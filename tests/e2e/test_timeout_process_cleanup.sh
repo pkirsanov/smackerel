@@ -10,6 +10,8 @@ BASE_MARKER="smackerel-e2e-timeout-cleanup-$$-$(date +%s)"
 RUNNER_LOG=""
 RUNNER_PID=""
 ADVERSARIAL_PARENT_PID=""
+DOCKER_RUNNER_ID=""
+DOCKER_CANARY_ID=""
 
 marker_pids() {
   local marker="$1"
@@ -43,6 +45,13 @@ cleanup() {
   fi
   cleanup_marker_processes "${BASE_MARKER}-adversarial"
   cleanup_marker_processes "${BASE_MARKER}-runner"
+  if [[ -n "${DOCKER_RUNNER_ID:-}" ]]; then
+    docker rm --force "$DOCKER_RUNNER_ID" >/dev/null 2>&1 || true
+  fi
+  if [[ -n "${DOCKER_CANARY_ID:-}" ]]; then
+    docker rm --force "$DOCKER_CANARY_ID" >/dev/null 2>&1 || true
+  fi
+  "$REPO_DIR/smackerel.sh" --env test down --volumes >/dev/null 2>&1 || true
   if [[ -n "${RUNNER_LOG:-}" && -f "$RUNNER_LOG" ]]; then
     rm -f "$RUNNER_LOG"
   fi
@@ -103,11 +112,12 @@ wait_for_no_marker_processes() {
 
 wait_for_runner_exit() {
   local runner_pid="$1"
+  local max_attempts="${2:-120}"
   local runner_state=""
   local runner_status=0
   local attempt
 
-  for attempt in {1..120}; do
+  for ((attempt = 0; attempt < max_attempts; attempt++)); do
     runner_state="$(ps -p "$runner_pid" -o stat= 2>/dev/null || true)"
     if [[ -z "$runner_state" || "$runner_state" == Z* ]]; then
       set +e
@@ -122,6 +132,54 @@ wait_for_runner_exit() {
 
   echo "Nested E2E runner did not exit after interruption" >&2
   return 1
+}
+
+wait_for_log_line() {
+  local expected="$1"
+  local attempt
+
+  for attempt in {1..480}; do
+    if [[ -n "${RUNNER_LOG:-}" && -f "$RUNNER_LOG" ]] && grep -Fq "$expected" "$RUNNER_LOG"; then
+      echo "Observed nested runner log marker: $expected"
+      return 0
+    fi
+    sleep 0.25
+  done
+
+  return 1
+}
+
+wait_for_go_runner_container() {
+  local runner_ids=()
+  local attempt
+
+  for attempt in {1..480}; do
+    mapfile -t runner_ids < <(docker ps -q \
+      --filter "ancestor=golang:1.25.10-bookworm" \
+      --filter "network=smackerel-test_default")
+    if [[ ${#runner_ids[@]} -eq 1 ]]; then
+      DOCKER_RUNNER_ID="${runner_ids[0]}"
+      echo "Observed Go E2E runner container: $DOCKER_RUNNER_ID"
+      return 0
+    fi
+    if [[ ${#runner_ids[@]} -gt 1 ]]; then
+      echo "Expected one Go E2E runner container, found ${#runner_ids[@]}: ${runner_ids[*]}" >&2
+      return 1
+    fi
+    sleep 0.25
+  done
+
+  return 1
+}
+
+container_is_running() {
+  local container_id="$1"
+  [[ "$(docker inspect --format '{{.State.Running}}' "$container_id" 2>/dev/null || true)" == "true" ]]
+}
+
+container_run_id() {
+  local container_id="$1"
+  docker inspect --format '{{index .Config.Labels "com.smackerel.e2e-child-run-id"}}' "$container_id" 2>/dev/null || true
 }
 
 run_adversarial_detector_check() {
@@ -185,6 +243,55 @@ run_timeout_cleanup_check() {
   echo "PASS: BUG-031-004-SCN-001"
 }
 
+run_docker_runner_cleanup_check() {
+  local runner_status=""
+  local canary_label="smackerel-e2e-canary-${BASE_MARKER}"
+
+  echo "=== BUG-031-009-SCN-001/002: interrupted Docker Go runner is reaped before teardown ==="
+  RUNNER_LOG="$(mktemp)"
+  DOCKER_CANARY_ID="$(docker run -d --rm \
+    --label "com.smackerel.e2e-child-run-id=$canary_label" \
+    golang:1.25.10-bookworm tail -f /dev/null)"
+  if [[ -z "$DOCKER_CANARY_ID" ]]; then
+    e2e_fail "failed to start nonmatching Docker cleanup canary"
+  fi
+
+  SMACKEREL_HARDWARE_TIER=cpu "$REPO_DIR/smackerel.sh" --env test test e2e \
+    --go-run '^(TestDrive|TestMultiProviderDrive|TestLowConfidenceConfirmation|TestTelegramRetrieval|TestFolderMove|TestSkippedAndBlocked|TestSaveRulesList|TestTelegramReceipt)' \
+    >"$RUNNER_LOG" 2>&1 &
+  RUNNER_PID=$!
+
+  wait_for_go_runner_container || e2e_fail "nested E2E did not start exactly one Go runner container"
+  wait_for_log_line "=== RUN   TestDrive" || e2e_fail "nested Go runner did not begin a Drive test"
+  if [[ "$(container_run_id "$DOCKER_RUNNER_ID")" != smackerel-e2e-child-* ]]; then
+    e2e_fail "Dockerized Go E2E runner $DOCKER_RUNNER_ID has no per-run cleanup identity"
+  fi
+
+  echo "Interrupting nested Dockerized E2E runner pid $RUNNER_PID"
+  kill -TERM "$RUNNER_PID"
+  wait_for_log_line "Running project-scoped test stack teardown (exit cleanup" || e2e_fail "nested E2E did not begin stack teardown after interruption"
+
+  if container_is_running "$DOCKER_RUNNER_ID"; then
+    e2e_fail "Dockerized Go E2E runner $DOCKER_RUNNER_ID survived until stack teardown began"
+  fi
+  if ! container_is_running "$DOCKER_CANARY_ID"; then
+    e2e_fail "nonmatching Docker canary $DOCKER_CANARY_ID was removed by interrupted-run cleanup"
+  fi
+
+  runner_status="$(wait_for_runner_exit "$RUNNER_PID" 800)" || e2e_fail "nested Dockerized E2E runner failed to exit after interruption"
+  RUNNER_PID=""
+  if [[ "$runner_status" -eq 0 ]]; then
+    e2e_fail "nested Dockerized E2E runner returned success after TERM interruption"
+  fi
+
+  docker rm --force "$DOCKER_CANARY_ID" >/dev/null
+  DOCKER_CANARY_ID=""
+  DOCKER_RUNNER_ID=""
+  echo "PASS: BUG-031-009-SCN-001"
+  echo "PASS: BUG-031-009-SCN-002"
+}
+
 run_adversarial_detector_check
 run_timeout_cleanup_check
+run_docker_runner_cleanup_check
 echo "PASS: BUG-031-004 timeout process cleanup regression"

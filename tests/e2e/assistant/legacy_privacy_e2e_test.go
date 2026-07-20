@@ -24,6 +24,7 @@
 package assistant_e2e
 
 import (
+	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -66,6 +67,17 @@ func scrapeMetrics(t *testing.T, base string) string {
 // raw-id-shaped label name appears, or (c) any sample carries a
 // user_bucket value that is not the 64-char hex HMAC shape.
 func TestLegacyResidualTelemetry_LiveMetricsExposeBucketsOnly(t *testing.T) {
+	stack := loadLegacyRetirementNoticeLiveStack(t)
+	if stack.WindowState != "open" {
+		t.Fatalf("LEGACY_RETIREMENT_WINDOW_STATE=%q, want explicit test capability open", stack.WindowState)
+	}
+	waitLegacyRetirementNoticeReady(t, stack)
+	turnID := fmt.Sprintf("bug-075-001-residual-metric-%d", time.Now().UnixNano())
+	resp, responseBody := postNoticeAssistantTurn(t, stack, stack.RetiredCmd, turnID)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("retired-command turn status=%d, want 200; body=%s", resp.StatusCode, responseBody)
+	}
+
 	body := scrapeMetrics(t, legacyRetirementE2EBaseURL(t))
 
 	const metricName = "smackerel_legacy_command_residual_total"
@@ -100,24 +112,37 @@ func TestLegacyResidualTelemetry_LiveMetricsExposeBucketsOnly(t *testing.T) {
 		}
 	}
 
-	// If any samples exist, every user_bucket value MUST be the
-	// 64-char lowercase-hex HMAC-SHA256 digest. Empty bucket is
-	// permitted (anonymous turn) but the raw id format is not.
+	// The live turn above must materialize at least one sample. Every
+	// sample has exactly the closed {command,user_bucket} label set,
+	// and every user_bucket is the 64-char lowercase-hex HMAC-SHA256
+	// digest for the authenticated test actor.
 	bucketRE := regexp.MustCompile(`user_bucket="([^"]*)"`)
 	hexRE := regexp.MustCompile(`^[0-9a-f]{64}$`)
+	sampleCount := 0
 	for _, line := range strings.Split(body, "\n") {
 		if !strings.HasPrefix(line, metricName) {
 			continue
 		}
+		sampleCount++
+		openBrace := strings.IndexByte(line, '{')
+		closeBrace := strings.IndexByte(line, '}')
+		if openBrace < 0 || closeBrace <= openBrace {
+			t.Errorf("metric %q sample has no label set: %s", metricName, line)
+			continue
+		}
+		labels := strings.Split(line[openBrace+1:closeBrace], ",")
+		if len(labels) != 2 || !strings.HasPrefix(labels[0], `command="`) || !strings.HasPrefix(labels[1], `user_bucket="`) {
+			t.Errorf("metric %q sample labels=%q, want exactly command,user_bucket: %s", metricName, labels, line)
+		}
 		matches := bucketRE.FindAllStringSubmatch(line, -1)
 		for _, m := range matches {
 			val := m[1]
-			if val == "" {
-				continue
-			}
 			if !hexRE.MatchString(val) {
 				t.Errorf("metric %q sample carries non-HMAC user_bucket value %q; only 64-char lowercase hex (HMAC-SHA256) is permitted: %s", metricName, val, line)
 			}
 		}
+	}
+	if sampleCount == 0 {
+		t.Fatalf("metric %q has no samples after a successful retired-command turn", metricName)
 	}
 }

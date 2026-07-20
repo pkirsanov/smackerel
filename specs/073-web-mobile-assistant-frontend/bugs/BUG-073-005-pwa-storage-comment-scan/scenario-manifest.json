@@ -1,0 +1,55 @@
+{
+  "version": 1,
+  "featureDir": "specs/073-web-mobile-assistant-frontend/bugs/BUG-073-005-pwa-storage-comment-scan",
+  "generatedAt": "2026-07-19T00:00:00Z",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-BUG073005-001",
+      "scope": "Scope 1",
+      "title": "Policy comments do not fail the live route test",
+      "gherkin": {
+        "given": "assistant.js comments name localStorage as forbidden",
+        "when": "the served executable source is inspected",
+        "then": "the comment token is ignored and the live test passes"
+      },
+      "requiredTestType": "e2e-api",
+      "regressionRequired": true,
+      "testPlanIds": ["TP-BUG073005-001"],
+      "linkedTests": [{"type": "e2e-api", "file": "tests/e2e/assistant/web_pwa_chat_e2e_test.go", "name": "TestAssistantWebPWAChatE2E_ServedRouteHasComposerTranscriptAndResponseMarkup_TP_073_09"}],
+      "evidenceRefs": ["report.md#red-before-fix-served-route-e2e", "report.md#green-after-fix-scanner-unit-and-live-e2e"],
+      "status": "in_progress"
+    },
+    {
+      "scenarioId": "SCN-BUG073005-002",
+      "scope": "Scope 1",
+      "title": "Executable browser storage access is rejected",
+      "gherkin": {
+        "given": "JavaScript calls localStorage.getItem outside a comment",
+        "when": "the shared scanner and forbidden-pattern check run",
+        "then": "the executable reference is reported as a violation"
+      },
+      "requiredTestType": "unit",
+      "regressionRequired": true,
+      "testPlanIds": ["TP-BUG073005-002"],
+      "linkedTests": [{"type": "unit", "file": "internal/testsupport/jssource/comments_test.go", "name": "TestWithoutComments_IgnoresPolicyCommentsAndRetainsExecutableAccess"}],
+      "evidenceRefs": ["report.md#green-after-fix-scanner-unit-and-live-e2e"],
+      "status": "in_progress"
+    },
+    {
+      "scenarioId": "SCN-BUG073005-003",
+      "scope": "Scope 1",
+      "title": "Comment markers inside strings remain source text",
+      "gherkin": {
+        "given": "JavaScript contains an https URL and escaped quotes",
+        "when": "comments are removed",
+        "then": "string content and following executable code remain intact"
+      },
+      "requiredTestType": "unit",
+      "regressionRequired": true,
+      "testPlanIds": ["TP-BUG073005-003"],
+      "linkedTests": [{"type": "unit", "file": "internal/testsupport/jssource/comments_test.go", "name": "TestWithoutComments_PreservesStringsTemplatesAndFollowingCode"}],
+      "evidenceRefs": ["report.md#green-after-fix-scanner-unit-and-live-e2e"],
+      "status": "in_progress"
+    }
+  ]
+}

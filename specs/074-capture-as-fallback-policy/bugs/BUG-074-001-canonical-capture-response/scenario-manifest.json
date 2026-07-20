@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "featureDir": "specs/074-capture-as-fallback-policy/bugs/BUG-074-001-canonical-capture-response",
+  "generatedAt": "2026-07-19T00:00:00Z",
+  "scenarios": [
+    {
+      "scenarioId": "BUG-074-001-SCN-001",
+      "scope": "scope-1-canonical-capture",
+      "title": "Successful no-ground capture returns normal acknowledgement",
+      "gherkin": {"given": "no-ground fallback persistence succeeds", "when": "the facade returns", "then": "saved-as-idea fields are canonical and error-free"},
+      "behaviorClass": "e2e-api",
+      "changeType": "bugfix",
+      "requiredTestType": "e2e-api",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {"file": "tests/e2e/assistant/capture_fallback_trigger_e2e_test.go", "testId": "TestAssistantHTTPE2E_CaptureFallbackOpenKnowledgeNoGround"},
+        {"file": "tests/e2e/assistant/http_capture_test.go", "testId": "TestAssistantHTTPE2E_CaptureAcknowledgementMatchesTelegramShape"}
+      ],
+      "evidenceRefs": ["report.md#red"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "BUG-074-001-SCN-002",
+      "scope": "scope-1-canonical-capture",
+      "title": "Capture persistence failure remains explicit",
+      "gherkin": {"given": "the response is an explicit unavailable capture failure", "when": "successful-capture canonicalization runs", "then": "the failure status, cause, body, and timestamp remain unchanged"},
+      "behaviorClass": "unit",
+      "changeType": "bugfix",
+      "requiredTestType": "unit",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [{"file": "internal/assistant/facade_open_knowledge_no_ground_test.go", "testId": "TestCanonicalizeSuccessfulCaptureResponse_LeavesExplicitFailureUnchanged"}],
+      "evidenceRefs": ["report.md#green-canonical-capture-response"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    }
+  ]
+}

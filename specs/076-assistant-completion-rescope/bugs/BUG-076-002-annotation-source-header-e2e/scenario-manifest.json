@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "featureDir": "specs/076-assistant-completion-rescope/bugs/BUG-076-002-annotation-source-header-e2e",
+  "generatedAt": "2026-07-19T00:00:00Z",
+  "scenarios": [
+    {
+      "scenarioId": "BUG-076-002-SCN-001",
+      "scope": "scope-1-annotation-source",
+      "title": "API annotation reaches shadow comparator",
+      "gherkin": {"given": "generated test config names the source header", "when": "an api-sourced annotation is posted", "then": "HTTP 201 and the api shadow counter advances"},
+      "behaviorClass": "e2e-api",
+      "changeType": "bugfix",
+      "requiredTestType": "e2e-api",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [{"file": "tests/e2e/assistant/annotation_classifier_e2e_test.go", "testId": "TestAnnotationClassifierWithShadowComparator"}],
+      "evidenceRefs": ["report.md#red"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "BUG-076-002-SCN-002",
+      "scope": "scope-1-annotation-source",
+      "title": "Missing generated header name fails loudly",
+      "gherkin": {"given": "the generated annotation source header name is absent", "when": "the shadow comparator E2E prepares its request", "then": "the test fails before claiming live comparator coverage"},
+      "behaviorClass": "e2e-api",
+      "changeType": "bugfix",
+      "requiredTestType": "e2e-api",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [{"file": "tests/e2e/assistant/annotation_classifier_e2e_test.go", "testId": "TestAnnotationClassifierWithShadowComparator"}],
+      "evidenceRefs": ["report.md#green-explicit-api-source"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    }
+  ]
+}

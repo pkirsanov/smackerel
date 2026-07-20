@@ -79,10 +79,10 @@ var validPhases = map[string]bool{
 }
 
 var validTargetSlots = map[string]bool{
-	"prod":     true,
-	"staging":  true,
+	"prod":        true,
+	"staging":     true,
 	"self-hosted": true,
-	"none":     true,
+	"none":        true,
 }
 
 func releaseTrainsRepoRoot(t *testing.T) string {

@@ -24,6 +24,8 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
+
+	assistantintent "github.com/smackerel/smackerel/internal/assistant/intent"
 )
 
 // IntentTracesTotal counts persisted IntentTrace rows by transport,
@@ -50,6 +52,15 @@ var IntentTraceRetentionSweepRowsTotal = prometheus.NewCounterVec(
 )
 
 func init() {
+	// Keep the registered family visible before the first compiled turn.
+	// The labels are a valid closed-vocabulary refusal combination and
+	// Add(0) records no synthetic event.
+	IntentTracesTotal.WithLabelValues(
+		string(TransportWeb),
+		"true",
+		string(assistantintent.ActionRefuse),
+		string(StatusRefused),
+	).Add(0)
 	prometheus.MustRegister(IntentTracesTotal, IntentTraceRetentionSweepRowsTotal)
 }
 

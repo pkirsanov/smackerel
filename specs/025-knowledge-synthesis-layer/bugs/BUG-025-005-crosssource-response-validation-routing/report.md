@@ -360,32 +360,186 @@ The parent feature design already documents the exact `CrossSourceResponse` wire
 confidence semantics. No runtime contract document changed; this bug packet records the
 repaired validation and poison-routing behavior. No `docs/` change is required for this bug.
 
+## Interrupted Test Closeout Evidence - 2026-07-19
+
+### Corrected Unit And Integration Categories
+
+**Executed:** YES (current session, recovered from the interrupted terminal resources)
+**Commands:** `./smackerel.sh test unit --python --python-k 'crosssource or schema_repair or malformed_json or structured_extraction_thinking or output_token_budget'`; `./smackerel.sh test unit --python`; `./smackerel.sh --env test test integration`
+**Exit Code:** 0 for every listed command
+**Claim Source:** executed
+
+```text
+[py-unit] pip install OK; starting unit-only pytest ml/tests
+pytest -q -m 'not integration and not live_ollama' -k 'crosssource or schema_repair or malformed_json or structured_extraction_thinking or output_token_budget' ml/tests
+........................................................................ [ 92%]
+......                                                                   [100%]
+78 passed, 632 deselected in 1.11s
+[py-unit] pytest ml/tests finished OK
+pytest -q -m 'not integration and not live_ollama' ml/tests
+........................................................................ [ 91%]
+............................................................             [100%]
+708 passed, 2 deselected in 13.95s
+[py-unit] pytest ml/tests finished OK
+PASS: go-integration
+[py-integration] pip install OK; starting live integration pytest
+.                                                                        [100%]
+1 passed in 0.48s
+[py-integration] live integration pytest finished OK
+PASS: python-integration
+```
+
+This supersedes the earlier `689 passed, 2 skipped` evidence for closeout accounting. The unit runner now excludes live categories instead of collecting skips, and the required dead-letter parity test runs fail-loud in the canonical ephemeral integration lane.
+
+### Focused Live Synthesis And Cross-Source Run
+
+**Executed:** YES (current session, recovered from the interrupted terminal resource)
+**Command:** `./smackerel.sh --env test test e2e --go-run 'TestKnowledge(Synthesis_PipelineRoundTrip|CrossSource_ConnectionDetection)'`
+**Exit Code:** 0
+**Claim Source:** executed
+
+```text
+go-e2e: applying -run selector: TestKnowledge(Synthesis_PipelineRoundTrip|CrossSource_ConnectionDetection)
+=== RUN   TestKnowledgeCrossSource_ConnectionDetection
+knowledge_crosssource_test.go:48: total concepts: 0, multi-source: 0
+--- PASS: TestKnowledgeCrossSource_ConnectionDetection (0.01s)
+=== RUN   TestKnowledgeSynthesis_PipelineRoundTrip
+knowledge_synthesis_test.go:115: capture response: 200
+knowledge_synthesis_test.go:171: synthesis stats: completed=0 pending=3 failed=4 total=7
+--- PASS: TestKnowledgeSynthesis_PipelineRoundTrip (8.03s)
+PASS
+ok github.com/smackerel/smackerel/tests/e2e 8.150s
+PASS: go-e2e
+Running project-scoped test stack teardown (exit cleanup, timeout 180s)...
+```
+
+The live cross-source assertion explicitly permits zero concepts, so it remains collateral API coverage. Exact valid/malformed routing, poison handling, and neighboring subject semantics are proven by the actual-consumer-loop Python regressions, not by this live result alone.
+
+### Broad E2E Remains RED
+
+**Executed:** YES (current session, recovered from the saved terminal resource)
+**Command:** `./smackerel.sh --env test test e2e`
+**Exit Code:** nonzero; terminal scrollback retained the failures but not the exact numeric exit footer
+**Claim Source:** executed
+
+```text
+--- FAIL: TestAssistantTransportHintParity_WebAndMobileShareResponseShape (0.03s)
+assistant.js must not reference forbidden auth surface "localStorage" (SCN-073-A11)
+trace.assistant_turn_id must be non-empty: first="" second=""
+trace.assistant_turn_id must be non-empty: a="" b=""
+--- FAIL: TestAssistantWebPWARetryE2E_DifferentTransportMessageIDsAreDistinct_TP_073_10_Adversarial (0.01s)
+drive scan: completed provider=google seen=1 indexed=1 skipped=0
+drive scan: completed provider=memdrive seen=1 indexed=1 skipped=0
+/api/search must return BOTH provider rows; google=false mem=false
+--- FAIL: TestDriveCrossFeatureE2E_ProviderNeutralConsumersAndProducers (3.87s)
+e2e: services not healthy after 2m0s at http://smackerel-core:8080
+--- FAIL: TestDriveObservabilityE2E_MetricsAndCountersReconcileAfterStressFixture (121.94s)
+e2e: services not healthy after 30s at http://smackerel-core:8080
+FAIL github.com/smackerel/smackerel/tests/e2e/drive 300.054s
+lookup postgres on 127.0.0.11:53: no such host
+FAIL github.com/smackerel/smackerel/tests/e2e/foundation 0.056s
+core not healthy at http://smackerel-core:8080
+FAIL github.com/smackerel/smackerel/tests/e2e/legacy_retirement 274.745s
+```
+
+**Uncertainty Declaration:** the retained output proves the broad run is RED but does not preserve its final numeric exit. The assistant/PWA failures, Drive cross-feature search failure, and first Drive observability health failure occurred before the later stack/DNS cascade. Subsequent Drive, foundation, retirement, transport, and wiki failures are not counted as independent findings.
+
+### Routed Independent Findings
+
+| Finding ID | Finding | Route |
+|---|---|---|
+| `BROAD-ASSISTANT-TRANSPORT-001` | Transport-hint parity appears stale or shared-state contaminated: it compares two `/reset` calls while the adapter contract defines hints as telemetry-only. | `bubbles.bug`, likely spec 073 / assistant ownership |
+| `BROAD-ASSISTANT-PWA-SCAN-001` | The PWA test's raw substring scan matches `localStorage` in a prohibition comment rather than executable storage access. | `bubbles.bug`, likely spec 073 / assistant ownership |
+| `BROAD-ASSISTANT-RETRY-001` | Both retry tests receive empty trace IDs on the `/reset` short-circuit; investigate the stale assertion and context-reset shared-state contamination. | `bubbles.bug`, likely spec 073 / assistant ownership |
+| `BROAD-DRIVE-SEARCH-001` | Cross-feature search independently returns neither expected row after successful google and memdrive scans. | `bubbles.bug`, Drive/search ownership |
+| `BROAD-DRIVE-HEALTH-001` | Drive observability independently makes or observes core unhealthy before later failures cascade. | `bubbles.bug`, Drive/observability ownership |
+
+TP-05 and the duplicate broader-E2E DoD item remain unchecked. These independent regressions are outside BUG-025-005's four-file runtime boundary and are routed rather than patched here.
+
+### Final Cheap Closeout Checks
+
+**Executed:** YES (current session)
+**Commands:** targeted ShellCheck/shfmt and both CLI contracts; `./smackerel.sh format --check`; `SMACKEREL_HARDWARE_TIER=cpu ./smackerel.sh check`; `./smackerel.sh lint`; packet artifact/traceability/reality/regression guards
+**Exit Code:** 0 for every listed check
+**Claim Source:** executed
+
+```text
+=== SHELLCHECK FORMATTED FILES PASS ===
+=== SHELLCHECK CLI PASS ===
+=== SHFMT NEW FILES PASS ===
+=== SHFMT CHANGED FILES PARSE PASS ===
+PASS: linked worktree tooling mounts common Git metadata read-only
+PASS: synthesis test harness preserves stack lifecycle and zero-skip category boundaries
+=== REPO FORMAT CHECK PASS ===
+Config is in sync with SST
+scenario-lint: OK
+=== REPO CHECK PASS ===
+All checks passed!
+Web validation passed
+=== REPO LINT PASS ===
+Artifact lint PASSED.
+RESULT: PASSED (0 warnings)
+Violations: 0
+Warnings: 0
+REGRESSION QUALITY RESULT: 0 violation(s), 0 warning(s)
+=== BUG-025 REGRESSION PASS ===
+```
+
+### Post-Merge Discrimination
+
+**Executed:** YES (current session)
+**Merged Head:** `321ed4e0a3ae12f76b7d687df327e3d892defc0c`
+**Commands:** focused Python selector; focused Go synthesis response tests; shell/harness checks; repo format/check/lint; both packet gate sets
+**Exit Code:** 0 for every listed command
+**Claim Source:** executed
+
+```text
+78 passed, 632 deselected in 1.44s
+[py-unit] pytest ml/tests finished OK
+--- PASS: TestSynthesisExtractResponse_SuccessMarksCompleted (0.00s)
+--- PASS: TestSynthesisExtractResponse_FailureMarksFailed (0.00s)
+--- PASS: TestSynthesisExtractResponse_FullPipelinePayload (0.00s)
+[go-unit] go test ./... finished OK
+PASS: linked worktree tooling mounts common Git metadata read-only
+PASS: synthesis test harness preserves stack lifecycle and zero-skip category boundaries
+75 files already formatted
+Config is in sync with SST
+scenario-lint: OK
+All checks passed!
+Web validation passed
+Artifact lint PASSED.
+RESULT: PASSED (0 warnings)
+Violations: 0
+Warnings: 0
+REGRESSION QUALITY RESULT: 0 violation(s), 0 warning(s)
+=== POST-MERGE BUG-025 GATES PASS ===
+```
+
 ## Ownership And Certification
 
 - `bubbles.workflow` parent-expanded the `bugfix-fastlane` specialist phases directly
   in-session (no `runSubagent` in this runtime) — the documented smackerel precedent.
-- The fix (`8cd13fff`) is landed on `main`; this session reconciled and certified it with
-  fresh current-session evidence. No runtime code was rebuilt (no residual hole).
-- Validate-owned certification is `done`; `state-transition-guard.sh` passes at `done`.
-- The fresh full ephemeral-stack integration/e2e re-run + any deploy are routed to
-  `bubbles.devops` as NON-GATING operational tasks. No deployment was performed here.
+- The fix (`8cd13fff`) is landed on `main` and remains proven by focused RED→GREEN,
+  unit, integration, and focused live E2E evidence.
+- The later required broad E2E run was RED on independent assistant/PWA and Drive
+  findings. Those findings now have isolated fixes, but terminal certification is
+  invalidated until the consolidated source passes the complete broad suite.
+- Current routing is `bubbles.test`, followed by security, validate, audit, build, and
+  deployment. No deployment was performed here.
 
 ## Completion Statement
 
-BUG-025-005 is **certified done**. The cross-source response-validation routing defect is
-fixed on `main` (`8cd13fff`): `synthesis.crosssource` results are validated by the
+BUG-025-005 is **fixed but in progress pending broad revalidation**. The cross-source
+response-validation routing defect is fixed on `main` (`8cd13fff`): `synthesis.crosssource` results are validated by the
 concept-centric `validate_crosssource_result` (enforcing every FR-02–FR-06 field rule),
 neighbor subjects retain their contracts via the closed `OUTGOING_VALIDATION_MODES` table,
 and outgoing validation failures propagate fail-loud to `_handle_poison` before any
 publish/ack. RED→GREEN was captured this session (`2 failed` with the routing reverted →
-`689 passed` restored). The full `bugfix-fastlane` specialist pipeline (implement, test,
-regression, simplify, stabilize, security, validate, audit) was parent-expanded in-session
-with fresh evidence, `artifact-lint.sh` exits 0, and `state-transition-guard.sh` certifies
-`done`. The live TP-04 (ephemeral NATS integration) and TP-05 (broader E2E) legs are
-certified on the in-session real-`_consume_loop`/real-`_handle_poison` dispatch proof plus
-the committed collateral E2E; a fresh full ephemeral-stack re-run is a NON-GATING
-`bubbles.devops` operational task, held out of this session solely to avoid corrupting an actively-running
-parallel-worktree `smackerel-test` stack. No deployment is authorized by this packet.
+`689 passed` restored). A later complete broad E2E run exposed independent assistant/PWA
+and Drive regressions, so TP-05 and aggregate build-quality closeout are not complete on
+the merged source. Their fixes are now consolidated; the full suite must be rerun before
+security review, validate-owned recertification, audit, build, or deployment. No deployment
+is authorized by this packet.
 
 ## Invocation Audit
 

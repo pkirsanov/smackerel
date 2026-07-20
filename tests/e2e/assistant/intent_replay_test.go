@@ -104,8 +104,10 @@ func intentReplaySeedRow(t *testing.T, pool *pgxpool.Pool, traceID, turnID strin
 	}
 }
 
-// runReplayCLI builds and runs `go run ./cmd/core assistant
-// replay-intent <traceID>` with the test-stack env file loaded.
+// runReplayCLI builds and runs `smackerel-core assistant replay-intent
+// <traceID>` with the test-stack env file loaded. Executing the built
+// binary preserves the command's closed exit-code contract; `go run`
+// collapses every non-zero program exit to wrapper exit 1.
 // Returns (exitCode, stdout, stderr). The CLI exit codes mirror the
 // design.md §"CLI Contract" table.
 func runReplayCLI(t *testing.T, repoRoot, envFile, traceID string) (int, string, string) {
@@ -122,9 +124,20 @@ func runReplayCLI(t *testing.T, repoRoot, envFile, traceID string) (int, string,
 		}
 		env = append(env, line)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	buildCtx, buildCancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer buildCancel()
+	binaryPath := filepath.Join(t.TempDir(), "smackerel-core")
+	build := exec.CommandContext(buildCtx, "go", "build", "-o", binaryPath, "./cmd/core")
+	build.Dir = repoRoot
+	var buildStderr bytes.Buffer
+	build.Stderr = &buildStderr
+	if err := build.Run(); err != nil {
+		t.Fatalf("build replay CLI: %v\nstderr: %s", err, buildStderr.String())
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, "go", "run", "./cmd/core", "assistant", "replay-intent", traceID)
+	cmd := exec.CommandContext(ctx, binaryPath, "assistant", "replay-intent", traceID)
 	cmd.Dir = repoRoot
 	cmd.Env = env
 	var outBuf, errBuf bytes.Buffer
@@ -136,7 +149,7 @@ func runReplayCLI(t *testing.T, repoRoot, envFile, traceID string) (int, string,
 		if ee, ok := err.(*exec.ExitError); ok {
 			code = ee.ExitCode()
 		} else {
-			t.Fatalf("go run failed (non-exit error): %v\nstderr: %s", err, errBuf.String())
+			t.Fatalf("replay CLI failed (non-exit error): %v\nstderr: %s", err, errBuf.String())
 		}
 	}
 	return code, outBuf.String(), errBuf.String()
