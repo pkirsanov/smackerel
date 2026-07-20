@@ -132,6 +132,25 @@
       "routedToCommit": "5904f0266c2e9edd06db8fd8fb75794687dcf10e",
       "productAction": "none",
       "crossRepoFollowUp": true,
+      "status": "resolved",
+      "addressedAt": "2026-07-20T02:31:10Z",
+      "addressedBy": "bubbles.validate",
+      "resolution": "Bounded validation confirmed source ancestry, zero post-review product delta, outcome-contract evidence, broad Go E2E composite coverage with the Ollama-agent skip preserved, and release-positive security/audit diagnostics. Terminal certification was withheld because the current delivery-completion audit attempt and AUDIT_RESULT_V1 transcript are absent.",
+      "evidenceRef": "report.md#validate-owned-bounded-certification---2026-07-20"
+    },
+    {
+      "id": "TR-026-008-AUDIT-001",
+      "requestedAt": "2026-07-20T02:31:10Z",
+      "requestedBy": "bubbles.validate",
+      "fromStatus": "in_progress",
+      "toStatus": "route_required",
+      "targetAgent": "bubbles.audit",
+      "routedTo": "bubbles.audit",
+      "routedToSpec": "specs/026-domain-extraction/bugs/BUG-026-008-synthesis-schema-repair",
+      "productAction": "none",
+      "crossRepoFollowUp": true,
+      "reason": "Execute the current delivery-completion-v1 audit attempt at the latest branch tip, persist exactly one ACTIVE attempt through execution.audit.currentAttemptId, and attach a complete AUDIT_RESULT_V1 transcript resolved against the fresh transition contract. The prior b4761988 audit was governance-blocked and cannot serve as the post-governance terminal audit result.",
+      "packetRef": "report.md#candidate-and-audit-contract-probe",
       "status": "open"
     },
     {
@@ -323,9 +342,9 @@
     "workflowMode": "bugfix-fastlane"
   },
   "routing": {
-    "outcome": "route_required",
-    "nextRequiredOwner": "bubbles.validate",
-    "reason": "Implement, test, regression, simplify, and stabilize phases executed at exact candidate 5904f0266c2e9edd06db8fd8fb75794687dcf10e. Certification remains validate-owned; full all-package E2E is operator-attested only under the explicit no-rerun boundary, and the focused runner retains its opt-in Ollama-agent skip.",
+    "outcome": "blocked",
+    "nextRequiredOwner": "bubbles.audit",
+    "reason": "Bounded validation is complete at packet tip 563b36a7717ad59628316bbfe4a3aa31fc8240f0. Terminal certification requires one current delivery-completion-v1 audit attempt and complete AUDIT_RESULT_V1 transcript; the prior b4761988 audit was governance-blocked. No product change is required.",
     "subsequentOwners": ["bubbles.devops"]
   }
 }
