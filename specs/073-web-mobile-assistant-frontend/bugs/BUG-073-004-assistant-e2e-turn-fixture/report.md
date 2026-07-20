@@ -21,7 +21,7 @@ Packet status and validate-owned certification intentionally remain
 
 ## Test Evidence
 
-### Before Fix - Named Live E2E
+### RED: Before Fix Named Live E2E
 
 **Executed:** YES (current session)
 **Command:** `SMACKEREL_HARDWARE_TIER=cpu ./smackerel.sh test e2e --go-run 'TestAssistantTransportHintParity_WebAndMobileShareResponseShape|TestAssistantWebPWAChatE2E_ServedRouteHasComposerTranscriptAndResponseMarkup_TP_073_09|TestAssistantWebPWARetryE2E_'`
@@ -65,9 +65,9 @@ Command exited with code 1
 - Both retry failures are exact consequences of the reset fixture: reset has
   no invocation and therefore no `assistant_turn_id` to compare.
 - No package-order contamination is established by this isolated run.
-- A deterministic ordinary-weather retry later proved a separate production
-  HTTP dedup defect; that finding is routed to BUG-069-004 and is not owned by
-  this packet.
+- A deterministic ordinary-weather retry later proved a distinct production
+  HTTP dedup defect; that finding is immediately routed to BUG-069-004 while
+  this packet preserves the existing production semantics.
 
 **Claim Source:** interpreted
 
@@ -113,7 +113,7 @@ Network smackerel-test_default Removed
 
 **Claim Source:** executed
 
-### After Fix - Focused And Package E2E
+### GREEN: After Fix Focused And Package E2E
 
 Concrete tests:
 
@@ -171,6 +171,28 @@ guard reported 0 violations and 0 warnings.
   ordinary-turn parity.
 
 **Claim Source:** interpreted
+
+### Code Diff Evidence
+
+**Phase:** plan reconciliation
+**Command:** `git show --format=fuller --stat c5ddf562 -- tests/e2e/assistant/transport_hint_parity_test.go tests/e2e/assistant/conversation_isolation_test.go specs/073-web-mobile-assistant-frontend/bugs/BUG-073-004-assistant-e2e-turn-fixture` and `git diff --name-status origin/main...HEAD -- tests/e2e/assistant/transport_hint_parity_test.go tests/e2e/assistant/conversation_isolation_test.go`
+**Exit Code:** 0
+**Claim Source:** executed
+
+Executed git show and git diff proof is reproduced below.
+
+```text
+BEGIN_BUG073004_GIT_PROOF
+21f6ae7f chore(governance): reconcile release candidate packets
+c5ddf562 fix(assistant): harden broad e2e retries and source scans
+97786b84 wip: convergence loop progress across specs 063-075 (multi-agent session)
+--- implementation paths at HEAD versus parent baseline ---
+A       tests/e2e/assistant/conversation_isolation_test.go
+M       tests/e2e/assistant/transport_hint_parity_test.go
+commit c5ddf562fac43b3d281a2de5607367523fe4e602
+10 files changed, 747 insertions(+), 1 deletion(-)
+END_BUG073004_GIT_PROOF rc=0
+```
 
 ## Open Findings
 
