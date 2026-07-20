@@ -14,32 +14,26 @@
   "executionRuntime": "direct",
   "flagsIntroduced": [],
   "createdAt": "2026-07-19",
-  "updatedAt": "2026-07-19",
+  "updatedAt": "2026-07-20",
   "redeployRequired": true,
   "deploymentReached": false,
   "execution": {
     "activeAgent": "bubbles.bug",
-    "currentPhase": "bug",
+    "currentPhase": "validate",
     "currentScope": "1",
     "executionModel": "direct-authorized-runner",
     "runStartedAt": "2026-07-19",
-    "lastUpdatedAt": "2026-07-19T16:03:34Z",
+    "lastUpdatedAt": "2026-07-20",
     "completedScopes": [],
     "completedPhaseClaims": ["security", "validate", "audit"],
     "completedPhaseClaimsByScope": {},
-    "pendingTransitionRequests": [
-      {
-        "findingId": "BUG-026-008-GOVERNANCE-RECONCILIATION",
-        "nextRequiredOwner": "bubbles.plan",
-        "reason": "Repair the missing change-boundary DoD shape and broken RED evidence anchor in scopes.md from existing evidence only. Then bubbles.implement reconciles execution-owned DoD/phase records, bubbles.audit appends git-backed Code Diff Evidence, and bubbles.validate owns certification."
-      }
-    ],
+    "pendingTransitionRequests": [],
     "scopeSummary": [
       {
         "scopeId": "1",
         "title": "Repair one parsed schema-invalid synthesis response",
         "owner": "bubbles.implement",
-        "dodCount": 14,
+        "dodCount": 25,
         "status": "in_progress",
         "dependsOn": [],
         "notes": "Scenario-first bounded repair inside the existing synthesis extraction capability; source delivery stops before build/deploy."
@@ -132,10 +126,10 @@
       "fromStatus": "in_progress",
       "toStatus": "route_required",
       "targetAgent": "bubbles.validate",
-      "reason": "Source, config, tests, docs, red-green evidence, live synthesis E2E, artifact lint, traceability, regression guards, check, and lint are ready for independent validation. This runtime has no specialist invocation tool, so certification remains validate-owned and unset.",
-      "packetRef": "report.md#validation-evidence",
+      "reason": "Review exact source candidate 5904f0266c2e9edd06db8fd8fb75794687dcf10e plus the committed packet evidence. Implement, focused test, regression, simplify, and stabilize ran in this invocation. Full all-package E2E remains operator-attested under the explicit no-rerun boundary, the focused runner retains its opt-in Ollama-agent skip, and security/audit remain diagnostic claims rather than terminal certification.",
+      "packetRef": "report.md#remaining-workflow-execution---2026-07-20",
       "routedTo": "bubbles.validate",
-      "routedToCommit": "b476198898f005ac5bad25510fcb9d90cbe50939",
+      "routedToCommit": "5904f0266c2e9edd06db8fd8fb75794687dcf10e",
       "productAction": "none",
       "crossRepoFollowUp": true,
       "status": "open"
@@ -168,7 +162,11 @@
       "crossRepoFollowUp": true,
       "reason": "Repair the scopes.md change-boundary DoD shape and broken RED evidence anchor from existing report evidence only; do not rerun full E2E.",
       "packetRef": "report.md#red-bug-reproduction---before-fix",
-      "status": "open"
+      "status": "resolved",
+      "addressedAt": "2026-07-20",
+      "addressedBy": "bubbles.plan",
+      "resolution": "scopes.md now contains the canonical Change Boundary DoD item and the pre-fix regression links to the existing RED evidence anchor.",
+      "evidenceRef": "scopes.md#change-boundary"
     }
   ],
   "transitionHistory": [],
@@ -220,6 +218,76 @@
       "claimSource": "operator-attested-outer-session",
       "outcome": "blocked",
       "note": "Exact-candidate source, test, and documentation consistency passed; DELIVERY_COMPLETION_FAILED was limited to packet governance."
+    },
+    {
+      "at": "2026-07-20",
+      "agent": "bubbles.implement",
+      "phase": "implement",
+      "phasesExecuted": ["implement"],
+      "provenanceMode": "parent-expanded",
+      "expandedBy": "bubbles.bug",
+      "expansionReason": "The authorized bubbles.bug runner is executing bugfix-fastlane directly; this runtime exposes no runSubagent tool.",
+      "candidateRevision": "5904f0266c2e9edd06db8fd8fb75794687dcf10e",
+      "claimSource": "executed",
+      "outcome": "completed_owned",
+      "evidenceRef": "scopes.md#definition-of-done",
+      "note": "Reconciled implementation commit e2ac9405b453698b5325b4b92f8b9cab4bd3cc35 against the exact candidate. Git showed the pre-fix terminal schema-validation return, the candidate bounded-repair transition, and zero paths outside the plan-owned change boundary; no source edit was required."
+    },
+    {
+      "at": "2026-07-20",
+      "agent": "bubbles.test",
+      "phase": "test",
+      "phasesExecuted": ["test"],
+      "provenanceMode": "parent-expanded",
+      "expandedBy": "bubbles.bug",
+      "expansionReason": "The authorized bubbles.bug runner is executing bugfix-fastlane directly; this runtime exposes no runSubagent tool.",
+      "candidateRevision": "5904f0266c2e9edd06db8fd8fb75794687dcf10e",
+      "claimSource": "executed",
+      "outcome": "completed_diagnostic",
+      "evidenceRef": "report.md#test-phase---focused-contracts",
+      "note": "Current-session focused verification passed: 13 exact-one config tests, SST/config drift check, 20 focused synthesis tests, three Go synthesis response tests, and the live disposable TestKnowledgeSynthesis_PipelineRoundTrip. The canonical full all-package E2E run was not rerun under the operator's hard boundary; its outer-session PASS remains operator-attested only, and the focused runner's explicit Ollama-agent skip remains residual risk."
+    },
+    {
+      "at": "2026-07-20",
+      "agent": "bubbles.regression",
+      "phase": "regression",
+      "phasesExecuted": ["regression"],
+      "provenanceMode": "parent-expanded",
+      "expandedBy": "bubbles.bug",
+      "expansionReason": "The authorized bubbles.bug runner is executing bugfix-fastlane directly; this runtime exposes no runSubagent tool.",
+      "candidateRevision": "5904f0266c2e9edd06db8fd8fb75794687dcf10e",
+      "claimSource": "executed",
+      "outcome": "completed_diagnostic",
+      "evidenceRef": "report.md#regression-phase",
+      "note": "Focused sibling-preservation selector passed 21 tests for schema repair, malformed JSON, structured-extraction thinking, and output budget. The canonical bugfix regression guard found adversarial signals in all three touched Python test files with zero violations and zero warnings."
+    },
+    {
+      "at": "2026-07-20",
+      "agent": "bubbles.simplify",
+      "phase": "simplify",
+      "phasesExecuted": ["simplify"],
+      "provenanceMode": "parent-expanded",
+      "expandedBy": "bubbles.bug",
+      "expansionReason": "The authorized bubbles.bug runner is executing bugfix-fastlane directly; this runtime exposes no runSubagent tool.",
+      "candidateRevision": "5904f0266c2e9edd06db8fd8fb75794687dcf10e",
+      "claimSource": "executed",
+      "outcome": "completed_diagnostic",
+      "evidenceRef": "report.md#simplify-phase",
+      "note": "Git-backed structural inspection found both model calls reuse one completion helper, one repair-message construction, an exact-one fail-loud budget, no retry loop, and no active non-packet source diff. No simplification edit was warranted."
+    },
+    {
+      "at": "2026-07-20",
+      "agent": "bubbles.stabilize",
+      "phase": "stabilize",
+      "phasesExecuted": ["stabilize"],
+      "provenanceMode": "parent-expanded",
+      "expandedBy": "bubbles.bug",
+      "expansionReason": "The authorized bubbles.bug runner is executing bugfix-fastlane directly; this runtime exposes no runSubagent tool.",
+      "candidateRevision": "5904f0266c2e9edd06db8fd8fb75794687dcf10e",
+      "claimSource": "executed",
+      "outcome": "completed_diagnostic",
+      "evidenceRef": "report.md#stabilize-phase",
+      "note": "Four focused terminal-failure/content-free/valid-first contracts passed. Read-only Docker label inspection confirmed zero smackerel-test containers, volumes, and networks after the live run. No stabilization source edit was required."
     }
   ],
   "certification": {
@@ -256,8 +324,8 @@
   },
   "routing": {
     "outcome": "route_required",
-    "nextRequiredOwner": "bubbles.plan",
-    "reason": "Repair the scopes.md change-boundary DoD shape and RED evidence anchor. Then reconcile the five missing execution phases from existing evidence, append git-backed G053 evidence, and route terminal certification to bubbles.validate; no full E2E rerun is requested.",
-    "subsequentOwners": ["bubbles.implement", "bubbles.audit", "bubbles.validate", "bubbles.devops"]
+    "nextRequiredOwner": "bubbles.validate",
+    "reason": "Implement, test, regression, simplify, and stabilize phases executed at exact candidate 5904f0266c2e9edd06db8fd8fb75794687dcf10e. Certification remains validate-owned; full all-package E2E is operator-attested only under the explicit no-rerun boundary, and the focused runner retains its opt-in Ollama-agent skip.",
+    "subsequentOwners": ["bubbles.devops"]
   }
 }

@@ -15,8 +15,8 @@
 
 - [ ] Reported
 - [x] Confirmed
-- [ ] In Progress
-- [x] Fixed
+- [x] In Progress
+- [ ] Fixed
 - [ ] Verified
 - [ ] Closed
 
@@ -40,6 +40,7 @@ The first parsed-but-schema-invalid response triggers exactly one corrective LLM
 
 - Service: `smackerel-ml`
 - Source baseline: `4b28bb9f0c2cc3a48ab78aa04395ebe817c50864`
+- Exact candidate verified: `5904f0266c2e9edd06db8fd8fb75794687dcf10e`
 - Runtime symptom: accepted runtime, card-rewards artifacts
 - Platform: Linux container runtime with Ollama-backed structured extraction
 
