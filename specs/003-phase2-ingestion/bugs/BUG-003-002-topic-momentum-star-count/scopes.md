@@ -94,4 +94,4 @@ Excluded:
 
 ### Post-Scope Certification Gate (Not Scope DoD)
 
-After every Scope 1 DoD item is completed with execution-backed evidence, route the packet through the authorized `bugfix-fastlane` implementation/test chain and then to `bubbles.validate` and `bubbles.audit` for independent certification. Validation and audit evidence remain owner-recorded phase-exit evidence; they do not gate Scope 1 completion and must not be self-certified by planning or implementation.
+Route the packet now through the authorized `bugfix-fastlane` implementation/test chain so each remaining Scope 1 DoD item receives owner-recorded execution evidence. Only after every Scope 1 DoD item is complete and Scope 1 is marked Done may the packet proceed to `bubbles.validate` and `bubbles.audit` for independent certification. Validation and audit evidence remain owner-recorded phase-exit evidence; they do not gate Scope 1 completion and must not be self-certified by planning or implementation.
