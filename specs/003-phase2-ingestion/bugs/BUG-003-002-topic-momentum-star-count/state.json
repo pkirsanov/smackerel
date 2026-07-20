@@ -135,7 +135,7 @@
       "statusBefore": "in_progress",
       "statusAfter": "in_progress",
       "runStartedAt": "2026-07-20T21:09:09Z",
-      "runCompletedAt": "2026-07-20T21:09:09Z",
+      "runCompletedAt": "2026-07-20T21:15:21Z",
       "summary": "Enumerated the mechanically accepted Change Boundary, moved independent validation and audit out of Scope 1 DoD, preserved Test Plan-to-DoD parity and scenario mapping, and routed the bugfix-fastlane packet to implementation without changing audit evidence or certification."
     }
   ],
@@ -149,7 +149,7 @@
       "summary": "Topic momentum update fails before row processing because UpdateAllMomentum selects nonexistent topics.star_count (SQLSTATE 42703)."
     }
   ],
-  "lastUpdatedAt": "2026-07-20T21:09:09Z",
+  "lastUpdatedAt": "2026-07-20T21:15:21Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "bug": "bug.md",
