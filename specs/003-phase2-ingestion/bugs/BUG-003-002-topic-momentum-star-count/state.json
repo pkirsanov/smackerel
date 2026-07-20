@@ -16,10 +16,10 @@
   "certifiedAt": null,
   "requiresRevalidation": false,
   "execution": {
-    "activeAgent": "bubbles.bug",
-    "currentPhase": "validate",
+    "activeAgent": "bubbles.plan",
+    "currentPhase": "plan",
     "currentScope": "scope-1-restore-canonical-topic-star-aggregation",
-    "runStartedAt": "2026-07-20T20:17:05Z",
+    "runStartedAt": "2026-07-20T21:09:09Z",
     "completedPhaseClaims": [
       {
         "phase": "bug",
@@ -31,9 +31,28 @@
     "pendingTransitionRequests": [],
     "audit": {
       "schemaVersion": "audit-run/v1",
-      "runId": null,
-      "currentAttemptId": null,
-      "attempts": []
+      "runId": "audit-003-002-20260720T205105Z",
+      "currentAttemptId": "audit-003-002-20260720T205105Z-a1",
+      "attempts": [
+        {
+          "attemptId": "audit-003-002-20260720T205105Z-a1",
+          "resultState": "ACTIVE",
+          "targetRevision": "sha256:3cdb2dd585aa85d66c045f909c7d8e899318128b88c29cb8451145e5d31820e8",
+          "contractDigest": "sha256:aa91472c047d3d985d38c1d308feb1e6081955b2aa553816deb5987d9cdc449f",
+          "auditProfile": "delivery-completion-v1",
+          "targetStatus": "done",
+          "auditVerdict": "REWORK_REQUIRED",
+          "outcome": "route_required",
+          "evidenceRef": ".specify/runtime/audit-003-002-20260720T205105Z-a1.txt",
+          "addressedFindings": [],
+          "unresolvedFindings": [
+            "AUD-003-002-COMPLETION-001",
+            "AUD-003-002-PROVENANCE-001",
+            "AUD-003-002-BOUNDARY-001",
+            "AUD-003-002-G090-001"
+          ]
+        }
+      ]
     }
   },
   "certification": {
@@ -107,6 +126,17 @@
       "runStartedAt": "2026-07-20T20:17:05Z",
       "runCompletedAt": "2026-07-20T20:43:05Z",
       "summary": "Executed the operator-requested RED/GREEN integration, focused lifecycle and scheduler regressions, targeted topic lifecycle E2E, broader Go unit suite, and project quality gates. No implement/test/validate/audit specialist phase claim or certification write was fabricated."
+    },
+    {
+      "agent": "bubbles.plan",
+      "phasesExecuted": [
+        "plan"
+      ],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-07-20T21:09:09Z",
+      "runCompletedAt": "2026-07-20T21:09:09Z",
+      "summary": "Enumerated the mechanically accepted Change Boundary, moved independent validation and audit out of Scope 1 DoD, preserved Test Plan-to-DoD parity and scenario mapping, and routed the bugfix-fastlane packet to implementation without changing audit evidence or certification."
     }
   ],
   "activeBugs": [
@@ -119,7 +149,7 @@
       "summary": "Topic momentum update fails before row processing because UpdateAllMomentum selects nonexistent topics.star_count (SQLSTATE 42703)."
     }
   ],
-  "lastUpdatedAt": "2026-07-20T20:43:05Z",
+  "lastUpdatedAt": "2026-07-20T21:09:09Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "bug": "bug.md",
@@ -131,7 +161,7 @@
     "scenarioManifest": "scenario-manifest.json"
   },
   "routing": {
-    "nextOwner": "bubbles.validate",
+    "nextOwner": "bubbles.implement",
     "testOwner": "bubbles.test",
     "validationOwner": "bubbles.validate",
     "auditOwner": "bubbles.audit",

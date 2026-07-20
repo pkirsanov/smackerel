@@ -296,4 +296,155 @@ No validate-owned certification result is recorded. Product tests and project-ow
 
 ### Audit Verdict
 
-No audit-owned result is recorded.
+The controlling audit-owned result is recorded in the bounded final delivery audit below.
+
+## Bounded Final Delivery Audit - 2026-07-20
+
+### Findings
+
+1. **[BLOCKER] AUD-003-002-COMPLETION-001** - The assertion-only transition guard refused target `done`: all 16 DoD items remain unchecked, Scope 1 remains `In Progress`, and the required broader E2E DoD item has no executed evidence. The current `in_progress` state is truthful and must remain unchanged.
+2. **[BLOCKER] AUD-003-002-PROVENANCE-001** - The registry-required `implement`, `test`, `regression`, `simplify`, `stabilize`, `security`, `validate`, and `audit` phases are absent from the execution/certification phase records. Existing `bubbles.bug` evidence is genuine but cannot impersonate those specialist claims.
+3. **[BLOCKER] AUD-003-002-BOUNDARY-001** - Gate Check 8D accepts the presence of a Change Boundary section but rejects its inline `Allowed`/`Excluded` prose because the scope does not enumerate the allowed and excluded surfaces in the mechanically required form.
+4. **[BLOCKER] AUD-003-002-G090-001** - Gate G090 cannot evaluate convergence because `.specify/memory/bubbles.session.json` is absent from the isolated exact-commit worktree.
+
+### Verified Delivery Delta
+
+- PASS: remote branch `origin/bug/topic-momentum-star-count-20260720`, isolated worktree HEAD, and requested commit all resolve to `7ff2d5441f8d90158873cff378c8b81d448900b8`.
+- PASS: the branch is one commit ahead of parent and `origin/main` merge-base `f5f05450848630fe84c0a215429bdfc701c4bcd2`.
+- PASS: production no longer references `t.star_count`; the correlated aggregate counts `DISTINCT a.id` through artifact-to-topic `BELONGS_TO` edges with `a.user_starred IS TRUE`.
+- PASS: no migration, schema, deploy, config, release-train, secret, manifest, or framework path changed.
+- PASS: the independent disposable PostgreSQL run applied canonical migrations and proved zero-star, multiple-star, unstarred, unrelated-star, momentum, and state outcomes.
+- PASS: the independent focused unit run proved lifecycle formula/state behavior and scheduler failure logging without a success log.
+- PASS: the recorded targeted lifecycle E2E is a real-stack shell flow; selected tests contain no skip, interception, or internal-fake markers.
+- PASS: artifact lint, traceability, implementation reality, and standard plus bugfix regression-quality guards passed independently.
+- PASS: post-test inspection found no residual `smackerel-test` containers, volumes, or networks.
+- PASS: the exact changed-path boundary is limited to one production query, two focused test surfaces, and this packet.
+
+### Independent Audit Evidence
+
+**Phase:** audit
+**Command:** `bash .github/bubbles/scripts/state-transition-guard.sh specs/003-phase2-ingestion/bugs/BUG-003-002-topic-momentum-star-count --target-status done --expect-workflow-mode bugfix-fastlane --expect-contract-digest sha256:aa91472c047d3d985d38c1d308feb1e6081955b2aa553816deb5987d9cdc449f`
+**Exit Code:** 1
+**Claim Source:** executed
+
+```text
+DoD items total: 16 (checked: 0, unchecked: 16)
+BLOCK: Resolved scope artifacts have 16 UNCHECKED DoD items
+Resolved scopes: total=1, Done=0, In Progress=1, Not Started=0, Blocked=0
+BLOCK: Resolved scope artifacts have 1 scope(s) still marked 'In Progress'
+BLOCK: Required phase 'implement' NOT in execution/certification phase records
+BLOCK: Required phase 'test' NOT in execution/certification phase records
+BLOCK: Required phase 'regression' NOT in execution/certification phase records
+BLOCK: Required phase 'simplify' NOT in execution/certification phase records
+BLOCK: Required phase 'stabilize' NOT in execution/certification phase records
+BLOCK: Required phase 'security' NOT in execution/certification phase records
+BLOCK: Required phase 'validate' NOT in execution/certification phase records
+BLOCK: Required phase 'audit' NOT in execution/certification phase records
+BLOCK: Scope is a refactor/repair but does not enumerate allowed and excluded surfaces
+BLOCK: Retro convergence health failed - Gate G090
+TRANSITION BLOCKED: 14 failure(s), 3 warning(s)
+```
+
+**Phase:** audit
+**Command:** `SMACKEREL_HARDWARE_TIER=cpu ./smackerel.sh test integration-light --go-run '^TestTopicLifecycleMomentumFromPersistedStars$'`
+**Exit Code:** 0
+**Claim Source:** executed
+
+```text
+INFO applied migration version=001_initial_schema.sql
+INFO applied migration version=062_model_usage_ledger.sql
+INFO dbmigrate: all migrations applied
+PASS: integration-light db migration (schema applied via cmd/dbmigrate)
+=== RUN   TestTopicLifecycleMomentumFromPersistedStars
+INFO topic state transition topic=<fixture>-zero from=emerging to=dormant momentum=0.5
+INFO topic state transition topic=<fixture>-multiple from=emerging to=active momentum=11.5
+zero-star persisted momentum=0.5000 state=dormant
+multiple-stars persisted momentum=11.5000 state=active
+PASS: canonical topics schema has no star_count column
+PASS: zero linked starred artifacts contribute 0.0 star momentum
+PASS: one linked unstarred artifact contributes only 0.5 connection momentum
+PASS: two linked starred artifacts contribute exactly 10.0 star momentum
+PASS: three linked artifacts contribute exactly 1.5 connection momentum
+PASS: an unrelated starred artifact contributes nothing to the tested topic
+--- PASS: TestTopicLifecycleMomentumFromPersistedStars (0.06s)
+PASS: go-integration-light
+Container smackerel-test-postgres-1 Removed
+Volume smackerel-test-postgres-data Removed
+Network smackerel-test_default Removed
+```
+
+### Observation Versus Blocker
+
+- **Observation:** `artifact-lint.sh` reports the existing `scopeProgress` and `scopeLayout` fields as deprecated while still exiting 0. This is non-blocking for the current `in_progress` packet.
+- **Observation:** focused `go test ./... -run ...` selectors emit `testing: warning: no tests to run` for unrelated packages; the selected scheduler, lifecycle, and integration tests all ran and passed. This does not substitute for the missing broader E2E evidence.
+- **Blocker:** the clean code/test sub-audit cannot override the failed delivery-completion guard or promote packet state.
+
+### Spot-Check Recommendations
+
+1. **Code Diff Evidence block (lines 36-47)** - The raw block is exactly 10 lines, the minimum threshold. Verify its path inventory against `git show --name-status 7ff2d5441f8d90158873cff378c8b81d448900b8`.
+2. **First packet-specific PostgreSQL integration regression** - Verify that the `0.5` and `11.5` expectations continue to separate connection contribution from explicit-star contribution.
+3. **Not-run live red-team observation** - Treat the `not-run` block only as supplied context; the separate executed RED transcript and the parent-commit `t.star_count` search are the controlling counterexample proof.
+
+### Audit Verdict
+
+`REWORK_REQUIRED`. The red-team fix and its bounded behavior evidence pass, but final delivery certification is blocked by incomplete DoD/phase provenance, the mechanically incomplete Change Boundary, and missing G090 session state. The next repair owner is `bubbles.plan`, which must enumerate the allowed and excluded Change Boundary surfaces in the mechanically accepted scope form without changing the already-clean production fix; the authorized `bugfix-fastlane` chain can then resume at `implement` and record each later phase's own evidence before validate and re-audit.
+
+BEGIN TRANSITION_GUARD_RESULT_V1
+schemaVersion: transition-guard-result/v1
+workflowMode: bugfix-fastlane
+auditProfile: delivery-completion-v1
+targetStatus: done
+contractDigest: sha256:aa91472c047d3d985d38c1d308feb1e6081955b2aa553816deb5987d9cdc449f
+targetRevision: sha256:3cdb2dd585aa85d66c045f909c7d8e899318128b88c29cb8451145e5d31820e8
+applicableCheckClasses: [universal,mode-required,delivery-completion]
+notApplicableChecks: []
+passedGateIds: [G053,G040,G051,G068,G082,G083,G084,G128,G085,G086,G091,G087,G093,G088,G089,G092,G094,G095,G097,G098,G099,G100]
+failedGateIds: [G022,G090]
+failedChecks: [Check-4-completion,Check-5-all-done]
+blockingCode: DELIVERY_COMPLETION_FAILED
+failureCount: 14
+exitStatus: 1
+verdict: FAIL
+END TRANSITION_GUARD_RESULT_V1
+
+verdict: REWORK_REQUIRED
+target: specs/003-phase2-ingestion/bugs/BUG-003-002-topic-momentum-star-count
+mode: bugfix-fastlane
+audit class: delivery-completion
+ceiling: done
+
+BEGIN AUDIT_RESULT_V1
+schemaVersion: audit-result/v1
+runId: audit-003-002-20260720T205105Z
+attemptId: audit-003-002-20260720T205105Z-a1
+target: specs/003-phase2-ingestion/bugs/BUG-003-002-topic-momentum-star-count
+targetRevision: sha256:3cdb2dd585aa85d66c045f909c7d8e899318128b88c29cb8451145e5d31820e8
+workflowMode: bugfix-fastlane
+modeClass: none
+auditClass: delivery-completion
+statusCeiling: done
+requestedStatus: done
+auditVerdict: REWORK_REQUIRED
+outcome: route_required
+resultState: ACTIVE
+certifiedStatus: none
+planningEvaluation: NOT_EVALUATED
+deliveryEvaluation: REFUSED
+sourceEditLockout: PASS
+applicableCheckClasses: [universal,mode-required,delivery-completion]
+notApplicableChecks: []
+passedGateIds: [G053,G040,G051,G068,G082,G083,G084,G128,G085,G086,G091,G087,G093,G088,G089,G092,G094,G095,G097,G098,G099,G100]
+failedGateIds: [G022,G090]
+failedChecks: [Check-4-completion,Check-5-all-done]
+blockingCode: DELIVERY_COMPLETION_FAILED
+unresolvedFields: []
+contradictions: []
+contractRef: bubbles/workflows/modes.yaml#bugfix-fastlane
+contractDigest: sha256:aa91472c047d3d985d38c1d308feb1e6081955b2aa553816deb5987d9cdc449f
+evidenceRefs: [.specify/runtime/audit-003-002-20260720T205105Z-a1.txt,report.md#bounded-final-delivery-audit---2026-07-20]
+addressedFindings: []
+unresolvedFindings: [AUD-003-002-COMPLETION-001,AUD-003-002-PROVENANCE-001,AUD-003-002-BOUNDARY-001,AUD-003-002-G090-001]
+nextRequiredOwner: bubbles.plan
+supersedesAttemptId: none
+resumeFromPhase: none
+END AUDIT_RESULT_V1
