@@ -4,10 +4,12 @@ package integration
 
 import (
 	"context"
+	"errors"
 	"math"
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/smackerel/smackerel/internal/topics"
@@ -30,6 +32,7 @@ func TestTopicLifecycleMomentumFromPersistedStars(t *testing.T) {
 
 	assertTopicsStarCountColumnAbsent(t, ctx, pool)
 	seedTopicMomentumFixtures(t, ctx, pool, fixturePrefix)
+	assertDuplicateBelongsToRejected(t, ctx, pool, fixturePrefix)
 
 	lifecycle := topics.NewLifecycle(pool)
 	if err := lifecycle.UpdateAllMomentum(ctx); err != nil {
@@ -47,8 +50,8 @@ func TestTopicLifecycleMomentumFromPersistedStars(t *testing.T) {
 	t.Log("PASS: canonical topics schema has no star_count column")
 	t.Log("PASS: zero linked starred artifacts contribute 0.0 star momentum")
 	t.Log("PASS: one linked unstarred artifact contributes only 0.5 connection momentum")
-	t.Log("PASS: two linked starred artifacts contribute exactly 10.0 star momentum")
-	t.Log("PASS: three linked artifacts contribute exactly 1.5 connection momentum")
+	t.Log("PASS: two distinct linked starred artifacts contribute exactly 10.0 star momentum")
+	t.Log("PASS: three linked relationships contribute exactly 1.5 connection momentum")
 	t.Log("PASS: an unrelated starred artifact contributes nothing to the tested topic")
 }
 
@@ -132,6 +135,29 @@ func seedTopicMomentumFixtures(t *testing.T, ctx context.Context, pool *pgxpool.
 	if err != nil {
 		t.Fatalf("insert edge momentum fixtures: %v", err)
 	}
+}
+
+func assertDuplicateBelongsToRejected(t *testing.T, ctx context.Context, pool *pgxpool.Pool, prefix string) {
+	t.Helper()
+
+	_, err := pool.Exec(ctx, `
+		INSERT INTO edges (
+			id, src_type, src_id, dst_type, dst_id, edge_type, weight, metadata
+		) VALUES ($1, 'artifact', $2, 'topic', $3, 'BELONGS_TO', 1.0, '{}')
+	`, prefix+"-edge-star-one-duplicate", prefix+"-artifact-star-one", prefix+"-topic-multiple")
+	if err == nil {
+		t.Fatal("canonical schema accepted a duplicate artifact-to-topic BELONGS_TO relationship")
+	}
+
+	var postgresError *pgconn.PgError
+	if !errors.As(err, &postgresError) {
+		t.Fatalf("duplicate BELONGS_TO returned non-PostgreSQL error: %v", err)
+	}
+	if postgresError.Code != "23505" || postgresError.ConstraintName != "edges_src_type_src_id_dst_type_dst_id_edge_type_key" {
+		t.Fatalf("duplicate BELONGS_TO error = code %s constraint %s, want canonical relationship uniqueness", postgresError.Code, postgresError.ConstraintName)
+	}
+
+	t.Log("PASS: canonical relationship uniqueness rejects duplicate BELONGS_TO edges")
 }
 
 func readTopicMomentum(t *testing.T, ctx context.Context, pool *pgxpool.Pool, topicID string) topicMomentumResult {
