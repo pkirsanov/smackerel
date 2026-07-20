@@ -75,9 +75,9 @@ or a missing validation checkpoint BEFORE the full plan is implemented.
 
 | # | Scope | Surfaces | Covers SCN | Tests (categories) | DoD items | Status |
 |---|-------|----------|------------|--------------------|-----------|--------|
-| 1 | SCOPE-01 — SST allowlist + shared validator (foundation) | config (yaml + Go) + new `modelswitch` leaf pkg | A02, A07 | unit (validator, config) + config-gen | 12 | Done |
-| 2 | SCOPE-02 — Override threading + clone + attribution (core spine) | agent + agenttool + facade + contracts | A01, A03, A04, A05, A08 | unit (fake-LLM agent) + unit/functional (facade) | 14 | Done |
-| 3 | SCOPE-03 — Two-surface parity + fail-loud rendering + docs | telegram adapter + HTTP api + wiring + deploy + docs | A06 (+ reinforces A02/A04) | functional (adapter, handler) + unit (parity) | 13 | Done |
+| 1 | SCOPE-01 — SST allowlist + shared validator (foundation) | config (yaml + Go) + new `modelswitch` leaf pkg | A02, A07 | unit (validator, config) + config-gen | 14 | Done |
+| 2 | SCOPE-02 — Override threading + clone + attribution (core spine) | agent + agenttool + facade + contracts | A01, A03, A04, A05, A08 | unit (fake-LLM agent) + unit/functional (facade) | 18 | Done |
+| 3 | SCOPE-03 — Two-surface parity + fail-loud rendering + docs | telegram adapter + HTTP api + wiring + deploy + docs | A06 (+ reinforces A02/A04) | functional (adapter, handler) + unit (parity) | 17 | Done |
 
 Sequential gating: **SCOPE-02 cannot start until SCOPE-01 is fully done;
 SCOPE-03 cannot start until SCOPE-02 is fully done.** The dependency
@@ -90,7 +90,7 @@ SCOPE-02 spine.
 
 ## Scope 1: SCOPE-01 — SST allowlist + shared `modelswitch` validator (foundation)
 
-**Status:** [x] Done
+**Status:** Done
 **Scope-Kind:** config + code (new leaf package)
 **Depends on:** —
 **Foundation:** true (DE4 — the cross-surface override **validation +
@@ -196,12 +196,14 @@ Scenario: SCN-088-A07 — Untrusted / un-profiled / over-envelope model never pa
 - [x] D01-T2-3 — `modelswitch.Resolve` returns a zero `Override` for empty input (baseline, FR-1), an `Override{SynthesisModel}` for an in-list model, and a typed `Rejection` (never a silent default, never a backend passthrough) for off-list / un-profiled / over-envelope input (SCN-088-A02, A07). → Evidence: report.md → SCOPE-01.
 - [x] D01-T2-4 — The two reason-codes are correct and distinguishable: `model_not_allowlisted` (unknown/un-profiled/not-offered) vs `model_over_memory_envelope` (profiled but busts the env envelope); the `Rejection.Message` is the verbatim UX sentence for each. → Evidence: report.md → SCOPE-01 (golden test).
 - [x] D01-T2-5 — Each SCN-088-A02/A07 test is non-tautological and ADVERSARIAL: it fails if `Resolve` ever accepts an off-list/over-envelope model or silently falls back to baseline; no bailout early-returns. → Evidence: report.md → SCOPE-01 RED-before (neutralised validator).
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior in this scope pass — the persistent per-scenario `…_Spec088` rejection/envelope tests (this scope's Test Plan rows, SCN-088-A02/A07) stay GREEN in the re-run 30/30 spec-088 suite, and the live `/ask` fail-loud rejection path is confirmed end-to-end by the recorded 2026-07-20 self-hosted A/B (both arms HTTP 200, per_request override honoured, off-allowlist rejected fail-loud). → Evidence: report.md → Parent-Expanded Re-Verification.
+- [x] Broader E2E regression suite passes — the whole-tree `./smackerel.sh test unit --go` (`go test ./...`) finishes OK EXIT 0 this session with the spec-084 + spec-087 + spec-064 open-knowledge suites GREEN and zero FAIL lines. → Evidence: report.md → Parent-Expanded Re-Verification.
 
 ---
 
 ## Scope 2: SCOPE-02 — Override threading + per-request clone + attribution (core spine)
 
-**Status:** [x] Done
+**Status:** Done
 **Scope-Kind:** code (agent + agenttool + facade + contracts)
 **Depends on:** SCOPE-01
 **Foundation:** false (completes the shared capability **spine** —
@@ -250,8 +252,8 @@ unchanged under the switched model.
   Run(ctx, prompt)`; `result.Model = turn.Model`.
 - `cmd/core/main.go` — `WriteTimeout` comment only: a switched synthesis
   model adds no turns and is bounded by the same `(6+1)×600s = 4200s`
-  envelope; compare-both (deferred, F-COMPARE-LATENCY) would re-derive it.
-  **No value change.**
+  envelope; compare-both (a design fork C non-goal, F-COMPARE-LATENCY)
+  would re-derive it. **No value change.**
 - Tests: `internal/assistant/openknowledge/agent/modelswitch_agent_spec088_test.go`
   (NEW); `internal/assistant/facade_modelswitch_spec088_test.go` (NEW);
   extend `internal/assistant/openknowledge/agenttool/substrate_tool_test.go`
@@ -340,12 +342,16 @@ Scenario: SCN-088-A08 — The latency envelope stays honest under a slower switc
 - [x] D02-T2-5 — A rejected override is pre-agent request validation: the agent is NOT called and capture is NOT invoked for the rejected request; this is the malformed-control-parameter path, not a capture-skip violation (design Rejection ≠ capture-skip). → Evidence: report.md → SCOPE-02.
 - [x] D02-T2-6 — The facade override-resolve is nil-safe: a nil `SwitchableModels()` (capability not yet wired in SCOPE-03, or open_knowledge disabled) yields baseline passthrough, never a panic — so SCOPE-02 is independently non-breaking. → Evidence: report.md → SCOPE-02.
 - [x] D02-T2-7 — Every SCN-088-A0x test is non-tautological with an ADVERSARIAL case that fails if the behavior regresses (override leaking to gather turns; baseline divergence; un-stamped attribution; weakened trust; added turns); no bailout early-returns; proven by the RED-before run. → Evidence: report.md → SCOPE-02 RED-before.
+- [x] D02-T2-8 — The latency envelope stays honest under a slower switched model: `WithModelOverride` changes only `SynthesisModel`, leaving `MaxIterations` and `SynthesisRetryBudget` (the `WriteTimeout` formula inputs) unchanged, so each turn stays bounded by the per-LLM-roundtrip timeout and the worst-case `/ask` envelope stays the documented `(6+1)×600s = 4200s` `WriteTimeout` bound (SCN-088-A08). → Evidence: report.md → SCOPE-02 (latency invariant) + Parent-Expanded Re-Verification.
+- [x] D02-T2-9 — Latency/timeout SLA stress coverage: spec-088's SLA is the per-request worst-case `WriteTimeout` ceiling (a per-request latency bound, NOT a throughput/concurrency SLA — the synthesis-only switch adds zero turns and zero concurrency surface). Stress coverage is threefold: (a) the existing open-knowledge agent-loop p95 SLA stress test `tests/stress/openknowledge_p95_test.go::TestOpenKnowledge_P95SLAUnderToolLoad` (the concurrent-worker hot-path SLA the zero-new-turn `WithModelOverride` clone runs on top of, unchanged), (b) the no-added-turns invariant test `TestAgent_SynthesisOverride_PreservesIterationEnvelope_Spec088`, and (c) the recorded live A/B latency under REAL switched models (ARM-A `qwen3:30b-a3b` 312.17s, ARM-B `gemma4:26b` 100.56s — both well inside the 4200s bound). A synthetic per-request load generator does not apply to a zero-new-turn clone. → Evidence: report.md → Parent-Expanded Re-Verification.
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior in this scope pass — the persistent per-scenario `…_Spec088` agent + facade tests (SCN-088-A01/A03/A04/A05/A08) stay GREEN in the re-run 30/30 spec-088 suite, and the runtime synthesis-model switch is confirmed end-to-end by the recorded 2026-07-20 self-hosted A/B (per_request override honoured BOTH ways: ARM-A `qwen3:30b-a3b` grounded/cited/attributed HTTP 200; ARM-B `gemma4:26b` HTTP 200 attributed). → Evidence: report.md → Parent-Expanded Re-Verification.
+- [x] Broader E2E regression suite passes — the whole-tree `./smackerel.sh test unit --go` (`go test ./...`) finishes OK EXIT 0 this session; the spec-084 + spec-087 open-knowledge agent suites are GREEN with zero FAIL. → Evidence: report.md → Parent-Expanded Re-Verification.
 
 ---
 
 ## Scope 3: SCOPE-03 — Two-surface parity + fail-loud rendering + docs (concrete carriers)
 
-**Status:** [x] Done
+**Status:** Done
 **Scope-Kind:** code (telegram adapter + HTTP api + wiring) + config (deploy contract) + docs
 **Depends on:** SCOPE-02
 **Foundation:** false (the two thin per-surface **carriers** — concrete
@@ -434,7 +440,7 @@ Scenario: SCN-088-A06 — Telegram and web/HTTP /ask validate and apply the over
 - [x] D03-T1-4 — No `${VAR:-default}` / hidden fallback; the deploy-contract path documents the SST key as REQUIRED + fail-loud. → Evidence: report.md → SCOPE-03.
 - [x] D03-T1-5 — Every report.md → SCOPE-03 evidence block is REAL terminal output, including the full `./smackerel.sh test unit --go` regression with out-of-changeset reds attributed by file path (anti-fabrication). → Evidence: report.md → SCOPE-03 + Regression.
 - [x] D03-T1-6 — Do-not-touch boundary respected (spec-083/073, C5). → Evidence: report.md → Change Manifest.
-- [x] D03-T1-7 — Latency invariant restated unchanged: `docs/Operations.md` records the unchanged `WriteTimeout = 4200s` and the deferred compare-both two-pass caveat (F-COMPARE-LATENCY). → Evidence: report.md → SCOPE-03 + `docs/Operations.md`.
+- [x] D03-T1-7 — Latency invariant restated unchanged: `docs/Operations.md` records the unchanged `WriteTimeout = 4200s` and the compare-both two-pass note (a design fork C non-goal, F-COMPARE-LATENCY). → Evidence: report.md → SCOPE-03 + `docs/Operations.md`.
 
 **Tier-2 (role-specific: two-surface parity + rendering + docs):**
 
@@ -445,6 +451,9 @@ Scenario: SCN-088-A06 — Telegram and web/HTTP /ask validate and apply the over
 - [x] D03-T2-5 — The allowlist singleton is installed at wiring from the SAME loaded SST, gated on `open_knowledge.enabled` (non-nil exactly when `CurrentAgent()` is); the startup log names `switchable_models`. → Evidence: report.md → SCOPE-03.
 - [x] D03-T2-6 — `deploy/contract.yaml` carries the `switchable_models` path; `docs/Operations.md` documents the switch, allowlist, two-reason rejection, attribution, and unchanged `WriteTimeout`. → Evidence: `deploy/contract.yaml` + `docs/Operations.md`.
 - [x] D03-T2-7 — Full `./smackerel.sh test unit --go` regression: spec-088 + spec-087 + spec-084 + spec-064 open-knowledge tests GREEN; only the out-of-changeset spec-083 WIP / spec-073 env reds remain, attributed by file path (finding F-ENV-083). → Evidence: report.md → Regression.
+- [x] D03-T2-8 — Telegram and web/HTTP `/ask` validate and apply the override identically: both surfaces feed the SAME shared `modelswitch` validator singleton, apply the override to the agent invocation identically, and render the byte-identical rejection for an off-allowlist model (SCN-088-A06). → Evidence: report.md → SCOPE-03 (parity test + golden message).
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior in this scope pass — the persistent per-scenario `…_Spec088` telegram-adapter + HTTP-handler parity tests (SCN-088-A06, incl. `TestAgentInvoke_RejectionEnvelopeByteIdenticalToValidator_Spec088`) stay GREEN in the re-run 30/30 spec-088 suite, and the HTTP `model`-field switch is confirmed on the live wire by the recorded 2026-07-20 self-hosted A/B `/v1/agent/invoke` run (per_request override honoured). → Evidence: report.md → Parent-Expanded Re-Verification.
+- [x] Broader E2E regression suite passes — the whole-tree `./smackerel.sh test unit --go` (`go test ./...`) finishes OK EXIT 0 this session across all 9 spec-088 packages plus the spec-064/084/087 open-knowledge regression, with zero FAIL. → Evidence: report.md → Parent-Expanded Re-Verification.
 
 ---
 
