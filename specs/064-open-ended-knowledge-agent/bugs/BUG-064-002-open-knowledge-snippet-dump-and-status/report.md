@@ -300,3 +300,37 @@ level. The LIVE self-hosted symptom clears only after a redeploy (rebuild
 `smackerel-core` from the fixed SHA + self-hosted config-bundle regen + redeploy via
 the knb `<deployment-owner>/<product>/<target>` adapter — the same build-once-deploy-many chain as
 BUG-064-001). Owner: `bubbles.devops`.
+
+---
+
+## DevOps Live Self-Hosted Re-Verify — 2026-07-20 (evidence only; NOT a promotion)
+
+Recorded by `bubbles.devops`. Bug `status` UNCHANGED (`blocked`). Live-stack evidence
+only.
+
+**Target:** self-hosted `<deploy-host>`; deployed core rev `a7ce6834fddb` (ancestor of HEAD
+`a8a64525`). A live `POST /v1/agent/invoke` `open_knowledge` turn (synthesis
+`qwen3:30b-a3b`, persisted `smackerel-cohort-ab-1784510252.log`) returned:
+
+```
+status: success | termination: final
+ONE synthesized verdict (no "thinking…" header; no triplicated snippet dump)
+num_sources: 2 — real, de-duplicated searxng web results, within the sources cap
+```
+
+**DEFECTS 1/2/3a/3b — cleared live on the reasoning-loop path.** The live answer is a
+single synthesized verdict with a small de-duplicated, capped real source set and a
+terminal (non-"thinking…") status — the opposite of the triplicated raw-snippet dump
+under a "thinking…" header this bug fixed. A companion same-question run with
+`gemma4:26b`-as-synthesis (recorded in spec-088) produced a non-answer; that is a
+model-quality outcome, not a regression of these fixes, and the dedup/cap/honest-
+salvage machinery still bounded it.
+
+**Promotion NOT performed — not due to this evidence.** `state-transition-guard.sh`
+(2026-07-20, HEAD `a8a64525`) exits 1 with 11 failures that are structural gaps owned
+by other specialists: G056 (state.json has no `certification` block), a Test-Plan
+reference to a non-existent file `agent_test.go`, G022 (`audit` phase not recorded),
+G053 (report has no git-backed `### Code Diff Evidence` section), and E2E-regression
+DoD rows. `bubbles.devops` did not fabricate a certification block or a missing test
+file. Route: `bubbles.test` (fix the Test-Plan file reference), `bubbles.validate`
+(certification block), then re-drive the guard.

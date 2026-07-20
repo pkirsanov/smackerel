@@ -1422,3 +1422,55 @@ retired from the self-hosted active selection. The spec-088 runtime-switch
 machinery, the `switchable_models` co-residence envelope guard
 (`validateModelEnvelopes`), and the trust invariants are unchanged — only the
 offered model set changed. See `docs/Operations.md` → "Model Envelope Sizing".
+
+---
+
+## DevOps Live Self-Hosted A/B — 2026-07-20 (evidence only; NOT a promotion)
+
+Recorded by `bubbles.devops`. Status UNCHANGED (`blocked`); `certifiedAt` stays
+`null`. Live-stack evidence only; no certification/promotion.
+
+**Target:** self-hosted `<deploy-host>`; deployed core rev `a7ce6834fddb` (ancestor of HEAD
+`a8a64525` — the spec-088 per-request `--model` override is on the live wire).
+`POST /v1/agent/invoke` with a top-level `"model"` field. Throwaway PASETOs minted
+then handled; tokens redacted. Foreign `colibri` DeepSeek-V4 download + models left
+untouched (host ~95→61 GiB MemAvailable across the run); `smackerel-ml-1` healthy
+throughout ARM-B (`RestartCount=0`).
+
+The runtime SYNTHESIS-model switch was exercised BOTH ways — the per-request
+override is honoured in each arm (`model_source: per_request`):
+
+```
+ARM-A  synthesis qwen3:30b-a3b (per_request)  -> HTTP 200, TIME_TOTAL 312.17s
+       status success | termination final | 2 real sources | GENUINE verdict
+       (Phoenix > Minneapolis, USDA zones)   [persisted: smackerel-cohort-ab-1784510252.log]
+
+ARM-B  synthesis gemma4:26b     (per_request)  -> HTTP 200, TIME_TOTAL 100.56s
+       status success | termination final | refusal_cause "" | 5 real searxng sources
+       model: gemma4:26b   model_source: per_request   gather_model: gemma4:26b (default)
+       body(DEGRADED): "I do not have any retrieved information or tool results
+                        regarding the climate suitability for pomegranate trees in
+                        Minneapolis or Phoenix to provide an answer."
+       [persisted: smackerel-armb-1784511382.log]
+```
+
+**Switch routing — proven both ways** (per_request override honoured for qwen3 AND
+gemma4). **ARM-B synthesis quality — DEGRADED:** `gemma4:26b`-as-synthesis returned a
+self-contradicting non-answer despite 5 real gathered sources — consistent with
+spec-084's empirical finding that gemma4 is a weak synthesizer (the rationale for
+spec-087's split synthesis model). `smackerel-ml-1` stayed healthy across ARM-B
+(`RestartCount=0`), the arm was not interrupted, so this is a genuine gemma4 output,
+not an infra fault.
+
+**Promotion NOT performed — two independent reasons.** (1) The A/B acceptance bar for
+this promotion is "a real gemma4-synthesized verdict (not error/degraded)"; a
+degraded non-answer does not clear it, so a genuine gemma4-as-synthesis VERDICT was
+not captured — an accepted 088 A/B needs that verdict or a different second synthesis
+model. (2) Independently, `state-transition-guard.sh` (2026-07-20, HEAD `a8a64525`)
+exits 1 with 36 failures on pre-existing structural gaps owned by other specialists:
+G041 (non-canonical `[x] Done` scope statuses), G022 (7 required phases + phase
+provenance missing), G040 (deferral language in scopes.md/report.md), G068 (2 Gherkin
+scenarios without faithful DoD items), G093, G053, and G089 (depends on the blocked
+spec-087). `bubbles.devops` did not fabricate phase records nor edit `scopes.md`.
+Route: `bubbles.plan` + `bubbles.validate` to remediate the artifact gaps; a genuine
+gemma4-as-synthesis (or alternate second-model) A/B is the outstanding live gate.

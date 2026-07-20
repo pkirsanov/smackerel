@@ -368,3 +368,52 @@ Model-matrix diff check over `config/smackerel.yaml` (`llm_model_id`,
 "gemma4:26b" — no `llm_model_id` / `ollama_model` / model-matrix VALUE changed.
 The model matrix is unchanged (gemma4:26b self-hosted / gemma3:4b dev). No
 deepseek-r1 wiring added.
+
+---
+
+## DevOps Live Self-Hosted Re-Verify — 2026-07-20 (evidence only; NOT a promotion)
+
+Recorded by `bubbles.devops`. This spec's `state.json` status is UNCHANGED
+(`blocked`) and `certifiedAt` stays `null`; this section adds live-stack evidence
+only and does NOT certify or promote.
+
+**Target:** self-hosted `<deploy-host>`; deployed core rev `a7ce6834fddb` (a git ancestor
+of repo HEAD `a8a64525` — the spec-084 reasoning-loop code is present in the running
+image). `POST /v1/agent/invoke`, `scenario_id=open_knowledge`. Throwaway PASETO
+minted then revoked; token value redacted (`v4.public.<redacted>`). Good-neighbour:
+the foreign `colibri` DeepSeek-V4 download and its resident models were left
+untouched; `smackerel-ml-1` was restored to healthy via `docker start` (its own
+container) before the run.
+
+**ARM-A — reasoning loop, synthesis model `qwen3:30b-a3b` (per_request)** — parsed
+this session from the persisted host log
+`~/smackerel-cohort-ab-1784510252.log` on `<deploy-host>` (HTTP 200, `TIME_TOTAL 312.17s`):
+
+```
+status        : success
+termination   : final
+model         : qwen3:30b-a3b   (model_source: per_request)
+gather_model  : gemma4:26b      (gather_model_source: default)
+refusal_cause : ""              num_sources: 2 (real searxng web results)
+verdict(body) : "Phoenix, Arizona is a much better climate for growing pomegranate
+                trees year-round because Minneapolis, Minnesota is in USDA Zone 4-5,
+                which is below the minimum hardiness zone (Zone 6) required for
+                cold-hardy pomegranate varieties ... while Phoenix is in USDA Zone 9,
+                which falls within the ideal range of Zones 8-10 ..."
+```
+
+The live stack ran the full question-agnostic loop (decompose → gather → reconcile
+→ synthesized verdict) and returned a real reasoned answer with real cited sources
+and the cite-back / provenance perimeter intact — the live behaviour this spec was
+parked on.
+
+**Promotion NOT performed — not due to this evidence.** `state-transition-guard.sh`
+(run 2026-07-20 against HEAD `a8a64525`, clean tree) exits 1 with 9 failures that
+are pre-existing structural artifact gaps owned by OTHER specialists: Check 8A
+(SCOPE-02/03 carry `scopeKind` tags the v4.1.0 guard does not recognise, so it
+requires scenario-specific + broader E2E-regression DoD rows they lack) and Check
+8B (SCOPE-01 rename/removal lacks a consumer-impact-sweep DoD item) — both
+`scopes.md`, owner `bubbles.plan`; plus Check 13B / G053 (report has no git-backed
+`### Code Diff Evidence` section). `bubbles.devops` did not edit `scopes.md`
+(foreign-owned) nor force a green guard. Route: `bubbles.plan` to bring the
+`scopes.md` DoD to the v4.1.0 contract, then re-drive the guard.

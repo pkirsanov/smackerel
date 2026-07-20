@@ -363,3 +363,37 @@ See {#build-gate}.
   live openknowledge E2E on the real Telegram+searxng+GPU stack, audit pass) cannot
   run in this sandbox (no self-hosted GPU stack; pypi/node/dart toolchains absent).
   They are appropriate to run on the real stack alongside the redeploy.
+
+---
+
+## DevOps Live Self-Hosted Re-Verify — 2026-07-20 (evidence only; NOT a promotion)
+
+Recorded by `bubbles.devops`. Bug `status` UNCHANGED (`blocked`). Live-stack evidence
+only.
+
+**Target:** self-hosted `<deploy-host>`; deployed core rev `a7ce6834fddb` (a git ancestor of
+HEAD `a8a64525`; far newer than the `0bc04cfb` that shipped the `0` budget). A live
+`POST /v1/agent/invoke` `open_knowledge` turn returned:
+
+```
+status: success   termination: final   (NOT a "cap_usd" pre-flight refusal)
+```
+
+**DEFECT A (budget refuse-all) — cleared live.** The open-knowledge agent answered
+instead of refusing at the per-user-monthly USD pre-flight gate, confirming the
+`monthly_budget_usd 100 / per_user_monthly_budget_usd 25` fix is live on the deployed
+rev. **DEFECT B (Telegram `/ask` capture-prefix strip)** is a Telegram-adapter path
+and is NOT exercised by an HTTP `/v1/agent/invoke` turn; it stays validated in-repo
+(`capture_prefix_bug064001_test.go`) and present in the deployed rev, but a live
+Telegram `/ask` capture-title check was not run this session.
+
+**Promotion NOT performed — not due to DEFECT-A evidence.** `state-transition-guard.sh`
+(2026-07-20, HEAD `a8a64525`) exits 1 with 14 failures that are structural gaps owned
+by other specialists: **G028 implementation-reality-scan flags 5 STUB/FAKE-DATA source
+violations**, G056 (state.json has no `certification` block), G057 (no
+`scenario-manifest.json`), G022 (`audit` phase not recorded), G068 (3 Gherkin
+scenarios without faithful DoD items), and E2E-regression DoD rows. `bubbles.devops`
+did not fabricate a certification block or edit source/scopes. Route: `bubbles.implement`
+(G028 source violations), `bubbles.validate` (certification block), `bubbles.plan`
+(scenario-manifest + DoD), then re-drive the guard; plus a live Telegram `/ask` check
+for DEFECT B.
