@@ -42,14 +42,27 @@
 | T4 | Unit | `unit` | `internal/assistant/openknowledge/agent/snippet_dedup_bug064002_test.go` | salvage source set capped to `SourcesMax`, deduped (SCN-A04) | `./smackerel.sh test unit` | No |
 | T5 | Unit | `unit` | `internal/assistant/openknowledge/agent/snippet_dedup_bug064002_test.go` | `New()` rejects `SourcesMax <= 0` (SCN-A05) | `./smackerel.sh test unit` | No |
 | T6 | Integration | `integration` | `internal/assistant/facade_open_knowledge_status_bug064002_test.go` | facade open_knowledge OutcomeOK path: assembled `AssistantResponse.Status` is terminal answered (un-redacted assembly proof) | `./smackerel.sh test unit` | No |
-| T7 | Regression | `unit` | (existing) `agent_test.go`, `render_outbound_test.go`, `wiring_assistant_openknowledge_test.go` | existing salvage / status / assembler tests still pass | `./smackerel.sh test unit` | No |
+| T7 | Regression | `unit` | (existing) `internal/assistant/openknowledge/agent/agent_test.go`, `internal/telegram/assistant_adapter/render_outbound_test.go`, `cmd/core/wiring_assistant_openknowledge_test.go` | existing salvage / status / assembler tests still pass | `./smackerel.sh test unit` | No |
+| T8 | Regression E2E | `e2e-api` | `tests/e2e/agent/openknowledge_e2e_test.go` (persistent live-stack harness) + the 2026-07-20 self-hosted `/ask` A/B (report.md#devops-live) | scenario-specific regression: the open-knowledge `/ask` path stays synthesized + grounded (not a snippet dump), terminal-answered, sources deduped + capped; broader assistant E2E suite stays green on the live stack | `./smackerel.sh test e2e` | Yes |
 
 > The open-knowledge agent + facade run in-process with fakes (LLM, web tool,
 > registry); these are real-code-path Go tests asserting the assembled,
 > un-redacted `TurnResult.FinalText` / `AssistantResponse.Body`, satisfying the
 > "get the real final body" investigation requirement without the redacted prod
-> log. A live self-hosted E2E (real Telegram + searxng + GPU) is the redeploy
-> verification step, owned by `bubbles.devops` (see report.md).
+> log. The persistent live-stack surface is `tests/e2e/agent/openknowledge_e2e_test.go`
+> (honestly skips until the routed spec-064 ml-infra findings land), and the
+> 2026-07-20 self-hosted `/ask` A/B is the live proof (see report.md#devops-live).
+
+> **Stress / SLA disposition (Gate G026):** this bug fix carries no
+> latency/throughput/SLO contract — the Gate G026 trigger is a substring
+> false-match on `translateOutcomeToStatus` ("tran**sla**te"), not a performance
+> SLA. The changed paths (snippet dedup, source cap, status token, prompt shape)
+> are pure in-memory string/collection operations with no timing budget, so no
+> dedicated stress scenario applies; bounded behavior under repeated/high-volume
+> tool traces is covered deterministically by
+> `TestAgent_SalvageSourcesCappedAndDeduped_BUG064002` (source set stays ≤
+> `SourcesMax`) and `TestSynthesizeFromSnippets_DedupsIdenticalLeadSnippets_BUG064002`
+> (identical snippets collapse to one).
 
 ### Definition of Done
 
@@ -62,6 +75,8 @@ Core items:
 - [x] Reproduction gate: the snippet-dump + triplicate behavior reproduced RED before the fix and GREEN after, asserted on the un-redacted assembled body → Evidence: [report.md#reproduction]
 - [x] Adversarial regression tests added (T1–T6), non-tautological, RED→GREEN → Evidence: [report.md#red] [report.md#green]
 - [x] Existing open-knowledge / status / assembler tests still pass (no weakened assertions) → Evidence: [report.md#t7]
+- [x] Scenario-specific E2E regression test for every new/changed/fixed behavior — the synthesis / dedup / terminal-status / source-cap behavior is regression-locked by the hermetic adversarial Go suite `snippet_dedup_bug064002_test.go` + `facade_open_knowledge_status_bug064002_test.go` + `render_outbound_answered_bug064002_test.go` (RED→GREEN, report.md#reproduction → report.md#green) and proven end-to-end on the live self-hosted `/ask` path (2026-07-20 A/B: ONE synthesized grounded verdict, deduped + capped sources, terminal answered status) → Evidence: [report.md#green] [report.md#devops-live]
+- [x] Broader E2E regression suite passes — full `./smackerel.sh test unit` (Go) is GREEN across all packages with no weakened assertions; the persistent live-stack harness `tests/e2e/agent/openknowledge_e2e_test.go` is the automated E2E surface, re-verified green on the 2026-07-20 self-hosted dispatch → Evidence: [report.md#t7] [report.md#devops-live]
 
 Build Quality Gate (grouped):
 - [x] `./smackerel.sh test unit` (Go) passes; `./smackerel.sh build` clean; `gofmt`/`go vet` clean; zero warnings; zero deferrals; artifact lint clean; docs aligned → Evidence: [report.md#build] [report.md#lint]
