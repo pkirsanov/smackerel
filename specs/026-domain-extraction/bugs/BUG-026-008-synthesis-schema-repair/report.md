@@ -795,3 +795,221 @@ state_transition_guard_exit=1
 ```
 
 The nonzero state guard is the required terminal refusal. It confirms that no `done` write is truthful until the fresh audit result exists and the owning completion chain reconciles the three remaining DoD items, Scope 1, and the five evidence-backed phase claims.
+
+## Delivery Completion Audit - 2026-07-20
+
+### Findings
+
+1. **[HIGH] The registry-bound delivery-completion guard is not green.** The fresh assertion-only guard resolved `bugfix-fastlane`, target `done`, profile `delivery-completion-v1`, and contract digest `sha256:aa91472c047d3d985d38c1d308feb1e6081955b2aa553816deb5987d9cdc449f`, then exited `1`. It found three unchecked DoD items, Scope 1 still `In Progress`, and five evidence-backed phase claims withheld from `execution.completedPhaseClaims`. A positive `SHIP_IT` audit would contradict the canonical guard and fail `audit-result-contract-lint.sh`.
+2. **[PASS] No product implementation release blocker was found.** Exact pushed tip `2aef0dc47435bf338218273301cc8322a26c7e86` contains source candidate `5904f0266c2e9edd06db8fd8fb75794687dcf10e` and security-reviewed aggregate candidate `b476198898f005ac5bad25510fcb9d90cbe50939` in its ancestry. All changes after both candidates are packet-only under `specs/`; there is no post-review product source, test, config, runtime-doc, deployment, secret, host, or release-train mutation.
+3. **[PASS] The bounded repair matches the outcome contract.** The reviewed bytes contain one fail-loud exact-one repair budget, one shared completion helper, one corrective message construction, exactly two possible dispatch call sites, accumulated token accounting, full-operation elapsed time, content-free repair failures, trace retention on the result only, and no third-call loop. The adversarial contracts cover invalid-then-valid, invalid twice, malformed repair JSON, repair exception leakage, valid-first, profile/context/accounting retention, and missing-semantic non-normalization.
+4. **[MEDIUM] Broad-suite proof is compositional and the Ollama-agent path remains explicitly skipped.** The packet records current bug-scoped focused execution plus outer-session assistant-package and all-package/root-package evidence composition. This audit did not rerun runtime suites under the operator boundary and does not relabel the opt-in Ollama skip as passing coverage. The residual is disclosed, not hidden.
+5. **[HIGH] The remaining completion work is foreign-owned packet reconciliation.** Audit cannot check DoD items, mark Scope 1 Done, promote the five parent-expanded phase records, or write validate-owned certification. The current DoD includes validate-owned certification as a prerequisite to a guard that must pass before a positive audit, creating a completion-order conflict that must be reconciled by the planning/completion owners rather than bypassed by audit.
+
+### Contract And Candidate Identity
+
+**Phase:** audit
+
+**Command:** exact local/remote branch identity, ancestry, and post-candidate path-class checks
+
+**Exit Code:** 0
+
+**Claim Source:** executed
+
+```text
+=== BUG-026-008 AUDIT IDENTITY ===
+worktree=~/smackerel-bug-026-008-synthesis-schema-repair
+branch=bug/026-008-synthesis-schema-repair
+local_tip=2aef0dc47435bf338218273301cc8322a26c7e86
+expected_tip=2aef0dc47435bf338218273301cc8322a26c7e86
+origin=git@github.com:pkirsanov/smackerel.git
+2aef0dc47435bf338218273301cc8322a26c7e86 refs/heads/bug/026-008-synthesis-schema-repair
+local_tip_match=PASS
+remote_tip_match=PASS
+source_candidate_ancestor_exit=0
+security_review_ancestor_exit=0
+post_candidate_non_packet_diff_exit=0
+post_security_non_packet_diff_exit=0
+=== COMMITS AFTER SOURCE CANDIDATE ===
+2aef0dc4 chore(bug): record bounded validation block
+563b36a7 docs(bug): align BUG-026-008 release route
+f782be87 docs(bug): record BUG-026-008 fastlane evidence
+=== BUG-026-008 AUDIT IDENTITY END ===
+```
+
+### Technical Byte Audit
+
+**Phase:** audit
+
+**Command:** read-only git inspection of exact source candidate `5904f0266c2e9edd06db8fd8fb75794687dcf10e`, reviewed ancestry, bounded repair call sites, SST wiring, and adversarial tests
+
+**Exit Code:** 0
+
+**Claim Source:** executed
+
+```text
+=== BUG-026-008 TECHNICAL BYTE AUDIT ===
+tip=2aef0dc47435bf338218273301cc8322a26c7e86
+source_candidate=5904f0266c2e9edd06db8fd8fb75794687dcf10e
+security_review=b476198898f005ac5bad25510fcb9d90cbe50939
+review_to_source_ancestry_exit=0
+post_review_product_delta_exit=0
+--- bounded repair call sites ---
+ml/app/synthesis.py:31:def resolve_synthesis_schema_repair_attempts() -> int:
+ml/app/synthesis.py:182:async def _dispatch_synthesis_completion(
+ml/app/synthesis.py:258:    resolve_synthesis_schema_repair_attempts()
+ml/app/synthesis.py:293:        llm_output_text, tokens_used, model_used = await _dispatch_synthesis_completion(
+ml/app/synthesis.py:343:        repair_kwargs["messages"] = [
+ml/app/synthesis.py:353:            repair_text, repair_tokens, model_used = await _dispatch_synthesis_completion(
+ml/app/synthesis.py:402:                "error": f"Schema validation failed after repair: {repair_error_class}",
+--- exact-one SST wiring ---
+config/smackerel.yaml:1868:    synthesis_schema_repair_attempts: 1
+ml/app/main.py:56:        "ML_SYNTHESIS_SCHEMA_REPAIR_ATTEMPTS",
+ml/app/synthesis.py:33:    value = os.environ.get("ML_SYNTHESIS_SCHEMA_REPAIR_ATTEMPTS")
+scripts/commands/config.sh:766:ML_SYNTHESIS_SCHEMA_REPAIR_ATTEMPTS="$(required_value services.ml.synthesis_schema_repair_attempts)"
+scripts/commands/config.sh:2682:ML_SYNTHESIS_SCHEMA_REPAIR_ATTEMPTS=${ML_SYNTHESIS_SCHEMA_REPAIR_ATTEMPTS}
+--- adversarial scenario contracts ---
+ml/tests/test_synthesis.py:225:def test_handle_extract_repairs_missing_concepts_once(monkeypatch):
+ml/tests/test_synthesis.py:242:def test_handle_extract_fails_when_schema_repair_remains_invalid(monkeypatch):
+ml/tests/test_synthesis.py:276:def test_handle_extract_fails_when_schema_repair_is_malformed_json(monkeypatch):
+ml/tests/test_synthesis.py:294:def test_handle_extract_schema_repair_exception_is_content_free(monkeypatch, caplog):
+ml/tests/test_synthesis.py:317:def test_handle_extract_valid_first_response_remains_one_call(monkeypatch):
+ml/tests/test_synthesis.py:329:def test_handle_extract_schema_repair_retains_profile_and_sums_tokens(monkeypatch):
+=== BUG-026-008 TECHNICAL BYTE AUDIT END ===
+```
+
+The implementation satisfies the declared intent, success signal, hard constraints, and failure classes. No new endpoint, route, consumer removal, datastore mutation, authentication surface, IDOR path, or silent decode branch is introduced. The additive Go `trace_id` response field remains covered by the focused response contract and does not alter core acknowledgement semantics.
+
+### Static Governance Verification
+
+**Phase:** audit
+
+**Commands:** artifact lint, traceability guard, implementation-reality scan, bugfix regression-quality guard, and `git diff --check`
+
+**Exit Code:** 0 for every command
+
+**Claim Source:** executed
+
+```text
+Artifact lint PASSED.
+artifact_lint_exit=0
+scenario-manifest.json covers 7 scenario contract(s)
+Scenarios checked: 7
+Test rows checked: 21
+Scenario-to-row mappings: 7
+Concrete test file references: 7
+Report evidence references: 7
+DoD fidelity scenarios: 7 (mapped: 7, unmapped: 0)
+RESULT: PASSED (0 warnings)
+traceability_exit=0
+Files scanned: 13
+Violations: 0
+Warnings: 0
+PASSED: No source code reality violations detected
+reality_scan_exit=0
+REGRESSION QUALITY RESULT: 0 violation(s), 0 warning(s)
+Files scanned: 3
+Files with adversarial signals: 3
+regression_guard_exit=0
+git_diff_check_exit=0
+```
+
+### Independent Test Verification
+
+- **Runtime suite execution:** NOT RUN by this audit. The operator expressly prohibited runtime suite/build/deploy reruns, and audit did not substitute source inspection for test execution.
+- **Bug-scoped evidence composition:** The report contains executed evidence for 13 exact-one config tests, 20 synthesis tests, three Go response tests, SST sync, live `TestKnowledgeSynthesis_PipelineRoundTrip` in 19.56s, 21 sibling regressions, terminal-path tests, adversarial guard, and cleanup.
+- **Outer broad evidence:** The operator supplied current-session composition: assistant package PASS in 44.972s; every named all-package subpackage PASS with one root Photos assertion failure; after one test-only repair, root package PASS in 221.468s with clean teardown. Audit treats this as interpreted release evidence, not as this audit's command execution.
+- **Skip marker scan:** No actual skip/only/todo marker was found in the selected BUG-026-008 Python, Go, or live E2E test files. The lexical scan's two matches are docstrings containing `sys.exit(1)`, not test skips.
+- **Live interception scan:** Zero interception signals were found in selected live-system files.
+- **Evidence integrity:** No discrepancy was found between the packet's focused counts and its raw blocks. The outer broad counts are preserved as interpreted context because their complete raw transcript is not embedded here.
+
+### Security And Change Boundary
+
+The prior security specialist reviewed aggregate candidate `b476198898f005ac5bad25510fcb9d90cbe50939` and returned release-positive merge/build/deploy findings. This audit individually reviewed that interpreted claim against ancestry and the zero post-review non-packet delta; applying it to the exact pushed tip is reasonable. Current static reality scans report zero G047 IDOR and G048 silent-decode findings. The changed repair path logs exception types and validator/path classes rather than exception text, artifact content, model output, credentials, or trace IDs. No deployment, knb, `<deploy-host>`, secret, release-train, or host surface changed.
+
+### Evidence Provenance Review
+
+The packet contains 24 `executed`, one `interpreted`, and one `not-run` report claim-source block. The single interpreted block, `Specialist Evidence Reconciliation`, was reviewed individually: its interpretation is supported by exact ancestry plus zero post-review product delta, but it remains diagnostic rather than current command execution. The `not-run` broad-suite block is correctly disclosed and does not support a checked completion claim by itself.
+
+Three unchecked DoD items each carry an Uncertainty Declaration. Audit resolves none by mutation:
+
+- The broad-suite declaration remains a genuine evidence-provenance limitation; compositional evidence is release-positive, but the Ollama-agent path remains explicitly skipped.
+- The security/audit declaration is technically satisfied by prior security plus this current audit review, but audit does not own its checkbox.
+- The validate-owned certification declaration is necessarily post-audit and remains validate-owned.
+
+No duplicate evidence block, unfilled template token, false live-test interception, content leak, unbounded retry, config fallback in the changed contract, or post-review product mutation was found.
+
+## Spot-Check Recommendations
+
+These items passed their technical checks or were honestly disclosed, but warrant human review:
+
+1. **Specialist Evidence Reconciliation** - This is the packet's one `interpreted` evidence block. Verify the prior security PASS and prior audit technical PASS against their original specialist transcripts before deployment; ancestry and zero product delta make the interpretation reasonable but do not turn it into current execution.
+2. **Focused Go Response Contract** - Its raw output is exactly 10 lines, the minimum threshold. Verify the three named response tests directly cover success, failure, and full-pipeline trace/payload retention.
+3. **SST Check** - Its raw output is exactly 10 lines, the minimum threshold. Verify the generated environment check covers both dev/test projections of `ML_SYNTHESIS_SCHEMA_REPAIR_ATTEMPTS` rather than only the source YAML scalar.
+4. **Format Classification** - Its historical raw block is nine lines. Verify the later warning-free format evidence remains the controlling proof and the old baseline-classification block is not reused alone.
+5. **Broad-suite composition** - Verify the 44.972s assistant-package and 221.468s repaired root-package transcripts remain tied to the same source candidate; do not count the opt-in Ollama-agent skip as passed.
+6. **Three Uncertainty Declarations** - Verify the completion owners reconcile the broad-suite evidence, audit checkbox, and validate-owned certification in the required phase order without audit mutating foreign-owned scope/certification state.
+
+### Audit Results
+
+| Category | Result | Basis |
+|---|---|---|
+| Branch/remote identity | PASS | Local and remote exact tip `2aef0dc4` |
+| Candidate ancestry | PASS | `5904f026` and `b4761988` are ancestors |
+| Post-review product mutation | PASS | Zero non-`specs/` delta |
+| Implementation correctness | PASS | Bounded exact-one repair contract matches code and tests |
+| Test evidence composition | PASS WITH RESIDUAL | Focused evidence is raw; broad composition interpreted; Ollama skip retained |
+| Security/change boundary | PASS | Prior specialist plus current zero-delta and static checks |
+| Artifact lint | PASS | Exit 0 |
+| Traceability | PASS | 7/7 scenario mappings, zero warnings |
+| Implementation reality | PASS | 13 files, zero violations/warnings |
+| Regression quality | PASS | Three adversarial files, zero violations/warnings |
+| Delivery completion guard | FAIL | Eight completion-chain failures, Gate G022 |
+
+### Audit Verdict
+
+**Technical verdict:** PASS for the exact source candidate and reviewed delivery bytes.
+
+**Structured delivery-completion verdict:** `REWORK_REQUIRED`. This audit cannot honestly emit `SHIP_IT` while the registry-bound guard exits `1`. No product-source repair is required. The first required owner is `bubbles.plan` to reconcile the cyclic/pre-audit DoD shape and exact completion ownership; execution/test owners then reconcile the broad-suite item and five phase claims, and `bubbles.validate` alone performs terminal certification. Deployment remains routed to `bubbles.devops` only after that completion chain is mechanically green.
+
+### Route Required
+
+Owner: `bubbles.plan`
+
+Reason: The exact candidate is technically release-positive, but the `delivery-completion-v1` guard cannot pass while audit and validate-owned completion are unchecked prerequisites and five already-executed phases remain withheld. Reconcile the packet's completion ordering without weakening the delivery bar; audit does not edit foreign-owned DoD, scope status, phase claims, or certification.
+
+BEGIN AUDIT_RESULT_V1
+schemaVersion: audit-result/v1
+runId: audit-026-008-20260720T024224Z
+attemptId: audit-026-008-20260720T024224Z-a1
+target: specs/026-domain-extraction/bugs/BUG-026-008-synthesis-schema-repair
+targetRevision: sha256:e75a52015c91ccffa4701e1e26c81728254d70b5adfd52cae238bc53f648ced5
+workflowMode: bugfix-fastlane
+modeClass: none
+auditClass: delivery-completion
+statusCeiling: done
+requestedStatus: done
+auditVerdict: REWORK_REQUIRED
+outcome: route_required
+resultState: ACTIVE
+certifiedStatus: none
+planningEvaluation: NOT_EVALUATED
+deliveryEvaluation: REFUSED
+sourceEditLockout: PASS
+applicableCheckClasses: [universal,mode-required,delivery-completion]
+notApplicableChecks: []
+passedGateIds: [G061,G053,G040,G051,G068,G082,G083,G084,G128,G085,G086,G091,G087,G093,G088,G089,G092,G090,G094,G095,G097,G098,G099,G100]
+failedGateIds: [G022]
+failedChecks: [Check-4-completion,Check-5-all-done]
+blockingCode: DELIVERY_COMPLETION_FAILED
+unresolvedFields: []
+contradictions: []
+contractRef: bubbles/workflows/modes.yaml#bugfix-fastlane
+contractDigest: sha256:aa91472c047d3d985d38c1d308feb1e6081955b2aa553816deb5987d9cdc449f
+evidenceRefs: [.specify/runtime/audit-026-008-20260720T024224Z-a1.txt,report.md#delivery-completion-audit---2026-07-20]
+addressedFindings: []
+unresolvedFindings: [AUD-026-008-BROAD-EVIDENCE-001,AUD-026-008-COMPLETION-ORDER-001,AUD-026-008-PHASE-CLAIMS-001]
+nextRequiredOwner: bubbles.plan
+supersedesAttemptId: none
+resumeFromPhase: none
+END AUDIT_RESULT_V1
