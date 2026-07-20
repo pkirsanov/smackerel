@@ -41,6 +41,15 @@ processing_latency = Histogram(
     buckets=[0.1, 0.25, 0.5, 1, 2, 5, 10, 30, 60],
 )
 
+# BUG-026-008 — content-free observability for the single corrective model call
+# made after parsed synthesis JSON fails its prompt-contract schema. No labels
+# are used, so model output, artifact content, identifiers, and validation text
+# can never enter the metric surface or create unbounded cardinality.
+synthesis_schema_repair_attempts_total = Counter(
+    "smackerel_ml_synthesis_schema_repair_attempts_total",
+    "Corrective synthesis model calls after parsed JSON fails schema validation",
+)
+
 # Spec 050 FR-050-005 — embedding worker pool observability.
 #
 # embedding_workers_configured exposes the configured pool size

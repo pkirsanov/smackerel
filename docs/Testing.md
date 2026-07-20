@@ -36,6 +36,7 @@ The repository now exposes a sanctioned CLI-owned runtime test surface for the f
 | Integration | `./smackerel.sh test integration` | Runtime lifecycle or health changes |
 | Integration (stores-only, light) | `./smackerel.sh test integration-light` | Integration tests needing ONLY postgres+nats (in-process Go against the stores); LIGHT preflight floor (2000 MB / 8 GB) |
 | End-to-end | `./smackerel.sh test e2e` | Runtime, compose, or config changes |
+| Assistant-package end-to-end | `./smackerel.sh test e2e --go-package assistant` | Assistant facade, transport, intent trace, legacy retirement, renderer, or assistant E2E harness changes |
 | End-to-end UI (PWA browser) | `./smackerel.sh test e2e-ui` | PWA `.spec.ts` under `web/pwa/tests/` changes, login/auth UI, CSP, or served-route shape changes |
 | Stress smoke | `./smackerel.sh test stress` | Runtime health, lifecycle, or stress env handoff changes |
 | Chrome extension e2e (MV3) | `./smackerel.sh test e2e-ext` | `extensions/chrome-bridge/` MV3 background/content/transport code or its Playwright e2e harness changes (self-contained; real headless Chromium, no live stack) |
@@ -64,6 +65,21 @@ The current CLI-owned runtime surface exposes these categories today:
 | Chrome extension e2e (MV3) | `e2e-ext` | `./smackerel.sh test e2e-ext` |
 | Chrome extension supply-chain | `extension-supplychain` | `./smackerel.sh test extension-supplychain` |
 | Portability guard (host static) | `pre-push` | `./smackerel.sh test pre-push` |
+
+### Assistant-Only E2E Package
+
+`./smackerel.sh test e2e --go-package assistant` runs every Go test under
+`tests/e2e/assistant` against the disposable test stack while excluding the
+shell E2E blocks and every other Go E2E package. The selector is closed:
+`assistant` is the only accepted package value, and an unknown or empty value
+fails before stack startup. Add `--go-run '<regex>'` for a focused test inside
+the assistant package.
+
+The assistant package includes tests that execute the checked-in PWA renderer.
+`scripts/runtime/go-e2e.sh` supplies and verifies Node inside its Debian Go
+tooling container. Host Node/npm is neither installed nor used, and a missing
+containerized Node executable fails the test lane rather than skipping renderer
+coverage.
 
 ### Stores-Only Integration-Light Lane (`test integration-light`, OPS-005 F-RUNBOOK)
 

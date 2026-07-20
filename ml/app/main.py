@@ -51,6 +51,9 @@ def _check_required_config() -> dict[str, str]:
         "ML_EMBEDDING_WORKERS",
         "ML_EMBEDDING_QUEUE_MAX",
         "ML_HEALTH_LATENCY_SLA_MS",
+        # BUG-026-008 — exactly one corrective call after parsed synthesis JSON
+        # fails schema validation. SST-owned and required for every provider.
+        "ML_SYNTHESIS_SCHEMA_REPAIR_ATTEMPTS",
     ]
     required: dict[str, str] = {}
     missing: list[str] = []
@@ -174,6 +177,15 @@ def _check_required_config() -> dict[str, str]:
             "Invalid ML_PROCESSING_DEGRADED_FALLBACK_ENABLED=%r; expected true or false",
             required["ML_PROCESSING_DEGRADED_FALLBACK_ENABLED"],
         )
+        sys.exit(1)
+
+    try:
+        schema_repair_attempts = int(required["ML_SYNTHESIS_SCHEMA_REPAIR_ATTEMPTS"])
+    except ValueError:
+        logger.error("ML_SYNTHESIS_SCHEMA_REPAIR_ATTEMPTS must be the integer 1")
+        sys.exit(1)
+    if schema_repair_attempts != 1:
+        logger.error("ML_SYNTHESIS_SCHEMA_REPAIR_ATTEMPTS must be the integer 1")
         sys.exit(1)
 
     # Spec 050 FR-050-002 — embedding worker pool size MUST be a positive
@@ -422,7 +434,6 @@ def _health_strict_requested(strict: str) -> bool:
     liveness is unaffected. Mirrors the Go ``healthStrictRequested`` contract
     (``internal/api/health.go``) — redteam F1 / BUG-050-002."""
     return strict.strip().lower() in {"1", "true", "yes"}
-
 
 
 @app.get("/metrics")

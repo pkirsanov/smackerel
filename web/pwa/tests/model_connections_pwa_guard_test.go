@@ -27,6 +27,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"testing"
+
+	"github.com/smackerel/smackerel/internal/testsupport/jssource"
 )
 
 // readPWA reads a committed file under web/pwa/ relative to the repo root.
@@ -90,7 +92,7 @@ var forbiddenWriteOnlyPatterns = []struct {
 // credential input in the add + detail PWA JS (DoD: write-only secret).
 func TestModelConnectionsWriteOnlySecretAffordance_Spec096(t *testing.T) {
 	for _, name := range modelConnSecretJS {
-		src := stripLineComments(readPWA(t, name))
+		src := jssource.WithoutComments(readPWA(t, name))
 
 		for _, want := range requiredWriteOnlyPatterns {
 			if !want.re.MatchString(src) {
@@ -164,7 +166,7 @@ var requiredOperatorBoundaryPatterns = []struct {
 // 403→operator-only handling across the whole triad (DoD: operator gate).
 func TestModelConnectionsOperatorBoundary_Spec096(t *testing.T) {
 	for _, name := range modelConnAllJS {
-		src := stripLineComments(readPWA(t, name))
+		src := jssource.WithoutComments(readPWA(t, name))
 		for _, want := range requiredOperatorBoundaryPatterns {
 			if !want.re.MatchString(src) {
 				t.Errorf("%s is missing the operator-boundary wiring %q: pattern %s did not match",
@@ -213,7 +215,7 @@ var requiredTruthfulTestPatterns = []struct {
 // danger banner, and NO Ollama substitution/fallback in executable code
 // (SCN-096-W04 / DoD: truthful test).
 func TestModelConnectionDetailTruthfulTest_NoFalseSuccess_Spec096(t *testing.T) {
-	js := stripLineComments(readPWA(t, "model-connection-detail.js"))
+	js := jssource.WithoutComments(readPWA(t, "model-connection-detail.js"))
 
 	for _, want := range requiredTruthfulTestPatterns {
 		if !want.re.MatchString(js) {

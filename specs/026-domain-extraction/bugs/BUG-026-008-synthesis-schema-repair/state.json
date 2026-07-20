@@ -1,0 +1,491 @@
+{
+  "version": 3,
+  "specId": "026-domain-extraction",
+  "bugId": "BUG-026-008-synthesis-schema-repair",
+  "featureDir": "specs/026-domain-extraction/bugs/BUG-026-008-synthesis-schema-repair",
+  "featureName": "BUG-026-008 bounded synthesis extraction schema repair",
+  "title": "Parsed schema-invalid synthesis output becomes permanent failure after one LLM call",
+  "severity": "high",
+  "source": "operator-provided accepted-runtime logs plus source-path confirmation",
+  "owningSpec": "026-domain-extraction",
+  "status": "done",
+  "releaseTrain": "mvp",
+  "workflowMode": "bugfix-fastlane",
+  "executionRuntime": "direct",
+  "flagsIntroduced": [],
+  "createdAt": "2026-07-19",
+  "updatedAt": "2026-07-20T18:15:46Z",
+  "certifiedAt": "2026-07-20T18:15:46Z",
+  "certifiedBy": "bubbles.validate",
+  "completedAt": "2026-07-20T18:15:46Z",
+  "redeployRequired": true,
+  "deploymentReached": false,
+  "execution": {
+    "activeAgent": null,
+    "currentPhase": "finalize",
+    "currentScope": "1",
+    "executionModel": "direct-authorized-runner",
+    "runStartedAt": "2026-07-19",
+    "lastUpdatedAt": "2026-07-20T18:15:46Z",
+    "completedAt": "2026-07-20T18:15:46Z",
+    "completedScopes": [
+      "1"
+    ],
+    "completedPhaseClaims": ["implement", "test", "regression", "simplify", "stabilize", "security", "validate", "audit"],
+    "completedPhaseClaimsByScope": {
+      "1": ["implement", "test", "regression", "simplify", "stabilize", "security", "validate", "audit"]
+    },
+    "pendingTransitionRequests": [],
+    "audit": {
+      "schemaVersion": "audit-run/v1",
+      "runId": "audit-026-008-20260720T024224Z",
+      "currentAttemptId": "audit-026-008-20260720T024224Z-a2",
+      "attempts": [
+        {
+          "attemptId": "audit-026-008-20260720T024224Z-a1",
+          "resultState": "SUPERSEDED",
+          "targetRevision": "sha256:e75a52015c91ccffa4701e1e26c81728254d70b5adfd52cae238bc53f648ced5",
+          "contractDigest": "sha256:aa91472c047d3d985d38c1d308feb1e6081955b2aa553816deb5987d9cdc449f",
+          "auditProfile": "delivery-completion-v1",
+          "targetStatus": "done",
+          "auditVerdict": "REWORK_REQUIRED",
+          "outcome": "route_required",
+          "evidenceRef": ".specify/runtime/audit-026-008-20260720T024224Z-a1.txt",
+          "addressedFindings": [],
+          "unresolvedFindings": [
+            "AUD-026-008-BROAD-EVIDENCE-001",
+            "AUD-026-008-COMPLETION-ORDER-001",
+            "AUD-026-008-PHASE-CLAIMS-001"
+          ]
+        },
+        {
+          "attemptId": "audit-026-008-20260720T024224Z-a2",
+          "resultState": "ACTIVE",
+          "targetRevision": "sha256:9180b9c534072a486d843948d09fd1a181413b4597063381120f421a5897a963",
+          "contractDigest": "sha256:aa91472c047d3d985d38c1d308feb1e6081955b2aa553816deb5987d9cdc449f",
+          "auditProfile": "delivery-completion-v1",
+          "targetStatus": "done",
+          "auditVerdict": "SHIP_WITH_NOTES",
+          "outcome": "completed_diagnostic",
+          "evidenceRef": ".specify/runtime/audit-026-008-20260720T024224Z-a2.txt",
+          "addressedFindings": [
+            "AUD-026-008-BROAD-EVIDENCE-001",
+            "AUD-026-008-COMPLETION-ORDER-001",
+            "AUD-026-008-PHASE-CLAIMS-001"
+          ],
+          "unresolvedFindings": []
+        }
+      ]
+    },
+    "scopeSummary": [
+      {
+        "scopeId": "1",
+        "title": "Repair one parsed schema-invalid synthesis response",
+        "owner": "bubbles.implement",
+        "dodCount": 23,
+        "status": "done",
+        "dependsOn": [],
+        "notes": "Scenario-first bounded repair inside the existing synthesis extraction capability; source delivery stops before build/deploy."
+      }
+    ]
+  },
+  "completedScopes": [
+    "1"
+  ],
+  "transitionRequests": [
+    {
+      "id": "TR-026-008-TEST-001",
+      "requestedAt": "2026-07-19T13:10:00Z",
+      "requestedBy": "bubbles.bug",
+      "fromStatus": "in_progress",
+      "toStatus": "route_required",
+      "targetAgent": "bubbles.test",
+      "reason": "Targeted shell E2E sets E2E_STACK_MANAGED=1 but does not boot the parent-owned stack, so test_synthesis.sh times out with service postgres is not running. Own under spec 031 live-stack test infrastructure.",
+      "packetRef": "report.md#discovered-issues",
+      "routedTo": "bubbles.test",
+      "status": "resolved",
+      "addressedAt": "2026-07-19T16:03:34Z",
+      "addressedBy": "bubbles.test",
+      "resolution": "Targeted shared-stack shell E2E now pre-cleans, boots the disposable stack, passes SCN-004-001, and tears down through the parent lifecycle.",
+      "evidenceRef": "report.md#harness-and-category-repairs"
+    },
+    {
+      "id": "TR-026-008-TEST-002",
+      "requestedAt": "2026-07-19T13:12:00Z",
+      "requestedBy": "bubbles.bug",
+      "fromStatus": "in_progress",
+      "toStatus": "route_required",
+      "targetAgent": "bubbles.test",
+      "reason": "Dockerized full-unit tests mount the linked worktree but not the primary checkout Git metadata, so provenance and local-client tests fail with fatal not a git repository at the .git/worktrees pointer. Own under spec 031 test infrastructure.",
+      "packetRef": "report.md#discovered-issues",
+      "routedTo": "bubbles.test",
+      "status": "resolved",
+      "addressedAt": "2026-07-19T16:03:34Z",
+      "addressedBy": "bubbles.test",
+      "resolution": "Tooling containers now receive read-only linked-worktree Git metadata plus GIT_OPTIONAL_LOCKS=0; the focused mount contract and full Go unit lane pass.",
+      "evidenceRef": "report.md#harness-and-category-repairs"
+    },
+    {
+      "id": "TR-026-008-TEST-003",
+      "requestedAt": "2026-07-19T13:47:00Z",
+      "requestedBy": "bubbles.bug",
+      "fromStatus": "in_progress",
+      "toStatus": "route_required",
+      "targetAgent": "bubbles.test",
+      "reason": "The repo CLI Python unit lane collects two explicit opt-in live tests as skips. Every changed BUG-026-008 test executes, but a literal zero-skip certification needs a supported required-test selector or category isolation owned by test infrastructure.",
+      "packetRef": "report.md#post-rebase-combined-head-verification",
+      "routedTo": "bubbles.test",
+      "status": "resolved",
+      "addressedAt": "2026-07-19T16:03:34Z",
+      "addressedBy": "bubbles.test",
+      "resolution": "Python unit collection excludes integration and live-Ollama categories with zero skips, while the required dead-letter parity test passes in the canonical integration lane.",
+      "evidenceRef": "report.md#harness-and-category-repairs"
+    },
+    {
+      "id": "TR-026-008-QUALITY-001",
+      "requestedAt": "2026-07-19T13:14:00Z",
+      "requestedBy": "bubbles.bug",
+      "fromStatus": "in_progress",
+      "toStatus": "route_required",
+      "targetAgent": "bubbles.implement",
+      "reason": "Repo-wide format check names internal/config/release_trains_contract_test.go; git diff --exit-code proves it is byte-identical to origin/main and outside BUG-026-008's change boundary.",
+      "packetRef": "report.md#format-classification",
+      "routedTo": "bubbles.implement",
+      "status": "resolved",
+      "addressedAt": "2026-07-19T16:03:34Z",
+      "addressedBy": "bubbles.test",
+      "resolution": "Mechanical formatting was applied and the canonical repo-wide format check now passes.",
+      "evidenceRef": "report.md#final-cheap-closeout-checks"
+    },
+    {
+      "id": "TR-026-008-BROAD-001",
+      "requestedAt": "2026-07-19T16:03:34Z",
+      "requestedBy": "bubbles.test",
+      "fromStatus": "in_progress",
+      "toStatus": "route_required",
+      "targetAgent": "bubbles.bug",
+      "reason": "The final broad E2E run is RED on five independent assistant/PWA and Drive findings documented in report.md; later failures after core/network disappearance are cascade noise and must not be over-filed.",
+      "packetRef": "report.md#independent-broad-findings-routed-out-of-packet",
+      "routedTo": "bubbles.bug",
+      "status": "resolved",
+      "resolution": "The five independent findings were assigned BUG-069-004, BUG-073-004, BUG-073-005, BUG-038-002, and BUG-038-003/BUG-031-009 packets and their fixes are consolidated in candidate b476198898f005ac5bad25510fcb9d90cbe50939. Aggregate evidence reconciliation remains a separate open governance action."
+    },
+    {
+      "id": "TR-026-008-VALIDATE-001",
+      "requestedAt": "2026-07-19T13:37:00Z",
+      "requestedBy": "bubbles.bug",
+      "fromStatus": "in_progress",
+      "toStatus": "route_required",
+      "targetAgent": "bubbles.validate",
+      "reason": "Review exact source candidate 5904f0266c2e9edd06db8fd8fb75794687dcf10e plus the committed packet evidence. Implement, focused test, regression, simplify, and stabilize ran in this invocation. Full all-package E2E remains operator-attested under the explicit no-rerun boundary, the focused runner retains its opt-in Ollama-agent skip, and security/audit remain diagnostic claims rather than terminal certification.",
+      "packetRef": "report.md#remaining-workflow-execution---2026-07-20",
+      "routedTo": "bubbles.validate",
+      "routedToCommit": "5904f0266c2e9edd06db8fd8fb75794687dcf10e",
+      "productAction": "none",
+      "crossRepoFollowUp": true,
+      "status": "resolved",
+      "addressedAt": "2026-07-20T02:31:10Z",
+      "addressedBy": "bubbles.validate",
+      "resolution": "Bounded validation confirmed source ancestry, zero post-review product delta, outcome-contract evidence, broad Go E2E composite coverage with the Ollama-agent skip preserved, and release-positive security/audit diagnostics. Terminal certification was withheld because the current delivery-completion audit attempt and AUDIT_RESULT_V1 transcript are absent.",
+      "evidenceRef": "report.md#validate-owned-bounded-certification---2026-07-20"
+    },
+    {
+      "id": "TR-026-008-AUDIT-001",
+      "requestedAt": "2026-07-20T02:31:10Z",
+      "requestedBy": "bubbles.validate",
+      "fromStatus": "in_progress",
+      "toStatus": "route_required",
+      "targetAgent": "bubbles.audit",
+      "routedTo": "bubbles.audit",
+      "routedToSpec": "specs/026-domain-extraction/bugs/BUG-026-008-synthesis-schema-repair",
+      "productAction": "none",
+      "crossRepoFollowUp": true,
+      "reason": "Execute the current delivery-completion-v1 audit attempt at the latest branch tip, persist exactly one ACTIVE attempt through execution.audit.currentAttemptId, and attach a complete AUDIT_RESULT_V1 transcript resolved against the fresh transition contract. The prior b4761988 audit was governance-blocked and cannot serve as the post-governance terminal audit result.",
+      "packetRef": "report.md#candidate-and-audit-contract-probe",
+      "status": "resolved",
+      "addressedAt": "2026-07-20T18:15:46Z",
+      "addressedBy": "bubbles.validate",
+      "resolution": "Fresh ACTIVE attempt audit-026-008-20260720T024224Z-a2 matches the registry-resolved delivery-completion-v1 contract, passes audit-result-contract-lint, accounts for all inherited findings, and authorizes validate-owned terminal certification.",
+      "evidenceRef": "report.md#validate-owned-terminal-certification---2026-07-20"
+    },
+    {
+      "id": "TR-026-008-DEVOPS-001",
+      "requestedAt": "2026-07-19T13:37:00Z",
+      "requestedBy": "bubbles.bug",
+      "fromStatus": "in_progress",
+      "toStatus": "route_required",
+      "targetAgent": "bubbles.devops",
+      "reason": "After validate/audit certification, build and deploy the pushed source through the signed delivery path and confirm accepted-runtime card-rewards synthesis repair; no deployment is authorized in this source-delivery session.",
+      "packetRef": "spec.md#deployment-boundary",
+      "routedTo": "bubbles.devops",
+      "routedToCommit": "024cb65317645ed375c02bf574151f2ecee92f02",
+      "productAction": "none",
+      "crossRepoFollowUp": true,
+      "status": "open"
+    },
+    {
+      "id": "TR-026-008-GOVERNANCE-001",
+      "requestedAt": "2026-07-19T23:20:00Z",
+      "requestedBy": "bubbles.bug",
+      "fromStatus": "in_progress",
+      "toStatus": "route_required",
+      "targetAgent": "bubbles.plan",
+      "routedTo": "bubbles.plan",
+      "routedToCommit": "b476198898f005ac5bad25510fcb9d90cbe50939",
+      "productAction": "none",
+      "crossRepoFollowUp": true,
+      "reason": "Repair the scopes.md change-boundary DoD shape and broken RED evidence anchor from existing report evidence only; do not rerun full E2E.",
+      "packetRef": "report.md#red-bug-reproduction---before-fix",
+      "status": "resolved",
+      "addressedAt": "2026-07-20",
+      "addressedBy": "bubbles.plan",
+      "resolution": "scopes.md now contains the canonical Change Boundary DoD item and the pre-fix regression links to the existing RED evidence anchor.",
+      "evidenceRef": "scopes.md#change-boundary"
+    }
+  ],
+  "transitionHistory": [],
+  "reworkQueue": [],
+  "executionHistory": [
+    {
+      "at": "2026-07-19",
+      "agent": "bubbles.bug",
+      "phase": "bug",
+      "phasesExecuted": ["bug"],
+      "provenanceMode": "direct-authorized-runner",
+      "note": "Created the complete BUG-026-008 packet from the accepted-runtime missing-concepts symptom and confirmed the one-call terminal schema-validation branch in handle_extract."
+    },
+    {
+      "at": "2026-07-19T13:37:00Z",
+      "agent": "bubbles.bug",
+      "phase": "implementation-test-handoff",
+      "phasesExecuted": ["bug"],
+      "provenanceMode": "direct-authorized-runner",
+      "outcome": "route_required",
+      "note": "Implemented and exercised the bounded schema-repair source/config/test/doc delivery under the authorized top-level runner because no runSubagent tool exists. Did not claim implement/test/docs/validate/audit specialist phases. Routed independent certification to bubbles.validate, audit thereafter, and signed build/deploy to bubbles.devops."
+    },
+    {
+      "at": "2026-07-19",
+      "agent": "bubbles.security",
+      "phasesExecuted": ["security"],
+      "provenanceMode": "specialist",
+      "candidateRevision": "b476198898f005ac5bad25510fcb9d90cbe50939",
+      "claimSource": "operator-attested-outer-session",
+      "outcome": "completed_diagnostic",
+      "note": "Exact-candidate security review returned PASS for merge, build, and deploy. No skipped coverage is reclassified as passing."
+    },
+    {
+      "at": "2026-07-19",
+      "agent": "bubbles.validate",
+      "phasesExecuted": ["validate"],
+      "provenanceMode": "specialist",
+      "candidateRevision": "b476198898f005ac5bad25510fcb9d90cbe50939",
+      "claimSource": "operator-attested-outer-session",
+      "outcome": "completed_diagnostic",
+      "note": "Exact-candidate diagnostic returned PASS for exact fast-forward merge, build, and deploy while explicitly noting existing skips and nonterminal certification. certification.* remains untouched."
+    },
+    {
+      "at": "2026-07-19",
+      "agent": "bubbles.audit",
+      "phasesExecuted": ["audit"],
+      "provenanceMode": "specialist",
+      "candidateRevision": "b476198898f005ac5bad25510fcb9d90cbe50939",
+      "claimSource": "operator-attested-outer-session",
+      "outcome": "blocked",
+      "note": "Exact-candidate source, test, and documentation consistency passed; DELIVERY_COMPLETION_FAILED was limited to packet governance."
+    },
+    {
+      "at": "2026-07-20",
+      "agent": "bubbles.implement",
+      "phase": "implement",
+      "phasesExecuted": ["implement"],
+      "provenanceMode": "parent-expanded",
+      "expandedBy": "bubbles.bug",
+      "expansionReason": "The authorized bubbles.bug runner is executing bugfix-fastlane directly; this runtime exposes no runSubagent tool.",
+      "candidateRevision": "5904f0266c2e9edd06db8fd8fb75794687dcf10e",
+      "claimSource": "executed",
+      "outcome": "completed_owned",
+      "evidenceRef": "scopes.md#definition-of-done",
+      "note": "Reconciled implementation commit e2ac9405b453698b5325b4b92f8b9cab4bd3cc35 against the exact candidate. Git showed the pre-fix terminal schema-validation return, the candidate bounded-repair transition, and zero paths outside the plan-owned change boundary; no source edit was required."
+    },
+    {
+      "at": "2026-07-20",
+      "agent": "bubbles.test",
+      "phase": "test",
+      "phasesExecuted": ["test"],
+      "provenanceMode": "parent-expanded",
+      "expandedBy": "bubbles.bug",
+      "expansionReason": "The authorized bubbles.bug runner is executing bugfix-fastlane directly; this runtime exposes no runSubagent tool.",
+      "candidateRevision": "5904f0266c2e9edd06db8fd8fb75794687dcf10e",
+      "claimSource": "executed",
+      "outcome": "completed_diagnostic",
+      "evidenceRef": "report.md#test-phase---focused-contracts",
+      "note": "Current-session focused verification passed: 13 exact-one config tests, SST/config drift check, 20 focused synthesis tests, three Go synthesis response tests, and the live disposable TestKnowledgeSynthesis_PipelineRoundTrip. The canonical full all-package E2E run was not rerun under the operator's hard boundary; its outer-session PASS remains operator-attested only, and the focused runner's explicit Ollama-agent skip remains residual risk."
+    },
+    {
+      "at": "2026-07-20",
+      "agent": "bubbles.regression",
+      "phase": "regression",
+      "phasesExecuted": ["regression"],
+      "provenanceMode": "parent-expanded",
+      "expandedBy": "bubbles.bug",
+      "expansionReason": "The authorized bubbles.bug runner is executing bugfix-fastlane directly; this runtime exposes no runSubagent tool.",
+      "candidateRevision": "5904f0266c2e9edd06db8fd8fb75794687dcf10e",
+      "claimSource": "executed",
+      "outcome": "completed_diagnostic",
+      "evidenceRef": "report.md#regression-phase",
+      "note": "Focused sibling-preservation selector passed 21 tests for schema repair, malformed JSON, structured-extraction thinking, and output budget. The canonical bugfix regression guard found adversarial signals in all three touched Python test files with zero violations and zero warnings."
+    },
+    {
+      "at": "2026-07-20",
+      "agent": "bubbles.simplify",
+      "phase": "simplify",
+      "phasesExecuted": ["simplify"],
+      "provenanceMode": "parent-expanded",
+      "expandedBy": "bubbles.bug",
+      "expansionReason": "The authorized bubbles.bug runner is executing bugfix-fastlane directly; this runtime exposes no runSubagent tool.",
+      "candidateRevision": "5904f0266c2e9edd06db8fd8fb75794687dcf10e",
+      "claimSource": "executed",
+      "outcome": "completed_diagnostic",
+      "evidenceRef": "report.md#simplify-phase",
+      "note": "Git-backed structural inspection found both model calls reuse one completion helper, one repair-message construction, an exact-one fail-loud budget, no retry loop, and no active non-packet source diff. No simplification edit was warranted."
+    },
+    {
+      "at": "2026-07-20",
+      "agent": "bubbles.stabilize",
+      "phase": "stabilize",
+      "phasesExecuted": ["stabilize"],
+      "provenanceMode": "parent-expanded",
+      "expandedBy": "bubbles.bug",
+      "expansionReason": "The authorized bubbles.bug runner is executing bugfix-fastlane directly; this runtime exposes no runSubagent tool.",
+      "candidateRevision": "5904f0266c2e9edd06db8fd8fb75794687dcf10e",
+      "claimSource": "executed",
+      "outcome": "completed_diagnostic",
+      "evidenceRef": "report.md#stabilize-phase",
+      "note": "Four focused terminal-failure/content-free/valid-first contracts passed. Read-only Docker label inspection confirmed zero smackerel-test containers, volumes, and networks after the live run. No stabilization source edit was required."
+    },
+    {
+      "at": "2026-07-20T15:49:01Z",
+      "agent": "bubbles.implement",
+      "phase": "implement",
+      "phasesExecuted": ["implement"],
+      "provenanceMode": "specialist",
+      "candidateRevision": "024cb65317645ed375c02bf574151f2ecee92f02",
+      "claimSource": "executed",
+      "outcome": "completed_owned",
+      "evidenceRef": "report.md#direct-specialist-implement-provenance---2026-07-20",
+      "note": "Fresh direct-specialist verification confirmed the introducing repair commit is an ancestor of the exact local/remote candidate, the exact-one fail-loud repair path preserves request profile and original context, every terminal branch remains bounded and content-free, 14 focused current-HEAD contracts pass through the repo CLI, and this invocation has zero non-packet implementation delta. The historical parent-expanded implement record remains unchanged."
+    },
+    {
+      "at": "2026-07-20T16:04:11Z",
+      "agent": "bubbles.test",
+      "phase": "test",
+      "phasesExecuted": ["test"],
+      "provenanceMode": "specialist",
+      "candidateRevision": "024cb65317645ed375c02bf574151f2ecee92f02",
+      "claimSource": "executed",
+      "outcome": "completed_owned",
+      "evidenceRef": "report.md#direct-specialist-test-provenance---2026-07-20",
+      "note": "Fresh direct-specialist execution through ./smackerel.sh passed 13 exact-one config/startup tests, 20 focused Python synthesis schema-repair tests, three focused Go synthesis response tests, and the single focused live TestKnowledgeSynthesis_PipelineRoundTrip. Both exclusivity checks found zero active Smackerel test processes or project resources, and post-run cleanup independently proved zero residual processes, containers, volumes, or networks. No selected required test was skipped. The full all-package E2E suite and explicit opt-in Ollama-agent E2E were not run and are not claimed; the Go selector's no-match warnings for unrelated packages remain disclosed in report.md."
+    },
+    {
+      "at": "2026-07-20T16:34:13Z",
+      "agent": "bubbles.regression",
+      "phase": "regression",
+      "phasesExecuted": ["regression"],
+      "provenanceMode": "specialist",
+      "candidateRevision": "024cb65317645ed375c02bf574151f2ecee92f02",
+      "claimSource": "executed",
+      "outcome": "completed_diagnostic",
+      "evidenceRef": "report.md#direct-specialist-regression-provenance---2026-07-20",
+      "note": "Fresh direct-specialist regression execution passed the canonical bugfix guard with three of three files carrying adversarial signals and zero violations or warnings, then passed 23 focused sibling-preservation tests with zero selected failures or skips. The authoritative selector explicitly includes invalid-then-valid recovery and valid-first preservation. The repair, source, and security-reviewed candidates are ancestors of the exact local/remote candidate; the protected tests are byte-identical and no product path changed after review. No new regression finding was detected. Full all-package E2E and quantitative line coverage were not run or claimed under the bounded dispatch; existing audit findings, REWORK_REQUIRED disposition, and open routes remain unchanged."
+    },
+    {
+      "at": "2026-07-20T16:42:21Z",
+      "agent": "bubbles.simplify",
+      "phase": "simplify",
+      "phasesExecuted": ["simplify"],
+      "provenanceMode": "specialist",
+      "candidateRevision": "024cb65317645ed375c02bf574151f2ecee92f02",
+      "claimSource": "executed",
+      "outcome": "completed_diagnostic",
+      "evidenceRef": "report.md#direct-specialist-simplify-provenance---2026-07-20",
+      "note": "Fresh direct-specialist reuse, quality, and efficiency review found one shared completion helper, one resolved Ollama profile reused by both dispatches, exactly two possible completion calls, no retry loop or third-call path, fail-loud exact-one config enforcement at startup and handler boundaries, no repair-specific semantic default fabrication, additive response-contract wiring, and zero post-review or active non-packet product delta. Twelve focused current-HEAD contracts passed through the repo CLI with zero selected failures or skips. No product simplification edit was warranted; status, certification, audit, and routing fields remain unchanged."
+    },
+    {
+      "at": "2026-07-20T16:56:29Z",
+      "agent": "bubbles.stabilize",
+      "phase": "stabilize",
+      "phasesExecuted": ["stabilize"],
+      "provenanceMode": "specialist",
+      "candidateRevision": "024cb65317645ed375c02bf574151f2ecee92f02",
+      "claimSource": "executed",
+      "outcome": "completed_diagnostic",
+      "evidenceRef": "report.md#direct-specialist-stabilize-provenance---2026-07-20",
+      "note": "Fresh direct-specialist stabilization passed 13 exact-one config/startup contracts and five terminal/content-free/valid-first/profile-accounting contracts through ./smackerel.sh with zero selected failures or skips. Structural inspection found one completion helper, exactly two possible dispatch call sites, no unbounded loop or retry/backoff/sleep marker, three content-free terminal forms, and additive repair metric/token/time accounting. Independent read-only checks found zero matching test processes, containers, volumes, and networks before and after execution. No live rerun or product edit was warranted; the ACTIVE REWORK_REQUIRED audit, three inherited audit findings, two open routes, status, certification, and routing remain unchanged."
+    },
+    {
+      "at": "2026-07-20T18:15:46Z",
+      "agent": "bubbles.validate",
+      "phase": "validate",
+      "phasesExecuted": ["validate"],
+      "provenanceMode": "specialist",
+      "candidateRevision": "024cb65317645ed375c02bf574151f2ecee92f02",
+      "claimSource": "executed",
+      "outcome": "completed_diagnostic",
+      "evidenceRef": "report.md#validate-owned-terminal-certification---2026-07-20",
+      "note": "Fresh terminal certification re-resolved bugfix-fastlane to delivery-completion-v1 at target done, matched ACTIVE audit attempt a2 and its complete AUDIT_RESULT_V1 transcript, independently verified all eight specialist phase records, Scope 1 at 23/23 DoD, candidate ancestry, packet-only delta, and optional Ollama non-claim honesty, then observed artifact lint, G095, traceability, implementation reality, audit-result lint, and the assertion-bound state guard all exit zero. Deployment remains unreached and required through bubbles.devops."
+    }
+  ],
+  "certification": {
+    "status": "done",
+    "certificationReadiness": "ready",
+    "completedScopes": [
+      "1"
+    ],
+    "certifiedCompletedPhases": ["implement", "test", "regression", "simplify", "stabilize", "security", "validate", "audit"],
+    "certifierAgent": "bubbles.validate",
+    "certifiedBy": "bubbles.validate",
+    "certifiedAt": "2026-07-20T18:15:46Z",
+    "scopeProgress": [
+      {
+        "scopeId": "1",
+        "status": "done",
+        "dodComplete": 23,
+        "dodTotal": 23,
+        "certifiedAt": "2026-07-20T18:15:46Z"
+      }
+    ],
+    "lockdownState": {
+      "active": false,
+      "round": 0,
+      "lastCleanRound": 0,
+      "lockedScenarioIds": []
+    },
+    "observations": [
+      {
+        "id": "OBS-026-008-AUDIT-NOTES",
+        "scope": "1",
+        "summary": "The opt-in Ollama-agent category was not executed or counted, Go selectors reported no matching tests only in unrelated packages, and 11 historical pre-window evidence fences predate the current terminal-signal heuristic. Required BUG-026-008 scenarios and the current certifying window pass all applicable gates.",
+        "severity": "low",
+        "followUpOwner": "human",
+        "followUpAction": "accept",
+        "agent": "bubbles.validate"
+      }
+    ]
+  },
+  "policySnapshot": {
+    "grill": {"mode": "off", "source": "repo-default"},
+    "tdd": {"mode": "scenario-first", "source": "bugfix-fastlane-mode-default"},
+    "autoCommit": {"mode": "on", "source": "user-request"},
+    "lockdown": {"mode": "off", "source": "repo-default"},
+    "regression": {"mode": "protected-scenarios", "source": "bugfix-fastlane-mode-default"},
+    "validation": {"mode": "certification-required", "source": "repo-default"},
+    "workflowMode": "bugfix-fastlane"
+  },
+  "routing": {
+    "outcome": "route_required",
+    "nextRequiredOwner": "bubbles.devops",
+    "reason": "Validate-owned source certification is done at pushed candidate 024cb65317645ed375c02bf574151f2ecee92f02. Build and deploy through the signed delivery path, then confirm the accepted-runtime synthesis repair without reclassifying the optional Ollama-agent E2E as covered.",
+    "subsequentOwners": []
+  }
+}

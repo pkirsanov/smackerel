@@ -4,60 +4,31 @@
   "parentFeatureDir": "specs/025-knowledge-synthesis-layer",
   "featureName": "BUG-025-005: Cross-Source Response Validation Routing",
   "bugId": "BUG-025-005",
-  "status": "done",
+  "status": "in_progress",
   "releaseTrain": "mvp",
   "workflowMode": "bugfix-fastlane",
+  "executionRuntime": "direct",
   "flagsIntroduced": [],
   "linkedImplementationSpec": null,
   "linkedPlanningPacket": null,
   "planningOnly": false,
   "planningOnlyJustification": null,
   "specDependsOn": ["specs/025-knowledge-synthesis-layer"],
-  "certifiedAt": "2026-07-19T17:10:00Z",
-  "certifiedBy": "bubbles.validate",
-  "requiresRevalidation": false,
-  "completedScopes": ["scope-1-enforce-subject-correct-outgoing-validation"],
-  "completedPhases": [
-    "implement",
-    "test",
-    "regression",
-    "simplify",
-    "stabilize",
-    "security",
-    "validate",
-    "audit"
-  ],
+  "certifiedAt": null,
+  "certifiedBy": null,
+  "requiresRevalidation": true,
+  "completedScopes": [],
+  "completedPhases": [],
   "execution": {
-    "executionModel": "parent-expanded-bugfix-fastlane",
-    "activeAgent": "bubbles.workflow",
-    "currentPhase": "finalize",
+    "executionModel": "direct-authorized-runner",
+    "activeAgent": "bubbles.bug",
+    "currentPhase": "governance-reconciliation",
     "currentScope": "scope-1-enforce-subject-correct-outgoing-validation",
     "runStartedAt": "2026-07-19T00:00:00Z",
-    "runCompletedAt": "2026-07-19T17:10:00Z",
-    "completedScopes": ["scope-1-enforce-subject-correct-outgoing-validation"],
-    "completedPhaseClaims": [
-      "bug",
-      "implement",
-      "test",
-      "regression",
-      "simplify",
-      "stabilize",
-      "security",
-      "validate",
-      "audit"
-    ],
-    "completedPhaseClaimsByScope": {
-      "scope-1-enforce-subject-correct-outgoing-validation": [
-        "implement",
-        "test",
-        "regression",
-        "simplify",
-        "stabilize",
-        "security",
-        "validate",
-        "audit"
-      ]
-    },
+    "runCompletedAt": null,
+    "completedScopes": [],
+    "completedPhaseClaims": ["security", "validate", "audit"],
+    "completedPhaseClaimsByScope": {},
     "completedPhaseClaimDetails": [
       {
         "phase": "bug",
@@ -67,16 +38,23 @@
         "summary": "Discovered and packeted BUG-025-005; identified the generic-validator misrouting and the catch-and-publish swallow via source inspection."
       }
     ],
-    "pendingTransitionRequests": [],
+    "pendingTransitionRequests": [
+      {
+        "findingId": "BUG-025-005-EVIDENCE-RECONCILIATION",
+        "scenarioIds": ["SCN-B0255-001", "SCN-B0255-002", "SCN-B0255-003"],
+        "nextRequiredOwner": "bubbles.test",
+        "reason": "Append the already-executed exact-candidate assistant/full-package and repaired root-package evidence to report.md without rerunning full E2E, preserving all explicit skips; then route scope execution updates to bubbles.implement."
+      }
+    ],
     "scopeSummary": [
       {
         "scopeId": "scope-1-enforce-subject-correct-outgoing-validation",
         "title": "Enforce Subject-Correct Outgoing Validation",
         "owner": "bubbles.implement",
         "dodCount": 18,
-        "status": "done",
+        "status": "in_progress",
         "dependsOn": [],
-        "notes": "Fix landed at 8cd13fff (git-verified ancestor of main). Reconciled + certified this session: fresh in-session RED->GREEN (routing revert -> 2 failed; restored -> 689 passed, 2 skipped), lint/check clean, regression-quality/traceability/implementation-reality guards exit 0, format names only the pre-existing out-of-boundary internal/config/release_trains_contract_test.go (git-verified unchanged vs origin/main). Live TP-04 (ephemeral NATS integration) + TP-05 (broader e2e) certified on the in-session real-_consume_loop/real-_handle_poison dispatch proof + committed collateral e2e; fresh full ephemeral-stack re-run routed to bubbles.devops as NON-GATING (deferred here to avoid corrupting an active parallel-worktree smackerel-test stack). All 18 DoD [x] with current-session evidence."
+        "notes": "The runtime fix and focused unit/integration paths are proven. Fifteen of eighteen DoD items are complete; the complete broad E2E suite and aggregate build-quality closeout remain pending on the consolidated source."
       }
     ],
     "audit": {
@@ -87,33 +65,16 @@
     }
   },
   "certification": {
-    "status": "done",
-    "certificationReadiness": "certified",
-    "certifiedBy": "bubbles.validate",
-    "certifiedAt": "2026-07-19T17:10:00Z",
-    "completedScopes": ["scope-1-enforce-subject-correct-outgoing-validation"],
-    "certifiedCompletedPhases": [
-      "implement",
-      "test",
-      "regression",
-      "simplify",
-      "stabilize",
-      "security",
-      "validate",
-      "audit"
-    ],
-    "certifierAgent": "bubbles.validate",
-    "auditorAgent": "bubbles.audit",
-    "auditedAt": "2026-07-19",
-    "auditVerdict": "pass",
-    "scopeProgress": [
-      {
-        "scopeId": "scope-1-enforce-subject-correct-outgoing-validation",
-        "status": "done",
-        "dodComplete": 18,
-        "dodTotal": 18
-      }
-    ],
+    "status": "in_progress",
+    "certificationReadiness": "revalidation_required",
+    "certifiedBy": null,
+    "certifiedAt": null,
+    "completedScopes": [],
+    "certifiedCompletedPhases": [],
+    "certifierAgent": null,
+    "auditorAgent": null,
+    "auditedAt": null,
+    "auditVerdict": null,
     "lockdownState": {
       "active": false,
       "lockedScenarioIds": []
@@ -130,7 +91,36 @@
     "regression": {"mode": "protected-scenarios", "source": "repo-default"},
     "validation": {"mode": "certification-required", "source": "repo-default"}
   },
-  "transitionRequests": [],
+  "transitionRequests": [
+    {
+      "id": "TR-B0255-BROAD-001",
+      "requestedAt": "2026-07-19T16:03:34Z",
+      "requestedBy": "bubbles.test",
+      "fromStatus": "in_progress",
+      "toStatus": "route_required",
+      "targetAgent": "bubbles.bug",
+      "reason": "The final broad E2E run is RED on five independent assistant/PWA and Drive findings documented in report.md; later failures after core/network disappearance are cascade noise.",
+      "packetRef": "report.md#routed-independent-findings",
+      "routedTo": "bubbles.bug",
+      "status": "resolved",
+      "resolution": "All five independent findings were assigned owning bug packets and their fixes are consolidated in candidate b476198898f005ac5bad25510fcb9d90cbe50939. Aggregate exact-candidate evidence reconciliation remains separately routed and is not claimed by this transition."
+    },
+    {
+      "id": "TR-B0255-GOVERNANCE-001",
+      "requestedAt": "2026-07-19T23:20:00Z",
+      "requestedBy": "bubbles.bug",
+      "fromStatus": "in_progress",
+      "toStatus": "route_required",
+      "targetAgent": "bubbles.test",
+      "routedTo": "bubbles.test",
+      "routedToCommit": "b476198898f005ac5bad25510fcb9d90cbe50939",
+      "productAction": "none",
+      "crossRepoFollowUp": true,
+      "reason": "Append the already-executed exact-candidate assistant/full-package and repaired root-package evidence without rerunning full E2E, preserving explicit skips and failures; then route execution-owned DoD updates and G056 certification schema to their owners.",
+      "packetRef": "report.md#ownership-and-certification",
+      "status": "open"
+    }
+  ],
   "reworkQueue": [],
   "executionHistory": [
     {
@@ -146,83 +136,33 @@
     },
     {
       "at": "2026-07-19",
-      "agent": "bubbles.implement",
-      "phasesExecuted": ["implement"],
-      "provenanceMode": "parent-expanded",
-      "expandedBy": "bubbles.iterate",
-      "expansionReason": "runSubagent unavailable in this runtime; bubbles.workflow parent-expanded the bubbles.implement phase owner directly in-session per the documented smackerel precedent (BUG-050-002).",
-      "expansionEvidenceRef": "report.md#reconciliation--implementation-delta",
-      "note": "Reconciled the landed fix 8cd13fff (git-verified ancestor of main); no runtime rebuild — direct source inspection + RED->GREEN confirm the closed OUTGOING_VALIDATION_MODES routing, strict validate_crosssource_result, and swallow removal are complete. No residual hole found."
-    },
-    {
-      "at": "2026-07-19",
-      "agent": "bubbles.test",
-      "phasesExecuted": ["test"],
-      "provenanceMode": "parent-expanded",
-      "expandedBy": "bubbles.iterate",
-      "expansionReason": "runSubagent unavailable in this runtime; bubbles.workflow parent-expanded the bubbles.test phase owner directly in-session per the documented smackerel precedent.",
-      "expansionEvidenceRef": "report.md#post-fix-regression-test-green",
-      "note": "./smackerel.sh --env dev test unit --python GREEN this session (689 passed, 2 skipped, BUG025005_SESSION_PYUNIT_END exit=0). Fresh RED->GREEN captured (routing reverted -> 2 failed; restored -> 689 passed). Real _consume_loop + real _handle_poison exercised; only external LiteLLM mocked."
-    },
-    {
-      "at": "2026-07-19",
-      "agent": "bubbles.regression",
-      "phasesExecuted": ["regression"],
-      "provenanceMode": "parent-expanded",
-      "expandedBy": "bubbles.iterate",
-      "expansionReason": "runSubagent unavailable in this runtime; bubbles.workflow parent-expanded the bubbles.regression phase owner directly in-session per the documented smackerel precedent.",
-      "expansionEvidenceRef": "report.md#governance-gates",
-      "note": "regression-quality-guard.sh --bugfix ml/tests/test_nats_client.py ml/tests/test_validation.py: adversarial signal detected, 0 violation(s)/0 warning(s), BUG025005_SESSION_REGQUAL_END exit=0. The RED capture proves the regression re-blocks a routing revert."
-    },
-    {
-      "at": "2026-07-19",
-      "agent": "bubbles.simplify",
-      "phasesExecuted": ["simplify"],
-      "provenanceMode": "parent-expanded",
-      "expandedBy": "bubbles.iterate",
-      "expansionReason": "runSubagent unavailable in this runtime; bubbles.workflow parent-expanded the bubbles.simplify phase owner directly in-session per the documented smackerel precedent.",
-      "expansionEvidenceRef": "report.md#phase-simplify",
-      "note": "Landed fix is minimal/proportional: one validator + one closed routing table + one helper at the existing boundary; no new framework/dependency/schema/transport/config. ./smackerel.sh check clean (BUG025005_SESSION_CHECK_END exit=0)."
-    },
-    {
-      "at": "2026-07-19",
-      "agent": "bubbles.stabilize",
-      "phasesExecuted": ["stabilize"],
-      "provenanceMode": "parent-expanded",
-      "expandedBy": "bubbles.iterate",
-      "expansionReason": "runSubagent unavailable in this runtime; bubbles.workflow parent-expanded the bubbles.stabilize phase owner directly in-session per the documented smackerel precedent.",
-      "expansionEvidenceRef": "report.md#phase-stabilize",
-      "note": "Fail-loud, non-destabilizing: validation precedes publish and PayloadValidationError propagates to the pre-existing _handle_poison (nak/dead-letter) instead of the removed catch-and-log-then-publish path. Neighbor subjects unchanged (green neighbor regressions). check confirms config in sync with SST."
-    },
-    {
-      "at": "2026-07-19",
       "agent": "bubbles.security",
       "phasesExecuted": ["security"],
-      "provenanceMode": "parent-expanded",
-      "expandedBy": "bubbles.iterate",
-      "expansionReason": "runSubagent unavailable in this runtime; bubbles.workflow parent-expanded the bubbles.security phase owner directly in-session per the documented smackerel precedent.",
-      "expansionEvidenceRef": "report.md#phase-security",
-      "note": "Change touches only the ML NATS response-validation surface + tests; no skip/force/insecure path, no secret/credential material, no new egress. Security-positive: closes a fail-open hole. implementation-reality-scan (incl. IDOR/auth-bypass + silent-decode) 0 violations (BUG025005_SESSION_REALITY_END exit=0). No smackerel-no-defaults SST violation."
+      "provenanceMode": "specialist",
+      "candidateRevision": "b476198898f005ac5bad25510fcb9d90cbe50939",
+      "claimSource": "operator-attested-outer-session",
+      "outcome": "completed_diagnostic",
+      "note": "Exact-candidate security review returned PASS for merge, build, and deploy. No broader security or coverage claim is added."
     },
     {
       "at": "2026-07-19",
       "agent": "bubbles.validate",
       "phasesExecuted": ["validate"],
-      "provenanceMode": "parent-expanded",
-      "expandedBy": "bubbles.iterate",
-      "expansionReason": "runSubagent unavailable in this runtime; bubbles.workflow parent-expanded the bubbles.validate phase owner directly in-session per the documented smackerel precedent.",
-      "expansionEvidenceRef": "report.md#phase-validate",
-      "note": "Independent re-verification: git-backed Code Diff Evidence at 8cd13fff; Python unit GREEN; RED->GREEN ordering present; regression-quality/traceability/implementation-reality guards exit 0; lint/check clean; format names only the pre-existing out-of-boundary Go file; artifact-lint exit 0; state-transition-guard passes at done. Live TP-04/TP-05 certified on dispatch-level proof + committed collateral e2e; fresh full-stack re-run routed to bubbles.devops as non-gating."
+      "provenanceMode": "specialist",
+      "candidateRevision": "b476198898f005ac5bad25510fcb9d90cbe50939",
+      "claimSource": "operator-attested-outer-session",
+      "outcome": "completed_diagnostic",
+      "note": "Exact-candidate diagnostic returned PASS for exact fast-forward merge, build, and deploy while explicitly preserving existing skips and nonterminal certification. This is not validate-owned terminal certification."
     },
     {
       "at": "2026-07-19",
       "agent": "bubbles.audit",
       "phasesExecuted": ["audit"],
-      "provenanceMode": "parent-expanded",
-      "expandedBy": "bubbles.iterate",
-      "expansionReason": "runSubagent unavailable in this runtime; bubbles.workflow parent-expanded the bubbles.audit phase owner (a separate authority from validate) directly in-session per the documented smackerel precedent.",
-      "expansionEvidenceRef": "report.md#phase-audit",
-      "note": "Independent delivery-delta + change-boundary audit: runtime delta confined to ml/app/nats_client.py + ml/app/validation.py; tests to ml/tests/test_nats_client.py + ml/tests/test_validation.py; packet mutations confined to the BUG-025-005 folder; sibling BUG-025-001..004 untouched (689 passed includes the ML suite); the pre-existing internal/config/release_trains_contract_test.go gofmt finding is outside the boundary. Change boundary respected. Verdict: pass."
+      "provenanceMode": "specialist",
+      "candidateRevision": "b476198898f005ac5bad25510fcb9d90cbe50939",
+      "claimSource": "operator-attested-outer-session",
+      "outcome": "blocked",
+      "note": "Exact-candidate source, test, and documentation consistency passed; delivery completion was blocked only by packet governance. No terminal certification is inferred."
     }
   ],
   "activeBugs": [],
@@ -236,10 +176,10 @@
   ],
   "routing": {
     "outcome": "route_required",
-    "nextRequiredOwner": "bubbles.devops",
-    "reason": "CERTIFIED done 2026-07-19: the full bugfix-fastlane pipeline (implement, test, regression, simplify, stabilize, security, validate, audit) was parent-expanded this session with fresh evidence in report.md, and state-transition-guard.sh passes at done. The defect (cross-source response validation routing) is proven fixed by the in-session real-_consume_loop/real-_handle_poison RED->GREEN dispatch regressions. NON-GATING follow-up for bubbles.devops/operator: run a fresh full ephemeral-stack ./smackerel.sh test integration + broader ./smackerel.sh test e2e re-run when the shared smackerel-test stack is free (a parallel worktree's stack was active this session), and any deploy. No deployment is authorized by this packet.",
-    "subsequentOwners": ["bubbles.devops"],
-    "redeployRequired": false
+    "nextRequiredOwner": "bubbles.test",
+    "reason": "Reconcile the already-executed exact-candidate package/root evidence into report.md without rerunning full E2E and preserve explicit skips. Then bubbles.implement must update plan-owned execution checkboxes; bubbles.validate remains the only certification writer.",
+    "subsequentOwners": ["bubbles.implement", "bubbles.validate"],
+    "redeployRequired": true
   },
   "lastUpdatedAt": "2026-07-19T17:10:00Z",
   "artifacts": {
@@ -254,5 +194,5 @@
     "transitionRequests": "transition-requests.json",
     "reworkQueue": "rework-queue.json"
   },
-  "notes": "Fix landed at 8cd13fff from a now-concluded isolated worktree; reconciled + certified to done this session via parent-expanded bugfix-fastlane (no runSubagent in this runtime). No deployment is in scope; the fresh full ephemeral-stack integration/e2e re-run is a non-gating bubbles.devops follow-up."
+  "notes": "The runtime fix landed at 8cd13fff and remains focused-test verified. Candidate b476198898f005ac5bad25510fcb9d90cbe50939 has outer security/validate/audit diagnostics, but packet evidence reconciliation, scope execution updates, and validate-owned certification remain open. Unsupported parent-expanded specialist claims were removed."
 }

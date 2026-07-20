@@ -73,8 +73,7 @@ def test_strict_truthy_variants_return_503(client, monkeypatch):
     for variant in ("1", "true", "TRUE", "Yes", "yes"):
         resp = client.get(f"/health?strict={variant}")
         assert resp.status_code == 503, (
-            f"?strict={variant!r} must be treated as truthy ⇒ 503 when degraded, "
-            f"got {resp.status_code}"
+            f"?strict={variant!r} must be treated as truthy ⇒ 503 when degraded, got {resp.status_code}"
         )
 
 
@@ -97,8 +96,7 @@ def test_default_degraded_stays_200(client, monkeypatch):
     monkeypatch.setattr(main, "nats_client", None, raising=False)
     resp = client.get("/health")
     assert resp.status_code == 200, (
-        "liveness contract broken: default /health MUST stay 200 when degraded, "
-        f"got {resp.status_code}"
+        f"liveness contract broken: default /health MUST stay 200 when degraded, got {resp.status_code}"
     )
     assert resp.json()["status"] == "degraded"
 
@@ -111,8 +109,7 @@ def test_strict_falsey_and_absent_stay_200_when_degraded(client, monkeypatch):
     for variant in ("", "false", "0", "no", "maybe"):
         resp = client.get(f"/health?strict={variant}")
         assert resp.status_code == 200, (
-            f"?strict={variant!r} is not a truthy opt-in ⇒ must stay 200, "
-            f"got {resp.status_code}"
+            f"?strict={variant!r} is not a truthy opt-in ⇒ must stay 200, got {resp.status_code}"
         )
         assert resp.json()["status"] == "degraded"
 

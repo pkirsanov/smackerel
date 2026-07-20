@@ -1,0 +1,102 @@
+{
+  "version": 3,
+  "specId": "069-assistant-http-transport",
+  "bugId": "BUG-069-004-http-turn-dedup",
+  "featureDir": "specs/069-assistant-http-transport/bugs/BUG-069-004-http-turn-dedup",
+  "featureName": "BUG-069-004: HTTP assistant turn response deduplication",
+  "workflowMode": "bugfix-fastlane",
+  "executionRuntime": "direct",
+  "status": "in_progress",
+  "execution": {
+    "activeAgent": "bubbles.bug",
+    "currentPhase": "governance-reconciliation",
+    "executionModel": "direct-authorized-runner",
+    "runStartedAt": "2026-07-19T00:00:00Z",
+    "completedPhaseClaims": ["security", "validate", "audit"],
+    "executionHistory": [
+      {
+        "at": "2026-07-19",
+        "agent": "bubbles.security",
+        "phasesExecuted": ["security"],
+        "provenanceMode": "specialist",
+        "candidateRevision": "b476198898f005ac5bad25510fcb9d90cbe50939",
+        "claimSource": "operator-attested-outer-session",
+        "outcome": "completed_diagnostic",
+        "note": "Exact-candidate security review returned PASS for merge, build, and deploy."
+      },
+      {
+        "at": "2026-07-19",
+        "agent": "bubbles.validate",
+        "phasesExecuted": ["validate"],
+        "provenanceMode": "specialist",
+        "candidateRevision": "b476198898f005ac5bad25510fcb9d90cbe50939",
+        "claimSource": "operator-attested-outer-session",
+        "outcome": "completed_diagnostic",
+        "note": "Exact-candidate diagnostic returned PASS for fast-forward merge, build, and deploy while preserving explicit skips and nonterminal certification."
+      },
+      {
+        "at": "2026-07-19",
+        "agent": "bubbles.audit",
+        "phasesExecuted": ["audit"],
+        "provenanceMode": "specialist",
+        "candidateRevision": "b476198898f005ac5bad25510fcb9d90cbe50939",
+        "claimSource": "operator-attested-outer-session",
+        "outcome": "blocked",
+        "note": "Exact-candidate source, test, and documentation consistency passed; delivery completion was blocked only by packet governance."
+      }
+    ]
+  },
+  "certification": {
+    "status": "in_progress",
+    "completedScopes": [],
+    "certifiedCompletedPhases": [],
+    "lockdownState": {
+      "active": false,
+      "round": 0,
+      "reason": "Production dedup bug is under active implementation; validate-owned certification remains in progress.",
+      "lastUpdatedAt": "2026-07-19T00:00:00Z"
+    }
+  },
+  "policySnapshot": {
+    "grill": {"value": "off", "source": "repo-default"},
+    "tdd": {"value": "scenario-first", "source": "workflow-forced"},
+    "autoCommit": {"value": "on", "source": "user-approved"},
+    "lockdown": {"value": "off", "source": "repo-default"},
+    "regression": {"value": "standard", "source": "repo-default"},
+    "validation": {"value": "required", "source": "repo-default"},
+    "regressionStrictness": {"value": "standard", "source": "repo-default"},
+    "validateCertificationRequired": {"value": true, "source": "repo-default"}
+  },
+  "transitionRequests": [
+    {
+      "id": "TR-BUG-069-004-GOVERNANCE-001",
+      "requestedAt": "2026-07-19T23:20:00Z",
+      "requestedBy": "bubbles.bug",
+      "fromStatus": "in_progress",
+      "toStatus": "route_required",
+      "targetAgent": "bubbles.audit",
+      "routedTo": "bubbles.audit",
+      "routedToCommit": "b476198898f005ac5bad25510fcb9d90cbe50939",
+      "productAction": "none",
+      "crossRepoFollowUp": true,
+      "reason": "Append packet-attributed git-backed Code Diff Evidence for G053/G093. Then bubbles.implement reconciles supported execution items while leaving the six assistant-package failures and multi-replica residual risk open; bubbles.validate repairs scopeProgress and certifies only the supported state.",
+      "packetRef": "report.md#open-findings",
+      "status": "open"
+    }
+  ],
+  "reworkQueue": [],
+  "observations": [
+    {
+      "severity": "critical",
+      "summary": "Deterministic live RED proves identical HTTP idempotency keys execute the facade twice; the distinct-ID adversary passes.",
+      "followUpOwner": "parent-synthesis",
+      "followUpAction": "Consolidate this tested packet while preserving validate-owned certification as in_progress."
+    }
+  ],
+  "routing": {
+    "outcome": "route_required",
+    "nextRequiredOwner": "bubbles.audit",
+    "reason": "Append candidate-attributed G053/G093 diff evidence first; then reconcile only supported DoD/phase claims, preserve package failures and residual risk, and route certification schema/status to bubbles.validate.",
+    "subsequentOwners": ["bubbles.implement", "bubbles.test", "bubbles.validate"]
+  }
+}

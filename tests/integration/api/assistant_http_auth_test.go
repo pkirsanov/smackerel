@@ -160,6 +160,7 @@ func defaultScope2Config() httpadapter.HTTPTransportConfig {
 		SchemaVersion:             httpadapter.SchemaVersionV1,
 		BodySizeMaxBytes:          65536,
 		RateLimitPerUserPerMinute: 60,
+		ConversationTTL:           time.Hour,
 		TransportHintAllowlist:    []string{"web", "mobile", "bridge"},
 		RequiredScope:             scope2RequireScope,
 	}

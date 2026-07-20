@@ -75,6 +75,7 @@ Use `./smackerel.sh` for runtime work and keep the committed Bubbles validation 
 | Integration tests | `./smackerel.sh test integration` | Run live-stack foundation integration validation |
 | Integration tests (stores-only, light) | `./smackerel.sh test integration-light` | Run live-stack integration tests needing ONLY postgres+nats (no core/ml build, no ml_sidecar gate); LIGHT preflight floor (2000 MB / 8 GB) |
 | E2E tests | `./smackerel.sh test e2e` | Run compose start, persistence, and config-failure E2E checks |
+| Assistant E2E package | `./smackerel.sh test e2e --go-package assistant [--go-run <regex>]` | Run only `tests/e2e/assistant` on the disposable stack; Node-dependent renderer checks execute inside the repository tooling container |
 | Stress smoke | `./smackerel.sh test stress` | Run disposable test-stack shell and Go stress validation |
 | Resource pre-flight | `./smackerel.sh pre-flight` | Check host RAM/disk vs the SST minimums (`runtime.preflight.*`) before heavy ops; exit 0 ok, 1 below threshold (auto-run before build/up/test integration\|e2e\|e2e-ui\|stress) |
 | Start stack | `./smackerel.sh up` | Start the foundation runtime |
@@ -201,6 +202,25 @@ Rules:
 - Docker Compose and deploy specs use fail-loud required interpolation such as `${HOST_BIND_ADDRESS:?HOST_BIND_ADDRESS must be set by deploy adapter}`. If loopback is desired, it must be an explicit SST/generated env value, not a Compose fallback.
 - Generated files are derived artifacts, never hand-edited sources of truth.
 - Missing required config must fail loudly.
+
+### Synthesis Schema Repair SST
+
+The ML synthesis handler permits one corrective model call when the first
+response is valid JSON but violates the selected prompt contract's
+`extraction_schema`. The retry policy is explicit and bounded:
+
+| YAML path | Generated env var | Required value | Runtime purpose |
+|---|---|---:|---|
+| `services.ml.synthesis_schema_repair_attempts` | `ML_SYNTHESIS_SCHEMA_REPAIR_ATTEMPTS` | `1` | Allows exactly one schema-guided correction before returning an explicit terminal synthesis failure. |
+
+`scripts/commands/config.sh` emits the value into generated development, test,
+and deployment environment contracts. `ml/app/main.py` validates it at startup,
+and `ml/app/synthesis.py` validates it again before any extraction request. A
+missing, empty, non-integer, zero, or value above one fails loudly; there is no
+code fallback and no indefinite retry. The corrective request reuses the
+original artifact prompt and Ollama request profile, while outward terminal
+errors expose only failure class and JSON Schema path, never model output or
+artifact content.
 
 ### Notification Intelligence SST (Spec 054)
 
@@ -481,6 +501,7 @@ Any runtime change that affects command surfaces, topology, storage, or test beh
 | `internal/pipeline/` | Artifact processing pipeline — NATS subscribers for process/embed/rerank/digest/synthesis/domain-extract, result handlers, retry logic |
 | `internal/scheduler/` | Cron-based task scheduler — digest generation (configurable cron), intelligence synthesis (2AM), momentum (hourly), resurfacing (8AM), knowledge lint (configurable), alert checks |
 | `internal/stringutil/` | String utility functions — UTF-8 safe truncation, control character sanitization, text normalization |
+| `internal/testsupport/` | Shared test-only lexical support, including comment-aware JavaScript source inspection used by committed-source and served-asset policy guards |
 | `internal/telegram/` | Telegram bot — message handling (URLs, text, voice, forwards, media groups, conversations), 9 commands (/find, /concept, /person, /lint, /digest, /done, /status, /recent, /rate), annotation via reply, disambiguation flow, recipe commands (serving scaler, cook mode with session store), expense interactions (receipt confirmation, query, correction, suggestions), meal plan commands (create, assign, query, cook-from-plan) |
 | `internal/mealplan/` | Meal planning calendar — plan store, service (lifecycle, overlap, copy), shopping list bridge (reuses RecipeAggregator + ScaleIngredients), CalDAV calendar sync bridge |
 | `internal/recipe/` | Shared recipe types, serving scaler, kitchen fraction formatter, quantity parsing (extracted from list aggregator for reuse by scaler and cook mode) |
@@ -758,6 +779,13 @@ detection):
   transport identically (Telegram, HTTP per
   [spec 069](../specs/069-assistant-http-transport/), and any future
   adapter). This is enforced by a spec 067 CI guard.
+- HTTP assistant retries MUST reuse the original `transport_message_id` and the
+  exact semantic request body. The adapter scopes replay by authenticated user
+  plus canonical HTTP transport plus message ID, collapses concurrent retries,
+  and returns the original logical response with a fresh HTTP request ID. A
+  same-user message ID reused with a different body is rejected with HTTP 409
+  and `error_cause="transport_message_id_conflict"`; callers must mint a new ID
+  for a new logical turn.
 
 #### Adding A New Scenario (BS-001 — zero Go changes)
 

@@ -2,6 +2,7 @@ package httpadapter
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -76,6 +77,20 @@ func TestHTTPAdapterTranslatesTextTurnToAssistantMessage(t *testing.T) {
 	}
 	if !msg.ReceivedAt.Equal(now) {
 		t.Errorf("ReceivedAt = %v, want %v", msg.ReceivedAt, now)
+	}
+}
+
+func TestNewHTTPAdapterRejectsMissingConversationTTL(t *testing.T) {
+	cfg := defaultConfig()
+	cfg.ConversationTTL = 0
+	_, err := NewHTTPAdapter(Options{
+		Facade:  &stubFacade{},
+		Capture: func(context.Context, string, string, string) {},
+		Clock:   time.Now,
+		Config:  cfg,
+	})
+	if err == nil || !strings.Contains(err.Error(), "ConversationTTL") {
+		t.Fatalf("NewHTTPAdapter error=%v, want fail-loud ConversationTTL error", err)
 	}
 }
 

@@ -760,6 +760,11 @@ ML_STRUCTURED_EXTRACTION_THINKING="$(required_value services.ml.structured_extra
 # ml/app/processor.py + ml/app/synthesis.py.
 ML_DOMAIN_OUTPUT_TOKEN_BUDGET="$(required_value services.ml.domain_output_token_budget)"
 
+# BUG-026-008 — bounded corrective call budget for parsed-but-schema-invalid
+# synthesis output. Required SST value, read fail-loud by the ML sidecar; the
+# supported contract is exactly one repair attempt with no code fallback.
+ML_SYNTHESIS_SCHEMA_REPAIR_ATTEMPTS="$(required_value services.ml.synthesis_schema_repair_attempts)"
+
 # Spec 045 FR-045-001 / FR-045-002 — deploy resource envelope + ML model
 # memory profile extraction. Every key is required (fail-loud SST). The
 # memory limit values are emitted both with their `compose-style` string
@@ -2088,6 +2093,15 @@ ASSISTANT_INTENT_COMPILER_MAX_CONTEXT_TURNS="$(required_value assistant.intent_c
 ASSISTANT_INTENT_COMPILER_MAX_OUTPUT_BYTES="$(required_value assistant.intent_compiler.max_output_bytes)"
 ASSISTANT_INTENT_COMPILER_RETRY_BUDGET="$(required_value assistant.intent_compiler.retry_budget)"
 
+# Spec 071 SCOPE-01 — IntentTrace observability SST keys. All five
+# values are required at the generator boundary and validated again
+# by internal/config/assistant_intent_trace.go during aggregate load.
+ASSISTANT_INTENT_TRACE_SAMPLING_RATIO="$(required_value assistant.intent_trace.sampling_ratio)"
+ASSISTANT_INTENT_TRACE_RETENTION_DAYS="$(required_value assistant.intent_trace.retention_days)"
+ASSISTANT_INTENT_TRACE_EXPORT_TARGETS="$(required_value assistant.intent_trace.export_targets)"
+ASSISTANT_INTENT_TRACE_REPLAY_ENABLED="$(required_value assistant.intent_trace.replay_enabled)"
+ASSISTANT_INTENT_TRACE_RETENTION_SWEEP_INTERVAL="$(required_value assistant.intent_trace.retention_sweep_interval)"
+
 # Spec 095 SCOPE-01 — Retrieval-Strategy Routing + Freshness-Aware Retrieval SST
 # keys. All keys REQUIRED at the generator boundary (Gate G028 /
 # smackerel-no-defaults). The Go loader (internal/config/retrieval.go::
@@ -2665,6 +2679,7 @@ ML_LOG_LEVEL=${ML_LOG_LEVEL}
 ML_OLLAMA_KEEP_ALIVE=${ML_OLLAMA_KEEP_ALIVE}
 ML_STRUCTURED_EXTRACTION_THINKING=${ML_STRUCTURED_EXTRACTION_THINKING}
 ML_DOMAIN_OUTPUT_TOKEN_BUDGET=${ML_DOMAIN_OUTPUT_TOKEN_BUDGET}
+ML_SYNTHESIS_SCHEMA_REPAIR_ATTEMPTS=${ML_SYNTHESIS_SCHEMA_REPAIR_ATTEMPTS}
 KNOWLEDGE_ENABLED=${KNOWLEDGE_ENABLED}
 KNOWLEDGE_SYNTHESIS_TIMEOUT_SECONDS=${KNOWLEDGE_SYNTHESIS_TIMEOUT_SECONDS}
 KNOWLEDGE_LINT_CRON=${KNOWLEDGE_LINT_CRON}
@@ -2876,6 +2891,11 @@ ASSISTANT_INTENT_COMPILER_CONFIDENCE_FLOOR=${ASSISTANT_INTENT_COMPILER_CONFIDENC
 ASSISTANT_INTENT_COMPILER_MAX_CONTEXT_TURNS=${ASSISTANT_INTENT_COMPILER_MAX_CONTEXT_TURNS}
 ASSISTANT_INTENT_COMPILER_MAX_OUTPUT_BYTES=${ASSISTANT_INTENT_COMPILER_MAX_OUTPUT_BYTES}
 ASSISTANT_INTENT_COMPILER_RETRY_BUDGET=${ASSISTANT_INTENT_COMPILER_RETRY_BUDGET}
+ASSISTANT_INTENT_TRACE_SAMPLING_RATIO=${ASSISTANT_INTENT_TRACE_SAMPLING_RATIO}
+ASSISTANT_INTENT_TRACE_RETENTION_DAYS=${ASSISTANT_INTENT_TRACE_RETENTION_DAYS}
+ASSISTANT_INTENT_TRACE_EXPORT_TARGETS=${ASSISTANT_INTENT_TRACE_EXPORT_TARGETS}
+ASSISTANT_INTENT_TRACE_REPLAY_ENABLED=${ASSISTANT_INTENT_TRACE_REPLAY_ENABLED}
+ASSISTANT_INTENT_TRACE_RETENTION_SWEEP_INTERVAL=${ASSISTANT_INTENT_TRACE_RETENTION_SWEEP_INTERVAL}
 RETRIEVAL_ROUTING_ENABLED=${RETRIEVAL_ROUTING_ENABLED}
 RETRIEVAL_ROUTING_INTENT_CONFIDENCE_THRESHOLD=${RETRIEVAL_ROUTING_INTENT_CONFIDENCE_THRESHOLD}
 RETRIEVAL_ROUTING_STRATEGY_WHOLE_DOCUMENT_ENABLED=${RETRIEVAL_ROUTING_STRATEGY_WHOLE_DOCUMENT_ENABLED}

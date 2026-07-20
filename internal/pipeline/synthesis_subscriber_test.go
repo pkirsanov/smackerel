@@ -148,7 +148,8 @@ func TestSynthesisExtractResponse_FullPipelinePayload(t *testing.T) {
 		"prompt_contract_version": "ingest-synthesis-v1",
 		"processing_time_ms": 4500,
 		"model_used": "ollama/llama3.2",
-		"tokens_used": 1200
+		"tokens_used": 1200,
+		"trace_id": "trace-synthesis-roundtrip"
 	}`
 
 	var resp SynthesisExtractResponse
@@ -173,6 +174,9 @@ func TestSynthesisExtractResponse_FullPipelinePayload(t *testing.T) {
 	}
 	if resp.Result.Contradictions[0].ExistingArtifactID != "01JARTA" {
 		t.Error("contradiction existing_artifact_id mismatch")
+	}
+	if resp.TraceID != "trace-synthesis-roundtrip" {
+		t.Errorf("trace_id = %q, want trace-synthesis-roundtrip", resp.TraceID)
 	}
 }
 

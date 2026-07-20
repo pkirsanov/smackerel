@@ -149,6 +149,7 @@ func newPendingAdapter(t *testing.T, facade contracts.Assistant) *httpadapter.HT
 			Enabled:                true,
 			SchemaVersion:          httpadapter.SchemaVersionV1,
 			BodySizeMaxBytes:       1 << 20,
+			ConversationTTL:        time.Hour,
 			TransportHintAllowlist: []string{"web", "mobile", "bridge"},
 			RequiredScope:          "assistant.turn",
 		},

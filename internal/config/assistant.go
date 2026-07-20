@@ -459,6 +459,11 @@ func loadAssistantConfig(cfg *Config) error {
 	// Spec 068 SCOPE-1 — structured intent compiler SST (fail-loud).
 	loadIntentCompilerConfig(cfg, &errs)
 
+	// Spec 071 SCOPE-01 — IntentTrace observability SST (fail-loud).
+	// The typed loader validates all five generated values and appends
+	// every missing/invalid key to the shared aggregate error.
+	loadIntentTraceConfig(cfg, &errs)
+
 	// Spec 065 SCOPE-1 — generic micro-tools SST (fail-loud). Every
 	// ASSISTANT_TOOLS_* key is REQUIRED; loadAssistantToolsConfig
 	// appends missing/invalid keys into the shared errs slice so the

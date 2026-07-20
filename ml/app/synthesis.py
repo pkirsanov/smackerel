@@ -12,6 +12,7 @@ import time
 
 import yaml
 
+from .metrics import synthesis_schema_repair_attempts_total
 from .ollama_keepalive import (
     OllamaProfileConfigError,
     dispatch_litellm,
@@ -25,6 +26,26 @@ logger = logging.getLogger("smackerel-ml.synthesis")
 
 # Content char limit sent to LLM (design contract: 8000 chars)
 MAX_CONTENT_CHARS = 8000
+
+
+def resolve_synthesis_schema_repair_attempts() -> int:
+    """Resolve the exact-one synthesis schema-repair budget from SST."""
+    value = os.environ.get("ML_SYNTHESIS_SCHEMA_REPAIR_ATTEMPTS")
+    if value is None or not value.strip():
+        raise RuntimeError(
+            "ML_SYNTHESIS_SCHEMA_REPAIR_ATTEMPTS is required (SST services.ml.synthesis_schema_repair_attempts)"
+        )
+    try:
+        attempts = int(value)
+    except ValueError:
+        raise RuntimeError(
+            "ML_SYNTHESIS_SCHEMA_REPAIR_ATTEMPTS expected=integer 1 category=invalid_schema_repair_budget"
+        ) from None
+    if attempts != 1:
+        raise RuntimeError(
+            "ML_SYNTHESIS_SCHEMA_REPAIR_ATTEMPTS expected=integer 1 category=invalid_schema_repair_budget"
+        )
+    return attempts
 
 
 def _elapsed_ms(start: float) -> int:
@@ -63,6 +84,22 @@ def validate_extraction(output: dict, schema: dict) -> tuple[bool, str]:
         return False, f"Schema validation failed: {e.message}"
     except jsonschema.SchemaError as e:
         return False, f"Invalid schema: {e.message}"
+
+
+def classify_schema_validation_error(output: dict, schema: dict) -> str:
+    """Return a content-free validator/path class for a terminal failure."""
+    import jsonschema
+
+    try:
+        jsonschema.validate(instance=output, schema=schema)
+        return "validator=none path=$"
+    except jsonschema.ValidationError as error:
+        path = "$"
+        for part in error.absolute_path:
+            path += f"[{part}]" if isinstance(part, int) else f".{part}"
+        return f"validator={error.validator} path={path}"
+    except jsonschema.SchemaError:
+        return "validator=invalid_schema path=$"
 
 
 def truncate_content(text: str, max_chars: int = MAX_CONTENT_CHARS) -> str:
@@ -130,6 +167,40 @@ def build_synthesis_prompt(
     return "\n".join(parts)
 
 
+def build_schema_repair_prompt(validation_error: str, schema: dict) -> str:
+    """Build the corrective instruction without inventing semantic defaults."""
+    return (
+        "Your previous response was valid JSON but failed the required output schema.\n"
+        f"Validation error: {validation_error}\n"
+        "Return corrected JSON only. Preserve every supported semantic claim from the artifact; "
+        "do not invent concepts, claims, entities, or relationships and do not substitute empty "
+        "values for required semantic content.\n"
+        f"Required schema:\n{json.dumps(schema, indent=2)}"
+    )
+
+
+async def _dispatch_synthesis_completion(
+    completion_kwargs: dict,
+    *,
+    provider: str,
+    model: str,
+    profile,
+    litellm_module,
+    fallback_model: str,
+) -> tuple[str, int, str]:
+    response = await dispatch_litellm(
+        completion_kwargs,
+        provider=provider,
+        model=model,
+        profile=profile,
+        litellm_module=litellm_module,
+    )
+    output_text = response.choices[0].message.content
+    tokens_used = response.usage.total_tokens if response.usage else 0
+    model_used = response.model or fallback_model
+    return output_text, tokens_used, model_used
+
+
 async def handle_extract(
     data: dict,
     provider: str,
@@ -144,6 +215,7 @@ async def handle_extract(
     """
     artifact_id = data.get("artifact_id", "")
     contract_version = data.get("prompt_contract_version", "")
+    trace_id = data.get("trace_id", "")
 
     # Pre-filter: check if content looks like a receipt (avoids expensive LLM
     # calls for receipt extraction on non-receipt content)
@@ -167,6 +239,7 @@ async def handle_extract(
             "success": False,
             "error": str(e),
             "prompt_contract_version": contract_version,
+            "trace_id": trace_id,
         }
 
     # Build the LLM prompt
@@ -182,6 +255,7 @@ async def handle_extract(
     # still wins when set; otherwise fall back to the SST-owned budget
     # (ML_DOMAIN_OUTPUT_TOKEN_BUDGET) instead of a hardcoded 2000 magic number.
     token_budget = contract.get("token_budget", resolve_domain_output_token_budget())
+    resolve_synthesis_schema_repair_attempts()
 
     start = time.time()
 
@@ -216,17 +290,14 @@ async def handle_extract(
         # non-qwen models.
         apply_structured_extraction_thinking(completion_kwargs, provider)
         profile = resolve_ollama_request_profile(model) if provider == "ollama" else None
-        response = await dispatch_litellm(
+        llm_output_text, tokens_used, model_used = await _dispatch_synthesis_completion(
             completion_kwargs,
             provider=provider,
             model=model,
             profile=profile,
             litellm_module=litellm,
+            fallback_model=llm_model,
         )
-
-        llm_output_text = response.choices[0].message.content
-        tokens_used = response.usage.total_tokens if response.usage else 0
-        model_used = response.model or llm_model
 
     except OllamaProfileConfigError:
         raise
@@ -235,42 +306,106 @@ async def handle_extract(
         return {
             "artifact_id": artifact_id,
             "success": False,
-            "error": f"LLM call failed: {type(e).__name__}: {str(e)[:200]}",
+            "error": f"LLM call failed: {type(e).__name__}",
             "prompt_contract_version": contract_version,
             "processing_time_ms": _elapsed_ms(start),
             "model_used": model or "",
             "tokens_used": 0,
+            "trace_id": trace_id,
         }
 
     # Parse LLM output as JSON
     try:
         llm_output = json.loads(llm_output_text)
-    except json.JSONDecodeError as e:
-        logger.error("LLM returned invalid JSON: %s", e)
+    except (json.JSONDecodeError, TypeError) as e:
+        logger.error("LLM returned invalid JSON: %s", type(e).__name__)
         return {
             "artifact_id": artifact_id,
             "success": False,
-            "error": f"LLM returned invalid JSON: {e}",
+            "error": f"LLM returned invalid JSON: {type(e).__name__}",
             "prompt_contract_version": contract_version,
             "processing_time_ms": _elapsed_ms(start),
             "model_used": model_used,
             "tokens_used": tokens_used,
+            "trace_id": trace_id,
         }
 
     # Validate against extraction schema
     extraction_schema = contract.get("extraction_schema", {})
     valid, error_msg = validate_extraction(llm_output, extraction_schema)
     if not valid:
-        logger.error("Extraction output failed schema validation: %s", error_msg)
-        return {
-            "artifact_id": artifact_id,
-            "success": False,
-            "error": f"Schema validation failed: {error_msg}",
-            "prompt_contract_version": contract_version,
-            "processing_time_ms": _elapsed_ms(start),
-            "model_used": model_used,
-            "tokens_used": tokens_used,
-        }
+        logger.info(
+            "Synthesis schema repair attempt class=schema_validation",
+            extra={"repair_class": "schema_validation"},
+        )
+        synthesis_schema_repair_attempts_total.inc()
+        repair_kwargs = dict(completion_kwargs)
+        repair_kwargs["messages"] = [
+            *completion_kwargs["messages"],
+            {"role": "assistant", "content": llm_output_text},
+            {
+                "role": "user",
+                "content": build_schema_repair_prompt(error_msg, extraction_schema),
+            },
+        ]
+
+        try:
+            repair_text, repair_tokens, model_used = await _dispatch_synthesis_completion(
+                repair_kwargs,
+                provider=provider,
+                model=model,
+                profile=profile,
+                litellm_module=litellm,
+                fallback_model=model_used,
+            )
+            tokens_used += repair_tokens
+        except OllamaProfileConfigError:
+            raise
+        except Exception as e:
+            logger.error("Synthesis schema repair LLM call failed: %s", type(e).__name__)
+            return {
+                "artifact_id": artifact_id,
+                "success": False,
+                "error": f"LLM schema repair failed: {type(e).__name__}",
+                "prompt_contract_version": contract_version,
+                "processing_time_ms": _elapsed_ms(start),
+                "model_used": model_used,
+                "tokens_used": tokens_used,
+                "trace_id": trace_id,
+            }
+
+        try:
+            llm_output = json.loads(repair_text)
+        except (json.JSONDecodeError, TypeError) as e:
+            logger.error("Synthesis schema repair returned invalid JSON: %s", type(e).__name__)
+            return {
+                "artifact_id": artifact_id,
+                "success": False,
+                "error": f"LLM schema repair returned invalid JSON: {type(e).__name__}",
+                "prompt_contract_version": contract_version,
+                "processing_time_ms": _elapsed_ms(start),
+                "model_used": model_used,
+                "tokens_used": tokens_used,
+                "trace_id": trace_id,
+            }
+
+        valid, _ = validate_extraction(llm_output, extraction_schema)
+        if not valid:
+            repair_error_class = classify_schema_validation_error(llm_output, extraction_schema)
+            logger.error(
+                "Synthesis schema repair failed validation class=schema_validation",
+                extra={"repair_class": "schema_validation"},
+            )
+            return {
+                "artifact_id": artifact_id,
+                "success": False,
+                "error": f"Schema validation failed after repair: {repair_error_class}",
+                "prompt_contract_version": contract_version,
+                "processing_time_ms": _elapsed_ms(start),
+                "model_used": model_used,
+                "tokens_used": tokens_used,
+                "trace_id": trace_id,
+            }
 
     # Apply validation rules (max counts from contract)
     validation_rules = contract.get("validation_rules", {})
@@ -285,6 +420,7 @@ async def handle_extract(
         "processing_time_ms": _elapsed_ms(start),
         "model_used": model_used,
         "tokens_used": tokens_used,
+        "trace_id": trace_id,
     }
 
 

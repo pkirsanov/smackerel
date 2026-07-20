@@ -213,11 +213,10 @@ func TestFacadeHighBandSourceAssemblerEmptySourcesTriggersProvenanceRefusal(t *t
 		t.Fatalf("Handle err = %v", err)
 	}
 
-	// Provenance gate canonical refusal — see provenance/gate.go.
-	// The assembler-provided body is replaced by the gate's
-	// canonical refusal text.
-	if resp.Body != "I don't have a sourced answer for that." {
-		t.Errorf("Body = %q; want canonical refusal (gate fires on empty Sources)", resp.Body)
+	// The gate marks the response for capture; the facade then emits
+	// the final transport-agnostic successful-capture acknowledgement.
+	if resp.Body != captureFallbackAcknowledgement {
+		t.Errorf("Body = %q; want canonical capture acknowledgement", resp.Body)
 	}
 	if resp.Status != contracts.StatusSavedAsIdea {
 		t.Errorf("Status = %q; want %q", resp.Status, contracts.StatusSavedAsIdea)
