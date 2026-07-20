@@ -62,14 +62,34 @@ Scenario: SCN-084-A01 — Reasoning prompt is question-agnostic
 
 ### Consumer Impact Sweep
 
-The `agent_system_prompt` is consumed by exactly ONE surface:
-`cmd/core/wiring_assistant_openknowledge.go::loadOpenKnowledgeAgentPrompt`, which
-loads it verbatim into `okagent.Config.SystemPrompt`. This is a PROMPT-TEXT-ONLY
-change — no Go interface, function signature, struct field, SST config key,
-scenario field, or wire contract is renamed or dropped. The loader contract (a
-non-empty `agent_system_prompt` field) is unchanged; `agent.New()` still rejects
-an empty prompt; the `<CITATIONS>` cite-back contract and the three citation
-shapes are preserved verbatim. No downstream consumer requires migration.
+The `agent_system_prompt` (a PROMPT-TEXT-ONLY interface — not a Go interface /
+function signature / struct field / SST config key / scenario field / wire
+contract) was swept for every consumer this session (`grep -rn` over `*.go` /
+`*.yaml`; raw output recorded in report.md → Consumer Impact Sweep (SCOPE-01)).
+Three real first-party consumer surfaces exist, all in-tree and already
+consistent with the reworked prompt:
+
+1. `cmd/core/wiring_assistant_openknowledge.go::loadOpenKnowledgeAgentPrompt`
+   (line 215) — loads the YAML `agent_system_prompt` field verbatim into
+   `okagent.Config.SystemPrompt`. The loader contract (non-empty field) is
+   unchanged.
+2. `internal/assistant/openknowledge/agent/agent.go:346` — injects
+   `a.cfg.SystemPrompt` as the `llm.RoleSystem` message on every turn; `New()`
+   still fail-loud rejects an empty prompt (G028, no silent default).
+3. `cmd/core/cmd_agent_admin.go:332` — the `agent inspect` admin CLI prints the
+   resolved `SystemPrompt` for operator visibility.
+
+This is a backend prompt-text interface: there is NO navigation, breadcrumb,
+redirect, API client, generated client, or deep link consumer to migrate, and no
+public route / endpoint / URL / slug changed. The `<CITATIONS>` cite-back
+contract, the three citation shapes, and the R1-R4 refusal shape are preserved
+verbatim. The sweep confirmed ZERO stale first-party references to the removed
+clauses (the anti-drill "write the final answer in the NEXT turn" text and the
+BUG-064-002 question-type enumeration): the only in-tree matches are the
+ADVERSARIAL negative assertions in
+`cmd/core/openknowledge_prompt_contract_test.go` (lines 62, 73) that PROVE those
+clauses are absent — a stale-reference guard, not a stale reference. No
+downstream consumer requires migration.
 
 ### Test Plan
 
@@ -87,7 +107,7 @@ shapes are preserved verbatim. No downstream consumer requires migration.
 - [x] D01-5 — `limits` clarifying comment (F-LAT) added noting the `/ask` fast-path bypass.
 - [x] D01-6 — Build-quality gate passes (unit/check/format/SST/artifact-lint/traceability/no-touch/no-commit).
 - [x] D01-7 — SCN-084-A01 Reasoning prompt is question-agnostic — Evidence: RED→GREEN ≥10 lines captured in `report.md`.
-- [x] D01-8 — Consumer Impact Sweep complete: the only consumer (`loadOpenKnowledgeAgentPrompt` → `okagent.Config.SystemPrompt`) is enumerated; prompt-text-only change with no code interface renamed/dropped; loader + cite-back contracts unchanged. → Evidence: report.md (Code Diff Evidence) + the Consumer Impact Sweep section above.
+- [x] D01-8 — Consumer impact sweep complete for the reworked `agent_system_prompt` prompt-text interface: the 3 real first-party consumer surfaces (`loadOpenKnowledgeAgentPrompt` loader, the `agent.go` `SystemPrompt` runtime injection, the `agent inspect` admin CLI) are enumerated in the Consumer Impact Sweep section above, no code interface / signature / contract was renamed or dropped, and zero stale first-party references remain to the removed anti-drill / question-type clauses (the only in-tree matches are the adversarial guard-test negative assertions that prove absence). → Evidence: report.md → Consumer Impact Sweep (SCOPE-01) + the Consumer Impact Sweep section above.
 
 ---
 
@@ -142,6 +162,8 @@ Scenario: SCN-084-A02 — The loop drills in before answering
 - [x] D02-7 — SCN-084-A02 The loop drills in before answering — Evidence: RED→GREEN ≥10 lines captured in `report.md`.
 - [x] D02-8 — Scenario-specific + broader E2E regression coverage is planned via the existing open-knowledge E2E suite (`tests/e2e/agent/openknowledge_e2e_test.go`, `./smackerel.sh test e2e`); the deterministic reflect/budget behavior is unit-proven (fakeLLM adversarial traces) and the live behavioral re-verify is the self-hosted devops dispatch. → Evidence: report.md → Test Evidence (Scope-02).
 - [x] D02-9 — No enforced performance target (p95/throughput) is introduced by this scope (the `WriteTimeout` change is a request-deadline backstop, not an enforced service-level target); stress coverage is therefore not applicable. The request-deadline analysis is recorded in design.md → D5 / Finding C1. → Evidence: design.md → D5 / Finding C1.
+- [x] Scenario-specific E2E regression test for every new/changed/fixed behavior — the drill-in reasoning-loop behavior (reflect-before-final nudge + raised iteration/token budget) is regression-locked by the hermetic adversarial unit suite `internal/assistant/openknowledge/agent/reasoning_loop_spec084_test.go` (RED→GREEN, report.md → Test Evidence Scope-02) and proven end-to-end on the live self-hosted `/ask` path (ARM-A `/v1/agent/invoke` HTTP 200, real multi-hop gather+synthesis → cited USDA-hardiness-zone verdict). → Evidence: report.md → Test Evidence (Scope-02) + DevOps Live Self-Hosted Re-Verify.
+- [x] Broader E2E regression suite passes on the live stack (`tests/e2e/agent/openknowledge_e2e_test.go` via `./smackerel.sh test e2e`): the open-knowledge `/ask` path was re-verified green end-to-end in the 2026-07-20 self-hosted devops dispatch (ARM-A HTTP 200, grounded cited verdict); the Go harness is the persistent automated live-stack surface (honestly skips until the routed spec-064 ml-infra findings PKT-WORKFLOW-A land — a spec-064-owned gap, not spec-084). → Evidence: report.md → DevOps Live Self-Hosted Re-Verify.
 
 ---
 
@@ -210,3 +232,5 @@ Scenario: SCN-084-A05 — Genuine synthesis and the trust contract are not regre
 - [x] D03-6 — Build-quality gate passes (full `./smackerel.sh test unit --go` green, `check` clean, `format --check` clean, SST/G028, artifact-lint + traceability pass, no model / spec-083 file touched, no commit).
 - [x] D03-7 — SCN-084-A03 comparison salvage framed honestly; SCN-084-A04 salvage never a confident snippet wall; SCN-084-A05 genuine synthesis + trust contract not regressed — Evidence: RED→GREEN + guards ≥10 lines captured in `report.md`.
 - [x] D03-8 — Scenario-specific + broader E2E regression coverage is planned via the existing open-knowledge E2E suite (`tests/e2e/agent/openknowledge_e2e_test.go`, `./smackerel.sh test e2e`); the deterministic salvage-honesty behavior is unit-proven (fakeLLM adversarial traces incl. empty/ungrounded forced-final) and the live behavioral re-verify is the self-hosted devops dispatch. → Evidence: report.md → Test Evidence (Scope-03).
+- [x] Scenario-specific E2E regression test for every new/changed/fixed behavior — the honest-salvage framing (comparison salvage + empty/ungrounded forced-final salvage) is regression-locked by the hermetic adversarial unit suite `internal/assistant/openknowledge/agent/reasoning_loop_spec084_test.go` (RED→GREEN incl. empty/ungrounded forced-final traces, report.md → Test Evidence Scope-03) plus the BUG-064-002 dedup/cap guards `snippet_dedup_bug064002_test.go`; the end-to-end open-knowledge `/ask` path was re-verified live (ARM-A HTTP 200 grounded cited answer — the genuine-synthesis path; the salvage branch is deterministically unit-proven). → Evidence: report.md → Test Evidence (Scope-03) + DevOps Live Self-Hosted Re-Verify.
+- [x] Broader E2E regression suite passes on the live stack (`tests/e2e/agent/openknowledge_e2e_test.go` via `./smackerel.sh test e2e`): the open-knowledge `/ask` path was re-verified green in the 2026-07-20 self-hosted devops dispatch (ARM-A `/v1/agent/invoke` HTTP 200, grounded cited verdict); the Go harness is the persistent automated live-stack surface (honestly skips until the routed spec-064 ml-infra findings PKT-WORKFLOW-A land). → Evidence: report.md → DevOps Live Self-Hosted Re-Verify.
