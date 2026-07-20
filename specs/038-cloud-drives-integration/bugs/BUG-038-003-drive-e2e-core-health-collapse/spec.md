@@ -30,6 +30,13 @@ Drive policy/retrieve/save/scan, foundation, retirement, transport, and wiki fai
 
 All regression execution must use the repository-owned disposable test stack and real internal services. Mocks, interception, production monitoring, persistent dev state, and cleanup-based reuse of foreign data are forbidden.
 
+### Single-Capability Justification
+
+- **Classification:** This packet classifies a failure inside the existing repository-owned disposable E2E lifecycle. It neither introduces another test runner nor creates a new lifecycle capability; the proven owning repair remains `BUG-031-009`.
+- **Existing foundation and reuse path:** `smackerel.sh` already owns E2E child run IDs, runner labels, shared-stack startup, and `e2e_down_test_stack`; Drive tests reuse `tests/e2e/drive/helpers.go` and `CORE_EXTERNAL_URL` for health checks against that parent-owned stack. This packet reuses those controls to distinguish a Drive-local failure from parent interruption.
+- **Consumer set:** The serialized Drive package, its observability and successor health scenarios, and every later Go E2E package sharing the same disposable stack depend on the parent lifecycle remaining live until the runner finishes.
+- **Why no new abstraction or provider registry is needed:** There is one repository CLI, one parent lifecycle owner, and one runner-label contract. The defect is missing lifecycle containment in that existing path, not variation among interchangeable runners or providers; a registry would obscure the single ownership invariant.
+
 ## Acceptance Criteria
 
 1. Isolation and package-order RED runs classify the first actual defect with container/process evidence.
