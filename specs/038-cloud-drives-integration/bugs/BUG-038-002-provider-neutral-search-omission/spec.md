@@ -30,6 +30,14 @@ Regression tests must use uniquely identified Google and memdrive connections on
 
 The regression must prove database visibility and live API visibility through deterministic state checks or bounded polling tied to a concrete persistence state. Arbitrary sleeps, interception, mocks, skip/only selectors committed to source, and weakened assertions are forbidden.
 
+### Single-Capability Justification
+
+- **Classification:** This is a regression repair inside the existing provider-neutral Drive search capability, not a new capability, provider, or shared contract. Google and memdrive already use the same Drive scan, extraction, persistence, and search surfaces.
+- **Existing foundation and reuse path:** `internal/drive/scan.Service.InitialScan` and `internal/drive/extract.Service.ProcessPending` persist artifacts carrying `drive_connections.provider_id`; `internal/drive/consumers.LoadDriveArtifact` and the canonical `internal/api/search.go` `/api/search` handler consume those artifacts. The repair reuses that path and changes only the collision resistance of the regression query.
+- **Consumer set:** The authenticated core search API, provider-neutral Drive artifact consumers, and the Google-plus-memdrive cross-feature E2E in `tests/e2e/drive/drive_cross_feature_e2e_test.go` continue to consume the same contract and metadata.
+- **Why no new abstraction or provider registry is needed:** Provider identity, provider selection, and the shared artifact contract already exist. No provider behavior or extension point changes, so another registry or adapter layer would duplicate the established Drive foundation without serving a new variant.
+- **Residual risk:** The packet evidence records the opt-in Ollama agent E2E as not executed. That coverage remains unproven and is routed to `bubbles.test` by this packet's existing `state.json.routing`; this requirement reconciliation does not convert it into execution evidence or a completion claim.
+
 ## Acceptance Criteria
 
 1. A current-session RED run reproduces omission of both exact provider rows.

@@ -13,6 +13,13 @@ The five required `assistant.intent_trace` values MUST flow from `config/smacker
 5. Removing any required key breaks a unit/config contract and the replay scenario cannot silently succeed.
 6. Production values remain operator-defined by SST; no test-only fallback or language default is introduced.
 
+### Single-Capability Justification
+
+- **Classification:** This is missing wiring inside the existing intent-trace capability, not a new configuration capability, replay provider, or runtime variant.
+- **Existing foundation and reuse path:** The five `assistant.intent_trace` values originate in `config/smackerel.yaml`, flow through `scripts/commands/config.sh` into generated `ASSISTANT_INTENT_TRACE_*` values, and are loaded by `internal/config.loadAssistantConfig` through `loadIntentTraceConfig` into `Config.Assistant.IntentTrace`. Replay then consumes the same typed configuration and persisted intent-trace store.
+- **Consumer set:** Core startup validation, intent recording and retention behavior, the `assistant replay-intent` command, and the replay integration/E2E scenarios all consume this one typed intent-trace configuration.
+- **Why no new abstraction or provider registry is needed:** The typed `IntentTraceConfig` and aggregate assistant loader are already the single extension point. The repair connects two omitted edges in that path and adds no alternate source, store, replay engine, or provider that would justify a registry.
+
 ## Release Train
 
 This bug targets the `mvp` train and introduces no feature flag.
