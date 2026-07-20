@@ -397,3 +397,52 @@ did not fabricate a certification block or edit source/scopes. Route: `bubbles.i
 (G028 source violations), `bubbles.validate` (certification block), `bubbles.plan`
 (scenario-manifest + DoD), then re-drive the guard; plus a live Telegram `/ask` check
 for DEFECT B.
+
+---
+
+## In-session G028 disposition & honest-HOLD — 2026-07-20 (bubbles.iterate parent-expand)
+
+Recorded by `bubbles.iterate`. Bug `status` UNCHANGED (`blocked`). This refines the
+prior devops note's G028 line.
+
+**Hermetic re-verification this session (real terminal output):**
+
+```text
+$ ./smackerel.sh test unit --go --go-run "BUG064001" --verbose
+--- PASS: TestAgent_BUG064001_PositivePerUserBudget_ProceedsPastPreflight (0.00s)
+--- PASS: TestAgent_BUG064001_ZeroPerUserBudget_StillRefusesPreflight (0.00s)
+ok      github.com/smackerel/smackerel/internal/assistant/openknowledge/agent   0.027s
+ok      github.com/smackerel/smackerel/internal/telegram/assistant_adapter   0.010s
+Result: BUG064001 suite passed, 0 failed | BUG001_TEST_EXIT=0
+```
+
+**G028 is 5 FALSE POSITIVES, not stub/fake data — owner is the FRAMEWORK, not `bubbles.implement`.**
+The prior devops note called them "STUB/FAKE-DATA source violations." Investigation this
+session (git-blame + the tracing contract) proves otherwise: all 5 hits are on
+`internal/telegram/assistant_adapter/adapter.go` lines 147/152/154/214/338, all from
+commit `2886d516e` (2026-05-29, spec-061) — pre-existing OTel telemetry, NOT this bug:
+
+- Lines 147/152/154: the standard OTel **no-op tracer fallback**
+  (`tracing.NewTracer(Config{Enabled:false})`); production always injects the real
+  tracer. Telemetry infrastructure, not fake business data.
+- Lines 214/338: the closed-vocabulary span-status literal `"noop"`, **contract-defined**
+  in `internal/assistant/tracing/tracer.go:23` (status vocab `"ok" | "error" | "noop"`)
+  and emitted identically at `facade.go:471` / `facade.go:1752`. The value CANNOT change
+  without breaking the telemetry contract.
+
+The reality-scan's `INTEGRATION_SUSPICIOUS_PATTERNS` matches the substring `noop`
+case-insensitively; the scanner is a framework-managed immutable file with NO allowlist,
+inline-suppression, or `bubbles-project.yaml` knob. Editing `adapter.go` cannot clear
+G028 (214/338 are contract-locked), and de-referencing the genuinely-changed `adapter.go`
+from the reality-scan file list would be dishonest scanner-gaming (rejected per
+anti-fabrication). **Correct owner: the Bubbles framework** — refine
+`implementation-reality-scan.sh` so contract telemetry-status literals and no-op tracer
+fallbacks are not flagged `FAKE_INTEGRATION`.
+
+**Honest-HOLD conclusion.** The DEFECT-A + DEFECT-B code+config fix is COMPLETE,
+hermetically GREEN, and DEFECT-A is live-proven (the sibling BUG-064-002 promoted to
+`done` on the same live `/ask` A/B). The bug is HELD on the single irreducible G028
+framework-scanner false positive (secondary: the G068 single-file two-scope
+DoD-extraction layout limitation, Check-22 awk). Neither is solvable by editing this
+bug's source without gaming the scanner. Once the framework G028 refinement lands, add
+the certification block + `scenario-manifest.json` and re-drive the guard to `done`.
