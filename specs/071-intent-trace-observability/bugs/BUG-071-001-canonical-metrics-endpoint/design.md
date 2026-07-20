@@ -28,6 +28,15 @@ Resolve the metrics URL from required `CORE_EXTERNAL_URL`, append `/metrics` exa
 2. Synthesize a metrics body in the test - rejected because it would no longer verify the live registry.
 3. Keep the both-unset success path - rejected because repository-managed E2E must execute the scenario.
 
+### Single-Implementation Justification
+
+- **Existing owning abstraction:** `smackerel.sh` injects the canonical `CORE_EXTERNAL_URL` into `scripts/runtime/go-e2e.sh`, and `internal/metrics.Handler` exposes the process Prometheus registry at `/metrics`. The E2E derives its scrape URL by appending `/metrics` to that one endpoint.
+- **Concrete implementations:** `internal/assistant/openknowledge/metrics` owns `openknowledge_refusal_total`, and `internal/assistant/intenttrace.IntentTracesTotal` owns `smackerel_assistant_intent_traces_total`. Each is a concrete metric family in the same core registry, not an interchangeable metrics provider.
+- **Current consumers:** `tests/e2e/assistant/intent_refusal_join_e2e_test.go`, the assistant-package selector in `go-e2e.sh`, and the Assistant Intents Grafana join query consume the canonical endpoint, family names, and closed label vocabularies.
+- **Bounded variation axes:** Metric-family semantics vary between refusal causes and persisted intent-trace status, while E2E execution varies between the complete Go E2E set and the closed `assistant` package selector. Neither axis changes endpoint ownership or registry implementation.
+- **Extension path:** A new assistant metric registers with the existing process registry and is verified through `CORE_EXTERNAL_URL + /metrics`. A new package selector requires an explicit closed CLI contract; it is not discovered through a plugin registry.
+- **Foundation decision:** The defect is endpoint-contract drift plus missing zero-series initialization in two existing counters. A URL registry, metric-provider interface, or dynamic package registry would duplicate established ownership and introduce unsupported runtime variation.
+
 ## Complexity Tracking
 
 | Decision | Simpler fix considered | Why rejected |

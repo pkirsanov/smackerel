@@ -58,6 +58,15 @@ Excluded:
 - synthesis/assistant packet edits
 - evo-x2, `knb`, deploy adapters/manifests, secrets, and release-train bundles
 
+### Single-Implementation Justification
+
+- **Existing owning abstraction:** `smackerel.sh` owns the disposable E2E lifecycle through `e2e_run_child`, the `E2E_CHILD_RUN_LABEL` run identity, `e2e_stop_child`, and `e2e_down_test_stack`. `tests/e2e/drive/helpers.go` consumes the runner-injected `CORE_EXTERNAL_URL` and provides the Drive package health boundary.
+- **Concrete implementations:** There is one repository CLI lifecycle owner and one Dockerized Go E2E runner path. The Drive observability scenario and its serialized neighbors reuse that parent-owned stack; the proven container-lifetime repair is owned by `BUG-031-009`, not by a second Drive runner.
+- **Current consumers:** The serialized Drive E2E package, `TestDriveObservabilityE2E_MetricsAndCountersReconcileAfterStressFixture`, immediate successor health probes, and later Go E2E packages all depend on the parent waiting for labeled children before stack teardown.
+- **Bounded variation axes:** Child ownership varies between host process descendants and Docker-daemon-owned labeled containers, while execution varies between targeted and serialized package order. Both axes are already represented by the same run ID and parent cleanup contract.
+- **Extension path:** Any additional Dockerized E2E child must inherit the existing run label and remain inside the parent's wait-then-teardown sequence. Additional package scenarios continue to use the injected canonical endpoint and shared lifecycle rather than registering an interchangeable runner.
+- **Foundation decision:** This packet diagnoses a containment defect in the established E2E lifecycle and routes the owning repair to `BUG-031-009`. A runner registry or second lifecycle abstraction would weaken the single-parent ownership invariant and would not address the observed teardown race.
+
 ## Complexity Tracking
 
 None - Drive code requires no change; remediation stays in the owning parent E2E lifecycle.

@@ -28,6 +28,15 @@ Use the existing live assistant turn helper to invoke a retired command with uni
 2. Accept a missing family when no samples exist - rejected because the test would not prove production wiring.
 3. Add a delay before scraping - rejected because time cannot create an observation.
 
+### Single-Implementation Justification
+
+- **Existing owning abstraction:** `internal/assistant/legacyretirement.ResidualTelemetry` is the established recording contract. `policyImpl.recordResidual` derives the privacy-safe bucket and calls that contract, while `MultiResidualTelemetry` already provides bounded sink fan-out.
+- **Concrete implementations:** `PrometheusResidualTelemetry` emits `smackerel_legacy_command_residual_total` and normalizes identity to a 64-character HMAC or `anonymous`; the existing residual store participates through the same fan-out for the rolling report. This bug changes neither implementation.
+- **Current consumers:** The authenticated retired-command assistant flow, the residual privacy E2E, the live `/metrics` scrape, and the rolling seven-day retirement report consume the same observation path and labels.
+- **Bounded variation axes:** Identity varies only between HMAC-shaped and canonical anonymous buckets, while retirement outcomes use the existing closed vocabulary. Sink composition is already bounded by the `ResidualTelemetry` interface and `MultiResidualTelemetry`.
+- **Extension path:** Another telemetry sink implements `ResidualTelemetry` and is composed through the existing fan-out after preserving the same privacy contract. Another test scenario must create its own real retired-command observation before asserting a sample.
+- **Foundation decision:** The reusable interface and fan-out already exist. The failure is one consumer test omitting its production precondition, so a new metric registry, sink abstraction, or test-only series initializer would add duplication and could conceal the ordering defect.
+
 ## Complexity Tracking
 
 None - simplest viable fix used.
