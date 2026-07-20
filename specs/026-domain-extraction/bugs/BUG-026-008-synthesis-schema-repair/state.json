@@ -144,7 +144,7 @@
       "reason": "After validate/audit certification, build and deploy the pushed source through the signed delivery path and confirm accepted-runtime card-rewards synthesis repair; no deployment is authorized in this source-delivery session.",
       "packetRef": "spec.md#deployment-boundary",
       "routedTo": "bubbles.devops",
-      "routedToCommit": "b476198898f005ac5bad25510fcb9d90cbe50939",
+      "routedToCommit": "5904f0266c2e9edd06db8fd8fb75794687dcf10e",
       "productAction": "none",
       "crossRepoFollowUp": true,
       "status": "open"
