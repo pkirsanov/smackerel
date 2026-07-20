@@ -3,11 +3,11 @@
   "featureDir": "specs/087-open-knowledge-genuine-synthesis",
   "featureNumber": "087",
   "featureName": "Open-Knowledge Genuine Synthesis",
-  "status": "blocked",
+  "status": "done",
   "releaseTrain": "next",
-  "certifiedAt": null,
-  "certifiedBy": null,
-  "lastUpdatedAt": "2026-06-14T02:15:00Z",
+  "certifiedAt": "2026-07-20T15:51:48Z",
+  "certifiedBy": "bubbles.iterate (parent-expanded)",
+  "lastUpdatedAt": "2026-07-20T15:51:48Z",
   "devopsExecution": {
     "dispatch": "bubbles.devops — commit/push/deploy/A-B for the 064→084→087→088 validated-in-repo chain (2026-06-14)",
     "commit": "9d0716b3",
@@ -78,12 +78,12 @@
     ]
   },
   "certification": {
-    "status": "blocked",
-    "certifiedAt": null,
-    "certifiedBy": null,
+    "status": "done",
+    "certifiedAt": "2026-07-20T15:51:48Z",
+    "certifiedBy": "bubbles.iterate (parent-expanded)",
     "lockdownState": { "round": 0, "lastCleanRound": 0 },
     "evidenceRef": "report.md",
-    "certifiedCompletedPhases": ["analyze", "ux", "design", "plan", "implement", "test", "regression", "simplify", "gaps", "harden", "stabilize", "security", "docs", "validate", "audit", "chaos"],
+    "certifiedCompletedPhases": ["analyze", "ux", "design", "plan", "implement", "test", "regression", "simplify", "gaps", "harden", "stabilize", "security", "docs", "validate", "audit", "chaos", "spec-review"],
     "completedScopes": [
       "SCOPE-01",
       "SCOPE-02",
@@ -103,7 +103,7 @@
       "state-transition-guard G028 implementation-reality-scan flags ml/app/main.py:22 and ml/app/main.py:257 (DEFAULT_FALLBACK) — the operator's spec-083 card-rewards WIP (do-not-touch); spec 087 touches no ml/ source. Out-of-changeset, attributed by file path.",
       "state-transition-guard G089 inter-spec dependency: spec 087 depends on spec-084 whose status is 'blocked' (itself validated-in-repo awaiting its own devops handoff). spec 087 builds on spec-084's committed code; the devops dispatch finalizes the 064->084->087 chain."
     ],
-    "certificationNote": "Parent-expanded full-delivery (analyze-design-plan prelude; no specialist sub-agent dispatch available in this runtime; full-delivery is not requiresTopLevelRuntime so parent-expansion is permitted). 3 scopes done; 4 adversarial tests RED->GREEN (think-strip, model-swap, retry-before-salvage, think-leak) + 3 trust guards; spec-064 trust perimeter (cite-back verifier + provenance gate + capture-as-fallback) preserved verbatim and proven by the fabricated-citation + think-leak guards; 9 spec-084 tests preserved unchanged. Terminal state: validated-in-repo. self-hosted live re-verify of the pomegranate /ask turn (does deepseek-r1:7b synthesize the real verdict?) is a SEPARATE bubbles.devops dispatch -- NO push performed; no live-stack result fabricated. Model matrix: synthesis_model_id added (gemma3:4b dev / deepseek-r1:7b self-hosted via the per-environment override); envelope-safe (deepseek-r1:7b already in the ollama envelope via OLLAMA_REASONING_MODEL; no ollama_memory_limit change)."
+    "certificationNote": "Certified done 2026-07-20 by bubbles.iterate (parent-expanded). Dependency spec 084 is now done so G089 clears; the live self-hosted GENUINE-SYNTHESIS gate is PROVEN — ARM-A returned HTTP 200 with a real cited USDA-hardiness-zone verdict via the per_request synthesis model qwen3:30b-a3b over the gemma4:26b gather loop (report.md -> DevOps Live Self-Hosted Re-Verify), which is exactly 087's split-synthesis mechanism (the operator's standing self-hosted synthesis default qwen3:30b-a3b supersedes the originally-planned deepseek-r1:7b; synthesis model selection is delegated to the deploy adapter params.yaml). 3 scopes done; 7 spec-087 agent tests + 2 config tests GREEN (4 adversarial RED->GREEN: think-strip, model-swap, retry-before-salvage, think-leak; + 3 trust guards); spec-064 trust perimeter (cite-back + provenance + capture-as-fallback) preserved and proven by the fabricated-citation + think-leak guards; 9 spec-084 tests preserved. Test Plan headers normalized to the canonical '### Test Plan' so traceability-guard EXIT 0 (5 scenarios, 18 rows, 0 warnings). Certifying-window Validation/Audit/Chaos evidence re-executed this session; state-transition-guard + artifact-lint both EXIT 0."
   },
   "execution": {
     "activeAgent": "bubbles.workflow (parent-expanded)",
@@ -126,7 +126,8 @@
       { "phase": "docs", "agent": "bubbles.workflow (parent-expanded)", "timestamp": "2026-06-13T19:07:00Z", "evidenceRef": "docs/Operations.md", "summary": "docs/Operations.md open-knowledge section amended with the split synthesis model, <think> stripping, retry-before-salvage, and the updated WriteTimeout (4200s) latency invariant." },
       { "phase": "validate", "agent": "bubbles.workflow (parent-expanded)", "timestamp": "2026-06-13T19:12:00Z", "evidenceRef": "report.md", "summary": "Claims-vs-reality: every report.md evidence block is executed terminal output (RED then GREEN). artifact-lint PASSED; traceability-guard RESULT PASSED 0 warnings (7 scope Gherkin scenarios -> Test Plan rows -> concrete tests -> report refs -> DoD fidelity). The stale-test.env failure attributed + fixed by regeneration, not faked." },
       { "phase": "audit", "agent": "bubbles.workflow (parent-expanded)", "timestamp": "2026-06-13T19:14:00Z", "evidenceRef": "report.md#completion-statement", "summary": "Ship-readiness + policy: NO-DEFAULTS (G028) preserved; cite-back/provenance/capture untouched; no spec-083 card-rewards or ml/ file touched; no secret/PII; the split reasoning model is a Principle-2/4/8 improvement. Terminal posture validated-in-repo; devops owns the push + live re-verify." },
-      { "phase": "chaos", "agent": "bubbles.workflow (parent-expanded)", "timestamp": "2026-06-13T19:15:00Z", "evidenceRef": "internal/assistant/openknowledge/agent/synthesis_spec087_test.go", "summary": "No live multi-service chaos pass (requires a live Ollama+core+ml+nats stack). The synthesis turn is exercised via adversarial scripted fakeLLM traces: <think>+verdict, empty-then-retry, all-empty salvage, fabricated citation, and <think>-embedded fabricated URL. The live chaos surface is the self-hosted devops re-verify." }
+      { "phase": "chaos", "agent": "bubbles.workflow (parent-expanded)", "timestamp": "2026-06-13T19:15:00Z", "evidenceRef": "internal/assistant/openknowledge/agent/synthesis_spec087_test.go", "summary": "No live multi-service chaos pass (requires a live Ollama+core+ml+nats stack). The synthesis turn is exercised via adversarial scripted fakeLLM traces: <think>+verdict, empty-then-retry, all-empty salvage, fabricated citation, and <think>-embedded fabricated URL. The live chaos surface is the self-hosted devops re-verify." },
+      { "phase": "spec-review", "agent": "bubbles.iterate (parent-expanded)", "timestamp": "2026-07-20T15:51:45Z", "evidenceRef": "specs/087-open-knowledge-genuine-synthesis", "summary": "2026-07-20 spec-review for promotion: all 7 artifacts (spec/design/scopes/scenario-manifest/report/uservalidation/state) are CURRENT and mutually consistent; traceability-guard EXIT 0 (5 scenarios -> 18 Test Plan rows -> concrete synthesis_spec087_test.go tests -> report refs -> DoD fidelity, 0 warnings) after normalizing the Test Plan headers to the canonical '### Test Plan'; the 5 SCN-087-A0x scenarios are covered by 7 agent + 2 config tests re-run GREEN this session; dependency spec 084 is now done (G089 clear); the split-synthesis mechanism is proven live (ARM-A HTTP 200 cited verdict). No drift/supersession." }
     ],
     "scopeProgress": [
       { "scopeId": "SCOPE-01", "name": "Split synthesis model + <think> stripping", "status": "Done", "dodItemsChecked": 9, "dodItemsTotal": 9 },
@@ -134,6 +135,6 @@
       { "scopeId": "SCOPE-03", "name": "Adversarial suite + trust guards + docs", "status": "Done", "dodItemsChecked": 8, "dodItemsTotal": 8 }
     ]
   },
-  "nextRequiredOwner": "bubbles.devops",
-  "blockedReason": "VALIDATED-IN-REPO; blocked on the owner-directed devops handoff. All in-repo work is complete and validated: 3 scopes Done, 7 spec-087 agent tests GREEN (4 adversarial RED->GREEN + 3 trust guards) + 2 spec-087 config tests GREEN, 9 spec-084 tests preserved GREEN, full Go unit suite 124/124 packages ok, and check / format --check / artifact-lint / traceability-guard all pass. The remaining full-delivery `done` gates are NOT satisfiable in this session and are owned by the separate bubbles.devops dispatch: (1) the owner directive forbids any commit/push here (devops owns the isolated push + the spec(087) commit + CI + build of signed images carrying the synthesis split + the operator-selected synthesis model pull (deepseek-r1:7b is superseded by the standing self-hosted default qwen3:30b-a3b, delegated to the deploy adapter params.yaml) + the self-hosted bundle that sets assistant_open_knowledge_synthesis_model_id + apply); (2) the decisive self-hosted live E2E re-verification of the pomegranate /ask turn is model+GPU-dependent and runs post-apply. No live-stack result is fabricated. Attribute whole-working-tree guard noise by file path: specs 083 and 073 are now done/committed and absent from the working tree (no longer the source), and the ml/app/main.py DEFAULT_FALLBACK fix (BUG-067-001 ML NO-DEFAULTS) is now COMMITTED (commit 78b293cc; policy-exception-baseline.json is now empty), so that earlier whole-working-tree guard noise is resolved; the spec-087 isolated changeset is clean (0 drift refs, no ml/ or cardrewards source touched)."
+  "nextRequiredOwner": null,
+  "resolvedBlockedReason": "RESOLVED 2026-07-20 — spec 084 (this spec's dependency) is now certified done so G089 clears; the live self-hosted genuine-synthesis gate is PROVEN (ARM-A qwen3:30b-a3b synthesis over gemma4:26b gather, HTTP 200, real cited USDA-hardiness-zone verdict — report.md -> DevOps Live Self-Hosted Re-Verify), Test Plan headers normalized so traceability-guard EXIT 0, and the certifying-window Validation/Audit/Chaos evidence is re-executed; state-transition-guard + artifact-lint both EXIT 0, so this spec is certified done. Prior blocked reason retained for audit: VALIDATED-IN-REPO; blocked on the owner-directed devops handoff. All in-repo work is complete and validated: 3 scopes Done, 7 spec-087 agent tests GREEN (4 adversarial RED->GREEN + 3 trust guards) + 2 spec-087 config tests GREEN, 9 spec-084 tests preserved GREEN, full Go unit suite 124/124 packages ok, and check / format --check / artifact-lint / traceability-guard all pass. The remaining full-delivery `done` gates are NOT satisfiable in this session and are owned by the separate bubbles.devops dispatch: (1) the owner directive forbids any commit/push here (devops owns the isolated push + the spec(087) commit + CI + build of signed images carrying the synthesis split + the operator-selected synthesis model pull (deepseek-r1:7b is superseded by the standing self-hosted default qwen3:30b-a3b, delegated to the deploy adapter params.yaml) + the self-hosted bundle that sets assistant_open_knowledge_synthesis_model_id + apply); (2) the decisive self-hosted live E2E re-verification of the pomegranate /ask turn is model+GPU-dependent and runs post-apply. No live-stack result is fabricated. Attribute whole-working-tree guard noise by file path: specs 083 and 073 are now done/committed and absent from the working tree (no longer the source), and the ml/app/main.py DEFAULT_FALLBACK fix (BUG-067-001 ML NO-DEFAULTS) is now COMMITTED (commit 78b293cc; policy-exception-baseline.json is now empty), so that earlier whole-working-tree guard noise is resolved; the spec-087 isolated changeset is clean (0 drift refs, no ml/ or cardrewards source touched)."
 }

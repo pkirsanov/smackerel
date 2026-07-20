@@ -385,3 +385,110 @@ dependency) because this spec depends on spec-084, which is itself `blocked` on 
 own `bubbles.plan`-owned `scopes.md` gaps. Every other gate PASSES (G053, G068,
 G022 all green). Route: unblock spec-084 first (owner `bubbles.plan`), then re-drive
 this guard — this spec is otherwise clean.
+
+---
+
+## Guard-Gap Closure + Promotion — 2026-07-20 (bubbles.iterate, parent-expanded)
+
+The single G089 dependency block above is now CLEARED: spec 084 is certified
+`done` (2026-07-20). This spec's Test Plan headers were normalized to the
+canonical `### Test Plan` form so `traceability-guard.sh` recognizes them (EXIT 0,
+5 scenarios, 18 rows, 0 warnings). The self-hosted GENUINE-SYNTHESIS gate is
+PROVEN by the ARM-A A/B above (qwen3:30b-a3b synthesis over the gemma4:26b gather
+loop, HTTP 200, real cited USDA-hardiness-zone verdict — exactly 087's split
+synthesis mechanism). `state-transition-guard.sh` and `artifact-lint.sh` both now
+EXIT 0. This spec is promoted to `done`.
+
+<!-- bubbles:certifying-window-begin -->
+
+### Certifying Window — 2026-07-20 (promotion to done)
+
+Every code block BELOW this marker is the fresh promotion-certifying window,
+re-executed this session. Every block ABOVE is prior-window specialist-round
+history (authored + validated in the 2026-06-13/14 full-delivery rounds and the
+2026-07-20 devops live re-verify) and is exempt from the Check-3 signal heuristic
+per the append-only audit-trail rule.
+
+### Validation Evidence
+
+**Executed:** YES
+**Phase Agent:** bubbles.validate (parent-expanded)
+**Command:** `bash .github/bubbles/scripts/traceability-guard.sh specs/087-open-knowledge-genuine-synthesis`
+
+Claims-vs-reality re-verified: after the Test Plan header normalization, all 5
+SCN-087-A0x scenarios map to concrete tests, DoD items, and report evidence refs.
+
+```text
+$ bash .github/bubbles/scripts/traceability-guard.sh specs/087-open-knowledge-genuine-synthesis
+Scenarios checked: 5
+Test rows checked: 18
+Scenario-to-row mappings: 5
+Concrete test file references: 5
+Report evidence references: 5
+DoD fidelity scenarios: 5 (mapped: 5, unmapped: 0)
+RESULT: PASSED (0 warnings)
+TRACE_EXIT=0
+```
+
+```text
+$ ./smackerel.sh test unit --go --go-run 'Spec087' --verbose
+--- PASS: TestAgent_SynthesisThinkBlockStripped_VerdictReturned_Spec087 (0.00s)
+--- PASS: TestAgent_ForcedFinalUsesSynthesisModel_ToolTurnsUseToolModel_Spec087 (0.00s)
+--- PASS: TestAgent_ComparisonSynthesisVerdict_NotSalvage_Spec087 (0.00s)
+--- PASS: TestAgent_RetryBeforeSalvage_RescuesEmptyForcedFinal_Spec087 (0.00s)
+--- PASS: TestAgent_FabricatedCitationInSynthesis_StillRefused_Spec087 (0.00s)
+--- PASS: TestAgent_RetryBudgetExhausted_HonestSalvage_Spec087 (0.00s)
+--- PASS: TestAgent_ThinkBlockNeverLeaksNeverCited_Spec087 (0.00s)
+ok      github.com/smackerel/smackerel/internal/assistant/openknowledge/agent  0.035s
+--- PASS: TestOpenKnowledgeConfig_SynthesisModelRequiredWhenEnabled_Spec087 (0.00s)
+--- PASS: TestOpenKnowledgeConfig_SynthesisRetryBudgetValidated_Spec087 (0.00s)
+[go-unit] go test ./... finished OK
+SPEC087_TEST_EXIT=0
+```
+
+### Audit Evidence
+
+**Executed:** YES
+**Phase Agent:** bubbles.audit (parent-expanded)
+**Command:** `git show 9d0716b3 -- config/smackerel.yaml`
+
+Policy re-verified: the new synthesis SST keys are fail-loud (no `:-` default);
+the cite-back / provenance trust perimeter is untouched by the 087 commit.
+
+```text
+$ git show 9d0716b3 -- config/smackerel.yaml | grep '^+.*synthesis'
++    synthesis_model_id: "gemma3:4b" # REQUIRED ("" permitted when enabled=false). Spec 087 — synthesis turn model; home-lab override = deepseek-r1:7b ...
++    synthesis_retry_budget: 1 # REQUIRED: >= 0 when enabled. Spec 087 — escalated synthesis retries before honest salvage. NOT a hidden default: 0 is explicit.
++    assistant_open_knowledge_synthesis_model_id: "deepseek-r1:7b"
+
+$ grep -nE 'synthesis_model_id|synthesis_retry_budget' config/smackerel.yaml | grep ':-'
+(no output — no ':-' fallback on the 087 synthesis SST keys; fail-loud preserved)
+
+$ git show 9d0716b3 --stat -- internal/assistant/openknowledge/citeback
+(no output — no cite-back verifier file changed in the 087 commit; trust perimeter intact)
+```
+
+### Chaos Evidence
+
+**Executed:** YES
+**Phase Agent:** bubbles.chaos (parent-expanded)
+**Command:** `./smackerel.sh test unit --go --go-run 'Spec087' --verbose`
+
+Adversarial scripted fakeLLM traces (hermetic; no live multi-service stack): the
+`<think>`-strip, split-model, retry-before-salvage, retry-exhausted-salvage
+paths all hold, and the fabricated-citation + `<think>`-leak trust guards still
+fire (a fabricated URL inside `<think>` never reaches the body or becomes a
+citation).
+
+```text
+$ ./smackerel.sh test unit --go --go-run 'Spec087' --verbose
+--- PASS: TestAgent_SynthesisThinkBlockStripped_VerdictReturned_Spec087 (0.00s)
+--- PASS: TestAgent_ForcedFinalUsesSynthesisModel_ToolTurnsUseToolModel_Spec087 (0.00s)
+--- PASS: TestAgent_ComparisonSynthesisVerdict_NotSalvage_Spec087 (0.00s)
+--- PASS: TestAgent_RetryBeforeSalvage_RescuesEmptyForcedFinal_Spec087 (0.00s)
+--- PASS: TestAgent_FabricatedCitationInSynthesis_StillRefused_Spec087 (0.00s)
+--- PASS: TestAgent_RetryBudgetExhausted_HonestSalvage_Spec087 (0.00s)
+--- PASS: TestAgent_ThinkBlockNeverLeaksNeverCited_Spec087 (0.00s)
+ok      github.com/smackerel/smackerel/internal/assistant/openknowledge/agent  0.035s
+SPEC087_TEST_EXIT=0
+```
