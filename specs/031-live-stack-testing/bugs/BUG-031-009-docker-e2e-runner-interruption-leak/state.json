@@ -8,7 +8,8 @@
   "severity": "high",
   "source": "BROAD-DRIVE-HEALTH-001 routed through BUG-038-003",
   "owningSpec": "031-live-stack-testing",
-  "status": "in_progress",
+  "status": "done",
+  "certifiedAt": "2026-07-21T17:38:00Z",
   "releaseTrain": "mvp",
   "workflowMode": "bugfix-fastlane",
   "executionRuntime": "direct",
@@ -141,15 +142,15 @@
     }
   ],
   "certification": {
-    "status": "in_progress",
+    "status": "done",
     "certificationReadiness": "ready",
     "completedScopes": ["1"],
-    "certifiedCompletedPhases": [],
-    "certifierAgent": null,
-    "certifiedAt": null,
+    "certifiedCompletedPhases": ["implement", "test", "regression", "simplify", "stabilize", "security", "validate", "audit"],
+    "certifierAgent": "bubbles.validate",
+    "certifiedAt": "2026-07-21T17:38:00Z",
     "scopeProgress": [{"scopeId": "1", "status": "done", "dodComplete": 15, "dodTotal": 15}],
     "lockdownState": {"active": false, "round": 0, "lastCleanRound": 0, "lockedScenarioIds": []},
-    "observations": ["Correction round (fabrication fix): all 15 DoD closed with current-session evidence; reaping core proof re-run GREEN at load 3.06 (runner 33b45303d15b reaped before teardown, exit 0) after an environmental RED at load 4.58; reality-scan/unit/check/lint green. The prior round recorded a done promotion whose state-transition-guard actually FAILED (G088 + artifact-lint) and whose report embedded a fabricated guard-PASS block; both are being corrected. This planning-truth commit is in_progress with no top-level certifiedAt; validate-owned promotion to done follows in a separate commit after certifiedAt."]
+    "observations": ["Correction round (fabrication fix): reaping core proof re-run GREEN this session at load 3.06 (runner 33b45303d15b reaped before teardown, exit 0) after an environmental RED at load 4.58; reality-scan (0 violations), unit (go OK / py 708 passed), check, and lint all green; all 15 DoD closed with current-session evidence; 8 bugfix-fastlane phases recorded. The prior round had recorded done with a state-transition-guard that actually FAILED (G088 + artifact-lint) and a fabricated guard-PASS block in report.md; both removed. Promotion follows the ordered G088 sequence: planning-truth commit a8bcc8dc at in_progress with no top-level certifiedAt, top-level certifiedAt set after it, then this promotion commit. Post-correction state-transition-guard verdict PASS (failedGateIds []), exit 0; artifact-lint exit 0 — captured live this session and recorded in report.md#governance-guard-verification."]
   },
   "policySnapshot": {
     "grill": {"mode": "off", "source": "repo-default"},
@@ -162,8 +163,8 @@
   },
   "routing": {
     "outcome": "completed_owned",
-    "nextRequiredOwner": "bubbles.validate",
-    "reason": "Correction round: planning truth (report.md real evidence, fabricated guard-PASS block removed) committed at in_progress with no top-level certifiedAt. Validate-owned promotion to done follows in a separate commit that sets the top-level certifiedAt after this commit (Gate G088 ordering).",
-    "subsequentOwners": ["bubbles.validate"]
+    "nextRequiredOwner": null,
+    "reason": "Correction round complete: fabricated guard-PASS block removed, real current-session evidence recorded, ordered G088 promotion sequence applied (planning-truth commit a8bcc8dc at in_progress; top-level certifiedAt set after it; promotion commit). Post-correction state-transition-guard PASS (failedGateIds []), artifact-lint exit 0.",
+    "subsequentOwners": []
   }
 }
