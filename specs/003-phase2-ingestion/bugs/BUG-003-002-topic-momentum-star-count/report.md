@@ -1,0 +1,1189 @@
+# Execution Report: BUG-003-002 Topic momentum star aggregation
+
+Links: [scopes.md](scopes.md) | [uservalidation.md](uservalidation.md)
+
+## Scope 1: Restore canonical topic star aggregation - 2026-07-20 20:17 UTC
+
+### Summary
+
+The worktree reproduced the production query/schema counterexample in Scope 6 Topic Lifecycle, replaced the invalid star source with canonical relationship aggregation, and verified the focused integration, R-208 unit/functional, scheduler-observability, and targeted full-stack paths. Delivery status remains `in_progress`; no terminal certification is claimed.
+
+Changed implementation and test paths:
+
+- `internal/topics/lifecycle.go`
+- `tests/integration/topic_lifecycle_momentum_test.go`
+- `internal/scheduler/jobs_test.go`
+- `tests/e2e/test_topic_lifecycle.sh` (executed unchanged)
+
+### Decision Record
+
+- Canonical explicit-star source: `artifacts.user_starred`.
+- Canonical topic membership: `artifact -> topic` `BELONGS_TO` edges.
+- Repair boundary: replace the invalid lifecycle star expression without adding a migration or changing scheduler/health semantics.
+- Required RED: actual `topics.Lifecycle.UpdateAllMomentum` against production migrations in the disposable `integration-light` PostgreSQL stack.
+
+### Completion Statement
+
+Bug delivery remains `in_progress`. Certification fields remain owned by `bubbles.validate`, and audit evidence remains owned by `bubbles.audit`.
+
+### Code Diff Evidence
+
+**Phase:** bug
+**Command:** `git status --short && git diff --name-only && git diff --stat && git diff --check`
+**Exit Code:** 0
+**Claim Source:** executed
+
+```text
+ M internal/scheduler/jobs_test.go
+ M internal/topics/lifecycle.go
+?? specs/003-phase2-ingestion/bugs/BUG-003-002-topic-momentum-star-count/
+?? tests/integration/topic_lifecycle_momentum_test.go
+internal/scheduler/jobs_test.go
+internal/topics/lifecycle.go
+internal/scheduler/jobs_test.go | 34 ++++++++++++++++++++++++++++++++++
+internal/topics/lifecycle.go    |  6 +++++-
+2 files changed, 39 insertions(+), 1 deletion(-)
+git diff --check produced no diagnostics and exited 0
+```
+
+Changed-path classification: one production query, one scheduler unit test, one PostgreSQL integration test, and one canonical bug packet. No config, schema, deployment, release-train, secret, manifest, or generated path is present.
+
+### Bug Reproduction - Live Red-Team Observation
+
+**Phase:** bug
+**Command:** Not executed in this worktree; observation supplied from the live red-team run.
+**Exit Code:** not-run
+**Claim Source:** not-run
+
+```text
+Observed source: f5f05450848630fe84c0a215429bdfc701c4bcd2
+Observed at: 2026-07-20T20:00:00Z
+Observed service: smackerel-core
+Observed job: topic momentum update
+Observed database: PostgreSQL
+Observed SQLSTATE: 42703
+Observed error class: undefined column
+Observed column: t.star_count
+Observed scheduler result: failure log emitted
+Observed public health result: remained green
+Raw counterexample:
+topic momentum update failed: query topics: ERROR: column t.star_count does not exist (SQLSTATE 42703)
+```
+
+The current-session RED below independently reproduced the same counterexample against production migrations.
+
+### Test Evidence
+
+#### RED - actual lifecycle query against canonical migrations
+
+**Phase:** bug
+**Command:** `SMACKEREL_HARDWARE_TIER=cpu ./smackerel.sh test integration-light --go-run '^TestTopicLifecycleMomentumFromPersistedStars$'`
+**Exit Code:** 1 (expected RED)
+**Claim Source:** executed
+
+```text
+[go-integration] gettext-base install OK
+go-integration: applying -run selector: ^TestTopicLifecycleMomentumFromPersistedStars$
+=== RUN   TestTopicLifecycleMomentumFromPersistedStars
+	topic_lifecycle_momentum_test.go:36: UpdateAllMomentum against canonical migrations: query topics: ERROR: column t.star_count does not exist (SQLSTATE 42703)
+--- FAIL: TestTopicLifecycleMomentumFromPersistedStars (0.06s)
+FAIL
+FAIL    github.com/smackerel/smackerel/tests/integration        0.195s
+FAIL: go-integration-light (exit=1)
+Running project-scoped integration-light stack teardown (exit cleanup, timeout 120s)...
+Container smackerel-test-nats-1 Removed
+Container smackerel-test-postgres-1 Removed
+Volume smackerel-test-nats-data Removed
+Volume smackerel-test-postgres-data Removed
+Network smackerel-test_default Removed
+```
+
+#### Broader Go unit regression
+
+**Phase:** bug
+**Command:** `SMACKEREL_HARDWARE_TIER=cpu ./smackerel.sh test unit --go`
+**Exit Code:** 0
+**Claim Source:** executed
+
+```text
+ok      github.com/smackerel/smackerel/internal/recommendation/watch    (cached)
+ok      github.com/smackerel/smackerel/internal/retrieval/evergreen     0.030s
+ok      github.com/smackerel/smackerel/internal/retrieval/routing       0.020s
+ok      github.com/smackerel/smackerel/internal/scheduler       5.071s
+ok      github.com/smackerel/smackerel/internal/scopesdriftguard        0.126s
+ok      github.com/smackerel/smackerel/internal/stringutil      (cached)
+ok      github.com/smackerel/smackerel/internal/telegram        27.636s
+ok      github.com/smackerel/smackerel/internal/topics  (cached)
+ok      github.com/smackerel/smackerel/internal/web     0.233s
+ok      github.com/smackerel/smackerel/tests/e2e/agent  0.013s
+ok      github.com/smackerel/smackerel/tests/eval/assistant     0.046s
+ok      github.com/smackerel/smackerel/tests/observability      0.007s
+ok      github.com/smackerel/smackerel/tests/stress/readiness   0.036s
+ok      github.com/smackerel/smackerel/web/pwa/tests    1.245s
+[go-unit] go test ./... finished OK
+```
+
+#### GREEN - canonical persisted star aggregation
+
+**Phase:** bug
+**Command:** `SMACKEREL_HARDWARE_TIER=cpu ./smackerel.sh test integration-light --go-run '^TestTopicLifecycleMomentumFromPersistedStars$'`
+**Exit Code:** 0
+**Claim Source:** executed
+
+```text
+go-integration: applying -run selector: ^TestTopicLifecycleMomentumFromPersistedStars$
+=== RUN   TestTopicLifecycleMomentumFromPersistedStars
+INFO topic state transition topic=test-TestTopicLifecycleMomentumFromPersistedStars-1784579307715676916-zero from=emerging to=dormant momentum=0.5
+INFO topic state transition topic=test-TestTopicLifecycleMomentumFromPersistedStars-1784579307715676916-multiple from=emerging to=active momentum=11.5
+topic_lifecycle_momentum_test.go:41: zero-star persisted momentum=0.5000 state=dormant
+topic_lifecycle_momentum_test.go:45: multiple-stars persisted momentum=11.5000 state=active
+topic_lifecycle_momentum_test.go:47: PASS: canonical topics schema has no star_count column
+topic_lifecycle_momentum_test.go:48: PASS: zero linked starred artifacts contribute 0.0 star momentum
+topic_lifecycle_momentum_test.go:49: PASS: one linked unstarred artifact contributes only 0.5 connection momentum
+topic_lifecycle_momentum_test.go:50: PASS: two linked starred artifacts contribute exactly 10.0 star momentum
+topic_lifecycle_momentum_test.go:51: PASS: three linked artifacts contribute exactly 1.5 connection momentum
+topic_lifecycle_momentum_test.go:52: PASS: an unrelated starred artifact contributes nothing to the tested topic
+--- PASS: TestTopicLifecycleMomentumFromPersistedStars (0.06s)
+PASS
+ok      github.com/smackerel/smackerel/tests/integration        0.167s
+PASS: go-integration-light
+Volume smackerel-test-postgres-data Removed
+Volume smackerel-test-nats-data Removed
+Network smackerel-test_default Removed
+```
+
+#### Focused R-208 and scheduler regressions
+
+**Phase:** bug
+**Command:** `SMACKEREL_HARDWARE_TIER=cpu ./smackerel.sh test unit --go --go-run '^(TestCalculateMomentum.*|TestTransitionState.*|TestDefaultMomentumConfig|TestNewLifecycle|TestTopicMomentumJob_LogsLifecycleQueryFailure)$' --verbose`
+**Exit Code:** 0
+**Claim Source:** executed
+
+```text
+=== RUN   TestTopicMomentumJob_LogsLifecycleQueryFailure
+--- PASS: TestTopicMomentumJob_LogsLifecycleQueryFailure (0.00s)
+PASS
+ok      github.com/smackerel/smackerel/internal/scheduler       0.050s
+=== RUN   TestCalculateMomentum
+--- PASS: TestCalculateMomentum (0.00s)
+=== RUN   TestCalculateMomentum_Dormant
+--- PASS: TestCalculateMomentum_Dormant (0.00s)
+=== RUN   TestCalculateMomentum_Decay
+--- PASS: TestCalculateMomentum_Decay (0.00s)
+=== RUN   TestTransitionState
+--- PASS: TestTransitionState (0.00s)
+=== RUN   TestCalculateMomentum_StarsAndConnections
+--- PASS: TestCalculateMomentum_StarsAndConnections (0.00s)
+=== RUN   TestNewLifecycle
+--- PASS: TestNewLifecycle (0.00s)
+PASS
+ok      github.com/smackerel/smackerel/internal/topics  0.006s
+[go-unit] go test ./... finished OK
+```
+
+#### Targeted topic lifecycle E2E
+
+**Phase:** bug
+**Command:** `SMACKEREL_HARDWARE_TIER=cpu ./smackerel.sh test e2e --shell-run test_topic_lifecycle.sh`
+**Exit Code:** 0
+**Claim Source:** executed
+
+```text
+Container smackerel-test-postgres-1 Healthy
+Container smackerel-test-smackerel-core-1 Healthy
+Container smackerel-test-smackerel-ml-1 Healthy
+=== Topic Lifecycle E2E Tests ===
+Waiting for services to be healthy (max 120s)...
+Services healthy after 0s
+Seeding topics...
+Existing pricing topic owner: topic-lifecycle-existing-pricing
+PASS: Adversarial pricing topic present without duplicate collision
+Hot topic momentum: 20
+Dormant topic momentum: 0.1
+PASS: Topic lifecycle: states and momentum verified
+=== Topic Lifecycle E2E tests passed ===
+PASS: test_topic_lifecycle.sh
+Total: 1
+Passed: 1
+Failed: 0
+Volume smackerel-test-ollama-data Removed
+Volume smackerel-test-nats-data Removed
+Volume smackerel-test-postgres-data Removed
+Network smackerel-test_default Removed
+```
+
+### Uncertainty Declarations
+
+Validate-owned certification and audit-owned final review were not executed in this invocation. The packet remains `in_progress` and all delivery DoD items remain unchecked rather than attributing evidence to unavailable specialists.
+
+### Scenario Contract Evidence
+
+Scenario contracts are registered in [scenario-manifest.json](scenario-manifest.json) and linked to these executed regressions:
+
+- `tests/integration/topic_lifecycle_momentum_test.go`
+- `internal/scheduler/jobs_test.go`
+- `tests/e2e/test_topic_lifecycle.sh`
+
+### Coverage Report
+
+Focused behavior coverage includes canonical schema compatibility, zero linked stars, two linked stars, linked unstarred artifacts, unrelated starred artifacts, connection contribution, lifecycle state transitions, and scheduler failure/success log separation. No numeric repository-wide coverage percentage is claimed.
+
+### Lint/Quality
+
+Executed repository surfaces:
+
+- `SMACKEREL_HARDWARE_TIER=cpu ./smackerel.sh check` - exit 0
+- `SMACKEREL_HARDWARE_TIER=cpu ./smackerel.sh lint` - exit 0, `All checks passed!`, `Web validation passed`
+- `SMACKEREL_HARDWARE_TIER=cpu ./smackerel.sh format --check` - exit 0, `75 files already formatted`
+- Standard and `--bugfix` regression-quality guards - exit 0, zero violations and warnings
+
+#### Traceability and implementation reality
+
+**Phase:** bug
+**Command:** `bash .github/bubbles/scripts/traceability-guard.sh specs/003-phase2-ingestion/bugs/BUG-003-002-topic-momentum-star-count` and `bash .github/bubbles/scripts/implementation-reality-scan.sh specs/003-phase2-ingestion/bugs/BUG-003-002-topic-momentum-star-count --verbose`
+**Exit Code:** 0, 0
+**Claim Source:** executed
+
+```text
+scenario-manifest.json covers 3 scenario contract(s)
+scenario-manifest.json linked test exists: tests/integration/topic_lifecycle_momentum_test.go
+scenario-manifest.json linked test exists: internal/scheduler/jobs_test.go
+scenario-manifest.json linked test exists: tests/e2e/test_topic_lifecycle.sh
+All linked tests from scenario-manifest.json exist
+Scenarios checked: 3
+Scenario-to-row mappings: 3
+Report evidence references: 3
+DoD fidelity scenarios: 3 (mapped: 3, unmapped: 0)
+RESULT: PASSED (0 warnings)
+INFO: Resolved 1 implementation file(s) to scan
+Files scanned: 1
+Violations: 0
+Warnings: 0
+PASSED: No source code reality violations detected
+```
+
+#### Adversarial regression guards
+
+**Phase:** bug
+**Command:** `bash .github/bubbles/scripts/regression-quality-guard.sh tests/integration/topic_lifecycle_momentum_test.go internal/scheduler/jobs_test.go tests/e2e/test_topic_lifecycle.sh` and the same command with `--bugfix`
+**Exit Code:** 0, 0
+**Claim Source:** executed
+
+```text
+REGRESSION QUALITY RESULT: 0 violation(s), 0 warning(s)
+Files scanned: 3
+Bugfix mode: true
+Scanning tests/integration/topic_lifecycle_momentum_test.go
+Adversarial signal detected in tests/integration/topic_lifecycle_momentum_test.go
+Scanning internal/scheduler/jobs_test.go
+Adversarial signal detected in internal/scheduler/jobs_test.go
+Scanning tests/e2e/test_topic_lifecycle.sh
+Adversarial signal detected in tests/e2e/test_topic_lifecycle.sh
+REGRESSION QUALITY RESULT: 0 violation(s), 0 warning(s)
+Files scanned: 3
+Files with adversarial signals: 3
+```
+
+### Spot-Check Recommendations
+
+- Verify the final query retains all five `BELONGS_TO` relationship predicates from BUG-R2.
+- Verify the integration assertion includes connection contribution separately from explicit-star contribution.
+- Verify no migration or health-contract path appears in the final diff.
+
+### Validation Summary
+
+No validate-owned certification result is recorded. Product tests and project-owned gates are recorded above; certification stays `in_progress`.
+
+### Audit Verdict
+
+The controlling audit-owned result is recorded in the bounded final delivery audit below.
+
+## Bounded Final Delivery Audit - 2026-07-20
+
+### Findings
+
+1. **[BLOCKER] AUD-003-002-COMPLETION-001** - The assertion-only transition guard refused target `done`: all 16 DoD items remain unchecked, Scope 1 remains `In Progress`, and the required broader E2E DoD item has no executed evidence. The current `in_progress` state is truthful and must remain unchanged.
+2. **[BLOCKER] AUD-003-002-PROVENANCE-001** - The registry-required `implement`, `test`, `regression`, `simplify`, `stabilize`, `security`, `validate`, and `audit` phases are absent from the execution/certification phase records. Existing `bubbles.bug` evidence is genuine but cannot impersonate those specialist claims.
+3. **[BLOCKER] AUD-003-002-BOUNDARY-001** - Gate Check 8D accepts the presence of a Change Boundary section but rejects its inline `Allowed`/`Excluded` prose because the scope does not enumerate the allowed and excluded surfaces in the mechanically required form.
+4. **[BLOCKER] AUD-003-002-G090-001** - Gate G090 cannot evaluate convergence because `.specify/memory/bubbles.session.json` is absent from the isolated exact-commit worktree.
+
+### Verified Delivery Delta
+
+- PASS: remote branch `origin/bug/topic-momentum-star-count-20260720`, isolated worktree HEAD, and requested commit all resolve to `7ff2d5441f8d90158873cff378c8b81d448900b8`.
+- PASS: the branch is one commit ahead of parent and `origin/main` merge-base `f5f05450848630fe84c0a215429bdfc701c4bcd2`.
+- PASS: production no longer references `t.star_count`; the correlated aggregate counts `DISTINCT a.id` through artifact-to-topic `BELONGS_TO` edges with `a.user_starred IS TRUE`.
+- PASS: no migration, schema, deploy, config, release-train, secret, manifest, or framework path changed.
+- PASS: the independent disposable PostgreSQL run applied canonical migrations and proved zero-star, multiple-star, unstarred, unrelated-star, momentum, and state outcomes.
+- PASS: the independent focused unit run proved lifecycle formula/state behavior and scheduler failure logging without a success log.
+- PASS: the recorded targeted lifecycle E2E is a real-stack shell flow; selected tests contain no skip, interception, or internal-fake markers.
+- PASS: artifact lint, traceability, implementation reality, and standard plus bugfix regression-quality guards passed independently.
+- PASS: post-test inspection found no residual `smackerel-test` containers, volumes, or networks.
+- PASS: the exact changed-path boundary is limited to one production query, two focused test surfaces, and this packet.
+
+### Independent Audit Evidence
+
+**Phase:** audit
+**Command:** `bash .github/bubbles/scripts/state-transition-guard.sh specs/003-phase2-ingestion/bugs/BUG-003-002-topic-momentum-star-count --target-status done --expect-workflow-mode bugfix-fastlane --expect-contract-digest sha256:aa91472c047d3d985d38c1d308feb1e6081955b2aa553816deb5987d9cdc449f`
+**Exit Code:** 1
+**Claim Source:** executed
+
+```text
+DoD items total: 16 (checked: 0, unchecked: 16)
+BLOCK: Resolved scope artifacts have 16 UNCHECKED DoD items
+Resolved scopes: total=1, Done=0, In Progress=1, Not Started=0, Blocked=0
+BLOCK: Resolved scope artifacts have 1 scope(s) still marked 'In Progress'
+BLOCK: Required phase 'implement' NOT in execution/certification phase records
+BLOCK: Required phase 'test' NOT in execution/certification phase records
+BLOCK: Required phase 'regression' NOT in execution/certification phase records
+BLOCK: Required phase 'simplify' NOT in execution/certification phase records
+BLOCK: Required phase 'stabilize' NOT in execution/certification phase records
+BLOCK: Required phase 'security' NOT in execution/certification phase records
+BLOCK: Required phase 'validate' NOT in execution/certification phase records
+BLOCK: Required phase 'audit' NOT in execution/certification phase records
+BLOCK: Scope is a refactor/repair but does not enumerate allowed and excluded surfaces
+BLOCK: Retro convergence health failed - Gate G090
+TRANSITION BLOCKED: 14 failure(s), 3 warning(s)
+```
+
+**Phase:** audit
+**Command:** `SMACKEREL_HARDWARE_TIER=cpu ./smackerel.sh test integration-light --go-run '^TestTopicLifecycleMomentumFromPersistedStars$'`
+**Exit Code:** 0
+**Claim Source:** executed
+
+```text
+INFO applied migration version=001_initial_schema.sql
+INFO applied migration version=062_model_usage_ledger.sql
+INFO dbmigrate: all migrations applied
+PASS: integration-light db migration (schema applied via cmd/dbmigrate)
+=== RUN   TestTopicLifecycleMomentumFromPersistedStars
+INFO topic state transition topic=<fixture>-zero from=emerging to=dormant momentum=0.5
+INFO topic state transition topic=<fixture>-multiple from=emerging to=active momentum=11.5
+zero-star persisted momentum=0.5000 state=dormant
+multiple-stars persisted momentum=11.5000 state=active
+PASS: canonical topics schema has no star_count column
+PASS: zero linked starred artifacts contribute 0.0 star momentum
+PASS: one linked unstarred artifact contributes only 0.5 connection momentum
+PASS: two linked starred artifacts contribute exactly 10.0 star momentum
+PASS: three linked artifacts contribute exactly 1.5 connection momentum
+PASS: an unrelated starred artifact contributes nothing to the tested topic
+--- PASS: TestTopicLifecycleMomentumFromPersistedStars (0.06s)
+PASS: go-integration-light
+Container smackerel-test-postgres-1 Removed
+Volume smackerel-test-postgres-data Removed
+Network smackerel-test_default Removed
+```
+
+### Observation Versus Blocker
+
+- **Observation:** `artifact-lint.sh` reports the existing `scopeProgress` and `scopeLayout` fields as deprecated while still exiting 0. This is non-blocking for the current `in_progress` packet.
+- **Observation:** focused `go test ./... -run ...` selectors emit `testing: warning: no tests to run` for unrelated packages; the selected scheduler, lifecycle, and integration tests all ran and passed. This does not substitute for the missing broader E2E evidence.
+- **Blocker:** the clean code/test sub-audit cannot override the failed delivery-completion guard or promote packet state.
+
+### Spot-Check Recommendations
+
+1. **Code Diff Evidence block (lines 36-47)** - The raw block is exactly 10 lines, the minimum threshold. Verify its path inventory against `git show --name-status 7ff2d5441f8d90158873cff378c8b81d448900b8`.
+2. **First packet-specific PostgreSQL integration regression** - Verify that the `0.5` and `11.5` expectations continue to separate connection contribution from explicit-star contribution.
+3. **Not-run live red-team observation** - Treat the `not-run` block only as supplied context; the separate executed RED transcript and the parent-commit `t.star_count` search are the controlling counterexample proof.
+
+### Audit Verdict
+
+`REWORK_REQUIRED`. The red-team fix and its bounded behavior evidence pass, but final delivery certification is blocked by incomplete DoD/phase provenance, the mechanically incomplete Change Boundary, and missing G090 session state. The next repair owner is `bubbles.plan`, which must enumerate the allowed and excluded Change Boundary surfaces in the mechanically accepted scope form without changing the already-clean production fix; the authorized `bugfix-fastlane` chain can then resume at `implement` and record each later phase's own evidence before validate and re-audit.
+
+BEGIN TRANSITION_GUARD_RESULT_V1
+schemaVersion: transition-guard-result/v1
+workflowMode: bugfix-fastlane
+auditProfile: delivery-completion-v1
+targetStatus: done
+contractDigest: sha256:aa91472c047d3d985d38c1d308feb1e6081955b2aa553816deb5987d9cdc449f
+targetRevision: sha256:3cdb2dd585aa85d66c045f909c7d8e899318128b88c29cb8451145e5d31820e8
+applicableCheckClasses: [universal,mode-required,delivery-completion]
+notApplicableChecks: []
+passedGateIds: [G053,G040,G051,G068,G082,G083,G084,G128,G085,G086,G091,G087,G093,G088,G089,G092,G094,G095,G097,G098,G099,G100]
+failedGateIds: [G022,G090]
+failedChecks: [Check-4-completion,Check-5-all-done]
+blockingCode: DELIVERY_COMPLETION_FAILED
+failureCount: 14
+exitStatus: 1
+verdict: FAIL
+END TRANSITION_GUARD_RESULT_V1
+
+verdict: REWORK_REQUIRED
+target: specs/003-phase2-ingestion/bugs/BUG-003-002-topic-momentum-star-count
+mode: bugfix-fastlane
+audit class: delivery-completion
+ceiling: done
+
+BEGIN AUDIT_RESULT_V1
+schemaVersion: audit-result/v1
+runId: audit-003-002-20260720T205105Z
+attemptId: audit-003-002-20260720T205105Z-a1
+target: specs/003-phase2-ingestion/bugs/BUG-003-002-topic-momentum-star-count
+targetRevision: sha256:3cdb2dd585aa85d66c045f909c7d8e899318128b88c29cb8451145e5d31820e8
+workflowMode: bugfix-fastlane
+modeClass: none
+auditClass: delivery-completion
+statusCeiling: done
+requestedStatus: done
+auditVerdict: REWORK_REQUIRED
+outcome: route_required
+resultState: ACTIVE
+certifiedStatus: none
+planningEvaluation: NOT_EVALUATED
+deliveryEvaluation: REFUSED
+sourceEditLockout: PASS
+applicableCheckClasses: [universal,mode-required,delivery-completion]
+notApplicableChecks: []
+passedGateIds: [G053,G040,G051,G068,G082,G083,G084,G128,G085,G086,G091,G087,G093,G088,G089,G092,G094,G095,G097,G098,G099,G100]
+failedGateIds: [G022,G090]
+failedChecks: [Check-4-completion,Check-5-all-done]
+blockingCode: DELIVERY_COMPLETION_FAILED
+unresolvedFields: []
+contradictions: []
+contractRef: bubbles/workflows/modes.yaml#bugfix-fastlane
+contractDigest: sha256:aa91472c047d3d985d38c1d308feb1e6081955b2aa553816deb5987d9cdc449f
+evidenceRefs: [.specify/runtime/audit-003-002-20260720T205105Z-a1.txt,report.md#bounded-final-delivery-audit---2026-07-20]
+addressedFindings: []
+unresolvedFindings: [AUD-003-002-COMPLETION-001,AUD-003-002-PROVENANCE-001,AUD-003-002-BOUNDARY-001,AUD-003-002-G090-001]
+nextRequiredOwner: bubbles.plan
+supersedesAttemptId: none
+resumeFromPhase: none
+END AUDIT_RESULT_V1
+
+## Implement Phase Verification - 2026-07-20 21:22 UTC
+
+### Implement Owner Statement
+
+`bubbles.implement` inspected the authorized starting revision
+`49be4c9735955e5a3ccefa612e54c7d265160aee` and found no concrete defect in the
+scoped product delta. No product source or test file was modified in this phase.
+The existing repair is the minimal design-prescribed query replacement: it
+derives explicit stars from canonical persisted relationships, preserves the
+existing momentum/state code, and preserves query-error propagation.
+
+This phase does not claim the `test`, `regression`, `simplify`, `stabilize`,
+`security`, `validate`, or `audit` phases. Scope and certification status remain
+`in_progress`.
+
+### Canonical Root Cause Reconciliation
+
+**Phase:** implement
+**Executed:** YES (current session)
+**Command:** `printf '%s\n' 'IMPLEMENT INSPECTION: root cause and canonical contracts' 'base revision: f5f05450848630fe84c0a215429bdfc701c4bcd2' 'pre-fix lifecycle reference:' && git grep -n 't.star_count' f5f05450848630fe84c0a215429bdfc701c4bcd2 -- internal/topics/lifecycle.go && printf '%s\n' 'canonical star persistence:' && grep -n 'user_starred' internal/db/migrations/001_initial_schema.sql && printf '%s\n' 'canonical edge table:' && grep -n -A 8 'CREATE TABLE IF NOT EXISTS edges' internal/db/migrations/001_initial_schema.sql && printf '%s\n' 'canonical BELONGS_TO producers:' && grep -n 'BELONGS_TO' internal/graph/linker.go internal/connector/bookmarks/topics.go`
+**Exit Code:** 0
+**Claim Source:** executed
+**Output:**
+
+```text
+IMPLEMENT INSPECTION: root cause and canonical contracts
+base revision: f5f05450848630fe84c0a215429bdfc701c4bcd2
+pre-fix lifecycle reference:
+f5f05450848630fe84c0a215429bdfc701c4bcd2:internal/topics/lifecycle.go:123: COALESCE(t.star_count, 0),
+canonical star persistence:
+35:    user_starred            BOOLEAN DEFAULT FALSE,
+canonical edge table:
+122:CREATE TABLE IF NOT EXISTS edges (
+123-    id          TEXT PRIMARY KEY,
+124-    src_type    TEXT NOT NULL,
+125-    src_id      TEXT NOT NULL,
+126-    dst_type    TEXT NOT NULL,
+127-    dst_id      TEXT NOT NULL,
+128-    edge_type   TEXT NOT NULL,
+129-    weight      REAL DEFAULT 1.0,
+130-    metadata    JSONB,
+canonical BELONGS_TO producers:
+internal/graph/linker.go:216:// linkByTopics assigns artifacts to topics and creates BELONGS_TO edges.
+internal/graph/linker.go:266: if err := l.createEdge(ctx, "artifact", artifactID, "topic", topicID, "BELONGS_TO", 1.0); err != nil {
+internal/connector/bookmarks/topics.go:152:// CreateTopicEdge creates a BELONGS_TO edge from an artifact to a topic.
+internal/connector/bookmarks/topics.go:161: VALUES ($1, 'artifact', $2, 'topic', $3, 'BELONGS_TO', 1.0, '{}')
+```
+
+**Result:** PASS - the pre-fix query read an absent topic column while canonical
+source persists stars on artifacts and membership as artifact-to-topic
+`BELONGS_TO` edges.
+
+### Production Query Reconciliation
+
+**Phase:** implement
+**Executed:** YES (current session)
+**Command:** `printf '%s\n' 'IMPLEMENT INSPECTION: production aggregation query' 'required source: artifacts.user_starred' 'required relation: artifact -> topic BELONGS_TO' 'required cardinality: distinct artifact ids' && grep -n -A 17 -B 2 'COUNT(DISTINCT a.id)' internal/topics/lifecycle.go`
+**Exit Code:** 0
+**Claim Source:** executed
+**Output:**
+
+```text
+IMPLEMENT INSPECTION: production aggregation query
+required source: artifacts.user_starred
+required relation: artifact -> topic BELONGS_TO
+required cardinality: distinct artifact ids
+121-    rows, err := l.Pool.Query(ctx, `
+122-            SELECT t.id, t.name, t.state, t.capture_count_30d, t.capture_count_90d, t.search_hit_count_30d,
+123:                   COALESCE((SELECT COUNT(DISTINCT a.id)
+124-                             FROM edges e
+125-                             JOIN artifacts a ON a.id = e.src_id AND e.src_type = 'artifact'
+126-                             WHERE e.dst_type = 'topic' AND e.dst_id = t.id
+127-                               AND e.edge_type = 'BELONGS_TO' AND a.user_starred IS TRUE), 0)::int,
+128-                   COALESCE((SELECT COUNT(*) FROM edges WHERE src_type = 'topic' AND src_id = t.id
+129-                              OR dst_type = 'topic' AND dst_id = t.id), 0)::int,
+130-                   EXTRACT(DAY FROM NOW() - COALESCE(t.last_active, t.created_at))::int
+131-            FROM topics t
+132-    `)
+133-    if err != nil {
+134-            return fmt.Errorf("query topics: %w", err)
+135-    }
+136-    defer rows.Close()
+137-
+138-    for rows.Next() {
+139-            var id, name, state string
+140-            var cap30, cap90, search30, starCount, connCount, daysSince int
+```
+
+**Result:** PASS - all BUG-R2 predicates are present, duplicate relationships
+cannot inflate the star signal because artifact IDs are distinct, no
+denormalized column is introduced, and SQL query errors retain `query topics`
+context.
+
+### Persisted Case Contract Inspection
+
+**Phase:** implement
+**Executed:** YES (current session)
+**Command:** `printf '%s\n' 'IMPLEMENT INSPECTION: persisted-star test contract' 'actual entrypoint: topics.NewLifecycle(pool).UpdateAllMomentum(ctx)' 'required cases: zero, multiple, unstarred, unrelated' && grep -n 'UpdateAllMomentum\|zero-star persisted\|multiple-stars persisted\|PASS: canonical\|PASS: zero\|PASS: one linked unstarred\|PASS: two linked starred\|PASS: three linked artifacts\|PASS: an unrelated' tests/integration/topic_lifecycle_momentum_test.go && printf '%s\n' 'fixture identities:' && grep -n 'artifact-zero\|artifact-star-one\|artifact-star-two\|artifact-unstarred\|artifact-unrelated-star' tests/integration/topic_lifecycle_momentum_test.go`
+**Exit Code:** 0
+**Claim Source:** interpreted
+**Interpretation:** The inspected persistent regression invokes the production
+`Lifecycle.UpdateAllMomentum` entrypoint and encodes separate zero-star,
+multiple-star, unstarred, and unrelated-star fixtures and assertions. This is a
+test-code existence/fidelity claim only; this implement phase did not re-run the
+PostgreSQL integration test.
+**Output:**
+
+```text
+IMPLEMENT INSPECTION: persisted-star test contract
+actual entrypoint: topics.NewLifecycle(pool).UpdateAllMomentum(ctx)
+required cases: zero, multiple, unstarred, unrelated
+35:     if err := lifecycle.UpdateAllMomentum(ctx); err != nil {
+36:             t.Fatalf("UpdateAllMomentum against canonical migrations: %v", err)
+41:     t.Logf("zero-star persisted momentum=%.4f state=%s", zeroStar.momentum, zeroStar.state)
+45:     t.Logf("multiple-stars persisted momentum=%.4f state=%s", multipleStars.momentum, multipleStars.state)
+47:     t.Log("PASS: canonical topics schema has no star_count column")
+48:     t.Log("PASS: zero linked starred artifacts contribute 0.0 star momentum")
+49:     t.Log("PASS: one linked unstarred artifact contributes only 0.5 connection momentum")
+50:     t.Log("PASS: two linked starred artifacts contribute exactly 10.0 star momentum")
+51:     t.Log("PASS: three linked artifacts contribute exactly 1.5 connection momentum")
+52:     t.Log("PASS: an unrelated starred artifact contributes nothing to the tested topic")
+fixture identities:
+106: prefix+"-artifact-zero", prefix+"-hash-zero",
+107: prefix+"-artifact-star-one", prefix+"-hash-star-one",
+108: prefix+"-artifact-star-two", prefix+"-hash-star-two",
+109: prefix+"-artifact-unstarred", prefix+"-hash-unstarred",
+110: prefix+"-artifact-unrelated-star", prefix+"-hash-unrelated-star",
+126: prefix+"-edge-zero", prefix+"-artifact-zero", prefix+"-topic-zero",
+127: prefix+"-edge-star-one", prefix+"-artifact-star-one", prefix+"-topic-multiple",
+128: prefix+"-edge-star-two", prefix+"-artifact-star-two", prefix+"-topic-multiple",
+129: prefix+"-edge-unstarred", prefix+"-artifact-unstarred", prefix+"-topic-multiple",
+130: prefix+"-edge-unrelated-star", prefix+"-artifact-unrelated-star", prefix+"-topic-unrelated",
+```
+
+**Result:** PASS - the persistent regression contract directly represents every
+required star-association case without a test-only production path.
+
+### Focused Lifecycle And Scheduler Unit Check
+
+**Phase:** implement
+**Executed:** YES (current session)
+**Command:** `SMACKEREL_HARDWARE_TIER=cpu ./smackerel.sh test unit --go --go-run '^(TestCalculateMomentum.*|TestTransitionState.*|TestDefaultMomentumConfig|TestNewLifecycle|TestTopicMomentumJob_LogsLifecycleQueryFailure)$' --verbose`
+**Exit Code:** 0
+**Claim Source:** executed
+**Output:**
+
+```text
+=== RUN   TestTopicMomentumJob_LogsLifecycleQueryFailure
+--- PASS: TestTopicMomentumJob_LogsLifecycleQueryFailure (0.00s)
+PASS
+ok      github.com/smackerel/smackerel/internal/scheduler       0.050s
+=== RUN   TestCalculateMomentum
+--- PASS: TestCalculateMomentum (0.00s)
+=== RUN   TestCalculateMomentum_Dormant
+--- PASS: TestCalculateMomentum_Dormant (0.00s)
+=== RUN   TestCalculateMomentum_Decay
+--- PASS: TestCalculateMomentum_Decay (0.00s)
+=== RUN   TestTransitionState
+--- PASS: TestTransitionState (0.00s)
+=== RUN   TestDefaultMomentumConfig
+--- PASS: TestDefaultMomentumConfig (0.00s)
+=== RUN   TestCalculateMomentum_StarsAndConnections
+--- PASS: TestCalculateMomentum_StarsAndConnections (0.00s)
+=== RUN   TestNewLifecycle
+--- PASS: TestNewLifecycle (0.00s)
+PASS
+ok      github.com/smackerel/smackerel/internal/topics  0.014s
+[go-unit] go test ./... finished OK
+```
+
+**Result:** PASS - focused formula/state behavior remains green, and the real
+closed-pool lifecycle path still returns enough query context for the scheduler
+to log failure without logging success.
+
+### Cheap Compile Check
+
+**Phase:** implement
+**Executed:** YES (current session)
+**Command:** `SMACKEREL_HARDWARE_TIER=cpu ./smackerel.sh check`
+**Exit Code:** 0
+**Claim Source:** executed
+**Output:**
+
+```text
+IMPLEMENT COMPILE CHECK START
+worktree: ~/smackerel-bug-topic-momentum-star-count-20260720
+hardware tier: cpu
+command: ./smackerel.sh check
+config-validate: ~/smackerel-bug-topic-momentum-star-count-20260720/config/generated/dev.env.tmp.437564 OK
+Config is in sync with SST
+env_file drift guard: OK
+scenario-lint: scanning config/prompt_contracts (glob: *.yaml)
+scenarios registered: 17, rejected: 0
+scenario-lint: OK
+compile check exit: 0
+IMPLEMENT COMPILE CHECK END
+```
+
+**Result:** PASS - the scoped implementation compiles through the repository
+CLI and the check did not mutate tracked generated configuration.
+
+### Implement Change Boundary Proof
+
+**Phase:** implement
+**Executed:** YES (current session)
+**Command:** `BASE=$(git merge-base HEAD origin/main) && printf 'IMPLEMENT BOUNDARY CHECK\nBASE=%s\nHEAD=%s\n' "$BASE" "$(git rev-parse HEAD)" && git diff --name-status "$BASE"..HEAD && printf '%s\n' 'diff check:' && git diff --check "$BASE"..HEAD && printf '%s\n' 'excluded families changed: none shown above'`
+**Exit Code:** 0
+**Claim Source:** executed
+**Output:**
+
+```text
+IMPLEMENT BOUNDARY CHECK
+BASE=f5f05450848630fe84c0a215429bdfc701c4bcd2
+HEAD=49be4c9735955e5a3ccefa612e54c7d265160aee
+M       internal/scheduler/jobs_test.go
+M       internal/topics/lifecycle.go
+A       specs/003-phase2-ingestion/bugs/BUG-003-002-topic-momentum-star-count/bug.md
+A       specs/003-phase2-ingestion/bugs/BUG-003-002-topic-momentum-star-count/design.md
+A       specs/003-phase2-ingestion/bugs/BUG-003-002-topic-momentum-star-count/report.md
+A       specs/003-phase2-ingestion/bugs/BUG-003-002-topic-momentum-star-count/scenario-manifest.json
+A       specs/003-phase2-ingestion/bugs/BUG-003-002-topic-momentum-star-count/scopes.md
+A       specs/003-phase2-ingestion/bugs/BUG-003-002-topic-momentum-star-count/spec.md
+A       specs/003-phase2-ingestion/bugs/BUG-003-002-topic-momentum-star-count/state.json
+A       specs/003-phase2-ingestion/bugs/BUG-003-002-topic-momentum-star-count/uservalidation.md
+A       tests/integration/topic_lifecycle_momentum_test.go
+diff check:
+excluded families changed: none shown above
+```
+
+**Result:** PASS - the complete branch delta contains only the authorized query,
+focused test surfaces, and BUG-003-002 packet. No migration, deployment,
+configuration, release-train, secret, manifest, or unrelated packet path appears.
+
+### Implement Phase DoD Decision
+
+The implementation owner can support only these five Scope 1 claims from the
+current-session execution and inspection above:
+
+1. root cause confirmation against canonical persistence and relationship source;
+2. production query derivation from linked `artifacts.user_starred` rows;
+3. persistent zero/multiple/unstarred/unrelated case assertions exist against the real lifecycle entrypoint;
+4. query-error propagation and scheduler failure/success log separation remain intact;
+5. the mechanically enumerated Change Boundary is respected.
+
+All test-category, broad E2E, quality-chain, and documentation-phase claims
+remain unchecked for their owning specialists. This phase neither changes Scope
+1 to `Done` nor writes any `certification.*` field.
+
+## Test Phase Execution - 2026-07-20 21:37-22:14 UTC
+
+### Findings
+
+1. **TEST-003-002-DUPLICATE-001 - addressed in the scoped regression test.** A
+	 first attempt to persist the same artifact-to-topic `BELONGS_TO` relationship
+	 twice failed with SQLSTATE `23505`, proving the canonical schema prevents the
+	 duplicate row before lifecycle aggregation. The regression now asserts that
+	 exact uniqueness constraint and separately proves two distinct linked starred
+	 artifacts contribute exactly two star weights.
+2. **TEST-003-002-BROAD-E2E-SKIPS-001 - independent, unresolved.** The canonical
+	 complete E2E command returned success and all 12 executed Go E2E packages
+	 passed, but 20 top-level Go tests emitted `SKIP`, and the harness omitted the
+	 opt-in Ollama agent suite. This is unrelated to the topic-momentum delta and
+	 was not fixed inline. Under the zero-skip test policy, the broader-E2E DoD and
+	 test-phase completion claim remain unchecked.
+
+### Test Owner Statement
+
+`bubbles.test` began from branch `bug/topic-momentum-star-count-20260720` at the
+authorized exact starting HEAD `4049cd7ea978dab1dd32e7651182b96b2e4ff658` with
+no active `smackerel-test` container, network, volume, or matching process. Only
+the packet's existing topic-momentum behavior was exercised. No production
+source, migration, deployment, configuration, release-train, secret, or other
+packet path was modified.
+
+The test owner strengthened only
+`tests/integration/topic_lifecycle_momentum_test.go` so duplicate safety is
+proved against the canonical relationship uniqueness constraint rather than by
+an impossible duplicate row. Scope and certification remain `in_progress`.
+
+### Duplicate-Safety Probe
+
+**Phase:** test
+**Executed:** YES (current session)
+**Command:** `SMACKEREL_HARDWARE_TIER=cpu ./smackerel.sh test integration-light --go-run '^TestTopicLifecycleMomentumFromPersistedStars$'`
+**Exit Code:** 1
+**Claim Source:** executed
+**Output:**
+
+```text
+PASS: integration-light db migration (schema applied via cmd/dbmigrate)
+go-integration: applying -run selector: ^TestTopicLifecycleMomentumFromPersistedStars$
+=== RUN   TestTopicLifecycleMomentumFromPersistedStars
+topic_lifecycle_momentum_test.go:32: insert edge momentum fixtures: ERROR: duplicate key value violates unique constraint "edges_src_type_src_id_dst_type_dst_id_edge_type_key" (SQLSTATE 23505)
+--- FAIL: TestTopicLifecycleMomentumFromPersistedStars (0.05s)
+FAIL
+FAIL    github.com/smackerel/smackerel/tests/integration        0.170s
+FAIL: go-integration-light (exit=1)
+Running project-scoped integration-light stack teardown (exit cleanup, timeout 120s)...
+Container smackerel-test-postgres-1 Removed
+Container smackerel-test-nats-1 Removed
+Volume smackerel-test-nats-data Removed
+Volume smackerel-test-postgres-data Removed
+Network smackerel-test_default Removed
+```
+
+**Result:** FAIL - the proposed duplicate fixture contradicted the canonical
+relationship uniqueness contract. The test, not production source, was repaired.
+
+### Canonical PostgreSQL Integration
+
+**Phase:** test
+**Executed:** YES (current session)
+**Command:** `SMACKEREL_HARDWARE_TIER=cpu ./smackerel.sh test integration-light --go-run '^TestTopicLifecycleMomentumFromPersistedStars$'`
+**Exit Code:** 0
+**Claim Source:** executed
+**Output:**
+
+```text
+INFO applied migration version=001_initial_schema.sql
+INFO applied migration version=062_model_usage_ledger.sql
+INFO dbmigrate: all migrations applied
+PASS: integration-light db migration (schema applied via cmd/dbmigrate)
+go-integration: applying -run selector: ^TestTopicLifecycleMomentumFromPersistedStars$
+=== RUN   TestTopicLifecycleMomentumFromPersistedStars
+topic_lifecycle_momentum_test.go:35: PASS: canonical relationship uniqueness rejects duplicate BELONGS_TO edges
+INFO topic state transition topic=<fixture>-zero from=emerging to=dormant momentum=0.5
+INFO topic state transition topic=<fixture>-multiple from=emerging to=active momentum=11.5
+topic_lifecycle_momentum_test.go:44: zero-star persisted momentum=0.5000 state=dormant
+topic_lifecycle_momentum_test.go:48: multiple-stars persisted momentum=11.5000 state=active
+topic_lifecycle_momentum_test.go:50: PASS: canonical topics schema has no star_count column
+topic_lifecycle_momentum_test.go:51: PASS: zero linked starred artifacts contribute 0.0 star momentum
+topic_lifecycle_momentum_test.go:52: PASS: one linked unstarred artifact contributes only 0.5 connection momentum
+topic_lifecycle_momentum_test.go:53: PASS: two distinct linked starred artifacts contribute exactly 10.0 star momentum
+topic_lifecycle_momentum_test.go:54: PASS: three linked relationships contribute exactly 1.5 connection momentum
+topic_lifecycle_momentum_test.go:55: PASS: an unrelated starred artifact contributes nothing to the tested topic
+--- PASS: TestTopicLifecycleMomentumFromPersistedStars (0.07s)
+PASS
+ok      github.com/smackerel/smackerel/tests/integration        0.184s
+PASS: go-integration-light
+Container smackerel-test-postgres-1 Removed
+Container smackerel-test-nats-1 Removed
+Volume smackerel-test-postgres-data Removed
+Volume smackerel-test-nats-data Removed
+Network smackerel-test_default Removed
+```
+
+**Result:** PASS - one integration test passed with zero skips against disposable
+PostgreSQL and the full canonical migration chain.
+
+### Focused Lifecycle Formula And State Tests
+
+**Phase:** test
+**Executed:** YES (current session)
+**Command:** `SMACKEREL_HARDWARE_TIER=cpu ./smackerel.sh test unit --go --go-run '^Test(CalculateMomentum|TransitionState)' --verbose`
+**Exit Code:** 0
+**Claim Source:** executed
+**Output:**
+
+```text
+=== RUN   TestCalculateMomentum
+--- PASS: TestCalculateMomentum (0.00s)
+=== RUN   TestCalculateMomentum_Dormant
+--- PASS: TestCalculateMomentum_Dormant (0.00s)
+=== RUN   TestCalculateMomentum_Decay
+--- PASS: TestCalculateMomentum_Decay (0.00s)
+=== RUN   TestTransitionState
+=== RUN   TestTransitionState/emerging_to_hot
+=== RUN   TestTransitionState/emerging_to_active
+=== RUN   TestTransitionState/hot_to_cooling
+=== RUN   TestTransitionState/cooling_to_dormant
+--- PASS: TestTransitionState (0.00s)
+=== RUN   TestTransitionState_AllBoundaries
+--- PASS: TestTransitionState_AllBoundaries (0.00s)
+=== RUN   TestCalculateMomentum_StarsAndConnections
+--- PASS: TestCalculateMomentum_StarsAndConnections (0.00s)
+=== RUN   TestTransitionState_ArchivedResurfaces
+--- PASS: TestTransitionState_ArchivedResurfaces (0.00s)
+PASS
+ok      github.com/smackerel/smackerel/internal/topics  0.009s
+```
+
+**Result:** PASS - 16 top-level tests and 10 subtests ran, with zero failures and
+zero skips.
+
+### Scheduler Failure-Log Regression
+
+**Phase:** test
+**Executed:** YES (current session)
+**Command:** `SMACKEREL_HARDWARE_TIER=cpu ./smackerel.sh test unit --go --go-run '^TestTopicMomentumJob_LogsLifecycleQueryFailure$' --verbose`
+**Exit Code:** 0
+**Claim Source:** executed
+**Output:**
+
+```text
+[go-unit] envsubst missing - installing gettext-base
+[go-unit] gettext-base install OK
+[go-unit] starting go test ./...
+testing: warning: no tests to run
+PASS
+ok      github.com/smackerel/smackerel/internal/retrieval/routing       0.014s [no tests to run]
+=== RUN   TestTopicMomentumJob_LogsLifecycleQueryFailure
+--- PASS: TestTopicMomentumJob_LogsLifecycleQueryFailure (0.00s)
+PASS
+ok      github.com/smackerel/smackerel/internal/scheduler       0.038s
+testing: warning: no tests to run
+PASS
+ok      github.com/smackerel/smackerel/internal/topics  0.013s [no tests to run]
+[go-unit] go test ./... finished OK
+```
+
+**Result:** PASS - the one selected scheduler test ran and passed with zero
+selected-test skips. Unrelated packages were selected out by the exact `-run`
+filter.
+
+### Targeted Topic Lifecycle E2E
+
+**Phase:** test
+**Executed:** YES (current session)
+**Command:** `SMACKEREL_HARDWARE_TIER=cpu ./smackerel.sh test e2e --shell-run test_topic_lifecycle.sh`
+**Exit Code:** 0
+**Claim Source:** executed
+**Output:**
+
+```text
+=== Topic Lifecycle E2E Tests ===
+Waiting for services to be healthy (max 120s)...
+Services healthy after 0s
+Seeding topics...
+Existing pricing topic owner: topic-lifecycle-existing-pricing
+PASS: Adversarial pricing topic present without duplicate collision
+Hot topic momentum: 20
+Dormant topic momentum: 0.1
+PASS: Topic lifecycle: states and momentum verified
+=== Topic Lifecycle E2E tests passed ===
+PASS: test_topic_lifecycle.sh
+Total:  1
+Passed: 1
+Failed: 0
+Container smackerel-test-smackerel-core-1 Removed
+Container smackerel-test-smackerel-ml-1 Removed
+Container smackerel-test-postgres-1 Removed
+Container smackerel-test-nats-1 Removed
+Volume smackerel-test-postgres-data Removed
+Volume smackerel-test-nats-data Removed
+Volume smackerel-test-ollama-data Removed
+Network smackerel-test_default Removed
+```
+
+**Result:** PASS - one targeted full-stack shell E2E passed with zero skips and
+the harness fully removed its disposable stack.
+
+### Canonical Complete E2E
+
+**Phase:** test
+**Executed:** YES (current session)
+**Command:** `SMACKEREL_HARDWARE_TIER=cpu ./smackerel.sh test e2e`
+**Exit Code:** 0
+**Claim Source:** executed
+**Output:**
+
+```text
+--- SKIP: TestOpenKnowledgeE2E_A01_WebAnswerWithCitations (0.00s)
+--- SKIP: TestOpenKnowledgeE2E_A02_UnitConvert (0.00s)
+--- SKIP: TestOpenKnowledgeE2E_A03_HybridInternalPlusWeb (0.00s)
+--- SKIP: TestOpenKnowledgeE2E_A04_PerTurnBudgetExhausted (0.00s)
+--- SKIP: TestOpenKnowledgeE2E_A05_WebSearchDisabled (0.00s)
+--- SKIP: TestOpenKnowledgeE2E_A06_PerUserMonthlyBudgetExceeded (0.00s)
+--- SKIP: TestOpenKnowledgeE2E_A06_FabricatedSourceRejected (0.00s)
+--- SKIP: TestAnnotationIntentE2E_SlotsComeFromCompiledIntent (0.08s)
+--- SKIP: TestAssistantE2E_CaptureAcknowledgementIsCrossTransportIdentical_TP_074_17 (0.00s)
+--- SKIP: TestAssistantHTTPE2E_CaptureFallbackDedupWithinWindow_TP_074_11 (0.00s)
+--- SKIP: TestAssistantHTTPE2E_CaptureFallbackIsInviolable_TP_074_04 (0.00s)
+--- SKIP: TestAssistantHTTPE2E_CaptureProvenanceIsDistinct_TP_074_07 (0.00s)
+--- SKIP: TestAssistantHTTPE2E_ConfirmAcceptExecutesGatedActionOnce (0.15s)
+--- SKIP: TestAssistantHTTPE2E_DisambiguationChoiceResolvesPendingTurn (0.06s)
+--- SKIP: TestIntentCompilerE2E_SpringfieldWeatherClarifiesLocation (0.06s)
+--- SKIP: TestIntentCompilerE2E_ListWriteRequiresConfirmationBeforePersistence (0.11s)
+--- SKIP: TestLegacyRetirementE2E_AliasWindowRoutesPlainEnglishWithNotice (0.00s)
+--- SKIP: TestLegacyRetirementE2E_ExpiredSlashCommandDoesNotInvokeScenario (0.00s)
+--- SKIP: TestMicroToolsE2E_ConvertsThreeCupsFlourToGrams (0.05s)
+--- SKIP: TestMicroToolsE2E_CalculatorRejectsUnsafeExpression (0.05s)
+ok      github.com/smackerel/smackerel/tests/e2e/agent  7.615s
+ok      github.com/smackerel/smackerel/tests/e2e/assistant      52.856s
+ok      github.com/smackerel/smackerel/tests/e2e/auth   0.320s
+ok      github.com/smackerel/smackerel/tests/e2e/capture        0.006s
+ok      github.com/smackerel/smackerel/tests/e2e/drive  11.563s
+ok      github.com/smackerel/smackerel/tests/e2e/foundation     1.866s
+ok      github.com/smackerel/smackerel/tests/e2e/legacy_retirement      0.394s
+ok      github.com/smackerel/smackerel/tests/e2e/microtools     0.032s
+ok      github.com/smackerel/smackerel/tests/e2e/openknowledge  0.086s
+ok      github.com/smackerel/smackerel/tests/e2e/policy 0.010s
+ok      github.com/smackerel/smackerel/tests/e2e/transports     0.057s
+ok      github.com/smackerel/smackerel/tests/e2e/wiki   0.082s
+PASS: go-e2e
+Skipping Ollama agent E2E (set SMACKEREL_TEST_OLLAMA=1 to enable tests/e2e/agent/happy_path_test.go)
+Running project-scoped test stack teardown (exit cleanup, timeout 180s)...
+Container smackerel-test-smackerel-core-1 Removed
+Container smackerel-test-smackerel-ml-1 Removed
+Container smackerel-test-postgres-1 Removed
+Container smackerel-test-nats-1 Removed
+Volume smackerel-test-ollama-data Removed
+Volume smackerel-test-nats-data Removed
+Volume smackerel-test-postgres-data Removed
+Network smackerel-test_default Removed
+```
+
+**Result:** FAIL (zero-skip policy) - the package runner passed 12 packages and recorded 126
+top-level passes, but it also recorded 20 top-level Go skips plus one harness-
+level opt-in Ollama-suite skip. No independent failure was fixed inline.
+
+### Broader Go Unit Regression
+
+**Phase:** test
+**Executed:** YES (current session)
+**Command:** `SMACKEREL_HARDWARE_TIER=cpu ./smackerel.sh test unit --go`
+**Exit Code:** 0
+**Claim Source:** executed
+**Output:**
+
+```text
+[go-unit] starting go test ./...
+ok      github.com/smackerel/smackerel/cmd/config-validate      0.036s
+ok      github.com/smackerel/smackerel/cmd/core 1.373s
+ok      github.com/smackerel/smackerel/internal/assistant/capturefallback      0.418s
+ok      github.com/smackerel/smackerel/internal/config  30.452s
+ok      github.com/smackerel/smackerel/internal/preflight       0.033s
+ok      github.com/smackerel/smackerel/internal/scheduler       (cached)
+ok      github.com/smackerel/smackerel/internal/topics  (cached)
+ok      github.com/smackerel/smackerel/internal/web     (cached)
+ok      github.com/smackerel/smackerel/tests/e2e/agent  (cached)
+ok      github.com/smackerel/smackerel/tests/eval/assistant     (cached)
+ok      github.com/smackerel/smackerel/tests/observability      (cached)
+ok      github.com/smackerel/smackerel/tests/stress/readiness   (cached)
+ok      github.com/smackerel/smackerel/web/pwa/tests    (cached)
+[go-unit] go test ./... finished OK
+```
+
+**Result:** PASS - 140 Go packages passed and 18 packages reported no test
+files; no unit test emitted `SKIP`.
+
+### Check, Lint, And Format
+
+**Phase:** test
+**Executed:** YES (current session)
+**Command:** `SMACKEREL_HARDWARE_TIER=cpu ./smackerel.sh check`; `SMACKEREL_HARDWARE_TIER=cpu ./smackerel.sh lint`; `SMACKEREL_HARDWARE_TIER=cpu ./smackerel.sh format --check`
+**Exit Code:** 0, 0, 0
+**Claim Source:** executed
+**Output:**
+
+```text
+Config is in sync with SST
+env_file drift guard: OK
+scenario-lint: scanning config/prompt_contracts (glob: *.yaml)
+scenarios registered: 17, rejected: 0
+scenario-lint: OK
+All checks passed!
+=== Validating web manifests ===
+OK: PWA manifest has required fields
+OK: Chrome extension manifest has required fields (MV3)
+OK: Firefox extension manifest has required fields (MV2 + gecko)
+=== Validating JS syntax ===
+OK: web/pwa/app.js
+OK: web/pwa/sw.js
+OK: web/extension/background.js
+OK: web/extension/popup/popup.js
+OK: Extension versions match (1.0.0)
+Web validation passed
+75 files already formatted
+```
+
+**Result:** PASS - all three canonical quality commands exited zero.
+
+### Test Fidelity Audit
+
+- The focused integration test uses the production migration entry point,
+	disposable PostgreSQL, production `Lifecycle.UpdateAllMomentum`, and persisted
+	round-trip assertions. It contains no internal mock or request interception.
+- The duplicate-safety assertion is adversarial: removing canonical edge
+	uniqueness would make the expected SQLSTATE/constraint assertion fail; changing
+	star aggregation from two distinct artifact IDs would make persisted momentum
+	differ from `11.5`.
+- The scheduler regression uses a real closed PostgreSQL pool and asserts the
+	code-produced structured log output contains failure and query context while
+	excluding success.
+- The targeted shell E2E exercises the live disposable stack and has direct
+	state, momentum, HTTP, and rendered-content assertions.
+- `traceContracts.observability.posture` is `wired`, but this packet's Test Plan
+	declares no `observabilityWorkflow`; G080/G100 capture is therefore a clean
+	no-op for this test phase.
+
+### Uncertainty Declarations
+
+- **Pre-fix PostgreSQL RED remains unchecked:** this test phase started at the
+	already-repaired authorized HEAD. The prior append-only bug-phase RED remains
+	historical evidence; it was not re-attributed as current-session test-owner
+	execution.
+- **Scenario-specific E2E for every fixed behavior remains unchecked:** the
+	targeted full-stack flow proves the existing lifecycle surface, while the
+	actual star aggregate and scheduler failure branch are directly proved by the
+	integration and unit regressions prescribed by the packet.
+- **Broader E2E remains unchecked:** the command exited zero, but 20 Go tests and
+	one opt-in harness suite did not execute.
+- **Test phase completion remains unclaimed:** a zero-skip verdict is not
+	supportable, so no `completedPhaseClaims` entry, scope completion, or
+	certification mutation is made.
+- **Documentation alignment remains unchecked:** this test owner did not claim a
+	docs, regression, security, validation, or audit phase.
+
+### Packet-Local Guard Results
+
+**Phase:** test
+**Executed:** YES (current session)
+**Command:** `bash .github/bubbles/scripts/artifact-lint.sh specs/003-phase2-ingestion/bugs/BUG-003-002-topic-momentum-star-count`; `timeout 600 bash .github/bubbles/scripts/traceability-guard.sh specs/003-phase2-ingestion/bugs/BUG-003-002-topic-momentum-star-count`; `bash .github/bubbles/scripts/implementation-reality-scan.sh specs/003-phase2-ingestion/bugs/BUG-003-002-topic-momentum-star-count --verbose`; `bash .github/bubbles/scripts/regression-quality-guard.sh tests/integration/topic_lifecycle_momentum_test.go internal/scheduler/jobs_test.go tests/e2e/test_topic_lifecycle.sh`; `bash .github/bubbles/scripts/regression-quality-guard.sh --bugfix tests/integration/topic_lifecycle_momentum_test.go internal/scheduler/jobs_test.go tests/e2e/test_topic_lifecycle.sh`; scoped marker `grep`
+**Exit Code:** 0 for every command
+**Claim Source:** executed
+**Output:**
+
+```text
+Artifact lint PASSED.
+state.json uses deprecated field 'scopeProgress'
+state.json uses deprecated field 'scopeLayout'
+scenario-manifest.json covers 3 scenario contract(s)
+All linked tests from scenario-manifest.json exist
+Scenarios checked: 3
+Scenario-to-row mappings: 3
+DoD fidelity scenarios: 3 (mapped: 3, unmapped: 0)
+RESULT: PASSED (0 warnings)
+Files scanned: 1
+Violations: 0
+Warnings: 0
+PASSED: No source code reality violations detected
+REGRESSION QUALITY RESULT: 0 violation(s), 0 warning(s)
+Adversarial signal detected in tests/integration/topic_lifecycle_momentum_test.go
+Adversarial signal detected in internal/scheduler/jobs_test.go
+Adversarial signal detected in tests/e2e/test_topic_lifecycle.sh
+Files with adversarial signals: 3
+SCOPED TEST MARKER CHECK: PASS
+skip markers: 0
+interception markers: 0
+internal mock markers: 0
+```
+
+**Result:** PASS with two pre-existing, non-blocking artifact-schema deprecation
+advisories. No deprecated state field was removed during this bounded test phase.
+
+### Final Test Resource Cleanup
+
+**Phase:** test
+**Executed:** YES (current session)
+**Command:** `docker ps -a --filter 'name=smackerel-test'`; `docker network ls --filter 'name=smackerel-test'`; `docker volume ls --filter 'name=smackerel-test'`; `pgrep -af 'smackerel\.sh test|smackerel-test|test_topic_lifecycle'`; `git status --short`
+**Exit Code:** 0
+**Claim Source:** executed
+**Output:**
+
+```text
+FINAL SMACKEREL TEST RESOURCE CHECK
+containers:
+<none>
+networks:
+<none>
+volumes:
+<none>
+processes:
+<none>
+tracked worktree delta:
+M specs/003-phase2-ingestion/bugs/BUG-003-002-topic-momentum-star-count/report.md
+M specs/003-phase2-ingestion/bugs/BUG-003-002-topic-momentum-star-count/scopes.md
+M specs/003-phase2-ingestion/bugs/BUG-003-002-topic-momentum-star-count/state.json
+M tests/integration/topic_lifecycle_momentum_test.go
+resource verdict:
+PASS: zero residual smackerel-test resources or processes
+```
+
+**Result:** PASS - no disposable Smackerel test state or process remained.
+
+## Discovered Issues
+
+| Observed | Description | Disposition | Reference |
+|---|---|---|---|
+| 2026-07-20 | Canonical `./smackerel.sh test e2e` passed all 12 executed Go packages but emitted 20 top-level Go skips and omitted the opt-in Ollama agent suite; independent of BUG-003-002 | route-required: `bubbles.bug` to classify the repo-wide zero-skip test-harness debt; no inline fix in this packet | `specs/074-capture-as-fallback-policy/`; `tests/e2e/agent/openknowledge_e2e_test.go`; `tests/e2e/assistant/` |
+
+### Assertion-Only Transition Guard
+
+**Phase:** test
+**Executed:** YES (current session)
+**Command:** `bash .github/bubbles/scripts/state-transition-guard.sh specs/003-phase2-ingestion/bugs/BUG-003-002-topic-momentum-star-count --target-status done --expect-workflow-mode bugfix-fastlane --expect-contract-digest sha256:aa91472c047d3d985d38c1d308feb1e6081955b2aa553816deb5987d9cdc449f`
+**Exit Code:** 1
+**Claim Source:** executed
+**Output:**
+
+```text
+Current state.json status: in_progress
+Current workflowMode: bugfix-fastlane
+DoD items total: 15 (checked: 11, unchecked: 4)
+BLOCK: Resolved scope artifacts have 4 UNCHECKED DoD items
+BLOCK: Resolved scope artifacts have 1 scope(s) still marked 'In Progress'
+PASS: completedScopes count matches artifact Done scope count (0)
+BLOCK: Required phase 'implement' NOT in execution/certification phase records
+BLOCK: Required phase 'test' NOT in execution/certification phase records
+BLOCK: Required phase 'regression' NOT in execution/certification phase records
+BLOCK: Required phase 'simplify' NOT in execution/certification phase records
+BLOCK: Required phase 'stabilize' NOT in execution/certification phase records
+BLOCK: Required phase 'security' NOT in execution/certification phase records
+BLOCK: Required phase 'validate' NOT in execution/certification phase records
+BLOCK: Required phase 'audit' NOT in execution/certification phase records
+PASS: All 11 checked DoD items across resolved scope files have evidence blocks
+PASS: Artifact lint passes (exit 0)
+PASS: Implementation reality scan passed
+BLOCK: Retro convergence health failed - Gate G090
+PASS: Discovered-issue disposition clean - no unfiled deferrals (Gate G095)
+TRANSITION BLOCKED: 12 failure(s), 3 warning(s)
+failedGateIds: [G022,G090]
+failedChecks: [Check-4-completion,Check-5-all-done]
+blockingCode: DELIVERY_COMPLETION_FAILED
+failureCount: 12
+exitStatus: 1
+verdict: FAIL
+```
+
+**Result:** EXPECTED FAIL - this was a non-mutating assertion. No
+`--revert-on-fail` flag was supplied, no status was promoted or reverted, and no
+certification field was changed.
+
+### Test Phase Guard Delta
+
+- Dispatch baseline: 5 of 15 DoD items checked; 10 unchecked.
+- Test-owner delta: 6 additional supported items checked; 11 of 15 now checked;
+	4 remain unchecked.
+- G095 moved from failed to passed after the independent E2E skip finding gained
+	a dated `route-required` disposition.
+- G027 remained clean because `execution.completedPhaseClaims` did not receive a
+	`test` completion claim while Scope 1 remains `In Progress`.
+- Final failed gate IDs are `G022` and `G090`; final transition failure count is
+	12 with 3 warnings.
+- The three warnings are non-terminal packet hygiene signals: no top-level
+	`completedAt`, nine historical evidence blocks lacking terminal-signal
+	heuristics, and one narrative-summary phrase. They were not reclassified as
+	test success.
