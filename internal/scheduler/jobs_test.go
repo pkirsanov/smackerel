@@ -1,13 +1,18 @@
 package scheduler
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"log/slog"
 	"strings"
 	"testing"
 	"unicode/utf8"
 
+	"github.com/jackc/pgx/v5/pgxpool"
+
 	"github.com/smackerel/smackerel/internal/intelligence"
+	"github.com/smackerel/smackerel/internal/topics"
 )
 
 // === FormatAlertMessage edge cases ===
@@ -460,6 +465,35 @@ func TestRunTopicMomentumJob_OverlapGuard(t *testing.T) {
 	s.muHourly.Lock()
 	s.runTopicMomentumJob()
 	s.muHourly.Unlock()
+}
+
+func TestTopicMomentumJob_LogsLifecycleQueryFailure(t *testing.T) {
+	pool, err := pgxpool.New(context.Background(), "postgres://test:test@127.0.0.1:1/test?connect_timeout=1")
+	if err != nil {
+		t.Fatalf("create PostgreSQL pool: %v", err)
+	}
+	pool.Close()
+
+	s := New(nil, nil, nil, topics.NewLifecycle(pool))
+	t.Cleanup(s.baseCancel)
+
+	var logBuffer bytes.Buffer
+	previousLogger := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&logBuffer, &slog.HandlerOptions{Level: slog.LevelInfo})))
+	t.Cleanup(func() { slog.SetDefault(previousLogger) })
+
+	s.doTopicMomentumJob()
+
+	logs := logBuffer.String()
+	if !strings.Contains(logs, "topic momentum update failed") {
+		t.Fatalf("scheduler did not log lifecycle failure: %s", logs)
+	}
+	if !strings.Contains(logs, "query topics") {
+		t.Fatalf("scheduler failure log omitted lifecycle query context: %s", logs)
+	}
+	if strings.Contains(logs, "topic momentum updated") {
+		t.Fatalf("scheduler logged success for a failed lifecycle query: %s", logs)
+	}
 }
 
 func TestRunSynthesisJob_OverlapGuard(t *testing.T) {
