@@ -4,7 +4,7 @@ Links: [bug.md](bug.md) | [spec.md](spec.md) | [design.md](design.md) | [report.
 
 ## Scope 1: Enforce Subject-Correct Outgoing Validation
 
-**Status:** In Progress
+**Status:** Done
 **Priority:** P0
 **Depends On:** None
 **Scope-Kind:** bugfix-runtime
@@ -86,7 +86,7 @@ Excluded surfaces:
 - [x] TP-02 Regression E2E dispatch tests pass: valid concept response follows the cross-source validator with publish/ack, and malformed concept response enters poison handling before publish. Evidence: [report.md#corrected-unit-and-integration-categories](report.md#corrected-unit-and-integration-categories)
 - [x] TP-03 Neighbor Regression E2E tests prove neighboring subject semantics remain intact for artifact, digest, photo, and unknown subjects. Evidence: [report.md#corrected-unit-and-integration-categories](report.md#corrected-unit-and-integration-categories)
 - [x] TP-04 NATS integration tests pass against the ephemeral test stack. Evidence: [report.md#corrected-unit-and-integration-categories](report.md#corrected-unit-and-integration-categories)
-- [ ] TP-05 Broader E2E regression suite passes.
+- [x] TP-05 Broader E2E regression suite passes. Evidence: [report.md#round-4-live-synthesis-e2e](report.md#round-4-live-synthesis-e2e)
 - [x] TP-06 Lint and format checks pass with zero warnings. Evidence: [report.md#final-cheap-closeout-checks](report.md#final-cheap-closeout-checks)
 - [x] TP-07 Governance gates pass with truthful current-session evidence. Evidence: [report.md#final-cheap-closeout-checks](report.md#final-cheap-closeout-checks)
 - [x] Root cause is confirmed by a focused pre-fix failing regression test. Evidence: [report.md#pre-fix-regression-test](report.md#pre-fix-regression-test)
@@ -96,9 +96,9 @@ Excluded surfaces:
 - [x] Adversarial regression cases would fail if generic artifact routing or log-and-publish behavior returned. Evidence: [report.md#final-cheap-closeout-checks](report.md#final-cheap-closeout-checks)
 - [x] Regression tests contain no silent-pass bailout patterns. Evidence: [report.md#final-cheap-closeout-checks](report.md#final-cheap-closeout-checks)
 - [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior. Evidence: [report.md#post-merge-discrimination](report.md#post-merge-discrimination)
-- [ ] Broader E2E regression suite passes
+- [x] Broader E2E regression suite passes. Evidence: [report.md#round-4-live-synthesis-e2e](report.md#round-4-live-synthesis-e2e)
 - [x] Change Boundary is respected and zero excluded file families were changed. Evidence: [report.md#post-merge-discrimination](report.md#post-merge-discrimination)
 - [x] Documentation is aligned; no runtime contract doc changes are needed beyond this bug packet unless implementation reveals drift. Evidence: [report.md#documentation](report.md#documentation)
-- [ ] Build Quality Gate passes: zero warnings, zero deferrals, lint/format clean, artifact lint clean, and no skipped required tests.
+- [x] Build Quality Gate passes: zero warnings, zero deferrals, lint/format clean, artifact lint clean, and no skipped required tests. Evidence: [report.md#round-4-build-quality-gate](report.md#round-4-build-quality-gate)
 
 Test Plan rows: 7. Matching TP-labeled DoD items: 7.

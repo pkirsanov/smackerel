@@ -18,6 +18,10 @@
 #   BUBBLES_SPEC            spec slug, if applicable (default: '')
 #   BUBBLES_SCOPE           scope identifier, if applicable (default: '')
 #   BUBBLES_TOOL_LOG_TAGS   comma-separated tags (e.g. 'test,e2e' or 'build')
+#   BUBBLES_TOOL_LOG_INPUTS space/comma-separated input files; each is hashed at
+#                           record time into the receipt's inputClosure so a later
+#                           change to it can invalidate exactly this receipt
+#                           (IMP-024 SCOPE-1/2, consumed by evidence-receipt-check.sh)
 #   BUBBLES_TOOL_LOG_QUIET  if '1', suppress the "recorded" footer message
 #
 # Exit code: the wrapped command's exit code is preserved.
@@ -160,8 +164,9 @@ STDOUT_BYTES="$STDOUT_BYTES" \
 STDERR_BYTES="$STDERR_BYTES" \
 FRAMEWORK_VERSION="$FRAMEWORK_VERSION" \
 FRAMEWORK_SHA="$FRAMEWORK_SHA" \
+INPUTS_RAW="${BUBBLES_TOOL_LOG_INPUTS:-}" \
 python3 - >> "$LOG_FILE" <<'PY'
-import json, os
+import json, os, hashlib, re
 tags_raw = os.environ.get('TAGS_RAW', '').strip()
 tags = [t.strip() for t in tags_raw.split(',') if t.strip()] if tags_raw else []
 framework = {"name": "bubbles"}
@@ -171,6 +176,24 @@ if fv:
 fs = os.environ.get('FRAMEWORK_SHA', '').strip()
 if fs:
     framework["sourceGitSha"] = fs
+# IMP-024 SCOPE-1: input-closure fingerprint. Each declared input file is hashed
+# at record time so a later change to it can invalidate exactly this receipt.
+inputs_raw = os.environ.get('INPUTS_RAW', '').strip()
+input_closure = []
+if inputs_raw:
+    seen = set()
+    for path in re.split(r'[,\s]+', inputs_raw):
+        path = path.strip()
+        if not path or path in seen:
+            continue
+        seen.add(path)
+        entry = {"path": path}
+        try:
+            with open(path, 'rb') as fh:
+                entry["sha256"] = hashlib.sha256(fh.read()).hexdigest()
+        except Exception:
+            entry["sha256"] = None  # declared but unreadable at record time
+        input_closure.append(entry)
 record = {
     "schemaVersion": 2,
     "ts": os.environ['TS'],
@@ -189,6 +212,8 @@ record = {
     "tags": tags,
     "framework": framework,
 }
+if input_closure:
+    record["inputClosure"] = input_closure
 print(json.dumps(record, separators=(',', ':')))
 PY
 

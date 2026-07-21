@@ -62,6 +62,7 @@ handoffs:
 - When regressions are found, invoke `bubbles.implement` to fix code, `bubbles.test` for test gaps, or `bubbles.design` for design conflicts.
 
 **Non-goals:**
+- **Cross-`workBoundary` drift (do NOT wander):** a finding outside the active work boundary — a different repository, or a spec/path the feature's `workBoundary` excludes — is route-ONLY; never apply an inline fix outside the boundary even when it looks trivial. Consult `work-boundary-resolve.sh` (dispositions `route-cross-repo` / `refuse-cross-repo`) and emit `route_required` for the owning repo/spec.
 - Feature implementation (→ bubbles.implement)
 - Test authoring (→ bubbles.test)
 - Planning new scopes (→ bubbles.plan)

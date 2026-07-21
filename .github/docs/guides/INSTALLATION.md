@@ -7,7 +7,8 @@
 ## Prerequisites
 
 - A git repository
-- `curl` and `bash` (available on macOS, Linux, WSL)
+- `curl`, `tar`, and `bash` (available on macOS, Linux, WSL)
+- A SHA-256 utility (`sha256sum` or `shasum`) for install provenance checksums
 - VS Code with GitHub Copilot Chat extension
 
 > **Source repo note:** this guide is for downstream project repos. Do not run `install.sh` inside the Bubbles source repository itself; maintainers should edit the framework directly and validate with `bash bubbles/scripts/cli.sh framework-validate` or `bash bubbles/scripts/cli.sh release-check`.
@@ -30,8 +31,8 @@ curl -fsSL https://raw.githubusercontent.com/pkirsanov/bubbles/main/install.sh |
 ```
 
 This installs:
-- 34 agent definitions → `.github/agents/bubbles.*.agent.md`
-- 34 prompt shims → `.github/prompts/bubbles.*.prompt.md`
+- 41 agent definitions → `.github/agents/bubbles.*.agent.md`
+- 41 prompt shims → `.github/prompts/bubbles.*.prompt.md`
 - Shared governance docs → `.github/agents/bubbles_shared/`
 - Shared portable instructions → `.github/instructions/bubbles-*.instructions.md`
 - Shared portable governance skills → `.github/skills/bubbles-*/SKILL.md`
@@ -40,7 +41,6 @@ This installs:
 - Governance scripts → `.github/bubbles/scripts/*.sh`
 
 And with `--bootstrap`, also creates:
-- `AGENTS.md` — root-level AI guardrails (newer VS Code convention)
 - `.github/copilot-instructions.md` — project policies and commands
 - `.github/instructions/terminal-discipline.instructions.md` — CLI discipline rules
 - `.specify/memory/constitution.md` — project governance principles

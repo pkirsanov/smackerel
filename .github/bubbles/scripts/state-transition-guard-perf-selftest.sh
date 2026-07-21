@@ -23,7 +23,9 @@ fi
 # shellcheck disable=SC1090
 source "$LIB"
 
-TMPDIR="$(mktemp -d)"
+selftest_tmp_base="${TMPDIR:-$HOME/.cache}"
+mkdir -p "$selftest_tmp_base"
+TMPDIR="$(mktemp -d "$selftest_tmp_base/bubbles-guard-perf.XXXXXX")"
 trap 'rm -rf "$TMPDIR"' EXIT INT TERM
 
 pass_count=0
