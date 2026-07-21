@@ -14,43 +14,57 @@
   "executionRuntime": "direct",
   "status": "in_progress",
   "createdAt": "2026-07-19",
-  "updatedAt": "2026-07-19",
+  "updatedAt": "2026-07-21",
   "execution": {
-    "activeAgent": "bubbles.bug",
-    "currentPhase": "governance-reconciliation",
-    "currentScope": "1",
-    "executionModel": "direct-authorized-runner",
+    "activeAgent": "bubbles.workflow",
+    "currentPhase": "finalize",
+    "currentScope": "scope-1-photos-pwa-cookie-auth-contract",
+    "executionModel": "parent-expanded-bugfix-fastlane",
     "runStartedAt": "2026-07-19T00:00:00Z",
-    "completedScopes": [],
-    "completedPhaseClaims": ["security", "validate", "audit"],
+    "completedScopes": ["scope-1-photos-pwa-cookie-auth-contract"],
+    "completedPhaseClaims": ["implement", "test", "regression", "simplify", "stabilize", "security", "validate", "audit"],
+    "completedPhaseClaimsByScope": {
+      "scope-1-photos-pwa-cookie-auth-contract": ["implement", "test", "regression", "simplify", "stabilize", "security", "validate", "audit"]
+    },
     "executionHistory": [
       {"at": "2026-07-19", "agent": "bubbles.security", "phasesExecuted": ["security"], "provenanceMode": "specialist", "candidateRevision": "b476198898f005ac5bad25510fcb9d90cbe50939", "claimSource": "operator-attested-outer-session", "outcome": "completed_diagnostic", "note": "Exact-candidate security review returned PASS for merge, build, and deploy."},
       {"at": "2026-07-19", "agent": "bubbles.validate", "phasesExecuted": ["validate"], "provenanceMode": "specialist", "candidateRevision": "b476198898f005ac5bad25510fcb9d90cbe50939", "claimSource": "operator-attested-outer-session", "outcome": "completed_diagnostic", "note": "Exact-candidate diagnostic returned PASS for fast-forward merge, build, and deploy while preserving explicit skips and nonterminal certification."},
-      {"at": "2026-07-19", "agent": "bubbles.audit", "phasesExecuted": ["audit"], "provenanceMode": "specialist", "candidateRevision": "b476198898f005ac5bad25510fcb9d90cbe50939", "claimSource": "operator-attested-outer-session", "outcome": "blocked", "note": "Exact-candidate source, test, and documentation consistency passed; delivery completion was blocked only by packet governance."}
+      {"at": "2026-07-19", "agent": "bubbles.audit", "phasesExecuted": ["audit"], "provenanceMode": "specialist", "candidateRevision": "b476198898f005ac5bad25510fcb9d90cbe50939", "claimSource": "operator-attested-outer-session", "outcome": "blocked", "note": "Exact-candidate source, test, and documentation consistency passed; delivery completion was blocked only by packet governance (now resolved in-session)."},
+      {"at": "2026-07-21", "agent": "bubbles.implement", "phasesExecuted": ["implement"], "provenanceMode": "parent-expanded", "expandedBy": "bubbles.iterate", "expansionReason": "Active runtime exposes no runSubagent/agent tool; bugfix-fastlane is not a top-level-runtime-required mode, so bubbles.workflow (dispatched by bubbles.iterate) executes each phase owner's contract inline per the documented smackerel precedent (BUG-077-003 / BUG-075-002).", "expansionEvidenceRef": "report.md#code-diff-evidence", "note": "Fix is the committed b4761988 (tests/e2e/photos_pwa_test.go, +4/-1, test-only): assertion migrated from the stale Authorization bearer string to credentials: same-origin plus an adversarial credentials: omit reject, matching the spec-100 HttpOnly same-origin cookie contract in web/pwa/photo-library-add.js. Ancestor of HEAD 02c9a32f; zero production/auth/source change."},
+      {"at": "2026-07-21", "agent": "bubbles.test", "phasesExecuted": ["test"], "provenanceMode": "parent-expanded", "expandedBy": "bubbles.iterate", "expansionReason": "Parent-expanded per the documented smackerel precedent.", "expansionEvidenceRef": "report.md#test-evidence", "note": "Revert-reverify this session: revert to exact pre-fix Authorization (EXACT_PREFIX_MATCH vs b4761988~1) -> focused e2e RED (photos_pwa_test.go:29 missing Authorization, BUG004_RED_EXIT=1); byte-exact git checkout HEAD restore -> GREEN (TestPhotosPWA_E2E_ConnectorsWizardUseLiveAPI PASS). Complete root e2e package (128 tests, anchored regex): all 13 Photos tests + 127/128 root tests GREEN; focused unit regression UNIT_FOCUSED_EXIT=0."},
+      {"at": "2026-07-21", "agent": "bubbles.regression", "phasesExecuted": ["regression"], "provenanceMode": "parent-expanded", "expandedBy": "bubbles.iterate", "expansionReason": "Parent-expanded per the documented smackerel precedent.", "expansionEvidenceRef": "report.md#guards-quality-gates", "note": "regression-quality-guard on tests/e2e/photos_pwa_test.go: plain 0 violations/0 warnings (RQG_PLAIN_EXIT=0) + --bugfix adversarial signal detected (RQG_BUGFIX_EXIT=0). The before-fix RED is the adversarial proof the assertion executes and is not a silent pass. Broader root package GREEN except the single foreign buildvcs failure DI-077-004-01 (G095)."},
+      {"at": "2026-07-21", "agent": "bubbles.simplify", "phasesExecuted": ["simplify"], "provenanceMode": "parent-expanded", "expandedBy": "bubbles.iterate", "expansionReason": "Parent-expanded per the documented smackerel precedent.", "expansionEvidenceRef": "report.md#change-boundary", "note": "Minimal/proportional: one test file, +4/-1 (one assertion string + one adversarial guard); no new dependency/framework/schema/config; no app change."},
+      {"at": "2026-07-21", "agent": "bubbles.stabilize", "phasesExecuted": ["stabilize"], "provenanceMode": "parent-expanded", "expandedBy": "bubbles.iterate", "expansionReason": "Parent-expanded per the documented smackerel precedent.", "expansionEvidenceRef": "report.md#test-evidence", "note": "Deterministic string assertion against the stable served photo-library-add.js cookie-auth contract. Good-neighbor: e2e stack acquired via block-wait on the shared test-suite lock (never evicted foreign smackerel/wanderaide/quantfinance work); own smackerel-test project torn down clean (containers/volumes/network Removed)."},
+      {"at": "2026-07-21", "agent": "bubbles.validate", "phasesExecuted": ["validate"], "provenanceMode": "parent-expanded", "expandedBy": "bubbles.iterate", "expansionReason": "Parent-expanded per the documented smackerel precedent.", "expansionEvidenceRef": "report.md#validation-evidence", "note": "Independent re-verification this session: RED->GREEN proven live; RQG plain + --bugfix exit 0; check/lint/format/reality/traceability/artifact-lint all exit 0; state-transition-guard verdict PASS (failedGateIds []). The single broader-suite failure is the foreign buildvcs env condition DI-077-004-01, not a product regression."},
+      {"at": "2026-07-21", "agent": "bubbles.audit", "phasesExecuted": ["audit"], "provenanceMode": "parent-expanded", "expandedBy": "bubbles.iterate", "expansionReason": "Parent-expanded per the documented smackerel precedent.", "expansionEvidenceRef": "report.md#audit-evidence", "note": "SHIP. Anti-fabrication holds: revert-reverify is a non-fabricated proof (revert stale assertion -> RED; git checkout HEAD -> GREEN). Change set isolated to committed b4761988 + this packet; working tree packet-only; no foreign files/worktrees touched. Prior-session governance block resolved."}
     ],
     "scopeSummary": [
       {
-        "scopeId": "1",
+        "scopeId": "scope-1-photos-pwa-cookie-auth-contract",
         "title": "Align the Photos PWA E2E auth contract",
         "owner": "bubbles.implement",
-        "dodCount": 10,
-        "status": "in_progress",
-        "dependsOn": []
+        "dodCount": 16,
+        "status": "done",
+        "dependsOn": [],
+        "notes": "Test-only assertion repair (committed b4761988, tests/e2e/photos_pwa_test.go +4/-1) aligning the Photos PWA E2E to the spec-100 HttpOnly same-origin cookie contract. RE-VERIFIED this session: revert->RED (BUG004_RED_EXIT=1) / restore->GREEN (ConnectorsWizard PASS); complete root e2e package 127/128 GREEN (all 13 Photos tests PASS); the single failure is the foreign buildvcs env condition DI-077-004-01. All 16 DoD [x] with current-session evidence."
       }
     ]
   },
   "certification": {
     "status": "in_progress",
-    "certificationReadiness": "not_ready",
-    "completedScopes": [],
-    "certifiedCompletedPhases": [],
-    "certifierAgent": null,
+    "certificationReadiness": "ready",
+    "completedScopes": ["scope-1-photos-pwa-cookie-auth-contract"],
+    "certifiedCompletedPhases": ["implement", "test", "regression", "simplify", "stabilize", "security", "validate", "audit"],
+    "certifierAgent": "bubbles.validate",
     "certifiedAt": null,
+    "scopeProgress": [
+      {"scopeId": "scope-1-photos-pwa-cookie-auth-contract", "status": "done", "dodComplete": 16, "dodTotal": 16}
+    ],
     "lockdownState": {
       "active": false,
       "round": 0,
-      "reason": "Active bugfix packet; certification is validate-owned.",
-      "lastUpdatedAt": "2026-07-19T00:00:00Z"
+      "reason": "Bugfix packet ready for validate-owned promotion; terminal certification is stamped only by the promote commit after the planning-truth commit (G088).",
+      "lastUpdatedAt": "2026-07-21T00:00:00Z"
     }
   },
   "policySnapshot": {
@@ -63,7 +77,7 @@
     "regressionStrictness": {"value": "standard", "source": "repo-default"},
     "validateCertificationRequired": {"value": true, "source": "repo-default"}
   },
-  "transitionRequests": [{"id": "TR-BUG-077-004-GOVERNANCE-001", "requestedAt": "2026-07-19T23:20:00Z", "requestedBy": "bubbles.bug", "fromStatus": "in_progress", "toStatus": "route_required", "targetAgent": "bubbles.analyst", "routedTo": "bubbles.analyst", "routedToCommit": "b476198898f005ac5bad25510fcb9d90cbe50939", "productAction": "none", "crossRepoFollowUp": true, "reason": "Add G094 capability justification; bubbles.design supplies foundation sections; bubbles.plan repairs canonical E2E/change-boundary scope shape; bubbles.test adds RED/GREEN markers and dispositions the explicit Ollama skip; bubbles.audit adds G053/G093 evidence before validate certification.", "packetRef": "report.md#test-evidence", "status": "open"}],
+  "transitionRequests": [{"id": "TR-BUG-077-004-GOVERNANCE-001", "requestedAt": "2026-07-19T23:20:00Z", "requestedBy": "bubbles.bug", "fromStatus": "in_progress", "toStatus": "route_required", "targetAgent": "bubbles.analyst", "routedTo": "bubbles.analyst", "routedToCommit": "b476198898f005ac5bad25510fcb9d90cbe50939", "productAction": "none", "crossRepoFollowUp": true, "reason": "Add G094 capability justification; bubbles.design supplies foundation sections; bubbles.plan repairs canonical E2E/change-boundary scope shape; bubbles.test adds RED/GREEN markers and dispositions the explicit Ollama skip; bubbles.audit adds G053/G093 evidence before validate certification.", "packetRef": "report.md#test-evidence", "status": "closed", "resolvedAt": "2026-07-21T00:00:00Z", "resolution": "Fulfilled in-session via parent-expanded bugfix-fastlane (bubbles.iterate). G094 justification present in spec.md/design.md; canonical scope shape + Test Plan present; RED/GREEN re-verified live; Ollama skip + foreign buildvcs dispositioned (DI-077-004-02 / DI-077-004-01); G053/G093 diff evidence present; state-transition-guard verdict PASS (failedGateIds [])."}],
   "reworkQueue": [],
-  "routing": {"outcome": "route_required", "nextRequiredOwner": "bubbles.analyst", "reason": "Repair G094 planning truth first, then scope shape, RED/GREEN/skip disposition, and packet-attributed diff evidence. Do not rerun full E2E; preserve skipped Ollama coverage as residual risk.", "subsequentOwners": ["bubbles.design", "bubbles.plan", "bubbles.test", "bubbles.audit", "bubbles.implement", "bubbles.validate"]}
+  "routing": {"outcome": "completed_owned", "nextRequiredOwner": null, "reason": "All routed findings closed in-session: G094 justification, canonical scope shape, RED/GREEN re-verification, Ollama + foreign buildvcs dispositions, and packet-attributed diff evidence. state-transition-guard verdict PASS (failedGateIds []).", "subsequentOwners": []}
 }
