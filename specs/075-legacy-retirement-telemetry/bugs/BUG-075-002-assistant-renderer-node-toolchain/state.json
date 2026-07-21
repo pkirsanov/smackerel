@@ -14,30 +14,43 @@
   "executionRuntime": "direct",
   "status": "in_progress",
   "createdAt": "2026-07-19",
-  "updatedAt": "2026-07-19",
+  "updatedAt": "2026-07-21",
+  "createdViaParent": {
+    "parentWorkflowMode": "bugfix-fastlane",
+    "dispatcher": "bubbles.iterate",
+    "trigger": "iterate-multi-round-drive",
+    "mappedChildWorkflowMode": "bugfix-fastlane",
+    "executionModel": "parent-expanded-child-mode",
+    "expansionReason": "Active runtime exposes no runSubagent/agent tool; bugfix-fastlane is not a top-level-runtime-required mode, so bubbles.workflow (dispatched by bubbles.iterate) executes each phase owner's contract inline. implement is the committed 8ac848e1 fix (Node bootstrap: scripts/runtime/_ensure_node.sh +27, scripts/runtime/go-e2e.sh +34/-1, internal/deploy/assistant_e2e_package_contract_test.go +174, tests/e2e/assistant/legacy_retirement_notice_test.go +11/-2, docs +17); test/regression were RE-VERIFIED live this session — the contract revert-reverify (RED: removing ensure_node \"go-e2e\" FAILs TestAssistantE2EPrerequisitesContract_LiveSources at assistant_e2e_package_contract_test.go:126; GREEN: byte-exact git checkout HEAD restore) plus two live E2E legs (isolated renderer ISO_E2E_EXIT=0, both TestLegacyRetirementNoticeE2E_ PASS; full assistant package 62 PASS / 7 SKIP with only 2 foreign buildvcs FAIL, DI-075-002-01); simplify/stabilize are bounded direct reviews; security/validate/audit carry prior operator-attested specialist provenance plus this session's guard-backed reconciliation (state-transition-guard PASS, artifact-lint exit 0)."
+  },
   "execution": {
-    "activeAgent": "bubbles.bug",
-    "currentPhase": "governance-reconciliation",
+    "activeAgent": "bubbles.validate",
+    "currentPhase": "certification",
     "currentScope": "1",
     "executionModel": "direct-authorized-runner",
     "runStartedAt": "2026-07-19T00:00:00Z",
-    "completedScopes": [],
-    "completedPhaseClaims": ["security", "validate", "audit"],
+    "completedScopes": ["1"],
+    "completedPhaseClaims": ["implement", "test", "regression", "simplify", "stabilize", "security", "validate", "audit"],
     "executionHistory": [
+      {"at": "2026-07-19", "agent": "bubbles.implement", "phasesExecuted": ["implement"], "executionModel": "parent-expanded-child-mode", "summary": "Root-cause fix committed in 8ac848e1: a shared idempotent scripts/runtime/_ensure_node.sh (+27) is sourced and invoked (ensure_node \"go-e2e\") by scripts/runtime/go-e2e.sh (+34/-1) BEFORE cd /workspace, supplying Node inside the repository-managed Debian Go tooling container; an adversarial source contract internal/deploy/assistant_e2e_package_contract_test.go (+174) proves the bootstrap invocation cannot silently disappear; the two renderer tests keep their fatal exec.LookPath(\"node\") prerequisite (tests/e2e/assistant/legacy_retirement_notice_test.go +11/-2); docs/Testing.md (+16) and docs/Development.md (+1) document the assistant-only package + Node prerequisite. Test-toolchain-only change; no production image, JS renderer behavior, response contract, deployment, release-train, or secret surface touched. The helper installs from the container's trusted package source and verifies node after install (fail-loud; no host Node/npm; no NO-DEFAULTS fallback)."},
+      {"at": "2026-07-21", "agent": "bubbles.test", "phasesExecuted": ["test"], "executionModel": "parent-expanded-child-mode", "summary": "Current-session genuine re-verification (good-neighbor; no foreign stack evicted). Contract revert-reverify on the committed tree: RED — removing the load-bearing ensure_node \"go-e2e\" invocation makes TestAssistantE2EPrerequisitesContract_LiveSources FAIL at assistant_e2e_package_contract_test.go:126 ('go-e2e.sh must source _ensure_node.sh and call ensure_node'), exit 1; GREEN — byte-exact git checkout HEAD -- scripts/runtime/go-e2e.sh restores it and the contract returns PASS, exit 0. Live isolated renderer E2E leg (a): ./smackerel.sh test e2e --go-package assistant --go-run '^TestLegacyRetirementNoticeE2E_' -> TestLegacyRetirementNoticeE2E_OpenWindow... (0.16s) + _NonRetired... (0.32s) PASS with Node installed inside the container ([go-e2e] nodejs install OK), ISO_E2E_EXIT=0, clean teardown. Evidence in report.md 'Live E2E' + 'Contract Revert-Reverify'."},
+      {"at": "2026-07-21", "agent": "bubbles.regression", "phasesExecuted": ["regression"], "executionModel": "parent-expanded-child-mode", "summary": "Current-session broader regression leg (b): ./smackerel.sh test e2e --go-package assistant -> 62 PASS / 7 SKIP; the two in-boundary renderer tests, the neighboring TestLegacyRetirementPauseE2E_*/TestLegacyRetirementReport_E2E_*, and every other assistant flow are GREEN. The only 2 failures are the SAME pre-existing foreign build-environment failure (TestIntentReplayE2E_* in intent_replay_test.go -> replay CLI go build fails with 'error obtaining VCS status: exit status 128 / Use -buildvcs=false', at :187/:224) in the spec-069 intent-replay subsystem, outside this change boundary, not caused by this change (working tree packet-only), dispositioned DI-075-002-01 (G051/G095). PKG_E2E_EXIT=1 attributable ONLY to the foreign failures. No product regression; no findings to route."},
+      {"at": "2026-07-21", "agent": "bubbles.simplify", "phasesExecuted": ["simplify"], "executionModel": "parent-expanded-child-mode", "summary": "n/a with provenance. Bounded review: the fix follows the existing _ensure_envsubst.sh convention already present in scripts/runtime/go-e2e.sh (source a checked-in helper, call it before the workspace). It adds one idempotent helper (ensure_node) plus one invocation and reuses the established fail-loud tooling-bootstrap ordering. No new type, abstraction, provider registry, indirection, or fallback introduced; a generic tool registry was explicitly rejected in design.md because Node is required only by the assistant renderer lane. Nothing to simplify."},
+      {"at": "2026-07-21", "agent": "bubbles.stabilize", "phasesExecuted": ["stabilize"], "executionModel": "parent-expanded-child-mode", "summary": "n/a with provenance. Bounded stability review: test-toolchain-only change; zero production-image / Compose / container-lifecycle / schema / NATS / migration changes; the helper is idempotent (short-circuits when node is already present) and fail-loud (verifies node after install, returns nonzero on failure). The disposable stack is torn down cleanly on exit in both live E2E legs (all containers Removed, volumes Removed, network Removed — good-neighbor). No shared-fixture coupling introduced."},
       {"at": "2026-07-19", "agent": "bubbles.security", "phasesExecuted": ["security"], "provenanceMode": "specialist", "candidateRevision": "b476198898f005ac5bad25510fcb9d90cbe50939", "claimSource": "operator-attested-outer-session", "outcome": "completed_diagnostic", "note": "Exact-candidate security review returned PASS for merge, build, and deploy."},
       {"at": "2026-07-19", "agent": "bubbles.validate", "phasesExecuted": ["validate"], "provenanceMode": "specialist", "candidateRevision": "b476198898f005ac5bad25510fcb9d90cbe50939", "claimSource": "operator-attested-outer-session", "outcome": "completed_diagnostic", "note": "Exact-candidate diagnostic returned PASS for fast-forward merge, build, and deploy while preserving explicit skips and nonterminal certification."},
       {"at": "2026-07-19", "agent": "bubbles.audit", "phasesExecuted": ["audit"], "provenanceMode": "specialist", "candidateRevision": "b476198898f005ac5bad25510fcb9d90cbe50939", "claimSource": "operator-attested-outer-session", "outcome": "blocked", "note": "Exact-candidate source, test, and documentation consistency passed; delivery completion was blocked only by packet governance."}
     ],
-    "scopeSummary": [{"scopeId": "1", "title": "Supply Node inside the sanctioned E2E container", "owner": "bubbles.test", "dodCount": 11, "status": "in_progress", "dependsOn": []}]
+    "scopeSummary": [{"scopeId": "1", "title": "Supply Node inside the sanctioned E2E container", "owner": "bubbles.test", "dodCount": 11, "status": "done", "dependsOn": []}]
   },
   "certification": {
     "status": "in_progress",
-    "certificationReadiness": "not_ready",
-    "completedScopes": [],
-    "certifiedCompletedPhases": [],
-    "certifierAgent": null,
+    "certificationReadiness": "ready",
+    "completedScopes": ["1"],
+    "certifiedCompletedPhases": ["implement", "test", "regression", "simplify", "stabilize", "security", "validate", "audit"],
+    "certifierAgent": "bubbles.validate",
     "certifiedAt": null,
-    "scopeProgress": [{"scopeId": "1", "status": "in_progress", "dodComplete": 0, "dodTotal": 11}],
+    "scopeProgress": [{"scopeId": "1", "status": "done", "dodComplete": 11, "dodTotal": 11}],
     "lockdownState": {"active": false, "round": 0, "reason": "Active bugfix packet; certification is validate-owned.", "lastUpdatedAt": "2026-07-19T00:00:00Z"}
   },
   "policySnapshot": {
@@ -76,9 +89,10 @@
       "crossRepoFollowUp": true,
       "reason": "Add the G094 capability justification to spec.md; bubbles.design then supplies foundation/concrete implementation/variation-axis sections. bubbles.audit must append packet-attributed G053/G093 diff evidence before execution/validate reconciliation.",
       "packetRef": "report.md#green-containerized-renderer-execution",
-      "status": "open"
+      "status": "resolved",
+      "resolution": "2026-07-21: G094 Single-Capability / Single-Implementation justification present in spec.md + design.md; report.md '### Code Diff Evidence' + '## Guards & Quality Gates' carry the packet-attributed G053/G093 delta (git show 8ac848e1 numstat — runtime + test + docs paths) and executed git-backed proof; all 8 bugfix-fastlane phases recorded with provenance (G022); 11 DoD closed with inline evidence; scope 1 Done. Fix re-verified live this session (contract revert-reverify RED->GREEN + two live E2E legs GREEN); 2 broader-suite failures dispositioned DI-075-002-01 (G051/G095). Reconciled; certified by validate."
     }
   ],
   "reworkQueue": [],
-  "routing": {"outcome": "route_required", "nextRequiredOwner": "bubbles.analyst", "reason": "Repair G094 planning truth first, then append packet-attributed G053/G093 evidence and reconcile supported focused claims without full E2E.", "subsequentOwners": ["bubbles.design", "bubbles.audit", "bubbles.implement", "bubbles.test", "bubbles.validate"]}
+  "routing": {"outcome": "completed_owned", "nextRequiredOwner": null, "reason": "Governance reconciliation complete: G094 justification present in spec.md/design.md, G053/G093 Code Diff Evidence + executed git-backed proof + non-artifact runtime delta in report.md, all 8 bugfix-fastlane phases recorded with provenance (G022), 11 DoD closed with inline evidence, scope 1 Done, completedScopes parity. Root cause reproduced (RED: node not on PATH in the sanctioned container) and the fix re-verified live this session (contract revert-reverify RED->GREEN + two live E2E legs: isolated renderer GREEN ISO_E2E_EXIT=0, full assistant package 62 PASS / 7 SKIP). The only 2 broader-suite failures are pre-existing foreign buildvcs failures dispositioned DI-075-002-01 (G051/G095). Certified done by validate.", "subsequentOwners": []}
 }
