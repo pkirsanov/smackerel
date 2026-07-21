@@ -17,6 +17,11 @@
 #   T3. Two markers     -> fail loud ("Multiple ... markers (2)").
 #   T4. NO marker       -> a weak block is STILL ENFORCED (no silent fleet-wide
 #       disable — the integrity guarantee that the exemption is opt-in per file).
+#   T5-T8. Current-window duplicate evidence is rejected without treating
+#       distinct dimensions or prior-window history as duplicates.
+#   T9. Canonical v3    -> nested certification.scopeProgress plus current
+#       scopeLayout/statusDiscipline fields produce no deprecation warning.
+#   T10. Legacy v3      -> top-level scopeProgress still produces a warning.
 #
 # Check-3 only runs at state.json status == "done"; every fixture sets that.
 # The overall lint exit code is non-zero (minimal fixtures omit spec/design/
@@ -294,5 +299,60 @@ expect_not_in "T8 a post-marker block identical to a PRE-marker block is NOT fla
 expect_in "T8 the pre-marker identical block is a prior-window skip" \
   "$out" "Skipped 1 evidence blocks before"
 
+# ── T9: canonical v3 fields → no stale v2 deprecation warnings
+d="$(make_fixture canonical-v3-fields)"
+cat > "$d/state.json" <<'STATE'
+{
+  "version": 3,
+  "status": "not_started",
+  "workflowMode": "full-delivery",
+  "execution": {
+    "completedPhaseClaims": []
+  },
+  "certification": {
+    "status": "not_started",
+    "completedScopes": [],
+    "certifiedCompletedPhases": [],
+    "scopeProgress": [],
+    "lockdownState": { "active": false, "lockedScenarioIds": [] }
+  },
+  "policySnapshot": {},
+  "scopeLayout": "single-file",
+  "statusDiscipline": {}
+}
+STATE
+out="$(run_lint "$d")"
+expect_not_in "T9 nested certification.scopeProgress is current v3 state" \
+  "$out" "uses deprecated field 'scopeProgress'"
+expect_not_in "T9 scopeLayout is current v3 state" \
+  "$out" "uses deprecated field 'scopeLayout'"
+expect_not_in "T9 statusDiscipline is current v3 state" \
+  "$out" "uses deprecated field 'statusDiscipline'"
+
+# ── T10: legacy top-level scopeProgress remains detected
+d="$(make_fixture legacy-top-level-scope-progress)"
+cat > "$d/state.json" <<'STATE'
+{
+  "version": 3,
+  "status": "not_started",
+  "workflowMode": "full-delivery",
+  "execution": {
+    "completedPhaseClaims": []
+  },
+  "certification": {
+    "status": "not_started",
+    "completedScopes": [],
+    "certifiedCompletedPhases": [],
+    "scopeProgress": [],
+    "lockdownState": { "active": false, "lockedScenarioIds": [] }
+  },
+  "policySnapshot": {},
+  "scopeProgress": []
+}
+STATE
+out="$(run_lint "$d")"
+expect_in "T10 top-level scopeProgress remains deprecated" \
+  "$out" "uses deprecated field 'scopeProgress'"
+
 echo
-echo "artifact-lint certifying-window selftest: $passes/$assertions assertions passed"
+echo "artifact-lint selftest: $passes/$assertions assertions passed"

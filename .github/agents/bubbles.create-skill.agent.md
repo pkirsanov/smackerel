@@ -92,7 +92,7 @@ When generating the skill:
 - Do not hardcode hosts/ports/URLs. Defer to repo configuration and policy sources.
 - Do not prescribe repo-specific build/run commands; defer to `.specify/memory/agents.md` and the repo’s development docs.
 - Keep the skill short (workflow/checklist/decision tree). Put long details in `references/` only if explicitly requested.
-- The generated `SKILL.md` MUST include a **When NOT to use** section stub (negative triggers that route to sibling skills) and a **Works well with** section stub (composition pointers), consistent with `skills/bubbles-skill-authoring/SKILL.md`. Leave them as clearly-marked stubs for the author to complete when no content is known yet.
+- The generated `SKILL.md` SHOULD include a **When NOT to use** section (negative triggers that route to sibling skills) and a **Works well with** section (composition pointers), consistent with `skills/bubbles-skill-authoring/SKILL.md` — but emit each section ONLY when the interview or verified repository context supplies concrete, applicable content. If a section has no verified content, omit it cleanly. Never emit a placeholder/stub section (that would violate the no-stubs rule above); an inapplicable optional section is omitted, not stubbed.
 
 If the user asks for scripts/templates:
 - Prefer putting reusable scripts under repo root `scripts/` (not inside `.github/skills/`) unless the script is narrowly skill-specific.

@@ -42,6 +42,10 @@ source "$SCRIPT_DIR/guard-lib.sh"
 # blockquote exclusion used by Check 4B + Check 5 so they stay in lockstep.
 source "$SCRIPT_DIR/scan-lib.sh"
 
+# Shared DoD section parser (BUG-026): one correct tiered-DoD boundary consumed
+# by Check 4A (G041 list-format policy) and Check 22 (G068 checkbox fidelity).
+source "$SCRIPT_DIR/dod-section-lib.sh"
+
 transition_workflow_mode="UNRESOLVED"
 transition_audit_profile="UNRESOLVED"
 transition_target_status="UNRESOLVED"
@@ -1046,50 +1050,22 @@ echo ""
 # =============================================================================
 echo "--- Check 4A: DoD Format Manipulation Detection (Gate G041) ---"
 total_manipulated=0
-# BUG-005: precompiled patterns (bash builtins replace per-line echo|grep forks).
-# `_c4a_dod_header_re` is matched case-INSENSITIVELY (original grep -qiE); the
-# rest are case-SENSITIVE (original grep -qE).
-_c4a_dod_header_re='^#{1,4}.*Definition of Done|^#{1,4}.*DoD'
-_c4a_heading_re='^#{1,4} '
-_c4a_listitem_re='^\- '
-_c4a_checkbox_re='^\- \[(x| )\] '
 for scope_path in ${scope_files[@]+"${scope_files[@]}"}; do
   [[ -f "$scope_path" ]] || continue
 
-  # Extract lines inside DoD sections and check for non-checkbox list items
-  in_dod=0
-  line_num=0
-  while IFS= read -r line; do
-    line_num=$((line_num + 1))
-
-    # Detect DoD section headers (case-INSENSITIVE — matches the original
-    # grep -qiE). BUG-005: bash builtin instead of an echo|grep fork per line.
-    _c4a_is_dod_header=0
-    shopt -s nocasematch
-    [[ "$line" =~ $_c4a_dod_header_re ]] && _c4a_is_dod_header=1
-    shopt -u nocasematch
-    if [[ "$_c4a_is_dod_header" -eq 1 ]]; then
-      in_dod=1
-      continue
-    fi
-
-    # Exit DoD section on next heading or scope boundary (case-sensitive)
-    if [[ "$in_dod" -eq 1 ]] && [[ "$line" =~ $_c4a_heading_re ]]; then
-      in_dod=0
-      continue
-    fi
-
-    # While inside DoD section, check list items
-    if [[ "$in_dod" -eq 1 ]]; then
-      # Valid formats: "- [ ] " or "- [x] "
-      # Invalid: "- (deferred)", "- ~~text~~", "- *text*", "- text" (no checkbox)
-      if [[ "$line" =~ $_c4a_listitem_re ]] && ! [[ "$line" =~ $_c4a_checkbox_re ]]; then
-        fail "DoD format manipulation detected in ${scope_path#$feature_dir/} line $line_num: ${line:0:100}"
-        fun_message format_bypass
-        total_manipulated=$((total_manipulated + 1))
-      fi
-    fi
-  done < "$scope_path"
+  # BUG-026: consume the shared DoD parser (bubbles/scripts/dod-section-lib.sh).
+  # A column-zero list item inside a DoD section that is NOT a checkbox is
+  # format manipulation. The shared parser carries the correct tiered-DoD
+  # boundary (nested #### tier subheadings are retained through depth 6 and the
+  # section ends only at a same-or-shallower heading), so a valid tier no longer
+  # terminates the section early (BUG026-F002). DoD-header matching stays
+  # case-insensitive, matching the previous Check 4A behavior.
+  while IFS=$'\t' read -r _c4a_rec _c4a_line _c4a_kind _c4a_text; do
+    [[ "$_c4a_rec" == "LIST" && "$_c4a_kind" == "non-checkbox" ]] || continue
+    fail "DoD format manipulation detected in ${scope_path#$feature_dir/} line $_c4a_line: ${_c4a_text:0:100}"
+    fun_message format_bypass
+    total_manipulated=$((total_manipulated + 1))
+  done < <(dod_section_parse "$scope_path")
 done
 
 if [[ "$total_manipulated" -gt 0 ]]; then
@@ -2936,7 +2912,18 @@ echo ""
 # =============================================================================
 echo "--- Check 18: Deferral Language Scan (Gate G040) ---"
 
-if [[ "$state_status" == "done_with_concerns" && "$(json_first_bool "legacyStatusCompatibility" "$state_file" || true)" == "true" ]]; then
+if [[ "$transition_audit_profile" == "planning-maturity-v1" ]]; then
+  # A planning-maturity transition (e.g. -> specs_hardened) certifies a PLAN,
+  # not a delivered implementation. A planning-only spec (product-to-planning /
+  # planMaturityOnly) describes future work by nature and legitimately uses
+  # forward-looking domain terminology — e.g. a real MVP-surface / feature name
+  # such as "Authorized Outcome Follow-Up". The context-free deferral scan would
+  # flag such legitimate domain labels as "deferred work", so it is category-
+  # inappropriate here and is deferred to the delivery-completion (done)
+  # transition — matching how Check 4 (DoD completion) and Check 3E (scenario-
+  # first TDD, Gate G060) treat this profile. Delivery enforcement is unchanged.
+  info "NOT_APPLICABLE: Check-18 deferral-language scan — planning maturity describes a plan of future work, so forward-looking domain terminology is category-appropriate; deferral-language enforcement is deferred to the delivery-completion transition (Gate G040)"
+elif [[ "$state_status" == "done_with_concerns" && "$(json_first_bool "legacyStatusCompatibility" "$state_file" || true)" == "true" ]]; then
   info "Check 18 skipped: state.json status is legacy read-only 'done_with_concerns' with legacyStatusCompatibility:true (Gate G040/G092)"
 else
   deferral_pattern='deferred|defer to|deferred to|future scope|future work|future iteration|follow-up|follow up|followup|out of scope|not in scope|beyond scope|will address later|address later|revisit later|separate ticket|separate issue|separate PR|tracked separately|handled separately|punt\b|punted|postpone|postponed|skip for now|skipped for now|not implemented yet|not yet implemented|placeholder|temporary workaround'
@@ -3273,14 +3260,11 @@ for scope_index in "${!scope_analysis_files[@]}"; do
   fi
 
   # Extract DoD items (text only, strip checkbox prefix)
-  scope_dod_items="$(awk '
-    /^#{1,4}.*Definition of Done|^#{1,4}.*DoD/ {in_dod=1; next}
-    /^#{1,4} / {if (in_dod) exit}
-    in_dod && /^- \[(x| )\] / {
-      sub(/^- \[(x| )\] /, "", $0)
-      print
-    }
-  ' "$scope_path" || true)"
+  # BUG-026: shared DoD parser (correct tiered-DoD boundary; case-insensitive
+  # header match). Emits checkbox item text, one per line.
+  scope_dod_items="$(dod_section_parse "$scope_path" | awk -F'\t' '
+    $1 == "CHECKBOX" { out = $4; for (i = 5; i <= NF; i++) out = out "\t" $i; print out }
+  ' || true)"
 
   if [[ -z "$scope_dod_items" ]]; then
     continue

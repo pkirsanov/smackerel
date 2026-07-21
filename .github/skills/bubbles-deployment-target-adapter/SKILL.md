@@ -336,6 +336,11 @@ attestations:
   signature: <cosign signature ref>
   sbom: <SBOM artifact ref>
   provenance: <SLSA provenance ref>
+  assurance:                          # IMP-100 R5 — achieved assurance attestation
+    level: full | fast | prototype    # copied from certification.assurance.level
+    profile: <delivery-completion-v1 | delivery-completion-fast-v1>
+    evidenceDigest: sha256:<digest of the certifying evidence>
+    riskClass: <low | medium | high | unknown>   # optional; escalates the target floor
 previousManifest:
   image: { digest: sha256:<prior> }
   configBundle: { hash: <prior-hash> }
@@ -344,6 +349,34 @@ rolloutStrategy: recreate | blue-green | canary
 ```
 
 The `previousManifest` field enables `rollback` to restore the prior pointer without rebuilding.
+
+### Assurance Dimension (IMP-100 R5 — assurance-gated deployment)
+
+The signed manifest additionally carries the **achieved assurance level** of the
+certified work it deploys (choke point #4), and the adapter preflight verifies it
+before any container starts (choke point #5). This extends build-once-deploy-many
+with an assurance dimension: a `prototype`-tier build can never ship, and a
+`fast`-tier build ships only within the target's declared risk policy.
+
+- **Source of truth:** `certification.assurance.level` (∈ `full` | `fast` |
+  `prototype`), derived + recorded + consistency-enforced by `bubbles.validate` at
+  certification (`assurance-derive.sh`, `assurance-certification-check.sh`). CI
+  copies it — plus the certifying evidence digest — into `attestations.assurance`
+  when it publishes the signed manifest.
+- **Preflight refusal (generic, framework-owned):** the adapter's preflight MUST
+  call the target-agnostic primitive
+  `bubbles/scripts/deploy-manifest-assurance-lint.sh --manifest <manifest> --minimum-assurance <target-floor> [--risk-class <class>]`,
+  which: refuses a malformed / absent-digest assurance block; **ALWAYS refuses
+  `prototype`** (never deployable, at any target); and refuses an under-assured
+  level for the target floor by consuming the shared decision in
+  `assurance-resolve.sh` (never re-deriving), forwarding `riskClass` so high /
+  unknown risk escalates the floor to `full`. A manifest with no
+  `attestations.assurance` block is a no-op (backward compatible — pre-assurance
+  manifests never break).
+- **Ownership boundary:** the generic decision (this lint + `assurance-resolve.sh`)
+  is framework-owned; the CONCRETE preflight wiring, the per-target floor, and the
+  signed-manifest publication are knb / product-adapter-owned per the deployment
+  boundary — the framework primitive is CALLED, never a concrete adapter itself.
 
 ### Registry Choice
 

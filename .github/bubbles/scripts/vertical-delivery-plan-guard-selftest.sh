@@ -105,6 +105,97 @@ else
   fail "T6 per-scope-dir layout should be parsed (rc=$rc)"
 fi
 
+# Low-risk tier marker: state.json on the rapid-tool-delivery fast lane.
+write_rapid_state() { printf '%s\n' '{ "workflowMode": "rapid-tool-delivery" }' > "$1/state.json"; }
+
+# ── T7: low-risk tier, 6 consumer scopes (early consumer, so NOT horizontal) →
+#        over scope budget (>5) → advisory SCOPE BUDGET warn, exit 0.
+d="$TMP_ROOT/t7"; mkdir -p "$d"; write_rapid_state "$d"
+{ for n in 1 2 3 4 5 6; do consumer_scope "$n" "surface$n"; echo; done; } > "$d/scopes.md"
+out="$("$GUARD" "$d" 2>&1)" && rc=0 || rc=$?
+if [[ "$rc" -eq 0 ]] && printf '%s\n' "$out" | grep -q 'SCOPE BUDGET (low-risk tier)' && printf '%s\n' "$out" | grep -q 'this plan has'; then
+  pass "T7 low-risk tier over budget (6>5 scopes) warns advisorily (exit 0)"
+else
+  fail "T7 low-risk over-budget plan should warn advisorily (rc=$rc)"
+fi
+
+# ── T8: low-risk tier, exactly 5 consumer scopes → within budget → OK, exit 0.
+d="$TMP_ROOT/t8"; mkdir -p "$d"; write_rapid_state "$d"
+{ for n in 1 2 3 4 5; do consumer_scope "$n" "surface$n"; echo; done; } > "$d/scopes.md"
+out="$("$GUARD" "$d" 2>&1)" && rc=0 || rc=$?
+if [[ "$rc" -eq 0 ]] && printf '%s\n' "$out" | grep -q 'within scope budget' && ! printf '%s\n' "$out" | grep -q 'SCOPE BUDGET (low-risk tier)'; then
+  pass "T8 low-risk tier at budget (5 scopes) passes clean (exit 0)"
+else
+  fail "T8 low-risk at-budget plan should pass clean (rc=$rc)"
+fi
+
+# ── T9: low-risk tier over budget + verticalPlanGuard: block opt-in → exit 1.
+d="$TMP_ROOT/budgetblock"; mkdir -p "$d/.github" "$d/specs/feat"
+printf 'verticalPlanGuard: block\n' > "$d/.github/bubbles-project.yaml"
+write_rapid_state "$d/specs/feat"
+{ for n in 1 2 3 4 5 6; do consumer_scope "$n" "surface$n"; echo; done; } > "$d/specs/feat/scopes.md"
+out="$( (cd "$d" && "$GUARD" specs/feat) 2>&1)" && rc=0 || rc=$?
+if [[ "$rc" -eq 1 ]] && printf '%s\n' "$out" | grep -q 'SCOPE BUDGET (low-risk tier)' && printf '%s\n' "$out" | grep -q 'verticalPlanGuard: block'; then
+  pass "T9 low-risk over-budget with verticalPlanGuard: block FAILS (exit 1)"
+else
+  fail "T9 low-risk over-budget with block config should fail (rc=$rc)"
+fi
+
+# ── T10: NON-low-risk mode (full-delivery), 6 consumer scopes → budget NOT
+#         imposed (unbounded like before) → OK, exit 0. Proves tier binding.
+d="$TMP_ROOT/t10"; mkdir -p "$d"
+printf '%s\n' '{ "workflowMode": "full-delivery" }' > "$d/state.json"
+{ for n in 1 2 3 4 5 6; do consumer_scope "$n" "surface$n"; echo; done; } > "$d/scopes.md"
+out="$("$GUARD" "$d" 2>&1)" && rc=0 || rc=$?
+if [[ "$rc" -eq 0 ]] && ! printf '%s\n' "$out" | grep -q 'SCOPE BUDGET'; then
+  pass "T10 non-low-risk mode (full-delivery) is unbounded (6 scopes, no budget finding)"
+else
+  fail "T10 non-low-risk mode should be unbounded (rc=$rc)"
+fi
+
+# ── T11: absent state.json, 6 consumer scopes → conservative (NOT low-risk) →
+#         no budget imposed → OK, exit 0.
+d="$TMP_ROOT/t11"; mkdir -p "$d"
+{ for n in 1 2 3 4 5 6; do consumer_scope "$n" "surface$n"; echo; done; } > "$d/scopes.md"
+out="$("$GUARD" "$d" 2>&1)" && rc=0 || rc=$?
+if [[ "$rc" -eq 0 ]] && ! printf '%s\n' "$out" | grep -q 'SCOPE BUDGET'; then
+  pass "T11 absent state.json is conservative (no budget imposed, exit 0)"
+else
+  fail "T11 absent state.json should impose no budget (rc=$rc)"
+fi
+
+# ── T12: Feature-010-shaped 14-scope HORIZONTAL plan (11 foundation layers →
+#         first consumer at scope 12) → advisory HORIZONTAL PLAN + remediation,
+#         exit 0. The negative fixture at the real pathological scale (IMP-022 SCOPE-6).
+d="$TMP_ROOT/t12"; mkdir -p "$d"
+{ for n in 1 2 3 4 5 6 7 8 9 10 11; do foundation_scope "$n" "layer$n"; echo; done; \
+  consumer_scope 12 "profile"; echo; consumer_scope 13 "settings"; echo; consumer_scope 14 "admin"; } > "$d/scopes.md"
+out="$("$GUARD" "$d" 2>&1)" && rc=0 || rc=$?
+if [[ "$rc" -eq 0 ]] \
+  && printf '%s\n' "$out" | grep -q 'HORIZONTAL PLAN' \
+  && printf '%s\n' "$out" | grep -q 'first consumer-visible increment is scope 12 of 14' \
+  && printf '%s\n' "$out" | grep -q 'Remediation: restructure'; then
+  pass "T12 Feature-010-shaped 14-scope horizontal plan warns with remediation (exit 0)"
+else
+  fail "T12 Feature-010 14-scope horizontal plan should warn with remediation (rc=$rc)"
+fi
+
+# ── T13: vertical TWIN of the same 14 scopes (early consumer at scope 1, work
+#         reorganized) → clean, exit 0, NOT flagged. Proves the guard rewards a
+#         reorganized-but-equivalent vertical plan (IMP-022 SCOPE-6 positive twin).
+d="$TMP_ROOT/t13"; mkdir -p "$d"
+{ consumer_scope 1 "profile"; echo; \
+  for n in 2 3 4 5 6 7 8 9 10 11 12; do foundation_scope "$n" "layer$n"; echo; done; \
+  consumer_scope 13 "settings"; echo; consumer_scope 14 "admin"; } > "$d/scopes.md"
+out="$("$GUARD" "$d" 2>&1)" && rc=0 || rc=$?
+if [[ "$rc" -eq 0 ]] \
+  && printf '%s\n' "$out" | grep -q 'first usable increment is early' \
+  && ! printf '%s\n' "$out" | grep -q 'HORIZONTAL PLAN'; then
+  pass "T13 vertical twin (same 14 scopes, early consumer) passes clean (exit 0)"
+else
+  fail "T13 vertical twin should pass clean (rc=$rc)"
+fi
+
 echo
 if [[ "$FAILURES" -gt 0 ]]; then
   echo "vertical-delivery-plan-guard-selftest FAILED with $FAILURES issue(s)."

@@ -159,6 +159,13 @@ is_terminal_status() {
   local status="$1" mode="$2"
   case "$status" in
     done) return 0 ;;
+    # delivered_prototype is a terminal-for-mode state but is NEVER deployable
+    # (the assurance-resolve.sh invariant: prototype tier never ships), so it can
+    # NEVER satisfy a delivery=required feature at a release choke point. Refuse it
+    # explicitly here regardless of any mode that declares it terminal — otherwise
+    # a future prototype-tier mode + the (now alias-aware) is-terminal-for-mode.sh
+    # below would silently accept a prototype as "delivered" (the deploy hole).
+    delivered_prototype) return 1 ;;
     in_progress | not_started | blocked | done_with_concerns | "") return 1 ;;
   esac
   if [[ -n "$mode" && -x "$SCRIPT_DIR/is-terminal-for-mode.sh" ]]; then
@@ -203,8 +210,11 @@ for FFILE in "${FEATURE_FILES[@]}"; do
     reconciled="true"
   fi
 
-  # Collect feature annotations.
-  mapfile -t ANN_LINES < <(grep -oE 'bubbles:feature[^>]*' "$FFILE" 2>/dev/null || true)
+  # Collect feature annotations (bash-3.2-portable; mapfile is bash 4+).
+  ANN_LINES=()
+  while IFS= read -r _ann_line; do
+    ANN_LINES+=("$_ann_line")
+  done < <(grep -oE 'bubbles:feature[^>]*' "$FFILE" 2>/dev/null || true)
 
   if [[ "$reconciled" != "true" ]]; then
     echo "[release-delivery-reconciliation-guard][WARN] $phase_dir: packet is not reconciled (no bubbles:reconciled-packet header; --require-coverage not set). Skipping enforcement; backfill machine bindings to enable G101. (grandfathered, exit 0)"

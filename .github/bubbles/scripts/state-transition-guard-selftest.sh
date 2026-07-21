@@ -13,7 +13,9 @@ source "$SCRIPT_DIR/guard-lib.sh"
 # them out of this cumulative fixture suite to avoid repeated heavy scans.
 export BUBBLES_STATE_TRANSITION_GUARD_SELFTEST_FAST=1
 
-tmp_root="$(mktemp -d)"
+selftest_tmp_base="${TMPDIR:-$HOME/.cache}"
+mkdir -p "$selftest_tmp_base"
+tmp_root="$(mktemp -d "$selftest_tmp_base/bubbles-transition-guard-selftest.XXXXXX")"
 failures=0
 
 cleanup() {
@@ -597,6 +599,33 @@ if workflow_mode == "autonomous-goal":
     data.pop("planningOnly", None)
     data.pop("planMaturityOnly", None)
     data.pop("planningOnlyJustification", None)
+
+with open(path, "w", encoding="utf-8") as handle:
+    json.dump(data, handle, indent=2)
+    handle.write("\n")
+PY
+}
+
+# Flip ONLY policySnapshot.tdd.mode -> scenario-first on an existing fixture so a
+# clone of an otherwise-passing packet carries a live scenario-first TDD policy.
+# This isolates Check 3E's RED->GREEN requirement as the single differentiator
+# between the planning-maturity and delivery-completion audit profiles.
+set_fixture_tdd_scenario_first() {
+  local state_file="$1"
+
+  python3 - "$state_file" <<'PY'
+import json
+import sys
+
+path = sys.argv[1]
+with open(path, encoding="utf-8") as handle:
+    data = json.load(handle)
+
+snapshot = data.get("policySnapshot")
+if not isinstance(snapshot, dict):
+    snapshot = {}
+    data["policySnapshot"] = snapshot
+snapshot["tdd"] = {"mode": "scenario-first", "source": "repo-default"}
 
 with open(path, "w", encoding="utf-8") as handle:
     json.dump(data, handle, indent=2)
@@ -1421,6 +1450,9 @@ s03_checked_evidence_dir="$tmp_root/specs/916-bug009-s03-checked-evidence"
 s03_done_honesty_dir="$tmp_root/specs/917-bug009-s03-done-honesty"
 s03_g068_dir="$tmp_root/specs/918-bug009-s03-g068-negative"
 s03_delivery_checked_dir="$tmp_root/specs/919-bug009-s03-delivery-checked-evidence"
+g060_planning_na_dir="$tmp_root/specs/928-bug026-g060-planning-not-applicable"
+g060_delivery_enforced_dir="$tmp_root/specs/929-bug026-g060-delivery-enforced"
+g040_planning_na_dir="$tmp_root/specs/930-g040-planning-not-applicable"
 g040_pos_deferred_dir="$tmp_root/specs/920-g040-positive-deferred-prose"
 g040_pos_skip_for_now_dir="$tmp_root/specs/921-g040-positive-skip-for-now"
 g040_neg_followup_fields_dir="$tmp_root/specs/922-g040-negative-schema-yaml-only"
@@ -1470,6 +1502,23 @@ cp -R "$s03_planning_feature_dir" "$s03_g068_dir"
 break_gherkin_dod_fidelity "$s03_g068_dir/scopes.md"
 cp -R "$s03_delivery_negative_dir" "$s03_delivery_checked_dir"
 mark_first_dod_checked "$s03_delivery_checked_dir/scopes.md"
+# BUG-026 G060 profile-awareness: isolate Check 3E's scenario-first enforcement to
+# the audit profile. Each fixture is cloned from an already-PASSING packet and
+# only flips policySnapshot.tdd.mode -> scenario-first, so the SOLE differentiator
+# is the RED->GREEN evidence requirement:
+#   * planning-maturity-v1  -> Check 3E NOT_APPLICABLE (plan hardening, no runtime test surface yet)
+#   * delivery-completion-v1 -> Check 3E STILL enforces G060 (delivery is unchanged)
+cp -R "$s03_planning_feature_dir" "$g060_planning_na_dir"
+set_fixture_tdd_scenario_first "$g060_planning_na_dir/state.json"
+cp -R "$positive_feature_dir" "$g060_delivery_enforced_dir"
+set_fixture_tdd_scenario_first "$g060_delivery_enforced_dir/state.json"
+# G040 Check 18 planning-maturity exemption: an honest planning packet carrying a
+# forward-looking domain label ("Authorized Outcome Follow-Up") the context-free
+# deferral regex would otherwise flag. Under planning maturity Check 18 is
+# NOT_APPLICABLE so this must not block plan hardening. Delivery-side G040
+# enforcement stays covered by the g040_pos_* fixtures.
+cp -R "$s03_planning_feature_dir" "$g040_planning_na_dir"
+printf '\nThe Authorized Outcome Follow-Up surface is a planned MVP capability of this executable-capability graph.\n' >> "$g040_planning_na_dir/scopes.md"
 emit_per_scope_fixture "$per_scope_positive_feature_dir" "Done" "scope-1-index-parity-proof"
 mutate_delivery_contract "$per_scope_positive_feature_dir/state.json"
 emit_per_scope_fixture "$index_parity_negative_feature_dir" "In Progress" "scope-1-index-parity-proof"
@@ -2222,6 +2271,66 @@ assert_transition_result "$s03_delivery_log" \
 s03_delivery_checked_log="$tmp_root/s03-delivery-checked.log"
 run_capture "$s03_delivery_checked_log" bash "$GUARD_SCRIPT" "$s03_delivery_checked_dir" >/dev/null
 assert_log_contains "$s03_delivery_checked_log" "DoD item [x] has NO evidence block" "BUG-009 S03: delivery Check 9 checked-item evidence remains blocking"
+
+echo "Running BUG-026 G060 profile-awareness matrix (Check 3E honors the audit profile)..."
+# Case 1 — planning-maturity exemption: a product-to-planning/specs_hardened packet
+# whose policySnapshot now declares tdd.mode=scenario-first but carries NO RED->GREEN
+# markers. Before the fix Check 3E demanded RED->GREEN and blocked this planning
+# transition; after the fix the planning-maturity-v1 profile makes Check 3E
+# NOT_APPLICABLE, so G060 no longer blocks plan hardening.
+g060_planning_log="$tmp_root/g060-planning-not-applicable.log"
+g060_planning_status="$(run_capture "$g060_planning_log" bash "$GUARD_SCRIPT" "$g060_planning_na_dir")"
+if [[ "$g060_planning_status" -eq 0 ]]; then
+  pass "BUG-026 G060: planning-maturity transition with scenario-first tdd and no RED→GREEN is not blocked by Check 3E"
+else
+  fail "BUG-026 G060: planning-maturity transition should not be blocked by Check 3E (observed $g060_planning_status)"
+  sed -n '1,260p' "$g060_planning_log"
+fi
+assert_log_contains "$g060_planning_log" "NOT_APPLICABLE: Check-3E scenario-first TDD evidence" "BUG-026 G060: Check 3E is explicitly non-applicable under planning maturity"
+assert_log_not_contains "$g060_planning_log" "no RED→GREEN ordering was found" "BUG-026 G060: planning maturity emits no scenario-first enforcement failure"
+assert_transition_result "$g060_planning_log" \
+  product-to-planning planning-maturity-v1 specs_hardened "$s03_not_applicable" PASS 0 \
+  "BUG-026 G060: planning maturity with scenario-first tdd still emits one complete passing result"
+
+# Case 2 — enforcement intact (regression guard): an autonomous-goal/done packet
+# that resolves delivery-completion-v1, is snapshot-bearing, and now declares
+# tdd.mode=scenario-first with NO RED->GREEN markers. Check 3E MUST still fail G060
+# — the fix does not weaken delivery enforcement. The fixture is otherwise clean,
+# so G060 is the isolated blocking gate.
+g060_delivery_log="$tmp_root/g060-delivery-enforced.log"
+g060_delivery_status="$(run_capture "$g060_delivery_log" bash "$GUARD_SCRIPT" "$g060_delivery_enforced_dir")"
+if [[ "$g060_delivery_status" -eq 1 ]]; then
+  pass "BUG-026 G060: delivery-completion transition with scenario-first tdd and no RED→GREEN still fails Check 3E"
+else
+  fail "BUG-026 G060: delivery-completion regression control should exit 1 (observed $g060_delivery_status)"
+  sed -n '1,260p' "$g060_delivery_log"
+fi
+assert_log_contains "$g060_delivery_log" "no RED→GREEN ordering was found" "BUG-026 G060: delivery completion still enforces scenario-first RED→GREEN evidence"
+assert_log_not_contains "$g060_delivery_log" "NOT_APPLICABLE: Check-3E" "BUG-026 G060: delivery completion receives no planning-maturity Check 3E exemption"
+assert_log_contains "$g060_delivery_log" "failedGateIds: [G060]" "BUG-026 G060: G060 is the isolated blocking gate for delivery completion"
+assert_transition_result "$g060_delivery_log" \
+  autonomous-goal delivery-completion-v1 "done" '[]' FAIL 1 \
+  "BUG-026 G060: delivery enforcement failure emits one complete blocked-by-gate result"
+
+echo "Running G040 Check 18 planning-maturity exemption (deferral scan honors the audit profile)..."
+# Planning-maturity exemption: a product-to-planning/specs_hardened packet whose
+# scope carries a forward-looking domain label ("Authorized Outcome Follow-Up")
+# that the context-free deferral regex would otherwise flag. Under planning
+# maturity Check 18 is NOT_APPLICABLE, so G040 no longer blocks plan hardening.
+# Delivery-side G040 enforcement remains covered by the g040_pos_* cases below.
+g040_planning_log="$tmp_root/g040-planning-not-applicable.log"
+g040_planning_status="$(run_capture "$g040_planning_log" bash "$GUARD_SCRIPT" "$g040_planning_na_dir")"
+if [[ "$g040_planning_status" -eq 0 ]]; then
+  pass "G040 Check 18: planning-maturity packet with a forward-looking domain label (Authorized Outcome Follow-Up) is not blocked by the deferral scan"
+else
+  fail "G040 Check 18: planning-maturity should not be blocked by the deferral scan (observed $g040_planning_status)"
+  sed -n '1,260p' "$g040_planning_log"
+fi
+assert_log_contains "$g040_planning_log" "NOT_APPLICABLE: Check-18 deferral-language scan" "G040 Check 18: deferral scan is explicitly non-applicable under planning maturity"
+assert_log_not_contains "$g040_planning_log" "deferral language hit" "G040 Check 18: planning maturity emits no deferral enforcement failure"
+assert_transition_result "$g040_planning_log" \
+  product-to-planning planning-maturity-v1 specs_hardened "$s03_not_applicable" PASS 0 \
+  "G040 Check 18: planning maturity with a forward-looking domain label still emits one complete passing result"
 
 s03_checked_log="$tmp_root/s03-checked-evidence.log"
 s03_checked_status="$(run_capture "$s03_checked_log" bash "$GUARD_SCRIPT" "$s03_checked_evidence_dir")"

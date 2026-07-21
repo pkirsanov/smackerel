@@ -317,13 +317,19 @@ assert_exit "$rc" 1 'missing weighted judge fails closed'
 assert_field "$judge_missing_result" judge.status '"unavailable"' 'missing judge status remains visible'
 assert_code "$judge_missing_result" judge-adapter-missing 'missing judge reason is explicit'
 
-judge_printf_result="$TMPDIR/judge-printf.json"
+# BUG-026 finding fix: use /bin/echo (not /usr/bin/printf) as the non-JSON judge
+# adapter. Both emit non-empty non-JSON output, but BSD/macOS /usr/bin/printf
+# exits 1 ("missing format character") on the extra path arg while GNU printf
+# exits 0 — so printf was classified judge-nonzero on macOS but judge-malformed-json
+# on Linux. /bin/echo exits 0 with the path args on BOTH platforms, deterministically
+# exercising the malformed-JSON classification.
+judge_nonjson_result="$TMPDIR/judge-nonjson.json"
 rc=0
-BUBBLES_EVAL_JUDGE=/usr/bin/printf "$BASH_BIN" "$HARNESS" score --task "$judge_task" --output "$GOOD" > "$judge_printf_result" || rc=$?
-assert_exit "$rc" 1 'exact /usr/bin/printf hollow judge output fails closed'
-assert_field "$judge_printf_result" evaluationStatus '"error"' 'invalid printf judge output reports evaluation error'
-assert_field "$judge_printf_result" judge.status '"error"' 'invalid printf judge attempt cannot disappear'
-assert_code "$judge_printf_result" judge-nonzero 'invalid printf judge output has nonzero adapter code'
+BUBBLES_EVAL_JUDGE=/bin/echo "$BASH_BIN" "$HARNESS" score --task "$judge_task" --output "$GOOD" > "$judge_nonjson_result" || rc=$?
+assert_exit "$rc" 1 'non-JSON (/bin/echo) hollow judge output fails closed'
+assert_field "$judge_nonjson_result" evaluationStatus '"error"' 'non-JSON judge output reports evaluation error'
+assert_field "$judge_nonjson_result" judge.status '"error"' 'non-JSON judge attempt cannot disappear'
+assert_code "$judge_nonjson_result" judge-malformed-json 'non-JSON judge output has malformed-JSON adapter code'
 
 for judge_mode in nonzero timeout invalid-output malformed-json missing-provenance nan infinity out-of-range; do
   judge_result="$TMPDIR/judge-$judge_mode.json"

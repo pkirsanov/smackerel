@@ -1,0 +1,66 @@
+# Bubbles Tool-Trust Registry (IMP-020 S3 / AF-005)
+# ---------------------------------------------------------------------------
+# Machine-readable trust classification for tools/servers + their operations,
+# consumed by bubbles/scripts/pre-tool-risk-gate.sh in --event mode and validated
+# against bubbles/schemas/tool-trust-registry.schema.json by yaml-schema-validate.sh.
+#
+# INVARIANTS (also enforced by the schema + selftest):
+#   - No secret VALUES here — classification/presence metadata only.
+#   - trustState: trusted is reserved for Bubbles-owned (bubbles-cli/bubbles-mcp)
+#     or maintainer-registered sources. A token merely present in .vscode/mcp.json
+#     never confers trust.
+#   - hostEnforceable: false => the host does not route this server's calls through
+#     the Bubbles pre-tool contract, so decisions are advisory (enforcement:
+#     unavailable), never a silent pass.
+#   - permittedDataClasses MUST NOT include 'secret' for any egress-capable op.
+#   - Anything not registered here falls through to `defaults` (fail-closed).
+version: 1
+
+dataClasses: [public, internal, sensitive, secret]
+
+servers:
+  # ---- Bubbles-owned, host-enforceable (routed through the CLI/hook contract) ----
+  bubbles-cli:
+    source: bubbles-cli
+    trustState: trusted
+    hostEnforceable: true
+    description: The Bubbles CLI. Per-command risk classes are refined in action-risk-registry.yaml; this entry is the server-level trust envelope.
+    operations:
+      read-query:            { riskClass: read_only,            capability: read,       egress: none,     permittedDataClasses: [public, internal], approvalRequired: false }
+      owned-mutation:        { riskClass: owned_mutation,       capability: write,      egress: none,     permittedDataClasses: [public, internal], approvalRequired: false }
+      runtime-teardown:      { riskClass: runtime_teardown,     capability: write,      egress: internal, permittedDataClasses: [internal],         approvalRequired: false }
+      destructive-mutation:  { riskClass: destructive_mutation, capability: read-write, egress: none,     permittedDataClasses: [public, internal], approvalRequired: true }
+
+  bubbles-mcp:
+    source: bubbles-mcp
+    trustState: trusted
+    hostEnforceable: true
+    description: The per-repo Bubbles MCP server (bubbles-<repo-slug>). Read tools are read_only; evidence/routing tools are owned mutations.
+    operations:
+      read_spec:        { riskClass: read_only,      capability: read,  egress: none, permittedDataClasses: [public, internal], approvalRequired: false }
+      search_code:      { riskClass: read_only,      capability: read,  egress: none, permittedDataClasses: [public, internal], approvalRequired: false }
+      check_gate:       { riskClass: read_only,      capability: read,  egress: none, permittedDataClasses: [public, internal], approvalRequired: false }
+      graph_neighbors:  { riskClass: read_only,      capability: read,  egress: none, permittedDataClasses: [public, internal], approvalRequired: false }
+      record_evidence:  { riskClass: owned_mutation, capability: write, egress: none, permittedDataClasses: [public, internal], approvalRequired: false }
+      route_finding:    { riskClass: owned_mutation, capability: write, egress: none, permittedDataClasses: [public, internal], approvalRequired: false }
+
+  # ---- Ambient editor tools: real but NOT interceptable by Bubbles alone ----
+  host-builtin:
+    source: host-builtin
+    trustState: untrusted
+    hostEnforceable: false
+    description: VS Code / host built-in tools (edit, shell, web, browser). Bubbles cannot guarantee these pass through its hook; decisions are advisory (enforcement unavailable). Least privilege + untrusted-content.md are the real defenses.
+    operations:
+      read:    { riskClass: read_only,            capability: read,       egress: none,     permittedDataClasses: [public, internal], approvalRequired: false }
+      edit:    { riskClass: owned_mutation,       capability: write,      egress: none,     permittedDataClasses: [public, internal], approvalRequired: false }
+      execute: { riskClass: external_side_effect, capability: read-write, egress: external, permittedDataClasses: [public, internal], approvalRequired: true }
+      web:     { riskClass: external_side_effect, capability: read,       egress: external, permittedDataClasses: [public],           approvalRequired: true }
+      browser: { riskClass: external_side_effect, capability: read-write, egress: external, permittedDataClasses: [public],           approvalRequired: true }
+
+# Fail-closed posture for anything not registered above.
+defaults:
+  unregisteredServer:
+    sensitiveOperations: deny      # unregistered MCP/tool servers: sensitive ops always denied
+  unknownOperation:
+    riskClass: external_side_effect  # unknown op is NEVER read_only — treated as sensitive
+    approvalRequired: true

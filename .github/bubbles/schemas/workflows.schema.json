@@ -56,7 +56,8 @@
                 "profile": {
                   "enum": [
                     "planning-maturity-v1",
-                    "delivery-completion-v1"
+                    "delivery-completion-v1",
+                    "delivery-completion-fast-v1"
                   ]
                 },
                 "target": { "const": "statusCeiling" }

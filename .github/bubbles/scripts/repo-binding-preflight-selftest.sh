@@ -76,6 +76,29 @@ else
   fail "T7 slug derivation should match install.sh (rc=$rc)"
 fi
 
+# ── T8: per-repo MCP id compatibility (no regression to the v7.19.x unique-id fix).
+# The preflight's repo-slug derivation MUST match the slug embedded in the per-repo
+# MCP server id (bubbles-<slug>) and the installer's targetRepoSlug marker, so a
+# correctly-installed multi-root repo binds cleanly. A dir with mixed case + punct
+# derives the SAME slug the MCP id uses (My.Repo_Name -> my-repo-name).
+d8="$TMP_ROOT/My.Repo_Name"; mkdir -p "$d8"
+mcp_slug="my-repo-name"   # install.sh registers the server as bubbles-my-repo-name
+out="$("$PREFLIGHT" --repo-root "$d8" --agent-source "$mcp_slug" 2>&1)" && rc=0 || rc=$?
+if [[ "$rc" -eq 0 ]] && printf '%s\n' "$out" | grep -q 'matches target repo'; then
+  pass "T8 preflight slug derivation matches per-repo MCP id slug (bubbles-$mcp_slug)"
+else
+  fail "T8 preflight slug should match MCP-id slug derivation (rc=$rc)"
+fi
+# And via the installed marker: targetRepoSlug == MCP-id slug binds cleanly.
+mkdir -p "$d8/.github/bubbles"
+printf '{ "installedVersion": "7.20.0", "targetRepoSlug": "%s" }\n' "$mcp_slug" > "$d8/.github/bubbles/.install-source.json"
+out="$("$PREFLIGHT" --repo-root "$d8" 2>&1)" && rc=0 || rc=$?
+if [[ "$rc" -eq 0 ]] && printf '%s\n' "$out" | grep -q 'matches target repo'; then
+  pass "T8b installed targetRepoSlug marker matching the MCP-id slug binds cleanly"
+else
+  fail "T8b marker matching MCP-id slug should bind (rc=$rc)"
+fi
+
 echo
 if [[ "$FAILURES" -gt 0 ]]; then
   echo "repo-binding-preflight-selftest FAILED with $FAILURES issue(s)."

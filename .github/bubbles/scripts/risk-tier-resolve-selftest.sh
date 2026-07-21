@@ -20,6 +20,18 @@ expect_tier() {
   fi
 }
 
+# expect_field <label> <field> <expected-value> <resolver-args...>
+expect_field() {
+  local label="$1" field="$2" want="$3"; shift 3
+  local out
+  out="$("$RESOLVE" "$@" 2>&1)"
+  if printf '%s\n' "$out" | grep -qx "$field=$want"; then
+    pass "$label"
+  else
+    fail "$label (got: $(printf '%s' "$out" | grep "^$field=" || true))"
+  fi
+}
+
 echo "Running risk-tier-resolve selftest..."
 
 # Low-risk: build-free static single-file tool, no triggers → rapid
@@ -50,6 +62,35 @@ expect_tier "low-risk changed paths + signal -> rapid" "rapid-tool-delivery" \
 
 # Ambiguous: no positive low-risk signal, no trigger → fail-closed to full
 expect_tier "ambiguous (no low-risk signal) -> full (fail-closed)" "full-delivery" \
+  --surface "Refactor the internal module"
+
+# --- IMP-100 Phase 1: riskClass + minimumAssurance contract ---------------
+# Low-risk signal, no trigger → riskClass=low, minimumAssurance=fast
+expect_field "low-risk -> riskClass=low" "riskClass" "low" \
+  --surface "Add a build-free single-file static HTML tool, no backend"
+expect_field "low-risk -> minimumAssurance=fast" "minimumAssurance" "fast" \
+  --surface "Add a build-free single-file static HTML tool, no backend"
+
+# High-risk trigger → riskClass=high, minimumAssurance=full
+expect_field "auth trigger -> riskClass=high" "riskClass" "high" \
+  --surface "Add a static tool with OAuth login"
+expect_field "auth trigger -> minimumAssurance=full" "minimumAssurance" "full" \
+  --surface "Add a static tool with OAuth login"
+
+# High-risk changed path → riskClass=high, minimumAssurance=full
+expect_field "high-risk path -> riskClass=high" "riskClass" "high" \
+  --surface "static tool" --changed-paths $'index.html\nmigrations/001_users.sql'
+
+# Mixed low-risk signal + high-risk trigger → high/full (no self-label bypass)
+expect_field "low-risk signal + auth trigger -> riskClass=high" "riskClass" "high" \
+  --surface "self-contained html tool with jwt auth"
+expect_field "low-risk signal + auth trigger -> minimumAssurance=full" "minimumAssurance" "full" \
+  --surface "self-contained html tool with jwt auth"
+
+# Ambiguous (fail-closed) → riskClass=unknown, minimumAssurance=full
+expect_field "ambiguous -> riskClass=unknown (fail-closed)" "riskClass" "unknown" \
+  --surface "Refactor the internal module"
+expect_field "ambiguous -> minimumAssurance=full (fail-closed)" "minimumAssurance" "full" \
   --surface "Refactor the internal module"
 
 echo

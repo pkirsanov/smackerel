@@ -268,7 +268,15 @@ except Exception:
 tdd_exemption_eligible_modes="docs-only reconcile-to-doc validate-to-doc gaps-to-doc devops-to-doc bugfix-fastlane chaos-hardening stabilize-to-doc audit-to-doc"
 tdd_forbidden_reasons="n/a none exempt no tests skip skipped tbd todo"
 
-if [[ "$effective_tdd_mode" == "scenario-first" ]]; then
+if [[ "$transition_audit_profile" == "planning-maturity-v1" ]]; then
+  # A planning-maturity transition (e.g. -> specs_hardened) hardens the PLAN,
+  # not the tests. A planning-only spec (product-to-planning / planMaturityOnly)
+  # has no runtime test surface yet, so scenario-first RED->GREEN execution
+  # evidence is category-inappropriate here and is deferred to the
+  # delivery-completion (done) transition — matching how Check 4 (DoD
+  # completion) and the other delivery-specific gates treat this profile.
+  info "NOT_APPLICABLE: Check-3E scenario-first TDD evidence — planning maturity has no runtime test surface; RED->GREEN evidence deferred to the delivery-completion transition (Gate G060)"
+elif [[ "$effective_tdd_mode" == "scenario-first" ]]; then
   if [[ "$tdd_exempt" == "true" ]]; then
     # Validate exemption: mode eligible, reason present, reason substantive
     mode_eligible="false"

@@ -167,8 +167,32 @@ Rules:
   lapses via its TTL; a new owner takes it over explicitly with
   `runtime attach <lease-id> --takeover` (after `runtime reclaim-stale`).
 - **Parallel scopes** still follow the parent-owned shared-state contract
-  (IMP-004 SCOPE-2): child scopes run in isolated worktrees and never write
-  shared `state.json` / scenario-manifest / spec/design / another scope's report.
+  (IMP-004 SCOPE-2), now MECHANIZED by `runtime writer-guard` (below): child
+  scopes run in isolated worktrees and never write shared `state.json` /
+  scenario-manifest / spec/design / another scope's report.
+
+### Enforce Parent-Owned Shared State (`writer-guard`)
+
+`runtime writer-guard` mechanizes the IMP-004 SCOPE-2 parent-owned shared-state
+contract: a **child** scope is refused when it tries to write a parent-owned
+shared file, while it is allowed to write its own report/scope/source/tests. Call
+it before a shared-state write when running parallel or worktree scopes:
+
+```bash
+# A child scope checking whether it may write a path (default --role child):
+bash bubbles/scripts/cli.sh runtime writer-guard \
+  --target specs/010-company-fundamentals --path state.json --role child --scope 03
+```
+
+- **Refused (exit non-zero):** `state.json`, `scenario-manifest.json`, `spec.md`,
+  `design.md`, or another scope's `scopes/<id>/report.md` when `--role child`.
+- **Allowed (exit 0):** the caller's own `scopes/<scope>/report.md` plus owned
+  code/tests, and anything when `--role parent` (the orchestrator owns shared state).
+- **Structured refusal.** A refusal prints one machine-parseable line to stderr —
+  `writer-lease-refusal result=blocked reason=<reason> ... route=<owner-agent> remediation=<action>` —
+  naming the parent owner and a safe remediation. The framework NEVER "reconciles"
+  two live writers by appending evidence to shared state (the Feature-010
+  anti-pattern).
 
 ## Ask The Super Instead
 
