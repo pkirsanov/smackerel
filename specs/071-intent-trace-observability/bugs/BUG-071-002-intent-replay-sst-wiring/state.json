@@ -12,7 +12,9 @@
   "flagsIntroduced": [],
   "workflowMode": "bugfix-fastlane",
   "executionRuntime": "direct",
-  "status": "in_progress",
+  "status": "done",
+  "certifiedAt": "2026-07-21T14:48:30Z",
+  "certifiedBy": "bubbles.validate",
   "createdAt": "2026-07-19",
   "updatedAt": "2026-07-21",
   "createdViaParent": {
@@ -44,12 +46,12 @@
     "scopeSummary": [{"scopeId": "1", "title": "Complete intent-trace config propagation", "owner": "bubbles.implement", "dodCount": 13, "status": "done", "dependsOn": []}]
   },
   "certification": {
-    "status": "in_progress",
-    "certificationReadiness": "not_ready",
+    "status": "done",
+    "certificationReadiness": "ready",
     "completedScopes": ["1"],
-    "certifiedCompletedPhases": [],
-    "certifierAgent": null,
-    "certifiedAt": null,
+    "certifiedCompletedPhases": ["implement", "test", "regression", "simplify", "stabilize", "security", "validate", "audit"],
+    "certifierAgent": "bubbles.validate",
+    "certifiedAt": "2026-07-21T14:48:30Z",
     "scopeProgress": [{"scopeId": "1", "status": "done", "dodComplete": 13, "dodTotal": 13}],
     "lockdownState": {"active": false, "round": 0, "reason": "Active bugfix packet; certification is validate-owned.", "lastUpdatedAt": "2026-07-19T00:00:00Z"}
   },
