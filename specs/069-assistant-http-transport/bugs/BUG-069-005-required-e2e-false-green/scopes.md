@@ -7,21 +7,61 @@ Links: [bug.md](bug.md) | [spec.md](spec.md) | [design.md](design.md) | [report.
 1. Complete the compiler SST/provider/core vertical path.
 2. Compose compiler outcomes into persistent disambiguation and confirmation
    state.
-3. Make all five protected E2E tests deterministic and strict, and close the
-   foreign framework guard gap through upstream ownership.
+3. Make all five protected E2E tests deterministic and strict, prove the
+   installed product guards, and record the foreign framework guard gap for
+   upstream ownership.
 
 ## Mechanical Allowed List
 
-- Compiler SST coherence and generated test env through `./smackerel.sh config generate`.
-- Core-to-ML compiler transport and the real ML compiler route.
-- `cmd/core` compiler construction and facade attachment.
-- Existing facade, disambiguation, confirm, conversation-store, and HTTP
-  response composition needed by SCN-BUG069005-001..005.
-- Focused test provider composition in the disposable test stack, with no
-  internal product bypass.
-- Exact required tests and focused unit/integration support tests.
-- This bug packet's evidence/state updates.
-- Separate upstream Bubbles source/selftest work routed to the framework owner.
+The following concrete product paths are the complete implementation path set
+changed at revision `ebf419414e1d1f824c77acf14025b1dda418c2a7`. Packet planning,
+state, and evidence artifacts are not product implementation files.
+
+### Implementation Files
+
+#### Scope 1 Paths
+
+- `cmd/core/main.go`
+- `cmd/core/wiring_assistant_facade.go`
+- `config/smackerel.yaml`
+- `docker-compose.yml`
+- `internal/assistant/intent/http_transport.go`
+- `internal/assistant/intent/http_transport_test.go`
+- `internal/config/assistant.go`
+- `internal/config/assistant_intent_compiler.go`
+- `internal/config/assistant_intent_compiler_test.go`
+- `internal/config/assistant_test.go`
+- `internal/config/validate_test.go`
+- `ml/app/main.py`
+- `ml/app/routes/intent_compile.py`
+- `ml/tests/conftest.py`
+- `ml/tests/test_intent_compiler.py`
+- `ml/tests/test_intent_compiler_provider_fixture.py`
+- `ml/tests/test_main.py`
+- `scripts/commands/config.sh`
+- `tests/e2e/intent-compiler-provider/provider.py`
+- `tests/e2e/stub-providers/nginx.conf`
+- `tests/integration/assistant/bug069005_runtime_canary_test.go`
+
+#### Scope 2 Paths
+
+- `cmd/core/wiring_assistant_actions.go`
+- `internal/agent/tools/microtools/location_normalize.go`
+- `internal/agent/tools/microtools/location_normalize_openmeteo.go`
+- `internal/agent/tools/microtools/location_normalize_openmeteo_test.go`
+- `internal/agent/tools/weather/tool.go`
+- `internal/assistant/compiled_interactions.go`
+- `internal/assistant/context/store.go`
+- `internal/assistant/facade.go`
+
+#### Scope 3 Paths
+
+- `tests/e2e/assistant/annotation_intent_test.go`
+- `tests/e2e/assistant/http_confirm_test.go`
+- `tests/e2e/assistant/http_disambiguation_test.go`
+- `tests/e2e/assistant/intent_clarify_test.go`
+- `tests/e2e/assistant/intent_side_effect_test.go`
+- `tests/e2e/assistant/required_compiler_state_helpers_test.go`
 
 ## Mechanical Excluded List
 
@@ -43,7 +83,7 @@ Links: [bug.md](bug.md) | [spec.md](spec.md) | [design.md](design.md) | [report.
 |-------|------|------------|--------------|--------|
 | 1 | Compiler SST, provider transport, and core wiring | none | SCN-BUG069005-001, SCN-BUG069005-002 | In Progress |
 | 2 | Persistent disambiguation and confirmation state | Scope 1 | SCN-BUG069005-003, SCN-BUG069005-004, SCN-BUG069005-005 | In Progress |
-| 3 | Strict required E2E and framework skip-guard closure | Scopes 1, 2 | all five | Not Started |
+| 3 | Strict required E2E and product guard proof | Scopes 1, 2 | all five | Not Started |
 
 ## Scope 1: Compiler SST, provider transport, and core wiring
 
@@ -85,13 +125,27 @@ Scenario: SCN-BUG069005-002 - Springfield ambiguity creates a persistent choice
 
 ### Allowed Files
 
-- `config/smackerel.yaml` compiler block and generated test env via generator
-- `scripts/commands/config.sh` only if an existing compiler key is not emitted
-- `internal/config/assistant_intent_compiler*.go`
-- `internal/assistant/intent/**`
-- `ml/app/**` compiler route/provider contract
+- `cmd/core/main.go`
 - `cmd/core/wiring_assistant_facade.go`
-- focused test-stack provider composition and tests
+- `config/smackerel.yaml`
+- `docker-compose.yml`
+- `internal/assistant/intent/http_transport.go`
+- `internal/assistant/intent/http_transport_test.go`
+- `internal/config/assistant.go`
+- `internal/config/assistant_intent_compiler.go`
+- `internal/config/assistant_intent_compiler_test.go`
+- `internal/config/assistant_test.go`
+- `internal/config/validate_test.go`
+- `ml/app/main.py`
+- `ml/app/routes/intent_compile.py`
+- `ml/tests/conftest.py`
+- `ml/tests/test_intent_compiler.py`
+- `ml/tests/test_intent_compiler_provider_fixture.py`
+- `ml/tests/test_main.py`
+- `scripts/commands/config.sh`
+- `tests/e2e/intent-compiler-provider/provider.py`
+- `tests/e2e/stub-providers/nginx.conf`
+- `tests/integration/assistant/bug069005_runtime_canary_test.go`
 
 ### Excluded Files
 
@@ -332,11 +386,14 @@ Scenario: SCN-BUG069005-005 - Confirm acceptance executes the gated action once
 
 ### Allowed Files
 
-- existing assistant facade clarification/write composition
-- existing disambiguation and confirm machine adapters
-- existing conversation pending-state DTO/store methods
-- HTTP response mapping of already-declared fields
-- focused integration and E2E tests
+- `cmd/core/wiring_assistant_actions.go`
+- `internal/agent/tools/microtools/location_normalize.go`
+- `internal/agent/tools/microtools/location_normalize_openmeteo.go`
+- `internal/agent/tools/microtools/location_normalize_openmeteo_test.go`
+- `internal/agent/tools/weather/tool.go`
+- `internal/assistant/compiled_interactions.go`
+- `internal/assistant/context/store.go`
+- `internal/assistant/facade.go`
 
 ### Excluded Files
 
@@ -491,7 +548,7 @@ Scenario: SCN-BUG069005-005 - Confirm acceptance executes the gated action once
 
 All items require current-session command evidence before checking.
 
-## Scope 3: Strict required E2E and framework skip-guard closure
+## Scope 3: Strict required E2E and product guard proof
 
 **Status:** Not Started
 **Priority:** P0
@@ -514,18 +571,22 @@ Scenario: SCN-BUG069005-006 - Required tests fail closed instead of skipping
    the exact five required tests; absent behavior becomes a fatal assertion.
 2. Run one exact repo-CLI selector proving five passes and zero skips.
 3. Run the broader assistant E2E package and regression scans.
-4. Route the generic guard change to upstream Bubbles implementation/test
-   owners; consume it only after canonical propagation.
+4. Record the generic Go skip-family detection gap as a non-product route to
+   `bubbles.implement` in the canonical Bubbles source repository; product
+   certification does not wait for propagation when the exact five execute
+   five of five with zero skips and the installed product regression guards
+   pass.
 5. Run packet artifact lint and traceability, then route certification to
    `bubbles.validate`.
 
 ### Allowed Files
 
-- the exact five required E2E test files
-- focused shared E2E helpers needed for deterministic provider/state setup
-- this packet's report/state evidence
-- separate upstream Bubbles guard and selftest work in the Bubbles source repo
-  under its owning workflow
+- `tests/e2e/assistant/annotation_intent_test.go`
+- `tests/e2e/assistant/http_confirm_test.go`
+- `tests/e2e/assistant/http_disambiguation_test.go`
+- `tests/e2e/assistant/intent_clarify_test.go`
+- `tests/e2e/assistant/intent_side_effect_test.go`
+- `tests/e2e/assistant/required_compiler_state_helpers_test.go`
 
 ### Excluded Files
 
@@ -535,13 +596,34 @@ Scenario: SCN-BUG069005-006 - Required tests fail closed instead of skipping
 - parent Spec 069 artifacts before validate-owned reconciliation
 - unrelated product tests or runtime code
 
+### Foreign Framework Routing Observation
+
+- **Finding:** The generic Bubbles regression-quality guard does not yet
+   identify Go `t.Skip`, `t.Skipf`, and `t.SkipNow` as required-test bailouts.
+- **Owner:** `bubbles.implement` in the canonical Bubbles source repository
+   (`<bubbles-repo>`), targeting
+   `bubbles/scripts/regression-quality-guard.sh` and
+   `bubbles/scripts/regression-quality-guard-selftest.sh`.
+- **Product boundary:** Smackerel's installed `.github/bubbles/**` remains
+   unchanged. This foreign framework observation is not product implementation
+   work and is not a product-certification prerequisite when TP-BUG069005-10
+   reports five of five passes with zero skips and TP-BUG069005-11 plus the
+   existing product regression guards pass.
+- **Claim:** This packet records the route only; it makes no claim that the
+   upstream Bubbles gap is fixed.
+- **Foreign verification reference:** TP-BUG069005-12 remains owned by the
+   canonical Bubbles workflow: upstream
+   `bubbles/scripts/regression-quality-guard-selftest.sh` must prove that a Go
+   `t.Skipf` fixture exits non-zero with `REQUIRED_TEST_SKIP` during upstream
+   Bubbles framework validation. This reference is not a Smackerel Test Plan
+   row or product DoD item.
+
 ### Test Plan
 
 | Row | Scenario | Category | File/Location | Expected Test Title | Command | Live System |
 |-----|----------|----------|---------------|---------------------|---------|-------------|
 | TP-BUG069005-10 | SCN-BUG069005-006 | Regression E2E API | `tests/e2e/assistant/http_confirm_test.go` | exact five manifest-required test identities selected together | `./smackerel.sh test e2e --go-run '<anchored exact-five selector>'` | Yes |
 | TP-BUG069005-11 | SCN-BUG069005-006 | guard | `tests/e2e/assistant/http_confirm_test.go` | zero required-test skip-family violations across all five files | `bash .github/bubbles/scripts/regression-quality-guard.sh --bugfix <five files>` | No |
-| TP-BUG069005-12 | SCN-BUG069005-006 | framework selftest | upstream `bubbles/scripts/regression-quality-guard-selftest.sh` | Go `t.Skipf` fixture exits non-zero with `REQUIRED_TEST_SKIP` | upstream Bubbles framework validation | No |
 | TP-BUG069005-13 | SCN-BUG069005-006 | Regression E2E API | `tests/e2e/assistant/http_live_stack_test.go` | broader assistant protected-scenario regression | `./smackerel.sh test e2e --go-run '<assistant protected selector>'` | Yes |
 
 ### Definition of Done
@@ -550,7 +632,6 @@ Scenario: SCN-BUG069005-006 - Required tests fail closed instead of skipping
 - [ ] SCN-BUG069005-006 - Required tests fail closed instead of skipping: absent compiler, disambiguation, or confirmation behavior fails the responsible test, and a healthy exact-five run reports five passes and zero skips.
 - [ ] Pre-fix semantic RED and post-fix GREEN for the same exact five tests are both recorded with claim-source provenance.
 - [ ] TP-BUG069005-11 rejects every Go skip-family bailout in the protected files and reports zero violations after repair.
-- [ ] TP-BUG069005-12 is implemented upstream by the Bubbles owner, passes framework validation, and reaches Smackerel only through canonical propagation.
 - [ ] TP-BUG069005-13 passes with no adjacent assistant regression and no required skip.
 - [ ] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior pass.
 - [ ] Broader E2E regression suite passes.
