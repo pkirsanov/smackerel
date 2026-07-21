@@ -32,6 +32,8 @@ import (
 func TestAssistantHTTPE2E_DisambiguationChoiceResolvesPendingTurn(t *testing.T) {
 	stack := loadHTTPTurnLiveStack(t)
 	waitHTTPTurnHealthy(t, stack, 30*time.Second)
+	isolateRequiredAssistantConversation(t, stack)
+	pool := openRequiredAssistantPool(t)
 
 	// Turn 1: send a text known to trigger borderline routing /
 	// disambiguation. The exact phrasing is intentionally ambiguous
@@ -42,7 +44,7 @@ func TestAssistantHTTPE2E_DisambiguationChoiceResolvesPendingTurn(t *testing.T) 
 		TransportMessageID: "e2e-scope3-disambig-1-" + timestamp(),
 		Kind:               string(contracts.KindText),
 		TransportHint:      "web",
-		Text:               "weather",
+		Text:               "what is the weather in Springfield",
 	}
 	resp1, body1 := postAssistantTurn(t, stack, turn1Req)
 	if resp1.StatusCode != 200 {
@@ -56,11 +58,13 @@ func TestAssistantHTTPE2E_DisambiguationChoiceResolvesPendingTurn(t *testing.T) 
 		t.Fatalf("turn 1 facade_invoked = false; want true")
 	}
 	if env1.DisambiguationPrompt == nil {
-		t.Skipf("turn 1 did not produce a DisambiguationPrompt on the live stack (status=%q, capture_route=%v); cannot exercise round-trip without a deterministic disambig fixture",
-			env1.Status, env1.CaptureRoute)
+		t.Fatalf("turn 1 returned no required DisambiguationPrompt (status=%q, capture_route=%v, body=%q)", env1.Status, env1.CaptureRoute, env1.Body)
 	}
-	if len(env1.DisambiguationPrompt.Choices) == 0 {
-		t.Fatalf("turn 1 returned DisambiguationPrompt with zero choices")
+	if len(env1.DisambiguationPrompt.Choices) < 2 {
+		t.Fatalf("turn 1 returned %d choices, want at least 2", len(env1.DisambiguationPrompt.Choices))
+	}
+	if got := pendingDisambiguationChoiceCount(t, pool, env1.DisambiguationPrompt.DisambiguationRef); got < 2 {
+		t.Fatalf("persisted turn 1 choices = %d, want at least 2", got)
 	}
 	choice := env1.DisambiguationPrompt.Choices[0]
 
@@ -92,5 +96,11 @@ func TestAssistantHTTPE2E_DisambiguationChoiceResolvesPendingTurn(t *testing.T) 
 	// pinning the same ref (would mean pending was not cleared).
 	if env2.DisambiguationPrompt != nil && env2.DisambiguationPrompt.DisambiguationRef == turn2Req.DisambiguationRef {
 		t.Errorf("turn 2 returned the same DisambiguationPrompt; pending was not resolved")
+	}
+	if env2.CaptureRoute {
+		t.Fatalf("selected Springfield candidate resumed into capture fallback: status=%q body=%q", env2.Status, env2.Body)
+	}
+	if got := pendingDisambiguationRows(t, pool, turn2Req.DisambiguationRef); got != 0 {
+		t.Fatalf("pending disambiguation rows after selection = %d, want 0", got)
 	}
 }

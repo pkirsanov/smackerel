@@ -308,6 +308,44 @@ func handleWeatherLookup(ctx context.Context, raw json.RawMessage) (json.RawMess
 	return marshalForecast(fresh)
 }
 
+// Lookup executes the registered weather capability without routing through an
+// LLM scenario. It is used when a prior persistent disambiguation has already
+// resolved the structured location server-side.
+func Lookup(ctx context.Context, location string, window ForecastWindow) (Forecast, error) {
+	svc, err := loadServices()
+	if err != nil {
+		return Forecast{}, err
+	}
+	location = strings.TrimSpace(location)
+	if location == "" {
+		return Forecast{}, errors.New("weather_lookup_empty_location")
+	}
+	if window == "" {
+		window = WindowNow
+	}
+	switch window {
+	case WindowNow, WindowToday, WindowTomorrow, WindowWeekend:
+	default:
+		return Forecast{}, fmt.Errorf("weather_lookup_invalid_window: %q", window)
+	}
+	providerName := svc.Provider.Name()
+	if cached, ok := svc.Cache.Get(providerName, location, window); ok {
+		return cached, nil
+	}
+	fresh, err := svc.Provider.Lookup(ctx, location, window)
+	if err != nil {
+		return Forecast{}, fmt.Errorf("weather_lookup_provider_error: %w", err)
+	}
+	if fresh.ProviderName == "" {
+		fresh.ProviderName = providerName
+	}
+	if fresh.RetrievedAt.IsZero() {
+		fresh.RetrievedAt = time.Now().UTC()
+	}
+	svc.Cache.Put(providerName, location, window, fresh)
+	return fresh, nil
+}
+
 func marshalForecast(f Forecast) (json.RawMessage, error) {
 	// Daily is always non-nil on the success path (forecast_days >= 1),
 	// but coalesce a nil slice to an empty array so the strict
