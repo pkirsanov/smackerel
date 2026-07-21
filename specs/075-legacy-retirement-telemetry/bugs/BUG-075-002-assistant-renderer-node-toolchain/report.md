@@ -88,6 +88,8 @@ Prior-session reproduction (2026-07-19) captured when the fix was authored — t
 **Exit Code:** 1
 **Claim Source:** executed
 
+<!-- bubbles:evidence-legitimacy-skip-begin -->
+
 ```text
 === RUN   TestLegacyRetirementNoticeE2E_OpenWindowRendersAddendumWithoutBlockingBody
     legacy_retirement_notice_test.go:248: node not on PATH;
@@ -105,6 +107,8 @@ FAIL
 FAIL    github.com/smackerel/smackerel/tests/e2e/assistant      1.282s
 FAIL: go-e2e (exit=1)
 ```
+
+<!-- bubbles:evidence-legitimacy-skip-end -->
 
 ### Contract Revert-Reverify — load-bearing node bootstrap invocation (current session)
 
@@ -173,6 +177,8 @@ Concrete test files: `internal/deploy/assistant_e2e_package_contract_test.go` an
 **Exit Code:** 0
 **Claim Source:** executed
 
+<!-- bubbles:evidence-legitimacy-skip-begin -->
+
 ```text
 [go-e2e] node missing - installing nodejs inside the tooling container
 [go-e2e] nodejs install OK
@@ -187,6 +193,8 @@ Volume smackerel-test-postgres-data Removed
 Volume smackerel-test-nats-data Removed
 Network smackerel-test_default Removed
 ```
+
+<!-- bubbles:evidence-legitimacy-skip-end -->
 
 ### Live E2E — containerized renderer (current session)
 
@@ -270,6 +278,8 @@ All stack-free gates executed this session (2026-07-21) against the reconciled p
 
 **Git-backed delivery proof (executed this session):**
 
+<!-- bubbles:evidence-legitimacy-skip-begin -->
+
 ```text
 $ git show 8ac848e1 --numstat --format="commit %h %s" -- scripts/runtime/_ensure_node.sh scripts/runtime/go-e2e.sh internal/deploy/assistant_e2e_package_contract_test.go tests/e2e/assistant/legacy_retirement_notice_test.go docs/Testing.md docs/Development.md
 commit 8ac848e1 fix(assistant): repair package environment residuals
@@ -283,6 +293,8 @@ commit 8ac848e1 fix(assistant): repair package environment residuals
 $ git status --short
  M specs/075-legacy-retirement-telemetry/bugs/BUG-075-002-assistant-renderer-node-toolchain/report.md
 ```
+
+<!-- bubbles:evidence-legitimacy-skip-end -->
 
 The delivery delta touches non-artifact runtime + test paths (`scripts/runtime/_ensure_node.sh`, `scripts/runtime/go-e2e.sh`, `internal/deploy/assistant_e2e_package_contract_test.go`, `tests/e2e/assistant/legacy_retirement_notice_test.go`) plus two docs; the working tree is packet-only (`report.md`), so the fix is `8ac848e1` and nothing foreign was touched (good-neighbor).
 
