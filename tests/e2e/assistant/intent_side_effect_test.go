@@ -37,6 +37,8 @@ import (
 func TestIntentCompilerE2E_ListWriteRequiresConfirmationBeforePersistence(t *testing.T) {
 	stack := loadHTTPTurnLiveStack(t)
 	waitHTTPTurnHealthy(t, stack, 30*time.Second)
+	isolateRequiredAssistantConversation(t, stack)
+	pool := openRequiredAssistantPool(t)
 
 	turnID := "e2e-scope1c-068a03-" + timestamp()
 	req := httpadapter.TurnRequest{
@@ -61,14 +63,19 @@ func TestIntentCompilerE2E_ListWriteRequiresConfirmationBeforePersistence(t *tes
 	// this check (write intent fired AND no ConfirmCard) lives in
 	// TestIntentCompilerE2E_WriteAndStateMutationNeverBypassConfirmGate.
 	if env.ConfirmCard == nil {
-		t.Skipf("live compiler did not classify %q as a confirmation-gated write on this run (status=%q, capture_route=%v); list-write confirmation assertion skipped per LLM nondeterminism policy",
-			req.Text, env.Status, env.CaptureRoute)
+		t.Fatalf("required list write returned no ConfirmCard (status=%q, capture_route=%v, body=%q)", env.Status, env.CaptureRoute, env.Body)
 	}
 	if env.ConfirmCard.ConfirmRef == "" {
 		t.Errorf("ConfirmCard present but ConfirmRef empty; cannot round-trip the confirmation")
 	}
 	if env.ConfirmCard.PositiveLabel == "" || env.ConfirmCard.NegativeLabel == "" {
 		t.Errorf("ConfirmCard missing labels; UX cannot render a confirmation")
+	}
+	if env.CaptureRoute {
+		t.Fatal("list confirmation was mislabeled as capture fallback")
+	}
+	if got := listCountBySourceQuery(t, pool, turnID); got != 0 {
+		t.Fatalf("list count before confirmation = %d, want 0", got)
 	}
 }
 

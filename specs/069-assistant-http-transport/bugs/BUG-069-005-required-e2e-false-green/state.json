@@ -9,14 +9,14 @@
   "releaseTrain": "mvp",
   "flagsIntroduced": [],
   "status": "in_progress",
-  "lastUpdatedAt": "2026-07-20T23:07:25Z",
+  "lastUpdatedAt": "2026-07-21T01:12:06Z",
   "execution": {
-    "activeAgent": "bubbles.bug",
-    "currentPhase": "analysis",
-    "currentScope": null,
+    "activeAgent": "bubbles.implement",
+    "currentPhase": "implement",
+    "currentScope": "Scopes 1-2",
     "executionModel": "direct-authorized-runner",
     "runStartedAt": "2026-07-20T23:07:25Z",
-    "lastUpdatedAt": "2026-07-20T23:07:25Z",
+    "lastUpdatedAt": "2026-07-21T01:12:06Z",
     "completedPhaseClaims": [],
     "completedScopes": [],
     "executionHistory": [
@@ -32,6 +32,16 @@
         "claimSource": "executed-static-and-accepted-handoff",
         "outcome": "route_required",
         "summary": "Created one consolidated packet after reconciling Specs 068, 069, 071, and 076; confirmed required scenarios are current; statically confirmed compiler-disabled test config, missing production compiler wiring and ML route, state-machine response gaps, five t.Skipf bailouts, and missing generic guard coverage. No implementation or live tests were run."
+      },
+      {
+        "at": "2026-07-21T01:12:06Z",
+        "agent": "bubbles.implement",
+        "phasesExecuted": [
+          "implement"
+        ],
+        "claimSource": "executed",
+        "outcome": "route_required",
+        "summary": "Implemented product-owned Scopes 1 and 2 plus implementation-adjacent strict required tests. Go/Python units, focused live integration, exact five required E2E, full assistant E2E, check, lint, format, artifact lint, traceability, and installed regression guard passed. Scopes remain in_progress because planning-owned concrete path reconciliation and the upstream Bubbles Go skip-family guard remain open; certification was not modified."
       }
     ]
   },
@@ -92,7 +102,9 @@
       "targetAgent": "bubbles.implement",
       "reason": "Implement Scopes 1 and 2: real compiler provider/core wiring plus persistent disambiguation and confirmation composition; preserve exact five protected test identities.",
       "packetRef": "design.md#minimal-correct-repair",
-      "status": "open"
+      "status": "resolved",
+      "resolvedAt": "2026-07-21T01:12:06Z",
+      "resolutionRef": "report.md#post-fix-evidence"
     },
     {
       "id": "TR-BUG-069-005-FRAMEWORK-001",
@@ -123,13 +135,24 @@
       "severity": "high",
       "summary": "Parent Spec 069 completion evidence is contradicted; parent artifact reconciliation is validate-owned after the fix is proven.",
       "claimSource": "interpreted"
+    },
+    {
+      "severity": "info",
+      "summary": "Product GREEN: exact five required assistant E2E tests passed with zero skips; full assistant E2E package passed with nine unrelated optional/profile-dependent skips.",
+      "claimSource": "executed"
+    },
+    {
+      "severity": "medium",
+      "summary": "Implementation reality scan found zero violations and one planning-format warning because Scope 1/2 declare implementation file families rather than concrete paths.",
+      "claimSource": "executed"
     }
   ],
   "routing": {
     "outcome": "route_required",
-    "nextRequiredOwner": "bubbles.implement",
-    "reason": "The packet is complete; product runtime/state repair and a separately owned upstream framework guard repair must precede test and validation phases.",
+    "nextRequiredOwner": "bubbles.plan",
+    "reason": "Product runtime and state repair is GREEN; planning-owned concrete path reconciliation and the separately owned upstream framework guard repair remain before certification.",
     "subsequentOwners": [
+      "bubbles.implement",
       "bubbles.test",
       "bubbles.regression",
       "bubbles.security",

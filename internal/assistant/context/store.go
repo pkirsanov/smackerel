@@ -22,6 +22,7 @@ package assistantctx
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 )
 
@@ -83,6 +84,14 @@ type PendingDisambig struct {
 	DisambiguationRef string             `json:"disambiguation_ref"`
 	Choices           []DisambigChoiceID `json:"choices"`
 	ExpiresAt         time.Time          `json:"expires_at"`
+	Resume            *DisambigResume    `json:"resume,omitempty"`
+}
+
+// DisambigResume preserves the original compiler turn while the user selects
+// a server-resolved candidate. The selected value is read from Choices; callback
+// payloads never supply business arguments.
+type DisambigResume struct {
+	CompiledIntent json.RawMessage `json:"compiled_intent"`
 }
 
 // PendingClarify is the persisted shadow of an outstanding spec 068
@@ -118,8 +127,10 @@ const PendingClarifySchemaV1 = "v1"
 // number is preserved across the persist boundary; labels are re-rendered
 // from the skills manifest on the second turn.
 type DisambigChoiceID struct {
-	Number int    `json:"number"`
-	ID     string `json:"id"`
+	Number int             `json:"number"`
+	ID     string          `json:"id"`
+	Label  string          `json:"label,omitempty"`
+	Value  json.RawMessage `json:"value,omitempty"`
 }
 
 // Store is the persistence interface the facade depends on. The

@@ -35,6 +35,8 @@ import (
 func TestIntentCompilerE2E_SpringfieldWeatherClarifiesLocation(t *testing.T) {
 	stack := loadHTTPTurnLiveStack(t)
 	waitHTTPTurnHealthy(t, stack, 30*time.Second)
+	isolateRequiredAssistantConversation(t, stack)
+	pool := openRequiredAssistantPool(t)
 
 	turnID := "e2e-scope1c-068a05-" + timestamp()
 	req := httpadapter.TurnRequest{
@@ -54,14 +56,19 @@ func TestIntentCompilerE2E_SpringfieldWeatherClarifiesLocation(t *testing.T) {
 	}
 
 	if env.DisambiguationPrompt == nil {
-		t.Skipf("live compiler did not produce a DisambiguationPrompt for %q on this run (status=%q, capture_route=%v); clarification positive assertion skipped per LLM nondeterminism policy",
-			req.Text, env.Status, env.CaptureRoute)
+		t.Fatalf("required Springfield turn returned no DisambiguationPrompt (status=%q, capture_route=%v, body=%q)", env.Status, env.CaptureRoute, env.Body)
 	}
 	if env.DisambiguationPrompt.DisambiguationRef == "" {
 		t.Errorf("DisambiguationPrompt has empty DisambiguationRef; cannot round-trip clarification")
 	}
 	if len(env.DisambiguationPrompt.Choices) < 2 {
 		t.Errorf("Springfield clarification must offer at least 2 choices; got %d", len(env.DisambiguationPrompt.Choices))
+	}
+	if env.Status == string(contracts.StatusCheckingWeather) {
+		t.Fatal("ambiguous Springfield turn reached weather lookup before selection")
+	}
+	if got := pendingDisambiguationChoiceCount(t, pool, env.DisambiguationPrompt.DisambiguationRef); got < 2 {
+		t.Fatalf("persisted Springfield choices = %d, want at least 2", got)
 	}
 }
 

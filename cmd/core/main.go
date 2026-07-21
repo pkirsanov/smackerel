@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/smackerel/smackerel/internal/api"
+	"github.com/smackerel/smackerel/internal/assistant"
 	"github.com/smackerel/smackerel/internal/assistant/httpadapter"
 	"github.com/smackerel/smackerel/internal/assistant/transportidentity"
 	"github.com/smackerel/smackerel/internal/backup"
@@ -335,7 +336,11 @@ func run() error {
 	// misconfiguration (nil cfg, missing tokens, etc.) still surfaces
 	// loud via repeated error logs; transient sidecar unavailability
 	// drains naturally as ml-sidecar finishes its own startup.
-	go runAssistantFacadeWiringWithRetry(ctx, cfg, svc, agentRT, tgBot, scenarioDir)
+	compiledActions, err := newAssistantCompiledActionExecutor(listStore, deps.AnnotationHandlers.Store)
+	if err != nil {
+		return fmt.Errorf("assistant compiled action wiring: %w", err)
+	}
+	go runAssistantFacadeWiringWithRetry(ctx, cfg, svc, agentRT, tgBot, scenarioDir, compiledActions)
 
 	// Start digest scheduler + intelligence jobs
 	sched := scheduler.New(svc.digestGen, tgBot, svc.intEngine, svc.topicLifecycle)
@@ -521,13 +526,14 @@ func runAssistantFacadeWiringWithRetry(
 	agentRT *agentRuntime,
 	tgBot *telegram.Bot,
 	scenarioDir string,
+	compiledActions assistant.CompiledActionExecutor,
 ) {
 	backoff := 2 * time.Second
 	const maxBackoff = 30 * time.Second
 	attempt := 0
 	for {
 		attempt++
-		err := wireAssistantFacade(ctx, cfg, svc, agentRT, tgBot, scenarioDir)
+		err := wireAssistantFacade(ctx, cfg, svc, agentRT, tgBot, scenarioDir, compiledActions)
 		if err == nil {
 			if attempt > 1 {
 				slog.Info("assistant facade wired after deferred retries", "attempts", attempt)

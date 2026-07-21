@@ -56,6 +56,26 @@ def test_check_required_config_requires_named_keys(monkeypatch):
         _check_required_config()
 
 
+@pytest.mark.parametrize(
+    "key",
+    [
+        "ASSISTANT_INTENT_COMPILER_ENABLED",
+        "ASSISTANT_INTENT_COMPILER_MODEL_ROLE",
+        "ASSISTANT_INTENT_COMPILER_PROVIDER_NAME",
+        "ASSISTANT_INTENT_COMPILER_PROVIDER_URL",
+        "ASSISTANT_INTENT_COMPILER_PROMPT_CONTRACT_VERSION",
+        "ASSISTANT_INTENT_COMPILER_SCHEMA_VERSION",
+        "ASSISTANT_INTENT_COMPILER_TIMEOUT_MS",
+    ],
+)
+def test_check_required_config_requires_intent_compiler_keys(monkeypatch, key):
+    _set_required_env_minus(monkeypatch, "test", auth_token="unit-test-auth-token")
+    monkeypatch.delenv(key, raising=False)
+
+    with pytest.raises(SystemExit):
+        _check_required_config()
+
+
 def test_check_required_config_allows_ollama_without_api_key(monkeypatch):
     monkeypatch.setenv("NATS_URL", "nats://nats:4222")
     monkeypatch.setenv("LLM_PROVIDER", "ollama")

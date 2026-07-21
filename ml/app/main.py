@@ -5,6 +5,7 @@ import logging
 import os
 import sys
 from contextlib import asynccontextmanager
+from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, FastAPI, HTTPException
 from fastapi.responses import JSONResponse, PlainTextResponse
@@ -54,6 +55,15 @@ def _check_required_config() -> dict[str, str]:
         # BUG-026-008 — exactly one corrective call after parsed synthesis JSON
         # fails schema validation. SST-owned and required for every provider.
         "ML_SYNTHESIS_SCHEMA_REPAIR_ATTEMPTS",
+        # BUG-069-005 — compiler route/provider contract. Required even when
+        # disabled so every environment declares its posture explicitly.
+        "ASSISTANT_INTENT_COMPILER_ENABLED",
+        "ASSISTANT_INTENT_COMPILER_MODEL_ROLE",
+        "ASSISTANT_INTENT_COMPILER_PROVIDER_NAME",
+        "ASSISTANT_INTENT_COMPILER_PROVIDER_URL",
+        "ASSISTANT_INTENT_COMPILER_PROMPT_CONTRACT_VERSION",
+        "ASSISTANT_INTENT_COMPILER_SCHEMA_VERSION",
+        "ASSISTANT_INTENT_COMPILER_TIMEOUT_MS",
     ]
     required: dict[str, str] = {}
     missing: list[str] = []
@@ -186,6 +196,23 @@ def _check_required_config() -> dict[str, str]:
         sys.exit(1)
     if schema_repair_attempts != 1:
         logger.error("ML_SYNTHESIS_SCHEMA_REPAIR_ATTEMPTS must be the integer 1")
+        sys.exit(1)
+
+    compiler_enabled = required["ASSISTANT_INTENT_COMPILER_ENABLED"].lower()
+    if compiler_enabled not in ("true", "false"):
+        logger.error("ASSISTANT_INTENT_COMPILER_ENABLED must be true or false")
+        sys.exit(1)
+    compiler_url = urlparse(required["ASSISTANT_INTENT_COMPILER_PROVIDER_URL"])
+    if compiler_url.scheme not in ("http", "https") or not compiler_url.netloc:
+        logger.error("ASSISTANT_INTENT_COMPILER_PROVIDER_URL must be an absolute HTTP(S) URL")
+        sys.exit(1)
+    try:
+        compiler_timeout_ms = int(required["ASSISTANT_INTENT_COMPILER_TIMEOUT_MS"])
+    except ValueError:
+        logger.error("ASSISTANT_INTENT_COMPILER_TIMEOUT_MS must be a positive integer")
+        sys.exit(1)
+    if compiler_timeout_ms < 1:
+        logger.error("ASSISTANT_INTENT_COMPILER_TIMEOUT_MS must be a positive integer")
         sys.exit(1)
 
     # Spec 050 FR-050-002 — embedding worker pool size MUST be a positive
@@ -484,6 +511,10 @@ app.include_router(authed_router)
 from .routes.chat import router as openknowledge_chat_router  # noqa: E402
 
 app.include_router(openknowledge_chat_router, dependencies=[Depends(verify_auth)])
+
+from .routes.intent_compile import router as intent_compile_router  # noqa: E402
+
+app.include_router(intent_compile_router, dependencies=[Depends(verify_auth)])
 
 # Spec 083 Scope 05 — card-rewards strict-schema rotating-category extraction.
 # Mounted under verify_auth so POST /extract-card-categories inherits the same

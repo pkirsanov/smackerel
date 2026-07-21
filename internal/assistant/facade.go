@@ -200,6 +200,7 @@ type Facade struct {
 	// eligible BandLow and open_knowledge no-ground turns invoke
 	// Policy.CaptureForUser so the facade itself writes the Idea.
 	captureFallbackPolicy capturefallback.Policy
+	compiledInteractions  *compiledInteractions
 }
 
 // NewFacade constructs a Facade. All non-Now config fields and every
@@ -582,6 +583,24 @@ func (f *Facade) Handle(ctx context.Context, msg contracts.AssistantMessage) (re
 		return resp, nil
 	}
 
+	if confirmResp, handled, confirmErr := f.handlePendingConfirm(ctx, msg, conv, emittedAt); handled {
+		return confirmResp, confirmErr
+	}
+
+	if f.compiledInteractions != nil {
+		resumedMsg, resumedConv, resumedResp, handled, resumeErr := f.resolveCompilerDisambig(
+			ctx, msg, conv, transportLabel, emittedAt,
+		)
+		if resumeErr != nil {
+			return contracts.AssistantResponse{}, resumeErr
+		}
+		if handled {
+			return resumedResp, nil
+		}
+		msg = resumedMsg
+		conv = resumedConv
+	}
+
 	// --- Step 1.5: pending disambiguation resolver ---
 	//
 	// Spec 061 SCOPE-09 — when the prior turn left a PendingDisambig
@@ -821,6 +840,15 @@ func (f *Facade) Handle(ctx context.Context, msg contracts.AssistantMessage) (re
 	// when non-nil/non-empty; otherwise a deterministic fallback that
 	// names the missing slots.
 	if compiledOK && conv.PendingConfirm == nil && requiresClarification(compiled) {
+		if f.compiledInteractions != nil {
+			clarifyResp, proposed, clarifyErr := f.proposeCompilerDisambiguation(ctx, msg, conv, compiled, emittedAt)
+			if clarifyErr != nil {
+				return contracts.AssistantResponse{}, fmt.Errorf("assistant: compiler disambiguation: %w", clarifyErr)
+			}
+			if proposed {
+				return clarifyResp, nil
+			}
+		}
 		body := buildClarificationBody(compiled)
 		resp = contracts.AssistantResponse{
 			Status:     contracts.StatusUnavailable,
@@ -859,6 +887,13 @@ func (f *Facade) Handle(ctx context.Context, msg contracts.AssistantMessage) (re
 	// confirm-reply path.
 	if compiledOK && conv.PendingConfirm == nil && intent.RequiresConfirmation(compiled) {
 		intent.SideEffectBlockedTotal.WithLabelValues(string(compiled.SideEffectClass), "missing_confirmation").Inc()
+		if f.compiledInteractions != nil {
+			confirmResp, confirmErr := f.proposeCompiledAction(ctx, msg, conv, compiled, emittedAt)
+			if confirmErr != nil {
+				return contracts.AssistantResponse{}, fmt.Errorf("assistant: propose compiled action: %w", confirmErr)
+			}
+			return confirmResp, nil
+		}
 		resp = contracts.AssistantResponse{
 			Status:       contracts.StatusUnavailable,
 			ErrorCause:   contracts.ErrMissingScope,

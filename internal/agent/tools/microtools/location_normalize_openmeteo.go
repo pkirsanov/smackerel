@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strings"
 )
 
 // OpenMeteoGeocoder is the Open-Meteo LocationProvider.
@@ -88,14 +89,23 @@ func (p *OpenMeteoGeocoder) Geocode(ctx context.Context, query string) ([]Locati
 		return nil, nil
 	}
 	out := make([]LocationCandidate, 0, len(g.Results))
+	sameNameAmbiguity := len(g.Results) > 1 &&
+		strings.EqualFold(strings.TrimSpace(g.Results[0].Name), strings.TrimSpace(g.Results[1].Name))
 	for i, r := range g.Results {
+		confidence := 1.0 / float64(i+1)
+		if sameNameAmbiguity {
+			// The provider has no confidence field. Multiple top results with
+			// the same place name but different regions are equally plausible;
+			// retaining a rank-derived 1.0/0.5 split would falsely resolve one.
+			confidence = 0.5
+		}
 		out = append(out, LocationCandidate{
 			Name:       r.Name,
 			Admin1:     r.Admin1,
 			Country:    r.Country,
 			Latitude:   r.Latitude,
 			Longitude:  r.Longitude,
-			Confidence: 1.0 / float64(i+1),
+			Confidence: confidence,
 		})
 	}
 	return out, nil

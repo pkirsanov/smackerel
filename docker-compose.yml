@@ -379,6 +379,43 @@ services:
       com.bubbles.product: ${METRICS_SCRAPE_LABEL_PRODUCT}
       com.bubbles.service: test-stub
 
+  intent-compiler-provider:
+    build:
+      context: ./ml
+      dockerfile: Dockerfile
+      args:
+        VERSION: ${SMACKEREL_VERSION:?must be set in env file}
+        COMMIT_HASH: ${SMACKEREL_COMMIT:?must be set in env file}
+        BUILD_TIME: ${SMACKEREL_BUILD_TIME:?must be set in env file}
+    command: [ "python", "/fixture/provider.py" ]
+    profiles:
+      - test
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777,nosuid,noexec,nodev
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    volumes:
+      - ./tests/e2e/intent-compiler-provider/provider.py:/fixture/provider.py:ro
+    healthcheck:
+      test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8082/healthz')" ]
+      interval: 5s
+      timeout: 2s
+      retries: 5
+      start_period: 5s
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+    labels:
+      com.smackerel.component: intent-compiler-provider
+      com.smackerel.lifecycle: ephemeral
+      com.bubbles.product: ${METRICS_SCRAPE_LABEL_PRODUCT}
+      com.bubbles.service: intent-compiler-provider
+
   # Spec 061 SCOPE-09a design §8.3.2 Step 1 — Jaeger all-in-one sidecar
   # for OTel span emission. Lifecycle: ENABLED ONLY when the `test` or
   # `dev-otel` compose profile is selected (matches §18.4 stub-providers

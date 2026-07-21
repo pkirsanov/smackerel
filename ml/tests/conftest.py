@@ -85,3 +85,14 @@ os.environ.setdefault("ML_DOMAIN_OUTPUT_TOKEN_BUDGET", "4096")
 # generated it; dedicated adversarial tests delete/replace it to prove the
 # production resolver has no fallback.
 os.environ.setdefault("ML_SYNTHESIS_SCHEMA_REPAIR_ATTEMPTS", "1")
+
+# BUG-069-005 — explicit compiler provider posture used by ML unit tests. The
+# production module still requires every value with no fallback; dedicated
+# startup tests delete each key adversarially.
+os.environ.setdefault("ASSISTANT_INTENT_COMPILER_ENABLED", "true")
+os.environ.setdefault("ASSISTANT_INTENT_COMPILER_MODEL_ROLE", "assistant_intent_compiler")
+os.environ.setdefault("ASSISTANT_INTENT_COMPILER_PROVIDER_NAME", "deterministic-unit")
+os.environ.setdefault("ASSISTANT_INTENT_COMPILER_PROVIDER_URL", "http://intent-provider:8082")
+os.environ.setdefault("ASSISTANT_INTENT_COMPILER_PROMPT_CONTRACT_VERSION", "intent-compiler-v1")
+os.environ.setdefault("ASSISTANT_INTENT_COMPILER_SCHEMA_VERSION", "v1")
+os.environ.setdefault("ASSISTANT_INTENT_COMPILER_TIMEOUT_MS", "5000")

@@ -1397,13 +1397,12 @@ assistant:
   # Spec 068 SCOPE-1 — Structured Intent Compiler. SST zero-defaults
   # (Gate G028 / smackerel-no-defaults): EVERY key REQUIRED at the
   # generator boundary; missing values fail loud at startup. Ships
-  # `enabled: false` in this scope because the facade does not yet
-  # invoke the compiler in the routing path — Scope 2 wires that.
-  # When enabled=true the compiler calls the ML sidecar
+  # enabled user-facing transports require this compiler. When enabled=true
+  # the compiler calls the ML sidecar
   # POST /assistant/intent/compile and refuses to route raw text on
   # schema failure (spec.md Hard Constraints 2, 4, 5).
   intent_compiler:
-    enabled: false # REQUIRED: strict bool; Scope 2 flips this to true alongside facade insertion
+    enabled: true # REQUIRED: strict bool; every enabled user-facing assistant transport compiles before routing
     model_role: "assistant_intent_compiler" # REQUIRED: ML bridge model role used for compilation
     prompt_contract_version: "intent-compiler-v1" # REQUIRED: prompt contract version the sidecar must honor
     schema_version: "v1" # REQUIRED: CompiledIntent schema version the Go side accepts
@@ -1455,7 +1454,7 @@ assistant:
   # when enabled=false (every key must resolve explicitly).
   tools:
     location_normalize:
-      enabled: false # REQUIRED: strict bool ("true"|"false"); SCOPE-2 flips this to true
+      enabled: true # REQUIRED: compiler ambiguity path consumes this read-only resolver
       provider: "open-meteo" # REQUIRED: canonical-location backend selector ("open-meteo" supported in v1)
       timeout_ms: 2000 # REQUIRED: per-call provider deadline; > 0
       cache_ttl_seconds: 600 # REQUIRED: tool-local LRU TTL; > 0
@@ -2528,6 +2527,13 @@ environments:
     qf_decisions_base_url: "http://qf-e2e-runner:45003"
     qf_decisions_credential_ref: "qf-e2e-credential-ref"
     qf_decisions_packet_version: 99
+    # BUG-069-005 — required assistant E2E substitutes only the external
+    # compiler provider. Core, auth, ML route, persistence, and callbacks stay
+    # live. The service exists only in the Compose `test` profile.
+    intent_compiler_enabled: true
+    intent_compiler_provider_name: "deterministic-e2e"
+    intent_compiler_provider_url: "http://intent-compiler-provider:8082"
+    assistant_tools_location_normalize_enabled: true
   self-hosted:
     # Generic production-class seam. The external deployment owner replaces
     # every topology/profile/storage placeholder in app.env before compose.

@@ -41,12 +41,15 @@ import (
 
 	"github.com/smackerel/smackerel/internal/agent"
 	"github.com/smackerel/smackerel/internal/agent/embedder/sidecar"
+	"github.com/smackerel/smackerel/internal/agent/tools/microtools"
 	"github.com/smackerel/smackerel/internal/agent/tools/retrieval"
 	"github.com/smackerel/smackerel/internal/agent/tools/weather"
 	"github.com/smackerel/smackerel/internal/assistant"
+	"github.com/smackerel/smackerel/internal/assistant/confirm"
 	assistantctx "github.com/smackerel/smackerel/internal/assistant/context"
 	"github.com/smackerel/smackerel/internal/assistant/contracts"
 	"github.com/smackerel/smackerel/internal/assistant/httpadapter"
+	"github.com/smackerel/smackerel/internal/assistant/intent"
 	"github.com/smackerel/smackerel/internal/assistant/legacyretirement"
 	assistantmetrics "github.com/smackerel/smackerel/internal/assistant/metrics"
 	"github.com/smackerel/smackerel/internal/assistant/skills/recipesearch"
@@ -74,6 +77,7 @@ func wireAssistantFacade(
 	agentRT *agentRuntime,
 	tgBot *telegram.Bot,
 	agentScenarioDir string,
+	compiledActions assistant.CompiledActionExecutor,
 ) error {
 	if cfg == nil {
 		return errors.New("wireAssistantFacade: nil config")
@@ -190,6 +194,20 @@ func wireAssistantFacade(
 	// stays in place if svc.assistantTracer is nil (defensive — every
 	// production wiring path sets it).
 	facade.WithTracer(svc.assistantTracer)
+	confirmMachine := confirm.NewMachine(contextStore, confirm.NewPgWriter(svc.pg.Pool)).WithTracer(svc.assistantTracer)
+	if err := facade.ConfigureCompiledInteractions(
+		confirmMachine,
+		compiledActions,
+		microtools.ResolveLocation,
+		weather.Lookup,
+		cfg.Assistant.NotificationsConfirmTimeout,
+	); err != nil {
+		return fmt.Errorf("configure compiled interactions: %w", err)
+	}
+
+	if err := wireAssistantIntentCompiler(cfg, facade); err != nil {
+		return fmt.Errorf("wire assistant intent compiler: %w", err)
+	}
 
 	// Spec 071 SCOPE-02 — attach the persisted/redacted IntentTrace
 	// recorder before any transport can invoke the facade. This is the
@@ -233,6 +251,37 @@ func wireAssistantFacade(
 	if err := wireAssistantHTTPAdapter(cfg, svc, facade); err != nil {
 		return fmt.Errorf("wire assistant HTTP adapter: %w", err)
 	}
+	return nil
+}
+
+func wireAssistantIntentCompiler(cfg *config.Config, facade *assistant.Facade) error {
+	if !cfg.Assistant.IntentCompiler.Enabled {
+		return errors.New("[F069-INTENT-COMPILER-DISABLED] assistant facade cannot bind enabled transports without the intent compiler")
+	}
+	transport, err := intent.NewHTTPTransport(
+		cfg.MLSidecarURL,
+		cfg.AuthToken,
+		cfg.Assistant.IntentCompiler.Timeout,
+		cfg.Assistant.IntentCompiler.MaxOutputBytes,
+	)
+	if err != nil {
+		return fmt.Errorf("build compiler transport: %w", err)
+	}
+	compiler, err := intent.NewLLMCompiler(intent.CompilerConfig{
+		Enabled:               true,
+		ModelRole:             cfg.Assistant.IntentCompiler.ModelRole,
+		PromptContractVersion: cfg.Assistant.IntentCompiler.PromptContractVersion,
+		SchemaVersion:         cfg.Assistant.IntentCompiler.SchemaVersion,
+		Timeout:               cfg.Assistant.IntentCompiler.Timeout,
+		ConfidenceFloor:       cfg.Assistant.IntentCompiler.ConfidenceFloor,
+		MaxContextTurns:       cfg.Assistant.IntentCompiler.MaxContextTurns,
+		MaxOutputBytes:        cfg.Assistant.IntentCompiler.MaxOutputBytes,
+		RetryBudget:           cfg.Assistant.IntentCompiler.RetryBudget,
+	}, transport)
+	if err != nil {
+		return fmt.Errorf("build compiler: %w", err)
+	}
+	facade.WithIntentCompiler(compiler)
 	return nil
 }
 
