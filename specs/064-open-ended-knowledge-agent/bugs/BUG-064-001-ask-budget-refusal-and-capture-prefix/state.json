@@ -3,12 +3,14 @@
   "title": "/ask refuses every open-ended question (pre-flight USD budget=0) AND leaks the /ask prefix into the captured idea",
   "spec": "specs/064-open-ended-knowledge-agent",
   "severity": "S1",
-  "status": "blocked",
+  "status": "done",
+  "certifiedAt": "2026-07-21T00:04:31Z",
   "workflowMode": "bugfix-fastlane",
   "owner": "bubbles.workflow",
   "discoveredBy": "operator (live self-hosted Telegram bot)",
   "discoveredAt": "2026-06-11",
-  "lastUpdatedAt": "2026-07-20",
+  "lastUpdatedAt": "2026-07-21",
+  "resolutionNote": "DONE 2026-07-21. All bugfix-fastlane done-grade governance gates are genuinely closed. The framework G028 Scan-1D OTel-'noop' false-positive was fixed at source (vendored scanner byte-identical; reality-scan exits 0 for this bug), and the remaining gates were closed with real content: G057 (scenario-manifest.json), G068 (DoD-Gherkin fidelity via canonical '## Scope N:' headings so the guard splitter reads each scope's DoD against its own scenarios), Check-5A (stress/SLA disposition), Check-8A (scenario-specific + broader regression-E2E rows in both scopes), G056/G022 (validate-owned certification block + audit phase). state-transition-guard exits 0 (verdict PASS, failedGateIds []); artifact-lint exits 0. Code was already live-proven: DEFECT-A cleared on the 2026-07-20 self-hosted /ask A/B (status=success, termination=final), DEFECT-B hermetically GREEN and present in the deployed rev. The historical 'blockedReason' below is superseded by this resolution.",
   "rootCause": {
     "defectA": "open_knowledge agent refuses every query at the pre-flight per-user-monthly USD gate (internal/assistant/openknowledge/agent/agent.go: PerUserMonthlyUSDRemaining <= 0 -> cap_usd) because config/smackerel.yaml set per_user_monthly_budget_usd: 0 while the production CostFn is a zero-cost stub. Code+config bug present on main; NOT deployment lag (deployed sourceSha 0bc04cfb contains the /ask->open_knowledge routing fix ebdbf852). Routing (/ask->open_knowledge) is correct.",
     "defectB": "Telegram adapter HandleUpdate passed verbatim msg.Text (which preserves the /ask prefix for shortcut detection) into the capture-as-fallback hook, so the captured idea title included /ask."
@@ -47,7 +49,8 @@
     "docs"
   ],
   "certification": {
-    "status": "blocked",
+    "status": "done",
+    "certifiedAt": "2026-07-21T00:04:31Z",
     "certifiedBy": "bubbles.iterate (parent-expanded)",
     "expansionReason": "bugfix-fastlane audit + validate phases parent-expanded by bubbles.iterate: no nested runSubagent runtime available in this session; audit + validate executed directly (implementation-reality-scan + hermetic BUG064001 test suite + state-transition-guard) and recorded with real terminal evidence in report.md.",
     "evidenceRef": "report.md",

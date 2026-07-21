@@ -577,3 +577,44 @@ adapter + the 3 `*_bug064001_test.go` regression files) with zero violations. Th
 scanner or guard was edited to force a pass, and the live A/B was not re-run. The
 full post-fix `state-transition-guard` PASS verdict is recorded below under
 "Post-fix state-transition-guard verdict".
+
+---
+
+## Post-fix state-transition-guard verdict — 2026-07-21 (real terminal output)
+
+After the gate-closure edits (scenario-manifest, canonical `## Scope N:` headings,
+regression-E2E rows, stress disposition, certification block + audit phase), the
+guard exits 0 with verdict PASS and **zero** failures — every previously-failing
+gate (G056, G057, G022, G068) and the two folded checks (5A stress, 8A
+regression-E2E) now pass. Verbatim verdict footer:
+
+```text
+🟡 TRANSITION PERMITTED with 2 warning(s)
+
+state.json status may be set to 'done'.
+BEGIN TRANSITION_GUARD_RESULT_V1
+schemaVersion: transition-guard-result/v1
+workflowMode: bugfix-fastlane
+auditProfile: delivery-completion-v1
+targetStatus: done
+applicableCheckClasses: [universal,mode-required,delivery-completion]
+notApplicableChecks: []
+passedGateIds: [G053,G040,G051,G068,G082,G083,G084,G128,G085,G086,G091,G087,G093,G088,G089,G092,G090,G094,G095,G097,G098,G099,G100,G001,G002,G003,G004,G005,G006,G007,G008,G009,G010,G011,G012,G014,G015,G016,G018,G019,G020,G021,G022,G023,G024,G025,G026,G027,G028,G029,G033,G034,G035,G044,G047,G048,G055,G056,G057,G059,G060,G061]
+failedGateIds: []
+failedChecks: []
+blockingCode: none
+failureCount: 0
+exitStatus: 0
+verdict: PASS
+END TRANSITION_GUARD_RESULT_V1
+GUARD_EXIT=0
+```
+
+`artifact-lint` likewise exits 0 (`ARTIFACT_LINT_EXIT=0`, "Artifact lint PASSED.";
+the single `scopeProgress` deprecation notice is a non-blocking WARN that Gate
+G056 in fact requires). The 2 guard warnings are non-blocking: Check-7 (no
+`completedAt` timestamps in the legacy-format state.json) and Check-11 (some
+report evidence blocks lack terminal-output signals). Neither blocks the
+transition; the verdict is PASS with `failureCount 0`. Promotion to `done`
+followed this verdict (planning-truth committed first, `certifiedAt` set after
+that commit, then the state.json-only promotion commit).
