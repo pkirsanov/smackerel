@@ -906,6 +906,29 @@ func (f *Facade) Handle(ctx context.Context, msg contracts.AssistantMessage) (re
 		return resp, nil
 	}
 
+	// A resolved compiled weather read already carries the canonical location
+	// slot needed by the existing location and weather capabilities. Execute it
+	// through those injected capabilities before the generic LLM executor so the
+	// response is sourced from the provider rather than synthesized without
+	// attribution. Ambiguous locations remain owned by the persistent choice
+	// path and do not reach weather until selection.
+	if compiledOK && conv.PendingConfirm == nil {
+		weatherResp, handled, weatherErr := f.handleResolvedCompiledWeather(ctx, msg, conv, compiled, emittedAt)
+		if weatherErr != nil {
+			return contracts.AssistantResponse{}, fmt.Errorf("assistant: resolved compiled weather: %w", weatherErr)
+		}
+		if handled {
+			turnScenarioID = compiledWeatherScenarioID
+			turnAssistantTurnID = facadeTurnIDFromTime(emittedAt)
+			if weatherResp.CaptureRoute {
+				turnBand = BandLow
+			} else {
+				turnBand = BandHigh
+			}
+			return weatherResp, nil
+		}
+	}
+
 	// --- Step 3.7: spec 095 SCOPE-06 — retrieval-strategy routing (additive) ---
 	//
 	// When a retrieval-strategy router is wired AND this turn produced a

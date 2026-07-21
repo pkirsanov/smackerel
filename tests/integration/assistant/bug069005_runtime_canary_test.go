@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"os"
 	"strings"
@@ -26,6 +27,12 @@ type bug069005LiveStack struct {
 	database  *pgxpool.Pool
 }
 
+const (
+	bug069005FacadeReadyMaxWait        = 60 * time.Second
+	bug069005FacadeReadyPollInterval   = 2 * time.Second
+	bug069005FacadeReadyRequestTimeout = 10 * time.Second
+)
+
 func loadBug069005LiveStack(t *testing.T) bug069005LiveStack {
 	t.Helper()
 	coreURL := strings.TrimRight(os.Getenv("CORE_EXTERNAL_URL"), "/")
@@ -44,33 +51,73 @@ func loadBug069005LiveStack(t *testing.T) bug069005LiveStack {
 	return bug069005LiveStack{coreURL: coreURL, authToken: authToken, database: pool}
 }
 
-func postBug069005Turn(t *testing.T, stack bug069005LiveStack, request httpadapter.TurnRequest) httpadapter.TurnResponse {
-	t.Helper()
+func sendBug069005Turn(
+	stack bug069005LiveStack,
+	request httpadapter.TurnRequest,
+	requestTimeout time.Duration,
+) (int, httpadapter.TurnResponse, error) {
 	encoded, err := json.Marshal(request)
 	if err != nil {
-		t.Fatalf("marshal assistant turn: %v", err)
+		return 0, httpadapter.TurnResponse{}, fmt.Errorf("marshal assistant turn: %w", err)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
 	defer cancel()
 	httpRequest, err := http.NewRequestWithContext(ctx, http.MethodPost, stack.coreURL+"/api/assistant/turn", bytes.NewReader(encoded))
 	if err != nil {
-		t.Fatalf("build assistant request: %v", err)
+		return 0, httpadapter.TurnResponse{}, fmt.Errorf("build assistant request: %w", err)
 	}
 	httpRequest.Header.Set("Content-Type", "application/json")
 	httpRequest.Header.Set("Authorization", "Bearer "+stack.authToken)
-	response, err := http.DefaultClient.Do(httpRequest)
+	client := &http.Client{Timeout: requestTimeout}
+	response, err := client.Do(httpRequest)
 	if err != nil {
-		t.Fatalf("POST assistant turn: %v", err)
+		return 0, httpadapter.TurnResponse{}, fmt.Errorf("POST assistant turn: %w", err)
 	}
 	defer response.Body.Close()
 	var envelope httpadapter.TurnResponse
 	if err := json.NewDecoder(response.Body).Decode(&envelope); err != nil {
-		t.Fatalf("decode assistant response: %v", err)
+		return response.StatusCode, httpadapter.TurnResponse{}, fmt.Errorf("decode assistant response: %w", err)
 	}
-	if response.StatusCode != http.StatusOK {
-		t.Fatalf("assistant status = %d, want 200; envelope=%+v", response.StatusCode, envelope)
+	return response.StatusCode, envelope, nil
+}
+
+func postBug069005Turn(t *testing.T, stack bug069005LiveStack, request httpadapter.TurnRequest) httpadapter.TurnResponse {
+	t.Helper()
+	status, envelope, err := sendBug069005Turn(stack, request, 30*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if status != http.StatusOK {
+		t.Fatalf("assistant status = %d, want 200; envelope=%+v", status, envelope)
 	}
 	return envelope
+}
+
+func waitBug069005AssistantFacadeReady(t *testing.T, stack bug069005LiveStack) {
+	t.Helper()
+	deadline := time.Now().Add(bug069005FacadeReadyMaxWait)
+	var lastStatus int
+	var lastEnvelope httpadapter.TurnResponse
+	var lastErr error
+	for time.Now().Before(deadline) {
+		lastStatus, lastEnvelope, lastErr = sendBug069005Turn(stack, httpadapter.TurnRequest{
+			SchemaVersion:      httpadapter.SchemaVersionV1,
+			TransportMessageID: "test-bug069005-readiness-" + time.Now().UTC().Format("20060102T150405.000000000"),
+			Kind:               string(contracts.KindReset),
+			TransportHint:      "web",
+		}, bug069005FacadeReadyRequestTimeout)
+		if lastErr == nil && lastStatus == http.StatusOK && lastEnvelope.FacadeInvoked {
+			return
+		}
+		time.Sleep(bug069005FacadeReadyPollInterval)
+	}
+	t.Fatalf(
+		"BUG-069-005 assistant facade did not become ready within %s; last_status=%d last_envelope=%+v last_error=%v",
+		bug069005FacadeReadyMaxWait,
+		lastStatus,
+		lastEnvelope,
+		lastErr,
+	)
 }
 
 func resetBug069005Conversation(t *testing.T, stack bug069005LiveStack) {
@@ -88,6 +135,7 @@ func resetBug069005Conversation(t *testing.T, stack bug069005LiveStack) {
 
 func TestIntentCompilerCanary_LiveCoreConstructsAndAttachesCompiler(t *testing.T) {
 	stack := loadBug069005LiveStack(t)
+	waitBug069005AssistantFacadeReady(t, stack)
 	resetBug069005Conversation(t, stack)
 	cfg, err := config.Load()
 	if err != nil {
@@ -115,6 +163,23 @@ func TestIntentCompilerCanary_LiveCoreConstructsAndAttachesCompiler(t *testing.T
 	}, transport)
 	if err != nil {
 		t.Fatalf("NewLLMCompiler: %v", err)
+	}
+	barcelona, _, err := compiler.Compile(context.Background(), intent.RawTurn{
+		UserID: "test-bug069005-integration-user", Transport: "web",
+		TransportMessageID: "test-bug069005-integration-barcelona",
+		Text:               "what is the weather in Barcelona", ReceivedAt: time.Now().UTC(),
+	})
+	if err != nil {
+		t.Fatalf("live Barcelona compiler route: %v", err)
+	}
+	if barcelona.ActionClass != intent.ActionExternalLookup {
+		t.Fatalf("Barcelona compiled action = %q, want external_lookup", barcelona.ActionClass)
+	}
+	if barcelona.ScenarioHint == nil || *barcelona.ScenarioHint != "weather_query" {
+		t.Fatalf("Barcelona compiled scenario hint = %v, want weather_query", barcelona.ScenarioHint)
+	}
+	if location, ok := barcelona.Slots["location"].(map[string]any); !ok || location["raw"] != "Barcelona" {
+		t.Fatalf("Barcelona compiled location slot = %#v, want raw Barcelona", barcelona.Slots["location"])
 	}
 	compiled, _, err := compiler.Compile(context.Background(), intent.RawTurn{
 		UserID: "test-bug069005-integration-user", Transport: "web",
@@ -146,6 +211,7 @@ func TestIntentCompilerCanary_LiveCoreConstructsAndAttachesCompiler(t *testing.T
 
 func TestCompilerInteractiveControlsPersistByUserAndTransport(t *testing.T) {
 	stack := loadBug069005LiveStack(t)
+	waitBug069005AssistantFacadeReady(t, stack)
 	resetBug069005Conversation(t, stack)
 	turnID := "test-bug069005-integration-list-" + time.Now().UTC().Format("20060102T150405.000000000")
 	proposal := postBug069005Turn(t, stack, httpadapter.TurnRequest{
