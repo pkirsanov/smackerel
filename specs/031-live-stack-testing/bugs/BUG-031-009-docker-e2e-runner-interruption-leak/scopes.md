@@ -2,7 +2,7 @@
 
 ## Scope 1: Reap Dockerized E2E children before stack teardown
 
-**Status:** In Progress
+**Status:** Done
 **Depends On:** none
 **Owner:** `bubbles.implement`
 **Scope Kind:** test-harness lifecycle bugfix
@@ -69,18 +69,18 @@ No public route, API client, generated client, symbol, deep link, navigation, br
 
 ### Definition of Done
 
-- [ ] Root cause confirmed with current-session Docker-runner interruption RED evidence.
-- [ ] Pre-fix regression detects a surviving Dockerized Go E2E runner.
-- [ ] Every E2E Docker child carries the exact active run-ID label.
-- [ ] Exact-label runner containers are removed before stack teardown.
-- [ ] Cleanup remains scoped to the interrupted invocation; nonmatching Docker containers are preserved.
-- [ ] Existing stubborn shell-child cleanup remains green.
-- [ ] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior
-- [ ] Broader E2E regression suite passes
-- [ ] Full serialized Drive package passes without core/network cascade.
-- [ ] Regression tests contain no bailout, skip/only, interception, or tautological patterns.
-- [ ] Check, lint, format, ShellCheck, and portability checks pass.
-- [ ] Consumer impact sweep is complete and zero stale first-party references remain.
-- [ ] Change Boundary is respected and zero excluded file families were changed.
-- [ ] Packet artifact, traceability, implementation-reality, state-transition, and regression guards pass at `in_progress`.
-- [ ] Source branch is committed and pushed through normal hooks; validate-owned certification remains `in_progress`.
+- [x] Root cause confirmed with current-session Docker-runner interruption RED evidence. → Evidence: [red](report.md#red-bug-reproduction-before-fix)
+- [x] Pre-fix regression detects a surviving Dockerized Go E2E runner. → Evidence: [red](report.md#red-bug-reproduction-before-fix)
+- [x] Every E2E Docker child carries the exact active run-ID label. → Evidence: [green-reverify](report.md#green-current-session-reaping-reverification-quiet-host)
+- [x] Exact-label runner containers are removed before stack teardown. → Evidence: [green-reverify](report.md#green-current-session-reaping-reverification-quiet-host)
+- [x] Cleanup remains scoped to the interrupted invocation; nonmatching Docker containers are preserved. → Evidence: [green-reverify](report.md#green-current-session-reaping-reverification-quiet-host)
+- [x] Existing stubborn shell-child cleanup remains green. → Evidence: [green-reverify](report.md#green-current-session-reaping-reverification-quiet-host)
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior → Evidence: [green-reverify](report.md#green-current-session-reaping-reverification-quiet-host)
+- [x] Broader E2E regression suite passes → Evidence: [drive-regression](report.md#broader-drive-e2e-regression-current-session)
+- [x] Full serialized Drive package passes without core/network cascade. → Evidence: [drive-regression](report.md#broader-drive-e2e-regression-current-session)
+- [x] Regression tests contain no bailout, skip/only, interception, or tautological patterns. → Evidence: [integrity-scan](report.md#regression-test-integrity-scan)
+- [x] Check, lint, format, ShellCheck, and portability checks pass. → Evidence: [static-quality](report.md#static-quality-verification-current-session)
+- [x] Consumer impact sweep is complete and zero stale first-party references remain. → Evidence: [consumer-boundary](report.md#consumer-impact-and-change-boundary)
+- [x] Change Boundary is respected and zero excluded file families were changed. → Evidence: [consumer-boundary](report.md#consumer-impact-and-change-boundary)
+- [x] Packet artifact, traceability, implementation-reality, state-transition, and regression guards pass at `in_progress`. → Evidence: [guard](report.md#governance-guard-verification)
+- [x] Source branch is committed and pushed through normal hooks; validate-owned certification remains `in_progress`. → Evidence: [committed](report.md#committed-and-pushed)

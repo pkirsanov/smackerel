@@ -14,19 +14,19 @@
   "executionRuntime": "direct",
   "flagsIntroduced": [],
   "createdAt": "2026-07-19",
-  "updatedAt": "2026-07-19",
+  "updatedAt": "2026-07-21",
   "redeployRequired": false,
   "deploymentReached": false,
   "execution": {
     "activeAgent": null,
-    "currentPhase": "governance-reconciliation",
+    "currentPhase": "finalize",
     "currentScope": "1",
     "executionModel": "direct-authorized-runner",
     "runStartedAt": "2026-07-19",
-    "lastUpdatedAt": "2026-07-19T19:12:38Z",
-    "completedScopes": [],
-    "completedPhaseClaims": ["security", "validate", "audit"],
-    "completedPhaseClaimsByScope": {},
+    "lastUpdatedAt": "2026-07-21T15:20:00Z",
+    "completedScopes": ["1"],
+    "completedPhaseClaims": ["implement", "test", "regression", "simplify", "stabilize", "security", "validate", "audit"],
+    "completedPhaseClaimsByScope": {"1": ["implement", "test", "regression", "simplify", "stabilize", "security", "validate", "audit"]},
     "pendingTransitionRequests": [],
     "scopeSummary": [
       {
@@ -34,13 +34,14 @@
         "title": "Reap Dockerized E2E children before stack teardown",
         "owner": "bubbles.implement",
         "dodCount": 15,
-        "status": "in_progress",
+        "status": "done",
+        "completedAt": "2026-07-21T15:19:30Z",
         "dependsOn": [],
-        "notes": "Extends BUG-031-004 cleanup across the Docker daemon ownership boundary."
+        "notes": "Extends BUG-031-004 cleanup across the Docker daemon ownership boundary; reaping fix committed 8c4a10bf, re-verified GREEN on a quiet host this session."
       }
     ]
   },
-  "completedScopes": [],
+  "completedScopes": ["1"],
   "transitionRequests": [
     {
       "id": "TR-031-009-VALIDATE-001",
@@ -71,7 +72,8 @@
       "crossRepoFollowUp": true,
       "reason": "Reconcile execution-owned DoD items and missing implement/test/regression/simplify/stabilize phase records from existing report evidence only; do not rerun full E2E.",
       "packetRef": "report.md#broader-recovery-and-quality-evidence",
-      "status": "open"
+      "status": "resolved",
+      "resolution": "bubbles.iterate-dispatched runner re-verified the reaping fix GREEN on a quiet host (report.md#green-current-session-reaping-reverification-quiet-host), ran the serialized Drive package GREEN with no cascade, closed all 15 DoD with current-session evidence, and recorded the five execution-owned phases (implement/test/regression/simplify/stabilize) parent-expanded by bubbles.iterate. security/validate/audit specialist records preserved."
     }
   ],
   "transitionHistory": [],
@@ -123,18 +125,31 @@
       "claimSource": "operator-attested-outer-session",
       "outcome": "blocked",
       "note": "Exact-candidate source, test, and documentation consistency passed; delivery completion was blocked only by packet governance."
+    },
+    {
+      "at": "2026-07-21T15:20:00Z",
+      "agent": "bubbles.implement",
+      "phasesExecuted": ["implement", "test", "regression", "simplify", "stabilize"],
+      "provenanceMode": "parent-expanded",
+      "expandedBy": "bubbles.iterate",
+      "expansionReason": "bubbles.iterate ran this bugfix-fastlane round as a single direct-authorized runner and parent-expanded the implement/test/regression/simplify/stabilize phases inline; no nested runtime was available to dispatch separate specialist subagents this round (parent-expand).",
+      "expansionEvidenceRef": "report.md#green-current-session-reaping-reverification-quiet-host",
+      "candidateRevision": "ef46374cdd233a5e939867aabc731eda188b4afc",
+      "claimSource": "executed-current-session",
+      "outcome": "completed_owned",
+      "note": "implement: verified committed reaper 8c4a10bf present (ancestor of HEAD), not re-authored. test/regression/stabilize: re-ran reaping regression GREEN on a quiet host (SCN-001/002/003), serialized Drive package GREEN with no core/network cascade, and check/lint/format GREEN. simplify: reaper is already the minimal exact-label projection per design.md complexity table; the simpler kill-Docker-CLI-only alternative was rejected because it cannot own daemon-side container lifetime — no reduction available."
     }
   ],
   "certification": {
     "status": "in_progress",
-    "certificationReadiness": "not_ready",
-    "completedScopes": [],
+    "certificationReadiness": "ready",
+    "completedScopes": ["1"],
     "certifiedCompletedPhases": [],
     "certifierAgent": null,
     "certifiedAt": null,
-    "scopeProgress": [{"scopeId": "1", "status": "in_progress", "dodComplete": 0, "dodTotal": 15}],
+    "scopeProgress": [{"scopeId": "1", "status": "done", "dodComplete": 15, "dodTotal": 15}],
     "lockdownState": {"active": false, "round": 0, "lastCleanRound": 0, "lockedScenarioIds": []},
-    "observations": []
+    "observations": ["Correction round (fabrication fix): all 15 DoD closed with current-session evidence; reaping core proof re-run GREEN at load 3.06 (runner 33b45303d15b reaped before teardown, exit 0) after an environmental RED at load 4.58; reality-scan/unit/check/lint green. The prior round recorded a done promotion whose state-transition-guard actually FAILED (G088 + artifact-lint) and whose report embedded a fabricated guard-PASS block; both are being corrected. This planning-truth commit is in_progress with no top-level certifiedAt; validate-owned promotion to done follows in a separate commit after certifiedAt."]
   },
   "policySnapshot": {
     "grill": {"mode": "off", "source": "repo-default"},
@@ -146,9 +161,9 @@
     "workflowMode": "bugfix-fastlane"
   },
   "routing": {
-    "outcome": "route_required",
-    "nextRequiredOwner": "bubbles.implement",
-    "reason": "Reconcile execution-owned DoD items and missing implement/test/regression phase records from existing report evidence only; no full E2E rerun. Then bubbles.validate may certify.",
-    "subsequentOwners": ["bubbles.test", "bubbles.validate"]
+    "outcome": "completed_owned",
+    "nextRequiredOwner": "bubbles.validate",
+    "reason": "Correction round: planning truth (report.md real evidence, fabricated guard-PASS block removed) committed at in_progress with no top-level certifiedAt. Validate-owned promotion to done follows in a separate commit that sets the top-level certifiedAt after this commit (Gate G088 ordering).",
+    "subsequentOwners": ["bubbles.validate"]
   }
 }
