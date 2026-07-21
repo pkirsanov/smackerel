@@ -4,7 +4,7 @@ Links: [spec.md](spec.md) | [design.md](design.md) | [report.md](report.md) | [u
 
 ## Scope 1: Align assistant E2E with the canonical core endpoint
 
-**Status:** In Progress
+**Status:** Done
 **Depends On:** none
 **Owner:** `bubbles.implement`
 **Scope Kind:** test-harness bugfix
@@ -66,13 +66,13 @@ Excluded: production metrics registration, dashboards, deployment, release train
 
 ### Definition of Done
 
-- [ ] Root cause is confirmed against the current runner and test source.
-- [ ] Canonical endpoint regression fails before the fix and passes after it.
-- [ ] The real core metrics endpoint is scraped with a bounded timeout.
-- [ ] Unknown or missing package/endpoint inputs fail loudly.
-- [ ] Change Boundary contains every changed file and no excluded surface changes.
-- [ ] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior
-- [ ] Broader E2E regression suite passes
-- [ ] Regression tests contain no bailout, interception, or canned metrics output.
-- [ ] Check, lint, format, artifact, traceability, reality, and regression guards pass.
-- [ ] Validate-owned certification records the strongest evidence-supported state.
+- [x] Root cause is confirmed against the current runner and test source. → Evidence: [design.md](design.md) "Root Cause Analysis"; report.md "Bug Reproduction — Before Fix" (partial-env `SMACKEREL_CORE_METRICS_URL=""` failure at `intent_refusal_join_e2e_test.go:77`).
+- [x] Canonical endpoint regression fails before the fix and passes after it. → Evidence: report.md "Bug Reproduction — Before Fix" (RED, exit 1) and "Bug Reproduction — After Fix" (GREEN, `TestIntentRefusalJoinE2E_LiveCoreExposesJoinKeyOnBothMetrics` PASS).
+- [x] The real core metrics endpoint is scraped with a bounded timeout. → Evidence: report.md Code Diff Evidence (`baseURL + "/metrics"`, `context.WithTimeout(..., 10*time.Second)`); GREEN scrape passes against the live disposable core.
+- [x] Unknown or missing package/endpoint inputs fail loudly. → Evidence: report.md "Impacted unit suite" — `TestAssistantE2EPackageContract_AdversarialRejectsAllPackageFallback` PASS, and the test's `t.Fatal` on empty `CORE_EXTERNAL_URL`.
+- [x] Change Boundary contains every changed file and no excluded surface changes. → Evidence: report.md Code Diff Evidence (10-file numstat for `8ac848e1` matches the Change Boundary/Implementation Files list; no production metrics registration, dashboard, deployment, release-train, or secret surface).
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior → Evidence: report.md "Packet scenario + broader assistant E2E regression" — `TestIntentRefusalJoinE2E_LiveCoreExposesJoinKeyOnBothMetrics` PASS (live scrape of both metric families).
+- [x] Broader E2E regression suite passes → Evidence: report.md "Packet scenario + broader assistant E2E regression" — 40 PASS / 7 legitimate SKIP; the only 2 failures are the foreign replay-CLI `buildvcs` env condition dispositioned to BUG-071-002 (report.md Discovered Issues), zero attributable to this change.
+- [x] Regression tests contain no bailout, interception, or canned metrics output. → Evidence: `tests/e2e/assistant/intent_refusal_join_e2e_test.go` performs a real `http.DefaultClient.Do` scrape with no `page.route`/`intercept`/canned body and no early-return bailout; `metrics_test.go` / `export_test.go` gather from a fresh registry.
+- [x] Check, lint, format, artifact, traceability, reality, and regression guards pass. → Evidence: report.md "Static gates & guards" (check/lint/format exit 0; artifact-lint exit 0; traceability guard exit 0; reality scan PASS; state-transition-guard verdict PASS).
+- [x] Validate-owned certification records the strongest evidence-supported state. → Evidence: state.json `certification.status=done` recorded on real state-transition-guard exit 0 (verdict PASS, failedGateIds []); report.md Invocation Audit.
