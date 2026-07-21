@@ -1038,8 +1038,10 @@ func setRequiredEnv(t *testing.T) {
 	// Defaults mirror config/smackerel.yaml so Load() succeeds; the
 	// dedicated TestIntentCompilerConfigRequiresEverySSTKey exercises
 	// the fail-loud paths against each missing/invalid field.
-	t.Setenv("ASSISTANT_INTENT_COMPILER_ENABLED", "false")
+	t.Setenv("ASSISTANT_INTENT_COMPILER_ENABLED", "true")
 	t.Setenv("ASSISTANT_INTENT_COMPILER_MODEL_ROLE", "assistant_intent_compiler")
+	t.Setenv("ASSISTANT_INTENT_COMPILER_PROVIDER_NAME", "ollama")
+	t.Setenv("ASSISTANT_INTENT_COMPILER_PROVIDER_URL", "http://ollama:11434")
 	t.Setenv("ASSISTANT_INTENT_COMPILER_PROMPT_CONTRACT_VERSION", "intent-compiler-v1")
 	t.Setenv("ASSISTANT_INTENT_COMPILER_SCHEMA_VERSION", "v1")
 	t.Setenv("ASSISTANT_INTENT_COMPILER_TIMEOUT_MS", "5000")

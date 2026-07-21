@@ -217,6 +217,27 @@ func handleLocationNormalize(ctx context.Context, raw json.RawMessage) (json.Raw
 	return marshalEnvelope(env)
 }
 
+// ResolveLocation invokes the registered read-only location capability and
+// returns its validated typed envelope for transport-neutral consumers.
+func ResolveLocation(ctx context.Context, input string) (Envelope, error) {
+	raw, err := json.Marshal(locationInput{Input: input})
+	if err != nil {
+		return Envelope{}, fmt.Errorf("location_normalize_input_encode: %w", err)
+	}
+	encoded, err := handleLocationNormalize(ctx, raw)
+	if err != nil {
+		return Envelope{}, err
+	}
+	var envelope Envelope
+	if err := json.Unmarshal(encoded, &envelope); err != nil {
+		return Envelope{}, fmt.Errorf("location_normalize_output_decode: %w", err)
+	}
+	if err := ValidateEnvelope(envelope); err != nil {
+		return Envelope{}, err
+	}
+	return envelope, nil
+}
+
 // shapeEnvelope folds a provider's candidate list into a validated
 // Envelope. Decision rules:
 //   - zero candidates                                  → failed (no_result)

@@ -69,8 +69,10 @@ func minimalAssistantEnv() map[string]string {
 		"ASSISTANT_ROUTING_EMBEDDER_MODE":    "sidecar",
 		"ASSISTANT_ROUTING_EMBED_TIMEOUT_MS": "500",
 		// Spec 068 SCOPE-1 — Structured Intent Compiler SST.
-		"ASSISTANT_INTENT_COMPILER_ENABLED":                 "false",
+		"ASSISTANT_INTENT_COMPILER_ENABLED":                 "true",
 		"ASSISTANT_INTENT_COMPILER_MODEL_ROLE":              "assistant_intent_compiler",
+		"ASSISTANT_INTENT_COMPILER_PROVIDER_NAME":           "ollama",
+		"ASSISTANT_INTENT_COMPILER_PROVIDER_URL":            "http://ollama:11434",
 		"ASSISTANT_INTENT_COMPILER_PROMPT_CONTRACT_VERSION": "intent-compiler-v1",
 		"ASSISTANT_INTENT_COMPILER_SCHEMA_VERSION":          "v1",
 		"ASSISTANT_INTENT_COMPILER_TIMEOUT_MS":              "5000",
@@ -700,5 +702,36 @@ func TestValidateAssistantConfig_StubProviders_ProductionSafetyGuard(t *testing.
 				t.Fatalf("expected no error for env=%q with urls %q/%q, got: %v", tc.env, tc.geocode, tc.forecast, err)
 			}
 		})
+	}
+}
+
+func TestValidateAssistantConfig_IntentCompilerProviderProductionSafetyGuard(t *testing.T) {
+	t.Setenv("AGENT_ROUTING_CONFIDENCE_FLOOR", "0.65")
+	build := func(environment string) *Config {
+		return &Config{
+			Environment: environment,
+			Assistant: AssistantConfig{
+				Enabled:             true,
+				BorderlineFloor:     0.75,
+				ContextStateKey:     "transport_user",
+				TelegramEnabled:     true,
+				TelegramMode:        "long_poll",
+				TelegramWebhookPath: "/v1/telegram/webhook",
+				IntentCompiler: IntentCompilerConfig{
+					Enabled:      true,
+					ModelRole:    "assistant_intent_compiler",
+					ProviderName: "deterministic-e2e",
+					ProviderURL:  "http://intent-compiler-provider:8082",
+				},
+			},
+		}
+	}
+
+	if err := build("test").validateAssistantConfig(); err != nil {
+		t.Fatalf("test compiler provider fixture should be accepted: %v", err)
+	}
+	err := build("production").validateAssistantConfig()
+	if err == nil || !strings.Contains(err.Error(), "F069-PROD-SAFETY") {
+		t.Fatalf("production compiler provider fixture error = %v, want F069-PROD-SAFETY", err)
 	}
 }

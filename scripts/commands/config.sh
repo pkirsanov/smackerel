@@ -2083,8 +2083,10 @@ ANNOTATIONS_LIST_MY_MAX_LIMIT="$(required_value annotations.list_my_max_limit)"
 # REQUIRED at the generator boundary (Gate G028 / smackerel-no-defaults).
 # The Go loader (internal/config/assistant_intent_compiler.go) fails
 # loud at startup if any value is missing or unparsable.
-ASSISTANT_INTENT_COMPILER_ENABLED="$(required_value assistant.intent_compiler.enabled)"
+ASSISTANT_INTENT_COMPILER_ENABLED="$(env_override_value intent_compiler_enabled assistant.intent_compiler.enabled)"
 ASSISTANT_INTENT_COMPILER_MODEL_ROLE="$(required_value assistant.intent_compiler.model_role)"
+ASSISTANT_INTENT_COMPILER_PROVIDER_NAME="$(env_override_value intent_compiler_provider_name llm.provider)"
+ASSISTANT_INTENT_COMPILER_PROVIDER_URL="$(env_override_value intent_compiler_provider_url llm.ollama_url)"
 ASSISTANT_INTENT_COMPILER_PROMPT_CONTRACT_VERSION="$(required_value assistant.intent_compiler.prompt_contract_version)"
 ASSISTANT_INTENT_COMPILER_SCHEMA_VERSION="$(required_value assistant.intent_compiler.schema_version)"
 ASSISTANT_INTENT_COMPILER_TIMEOUT_MS="$(required_value assistant.intent_compiler.timeout_ms)"
@@ -2132,7 +2134,7 @@ CAPTURE_AS_FALLBACK_DEDUP_HASH_KEY="$(required_value assistant.capture_as_fallba
 CAPTURE_AS_FALLBACK_RETENTION_AUDIT_DAYS="$(required_value assistant.capture_as_fallback.retention_audit_days)"
 
 # Spec 065 SCOPE-1 — Generic micro-tools SST (NO defaults; required at generator boundary).
-ASSISTANT_TOOLS_LOCATION_NORMALIZE_ENABLED="$(required_value assistant.tools.location_normalize.enabled)"
+ASSISTANT_TOOLS_LOCATION_NORMALIZE_ENABLED="$(env_override_value assistant_tools_location_normalize_enabled assistant.tools.location_normalize.enabled)"
 ASSISTANT_TOOLS_LOCATION_NORMALIZE_PROVIDER="$(required_value assistant.tools.location_normalize.provider)"
 ASSISTANT_TOOLS_LOCATION_NORMALIZE_TIMEOUT_MS="$(required_value assistant.tools.location_normalize.timeout_ms)"
 ASSISTANT_TOOLS_LOCATION_NORMALIZE_CACHE_TTL_SECONDS="$(required_value assistant.tools.location_normalize.cache_ttl_seconds)"
@@ -2884,6 +2886,8 @@ ANNOTATIONS_SOURCE_ALLOWLIST=${ANNOTATIONS_SOURCE_ALLOWLIST}
 ANNOTATIONS_LIST_MY_MAX_LIMIT=${ANNOTATIONS_LIST_MY_MAX_LIMIT}
 ASSISTANT_INTENT_COMPILER_ENABLED=${ASSISTANT_INTENT_COMPILER_ENABLED}
 ASSISTANT_INTENT_COMPILER_MODEL_ROLE=${ASSISTANT_INTENT_COMPILER_MODEL_ROLE}
+ASSISTANT_INTENT_COMPILER_PROVIDER_NAME=${ASSISTANT_INTENT_COMPILER_PROVIDER_NAME}
+ASSISTANT_INTENT_COMPILER_PROVIDER_URL=${ASSISTANT_INTENT_COMPILER_PROVIDER_URL}
 ASSISTANT_INTENT_COMPILER_PROMPT_CONTRACT_VERSION=${ASSISTANT_INTENT_COMPILER_PROMPT_CONTRACT_VERSION}
 ASSISTANT_INTENT_COMPILER_SCHEMA_VERSION=${ASSISTANT_INTENT_COMPILER_SCHEMA_VERSION}
 ASSISTANT_INTENT_COMPILER_TIMEOUT_MS=${ASSISTANT_INTENT_COMPILER_TIMEOUT_MS}
