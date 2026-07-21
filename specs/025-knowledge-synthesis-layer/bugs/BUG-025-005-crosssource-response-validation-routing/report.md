@@ -628,6 +628,7 @@ the swallow is gone — propagates to poison so `publish` is awaited 0 times. Th
 **Claim Source:** executed
 
 ```text
+$ git checkout -- ml/app/nats_client.py && git status --porcelain; echo restored_exit=$?
 restored_exit=0
 === routing restored to crosssource? ===
 147:    "synthesis.crosssource": "crosssource",
