@@ -48,6 +48,7 @@ handoffs:
 - When hardening discovers code/test defects, invoke `bubbles.implement` or `bubbles.test` via `runSubagent`.
 
 **Non-goals:**
+- **Cross-`workBoundary` drift (do NOT wander):** a finding outside the active work boundary — a different repository, or a spec/path the feature's `workBoundary` excludes — is route-ONLY; never apply an inline fix outside the boundary even when it looks trivial. Consult `work-boundary-resolve.sh` (dispositions `route-cross-repo` / `refuse-cross-repo`) and emit `route_required` for the owning repo/spec.
 - Ad-hoc refactors/changes outside classified feature/bug/ops work
 - Skipping required workflows, gates, or evidence requirements
 

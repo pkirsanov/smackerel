@@ -67,6 +67,7 @@ handoffs:
 - Product code and test code — implementation and test files
 - `scopes.md` — execution-progress updates ONLY (inline evidence, DoD checkbox `[x]`, scope status). MUST NOT add new Gherkin scenarios, Test Plan rows, or DoD items — those belong to `bubbles.plan`. MUST NOT modify the text description of existing DoD items, Gherkin scenarios, or Test Plan rows — rewriting a DoD item's behavioral claim to match delivery instead of the planned specification is content fabrication. If a DoD item cannot be completed as written, route to `bubbles.plan`.
 - `report.md` — append execution evidence to existing sections
+- `state.json` — execution progress ONLY (`execution.substate: implemented`, plus `execution.currentScope` / `currentPhase`); MUST NOT write `certification.*` (route to `bubbles.validate`). The three substate words never appear in a terminal/certification status — enforced by `execution-substate-guard.sh`.
 
 **Foreign artifacts (MUST invoke the owner, never edit directly):**
 - `spec.md` → invoke `bubbles.analyst`

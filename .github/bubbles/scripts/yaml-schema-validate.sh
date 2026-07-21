@@ -44,6 +44,8 @@ pairs = [
     ("bubbles/workflows.yaml", "workflows.schema.json", False),
     ("bubbles/capability-ledger.yaml", "capability-ledger.schema.json", False),
     ("bubbles/adoption-profiles.yaml", "adoption-profiles.schema.json", False),
+    # IMP-020 S3 / AF-005 — tool-trust registry.
+    ("bubbles/tool-trust-registry.yaml", "tool-trust-registry.schema.json", False),
     # v5.1 / M9 additions — present only when project uses these surfaces.
     ("propagation-policy.yaml", "propagation-policy.schema.json", True),
     ("config/propagation-policy.yaml", "propagation-policy.schema.json", True),

@@ -189,7 +189,53 @@ Under `parallelScopes=dag`, DAG-independent scopes execute concurrently in separ
 
 **Cleanup on abandon:** if a worktree scope fails or is abandoned, the parent drops that worktree and its branch — no partial shared-state mutation survives (mirroring `gitIsolation` whole-run rollback).
 
-This is a documented contract; a mechanical gate is a possible future step, not added here.
+**Acquire-before-mutate enforcement (IMP-023 writer-lease).** This contract is MECHANIZED — no longer advisory. Integration points:
+
+- **Parent dispatch:** before the first mutable write the parent acquires the target lease — `runtime writer-acquire --target <spec-dir> --paths source,tests,report`.
+- **Child worktree scope:** before writing, a child runs `runtime writer-guard --target <spec-dir> --path <relpath> --role child --scope <id>`; a child write to `state.json` / `scenario-manifest.json` / `spec.md` / `design.md` or another scope's `report.md` is REFUSED with a structured `blocked` envelope naming the parent — never a reconcile-by-append. The parent writes shared state with `--role parent`.
+- **Nested subagents:** the parent holds the target lease; a dispatched child gets a scoped worktree lease for its own scope only.
+- **Multi-repo runs:** the lease is keyed by repository root — a cross-repo scenario holds exactly one writer lease per repo.
+- **Handoff / continuation + pre-tool risk:** a handoff/continuation envelope records the held lease target so a resumed run re-acquires (or refuses on a live conflict); an `owned_mutation` against a held spec target is expected to hold the lease. The lease is opt-in / no-op for single-writer runs and only refuses a SECOND live writer. See `docs/recipes/runtime-coordination.md` (writer-guard).
+
+### Isolated Design-Experiment Contract (`.design-experiment`)
+
+A **design-experiment** is a DISPOSABLE git worktree for throwaway exploration — a spike, proof-of-concept, or "what if" probe whose purpose is LEARNING, not delivery. It composes with the `parallelScopes=dag` / `gitIsolation` worktree model above but adds one hard rule: **a design-experiment's outputs can NEVER satisfy DoD, tests, integration, or certification, and the worktree is DELETED after its findings are captured.**
+
+- **Marker.** A design-experiment worktree carries a `.design-experiment` marker file at its root (created when the experiment worktree is spun up). The marker's presence is what makes the isolation rules below apply; absent the marker, a worktree is a normal delivery worktree.
+- **Throwaway by construction.** Nothing produced inside a design-experiment counts toward completion: it MUST NOT be merged to the trunk, MUST NOT flip DoD checkboxes, MUST NOT write `certification.*` terminal state or `completedScopes`, and MUST NOT be cited as test/integration evidence. It is learning, not delivery.
+- **Capture then delete.** When the experiment concludes, the parent DISTILLS its findings into the durable `spec.md` / `design.md` (a decision, a rejected alternative, a measured number), then DELETES the worktree and its branch (mirroring `gitIsolation` whole-run rollback). No partial experiment state survives.
+- **No certification path.** Because a design-experiment can't satisfy DoD/test/certification, it can't be a scope, can't close a scope, and can't be a spec's delivery vehicle. Real work the experiment informed is planned + delivered as a normal scope afterward.
+
+**Mechanical enforcement.** `bubbles/scripts/design-experiment-guard.sh --worktree <dir>` REFUSES (exit 1) when a `.design-experiment`-marked worktree contains completion/certification leakage — a `state.json` with a terminal `status`/`certification.status` (`done` / `delivered_fast` / `delivered_prototype` / `specs_hardened`) or a non-empty `completedScopes`, or a checked DoD item (`- [x]`) in a `scope.md` / `scopes.md`. A clean exploration (or a directory with no marker) passes (exit 0). The check is advisory-until-adopted (a workflow may invoke it before merge or certification); there is no bypass flag — a design-experiment becomes deliverable only by being re-planned as a normal scope.
+
+### Scope Context-Fit (`contextFit` — single-specialist-context)
+
+A scope is a DURABLE unit of work: a fresh specialist, handed ONLY the spec's durable artifacts (`spec.md` / `design.md` / the scope body / referenced files), MUST be able to execute it WITHOUT replaying the chat/session that produced it. A scope whose instructions say "as discussed above", "per our chat", or "earlier in this session" cannot be executed from a clean context — the ephemeral conversation is gone.
+
+- **Self-contained by construction.** Restate the decision inline, or reference a durable anchor (a `spec.md` FR / a `design.md` section / a scenario ID / a file path) — never the conversation.
+- **Not a length rule.** This is orthogonal to the G037 size discipline: a short scope can still be context-unfit (if it leans on chat), and a long scope can be perfectly self-contained. There is no hardcoded token count.
+
+**Mechanical enforcement.** `bubbles/scripts/scope-context-fit-lint.sh <feature-dir>` flags any scope body containing an unambiguous chat/session-replay dependency (a curated phrase set; ordinary requirement language like "the user asked for" never false-positives). Advisory by default (exit 0 + warning); blocking (exit 1) only under `.github/bubbles-project.yaml` `scopeContextFitGuard: block`. No bypass flag. This is the G037 `contextFit` dimension.
+
+### Wide-Refactor Sequencing (`expand→migrate→contract`)
+
+A wide refactor — renaming / moving / replacing a widely-consumed route, symbol, contract, or schema — is safe ONLY when removal of the old form is SEQUENCED after every consumer has moved. Plan it in three phases and tag each scope's `refactorPhase` in `state.json`:
+
+- **expand** — add the new form ALONGSIDE the old (both work); depends on nothing else in this refactor.
+- **migrate** — move each consumer batch onto the new form; each migrate scope `dependsOn` the expand scope.
+- **contract** — remove the old form; the contract scope `dependsOn` **all** migrate scopes.
+
+Opt in with a top-level `"refactorPattern": "expand-migrate-contract"` in `state.json`. **Mechanical enforcement:** `bubbles/scripts/expand-migrate-contract-guard.sh <feature-dir>` verifies the invariants over the existing `dependsOn` DAG (every scope carries a valid `refactorPhase`; at least one of each phase; every migrate depends on ≥1 expand; every contract depends on ALL migrates; no expand depends on a migrate/contract scope). It COMPOSES with G043 (consumer trace) + G044 (regression) — those prove consumers are updated; this proves the removal runs last. Advisory by default; blocking under `.github/bubbles-project.yaml` `expandMigrateContractGuard: block`. No integration-branch bypass.
+
+### Execution Substates (`execution.substate` — honest progress before certification)
+
+A scope makes visible progress DURING execution, before any certifying agent runs. That progress lives in `state.json` at `execution.substate`, a closed vocabulary written by the EXECUTION agents (`bubbles.implement` / `bubbles.test`):
+
+- **`implemented`** — the code/tests for the scope are written.
+- **`independently_verified`** — a separate check (a different agent or run) confirmed the behavior.
+- **`needs_reverification`** — a later change invalidated a prior verification.
+
+These are NOT terminal statuses and NOT certification. `bubbles.implement` and `bubbles.test` MUST NOT write `certification.*` — only `bubbles.validate` owns certification. The three substate words may NEVER appear in a terminal-status or certification-status field. **Mechanical enforcement:** `bubbles/scripts/execution-substate-guard.sh <feature-dir>` (BLOCKING) validates the vocabulary and the namespace separation; a `state.json` without `execution.substate` passes untouched.
 
 ### Legacy Format Migration (MANDATORY Before Starting Work)
 

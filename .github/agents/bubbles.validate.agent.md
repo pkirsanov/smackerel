@@ -241,6 +241,40 @@ unchanged: all scopes are Done, all DoD and evidence requirements pass, the
 delivery audit verdict is valid, and the full completion chain is required
 before `done` certification.
 
+#### Record the achieved assurance assessment (IMP-100 Phase 3, choke point #1)
+
+At terminal certification, additionally record validate's ASSESSMENT of the
+achieved assurance level as validate-owned bookkeeping under
+`certification.assurance`. This is ADDITIVE and INFORMATIONAL — it never alters
+the terminal status mirror, scope statuses, DoD, `completedScopes`, or audit
+history, and a spec with no `certification.assurance` block remains valid
+(backward-compatible). Derive it mechanically, never by assertion:
+
+1. From the completion evidence you just verified, determine four booleans:
+   implementation complete (all required scopes Done), full test coverage
+   present, all tests passing, and whether an INDEPENDENT audit ran and passed.
+   The audit profile decides the last one: `delivery-completion-v1` runs the
+   audit phase (→ `true`); the `delivery-completion-fast-v1` fast lane
+   (`rapid-tool-delivery`) runs NO audit (→ `false`).
+2. Run, via `run_in_terminal` (never by predicting its output):
+   `bash bubbles/scripts/assurance-derive.sh --implement-complete <t|f> --tests-complete <t|f> --tests-passed <t|f> --audit-complete <t|f>`
+   (optionally `--risk-class` from `risk-tier-resolve.sh`). Read the printed
+   `achievedLevel` and `missingForFull`.
+3. Record `certification.assurance = { "level": <achievedLevel>, "missingForFull": [<gaps or empty>] }`
+   verbatim from that output. `assurance-derive.sh` is fail-closed and derives
+   DOWN, so never record a higher level than the evidence supports.
+4. Confirm the recorded block is internally consistent by running, via
+   `run_in_terminal`, `bash bubbles/scripts/assurance-certification-check.sh --feature-dir <FEATURE_DIR>`
+   (it REFUSES a block whose `level` and `missingForFull` contradict the
+   derivation invariants). A refusal means the record was mangled — re-derive.
+
+This makes the achieved assurance level auditable at certification and available
+to the deploy choke points (`assurance-resolve.sh` decides deploy-eligibility
+from it; G101 release reconciliation already refuses a `delivered_prototype`
+required feature) WITHOUT changing the terminal status. Driving a DISTINCT
+terminal status (`delivered_fast` / `delivered_prototype`) from the level, and
+the guard-side consistency enforcement, are the remaining Phase-3 steps.
+
 ### Step 2B: Contract Verification (MANDATORY for API changes)
 
 If the scope includes API endpoint changes, verify response contracts match spec:

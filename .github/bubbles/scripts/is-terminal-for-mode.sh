@@ -93,10 +93,10 @@ fi
 
 if [[ -n "$resolved" ]]; then
   ceiling="$(printf '%s\n' "$resolved" | yq -r '.statusCeiling // ""' 2>/dev/null || true)"
-  aliases="$(printf '%s\n' "$resolved" | yq -r '.terminalAliases[]? // empty' 2>/dev/null || true)"
+  aliases="$(printf '%s\n' "$resolved" | yq -r '(.terminalAliases // [])[]' 2>/dev/null || true)"
 else
   ceiling="$(yq -r ".modes[\"$MODE\"].statusCeiling // \"\"" "$MODES_FILE" 2>/dev/null || true)"
-  aliases="$(yq -r ".modes[\"$MODE\"].terminalAliases[]? // empty" "$MODES_FILE" 2>/dev/null || true)"
+  aliases="$(yq -r "(.modes[\"$MODE\"].terminalAliases // [])[]" "$MODES_FILE" 2>/dev/null || true)"
 fi
 
 if [[ -z "$ceiling" || "$ceiling" == "null" ]]; then

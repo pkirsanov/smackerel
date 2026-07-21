@@ -115,7 +115,7 @@ portable_sed_inplace '/"sourceDirty":/d' "$fix6/install.sh"
 if BUBBLES_REPO_ROOT="$fix6" bash "$fix6/bubbles/scripts/generate-installer.sh" >"$fix6/check.log" 2>&1; then
   bad "mutated install.sh (missing sourceDirty field) was NOT rejected"
 else
-  if grep -qF 'I5 provenance_records_six_fields' "$fix6/check.log"; then
+  if grep -qF 'I5 provenance_records_required_fields' "$fix6/check.log"; then
     pass "removing sourceDirty from provenance heredoc -> I5 FAILs"
   else
     bad "missing sourceDirty -> checker FAILed but did not flag I5"

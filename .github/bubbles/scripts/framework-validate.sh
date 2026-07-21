@@ -163,6 +163,7 @@ run_check "Gate-catalog freshness advisory (informational, IMP-005)" bash "$SCRI
 run_check_self_only "Portable surface agnosticity" bash "$SCRIPT_DIR/agnosticity-lint.sh" --quiet
 run_check_self_only "Shellcheck lint (v7.0.2, -S warning, zero findings)" bash "$SCRIPT_DIR/shellcheck-lint.sh" --quiet
 run_check_self_only "Shellcheck lint selftest (v7.0.2)" bash "$SCRIPT_DIR/shellcheck-lint-selftest.sh"
+run_check_self_only "Git hook environment sanitization selftest" bash "$SCRIPT_DIR/hooks/git-env-sanitize-selftest.sh"
 run_check "Registry consistency selftest" bash "$SCRIPT_DIR/registry-consistency-selftest.sh"
 run_check "YAML schema validate" bash "$SCRIPT_DIR/yaml-schema-validate.sh"
 run_check_self_only "Cheatsheet generator selftest (v6.0 / B7)" bash "$SCRIPT_DIR/generate-cheatsheet-selftest.sh"
@@ -227,6 +228,15 @@ fi
 if [[ -x "$SCRIPT_DIR/eval-harness-selftest.sh" ]]; then
   run_check_self_only "Golden-task eval harness selftest (v6.1 / R11)" bash "$SCRIPT_DIR/eval-harness-selftest.sh"
 fi
+if [[ -x "$SCRIPT_DIR/eval-heldout-guard-selftest.sh" ]]; then
+  run_check "Held-out eval isolation guard selftest (IMP-100 Phase 6 / IMP-020 S4)" bash "$SCRIPT_DIR/eval-heldout-guard-selftest.sh"
+fi
+if [[ -x "$SCRIPT_DIR/effective-bundle-measure-selftest.sh" ]]; then
+  run_check "Effective prompt-bundle measurement selftest (IMP-100 Phase 6 / IMP-020 S5)" bash "$SCRIPT_DIR/effective-bundle-measure-selftest.sh"
+fi
+if [[ -x "$SCRIPT_DIR/forecast-eval-check-selftest.sh" ]]; then
+  run_check "Forecast-eval check selftest (IMP-100 Phase 6 / IMP-020 S6)" bash "$SCRIPT_DIR/forecast-eval-check-selftest.sh"
+fi
 if [[ -x "$SCRIPT_DIR/state-transition-guard-perf-selftest.sh" ]]; then
   run_check "Guard reliability perf selftest (v6.1 / R1 / BUG-001)" bash "$SCRIPT_DIR/state-transition-guard-perf-selftest.sh"
 fi
@@ -245,6 +255,12 @@ run_check "Workflow registry consistency" bash "$SCRIPT_DIR/workflow-registry-co
 run_check "Mode resolver validate" bash "$SCRIPT_DIR/mode-resolver.sh" --validate
 run_check "Mode resolver selftest" bash "$SCRIPT_DIR/mode-resolver-selftest.sh"
 run_check "Risk-tier resolver selftest (BFW-01 / IMP-021)" bash "$SCRIPT_DIR/risk-tier-resolve-selftest.sh"
+run_check "Rapid-tool-delivery mode selftest (IMP-100 Phase 1)" bash "$SCRIPT_DIR/rapid-tool-delivery-mode-selftest.sh"
+run_check "Work-boundary resolver selftest (IMP-100 Phase 4 R6)" bash "$SCRIPT_DIR/work-boundary-resolve-selftest.sh"
+run_check "Assurance deploy-eligibility resolver selftest (IMP-100 Phase 2 R4d / Phase 3)" bash "$SCRIPT_DIR/assurance-resolve-selftest.sh"
+run_check "Assurance level derivation resolver selftest (IMP-100 Phase 3 choke #1)" bash "$SCRIPT_DIR/assurance-derive-selftest.sh"
+run_check "Assurance certification consistency guard selftest (IMP-100 Phase 3 choke #1)" bash "$SCRIPT_DIR/assurance-certification-check-selftest.sh"
+run_check "Deploy-manifest assurance lint selftest (IMP-100 Phase 3 chokes #4/#5)" bash "$SCRIPT_DIR/deploy-manifest-assurance-lint-selftest.sh"
 run_check "Transition contract resolver selftest (BUG-009 S02)" bash "$SCRIPT_DIR/transition-contract-resolver-selftest.sh"
 run_check "Audit result contract lint selftest (BUG-009 S04)" bash "$SCRIPT_DIR/audit-result-contract-lint-selftest.sh"
 run_check "Mode alias selftest (v6.0 / B4)" bash "$SCRIPT_DIR/mode-alias-selftest.sh"
@@ -282,6 +298,8 @@ run_check_self_only "Gate scaffolder selftest (IMP-011)" bash "$SCRIPT_DIR/scaff
 run_check_self_only "Framework drift-check selftest (IMP-013)" bash "$SCRIPT_DIR/bubbles-drift-check-selftest.sh"
 run_check_self_only "Governance hub-report selftest (IMP-014)" bash "$SCRIPT_DIR/bubbles-hub-report-selftest.sh"
 run_check_self_only "Scan-lib helpers selftest (IMP-009)" bash "$SCRIPT_DIR/scan-lib-selftest.sh"
+run_check_self_only "DoD section lib selftest (BUG-026)" bash "$SCRIPT_DIR/dod-section-lib-selftest.sh"
+run_check_self_only "Scope universe resolver selftest (BUG-026)" bash "$SCRIPT_DIR/scope-universe-resolver-selftest.sh"
 run_check_self_only "Framework-validate tiering selftest (IMP-012)" bash "$SCRIPT_DIR/framework-validate-tier-selftest.sh"
 run_check_self_only "Install provenance selftest" bash "$SCRIPT_DIR/install-provenance-selftest.sh"
 run_check_self_only "Trust doctor selftest" bash "$SCRIPT_DIR/trust-doctor-selftest.sh"
@@ -315,6 +333,13 @@ run_check "Capability foundation guard selftest" bash "$SCRIPT_DIR/capability-fo
 run_check "State linkage backfill selftest" bash "$SCRIPT_DIR/state-linkage-backfill-selftest.sh"
 run_check "Planning packet linkage guard selftest" bash "$SCRIPT_DIR/planning-packet-linkage-guard-selftest.sh"
 run_check "Vertical-delivery plan guard selftest (BFW-02 / IMP-022)" bash "$SCRIPT_DIR/vertical-delivery-plan-guard-selftest.sh"
+run_check "Plan dependency-depth guard selftest (IMP-100 Phase 4 / IMP-022 SCOPE-3+4)" bash "$SCRIPT_DIR/plan-dependency-depth-guard-selftest.sh"
+run_check "Execution substate guard selftest (IMP-100 Phase 2 / IMP-024 SCOPE-3)" bash "$SCRIPT_DIR/execution-substate-guard-selftest.sh"
+run_check "Evidence receipt check selftest (IMP-100 Phase 2 / IMP-024 SCOPE-1+2)" bash "$SCRIPT_DIR/evidence-receipt-check-selftest.sh"
+run_check "Design-experiment guard selftest (IMP-100 Phase 4 / IMP-026 SCOPE-8)" bash "$SCRIPT_DIR/design-experiment-guard-selftest.sh"
+run_check "Work-tracker projection selftest (IMP-100 Phase 4 / IMP-026 SCOPE-7)" bash "$SCRIPT_DIR/work-tracker-project-selftest.sh"
+run_check "Scope context-fit lint selftest (IMP-100 Phase 4 / IMP-026 SCOPE-6)" bash "$SCRIPT_DIR/scope-context-fit-lint-selftest.sh"
+run_check "Expand-migrate-contract guard selftest (IMP-100 Phase 4 / IMP-026 SCOPE-2)" bash "$SCRIPT_DIR/expand-migrate-contract-guard-selftest.sh"
 run_check "Post-certification spec edit guard selftest" bash "$SCRIPT_DIR/post-cert-spec-edit-guard-selftest.sh"
 run_check "Inter-spec dependency guard selftest" bash "$SCRIPT_DIR/inter-spec-dependency-guard-selftest.sh"
 run_check "Strict terminal status guard selftest" bash "$SCRIPT_DIR/strict-terminal-status-guard-selftest.sh"
@@ -416,6 +441,10 @@ if [[ -x "$SCRIPT_DIR/release-train-rollup-selftest.sh" ]]; then
   run_check "Release train rollup selftest" bash "$SCRIPT_DIR/release-train-rollup-selftest.sh"
 fi
 
+if [[ -x "$SCRIPT_DIR/release-assurance-gate-selftest.sh" ]]; then
+  run_check "Release assurance gate selftest (IMP-100 Phase 3 choke #3)" bash "$SCRIPT_DIR/release-assurance-gate-selftest.sh"
+fi
+
 if [[ -x "$SCRIPT_DIR/observability-adapter-lint-selftest.sh" ]]; then
   run_check "Observability adapter lint selftest" bash "$SCRIPT_DIR/observability-adapter-lint-selftest.sh"
 fi
@@ -502,6 +531,18 @@ if [[ -x "$SCRIPT_DIR/stale-deferral-lint.sh" ]]; then
   # framework's own managed docs. Downstream repos have their own VERSION +
   # product docs, so the lapsed-promise comparison is meaningful only here.
   run_check_self_only "Stale-deferral lint (live)" bash "$SCRIPT_DIR/stale-deferral-lint.sh" "$REPO_ROOT"
+fi
+
+if [[ -x "$SCRIPT_DIR/management-truth-lint-selftest.sh" ]]; then
+  run_check "Management-truth lint selftest" bash "$SCRIPT_DIR/management-truth-lint-selftest.sh"
+fi
+
+if [[ -x "$SCRIPT_DIR/management-truth-lint.sh" ]]; then
+  # Live scan is source-only: it checks the framework's OWN recipe catalog
+  # (docs/recipes/README.md) and installer --profile help against the live
+  # adoption-profiles.yaml. Downstream repos have their own docs, so the
+  # catalog-completeness comparison is meaningful only here.
+  run_check_self_only "Management-truth lint (live)" bash "$SCRIPT_DIR/management-truth-lint.sh" "$REPO_ROOT"
 fi
 
 if [[ "$LIST_TIER_ONLY" == "true" ]]; then
