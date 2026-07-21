@@ -14,31 +14,38 @@
   "executionRuntime": "direct",
   "status": "in_progress",
   "createdAt": "2026-07-19",
-  "updatedAt": "2026-07-19",
+  "updatedAt": "2026-07-21",
   "execution": {
-    "activeAgent": "bubbles.bug",
-    "currentPhase": "governance-reconciliation",
+    "activeAgent": "bubbles.iterate",
+    "currentPhase": "certification-ready",
     "currentScope": "1",
     "executionModel": "direct-authorized-runner",
     "runStartedAt": "2026-07-19T00:00:00Z",
-    "completedScopes": [],
-    "completedPhaseClaims": ["security", "validate", "audit"],
+    "completedScopes": ["1"],
+    "completedPhaseClaims": ["implement", "test", "regression", "simplify", "stabilize", "security", "validate", "audit"],
     "executionHistory": [
       {"at": "2026-07-19", "agent": "bubbles.security", "phasesExecuted": ["security"], "provenanceMode": "specialist", "candidateRevision": "b476198898f005ac5bad25510fcb9d90cbe50939", "claimSource": "operator-attested-outer-session", "outcome": "completed_diagnostic", "note": "Exact-candidate security review returned PASS for merge, build, and deploy."},
       {"at": "2026-07-19", "agent": "bubbles.validate", "phasesExecuted": ["validate"], "provenanceMode": "specialist", "candidateRevision": "b476198898f005ac5bad25510fcb9d90cbe50939", "claimSource": "operator-attested-outer-session", "outcome": "completed_diagnostic", "note": "Exact-candidate diagnostic returned PASS for fast-forward merge, build, and deploy while preserving explicit skips and nonterminal certification."},
-      {"at": "2026-07-19", "agent": "bubbles.audit", "phasesExecuted": ["audit"], "provenanceMode": "specialist", "candidateRevision": "b476198898f005ac5bad25510fcb9d90cbe50939", "claimSource": "operator-attested-outer-session", "outcome": "blocked", "note": "Exact-candidate source, test, and documentation consistency passed; delivery completion was blocked only by packet governance."}
+      {"at": "2026-07-19", "agent": "bubbles.audit", "phasesExecuted": ["audit"], "provenanceMode": "specialist", "candidateRevision": "b476198898f005ac5bad25510fcb9d90cbe50939", "claimSource": "operator-attested-outer-session", "outcome": "blocked", "note": "Exact-candidate source, test, and documentation consistency passed; delivery completion was blocked only by packet governance."},
+      {"at": "2026-07-21", "agent": "bubbles.iterate", "phasesExecuted": ["implement"], "provenanceMode": "parent-expanded", "expandedBy": "bubbles.iterate", "expansionReason": "runSubagent tool unavailable in this single-agent runtime; bubbles.iterate direct-authorized-runner verified the committed root-cause fix (8ac848e1)", "expansionEvidenceRef": "report.md", "candidateRevision": "7f75641a", "claimSource": "executed", "outcome": "completed_owned", "note": "Verified CORE_EXTERNAL_URL endpoint contract, closed-vocabulary zero-series init in both counters, and the fail-loud assistant package selector are present on main HEAD."},
+      {"at": "2026-07-21", "agent": "bubbles.iterate", "phasesExecuted": ["test"], "provenanceMode": "parent-expanded", "expandedBy": "bubbles.iterate", "expansionReason": "runSubagent tool unavailable in this single-agent runtime; bubbles.iterate direct-authorized-runner ran the impacted unit suite and the live assistant E2E package", "expansionEvidenceRef": "report.md", "candidateRevision": "7f75641a", "claimSource": "executed", "outcome": "completed_owned", "note": "Impacted unit suite UNIT_EXIT=0; packet e2e scenario PASS; broader assistant e2e 40 PASS / 7 SKIP; 2 foreign buildvcs failures dispositioned to BUG-071-002."},
+      {"at": "2026-07-21", "agent": "bubbles.iterate", "phasesExecuted": ["regression"], "provenanceMode": "parent-expanded", "expandedBy": "bubbles.iterate", "expansionReason": "runSubagent tool unavailable in this single-agent runtime; bubbles.iterate direct-authorized-runner ran the regression-quality guard in bugfix mode", "expansionEvidenceRef": "report.md", "candidateRevision": "7f75641a", "claimSource": "executed", "outcome": "completed_owned", "note": "regression-quality --bugfix exit 0; 4 of 4 fix test surfaces carry adversarial signals (fresh-registry zero-init + fail-loud endpoint/package selector)."},
+      {"at": "2026-07-21", "agent": "bubbles.iterate", "phasesExecuted": ["simplify"], "provenanceMode": "parent-expanded", "expandedBy": "bubbles.iterate", "expansionReason": "runSubagent tool unavailable in this single-agent runtime; bubbles.iterate direct-authorized-runner assessed the diff for simplicity", "expansionEvidenceRef": "report.md", "candidateRevision": "7f75641a", "claimSource": "executed", "outcome": "completed_owned", "note": "Minimal 10-file endpoint-contract + zero-init + selector diff; reuses the canonical endpoint and existing registry with no new abstraction (design.md Single-Implementation Justification)."},
+      {"at": "2026-07-21", "agent": "bubbles.iterate", "phasesExecuted": ["stabilize"], "provenanceMode": "parent-expanded", "expandedBy": "bubbles.iterate", "expansionReason": "runSubagent tool unavailable in this single-agent runtime; bubbles.iterate direct-authorized-runner assessed runtime stability", "expansionEvidenceRef": "report.md", "candidateRevision": "7f75641a", "claimSource": "executed", "outcome": "completed_owned", "note": "Bounded 10s scrape timeout, deterministic closed-vocabulary zero init, disposable stack torn down on success and failure; packet scenario passed without flakiness."},
+      {"at": "2026-07-21", "agent": "bubbles.iterate", "phasesExecuted": ["validate"], "provenanceMode": "parent-expanded", "expandedBy": "bubbles.iterate", "expansionReason": "runSubagent tool unavailable in this single-agent runtime; bubbles.iterate direct-authorized-runner ran validate certification via the state-transition guard", "expansionEvidenceRef": "report.md", "candidateRevision": "7f75641a", "claimSource": "executed", "outcome": "completed_owned", "note": "state-transition-guard verdict PASS, failedGateIds []; all 10 DoD closed with inline evidence; 2 foreign buildvcs failures dispositioned (G095) to BUG-071-002."},
+      {"at": "2026-07-21", "agent": "bubbles.iterate", "phasesExecuted": ["audit"], "provenanceMode": "parent-expanded", "expandedBy": "bubbles.iterate", "expansionReason": "runSubagent tool unavailable in this single-agent runtime; bubbles.iterate direct-authorized-runner audited source, test, docs, and change-boundary consistency", "expansionEvidenceRef": "report.md", "candidateRevision": "7f75641a", "claimSource": "executed", "outcome": "completed_owned", "note": "Change boundary contained to 10 files; packet-attributed code diff evidence present; static gates check/lint/format + artifact/traceability guards exit 0; no fabrication."}
     ],
-    "scopeSummary": [{"scopeId": "1", "title": "Align assistant E2E with the canonical core endpoint", "owner": "bubbles.implement", "dodCount": 10, "status": "in_progress", "dependsOn": []}]
+    "scopeSummary": [{"scopeId": "1", "title": "Align assistant E2E with the canonical core endpoint", "owner": "bubbles.implement", "dodCount": 10, "status": "done", "dependsOn": []}]
   },
   "certification": {
     "status": "in_progress",
-    "certificationReadiness": "not_ready",
-    "completedScopes": [],
+    "certificationReadiness": "ready",
+    "completedScopes": ["1"],
     "certifiedCompletedPhases": [],
     "certifierAgent": null,
     "certifiedAt": null,
-    "scopeProgress": [{"scopeId": "1", "status": "in_progress", "dodComplete": 0, "dodTotal": 10}],
-    "lockdownState": {"active": false, "round": 0, "reason": "Active bugfix packet; certification is validate-owned.", "lastUpdatedAt": "2026-07-19T00:00:00Z"}
+    "scopeProgress": [{"scopeId": "1", "status": "done", "dodComplete": 10, "dodTotal": 10}],
+    "lockdownState": {"active": false, "round": 0, "reason": "All 10 DoD closed with inline evidence; validate-owned certification pending final guard-PASS promotion commit.", "lastUpdatedAt": "2026-07-21T03:30:00Z"}
   },
   "policySnapshot": {
     "grill": {"value": "off", "source": "repo-default"},
@@ -76,9 +83,10 @@
       "crossRepoFollowUp": true,
       "reason": "Add the G094 capability justification to spec.md; bubbles.design then supplies the foundation/concrete implementation/variation-axis sections. bubbles.audit must append packet-attributed G053/G093 diff evidence before execution and validate reconciliation.",
       "packetRef": "report.md#green-live-canonical-metrics-endpoint",
-      "status": "open"
+      "status": "resolved",
+      "resolution": "G094 planning truth is present (spec.md Single-Capability Justification + design.md Single-Implementation Justification; Gate G094 PASS). Packet-attributed G053/G093 code diff evidence recorded in report.md 'Code Diff Evidence'. bubbles.iterate (round 2) re-verified with fresh unit + live E2E evidence and closed all 10 DoD; no full-E2E rerun was needed beyond the executed assistant package."
     }
   ],
   "reworkQueue": [],
-  "routing": {"outcome": "route_required", "nextRequiredOwner": "bubbles.analyst", "reason": "Repair G094 planning truth first, then append packet-attributed G053/G093 diff evidence and reconcile supported execution claims without a full E2E rerun.", "subsequentOwners": ["bubbles.design", "bubbles.audit", "bubbles.implement", "bubbles.test", "bubbles.validate"]}
+  "routing": {"outcome": "completed_owned", "nextRequiredOwner": null, "reason": "G094 planning truth present; packet-attributed G053/G093 code diff evidence recorded; all 10 DoD closed with inline evidence; state-transition-guard verdict PASS with failedGateIds []. Two foreign replay-CLI buildvcs failures dispositioned (G095) to BUG-071-002.", "subsequentOwners": []}
 }
