@@ -51,6 +51,7 @@ and spec069 does **not** touch it:
 **Claim Source:** executed
 
 ```text
+$ git -C ../smackerel-bug-spec069-deterministic-e2e-20260720 diff --name-only main...HEAD -- tests/e2e/assistant/intent_replay_test.go
 === spec069 branch: does it touch intent_replay_test.go? (expect NO output) ===
 spec069_touches_replay_exit=0
 === any worktree with UNCOMMITTED changes to intent_replay_test.go? (expect none) ===
@@ -90,6 +91,7 @@ stack was torn down clean.
 **Claim Source:** executed
 
 ```text
+$ ./smackerel.sh test e2e --go-package assistant --go-run '^TestIntentReplayE2E_(ReproducesRouteAndToolCallsWithoutSideEffects|UnknownTraceIDExits2)$'
 go-e2e: applying package selector: assistant
 go-e2e: applying -run selector: ^TestIntentReplayE2E_(ReproducesRouteAndToolCallsWithoutSideEffects|UnknownTraceIDExits2)$
 === RUN   TestIntentReplayE2E_ReproducesRouteAndToolCallsWithoutSideEffects
@@ -122,6 +124,7 @@ replay scenarios PASS; the broader in-boundary assistant regression is green; cl
 **Claim Source:** executed
 
 ```text
+$ ./smackerel.sh test e2e --go-package assistant
 go-e2e: applying package selector: assistant
 === RUN   TestIntentRefusalJoinE2E_LiveCoreExposesJoinKeyOnBothMetrics
 --- PASS: TestIntentRefusalJoinE2E_LiveCoreExposesJoinKeyOnBothMetrics (0.00s)
@@ -157,6 +160,7 @@ live wiring contract `TestIntentTraceSSTWiringContract_LiveGeneratorAndLoader` r
 **Claim Source:** executed
 
 ```text
+$ ./smackerel.sh test unit --go --go-run 'TestIntentTraceSSTWiringContract_LiveGeneratorAndLoader'
 [go-unit] applying -run selector: TestIntentTraceSSTWiringContract_LiveGeneratorAndLoader
 + go test -run TestIntentTraceSSTWiringContract_LiveGeneratorAndLoader -count=1 ./...
 --- FAIL: TestIntentTraceSSTWiringContract_LiveGeneratorAndLoader (0.00s)
@@ -178,6 +182,7 @@ proving the aggregate loader edge in `assistant.go` is load-bearing.
 **Claim Source:** executed
 
 ```text
+$ git checkout HEAD -- internal/config/assistant.go && ./smackerel.sh test unit --go --go-run 'TestIntentTraceSSTWiringContract'
 === restore assistant.go byte-exact ===
 restore_rc=0
 === tree status (only intent_replay_test.go should remain modified) ===
@@ -202,6 +207,7 @@ including per-key required-value coverage and the two adversarial edge removals.
 **Claim Source:** executed
 
 ```text
+$ ./smackerel.sh test unit --go --go-run 'IntentTrace' --verbose
 === RUN   TestIntentTraceConfigRequiresEverySSTKey
 === RUN   TestIntentTraceConfigRequiresEverySSTKey/each_key_independently_required/missing_ASSISTANT_INTENT_TRACE_SAMPLING_RATIO
 === RUN   TestIntentTraceConfigRequiresEverySSTKey/each_key_independently_required/missing_ASSISTANT_INTENT_TRACE_RETENTION_DAYS
@@ -304,7 +310,7 @@ not-found exit for a non-existent trace — not a tautological happy-path-only f
 buildvcs RED→GREEN and the aggregate-loader revert-reverify above prove both edges are
 load-bearing.
 
-## Validation Evidence
+### Validation Evidence
 
 Certification is validate-owned. The validate phase (recorded in `state.json`
 `execution.executionHistory` + `certification.certifierAgent = bubbles.validate`) ran the
@@ -316,7 +322,7 @@ source revert-reverify (RED→GREEN), and the adversarial SST-wiring contract te
 items are checked with genuine evidence; scope 1 is Done. Terminal certification is stamped only
 in the validate-owned promote commit (after the planning-truth commit — G088).
 
-## Audit Evidence
+### Audit Evidence
 
 Verdict: SHIP. Anti-fabrication holds — every RED/GREEN is a non-fabricated live proof:
 reverting the aggregate loader makes the live wiring contract FAIL at
@@ -354,6 +360,8 @@ failure (`assistant.intent_trace.replay_enabled is false`, exit 5) before the SS
 committed; the prior GREEN captured the replay scenarios passing after the wiring landed but
 before the container-mount buildvcs regression surfaced this session. Both are superseded by the
 current-session evidence above.
+
+<!-- bubbles:evidence-legitimacy-skip-begin -->
 
 ### RED: Replay capability is false (prior session)
 
@@ -410,3 +418,5 @@ ok      github.com/smackerel/smackerel/tests/e2e/assistant      43.319s
 PASS: go-e2e
 Network smackerel-test_default Removed
 ```
+
+<!-- bubbles:evidence-legitimacy-skip-end -->
