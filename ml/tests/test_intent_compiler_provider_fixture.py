@@ -30,3 +30,13 @@ def test_annotation_fixture_preserves_dotted_artifact_id_and_compiled_slots() ->
         "rating": 4,
         "note": "needs more garlic",
     }
+
+
+def test_barcelona_weather_fixture_carries_canonical_location_slot() -> None:
+    fixture = load_fixture_module()
+    intent = fixture.compiled_intent("what is the weather in Barcelona")
+
+    assert intent["action_class"] == "external_lookup"
+    assert intent["scenario_hint"] == "weather_query"
+    assert intent["tool_hints"] == ["location_normalize", "weather_lookup"]
+    assert intent["slots"] == {"location": {"raw": "Barcelona"}}

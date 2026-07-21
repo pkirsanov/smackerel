@@ -20,19 +20,22 @@
 // is a legitimate "no live stack" skip; missing token when the stack
 // IS up is a wiring bug per repo NO-DEFAULTS policy.
 //
-// LLM nondeterminism: scenarios that depend on a specific compiler
-// classification (weather match, retrieval match, ambiguity match)
-// guard the strict assertions with a SKIP when the live compiler does
-// not produce the expected branch on this run. The wire-layer
-// invariants (HTTP 200, schema_version=v1, transport="web",
-// facade_invoked=true, no secret leakage) are always asserted because
-// they do not depend on which compiler branch fired.
+// The disposable test profile routes compiler requests through the
+// checked-in deterministic provider fixture. Required profile-backed
+// scenarios fail when that fixture does not produce the contracted
+// branch. Tests that deliberately probe an unforced compiler failure
+// remain explicit about their profile-dependent skip behavior.
 
 package assistant_e2e
 
 import (
 	"encoding/json"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"net/http"
+	"os"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -87,13 +90,12 @@ func assertNoSecretLeakage(t *testing.T, stack httpTurnLiveStack, raw []byte) {
 
 // TestIntentCompilerE2E_WeatherCompilesBeforeRouteAndNormalizesLocation —
 // SCN-068-A01. Posts a natural-language weather turn over HTTP and
-// proves the wire layer carries it through facade invocation. The
-// strict "weather scenario actually fired" assertion is guarded with
-// a SKIP because live Ollama may not classify the turn as weather on
-// every run.
+// proves the deterministic provider's canonical Barcelona location
+// reaches the weather route through facade invocation.
 func TestIntentCompilerE2E_WeatherCompilesBeforeRouteAndNormalizesLocation(t *testing.T) {
 	stack := loadHTTPTurnLiveStack(t)
 	waitHTTPTurnHealthy(t, stack, 30*time.Second)
+	isolateRequiredAssistantConversation(t, stack)
 
 	turnID := "e2e-scope1c-068a01-" + timestamp()
 	req := httpadapter.TurnRequest{
@@ -112,13 +114,58 @@ func TestIntentCompilerE2E_WeatherCompilesBeforeRouteAndNormalizesLocation(t *te
 		t.Fatalf("pre-facade rejection on weather turn: error_cause=%q", env.ErrorCause)
 	}
 	if env.CaptureRoute {
-		t.Skipf("live compiler did not route to weather (capture-as-fallback fired); scenario nondeterministic on this run. status=%q body=%q", env.Status, env.Body)
+		t.Fatalf("deterministic weather fixture routed to capture fallback; envelope=%+v", env)
 	}
-	// Weather scenario, when fired, returns the weather body. We
-	// cannot assert on exact phrasing (LLM output), but the
-	// envelope should not be empty.
+	// The weather tool response wording is provider-dependent, but the
+	// routed envelope must carry a non-empty outcome.
 	if strings.TrimSpace(env.Body) == "" && env.Status == "" {
 		t.Errorf("weather turn produced empty body and empty status; facade response is degenerate")
+	}
+}
+
+func TestIntentCompilerWeatherProtectedTestHasNoSkipFamilyCall(t *testing.T) {
+	_, sourcePath, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller failed")
+	}
+	source, err := os.ReadFile(sourcePath)
+	if err != nil {
+		t.Fatalf("read protected weather test source: %v", err)
+	}
+	parsed, err := parser.ParseFile(token.NewFileSet(), sourcePath, source, 0)
+	if err != nil {
+		t.Fatalf("parse protected weather test source: %v", err)
+	}
+	const protectedName = "TestIntentCompilerE2E_WeatherCompilesBeforeRouteAndNormalizesLocation"
+	found := false
+	for _, declaration := range parsed.Decls {
+		function, ok := declaration.(*ast.FuncDecl)
+		if !ok || function.Name.Name != protectedName {
+			continue
+		}
+		found = true
+		ast.Inspect(function.Body, func(node ast.Node) bool {
+			call, ok := node.(*ast.CallExpr)
+			if !ok {
+				return true
+			}
+			selector, ok := call.Fun.(*ast.SelectorExpr)
+			if !ok {
+				return true
+			}
+			receiver, ok := selector.X.(*ast.Ident)
+			if !ok || receiver.Name != "t" {
+				return true
+			}
+			switch selector.Sel.Name {
+			case "Skip", "Skipf", "SkipNow":
+				t.Errorf("%s contains forbidden skip-family call t.%s", protectedName, selector.Sel.Name)
+			}
+			return true
+		})
+	}
+	if !found {
+		t.Fatalf("protected weather test %s not found", protectedName)
 	}
 }
 
