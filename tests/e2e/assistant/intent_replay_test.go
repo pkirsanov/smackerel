@@ -127,7 +127,15 @@ func runReplayCLI(t *testing.T, repoRoot, envFile, traceID string) (int, string,
 	buildCtx, buildCancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer buildCancel()
 	binaryPath := filepath.Join(t.TempDir(), "smackerel-core")
-	build := exec.CommandContext(buildCtx, "go", "build", "-o", binaryPath, "./cmd/core")
+	// -buildvcs=false: this is a throwaway test-harness build of the CLI,
+	// not a release artifact, so VCS stamping is unnecessary. Disabling it
+	// keeps the build deterministic and avoids "error obtaining VCS status:
+	// exit status 128 / Use -buildvcs=false to disable VCS stamping." when
+	// git refuses to stamp the container-mounted repo tree (dubious
+	// ownership: the mounted checkout is owned by a different uid than the
+	// e2e container user). The replay contract under test is exit-code and
+	// route/tool behavior, none of which depends on embedded VCS metadata.
+	build := exec.CommandContext(buildCtx, "go", "build", "-buildvcs=false", "-o", binaryPath, "./cmd/core")
 	build.Dir = repoRoot
 	var buildStderr bytes.Buffer
 	build.Stderr = &buildStderr
