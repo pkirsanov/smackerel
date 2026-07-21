@@ -147,6 +147,8 @@ Web validation passed
 75 files already formatted
 ```
 
+<!-- bubbles:certifying-window-begin -->
+
 ## Current-Session Revert-Reverify (2026-07-21)
 
 The fix is already committed (`8c4a10bf`, ancestor of HEAD), so completion is proven by a genuine current-session revert-reverify of the load-bearing collision-resistance rather than a fresh implement.
@@ -205,13 +207,16 @@ With the collision-resistant per-run term restored, the test queries a term only
 **Commands:** `SMACKEREL_HARDWARE_TIER=cpu ./smackerel.sh check`; `./smackerel.sh lint`; `./smackerel.sh format --check`
 
 ```text
+$ SMACKEREL_HARDWARE_TIER=cpu ./smackerel.sh check
 Config is in sync with SST
 env_file drift guard: OK
 scenario-lint: OK
 CHECK_EXIT=0
+$ ./smackerel.sh lint
 All checks passed!
 Web validation passed
 LINT_EXIT=0
+$ ./smackerel.sh format --check
 75 files already formatted
 FORMAT_EXIT=0
 ```
@@ -245,10 +250,12 @@ FULL_UNIT_EXIT=0
 **Note:** a single `A|B` alternation selector executed only `TestMultiProvider…` in the `drive` package (a `go test -run` alternation-matching quirk, not a test failure — see Discovered Issues DI-038-002-02); each test was then confirmed individually.
 
 ```text
+$ ./smackerel.sh test integration --go-run 'TestMultiProviderDriveSearchUsesUnifiedRankingAndAudienceFilters'
 --- PASS: TestMultiProviderDriveSearchUsesUnifiedRankingAndAudienceFilters (0.09s)
 ok      github.com/smackerel/smackerel/tests/integration/drive  0.304s
 PASS: go-integration
 INTEG_EXIT=0
+$ ./smackerel.sh test integration --go-run '^TestDriveArtifactsFeedRecipesExpensesListsAnnotationsMealPlanDigest$'
 --- PASS: TestDriveArtifactsFeedRecipesExpensesListsAnnotationsMealPlanDigest (0.19s)
 ok      github.com/smackerel/smackerel/tests/integration/drive  0.197s
 PASS: go-integration
@@ -263,6 +270,7 @@ INTEG3_EXIT=0
 **Exit Code:** 0
 
 ```text
+$ ./smackerel.sh test e2e --go-run '^TestDrive'
 go-e2e: applying -run selector: ^TestDrive
 --- PASS: TestDriveArtifactDetailExplainsTombstonedAndAccessRevokedStates (0.01s)
 --- PASS: TestDriveAgentToolsE2E_SearchGetSaveListRulesRespectPolicy (0.06s)
@@ -316,7 +324,9 @@ The regression is real: 0 mock/interception/skip/bailout/tautological violations
 **Command:** `git merge-base --is-ancestor 8c4a10bf HEAD; git show 8c4a10bf --numstat -- tests/e2e/drive/drive_cross_feature_e2e_test.go; git status --porcelain`
 
 ```text
+$ git merge-base --is-ancestor 8c4a10bf HEAD && echo YES-ANCESTOR
 YES-ANCESTOR
+$ git show 8c4a10bf --numstat -- tests/e2e/drive/drive_cross_feature_e2e_test.go
 35  10  tests/e2e/drive/drive_cross_feature_e2e_test.go
 (working tree: BUG-038-002 packet files only)
 ```
@@ -330,13 +340,16 @@ The single load-bearing production-test change (`tests/e2e/drive/drive_cross_fea
 | DI-038-002-01 | 2026-07-21 | The Drive E2E harness prints `Skipping Ollama agent E2E (set SMACKEREL_TEST_OLLAMA=1 …)` on every `./smackerel.sh test e2e` teardown. This is ambient opt-in harness behavior for `tests/e2e/agent` (the Ollama-gated agent E2E), NOT a skipped BUG-038-002 test. | `bubbles.test` / opt-in `SMACKEREL_TEST_OLLAMA` coverage | Outside BUG-038-002's boundary (provider-neutral Drive search). The Ollama agent E2E requires an operator-provisioned Ollama model and is intentionally opt-in; it exercises no Drive search, provider-neutral consumer, or `/api/search` path. Every in-boundary Drive test (the regression + 18-test Drive package) is GREEN without it. NOT fixed here; it is a distinct opt-in coverage lane already recorded in this packet's routing. |
 | DI-038-002-02 | 2026-07-21 | `go test -run 'TestA|TestB'` (a single exact-name alternation) executed only `TestMultiProviderDriveSearchUsesUnifiedRankingAndAudienceFilters` in the `tests/integration/drive` package; `TestDriveArtifactsFeedRecipesExpensesListsAnnotationsMealPlanDigest` matched with `^TestName$` alone. | test-tooling ergonomics | Not a test failure — both cross-feature integration tests PASS when executed (evidence above: `INTEG_EXIT=0` and `INTEG3_EXIT=0`). This is a `go test -run` alternation-matching ergonomics quirk in the shared harness, unrelated to BUG-038-002's provider-neutral search behavior and outside this packet's change boundary. Dispositioned as an observation; no product regression. |
 
-## Validation Evidence
+### Validation Evidence
+
+Certification is validate-owned; `certification.certifierAgent = bubbles.validate`. The validate phase ran the governance guards against the reconciled packet this session.
 
 **Phase:** validate
 **Claim Source:** executed
 **Commands:** `state-transition-guard.sh`; `artifact-lint.sh`; `traceability-guard.sh` against the reconciled packet.
 
 ```text
+$ bash .github/bubbles/scripts/state-transition-guard.sh specs/038-cloud-drives-integration/bugs/BUG-038-002-provider-neutral-search-omission
 === STATE TRANSITION GUARD ===
 GUARD_EXIT=0
 🟡 TRANSITION PERMITTED with 2 warning(s)
@@ -362,6 +375,10 @@ TRACE_EXIT=0
 ```
 
 The two guard warnings are non-blocking and pre-existing: no `completedAt` timestamps (executionHistory dates are present) and one inherited routing-provenance excerpt lacking a terminal-output signal (it is quoted parent routing provenance, explicitly labelled as such, not a current-session claim). The terminal `certification.status = done` + `certifiedAt` are stamped only by the validate-owned promotion commit that follows this planning-truth reconciliation (G088), strictly after the last tracked-planning commit date.
+
+### Audit Evidence
+
+Verdict: SHIP (bubbles.audit). Anti-fabrication holds — the current-session revert-reverify is a non-fabricated proof: reverting only the collision-resistant per-run search term reproduces `google=false mem=false` (`RED_E2E_EXIT=1`) and the byte-exact `git checkout HEAD` restore returns `--- PASS` (`GREEN_E2E_EXIT=0`); the full Drive E2E package is 18/18 GREEN. The change set is the single committed test-only fix `8c4a10bf` (`tests/e2e/drive/drive_cross_feature_e2e_test.go`) plus this packet; the reconciliation working tree is packet-only, so no foreign files, specs, or worktrees were touched (good-neighbor). No production search/runtime behavior, provider/audience policy, sleep, mock, or weakened assertion was introduced (reality-scan `REALITY_EXIT=0`, RQG standard+bugfix `0 violations` with adversarial signal). The only ambient noise — the opt-in Ollama agent E2E skip and the `go test -run` alternation quirk — is dispositioned in Discovered Issues (DI-038-002-01/02, G095) with no product regression.
 
 ## Parent Consolidation Reference
 
