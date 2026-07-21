@@ -100,12 +100,14 @@ The same git SHA MUST produce one immutable application image. The same image di
 - Attach SLSA provenance attestation
 - Generate one config bundle per target environment via the SST pipeline (e.g., `./<project>.sh config generate --env <env> --bundle`) and publish each bundle as an immutable artifact identified by `<env>-<sourceSha>`
 - Publish a `build-manifest-<sourceSha>.yaml` listing image digest(s), bundle hashes, and attestation refs
+- **Attest the achieved assurance level** (`certification.assurance.level` ∈ `full`|`fast`|`prototype`) plus the certifying evidence digest into `build-manifest-<sourceSha>.yaml` and the per-target `manifest.yaml` `attestations.assurance` block (IMP-100 R5 choke #4)
 - Stop after publishing — CI MUST NOT SSH to a target, MUST NOT run `apply`, MUST NOT mutate any host state
 
 **Adapter `apply` MUST:**
 - Pull image by digest only (no tag resolution at deploy time)
 - Verify cosign signature against Rekor before container start
 - Verify SBOM and provenance attestations exist
+- **Verify the assurance attestation BEFORE starting any container** (IMP-100 R5 choke #5) via `bubbles/scripts/deploy-manifest-assurance-lint.sh --manifest deploy/<target>/manifest.yaml --minimum-assurance <target-floor> [--risk-class <class>]`: ALWAYS refuse `prototype` (never deployable at any target); refuse an under-assured level for the target floor (the lint consumes the shared decision in `assurance-resolve.sh`). A manifest with no `attestations.assurance` block is a backward-compatible no-op. The generic decision is framework-owned; the concrete floor + wiring are adapter-owned.
 - Pull the config bundle by hash and verify the hash
 - Write `deploy/<target>/manifest.yaml` with the new pointer pair before starting any container
 - Run the rollout strategy declared in `params.yaml`

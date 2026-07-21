@@ -18,6 +18,13 @@
 # surface?), not keyword-counting: a scope is "consumer" when its body references
 # a route/endpoint/UI/CLI/operator surface, else "foundation". Ambiguous scopes
 # are treated as foundation (conservative — advisory only).
+#
+# It ALSO enforces a risk-adjusted scope BUDGET (IMP-022 SCOPE-2, bound to the
+# Phase-1 tier): when the feature's state.json workflowMode is the low-risk
+# `rapid-tool-delivery` fast lane, the plan must stay small (<= 5 active scopes /
+# <= 3 increments) — the fast lane is for ONE usable increment, not a sprawling
+# build. Every other mode is unbounded, exactly as before. Same advisory/block
+# posture; conservative (unknown/absent mode is NOT treated as low-risk).
 set -euo pipefail
 
 usage() {
@@ -25,8 +32,9 @@ usage() {
 Usage: vertical-delivery-plan-guard.sh <feature-dir>
 
 Flags a horizontal plan (>=3 leading foundation-only scopes before the first
-consumer-visible increment). Advisory (exit 0 + warning) by default; blocks
-(exit 1) only when .github/bubbles-project.yaml sets verticalPlanGuard: block.
+consumer-visible increment) AND, for the low-risk rapid-tool-delivery tier, a
+scope-budget breach (> 5 active scopes). Advisory (exit 0 + warning) by default;
+blocks (exit 1) only when .github/bubbles-project.yaml sets verticalPlanGuard: block.
 EOF
 }
 
@@ -148,31 +156,59 @@ elif [[ "$first_consumer" -gt "$LEADING_FOUNDATION_THRESHOLD" ]]; then
   verdict="deferred-consumer"
 fi
 
-if [[ "$verdict" == "ok" ]]; then
+# ---------------------------------------------------------------------------
+# Risk-adjusted scope budget (IMP-022 SCOPE-2, bound to the Phase-1 tier).
+# The rapid-tool-delivery fast lane is for ONE low-risk, build-free usable
+# increment — not a sprawling multi-scope build. When state.json's workflowMode
+# is that low-risk tier, cap active scopes at LOW_RISK_SCOPE_BUDGET. Every other
+# mode stays unbounded (today's behavior). Conservative: an unknown/absent mode
+# is NOT treated as low-risk, so no budget is imposed.
+# ---------------------------------------------------------------------------
+LOW_RISK_SCOPE_BUDGET=5
+budget_verdict="ok"
+state_file="$feature_dir/state.json"
+if [[ -f "$state_file" ]]; then
+  wf_mode="$(grep -oE '"workflowMode"[[:space:]]*:[[:space:]]*"[^"]*"' "$state_file" 2>/dev/null | head -n1 | sed -E 's/.*:[[:space:]]*"([^"]*)"$/\1/' || true)"
+  if [[ "$wf_mode" == "rapid-tool-delivery" && "$scope_count" -gt "$LOW_RISK_SCOPE_BUDGET" ]]; then
+    budget_verdict="over-budget"
+  fi
+fi
+
+if [[ "$verdict" == "ok" && "$budget_verdict" == "ok" ]]; then
   if [[ "$first_consumer" -gt 0 ]]; then
-    echo "[vertical-delivery-plan-guard] OK — first usable increment is early (scope $first_consumer of $scope_count); no horizontal chain."
+    echo "[vertical-delivery-plan-guard] OK — first usable increment is early (scope $first_consumer of $scope_count); no horizontal chain; within scope budget."
   else
-    echo "[vertical-delivery-plan-guard] OK — $scope_count scope(s), below the horizontal-chain threshold ($LEADING_FOUNDATION_THRESHOLD)."
+    echo "[vertical-delivery-plan-guard] OK — $scope_count scope(s), below the horizontal-chain threshold ($LEADING_FOUNDATION_THRESHOLD); within scope budget."
   fi
   exit 0
 fi
 
 # ---------------------------------------------------------------------------
-# Emit the finding + concrete remediation (name the first non-shippable run).
+# Emit the finding(s) + concrete remediation.
 # ---------------------------------------------------------------------------
 lead="$((first_consumer > 0 ? first_consumer - 1 : scope_count))"
 {
-  echo "[vertical-delivery-plan-guard] HORIZONTAL PLAN in $feature_dir:"
-  if [[ "$verdict" == "no-consumer" ]]; then
-    echo "  All $scope_count scopes are foundation-only — no scope delivers a consumer-visible (usable) increment."
-  else
-    echo "  Scopes 1..$lead are foundation-only; the first consumer-visible increment is scope $first_consumer of $scope_count."
+  if [[ "$verdict" != "ok" ]]; then
+    echo "[vertical-delivery-plan-guard] HORIZONTAL PLAN in $feature_dir:"
+    if [[ "$verdict" == "no-consumer" ]]; then
+      echo "  All $scope_count scopes are foundation-only — no scope delivers a consumer-visible (usable) increment."
+    else
+      echo "  Scopes 1..$lead are foundation-only; the first consumer-visible increment is scope $first_consumer of $scope_count."
+    fi
+    echo "  Remediation: restructure so an EARLY scope delivers a runnable vertical slice"
+    echo "  (a consumer surface — route/UI/CLI/operator — plus its minimum backing path"
+    echo "  and an end-to-end scenario), instead of stacking foundations first. See"
+    echo "  docs/guides/WORKFLOW_MODES.md § Horizontal Plan Detection. A genuine"
+    echo "  high-risk foundation-first rationale can opt out per scope."
   fi
-  echo "  Remediation: restructure so an EARLY scope delivers a runnable vertical slice"
-  echo "  (a consumer surface — route/UI/CLI/operator — plus its minimum backing path"
-  echo "  and an end-to-end scenario), instead of stacking foundations first. See"
-  echo "  docs/guides/WORKFLOW_MODES.md § Horizontal Plan Detection. A genuine"
-  echo "  high-risk foundation-first rationale can opt out per scope."
+  if [[ "$budget_verdict" == "over-budget" ]]; then
+    echo "[vertical-delivery-plan-guard] SCOPE BUDGET (low-risk tier) in $feature_dir:"
+    echo "  workflowMode=rapid-tool-delivery is the low-risk fast lane, but this plan has"
+    echo "  $scope_count scopes (budget: <= $LOW_RISK_SCOPE_BUDGET active scopes / <= 3 increments)."
+    echo "  Remediation: keep the fast lane to a single low-risk, build-free usable increment —"
+    echo "  split the surplus scopes into a separate feature, or re-plan as full-delivery if the"
+    echo "  work is genuinely large. risk-tier-resolve.sh escalates any high-risk trigger anyway."
+  fi
 } >&2
 
 if [[ "$mode" == "block" ]]; then

@@ -105,7 +105,10 @@ Control-plane law also requires owner-only remediation and concrete result envel
 | [Post-Implementation Hardening](post-impl-hardening.md) | "I want code cleaned up, stable, secure, and regression-free before shipping" |
 | [Chaos Testing](chaos-testing.md) | "I need to break things to find weaknesses" |
 | [Security Review](security-review.md) | "I need to check for security vulnerabilities" |
+| [Adversarial Verification (Red-Team)](adversarial-verification.md) | "I want an adversarial pass that tries to falsify the 'done' claim before shipping" |
+| [Tool Trust & Untrusted Content](tool-trust-and-untrusted-content.md) | "I need to handle untrusted tool output and prompt-injection risk safely" |
 | [Spec Freshness Review](spec-freshness-review.md) | "I need to check if my specs are still valid before running maintenance" |
+
 ## Planning & Design
 
 | Recipe | Problem → Solution |
@@ -145,6 +148,22 @@ Control-plane law also requires owner-only remediation and concrete result envel
 | [Simplify Existing Code](simplify-existing-code.md) | "This works, but it's too complicated and I want to reduce the noise safely" |
 | [UX Single-File Sweep](ux-single-file-sweep.md) | "I need to clean up one user-facing file without scope creep into adjacent code" |
 
+## Release Trains & Propagation
+
+| Recipe | Problem → Solution |
+|--------|-------------------|
+| [Release Trains — Cut + Promote + Rollback + Retire](release-train-lifecycle.md) | "I run named release trains and need to cut, promote, roll back, or retire one" |
+| [Propagate Changes Across Trains](propagate-changes.md) | "I fixed something on one train and need it forward-merged or backported across the others" |
+| [Multi-Train Status Rollup](multi-train-status.md) | "I need one status view across every active release train" |
+
+## Production Operations
+
+| Recipe | Problem → Solution |
+|--------|-------------------|
+| [Production Incident Response](incident-response.md) | "Something is broken in production and I need the incident fastlane" |
+| [Observe Production (Live Telemetry Adapters)](observe-production.md) | "I need live production telemetry wired through observability adapters" |
+| [Upkeep — Monthly Operator Checklist](upkeep-monthly.md) | "I need the recurring monthly operational upkeep checklist" |
+
 ## Day-to-Day
 
 | Recipe | Problem → Solution |
@@ -156,6 +175,8 @@ Control-plane law also requires owner-only remediation and concrete result envel
 | [Retrospective](retro.md) | "What's my velocity, which gates fail most, where are the hotspots?" |
 | [Update Docs](update-docs.md) | "Code changed, managed docs need publishing or cleanup" |
 | [Framework Ops](framework-ops.md) | "I need to manage Bubbles itself — health, framework validation, release hygiene, hooks, gates, upgrades, metrics" |
+| [Upgrade to Bubbles v6](upgrade-to-v6.md) | "I'm on an older Bubbles version and need the v6 upgrade path" |
+| [Upgrade to Bubbles v7](upgrade-to-v7.md) | "I need the v7 upgrade path and its breaking-change notes" |
 | [Framework Dogfood](framework-dogfood.md) | "I need to prove Bubbles framework changes without keeping source-repo specs" |
 | [Framework Self-Observation](framework-health.md) | "Tell me which gates fail most, which modes stall, and promote a recurring lesson into a reusable skill" |
 | [Validation Latency Budgets](validation-latency-budgets.md) | "I need to inspect validation phase latency and budget drift" |

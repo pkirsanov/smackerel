@@ -40,6 +40,7 @@ Observability and execution evidence are not only anti-fabrication controls for 
 | Persistent regression expectations | `e2e-regression.md` |
 | Evidence-specific rules | `evidence-rules.md` |
 | Shared test-substance rules | `test-fidelity.md` |
+| Untrusted content and tool-trust boundary (NON-NEGOTIABLE) | `untrusted-content.md` |
 
 ## Quick Routing Guide
 
