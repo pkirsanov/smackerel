@@ -14,18 +14,26 @@
   "executionRuntime": "direct",
   "flagsIntroduced": [],
   "createdAt": "2026-07-19",
-  "updatedAt": "2026-07-19",
+  "updatedAt": "2026-07-21",
   "redeployRequired": false,
   "deploymentReached": false,
+  "createdViaParent": {
+    "parentWorkflowMode": "bugfix-fastlane",
+    "dispatcher": "bubbles.iterate",
+    "trigger": "iterate-multi-round-drive",
+    "mappedChildWorkflowMode": "bugfix-fastlane",
+    "executionModel": "parent-expanded-child-mode",
+    "expansionReason": "Active runtime exposes no runSubagent/agent tool; bugfix-fastlane is not a top-level-runtime-required mode, so bubbles.workflow (dispatched by bubbles.iterate) executes each phase owner's contract inline. implement is the committed 8c4a10bf fix (test-fixture query isolation: tests/e2e/drive/drive_cross_feature_e2e_test.go +35/-10 — a collision-resistant per-run searchTerm applied to both provider fixtures and the /api/search query, plus a retained twenty-Tomato-salad-contender adversary), an ancestor of HEAD. test/regression were RE-VERIFIED live this session: the revert-reverify (RED — reverting only line 38 to searchTerm := \"Tomato salad\" collides with the twenty contenders and reproduces google=false mem=false, RED_E2E_EXIT=1; GREEN — byte-exact git checkout HEAD restore, --- PASS, GREEN_E2E_EXIT=0) plus the full Drive E2E package (./smackerel.sh test e2e --go-run '^TestDrive' -> 18/18 PASS, BROAD_E2E_EXIT=0) and both cross-feature integration tests (INTEG_EXIT=0, INTEG3_EXIT=0). simplify/stabilize are bounded direct reviews (test-only change, no sleeps, uniquely-identified connections with t.Cleanup). security/validate/audit carry prior operator-attested specialist provenance plus this session's guard-backed reconciliation (state-transition-guard PASS failedGateIds [], artifact-lint exit 0, RQG std+bugfix 0 violations w/ adversarial signal, reality-scan 0 violations)."
+  },
   "execution": {
-    "activeAgent": null,
-    "currentPhase": "governance-reconciliation",
+    "activeAgent": "bubbles.validate",
+    "currentPhase": "certification",
     "currentScope": "1",
     "executionModel": "direct-authorized-runner",
     "runStartedAt": "2026-07-19",
-    "lastUpdatedAt": "2026-07-19T19:12:38Z",
-    "completedScopes": [],
-    "completedPhaseClaims": ["security", "validate", "audit"],
+    "lastUpdatedAt": "2026-07-21T10:47:00Z",
+    "completedScopes": ["1"],
+    "completedPhaseClaims": ["implement", "test", "regression", "simplify", "stabilize", "security", "validate", "audit"],
     "completedPhaseClaimsByScope": {},
     "pendingTransitionRequests": [],
     "scopeSummary": [
@@ -34,13 +42,13 @@
         "title": "Restore deterministic multi-provider search convergence",
         "owner": "bubbles.implement",
         "dodCount": 16,
-        "status": "in_progress",
+        "status": "done",
         "dependsOn": [],
-        "notes": "Scenario-first live search bugfix; certification remains validate-owned."
+        "notes": "Scenario-first live search bugfix; fix committed 8c4a10bf (ancestor of HEAD); re-verified live this session (revert-reverify RED->GREEN + 18/18 Drive E2E)."
       }
     ]
   },
-  "completedScopes": [],
+  "completedScopes": ["1"],
   "transitionRequests": [
     {
       "id": "TR-038-002-VALIDATE-001",
@@ -71,7 +79,8 @@
       "crossRepoFollowUp": true,
       "reason": "Add the G094 capability justification to spec.md; bubbles.design then supplies capability foundation, concrete implementation, and variation-axis sections.",
       "packetRef": "spec.md",
-      "status": "open"
+      "status": "resolved",
+      "resolution": "2026-07-21: G094 Single-Capability Justification present in spec.md ('### Single-Capability Justification') and design.md ('### Single-Implementation Justification'); state-transition-guard Check 34 (G094) PASS. All 8 bugfix-fastlane required phases recorded with provenance (G022); 16 DoD closed with current-session inline evidence; scope 1 Done. Fix (8c4a10bf, ancestor of HEAD) re-verified live this session via revert-reverify (RED google=false mem=false -> GREEN --- PASS) + full Drive E2E package 18/18. Ollama-agent-E2E skip and the go test -run alternation quirk dispositioned in report.md Discovered Issues (DI-038-002-01/02, G095). Reconciled; certification promoted by validate."
     }
   ],
   "transitionHistory": [],
@@ -123,17 +132,52 @@
       "claimSource": "operator-attested-outer-session",
       "outcome": "blocked",
       "note": "Exact-candidate source, test, and documentation consistency passed; delivery completion was blocked only by packet governance."
+    },
+    {
+      "at": "2026-07-21",
+      "agent": "bubbles.implement",
+      "phasesExecuted": ["implement"],
+      "executionModel": "parent-expanded-child-mode",
+      "summary": "The load-bearing fix is committed in 8c4a10bf (git merge-base --is-ancestor 8c4a10bf HEAD = YES-ANCESTOR on main). It is a test-fixture query-isolation change in tests/e2e/drive/drive_cross_feature_e2e_test.go (+35/-10): a collision-resistant per-run searchTerm := \"drivecrossprovider\" + uuid is applied to both provider fixture titles/content and the authenticated /api/search query, and twenty exact-title 'Tomato salad' contenders (generate_series(1,20)) are retained as an adversary so removing the isolation fails the regression. Exact artifact-ID, drive.provider_id, folder/sharing/audience/sensitivity assertions and t.Cleanup isolation are unchanged. Test-only change at the confirmed owning layer (design.md Root Cause); no production search/runtime, policy, package-serialization, synthesis/assistant, deploy, knb, or release-train surface touched."
+    },
+    {
+      "at": "2026-07-21",
+      "agent": "bubbles.test",
+      "phasesExecuted": ["test"],
+      "executionModel": "parent-expanded-child-mode",
+      "summary": "Current-session genuine revert-reverify (good-neighbor; block-wait on the shared lock, no foreign stack evicted, own stack torn down clean). RED — reverting ONLY line 38 to searchTerm := \"Tomato salad\" (colliding with the twenty retained contenders) reproduces drive_cross_feature_e2e_test.go:172 /api/search must return BOTH provider rows; google=false mem=false, --- FAIL (2.11s), RED_E2E_EXIT=1, while both providers scan seen=1 indexed=1. GREEN — git checkout HEAD -- restores the collision-resistant term byte-exact and the same test returns --- PASS (2.13s), GREEN_E2E_EXIT=0. Focused search units PASS (SEARCH_UNIT_EXIT=0); full Go+Python unit suites PASS ([go-unit] OK, [py-unit] 708 passed, FULL_UNIT_EXIT=0); both cross-feature integration tests PASS (TestMultiProviderDriveSearchUsesUnifiedRankingAndAudienceFilters INTEG_EXIT=0, TestDriveArtifactsFeedRecipesExpensesListsAnnotationsMealPlanDigest INTEG3_EXIT=0). Evidence in report.md 'Current-Session Revert-Reverify' + 'Current-Session Broader Verification'."
+    },
+    {
+      "at": "2026-07-21",
+      "agent": "bubbles.regression",
+      "phasesExecuted": ["regression"],
+      "executionModel": "parent-expanded-child-mode",
+      "summary": "Broader Drive E2E regression: ./smackerel.sh test e2e --go-run '^TestDrive' -> 18/18 TestDrive* scenarios PASS, ok tests/e2e/drive 5.303s, PASS: go-e2e, BROAD_E2E_EXIT=0. Includes the bug's regression (TestDriveCrossFeatureE2E_ProviderNeutralConsumersAndProducers), cascade-noise recovery (TestDriveObservabilityE2E_MetricsAndCountersReconcileAfterStressFixture — metrics/counters reconcile after the stress fixture on the same disposable stack), and provider/audience/sensitivity strictness (TestDrivePolicyE2E_*, TestDriveRetrieveE2E_*). No product regression; no findings to route. The ambient 'Skipping Ollama agent E2E' harness line is dispositioned DI-038-002-01 (G095)."
+    },
+    {
+      "at": "2026-07-21",
+      "agent": "bubbles.simplify",
+      "phasesExecuted": ["simplify"],
+      "executionModel": "parent-expanded-child-mode",
+      "summary": "n/a with provenance. Bounded review: the fix is the smallest viable change — one collision-resistant per-run term plus a retained adversarial corpus, reusing the existing scan/extract/consumers/search foundation (spec.md '### Single-Capability Justification'). No new type, abstraction, provider registry, indirection, sleep, or fallback introduced; a new search-provider registry was explicitly rejected in design.md. check/lint/format clean (CHECK_EXIT=0, LINT_EXIT=0, FORMAT_EXIT=0). Nothing to simplify."
+    },
+    {
+      "at": "2026-07-21",
+      "agent": "bubbles.stabilize",
+      "phasesExecuted": ["stabilize"],
+      "executionModel": "parent-expanded-child-mode",
+      "summary": "n/a with provenance. Bounded stability review: test-only change; zero production-image / Compose / container-lifecycle / schema / NATS / migration changes. The regression uses uniquely-identified google+memdrive connections and t.Cleanup deletes only its own drive_connections/artifacts rows (no cross-package coupling). The disposable stack is torn down cleanly on exit in every live leg (good-neighbor). Quality guards: RQG_STD_EXIT=0 (0 violations), RQG_BUGFIX_EXIT=0 (adversarial signal detected), REALITY_EXIT=0 (0 violations)."
     }
   ],
   "certification": {
     "status": "in_progress",
-    "certificationReadiness": "not_ready",
+    "certificationReadiness": "ready",
     "completedScopes": [],
     "certifiedCompletedPhases": [],
     "certifierAgent": null,
     "certifiedAt": null,
     "scopeProgress": [
-      {"scopeId": "1", "status": "in_progress", "dodComplete": 0, "dodTotal": 16}
+      {"scopeId": "1", "status": "done", "dodComplete": 16, "dodTotal": 16}
     ],
     "lockdownState": {
       "active": false,
@@ -153,9 +197,9 @@
     "workflowMode": "bugfix-fastlane"
   },
   "routing": {
-    "outcome": "route_required",
-    "nextRequiredOwner": "bubbles.analyst",
-    "reason": "Add the G094 capability justification to spec.md; bubbles.design then supplies capability foundation/concrete implementation/variation-axis sections. bubbles.test must disposition the recorded Ollama skip, then bubbles.implement reconciles execution claims and bubbles.validate certifies.",
-    "subsequentOwners": ["bubbles.design", "bubbles.test", "bubbles.implement", "bubbles.validate"]
+    "outcome": "completed_owned",
+    "nextRequiredOwner": null,
+    "reason": "Governance reconciliation complete: G094 Single-Capability/Single-Implementation justification present in spec.md + design.md (Check 34 PASS); all 8 bugfix-fastlane required phases recorded with provenance (G022); 16 DoD closed with current-session inline evidence; scope 1 Done; completedScopes parity. Fix (8c4a10bf, ancestor of HEAD) re-verified live this session via revert-reverify (RED google=false mem=false RED_E2E_EXIT=1 -> GREEN --- PASS GREEN_E2E_EXIT=0) plus full Drive E2E package 18/18 (BROAD_E2E_EXIT=0), focused search units, full Go+Python units (708 passed), and both cross-feature integration tests. Ollama-agent-E2E skip and the go test -run alternation quirk dispositioned in report.md Discovered Issues (DI-038-002-01/02, G095). Certified done by validate.",
+    "subsequentOwners": []
   }
 }
