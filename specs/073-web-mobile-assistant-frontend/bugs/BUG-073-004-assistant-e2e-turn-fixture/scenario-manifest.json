@@ -16,8 +16,8 @@
       "regressionRequired": true,
       "testPlanIds": ["TP-BUG073004-001"],
       "linkedTests": [{"type": "e2e-api", "file": "tests/e2e/assistant/transport_hint_parity_test.go", "name": "TestAssistantTransportHintParity_WebAndMobileShareResponseShape"}],
-      "evidenceRefs": ["report.md#red-before-fix-named-live-e2e", "report.md#green-after-fix-focused-and-package-e2e"],
-      "status": "in_progress"
+      "evidenceRefs": ["report.md#red-revert-reverify--load-bearing-parity-fixture-current-session", "report.md#green-revert-reverify-restore--focused-canary-current-session"],
+      "status": "done"
     },
     {
       "scenarioId": "SCN-BUG073004-002",
@@ -32,8 +32,8 @@
       "regressionRequired": true,
       "testPlanIds": ["TP-BUG073004-002"],
       "linkedTests": [{"type": "e2e-api", "file": "tests/e2e/assistant/conversation_isolation_test.go", "name": "TestAssistantConversationIsolation_RestoresExactTargetAndPreservesNeighbor_Adversarial"}],
-      "evidenceRefs": ["report.md#green-after-fix-focused-and-package-e2e"],
-      "status": "in_progress"
+      "evidenceRefs": ["report.md#green-revert-reverify-restore--focused-canary-current-session", "report.md#broader-assistant-package-regression-current-session"],
+      "status": "done"
     }
   ]
 }

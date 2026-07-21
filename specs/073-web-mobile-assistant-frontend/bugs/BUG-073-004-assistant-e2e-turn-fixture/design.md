@@ -47,3 +47,13 @@ dedup defect is owned by BUG-069-004.
 
 Revert the test/helper changes. No schema, runtime config, deployment, or
 persistent production state is involved.
+
+### Single-Implementation Justification
+
+This bugfix adds no new implementation, provider, or variant (Gate G094). It
+corrects a stale E2E fixture (swapping the `/reset` short circuit for an
+ordinary text turn) and adds one exact-key conversation-isolation test helper.
+The production `internal/assistant/facade.go` and `internal/assistant/httpadapter`
+remain a single, unchanged implementation; there are no alternative
+implementations, no variation axes, and no foundation/overlay split. A
+capability-foundation split therefore does not apply.
