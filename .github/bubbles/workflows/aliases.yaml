@@ -84,6 +84,11 @@ v5Aliases:
     tags: { action: full-delivery, target: spec }
     description: Maximum-assurance delivery of a known spec.
 
+  rapid-tool-delivery:
+    primitive: implement
+    tags: { action: rapid-tool-delivery, target: tool }
+    description: Risk-proportional fast lane for a single low-risk, build-free tool increment; escalates to full-delivery on any high-risk trigger.
+
   # delivery-lockdown is the pre-v6 (v5) NAME of full-delivery (renamed in the
   # v5→v6 mode collapse). Retained as a grandfathered registry key so persisted
   # artifacts (state.json.workflowMode: delivery-lockdown) keep resolving; new

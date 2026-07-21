@@ -3,6 +3,9 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# shellcheck source=/dev/null
+source "$SCRIPT_DIR/dod-section-lib.sh"
+
 if [[ "${BASH_VERSINFO[0]}" -ge 4 ]]; then
   # shellcheck source=/dev/null
   source "$SCRIPT_DIR/fun-mode.sh"
@@ -16,7 +19,28 @@ feature_dir="${1:-}"
 
 if [[ -z "$feature_dir" ]]; then
   echo "ERROR: missing feature directory argument"
-  echo "Usage: bash bubbles/scripts/traceability-guard.sh specs/<NNN-feature-name>"
+  echo "Usage: bash bubbles/scripts/traceability-guard.sh specs/<NNN-feature-name> [--all-scopes|--current-scope]"
+  exit 2
+fi
+
+# Scope-universe mode (BUG-026 C2). Valueless second positional token, mutually
+# exclusive, default --all-scopes. Any other form (a value, an =assignment, an
+# unknown flag, or a surplus argument) is a hard refusal. Context is derived
+# ONLY from state.json via scope-universe-resolver.py — never from an env var.
+scope_mode="--all-scopes"
+if [[ $# -ge 2 ]]; then
+  case "${2:-}" in
+    --all-scopes) scope_mode="--all-scopes" ;;
+    --current-scope) scope_mode="--current-scope" ;;
+    *)
+      echo "ERROR: unrecognized second argument: ${2:-}"
+      echo "Usage: bash bubbles/scripts/traceability-guard.sh specs/<NNN-feature-name> [--all-scopes|--current-scope]"
+      exit 2
+      ;;
+  esac
+fi
+if [[ $# -ge 3 ]]; then
+  echo "ERROR: too many arguments (expected feature dir and optional --all-scopes|--current-scope)"
   exit 2
 fi
 
@@ -295,14 +319,15 @@ extract_test_rows() {
 
 extract_dod_items() {
   local scope_path="$1"
-  awk '
-    /^#{1,4}.*Definition of Done|^#{1,4}.*DoD/ {in_dod=1; next}
-    /^#{1,4} / {if (in_dod) exit}
-    in_dod && /^- \[(x| )\] / {
-      sub(/^- \[(x| )\] /, "", $0)
-      print
-    }
-  ' "$scope_path"
+  # BUG-026: route through the shared DoD section parser so the tiered-DoD
+  # boundary is correct (nested tier subheadings are retained through depth 6
+  # and the section ends only at a same-or-shallower heading) and identical to
+  # state-transition Check 4A/22. Emits the checkbox item text after the marker,
+  # one per line — the same shape the previous inline awk produced, without the
+  # depth-4-tier false boundary that made valid DoDs look rowless (BUG026-F002).
+  dod_section_parse "$scope_path" | awk -F'\t' '
+    $1 == "CHECKBOX" { out = $4; for (i = 5; i <= NF; i++) out = out "\t" $i; print out }
+  '
 }
 
 scenario_matches_dod() {
@@ -473,12 +498,55 @@ scope_files=()
 scope_analysis_files=()
 scope_analysis_labels=()
 
+# BUG-026 C2: in --current-scope mode, resolve the immutable applicable universe
+# from state.json (fail-closed) and keep only the applicable scope directories.
+# A not_started descendant of the current scope is omitted; the current scope,
+# its transitive prerequisites, and applicable siblings are retained.
+applicable_scope_dirs=""
+if [[ "$scope_mode" == "--current-scope" ]]; then
+  if [[ "$scope_layout" != "per-scope-directory" ]]; then
+    echo "ERROR: --current-scope requires per-scope-directory layout (single-file scopes.md carries no scopeDir bijection)" >&2
+    exit 2
+  fi
+  scope_resolver="$SCRIPT_DIR/scope-universe-resolver.py"
+  if [[ ! -f "$scope_resolver" ]]; then
+    echo "ERROR: scope-universe-resolver.py not found (required for --current-scope): $scope_resolver" >&2
+    exit 2
+  fi
+  if ! command -v python3 >/dev/null 2>&1; then
+    echo "ERROR: python3 not found (required for --current-scope)" >&2
+    exit 2
+  fi
+  if ! scope_resolver_out="$(python3 "$scope_resolver" "$feature_dir" current-scope 2>&1)"; then
+    echo "ERROR: scope-universe resolution refused (--current-scope):" >&2
+    printf '%s\n' "$scope_resolver_out" >&2
+    exit 2
+  fi
+  applicable_scope_dirs="$(printf '%s\n' "$scope_resolver_out" \
+    | awk -F'\t' '$1=="RECORD" && $6=="true" && $7!="" { n=split($7,a,"/"); print a[n] }')"
+  if [[ -z "$applicable_scope_dirs" ]]; then
+    echo "ERROR: --current-scope resolved an empty applicable universe (no scopeDir on any applicable state record)" >&2
+    exit 2
+  fi
+fi
+
 if [[ "$scope_layout" == "per-scope-directory" ]]; then
   while IFS= read -r scope_path; do
+    if [[ "$scope_mode" == "--current-scope" ]]; then
+      scope_local_dir="$(basename "$(dirname "$scope_path")")"
+      if ! printf '%s\n' "$applicable_scope_dirs" | grep -qxF "$scope_local_dir"; then
+        continue
+      fi
+    fi
     scope_files+=("$scope_path")
   done < <(find "$feature_dir/scopes" -mindepth 2 -maxdepth 2 -type f -name 'scope.md' | sort)
 else
   scope_files+=("$feature_dir/scopes.md")
+fi
+
+if [[ "$scope_mode" == "--current-scope" && ${#scope_files[@]} -eq 0 ]]; then
+  echo "ERROR: --current-scope matched no physical scope directory (state scopeDir vs disk name mismatch)" >&2
+  exit 2
 fi
 
 for scope_path in "${scope_files[@]}"; do

@@ -92,6 +92,29 @@ Bubbles provides the agent definitions, skills, and governance; MCP provides ext
 
 ---
 
+## Multi-Root Workspaces: Agent–Repository Binding & Attribution
+
+When several Bubbles-installed repositories are open in one multi-root workspace, the same agent name (`bubbles.goal`, `bubbles.analyst`, …) exists under **every** workspace root. Two distinct hazards follow, and Bubbles addresses only the ones it actually controls.
+
+### What Bubbles controls (mechanical)
+
+| Surface | What it does |
+|---------|--------------|
+| Per-repo MCP id `bubbles-<repo-slug>` | Disambiguates the framework **server** so the MCP gateway starts cleanly per root (see [MCP.md](../MCP.md)). |
+| `.github/bubbles/.install-source.json` `targetRepoSlug` marker | A repo-relative identity token stamped by `install.sh` on every install/upgrade — never a per-machine absolute path. |
+| `bubbles/scripts/repo-binding-preflight.sh` | Fails loud (exit 1) before mutable work when the active agent's source-repo slug does not match the repository being edited; passes for `--canonical-source` framework work; advisory (exit 0) when no marker is present yet. |
+| `bubbles/scripts/work-boundary-resolve.sh` | Classifies a candidate change (repo / spec / path) against a feature's declared `workBoundary` (IMP-100 R6): `in-boundary`, `route-same-repo` (unrelated same-repo → file/route, never inline-fix), `route-cross-repo` (`crossRepoPolicy: authorized`), or `refuse-cross-repo` (a different repo under the default `forbidden` policy). Backward-compatible (no boundary → `in-boundary`); fail-closed (exit 2) on a malformed boundary. Guards the per-task allowed scope; composes with the repo-binding preflight above. |
+| Provenance-bearing continuation envelopes | Handoff/continuation envelopes carry `repositoryRoot` / `agentSourceRoot` / `frameworkVersion` / `target` so a resumed session can re-validate its binding (see [bubbles-result-envelope](../../skills/bubbles-result-envelope/SKILL.md)). |
+| Mechanical binding over a cosmetic label | Bubbles does **not** inject a per-repo qualifier into agent `.agent.md` files — those install byte-identical to canonical source (a managed-file integrity/tamper-detection invariant; see the `install-provenance` selftest's "installed bytes match canonical source" check). Multi-root disambiguation is therefore enforced by the three mechanical surfaces above (unique MCP id + preflight + marker), which is stronger and safer than a cosmetic picker suffix. |
+
+Run the preflight before cross-repo edits (or let an orchestrator run it) so a `guesthost` agent that drifts onto the `research-lab` repo refuses instead of silently mutating it.
+
+### What Bubbles does NOT control (upstream editor limitation)
+
+VS Code **Chronicle** (session attribution) attributes a multi-root session's work to the **first** workspace root, regardless of which repository the agent actually edited. This is an editor attribution behavior; Bubbles cannot fix it unilaterally from inside a downstream repo. Bubbles records the true binding where it CAN (the `targetRepoSlug` marker + the preflight + the envelope provenance fields), but the Chronicle roll-up remains an upstream limitation — treat Chronicle's per-root attribution as advisory in multi-root workspaces, and trust the Bubbles binding surfaces above for the authoritative agent↔repo relationship.
+
+---
+
 ## See Also
 
 - [INSTALLATION.md](INSTALLATION.md) — Full Bubbles installation guide

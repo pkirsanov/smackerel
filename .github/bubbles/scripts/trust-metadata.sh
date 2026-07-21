@@ -281,6 +281,14 @@ bubbles_framework_manifest_entries() {
     bubbles_print_manifest_entry "$source_root" "bubbles/scripts/$(basename "$file_path")"
   done
 
+  # BUG-026: top-level Python framework scripts (e.g. scope-universe-resolver.py)
+  # are managed, propagated by install.sh, and integrity-checked exactly like the
+  # *.sh scripts above; without this they would ship uncovered by the manifest.
+  for file_path in "$source_root"/bubbles/scripts/*.py; do
+    [[ -f "$file_path" ]] || continue
+    bubbles_print_manifest_entry "$source_root" "bubbles/scripts/$(basename "$file_path")"
+  done
+
   # v6.1 (M4 guard split): state-transition-guard.sh sources self-contained
   # check fragments from bubbles/scripts/guards/. The directory also owns
   # internal parser helpers used by guards. The bubbles/scripts/*.sh glob above

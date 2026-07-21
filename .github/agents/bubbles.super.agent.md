@@ -364,6 +364,7 @@ After selecting the mode, scan the user's request for these signals and attach t
 | "second opinion", "cross-check", "another review" | `samples: 2` | User wants a bounded correlated second check; increase only when risk or uncertainty justifies it |
 | "legacy", "old code", "might be stale" | `specReview: once-before-implement` | Legacy code needs freshness check |
 | "release", "ship", "production-ready", "no loose ends" | Mode: `full-delivery` | User wants release-quality assurance |
+| "quick tool", "small tool", "build-free", "low-risk increment" | Mode: `rapid-tool-delivery` (confirm via `risk-tier-resolve.sh`) | Low-risk build-free single-tool increment; the resolver escalates ANY high-risk trigger (auth/payments/secrets/PII/DB-migration/deploy/prod/host-singleton/cross-product) to `full-delivery` |
 | "competitive", "better than", "beat the competition" | Include `bubbles.analyst` in sequence | User wants competitive analysis |
 | "separate branch", "don't touch main", "isolated" | `gitIsolation: true` | User wants branch isolation |
 | "plan improvement before each round" | `improvementPrelude: analyze-design-plan` | User wants planning refreshed per round |

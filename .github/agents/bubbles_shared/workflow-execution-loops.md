@@ -224,6 +224,8 @@ Per Bubbles v5 conventions, the following phase shapes are parallel-eligible:
 | `bubbles.validate` -> `bubbles.audit` -> `bubbles.docs` | each phase reads the prior phase's status promotion. |
 | Anything writing to `state.json` for the same spec | state.json writes are non-atomic across multiple writers. |
 
+The `state.json` / shared-artifact sequential-only rule is MECHANIZED by the IMP-023 writer-lease: a second concurrent writer against a held spec target is refused with a structured `blocked` envelope (`runtime writer-guard`), so the never-parallel shapes above fail loud instead of racing. See `agents/bubbles_shared/scope-workflow.md` (Parallel-Scope Shared-State Contract, acquire-before-mutate).
+
 #### Determinism guarantees
 
 When the dispatcher fans out parallel phases, it MUST preserve:

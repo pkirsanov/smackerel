@@ -46,6 +46,7 @@ else
   FRAMEWORK_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 fi
 REGISTRY_FILE="${BUBBLES_ACTION_RISK_REGISTRY:-$FRAMEWORK_DIR/action-risk-registry.yaml}"
+TRUST_REGISTRY="${BUBBLES_TOOL_TRUST_REGISTRY:-$FRAMEWORK_DIR/tool-trust-registry.yaml}"
 
 BLOCK_CLASSES="${BUBBLES_RISK_BLOCK:-destructive_mutation external_side_effect}"
 WARN_CLASSES="${BUBBLES_RISK_WARN:-runtime_teardown}"
@@ -69,6 +70,15 @@ CONFIRM="${BUBBLES_RISK_CONFIRM:-0}"
 MODE="gate"
 RISK_CLASS_DIRECT=""
 
+# Structured-event (IMP-020 S3) fields.
+EV_SERVER=""
+EV_OPERATION=""
+EV_TOOL=""
+EV_TARGET=""
+EV_DATA_CLASSES=""
+EV_EGRESS="none"
+EV_APPROVAL_FILE=""
+
 # Pull out --confirm anywhere in the args.
 ARGS=()
 while [[ $# -gt 0 ]]; do
@@ -76,10 +86,159 @@ while [[ $# -gt 0 ]]; do
     --confirm) CONFIRM="1"; shift;;
     --risk-class) MODE="direct"; RISK_CLASS_DIRECT="${2:-}"; shift 2;;
     --resolve) MODE="resolve"; shift;;
+    --event) MODE="event"; shift;;
+    --server) MODE="event"; EV_SERVER="${2:-}"; shift 2;;
+    --operation) MODE="event"; EV_OPERATION="${2:-}"; shift 2;;
+    --tool) EV_TOOL="${2:-}"; shift 2;;
+    --target) EV_TARGET="${2:-}"; shift 2;;
+    --data-classes) EV_DATA_CLASSES="${2:-}"; shift 2;;
+    --egress) EV_EGRESS="${2:-none}"; shift 2;;
+    --approval-file) EV_APPROVAL_FILE="${2:-}"; shift 2;;
     -h|--help) usage; exit 0;;
     *) ARGS+=("$1"); shift;;
   esac
 done
+
+# --- Structured tool/server/operation event decision (IMP-020 S3 / AF-005) ---
+# Consumes a structured event + the tool-trust registry for a FAIL-CLOSED
+# decision. Unknown servers and unknown operations do NOT default to read_only.
+# Sensitive classes and any approvalRequired op need an ACTION-BOUND, host-
+# verified approval; a generic --confirm/env can never satisfy them. When the
+# host cannot enforce (hostEnforceable=false) a sensitive decision is
+# 'enforcement=unavailable' and BLOCKED — never silently passed.
+trust_srv_field() {
+  awk -v s="$1" -v f="$2" '
+    $0 ~ "^  " s ":[[:space:]]*$" {inx=1; next}
+    inx && /^  [^[:space:]]/ {inx=0}
+    inx && /^    operations:/ {ops=1}
+    inx && !ops && $0 ~ "^    " f ":" {sub(/^[^:]*:[[:space:]]*/,""); print; exit}
+  ' "$TRUST_REGISTRY" 2>/dev/null
+}
+trust_op_field() {
+  awk -v s="$1" -v o="$2" -v f="$3" '
+    $0 ~ "^  " s ":[[:space:]]*$" {inx=1; next}
+    inx && /^  [^[:space:]]/ && $0 !~ "^  " s ":" {inx=0}
+    inx && /^    operations:/ {ops=1; next}
+    inx && ops && $0 ~ "^      " o ":" {
+      line=$0
+      if (f=="permittedDataClasses") { if (match(line, /permittedDataClasses:[[:space:]]*\[[^]]*\]/)) {v=substr(line,RSTART,RLENGTH); sub(/^[^[]*\[/,"",v); sub(/\].*/,"",v); gsub(/[[:space:]]/,"",v); print v}; exit }
+      if (match(line, f":[[:space:]]*[^,}]+")) {v=substr(line,RSTART+length(f)+1); sub(/^[[:space:]]*/,"",v); sub(/[[:space:]]*[,}].*/,"",v); print v}
+      exit
+    }
+  ' "$TRUST_REGISTRY" 2>/dev/null
+}
+trust_default() {
+  awk -v a="$1" -v b="$2" '
+    $0 ~ "^defaults:" {ind=1; next}
+    ind && $0 ~ "^  " a ":" {inb=1; next}
+    inb && /^  [^[:space:]]/ {inb=0}
+    inb && $0 ~ "^    " b ":" {sub(/^[^:]*:[[:space:]]*/,""); print; exit}
+  ' "$TRUST_REGISTRY" 2>/dev/null
+}
+trust_request_hash() {
+  printf '%s|%s|%s|%s|%s|%s' "$EV_TOOL" "$EV_SERVER" "$EV_OPERATION" "$EV_TARGET" "$EV_DATA_CLASSES" "$EV_EGRESS" \
+    | { if command -v shasum >/dev/null 2>&1; then shasum -a 256; else sha256sum; fi; } | awk '{print $1}'
+}
+
+event_decision() {
+  [[ -n "$EV_SERVER" && -n "$EV_OPERATION" ]] || { echo "pre-tool-risk-gate: --event requires --server and --operation" >&2; exit 2; }
+  [[ -f "$TRUST_REGISTRY" ]] || { echo "pre-tool-risk-gate: BLOCK — tool-trust registry missing ($TRUST_REGISTRY); failing closed." >&2; echo "decision=block reason=registry-missing enforcement=unavailable"; exit 3; }
+
+  local label="$EV_SERVER/$EV_OPERATION"
+  local trust_state host_enforceable risk egress permitted approval_required
+  trust_state="$(trust_srv_field "$EV_SERVER" trustState)"
+
+  # 1. Unregistered server -> fail closed (default-deny).
+  if [[ -z "$trust_state" ]]; then
+    echo "pre-tool-risk-gate: BLOCK — '$label' server is UNREGISTERED (default-deny)." >&2
+    echo "  Register it in tool-trust-registry.yaml (source/trustState/operations) before use." >&2
+    echo "decision=block reason=unregistered-server enforcement=unavailable riskClass=external_side_effect"
+    exit 3
+  fi
+
+  host_enforceable="$(trust_srv_field "$EV_SERVER" hostEnforceable)"
+  risk="$(trust_op_field "$EV_SERVER" "$EV_OPERATION" riskClass)"
+  egress="$(trust_op_field "$EV_SERVER" "$EV_OPERATION" egress)"
+  permitted="$(trust_op_field "$EV_SERVER" "$EV_OPERATION" permittedDataClasses)"
+  approval_required="$(trust_op_field "$EV_SERVER" "$EV_OPERATION" approvalRequired)"
+
+  # 2. Unknown operation on a known server -> fail closed to the sensitive default.
+  if [[ -z "$risk" ]]; then
+    risk="$(trust_default unknownOperation riskClass)"; [[ -n "$risk" ]] || risk="external_side_effect"
+    approval_required="true"
+    egress="${egress:-external}"
+    permitted=""
+  fi
+
+  # 3. Data-class check: every event data class must be permitted; secret never egresses.
+  if [[ -n "$EV_DATA_CLASSES" ]]; then
+    local dc
+    for dc in ${EV_DATA_CLASSES//,/ }; do
+      if [[ "$dc" == "secret" && "$egress" != "none" ]]; then
+        echo "pre-tool-risk-gate: BLOCK — '$label' would move 'secret' data via egress '$egress'." >&2
+        echo "decision=block reason=secret-egress enforcement=enforced riskClass=$risk"; exit 3
+      fi
+      if [[ ",$permitted," != *",$dc,"* ]]; then
+        echo "pre-tool-risk-gate: BLOCK — '$label' not permitted for data class '$dc' (permitted: ${permitted:-none})." >&2
+        echo "decision=block reason=data-class-violation enforcement=enforced riskClass=$risk"; exit 3
+      fi
+    done
+  fi
+
+  # 4. Egress check: event egress must not exceed the declared operation egress.
+  if [[ "$EV_EGRESS" == "external" && "$egress" != "external" ]]; then
+    echo "pre-tool-risk-gate: BLOCK — '$label' attempted external egress but declares '$egress'." >&2
+    echo "decision=block reason=undeclared-egress enforcement=enforced riskClass=$risk"; exit 3
+  fi
+
+  # 5. Sensitive class or approvalRequired -> action-bound host-verified approval.
+  local sensitive="false"
+  case "$risk" in destructive_mutation|external_side_effect) sensitive="true";; esac
+  [[ "$approval_required" == "true" ]] && sensitive="true"
+
+  if [[ "$sensitive" == "true" ]]; then
+    if [[ "$host_enforceable" != "true" ]]; then
+      echo "pre-tool-risk-gate: BLOCK — '$label' is sensitive ($risk) and the host cannot enforce approval (hostEnforceable=false)." >&2
+      echo "  Ambient/non-routed tools are not interceptable by Bubbles; least privilege + untrusted-content policy apply." >&2
+      echo "decision=block reason=sensitive-host-unenforceable enforcement=unavailable riskClass=$risk"; exit 3
+    fi
+    if [[ -z "$EV_APPROVAL_FILE" || ! -f "$EV_APPROVAL_FILE" ]]; then
+      echo "pre-tool-risk-gate: BLOCK — '$label' is sensitive ($risk); needs an action-bound approval (--approval-file). --confirm does NOT apply." >&2
+      echo "decision=block reason=approval-required enforcement=enforced riskClass=$risk"; exit 3
+    fi
+    local a_hostverified a_hash a_expiry now computed
+    a_hostverified="$(sed -nE 's/^hostVerified=(.*)$/\1/p' "$EV_APPROVAL_FILE" | head -n1)"
+    a_hash="$(sed -nE 's/^requestHash=(.*)$/\1/p' "$EV_APPROVAL_FILE" | head -n1)"
+    a_expiry="$(sed -nE 's/^expiry=(.*)$/\1/p' "$EV_APPROVAL_FILE" | head -n1)"
+    computed="$(trust_request_hash)"
+    now="$(date +%s)"
+    if [[ "$a_hostverified" != "true" ]]; then
+      echo "pre-tool-risk-gate: BLOCK — approval is not host-verified (hostVerified!=true); Bubbles never simulates human approval." >&2
+      echo "decision=block reason=approval-not-host-verified enforcement=enforced riskClass=$risk"; exit 3
+    fi
+    if [[ "$a_hash" != "$computed" ]]; then
+      echo "pre-tool-risk-gate: BLOCK — approval requestHash does not bind this action (replay/mismatch)." >&2
+      echo "decision=block reason=approval-hash-mismatch enforcement=enforced riskClass=$risk"; exit 3
+    fi
+    if [[ ! "$a_expiry" =~ ^[0-9]+$ || "$a_expiry" -le "$now" ]]; then
+      echo "pre-tool-risk-gate: BLOCK — approval is expired or has no valid expiry." >&2
+      echo "decision=block reason=approval-expired enforcement=enforced riskClass=$risk"; exit 3
+    fi
+    echo "pre-tool-risk-gate: ALLOW — '$label' authorized by valid action-bound approval." >&2
+    echo "decision=allow reason=approved enforcement=enforced riskClass=$risk"; exit 0
+  fi
+
+  # 6. Non-sensitive: runtime_teardown warns; read_only/owned_mutation allow.
+  if [[ "$risk" == "runtime_teardown" ]]; then
+    echo "pre-tool-risk-gate: WARN — '$label' is runtime_teardown (proceeding)." >&2
+    echo "decision=warn reason=runtime-teardown enforcement=enforced riskClass=$risk"; exit 0
+  fi
+  echo "decision=allow reason=non-sensitive enforcement=enforced riskClass=$risk"; exit 0
+}
+
+if [[ "$MODE" == "event" ]]; then
+  event_decision
+fi
 
 # --- Resolve the effective risk class ---------------------------------------
 default_risk_class() {

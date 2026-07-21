@@ -1445,6 +1445,8 @@ cmd_writer_acquire() {
       owner_agent="$(field_from_line "$line" agent)"
       owner_lease="$(field_from_line "$line" leaseId)"
       release_registry_lock
+      emit_writer_refusal_envelope "reason=artifact-writer-conflict target=$(slugify "$target") ownerSession=${owner_session} ownerAgent=${owner_agent} ownerLease=${owner_lease} route=${owner_agent} remediation=route-to-owner-or-await-release"
+      record_framework_event "runtime_writer_acquire_refused" "blocked" "target=$(slugify "$target") owner=${owner_session} lease=${owner_lease}" "owned_mutation"
       die "Artifact writer already active for '${target}' — owner session '${owner_session}' (agent '${owner_agent}'), lease '${owner_lease}'. Route the change to that owner or wait for release; do NOT reconcile two live writers by appending evidence. Take over ONLY a stale lease with: runtime attach ${owner_lease} --takeover"
     fi
   done <<< "$(lease_lines)"
@@ -1472,6 +1474,146 @@ cmd_writer_acquire() {
   cmd_acquire "${acquire_args[@]}"
 }
 
+# ---------------------------------------------------------------------------
+# Writer-lease shared-state guard (WL2 / IMP-023 SCOPE-3) + structured refusal
+# envelope (WL1 / IMP-023 SCOPE-5)
+# ---------------------------------------------------------------------------
+# emit_writer_refusal_envelope prints ONE machine-parseable `blocked` line to
+# stderr so a caller (or selftest) can detect a structural writer refusal without
+# parsing prose. It NEVER "reconciles" two writers — it names the owner and a
+# remediation and leaves the mutation refused. The human `die` sentence is kept
+# alongside it for operators.
+emit_writer_refusal_envelope() {
+  # $1 = already-tokenized "key=value key=value" body (safe hyphenated tokens).
+  printf 'writer-lease-refusal result=blocked %s\n' "$1" >&2
+}
+
+# classify_writer_target_path echoes the OWNERSHIP CLASS of a path a scope wants
+# to write, per the IMP-004 SCOPE-2 parent-owned shared-state contract:
+#   shared-state:<file>        -> parent-orchestrator-owned (state.json,
+#                                 scenario-manifest.json, spec.md, design.md)
+#   foreign-scope-report:<id>  -> another scope's scopes/<id>/report.md|scope.md
+#   own                        -> the caller's own report/scope/source/tests
+# Classification is by basename (robust to any path prefix) plus a scopes/<id>/
+# segment check for foreign reports. Deterministic; performs no I/O.
+classify_writer_target_path() {
+  local path="$1"
+  local caller_scope="${2:-}"
+  local base seg_id
+  local re='(^|/)scopes/([^/]+)/(report|scope)\.md$'
+
+  path="${path#./}"
+  base="$(basename "$path")"
+
+  case "$base" in
+    state.json | scenario-manifest.json | spec.md | design.md)
+      printf 'shared-state:%s\n' "$base"
+      return 0
+      ;;
+  esac
+
+  if [[ "$path" =~ $re ]]; then
+    seg_id="${BASH_REMATCH[2]}"
+    if [[ -n "$caller_scope" && "$seg_id" != "$caller_scope" ]]; then
+      printf 'foreign-scope-report:%s\n' "$seg_id"
+      return 0
+    fi
+  fi
+
+  printf 'own\n'
+}
+
+# cmd_writer_guard mechanizes the parent-owned shared-state contract: a CHILD
+# scope (role=child, the default) is REFUSED when it tries to write a
+# parent-owned shared-state file or another scope's report; it is ALLOWED to
+# write its own report/scope/source/tests. A parent orchestrator (role=parent)
+# owns shared state and is always allowed. Refusal is the structured `blocked`
+# envelope (SCOPE-5) — never a reconcile-by-append.
+cmd_writer_guard() {
+  local target='' path='' role='child' scope='' session_id='' agent=''
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --target) target="$2"; shift 2 ;;
+      --path) path="$2"; shift 2 ;;
+      --role) role="$2"; shift 2 ;;
+      --scope) scope="$2"; shift 2 ;;
+      --session-id) session_id="$2"; shift 2 ;;
+      --agent) agent="$2"; shift 2 ;;
+      *) die "Unknown runtime writer-guard option: $1" ;;
+    esac
+  done
+
+  [[ -n "$target" ]] || die "Usage: runtime writer-guard --target <spec-or-bug-dir> --path <relpath> [--role parent|child] [--scope <id>] [--session-id id] [--agent name]"
+  [[ -n "$path" ]] || die "Usage: runtime writer-guard --target <spec-or-bug-dir> --path <relpath> [--role parent|child] [--scope <id>] [--session-id id] [--agent name]"
+  case "$role" in
+    parent | child) : ;;
+    *) die "runtime writer-guard --role must be 'parent' or 'child' (got '$role')" ;;
+  esac
+
+  load_runtime_defaults
+  [[ -n "$session_id" ]] || session_id="$(derive_session_id)"
+  [[ -n "$agent" ]] || agent="$(derive_agent_name)"
+
+  # A parent orchestrator owns shared state; nothing to guard.
+  if [[ "$role" == "parent" ]]; then
+    echo "✅ writer-guard: parent orchestrator may write '${path}' for '${target}'"
+    return 0
+  fi
+
+  local class
+  class="$(classify_writer_target_path "$path" "$scope")"
+
+  if [[ "$class" == own ]]; then
+    echo "✅ writer-guard: child scope may write its own '${path}' for '${target}'"
+    return 0
+  fi
+
+  # Refused: locate the current writer-lease owner (the parent) to name it.
+  local purpose repo_name owner_session='' owner_agent='' owner_lease='' line
+  purpose="artifact-write:$(slugify "$target")"
+  repo_name="$(basename "$REPO_ROOT")"
+  acquire_registry_lock
+  while IFS= read -r line; do
+    [[ -n "$line" ]] || continue
+    [[ "$(effective_status "$line")" == "active" ]] || continue
+    if [[ "$(field_from_line "$line" repo)" == "$repo_name" \
+      && "$(field_from_line "$line" purpose)" == "$purpose" \
+      && "$(field_from_line "$line" shareMode)" == "exclusive" ]]; then
+      owner_session="$(field_from_line "$line" sessionId)"
+      owner_agent="$(field_from_line "$line" agent)"
+      owner_lease="$(field_from_line "$line" leaseId)"
+      break
+    fi
+  done <<< "$(lease_lines)"
+  release_registry_lock
+
+  local reason family remediation route slug_target
+  slug_target="$(slugify "$target")"
+  case "$class" in
+    shared-state:*)
+      reason="shared-state-parent-owned"
+      family="${class#shared-state:}"
+      remediation="route-to-parent-orchestrator"
+      ;;
+    foreign-scope-report:*)
+      reason="foreign-scope-report"
+      family="scope-${class#foreign-scope-report:}"
+      remediation="route-to-owning-scope"
+      ;;
+    *)
+      reason="parent-owned"
+      family="unknown"
+      remediation="route-to-parent-orchestrator"
+      ;;
+  esac
+  route="${owner_agent:-parent-orchestrator}"
+
+  emit_writer_refusal_envelope "reason=${reason} target=${slug_target} path=${path} family=${family} ownerSession=${owner_session:-none} ownerAgent=${owner_agent:-none} ownerLease=${owner_lease:-none} route=${route} remediation=${remediation}"
+  record_framework_event "runtime_writer_guard_refused" "blocked" "target=${slug_target} path=${path} class=${class} owner=${owner_session:-none}" "owned_mutation"
+  die "Parent-owned shared state: a child scope may NOT write '${path}' (${reason}) for target '${target}'. That file is owned by the parent orchestrator${owner_session:+ (session '${owner_session}', agent '${owner_agent}', lease '${owner_lease}')}. Route the change to the parent; do NOT reconcile by appending evidence to shared state. See docs/recipes/runtime-coordination.md (artifact-writer guard)."
+}
+
 cmd_help() {
   cat <<'EOF'
 Usage: runtime-leases.sh <command> [args]
@@ -1487,6 +1629,7 @@ Commands:
   release <lease-id> [--session-id <id>] Mark a lease as released or detach one session
   reclaim-stale                   Mark expired active leases as stale
   writer-acquire --target <dir> [opts] Acquire an EXCLUSIVE artifact-writer lease keyed on a spec/bug target
+  writer-guard --target <dir> --path <p> [opts] Refuse a child scope write to parent-owned shared state
 
 Writer-acquire options (BFW-03 — thin convention over an exclusive lease):
   --target <spec-or-bug-dir>      REQUIRED. Write-exclusivity is keyed on this target (+ worktree)
@@ -1495,6 +1638,14 @@ Writer-acquire options (BFW-03 — thin convention over an exclusive lease):
   --session-id <id> / --agent <name> / --ttl-minutes <n>
   A second writer on the same target is refused, naming the current owner. A
   stale writer lease is taken over with: runtime attach <lease-id> --takeover.
+
+Writer-guard options (WL2 — mechanizes the IMP-004 parent-owned shared-state contract):
+  --target <spec-or-bug-dir>      REQUIRED. The spec/bug whose shared state is guarded
+  --path <relpath>                REQUIRED. The path the caller wants to write (relative to target)
+  --role parent|child             Default: child. A parent orchestrator owns shared state; a child does not
+  --scope <id>                    The caller's scope id (enables foreign-scope-report detection)
+  A child write to state.json / scenario-manifest.json / spec.md / design.md, or
+  to another scope's report, is refused with a structured `blocked` envelope.
 
 Acquire options:
   --environment <env>             Default: dev
@@ -1559,6 +1710,10 @@ case "${1:-help}" in
   writer-acquire)
     shift
     cmd_writer_acquire "$@"
+    ;;
+  writer-guard)
+    shift
+    cmd_writer_guard "$@"
     ;;
   help|--help|-h)
     cmd_help
