@@ -42,6 +42,14 @@ def compiled_intent(text: str) -> dict[str, object]:
             missing_slots=["location"],
             clarification_prompt="Which Springfield did you mean?",
         )
+    elif "barcelona" in normalized and "weather" in normalized:
+        base.update(
+            action_class="external_lookup",
+            side_effect_class="external_read",
+            scenario_hint="weather_query",
+            tool_hints=["location_normalize", "weather_lookup"],
+            slots={"location": {"raw": "Barcelona"}},
+        )
     elif "shopping list" in normalized:
         item_match = re.search(r"add\s+(.+?)\s+to\s+(?:my\s+)?shopping list", text, re.IGNORECASE)
         item = item_match.group(1).strip() if item_match else "milk"

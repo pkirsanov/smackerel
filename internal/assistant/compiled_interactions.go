@@ -15,9 +15,13 @@ import (
 	"github.com/smackerel/smackerel/internal/assistant/contracts"
 	"github.com/smackerel/smackerel/internal/assistant/intent"
 	assistantmetrics "github.com/smackerel/smackerel/internal/assistant/metrics"
+	"github.com/smackerel/smackerel/internal/assistant/provenance"
 )
 
-const compiledActionProposalSchemaV1 = "v1"
+const (
+	compiledActionProposalSchemaV1 = "v1"
+	compiledWeatherScenarioID      = "weather_query"
+)
 
 // CompiledActionProposal is the server-owned payload persisted behind a
 // ConfirmRef. Callback requests carry only the ref and choice.
@@ -236,6 +240,17 @@ func (f *Facade) proposeCompilerDisambiguation(
 	if err != nil {
 		return contracts.AssistantResponse{}, false, err
 	}
+	return f.proposeCompilerLocationDisambiguation(ctx, msg, conv, compiled, envelope, emittedAt)
+}
+
+func (f *Facade) proposeCompilerLocationDisambiguation(
+	ctx context.Context,
+	msg contracts.AssistantMessage,
+	conv assistantctx.Conversation,
+	compiled intent.CompiledIntent,
+	envelope microtools.Envelope,
+	emittedAt time.Time,
+) (contracts.AssistantResponse, bool, error) {
 	if envelope.Status != microtools.StatusAmbiguous {
 		return contracts.AssistantResponse{}, false, nil
 	}
@@ -281,6 +296,138 @@ func (f *Facade) proposeCompilerDisambiguation(
 	f.appendTurnAndPersist(ctx, conv, msg, resp, emittedAt)
 	f.writeAudit(ctx, msg, BandBorderline, nil, nil, resp)
 	return resp, true, nil
+}
+
+func (f *Facade) handleResolvedCompiledWeather(
+	ctx context.Context,
+	msg contracts.AssistantMessage,
+	conv assistantctx.Conversation,
+	compiled intent.CompiledIntent,
+	emittedAt time.Time,
+) (contracts.AssistantResponse, bool, error) {
+	if compiled.ActionClass != intent.ActionExternalLookup ||
+		compiled.SideEffectClass != intent.SideEffectExternalRead ||
+		compiledScenarioID(compiled) != compiledWeatherScenarioID {
+		return contracts.AssistantResponse{}, false, nil
+	}
+	if f.compiledInteractions == nil ||
+		f.compiledInteractions.locationResolver == nil ||
+		f.compiledInteractions.weatherResolver == nil {
+		return f.compiledWeatherFailure(ctx, msg, conv, contracts.ErrProviderUnavailable, contracts.ProvenanceCauseLookupError, emittedAt), true, nil
+	}
+	if !f.manifest.Enabled(compiledWeatherScenarioID) {
+		resp := contracts.AssistantResponse{
+			Status: contracts.StatusUnavailable, ErrorCause: contracts.ErrMissingScope,
+			CaptureRoute: true, Body: "that capability is not enabled.", EmittedAt: emittedAt,
+		}
+		f.appendTurnAndPersist(ctx, conv, msg, resp, emittedAt)
+		f.writeAudit(ctx, msg, BandLow, nil, nil, resp)
+		return resp, true, nil
+	}
+
+	rawLocation, ok := compiledLocationRaw(compiled)
+	if !ok {
+		return f.compiledWeatherFailure(ctx, msg, conv, contracts.ErrSlotMissing, contracts.ProvenanceCauseMissingArtifact, emittedAt), true, nil
+	}
+	envelope, err := f.compiledInteractions.locationResolver(ctx, rawLocation)
+	if err != nil {
+		return f.compiledWeatherFailure(ctx, msg, conv, contracts.ErrProviderUnavailable, contracts.ProvenanceCauseLookupError, emittedAt), true, nil
+	}
+	switch envelope.Status {
+	case microtools.StatusAmbiguous:
+		return f.proposeCompilerLocationDisambiguation(ctx, msg, conv, compiled, envelope, emittedAt)
+	case microtools.StatusFailed:
+		return f.compiledWeatherFailure(ctx, msg, conv, contracts.ErrProviderUnavailable, contracts.ProvenanceCauseLookupError, emittedAt), true, nil
+	case microtools.StatusResolved:
+		// Continue below with the canonical provider-resolved location.
+	default:
+		return contracts.AssistantResponse{}, true, fmt.Errorf("assistant: unsupported location resolution status %q", envelope.Status)
+	}
+
+	location, err := canonicalResolvedLocation(envelope.Value)
+	if err != nil {
+		return f.compiledWeatherFailure(ctx, msg, conv, contracts.ErrSlotMissing, contracts.ProvenanceCauseMissingArtifact, emittedAt), true, nil
+	}
+	forecast, err := f.compiledInteractions.weatherResolver(ctx, location, compiledWeatherWindow(compiled))
+	if err != nil {
+		return f.compiledWeatherFailure(ctx, msg, conv, contracts.ErrProviderUnavailable, contracts.ProvenanceCauseLookupError, emittedAt), true, nil
+	}
+	resp, err := compiledWeatherResponse(forecast, emittedAt)
+	if err != nil {
+		return f.compiledWeatherFailure(ctx, msg, conv, contracts.ErrProviderUnavailable, contracts.ProvenanceCauseFabricatedSource, emittedAt), true, nil
+	}
+	resp = provenance.Enforce(
+		f.manifest.RequiresProvenance(compiledWeatherScenarioID),
+		compiledWeatherScenarioID,
+		"",
+		resp,
+	)
+	f.appendTurnAndPersist(ctx, conv, msg, resp, emittedAt)
+	f.writeAudit(ctx, msg, BandHigh, nil, nil, resp)
+	return resp, true, nil
+}
+
+func canonicalResolvedLocation(value map[string]any) (string, error) {
+	name, _ := value["name"].(string)
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return "", errors.New("assistant: resolved location missing canonical name")
+	}
+	parts := []string{name}
+	for _, key := range []string{"admin1", "country"} {
+		part, _ := value[key].(string)
+		part = strings.TrimSpace(part)
+		if part == "" || strings.EqualFold(part, parts[len(parts)-1]) {
+			continue
+		}
+		parts = append(parts, part)
+	}
+	return strings.Join(parts, ", "), nil
+}
+
+func compiledWeatherResponse(forecast weather.Forecast, emittedAt time.Time) (contracts.AssistantResponse, error) {
+	forecastLine := strings.TrimSpace(forecast.ForecastLine)
+	providerName := strings.TrimSpace(forecast.ProviderName)
+	if forecastLine == "" || providerName == "" || forecast.RetrievedAt.IsZero() {
+		return contracts.AssistantResponse{}, errors.New("assistant: weather result missing source-qualified output")
+	}
+	return contracts.AssistantResponse{
+		Status: contracts.StatusCheckingWeather,
+		Body:   forecastLine,
+		Sources: []contracts.Source{{
+			ID:    fmt.Sprintf("%s:%d", providerName, forecast.RetrievedAt.UnixNano()),
+			Title: providerName,
+			Kind:  contracts.SourceExternalProvider,
+			Ref: contracts.ExternalProviderRef{
+				ProviderName: providerName,
+				RetrievedAt:  forecast.RetrievedAt,
+			},
+		}},
+		EmittedAt: emittedAt,
+	}, nil
+}
+
+func (f *Facade) compiledWeatherFailure(
+	ctx context.Context,
+	msg contracts.AssistantMessage,
+	conv assistantctx.Conversation,
+	errorCause contracts.ErrorCause,
+	provenanceCause contracts.ProvenanceCause,
+	emittedAt time.Time,
+) contracts.AssistantResponse {
+	resp := contracts.AssistantResponse{
+		Status: contracts.StatusUnavailable, ErrorCause: errorCause,
+		Body: "weather source unavailable.", EmittedAt: emittedAt,
+	}
+	resp = provenance.Enforce(
+		f.manifest.RequiresProvenance(compiledWeatherScenarioID),
+		compiledWeatherScenarioID,
+		provenanceCause,
+		resp,
+	)
+	f.appendTurnAndPersist(ctx, conv, msg, resp, emittedAt)
+	f.writeAudit(ctx, msg, BandLow, nil, nil, resp)
+	return resp
 }
 
 func compiledLocationRaw(compiled intent.CompiledIntent) (string, bool) {
@@ -357,20 +504,16 @@ func (f *Facade) resolveCompilerDisambig(
 	if err != nil {
 		return msg, conv, contracts.AssistantResponse{}, true, err
 	}
-	resp := contracts.AssistantResponse{
-		Status: contracts.StatusCheckingWeather,
-		Body:   forecast.ForecastLine,
-		Sources: []contracts.Source{{
-			ID:    fmt.Sprintf("%s:%d", forecast.ProviderName, forecast.RetrievedAt.UnixNano()),
-			Title: forecast.ProviderName,
-			Kind:  contracts.SourceExternalProvider,
-			Ref: contracts.ExternalProviderRef{
-				ProviderName: forecast.ProviderName,
-				RetrievedAt:  forecast.RetrievedAt,
-			},
-		}},
-		EmittedAt: emittedAt,
+	resp, err := compiledWeatherResponse(forecast, emittedAt)
+	if err != nil {
+		return msg, conv, contracts.AssistantResponse{}, true, err
 	}
+	resp = provenance.Enforce(
+		f.manifest.RequiresProvenance(compiledWeatherScenarioID),
+		compiledWeatherScenarioID,
+		"",
+		resp,
+	)
 	f.appendTurnAndPersist(ctx, conv, msg, resp, emittedAt)
 	f.writeAudit(ctx, msg, BandHigh, nil, nil, resp)
 	return msg, conv, resp, true, nil
