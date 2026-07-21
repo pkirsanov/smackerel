@@ -8,7 +8,9 @@
   "severity": "high",
   "source": "BROAD-DRIVE-HEALTH-001 routed from BUG-026-008 synthesis closeout",
   "owningSpec": "038-cloud-drives-integration",
-  "status": "in_progress",
+  "status": "done",
+  "certifiedAt": "2026-07-21T12:17:10Z",
+  "certifiedBy": "bubbles.validate",
   "releaseTrain": "mvp",
   "workflowMode": "bugfix-fastlane",
   "executionRuntime": "direct",
@@ -170,12 +172,12 @@
     }
   ],
   "certification": {
-    "status": "in_progress",
+    "status": "done",
     "certificationReadiness": "ready",
-    "completedScopes": [],
-    "certifiedCompletedPhases": [],
-    "certifierAgent": null,
-    "certifiedAt": null,
+    "completedScopes": ["1"],
+    "certifiedCompletedPhases": ["implement", "test", "regression", "simplify", "stabilize", "security", "validate", "audit"],
+    "certifierAgent": "bubbles.validate",
+    "certifiedAt": "2026-07-21T12:17:10Z",
     "scopeProgress": [
       {"scopeId": "1", "status": "done", "dodComplete": 16, "dodTotal": 16}
     ],
