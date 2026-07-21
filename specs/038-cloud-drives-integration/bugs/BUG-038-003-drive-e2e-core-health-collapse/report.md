@@ -146,6 +146,7 @@ BUG-038-003 is a diagnostic/routing packet; its own reliably-verifiable load-bea
 **Exit Code:** 1
 
 ```text
+$ ./smackerel.sh --env test test e2e --go-run '^TestDrive'
 === RUN   TestDriveCrossFeatureE2E_ProviderNeutralConsumersAndProducers
     /api/search must return BOTH provider rows; google=false mem=false
 --- FAIL: TestDriveCrossFeatureE2E_ProviderNeutralConsumersAndProducers (2.09s)
@@ -173,6 +174,7 @@ The cross-feature neighbor is RED, yet `TestDriveObservabilityE2E` (the successo
 **Exit Code:** 0
 
 ```text
+$ ./smackerel.sh --env test test e2e --go-run '^TestDrive'
 === RUN   TestDriveCrossFeatureE2E_ProviderNeutralConsumersAndProducers
 --- PASS: TestDriveCrossFeatureE2E_ProviderNeutralConsumersAndProducers (0.79s)
 --- PASS: TestDriveExtractE2E_MultiFormatFilesBecomeSearchable (2.06s)
@@ -232,6 +234,7 @@ UNIT_EXIT=0
 **Commands:** `SMACKEREL_HARDWARE_TIER=cpu ./smackerel.sh check`; `./smackerel.sh lint`; `./smackerel.sh format --check`
 
 ```text
+$ SMACKEREL_HARDWARE_TIER=cpu ./smackerel.sh check; ./smackerel.sh lint; ./smackerel.sh format --check
 Config is in sync with SST
 env_file drift guard: OK
 scenario-lint: OK
