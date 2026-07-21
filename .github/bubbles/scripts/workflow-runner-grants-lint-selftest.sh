@@ -12,7 +12,9 @@ if ! command -v yq >/dev/null 2>&1; then
   exit 0
 fi
 
-TMPDIR="$(mktemp -d)"
+selftest_tmp_base="${TMPDIR:-$HOME/.cache}"
+mkdir -p "$selftest_tmp_base"
+TMPDIR="$(mktemp -d "$selftest_tmp_base/bubbles-workflow-runner-grants.XXXXXX")"
 trap 'rm -rf "$TMPDIR"' EXIT INT TERM
 
 failures=0

@@ -54,6 +54,7 @@ handoffs:
 - When security review discovers code defects, invoke `bubbles.implement` via `runSubagent`.
 
 **Non-goals:**
+- **Cross-`workBoundary` drift (do NOT wander):** a finding outside the active work boundary — a different repository, or a spec/path the feature's `workBoundary` excludes — is route-ONLY; never apply an inline fix outside the boundary even when it looks trivial. Consult `work-boundary-resolve.sh` (dispositions `route-cross-repo` / `refuse-cross-repo`) and emit `route_required` for the owning repo/spec.
 - Performance/infrastructure hardening (→ bubbles.stabilize)
 - General code quality or spec compliance (→ bubbles.audit)
 - Implementing fixes for found vulnerabilities (→ bubbles.implement, unless ≤30 lines inline)

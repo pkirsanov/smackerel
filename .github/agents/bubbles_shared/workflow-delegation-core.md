@@ -15,10 +15,28 @@ Use this module to keep routing responsibilities separated across the Bubbles fr
 Classify incoming workflow requests into exactly one of these buckets before Phase 0:
 
 1. `STRUCTURED` — explicit `mode:` keyword is present WITH concrete spec targets. `bubbles.workflow` may continue directly. **NOTE:** If spec targets are present but NO explicit `mode:` keyword exists, this is NOT structured — classify as `VAGUE` and delegate to `bubbles.super` for intent resolution. The presence of spec targets alone does not make a request structured.
-2. `CONTINUATION` — continuation envelopes, run-state, recap/status/handoff packets, or explicit continuation language tied to active workflow state are present. Preserve the active workflow mode when possible.
+2. `CONTINUATION` — continuation envelopes, run-state, recap/status/handoff packets, or explicit continuation language tied to active workflow state are present. Preserve the active workflow mode when possible. **Binding re-validation (IMP-025 MR3):** when a continuation envelope carries a `provenance` block (`repositoryRoot` / `agentSourceRoot` / `frameworkVersion`), re-validate the repo↔agent binding on resume before mutable work — run `bubbles/scripts/repo-binding-preflight.sh --repo-root <repositoryRoot> --agent-source <agentSourceRoot>` (or `--canonical-source` for framework work). A binding mismatch is a REFUSE: the resumed session is bound to a different workspace root than the handoff assumed; surface the mismatch + remediation instead of editing.
 3. `VAGUE` — plain-English goal with no explicit `mode:` keyword, OR spec targets present without `mode:`. Delegate to `bubbles.super` and consume a `RESOLUTION-ENVELOPE`. This includes requests with planning-intent language ("plan", "design", "scope", "create specs", "create bugs", "planning cycle") even when the user names specific specs or features — the intent still needs NL-to-mode translation.
 4. `CONTINUE` — generic keep-going language with no recoverable active workflow target. Resolve through `bubbles.super` and route to `bubbles.goal` or `bubbles.iterate`; the workflow runner does not pick unrelated work.
 5. `FRAMEWORK` — framework operations such as doctor, hooks, upgrade, status, metrics, lessons, gates, or install. Delegate to `bubbles.super` and consume a `FRAMEWORK-ENVELOPE`.
+
+### Work-Boundary Preflight (R6 — anti-wandering)
+
+The binding re-validation in the `CONTINUATION` bucket runs on **resume**. Extend the SAME repo↔agent check to **initial mutable start**, not only on resume: before the FIRST mutable action of any classified request (`STRUCTURED`, or a `VAGUE` request after `bubbles.super` resolution), run `bubbles/scripts/repo-binding-preflight.sh` (`--canonical-source` for framework work) so a fresh session bound to the wrong workspace root REFUSES before editing — the resume path is not the only entry that can be mis-bound.
+
+At **each specialist dispatch**, before handing candidate work to a phase owner, consult the work-boundary resolver against the feature's declared boundary and honor the returned `disposition`:
+
+```
+bubbles/scripts/work-boundary-resolve.sh --feature-dir <FEATURE_DIR> --candidate-repo <slug> \
+    [--candidate-spec <id>] [--candidate-path <path>]
+```
+
+- `disposition=in-boundary` → dispatch inline as normal.
+- `disposition=route-same-repo` → an unrelated same-repo finding: FILE/route it; do not fix it inline in this scope.
+- `disposition=route-cross-repo` → a different-repo finding under `crossRepoPolicy: authorized`: route to the owning repo (route-only, never inline).
+- `disposition=refuse-cross-repo` → a different-repo finding under the default forbidden policy: REFUSE; surface the boundary + remediation instead of editing the other repo. This is the direct stop for the "started on repo A, wandered into fixing repo B" failure.
+
+Backward-compatible: a feature with no declared `workBoundary` (or no `state.json`) resolves `in-boundary` (no behavior change); a present-but-malformed boundary exits 2 (fail-closed). The resolver COMPOSES with — does not replace — `repo-binding-preflight.sh`: preflight verifies the repo↔agent binding, the resolver classifies each candidate change against the boundary.
 
 ### ⛔ Literal `mode:` Gate (MANDATORY — NON-NEGOTIABLE)
 

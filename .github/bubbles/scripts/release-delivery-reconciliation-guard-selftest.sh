@@ -28,6 +28,8 @@ set -uo pipefail
 #                                                                           honest blocked != delivered)
 #   S10 source-repo-shaped root (no docs/releases)               → exit 0  (EXEMPT)
 #   S11 reconciled packet; annotation missing 'delivery' field   → exit 1  (ADVERSARIAL: malformed)
+#   S12 reconciled packet; required feature delivered_prototype   → exit 1  (assurance invariant:
+#       (validate-certified)                                                 prototype never deployable)
 #
 # Reference: improvements/IMP-006-release-delivery-reconciliation.md
 
@@ -212,6 +214,18 @@ mk_features "$R11" mvp true \
 mk_spec "$R11" specs/079-broken "done" plan design implement test validate
 run_guard --repo-root "$R11" --phase mvp
 expect_rc 1 "S11 malformed annotation (missing delivery field)"
+
+# S12 — reconciled, required feature at delivered_prototype, FULLY validate-certified → 1
+#       (assurance invariant: prototype tier is NEVER deployable, so it can never
+#       satisfy a delivery=required feature — even validate-certified. This LOCKS the
+#       explicit refusal so a future prototype-tier mode that declares delivered_prototype
+#       terminal cannot silently reconcile a prototype as "delivered" — the deploy hole.)
+R12="$(new_repo s12)"
+mk_features "$R12" mvp true \
+  "bubbles:feature id=proto-only spec=specs/080-proto delivery=required"
+mk_spec "$R12" specs/080-proto "delivered_prototype" plan design implement test validate
+run_guard --repo-root "$R12" --phase mvp
+expect_rc 1 "S12 required feature delivered_prototype is refused (prototype never deployable)"
 
 # ----------------------------------------------------------------------------
 echo ""

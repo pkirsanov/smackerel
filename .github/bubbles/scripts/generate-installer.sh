@@ -162,8 +162,8 @@ fi
 # I4: every_step_has_a_marker — already handled per-step above; record a header pass
 emit_pass "I4 every_step_has_a_marker: $step_count required-step markers checked"
 
-# I5: provenance_records_six_fields
-provenance_fields=(installedVersion installMode sourceRef sourceGitSha sourceDirty installedAt)
+# I5: provenance_records_required_fields
+provenance_fields=(installedVersion installMode sourceRef sourceGitSha sourceDirty targetRepoSlug installedAt)
 missing_field=""
 for f in "${provenance_fields[@]}"; do
   if ! grep -qF "\"$f\":" "$INSTALL_SH"; then
@@ -172,9 +172,9 @@ for f in "${provenance_fields[@]}"; do
   fi
 done
 if [[ -z "$missing_field" ]]; then
-  emit_pass "I5 provenance_records_six_fields: all 6 fields present in .install-source.json heredoc"
+  emit_pass "I5 provenance_records_required_fields: all ${#provenance_fields[@]} fields present in .install-source.json heredoc"
 else
-  emit_fail "I5 provenance_records_six_fields: field missing from install.sh heredoc: $missing_field"
+  emit_fail "I5 provenance_records_required_fields: field missing from install.sh heredoc: $missing_field"
 fi
 
 # ── Summary ──────────────────────────────────────────────────────

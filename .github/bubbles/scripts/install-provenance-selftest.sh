@@ -209,6 +209,30 @@ remote_manifest="$REMOTE_FIXTURE/.github/bubbles/release-manifest.json"
   && pass "Remote-ref provenance stays clean" \
   || fail "Remote-ref provenance stays clean"
 
+# IMP-025 SCOPE-5: the installer STAMPS the repo-binding marker (targetRepoSlug),
+# flipping repo-binding-preflight.sh from advisory-until-configured to enforcing.
+remote_slug="$(bubbles_json_string_field "$remote_provenance" targetRepoSlug)"
+[[ -n "$remote_slug" ]] \
+  && pass "Install stamps the repo-binding targetRepoSlug marker (IMP-025 SCOPE-5)" \
+  || fail "Install should stamp the repo-binding targetRepoSlug marker"
+case "$remote_slug" in
+  */*) fail "Stamped targetRepoSlug must be a repo-relative slug (no path separator)" ;;
+  *) pass "Stamped targetRepoSlug is a repo-relative slug (no path separator)" ;;
+esac
+remote_preflight="$REMOTE_FIXTURE/.github/bubbles/scripts/repo-binding-preflight.sh"
+bound_out="$(bash "$remote_preflight" --repo-root "$REMOTE_FIXTURE" 2>&1)" && bound_rc=0 || bound_rc=$?
+if [[ "$bound_rc" -eq 0 ]] && printf '%s\n' "$bound_out" | grep -Fq 'matches target repo'; then
+  pass "repo-binding preflight resolves the stamped marker and confirms binding (enforcing, not advisory)"
+else
+  fail "repo-binding preflight should resolve the stamped marker (got rc=$bound_rc: $bound_out)"
+fi
+foreign_out="$(bash "$remote_preflight" --repo-root "$REMOTE_FIXTURE" --agent-source foreign-workspace-root 2>&1)" && foreign_rc=0 || foreign_rc=$?
+if [[ "$foreign_rc" -eq 1 ]] && printf '%s\n' "$foreign_out" | grep -Fq 'BINDING MISMATCH'; then
+  pass "repo-binding preflight refuses a foreign agent-source against the freshly installed repo"
+else
+  fail "repo-binding preflight should refuse a foreign agent-source (got rc=$foreign_rc)"
+fi
+
 default_bootstrap_output="$(
   cd "$DEFAULT_BOOTSTRAP_FIXTURE"
   BUBBLES_SOURCE_OVERRIDE_DIR="$ROOT_DIR" bash "$ROOT_DIR/install.sh" main --bootstrap 2>&1

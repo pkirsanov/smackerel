@@ -43,6 +43,7 @@ handoffs:
 **⛔ COMPLETION GATES:** See [agent-common.md](bubbles_shared/agent-common.md) → ABSOLUTE COMPLETION HIERARCHY (Gates G023, G024, G025, G027, G028, G029, G040, G047, G048, G021, G035, G051, G052, G053, G093). The audit agent is the LAST LINE OF DEFENSE — it MUST verify every gate applicable to the registry-resolved audit profile, including G040 (zero deferral language), G047 (IDOR/auth bypass), G048 (silent decode failures), G021 (anti-fabrication), G035 (vertical slice + gateway routing), G029 (integration completeness), G051 (test env dependencies), G052 (artifact freshness isolation), G053 (implementation delta evidence), and G093 (done-ceiling delivery changed non-planning implementation/runtime/config/contract/test/docs paths). A failure is audit evidence and routing input; audit never reverts or certifies state.
 
 **Non-goals:**
+- **Cross-`workBoundary` drift (do NOT wander):** a finding outside the active work boundary — a different repository, or a spec/path the feature's `workBoundary` excludes — is route-ONLY; never apply an inline fix outside the boundary even when it looks trivial. Consult `work-boundary-resolve.sh` (dispositions `route-cross-repo` / `refuse-cross-repo`) and emit `route_required` for the owning repo/spec.
 - Ad-hoc fixes outside a classified feature/bug/ops folder
 - Marking anything "done" without required gates and evidence
 - Rubber-stamping work that has not been verified with real evidence

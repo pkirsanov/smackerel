@@ -293,11 +293,13 @@ invariants:
       present. Missing marker => generator-check FAIL.
     closes_bug: silent-step-deletion
 
-  - id: provenance_records_six_fields
+  - id: provenance_records_required_fields
     description: |
-      .install-source.json MUST carry exactly the six declared fields
+      .install-source.json MUST carry every declared provenance field
       (installedVersion, installMode, sourceRef, sourceGitSha,
-      sourceDirty, installedAt). The check greps install.sh for the
-      cat > heredoc emitting .install-source.json and verifies every
-      field name appears.
+      sourceDirty, targetRepoSlug, installedAt). The check greps
+      install.sh for the cat > heredoc emitting .install-source.json and
+      verifies every field name appears. targetRepoSlug is the
+      repo-relative repo-binding marker (IMP-025 SCOPE-5) consumed by
+      repo-binding-preflight.sh.
     closes_bug: missing-provenance-field

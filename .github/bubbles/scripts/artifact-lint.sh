@@ -255,6 +255,25 @@ if isinstance(value, str):
 PY
 }
 
+json_has_top_level_key() {
+  local key="$1"
+  local file="$2"
+  if [[ ! -f "$file" ]]; then
+    return 1
+  fi
+
+  python3 - "$file" "$key" <<'PY'
+import json
+import sys
+
+file_path, key = sys.argv[1:3]
+with open(file_path, encoding="utf-8") as handle:
+    data = json.load(handle)
+
+raise SystemExit(0 if isinstance(data, dict) and key in data else 1)
+PY
+}
+
 extract_array_block() {
   local array_key="$1"
   local file="$2"
@@ -633,9 +652,10 @@ if [[ -f "$state_file" ]]; then
       done
     fi
 
-    # Check for deprecated field usage
-    for dep_field in "featureId" "featureFile" "selectedScopeName" "scopeProgress" "statusDiscipline" "scopeLayout"; do
-      if grep -q "\"$dep_field\"" "$state_file"; then
+    # Check only deprecated top-level fields. certification.scopeProgress,
+    # scopeLayout, and statusDiscipline are part of the canonical v3 shape.
+    for dep_field in "featureId" "featureFile" "selectedScopeName" "scopeProgress"; do
+      if json_has_top_level_key "$dep_field" "$state_file"; then
         warn "state.json uses deprecated field '$dep_field' — see scope-workflow.md state.json canonical schema v2"
       fi
     done

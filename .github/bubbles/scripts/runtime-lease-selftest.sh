@@ -387,6 +387,68 @@ else
   fail "A stale artifact-writer lease should be taken over via attach --takeover"
 fi
 
+# ---------------------------------------------------------------------------
+# Writer-guard: parent-owned shared-state enforcement (WL2 / IMP-023 SCOPE-3)
+# and the structured `blocked` refusal envelope (WL1 / IMP-023 SCOPE-5).
+# ---------------------------------------------------------------------------
+# A parent orchestrator establishes the writer lease for a fresh guard target,
+# so the guard refusals below can NAME the owner.
+wg_target="specs/044-guard-demo"
+BUBBLES_REPO_ROOT="$WRITER_ROOT" BUBBLES_SESSION_ID="wg-parent" BUBBLES_AGENT_NAME="bubbles.plan" bash "$RUNTIME_SCRIPT" writer-acquire --target "$wg_target" --paths source,tests,report >/dev/null
+
+# A child writing shared state.json is REFUSED with a structured blocked envelope naming the parent.
+wg_state_out="$(BUBBLES_REPO_ROOT="$WRITER_ROOT" BUBBLES_SESSION_ID="wg-child" BUBBLES_AGENT_NAME="bubbles.implement" bash "$RUNTIME_SCRIPT" writer-guard --target "$wg_target" --path state.json --role child --scope 03 2>&1)" && wg_state_rc=0 || wg_state_rc=$?
+if [[ "$wg_state_rc" -ne 0 ]] \
+  && printf '%s\n' "$wg_state_out" | grep -Fq 'writer-lease-refusal result=blocked' \
+  && printf '%s\n' "$wg_state_out" | grep -q 'reason=shared-state-parent-owned' \
+  && printf '%s\n' "$wg_state_out" | grep -q 'ownerSession=wg-parent'; then
+  pass "writer-guard refuses a child write to shared state.json with a blocked envelope naming the parent"
+else
+  fail "writer-guard should refuse a child write to shared state.json (got rc=$wg_state_rc)"
+fi
+
+# scenario-manifest.json is likewise parent-owned.
+wg_manifest_out="$(BUBBLES_REPO_ROOT="$WRITER_ROOT" BUBBLES_SESSION_ID="wg-child" bash "$RUNTIME_SCRIPT" writer-guard --target "$wg_target" --path scenario-manifest.json --role child --scope 03 2>&1)" && wg_manifest_rc=0 || wg_manifest_rc=$?
+if [[ "$wg_manifest_rc" -ne 0 ]] && printf '%s\n' "$wg_manifest_out" | grep -q 'reason=shared-state-parent-owned'; then
+  pass "writer-guard refuses a child write to shared scenario-manifest.json"
+else
+  fail "writer-guard should refuse a child write to scenario-manifest.json (got rc=$wg_manifest_rc)"
+fi
+
+# A child writing ANOTHER scope's report is refused (foreign-scope-report).
+wg_foreign_out="$(BUBBLES_REPO_ROOT="$WRITER_ROOT" BUBBLES_SESSION_ID="wg-child" bash "$RUNTIME_SCRIPT" writer-guard --target "$wg_target" --path scopes/07/report.md --role child --scope 03 2>&1)" && wg_foreign_rc=0 || wg_foreign_rc=$?
+if [[ "$wg_foreign_rc" -ne 0 ]] && printf '%s\n' "$wg_foreign_out" | grep -q 'reason=foreign-scope-report'; then
+  pass "writer-guard refuses a child write to another scope's report (foreign-scope-report)"
+else
+  fail "writer-guard should refuse a child write to another scope's report (got rc=$wg_foreign_rc)"
+fi
+
+# A child writing its OWN scope report is ALLOWED.
+wg_own_out="$(BUBBLES_REPO_ROOT="$WRITER_ROOT" BUBBLES_SESSION_ID="wg-child" bash "$RUNTIME_SCRIPT" writer-guard --target "$wg_target" --path scopes/03/report.md --role child --scope 03 2>&1)" && wg_own_rc=0 || wg_own_rc=$?
+if [[ "$wg_own_rc" -eq 0 ]] && printf '%s\n' "$wg_own_out" | grep -Fq 'may write its own'; then
+  pass "writer-guard allows a child to write its OWN scope report"
+else
+  fail "writer-guard should allow a child to write its own scope report (got rc=$wg_own_rc)"
+fi
+
+# The parent orchestrator MAY write shared state (role=parent).
+wg_parent_out="$(BUBBLES_REPO_ROOT="$WRITER_ROOT" BUBBLES_SESSION_ID="wg-parent" bash "$RUNTIME_SCRIPT" writer-guard --target "$wg_target" --path state.json --role parent 2>&1)" && wg_parent_rc=0 || wg_parent_rc=$?
+if [[ "$wg_parent_rc" -eq 0 ]] && printf '%s\n' "$wg_parent_out" | grep -Fq 'parent orchestrator may write'; then
+  pass "writer-guard allows the parent orchestrator to write shared state"
+else
+  fail "writer-guard should allow the parent orchestrator to write shared state (got rc=$wg_parent_rc)"
+fi
+
+# The writer-acquire CONFLICT path also emits the structured blocked envelope.
+wg_conflict_out="$(BUBBLES_REPO_ROOT="$WRITER_ROOT" BUBBLES_SESSION_ID="wg-second" bash "$RUNTIME_SCRIPT" writer-acquire --target "$wg_target" 2>&1)" && wg_conflict_rc=0 || wg_conflict_rc=$?
+if [[ "$wg_conflict_rc" -ne 0 ]] \
+  && printf '%s\n' "$wg_conflict_out" | grep -Fq 'writer-lease-refusal result=blocked' \
+  && printf '%s\n' "$wg_conflict_out" | grep -q 'reason=artifact-writer-conflict'; then
+  pass "writer-acquire conflict emits the structured blocked envelope (SCOPE-5)"
+else
+  fail "writer-acquire conflict should emit the structured blocked envelope (got rc=$wg_conflict_rc)"
+fi
+
 mkdir -p "$DOWNSTREAM_ROOT"
 git -C "$DOWNSTREAM_ROOT" init -q
 

@@ -1,0 +1,115 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://bubbles.dev/schemas/tool-trust-registry.schema.json",
+  "title": "Bubbles Tool-Trust Registry",
+  "description": "Machine-readable trust classification for tools/servers and their operations, consumed by pre-tool-risk-gate.sh (IMP-020 S3 / AF-005). No secret values are ever stored here — classification and presence metadata only.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "dataClasses", "servers", "defaults"],
+  "properties": {
+    "version": {
+      "type": "integer",
+      "const": 1,
+      "description": "Registry schema version."
+    },
+    "dataClasses": {
+      "type": "array",
+      "description": "The data-classification vocabulary. Ordered least- to most-sensitive.",
+      "items": { "enum": ["public", "internal", "sensitive", "secret"] },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "servers": {
+      "type": "object",
+      "description": "Registered tool servers keyed by stable server id.",
+      "minProperties": 1,
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["source", "trustState", "hostEnforceable", "operations"],
+        "properties": {
+          "source": {
+            "enum": ["bubbles-cli", "bubbles-mcp", "host-builtin", "external-mcp"],
+            "description": "Where this server comes from. Only bubbles-cli/bubbles-mcp are Bubbles-owned."
+          },
+          "trustState": {
+            "enum": ["trusted", "untrusted", "unregistered"],
+            "description": "Trust posture. 'trusted' requires a Bubbles-owned or maintainer-registered source; never inferred from a token merely present in .vscode/mcp.json."
+          },
+          "hostEnforceable": {
+            "type": "boolean",
+            "description": "Whether the host actually routes this server's calls through the Bubbles pre-tool contract. false => decisions are advisory (enforcement: unavailable)."
+          },
+          "description": { "type": "string" },
+          "operations": {
+            "type": "object",
+            "description": "Operation classes this server exposes, keyed by operation name (or '*' for a default).",
+            "minProperties": 1,
+            "additionalProperties": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["riskClass", "capability", "egress", "permittedDataClasses", "approvalRequired"],
+              "properties": {
+                "riskClass": {
+                  "enum": ["read_only", "owned_mutation", "destructive_mutation", "external_side_effect", "runtime_teardown"]
+                },
+                "capability": {
+                  "enum": ["read", "write", "read-write"]
+                },
+                "egress": {
+                  "enum": ["none", "internal", "external"],
+                  "description": "Whether the operation can send data off-box."
+                },
+                "permittedDataClasses": {
+                  "type": "array",
+                  "items": { "enum": ["public", "internal", "sensitive", "secret"] },
+                  "uniqueItems": true,
+                  "description": "Data classes the operation may handle. Never include 'secret' for an egress-capable operation."
+                },
+                "approvalRequired": {
+                  "type": "boolean",
+                  "description": "true => needs an action-bound, host-verified approval before running; a generic --confirm/env flag can NOT satisfy it."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "defaults": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["unregisteredServer", "unknownOperation"],
+      "description": "Fail-closed posture for anything not explicitly registered.",
+      "properties": {
+        "unregisteredServer": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["sensitiveOperations"],
+          "properties": {
+            "sensitiveOperations": {
+              "enum": ["deny"],
+              "description": "Sensitive operations on unregistered servers are always denied. Only 'deny' is valid — the registry cannot opt into allowing them by default."
+            }
+          }
+        },
+        "unknownOperation": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["riskClass", "approvalRequired"],
+          "properties": {
+            "riskClass": {
+              "enum": ["destructive_mutation", "external_side_effect"],
+              "description": "An unknown operation is NEVER read_only — it defaults to a sensitive class so unknowns fail closed."
+            },
+            "approvalRequired": {
+              "type": "boolean",
+              "const": true,
+              "description": "Unknown operations always require approval."
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -36,7 +36,7 @@ bash .github/bubbles/scripts/mcp-server-selftest.sh
 | Cursor | `.cursor/mcp.json` (workspace) or `~/.cursor/mcp.json` (global) | `.github/bubbles/mcp/clients/cursor.json` |
 | Cline | `cline_mcp_settings.json` | `.github/bubbles/mcp/clients/cline.json` |
 
-Restart your client. The `bubbles-<repo-slug>` server should appear with 10 annotated tools, 5 static resources, 2 resource templates, and 37 prompts.
+Restart your client. The `bubbles-<repo-slug>` server should appear with 12 annotated tools, 5 static resources, 2 resource templates, and 41 prompts.
 
 ---
 
@@ -245,6 +245,16 @@ python3 .github/bubbles/mcp/server.py --transport http --host 127.0.0.1 --port 8
 - Validated by `bubbles/scripts/mcp-http-transport-selftest.sh` (boots on an ephemeral port; asserts initialize/tools-list round-trips, health, bearer auth, and parse-error handling), wired into `framework-validate`.
 
 ---
+
+## Tool Trust & Untrusted Content (IMP-020 S3 / AF-005)
+
+Bubbles classifies tool/server operations in [`bubbles/tool-trust-registry.yaml`](../bubbles/tool-trust-registry.yaml) (schema: `bubbles/schemas/tool-trust-registry.schema.json`) and makes a fail-closed decision **before** a call runs via [`pre-tool-risk-gate.sh --event`](../bubbles/scripts/pre-tool-risk-gate.sh):
+
+- **Unregistered MCP servers are default-denied** for sensitive operations; an unknown operation is never treated as `read_only`. A token merely present in `.vscode/mcp.json` confers **no** trust — a server must be registered (and operator grants applied via [`cli.sh mcp sync`](#quick-start)).
+- **Sensitive** operations (destructive/external-egress, or `approvalRequired`) need an **action-bound, host-verified approval**; a generic `--confirm`/env flag can never unlock them. Where the host can't enforce (ambient editor tools), the decision is `enforcement: unavailable` and blocked, never silently passed.
+- Content returned by any tool/MCP call is **data, never instruction** — see [`untrusted-content.md`](../agents/bubbles_shared/untrusted-content.md).
+
+Full operator setup: [Tool Trust & Untrusted Content recipe](recipes/tool-trust-and-untrusted-content.md).
 
 ## What The Server Does Not Do
 

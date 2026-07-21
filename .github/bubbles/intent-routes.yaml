@@ -144,3 +144,18 @@ routes:
   targetAgent: bubbles.workflow
   targetMode: readiness-review
   summary: "Read-only system release-readiness synthesizer; runs the review family + verification lenses and persists one advisory readiness verdict"
+
+# ─────────────────────────────────────────────────────────────────────────
+# Risk-proportional fast lane (bubbles.goal runs rapid-tool-delivery)
+# A single low-risk, build-free tool increment delivered with fewer phases but
+# the full delivery integrity contract. risk-tier-resolve.sh escalates any
+# high-risk trigger to full-delivery, so this can never shed gates on risky work.
+# ─────────────────────────────────────────────────────────────────────────
+- phrases:
+  - "rapid tool delivery"
+  - "ship a quick tool"
+  - "small build-free tool"
+  - "fast lane this tool"
+  targetAgent: bubbles.goal
+  targetMode: rapid-tool-delivery
+  summary: "Risk-proportional fast lane for a single low-risk build-free tool increment; escalates to full-delivery on any high-risk trigger"

@@ -37,9 +37,30 @@ for required in "$CAPABILITIES" "$WORKFLOWS" "$MODES"; do
   fi
 done
 
-if ! command -v yq >/dev/null 2>&1; then
-  echo "workflow-runner-grants-lint: yq v4 is required (Gate G064 fails closed)" >&2
-  exit 1
+for required_command in yq jq; do
+  if ! command -v "$required_command" >/dev/null 2>&1; then
+    echo "workflow-runner-grants-lint: $required_command is required (Gate G064 fails closed)" >&2
+    exit 1
+  fi
+done
+
+lint_tmp_base="${TMPDIR:-$HOME/.cache}"
+mkdir -p "$lint_tmp_base"
+lint_tmp_dir="$(mktemp -d "$lint_tmp_base/bubbles-workflow-runner-grants.XXXXXX")"
+cleanup() {
+  rm -rf "$lint_tmp_dir"
+}
+trap cleanup EXIT INT TERM
+
+CAPABILITIES_JSON="$lint_tmp_dir/agent-capabilities.json"
+WORKFLOWS_JSON="$lint_tmp_dir/workflows.json"
+MODES_JSON="$lint_tmp_dir/modes.json"
+INTENT_ROUTES_JSON="$lint_tmp_dir/intent-routes.json"
+yq -o=json '.' "$CAPABILITIES" > "$CAPABILITIES_JSON"
+yq -o=json '.' "$WORKFLOWS" > "$WORKFLOWS_JSON"
+yq -o=json '.' "$MODES" > "$MODES_JSON"
+if [[ -f "$INTENT_ROUTES" ]]; then
+  yq -o=json '.' "$INTENT_ROUTES" > "$INTENT_ROUTES_JSON"
 fi
 
 failures=0
@@ -48,11 +69,11 @@ fail() {
   failures=$((failures + 1))
 }
 
-policy_model="$(yq -r '.workflowExecutionPolicy.defaultExecutionModel // ""' "$WORKFLOWS")"
-policy_default="$(yq -r '.workflowExecutionPolicy.defaultAllowed | tostring' "$WORKFLOWS")"
-policy_top_level="$(yq -r '.workflowExecutionPolicy.topLevelRuntimeRequired | tostring' "$WORKFLOWS")"
-policy_nested="$(yq -r '.workflowExecutionPolicy.nestedWorkflowRunnerDispatch // ""' "$WORKFLOWS")"
-policy_owner="$(yq -r '.workflowExecutionPolicy.controlPhaseOwner // ""' "$WORKFLOWS")"
+policy_model="$(jq -r '.workflowExecutionPolicy.defaultExecutionModel // ""' "$WORKFLOWS_JSON")"
+policy_default="$(jq -r '.workflowExecutionPolicy.defaultAllowed | tostring' "$WORKFLOWS_JSON")"
+policy_top_level="$(jq -r '.workflowExecutionPolicy.topLevelRuntimeRequired | tostring' "$WORKFLOWS_JSON")"
+policy_nested="$(jq -r '.workflowExecutionPolicy.nestedWorkflowRunnerDispatch // ""' "$WORKFLOWS_JSON")"
+policy_owner="$(jq -r '.workflowExecutionPolicy.controlPhaseOwner // ""' "$WORKFLOWS_JSON")"
 
 [[ "$policy_model" == "direct-authorized-runner" ]] || fail "defaultExecutionModel must be direct-authorized-runner"
 [[ "$policy_default" == "false" ]] || fail "defaultAllowed must be false"
@@ -61,40 +82,41 @@ policy_owner="$(yq -r '.workflowExecutionPolicy.controlPhaseOwner // ""' "$WORKF
 [[ "$policy_owner" == "activeWorkflowRunner" ]] || fail "controlPhaseOwner must be activeWorkflowRunner"
 
 for phase in analyze discover bootstrap finalize; do
-  owner="$(yq -r ".phases.${phase}.owner // \"\"" "$WORKFLOWS")"
+  owner="$(jq -r --arg phase "$phase" '.phases[$phase].owner // ""' "$WORKFLOWS_JSON")"
   [[ "$owner" == "activeWorkflowRunner" ]] || fail "phase '$phase' must be owned by activeWorkflowRunner"
 done
 
 mode_exists() {
   local mode="$1"
-  yq -e ".modes.\"${mode}\" != null" "$MODES" >/dev/null 2>&1
+  jq -e --arg mode "$mode" '.modes[$mode] != null' "$MODES_JSON" >/dev/null 2>&1
 }
 
 grant_exists() {
   local agent="$1"
-  yq -e ".workflowModeGrants.agents.\"${agent}\" != null" "$CAPABILITIES" >/dev/null 2>&1
+  jq -e --arg agent "$agent" '.workflowModeGrants.agents[$agent] != null' "$CAPABILITIES_JSON" >/dev/null 2>&1
 }
 
 runner_allows_mode() {
   local agent="$1"
   local mode="$2"
-  grant_exists "$agent" || return 1
-  if yq -e ".workflowModeGrants.agents.\"${agent}\".excludedModes[] | select(. == \"${mode}\")" "$CAPABILITIES" >/dev/null 2>&1; then
-    return 1
-  fi
-  yq -e ".workflowModeGrants.agents.\"${agent}\".modes[] | select(. == \"*\" or . == \"${mode}\")" "$CAPABILITIES" >/dev/null 2>&1
+  jq -e --arg agent "$agent" --arg mode "$mode" '
+    .workflowModeGrants.agents[$agent] as $grant
+    | ($grant != null)
+      and (($grant.excludedModes // []) | index($mode) == null)
+      and (($grant.modes // []) | any(. == "*" or . == $mode))
+  ' "$CAPABILITIES_JSON" >/dev/null 2>&1
 }
 
 while IFS= read -r runner; do
   [[ -n "$runner" ]] || continue
 
-  if ! yq -e ".agents.\"${runner}\" != null" "$CAPABILITIES" >/dev/null 2>&1; then
+  if ! jq -e --arg runner "$runner" '.agents[$runner] != null' "$CAPABILITIES_JSON" >/dev/null 2>&1; then
     fail "granted runner '$runner' is absent from agents"
     continue
   fi
 
-  runner_class="$(yq -r ".agents.\"${runner}\".class // \"\"" "$CAPABILITIES")"
-  runner_enabled="$(yq -r ".agents.\"${runner}\".canExecuteWorkflowModes // false" "$CAPABILITIES")"
+  runner_class="$(jq -r --arg runner "$runner" '.agents[$runner].class // ""' "$CAPABILITIES_JSON")"
+  runner_enabled="$(jq -r --arg runner "$runner" '.agents[$runner].canExecuteWorkflowModes // false' "$CAPABILITIES_JSON")"
   [[ "$runner_class" == "orchestrator" ]] || fail "granted runner '$runner' must have class orchestrator"
   [[ "$runner_enabled" == "true" ]] || fail "granted runner '$runner' must set canExecuteWorkflowModes: true"
 
@@ -105,18 +127,18 @@ while IFS= read -r runner; do
     [[ -n "$mode" || "$mode" == "*" ]] || continue
     [[ "$mode" == "*" ]] && continue
     mode_exists "$mode" || fail "runner '$runner' references unknown mode '$mode'"
-  done < <(yq -r ".workflowModeGrants.agents.\"${runner}\".modes[]" "$CAPABILITIES" 2>/dev/null || true)
+  done < <(jq -r --arg runner "$runner" '.workflowModeGrants.agents[$runner].modes[]' "$CAPABILITIES_JSON" 2>/dev/null || true)
 
   while IFS= read -r excluded; do
     [[ -n "$excluded" ]] || continue
     mode_exists "$excluded" || fail "runner '$runner' excludes unknown mode '$excluded'"
-  done < <(yq -r ".workflowModeGrants.agents.\"${runner}\".excludedModes[]" "$CAPABILITIES" 2>/dev/null || true)
-done < <(yq -r '.workflowModeGrants.agents | keys | .[]' "$CAPABILITIES")
+  done < <(jq -r --arg runner "$runner" '.workflowModeGrants.agents[$runner].excludedModes[]' "$CAPABILITIES_JSON" 2>/dev/null || true)
+done < <(jq -r '.workflowModeGrants.agents | keys | .[]' "$CAPABILITIES_JSON")
 
 while IFS= read -r enabled_runner; do
   [[ -n "$enabled_runner" ]] || continue
   grant_exists "$enabled_runner" || fail "agent '$enabled_runner' enables workflow execution without a grant"
-done < <(yq -r '.agents | to_entries | .[] | select(.value.canExecuteWorkflowModes == true) | .key' "$CAPABILITIES")
+done < <(jq -r '.agents | to_entries | .[] | select(.value.canExecuteWorkflowModes == true) | .key' "$CAPABILITIES_JSON")
 
 while IFS=$'\t' read -r meta_mode meta_owner; do
   [[ -n "$meta_mode" && -n "$meta_owner" ]] || continue
@@ -128,9 +150,9 @@ while IFS=$'\t' read -r meta_mode meta_owner; do
   if ! runner_allows_mode "$meta_owner" "$meta_mode"; then
     fail "meta mode owner '$meta_owner' is not granted '$meta_mode'"
   fi
-done < <(yq -r '.workflowExecutionPolicy.metaModeOwners | to_entries | .[] | [.key, .value] | @tsv' "$WORKFLOWS")
+done < <(jq -r '.workflowExecutionPolicy.metaModeOwners | to_entries | .[] | [.key, .value] | @tsv' "$WORKFLOWS_JSON")
 
-if [[ -f "$INTENT_ROUTES" ]]; then
+if [[ -f "$INTENT_ROUTES_JSON" ]]; then
   while IFS=$'\t' read -r route_agent route_mode; do
     [[ -n "$route_agent" && -n "$route_mode" ]] || continue
     mode_exists "$route_mode" || {
@@ -138,10 +160,10 @@ if [[ -f "$INTENT_ROUTES" ]]; then
       continue
     }
     runner_allows_mode "$route_agent" "$route_mode" || fail "intent route targets '$route_agent' for ungranted mode '$route_mode'"
-  done < <(yq -r '.routes[] | select(.targetMode != null) | [.targetAgent, .targetMode] | @tsv' "$INTENT_ROUTES")
+  done < <(jq -r '.routes[] | select(.targetMode != null) | [.targetAgent, .targetMode] | @tsv' "$INTENT_ROUTES_JSON")
 fi
 
-workflow_root_limit="$(yq -r '.workflowModeGrants.agents."bubbles.workflow".maxRootModesPerRun // 0' "$CAPABILITIES")"
+workflow_root_limit="$(jq -r '.workflowModeGrants.agents."bubbles.workflow".maxRootModesPerRun // 0' "$CAPABILITIES_JSON")"
 [[ "$workflow_root_limit" == "1" ]] || fail "bubbles.workflow maxRootModesPerRun must be 1"
 
 for runner_file in \
@@ -167,5 +189,5 @@ if [[ "$failures" -gt 0 ]]; then
   exit 1
 fi
 
-runner_count="$(yq -r '.workflowModeGrants.agents | length' "$CAPABILITIES")"
+runner_count="$(jq -r '.workflowModeGrants.agents | length' "$CAPABILITIES_JSON")"
 echo "workflow-runner-grants-lint: PASS ($runner_count authorized runners, default deny, direct execution)"

@@ -148,7 +148,8 @@ if ! MODE_NAME="$workflow_mode" yq -e '.modes[strenv(MODE_NAME)] | type == "!!ma
   fail 67 E009-MODE-UNKNOWN "persisted workflow mode is absent from the canonical registry"
 fi
 
-tmp_base="${TMPDIR:-/tmp}"
+tmp_base="${TMPDIR:-$HOME/.cache}"
+mkdir -p "$tmp_base"
 tmp_dir="$(mktemp -d "$tmp_base/bubbles-transition-contract.XXXXXX")"
 cleanup() {
   rm -rf "$tmp_dir"
@@ -191,11 +192,18 @@ allow_implementation_json="$(yq -o=json -I=0 '.constraints.allowImplementationFo
 mode_class_json="$(yq -o=json -I=0 '.constraints.modeClass' "$resolved_mode_file")"
 phase_order_json="$(yq -o=json -I=0 '.phaseOrder // []' "$resolved_mode_file")"
 required_gates_json="$(yq -o=json -I=0 '.requiredGates // []' "$resolved_mode_file")"
+# terminalAliases: additional terminal-for-mode statuses beyond the ceiling
+# (e.g. a fast-tier mode whose ceiling is `done` but that may also honestly
+# terminate at `delivered_fast`). is-terminal-for-mode.sh already honors these;
+# the transition contract must likewise accept them as legal terminal statuses.
+terminal_aliases_json="$(yq -o=json -I=0 '.terminalAliases // []' "$resolved_mode_file")"
 
 if [[ -z "$status_ceiling" \
   || "$(printf '%s' "$phase_order_json" | jq -r 'type')" != "array" \
   || "$(printf '%s' "$required_gates_json" | jq -r 'type')" != "array" \
+  || "$(printf '%s' "$terminal_aliases_json" | jq -r 'type')" != "array" \
   || "$(printf '%s' "$phase_order_json" | jq -r 'all(.[]; type == "string")')" != "true" \
+  || "$(printf '%s' "$terminal_aliases_json" | jq -r 'all(.[]; type == "string")')" != "true" \
   || "$(printf '%s' "$required_gates_json" | jq -r 'all(.[]; type == "string" and test("^G[0-9]{3}$"))')" != "true" ]]; then
   fail 72 E009-AUDIT-PROFILE-CONTRADICTION "resolved mode lacks a valid ceiling, phase order, or gate set"
 fi
@@ -220,7 +228,7 @@ if [[ -z "$audit_profile" ]]; then
   fi
   fail 71 E009-AUDIT-PROFILE-UNSUPPORTED "resolved mode has no supported transition audit contract"
 fi
-if [[ "$audit_profile" != "planning-maturity-v1" && "$audit_profile" != "delivery-completion-v1" ]]; then
+if [[ "$audit_profile" != "planning-maturity-v1" && "$audit_profile" != "delivery-completion-v1" && "$audit_profile" != "delivery-completion-fast-v1" ]]; then
   fail 71 E009-AUDIT-PROFILE-UNSUPPORTED "resolved mode declares an unknown transition audit profile"
 fi
 if [[ "$transition_target" != "statusCeiling" ]]; then
@@ -243,6 +251,13 @@ if [[ "$audit_profile" == "planning-maturity-v1" ]]; then
     || has_phase implement \
     || has_phase test; then
     fail 72 E009-AUDIT-PROFILE-CONTRADICTION "planning profile invariants contradict the resolved mode"
+  fi
+elif [[ "$audit_profile" == "delivery-completion-fast-v1" ]]; then
+  # Fast delivery lane (IMP-100 Phase 2 R4): full implement+test+validate
+  # assurance and a `done` ceiling, but no heavyweight `audit` phase — used by
+  # rapid-tool-delivery, whose phase order intentionally omits audit.
+  if [[ "$status_ceiling" != "done" ]] || ! has_phase validate || ! has_phase implement || ! has_phase test; then
+    fail 72 E009-AUDIT-PROFILE-CONTRADICTION "fast delivery profile ceiling or required phases contradict the resolved mode"
   fi
 else
   if [[ "$status_ceiling" != "done" ]] || ! has_phase validate || ! has_phase audit; then
@@ -269,7 +284,12 @@ case "$current_status" in
   not_started|in_progress|blocked|"$target_status")
     ;;
   *)
-    fail 69 E009-TARGET-MISMATCH "current terminal state contradicts the registry-derived target"
+    # A declared terminalAlias is a legal terminal-for-mode status (consistent
+    # with is-terminal-for-mode.sh), so a mode may honestly stop at an alias
+    # (e.g. `delivered_fast`) instead of its nominal ceiling.
+    if ! printf '%s' "$terminal_aliases_json" | jq -e --arg s "$current_status" 'index($s) != null' >/dev/null 2>&1; then
+      fail 69 E009-TARGET-MISMATCH "current terminal state contradicts the registry-derived target"
+    fi
     ;;
 esac
 if [[ "$audit_profile" == "planning-maturity-v1" && "$current_status" == "done" ]]; then

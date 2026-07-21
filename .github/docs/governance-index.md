@@ -98,6 +98,7 @@ Durable source-repo framework behavior and maintainer contracts.
 
 - [DEPRECATIONS.md](DEPRECATIONS.md)
 - [Framework_Convergence_Health.md](Framework_Convergence_Health.md)
+- [Framework_Improvements_Delivered.md](Framework_Improvements_Delivered.md)
 - [Spec_Implementation_Alignment.md](Spec_Implementation_Alignment.md)
 - [decisions/ADR-001-v6.1-review-followups.md](decisions/ADR-001-v6.1-review-followups.md)
 

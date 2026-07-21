@@ -26,7 +26,9 @@ done
 # shellcheck source=/dev/null
 source "$GUARD_LIB"
 
-WORKSPACE="$(mktemp -d "${TMPDIR:-/tmp}/bubbles-transition-contract-selftest.XXXXXX")"
+selftest_tmp_base="${TMPDIR:-$HOME/.cache}"
+mkdir -p "$selftest_tmp_base"
+WORKSPACE="$(mktemp -d "$selftest_tmp_base/bubbles-transition-contract-selftest.XXXXXX")"
 cleanup() {
   rm -rf "$WORKSPACE"
 }
@@ -234,7 +236,7 @@ schema_contract_tests() {
     | $contract.type == "object"
       and $contract.required == ["profile", "target"]
       and $contract.additionalProperties == false
-      and (($contract.properties.profile.enum | sort) == (["delivery-completion-v1", "planning-maturity-v1"] | sort))
+      and (($contract.properties.profile.enum | sort) == (["delivery-completion-fast-v1", "delivery-completion-v1", "planning-maturity-v1"] | sort))
       and $contract.properties.target.const == "statusCeiling"
   ' "$SCHEMA" >/dev/null 2>&1; then
     pass "transitionAudit schema is closed to the designed profile and target fields"
@@ -360,6 +362,31 @@ assert_json "$planning_contract" '(.contractDigest | test("^sha256:[0-9a-f]{64}$
 assert_json "$hardening_contract" '.workflowMode == "spec-scope-hardening" and .auditProfile == "planning-maturity-v1" and .targetStatus == "specs_hardened" and .sourceEditLockoutRequired == true' "scope hardening satisfies the planning profile invariants"
 assert_json "$delivery_contract" '.workflowMode == "bugfix-fastlane" and .auditProfile == "delivery-completion-v1" and .targetStatus == "done"' "delivery mode retains explicit completion semantics"
 
+# Fast delivery lane (IMP-100 Phase 2 R4): rapid-tool-delivery has a `done`
+# ceiling and full implement+test+validate assurance but NO `audit` phase, so it
+# uses delivery-completion-fast-v1. Under delivery-completion-v1 it would fail
+# E009-AUDIT-PROFILE-CONTRADICTION (the audit phase is required) — this proves
+# the fast profile resolves the real mode cleanly.
+rapid_feature="$WORKSPACE/specs/018-rapid-tool-delivery"
+write_feature "$rapid_feature" rapid-tool-delivery
+rapid_contract="$WORKSPACE/rapid-contract.json"
+if bash "$RESOLVER" "$rapid_feature" > "$rapid_contract"; then
+  pass "rapid-tool-delivery resolves through the fast delivery profile"
+else
+  fail_test "rapid-tool-delivery resolves through the fast delivery profile"
+fi
+assert_json "$rapid_contract" '.workflowMode == "rapid-tool-delivery" and .auditProfile == "delivery-completion-fast-v1" and .statusCeiling == "done" and .targetStatus == "done"' "rapid-tool-delivery uses the fast delivery profile over a done ceiling"
+
+# The fast profile still enforces implement+test+validate: drop `test` and it
+# must fail the contradiction check (no silent assurance relaxation).
+fast_missing_test_root="$WORKSPACE/fast-missing-test-layout"
+fast_missing_test_framework="$(copy_framework_layout installed "$fast_missing_test_root")"
+yq -i '.modes["rapid-tool-delivery"].phaseOrder = ["select", "implement", "validate", "docs", "finalize"]' "$fast_missing_test_framework/workflows/modes.yaml"
+rapid_missing_test_feature="$WORKSPACE/specs/019-rapid-missing-test"
+write_feature "$rapid_missing_test_feature" rapid-tool-delivery
+assert_failure "fast profile missing test phase" 72 E009-AUDIT-PROFILE-CONTRADICTION \
+  bash "$fast_missing_test_framework/scripts/transition-contract-resolver.sh" "$rapid_missing_test_feature"
+
 expected_planning_mode="$WORKSPACE/product-to-planning.resolved.yaml"
 bash "$MODE_RESOLVER" --grandfather product-to-planning > "$expected_planning_mode" 2> "$WORKSPACE/product-to-planning.resolved.err"
 expected_gates="$(yq -o=json -I=0 '.requiredGates' "$expected_planning_mode" | jq -cS '.')"
@@ -480,6 +507,29 @@ assert_failure "certification mirror mismatch" 69 E009-TARGET-MISMATCH bash "$RE
 terminal_mismatch_feature="$WORKSPACE/specs/014-terminal-mismatch"
 write_feature "$terminal_mismatch_feature" product-to-planning docs_updated
 assert_failure "terminal target mismatch" 69 E009-TARGET-MISMATCH bash "$RESOLVER" "$terminal_mismatch_feature"
+
+# A declared terminalAlias is a legal terminal-for-mode status: a mode may
+# honestly stop at an alias (e.g. `delivered_fast`) instead of its ceiling,
+# matching is-terminal-for-mode.sh. Reuse an existing delivery mode + inject
+# the alias into a copied registry (avoids the un-aliased new-mode trap).
+alias_terminal_root="$WORKSPACE/alias-terminal-layout"
+alias_terminal_framework="$(copy_framework_layout installed "$alias_terminal_root")"
+yq -i '.modes.bugfix-fastlane.terminalAliases = ["delivered_fast"]' "$alias_terminal_framework/workflows/modes.yaml"
+alias_terminal_feature="$WORKSPACE/specs/016-alias-terminal"
+write_feature "$alias_terminal_feature" bugfix-fastlane delivered_fast
+alias_terminal_contract="$WORKSPACE/alias-terminal-contract.json"
+if bash "$alias_terminal_framework/scripts/transition-contract-resolver.sh" "$alias_terminal_feature" > "$alias_terminal_contract"; then
+  pass "declared terminalAlias is accepted as a legal terminal status"
+else
+  fail_test "declared terminalAlias is accepted as a legal terminal status"
+fi
+assert_json "$alias_terminal_contract" '.currentStatus == "delivered_fast" and .workflowMode == "bugfix-fastlane" and .statusCeiling == "done"' "alias-terminal contract carries the alias current status over the done ceiling"
+
+# Without the alias declared, the same non-ceiling terminal status is rejected
+# (the alias must be explicit + registry-declared — no silent target widening).
+undeclared_alias_feature="$WORKSPACE/specs/017-undeclared-alias"
+write_feature "$undeclared_alias_feature" bugfix-fastlane delivered_fast
+assert_failure "undeclared terminal alias" 69 E009-TARGET-MISMATCH bash "$RESOLVER" "$undeclared_alias_feature"
 
 missing_profile_root="$WORKSPACE/missing-profile-layout"
 missing_profile_framework="$(copy_framework_layout installed "$missing_profile_root")"
