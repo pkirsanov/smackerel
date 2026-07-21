@@ -47,3 +47,16 @@ Feature: Contract-correct assistant parity E2E
 - Returning `transport="mobile"` from the HTTP adapter.
 - Adding trace IDs to `/reset` or changing reset acknowledgement semantics.
 - HTTP response deduplication, owned by BUG-069-004.
+
+### Single-Capability Justification
+
+This packet is a test-fixture correction and introduces NO new product
+capability, provider, adapter, strategy, or variant (Gate G094). The
+`transport_hint` and HTTP-adapter references above describe the EXISTING
+production `internal/assistant/httpadapter` behavior — canonical response
+transport `web`, telemetry-only hint — which this bugfix leaves unchanged. The
+only change under test is a single capability: ordinary-turn transport-hint
+parity (the E2E now sends a real text turn instead of the `/reset` short
+circuit) plus an exact-key conversation-isolation test helper. No foundation,
+no alternative implementations, and no shared capability surface are added, so a
+Domain Capability Model does not apply.
