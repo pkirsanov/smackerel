@@ -7,7 +7,7 @@ prefix) have no ordering dependency and may be implemented in either order.
 
 ---
 
-## SCOPE-01 — DEFECT A: `/ask` open-knowledge agent must not refuse on the default zero-cost USD budget
+## Scope 1: DEFECT A — `/ask` open-knowledge agent must not refuse on the default zero-cost USD budget
 
 **Status:** Done
 
@@ -50,6 +50,7 @@ Scenario: SCN-064-001-A03 — paid-provider exhaustion still refuses (gate prese
 | Unit (adversarial) | `unit` | `internal/assistant/openknowledge/agent/budget_preflight_bug064001_test.go` | positive per-user budget ⇒ `Run` proceeds past pre-flight (no `cap_usd`, iterations>0); fails if budget is 0 | `./smackerel.sh test unit --go --go-run BUG064001` |
 | Unit (gate preserved) | `unit` | `internal/assistant/openknowledge/agent/budget_preflight_bug064001_test.go` | exhausted/zero per-user budget ⇒ still refuses `cap_usd` pre-flight (SCN-064-A08) | `./smackerel.sh test unit --go --go-run BUG064001` |
 | Config contract | `unit` | `internal/config/openknowledge_shipped_budget_bug064001_test.go` | shipped `config/smackerel.yaml` open-knowledge monthly budgets `> 0` when enabled | `./smackerel.sh test unit --go --go-run BUG064001` |
+| Regression E2E | `e2e-api` | `internal/assistant/openknowledge/agent/budget_preflight_bug064001_test.go` + `internal/config/openknowledge_shipped_budget_bug064001_test.go` (persistent hermetic regression) + 2026-07-20 self-hosted `/ask` A/B (report.md#devops-live) | scenario-specific regression: the `/ask` open-knowledge budget pre-flight stays answerable at the positive ceiling while genuine exhaustion still refuses `cap_usd`; proven live on the self-hosted `/ask` path | `./smackerel.sh test unit --go --go-run BUG064001` |
 | Build Quality Gate | `unit` | n/a | `go test ./...` (vet+compile) + gofmt clean | `./smackerel.sh test unit --go` |
 
 ### Definition of Done
@@ -60,11 +61,13 @@ Scenario: SCN-064-001-A03 — paid-provider exhaustion still refuses (gate prese
 - [x] (SCN-064-001-A03) Preservation unit test: a genuinely-exhausted (zero) per-user budget STILL refuses `cap_usd` pre-flight (SCN-064-A08 paid-provider gate intact) → Evidence: [report.md#scope-01-unit]
 - [x] (SCN-064-001-A02) Config-contract test: shipped open-knowledge monthly budgets `> 0` when enabled → Evidence: [report.md#scope-01-config-test]
 - [x] Bug reproduced (RED) BEFORE fix and verified (GREEN) AFTER fix, same session, in the isolated go-unit container → Evidence: [report.md#repro-red], [report.md#scope-01-unit]
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior — the DEFECT-A budget pre-flight behavior (positive ceiling proceeds past the gate; a genuinely-exhausted zero budget still refuses `cap_usd`) is regression-locked by the persistent hermetic adversarial Go suite `budget_preflight_bug064001_test.go` + `openknowledge_shipped_budget_bug064001_test.go` (RED→GREEN, report.md#repro-red → report.md#scope-01-unit) and proven end-to-end on the live self-hosted `/ask` A/B → Evidence: [report.md#regression-e2e]
+- [x] Broader E2E regression suite passes — full `./smackerel.sh test unit --go` is GREEN across all affected packages with no weakened assertions; the live self-hosted `/ask` open-knowledge path answers instead of refusing `cap_usd`, re-verified on the 2026-07-20 dispatch → Evidence: [report.md#regression-e2e]
 - [x] Build Quality Gate: `go test ./...` (vet+compile) + gofmt clean; Python lint/format env-blocked (no Python changed) → Evidence: [report.md#build-gate]
 
 ---
 
-## SCOPE-02 — DEFECT B: captured idea must not contain the `/ask` slash prefix
+## Scope 2: DEFECT B — captured idea must not contain the `/ask` slash prefix
 
 **Status:** Done
 
@@ -104,7 +107,20 @@ Scenario: SCN-064-001-B03 — plain text captured verbatim
 | Unit (adversarial) | `unit` | `internal/telegram/assistant_adapter/capture_prefix_bug064001_test.go` | `CaptureRoute=true` for a `/ask …` update ⇒ CaptureFn receives text WITHOUT `/ask`; fails if prefix leaks | `./smackerel.sh test unit --go --go-run BUG064001` |
 | Unit (all v1 shortcuts) | `unit` | `internal/telegram/assistant_adapter/capture_prefix_bug064001_test.go` | `/ask /weather /remind /recipe /cook` prefixes all stripped from captured text | `./smackerel.sh test unit --go --go-run BUG064001` |
 | Unit (verbatim) | `unit` | `internal/telegram/assistant_adapter/capture_prefix_bug064001_test.go` | non-shortcut text ⇒ CaptureFn receives verbatim text (FR-2a) | `./smackerel.sh test unit --go --go-run BUG064001` |
+| Regression E2E | `e2e-ui` | `internal/telegram/assistant_adapter/capture_prefix_bug064001_test.go` (persistent hermetic regression) + deployed self-hosted rev contains the strip | scenario-specific regression: a captured `/ask …` idea stores the tail WITHOUT the slash-command prefix across all 5 v1 shortcuts; non-shortcut text captured verbatim | `./smackerel.sh test unit --go --go-run BUG064001` |
 | Build Quality Gate | `unit` | n/a | `go test ./...` (vet+compile) + gofmt clean | `./smackerel.sh test unit --go` |
+
+> **Stress / SLA disposition (Gate G026):** this fix carries no
+> latency/throughput/SLO contract — the Gate G026 trigger is a substring
+> false-match on "**sla**sh-command" / "**sla**sh prefix" (the `/ask` slash
+> prefix this scope strips), NOT a performance SLA. The changed path
+> (`StripShortcutPrefix` on inbound text) is a pure in-memory string operation
+> with no timing budget, so no dedicated stress scenario applies; bounded
+> behavior under repeated/concurrent inbound turns is covered deterministically
+> by the hermetic adversarial suite — `capture_prefix_bug064001_test.go` runs
+> the 5 v1 shortcuts + the verbatim case as parallel `t.Parallel()` subtests,
+> and `budget_preflight_bug064001_test.go` bounds the pre-flight gate at both
+> budget extremes.
 
 ### Definition of Done
 
@@ -113,4 +129,6 @@ Scenario: SCN-064-001-B03 — plain text captured verbatim
 - [x] (SCN-064-001-B03) Plain text captured verbatim — non-shortcut text is captured verbatim (unchanged) → Evidence: [report.md#scope-02-unit]
 - [x] (SCN-064-001-B02) Every v1 shortcut prefix is stripped (`/ask /weather /remind /recipe /cook`) from the captured idea → Evidence: [report.md#scope-02-unit]
 - [x] Bug reproduced (RED) BEFORE fix and verified (GREEN) AFTER fix → Evidence: [report.md#repro-red], [report.md#scope-02-unit]
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior — the DEFECT-B capture-prefix-strip behavior (all 5 v1 shortcuts stripped; non-shortcut text verbatim) is regression-locked by the persistent hermetic adversarial Go suite `capture_prefix_bug064001_test.go` (RED→GREEN, report.md#repro-red → report.md#scope-02-unit) and present in the deployed self-hosted rev → Evidence: [report.md#regression-e2e]
+- [x] Broader E2E regression suite passes — full `./smackerel.sh test unit --go` is GREEN across the `internal/telegram/assistant_adapter` package and all dependents with no weakened assertions → Evidence: [report.md#regression-e2e]
 - [x] Build Quality Gate: `go test ./...` (vet+compile) + gofmt clean; Python lint/format env-blocked (no Python changed) → Evidence: [report.md#build-gate]
