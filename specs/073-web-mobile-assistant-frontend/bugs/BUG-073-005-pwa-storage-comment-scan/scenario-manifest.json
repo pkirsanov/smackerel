@@ -16,8 +16,8 @@
       "regressionRequired": true,
       "testPlanIds": ["TP-BUG073005-001"],
       "linkedTests": [{"type": "e2e-api", "file": "tests/e2e/assistant/web_pwa_chat_e2e_test.go", "name": "TestAssistantWebPWAChatE2E_ServedRouteHasComposerTranscriptAndResponseMarkup_TP_073_09"}],
-      "evidenceRefs": ["report.md#red-before-fix-served-route-e2e", "report.md#green-after-fix-scanner-unit-and-live-e2e"],
-      "status": "in_progress"
+      "evidenceRefs": ["report.md#live-served-route-e2e-current-session", "report.md#revert-reverify-load-bearing-comment-aware-scanner-current-session"],
+      "status": "done"
     },
     {
       "scenarioId": "SCN-BUG073005-002",
@@ -32,8 +32,8 @@
       "regressionRequired": true,
       "testPlanIds": ["TP-BUG073005-002"],
       "linkedTests": [{"type": "unit", "file": "internal/testsupport/jssource/comments_test.go", "name": "TestWithoutComments_IgnoresPolicyCommentsAndRetainsExecutableAccess"}],
-      "evidenceRefs": ["report.md#green-after-fix-scanner-unit-and-live-e2e"],
-      "status": "in_progress"
+      "evidenceRefs": ["report.md#revert-reverify-load-bearing-comment-aware-scanner-current-session"],
+      "status": "done"
     },
     {
       "scenarioId": "SCN-BUG073005-003",
@@ -48,8 +48,8 @@
       "regressionRequired": true,
       "testPlanIds": ["TP-BUG073005-003"],
       "linkedTests": [{"type": "unit", "file": "internal/testsupport/jssource/comments_test.go", "name": "TestWithoutComments_PreservesStringsTemplatesAndFollowingCode"}],
-      "evidenceRefs": ["report.md#green-after-fix-scanner-unit-and-live-e2e"],
-      "status": "in_progress"
+      "evidenceRefs": ["report.md#revert-reverify-load-bearing-comment-aware-scanner-current-session"],
+      "status": "done"
     }
   ]
 }
