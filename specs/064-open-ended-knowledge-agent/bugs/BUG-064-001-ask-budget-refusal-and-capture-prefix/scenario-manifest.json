@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "specId": "064-open-ended-knowledge-agent-bug-064-001",
+  "scenarios": [
+    { "scenarioId": "SCN-064-001-A01", "title": "enabled local agent proceeds past the USD pre-flight gate", "scope": 1, "requiredTestType": "unit", "linkedTests": ["internal/assistant/openknowledge/agent/budget_preflight_bug064001_test.go"], "evidenceRefs": ["report.md#scope-01-unit", "report.md#regression-e2e"], "regressionProtected": true },
+    { "scenarioId": "SCN-064-001-A02", "title": "shipped SST budget is operable", "scope": 1, "requiredTestType": "unit", "linkedTests": ["internal/config/openknowledge_shipped_budget_bug064001_test.go"], "evidenceRefs": ["report.md#scope-01-config-test", "report.md#scope-01-config"], "regressionProtected": true },
+    { "scenarioId": "SCN-064-001-A03", "title": "paid-provider exhaustion still refuses (gate preserved)", "scope": 1, "requiredTestType": "unit", "linkedTests": ["internal/assistant/openknowledge/agent/budget_preflight_bug064001_test.go"], "evidenceRefs": ["report.md#scope-01-unit", "report.md#repro-red"], "regressionProtected": true },
+    { "scenarioId": "SCN-064-001-B01", "title": "/ask capture strips the prefix", "scope": 2, "requiredTestType": "unit", "linkedTests": ["internal/telegram/assistant_adapter/capture_prefix_bug064001_test.go"], "evidenceRefs": ["report.md#scope-02-unit", "report.md#regression-e2e"], "regressionProtected": true },
+    { "scenarioId": "SCN-064-001-B02", "title": "every v1 shortcut prefix is stripped", "scope": 2, "requiredTestType": "unit", "linkedTests": ["internal/telegram/assistant_adapter/capture_prefix_bug064001_test.go"], "evidenceRefs": ["report.md#scope-02-unit", "report.md#regression-e2e"], "regressionProtected": true },
+    { "scenarioId": "SCN-064-001-B03", "title": "plain text captured verbatim", "scope": 2, "requiredTestType": "unit", "linkedTests": ["internal/telegram/assistant_adapter/capture_prefix_bug064001_test.go"], "evidenceRefs": ["report.md#scope-02-unit"], "regressionProtected": true }
+  ]
+}

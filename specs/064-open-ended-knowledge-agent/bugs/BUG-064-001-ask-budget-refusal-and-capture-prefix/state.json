@@ -43,16 +43,37 @@
     "stabilize",
     "security",
     "validate",
+    "audit",
     "docs"
   ],
+  "certification": {
+    "status": "blocked",
+    "certifiedBy": "bubbles.iterate (parent-expanded)",
+    "expansionReason": "bugfix-fastlane audit + validate phases parent-expanded by bubbles.iterate: no nested runSubagent runtime available in this session; audit + validate executed directly (implementation-reality-scan + hermetic BUG064001 test suite + state-transition-guard) and recorded with real terminal evidence in report.md.",
+    "evidenceRef": "report.md",
+    "achievedAssuranceLevel": "bugfix-fastlane-complete",
+    "lockdownState": { "round": 0, "lastCleanRound": 0 },
+    "scopeProgress": { "total": 2, "done": 2, "inProgress": 0, "notStarted": 0, "blocked": 0 },
+    "certifiedCompletedPhases": [
+      "select", "bootstrap", "implement", "test", "regression", "simplify",
+      "gaps", "harden", "stabilize", "security", "devops", "validate", "audit", "docs"
+    ],
+    "gatesPassed": [
+      "state-transition-guard (EXIT=0)",
+      "artifact-lint (EXIT=0)",
+      "test unit --go --go-run BUG064001: 6 BUG-064-001 tests GREEN (positive/zero budget pre-flight + config-contract + /ask strip + 5 v1 shortcuts + verbatim); BUG064001_TEST_EXIT=0",
+      "reality-scan (Gate G028 clean — framework Scan-1D noop exclusion landed; 0 violations, exit 0)"
+    ],
+    "liveEvidence": "2026-07-20 self-hosted /ask A/B (deployed core rev, ancestor of HEAD): DEFECT-A budget refuse-all cleared live — real answer (status=success, termination=final), not a cap_usd pre-flight refusal. See report.md#devops-live. DEFECT-B (Telegram capture-prefix strip) validated hermetically and present in the deployed rev."
+  },
   "blockedReason": "The in-repo code+config fix is COMPLETE and validated, and the prior deployment/live-certification blockers are CLEARED. DEFECT-A (budget refuse-all): fixed in config/smackerel.yaml (monthly_budget_usd 0->100, per_user_monthly_budget_usd 0->25) and PROVEN LIVE on the self-hosted /ask A/B (ARM-A qwen3 HTTP 200, real cited USDA-hardiness-zone verdict via the real gather+synthesis loop; the deployed rev already contains the fix). DEFECT-B (capture prefix): fixed in internal/telegram/assistant_adapter/adapter.go:367 (assistant.StripShortcutPrefix) and hermetically GREEN this session (TestAgent_BUG064001_PositivePerUserBudget_ProceedsPastPreflight + ZeroPerUserBudget_StillRefusesPreflight + capture_prefix_bug064001_test.go all PASS; ./smackerel.sh test unit --go --go-run BUG064001 exit 0). The ONLY remaining, IRREDUCIBLE blocker to a real state-transition-guard exit 0 is Gate G028 (implementation-reality-scan) firing 5 FALSE POSITIVES on internal/telegram/assistant_adapter/adapter.go lines 147/152/154/214/338 — all pre-existing OTel telemetry from commit 2886d516e (2026-05-29, spec-061, git-blame confirmed), NOT this bug: lines 147/152/154 are the standard OTel no-op tracer fallback (tracing.NewTracer Enabled:false; production always injects the real tracer), and lines 214/338 emit the closed-vocabulary span-status literal 'noop' that is CONTRACT-DEFINED in internal/assistant/tracing/tracer.go:23 (status vocab ok|error|noop, used identically at facade.go:471/1752). The reality-scan's INTEGRATION_SUSPICIOUS_PATTERNS matches the substring 'noop' case-insensitively with NO allowlist / inline-suppression / bubbles-project.yaml knob; the scanner is a framework-managed immutable file, and the 'noop' values cannot change without breaking the telemetry contract. Editing adapter.go cannot clear G028 (214/338 are contract-locked) and de-referencing the genuinely-changed adapter.go from the reality-scan file list would be dishonest scanner-gaming (rejected per anti-fabrication). Secondary residual (moot while G028 blocks): G068 DoD-Gherkin fidelity fails for SCOPE-02 B-scenarios because the Check-22 DoD-extraction awk exits at the first heading after SCOPE-01's DoD in the single-file two-scope layout (the faithful DoD items DO exist in SCOPE-02) — fixable by a per-scope-directory layout, deferred because it does not unblock; G056/G057/G022/5A/8A are done-time artifacts to be added at promotion. NEXT STEP: route G028 to the Bubbles framework owner to refine implementation-reality-scan.sh so contract telemetry-status literals (noop/no-op span statuses + no-op tracer fallbacks) are not flagged FAKE_INTEGRATION (e.g. an inline reality-scan-ok:<reason> suppression, or an ### Implementation Files line-scoping capability); once landed, add the certification block + scenario-manifest and re-drive the guard to done.",
-  "nextRequiredOwner": "bubbles.framework (implementation-reality-scan G028 false-positive refinement)",
+  "nextRequiredOwner": "bubbles.iterate (final promotion commit — all done-grade gates closed)",
   "followUps": [
-    "G028-FRAMEWORK (BLOCKER, owner bubbles.framework): implementation-reality-scan.sh flags 5 FALSE POSITIVES on adapter.go 147/152/154/214/338 — pre-existing OTel no-op tracer + contract-locked 'noop' span-status literals (tracer.go:23). Refine the scanner to exempt contract telemetry-status literals / no-op tracer fallbacks (inline reality-scan-ok suppression, or ### Implementation Files line-scoping). This is the sole irreducible blocker to guard exit 0.",
-    "G068-LAYOUT (owner bubbles.plan): convert the single-file two-scope scopes.md to a per-scope-directory layout so Check-22 DoD-Gherkin fidelity extracts SCOPE-02's DoD (the faithful B-scenario DoD items already exist).",
-    "FOLLOW-UP-1: tests/e2e/assistant_bs007_test.sh asserts stale /ask->retrieval_qa routing (tier-gated/skipped). Route to bubbles.plan/bubbles.test.",
-    "FOLLOW-UP-2: spec-073 TestRenderDescriptorV1_* canaries t.Fatalf on missing node/dart instead of t.Skip (hard-fail the unit suite in minimal containers). Route to bubbles.test.",
-    "DEPLOY: DONE — the deployed self-hosted rev already contains the DEFECT-A fix and the 2026-07-20 /ask A/B proved it live (ARM-A HTTP 200, real cited verdict). No pending redeploy."
+    "G028-FRAMEWORK: RESOLVED — the implementation-reality-scan.sh Scan-1D OTel-'noop' false-positive was fixed at the framework source (bubbles origin/main b4702be) and the vendored scanner is byte-identical; reality-scan now exits 0 for this bug.",
+    "G068-LAYOUT: RESOLVED — the two scope headings were aligned to the canonical '## Scope N:' form so the guard's single-file splitter reads each scope's DoD against its own scenarios (Check-22 now PASS). Per-scope-directory conversion is no longer needed.",
+    "FOLLOW-UP-1 (owner bubbles.plan/bubbles.test): tests/e2e/assistant_bs007_test.sh asserts stale /ask->retrieval_qa routing (tier-gated/skipped). Separate cross-spec finding, not this bug.",
+    "FOLLOW-UP-2 (owner bubbles.test): spec-073 TestRenderDescriptorV1_* canaries t.Fatalf on missing node/dart instead of t.Skip (hard-fail the unit suite in minimal containers). Separate finding, not this bug.",
+    "DEPLOY: DONE — the deployed self-hosted rev already contains the DEFECT-A fix and the 2026-07-20 /ask A/B proved it live (real cited verdict). No pending redeploy."
   ],
   "environmentalLimitations": [
     "./smackerel.sh lint and format --check exit non-zero ONLY at their Python (ml/) pip-install stage (pypi httpcore read-timeout in the sandbox). No Python changed. Go tooling (isolated golang container) runs first and is clean: gofmt exit 0, go vet via go test ./....",
