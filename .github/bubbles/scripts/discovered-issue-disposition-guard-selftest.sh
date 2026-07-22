@@ -28,6 +28,9 @@ set -uo pipefail
 #   S5   --envelope points at a non-existent file    → exit 2
 #   S6   Envelope narrative carries an unfiled         → exit 1  (envelope scan
 #        deferral phrase                                 path)
+#   S7   Report-and-wait phrase ("recommend filing")     → exit 1  (ADVERSARIAL:
+#        with no disposition                              reported-but-unfiled)
+#   S8   Report-and-wait phrase + inline BUG-NNN         → exit 0
 #
 # Reference:
 #   bubbles/registry/gates.yaml → G095
@@ -231,6 +234,45 @@ if [[ "$RC" -eq 1 ]]; then
   pass "S6 envelope narrative with unfiled deferral BLOCKs (exit 1)"
 else
   bad "S6 envelope deferral expected exit 1, got $RC"
+fi
+
+# -----------------------------------------------------------------------
+# S7: report-and-wait phrase ("recommend filing"), no disposition → exit 1
+#     (ADVERSARIAL: proves the gate catches a reported-but-UNFILED finding —
+#      the exact anti-pattern of handing the user a findings list to authorize)
+# -----------------------------------------------------------------------
+s7="$(new_spec_dir s7-report-and-wait)"
+cat >"$s7/report.md" <<EOF
+# Report
+
+## Test Evidence
+
+Found an in-memory persistence gap. Recommend filing these as bugs in a follow-up workflow.
+EOF
+run_guard "$s7"
+if [[ "$RC" -eq 1 ]]; then
+  pass "S7 'recommend filing' report-and-wait without disposition BLOCKs (exit 1)"
+else
+  bad "S7 report-and-wait deferral expected exit 1, got $RC"
+fi
+
+# -----------------------------------------------------------------------
+# S8: report-and-wait phrase + inline BUG-NNN citation → exit 0
+#     (proves "recommend filing" PAIRED with a filed artifact passes)
+# -----------------------------------------------------------------------
+s8="$(new_spec_dir s8-filed-now)"
+cat >"$s8/report.md" <<EOF
+# Report
+
+## Test Evidence
+
+Found an in-memory persistence gap. Recommend filing as a bug — done: filed as BUG-027 (bug-filed).
+EOF
+run_guard "$s8"
+if [[ "$RC" -eq 0 ]]; then
+  pass "S8 report-and-wait phrase with inline BUG-NNN citation passes (exit 0)"
+else
+  bad "S8 filed-now expected exit 0, got $RC"
 fi
 
 # -----------------------------------------------------------------------

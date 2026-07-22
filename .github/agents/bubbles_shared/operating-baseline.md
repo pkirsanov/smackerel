@@ -104,6 +104,14 @@ When an agent encounters any of the following — hang, crash, regression, broke
 | **spec-filed** | The issue requires new design / behavior change | Path to `specs/NNN-*/spec.md` you just created |
 | **ops-filed** | The issue is operational (infra, deploy, monitoring, governance hygiene) | Path to ops artifact / ticket URL / issue link you just created |
 | **routed** | The issue belongs to another owner and you emitted a transition packet | Path to `transition-requests.json` entry with `routedTo` + `routedToCommit\|Spec\|Ticket` |
+| **status-adjusted** | The issue invalidates a completion claim on an EXISTING spec/scope/DoD item | The edited `state.json` (`status` moved off `done`, and/or `requiresRevalidation:true`) and/or the unchecked `- [ ]` DoD item — saved THIS turn, paired with a `bug-filed` entry for the underlying defect |
+
+**File on discovery — not report-and-wait (NON-NEGOTIABLE).** A disposition is discharged by CREATING or EDITING the tracked artifact NOW, in the SAME turn you observed the issue — never by describing it in chat prose, a findings table, or a `report.md` appendix and then waiting. Concretely:
+
+- `bug-filed` / `spec-filed` / `ops-filed` mean the artifact EXISTS ON DISK as of this turn (the bug folder with its required artifacts, the spec, the ops ticket) — not "will be filed", not "recommended for a future workflow", not "documented for later".
+- `routed` means a transition packet naming a CONCRETE owner + target was emitted THIS turn — not "deferred to a future delivery-mode workflow" with no packet.
+- When a finding shows a `done` spec/scope is not actually done (unimplemented requirement, broken behavior, missing coverage), you MUST immediately flip the artifact: move `status` off `done` OR set `requiresRevalidation:true`, uncheck the affected `- [ ]` DoD item(s), set the scope status — AND file the `bug-filed` entry for the defect. Do this in the same turn; do NOT report "this spec looks over-certified" and wait.
+- **Filing is NOT user-gated.** Never end a turn by handing the user a list of unfiled findings and asking whether or what to file. The default, unconditional action on discovery is to FILE; THEN report what you filed. "Should I file these?" is not a valid stopping point — file them, then tell the user they are filed.
 
 FORBIDDEN responses to a discovered issue:
 
@@ -112,6 +120,9 @@ FORBIDDEN responses to a discovered issue:
 - ❌ "I'll fix this later" — `later` is not a disposition
 - ❌ "Known issue" — known where? cite the BUG / TR ID
 - ❌ Silently moving on after observing a failure
+- ❌ "Here are the findings — let me know which to file" — filing is not user-authorized; file first, report second
+- ❌ "Recommend filing these as bugs" / "should be tracked in a follow-up workflow" — a recommendation is not a filing; create the artifact now
+- ❌ Documenting a finding in `report.md` prose or an appendix as the ONLY action — the tracked artifact (bug folder / status flip) MUST also exist this turn
 
 **Disposition record.** Every discovered-issue disposition MUST be recorded in the active spec's `report.md` under a `## Discovered Issues` section using this shape:
 

@@ -20,6 +20,7 @@ Close every finding raised in a round. No cherry-picking. No silent disappearanc
 3. **Trigger-owned closure workflow.** When a trigger maps to a workflow mode, the active authorized runner executes that mapped contract and waits for every phase owner before closeout.
 4. **No bespoke parent-side fix cycles.** The shared protocol governs all fix cycles; parents do not invent custom resolution loops.
 5. **Cherry-pick detection.** The state-transition guard rejects status promotion when previously-reported findings disappear between rounds without a recorded resolution.
+6. **File on discovery — not report-and-wait (Gate G095).** The instant a finding is confirmed, create the tracked artifact THIS turn: a `bug-filed` bug folder for a defect, and — when the finding invalidates a completion claim — an immediate spec/scope/DoD status flip (`status` off `done` / `requiresRevalidation:true` / unchecked `- [ ]` item). Reporting findings to the user, listing them in a table, or documenting them in `report.md` prose is NOT a substitute for filing. Filing is never user-gated: file first, then report what you filed. "Recommend filing" and "should be tracked later" are violations.
 
 ## Round flow
 1. Read all open findings carried into the round (from prior round's `unresolvedFindings`, validate/audit certification.* outputs, rework packets).
