@@ -13,7 +13,20 @@
     "summary": "The explicit /weather shortcut routes to the weather_query scenario, which depends on the LLM emitting a weather_lookup tool call (direct_output_from_tool short-circuits only AFTER the call). The self-hosted local model (qwen3:30b) sometimes returns no tool call and no final (llm_returned_no_tool_calls_and_no_final), producing OutcomeProviderError. Because weather_query is requires_provenance and the assembler yields empty Sources, the provenance gate rewrites the provider-error into the capture-as-fallback body 'saved as an idea — i'll surface it later.' Geocoding was never the cause (Open-Meteo resolves the ZIP directly)."
   },
   "resolution": "Add a deterministic /weather fast-path (facade Step 3.9) that dispatches the weather tool directly for an explicit /weather <location> shortcut, bypassing the LLM loop AND the provenance gate. Extract weather.LookupForecast (shared core of the tool handler) and wire it as a facade seam (WithWeatherLookup). Success renders forecast_line + one SourceExternalProvider; provider failure / empty location render an honest StatusUnavailable/slot_missing line — NEVER the capture-as-fallback acknowledgement. Backward-compatible: the LLM /weather path is untouched when the seam is not wired. Three adversarial unit tests reproduce the pre-fix provider-error and assert the fast-path bypasses it; regression-quality-guard --bugfix PASS.",
-  "codeVsDeployment": "code-only (in-repo). The live self-hosted symptom additionally requires a redeploy via the deploy adapter (bubbles.devops) and an operator Telegram smoke test.",
+  "codeVsDeployment": "deployed. The fix (sourceSha d4755abd, incl. the grpc v1.82.1 CVE bump) is built, operator-cosign-signed, deployed, and running on the self-hosted home-lab host. Running container digests match the fix build (core sha256:44ed9984, ml sha256:30ea2392), both healthy, and the Telegram assistant adapter is wired and bound. Only the operator's behavioral Telegram smoke test remains (an authenticated HTTP probe returned 401 because prod requires a PASETO session, not the raw shared token).",
+  "deployment": {
+    "target": "home-lab (self-hosted)",
+    "trustModel": "local-operator",
+    "sourceSha": "d4755abd",
+    "verifiedAt": "2026-07-22",
+    "images": {
+      "core": "ghcr.io/pkirsanov/smackerel-core@sha256:44ed998420057f5725759f9a08c09c90dea69ec0aca5efd1a5628586ca20de1d",
+      "ml": "ghcr.io/pkirsanov/smackerel-ml@sha256:30ea2392f39d5003bbd7f3b7174f969a95381569e8accb75e9b24c90c09360c1"
+    },
+    "configBundleSha256": "ea288c7bfefcaac94a2469dcc75cef684b90cc3556c4a610f42e808c5c060108",
+    "runningVerification": "docker inspect (read-only, safe projection): smackerel-home-lab-smackerel-core-1 running/healthy digest MATCHES CORE FIX; smackerel-home-lab-smackerel-ml-1 running/healthy digest MATCHES ML FIX; core startup log shows 'telegram bot started' + 'assistant Telegram adapter wired and bound to bot'",
+    "operatorSmokeTestPending": "send /weather <city or ZIP> on the bot; expect a forecast (or an honest unavailable line), never 'saved as an idea'"
+  },
   "affectedSurface": [
     "internal/agent/tools/weather/tool.go (extracted exported LookupForecast; handler delegates to it)",
     "internal/assistant/facade.go (weatherLookup seam, WithWeatherLookup, Step 3.9 fast-path, handleWeatherShortcut)",
@@ -30,24 +43,26 @@
     "select",
     "bootstrap",
     "implement",
-    "test"
+    "test",
+    "devops"
   ],
   "certification": {
     "status": "in_progress",
-    "achievedAssuranceLevel": "implement-and-unit-verified",
+    "achievedAssuranceLevel": "deployed-and-infra-verified",
     "scopeProgress": { "total": 1, "done": 1, "inProgress": 0, "notStarted": 0, "blocked": 0 },
     "gatesPassed": [
-      "test unit --go --go-run TestFacadeWeatherShortcut|TestWeatherLookup|TestFacadeWeatherIntegration|...: 3 BUG-061-007 adversarial tests GREEN; internal/agent/tools/weather ok, internal/assistant ok; go test ./... (compile+vet, filtered) zero FAILs",
+      "test unit --go --go-run TestFacadeWeatherShortcut|TestWeatherLookup|TestFacadeWeatherIntegration|...: 3 BUG-061-007 adversarial tests GREEN; internal/agent/tools/weather ok, internal/assistant ok; go test ./... (compile+vet, filtered) zero FAILs (also GREEN after the grpc v1.82.1 bump)",
       "regression-quality-guard.sh --bugfix: PASS (adversarial signal detected, 0 violations)",
-      "smackerel.sh check: config + scenario-lint OK (17 scenarios, 0 rejected)"
+      "artifact-lint.sh: PASS",
+      "smackerel.sh check: config + scenario-lint OK (17 scenarios, 0 rejected)",
+      "build --target self-hosted: 9/9 phases green (Trivy 0 CVEs after grpc v1.82.1 bump, cosign-signed, SBOM+attest, signed local-build-manifest)",
+      "deploy home-lab (on-host local-operator promote/apply): cosign release-proof verified; smackerel-core + smackerel-ml recreated; running digests match the fix build and are healthy; Telegram assistant adapter wired and bound"
     ],
     "pendingGates": [
-      "artifact-lint.sh",
-      "state-transition-guard.sh (mode-terminal)",
-      "live-stack validation on the home-lab target (deploy + operator Telegram smoke test)"
+      "operator live Telegram behavioral smoke test (human turn): /weather <city or ZIP> -> a forecast (or honest unavailable line), never 'saved as an idea'"
     ]
   },
-  "nextRequiredOwner": "bubbles.devops (build + deploy the fixed SHA to the home-lab target), then operator (live Telegram smoke test: /weather <location> returns a forecast, never 'saved as an idea')",
+  "nextRequiredOwner": "operator (live Telegram behavioral smoke test — a human turn; the fix binary is deployed + running + healthy + adapter-bound on the home-lab host, so the fixed code path is already live)",
   "followUps": [
     "WEATHER-WINDOW (owner bubbles.plan): the fast-path fixes window to 'now'; parsing 'tomorrow'/'weekend' from the /weather shortcut tail is a separate enhancement."
   ],
