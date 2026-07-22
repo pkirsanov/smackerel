@@ -1,0 +1,297 @@
+[
+  {
+    "alias": "pull-the-strings",
+    "maps_to": "bubbles.workflow",
+    "quote": "One plan at a time, boys. Bubbles is pulling the strings."
+  },
+  {
+    "alias": "i-got-a-plan-boys",
+    "maps_to": "bubbles.goal",
+    "quote": "I got a plan, boys, and it's a good one — the whole thing, start to finish."
+  },
+  {
+    "alias": "the-whole-operation",
+    "maps_to": "bubbles.sprint",
+    "quote": "We're runnin' the whole operation now — review, deliver, deploy, the works."
+  },
+  {
+    "alias": "under-the-light",
+    "maps_to": "bubbles.grill",
+    "quote": "Let's get it under the light and see if it survives."
+  },
+  {
+    "alias": "private-dancer",
+    "maps_to": "bubbles.grill",
+    "quote": "You want answers? Put it under the light."
+  },
+  {
+    "alias": "tell-me-straight",
+    "maps_to": "bubbles.journey",
+    "quote": "Come on, I'll walk you through it — and tell you straight what's broken."
+  },
+  {
+    "alias": "worst-case-ontario",
+    "maps_to": "bubbles.chaos",
+    "quote": "Worst case Ontario, something breaks"
+  },
+  {
+    "alias": "by-the-book",
+    "maps_to": "bubbles.audit --strict",
+    "quote": "This is by the book now."
+  },
+  {
+    "alias": "get-two-birds-stoned",
+    "maps_to": "bubbles.implement + bubbles.test",
+    "quote": "Get two birds stoned at once"
+  },
+  {
+    "alias": "i-got-work-to-do",
+    "maps_to": "bubbles.implement",
+    "quote": "I got work to do."
+  },
+  {
+    "alias": "smokes-lets-go",
+    "maps_to": "bubbles.setup",
+    "quote": "Smokes, let's go."
+  },
+  {
+    "alias": "know-what-im-sayin",
+    "maps_to": "bubbles.docs",
+    "quote": "Know what I'm sayin'? Publish the truth."
+  },
+  {
+    "alias": "somethings-fucky",
+    "maps_to": "bubbles.validate",
+    "quote": "Something's fucky"
+  },
+  {
+    "alias": "mans-gotta-eat",
+    "maps_to": "bubbles.validate",
+    "quote": "A man's gotta eat, Julian"
+  },
+  {
+    "alias": "way-she-goes",
+    "maps_to": "bubbles.analyst",
+    "quote": "Way she goes, boys."
+  },
+  {
+    "alias": "peanut-butter-and-jam",
+    "maps_to": "bubbles.gaps",
+    "quote": "BAAAAM! Peanut butter and JAAAAM!"
+  },
+  {
+    "alias": "safety-always-off",
+    "maps_to": "bubbles.security",
+    "quote": "Safety... always off"
+  },
+  {
+    "alias": "somethings-prowlin",
+    "maps_to": "bubbles.regression",
+    "quote": "Something's prowlin' around in the code, boys."
+  },
+  {
+    "alias": "roll-camera",
+    "maps_to": "bubbles.status",
+    "quote": "(camera keeps rolling)"
+  },
+  {
+    "alias": "greasy",
+    "maps_to": "bubbles.harden",
+    "quote": "That's greasy, boys."
+  },
+  {
+    "alias": "pave-your-cave",
+    "maps_to": "bubbles.harden",
+    "quote": "Why don't you go pave your cave?"
+  },
+  {
+    "alias": "supply-and-command",
+    "maps_to": "bubbles.plan",
+    "quote": "It's supply and command, Julian"
+  },
+  {
+    "alias": "jim-needs-a-plan",
+    "maps_to": "bubbles.plan",
+    "quote": "Jim, you need a plan."
+  },
+  {
+    "alias": "water-under-the-fridge",
+    "maps_to": "bubbles.simplify",
+    "quote": "Just tape it up and move on."
+  },
+  {
+    "alias": "laser-eyes",
+    "maps_to": "bubbles.spec-review",
+    "quote": "Gary can see right through it, boys. That spec expired three refactors ago."
+  },
+  {
+    "alias": "have-a-good-one",
+    "maps_to": "bubbles.handoff",
+    "quote": "Here, take this. I gotta go."
+  },
+  {
+    "alias": "plans-within-plans",
+    "maps_to": "bubbles.releases",
+    "quote": "Plans within plans, boys. Phase one is just the introduction."
+  },
+  {
+    "alias": "iron-lung-says",
+    "maps_to": "bubbles.releases",
+    "quote": "Iron Lung's got the ledger, boys."
+  },
+  {
+    "alias": "the-super",
+    "maps_to": "bubbles.super",
+    "quote": "I'm the trailer park supervisor."
+  },
+  {
+    "alias": "parts-unknown",
+    "maps_to": "bubbles.code-review",
+    "quote": "From parts unknown!"
+  },
+  {
+    "alias": "keep-the-park-online",
+    "maps_to": "bubbles.devops",
+    "quote": "Get the rack humming and keep the park online."
+  },
+  {
+    "alias": "whole-show",
+    "maps_to": "bubbles.system-review",
+    "quote": "Orangie sees everything. He's not dead, he's just... reviewing."
+  },
+  {
+    "alias": "not-how-that-works",
+    "maps_to": "bubbles.test",
+    "quote": "Dad, that's not how that works."
+  },
+  {
+    "alias": "lets-get-organized",
+    "maps_to": "bubbles.design",
+    "quote": "Let's get this organized."
+  },
+  {
+    "alias": "whats-going-on-here",
+    "maps_to": "bubbles.clarify",
+    "quote": "What in the f— is going on here?"
+  },
+  {
+    "alias": "nice-kitty",
+    "maps_to": "bubbles.bug",
+    "quote": "That's a nice f***ing kitty right there."
+  },
+  {
+    "alias": "i-handle-things",
+    "maps_to": "bubbles.goal",
+    "quote": "Tell Tyrone the outcome. He handles things, that's what he does."
+  },
+  {
+    "alias": "tyrone-got-this",
+    "maps_to": "bubbles.goal",
+    "quote": "Peace. Tyrone got this."
+  },
+  {
+    "alias": "on-the-clock",
+    "maps_to": "bubbles.sprint",
+    "quote": "Inside and outside, both at once. Don't fall behind."
+  },
+  {
+    "alias": "next-on-the-board",
+    "maps_to": "bubbles.sprint",
+    "quote": "That one's done — keep both flows moving."
+  },
+  {
+    "alias": "just-fixes",
+    "maps_to": "bubbles.stabilize",
+    "quote": "... (Bill spots the problem and points at it)"
+  },
+  {
+    "alias": "used-to-be-a-vet",
+    "maps_to": "bubbles.create-skill",
+    "quote": "I used to be a vet, you know."
+  },
+  {
+    "alias": "true",
+    "maps_to": "bubbles.commands",
+    "quote": "True."
+  },
+  {
+    "alias": "ill-do-whatever",
+    "maps_to": "bubbles.iterate",
+    "quote": "I'll do whatever you need, Julian."
+  },
+  {
+    "alias": "catch-me-up",
+    "maps_to": "bubbles.recap",
+    "quote": "So basically what happened was..."
+  },
+  {
+    "alias": "i-am-the-liquor",
+    "maps_to": "bubbles.retro",
+    "quote": "The liquor helps me see the patterns, Randy."
+  },
+  {
+    "alias": "see-the-patterns",
+    "maps_to": "bubbles.retro",
+    "quote": "I AM the liquor."
+  },
+  {
+    "alias": "wheres-the-bodies",
+    "maps_to": "bubbles.retro hotspots",
+    "quote": "The liquor knows where the bodies are buried, Randy."
+  },
+  {
+    "alias": "whos-driving",
+    "maps_to": "bubbles.retro busfactor",
+    "quote": "Somebody's gotta know how to drive this thing."
+  },
+  {
+    "alias": "tangled-up",
+    "maps_to": "bubbles.retro coupling",
+    "quote": "It's all tangled up like Christmas lights, Randy."
+  },
+  {
+    "alias": "liquor-then-tape",
+    "maps_to": "retro-to-simplify",
+    "quote": "The liquor shows me the problems. Donny tapes them up."
+  },
+  {
+    "alias": "liquor-then-harden",
+    "maps_to": "retro-to-harden",
+    "quote": "The liquor shows me the weak spots. Harden up, boys."
+  },
+  {
+    "alias": "liquor-then-sweep",
+    "maps_to": "retro-quality-sweep",
+    "quote": "The liquor finds the mess. Then the whole crew sweeps it clean."
+  },
+  {
+    "alias": "liquor-then-look",
+    "maps_to": "retro-to-review",
+    "quote": "The liquor shows me where to look. Green Bastard tells me what's broken."
+  },
+  {
+    "alias": "cant-just-slap",
+    "maps_to": "bubbles.ux",
+    "quote": "You can't just slap things together."
+  },
+  {
+    "alias": "same-lot-new-trailer",
+    "maps_to": "product-to-delivery (with existing impl)",
+    "quote": "Same lot, boys. New trailer."
+  },
+  {
+    "alias": "nothing-is-bulletproof",
+    "maps_to": "bubbles.redteam",
+    "quote": "Nothing's bulletproof, boys. Let me prove it."
+  },
+  {
+    "alias": "prove-it",
+    "maps_to": "bubbles.redteam",
+    "quote": "You say it's done? Prove it."
+  },
+  {
+    "alias": "this-is-my-park-now",
+    "maps_to": "bubbles.redteam",
+    "quote": "This is my park now. Let's see what holds."
+  }
+]
