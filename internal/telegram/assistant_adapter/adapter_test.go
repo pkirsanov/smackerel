@@ -38,6 +38,7 @@ func (r *recordingSender) count() int {
 type recordingCapture struct {
 	mu    sync.Mutex
 	calls []capturedCall
+	err   error // programmable return value (BUG-061-006 honest-ack cases)
 }
 
 type capturedCall struct {
@@ -46,7 +47,7 @@ type capturedCall struct {
 }
 
 func (c *recordingCapture) fn() CaptureFn {
-	return func(_ context.Context, msg *tgbotapi.Message, text string) {
+	return func(_ context.Context, msg *tgbotapi.Message, text string) error {
 		c.mu.Lock()
 		defer c.mu.Unlock()
 		chatID := int64(0)
@@ -54,6 +55,7 @@ func (c *recordingCapture) fn() CaptureFn {
 			chatID = msg.Chat.ID
 		}
 		c.calls = append(c.calls, capturedCall{chatID: chatID, text: text})
+		return c.err
 	}
 }
 

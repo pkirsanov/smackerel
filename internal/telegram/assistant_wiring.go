@@ -41,23 +41,21 @@ func (s *botSender) Send(c tgbotapi.Chattable) (tgbotapi.Message, error) {
 	return s.bot.api.Send(c)
 }
 
-// NewBotCaptureFn returns an assistant_adapter.CaptureFn that
-// delegates to *Bot.handleTextCapture so the capability layer's
-// CaptureRoute=true short-circuit reuses the exact legacy capture
-// pipeline (preserves BS-001 regression contract verbatim).
+// NewBotCaptureFn returns an assistant_adapter.CaptureFn that delegates
+// to *Bot.captureIdeaSilent so the capability layer's CaptureRoute=true
+// fallback persists the idea WITHOUT sending its own user-facing reply.
 //
-// The chatID → *tgbotapi.Message reconstruction is intentional: the
-// existing handleTextCapture signature takes a *tgbotapi.Message
-// (it derives the chat id from msg.Chat.ID and uses msg.MessageID
-// for reply attribution). The capability layer only knows chat_id +
-// text, so we build a minimal stub message that satisfies the
-// downstream code without inventing fields it does not need.
+// BUG-061-006 — the assistant renderer owns the single acknowledgement.
+// Routing this hook through the legacy replying handleTextCapture path
+// produced the duplicate ". Saved …"/"? Failed to save" + "saved as an
+// idea" pair. The silent path returns an error so the adapter can keep
+// the acknowledgement honest (nothing-to-save / real-failure vs saved).
 func NewBotCaptureFn(b *Bot) assistant_adapter.CaptureFn {
-	return func(ctx context.Context, msg *tgbotapi.Message, text string) {
+	return func(ctx context.Context, msg *tgbotapi.Message, text string) error {
 		if b == nil || msg == nil {
-			return
+			return assistant_adapter.ErrNothingToCapture
 		}
-		b.handleTextCapture(ctx, msg, text)
+		return b.captureIdeaSilent(ctx, msg, text)
 	}
 }
 

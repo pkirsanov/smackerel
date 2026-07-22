@@ -1,0 +1,64 @@
+{
+  "bugId": "BUG-061-006",
+  "title": "Telegram assistant emits duplicate and contradictory capture acknowledgements",
+  "spec": "specs/061-conversational-assistant",
+  "severity": "S2",
+  "status": "in_progress",
+  "workflowMode": "bugfix-fastlane",
+  "owner": "bubbles.goal",
+  "discoveredBy": "operator (live self-hosted Telegram bot, screenshot)",
+  "discoveredAt": "2026-07-21",
+  "lastUpdatedAt": "2026-07-22",
+  "rootCause": {
+    "defect1": "The CaptureRoute=true fallback drives two reply sinks: (A) NewBotCaptureFn -> Bot.handleTextCapture persists AND replies (replyWithMapping '. Saved …' / captureErrorReply '? Failed to save …'); (B) the renderer sends resp.Body 'saved as an idea — i'll surface it later.'. Two messages per turn.",
+    "defect2": "For a bare '/ask', StripShortcutPrefix('/ask') == '' so sink A's callCapture fails ('? Failed to save') while sink B still claims 'saved as an idea' — a false, contradictory pair; the renderer asserted the idea was saved even when it was not."
+  },
+  "resolution": "Silence the bot-side capture hook on the assistant path and make it report persistence honestly. CaptureFn now returns error; NewBotCaptureFn delegates to Bot.captureIdeaSilent (persist via shared persistTextIdea, NO reply; empty text -> assistant_adapter.ErrNothingToCapture; errDuplicate -> nil benign success). HandleUpdate inspects the returned error and, on failure, replaces the 'saved as an idea' response with an honest single line via honestCaptureFallbackFailure (nothing-to-save prompt vs generic failure), rendered through the default StatusAnswered body path (single message). The legacy plain-text handleTextCapture keeps its own '. Saved …' reply (BS-001 UX preserved). Four adversarial regression tests added; all GREEN; go test ./... (compile+vet, filtered) clean; both changed packages ok.",
+  "codeVsDeployment": "code-only (in-repo). The live self-hosted symptom additionally requires a redeploy via the deploy adapter (bubbles.devops) and a live-stack confirmation (bubbles.validate).",
+  "affectedSurface": [
+    "internal/telegram/assistant_adapter/adapter.go (CaptureFn signature, ErrNothingToCapture, HandleUpdate error handling, honestCaptureFallbackFailure)",
+    "internal/telegram/assistant_wiring.go (NewBotCaptureFn -> captureIdeaSilent)",
+    "internal/telegram/bot.go (captureIdeaSilent, persistTextIdea, handleTextCapture refactor)",
+    "internal/telegram/assistant_adapter/adapter_test.go (recordingCapture err field + CaptureFn signature)",
+    "internal/telegram/assistant_adapter/capture_ack_bug061006_test.go (new)",
+    "internal/telegram/capture_ack_bug061006_test.go (new)"
+  ],
+  "scopes": [
+    { "id": "scope-01", "title": "Single, silent acknowledgement on the capture-as-fallback path", "status": "done" },
+    { "id": "scope-02", "title": "Honest acknowledgement when nothing was saved", "status": "done" }
+  ],
+  "completedScopes": [
+    "scope-01",
+    "scope-02"
+  ],
+  "completedPhases": [
+    "select",
+    "bootstrap",
+    "implement",
+    "test"
+  ],
+  "certification": {
+    "status": "in_progress",
+    "achievedAssuranceLevel": "implement-and-unit-verified",
+    "scopeProgress": { "total": 2, "done": 2, "inProgress": 0, "notStarted": 0, "blocked": 0 },
+    "gatesPassed": [
+      "test unit --go --go-run BUG061006: 4 BUG-061-006 adversarial tests GREEN; internal/telegram ok, internal/telegram/assistant_adapter ok; go test ./... (compile+vet, filtered) zero FAILs"
+    ],
+    "pendingGates": [
+      "regression-quality-guard.sh --bugfix on the two new *_bug061006_test.go files",
+      "state-transition-guard.sh (done-grade)",
+      "artifact-lint.sh",
+      "live-stack validation on the home-lab target (bubbles.validate) after deploy"
+    ]
+  },
+  "nextRequiredOwner": "bubbles.devops (build + deploy the fixed SHA to the home-lab target via the smackerel home-lab deploy adapter), then bubbles.validate (live-stack confirmation of the single, honest acknowledgement)",
+  "followUps": [
+    "WEATHER-LOCATION (owner bubbles.plan): /weather <us-zip> (US ZIP) does not resolve in the open-meteo geocoder; and BS-006 rewrites a weather provider/geocode error to the generic capture-as-fallback ('saved as an idea') — whether an external-lookup error should instead surface an honest 'weather unavailable' line is a ratified-spec (BS-006) design question. Separate packet.",
+    "STATUS-VERSION (owner bubbles.plan): the health endpoint returns version/commit_hash but gates them behind authentication; surfacing them in the Telegram /status command answers the operator's 'what version is installed?' question. Separate observability change."
+  ],
+  "relatedSpecs": [
+    "specs/061-conversational-assistant",
+    "specs/074-assistant-capture-as-fallback-policy",
+    "specs/064-open-ended-knowledge-agent"
+  ]
+}
