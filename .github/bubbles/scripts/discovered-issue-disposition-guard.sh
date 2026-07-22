@@ -52,6 +52,12 @@ forbidden_phrases=(
   'not my session'
   'fix in a follow[- ]?up'
   'leave for (now|later)'
+  'recommend(ed|s|ing)? (filing|creating a bug|tracking as a bug)'
+  'should be filed'
+  'await(ing)? (user|operator|your) (approval|authorization|confirmation|decision|sign-?off|go-?ahead)'
+  'pending (user|operator|your) (approval|authorization|confirmation|decision|sign-?off)'
+  'defer(red|ring)? filing'
+  'defer(red|ring)? to a (future|later|separate) (workflow|delivery|run|session|cycle)'
 )
 
 # Artifact-reference patterns that count as a valid disposition citation

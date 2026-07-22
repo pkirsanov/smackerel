@@ -1,9 +1,9 @@
 {
-  "installedVersion": "7.20.1",
+  "installedVersion": "7.20.2",
   "installMode": "local-source",
-  "sourceRef": "fix/installer-managed-nested-payload",
-  "sourceGitSha": "171e1f76376a84aeec6c9688ba2a2f47e391eac0",
+  "sourceRef": "bubbles-g095-ship",
+  "sourceGitSha": "9efcb6c8a02c350f057140c8ba4cb8540fb34e6a",
   "sourceDirty": false,
   "targetRepoSlug": "smackerel",
-  "installedAt": "2026-07-22T06:40:22Z"
+  "installedAt": "2026-07-22T18:59:59Z"
 }
