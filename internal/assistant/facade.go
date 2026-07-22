@@ -200,6 +200,17 @@ type Facade struct {
 	// eligible BandLow and open_knowledge no-ground turns invoke
 	// Policy.CaptureForUser so the facade itself writes the Idea.
 	captureFallbackPolicy capturefallback.Policy
+
+	// weatherLookup is the spec-061 SCOPE-03 deterministic /weather
+	// fast-path seam. nil leaves /weather on the pre-existing LLM
+	// tool-call path. When wired (cmd/core -> weather.LookupForecast),
+	// an explicit `/weather <location>` shortcut dispatches the weather
+	// tool DIRECTLY (Step 3.9) instead of relying on the local model to
+	// emit the weather_lookup tool call (which qwen3:30b sometimes omits,
+	// producing a provider-error the provenance gate then masks as
+	// "saved as an idea"). Returns the marshaled Forecast JSON or a
+	// classified error.
+	weatherLookup func(ctx context.Context, location string) (json.RawMessage, error)
 }
 
 // NewFacade constructs a Facade. All non-Now config fields and every
@@ -308,6 +319,19 @@ func (f *Facade) WithTracer(tr *tracing.Tracer) *Facade {
 func (f *Facade) WithCaptureFallbackPolicy(p capturefallback.Policy) *Facade {
 	if p != nil {
 		f.captureFallbackPolicy = p
+	}
+	return f
+}
+
+// WithWeatherLookup attaches the deterministic /weather fast-path seam
+// (spec 061 SCOPE-03). nil-safe: a nil lookup leaves /weather on the LLM
+// tool-call path. When set, an explicit `/weather <location>` shortcut
+// dispatches the weather tool directly (Step 3.9), so the command never
+// depends on the local model emitting the weather_lookup tool call.
+// cmd/core wires this to weather.LookupForecast(…, WindowNow).
+func (f *Facade) WithWeatherLookup(fn func(ctx context.Context, location string) (json.RawMessage, error)) *Facade {
+	if fn != nil {
+		f.weatherLookup = fn
 	}
 	return f
 }
@@ -884,6 +908,26 @@ func (f *Facade) Handle(ctx context.Context, msg contracts.AssistantMessage) (re
 	// single §9.2 path) untouched. See retrieval_strategy_routing.go.
 	retrievalSelection := f.selectRetrievalStrategy(compiled, compiledOK, hashedUserID, correlationID)
 
+	// --- Step 3.9: deterministic /weather shortcut fast-path ---
+	//
+	// An explicit `/weather <location>` command must never depend on the
+	// LLM emitting a weather_lookup tool call. On the self-hosted path the
+	// local model (e.g. qwen3:30b) sometimes returns no tool call and no
+	// final; that provider-error then reaches the provenance gate, which
+	// (weather_query is requires_provenance) rewrites it to the
+	// capture-as-fallback "saved as an idea" acknowledgement — so a user who
+	// typed an explicit `/weather <city or ZIP>` is told their weather question
+	// was saved as an idea. The location is unambiguous for the explicit
+	// shortcut (it is the stripped tail), so dispatch the weather tool DIRECTLY and render the
+	// forecast — or an HONEST "weather unavailable" line — bypassing the LLM
+	// loop and the capture gate entirely.
+	if msg.Kind == contracts.KindText && shortcutScenarioID == "weather_query" && f.weatherLookup != nil {
+		resp = f.handleWeatherShortcut(ctx, msg, emittedAt)
+		conv = f.appendTurnAndPersist(ctx, conv, msg, resp, emittedAt)
+		f.writeAudit(ctx, msg, BandHigh, nil, nil, resp)
+		return resp, nil
+	}
+
 	// --- Step 4: build envelope + route ---
 	scenarioOverride := shortcutScenarioID
 	if scenarioOverride == "" {
@@ -1338,6 +1382,67 @@ func (f *Facade) runOpenKnowledgeDirect(ctx context.Context, sc *agent.Scenario,
 	// Telegram footer + the HTTP gather attribution.
 	result.GatherModel = turn.GatherModel
 	return result
+}
+
+// handleWeatherShortcut is the deterministic /weather fast-path (Step
+// 3.9). It dispatches the wired weather lookup for the explicit location
+// tail and renders the forecast with provider attribution on success, or
+// an HONEST provider-unavailable line on failure — NEVER the
+// capture-as-fallback "saved as an idea" acknowledgement (that masking of
+// an explicit weather command is exactly the defect this path removes).
+// Only invoked when f.weatherLookup is wired.
+func (f *Facade) handleWeatherShortcut(ctx context.Context, msg contracts.AssistantMessage, emittedAt time.Time) contracts.AssistantResponse {
+	location := strings.TrimSpace(StripShortcutPrefix(msg.Text))
+	if location == "" {
+		return contracts.AssistantResponse{
+			Status:     contracts.StatusUnavailable,
+			ErrorCause: contracts.ErrSlotMissing,
+			Body:       "which location? try `/weather <city or ZIP>`.",
+			EmittedAt:  emittedAt,
+		}
+	}
+	out, err := f.weatherLookup(ctx, location)
+	if err != nil {
+		return contracts.AssistantResponse{
+			Status:     contracts.StatusUnavailable,
+			ErrorCause: contracts.ErrProviderUnavailable,
+			Body:       fmt.Sprintf("couldn't get the weather for %s right now — please try again.", location),
+			EmittedAt:  emittedAt,
+		}
+	}
+	var payload struct {
+		ForecastLine string `json:"forecast_line"`
+		ProviderName string `json:"provider_name"`
+		RetrievedAt  string `json:"retrieved_at"`
+	}
+	if jerr := json.Unmarshal(out, &payload); jerr != nil || strings.TrimSpace(payload.ForecastLine) == "" {
+		return contracts.AssistantResponse{
+			Status:     contracts.StatusUnavailable,
+			ErrorCause: contracts.ErrProviderUnavailable,
+			Body:       fmt.Sprintf("couldn't read the weather for %s right now — please try again.", location),
+			EmittedAt:  emittedAt,
+		}
+	}
+	resp := contracts.AssistantResponse{
+		Status:    contracts.StatusAnswered,
+		Body:      payload.ForecastLine,
+		EmittedAt: emittedAt,
+	}
+	// Provider attribution Source (design §5.2): the forecast carries the
+	// provider name + the ORIGINAL upstream retrieved_at (preserved through
+	// cache hits by the weather tool). Mirrors weather.NewFacadeAssembler so
+	// the /weather shortcut response is attribution-honest without routing
+	// through the provenance gate.
+	if provider := strings.TrimSpace(payload.ProviderName); provider != "" {
+		retrievedAt, _ := time.Parse(time.RFC3339, payload.RetrievedAt)
+		resp.Sources = []contracts.Source{{
+			ID:    "weather-provider",
+			Title: provider,
+			Kind:  contracts.SourceExternalProvider,
+			Ref:   contracts.ExternalProviderRef{ProviderName: provider, RetrievedAt: retrievedAt},
+		}}
+	}
+	return resp
 }
 
 // buildDisambiguationPrompt selects up to cfg.DisambigMaxChoices
