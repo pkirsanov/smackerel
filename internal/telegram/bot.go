@@ -736,12 +736,16 @@ func (b *Bot) handleMessage(ctx context.Context, msg *tgbotapi.Message, updateID
 	}
 }
 
-// handleTextCapture captures plain text as an idea/note.
+// handleTextCapture captures plain text as an idea/note AND sends a
+// user-facing acknowledgement. This is the LEGACY path (plain text with
+// no bound assistant, document captions, etc.) where the bot is the sole
+// handler for the turn, so it is correct for it to reply here.
+//
+// The assistant CaptureRoute fallback MUST NOT use this path — it uses
+// captureIdeaSilent so the assistant renderer owns the single
+// acknowledgement (BUG-061-006).
 func (b *Bot) handleTextCapture(ctx context.Context, msg *tgbotapi.Message, text string) {
-	if len(text) > maxShareTextLen {
-		text = stringutil.TruncateUTF8(text, maxShareTextLen)
-	}
-	result, err := b.callCapture(ctx, msg.Chat.ID, map[string]string{"text": text})
+	result, err := b.persistTextIdea(ctx, msg.Chat.ID, text)
 	if err != nil {
 		b.captureErrorReply(msg.Chat.ID, err, "telegram text capture failed")
 		return
@@ -756,6 +760,44 @@ func (b *Bot) handleTextCapture(ctx context.Context, msg *tgbotapi.Message, text
 	}
 
 	b.replyWithMapping(ctx, msg.Chat.ID, fmt.Sprintf(". Saved: \"%s\" (idea)%s", title, suffix), artifactID)
+}
+
+// persistTextIdea POSTs plain text to the internal capture API and
+// returns the decoded result WITHOUT sending any user-facing reply.
+// Shared by the legacy replying path (handleTextCapture) and the silent
+// assistant CaptureRoute fallback hook (captureIdeaSilent).
+func (b *Bot) persistTextIdea(ctx context.Context, chatID int64, text string) (map[string]interface{}, error) {
+	if len(text) > maxShareTextLen {
+		text = stringutil.TruncateUTF8(text, maxShareTextLen)
+	}
+	return b.callCapture(ctx, chatID, map[string]string{"text": text})
+}
+
+// captureIdeaSilent persists plain text as an idea/note WITHOUT sending
+// any user-facing Telegram reply. It is the assistant CaptureRoute
+// fallback hook (spec 061 SCOPE-05, BUG-061-006): the assistant renderer
+// owns the single acknowledgement, so this path stays silent to avoid the
+// duplicate ". Saved …"/"? Failed to save" + "saved as an idea" pair.
+//
+// Returns:
+//   - assistant_adapter.ErrNothingToCapture when text is empty/whitespace
+//     (e.g. a bare "/ask") so the adapter renders an honest prompt
+//     instead of a false "saved as an idea".
+//   - nil on a successful persist AND on a duplicate (the idea already
+//     exists — a benign success from the user's perspective).
+//   - the underlying error on any real capture failure.
+func (b *Bot) captureIdeaSilent(ctx context.Context, msg *tgbotapi.Message, text string) error {
+	if strings.TrimSpace(text) == "" {
+		return assistant_adapter.ErrNothingToCapture
+	}
+	if _, err := b.persistTextIdea(ctx, msg.Chat.ID, text); err != nil {
+		if errors.Is(err, errDuplicate) {
+			return nil
+		}
+		slog.Error("assistant capture-fallback persist failed", "chat_id", msg.Chat.ID, "error", err)
+		return err
+	}
+	return nil
 }
 
 // handleVoice captures a voice note through Whisper transcription.
