@@ -36,7 +36,7 @@ Gates G073, G090, G022, G041, G040, G008A, G009, G056 received non-breaking refi
 | G080 | Trace contracts (traceContracts config) | `trace-contract-guard.sh` |
 | G082–G093 | Convergence cap, compaction discipline, pre-existing deferral, dogfood, orchestrator persistence, planning packet linkage, post-cert edits, inter-spec deps, retro convergence, planning chain, strict terminal status, delivery delta | targeted guards (each named after the gate) |
 | G094 | Capability foundation gate | `capability-foundation-guard.sh` |
-| G095 | Discovered-issue disposition (every observed issue is filed, not deferred) | `discovered-issue-disposition-guard.sh` |
+| G095 | Discovered-issue disposition — every observed issue is FILED immediately on discovery (bug artifact + spec/scope/DoD status flip), never merely reported to the user, "recommended" for a future workflow, or deferred | `discovered-issue-disposition-guard.sh` |
 | G097 | Requirement-mechanism correspondence (named mechanism ↔ code, warn-and-justify) | `requirement-mechanism-guard.sh` |
 | G098 | Observability posture declared (wired/opted-out; undeclared WARN, project-flippable to block; fake-wired / opted-out-malformed / unsupported-schema fail loud; framework source EXEMPT) | `observability-posture-guard.sh` |
 | G099 | Observability opt-out freshness (recorded + expiring opt-out; missing required optOut field fails loud; expired revisitAfter = non-blocking route-required reminder) | `observability-opt-out-guard.sh` |

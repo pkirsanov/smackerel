@@ -120,6 +120,7 @@ After all rounds complete:
 - **No docs/finalize duplication.** The runner MUST NOT add a bespoke docs/finalize tail after the mapped mode completes.
 - **No narrative-only mapped-mode results.** If the mapped mode returns without concrete evidence and a `## RESULT-ENVELOPE`, treat the result as incomplete and the round as NON_TERMINAL.
 - **No report-only completion.** Producing a table of findings without executing mapped workflow modes to remediate them is a policy violation, not a valid sweep outcome.
+- **No report-and-wait on filing (Gate G095).** Even a round that only DISCOVERS (no fix this pass) MUST FILE each finding as a tracked artifact the moment it is found — a `bug-filed` bug folder, plus an immediate spec/scope/DoD status flip (`status` off `done` / `requiresRevalidation:true` / unchecked `- [ ]`) when the finding invalidates a completion claim. Handing the user a findings table and waiting for authorization to file, "recommending" filing, or documenting findings only in `report.md` prose is a violation. File first, then report what was filed.
 - **No baseline-rationalization skip.** A green E2E suite does NOT make a stochastic sweep redundant. The runner MUST execute all requested rounds.
 - **No test-suite substitution.** A sweep round is random spec + random trigger + mapped workflow mode execution, never merely an existing test-suite run.
 
