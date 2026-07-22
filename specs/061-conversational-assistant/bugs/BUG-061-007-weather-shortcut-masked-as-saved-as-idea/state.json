@@ -1,0 +1,59 @@
+{
+  "bugId": "BUG-061-007",
+  "title": "/weather <location> answers 'saved as an idea' instead of the forecast",
+  "spec": "specs/061-conversational-assistant",
+  "severity": "S2",
+  "status": "in_progress",
+  "workflowMode": "bugfix-fastlane",
+  "owner": "bubbles.goal",
+  "discoveredBy": "operator (live self-hosted Telegram bot, screenshot)",
+  "discoveredAt": "2026-07-22",
+  "lastUpdatedAt": "2026-07-22",
+  "rootCause": {
+    "summary": "The explicit /weather shortcut routes to the weather_query scenario, which depends on the LLM emitting a weather_lookup tool call (direct_output_from_tool short-circuits only AFTER the call). The self-hosted local model (qwen3:30b) sometimes returns no tool call and no final (llm_returned_no_tool_calls_and_no_final), producing OutcomeProviderError. Because weather_query is requires_provenance and the assembler yields empty Sources, the provenance gate rewrites the provider-error into the capture-as-fallback body 'saved as an idea — i'll surface it later.' Geocoding was never the cause (Open-Meteo resolves the ZIP directly)."
+  },
+  "resolution": "Add a deterministic /weather fast-path (facade Step 3.9) that dispatches the weather tool directly for an explicit /weather <location> shortcut, bypassing the LLM loop AND the provenance gate. Extract weather.LookupForecast (shared core of the tool handler) and wire it as a facade seam (WithWeatherLookup). Success renders forecast_line + one SourceExternalProvider; provider failure / empty location render an honest StatusUnavailable/slot_missing line — NEVER the capture-as-fallback acknowledgement. Backward-compatible: the LLM /weather path is untouched when the seam is not wired. Three adversarial unit tests reproduce the pre-fix provider-error and assert the fast-path bypasses it; regression-quality-guard --bugfix PASS.",
+  "codeVsDeployment": "code-only (in-repo). The live self-hosted symptom additionally requires a redeploy via the deploy adapter (bubbles.devops) and an operator Telegram smoke test.",
+  "affectedSurface": [
+    "internal/agent/tools/weather/tool.go (extracted exported LookupForecast; handler delegates to it)",
+    "internal/assistant/facade.go (weatherLookup seam, WithWeatherLookup, Step 3.9 fast-path, handleWeatherShortcut)",
+    "cmd/core/wiring_assistant_facade.go (WithWeatherLookup -> weather.LookupForecast(., WindowNow); encoding/json import)",
+    "internal/assistant/facade_weather_shortcut_test.go (new; 3 adversarial tests)"
+  ],
+  "scopes": [
+    { "id": "scope-01", "title": "Deterministic /weather shortcut fast-path", "status": "done" }
+  ],
+  "completedScopes": [
+    "scope-01"
+  ],
+  "completedPhases": [
+    "select",
+    "bootstrap",
+    "implement",
+    "test"
+  ],
+  "certification": {
+    "status": "in_progress",
+    "achievedAssuranceLevel": "implement-and-unit-verified",
+    "scopeProgress": { "total": 1, "done": 1, "inProgress": 0, "notStarted": 0, "blocked": 0 },
+    "gatesPassed": [
+      "test unit --go --go-run TestFacadeWeatherShortcut|TestWeatherLookup|TestFacadeWeatherIntegration|...: 3 BUG-061-007 adversarial tests GREEN; internal/agent/tools/weather ok, internal/assistant ok; go test ./... (compile+vet, filtered) zero FAILs",
+      "regression-quality-guard.sh --bugfix: PASS (adversarial signal detected, 0 violations)",
+      "smackerel.sh check: config + scenario-lint OK (17 scenarios, 0 rejected)"
+    ],
+    "pendingGates": [
+      "artifact-lint.sh",
+      "state-transition-guard.sh (mode-terminal)",
+      "live-stack validation on the home-lab target (deploy + operator Telegram smoke test)"
+    ]
+  },
+  "nextRequiredOwner": "bubbles.devops (build + deploy the fixed SHA to the home-lab target), then operator (live Telegram smoke test: /weather <location> returns a forecast, never 'saved as an idea')",
+  "followUps": [
+    "WEATHER-WINDOW (owner bubbles.plan): the fast-path fixes window to 'now'; parsing 'tomorrow'/'weekend' from the /weather shortcut tail is a separate enhancement."
+  ],
+  "relatedSpecs": [
+    "specs/061-conversational-assistant",
+    "specs/074-assistant-capture-as-fallback-policy",
+    "specs/094-rich-weather"
+  ]
+}

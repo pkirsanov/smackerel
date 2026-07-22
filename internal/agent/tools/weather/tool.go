@@ -264,19 +264,33 @@ type weatherOutput struct {
 }
 
 func handleWeatherLookup(ctx context.Context, raw json.RawMessage) (json.RawMessage, error) {
-	svc, err := loadServices()
-	if err != nil {
-		return nil, err
-	}
 	var in weatherInput
 	if err := json.Unmarshal(raw, &in); err != nil {
 		return nil, fmt.Errorf("weather_lookup_bad_input: %w", err)
 	}
-	location := strings.TrimSpace(in.Location)
+	return LookupForecast(ctx, in.Location, ForecastWindow(in.ForecastWindow))
+}
+
+// LookupForecast performs a single deterministic weather lookup for an
+// explicit location and window, reusing the exact provider + cache +
+// attribution invariants of the weather_lookup agent tool. It is the
+// shared core of the tool handler AND the capability-layer /weather
+// shortcut fast-path (internal/assistant): an explicit `/weather <loc>`
+// command dispatches here directly, so it never depends on the LLM
+// emitting the weather_lookup tool call. An empty window defaults to
+// "now". Returns the marshaled Forecast JSON (identical to the tool's
+// output_schema) or a classified error (weather_tools_not_configured /
+// weather_lookup_empty_location / weather_lookup_invalid_window /
+// weather_lookup_provider_error).
+func LookupForecast(ctx context.Context, location string, window ForecastWindow) (json.RawMessage, error) {
+	svc, err := loadServices()
+	if err != nil {
+		return nil, err
+	}
+	location = strings.TrimSpace(location)
 	if location == "" {
 		return nil, errors.New("weather_lookup_empty_location")
 	}
-	window := ForecastWindow(in.ForecastWindow)
 	if window == "" {
 		window = WindowNow
 	}
@@ -284,7 +298,7 @@ func handleWeatherLookup(ctx context.Context, raw json.RawMessage) (json.RawMess
 	case WindowNow, WindowToday, WindowTomorrow, WindowWeekend:
 		// ok
 	default:
-		return nil, fmt.Errorf("weather_lookup_invalid_window: %q", in.ForecastWindow)
+		return nil, fmt.Errorf("weather_lookup_invalid_window: %q", window)
 	}
 
 	providerName := svc.Provider.Name()
