@@ -13,7 +13,19 @@
     "summary": "The facade high-band path runs the provenance gate unconditionally when a requires_provenance scenario has no sources, regardless of outcome. For a non-OK execution outcome (provider-error/timeout/no-tool-call/schema-failure) the gate rewrites Status to StatusSavedAsIdea + CaptureRoute=true, and canonicalizeSuccessfulCaptureResponse then clears ErrorCause and forces Body='saved as an idea'. A real failure is laundered into a benign capture, invisible to users and alerting. The gate's purpose (anti-fabrication) is only meaningful for an OK outcome that produced a body without valid sources."
   },
   "resolution": "P1: run the provenance gate only on OutcomeOK; a non-OK outcome keeps the honest StatusUnavailable + ErrorCause the facade already computed, with a friendly truthful body, and is not re-canonicalised into the capture acknowledgement. P2: a cross-scenario invariant test over every requires_provenance scenario x error outcome (the mechanical regression gate) plus complementary OK+no-sources cases proving the fabrication guard is intact. P3: an ExecutionErrorSurfacedTotal{scenario,outcome,transport} metric for proactive observability. P4: document the BUG-061-007 deterministic-dispatch seam pattern for explicit commands. P5: encode the invariant in the assistant design + review checklist, with the P2 test as mechanical enforcement.",
-  "codeVsDeployment": "code + docs (in-repo). The live self-hosted behavior additionally requires a redeploy via the local-operator home-lab path and an operator smoke test.",
+  "codeVsDeployment": "deployed. The P1-P5 fix (sourceSha 19fe72c8) is built, operator-cosign-signed, deployed on-host (local-operator promote/apply under sudo), and running healthy on the home-lab bot. Running core+ml digests match the P1-P5 build (core sha256:b4a59eef24f2956896710797360f5ef1b3be7a35574819441e116e6c50faed73, ml sha256:c43fad4afc6d86287f5fe93029694dfad85a74fa9281a94bd4f870220fc5d455), both healthy with 0 restarts, Telegram assistant adapter wired and bound. Only the operator's behavioral Telegram smoke test remains.",
+  "deployment": {
+    "target": "home-lab (self-hosted)",
+    "trustModel": "local-operator",
+    "sourceSha": "19fe72c8",
+    "verifiedAt": "2026-07-22",
+    "images": {
+      "core": "ghcr.io/pkirsanov/smackerel-core@sha256:b4a59eef24f2956896710797360f5ef1b3be7a35574819441e116e6c50faed73",
+      "ml": "ghcr.io/pkirsanov/smackerel-ml@sha256:c43fad4afc6d86287f5fe93029694dfad85a74fa9281a94bd4f870220fc5d455"
+    },
+    "runningVerification": "docker inspect (read-only): smackerel-home-lab-smackerel-core-1 running/healthy restarts=0 digest MATCHES P1-P5 CORE (b4a59eef); smackerel-home-lab-smackerel-ml-1 running/healthy restarts=0 digest MATCHES P1-P5 ML (c43fad4a); core startup log shows 'telegram bot started' + 'assistant Telegram adapter wired and bound to bot'; Trivy CRITICAL/HIGH gate 0 CVEs on the build",
+    "operatorSmokeTestPending": "on Telegram, trigger a scenario execution failure (weather/retrieval while the local model is flaky) and confirm the reply is an honest 'couldn't do that right now' line, NOT 'saved as an idea'; a genuine low-confidence capture should still say 'saved as an idea'"
+  },
   "affectedSurface": [
     "internal/assistant/facade.go (gate on OK outcome; friendly error body; P3 metric increment)",
     "internal/assistant/facade_weather_integration_test.go (BS006 refined to honest-error contract)",
@@ -40,23 +52,26 @@
     "bootstrap",
     "implement",
     "test",
-    "docs"
+    "docs",
+    "devops"
   ],
   "certification": {
     "status": "in_progress",
-    "achievedAssuranceLevel": "implemented-self-certified",
+    "achievedAssuranceLevel": "deployed-and-infra-verified",
     "scopeProgress": { "total": 5, "done": 5, "inProgress": 0, "notStarted": 0, "blocked": 0 },
     "gatesPassed": [
       "implement P1-P5",
       "test unit (invariant + guard-preserved + metric)",
-      "regression-quality-guard.sh --bugfix"
+      "regression-quality-guard.sh --bugfix",
+      "artifact-lint.sh",
+      "build --target self-hosted: Trivy 0 CVEs, cosign-signed, SBOM+attest, signed local-build-manifest (sourceSha 19fe72c8)",
+      "deploy home-lab (on-host local-operator promote/apply): cosign release-proof verified; core+ml recreated; running digests match the P1-P5 build and are healthy (0 restarts); Telegram assistant adapter wired and bound"
     ],
     "pendingGates": [
-      "artifact-lint.sh",
-      "build + deploy home-lab + operator smoke test"
+      "operator live Telegram behavioral smoke test (human turn): a failed scenario execution surfaces an honest error, never 'saved as an idea'"
     ]
   },
-  "nextRequiredOwner": "bubbles.goal (artifact-lint, commit, build + deploy home-lab, operator smoke test)",
+  "nextRequiredOwner": "operator (live Telegram behavioral smoke test — a human turn; the P1-P5 fix is deployed + running + healthy + adapter-bound on the home-lab host, so the honest-error code path is already live)",
   "relatedSpecs": [
     "specs/061-conversational-assistant",
     "specs/074-assistant-capture-as-fallback-policy"
