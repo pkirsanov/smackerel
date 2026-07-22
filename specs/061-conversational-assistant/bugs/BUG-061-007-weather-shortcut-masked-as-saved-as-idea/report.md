@@ -97,8 +97,47 @@ scenario-lint: OK
 See "After Fix — unit evidence" and "Regression quality" above. Command exit status: the CLI
 printed `[go-unit] go test ./... finished OK` and returned success; the guard returned exit 0.
 
-## Deploy + Live Verification
+## Deploy + Live Verification (self-hosted home-lab) {#deploy-verify}
 
-Pending the home-lab deploy of the fixed SHA (bubbles.devops), then an operator Telegram smoke
-test: send `/weather <location>` and confirm a forecast (or an honest unavailable line), never
-"saved as an idea".
+The fix (sourceSha `d4755abd`, which also carries a grpc → v1.82.1 CVE bump that
+unblocked the Trivy gate — see below) was built + operator-cosign-signed + deployed
+to the running self-hosted home-lab host and verified live this session
+(`local-operator` trust model).
+
+### Build + sign (accel tier, on the target)
+
+`smackerel.sh build --target self-hosted` — 9/9 phases green:
+- Trivy CRITICAL/HIGH gate: PASS (0 vulnerabilities). The first build FAILED the gate
+  on a HIGH in `google.golang.org/grpc v1.81.1` (GHSA-hrxh-6v49-42gf, newly in Trivy's
+  DB); bumping grpc to v1.82.1 (commit `d4755abd`) cleared it.
+- Pushed + cosign-signed (operator key) + SBOM-attested:
+  - core `ghcr.io/pkirsanov/smackerel-core@sha256:44ed9984…`
+  - ml   `ghcr.io/pkirsanov/smackerel-ml@sha256:30ea2392…`
+- Config bundle `config-bundle-self-hosted-d4755abd…` (sha256 `ea288c7b…`) pushed + signed.
+
+### Deploy (on-host local-operator apply → recreate)
+
+`promote.sh --target home-lab --product smackerel --local-build-manifest <manifest> --operator <op>`
+(on-host, under passwordless sudo, with the operator cosign pubkey + ghcr docker-config).
+The adapter verified the release proof (cosign verified BOTH images + attestations against
+the operator pubkey), decrypted the bundle secrets (mode 0600), and recreated
+`smackerel-core` + `smackerel-ml` (infra services stayed healthy).
+
+### Live running-state verification (this session, read-only)
+
+```text
+smackerel-home-lab-smackerel-core-1 | running/healthy | sha256:44ed9984… | MATCHES CORE FIX
+smackerel-home-lab-smackerel-ml-1   | running/healthy | sha256:30ea2392… | MATCHES ML FIX
+```
+
+Both containers run the EXACT fix digests and are healthy; core startup log shows
+`telegram bot started` + `assistant Telegram adapter wired and bound to bot`, so the
+fixed `/weather` code path is the live one.
+
+### Remaining (operator behavioral smoke test)
+
+A direct authenticated probe of `POST /api/assistant/turn` returned HTTP 401 (production
+requires a PASETO login session, not the raw shared token — a security-correct posture),
+so the end-to-end behavioral confirmation is an operator Telegram turn: send
+`/weather <city or ZIP>` and confirm a forecast (or an honest "unavailable" line), never
+"saved as an idea". The fix binary is deployed + running + healthy + adapter-bound.
