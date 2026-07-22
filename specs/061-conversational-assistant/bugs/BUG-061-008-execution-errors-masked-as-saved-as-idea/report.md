@@ -116,8 +116,43 @@ Full suite green for the affected packages (`go test ./... finished OK`, exit 0)
 `internal/assistant` and `internal/agent` packages report `ok`. Per-scenario PASS lines are in
 the P1/P2 blocks above.
 
-## Deploy + Live Verification
+## Deploy + Live Verification (self-hosted home-lab) {#deploy-verify}
 
-_Pending the local-operator home-lab build + apply + running-digest verification (in progress
-in this session). Operator behavioral confirmation ("a failed request no longer says saved as
-an idea") tracked in `uservalidation.md`._
+The P1–P5 fix (sourceSha `19fe72c8`) was built, operator-cosign-signed, deployed on-host, and
+verified running healthy this session (`local-operator` trust model).
+
+### Build + sign (accel tier, on the target)
+
+`smackerel.sh build --target self-hosted` — all phases green:
+- Trivy CRITICAL/HIGH gate: PASS (0 vulnerabilities).
+- Pushed + cosign-signed (operator key) + SBOM-attested:
+  - core `ghcr.io/pkirsanov/smackerel-core@sha256:b4a59eef24f2956896710797360f5ef1b3be7a35574819441e116e6c50faed73`
+  - ml   `ghcr.io/pkirsanov/smackerel-ml@sha256:c43fad4afc6d86287f5fe93029694dfad85a74fa9281a94bd4f870220fc5d455`
+- Config bundle `config-bundle-self-hosted-19fe72c8…` pushed + signed; signed local-build-manifest emitted.
+
+### Deploy (on-host local-operator apply → recreate)
+
+`promote.sh --target home-lab --product smackerel --local-build-manifest <manifest> --operator <op>`
+(on-host, under passwordless sudo, with the operator cosign pubkey + ghcr docker-config).
+The adapter verified the release proof (cosign verified both images + attestations against the
+operator pubkey), decrypted the bundle secrets, and recreated `smackerel-core` + `smackerel-ml`
+(infra services stayed healthy).
+
+### Live running-state verification (this session, read-only)
+
+```text
+smackerel-home-lab-smackerel-core-1 | running/healthy restarts=0 | sha256:b4a59eef… | MATCHES P1-P5 CORE
+smackerel-home-lab-smackerel-ml-1   | running/healthy restarts=0 | sha256:c43fad4a… | MATCHES P1-P5 ML
+```
+
+Both containers run the EXACT P1–P5 digests and are healthy (0 restarts); core startup log shows
+`telegram bot started` + `assistant Telegram adapter wired and bound to bot`, so the honest-error
+code path is the live one.
+
+### Remaining (operator behavioral smoke test)
+
+On Telegram, trigger a scenario execution failure (e.g. a weather/retrieval turn while the local
+model is flaky) and confirm the reply is an honest "couldn't do that right now" line, NOT "saved
+as an idea"; a genuine low-confidence capture should still say "saved as an idea". An authenticated
+HTTP probe is not feasible (prod requires a PASETO session), and the agent cannot send Telegram
+messages.
