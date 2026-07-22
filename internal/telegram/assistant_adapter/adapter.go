@@ -34,10 +34,27 @@ type Sender interface {
 // BS-001 regression contract.
 //
 // Signature carries the inbound *tgbotapi.Message so the bot-side
-// handler can reuse its existing handleTextCapture(ctx, msg, text)
-// path verbatim — the artifact written is byte-for-byte identical
-// to the BS-001 fallthrough path.
-type CaptureFn func(ctx context.Context, msg *tgbotapi.Message, text string)
+// handler can reuse its existing capture path — the artifact written is
+// byte-for-byte identical to the BS-001 fallthrough path.
+//
+// BUG-061-006 — the hook MUST persist the idea WITHOUT sending its own
+// user-facing Telegram reply: the assistant renderer owns the single
+// acknowledgement, so a self-reply here produces the duplicate
+// ". Saved …" + "saved as an idea" pair the user saw. The returned error
+// lets the adapter keep the acknowledgement honest:
+//   - nil                 → the idea was persisted (or already existed);
+//                           the renderer's "saved as an idea" ack stands.
+//   - ErrNothingToCapture  → there was nothing to save (e.g. a bare
+//                           "/ask"); the adapter renders an honest prompt
+//                           instead of a false "saved as an idea".
+//   - any other error      → the capture failed; the adapter renders an
+//                           honest failure line, never "saved as an idea".
+type CaptureFn func(ctx context.Context, msg *tgbotapi.Message, text string) error
+
+// ErrNothingToCapture is the sentinel a CaptureFn returns when the
+// capture-as-fallback text was empty/whitespace so there was nothing to
+// persist (BUG-061-006). Distinct from a real capture failure.
+var ErrNothingToCapture = errors.New("assistant_adapter: nothing to capture")
 
 // UserResolver maps a Telegram chat_id to the canonical Smackerel
 // user_id via spec 044 (TELEGRAM_USER_MAPPING). It MUST return
@@ -364,7 +381,15 @@ func (a *Adapter) HandleUpdate(ctx context.Context, update *tgbotapi.Update) (bo
 	// "/weather", ...). StripShortcutPrefix is a no-op for non-shortcut
 	// text, so ordinary plain-text captures are unchanged.
 	if resp.CaptureRoute && update.Message != nil {
-		a.capture(ctx, update.Message, assistant.StripShortcutPrefix(msg.Text))
+		// BUG-061-006 — the capture hook persists silently and reports
+		// whether an idea was actually saved. When it was NOT (empty bare
+		// shortcut or a real failure) we replace the "saved as an idea"
+		// response with an honest single acknowledgement so the user never
+		// sees a false "saved" or the contradictory "? Failed to save" +
+		// "saved as an idea" pair.
+		if capErr := a.capture(ctx, update.Message, assistant.StripShortcutPrefix(msg.Text)); capErr != nil {
+			resp = honestCaptureFallbackFailure(resp, capErr)
+		}
 	}
 	// Spec 061 SCOPE-09b — `assistant.adapter.render` span (design
 	// §8.3.1.A item 10). Sibling of facade.handle under the same
@@ -383,6 +408,28 @@ func (a *Adapter) HandleUpdate(ctx context.Context, update *tgbotapi.Update) (bo
 	}
 	tracing.EndSpan(renderSpan, "ok", "")
 	return true, nil
+}
+
+// honestCaptureFallbackFailure replaces a capture-as-fallback response
+// whose body would claim "saved as an idea" with an honest single
+// acknowledgement when the bot-side capture hook did NOT persist an idea.
+// This prevents the BUG-061-006 defects: the contradictory
+// "? Failed to save" + "saved as an idea" pair, and the false
+// "saved as an idea" on a bare shortcut that carried no text.
+//
+// The returned response renders through the default body path (no status
+// prefix), so the user sees exactly one honest line.
+func honestCaptureFallbackFailure(resp contracts.AssistantResponse, capErr error) contracts.AssistantResponse {
+	body := "Couldn't save that just now — please try again."
+	if errors.Is(capErr, ErrNothingToCapture) {
+		body = "Nothing to save — add some text or a question after the command."
+	}
+	return contracts.AssistantResponse{
+		Status:    contracts.StatusAnswered,
+		Body:      body,
+		Routing:   resp.Routing,
+		EmittedAt: resp.EmittedAt,
+	}
 }
 
 // canonicalAttr is a thin convenience for stamping a single
