@@ -146,6 +146,21 @@ var SkillInvocationsTotal = prometheus.NewCounterVec(
 	[]string{"scenario_id", "outcome", "transport"},
 )
 
+// ExecutionErrorSurfacedTotal counts non-OK executor outcomes that were
+// surfaced to the user as an HONEST error (spec 061 BUG-061-008 P3).
+// After the fix, a non-OK outcome is never masked as capture-as-fallback,
+// so this counter is the proactive execution-failure signal: a per-scenario
+// rise here is a real upstream / tool / model failure the operator should
+// see on a dashboard BEFORE a user reports it. outcome maps to
+// agent.InvocationResult.Outcome (provider_error, timeout, …).
+var ExecutionErrorSurfacedTotal = prometheus.NewCounterVec(
+	prometheus.CounterOpts{
+		Name: "smackerel_assistant_execution_error_surfaced_total",
+		Help: "Per-scenario non-OK executor outcomes surfaced to the user as an honest error (spec 061 BUG-061-008 P3). A rise indicates a real execution failure (upstream/tool/model), never a masked 'saved as an idea'.",
+	},
+	[]string{"scenario_id", "outcome", "transport"},
+)
+
 // CaptureFallbackTotal counts capture-as-fallback events by cause.
 var CaptureFallbackTotal = prometheus.NewCounterVec(
 	prometheus.CounterOpts{
@@ -190,6 +205,7 @@ func init() {
 		FacadeLatencySeconds,
 		RouterBandTotal,
 		SkillInvocationsTotal,
+		ExecutionErrorSurfacedTotal,
 		CaptureFallbackTotal,
 		ConfirmCardOutcomesTotal,
 		DisambiguationOutcomesTotal,

@@ -1271,15 +1271,28 @@ func (f *Facade) Handle(ctx context.Context, msg contracts.AssistantMessage) (re
 			}
 		}
 
-		// Provenance gate (requires_provenance scenarios only).
-		// BUG-061-003 — skip the gate when the assembler emitted a
-		// deterministic Override (the override path is for known
-		// non-error states; there is nothing to refuse).
-		if assemblerOverride == nil {
+		// Provenance gate (requires_provenance scenarios only) — ONLY on a
+		// successful (OK) outcome. BUG-061-008: the gate's purpose is
+		// anti-fabrication (a synthesized body with no valid sources). A
+		// NON-OK execution outcome (provider-error / timeout / no-tool-call /
+		// schema-failure) is a FAILURE, not fabrication, and MUST surface
+		// honestly (StatusUnavailable + ErrorCause already set by
+		// translateOutcomeToStatus/ErrorCause) instead of being masked as
+		// capture-as-fallback ("saved as an idea"). Running the gate on a
+		// non-OK outcome is exactly the recurring masking defect this bug fixes.
+		// BUG-061-003 — also skip when the assembler emitted a deterministic
+		// Override (a known non-error state; nothing to refuse).
+		if assemblerOverride == nil && result != nil && result.Outcome == agent.OutcomeOK {
 			resp = f.enforceProvenanceWithSpan(ctx,
 				f.manifest.RequiresProvenance(scenarioID),
 				scenarioID, provenanceCause, resp,
 				transportLabel, hashedUserID, correlationID)
+		} else if result != nil && result.Outcome != agent.OutcomeOK {
+			// BUG-061-008 P3 — a non-OK outcome is surfaced honestly; record
+			// it so execution failures are visible on a dashboard/alert and
+			// never silently laundered into a capture.
+			assistantmetrics.ExecutionErrorSurfacedTotal.WithLabelValues(
+				scenarioID, string(result.Outcome), transportLabel).Inc()
 		}
 
 		// Spec 074 SCOPE-04A — open-knowledge no-ground capture hook.
@@ -1636,13 +1649,13 @@ func translateFinalToBody(result *agent.InvocationResult) string {
 		}
 		return string(result.Final)
 	case agent.OutcomeTimeout:
-		return "request timed out."
+		return "that took too long — please try again in a moment."
 	case agent.OutcomeProviderError:
-		return "provider unavailable."
+		return "the service is unavailable right now — please try again in a moment."
 	case agent.OutcomeSchemaFailure, agent.OutcomeToolReturnInvalid, agent.OutcomeInputSchemaViolation:
-		return "internal validation failure."
+		return "something went wrong handling that — please try again."
 	case agent.OutcomeLoopLimit:
-		return "request exceeded internal limits."
+		return "I couldn't finish that in time — please try again."
 	case agent.OutcomeUnknownIntent:
 		return ""
 	default:

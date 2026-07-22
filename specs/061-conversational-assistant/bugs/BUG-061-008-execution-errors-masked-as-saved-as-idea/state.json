@@ -1,0 +1,64 @@
+{
+  "bugId": "BUG-061-008",
+  "title": "Execution errors are masked as 'saved as an idea' (systemic prevention P1-P5)",
+  "spec": "specs/061-conversational-assistant",
+  "severity": "S2",
+  "status": "in_progress",
+  "workflowMode": "bugfix-fastlane",
+  "owner": "bubbles.goal",
+  "discoveredBy": "operator (recurring pattern after per-scenario fixes)",
+  "discoveredAt": "2026-07-22",
+  "lastUpdatedAt": "2026-07-23",
+  "rootCause": {
+    "summary": "The facade high-band path runs the provenance gate unconditionally when a requires_provenance scenario has no sources, regardless of outcome. For a non-OK execution outcome (provider-error/timeout/no-tool-call/schema-failure) the gate rewrites Status to StatusSavedAsIdea + CaptureRoute=true, and canonicalizeSuccessfulCaptureResponse then clears ErrorCause and forces Body='saved as an idea'. A real failure is laundered into a benign capture, invisible to users and alerting. The gate's purpose (anti-fabrication) is only meaningful for an OK outcome that produced a body without valid sources."
+  },
+  "resolution": "P1: run the provenance gate only on OutcomeOK; a non-OK outcome keeps the honest StatusUnavailable + ErrorCause the facade already computed, with a friendly truthful body, and is not re-canonicalised into the capture acknowledgement. P2: a cross-scenario invariant test over every requires_provenance scenario x error outcome (the mechanical regression gate) plus complementary OK+no-sources cases proving the fabrication guard is intact. P3: an ExecutionErrorSurfacedTotal{scenario,outcome,transport} metric for proactive observability. P4: document the BUG-061-007 deterministic-dispatch seam pattern for explicit commands. P5: encode the invariant in the assistant design + review checklist, with the P2 test as mechanical enforcement.",
+  "codeVsDeployment": "code + docs (in-repo). The live self-hosted behavior additionally requires a redeploy via the local-operator home-lab path and an operator smoke test.",
+  "affectedSurface": [
+    "internal/assistant/facade.go (gate on OK outcome; friendly error body; P3 metric increment)",
+    "internal/assistant/facade_weather_integration_test.go (BS006 refined to honest-error contract)",
+    "internal/assistant/facade_execution_error_honesty_test.go (new; P2 cross-scenario invariant)",
+    "internal/assistant/metrics/metrics.go (P3 ExecutionErrorSurfacedTotal)",
+    "docs (P4 deterministic-dispatch pattern; P5 invariant + review checklist)"
+  ],
+  "scopes": [
+    { "id": "scope-01", "title": "P1 honest execution-error surfacing", "status": "done" },
+    { "id": "scope-02", "title": "P2 cross-scenario invariant test", "status": "done" },
+    { "id": "scope-03", "title": "P3 execution-error observability metric", "status": "done" },
+    { "id": "scope-04", "title": "P4 deterministic-dispatch seam pattern (doc)", "status": "done" },
+    { "id": "scope-05", "title": "P5 invariant encoded + review checklist", "status": "done" }
+  ],
+  "completedScopes": [
+    "scope-01",
+    "scope-02",
+    "scope-03",
+    "scope-04",
+    "scope-05"
+  ],
+  "completedPhases": [
+    "select",
+    "bootstrap",
+    "implement",
+    "test",
+    "docs"
+  ],
+  "certification": {
+    "status": "in_progress",
+    "achievedAssuranceLevel": "implemented-self-certified",
+    "scopeProgress": { "total": 5, "done": 5, "inProgress": 0, "notStarted": 0, "blocked": 0 },
+    "gatesPassed": [
+      "implement P1-P5",
+      "test unit (invariant + guard-preserved + metric)",
+      "regression-quality-guard.sh --bugfix"
+    ],
+    "pendingGates": [
+      "artifact-lint.sh",
+      "build + deploy home-lab + operator smoke test"
+    ]
+  },
+  "nextRequiredOwner": "bubbles.goal (artifact-lint, commit, build + deploy home-lab, operator smoke test)",
+  "relatedSpecs": [
+    "specs/061-conversational-assistant",
+    "specs/074-assistant-capture-as-fallback-policy"
+  ]
+}

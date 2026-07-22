@@ -972,6 +972,75 @@ SST env vars resolve from `config/smackerel.yaml` through
 `scripts/commands/config.sh`) lives in
 [`docs/Testing.md` → Assistant Evaluation Harness](Testing.md#assistant-evaluation-harness).
 
+#### 3.8.6 Failure Honesty + Deterministic Dispatch (BUG-061-008)
+
+Two invariants keep the assistant from *lying about failure*. Both were
+ratified after a class of bugs where a request that actually failed
+(provider down, timeout, a slash command the LLM never routed) was
+rendered to the user as the cheerful capture acknowledgement **"saved as
+an idea"** — masking a real outage as if the user's input had been
+happily filed away.
+
+**Invariant 1 — execution errors are never rendered as capture /
+soft-refusal (P1, P2, P5).**
+
+The source-provenance / capture-fallback gate in
+`internal/assistant/facade.go` (`enforceProvenanceWithSpan` →
+`canonicalizeSuccessfulCaptureResponse`) exists ONLY to stop the agent
+**fabricating** a grounded answer — i.e. presenting a synthesized body
+as if it were sourced when `requires_provenance` is set and no real
+sources were assembled. That is a property of a *successful* turn.
+Therefore the gate MUST run **only when `result.Outcome ==
+agent.OutcomeOK`**. For any non-OK outcome (`OutcomeProviderError`,
+`OutcomeTimeout`, `OutcomeSchemaFailure`, `OutcomeToolReturnInvalid`,
+`OutcomeInputSchemaViolation`, `OutcomeLoopLimit`) the facade surfaces an
+**honest, transport-appropriate status + message** and preserves
+`ErrorCause` — it never rewrites the turn into `StatusSavedAsIdea` +
+`captureFallbackAcknowledgement`. `translateFinalToBody` owns the
+user-facing copy (e.g. provider-error → *"the service is unavailable
+right now — please try again in a moment."*, timeout → *"that took too
+long — please try again in a moment."*).
+
+- **Mechanical enforcement:** `facade_execution_error_honesty_test.go`.
+  `TestExecutionErrorHonesty_NonOKNeverMaskedAsSavedAsIdea` sweeps every
+  `requires_provenance` scenario (`weather_query`, `retrieval_qa`,
+  `recipe_search`) × `{OutcomeProviderError, OutcomeTimeout}` and asserts
+  the response is honest (status ≠ `StatusSavedAsIdea`, `CaptureRoute ==
+  false`, `ErrorCause` preserved, body ≠ the capture acknowledgement).
+  `TestExecutionErrorHonesty_OKNoSourcesStillRefuses` proves the fix does
+  **not** over-correct — an `OutcomeOK` turn with a synthesized body and
+  no assembled sources STILL trips the fabrication gate. The pre-existing
+  `AntiFabrication` and `ProvenanceGateRewritesWhenSourcesMissing` tests
+  (both `OutcomeOK`) remain green for the same reason.
+- **Observability (P3):**
+  `smackerel_assistant_execution_error_surfaced_total{scenario_id,
+  outcome, transport}` (`internal/assistant/metrics`) increments whenever
+  a non-OK outcome is surfaced honestly, so a spike in real execution
+  failures is visible on a dashboard instead of hiding inside the
+  capture-success rate.
+
+**Invariant 2 — explicit commands dispatch deterministically, never via
+LLM tool-call reliability (P4).**
+
+An explicit user command (a slash command such as `/weather <place>`)
+resolves its tool through an **injected seam on the facade**, not by
+hoping the LLM emits the right tool call. `internal/assistant/facade.go`
+carries a `weatherLookup` field wired by the functional option
+`WithWeatherLookup(...)` (from `cmd/core`); the Step-3.9 `/weather`
+fast-path (`handleWeatherShortcut`) calls that seam directly and returns
+a deterministic forecast turn. This keeps a first-class command working
+even when the model would otherwise mis-route it to capture. New explicit
+commands SHOULD follow the same pattern: add a typed seam + `With…`
+option, dispatch it before the general band-dispatch, and unit-test the
+seam directly (see `facade_weather_integration_test.go`).
+
+**Author checklist** when touching assistant response assembly: the
+provenance/capture gate is guarded by `result.Outcome ==
+agent.OutcomeOK`; a non-OK outcome must reach `translateFinalToBody`
+with `ErrorCause` intact; and any new explicit command dispatches through
+an injected seam. `facade_execution_error_honesty_test.go` is the
+regression that fails if the gate ever runs on a non-OK outcome again.
+
 ---
 
 ## 4. OpenClaw Integration Strategy
