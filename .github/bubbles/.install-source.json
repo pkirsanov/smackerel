@@ -1,9 +1,9 @@
 {
   "installedVersion": "7.20.1",
-  "installMode": "remote-ref",
-  "sourceRef": "main",
-  "sourceGitSha": "afef464ba9b8bb71da210d725f9cfba899378b8e",
+  "installMode": "local-source",
+  "sourceRef": "fix/installer-managed-nested-payload",
+  "sourceGitSha": "171e1f76376a84aeec6c9688ba2a2f47e391eac0",
   "sourceDirty": false,
   "targetRepoSlug": "smackerel",
-  "installedAt": "2026-07-21T05:07:18Z"
+  "installedAt": "2026-07-22T06:40:22Z"
 }

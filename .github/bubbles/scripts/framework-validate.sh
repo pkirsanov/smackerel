@@ -192,6 +192,7 @@ macos_portability_guard_timeout_seconds="${BUBBLES_MACOS_PORTABILITY_GUARD_SELFT
 run_check "macOS portability guard selftest (bubbles-cross-platform-shell)" bubbles_run_with_timeout "$macos_portability_guard_timeout_seconds" bash "$SCRIPT_DIR/macos-portability-guard-selftest.sh"
 run_check_self_only "Installer manifest check (v6.0 / B9)" bash "$SCRIPT_DIR/generate-installer.sh"
 run_check_self_only "Installer manifest selftest (v6.0 / B9)" bash "$SCRIPT_DIR/generate-installer-selftest.sh"
+run_check_self_only "Payload integrity verifier selftest (IMP-101 / SCOPE-8)" bash "$SCRIPT_DIR/verify-payload-integrity-selftest.sh"
 if [[ -x "$SCRIPT_DIR/migrate-modes-v5-to-v6.sh" ]]; then
   run_check_self_only "Migrate-modes-v5-to-v6 selftest (v6.0 / C1)" bash "$SCRIPT_DIR/migrate-modes-v5-to-v6-selftest.sh"
 fi
@@ -543,6 +544,39 @@ if [[ -x "$SCRIPT_DIR/management-truth-lint.sh" ]]; then
   # adoption-profiles.yaml. Downstream repos have their own docs, so the
   # catalog-completeness comparison is meaningful only here.
   run_check_self_only "Management-truth lint (live)" bash "$SCRIPT_DIR/management-truth-lint.sh" "$REPO_ROOT"
+fi
+
+if [[ -x "$SCRIPT_DIR/gate-strength-lint-selftest.sh" ]]; then
+  run_check "Gate-strength lint selftest" bash "$SCRIPT_DIR/gate-strength-lint-selftest.sh"
+fi
+
+if [[ -x "$SCRIPT_DIR/gate-strength-lint.sh" ]]; then
+  # Source-only: publishes the enforcement-strength taxonomy of the framework's
+  # OWN gate registry and fails only if a gate cannot be classified (a registry
+  # parse problem). Downstream repos carry the same registry via managed sync.
+  run_check_self_only "Gate-strength taxonomy (live)" bash "$SCRIPT_DIR/gate-strength-lint.sh" "$REPO_ROOT"
+fi
+
+if [[ -x "$SCRIPT_DIR/claim-source-lint-selftest.sh" ]]; then
+  run_check "Claim-Source lint selftest" bash "$SCRIPT_DIR/claim-source-lint-selftest.sh"
+fi
+
+if [[ -x "$SCRIPT_DIR/claim-source-lint.sh" ]]; then
+  # Source-only: scans the framework's OWN report.md evidence blocks for the
+  # G072 Claim-Source provenance tag. Advisory-until-opt-in, so it never blocks
+  # here; the state-transition-guard invokes the same lint on every transition.
+  run_check_self_only "Claim-Source provenance lint (live)" bash "$SCRIPT_DIR/claim-source-lint.sh" "$REPO_ROOT"
+fi
+
+if [[ -x "$SCRIPT_DIR/effective-bundle-budget-selftest.sh" ]]; then
+  run_check "Effective-bundle budget selftest" bash "$SCRIPT_DIR/effective-bundle-budget-selftest.sh"
+fi
+
+if [[ -x "$SCRIPT_DIR/effective-bundle-budget.sh" ]]; then
+  # Source-only: measures the framework's OWN agent bundles against an OPTIONAL
+  # effectiveBundleMaxBytes budget. With no budget configured it is purely
+  # informational (never blocks); opt-in blocking is per .github/bubbles-project.yaml.
+  run_check_self_only "Effective-bundle budget (live)" bash "$SCRIPT_DIR/effective-bundle-budget.sh" "$REPO_ROOT"
 fi
 
 if [[ "$LIST_TIER_ONLY" == "true" ]]; then

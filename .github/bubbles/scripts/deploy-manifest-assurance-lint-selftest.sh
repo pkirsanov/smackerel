@@ -160,6 +160,12 @@ run "T15 invalid --minimum-assurance 'prototype' → error (exit 2)" 2 --manifes
 # T16: missing --manifest → usage error.
 run "T16 missing --manifest → error (exit 2)" 2 --minimum-assurance full
 
+# T17 (IMP-101 SCOPE-9): absent block + --require-assurance → refuse (mandatory).
+run "T17 no block + --require-assurance → refuse (exit 1)" 1 --manifest "$m_no_block" --require-assurance
+
+# T18 (IMP-101 SCOPE-9): present block + --require-assurance → still deployable.
+run "T18 full block + --require-assurance → deployable (exit 0)" 0 --manifest "$m_full" --require-assurance
+
 echo
 if [[ "$FAILURES" -gt 0 ]]; then
   echo "deploy-manifest-assurance-lint-selftest FAILED with $FAILURES issue(s)."

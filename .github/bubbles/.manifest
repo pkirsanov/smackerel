@@ -40,6 +40,8 @@ bubbles/scripts/capability-freshness-selftest.sh
 bubbles/scripts/capability-ledger-selftest.sh
 bubbles/scripts/case-collision-guard-selftest.sh
 bubbles/scripts/case-collision-guard.sh
+bubbles/scripts/claim-source-lint-selftest.sh
+bubbles/scripts/claim-source-lint.sh
 bubbles/scripts/cli.sh
 bubbles/scripts/code-search.sh
 bubbles/scripts/compaction-discipline-guard-selftest.sh
@@ -71,6 +73,8 @@ bubbles/scripts/done-spec-audit.sh
 bubbles/scripts/downstream-framework-write-guard.sh
 bubbles/scripts/edit-lint-gate-selftest.sh
 bubbles/scripts/edit-lint-gate.sh
+bubbles/scripts/effective-bundle-budget-selftest.sh
+bubbles/scripts/effective-bundle-budget.sh
 bubbles/scripts/effective-bundle-measure-selftest.sh
 bubbles/scripts/effective-bundle-measure.sh
 bubbles/scripts/env-pollution-scan-selftest.sh
@@ -99,6 +103,8 @@ bubbles/scripts/gate-catalog-freshness.sh
 bubbles/scripts/gate-id-grep-selftest.sh
 bubbles/scripts/gate-id-grep.sh
 bubbles/scripts/gate-meta.sh
+bubbles/scripts/gate-strength-lint-selftest.sh
+bubbles/scripts/gate-strength-lint.sh
 bubbles/scripts/gates-registry-selftest.sh
 bubbles/scripts/generate-capability-ledger-docs.sh
 bubbles/scripts/generate-cheatsheet-selftest.sh
@@ -284,6 +290,8 @@ bubbles/scripts/validation-latency-report-selftest.sh
 bubbles/scripts/validation-latency-report.sh
 bubbles/scripts/value-selection-lint-selftest.sh
 bubbles/scripts/value-selection-lint.sh
+bubbles/scripts/verify-payload-integrity-selftest.sh
+bubbles/scripts/verify-payload-integrity.sh
 bubbles/scripts/vertical-delivery-plan-guard-selftest.sh
 bubbles/scripts/vertical-delivery-plan-guard.sh
 bubbles/scripts/work-boundary-resolve-selftest.sh

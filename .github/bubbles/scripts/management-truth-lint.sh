@@ -72,10 +72,38 @@ else
   info "adoption-profiles.yaml or install.sh not present (skipping check 2)"
 fi
 
+# ── Check 3: documented inventory counts match the live inventory ─────
+# Robust by design: only compares when the anchored count phrase is present, so
+# rewording never false-positives; a PRESENT count that disagrees with the real
+# inventory is a finding (this is the class of drift DOC-101 hit — 34 vs 41).
+compare_doc_count() {
+  local label="$1" true_n="$2" file="$3" phrase="$4"
+  [[ -f "$file" ]] || return 0
+  local doc_n
+  doc_n="$( { grep -oE "[0-9]+ ${phrase}" "$file" || true; } | head -1 | grep -oE "^[0-9]+" || true )"
+  [[ -n "$doc_n" ]] || return 0
+  if [[ "$doc_n" != "$true_n" ]]; then
+    err "$label: docs say ${doc_n} '${phrase}' but the live inventory has ${true_n} ($file)"
+    findings=$((findings + 1))
+  fi
+}
+
+agents_n=0
+for f in "$REPO_ROOT"/agents/*.agent.md; do [[ -e "$f" ]] && agents_n=$((agents_n + 1)); done
+prompts_n=0
+for f in "$REPO_ROOT"/prompts/*.prompt.md; do [[ -e "$f" ]] && prompts_n=$((prompts_n + 1)); done
+tools_n=0
+for f in "$REPO_ROOT"/bubbles/mcp/tools/*.json; do [[ -e "$f" ]] && tools_n=$((tools_n + 1)); done
+
+compare_doc_count "agent count" "$agents_n" "$REPO_ROOT/docs/guides/INSTALLATION.md" "agent definitions"
+compare_doc_count "prompt-shim count" "$prompts_n" "$REPO_ROOT/docs/guides/INSTALLATION.md" "prompt shims"
+compare_doc_count "MCP tool count" "$tools_n" "$REPO_ROOT/docs/MCP.md" "annotated tools"
+compare_doc_count "MCP prompt count" "$prompts_n" "$REPO_ROOT/docs/MCP.md" "prompts"
+
 if [[ "$findings" -gt 0 ]]; then
   err "found $findings management-truth catalog omission(s)"
   exit 1
 fi
 
-info "OK — recipe catalog and adoption-profile help enumerate the live inventory"
+info "OK — recipe catalog, adoption-profile help, and documented counts match the live inventory"
 exit 0

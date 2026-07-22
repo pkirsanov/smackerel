@@ -42,6 +42,7 @@ MANIFEST=""
 MIN_ASSURANCE=""
 RISK_CLASS=""
 QUIET="false"
+REQUIRE_ASSURANCE="false"
 
 usage() {
   cat <<'EOF'
@@ -55,6 +56,8 @@ Optional:
                                an under-assured manifest is refused via assurance-resolve.sh.
   --risk-class <class>         Forwarded to assurance-resolve.sh (high/unknown → floor full).
   --quiet                      Suppress success output.
+  --require-assurance          Make an ABSENT assurance block a refusal instead of a
+                               backward-compatible no-op (mandatory assurance, DEPLOY-101).
   -h, --help                   Print this usage and exit.
 
 Exit codes:
@@ -96,6 +99,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --quiet)
       QUIET="true"
+      shift
+      ;;
+    --require-assurance)
+      REQUIRE_ASSURANCE="true"
       shift
       ;;
     --*)
@@ -150,6 +157,16 @@ if [[ "$block_type" == "error" ]]; then
   exit 2
 fi
 if [[ "$block_type" == "!!null" || -z "$block_type" ]]; then
+  # IMP-101 SCOPE-9 (DEPLOY-101): an absent assurance block is a backward-compatible
+  # no-op UNLESS the operator has activated mandatory assurance via
+  # --require-assurance (typically passed by CI/apply after their assurance-migration
+  # date). Then a manifest with no assurance block is REFUSED, closing the
+  # fail-open window. The migration DATE is the operator's decision, expressed by
+  # when they start passing the flag; the framework only provides the seam.
+  if [[ "$REQUIRE_ASSURANCE" == "true" ]]; then
+    refuse "no attestations.assurance block in $MANIFEST and --require-assurance is set (mandatory assurance active)"
+    exit 1
+  fi
   info "no attestations.assurance block in $MANIFEST — no-op (backward-compatible)."
   exit 0
 fi

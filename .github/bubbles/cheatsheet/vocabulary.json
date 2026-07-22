@@ -1,0 +1,370 @@
+[
+  {
+    "term": "workflow-only continuation",
+    "meaning": "When one root mode is already active, recap, status, and handoff preserve that mode and route back to its authorized runner instead of dropping into raw specialists."
+  },
+  {
+    "term": "universal goal endpoint",
+    "meaning": "`bubbles.goal` owns one requested outcome and may execute zero, one, or several authorized workflows plus direct specialist phases until convergence."
+  },
+  {
+    "term": "single-mode workflow runner",
+    "meaning": "`bubbles.workflow` executes exactly one explicit `mode:` or one mode resolved by `bubbles.super`; it does not decompose broad goals or run timed goal queues."
+  },
+  {
+    "term": "direct authorized runner",
+    "meaning": "The top-level agent granted a workflow mode interprets its phase order and invokes specialist owners directly. Workflow-running orchestrators never invoke one another as subagents."
+  },
+  {
+    "term": "workflow mode grant",
+    "meaning": "A default-deny entry in `bubbles/agent-capabilities.yaml::workflowModeGrants` declaring exactly which modes an orchestrator may execute. Gate G064 enforces it."
+  },
+  {
+    "term": "continuation envelope",
+    "meaning": "Machine-readable packet from a read-only agent carrying the target, intent, preferred workflow mode, and reason for the next workflow step."
+  },
+  {
+    "term": "scenario replay",
+    "meaning": "Validate reruns the linked live-system `SCN-*` user journeys from `scenario-manifest.json` before certification."
+  },
+  {
+    "term": "human acceptance",
+    "meaning": "`uservalidation.md` is human-owned acceptance input. Automation findings do not toggle it."
+  },
+  {
+    "term": "framework validation",
+    "meaning": "The framework's own self-check surface. Runs portable-surface, ownership, registry, and selftest checks before you trust a release or upgrade."
+  },
+  {
+    "term": "release hygiene",
+    "meaning": "Source-repo ship check for Bubbles itself. Confirms framework validation passed, required release docs exist, and no stray temp or backup files are riding along."
+  },
+  {
+    "term": "workflow run-state",
+    "meaning": "Durable per-run coordination state that makes resume, runtime reuse, and packet routing explicit instead of guesswork."
+  },
+  {
+    "term": "runtime capacity",
+    "meaning": "Weighted runtime-lease admission: heavy builds and tests acquire leases by weight (`--weight light|medium|heavy`, or `--weight-units N`), and the lease registry refuses (or `--wait`s) when the host weight budget (`runtime.capacityWeight` in `bubbles.config.json`) would be exceeded — so concurrent sessions can't OOM the box or stomp each other's build. Disabled by default (`capacityWeight: 0`); stale or released leases free their slot automatically. The park only has so many parking spots, boys."
+  },
+  {
+    "term": "typed framework event",
+    "meaning": "Structured framework log entry for gate outcomes, packet routing, lease changes, and policy provenance instead of narrative-only breadcrumbs."
+  },
+  {
+    "term": "action risk class",
+    "meaning": "Safety label for an operation such as read-only, owned mutation, destructive mutation, external side effect, or runtime teardown."
+  },
+  {
+    "term": "repo-readiness",
+    "meaning": "Advisory repo hygiene check for agent adoption. Useful before deep framework use, but separate from `bubbles.validate` certification."
+  },
+  {
+    "term": "adoption profile",
+    "meaning": "Maturity-tier onboarding posture such as `foundation`, `delivery`, or `assured`. It changes guidance and early guardrail messaging, not certification rigor."
+  },
+  {
+    "term": "release manifest",
+    "meaning": "Upstream trust bundle that states what version shipped, which profiles and interop sources are supported, what surfaces were validated, and which managed files belong to the release."
+  },
+  {
+    "term": "install provenance",
+    "meaning": "The install record that explains where a downstream framework copy came from and whether local-source risk exists before upgrade or doctor guidance is trusted."
+  },
+  {
+    "term": "framework-managed boundary",
+    "meaning": "Downstream `.github/bubbles/**`, `bubbles.*` agents/prompts, shared Bubbles instructions, and shared Bubbles skills are install artifacts. Do not patch them in a consumer repo; propose upstream or move the change to a project-owned file."
+  },
+  {
+    "term": "project-owned extension",
+    "meaning": "Repo-specific Bubbles customization that belongs outside the framework layer: `.github/bubbles-project.yaml`, `.github/bubbles-project/proposals/**`, project docs, project scripts, project specs, and repo-local policy files."
+  },
+  {
+    "term": "source-native refresh",
+    "meaning": "In the Bubbles source repo, maintain the framework directly and use `bash bubbles/scripts/cli.sh ...` validation surfaces. `install.sh` is for downstream repos, not for installing Bubbles into the Bubbles checkout itself."
+  },
+  {
+    "term": "trust preview",
+    "meaning": "Upgrade dry-run output that compares the current installed provenance and manifest to the target release before any framework-managed files are replaced."
+  },
+  {
+    "term": "review-only interop intake",
+    "meaning": "Project-owned import path that snapshots and normalizes Claude Code, Roo Code, Cursor, or Cline assets without mutating framework-managed Bubbles files."
+  },
+  {
+    "term": "supported interop apply",
+    "meaning": "Safe promotion path that writes only declared project-owned outputs from an interop import and falls back to proposals when a change would touch framework-owned or colliding surfaces."
+  },
+  {
+    "term": "objective research pass",
+    "meaning": "Brownfield workflows split question generation from codebase research so the research context reports current truth instead of solution-shaped opinions."
+  },
+  {
+    "term": "current truth",
+    "meaning": "The short section in `design.md` produced by objective research that summarizes how the code actually works today."
+  },
+  {
+    "term": "design brief",
+    "meaning": "A short top-of-file checkpoint in `design.md` that lets humans steer the design without reviewing the whole document."
+  },
+  {
+    "term": "execution outline",
+    "meaning": "A short top-of-file checkpoint in `scopes.md` that shows phase order, new signatures, and validation checkpoints before implementation starts."
+  },
+  {
+    "term": "horizontal plan",
+    "meaning": "A layer-by-layer plan like DB → service → API → UI that Bubbles tries to rewrite because it hides breakage until too late."
+  },
+  {
+    "term": "vertical slice",
+    "meaning": "An implementation sequence that gives you checkpoints through the stack instead of a giant horizontal batch."
+  },
+  {
+    "term": "slop tax",
+    "meaning": "Rework signal measured by `bubbles.retro`: retries, reversions, reopened scopes, and fix-on-fix churn versus forward progress."
+  },
+  {
+    "term": "instruction budget",
+    "meaning": "Prompt-size budget for agent surfaces. If the prompt gets too bloated, adherence gets worse; audit it with `bubbles lint-budget`."
+  },
+  {
+    "term": "read the code",
+    "meaning": "Use the short planning artifacts to steer early, then read the implementation and evidence instead of trusting giant plans blindly."
+  },
+  {
+    "term": "Liquor Inside / Liquor Outside",
+    "meaning": "Erica's two-location hustle. In Bubbles, this is `bubbles.sprint`: keep multiple goal streams moving under one time budget without dropping either side."
+  },
+  {
+    "term": "contextual persona variant",
+    "meaning": "A documented, visually distinct reuse of the same TPB character when the character has a genuinely different narrative mode. Only the variants listed in the persona convention table are allowed."
+  },
+  {
+    "term": "product direction surfaces trio",
+    "meaning": "The three canonical product-direction docs every product repo must carry: `docs/INVESTOR_OVERVIEW.md`, `docs/Product-Principles.md`, `.github/instructions/product-principles.instructions.md`. `bubbles.setup` enforces presence; `bubbles.releases` refuses to plan without it."
+  },
+  {
+    "term": "release packet",
+    "meaning": "The 8-doc bundle Sonny \"Iron Lung\" Smith produces per phase: `vision.md`, `features.md`, `actions.md`, `business-plan.md`, `deployment.md`, `marketing.md`, `monetization.md`, `ops-scalability.md`."
+  },
+  {
+    "term": "release-delivery reconciliation",
+    "meaning": "Gate G101: every `delivery=required` feature declared in a phase's `features.md` (via `bubbles:feature` machine annotations) MUST map to a terminal + validate-certified spec. Blocks a `bubbles.goal`/`bubbles.sprint` release-phase scenario from self-certifying 'delivered' while required features are unspecced, non-terminal, blocked, or implement-self-certified. WARN-grandfathered until a packet opts in with a `bubbles:reconciled-packet` header. Enforced by `release-delivery-reconciliation-guard.sh`; the compile-time twin in `scenario-compile-lint.sh` rejects an under-scoped scenario DAG."
+  },
+  {
+    "term": "carry-forward table",
+    "meaning": "Mandatory section in every multi-phase repo's `features.md` — captures capabilities inherited from prior phases so nothing gets quietly dropped."
+  },
+  {
+    "term": "vision restatement",
+    "meaning": "Every phase's `vision.md` MUST be self-contained — no cross-references like \"see vision.md in v1.0\". Restate inline."
+  },
+  {
+    "term": "cross-product coordination",
+    "meaning": "When two repos ship features together (e.g., a primary product ↔ a companion product), `bubbles.releases` produces matched plan files in BOTH repos with cross-references and a shared schema-versioning rule."
+  },
+  {
+    "term": "surfaced principle",
+    "meaning": "A product principle drafted from existing repo evidence by the `bubbles-product-principle-discovery` skill, flagged \"Surfaced for owner approval — not yet ratified\". Owner ratifies; agents do not."
+  },
+  {
+    "term": "release train",
+    "meaning": "A named, long-lived ship-line that gates trunk code behind per-train flag bundles and a manifest pointer. Operator-chosen string id (`mvp`, `v1.0`, `2026-q3`); framework is name-agnostic."
+  },
+  {
+    "term": "cut",
+    "meaning": "Tagging trunk at a SHA and producing a signed candidate artifact (digests + per-train config bundle) for a train. NO deployment."
+  },
+  {
+    "term": "promote",
+    "meaning": "Pointer-swap moving a candidate from one slot (staging) to another (prod) on a train. Requires backup-freshness + restore-drill currency."
+  },
+  {
+    "term": "slot",
+    "meaning": "A deployment target slot per train (`staging` / `prod` / `none` for build-only)."
+  },
+  {
+    "term": "train phase",
+    "meaning": "`active` / `maintained` / `frozen` / `retired` — operator-controlled lifecycle. Cuts allowed in `active`/`maintained`; promotes only in `active`; flags MUST be cleaned up before `retired`."
+  },
+  {
+    "term": "dark code",
+    "meaning": "Code on trunk that is default-off behind a flag for trains where it isn't shipping. Lives until its train graduates + 1 cycle (then retire)."
+  },
+  {
+    "term": "flag retirement",
+    "meaning": "Removing a feature flag (and its dead conditional branch) once its owning train has graduated. Mandatory before `release-train-retire`."
+  },
+  {
+    "term": "drift",
+    "meaning": "The running container digest no longer matches `manifest.yaml`. Surfaced by `verify.sh` post-apply."
+  },
+  {
+    "term": "upkeep cycle",
+    "meaning": "Scheduled recurring operational task (backup verify, restore drill, BCDR drill, patch, rotation, flag-cleanup, compliance sweep). Calendar-driven via `config/upkeep-calendar.yaml`."
+  },
+  {
+    "term": "near-line backup",
+    "meaning": "Removable-media backup on-site (USB drive that can be rotated and physically separated). Tier T3 in the backup model."
+  },
+  {
+    "term": "offsite backup",
+    "meaning": "Backup stored on different physical infrastructure than the source host. Tier T4 (cloud: B2/R2/Wasabi/S3/rclone)."
+  },
+  {
+    "term": "restore drill",
+    "meaning": "Periodic exercise that proves a backup can be restored to a working state. Weekly cadence. Failed drill blocks next `promote`."
+  },
+  {
+    "term": "BCDR drill",
+    "meaning": "Full disaster-recovery exercise; restores entire product stack into isolated namespace. Quarterly cadence."
+  },
+  {
+    "term": "RTO / RPO",
+    "meaning": "Recovery Time Objective (how fast to restore) / Recovery Point Objective (max data loss tolerated). Per-product targets in `docs/BCDR_Plan.md`."
+  },
+  {
+    "term": "OFFSITE_BACKEND",
+    "meaning": "Single env var in `<product>/<target>/params.yaml` that selects backup backend (`local-only` / `restic_usb:*` / `restic_b2:*` / etc). Swap requires zero product changes."
+  },
+  {
+    "term": "upkeep ledger",
+    "meaning": "Append-only `/srv/backups/upkeep-ledger.jsonl` recording every upkeep task execution. Read by `bubbles.train` for promote-freshness gating."
+  },
+  {
+    "term": "pollution isolation",
+    "meaning": "Test code MUST NOT write to prod monitoring, prod backup paths, or knb manifest. Enforced by `env-pollution-scan.sh` (G115)."
+  },
+  {
+    "term": "compliance sweep",
+    "meaning": "Quarterly evidence-collection task generating `docs/Compliance_Report.md` for G117-G120. Treena gathers, Ted certifies."
+  },
+  {
+    "term": "test impact map",
+    "meaning": "Optional project-owned `testImpact` config that maps changed paths to impacted components, first-pass test categories, always-run checks, and full-suite triggers. It speeds planning; it never permits skipping final gates."
+  },
+  {
+    "term": "narrow-first validation",
+    "meaning": "Run the impact-mapped focused checks first so feedback is fast, then still run every required closeout gate and broad suite."
+  },
+  {
+    "term": "full-suite trigger",
+    "meaning": "A high-blast-radius path pattern in `testImpact` that forces broad validation even when the direct change looks small."
+  },
+  {
+    "term": "trace contract",
+    "meaning": "Optional project-owned `traceContracts` config that describes required trace/log evidence for a workflow: spans, attributes, invariants, and red flags. Validate checks actual evidence, not predictions."
+  },
+  {
+    "term": "trace evidence",
+    "meaning": "Captured runtime trace/log output used by G080. Code inspection, expected spans, or planned instrumentation do not count."
+  },
+  {
+    "term": "capability foundation",
+    "meaning": "Provider-, screen-, service-, or variant-neutral domain and technical base that concrete implementations plug into."
+  },
+  {
+    "term": "concrete implementation",
+    "meaning": "A provider, adapter, channel, connector, driver, strategy, plugin, screen, or variant layered on the foundation."
+  },
+  {
+    "term": "variation axis",
+    "meaning": "A dimension where implementations differ, such as provider protocol, delivery policy, schema shape, authorization surface, storage behavior, runtime environment, or UI composition."
+  },
+  {
+    "term": "proportionality clause",
+    "meaning": "The rule that capability-first design applies only when reuse signals exist; premature abstraction is a violation too."
+  },
+  {
+    "term": "skills-first discovery",
+    "meaning": "v4.0 architectural posture: agents lean on auto-loaded discovery skills (`bubbles-anti-fabrication`, `bubbles-evidence-capture`, `bubbles-dod-validation`, `bubbles-status-transition`, `bubbles-result-envelope`, `bubbles-artifact-ownership-routing`, `bubbles-quality-gates-catalog`, `bubbles-scope-workflow-runtime`) instead of eager-loading the full governance corpus. Skills are shims pointing to the authoritative `agents/bubbles_shared/*.md` modules; rules and mechanical guards do not change."
+  },
+  {
+    "term": "policy skill",
+    "meaning": "A `.github/skills/bubbles-*` skill whose description triggers on a recurring agent decision (marking a DoD, capturing evidence, returning a result envelope) and routes the agent to the canonical governance module."
+  },
+  {
+    "term": "grandfather clause",
+    "meaning": "Historical `done` specs remain green under new framework policy unless their `state.json` is touched in the same commit. Enforced by `done-spec-audit.sh --profile advisory` (default) and the pre-push hook's changed-spec profile. Skills-first refactor preserves this contract."
+  },
+  {
+    "term": "production cycle",
+    "meaning": "v5 production-operations doctrine: a release-train portfolio (DVS) operates under continuous cross-train propagation (J-Roc), production-incident fastlane (Cory + Trevor), live observability (Phil-Collins adapters), and framework self-observation (Bubbles retro target: framework). All five surfaces are mandatory for \"in-production\" maturity."
+  },
+  {
+    "term": "cross-train propagation",
+    "meaning": "J-Roc's role: moving the same fix/feature across declared release-train chains per `propagation-policy.yaml`. DVS owns the lifecycle of one train; J-Roc owns movement between trains."
+  },
+  {
+    "term": "forward-merge",
+    "meaning": "Default-direction propagation along `defaultFlow` edges (e.g. experimental → mvp → prod). No approval token required when policy edge is `forward`."
+  },
+  {
+    "term": "backport",
+    "meaning": "Reverse-edge propagation (e.g. prod → mvp → experimental). MUST carry an explicit `approvalToken` from the receiving train's owner. Logged in `propagation-ledger.yaml`."
+  },
+  {
+    "term": "propagation policy",
+    "meaning": "`propagation-policy.yaml` at repo root. Declares trains, edges, default flow direction, receiving-train validation mode, and backport approval requirement. Owned by J-Roc; enforced by Gate G121/G122."
+  },
+  {
+    "term": "propagation ledger",
+    "meaning": "Append-only `propagation-ledger.yaml` recording every propagation event (forward, backport, audit). One JSONL line per event with train pair, SHA, approval token (backports), and timestamp. Gate G123 enforces append-only + per-edge integrity."
+  },
+  {
+    "term": "incident fastlane",
+    "meaning": "Cory + Trevor's production-incident chain: triage → fix → validate → propagate → audit. Highest-priority lane; bypasses normal planning queue. Uses `bugfix-fastlane` mechanics plus mandatory cross-train propagation step."
+  },
+  {
+    "term": "observability adapter",
+    "meaning": "`bubbles/adapters/observability/<name>.sh` — pluggable live-telemetry contract selected per signal+plane via `traceContracts.observability.endpoints`. Reference adapters: `none.sh` (default; returns `[]` for `fetch-alerts`, `{}` for the other three verbs), `prometheus.sh` (requires `PROMETHEUS_BASE_URL` + per-query env vars). Four verbs: `fetch-alerts`, `fetch-slo-burn`, `fetch-error-rate`, `fetch-deploy-impact`. Two planes: validate (ephemeral test stack, `env=test*`) and operate (prod, read-only)."
+  },
+  {
+    "term": "observability posture",
+    "meaning": "First-class per-repo declaration under `traceContracts.observability.posture`: `wired` (proves captured telemetry + numeric SLOs in integration/e2e/stress) or `opted-out` (recorded + expiring via `revisitAfter`); undeclared nags. Enforced by G098 (posture declared), G099 (opt-out freshness), G100 (SLO evidence — blocking when wired), and G080 (trace contract — MUST-when-wired). `bubbles doctor` surfaces it, `bubbles.setup focus: observability` declares it, and the `check_observability` MCP tool reports a one-shot verdict."
+  },
+  {
+    "term": "framework self-observation",
+    "meaning": "`bubbles.retro target: framework` (alias `framework-health`). Proposal-first: reads gate-failure logs and stalled-mode counts, writes only into `improvements/`, never auto-mutates framework files. The framework eats its own dog food."
+  },
+  {
+    "term": "release train portfolio",
+    "meaning": "The set of all declared trains under `config/release-trains.yaml`. Surfaced by `release-train-status-all` (J-Roc). Each row reports phase, current candidate SHA per slot, open-flag count, and backup/restore freshness."
+  },
+  {
+    "term": "adversarial verification",
+    "meaning": "Green Bastard (`bubbles.redteam`) attacks a FINISHED result to falsify the \"done\" claim through evidence-first counterexamples, risk-bounded same-runtime-correlated samples, deterministic union/disagreement aggregation, and a bounded live-system probe. It emits findings and NEVER certifies (completion stays with `bubbles.validate`). OFF BY DEFAULT. The post-result adversary alongside `bubbles.grill`, which pressure-tests ideas pre-build."
+  },
+  {
+    "term": "adversarial posture",
+    "meaning": "The effective mode/samples/teeth resolved by `adversarial-resolve.sh` via one precedence chain: per-run directive (`adversarial: on samples: 3`) -> `BUBBLES_ADVERSARIAL`, `BUBBLES_ADVERSARIAL_SAMPLES`, and `BUBBLES_ADVERSARIAL_TEETH` env -> `.github/bubbles-project.yaml` `adversarial:` block -> framework default `off`. Additional samples are risk-bounded same-runtime-correlated checks."
+  },
+  {
+    "term": "guided journey",
+    "meaning": "`bubbles.journey` (Cathy Curtis) walks you through the LIVE product toward a concrete goal, drives the real UI/API, captures friction at each step, and routes refinements into planning. Cooperative-guided — the third stance alongside chaos (stochastic) and redteam (adversarial)."
+  },
+  {
+    "term": "friction verdict",
+    "meaning": "The per-step outcome bubbles.journey records while walking the live product: works, unclear, inconvenient, missing, or broken. Each is backed by captured UI/API/telemetry evidence."
+  },
+  {
+    "term": "experiential friction",
+    "meaning": "A proactive priorityScoring dimension sourced from journey findings — scores user-discovered usability friction so refinement work can out-rank pure-correctness work."
+  },
+  {
+    "term": "readiness verdict",
+    "meaning": "Advisory validate-owned `certification.readinessVerdict` from the `readiness-review` mode: one ship / ship-with-notes / not-ready synthesis across spec, code, system, security, regression, and redteam lenses. Advisory-to-release; never a `done` transition (G056 unchanged)."
+  },
+  {
+    "term": "autonomy dial",
+    "meaning": "The `autonomy` execution tag with three levels — full, guarded, interactive. full = 100% autonomous (default); guarded = grill on ambiguity plus a conditional clarify gate; interactive = socratic plus on-demand grill. A convenience alias that sets grillMode, socratic, and clarify together; explicit flags override."
+  },
+  {
+    "term": "session budget",
+    "meaning": "Advisory aggregate caps for a goal/sprint session: sessionBudget.maxTotalConvergenceIterations, maxWallClockMinutes, and maxToolCalls. null = unbounded (today). Orchestrators self-enforce and stop with a blocked envelope when a cap is hit."
+  },
+  {
+    "term": "dry-run plan",
+    "meaning": "`dryRun: plan` resolves the full convergence plan and reports intended changes WITHOUT mutating code or state — a propose-only preview that extends parallelScopes=dag-dry to the whole loop."
+  }
+]

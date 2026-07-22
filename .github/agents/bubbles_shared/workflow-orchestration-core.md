@@ -70,4 +70,13 @@ Default routing map:
 - State drift: inline reconciliation of `state.json`, stale execution claims, and stale certification claims
 - Post-implementation test failures: `bubbles.implement` + `bubbles.test`
 
+## Dispatch-Failure Checkpointing (HOST-101)
+
+Host-level `runSubagent` dispatch can fail mid-batch (for example the BUG-003
+Anthropic 400 thinking-block mutation). When a dispatch fails, the orchestrator
+records which findings and phases already reached a terminal result, treats the
+failed dispatch as not-run rather than completed, and resumes the remaining
+batch from that checkpoint. A dispatch that never returned a result must never
+be counted as a passed phase or a closed finding.
+
 When both `bubbles.gaps` and `bubbles.harden` are dispatched for the same spec, order them gaps → harden: gaps audits spec/design ↔ implementation fidelity first, then harden verifies DoD/tests/policy compliance.

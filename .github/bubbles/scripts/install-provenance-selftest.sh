@@ -477,6 +477,56 @@ assert_bug_009_source_only_release_entry \
   'source-only schema' \
   'source-only schema'
 
+# Packaging repair: both trees were already enumerated under
+# managedFileChecksums, so the real installer must project them downstream with
+# matching ownership/checksum provenance. This would fail against the pre-fix
+# installer, which omitted all seven files while integrity verification passed.
+packaging_repair_executable_paths=(
+  bubbles/scripts/hooks/git-env-sanitize-selftest.sh
+  bubbles/scripts/hooks/git-env-sanitize.sh
+  bubbles/scripts/hooks/pre-push.sh
+)
+packaging_repair_managed_paths=(
+  bubbles/cheatsheet/README.md
+  bubbles/cheatsheet/aliases.json
+  bubbles/cheatsheet/modes.json
+  bubbles/cheatsheet/vocabulary.json
+)
+for packaging_repair_path in "${packaging_repair_executable_paths[@]}"; do
+  assert_bug_009_managed_install "$packaging_repair_path" true 'packaging repair'
+done
+for packaging_repair_path in "${packaging_repair_managed_paths[@]}"; do
+  assert_bug_009_managed_install "$packaging_repair_path" false 'packaging repair'
+done
+
+# The two managed subtrees are mirrors, so stale previously-managed files must
+# be removed on upgrade while canonical files survive.
+packaging_cheatsheet_orphan="$LOCAL_FIXTURE/.github/bubbles/cheatsheet/__orphan_probe.json"
+packaging_hook_orphan="$LOCAL_FIXTURE/.github/bubbles/scripts/hooks/__orphan_probe.sh"
+printf '{}\n' > "$packaging_cheatsheet_orphan"
+printf '#!/usr/bin/env bash\n' > "$packaging_hook_orphan"
+chmod +x "$packaging_hook_orphan"
+{
+  echo 'bubbles/cheatsheet/__orphan_probe.json'
+  echo 'bubbles/scripts/hooks/__orphan_probe.sh'
+} >> "$LOCAL_FIXTURE/.github/bubbles/.manifest"
+(
+  cd "$LOCAL_FIXTURE"
+  bash "$ROOT_DIR/install.sh" --local-source "$DIRTY_SOURCE" >/dev/null
+)
+[[ ! -e "$packaging_cheatsheet_orphan" ]] \
+  && pass "packaging repair prunes a stale managed cheatsheet file" \
+  || fail "packaging repair prunes a stale managed cheatsheet file"
+[[ ! -e "$packaging_hook_orphan" ]] \
+  && pass "packaging repair prunes a stale managed hook file" \
+  || fail "packaging repair prunes a stale managed hook file"
+[[ -f "$LOCAL_FIXTURE/.github/bubbles/cheatsheet/modes.json" ]] \
+  && pass "packaging repair keeps canonical cheatsheet files after prune" \
+  || fail "packaging repair keeps canonical cheatsheet files after prune"
+[[ -x "$LOCAL_FIXTURE/.github/bubbles/scripts/hooks/pre-push.sh" ]] \
+  && pass "packaging repair keeps canonical hook files executable after prune" \
+  || fail "packaging repair keeps canonical hook files executable after prune"
+
 # Prove checksum drift and an installed-file removal are detected, then prove a
 # supported re-install repairs bytes, mode, membership, and checksum provenance.
 drift_probe="$LOCAL_FIXTURE/.github/bubbles/scripts/transition-contract-resolver.sh"
