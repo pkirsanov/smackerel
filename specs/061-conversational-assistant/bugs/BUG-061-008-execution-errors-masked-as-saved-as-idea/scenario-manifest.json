@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "specId": "061-conversational-assistant-bug-061-008",
+  "scenarios": [
+    { "scenarioId": "SCN-061-008-01", "title": "a provider error surfaces honestly across every requires_provenance scenario, never saved as an idea", "scope": 2, "requiredTestType": "unit", "linkedTests": ["internal/assistant/facade_execution_error_honesty_test.go", "internal/assistant/facade_weather_integration_test.go"], "evidenceRefs": ["report.md#p1-evidence", "report.md#p2-evidence"], "regressionProtected": true },
+    { "scenarioId": "SCN-061-008-02", "title": "a timeout surfaces honestly, never saved as an idea", "scope": 2, "requiredTestType": "unit", "linkedTests": ["internal/assistant/facade_execution_error_honesty_test.go"], "evidenceRefs": ["report.md#p2-evidence"], "regressionProtected": true },
+    { "scenarioId": "SCN-061-008-03", "title": "an OK outcome with no valid sources still refuses (anti-fabrication guard preserved)", "scope": 1, "requiredTestType": "unit", "linkedTests": ["internal/assistant/facade_high_band_test.go", "internal/assistant/facade_weather_integration_test.go", "internal/assistant/facade_execution_error_honesty_test.go"], "evidenceRefs": ["report.md#p1-evidence", "report.md#p2-evidence"], "regressionProtected": true },
+    { "scenarioId": "SCN-061-008-04", "title": "execution failures are observable via a scenario+outcome metric", "scope": 3, "requiredTestType": "unit", "linkedTests": ["internal/assistant/facade_execution_error_honesty_test.go"], "evidenceRefs": ["report.md#p3-evidence"], "regressionProtected": true }
+  ]
+}

@@ -172,7 +172,7 @@ func TestFacadeWeatherIntegration_BS003_HappyPathEmitsExternalProviderSource(t *
 	}
 }
 
-func TestFacadeWeatherIntegration_BS006_ProviderUnavailableTriggersRefusal(t *testing.T) {
+func TestFacadeWeatherIntegration_BS006_ProviderUnavailableSurfacesHonestly(t *testing.T) {
 	_, _ = newIntegrationPostgres(t)
 
 	prefix := "asm-int-weather-bs006-" + time.Now().UTC().Format("20060102150405.000000000")
@@ -240,26 +240,26 @@ func TestFacadeWeatherIntegration_BS006_ProviderUnavailableTriggersRefusal(t *te
 		t.Fatalf("Handle err = %v", err)
 	}
 
-	// BS-006 expectations: provider unavailable → translateFinalToBody
-	// emits "provider unavailable." → assembler returns zero value
-	// (Outcome != OK) → provenance gate sees requires_provenance=true
-	// + Sources empty + Body non-empty → REWRITES to canonical refusal
-	// (Status=StatusSavedAsIdea, Body=CanonicalRefusalBody,
-	// CaptureRoute=true). ErrorCause is set BEFORE the gate runs
-	// (translateOutcomeToErrorCause) and the gate preserves it; this
-	// is the field the transport adapter uses to render the
-	// `weather: unavailable` error line per spec BS-006.
-	if got, want := resp.Status, contracts.StatusSavedAsIdea; got != want {
-		t.Errorf("Status = %q; want %q (provenance gate rewrites provider-error to soft refusal)", got, want)
+	// BUG-061-008 — BS-006 refined: a provider-unavailable execution
+	// FAILURE (OutcomeProviderError) MUST surface HONESTLY and MUST NEVER be
+	// masked as capture-as-fallback ("saved as an idea"). The provenance gate
+	// now runs ONLY on OK outcomes (anti-fabrication); a non-OK outcome keeps
+	// the honest StatusUnavailable + ErrProviderUnavailable the facade
+	// computed via translateOutcomeToStatus/ErrorCause, with a truthful body.
+	if got, want := resp.Status, contracts.StatusUnavailable; got != want {
+		t.Errorf("Status = %q; want %q (provider-error surfaces honestly, not masked as saved-as-idea)", got, want)
 	}
 	if got, want := resp.ErrorCause, contracts.ErrProviderUnavailable; got != want {
-		t.Errorf("ErrorCause = %q; want %q (translateOutcomeToErrorCause MUST propagate provider failure for BS-006)", got, want)
+		t.Errorf("ErrorCause = %q; want %q (honest provider-unavailable cause preserved, not discarded)", got, want)
 	}
-	if !resp.CaptureRoute {
-		t.Errorf("CaptureRoute = false; want true (provenance gate must offer to capture per BS-006)")
+	if resp.CaptureRoute {
+		t.Errorf("CaptureRoute = true; want false (an execution failure must NOT be captured as an idea)")
 	}
-	if got, want := resp.Body, "I don't have a sourced answer for that."; got != want {
-		t.Errorf("Body = %q; want %q (canonical refusal body)", got, want)
+	if resp.Body == captureFallbackAcknowledgement {
+		t.Errorf("Body = %q; a provider failure must NEVER be rendered as the capture acknowledgement", resp.Body)
+	}
+	if got, want := resp.Body, "the service is unavailable right now — please try again in a moment."; got != want {
+		t.Errorf("Body = %q; want the honest provider-unavailable line %q", got, want)
 	}
 	if len(resp.Sources) != 0 {
 		t.Errorf("Sources len = %d; want 0 (provider unavailable)", len(resp.Sources))

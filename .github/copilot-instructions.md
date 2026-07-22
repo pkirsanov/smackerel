@@ -332,6 +332,20 @@ The future runtime command surface must converge on:
 
 ---
 
+## Assistant Response Honesty (NON-NEGOTIABLE)
+
+The conversational assistant (`internal/assistant/`) MUST NOT render an
+execution failure as a success. When reviewing or changing assistant
+response assembly (`facade.go`, provenance/capture-fallback, band
+dispatch, `translateFinalToBody`), verify ALL of the following:
+
+- **The provenance / capture-fallback gate runs ONLY on `result.Outcome == agent.OutcomeOK`.** Its sole purpose is anti-fabrication on a *successful* turn. It MUST NOT run on a non-OK outcome — doing so is exactly the bug that rewrote provider-error/timeout turns into `StatusSavedAsIdea` + "saved as an idea", masking a real outage as a happy capture.
+- **A non-OK outcome (`OutcomeProviderError`, `OutcomeTimeout`, `OutcomeSchemaFailure`, `OutcomeToolReturnInvalid`, `OutcomeInputSchemaViolation`, `OutcomeLoopLimit`) surfaces honestly** — an outcome-appropriate status + user message via `translateFinalToBody`, with `ErrorCause` preserved. Never `StatusSavedAsIdea`, never the capture acknowledgement, for a turn that failed.
+- **Explicit commands dispatch deterministically** through an injected facade seam (e.g. `WithWeatherLookup` → `handleWeatherShortcut`), never by relying on the LLM to emit the right tool call.
+- **Mechanical enforcement:** `internal/assistant/facade_execution_error_honesty_test.go` fails if the gate ever runs on a non-OK outcome again; `smackerel_assistant_execution_error_surfaced_total` makes surfaced failures observable. Do not weaken or delete either. Full rationale: [`docs/smackerel.md` §3.8.6 Failure Honesty + Deterministic Dispatch](../docs/smackerel.md).
+
+---
+
 ## Terminal Discipline
 
 See `instructions/terminal-discipline.instructions.md` for current terminal rules.
