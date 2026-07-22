@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "specId": "061-conversational-assistant-bug-061-007",
+  "scenarios": [
+    { "scenarioId": "SCN-061-007-01", "title": "a valid location returns the forecast, never saved as an idea", "scope": 1, "requiredTestType": "unit", "linkedTests": ["internal/assistant/facade_weather_shortcut_test.go"], "evidenceRefs": ["report.md#after-fix-unit-evidence", "report.md#repro-red"], "regressionProtected": true },
+    { "scenarioId": "SCN-061-007-02", "title": "a provider failure is reported honestly, never saved as an idea", "scope": 1, "requiredTestType": "unit", "linkedTests": ["internal/assistant/facade_weather_shortcut_test.go"], "evidenceRefs": ["report.md#after-fix-unit-evidence", "report.md#regression-quality"], "regressionProtected": true },
+    { "scenarioId": "SCN-061-007-03", "title": "a bare /weather asks for a location and never calls the provider", "scope": 1, "requiredTestType": "unit", "linkedTests": ["internal/assistant/facade_weather_shortcut_test.go"], "evidenceRefs": ["report.md#after-fix-unit-evidence"], "regressionProtected": true }
+  ]
+}

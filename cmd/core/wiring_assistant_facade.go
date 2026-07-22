@@ -29,6 +29,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -210,6 +211,17 @@ func wireAssistantFacade(
 		return fmt.Errorf("build retrieval-strategy contract registry: %w", err)
 	}
 	facade.WithRetrievalRouter(routing.NewRouter(cfg.Retrieval.Routing, retrievalRegistry))
+
+	// Spec 061 SCOPE-03 — deterministic /weather fast-path. An explicit
+	// `/weather <location>` command dispatches the weather tool directly
+	// (bypassing the LLM tool-call loop and the capture-as-fallback gate)
+	// so it never returns "saved as an idea" when the local model fails to
+	// emit the weather_lookup call. weather.LookupForecast returns
+	// weather_tools_not_configured when the skill is disabled, which the
+	// facade renders as an honest "weather unavailable" line.
+	facade.WithWeatherLookup(func(ctx context.Context, location string) (json.RawMessage, error) {
+		return weather.LookupForecast(ctx, location, weather.WindowNow)
+	})
 	slog.Info("assistant facade wired",
 		"scenarios", len(scenarios),
 		"borderline_floor", facadeCfg.BorderlineFloor,
