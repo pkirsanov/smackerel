@@ -14,7 +14,20 @@
     "defect2": "For a bare '/ask', StripShortcutPrefix('/ask') == '' so sink A's callCapture fails ('? Failed to save') while sink B still claims 'saved as an idea' — a false, contradictory pair; the renderer asserted the idea was saved even when it was not."
   },
   "resolution": "Silence the bot-side capture hook on the assistant path and make it report persistence honestly. CaptureFn now returns error; NewBotCaptureFn delegates to Bot.captureIdeaSilent (persist via shared persistTextIdea, NO reply; empty text -> assistant_adapter.ErrNothingToCapture; errDuplicate -> nil benign success). HandleUpdate inspects the returned error and, on failure, replaces the 'saved as an idea' response with an honest single line via honestCaptureFallbackFailure (nothing-to-save prompt vs generic failure), rendered through the default StatusAnswered body path (single message). The legacy plain-text handleTextCapture keeps its own '. Saved …' reply (BS-001 UX preserved). Four adversarial regression tests added; all GREEN; go test ./... (compile+vet, filtered) clean; both changed packages ok.",
-  "codeVsDeployment": "code-only (in-repo). The live self-hosted symptom additionally requires a redeploy via the deploy adapter (bubbles.devops) and a live-stack confirmation (bubbles.validate).",
+  "codeVsDeployment": "deployed. The fix (sourceSha 777323fa) is built, operator-cosign-signed, deployed, and running on the self-hosted home-lab host. Running container digests match the fix build (core sha256:7bd984a316e3feec…, ml sha256:7029c246e24446…), both healthy, and the Telegram assistant adapter is wired and bound. Only the operator's behavioral Telegram smoke test remains (a human turn).",
+  "deployment": {
+    "target": "home-lab (self-hosted)",
+    "trustModel": "local-operator",
+    "sourceSha": "777323fa",
+    "verifiedAt": "2026-07-22",
+    "images": {
+      "core": "ghcr.io/pkirsanov/smackerel-core@sha256:7bd984a316e3feec0d97949cc6ba01cf90371d32b4de3a54b78a8602acddee4c",
+      "ml": "ghcr.io/pkirsanov/smackerel-ml@sha256:7029c246e24446f607c272162ac4e13c406c5eac5c5dc6bd3f411e4f23e76a20"
+    },
+    "configBundleSha256": "9ccd0df3",
+    "runningVerification": "docker inspect (read-only, safe projection): smackerel-home-lab-smackerel-core-1 running/healthy digest MATCHES CORE FIX; smackerel-home-lab-smackerel-ml-1 running/healthy digest MATCHES ML FIX; core startup log shows 'telegram bot started' + 'assistant Telegram adapter wired and bound to bot'",
+    "operatorSmokeTestPending": "send /ask <question> (expect one ack) and bare /ask (expect one honest line, never '? Failed to save' + 'saved as an idea')"
+  },
   "affectedSurface": [
     "internal/telegram/assistant_adapter/adapter.go (CaptureFn signature, ErrNothingToCapture, HandleUpdate error handling, honestCaptureFallbackFailure)",
     "internal/telegram/assistant_wiring.go (NewBotCaptureFn -> captureIdeaSilent)",
@@ -35,23 +48,25 @@
     "select",
     "bootstrap",
     "implement",
-    "test"
+    "test",
+    "devops"
   ],
   "certification": {
     "status": "in_progress",
-    "achievedAssuranceLevel": "implement-and-unit-verified",
+    "achievedAssuranceLevel": "deployed-and-infra-verified",
     "scopeProgress": { "total": 2, "done": 2, "inProgress": 0, "notStarted": 0, "blocked": 0 },
     "gatesPassed": [
-      "test unit --go --go-run BUG061006: 4 BUG-061-006 adversarial tests GREEN; internal/telegram ok, internal/telegram/assistant_adapter ok; go test ./... (compile+vet, filtered) zero FAILs"
+      "test unit --go --go-run BUG061006: 4 BUG-061-006 adversarial tests GREEN; internal/telegram ok, internal/telegram/assistant_adapter ok; go test ./... (compile+vet, filtered) zero FAILs",
+      "regression-quality-guard.sh --bugfix: PASS on both new *_bug061006_test.go files",
+      "artifact-lint.sh: PASS",
+      "build --target self-hosted: 9/9 phases green (Trivy 0 CVEs, cosign-signed, SBOM+attest, signed local-build-manifest)",
+      "deploy home-lab: recreate rollout applied; cosign release-proof verified; running core+ml digests match the fix build and are healthy; Telegram assistant adapter wired and bound"
     ],
     "pendingGates": [
-      "regression-quality-guard.sh --bugfix on the two new *_bug061006_test.go files",
-      "state-transition-guard.sh (done-grade)",
-      "artifact-lint.sh",
-      "live-stack validation on the home-lab target (bubbles.validate) after deploy"
+      "operator live Telegram behavioral smoke test (human turn): /ask <question> -> exactly ONE ack; bare /ask -> ONE honest line, never '? Failed to save' + 'saved as an idea'"
     ]
   },
-  "nextRequiredOwner": "bubbles.devops (build + deploy the fixed SHA to the home-lab target via the smackerel home-lab deploy adapter), then bubbles.validate (live-stack confirmation of the single, honest acknowledgement)",
+  "nextRequiredOwner": "operator (live Telegram behavioral smoke test — a human turn; the fix binary is deployed + running + healthy + adapter-bound on the home-lab host, so the fixed code path is already live)",
   "followUps": [
     "WEATHER-LOCATION (owner bubbles.plan): /weather <us-zip> (US ZIP) does not resolve in the open-meteo geocoder; and BS-006 rewrites a weather provider/geocode error to the generic capture-as-fallback ('saved as an idea') — whether an external-lookup error should instead surface an honest 'weather unavailable' line is a ratified-spec (BS-006) design question. Separate packet.",
     "STATUS-VERSION (owner bubbles.plan): the health endpoint returns version/commit_hash but gates them behind authentication; surfacing them in the Telegram /status command answers the operator's 'what version is installed?' question. Separate observability change."
