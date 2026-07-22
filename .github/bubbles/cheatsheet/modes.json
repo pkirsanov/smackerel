@@ -1,0 +1,392 @@
+[
+  {
+    "name": "value-first-e2e-batch",
+    "alias": "boys-plan",
+    "description": "Auto-discover highest-value work, full delivery pipeline",
+    "description_html": "Auto-discover highest-value work, full delivery pipeline. The master plan.",
+    "html_quote": "Boys, I got a plan. And this time it's a good one."
+  },
+  {
+    "name": "full-delivery",
+    "alias": "full-send",
+    "description": "Default maximum-assurance delivery — loops through implementation, tests, quality sweep, validation, and bug closure until truly green or blocked",
+    "description_html": "Default maximum-assurance delivery. Loops through implementation, tests, quality sweep, validation, and bug closure until truly green or blocked.",
+    "html_quote": "Just get 'er done, Julian. And keep goin' until it's actually done."
+  },
+  {
+    "name": "full-delivery",
+    "alias": "no-loose-ends",
+    "description": "Maximum-assurance delivery — keep looping until validate certifies done or records a real blocker. Default continuation target for active recap/status/handoff follow-up.",
+    "description_html": "Maximum-assurance delivery. Keep looping until validate certifies done or records a real blocker. Default continuation target for active recap/status/handoff follow-up.",
+    "html_quote": "No loose ends. All green or we keep going."
+  },
+  {
+    "name": "devops-to-doc",
+    "alias": "keep-the-park-online",
+    "description": "Focused DevOps execution + operational verification + docs sync",
+    "description_html": "Focused DevOps execution for CI/CD, build, deployment, monitoring, observability, and release automation.",
+    "html_quote": "Get the rack humming and keep the park online."
+  },
+  {
+    "name": "simplify-to-doc",
+    "alias": "strip-it-down",
+    "description": "Simplify an existing implementation, prove it still works, then sync docs",
+    "html_quote": "Strip it down to the trailer frame."
+  },
+  {
+    "name": "spec-review-to-doc",
+    "alias": "laser-eyes-sweep",
+    "description": "Audit specs for freshness, classify trust levels, produce maintenance report",
+    "description_html": "Audit specs for freshness, classify trust levels, produce a maintenance report.",
+    "html_quote": "Lasers on the trailer park, boys."
+  },
+  {
+    "name": "chaos-hardening",
+    "alias": "shit-storm",
+    "description": "Iterative chaos + bugfix cycles until clean",
+    "description_html": "Iterative chaos + bugfix cycles until clean or limit reached.",
+    "html_quote": "We're in the eye of a shiticane, Randy."
+  },
+  {
+    "name": "bugfix-fastlane",
+    "alias": "smash-and-grab",
+    "description": "Fast bug closure with regression, hardening, validation, and audit",
+    "description_html": "Fast bug closure. In. Fix. Out. Mandatory reproduce-before/verify-after.",
+    "html_quote": "Get in, get out. That's a good plan."
+  },
+  {
+    "name": "validate-only",
+    "alias": "randy-put-a-shirt-on",
+    "description": "Run validation gates only",
+    "description_html": "Run validation gates only. Things are about to get serious.",
+    "html_quote": "Randy, put a shirt on. We got company."
+  },
+  {
+    "name": "stochastic-quality-sweep",
+    "alias": "bottle-kids",
+    "description": "Randomized probing — you never know where they'll hit",
+    "description_html": "Randomized adversarial probing. You never know where they'll hit, and follow-up commands like `fix all found` should resume the sweep instead of dropping into raw specialist work.",
+    "html_quote": "BOTTLE KIDS! (runs for cover)"
+  },
+  {
+    "name": "harden-gaps-to-doc",
+    "alias": "conky-says",
+    "description": "Thorough pre-release sweep",
+    "description_html": "The most thorough pre-release sweep. Uncomfortable truths revealed.",
+    "html_quote": "Conky says you missed something, Bubbles."
+  },
+  {
+    "name": "product-to-delivery",
+    "alias": "freedom-35",
+    "description": "Full pipeline: analyst → UX → design → implement → ship",
+    "description_html": "Full pipeline: analyst → UX → design → scopes → implement → test → quality.",
+    "html_quote": "Freedom 35, boys! This is the one!"
+  },
+  {
+    "name": "docs-only",
+    "alias": "gnome-sayin",
+    "description": "Documentation maintenance only",
+    "description_html": "Managed-doc maintenance only. J-Roc publishes the truth.",
+    "html_quote": "You're sayin' 'gnome sayin'' too many times — 80, 90 times? That's too many times."
+  },
+  {
+    "name": "iterate",
+    "alias": "keep-going",
+    "description": "Continue scope-by-scope implementation",
+    "description_html": "Priority-driven scope-by-scope execution. Picks the next thing and does it.",
+    "html_quote": "Keep going, boys. Don't stop."
+  },
+  {
+    "name": "resume-only",
+    "alias": "resume-the-tape",
+    "description": "Resume from last session state",
+    "description_html": "Resume from saved session state. Pick up where you left off.",
+    "html_quote": "Roll that tape back, boys."
+  },
+  {
+    "name": "spec-scope-hardening (with analyze)",
+    "alias": "whats-the-big-idea",
+    "description": "Business analysis + UX exploration only",
+    "description_html": "Business analysis + UX exploration. No implementation — just discovery.",
+    "html_quote": "What's the big idea here, Julian?"
+  },
+  {
+    "name": "test-to-doc",
+    "alias": "quick-dirty",
+    "description": "Run tests, fix failures, update docs",
+    "description_html": "Run tests, fix failures, publish docs. Quick verification pass.",
+    "html_quote": "Quick and dirty, boys."
+  },
+  {
+    "name": "audit-only",
+    "alias": "open-and-shut",
+    "description": "Run audit phase only",
+    "description_html": "Run audit phase only. Pure compliance check.",
+    "html_quote": "Open and shut case."
+  },
+  {
+    "name": "stabilize-to-doc",
+    "alias": "bill-fixes-it",
+    "description": "Stability fixes → test → docs",
+    "description_html": "Stability diagnosis → DevOps execution → test → docs. Bill finds it, Tommy ships it.",
+    "html_quote": "... (Bill just points at the problem.)"
+  },
+  {
+    "name": "improve-existing",
+    "alias": "survival-of-the-fitness",
+    "description": "Analyze, harden, improve → test → docs",
+    "description_html": "Analyze, harden, close gaps, improve → test → docs. Evolutionary improvement.",
+    "html_quote": "Survival of the fitness, boys."
+  },
+  {
+    "name": "product-to-delivery (with existing impl)",
+    "alias": "same-lot-new-trailer",
+    "description": "Reconcile stale artifacts, redesign an existing feature, then deliver",
+    "description_html": "Reconcile stale artifacts, redesign the feature, then deliver it through the full quality chain.",
+    "html_quote": "Same lot, boys. New trailer."
+  },
+  {
+    "name": "spec-scope-hardening",
+    "alias": "harden-up",
+    "description": "Tighten specs and scope definitions",
+    "description_html": "Tighten specs and scope definitions. No implementation, just planning quality.",
+    "html_quote": "Harden up, boys. This has gotta be tight."
+  },
+  {
+    "name": "harden-to-doc",
+    "alias": "shit-winds-coming",
+    "description": "Harden → test → docs",
+    "description_html": "Harden existing code, fix issues, then test and doc. Prepare for the storm.",
+    "html_quote": "The shit winds are coming, Randy. Harden up."
+  },
+  {
+    "name": "gaps-to-doc",
+    "alias": "gut-feeling",
+    "description": "Gap analysis → test → docs",
+    "description_html": "Gap analysis → implement fixes → test → docs. Find what's missing.",
+    "html_quote": "What are ya lookin' at my gut fer?"
+  },
+  {
+    "name": "chaos-to-doc",
+    "alias": "we-broke-it",
+    "description": "Chaos → test → docs",
+    "description_html": "Chaos probing → fix → docs. Break it, then document what happened.",
+    "html_quote": "We broke it. Now document what happened."
+  },
+  {
+    "name": "reconcile-to-doc",
+    "alias": "i-toad-a-so",
+    "description": "Reconcile conflicts → test → docs",
+    "description_html": "Reconcile stale state, fix conflicts → test → docs. Told you so.",
+    "html_quote": "I toad a so. I f***ing toad a so."
+  },
+  {
+    "name": "validate-to-doc",
+    "alias": "just-watching",
+    "description": "Validate + audit + docs",
+    "description_html": "Validate + audit + docs. The camera crew watches and documents.",
+    "html_quote": "(camera crew just watches)"
+  },
+  {
+    "name": "spec-scope-hardening (with analyze + socratic)",
+    "alias": "smokes-and-think",
+    "description": "Explore ideas before building — produces design artifacts, no code",
+    "description_html": "Explore ideas before building — produces design artifacts, no code.",
+    "html_quote": "Let me think about it over a couple smokes."
+  },
+  {
+    "name": "retro-to-simplify",
+    "alias": "liquor-then-tape",
+    "description": "Data-driven simplification — retro finds hotspots, then simplify fixes them",
+    "description_html": "Data-driven simplification. Retro analyzes git history for bug magnets and hotspots, then Donny simplifies the worst offenders.",
+    "html_quote": "The liquor shows me the problems. Donny tapes them up."
+  },
+  {
+    "name": "retro-to-harden",
+    "alias": "liquor-then-harden",
+    "description": "Data-driven hardening — retro finds bug magnets, then harden targets them",
+    "description_html": "Data-driven hardening. Retro finds bug magnets and worsening hotspots, then the hardening pipeline targets those areas.",
+    "html_quote": "The liquor shows me the weak spots. Harden up, boys."
+  },
+  {
+    "name": "retro-quality-sweep",
+    "alias": "liquor-then-sweep",
+    "description": "Retro finds hotspots, then the deterministic quality crew cleans them up",
+    "description_html": "Retro-guided quality sweep. The liquor finds the hotspot mess, then simplify, harden, and the rest of the crew clean it up deterministically.",
+    "html_quote": "The liquor finds the mess. Then the whole crew sweeps it clean."
+  },
+  {
+    "name": "retro-to-review",
+    "alias": "liquor-then-look",
+    "description": "Data-driven review — retro finds risks, then code-review diagnoses them",
+    "description_html": "Data-driven code review. Retro identifies highest-risk files, then Green Bastard reviews them. Read-only diagnostic.",
+    "html_quote": "The liquor shows me where to look. Green Bastard tells me what's broken."
+  },
+  {
+    "name": "release-planning-to-doc",
+    "alias": "plans-within-plans",
+    "description": "Produce or refresh a phase release packet (vision/features/actions/business-plan/deployment/marketing/monetization/ops-scalability), enforce Product Direction Surfaces trio + carry-forward + cross-product coordination",
+    "description_html": "Produce or refresh a phase release packet (vision / features / actions / business-plan / deployment / marketing / monetization / ops-scalability); enforces Product Direction Surfaces trio + carry-forward + cross-product coordination.",
+    "html_quote": "Plans within plans within plans."
+  },
+  {
+    "name": "idea-to-release-completion",
+    "alias": "rocket-appliance",
+    "description": "Full lifecycle: idea -> release packet bootstrap-or-refresh -> spec/design/scopes -> implement/test/validate/audit/chaos -> final release packet refresh that flips the capability to `delivered`. Closes the loop the standard `product-to-delivery` mode used to leave open. Owned by Sonny \"Iron Lung\" Smith for the release phases.",
+    "description_html": "Full lifecycle: idea → release-packet bootstrap → spec/design/scopes → implement/test/validate/audit/chaos → final packet refresh that flips capability to `delivered`.",
+    "html_quote": "It ain't rocket appliances, but it works."
+  },
+  {
+    "name": "release-train-cut",
+    "alias": "cut-the-train",
+    "description": "DVS cuts a candidate at a trunk SHA for a named train. Tag + signed candidate artifact, no deployment.",
+    "description_html": "DVS cuts a candidate at a trunk SHA for a named train. Signed candidate artifact, no deployment.",
+    "html_quote": "Cut it, tag it, ship it."
+  },
+  {
+    "name": "release-train-promote",
+    "alias": "promote-the-pointer",
+    "description": "Pointer-swap a candidate between slots on a train (e.g. staging→prod). Requires backup-freshness + restore-drill currency.",
+    "description_html": "Pointer-swap a candidate between slots on a train. Requires backup-freshness + restore-drill currency.",
+    "html_quote": "Pointer swap. Don't rebuild."
+  },
+  {
+    "name": "release-train-rollback",
+    "alias": "back-it-up",
+    "description": "Revert the train pointer to the previous candidate. Pure pointer swap, no rebuild.",
+    "description_html": "Revert the train pointer to the previous candidate. Pure pointer swap. No rebuild.",
+    "html_quote": "Back her up. We've been here before."
+  },
+  {
+    "name": "release-train-retire",
+    "alias": "park-the-train",
+    "description": "End-of-life a train: requires `flag-retirement` completion and clean upkeep ledger.",
+    "description_html": "End-of-life a train: requires flag-retirement completion and clean upkeep ledger.",
+    "html_quote": "This train's done. Flags off the books first."
+  },
+  {
+    "name": "release-train-status-all",
+    "alias": "every-park-at-once",
+    "description": "J-Roc's portfolio rollup across every declared train. Read-only multi-train status snapshot.",
+    "description_html": "J-Roc's portfolio rollup across every declared train. Read-only multi-train snapshot.",
+    "html_quote": "Every park, one view. Knawmsayin?"
+  },
+  {
+    "name": "propagate-forward",
+    "alias": "same-fix-every-park",
+    "description": "J-Roc forward-merges a fix/feature across `defaultFlow` train edges per `propagation-policy.yaml`.",
+    "html_quote": "Same fix, every park, knawmsayin?"
+  },
+  {
+    "name": "propagate-backport",
+    "alias": "back-to-the-old-park",
+    "description": "J-Roc backports under explicit train-owner approval token. Reverse-edge propagation.",
+    "description_html": "J-Roc backports under explicit train-owner approval token. Reverse-edge, audited.",
+    "html_quote": "Permission slip first. Then the cherry-pick."
+  },
+  {
+    "name": "propagate-audit",
+    "alias": "check-every-park",
+    "description": "Read-only drift detection between declared trains. Reports unpropagated changes; never mutates.",
+    "html_quote": "Just lookin'. Not movin' nothin'."
+  },
+  {
+    "name": "incident-fastlane",
+    "alias": "call-the-trailer",
+    "description": "Production incident chain: triage → fix → validate → propagate → audit. Highest-priority operational lane.",
+    "html_quote": "Trailer's on fire, boys. Cory, grab the hose."
+  },
+  {
+    "name": "framework-health",
+    "alias": "bubbles-check-yo-self",
+    "description": "`bubbles.retro target: framework` — proposal-first self-observation of the framework itself. Writes only into `improvements/`, never auto-mutates framework files.",
+    "description_html": "`bubbles.retro target: framework` — proposal-first self-observation of the framework. Writes only into `improvements/`.",
+    "html_quote": "Check yo'self before you wreck yo'self."
+  },
+  {
+    "name": "journey-refinement",
+    "alias": "walk-me-through-it",
+    "description": "Guided live-product walkthrough toward a goal — bubbles.journey verifies UI/API/telemetry/data at each step, captures friction, and routes refinements to owners",
+    "description_html": "Guided live-product walkthrough. Cathy Curtis walks you through the live product toward a goal, verifies each step across UI/API/telemetry/data, and routes refinements to their owners.",
+    "html_quote": "Come on, I'll walk you through it — and tell you straight what's broken."
+  },
+  {
+    "name": "upkeep-backup-verify",
+    "alias": "check-the-backup",
+    "description": "Run scheduled backup verification (T1/T2/T3/T4). Calendar-driven via `config/upkeep-calendar.yaml`.",
+    "description_html": "Scheduled backup verification (T1/T2/T3/T4). Calendar-driven via `config/upkeep-calendar.yaml`.",
+    "html_quote": "Backup or it didn't happen."
+  },
+  {
+    "name": "upkeep-restore-drill",
+    "alias": "rehearse-the-rescue",
+    "description": "Weekly restore drill — proves a backup can be recovered. Failed drill blocks next promote.",
+    "html_quote": "Rehearse the rescue. Every week. No exceptions."
+  },
+  {
+    "name": "upkeep-bcdr-drill",
+    "alias": "full-park-rebuild",
+    "description": "Quarterly BCDR drill — full disaster-recovery exercise into isolated namespace.",
+    "html_quote": "Whole park, from zero. Time it."
+  },
+  {
+    "name": "upkeep-patch-cycle",
+    "alias": "patch-it-up",
+    "description": "Scheduled patch/dependency-rotation cycle. Recorded in upkeep ledger.",
+    "html_quote": "Patch the trailer. Log the patch."
+  },
+  {
+    "name": "upkeep-secret-rotation",
+    "alias": "new-locks",
+    "description": "Scheduled secret/credential rotation. Recorded in upkeep ledger.",
+    "html_quote": "New locks. Old keys go in the fire."
+  },
+  {
+    "name": "upkeep-flag-cleanup",
+    "alias": "retire-the-flags",
+    "description": "Remove feature flags and their dead branches before `release-train-retire`.",
+    "html_quote": "Flag's done. Branch is dead. Out it goes."
+  },
+  {
+    "name": "upkeep-compliance-sweep",
+    "alias": "quarterly-tedification",
+    "description": "Quarterly compliance evidence collection → `docs/Compliance_Report.md` (G117–G120). Treena gathers, Ted certifies.",
+    "description_html": "Quarterly compliance evidence collection → `docs/Compliance_Report.md` (G117–G120). Treena gathers, Ted certifies.",
+    "html_quote": "Evidence, evidence, evidence. Then sign-off."
+  },
+  {
+    "name": "adapter-readiness-to-packet",
+    "alias": "adapter-ready-to-go",
+    "description": "Deliver an adapter to readiness state; packet certifies the adapter is ready for downstream consumption. Terminal status: `delivered_pending_activation`.",
+    "description_html": "Deliver an adapter to readiness state; packet certifies readiness for downstream consumption. Terminal: `delivered_pending_activation`.",
+    "html_quote": "Adapter's done. Operator's call when to flip it."
+  },
+  {
+    "name": "dark-launch-shipped",
+    "alias": "dark-and-quiet",
+    "description": "Code shipped behind a default-off flag; terminal status `delivered_pending_activation` until flag flip.",
+    "description_html": "Code shipped behind a default-off flag; terminal `delivered_pending_activation` until flag flip.",
+    "html_quote": "Shipped. Quiet. Flag's still off."
+  },
+  {
+    "name": "migration-shipped-pending-cutover",
+    "alias": "migration-shipped-not-cutover",
+    "description": "Migration code shipped but cutover not executed; terminal status `delivered_pending_activation` until operator cutover.",
+    "description_html": "Migration code shipped but cutover not executed; terminal `delivered_pending_activation` until operator cutover.",
+    "html_quote": "Code's there. Operator's gotta pull the lever."
+  },
+  {
+    "name": "redteam-to-doc",
+    "alias": "prove-it",
+    "description": "Adversarial red-team attack on a finished result (Green Bastard); finding-owned remediation chain then validate/audit/docs. Off by default.",
+    "description_html": "Adversarial red-team attack on a finished result (Green Bastard). Finding-owned remediation chain, then validate/audit/docs. Off by default.",
+    "html_quote": "You say it's done? Prove it."
+  },
+  {
+    "name": "production-adversarial-probe",
+    "alias": "this-is-my-park-now",
+    "description": "Bounded, armed, read-only chaos-monkey probing of a LIVE system (Green Bastard on a leash). Requires arming + target allowlist; restore-or-fix; never certifies.",
+    "description_html": "Bounded, armed, read-only chaos-monkey probing of a LIVE system (Green Bastard on a leash). Requires arming + target allowlist; restore-or-fix; never certifies.",
+    "html_quote": "This is my park now. Let's see what holds."
+  }
+]

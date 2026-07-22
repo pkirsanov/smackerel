@@ -1458,6 +1458,17 @@ if [[ -n "$state_workflow_mode" ]]; then
     bugfix-fastlane)
       required_specialists=("implement" "test" "regression" "simplify" "stabilize" "security" "validate" "audit")
       ;;
+    rapid-tool-delivery)
+      # IMP-101 SCOPE-5 (FLOW-101): this delivery mode was absent from the table,
+      # so Check 6 imposed no specialist-completion requirement on it. Its
+      # required specialists are its own declared phaseOrder in modes.yaml
+      # ([select, implement, test, validate, docs, finalize]) minus the select/
+      # finalize bookends. The read-only modes readiness-review and
+      # journey-refinement are intentionally NOT listed: they set
+      # allowImplementationForFindings:false and run review/journey phases, so a
+      # delivery-specialist requirement would be incorrect for them.
+      required_specialists=("implement" "test" "validate" "docs")
+      ;;
     chaos-hardening)
       required_specialists=("chaos" "implement" "test" "regression" "simplify" "stabilize" "security" "validate" "audit" "docs")
       ;;
@@ -3334,6 +3345,24 @@ else
 # byte-identical.
 # =============================================================================
 source "$SCRIPT_DIR/guards/tail-delegated-gates.sh"
+fi
+
+# =============================================================================
+# CHECK 40: Claim-Source provenance (IMP-101 SCOPE-1 / gate G072)
+# Delegates to the standalone claim-source-lint.sh in an ISOLATED subprocess —
+# its own `set -e` can never abort this guard. Advisory-until-opt-in: the lint
+# exits non-zero ONLY when `claimSourceProvenanceGuard: block` is set in
+# .github/bubbles-project.yaml, so a transition is failed here only when the
+# operator has explicitly opted in. Otherwise findings print but do not block.
+# =============================================================================
+if [[ -x "$SCRIPT_DIR/claim-source-lint.sh" ]]; then
+  echo "--- Check 40: Claim-Source provenance (G072) ---"
+  if bash "$SCRIPT_DIR/claim-source-lint.sh" "$feature_dir"; then
+    pass "Claim-Source provenance: execution-evidence blocks carry a valid tag (or advisory)"
+  else
+    fail "Claim-Source provenance findings under claimSourceProvenanceGuard: block (G072)"
+  fi
+  echo ""
 fi
 
 # =============================================================================
