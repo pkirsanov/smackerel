@@ -50,6 +50,7 @@ import (
 	"github.com/smackerel/smackerel/internal/assistant/httpadapter"
 	"github.com/smackerel/smackerel/internal/assistant/legacyretirement"
 	assistantmetrics "github.com/smackerel/smackerel/internal/assistant/metrics"
+	"github.com/smackerel/smackerel/internal/assistant/selfknowledge"
 	"github.com/smackerel/smackerel/internal/assistant/skills/recipesearch"
 	"github.com/smackerel/smackerel/internal/config"
 	"github.com/smackerel/smackerel/internal/pipeline"
@@ -286,6 +287,10 @@ func wireAssistantTelegramAdapter(
 		return fmt.Errorf("bind facade to telegram adapter: %w", err)
 	}
 	tgBot.SetAssistantAdapter(adapter)
+	// Spec 104 SCOPE-06 — drive the /help "What I can help with" list from the
+	// SAME derived self-knowledge corpus, so the menu and the /ask
+	// self-knowledge answers cannot diverge (a new scenario appears in both).
+	tgBot.SetHelpCapabilities(selfknowledge.Derive(manifest))
 	slog.Info("assistant Telegram adapter wired and bound to bot",
 		"markdown_mode", string(mode),
 		"max_message_chars", cfg.Assistant.TelegramMaxMessageChars,

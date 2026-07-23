@@ -21,11 +21,14 @@
 package telegram
 
 import (
+	"sort"
+	"strings"
 	"time"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 
 	"github.com/smackerel/smackerel/internal/assistant/legacyretirement"
+	"github.com/smackerel/smackerel/internal/assistant/selfknowledge"
 )
 
 // LegacyCommandClass is the closed enumeration of Telegram command
@@ -226,15 +229,32 @@ func BotCommandsForState(state legacyretirement.WindowState) []tgbotapi.BotComma
 	return out
 }
 
-// HelpText returns the canonical /help body. It enumerates the
-// operational + retained-shortcut commands and teaches the
-// natural-language replacement examples for retired surfaces; it
-// contains no instruction to use any retired slash command as an
-// active option. SCN-066-A06.
-func HelpText() string {
-	return `> Smackerel Bot
-Just type what you want — no slash commands needed for everyday use.
+// HelpText returns the canonical /help body. Its "What I can help with"
+// capability list is rendered from the SHARED self-knowledge corpus (spec 104
+// SCOPE-06) so a newly-added scenario appears with no help-code edit and the
+// /help menu can never diverge from the /ask self-knowledge answers. The
+// operational + power-shortcut lines come from the same spec-066 command
+// inventory SetMyCommands uses; the plain-English examples teach the
+// natural-language replacements for retired surfaces and contain no active
+// instruction to use any retired slash command (SCN-066-A06).
+//
+// caps is the derived corpus (selfknowledge.Derive(manifest)). When empty
+// (assistant facade not yet wired, dev/test), the capability section is omitted
+// and the static spec-066 body is returned unchanged.
+func HelpText(caps []selfknowledge.CapabilityEntry) string {
+	var b strings.Builder
+	b.WriteString("> Smackerel Bot\n")
+	b.WriteString("Just type what you want — no slash commands needed for everyday use.\n")
 
+	if lines := capabilityHelpLines(caps); len(lines) > 0 {
+		b.WriteString("\nWhat I can help with:\n")
+		for _, ln := range lines {
+			b.WriteString(ln)
+			b.WriteString("\n")
+		}
+	}
+
+	b.WriteString(`
 Operational commands:
 - /help — show this help
 - /status — system status
@@ -266,5 +286,32 @@ Capture is automatic:
 - Send text to save an idea
 - Send a voice note to transcribe and save
 - Forward messages to assemble conversations
-- Reply to a saved item to annotate it`
+- Reply to a saved item to annotate it`)
+	return b.String()
+}
+
+// capabilityHelpLines renders the SCENARIO facet of the shared self-knowledge
+// corpus as natural-language capability lines. It renders scenario LABELS (not
+// slash surfaces) so a newly-added scenario is advertised while retiring slash
+// surfaces (e.g. /recipe, /cook) stay hidden per spec 066. Deterministic:
+// deduped + sorted so /help output is stable.
+func capabilityHelpLines(caps []selfknowledge.CapabilityEntry) []string {
+	seen := make(map[string]struct{}, len(caps))
+	lines := make([]string, 0, len(caps))
+	for _, c := range caps {
+		if c.Kind != selfknowledge.KindScenario {
+			continue
+		}
+		label := strings.TrimSpace(c.Title)
+		if label == "" {
+			continue
+		}
+		if _, dup := seen[label]; dup {
+			continue
+		}
+		seen[label] = struct{}{}
+		lines = append(lines, "- "+label)
+	}
+	sort.Strings(lines)
+	return lines
 }

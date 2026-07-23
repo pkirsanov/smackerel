@@ -56,7 +56,10 @@ func wireSelfKnowledgeIngestion(ctx context.Context, cfg *config.Config, svc *co
 	// Same publisher every connector uses: real embedding job + content-hash
 	// dedup, never a bespoke INSERT (G029).
 	publisher := pipeline.NewRawArtifactPublisher(svc.pg.Pool, svc.nc)
-	ingestor := selfknowledge.NewIngestor(manifest, publisher, svc.pg.Pool)
+	ingestor := selfknowledge.NewIngestor(manifest, publisher, svc.pg.Pool).
+		// SCOPE-05 — add the curated product-overview facet (embedded, so it
+		// works in the docs-less runtime image). Fail-loud on a missing anchor.
+		WithDocSource(selfknowledge.NewDocCorpus())
 
 	res, err := ingestor.Ingest(ctx)
 	if err != nil {
