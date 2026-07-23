@@ -128,6 +128,75 @@ snippets. Registered always-on into the effective `tool_allowlist` in
 `ok`, zero FAIL across unit + integration runs); `gofmt -l` on all 10 changed
 files returned empty (format clean); 0 warnings.
 
-### Scopes 5–8
+### Scope 5 — product-doc corpus source {#scope-5}
 
-Pending implementation.
+Built + tested on the home-lab host. Source SHA a50b37ca.
+
+**Unit (`./smackerel.sh test unit --go --go-run "DocCorpus|ExtractDocSection"`) — exit 0:**
+
+```
+[go-unit] applying -run selector: DocCorpus|ExtractDocSection|...
+[go-unit] starting go test ./...
+ok  github.com/smackerel/smackerel/cmd/core  0.095s [no tests to run]
+ok  github.com/smackerel/smackerel/internal/assistant/selfknowledge  0.012s
+```
+
+`selfknowledge` ran the docsource tests (0.012s): `TestDocCorpus_Entries_FromEmbeddedOverview`
+(the embedded `corpus/product_overview.md` parses into 3 feature/usecase entries;
+`feature:overview` mentions the product framing), `TestExtractDocSection_MissingAnchorFailsLoud`
++ `TestExtractDocSection_EmptyBodyFailsLoud` (fail-loud, no silent drop),
+`TestExtractDocSection_StopsAtNextHeading`, `TestDocCorpus_DeclaredAnchorMissingFromMarkdownFailsLoud`
+(lockstep between `curatedDocSections` and the embedded file). The curated overview
+is embedded (`//go:embed`) because the runtime image ships only the binary (Dockerfile
+`COPY --from=builder /bin/smackerel-core`), not `docs/`; wired into the ingestor via
+`WithDocSource(NewDocCorpus())`.
+
+### Scope 6 — /help human twin {#scope-6}
+
+**Unit (`./smackerel.sh test unit --go --go-run "HelpListsNaturalLanguage|Help_RendersCapabilities"`) — exit 0:**
+
+```
+ok  github.com/smackerel/smackerel/internal/telegram  0.013s
+ok  github.com/smackerel/smackerel/cmd/core  0.095s [no tests to run]
+```
+
+`internal/telegram` ran the /help tests (0.013s, NOT "[no tests to run]"):
+`TestHelpListsNaturalLanguageExamplesAndNoRetiredCommands` (the spec-066 contract
+still holds — plain-English examples, operational commands, retained /ask,/weather,/remind,
+NO retired slash commands) and `TestHelp_RendersCapabilitiesFromSharedCorpus`
+(the "What I can help with" list is derived from the SAME `selfknowledge.Derive`
+corpus; every enabled scenario label appears; an adversarial brand-new scenario
+appears with no help-code edit; command-kind entries do not surface retiring
+/recipe,/cook). `HelpText` is fed `selfknowledge.Derive(manifest)` via
+`SetHelpCapabilities` in `wireAssistantTelegramAdapter`; the stale hardcoded
+`handleHelp` string that still advertised retired commands was removed (spec-066 fix).
+
+### Scope 7 — trust integration + honest fallback {#scope-7}
+
+**Integration (`./smackerel.sh test integration-light --go-run "TrustPerimeter"`) — exit 0:**
+
+```
+=== RUN   TestSelfKnowledge_TrustPerimeter
+--- PASS: TestSelfKnowledge_TrustPerimeter (0.01s)
+PASS
+ok  github.com/smackerel/smackerel/tests/integration/openknowledge  0.018s
+```
+
+Over real pgvector + the REAL `citeback.Verify` (the same verifier the agent loop
+runs each turn): (1) a grounded answer citing a returned `smackerel_self` artifact
+passes cite-back (`VerifyResult.OK`, 1 verified); (2) a citation absent from the tool
+trace is REFUSED (`ReasonNotInTrace`) — the facade renders this as an honest
+`StatusUnavailable` (BUG-061-009 INV-HB-REFUSAL), never "saved as an idea", never a
+hallucinated answer; (3) a personal-graph `user:` artifact is never in the tool's
+recorded sources AND citing it is rejected (`ReasonNotInTrace`) — personal data can
+never be cited via self_knowledge.
+
+**Build Quality Gate (scopes 5–7):** whole module compiled clean (all packages `ok`,
+zero FAIL across unit + integration runs); `gofmt -l` empty; 0 warnings. (One
+cross-function scope slip — `manifest` referenced in `wireAssistantTelegramAdapter` —
+was caught by the module `go test` on the home-lab host, fixed in a50b37ca, and
+re-verified green.)
+
+### Scope 8
+
+Pending: E2E + build --target self-hosted + local-operator deploy + verify.
