@@ -106,6 +106,7 @@ import (
 	"github.com/smackerel/smackerel/internal/assistant/openknowledge/tools"
 	"github.com/smackerel/smackerel/internal/assistant/openknowledge/usageledger"
 	"github.com/smackerel/smackerel/internal/assistant/openknowledge/web"
+	"github.com/smackerel/smackerel/internal/assistant/selfknowledge"
 
 	"github.com/prometheus/client_golang/prometheus"
 )
@@ -173,7 +174,25 @@ func wireOpenKnowledge(cfg *config.Config, svc *coreServices, agentScenarioDir s
 	//     allowlisted) once the four production tools register
 	//     unconditionally. Register() runs after all collectors are
 	//     in place, below.
-	okMetrics := okmetrics.New(okCfg.ToolAllowlist, okCfg.Provider)
+	//
+	//     Spec 104 SCOPE-04 — self_knowledge is ALWAYS-ON (FR-1): the
+	//     operator cannot disable answering about smackerel itself.
+	//     We force it into the effective allowlist (dedup-safe) and
+	//     use that same slice for BOTH the metrics collector AND the
+	//     registry below, preserving the "allowlist == registry.Enabled()"
+	//     invariant this comment relies on.
+	effectiveAllowlist := make([]string, 0, len(okCfg.ToolAllowlist)+1)
+	selfKnowledgeAllowed := false
+	for _, name := range okCfg.ToolAllowlist {
+		effectiveAllowlist = append(effectiveAllowlist, name)
+		if name == tools.SelfKnowledgeToolName {
+			selfKnowledgeAllowed = true
+		}
+	}
+	if !selfKnowledgeAllowed {
+		effectiveAllowlist = append(effectiveAllowlist, tools.SelfKnowledgeToolName)
+	}
+	okMetrics := okmetrics.New(effectiveAllowlist, okCfg.Provider)
 
 	// 3. Web search provider.
 	webProvider, err := buildOpenKnowledgeWebProvider(okCfg, llmTimeout, okMetrics)
@@ -202,13 +221,35 @@ func wireOpenKnowledge(cfg *config.Config, svc *coreServices, agentScenarioDir s
 	//    finding for the embedding-backed follow-up).
 	graphSearcher := tools.NewPgxGraphSearcher(svc.pg.Pool)
 
+	// 4b. Spec 104 SCOPE-04 — self_knowledge semantic searcher. Reuses
+	//     the SAME ML-sidecar embedder the assistant router uses
+	//     (buildAssistantEmbedder, embedder_mode SST) over the live pgx
+	//     pool, scoped at query time to the smackerel_self namespace by
+	//     the tool. On embedder failure the searcher returns a typed
+	//     error (no keyword fallback) so a product meta-answer never
+	//     degrades into an ungrounded guess.
+	selfKnowledgeEmbedder, err := buildAssistantEmbedder(cfg)
+	if err != nil {
+		return fmt.Errorf("wireOpenKnowledge: build embedder for self_knowledge: %w", err)
+	}
+	selfKnowledgeSearcher := tools.NewPgxSemanticSearcher(svc.pg.Pool, selfKnowledgeEmbedder)
+
 	// 5. Registry + tool registration.
-	registry := ok.NewRegistry(okCfg.ToolAllowlist)
+	registry := ok.NewRegistry(effectiveAllowlist)
 	if err := tools.RegisterAll(registry, tools.Deps{
 		GraphSearcher:     graphSearcher,
 		WebSearchProvider: webProvider,
 	}); err != nil {
 		return fmt.Errorf("wireOpenKnowledge: register tools: %w", err)
+	}
+
+	// 5b. Spec 104 SCOPE-04 — register the always-on self_knowledge tool.
+	//     It is registered SEPARATELY from RegisterAll (which owns the
+	//     four generic tools) because it carries a distinct dependency
+	//     (the namespace-scoped semantic searcher) and a fixed namespace
+	//     binding. It is already present in effectiveAllowlist above.
+	if err := registry.Register(tools.NewSelfKnowledge(selfKnowledgeSearcher, selfknowledge.SelfKnowledgeNamespace)); err != nil {
+		return fmt.Errorf("wireOpenKnowledge: register self_knowledge tool: %w", err)
 	}
 
 	// 7. Agent system prompt.
