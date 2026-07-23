@@ -120,7 +120,7 @@ func projectTelegramConfirm(t *testing.T, resp contracts.AssistantResponse) cano
 	sender := &captureSenderConfirm{}
 	adapter, err := telegramadapter.NewAdapter(telegramadapter.Options{
 		Sender:          sender,
-		Capture:         func(context.Context, *tgbotapi.Message, string) {},
+		Capture:         func(context.Context, *tgbotapi.Message, string) error { return nil },
 		ResolveUser:     func(int64) (string, error) { return "test-user", nil },
 		MarkdownMode:    telegramadapter.PlainText,
 		MaxMessageChars: 4096,
