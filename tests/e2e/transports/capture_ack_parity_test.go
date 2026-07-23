@@ -70,7 +70,7 @@ func TestCaptureAckParity_AcrossAllTransports(t *testing.T) {
 	sender := &captureSender{}
 	tgAdapter, err := telegramadapter.NewAdapter(telegramadapter.Options{
 		Sender:          sender,
-		Capture:         func(context.Context, *tgbotapi.Message, string) {},
+		Capture:         func(context.Context, *tgbotapi.Message, string) error { return nil },
 		ResolveUser:     func(int64) (string, error) { return "test-user", nil },
 		MarkdownMode:    telegramadapter.PlainText,
 		MaxMessageChars: 4096,
@@ -156,7 +156,7 @@ func TestCaptureAckParity_AcrossWebTelegramWhatsApp(t *testing.T) {
 	tgSender := &captureSender{}
 	tgAdapter, err := telegramadapter.NewAdapter(telegramadapter.Options{
 		Sender:          tgSender,
-		Capture:         func(context.Context, *tgbotapi.Message, string) {},
+		Capture:         func(context.Context, *tgbotapi.Message, string) error { return nil },
 		ResolveUser:     func(int64) (string, error) { return "test-user", nil },
 		MarkdownMode:    telegramadapter.PlainText,
 		MaxMessageChars: 4096,
