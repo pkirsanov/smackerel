@@ -166,6 +166,17 @@ func run() error {
 		return fmt.Errorf("open-knowledge subsystem wiring: %w", err)
 	}
 
+	// Spec 104 SCOPE-03 — ingest the self-knowledge corpus (what
+	// smackerel can do: scenarios, commands, features) into the
+	// smackerel_self namespace so /ask can answer product
+	// meta-questions with grounded, cited capability entries. No-op
+	// when open_knowledge is disabled; fail-loud when enabled but the
+	// corpus cannot be derived/ingested (a silent empty corpus would
+	// make every meta-question refuse).
+	if err := wireSelfKnowledgeIngestion(ctx, cfg, svc, scenarioDir); err != nil {
+		return fmt.Errorf("self-knowledge ingestion wiring: %w", err)
+	}
+
 	// BUG-034-003 follow-up: expense handler MUST be constructed BEFORE
 	// api.NewRouter(deps), because NewRouter does a single-pass route
 	// registration that skips deps.ExpenseHandler when it is nil. The
