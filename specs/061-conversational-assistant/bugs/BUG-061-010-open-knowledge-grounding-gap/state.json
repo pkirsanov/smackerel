@@ -1,0 +1,41 @@
+{
+  "bugId": "BUG-061-010",
+  "title": "/ask can't answer questions about smackerel itself (grounding gap)",
+  "spec": "specs/061-conversational-assistant",
+  "severity": "S3",
+  "status": "blocked",
+  "blockedReason": "Blocked on a product/design decision, not on implementation. Live evidence (home-lab deploy host, 2026-07-23) proves the open_knowledge agent has NO grounded source for a question about this private product: web_search (searxng, ENABLE_SEARXNG=true) returns Super Mario Wiki results for the token 'smackerel' (the public web has zero knowledge of the product); internal_retrieval is empty because the user's knowledge graph has never ingested smackerel's own docs; and the local LLM (gemma4:26b/qwen3:30b-a3b) has no training data on a private product. The refusal is therefore CORRECT (BUG-061-009 made it honest). Making /ask ANSWER meta-questions requires the operator/owner to choose the fix direction: (A) ingest smackerel's own docs as a citeable source (recommended, ideally a dedicated system-knowledge collection separate from the personal graph), (B) a dedicated about_smackerel help tool in the agent tool_allowlist, or (C) accept the limitation and keep the honest refusal. Owner next-step: pick A / B / C; then this bug can be specced and implemented.",
+  "workflowMode": "bugfix-fastlane",
+  "owner": "bubbles.goal",
+  "discoveredBy": "operator (live /ask on the home-lab bot; diagnosed during BUG-061-009 close-out)",
+  "discoveredAt": "2026-07-23",
+  "lastUpdatedAt": "2026-07-23",
+  "dependsOn": [
+    "specs/061-conversational-assistant/bugs/BUG-061-009-high-band-refusal-masked-as-saved-as-idea (done — made this case refuse honestly instead of masking as 'saved as an idea')"
+  ],
+  "diagnosis": {
+    "summary": "Grounding/data gap, not a code defect. Neither web_search (public web doesn't know the private product — searxng returns Super Mario Wiki for 'smackerel') nor internal_retrieval (product's own docs never ingested) nor the local LLM (no training data on a private product) can ground an answer about smackerel itself. The cite-back verifier + provenance gate correctly refuse the uncited synthesis.",
+    "liveEvidence": [
+      "open_knowledge wired: provider=searxng model=gemma4:26b synthesis_model=qwen3:30b-a3b tool_count=4 (core startup log)",
+      "ENABLE_SEARXNG=true present in /var/lib/smackerel/compose/app.env (prod)",
+      "direct searxng query 'smackerel second brain' -> top result 'Smackerel - Super Mario Wiki ... enemies that appear in Super Mario Bros. Wonder ... resemble flatfish' (public web has no knowledge of the product)"
+    ]
+  },
+  "certification": {
+    "status": "blocked",
+    "achievedAssuranceLevel": "diagnosed (evidence-backed); awaiting product decision on fix direction",
+    "gatesPassed": [
+      "root-cause diagnosis with live home-lab evidence"
+    ],
+    "pendingGates": [
+      "owner decision: fix option A (self-knowledge ingestion), B (about_smackerel help tool), or C (accept honest-refusal limitation)",
+      "spec + design + scopes (deferred until fix direction is chosen — scaffolding them now would be premature/fabricated)"
+    ]
+  },
+  "nextRequiredOwner": "operator/owner (choose fix direction A/B/C; then bubbles.plan specs it)",
+  "relatedSpecs": [
+    "specs/061-conversational-assistant",
+    "specs/064-open-ended-knowledge-agent",
+    "specs/084-open-knowledge-reasoning-loop"
+  ]
+}
