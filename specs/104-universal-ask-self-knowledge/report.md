@@ -23,5 +23,42 @@ trust integration → e2e + deploy).
 
 ## Test Evidence
 
-Pending implementation. Each scope's DoD records unit/integration/e2e evidence
-against the ephemeral test stack; scope 8 records build + on-host deploy + verify.
+### Scope 1 — general embedding-backed namespace SemanticSearcher {#scope-1}
+
+Built + tested on the home-lab host (local box under OOM pressure). Source SHA a26d9985.
+
+**Unit (`./smackerel.sh test unit --go --go-run SemanticSearcher`) — exit 0:**
+
+```
+ok  github.com/smackerel/smackerel/internal/assistant/openknowledge/tools  0.006s
+___UNIT_EXIT=0___
+```
+
+The `tools` package ran the matched tests (0.006s, not "[no tests to run]"):
+`TestPgxSemanticSearcher_ValidationAndEmbedShortCircuit` (all validation +
+embedder-error paths short-circuit before any DB access via the queryGuard) and
+`TestNewPgxSemanticSearcher_NilArgsPanic`.
+
+**Integration (`./smackerel.sh test integration-light --go-run PgxSemanticSearcher_NamespaceScopedCosine`) — exit 0:**
+
+```
+=== RUN   TestPgxSemanticSearcher_NamespaceScopedCosine
+--- PASS: TestPgxSemanticSearcher_NamespaceScopedCosine (0.02s)
+ok  github.com/smackerel/smackerel/tests/integration/openknowledge  0.032s
+PASS: go-integration-light
+___INTEG_EXIT=0___
+```
+
+Against real pgvector: a row identical to the query vector but in a different
+`source_id` namespace is EXCLUDED (isolation, FR-5), and within `smackerel_self`
+the nearer embedding ranks first (cosine ordering).
+
+**Build Quality Gate:** the whole Go module compiled clean in both runs;
+`format --check` flagged only a pre-existing gofmt drift in
+`internal/telegram/assistant_adapter/adapter.go` (a BUG-061-006 doc-comment
+reindent that slipped past the pre-push hook, which runs only the knb uniformity
+lint) — fixed here.
+
+### Scopes 2–8
+
+Pending implementation.
