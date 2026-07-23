@@ -262,3 +262,18 @@ cannot send Telegram and the prod assistant HTTP API requires a per-user PASETO
 token. The behavior is proven end-to-end at the agent/facade layer by the scope-8
 e2e tests + the scope-7 trust-perimeter integration test, and deploy-verified with
 the corpus live.
+
+**Connector-only smoke — automates the operator RENDER step (2026-07-23 follow-up):**
+to avoid needing a real Telegram client for that final check,
+`internal/telegram/assistant_connector_smoke_test.go` (commit 4a7c545d) injects a
+synthetic inbound `/ask` update through the REAL Telegram connector (bot dispatch
+→ assistant adapter → render) and captures the rendered OUTBOUND — asserting the
+grounded answer renders a `sources:` citation block (never "saved as an idea") and
+an ungroundable `/ask` renders the honest refusal verbatim. It is an always-run
+unit test (no Telegram client, no bot token, no live stack), so the operator-smoke
+RENDER behavior is now a standing regression at the exact connector boundary the
+user sees. The `/ask` self-knowledge behavior is thus covered at all three layers:
+agent grounding over pgvector (scope-8 e2e), facade honesty decision
+(`facade_execution_error_honesty_test.go`), and connector render (this smoke). The
+remaining operator item is narrowed to a final live-prod confirmation on the
+deployed bot.
