@@ -44,7 +44,7 @@ Scenario: namespace-scoped cosine search returns only in-namespace artifacts
 
 ## Scope 2 (P0): Self-knowledge corpus derivation (fresh-by-construction)
 
-**Status:** Not Started
+**Status:** Done
 **Depends On:** —
 **FR:** FR-2
 
@@ -67,17 +67,17 @@ Scenario: adding a scenario yields a new capability entry with no hand edit
 | Unit | `unit` | `internal/assistant/selfknowledge/derive_test.go` | derive from real scenarios.yaml + shortcuts; count/shape asserts; malformed SST → fail-loud | `./smackerel.sh test unit --go` | No |
 
 ### Definition of Done
-- [ ] `CapabilityEntry` + derivation from scenarios.yaml + shortcuts + skills_manifest + recipe catalog
-- [ ] Auto-derived facets require zero hand-maintenance (adding a scenario/command/recipe updates the corpus)
-- [ ] Malformed SST fails loud at derive time (no silent empty corpus)
-- [ ] Unit tests pass against the real committed SSTs
-- [ ] Build Quality Gate clean
+- [x] `CapabilityEntry` + derivation from scenarios.yaml + shortcuts + skills_manifest + recipe catalog → `selfknowledge.Derive` reads the manifest's enabled scenarios + `assistant.SlashShortcuts`; recipes via the `recipe_search` scenario + `/recipe`,`/cook` commands (no separate recipe-catalog SST exists) (Evidence: report.md#scope-2)
+- [x] Auto-derived facets require zero hand-maintenance (adding a scenario/command/recipe updates the corpus) → derivation reads the live SSTs, no hardcoded list (Evidence: report.md#scope-2)
+- [x] Malformed SST fails loud at derive time (no silent empty corpus) → `LoadSkillsManifest` is fail-loud; `TestDerive_NilManifest` covers the nil guard (Evidence: report.md#scope-2)
+- [x] Unit tests pass against the real committed SSTs → `ok .../internal/assistant/selfknowledge 0.017s` (loads real `config/assistant/scenarios.yaml`) (Evidence: report.md#scope-2)
+- [x] Build Quality Gate clean → module compiles; `gofmt -l` empty; 0 warnings (Evidence: report.md#scope-2)
 
 ---
 
 ## Scope 3 (P0): Self-knowledge ingestion + `smackerel_self` namespace + boot lifecycle
 
-**Status:** Not Started
+**Status:** Done
 **Depends On:** Scope 2
 **FR:** FR-3, FR-5, FR-9, NFR-2
 
@@ -99,16 +99,16 @@ Scenario: idempotent ingestion with stale sweep
 | Integration | `integration` | `tests/integration/selfknowledge/ingest_test.go` | ingest → artifacts present under smackerel_self, embedded; re-ingest no-op; stale sweep | `./smackerel.sh test integration` | Yes |
 
 ### Definition of Done
-- [ ] Ingestor uses the existing `PublishRawArtifact` (no bespoke insert); artifacts land under `source_id="smackerel_self"` with embeddings
-- [ ] Idempotent (content_hash dedup); stale entries swept; boot wiring runs once, safe to re-run
-- [ ] Integration test proves ingest + dedup + sweep on ephemeral pg
-- [ ] Build Quality Gate clean
+- [x] Ingestor uses the existing `PublishRawArtifact` (no bespoke insert); artifacts land under `source_id="smackerel_self"` with embeddings → `selfknowledge.Ingestor` publishes each entry via `pipeline.RawArtifactPublisher` (Evidence: report.md#scope-3)
+- [x] Idempotent (content_hash dedup); stale entries swept; boot wiring runs once, safe to re-run → `cmd/core/wiring_selfknowledge.go` runs after migrations gated on `open_knowledge.enabled` (Evidence: report.md#scope-3)
+- [x] Integration test proves ingest + dedup + sweep on ephemeral pg → `--- PASS: TestIngestor_IdempotentWithStaleSweep (0.02s)` (Evidence: report.md#scope-3)
+- [x] Build Quality Gate clean → `cmd/core` compiles; `gofmt -l` empty; 0 warnings (Evidence: report.md#scope-3)
 
 ---
 
 ## Scope 4 (P0): `self_knowledge` tool + allowlist + planner routing
 
-**Status:** Not Started
+**Status:** Done
 **Depends On:** Scope 1, Scope 3
 **FR:** FR-1, FR-5
 
@@ -130,11 +130,11 @@ Scenario: the tool returns only cited smackerel_self sources
 | Integration | `integration` | `tests/integration/openknowledge/self_knowledge_tool_test.go` | tool over real pg+embeddings returns cited self sources | `./smackerel.sh test integration` | Yes |
 
 ### Definition of Done
-- [ ] `self_knowledge` implements the Tool contract; wired into registry + always in the allowlist
-- [ ] Returns `Source{Kind:SourceArtifact}` only from smackerel_self (isolation)
-- [ ] Planner description present + clear
-- [ ] Unit + integration tests pass
-- [ ] Build Quality Gate clean
+- [x] `self_knowledge` implements the Tool contract; wired into registry + always in the allowlist → `tools.SelfKnowledge`; `wireOpenKnowledge` force-adds `self_knowledge` to the effective allowlist + registers it (FR-1) (Evidence: report.md#scope-4)
+- [x] Returns `Source{Kind:SourceArtifact}` only from smackerel_self (isolation) → `--- PASS: TestSelfKnowledgeTool_CitesOnlySmackerelSelf` (personal `user:` row excluded) (Evidence: report.md#scope-4)
+- [x] Planner description present + clear → `Description()` names skills/scenarios, slash commands, recipes, features (Evidence: report.md#scope-4)
+- [x] Unit + integration tests pass → `ok .../openknowledge/tools 0.006s` + `ok .../tests/integration/openknowledge 0.019s` (Evidence: report.md#scope-4)
+- [x] Build Quality Gate clean → module compiles; `gofmt -l` empty; 0 warnings (Evidence: report.md#scope-4)
 
 ---
 
