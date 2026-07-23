@@ -197,6 +197,68 @@ cross-function scope slip — `manifest` referenced in `wireAssistantTelegramAda
 was caught by the module `go test` on the home-lab host, fixed in a50b37ca, and
 re-verified green.)
 
-### Scope 8
+### Scope 8 — E2E + deploy + verify {#scope-8}
 
-Pending: E2E + build --target self-hosted + local-operator deploy + verify.
+**E2E (`./smackerel.sh test e2e`) — self-knowledge meta-question flow:**
+
+```
+=== RUN   TestSelfKnowledge_AskMetaQuestion_GroundedCitedAnswer_E2E
+--- PASS: TestSelfKnowledge_AskMetaQuestion_GroundedCitedAnswer_E2E (0.01s)  [status=success num_sources=1]
+=== RUN   TestSelfKnowledge_AskUngroundable_RefusesHonestly_E2E
+--- PASS: TestSelfKnowledge_AskUngroundable_RefusesHonestly_E2E (0.01s)  [status=refused termination_reason=fabricated_source]
+ok  github.com/smackerel/smackerel/tests/e2e/openknowledge  0.035s
+```
+
+Drives the REAL agent loop over real pg: a grounded `/ask` meta-question returns a
+cited answer (num_sources=1); an ungroundable one refuses honestly (never "saved as
+an idea"). The `tests/e2e/transports` package failed to COMPILE on a pre-existing
+`CaptureFn` signature drift (BUG-061-006 added an `error` return; those e2e stubs
+were never updated — e2e is not in the pre-push hook) — fixed here (4 stubs, commit
+50d6b564): `ok tests/e2e/transports 0.016s`.
+
+**Pre-existing flake (NOT this spec):** the full suite intermittently fails on
+`tests/e2e/assistant :: TestIntentCompilerE2E_WeatherCompilesBeforeRouteAndNormalizesLocation`
+(weather routed to capture-fallback — a real-embedding-router timing flake, observed
+failing 2026-07-21, before any spec-104 work). Re-run on HEAD: `--- PASS (0.02s)`,
+exit 0. Unrelated to self-knowledge.
+
+**Build (`./smackerel.sh build --target self-hosted`) — exit 0:**
+
+```
+core: ghcr.io/pkirsanov/smackerel-core@sha256:3b6261a915afc2df5144bf6f15fb61d9793894b520b0feb01da46be80471ef5b
+ml:   ghcr.io/pkirsanov/smackerel-ml@sha256:25f36dc55c7be2138f1b49c3e90b57892a6797bc421432a3cfecb7f80088830e
+[5/7] cosign sign (operator key) — core + ml signed
+[6/7] syft SBOM + cosign attest — core + ml attested
+___SMKBUILD_EXIT=0___
+```
+
+**Deploy (`promote.sh --target home-lab --product smackerel`, sudo -n) — exit 0:**
+
+```
+The cosign claims were validated (core + ml)
+preconditions OK
+core+ml Recreated → Started
+verify OK (strict current release accepted): core-digest=accepted ml-digest=accepted health=accepted
+apply OK
+___SMKDEPLOY_EXIT=0___
+```
+
+**Live verification (docker inspect + prod DB):**
+
+```
+smackerel-home-lab-smackerel-core-1 :: running health=healthy restarts=0 :: smackerel-core@sha256:3b6261a9…
+smackerel-home-lab-smackerel-ml-1   :: running health=healthy restarts=0 :: smackerel-ml@sha256:25f36dc5…
+self-knowledge corpus (source_id=smackerel_self): total=13 embedded=5→7→… kinds=capability,product,recipe,article,idea,note
+```
+
+Both digests match the build, healthy, 0 restarts. The boot self-knowledge
+ingestion populated the `smackerel_self` namespace (13 artifacts; embeddings fill in
+async via NATS→ML — climbing 5→7 at verification). **The semantic self-knowledge
+corpus is LIVE on the deployed bot.**
+
+**Operator behavioral smoke test (operator-only):** the live Telegram round-trip
+(`/ask what can you do?` → cited capability answer) is operator-verifiable — agents
+cannot send Telegram and the prod assistant HTTP API requires a per-user PASETO
+token. The behavior is proven end-to-end at the agent/facade layer by the scope-8
+e2e tests + the scope-7 trust-perimeter integration test, and deploy-verified with
+the corpus live.

@@ -232,7 +232,7 @@ Scenario: grounded meta-answer is cited; ungroundable refuses honestly
 
 ## Scope 8 (P0): E2E + deploy + verify
 
-**Status:** Not Started
+**Status:** Done
 **Depends On:** Scope 6, Scope 7
 **FR:** all (end-to-end)
 
@@ -253,7 +253,7 @@ Scenario: live /ask about smackerel answers with citations
 | Stress | `stress` | (extend openknowledge p95) | self_knowledge search within budget | per existing | Yes |
 
 ### Definition of Done
-- [ ] E2E meta-question flow passes on the ephemeral stack (cited answer)
-- [ ] Built + operator-cosign-signed + deployed on-host; running digests healthy; corpus ingested (verified)
-- [ ] Operator behavioral smoke test recorded (or noted operator-only)
-- [ ] Build Quality Gate clean
+- [x] E2E meta-question flow passes on the ephemeral stack (cited answer) → `TestSelfKnowledge_AskMetaQuestion_GroundedCitedAnswer_E2E` + `_AskUngroundable_RefusesHonestly_E2E` PASS (Evidence: report.md#scope-8)
+- [x] Built + operator-cosign-signed + deployed on-host; running digests healthy; corpus ingested (verified) → core sha256:3b6261a9… + ml sha256:25f36dc5… running/healthy/0-restarts; 13 smackerel_self artifacts ingested (Evidence: report.md#scope-8)
+- [x] Operator behavioral smoke test recorded (or noted operator-only) → noted operator-only (agent cannot send Telegram; prod HTTP needs PASETO); behavior e2e-proven + deploy-verified (Evidence: report.md#scope-8)
+- [x] Build Quality Gate clean → module compiles; format clean; Trivy gate passed in the signed build (Evidence: report.md#scope-8)
