@@ -1,0 +1,72 @@
+{
+  "specId": "104-universal-ask-self-knowledge",
+  "title": "Universal /ask + Self-Knowledge Grounding",
+  "status": "not_started",
+  "workflowMode": "full-delivery",
+  "owner": "bubbles.goal",
+  "createdAt": "2026-07-23",
+  "lastUpdatedAt": "2026-07-23",
+  "summary": "Make /ask answer ANY question — including questions about smackerel itself — by adding self_knowledge as a first-class, grounded, cited answer source. Self-knowledge is derived fresh-by-construction from the live product SSTs (scenarios, commands, recipes, curated docs), ingested as embedded artifacts under a dedicated smackerel_self namespace via the existing pipeline, and searched semantically via a new general embedding-backed namespace searcher (resolving the 064 SCOPE-06 deferral). The cite-back verifier + provenance gate are unchanged; BUG-061-009's honest refusal is the fallback. The tool_allowlist is the general seam for wiring any command/surface as an answer source.",
+  "motivation": "Diagnosed in BUG-061-010: the bot cannot answer questions about itself because web_search resolves 'smackerel' to a Super Mario enemy, internal_retrieval has no ingested product docs, and the local LLM has no training data on a private product. Answering about smackerel is an essential skill for a personal second brain. Operator direction (2026-07-23): pick best option for long term, no shortcuts — pgvector system-knowledge namespace + ingest curated docs via the existing pipeline, semantic search.",
+  "dependsOn": [
+    "specs/061-conversational-assistant/bugs/BUG-061-009-high-band-refusal-masked-as-saved-as-idea (done — honest refusal is the fallback)",
+    "specs/061-conversational-assistant/bugs/BUG-061-010-open-knowledge-grounding-gap (diagnosis that motivated this spec)",
+    "specs/064-open-ended-knowledge-agent (Tool contract, cite-back verifier, tool_allowlist)",
+    "specs/084-open-knowledge-reasoning-loop (agent loop)",
+    "specs/095-retrieval-strategy-routing (retrieval routing)"
+  ],
+  "groundedSeams": {
+    "toolContract": "internal/assistant/openknowledge/tool.go (Tool interface), registry.go (Register)",
+    "referenceTool": "internal/assistant/openknowledge/tools/internal_retrieval.go (GraphSearcher pattern)",
+    "citeback": "internal/assistant/openknowledge/citeback/verifier.go",
+    "ingestion": "internal/pipeline/ingest.go (RawArtifactPublisher.PublishRawArtifact)",
+    "store": "artifacts table (internal/db/migrations/001_initial_schema.sql): source_id, artifact_type, content_hash, embedding vector(384)",
+    "sstSources": "config/assistant/scenarios.yaml, internal/assistant/shortcuts.go, internal/assistant/skills_manifest.go, recipe_search catalog, docs/smackerel.md, README.md",
+    "helpCommand": "internal/telegram/help*.go + SetMyCommands inventory (cmd/core/wiring.go)",
+    "namespace": "artifacts.source_id = 'smackerel_self'"
+  },
+  "scopes": [
+    { "id": "scope-01", "title": "General embedding-backed namespace SemanticSearcher", "status": "not_started", "priority": "P0" },
+    { "id": "scope-02", "title": "Self-knowledge corpus derivation (fresh-by-construction)", "status": "not_started", "priority": "P0" },
+    { "id": "scope-03", "title": "Self-knowledge ingestion + smackerel_self namespace + boot lifecycle", "status": "not_started", "priority": "P0" },
+    { "id": "scope-04", "title": "self_knowledge tool + allowlist + planner routing", "status": "not_started", "priority": "P0" },
+    { "id": "scope-05", "title": "Product-doc corpus source (features/use-cases/overview)", "status": "not_started", "priority": "P1" },
+    { "id": "scope-06", "title": "/help human twin (shared corpus)", "status": "not_started", "priority": "P1" },
+    { "id": "scope-07", "title": "Trust integration + honest-fallback (cite-back/provenance)", "status": "not_started", "priority": "P0" },
+    { "id": "scope-08", "title": "E2E + deploy + verify", "status": "not_started", "priority": "P0" }
+  ],
+  "completedScopes": [],
+  "completedPhases": [
+    "analyze",
+    "design",
+    "plan"
+  ],
+  "nonGoals": [
+    "Weakening the cite-back verifier or requires_provenance",
+    "Letting the LLM answer product meta-questions from its own weights (hallucination)",
+    "Ingesting product docs into the user's personal graph (self-knowledge is a separate smackerel_self namespace)",
+    "Rewriting internal_retrieval to the new searcher (follow-on; this spec makes the general searcher available)",
+    "Answering about other products/tenants"
+  ],
+  "certification": {
+    "status": "not_started",
+    "achievedAssuranceLevel": "planning-authored (spec + design + scopes)",
+    "gatesPassed": [
+      "planning: spec.md + design.md + scopes.md authored, grounded in real seams (BUG-061-010 evidence)"
+    ],
+    "pendingGates": [
+      "implement scope-01..08",
+      "test unit + integration + e2e (ephemeral stack)",
+      "lint + artifact-lint",
+      "build --target self-hosted + deploy home-lab on-host + verify",
+      "operator live Telegram behavioral smoke test"
+    ]
+  },
+  "nextRequiredOwner": "bubbles.goal (implement scope-01 → 08 in dependency order)",
+  "relatedSpecs": [
+    "specs/061-conversational-assistant",
+    "specs/064-open-ended-knowledge-agent",
+    "specs/084-open-knowledge-reasoning-loop",
+    "specs/095-retrieval-strategy-routing"
+  ]
+}
