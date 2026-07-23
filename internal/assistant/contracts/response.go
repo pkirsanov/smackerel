@@ -193,6 +193,16 @@ const (
 	// operator sees exactly which model was refused and why. The
 	// specific reason-code lives in the message + the HTTP error_code.
 	ErrModelNotSwitchable ErrorCause = "model_not_switchable"
+	// ErrNoGroundedAnswer is the honest discriminator for a
+	// requires_provenance scenario that produced a body with no valid
+	// sources (BUG-061-009). The provenance gate refuses into this cause
+	// with StatusUnavailable and the canonical refusal body
+	// ("I don't have a sourced answer for that."), NEVER the band-low
+	// capture acknowledgement. It is the structural signal that this is a
+	// high-band refusal (a matched, executed request the system could not
+	// ground), distinct from ErrProviderUnavailable (upstream failed) and
+	// ErrNoMatch (the owned graph was empty for the query).
+	ErrNoGroundedAnswer ErrorCause = "no_grounded_answer"
 )
 
 // AllErrorCauses is the exhaustive non-zero closed-vocabulary list
@@ -204,6 +214,7 @@ var AllErrorCauses = []ErrorCause{
 	ErrInternalError,
 	ErrNoMatch,
 	ErrModelNotSwitchable,
+	ErrNoGroundedAnswer,
 }
 
 // ConfirmCard is the propose-phase response that requires user

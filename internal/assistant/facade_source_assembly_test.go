@@ -213,16 +213,20 @@ func TestFacadeHighBandSourceAssemblerEmptySourcesTriggersProvenanceRefusal(t *t
 		t.Fatalf("Handle err = %v", err)
 	}
 
-	// The gate marks the response for capture; the facade then emits
-	// the final transport-agnostic successful-capture acknowledgement.
-	if resp.Body != captureFallbackAcknowledgement {
-		t.Errorf("Body = %q; want canonical capture acknowledgement", resp.Body)
+	// BUG-061-009 — the gate refuses HONESTLY (StatusUnavailable +
+	// ErrNoGroundedAnswer + the canonical refusal body), never the
+	// band-low "saved as an idea" capture.
+	if resp.Body != "I don't have a sourced answer for that." {
+		t.Errorf("Body = %q; want the honest canonical refusal", resp.Body)
 	}
-	if resp.Status != contracts.StatusSavedAsIdea {
-		t.Errorf("Status = %q; want %q", resp.Status, contracts.StatusSavedAsIdea)
+	if resp.Status != contracts.StatusUnavailable {
+		t.Errorf("Status = %q; want %q (honest refusal)", resp.Status, contracts.StatusUnavailable)
 	}
-	if !resp.CaptureRoute {
-		t.Errorf("CaptureRoute = false; provenance refusal MUST set CaptureRoute=true")
+	if resp.ErrorCause != contracts.ErrNoGroundedAnswer {
+		t.Errorf("ErrorCause = %q; want %q", resp.ErrorCause, contracts.ErrNoGroundedAnswer)
+	}
+	if resp.CaptureRoute {
+		t.Errorf("CaptureRoute = true; a high-band provenance refusal is not a capture")
 	}
 	if len(resp.Sources) != 0 {
 		t.Errorf("Sources length = %d; want 0 (graph drift)", len(resp.Sources))
