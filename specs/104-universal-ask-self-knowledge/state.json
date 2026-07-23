@@ -1,7 +1,7 @@
 {
   "specId": "104-universal-ask-self-knowledge",
   "title": "Universal /ask + Self-Knowledge Grounding",
-  "status": "not_started",
+  "status": "in_progress",
   "workflowMode": "full-delivery",
   "owner": "bubbles.goal",
   "createdAt": "2026-07-23",
@@ -26,7 +26,7 @@
     "namespace": "artifacts.source_id = 'smackerel_self'"
   },
   "scopes": [
-    { "id": "scope-01", "title": "General embedding-backed namespace SemanticSearcher", "status": "not_started", "priority": "P0" },
+    { "id": "scope-01", "title": "General embedding-backed namespace SemanticSearcher", "status": "done", "priority": "P0" },
     { "id": "scope-02", "title": "Self-knowledge corpus derivation (fresh-by-construction)", "status": "not_started", "priority": "P0" },
     { "id": "scope-03", "title": "Self-knowledge ingestion + smackerel_self namespace + boot lifecycle", "status": "not_started", "priority": "P0" },
     { "id": "scope-04", "title": "self_knowledge tool + allowlist + planner routing", "status": "not_started", "priority": "P0" },
@@ -35,7 +35,9 @@
     { "id": "scope-07", "title": "Trust integration + honest-fallback (cite-back/provenance)", "status": "not_started", "priority": "P0" },
     { "id": "scope-08", "title": "E2E + deploy + verify", "status": "not_started", "priority": "P0" }
   ],
-  "completedScopes": [],
+  "completedScopes": [
+    "scope-01"
+  ],
   "completedPhases": [
     "analyze",
     "design",
