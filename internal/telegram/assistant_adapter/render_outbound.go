@@ -110,12 +110,28 @@ func buildTelegramRendering(
 		return rendered, nil, nil
 	}
 
+	// BUG-061-009 — a high-band provenance refusal (ErrNoGroundedAnswer)
+	// renders its honest body verbatim ("I don't have a sourced answer for
+	// that."), NOT the machine "<skill>: <cause>" renderError form and NOT
+	// the band-low capture acknowledgement. This is the honest refusal a
+	// user sees when a matched, executed request could not be grounded.
+	// Refusal-vs-answer stays structurally distinguishable (StatusUnavailable
+	// + typed cause, no "[N]" citation markers).
+	if resp.ErrorCause == contracts.ErrNoGroundedAnswer {
+		body := strings.TrimSpace(resp.Body)
+		if body == "" {
+			body = contracts.CanonicalRefusalBodyFor(contracts.RefusalDefault)
+		}
+		rendered := budgetTruncate(escapeForMode(body, mode), maxMessageChars, mode)
+		return appendModelFooter(rendered, resp, mode), nil, nil
+	}
+
 	// Spec 064 SCOPE-13 — open_knowledge dispatch. Routed strictly by
 	// AssistantResponse content composition so the AssistantResponse
 	// shape (spec 061) is not extended:
 	//
 	//   - ErrorCause string matching a non-default spec 064
-	//     RefusalCause → RenderRefusalWithCapture.
+	//     RefusalCause → RenderRefusal.
 	//   - Otherwise, when Sources contains at least one
 	//     non-SourceArtifact kind → RenderSourcedAnswer (all
 	//     non-artifact) or RenderHybridAnswer (mixed with artifact).
@@ -124,7 +140,7 @@ func buildTelegramRendering(
 	// values fall through to the unchanged default rendering below
 	// (backward compatibility).
 	if cause, ok := openKnowledgeRefusalCauseFromError(resp.ErrorCause); ok {
-		body := RenderRefusalWithCapture(cause)
+		body := RenderRefusal(cause)
 		rendered := budgetTruncate(escapeForMode(body, mode), maxMessageChars, mode)
 		return appendModelFooter(rendered, resp, mode), nil, nil
 	}

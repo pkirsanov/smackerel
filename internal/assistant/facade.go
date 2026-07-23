@@ -1328,7 +1328,10 @@ func (f *Facade) Handle(ctx context.Context, msg contracts.AssistantMessage) (re
 	// acknowledgement shape. Provenance and no-ground paths may carry
 	// an upstream refusal body/error into this boundary; clear those
 	// only when the response already declares a successful capture.
-	resp = canonicalizeSuccessfulCaptureResponse(resp, emittedAt)
+	// BUG-061-009 — the capture acknowledgement is band-LOW-only; a
+	// band-high response that still carries the capture shape is a
+	// masked refusal and is converted to the honest refusal instead.
+	resp = canonicalizeSuccessfulCaptureResponse(resp, band, emittedAt)
 
 	// --- Step 7: persist conversation ---
 	conv = f.appendTurnAndPersist(ctx, conv, msg, resp, emittedAt)
@@ -1726,8 +1729,29 @@ func truncateBody(body string, maxChars int) string {
 	return string(runes[:maxChars])
 }
 
-func canonicalizeSuccessfulCaptureResponse(resp contracts.AssistantResponse, emittedAt time.Time) contracts.AssistantResponse {
+func canonicalizeSuccessfulCaptureResponse(resp contracts.AssistantResponse, band Band, emittedAt time.Time) contracts.AssistantResponse {
 	if !resp.CaptureRoute || resp.Status != contracts.StatusSavedAsIdea {
+		return resp
+	}
+	// BUG-061-009 — "saved as an idea" is a band-LOW-only outcome (the input
+	// was not a clear request). A band-HIGH turn (the router matched a
+	// scenario and executed it) that still carries the capture shape is a
+	// masked refusal; convert it to the honest refusal so INV-HB-REFUSAL
+	// holds structurally even if an upstream path regresses into the
+	// capture shape. The user must never see "saved as an idea" for a real
+	// request.
+	if band != BandLow {
+		resp.Status = contracts.StatusUnavailable
+		resp.ErrorCause = contracts.ErrNoGroundedAnswer
+		resp.CaptureRoute = false
+		resp.Sources = nil
+		resp.SourcesOverflowCount = 0
+		resp.ConfirmCard = nil
+		resp.DisambiguationPrompt = nil
+		if resp.Body == "" || resp.Body == captureFallbackAcknowledgement {
+			resp.Body = contracts.CanonicalRefusalBodyFor(contracts.RefusalDefault)
+		}
+		resp.EmittedAt = emittedAt
 		return resp
 	}
 	resp.Status = contracts.StatusSavedAsIdea

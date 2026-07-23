@@ -578,8 +578,8 @@ func TestBuildTelegramRendering_OpenKnowledge_RefusalCauses(t *testing.T) {
 			if !strings.Contains(rendered, wantBody) {
 				t.Errorf("rendered = %q; want to contain canonical body %q", rendered, wantBody)
 			}
-			if !strings.HasSuffix(rendered, OpenKnowledgeCaptureSuffix) {
-				t.Errorf("rendered = %q; want suffix %q", rendered, OpenKnowledgeCaptureSuffix)
+			if strings.Contains(rendered, "(saved as idea)") {
+				t.Errorf("rendered = %q; a high-band refusal must NOT contain the capture marker (BUG-061-009)", rendered)
 			}
 		})
 	}
@@ -602,7 +602,7 @@ func TestBuildTelegramRendering_LegacyErrorCause_BackCompat(t *testing.T) {
 	if rendered != "weather: provider_unavailable" {
 		t.Errorf("rendered = %q; want existing single-line error rendering", rendered)
 	}
-	if strings.Contains(rendered, OpenKnowledgeCaptureSuffix) {
+	if strings.Contains(rendered, "(saved as idea)") {
 		t.Errorf("rendered = %q; must NOT contain refusal suffix (legacy cause)", rendered)
 	}
 }
@@ -630,7 +630,7 @@ func TestBuildTelegramRendering_G021_NoSourcesNoErrorCauseFallsThroughDefault(t 
 	if rendered != "ok" {
 		t.Errorf("rendered = %q; want %q (default body-only render)", rendered, "ok")
 	}
-	if strings.Contains(rendered, OpenKnowledgeCaptureSuffix) {
+	if strings.Contains(rendered, "(saved as idea)") {
 		t.Errorf("rendered must NOT contain refusal suffix when ErrorCause is unset")
 	}
 	if strings.Contains(rendered, "[1]") {

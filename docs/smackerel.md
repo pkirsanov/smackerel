@@ -972,14 +972,15 @@ SST env vars resolve from `config/smackerel.yaml` through
 `scripts/commands/config.sh`) lives in
 [`docs/Testing.md` → Assistant Evaluation Harness](Testing.md#assistant-evaluation-harness).
 
-#### 3.8.6 Failure Honesty + Deterministic Dispatch (BUG-061-008)
+#### 3.8.6 Failure Honesty + Deterministic Dispatch (BUG-061-008, BUG-061-009)
 
-Two invariants keep the assistant from *lying about failure*. Both were
+Three invariants keep the assistant from *lying about failure*. All were
 ratified after a class of bugs where a request that actually failed
-(provider down, timeout, a slash command the LLM never routed) was
-rendered to the user as the cheerful capture acknowledgement **"saved as
-an idea"** — masking a real outage as if the user's input had been
-happily filed away.
+(provider down, timeout, a slash command the LLM never routed) OR could
+not be grounded (an answer with no verifiable sources) was rendered to
+the user as the cheerful capture acknowledgement **"saved as an idea"** —
+masking a real outage, or an honest "I can't answer that", as if the
+user's input had been happily filed away.
 
 **Invariant 1 — execution errors are never rendered as capture /
 soft-refusal (P1, P2, P5).**
@@ -1007,11 +1008,15 @@ long — please try again in a moment."*).
   `recipe_search`) × `{OutcomeProviderError, OutcomeTimeout}` and asserts
   the response is honest (status ≠ `StatusSavedAsIdea`, `CaptureRoute ==
   false`, `ErrorCause` preserved, body ≠ the capture acknowledgement).
-  `TestExecutionErrorHonesty_OKNoSourcesStillRefuses` proves the fix does
-  **not** over-correct — an `OutcomeOK` turn with a synthesized body and
-  no assembled sources STILL trips the fabrication gate. The pre-existing
-  `AntiFabrication` and `ProvenanceGateRewritesWhenSourcesMissing` tests
-  (both `OutcomeOK`) remain green for the same reason.
+  `TestExecutionErrorHonesty_OKNoSourcesRefusesHonestly` proves the fix
+  does **not** over-correct — an `OutcomeOK` turn with a synthesized body
+  and no assembled sources STILL trips the anti-fabrication gate (the
+  uncited body is never shown), but per BUG-061-009 it now refuses
+  **honestly** (`StatusUnavailable` + `ErrNoGroundedAnswer` + the
+  canonical refusal body) instead of the band-low capture ack — see
+  Invariant 3. The pre-existing `AntiFabrication` and
+  `ProvenanceGateRewritesWhenSourcesMissing` tests (both `OutcomeOK`)
+  remain green for the same reason.
 - **Observability (P3):**
   `smackerel_assistant_execution_error_surfaced_total{scenario_id,
   outcome, transport}` (`internal/assistant/metrics`) increments whenever
@@ -1034,12 +1039,57 @@ commands SHOULD follow the same pattern: add a typed seam + `With…`
 option, dispatch it before the general band-dispatch, and unit-test the
 seam directly (see `facade_weather_integration_test.go`).
 
+**Invariant 3 — "saved as an idea" is band-LOW-only; a high-band turn
+never renders the capture ack (BUG-061-009, INV-HB-REFUSAL).**
+
+The capture acknowledgement **"saved as an idea — i'll surface it
+later."** is legitimate for exactly ONE situation: a **band-low** turn —
+the router did not match a scenario, so the user's message wasn't a clear
+request and is filed as a note. A **band-high** turn (the router matched
+a scenario and the executor ran) is a real request, so it MUST render the
+answer, an honest refusal, or an honest error — NEVER the capture ack.
+This closes the last masking path: an open_knowledge (`/ask`) answer that
+the agent produced but could not cite (`OutcomeOK`, `requires_provenance`,
+no sources). Previously the provenance gate rewrote that to
+`StatusSavedAsIdea` and `canonicalizeSuccessfulCaptureResponse` stamped
+the flat capture ack over the honest refusal body; now the gate refuses
+with `StatusUnavailable` + `ErrNoGroundedAnswer` + the honest body, and
+`canonicalizeSuccessfulCaptureResponse(resp, band, …)` applies the
+capture ack ONLY for `BandLow` (a residual band-high `StatusSavedAsIdea`
+is converted to the honest refusal as defence-in-depth).
+
+Refusal-vs-answer distinguishability is **structural**
+(`Status`/`ErrorCause` + presence of citations), not a user-visible
+string: the spec-064 open_knowledge renderer (`RenderRefusal`) no longer
+appends a "(saved as idea)" suffix, and the five cause-specific refusal
+bodies in `contracts/refusal.go` no longer end in "— saved as an idea".
+A refused open_knowledge turn with a typed cause is surfaced by the
+facade source-assembler as an honest `StatusUnavailable` Override
+(bypassing the provenance gate so the cause-specific body survives) —
+the single refusal-shaping path, after the dead `provenance.EnforceRefusal`
+parallel path was removed (the "latent duplicate that drifts" that seeded
+this whole bug family).
+
+- **Mechanical enforcement:** `facade_execution_error_honesty_test.go`
+  (`TestExecutionErrorHonesty_NonOKNeverMaskedAsSavedAsIdea` sweeps every
+  `requires_provenance` scenario × {provider error, timeout, OK-uncited}
+  → never `StatusSavedAsIdea`, never the capture ack;
+  `TestExecutionErrorHonesty_OKNoSourcesRefusesHonestly` pins the
+  OK-uncited honest refusal). `cmd/core/wiring_assistant_openknowledge_test.go`
+  (`TestOpenKnowledgeAssembler_RefusedEnvelope`) pins the honest Override.
+  `contracts/refusal_test.go` pins each cause→honest-body mapping (no
+  "saved as an idea" substring). Band-low capture is unchanged
+  (`facade_capture_fallback_test.go`, WhatsApp/Telegram capture tests).
+
 **Author checklist** when touching assistant response assembly: the
 provenance/capture gate is guarded by `result.Outcome ==
 agent.OutcomeOK`; a non-OK outcome must reach `translateFinalToBody`
-with `ErrorCause` intact; and any new explicit command dispatches through
-an injected seam. `facade_execution_error_honesty_test.go` is the
-regression that fails if the gate ever runs on a non-OK outcome again.
+with `ErrorCause` intact; the capture ack is emitted for `BandLow` ONLY
+— a band-high turn that cannot answer refuses honestly (Invariant 3);
+and any new explicit command dispatches through an injected seam.
+`facade_execution_error_honesty_test.go` is the regression that fails if
+the gate ever runs on a non-OK outcome again OR if a high-band turn is
+ever rendered as "saved as an idea".
 
 ---
 
