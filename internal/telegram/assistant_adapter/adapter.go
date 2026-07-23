@@ -43,12 +43,12 @@ type Sender interface {
 // ". Saved …" + "saved as an idea" pair the user saw. The returned error
 // lets the adapter keep the acknowledgement honest:
 //   - nil                 → the idea was persisted (or already existed);
-//                           the renderer's "saved as an idea" ack stands.
+//     the renderer's "saved as an idea" ack stands.
 //   - ErrNothingToCapture  → there was nothing to save (e.g. a bare
-//                           "/ask"); the adapter renders an honest prompt
-//                           instead of a false "saved as an idea".
+//     "/ask"); the adapter renders an honest prompt
+//     instead of a false "saved as an idea".
 //   - any other error      → the capture failed; the adapter renders an
-//                           honest failure line, never "saved as an idea".
+//     honest failure line, never "saved as an idea".
 type CaptureFn func(ctx context.Context, msg *tgbotapi.Message, text string) error
 
 // ErrNothingToCapture is the sentinel a CaptureFn returns when the
