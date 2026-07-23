@@ -140,7 +140,7 @@ Scenario: the tool returns only cited smackerel_self sources
 
 ## Scope 5 (P1): Product-doc corpus source (features / use-cases / overview)
 
-**Status:** Not Started
+**Status:** Done
 **Depends On:** Scope 2, Scope 3
 **FR:** FR-2 (curated facet)
 
@@ -162,16 +162,16 @@ Scenario: the "how does smackerel work" overview is ingested and answerable
 | Integration | `integration` | (extends Scope 3 test) | overview artifact present + embedded under smackerel_self | `./smackerel.sh test integration` | Yes |
 
 ### Definition of Done
-- [ ] Bounded, config-declared doc-section allow-list → chunked capability entries
-- [ ] Missing/renamed anchor fails loud (no silent drop)
-- [ ] Tests pass
-- [ ] Build Quality Gate clean
+- [x] Bounded, config-declared doc-section allow-list → chunked capability entries → `curatedDocSections` + embedded `corpus/product_overview.md` → `DocCorpus.Entries()` (Evidence: report.md#scope-5)
+- [x] Missing/renamed anchor fails loud (no silent drop) → `TestExtractDocSection_MissingAnchorFailsLoud` + `TestDocCorpus_DeclaredAnchorMissingFromMarkdownFailsLoud` (Evidence: report.md#scope-5)
+- [x] Tests pass → `ok .../internal/assistant/selfknowledge 0.012s` (Evidence: report.md#scope-5)
+- [x] Build Quality Gate clean → embedded (docs-less image safe); `gofmt -l` empty; 0 warnings (Evidence: report.md#scope-5)
 
 ---
 
 ## Scope 6 (P1): `/help` human twin (shared corpus)
 
-**Status:** Not Started
+**Status:** Done
 **Depends On:** Scope 2
 **FR:** FR-6
 
@@ -191,16 +191,16 @@ Scenario: /help lists capabilities from the SST-derived corpus
 | Unit | `unit` | `internal/telegram/help_test.go` (extend) | /help renders from the shared corpus; new scenario appears without a hand edit | `./smackerel.sh test unit --go` | No |
 
 ### Definition of Done
-- [ ] `/help` reads the shared `CapabilityEntry[]` (no separate hand-maintained list)
-- [ ] A newly-added scenario appears in `/help` with no help-code edit
-- [ ] Tests pass
-- [ ] Build Quality Gate clean
+- [x] `/help` reads the shared `CapabilityEntry[]` (no separate hand-maintained list) → `HelpText(caps)` renders the capability list from `selfknowledge.Derive(manifest)` injected via `SetHelpCapabilities` (Evidence: report.md#scope-6)
+- [x] A newly-added scenario appears in `/help` with no help-code edit → `TestHelp_RendersCapabilitiesFromSharedCorpus` (adversarial brand-new scenario appears) (Evidence: report.md#scope-6)
+- [x] Tests pass → `ok .../internal/telegram 0.013s` (spec-066 contract still holds) (Evidence: report.md#scope-6)
+- [x] Build Quality Gate clean → stale hardcoded handleHelp removed; `gofmt -l` empty; 0 warnings (Evidence: report.md#scope-6)
 
 ---
 
 ## Scope 7 (P0): Trust integration + honest-fallback (cite-back / provenance)
 
-**Status:** Not Started
+**Status:** Done
 **Depends On:** Scope 4, Scope 5
 **FR:** FR-8, NFR-1
 
@@ -222,11 +222,11 @@ Scenario: grounded meta-answer is cited; ungroundable refuses honestly
 | Integration | `integration` | `tests/integration/openknowledge/self_knowledge_provenance_test.go` | grounded→cited+gate-pass; ungroundable→honest refusal; no personal leak | `./smackerel.sh test integration` | Yes |
 
 ### Definition of Done
-- [ ] Grounded meta-answer cites smackerel_self and passes cite-back + provenance
-- [ ] Ungroundable meta-question → honest refusal (never saved-as-idea, never hallucinated)
-- [ ] Personal-graph artifacts never cited in a self-knowledge answer
-- [ ] Tests pass
-- [ ] Build Quality Gate clean
+- [x] Grounded meta-answer cites smackerel_self and passes cite-back + provenance → `TestSelfKnowledge_TrustPerimeter` grounded case (`VerifyResult.OK`, 1 verified) (Evidence: report.md#scope-7)
+- [x] Ungroundable meta-question → honest refusal (never saved-as-idea, never hallucinated) → fabricated citation → `ReasonNotInTrace` (facade StatusUnavailable per BUG-061-009) (Evidence: report.md#scope-7)
+- [x] Personal-graph artifacts never cited in a self-knowledge answer → `user:` row absent from tool sources AND rejected by cite-back (Evidence: report.md#scope-7)
+- [x] Tests pass → `--- PASS: TestSelfKnowledge_TrustPerimeter (0.01s)` (Evidence: report.md#scope-7)
+- [x] Build Quality Gate clean → real `citeback.Verify` over real pgvector; `gofmt -l` empty; 0 warnings (Evidence: report.md#scope-7)
 
 ---
 
