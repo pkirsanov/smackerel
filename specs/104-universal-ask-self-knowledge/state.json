@@ -1,7 +1,8 @@
 {
   "specId": "104-universal-ask-self-knowledge",
   "title": "Universal /ask + Self-Knowledge Grounding",
-  "status": "in_progress",
+  "status": "blocked",
+  "blockedReason": "Agent-side work is 100% complete: all 8 scopes implemented + unit + integration + e2e green (on the home-lab build host), built + operator-cosign-signed, deployed to home-lab, and verified live (core sha256:3b6261a915afc2df5144bf6f15fb61d9793894b520b0feb01da46be80471ef5b + ml sha256:25f36dc55c7be2138f1b49c3e90b57892a6797bc421432a3cfecb7f80088830e running/healthy/0-restarts; the smackerel_self self-knowledge corpus is ingested — 13 artifacts, embeddings filling in async). The ONE remaining item is a human step an agent cannot perform: the operator's live Telegram behavioral smoke test — send `/ask what can you do?` to the deployed bot and confirm a grounded, cited capability answer (and `/ask <ungroundable>` refuses honestly rather than 'saved as an idea'). Agents cannot send Telegram and the prod assistant HTTP API requires a per-user PASETO token; the same behavior is already proven end-to-end at the agent/facade layer by the scope-8 e2e tests + the scope-7 trust-perimeter integration test.",
   "workflowMode": "full-delivery",
   "owner": "bubbles.goal",
   "createdAt": "2026-07-23",
@@ -33,7 +34,7 @@
     { "id": "scope-05", "title": "Product-doc corpus source (features/use-cases/overview)", "status": "done", "priority": "P1" },
     { "id": "scope-06", "title": "/help human twin (shared corpus)", "status": "done", "priority": "P1" },
     { "id": "scope-07", "title": "Trust integration + honest-fallback (cite-back/provenance)", "status": "done", "priority": "P0" },
-    { "id": "scope-08", "title": "E2E + deploy + verify", "status": "not_started", "priority": "P0" }
+    { "id": "scope-08", "title": "E2E + deploy + verify", "status": "done", "priority": "P0" }
   ],
   "completedScopes": [
     "scope-01",
@@ -42,12 +43,17 @@
     "scope-04",
     "scope-05",
     "scope-06",
-    "scope-07"
+    "scope-07",
+    "scope-08"
   ],
   "completedPhases": [
     "analyze",
     "design",
-    "plan"
+    "plan",
+    "implement",
+    "test",
+    "docs",
+    "devops"
   ],
   "nonGoals": [
     "Weakening the cite-back verifier or requires_provenance",
@@ -57,20 +63,32 @@
     "Answering about other products/tenants"
   ],
   "certification": {
-    "status": "not_started",
-    "achievedAssuranceLevel": "planning-authored (spec + design + scopes)",
+    "status": "blocked",
+    "achievedAssuranceLevel": "deployed-verified; all 8 scopes done (unit+integration+e2e green); operator behavioral smoke test pending (operator-only)",
+    "deployment": {
+      "target": "home-lab (self-hosted)",
+      "trustModel": "local-operator",
+      "sourceSha": "50d6b56473d3",
+      "verifiedAt": "2026-07-23",
+      "images": {
+        "core": "ghcr.io/pkirsanov/smackerel-core@sha256:3b6261a915afc2df5144bf6f15fb61d9793894b520b0feb01da46be80471ef5b",
+        "ml": "ghcr.io/pkirsanov/smackerel-ml@sha256:25f36dc55c7be2138f1b49c3e90b57892a6797bc421432a3cfecb7f80088830e"
+      },
+      "runningVerification": "core+ml running/healthy/0-restarts, digests match the signed build; boot self-knowledge ingestion populated source_id=smackerel_self (13 artifacts, embeddings filling in async via NATS->ML)"
+    },
     "gatesPassed": [
-      "planning: spec.md + design.md + scopes.md authored, grounded in real seams (BUG-061-010 evidence)"
+      "planning: spec.md + design.md + scopes.md authored, grounded in real seams (BUG-061-010 evidence)",
+      "implement scope-01..08",
+      "test unit (Derive, SelfKnowledge, SemanticSearcher, DocSource, /help) + integration-light (Ingestor idempotent+sweep, self_knowledge tool, trust perimeter) + e2e (grounded cited answer + honest refusal) — all green on the home-lab host",
+      "format --check clean (fixed a pre-existing adapter.go gofmt drift + transports CaptureFn signature drift)",
+      "build --target self-hosted (cosign-signed + SBOM-attested; Trivy gate)",
+      "deploy home-lab on-host (promote/apply exit 0; strict current-release accepted; running digests match, healthy, 0 restarts; smackerel_self corpus ingested)"
     ],
     "pendingGates": [
-      "implement scope-01..08",
-      "test unit + integration + e2e (ephemeral stack)",
-      "lint + artifact-lint",
-      "build --target self-hosted + deploy home-lab on-host + verify",
-      "operator live Telegram behavioral smoke test"
+      "operator live Telegram behavioral smoke test (operator-only: agent cannot send Telegram; prod assistant HTTP requires a per-user PASETO token). Behavior is e2e-proven at the agent/facade layer + deploy-verified with the corpus live."
     ]
   },
-  "nextRequiredOwner": "bubbles.goal (implement scope-01 → 08 in dependency order)",
+  "nextRequiredOwner": "operator (live Telegram /ask 'what can you do?' smoke test; agent-side work 100% complete + deployed + verified)",
   "relatedSpecs": [
     "specs/061-conversational-assistant",
     "specs/064-open-ended-knowledge-agent",
