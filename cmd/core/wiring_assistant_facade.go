@@ -234,7 +234,7 @@ func wireAssistantFacade(
 	//    transport (step 7) is independent: it binds regardless of
 	//    Telegram availability so the assistant capability is reachable
 	//    on every transport its SST opts in.
-	if err := wireAssistantTelegramAdapter(ctx, cfg, svc, facade, tgBot); err != nil {
+	if err := wireAssistantTelegramAdapter(ctx, cfg, svc, facade, tgBot, selfknowledge.Derive(manifest)); err != nil {
 		return err
 	}
 
@@ -258,6 +258,7 @@ func wireAssistantTelegramAdapter(
 	svc *coreServices,
 	facade *assistant.Facade,
 	tgBot *telegram.Bot,
+	helpCaps []selfknowledge.CapabilityEntry,
 ) error {
 	if tgBot == nil {
 		slog.Info("telegram bot not configured; assistant facade ready but no telegram transport bound")
@@ -290,7 +291,7 @@ func wireAssistantTelegramAdapter(
 	// Spec 104 SCOPE-06 — drive the /help "What I can help with" list from the
 	// SAME derived self-knowledge corpus, so the menu and the /ask
 	// self-knowledge answers cannot diverge (a new scenario appears in both).
-	tgBot.SetHelpCapabilities(selfknowledge.Derive(manifest))
+	tgBot.SetHelpCapabilities(helpCaps)
 	slog.Info("assistant Telegram adapter wired and bound to bot",
 		"markdown_mode", string(mode),
 		"max_message_chars", cfg.Assistant.TelegramMaxMessageChars,
