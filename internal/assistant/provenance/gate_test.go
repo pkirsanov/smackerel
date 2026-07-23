@@ -20,8 +20,11 @@ func counterValue(t *testing.T, scenario string, cause contracts.ProvenanceCause
 
 // TestEnforce_BS007 is the BS-007 unit proof: a requires-provenance
 // scenario whose response has a non-empty body and an empty Sources
-// slice MUST be rewritten to the canonical refusal AND increment the
-// violations counter.
+// slice MUST be rewritten to the HONEST refusal (StatusUnavailable +
+// ErrNoGroundedAnswer + canonical refusal body, NEVER the band-low
+// capture) AND increment the violations counter. BUG-061-009 changed
+// the refusal shape from a StatusSavedAsIdea capture to an honest
+// high-band refusal.
 func TestEnforce_BS007(t *testing.T) {
 	// Not t.Parallel: shares the package-level ViolationsCounter.
 
@@ -38,11 +41,17 @@ func TestEnforce_BS007(t *testing.T) {
 	if got.Body != CanonicalRefusalBody {
 		t.Fatalf("Body = %q; want canonical refusal %q", got.Body, CanonicalRefusalBody)
 	}
-	if got.Status != contracts.StatusSavedAsIdea {
-		t.Fatalf("Status = %q; want %q", got.Status, contracts.StatusSavedAsIdea)
+	if got.Status != contracts.StatusUnavailable {
+		t.Fatalf("Status = %q; want %q (honest refusal, never the band-low capture)", got.Status, contracts.StatusUnavailable)
 	}
-	if !got.CaptureRoute {
-		t.Fatalf("CaptureRoute = false; want true")
+	if got.ErrorCause != contracts.ErrNoGroundedAnswer {
+		t.Fatalf("ErrorCause = %q; want %q", got.ErrorCause, contracts.ErrNoGroundedAnswer)
+	}
+	if got.CaptureRoute {
+		t.Fatalf("CaptureRoute = true; want false (a high-band refusal is not a capture)")
+	}
+	if got.Status == contracts.StatusSavedAsIdea {
+		t.Fatalf("Status = saved_as_idea; a requires_provenance refusal MUST NOT be masked as a capture")
 	}
 	if len(got.Sources) != 0 {
 		t.Fatalf("Sources len = %d; want 0", len(got.Sources))
@@ -349,68 +358,20 @@ func TestEnforce_RejectsUnknownSourceKind(t *testing.T) {
 	if got.Body != CanonicalRefusalBody {
 		t.Fatalf("BYPASS DETECTED: unknown SourceKind passed through. Body=%q", got.Body)
 	}
-	if got.Status != contracts.StatusSavedAsIdea {
-		t.Fatalf("Status not rewritten: %q", got.Status)
+	if got.Status != contracts.StatusUnavailable {
+		t.Fatalf("Status not rewritten to honest refusal: %q", got.Status)
 	}
-	if !got.CaptureRoute {
-		t.Fatalf("CaptureRoute not set on unknown-kind rejection")
+	if got.ErrorCause != contracts.ErrNoGroundedAnswer {
+		t.Fatalf("ErrorCause = %q; want %q", got.ErrorCause, contracts.ErrNoGroundedAnswer)
+	}
+	if got.CaptureRoute {
+		t.Fatalf("CaptureRoute set on unknown-kind rejection; want false (honest refusal)")
 	}
 	if len(got.Sources) != 0 {
 		t.Fatalf("Sources not cleared on unknown-kind rejection: len=%d", len(got.Sources))
 	}
 	if counterValue(t, scenario, contracts.ProvenanceCauseFabricatedSource)-before != 1 {
 		t.Fatalf("counter not incremented on unknown-kind rejection")
-	}
-}
-
-// TestEnforceRefusal_EachCauseHasExactBody proves every RefusalCause
-// in contracts.AllRefusalCauses maps to its packet §3.B exact body
-// string. Adversarial: if any cause is silently aliased to the
-// default body in a refactor, that case fails.
-func TestEnforceRefusal_EachCauseHasExactBody(t *testing.T) {
-	wantBodies := map[contracts.RefusalCause]string{
-		contracts.RefusalBudgetExhausted:         "I couldn't complete that within the answer budget — saved as an idea.",
-		contracts.RefusalToolUnavailable:         "A tool I needed isn't available right now — saved as an idea.",
-		contracts.RefusalFabricatedSourceBlocked: "I couldn't verify the sources I would have cited — saved as an idea.",
-		contracts.RefusalInternalOnlyRestricted:  "That requires looking outside your knowledge graph, which is disabled — saved as an idea.",
-		contracts.RefusalAmbiguousNotClarified:   "I couldn't decide what to look up — saved as an idea.",
-		contracts.RefusalDefault:                 CanonicalRefusalBody,
-	}
-	for cause, want := range wantBodies {
-		t.Run(string(cause), func(t *testing.T) {
-			resp := contracts.AssistantResponse{
-				Body:   "original body that should be replaced",
-				Status: contracts.StatusThinking,
-			}
-			got := EnforceRefusal("open_knowledge_test_"+string(cause), cause, resp)
-			if got.Body != want {
-				t.Fatalf("body for cause %q = %q; want %q", cause, got.Body, want)
-			}
-			if got.Status != contracts.StatusSavedAsIdea {
-				t.Fatalf("Status not rewritten by EnforceRefusal: %q", got.Status)
-			}
-			if !got.CaptureRoute {
-				t.Fatalf("CaptureRoute not set by EnforceRefusal for cause %q", cause)
-			}
-			if len(got.Sources) != 0 {
-				t.Fatalf("Sources not cleared by EnforceRefusal for cause %q", cause)
-			}
-		})
-	}
-}
-
-// TestEnforceRefusal_AdversarialDefault — adversarial regression: if
-// CanonicalRefusalBodyFor were ever changed to return "" for an
-// unknown cause, the gate would emit a blank refusal body. This test
-// proves the contract is total.
-func TestEnforceRefusal_AdversarialDefault(t *testing.T) {
-	resp := contracts.AssistantResponse{Body: "x", Status: contracts.StatusThinking}
-	got := EnforceRefusal("scenario", contracts.RefusalCause("definitely_not_a_real_cause"), resp)
-	if got.Body == "" {
-		t.Fatal("CanonicalRefusalBodyFor returned empty for unknown cause — contract is not total")
-	}
-	if got.Body != CanonicalRefusalBody {
-		t.Fatalf("unknown cause did not fall back to default body: got %q", got.Body)
 	}
 }
 

@@ -48,6 +48,7 @@ func TestAllErrorCauses_Exhaustive(t *testing.T) {
 		ErrInternalError,
 		ErrNoMatch,
 		ErrModelNotSwitchable,
+		ErrNoGroundedAnswer,
 	}
 	if len(AllErrorCauses) != len(declared) {
 		t.Fatalf("AllErrorCauses length %d != declared %d", len(AllErrorCauses), len(declared))
@@ -357,6 +358,20 @@ func goldenCases() []goldenCase {
 				Status:       StatusUnavailable,
 				Body:         "no recipes saved yet — capture one with /capture or import via a connector.",
 				ErrorCause:   ErrNoMatch,
+				CaptureRoute: false,
+				EmittedAt:    t0,
+			},
+		},
+		{
+			// BUG-061-009 — a high-band open_knowledge answer with no
+			// verifiable sources is refused HONESTLY (never the band-low
+			// "saved as an idea" capture): StatusUnavailable + the umbrella
+			// ErrNoGroundedAnswer cause + no capture.
+			name: "unavailable_no_grounded_answer",
+			resp: AssistantResponse{
+				Status:       StatusUnavailable,
+				Body:         "I don't have a sourced answer for that.",
+				ErrorCause:   ErrNoGroundedAnswer,
 				CaptureRoute: false,
 				EmittedAt:    t0,
 			},

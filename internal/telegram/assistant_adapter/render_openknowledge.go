@@ -15,10 +15,13 @@ import (
 //
 //   - RenderSourcedAnswer: body + inline [N] citations capped at
 //     OpenKnowledgeMaxInlineCitations (phone-screen-fit, P7).
-//   - RenderRefusalWithCapture: canonical refusal body for a typed
-//     RefusalCause plus the OpenKnowledgeCaptureSuffix marker that
-//     adversarial G021 tests rely on to distinguish refusal from
-//     a successful sourced answer.
+//   - RenderRefusal: the honest, cause-specific refusal body for a
+//     typed RefusalCause. It carries NO user-visible capture marker
+//     (BUG-061-009): a high-band refusal reads as an honest "couldn't
+//     answer", never a "saved as an idea" capture. Refusal output is
+//     distinguished from a sourced answer STRUCTURALLY (the response
+//     carries StatusUnavailable + a typed cause and no "[N]" citation
+//     markers), not by a user-facing suffix.
 //   - RenderHybridAnswer: same as RenderSourcedAnswer but groups
 //     citations by Kind (graph → web → computation) with a small
 //     group marker per design.md §UX / refusal taxonomy notes.
@@ -34,23 +37,17 @@ import (
 // refusing earlier, and reaching the renderer with zero sources is
 // a contract bug worth surfacing.
 //
-// Capture-as-fallback (design §UX): the "(saved as idea)" suffix is
-// appended ONLY to refusal renders. Successful sourced answers do
-// not claim "saved" — the facade captures unconditionally, but the
-// UX hides it from the success path to avoid implying the answer
-// itself was filed away.
+// Honest refusal (BUG-061-009): a refusal render carries no "saved as
+// idea" suffix. A matched, executed request that cannot be grounded
+// reads as an honest "couldn't answer"; the band-low capture
+// acknowledgement is the only place "saved as an idea" belongs. Any
+// silent capture the facade performs is never surfaced as the
+// user-visible headline.
 
 // OpenKnowledgeMaxInlineCitations is the phone-screen-fit cap on
 // the number of inline [N] citations rendered. Additional sources
 // are summarised as "... +N more sources".
 const OpenKnowledgeMaxInlineCitations = 3
-
-// OpenKnowledgeCaptureSuffix is the visual marker appended to every
-// refusal render so adversarial G021 tests can assert that refusal
-// output is text-shape-distinguishable from a sourced answer
-// (which carries "[1]" markers instead). Format is intentionally
-// short per P7.
-const OpenKnowledgeCaptureSuffix = "(saved as idea)"
 
 // ErrOpenKnowledgeRendererNoSources is returned when
 // RenderSourcedAnswer or RenderHybridAnswer is called with zero
@@ -152,13 +149,15 @@ func RenderHybridAnswer(body string, sources []contracts.Source) (string, error)
 	return b.String(), nil
 }
 
-// RenderRefusalWithCapture renders the canonical refusal body for
-// cause plus the OpenKnowledgeCaptureSuffix marker. The suffix is
-// appended unconditionally so adversarial G021 tests can assert
-// refusal output always contains "(saved as idea)".
-func RenderRefusalWithCapture(cause contracts.RefusalCause) string {
-	body := strings.TrimSpace(contracts.CanonicalRefusalBodyFor(cause))
-	return body + " " + OpenKnowledgeCaptureSuffix
+// RenderRefusal renders the honest, cause-specific refusal body for
+// cause (BUG-061-009). It carries NO user-visible capture marker: a
+// high-band refusal must read as an honest "couldn't answer", never a
+// "saved as an idea" capture. Refusal output stays distinguishable from
+// a sourced answer STRUCTURALLY (the response is StatusUnavailable with
+// a typed cause and no "[N]" citation markers), not by a user-facing
+// suffix.
+func RenderRefusal(cause contracts.RefusalCause) string {
+	return strings.TrimSpace(contracts.CanonicalRefusalBodyFor(cause))
 }
 
 // openKnowledgeKindOrder is the deterministic ordering applied

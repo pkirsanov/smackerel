@@ -1,0 +1,82 @@
+{
+  "bugId": "BUG-061-009",
+  "title": "A high-band request that can't be answered is masked as 'saved as an idea'",
+  "spec": "specs/061-conversational-assistant",
+  "severity": "S2",
+  "status": "in_progress",
+  "workflowMode": "bugfix-fastlane",
+  "owner": "bubbles.goal",
+  "discoveredBy": "operator (live /ask on the home-lab bot after BUG-061-008 P1-P5 shipped)",
+  "discoveredAt": "2026-07-23",
+  "lastUpdatedAt": "2026-07-23",
+  "rootCause": {
+    "summary": "open_knowledge (requires_provenance) produced an OK answer with no citations. The provenance gate correctly refuses the uncited body but rewrites to Status=StatusSavedAsIdea + CaptureRoute=true with ErrorCause unset; canonicalizeSuccessfulCaptureResponse then overwrites the gate's honest body ('I don't have a sourced answer for that.') with the generic capture acknowledgement ('saved as an idea — i'll surface it later.'). BUG-061-008 P1 only guarded NON-OK outcomes, so this OK-but-uncited path was left intact — and its P2 test asserted the OK+no-sources case SHOULD return saved_as_idea, test-locking the reported behavior. An honest open_knowledge refusal renderer exists but is bypassed (it fires only when ErrorCause matches a spec-064 RefusalCause, which the gate leaves empty) and even it appends a confusing '(saved as idea)' suffix."
+  },
+  "resolution": "Enforce INV-HB-REFUSAL: 'saved as an idea' is band-LOW-only. SCOPE-01 makes the provenance gate refuse into an honest shape (StatusUnavailable + new ErrNoGroundedAnswer + honest body + CaptureRoute=false) uniformly across every requires_provenance scenario. SCOPE-02 scopes canonicalizeSuccessfulCaptureResponse to band-low (band-high residual StatusSavedAsIdea is converted to the honest refusal). SCOPE-03 flips the BUG-061-008 OK-no-sources assertion to honest-refusal and extends the cross-path invariant test so a single test proves no band-high requires_provenance path can render the capture acknowledgement (class-killer). SCOPE-04 renders the honest body verbatim for ErrNoGroundedAnswer, drops the '(saved as idea)' suffix from the open_knowledge refusal renderer, reword the 5 refusal cause strings, and upgrades G021 refusal-vs-answer distinguishability from a user-visible string to a structural (Status/ErrorCause) contract across Telegram + WhatsApp. SCOPE-05 diagnoses + routes the grounding gap and encodes the invariant in docs + the review checklist.",
+  "codeVsDeployment": "code-only (not yet implemented). Will be built (build --target self-hosted), operator-cosign-signed, and deployed on-host (local-operator promote/apply under sudo -n) to the home-lab bot after all scopes are green, matching the BUG-061-008 deploy recipe.",
+  "deployment": {
+    "target": "home-lab (self-hosted)",
+    "trustModel": "local-operator",
+    "sourceSha": "pending",
+    "verifiedAt": "pending",
+    "images": {
+      "core": "pending",
+      "ml": "pending"
+    },
+    "runningVerification": "pending",
+    "operatorSmokeTestPending": "on Telegram, send `/ask <a question the bot cannot ground>` and confirm the reply is an honest 'I don't have a sourced answer for that.' (never 'saved as an idea'); confirm a genuine dropped thought (unrouted) still replies 'saved as an idea — i'll surface it later.'"
+  },
+  "affectedSurface": [
+    "internal/assistant/contracts/response.go (new ErrNoGroundedAnswer)",
+    "internal/assistant/contracts/refusal.go (reword 5 cause strings)",
+    "internal/assistant/provenance/gate.go (honest refusal shape) + gate_test.go",
+    "internal/assistant/facade.go (canonicalize band-scoping)",
+    "internal/assistant/facade_execution_error_honesty_test.go (flip OK-no-sources; extend cross-path invariant)",
+    "internal/assistant/facade_open_knowledge_no_ground_test.go (canonicalize band param)",
+    "internal/telegram/assistant_adapter/render_outbound.go + render_openknowledge.go (+ tests)",
+    "internal/whatsapp/assistant_adapter/* (mirror honest refusal) + goldens",
+    "docs/smackerel.md §3.8.6 + .github/copilot-instructions.md (INV-HB-REFUSAL)"
+  ],
+  "scopes": [
+    { "id": "scope-01", "title": "Provenance gate refuses honestly (not as a capture)", "status": "done" },
+    { "id": "scope-02", "title": "Facade canonicalize scoped to band-low", "status": "done" },
+    { "id": "scope-03", "title": "Cross-path invariant test (class-killer)", "status": "done" },
+    { "id": "scope-04", "title": "Adapter honest render + structural distinguishability", "status": "done" },
+    { "id": "scope-05", "title": "Grounding-gap diagnosis + docs/invariant encoding", "status": "done" }
+  ],
+  "completedScopes": [ "scope-01", "scope-02", "scope-03", "scope-04", "scope-05" ],
+  "completedPhases": [
+    "select",
+    "bootstrap",
+    "implement",
+    "test",
+    "harden",
+    "docs"
+  ],
+  "certification": {
+    "status": "in_progress",
+    "achievedAssuranceLevel": "artifacts-authored",
+    "scopeProgress": { "total": 5, "done": 5, "inProgress": 0, "notStarted": 0, "blocked": 0 },
+    "gatesPassed": [
+      "implement SCOPE-01..05",
+      "test unit --go (all packages ok, exit 0; gate + facade + adapter + cross-path invariant green)",
+      "check (SST/config/scenario-lint OK)",
+      "lint (go vet + ruff + web: All checks passed!)",
+      "artifact-lint.sh (PASSED, exit 0)"
+    ],
+    "pendingGates": [
+      "build --target self-hosted (Trivy 0 CVEs, cosign-signed, signed local-build-manifest)",
+      "deploy home-lab (on-host local-operator promote/apply): running digests match build + healthy",
+      "operator live Telegram behavioral smoke test"
+    ]
+  },
+  "nextRequiredOwner": "bubbles.goal (artifact-lint, then deploy home-lab on-host, then operator smoke test)",
+  "supersedes": [
+    "specs/061-conversational-assistant/bugs/BUG-061-008-execution-errors-masked-as-saved-as-idea SCN-061-008-03 (OK+no-sources -> saved_as_idea) is replaced by OK+no-sources -> honest StatusUnavailable refusal"
+  ],
+  "relatedSpecs": [
+    "specs/061-conversational-assistant",
+    "specs/064-open-ended-knowledge-agent",
+    "specs/074-assistant-capture-as-fallback-policy"
+  ]
+}

@@ -2,13 +2,16 @@
 // Transparency") hard constraint at the capability layer. Every
 // scenario whose sibling-manifest metadata sets requires_provenance=true
 // MUST attach at least one contracts.Source to its response; otherwise
-// the response is rewritten to a canonical refusal + capture-route so
-// the user never sees a synthesized-without-sources body.
+// the response is rewritten to an honest refusal (StatusUnavailable +
+// ErrNoGroundedAnswer) so the user never sees a synthesized-without-
+// sources body — and never the band-low "saved as an idea" capture
+// acknowledgement (BUG-061-009: a matched, executed request that cannot
+// be grounded is a high-band refusal, not a capture).
 //
 // The rewrite is intentionally lossless from the user's perspective:
 // the original Invocation/Routing references are preserved so traces
 // remain queryable. Only the user-visible fields (Body, Status,
-// Sources, CaptureRoute) are normalized.
+// ErrorCause, Sources, CaptureRoute) are normalized.
 package provenance
 
 import (
@@ -66,10 +69,10 @@ func init() {
 //   - When requiresProvenance is true AND len(resp.Sources) > 0 →
 //     return resp unchanged (passthrough).
 //   - When requiresProvenance is true AND len(resp.Sources) == 0 AND
-//     resp.Body has any non-empty content → rewrite to the canonical
-//     refusal (Body=CanonicalRefusalBody, Status=StatusSavedAsIdea,
-//     CaptureRoute=true) and increment the violations counter
-//     labeled by (scenarioLabel, cause).
+//     resp.Body has any non-empty content → rewrite to the honest
+//     refusal (Body=CanonicalRefusalBody, Status=StatusUnavailable,
+//     ErrorCause=ErrNoGroundedAnswer, CaptureRoute=false) and increment
+//     the violations counter labeled by (scenarioLabel, cause).
 //   - When requiresProvenance is true AND len(resp.Sources) == 0 AND
 //     resp.Body is empty → return resp unchanged. An empty body with
 //     no sources is itself a refusal; the caller (the facade) is
@@ -102,14 +105,22 @@ func Enforce(requiresProvenance bool, scenarioLabel string, cause contracts.Prov
 	}
 	ViolationsCounter.WithLabelValues(scenarioLabel, string(cause)).Inc()
 
+	// BUG-061-009 — refuse into an HONEST high-band shape, not a band-low
+	// capture. A requires_provenance scenario that produced a body with no
+	// valid sources is a matched, executed request the system could not
+	// ground; the user must see the honest refusal, never the "saved as an
+	// idea" capture acknowledgement (that is band-low-only). The canonical
+	// refusal body is preserved; Status becomes StatusUnavailable with the
+	// ErrNoGroundedAnswer cause so the transport renders it honestly and
+	// refusal-vs-answer stays structurally distinguishable (no user-visible
+	// capture string).
 	resp.Body = CanonicalRefusalBody
-	resp.Status = contracts.StatusSavedAsIdea
-	resp.CaptureRoute = true
+	resp.Status = contracts.StatusUnavailable
+	resp.ErrorCause = contracts.ErrNoGroundedAnswer
+	resp.CaptureRoute = false
 	// Drop any sources that included an unrecognised Kind — the
 	// rewrite path MUST NOT surface partially-invalid provenance.
 	resp.Sources = nil
-	// ErrorCause is intentionally not set — the response is a soft
-	// refusal, not an unavailability error.
 	return resp
 }
 
@@ -123,53 +134,4 @@ func allSourceKindsAccepted(srcs []contracts.Source) bool {
 		}
 	}
 	return true
-}
-
-// EnforceRefusal unconditionally rewrites resp to the canonical
-// refusal body for the given RefusalCause, regardless of the
-// response's current Sources. Used by spec 064's open-knowledge
-// agent when a known termination condition (budget exhausted, tool
-// unavailable, fabricated-source rejection, internal-only
-// restriction, ambiguous query) requires a cause-specific refusal
-// body instead of the default "no sourced answer" text.
-//
-// The function also increments the ViolationsCounter labelled by
-// (scenarioLabel, refusalCauseToProvenanceCause(refusalCause)) so
-// dashboards can attribute open-knowledge refusals alongside the
-// existing artifact-grounded provenance violations. The mapping is
-// intentionally narrow: every new cause maps to a single existing
-// ProvenanceCause bucket so the metric's label cardinality stays
-// bounded.
-func EnforceRefusal(scenarioLabel string, refusalCause contracts.RefusalCause, resp contracts.AssistantResponse) contracts.AssistantResponse {
-	if scenarioLabel == "" {
-		scenarioLabel = "unknown"
-	}
-	provCause := refusalCauseToProvenanceCause(refusalCause)
-	ViolationsCounter.WithLabelValues(scenarioLabel, string(provCause)).Inc()
-
-	resp.Body = contracts.CanonicalRefusalBodyFor(refusalCause)
-	resp.Status = contracts.StatusSavedAsIdea
-	resp.CaptureRoute = true
-	resp.Sources = nil
-	return resp
-}
-
-// refusalCauseToProvenanceCause maps a RefusalCause to the existing
-// ProvenanceCause vocabulary used by the violations counter. The
-// mapping is deliberate and stable per PKT-061-A so dashboards
-// built against ProvenanceCause continue to work without a schema
-// migration.
-func refusalCauseToProvenanceCause(c contracts.RefusalCause) contracts.ProvenanceCause {
-	switch c {
-	case contracts.RefusalFabricatedSourceBlocked:
-		return contracts.ProvenanceCauseFabricatedSource
-	case contracts.RefusalToolUnavailable:
-		return contracts.ProvenanceCauseLookupError
-	case contracts.RefusalBudgetExhausted,
-		contracts.RefusalInternalOnlyRestricted,
-		contracts.RefusalAmbiguousNotClarified:
-		return contracts.ProvenanceCauseMissingArtifact
-	default:
-		return contracts.ProvenanceCauseFabricatedSource
-	}
 }

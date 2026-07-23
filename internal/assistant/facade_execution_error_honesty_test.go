@@ -1,11 +1,14 @@
-// BUG-061-008 — the cross-scenario invariant that prevents the recurring
-// "saved as an idea" masking. Every prior fix (BUG-061-006, BUG-061-007)
-// patched ONE scenario; the masking was produced by a shared mechanism (the
-// provenance gate running on non-OK outcomes), so each requires_provenance
-// scenario was a latent copy of the same defect. These tests assert the fix
-// mechanically across ALL such scenarios at once, so the class cannot silently
-// recur: reverting the P1 guard (running the gate on a non-OK outcome) makes
-// every row of TestExecutionErrorHonesty_NonOKNeverMaskedAsSavedAsIdea fail.
+// BUG-061-008 / BUG-061-009 — the cross-scenario invariant that prevents the
+// recurring "saved as an idea" masking. Every per-scenario fix (BUG-061-006,
+// -007) patched ONE path; the masking was produced by a shared mechanism, so
+// each requires_provenance scenario was a latent copy of the same defect.
+// BUG-061-008 (P1) closed the NON-OK execution-error path. BUG-061-009 closes
+// the last path — an OK outcome that produced no valid sources — and enforces
+// the general invariant INV-HB-REFUSAL: a band-high turn NEVER renders the
+// capture acknowledgement. TestHighBandNeverMaskedAsSavedAsIdea asserts this
+// mechanically across every requires_provenance scenario × every high-band
+// no-source outcome, so the class cannot silently recur: reverting any layer of
+// the fix fails it.
 
 package assistant
 
@@ -68,18 +71,35 @@ func newExecErrHonestyFacade(t *testing.T, scenarioID string, outcome agent.Outc
 	return mustFacade(cfg, router, executor, registry, manifest, newMemContextStore(), &recordingAudit{})
 }
 
-// TestExecutionErrorHonesty_NonOKNeverMaskedAsSavedAsIdea — SCN-061-008-01/02.
-// The invariant, across EVERY requires_provenance scenario × EVERY execution
-// error outcome: the response surfaces honestly and is NEVER the
-// capture-as-fallback "saved as an idea". This is the mechanical regression
-// gate that catches the recurring masking for all scenarios at once.
-func TestExecutionErrorHonesty_NonOKNeverMaskedAsSavedAsIdea(t *testing.T) {
+// TestHighBandNeverMaskedAsSavedAsIdea — SCN-061-008-01/02 + SCN-061-009-01/02.
+// The invariant INV-HB-REFUSAL, across EVERY requires_provenance scenario ×
+// EVERY high-band no-source outcome (provider error, timeout, AND an OK outcome
+// that produced no valid sources): the response surfaces honestly
+// (StatusUnavailable + a non-empty ErrorCause) and is NEVER the capture-as-
+// fallback "saved as an idea". This is the mechanical regression gate that
+// catches the recurring masking for the whole class at once — reverting the
+// gate's honest-refusal shape, the OK-outcome guard, OR the band-low
+// canonicalize scoping fails a row here.
+func TestHighBandNeverMaskedAsSavedAsIdea(t *testing.T) {
 	t.Parallel()
+	type hbCase struct {
+		name    string
+		outcome agent.Outcome
+		final   []byte
+	}
+	var cases []hbCase
+	for _, o := range errorOutcomes {
+		cases = append(cases, hbCase{string(o), o, nil})
+	}
+	// The OK-but-uncited case: the agent succeeded (produced a body) but with
+	// no valid sources — the exact /ask path BUG-061-009 fixes.
+	cases = append(cases, hbCase{"ok_uncited", agent.OutcomeOK, []byte(`"a synthesized answer with no citations"`)})
+
 	for _, scenarioID := range requiresProvenanceScenarios {
-		for _, outcome := range errorOutcomes {
-			name := scenarioID + "/" + string(outcome)
+		for _, tc := range cases {
+			name := scenarioID + "/" + tc.name
 			t.Run(name, func(t *testing.T) {
-				f := newExecErrHonestyFacade(t, scenarioID, outcome, nil)
+				f := newExecErrHonestyFacade(t, scenarioID, tc.outcome, tc.final)
 				resp, err := f.Handle(context.Background(), contracts.AssistantMessage{
 					UserID: "u-" + name, Transport: "telegram",
 					Text: "do the thing", Kind: contracts.KindText,
@@ -88,31 +108,32 @@ func TestExecutionErrorHonesty_NonOKNeverMaskedAsSavedAsIdea(t *testing.T) {
 					t.Fatalf("Handle err: %v", err)
 				}
 				if resp.Status == contracts.StatusSavedAsIdea {
-					t.Errorf("Status = saved_as_idea; an execution error (%s) MUST surface honestly, never masked", outcome)
+					t.Errorf("Status = saved_as_idea; a high-band no-source outcome (%s) MUST surface honestly, never masked", tc.name)
 				}
 				if resp.Status != contracts.StatusUnavailable {
-					t.Errorf("Status = %q; want unavailable for execution error %s", resp.Status, outcome)
+					t.Errorf("Status = %q; want unavailable for high-band no-source outcome %s", resp.Status, tc.name)
 				}
 				if resp.Body == captureFallbackAcknowledgement {
-					t.Errorf("Body is the capture acknowledgement; %s must surface an honest error, never 'saved as an idea'", outcome)
+					t.Errorf("Body is the capture acknowledgement; %s must surface an honest message, never 'saved as an idea'", tc.name)
 				}
 				if resp.CaptureRoute {
-					t.Errorf("CaptureRoute = true; an execution error (%s) must not be captured as an idea", outcome)
+					t.Errorf("CaptureRoute = true; a high-band %s must not be captured as an idea", tc.name)
 				}
 				if resp.ErrorCause == "" {
-					t.Errorf("ErrorCause empty; an execution error (%s) must carry a cause so the transport can render it honestly", outcome)
+					t.Errorf("ErrorCause empty; a high-band %s must carry a cause so the transport can render it honestly", tc.name)
 				}
 			})
 		}
 	}
 }
 
-// TestExecutionErrorHonesty_OKNoSourcesStillRefuses — SCN-061-008-03.
-// Complementary guard proving the fix does NOT over-correct: an OK outcome
-// that produced a body with no valid sources is genuine fabrication and MUST
-// still refuse (capture-as-fallback). The provenance gate stays intact for its
-// real purpose; only NON-OK outcomes are exempted.
-func TestExecutionErrorHonesty_OKNoSourcesStillRefuses(t *testing.T) {
+// TestExecutionErrorHonesty_OKNoSourcesRefusesHonestly — SCN-061-009-01.
+// BUG-061-009 supersedes BUG-061-008 SCN-061-008-03: an OK outcome that
+// produced a body with no valid sources is a high-band REFUSAL, not a capture.
+// The anti-fabrication guard still fires (the uncited body is never shown), but
+// it refuses HONESTLY — StatusUnavailable + ErrNoGroundedAnswer + the canonical
+// refusal body — never "saved as an idea".
+func TestExecutionErrorHonesty_OKNoSourcesRefusesHonestly(t *testing.T) {
 	t.Parallel()
 	for _, scenarioID := range requiresProvenanceScenarios {
 		t.Run(scenarioID, func(t *testing.T) {
@@ -124,14 +145,23 @@ func TestExecutionErrorHonesty_OKNoSourcesStillRefuses(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Handle err: %v", err)
 			}
-			if resp.Status != contracts.StatusSavedAsIdea {
-				t.Errorf("Status = %q; an OK outcome with no sources is fabrication and MUST still refuse (want saved_as_idea)", resp.Status)
+			if resp.Status == contracts.StatusSavedAsIdea {
+				t.Errorf("Status = saved_as_idea; an OK-but-uncited high-band answer MUST refuse honestly, never be masked as a capture")
 			}
-			if resp.Body != captureFallbackAcknowledgement {
-				t.Errorf("Body = %q; want the capture acknowledgement (anti-fabrication guard preserved)", resp.Body)
+			if resp.Status != contracts.StatusUnavailable {
+				t.Errorf("Status = %q; want unavailable (honest refusal)", resp.Status)
 			}
-			if !resp.CaptureRoute {
-				t.Errorf("CaptureRoute = false; the anti-fabrication guard must set it")
+			if resp.ErrorCause != contracts.ErrNoGroundedAnswer {
+				t.Errorf("ErrorCause = %q; want %q", resp.ErrorCause, contracts.ErrNoGroundedAnswer)
+			}
+			if resp.Body == captureFallbackAcknowledgement {
+				t.Errorf("Body is the capture acknowledgement; an OK-but-uncited refusal must be honest, never 'saved as an idea'")
+			}
+			if resp.Body != contracts.CanonicalRefusalBodyFor(contracts.RefusalDefault) {
+				t.Errorf("Body = %q; want the honest canonical refusal (the uncited answer must not leak)", resp.Body)
+			}
+			if resp.CaptureRoute {
+				t.Errorf("CaptureRoute = true; a high-band refusal is not a capture")
 			}
 		})
 	}

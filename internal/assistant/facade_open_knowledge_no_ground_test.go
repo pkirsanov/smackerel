@@ -89,7 +89,7 @@ func TestCanonicalizeSuccessfulCaptureResponse_ClearsUpstreamFailureShape(t *tes
 		CaptureRoute:           true,
 		Body:                   "I don't have a sourced answer for that.",
 		LegacyRetirementNotice: &contracts.NoticePayload{Command: "/weather"},
-	}, emittedAt)
+	}, BandLow, emittedAt)
 
 	if got.Status != contracts.StatusSavedAsIdea || !got.CaptureRoute {
 		t.Fatalf("status=%q capture_route=%v, want saved_as_idea true", got.Status, got.CaptureRoute)
@@ -105,6 +105,36 @@ func TestCanonicalizeSuccessfulCaptureResponse_ClearsUpstreamFailureShape(t *tes
 	}
 }
 
+// TestCanonicalizeSuccessfulCaptureResponse_BandHighConvertsToHonestRefusal —
+// BUG-061-009 defense-in-depth: a band-HIGH response that still carries the
+// capture shape (StatusSavedAsIdea + CaptureRoute) is converted to the honest
+// refusal (StatusUnavailable + ErrNoGroundedAnswer + the canonical refusal
+// body), NEVER the band-low "saved as an idea" acknowledgement. This holds
+// INV-HB-REFUSAL structurally even if an upstream path regresses.
+func TestCanonicalizeSuccessfulCaptureResponse_BandHighConvertsToHonestRefusal(t *testing.T) {
+	emittedAt := time.Date(2026, time.July, 23, 12, 0, 0, 0, time.UTC)
+	got := canonicalizeSuccessfulCaptureResponse(contracts.AssistantResponse{
+		Status:       contracts.StatusSavedAsIdea,
+		CaptureRoute: true,
+		Body:         captureFallbackAcknowledgement,
+	}, BandHigh, emittedAt)
+	if got.Status != contracts.StatusUnavailable {
+		t.Fatalf("Status = %q; want StatusUnavailable (a band-high turn never keeps the capture shape)", got.Status)
+	}
+	if got.ErrorCause != contracts.ErrNoGroundedAnswer {
+		t.Fatalf("ErrorCause = %q; want %q", got.ErrorCause, contracts.ErrNoGroundedAnswer)
+	}
+	if got.CaptureRoute {
+		t.Fatalf("CaptureRoute = true; a band-high turn is not a capture")
+	}
+	if got.Body == captureFallbackAcknowledgement {
+		t.Fatalf("Body is the capture acknowledgement; a band-high turn must be an honest refusal")
+	}
+	if got.Body != contracts.CanonicalRefusalBodyFor(contracts.RefusalDefault) {
+		t.Fatalf("Body = %q; want the honest canonical refusal", got.Body)
+	}
+}
+
 func TestCanonicalizeSuccessfulCaptureResponse_LeavesExplicitFailureUnchanged(t *testing.T) {
 	emittedAt := time.Date(2026, time.July, 19, 20, 35, 0, 0, time.UTC)
 	want := contracts.AssistantResponse{
@@ -114,7 +144,7 @@ func TestCanonicalizeSuccessfulCaptureResponse_LeavesExplicitFailureUnchanged(t 
 		Body:         "capture failed: database unavailable",
 		EmittedAt:    emittedAt,
 	}
-	got := canonicalizeSuccessfulCaptureResponse(want, emittedAt.Add(time.Minute))
+	got := canonicalizeSuccessfulCaptureResponse(want, BandLow, emittedAt.Add(time.Minute))
 	if got.Status != want.Status || got.ErrorCause != want.ErrorCause || got.CaptureRoute != want.CaptureRoute || got.Body != want.Body || !got.EmittedAt.Equal(want.EmittedAt) {
 		t.Fatalf("explicit capture failure changed: got=%+v want=%+v", got, want)
 	}

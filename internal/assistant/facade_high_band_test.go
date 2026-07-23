@@ -212,19 +212,20 @@ func TestFacadeHighBandProvenanceGateRewritesWhenSourcesMissing(t *testing.T) {
 		t.Fatalf("Handle err = %v", err)
 	}
 
-	// Provenance first marks the response for capture; the facade's
-	// common successful-capture boundary renders the final user-visible
-	// acknowledgement shared by every transport.
-	if resp.Body != captureFallbackAcknowledgement {
-		t.Errorf("Body = %q; want canonical capture acknowledgement", resp.Body)
+	// BUG-061-009 — a requires_provenance scenario that produced a body
+	// with no valid sources is a high-band REFUSAL, surfaced HONESTLY
+	// (StatusUnavailable + ErrNoGroundedAnswer + the canonical refusal
+	// body), never the band-low "saved as an idea" capture.
+	if resp.Body != "I don't have a sourced answer for that." {
+		t.Errorf("Body = %q; want the honest canonical refusal", resp.Body)
 	}
-	if resp.Status != contracts.StatusSavedAsIdea {
-		t.Errorf("Status = %q; want %q", resp.Status, contracts.StatusSavedAsIdea)
+	if resp.Status != contracts.StatusUnavailable {
+		t.Errorf("Status = %q; want %q (honest refusal, not the band-low capture)", resp.Status, contracts.StatusUnavailable)
 	}
-	if !resp.CaptureRoute {
-		t.Errorf("CaptureRoute = false; provenance rewrite MUST set CaptureRoute=true")
+	if resp.ErrorCause != contracts.ErrNoGroundedAnswer {
+		t.Errorf("ErrorCause = %q; want %q", resp.ErrorCause, contracts.ErrNoGroundedAnswer)
 	}
-	if resp.ErrorCause != "" {
-		t.Errorf("ErrorCause = %q; successful capture must be a normal response", resp.ErrorCause)
+	if resp.CaptureRoute {
+		t.Errorf("CaptureRoute = true; a high-band provenance refusal is not a capture")
 	}
 }

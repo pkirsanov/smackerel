@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "specId": "061-conversational-assistant-bug-061-009",
+  "scenarios": [
+    { "scenarioId": "SCN-061-009-01", "title": "open_knowledge OK-but-uncited answer refuses honestly (StatusUnavailable + ErrNoGroundedAnswer), never saved as an idea", "scope": 1, "requiredTestType": "unit", "linkedTests": ["internal/assistant/provenance/gate_test.go", "internal/assistant/facade_execution_error_honesty_test.go"], "evidenceRefs": ["report.md#scope-01-evidence", "report.md#scope-03-evidence"], "regressionProtected": true },
+    { "scenarioId": "SCN-061-009-02", "title": "no band-high requires_provenance path renders the capture acknowledgement", "scope": 3, "requiredTestType": "unit", "linkedTests": ["internal/assistant/facade_execution_error_honesty_test.go"], "evidenceRefs": ["report.md#scope-03-evidence"], "regressionProtected": true },
+    { "scenarioId": "SCN-061-009-03", "title": "band-low unrouted input still captures as an idea (capture ack unchanged)", "scope": 2, "requiredTestType": "unit", "linkedTests": ["internal/assistant/facade_execution_error_honesty_test.go", "internal/assistant/facade_open_knowledge_no_ground_test.go"], "evidenceRefs": ["report.md#scope-02-evidence"], "regressionProtected": true },
+    { "scenarioId": "SCN-061-009-04", "title": "a typed refusal cause renders an honest headline with no '(saved as idea)'; refusal vs answer is structurally distinguishable", "scope": 4, "requiredTestType": "unit", "linkedTests": ["internal/telegram/assistant_adapter/render_openknowledge_test.go", "internal/telegram/assistant_adapter/render_outbound_test.go"], "evidenceRefs": ["report.md#scope-04-evidence"], "regressionProtected": true },
+    { "scenarioId": "SCN-061-009-05", "title": "grounding gap diagnosed and routed as a follow-up; honesty fix stands independently", "scope": 5, "requiredTestType": "unit", "linkedTests": [], "evidenceRefs": ["report.md#grounding-gap-follow-up"], "regressionProtected": false }
+  ]
+}

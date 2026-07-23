@@ -175,47 +175,44 @@ func TestRenderSourcedAnswer_UnknownKind(t *testing.T) {
 	}
 }
 
-// TestRenderRefusalWithCapture_AllCauses table-drives every cause
-// in AllRefusalCauses, asserts the canonical body is present and
-// the OpenKnowledgeCaptureSuffix marker is appended exactly once.
-func TestRenderRefusalWithCapture_AllCauses(t *testing.T) {
+// TestRenderRefusal_AllCauses table-drives every cause in
+// AllRefusalCauses and asserts the honest canonical body is returned
+// verbatim with NO user-visible capture marker (BUG-061-009).
+func TestRenderRefusal_AllCauses(t *testing.T) {
 	t.Parallel()
 	for _, cause := range contracts.AllRefusalCauses {
 		cause := cause
 		t.Run(string(cause), func(t *testing.T) {
 			t.Parallel()
-			got := RenderRefusalWithCapture(cause)
+			got := RenderRefusal(cause)
 			canonical := contracts.CanonicalRefusalBodyFor(cause)
-			if !strings.Contains(got, canonical) {
-				t.Errorf("expected canonical body %q in output, got %q", canonical, got)
+			if got != canonical {
+				t.Errorf("RenderRefusal(%s) = %q; want the canonical body verbatim %q (no suffix)", cause, got, canonical)
 			}
-			if !strings.Contains(got, OpenKnowledgeCaptureSuffix) {
-				t.Errorf("expected suffix %q in output, got %q", OpenKnowledgeCaptureSuffix, got)
-			}
-			if strings.Count(got, OpenKnowledgeCaptureSuffix) != 1 {
-				t.Errorf("expected suffix to appear exactly once, got %d in %q",
-					strings.Count(got, OpenKnowledgeCaptureSuffix), got)
+			if strings.Contains(got, "(saved as idea)") {
+				t.Errorf("RenderRefusal(%s) = %q; must NOT contain a capture marker", cause, got)
 			}
 		})
 	}
 }
 
-// TestRenderRefusalWithCapture_Default asserts the default cause
-// produces the default canonical body plus the capture suffix.
-func TestRenderRefusalWithCapture_Default(t *testing.T) {
+// TestRenderRefusal_Default asserts the default cause produces the
+// honest default canonical body with no capture marker.
+func TestRenderRefusal_Default(t *testing.T) {
 	t.Parallel()
-	got := RenderRefusalWithCapture(contracts.RefusalDefault)
-	want := "I don't have a sourced answer for that. " + OpenKnowledgeCaptureSuffix
+	got := RenderRefusal(contracts.RefusalDefault)
+	want := "I don't have a sourced answer for that."
 	if got != want {
 		t.Errorf("got: %q\nwant: %q", got, want)
 	}
 }
 
 // TestOpenKnowledgeAdversarialG021_RefusalDistinguishableFromSourced
-// is the headline adversarial G021 test referenced in the result
-// envelope: a refusal MUST contain "(saved as idea)" and MUST NOT
-// look like a sourced answer; a sourced answer MUST contain "[1]"
-// and MUST NOT contain "(saved as idea)".
+// is the headline adversarial G021 test: a refusal is STRUCTURALLY
+// distinguishable from a sourced answer (BUG-061-009) — a sourced
+// answer carries "[1]" citation markers; a refusal is the honest
+// canonical body with NO "[N]" markers and NO "(saved as idea)"
+// capture marker.
 func TestOpenKnowledgeAdversarialG021_RefusalDistinguishableFromSourced(t *testing.T) {
 	t.Parallel()
 	sourced, err := RenderSourcedAnswer("answer body", []contracts.Source{
@@ -225,19 +222,22 @@ func TestOpenKnowledgeAdversarialG021_RefusalDistinguishableFromSourced(t *testi
 		t.Fatalf("RenderSourcedAnswer: %v", err)
 	}
 	for _, cause := range contracts.AllRefusalCauses {
-		refusal := RenderRefusalWithCapture(cause)
-		if !strings.Contains(refusal, OpenKnowledgeCaptureSuffix) {
-			t.Errorf("refusal[%s] missing capture marker: %q", cause, refusal)
+		refusal := RenderRefusal(cause)
+		if strings.Contains(refusal, "(saved as idea)") {
+			t.Errorf("refusal[%s] must not contain a capture marker: %q", cause, refusal)
 		}
 		if strings.Contains(refusal, "[1]") {
 			t.Errorf("refusal[%s] must not contain [1]: %q", cause, refusal)
+		}
+		if refusal != contracts.CanonicalRefusalBodyFor(cause) {
+			t.Errorf("refusal[%s] = %q; want the honest canonical body", cause, refusal)
 		}
 	}
 	if !strings.Contains(sourced, "[1]") {
 		t.Errorf("sourced answer missing [1] marker: %q", sourced)
 	}
-	if strings.Contains(sourced, OpenKnowledgeCaptureSuffix) {
-		t.Errorf("sourced answer must not contain capture marker: %q", sourced)
+	if strings.Contains(sourced, "(saved as idea)") {
+		t.Errorf("sourced answer must not contain a capture marker: %q", sourced)
 	}
 }
 

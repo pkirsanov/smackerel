@@ -104,16 +104,30 @@ func newOpenKnowledgeAssembler(sourcesMax int) contracts.SourceAssembler {
 		if err := json.Unmarshal(result.Final, &env); err != nil {
 			return contracts.SourceAssembly{}
 		}
-		// "refused" envelopes carry the canonical refusal body
-		// already; surface it as the Body but emit zero Sources so
-		// the gate rewrites/passes through consistently. (The
-		// Handler always emits CanonicalRefusalBodyFor(cause) for
-		// refused turns, so the Body is safe to pass through.)
+		// "refused" envelopes carry the honest, cause-specific canonical
+		// refusal body already (the Handler emits CanonicalRefusalBodyFor
+		// (cause)). BUG-061-009 — a refused open_knowledge turn is a
+		// high-band REFUSAL, surfaced HONESTLY as StatusUnavailable with the
+		// cause-specific body, and NEVER the band-low "saved as an idea"
+		// capture. Emit a deterministic Override (which bypasses the
+		// provenance gate) so the cause-specific body is not overwritten by
+		// the gate's default refusal text. A typed (non-default) spec-064
+		// cause is carried in ErrorCause so the transport can render the
+		// cause-specific refusal; the default/unknown case uses the umbrella
+		// ErrNoGroundedAnswer so the honest body still renders verbatim.
 		if env.Status == "refused" {
+			cause := contracts.RefusalCause(env.RefusalCause)
+			errCause := contracts.ErrNoGroundedAnswer
+			if cause != contracts.RefusalDefault && cause != "" {
+				errCause = contracts.ErrorCause(string(cause))
+			}
 			return contracts.SourceAssembly{
-				Body:    env.Body,
-				Sources: nil,
-				Cause:   refusalCauseToProvenanceCause(env.RefusalCause),
+				Override: &contracts.ResponseOverride{
+					Status:       contracts.StatusUnavailable,
+					ErrorCause:   errCause,
+					Body:         env.Body,
+					CaptureRoute: false,
+				},
 			}
 		}
 		// "success" envelopes — translate sources.
@@ -228,22 +242,4 @@ func hashAny(v interface{}) string {
 	}
 	sum := sha256.Sum256(b)
 	return "sha256:" + hex.EncodeToString(sum[:])
-}
-
-// refusalCauseToProvenanceCause maps the substrate Handler's typed
-// refusal cause string into the provenance gate's attribution cause
-// enum. Unknown / empty cause → ProvenanceCauseFabricatedSource
-// (the gate's default attribution).
-func refusalCauseToProvenanceCause(cause string) contracts.ProvenanceCause {
-	switch cause {
-	case "fabricated_source_blocked":
-		return contracts.ProvenanceCauseFabricatedSource
-	case "budget_exhausted", "tool_unavailable", "missing_dependency":
-		// These are not graph-drift; reuse fabricated_source for the
-		// gate's attribution because the closed vocabulary in
-		// contracts.AllProvenanceCauses does not yet cover them.
-		return contracts.ProvenanceCauseFabricatedSource
-	default:
-		return contracts.ProvenanceCauseFabricatedSource
-	}
 }

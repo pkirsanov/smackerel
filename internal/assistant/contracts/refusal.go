@@ -52,17 +52,19 @@ var AllRefusalCauses = []RefusalCause{
 }
 
 // Canonical refusal body strings. Each is short per P7 (Small,
-// Frequent, Actionable Output) and ends with the capture-as-fallback
-// tail per P9 (Design For Restart, Not Perfection). The default
-// body is preserved verbatim from the original spec 061
-// CanonicalRefusalBody constant for backward compatibility.
+// Frequent, Actionable Output) and reads as an HONEST, cause-specific
+// "couldn't answer" headline — NOT a "saved as an idea" capture tail
+// (BUG-061-009: a high-band refusal must never imply the user's request
+// was merely filed away; the band-low capture acknowledgement is the
+// only place that phrase belongs). The default body is preserved
+// verbatim from the original spec 061 CanonicalRefusalBody constant.
 const (
 	canonicalRefusalDefault                 = "I don't have a sourced answer for that."
-	canonicalRefusalBudgetExhausted         = "I couldn't complete that within the answer budget — saved as an idea."
-	canonicalRefusalToolUnavailable         = "A tool I needed isn't available right now — saved as an idea."
-	canonicalRefusalFabricatedSourceBlocked = "I couldn't verify the sources I would have cited — saved as an idea."
-	canonicalRefusalInternalOnlyRestricted  = "That requires looking outside your knowledge graph, which is disabled — saved as an idea."
-	canonicalRefusalAmbiguousNotClarified   = "I couldn't decide what to look up — saved as an idea."
+	canonicalRefusalBudgetExhausted         = "I couldn't complete that within the answer budget."
+	canonicalRefusalToolUnavailable         = "A tool I needed isn't available right now."
+	canonicalRefusalFabricatedSourceBlocked = "I couldn't verify the sources I would have cited."
+	canonicalRefusalInternalOnlyRestricted  = "That requires looking outside your knowledge graph, which is disabled."
+	canonicalRefusalAmbiguousNotClarified   = "I couldn't decide what to look up."
 )
 
 // CanonicalRefusalBodyFor returns the canonical user-facing refusal

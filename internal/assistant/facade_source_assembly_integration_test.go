@@ -332,21 +332,25 @@ func TestFacadeSourceAssemblyIntegration_BS007_GraphDriftTriggersRefusal(t *test
 		t.Fatalf("Handle err = %v", err)
 	}
 
-	// BS-007 expectations: both cited IDs are missing → assembler
-	// returns empty Sources → provenance.Enforce rewrites to canonical
-	// refusal and sets CaptureRoute=true.
+	// BS-007 expectations (BUG-061-009 honest shape): both cited IDs are
+	// missing → assembler returns empty Sources → provenance.Enforce refuses
+	// HONESTLY (StatusUnavailable + ErrNoGroundedAnswer + canonical refusal
+	// body), never the band-low "saved as an idea" capture.
 	const canonicalRefusal = "I don't have a sourced answer for that."
 	if resp.Body != canonicalRefusal {
 		t.Errorf("Body mismatch:\n  got:  %q\n  want: %q", resp.Body, canonicalRefusal)
 	}
-	if !resp.CaptureRoute {
-		t.Errorf("CaptureRoute=false; gate did NOT fire on graph drift")
+	if resp.CaptureRoute {
+		t.Errorf("CaptureRoute=true; a high-band provenance refusal is not a capture (BUG-061-009)")
 	}
 	if len(resp.Sources) != 0 {
 		t.Errorf("Sources len = %d; want 0 (both cited IDs are graph drift)", len(resp.Sources))
 	}
-	if resp.Status != contracts.StatusSavedAsIdea {
-		t.Errorf("Status = %q; want %q", resp.Status, contracts.StatusSavedAsIdea)
+	if resp.Status != contracts.StatusUnavailable {
+		t.Errorf("Status = %q; want %q (honest refusal)", resp.Status, contracts.StatusUnavailable)
+	}
+	if resp.ErrorCause != contracts.ErrNoGroundedAnswer {
+		t.Errorf("ErrorCause = %q; want %q", resp.ErrorCause, contracts.ErrNoGroundedAnswer)
 	}
 	if executor.invocations != 1 {
 		t.Errorf("executor.invocations = %d; want 1", executor.invocations)

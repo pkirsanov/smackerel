@@ -138,24 +138,59 @@ func TestOpenKnowledgeAssembler_MalformedJSON(t *testing.T) {
 	}
 }
 
+// TestOpenKnowledgeAssembler_RefusedEnvelope proves the LIVE refused-turn
+// path (BUG-061-009). A refused open_knowledge envelope is translated into
+// an honest StatusUnavailable Override that bypasses the provenance gate
+// (so the cause-specific body is not overwritten by the gate's generic
+// refusal text), carries the typed spec-064 cause in ErrorCause (or the
+// umbrella ErrNoGroundedAnswer for the default/empty cause), renders the
+// honest cause-specific body verbatim, and is NEVER the band-low "saved as
+// an idea" capture. This is the coverage previously carried by the dead
+// provenance.EnforceRefusal path — but exercised against the path that
+// actually runs (the facade source-assembler).
 func TestOpenKnowledgeAssembler_RefusedEnvelope(t *testing.T) {
 	asm := newOpenKnowledgeAssembler(8)
-	env := openKnowledgeEnvelope{
-		Status:       "refused",
-		Body:         "I couldn't verify the sources for that.",
-		RefusalCause: "fabricated_source_blocked",
-		Sources:      []map[string]interface{}{},
+	cases := []struct {
+		name    string
+		cause   string
+		body    string
+		wantErr contracts.ErrorCause
+	}{
+		{"typed_cause_fabricated", "fabricated_source_blocked", "I couldn't verify the sources I would have cited.", contracts.ErrorCause("fabricated_source_blocked")},
+		{"typed_cause_budget", "budget_exhausted", "I couldn't complete that within the answer budget.", contracts.ErrorCause("budget_exhausted")},
+		{"typed_cause_tool", "tool_unavailable", "A tool I needed isn't available right now.", contracts.ErrorCause("tool_unavailable")},
+		{"default_cause_umbrella", "default", "I don't have a sourced answer for that.", contracts.ErrNoGroundedAnswer},
+		{"empty_cause_umbrella", "", "I don't have a sourced answer for that.", contracts.ErrNoGroundedAnswer},
 	}
-	raw, _ := json.Marshal(env)
-	got := asm(context.Background(), &agent.InvocationResult{Outcome: agent.OutcomeOK, Final: raw})
-	if got.Body != env.Body {
-		t.Fatalf("refused body mismatch: %q", got.Body)
-	}
-	if len(got.Sources) != 0 {
-		t.Fatalf("refused must emit zero sources, got %d", len(got.Sources))
-	}
-	if got.Cause == "" {
-		t.Fatalf("refused must classify cause")
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			raw, err := json.Marshal(openKnowledgeEnvelope{
+				Status:       "refused",
+				RefusalCause: tc.cause,
+				Body:         tc.body,
+				Sources:      []map[string]interface{}{},
+			})
+			if err != nil {
+				t.Fatalf("marshal envelope: %v", err)
+			}
+			got := asm(context.Background(), &agent.InvocationResult{Outcome: agent.OutcomeOK, Final: raw})
+			if got.Override == nil {
+				t.Fatal("refused turn must emit an Override; got nil (would fall through to the gate/capture path)")
+			}
+			if got.Override.Status != contracts.StatusUnavailable {
+				t.Errorf("Status = %q; want StatusUnavailable (honest refusal, never the band-low capture)", got.Override.Status)
+			}
+			if got.Override.CaptureRoute {
+				t.Error("CaptureRoute = true; a high-band refusal is NEVER 'saved as an idea'")
+			}
+			if got.Override.ErrorCause != tc.wantErr {
+				t.Errorf("ErrorCause = %q; want %q", got.Override.ErrorCause, tc.wantErr)
+			}
+			if got.Override.Body != tc.body {
+				t.Errorf("Body = %q; want the honest cause-specific body %q", got.Override.Body, tc.body)
+			}
+		})
 	}
 }
 
