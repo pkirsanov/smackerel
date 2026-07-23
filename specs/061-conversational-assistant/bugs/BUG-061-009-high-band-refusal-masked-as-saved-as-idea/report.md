@@ -117,9 +117,10 @@ refusal)?
   `web_search` returning citable pages OR `internal_retrieval` finding ingested
   smackerel-about-smackerel content.
 - On the self-hosted env, `searxng_enabled: "${ENABLE_SEARXNG}"`
-  (`config/smackerel.yaml` `environments.self-hosted`) — web grounding is
-  **operator-gated**. If `ENABLE_SEARXNG` is unset / the `searxng` profile is not
-  running on the deploy host, `web_search` has no working provider.
+  (`config/smackerel.yaml` `environments.self-hosted`) is operator-gated — **and
+  on the live deploy host `searxng` IS running** (observed
+  `smackerel-home-lab-searxng-1` healthy, 30h uptime at deploy time). So
+  `web_search` HAS a working provider; a disabled tool is NOT the cause here.
 - A question about smackerel's own product almost certainly has **no ingested
   source** in the user's knowledge graph (the user has not captured smackerel's
   own docs), so `internal_retrieval` returns nothing.
@@ -130,9 +131,13 @@ refusal)?
   instead of the misleading "saved as an idea."
 
 **Conclusion:** the refusal itself is correct; the gap is that the user wants an
-*answer*. That requires an operator/product action, not a facade change:
-1. set `ENABLE_SEARXNG=true` (+ run the `searxng` profile) on the deploy host so
-   `/ask` can ground meta-questions in web sources; and/or
+*answer*. Since `searxng` IS running, a disabled web tool is NOT the cause — the
+meta-question still grounded nothing, which needs a deeper investigation, not a
+facade change:
+1. determine why `web_search` produced no accepted source for this query —
+   either the agent did not select `web_search` for a product meta-question, or
+   `searxng` returned no citable pages, or the citeback verifier rejected them;
+   and/or
 2. ingest smackerel's own product docs so `internal_retrieval` can answer
    meta-questions; and/or
 3. a product decision to let `open_knowledge` answer general-knowledge questions
@@ -143,3 +148,58 @@ refusal)?
 created) — out of scope for BUG-061-009, which owns only the honest-refusal
 invariant. This bug does NOT claim to make `/ask` answer; it claims the refusal
 is now honest.
+
+## Deploy Evidence (local-operator on-host, home-lab)
+
+Built, operator-cosign-signed, and applied on the deploy host per the BUG-061-008
+recipe. Source SHA `2e84a1b4`.
+
+**Build (`./smackerel.sh build --target self-hosted`) — exit 0:**
+
+```
+[4/7] docker push (capture stable digests)
+  core: ghcr.io/pkirsanov/smackerel-core@sha256:dc8963683bc87f6d07b5460a009755c8cd400b5dd56ae20d0f3094307e570c32
+  ml:   ghcr.io/pkirsanov/smackerel-ml@sha256:ef16adc279b908b3777e9afbf9558dbbdfe9b8611b741c12cccc5d39db4c1b23
+[5/7] cosign sign (operator key)   — core + ml signed
+[6/7] syft SBOM + cosign attest    — core + ml attested
+[8/9] oras push bundle + cosign sign — config-bundle self-hosted-2e84a1b4… signed
+[9/9] emit local-build-manifest    — local-build-manifest-2e84a1b4….yaml
+___SMKBUILD_EXIT=0
+```
+
+**Apply (`promote.sh --target home-lab --product smackerel`, sudo -n) — exit 0:**
+
+```
+Verification for ghcr.io/pkirsanov/smackerel-core@… — The cosign claims were validated
+Verification for ghcr.io/pkirsanov/smackerel-ml@…   — The cosign claims were validated
+preconditions OK
+▶ apply: pulling images by digest (core dc896368…, ml ef16adc2…)
+▶ apply: running rollout strategy: recreate
+  Container smackerel-home-lab-smackerel-core-1 Recreated → Started
+  Container smackerel-home-lab-smackerel-ml-1   Recreated → Started
+▶ verify: waiting for strict current-release health
+  acceptance: core-digest=accepted
+  acceptance: ml-digest=accepted
+verify OK (strict current release accepted)
+▶ apply: committing verified manifest pointer → apply OK
+___SMKDEPLOY_EXIT=0
+```
+
+**Independent running verification (docker inspect):**
+
+```
+smackerel-home-lab-smackerel-core-1 :: running health=healthy restarts=0
+   ghcr.io/pkirsanov/smackerel-core@sha256:dc8963683bc87f6d07b5460a009755c8cd400b5dd56ae20d0f3094307e570c32
+smackerel-home-lab-smackerel-ml-1   :: running health=healthy restarts=0
+   ghcr.io/pkirsanov/smackerel-ml@sha256:ef16adc279b908b3777e9afbf9558dbbdfe9b8611b741c12cccc5d39db4c1b23
+```
+
+Both new digests running, healthy, 0 restarts — matching the built+signed digests.
+
+**Behavioral confirmation (operator-only):** the live Telegram `/ask` smoke test
+is operator-verifiable (the prod assistant HTTP API requires a per-user PASETO
+token; agents cannot send Telegram messages). The honest-refusal behavior is
+proven at the unit level by the extended cross-path invariant test
+(`TestExecutionErrorHonesty_*`), which exercises the exact open_knowledge
+OK-but-uncited path and asserts `StatusUnavailable` + honest body, never the
+capture acknowledgement.

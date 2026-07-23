@@ -3,7 +3,8 @@
   "title": "A high-band request that can't be answered is masked as 'saved as an idea'",
   "spec": "specs/061-conversational-assistant",
   "severity": "S2",
-  "status": "in_progress",
+  "status": "blocked",
+  "blockedReason": "Agent-side work is COMPLETE and deploy-verified; the only remaining step is an OPERATOR behavioral smoke test the agent cannot perform. The INV-HB-REFUSAL fix is implemented, unit-proven by the cross-path invariant test (TestExecutionErrorHonesty_* exercises the exact open_knowledge OK-but-uncited path and asserts StatusUnavailable + honest body, never the capture acknowledgement), built + operator-cosign-signed, deployed on-host (local-operator promote/apply), and verified running/healthy on the home-lab bot (core sha256:dc8963683bc87f6d07b5460a009755c8cd400b5dd56ae20d0f3094307e570c32, ml sha256:ef16adc279b908b3777e9afbf9558dbbdfe9b8611b741c12cccc5d39db4c1b23, 0 restarts). The agent cannot send Telegram messages and the prod assistant HTTP API requires a per-user PASETO token (shared token -> 401). OPERATOR NEXT-STEP (then flip status to done): on Telegram, send /ask <a question the bot cannot ground> and confirm the reply is an honest 'I don't have a sourced answer for that.' (never 'saved as an idea'); confirm a genuine dropped thought (unrouted) still replies 'saved as an idea — i'll surface it later.'.",
   "workflowMode": "bugfix-fastlane",
   "owner": "bubbles.goal",
   "discoveredBy": "operator (live /ask on the home-lab bot after BUG-061-008 P1-P5 shipped)",
@@ -13,17 +14,17 @@
     "summary": "open_knowledge (requires_provenance) produced an OK answer with no citations. The provenance gate correctly refuses the uncited body but rewrites to Status=StatusSavedAsIdea + CaptureRoute=true with ErrorCause unset; canonicalizeSuccessfulCaptureResponse then overwrites the gate's honest body ('I don't have a sourced answer for that.') with the generic capture acknowledgement ('saved as an idea — i'll surface it later.'). BUG-061-008 P1 only guarded NON-OK outcomes, so this OK-but-uncited path was left intact — and its P2 test asserted the OK+no-sources case SHOULD return saved_as_idea, test-locking the reported behavior. An honest open_knowledge refusal renderer exists but is bypassed (it fires only when ErrorCause matches a spec-064 RefusalCause, which the gate leaves empty) and even it appends a confusing '(saved as idea)' suffix."
   },
   "resolution": "Enforce INV-HB-REFUSAL: 'saved as an idea' is band-LOW-only. SCOPE-01 makes the provenance gate refuse into an honest shape (StatusUnavailable + new ErrNoGroundedAnswer + honest body + CaptureRoute=false) uniformly across every requires_provenance scenario. SCOPE-02 scopes canonicalizeSuccessfulCaptureResponse to band-low (band-high residual StatusSavedAsIdea is converted to the honest refusal). SCOPE-03 flips the BUG-061-008 OK-no-sources assertion to honest-refusal and extends the cross-path invariant test so a single test proves no band-high requires_provenance path can render the capture acknowledgement (class-killer). SCOPE-04 renders the honest body verbatim for ErrNoGroundedAnswer, drops the '(saved as idea)' suffix from the open_knowledge refusal renderer, reword the 5 refusal cause strings, and upgrades G021 refusal-vs-answer distinguishability from a user-visible string to a structural (Status/ErrorCause) contract across Telegram + WhatsApp. SCOPE-05 diagnoses + routes the grounding gap and encodes the invariant in docs + the review checklist.",
-  "codeVsDeployment": "code-only (not yet implemented). Will be built (build --target self-hosted), operator-cosign-signed, and deployed on-host (local-operator promote/apply under sudo -n) to the home-lab bot after all scopes are green, matching the BUG-061-008 deploy recipe.",
+  "codeVsDeployment": "deployed. Built (build --target self-hosted, exit 0), operator-cosign-signed + SBOM-attested, and applied on-host (local-operator promote/apply under sudo -n) to the home-lab bot. Running core+ml digests match the build and are healthy with 0 restarts.",
   "deployment": {
     "target": "home-lab (self-hosted)",
     "trustModel": "local-operator",
-    "sourceSha": "pending",
-    "verifiedAt": "pending",
+    "sourceSha": "2e84a1b4df78c3b1932ddf91def2ededcf34cb9e",
+    "verifiedAt": "2026-07-23T20:29Z",
     "images": {
-      "core": "pending",
-      "ml": "pending"
+      "core": "ghcr.io/pkirsanov/smackerel-core@sha256:dc8963683bc87f6d07b5460a009755c8cd400b5dd56ae20d0f3094307e570c32",
+      "ml": "ghcr.io/pkirsanov/smackerel-ml@sha256:ef16adc279b908b3777e9afbf9558dbbdfe9b8611b741c12cccc5d39db4c1b23"
     },
-    "runningVerification": "pending",
+    "runningVerification": "both containers running, health=healthy, restarts=0; running RepoDigests match the built+signed digests (docker inspect, exit 0)",
     "operatorSmokeTestPending": "on Telegram, send `/ask <a question the bot cannot ground>` and confirm the reply is an honest 'I don't have a sourced answer for that.' (never 'saved as an idea'); confirm a genuine dropped thought (unrouted) still replies 'saved as an idea — i'll surface it later.'"
   },
   "affectedSurface": [
@@ -44,7 +45,13 @@
     { "id": "scope-04", "title": "Adapter honest render + structural distinguishability", "status": "done" },
     { "id": "scope-05", "title": "Grounding-gap diagnosis + docs/invariant encoding", "status": "done" }
   ],
-  "completedScopes": [ "scope-01", "scope-02", "scope-03", "scope-04", "scope-05" ],
+  "completedScopes": [
+    "scope-01",
+    "scope-02",
+    "scope-03",
+    "scope-04",
+    "scope-05"
+  ],
   "completedPhases": [
     "select",
     "bootstrap",
@@ -54,23 +61,23 @@
     "docs"
   ],
   "certification": {
-    "status": "in_progress",
-    "achievedAssuranceLevel": "artifacts-authored",
+    "status": "blocked",
+    "achievedAssuranceLevel": "deployed-verified; operator behavioral smoke test pending (agent-side complete)",
     "scopeProgress": { "total": 5, "done": 5, "inProgress": 0, "notStarted": 0, "blocked": 0 },
     "gatesPassed": [
       "implement SCOPE-01..05",
       "test unit --go (all packages ok, exit 0; gate + facade + adapter + cross-path invariant green)",
       "check (SST/config/scenario-lint OK)",
       "lint (go vet + ruff + web: All checks passed!)",
-      "artifact-lint.sh (PASSED, exit 0)"
+      "artifact-lint.sh (PASSED, exit 0)",
+      "build --target self-hosted (exit 0; cosign-signed + SBOM-attested; signed local-build-manifest emitted)",
+      "deploy home-lab on-host (promote/apply exit 0; cosign verified; strict current-release health accepted; running core+ml digests match build, healthy, 0 restarts)"
     ],
     "pendingGates": [
-      "build --target self-hosted (Trivy 0 CVEs, cosign-signed, signed local-build-manifest)",
-      "deploy home-lab (on-host local-operator promote/apply): running digests match build + healthy",
-      "operator live Telegram behavioral smoke test"
+      "operator live Telegram behavioral smoke test (operator-only: prod assistant HTTP requires per-user PASETO; behavior unit-proven by TestExecutionErrorHonesty_* cross-path invariant)"
     ]
   },
-  "nextRequiredOwner": "bubbles.goal (artifact-lint, then deploy home-lab on-host, then operator smoke test)",
+  "nextRequiredOwner": "operator (live Telegram /ask smoke test; behavior already unit-proven and deploy-verified)",
   "supersedes": [
     "specs/061-conversational-assistant/bugs/BUG-061-008-execution-errors-masked-as-saved-as-idea SCN-061-008-03 (OK+no-sources -> saved_as_idea) is replaced by OK+no-sources -> honest StatusUnavailable refusal"
   ],
