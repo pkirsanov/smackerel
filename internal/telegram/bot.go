@@ -16,6 +16,7 @@ import (
 
 	"github.com/smackerel/smackerel/internal/annotation"
 	"github.com/smackerel/smackerel/internal/assistant/legacyretirement"
+	"github.com/smackerel/smackerel/internal/assistant/selfknowledge"
 	"github.com/smackerel/smackerel/internal/stringutil"
 	"github.com/smackerel/smackerel/internal/telegram/assistant_adapter"
 )
@@ -99,6 +100,14 @@ type Bot struct {
 	// cmd/core/wiring.go after the agent bridge is constructed.
 	// Nil = no-op (safe pre-bridge / test default).
 	annotationShadow *annotation.ShadowComparator
+
+	// Spec 104 SCOPE-06 — the shared self-knowledge capability corpus
+	// (selfknowledge.Derive(manifest)) that drives the /help "What I
+	// can help with" list, so the /help menu and the /ask
+	// self-knowledge answers cannot diverge. Wired via
+	// SetHelpCapabilities from cmd/core after the manifest is loaded;
+	// nil = the static spec-066 /help body (safe dev/test default).
+	helpCapabilities []selfknowledge.CapabilityEntry
 }
 
 // Config holds Telegram bot configuration.
@@ -1070,33 +1079,20 @@ func (b *Bot) handleRecent(ctx context.Context, msg *tgbotapi.Message) {
 	b.reply(msg.Chat.ID, strings.Join(lines, "\n"))
 }
 
-// handleHelp shows available commands.
+// SetHelpCapabilities injects the shared self-knowledge capability corpus
+// (selfknowledge.Derive(manifest)) that drives the /help "What I can help with"
+// list (spec 104 SCOPE-06). Called once at startup from cmd/core after the
+// skills manifest is loaded; safe for concurrent reads afterward. When never
+// called, /help renders the static spec-066 body.
+func (b *Bot) SetHelpCapabilities(caps []selfknowledge.CapabilityEntry) {
+	b.helpCapabilities = caps
+}
+
+// handleHelp shows available commands. The body is rendered from the shared
+// self-knowledge corpus (spec 104 SCOPE-06) via HelpText, so a newly-added
+// scenario appears with no help-code edit and the menu/answers cannot diverge.
 func (b *Bot) handleHelp(ctx context.Context, msg *tgbotapi.Message) {
-	help := `> Smackerel Bot
-- Send a URL to save an article/video
-- Send text to save an idea
-- Send a voice note to transcribe and save
-- Forward messages to assemble conversations
-- Reply to a saved item to annotate it
-- /find <query> - Search your knowledge
-- /rate <search> <annotation> - Rate/annotate an artifact
-- /concept - Browse concept pages
-- /person - Browse entity profiles
-- /lint - Knowledge quality report
-- /list - Manage actionable lists
-- /expense - View and manage expenses
-- /watch - Recommendation watchlist
-- /digest - Get today's digest
-- /done - Finalize conversation assembly
-- /status - System status
-- /recent - Recent items
-- /meal_plan - Show meal-planning phrases
-- /ask <question> - Ask the assistant (retrieval Q&A)
-- /weather [city] - Weather lookup
-- /remind <when> <what> - Schedule a reminder
-- /reset - Reset assistant conversation state
-- /help - Show this help`
-	b.reply(msg.Chat.ID, help)
+	b.reply(msg.Chat.ID, HelpText(b.helpCapabilities))
 }
 
 // maxAPIResponseBytes limits how much data the bot reads from internal API responses.

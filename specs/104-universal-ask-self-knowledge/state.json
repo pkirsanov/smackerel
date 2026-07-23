@@ -27,16 +27,19 @@
   },
   "scopes": [
     { "id": "scope-01", "title": "General embedding-backed namespace SemanticSearcher", "status": "done", "priority": "P0" },
-    { "id": "scope-02", "title": "Self-knowledge corpus derivation (fresh-by-construction)", "status": "not_started", "priority": "P0" },
-    { "id": "scope-03", "title": "Self-knowledge ingestion + smackerel_self namespace + boot lifecycle", "status": "not_started", "priority": "P0" },
-    { "id": "scope-04", "title": "self_knowledge tool + allowlist + planner routing", "status": "not_started", "priority": "P0" },
+    { "id": "scope-02", "title": "Self-knowledge corpus derivation (fresh-by-construction)", "status": "done", "priority": "P0" },
+    { "id": "scope-03", "title": "Self-knowledge ingestion + smackerel_self namespace + boot lifecycle", "status": "done", "priority": "P0" },
+    { "id": "scope-04", "title": "self_knowledge tool + allowlist + planner routing", "status": "done", "priority": "P0" },
     { "id": "scope-05", "title": "Product-doc corpus source (features/use-cases/overview)", "status": "not_started", "priority": "P1" },
     { "id": "scope-06", "title": "/help human twin (shared corpus)", "status": "not_started", "priority": "P1" },
     { "id": "scope-07", "title": "Trust integration + honest-fallback (cite-back/provenance)", "status": "not_started", "priority": "P0" },
     { "id": "scope-08", "title": "E2E + deploy + verify", "status": "not_started", "priority": "P0" }
   ],
   "completedScopes": [
-    "scope-01"
+    "scope-01",
+    "scope-02",
+    "scope-03",
+    "scope-04"
   ],
   "completedPhases": [
     "analyze",
