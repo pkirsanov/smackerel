@@ -99,3 +99,10 @@ running/healthy on home-lab; `smackerel_self` corpus ingested (13 artifacts,
 embeddings async). The single remaining item — the operator's live Telegram
 behavioral smoke test — is tracked on spec 104 (operator-only; agent cannot send
 Telegram / prod HTTP needs PASETO); the behavior is already e2e-proven.
+
+As of commit `4a7c545d` the RENDER half of that operator smoke is AUTOMATED —
+`internal/telegram/assistant_connector_smoke_test.go` is a connector-only `/ask`
+smoke that injects a synthetic inbound update through the real Telegram connector
+(bot dispatch + adapter) and captures the rendered outbound, asserting the grounded
+cited answer + the honest refusal (never "saved as an idea") with no Telegram
+client. The remaining operator item is narrowed to a final live-prod confirmation.
