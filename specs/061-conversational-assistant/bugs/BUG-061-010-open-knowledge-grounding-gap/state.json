@@ -4,7 +4,7 @@
   "spec": "specs/061-conversational-assistant",
   "severity": "S3",
   "status": "blocked",
-  "blockedReason": "Blocked on a product/design decision, not on implementation. Live evidence (home-lab deploy host, 2026-07-23) proves the open_knowledge agent has NO grounded source for a question about this private product: web_search (searxng, ENABLE_SEARXNG=true) returns Super Mario Wiki results for the token 'smackerel' (the public web has zero knowledge of the product); internal_retrieval is empty because the user's knowledge graph has never ingested smackerel's own docs; and the local LLM (gemma4:26b/qwen3:30b-a3b) has no training data on a private product. The refusal is therefore CORRECT (BUG-061-009 made it honest). Making /ask ANSWER meta-questions requires the operator/owner to choose the fix direction: (A) ingest smackerel's own docs as a citeable source (recommended, ideally a dedicated system-knowledge collection separate from the personal graph), (B) a dedicated about_smackerel help tool in the agent tool_allowlist, or (C) accept the limitation and keep the honest refusal. Owner next-step: pick A / B / C; then this bug can be specced and implemented.",
+  "blockedReason": "Fix DELIVERED and live — resolved by supersession via spec 104 (option A: self-knowledge ingestion into the dedicated smackerel_self pgvector namespace, surfaced via the self_knowledge tool). Deployed to home-lab and verified live 2026-07-23 (core 3b6261a9 / ml 25f36dc5; smackerel_self corpus ingested); /ask now answers product meta-questions with real citations, with the cite-back verifier + BUG-061-009 honest refusal unchanged as the fallback. This diagnosis bug did NO implementation itself (it routed its fix to spec 104), so it cannot satisfy the done-status specialist-phase gate (implement/test/validate/audit) on its own artifact without fabrication — hence terminal status blocked, mirroring spec 104. The single genuinely-remaining item is the operator's live Telegram behavioral smoke test, shared with spec 104 (operator-only: agents cannot send Telegram / prod HTTP needs a PASETO token); the behavior is already e2e-proven. No further agent work remains on this bug.",
   "workflowMode": "bugfix-fastlane",
   "owner": "bubbles.goal",
   "discoveredBy": "operator (live /ask on the home-lab bot; diagnosed during BUG-061-009 close-out)",
@@ -23,16 +23,18 @@
   },
   "certification": {
     "status": "blocked",
-    "achievedAssuranceLevel": "diagnosed (evidence-backed); awaiting product decision on fix direction",
+    "achievedAssuranceLevel": "resolved by supersession — fix option A delivered + deployed + verified via spec 104; blocked only on the shared operator smoke",
     "gatesPassed": [
-      "root-cause diagnosis with live home-lab evidence"
+      "root-cause diagnosis with live home-lab evidence",
+      "fix direction chosen (option A: self-knowledge ingestion into a dedicated system-knowledge collection)",
+      "fix delivered by spec 104 (all 8 scopes; unit+integration+e2e green)",
+      "deployed to home-lab + verified live (core 3b6261a9, ml 25f36dc5; smackerel_self corpus ingested)"
     ],
     "pendingGates": [
-      "owner decision: fix option A (self-knowledge ingestion), B (about_smackerel help tool), or C (accept honest-refusal limitation)",
-      "spec + design + scopes (deferred until fix direction is chosen — scaffolding them now would be premature/fabricated)"
+      "operator live Telegram behavioral smoke test — the same single item tracked on spec 104 (operator-only)"
     ]
   },
-  "nextRequiredOwner": "operator/owner (choose fix direction A/B/C; then bubbles.plan specs it)",
+  "nextRequiredOwner": "operator (live Telegram /ask smoke test — shared with spec 104)",
   "relatedSpecs": [
     "specs/061-conversational-assistant",
     "specs/064-open-ended-knowledge-agent",

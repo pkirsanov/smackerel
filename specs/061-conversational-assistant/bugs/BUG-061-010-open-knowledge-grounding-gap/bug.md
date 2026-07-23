@@ -3,7 +3,7 @@
 - **Severity:** S3 (product capability gap, not a correctness defect)
 - **Spec:** specs/061-conversational-assistant (mechanism lives in specs/064-open-ended-knowledge-agent + specs/084-open-knowledge-reasoning-loop)
 - **Discovered:** 2026-07-23, during the BUG-061-009 close-out (operator `/ask how smackerel works as second brain or llm wiki?`)
-- **Status:** blocked on a product/design decision (see "Fix options")
+- **Status:** blocked (fix DELIVERED + live via spec 104; only the shared operator Telegram smoke remains — see "Resolution")
 - **Depends on:** BUG-061-009 (done) — that fix made this case *refuse honestly* ("I don't have a sourced answer for that.") instead of masking it as "saved as an idea". This bug is about making it *answer*.
 
 ## Symptom
@@ -77,3 +77,25 @@ sources.
   hallucinated product answers through — the LLM has no real knowledge here).
 - Changing the honest-refusal behavior from BUG-061-009 (that stays as the
   fallback when no grounded source exists).
+
+## Resolution (2026-07-23)
+
+**RESOLVED by supersession — fix option A delivered by [spec 104](../../../104-universal-ask-self-knowledge/).**
+
+The operator/owner chose **option A with a dedicated system-knowledge collection**
+(the recommended variant), and it was fully designed + implemented + deployed as
+spec 104 (Universal /ask + Self-Knowledge Grounding). smackerel's own SSTs
+(scenarios, shortcuts, skills, curated docs) are now derived fresh-by-construction
+and ingested under a dedicated `smackerel_self` pgvector namespace — separate from
+the user's personal graph, exactly as recommended — and surfaced via a first-class
+`self_knowledge` tool in the agent `tool_allowlist`. `/ask` about the product now
+answers with real citations to the product's own knowledge; the cite-back verifier
++ provenance gate + the BUG-061-009 honest refusal are unchanged as the fallback
+for anything ungroundable.
+
+This diagnosis bug required **no separate implementation** — it routed its fix to
+spec 104. Live verification: core `sha256:3b6261a9…` + ml `sha256:25f36dc5…`
+running/healthy on home-lab; `smackerel_self` corpus ingested (13 artifacts,
+embeddings async). The single remaining item — the operator's live Telegram
+behavioral smoke test — is tracked on spec 104 (operator-only; agent cannot send
+Telegram / prod HTTP needs PASETO); the behavior is already e2e-proven.
