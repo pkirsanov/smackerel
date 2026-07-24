@@ -5,14 +5,15 @@
   "featureName": "Digest Date Scan Produces False Empty",
   "releaseTrain": "mvp",
   "flagsIntroduced": [],
-  "status": "in_progress",
-  "statusReason": "Planning packet initialized from interpreted operator input. No local database/browser reproduction, implementation, test, certification, production mutation, commit, push, or deployment is claimed.",
+  "status": "blocked",
+  "statusReason": "bubbles.implement (2026-07-24) landed the disjoint unit-verifiable false-empty core: the web /digest route now consumes the canonical typed internal/digest.Generator.GetLatest via an injected web.DigestReader, the duplicate DATE-to-string-scan + time.Now() catch-all is removed, and a closed typed DigestPageModel/DigestViewState distinguishes current/quiet/stale/first_use_empty/selected_date_empty/read_error so only a wrapped pgx.ErrNoRows renders empty (internal/web unit tests + go test ./... + lint all pass). BLOCKED on (1) COORDINATION-REQUIRED Scope 01 freshness/ownership SST which requires editing config files a concurrent agent owns, and (2) DEFERRED live-stack verification (all integration/e2e-api/e2e-ui rows + Scope 04) intentionally not run to avoid the shared Docker stack.",
   "workflowMode": "bugfix-fastlane",
   "linkedImplementationSpec": null,
   "linkedPlanningPacket": null,
   "planningOnly": false,
   "planningOnlyJustification": null,
   "specDependsOn": ["specs/002-phase1-foundation"],
+  "blockedReason": "Disjoint unit-verifiable core is implemented and green (./smackerel.sh test unit --go -> go test ./... exit 0; ./smackerel.sh check exit 0; ./smackerel.sh lint exit 0). BLOCKED on TWO dependencies. (1) COORDINATION-REQUIRED: Scope 01 freshness/ownership SST (DIGEST_STALE_AFTER_HOURS positive-int no-default key + the digest:read/digest:generate grant contract) requires editing internal/config/config.go, internal/config/validate_test.go, config/smackerel.yaml, and scripts/commands/config.sh, which a CONCURRENT agent is actively editing; per the operator directive those files were NOT touched. Stale determination is therefore wired inert (web.Handler.DigestStaleAfter=0 in cmd/core/services.go) so a non-quiet row renders current rather than being arbitrarily called stale until the config work lands. UNBLOCK STEP: after the concurrent config-SST work merges, wire DigestStaleAfter from DIGEST_STALE_AFTER_HOURS + add the grant authorization boundary, then re-verify. (2) DEFERRED LIVE VERIFICATION: every integration/e2e-api/e2e-ui row was intentionally not run to avoid bringing up the shared Docker stack while other agents use the host daemon -- specifically the real-PostgreSQL DATE round-trip DIGEST-S02-T02, the scan-fault profile DIGEST-FP-DB-SCAN-001, the unauthorized/grant boundary SCN-002-007-07, and all of Scope 04 disposable browser acceptance. UNBLOCK STEP: run the deferred live rows on the disposable stack (./smackerel.sh test integration / e2e / e2e-ui).",
   "certifiedAt": null,
   "requiresRevalidation": false,
   "requirementsRecovery": {
@@ -24,22 +25,22 @@
     "certificationClaimed": false
   },
   "execution": {
-    "activeAgent": "bubbles.plan",
-    "currentPhase": "harden",
-    "currentScope": null,
+    "activeAgent": "bubbles.implement",
+    "currentPhase": "implement",
+    "currentScope": "SCOPE-03",
     "runStartedAt": "2026-07-24T07:55:00Z",
     "completedPhaseClaims": [],
     "pendingTransitionRequests": [],
     "audit": { "schemaVersion": "audit-run/v1", "runId": null, "currentAttemptId": null, "attempts": [] }
   },
   "certification": {
-    "status": "in_progress",
+    "status": "blocked",
     "completedScopes": [],
     "certifiedCompletedPhases": [],
     "scopeProgress": [
-      { "scope": 1, "scopeId": "SCOPE-01", "name": "Digest Ownership And Freshness Contract Gate", "status": "not_started", "dependsOn": [], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": null },
-      { "scope": 2, "scopeId": "SCOPE-02", "name": "Canonical Typed Digest Reader", "status": "not_started", "dependsOn": ["SCOPE-01"], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": null },
-      { "scope": 3, "scopeId": "SCOPE-03", "name": "Truthful Server-Rendered Digest States", "status": "not_started", "dependsOn": ["SCOPE-02"], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": null },
+      { "scope": 1, "scopeId": "SCOPE-01", "name": "Digest Ownership And Freshness Contract Gate", "status": "blocked", "dependsOn": [], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": null },
+      { "scope": 2, "scopeId": "SCOPE-02", "name": "Canonical Typed Digest Reader", "status": "in_progress", "dependsOn": ["SCOPE-01"], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": null },
+      { "scope": 3, "scopeId": "SCOPE-03", "name": "Truthful Server-Rendered Digest States", "status": "in_progress", "dependsOn": ["SCOPE-02"], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": null },
       { "scope": 4, "scopeId": "SCOPE-04", "name": "Disposable Digest Browser Acceptance", "status": "not_started", "dependsOn": ["SCOPE-03"], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": null }
     ],
     "lockdownState": { "active": false, "lockedScenarioIds": [] },
@@ -100,12 +101,21 @@
       "runStartedAt": "2026-07-24T07:55:00Z",
       "runEndedAt": "2026-07-24T08:02:00Z",
       "summary": "Planning reconciliation (spec-scope-hardening harden): re-derived scopes.md, scenario-manifest.json, and report.md against the revised spec.md/design.md (both 2026-07-24T05:46Z). Reframed Scope 01 SCN-002-007-10 from the superseded product-session-versus-per-user ratification to the design-resolved model — one operator-owned global corpus gated by digest:read/digest:generate with no tenant/per-user row isolation — and aligned Scope 02's reader plan. Regenerated scenario-manifest.json from 8 stale SCOPE-01 entries to 10 scenarios across SCOPE-01..04 with existing linked-test anchors (removed the nonexistent web/pwa/tests/digest.spec.ts) and spec-matching titles. Recorded concrete canary anchors in report.md and expanded certification.scopeProgress to the four planned scopes. Kept status in_progress; no source, test, spec, design, certification, commit, push, or deployment change is claimed."
+    },
+    {
+      "agent": "bubbles.implement",
+      "phasesExecuted": ["implement"],
+      "statusBefore": "in_progress",
+      "statusAfter": "blocked",
+      "runStartedAt": "2026-07-24T09:30:00Z",
+      "runEndedAt": "2026-07-24T10:05:00Z",
+      "summary": "Implemented the disjoint unit-verifiable false-empty core per operator directive. NEW internal/web/digest_model.go: DigestReader seam + closed DigestViewState/DigestReadErrorKind + concrete DigestPageModel + pure classifyDigest (only a wrapped pgx.ErrNoRows is empty; every other fault is read_error with cleared fields; stale only when the freshness threshold is configured). Rewrote internal/web/handler.go::DigestPage onto the injected reader, removing the duplicate DATE-to-string-scan + time.Now() false-empty catch-all; added the Handler DigestReader/DigestStaleAfter/ClockOverride seams + now(). Expanded internal/web/templates.go digest.html to mutually-exclusive typed states. Injected svc.digestGen as the reader in cmd/core/services.go (DigestStaleAfter left 0 = inert until Scope 01 config lands). Upgraded the non-guarding TestDigestPage_NoRows into a real nil-reader read_error guard and added internal/web/digest_state_test.go (classify state matrix + DigestPage HTTP truthful-state matrix, including the exact error->500 read_error regression that fails against the old code). ./smackerel.sh test unit --go passed (go test ./... exit 0; 7 targeted tests PASS incl. the 002-006 search regression), ./smackerel.sh check exit 0, ./smackerel.sh lint exit 0. DEFERRED: Scope 01 config-SST (coordination-required — internal/config/config.go, internal/config/validate_test.go, config/smackerel.yaml, scripts/commands/config.sh owned by a concurrent agent) and ALL live-stack rows (integration/e2e-api/e2e-ui incl. the unauthorized/grant boundary and Scope 04). No config/telemetry/live/foreign source touched; no git operations performed."
     }
   ],
   "activeBugs": [],
   "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-07-24T08:02:00Z",
+  "lastUpdatedAt": "2026-07-24T10:05:00Z",
   "scopeLayout": "single-file",
   "artifacts": { "bug": "bug.md", "spec": "spec.md", "design": "design.md", "scopes": "scopes.md", "report": "report.md", "uservalidation": "uservalidation.md", "scenarioManifest": "scenario-manifest.json" },
   "statusDiscipline": {

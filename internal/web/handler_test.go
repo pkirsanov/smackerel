@@ -86,14 +86,22 @@ func TestSettingsPage_Render(t *testing.T) {
 }
 
 func TestDigestPage_NoRows(t *testing.T) {
-	// With nil pool, DigestPage will panic on nil pointer dereference.
-	// This is expected behavior — in production, pool is always initialized.
+	// BUG-002-007: a misconfigured/absent reader must render an honest read_error
+	// (HTTP 500), never the old false-empty "No digest generated yet." with
+	// today's date. (The prior version only asserted a nil pool and executed no
+	// read behavior, so it could not guard this bug.)
 	h := NewHandler(nil, nil, time.Now())
-	if h == nil {
-		t.Fatal("expected non-nil handler")
+	rec := httptest.NewRecorder()
+	h.DigestPage(rec, httptest.NewRequest(http.MethodGet, "/digest", nil))
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("nil reader: expected 500 read_error, got %d", rec.Code)
 	}
-	if h.Pool != nil {
-		t.Error("expected nil pool for this test")
+	body := rec.Body.String()
+	if !strings.Contains(body, `data-digest-state="read_error"`) {
+		t.Errorf("nil reader: expected read_error state marker; body=%q", body)
+	}
+	if strings.Contains(body, "No digest generated yet") {
+		t.Error("nil reader: must not render the false-empty first-use copy for a read failure")
 	}
 }
 
