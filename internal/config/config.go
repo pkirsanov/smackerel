@@ -342,6 +342,12 @@ type Config struct {
 	// SURFACING_* env vars; fail-loud SST per smackerel-no-defaults.
 	Surfacing SurfacingConfig
 
+	// Spec 107 SCOPE-01 — Proactive & Correlated Experience foundation.
+	// Sourced from `proactive.*` in config/smackerel.yaml via PROACTIVE_*
+	// env vars; fail-loud SST per smackerel-no-defaults. Consumed by
+	// internal/proactive (NudgeRef registry TTL).
+	Proactive ProactiveConfig
+
 	// Spec 080 SCOPE-080-01 — Knowledge Graph Public API SST envelope.
 	// Sourced from `knowledge_graph_api.*` in config/smackerel.yaml
 	// via KNOWLEDGE_GRAPH_API_* env vars; fail-loud SST per
@@ -1153,6 +1159,12 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 	cfg.Surfacing = surfacingCfg
+
+	proactiveCfg, err := loadProactiveConfig(surfacingCfg)
+	if err != nil {
+		return nil, err
+	}
+	cfg.Proactive = proactiveCfg
 
 	knowledgeGraphAPICfg, err := loadKnowledgeGraphAPIConfig()
 	if err != nil {

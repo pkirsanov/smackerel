@@ -108,32 +108,32 @@ Scenario: SCN-107-009 Urgent escalation surfaces identically across channels
 
 #### Core Outcomes
 
-- [ ] SCN-107-004 Acting on a card acknowledges through the controller: act/snooze/dismiss from any channel resolve their `NudgeRef` and call one `Acknowledge(content_key)` on the process-wide registry, and the visible budget and suppression state update honestly.
-- [ ] SCN-107-008 Budget exhaustion defers identically across channels: a sixth non-urgent candidate returns `deferred-budget-exhausted`, produces no card on web/telegram/whatsapp, and renders an honest budget-exhausted state, never a fabricated card.
-- [ ] SCN-107-009 Urgent escalation surfaces identically across channels: a priority-1 time-critical candidate returns `escalated` and surfaces on every targeted channel with an urgent-escalation provenance line.
-- [ ] A `ProactiveCardModel` exists only for a `permit`/`escalated` verdict; no composition path renders a card that bypassed `controller.Propose`, and no second budget, second store, or client cache is introduced.
-- [ ] The `NudgeRef` registry is the single anti-leak boundary: no `content_key`, node label, or query text reaches any `callback_data`, `reply.id`, web body, `data-*` hook, or telemetry; the `a:n:` family never collides with `a:c:`/`a:d:`/spec-028; NFR-107-001 controller hot-path is preserved.
+- [x] SCN-107-004 Acting on a card acknowledges through the controller: act/snooze/dismiss from any channel resolve their `NudgeRef` and call one `Acknowledge(content_key)` on the process-wide registry, and the visible budget and suppression state update honestly. — Evidence: [report.md#integration-light](../01-single-controller-card-projection-foundation/report.md) unit `TestNudgeAck_*` + integration `TestSCN107004_ActAcknowledgesThroughControllerAndSuppressesEveryChannel` PASS (unit + stores-only live stack, exit 0) — the `_index.md` SCOPE-01 bar.
+- [x] SCN-107-008 Budget exhaustion defers identically across channels: a sixth non-urgent candidate returns `deferred-budget-exhausted`, produces no card on web/telegram/whatsapp, and renders an honest budget-exhausted state, never a fabricated card. — Evidence: [report.md#integration-light](../01-single-controller-card-projection-foundation/report.md) unit `TestReadBudgetMeter_ExhaustedIsExplicit` + integration `TestSCN107008_BudgetExhaustionDefersOnEveryChannel` PASS (unit + stores-only live stack, exit 0).
+- [x] SCN-107-009 Urgent escalation surfaces identically across channels: a priority-1 time-critical candidate returns `escalated` and surfaces on every targeted channel with an urgent-escalation provenance line. — Evidence: [report.md#integration-light](../01-single-controller-card-projection-foundation/report.md) unit `TestProjectCard_EscalatedIsUrgentWithProvenance` + integration `TestSCN107009_UrgentEscalationSurfacesOnEveryChannel` PASS (unit + stores-only live stack, exit 0).
+- [x] A `ProactiveCardModel` exists only for a `permit`/`escalated` verdict; no composition path renders a card that bypassed `controller.Propose`, and no second budget, second store, or client cache is introduced. — Evidence: [report.md#lane-test-unit](../01-single-controller-card-projection-foundation/report.md) `TestProjectCard_PermitProducesCard` / `TestProjectCard_EscalatedIsUrgentWithProvenance` / `TestProjectCard_NonCardVerdictsProduceNoCard` PASS.
+- [x] The `NudgeRef` registry is the single anti-leak boundary: no `content_key`, node label, or query text reaches any `callback_data`, `reply.id`, web body, `data-*` hook, or telemetry; the `a:n:` family never collides with `a:c:`/`a:d:`/spec-028; NFR-107-001 controller hot-path is preserved. — Evidence: [report.md#t107-01-leak](../01-single-controller-card-projection-foundation/report.md) `TestNudgeRef_AntiLeakBoundary` / `TestProactiveCardModel_MarshalOmitsContentKey` / `TestDecodeNudgeCallback_NonCollision` / `TestDecodeCallbackData_NudgeDoesNotBreakConfirmOrDisambig` / `TestNFR107001_CardProjectionHotPathP99` PASS.
 
 #### Test Evidence - One Item Per Test Plan Row
 
-- [ ] T107-004-U passes with current-session evidence in `report.md#t107-004-u`.
-- [ ] T107-004-I passes against the disposable stack with current-session evidence in `report.md#t107-004-i`.
+- [x] T107-004-U passes with current-session evidence in `report.md#t107-004-u`.
+- [x] T107-004-I passes against the disposable stack with current-session evidence in `report.md#t107-004-i`. — `TestSCN107004_ActAcknowledgesThroughControllerAndSuppressesEveryChannel` PASS via `test integration-light --go-run 'TestSCN107(004|008|009)'`, exit 0.
 - [ ] T107-004-A passes through production HTTP routes with current-session evidence in `report.md#t107-004-a`.
 - [ ] T107-004-W passes without interception and proves honest budget/suppression update in `report.md#t107-004-w`.
-- [ ] T107-008-U passes with current-session evidence in `report.md#t107-008-u`.
-- [ ] T107-008-I passes against the disposable stack with current-session evidence in `report.md#t107-008-i`.
+- [x] T107-008-U passes with current-session evidence in `report.md#t107-008-u`.
+- [x] T107-008-I passes against the disposable stack with current-session evidence in `report.md#t107-008-i`. — `TestSCN107008_BudgetExhaustionDefersOnEveryChannel` PASS via `test integration-light --go-run 'TestSCN107(004|008|009)'`, exit 0.
 - [ ] T107-008-A passes through production HTTP routes with current-session evidence in `report.md#t107-008-a`.
 - [ ] T107-008-W passes without interception and proves the honest budget-exhausted state in `report.md#t107-008-w`.
-- [ ] T107-009-U passes with current-session evidence in `report.md#t107-009-u`.
-- [ ] T107-009-I passes against the disposable stack with current-session evidence in `report.md#t107-009-i`.
+- [x] T107-009-U passes with current-session evidence in `report.md#t107-009-u`.
+- [x] T107-009-I passes against the disposable stack with current-session evidence in `report.md#t107-009-i`. — `TestSCN107009_UrgentEscalationSurfacesOnEveryChannel` PASS via `test integration-light --go-run 'TestSCN107(004|008|009)'`, exit 0.
 - [ ] T107-009-A passes through production HTTP routes with current-session evidence in `report.md#t107-009-a`.
 - [ ] T107-009-W passes without interception and proves the urgent-escalation provenance in `report.md#t107-009-w`.
-- [ ] T107-01-HOTPATH proves the controller `<5ms` p99 hot path is preserved in `report.md#t107-01-hotpath`.
-- [ ] T107-01-LEAK proves no `content_key`/node label/query reaches any wire or telemetry in `report.md#t107-01-leak`.
+- [x] T107-01-HOTPATH proves the controller `<5ms` p99 hot path is preserved in `report.md#t107-01-hotpath`. — `TestSCN107Hotpath_CardProjectionP99Live` PASS under the live full stack: p99 = 2.048ms over 50000 ops (ceiling 5ms), exit 0.
+- [x] T107-01-LEAK proves no `content_key`/node label/query reaches any wire or telemetry in `report.md#t107-01-leak`.
 
 #### Build Quality Gate
 
-- [ ] Scope tests, check, lint, format, source/config validation (including the `nudge_ref_ttl_hours` no-default SST key), API documentation, consumer review, artifact lint, traceability, zero warnings, and change-boundary review pass with executed evidence.
+- [ ] Scope tests, check, lint, format, source/config validation (including the `nudge_ref_ttl_hours` no-default SST key), API documentation, consumer review, artifact lint, traceability, zero warnings, and change-boundary review pass with executed evidence. — Uncertainty Declaration (honest gap, `[ ]`): scope-owned sub-parts PASS this session — unit + `integration-light` + live stress (exit 0), `check` (exit 0), `lint` (exit 0, "All checks passed!"), config/SST `nudge_ref_ttl_hours` no-default validation, and change-boundary (105/106/072/078/surfacing untouched). BLOCKER: repo-wide `./smackerel.sh format --check` exits 1 on `internal/web/handler_test.go`, a CONCURRENT SIBLING SESSION'S in-progress file (+188 lines; search / BUG-002-006 work) OUTSIDE SCOPE-01's boundary that must not be touched. SCOPE-01's own code is gofmt-clean. Routed to `bubbles.workflow`. Evidence: [report.md#build-quality](../01-single-controller-card-projection-foundation/report.md).
 
 ## Uncertainty Declaration
 
