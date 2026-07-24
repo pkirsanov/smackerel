@@ -1,0 +1,376 @@
+{
+  "version": 1,
+  "specId": "BUG-070-001",
+  "generatedBy": "bubbles.plan",
+  "generatedAt": "2026-07-24T06:34:43Z",
+  "reconciledAt": "2026-07-24T06:34:43Z",
+  "reconciliationNote": "Reconciled to analyst-updated spec.md: SCOPE-03 rows re-pointed off the stale SCN-070-001-09 mislabel to SCN-06/07; new SCOPE-05 covers SCN-070-001-09 (CSRF/Origin); SCOPE-06 (was SCOPE-05) covers SCN-070-001-01/10/11 acceptance.",
+  "scopes": [
+    {
+      "scopeId": "SCOPE-01",
+      "scopeName": "Bound Browser-Account Policy",
+      "tests": [
+        {
+          "id": "AUTH-S01-T01",
+          "type": "unit",
+          "category": "unit",
+          "file": "internal/auth/webcreds/repo_test.go; internal/auth/scope_registry_test.go",
+          "scenarioId": "SCN-070-001-02",
+          "description": "Reject unknown, wrong-password, disabled, unbound, and invalid-grant credentials without identity leakage.",
+          "testTitle": "TestVerifyAndResolveBrowserAccountRejectsUnknownWrongDisabledUnboundAndInvalidGrantWithoutIdentityLeak",
+          "command": "./smackerel.sh test unit --go",
+          "liveSystem": false
+        },
+        {
+          "id": "AUTH-S01-T02",
+          "type": "integration-red-green",
+          "category": "integration",
+          "file": "tests/integration/auth/browser_account_binding_test.go",
+          "scenarioId": "SCN-070-001-02",
+          "description": "Record the pre-fix unbound-account contract failure, then prove atomic explicit binding and zero token residue.",
+          "testTitle": "TestProductionCredentialBindingIsAtomicAndNeverInfersPrincipalOrScopes",
+          "command": "./smackerel.sh test integration",
+          "liveSystem": true
+        },
+        {
+          "id": "AUTH-S01-T03",
+          "type": "regression-e2e-api",
+          "category": "e2e-api",
+          "file": "tests/e2e/auth/browser_account_provisioning_test.go",
+          "scenarioId": "SCN-070-001-02",
+          "description": "Round-trip real invite provisioning and prove unbound login creates no browser session.",
+          "testTitle": "TestInviteProvisioningRoundTripCreatesBoundPrincipalAndExplicitGrantsWhileUnboundLoginCreatesNoSession",
+          "command": "./smackerel.sh test e2e",
+          "liveSystem": true
+        },
+        {
+          "id": "AUTH-S01-T04",
+          "type": "regression-e2e-ui",
+          "category": "e2e-ui",
+          "file": "web/pwa/tests/auth_account_binding.spec.ts",
+          "scenarioId": "SCN-070-001-02",
+          "description": "Use the real form and cookie jar to prove invalid, disabled, and unbound accounts share one rejection and no session.",
+          "testTitle": "invalid disabled and unbound accounts share one visible rejection and create no authenticated browser session",
+          "command": "./smackerel.sh test e2e-ui",
+          "liveSystem": true
+        },
+        {
+          "id": "AUTH-S01-T05",
+          "type": "broader-regression-e2e-ui",
+          "category": "e2e-ui",
+          "file": "web/pwa/tests/auth_registration_login.spec.ts",
+          "scenarioId": "SCN-070-001-02",
+          "description": "Prove real invited-account registration and login while failed provisioning leaves no usable partial account.",
+          "testTitle": "a real invited account registers then signs in while a failed provisioning transaction leaves no usable partial account",
+          "command": "./smackerel.sh test e2e-ui",
+          "liveSystem": true
+        }
+      ]
+    },
+    {
+      "scopeId": "SCOPE-02",
+      "scopeName": "Purpose-Bound Session Lifecycle",
+      "tests": [
+        {
+          "id": "AUTH-S02-T01",
+          "type": "unit",
+          "category": "unit",
+          "file": "internal/auth/issue_test.go; internal/auth/verify_test.go; internal/api/browser_session_policy_test.go",
+          "scenarioId": "SCN-070-001-03,SCN-070-001-04",
+          "description": "Validate audience, carrier, cookie expiry, revocation, and privacy matrices.",
+          "testTitle": "TestBrowserSessionAudienceCarrierCookieExpiryAndPrivacyMatrix",
+          "command": "./smackerel.sh test unit --go",
+          "liveSystem": false
+        },
+        {
+          "id": "AUTH-S02-T02",
+          "type": "integration-red-green",
+          "category": "integration",
+          "file": "tests/integration/auth/browser_session_lifecycle_test.go",
+          "scenarioId": "SCN-070-001-03",
+          "description": "Record the shared-cookie pre-fix failure and prove only persisted browser-purpose sessions survive after repair.",
+          "testTitle": "TestSharedAndAPITokenCookiesFailWhilePersistedBrowserTokenRevocationRejectsReplay",
+          "command": "./smackerel.sh test integration",
+          "liveSystem": true
+        },
+        {
+          "id": "AUTH-S02-T03",
+          "type": "regression-e2e-api",
+          "category": "e2e-api",
+          "file": "tests/e2e/auth/browser_token_exchange_test.go",
+          "scenarioId": "SCN-070-001-03",
+          "description": "Prove API-header exchange mints a distinct browser session while direct API-token cookie use fails.",
+          "testTitle": "TestAPIHeaderTokenExchangesForNewBrowserSessionButFailsWhenCopiedDirectlyIntoCookie",
+          "command": "./smackerel.sh test e2e",
+          "liveSystem": true
+        },
+        {
+          "id": "AUTH-S02-T04",
+          "type": "regression-e2e-ui",
+          "category": "e2e-ui",
+          "file": "web/pwa/tests/auth_session_privacy.spec.ts",
+          "scenarioId": "SCN-070-001-04",
+          "description": "Inspect the real browser journey for credential material in DOM, URL, storage, responses, and console.",
+          "testTitle": "real login keeps password and session material out of DOM URLs storage responses and console",
+          "command": "./smackerel.sh test e2e-ui",
+          "liveSystem": true
+        },
+        {
+          "id": "AUTH-S02-T05",
+          "type": "broader-regression-e2e-ui",
+          "category": "e2e-ui",
+          "file": "web/pwa/tests/auth_session_expiry_revocation.spec.ts",
+          "scenarioId": "SCN-070-001-03",
+          "description": "Exercise malformed, expired, revoked, wrong-purpose, unknown-key, and shared-token-shaped cookies through real navigation.",
+          "testTitle": "malformed expired revoked wrong-purpose unknown-key and shared-token-shaped cookies all require re-authentication",
+          "command": "./smackerel.sh test e2e-ui",
+          "liveSystem": true
+        }
+      ]
+    },
+    {
+      "scopeId": "SCOPE-03",
+      "scopeName": "Unified Request Authentication",
+      "tests": [
+        {
+          "id": "AUTH-S03-T01",
+          "type": "unit",
+          "category": "unit",
+          "file": "internal/api/router_auth_middleware_test.go; internal/auth/request_authenticator_test.go",
+          "scenarioId": "SCN-070-001-06,SCN-070-001-07",
+          "description": "Validate carrier precedence, session parity, and 401, 403, empty, and degraded separation.",
+          "testTitle": "TestUnifiedAuthenticatorPreservesCarrierPrecedenceSessionParityAnd401403EmptyDegradedSeparation",
+          "command": "./smackerel.sh test unit --go",
+          "liveSystem": false
+        },
+        {
+          "id": "AUTH-S03-T02",
+          "type": "integration-red-green",
+          "category": "integration",
+          "file": "tests/integration/auth/middleware_parity_test.go",
+          "scenarioId": "SCN-070-001-06",
+          "description": "Record legacy acceptance and modern rejection before the fix, then identical sessions across legacy, API, and V1 (middleware-parity mechanism for the SCN-06 modern read).",
+          "testTitle": "TestOnePasswordLoginCookieAuthenticatesLegacyAPIAndV1WithIdenticalSession",
+          "command": "./smackerel.sh test integration",
+          "liveSystem": true
+        },
+        {
+          "id": "AUTH-S03-T03",
+          "type": "regression-e2e-api",
+          "category": "e2e-api",
+          "file": "tests/e2e/auth/browser_middleware_parity_test.go",
+          "scenarioId": "SCN-070-001-06",
+          "description": "Use one browser cookie for representative API and V1 reads while preserving 401, 403, and true-empty semantics.",
+          "testTitle": "TestBrowserCookieAuthorizesRepresentativeAPIAndV1ReadsAndPreserves401403AndEmptySemantics",
+          "command": "./smackerel.sh test e2e",
+          "liveSystem": true
+        },
+        {
+          "id": "AUTH-S03-T04",
+          "type": "regression-e2e-ui",
+          "category": "e2e-ui",
+          "file": "web/pwa/tests/auth_middleware_parity.spec.ts",
+          "scenarioId": "SCN-070-001-06",
+          "description": "Navigate a legacy page and modern PWA data route after one real login.",
+          "testTitle": "one real login navigates a legacy page and modern PWA data route without a second credential",
+          "command": "./smackerel.sh test e2e-ui",
+          "liveSystem": true
+        },
+        {
+          "id": "AUTH-S03-T05",
+          "type": "broader-regression-e2e-ui",
+          "category": "e2e-ui",
+          "file": "web/pwa/tests/auth_empty_degraded_access.spec.ts",
+          "scenarioId": "SCN-070-001-06,SCN-070-001-07",
+          "description": "Distinguish true empty, filtered empty, degraded dependency, access denied, and healthy content under one valid session.",
+          "testTitle": "authenticated true empty filtered empty degraded dependency access denied and healthy content remain distinguishable",
+          "command": "./smackerel.sh test e2e-ui",
+          "liveSystem": true
+        }
+      ]
+    },
+    {
+      "scopeId": "SCOPE-04",
+      "scopeName": "Login Recovery And Logout UX",
+      "tests": [
+        {
+          "id": "AUTH-S04-T01",
+          "type": "unit",
+          "category": "unit",
+          "file": "internal/api/web_login_credential_test.go; internal/api/web_login_page_test.go; internal/api/web_logout_test.go; internal/api/sanitize_next_test.go",
+          "scenarioId": "SCN-070-001-05,SCN-070-001-08",
+          "description": "Validate login, recovery, safe-return, cookie, logout, and presentation matrices.",
+          "testTitle": "TestLoginRecoverySafeReturnCookieAndLogoutPresentationMatrix",
+          "command": "./smackerel.sh test unit --go",
+          "liveSystem": false
+        },
+        {
+          "id": "AUTH-S04-T02",
+          "type": "integration-red-green",
+          "category": "integration",
+          "file": "tests/integration/auth/password_login_logout_test.go",
+          "scenarioId": "SCN-070-001-05",
+          "description": "Record shared-token/JTI logout failure before repair and prove persisted session revocation and replay rejection after repair.",
+          "testTitle": "TestRealPasswordLoginPersistsBrowserSessionAndLogoutRevokesBeforeSuccess",
+          "command": "./smackerel.sh test integration",
+          "liveSystem": true
+        },
+        {
+          "id": "AUTH-S04-T03",
+          "type": "regression-e2e-api",
+          "category": "e2e-api",
+          "file": "tests/e2e/auth/browser_login_logout_test.go",
+          "scenarioId": "SCN-070-001-05",
+          "description": "Round-trip login, logout, replay, and typed revocation-store failure across route families.",
+          "testTitle": "TestLoginLogoutAndReplayAcrossLegacyAPIAndV1PreservesTypedRevocationFailure",
+          "command": "./smackerel.sh test e2e",
+          "liveSystem": true
+        },
+        {
+          "id": "AUTH-S04-T04",
+          "type": "regression-e2e-ui",
+          "category": "e2e-ui",
+          "file": "web/pwa/tests/auth_login_recovery.spec.ts; web/pwa/tests/auth_logout.spec.ts",
+          "scenarioId": "SCN-070-001-05,SCN-070-001-08",
+          "description": "Use the real form for login, safe recovery, and truthful logout without interception or auth injection.",
+          "testTitle": "real form login safe recovery and logout remain truthful with no auth injection interception or bailout",
+          "command": "./smackerel.sh test e2e-ui",
+          "liveSystem": true
+        },
+        {
+          "id": "AUTH-S04-T05",
+          "type": "broader-regression-e2e-ui",
+          "category": "e2e-ui",
+          "file": "web/pwa/tests/auth_accessibility.spec.ts",
+          "scenarioId": "SCN-070-001-08",
+          "description": "Exercise login rejection, recovery, and logout with keyboard, accessibility snapshots, 320px viewport, and 200 percent zoom.",
+          "testTitle": "login rejection session recovery and logout are keyboard screen-reader and narrow-viewport operable",
+          "command": "./smackerel.sh test e2e-ui",
+          "liveSystem": true
+        }
+      ]
+    },
+    {
+      "scopeId": "SCOPE-05",
+      "scopeName": "Product-Wide CSRF And Origin Mutation Protection",
+      "tests": [
+        {
+          "id": "AUTH-S05-T01",
+          "type": "unit",
+          "category": "unit",
+          "file": "internal/api/web_login_test.go; internal/api/csrf_origin_middleware_test.go",
+          "scenarioId": "SCN-070-001-09",
+          "description": "Validate that every cookie-authenticated mutation family requires a trusted Origin and a session-bound anti-CSRF proof; SameSite alone is not accepted as sufficient evidence.",
+          "testTitle": "TestCookieMutationsRequireTrustedOriginAndSessionBoundCsrfProofAcrossEveryMutationFamily",
+          "command": "./smackerel.sh test unit --go",
+          "liveSystem": false
+        },
+        {
+          "id": "AUTH-S05-T02",
+          "type": "integration-red-green",
+          "category": "integration",
+          "file": "tests/integration/auth/csrf_origin_enforcement_test.go",
+          "scenarioId": "SCN-070-001-09",
+          "description": "Record the pre-fix state where a cookie-authenticated mutation family accepts a missing/cross-origin request, then prove every family returns 403 before any state change and passes only with valid session-bound proof.",
+          "testTitle": "TestEveryCookieMutationFamilyRejectsMissingStaleMismatchedAndCrossOriginProofBeforeStateChange",
+          "command": "./smackerel.sh test integration",
+          "liveSystem": true
+        },
+        {
+          "id": "AUTH-S05-T03",
+          "type": "regression-e2e-api",
+          "category": "e2e-api",
+          "file": "tests/e2e/auth/csrf_mutation_matrix_test.go",
+          "scenarioId": "SCN-070-001-09",
+          "description": "Exercise login, registration, logout, JSON, and admin mutations with forged/cross-origin requests and assert 403 before mutation, then success with valid same-origin session-bound proof.",
+          "testTitle": "TestLoginRegisterLogoutJsonAndAdminMutationsReturn403BeforeMutationOnForgedRequests",
+          "command": "./smackerel.sh test e2e",
+          "liveSystem": true
+        },
+        {
+          "id": "AUTH-S05-T04",
+          "type": "regression-e2e-ui",
+          "category": "e2e-ui",
+          "file": "web/pwa/tests/auth_csrf_origin.spec.ts; web/pwa/tests/auth_login.spec.ts",
+          "scenarioId": "SCN-070-001-09",
+          "description": "Use the real browser to submit server-form, HTMX, PWA fetch, and Cards mutations with missing/stale/cross-origin proof and assert they are blocked before mutation while valid same-origin proof proceeds.",
+          "testTitle": "cross-origin stale and missing csrf submissions are blocked before mutation while valid same-origin proof proceeds",
+          "command": "./smackerel.sh test e2e-ui",
+          "liveSystem": true
+        },
+        {
+          "id": "AUTH-S05-T05",
+          "type": "broader-regression-e2e-ui",
+          "category": "e2e-ui",
+          "file": "web/pwa/tests/production_authenticated_product_journey.spec.ts; web/pwa/tests/auth_login.spec.ts",
+          "scenarioId": "SCN-070-001-09",
+          "description": "Confirm CSRF/Origin protection holds across login, registration, logout, server forms, HTMX, PWA fetch, JSON, Cards, and admin in the broader authenticated journey.",
+          "testTitle": "csrf and origin protection holds across every mutation family in the broader authenticated journey",
+          "command": "./smackerel.sh test e2e-ui",
+          "liveSystem": true
+        }
+      ]
+    },
+    {
+      "scopeId": "SCOPE-06",
+      "scopeName": "Role And Grant Acceptance And Global Corpus Gating (Disposable Production)",
+      "tests": [
+        {
+          "id": "AUTH-S06-T01",
+          "type": "unit",
+          "category": "unit",
+          "file": "internal/api/model_connections_operator_gate_test.go; internal/auth/scope_middleware_test.go; internal/api/auth_surface_contract_test.go; web/pwa/tests/auth_login.spec.ts",
+          "scenarioId": "SCN-070-001-01,SCN-070-001-10,SCN-070-001-11",
+          "description": "Validate representative surface inventory, the daily-user/operator role-grant matrix, and global-corpus grant gating through the unified authenticator; reject bypass-shaped browser helpers.",
+          "testTitle": "TestSurfaceInventoryRoleGrantMatrixAndGlobalCorpusGateUseUnifiedAuthenticatorAndRejectBypassHelpers",
+          "command": "./smackerel.sh test unit --go",
+          "liveSystem": false
+        },
+        {
+          "id": "AUTH-S06-T02",
+          "type": "integration-red-green",
+          "category": "integration",
+          "file": "tests/integration/auth/production_browser_session_acceptance_test.go",
+          "scenarioId": "SCN-070-001-01",
+          "description": "Capture the pre-fix modern-route 401 after real login, then accepted legacy, Assistant, API, and V1 access with fallback false and one persisted browser session.",
+          "testTitle": "TestProductionPasswordCookieReachesLegacyAssistantAPIAndV1WithFallbackFalse",
+          "command": "./smackerel.sh test integration",
+          "liveSystem": true
+        },
+        {
+          "id": "AUTH-S06-T03",
+          "type": "regression-e2e-api",
+          "category": "e2e-api",
+          "file": "tests/e2e/auth/role_route_matrix_test.go; tests/e2e/auth/global_corpus_grant_gate_test.go; tests/integration/graphapi/auth_test.go",
+          "scenarioId": "SCN-070-001-10,SCN-070-001-11",
+          "description": "Prove one daily-user and one operator each authorize their permitted routes (2xx) and receive 403 outside their grants, and that ungranted global-corpus reads return 403 with no counts, labels, or existence hints.",
+          "testTitle": "TestDailyUserAndOperatorRouteMatrixAndGlobalCorpusGrantGateReturn2xxAnd403WithoutLeak",
+          "command": "./smackerel.sh test e2e",
+          "liveSystem": true
+        },
+        {
+          "id": "AUTH-S06-T04",
+          "type": "regression-e2e-ui",
+          "category": "e2e-ui",
+          "file": "web/pwa/tests/production_authenticated_product_journey.spec.ts",
+          "scenarioId": "SCN-070-001-01,SCN-070-001-10",
+          "description": "Reach every permitted representative product surface after one real production-mode login, and confirm the daily-user/operator 2xx/403 matrix with no daily-user admin success.",
+          "testTitle": "one real production login reaches every permitted surface and the daily and operator matrix returns 2xx and 403 correctly",
+          "command": "./smackerel.sh test e2e-ui",
+          "liveSystem": true
+        },
+        {
+          "id": "AUTH-S06-T05",
+          "type": "broader-regression-e2e-ui",
+          "category": "e2e-ui",
+          "file": "web/pwa/tests/production_authenticated_product_journey.spec.ts; web/pwa/tests",
+          "scenarioId": "SCN-070-001-01,SCN-070-001-02,SCN-070-001-03,SCN-070-001-04,SCN-070-001-05,SCN-070-001-06,SCN-070-001-07,SCN-070-001-08,SCN-070-001-09,SCN-070-001-10,SCN-070-001-11",
+          "description": "Preserve logout, privacy, empty, degraded, denied, accessibility, recovery, CSRF, role-matrix, and corpus-gate states across the broader authenticated browser suite.",
+          "testTitle": "logout privacy empty degraded denied recovery csrf role-matrix and corpus-gate states remain correct across the broader authenticated journey",
+          "command": "./smackerel.sh test e2e-ui",
+          "liveSystem": true
+        }
+      ]
+    }
+  ]
+}

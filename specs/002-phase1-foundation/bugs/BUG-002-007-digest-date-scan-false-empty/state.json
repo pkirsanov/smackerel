@@ -1,0 +1,118 @@
+{
+  "version": 3,
+  "bugId": "BUG-002-007",
+  "featureDir": "specs/002-phase1-foundation/bugs/BUG-002-007-digest-date-scan-false-empty",
+  "featureName": "Digest Date Scan Produces False Empty",
+  "releaseTrain": "mvp",
+  "flagsIntroduced": [],
+  "status": "in_progress",
+  "statusReason": "Planning packet initialized from interpreted operator input. No local database/browser reproduction, implementation, test, certification, production mutation, commit, push, or deployment is claimed.",
+  "workflowMode": "bugfix-fastlane",
+  "linkedImplementationSpec": null,
+  "linkedPlanningPacket": null,
+  "planningOnly": false,
+  "planningOnlyJustification": null,
+  "specDependsOn": ["specs/002-phase1-foundation"],
+  "certifiedAt": null,
+  "requiresRevalidation": false,
+  "requirementsRecovery": {
+    "reviewId": "2026-07-24-independent-planning-review",
+    "status": "analyst_reconciled",
+    "addressedFindings": ["SR-006", "GRILL-12"],
+    "activeRequirementsRef": "spec.md",
+    "decision": "Digest reads the single operator-owned global corpus through explicit role/grant access and makes no tenant/user row-isolation claim.",
+    "certificationClaimed": false
+  },
+  "execution": {
+    "activeAgent": "bubbles.plan",
+    "currentPhase": "harden",
+    "currentScope": null,
+    "runStartedAt": "2026-07-24T07:55:00Z",
+    "completedPhaseClaims": [],
+    "pendingTransitionRequests": [],
+    "audit": { "schemaVersion": "audit-run/v1", "runId": null, "currentAttemptId": null, "attempts": [] }
+  },
+  "certification": {
+    "status": "in_progress",
+    "completedScopes": [],
+    "certifiedCompletedPhases": [],
+    "scopeProgress": [
+      { "scope": 1, "scopeId": "SCOPE-01", "name": "Digest Ownership And Freshness Contract Gate", "status": "not_started", "dependsOn": [], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": null },
+      { "scope": 2, "scopeId": "SCOPE-02", "name": "Canonical Typed Digest Reader", "status": "not_started", "dependsOn": ["SCOPE-01"], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": null },
+      { "scope": 3, "scopeId": "SCOPE-03", "name": "Truthful Server-Rendered Digest States", "status": "not_started", "dependsOn": ["SCOPE-02"], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": null },
+      { "scope": 4, "scopeId": "SCOPE-04", "name": "Disposable Digest Browser Acceptance", "status": "not_started", "dependsOn": ["SCOPE-03"], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": null }
+    ],
+    "lockdownState": { "active": false, "lockedScenarioIds": [] },
+    "invalidationLedger": []
+  },
+  "policySnapshot": {
+    "grill": { "mode": "off", "source": "repo-default" },
+    "tdd": { "mode": "scenario-first", "source": "workflow-mode" },
+    "autoCommit": { "mode": "off", "source": "user-constraint" },
+    "lockdown": { "mode": "off", "source": "repo-default" },
+    "regression": { "mode": "protected-scenarios", "source": "workflow-mode" },
+    "validation": { "mode": "certification-required", "source": "repo-default" }
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "executionHistory": [
+    {
+      "agent": "bubbles.ux",
+      "phasesExecuted": ["analyze"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-07-23T15:07:02Z",
+      "runEndedAt": "2026-07-23T15:07:02Z",
+      "summary": "Reconciled the UX-owned Digest contract with desktop and mobile wireframes; distinct loading, current, quiet, selected-date-empty, first-use-empty, stale, unauthorized, read-error, and retry states; date/source interaction rules; keyboard and screen-reader behavior; real-stack Playwright-visible outcomes; and routed design questions. No implementation, database or browser execution, evidence, certification, status transition, commit, push, build, or deployment is claimed."
+    },
+    {
+      "agent": "bubbles.design",
+      "phasesExecuted": ["bootstrap"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-07-23T16:36:03Z",
+      "runEndedAt": "2026-07-23T17:00:23Z",
+      "summary": "Replaced the initialization design with a code-grounded typed Digest architecture: the legacy page consumes the canonical digest.Generator reader, PostgreSQL DATE and TIMESTAMPTZ values remain typed, only wrapped pgx.ErrNoRows maps to empty, all other read failures are explicit, states and telemetry are closed and privacy-safe, real-PostgreSQL Playwright validation is required, and rollback is schema-free. No spec, scope, report, user validation, scenario manifest, source, test, certification, status transition, commit, push, build, or deployment change is claimed."
+    },
+    {
+      "agent": "bubbles.analyst",
+      "phasesExecuted": ["analyze"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-07-24T02:35:39Z",
+      "runEndedAt": "2026-07-24T02:38:31Z",
+      "summary": "Reconciled SR-006/GRILL-12: Digest reads the single operator-owned global corpus through explicit role/grant access, forbids ungranted private-content and existence disclosure, and makes no tenant/user row-isolation claim. Preserved SCN-002-007-01..08. No source, test, design, scope, report, user validation, certification, commit, push, or deployment work is claimed."
+    },
+    {
+      "agent": "bubbles.design",
+      "phasesExecuted": ["bootstrap"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-07-24T03:05:58Z",
+      "runEndedAt": "2026-07-24T03:05:58Z",
+      "summary": "Reconciled design.md to the analyst-owned global-corpus decision: operator/digest:read authorization precedes web/API reads, configured operator/digest:generate authorization precedes generation, denial leaks no existence metadata, typed DATE/TIMESTAMPTZ scans and non-no-row errors stay explicit, no storage migration number is reserved, rollback is data-neutral and cannot restore false-empty or grant bypass, first-slice auth/privacy/error/observability obligations are explicit, and DIGEST-FP-DB-SCAN-001 defines isolated real-PostgreSQL no-interception fault proof. Focused artifact lint passed. No spec, scope, report, user validation, scenario manifest, source, test, config, certification, status transition, commit, push, build, deployment, or spec 079 change is claimed."
+    },
+    {
+      "agent": "bubbles.plan",
+      "phasesExecuted": ["harden"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-07-24T07:55:00Z",
+      "runEndedAt": "2026-07-24T08:02:00Z",
+      "summary": "Planning reconciliation (spec-scope-hardening harden): re-derived scopes.md, scenario-manifest.json, and report.md against the revised spec.md/design.md (both 2026-07-24T05:46Z). Reframed Scope 01 SCN-002-007-10 from the superseded product-session-versus-per-user ratification to the design-resolved model — one operator-owned global corpus gated by digest:read/digest:generate with no tenant/per-user row isolation — and aligned Scope 02's reader plan. Regenerated scenario-manifest.json from 8 stale SCOPE-01 entries to 10 scenarios across SCOPE-01..04 with existing linked-test anchors (removed the nonexistent web/pwa/tests/digest.spec.ts) and spec-matching titles. Recorded concrete canary anchors in report.md and expanded certification.scopeProgress to the four planned scopes. Kept status in_progress; no source, test, spec, design, certification, commit, push, or deployment change is claimed."
+    }
+  ],
+  "activeBugs": [],
+  "resolvedBugs": [],
+  "failures": [],
+  "lastUpdatedAt": "2026-07-24T08:02:00Z",
+  "scopeLayout": "single-file",
+  "artifacts": { "bug": "bug.md", "spec": "spec.md", "design": "design.md", "scopes": "scopes.md", "report": "report.md", "uservalidation": "uservalidation.md", "scenarioManifest": "scenario-manifest.json" },
+  "statusDiscipline": {
+    "validStatuses": ["not_started", "in_progress", "blocked", "specs_hardened", "docs_updated", "validated", "done"],
+    "scopePickupRule": "All dependsOn scopes must be Done. Pick the lowest-numbered eligible scope.",
+    "scopeDoneGates": ["G020", "G021", "G022", "G023", "G024", "G025", "G055", "G056", "G057", "G058", "G059", "G060", "G061"],
+    "specDoneRequires": "All scopes done and validate-owned certification permits promotion."
+  },
+  "notes": "Owner routes required: bubbles.ux, bubbles.design, bubbles.plan. Blocks spec 106 Digest and BUG-102-001 journey acceptance."
+}

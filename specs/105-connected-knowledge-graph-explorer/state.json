@@ -1,0 +1,232 @@
+{
+  "version": 3,
+  "featureDir": "specs/105-connected-knowledge-graph-explorer",
+  "featureNumber": "105",
+  "featureName": "Connected Knowledge Graph Explorer",
+  "status": "in_progress",
+  "workflowMode": "full-delivery",
+  "releaseTrain": "mvp",
+  "flagsIntroduced": [],
+  "linkedImplementationSpec": null,
+  "linkedPlanningPacket": null,
+  "planningOnly": false,
+  "planningOnlyJustification": null,
+  "specDependsOn": [
+    "specs/080-knowledge-graph-public-api",
+    "specs/073-web-mobile-assistant-frontend",
+    "specs/100-unified-journey-ui-transformation",
+    "specs/080-knowledge-graph-public-api/bugs/BUG-080-001-graph-api-fail-soft-runtime-disable"
+  ],
+  "planningProvenance": {
+    "owner": "bubbles.plan",
+    "generatedAt": "2026-07-24T17:46:09Z",
+    "inputs": [
+      "spec.md",
+      "design.md",
+      "state.json",
+      "specs/080-knowledge-graph-public-api/bugs/BUG-080-001-graph-api-fail-soft-runtime-disable"
+    ],
+    "dependencyStatusObserved": {
+      "specs/080-knowledge-graph-public-api/bugs/BUG-080-001-graph-api-fail-soft-runtime-disable": "in_progress"
+    },
+    "reconciliation": {
+      "reviewId": "2026-07-24-plan-scope-hardening-reconciliation",
+      "owner": "bubbles.plan",
+      "phase": "harden",
+      "reason": "Planning artifacts were authored before the 05:46 spec revision that added SCN-105-014/015/016; scopes, scenario-manifest.json, test-plan.json, _index.md, report.md, and uservalidation.md were stale at 01:27:57 while spec.md/state.json (05:46:37) and design.md (05:46:38) were fresh.",
+      "designStalenessObserved": false,
+      "designStalenessNote": "105 design.md (05:46:38) postdates the 05:46 spec revision and already specifies SCN-105-014/015/016, the two-node/one-edge connectedness contract, the component analyzer, and Graph/Outline/Table equivalence, so no 105 design edit was required.",
+      "crossPacketRisk": "Upstream BUG-080-001 has an unresolved design-staleness gap (its design.md predates the 05:46 graph-API revision; missing SCN-080-001-09 and the operator-owned global-corpus grant model) routed to bubbles.design. 105 SCOPE-01/02 consume graph-API behavior that 080's design has not yet fully specified.",
+      "scopeMapping": {
+        "SCN-105-014": "SCOPE-01",
+        "SCN-105-015": "SCOPE-01",
+        "SCN-105-016": "SCOPE-05"
+      }
+    },
+    "claims": "Planning artifacts only. The scenario manifest now covers 16 scenarios and classifies all 64 not-yet-authored tests as planned; both requested planning guards exit 0 (artifact-lint PASSED, traceability-guard PASSED with 0 warnings and 16/16 DoD fidelity). No source, authored-test, test-pass, migration, browser, deployment, commit, or push execution is claimed.",
+    "scenarioManifestRepair": {
+      "scenarioCountBefore": 13,
+      "scenarioCountAfter": 16,
+      "linkedTestsBefore": 0,
+      "linkedTestsAfter": 0,
+      "plannedTestsBefore": 52,
+      "plannedTestsAfter": 64,
+      "testPlanChanged": true,
+      "artifactLintExit": 0,
+      "traceabilityGuardExit": 0,
+      "traceabilityWarnings": 0
+    }
+  },
+  "scopeDag": {
+    "layout": "per-scope-directory",
+    "nodes": ["SCOPE-01", "SCOPE-02", "SCOPE-03", "SCOPE-04", "SCOPE-05", "SCOPE-06", "SCOPE-07", "SCOPE-08", "SCOPE-09", "SCOPE-10"],
+    "edges": [
+      {"from": "SCOPE-01", "to": "SCOPE-02"},
+      {"from": "SCOPE-02", "to": "SCOPE-03"},
+      {"from": "SCOPE-03", "to": "SCOPE-04"},
+      {"from": "SCOPE-04", "to": "SCOPE-05"},
+      {"from": "SCOPE-05", "to": "SCOPE-06"},
+      {"from": "SCOPE-06", "to": "SCOPE-07"},
+      {"from": "SCOPE-07", "to": "SCOPE-08"},
+      {"from": "SCOPE-08", "to": "SCOPE-09"},
+      {"from": "SCOPE-09", "to": "SCOPE-10"}
+    ],
+    "externalGate": "BUG-080-001 must be certified done before SCOPE-01 pickup"
+  },
+  "certifiedAt": null,
+  "requiresRevalidation": false,
+  "corpusOwnershipModel": {
+    "mode": "single-operator-owned-global-corpus",
+    "identityModel": "multiple authenticated identities with explicit roles/grants",
+    "tenantRowIsolationClaimed": false,
+    "privateDefault": "operator-only"
+  },
+  "connectedAcceptance": {
+    "minimumConnectedComponent": {"nodes": 2, "storedEdges": 1},
+    "isolatedOnlyOutcome": "no-connected-overview",
+    "boundedProjectionRequired": true,
+    "equivalentViews": ["Graph", "Outline", "Table"],
+    "crossCuttingFromFirstSlice": ["scale", "security/privacy", "accessibility", "typed errors"]
+  },
+  "requirementsRecovery": {
+    "reviewId": "2026-07-24-independent-planning-review",
+    "status": "analyst_reconciled",
+    "addressedFindings": ["SR-006", "GRILL-10", "GRILL-12"],
+    "activeRequirementsRef": "spec.md",
+    "certificationClaimed": false
+  },
+  "execution": {
+    "activeAgent": "bubbles.plan",
+    "currentPhase": "harden",
+    "currentScope": null,
+    "runStartedAt": "2026-07-24T02:35:39Z",
+    "completedPhaseClaims": [
+      {
+        "phase": "analyze",
+        "agent": "bubbles.analyst",
+        "completedAt": "2026-07-23T08:16:08Z",
+        "evidenceRef": "spec.md",
+        "summary": "Authored grounded business requirements for a bounded connected graph explorer with real topology, expansion, focus, filtering, path explanation, equivalent nonvisual interaction, responsive/accessibility behavior, honest states, security/privacy, observability, migration compatibility, and mvp release-train alignment."
+      }
+    ],
+    "pendingTransitionRequests": [],
+    "audit": {
+      "schemaVersion": "audit-run/v1",
+      "runId": null,
+      "currentAttemptId": null,
+      "attempts": []
+    }
+  },
+  "certification": {
+    "status": "in_progress",
+    "completedScopes": [],
+    "certifiedCompletedPhases": [],
+    "scopeProgress": [
+      {"scope":1,"scopeId":"SCOPE-01","name":"Graph Contract And Query Foundation","status":"not_started","dependsOn":[],"externalDependsOn":["BUG-080-001"],"scopeDir":"scopes/01-graph-contract-query-foundation","evidenceFile":"scopes/01-graph-contract-query-foundation/report.md","certifiedAt":null},
+      {"scope":2,"scopeId":"SCOPE-02","name":"Bounded Projection Cursor Expansion And Path API","status":"not_started","dependsOn":["SCOPE-01"],"scopeDir":"scopes/02-bounded-projection-cursor-expansion-api","evidenceFile":"scopes/02-bounded-projection-cursor-expansion-api/report.md","certifiedAt":null},
+      {"scope":3,"scopeId":"SCOPE-03","name":"Source-Locked Renderer And Assets","status":"not_started","dependsOn":["SCOPE-02"],"scopeDir":"scopes/03-source-locked-renderer-assets","evidenceFile":"scopes/03-source-locked-renderer-assets/report.md","certifiedAt":null},
+      {"scope":4,"scopeId":"SCOPE-04","name":"Desktop Explorer Interactions","status":"not_started","dependsOn":["SCOPE-03"],"scopeDir":"scopes/04-desktop-explorer-interactions","evidenceFile":"scopes/04-desktop-explorer-interactions/report.md","certifiedAt":null},
+      {"scope":5,"scopeId":"SCOPE-05","name":"Keyboard Semantic Projections And Accessibility","status":"not_started","dependsOn":["SCOPE-04"],"scopeDir":"scopes/05-keyboard-semantic-accessibility","evidenceFile":"scopes/05-keyboard-semantic-accessibility/report.md","certifiedAt":null},
+      {"scope":6,"scopeId":"SCOPE-06","name":"Entry Points Deep Links And Restoration","status":"not_started","dependsOn":["SCOPE-05"],"scopeDir":"scopes/06-entry-deep-links","evidenceFile":"scopes/06-entry-deep-links/report.md","certifiedAt":null},
+      {"scope":7,"scopeId":"SCOPE-07","name":"Responsive Mobile Motion And Theming","status":"not_started","dependsOn":["SCOPE-06"],"scopeDir":"scopes/07-responsive-mobile-motion-theming","evidenceFile":"scopes/07-responsive-mobile-motion-theming/report.md","certifiedAt":null},
+      {"scope":8,"scopeId":"SCOPE-08","name":"Privacy Security And Honest States","status":"not_started","dependsOn":["SCOPE-07"],"scopeDir":"scopes/08-privacy-security-honest-states","evidenceFile":"scopes/08-privacy-security-honest-states/report.md","certifiedAt":null},
+      {"scope":9,"scopeId":"SCOPE-09","name":"Scale Performance And Observability","status":"not_started","dependsOn":["SCOPE-08"],"scopeDir":"scopes/09-scale-performance-observability","evidenceFile":"scopes/09-scale-performance-observability/report.md","certifiedAt":null},
+      {"scope":10,"scopeId":"SCOPE-10","name":"Real-Stack Acceptance And Deployment Handoff","status":"not_started","dependsOn":["SCOPE-09"],"scopeDir":"scopes/10-real-stack-acceptance-handoff","evidenceFile":"scopes/10-real-stack-acceptance-handoff/report.md","certifiedAt":null}
+    ],
+    "lockdownState": {
+      "active": false,
+      "lockedScenarioIds": []
+    }
+  },
+  "policySnapshot": {
+    "grill": {"mode": "off", "source": "repo-default"},
+    "tdd": {"mode": "scenario-first", "source": "repo-default"},
+    "autoCommit": {"mode": "off", "source": "repo-default"},
+    "lockdown": {"mode": "off", "source": "repo-default"},
+    "regression": {"mode": "protected-scenarios", "source": "repo-default"},
+    "validation": {"mode": "certification-required", "source": "repo-default"}
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "executionHistory": [
+    {
+      "agent": "bubbles.analyst",
+      "phasesExecuted": ["analyze"],
+      "statusBefore": "not_started",
+      "statusAfter": "not_started",
+      "runStartedAt": "2026-07-23T08:13:15Z",
+      "runEndedAt": "2026-07-23T08:16:08Z",
+      "summary": "Created analyst-owned spec.md and state.json only. No design, UX, scopes, report, user validation, source, tests, certification, commit, push, or deployment work was performed."
+    },
+    {
+      "agent": "bubbles.ux",
+      "phasesExecuted": ["analyze"],
+      "statusBefore": "not_started",
+      "statusAfter": "not_started",
+      "runStartedAt": "2026-07-23T09:12:48Z",
+      "runEndedAt": "2026-07-23T09:13:11Z",
+      "summary": "Authored UX-owned graph screen inventory, reusable primitives, desktop/tablet/mobile ASCII wireframes, equivalent Graph/Outline/Table interactions, accessibility and scale safeguards, user flows, and a stable real-stack Playwright scenario matrix. No design, scope, source, test, certification, commit, push, or deployment work was performed."
+    },
+    {
+      "agent": "bubbles.design",
+      "phasesExecuted": ["bootstrap"],
+      "statusBefore": "not_started",
+      "statusAfter": "not_started",
+      "runStartedAt": "2026-07-23T16:58:57Z",
+      "runEndedAt": "2026-07-23T16:59:20Z",
+      "summary": "Created the contract-grade technical design for one authorized bounded graph-query foundation shared by Browse, Graph, Outline, Table, and Path, using the existing PostgreSQL graph. The design defines concept/entity and edge/evidence contracts, query-bound cursors, deterministic Canvas 2D and semantic projections, path limits, saved-view preferences, privacy clearing, activation, observability, migration/rollback, and Playwright canvas-pixel validation. No spec, scope, report, user validation, scenario manifest, source, test, certification, commit, push, build, or deployment change is claimed."
+    },
+    {
+      "agent": "bubbles.analyst",
+      "phasesExecuted": ["analyze"],
+      "statusBefore": "not_started",
+      "statusAfter": "not_started",
+      "runStartedAt": "2026-07-24T02:35:39Z",
+      "runEndedAt": "2026-07-24T02:38:31Z",
+      "summary": "Reconciled SR-006/GRILL-10/GRILL-12: the explorer projects one operator-owned global graph through explicit grants; connected overview requires at least two real nodes and one stored edge; isolated-only data is no-connected-overview; projections are bounded and equivalent across Graph/Outline/Table; scale, privacy, typed errors, and representative accessibility begin in every slice. Preserved SCN-105-001..013 and added 014..016. No source, tests, design, scopes, report, user validation, certification, commit, push, or deployment work is claimed."
+    },
+    {
+      "agent": "bubbles.design",
+      "phasesExecuted": ["bootstrap"],
+      "statusBefore": "not_started",
+      "statusAfter": "not_started",
+      "runStartedAt": "2026-07-24T02:50:40Z",
+      "runEndedAt": "2026-07-24T02:50:40Z",
+      "summary": "Reconciled the requested SR-010/SR-011/GRILL-10 graph design and SR-012/SR-013 cross-capability design obligations. Bounded overview assembly now uses authorized stored edges and explicitly computes components; connected requires two real nodes plus one stored edge, while isolated-only and unresolved-partial remain honest. Defined deterministic bounded expansion, projection-equivalent first-party Canvas/Outline/Table, real nonblank and privacy-clear pixel checks, a first-enabled-slice query-plan/grant/security/error/a11y gate, implementation-time migration number allocation, source-locking rationale, validate-plane graph.explorer traces/SLOs, and disposable no-interception graph fault profiles. No spec, scopes, report, uservalidation, manifest, config, source, test, certification, status transition, CCManager mutation, spec 079, commit, push, or deployment work is claimed."
+    },
+    {
+      "agent": "bubbles.plan",
+      "phasesExecuted": ["harden"],
+      "statusBefore": "not_started",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-07-24T17:39:13Z",
+      "runEndedAt": "2026-07-24T17:46:09Z",
+      "summary": "Reconciled the planning packet to the 05:46 spec revision that added SCN-105-014/015/016. mtime drift: spec.md/state.json (05:46:37) and design.md (05:46:38) were fresh; scopes, scenario-manifest.json, test-plan.json, _index.md, report.md, and uservalidation.md were stale at 01:27:57. 105 design.md already specified all three new scenarios, the two-node/one-edge connectedness contract, the component analyzer, and Graph/Outline/Table equivalence, so no design edit was made (no 105 design-staleness residual). Added SCN-105-014 (connected real-edge minimum) and SCN-105-015 (isolated-only no-connected-overview) to SCOPE-01 and SCN-105-016 (Graph/Outline/Table equivalence + Canvas-failure safety) to SCOPE-05 across scope.md Gherkin/impl/Test-Plan/DoD, scenario-manifest.json (13->16 scenarios, 52->64 planned), test-plan.json (52->64 scenario rows), _index.md contract, and uservalidation.md journeys. Per-scope DoD test-evidence parity maintained (SCOPE-01 13/13, SCOPE-05 13/13). Dependency on BUG-080-001 preserved; its unresolved upstream design-staleness gap remains a cross-packet risk routed to bubbles.design. artifact-lint exit 0 and traceability-guard exit 0 (0 warnings, 16/16 DoD fidelity) captured this session. No source, authored-test, test-pass, certification, commit, push, or deployment work claimed."
+    }
+  ],
+  "activeBugs": [],
+  "resolvedBugs": [],
+  "failures": [],
+  "lastUpdatedAt": "2026-07-24T17:46:09Z",
+  "scopeLayout": "per-scope-directory",
+  "artifacts": {
+    "spec": "spec.md",
+    "design": "design.md",
+    "scopes": "scopes/_index.md",
+    "report": "report.md",
+    "uservalidation": "uservalidation.md",
+    "scenarioManifest": "scenario-manifest.json",
+    "testPlan": "test-plan.json",
+    "lockdownApprovals": "lockdown-approvals.json",
+    "invalidationLedger": "invalidation-ledger.json",
+    "transitionRequests": "transition-requests.json",
+    "reworkQueue": "rework-queue.json"
+  },
+  "statusDiscipline": {
+    "validStatuses": ["not_started", "in_progress", "blocked", "specs_hardened", "docs_updated", "validated", "done"],
+    "scopePickupRule": "All dependsOn scopes must be Done. Pick the lowest-numbered eligible scope.",
+    "scopeDoneGates": ["G020", "G021", "G022", "G023", "G024", "G025", "G055", "G056", "G057", "G058", "G059", "G060", "G061"],
+    "specDoneRequires": "All scopes done. certification.completedScopes contains all scope IDs and bubbles.validate has certified promotion."
+  },
+  "notes": "Planning packet reconciled to the 05:46 spec revision that added SCN-105-014/015/016. Scenario manifest now covers 16 scenarios / 64 planned tests; artifact lint and traceability guard both exit 0 with traceability reporting 0 warnings and 16/16 DoD fidelity. SCN-105-014/015 (connected real-edge minimum, isolated-only no-connected-overview) land in SCOPE-01; SCN-105-016 (Graph/Outline/Table equivalence) lands in SCOPE-05; per-scope DoD test-evidence parity holds (SCOPE-01 13/13, SCOPE-05 13/13). design.md (05:46:38) was already fresh and specified all three, so no design edit was made. Ten sequential scopes remain Not Started, test-plan.json remains the executable handoff, BUG-080-001 remains an external completion gate whose unresolved upstream design-staleness gap is a cross-packet risk routed to bubbles.design. No implementation, authored-test, test-pass, certification, commit, push, or deployment claim."
+}

@@ -1,0 +1,96 @@
+{
+  "version": 1,
+  "specId": "BUG-102-001",
+  "generatedBy": "bubbles.plan",
+  "generatedAt": "2026-07-23T23:46:07Z",
+  "scopes": [
+    {
+      "scopeId": "SCOPE-01",
+      "scopeName": "Product Journey Contract Foundation",
+      "tests": [
+        {"testId":"TP-102-01-01","type":"unit","category":"unit","file":"internal/acceptance/manifest_test.go","scenarioId":"SCN-102-001-07","description":"TestManifestRequiresEveryDeclaredJourneyDependencyAndAssertion","command":"./smackerel.sh test unit --go","liveSystem":false},
+        {"testId":"TP-102-01-02","type":"unit","category":"unit","file":"internal/acceptance/result_validator_test.go","scenarioId":"SCN-102-001-07","description":"TestResultValidatorRejectsMissingDuplicateUnknownAndMismatchedRows","command":"./smackerel.sh test unit --go","liveSystem":false},
+        {"testId":"TP-102-01-03","type":"unit","category":"unit","file":"internal/acceptance/verdict_reducer_test.go","scenarioId":"SCN-102-001-07","description":"TestAllowedEmptyQuietOptionalAndDegradedRequireExactPolicy","command":"./smackerel.sh test unit --go","liveSystem":false},
+        {"testId":"TP-102-01-04","type":"unit","category":"unit","file":"internal/acceptance/failure_registry_test.go","scenarioId":"SCN-102-001-07","description":"TestEveryFailureCodeHasOneCategoryAndOwner","command":"./smackerel.sh test unit --go","liveSystem":false},
+        {"testId":"TP-102-01-05","type":"unit-adversarial","category":"unit","file":"internal/acceptance/read_only_guard_test.go","scenarioId":"SCN-102-001-07","description":"TestProductionManifestRejectsWritesInterceptionInjectionAndTargetLiterals","command":"./smackerel.sh test unit --go","liveSystem":false},
+        {"testId":"TP-102-01-06","type":"functional","category":"functional","file":"internal/acceptance/manifest_coverage_test.go","scenarioId":"SCN-102-001-07","description":"TestManifestCoversAllProductJourneyGroupsAndRouteAuthorities","command":"./smackerel.sh check","liveSystem":false},
+        {"testId":"TP-102-01-07","type":"unit","category":"unit","file":"internal/acceptance/fault_profile_registry_test.go","scenarioId":"SCN-102-001-12","description":"TestFaultProfileRegistryRequiresEveryDeclaredFieldAndRejectsFirstPartyInterception","command":"./smackerel.sh test unit --go","liveSystem":false},
+        {"testId":"TP-102-01-08","type":"unit-adversarial","category":"unit","file":"internal/acceptance/fault_profile_production_inert_test.go","scenarioId":"SCN-102-001-12","description":"TestProductionRoutesConfigRequestsAndUIExposeNoFaultSelectorOrTrigger","command":"./smackerel.sh test unit --go","liveSystem":false}
+      ]
+    },
+    {
+      "scopeId": "SCOPE-02",
+      "scopeName": "Production-Readonly Runner And Real Session",
+      "tests": [
+        {"testId":"TP-102-02-01","type":"integration","category":"integration","file":"internal/acceptance/runner_integration_test.go","scenarioId":"SCN-102-001-05","description":"TestRunnerUsesMountedIdentityAndEmitsOnlyPresenceState","command":"./smackerel.sh test integration","liveSystem":true},
+        {"testId":"TP-102-02-02","type":"unit-security","category":"unit","file":"internal/acceptance/evidence_sanitizer_test.go","scenarioId":"SCN-102-001-06","description":"TestSanitizerRejectsEverySensitiveContentAndTargetClass","command":"./smackerel.sh test unit --go","liveSystem":false},
+        {"testId":"TP-102-02-03","type":"integration-adversarial","category":"integration","file":"internal/acceptance/request_guard_integration_test.go","scenarioId":"SCN-102-001-06","description":"TestRuntimeGuardRejectsUndeclaredOrMutatingRequestsBeforeStateChange","command":"./smackerel.sh test integration","liveSystem":true},
+        {"testId":"TP-102-02-04","type":"e2e-api","category":"e2e-api","file":"tests/e2e/product_journey_acceptance_session_test.go","scenarioId":"SCN-102-001-05","description":"TestProductionRunnerReusesOneRealSessionForProtectedReads","command":"./smackerel.sh test e2e","liveSystem":true},
+        {"testId":"TP-102-02-05","type":"regression-e2e-ui","category":"e2e-ui","file":"web/pwa/tests/product_journey_acceptance.spec.ts","scenarioId":"SCN-102-001-05","description":"production runner establishes and reuses a real private session","command":"./smackerel.sh test e2e-ui","liveSystem":true},
+        {"testId":"TP-102-02-06","type":"regression-e2e-ui","category":"e2e-ui","file":"web/pwa/tests/product_journey_acceptance.spec.ts","scenarioId":"SCN-102-001-06","description":"production runner observes no product write or state-changing control","command":"./smackerel.sh test e2e-ui","liveSystem":true},
+        {"testId":"TP-102-02-07","type":"stress","category":"stress","file":"tests/stress/product_journey_acceptance_timeout_test.go","scenarioId":"SCN-102-001-08","description":"TestStepAndOverallTimeoutCancelBrowserAndEmitExactCode","command":"./smackerel.sh test stress","liveSystem":true},
+        {"testId":"TP-102-02-08","type":"functional-safety","category":"functional","file":"scripts/lint/product-journey-runner-safety_test.sh","scenarioId":"SCN-102-001-05, SCN-102-001-06","description":"runner contains no interception injection mutation or target-specific surface","command":"./smackerel.sh lint","liveSystem":false}
+      ]
+    },
+    {
+      "scopeId": "SCOPE-03",
+      "scopeName": "Primary Knowledge Journeys",
+      "tests": [
+        {"testId":"TP-102-03-01","type":"e2e-api","category":"e2e-api","file":"tests/e2e/product_journey_acceptance_test.go","scenarioId":"SCN-102-001-02","description":"TestSearchJourneyRequiresOneCompletedRequestAndTruthfulTerminalState","command":"./smackerel.sh test e2e","liveSystem":true},
+        {"testId":"TP-102-03-02","type":"regression-e2e-ui","category":"e2e-ui","file":"web/pwa/tests/product_journey_acceptance.spec.ts","scenarioId":"SCN-102-001-02","description":"search journey uses one real request and never renders transport failure as empty","command":"./smackerel.sh test e2e-ui","liveSystem":true},
+        {"testId":"TP-102-03-03","type":"e2e-api","category":"e2e-api","file":"tests/e2e/product_journey_acceptance_test.go","scenarioId":"SCN-102-001-02","description":"TestDigestJourneyDistinguishesCurrentQuietEmptyStaleAndFailure","command":"./smackerel.sh test e2e","liveSystem":true},
+        {"testId":"TP-102-03-04","type":"regression-e2e-ui","category":"e2e-ui","file":"web/pwa/tests/product_journey_acceptance.spec.ts","scenarioId":"SCN-102-001-02","description":"digest journey exposes the real current read without false empty","command":"./smackerel.sh test e2e-ui","liveSystem":true},
+        {"testId":"TP-102-03-05","type":"e2e-api","category":"e2e-api","file":"tests/e2e/product_journey_acceptance_test.go","scenarioId":"SCN-102-001-02","description":"TestAssistantJourneyRequiresOneNonblankTruthfulTerminalOutcome","command":"./smackerel.sh test e2e","liveSystem":true},
+        {"testId":"TP-102-03-06","type":"regression-e2e-ui","category":"e2e-ui","file":"web/pwa/tests/product_journey_acceptance.spec.ts","scenarioId":"SCN-102-001-02","description":"assistant journey never accepts blank false capture or missing retry","command":"./smackerel.sh test e2e-ui","liveSystem":true},
+        {"testId":"TP-102-03-07","type":"e2e-api","category":"e2e-api","file":"tests/e2e/product_journey_acceptance_test.go","scenarioId":"SCN-102-001-02","description":"TestWikiAndKnowledgeJourneyDistinguishesPopulatedEmptyUnauthorizedAndFailure","command":"./smackerel.sh test e2e","liveSystem":true},
+        {"testId":"TP-102-03-08","type":"regression-e2e-ui","category":"e2e-ui","file":"web/pwa/tests/product_journey_acceptance.spec.ts","scenarioId":"SCN-102-001-02","description":"wiki and knowledge journey follows real links and never maps route failure to empty","command":"./smackerel.sh test e2e-ui","liveSystem":true},
+        {"testId":"TP-102-03-09","type":"e2e-api","category":"e2e-api","file":"tests/e2e/product_journey_acceptance_test.go","scenarioId":"SCN-102-001-13","description":"TestConnectedGraphJourneyRequiresTwoRealNodesAndOneStoredEdgeWithinBounds","command":"./smackerel.sh test e2e","liveSystem":true},
+        {"testId":"TP-102-03-10","type":"regression-e2e-ui","category":"e2e-ui","file":"web/pwa/tests/product_journey_acceptance.spec.ts","scenarioId":"SCN-102-001-13","description":"connected graph journey exposes equivalent authorized graph outline and table without private leakage","command":"./smackerel.sh test e2e-ui","liveSystem":true},
+        {"testId":"TP-102-03-11","type":"integration-dependency-canary","category":"integration","file":"internal/acceptance/dependency_register_integration_test.go","scenarioId":"SCN-102-001-02","description":"TestIncompletePrimaryJourneyDependencyProducesNotEvaluatedAndBlockedPrerequisite","command":"./smackerel.sh test integration","liveSystem":true},
+        {"testId":"TP-102-03-12","type":"functional-owner-evidence","category":"functional","file":"internal/acceptance/owner_regression_evidence_test.go","scenarioId":"SCN-102-001-02, SCN-102-001-04","description":"TestPrimaryAggregateRequiresCurrentIndependentOwnerRegressionEvidence","command":"./smackerel.sh check","liveSystem":false},
+        {"testId":"TP-102-03-13","type":"e2e-api","category":"e2e-api","file":"tests/e2e/product_journey_acceptance_test.go","scenarioId":"SCN-102-001-04","description":"TestPrimaryRequiredJourneyPartialOutcomeFailsUnlessExactUsefulSubsetPermitted","command":"./smackerel.sh test e2e","liveSystem":true},
+        {"testId":"TP-102-03-14","type":"regression-e2e-ui","category":"e2e-ui","file":"web/pwa/tests/product_journey_acceptance.spec.ts","scenarioId":"SCN-102-001-13","description":"connected graph journey renders honest no-connected-overview for isolated only data","command":"./smackerel.sh test e2e-ui","liveSystem":true}
+      ]
+    },
+    {
+      "scopeId": "SCOPE-04",
+      "scopeName": "Capability And Operational Journeys",
+      "tests": [
+        {"testId":"TP-102-04-01","type":"e2e-api","category":"e2e-api","file":"tests/e2e/product_journey_acceptance_test.go","scenarioId":"SCN-102-001-03","description":"TestCardsJourneyPerformsRepresentativeOwnerReadWithoutMutation","command":"./smackerel.sh test e2e","liveSystem":true},
+        {"testId":"TP-102-04-02","type":"regression-e2e-ui","category":"e2e-ui","file":"web/pwa/tests/product_journey_acceptance.spec.ts","scenarioId":"SCN-102-001-03","description":"cards journey distinguishes representative read and owned empty without editing","command":"./smackerel.sh test e2e-ui","liveSystem":true},
+        {"testId":"TP-102-04-03","type":"e2e-api","category":"e2e-api","file":"tests/e2e/product_journey_acceptance_test.go","scenarioId":"SCN-102-001-04","description":"TestRecommendationsJourneyRejectsEnabledWithZeroUsableProviders","command":"./smackerel.sh test e2e","liveSystem":true},
+        {"testId":"TP-102-04-04","type":"regression-e2e-ui","category":"e2e-ui","file":"web/pwa/tests/product_journey_acceptance.spec.ts","scenarioId":"SCN-102-001-04","description":"recommendations journey renders one truthful provider availability snapshot","command":"./smackerel.sh test e2e-ui","liveSystem":true},
+        {"testId":"TP-102-04-05","type":"e2e-api","category":"e2e-api","file":"tests/e2e/product_journey_acceptance_test.go","scenarioId":"SCN-102-001-03","description":"TestNotificationsJourneyDistinguishesEmptyDegradedUnauthorizedAndFailure","command":"./smackerel.sh test e2e","liveSystem":true},
+        {"testId":"TP-102-04-06","type":"regression-e2e-ui","category":"e2e-ui","file":"web/pwa/tests/product_journey_acceptance.spec.ts","scenarioId":"SCN-102-001-03","description":"notifications journey reads truthful state without replay reconnect ingest snooze or approval","command":"./smackerel.sh test e2e-ui","liveSystem":true},
+        {"testId":"TP-102-04-07","type":"e2e-api","category":"e2e-api","file":"tests/e2e/product_journey_acceptance_test.go","scenarioId":"SCN-102-001-03","description":"TestPhotosAndDriveJourneysDistinguishOptionalUnconfiguredZeroLimitedStaleAndFailure","command":"./smackerel.sh test e2e","liveSystem":true},
+        {"testId":"TP-102-04-08","type":"regression-e2e-ui","category":"e2e-ui","file":"web/pwa/tests/product_journey_acceptance.spec.ts","scenarioId":"SCN-102-001-03","description":"photos and drive optional journeys expose exact policy without connect test sync upload or reveal","command":"./smackerel.sh test e2e-ui","liveSystem":true},
+        {"testId":"TP-102-04-09","type":"e2e-api","category":"e2e-api","file":"tests/e2e/product_journey_acceptance_test.go","scenarioId":"SCN-102-001-04","description":"TestModelSelectionJourneyRequiresOperatorAuthorizationRedactionAndFreshStatus","command":"./smackerel.sh test e2e","liveSystem":true},
+        {"testId":"TP-102-04-10","type":"regression-e2e-ui","category":"e2e-ui","file":"web/pwa/tests/product_journey_acceptance.spec.ts","scenarioId":"SCN-102-001-04","description":"model selection journey proves redacted status and never changes credentials or models","command":"./smackerel.sh test e2e-ui","liveSystem":true},
+        {"testId":"TP-102-04-11","type":"e2e-api","category":"e2e-api","file":"tests/e2e/product_journey_acceptance_test.go","scenarioId":"SCN-102-001-04","description":"TestSynthesisAndCapabilityStatusRejectNeverRunStaleAndHealthOnlyReadiness","command":"./smackerel.sh test e2e","liveSystem":true},
+        {"testId":"TP-102-04-12","type":"regression-e2e-ui","category":"e2e-ui","file":"web/pwa/tests/product_journey_acceptance.spec.ts","scenarioId":"SCN-102-001-04","description":"status health and synthesis journey expose canonical truth without triggering work","command":"./smackerel.sh test e2e-ui","liveSystem":true},
+        {"testId":"TP-102-04-13","type":"integration-dependency-canary","category":"integration","file":"internal/acceptance/dependency_register_integration_test.go","scenarioId":"SCN-102-001-03, SCN-102-001-04","description":"TestIncompleteCapabilityDependencyProducesNotEvaluatedAndNeverSoftPasses","command":"./smackerel.sh test integration","liveSystem":true},
+        {"testId":"TP-102-04-14","type":"functional-owner-evidence","category":"functional","file":"internal/acceptance/owner_regression_evidence_test.go","scenarioId":"SCN-102-001-03, SCN-102-001-04","description":"TestCapabilityAggregateRequiresCurrentIndependentOwnerRegressionEvidence","command":"./smackerel.sh check","liveSystem":false}
+      ]
+    },
+    {
+      "scopeId": "SCOPE-05",
+      "scopeName": "Aggregate Acceptance, Release Artifact, Projection, And Adapter Handoff",
+      "tests": [
+        {"testId":"TP-102-05-01","type":"integration","category":"integration","file":"internal/acceptance/aggregate_integration_test.go","scenarioId":"SCN-102-001-01","description":"TestAggregateAcceptedRequiresEveryCurrentAllowedRequiredJourney","command":"./smackerel.sh test integration","liveSystem":true},
+        {"testId":"TP-102-05-02","type":"integration-adversarial","category":"integration","file":"internal/acceptance/aggregate_integration_test.go","scenarioId":"SCN-102-001-02","description":"TestHealthGreenRequiredFailurePreservesExactRowAndRejects","command":"./smackerel.sh test integration","liveSystem":true},
+        {"testId":"TP-102-05-03","type":"e2e-api","category":"e2e-api","file":"tests/e2e/product_journey_acceptance_test.go","scenarioId":"SCN-102-001-01","description":"TestFullRequiredJourneyContractEmitsOneAcceptedValueSafeEnvelope","command":"./smackerel.sh test e2e","liveSystem":true},
+        {"testId":"TP-102-05-04","type":"regression-e2e-api","category":"e2e-api","file":"tests/e2e/product_journey_acceptance_test.go","scenarioId":"SCN-102-001-02","description":"TestEachHistoricalRequiredFailureRejectsWhileInfrastructureIsGreen","command":"./smackerel.sh test e2e","liveSystem":true},
+        {"testId":"TP-102-05-05","type":"regression-e2e-ui","category":"e2e-ui","file":"web/pwa/tests/product_journey_acceptance.spec.ts","scenarioId":"SCN-102-001-01","description":"accepted result exposes every required journey and no run control","command":"./smackerel.sh test e2e-ui","liveSystem":true},
+        {"testId":"TP-102-05-06","type":"regression-e2e-ui","category":"e2e-ui","file":"web/pwa/tests/product_journey_acceptance.spec.ts","scenarioId":"SCN-102-001-02","description":"health green required failure remains rejected and selects rollback","command":"./smackerel.sh test e2e-ui","liveSystem":true},
+        {"testId":"TP-102-05-07","type":"regression-e2e-ui","category":"e2e-ui","file":"web/pwa/tests/product_journey_acceptance.spec.ts","scenarioId":"SCN-102-001-07, SCN-102-001-08","description":"blocked invalid and timeout results remain closed and actionable","command":"./smackerel.sh test e2e-ui","liveSystem":true},
+        {"testId":"TP-102-05-08","type":"accessibility-e2e-ui","category":"e2e-ui","file":"web/pwa/tests/product_journey_acceptance.spec.ts","scenarioId":"SCN-102-001-09","description":"acceptance result remains accessible responsive and value safe in every required mode","command":"./smackerel.sh test e2e-ui","liveSystem":true},
+        {"testId":"TP-102-05-09","type":"adapter-contract-integration","category":"integration","file":"internal/deploy/product_journey_acceptance_adapter_contract_test.go","scenarioId":"SCN-102-001-07","description":"TestAdapterContractRejectsMissingMalformedStaleMismatchedAndUnsignedResults","command":"./smackerel.sh test integration","liveSystem":true},
+        {"testId":"TP-102-05-10","type":"adapter-contract-integration","category":"integration","file":"internal/deploy/product_journey_acceptance_adapter_contract_test.go","scenarioId":"SCN-102-001-01, SCN-102-001-02","description":"TestAdapterContractMapsAcceptedToKeepAndEveryOtherVerdictToPointerSwapRollback","command":"./smackerel.sh test integration","liveSystem":true},
+        {"testId":"TP-102-05-11","type":"functional-privacy","category":"functional","file":"scripts/lint/product-journey-result-privacy_test.sh","scenarioId":"SCN-102-001-05, SCN-102-001-06","description":"result stdout logs dom accessibility url clipboard screenshots and traces are value safe","command":"./smackerel.sh lint","liveSystem":false},
+        {"testId":"TP-102-05-12","type":"stress","category":"stress","file":"tests/stress/product_journey_acceptance_timeout_test.go","scenarioId":"SCN-102-001-08","description":"TestAggregateDeadlineCancelsChildrenAndCannotEmitPartialAcceptance","command":"./smackerel.sh test stress","liveSystem":true},
+        {"testId":"TP-102-05-13","type":"functional-owner-evidence","category":"functional","file":"internal/acceptance/owner_regression_evidence_test.go","scenarioId":"SCN-102-001-01, SCN-102-001-02","description":"TestAggregateCertificationRequiresEveryOwningRegressionPacketCurrent","command":"./smackerel.sh check","liveSystem":false},
+        {"testId":"TP-102-05-14","type":"functional-build-contract","category":"functional","file":".github/workflows/build_contract_test.go","scenarioId":"SCN-102-001-01","description":"TestJourneyRunnerArtifactIsSourceLockedSignedScannedAndReleaseMatched","command":"./smackerel.sh check","liveSystem":false}
+      ]
+    }
+  ]
+}

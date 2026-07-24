@@ -1,0 +1,92 @@
+{
+  "version": 3,
+  "bugId": "BUG-080-001",
+  "featureDir": "specs/080-knowledge-graph-public-api/bugs/BUG-080-001-graph-api-fail-soft-runtime-disable",
+  "featureName": "Graph API Fails Soft Into Runtime Disablement",
+  "releaseTrain": "mvp",
+  "flagsIntroduced": [],
+  "status": "in_progress",
+  "statusReason": "Planning packet initialized from interpreted operator input. No secret read, local reproduction, implementation, devops mutation, test, certification, commit, push, or deployment is claimed.",
+  "workflowMode": "bugfix-fastlane",
+  "linkedImplementationSpec": null,
+  "linkedPlanningPacket": null,
+  "planningOnly": false,
+  "planningOnlyJustification": null,
+  "specDependsOn": [
+    "specs/080-knowledge-graph-public-api",
+    "specs/070-web-username-password-login/bugs/BUG-070-001-production-credential-session-paseto-split"
+  ],
+  "certifiedAt": null,
+  "requiresRevalidation": false,
+  "corpusOwnershipModel": {"mode":"single-operator-owned-global-corpus","identityModel":"multiple authenticated identities with explicit roles/grants","tenantRowIsolationClaimed":false,"privateDefault":"operator-only"},
+  "requirementsRecovery": {"reviewId":"2026-07-24-independent-planning-review","status":"analyst_reconciled","addressedFindings":["SR-006","GRILL-12"],"activeRequirementsRef":"spec.md","certificationClaimed":false},
+  "execution": {"activeAgent":"bubbles.plan","currentPhase":"harden","currentScope":null,"runStartedAt":"2026-07-24T18:49:03Z","completedPhaseClaims":[],"pendingTransitionRequests":[],"audit":{"schemaVersion":"audit-run/v1","runId":null,"currentAttemptId":null,"attempts":[]}},
+  "certification": {"status":"in_progress","completedScopes":[],"certifiedCompletedPhases":[],"scopeProgress":[{"scope":1,"scopeId":"SCOPE-01","name":"Fail-Loud Graph Activation Foundation","status":"not_started","dependsOn":[],"scopeDir":null,"evidenceFile":"report.md","certifiedAt":null},{"scope":2,"scopeId":"SCOPE-02","name":"Authorized Graph Read Truth","status":"not_started","dependsOn":["SCOPE-01"],"scopeDir":null,"evidenceFile":"report.md","certifiedAt":null},{"scope":3,"scopeId":"SCOPE-03","name":"Product Read Synthetic And Readiness Truth","status":"not_started","dependsOn":["SCOPE-02"],"scopeDir":null,"evidenceFile":"report.md","certifiedAt":null},{"scope":4,"scopeId":"SCOPE-04","name":"Wiki And Graph State Integration","status":"not_started","dependsOn":["SCOPE-03"],"scopeDir":null,"evidenceFile":"report.md","certifiedAt":null}],"lockdownState":{"active":false,"lockedScenarioIds":[]},"invalidationLedger":[]},
+  "policySnapshot": {"grill":{"mode":"off","source":"repo-default"},"tdd":{"mode":"scenario-first","source":"workflow-mode"},"autoCommit":{"mode":"off","source":"user-constraint"},"lockdown":{"mode":"off","source":"repo-default"},"regression":{"mode":"protected-scenarios","source":"workflow-mode"},"validation":{"mode":"certification-required","source":"repo-default"}},
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "executionHistory": [
+    {
+      "agent": "bubbles.ux",
+      "phasesExecuted": ["analyze"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-07-23T16:27:07Z",
+      "runEndedAt": "2026-07-23T16:27:37Z",
+      "summary": "Read-only UX provenance reconciliation confirmed the existing Graph API activation contract covers daily and returning users, operators, screen inventory, desktop and mobile composition, keyboard and screen-reader behavior, closed honest states, state-specific recovery, and real-stack Playwright-visible outcomes. No spec change, runtime, config, secret, browser, API, store, test, evidence, design, plan, implementation, certification, commit, push, or deployment is claimed."
+    },
+    {
+      "agent": "bubbles.design",
+      "phasesExecuted": ["bootstrap"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-07-23T16:58:57Z",
+      "runEndedAt": "2026-07-23T16:59:20Z",
+      "summary": "Replaced the placeholder technical design with a code-grounded fail-loud Graph API activation architecture: one composite authorized graph-read capability, atomic route manifest, explicit required/disabled policy, generic operator secret seam, typed outcomes, value-safe read synthetic/readiness, privacy clearing, observability, migration, rollback, and downstream validation contracts. No spec, scope, report, user validation, scenario manifest, source, test, certification, commit, push, build, or deployment change is claimed."
+    },
+    {
+      "agent": "bubbles.analyst",
+      "phasesExecuted": ["analyze"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-07-24T02:35:39Z",
+      "runEndedAt": "2026-07-24T02:38:31Z",
+      "summary": "Reconciled SR-006/GRILL-12: Graph reads the single operator-owned global corpus through explicit role/grant access, rejects ungranted identities without content/count/existence leakage, and makes no tenant/user row-isolation claim. Preserved SCN-080-001-01..08 and added 09. No source, test, design, scope, report, user validation, certification, commit, push, or deployment work is claimed."
+    },
+    {
+      "agent": "bubbles.plan",
+      "phasesExecuted": ["harden"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-07-24T08:31:22Z",
+      "runEndedAt": "2026-07-24T08:45:00Z",
+      "summary": "spec-scope-hardening reconciliation of planning artifacts against the 2026-07-24T05:46Z spec.md revision. Reconciled scenario-manifest.json to 13 rows (one per Gherkin (scenarioId,scope) instance across SCOPE-01..04, empty linkedTests pending implementation) to clear G057/G059; added SCN-id-cited faithful Core Outcome DoD items to all four scopes to clear G068; expanded certification.scopeProgress from 1 to 4 scopes with correct names and dependency ordering; preserved the SCOPE-04 -> spec 105 predecessor edge. Recorded a DESIGN-STALENESS GAP routed to bubbles.design: the 05:46Z analyst revision added SCN-080-001-09 (operator/granted/ungranted control of the single operator-owned global corpus; GRAPH-ACT-005/011) to spec.md, but design.md (2026-07-23T16:52Z) predates it, uses knowledge-graph:read scope with leak-free denial, and its test table stops at SCN-08 without the global-corpus grant articulation. SCN-09 scope/test/DoD coverage is DEFERRED to a follow-up bubbles.plan pass after bubbles.design reconciles design.md, rather than planning around the gap; scopes.md documents the deferral. No spec, design, source, test, config, certification, status transition, commit, push, build, deployment, or spec 079 change is claimed. Residual: traceability-guard report-evidence checks remain implementation-pending (report.md correctly claims no test evidence at planning time); not fabricated."
+    },
+    {
+      "agent": "bubbles.design",
+      "phasesExecuted": ["bootstrap"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-07-24T18:25:51Z",
+      "runEndedAt": "2026-07-24T18:26:40Z",
+      "summary": "Reconciled design.md to the 2026-07-24T05:46Z analyst spec revision. Added the '## Corpus Ownership And Authorization Model' section grounding GRAPH-ACT-005/GRAPH-ACT-011 and the spec's Corpus Ownership And Private Access section: one operator-owned global corpus with three authenticated identity classes (operator reads all private content plus operational metadata; grant-holder reads the knowledge-graph:read authorized global projection; ungranted authenticated identity receives a leak-free unauthorized-scope 403 denial with no content/counts/existence hints), no tenant or per-user row isolation. Specified SCN-080-001-09 behavior; extended the Testing And Validation Strategy table through SCN-080-001-09; added single-global-corpus authorization to Purpose/Scope and Resolved Decisions. artifact-lint PASSED (exit 0); traceability-guard unchanged at its prior report-evidence-residual level (13 report-missing-evidence failures for not-yet-created tests; scenario coverage still SCN-01..08). FOLLOW-UP ROUTED to bubbles.plan: add SCN-080-001-09 scope/test/DoD coverage (scenario-manifest.json, scopes.md, test-plan are plan-owned and were NOT edited). No spec, scope, scenario-manifest, source, test, certification, status transition, commit, push, build, deployment, or spec 079 change is claimed."
+    },
+    {
+      "agent": "bubbles.plan",
+      "phasesExecuted": ["harden"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-07-24T18:49:03Z",
+      "runEndedAt": "2026-07-24T18:57:30Z",
+      "summary": "spec-scope-hardening follow-up after bubbles.design reconciled design.md (18:25Z '## Corpus Ownership And Authorization Model' + Testing And Validation Strategy table extended through SCN-09). Added SCN-080-001-09 to the owning SCOPE-02 (Authorized Graph Read Truth): the verbatim spec Gherkin, GRAPH-ACT-011 in the requirement set, an implementation-plan step for the operator/grant-holder/ungranted single operator-owned global-corpus authorization matrix (leak-free unauthorized-scope denial, no per-identity/tenant row predicate, true-empty only after an authorized query), a Security And Privacy bullet, Test Plan rows T080-09-CORPUS (integration corpus-grant matrix + no-row-isolation) and T080-09-GRANT (e2e-api real-stack shared-login three-identity leak-free regression), one SCN-09 Core Outcome DoD item, and two matching Test Evidence DoD items (SCOPE-02 Test-Plan data rows 6->8 == Test-Evidence items 6->8). Added SCN-080-001-09 -> SCOPE-02 to scenario-manifest.json (14 rows; linkedTests empty pending implementation, no fabricated file refs), updated the SCOPE-02 validation checkpoint, and closed the scopes.md SCN-09 deferral note. Plan now covers SCN-080-001-01..09; no tenant/user row isolation is asserted. No scopes/_index.md or test-plan.json exists (single-file packet), so those sub-steps do not apply. GUARDS re-run this session: artifact-lint.sh PASSED (exit 0); traceability-guard.sh exit 1 with G057/G059 now covering 14 scenario contracts INCLUDING SCN-09, G068 DoD-fidelity 14/14 mapped (SCN-09 mapped, 0 unmapped), and the ONLY 14 failures being the pre-existing report-missing-evidence class for not-yet-created test files (implementation-pending; report.md correctly claims no test evidence at planning time; not fabricated). design.md remains bubbles.design-owned and was NOT edited. No spec, source, config, test, certification, status transition, commit, push, build, deployment, or spec 079 change is claimed."
+    }
+  ],
+  "activeBugs": [],
+  "resolvedBugs": [],
+  "failures": [],
+  "lastUpdatedAt": "2026-07-24T18:49:03Z",
+  "scopeLayout": "single-file",
+  "artifacts": {"bug":"bug.md","spec":"spec.md","design":"design.md","scopes":"scopes.md","report":"report.md","uservalidation":"uservalidation.md","scenarioManifest":"scenario-manifest.json"},
+  "statusDiscipline": {"validStatuses":["not_started","in_progress","blocked","specs_hardened","docs_updated","validated","done"],"scopePickupRule":"All dependsOn scopes must be Done. Pick the lowest-numbered eligible scope.","scopeDoneGates":["G020","G021","G022","G023","G024","G025","G055","G056","G057","G058","G059","G060","G061"],"specDoneRequires":"All scopes done and validate-owned certification permits promotion."},
+  "notes": "Owner routes required: bubbles.plan, bubbles.ux, bubbles.devops. Smackerel owns the generic fail-loud and synthetic contract; operator deploy-adapter injection remains untouched. Blocks spec 105, spec 106 Wiki/Graph, and BUG-102-001. DESIGN GAP RESOLVED (bubbles.design 2026-07-24T18:25Z) and PLAN COVERAGE ADDED (bubbles.plan 2026-07-24T18:49Z): design.md grounds SCN-080-001-09 + the operator-owned global-corpus grant model (GRAPH-ACT-005/011) via the '## Corpus Ownership And Authorization Model' section (operator/grant-holder/ungranted, no tenant/user row isolation), and scopes.md + scenario-manifest.json now cover SCN-080-001-01..09 with SCN-09 mapped to the owning SCOPE-02 (Test Plan rows T080-09-CORPUS + T080-09-GRANT and matching Core Outcome + Test Evidence DoD items). The plan now fully covers the current spec + design at planning depth; execution/testing/certification remain unclaimed and status stays in_progress. No scopes/_index.md or test-plan.json exists (single-file packet)."
+}

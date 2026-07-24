@@ -1,0 +1,104 @@
+{
+  "version": 3,
+  "bugId": "BUG-039-005",
+  "featureDir": "specs/039-recommendations-engine/bugs/BUG-039-005-enabled-with-zero-providers-false-ready",
+  "featureName": "Enabled With Zero Providers Reports False Ready",
+  "releaseTrain": "mvp",
+  "flagsIntroduced": [],
+  "status": "in_progress",
+  "statusReason": "Executable eight-scope per-directory planning and structured test/scenario handoffs are finalized. No local provider/runtime reproduction, implementation, behavior test, certification, production mutation, commit, push, or deployment is claimed.",
+  "workflowMode": "bugfix-fastlane",
+  "linkedImplementationSpec": null,
+  "linkedPlanningPacket": null,
+  "planningOnly": false,
+  "planningOnlyJustification": null,
+  "specDependsOn": ["specs/039-recommendations-engine"],
+  "certifiedAt": null,
+  "requiresRevalidation": false,
+  "providerMinimumDecision": {
+    "firstReadinessMinimum": 1,
+    "selection": "operator-selected configured healthy production provider",
+    "adapterChoice": "provider-neutral pending design evidence",
+    "secondProviderRequired": false,
+    "denominatorExcludes": ["disabled", "unconfigured", "fixture", "category-irrelevant"]
+  },
+  "requirementsRecovery": {"reviewId":"2026-07-24-independent-planning-review","status":"analyst_reconciled","addressedFindings":["SR-008","GRILL-09"],"activeRequirementsRef":"spec.md","certificationClaimed":false},
+  "execution": {"activeAgent":"bubbles.design","currentPhase":"bootstrap","currentScope":null,"runStartedAt":"2026-07-24T19:24:40Z","completedPhaseClaims":[],"pendingTransitionRequests":[],"audit":{"schemaVersion":"audit-run/v1","runId":null,"currentAttemptId":null,"attempts":[]}},
+  "certification": {"status":"in_progress","completedScopes":[],"certifiedCompletedPhases":[],"scopeProgress":[{"scope":1,"scopeId":"SCOPE-01","name":"Provider Contract And Migration Foundation","status":"not_started","dependsOn":[],"scopeDir":"scopes/01-provider-contract-foundation","evidenceFile":"scopes/01-provider-contract-foundation/report.md","certifiedAt":null},{"scope":2,"scopeId":"SCOPE-02","name":"Google Places Production Adapter","status":"not_started","dependsOn":[1],"scopeDir":"scopes/02-google-places-adapter","evidenceFile":"scopes/02-google-places-adapter/report.md","certifiedAt":null},{"scope":3,"scopeId":"SCOPE-03","name":"Yelp Production Adapter","status":"not_started","dependsOn":[2],"scopeDir":"scopes/03-yelp-adapter","evidenceFile":"scopes/03-yelp-adapter/report.md","certifiedAt":null},{"scope":4,"scopeId":"SCOPE-04","name":"Availability And Startup Truth","status":"not_started","dependsOn":[3],"scopeDir":"scopes/04-availability-startup-truth","evidenceFile":"scopes/04-availability-startup-truth/report.md","certifiedAt":null},{"scope":5,"scopeId":"SCOPE-05","name":"Request Outcomes And Provider Evidence","status":"not_started","dependsOn":[4],"scopeDir":"scopes/05-request-outcomes-evidence","evidenceFile":"scopes/05-request-outcomes-evidence/report.md","certifiedAt":null},{"scope":6,"scopeId":"SCOPE-06","name":"Watch And Scheduler Eligibility","status":"not_started","dependsOn":[5],"scopeDir":"scopes/06-watch-scheduler-eligibility","evidenceFile":"scopes/06-watch-scheduler-eligibility/report.md","certifiedAt":null},{"scope":7,"scopeId":"SCOPE-07","name":"Shared API And Accessible UI Projections","status":"not_started","dependsOn":[6],"scopeDir":"scopes/07-shared-api-ui-projections","evidenceFile":"scopes/07-shared-api-ui-projections/report.md","certifiedAt":null},{"scope":8,"scopeId":"SCOPE-08","name":"Rollout And Cross-Surface Regression","status":"not_started","dependsOn":[7],"scopeDir":"scopes/08-rollout-cross-surface-regression","evidenceFile":"scopes/08-rollout-cross-surface-regression/report.md","certifiedAt":null}],"lockdownState":{"active":false,"lockedScenarioIds":[]},"invalidationLedger":[]},
+  "policySnapshot": {"grill":{"mode":"off","source":"repo-default"},"tdd":{"mode":"scenario-first","source":"workflow-mode"},"autoCommit":{"mode":"off","source":"user-constraint"},"lockdown":{"mode":"off","source":"repo-default"},"regression":{"mode":"protected-scenarios","source":"workflow-mode"},"validation":{"mode":"certification-required","source":"repo-default"}},
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "executionHistory": [
+    {
+      "agent": "bubbles.ux",
+      "phasesExecuted": ["analyze"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-07-23T15:13:56Z",
+      "runEndedAt": "2026-07-23T15:13:56Z",
+      "summary": "Reconciled the UX-owned recommendation-readiness contract across request, watches, and operator status surfaces, with shared availability/provenance/mutation primitives; distinct zero-provider, no-match, policy-filtered-empty, degraded, auth, quota, timeout, provider-error, retry, and unauthorized states; responsive/accessibility behavior; real-stack Playwright-visible outcomes; and routed design questions. No provider, mutation, browser or test execution, implementation, evidence, certification, status transition, commit, push, build, or deployment is claimed."
+    },
+    {
+      "agent": "bubbles.design",
+      "phasesExecuted": ["bootstrap"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-07-23T16:56:03.870403637Z",
+      "runEndedAt": "2026-07-23T17:03:15.494451286Z",
+      "summary": "Reconciled design.md against current requirements, UX, recommendation provider/config/API/web/watch/store code, migrations, and tests. Defined explicit enabled/configured/provider-ready/degraded/unavailable semantics, production provider inventory, pre-persistence mutation gates, typed provider evidence, additive migration sequencing, API/UI/observability/rollback contracts, and bounded implementation seams. Artifact lint was executed separately; no implementation, product test, certification, status transition, source/test/spec/scope/report/uservalidation/scenario-manifest change, build, deploy, commit, or push is claimed."
+    },
+    {
+      "agent": "bubbles.plan",
+      "phasesExecuted": ["bootstrap"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-07-23T23:58:57Z",
+      "runEndedAt": "2026-07-23T23:58:57Z",
+      "summary": "Finalized eight dependency-ordered per-scope planning artifacts, 47 exact Test Plan rows with one-for-one DoD evidence items, scenario-manifest mappings, test-plan.json, report, and user-validation baseline. Required real provider-compatible Google/Yelp validation, production fixture rejection, typed unavailable/degraded/no-match/filtered/error states, watch pre-persistence refusal, migration/rollback, consumer tracing, no-interception Playwright, and stress. No requirements/design/source/test/certification/runtime/deploy/commit/push work is claimed."
+    },
+    {
+      "agent": "bubbles.analyst",
+      "phasesExecuted": ["analyze"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-07-24T02:35:39Z",
+      "runEndedAt": "2026-07-24T02:38:31Z",
+      "summary": "Reconciled SR-008/GRILL-09: first readiness requires one operator-selected eligible healthy production provider; disabled/unconfigured/fixture/category-irrelevant providers are excluded from the denominator; a second provider is not a completion dependency; adapter choice remains provider-neutral because current production registry code is empty. Preserved SCN-039-005-01..09 and added 10. No source, config, provider, tests, design, scopes, report, certification, commit, push, or deployment work is claimed."
+    },
+    {
+      "agent": "bubbles.design",
+      "phasesExecuted": ["bootstrap"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-07-24T02:50:40Z",
+      "runEndedAt": "2026-07-24T02:50:40Z",
+      "summary": "Reconciled the SR-008/GRILL-09 provider-readiness design and the requested SR-012/SR-013 cross-capability design obligations. One operator-selected eligible healthy production provider now satisfies first readiness; unused declarations are operator-only setup inventory outside the denominator; the empty production registry requires a provider-neutral SPI and seven-part first-adapter decision gate; a second provider is independent. Added validate-plane recommendations.readiness trace/SLO and disposable no-interception provider fault profiles. No spec, scopes, report, uservalidation, manifest, config, provider, source, test, certification, status transition, CCManager mutation, spec 079, commit, push, or deployment work is claimed."
+    },
+    {
+      "agent": "bubbles.plan",
+      "phasesExecuted": ["harden"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-07-24T08:50:00Z",
+      "runEndedAt": "2026-07-24T09:20:00Z",
+      "summary": "Spec-scope-hardening reconciliation after the 2026-07-24T05:46Z independent-review spec revision. Integrated the newly added spec Gherkin scenario SCN-039-005-10 (Disabled providers do not dilute readiness) into scenario-manifest.json, test-plan.json (REC04-TP07 denominator integration, REC07-TP08 projection e2e-ui), and scopes/04 + scopes/07 (Gherkin, Test Plan row, tiered DoD with 6->7 and 7->8 evidence parity). Renumbered the plan-decomposition scenario 'Provider foundation migrates' from SCN-039-005-10 to SCN-039-005-15 to free the canonical spec slot; updated scopes/01, scenario-manifest.json, and test-plan.json accordingly. Rebuilt certification.scopeProgress from one stale entry to the real eight-scope per-directory inventory and updated scopes/_index.md coverage. Marked the legacy single-file scopes.md superseded (do-not-execute) pointing at scopes/_index.md. design.md is current (2026-07-24T05:46Z) and already grounds the disabled-provider denominator/first-readiness behavior, so no design residual arises for this packet. Status held in_progress; no source, config, provider, test, certification, runtime, CCManager, spec 079, commit, push, or deployment work is claimed."
+    },
+    {
+      "agent": "bubbles.design",
+      "phasesExecuted": ["bootstrap"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-07-24T19:24:40Z",
+      "runEndedAt": "2026-07-24T19:39:50Z",
+      "summary": "F2 (independent-review LOW-MED) design-side remediation: updated design.md to cite BUG-070-001's MutationTrustGuard (AUTH-011) as the single owning same-origin + session-bound anti-CSRF guard that this packet's cookie-authenticated recommendation mutations BIND to (API Contracts and Security And Privacy sections). Removed the prior additive/parallel-guard framing; 039 consumes the 070-owned guard and does not implement its own. ROUTED to bubbles.plan: add specDependsOn += specs/070-web-username-password-login/bugs/BUG-070-001-production-credential-session-paseto-split (dependency edge is plan-owned). Guards artifact-lint.sh and traceability-guard.sh re-run before/after with identical verdicts; no regression. Read-only reference to BUG-070-001 design; BUG-070-001 not edited. No spec, scopes, scenario-manifest, test-plan, report, uservalidation, source, test, certification, status transition, commit, push, or deployment change is claimed."
+    }
+  ],
+  "activeBugs": [],
+  "resolvedBugs": [],
+  "failures": [],
+  "lastUpdatedAt": "2026-07-24T19:39:50Z",
+  "scopeLayout": "per-scope-directory",
+  "artifacts": {"bug":"bug.md","spec":"spec.md","design":"design.md","scopes":"scopes/_index.md","report":"report.md","uservalidation":"uservalidation.md","scenarioManifest":"scenario-manifest.json","testPlan":"test-plan.json"},
+  "statusDiscipline": {"validStatuses":["not_started","in_progress","blocked","specs_hardened","docs_updated","validated","done"],"scopePickupRule":"All dependsOn scopes must be Done. Pick the lowest-numbered eligible scope.","scopeDoneGates":["G020","G021","G022","G023","G024","G025","G055","G056","G057","G058","G059","G060","G061"],"specDoneRequires":"All scopes done and validate-owned certification permits promotion."},
+  "notes": "Owner routes required: bubbles.design, bubbles.plan, bubbles.ux. bubbles.design 2026-07-24 (F2 independent-review): cited BUG-070-001's MutationTrustGuard (AUTH-011) as the owning CSRF/Origin guard 039's cookie-authenticated mutations bind to (no parallel 039 guard). ROUTED to bubbles.plan: add specDependsOn += specs/070-web-username-password-login/bugs/BUG-070-001-production-credential-session-paseto-split. Blocks spec 106 recommendations/watches and BUG-102-001 acceptance."
+}

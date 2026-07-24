@@ -1,0 +1,273 @@
+{
+  "version": 1,
+  "featureDir": "specs/039-recommendations-engine/bugs/BUG-039-005-enabled-with-zero-providers-false-ready",
+  "generatedAt": "2026-07-23T23:58:57Z",
+  "generatedBy": "bubbles.plan",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-039-005-01",
+      "scope": "SCOPE-05",
+      "title": "Healthy provider makes capability ready",
+      "behaviorClass": "api",
+      "changeType": "bugfix",
+      "requiredTestType": "e2e-api",
+      "regressionRequired": true,
+      "linkedTests": [
+        {"file": "tests/e2e/recommendations_api_test.go", "testId": "existing request API regression surface to extend"},
+        {"file": "tests/e2e/recommendations_providers_test.go", "testId": "existing provider E2E surface to extend"}
+      ],
+      "plannedTests": [
+        {"plannedFile": "tests/e2e/recommendations_api_test.go", "plannedTestId": "TestRequestDistinguishesNoMatchFilteredEmptyDegradedAndFailed", "status": "not-yet-authored", "owner": "bubbles.test"},
+        {"plannedFile": "web/pwa/tests/recommendations_readiness.spec.ts", "plannedTestId": "SCN-039-005-01 Regression: healthy production provider yields available sourced results", "status": "not-yet-authored", "owner": "bubbles.test"}
+      ],
+      "evidenceRefs": []
+    },
+    {
+      "scenarioId": "SCN-039-005-02",
+      "scope": "SCOPE-04",
+      "title": "Enabled zero-provider state is not ready",
+      "behaviorClass": "config",
+      "changeType": "bugfix",
+      "requiredTestType": "e2e-api",
+      "regressionRequired": true,
+      "linkedTests": [
+        {"file": "internal/config/recommendations_validate_test.go", "testId": "existing recommendation configuration validation surface"},
+        {"file": "tests/integration/recommendation_provider_registry_test.go", "testId": "existing provider-registry integration surface"}
+      ],
+      "plannedTests": [
+        {"plannedFile": "tests/e2e/recommendations_api_test.go", "plannedTestId": "TestRegressionEnabledEmptyRegistryCannotBecomeReady", "status": "not-yet-authored", "owner": "bubbles.test"},
+        {"plannedFile": "web/pwa/tests/recommendations_readiness.spec.ts", "plannedTestId": "SCN-039-005-02 Regression: enabled zero-provider UI never mounts ready actions", "status": "not-yet-authored", "owner": "bubbles.test"}
+      ],
+      "evidenceRefs": []
+    },
+    {
+      "scenarioId": "SCN-039-005-03",
+      "scope": "SCOPE-04",
+      "title": "Unhealthy provider is degraded or unavailable",
+      "behaviorClass": "api",
+      "changeType": "bugfix",
+      "requiredTestType": "integration",
+      "regressionRequired": true,
+      "linkedTests": [
+        {"file": "tests/integration/recommendation_providers_test.go", "testId": "existing provider failure integration surface"},
+        {"file": "tests/e2e/recommendations_providers_test.go", "testId": "existing provider E2E surface"}
+      ],
+      "plannedTests": [
+        {"plannedFile": "internal/recommendation/availability/service_test.go", "plannedTestId": "Table-driven provider health freshness and safe cause matrix", "status": "not-yet-authored", "owner": "bubbles.test"},
+        {"plannedFile": "web/pwa/tests/recommendations_readiness.spec.ts", "plannedTestId": "SCN-039-005-03 Regression: provider failure classes remain safe and exclusive", "status": "not-yet-authored", "owner": "bubbles.test"}
+      ],
+      "evidenceRefs": []
+    },
+    {
+      "scenarioId": "SCN-039-005-04",
+      "scope": "SCOPE-01",
+      "title": "Fixture provider cannot satisfy production",
+      "behaviorClass": "security",
+      "changeType": "bugfix",
+      "requiredTestType": "e2e-api",
+      "regressionRequired": true,
+      "linkedTests": [
+        {"file": "tests/integration/recommendation_provider_registry_test.go", "testId": "existing production/e2e registry contract surface"},
+        {"file": "tests/e2e/recommendations_providers_test.go", "testId": "existing provider E2E surface"}
+      ],
+      "plannedTests": [
+        {"plannedFile": "internal/recommendation/provider/runtime_registry_test.go", "plannedTestId": "TestProductionRegistryRejectsFixtureDescriptor", "status": "not-yet-authored", "owner": "bubbles.test"},
+        {"plannedFile": "tests/e2e/recommendations_providers_test.go", "plannedTestId": "TestRegressionProductionFixtureOnlyRegistryRefusesStartup", "status": "not-yet-authored", "owner": "bubbles.test"}
+      ],
+      "evidenceRefs": []
+    },
+    {
+      "scenarioId": "SCN-039-005-05",
+      "scope": "SCOPE-05",
+      "title": "Healthy no-match remains valid",
+      "behaviorClass": "api",
+      "changeType": "bugfix",
+      "requiredTestType": "e2e-api",
+      "regressionRequired": true,
+      "linkedTests": [
+        {"file": "tests/integration/recommendations_test.go", "testId": "existing recommendation engine/store integration surface"},
+        {"file": "tests/e2e/recommendations_api_test.go", "testId": "existing request API E2E surface"}
+      ],
+      "plannedTests": [
+        {"plannedFile": "tests/e2e/recommendations_api_test.go", "plannedTestId": "TestRegressionAllProviderFailuresCannotRenderAsNoMatch", "status": "not-yet-authored", "owner": "bubbles.test"},
+        {"plannedFile": "web/pwa/tests/recommendations_readiness.spec.ts", "plannedTestId": "SCN-039-005-05 Regression: no-match filtered-empty and typed failures remain exclusive", "status": "not-yet-authored", "owner": "bubbles.test"}
+      ],
+      "evidenceRefs": []
+    },
+    {
+      "scenarioId": "SCN-039-005-06",
+      "scope": "SCOPE-06",
+      "title": "Watch creation requires provider readiness",
+      "behaviorClass": "api",
+      "changeType": "bugfix",
+      "requiredTestType": "e2e-ui",
+      "regressionRequired": true,
+      "linkedTests": [
+        {"file": "tests/integration/recommendation_watches_test.go", "testId": "existing watch integration surface"},
+        {"file": "tests/e2e/recommendations_watches_web_test.go", "testId": "existing watch E2E surface"}
+      ],
+      "plannedTests": [
+        {"plannedFile": "tests/e2e/recommendation_watch_consent_test.go", "plannedTestId": "TestRegressionDirectUnavailableWatchRouteCannotPersistInertWatch", "status": "not-yet-authored", "owner": "bubbles.test"},
+        {"plannedFile": "web/pwa/tests/recommendation_watches_readiness.spec.ts", "plannedTestId": "SCN-039-005-06 Regression: unavailable create and refresh refuse without inert state", "status": "not-yet-authored", "owner": "bubbles.test"}
+      ],
+      "evidenceRefs": []
+    },
+    {
+      "scenarioId": "SCN-039-005-07",
+      "scope": "SCOPE-07",
+      "title": "Auth and privacy boundaries hold",
+      "behaviorClass": "security",
+      "changeType": "bugfix",
+      "requiredTestType": "integration",
+      "regressionRequired": true,
+      "linkedTests": [
+        {"file": "tests/integration/recommendation_privacy_test.go", "testId": "existing recommendation privacy integration surface"},
+        {"file": "tests/e2e/recommendations_web_test.go", "testId": "existing recommendation web E2E surface"}
+      ],
+      "plannedTests": [
+        {"plannedFile": "internal/web/recommendations_render_test.go", "plannedTestId": "Closed state operator redaction and CSRF mapping", "status": "not-yet-authored", "owner": "bubbles.test"},
+        {"plannedFile": "web/pwa/tests/recommendations_readiness.spec.ts", "plannedTestId": "SCN-039-005-07 Regression: unauthorized surfaces clear recommendation details", "status": "not-yet-authored", "owner": "bubbles.test"}
+      ],
+      "evidenceRefs": []
+    },
+    {
+      "scenarioId": "SCN-039-005-08",
+      "scope": "SCOPE-05",
+      "title": "Partial provider degradation is transparent",
+      "behaviorClass": "api",
+      "changeType": "bugfix",
+      "requiredTestType": "e2e-api",
+      "regressionRequired": true,
+      "linkedTests": [
+        {"file": "tests/integration/recommendation_providers_test.go", "testId": "existing multi-provider integration surface"},
+        {"file": "tests/e2e/recommendations_api_test.go", "testId": "existing recommendation API E2E surface"}
+      ],
+      "plannedTests": [
+        {"plannedFile": "tests/e2e/recommendations_providers_test.go", "plannedTestId": "TestRegressionOneProviderSuccessCannotEraseOtherProviderFailure", "status": "not-yet-authored", "owner": "bubbles.test"},
+        {"plannedFile": "web/pwa/tests/recommendations_readiness.spec.ts", "plannedTestId": "SCN-039-005-08 Regression: partial coverage names participating and missing providers", "status": "not-yet-authored", "owner": "bubbles.test"}
+      ],
+      "evidenceRefs": []
+    },
+    {
+      "scenarioId": "SCN-039-005-09",
+      "scope": "SCOPE-07",
+      "title": "Recommendation availability is accessible",
+      "behaviorClass": "ui",
+      "changeType": "bugfix",
+      "requiredTestType": "e2e-ui",
+      "regressionRequired": true,
+      "linkedTests": [
+        {"file": "tests/e2e/recommendations_web_test.go", "testId": "existing recommendation web regression surface"},
+        {"file": "tests/e2e/recommendations_watches_web_test.go", "testId": "existing watch web regression surface"}
+      ],
+      "plannedTests": [
+        {"plannedFile": "web/pwa/tests/recommendations_readiness.spec.ts", "plannedTestId": "SCN-039-005-09 Regression: recommendation states remain operable at 320px and 200 percent zoom", "status": "not-yet-authored", "owner": "bubbles.test"},
+        {"plannedFile": "web/pwa/tests/recommendation_watches_readiness.spec.ts", "plannedTestId": "Recommendation watch states remain keyboard and screen-reader operable", "status": "not-yet-authored", "owner": "bubbles.test"}
+      ],
+      "evidenceRefs": []
+    },
+    {
+      "scenarioId": "SCN-039-005-10",
+      "scope": "SCOPE-04",
+      "title": "Disabled providers do not dilute readiness",
+      "behaviorClass": "domain",
+      "changeType": "bugfix",
+      "requiredTestType": "integration",
+      "regressionRequired": true,
+      "linkedTests": [
+        {"file": "tests/integration/recommendation_provider_registry_test.go", "testId": "existing provider-registry integration surface"},
+        {"file": "tests/e2e/recommendations_providers_test.go", "testId": "existing provider E2E surface"}
+      ],
+      "plannedTests": [
+        {"plannedFile": "internal/recommendation/availability/service_test.go", "plannedTestId": "TestReadinessDenominatorExcludesDisabledUnconfiguredFixtureAndCategoryIrrelevantProviders", "status": "not-yet-authored", "owner": "bubbles.test"},
+        {"plannedFile": "web/pwa/tests/recommendations_readiness.spec.ts", "plannedTestId": "SCN-039-005-10 Regression: disabled providers stay operator-only setup inventory and never dilute daily-user readiness", "status": "not-yet-authored", "owner": "bubbles.test"}
+      ],
+      "evidenceRefs": []
+    },
+    {
+      "scenarioId": "SCN-039-005-15",
+      "scope": "SCOPE-01",
+      "title": "Provider foundation migrates and configures without guessing",
+      "behaviorClass": "config",
+      "changeType": "bugfix",
+      "requiredTestType": "integration",
+      "regressionRequired": true,
+      "linkedTests": [
+        {"file": "internal/config/recommendations_validate_test.go", "testId": "existing fail-loud recommendation config surface"},
+        {"file": "tests/integration/recommendations_migration_test.go", "testId": "existing recommendation migration surface"}
+      ],
+      "plannedTests": [
+        {"plannedFile": "tests/integration/recommendations_migration_test.go", "plannedTestId": "Additive upgrade conservative backfill constraints rollback and retained evidence", "status": "not-yet-authored", "owner": "bubbles.test"}
+      ],
+      "evidenceRefs": []
+    },
+    {
+      "scenarioId": "SCN-039-005-11",
+      "scope": "SCOPE-02",
+      "title": "Google Places production adapter honors the provider contract",
+      "behaviorClass": "integration",
+      "changeType": "bugfix",
+      "requiredTestType": "integration",
+      "regressionRequired": true,
+      "linkedTests": [
+        {"file": "tests/integration/recommendation_providers_test.go", "testId": "existing provider protocol integration surface"},
+        {"file": "tests/e2e/recommendations_providers_test.go", "testId": "existing provider E2E surface"}
+      ],
+      "plannedTests": [
+        {"plannedFile": "internal/recommendation/provider/google_places_test.go", "plannedTestId": "TestGooglePlacesNormalizesAttributedFactsAndHealthyEmpty", "status": "not-yet-authored", "owner": "bubbles.test"}
+      ],
+      "evidenceRefs": []
+    },
+    {
+      "scenarioId": "SCN-039-005-12",
+      "scope": "SCOPE-03",
+      "title": "Yelp production adapter is independent and composes partial coverage",
+      "behaviorClass": "integration",
+      "changeType": "bugfix",
+      "requiredTestType": "integration",
+      "regressionRequired": true,
+      "linkedTests": [
+        {"file": "tests/integration/recommendation_providers_test.go", "testId": "existing multi-provider integration surface"},
+        {"file": "tests/e2e/recommendations_providers_test.go", "testId": "existing provider E2E surface"}
+      ],
+      "plannedTests": [
+        {"plannedFile": "internal/recommendation/provider/yelp_test.go", "plannedTestId": "TestYelpNormalizesProductionFactsAndAttribution", "status": "not-yet-authored", "owner": "bubbles.test"}
+      ],
+      "evidenceRefs": []
+    },
+    {
+      "scenarioId": "SCN-039-005-13",
+      "scope": "SCOPE-05",
+      "title": "Request refusal and attempted failure preserve evidence boundaries",
+      "behaviorClass": "data",
+      "changeType": "bugfix",
+      "requiredTestType": "integration",
+      "regressionRequired": true,
+      "linkedTests": [
+        {"file": "tests/integration/recommendation_privacy_test.go", "testId": "existing privacy/persistence integration surface"},
+        {"file": "tests/e2e/recommendations_full_regression_test.go", "testId": "existing full recommendation regression surface"}
+      ],
+      "plannedTests": [
+        {"plannedFile": "tests/integration/recommendation_privacy_test.go", "plannedTestId": "Pre-execution refusal writes zero request or trace while attempted failure writes typed redacted evidence", "status": "not-yet-authored", "owner": "bubbles.test"}
+      ],
+      "evidenceRefs": []
+    },
+    {
+      "scenarioId": "SCN-039-005-14",
+      "scope": "SCOPE-08",
+      "title": "Rollout preserves recommendation truth across every surface",
+      "behaviorClass": "regression",
+      "changeType": "bugfix",
+      "requiredTestType": "e2e-ui",
+      "regressionRequired": true,
+      "linkedTests": [
+        {"file": "tests/e2e/recommendations_full_regression_test.go", "testId": "existing broad recommendation regression surface"},
+        {"file": "tests/stress/recommendations_test.go", "testId": "existing recommendation stress surface"}
+      ],
+      "plannedTests": [
+        {"plannedFile": "web/pwa/tests/recommendations_readiness.spec.ts", "plannedTestId": "Complete recommendation request status and accessibility matrix", "status": "not-yet-authored", "owner": "bubbles.test"}
+      ],
+      "evidenceRefs": []
+    }
+  ]
+}
