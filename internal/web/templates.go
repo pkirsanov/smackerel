@@ -241,15 +241,25 @@ const allTemplates = `
     <p><a class="intent-hero-cta" href="/assistant">Open the assistant &rarr;</a></p>
 </section>
 <h2>Or search by keyword</h2>
-<input class="search-box" type="search" name="query" placeholder="Search your knowledge..."
-       hx-post="/search" hx-trigger="input changed delay:300ms, keyup[key=='Enter']"
-       hx-target="#results" hx-indicator="#search-spinner">
-<div id="search-spinner" class="htmx-indicator">Searching...</div>
-<div id="results"><div class="empty">Type a query to search your knowledge</div></div>
+<form class="search-form" method="post" action="/search" role="search" data-search-form
+      hx-post="/search" hx-target="#search-outcome" hx-swap="innerHTML" hx-indicator="#search-spinner">
+    <label for="search-query">Search your knowledge</label>
+    <input id="search-query" class="search-box" type="search" name="query" value="{{.Query}}"
+           placeholder="Search your knowledge..." required aria-describedby="search-validation"{{if eq .State "validation"}} aria-invalid="true"{{end}}>
+    <button type="submit">Search</button>
+    {{if eq .State "validation"}}<p id="search-validation" class="error" role="alert">{{.ValidationMessage}}</p>{{end}}
+</form>
+<div id="search-spinner" class="htmx-indicator" aria-hidden="true">Searching...</div>
+<div id="search-outcome" aria-live="polite">{{template "search-outcome" .}}</div>
 {{template "foot"}}
 {{end}}
 
-{{define "results-partial.html"}}
+{{define "search-outcome"}}
+<div class="search-outcome-body" data-search-state="{{.State}}"{{if .ResultCount}} data-search-result-count="{{.ResultCount}}"{{end}}>
+{{if eq .State "ready"}}<div class="empty">Type a query to search your knowledge</div>{{end}}
+{{if eq .State "validation"}}<div class="empty" role="status">Enter a search query to begin.</div>{{end}}
+{{if eq .State "server_error"}}<div class="error" role="alert">{{.ErrorMessage}} <form method="post" action="/search" style="display:inline" hx-post="/search" hx-target="#search-outcome" hx-swap="innerHTML"><input type="hidden" name="query" value="{{.Query}}"><button type="submit">Retry</button></form></div>{{end}}
+{{if eq .State "unauthorized"}}<div class="error" role="alert">Your session ended. <a href="/login?next=/">Sign in again</a></div>{{end}}
 {{if .KnowledgeMatch}}
 <div class="card" style="border-left:3px solid var(--warning)">
     <h3><span aria-label="Result from pre-synthesized knowledge layer">★</span> From Knowledge Layer</h3>
@@ -259,8 +269,7 @@ const allTemplates = `
     <div style="margin-top:0.5rem"><a href="/knowledge/concepts/{{.KnowledgeMatch.ConceptID}}">View Full Concept Page</a></div>
 </div>
 {{end}}
-{{if .Error}}<div class="error">{{.Error}}</div>{{end}}
-{{if .Empty}}<div class="empty">{{.Empty}}</div>{{end}}
+{{if eq .State "empty"}}{{if not .KnowledgeMatch}}<div class="empty">No matches. Try a different query.</div>{{end}}{{end}}
 {{range .Results}}
 <div class="card">
     <h3><a href="/artifact/{{.ID}}">{{.Title}}</a></h3>
@@ -269,7 +278,10 @@ const allTemplates = `
     {{if .QFCard}}{{template "qf-card" .QFCard}}{{end}}
 </div>
 {{end}}
+</div>
 {{end}}
+
+{{define "results-partial.html"}}{{template "search-outcome" .}}{{end}}
 
 {{define "qf-card"}}
 <div class="qf-card" data-card-kind="{{.CardKind}}">
