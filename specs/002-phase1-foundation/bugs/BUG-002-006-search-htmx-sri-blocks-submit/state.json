@@ -5,8 +5,9 @@
   "featureName": "Search HTMX SRI Blocks Submit",
   "releaseTrain": "mvp",
   "flagsIntroduced": [],
-  "status": "in_progress",
-  "statusReason": "Planning packet initialized from interpreted operator input. No local reproduction, implementation, test, certification, production mutation, commit, push, or deployment is claimed.",
+  "status": "blocked",
+  "statusReason": "Scope 02 core (progressive-enhancement semantic-form baseline + zero-domain-work HTTP 422 gate + typed SearchState model + narrow SearchExecutor seam in internal/web) is implemented and unit-verified: SEARCH-S02-T01 unit, ./smackerel.sh check, and ./smackerel.sh lint all exit 0 (see report.md Implementation Evidence). Scope 01 (self-hosted source-locked HTMX 1.9.12 asset + CSP tighten + true SRI digest) is blocked on an unobtainable in-tree HTMX artifact; Scopes 03/04 and all live-stack rows are blocked/deferred downstream. No commit, push, or deployment is claimed.",
+  "blockedReason": "Scope 01 requires self-hosting the reviewed HTMX 1.9.12 bytes at a product-origin asset route (/web-assets/htmx-1.9.12.min.js) with tightened CSP, but that artifact is not vendored in-tree and cannot be fetched under the supply-chain-source-locking + terminal-discipline policies. OPERATOR ACTION: vendor htmx.org@1.9.12 via a pinned trusted registry + committed lockfile (or the repo's approved source-locked vendoring mechanism), then re-run Scope 01 (asset embed/route/CSP + true SRI digest) and the enhanced-path live-stack rows (SEARCH-S01/S03/S04-* and SEARCH-S02-T02..T05). Scope 02 (progressive-enhancement semantic-form baseline + zero-domain-work 422 gate + typed SearchState model) is implemented and unit-verified and works independently of HTMX.",
   "workflowMode": "bugfix-fastlane",
   "linkedImplementationSpec": null,
   "linkedPlanningPacket": null,
@@ -24,23 +25,23 @@
     "certificationClaimed": false
   },
   "execution": {
-    "activeAgent": "bubbles.plan",
-    "currentPhase": "harden",
-    "currentScope": null,
-    "runStartedAt": "2026-07-24T07:52:00Z",
+    "activeAgent": "bubbles.implement",
+    "currentPhase": "implement",
+    "currentScope": 2,
+    "runStartedAt": "2026-07-24T20:45:00Z",
     "completedPhaseClaims": [],
     "pendingTransitionRequests": [],
     "audit": { "schemaVersion": "audit-run/v1", "runId": null, "currentAttemptId": null, "attempts": [] }
   },
   "certification": {
-    "status": "in_progress",
+    "status": "blocked",
     "completedScopes": [],
     "certifiedCompletedPhases": [],
     "scopeProgress": [
-      { "scope": 1, "scopeId": "SCOPE-01", "name": "Source-Locked Shared HTMX Asset", "status": "not_started", "dependsOn": [], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": null },
-      { "scope": 2, "scopeId": "SCOPE-02", "name": "Semantic Baseline Search", "status": "not_started", "dependsOn": ["SCOPE-01"], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": null },
-      { "scope": 3, "scopeId": "SCOPE-03", "name": "Exactly-Once Search Enhancement", "status": "not_started", "dependsOn": ["SCOPE-02"], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": null },
-      { "scope": 4, "scopeId": "SCOPE-04", "name": "Disposable Search Browser Acceptance", "status": "not_started", "dependsOn": ["SCOPE-03"], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": null }
+      { "scope": 1, "scopeId": "SCOPE-01", "name": "Source-Locked Shared HTMX Asset", "status": "blocked", "dependsOn": [], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": null },
+      { "scope": 2, "scopeId": "SCOPE-02", "name": "Semantic Baseline Search", "status": "in_progress", "dependsOn": ["SCOPE-01"], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": null },
+      { "scope": 3, "scopeId": "SCOPE-03", "name": "Exactly-Once Search Enhancement", "status": "blocked", "dependsOn": ["SCOPE-02"], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": null },
+      { "scope": 4, "scopeId": "SCOPE-04", "name": "Disposable Search Browser Acceptance", "status": "blocked", "dependsOn": ["SCOPE-03"], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": null }
     ],
     "lockdownState": { "active": false, "lockedScenarioIds": [] },
     "invalidationLedger": []
@@ -91,12 +92,21 @@
       "runStartedAt": "2026-07-24T07:52:00Z",
       "runEndedAt": "2026-07-24T07:58:00Z",
       "summary": "Planning reconciliation (spec-scope-hardening harden): re-derived scopes.md, scenario-manifest.json, and test-plan.json against the revised spec.md/design.md (both 2026-07-24T05:46Z). Reconciled SCN-002-006-04 from the superseded 'empty query sends no request' framing to the authoritative 'blank query performs no search-domain work' contract (empty/control-only/whitespace-only/mixed input on native or HTMX paths executes zero SearchEngine and downstream search-domain dispatch; HTTP validation permitted). Expanded certification.scopeProgress to the four planned scopes. Kept status in_progress; no source, test, certification, commit, push, or deployment change is claimed."
+    },
+    {
+      "agent": "bubbles.implement",
+      "phasesExecuted": ["implement"],
+      "statusBefore": "in_progress",
+      "statusAfter": "blocked",
+      "runStartedAt": "2026-07-24T20:45:00Z",
+      "runEndedAt": "2026-07-24T21:10:00Z",
+      "summary": "Scope 02 core implemented and unit-verified: progressive-enhancement semantic <form> baseline (native full-page POST /search when HTMX is blocked), pre-dispatch zero-domain-work validation gate (blank/control-only/whitespace-only/mixed input -> HTTP 422 with zero SearchEngine dispatch), typed SearchState model, and the narrow SearchExecutor seam in internal/web (SEARCH-S02-T01 unit + ./smackerel.sh check + ./smackerel.sh lint all exit 0; see report.md Implementation Evidence). Scope 01 (self-hosted source-locked HTMX 1.9.12 asset + CSP tighten + true SRI) is blocked on an unobtainable in-tree HTMX artifact under supply-chain-source-locking + terminal-discipline; internal/api/router.go CSP/asset wiring deliberately left untouched. Scopes 03/04 and all live-stack rows (SEARCH-S01/S03/S04-* and SEARCH-S02-T02..T05) are blocked/deferred downstream. Reconciled the packet terminal-for-mode status to blocked with an operator-actionable blockedReason; no source, test, certification, commit, push, or deployment change is claimed by this reconciliation."
     }
   ],
   "activeBugs": [],
   "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-07-24T07:58:00Z",
+  "lastUpdatedAt": "2026-07-24T21:10:00Z",
   "scopeLayout": "single-file",
   "artifacts": { "bug": "bug.md", "spec": "spec.md", "design": "design.md", "scopes": "scopes.md", "report": "report.md", "uservalidation": "uservalidation.md", "scenarioManifest": "scenario-manifest.json" },
   "statusDiscipline": {

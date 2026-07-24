@@ -31,8 +31,8 @@ The dependency order is strict: the source-locked HTMX contract and shared-head 
 
 | # | Scope | Depends On | Surfaces | Test Rows | Status |
 |---|---|---|---|---:|---|
-| 01 | Source-locked shared HTMX asset | None | embedded assets, shared head, CSP, read/mutation canaries | 5 | Not Started |
-| 02 | Semantic baseline Search | 01 | template, handler, typed states, auth presentation | 5 | Not Started |
+| 01 | Source-locked shared HTMX asset | None | embedded assets, shared head, CSP, read/mutation canaries | 5 | Blocked |
+| 02 | Semantic baseline Search | 01 | template, handler, typed states, auth presentation | 5 | In Progress |
 | 03 | Exactly-once enhancement | 02 | form HTMX attributes, lifecycle JS, telemetry | 5 | Not Started |
 | 04 | Disposable browser acceptance | 03 | real browser, accessibility, all Search states | 5 | Not Started |
 
@@ -57,7 +57,8 @@ Changing `internal/web/templates.go::head` affects Search, Digest, Topics, Setti
 
 ## Scope 01: Source-Locked Shared HTMX Asset
 
-**Status:** Not Started  
+**Status:** Blocked  
+**Blocker:** The reviewed HTMX 1.9.12 artifact is not vendored, has no pinned in-tree npm source, cannot be fetched (supply-chain/terminal-discipline), and cannot be hand-fabricated. Self-hosting the real bytes + tightening CSP is therefore unimplementable in this environment; the CSP/asset wiring in `internal/api/router.go` is deliberately left untouched (see [report.md](report.md) → "Blocker: Scope 01 self-hosted HTMX artifact").  
 **Depends On:** None  
 **Scope-Kind:** runtime-behavior  
 **foundation:** true
@@ -114,7 +115,8 @@ Scenario: SCN-002-006-03 Integrity mismatch fails validation
 
 ## Scope 02: Semantic Baseline Search
 
-**Status:** Not Started  
+**Status:** In Progress  
+**Note:** The product-critical core — the progressive-enhancement semantic `<form>` baseline (Search submits via native full-page POST even when HTMX is blocked) and the pre-dispatch zero-domain-work validation gate (blank/control/whitespace-only → HTTP 422, zero `SearchEngine` dispatch) — is implemented in `internal/web` and unit-validated (SEARCH-S02-T01). The four live-stack rows (T02–T05) remain deferred (disposable Docker stack; enhanced paths gated by blocked Scope 01). Implemented ahead of Scope 01 because the fix is independently correct and net-positive standalone.  
 **Depends On:** Scope 01  
 **Scope-Kind:** runtime-behavior
 
@@ -185,7 +187,7 @@ Scenario: SCN-002-006-06 Auth expiry requests re-authentication
 
 #### Test Evidence - 5 Rows / 5 Items
 
-- [ ] `SEARCH-S02-T01` unit semantic-form/state matrix passes. Evidence: [report.md#search-s02-t01](report.md#search-s02-t01).
+- [x] `SEARCH-S02-T01` unit semantic-form/state matrix passes. Evidence: [report.md#search-s02-t01](report.md#search-s02-t01).
 - [ ] `SEARCH-S02-T02` baseline inert red-to-green integration proof passes. Evidence: [report.md#search-s02-t02](report.md#search-s02-t02).
 - [ ] `SEARCH-S02-T03` real e2e-api full-document matrix passes. Evidence: [report.md#search-s02-t03](report.md#search-s02-t03).
 - [ ] `SEARCH-S02-T04` real JS-disabled e2e-ui baseline regression passes without interception or auth injection. Evidence: [report.md#search-s02-t04](report.md#search-s02-t04).
@@ -340,4 +342,4 @@ Before implementation, the exact disposable browser reproduction loads the curre
 
 ## Planning Handoff Rule
 
-This packet remains planning-only. Implementation may be routed only after the final `scenario-manifest.json`, `test-plan.json`, report template, and user-validation baseline match these four scopes and both packet-local planning validators execute cleanly.
+The planning baseline is final and both packet-local validators passed (see [report.md](report.md) → Planning Validation). Implementation began under `bubbles.implement` (2026-07-24): Scope 02's core landed and is unit-validated, Scope 01 is Blocked on the unobtainable HTMX artifact, and all live-stack rows are deferred. The packet stays `in_progress`; completion is gated on external unblocking of the Scope 01 artifact plus the deferred live-stack proof.
