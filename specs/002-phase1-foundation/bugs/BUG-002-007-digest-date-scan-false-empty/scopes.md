@@ -31,9 +31,9 @@ No Digest UI proof begins before Scope 02's typed reader and adversarial real-Po
 
 | # | Scope | Kind | Depends On | Surfaces | Test Rows | Status |
 |---|---|---|---|---|---:|---|
-| 01 | Ownership and freshness contract gate | contract-only | None | grant contract, config SST, validation | 3 | Not Started |
-| 02 | Canonical typed reader | runtime-behavior | 01 | digest domain reader, composition, PostgreSQL, API parity | 5 | Not Started |
-| 03 | Truthful server-rendered states | runtime-behavior | 02 | web handler, template, auth projection, telemetry | 5 | Not Started |
+| 01 | Ownership and freshness contract gate | contract-only | None | grant contract, config SST, validation | 3 | Blocked |
+| 02 | Canonical typed reader | runtime-behavior | 01 | digest domain reader, composition, PostgreSQL, API parity | 5 | In Progress |
+| 03 | Truthful server-rendered states | runtime-behavior | 02 | web handler, template, auth projection, telemetry | 5 | In Progress |
 | 04 | Disposable Digest acceptance | runtime-behavior | 03 | real database, browser, accessibility, privacy | 5 | Not Started |
 
 ## Shared Digest Read Infrastructure Impact Sweep
@@ -57,7 +57,7 @@ The canonical reader is shared by `/api/digest`, scheduler/generation consumers,
 
 ## Scope 01: Digest Ownership And Freshness Contract Gate
 
-**Status:** Not Started  
+**Status:** Blocked  
 **Depends On:** None  
 **Scope-Kind:** contract-only  
 **foundation:** true
@@ -116,7 +116,7 @@ Scenario: SCN-002-007-10 Digest reads follow the ratified global-corpus grant co
 
 ## Scope 02: Canonical Typed Digest Reader
 
-**Status:** Not Started  
+**Status:** In Progress  
 **Depends On:** Scope 01  
 **Scope-Kind:** runtime-behavior  
 **foundation:** true
@@ -179,7 +179,7 @@ Insert the approximately 380-word marker directly through the disposable Postgre
 - [ ] `SCN-002-007-01 Current stored digest round-trips through the canonical reader`: exact persisted content and metadata return with no false-empty substitution. Evidence: [report.md#scope-02-core](report.md#scope-02-core).
 - [ ] `SCN-002-007-02 Date boundary scans and formats correctly`: typed DATE/TIMESTAMPTZ preserve the intended calendar date and UTC instant. Evidence: [report.md#scope-02-core](report.md#scope-02-core).
 - [ ] `SCN-002-007-03 Query or scan failure remains an error`: only wrapped no-row means absence and all other faults retain typed failure with zero fallback fields. Evidence: [report.md#scope-02-core](report.md#scope-02-core).
-- [ ] The web route is composed with the canonical reader and duplicate raw SQL/string scanning is absent before UI work begins. Evidence: [report.md#scope-02-core](report.md#scope-02-core).
+- [x] The web route is composed with the canonical reader and duplicate raw SQL/string scanning is absent before UI work begins. Evidence: [report.md#scope-02-core](report.md#scope-02-core).
 
 #### Test Evidence - 5 Rows / 5 Items
 
@@ -197,7 +197,7 @@ Insert the approximately 380-word marker directly through the disposable Postgre
 
 ## Scope 03: Truthful Server-Rendered Digest States
 
-**Status:** Not Started  
+**Status:** In Progress  
 **Depends On:** Scope 02  
 **Scope-Kind:** runtime-behavior
 

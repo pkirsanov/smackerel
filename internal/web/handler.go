@@ -46,6 +46,21 @@ type Handler struct {
 	Supervisor     SyncTrigger
 	KnowledgeStore *knowledge.KnowledgeStore
 
+	// DigestReader is the canonical typed digest read seam (BUG-002-007). The
+	// server-rendered /digest page consumes it instead of owning duplicate SQL;
+	// only a wrapped pgx.ErrNoRows is empty and every other fault is an honest
+	// read error. Production injects *digest.Generator (cmd/core wiring); a nil
+	// reader renders an honest read_error, never a false-empty.
+	DigestReader DigestReader
+	// DigestStaleAfter is the operator-owned freshness threshold. Zero means the
+	// DIGEST_STALE_AFTER_HOURS SST contract (BUG-002-007 Scope 01) is not yet
+	// wired, which keeps stale determination inert (a non-quiet row renders
+	// current, never arbitrarily stale) until the concurrent config work lands.
+	DigestStaleAfter time.Duration
+	// ClockOverride, when non-nil, replaces time.Now for deterministic stale-age
+	// tests. Production leaves it nil. It is an observation seam only.
+	ClockOverride func() time.Time
+
 	// SearchExecutorOverride, when non-nil, replaces the real *api.SearchEngine
 	// as the SearchResults domain-dispatch seam. Production leaves it nil;
 	// focused unit tests inject a counting fake to prove zero SearchEngine
@@ -364,30 +379,51 @@ func webStringFromAny(value any) string {
 	return stringValue
 }
 
-// DigestPage handles GET /digest.
+// DigestPage handles GET /digest. It consumes the canonical typed digest reader
+// and renders exactly one truthful state; only a wrapped pgx.ErrNoRows is empty
+// (BUG-002-007). A read fault is an honest read_error at HTTP 500 with no
+// digest-derived fields and no today's-date substitution.
 func (h *Handler) DigestPage(w http.ResponseWriter, r *http.Request) {
-	var digestText, digestDate string
-	var isQuiet bool
-
-	err := h.Pool.QueryRow(r.Context(), `
-		SELECT digest_text, digest_date, is_quiet FROM digests
-		ORDER BY digest_date DESC LIMIT 1
-	`).Scan(&digestText, &digestDate, &isQuiet)
-
-	if err != nil {
-		digestText = "No digest generated yet."
-		digestDate = time.Now().Format("2006-01-02")
+	// Honor the reader's existing exact-date capability (mirrors GET /api/digest).
+	// An invalid date falls back to the latest digest and never selects a test path.
+	selectedDate := r.URL.Query().Get("date")
+	if selectedDate != "" {
+		if _, perr := time.Parse("2006-01-02", selectedDate); perr != nil {
+			selectedDate = ""
+		}
 	}
 
-	if err := h.Templates.ExecuteTemplate(w, "digest.html", map[string]interface{}{
-		"Title":      "Daily Digest",
-		"DigestText": digestText,
-		"DigestDate": digestDate,
-		"IsQuiet":    isQuiet,
-	}); err != nil {
-		slog.Error("template error", "error", err)
-		http.Error(w, "Internal error", 500)
+	var model DigestPageModel
+	if h.DigestReader == nil {
+		model = classifyDigest(nil, errDigestReaderUnavailable, selectedDate, h.now(), h.DigestStaleAfter)
+	} else {
+		d, err := h.DigestReader.GetLatest(r.Context(), selectedDate)
+		model = classifyDigest(d, err, selectedDate, h.now(), h.DigestStaleAfter)
 	}
+
+	status := http.StatusOK
+	if model.State == DigestReadError {
+		status = http.StatusInternalServerError
+		slog.Error("digest read failed", "kind", model.ErrorKind, "date_selected", selectedDate != "")
+	}
+
+	var buf bytes.Buffer
+	if terr := h.Templates.ExecuteTemplate(&buf, "digest.html", model); terr != nil {
+		slog.Error("template error", "error", terr)
+		http.Error(w, "Internal error", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(status)
+	_, _ = buf.WriteTo(w)
+}
+
+// now returns the injected clock or time.Now (BUG-002-007 stale-age seam).
+func (h *Handler) now() time.Time {
+	if h.ClockOverride != nil {
+		return h.ClockOverride()
+	}
+	return time.Now()
 }
 
 // TopicsPage handles GET /topics.

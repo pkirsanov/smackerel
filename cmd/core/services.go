@@ -372,6 +372,11 @@ func buildCoreServices(ctx context.Context, cfg *config.Config) (*coreServices, 
 	svc.recommendationStore = recstore.New(svc.pg.Pool)
 	svc.recommendationRegistry = recprovider.RuntimeRegistry()
 	svc.webHandler = web.NewHandler(svc.pg.Pool, svc.nc, time.Now())
+	// BUG-002-007: the server-rendered /digest page consumes the canonical typed
+	// digest reader instead of owning duplicate string-scanning SQL. DigestStaleAfter
+	// stays zero until DIGEST_STALE_AFTER_HOURS (Scope 01, concurrent config work)
+	// is wired, which keeps stale determination inert rather than defaulting.
+	svc.webHandler.DigestReader = svc.digestGen
 	svc.webHandler.KnowledgeStore = svc.knowledgeStore
 	svc.webHandler.Supervisor = svc.supervisor
 	svc.webHandler.RecommendationsEnabled = cfg.Recommendations.Enabled
