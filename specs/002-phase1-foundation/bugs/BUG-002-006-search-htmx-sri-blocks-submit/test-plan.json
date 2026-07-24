@@ -1,0 +1,252 @@
+{
+  "version": 1,
+  "specId": "BUG-002-006",
+  "generatedBy": "bubbles.plan",
+  "generatedAt": "2026-07-23T23:57:56Z",
+  "scopes": [
+    {
+      "scopeId": "SCOPE-01",
+      "scopeName": "Source-Locked Shared HTMX Asset",
+      "tests": [
+        {
+          "id": "SEARCH-S01-T01",
+          "type": "unit",
+          "category": "unit",
+          "file": "internal/web/handler_test.go; internal/web/htmx_asset_contract_test.go",
+          "scenarioId": "SCN-002-006-03",
+          "description": "Verify the embedded HTMX bytes match the lock-derived digest and that mutated bytes, stale digest, duplicate source, or weakened CSP fail.",
+          "testTitle": "TestHTMXAssetMatchesLockedDigestAndMutatedBytesOrWeakenedCSPFail",
+          "command": "./smackerel.sh test unit --go",
+          "liveSystem": false
+        },
+        {
+          "id": "SEARCH-S01-T02",
+          "type": "integration",
+          "category": "integration",
+          "file": "tests/e2e/recommendations_web_test.go; tests/integration/web/shared_htmx_asset_test.go",
+          "scenarioId": "SCN-002-006-03",
+          "description": "Serve exact source-locked bytes and preserve one existing read interaction and one existing mutation interaction.",
+          "testTitle": "TestSharedHTMXAssetServesExactBytesAndSupportsReadAndMutationCanaries",
+          "command": "./smackerel.sh test integration",
+          "liveSystem": true
+        },
+        {
+          "id": "SEARCH-S01-T03",
+          "type": "regression-e2e-api",
+          "category": "e2e-api",
+          "file": "tests/e2e/test_web_ui.sh",
+          "scenarioId": "SCN-002-006-03",
+          "description": "Assert immutable asset headers, strict CSP, and absence of the external HTMX source through the real server-rendered stack.",
+          "testTitle": "shared HTMX asset has immutable headers strict CSP and no external source",
+          "command": "./smackerel.sh test e2e",
+          "liveSystem": true
+        },
+        {
+          "id": "SEARCH-S01-T04",
+          "type": "regression-e2e-ui",
+          "category": "e2e-ui",
+          "file": "web/pwa/tests/unified_journey.spec.ts; web/pwa/tests/server_rendered_htmx_canary.spec.ts",
+          "scenarioId": "SCN-002-006-03",
+          "description": "Load same-origin HTMX and exercise one read and one mutation interaction in the real browser.",
+          "testTitle": "same-origin HTMX loads and one read plus one mutation interaction remains operable",
+          "command": "./smackerel.sh test e2e-ui",
+          "liveSystem": true
+        },
+        {
+          "id": "SEARCH-S01-T05",
+          "type": "broader-regression-e2e-ui",
+          "category": "e2e-ui",
+          "file": "web/pwa/tests",
+          "scenarioId": "SCN-002-006-03",
+          "description": "Prove the shared head exposes one source-locked version and emits no CSP or integrity console errors across the browser suite.",
+          "testTitle": "shared head exposes exactly one source-locked HTMX version without console CSP or integrity errors",
+          "command": "./smackerel.sh test e2e-ui",
+          "liveSystem": true
+        }
+      ]
+    },
+    {
+      "scopeId": "SCOPE-02",
+      "scopeName": "Semantic Baseline Search",
+      "tests": [
+        {
+          "id": "SEARCH-S02-T01",
+          "type": "unit",
+          "category": "unit",
+          "file": "internal/web/handler_test.go",
+          "scenarioId": "SCN-002-006-02,SCN-002-006-04,SCN-002-006-05,SCN-002-006-06",
+          "description": "Validate semantic form markup, one typed model, SearchEngine call count, complete-page and fragment rendering, and state exclusivity.",
+          "testTitle": "TestSearchSemanticFormAndTypedFullPageFragmentStateMatrix",
+          "command": "./smackerel.sh test unit --go",
+          "liveSystem": false
+        },
+        {
+          "id": "SEARCH-S02-T02",
+          "type": "integration-red-green",
+          "category": "integration",
+          "file": "tests/e2e/capture_process_search_test.go; tests/integration/web/search_baseline_test.go",
+          "scenarioId": "SCN-002-006-02,SCN-002-006-04,SCN-002-006-05",
+          "description": "Record the pre-fix inert baseline and then prove native submission calls SearchEngine once with typed outcomes.",
+          "testTitle": "TestBaselineSearchWasInertBeforeFixAndNowCallsEngineOnceWithTypedOutcomes",
+          "command": "./smackerel.sh test integration",
+          "liveSystem": true
+        },
+        {
+          "id": "SEARCH-S02-T03",
+          "type": "regression-e2e-api",
+          "category": "e2e-api",
+          "file": "tests/e2e/test_web_ui.sh",
+          "scenarioId": "SCN-002-006-02,SCN-002-006-04,SCN-002-006-05,SCN-002-006-06",
+          "description": "Exercise baseline POST results, validation, empty, failure, and unauthorized complete documents on the real stack.",
+          "testTitle": "baseline POST search returns complete results validation empty failure and unauthorized documents",
+          "command": "./smackerel.sh test e2e",
+          "liveSystem": true
+        },
+        {
+          "id": "SEARCH-S02-T04",
+          "type": "regression-e2e-ui",
+          "category": "e2e-ui",
+          "file": "web/pwa/tests/auth_login.spec.ts; web/pwa/tests/search_progressive.spec.ts",
+          "scenarioId": "SCN-002-006-02,SCN-002-006-04",
+          "description": "Use a real session and JavaScript-disabled browser to prove pointer submission works and blank input performs no search-domain work while HTTP validation is permitted.",
+          "testTitle": "pointer search works with JavaScript disabled and blank input performs no search-domain work",
+          "command": "./smackerel.sh test e2e-ui",
+          "liveSystem": true
+        },
+        {
+          "id": "SEARCH-S02-T05",
+          "type": "broader-regression-e2e-ui",
+          "category": "e2e-ui",
+          "file": "web/pwa/tests/search_states.spec.ts; web/pwa/tests/auth_login.spec.ts",
+          "scenarioId": "SCN-002-006-05,SCN-002-006-06",
+          "description": "Keep baseline no-match, typed failure, and expired-session browser states mutually exclusive.",
+          "testTitle": "baseline no-match failure and expired-session states remain mutually exclusive",
+          "command": "./smackerel.sh test e2e-ui",
+          "liveSystem": true
+        }
+      ]
+    },
+    {
+      "scopeId": "SCOPE-03",
+      "scopeName": "Exactly-Once Search Enhancement",
+      "tests": [
+        {
+          "id": "SEARCH-S03-T01",
+          "type": "unit",
+          "category": "unit",
+          "file": "internal/web/handler_test.go; internal/web/search_enhancement_contract_test.go",
+          "scenarioId": "SCN-002-006-01,SCN-002-006-07",
+          "description": "Prove the enhancement observes lifecycle but cannot submit requests or expose raw query data.",
+          "testTitle": "TestSearchEnhancementObservesLifecycleButCannotSubmitOrLeakQuery",
+          "command": "./smackerel.sh test unit --go",
+          "liveSystem": false
+        },
+        {
+          "id": "SEARCH-S03-T02",
+          "type": "integration-red-green",
+          "category": "integration",
+          "file": "tests/e2e/test_web_ui.sh; tests/integration/web/search_exactly_once_test.go",
+          "scenarioId": "SCN-002-006-01,SCN-002-006-07",
+          "description": "Record duplicate-capable legacy triggers and then prove form enhancement calls Search once and preserves degraded truth.",
+          "testTitle": "TestOldInputAndEnterTriggersCanDuplicateButFormEnhancementCallsSearchOnceAndPreservesDegradedState",
+          "command": "./smackerel.sh test integration",
+          "liveSystem": true
+        },
+        {
+          "id": "SEARCH-S03-T03",
+          "type": "regression-e2e-api",
+          "category": "e2e-api",
+          "file": "tests/e2e/capture_process_search_test.go",
+          "scenarioId": "SCN-002-006-01,SCN-002-006-07",
+          "description": "Return one typed result or degraded HTMX fragment with real status and provenance.",
+          "testTitle": "HTMX request returns one typed result or degraded fragment with real status and provenance",
+          "command": "./smackerel.sh test e2e",
+          "liveSystem": true
+        },
+        {
+          "id": "SEARCH-S03-T04",
+          "type": "regression-e2e-ui",
+          "category": "e2e-ui",
+          "file": "web/pwa/tests/search_progressive.spec.ts",
+          "scenarioId": "SCN-002-006-01",
+          "description": "Observe one actual POST for Enter and one actual POST for pointer, followed by live results.",
+          "testTitle": "Enter and pointer each issue exactly one real search request and render live results",
+          "command": "./smackerel.sh test e2e-ui",
+          "liveSystem": true
+        },
+        {
+          "id": "SEARCH-S03-T05",
+          "type": "broader-regression-e2e-ui",
+          "category": "e2e-ui",
+          "file": "web/pwa/tests/search_states.spec.ts",
+          "scenarioId": "SCN-002-006-07",
+          "description": "Replace stale state across retry, timeout, network, server, and degraded transitions without session or privacy drift.",
+          "testTitle": "retry timeout network server and degraded transitions replace stale state without session or privacy drift",
+          "command": "./smackerel.sh test e2e-ui",
+          "liveSystem": true
+        }
+      ]
+    },
+    {
+      "scopeId": "SCOPE-04",
+      "scopeName": "Disposable Search Browser Acceptance",
+      "tests": [
+        {
+          "id": "SEARCH-S04-T01",
+          "type": "unit",
+          "category": "unit",
+          "file": "internal/web/handler_test.go; web/pwa/tests/_support/search_helper_policy.test.ts",
+          "scenarioId": "SCN-002-006-08",
+          "description": "Reject browser helpers with interception, auth injection, bailout, or private live-region content.",
+          "testTitle": "TestSearchBrowserHelpersForbidInterceptionAuthInjectionBailoutAndPrivateAnnouncements",
+          "command": "./smackerel.sh test unit --go",
+          "liveSystem": false
+        },
+        {
+          "id": "SEARCH-S04-T02",
+          "type": "integration-red-green",
+          "category": "integration",
+          "file": "tests/e2e/test_web_ui.sh; tests/integration/web/search_disposable_states_test.go",
+          "scenarioId": "SCN-002-006-08",
+          "description": "Record zero browser requests before repair and prove all owned states are reachable after repair.",
+          "testTitle": "TestPreFixBrowserSendsZeroRequestWhenHTMXBlockedAndPostFixAllOwnedStatesRemainReachable",
+          "command": "./smackerel.sh test integration",
+          "liveSystem": true
+        },
+        {
+          "id": "SEARCH-S04-T03",
+          "type": "regression-e2e-api",
+          "category": "e2e-api",
+          "file": "tests/e2e/test_search.sh; tests/e2e/test_search_empty.sh; tests/e2e/test_web_ui.sh",
+          "scenarioId": "SCN-002-006-08",
+          "description": "Keep real Search API and server-rendered outcome matrices coherent.",
+          "testTitle": "real Search API and server-rendered outcome matrix remains coherent",
+          "command": "./smackerel.sh test e2e",
+          "liveSystem": true
+        },
+        {
+          "id": "SEARCH-S04-T04",
+          "type": "regression-e2e-ui",
+          "category": "e2e-ui",
+          "file": "web/pwa/tests/search_progressive.spec.ts; web/pwa/tests/search_states.spec.ts",
+          "scenarioId": "SCN-002-006-08",
+          "description": "Prove real Search remains operable, announced, and non-overlapping with enhancement enabled and disabled.",
+          "testTitle": "real Search remains operable announced and non-overlapping with enhancement enabled and disabled",
+          "command": "./smackerel.sh test e2e-ui",
+          "liveSystem": true
+        },
+        {
+          "id": "SEARCH-S04-T05",
+          "type": "broader-regression-e2e-ui",
+          "category": "e2e-ui",
+          "file": "web/pwa/tests/auth_login.spec.ts; web/pwa/tests/unified_journey.spec.ts; web/pwa/tests",
+          "scenarioId": "SCN-002-006-01,SCN-002-006-02,SCN-002-006-03,SCN-002-006-04,SCN-002-006-05,SCN-002-006-06,SCN-002-006-07,SCN-002-006-08",
+          "description": "Preserve authentication, navigation, shared HTMX, and broader product journeys after the Search repair.",
+          "testTitle": "Search repair preserves auth navigation shared HTMX and broader product journeys",
+          "command": "./smackerel.sh test e2e-ui",
+          "liveSystem": true
+        }
+      ]
+    }
+  ]
+}

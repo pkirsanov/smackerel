@@ -1,0 +1,164 @@
+{
+  "version": 3,
+  "bugId": "BUG-102-001",
+  "featureDir": "specs/102-target-deploy-hardening/bugs/BUG-102-001-product-journey-acceptance-gap",
+  "featureName": "Product Journey Acceptance Gap",
+  "releaseTrain": "mvp",
+  "flagsIntroduced": [],
+  "status": "in_progress",
+  "statusReason": "Planning packet initialized from interpreted operator input. Product dependencies, spec 104 Scope 8, implementation, adapter consumption, tests, certification, production mutation, commit, push, and deployment are not claimed.",
+  "workflowMode": "bugfix-fastlane",
+  "linkedImplementationSpec": null,
+  "linkedPlanningPacket": null,
+  "planningOnly": false,
+  "planningOnlyJustification": null,
+  "specDependsOn": [
+    "specs/102-target-deploy-hardening",
+    "specs/070-web-username-password-login/bugs/BUG-070-001-production-credential-session-paseto-split",
+    "specs/002-phase1-foundation/bugs/BUG-002-006-search-htmx-sri-blocks-submit",
+    "specs/002-phase1-foundation/bugs/BUG-002-007-digest-date-scan-false-empty",
+    "specs/073-web-mobile-assistant-frontend/bugs/BUG-073-006-auth-rejection-blank-assistant-response",
+    "specs/080-knowledge-graph-public-api/bugs/BUG-080-001-graph-api-fail-soft-runtime-disable",
+    "specs/004-phase3-intelligence/bugs/BUG-004-004-synthesis-persistence-and-health-truth",
+    "specs/039-recommendations-engine/bugs/BUG-039-005-enabled-with-zero-providers-false-ready",
+    "specs/083-card-rewards-companion/bugs/BUG-083-002-ccmanager-parity-runtime-drift",
+    "specs/104-universal-ask-self-knowledge#scope-08",
+    "specs/105-connected-knowledge-graph-explorer",
+    "specs/106-coherent-product-experience"
+  ],
+  "certifiedAt": null,
+  "requiresRevalidation": false,
+  "evidenceLifecycleRole": {
+    "role": "acceptance_producer",
+    "readinessConsumer": "specs/032-documentation-freshness/bugs/BUG-004-production-readiness-claims-runtime-drift",
+    "presentationConsumer": "specs/106-coherent-product-experience",
+    "producerDependsOnConsumers": false,
+    "flow": "domain journey contracts -> BUG-102 immutable evidence -> BUG-032 readiness -> spec 106 presentation"
+  },
+  "candidateAcceptancePolicy": {
+    "trafficPosture": "off-traffic-before-cutover",
+    "migration": "expand-contract previous-release-readable or automated write-freeze plus proven backup/restore",
+    "pointerSwapAloneSufficient": false
+  },
+  "faultProfilePolicy": {"registry":"test-only machine-readable","productionExposure":"forbidden","requiredFields":["stableId","journey","setup","teardown","parallelism","expectedRequest","expectedResponseOrTermination","evidence","noFirstPartyInterception"]},
+  "dependencyEvidencePolicy": {"spec104ObservedStatus":"blocked","eligibleEvidence":["completed scopes only","scope-08 bounded Assistant evidence"],"forbiddenClaim":"spec 104 done"},
+  "requirementsRecovery": {"reviewId":"2026-07-24-independent-planning-review","status":"analyst_reconciled","addressedFindings":["GRILL-02","GRILL-04","GRILL-05","GRILL-10","SR-012"],"activeRequirementsRef":"spec.md","certificationClaimed":false},
+  "execution": {"activeAgent":"bubbles.design","currentPhase":"bootstrap","currentScope":null,"runStartedAt":"2026-07-24T18:25:51Z","completedPhaseClaims":[],"pendingTransitionRequests":[],"audit":{"schemaVersion":"audit-run/v1","runId":null,"currentAttemptId":null,"attempts":[]}},
+  "certification": {
+    "status": "in_progress",
+    "completedScopes": [],
+    "certifiedCompletedPhases": [],
+    "scopeProgress": [
+      {
+        "scope": 1,
+        "scopeId": "SCOPE-01",
+        "name": "Product Journey Contract Foundation",
+        "status": "not_started",
+        "dependsOn": [],
+        "scopeDir": null,
+        "evidenceFile": "report.md",
+        "certifiedAt": null
+      },
+      {
+        "scope": 2,
+        "scopeId": "SCOPE-02",
+        "name": "Production-Readonly Runner And Real Session",
+        "status": "not_started",
+        "dependsOn": [1],
+        "scopeDir": null,
+        "evidenceFile": "report.md",
+        "certifiedAt": null
+      },
+      {
+        "scope": 3,
+        "scopeId": "SCOPE-03",
+        "name": "Primary Knowledge Journeys",
+        "status": "not_started",
+        "dependsOn": [2],
+        "scopeDir": null,
+        "evidenceFile": "report.md",
+        "certifiedAt": null
+      },
+      {
+        "scope": 4,
+        "scopeId": "SCOPE-04",
+        "name": "Capability And Operational Journeys",
+        "status": "not_started",
+        "dependsOn": [2],
+        "scopeDir": null,
+        "evidenceFile": "report.md",
+        "certifiedAt": null
+      },
+      {
+        "scope": 5,
+        "scopeId": "SCOPE-05",
+        "name": "Aggregate Acceptance, Release Artifact, Projection, And Adapter Handoff",
+        "status": "not_started",
+        "dependsOn": [3, 4],
+        "scopeDir": null,
+        "evidenceFile": "report.md",
+        "certifiedAt": null
+      }
+    ],
+    "lockdownState": { "active": false, "lockedScenarioIds": [] },
+    "invalidationLedger": []
+  },
+  "policySnapshot": {"grill":{"mode":"off","source":"repo-default"},"tdd":{"mode":"scenario-first","source":"workflow-mode"},"autoCommit":{"mode":"off","source":"user-constraint"},"lockdown":{"mode":"off","source":"repo-default"},"regression":{"mode":"protected-scenarios","source":"workflow-mode"},"validation":{"mode":"certification-required","source":"repo-default"}},
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "executionHistory": [
+    {
+      "agent": "bubbles.ux",
+      "phasesExecuted": ["analyze"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-07-23T16:27:07Z",
+      "runEndedAt": "2026-07-23T16:27:37Z",
+      "summary": "Read-only UX provenance reconciliation confirmed the existing product-journey acceptance contract covers the operator actor, single-screen inventory and justification, desktop and mobile composition, keyboard and screen-reader behavior, closed honest prerequisite, verdict, journey, and error states, externally owned recovery, and real-stack Playwright-visible outcomes. No spec change, target or adapter run, browser, HTTP, product dependency, test, evidence, design, plan, implementation, certification, production mutation, commit, push, or deployment is claimed."
+    },
+    {
+      "agent": "bubbles.design",
+      "phasesExecuted": ["bootstrap"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-07-23T20:09:48Z",
+      "runEndedAt": "2026-07-23T20:18:33Z",
+      "summary": "Replaced the design-routing stub with a complete product-owned acceptance capability: versioned journey manifest and policy schemas, seeded-validate versus production-readonly safety modes, exact session/Search/Digest/Assistant/Wiki/Graph/Cards/Recommendations/Notifications/Settings/Photos/Connectors/models/synthesis contracts, real-target Playwright execution, content-free evidence envelope, closed E102 codes, fail-closed verdict reduction, signed runner artifact, adapter consumption boundary, deploy gate, and rollback trigger. The design grounds current routes and records specs 105/106 plus dependency packets as unresolved delivery prerequisites. No spec, bug, scope, scenario manifest, report, user validation, source, test, adapter, target, production data, certification, status promotion, commit, push, or deployment change is claimed."
+    },
+    {
+      "agent": "bubbles.plan",
+      "phasesExecuted": ["plan"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-07-23T23:46:07Z",
+      "runEndedAt": "2026-07-24T00:03:04Z",
+      "summary": "Finalized a five-scope executable product-owned acceptance DAG covering contract foundation, production-readonly runner/session, dependency-gated primary knowledge journeys, Cards/Recommendations/Notifications/Photos-Drive/Models/Synthesis/Status journeys, and aggregate release/adapter handoff. Reconciled 12 stable scenarios and a 54-row test-plan handoff; artifact lint and traceability passed. No owner repair, spec 104/105/106, source, tests, adapter, knb, target, production data, certification, commit, push, or deployment change is claimed."
+    },
+    {
+      "agent": "bubbles.analyst",
+      "phasesExecuted": ["analyze"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-07-24T02:35:39Z",
+      "runEndedAt": "2026-07-24T02:38:31Z",
+      "summary": "Reconciled GRILL-02/04/05/10 and SR-012: BUG-102 is the sole immutable acceptance producer; candidates are accepted off traffic; data migrations remain previous-release-readable or use automated write freeze plus proven restore; test faults use a production-inert registry; connected graph has a real component minimum and equivalent projections; spec 104 stays blocked with completed-scope evidence only. Preserved SCN-102-001-01..09 and added 10..13. No source, tests, design, scopes, report, adapter, target, production data, certification, commit, push, or deployment work is claimed."
+    },
+    {
+      "agent": "bubbles.design",
+      "phasesExecuted": ["bootstrap"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-07-24T18:25:51Z",
+      "runEndedAt": "2026-07-24T18:27:40Z",
+      "summary": "Reconciled design.md to the 2026-07-24T05:46Z spec revision. Added '## Test-Only Fault-Profile Registry' establishing BUG-102-001 as OWNER of the production-inert, test-only, machine-readable fault-profile registry (JOURNEY-016/SCN-102-001-12) with a closed nine-field schema and a one-way consumer contract that BUG-073-006 SCOPE-01 uses (per capability-foundation-design broadest-consumer-owns; BUG-073-006 NOT edited). Added '### Connected-Graph Acceptance (JOURNEY-017 And JOURNEY-018)' (>=2 real nodes + 1 stored edge connected minimum, honest no-connected-overview isolated state, bounded projection, privacy clearing, Graph/Outline/Table parity, scale/security/accessibility as prerequisites). Reconciled the Integration Point to off-traffic-before-cutover (JOURNEY-014/SCN-102-001-10; live traffic moves only after acceptance, pointer swap alone insufficient). Added '### User-Data Migration Compatibility (JOURNEY-015)' (expand-contract previous-release-readable OR automated write-freeze plus proven backup/restore). Grounded JOURNEY-013 one-way evidence-ownership flow in Purpose/Scope; updated the plan-reconciliation note to the full SCN-102-001-01..13 set plus the state.json scope-inventory. These realize the evidenceLifecycleRole/candidateAcceptancePolicy/faultProfilePolicy/dependencyEvidencePolicy already present in state.json. artifact-lint PASSED (exit 0); traceability-guard PASSED (exit 0, 15 scenarios, 15 report-evidence refs) unchanged from baseline. FOLLOW-UP ROUTED to bubbles.plan: reconcile scopes.md/scenario-manifest.json/test-plan.json AND this state.json scope-inventory/executionHistory to SCN-102-001-01..13 (plan-owned; a prior plan harden run truncated). No spec, scope, scenario-manifest, test-plan, source, test, adapter, target, production data, certification, status transition, commit, push, build, deployment, or foreign packet (073/104/105/106/079) change is claimed."
+    }
+  ],
+  "activeBugs": [],
+  "resolvedBugs": [],
+  "failures": [],
+  "lastUpdatedAt": "2026-07-24T18:25:51Z",
+  "scopeLayout": "single-file",
+  "artifacts": {"bug":"bug.md","spec":"spec.md","design":"design.md","scopes":"scopes.md","report":"report.md","uservalidation":"uservalidation.md","scenarioManifest":"scenario-manifest.json","testPlan":"test-plan.json"},
+  "statusDiscipline": {"validStatuses":["not_started","in_progress","blocked","specs_hardened","docs_updated","validated","done"],"scopePickupRule":"All dependsOn scopes must be Done. Pick the lowest-numbered eligible scope.","scopeDoneGates":["G020","G021","G022","G023","G024","G025","G055","G056","G057","G058","G059","G060","G061"],"specDoneRequires":"All scopes done and validate-owned certification permits promotion."},
+  "notes": "Owner routes required: bubbles.plan, bubbles.ux, bubbles.devops. Product dependencies and spec 104 Scope 8 block final aggregate. Operator deploy repository remains untouched. DESIGN GAP RESOLVED (bubbles.design 2026-07-24T18:25Z): design.md now grounds JOURNEY-013 (one-way BUG-102 producer -> BUG-032 readiness -> spec 106 presentation), JOURNEY-014 off-traffic-before-cutover, JOURNEY-015 user-data migration expand-contract or write-freeze+restore, JOURNEY-016 via the new '## Test-Only Fault-Profile Registry' (102-001 OWNS the production-inert, test-only, machine-readable fault-profile registry; BUG-073-006 SCOPE-01 CONSUMES it, not edited here), and JOURNEY-017/018 via '### Connected-Graph Acceptance'. Fault-registry ownership is unambiguously 102-001-owned / 073-006-consumed. OPEN PLAN FOLLOW-UP (bubbles.plan): reconcile scopes.md/scenario-manifest.json/test-plan.json AND this state.json scope-inventory/executionHistory to the full SCN-102-001-01..13 set + expanded journey/fault/graph inventory (a prior plan harden run truncated and did not refresh them)."
+}

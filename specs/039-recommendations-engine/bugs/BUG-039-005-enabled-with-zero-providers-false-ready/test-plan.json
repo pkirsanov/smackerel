@@ -1,0 +1,105 @@
+{
+  "version": 1,
+  "specId": "BUG-039-005",
+  "generatedBy": "bubbles.plan",
+  "generatedAt": "2026-07-23T23:58:57Z",
+  "scopes": [
+    {
+      "scopeId": "01-provider-contract-foundation",
+      "scopeName": "Provider Contract And Migration Foundation",
+      "tests": [
+        {"id":"REC01-TP01","type":"unit","category":"unit","file":"internal/recommendation/provider/runtime_registry_test.go","scenarioId":"SCN-039-005-04","description":"Production registry rejects fixture descriptors and invalid class combinations.","command":"./smackerel.sh test unit --go","liveSystem":false},
+        {"id":"REC01-TP02","type":"config-unit","category":"unit","file":"internal/config/recommendations_validate_test.go","scenarioId":"SCN-039-005-15","description":"Required provider configuration fails loud without exposing values.","command":"./smackerel.sh test unit --go","liveSystem":false},
+        {"id":"REC01-TP03","type":"migration-integration","category":"integration","file":"tests/integration/recommendations_migration_test.go","scenarioId":"SCN-039-005-15","description":"Additive migration, conservative backfill, constraints, rollback, and evidence retention.","command":"./smackerel.sh test integration","liveSystem":true},
+        {"id":"REC01-TP04","type":"adversarial-e2e-api","category":"e2e-api","file":"tests/e2e/recommendations_providers_test.go","scenarioId":"SCN-039-005-04","description":"Fixture-only production registry refuses startup in red-to-green regression.","command":"./smackerel.sh test e2e","liveSystem":true},
+        {"id":"REC01-TP05","type":"registry-compatibility-e2e-api","category":"e2e-api","file":"tests/e2e/recommendations_full_regression_test.go","scenarioId":"SCN-039-005-04","description":"Build-tag fixture registry remains isolated to the validate runtime.","command":"./smackerel.sh test e2e","liveSystem":true}
+      ]
+    },
+    {
+      "scopeId": "02-google-places-adapter",
+      "scopeName": "Google Places Production Adapter",
+      "tests": [
+        {"id":"REC02-TP01","type":"adapter-unit","category":"unit","file":"internal/recommendation/provider/google_places_test.go","scenarioId":"SCN-039-005-11","description":"Google adapter normalizes attributed facts and healthy empty responses.","command":"./smackerel.sh test unit --go","liveSystem":false},
+        {"id":"REC02-TP02","type":"failure-unit","category":"unit","file":"internal/recommendation/provider/google_places_test.go","scenarioId":"SCN-039-005-11","description":"Google failures map to closed safe classes with redacted payloads.","command":"./smackerel.sh test unit --go","liveSystem":false},
+        {"id":"REC02-TP03","type":"protocol-integration","category":"integration","file":"tests/integration/recommendation_providers_test.go","scenarioId":"SCN-039-005-11","description":"Real production adapter executes provider-compatible health and fetch protocol.","command":"./smackerel.sh test integration","liveSystem":true},
+        {"id":"REC02-TP04","type":"adversarial-e2e-api","category":"e2e-api","file":"tests/e2e/recommendations_providers_test.go","scenarioId":"SCN-039-005-11","description":"Configured provider without an adapter cannot report ready.","command":"./smackerel.sh test e2e","liveSystem":true},
+        {"id":"REC02-TP05","type":"attribution-e2e-api","category":"e2e-api","file":"tests/e2e/recommendations_api_test.go","scenarioId":"SCN-039-005-11","description":"Live Google adapter yields sourced results and healthy no-match.","command":"./smackerel.sh test e2e","liveSystem":true}
+      ]
+    },
+    {
+      "scopeId": "03-yelp-adapter",
+      "scopeName": "Yelp Production Adapter",
+      "tests": [
+        {"id":"REC03-TP01","type":"adapter-unit","category":"unit","file":"internal/recommendation/provider/yelp_test.go","scenarioId":"SCN-039-005-12","description":"Yelp adapter normalizes production facts and attribution.","command":"./smackerel.sh test unit --go","liveSystem":false},
+        {"id":"REC03-TP02","type":"failure-unit","category":"unit","file":"internal/recommendation/provider/yelp_test.go","scenarioId":"SCN-039-005-12","description":"Yelp failures remain typed and redact raw details.","command":"./smackerel.sh test unit --go","liveSystem":false},
+        {"id":"REC03-TP03","type":"multi-provider-integration","category":"integration","file":"tests/integration/recommendation_providers_test.go","scenarioId":"SCN-039-005-12","description":"Google and Yelp execute independently with mixed success and failure evidence.","command":"./smackerel.sh test integration","liveSystem":true},
+        {"id":"REC03-TP04","type":"adversarial-e2e-api","category":"e2e-api","file":"tests/e2e/recommendations_providers_test.go","scenarioId":"SCN-039-005-12","description":"One provider success cannot erase another provider failure.","command":"./smackerel.sh test e2e","liveSystem":true},
+        {"id":"REC03-TP05","type":"provider-independence-e2e-api","category":"e2e-api","file":"tests/e2e/recommendations_api_test.go","scenarioId":"SCN-039-005-12","description":"Yelp-only and mixed-provider execution remain sourced.","command":"./smackerel.sh test e2e","liveSystem":true}
+      ]
+    },
+    {
+      "scopeId": "04-availability-startup-truth",
+      "scopeName": "Availability And Startup Truth",
+      "tests": [
+        {"id":"REC04-TP01","type":"availability-unit","category":"unit","file":"internal/recommendation/availability/service_test.go","scenarioId":"SCN-039-005-03","description":"Category and operation availability covers class, health, freshness, and deterministic evidence.","command":"./smackerel.sh test unit --go","liveSystem":false},
+        {"id":"REC04-TP02","type":"startup-config-integration","category":"integration","file":"tests/integration/recommendation_provider_registry_test.go","scenarioId":"SCN-039-005-02","description":"Required invalid provider states refuse startup while optional core stays live.","command":"./smackerel.sh test integration","liveSystem":true},
+        {"id":"REC04-TP03","type":"availability-e2e-api","category":"e2e-api","file":"tests/e2e/recommendations_providers_test.go","scenarioId":"SCN-039-005-01","description":"Availability contract distinguishes available, degraded, and unavailable.","command":"./smackerel.sh test e2e","liveSystem":true},
+        {"id":"REC04-TP04","type":"adversarial-e2e-api","category":"e2e-api","file":"tests/e2e/recommendations_api_test.go","scenarioId":"SCN-039-005-02","description":"Enabled empty registry cannot become ready.","command":"./smackerel.sh test e2e","liveSystem":true},
+        {"id":"REC04-TP05","type":"optional-isolation-e2e-api","category":"e2e-api","file":"tests/e2e/recommendations_full_regression_test.go","scenarioId":"SCN-039-005-02","description":"Optional recommendation outage does not become a product outage.","command":"./smackerel.sh test e2e","liveSystem":true},
+        {"id":"REC04-TP06","type":"telemetry-integration","category":"integration","file":"tests/integration/recommendation_metrics_test.go","scenarioId":"SCN-039-005-03","description":"Bounded redacted metrics and logs reflect availability snapshots.","command":"./smackerel.sh test integration","liveSystem":true},
+        {"id":"REC04-TP07","type":"denominator-integration","category":"integration","file":"internal/recommendation/availability/service_test.go","scenarioId":"SCN-039-005-10","description":"Readiness denominator excludes disabled, unconfigured, fixture, and category-irrelevant providers while one eligible healthy provider suffices.","command":"./smackerel.sh test integration","liveSystem":true}
+      ]
+    },
+    {
+      "scopeId": "05-request-outcomes-evidence",
+      "scopeName": "Request Outcomes And Provider Evidence",
+      "tests": [
+        {"id":"REC05-TP01","type":"outcome-unit","category":"unit","file":"internal/api/recommendations_test.go","scenarioId":"SCN-039-005-05","description":"HTTP mapping separates no-match, filtered-empty, degraded, refusal, and failure.","command":"./smackerel.sh test unit --go","liveSystem":false},
+        {"id":"REC05-TP02","type":"engine-integration","category":"integration","file":"tests/integration/recommendations_test.go","scenarioId":"SCN-039-005-08","description":"Engine and store persist facts plus orthogonal outcomes in PostgreSQL.","command":"./smackerel.sh test integration","liveSystem":true},
+        {"id":"REC05-TP03","type":"persistence-integration","category":"integration","file":"tests/integration/recommendation_privacy_test.go","scenarioId":"SCN-039-005-13","description":"Refusal writes no request or trace; attempted failure writes typed redacted evidence.","command":"./smackerel.sh test integration","liveSystem":true},
+        {"id":"REC05-TP04","type":"adversarial-e2e-api","category":"e2e-api","file":"tests/e2e/recommendations_api_test.go","scenarioId":"SCN-039-005-05","description":"All-provider failure cannot render as no-match.","command":"./smackerel.sh test e2e","liveSystem":true},
+        {"id":"REC05-TP05","type":"request-outcome-e2e-api","category":"e2e-api","file":"tests/e2e/recommendations_api_test.go","scenarioId":"SCN-039-005-08","description":"Live request distinguishes every empty, partial, and failed outcome.","command":"./smackerel.sh test e2e","liveSystem":true},
+        {"id":"REC05-TP06","type":"existing-journey-regression","category":"e2e-api","file":"tests/e2e/recommendations_full_regression_test.go","scenarioId":"SCN-039-005-13","description":"Why, feedback, constraints, consent, attribution, and confidence remain authoritative.","command":"./smackerel.sh test e2e","liveSystem":true}
+      ]
+    },
+    {
+      "scopeId": "06-watch-scheduler-eligibility",
+      "scopeName": "Watch And Scheduler Eligibility",
+      "tests": [
+        {"id":"REC06-TP01","type":"command-unit","category":"unit","file":"internal/api/recommendation_watches_test.go","scenarioId":"SCN-039-005-06","description":"Watch command mapping covers stale snapshot refusal and safe controls.","command":"./smackerel.sh test unit --go","liveSystem":false},
+        {"id":"REC06-TP02","type":"watch-integration","category":"integration","file":"tests/integration/recommendation_watches_test.go","scenarioId":"SCN-039-005-06","description":"Unavailable create, enable, resume, and refresh write no inert watch or run.","command":"./smackerel.sh test integration","liveSystem":true},
+        {"id":"REC06-TP03","type":"scheduler-integration","category":"integration","file":"tests/integration/recommendation_watch_audit_test.go","scenarioId":"SCN-039-005-06","description":"Manual and scheduled work share one gate and auditable real run.","command":"./smackerel.sh test integration","liveSystem":true},
+        {"id":"REC06-TP04","type":"adversarial-e2e-api","category":"e2e-api","file":"tests/e2e/recommendation_watch_consent_test.go","scenarioId":"SCN-039-005-06","description":"Unavailable direct route cannot persist an inert watch.","command":"./smackerel.sh test e2e","liveSystem":true},
+        {"id":"REC06-TP05","type":"watch-lifecycle-e2e-api","category":"e2e-api","file":"tests/e2e/recommendations_watches_web_test.go","scenarioId":"SCN-039-005-06","description":"Healthy watch lifecycle and provider-loss refusal preserve authoritative state.","command":"./smackerel.sh test e2e","liveSystem":true},
+        {"id":"REC06-TP06","type":"watch-playwright-regression","category":"e2e-ui","file":"web/pwa/tests/recommendation_watches_readiness.spec.ts","scenarioId":"SCN-039-005-06","description":"Unavailable create and refresh refuse visibly without inert state.","command":"./smackerel.sh test e2e-ui","liveSystem":true}
+      ]
+    },
+    {
+      "scopeId": "07-shared-api-ui-projections",
+      "scopeName": "Shared API And Accessible UI Projections",
+      "tests": [
+        {"id":"REC07-TP01","type":"renderer-security-unit","category":"unit","file":"internal/web/recommendations_render_test.go","scenarioId":"SCN-039-005-07","description":"Closed state rendering, redaction, semantic hooks, and CSRF mapping.","command":"./smackerel.sh test unit --go","liveSystem":false},
+        {"id":"REC07-TP02","type":"api-authorization-integration","category":"integration","file":"tests/integration/recommendation_privacy_test.go","scenarioId":"SCN-039-005-07","description":"Daily, operator, expired, and unauthorized projections enforce privacy.","command":"./smackerel.sh test integration","liveSystem":true},
+        {"id":"REC07-TP03","type":"availability-e2e-api","category":"e2e-api","file":"tests/e2e/recommendations_providers_test.go","scenarioId":"SCN-039-005-07","description":"Availability and provider compatibility routes share one snapshot.","command":"./smackerel.sh test e2e","liveSystem":true},
+        {"id":"REC07-TP04","type":"adversarial-playwright","category":"e2e-ui","file":"web/pwa/tests/recommendations_readiness.spec.ts","scenarioId":"SCN-039-005-09","description":"Zero-provider UI never mounts ready actions.","command":"./smackerel.sh test e2e-ui","liveSystem":true},
+        {"id":"REC07-TP05","type":"state-matrix-playwright","category":"e2e-ui","file":"web/pwa/tests/recommendations_readiness.spec.ts","scenarioId":"SCN-039-005-09","description":"No-match, filtered-empty, and typed failures remain exclusive.","command":"./smackerel.sh test e2e-ui","liveSystem":true},
+        {"id":"REC07-TP06","type":"a11y-responsive-playwright","category":"e2e-ui","file":"web/pwa/tests/recommendations_readiness.spec.ts","scenarioId":"SCN-039-005-09","description":"Recommendation states remain operable at narrow and assistive modes.","command":"./smackerel.sh test e2e-ui","liveSystem":true},
+        {"id":"REC07-TP07","type":"browser-authenticity-scan","category":"e2e-ui","file":"web/pwa/tests/recommendation_watches_readiness.spec.ts","scenarioId":"SCN-039-005-09","description":"Required browser tests contain no interception, bailout, or optional assertion.","command":"./smackerel.sh test e2e-ui","liveSystem":true},
+        {"id":"REC07-TP08","type":"disabled-projection-e2e-ui","category":"e2e-ui","file":"web/pwa/tests/recommendations_readiness.spec.ts","scenarioId":"SCN-039-005-10","description":"Disabled and unconfigured providers appear only as operator setup inventory and are absent from daily-user provider detail and readiness.","command":"./smackerel.sh test e2e-ui","liveSystem":true}
+      ]
+    },
+    {
+      "scopeId": "08-rollout-cross-surface-regression",
+      "scopeName": "Rollout And Cross-Surface Regression",
+      "tests": [
+        {"id":"REC08-TP01","type":"migration-rollback-integration","category":"integration","file":"tests/integration/recommendations_migration_test.go","scenarioId":"SCN-039-005-14","description":"Staged upgrade, backfill, constraints, rollback, and evidence retention.","command":"./smackerel.sh test integration","liveSystem":true},
+        {"id":"REC08-TP02","type":"provider-matrix-e2e-api","category":"e2e-api","file":"tests/e2e/recommendations_providers_test.go","scenarioId":"SCN-039-005-14","description":"Real adapters cover all provider readiness and outcome classes.","command":"./smackerel.sh test e2e","liveSystem":true},
+        {"id":"REC08-TP03","type":"complete-playwright-matrix","category":"e2e-ui","file":"web/pwa/tests/recommendations_readiness.spec.ts","scenarioId":"SCN-039-005-14","description":"Complete request, watch, status, auth, and accessibility journeys use the live stack.","command":"./smackerel.sh test e2e-ui","liveSystem":true},
+        {"id":"REC08-TP04","type":"broader-recommendation-regression","category":"e2e-api","file":"tests/e2e/recommendations_full_regression_test.go","scenarioId":"SCN-039-005-14","description":"Existing recommendation journeys remain intact.","command":"./smackerel.sh test e2e","liveSystem":true},
+        {"id":"REC08-TP05","type":"readiness-concurrency-stress","category":"stress","file":"tests/stress/recommendations_test.go","scenarioId":"SCN-039-005-14","description":"Health churn, requests, watches, and scheduler overlap preserve truthful state.","command":"./smackerel.sh test stress","liveSystem":true},
+        {"id":"REC08-TP06","type":"security-privacy-integration","category":"integration","file":"tests/integration/recommendation_privacy_test.go","scenarioId":"SCN-039-005-14","description":"Authz, CSRF, redaction, bounded labels, logs, and sensitive-data absence.","command":"./smackerel.sh test integration","liveSystem":true},
+        {"id":"REC08-TP07","type":"consumer-reality-regression","category":"functional","file":"specs/039-recommendations-engine/bugs/BUG-039-005-enabled-with-zero-providers-false-ready/scopes/_index.md","scenarioId":"SCN-039-005-14","description":"Stale-reference, fixture, fallback, reality, source-lock, lint, and traceability guards are clean.","command":"./smackerel.sh lint","liveSystem":false}
+      ]
+    }
+  ]
+}

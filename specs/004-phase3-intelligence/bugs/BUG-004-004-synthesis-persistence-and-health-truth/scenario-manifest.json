@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "featureDir": "specs/004-phase3-intelligence/bugs/BUG-004-004-synthesis-persistence-and-health-truth",
+  "generatedAt": "2026-07-24T08:31:22Z",
+  "reconciliation": "bubbles.plan harden 2026-07-24: one contract row per (scenarioId, scope) Gherkin instance across SCOPE-01..05 (18 rows) to match scopes.md. linkedTests are empty pending implementation (planned test files under tests/integration/synthesis/, tests/e2e/, web/pwa/tests/ are not yet created); evidenceRefs remain empty until execution.",
+  "scenarios": [
+    {"scenarioId":"SCN-004-004-01","scope":"SCOPE-01","title":"Successful run commits one complete aggregate","behaviorClass":"data","changeType":"bugfix","requiredTestType":"integration","regressionRequired":true,"linkedTests":[],"evidenceRefs":[]},
+    {"scenarioId":"SCN-004-004-02","scope":"SCOPE-01","title":"Duplicate logical run is idempotent","behaviorClass":"data","changeType":"bugfix","requiredTestType":"integration","regressionRequired":true,"linkedTests":[],"evidenceRefs":[]},
+    {"scenarioId":"SCN-004-004-03","scope":"SCOPE-01","title":"Required write failure rolls back atomically","behaviorClass":"data","changeType":"bugfix","requiredTestType":"integration","regressionRequired":true,"linkedTests":[],"evidenceRefs":[]},
+    {"scenarioId":"SCN-004-004-01","scope":"SCOPE-02","title":"Daily and weekly producers persist cited output","behaviorClass":"data","changeType":"bugfix","requiredTestType":"integration","regressionRequired":true,"linkedTests":[],"evidenceRefs":[]},
+    {"scenarioId":"SCN-004-004-04","scope":"SCOPE-02","title":"Invalid or uncited candidate is rejected","behaviorClass":"security","changeType":"bugfix","requiredTestType":"unit","regressionRequired":true,"linkedTests":[],"evidenceRefs":[]},
+    {"scenarioId":"SCN-004-004-07","scope":"SCOPE-02","title":"Quiet is durable output, not missing work","behaviorClass":"api","changeType":"bugfix","requiredTestType":"integration","regressionRequired":true,"linkedTests":[],"evidenceRefs":[]},
+    {"scenarioId":"SCN-004-004-08","scope":"SCOPE-02","title":"Permitted partial output names omissions","behaviorClass":"api","changeType":"bugfix","requiredTestType":"integration","regressionRequired":true,"linkedTests":[],"evidenceRefs":[]},
+    {"scenarioId":"SCN-004-004-02","scope":"SCOPE-03","title":"Scheduled and manual retries share durable identity","behaviorClass":"data","changeType":"bugfix","requiredTestType":"integration","regressionRequired":true,"linkedTests":[],"evidenceRefs":[]},
+    {"scenarioId":"SCN-004-004-03","scope":"SCOPE-03","title":"Retry failure leaves no partial output","behaviorClass":"data","changeType":"bugfix","requiredTestType":"integration","regressionRequired":true,"linkedTests":[],"evidenceRefs":[]},
+    {"scenarioId":"SCN-004-004-06","scope":"SCOPE-03","title":"Lifecycle and recovery remain truthful","behaviorClass":"api","changeType":"bugfix","requiredTestType":"integration","regressionRequired":true,"linkedTests":[],"evidenceRefs":[]},
+    {"scenarioId":"SCN-004-004-05","scope":"SCOPE-04","title":"Never-run cannot be healthy","behaviorClass":"api","changeType":"bugfix","requiredTestType":"integration","regressionRequired":true,"linkedTests":[],"evidenceRefs":[]},
+    {"scenarioId":"SCN-004-004-06","scope":"SCOPE-04","title":"Stale or failed remains alerted until verified recovery","behaviorClass":"api","changeType":"bugfix","requiredTestType":"integration","regressionRequired":true,"linkedTests":[],"evidenceRefs":[]},
+    {"scenarioId":"SCN-004-004-07","scope":"SCOPE-04","title":"Quiet and partial are durable distinct read states","behaviorClass":"api","changeType":"bugfix","requiredTestType":"e2e-api","regressionRequired":true,"linkedTests":[],"evidenceRefs":[]},
+    {"scenarioId":"SCN-004-004-09","scope":"SCOPE-04","title":"Authorization and telemetry preserve privacy","behaviorClass":"security","changeType":"bugfix","requiredTestType":"e2e-api","regressionRequired":true,"linkedTests":[],"evidenceRefs":[]},
+    {"scenarioId":"SCN-004-004-01","scope":"SCOPE-05","title":"Today renders only durable cited output","behaviorClass":"ui","changeType":"bugfix","requiredTestType":"e2e-ui","regressionRequired":true,"linkedTests":[],"evidenceRefs":[]},
+    {"scenarioId":"SCN-004-004-05","scope":"SCOPE-05","title":"Reader and operator states are exclusive","behaviorClass":"ui","changeType":"bugfix","requiredTestType":"e2e-ui","regressionRequired":true,"linkedTests":[],"evidenceRefs":[]},
+    {"scenarioId":"SCN-004-004-09","scope":"SCOPE-05","title":"Authorization loss clears synthesis content","behaviorClass":"security","changeType":"bugfix","requiredTestType":"e2e-ui","regressionRequired":true,"linkedTests":[],"evidenceRefs":[]},
+    {"scenarioId":"SCN-004-004-10","scope":"SCOPE-05","title":"Synthesis states and Retry are accessible and responsive","behaviorClass":"ui","changeType":"bugfix","requiredTestType":"e2e-ui","regressionRequired":true,"linkedTests":[],"evidenceRefs":[]}
+  ]
+}

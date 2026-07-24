@@ -1,0 +1,294 @@
+{
+  "version": 1,
+  "featureDir": "specs/070-web-username-password-login/bugs/BUG-070-001-production-credential-session-paseto-split",
+  "generatedAt": "2026-07-24T06:34:43Z",
+  "generatedBy": "bubbles.plan",
+  "reconciledAt": "2026-07-24T06:34:43Z",
+  "reconciledBy": "bubbles.plan",
+  "reconciliationNote": "Reconciled the stale planning manifest to the analyst-updated spec.md. SCN-070-001-09 corrected from a middleware-parity mislabel to the spec's CSRF/Origin scenario; SCN-070-001-10 (roles) and SCN-070-001-11 (global-corpus grant-gating) added. Scenario homes: SCN-01/10/11=SCOPE-06, SCN-06/07=SCOPE-03, SCN-09=SCOPE-05.",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-070-001-01",
+      "scope": "SCOPE-06",
+      "title": "One login authenticates every browser surface",
+      "gherkin": {
+        "given": "A disposable production-mode stack, a bound invited user with explicit grants, and production shared-token fallback disabled",
+        "when": "The user signs in once through the real username and password form",
+        "then": "One per-user HttpOnly browser-session cookie authenticates every permitted representative surface without a second credential, interception, auth injection, or fallback"
+      },
+      "behaviorClass": "ui",
+      "changeType": "bugfix",
+      "requiredTestType": "e2e-ui",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        { "file": "web/pwa/tests/auth_login.spec.ts", "testId": "existing login browser canary to extend" },
+        { "file": "tests/integration/api/assistant_http_auth_test.go", "testId": "existing Assistant auth canary to preserve" }
+      ],
+      "plannedTests": [
+        { "plannedFile": "web/pwa/tests/production_authenticated_product_journey.spec.ts", "plannedTestId": "one real production login reaches every permitted product surface with one private cookie", "status": "not-yet-authored", "owner": "bubbles.test" },
+        { "plannedFile": "tests/e2e/auth/production_browser_surface_acceptance_test.go", "plannedTestId": "TestOneBrowserSessionAuthorizesRepresentativeAPIReadsAndPreservesPerRoute403", "status": "not-yet-authored", "owner": "bubbles.test" }
+      ],
+      "evidenceRefs": [],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "SCN-070-001-02",
+      "scope": "SCOPE-01",
+      "title": "Invalid or unbound credentials create no partial session",
+      "gherkin": {
+        "given": "An unknown username, wrong password, disabled account, malformed password record, or credential without an explicit active principal and valid grants",
+        "when": "Production username and password login is submitted",
+        "then": "Every credential-class rejection is non-enumerating and creates neither a persisted browser token nor an accepted cookie"
+      },
+      "behaviorClass": "security",
+      "changeType": "bugfix",
+      "requiredTestType": "e2e-ui",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        { "file": "web/pwa/tests/auth_login.spec.ts", "testId": "existing credential rejection browser canary to extend" },
+        { "file": "internal/auth/webcreds/repo_test.go", "testId": "existing credential repository canary to extend" }
+      ],
+      "plannedTests": [
+        { "plannedFile": "web/pwa/tests/auth_account_binding.spec.ts", "plannedTestId": "invalid disabled and unbound accounts share one visible rejection and create no authenticated browser session", "status": "not-yet-authored", "owner": "bubbles.test" },
+        { "plannedFile": "tests/e2e/auth/browser_account_provisioning_test.go", "plannedTestId": "TestInviteProvisioningRoundTripCreatesBoundPrincipalAndExplicitGrantsWhileUnboundLoginCreatesNoSession", "status": "not-yet-authored", "owner": "bubbles.test" }
+      ],
+      "evidenceRefs": [],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "SCN-070-001-03",
+      "scope": "SCOPE-02",
+      "title": "Malformed expired revoked and wrong-purpose sessions fail closed",
+      "gherkin": {
+        "given": "A malformed, expired, revoked, unknown-key, wrong-audience, no-audience, API-token, or shared-token-shaped browser cookie",
+        "when": "The canonical verifier evaluates it as a browser carrier",
+        "then": "Validation denies it consistently and no consumer reinterprets it as authenticated"
+      },
+      "behaviorClass": "api",
+      "changeType": "bugfix",
+      "requiredTestType": "e2e-api",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        { "file": "internal/auth/verify_test.go", "testId": "existing expiry and issuer verifier canary to extend" },
+        { "file": "tests/integration/auth_revocation_test.go", "testId": "existing revocation integration canary to preserve" }
+      ],
+      "plannedTests": [
+        { "plannedFile": "tests/e2e/auth/browser_token_exchange_test.go", "plannedTestId": "TestAPIHeaderTokenExchangesForNewBrowserSessionButFailsWhenCopiedDirectlyIntoCookie", "status": "not-yet-authored", "owner": "bubbles.test" },
+        { "plannedFile": "web/pwa/tests/auth_session_expiry_revocation.spec.ts", "plannedTestId": "malformed expired revoked wrong-purpose unknown-key and shared-token-shaped cookies all require re-authentication", "status": "not-yet-authored", "owner": "bubbles.test" }
+      ],
+      "evidenceRefs": [],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "SCN-070-001-04",
+      "scope": "SCOPE-02",
+      "title": "Session material remains private",
+      "gherkin": {
+        "given": "A bound account successfully receives a browser-purpose session",
+        "when": "The token is persisted and the browser navigates authenticated surfaces",
+        "then": "Cookie attributes enforce the explicit policy and no credential or token material appears in client-visible output or telemetry"
+      },
+      "behaviorClass": "security",
+      "changeType": "bugfix",
+      "requiredTestType": "e2e-ui",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        { "file": "web/pwa/tests/auth_login.spec.ts", "testId": "existing browser login privacy canary to extend" },
+        { "file": "internal/api/web_login_page_test.go", "testId": "existing query-token privacy canary to preserve" }
+      ],
+      "plannedTests": [
+        { "plannedFile": "web/pwa/tests/auth_session_privacy.spec.ts", "plannedTestId": "real login keeps password and session material out of DOM URLs storage responses and console", "status": "not-yet-authored", "owner": "bubbles.test" }
+      ],
+      "evidenceRefs": [],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "SCN-070-001-05",
+      "scope": "SCOPE-04",
+      "title": "Logout closes both trust paths",
+      "gherkin": {
+        "given": "One browser-purpose session authenticates legacy and modern surfaces",
+        "when": "The user submits the real logout action",
+        "then": "Canonical revocation commits before signed-out success and both middleware families reject replay"
+      },
+      "behaviorClass": "ui",
+      "changeType": "bugfix",
+      "requiredTestType": "e2e-ui",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        { "file": "web/pwa/tests/auth_login.spec.ts", "testId": "existing real login browser canary to extend" },
+        { "file": "tests/integration/auth_revocation_test.go", "testId": "existing revocation integration canary to extend" }
+      ],
+      "plannedTests": [
+        { "plannedFile": "web/pwa/tests/auth_logout.spec.ts", "plannedTestId": "real form login safe recovery and logout remain truthful with no auth injection interception or bailout", "status": "not-yet-authored", "owner": "bubbles.test" },
+        { "plannedFile": "tests/e2e/auth/browser_login_logout_test.go", "plannedTestId": "TestLoginLogoutAndReplayAcrossLegacyAPIAndV1PreservesTypedRevocationFailure", "status": "not-yet-authored", "owner": "bubbles.test" }
+      ],
+      "evidenceRefs": [],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "SCN-070-001-06",
+      "scope": "SCOPE-03",
+      "title": "Authenticated no-data remains distinct from auth failure",
+      "gherkin": {
+        "given": "The unified authenticator accepts the user and an authorized collection has no records",
+        "when": "A modern surface reads the collection",
+        "then": "It returns a true authorized empty state rather than authentication failure, access denial, or degradation"
+      },
+      "behaviorClass": "ui",
+      "changeType": "bugfix",
+      "requiredTestType": "e2e-ui",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        { "file": "web/pwa/tests/auth_login.spec.ts", "testId": "existing authenticated browser canary to extend" },
+        { "file": "internal/api/router_auth_middleware_test.go", "testId": "existing middleware status canary to extend" }
+      ],
+      "plannedTests": [
+        { "plannedFile": "web/pwa/tests/auth_empty_degraded_access.spec.ts", "plannedTestId": "authenticated true empty filtered empty degraded dependency access denied and healthy content remain distinguishable", "status": "not-yet-authored", "owner": "bubbles.test" },
+        { "plannedFile": "tests/e2e/auth/browser_middleware_parity_test.go", "plannedTestId": "TestBrowserCookieAuthorizesRepresentativeAPIAndV1ReadsAndPreserves401403AndEmptySemantics", "status": "not-yet-authored", "owner": "bubbles.test" }
+      ],
+      "evidenceRefs": [],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "SCN-070-001-07",
+      "scope": "SCOPE-03",
+      "title": "Downstream degradation does not invalidate a valid session",
+      "gherkin": {
+        "given": "The unified authenticator accepts the user and one downstream capability is degraded",
+        "when": "The user opens that capability and then another healthy authenticated surface",
+        "then": "Only the degraded capability reports failure and the healthy surface remains authorized"
+      },
+      "behaviorClass": "api",
+      "changeType": "bugfix",
+      "requiredTestType": "e2e-ui",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        { "file": "tests/integration/api/assistant_http_auth_test.go", "testId": "existing downstream auth integration canary to extend" },
+        { "file": "web/pwa/tests/assistant_retry.spec.ts", "testId": "existing degraded Assistant browser canary to preserve" }
+      ],
+      "plannedTests": [
+        { "plannedFile": "web/pwa/tests/auth_empty_degraded_access.spec.ts", "plannedTestId": "authenticated true empty filtered empty degraded dependency access denied and healthy content remain distinguishable", "status": "not-yet-authored", "owner": "bubbles.test" }
+      ],
+      "evidenceRefs": [],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "SCN-070-001-08",
+      "scope": "SCOPE-04",
+      "title": "Login and re-authentication are accessible and responsive",
+      "gherkin": {
+        "given": "A keyboard or screen-reader user at 320 CSS pixels and 200 percent zoom",
+        "when": "The user submits credentials or recovers from a rejected session",
+        "then": "Labels, focus, status, errors, safe return, and protected-content removal remain perceivable and operable without overlap"
+      },
+      "behaviorClass": "ui",
+      "changeType": "bugfix",
+      "requiredTestType": "e2e-ui",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        { "file": "web/pwa/tests/auth_login.spec.ts", "testId": "existing login browser accessibility canary to extend" },
+        { "file": "web/pwa/tests/assistant_accessibility.spec.ts", "testId": "existing authenticated accessibility canary to preserve" }
+      ],
+      "plannedTests": [
+        { "plannedFile": "web/pwa/tests/auth_accessibility.spec.ts", "plannedTestId": "login rejection session recovery and logout are keyboard screen-reader and narrow-viewport operable", "status": "not-yet-authored", "owner": "bubbles.test" }
+      ],
+      "evidenceRefs": [],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "SCN-070-001-09",
+      "scope": "SCOPE-05",
+      "title": "Cookie mutations enforce CSRF and Origin",
+      "gherkin": {
+        "given": "A daily user or operator holds a valid claim-bound browser session",
+        "when": "A server form, HTMX request, PWA fetch, JSON mutation, Cards action, or admin action carries missing, stale, mismatched, or cross-origin CSRF evidence",
+        "then": "The request returns 403 before any state change, while the same permitted action with valid session-bound CSRF evidence and trusted same-origin context may proceed under the identity's grants"
+      },
+      "behaviorClass": "security",
+      "changeType": "bugfix",
+      "requiredTestType": "e2e-ui",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        { "file": "internal/api/web_login_test.go", "testId": "existing web login Origin/SameSite canary to extend" },
+        { "file": "internal/api/router_test.go", "testId": "existing router middleware canary to extend" }
+      ],
+      "plannedTests": [
+        { "plannedFile": "internal/api/csrf_origin_middleware_test.go", "plannedTestId": "TestCookieMutationsRequireTrustedOriginAndSessionBoundCsrfProofAcrossEveryMutationFamily", "status": "not-yet-authored", "owner": "bubbles.test" },
+        { "plannedFile": "web/pwa/tests/auth_csrf_origin.spec.ts", "plannedTestId": "missing stale mismatched and cross-origin csrf evidence is rejected with 403 before mutation while valid same-origin proof proceeds", "status": "not-yet-authored", "owner": "bubbles.test" }
+      ],
+      "evidenceRefs": [],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "SCN-070-001-10",
+      "scope": "SCOPE-06",
+      "title": "Roles share one login but not one authority",
+      "gherkin": {
+        "given": "One daily-user identity and one operator identity, each bound to explicit grants",
+        "when": "Each identity signs in once and traverses representative permitted route families",
+        "then": "The same cookie yields 2xx across every permitted middleware family without a second login, the daily user receives 403 on representative operator-only routes without a login loop or content disclosure, and the operator receives 2xx only on operator routes permitted by its grants"
+      },
+      "behaviorClass": "security",
+      "changeType": "bugfix",
+      "requiredTestType": "e2e-ui",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        { "file": "internal/auth/scope_middleware_test.go", "testId": "existing RequireScope 401/403 canary to extend" },
+        { "file": "internal/api/model_connections_operator_gate_test.go", "testId": "existing operator-gate canary to extend" }
+      ],
+      "plannedTests": [
+        { "plannedFile": "tests/e2e/auth/role_route_matrix_test.go", "plannedTestId": "TestDailyUserAndOperatorShareOneLoginButDailyUserGets403OnOperatorRoutesWithoutSecondLogin", "status": "not-yet-authored", "owner": "bubbles.test" },
+        { "plannedFile": "web/pwa/tests/production_authenticated_product_journey.spec.ts", "plannedTestId": "daily user and operator each sign in once and see the correct 2xx and 403 route matrix without a second login", "status": "not-yet-authored", "owner": "bubbles.test" }
+      ],
+      "evidenceRefs": [],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "SCN-070-001-11",
+      "scope": "SCOPE-06",
+      "title": "Global private corpus is grant-gated",
+      "gherkin": {
+        "given": "Private artifacts, Graph, Digest, and Synthesis exist in the single operator-owned global corpus",
+        "when": "An operator, a specifically granted daily user, and an ungranted daily user read those capabilities",
+        "then": "Each identity receives only the content its explicit grants allow, the ungranted identity receives 403 with no content counts labels or existence hints, and no response or readiness claim asserts tenant or per-user row isolation"
+      },
+      "behaviorClass": "security",
+      "changeType": "bugfix",
+      "requiredTestType": "e2e-api",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        { "file": "tests/integration/graphapi/auth_test.go", "testId": "existing graph corpus auth canary to extend" },
+        { "file": "internal/api/annotation_auth_test.go", "testId": "existing grant-gated mutation canary to extend" }
+      ],
+      "plannedTests": [
+        { "plannedFile": "tests/e2e/auth/global_corpus_grant_gate_test.go", "plannedTestId": "TestGlobalCorpusReadsAreGrantGatedAndUngrantedIdentityGets403WithoutContentOrExistenceLeak", "status": "not-yet-authored", "owner": "bubbles.test" },
+        { "plannedFile": "web/pwa/tests/production_authenticated_product_journey.spec.ts", "plannedTestId": "ungranted daily user receives 403 with no counts labels or existence hints on private corpus", "status": "not-yet-authored", "owner": "bubbles.test" }
+      ],
+      "evidenceRefs": [],
+      "replacedBy": null,
+      "invalidatedBy": null
+    }
+  ]
+}

@@ -1,0 +1,93 @@
+{
+  "version": 3,
+  "bugId": "BUG-073-006",
+  "featureDir": "specs/073-web-mobile-assistant-frontend/bugs/BUG-073-006-auth-rejection-blank-assistant-response",
+  "featureName": "Auth Rejection Leaves Blank Assistant Response",
+  "releaseTrain": "mvp",
+  "flagsIntroduced": [],
+  "status": "in_progress",
+  "statusReason": "Planning packet initialized from interpreted operator input. No local reproduction, implementation, test, certification, production mutation, commit, push, or deployment is claimed.",
+  "workflowMode": "bugfix-fastlane",
+  "linkedImplementationSpec": null,
+  "linkedPlanningPacket": null,
+  "planningOnly": false,
+  "planningOnlyJustification": null,
+  "specDependsOn": [
+    "specs/073-web-mobile-assistant-frontend",
+    "specs/070-web-username-password-login/bugs/BUG-070-001-production-credential-session-paseto-split",
+    "specs/102-target-deploy-hardening/bugs/BUG-102-001-product-journey-acceptance-gap"
+  ],
+  "certifiedAt": null,
+  "requiresRevalidation": false,
+  "faultProfilePolicy": {"role":"consumer","registryOwner":"BUG-102-001","registryOwnerScope":"SCOPE-01","registryOwnerScenario":"SCN-102-001-12","referenceBy":"stableId","schemaRedeclaration":"forbidden","parallelRegistry":"forbidden","productionExposure":"forbidden","consumedProfiles":["auth_401","access_403","rate_limited","provider_unavailable","server_error","timeout","network","schema_decode"]},
+  "requirementsRecovery": {"reviewId":"2026-07-24-independent-planning-review","status":"analyst_reconciled","addressedFindings":["GRILL-04"],"activeRequirementsRef":"spec.md","certificationClaimed":false},
+  "execution": {"activeAgent":"bubbles.plan","currentPhase":"plan","currentScope":null,"runStartedAt":"2026-07-24T20:06:22Z","completedPhaseClaims":[],"pendingTransitionRequests":[],"audit":{"schemaVersion":"audit-run/v1","runId":null,"currentAttemptId":null,"attempts":[]}},
+  "certification": {"status":"in_progress","completedScopes":[],"certifiedCompletedPhases":[],"scopeProgress":[{"scope":1,"scopeId":"SCOPE-01","name":"Consume BUG-102-001 Fault-Profile Registry (Assistant Fault Profiles) and Production-Inert Verification","status":"not_started","dependsOn":[],"scopeDir":null,"evidenceFile":"report.md","certifiedAt":null},{"scope":2,"scopeId":"SCOPE-02","name":"Exhaustive Honest Assistant Turn Terminal States","status":"not_started","dependsOn":["SCOPE-01"],"scopeDir":null,"evidenceFile":"report.md","certifiedAt":null}],"lockdownState":{"active":false,"lockedScenarioIds":[]},"invalidationLedger":[]},
+  "policySnapshot": {"grill":{"mode":"off","source":"repo-default"},"tdd":{"mode":"scenario-first","source":"workflow-mode"},"autoCommit":{"mode":"off","source":"user-constraint"},"lockdown":{"mode":"off","source":"repo-default"},"regression":{"mode":"protected-scenarios","source":"workflow-mode"},"validation":{"mode":"certification-required","source":"repo-default"}},
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "executionHistory": [
+    {
+      "agent": "bubbles.ux",
+      "phasesExecuted": ["analyze"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-07-23T15:18:45Z",
+      "runEndedAt": "2026-07-23T15:18:45Z",
+      "summary": "Reconciled the UX-owned Assistant turn lifecycle with paired user/pending rows, a closed terminal-state vocabulary, distinct 401/403/429/4xx/5xx/provider/network/timeout/schema behavior, explicit re-authentication and deduplicated retry rules, mobile transcript/composer behavior, screen-reader announcements, real-stack Playwright-visible outcomes, and routed design questions. No Assistant, authentication, browser or test execution, implementation, evidence, certification, status transition, commit, push, build, or deployment is claimed."
+    },
+    {
+      "agent": "bubbles.design",
+      "phasesExecuted": ["bootstrap"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-07-23T16:36:03Z",
+      "runEndedAt": "2026-07-23T17:00:23Z",
+      "summary": "Replaced the initialization design with a code-grounded exhaustive Assistant turn architecture: one in-memory turn group per transport_message_id, immediate pending and exactly one terminal state, typed normalization of v1 and outer middleware errors, fixed safe copy, explicit separate-tab re-authentication, idempotent same-row retry, privacy-safe observability, real-stack Playwright strategy, and narrow renderer rollback. No spec, scope, report, user validation, scenario manifest, source, test, certification, status transition, commit, push, build, or deployment change is claimed."
+    },
+    {
+      "agent": "bubbles.analyst",
+      "phasesExecuted": ["analyze"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-07-24T02:35:39Z",
+      "runEndedAt": "2026-07-24T02:38:31Z",
+      "summary": "Reconciled GRILL-04: disposable validate/e2e faults must come from a test-only machine-readable registry defining setup, teardown, parallelism, expected request/response, evidence, and no-first-party-interception proof; production exposes no fault control. Preserved SCN-073-006-01..09 and added 10. No source, test, design, scope, report, user validation, certification, commit, push, or deployment work is claimed."
+    },
+    {
+      "agent": "bubbles.plan",
+      "phasesExecuted": ["plan"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-07-24T07:30:49Z",
+      "runEndedAt": "2026-07-24T07:31:00Z",
+      "summary": "Planning reconciliation (spec-scope-hardening harden) against current spec.md (10 scenarios, ASST-UI-001..012) and design.md. Restored SCN-073-006-10 (test-only fault-profile registry + production-inert controls) which scopes.md and scenario-manifest.json had dropped; split into SCOPE-01 (fault-profile registry foundation) and SCOPE-02 (honest terminal-state fix, dependsOn SCOPE-01 + cross-packet BUG-070-001). Bound the assistant surface to BUG-070-001's unified claim-bound PASETO session + MutationTrustGuard typed CSRF/auth outcomes (honest 401/403 render, never blank/capture/success). Rewrote scopes.md Gherkin/Test Plan/tiered DoD with per-scope Test-Plan-row==test-DoD-item parity, updated scenario-manifest.json to 10 scenarios with existing linkedTests, and expanded report.md scenario contract evidence. Guards artifact-lint.sh and traceability-guard.sh re-run to exit 0. Residual design-gaps routed to bubbles.design (fault-profile registry architecture absent from design.md; explicit BUG-070-001 unified-PASETO + MutationTrustGuard CSRF taxonomy articulation in the assistant auth/mutation contract; native-mobile honest-failure parity decision). status kept in_progress; no source, test, certification, commit, push, or deployment work is claimed."
+    },
+    {
+      "agent": "bubbles.design",
+      "phasesExecuted": ["bootstrap"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-07-24T19:24:40Z",
+      "runEndedAt": "2026-07-24T19:39:50Z",
+      "summary": "F1 (independent-review MEDIUM) design-side remediation: added a '## Fault Registry Consumption (BUG-102-001-Owned)' section establishing this packet as a pure CONSUMER of BUG-102-001's shared, production-inert, test-only, machine-readable fault-profile registry. SCN-073-006-10's eight Assistant fault conditions (auth_401, access_403, rate_limited, provider_unavailable, server_error, timeout, network, schema_decode) are entries registered in the 102-owned registry, referenced by stableId only; this packet neither defines, authors, nor forks the closed nine-field schema (stableId, journey, setup, teardown, parallelism, expectedRequest, expectedResponseOrTermination, evidence, noFirstPartyInterception). Added the SCN-073-006-10 row to the design Testing table and reconciled Open Questions plus the Routed Design Questions table for internal consistency with ASST-UI-011. ROUTED to bubbles.plan: realign SCOPE-01 to a consumer scope (retitle; drop parallel-registry authorship + nine-field-schema redeclaration; reference by stableId). Guards artifact-lint.sh and traceability-guard.sh re-run before/after with identical verdicts; no regression. Read-only reference to BUG-102-001 design; BUG-102-001 not edited. No spec, scopes, scenario-manifest, report, uservalidation, source, test, certification, status transition, commit, push, or deployment change is claimed."
+    },
+    {
+      "agent": "bubbles.plan",
+      "phasesExecuted": ["plan"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-07-24T20:06:22Z",
+      "runEndedAt": "2026-07-24T20:11:00Z",
+      "summary": "F1 (independent-review MEDIUM) planning-side realignment: retitled SCOPE-01 from authoring a parallel fault-profile registry to CONSUMING the BUG-102-001-owned production-inert, test-only, machine-readable fault-profile registry (its SCOPE-01/SCN-102-001-12) by immutable stableId, matching design.md '## Fault Registry Consumption'. Dropped the parallel-registry authorship and the nine-field-schema redeclaration; the eight assistant faults (auth_401, access_403, rate_limited, provider_unavailable, server_error, timeout, network, schema_decode) are now referenced by BUG-102-001-owned stableId only. Added a Scope 01 'Cross-Packet Binding: BUG-102-001' note and Depends On edge, reframed the Gherkin/Test Plan/tiered DoD to consumption while preserving the same four existing test files and 4/4 test-row==test-DoD parity, and reframed Scope 02's Depends On phrase to reference the consumed profiles. Added BUG-102-001 to specDependsOn and reframed faultProfilePolicy to a consumer policy. Updated scenario-manifest.json SCN-073-006-10 title/testId (home unchanged, SCOPE-01) and report.md summary framing. Guards artifact-lint.sh and traceability-guard.sh re-run before/after; no regression. BUG-102-001 read-only; not edited. No source, test, certification, status transition, commit, push, or deployment change is claimed."
+    }
+  ],
+  "activeBugs": [],
+  "resolvedBugs": [],
+  "failures": [],
+  "lastUpdatedAt": "2026-07-24T20:11:00Z",
+  "scopeLayout": "single-file",
+  "artifacts": {"bug":"bug.md","spec":"spec.md","design":"design.md","scopes":"scopes.md","report":"report.md","uservalidation":"uservalidation.md","scenarioManifest":"scenario-manifest.json"},
+  "statusDiscipline": {"validStatuses":["not_started","in_progress","blocked","specs_hardened","docs_updated","validated","done"],"scopePickupRule":"All dependsOn scopes must be Done. Pick the lowest-numbered eligible scope.","scopeDoneGates":["G020","G021","G022","G023","G024","G025","G055","G056","G057","G058","G059","G060","G061"],"specDoneRequires":"All scopes done and validate-owned certification permits promotion."},
+  "notes": "Reconciled by bubbles.plan 2026-07-24: two scopes (SCOPE-01 test-only fault-profile registry + production-inert controls covering SCN-073-006-10; SCOPE-02 honest Assistant terminal states covering SCN-073-006-01..09, dependsOn SCOPE-01). DEPENDENT of BUG-070-001 (unified claim-bound PASETO session; assistant auth/CSRF rejection renders honest typed failure, never blank). Full authenticated real-stack Playwright for auth paths sequenced after BUG-070-001. Residual design-gaps routed to bubbles.design (fault-profile registry architecture; explicit BUG-070-001 PASETO+MutationTrustGuard CSRF taxonomy in assistant contract; native-mobile honest-failure parity). bubbles.design 2026-07-24 (F1 independent-review): resolved the fault-profile-registry-architecture design gap by adding a '## Fault Registry Consumption (BUG-102-001-Owned)' section (pure consumer of 102-001's registry; 8 profiles by stableId; no schema fork). ROUTED to bubbles.plan: realign SCOPE-01 to a consumer scope (retitle; drop parallel-registry authorship + nine-field-schema redeclaration; reference profiles by stableId). bubbles.plan 2026-07-24 (F1 CLOSED): SCOPE-01 realigned to CONSUME the BUG-102-001-owned registry (its SCOPE-01/SCN-102-001-12) by stableId; owns only the eight assistant-specific fault PROFILES (auth_401/access_403/rate_limited/provider_unavailable/server_error/timeout/network/schema_decode); no parallel registry or nine-field-schema redeclaration remains. BUG-102-001 added to specDependsOn (registry-foundation rationale) alongside BUG-070-001 (auth rationale). Blocks spec 106 Assistant and BUG-102-001 acceptance."
+}

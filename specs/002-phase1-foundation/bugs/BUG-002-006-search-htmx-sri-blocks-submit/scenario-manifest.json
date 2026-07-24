@@ -1,0 +1,194 @@
+{
+  "version": 1,
+  "featureDir": "specs/002-phase1-foundation/bugs/BUG-002-006-search-htmx-sri-blocks-submit",
+  "generatedAt": "2026-07-23T23:57:56Z",
+  "generatedBy": "bubbles.plan",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-002-006-01",
+      "scope": "SCOPE-03",
+      "title": "Keyboard search returns real results",
+      "gherkin": {
+        "given": "An authenticated user, a non-empty query with live matches, and the source-locked enhancement loaded",
+        "when": "The user presses Enter once",
+        "then": "The browser emits exactly one real POST /search and Searching resolves to a positive result count and live links"
+      },
+      "behaviorClass": "ui",
+      "changeType": "bugfix",
+      "requiredTestType": "e2e-ui",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        { "file": "internal/web/handler_test.go", "testId": "existing Search render canary to extend" },
+        { "file": "tests/e2e/test_web_ui.sh", "testId": "existing server-rendered Search HTTP canary to extend" }
+      ],
+      "plannedTests": [
+        { "plannedFile": "web/pwa/tests/search_progressive.spec.ts", "plannedTestId": "Enter and pointer each issue exactly one real search request and render live results", "status": "not-yet-authored", "owner": "bubbles.test" }
+      ],
+      "evidenceRefs": []
+    },
+    {
+      "scenarioId": "SCN-002-006-02",
+      "scope": "SCOPE-02",
+      "title": "Pointer submission works without client enhancement",
+      "gherkin": {
+        "given": "An authenticated browser with JavaScript disabled or HTMX unavailable",
+        "when": "The user activates the semantic Search submit control for a non-empty query",
+        "then": "One native POST /search renders a complete terminal page with retained query and recovery actions"
+      },
+      "behaviorClass": "ui",
+      "changeType": "bugfix",
+      "requiredTestType": "e2e-ui",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        { "file": "internal/web/handler_test.go", "testId": "existing Search template canary to extend" },
+        { "file": "tests/e2e/test_web_ui.sh", "testId": "existing baseline Search endpoint canary to extend" }
+      ],
+      "plannedTests": [
+        { "plannedFile": "web/pwa/tests/search_progressive.spec.ts", "plannedTestId": "pointer search works with JavaScript disabled and blank input performs no search-domain work", "status": "not-yet-authored", "owner": "bubbles.test" }
+      ],
+      "evidenceRefs": []
+    },
+    {
+      "scenarioId": "SCN-002-006-03",
+      "scope": "SCOPE-01",
+      "title": "Integrity mismatch fails validation",
+      "gherkin": {
+        "given": "The embedded HTMX bytes differ from the lock-derived digest or the shared head weakens its source policy",
+        "when": "Source-lock and security-header contracts are checked",
+        "then": "Validation fails before release while one same-origin versioned asset and strict CSP remain required"
+      },
+      "behaviorClass": "security",
+      "changeType": "bugfix",
+      "requiredTestType": "unit",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        { "file": "internal/web/handler_test.go", "testId": "existing shared template canary to extend" },
+        { "file": "tests/e2e/recommendations_web_test.go", "testId": "existing HTMX mutation canary to preserve" }
+      ],
+      "plannedTests": [
+        { "plannedFile": "internal/web/htmx_asset_contract_test.go", "plannedTestId": "TestHTMXAssetMatchesLockedDigestAndMutatedBytesOrWeakenedCSPFail", "status": "not-yet-authored", "owner": "bubbles.test" },
+        { "plannedFile": "web/pwa/tests/server_rendered_htmx_canary.spec.ts", "plannedTestId": "same-origin HTMX loads and one read plus one mutation interaction remains operable", "status": "not-yet-authored", "owner": "bubbles.test" }
+      ],
+      "evidenceRefs": []
+    },
+    {
+      "scenarioId": "SCN-002-006-04",
+      "scope": "SCOPE-02",
+      "title": "Blank query performs no search-domain work",
+      "gherkin": {
+        "given": "The query is empty, control-only, whitespace-only, or a mixture of whitespace and control characters",
+        "when": "The user submits through the native form or HTMX path",
+        "then": "SearchEngine and every downstream search-domain dependency execute zero times while the HTTP layer may return accessible validation without representing a search result"
+      },
+      "behaviorClass": "ui",
+      "changeType": "bugfix",
+      "requiredTestType": "e2e-ui",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        { "file": "internal/web/handler_test.go", "testId": "existing Search handler validation canary to extend" },
+        { "file": "tests/e2e/test_web_ui.sh", "testId": "existing Search endpoint canary to extend" }
+      ],
+      "plannedTests": [
+        { "plannedFile": "web/pwa/tests/search_progressive.spec.ts", "plannedTestId": "pointer search works with JavaScript disabled and blank input performs no search-domain work", "status": "not-yet-authored", "owner": "bubbles.test" }
+      ],
+      "evidenceRefs": []
+    },
+    {
+      "scenarioId": "SCN-002-006-05",
+      "scope": "SCOPE-02",
+      "title": "No match differs from request failure",
+      "gherkin": {
+        "given": "One authorized query completes with zero matches and another reaches a typed timeout or server failure",
+        "when": "Each baseline response renders",
+        "then": "No matches has no error language while each failure preserves the query and exposes its own Retry state"
+      },
+      "behaviorClass": "ui",
+      "changeType": "bugfix",
+      "requiredTestType": "e2e-ui",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        { "file": "internal/web/handler_test.go", "testId": "existing Search result projection canary to extend" },
+        { "file": "tests/e2e/test_search_empty.sh", "testId": "existing real empty-search canary to preserve" }
+      ],
+      "plannedTests": [
+        { "plannedFile": "web/pwa/tests/search_states.spec.ts", "plannedTestId": "baseline no-match failure and expired-session states remain mutually exclusive", "status": "not-yet-authored", "owner": "bubbles.test" }
+      ],
+      "evidenceRefs": []
+    },
+    {
+      "scenarioId": "SCN-002-006-06",
+      "scope": "SCOPE-02",
+      "title": "Auth expiry requests re-authentication",
+      "gherkin": {
+        "given": "The browser session expires before the baseline form post",
+        "when": "Web authentication rejects Search",
+        "then": "The complete response presents route-only safe re-authentication and never claims no matches or includes the query in return metadata"
+      },
+      "behaviorClass": "ui",
+      "changeType": "bugfix",
+      "requiredTestType": "e2e-ui",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        { "file": "tests/e2e/auth/browser_login_test.go", "testId": "existing HTMX 401 and browser auth canary to preserve" },
+        { "file": "web/pwa/tests/auth_login.spec.ts", "testId": "existing real login browser canary to extend" }
+      ],
+      "plannedTests": [
+        { "plannedFile": "web/pwa/tests/search_states.spec.ts", "plannedTestId": "baseline no-match failure and expired-session states remain mutually exclusive", "status": "not-yet-authored", "owner": "bubbles.test" }
+      ],
+      "evidenceRefs": []
+    },
+    {
+      "scenarioId": "SCN-002-006-07",
+      "scope": "SCOPE-03",
+      "title": "Degraded search remains honest",
+      "gherkin": {
+        "given": "A real search dependency is owned-degraded while verified partial rows remain available",
+        "when": "Enhanced Search completes",
+        "then": "Partial results names the unavailable capability and preserves operable verified rows, provenance, and the valid session"
+      },
+      "behaviorClass": "api",
+      "changeType": "bugfix",
+      "requiredTestType": "e2e-ui",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        { "file": "tests/e2e/capture_process_search_test.go", "testId": "existing live Search result canary to extend" },
+        { "file": "internal/web/handler_test.go", "testId": "existing Search projection canary to extend" }
+      ],
+      "plannedTests": [
+        { "plannedFile": "web/pwa/tests/search_states.spec.ts", "plannedTestId": "retry timeout network server and degraded transitions replace stale state without session or privacy drift", "status": "not-yet-authored", "owner": "bubbles.test" }
+      ],
+      "evidenceRefs": []
+    },
+    {
+      "scenarioId": "SCN-002-006-08",
+      "scope": "SCOPE-04",
+      "title": "Search is accessible and responsive",
+      "gherkin": {
+        "given": "An authenticated keyboard or screen-reader user at 320 CSS pixels, 200 percent zoom, and reduced motion",
+        "when": "The user submits and reviews every Search state",
+        "then": "State changes omit raw query text and controls, retries, filters, and result links remain ordered, operable, unclipped, and non-overlapping"
+      },
+      "behaviorClass": "ui",
+      "changeType": "bugfix",
+      "requiredTestType": "e2e-ui",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        { "file": "internal/web/handler_test.go", "testId": "existing Search markup canary to extend" },
+        { "file": "web/pwa/tests/assistant_accessibility.spec.ts", "testId": "existing authenticated accessibility canary to preserve" }
+      ],
+      "plannedTests": [
+        { "plannedFile": "web/pwa/tests/search_progressive.spec.ts", "plannedTestId": "real Search remains operable announced and non-overlapping with enhancement enabled and disabled", "status": "not-yet-authored", "owner": "bubbles.test" },
+        { "plannedFile": "web/pwa/tests/search_states.spec.ts", "plannedTestId": "all real Search states remain mutually exclusive and accessible", "status": "not-yet-authored", "owner": "bubbles.test" }
+      ],
+      "evidenceRefs": []
+    }
+  ]
+}

@@ -1,0 +1,211 @@
+{
+  "version": 3,
+  "bugId": "BUG-070-001",
+  "featureDir": "specs/070-web-username-password-login/bugs/BUG-070-001-production-credential-session-paseto-split",
+  "featureName": "Production Credential Session and PASETO Split",
+  "releaseTrain": "mvp",
+  "flagsIntroduced": [],
+  "status": "in_progress",
+  "statusReason": "Planning packet initialized from operator-supplied current-session historical input. No local reproduction, root-cause certification, implementation, test execution, validation, audit, production mutation, commit, push, or deployment is claimed.",
+  "workflowMode": "bugfix-fastlane",
+  "linkedImplementationSpec": null,
+  "linkedPlanningPacket": null,
+  "planningOnly": false,
+  "planningOnlyJustification": null,
+  "specDependsOn": [
+    "specs/070-web-username-password-login"
+  ],
+  "certifiedAt": null,
+  "requiresRevalidation": false,
+  "amends": [
+    "specs/070-web-username-password-login",
+    "specs/091-web-self-registration-invite-gated"
+  ],
+  "amendsScope": "Production username/password browser-session issuance, principal binding, role/grant authorization, product-wide CSRF/Origin protection, and route-by-role acceptance. Preserves spec 091's repeatable static invite gate and credential safety; supersedes conflicting full-admin/shared-token/no-schema assumptions.",
+  "predecessorContractDisposition": [
+    {
+      "target": "specs/091-web-self-registration-invite-gated",
+      "statusObserved": "done",
+      "preserved": ["repeatable static invite gate", "non-enumerating credential intake", "Argon2id credential storage", "duplicate username no-overwrite"],
+      "superseded": ["every web account automatically full admin", "production shared-token cookie compatibility", "no-schema expectation where principal/grant binding needs expand-contract persistence"],
+      "directMutation": false
+    }
+  ],
+  "recertificationRouting": {
+    "owner": "bubbles.validate",
+    "trigger": "BUG-070-001 implementation and role/CSRF/route-matrix evidence complete",
+    "requiredRecord": "successor amendment to certified specs 070 and 091",
+    "predecessorFilesRemainSealed": true
+  },
+  "requirementsRecovery": {
+    "reviewId": "2026-07-24-independent-planning-review",
+    "status": "analyst_reconciled",
+    "addressedFindings": ["SR-002", "SR-003", "GRILL-03", "SR-006", "GRILL-12"],
+    "activeRequirementsRef": "spec.md",
+    "certificationClaimed": false
+  },
+  "execution": {
+    "activeAgent": "bubbles.design",
+    "currentPhase": "harden",
+    "currentScope": null,
+    "runStartedAt": "2026-07-24T07:11:21Z",
+    "completedPhaseClaims": [],
+    "pendingTransitionRequests": [],
+    "audit": {
+      "schemaVersion": "audit-run/v1",
+      "runId": null,
+      "currentAttemptId": null,
+      "attempts": []
+    }
+  },
+  "certification": {
+    "status": "in_progress",
+    "completedScopes": [],
+    "certifiedCompletedPhases": [],
+    "scopeProgress": [
+      {
+        "scope": 1,
+        "scopeId": "SCOPE-01",
+        "name": "Bound Browser-Account Policy And Role/Grant Model",
+        "status": "not_started",
+        "dependsOn": [],
+        "scopeDir": null,
+        "evidenceFile": "report.md",
+        "certifiedAt": null
+      },
+      {
+        "scope": 2,
+        "scopeId": "SCOPE-02",
+        "name": "Purpose-Bound Session Lifecycle",
+        "status": "not_started",
+        "dependsOn": ["SCOPE-01"],
+        "scopeDir": null,
+        "evidenceFile": "report.md",
+        "certifiedAt": null
+      },
+      {
+        "scope": 3,
+        "scopeId": "SCOPE-03",
+        "name": "Unified Request Authentication",
+        "status": "not_started",
+        "dependsOn": ["SCOPE-02"],
+        "scopeDir": null,
+        "evidenceFile": "report.md",
+        "certifiedAt": null
+      },
+      {
+        "scope": 4,
+        "scopeId": "SCOPE-04",
+        "name": "Login Recovery And Logout UX",
+        "status": "not_started",
+        "dependsOn": ["SCOPE-03"],
+        "scopeDir": null,
+        "evidenceFile": "report.md",
+        "certifiedAt": null
+      },
+      {
+        "scope": 5,
+        "scopeId": "SCOPE-05",
+        "name": "Product-Wide CSRF And Origin Mutation Protection",
+        "status": "not_started",
+        "dependsOn": ["SCOPE-04"],
+        "scopeDir": null,
+        "evidenceFile": "report.md",
+        "certifiedAt": null
+      },
+      {
+        "scope": 6,
+        "scopeId": "SCOPE-06",
+        "name": "Role And Grant Acceptance And Global Corpus Gating (Disposable Production)",
+        "status": "not_started",
+        "dependsOn": ["SCOPE-05"],
+        "scopeDir": null,
+        "evidenceFile": "report.md",
+        "certifiedAt": null
+      }
+    ],
+    "lockdownState": {
+      "active": false,
+      "lockedScenarioIds": []
+    },
+    "invalidationLedger": []
+  },
+  "policySnapshot": {
+    "grill": { "mode": "off", "source": "repo-default" },
+    "tdd": { "mode": "scenario-first", "source": "workflow-mode" },
+    "autoCommit": { "mode": "off", "source": "user-constraint" },
+    "lockdown": { "mode": "off", "source": "repo-default" },
+    "regression": { "mode": "protected-scenarios", "source": "workflow-mode" },
+    "validation": { "mode": "certification-required", "source": "repo-default" }
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "executionHistory": [
+    {
+      "agent": "bubbles.ux",
+      "phasesExecuted": ["analyze"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-07-23T15:16:25Z",
+      "runEndedAt": "2026-07-23T15:16:25Z",
+      "summary": "Reconciled the UX-owned production-session contract for login, session recovery, authenticated shell states, safe return, 401-versus-403 handling, true and filtered empty states, degraded dependencies, logout mutation feedback, responsive and accessible behavior, real-cookie Playwright-visible outcomes, and routed security/design questions. No authentication, cookie, browser or test execution, implementation, evidence, certification, status transition, commit, push, build, or deployment is claimed."
+    },
+    {
+      "agent": "bubbles.design",
+      "phasesExecuted": ["bootstrap"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-07-23T16:36:03Z",
+      "runEndedAt": "2026-07-23T17:00:23Z",
+      "summary": "Replaced the initialization design with a code-grounded unified browser-session architecture: explicit credential-to-principal binding and scope grants, audience-bound browser and API PASETO purposes, persisted browser issuance, one request authenticator for legacy and modern middleware, revocation-backed logout, fail-closed migration, privacy-safe observability, real-cookie Playwright strategy, and narrow non-destructive rollback. No spec, scope, report, user validation, scenario manifest, source, test, certification, status transition, commit, push, build, or deployment change is claimed."
+    },
+    {
+      "agent": "bubbles.analyst",
+      "phasesExecuted": ["analyze"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-07-24T02:35:39Z",
+      "runEndedAt": "2026-07-24T02:38:31Z",
+      "summary": "Reconciled SR-002/SR-003/GRILL-03/SR-006/GRILL-12: BUG-070 explicitly amends certified specs 070/091, preserves the repeatable static invite gate, supersedes conflicting full-admin/shared-token/no-schema assumptions, defines one claim-bound session, daily/operator 2xx/403 acceptance, product-wide CSRF/Origin protection, and global-corpus grants. Preserved SCN-070-001-01..08 and added 09..11. No certified predecessor, source, test, design, scope, report, user validation, certification, commit, push, or deployment work is claimed."
+    },
+    {
+      "agent": "bubbles.plan",
+      "phasesExecuted": ["harden"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-07-24T06:34:43Z",
+      "runEndedAt": "2026-07-24T06:34:43Z",
+      "summary": "Planning reconciliation to the analyst-updated spec.md (which added SCN-070-001-09 CSRF/Origin, SCN-070-001-10 roles, and SCN-070-001-11 global-corpus grant-gating after the 2026-07-24T01:27Z planning artifacts were authored). Corrected the stale SCN-070-001-09 middleware-parity mislabel across scopes.md, scenario-manifest.json, and test-plan.json; split planning from 5 to 6 scopes (new SCOPE-05 product-wide CSRF/Origin; SCOPE-06 = former disposable-acceptance scope expanded to cover SCN-01/10/11); re-pointed SCOPE-03 rows to SCN-06/07 and made the AUTH-015 single-authoritative-session-contract an explicit SCOPE-03 Core Outcome to resolve the auth predecessor-amendment consistency finding; restored Test-Plan-row/DoD-test-item parity (5 rows / 5 items per scope, 30 rows total); rebuilt certification.scopeProgress to 6 scopes. Residuals routed to bubbles.design: RF-070-001-01 (design Security relies on SameSite/Origin vs spec AUTH-011 session-bound anti-CSRF proof) and RF-070-001-02 (design Testing table stops at SCN-08 and omits SCN-09/10/11). No source, test, spec, design, bug, certification, status transition, commit, push, build, or deployment change is claimed; status remains in_progress."
+    },
+    {
+      "agent": "bubbles.design",
+      "phasesExecuted": ["bootstrap"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-07-24T07:11:21Z",
+      "runEndedAt": "2026-07-24T07:11:21Z",
+      "summary": "Resolved the two design residuals routed by the plan reconciliation. RF-070-001-01 (spec AUTH-011 vs design Security conflict): took option (a) and specified a concrete session-bound anti-CSRF mechanism in a new design.md section '## Cross-Site Request Forgery Protection' — a stateless signed double-submit proof bound to the browser-session PASETO jti/sub/aud via HMAC under a dedicated fail-loud csrf_signing_key (no schema, no per-request DB read), layered on a trusted-Origin check, delivered through a non-authenticating smackerel_csrf companion cookie plus a _csrf form field and a csrf-token meta tag, echoed via _csrf/X-CSRF-Token, enforced for every POST/PUT/PATCH/DELETE by a MutationTrustGuard across server-form/HTMX/PWA/JSON/Cards/admin with a pre-session variant for login/registration/logout. Reconciled the contradictory 'No token is exposed for a custom CSRF scheme' statement to necessary-not-sufficient SameSite plus a required session-bound proof, and clarified the proof is not session material so the HttpOnly session PASETO stays script-inaccessible. RF-070-001-02: extended the design Testing And Validation Strategy table to SCN-070-001-09/10/11. Supporting internal-consistency edits: MutationTrustGuard foundation contract, foundation-owned CSRF behavior, anti-CSRF proof-carrier variation axis, companion-cookie cross-reference, a 403-before-mutation failure-mapping row, a csrf telemetry line, two rejected-alternative subsections, and a complexity-tracking row. AUTH-011 was upheld (not weakened); the mechanism matches the already-planned SCOPE-05 surface (MutationGuard, csrf middleware/enforcement test files, and the origin_rejected|csrf_missing|csrf_stale|csrf_mismatch|accepted plus family telemetry vocabulary), so no scope/test/DoD re-reconciliation is required. No spec, scope, report, user validation, scenario manifest, source, test, certification, status transition, commit, push, build, or deployment change is claimed; status remains in_progress."
+    }
+  ],
+  "activeBugs": [],
+  "resolvedBugs": [],
+  "failures": [],
+  "lastUpdatedAt": "2026-07-24T07:11:21Z",
+  "scopeLayout": "single-file",
+  "artifacts": {
+    "bug": "bug.md",
+    "spec": "spec.md",
+    "design": "design.md",
+    "scopes": "scopes.md",
+    "report": "report.md",
+    "uservalidation": "uservalidation.md",
+    "scenarioManifest": "scenario-manifest.json"
+  },
+  "statusDiscipline": {
+    "validStatuses": ["not_started", "in_progress", "blocked", "specs_hardened", "docs_updated", "validated", "done"],
+    "scopePickupRule": "All dependsOn scopes must be Done. Pick the lowest-numbered eligible scope.",
+    "scopeDoneGates": ["G020", "G021", "G022", "G023", "G024", "G025", "G055", "G056", "G057", "G058", "G059", "G060", "G061"],
+    "specDoneRequires": "All scopes done, certification.completedScopes contains every scope ID, and bubbles.validate certifies promotion."
+  },
+  "notes": "Owner routes required: bubbles.ux for user flows, bubbles.design for root-cause design, and bubbles.plan for final scope/test planning. BUG-070-001 blocks modern authenticated API/PWA Playwright and product journey acceptance."
+}

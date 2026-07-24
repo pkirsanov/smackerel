@@ -1,0 +1,378 @@
+{
+  "version": 1,
+  "specId": "BUG-032-004",
+  "generatedBy": "bubbles.plan",
+  "generatedAt": "2026-07-23T23:46:07Z",
+  "scopes": [
+    {
+      "scopeId": "SCOPE-01",
+      "scopeName": "Capability Catalog And Deterministic Resolver Foundation",
+      "tests": [
+        {
+          "testId": "TP-032-01-01",
+          "type": "unit",
+          "category": "unit",
+          "file": "internal/readiness/catalog_test.go",
+          "scenarioId": "SCN-032-004-01",
+          "description": "TestCapabilityCatalogRejectsIncompleteAndImplicitPolicy",
+          "command": "./smackerel.sh test unit --go",
+          "liveSystem": false
+        },
+        {
+          "testId": "TP-032-01-02",
+          "type": "unit-canary",
+          "category": "unit",
+          "file": "internal/readiness/resolver_test.go",
+          "scenarioId": "SCN-032-004-01",
+          "description": "TestResolverImplementationAndCertificationNeverImplyRuntimeReadiness",
+          "command": "./smackerel.sh test unit --go",
+          "liveSystem": false
+        },
+        {
+          "testId": "TP-032-01-03",
+          "type": "unit",
+          "category": "unit",
+          "file": "internal/readiness/resolver_test.go",
+          "scenarioId": "SCN-032-004-05",
+          "description": "TestResolverDistinguishesOptionalDisabledFromRequiredBroken",
+          "command": "./smackerel.sh test unit --go",
+          "liveSystem": false
+        },
+        {
+          "testId": "TP-032-01-04",
+          "type": "unit-adversarial",
+          "category": "unit",
+          "file": "internal/readiness/resolver_test.go",
+          "scenarioId": "SCN-032-004-06",
+          "description": "TestResolverBoundsTrueEmptyAndRejectsFixtureOnlyLiveProof",
+          "command": "./smackerel.sh test unit --go",
+          "liveSystem": false
+        },
+        {
+          "testId": "TP-032-01-05",
+          "type": "functional-config",
+          "category": "functional",
+          "file": "internal/config/capability_readiness_test.go",
+          "scenarioId": "SCN-032-004-01",
+          "description": "TestCompiledCapabilityReadinessCatalogIsCompleteAndDigestStable",
+          "command": "./smackerel.sh check",
+          "liveSystem": false
+        }
+      ]
+    },
+    {
+      "scopeId": "SCOPE-02",
+      "scopeName": "Append-Only Evidence Ledger And Safe Ingestion",
+      "tests": [
+        {
+          "testId": "TP-032-02-01",
+          "type": "unit",
+          "category": "unit",
+          "file": "internal/readiness/evidence_schema_test.go",
+          "scenarioId": "SCN-032-004-08",
+          "description": "TestEvidenceEnvelopeRejectsUnknownUnsafeAndUnboundedFields",
+          "command": "./smackerel.sh test unit --go",
+          "liveSystem": false
+        },
+        {
+          "testId": "TP-032-02-02",
+          "type": "integration-canary",
+          "category": "integration",
+          "file": "internal/readiness/store_integration_test.go",
+          "scenarioId": "SCN-032-004-08",
+          "description": "TestEvidenceBatchAppendIsAtomicIdempotentAndDigestBound",
+          "command": "./smackerel.sh test integration",
+          "liveSystem": true
+        },
+        {
+          "testId": "TP-032-02-03",
+          "type": "integration-canary",
+          "category": "integration",
+          "file": "internal/readiness/store_integration_test.go",
+          "scenarioId": "SCN-032-004-08",
+          "description": "TestEvidenceCorrectionsAppendAndHistoryRejectsUpdateDelete",
+          "command": "./smackerel.sh test integration",
+          "liveSystem": true
+        },
+        {
+          "testId": "TP-032-02-04",
+          "type": "e2e-api",
+          "category": "e2e-api",
+          "file": "tests/e2e/capability_readiness_evidence_test.go",
+          "scenarioId": "SCN-032-004-08",
+          "description": "TestReadinessIngestionCLIAppendsOneCompleteValueSafeBatch",
+          "command": "./smackerel.sh test e2e",
+          "liveSystem": true
+        },
+        {
+          "testId": "TP-032-02-05",
+          "type": "regression-e2e-api",
+          "category": "e2e-api",
+          "file": "tests/e2e/capability_readiness_evidence_test.go",
+          "scenarioId": "SCN-032-004-08",
+          "description": "TestReadinessIngestionCLIRejectsUnsafeBatchWithZeroRows",
+          "command": "./smackerel.sh test e2e",
+          "liveSystem": true
+        },
+        {
+          "testId": "TP-032-02-06",
+          "type": "regression-e2e-api",
+          "category": "e2e-api",
+          "file": "tests/e2e/capability_readiness_evidence_test.go",
+          "scenarioId": "SCN-032-004-08",
+          "description": "TestReadinessIngestionCLIPreservesCorrectionHistoryAcrossRestart",
+          "command": "./smackerel.sh test e2e",
+          "liveSystem": true
+        }
+      ]
+    },
+    {
+      "scopeId": "SCOPE-03",
+      "scopeName": "Immutable Snapshots And Managed-Claim Enforcement",
+      "tests": [
+        {
+          "testId": "TP-032-03-01",
+          "type": "unit-boundary",
+          "category": "unit",
+          "file": "internal/readiness/snapshot_test.go",
+          "scenarioId": "SCN-032-004-04",
+          "description": "TestSnapshotMarksEvidenceStaleAtExactExpiryBoundary",
+          "command": "./smackerel.sh test unit --go",
+          "liveSystem": false
+        },
+        {
+          "testId": "TP-032-03-02",
+          "type": "integration",
+          "category": "integration",
+          "file": "internal/readiness/snapshot_integration_test.go",
+          "scenarioId": "SCN-032-004-04",
+          "description": "TestSnapshotDigestRowsAndValidityMatchResolverOutput",
+          "command": "./smackerel.sh test integration",
+          "liveSystem": true
+        },
+        {
+          "testId": "TP-032-03-03",
+          "type": "functional",
+          "category": "functional",
+          "file": "internal/docfreshness/readiness_claims_test.go",
+          "scenarioId": "SCN-032-004-07",
+          "description": "TestReadinessClaimValidatorReportsEveryOverclaimField",
+          "command": "./smackerel.sh lint",
+          "liveSystem": false
+        },
+        {
+          "testId": "TP-032-03-04",
+          "type": "functional-adversarial",
+          "category": "functional",
+          "file": "internal/docfreshness/readiness_claims_test.go",
+          "scenarioId": "SCN-032-004-07",
+          "description": "TestReadinessClaimValidatorRejectsImplementedAsProductionReady",
+          "command": "./smackerel.sh lint",
+          "liveSystem": false
+        },
+        {
+          "testId": "TP-032-03-05",
+          "type": "functional-regression",
+          "category": "functional",
+          "file": "internal/docfreshness/readiness_claims_test.go",
+          "scenarioId": "SCN-032-004-04",
+          "description": "TestReadinessPublicationRejectsStaleOrMismatchedSnapshot",
+          "command": "./smackerel.sh lint",
+          "liveSystem": false
+        }
+      ]
+    },
+    {
+      "scopeId": "SCOPE-04",
+      "scopeName": "Runtime Readiness Projections And Product Consumers",
+      "tests": [
+        {
+          "testId": "TP-032-04-01",
+          "type": "unit",
+          "category": "unit",
+          "file": "internal/api/capability_readiness_test.go",
+          "scenarioId": "SCN-032-004-09",
+          "description": "TestCapabilityReadinessProjectionAuthorizationAndRedaction",
+          "command": "./smackerel.sh test unit --go",
+          "liveSystem": false
+        },
+        {
+          "testId": "TP-032-04-02",
+          "type": "integration-canary",
+          "category": "integration",
+          "file": "internal/web/capability_readiness_consumer_integration_test.go",
+          "scenarioId": "SCN-032-004-09",
+          "description": "TestSettingsStatusAndNavigationShareOneProjection",
+          "command": "./smackerel.sh test integration",
+          "liveSystem": true
+        },
+        {
+          "testId": "TP-032-04-03",
+          "type": "e2e-api",
+          "category": "e2e-api",
+          "file": "tests/e2e/capability_readiness_api_test.go",
+          "scenarioId": "SCN-032-004-09",
+          "description": "TestDailyUserAndOperatorReadinessAPIsExposeOneDerivedState",
+          "command": "./smackerel.sh test e2e",
+          "liveSystem": true
+        },
+        {
+          "testId": "TP-032-04-04",
+          "type": "regression-e2e-api",
+          "category": "e2e-api",
+          "file": "tests/e2e/capability_readiness_api_test.go",
+          "scenarioId": "SCN-032-004-09",
+          "description": "TestReadinessStoreFailureReturnsTypedUnavailableWithoutOptimisticFallback",
+          "command": "./smackerel.sh test e2e",
+          "liveSystem": true
+        },
+        {
+          "testId": "TP-032-04-05",
+          "type": "regression-e2e-ui",
+          "category": "e2e-ui",
+          "file": "web/pwa/tests/capability_readiness.spec.ts",
+          "scenarioId": "SCN-032-004-09",
+          "description": "operator readiness exposes all facts without reinterpretation",
+          "command": "./smackerel.sh test e2e-ui",
+          "liveSystem": true
+        },
+        {
+          "testId": "TP-032-04-06",
+          "type": "regression-e2e-ui",
+          "category": "e2e-ui",
+          "file": "web/pwa/tests/capability_readiness.spec.ts",
+          "scenarioId": "SCN-032-004-09",
+          "description": "daily user sees bounded availability and no operator evidence",
+          "command": "./smackerel.sh test e2e-ui",
+          "liveSystem": true
+        },
+        {
+          "testId": "TP-032-04-07",
+          "type": "regression-e2e-ui-canary",
+          "category": "e2e-ui",
+          "file": "web/pwa/tests/capability_readiness.spec.ts",
+          "scenarioId": "SCN-032-004-09",
+          "description": "resolver failure never restores optimistic navigation",
+          "command": "./smackerel.sh test e2e-ui",
+          "liveSystem": true
+        },
+        {
+          "testId": "TP-032-04-08",
+          "type": "accessibility-e2e-ui",
+          "category": "e2e-ui",
+          "file": "web/pwa/tests/capability_readiness.spec.ts",
+          "scenarioId": "SCN-032-004-09",
+          "description": "readiness records remain semantic and operable in every required mode",
+          "command": "./smackerel.sh test e2e-ui",
+          "liveSystem": true
+        }
+      ]
+    },
+    {
+      "scopeId": "SCOPE-05",
+      "scopeName": "Actual Journey Evidence Bridge And Docs Publication Handoff",
+      "tests": [
+        {
+          "testId": "TP-032-05-01",
+          "type": "unit-contract",
+          "category": "unit",
+          "file": "internal/readiness/journey_bridge_test.go",
+          "scenarioId": "SCN-032-004-02",
+          "description": "TestJourneyBridgeMapsOnlyCatalogRegisteredAcceptanceRows",
+          "command": "./smackerel.sh test unit --go",
+          "liveSystem": false
+        },
+        {
+          "testId": "TP-032-05-02",
+          "type": "unit-adversarial",
+          "category": "unit",
+          "file": "internal/readiness/journey_bridge_test.go",
+          "scenarioId": "SCN-032-004-03",
+          "description": "TestJourneyBridgeRejectsMissingUnsafeAndReleaseMismatchedResults",
+          "command": "./smackerel.sh test unit --go",
+          "liveSystem": false
+        },
+        {
+          "testId": "TP-032-05-03",
+          "type": "integration",
+          "category": "integration",
+          "file": "internal/readiness/journey_bridge_integration_test.go",
+          "scenarioId": "SCN-032-004-02",
+          "description": "TestAcceptedProductResultPromotesOnlyMappedJourneyFacts",
+          "command": "./smackerel.sh test integration",
+          "liveSystem": true
+        },
+        {
+          "testId": "TP-032-05-04",
+          "type": "integration-adversarial",
+          "category": "integration",
+          "file": "internal/readiness/journey_bridge_integration_test.go",
+          "scenarioId": "SCN-032-004-03",
+          "description": "TestNewerDeniedJourneyDemotesClaimWithoutErasingPass",
+          "command": "./smackerel.sh test integration",
+          "liveSystem": true
+        },
+        {
+          "testId": "TP-032-05-05",
+          "type": "e2e-api",
+          "category": "e2e-api",
+          "file": "tests/e2e/capability_readiness_journey_evidence_test.go",
+          "scenarioId": "SCN-032-004-02",
+          "description": "TestCurrentAcceptedJourneyResultCompletesReadinessProjection",
+          "command": "./smackerel.sh test e2e",
+          "liveSystem": true
+        },
+        {
+          "testId": "TP-032-05-06",
+          "type": "regression-e2e-api",
+          "category": "e2e-api",
+          "file": "tests/e2e/capability_readiness_journey_evidence_test.go",
+          "scenarioId": "SCN-032-004-03",
+          "description": "TestHealthGreenButBrokenJourneyInvalidatesLiveClaim",
+          "command": "./smackerel.sh test e2e",
+          "liveSystem": true
+        },
+        {
+          "testId": "TP-032-05-07",
+          "type": "regression-e2e-api",
+          "category": "e2e-api",
+          "file": "tests/e2e/capability_readiness_journey_evidence_test.go",
+          "scenarioId": "SCN-032-004-03",
+          "description": "TestStalePriorReleaseAndFixtureResultsCannotProveCurrentReadiness",
+          "command": "./smackerel.sh test e2e",
+          "liveSystem": true
+        },
+        {
+          "testId": "TP-032-05-08",
+          "type": "functional-publication-gate",
+          "category": "functional",
+          "file": "internal/docfreshness/readiness_publication_handoff_test.go",
+          "scenarioId": "SCN-032-004-02, SCN-032-004-03",
+          "description": "TestPublicationHandoffContainsOnlyCurrentGeneratedClaimsAndDocsOwnerRoutes",
+          "command": "./smackerel.sh lint",
+          "liveSystem": false
+        },
+        {
+          "testId": "TP-032-05-09",
+          "type": "integration-contract",
+          "category": "integration",
+          "file": "internal/readiness/journey_bridge_integration_test.go",
+          "scenarioId": "SCN-032-004-10",
+          "description": "TestReadinessConsumesBUG102EvidenceWithoutBecomingProducerOrLooping",
+          "command": "./smackerel.sh test integration",
+          "liveSystem": true
+        },
+        {
+          "testId": "TP-032-05-10",
+          "type": "integration-dependency-status",
+          "category": "integration",
+          "file": "internal/readiness/dependency_status_test.go",
+          "scenarioId": "SCN-032-004-11",
+          "description": "TestBlockedSpec104RecordsBlockedWhileCitingOnlyCompletedScope8Evidence",
+          "command": "./smackerel.sh test integration",
+          "liveSystem": true
+        }
+      ]
+    }
+  ]
+}

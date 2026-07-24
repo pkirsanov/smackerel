@@ -1,0 +1,116 @@
+{
+  "version": 3,
+  "bugId": "BUG-083-002",
+  "featureDir": "specs/083-card-rewards-companion/bugs/BUG-083-002-ccmanager-parity-runtime-drift",
+  "featureName": "CCManager Parity Runtime Drift",
+  "releaseTrain": "mvp",
+  "flagsIntroduced": [],
+  "status": "in_progress",
+  "statusReason": "Planning packet and read-only 16-area parity baseline initialized. No CCManager or Smackerel runtime, implementation, test, certification, production mutation, commit, push, or deployment is claimed.",
+  "workflowMode": "bugfix-fastlane",
+  "linkedImplementationSpec": null,
+  "linkedPlanningPacket": null,
+  "planningOnly": false,
+  "planningOnlyJustification": null,
+  "specDependsOn": [
+    "specs/083-card-rewards-companion",
+    "specs/092-card-rewards-ui-elevation",
+    "specs/070-web-username-password-login/bugs/BUG-070-001-production-credential-session-paseto-split"
+  ],
+  "certifiedAt": null,
+  "requiresRevalidation": false,
+  "programClassification": {
+    "lineage": "bug",
+    "deliveryMagnitude": "feature-sized parity program",
+    "parityAreaCount": 16,
+    "domainDeliveryOwner": "BUG-083-002",
+    "compositionConsumer": "specs/106-coherent-product-experience",
+    "allParityAreasRequired": true,
+    "crossCuttingFromFirstSlice": ["claim-bound authorization", "CSRF/Origin", "typed errors", "representative accessibility"]
+  },
+  "requirementsRecovery": {"reviewId":"2026-07-24-independent-planning-review","status":"analyst_reconciled","addressedFindings":["SR-009","GRILL-11","SR-003","GRILL-03"],"activeRequirementsRef":"spec.md","certificationClaimed":false},
+  "execution": {"activeAgent":"bubbles.design","currentPhase":"bootstrap","currentScope":null,"runStartedAt":"2026-07-24T19:24:40Z","completedPhaseClaims":[],"pendingTransitionRequests":[],"audit":{"schemaVersion":"audit-run/v1","runId":null,"currentAttemptId":null,"attempts":[]}},
+  "certification": {
+    "status":"in_progress",
+    "completedScopes":[],
+    "certifiedCompletedPhases":[],
+    "scopeProgress":[
+      {"scope":1,"scopeId":"SCOPE-01","name":"Wallet Identity And Lifecycle","parityRows":[1],"status":"not_started","dependsOn":[],"scopeDir":"scopes/01-wallet-identity-lifecycle","evidenceFile":"report.md","certifiedAt":null},
+      {"scope":2,"scopeId":"SCOPE-02","name":"Benefits And Pending Lifecycle","parityRows":[2,3,10],"status":"not_started","dependsOn":[1],"scopeDir":"scopes/02-benefits-pending-lifecycle","evidenceFile":"report.md","certifiedAt":null},
+      {"scope":3,"scopeId":"SCOPE-03","name":"Bonus And Calendar Lifecycle","parityRows":[4,12],"status":"not_started","dependsOn":[1],"scopeDir":"scopes/03-bonus-calendar-lifecycle","evidenceFile":"report.md","certifiedAt":null},
+      {"scope":4,"scopeId":"SCOPE-04","name":"Optimization History And Reports","parityRows":[5,11],"status":"not_started","dependsOn":[1,2],"scopeDir":"scopes/04-optimization-history-reports","evidenceFile":"report.md","certifiedAt":null},
+      {"scope":5,"scopeId":"SCOPE-05","name":"Sources Config And Durable Operations","parityRows":[6,8,12],"status":"not_started","dependsOn":[1],"scopeDir":"scopes/05-sources-config-operations","evidenceFile":"report.md","certifiedAt":null},
+      {"scope":6,"scopeId":"SCOPE-06","name":"Versioned Portability And Immutable Audit","parityRows":[7,9],"status":"not_started","dependsOn":[1],"scopeDir":"scopes/06-portability-immutable-audit","evidenceFile":"report.md","certifiedAt":null},
+      {"scope":7,"scopeId":"SCOPE-07","name":"Card-Local Composition And Complete Parity Loop","parityRows":[13,14,15,16],"status":"not_started","dependsOn":[1,2,3,4,5,6],"scopeDir":"scopes/07-composition-parity-loop","evidenceFile":"report.md","certifiedAt":null}
+    ],
+    "lockdownState":{"active":false,"lockedScenarioIds":[]},
+    "invalidationLedger":[]
+  },
+  "policySnapshot": {"grill":{"mode":"off","source":"repo-default"},"tdd":{"mode":"scenario-first","source":"workflow-mode"},"autoCommit":{"mode":"off","source":"user-constraint"},"lockdown":{"mode":"off","source":"repo-default"},"regression":{"mode":"protected-scenarios","source":"workflow-mode"},"validation":{"mode":"certification-required","source":"repo-default"}},
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "executionHistory": [
+    {
+      "agent": "bubbles.ux",
+      "phasesExecuted": ["analyze"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-07-23T16:27:07Z",
+      "runEndedAt": "2026-07-23T16:27:37Z",
+      "summary": "Read-only UX provenance reconciliation confirmed the existing Card Rewards parity contract covers Card Rewards users and operators, the complete screen inventory, desktop and mobile composition, keyboard and screen-reader behavior, closed honest read and mutation states, state-specific recovery, and all 16 real-stack Playwright-visible parity outcomes. No spec change, CCManager or Smackerel runtime, browser, database, source, calendar, import or export, security probe, test, evidence, design, plan, implementation, certification, commit, push, or deployment is claimed."
+    },
+    {
+      "agent": "bubbles.design",
+      "phasesExecuted": ["bootstrap"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-07-23T16:56:03.870403637Z",
+      "runEndedAt": "2026-07-23T17:03:15.494451286Z",
+      "summary": "Reconciled design.md against current requirements, UX, Card Rewards domain/store/service/API/web/scheduler/calendar/import/migration code and tests, plus read-only CCManager behavior. Defined claim-bound ownership, lifecycle and pending-action foundations, multi-category offers with typed shared limit pools, immutable optimization versions, source and durable operation contracts, append-only audit, versioned dry-run import/export, full product-shell/theme/error/accessibility/security composition, all 16 parity mappings, additive migration sequencing, rollback, observability, and bounded implementation seams. Artifact lint was executed separately; no CCManager change, implementation, product test, certification, status transition, source/test/spec/scope/report/uservalidation/scenario-manifest change, build, deploy, commit, or push is claimed."
+    },
+    {
+      "agent": "bubbles.analyst",
+      "phasesExecuted": ["analyze"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-07-24T02:35:39Z",
+      "runEndedAt": "2026-07-24T02:38:31Z",
+      "summary": "Reconciled SR-009/GRILL-11: BUG-083-002 retains bug lineage but is classified as a feature-sized program owning all 16 Card parity areas; spec 106 composes only the shared shell. Security, CSRF/Origin, typed errors, and representative accessibility are required in every vertical slice. No CCManager change, source, tests, design, scopes, report, certification, commit, push, or deployment work is claimed."
+    },
+    {
+      "agent": "bubbles.design",
+      "phasesExecuted": ["bootstrap"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-07-24T02:50:40Z",
+      "runEndedAt": "2026-07-24T02:50:40Z",
+      "summary": "Reconciled the SR-009/GRILL-11 Card design and the requested SR-012/SR-013 cross-capability design obligations as a feature-sized 16-area program retaining BUG-083-002 lineage. Defined seven cohesive independently acceptable vertical slices, a mandatory per-slice authorization/Origin-CSRF/typed-error/audit/PostgreSQL-read-back/accessibility kernel, parity-or-better preservation of the read-only CCManager baseline, spec 106 shell-only composition, logical migration groups with implementation-time number allocation and expand-migrate-cutover-contract compatibility, validate-plane cards.parity traces/SLOs, and disposable no-interception fault profiles. No spec, scopes, report, uservalidation, manifest, config, CCManager write, source, test, certification, status transition, spec 079, commit, push, or deployment work is claimed."
+    },
+    {
+      "agent": "bubbles.plan",
+      "phasesExecuted": ["harden"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-07-24T15:05:00Z",
+      "runEndedAt": "2026-07-24T15:12:00Z",
+      "summary": "Planning reconciliation (spec-scope-hardening harden) against the review-driven 2026-07-24T05:46Z spec.md + design.md. design.md shares the spec mtime and is content-complete (85KB: full 16-area ledger, seven-slice Cohesive Vertical Slice Program, Slice Acceptance Kernel, CSRF section) so there is NO design-staleness residual. Replaced the stale 18-serial-scope layout (which predated the 05:46 revision, contradicted the design's seven-slice cohesive model, folded cross-cutting foundation/audit/errors/a11y/security into separate serial scopes the design forbids, and injected phantom scenarios F01/F02 that failed manifest coverage 16-vs-19 under G057/G059) with the seven cohesive vertical slices from design §Cohesive Vertical Slice Program. Each slice folds the mandatory acceptance kernel in-band (claim-bound authz + BUG-070-001 MutationTrustGuard Origin/CSRF typed origin_rejected|csrf_missing|csrf_stale|csrf_mismatch|accepted + typed errors + immutable audit + PostgreSQL read-back + representative keyboard/screen-reader/mobile a11y + validate-plane traces) and owns per-row happy + adversarial real-stack Test-Plan rows with matching DoD test-evidence items (G068). The 16 SCN-083-002-01..16 scenarios map one-to-one to owning slices so scenario-manifest.json count equals scope-defined count (G057/G059 16==16). Remapped scenario-manifest.json scope fields to SCOPE-01..07, rebuilt certification.scopeProgress 4->7 with parityRows and scopeDir, set scopeLayout=per-scope-directory, and pointed artifacts.scopes at scopes/_index.md. Declared the cross-packet BUG-070-001 dependency edge for CSRF/Origin on every cookie-authenticated Card mutation (already present in specDependsOn; now bound per mutation slice). No product source, test, evidence, certification, status transition, spec 079/106 edit, CCManager write, commit, push, or deployment is claimed; status remains in_progress."
+    },
+    {
+      "agent": "bubbles.design",
+      "phasesExecuted": ["bootstrap"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-07-24T19:24:40Z",
+      "runEndedAt": "2026-07-24T19:39:50Z",
+      "summary": "F4 (independent-review LOW, advisory) design-side traceability polish: added the canonical 'MutationTrustGuard (AUTH-011)' citation to design.md prose where Card cookie-authenticated mutations bind to BUG-070-001's guard. The Slice Acceptance Kernel item 2 and the '### CSRF' subsection now name BUG-070-001's MutationTrustGuard (AUTH-011) as the single product-owned same-origin + session-bound anti-CSRF guard this packet consumes (not a parallel guard); CARD_CSRF_INVALID is framed as the Card-surface mapping of a MutationTrustGuard rejection. No substantive design change; the existing specDependsOn edge to BUG-070-001 is unchanged. Guards artifact-lint.sh and traceability-guard.sh re-run before/after with identical verdicts (artifact-lint PASS; traceability held at its pre-existing acceptable report-evidence-residual level of 16 unexecuted-scope report failures, unchanged); no regression. Read-only reference to BUG-070-001 design; BUG-070-001 not edited. No spec, scopes, scenario-manifest, report, uservalidation, source, test, certification, status transition, commit, push, or deployment change is claimed."
+    }
+  ],
+  "activeBugs": [],
+  "resolvedBugs": [],
+  "failures": [],
+  "lastUpdatedAt": "2026-07-24T19:39:50Z",
+  "scopeLayout": "per-scope-directory",
+  "artifacts": {"bug":"bug.md","spec":"spec.md","design":"design.md","scopes":"scopes/_index.md","report":"report.md","uservalidation":"uservalidation.md","scenarioManifest":"scenario-manifest.json"},
+  "statusDiscipline": {"validStatuses":["not_started","in_progress","blocked","specs_hardened","docs_updated","validated","done"],"scopePickupRule":"All dependsOn scopes must be Done. Pick the lowest-numbered eligible scope.","scopeDoneGates":["G020","G021","G022","G023","G024","G025","G055","G056","G057","G058","G059","G060","G061"],"specDoneRequires":"All scopes done and validate-owned certification permits promotion."},
+  "notes": "Reconciled 2026-07-24 to the seven cohesive vertical slices in design.md (revised 05:46Z, not stale). The retired 18-serial-scope layout is superseded. Cross-cutting rows 14/15/16 are folded into every slice's acceptance kernel plus a dedicated cross-area confirmation in Slice 07 (CARD-PROG-001: no row disappears into a catch-all). Every cookie-authenticated Card mutation binds to BUG-070-001 MutationTrustGuard. BUG-083-002 owns all 16 Card parity rows; spec 106 composes the shared shell only and owns no Card row. Major dependency of spec 106 Card surface and BUG-102-001. bubbles.design 2026-07-24 (F4 independent-review, advisory): added the canonical 'MutationTrustGuard (AUTH-011)' citation to design.md (Slice Acceptance Kernel item 2 + '### CSRF' subsection) naming BUG-070-001's guard as the owning same-origin + session-bound anti-CSRF guard Card mutations bind to (no parallel guard); traceability polish only, no substantive design change. CCManager and active specs 104/105/106 remain unchanged."
+}

@@ -1,0 +1,238 @@
+{
+  "version": 1,
+  "featureDir": "specs/002-phase1-foundation/bugs/BUG-002-007-digest-date-scan-false-empty",
+  "generatedAt": "2026-07-24T07:55:00Z",
+  "generatedBy": "bubbles.plan",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-002-007-01",
+      "scope": "SCOPE-02",
+      "title": "Current stored digest round-trips through the canonical reader",
+      "gherkin": {
+        "given": "Disposable PostgreSQL contains a current non-empty approximately 380-word digest in the operator-owned global corpus",
+        "when": "digest.Generator.GetLatest reads the row for an authorized reader",
+        "then": "The exact stored prose, digest date, creation instant, quiet flag, word count, and model metadata return with no empty-state substitution"
+      },
+      "behaviorClass": "data",
+      "changeType": "bugfix",
+      "requiredTestType": "integration",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        { "file": "internal/digest/generator_test.go", "testId": "existing canonical GetLatest typed-read canary to extend" },
+        { "file": "tests/integration/guesthost_digest_test.go", "testId": "existing real digest read integration canary to extend" }
+      ],
+      "plannedTests": [
+        { "plannedFile": "web/pwa/tests/digest_typed_read.spec.ts", "plannedTestId": "current stored digest marker and intended calendar date reach the real authenticated page", "status": "not-yet-authored", "owner": "bubbles.test" }
+      ],
+      "evidenceRefs": []
+    },
+    {
+      "scenarioId": "SCN-002-007-02",
+      "scope": "SCOPE-02",
+      "title": "Date boundary scans and formats correctly",
+      "gherkin": {
+        "given": "PostgreSQL stores digest_date as DATE and created_at as TIMESTAMPTZ at a timezone boundary",
+        "when": "The canonical reader scans the row",
+        "then": "Both values use compatible typed time values and the calendar date remains the intended database date without viewer or host timezone substitution"
+      },
+      "behaviorClass": "data",
+      "changeType": "bugfix",
+      "requiredTestType": "integration",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        { "file": "internal/digest/generator_test.go", "testId": "existing typed DATE/TIMESTAMPTZ scan canary to extend" },
+        { "file": "tests/integration/guesthost_digest_test.go", "testId": "existing real digest read integration canary to preserve" }
+      ],
+      "plannedTests": [
+        { "plannedFile": "tests/integration/digest_typed_read_test.go", "plannedTestId": "TestRealDateRowWasHiddenByStringScanAndNowRoundTripsWithoutFalseEmpty", "status": "not-yet-authored", "owner": "bubbles.test" }
+      ],
+      "evidenceRefs": []
+    },
+    {
+      "scenarioId": "SCN-002-007-03",
+      "scope": "SCOPE-02",
+      "title": "Query or scan failure is explicit",
+      "gherkin": {
+        "given": "The real reader reaches an owned query, scan, decode, or connection fault boundary",
+        "when": "GetLatest completes",
+        "then": "Wrapped pgx.ErrNoRows alone represents absence and every other fault retains a typed error with no digest-derived fallback fields"
+      },
+      "behaviorClass": "ui",
+      "changeType": "bugfix",
+      "requiredTestType": "e2e-ui",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        { "file": "internal/digest/generator_test.go", "testId": "existing reader error-classification canary to extend" },
+        { "file": "tests/e2e/test_digest.sh", "testId": "existing real Digest endpoint canary to extend" }
+      ],
+      "plannedTests": [
+        { "plannedFile": "web/pwa/tests/digest_typed_read.spec.ts", "plannedTestId": "reader failure never renders first-use copy or a substituted current date", "status": "not-yet-authored", "owner": "bubbles.test" }
+      ],
+      "evidenceRefs": []
+    },
+    {
+      "scenarioId": "SCN-002-007-04",
+      "scope": "SCOPE-03",
+      "title": "True first-use empty is honest",
+      "gherkin": {
+        "given": "The authorized canonical reader completes successfully with no digest rows",
+        "when": "The Digest page renders",
+        "then": "The first-use never-generated state shows with no Retry or sample prose and no failure, current, quiet, or stale content"
+      },
+      "behaviorClass": "ui",
+      "changeType": "bugfix",
+      "requiredTestType": "e2e-ui",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        { "file": "internal/web/handler_test.go", "testId": "existing Digest page canary to extend" },
+        { "file": "tests/e2e/test_digest.sh", "testId": "existing real Digest endpoint canary to extend" }
+      ],
+      "plannedTests": [
+        { "plannedFile": "web/pwa/tests/digest_states.spec.ts", "plannedTestId": "real Digest page distinguishes empty quiet stale error session-ended and access-denied without leakage", "status": "not-yet-authored", "owner": "bubbles.test" }
+      ],
+      "evidenceRefs": []
+    },
+    {
+      "scenarioId": "SCN-002-007-05",
+      "scope": "SCOPE-03",
+      "title": "Quiet digest remains a digest",
+      "gherkin": {
+        "given": "The latest successful row is intentionally quiet with valid persisted metadata",
+        "when": "The Digest page renders",
+        "then": "Quiet day plus its persisted date and generation time are visible and no empty or read-error copy is present"
+      },
+      "behaviorClass": "ui",
+      "changeType": "bugfix",
+      "requiredTestType": "e2e-ui",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        { "file": "internal/web/handler_test.go", "testId": "existing Digest projection canary to extend" },
+        { "file": "tests/e2e/test_digest_quiet.sh", "testId": "existing real quiet-digest canary to preserve" }
+      ],
+      "plannedTests": [
+        { "plannedFile": "web/pwa/tests/digest_states.spec.ts", "plannedTestId": "quiet digest renders quiet day and persisted metadata without empty or error copy", "status": "not-yet-authored", "owner": "bubbles.test" }
+      ],
+      "evidenceRefs": []
+    },
+    {
+      "scenarioId": "SCN-002-007-06",
+      "scope": "SCOPE-03",
+      "title": "Stale digest is degraded not empty",
+      "gherkin": {
+        "given": "The latest successful row exceeds the explicit stale-age SST contract",
+        "when": "The Digest page renders",
+        "then": "Stored prose, last-success metadata, and exact age remain visible under Degraded while Current and both empty states are absent"
+      },
+      "behaviorClass": "ui",
+      "changeType": "bugfix",
+      "requiredTestType": "e2e-ui",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        { "file": "internal/web/handler_test.go", "testId": "existing Digest projection canary to extend" },
+        { "file": "tests/e2e/test_digest.sh", "testId": "existing real Digest endpoint canary to extend" }
+      ],
+      "plannedTests": [
+        { "plannedFile": "web/pwa/tests/digest_states.spec.ts", "plannedTestId": "stale digest shows Degraded age and stored prose and never Current or empty", "status": "not-yet-authored", "owner": "bubbles.test" }
+      ],
+      "evidenceRefs": []
+    },
+    {
+      "scenarioId": "SCN-002-007-07",
+      "scope": "SCOPE-03",
+      "title": "Unauthorized read leaks nothing",
+      "gherkin": {
+        "given": "The session is missing, expired, or the authenticated identity lacks the explicit Digest read grant",
+        "when": "Digest is requested",
+        "then": "The router presents re-authentication or access denial and the response and accessibility tree contain no digest prose, date, source title, count, or existence signal"
+      },
+      "behaviorClass": "security",
+      "changeType": "bugfix",
+      "requiredTestType": "e2e-ui",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        { "file": "internal/web/handler_test.go", "testId": "existing Digest auth-projection canary to extend" },
+        { "file": "tests/e2e/test_web_ui.sh", "testId": "existing server-rendered auth canary to preserve" }
+      ],
+      "plannedTests": [
+        { "plannedFile": "web/pwa/tests/digest_states.spec.ts", "plannedTestId": "unauthorized or ungranted Digest read removes all protected nodes from DOM and accessibility tree", "status": "not-yet-authored", "owner": "bubbles.test" }
+      ],
+      "evidenceRefs": []
+    },
+    {
+      "scenarioId": "SCN-002-007-08",
+      "scope": "SCOPE-04",
+      "title": "Digest states are accessible and responsive",
+      "gherkin": {
+        "given": "A real authenticated keyboard or screen-reader user at 320 CSS pixels, 200 percent zoom, and reduced motion",
+        "when": "Any real-reader Digest state renders",
+        "then": "Headings, semantic dates, prose, source links, status, and retry remain perceivable and operable without overlap, and protected nodes are removed on unauthorized outcomes"
+      },
+      "behaviorClass": "ui",
+      "changeType": "bugfix",
+      "requiredTestType": "e2e-ui",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        { "file": "internal/web/handler_test.go", "testId": "existing Digest markup canary to extend" },
+        { "file": "web/pwa/tests/unified_journey.spec.ts", "testId": "existing authenticated browser journey canary to preserve" }
+      ],
+      "plannedTests": [
+        { "plannedFile": "web/pwa/tests/digest_typed_read.spec.ts", "plannedTestId": "real Digest states expose exact typed dates truthful content privacy and accessible recovery", "status": "not-yet-authored", "owner": "bubbles.test" },
+        { "plannedFile": "web/pwa/tests/digest_states.spec.ts", "plannedTestId": "all real Digest states remain mutually exclusive announced and non-overlapping", "status": "not-yet-authored", "owner": "bubbles.test" }
+      ],
+      "evidenceRefs": []
+    },
+    {
+      "scenarioId": "SCN-002-007-09",
+      "scope": "SCOPE-01",
+      "title": "Stale digest has an explicit age contract",
+      "gherkin": {
+        "given": "Digest has a configured generation cadence and no hidden stale threshold",
+        "when": "The freshness contract is ratified",
+        "then": "One required positive SST value defines stale age for every reader and renderer and missing or invalid freshness configuration fails startup rather than defaulting"
+      },
+      "behaviorClass": "data",
+      "changeType": "bugfix",
+      "requiredTestType": "integration",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        { "file": "internal/config/validate_test.go", "testId": "existing config validation canary to extend for the required freshness key" }
+      ],
+      "plannedTests": [
+        { "plannedFile": "internal/config/validate_test.go", "plannedTestId": "TestDigestStaleAfterHoursIsRequiredPositiveAndHasNoFallback", "status": "not-yet-authored", "owner": "bubbles.test" }
+      ],
+      "evidenceRefs": []
+    },
+    {
+      "scenarioId": "SCN-002-007-10",
+      "scope": "SCOPE-01",
+      "title": "Digest reads follow the ratified global-corpus grant contract",
+      "gherkin": {
+        "given": "Active storage contains one operator-owned global latest digest and no auth_user_id column",
+        "when": "The ratified authorization model is applied",
+        "then": "Requirements, design, storage, generation, reads, and tests name one operator-owned global corpus gated by digest:read and digest:generate grants, and no scope certifies tenant or per-user row isolation because the digests table has no ownership column"
+      },
+      "behaviorClass": "security",
+      "changeType": "bugfix",
+      "requiredTestType": "unit",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        { "file": "internal/digest/generator_test.go", "testId": "existing global-corpus canonical-read canary to preserve" },
+        { "file": "internal/web/handler_test.go", "testId": "existing Digest page authorization canary to extend" }
+      ],
+      "plannedTests": [
+        { "plannedFile": "internal/web/digest_authorization_test.go", "plannedTestId": "TestDigestAuthorizationUnitMatchesRatifiedGlobalCorpusGrantContract", "status": "not-yet-authored", "owner": "bubbles.test" }
+      ],
+      "evidenceRefs": []
+    }
+  ]
+}

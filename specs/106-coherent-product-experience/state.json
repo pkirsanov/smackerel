@@ -1,0 +1,337 @@
+{
+  "version": 3,
+  "featureDir": "specs/106-coherent-product-experience",
+  "featureNumber": "106",
+  "featureName": "Coherent Product Experience",
+  "status": "in_progress",
+  "workflowMode": "full-delivery",
+  "releaseTrain": "mvp",
+  "flagsIntroduced": [],
+  "linkedImplementationSpec": null,
+  "linkedPlanningPacket": null,
+  "planningOnly": false,
+  "planningOnlyJustification": null,
+  "amends": [
+    "specs/092-card-rewards-ui-elevation",
+    "specs/100-unified-journey-ui-transformation"
+  ],
+  "amendsScope": "Presentation, navigation, theme, shared visible-state language, cross-product composition, and CSRF posture where spec 106 conflicts. Preserves predecessor domain/data hooks, routes unless consumer-traced, CSP, auth/privacy invariants, and certified business behavior.",
+  "predecessorContractDisposition": [
+    {
+      "target": "specs/092-card-rewards-ui-elevation",
+      "statusObserved": "done",
+      "superseded": ["Cards-only presentation boundary", "prefers-color-scheme-only theme limitation", "Cards-local navigation where it conflicts with shared shell"],
+      "preserved": ["Card domain hooks", "information density", "CSP", "responsive/accessibility baseline"],
+      "directMutation": false
+    },
+    {
+      "target": "specs/100-unified-journey-ui-transformation",
+      "statusObserved": "done",
+      "superseded": ["navigation-only scope", "fixed inventory where readiness-driven catalog differs", "renderer-specific presentation", "SameSite-only CSRF justification"],
+      "preserved": ["route compatibility", "shared-shell foundation", "CSP", "cookie privacy", "durable capture behavior"],
+      "directMutation": false
+    }
+  ],
+  "recertificationRouting": {
+    "owner": "bubbles.validate",
+    "trigger": "spec 106 successor behavior and owner-packet evidence complete",
+    "requiredRecord": "bounded partial supersession of certified specs 092 and 100",
+    "predecessorFilesRemainSealed": true
+  },
+  "evidenceLifecycleRole": {
+    "role": "presentation_consumer",
+    "acceptanceProducer": "specs/102-target-deploy-hardening/bugs/BUG-102-001-product-journey-acceptance-gap",
+    "readinessConsumerProducer": "specs/032-documentation-freshness/bugs/BUG-004-production-readiness-claims-runtime-drift",
+    "producesAcceptanceEvidence": false,
+    "flow": "BUG-102 immutable acceptance evidence -> BUG-032 derived readiness snapshot -> spec 106 presentation"
+  },
+  "domainOwnership": {
+    "cardsParityOwner": "specs/083-card-rewards-companion/bugs/BUG-083-002-ccmanager-parity-runtime-drift",
+    "cardsRoleHere": "shared shell/theme/state composition only",
+    "workDomains": ["existing Lists API", "existing Meal/Recipe APIs", "existing Expenses API"],
+    "workRoleHere": "real browser routes and user journeys",
+    "workRouteOwnership": {
+      "owner": "spec 106 — SCOPE-106-09 owns leaf composition; SCOPE-106-02/05 own catalog registration and navigation cutover",
+      "workGroup": "route-free navigation group with null parent href; spec 106 owns its composition, label, and readiness-driven visibility as part of the shared shell (grounded in spec.md UI Scenario Matrix 'Work / Lists|Meals|Expenses', UC-106-010, and design.md Honest Integration Constraints)",
+      "leaves": "spec 106 owns the Lists, Meals/Recipes, and Expenses browser routes and user journeys composed over the existing owner domain APIs; those APIs and their owners are unchanged and are never reimplemented here",
+      "supersessionOf100": "The Work grouping is a readiness-driven navigation-catalog decision covered by the declared partial-supersession of spec 100's fixed assistant-first inventory (predecessorContractDisposition[100].superseded). Spec 100's sealed artifacts are not edited.",
+      "noConflictWith092": "Cards (spec 092 domain) is a separate top-level surface (SCOPE-106-10), not a Work leaf; there is no Work/Cards ownership conflict.",
+      "mutationTrust": "Every shell-reached Work mutation binds to BUG-070-001 MutationTrustGuard (server-validated session-bound anti-CSRF/Origin 403-before-mutation proof); spec 106 consumes that enforcement and does not implement it."
+    }
+  },
+  "corpusOwnershipModel": {"mode":"single-operator-owned-global-corpus","identityModel":"multiple authenticated identities with explicit roles/grants","tenantRowIsolationClaimed":false,"privateDefault":"operator-only"},
+  "dependencyEvidencePolicy": {"spec104ObservedStatus":"blocked","eligibleEvidence":["completed scopes only","scope-08 bounded Assistant evidence"],"forbiddenClaim":"spec 104 done"},
+  "requirementsRecovery": {
+    "reviewId": "2026-07-24-independent-planning-review",
+    "status": "analyst_reconciled",
+    "addressedFindings": ["SR-003", "SR-006", "SR-007", "SR-009", "GRILL-02", "GRILL-03", "GRILL-04", "GRILL-05", "GRILL-06", "GRILL-11", "GRILL-12", "SR-012"],
+    "activeRequirementsRef": "spec.md",
+    "certificationClaimed": false
+  },
+  "specDependsOn": [
+    "specs/100-unified-journey-ui-transformation",
+    "specs/077-pwa-browser-test-harness",
+    "specs/104-universal-ask-self-knowledge",
+    "specs/002-phase1-foundation/bugs/BUG-002-006-search-htmx-sri-blocks-submit",
+    "specs/002-phase1-foundation/bugs/BUG-002-007-digest-date-scan-false-empty",
+    "specs/004-phase3-intelligence/bugs/BUG-004-004-synthesis-persistence-and-health-truth",
+    "specs/032-documentation-freshness/bugs/BUG-004-production-readiness-claims-runtime-drift",
+    "specs/039-recommendations-engine/bugs/BUG-039-005-enabled-with-zero-providers-false-ready",
+    "specs/070-web-username-password-login/bugs/BUG-070-001-production-credential-session-paseto-split",
+    "specs/073-web-mobile-assistant-frontend/bugs/BUG-073-006-auth-rejection-blank-assistant-response",
+    "specs/080-knowledge-graph-public-api/bugs/BUG-080-001-graph-api-fail-soft-runtime-disable",
+    "specs/083-card-rewards-companion/bugs/BUG-083-002-ccmanager-parity-runtime-drift",
+    "specs/102-target-deploy-hardening/bugs/BUG-102-001-product-journey-acceptance-gap",
+    "specs/105-connected-knowledge-graph-explorer"
+  ],
+  "planningProvenance": {
+    "owner": "bubbles.plan",
+    "generatedAt": "2026-07-24T00:52:17Z",
+    "inputs": [
+      "spec.md",
+      "design.md",
+      "state.json",
+      "specs/105-connected-knowledge-graph-explorer/design.md",
+      "specs/105-connected-knowledge-graph-explorer/scopes/_index.md",
+      "specs/002-phase1-foundation/bugs/BUG-002-006-search-htmx-sri-blocks-submit/design.md",
+      "specs/002-phase1-foundation/bugs/BUG-002-006-search-htmx-sri-blocks-submit/scopes.md",
+      "specs/002-phase1-foundation/bugs/BUG-002-007-digest-date-scan-false-empty/design.md",
+      "specs/002-phase1-foundation/bugs/BUG-002-007-digest-date-scan-false-empty/scopes.md",
+      "specs/004-phase3-intelligence/bugs/BUG-004-004-synthesis-persistence-and-health-truth/design.md",
+      "specs/004-phase3-intelligence/bugs/BUG-004-004-synthesis-persistence-and-health-truth/scopes.md",
+      "specs/032-documentation-freshness/bugs/BUG-004-production-readiness-claims-runtime-drift/design.md",
+      "specs/032-documentation-freshness/bugs/BUG-004-production-readiness-claims-runtime-drift/scopes.md",
+      "specs/039-recommendations-engine/bugs/BUG-039-005-enabled-with-zero-providers-false-ready/design.md",
+      "specs/039-recommendations-engine/bugs/BUG-039-005-enabled-with-zero-providers-false-ready/scopes/_index.md",
+      "specs/070-web-username-password-login/bugs/BUG-070-001-production-credential-session-paseto-split/design.md",
+      "specs/070-web-username-password-login/bugs/BUG-070-001-production-credential-session-paseto-split/scopes.md",
+      "specs/073-web-mobile-assistant-frontend/bugs/BUG-073-006-auth-rejection-blank-assistant-response/design.md",
+      "specs/073-web-mobile-assistant-frontend/bugs/BUG-073-006-auth-rejection-blank-assistant-response/scopes.md",
+      "specs/080-knowledge-graph-public-api/bugs/BUG-080-001-graph-api-fail-soft-runtime-disable/design.md",
+      "specs/080-knowledge-graph-public-api/bugs/BUG-080-001-graph-api-fail-soft-runtime-disable/scopes.md",
+      "specs/083-card-rewards-companion/bugs/BUG-083-002-ccmanager-parity-runtime-drift/design.md",
+      "specs/083-card-rewards-companion/bugs/BUG-083-002-ccmanager-parity-runtime-drift/scopes/_index.md",
+      "specs/102-target-deploy-hardening/bugs/BUG-102-001-product-journey-acceptance-gap/design.md",
+      "specs/102-target-deploy-hardening/bugs/BUG-102-001-product-journey-acceptance-gap/scopes.md"
+    ],
+    "dependencyStatusObserved": {
+      "BUG-002-006": "in_progress",
+      "BUG-002-007": "in_progress",
+      "BUG-004-004": "in_progress",
+      "BUG-032-004": "in_progress",
+      "BUG-039-005": "in_progress",
+      "BUG-070-001": "in_progress",
+      "BUG-073-006": "in_progress",
+      "BUG-080-001": "in_progress",
+      "BUG-083-002": "in_progress",
+      "BUG-102-001": "in_progress",
+      "spec-105": "not_started"
+    },
+    "scenarioAuthority": "The analyst-owned spec.md User Scenarios define SCN-106-001 through SCN-106-022. Design-local technical text that reused those identifiers is implementation detail and does not redefine analyst behavior. SCN-106-016..022 (added by the 2026-07-24T05:46 spec revision) were mapped to existing scopes and already-planned tests in scenario-manifest.json during the 2026-07-24 planning reconciliation; no new test file was invented and no Test Plan row or DoD item was added.",
+    "counts": {
+      "scopeCount": 16,
+      "specScenarioCount": 22,
+      "uxE2eCount": 72,
+      "testPlanRowCount": 144,
+      "dodTestItemCount": 144,
+      "stressRows": 1,
+      "loadRows": 1,
+      "specScenarioCountNote": "specScenarioCount raised 15->22 on 2026-07-24 to match the 05:46 spec revision. SCN-106-016..022 are covered via scenario-manifest.json mappings to existing scopes + already-planned tests; testPlanRowCount and dodTestItemCount stay 144 because no Test Plan row or DoD item was added."
+    },
+    "validation": {
+      "artifactLintExit": 0,
+      "traceabilityGuardExit": 0,
+      "validatedAt": "2026-07-24T18:04:48Z",
+      "validatedBy": "bubbles.plan",
+      "note": "First guard validation for this packet. Both guards PASSED at baseline and again after the 2026-07-24 reconciliation. G068 DoD-fidelity clean; scope-local traceability 29 scenarios all mapped to Test Plan rows + DoD items."
+    },
+    "claims": "Planning artifacts only. No source, authored test, test pass, runtime, browser, NFR measurement, owner dependency completion, readiness ingestion, deployment, certification, commit, or push is claimed."
+  },
+  "scopeDag": {
+    "layout": "per-scope-directory",
+    "nodes": [
+      "SCOPE-106-01", "SCOPE-106-02", "SCOPE-106-03", "SCOPE-106-04",
+      "SCOPE-106-05", "SCOPE-106-06", "SCOPE-106-07", "SCOPE-106-08",
+      "SCOPE-106-09", "SCOPE-106-10", "SCOPE-106-11", "SCOPE-106-12",
+      "SCOPE-106-13", "SCOPE-106-14", "SCOPE-106-15", "SCOPE-106-16"
+    ],
+    "edges": [
+      {"from":"SCOPE-106-01","to":"SCOPE-106-02"},
+      {"from":"SCOPE-106-01","to":"SCOPE-106-03"},
+      {"from":"SCOPE-106-02","to":"SCOPE-106-03"},
+      {"from":"SCOPE-106-01","to":"SCOPE-106-04"},
+      {"from":"SCOPE-106-02","to":"SCOPE-106-04"},
+      {"from":"SCOPE-106-03","to":"SCOPE-106-04"},
+      {"from":"SCOPE-106-04","to":"SCOPE-106-05"},
+      {"from":"SCOPE-106-05","to":"SCOPE-106-06"},
+      {"from":"SCOPE-106-05","to":"SCOPE-106-07"},
+      {"from":"SCOPE-106-05","to":"SCOPE-106-08"},
+      {"from":"SCOPE-106-05","to":"SCOPE-106-09"},
+      {"from":"SCOPE-106-05","to":"SCOPE-106-10"},
+      {"from":"SCOPE-106-05","to":"SCOPE-106-11"},
+      {"from":"SCOPE-106-05","to":"SCOPE-106-12"},
+      {"from":"SCOPE-106-06","to":"SCOPE-106-13"},
+      {"from":"SCOPE-106-07","to":"SCOPE-106-13"},
+      {"from":"SCOPE-106-08","to":"SCOPE-106-13"},
+      {"from":"SCOPE-106-09","to":"SCOPE-106-13"},
+      {"from":"SCOPE-106-10","to":"SCOPE-106-13"},
+      {"from":"SCOPE-106-11","to":"SCOPE-106-13"},
+      {"from":"SCOPE-106-12","to":"SCOPE-106-13"},
+      {"from":"SCOPE-106-13","to":"SCOPE-106-14"},
+      {"from":"SCOPE-106-14","to":"SCOPE-106-15"},
+      {"from":"SCOPE-106-15","to":"SCOPE-106-16"}
+    ],
+    "externalOrdering": [
+      "BUG-070-001 precedes every API-backed PWA acceptance row",
+      "BUG-002-006, BUG-002-007, and BUG-004-004 precede Search/Today/synthesis composition",
+      "BUG-073-006 and spec 104 Scope 8 precede Assistant integration",
+      "BUG-080-001 precedes spec 105, and spec 105 precedes Graph shell integration",
+      "BUG-083-002 precedes Cards shell integration",
+      "BUG-039-005 precedes Recommendation actions",
+      "SCOPE-106-14 real journey evidence precedes BUG-032 and BUG-102 projection consumption",
+      "BUG-102 SCOPE-05 precedes BUG-032 SCOPE-05 journey bridge consumption and SCOPE-106-16 handoff"
+    ]
+  },
+  "certifiedAt": null,
+  "requiresRevalidation": false,
+  "execution": {
+    "activeAgent": "bubbles.design",
+    "currentPhase": "bootstrap",
+    "currentScope": null,
+    "runStartedAt": "2026-07-24T19:24:40Z",
+    "completedPhaseClaims": [
+      {
+        "phase": "analyze",
+        "agent": "bubbles.analyst",
+        "completedAt": "2026-07-23T08:16:08Z",
+        "evidenceRef": "spec.md",
+        "summary": "Authored grounded cross-product experience requirements for shared navigation, themes, availability truth, complete primary workflows, visible action feedback, honest states, responsive/accessibility behavior, security/privacy, observability, backward compatibility, real-stack Playwright, and mvp release-train alignment."
+      }
+    ],
+    "pendingTransitionRequests": [],
+    "audit": {
+      "schemaVersion": "audit-run/v1",
+      "runId": null,
+      "currentAttemptId": null,
+      "attempts": []
+    }
+  },
+  "certification": {
+    "status": "in_progress",
+    "completedScopes": [],
+    "certifiedCompletedPhases": [],
+    "scopeProgress": [
+      {"scope":1,"scopeId":"SCOPE-106-01","name":"Source-Locked Visual Assets And Appearance Foundation","status":"not_started","dependsOn":[],"externalDependsOn":[],"scopeDir":"scopes/01-source-locked-visual-foundation","evidenceFile":"scopes/01-source-locked-visual-foundation/report.md","certifiedAt":null},
+      {"scope":2,"scopeId":"SCOPE-106-02","name":"Canonical Catalog And Exact Route Inventory","status":"not_started","dependsOn":["SCOPE-106-01"],"externalDependsOn":[],"scopeDir":"scopes/02-canonical-catalog-route-inventory","evidenceFile":"scopes/02-canonical-catalog-route-inventory/report.md","certifiedAt":null},
+      {"scope":3,"scopeId":"SCOPE-106-03","name":"Truthful State And Feedback Foundation","status":"not_started","dependsOn":["SCOPE-106-01","SCOPE-106-02"],"externalDependsOn":[],"scopeDir":"scopes/03-truthful-state-feedback-foundation","evidenceFile":"scopes/03-truthful-state-feedback-foundation/report.md","certifiedAt":null},
+      {"scope":4,"scopeId":"SCOPE-106-04","name":"Shared Shell Shadow Adapters And Canaries","status":"not_started","dependsOn":["SCOPE-106-01","SCOPE-106-02","SCOPE-106-03"],"externalDependsOn":["BUG-070-001"],"scopeDir":"scopes/04-shared-shell-shadow-canaries","evidenceFile":"scopes/04-shared-shell-shadow-canaries/report.md","certifiedAt":null},
+      {"scope":5,"scopeId":"SCOPE-106-05","name":"Shared Shell Cutover And Compatibility","status":"not_started","dependsOn":["SCOPE-106-04"],"externalDependsOn":["BUG-070-001"],"scopeDir":"scopes/05-shared-shell-cutover-compatibility","evidenceFile":"scopes/05-shared-shell-cutover-compatibility/report.md","certifiedAt":null},
+      {"scope":6,"scopeId":"SCOPE-106-06","name":"Search Today Digest And Synthesis Composition","status":"not_started","dependsOn":["SCOPE-106-05"],"externalDependsOn":["BUG-002-006","BUG-002-007","BUG-004-004"],"scopeDir":"scopes/06-search-today-digest-synthesis","evidenceFile":"scopes/06-search-today-digest-synthesis/report.md","certifiedAt":null},
+      {"scope":7,"scopeId":"SCOPE-106-07","name":"Assistant And Capture Composition","status":"not_started","dependsOn":["SCOPE-106-05"],"externalDependsOn":["BUG-070-001","BUG-073-006","spec-104-scope-08"],"scopeDir":"scopes/07-assistant-capture-composition","evidenceFile":"scopes/07-assistant-capture-composition/report.md","certifiedAt":null},
+      {"scope":8,"scopeId":"SCOPE-106-08","name":"Knowledge And Graph Shell Integration","status":"not_started","dependsOn":["SCOPE-106-05"],"externalDependsOn":["BUG-080-001","spec-105"],"scopeDir":"scopes/08-knowledge-graph-shell-integration","evidenceFile":"scopes/08-knowledge-graph-shell-integration/report.md","certifiedAt":null},
+      {"scope":9,"scopeId":"SCOPE-106-09","name":"Lists Meals And Expenses Route Composition","status":"not_started","dependsOn":["SCOPE-106-05"],"externalDependsOn":["exact-route-api-owner-inventory"],"scopeDir":"scopes/09-work-route-composition","evidenceFile":"scopes/09-work-route-composition/report.md","certifiedAt":null},
+      {"scope":10,"scopeId":"SCOPE-106-10","name":"Cards Shell Integration","status":"not_started","dependsOn":["SCOPE-106-05"],"externalDependsOn":["BUG-083-002-scopes-01-18"],"scopeDir":"scopes/10-cards-shell-integration","evidenceFile":"scopes/10-cards-shell-integration/report.md","certifiedAt":null},
+      {"scope":11,"scopeId":"SCOPE-106-11","name":"Recommendations Projection","status":"not_started","dependsOn":["SCOPE-106-05"],"externalDependsOn":["BUG-039-005-scopes-01-08"],"scopeDir":"scopes/11-recommendations-projection","evidenceFile":"scopes/11-recommendations-projection/report.md","certifiedAt":null},
+      {"scope":12,"scopeId":"SCOPE-106-12","name":"Sources Photos Drive Models Activity And Admin Projections","status":"not_started","dependsOn":["SCOPE-106-05"],"externalDependsOn":["exact-owner-route-and-journey-inventory"],"scopeDir":"scopes/12-sources-activity-admin-projections","evidenceFile":"scopes/12-sources-activity-admin-projections/report.md","certifiedAt":null},
+      {"scope":13,"scopeId":"SCOPE-106-13","name":"Cross-Surface Responsive And Accessibility Hardening","status":"not_started","dependsOn":["SCOPE-106-06","SCOPE-106-07","SCOPE-106-08","SCOPE-106-09","SCOPE-106-10","SCOPE-106-11","SCOPE-106-12"],"externalDependsOn":[],"scopeDir":"scopes/13-responsive-accessibility-hardening","evidenceFile":"scopes/13-responsive-accessibility-hardening/report.md","certifiedAt":null},
+      {"scope":14,"scopeId":"SCOPE-106-14","name":"Disposable-Stack Product Journeys And NFR Proof","status":"not_started","dependsOn":["SCOPE-106-13"],"externalDependsOn":["all-applicable-owner-packets-current"],"scopeDir":"scopes/14-disposable-product-journeys-nfr","evidenceFile":"scopes/14-disposable-product-journeys-nfr/report.md","certifiedAt":null},
+      {"scope":15,"scopeId":"SCOPE-106-15","name":"Readiness And Acceptance Projection Integration","status":"not_started","dependsOn":["SCOPE-106-14"],"externalDependsOn":["BUG-032-004-SCOPE-04","BUG-102-001-SCOPE-04"],"scopeDir":"scopes/15-readiness-acceptance-projection","evidenceFile":"scopes/15-readiness-acceptance-projection/report.md","certifiedAt":null},
+      {"scope":16,"scopeId":"SCOPE-106-16","name":"Final Cross-Product Acceptance Handoff","status":"not_started","dependsOn":["SCOPE-106-15"],"externalDependsOn":["BUG-102-001-SCOPE-05","BUG-032-004-SCOPE-05"],"scopeDir":"scopes/16-final-acceptance-handoff","evidenceFile":"scopes/16-final-acceptance-handoff/report.md","certifiedAt":null}
+    ],
+    "lockdownState": {
+      "active": false,
+      "lockedScenarioIds": []
+    }
+  },
+  "policySnapshot": {
+    "grill": {"mode": "off", "source": "repo-default"},
+    "tdd": {"mode": "scenario-first", "source": "repo-default"},
+    "autoCommit": {"mode": "off", "source": "repo-default"},
+    "lockdown": {"mode": "off", "source": "repo-default"},
+    "regression": {"mode": "protected-scenarios", "source": "repo-default"},
+    "validation": {"mode": "certification-required", "source": "repo-default"}
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "executionHistory": [
+    {
+      "agent": "bubbles.analyst",
+      "phasesExecuted": ["analyze"],
+      "statusBefore": "not_started",
+      "statusAfter": "not_started",
+      "runStartedAt": "2026-07-23T08:13:15Z",
+      "runEndedAt": "2026-07-23T08:16:08Z",
+      "summary": "Created analyst-owned spec.md and state.json only. Existing runtime defects remain routed to bubbles.bug; no design, UX, scopes, report, user validation, source, tests, certification, commit, push, or deployment work was performed."
+    },
+    {
+      "agent": "bubbles.ux",
+      "phasesExecuted": ["analyze"],
+      "statusBefore": "not_started",
+      "statusAfter": "not_started",
+      "runStartedAt": "2026-07-23T09:12:48Z",
+      "runEndedAt": "2026-07-23T09:13:11Z",
+      "summary": "Authored UX-owned product IA, responsive shell, shared token/theme/state system, desktop/tablet/mobile wireframes, first-run and returning-use journeys, 16-row Card Management parity placement, accessibility contracts, exact failure behavior, routed design questions, and a stable real-stack Playwright scenario matrix. No design, scope, source, test, certification, commit, push, or deployment work was performed."
+    },
+    {
+      "agent": "bubbles.design",
+      "phasesExecuted": ["bootstrap"],
+      "statusBefore": "not_started",
+      "statusAfter": "not_started",
+      "runStartedAt": "2026-07-23T23:10:48Z",
+      "runEndedAt": "2026-07-23T23:28:11Z",
+      "summary": "Created the contract-grade integration design for one readiness-driven product shell, source-locked theme/token/assets, coherent state and mutation presentation, unified-session consumption, packet-owned Search/Digest/Assistant/Graph/Recommendations/Cards/deployment composition, route compatibility, accessibility/responsive behavior, and real-stack Playwright architecture. All ten repair packets and spec 105 remain sole owners of their domain contracts. No spec, scope, report, user validation, scenario manifest, source, test, certification, status, commit, push, build, deployment, or CCManager change is claimed."
+    },
+    {
+      "agent": "bubbles.analyst",
+      "phasesExecuted": ["analyze"],
+      "statusBefore": "not_started",
+      "statusAfter": "not_started",
+      "runStartedAt": "2026-07-24T02:35:39Z",
+      "runEndedAt": "2026-07-24T02:38:31Z",
+      "summary": "Reconciled the independent-review findings in analyst-owned requirements. Spec 106 partially supersedes certified 092/100 presentation/navigation/theme/CSRF decisions without editing them; adds one-login role matrices, global-corpus grants, CSRF/Origin, real Lists/Meals/Expenses browser journeys, BUG-083 domain ownership, BUG-102->BUG-032->106 evidence flow, off-traffic migration safety, test-only fault profiles, Search no-domain-work semantics, and accurate blocked spec-104 consumption. Preserved SCN-106-001..015 and added 016..022. No source, tests, design, scopes, report, user validation, certification, commit, push, or deployment work is claimed."
+    },
+    {
+      "agent": "bubbles.plan",
+      "phasesExecuted": ["harden"],
+      "statusBefore": "not_started",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-07-24T18:04:48Z",
+      "runEndedAt": "2026-07-24T18:04:48Z",
+      "summary": "Planning reconciliation (spec-scope-hardening harden phase) against the 2026-07-24T05:46 spec revision. Found artifact drift: spec.md/state.json at 05:46 defined 22 analyst scenarios (SCN-106-001..022) + 38 FRs + 11 NFRs, while scenario-manifest.json, scopes/_index.md, report.md, and planningProvenance counts were stuck at the 01:27 generation (15 scenarios). Reconciled: added SCN-106-016..022 to scenario-manifest.json mapped to existing scopes + already-planned tests (016->SCOPE-04 cross-family mutation canary; 017/018/019->SCOPE-09 Lists/Meals/Expenses UX-E2E-037/038/039; 020->SCOPE-15 UX-E2E-071 Admin Acceptance; 021->SCOPE-06 UX-E2E-027 blank-search; 022->SCOPE-12 UX-E2E-052 grant projection); raised specScenarioCount 15->22 and updated scenarioAuthority text in state.json + _index.md + report.md; resolved the named 'Work-route ownership' finding (106 owns the route-free Work navigation group plus the Lists/Meals/Expenses browser routes over existing owner domain APIs; the Work grouping is covered by the declared partial-supersession of spec 100's fixed inventory, NOT by editing 100; Cards/092 stays a separate surface); bound shell-reached Work mutations to BUG-070-001 MutationTrustGuard; recorded the BUG-102-001->BUG-032-004->106 one-way readiness/acceptance edge. Ran artifact-lint (exit 0) and traceability-guard (exit 0) for the first time on this packet and recorded them in report.md; no Test Plan row or DoD item count changed (144==144, G068 fidelity preserved). Residuals routed: design.md staleness (predates 05:46; does not name SCN-016..022 or the MutationTrustGuard term) -> bubbles.design; no design.md edit made. No source, authored test, test pass, runtime, browser, NFR measurement, certification, commit, or push is claimed; status set to in_progress (non-terminal) per the harden mandate."
+    },
+    {
+      "agent": "bubbles.design",
+      "phasesExecuted": ["bootstrap"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-07-24T19:24:40Z",
+      "runEndedAt": "2026-07-24T19:39:50Z",
+      "summary": "F4 (independent-review LOW, advisory) design-side traceability polish: added the canonical 'MutationTrustGuard (AUTH-011)' citation to design.md prose. The Security And Privacy invariant describing how cookie-authenticated mutations keep their owning guard now names BUG-070-001's MutationTrustGuard (AUTH-011) as the owning same-origin + session-bound anti-CSRF guard each domain (for example BUG-083-002 Cards) binds to; the shell composes it and does not implement a parallel guard. This partially addresses the previously-routed design residual that design.md 'does not name the MutationTrustGuard term'. No substantive design change; scenarios, FRs, scopes, and Test Plan/DoD counts are unchanged. Guards artifact-lint.sh and traceability-guard.sh re-run before/after with identical PASS verdicts (exit 0); no regression. Read-only reference to BUG-070-001 design; BUG-070-001 not edited. No spec, scopes, scenario-manifest, test-plan, report, uservalidation, source, test, certification, status transition, commit, push, or deployment change is claimed."
+    }
+  ],
+  "activeBugs": [],
+  "resolvedBugs": [],
+  "failures": [],
+  "lastUpdatedAt": "2026-07-24T19:39:50Z",
+  "scopeLayout": "per-scope-directory",
+  "artifacts": {
+    "spec": "spec.md",
+    "design": "design.md",
+    "scopes": "scopes/_index.md",
+    "report": "report.md",
+    "uservalidation": "uservalidation.md",
+    "scenarioManifest": "scenario-manifest.json",
+    "testPlan": "test-plan.json",
+    "lockdownApprovals": "lockdown-approvals.json",
+    "invalidationLedger": "invalidation-ledger.json",
+    "transitionRequests": "transition-requests.json",
+    "reworkQueue": "rework-queue.json"
+  },
+  "statusDiscipline": {
+    "validStatuses": ["not_started", "in_progress", "blocked", "specs_hardened", "docs_updated", "validated", "done"],
+    "scopePickupRule": "All dependsOn scopes must be Done. Pick the lowest-numbered eligible scope.",
+    "scopeDoneGates": ["G020", "G021", "G022", "G023", "G024", "G025", "G055", "G056", "G057", "G058", "G059", "G060", "G061"],
+    "specDoneRequires": "All scopes done. certification.completedScopes contains all scope IDs and bubbles.validate has certified promotion."
+  },
+  "notes": "Planning packet is in_progress under a 2026-07-24 harden reconciliation. Sixteen bounded scopes, 22 analyst scenarios (SCN-106-001..022), 72 UX-E2E contracts, 144 Test Plan rows, and 144 matching unchecked DoD test items are planned. SCN-106-016..022 are covered via scenario-manifest.json mappings to existing scopes + already-planned tests (no new Test Plan row or DoD item). All ten bug packets remain in_progress and spec 105 remains not_started. design.md predates the 05:46 spec revision; bubbles.design 2026-07-24 (F4 independent-review, advisory) added the canonical 'MutationTrustGuard (AUTH-011)' citation to the design Security And Privacy invariant (naming BUG-070-001's owning CSRF/Origin guard each domain binds to), partially addressing the previously-routed 'does not name MutationTrustGuard' residual; the broader SCN-016..022 design-refresh remains routed to bubbles.design. No source, authored test, test pass, runtime, browser, NFR measurement, readiness ingestion, deployment, certification, commit, or push is claimed."
+}
