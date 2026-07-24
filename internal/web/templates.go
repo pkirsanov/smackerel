@@ -370,8 +370,29 @@ const allTemplates = `
 
 {{define "digest.html"}}
 {{template "head" .}}
-<h1>Daily Digest - {{.DigestDate}}</h1>
-<div class="card"><div class="digest-text">{{.DigestText}}</div></div>
+<div id="digest-outcome" data-digest-state="{{.State}}">
+{{if eq .State "current"}}
+<h1>Daily Digest - {{.Date}}</h1>
+<p class="meta">Generated {{.GeneratedAtUTC}} · {{.WordCount}} words</p>
+<div class="card"><div class="digest-text">{{.Text}}</div></div>
+{{else if eq .State "quiet"}}
+<h1>Daily Digest - {{.Date}}</h1>
+<div class="card"><p class="meta">Quiet day — no significant activity was captured.</p><div class="digest-text">{{.Text}}</div><p class="meta">Generated {{.GeneratedAtUTC}}</p></div>
+{{else if eq .State "stale"}}
+<h1>Daily Digest - {{.Date}} <span class="type-badge">Degraded</span></h1>
+<p class="meta">Showing the last successful digest, {{.AgeDays}} day(s) old.</p>
+<div class="card"><div class="digest-text">{{.Text}}</div><p class="meta">Generated {{.GeneratedAtUTC}}</p></div>
+{{else if eq .State "first_use_empty"}}
+<h1>Daily Digest</h1>
+<div class="empty">No digest generated yet. Your first daily digest will appear here once sources have been captured.</div>
+{{else if eq .State "selected_date_empty"}}
+<h1>Daily Digest - {{.Date}}</h1>
+<div class="empty">No digest for {{.Date}}. <a href="/digest">View the latest digest</a>.</div>
+{{else if eq .State "read_error"}}
+<h1>Daily Digest</h1>
+<div class="card"><p>The digest could not be read right now. <a href="/digest">Retry</a>.</p>{{if .ErrorReference}}<p class="meta">Reference: {{.ErrorReference}}</p>{{end}}</div>
+{{end}}
+</div>
 {{template "foot"}}
 {{end}}
 

@@ -10,7 +10,7 @@ No source, test, database, browser, production, requirements, design, certificat
 
 ## Completion Statement
 
-Incomplete and non-terminal. Status remains `in_progress`. Implementation routing is permitted only after packet-local artifact lint and traceability guard pass; owner reproduction, implementation, testing, validation, and audit have not occurred.
+Non-terminal and **blocked**. `bubbles.implement` (2026-07-24) landed the disjoint unit-verifiable false-empty core (Scope 02/03 web reader composition + typed state determination) with passing Go unit tests, `check`, and `lint`. The packet is BLOCKED on two dependencies recorded in `state.json.blockedReason`: (1) Scope 01 freshness/ownership SST is coordination-required — it edits `internal/config/config.go`, `internal/config/validate_test.go`, `config/smackerel.yaml`, and `scripts/commands/config.sh`, which a concurrent agent owns, so those files were not touched and stale determination is wired inert (`DigestStaleAfter = 0`); and (2) every live-stack row (integration / e2e-api / e2e-ui, including the unauthorized/grant boundary and all of Scope 04) was intentionally deferred to avoid the shared Docker stack. No certification, audit, commit, push, or deployment occurred.
 
 ## Bug Reproduction - Before Fix
 
@@ -34,12 +34,76 @@ Not applicable to this planning-only invocation.
 
 ## Test Evidence
 
-**Phase:** planning  
-**Command:** none  
-**Exit Code:** not applicable  
-**Claim Source:** not-run
+**Phase:** implement  
+**Claim Source:** executed (this invocation, 2026-07-24)
 
-No test result is claimed.
+### Unit — `./smackerel.sh test unit --go --verbose --go-run '<digest/web selectors>'`
+
+**Exit Code:** 0 (`UNIT_EXIT=0`; the wrapper ran `go test ./...`, so the whole module compiled — `cmd/core` included).
+
+```
+=== RUN   TestClassifyDigestStateMatrix
+--- PASS: TestClassifyDigestStateMatrix (0.00s)
+=== RUN   TestDigestPageTruthfulHTTPStates
+--- PASS: TestDigestPageTruthfulHTTPStates (0.01s)
+=== RUN   TestNewHandler_TemplateFuncs
+--- PASS: TestNewHandler_TemplateFuncs (0.00s)
+=== RUN   TestDigestPage_NoRows
+--- PASS: TestDigestPage_NoRows (0.00s)
+=== RUN   TestSearchSemanticFormAndTypedFullPageFragmentStateMatrix
+--- PASS: TestSearchSemanticFormAndTypedFullPageFragmentStateMatrix (0.02s)
+=== RUN   TestAllTemplates_Present
+--- PASS: TestAllTemplates_Present (0.00s)
+=== RUN   TestTemplates_NoInlineEventHandlers
+--- PASS: TestTemplates_NoInlineEventHandlers (0.00s)
+ok      github.com/smackerel/smackerel/internal/web     0.231s
+[go-unit] go test ./... finished OK
+UNIT_EXIT=0
+```
+
+The 002-006 search regression (`TestSearchSemanticFormAndTypedFullPageFragmentStateMatrix`) still passes — the just-committed search changes are preserved.
+
+### Compile / SST — `./smackerel.sh check`
+
+**Exit Code:** 0
+
+```
+config-validate: .../config/generated/dev.env.tmp OK
+Config is in sync with SST
+env_file drift guard: OK
+scenario-lint: scanning config/prompt_contracts (glob: *.yaml)
+scenarios registered: 17, rejected: 0
+scenario-lint: OK
+```
+
+### Lint — `./smackerel.sh lint`
+
+**Exit Code:** 0 (`LINT_EXIT=0`; `Web validation passed`, `All checks passed!`; zero findings in the touched Go files).
+
+## Implementation Evidence (bubbles.implement — 2026-07-24)
+
+### Scope 02 Core
+
+**Reader composition + duplicate-SQL removal — DONE (unit + compile verified).**
+
+- NEW `internal/web/digest_model.go`: the narrow `DigestReader` seam (`GetLatest(ctx, date) (*digest.Digest, error)`, satisfied by the existing `*digest.Generator`), the closed `DigestViewState` / `DigestReadErrorKind` vocabularies, the concrete `DigestPageModel`, and the pure `classifyDigest` determination.
+- `internal/web/handler.go::DigestPage` REWRITTEN onto the injected reader. The confirmed root-cause path — `var digestText, digestDate string` + `Scan(&digestText, &digestDate, ...)` on a `DATE` column + the `if err != nil { digestText = "No digest generated yet."; digestDate = time.Now()... }` catch-all — is REMOVED. A grep confirms no raw `digests` SQL or `time.Now()` date substitution remains in the web page path:
+
+```
+$ grep -n "No digest generated yet\|digest_date, is_quiet FROM digests\|time.Now().Format" internal/web/handler.go
+(no matches)
+```
+
+- `cmd/core/services.go` injects `svc.webHandler.DigestReader = svc.digestGen` immediately after `web.NewHandler(...)`; `go test ./...` compiled the whole module (including `cmd/core`) with exit 0, proving the wiring builds.
+- Only a wrapped `pgx.ErrNoRows` yields an empty model; every other fault is a typed `read_error` (HTTP 500) with cleared digest-derived fields — proved by `TestClassifyDigestStateMatrix` and `TestDigestPageTruthfulHTTPStates`, including the exact regression that the old handler returned HTTP 200 + `"No digest generated yet."` + today's date for a read error.
+
+**Deferred within Scope 02 (NOT claimed):** the real-PostgreSQL `DATE`/`TIMESTAMPTZ` round-trip (SCN-002-007-01/02, DIGEST-S02-T02), the real scan-fault profile (SCN-002-007-03, DIGEST-FP-DB-SCAN-001), and the e2e-api/e2e-ui rows — all live-stack, deferred this session.
+
+### Scope 03 Progress (states + template — unit core only)
+
+- `digest.html` (`internal/web/templates.go`) expanded to mutually-exclusive `data-digest-state` branches: current / quiet / stale / first_use_empty / selected_date_empty / read_error.
+- `TestDigestPageTruthfulHTTPStates` proves distinct HTTP + DOM markers for current (200, populated, not empty), first-use empty (200), selected-date miss (200, distinct from first-use, exact date reaches the reader), stale (200, degraded, stored prose retained), read_error (500, no digest fields, no today's-date), and the deferred-config honesty case (unconfigured threshold → current, never arbitrarily stale).
+- **Deferred (NOT claimed):** SCN-002-007-07 unauthorized/grant boundary (needs the live auth stack), `smackerel_digest_read_total` telemetry, and all integration/e2e rows. Scope 03 DoD checkboxes remain `[ ]` pending those live proofs.
 
 ## Uncertainty Declarations
 
