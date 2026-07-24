@@ -1,0 +1,162 @@
+{
+  "version": 1,
+  "specId": "107",
+  "generatedBy": "bubbles.plan",
+  "generatedAt": "2026-07-24T18:20:00Z",
+  "planningOnly": true,
+  "allTestsPlanned": true,
+  "scopes": [
+    {
+      "scopeId": "SCOPE-01",
+      "scopeName": "Single-Controller Card Projection & Nudge-Ack Foundation",
+      "tests": [
+        {"id":"T107-004-U","type":"unit","category":"unit","file":"internal/web/proactive/nudge_ack_test.go","scenarioId":"SCN-107-004","description":"SCN-107-004 act acknowledges content_key through the one controller","command":"./smackerel.sh test unit","liveSystem":false},
+        {"id":"T107-004-I","type":"integration","category":"integration","file":"tests/integration/proactive/nudge_ack_controller_test.go","scenarioId":"SCN-107-004","description":"SCN-107-004 ack routes to the process-wide registry","command":"./smackerel.sh test integration","liveSystem":true},
+        {"id":"T107-004-A","type":"e2e-api","category":"e2e-api","file":"tests/e2e/proactive_experience_e2e_test.go","scenarioId":"SCN-107-004","description":"SCN-107-004 act acknowledges through controller API","command":"./smackerel.sh test e2e","liveSystem":true},
+        {"id":"T107-004-W","type":"e2e-ui","category":"e2e-ui","file":"web/pwa/tests/proactive-card.spec.ts","scenarioId":"SCN-107-004","description":"SCN-107-004 acting updates honest budget and suppression state","command":"./smackerel.sh test e2e-ui","liveSystem":true},
+        {"id":"T107-008-U","type":"unit","category":"unit","file":"internal/intelligence/surfacing/budget_meter_test.go","scenarioId":"SCN-107-008","description":"SCN-107-008 deferred-budget-exhausted yields no card","command":"./smackerel.sh test unit","liveSystem":false},
+        {"id":"T107-008-I","type":"integration","category":"integration","file":"tests/integration/proactive/budget_defer_parity_test.go","scenarioId":"SCN-107-008","description":"SCN-107-008 sixth non-urgent deferred on every channel","command":"./smackerel.sh test integration","liveSystem":true},
+        {"id":"T107-008-A","type":"e2e-api","category":"e2e-api","file":"tests/e2e/proactive_experience_e2e_test.go","scenarioId":"SCN-107-008","description":"SCN-107-008 budget exhausted defer API","command":"./smackerel.sh test e2e","liveSystem":true},
+        {"id":"T107-008-W","type":"e2e-ui","category":"e2e-ui","file":"web/pwa/tests/proactive-card.spec.ts","scenarioId":"SCN-107-008","description":"SCN-107-008 honest budget-exhausted state, no sixth card","command":"./smackerel.sh test e2e-ui","liveSystem":true},
+        {"id":"T107-009-U","type":"unit","category":"unit","file":"internal/intelligence/surfacing/escalation_projection_test.go","scenarioId":"SCN-107-009","description":"SCN-107-009 escalated verdict projects an urgent card","command":"./smackerel.sh test unit","liveSystem":false},
+        {"id":"T107-009-I","type":"integration","category":"integration","file":"tests/integration/proactive/escalation_parity_test.go","scenarioId":"SCN-107-009","description":"SCN-107-009 urgent escalation surfaces on every channel","command":"./smackerel.sh test integration","liveSystem":true},
+        {"id":"T107-009-A","type":"e2e-api","category":"e2e-api","file":"tests/e2e/proactive_experience_e2e_test.go","scenarioId":"SCN-107-009","description":"SCN-107-009 urgent escalation API","command":"./smackerel.sh test e2e","liveSystem":true},
+        {"id":"T107-009-W","type":"e2e-ui","category":"e2e-ui","file":"web/pwa/tests/proactive-card.spec.ts","scenarioId":"SCN-107-009","description":"SCN-107-009 urgent escalation provenance is marked","command":"./smackerel.sh test e2e-ui","liveSystem":true},
+        {"id":"T107-01-HOTPATH","type":"stress","category":"stress","file":"tests/stress/proactive_hotpath_test.go","scenarioId":"SCN-107-004","description":"NFR-107-001 card projection adds no controller hot-path I/O (<5ms p99 preserved)","command":"./smackerel.sh test stress","liveSystem":true},
+        {"id":"T107-01-LEAK","type":"unit","category":"unit","file":"internal/web/proactive/nudge_ref_leak_test.go","scenarioId":"SCN-107-004","description":"FR-107-028 no content_key/node label/query on any wire or telemetry","command":"./smackerel.sh test unit","liveSystem":false}
+      ]
+    },
+    {
+      "scopeId": "SCOPE-02",
+      "scopeName": "Web Proactive Card & Authenticated Action Transport",
+      "tests": [
+        {"id":"T107-003-U","type":"unit","category":"unit","file":"web/pwa/tests/proactive_card_model_test.ts","scenarioId":"SCN-107-003","description":"SCN-107-003 provenance line and three named actions render","command":"./smackerel.sh test unit","liveSystem":false},
+        {"id":"T107-003-I","type":"integration","category":"integration","file":"tests/integration/proactive/web_action_transport_test.go","scenarioId":"SCN-107-003","description":"SCN-107-003 same-origin authenticated {nudgeRef,action} mutation","command":"./smackerel.sh test integration","liveSystem":true},
+        {"id":"T107-003-A","type":"e2e-api","category":"e2e-api","file":"tests/e2e/proactive_experience_e2e_test.go","scenarioId":"SCN-107-003","description":"SCN-107-003 web nudge action API acknowledges through controller","command":"./smackerel.sh test e2e","liveSystem":true},
+        {"id":"T107-003-W","type":"e2e-ui","category":"e2e-ui","file":"web/pwa/tests/proactive-card.spec.ts","scenarioId":"SCN-107-003","description":"SCN-107-003 card shows provenance and one-tap act/snooze/dismiss","command":"./smackerel.sh test e2e-ui","liveSystem":true},
+        {"id":"T107-02-TRANSPORT","type":"integration","category":"integration","file":"tests/integration/proactive/web_action_transport_test.go","scenarioId":"SCN-107-003","description":"web action carries no bearer in JS and no content_key client-side","command":"./smackerel.sh test integration","liveSystem":true},
+        {"id":"T107-02-CANARY","type":"e2e-ui","category":"e2e-ui","file":"web/pwa/tests/assistant_intents_dashboard.spec.ts","scenarioId":"SCN-107-003","description":"proactive card preserves authenticated shell and assistant navigation","command":"./smackerel.sh test e2e-ui","liveSystem":true}
+      ]
+    },
+    {
+      "scopeId": "SCOPE-03",
+      "scopeName": "Telegram & WhatsApp Nudge Renderings + Cross-Channel Parity",
+      "tests": [
+        {"id":"T107-005-U","type":"unit","category":"unit","file":"internal/telegram/assistant_adapter/nudge_callbacks_test.go","scenarioId":"SCN-107-005","description":"SCN-107-005 a:n: encode/decode within 64 bytes","command":"./smackerel.sh test unit","liveSystem":false},
+        {"id":"T107-005-I","type":"integration","category":"integration","file":"tests/integration/proactive/telegram_nudge_ack_test.go","scenarioId":"SCN-107-005","description":"SCN-107-005 Telegram tap routes to the one ack path","command":"./smackerel.sh test integration","liveSystem":true},
+        {"id":"T107-005-A","type":"e2e-api","category":"e2e-api","file":"tests/e2e/proactive_channel_parity_e2e_test.go","scenarioId":"SCN-107-005","description":"SCN-107-005 Telegram inline nudge acknowledges through controller","command":"./smackerel.sh test e2e","liveSystem":true},
+        {"id":"T107-005-W","type":"e2e-ui","category":"e2e-ui","file":"web/pwa/tests/proactive-cross-channel.spec.ts","scenarioId":"SCN-107-005","description":"SCN-107-005 Telegram act reflects on the web card state","command":"./smackerel.sh test e2e-ui","liveSystem":true},
+        {"id":"T107-006-U","type":"unit","category":"unit","file":"internal/whatsapp/nudge_reply_test.go","scenarioId":"SCN-107-006","description":"SCN-107-006 WhatsApp reply.id carries a:n:<ref>:<a|s|d>","command":"./smackerel.sh test unit","liveSystem":false},
+        {"id":"T107-006-I","type":"integration","category":"integration","file":"tests/integration/proactive/whatsapp_nudge_ack_test.go","scenarioId":"SCN-107-006","description":"SCN-107-006 WhatsApp interactive choice routes to the one ack path","command":"./smackerel.sh test integration","liveSystem":true},
+        {"id":"T107-006-A","type":"e2e-api","category":"e2e-api","file":"tests/e2e/proactive_channel_parity_e2e_test.go","scenarioId":"SCN-107-006","description":"SCN-107-006 WhatsApp interactive nudge acknowledges through controller","command":"./smackerel.sh test e2e","liveSystem":true},
+        {"id":"T107-006-W","type":"e2e-ui","category":"e2e-ui","file":"web/pwa/tests/proactive-cross-channel.spec.ts","scenarioId":"SCN-107-006","description":"SCN-107-006 WhatsApp act reflects on the web card state","command":"./smackerel.sh test e2e-ui","liveSystem":true},
+        {"id":"T107-007-U","type":"unit","category":"unit","file":"internal/intelligence/surfacing/cross_channel_ack_test.go","scenarioId":"SCN-107-007","description":"SCN-107-007 one Acknowledge(content_key) suppresses every channel","command":"./smackerel.sh test unit","liveSystem":false},
+        {"id":"T107-007-I","type":"integration","category":"integration","file":"tests/integration/proactive/cross_channel_suppression_test.go","scenarioId":"SCN-107-007","description":"SCN-107-007 act on Telegram suppresses web and whatsapp in window","command":"./smackerel.sh test integration","liveSystem":true},
+        {"id":"T107-007-A","type":"e2e-api","category":"e2e-api","file":"tests/e2e/proactive_channel_parity_e2e_test.go","scenarioId":"SCN-107-007","description":"SCN-107-007 cross-channel suppression API","command":"./smackerel.sh test e2e","liveSystem":true},
+        {"id":"T107-007-W","type":"e2e-ui","category":"e2e-ui","file":"web/pwa/tests/proactive-cross-channel.spec.ts","scenarioId":"SCN-107-007","description":"SCN-107-007 no duplicate prompt on web after acting on Telegram","command":"./smackerel.sh test e2e-ui","liveSystem":true},
+        {"id":"T107-03-SUPPRESS","type":"stress","category":"stress","file":"tests/stress/proactive_suppression_propagation_test.go","scenarioId":"SCN-107-007","description":"NFR-107-004 suppression propagates within suppression_window_hours across channels","command":"./smackerel.sh test stress","liveSystem":true},
+        {"id":"T107-03-COLLISION","type":"unit","category":"unit","file":"internal/telegram/assistant_adapter/nudge_callbacks_test.go","scenarioId":"SCN-107-005","description":"a:n: never collides with a:c:/a:d:/spec-028 list family","command":"./smackerel.sh test unit","liveSystem":false}
+      ]
+    },
+    {
+      "scopeId": "SCOPE-04",
+      "scopeName": "Today Cockpit Composition",
+      "tests": [
+        {"id":"T107-001-U","type":"unit","category":"unit","file":"web/pwa/tests/today_cockpit_compose_test.ts","scenarioId":"SCN-107-001","description":"SCN-107-001 cockpit composes digest+cards+what-changed+ask-or-capture","command":"./smackerel.sh test unit","liveSystem":false},
+        {"id":"T107-001-I","type":"integration","category":"integration","file":"tests/integration/proactive/today_cockpit_test.go","scenarioId":"SCN-107-001","description":"SCN-107-001 cockpit reads real digest and permitted cards","command":"./smackerel.sh test integration","liveSystem":true},
+        {"id":"T107-001-A","type":"e2e-api","category":"e2e-api","file":"tests/e2e/proactive_experience_e2e_test.go","scenarioId":"SCN-107-001","description":"SCN-107-001 cockpit composition API","command":"./smackerel.sh test e2e","liveSystem":true},
+        {"id":"T107-001-W","type":"e2e-ui","category":"e2e-ui","file":"web/pwa/tests/today-cockpit.spec.ts","scenarioId":"SCN-107-001","description":"SCN-107-001 landing leads with produced intelligence, not a blank canvas","command":"./smackerel.sh test e2e-ui","liveSystem":true},
+        {"id":"T107-002-U","type":"unit","category":"unit","file":"web/pwa/tests/today_cockpit_compose_test.ts","scenarioId":"SCN-107-002","description":"SCN-107-002 quiet day maps to an honest quiet state","command":"./smackerel.sh test unit","liveSystem":false},
+        {"id":"T107-002-I","type":"integration","category":"integration","file":"tests/integration/proactive/today_cockpit_test.go","scenarioId":"SCN-107-002","description":"SCN-107-002 no permitted cards yields honest quiet state","command":"./smackerel.sh test integration","liveSystem":true},
+        {"id":"T107-002-A","type":"e2e-api","category":"e2e-api","file":"tests/e2e/proactive_experience_e2e_test.go","scenarioId":"SCN-107-002","description":"SCN-107-002 quiet-day cockpit API","command":"./smackerel.sh test e2e","liveSystem":true},
+        {"id":"T107-002-W","type":"e2e-ui","category":"e2e-ui","file":"web/pwa/tests/today-cockpit.spec.ts","scenarioId":"SCN-107-002","description":"SCN-107-002 quiet day shows honest state and fabricates no card","command":"./smackerel.sh test e2e-ui","liveSystem":true},
+        {"id":"T107-017-U","type":"unit","category":"unit","file":"web/pwa/tests/today_cockpit_compose_test.ts","scenarioId":"SCN-107-017","description":"SCN-107-017 degraded producer maps to a distinct region error","command":"./smackerel.sh test unit","liveSystem":false},
+        {"id":"T107-017-I","type":"integration","category":"integration","file":"tests/integration/proactive/today_cockpit_test.go","scenarioId":"SCN-107-017","description":"SCN-107-017 producer failure is a distinct region state","command":"./smackerel.sh test integration","liveSystem":true},
+        {"id":"T107-017-A","type":"e2e-api","category":"e2e-api","file":"tests/e2e/proactive_experience_e2e_test.go","scenarioId":"SCN-107-017","description":"SCN-107-017 producer failure API","command":"./smackerel.sh test e2e","liveSystem":true},
+        {"id":"T107-017-W","type":"e2e-ui","category":"e2e-ui","file":"web/pwa/tests/today-cockpit.spec.ts","scenarioId":"SCN-107-017","description":"SCN-107-017 producer failure is not a normal or fabricated card","command":"./smackerel.sh test e2e-ui","liveSystem":true},
+        {"id":"T107-04-LANDING","type":"stress","category":"stress","file":"tests/stress/proactive_cockpit_landing_test.go","scenarioId":"SCN-107-001","description":"NFR-107-002 cockpit interactive at P95 within the shared-shell landing budget","command":"./smackerel.sh test stress","liveSystem":true},
+        {"id":"T107-04-CANARY","type":"e2e-ui","category":"e2e-ui","file":"web/pwa/tests/unified_journey.spec.ts","scenarioId":"SCN-107-001","description":"cockpit body preserves the existing Today/Digest surface and shell navigation","command":"./smackerel.sh test e2e-ui","liveSystem":true}
+      ]
+    },
+    {
+      "scopeId": "SCOPE-05",
+      "scopeName": "Correlation Rail",
+      "tests": [
+        {"id":"T107-010-U","type":"unit","category":"unit","file":"web/pwa/tests/correlation_rail_model_test.ts","scenarioId":"SCN-107-010","description":"SCN-107-010 rail renders bounded real GraphNodeV1 rows with reasons","command":"./smackerel.sh test unit","liveSystem":false},
+        {"id":"T107-010-I","type":"integration","category":"integration","file":"tests/integration/proactive/correlation_rail_read_test.go","scenarioId":"SCN-107-010","description":"SCN-107-010 RAIL_MAX-bounded neighborhood via the spec-105 contract","command":"./smackerel.sh test integration","liveSystem":true},
+        {"id":"T107-010-A","type":"e2e-api","category":"e2e-api","file":"tests/e2e/proactive_experience_e2e_test.go","scenarioId":"SCN-107-010","description":"SCN-107-010 correlation rail read API","command":"./smackerel.sh test e2e","liveSystem":true},
+        {"id":"T107-010-W","type":"e2e-ui","category":"e2e-ui","file":"web/pwa/tests/correlation-rail.spec.ts","scenarioId":"SCN-107-010","description":"SCN-107-010 real edges deep-link into the spec-105 explorer","command":"./smackerel.sh test e2e-ui","liveSystem":true},
+        {"id":"T107-011-U","type":"unit","category":"unit","file":"web/pwa/tests/correlation_rail_model_test.ts","scenarioId":"SCN-107-011","description":"SCN-107-011 zero-edge read maps to honest no-related-items","command":"./smackerel.sh test unit","liveSystem":false},
+        {"id":"T107-011-I","type":"integration","category":"integration","file":"tests/integration/proactive/correlation_rail_read_test.go","scenarioId":"SCN-107-011","description":"SCN-107-011 isolated-only is honest no-related, unavailable is distinct","command":"./smackerel.sh test integration","liveSystem":true},
+        {"id":"T107-011-A","type":"e2e-api","category":"e2e-api","file":"tests/e2e/proactive_experience_e2e_test.go","scenarioId":"SCN-107-011","description":"SCN-107-011 no-related vs unavailable API","command":"./smackerel.sh test e2e","liveSystem":true},
+        {"id":"T107-011-W","type":"e2e-ui","category":"e2e-ui","file":"web/pwa/tests/correlation-rail.spec.ts","scenarioId":"SCN-107-011","description":"SCN-107-011 no-related-items draws no decorative correlation","command":"./smackerel.sh test e2e-ui","liveSystem":true},
+        {"id":"T107-05-BOUND","type":"unit","category":"unit","file":"tests/integration/proactive/correlation_rail_read_test.go","scenarioId":"SCN-107-010","description":"NFR-107-003 rail requests only RAIL_MAX neighbors and never the full store","command":"./smackerel.sh test unit","liveSystem":false},
+        {"id":"T107-05-CANARY","type":"e2e-ui","category":"e2e-ui","file":"web/pwa/tests/photos_lifecycle_review.spec.ts","scenarioId":"SCN-107-010","description":"correlation rail preserves existing item views and explorer deep-link","command":"./smackerel.sh test e2e-ui","liveSystem":true}
+      ]
+    },
+    {
+      "scopeId": "SCOPE-06",
+      "scopeName": "Ask-or-Capture Command Palette",
+      "tests": [
+        {"id":"T107-012-U","type":"unit","category":"unit","file":"web/pwa/tests/command_palette_router_test.ts","scenarioId":"SCN-107-012","description":"SCN-107-012 grounded OutcomeOK renders answer + sources","command":"./smackerel.sh test unit","liveSystem":false},
+        {"id":"T107-012-I","type":"integration","category":"integration","file":"tests/integration/proactive/palette_turn_router_test.go","scenarioId":"SCN-107-012","description":"SCN-107-012 palette routes an answerable turn through the Facade","command":"./smackerel.sh test integration","liveSystem":true},
+        {"id":"T107-012-A","type":"e2e-api","category":"e2e-api","file":"tests/e2e/proactive_experience_e2e_test.go","scenarioId":"SCN-107-012","description":"SCN-107-012 grounded answer API","command":"./smackerel.sh test e2e","liveSystem":true},
+        {"id":"T107-012-W","type":"e2e-ui","category":"e2e-ui","file":"web/pwa/tests/command-palette.spec.ts","scenarioId":"SCN-107-012","description":"SCN-107-012 Cmd/Ctrl-K returns a grounded answer with sources","command":"./smackerel.sh test e2e-ui","liveSystem":true},
+        {"id":"T107-013-U","type":"unit","category":"unit","file":"web/pwa/tests/command_palette_router_test.ts","scenarioId":"SCN-107-013","description":"SCN-107-013 CaptureRoute renders captured-as-idea ack","command":"./smackerel.sh test unit","liveSystem":false},
+        {"id":"T107-013-I","type":"integration","category":"integration","file":"tests/integration/proactive/palette_turn_router_test.go","scenarioId":"SCN-107-013","description":"SCN-107-013 unground-able turn captures exactly one spec-074 Idea","command":"./smackerel.sh test integration","liveSystem":true},
+        {"id":"T107-013-A","type":"e2e-api","category":"e2e-api","file":"tests/e2e/proactive_experience_e2e_test.go","scenarioId":"SCN-107-013","description":"SCN-107-013 capture-as-fallback API (one Idea, dedup window)","command":"./smackerel.sh test e2e","liveSystem":true},
+        {"id":"T107-013-W","type":"e2e-ui","category":"e2e-ui","file":"web/pwa/tests/command-palette.spec.ts","scenarioId":"SCN-107-013","description":"SCN-107-013 fallback captures one Idea with the shared saved-as-idea ack","command":"./smackerel.sh test e2e-ui","liveSystem":true},
+        {"id":"T107-06-HONESTY","type":"unit","category":"unit","file":"web/pwa/tests/command_palette_router_test.ts","scenarioId":"SCN-107-013","description":"failed/refused ask renders refused/error, never saved-as-idea","command":"./smackerel.sh test unit","liveSystem":false},
+        {"id":"T107-06-CANARY","type":"e2e-ui","category":"e2e-ui","file":"web/pwa/tests/assistant_accessibility.spec.ts","scenarioId":"SCN-107-012","description":"palette preserves the existing assistant capture and correction path","command":"./smackerel.sh test e2e-ui","liveSystem":true}
+      ]
+    },
+    {
+      "scopeId": "SCOPE-07",
+      "scopeName": "What-Changed Feed",
+      "tests": [
+        {"id":"T107-014-U","type":"unit","category":"unit","file":"web/pwa/tests/what_changed_feed_model_test.ts","scenarioId":"SCN-107-014","description":"SCN-107-014 two-column projection renders real events, no fabricated entry","command":"./smackerel.sh test unit","liveSystem":false},
+        {"id":"T107-014-I","type":"integration","category":"integration","file":"tests/integration/proactive/what_changed_read_test.go","scenarioId":"SCN-107-014","description":"SCN-107-014 bounded read over agent_traces + verdicts + lifecycle + recency","command":"./smackerel.sh test integration","liveSystem":true},
+        {"id":"T107-014-A","type":"e2e-api","category":"e2e-api","file":"tests/e2e/proactive_experience_e2e_test.go","scenarioId":"SCN-107-014","description":"SCN-107-014 what-changed read API","command":"./smackerel.sh test e2e","liveSystem":true},
+        {"id":"T107-014-W","type":"e2e-ui","category":"e2e-ui","file":"web/pwa/tests/what-changed-feed.spec.ts","scenarioId":"SCN-107-014","description":"SCN-107-014 real system decisions in the left column, recent items in the right","command":"./smackerel.sh test e2e-ui","liveSystem":true},
+        {"id":"T107-015-U","type":"unit","category":"unit","file":"web/pwa/tests/what_changed_feed_model_test.ts","scenarioId":"SCN-107-015","description":"SCN-107-015 while-you-were-away aggregate has no unread counter","command":"./smackerel.sh test unit","liveSystem":false},
+        {"id":"T107-015-I","type":"integration","category":"integration","file":"tests/integration/proactive/what_changed_read_test.go","scenarioId":"SCN-107-015","description":"SCN-107-015 returning-user summary is a bounded aggregate, no watermark","command":"./smackerel.sh test integration","liveSystem":true},
+        {"id":"T107-015-A","type":"e2e-api","category":"e2e-api","file":"tests/e2e/proactive_experience_e2e_test.go","scenarioId":"SCN-107-015","description":"SCN-107-015 returning-user summary API","command":"./smackerel.sh test e2e","liveSystem":true},
+        {"id":"T107-015-W","type":"e2e-ui","category":"e2e-ui","file":"web/pwa/tests/what-changed-feed.spec.ts","scenarioId":"SCN-107-015","description":"SCN-107-015 what changed while away, no backlog counter or guilt state","command":"./smackerel.sh test e2e-ui","liveSystem":true},
+        {"id":"T107-07-RESTART","type":"integration","category":"integration","file":"tests/integration/proactive/what_changed_read_test.go","scenarioId":"SCN-107-015","description":"feed is restart-safe: no persisted seen/unread watermark, no second store","command":"./smackerel.sh test integration","liveSystem":true}
+      ]
+    },
+    {
+      "scopeId": "SCOPE-08",
+      "scopeName": "Cross-Surface Accessibility, Responsive & Authorization Hardening",
+      "tests": [
+        {"id":"T107-018-U","type":"unit","category":"unit","file":"web/pwa/tests/proactive_a11y_semantics_test.ts","scenarioId":"SCN-107-018","description":"SCN-107-018 semantic order and focus model across surfaces","command":"./smackerel.sh test unit","liveSystem":false},
+        {"id":"T107-018-I","type":"integration","category":"integration","file":"tests/integration/proactive/a11y_projection_test.go","scenarioId":"SCN-107-018","description":"SCN-107-018 nonvisual projection parity for each surface","command":"./smackerel.sh test integration","liveSystem":true},
+        {"id":"T107-018-A","type":"e2e-api","category":"e2e-api","file":"tests/e2e/proactive_experience_e2e_test.go","scenarioId":"SCN-107-018","description":"SCN-107-018 semantic projection authorization API","command":"./smackerel.sh test e2e","liveSystem":true},
+        {"id":"T107-018-W","type":"e2e-ui","category":"e2e-ui","file":"web/pwa/tests/proactive-accessibility.spec.ts","scenarioId":"SCN-107-018","description":"SCN-107-018 keyboard and screen-reader parity with predictable focus","command":"./smackerel.sh test e2e-ui","liveSystem":true},
+        {"id":"T107-019-U","type":"unit","category":"unit","file":"web/pwa/tests/proactive_responsive_contract_test.ts","scenarioId":"SCN-107-019","description":"SCN-107-019 44x44 targets and no-overlap contract","command":"./smackerel.sh test unit","liveSystem":false},
+        {"id":"T107-019-I","type":"integration","category":"integration","file":"tests/integration/proactive/responsive_state_test.go","scenarioId":"SCN-107-019","description":"SCN-107-019 responsive state across viewports","command":"./smackerel.sh test integration","liveSystem":true},
+        {"id":"T107-019-A","type":"e2e-api","category":"e2e-api","file":"tests/e2e/proactive_experience_e2e_test.go","scenarioId":"SCN-107-019","description":"SCN-107-019 responsive read API","command":"./smackerel.sh test e2e","liveSystem":true},
+        {"id":"T107-019-W","type":"e2e-ui","category":"e2e-ui","file":"web/pwa/tests/proactive-responsive.spec.ts","scenarioId":"SCN-107-019","description":"SCN-107-019 320px/200% no overlap, 44x44 touch-safe","command":"./smackerel.sh test e2e-ui","liveSystem":true},
+        {"id":"T107-020-U","type":"unit","category":"unit","file":"internal/web/proactive/authorization_telemetry_test.go","scenarioId":"SCN-107-020","description":"SCN-107-020 telemetry carries no secret/node-label/personal content","command":"./smackerel.sh test unit","liveSystem":false},
+        {"id":"T107-020-I","type":"integration","category":"integration","file":"tests/integration/proactive/authorization_render_test.go","scenarioId":"SCN-107-020","description":"SCN-107-020 unauthorized content never rendered on any surface","command":"./smackerel.sh test integration","liveSystem":true},
+        {"id":"T107-020-A","type":"e2e-api","category":"e2e-api","file":"tests/e2e/proactive_experience_e2e_test.go","scenarioId":"SCN-107-020","description":"SCN-107-020 per-surface re-authorization API","command":"./smackerel.sh test e2e","liveSystem":true},
+        {"id":"T107-020-W","type":"e2e-ui","category":"e2e-ui","file":"web/pwa/tests/proactive-authorization.spec.ts","scenarioId":"SCN-107-020","description":"SCN-107-020 only authorized cards/provenance/correlations/activity render","command":"./smackerel.sh test e2e-ui","liveSystem":true},
+        {"id":"T107-08-CONTRAST","type":"e2e-ui","category":"e2e-ui","file":"web/pwa/tests/proactive-accessibility.spec.ts","scenarioId":"SCN-107-018","description":"NFR-107-005 WCAG 2.2 AA contrast and forced-colors across themes","command":"./smackerel.sh test e2e-ui","liveSystem":true},
+        {"id":"T107-08-TELEMETRY","type":"unit","category":"unit","file":"internal/web/proactive/authorization_telemetry_test.go","scenarioId":"SCN-107-020","description":"FR-107-028 bounded content-free telemetry vocabulary only","command":"./smackerel.sh test unit","liveSystem":false}
+      ]
+    },
+    {
+      "scopeId": "SCOPE-09",
+      "scopeName": "Real-Stack Acceptance & Implementation Handoff",
+      "tests": [
+        {"id":"T107-016-U","type":"unit","category":"unit","file":"internal/web/proactive/card_origin_invariant_test.go","scenarioId":"SCN-107-016","description":"SCN-107-016 a card is built only from a permit/escalated verdict","command":"./smackerel.sh test unit","liveSystem":false},
+        {"id":"T107-016-I","type":"integration","category":"integration","file":"tests/integration/proactive/controller_origin_test.go","scenarioId":"SCN-107-016","description":"SCN-107-016 no card bypasses controller.Propose on any channel","command":"./smackerel.sh test integration","liveSystem":true},
+        {"id":"T107-016-A","type":"e2e-api","category":"e2e-api","file":"tests/e2e/proactive_experience_e2e_test.go","scenarioId":"SCN-107-016","description":"SCN-107-016 controller-origin invariant API","command":"./smackerel.sh test e2e","liveSystem":true},
+        {"id":"T107-016-W","type":"e2e-ui","category":"e2e-ui","file":"web/pwa/tests/proactive-acceptance.spec.ts","scenarioId":"SCN-107-016","description":"SCN-107-016 every rendered card originates from the controller","command":"./smackerel.sh test e2e-ui","liveSystem":true},
+        {"id":"T107-09-MATRIX","type":"e2e-ui","category":"e2e-ui","file":"web/pwa/tests/proactive-acceptance.spec.ts","scenarioId":"SCN-107-016","description":"acceptance rerun of SCN-107-001..020 with no interception","command":"./smackerel.sh test e2e-ui","liveSystem":true},
+        {"id":"T107-09-CHANNELS","type":"e2e-api","category":"e2e-api","file":"tests/e2e/proactive_channel_parity_e2e_test.go","scenarioId":"SCN-107-016","description":"Telegram + WhatsApp adapter-level parity and cross-channel ack","command":"./smackerel.sh test e2e","liveSystem":true},
+        {"id":"T107-09-HONEST","type":"e2e-ui","category":"e2e-ui","file":"web/pwa/tests/proactive-acceptance.spec.ts","scenarioId":"SCN-107-016","description":"honest-state matrix: budget-exhausted, deduped, suppressed, no-related, unavailable render distinctly","command":"./smackerel.sh test e2e-ui","liveSystem":true}
+      ]
+    }
+  ]
+}
