@@ -1,0 +1,164 @@
+{
+  "version": 1,
+  "specId": "105",
+  "generatedBy": "bubbles.plan",
+  "generatedAt": "2026-07-24T17:39:13Z",
+  "scopes": [
+    {
+      "scopeId": "SCOPE-01",
+      "scopeName": "Graph Contract And Query Foundation",
+      "tests": [
+        {"id":"T105-001-U","type":"unit","category":"unit","file":"internal/api/graphapi/query_service_test.go","scenarioId":"SCN-105-001","description":"SCN-105-001 bounded canonical overview unit","command":"./smackerel.sh test unit","liveSystem":false},
+        {"id":"T105-001-I","type":"integration","category":"integration","file":"tests/integration/graphapi/query_service_test.go","scenarioId":"SCN-105-001","description":"SCN-105-001 bounded canonical overview integration","command":"./smackerel.sh test integration","liveSystem":true},
+        {"id":"T105-001-A","type":"e2e-api","category":"e2e-api","file":"tests/e2e/graph_explorer_e2e_test.go","scenarioId":"SCN-105-001","description":"SCN-105-001 bounded canonical overview API","command":"./smackerel.sh test e2e","liveSystem":true},
+        {"id":"T105-001-W","type":"e2e-ui","category":"e2e-ui","file":"web/pwa/tests/graph-explorer.spec.ts","scenarioId":"SCN-105-001","description":"SCN-105-001 real bounded graph is nonblank and truthful","command":"./smackerel.sh test e2e-ui","liveSystem":true},
+        {"id":"T105-014-U","type":"unit","category":"unit","file":"internal/api/graphapi/component_analyzer_test.go","scenarioId":"SCN-105-014","description":"SCN-105-014 connected component minimum unit","command":"./smackerel.sh test unit","liveSystem":false},
+        {"id":"T105-014-I","type":"integration","category":"integration","file":"tests/integration/graphapi/overview_component_test.go","scenarioId":"SCN-105-014","description":"SCN-105-014 connected overview minimum integration","command":"./smackerel.sh test integration","liveSystem":true},
+        {"id":"T105-014-A","type":"e2e-api","category":"e2e-api","file":"tests/e2e/graph_explorer_e2e_test.go","scenarioId":"SCN-105-014","description":"SCN-105-014 connected overview minimum API","command":"./smackerel.sh test e2e","liveSystem":true},
+        {"id":"T105-014-W","type":"e2e-ui","category":"e2e-ui","file":"web/pwa/tests/graph-explorer.spec.ts","scenarioId":"SCN-105-014","description":"SCN-105-014 connected overview real edge minimum","command":"./smackerel.sh test e2e-ui","liveSystem":true},
+        {"id":"T105-015-U","type":"unit","category":"unit","file":"internal/api/graphapi/component_analyzer_test.go","scenarioId":"SCN-105-015","description":"SCN-105-015 isolated-only classification unit","command":"./smackerel.sh test unit","liveSystem":false},
+        {"id":"T105-015-I","type":"integration","category":"integration","file":"tests/integration/graphapi/overview_component_test.go","scenarioId":"SCN-105-015","description":"SCN-105-015 isolated-only honest integration","command":"./smackerel.sh test integration","liveSystem":true},
+        {"id":"T105-015-A","type":"e2e-api","category":"e2e-api","file":"tests/e2e/graph_explorer_e2e_test.go","scenarioId":"SCN-105-015","description":"SCN-105-015 no-connected-overview API","command":"./smackerel.sh test e2e","liveSystem":true},
+        {"id":"T105-015-W","type":"e2e-ui","category":"e2e-ui","file":"web/pwa/tests/graph-explorer.spec.ts","scenarioId":"SCN-105-015","description":"SCN-105-015 isolated-only honest state","command":"./smackerel.sh test e2e-ui","liveSystem":true},
+        {"id":"T105-01-CANARY","type":"e2e-ui","category":"e2e-ui","file":"web/pwa/tests/wiki.spec.ts","scenarioId":"SCN-105-001","description":"Graph foundation preserves authenticated Wiki and shell navigation","command":"./smackerel.sh test e2e-ui","liveSystem":true}
+      ]
+    },
+    {
+      "scopeId": "SCOPE-02",
+      "scopeName": "Bounded Projection Cursor Expansion And Path API",
+      "tests": [
+        {"id":"T105-006-U","type":"unit","category":"unit","file":"internal/api/graphapi/path_service_test.go","scenarioId":"SCN-105-006","description":"SCN-105-006 path reason unit","command":"./smackerel.sh test unit","liveSystem":false},
+        {"id":"T105-006-I","type":"integration","category":"integration","file":"tests/integration/graphapi/path_service_test.go","scenarioId":"SCN-105-006","description":"SCN-105-006 path evidence integration","command":"./smackerel.sh test integration","liveSystem":true},
+        {"id":"T105-006-A","type":"e2e-api","category":"e2e-api","file":"tests/e2e/graph_explorer_e2e_test.go","scenarioId":"SCN-105-006","description":"SCN-105-006 path API","command":"./smackerel.sh test e2e","liveSystem":true},
+        {"id":"T105-006-W","type":"e2e-ui","category":"e2e-ui","file":"web/pwa/tests/graph-explorer.spec.ts","scenarioId":"SCN-105-006","description":"SCN-105-006 ordered explained path","command":"./smackerel.sh test e2e-ui","liveSystem":true},
+        {"id":"T105-02-CURSOR","type":"e2e-api","category":"e2e-api","file":"tests/e2e/graph_explorer_e2e_test.go","scenarioId":"SCN-105-003","description":"Graph cursors reject tamper cross-user cross-query and expiry without disclosure","command":"./smackerel.sh test e2e","liveSystem":true}
+      ]
+    },
+    {
+      "scopeId": "SCOPE-03",
+      "scopeName": "Source-Locked Renderer And Assets",
+      "tests": [
+        {"id":"T105-003-U","type":"unit","category":"unit","file":"web/pwa/tests/graph_state_reducer_test.go","scenarioId":"SCN-105-003","description":"SCN-105-003 expansion merge unit","command":"./smackerel.sh test unit","liveSystem":false},
+        {"id":"T105-003-I","type":"integration","category":"integration","file":"tests/integration/graph_explorer/expansion_state_test.go","scenarioId":"SCN-105-003","description":"SCN-105-003 expansion state integration","command":"./smackerel.sh test integration","liveSystem":true},
+        {"id":"T105-003-A","type":"e2e-api","category":"e2e-api","file":"tests/e2e/graph_explorer_e2e_test.go","scenarioId":"SCN-105-003","description":"SCN-105-003 bounded expansion API","command":"./smackerel.sh test e2e","liveSystem":true},
+        {"id":"T105-003-W","type":"e2e-ui","category":"e2e-ui","file":"web/pwa/tests/graph-explorer.spec.ts","scenarioId":"SCN-105-003","description":"SCN-105-003 expansion preserves orientation","command":"./smackerel.sh test e2e-ui","liveSystem":true},
+        {"id":"T105-03-ADMISSION","type":"unit","category":"unit","file":"web/pwa/tests/graph_renderer_admission_test.go","scenarioId":"SCN-105-001","description":"Graph renderer dependency and assets are explicit source locked and contain no custom force solver","command":"./smackerel.sh test unit","liveSystem":false},
+        {"id":"T105-03-GEOMETRY","type":"unit","category":"unit","file":"web/pwa/tests/graph_layout_test.go","scenarioId":"SCN-105-003","description":"Deterministic finite layout and hit testing preserve prior geometry","command":"./smackerel.sh test unit","liveSystem":false},
+        {"id":"T105-03-ASSET","type":"integration","category":"integration","file":"tests/integration/graph_explorer/asset_contract_test.go","scenarioId":"SCN-105-001","description":"Explorer assets are same origin fresh and API responses remain network only","command":"./smackerel.sh test integration","liveSystem":true},
+        {"id":"T105-03-PIXEL","type":"e2e-ui","category":"e2e-ui","file":"web/pwa/tests/graph-explorer.spec.ts","scenarioId":"SCN-105-001","description":"Populated Graph pixels geometry and semantic IDs prove real nonblank topology","command":"./smackerel.sh test e2e-ui","liveSystem":true},
+        {"id":"T105-03-RESIZE","type":"e2e-ui","category":"e2e-ui","file":"web/pwa/tests/graph-explorer.spec.ts","scenarioId":"SCN-105-003","description":"Graph remains framed nonblank and hittable across resize and DPR changes","command":"./smackerel.sh test e2e-ui","liveSystem":true}
+      ]
+    },
+    {
+      "scopeId": "SCOPE-04",
+      "scopeName": "Desktop Explorer Interactions",
+      "tests": [
+        {"id":"T105-005-U","type":"unit","category":"unit","file":"web/pwa/tests/graph_state_reducer_test.go","scenarioId":"SCN-105-005","description":"SCN-105-005 filtered empty unit","command":"./smackerel.sh test unit","liveSystem":false},
+        {"id":"T105-005-I","type":"integration","category":"integration","file":"tests/integration/graph_explorer/filter_state_test.go","scenarioId":"SCN-105-005","description":"SCN-105-005 filter parity integration","command":"./smackerel.sh test integration","liveSystem":true},
+        {"id":"T105-005-A","type":"e2e-api","category":"e2e-api","file":"tests/e2e/graph_explorer_e2e_test.go","scenarioId":"SCN-105-005","description":"SCN-105-005 filter scope API","command":"./smackerel.sh test e2e","liveSystem":true},
+        {"id":"T105-005-W","type":"e2e-ui","category":"e2e-ui","file":"web/pwa/tests/graph-explorer.spec.ts","scenarioId":"SCN-105-005","description":"SCN-105-005 filtered empty reset","command":"./smackerel.sh test e2e-ui","liveSystem":true},
+        {"id":"T105-04-DESKTOP","type":"e2e-ui","category":"e2e-ui","file":"web/pwa/tests/graph-explorer.spec.ts","scenarioId":"SCN-105-003","description":"Desktop pan zoom fit focus filter expand collapse path inspector and history operate on real graph state","command":"./smackerel.sh test e2e-ui","liveSystem":true}
+      ]
+    },
+    {
+      "scopeId": "SCOPE-05",
+      "scopeName": "Keyboard Semantic Projections And Accessibility",
+      "tests": [
+        {"id":"T105-008-U","type":"unit","category":"unit","file":"web/pwa/tests/graph_keyboard_commands_test.go","scenarioId":"SCN-105-008","description":"SCN-105-008 keyboard command unit","command":"./smackerel.sh test unit","liveSystem":false},
+        {"id":"T105-008-I","type":"integration","category":"integration","file":"tests/integration/graph_explorer/keyboard_projection_test.go","scenarioId":"SCN-105-008","description":"SCN-105-008 keyboard parity integration","command":"./smackerel.sh test integration","liveSystem":true},
+        {"id":"T105-008-A","type":"e2e-api","category":"e2e-api","file":"tests/e2e/graph_explorer_e2e_test.go","scenarioId":"SCN-105-008","description":"SCN-105-008 keyboard authorization API","command":"./smackerel.sh test e2e","liveSystem":true},
+        {"id":"T105-008-W","type":"e2e-ui","category":"e2e-ui","file":"web/pwa/tests/graph-explorer.spec.ts","scenarioId":"SCN-105-008","description":"SCN-105-008 keyboard-only exploration","command":"./smackerel.sh test e2e-ui","liveSystem":true},
+        {"id":"T105-009-U","type":"unit","category":"unit","file":"web/pwa/tests/graph_semantic_projection_test.go","scenarioId":"SCN-105-009","description":"SCN-105-009 semantic outline unit","command":"./smackerel.sh test unit","liveSystem":false},
+        {"id":"T105-009-I","type":"integration","category":"integration","file":"tests/integration/graph_explorer/keyboard_projection_test.go","scenarioId":"SCN-105-009","description":"SCN-105-009 projection parity integration","command":"./smackerel.sh test integration","liveSystem":true},
+        {"id":"T105-009-A","type":"e2e-api","category":"e2e-api","file":"tests/e2e/graph_explorer_e2e_test.go","scenarioId":"SCN-105-009","description":"SCN-105-009 semantic parity API","command":"./smackerel.sh test e2e","liveSystem":true},
+        {"id":"T105-009-W","type":"e2e-ui","category":"e2e-ui","file":"web/pwa/tests/graph-explorer.spec.ts","scenarioId":"SCN-105-009","description":"SCN-105-009 screen-reader outline parity","command":"./smackerel.sh test e2e-ui","liveSystem":true},
+        {"id":"T105-016-U","type":"unit","category":"unit","file":"web/pwa/tests/graph_projection_parity_test.go","scenarioId":"SCN-105-016","description":"SCN-105-016 projection parity unit","command":"./smackerel.sh test unit","liveSystem":false},
+        {"id":"T105-016-I","type":"integration","category":"integration","file":"tests/integration/graph_explorer/projection_equivalence_test.go","scenarioId":"SCN-105-016","description":"SCN-105-016 projection equivalence integration","command":"./smackerel.sh test integration","liveSystem":true},
+        {"id":"T105-016-A","type":"e2e-api","category":"e2e-api","file":"tests/e2e/graph_explorer_e2e_test.go","scenarioId":"SCN-105-016","description":"SCN-105-016 projection identity API","command":"./smackerel.sh test e2e","liveSystem":true},
+        {"id":"T105-016-W","type":"e2e-ui","category":"e2e-ui","file":"web/pwa/tests/graph-explorer.spec.ts","scenarioId":"SCN-105-016","description":"SCN-105-016 graph outline table equivalent and Canvas-failure safe","command":"./smackerel.sh test e2e-ui","liveSystem":true},
+        {"id":"T105-05-A11Y","type":"e2e-ui","category":"e2e-ui","file":"web/pwa/tests/graph-explorer.spec.ts","scenarioId":"SCN-105-009","description":"Graph Outline and Table remain equivalent at 200 percent zoom and forced colors","command":"./smackerel.sh test e2e-ui","liveSystem":true}
+      ]
+    },
+    {
+      "scopeId": "SCOPE-06",
+      "scopeName": "Entry Points Deep Links And Restoration",
+      "tests": [
+        {"id":"T105-002-U","type":"unit","category":"unit","file":"web/pwa/tests/graph_entry_state_test.go","scenarioId":"SCN-105-002","description":"SCN-105-002 entry URL state unit","command":"./smackerel.sh test unit","liveSystem":false},
+        {"id":"T105-002-I","type":"integration","category":"integration","file":"tests/integration/graph_explorer/entry_restore_test.go","scenarioId":"SCN-105-002","description":"SCN-105-002 entry restore integration","command":"./smackerel.sh test integration","liveSystem":true},
+        {"id":"T105-002-A","type":"e2e-api","category":"e2e-api","file":"tests/e2e/graph_explorer_e2e_test.go","scenarioId":"SCN-105-002","description":"SCN-105-002 entry reauthorization API","command":"./smackerel.sh test e2e","liveSystem":true},
+        {"id":"T105-002-W","type":"e2e-ui","category":"e2e-ui","file":"web/pwa/tests/graph-explorer.spec.ts","scenarioId":"SCN-105-002","description":"SCN-105-002 topic entry back and forward","command":"./smackerel.sh test e2e-ui","liveSystem":true},
+        {"id":"T105-013-U","type":"unit","category":"unit","file":"web/pwa/tests/graph_restore_state_test.go","scenarioId":"SCN-105-013","description":"SCN-105-013 restore state unit","command":"./smackerel.sh test unit","liveSystem":false},
+        {"id":"T105-013-I","type":"integration","category":"integration","file":"tests/integration/graph_explorer/entry_restore_test.go","scenarioId":"SCN-105-013","description":"SCN-105-013 restore reauthorization integration","command":"./smackerel.sh test integration","liveSystem":true},
+        {"id":"T105-013-A","type":"e2e-api","category":"e2e-api","file":"tests/e2e/graph_explorer_e2e_test.go","scenarioId":"SCN-105-013","description":"SCN-105-013 restore authorization API","command":"./smackerel.sh test e2e","liveSystem":true},
+        {"id":"T105-013-W","type":"e2e-ui","category":"e2e-ui","file":"web/pwa/tests/graph-explorer.spec.ts","scenarioId":"SCN-105-013","description":"SCN-105-013 restore omits unauthorized state","command":"./smackerel.sh test e2e-ui","liveSystem":true},
+        {"id":"T105-06-ENTRY","type":"e2e-ui","category":"e2e-ui","file":"web/pwa/tests/graph-explorer.spec.ts","scenarioId":"SCN-105-002","description":"Topic person place concept entity and artifact entries seed the same explorer","command":"./smackerel.sh test e2e-ui","liveSystem":true},
+        {"id":"T105-06-SAVED","type":"e2e-ui","category":"e2e-ui","file":"web/pwa/tests/graph-explorer.spec.ts","scenarioId":"SCN-105-013","description":"Saved view create rename reload open and delete round trips authorized preferences only","command":"./smackerel.sh test e2e-ui","liveSystem":true},
+        {"id":"T105-06-CONSUMERS","type":"e2e-ui","category":"e2e-ui","file":"web/pwa/tests/wiki.spec.ts","scenarioId":"SCN-105-002","description":"Graph navigation breadcrumbs redirects deep links and Wiki consumers contain no stale target","command":"./smackerel.sh test e2e-ui","liveSystem":true}
+      ]
+    },
+    {
+      "scopeId": "SCOPE-07",
+      "scopeName": "Responsive Mobile Motion And Theming",
+      "tests": [
+        {"id":"T105-010-U","type":"unit","category":"unit","file":"web/pwa/tests/graph_responsive_contract_test.go","scenarioId":"SCN-105-010","description":"SCN-105-010 responsive contract unit","command":"./smackerel.sh test unit","liveSystem":false},
+        {"id":"T105-010-I","type":"integration","category":"integration","file":"tests/integration/graph_explorer/responsive_state_test.go","scenarioId":"SCN-105-010","description":"SCN-105-010 responsive state integration","command":"./smackerel.sh test integration","liveSystem":true},
+        {"id":"T105-010-A","type":"e2e-api","category":"e2e-api","file":"tests/e2e/graph_explorer_e2e_test.go","scenarioId":"SCN-105-010","description":"SCN-105-010 mobile bounded API","command":"./smackerel.sh test e2e","liveSystem":true},
+        {"id":"T105-010-W","type":"e2e-ui","category":"e2e-ui","file":"web/pwa/tests/graph-explorer.spec.ts","scenarioId":"SCN-105-010","description":"SCN-105-010 mobile controls and sheets","command":"./smackerel.sh test e2e-ui","liveSystem":true},
+        {"id":"T105-07-MOTION","type":"e2e-ui","category":"e2e-ui","file":"web/pwa/tests/graph-explorer.spec.ts","scenarioId":"SCN-105-010","description":"Reduced motion removes force and zoom animation without changing outcomes","command":"./smackerel.sh test e2e-ui","liveSystem":true},
+        {"id":"T105-07-THEME","type":"e2e-ui","category":"e2e-ui","file":"web/pwa/tests/graph-explorer.spec.ts","scenarioId":"SCN-105-010","description":"Light dark system and forced colors preserve graph meaning and contrast","command":"./smackerel.sh test e2e-ui","liveSystem":true},
+        {"id":"T105-07-VIEWPORTS","type":"e2e-ui","category":"e2e-ui","file":"web/pwa/tests/graph-explorer.spec.ts","scenarioId":"SCN-105-010","description":"Desktop tablet 390 and 320 viewports have no overlap clipping or horizontal overflow","command":"./smackerel.sh test e2e-ui","liveSystem":true}
+      ]
+    },
+    {
+      "scopeId": "SCOPE-08",
+      "scopeName": "Privacy Security And Honest States",
+      "tests": [
+        {"id":"T105-004-U","type":"unit","category":"unit","file":"web/pwa/tests/graph_state_reducer_test.go","scenarioId":"SCN-105-004","description":"SCN-105-004 branch failure unit","command":"./smackerel.sh test unit","liveSystem":false},
+        {"id":"T105-004-I","type":"integration","category":"integration","file":"tests/integration/graph_explorer/expansion_state_test.go","scenarioId":"SCN-105-004","description":"SCN-105-004 branch failure integration","command":"./smackerel.sh test integration","liveSystem":true},
+        {"id":"T105-004-A","type":"e2e-api","category":"e2e-api","file":"tests/e2e/graph_explorer_e2e_test.go","scenarioId":"SCN-105-004","description":"SCN-105-004 branch failure API","command":"./smackerel.sh test e2e","liveSystem":true},
+        {"id":"T105-004-W","type":"e2e-ui","category":"e2e-ui","file":"web/pwa/tests/graph-explorer.spec.ts","scenarioId":"SCN-105-004","description":"SCN-105-004 branch failure retains graph","command":"./smackerel.sh test e2e-ui","liveSystem":true},
+        {"id":"T105-011-U","type":"unit","category":"unit","file":"web/pwa/tests/graph_privacy_clear_test.go","scenarioId":"SCN-105-011","description":"SCN-105-011 privacy clear unit","command":"./smackerel.sh test unit","liveSystem":false},
+        {"id":"T105-011-I","type":"integration","category":"integration","file":"tests/integration/graph_explorer/auth_privacy_test.go","scenarioId":"SCN-105-011","description":"SCN-105-011 auth privacy integration","command":"./smackerel.sh test integration","liveSystem":true},
+        {"id":"T105-011-A","type":"e2e-api","category":"e2e-api","file":"tests/e2e/graph_explorer_e2e_test.go","scenarioId":"SCN-105-011","description":"SCN-105-011 auth failure API","command":"./smackerel.sh test e2e","liveSystem":true},
+        {"id":"T105-011-W","type":"e2e-ui","category":"e2e-ui","file":"web/pwa/tests/graph-explorer.spec.ts","scenarioId":"SCN-105-011","description":"SCN-105-011 auth clears DOM and pixels","command":"./smackerel.sh test e2e-ui","liveSystem":true},
+        {"id":"T105-08-PRIVACY","type":"e2e-api","category":"e2e-api","file":"tests/e2e/graph_explorer_privacy_e2e_test.go","scenarioId":"SCN-105-011","description":"Graph sources logs metrics traces storage and observations contain no private content or tokens","command":"./smackerel.sh test e2e","liveSystem":true},
+        {"id":"T105-08-AUTH","type":"e2e-ui","category":"e2e-ui","file":"web/pwa/tests/graph-explorer.spec.ts","scenarioId":"SCN-105-011","description":"Expired session and denied scope clear prior labels semantics geometry and pixels before recovery","command":"./smackerel.sh test e2e-ui","liveSystem":true},
+        {"id":"T105-08-STATES","type":"e2e-ui","category":"e2e-ui","file":"web/pwa/tests/graph-explorer.spec.ts","scenarioId":"SCN-105-004","description":"Loading empty filtered isolated partial degraded limit unavailable render not-found and stale states stay exclusive","command":"./smackerel.sh test e2e-ui","liveSystem":true}
+      ]
+    },
+    {
+      "scopeId": "SCOPE-09",
+      "scopeName": "Scale Performance And Observability",
+      "tests": [
+        {"id":"T105-007-U","type":"unit","category":"unit","file":"internal/api/graphapi/path_service_test.go","scenarioId":"SCN-105-007","description":"SCN-105-007 path outcome unit","command":"./smackerel.sh test unit","liveSystem":false},
+        {"id":"T105-007-I","type":"integration","category":"integration","file":"tests/integration/graphapi/path_service_test.go","scenarioId":"SCN-105-007","description":"SCN-105-007 path bounds integration","command":"./smackerel.sh test integration","liveSystem":true},
+        {"id":"T105-007-A","type":"e2e-api","category":"e2e-api","file":"tests/e2e/graph_explorer_e2e_test.go","scenarioId":"SCN-105-007","description":"SCN-105-007 no path versus partial API","command":"./smackerel.sh test e2e","liveSystem":true},
+        {"id":"T105-007-W","type":"e2e-ui","category":"e2e-ui","file":"web/pwa/tests/graph-explorer.spec.ts","scenarioId":"SCN-105-007","description":"SCN-105-007 no path versus partial UI","command":"./smackerel.sh test e2e-ui","liveSystem":true},
+        {"id":"T105-09-QUERYPLAN","type":"integration","category":"integration","file":"tests/integration/graphapi/query_plan_test.go","scenarioId":"SCN-105-007","description":"Graph overview expansion search detail and path use bounded indexed plans","command":"./smackerel.sh test integration","liveSystem":true},
+        {"id":"T105-09-STRESS-INITIAL","type":"stress","category":"stress","file":"tests/stress/graph_explorer_stress_test.go","scenarioId":"SCN-105-001","description":"Bounded overview meets interaction budget at measured scale","command":"./smackerel.sh test stress","liveSystem":true},
+        {"id":"T105-09-STRESS-EXPAND","type":"stress","category":"stress","file":"tests/stress/graph_explorer_stress_test.go","scenarioId":"SCN-105-003","description":"Concurrent high-degree expansion remains bounded and truthful","command":"./smackerel.sh test stress","liveSystem":true},
+        {"id":"T105-09-LOAD-CLIENT","type":"load","category":"load","file":"tests/stress/graph_explorer_load_test.go","scenarioId":"SCN-105-003","description":"Sustained graph interactions remain responsive without unbounded growth","command":"./smackerel.sh test stress","liveSystem":true},
+        {"id":"T105-09-OBS","type":"integration","category":"integration","file":"tests/integration/graphapi/observability_test.go","scenarioId":"SCN-105-001","description":"Graph query path and client telemetry uses closed content-free outcomes","command":"./smackerel.sh test integration","liveSystem":true},
+        {"id":"T105-09-SLO","type":"stress","category":"stress","file":"tests/stress/graph_explorer_stress_test.go","scenarioId":"SCN-105-003","description":"Graph explorer captured percentiles meet declared NFR targets","command":"./smackerel.sh test stress","liveSystem":true}
+      ]
+    },
+    {
+      "scopeId": "SCOPE-10",
+      "scopeName": "Real-Stack Acceptance And Deployment Handoff",
+      "tests": [
+        {"id":"T105-012-U","type":"unit","category":"unit","file":"web/pwa/tests/graph_honest_states_test.go","scenarioId":"SCN-105-012","description":"SCN-105-012 true empty unit","command":"./smackerel.sh test unit","liveSystem":false},
+        {"id":"T105-012-I","type":"integration","category":"integration","file":"tests/integration/graph_explorer/empty_state_test.go","scenarioId":"SCN-105-012","description":"SCN-105-012 true empty integration","command":"./smackerel.sh test integration","liveSystem":true},
+        {"id":"T105-012-A","type":"e2e-api","category":"e2e-api","file":"tests/e2e/graph_explorer_e2e_test.go","scenarioId":"SCN-105-012","description":"SCN-105-012 true empty API","command":"./smackerel.sh test e2e","liveSystem":true},
+        {"id":"T105-012-W","type":"e2e-ui","category":"e2e-ui","file":"web/pwa/tests/graph-explorer.spec.ts","scenarioId":"SCN-105-012","description":"SCN-105-012 first use has no fake topology","command":"./smackerel.sh test e2e-ui","liveSystem":true},
+        {"id":"T105-10-API","type":"e2e-api","category":"e2e-api","file":"tests/e2e/graph_explorer_e2e_test.go","scenarioId":"SCN-105-001..013","description":"Connected Graph Explorer complete authorized API acceptance","command":"./smackerel.sh test e2e","liveSystem":true},
+        {"id":"T105-10-PLAYWRIGHT","type":"e2e-ui","category":"e2e-ui","file":"web/pwa/tests/graph-explorer.spec.ts","scenarioId":"SCN-105-012","description":"Connected Graph Explorer complete desktop mobile keyboard privacy and pixel acceptance","command":"./smackerel.sh test e2e-ui","liveSystem":true},
+        {"id":"T105-10-NO-INTERCEPT","type":"e2e-ui","category":"e2e-ui","file":"web/pwa/tests/graph-explorer.spec.ts","scenarioId":"SCN-105-001..013","description":"Required graph scenarios contain no interception bailout or optional assertion","command":"bash .github/bubbles/scripts/regression-quality-guard.sh web/pwa/tests/graph-explorer.spec.ts","liveSystem":false},
+        {"id":"T105-10-MIGRATION","type":"integration","category":"integration","file":"tests/integration/graph_explorer/migration_test.go","scenarioId":"MIGRATION-063","description":"Graph explorer migration applies and pre-data rollback preserves canonical graph","command":"./smackerel.sh test integration","liveSystem":true},
+        {"id":"T105-10-ROLLBACK","type":"integration","category":"integration","file":"tests/integration/graph_explorer/rollback_test.go","scenarioId":"ROLLBACK-105","description":"Explorer source asset and saved-view rollback is pointer-safe and non-destructive","command":"./smackerel.sh test integration","liveSystem":true},
+        {"id":"T105-10-SHELL","type":"e2e-ui","category":"e2e-ui","file":"web/pwa/tests/wiki.spec.ts","scenarioId":"CONSUMER-SWEEP-105","description":"Existing Wiki login shell navigation and non-Graph PWA journeys remain intact","command":"./smackerel.sh test e2e-ui","liveSystem":true},
+        {"id":"T105-10-HANDOFF","type":"e2e-api","category":"e2e-api","file":"tests/e2e/graph_explorer_acceptance_e2e_test.go","scenarioId":"ACCEPTANCE-105","description":"Product acceptance emits complete value-safe deployment handoff without operated writes","command":"./smackerel.sh test e2e","liveSystem":true},
+        {"id":"T105-10-REGRESSION","type":"e2e-ui","category":"e2e-ui","file":"web/pwa/tests/wiki.spec.ts","scenarioId":"SCN-105-001..013","description":"Knowledge Wiki Graph activation and explorer journeys remain coherent","command":"./smackerel.sh test e2e-ui","liveSystem":true}
+      ]
+    }
+  ]
+}
