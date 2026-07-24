@@ -1,0 +1,266 @@
+{
+  "version": 3,
+  "featureDir": "specs/107-proactive-correlated-experience",
+  "featureNumber": "107",
+  "featureName": "Proactive & Correlated Experience",
+  "status": "not_started",
+  "workflowMode": "full-delivery",
+  "releaseTrain": "mvp",
+  "flagsIntroduced": [],
+  "linkedImplementationSpec": null,
+  "linkedPlanningPacket": null,
+  "planningOnly": false,
+  "planningOnlyJustification": null,
+  "specDependsOn": [
+    "specs/078-cross-surface-surfacing-prioritizer",
+    "specs/054-notification-intelligence-handler",
+    "specs/055-notification-source-ntfy-adapter",
+    "specs/074-capture-as-fallback-policy",
+    "specs/073-web-mobile-assistant-frontend",
+    "specs/061-conversational-assistant",
+    "specs/072-whatsapp-business-transport",
+    "specs/105-connected-knowledge-graph-explorer",
+    "specs/106-coherent-product-experience"
+  ],
+  "analystIdentifiedAdditionalDependency": {
+    "spec": "specs/072-whatsapp-business-transport",
+    "reason": "Cross-frontend parity (P5) requires the WhatsApp interactive-message transport. Promoted into specDependsOn during the design phase per orchestrator decision (2026-07-24): WhatsApp is in scope for P5 and is modeled as a new bounded `whatsapp` Channel value via the documented types.go bounded-cardinality extension path, routed as a coordination note to the spec-078/spec-072 owners (design.md ## Resolved Design Contracts OQ2, ## Dependency And Ownership Map).",
+    "orchestratorConfirmed": true,
+    "surfacedIn": ["spec.md ## Dependencies", "spec.md ## Open Questions For UX, Design, And Planning #1", "design.md ## Dependency And Ownership Map"]
+  },
+  "planningProvenance": {
+    "owner": "bubbles.plan",
+    "phase": "plan",
+    "generatedAt": "2026-07-24T18:33:00Z",
+    "inputs": [
+      "spec.md",
+      "design.md",
+      "state.json",
+      "specs/105-connected-knowledge-graph-explorer/scopes/_index.md",
+      "specs/105-connected-knowledge-graph-explorer/scenario-manifest.json",
+      "specs/105-connected-knowledge-graph-explorer/test-plan.json",
+      "specs/105-connected-knowledge-graph-explorer/state.json",
+      "specs/106-coherent-product-experience/state.json",
+      "specs/078-cross-surface-surfacing-prioritizer/spec.md",
+      "specs/072-whatsapp-business-transport/spec.md",
+      "internal/intelligence/surfacing/",
+      "internal/telegram/assistant_adapter/callbacks.go",
+      "config/smackerel.yaml"
+    ],
+    "claims": "Planning phase only. This phase authored scopes/ (9 per-scope-directory scopes + _index.md), scenario-manifest.json (20 SCN-107 scenarios, all tests PLANNED / 0 linked), test-plan.json, report.md, uservalidation.md, and this state.json (planningProvenance, scopeDag, scopeLayout, artifacts, execution, executionHistory). No source, authored test, test pass, migration, browser run, certification, commit, push, or deployment work was performed or is claimed; certification.* was not touched. Dependency specs are entry gates, not delegated work.",
+    "sstNoDefaultDecisions": {
+      "nudge_ref_ttl_hours": {"value": 6, "constraint": ">= max(suppression_window_hours=4, dedupe_window_hours=6)", "owningScope": "SCOPE-01", "editedThisPhase": false},
+      "snooze_window": {"decision": "reuse suppression_window_hours (no distinct snooze_window_hours for MVP)", "owningScope": "SCOPE-01", "editedThisPhase": false},
+      "RAIL_MAX": {"value": 6, "constraint": "integer 1..N; rail never renders the full edge store (NFR-107-003)", "owningScope": "SCOPE-05", "editedThisPhase": false},
+      "what_changed_page_cap": {"value": 25, "constraint": "integer 1..N per column per page; cursor-paged created_at DESC", "owningScope": "SCOPE-07", "editedThisPhase": false}
+    },
+    "migrationReservation": "none expected -- the NudgeRef registry is in-memory; no new PostgreSQL business table is added; a migration number is allocated at pickup only if implementation proves one is needed",
+    "scenarioManifestRepair": {
+      "origin": "initial-authoring",
+      "scenarioCountBefore": 0,
+      "scenarioCountAfter": 20,
+      "linkedTestsBefore": 0,
+      "linkedTestsAfter": 0,
+      "plannedTestsBefore": 0,
+      "plannedTestsAfter": 80,
+      "testPlanChanged": true,
+      "artifactLintExit": 0,
+      "traceabilityGuardExit": 0,
+      "traceabilityWarnings": 0
+    },
+    "nextPhase": "bubbles.implement"
+  },
+  "specComposesOver": [
+    {
+      "target": "specs/105-connected-knowledge-graph-explorer",
+      "role": "deep-link-target-do-not-mutate",
+      "usedBy": ["P3 correlation rail"],
+      "directMutation": false,
+      "coordinationNotesRef": "spec.md ## Coordination With Specs 105 and 106"
+    },
+    {
+      "target": "specs/106-coherent-product-experience",
+      "role": "shell-compose-over-do-not-mutate",
+      "usedBy": ["P1 Today cockpit", "P4 command palette", "P6 what-changed feed"],
+      "directMutation": false,
+      "coordinationNotesRef": "spec.md ## Coordination With Specs 105 and 106"
+    }
+  ],
+  "surfacingRouting": {
+    "singleDecisionPoint": "internal/intelligence/surfacing/controller.go",
+    "everyCardOriginatesFromControllerVerdict": ["permit", "escalated"],
+    "parallelSurfacingPathIntroduced": false,
+    "secondBudgetIntroduced": false,
+    "sst": "config/smackerel.yaml surfacing: (L457-482)",
+    "sstKeysObserved": {
+      "daily_nudge_budget": 5,
+      "suppression_window_hours": 4,
+      "dedupe_window_hours": 6,
+      "urgent_escalation_enabled": true
+    },
+    "channelsInContract": ["telegram", "web_push", "ntfy", "email_out", "digest"],
+    "newChannelExtensionUnderReview": ["whatsapp"],
+    "channelExtensionDecision": {
+      "value": "whatsapp",
+      "resolution": "add-as-new-bounded-Channel-enum-value",
+      "extensionPathPrecedent": "ProducerNotification additive enum extension in internal/intelligence/surfacing/types.go",
+      "ownerToEdit": "specs/078-cross-surface-surfacing-prioritizer (surfacing Channel enum owner)",
+      "editedThisPhase": false,
+      "routedAs": "coordination-note",
+      "designRef": "design.md ## Resolved Design Contracts OQ2 + ## Routed Questions"
+    },
+    "crossChannelBudgetDedupeSuppressionIsControllers": true,
+    "everyCardRoutesThroughControllerPropose": true,
+    "nudgeAckPath": "single Acknowledge(content_key) on the process-wide AckLookup for act/snooze/dismiss on every channel"
+  },
+  "corpusOwnershipModel": {
+    "mode": "single-operator-owned-global-corpus",
+    "identityModel": "multiple authenticated identities with explicit roles/grants",
+    "tenantRowIsolationClaimed": false,
+    "privateDefault": "operator-only"
+  },
+  "scopeDag": {
+    "layout": "per-scope-directory",
+    "nodes": ["SCOPE-01", "SCOPE-02", "SCOPE-03", "SCOPE-04", "SCOPE-05", "SCOPE-06", "SCOPE-07", "SCOPE-08", "SCOPE-09"],
+    "edges": [
+      {"from": "SCOPE-01", "to": "SCOPE-02"},
+      {"from": "SCOPE-02", "to": "SCOPE-03"},
+      {"from": "SCOPE-03", "to": "SCOPE-04"},
+      {"from": "SCOPE-04", "to": "SCOPE-05"},
+      {"from": "SCOPE-05", "to": "SCOPE-06"},
+      {"from": "SCOPE-06", "to": "SCOPE-07"},
+      {"from": "SCOPE-07", "to": "SCOPE-08"},
+      {"from": "SCOPE-08", "to": "SCOPE-09"}
+    ],
+    "externalEntryGates": [
+      {"scope": "SCOPE-01", "gate": "specs/078-cross-surface-surfacing-prioritizer controller usable (internal/intelligence/surfacing/)"},
+      {"scope": "SCOPE-02", "gate": "specs/106-coherent-product-experience shell/AuthenticatedRequestAdapter usable"},
+      {"scope": "SCOPE-03", "gate": "specs/072-whatsapp-business-transport usable"},
+      {"scope": "SCOPE-04", "gate": "specs/106-coherent-product-experience Today destination usable"},
+      {"scope": "SCOPE-05", "gate": "specs/105-connected-knowledge-graph-explorer neighborhood + deep-link usable"},
+      {"scope": "SCOPE-06", "gate": "specs/074-capture-as-fallback-policy + specs/061-conversational-assistant + specs/073-web-mobile-assistant-frontend usable"},
+      {"scope": "SCOPE-07", "gate": "specs/054-notification-intelligence-handler agent_traces + topic lifecycle usable"}
+    ],
+    "pickupRule": "All dependsOn scopes must be Done; pick the lowest-numbered eligible scope. Each external entry gate must be usable before its scope is picked up; entry gates are dependency specs, not delegated work."
+  },
+  "certifiedAt": null,
+  "requiresRevalidation": false,
+  "execution": {
+    "activeAgent": "bubbles.plan",
+    "currentPhase": "plan",
+    "currentScope": null,
+    "nextRequiredOwner": "bubbles.implement",
+    "runStartedAt": "2026-07-24T18:00:00Z",
+    "completedPhaseClaims": [
+      {
+        "phase": "analyze",
+        "agent": "bubbles.analyst",
+        "completedAt": "2026-07-24T03:12:44Z",
+        "evidenceRef": "spec.md",
+        "summary": "Authored grounded business requirements for a proactive, correlated, cross-frontend experience layer over the existing surfacing controller, edge store, capture-as-fallback policy, and assistant transports. Covers P1 Today cockpit, P2 actionable nudge cards, P3 correlation rail, P4 command palette, P5 cross-frontend parity, and P6 what-changed feed across web, Telegram, and WhatsApp, with observe-first, honest-state, single-controller, and compose-over-105/106 constraints."
+      },
+      {
+        "phase": "ux",
+        "agent": "bubbles.ux",
+        "completedAt": "2026-07-24T04:22:00Z",
+        "evidenceRef": "spec.md#ui-wireframes",
+        "summary": "Authored the UX/interaction-design layer inline in spec.md as '## UI Wireframes' and '## User Flows'. P1 Today cockpit (desktop/tablet/390px/320px+200% zoom) designed as the body of the spec-106 Today root destination. P2 proactive nudge card across web, Telegram (new a:n: act/snooze/dismiss callback family recommended within the real 64-byte callback_data bound, distinct from a:c:/a:d:), and WhatsApp (spec-072 interactive; 3 reply buttons + list/text fallback), with all honest states (permitted/escalated/acted/snoozed/suppressed/budget-exhausted/quiet/deduped/degraded/error). P3 always-on correlation rail (desktop side rail, mobile sheet, nonvisual outline) deep-linking into the spec-105 explorer via its existing Explore-connections seed contract; bounded projection, never re-implements the explorer. P4 Cmd/Ctrl-K ask-or-capture palette (answer / capture-as-idea via spec-074 / honest refusal; never saved-as-idea for a failed ask). P5 cross-frontend parity model with every card originating from the single spec-078 controller (no parallel surfacing path) and act-once-suppressed-everywhere. P6 two-column what-changed feed (desktop/mobile). Composed over spec-106 shell/tokens/typography/stable data-* DOM contract and the four availability labels; mapped proactive honest states onto 106 vocabulary and flagged the new bounded tokens as coordination items. No files under specs/105 or specs/106 were modified. Planning-only: no source, no executed tests, no deployment, status left not_started."
+      },
+      {
+        "phase": "design",
+        "agent": "bubbles.design",
+        "completedAt": "2026-07-24T05:12:00Z",
+        "evidenceRef": "design.md",
+        "summary": "Authored design.md as the full technical composition over the single spec-078 surfacing controller, the spec-106 shell, and the spec-105 explorer, in the 105/106 house style (Design Brief -> Purpose And Change Boundary -> Grounded Architecture Findings -> Architecture Overview mermaid -> Capability Foundation -> Concrete Implementations -> Resolved Design Contracts -> Dependency And Ownership Map -> Data Model -> Security -> Observability -> Complexity Tracking -> Routed Questions). Resolved every routed OQ as a typed contract: OQ2 nudge callback = additive Telegram a:n:<ref>:<a|s|d> subprefix (~32 bytes, inside the 64-byte callback_data bound, new callbackKindNudge, never colliding with a:c:/a:d:/spec-028) + WhatsApp reply-id carrying the same shape, both resolved through a shared ephemeral process-local NudgeRef registry so no content_key ever reaches a wire; OQ4 WhatChangedRead = bounded, cursor-paged, authorized read over agent_traces + surfacing verdicts + topic lifecycle (left) and a recency read (right), honest populated/quiet/partial/unavailable/unauthorized, restart-safe with NO unread watermark and NO second store; OQ5 CorrelationRailRead = a RAIL_MAX-bounded call of the spec-105 GraphQueryService.Neighborhood(seed,depth=1) under the same GraphReaderAuthorizer, returning GraphNodeV1 rows + GraphReasonResolver reasons + the stable <kind>:<id> seed for the exact /knowledge/graph?...&seed=&focus= deep-link, honest no-related (105 isolated-only) vs unavailable, no parallel graph path, no client cache; OQ6 snooze = Acknowledge(content_key) on the existing SuppressionWindow (act/snooze/dismiss all ack; snooze differs by intent/label/window; MVP reuses suppression_window_hours; no snooze store); OQ7 identity join = suppression already global by content_key on one process-wide controller, join = (transport,transport_user)->auth.Session principal reusing each transport's existing auth mapping, no identity store. Also specified the web action transport (spec-106 authenticated same-origin mutation carrying only {nudgeRef,action}; no bearer in JS, no new bypass, no new surfacing path) and the command-palette routing contract (Facade OutcomeOK+grounded -> answer; CaptureRoute -> spec-074 Idea + StatusSavedAsIdea; failed/refused -> StatusUnavailable/honest refusal, NEVER saved-as-idea; honors the OutcomeOK-only capture gate in facade.go). Grounded Architecture Findings table cites real files (controller.go, types.go, suppression.go, budget.go, metrics/surfacing.go, telegram/assistant_adapter/callbacks.go, graphapi, agent/store.go, 020_agent_traces.sql, topics/lifecycle.go, assistant/facade.go, capturefallback/payload.go, api/router.go, api/pwa.go). Every card routes through the one controller.Propose verdict; no parallel surfacing path, no second budget/dedupe/suppression, no new business store, no client cache of sensitive data. whatsapp reserved as an additive bounded Channel value routed to the spec-078 enum owner (types.go NOT edited). No files under specs/105, specs/106, specs/072, or specs/078 were modified. Planning-only: no source, no executed product tests, no migrations claimed (reserved at pickup), no browser runs, no deployment; status left not_started; certification.* untouched. Next owner: bubbles.plan."
+      }
+    ],
+    "pendingTransitionRequests": [],
+    "audit": {
+      "schemaVersion": "audit-run/v1",
+      "runId": null,
+      "currentAttemptId": null,
+      "attempts": []
+    }
+  },
+  "certification": {
+    "status": "not_started",
+    "completedScopes": [],
+    "certifiedCompletedPhases": [],
+    "scopeProgress": [],
+    "lockdownState": {
+      "active": false,
+      "lockedScenarioIds": []
+    }
+  },
+  "policySnapshot": {
+    "grill": {"mode": "off", "source": "repo-default"},
+    "tdd": {"mode": "scenario-first", "source": "repo-default"},
+    "autoCommit": {"mode": "off", "source": "repo-default"},
+    "lockdown": {"mode": "off", "source": "repo-default"},
+    "regression": {"mode": "protected-scenarios", "source": "repo-default"},
+    "validation": {"mode": "certification-required", "source": "repo-default"}
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "executionHistory": [
+    {
+      "agent": "bubbles.analyst",
+      "phasesExecuted": ["analyze"],
+      "statusBefore": "not_started",
+      "statusAfter": "not_started",
+      "runStartedAt": "2026-07-24T03:04:12Z",
+      "runEndedAt": "2026-07-24T03:12:44Z",
+      "summary": "Created analyst-owned spec.md and state.json only for the new feature 107 Proactive & Correlated Experience. Grounded every requirement in real in-tree assets (surfacing controller, capture-as-fallback, assistant transports, edge store) and cited docs/Product-Principles.md and docs/smackerel.md §12/§17.1. Recorded compose-over-105/106 non-mutation boundaries and single-controller routing as machine-readable state. No UX, design, scopes, scope DAG, scenario manifest, test plan, report, user validation, source, tests, certification, commit, push, or deployment work was performed. Next owner: bubbles.ux."
+    },
+    {
+      "agent": "bubbles.ux",
+      "phasesExecuted": ["ux"],
+      "statusBefore": "not_started",
+      "statusAfter": "not_started",
+      "runStartedAt": "2026-07-24T04:05:00Z",
+      "runEndedAt": "2026-07-24T04:22:00Z",
+      "summary": "Authored the UX/interaction-design layer inline in spec.md (## UI Wireframes + ## User Flows) for P1–P6 across web PWA, Telegram, and WhatsApp. Composed over the spec-106 shell, theme tokens, typography, stable data-* DOM contract, and four availability labels; designed the P1 cockpit as the spec-106 Today body (landing-route coordination recorded); mapped proactive honest states onto the 106 vocabulary. Deep-linked the P3 correlation rail into the spec-105 explorer via its existing Explore-connections seed contract without re-implementing it. Every proactive card routes through the single spec-078 surfacing controller with act-once-suppressed-everywhere, identical budget-defer, and identical urgent-escalation across channels. Recommended the Telegram a:n: nudge callback family within the real 64-byte bound and the WhatsApp interactive 3-button + fallback rendering, leaving exact wire encoding and the whatsapp channel-enum decision to bubbles.design. Did NOT modify specs/105 or specs/106 (dependencies only). Ran the UX mode mechanical gate (UX1 present, UX8 no sidecar). Planning-only: no code, no executed product tests, no deployment; status left not_started (orchestration ceiling specs_hardened). Next owner: bubbles.design."
+    },
+    {
+      "agent": "bubbles.design",
+      "phasesExecuted": ["design"],
+      "statusBefore": "not_started",
+      "statusAfter": "not_started",
+      "runStartedAt": "2026-07-24T04:30:00Z",
+      "runEndedAt": "2026-07-24T05:12:00Z",
+      "summary": "Authored design.md in the 105/106 house style: the full technical composition of the proactive/correlated experience over the single spec-078 surfacing controller, the spec-106 shell, and the spec-105 explorer. Defined the ProactiveExperience capability foundation (ProactiveCardModel, NudgeRef registry, NudgeAck path, CorrelationRailRead, WhatChangedRead, PaletteTurnRouter, HonestStatePresenter, BudgetMeterRead), the three channel renderings, and the single-controller routing rule. Resolved OQ2 (a:n: Telegram callback family + WhatsApp reply-id via a shared opaque NudgeRef registry, no content_key on any wire), OQ4 (bounded authorized WhatChangedRead over agent_traces + surfacing verdicts + topic lifecycle + recency; no second store, no unread counter), OQ5 (CorrelationRailRead as a RAIL_MAX-bounded spec-105 neighborhood call with the exact seed deep-link; no parallel graph path, no client cache), OQ6 (snooze = Acknowledge(content_key); no snooze store), OQ7 (cross-channel suppression already global by content_key; join reuses each transport's existing auth mapping), plus the web action transport and command-palette routing contract. Promoted specs/072-whatsapp-business-transport into specDependsOn per orchestrator decision and reserved whatsapp as an additive bounded Channel value routed as a coordination note to the spec-078 enum owner (types.go NOT edited). Did NOT modify specs/105, specs/106, specs/072, or specs/078 (dependencies only). Planning-only: no code, no executed product tests, no migrations claimed, no browser runs, no deployment; status left not_started (orchestration ceiling specs_hardened); certification.* untouched. Next owner: bubbles.plan."
+    },
+    {
+      "agent": "bubbles.plan",
+      "phasesExecuted": ["plan"],
+      "statusBefore": "not_started",
+      "statusAfter": "not_started",
+      "runStartedAt": "2026-07-24T18:00:00Z",
+      "runEndedAt": "2026-07-24T18:33:00Z",
+      "summary": "Authored the scope plan + planning artifacts (final product-to-planning phase, ceiling specs_hardened). Decomposed P1-P6 across web PWA + Telegram + WhatsApp into 9 sequential, dependency-ordered, per-scope-directory scopes (scopes/NN-name/scope.md + _index.md) in the spec-105/106 house style. Mapped all 20 SCN-107 scenarios one-to-one to owning scopes; every scenario has concrete unit/integration/e2e-api/e2e-ui planning (80 scenario rows) plus supplemental canary/stress/anti-leak/non-collision/restart/contrast/telemetry/acceptance rows (107 total). Authored scenario-manifest.json (20 scenarios, all tests PLANNED / 0 linked) and test-plan.json. Recorded the four SST no-default decisions (nudge_ref_ttl_hours=6, RAIL_MAX=6, what_changed_page_cap=25, snooze reuses suppression_window_hours) reserved for implementation (config/smackerel.yaml NOT edited). Every card originates from the single spec-078 controller; the rail is a tighter-bounded spec-105 neighborhood call; the palette consumes spec-074/061; no second store, budget, client cache, or owner edit. Did NOT modify specs/105, specs/106, specs/072, or specs/078. Ran artifact-lint.sh (exit 0) and traceability-guard.sh (exit 0, 0 warnings, 20/20 DoD fidelity). Planning-only: no source, authored-test, test-pass, migration, browser, deployment, commit, or push; certification.* untouched; status left not_started (planning-complete convention). Next owner: bubbles.implement."
+    }
+  ],
+  "activeBugs": [],
+  "resolvedBugs": [],
+  "failures": [],
+  "lastUpdatedAt": "2026-07-24T18:33:00Z",
+  "artifacts": {
+    "spec": "spec.md",
+    "state": "state.json",
+    "design": "design.md",
+    "scopes": "scopes/_index.md",
+    "report": "report.md",
+    "uservalidation": "uservalidation.md",
+    "scenarioManifest": "scenario-manifest.json",
+    "testPlan": "test-plan.json"
+  },
+  "scopeLayout": "per-scope-directory",
+  "statusDiscipline": {
+    "validStatuses": ["not_started", "in_progress", "blocked", "specs_hardened", "docs_updated", "validated", "done"],
+    "orchestrationMode": "product-to-planning",
+    "orchestrationStatusCeiling": "specs_hardened",
+    "phasePlan": ["analyze (bubbles.analyst, done this run)", "ux (bubbles.ux)", "design (bubbles.design)", "plan (bubbles.plan)"],
+    "note": "Planning-only workflow. Terminal status for this orchestration is specs_hardened; implementation, product testing, certification, and deployment are out of scope for this session."
+  },
+  "notes": "Plan phase (bubbles.plan) authored the scope plan + planning artifacts (final product-to-planning phase; orchestration ceiling specs_hardened). 9 sequential, dependency-ordered, per-scope-directory scopes under scopes/ (01 single-controller card/ack foundation [foundation:true]; 02 web card + authenticated action transport; 03 Telegram + WhatsApp nudge parity; 04 Today cockpit; 05 correlation rail; 06 ask-or-capture palette; 07 what-changed feed; 08 a11y/responsive/authz hardening; 09 real-stack acceptance + handoff) plus scopes/_index.md. All 20 SCN-107 scenarios mapped one-to-one to owning scopes; every scenario has concrete unit/integration/e2e-api/e2e-ui planning (80 scenario rows) plus supplemental canary/stress/anti-leak/non-collision/restart/contrast/telemetry/acceptance rows (107 total). scenario-manifest.json covers 20 scenarios with ALL tests PLANNED / not-yet-authored (0 linked); test-plan.json is the executable handoff. Four SST no-default decisions recorded (reserved, config/smackerel.yaml NOT edited): nudge_ref_ttl_hours=6 (>= max(suppression_window_hours=4, dedupe_window_hours=6)); RAIL_MAX=6; what_changed_page_cap=25; snooze reuses suppression_window_hours (no distinct snooze_window_hours for MVP). No migration reserved (NudgeRef registry is in-memory; number allocated at pickup only if needed). Every card originates from the single spec-078 controller; the rail is a tighter-bounded spec-105 neighborhood call; the palette consumes spec-074/061/073; no second store, second budget, client cache, or owner edit; whatsapp Channel value remains a coordination note to spec-078. Did NOT modify specs/105, specs/106, specs/072, or specs/078 (dependencies/entry gates only). artifact-lint.sh exit 0 and traceability-guard.sh exit 0 (0 warnings, 20 scenarios, 20/20 DoD fidelity, 107 test rows) captured this session. Planning-only: no source, authored-test, test-pass, migration, browser, deployment, commit, or push; certification.* untouched; status left not_started (planning-complete convention, matching 105/106). Planning package COMPLETE (spec + design + scopes + scenario-manifest + test-plan + state + report + uservalidation); ready for implementation pickup. Next owner: bubbles.implement. (Prior: analyst authored spec.md; ux authored ## UI Wireframes + ## User Flows inline in spec.md; design authored design.md.)"
+}
