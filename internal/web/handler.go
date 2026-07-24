@@ -1,6 +1,7 @@
 package web
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -11,6 +12,7 @@ import (
 	"os"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -43,6 +45,13 @@ type Handler struct {
 	SearchEngine   *api.SearchEngine
 	Supervisor     SyncTrigger
 	KnowledgeStore *knowledge.KnowledgeStore
+
+	// SearchExecutorOverride, when non-nil, replaces the real *api.SearchEngine
+	// as the SearchResults domain-dispatch seam. Production leaves it nil;
+	// focused unit tests inject a counting fake to prove zero SearchEngine
+	// dispatch for blank/control/whitespace-only input (BUG-002-006 SEARCH-004).
+	// It is an observation seam only — no runtime input selects it.
+	SearchExecutorOverride SearchExecutor
 
 	RecommendationsEnabled  bool
 	RecommendationProviders RecommendationProviderLister
@@ -130,100 +139,129 @@ func NewHandler(pool *pgxpool.Pool, nc *smacknats.Client, startTime time.Time) *
 	}
 }
 
-// SearchPage handles GET / — the main search page.
-func (h *Handler) SearchPage(w http.ResponseWriter, r *http.Request) {
-	if err := h.Templates.ExecuteTemplate(w, "search.html", map[string]interface{}{
-		"Title": "Smackerel",
-	}); err != nil {
-		slog.Error("template render failed", "template", "search.html", "error", err)
+// executor returns the domain-dispatch seam used by SearchResults. Production
+// uses the real *api.SearchEngine; focused tests inject a counting fake via
+// SearchExecutorOverride to prove zero SearchEngine dispatch for blank input.
+func (h *Handler) executor() SearchExecutor {
+	if h.SearchExecutorOverride != nil {
+		return h.SearchExecutorOverride
 	}
+	return h.SearchEngine
 }
 
-// SearchResults handles POST /search — HTMX partial for search results.
+// trimSearchQuery edge-trims leading/trailing Unicode whitespace and control
+// code points without deleting interior content (BUG-002-006 design
+// "Pre-Dispatch Input Gate").
+func trimSearchQuery(raw string) string {
+	return strings.TrimFunc(raw, func(r rune) bool {
+		return unicode.IsSpace(r) || unicode.IsControl(r)
+	})
+}
+
+// isBlankQuery reports whether the edge-trimmed query is empty. Empty,
+// whitespace-only, control-only, and mixed whitespace/control input all trim to
+// "" and MUST NOT dispatch any SearchEngine or downstream search-domain work
+// (SEARCH-004).
+func isBlankQuery(trimmed string) bool { return trimmed == "" }
+
+// renderSearch writes one Search response from the typed model. A baseline
+// (non-HTMX) request receives a complete page; an HX-Request receives the
+// outcome fragment. Both use the same real HTTP status. Rendering happens into a
+// buffer first so a template failure cannot emit a partially-written body under
+// a wrong status.
+func (h *Handler) renderSearch(w http.ResponseWriter, htmx bool, model SearchPageModel, status int) {
+	tmplName := "search.html"
+	if htmx {
+		tmplName = "results-partial.html"
+	}
+	var buf bytes.Buffer
+	if err := h.Templates.ExecuteTemplate(&buf, tmplName, model); err != nil {
+		slog.Error("template render failed", "template", tmplName, "error", err)
+		http.Error(w, "Internal error", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(status)
+	_, _ = w.Write(buf.Bytes())
+}
+
+// SearchPage handles GET / — the complete server-rendered Search page in the
+// initial ready state. It renders a semantic form that works with JavaScript
+// disabled or HTMX blocked (progressive enhancement baseline).
+func (h *Handler) SearchPage(w http.ResponseWriter, r *http.Request) {
+	h.renderSearch(w, false, SearchPageModel{Title: "Smackerel", State: SearchStateReady}, http.StatusOK)
+}
+
+// SearchResults handles POST /search. It normalizes and classifies the query
+// once before any domain dispatch: blank/control/whitespace-only input returns
+// HTTP 422 validation with ZERO SearchEngine or downstream search-domain work
+// (SEARCH-004); otherwise the injected SearchExecutor is called exactly once and
+// one closed terminal state is projected. A baseline (non-HTMX) request receives
+// a complete page; an HX-Request receives the outcome fragment with the same
+// real HTTP status.
 func (h *Handler) SearchResults(w http.ResponseWriter, r *http.Request) {
-	query := r.FormValue("query")
-	if query == "" {
-		if err := h.Templates.ExecuteTemplate(w, "results-partial.html", map[string]interface{}{
-			"Results": nil,
-			"Empty":   "Type a query to search your knowledge",
-		}); err != nil {
-			slog.Error("template error", "error", err)
-			http.Error(w, "Internal error", 500)
-		}
+	htmx := r.Header.Get("HX-Request") == "true"
+	trimmed := trimSearchQuery(r.FormValue("query"))
+
+	// Pre-dispatch gate: blank input is validated without touching SearchEngine
+	// or any downstream search-domain dependency.
+	if isBlankQuery(trimmed) {
+		h.renderSearch(w, htmx, SearchPageModel{
+			Title:             "Smackerel",
+			State:             SearchStateValidation,
+			ValidationMessage: "Enter a search query",
+		}, http.StatusUnprocessableEntity)
 		return
 	}
 
-	// Use the semantic search engine (vector + text fallback) instead of raw ILIKE
-	results, _, _, err := h.SearchEngine.Search(r.Context(), api.SearchRequest{
-		Query: query,
+	// Exactly one domain dispatch for a searchable query.
+	results, _, _, err := h.executor().Search(r.Context(), api.SearchRequest{
+		Query: trimmed,
 		Limit: 20,
 	})
 	if err != nil {
 		slog.Error("web search failed", "error", err)
-		if err := h.Templates.ExecuteTemplate(w, "results-partial.html", map[string]interface{}{
-			"Results": nil,
-			"Error":   "Search failed. Try again.",
-		}); err != nil {
-			slog.Error("template error", "error", err)
-			http.Error(w, "Internal error", 500)
-		}
+		h.renderSearch(w, htmx, SearchPageModel{
+			Title:        "Smackerel",
+			Query:        trimmed,
+			State:        SearchStateServerError,
+			ErrorMessage: "Search could not complete. Try again.",
+		}, http.StatusInternalServerError)
 		return
 	}
 
-	type Result struct {
-		ID        string
-		Title     string
-		Type      string
-		Summary   string
-		SourceURL string
-		CreatedAt time.Time
-		QFCard    *qfdecisions.PacketCard
-	}
-
-	var viewResults []Result
+	views := make([]SearchResultView, 0, len(results))
 	for _, sr := range results {
-		var createdAt time.Time
-		if t, err := time.Parse(time.RFC3339, sr.CreatedAt); err == nil {
-			createdAt = t
-		}
-		viewResults = append(viewResults, Result{
+		views = append(views, SearchResultView{
 			ID:        sr.ArtifactID,
 			Title:     sr.Title,
 			Type:      sr.ArtifactType,
 			Summary:   sr.Summary,
 			SourceURL: sr.SourceURL,
-			CreatedAt: createdAt,
 			QFCard:    sr.QFCard,
 		})
 	}
 
-	if len(viewResults) == 0 {
-		templateData := map[string]interface{}{
-			"Results": nil,
-			"Empty":   "No results found. Try a different query.",
-		}
-		if knowledgeMatch := h.searchKnowledgeMatch(r.Context(), query); knowledgeMatch != nil {
-			templateData["KnowledgeMatch"] = knowledgeMatch
-			delete(templateData, "Empty")
-		}
-		if err := h.Templates.ExecuteTemplate(w, "results-partial.html", templateData); err != nil {
-			slog.Error("template error", "error", err)
-			http.Error(w, "Internal error", 500)
-		}
+	km := h.searchKnowledgeMatch(r.Context(), trimmed)
+
+	if len(views) == 0 {
+		h.renderSearch(w, htmx, SearchPageModel{
+			Title:          "Smackerel",
+			Query:          trimmed,
+			State:          SearchStateEmpty,
+			KnowledgeMatch: km,
+		}, http.StatusOK)
 		return
 	}
 
-	templateData := map[string]interface{}{
-		"Results": viewResults,
-		"Query":   query,
-	}
-	if knowledgeMatch := h.searchKnowledgeMatch(r.Context(), query); knowledgeMatch != nil {
-		templateData["KnowledgeMatch"] = knowledgeMatch
-	}
-	if err := h.Templates.ExecuteTemplate(w, "results-partial.html", templateData); err != nil {
-		slog.Error("template error", "error", err)
-		http.Error(w, "Internal error", 500)
-	}
+	h.renderSearch(w, htmx, SearchPageModel{
+		Title:          "Smackerel",
+		Query:          trimmed,
+		State:          SearchStateResults,
+		Results:        views,
+		ResultCount:    len(views),
+		KnowledgeMatch: km,
+	}, http.StatusOK)
 }
 
 // ArtifactDetail handles GET /artifact/{id}.
@@ -898,13 +936,7 @@ func (h *Handler) BookmarkUploadHandler(w http.ResponseWriter, r *http.Request) 
 
 // searchKnowledgeMatch searches the knowledge layer for a concept match.
 // Returns nil if KnowledgeStore is not configured or no match is found.
-func (h *Handler) searchKnowledgeMatch(ctx context.Context, query string) *struct {
-	ConceptID     string
-	Title         string
-	Summary       string
-	CitationCount int
-	UpdatedAt     time.Time
-} {
+func (h *Handler) searchKnowledgeMatch(ctx context.Context, query string) *KnowledgeMatchView {
 	if h.KnowledgeStore == nil {
 		return nil
 	}
@@ -916,13 +948,7 @@ func (h *Handler) searchKnowledgeMatch(ctx context.Context, query string) *struc
 	if match == nil {
 		return nil
 	}
-	return &struct {
-		ConceptID     string
-		Title         string
-		Summary       string
-		CitationCount int
-		UpdatedAt     time.Time
-	}{
+	return &KnowledgeMatchView{
 		ConceptID:     match.ConceptID,
 		Title:         match.Title,
 		Summary:       match.Summary,

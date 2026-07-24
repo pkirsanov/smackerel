@@ -3,14 +3,18 @@ package web
 import (
 	"bytes"
 	"context"
+	"errors"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/go-chi/chi/v5"
+
+	"github.com/smackerel/smackerel/internal/api"
 )
 
 func TestNewHandler(t *testing.T) {
@@ -177,6 +181,190 @@ func TestSCN002033_WebSearchPage(t *testing.T) {
 	}
 	if !containsString(body, "hx-post") {
 		t.Error("search page should have HTMX attributes for search")
+	}
+}
+
+// errSearchBoom is a synthetic executor failure for the server_error path.
+var errSearchBoom = errors.New("search engine boom")
+
+// countingSearchExecutor is the injected zero-domain-work proof seam for
+// BUG-002-006 SEARCH-004: it records how many times the Search handler
+// dispatched domain work. A blank/control/whitespace-only submission MUST leave
+// calls == 0 on both the native-form and HTMX paths.
+type countingSearchExecutor struct {
+	calls   int
+	lastReq api.SearchRequest
+	results []api.SearchResult
+	err     error
+}
+
+func (c *countingSearchExecutor) Search(_ context.Context, req api.SearchRequest) ([]api.SearchResult, int, string, error) {
+	c.calls++
+	c.lastReq = req
+	if c.err != nil {
+		return nil, 0, "", c.err
+	}
+	return c.results, len(c.results), "text_fallback", nil
+}
+
+func searchForm(query string) (*http.Request, *httptest.ResponseRecorder) {
+	body := url.Values{"query": {query}}.Encode()
+	req := httptest.NewRequest(http.MethodPost, "/search", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	return req, httptest.NewRecorder()
+}
+
+// TestSearchSemanticFormAndTypedFullPageFragmentStateMatrix is BUG-002-006
+// SEARCH-S02-T01. It proves (SCN-002-006-02/04/05) the progressive-enhancement
+// semantic form, the typed full-page/fragment state matrix, and that
+// blank/control/whitespace-only input executes ZERO SearchEngine dispatch on
+// both the native-form and HTMX paths (HTTP 422 validation permitted).
+func TestSearchSemanticFormAndTypedFullPageFragmentStateMatrix(t *testing.T) {
+	// --- SCN-002-006-02: the semantic baseline form is present on GET / and
+	// submits without any client enhancement (native <form> POST /search). ---
+	h := NewHandler(nil, nil, time.Now())
+	getRec := httptest.NewRecorder()
+	h.SearchPage(getRec, httptest.NewRequest(http.MethodGet, "/", nil))
+	if getRec.Code != http.StatusOK {
+		t.Fatalf("GET /: expected 200, got %d", getRec.Code)
+	}
+	page := getRec.Body.String()
+	for _, want := range []string{
+		`method="post"`, `action="/search"`, `role="search"`,
+		`name="query"`, `required`, `type="submit"`, `hx-post="/search"`,
+		`id="search-outcome"`, `data-search-state="ready"`, "<!DOCTYPE html>",
+	} {
+		if !strings.Contains(page, want) {
+			t.Errorf("GET / semantic form missing %q", want)
+		}
+	}
+
+	// --- SCN-002-006-04: blank/control/whitespace-only input returns 422 and
+	// dispatches ZERO search-domain work, on BOTH native and HTMX paths. ---
+	blankInputs := []struct{ name, query string }{
+		{"empty", ""},
+		{"spaces", "     "},
+		{"tabs-newlines", "\t\n\r "},
+		{"control-only", "\x01\x02\x03"},
+		{"nul-and-mixed", " \t\x00\x1f \n"},
+		{"unicode-space", "\u00a0\u2003"},
+	}
+	paths := []struct {
+		name   string
+		htmx   bool
+		marker string
+		wantDoc bool
+	}{
+		{"native", false, `data-search-form`, true},
+		{"htmx", true, `search-outcome-body`, false},
+	}
+	for _, p := range paths {
+		for _, in := range blankInputs {
+			exec := &countingSearchExecutor{}
+			hb := NewHandler(nil, nil, time.Now())
+			hb.SearchExecutorOverride = exec
+			req, rec := searchForm(in.query)
+			if p.htmx {
+				req.Header.Set("HX-Request", "true")
+			}
+			hb.SearchResults(rec, req)
+			if rec.Code != http.StatusUnprocessableEntity {
+				t.Errorf("%s/%s: expected 422 validation, got %d", p.name, in.name, rec.Code)
+			}
+			if exec.calls != 0 {
+				t.Errorf("%s/%s: expected ZERO SearchEngine dispatch, got %d", p.name, in.name, exec.calls)
+			}
+			body := rec.Body.String()
+			if !strings.Contains(body, `data-search-state="validation"`) {
+				t.Errorf("%s/%s: expected validation state marker; body=%q", p.name, in.name, body)
+			}
+			if !strings.Contains(body, p.marker) {
+				t.Errorf("%s/%s: expected %q marker for the %s path", p.name, in.name, p.marker, p.name)
+			}
+			if hasDoc := strings.Contains(body, "<!DOCTYPE html>"); hasDoc != p.wantDoc {
+				t.Errorf("%s/%s: full-document=%v, wanted %v", p.name, in.name, hasDoc, p.wantDoc)
+			}
+		}
+	}
+
+	// --- SCN-002-006-02/05: a searchable query dispatches EXACTLY ONCE, the
+	// baseline returns a COMPLETE page with the retained edge-trimmed query, and
+	// the HTMX path returns only the outcome fragment. ---
+	for _, p := range []struct {
+		name    string
+		htmx    bool
+		wantDoc bool
+	}{
+		{"native-full-page", false, true},
+		{"htmx-fragment", true, false},
+	} {
+		exec := &countingSearchExecutor{results: []api.SearchResult{
+			{ArtifactID: "a-1", Title: "Ramen Notes", ArtifactType: "note", Summary: "broth"},
+		}}
+		hr := NewHandler(nil, nil, time.Now())
+		hr.SearchExecutorOverride = exec
+		req, rec := searchForm("  ramen  ")
+		if p.htmx {
+			req.Header.Set("HX-Request", "true")
+		}
+		hr.SearchResults(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Errorf("%s: expected 200, got %d", p.name, rec.Code)
+		}
+		if exec.calls != 1 {
+			t.Errorf("%s: expected exactly one SearchEngine dispatch, got %d", p.name, exec.calls)
+		}
+		if exec.lastReq.Query != "ramen" {
+			t.Errorf("%s: expected edge-trimmed query %q, got %q", p.name, "ramen", exec.lastReq.Query)
+		}
+		body := rec.Body.String()
+		if !strings.Contains(body, `data-search-state="results"`) {
+			t.Errorf("%s: expected results state marker", p.name)
+		}
+		if !strings.Contains(body, "Ramen Notes") {
+			t.Errorf("%s: expected the live result title in the body", p.name)
+		}
+		if hasDoc := strings.Contains(body, "<!DOCTYPE html>"); hasDoc != p.wantDoc {
+			t.Errorf("%s: full-document=%v, wanted %v", p.name, hasDoc, p.wantDoc)
+		}
+		if p.wantDoc && !strings.Contains(body, `value="ramen"`) {
+			t.Errorf("%s: baseline page must retain the query in the field", p.name)
+		}
+	}
+
+	// --- SCN-002-006-05: an engine failure is a typed server_error (HTTP 500),
+	// distinct from empty, with the query retained; exactly one dispatch. ---
+	execErr := &countingSearchExecutor{err: errSearchBoom}
+	he := NewHandler(nil, nil, time.Now())
+	he.SearchExecutorOverride = execErr
+	req, rec := searchForm("ramen")
+	he.SearchResults(rec, req)
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("server failure: expected 500, got %d", rec.Code)
+	}
+	if execErr.calls != 1 {
+		t.Errorf("server failure: expected one dispatch, got %d", execErr.calls)
+	}
+	if !strings.Contains(rec.Body.String(), `data-search-state="server_error"`) {
+		t.Error("server failure: expected server_error state marker")
+	}
+
+	// --- SCN-002-006-05: a valid query with zero results is a typed empty
+	// state (HTTP 200) with no error/retry language. ---
+	execEmpty := &countingSearchExecutor{}
+	hz := NewHandler(nil, nil, time.Now())
+	hz.SearchExecutorOverride = execEmpty
+	req, rec = searchForm("no-such-thing")
+	hz.SearchResults(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Errorf("empty: expected 200, got %d", rec.Code)
+	}
+	emptyBody := rec.Body.String()
+	if !strings.Contains(emptyBody, `data-search-state="empty"`) {
+		t.Error("empty: expected empty state marker")
+	}
+	if strings.Contains(emptyBody, `data-search-state="server_error"`) {
+		t.Error("empty: must not render server_error language for a zero-result query")
 	}
 }
 
