@@ -3,7 +3,8 @@
   "featureDir": "specs/107-proactive-correlated-experience",
   "featureNumber": "107",
   "featureName": "Proactive & Correlated Experience",
-  "status": "not_started",
+  "status": "blocked",
+  "blockedReason": "SCOPE-01 core-delivered (13/20 DoD): single-controller card projection + NudgeRef anti-leak boundary + single NudgeAck path + additive a:n: Telegram/WhatsApp callback family + budget-defer/urgent-escalation parity, proven with fresh evidence at unit + integration-light + live-stack stress (TestSCN107Hotpath p99=2.048ms<5ms over 50000 ops). SCOPE-01 remains Blocked: its 6 e2e-api/e2e-ui DoD rows require SCOPE-02 (web card + action transport) and SCOPE-03 (Telegram/WhatsApp send) rendered surfaces that do not exist yet, and the repo-wide format gate is red on a concurrent sibling session's out-of-boundary internal/web/handler_test.go (search/BUG-002-006 work, must not be touched). SCOPE-02..09 are each gated on the coordinating session's unbuilt specs 105 (connected-knowledge-graph explorer) + 106 (coherent-product shell); SCOPE-03 additionally on the spec-078 whatsapp Channel enum value. Unblock: coordinating session ships 105 + 106 (and the spec-078 whatsapp Channel value), the sibling search session lands/format-fixes internal/web/*, then re-run full delivery from SCOPE-02.",
   "workflowMode": "full-delivery",
   "releaseTrain": "mvp",
   "flagsIntroduced": [],
@@ -146,10 +147,11 @@
   "certifiedAt": null,
   "requiresRevalidation": false,
   "execution": {
-    "activeAgent": "bubbles.plan",
-    "currentPhase": "plan",
-    "currentScope": null,
-    "nextRequiredOwner": "bubbles.implement",
+    "activeAgent": "bubbles.implement",
+    "currentPhase": "implement",
+    "currentScope": "SCOPE-01",
+    "substate": "implemented",
+    "nextRequiredOwner": "bubbles.workflow",
     "runStartedAt": "2026-07-24T18:00:00Z",
     "completedPhaseClaims": [
       {
@@ -183,10 +185,20 @@
     }
   },
   "certification": {
-    "status": "not_started",
+    "status": "blocked",
     "completedScopes": [],
     "certifiedCompletedPhases": [],
-    "scopeProgress": [],
+    "scopeProgress": [
+      {"scope": "SCOPE-01", "status": "Blocked", "dod": "13/20", "startedAt": "2026-07-24T20:40:00Z", "note": "Core-delivered + Blocked. Checked with fresh current-session evidence: 2 model-contract items, 3 core scenarios (SCN-107-004/008/009 unit + integration-light green), 3 integration rows (T107-004/008/009-I), 4 unit rows (T107-004/008/009-U + T107-01-LEAK), 1 live-stack stress row (T107-01-HOTPATH p99=2.048ms<5ms/50000 ops). Remaining 7 [ ]: 6 e2e-api/e2e-ui rows (T107-004/008/009-A/W) blocked on SCOPE-02/03 rendered surfaces; 1 Build Quality Gate blocked by repo-wide format --check red on a sibling session's out-of-boundary internal/web/handler_test.go (SCOPE-01 own code is gofmt-clean). Routed to bubbles.workflow."},
+      {"scope": "SCOPE-02", "status": "Blocked", "note": "Gated on specs/106-coherent-product-experience shell/AuthenticatedRequestAdapter (unbuilt in coordinating session)."},
+      {"scope": "SCOPE-03", "status": "Blocked", "note": "Gated on specs/072-whatsapp-business-transport + the spec-078 whatsapp Channel enum value (coordination note, not yet landed)."},
+      {"scope": "SCOPE-04", "status": "Blocked", "note": "Gated on specs/106 Today destination (unbuilt)."},
+      {"scope": "SCOPE-05", "status": "Blocked", "note": "Gated on specs/105-connected-knowledge-graph-explorer neighborhood + deep-link (unbuilt)."},
+      {"scope": "SCOPE-06", "status": "Blocked", "note": "Gated on SCOPE-04/05 + specs/074/061/073 palette surfaces."},
+      {"scope": "SCOPE-07", "status": "Blocked", "note": "Gated on SCOPE-04 + specs/054 agent_traces/topic lifecycle what-changed read."},
+      {"scope": "SCOPE-08", "status": "Blocked", "note": "Gated on SCOPE-02..07 (a11y/responsive/authz hardening over rendered surfaces)."},
+      {"scope": "SCOPE-09", "status": "Blocked", "note": "Gated on SCOPE-01..08 (real-stack acceptance + handoff)."}
+    ],
     "lockdownState": {
       "active": false,
       "lockedScenarioIds": []
@@ -238,12 +250,22 @@
       "runStartedAt": "2026-07-24T18:00:00Z",
       "runEndedAt": "2026-07-24T18:33:00Z",
       "summary": "Authored the scope plan + planning artifacts (final product-to-planning phase, ceiling specs_hardened). Decomposed P1-P6 across web PWA + Telegram + WhatsApp into 9 sequential, dependency-ordered, per-scope-directory scopes (scopes/NN-name/scope.md + _index.md) in the spec-105/106 house style. Mapped all 20 SCN-107 scenarios one-to-one to owning scopes; every scenario has concrete unit/integration/e2e-api/e2e-ui planning (80 scenario rows) plus supplemental canary/stress/anti-leak/non-collision/restart/contrast/telemetry/acceptance rows (107 total). Authored scenario-manifest.json (20 scenarios, all tests PLANNED / 0 linked) and test-plan.json. Recorded the four SST no-default decisions (nudge_ref_ttl_hours=6, RAIL_MAX=6, what_changed_page_cap=25, snooze reuses suppression_window_hours) reserved for implementation (config/smackerel.yaml NOT edited). Every card originates from the single spec-078 controller; the rail is a tighter-bounded spec-105 neighborhood call; the palette consumes spec-074/061; no second store, budget, client cache, or owner edit. Did NOT modify specs/105, specs/106, specs/072, or specs/078. Ran artifact-lint.sh (exit 0) and traceability-guard.sh (exit 0, 0 warnings, 20/20 DoD fidelity). Planning-only: no source, authored-test, test-pass, migration, browser, deployment, commit, or push; certification.* untouched; status left not_started (planning-complete convention). Next owner: bubbles.implement."
+    },
+    {
+      "agent": "bubbles.implement",
+      "phasesExecuted": ["implement"],
+      "statusBefore": "not_started",
+      "statusAfter": "blocked",
+      "scope": "SCOPE-01",
+      "runStartedAt": "2026-07-24T20:40:00Z",
+      "runEndedAt": "2026-07-24T21:18:00Z",
+      "summary": "Resumed + core-delivered SCOPE-01 (single-controller card projection & nudge-ack foundation). Re-ran the remaining lanes FOCUSED with fresh current-session evidence and persisted incrementally after each: integration-light --go-run 'TestSCN107(004|008|009)' (3/3 PASS on the stores-only live stack, exit 0) => 3 core scenario + 3 integration DoD items; stress --go-run TestSCN107Hotpath_CardProjectionP99Live (live full stack up, p99=2.048ms<5ms over 50000 ops, exit 0) => T107-01-HOTPATH; unit --go --go-run 'Nudge' + check + lint all exit 0. Result: 13/20 DoD [x]. SCOPE-01 Blocked: 6 e2e-api/e2e-ui rows require SCOPE-02/03 rendered surfaces (unbuilt); Build Quality Gate blocked by repo-wide format --check red on a concurrent sibling session's out-of-boundary internal/web/handler_test.go (search/BUG-002-006) which must not be touched (SCOPE-01 own code gofmt-clean). Boundary intact: NO edits under specs/105, specs/106, specs/072, specs/078, or internal/intelligence/surfacing; a:n: additive in callbacks.go; every card routes through the single spec-078 controller.Propose; no second budget/store/cache. No commit/push/deploy. Next owner: bubbles.workflow (route the sibling-format finding; drive SCOPE-02+ once 105/106 land)."
     }
   ],
   "activeBugs": [],
   "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-07-24T18:33:00Z",
+  "lastUpdatedAt": "2026-07-24T21:18:00Z",
   "artifacts": {
     "spec": "spec.md",
     "state": "state.json",

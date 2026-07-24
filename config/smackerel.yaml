@@ -481,6 +481,24 @@ surfacing:
   dedupe_window_hours: 6 # same content_key collapses within this window
   urgent_escalation_enabled: true # priority-1 + time_critical may bypass exhausted budget
 
+# Spec 107 SCOPE-01 — Proactive & Correlated Experience foundation. The
+# proactive card/nudge layer composes OVER the spec-021/078 surfacing controller
+# above; it introduces no second budget, dedupe, or suppression. The only new
+# value is the NudgeRef registry TTL — the process-local, ephemeral map that
+# routes an opaque wire ref back to a content_key (the sole anti-leak boundary).
+# Every value flows through scripts/commands/config.sh into the generated env
+# file as PROACTIVE_*; no in-source defaults (smackerel-no-defaults policy).
+# Startup fails loud if the field is missing, non-positive, or below the bound.
+proactive:
+  # nudge_ref_ttl_hours bounds how long a minted NudgeRef resolves before a late
+  # tap on any channel renders an honest `expired`/`already-handled` state rather
+  # than a silent miss. It MUST be an integer >= max(surfacing.suppression_window_hours,
+  # surfacing.dedupe_window_hours) so a ref outlives both windows; config-compile
+  # validates the bound and aborts the build otherwise. There is NO snooze store:
+  # act/snooze/dismiss all Acknowledge(content_key); MVP reuses
+  # surfacing.suppression_window_hours (no distinct snooze_window_hours).
+  nudge_ref_ttl_hours: 6
+
 # Spec 021 R-021-005 / BUG-021-005 — relationship-cooling intelligence.
 # The "is this relationship cooling?" JUDGMENT is LLM-driven (the
 # relationship_cooling_evaluate scenario), NOT a hardcoded threshold. These
