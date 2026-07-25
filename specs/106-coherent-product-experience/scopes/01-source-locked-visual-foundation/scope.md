@@ -2,7 +2,7 @@
 
 Links: [spec.md](../../spec.md) | [design.md](../../design.md) | [scope index](../_index.md) | [report.md](report.md)
 
-**Status:** Not Started
+**Status:** In Progress
 **Scope-Kind:** runtime-behavior
 **Tags:** foundation:true
 **Depends On:** -
@@ -61,13 +61,13 @@ Assets, manifest, CSP references, pre-paint code, and service-worker cache ident
 #### Core Outcomes
 
 - [ ] `SCN-106-009 Theme follows the user across renderers`: System, Light, Dark, Comfortable, and Compact resolve before first paint and remain coherent across server and PWA renderers while forced colors and reduced motion stay platform-controlled and no credential or business value enters appearance storage.
-- [ ] One source-locked same-origin manifest and token source serves all renderers with explicit source, license, digest, CSP, and cache policy.
+- [x] One source-locked same-origin manifest and token source serves all renderers with explicit source, license, digest, CSP, and cache policy. → Evidence: [report.md#xp106-01-u](report.md#xp106-01-u) (per-asset real SHA-256/source/license/CSP-class/SW-cache-policy + semantic token source) and [report.md#build-quality](report.md#build-quality).
 - [ ] Typography, icons, controls, stable dimensions, no-overlap, no-nested-card, contrast, forced-colors, and reduced-motion contracts are mechanically enforceable.
 - [ ] Independent canaries and the immutable rollback unit protect every high-fan-out consumer before renderer migration.
 
 #### Test Evidence - 5 Rows / 5 Items
 
-- [ ] XP106-01-U passes with current-session evidence in `report.md#xp106-01-u`.
+- [x] XP106-01-U passes with current-session evidence in `report.md#xp106-01-u`.
 - [ ] XP106-01-I passes with current-session evidence in `report.md#xp106-01-i`.
 - [ ] XP106-01-A passes with current-session evidence in `report.md#xp106-01-a`.
 - [ ] XP106-01-W passes without interception or auth injection in `report.md#xp106-01-w`.
