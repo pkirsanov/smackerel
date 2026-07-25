@@ -58,7 +58,7 @@ Scenario: SCN-107-003 Nudge card carries provenance and one-tap actions
 tests/docs named by this scope.  
 **Excluded:** editing `specs/106-*` or the shell/session/CORS/CSP owners;
 introducing a second budget/dedupe/suppression path; the Telegram/WhatsApp
-renderings (SCOPE-03); the cockpit composition (SCOPE-04); any client cache of
+renderings (SCOPE-03A/SCOPE-03B); the cockpit composition (SCOPE-04); any client cache of
 card/provenance data.
 
 ## Test Plan

@@ -4,7 +4,7 @@
   "featureNumber": "107",
   "featureName": "Proactive & Correlated Experience",
   "status": "blocked",
-  "blockedReason": "SCOPE-01 core-delivered (13/20 DoD): single-controller card projection + NudgeRef anti-leak boundary + single NudgeAck path + additive a:n: Telegram/WhatsApp callback family + budget-defer/urgent-escalation parity, proven with fresh evidence at unit + integration-light + live-stack stress (TestSCN107Hotpath p99=2.048ms<5ms over 50000 ops). SCOPE-01 remains Blocked: its 6 e2e-api/e2e-ui DoD rows require SCOPE-02 (web card + action transport) and SCOPE-03 (Telegram/WhatsApp send) rendered surfaces that do not exist yet, and the repo-wide format gate is red on a concurrent sibling session's out-of-boundary internal/web/handler_test.go (search/BUG-002-006 work, must not be touched). SCOPE-02..09 are each gated on the coordinating session's unbuilt specs 105 (connected-knowledge-graph explorer) + 106 (coherent-product shell); SCOPE-03 additionally on the spec-078 whatsapp Channel enum value. Unblock: coordinating session ships 105 + 106 (and the spec-078 whatsapp Channel value), the sibling search session lands/format-fixes internal/web/*, then re-run full delivery from SCOPE-02.",
+  "blockedReason": "SCOPE-01 + SCOPE-03A (Telegram proactive nudge rendering) delivered; SCOPE-03B (WhatsApp + cross-channel parity) gated on unbuilt spec-072; SCOPE-02/04-09 gated on the coordinating session's unbuilt spec-106 (shell) + spec-105 (explorer). Unblock: ship 106/105/072, then resume.",
   "workflowMode": "full-delivery",
   "releaseTrain": "mvp",
   "flagsIntroduced": [],
@@ -69,6 +69,16 @@
       "traceabilityGuardExit": 0,
       "traceabilityWarnings": 0
     },
+    "reScopes": [
+      {
+        "at": "2026-07-24T21:40:00Z",
+        "owner": "bubbles.plan",
+        "action": "Split SCOPE-03 into SCOPE-03A (Telegram proactive nudge rendering, buildable now on SCOPE-01 + in-tree spec-078) and SCOPE-03B (WhatsApp interactive + cross-channel act-once-suppressed-everywhere parity, gated on spec-072 + SCOPE-02/spec-106). SCOPE-04 Depends On repointed SCOPE-03 -> SCOPE-03B. SCN-107-005 -> SCOPE-03A (retyped e2e-ui -> e2e-api adapter-golden, no web Playwright); SCN-107-006/007 -> SCOPE-03B; all still PLANNED / 0 linked. Removed scopes/03-telegram-whatsapp-nudge-parity/; created scopes/03A-* and scopes/03B-*. SCOPE-01 committed Blocked (13/20) status + evidence preserved unchanged.",
+        "editedArtifacts": ["scopes/_index.md", "scopes/03A-telegram-proactive-nudge-rendering/scope.md", "scopes/03A-telegram-proactive-nudge-rendering/report.md", "scopes/03B-whatsapp-interactive-cross-channel-parity/scope.md", "scopes/03B-whatsapp-interactive-cross-channel-parity/report.md", "scopes/02-web-proactive-card-action-transport/scope.md", "scopes/04-today-cockpit-composition/scope.md", "scopes/04-today-cockpit-composition/report.md", "scenario-manifest.json", "test-plan.json", "state.json", "report.md"],
+        "boundary": "Edited ONLY spec-107 artifacts. specs/105, specs/106, specs/072, specs/078, and internal/intelligence/surfacing untouched. No source, authored test, test pass, migration, browser, or deployment. Planning-only guards: artifact-lint.sh + traceability-guard.sh.",
+        "planningOnly": true
+      }
+    ],
     "nextPhase": "bubbles.implement"
   },
   "specComposesOver": [
@@ -122,11 +132,13 @@
   },
   "scopeDag": {
     "layout": "per-scope-directory",
-    "nodes": ["SCOPE-01", "SCOPE-02", "SCOPE-03", "SCOPE-04", "SCOPE-05", "SCOPE-06", "SCOPE-07", "SCOPE-08", "SCOPE-09"],
+    "nodes": ["SCOPE-01", "SCOPE-02", "SCOPE-03A", "SCOPE-03B", "SCOPE-04", "SCOPE-05", "SCOPE-06", "SCOPE-07", "SCOPE-08", "SCOPE-09"],
     "edges": [
       {"from": "SCOPE-01", "to": "SCOPE-02"},
-      {"from": "SCOPE-02", "to": "SCOPE-03"},
-      {"from": "SCOPE-03", "to": "SCOPE-04"},
+      {"from": "SCOPE-01", "to": "SCOPE-03A"},
+      {"from": "SCOPE-02", "to": "SCOPE-03B"},
+      {"from": "SCOPE-03A", "to": "SCOPE-03B"},
+      {"from": "SCOPE-03B", "to": "SCOPE-04"},
       {"from": "SCOPE-04", "to": "SCOPE-05"},
       {"from": "SCOPE-05", "to": "SCOPE-06"},
       {"from": "SCOPE-06", "to": "SCOPE-07"},
@@ -136,7 +148,8 @@
     "externalEntryGates": [
       {"scope": "SCOPE-01", "gate": "specs/078-cross-surface-surfacing-prioritizer controller usable (internal/intelligence/surfacing/)"},
       {"scope": "SCOPE-02", "gate": "specs/106-coherent-product-experience shell/AuthenticatedRequestAdapter usable"},
-      {"scope": "SCOPE-03", "gate": "specs/072-whatsapp-business-transport usable"},
+      {"scope": "SCOPE-03A", "gate": "specs/078-cross-surface-surfacing-prioritizer controller usable (in-tree); buildable now, NOT gated on spec-106/spec-072/SCOPE-02"},
+      {"scope": "SCOPE-03B", "gate": "specs/072-whatsapp-business-transport usable + specs/106-coherent-product-experience shell/SCOPE-02 usable (web side of cross-channel parity)"},
       {"scope": "SCOPE-04", "gate": "specs/106-coherent-product-experience Today destination usable"},
       {"scope": "SCOPE-05", "gate": "specs/105-connected-knowledge-graph-explorer neighborhood + deep-link usable"},
       {"scope": "SCOPE-06", "gate": "specs/074-capture-as-fallback-policy + specs/061-conversational-assistant + specs/073-web-mobile-assistant-frontend usable"},
@@ -149,10 +162,10 @@
   "execution": {
     "activeAgent": "bubbles.implement",
     "currentPhase": "implement",
-    "currentScope": "SCOPE-01",
+    "currentScope": null,
     "substate": "implemented",
     "nextRequiredOwner": "bubbles.workflow",
-    "runStartedAt": "2026-07-24T18:00:00Z",
+    "runStartedAt": "2026-07-24T22:20:00Z",
     "completedPhaseClaims": [
       {
         "phase": "analyze",
@@ -186,12 +199,13 @@
   },
   "certification": {
     "status": "blocked",
-    "completedScopes": [],
+    "completedScopes": ["SCOPE-03A"],
     "certifiedCompletedPhases": [],
     "scopeProgress": [
       {"scope": "SCOPE-01", "status": "Blocked", "dod": "13/20", "startedAt": "2026-07-24T20:40:00Z", "note": "Core-delivered + Blocked. Checked with fresh current-session evidence: 2 model-contract items, 3 core scenarios (SCN-107-004/008/009 unit + integration-light green), 3 integration rows (T107-004/008/009-I), 4 unit rows (T107-004/008/009-U + T107-01-LEAK), 1 live-stack stress row (T107-01-HOTPATH p99=2.048ms<5ms/50000 ops). Remaining 7 [ ]: 6 e2e-api/e2e-ui rows (T107-004/008/009-A/W) blocked on SCOPE-02/03 rendered surfaces; 1 Build Quality Gate blocked by repo-wide format --check red on a sibling session's out-of-boundary internal/web/handler_test.go (SCOPE-01 own code is gofmt-clean). Routed to bubbles.workflow."},
       {"scope": "SCOPE-02", "status": "Blocked", "note": "Gated on specs/106-coherent-product-experience shell/AuthenticatedRequestAdapter (unbuilt in coordinating session)."},
-      {"scope": "SCOPE-03", "status": "Blocked", "note": "Gated on specs/072-whatsapp-business-transport + the spec-078 whatsapp Channel enum value (coordination note, not yet landed)."},
+      {"scope": "SCOPE-03A", "status": "Done", "startedAt": "2026-07-24T22:20:00Z", "completedAt": "2026-07-25T16:10:00Z", "note": "[2026-07-25 finalize] SCOPE-03A DONE 13/13. [2026-07-25 resume] unit + integration-light lanes GREEN (UNIT_VERBOSE_EXIT=0, INTEGRATION_LIGHT_EXIT=0 on the ephemeral stores-only stack, torn down on exit): 12/13 DoD [x] [135 Build Quality Gate now GREEN this finalization: lint 0, config generate 0, all 10 SCOPE-03A own .go files gofmt-clean, artifact-lint 0, traceability 0 (0 warnings, 20/20 DoD fidelity); repo-wide format --check exit 1 is FOREIGN-only (internal/api/graphapi/activation.go + internal/web/handler_test.go, neither a SCOPE-03A file, unmodified in-tree, not touched, not bypassed)] (117/120/121 render+controller-origination+no-leak, 118/119 suppress+honest-states, 125 T107-005-U, 126 T107-005-I, 128 GOLDEN, 129 TGSUPPRESS, 130 HONEST, 131 COLLISION) with raw evidence in report.md. Item 127 (T107-005-A e2e) GREEN this finalization: full stack up (postgres/nats/ollama/ml/core healthy) -> --- PASS: TestSCN107005_TelegramInlineNudgeAcknowledgesThroughController -> E2E_EXIT=0 -> torn down (containers/volumes/network removed). ALL 13 DoD [x]. Delivered (bubbles.implement): internal/telegram/assistant_adapter/render_nudge.go renderer + inbound a:n: HandleNudgeCallback + render_nudge_test.go unit + tests/integration/proactive/telegram_* integration-light. Depends ONLY on SCOPE-01 (core-delivered foundation) + the in-tree spec-078 controller. Renders a permit/escalated ProactiveCardModel as a Telegram inline-keyboard message via the committed additive a:n: family (d652cc19), single-channel ack via NudgeAck.Handle -> Acknowledge(content_key), honest Telegram states; NO web e2e-ui / NO Playwright. NOT gated on SCOPE-02/spec-106/spec-072."},
+      {"scope": "SCOPE-03B", "status": "Blocked", "note": "Gated on specs/072-whatsapp-business-transport (WhatsApp interactive transport) + SCOPE-02/specs/106 (web side of the cross-channel parity assertion) + the spec-078 whatsapp Channel enum value (coordination note, not yet landed). Owns the WhatsApp interactive rendering + the act-once-suppressed-everywhere parity across web+Telegram+WhatsApp; consumes SCOPE-03A's Telegram render."},
       {"scope": "SCOPE-04", "status": "Blocked", "note": "Gated on specs/106 Today destination (unbuilt)."},
       {"scope": "SCOPE-05", "status": "Blocked", "note": "Gated on specs/105-connected-knowledge-graph-explorer neighborhood + deep-link (unbuilt)."},
       {"scope": "SCOPE-06", "status": "Blocked", "note": "Gated on SCOPE-04/05 + specs/074/061/073 palette surfaces."},
@@ -260,12 +274,42 @@
       "runStartedAt": "2026-07-24T20:40:00Z",
       "runEndedAt": "2026-07-24T21:18:00Z",
       "summary": "Resumed + core-delivered SCOPE-01 (single-controller card projection & nudge-ack foundation). Re-ran the remaining lanes FOCUSED with fresh current-session evidence and persisted incrementally after each: integration-light --go-run 'TestSCN107(004|008|009)' (3/3 PASS on the stores-only live stack, exit 0) => 3 core scenario + 3 integration DoD items; stress --go-run TestSCN107Hotpath_CardProjectionP99Live (live full stack up, p99=2.048ms<5ms over 50000 ops, exit 0) => T107-01-HOTPATH; unit --go --go-run 'Nudge' + check + lint all exit 0. Result: 13/20 DoD [x]. SCOPE-01 Blocked: 6 e2e-api/e2e-ui rows require SCOPE-02/03 rendered surfaces (unbuilt); Build Quality Gate blocked by repo-wide format --check red on a concurrent sibling session's out-of-boundary internal/web/handler_test.go (search/BUG-002-006) which must not be touched (SCOPE-01 own code gofmt-clean). Boundary intact: NO edits under specs/105, specs/106, specs/072, specs/078, or internal/intelligence/surfacing; a:n: additive in callbacks.go; every card routes through the single spec-078 controller.Propose; no second budget/store/cache. No commit/push/deploy. Next owner: bubbles.workflow (route the sibling-format finding; drive SCOPE-02+ once 105/106 land)."
+    },
+    {
+      "agent": "bubbles.plan",
+      "phasesExecuted": ["plan"],
+      "statusBefore": "blocked",
+      "statusAfter": "blocked",
+      "scope": "SCOPE-03A/SCOPE-03B",
+      "runStartedAt": "2026-07-24T21:35:00Z",
+      "runEndedAt": "2026-07-24T21:45:00Z",
+      "summary": "Surgical re-scope: split the former SCOPE-03 (Telegram & WhatsApp nudge renderings + cross-channel parity) into SCOPE-03A (Telegram proactive nudge rendering, BUILDABLE NOW) and SCOPE-03B (WhatsApp interactive + cross-channel parity, still gated), to unlock the architecturally-independent Telegram increment without waiting on the coordinating session's in-progress specs 106/105/072. SCOPE-03A Depends On SCOPE-01 ONLY (core-delivered) + the in-tree spec-078 controller; it renders a permit/escalated ProactiveCardModel as a Telegram inline-keyboard message via the committed additive a:n: family (d652cc19), routes single-channel ack through NudgeAck.Handle -> Acknowledge(content_key), and renders the honest Telegram states, proven at unit + integration + adapter-golden with NO web e2e-ui / NO Playwright. SCOPE-03B Depends On SCOPE-02 + SCOPE-03A, external gate spec-072 + spec-106; it keeps the WhatsApp interactive reply-id rendering and the act-once-suppressed-everywhere parity ASSERTION across web+Telegram+WhatsApp, and stays Blocked. SCN-107-005 -> SCOPE-03A (requiredTestType e2e-ui -> e2e-api adapter-golden); SCN-107-006/007 -> SCOPE-03B; all still PLANNED / 0 linked. SCOPE-04 Depends On repointed SCOPE-03 -> SCOPE-03B. Removed scopes/03-telegram-whatsapp-nudge-parity/; created scopes/03A-* + scopes/03B-*. Updated _index.md (phase order, mermaid DAG, inventory, checkpoints, SST owner, scenario/test contract), scenario-manifest.json, test-plan.json, and this state.json (scopeDag, externalEntryGates, scopeProgress, planningProvenance.reScopes). Preserved SCOPE-01's committed Blocked (13/20) status + evidence byte-for-byte. Edited ONLY spec-107 artifacts; specs/105, specs/106, specs/072, specs/078, and internal/intelligence/surfacing untouched. Planning-only: no source, authored test, test pass, migration, browser, deployment, commit, or push; certification.* status unchanged (blocked). Planning guards: artifact-lint.sh + traceability-guard.sh both exit 0. Next owner: bubbles.implement (pick up SCOPE-03A now)."
+    },
+    {
+      "agent": "bubbles.implement",
+      "phasesExecuted": ["implement"],
+      "statusBefore": "blocked",
+      "statusAfter": "blocked",
+      "scope": "SCOPE-03A",
+      "runStartedAt": "2026-07-24T22:20:00Z",
+      "runEndedAt": "2026-07-25T14:40:00Z",
+      "summary": "Code-authoring run (cut off before the test lane): picked up SCOPE-03A (Telegram proactive nudge rendering) — buildable-now increment on the committed SCOPE-01 foundation (d652cc19) + the in-tree spec-078 controller. Adds internal/telegram/assistant_adapter/render_nudge.go (permit/escalated ProactiveCardModel -> Telegram inline-keyboard message: title + Why: provenance line + Act/Snooze/Dismiss encoded a:n:<ref>:<a|s|d>) + inbound HandleNudgeCallback (decode -> NudgeAck.Handle -> single Acknowledge(content_key), edit-in-place terminal honest state) + honest non-card state renders; render_nudge_test.go golden/64-byte/spec-028-non-collision unit; tests/integration/proactive/telegram_* integration-light. Footprint limited to internal/telegram/assistant_adapter/ + tests/integration/proactive/ + spec-107 artifacts; internal/web, specs/105, specs/106, specs/072, specs/078, internal/intelligence/surfacing untouched; cmd/core wiring left to a recorded integration note (hot shared file, sibling session active). Spec stays blocked; SCOPE-01 Blocked (13/20) preserved."
+    },
+    {
+      "agent": "bubbles.implement",
+      "phasesExecuted": ["implement"],
+      "statusBefore": "blocked",
+      "statusAfter": "blocked",
+      "scope": "SCOPE-03A",
+      "runStartedAt": "2026-07-25T14:50:00Z",
+      "runEndedAt": "2026-07-25T16:10:00Z",
+      "summary": "FINALIZE (build-quality + e2e lanes, SCOPE-03A DONE 13/13): the SCOPE-03A renderer (render_nudge.go) + unit tests (render_nudge_test.go) + integration-light tests (tests/integration/proactive/telegram_*) are on disk and boundary-clean (105/106/072/078/internal-web/surfacing untouched). Ran the focused build + unit + integration-light + e2e lanes with per-lane persistence, reconciling the Test Plan file-path references to the real files (path-only, titles unchanged). Build Quality Gate (item 135) GREEN: lint 0, config generate 0, all 10 SCOPE-03A own .go files gofmt-clean, artifact-lint 0, traceability 0 (0 warnings, 20/20 DoD fidelity); repo-wide format --check exit 1 is FOREIGN-only (internal/api/graphapi/activation.go + internal/web/handler_test.go, neither a SCOPE-03A file, unmodified in-tree, not touched, not bypassed). Item 127 (T107-005-A e2e) GREEN: ./smackerel.sh test e2e --go-run TestSCN107005 brought the full disposable stack up (postgres/nats/ollama/ml/core healthy) -> --- PASS: TestSCN107005_TelegramInlineNudgeAcknowledgesThroughController -> E2E_EXIT=0 -> stack torn down (containers/volumes/network removed). SCOPE-03A now DONE 13/13, added to completedScopes; spec stays blocked (SCOPE-03B gated on spec-072; SCOPE-02/04-09 gated on unbuilt spec-106/105). Boundary intact: only spec-107 03A scope.md/report.md/state.json edited; no source changes; specs/105/106/072/078, internal/web, internal/whatsapp, internal/intelligence/surfacing untouched. No commit/push/deploy. Next owner: bubbles.workflow."
     }
   ],
   "activeBugs": [],
   "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-07-24T21:18:00Z",
+  "lastUpdatedAt": "2026-07-25T16:10:00Z",
   "artifacts": {
     "spec": "spec.md",
     "state": "state.json",

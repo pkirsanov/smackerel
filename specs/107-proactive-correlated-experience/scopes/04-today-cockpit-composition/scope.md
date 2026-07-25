@@ -2,7 +2,7 @@
 
 **Status:** Not Started  
 **Scope-Kind:** runtime-behavior  
-**Depends On:** SCOPE-03
+**Depends On:** SCOPE-03B
 
 ## Outcome
 

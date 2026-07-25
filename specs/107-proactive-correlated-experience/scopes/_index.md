@@ -6,13 +6,14 @@
 
 1. **SCOPE-01 - Single-controller card projection & nudge-ack foundation (`foundation:true`)**: the one composition contract every surface consumes — `ProactiveCardModel` (a card exists only for a `permit`/`escalated` verdict), the ephemeral process-local `NudgeRef` registry (opaque `ref → {content_key, producer, channel, principal, issued_at}`, the sole anti-leak boundary), the single `NudgeAck` path (`Acknowledge(content_key)` for act/snooze/dismiss on every channel), `HonestStatePresenter`, `BudgetMeterRead`, and the `a:n:<ref>:<a|s|d>` encode/decode shared by Telegram callbacks and WhatsApp reply-ids. Reserves the `nudge_ref_ttl_hours` SST value and the MVP snooze decision.
 2. **SCOPE-02 - Web proactive card & authenticated action transport**: render one `ProactiveCardModel` as a spec-106 Pending-action-row (title + provenance line + availability badge + act/snooze/dismiss + Why), and route the web action as an authenticated same-origin `{nudgeRef, action}` mutation (HttpOnly cookie, strict CORS/CSP/Origin) through the foundation `NudgeAck` path.
-3. **SCOPE-03 - Telegram & WhatsApp nudge renderings + cross-channel parity**: the Telegram inline `a:n:` family (new `callbackKindNudge`, never colliding with `a:c:`/`a:d:`/spec-028) and the WhatsApp interactive reply-id (spec-072 transport; 3 reply buttons + list/text fallback), both resolving through the shared `NudgeRef` registry to the one ack path so acting once suppresses everywhere within `suppression_window_hours`.
-4. **SCOPE-04 - Today cockpit composition (spec-106 `Today` body)**: compose, observe-first, the current digest lede, the `FOR YOU NOW` permitted-card region, the what-changed strip, and the secondary ask-or-capture bar, with the budget meter in the header and honest quiet/partial/degraded regions rendered through `HonestStatePresenter` — never a fabricated card. Reserves the landing-budget NFR.
-5. **SCOPE-05 - Correlation rail (bounded spec-105 neighborhood + deep-link)**: an always-on spec-106 Inspector populated by `CorrelationRailRead`, a `RAIL_MAX`-bounded `GraphQueryService.Neighborhood(seed, depth=1)` call of the same spec-105 contract under the same authorizer, deep-linking `See full graph` into the explorer on the current `<kind>:<id>` seed. Reserves the `RAIL_MAX` SST value.
-6. **SCOPE-06 - Ask-or-capture command palette (P4)**: one Cmd/Ctrl-K global overlay routed by `PaletteTurnRouter` through the existing assistant `Facade.Handle` to answered / captured-as-idea (spec-074 unchanged) / honest-refusal / error, honoring the `OutcomeOK`-only capture gate — a failed ask is never "saved as an idea".
-7. **SCOPE-07 - What-changed feed (P6)**: a spec-106 `Activity` view populated by `WhatChangedRead`, a bounded, cursor-paged, authorized projection of `agent_traces` + surfacing verdicts + topic lifecycle (left) and a recency read (right); restart-safe with no unread watermark and no second store. Reserves the `what_changed_page_cap` SST value.
-8. **SCOPE-08 - Cross-surface accessibility, responsive & authorization hardening**: keyboard/screen-reader parity, 320px/200%-zoom/44×44/no-overlap mobile behavior, and per-surface re-authorization + content-free telemetry across the cockpit, card, rail, palette, and feed.
-9. **SCOPE-09 - Real-stack acceptance & implementation handoff**: the complete no-interception Playwright web matrix, Telegram/WhatsApp adapter-level parity coverage, the honest-state matrix (budget-exhausted, deduped, suppressed, no-related, unavailable), and the acceptance rerun of SCN-107-001..020, with a value-safe planning handoff that makes no implementation or deployment claim.
+3. **SCOPE-03A - Telegram proactive nudge rendering (buildable now)**: render a `permit`/`escalated` card as a Telegram inline-keyboard message (title + `Why:` provenance line + `Act`/`Snooze`/`Dismiss` using the committed additive `a:n:` family, never colliding with `a:c:`/`a:d:`/spec-028), wire the producer → single spec-078 controller → Telegram render path, single-channel ack via `NudgeAck.Handle` → `Acknowledge(content_key)`, and the honest Telegram states — buildable on SCOPE-01 + the in-tree spec-078 controller alone, with no web/WhatsApp dependency.
+4. **SCOPE-03B - WhatsApp interactive + cross-channel parity (gated)**: the WhatsApp interactive reply-id (spec-072 transport; 3 reply buttons + list/text fallback) plus the cross-channel act-once-suppressed-**everywhere** parity assertion across web + Telegram + WhatsApp, both resolving through the shared `NudgeRef` registry to the one ack path within `suppression_window_hours`; stays gated on spec-072 + spec-106/SCOPE-02.
+5. **SCOPE-04 - Today cockpit composition (spec-106 `Today` body)**: compose, observe-first, the current digest lede, the `FOR YOU NOW` permitted-card region, the what-changed strip, and the secondary ask-or-capture bar, with the budget meter in the header and honest quiet/partial/degraded regions rendered through `HonestStatePresenter` — never a fabricated card. Reserves the landing-budget NFR.
+6. **SCOPE-05 - Correlation rail (bounded spec-105 neighborhood + deep-link)**: an always-on spec-106 Inspector populated by `CorrelationRailRead`, a `RAIL_MAX`-bounded `GraphQueryService.Neighborhood(seed, depth=1)` call of the same spec-105 contract under the same authorizer, deep-linking `See full graph` into the explorer on the current `<kind>:<id>` seed. Reserves the `RAIL_MAX` SST value.
+7. **SCOPE-06 - Ask-or-capture command palette (P4)**: one Cmd/Ctrl-K global overlay routed by `PaletteTurnRouter` through the existing assistant `Facade.Handle` to answered / captured-as-idea (spec-074 unchanged) / honest-refusal / error, honoring the `OutcomeOK`-only capture gate — a failed ask is never "saved as an idea".
+8. **SCOPE-07 - What-changed feed (P6)**: a spec-106 `Activity` view populated by `WhatChangedRead`, a bounded, cursor-paged, authorized projection of `agent_traces` + surfacing verdicts + topic lifecycle (left) and a recency read (right); restart-safe with no unread watermark and no second store. Reserves the `what_changed_page_cap` SST value.
+9. **SCOPE-08 - Cross-surface accessibility, responsive & authorization hardening**: keyboard/screen-reader parity, 320px/200%-zoom/44×44/no-overlap mobile behavior, and per-surface re-authorization + content-free telemetry across the cockpit, card, rail, palette, and feed.
+10. **SCOPE-09 - Real-stack acceptance & implementation handoff**: the complete no-interception Playwright web matrix, Telegram/WhatsApp adapter-level parity coverage, the honest-state matrix (budget-exhausted, deduped, suppressed, no-related, unavailable), and the acceptance rerun of SCN-107-001..020, with a value-safe planning handoff that makes no implementation or deployment claim.
 
 ### New Types And Signatures
 
@@ -31,7 +32,8 @@
 
 - **After SCOPE-01:** the verdict→card projection, the `NudgeRef` anti-leak boundary (no `content_key` on any wire), the single `Acknowledge(content_key)` ack path, budget-exhausted/escalated honest-state mapping, and the controller hot-path NFR must pass at unit + integration before any surface renders.
 - **After SCOPE-02:** the authenticated same-origin web action (no bearer in JS, no new bypass, no second budget) and the web card provenance/one-tap contract must pass on the real disposable stack before the messaging renderings.
-- **After SCOPE-03:** act-once-suppressed-everywhere, identical budget-defer, identical urgent-escalation, and `a:n:` non-collision with `a:c:`/`a:d:`/spec-028 must pass at adapter level and via the web cross-channel assertion before cockpit composition.
+- **After SCOPE-03A:** the Telegram inline `a:n:` render (title + `Why:` provenance + act/snooze/dismiss), single-channel act-once-suppresses-on-Telegram via the one `Acknowledge(content_key)`, the honest Telegram states (budget-exhausted, deduped, already-acted/suppressed, expired), and `a:n:` non-collision with `a:c:`/`a:d:`/spec-028 must pass at unit + integration + adapter-golden — buildable on the SCOPE-01 foundation with no web/WhatsApp dependency.
+- **After SCOPE-03B:** act-once-suppressed-**everywhere** across web + Telegram + WhatsApp, identical budget-defer, identical urgent-escalation, and the WhatsApp interactive reply-id render must pass at adapter level and via the web cross-channel assertion before cockpit composition.
 - **After every surface scope (04-07):** scenario-specific real-stack Playwright runs must use no interception and must retain direct user-visible assertions; each surface must render its honest quiet/partial/degraded/unavailable states, never a fabricated card or decorative correlation.
 - **After SCOPE-08:** keyboard, screen-reader, 320px/200%-zoom, 44×44 no-overlap, WCAG 2.2 AA contrast, per-surface re-authorization, and content-free telemetry must pass across every surface before acceptance.
 - **At SCOPE-09:** the complete API/UI/messaging/accessibility/mobile/authorization/honest-state matrix and the SCN-107-001..020 acceptance rerun must pass without making any implementation, migration, browser-executed, or deployment claim in this planning packet.
@@ -48,13 +50,16 @@
 ```mermaid
 flowchart LR
   D078[spec-078 controller usable] --> S01
+  D078 --> S03A
   D106[spec-106 shell usable] --> S02
-  D072[spec-072 WhatsApp transport usable] --> S03
+  D072[spec-072 WhatsApp transport usable] --> S03B
   D105[spec-105 explorer deep-link usable] --> S05
   D074[spec-074 capture + spec-061/073 Facade usable] --> S06
   S01[SCOPE-01 card/ack foundation] --> S02[SCOPE-02 web card + transport]
-  S02 --> S03[SCOPE-03 Telegram + WhatsApp parity]
-  S03 --> S04[SCOPE-04 Today cockpit]
+  S01 --> S03A[SCOPE-03A Telegram nudge rendering — buildable now]
+  S02 --> S03B[SCOPE-03B WhatsApp + cross-channel parity]
+  S03A --> S03B
+  S03B --> S04[SCOPE-04 Today cockpit]
   S04 --> S05[SCOPE-05 correlation rail]
   S05 --> S06[SCOPE-06 command palette]
   S06 --> S07[SCOPE-07 what-changed feed]
@@ -70,8 +75,9 @@ Execution is strictly sequential and scope-gated: no scope may start until every
 |---|---|---|---|---|---|---|
 | 01 | [Single-controller card projection & nudge-ack foundation](01-single-controller-card-projection-foundation/scope.md) `foundation:true` | — | spec-078 controller | surfacing verdict, NudgeRef registry, ack path, honest-state, budget meter | SCN-107-004, 008, 009 | Not Started |
 | 02 | [Web proactive card & authenticated action transport](02-web-proactive-card-action-transport/scope.md) | SCOPE-01 | spec-106 shell | web card, same-origin mutation | SCN-107-003 | Not Started |
-| 03 | [Telegram & WhatsApp nudge renderings + cross-channel parity](03-telegram-whatsapp-nudge-parity/scope.md) | SCOPE-02 | spec-072 transport | Telegram `a:n:`, WhatsApp interactive, parity | SCN-107-005, 006, 007 | Not Started |
-| 04 | [Today cockpit composition](04-today-cockpit-composition/scope.md) | SCOPE-03 | spec-106 `Today` | cockpit body, budget header, what-changed strip | SCN-107-001, 002, 017 | Not Started |
+| 03A | [Telegram proactive nudge rendering (buildable now)](03A-telegram-proactive-nudge-rendering/scope.md) | SCOPE-01 | spec-078 controller (in-tree) | Telegram `a:n:` inline render, single-channel ack, honest Telegram states | SCN-107-005 | Not Started |
+| 03B | [WhatsApp interactive + cross-channel parity (gated)](03B-whatsapp-interactive-cross-channel-parity/scope.md) | SCOPE-02, SCOPE-03A | spec-072 transport | WhatsApp interactive, act-once-suppressed-everywhere | SCN-107-006, 007 | Blocked |
+| 04 | [Today cockpit composition](04-today-cockpit-composition/scope.md) | SCOPE-03B | spec-106 `Today` | cockpit body, budget header, what-changed strip | SCN-107-001, 002, 017 | Not Started |
 | 05 | [Correlation rail (bounded spec-105 neighborhood + deep-link)](05-correlation-rail/scope.md) | SCOPE-04 | spec-105 explorer | rail Inspector, deep-link | SCN-107-010, 011 | Not Started |
 | 06 | [Ask-or-capture command palette](06-ask-or-capture-command-palette/scope.md) | SCOPE-05 | spec-074/061/073 | Cmd/Ctrl-K overlay | SCN-107-012, 013 | Not Started |
 | 07 | [What-changed feed](07-what-changed-feed/scope.md) | SCOPE-06 | spec-054 traces | two-column Activity view | SCN-107-014, 015 | Not Started |
@@ -89,19 +95,23 @@ validates presence, type, and bounds and aborts the build if a value is absent.
 | SST key | Decision (MVP) | Bound / validation intent | Owning scope | Design cross-ref |
 |---|---|---|---|---|
 | `nudge_ref_ttl_hours` | `6` | integer ≥ `max(suppression_window_hours=4, dedupe_window_hours=6)` so a late tap on any channel resolves to an honest `expired`/`already-handled` render rather than a silent miss; validated ≥ both windows at config-compile | SCOPE-01 | design.md `## Resolved Design Contracts` OQ2 (`NudgeRef` registry), `## Data Model And Persistence` |
-| snooze window | reuse `suppression_window_hours` (MVP ships **no** distinct `snooze_window_hours`) | act/snooze/dismiss all call `Acknowledge(content_key)`; snooze differs by intent/label/window only. A distinct `snooze_window_hours` is a bounded additive future SST key resolved through the same mechanism (no new store); its addition is deferred, not implemented | SCOPE-01, SCOPE-03 | design.md OQ6 (snooze semantics) |
+| snooze window | reuse `suppression_window_hours` (MVP ships **no** distinct `snooze_window_hours`) | act/snooze/dismiss all call `Acknowledge(content_key)`; snooze differs by intent/label/window only. A distinct `snooze_window_hours` is a bounded additive future SST key resolved through the same mechanism (no new store); its addition is deferred, not implemented | SCOPE-01, SCOPE-03A, SCOPE-03B | design.md OQ6 (snooze semantics) |
 | `RAIL_MAX` | `6` | integer 1..N neighborhood bound for `GraphQueryService.Neighborhood(seed, depth=1, limit=RAIL_MAX)`; the rail never renders the full edge store (NFR-107-003); tighter than the explorer workspace bound | SCOPE-05 | design.md OQ5 (`CorrelationRailRead`), NFR-107-003 |
 | `what_changed_page_cap` | `25` (per column, per page) | integer 1..N capped page size over `created_at DESC` with an opaque principal-bound cursor (spec-105 HMAC-cursor pattern); no unbounded scan | SCOPE-07 | design.md OQ4 (`WhatChangedRead`) |
 
 ## Scenario And Test Contract
 
-Each of the 20 specification scenarios has one concrete `unit`, `integration`,
-`e2e-api`, and `e2e-ui` row in its owning scope and in `test-plan.json`. That
-produces **80 scenario rows and exactly 80 matching unchecked DoD test-evidence
-items** before supplemental canary, stress, anti-leak, non-collision, restart,
-contrast, telemetry, and acceptance-matrix rows are counted. All tests are
-PLANNED / not-yet-authored (0 linked) in `scenario-manifest.json`, matching the
-spec-105 planning-only convention.
+Nineteen of the 20 specification scenarios have one concrete `unit`,
+`integration`, `e2e-api`, and `e2e-ui` row in their owning scope and in
+`test-plan.json`. SCN-107-005 (Telegram-only, `SCOPE-03A`) is buildable-now with
+`unit` + `integration` + `e2e-api` rows plus an **adapter-level golden**
+(`T107-03A-GOLDEN`) in place of a web `e2e-ui` row — there is no web surface for a
+Telegram-only render, and the Telegram→web cross-channel reflection moves to
+`SCOPE-03B` as the parity assertion. All tests are PLANNED / not-yet-authored (0
+linked) in `scenario-manifest.json`, matching the spec-105 planning-only
+convention; supplemental canary, stress, anti-leak, non-collision, restart,
+contrast, telemetry, single-channel-suppression, honest-state, and
+acceptance-matrix rows are additional.
 
 | Scenario | Owning Scope | Unit | Integration | E2E API | E2E UI |
 |---|---|---|---|---|---|
@@ -109,9 +119,9 @@ spec-105 planning-only convention.
 | SCN-107-002 | SCOPE-04 | T107-002-U | T107-002-I | T107-002-A | T107-002-W |
 | SCN-107-003 | SCOPE-02 | T107-003-U | T107-003-I | T107-003-A | T107-003-W |
 | SCN-107-004 | SCOPE-01 | T107-004-U | T107-004-I | T107-004-A | T107-004-W |
-| SCN-107-005 | SCOPE-03 | T107-005-U | T107-005-I | T107-005-A | T107-005-W |
-| SCN-107-006 | SCOPE-03 | T107-006-U | T107-006-I | T107-006-A | T107-006-W |
-| SCN-107-007 | SCOPE-03 | T107-007-U | T107-007-I | T107-007-A | T107-007-W |
+| SCN-107-005 | SCOPE-03A | T107-005-U | T107-005-I | T107-005-A | T107-03A-GOLDEN (adapter) |
+| SCN-107-006 | SCOPE-03B | T107-006-U | T107-006-I | T107-006-A | T107-006-W |
+| SCN-107-007 | SCOPE-03B | T107-007-U | T107-007-I | T107-007-A | T107-007-W |
 | SCN-107-008 | SCOPE-01 | T107-008-U | T107-008-I | T107-008-A | T107-008-W |
 | SCN-107-009 | SCOPE-01 | T107-009-U | T107-009-I | T107-009-A | T107-009-W |
 | SCN-107-010 | SCOPE-05 | T107-010-U | T107-010-I | T107-010-A | T107-010-W |

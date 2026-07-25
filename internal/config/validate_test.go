@@ -986,6 +986,8 @@ func setRequiredEnv(t *testing.T) {
 	t.Setenv("SURFACING_SUPPRESSION_WINDOW_HOURS", "4")
 	t.Setenv("SURFACING_DEDUPE_WINDOW_HOURS", "6")
 	t.Setenv("SURFACING_URGENT_ESCALATION_ENABLED", "true")
+	// Spec 107 SCOPE-01 — Proactive foundation SST baseline (>= max(4,6)=6).
+	t.Setenv("PROACTIVE_NUDGE_REF_TTL_HOURS", "6")
 	// Spec 080 SCOPE-080-01 — knowledge_graph_api.* SST keys.
 	t.Setenv("KNOWLEDGE_GRAPH_API_LIST_DEFAULT_LIMIT", "50")
 	t.Setenv("KNOWLEDGE_GRAPH_API_LIST_MAX_LIMIT", "200")
