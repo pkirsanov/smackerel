@@ -5,8 +5,9 @@
   "featureName": "Production Credential Session and PASETO Split",
   "releaseTrain": "mvp",
   "flagsIntroduced": [],
-  "status": "in_progress",
-  "statusReason": "Planning packet initialized from operator-supplied current-session historical input. No local reproduction, root-cause certification, implementation, test execution, validation, audit, production mutation, commit, push, or deployment is claimed.",
+  "status": "blocked",
+  "statusReason": "Unit-verifiable core of BUG-070-001 implemented and unit-verified (unified request-authentication seam, disposable-production role/grant and global-corpus policy, and product-wide MutationTrustGuard with stateless signed-proof mint/verify), each proven by a passing Go table test; smackerel.sh check and lint both exit 0. BLOCKED on two dependencies: (1) live cross-surface verification (integration/e2e-api/e2e-ui rows for scopes 03/05/06) requires the disposable Docker stack, intentionally not brought up this pass, and live router wiring of RequestAuthenticator depends on the Scope-02 audience-in-token plumbing that has not yet landed; (2) config-SST coordination -- the fail-loud csrf_signing_key accessor belongs in internal/config/config.go and config/smackerel.yaml paired with its validation, but the validation assertions live in internal/config/validate_test.go, which is concurrently dirty (another agent this session) and off-limits, so the guard consumes the key via an injectable CSRFKeyProvider pending that file becoming clean.",
+  "blockedReason": "(1) LIVE-STACK DEFERRED: every live cross-surface Test Plan row and DoD item stays [ ] and unrun -- Scope 03 (AUTH-S03-T02 integration, AUTH-S03-T03/T04/T05 e2e-api/e2e-ui), Scope 05 (AUTH-S05-T02 integration plus the e2e-api/e2e-ui mutation-matrix rows), and Scope 06 (AUTH-S06-T02 integration plus the full-shell route-matrix e2e-api/e2e-ui rows). The disposable Docker test stack was intentionally NOT brought up this pass (shared daemon, concurrent agents, host-OOM/contention risk). (2) SCOPES 01/02/04 NOT STARTED: the login-credential round-trip and session-issuance flow -- account/principal-grant binding and additive migrations (Scope 01), the purpose-bound browser/API PASETO lifecycle (Scope 02), and login/recovery/logout UX (Scope 04) -- remain Not Started; they require real PostgreSQL and the real login form on the live stack. (3) ROUTER WIRING DEFERRED (Scope-02 dependency): wiring RequestAuthenticator into the live bearerAuthMiddleware/webAuthMiddleware is deferred because it depends on the audience-in-token plumbing scoped to Scope 02, which has not yet landed; the seam itself is standalone and unit-proven. (4) CONFIG-SST COORDINATION RESIDUAL (csrf_signing_key): the fail-loud key accessor belongs in internal/config/config.go and config/smackerel.yaml paired with its validation, but the validation assertions live in internal/config/validate_test.go, which is concurrently dirty (owned by another agent this session) and off-limits; rather than race that file the product-wide MutationTrustGuard consumes the key via an injectable CSRFKeyProvider, and the config accessor is a coordination-required follow-up once validate_test.go is clean. bubbles.validate owns recertification once (1)-(4) clear; certification.status stays blocked and completedScopes stays [] -- no promotion or certification is claimed.",
   "workflowMode": "bugfix-fastlane",
   "linkedImplementationSpec": null,
   "linkedPlanningPacket": null,
@@ -45,9 +46,9 @@
     "certificationClaimed": false
   },
   "execution": {
-    "activeAgent": "bubbles.design",
-    "currentPhase": "harden",
-    "currentScope": null,
+    "activeAgent": "bubbles.implement",
+    "currentPhase": "implement",
+    "currentScope": 6,
     "runStartedAt": "2026-07-24T07:11:21Z",
     "completedPhaseClaims": [],
     "pendingTransitionRequests": [],
@@ -59,7 +60,7 @@
     }
   },
   "certification": {
-    "status": "in_progress",
+    "status": "blocked",
     "completedScopes": [],
     "certifiedCompletedPhases": [],
     "scopeProgress": [
@@ -87,7 +88,7 @@
         "scope": 3,
         "scopeId": "SCOPE-03",
         "name": "Unified Request Authentication",
-        "status": "not_started",
+        "status": "in_progress",
         "dependsOn": ["SCOPE-02"],
         "scopeDir": null,
         "evidenceFile": "report.md",
@@ -107,7 +108,7 @@
         "scope": 5,
         "scopeId": "SCOPE-05",
         "name": "Product-Wide CSRF And Origin Mutation Protection",
-        "status": "not_started",
+        "status": "in_progress",
         "dependsOn": ["SCOPE-04"],
         "scopeDir": null,
         "evidenceFile": "report.md",
@@ -117,7 +118,7 @@
         "scope": 6,
         "scopeId": "SCOPE-06",
         "name": "Role And Grant Acceptance And Global Corpus Gating (Disposable Production)",
-        "status": "not_started",
+        "status": "in_progress",
         "dependsOn": ["SCOPE-05"],
         "scopeDir": null,
         "evidenceFile": "report.md",
@@ -185,12 +186,21 @@
       "runStartedAt": "2026-07-24T07:11:21Z",
       "runEndedAt": "2026-07-24T07:11:21Z",
       "summary": "Resolved the two design residuals routed by the plan reconciliation. RF-070-001-01 (spec AUTH-011 vs design Security conflict): took option (a) and specified a concrete session-bound anti-CSRF mechanism in a new design.md section '## Cross-Site Request Forgery Protection' — a stateless signed double-submit proof bound to the browser-session PASETO jti/sub/aud via HMAC under a dedicated fail-loud csrf_signing_key (no schema, no per-request DB read), layered on a trusted-Origin check, delivered through a non-authenticating smackerel_csrf companion cookie plus a _csrf form field and a csrf-token meta tag, echoed via _csrf/X-CSRF-Token, enforced for every POST/PUT/PATCH/DELETE by a MutationTrustGuard across server-form/HTMX/PWA/JSON/Cards/admin with a pre-session variant for login/registration/logout. Reconciled the contradictory 'No token is exposed for a custom CSRF scheme' statement to necessary-not-sufficient SameSite plus a required session-bound proof, and clarified the proof is not session material so the HttpOnly session PASETO stays script-inaccessible. RF-070-001-02: extended the design Testing And Validation Strategy table to SCN-070-001-09/10/11. Supporting internal-consistency edits: MutationTrustGuard foundation contract, foundation-owned CSRF behavior, anti-CSRF proof-carrier variation axis, companion-cookie cross-reference, a 403-before-mutation failure-mapping row, a csrf telemetry line, two rejected-alternative subsections, and a complexity-tracking row. AUTH-011 was upheld (not weakened); the mechanism matches the already-planned SCOPE-05 surface (MutationGuard, csrf middleware/enforcement test files, and the origin_rejected|csrf_missing|csrf_stale|csrf_mismatch|accepted plus family telemetry vocabulary), so no scope/test/DoD re-reconciliation is required. No spec, scope, report, user validation, scenario manifest, source, test, certification, status transition, commit, push, build, or deployment change is claimed; status remains in_progress."
+    },
+    {
+      "agent": "bubbles.implement",
+      "phasesExecuted": ["implement"],
+      "statusBefore": "in_progress",
+      "statusAfter": "blocked",
+      "runStartedAt": "2026-07-25T15:32:07Z",
+      "runEndedAt": "2026-07-25T15:43:15Z",
+      "summary": "Implemented the unit-verifiable core of the reconciled packet as three new source files, each proven by a real passing Go table test. internal/auth/request_authenticator.go: the unified request-authentication seam -- carrier-precedence fail-closed (malformed Authorization never falls back to cookie), session parity across legacy/api/v1, wrong-audience cookie rejection (the production defect), revoked-cookie fail-closed, and 401-vs-303-vs-authorization-vs-degradation separation (TestUnifiedAuthenticator... 7 subtests PASS). internal/auth/browser_session_policy.go: disposable-production role/grant model with one operator-owned global corpus, wildcard grants forbidden, and a global-corpus read gate (covered by TestSurfaceInventory... 4 subtests PASS). internal/api/mutation_trust_guard.go: product-wide MutationTrustGuard with stateless session-bound signed-proof mint/verify across form/htmx/pwa/json/cards/admin, ordered trusted-Origin/proof/double-submit/HMAC-binding checks, 403-before-handler on any non-accepted outcome, bounded secret-free telemetry, and an injectable CSRFKeyProvider (TestCookieMutations... 15 subtests PASS). smackerel.sh test unit (narrow --go-run) exit 0, check exit 0, lint exit 0. Marked the three unit Test-Evidence DoD rows checked and scopes 03/05/06 In Progress; all live cross-surface rows (integration/e2e-api/e2e-ui), Build Quality Gates, and config-coordination items remain unchecked. Status set to blocked pending (1) live cross-surface verification (disposable stack not brought up; live router wiring depends on Scope-02 audience-in-token plumbing) and (2) config-SST coordination for csrf_signing_key entangled with the concurrently-dirty internal/config/validate_test.go. No git add/commit/push/reset or Docker stack action performed; changes left in the working tree. Finalization (2026-07-25T15:43:15Z): completed the truncated run's state.json write by adding the operator/coordination-actionable blockedReason enumerating all four real blockers -- deferred live-stack cross-surface rows, Not-Started scopes 01/02/04 (login-credential round-trip and session issuance), the Scope-02-dependent router wiring of RequestAuthenticator, and the csrf_signing_key config-SST coordination residual entangled with the concurrently-dirty internal/config/validate_test.go -- updated lastUpdatedAt, and re-ran the packet's artifact-lint and state-transition-guard to confirm the blocked state is internally consistent. No source, test, git, or Docker action performed."
     }
   ],
   "activeBugs": [],
   "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-07-24T07:11:21Z",
+  "lastUpdatedAt": "2026-07-25T15:43:15Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "bug": "bug.md",
