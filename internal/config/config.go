@@ -97,6 +97,11 @@ type Config struct {
 	// Core blocks at startup until ML sidecar is healthy or timeout elapses.
 	MLReadinessTimeoutS int
 
+	// Digest freshness threshold in hours (SST-compliant, BUG-002-007 Scope 01).
+	// A successfully read digest older than this renders stale/degraded instead
+	// of current. Required positive integer; no code default (fail-loud).
+	DigestStaleAfterHours int
+
 	// Optional connector path fields (SST-compliant — read from env, sourced from smackerel.yaml)
 	BookmarksImportDir                           string
 	BookmarksEnabled                             bool
@@ -1202,6 +1207,7 @@ func Load() (*Config, error) {
 	shutdownTimeoutStr := os.Getenv("SHUTDOWN_TIMEOUT_S")
 	mlHealthCacheTTLStr := os.Getenv("ML_HEALTH_CACHE_TTL_S")
 	mlReadinessTimeoutStr := os.Getenv("ML_READINESS_TIMEOUT_S")
+	digestStaleAfterHoursStr := os.Getenv("DIGEST_STALE_AFTER_HOURS")
 
 	var parseErrors []string
 
@@ -1243,6 +1249,17 @@ func Load() (*Config, error) {
 		parseErrors = append(parseErrors, "ML_READINESS_TIMEOUT_S (must be a non-negative integer)")
 	} else {
 		cfg.MLReadinessTimeoutS = v
+	}
+
+	// BUG-002-007 Scope 01 — Digest freshness threshold. Required positive
+	// integer hours; no code default. Missing/invalid fails loud so the reader
+	// and renderer never fall back to a hidden staleness default.
+	if digestStaleAfterHoursStr == "" {
+		parseErrors = append(parseErrors, "DIGEST_STALE_AFTER_HOURS")
+	} else if v, err := strconv.Atoi(digestStaleAfterHoursStr); err != nil || v < 1 {
+		parseErrors = append(parseErrors, "DIGEST_STALE_AFTER_HOURS (must be a positive integer)")
+	} else {
+		cfg.DigestStaleAfterHours = v
 	}
 
 	if len(parseErrors) > 0 {

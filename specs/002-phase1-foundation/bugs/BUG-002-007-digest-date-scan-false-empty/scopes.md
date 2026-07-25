@@ -31,7 +31,7 @@ No Digest UI proof begins before Scope 02's typed reader and adversarial real-Po
 
 | # | Scope | Kind | Depends On | Surfaces | Test Rows | Status |
 |---|---|---|---|---|---:|---|
-| 01 | Ownership and freshness contract gate | contract-only | None | grant contract, config SST, validation | 3 | Blocked |
+| 01 | Ownership and freshness contract gate | contract-only | None | grant contract, config SST, validation | 3 | In Progress |
 | 02 | Canonical typed reader | runtime-behavior | 01 | digest domain reader, composition, PostgreSQL, API parity | 5 | In Progress |
 | 03 | Truthful server-rendered states | runtime-behavior | 02 | web handler, template, auth projection, telemetry | 5 | In Progress |
 | 04 | Disposable Digest acceptance | runtime-behavior | 03 | real database, browser, accessibility, privacy | 5 | Not Started |
@@ -57,7 +57,7 @@ The canonical reader is shared by `/api/digest`, scheduler/generation consumers,
 
 ## Scope 01: Digest Ownership And Freshness Contract Gate
 
-**Status:** Blocked  
+**Status:** In Progress  
 **Depends On:** None  
 **Scope-Kind:** contract-only  
 **foundation:** true

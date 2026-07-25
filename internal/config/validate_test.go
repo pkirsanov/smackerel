@@ -478,6 +478,50 @@ func TestValidate_DigestCronInvalid(t *testing.T) {
 	}
 }
 
+// TestDigestStaleAfterHoursIsRequiredPositiveAndHasNoFallback is BUG-002-007
+// DIGEST-S01-T01 (SCN-002-007-09). It proves the Digest freshness threshold is a
+// REQUIRED positive-integer SST value with NO code default: an absent, empty,
+// zero, negative, or non-numeric DIGEST_STALE_AFTER_HOURS fails Load() loud and
+// names the key, and a valid positive value parses into cfg.DigestStaleAfterHours.
+// The reader/renderer share this one value; there is no hidden staleness default.
+func TestDigestStaleAfterHoursIsRequiredPositiveAndHasNoFallback(t *testing.T) {
+	// Valid positive value parses and no default masks it.
+	t.Run("valid positive parses", func(t *testing.T) {
+		setRequiredEnv(t)
+		t.Setenv("DIGEST_STALE_AFTER_HOURS", "36")
+		cfg, err := Load()
+		if err != nil {
+			t.Fatalf("DIGEST_STALE_AFTER_HOURS=36 should be valid, got: %v", err)
+		}
+		if cfg.DigestStaleAfterHours != 36 {
+			t.Errorf("want DigestStaleAfterHours=36, got %d", cfg.DigestStaleAfterHours)
+		}
+	})
+
+	// Missing/invalid values fail loud and name the key — no silent default.
+	for _, tc := range []struct {
+		name string
+		val  string
+	}{
+		{"empty", ""},
+		{"zero", "0"},
+		{"negative", "-5"},
+		{"non-numeric", "soon"},
+	} {
+		t.Run(tc.name+" fails loud", func(t *testing.T) {
+			setRequiredEnv(t)
+			t.Setenv("DIGEST_STALE_AFTER_HOURS", tc.val)
+			_, err := Load()
+			if err == nil {
+				t.Fatalf("DIGEST_STALE_AFTER_HOURS=%q must be rejected (no default)", tc.val)
+			}
+			if !strings.Contains(err.Error(), "DIGEST_STALE_AFTER_HOURS") {
+				t.Errorf("error must name DIGEST_STALE_AFTER_HOURS, got: %v", err)
+			}
+		})
+	}
+}
+
 func TestValidate_TelegramChatIDs_Empty(t *testing.T) {
 	setRequiredEnv(t)
 	t.Setenv("TELEGRAM_CHAT_IDS", "")
@@ -649,6 +693,7 @@ func setRequiredEnv(t *testing.T) {
 	t.Setenv("SHUTDOWN_TIMEOUT_S", "25")
 	t.Setenv("ML_HEALTH_CACHE_TTL_S", "30")
 	t.Setenv("ML_READINESS_TIMEOUT_S", "60")
+	t.Setenv("DIGEST_STALE_AFTER_HOURS", "24")
 	t.Setenv("KNOWLEDGE_ENABLED", "true")
 	t.Setenv("KNOWLEDGE_SYNTHESIS_TIMEOUT_SECONDS", "30")
 	t.Setenv("KNOWLEDGE_LINT_CRON", "0 3 * * *")

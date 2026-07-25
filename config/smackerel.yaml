@@ -59,6 +59,14 @@ runtime:
   # (compose returns as soon as healthchecks pass).
   compose_wait_timeout_s: 300
   digest_cron: "0 7 * * *"
+  # BUG-002-007 Scope 01 — Digest freshness SST contract (DIGEST_STALE_AFTER_HOURS).
+  # REQUIRED positive integer hours. A successfully read digest whose created_at is
+  # older than this threshold renders as stale/degraded (stored prose + age kept
+  # visible) instead of current; the reader and renderer share this single value
+  # (SCN-002-007-09). No code default: missing/invalid input fails startup in
+  # internal/config validation (smackerel-no-defaults / Gate G028), never silently
+  # defaults. 24 = one daily digest cadence.
+  digest_stale_after_hours: 24
   embedding_model: nomic-embed-text
   # Trusted reverse-proxy CIDR allowlist (BUG-020-005, F-SEC-R30-001).
   # When the connecting TCP peer is in one of these CIDRs, the API trusts
