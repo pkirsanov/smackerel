@@ -61,7 +61,7 @@ flowchart LR
 
 | Scope | Primary Outcome | Required External Evidence | Status |
 |---|---|---|---|
-| SCOPE-01 | Product-owned manifest/result/policy/failure foundation | None | Not Started |
+| SCOPE-01 | Product-owned manifest/result/policy/failure foundation | None | In Progress (fault-registry foundation unit-verified; manifest/validator/reducer/read-only-guard remainder and live acceptance deferred) |
 | SCOPE-02 | Production-readonly runner and real session | BUG-070-001 | Not Started |
 | SCOPE-03 | Search, Digest, Assistant, Wiki/Graph, Knowledge | BUG-002-006, BUG-002-007, BUG-073-006, BUG-080-001, spec 104 SCOPE-08, specs 105/106 where applicable | Not Started |
 | SCOPE-04 | Cards, Recommendations, Notifications, Photos/Drive, Models, Synthesis, Status/Health | BUG-083-002, BUG-039-005, BUG-004-004, spec 106 where applicable | Not Started |
@@ -80,11 +80,13 @@ flowchart LR
 
 ## Scope 01: Product Journey Contract Foundation
 
-**Status:** Not Started  
+**Status:** In Progress  
 **Priority:** P0  
 **Scope-Kind:** contract-only  
 **Foundation:** true  
 **Depends On:** None
+
+> **Partial delivery (bubbles.implement 2026-07-25):** The production-inert, test-only, machine-readable fault-profile REGISTRY FOUNDATION (JOURNEY-016 / SCN-102-001-12; TP-102-01-07, TP-102-01-08) is implemented and unit-verified — see [report.md](report.md). The remaining SCOPE-01 contract foundation (manifest/policy/result/evidence schemas, failure registry, read-only guard, reducer, validator — TP-102-01-01..06 / SCN-102-001-07) and all live-stack product-journey acceptance execution (SCOPE-02..05) are DEFERRED; those DoD items remain unchecked.
 
 ### Use Cases
 
@@ -142,7 +144,7 @@ Scenario: SCN-102-001-12 Fault profiles are disposable and production-inert
 #### Core Outcomes
 
 - [ ] `SCN-102-001-07 Contract mismatch fails closed`: missing, malformed, incomplete, duplicated, stale, unsafe, unsupported, or release-mismatched results become `contract-invalid` with one closed code and no tolerated row; an allowed true-empty, quiet, optional-unconfigured, or degraded outcome is produced only by an exact compiled policy rule, and absent or ambiguous policy fails closed.
-- [ ] `SCN-102-001-12 Fault profiles are disposable and production-inert`: the test-only machine-readable fault-profile registry is accepted only when every profile declares stable ID, owning journey, setup, teardown, parallelism/isolation, expected request, expected response or termination, permitted evidence, and no-first-party-interception, and production routes, configuration, requests, and UI expose no fault selector or trigger.
+- [x] `SCN-102-001-12 Fault profiles are disposable and production-inert`: the test-only machine-readable fault-profile registry is accepted only when every profile declares stable ID, owning journey, setup, teardown, parallelism/isolation, expected request, expected response or termination, permitted evidence, and no-first-party-interception, and production routes, configuration, requests, and UI expose no fault selector or trigger. → Evidence: [report.md](report.md) (unit — internal/acceptance/fault_profile_registry_test.go + fault_profile_production_inert_test.go; `ok internal/acceptance 0.199s`, UNIT_EXIT=0)
 - [ ] Versioned manifest/policy/result/evidence contracts cover every required journey and all closed states/codes without defaults.
 - [ ] Reducer and validator fail closed on every contract, safety, privacy, dependency, freshness, and count inconsistency.
 - [ ] Static guard (including the production-inert fault guard), Change Boundary, independent canaries, and pre-consumer rollback are complete.
@@ -155,8 +157,8 @@ Scenario: SCN-102-001-12 Fault profiles are disposable and production-inert
 - [ ] TP-102-01-04 passes with current-session evidence in report.md.
 - [ ] TP-102-01-05 passes with current-session evidence in report.md.
 - [ ] TP-102-01-06 passes with current-session evidence in report.md.
-- [ ] TP-102-01-07 passes with current-session evidence in report.md.
-- [ ] TP-102-01-08 passes with current-session evidence in report.md.
+- [x] TP-102-01-07 passes with current-session evidence in report.md. → Evidence: [report.md](report.md) (unit — TestFaultProfileRegistryRequiresEveryDeclaredFieldAndRejectsFirstPartyInterception)
+- [x] TP-102-01-08 passes with current-session evidence in report.md. → Evidence: [report.md](report.md) (unit — TestProductionRoutesConfigRequestsAndUIExposeNoFaultSelectorOrTrigger)
 
 #### Build Quality Gate
 

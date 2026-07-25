@@ -1,0 +1,185 @@
+# BUG-102-001-owned, production-inert, test-only, machine-readable
+# fault-profile registry (JOURNEY-016 / SCN-102-001-12).
+#
+# This registry exists ONLY for disposable env=test* validate/e2e stacks. It is
+# structurally inert in production builds and config: no production route,
+# request, configuration, or UI exposes any fault selector, trigger, or profile
+# control, and no production-posture caller can resolve or activate a profile.
+#
+# Every profile declares the closed nine-field schema BUG-102-001 owns once:
+#   stableId, journey, setup, teardown, parallelism, expectedRequest,
+#   expectedResponseOrTermination, evidence, noFirstPartyInterception.
+#
+# Consumers (for example BUG-073-006 SCOPE-01) reference profiles by immutable
+# stableId ONLY. They author no parallel registry, redefine no profile inline,
+# and re-declare none of the schema fields. A missing or unknown stableId fails
+# and never falls back to an inline definition. The nine-field schema and its
+# companion JSON Schema (fault-profiles.v1.schema.json) are the machine-readable
+# contract every consumer resolves against.
+
+version: v1
+posture: test
+productionExposure: forbidden
+
+profiles:
+  # ---------------------------------------------------------------------------
+  # Assistant journey faults. These eight profiles are consumed by
+  # BUG-073-006 SCOPE-01 (blank / auth-rejection Assistant terminal state) by
+  # their immutable stableId. Each stableId equals the terminal TurnOutcome the
+  # Assistant journey must honestly render for that fault.
+  # ---------------------------------------------------------------------------
+  - stableId: "auth_401"
+    journey: "assistant"
+    setup: "Provision a disposable env=test* browser context with no valid PASETO session so the assistant turn transport reaches the auth middleware as an unauthenticated caller before the facade."
+    teardown: "Discard the unauthenticated context and reset the disposable stack session store; no production session or credential is touched."
+    parallelism: "Isolated per test worker; each worker owns its own session-store namespace so concurrent assistant fault runs never share auth state."
+    expectedRequest: "A real first-party POST to the assistant turn transport with no valid session cookie, traversing the actual auth middleware."
+    expectedResponseOrTermination: "The turn terminates with the auth_401 outcome (authentication rejected before the facade) and an honest terminal assistant state, never a blank body."
+    evidence: "Value-safe auth_401 outcome key and 401 status class only; no cookie, token, prompt, or transcript content."
+    noFirstPartyInterception: true
+
+  - stableId: "access_403"
+    journey: "assistant"
+    setup: "Provision a disposable env=test* authenticated session whose claims lack the assistant scope so the real authorization check denies the turn."
+    teardown: "Revoke the scoped test session and reset the disposable stack claim store; no production authorization state is touched."
+    parallelism: "Isolated per test worker; scope-denial sessions are namespaced per worker so parallel runs never observe another worker's claims."
+    expectedRequest: "A real first-party POST to the assistant turn transport with a valid session that lacks the required assistant scope, traversing the actual authorization check."
+    expectedResponseOrTermination: "The turn terminates with the access_403 outcome (access denied) and an honest terminal state; no protected content or existence is disclosed."
+    evidence: "Value-safe access_403 outcome key and 403 status class only; no claim values, prompt, or transcript."
+    noFirstPartyInterception: true
+
+  - stableId: "rate_limited"
+    journey: "assistant"
+    setup: "Drive the disposable env=test* stack past its configured assistant rate limit using real sequential turns so the actual limiter rejects the next turn."
+    teardown: "Reset the disposable stack rate-limit counters and quiesce the worker; no production limiter state is touched."
+    parallelism: "Isolated per test worker; each worker drives its own rate-limit bucket so concurrent runs never consume a shared budget."
+    expectedRequest: "A real first-party POST to the assistant turn transport issued after the worker exceeds its configured limit, traversing the actual rate limiter."
+    expectedResponseOrTermination: "The turn terminates with the rate_limited outcome (429 class) and an honest terminal state, never a blank body or silent success."
+    evidence: "Value-safe rate_limited outcome key and 429 status class only; no counter internals, prompt, or transcript."
+    noFirstPartyInterception: true
+
+  - stableId: "provider_unavailable"
+    journey: "assistant"
+    setup: "Point the disposable env=test* assistant provider binding at an owned unavailable upstream fixture so a real provider call fails at the transport boundary."
+    teardown: "Restore the disposable stack provider binding to its default fixture; no production provider or credential is touched."
+    parallelism: "Isolated per test worker; each worker binds its own provider fixture endpoint so parallel runs never share upstream state."
+    expectedRequest: "A real first-party POST to the assistant turn transport that dispatches an actual provider call to the owned unavailable upstream."
+    expectedResponseOrTermination: "The turn terminates with the provider_unavailable outcome (provider failure surfaced honestly) and a terminal state, not a blank or false-success body."
+    evidence: "Value-safe provider_unavailable outcome key and upstream failure class only; no provider payload, prompt, or transcript."
+    noFirstPartyInterception: true
+
+  - stableId: "server_error"
+    journey: "assistant"
+    setup: "Configure the disposable env=test* assistant facade to hit an owned internal-error fixture path so the real facade returns a 5xx-class terminal state."
+    teardown: "Restore the disposable stack facade configuration to its default path; no production facade state is touched."
+    parallelism: "Isolated per test worker; the internal-error fixture path is namespaced per worker so parallel runs never collide."
+    expectedRequest: "A real first-party POST to the assistant turn transport that reaches the owned internal-error facade path."
+    expectedResponseOrTermination: "The turn terminates with the server_error outcome (5xx class) and an honest terminal state, never a blank body presented as success."
+    evidence: "Value-safe server_error outcome key and 5xx status class only; no stack trace, prompt, or transcript."
+    noFirstPartyInterception: true
+
+  - stableId: "timeout"
+    journey: "assistant"
+    setup: "Bind the disposable env=test* assistant provider to an owned slow-upstream fixture that exceeds the configured turn deadline so the real bounded turn times out."
+    teardown: "Restore the disposable stack provider binding and clear the slow-upstream fixture; no production timeout policy is touched."
+    parallelism: "Isolated per test worker; each worker owns its slow-upstream fixture and deadline so concurrent runs never share timing state."
+    expectedRequest: "A real first-party POST to the assistant turn transport whose bounded provider call exceeds the configured deadline."
+    expectedResponseOrTermination: "The turn terminates cleanly with the timeout outcome after its bound elapses; no process is left running and no partial success is shown."
+    evidence: "Value-safe timeout outcome key and the elapsed bound class only; no prompt, transcript, or upstream payload."
+    noFirstPartyInterception: true
+
+  - stableId: "network"
+    journey: "assistant"
+    setup: "Bind the disposable env=test* assistant provider to an owned unreachable network endpoint so a real dispatch fails with a transport-level network error."
+    teardown: "Restore the disposable stack provider binding to a reachable fixture; no production network policy is touched."
+    parallelism: "Isolated per test worker; each worker binds its own unreachable endpoint so parallel runs never share connection state."
+    expectedRequest: "A real first-party POST to the assistant turn transport that dispatches an actual network call to the owned unreachable endpoint."
+    expectedResponseOrTermination: "The turn terminates with the network outcome (transport-level network loss surfaced honestly) and a terminal state, never a blank success body."
+    evidence: "Value-safe network outcome key and the transport-error class only; no endpoint address, prompt, or transcript."
+    noFirstPartyInterception: true
+
+  - stableId: "schema_decode"
+    journey: "assistant"
+    setup: "Bind the disposable env=test* assistant provider to an owned fixture that returns a structurally invalid envelope so the real decoder rejects it."
+    teardown: "Restore the disposable stack provider binding to a valid-envelope fixture; no production decoder state is touched."
+    parallelism: "Isolated per test worker; each worker owns its invalid-envelope fixture so parallel runs never share decode state."
+    expectedRequest: "A real first-party POST to the assistant turn transport whose provider returns an invalid envelope through the actual decode path."
+    expectedResponseOrTermination: "The turn terminates with the schema_decode outcome (invalid envelope rejected) and an honest terminal state, never a blank or coerced body."
+    evidence: "Value-safe schema_decode outcome key and the decode-failure class only; no raw envelope, prompt, or transcript."
+    noFirstPartyInterception: true
+
+  # ---------------------------------------------------------------------------
+  # Other required product-journey faults. BUG-102-001 owns the widest fault
+  # surface (every required product journey), so the registry covers the other
+  # journeys named in the closed E102-JOURNEY-* failure families and the
+  # health-cannot-mask-product-failure acceptance scenario (SCN-102-001-02).
+  # ---------------------------------------------------------------------------
+  - stableId: "session_auth_split"
+    journey: "session"
+    setup: "In a disposable env=test* stack, drive a real login then a logout/re-auth sequence configured so the modern session cookie is malformed on re-establishment."
+    teardown: "Clear the disposable stack session store and cookie jar; no production session is touched."
+    parallelism: "Isolated per test worker; each worker owns its cookie jar and session-store namespace so parallel runs never share session identity."
+    expectedRequest: "A real first-party authenticated navigation that re-establishes a session across a logout/re-auth boundary."
+    expectedResponseOrTermination: "The session journey surfaces the auth split honestly (login rejected or cookie mismatch) rather than reporting a healthy authorized session."
+    evidence: "Value-safe session-outcome key and auth status class only; no cookie value, credential, or personal content."
+    noFirstPartyInterception: true
+
+  - stableId: "search_zero_request"
+    journey: "search"
+    setup: "In a disposable env=test* stack, submit a real query through the search UI configured so the client would issue zero backend requests, exposing a false-empty result."
+    teardown: "Reset the disposable stack search client configuration and index fixtures; no production search state is touched."
+    parallelism: "Isolated per test worker; each worker owns its search index fixture so parallel runs never share query state."
+    expectedRequest: "A real first-party search submission that must dispatch exactly one backend search request."
+    expectedResponseOrTermination: "The search journey fails when zero or duplicate requests are dispatched, or when a dependency-blocked result is rendered as a true empty, rather than passing a false empty."
+    evidence: "Value-safe search-outcome key and request-count class only; no query text or result content."
+    noFirstPartyInterception: true
+
+  - stableId: "digest_false_empty"
+    journey: "digest"
+    setup: "Seed a disposable env=test* stack with a stored digest, then configure the read path so a scan/read failure would render the digest as empty instead of surfacing the failure."
+    teardown: "Clear the seeded digest and reset the disposable stack read path; no production digest is touched."
+    parallelism: "Isolated per test worker; each worker seeds its own digest namespace so parallel runs never share stored content."
+    expectedRequest: "A real first-party read of a stored digest through the actual scan/read path."
+    expectedResponseOrTermination: "The digest journey fails when a stored digest is hidden or a read failure is shown as an empty digest, and passes only a genuine authorized true-empty where policy permits it."
+    evidence: "Value-safe digest-outcome key and read-status class only; no digest prose or personal content."
+    noFirstPartyInterception: true
+
+  - stableId: "graph_route_404"
+    journey: "graph"
+    setup: "Configure a disposable env=test* stack so a required knowledge-graph route responds 404 while infrastructure health remains green."
+    teardown: "Restore the disposable stack route table to its default mounted routes; no production routing is touched."
+    parallelism: "Isolated per test worker; each worker owns its route-table override so parallel runs never share mount state."
+    expectedRequest: "A real first-party GET to a required knowledge-graph route through the actual router."
+    expectedResponseOrTermination: "The graph journey fails when a required route 404s or an auth/store error is shown as an empty overview, never treating a 404 as a healthy empty state."
+    evidence: "Value-safe graph-outcome key and route status class only; no graph labels, nodes, edges, or personal content."
+    noFirstPartyInterception: true
+
+  - stableId: "recommend_zero_provider_false_ready"
+    journey: "recommendations"
+    setup: "Enable the recommendations capability in a disposable env=test* stack with zero configured providers so a false-ready state would be reported."
+    teardown: "Disable the capability and clear the disposable stack provider configuration; no production recommendation state is touched."
+    parallelism: "Isolated per test worker; each worker owns its capability configuration so parallel runs never share provider state."
+    expectedRequest: "A real first-party read of the recommendations readiness state through the actual capability path."
+    expectedResponseOrTermination: "The recommendations journey fails when an enabled capability with zero providers reports ready, and passes only a genuinely configured or explicitly-optional state."
+    evidence: "Value-safe recommendations-outcome key and provider-count class only; no provider payload or personal content."
+    noFirstPartyInterception: true
+
+  - stableId: "cards_parity_unavailable"
+    journey: "cards"
+    setup: "Configure a disposable env=test* stack so the representative Card Rewards read or its parity prerequisite is unavailable while health remains green."
+    teardown: "Restore the disposable stack card-rewards fixture and parity source; no production card state is touched."
+    parallelism: "Isolated per test worker; each worker owns its card-rewards fixture so parallel runs never share representative-read state."
+    expectedRequest: "A real first-party representative Card Rewards read through the actual card-rewards path."
+    expectedResponseOrTermination: "The cards journey fails when the representative read or its parity prerequisite is unavailable, never treating an unavailable prerequisite as a passing read."
+    evidence: "Value-safe cards-outcome key and prerequisite-status class only; no card metadata or personal content."
+    noFirstPartyInterception: true
+
+  - stableId: "synth_no_durable_output"
+    journey: "synthesis"
+    setup: "Configure a disposable env=test* stack so a never-run synthesis capability reports up while producing no durable output."
+    teardown: "Reset the disposable stack synthesis capability state and clear any fixture output; no production synthesis state is touched."
+    parallelism: "Isolated per test worker; each worker owns its synthesis capability namespace so parallel runs never share output state."
+    expectedRequest: "A real first-party read of the synthesis/health state through the actual capability path."
+    expectedResponseOrTermination: "The synthesis journey fails when a never-run capability is shown up or produces no durable output, and passes only a genuine quiet outcome where policy permits it."
+    evidence: "Value-safe synthesis-outcome key and durability class only; no synthesis prose or personal content."
+    noFirstPartyInterception: true
