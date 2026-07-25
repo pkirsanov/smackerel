@@ -43,7 +43,7 @@ owner edit is introduced. `specs/105-*`, `specs/106-*`, `specs/072-*`, and
 | SST key | Decision (MVP) | Owning scope |
 |---|---|---|
 | `nudge_ref_ttl_hours` | `6` (≥ max(suppression_window_hours=4, dedupe_window_hours=6)) | SCOPE-01 |
-| snooze window | reuse `suppression_window_hours` (no distinct `snooze_window_hours` for MVP) | SCOPE-01 / SCOPE-03 |
+| snooze window | reuse `suppression_window_hours` (no distinct `snooze_window_hours` for MVP) | SCOPE-01 / SCOPE-03A / SCOPE-03B |
 | `RAIL_MAX` | `6` (neighborhood bound; never renders the full store) | SCOPE-05 |
 | `what_changed_page_cap` | `25` (per column, per page) | SCOPE-07 |
 

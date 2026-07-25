@@ -12,7 +12,7 @@ spec-106 `Today` body, observe-first, with honest quiet/partial/degraded states.
 
 - Requirements source: `../../spec.md` (SCN-107-001/002/017; FR-107-001/002/022/024/029; NFR-107-002)
 - Design source: `../../design.md` (`## Concrete Implementations` P1, `### Landing Route Coordination`)
-- Depends on: SCOPE-03; external gate spec-106 `Today` destination usable
+- Depends on: SCOPE-03B; external gate spec-106 `Today` destination usable
 - Planning owner: `bubbles.plan`
 
 ## Test Evidence
