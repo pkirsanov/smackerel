@@ -23,6 +23,7 @@ import (
 	"github.com/smackerel/smackerel/internal/intelligence/surfacing"
 	"github.com/smackerel/smackerel/internal/proactive"
 	"github.com/smackerel/smackerel/internal/telegram/assistant_adapter"
+	wa "github.com/smackerel/smackerel/internal/whatsapp/assistant_adapter"
 )
 
 // nudgeE2ESender is the injected outbound seam: it captures the tgbotapi payloads
@@ -135,4 +136,98 @@ func TestSCN107005_TelegramInlineNudgeAcknowledgesThroughController(t *testing.T
 	// deduped (dedupe window), so this adapter-level e2e proves the
 	// ack-through-controller contract via the shared sink rather than
 	// re-deriving suppression.
+}
+
+// waE2ECloud is the injected outbound WhatsApp seam for the e2e lane: it captures
+// the rendered InteractiveMessage so the reply -> ack path is driven with no live
+// Cloud API. It satisfies wa.CloudClient.
+type waE2ECloud struct{ interactive []wa.InteractiveMessage }
+
+func (c *waE2ECloud) SendText(_ context.Context, _ string, _ wa.TextMessage) error { return nil }
+
+func (c *waE2ECloud) SendInteractive(_ context.Context, _ string, msg wa.InteractiveMessage) error {
+	c.interactive = append(c.interactive, msg)
+	return nil
+}
+
+// TestSCN107006_WhatsAppInteractiveNudgeAcknowledgesThroughController (T107-006-A):
+// the WhatsApp interactive nudge acknowledges through the one controller ack path,
+// end-to-end through the REAL surfacing controller + REAL NudgeRegistry/NudgeAck +
+// REAL WhatsApp renderer, via an INJECTED CloudClient seam (no live WhatsApp
+// network, no HTTP). Single-pair scope; the cross-channel act-once-suppressed-
+// EVERYWHERE parity is SCOPE-03B2.
+func TestSCN107006_WhatsAppInteractiveNudgeAcknowledgesThroughController(t *testing.T) {
+	ctx := context.Background()
+
+	// REAL single spec-078 controller over the REAL process-wide ack sink.
+	ack := surfacing.NewInMemoryAck()
+	ctrl, err := surfacing.NewController(surfacing.Config{
+		DailyNudgeBudget:        5,
+		SuppressionWindowHours:  4,
+		DedupeWindowHours:       6,
+		UrgentEscalationEnabled: true,
+	}, ack, nil)
+	if err != nil {
+		t.Fatalf("NewController: %v", err)
+	}
+	reg := proactive.NewNudgeRegistry(6 * time.Hour)
+	na := proactive.NewNudgeAck(reg, ack)
+
+	const key = "e2e-whatsapp-interactive-nudge"
+	cand := surfacing.SurfacingCandidate{
+		Producer:   surfacing.ProducerAlerts,
+		Channel:    wa.ReservedWhatsAppChannel,
+		ContentKey: key,
+		Priority:   2,
+	}
+
+	// Producer -> single controller.Propose -> permit verdict.
+	dec, err := ctrl.Propose(ctx, cand)
+	if err != nil {
+		t.Fatalf("Propose: %v", err)
+	}
+	if dec.Kind != surfacing.DecisionPermit {
+		t.Fatalf("verdict = %q, want permit", dec.Kind)
+	}
+
+	// Mint the opaque ref + project + render + SEND the WhatsApp interactive message.
+	ref := reg.Mint(key, cand.Producer, cand.Channel, "user-e2e")
+	card, ok := proactive.ProjectCard(dec, cand, ref, "Your weekly review is ready")
+	if !ok {
+		t.Fatalf("ProjectCard(permit) ok=false")
+	}
+	cloud := &waE2ECloud{}
+	if err := wa.RenderNudge(ctx, cloud, "+15555550123", card, 4096); err != nil {
+		t.Fatalf("RenderNudge: %v", err)
+	}
+	if len(cloud.interactive) != 1 {
+		t.Fatalf("interactive sends = %d, want exactly 1", len(cloud.interactive))
+	}
+	sent := cloud.interactive[0]
+	if len(sent.Buttons) != 3 {
+		t.Fatalf("rendered nudge carried %d buttons, want 3", len(sent.Buttons))
+	}
+	actID := sent.Buttons[0].ID
+	if want := "a:n:" + string(ref) + ":a"; actID != want {
+		t.Fatalf("Act reply.id = %q, want %q (opaque a:n: ref, never the content_key)", actID, want)
+	}
+
+	// Not yet acknowledged on the controller's sink.
+	if _, acked := ack.LastAcknowledged(key); acked {
+		t.Fatalf("content_key acknowledged before any reply")
+	}
+
+	// Interactive reply -> HandleNudgeReply -> the ONE Acknowledge(content_key).
+	out, err := wa.HandleNudgeReply(actID, na)
+	if err != nil {
+		t.Fatalf("HandleNudgeReply: %v", err)
+	}
+	if out.State != proactive.StateActed || !out.Acknowledged || out.ContentKey != key {
+		t.Fatalf("reply outcome = %+v, want acted+acknowledged content_key=%q", out, key)
+	}
+
+	// The ack landed on the SAME sink the controller reads (single ack path).
+	if _, acked := ack.LastAcknowledged(key); !acked {
+		t.Fatalf("content_key not acknowledged on the controller's sink after the reply")
+	}
 }
