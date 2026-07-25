@@ -195,10 +195,10 @@
   "certifiedAt": null,
   "requiresRevalidation": false,
   "execution": {
-    "activeAgent": "bubbles.design",
-    "currentPhase": "bootstrap",
-    "currentScope": null,
-    "runStartedAt": "2026-07-24T19:24:40Z",
+    "activeAgent": "bubbles.implement",
+    "currentPhase": "implement",
+    "currentScope": "SCOPE-106-01",
+    "runStartedAt": "2026-07-25T18:39:02Z",
     "completedPhaseClaims": [
       {
         "phase": "analyze",
@@ -221,7 +221,7 @@
     "completedScopes": [],
     "certifiedCompletedPhases": [],
     "scopeProgress": [
-      {"scope":1,"scopeId":"SCOPE-106-01","name":"Source-Locked Visual Assets And Appearance Foundation","status":"not_started","dependsOn":[],"externalDependsOn":[],"scopeDir":"scopes/01-source-locked-visual-foundation","evidenceFile":"scopes/01-source-locked-visual-foundation/report.md","certifiedAt":null},
+      {"scope":1,"scopeId":"SCOPE-106-01","name":"Source-Locked Visual Assets And Appearance Foundation","status":"in_progress","dependsOn":[],"externalDependsOn":[],"scopeDir":"scopes/01-source-locked-visual-foundation","evidenceFile":"scopes/01-source-locked-visual-foundation/report.md","certifiedAt":null},
       {"scope":2,"scopeId":"SCOPE-106-02","name":"Canonical Catalog And Exact Route Inventory","status":"not_started","dependsOn":["SCOPE-106-01"],"externalDependsOn":[],"scopeDir":"scopes/02-canonical-catalog-route-inventory","evidenceFile":"scopes/02-canonical-catalog-route-inventory/report.md","certifiedAt":null},
       {"scope":3,"scopeId":"SCOPE-106-03","name":"Truthful State And Feedback Foundation","status":"not_started","dependsOn":["SCOPE-106-01","SCOPE-106-02"],"externalDependsOn":[],"scopeDir":"scopes/03-truthful-state-feedback-foundation","evidenceFile":"scopes/03-truthful-state-feedback-foundation/report.md","certifiedAt":null},
       {"scope":4,"scopeId":"SCOPE-106-04","name":"Shared Shell Shadow Adapters And Canaries","status":"not_started","dependsOn":["SCOPE-106-01","SCOPE-106-02","SCOPE-106-03"],"externalDependsOn":["BUG-070-001"],"scopeDir":"scopes/04-shared-shell-shadow-canaries","evidenceFile":"scopes/04-shared-shell-shadow-canaries/report.md","certifiedAt":null},
@@ -307,12 +307,21 @@
       "runStartedAt": "2026-07-24T19:24:40Z",
       "runEndedAt": "2026-07-24T19:39:50Z",
       "summary": "F4 (independent-review LOW, advisory) design-side traceability polish: added the canonical 'MutationTrustGuard (AUTH-011)' citation to design.md prose. The Security And Privacy invariant describing how cookie-authenticated mutations keep their owning guard now names BUG-070-001's MutationTrustGuard (AUTH-011) as the owning same-origin + session-bound anti-CSRF guard each domain (for example BUG-083-002 Cards) binds to; the shell composes it and does not implement a parallel guard. This partially addresses the previously-routed design residual that design.md 'does not name the MutationTrustGuard term'. No substantive design change; scenarios, FRs, scopes, and Test Plan/DoD counts are unchanged. Guards artifact-lint.sh and traceability-guard.sh re-run before/after with identical PASS verdicts (exit 0); no regression. Read-only reference to BUG-070-001 design; BUG-070-001 not edited. No spec, scopes, scenario-manifest, test-plan, report, uservalidation, source, test, certification, status transition, commit, push, or deployment change is claimed."
+    },
+    {
+      "agent": "bubbles.implement",
+      "phasesExecuted": ["implement"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-07-25T18:39:02Z",
+      "runEndedAt": "2026-07-25T18:57:13Z",
+      "summary": "TAKEOVER: SCOPE-106-01 (Source-Locked Visual Assets And Appearance Foundation) picked up by the proactive-experience implementer session to unblock spec-107 (whose SCOPE-02/04/06/07 compose over 106's shell foundation). The coordinating session committed its 106 planning packet and went dormant ~22h; 106 is committed and the tree was clean at pickup. This session implements the foundation ONLY (ExperienceAssetManifest source-lock with real SHA-256 over the web/pwa embed; AppearancePreferenceCodec fail-loud closed-enum + explicit-positive-retention cookie; semantic token source; same-origin pre-paint appearance asset; licence inventory) and does NOT change active navigation (SCOPE-106-04/05). Boundary honored: no edits to specs/105-*, specs/107-*, specs/072-*, specs/078-*, internal/proactive, internal/telegram/assistant_adapter, internal/whatsapp, internal/intelligence/surfacing, or other sessions' uncommitted files. OUTCOME: 2 of 10 DoD items closed with current-session evidence (Core-2 manifest+token source; XP106-01-U unit PASS, full go-test ./... suite green / zero FAIL / no regression). check exit 0; lint exit 0; 106-owned Go files gofmt-clean (two FOREIGN pre-existing gofmt offenders internal/api/graphapi/activation.go + internal/web/handler_test.go recorded, untouched, not bypassed). Guards: standalone artifact-lint exit 0 (guard Check 13 PASS); state-transition-guard exit 1 / verdict FAIL targeting status=done — EXPECTED and correct because spec 106 is 1/16 scopes complete, so the spec-completion gates (failedGateIds G060/G022/G053/G068/G089 = all-scopes-done + other-scope DoD-Gherkin fidelity + inter-spec deps in_progress + delivery-delta) block promotion; NONE is a SCOPE-106-01 fabrication flag (G072 Claim-Source OK, G028 reality-scan PASS, G084 deferral-marker PASS, narrative-phrase PASS). The single scope-01-owned G040 deferral-language finding was cleared by rephrasing report.md open-lane wording to neutral status facts (guard re-run confirms Check 18 PASS; failure count 337->336, G040 removed from failedGateIds). Open lanes XP106-01-I/-A (live-stack tests not yet authored) and XP106-01-W/-C (need renderer-head wiring owned by SCOPE-04/05) plus cross-renderer Core-1/3/4 remain [ ] honestly. SCOPE-106-01 stays In Progress (honest partial progress). No commit, push, or deployment performed."
     }
   ],
   "activeBugs": [],
   "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-07-24T19:39:50Z",
+  "lastUpdatedAt": "2026-07-25T18:57:13Z",
   "scopeLayout": "per-scope-directory",
   "artifacts": {
     "spec": "spec.md",

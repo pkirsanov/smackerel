@@ -1,0 +1,170 @@
+/*
+ * Smackerel Coherent Product Experience — semantic token source (spec 106, SCOPE-106-01).
+ *
+ * ONE same-origin, source-locked token source consumed by both the server-rendered
+ * templates (internal/web) and the PWA (web/pwa) via the shared ExperienceAssetManifest.
+ * Templates and page CSS reference these token names; they MUST NOT copy hardcoded
+ * colors or spacing. This file is the single authority for UX color roles, the 4px
+ * spacing scale, 2-8px radii, stable shell/control dimensions, type tokens, focus,
+ * motion, and density.
+ *
+ * Mechanical rules enforced here (design.md "Component Semantics" + scope step 6):
+ *   - no viewport-width font scaling (no `vw`/`vh` on any font-size),
+ *   - no negative letter-spacing,
+ *   - stable control/shell dimensions (no font-size-driven layout jitter),
+ *   - light and dark color roles both defined; forced-colors stays platform-controlled.
+ *
+ * Appearance is resolved BEFORE first paint by experience-appearance.js, which sets
+ * html[data-theme] (system|light|dark) and html[data-density] (comfortable|compact).
+ * `system` follows prefers-color-scheme. No color/spacing value is hardcoded elsewhere.
+ */
+
+/* ---- Type tokens ------------------------------------------------------------
+ * IBM Plex Sans / Source Serif 4 / IBM Plex Mono are the intended families. Their
+ * same-origin byte vendoring is tracked as an external dependency in the manifest
+ * (network-gated); until those bytes are source-locked the platform fallback keeps
+ * content readable. Declaring the family names now means a later same-origin
+ * @font-face vendoring is a token-value change only, with no consumer edits.
+ */
+:root {
+  --font-sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-serif: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+
+  --text-xs: 12px;
+  --text-sm: 13px;
+  --text-md: 15px;
+  --text-lg: 18px;
+  --text-xl: 22px;
+  --text-2xl: 28px;
+  --line-tight: 1.3;
+  --line-normal: 1.55;
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  /* Explicitly zero — never negative letter-spacing (mechanical rule). */
+  --letter-spacing: 0;
+
+  /* ---- 4px spacing scale --------------------------------------------------- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+
+  /* ---- Radii (2-8px) ------------------------------------------------------- */
+  --radius-sm: 2px;
+  --radius-md: 4px;
+  --radius-lg: 6px;
+  --radius-xl: 8px;
+
+  /* ---- Stable shell / control dimensions ----------------------------------- */
+  --shell-rail-width: 240px;
+  --shell-rail-width-collapsed: 64px;
+  --shell-header-height: 56px;
+  --shell-mobile-bar-height: 56px;
+  --control-height: 40px;
+  --control-height-compact: 36px;
+  --touch-target-min: 44px;
+  --content-max-width: 1120px;
+
+  /* ---- Focus + motion ------------------------------------------------------ */
+  --focus-ring-width: 2px;
+  --focus-ring-offset: 2px;
+  --motion-duration-fast: 120ms;
+  --motion-duration: 200ms;
+  --motion-easing: cubic-bezier(0.2, 0, 0, 1);
+
+  /* ---- Density ------------------------------------------------------------- */
+  --density-row-gap: var(--space-3);
+  --density-section-gap: var(--space-6);
+  --density-control-height: var(--control-height);
+
+  /* ---- UX color roles (light is the default / system-light) ---------------- */
+  color-scheme: light dark;
+  --color-bg: #faf9f7;
+  --color-surface: #ffffff;
+  --color-surface-raised: #ffffff;
+  --color-border: #d9d7d2;
+  --color-fg: #1b1b19;
+  --color-fg-muted: #63625d;
+  --color-accent: #2f5d50;
+  --color-accent-fg: #ffffff;
+  --color-focus: #2f5d50;
+  --color-success: #2d6a2d;
+  --color-warning: #8a6410;
+  --color-danger: #a41f1f;
+  --color-info: #24506e;
+  --color-shadow: rgba(20, 20, 18, 0.10);
+}
+
+/* Explicit dark role set (used when the resolved theme is dark). */
+:root[data-theme="dark"],
+:root[data-theme="system"] {
+  /* system inherits light above; the dark override below only applies under the
+     prefers-color-scheme:dark media query so system truly follows the OS. */
+}
+
+:root[data-theme="dark"] {
+  --color-bg: #16161a;
+  --color-surface: #1e1e24;
+  --color-surface-raised: #24242c;
+  --color-border: #34343d;
+  --color-fg: #ececef;
+  --color-fg-muted: #9a9aa2;
+  --color-accent: #7fb8a6;
+  --color-accent-fg: #10201b;
+  --color-focus: #7fb8a6;
+  --color-success: #6bbf6b;
+  --color-warning: #d7ab3f;
+  --color-danger: #e07070;
+  --color-info: #79b6dc;
+  --color-shadow: rgba(0, 0, 0, 0.45);
+}
+
+/* system => follow the operating-system setting via prefers-color-scheme. */
+@media (prefers-color-scheme: dark) {
+  :root[data-theme="system"] {
+    --color-bg: #16161a;
+    --color-surface: #1e1e24;
+    --color-surface-raised: #24242c;
+    --color-border: #34343d;
+    --color-fg: #ececef;
+    --color-fg-muted: #9a9aa2;
+    --color-accent: #7fb8a6;
+    --color-accent-fg: #10201b;
+    --color-focus: #7fb8a6;
+    --color-success: #6bbf6b;
+    --color-warning: #d7ab3f;
+    --color-danger: #e07070;
+    --color-info: #79b6dc;
+    --color-shadow: rgba(0, 0, 0, 0.45);
+  }
+}
+
+/* Compact density tightens spacing/row composition WITHOUT shrinking text below
+   13px, coarse-pointer targets, fields, actions, or content (design.md). */
+:root[data-density="compact"] {
+  --density-row-gap: var(--space-2);
+  --density-section-gap: var(--space-4);
+  --density-control-height: var(--control-height-compact);
+}
+
+/* Reduced motion is platform-controlled: collapse motion tokens, never override
+   user intent. */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion-duration-fast: 0ms;
+    --motion-duration: 0ms;
+  }
+}
+
+/* Focus is always visible and token-driven (never removed). */
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: var(--focus-ring-width) solid var(--color-focus);
+  outline-offset: var(--focus-ring-offset);
+}
