@@ -4,7 +4,7 @@
 
 ### Phase Order
 
-1. **SCOPE-01 - Fail-loud Graph activation foundation (`foundation:true`)**: replace warning-and-nil activation with one explicit required/disabled capability, value-safe secret resolution, and atomic route-manifest registration.
+1. **SCOPE-01 - Fail-soft Graph activation foundation (`foundation:true`)**: replace warning-and-nil silent absence with one derived enabled/disabled capability (empty/missing enabler -> typed 503 `capability_disabled`, the service still boots), value-safe secret resolution, and atomic route-manifest registration when enabled.
 2. **SCOPE-02 - Authorized Graph read truth**: make real PostgreSQL family reads distinguish populated, true-empty, unauthorized, unavailable, schema failure, and route failure without changing existing API identity.
 3. **SCOPE-03 - Product synthetic and readiness truth**: execute the fixed family manifest through an authenticated read-only validate-plane synthetic and project its value-safe result into readiness and observability.
 4. **SCOPE-04 - Wiki/Graph state and recovery integration**: consume the shared activation/read model in the Knowledge shell, including explicit disabled, privacy clearing, responsive accessibility, and persistent live-stack regression coverage.
@@ -13,8 +13,9 @@ The graph activation foundation is the only ready scope at plan creation. Each l
 
 ### New Types And Signatures
 
-- `GraphActivationPolicy = required | disabled`
-- `AuthorizedGraphRead` composite capability with route registration, family-read, manifest, and safe-status behavior
+- `ActivationState = enabled | disabled` derived from cursor-secret presence via `ResolveActivation(cfg) Activation` and `Config.ClassifyCursorSecret() SecretPresence`
+- `GraphCapability` composite capability with `Guard(next)` middleware (disabled -> typed 503 `capability_disabled`; enabled -> delegate), route registration, family-read, manifest, and safe-status behavior
+- `GraphIdentity`/`ClassifyGraphGrant`/`AuthorizeGraphRead` single operator-owned global-corpus grant matrix (operator/grant-holder/ungranted; leak-free 403; no tenant or per-user row predicate)
 - `GraphRouteManifest` with Topics, Topic detail, People, Person detail, Places, Place detail, Time, and Edges entries
 - `GraphReadOutcome = populated | true-empty | partial | capability-disabled | unauthorized-session | unauthorized-scope | route-missing | store-unavailable | schema-error | invalid-request`
 - `GraphFamilyResult { family, state, durationMs, code, evidenceRef }`
@@ -23,7 +24,7 @@ The graph activation foundation is the only ready scope at plan creation. Each l
 
 ### Validation Checkpoints
 
-- **After SCOPE-01:** unit and process regressions prove required invalid activation cannot listen and removing one manifest route rejects construction.
+- **After SCOPE-01:** unit regressions prove an empty/missing enabler resolves the typed 503 `capability_disabled` disabled state (the service still boots; never a silent 404, opaque 500, panic, or boot refusal) and removing one manifest route rejects construction when enabled.
 - **After SCOPE-02:** real-PostgreSQL integration and E2E API tests prove all family reads, the operator/grant-holder/ungranted global-corpus grant matrix, true-empty, typed dependency failures, and read-only behavior.
 - **After SCOPE-03:** the product synthetic, authenticated health projection, content-free telemetry, and strict readiness policy agree before any UI readiness claim is implemented.
 - **After SCOPE-04:** desktop/mobile Playwright, accessibility, privacy-clear, route-missing, disabled-mode, broad regression, artifact-lint, and traceability guards pass before certification.
@@ -42,14 +43,14 @@ flowchart LR
 
 | Scope | Outcome | Surfaces | Depends On | Status |
 |---|---|---|---|---|
-| SCOPE-01 | Required Graph configuration fails loud and routes activate atomically | config, core wiring, router, route manifest | - | Not Started |
+| SCOPE-01 | Empty/missing enabler fails soft to a typed disabled capability; routes activate atomically when enabled | config, core wiring, router, route manifest | - | Not Started |
 | SCOPE-02 | Authorized Graph reads report truthful data and failure states | PostgreSQL readers, HTTP contracts, auth, cursors | SCOPE-01 | Not Started |
 | SCOPE-03 | Read-only synthetic and readiness prove actual Graph behavior | validate synthetic, health, metrics, traces, alerts | SCOPE-02 | Not Started |
 | SCOPE-04 | Knowledge surfaces render the same honest state accessibly | PWA Knowledge/Wiki, status, responsive UI, Playwright | SCOPE-03 | Not Started |
 
 ---
 
-## Scope 1: Fail-Loud Graph Activation Foundation
+## Scope 1: Fail-Soft Graph Activation Foundation
 
 **Scope ID:** SCOPE-01  
 **Status:** Not Started  
@@ -63,15 +64,16 @@ flowchart LR
 - SCN-080-001-01, SCN-080-001-02, SCN-080-001-07
 
 ```gherkin
-Scenario: SCN-080-001-01 Required empty secret refuses startup
-  Given Graph API activation is explicitly required
-  And the configured cursor-secret indirection is missing or resolves empty
-  When core validates and constructs its dependencies
-  Then startup returns the matching closed F080 failure before a listener accepts traffic
-  And diagnostics contain only the config key or indirection name, never secret material
+Scenario: SCN-080-001-01 Empty or missing secret yields a typed disabled response and the service still boots
+  Given the Knowledge Graph public API is an optional capability
+  And the configured cursor-secret enabler is missing or resolves empty
+  When core resolves the graph activation
+  Then the capability resolves to the typed runtime-disabled state and answers every known graph path with an HTTP 503 "capability_disabled" envelope
+  And the service continues to boot and serve other capabilities, never a silent 404, an opaque 500, a panic, or a boot refusal
+  And diagnostics contain only the value-safe code and the config or indirection name, never secret material
 
 Scenario: SCN-080-001-02 Valid configuration mounts the complete route manifest
-  Given required activation, valid limits, a non-empty injected secret, and PostgreSQL are available
+  Given a present cursor-secret enabler (enabled activation), valid limits, and PostgreSQL are available
   When the authorized Graph capability is constructed
   Then all eight required family routes register as one authenticated group
   And removing or duplicating any manifest entry rejects construction rather than mounting a subset
@@ -85,10 +87,10 @@ Scenario: SCN-080-001-07 Activation diagnostics are value-safe
 
 ### Implementation Plan
 
-1. Add the required `knowledge_graph_api.activation` SST value and parse the closed `required|disabled` enum without a fallback; consume the already-loaded central `KnowledgeGraphAPIConfig` rather than loading runtime config twice.
-2. Introduce one `AuthorizedGraphRead` construction boundary. Build config, secret codec, PostgreSQL readers, and the complete `GraphRouteManifest` into locals before assigning the capability so a failure cannot leave partial dependencies.
+1. Derive activation from the EXISTING `cursor_secret_env` presence (`Config.ClassifyCursorSecret()`): present -> enabled, empty/missing -> typed disabled. No new required SST enum key is introduced; consume the already-loaded central `KnowledgeGraphAPIConfig` rather than loading runtime config twice.
+2. Introduce one `GraphCapability` construction boundary (`ResolveActivation`/`NewGraphCapability`). Build config, secret codec, PostgreSQL readers, and the complete `GraphRouteManifest` into locals before assigning the capability so a failure cannot leave partial dependencies or nil handlers.
 3. Replace five nullable activation fields and per-family router checks with one manifest registrar under the existing bearer and `knowledge-graph:read` middleware.
-4. In `required` mode, return closed `F080-*` startup errors through the core boot path before listen. In explicit `disabled` mode, register known paths to the typed `503 capability_disabled` responder without resolving secret material.
+4. When enabled (enabler present), register the full manifest under the existing bearer + `knowledge-graph:read` middleware. When disabled (enabler empty/missing), `GraphCapability.Guard` answers every known graph path with the typed `503 capability_disabled` response without resolving secret material - the process keeps serving other capabilities and never refuses boot.
 5. Emit activation telemetry using closed low-cardinality labels and value-safe details only.
 6. Preserve generic product configuration seams. Do not add concrete target names, paths, secret values, or deploy-adapter mutations to this repository.
 
@@ -100,29 +102,29 @@ Scenario: SCN-080-001-07 Activation diagnostics are value-safe
 ### Migration And Rollback
 
 - This scope changes configuration and dependency shape but performs no graph-data migration.
-- Forward rollout requires an explicit `required` or `disabled` value; missing activation is a refusal.
+- Forward rollout derives activation from the cursor-secret enabler's presence; an absent enabler resolves the typed disabled state, never a boot refusal.
 - Rollback uses the prior source/config pointer. It must not restore warning-and-nil behavior as an operational workaround.
-- Operational removal uses an explicitly approved `disabled` config bundle whose readiness/UI contract is completed in later scopes.
+- Operational removal omits or empties the cursor-secret enabler (or applies an explicit disable policy); the capability resolves the typed disabled state whose readiness/UI contract is completed in later scopes.
 
 ### Test Plan
 
 | ID | Test Type | Category | Scenario | File / Expected Test Title | Command | Live System |
 |---|---|---|---|---|---|---|
-| T080-01-UNIT | Unit | `unit` | SCN-080-001-01 | `internal/config/knowledge_graph_api_test.go` - `TestKnowledgeGraphActivationRequiredRejectsMissingAndEmptySecret` | `./smackerel.sh test unit` | No |
-| T080-01-PROC | Integration | `integration` | SCN-080-001-01 | `tests/integration/graphapi/activation_test.go` - `TestRequiredGraphActivationRefusesBeforeListen` | `./smackerel.sh test integration` | Yes |
+| T080-01-UNIT | Unit | `unit` | SCN-080-001-01 | `internal/api/graphapi/activation_test.go` - `TestResolveActivation_EmptySecretIsTypedDisabled` / `TestResolveActivation_MissingSecretIsTypedDisabled` / `TestAdversarial_EmptySecretMustNotRevertToSilentAbsenceOr500` (empty AND missing enabler -> typed 503 disabled, service boots; adversarial red-to-green vs the silent-404/500 bug) | `./smackerel.sh test unit` | No |
+| T080-01-PROC | Integration | `integration` | SCN-080-001-01 | `tests/integration/graphapi/activation_test.go` - `TestGraphActivationDisabledSecretServesTyped503AndKeepsServing` | `./smackerel.sh test integration` | Yes |
 | T080-02-MANIFEST | Integration | `integration` | SCN-080-001-02 | `tests/integration/graphapi/route_manifest_test.go` - `TestGraphRouteManifestRegistersAllFamiliesAtomically` | `./smackerel.sh test integration` | Yes |
-| T080-02-ADVERSARIAL | E2E API regression | `e2e-api` | SCN-080-001-02 | `tests/e2e/graph_api_activation_e2e_test.go` - `Regression: warning-and-nil or omitted manifest route cannot start ready` | `./smackerel.sh test e2e` | Yes |
+| T080-02-ADVERSARIAL | E2E API regression | `e2e-api` | SCN-080-001-02 | `tests/e2e/graph_api_activation_e2e_test.go` - `Regression: empty/missing enabler serves typed 503 capability_disabled (never a silent 404 nil-handler absence or opaque 500); omitted manifest route rejects construction` | `./smackerel.sh test e2e` | Yes |
 | T080-07-SECURITY | Security regression | `e2e-api` | SCN-080-001-07 | `tests/e2e/graph_api_activation_e2e_test.go` - `Regression: Graph activation output never contains secret or cursor material` | `./smackerel.sh test e2e` | Yes |
-| T080-01-DISABLED | E2E API regression | `e2e-api` | SCN-080-001-01 | `tests/e2e/graph_api_activation_e2e_test.go` - `Regression: explicit disabled mode is typed and never inferred from missing config` | `./smackerel.sh test e2e` | Yes |
+| T080-01-DISABLED | E2E API regression | `e2e-api` | SCN-080-001-01 | `tests/e2e/graph_api_activation_e2e_test.go` - `Regression: empty/missing enabler yields the typed 503 capability_disabled disabled state and the service keeps serving other capabilities` | `./smackerel.sh test e2e` | Yes |
 
 ### Definition of Done - Tiered Validation
 
 #### Core Outcomes
 
-- [ ] SCN-080-001-01: When activation is required and the configured cursor-secret indirection is missing or resolves empty, core returns the matching closed F080 failure before a listener accepts traffic, and diagnostics name only the config key or indirection name.
-- [ ] SCN-080-001-02: With required activation, valid limits, a non-empty injected secret, and PostgreSQL available, all eight required family routes register as one authenticated group, and removing or duplicating any manifest entry rejects construction rather than mounting a subset.
+- [ ] SCN-080-001-01: When the optional cursor-secret enabler is missing or resolves empty, the capability resolves the typed HTTP 503 `capability_disabled` disabled state for every known graph path and the service continues to boot and serve other capabilities (never a silent 404, opaque 500, panic, or boot refusal), and diagnostics name only the value-safe code and the config or indirection name.
+- [ ] SCN-080-001-02: With a present cursor-secret enabler (enabled activation), valid limits, and PostgreSQL available, all eight required family routes register as one authenticated group, and removing or duplicating any manifest entry rejects construction rather than mounting a subset.
 - [ ] SCN-080-001-07: Whether secret resolution or cursor-codec construction succeeds or fails, startup logs, errors, metrics, and traces contain only activation mode, safe code, and non-secret config identity, never secret bytes, length, hash, cursor body, or authentication material.
-- [ ] Required Graph activation is one atomic capability; invalid configuration returns a closed F080 refusal before listen, and explicit disabled mode is the only non-live state.
+- [ ] Graph activation is one capability derived from the enabler's presence; an empty/missing enabler resolves the typed 503 `capability_disabled` disabled state (the service keeps serving; never a silent 404, opaque 500, panic, or boot refusal), and the enabled state mounts the full manifest atomically.
 - [ ] Every required route is derived from one canonical manifest and remains behind bearer authentication plus `knowledge-graph:read`.
 - [ ] Secret values and sensitive derivatives cannot enter errors, logs, metrics, traces, health, or test output.
 - [ ] The generic product/deploy ownership boundary and source/config rollback contract are preserved.
@@ -263,7 +265,7 @@ Scenario: SCN-080-001-03 Product synthetic proves every family
   And acceptance fails for any 401, 403, 404, 5xx, schema, cursor, or missing-row outcome
 
 Scenario: SCN-080-001-04 Disabled readiness is truthful
-  Given Graph is explicitly disabled
+  Given Graph is disabled (an empty or missing cursor-secret enabler, or an explicit disable policy)
   When authenticated health, strict readiness, and capability status are read
   Then Graph is unavailable or policy-disabled as declared
   And neither static Wiki assets nor general liveness report the Graph journey ready
@@ -342,7 +344,7 @@ Scenario: SCN-080-001-07 Synthetic and telemetry disclose no content
 
 ```gherkin
 Scenario: SCN-080-001-04 Explicit disabled mode is visible and unadvertised as ready
-  Given the shared Graph capability is explicitly disabled
+  Given the shared Graph capability is disabled (an empty or missing cursor-secret enabler, or an explicit disable policy)
   When a user opens Knowledge Graph or an operator opens readiness
   Then the product shell shows the exact unavailable explanation
   And no local navigation, status, or static page claims a working Graph journey
@@ -439,6 +441,8 @@ Scenario: SCN-080-001-08 Wiki availability is responsive and accessible
 - Any change to requirements or design discovered during implementation routes to `bubbles.analyst` or `bubbles.design`; execution agents must not weaken this plan.
 - Spec 105 cannot pick up its first live-Graph scope until BUG-080-001 is Done and its authenticated synthetic is certified.
 - **SCN-080-001-09 coverage (closed 2026-07-24).** `bubbles.design` reconciled design.md on 2026-07-24T18:25Z, adding the `## Corpus Ownership And Authorization Model` section (operator / grant-holder / ungranted three-identity control of the single operator-owned global corpus; leak-free `unauthorized-scope` denial; no tenant/user row isolation; grounds GRAPH-ACT-005 and GRAPH-ACT-011) and extending the Testing And Validation Strategy table through SCN-080-001-09. This follow-up `bubbles.plan` pass then added SCN-080-001-09 to the owning **SCOPE-02 (Authorized Graph Read Truth)**: the verbatim spec Gherkin, GRAPH-ACT-011 in the requirement set, an implementation-plan step for the global-corpus authorization matrix (operator / grant-holder / ungranted, leak-free denial, no per-identity or tenant row predicate), a Security And Privacy bullet, Test Plan rows T080-09-CORPUS (integration) and T080-09-GRANT (e2e-api real-stack regression), one SCN-09 Core Outcome DoD item, and two matching Test Evidence DoD items (SCOPE-02 Test-Plan rows 6->8 == Test-Evidence items 6->8). The plan now covers SCN-080-001-01..09. No tenant/user row isolation is asserted anywhere in this plan. design.md remains `bubbles.design`-owned and was not edited.
+
+- **Fail-loud -> fail-soft reconciliation (closed 2026-07-24).** `bubbles.analyst`, under explicit orchestrator direction, adjudicated the packet to the FAIL-SOFT contract that matches the packet folder name, the live incident (the service was running; the graph API was silently absent), and the already-implemented, unit-verified `internal/api/graphapi/activation.go`. The graph cursor secret is an OPTIONAL capability enabler, not global-required runtime config, so the NO-DEFAULTS SST boot-refusal does not apply: an empty or missing enabler resolves the typed HTTP 503 `capability_disabled` runtime-disabled state via `ResolveActivation`/`GraphCapability.Guard` while the service keeps serving other capabilities (never a silent 404, opaque 500, panic, or boot refusal). spec.md (GRAPH-ACT-001, SCN-080-001-01, the Outcome Contract, and the new Optional Capability Rationale), design.md (derived enabled/disabled activation, value-safe disabled diagnostic codes, no boot refusal), and this plan (SCOPE-01 title, Gherkin, implementation plan, Test Plan, and DoD) are now consistently fail-soft. SCN-080-001-01's unit coverage maps to the implemented `TestResolveActivation_EmptySecretIsTypedDisabled` / `TestResolveActivation_MissingSecretIsTypedDisabled` / `TestAdversarial_EmptySecretMustNotRevertToSilentAbsenceOr500`; the integration/e2e rows remain deferred (live-stack). Status stays `blocked` (live-stack deferred) and no DoD item was checked. Residual fail-loud framing in bug.md, uservalidation.md, and scenario-manifest.json is outside the analyst edit whitelist and is flagged for a follow-up owner route.
 
 ## Planning Completion Criteria
 

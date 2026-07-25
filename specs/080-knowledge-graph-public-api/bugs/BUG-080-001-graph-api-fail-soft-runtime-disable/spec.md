@@ -1,25 +1,25 @@
-# Expected Behavior: [BUG-080-001] Fail-Loud Graph API Activation
+# Expected Behavior: [BUG-080-001] Fail-Soft Graph API Runtime Disablement
 
 ## Problem Statement
 
-A required production API must not disappear through a warning/nil-handler path while static pages and deployment health imply readiness.
+An OPTIONAL production capability - the Knowledge Graph / Wiki public API - must not disappear through a warning/nil-handler path into silent absence (an ordinary Chi 404) while static pages and deployment health imply readiness. When its optional cursor-secret enabler is empty or missing, the capability MUST resolve to an honest, typed runtime-disabled response, never a silent 404, an opaque 500, a panic, or a boot refusal that would take the whole product down.
 
 ## Outcome Contract
 
-**Intent:** Refuse production startup/deploy when required Graph API configuration is missing, and prove route/read readiness when configuration is valid.
+**Intent:** When the optional Graph API's cursor-secret enabler is empty or missing, resolve a typed runtime-disabled state (HTTP 503 `capability_disabled`) for every graph path while the service continues to boot and serve every other capability; when the enabler is present, mount topics, people, places, time, and edges and prove authenticated route/read readiness.
 
-**Success Signal:** Required missing/empty config produces a typed refusal before serving; valid secret injection mounts topics, people, places, time, and edges and passes a non-mutating authenticated synthetic.
+**Success Signal:** An empty or missing cursor-secret enabler produces a typed HTTP 503 `capability_disabled` response for every known graph path while the process keeps serving other capabilities (never a silent 404, opaque 500, panic, or boot refusal); a present enabler mounts topics, people, places, time, and edges and passes a non-mutating authenticated synthetic.
 
-**Hard Constraints:** No secret output; no product-repo target details; no production-data writes; one operator-owned global knowledge graph with explicit role/grant access and no tenant/user row-isolation claim; explicit capability disablement remains truthful and unadvertised; 404 is reserved for actual resource/route semantics, not hidden activation failure.
+**Hard Constraints:** No secret output; no product-repo target details; no production-data writes; one operator-owned global knowledge graph with explicit role/grant access and no tenant/user row-isolation claim; runtime or compiled capability disablement remains truthful and unadvertised; the graph cursor secret is an OPTIONAL capability enabler, not global-required runtime config - its absence disables only the optional capability and never refuses process startup; 404 is reserved for actual resource/route semantics, not hidden activation failure.
 
-**Failure Condition:** Required Graph API can be nil at runtime, static Wiki/Graph implies readiness without data routes, or acceptance checks health but not authenticated reads.
+**Failure Condition:** The Graph API silently disappears (nil handler → ordinary 404), a missing or empty enabler produces an opaque 500 or refuses process startup, static Wiki/Graph implies readiness without data routes, or acceptance checks health but not authenticated reads.
 
 ## Requirements
 
-- **GRAPH-ACT-001:** Required production Graph API enablement SHALL reject missing or empty cursor-secret indirection/value before the server accepts traffic.
+- **GRAPH-ACT-001:** When the optional Graph API's cursor-secret indirection is missing or resolves empty, the capability SHALL resolve to a typed runtime-disabled state and answer every known graph path with a typed HTTP 503 `capability_disabled` response while the service continues to boot and serve other capabilities. It SHALL NOT silently omit the routes (Chi 404), return an opaque 500, panic, or refuse process startup.
 - **GRAPH-ACT-002:** Configuration errors SHALL expose a closed non-sensitive failure code and SHALL NOT print secret values.
 - **GRAPH-ACT-003:** Valid configuration SHALL register topics, people, places, time, edges, and required cursor routes atomically.
-- **GRAPH-ACT-004:** Explicit disabled mode SHALL omit/mark dependent UI capability unavailable and SHALL NOT report Graph API ready.
+- **GRAPH-ACT-004:** Disabled mode - reached by an empty/missing cursor-secret enabler at runtime OR by an explicit compiled disable policy - SHALL mark dependent UI capability unavailable and SHALL NOT report Graph API ready.
 - **GRAPH-ACT-005:** Authenticated reads SHALL enforce the caller's explicit Graph read grant against the single operator-owned global corpus and return a true empty collection only after a successful authorized query. They SHALL NOT claim per-user or tenant row isolation.
 - **GRAPH-ACT-006:** Database/dependency failure SHALL be a typed unavailable/degraded response, not route-not-found or empty data.
 - **GRAPH-ACT-007:** Product readiness SHALL include a deterministic read-only route canary plus authenticated synthetic using disposable/seeded validation data outside production.
@@ -27,6 +27,14 @@ A required production API must not disappear through a warning/nil-handler path 
 - **GRAPH-ACT-009:** Static Wiki/Graph navigation SHALL be advertised ready only when the authenticated data journey passes.
 - **GRAPH-ACT-010:** User-visible unavailable/auth/empty/error states SHALL be accessible and responsive.
 - **GRAPH-ACT-011:** Operators MAY read all private graph content and operational metadata. Another authenticated identity MAY read private graph content only with an explicit Graph read grant and MAY mutate nothing through this read-only capability. An ungranted identity SHALL receive no labels, nodes, edges, counts, route-family existence, source titles, or graph-existence hints.
+
+## Optional Capability Rationale (Fail-Soft, Not SST Boot-Refusal)
+
+The Knowledge Graph / Wiki public API is an OPTIONAL product capability: the product runs, and in the live incident DID run, without it. Its cursor-secret enabler is therefore an OPTIONAL capability enabler, not global-required runtime config.
+
+- **Why fail-soft, not the NO-DEFAULTS SST boot-refusal.** The NO-DEFAULTS / fail-loud SST policy exists for genuinely-required global runtime config (for example the database URL, the auth secret, the host bind address) whose absence means the product cannot run correctly. Refusing process startup because an OPT-IN feature's enabler is absent would be a self-inflicted outage of every other capability. The optional enabler's absence therefore disables only the optional capability, via a typed runtime-disabled response, and never refuses boot.
+- **This does NOT weaken the SST policy.** Genuinely-required config still fails loud at boot. Only the OPTIONAL graph cursor-secret enabler is exempt from boot-refusal, because its presence is the opt-in switch for an optional capability rather than a global runtime requirement.
+- **Disablement is typed and honest, never silent.** An empty or missing enabler yields the typed HTTP 503 `capability_disabled` response for every known graph path - distinct from a missing route (404), an opaque failure (500), a panic, or a boot refusal - so callers and operators can tell "disabled" apart from "absent" and from "broken".
 
 ## Corpus Ownership And Private Access
 
@@ -37,11 +45,12 @@ A required production API must not disappear through a warning/nil-handler path 
 ## User Scenarios
 
 ```gherkin
-Scenario: SCN-080-001-01 Required empty secret refuses startup
-  Given Graph API is required and the configured secret name resolves to an empty value
-  When core validates configuration
-  Then startup is refused before serving
-  And output names only a typed failure code and config key
+Scenario: SCN-080-001-01 Empty or missing secret yields a typed disabled response and the service still boots
+  Given the Knowledge Graph public API is an optional capability and its configured cursor-secret enabler resolves empty or is missing
+  When core resolves the graph activation
+  Then the capability resolves to the typed runtime-disabled state and answers every known graph path with an HTTP 503 "capability_disabled" envelope
+  And the service continues to boot and serve every other capability, never a silent 404, an opaque 500, a panic, or a boot refusal
+  And activation diagnostics name only a value-safe code and the config or indirection key, never secret material
 
 Scenario: SCN-080-001-02 Valid config mounts every graph route
   Given the adapter injects a non-empty valid cursor secret
@@ -91,7 +100,7 @@ Scenario: SCN-080-001-09 Explicit grant controls the global graph
 
 ## Acceptance Criteria
 
-1. Missing/empty required secret fails config/startup before listening and never prints its value.
+1. Missing/empty cursor-secret enabler resolves the typed HTTP 503 `capability_disabled` runtime-disabled state (never a silent 404, opaque 500, panic, or boot refusal), the service keeps serving other capabilities, and no secret value is printed.
 2. Valid config atomically mounts all graph families.
 3. Route canary plus authenticated read-only synthetic fail on the old nil-handler/404 state.
 4. True empty, explicit disabled, unauthorized, store unavailable, and route missing are distinct.
@@ -131,7 +140,7 @@ Scenario: SCN-080-001-09 Explicit grant controls the global graph
 | Primitive | Used By Screens | Composition Rule | Accessibility / Responsive Constraint |
 |---|---|---|---|
 | Knowledge local view switcher | Browse; Graph; Timeline | Graph stays discoverable with its current state label. Activating an unavailable view opens the explanatory state in place instead of issuing navigation to a generic 404. | Uses links or a true tab pattern consistently; current view and availability are exposed as text, not color. |
-| Capability state band | Knowledge; Graph; Wiki/Graph Readiness | Uses the product labels `Available`, `Degraded`, or `Unavailable`, followed by the exact state-specific explanation below. `Needs setup` appears only for operator-remediable optional configuration, never for a required empty secret. | One concise status announcement after a settled read; wraps before actions at narrow widths. |
+| Capability state band | Knowledge; Graph; Wiki/Graph Readiness | Uses the product labels `Available`, `Degraded`, or `Unavailable`, followed by the exact state-specific explanation below. `Needs setup` or `Unavailable - Graph is disabled for this deployment` covers operator-remediable optional configuration, including an empty or missing optional cursor-secret enabler, which disables the optional capability at runtime rather than refusing process startup. | One concise status announcement after a settled read; wraps before actions at narrow widths. |
 | Graph family result row | Knowledge state detail; Wiki/Graph Readiness; synthetic result | Fixed family order: Topics, People, Places, Time, Edges. Each row has family, safe state, observed time/duration, and action/evidence. | Desktop table becomes labeled records on mobile; no column can be the sole carrier of meaning. |
 | Verified-data boundary | Browse; Graph | Only rows/nodes from successful current authorized reads render. Missing families are represented by limitation text, never skeletons, sample rows, or inferred counts. | Partial content precedes limitation in source order; screen reader receives included and omitted family names. |
 | Graph privacy clear | Knowledge; Graph; session recovery | Auth loss removes all graph-derived DOM and render pixels before the recovery state is inserted. | Recovery heading receives focus once; no prior label remains discoverable through accessibility APIs. |
@@ -146,7 +155,7 @@ Scenario: SCN-080-001-09 Explicit grant controls the global graph
 | `true-empty` | `No connected knowledge yet` | Every required family read succeeded and returned zero authorized records. | Capture and source guidance only; no sample node, fake edge, or Retry. | Passes only when the manifest permits true empty. |
 | `partial` | `Degraded - partial graph` | Current verified output exists, but an explicitly optional family or enrichment is omitted. | Verified families remain operable; omitted family and impact are named. | Passes only when the manifest explicitly permits this exact partial state. |
 | `degraded` | `Degraded - graph data is incomplete` | Useful authorized data remains, but freshness or a required dependency/read is below the complete contract. | Retained data carries observed time and limitation; Graph cannot show `Available`. | Required complete journey fails unless a declared degraded policy says otherwise. |
-| `explicit-disabled` | `Unavailable - Graph is disabled for this deployment` | Compiled policy intentionally excludes Graph. | Browse may remain available from its own successful reads; no Graph setup or Retry promise. | Optional policy state may pass; required Graph fails. |
+| `explicit-disabled` | `Unavailable - Graph is disabled for this deployment` | Graph is disabled at runtime because the optional cursor-secret enabler is empty or missing, OR compiled policy intentionally excludes Graph. Reached without a boot refusal. | Browse may remain available from its own successful reads; no Graph setup or Retry promise. | Disabled is a truthful optional state; a train that opted Graph in fails only when an enabled Graph then fails its read contract. |
 | `unauthorized-session` | `Your session ended` | No graph read completed under a valid session. | All graph-derived content is removed before the message appears. | Fails authentication journey. |
 | `unauthorized-scope` | `You do not have access to connected knowledge` | Session is valid but actor scope is insufficient. | No existence, label, count, route-family, or evidence detail is shown. | Fails for an actor required to have access. |
 | `route-missing` | `Graph route unavailable` | A required product route returned not found or was not registered. | No empty copy or sample graph; successful independent Browse content may remain separately labeled. | Always fails required activation. |
@@ -278,7 +287,7 @@ stateDiagram-v2
   CheckingActivation --> TrueEmpty: All required reads succeed empty
   CheckingActivation --> Partial: Optional omission; verified data remains
   CheckingActivation --> Degraded: Required dependency/freshness limitation
-  CheckingActivation --> Disabled: Explicit optional policy
+  CheckingActivation --> Disabled: Empty/missing enabler or explicit policy
   CheckingActivation --> RouteMissing: Required route absent
   CheckingActivation --> StoreUnavailable: Registered read fails
   CheckingActivation --> SchemaError: Response unreadable
@@ -305,7 +314,7 @@ stateDiagram-v2
   AggregateResult --> Available: Required rows pass
   AggregateResult --> Degraded: Manifest-permitted limitation
   AggregateResult --> Unavailable: Required/auth/route/store/schema failure
-  AggregateResult --> Disabled: Explicit optional policy
+  AggregateResult --> Disabled: Empty/missing enabler or explicit policy
   Unavailable --> FamilyResult: Open first failed family
   Degraded --> FamilyResult: Inspect omitted/limited family
   FamilyResult --> SafeEvidence: Open value-safe evidence

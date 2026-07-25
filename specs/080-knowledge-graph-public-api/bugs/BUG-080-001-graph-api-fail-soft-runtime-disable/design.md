@@ -1,4 +1,4 @@
-# Bug Fix Design: BUG-080-001 Graph API Fail-Loud Runtime Activation
+# Bug Fix Design: BUG-080-001 Graph API Fail-Soft Runtime Disablement
 
 ## Design Brief
 
@@ -20,11 +20,14 @@ The activation boundary, not the existence of these primitives, is the defect.
 
 ### Target State
 
-Core resolves one explicit Graph API activation policy and constructs one
-`AuthorizedGraphRead` capability before building the router. Required mode is
-all-or-nothing: config, secret value, cursor codec, PostgreSQL pool, every graph
-family, and the route manifest must be valid or core refuses startup. Disabled
-mode is explicit and observable; it is never inferred from a missing value.
+Core resolves one Graph API activation from the existing cursor-secret
+configuration and constructs one graph capability before building the router.
+Activation is a closed derived enum - `enabled` when the cursor-secret enabler
+is present, `disabled` when it is empty or missing. The disabled state is honest
+and observable: every known graph path answers with a typed HTTP 503
+`capability_disabled` response. A missing or empty optional enabler NEVER refuses
+process startup; the service keeps serving every other capability. When enabled,
+config, cursor codec, PostgreSQL pool, and every graph family mount atomically.
 
 Wiki Browse, Graph, Outline, Table, Path, product readiness, and the read-only
 synthetic consume the same capability state and outcome vocabulary. Static PWA
@@ -47,7 +50,10 @@ files, a green database probe, or a subset of mounted routes cannot produce an
 ### Patterns To Avoid
 
 - Do not follow the warning-and-nil branch in `cmd/core/wiring.go`; it converts
-	required configuration failure into successful process startup.
+	an absent optional enabler into a SILENT nil-handler 404 absence instead of a
+	typed disabled capability. Keeping the process running is correct - the fix is
+	to serve the typed 503 disabled response, not a boot refusal and not a silent
+	404.
 - Do not follow the per-family nil checks in `internal/api/router.go`; they
 	permit an incoherent subset of the graph contract.
 - Do not treat `web/pwa/wiki.js` loading successfully as capability readiness;
@@ -58,12 +64,16 @@ files, a green database probe, or a subset of mounted routes cannot produce an
 
 ### Resolved Decisions
 
-- Activation is an explicit closed enum: `required` or `disabled`; there is no
-	implicit, optional, or inferred mode.
+- Activation is a closed derived enum: `enabled` or `disabled`, derived from the
+	cursor-secret enabler's presence. There is no separate boot-time
+	required/disabled policy key; an empty or missing enabler resolves the disabled
+	state, not a boot refusal.
 - One composite graph-read capability owns all family handlers and route
 	registration; individual nullable handlers cease to be activation state.
-- Required-mode construction returns an error to core startup; it never logs
-	and continues.
+- An empty or missing enabler resolves the typed disabled capability (fail-soft);
+	it never refuses core startup and never silently continues with nil handlers. A
+	present enabler that then fails codec/pool construction surfaces a typed
+	operating-path error, not a silent nil-handler absence.
 - Disabled mode exposes a typed capability result and no usable Graph action;
 	direct graph reads return a typed unavailable response rather than hidden
 	route absence.
@@ -130,10 +140,11 @@ target, secret name value, filesystem location, or host identity.
 ### Root Cause
 
 Graph activation is represented by absence of wiring instead of a typed domain
-state. Configuration is loaded twice, requiredness is not explicit, runtime
-construction errors are demoted to warnings, and route registration accepts
-partial composites. Health and PWA availability have no shared evidence source,
-so static surfaces can outlive the API capability they promise.
+state. Configuration is loaded twice, the optional-disabled state is not a typed
+domain state, runtime construction errors are demoted to warnings, and route
+registration accepts partial or absent composites. Health and PWA availability
+have no shared evidence source, so static surfaces can outlive the API capability
+they promise.
 
 ### Secondary Contract Gaps
 
@@ -154,11 +165,10 @@ so static surfaces can outlive the API capability they promise.
 flowchart LR
 	SST[Compiled Smackerel config] --> AP[Activation policy resolver]
 	Secret[Operator-injected secret env value] --> AP
-	Pool[PostgreSQL pool] --> Builder[AuthorizedGraphRead builder]
+	Pool[PostgreSQL pool] --> Builder[GraphCapability builder]
 	AP --> Builder
-	Builder -->|required and valid| Live[LiveAuthorizedGraphRead]
-	Builder -->|explicit disabled| Disabled[DisabledGraphRead]
-	Builder -->|required and invalid| Refuse[Core startup refusal]
+	Builder -->|secret present| Live[EnabledGraphCapability]
+	Builder -->|secret empty or missing| Disabled[DisabledGraphCapability]
 	Live --> Router[Atomic graph route registrar]
 	Disabled --> Router
 	Router --> Families[Topics People Places Time Edges]
@@ -169,13 +179,13 @@ flowchart LR
 	Status --> Adapter[Operator acceptance consumer]
 ```
 
-Core creates exactly one `AuthorizedGraphRead` value. The router receives that
-value rather than five independently nullable fields. `LiveAuthorizedGraphRead`
-registers the complete route manifest. `DisabledGraphRead` registers the same
-known graph paths with a typed unavailable responder and reports disabled to
-the capability projection, making explicit policy distinguishable from a
-missing route. Required-mode construction failure returns to the existing core
-boot error path before the server begins accepting traffic.
+Core creates exactly one graph capability value. The router receives that value
+rather than five independently nullable fields. The enabled capability registers
+the complete route manifest. The disabled capability guards the same known graph
+paths with the typed 503 `capability_disabled` responder and reports disabled to
+the capability projection, making disablement distinguishable from a missing
+route. An empty or missing optional enabler resolves the disabled capability and
+NEVER stops core boot; the process keeps serving every other capability.
 
 ## Capability Foundation
 
@@ -183,8 +193,8 @@ boot error path before the server begins accepting traffic.
 
 | Contract | Responsibility | Consumers |
 |---|---|---|
-| `GraphActivationPolicy` | Closed `required` or `disabled` policy loaded explicitly from SST | Core boot, status, PWA availability |
-| `AuthorizedGraphRead` | Non-nil composite for activation state, route registration, family reads, and safe capability metadata | Router, synthetic, spec-105 query service |
+| `Activation` / `ResolveActivation` | Closed derived `enabled`/`disabled` state from the cursor-secret enabler's presence, with a value-safe `SecretPresence` + code | Core boot, status, PWA availability |
+| `GraphCapability` (`Guard`) | Non-nil composite for activation state, the typed 503 `capability_disabled` guard when disabled, route registration, family reads, and safe capability metadata | Router, synthetic, spec-105 query service |
 | `GraphRouteManifest` | Canonical fixed route/family inventory and required scope | Router, route canary, synthetic, readiness |
 | `GraphFamilyReader` | Bounded authorized reads with typed populated, true-empty, partial, and failed outcomes | Browse, Graph, Outline, Table, Path |
 | `GraphReadOutcome` | Closed safe state plus completeness, observed time, duration, and evidence reference | PWA, `/api/health`, synthetic output |
@@ -216,11 +226,11 @@ boot error path before the server begins accepting traffic.
 
 ## Concrete Implementations
 
-### Required Live Graph Read
+### Enabled Graph Capability
 
-The builder requires all of the following before returning:
+The capability is ENABLED when the cursor-secret enabler resolves present. In the
+enabled state the builder wires all of the following:
 
-- activation policy equals `required`;
 - validated `KnowledgeGraphAPIConfig` supplied from central boot config;
 - the configured cursor-secret env name resolves to a non-empty value;
 - `NewCursorCodec` succeeds;
@@ -228,15 +238,17 @@ The builder requires all of the following before returning:
 - topics, people, places, time, and edges readers are constructed;
 - the route manifest contains every required route exactly once.
 
-Failure returns a typed boot error. No handler reaches `Dependencies`, no
-router is built, and no server listener starts.
+An empty or missing enabler resolves the disabled capability below WITHOUT
+stopping core boot. A present-enabler codec/pool construction failure surfaces as
+a typed operating-path response, never a silent nil-handler absence and never a
+process-wide boot refusal.
 
-### Explicit Disabled Graph Read
+### Disabled Graph Capability
 
-Disabled mode is valid only when the explicit activation policy equals
-`disabled`. It does not resolve cursor-secret material and exposes no graph
-records. It supplies value-safe capability metadata and a standard responder
-for known Graph API paths:
+Disabled mode is reached when the cursor-secret enabler is empty or missing (or,
+later, an explicit compiled disable policy). It does not resolve cursor-secret
+material and exposes no graph records. It supplies value-safe capability metadata
+and the typed responder for known Graph API paths:
 
 ```json
 {
@@ -247,9 +259,10 @@ for known Graph API paths:
 }
 ```
 
-The response status is `503 Service Unavailable`, not 404. UI projections omit
-or disable Graph actions with the spec-owned explanation. Browse may remain
-available only if its own complete authorized read contract succeeds.
+The response status is `503 Service Unavailable`, not 404, and the process keeps
+serving every other capability. UI projections omit or disable Graph actions with
+the spec-owned explanation. Browse may remain available only if its own complete
+authorized read contract succeeds.
 
 ### Existing Resource Readers
 
@@ -262,7 +275,7 @@ projection to infer state from item count alone.
 
 | Axis | Options | Foundation Ownership |
 |---|---|---|
-| Activation policy | required, disabled | Yes; explicit and closed |
+| Activation state | enabled, disabled (derived from cursor-secret presence) | Yes; closed and fail-soft |
 | Read operation | family list/detail, time window, edge neighborhood, later bounded query/path | Yes for auth/outcome/bounds; concrete reader owns SQL |
 | Projection | Browse, Graph, Outline, Table, Path, readiness, synthetic | Shared state model; projection owns presentation only |
 | Completeness | complete, true-empty, optional-partial, required-failed | Yes; policy cannot be weakened by clients |
@@ -272,11 +285,10 @@ projection to infer state from item count alone.
 
 ### SST Shape
 
-The compiled `knowledge_graph_api` block gains one required field:
+The compiled `knowledge_graph_api` block keeps its existing fields; activation is DERIVED from the presence of the value named by `cursor_secret_env`, not a new required enum key:
 
 ```yaml
 knowledge_graph_api:
-	activation: ${KNOWLEDGE_GRAPH_API_ACTIVATION}
 	list_default_limit: ${KNOWLEDGE_GRAPH_API_LIST_DEFAULT_LIMIT}
 	list_max_limit: ${KNOWLEDGE_GRAPH_API_LIST_MAX_LIMIT}
 	time_window_max_days: ${KNOWLEDGE_GRAPH_API_TIME_WINDOW_MAX_DAYS}
@@ -285,12 +297,14 @@ knowledge_graph_api:
 	cursor_secret_env: ${KNOWLEDGE_GRAPH_API_CURSOR_SECRET_ENV}
 ```
 
-`KNOWLEDGE_GRAPH_API_ACTIVATION` has no fallback. Any value outside
-`required|disabled` is `F080-ACTIVATION-INVALID`. In required mode every limit,
-the indirection name, and the named secret value are required. In disabled
-mode the activation decision is complete without reading secret material; the
-remaining fields may stay present for one generated schema, but they cannot
-silently reactivate the capability.
+Activation is NOT a separate SST enum key; it is derived at runtime from the
+presence of the value named by `cursor_secret_env`. A present value yields the
+enabled capability; an empty or missing value yields the typed disabled
+capability (fail-soft), never a boot refusal. The limits and the indirection name
+remain required config; the optional-capability decision is the enabler's
+presence, not a boot-refusal switch. An explicit `KNOWLEDGE_GRAPH_API_ACTIVATION`
+enum key remains a deferred optional refinement; the implemented
+derived-activation model does not require it - see `graphapi/activation.go`.
 
 ### Value-Safe Secret Resolution
 
@@ -306,27 +320,37 @@ value through its encrypted contract. Product diagnostics may report only:
 Secret bytes, byte length, hash, prefix, suffix, and cursor bodies are excluded
 from logs, traces, metrics, health, synthetic output, and HTTP errors.
 
-### Boot Failure Codes
+### Activation And Enabled-Path Diagnostic Codes
+
+The cursor-secret codes name a value-safe DISABLED-activation reason (fail-soft),
+NOT a boot failure; they match `graphapi/activation.go` (`CodeActivationOK`,
+`CodeCursorSecretEmpty`, `CodeCursorSecretMissing`). The remaining codes apply to
+the enabled path. The previously-proposed `F080-ACTIVATION-MISSING` /
+`F080-ACTIVATION-INVALID` boot codes are dropped: activation is derived from the
+enabler's presence, so there is no separate activation enum to be absent or
+invalid.
 
 | Code | Condition | Safe Detail |
 |---|---|---|
-| `F080-ACTIVATION-MISSING` | Activation setting absent/empty | Config key only |
-| `F080-ACTIVATION-INVALID` | Value outside closed enum | Config key and allowed enum |
-| `F080-CONFIG-INVALID` | Required limits or cross-field constraints invalid | Offending non-secret key |
-| `F080-CURSOR-SECRET-MISSING` | Named env variable absent | Indirection env name only |
-| `F080-CURSOR-SECRET-EMPTY` | Named env variable empty | Indirection env name only |
-| `F080-CURSOR-CODEC-INVALID` | Codec construction refuses material | Failure code only |
-| `F080-GRAPH-STORE-UNAVAILABLE` | Required PostgreSQL graph source cannot initialize | Dependency class only |
-| `F080-ROUTE-MANIFEST-INCOMPLETE` | Required family/route missing or duplicated | Family and route template only |
+| `OK` (`CodeActivationOK`) | Enabler present, activation enabled | none |
+| `capability_disabled` | Runtime response code for every graph path while disabled (HTTP 503) | none |
+| `F080-CURSOR-SECRET-EMPTY` | Named env variable empty -> typed disabled (fail-soft, not a boot failure) | Indirection env name only |
+| `F080-CURSOR-SECRET-MISSING` | Named env variable absent or no name configured -> typed disabled (fail-soft, not a boot failure) | Indirection env name only |
+| `F080-CONFIG-INVALID` | Enabled-path limits or cross-field constraints invalid | Offending non-secret key |
+| `F080-CURSOR-CODEC-INVALID` | Enabled-path codec construction refuses material | Failure code only |
+| `F080-GRAPH-STORE-UNAVAILABLE` | Enabled-path PostgreSQL graph source cannot initialize (typed operating response) | Dependency class only |
+| `F080-ROUTE-MANIFEST-INCOMPLETE` | Enabled-path required family/route missing or duplicated | Family and route template only |
 
 ## Atomic Wiring And Route Registration
 
 ### Construction Boundary
 
 `wireServices` receives the central config value and invokes one builder. The
-builder returns either a complete `AuthorizedGraphRead` or an error. It does not
-mutate `Dependencies` incrementally. Only after validation succeeds does core
-assign the single capability field.
+builder returns a graph capability that is either enabled (complete route
+manifest) or disabled (typed 503 responder); it never returns nil handlers and
+never refuses boot for an absent optional enabler. It does not mutate
+`Dependencies` incrementally. Only after resolution succeeds does core assign the
+single capability field.
 
 ### Canonical Route Manifest
 
@@ -341,10 +365,10 @@ assign the single capability field.
 | Time | GET | `/api/time` | `knowledge-graph:read` |
 | Edges | GET | `/api/graph/edges` | `knowledge-graph:read` |
 
-The registrar validates this complete manifest before calling Chi. Required
-live mode registers all rows in one group under the existing bearer and scope
-middleware. Disabled mode registers all rows against the disabled responder.
-There is no per-family `if handler != nil` branch.
+The registrar validates this complete manifest before calling Chi. Enabled mode
+registers all rows in one group under the existing bearer and scope middleware.
+Disabled mode registers all rows against the typed 503 disabled responder. There
+is no per-family `if handler != nil` branch.
 
 ### Route Canary
 
@@ -437,7 +461,7 @@ Authenticated `/api/health` gains a `knowledge_graph` capability section:
 
 ```json
 {
-	"activation": "required",
+	"activation": "enabled",
 	"status": "available",
 	"observedAt": "2026-07-23T00:00:00Z",
 	"families": [
@@ -451,10 +475,11 @@ It never includes labels, counts that reveal another user's data, route IDs,
 secret metadata, auth material, or raw errors. Unauthenticated health retains
 only the existing aggregate status.
 
-General liveness remains separate. Strict readiness fails when Graph is
-required and the latest product synthetic is unavailable. Explicit disabled
-mode is a truthful non-ready result for a train that requires Graph and a
-policy-valid disabled result only for a manifest that declares it optional.
+General liveness remains separate. Strict readiness fails when Graph is enabled
+and the latest product synthetic is unavailable. The disabled state (an empty or
+missing enabler, or an explicit disable policy) is a truthful non-ready result
+and never a boot refusal; Graph is optional, so a disabled capability is a valid
+deployment state.
 
 ## PWA And Projection Contract
 
@@ -574,8 +599,8 @@ person/place names, artifact titles, auth material, and secret metadata.
 
 ### Failure Containment
 
-- Required activation failure stops core before listen.
-- Disabled policy keeps the product running but Graph explicitly unavailable.
+- An empty or missing enabler resolves the typed disabled capability (fail-soft); core keeps serving and Graph is explicitly unavailable - it never stops core before listen.
+- The disabled state keeps the product running with Graph explicitly unavailable.
 - A failed family read does not erase independently verified data while auth is
 	valid; aggregate readiness remains degraded/unavailable as policy dictates.
 - Auth loss is the only failure that immediately erases every personal graph
@@ -587,22 +612,24 @@ person/place names, artifact titles, auth material, and secret metadata.
 
 ### Migration
 
-No data migration or second graph store is introduced. Configuration gains the
-explicit activation enum. Runtime dependency shape changes from five nullable
-handlers to one non-null capability. Existing API paths and DTO fields remain
-compatible; completeness metadata is additive.
+No data migration or second graph store is introduced. Configuration gains no new
+required enum key; activation is derived from the existing cursor-secret enabler's
+presence. Runtime dependency shape changes from five nullable handlers to one
+non-null capability. Existing API paths and DTO fields remain compatible;
+completeness metadata is additive.
 
 The delivery sequence is contract-first: config compiler and activation parser,
 composite builder, atomic route registrar, typed outcomes, PWA state decoder,
-then synthetic/readiness consumption. The `mvp` train declares `required`.
+then synthetic/readiness consumption. The `mvp` train enables Graph by injecting a present cursor-secret enabler; an absent enabler disables the optional capability at runtime without a boot refusal.
 
 ### Rollback
 
 Rollback is a source/config pointer rollback to the last complete release. It
-does not weaken required mode, inject a placeholder secret, or restore warning-
-and-nil behavior. If Graph must be removed operationally, the operator applies
-an explicitly approved config bundle with `activation: disabled`; readiness and
-navigation immediately report Unavailable.
+does not restore warning-and-nil (silent 404) behavior. If Graph must be removed
+operationally, the operator omits or empties the cursor-secret enabler (or applies
+an explicit disable policy); the capability resolves the typed disabled state and
+readiness and navigation immediately report Unavailable while the process keeps
+running.
 
 ## Testing And Validation Strategy
 
@@ -611,7 +638,7 @@ executed test claim.
 
 | Scenario | Test Type | Grounded Surface | Required Assertion |
 |---|---|---|---|
-| SCN-080-001-01 | Unit + process integration | config loader and core builder | Required empty named secret returns typed boot failure before listener |
+| SCN-080-001-01 | Unit + process integration | `graphapi/activation.go` `ResolveActivation`/`GraphCapability.Guard` and core builder | Empty or missing enabler resolves the typed 503 `capability_disabled` disabled state and the process keeps serving; never a silent 404, opaque 500, panic, or boot refusal |
 | SCN-080-001-02 | Router integration | canonical manifest registrar | All eight routes mount together; removing any descriptor fails construction |
 | SCN-080-001-03 | E2E API | real validate stack and PostgreSQL | Authenticated fixed-order family reads return valid data and no writes |
 | SCN-080-001-04 | Integration + E2E UI | disabled capability and Wiki | Typed disabled response and Unavailable UI; no ready claim |
@@ -622,24 +649,37 @@ executed test claim.
 | SCN-080-001-09 | E2E API + integration | operator, grant-holder, and ungranted identities on the shared product-wide login against the single global corpus | Operator and grant-holder receive their permitted global-corpus read; the ungranted identity is denied with no content, counts, or existence hints; no outcome claims tenant or per-user row isolation |
 
 Adversarial coverage must reintroduce the current warning-and-nil branch or
-remove one manifest route and prove the process/router contract fails. The UI
-route-missing scenario must use a real product route state rather than request
-interception. The product synthetic must compare graph-table write counts before
-and after execution to prove it is read-only.
+remove one manifest route and prove the process/router contract fails. The
+implemented hermetic unit core (`internal/api/graphapi/activation.go` +
+`activation_test.go`) already proves the SCN-01 fail-soft contract:
+`TestResolveActivation_EmptySecretIsTypedDisabled`,
+`TestResolveActivation_MissingSecretIsTypedDisabled`,
+`TestResolveActivation_PresentSecretOperates`,
+`TestGraphReadGrantMatrix_GlobalCorpus` (SCN-09), and the adversarial
+`TestAdversarial_EmptySecretMustNotRevertToSilentAbsenceOr500`, which fails if an
+empty secret reverts to a silent 404, degrades to an opaque 500, serves the
+operating path, or panics. That core imports no datastore, router, or auth
+package, so there is no import cycle. The UI route-missing scenario must use a
+real product route state rather than request interception. The product synthetic
+must compare graph-table write counts before and after execution to prove it is
+read-only.
 
 ## Alternatives And Tradeoffs
 
-### Keep Optional Handler Wiring
+### Keep Optional Handler Wiring (Warning-And-Nil)
 
-Rejected. It preserves unrelated service availability but cannot distinguish
-intentional disablement from broken required configuration, and it permits
-partial Graph contracts.
+Rejected. It preserves unrelated service availability but converts an absent
+enabler into a SILENT nil-handler 404 that cannot be distinguished from
+intentional disablement or a broken route, and it permits partial Graph
+contracts. Keeping the process running is correct; the silent 404 is the bug.
 
-### Fail Every Deployment When Graph Is Disabled
+### Refuse Startup When The Graph Enabler Is Absent
 
-Rejected. The spec explicitly permits a truthful disabled policy. The safe
-model is an explicit enum, not universal requiredness and not inferred
-optionality.
+Rejected. Graph is an OPTIONAL capability; refusing process startup because an
+opt-in feature's enabler is absent would be a self-inflicted outage of every
+other capability. The safe model derives enabled/disabled activation from the
+enabler's presence and answers the disabled state with a typed 503, never a boot
+refusal.
 
 ### Let The Adapter Probe Every Route Independently
 
@@ -657,7 +697,7 @@ or graph read behavior.
 
 | Deviation From Simpler Alternative | Simpler Alternative | Why Rejected |
 |---|---|---|
-| Composite `AuthorizedGraphRead` plus explicit disabled implementation | Keep five nullable handler fields | Nullable fields are the root ambiguity and permit partial registration |
+| Composite `GraphCapability` plus typed disabled implementation | Keep five nullable handler fields | Nullable fields are the root ambiguity and permit partial or absent registration |
 | Product-owned route manifest and synthetic | Probe only `/api/health` | Health does not execute authorized graph contracts or detect omitted routes |
 | Add completeness metadata | Infer empty/partial from arrays and status | Existing enrichment queries can fail soft into empty arrays |
 
