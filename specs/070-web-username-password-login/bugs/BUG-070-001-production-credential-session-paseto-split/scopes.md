@@ -41,10 +41,10 @@ Each scope is gated by the preceding scope. No Assistant API/PWA acceptance work
 |---|---|---|---|---:|---|
 | 01 | Bound browser-account policy and role/grant model | None | PostgreSQL, auth repository, provisioning, role/grant persistence, login rejection | 5 | Not Started |
 | 02 | Purpose-bound session lifecycle | 01 | PASETO claims, token store, revocation, cookie policy | 5 | Not Started |
-| 03 | Unified request authentication | 02 | Legacy web, `/api`, `/v1`, scope gates, telemetry | 5 | Not Started |
+| 03 | Unified request authentication | 02 | Legacy web, `/api`, `/v1`, scope gates, telemetry | 5 | In Progress |
 | 04 | Login, recovery, and logout UX | 03 | Login page, safe return, logout, accessibility | 5 | Not Started |
-| 05 | Product-wide CSRF and Origin mutation protection | 04 | Server forms, HTMX, PWA fetch, JSON, Cards, admin mutations | 5 | Not Started |
-| 06 | Role/grant acceptance and global-corpus gating (disposable production) | 05 | Full browser shell, daily-user/operator route matrix, global corpus | 5 | Not Started |
+| 05 | Product-wide CSRF and Origin mutation protection | 04 | Server forms, HTMX, PWA fetch, JSON, Cards, admin mutations | 5 | In Progress |
+| 06 | Role/grant acceptance and global-corpus gating (disposable production) | 05 | Full browser shell, daily-user/operator route matrix, global corpus | 5 | In Progress |
 
 ## Shared Authentication Infrastructure Impact Sweep
 
@@ -212,7 +212,7 @@ Scenario: SCN-070-001-04 Session material remains private
 
 ## Scope 03: Unified Request Authentication
 
-**Status:** Not Started  
+**Status:** In Progress  
 **Depends On:** Scope 02  
 **Scope-Kind:** runtime-behavior
 
@@ -270,7 +270,7 @@ Scenario: SCN-070-001-07 Downstream failure does not invalidate a valid session
 
 #### Test Evidence - 5 Rows / 5 Items
 
-- [ ] `AUTH-S03-T01` unit middleware matrix passes. Evidence: [report.md#auth-s03-t01](report.md#auth-s03-t01).
+- [x] `AUTH-S03-T01` unit middleware matrix passes. Evidence: [report.md#auth-s03-t01](report.md#auth-s03-t01).
 - [ ] `AUTH-S03-T02` adversarial trust-split integration evidence records red then green. Evidence: [report.md#auth-s03-t02](report.md#auth-s03-t02).
 - [ ] `AUTH-S03-T03` real e2e-api parity regression passes. Evidence: [report.md#auth-s03-t03](report.md#auth-s03-t03).
 - [ ] `AUTH-S03-T04` real e2e-ui legacy/modern parity regression passes without interception or auth injection. Evidence: [report.md#auth-s03-t04](report.md#auth-s03-t04).
@@ -368,7 +368,7 @@ Scenario: SCN-070-001-08 Login and re-authentication are accessible and responsi
 
 ## Scope 05: Product-Wide CSRF And Origin Mutation Protection
 
-**Status:** Not Started  
+**Status:** In Progress  
 **Depends On:** Scope 04  
 **Scope-Kind:** runtime-behavior
 
@@ -424,7 +424,7 @@ All live rows use the disposable test stack and real PostgreSQL; Playwright uses
 
 #### Test Evidence - 5 Rows / 5 Items
 
-- [ ] `AUTH-S05-T01` unit CSRF/Origin matrix passes. Evidence: [report.md#auth-s05-t01](report.md#auth-s05-t01).
+- [x] `AUTH-S05-T01` unit CSRF/Origin matrix passes. Evidence: [report.md#auth-s05-t01](report.md#auth-s05-t01).
 - [ ] `AUTH-S05-T02` adversarial per-family integration evidence records red then green. Evidence: [report.md#auth-s05-t02](report.md#auth-s05-t02).
 - [ ] `AUTH-S05-T03` real e2e-api forged-mutation regression passes. Evidence: [report.md#auth-s05-t03](report.md#auth-s05-t03).
 - [ ] `AUTH-S05-T04` real e2e-ui CSRF/Origin regression passes without interception or injected auth. Evidence: [report.md#auth-s05-t04](report.md#auth-s05-t04).
@@ -438,7 +438,7 @@ All live rows use the disposable test stack and real PostgreSQL; Playwright uses
 
 ## Scope 06: Role And Grant Acceptance And Global Corpus Gating (Disposable Production)
 
-**Status:** Not Started  
+**Status:** In Progress  
 **Depends On:** Scope 05  
 **Scope-Kind:** runtime-behavior
 
@@ -517,7 +517,7 @@ The same disposable production-mode reproduction must run before and after imple
 
 #### Test Evidence - 5 Rows / 5 Items
 
-- [ ] `AUTH-S06-T01` unit inventory/role-grant/corpus-gate/helper-policy test passes. Evidence: [report.md#auth-s06-t01](report.md#auth-s06-t01).
+- [x] `AUTH-S06-T01` unit inventory/role-grant/corpus-gate/helper-policy test passes. Evidence: [report.md#auth-s06-t01](report.md#auth-s06-t01).
 - [ ] `AUTH-S06-T02` exact disposable production red-to-green evidence is recorded. Evidence: [report.md#auth-s06-t02](report.md#auth-s06-t02).
 - [ ] `AUTH-S06-T03` real e2e-api role-matrix and corpus-gate acceptance passes. Evidence: [report.md#auth-s06-t03](report.md#auth-s06-t03).
 - [ ] `AUTH-S06-T04` real e2e-ui product journey and role matrix passes without interception, auth injection, or bailout. Evidence: [report.md#auth-s06-t04](report.md#auth-s06-t04).

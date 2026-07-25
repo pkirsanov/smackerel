@@ -159,3 +159,168 @@ Planning validation only. No state transition or certification is requested.
 ## Audit Verdict
 
 Not audited. No terminal verdict is claimed.
+
+---
+
+## BUG-070-001 Implementation Pass — Unit-Verifiable Core (2026-07-25, bubbles.implement)
+
+This pass delivers the unit-verifiable core of the reconciled packet as three new
+source files, each proven by a real Go table test:
+
+- `internal/auth/request_authenticator.go` — the unified request-authentication
+  seam consumed by the legacy web, `/api`, and `/v1` surfaces. Carrier precedence
+  is fail-closed: a malformed `Authorization` header resolves to
+  `AuthMalformedHeader` and never falls back to the cookie; a valid header yields
+  an `smackerel-api-bearer` session; a cookie yields an
+  `smackerel-browser-session` session; an api-audience token presented in the
+  browser cookie is rejected as wrong-audience (the production defect). The three
+  surface middlewares present 401 for `/api` and `/v1`, and 303 only for
+  top-level browser navigation on the legacy surface.
+- `internal/auth/browser_session_policy.go` — the disposable-production role and
+  grant model (one operator-owned global corpus, no per-user isolation). Explicit
+  `daily-user` and `operator` grant sets, wildcard grants forbidden, absent
+  grants denied, and a dedicated global-corpus read gate.
+- `internal/api/mutation_trust_guard.go` — the product-wide `MutationTrustGuard`
+  with stateless session-bound signed-proof mint/verify across every mutation
+  family (form, htmx, pwa, json, cards, admin). Ordered checks (trusted Origin →
+  proof present → double-submit cross-check → HMAC signature and aud|sub|jti
+  binding) collapse to the closed outcome vocabulary; the middleware returns 403
+  before the handler on any non-accepted outcome and emits only bounded,
+  secret-free telemetry. The signing key is read through an injectable
+  `CSRFKeyProvider`, so the guard is fully unit-testable without touching the
+  concurrently-dirty config test.
+
+Live cross-surface rows (integration/e2e-api/e2e-ui) and the `csrf_signing_key`
+config-SST wiring are deferred as recorded in the final subsection.
+
+### AUTH-S03-T01
+
+**Phase:** implement
+**Command:** `./smackerel.sh test unit --go --go-run 'TestUnifiedAuthenticator…|TestCookieMutations…|TestSurfaceInventory…' --verbose`
+**Exit Code:** 0
+**Claim Source:** executed 2026-07-25
+
+Unified request-authentication middleware matrix — carrier precedence, session
+parity across legacy/`/api`/`/v1`, wrong-audience cookie rejection, revoked-cookie
+fail-closed, and 401-vs-303-vs-authorization-vs-degradation separation.
+
+```text
+--- PASS: TestUnifiedAuthenticatorPreservesCarrierPrecedenceSessionParityAnd401403EmptyDegradedSeparation (0.00s)
+    --- PASS: TestUnifiedAuthenticatorPreservesCarrierPrecedenceSessionParityAnd401403EmptyDegradedSeparation/session_parity_across_legacy_api_and_v1_surfaces (0.00s)
+    --- PASS: TestUnifiedAuthenticatorPreservesCarrierPrecedenceSessionParityAnd401403EmptyDegradedSeparation/malformed_authorization_header_fails_closed_and_never_uses_cookie (0.00s)
+    --- PASS: TestUnifiedAuthenticatorPreservesCarrierPrecedenceSessionParityAnd401403EmptyDegradedSeparation/valid_authorization_header_resolves_api_audience_session (0.00s)
+    --- PASS: TestUnifiedAuthenticatorPreservesCarrierPrecedenceSessionParityAnd401403EmptyDegradedSeparation/missing_carrier_is_401_on_api_and_303_on_legacy_top-level_navigation (0.00s)
+    --- PASS: TestUnifiedAuthenticatorPreservesCarrierPrecedenceSessionParityAnd401403EmptyDegradedSeparation/api-audience_token_in_the_browser_cookie_is_rejected_wrong_audience (0.00s)
+    --- PASS: TestUnifiedAuthenticatorPreservesCarrierPrecedenceSessionParityAnd401403EmptyDegradedSeparation/revoked_browser_cookie_fails_closed (0.00s)
+    --- PASS: TestUnifiedAuthenticatorPreservesCarrierPrecedenceSessionParityAnd401403EmptyDegradedSeparation/auth_success_is_distinct_from_authorization_denial_and_downstream_degradation (0.00s)
+ok      github.com/smackerel/smackerel/internal/auth    0.034s
+[go-unit] go test ./... finished OK
+```
+
+### AUTH-S05-T01
+
+**Phase:** implement
+**Command:** `./smackerel.sh test unit --go --go-run 'TestUnifiedAuthenticator…|TestCookieMutations…|TestSurfaceInventory…' --verbose`
+**Exit Code:** 0
+**Claim Source:** executed 2026-07-25
+
+Product-wide CSRF/Origin mutation matrix — every mutation family requires a
+trusted Origin and a session-bound proof; double-submit mismatch, tampered
+signature, and a stale rotated `jti` are each rejected; SameSite/Origin alone are
+insufficient; the operator role is not exempt; the middleware blocks with 403
+before the mutation and does not enumerate; telemetry leaks no secret; the
+pre-session login/registration variant and the closed outcome vocabulary hold.
+
+```text
+--- PASS: TestCookieMutationsRequireTrustedOriginAndSessionBoundCsrfProofAcrossEveryMutationFamily (0.01s)
+    --- PASS: TestCookieMutationsRequireTrustedOriginAndSessionBoundCsrfProofAcrossEveryMutationFamily/family_form (0.00s)
+    --- PASS: TestCookieMutationsRequireTrustedOriginAndSessionBoundCsrfProofAcrossEveryMutationFamily/family_htmx (0.00s)
+    --- PASS: TestCookieMutationsRequireTrustedOriginAndSessionBoundCsrfProofAcrossEveryMutationFamily/family_pwa (0.00s)
+    --- PASS: TestCookieMutationsRequireTrustedOriginAndSessionBoundCsrfProofAcrossEveryMutationFamily/family_json (0.00s)
+    --- PASS: TestCookieMutationsRequireTrustedOriginAndSessionBoundCsrfProofAcrossEveryMutationFamily/family_cards (0.00s)
+    --- PASS: TestCookieMutationsRequireTrustedOriginAndSessionBoundCsrfProofAcrossEveryMutationFamily/family_admin (0.00s)
+    --- PASS: TestCookieMutationsRequireTrustedOriginAndSessionBoundCsrfProofAcrossEveryMutationFamily/double_submit_mismatch (0.00s)
+    --- PASS: TestCookieMutationsRequireTrustedOriginAndSessionBoundCsrfProofAcrossEveryMutationFamily/tampered_signature (0.00s)
+    --- PASS: TestCookieMutationsRequireTrustedOriginAndSessionBoundCsrfProofAcrossEveryMutationFamily/stale_rotated_jti (0.00s)
+    --- PASS: TestCookieMutationsRequireTrustedOriginAndSessionBoundCsrfProofAcrossEveryMutationFamily/samesite_and_origin_alone_insufficient (0.00s)
+    --- PASS: TestCookieMutationsRequireTrustedOriginAndSessionBoundCsrfProofAcrossEveryMutationFamily/operator_role_not_exempt (0.00s)
+    --- PASS: TestCookieMutationsRequireTrustedOriginAndSessionBoundCsrfProofAcrossEveryMutationFamily/middleware_403_before_mutation_and_non_enumerating (0.00s)
+    --- PASS: TestCookieMutationsRequireTrustedOriginAndSessionBoundCsrfProofAcrossEveryMutationFamily/bounded_telemetry_no_secret_leak (0.00s)
+    --- PASS: TestCookieMutationsRequireTrustedOriginAndSessionBoundCsrfProofAcrossEveryMutationFamily/pre_session_login_registration_variant (0.00s)
+    --- PASS: TestCookieMutationsRequireTrustedOriginAndSessionBoundCsrfProofAcrossEveryMutationFamily/closed_outcome_vocabulary (0.00s)
+ok      github.com/smackerel/smackerel/internal/api     0.305s
+```
+
+### AUTH-S06-T01
+
+**Phase:** implement
+**Command:** `./smackerel.sh test unit --go --go-run 'TestUnifiedAuthenticator…|TestCookieMutations…|TestSurfaceInventory…' --verbose`
+**Exit Code:** 0
+**Claim Source:** executed 2026-07-25
+
+Surface-inventory role/grant matrix and global-corpus gate — role/grant matrix,
+global-corpus grant gate, authority flows sourced from the unified authenticator
+across surfaces, and rejection of client-supplied roles and unverified sessions
+(no bypass helpers).
+
+```text
+--- PASS: TestSurfaceInventoryRoleGrantMatrixAndGlobalCorpusGateUseUnifiedAuthenticatorAndRejectBypassHelpers (0.00s)
+    --- PASS: TestSurfaceInventoryRoleGrantMatrixAndGlobalCorpusGateUseUnifiedAuthenticatorAndRejectBypassHelpers/role_grant_matrix (0.00s)
+    --- PASS: TestSurfaceInventoryRoleGrantMatrixAndGlobalCorpusGateUseUnifiedAuthenticatorAndRejectBypassHelpers/global_corpus_grant_gate (0.00s)
+    --- PASS: TestSurfaceInventoryRoleGrantMatrixAndGlobalCorpusGateUseUnifiedAuthenticatorAndRejectBypassHelpers/authority_flows_from_unified_authenticator_across_surfaces (0.00s)
+    --- PASS: TestSurfaceInventoryRoleGrantMatrixAndGlobalCorpusGateUseUnifiedAuthenticatorAndRejectBypassHelpers/reject_client_supplied_role_and_unverified_session (0.00s)
+ok      github.com/smackerel/smackerel/internal/api     0.305s
+ok      github.com/smackerel/smackerel/internal/auth    0.034s
++ echo '[go-unit] go test ./... finished OK'
+[go-unit] go test ./... finished OK
+UNIT_EXIT=0
+```
+
+### Repo-Standard Verification (check + lint)
+
+**Phase:** implement
+**Command:** `./smackerel.sh check` then `./smackerel.sh lint`
+**Exit Code:** 0 and 0
+**Claim Source:** executed 2026-07-25
+
+```text
+config-validate: ~/smackerel/config/generated/dev.env.tmp.1385657 OK
+Config is in sync with SST
+env_file drift guard: OK
+scenario-lint: scanning config/prompt_contracts (glob: *.yaml)
+scenarios registered: 17, rejected: 0
+scenario-lint: OK
+CHECK_EXIT=0
+...
+All checks passed!
+=== Validating web manifests ===
+  OK: web/pwa/manifest.json
+  OK: web/extension/manifest.json
+  OK: web/extension/manifest.firefox.json
+=== Checking extension version consistency ===
+  OK: Extension versions match (1.0.0)
+Web validation passed
+LINT_EXIT=0
+```
+
+### Deferred (Live Stack) And Coordination-Required
+
+The following remain `[ ]` in `scopes.md` and are honestly not verified in this
+pass:
+
+- **Live cross-surface rows** for Scope 03 (`AUTH-S03-T02` integration,
+  `AUTH-S03-T03`/`-T04`/`-T05` e2e-api/e2e-ui), Scope 05 (`AUTH-S05-T02`+ live
+  mutation rows), and Scope 06 (`AUTH-S06-T02`+ full-shell route-matrix rows) are
+  deferred. They require the disposable Docker stack, which was intentionally not
+  brought up. Scopes 01, 02, and 04 are unchanged and remain Not Started.
+- **Router wiring** of `RequestAuthenticator` into the live
+  `bearerAuthMiddleware`/`webAuthMiddleware` is deferred because it depends on the
+  audience-in-token plumbing scoped to Scope 02, which has not yet landed. The
+  seam is standalone and unit-proven.
+- **Config-SST coordination (`csrf_signing_key`)** is deferred. The fail-loud
+  key accessor belongs in `internal/config/config.go` and `config/smackerel.yaml`
+  paired with its validation, but the validation assertions live in
+  `internal/config/validate_test.go`, which is concurrently dirty (owned by
+  another agent this session) and off-limits. Rather than race that file, the
+  guard consumes the key via an injectable `CSRFKeyProvider`; the config accessor
+  is a coordination-required follow-up once `validate_test.go` is clean.
