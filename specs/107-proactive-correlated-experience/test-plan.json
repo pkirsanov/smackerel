@@ -52,19 +52,29 @@
       ]
     },
     {
-      "scopeId": "SCOPE-03B",
-      "scopeName": "WhatsApp Interactive + Cross-Channel Parity (Gated)",
+      "scopeId": "SCOPE-03B1",
+      "scopeName": "WhatsApp Proactive Nudge Rendering (Buildable Now)",
       "tests": [
-        {"id":"T107-006-U","type":"unit","category":"unit","file":"internal/whatsapp/nudge_reply_test.go","scenarioId":"SCN-107-006","description":"SCN-107-006 WhatsApp reply.id carries a:n:<ref>:<a|s|d>","command":"./smackerel.sh test unit","liveSystem":false},
-        {"id":"T107-006-I","type":"integration","category":"integration","file":"tests/integration/proactive/whatsapp_nudge_ack_test.go","scenarioId":"SCN-107-006","description":"SCN-107-006 WhatsApp interactive choice routes to the one ack path","command":"./smackerel.sh test integration","liveSystem":true},
+        {"id":"T107-006-U","type":"unit","category":"unit","file":"internal/whatsapp/assistant_adapter/nudge_reply_test.go","scenarioId":"SCN-107-006","description":"SCN-107-006 WhatsApp reply.id carries a:n:<ref>:<a|s|d> (opaque; no content_key/label)","command":"./smackerel.sh test unit","liveSystem":false},
+        {"id":"T107-006-I","type":"integration","category":"integration","file":"tests/integration/proactive/whatsapp_nudge_ack_test.go","scenarioId":"SCN-107-006","description":"SCN-107-006 WhatsApp interactive choice routes to the one ack path (injected transport seam)","command":"./smackerel.sh test integration","liveSystem":true},
         {"id":"T107-006-A","type":"e2e-api","category":"e2e-api","file":"tests/e2e/proactive_channel_parity_e2e_test.go","scenarioId":"SCN-107-006","description":"SCN-107-006 WhatsApp interactive nudge acknowledges through controller","command":"./smackerel.sh test e2e","liveSystem":true},
-        {"id":"T107-006-W","type":"e2e-ui","category":"e2e-ui","file":"web/pwa/tests/proactive-cross-channel.spec.ts","scenarioId":"SCN-107-006","description":"SCN-107-006 WhatsApp act reflects on the web card state","command":"./smackerel.sh test e2e-ui","liveSystem":true},
+        {"id":"T107-03B1-GOLDEN","type":"unit","category":"unit","file":"internal/whatsapp/assistant_adapter/nudge_render_golden_test.go","scenarioId":"SCN-107-006","description":"SCN-107-006 golden interactive message: body + Why line + a:n: Act/Snooze/Dismiss + list/text fallback (adapter-level, no web)","command":"./smackerel.sh test unit","liveSystem":false},
+        {"id":"T107-03B1-FALLBACK","type":"unit","category":"unit","file":"internal/whatsapp/assistant_adapter/nudge_reply_test.go","scenarioId":"SCN-107-006","description":"SCN-107-006 list-message + numbered text fallback (1|2|3 -> a|s|d) preserves the three actions + provenance line","command":"./smackerel.sh test unit","liveSystem":false},
+        {"id":"T107-03B1-WATGSUPPRESS","type":"integration","category":"integration","file":"tests/integration/proactive/whatsapp_telegram_pair_suppression_test.go","scenarioId":"SCN-107-006","description":"SCN-107-006 act on WhatsApp suppresses the same content_key on a Telegram re-render (WhatsApp<->Telegram pair; no web)","command":"./smackerel.sh test integration","liveSystem":true},
+        {"id":"T107-03B1-HONEST","type":"integration","category":"integration","file":"tests/integration/proactive/whatsapp_honest_states_test.go","scenarioId":"SCN-107-006","description":"SCN-107-006 budget-exhausted/deduped/already-acted/expired render on WhatsApp, never a fabricated card","command":"./smackerel.sh test integration","liveSystem":true}
+      ]
+    },
+    {
+      "scopeId": "SCOPE-03B2",
+      "scopeName": "Cross-Channel Web Parity (Gated)",
+      "tests": [
         {"id":"T107-007-U","type":"unit","category":"unit","file":"internal/intelligence/surfacing/cross_channel_ack_test.go","scenarioId":"SCN-107-007","description":"SCN-107-007 one Acknowledge(content_key) suppresses every channel","command":"./smackerel.sh test unit","liveSystem":false},
         {"id":"T107-007-I","type":"integration","category":"integration","file":"tests/integration/proactive/cross_channel_suppression_test.go","scenarioId":"SCN-107-007","description":"SCN-107-007 act on Telegram suppresses web and whatsapp in window","command":"./smackerel.sh test integration","liveSystem":true},
         {"id":"T107-007-A","type":"e2e-api","category":"e2e-api","file":"tests/e2e/proactive_channel_parity_e2e_test.go","scenarioId":"SCN-107-007","description":"SCN-107-007 cross-channel suppression API","command":"./smackerel.sh test e2e","liveSystem":true},
         {"id":"T107-007-W","type":"e2e-ui","category":"e2e-ui","file":"web/pwa/tests/proactive-cross-channel.spec.ts","scenarioId":"SCN-107-007","description":"SCN-107-007 no duplicate prompt on web after acting on Telegram","command":"./smackerel.sh test e2e-ui","liveSystem":true},
         {"id":"T107-03-SUPPRESS","type":"stress","category":"stress","file":"tests/stress/proactive_suppression_propagation_test.go","scenarioId":"SCN-107-007","description":"NFR-107-004 suppression propagates within suppression_window_hours across channels","command":"./smackerel.sh test stress","liveSystem":true},
-        {"id":"T107-03B-TGWEB-PARITY","type":"e2e-ui","category":"e2e-ui","file":"web/pwa/tests/proactive-cross-channel.spec.ts","scenarioId":"SCN-107-007","description":"SCN-107-007 Telegram act reflects on the web card state (cross-channel parity)","command":"./smackerel.sh test e2e-ui","liveSystem":true}
+        {"id":"T107-03B2-TGWEB-PARITY","type":"e2e-ui","category":"e2e-ui","file":"web/pwa/tests/proactive-cross-channel.spec.ts","scenarioId":"SCN-107-007","description":"SCN-107-007 Telegram act reflects on the web card state (cross-channel parity)","command":"./smackerel.sh test e2e-ui","liveSystem":true},
+        {"id":"T107-03B2-WAWEB-PARITY","type":"e2e-ui","category":"e2e-ui","file":"web/pwa/tests/proactive-cross-channel.spec.ts","scenarioId":"SCN-107-007","description":"SCN-107-007 WhatsApp act reflects on the web card state (cross-channel parity)","command":"./smackerel.sh test e2e-ui","liveSystem":true}
       ]
     },
     {
