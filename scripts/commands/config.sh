@@ -1109,6 +1109,9 @@ PREFLIGHT_MIN_AVAILABLE_DISK_GB_LIGHT="$(required_value runtime.preflight.min_av
 PREFLIGHT_MIN_AVAILABLE_RAM_MB_UI="$(required_value runtime.preflight.min_available_ram_mb_ui)"
 PREFLIGHT_MIN_AVAILABLE_DISK_GB_UI="$(required_value runtime.preflight.min_available_disk_gb_ui)"
 DIGEST_CRON="$(required_value runtime.digest_cron)"
+# BUG-002-007 Scope 01 — required positive-int Digest freshness threshold (hours).
+# No default: required_value fails loud if runtime.digest_stale_after_hours is absent.
+DIGEST_STALE_AFTER_HOURS="$(required_value runtime.digest_stale_after_hours)"
 EMBEDDING_MODEL="$(required_value runtime.embedding_model)"
 LOG_LEVEL="$(required_value runtime.log_level)"
 
@@ -2393,6 +2396,7 @@ LLM_MODEL_COSTS_JSON=${LLM_MODEL_COSTS_JSON}
 LLM_PROVIDER_SECRET_MASTER_KEY=${LLM_PROVIDER_SECRET_MASTER_KEY}
 EMBEDDING_MODEL=${EMBEDDING_MODEL}
 DIGEST_CRON=${DIGEST_CRON}
+DIGEST_STALE_AFTER_HOURS=${DIGEST_STALE_AFTER_HOURS}
 LOG_LEVEL=${LOG_LEVEL}
 PORT=${CORE_CONTAINER_PORT}
 ML_SIDECAR_URL=${ML_SIDECAR_URL}
