@@ -1,6 +1,6 @@
 # Scope 04: Availability And Startup Truth
 
-**Status:** Not Started
+**Status:** In Progress
 **Depends On:** 03
 **Scope-Kind:** runtime-behavior
 
@@ -86,7 +86,7 @@ Allowed: availability package, provider inventory/runtime projection, startup wi
 
 #### Test Evidence - 7 Rows / 7 Items
 
-- [ ] REC04-TP01 availability-unit evidence is recorded.
+- [x] REC04-TP01 availability-unit evidence is recorded. → Evidence: [report.md](../../report.md) Implementation — 2026-07-25 (bubbles.implement) → Test Evidence — REC04-TP01 (availability unit), exit 0. Unit-verified readiness-determination slice; live-health probe and consumer wiring deferred (packet blocked).
 - [ ] REC04-TP02 startup/config integration evidence is recorded.
 - [ ] REC04-TP03 availability E2E API evidence is recorded.
 - [ ] REC04-TP04 adversarial red-to-green E2E API evidence is recorded.

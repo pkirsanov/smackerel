@@ -39,7 +39,7 @@ Links: [spec.md](../spec.md) | [design.md](../design.md) | [report.md](../report
 | 01 | [Provider contract and migration foundation](01-provider-contract-foundation/scope.md) | SCN-039-005-02, 04, 07 | - | config, provider registry, PostgreSQL, security | Not Started |
 | 02 | [Google Places production adapter](02-google-places-adapter/scope.md) | SCN-039-005-01, 03, 05 | 01 | provider adapter, health, attribution | Not Started |
 | 03 | [Yelp production adapter](03-yelp-adapter/scope.md) | SCN-039-005-01, 03, 08 | 02 | provider adapter, partial coverage | Not Started |
-| 04 | [Availability and startup truth](04-availability-startup-truth/scope.md) | SCN-039-005-01, 02, 03, 08, 10 | 03 | availability, startup, metrics | Not Started |
+| 04 | [Availability and startup truth](04-availability-startup-truth/scope.md) | SCN-039-005-01, 02, 03, 08, 10 | 03 | availability, startup, metrics | In Progress |
 | 05 | [Request outcomes and evidence](05-request-outcomes-evidence/scope.md) | SCN-039-005-01, 03, 05, 07, 08 | 04 | request API, engine, evidence store | Not Started |
 | 06 | [Watch and scheduler eligibility](06-watch-scheduler-eligibility/scope.md) | SCN-039-005-02, 03, 06, 07 | 05 | watches, scheduler, persistence | Not Started |
 | 07 | [Shared API and accessible UI projections](07-shared-api-ui-projections/scope.md) | SCN-039-005-01 through 10 | 06 | request UI, watch UI, status, auth | Not Started |
