@@ -1,0 +1,105 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://smackerel.local/config/acceptance/fault-profiles.v1.schema.json",
+  "title": "BUG-102-001 Test-Only Fault-Profile Registry (v1)",
+  "description": "Closed machine-readable schema for the production-inert, test-only fault-profile registry owned by BUG-102-001 (JOURNEY-016 / SCN-102-001-12). Every profile declares the closed nine-field schema; consumers reference profiles by immutable stableId only.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "posture", "productionExposure", "profiles"],
+  "properties": {
+    "version": {
+      "description": "Registry schema version. v1 is the only supported version.",
+      "type": "string",
+      "const": "v1"
+    },
+    "posture": {
+      "description": "Deployment posture the registry declares. The registry is test-only; a production posture is forbidden.",
+      "type": "string",
+      "const": "test"
+    },
+    "productionExposure": {
+      "description": "Production exposure declaration. Fault profiles are production-inert; production exposure is forbidden.",
+      "type": "string",
+      "const": "forbidden"
+    },
+    "profiles": {
+      "description": "The set of fault profiles. At least one profile is required.",
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/profile" }
+    }
+  },
+  "$defs": {
+    "profile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "stableId",
+        "journey",
+        "setup",
+        "teardown",
+        "parallelism",
+        "expectedRequest",
+        "expectedResponseOrTermination",
+        "evidence",
+        "noFirstPartyInterception"
+      ],
+      "properties": {
+        "stableId": {
+          "description": "Immutable profile identifier, never reused.",
+          "type": "string",
+          "minLength": 1
+        },
+        "journey": {
+          "description": "The owning product journey the fault targets. Closed enum.",
+          "type": "string",
+          "enum": [
+            "assistant",
+            "session",
+            "search",
+            "digest",
+            "graph",
+            "recommendations",
+            "cards",
+            "synthesis"
+          ]
+        },
+        "setup": {
+          "description": "Deterministic fixture/state setup for the fault in a disposable stack.",
+          "type": "string",
+          "minLength": 1
+        },
+        "teardown": {
+          "description": "Deterministic teardown restoring the disposable stack.",
+          "type": "string",
+          "minLength": 1
+        },
+        "parallelism": {
+          "description": "Isolation/parallel-safety declaration for concurrent runs.",
+          "type": "string",
+          "minLength": 1
+        },
+        "expectedRequest": {
+          "description": "The real first-party request the profile provokes.",
+          "type": "string",
+          "minLength": 1
+        },
+        "expectedResponseOrTermination": {
+          "description": "The real response or clean termination it must produce.",
+          "type": "string",
+          "minLength": 1
+        },
+        "evidence": {
+          "description": "The permitted value-safe evidence class for the profile.",
+          "type": "string",
+          "minLength": 1
+        },
+        "noFirstPartyInterception": {
+          "description": "Explicit assertion that the fault is produced by real stack behavior, never page.route/context.route/route.fulfill/first-party request interception. Must be true; a profile that could only be produced by intercepting a first-party request is invalid.",
+          "type": "boolean",
+          "const": true
+        }
+      }
+    }
+  }
+}
