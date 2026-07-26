@@ -152,6 +152,12 @@ LINT_EXIT=0
 
 Go static analysis (golangci) reported no findings against the new package; a finding would have printed the `internal/recommendation/availability/service.go` path.
 
+> **2026-07-26 wiring update:** the "intentionally NOT touched" boundary recorded
+> in this 2026-07-25 section was accurate for that run. The subsequent wiring of
+> the gate into `internal/api/recommendations.go` and the live proof are recorded
+> below under **Runtime Wiring & Live Readiness Proof — 2026-07-26**, which
+> supersedes the change-boundary statement here.
+
 ### Deferred (live / coordination-required)
 
 - **Live provider HEALTH probe / real connectivity** — the gate consumes injected provider state; the live health-observation wiring (probe, freshness-window/max-age comparison against SST, timeout) is NOT implemented. Deferred (Docker/live).
@@ -177,3 +183,145 @@ ARTIFACT_LINT_EXIT=0
 ```
 
 The state-transition guard is intentionally NOT run to `done`: a blocked packet with unchecked live/integration DoD items is expected to fail that guard, which is correct for this deferred-live slice.
+
+## Runtime Wiring & Live Readiness Proof — 2026-07-26 (bubbles.implement)
+
+**Phase:** implement
+
+This session made **no** source change, ran **no** Docker, and ran **no** live
+test. It reconciles the packet artifacts against the readiness-gate WIRING that
+had already landed in the working tree (a prior implement run truncated before
+updating the artifacts), and it verifies that wiring plus its durable live proof
+by **inspecting the committed files this session**. The `MutationTrustGuard`
+(AUTH-011, BUG-070-001) remains the owning CSRF/Origin guard; nothing here adds a
+parallel guard.
+
+### Wired Change — Availability Gate Now Drives The Live Readiness Verdict
+
+**Claim Source:** executed (source `read_file` + `grep_search` this invocation) + interpreted.
+
+Verified by reading the working tree this session:
+
+- `internal/recommendation/availability/runtime.go` — new **live adapter**:
+  `ProviderLister` (satisfied by `*provider.Registry` via `List()`), `Service`,
+  `NewService(lister, enabled, validFor, now)`, and `Snapshot(ctx, category, op, required)`
+  which maps each live provider into the value-type `ProviderState` and returns
+  the pure `Determine(...)` verdict. Fixture class is resolved by the **TYPED**
+  `IsFixtureProvider()` marker (never an ID prefix); a `nil`/empty registry yields
+  zero providers → honest not-ready (`CauseZeroConfiguredProviders`).
+- `internal/api/recommendations.go` (import line 15; `computeAvailabilityView` +
+  `ListProviders` lines 387–470) — `computeAvailabilityView(ctx)` calls
+  `recavailability.NewService(lister, h.cfg.Enabled, 0, time.Now).Snapshot(ctx, recommendation.CategoryPlace, recavailability.OperationRequest, false)`
+  and projects the bounded, credential-free `availabilityView`; `ListProviders`
+  embeds that `availability` block (`enabled`, `ready`, `state`, `cause`, `counts`)
+  in every provider response. Readiness is now derived by the availability gate
+  over the **REAL configured-provider registry**, not feature-enablement, route
+  mounting, or `Registry.Len()`.
+- `internal/recommendation/provider/fixture_integration.go` (line 96) —
+  `func (p *FixtureProvider) IsFixtureProvider() bool { return true }`: the build-
+  and type-isolated fixture marker the gate uses to exclude fixtures from the
+  production readiness denominator.
+- `internal/recommendation/availability/runtime_test.go` — unit coverage of the
+  live adapter (`TestServiceSnapshotFromRegistry`, `TestServiceNilListerIsHonestNotReady`).
+- `tests/integration/recommendation_availability_readiness_test.go` — the durable,
+  re-runnable live proof (3 subtests) described next.
+
+**Contract proven:** zero eligible providers → honest NOT-ready; ≥1 eligible
+healthy production provider → ready; a second provider is not required.
+
+### Live Integration Proof — REC04 Readiness Over The Real Registry
+
+**Claim Source:** not-run this invocation. The three subtests were executed on the
+disposable stack in the immediately-preceding implement run and torn down clean;
+they were **NOT re-executed here** per the no-live-tests / no-Docker constraint.
+The **durable, on-demand proof** is the committed test file
+`tests/integration/recommendation_availability_readiness_test.go`, verified present
+this session (via `read_file`) with exactly the three subtests and assertions
+transcribed below.
+
+Durable test file — `TestRecommendationAvailabilityReadiness_LiveStatusReflectsRealProviderState`
+(driven through `api.NewRecommendationHandlers(...).ListProviders` on a real
+`recprovider.Registry`, no interception), quoted from the committed source this
+session:
+
+```text
+subtest 1  enabled zero providers is honest not ready
+  registry := NewRegistry()            // zero providers
+  assert availability.enabled == true
+  assert availability.ready   == false // FALSE-READY regression would fail here
+  assert availability.state   == "unavailable"
+  assert availability.cause   == "zero_configured_providers"
+  assert counts.eligible == 0 && counts.healthy_eligible == 0
+
+subtest 2  enabled with only a healthy fixture is still not ready
+  registry.Register(NewFixtureProvider("fixture_google_places", ...CategoryPlace))
+  assert availability.ready   == false // fixtures MUST NOT dilute readiness
+  assert availability.cause   == "zero_configured_providers"
+  assert counts.fixtures == 1          // fixture observed but excluded
+  assert counts.eligible == 0
+
+subtest 3  enabled with one healthy production provider is ready
+  registry.Register(readinessProductionProvider{google_places, CategoryPlace, Healthy})
+  assert availability.ready   == true  // one eligible healthy provider suffices
+  assert availability.state   == "available"
+  assert counts.healthy_eligible == 1
+```
+
+**Command (preceding run):** `./smackerel.sh test integration`
+**Reported result:** all three subtests PASS — `enabled_zero_providers_is_honest_not_ready`,
+`enabled_with_only_a_healthy_fixture_is_still_not_ready`,
+`enabled_with_one_healthy_production_provider_is_ready`; `ok tests/integration`;
+`INTEGRATION_EXIT=0`.
+
+**Teardown (preceding run):** `./smackerel.sh down` → `DOWN_EXIT=0`; zero
+`smackerel` containers remain (disposable stack, ephemeral storage; nothing
+persisted).
+
+These three subtests are the exact BUG-039-005 contract on the real registry: an
+ENABLED capability with zero eligible providers (empty or fixture-only) is honest
+NOT-ready, and one healthy production provider is ready — never false-ready from
+enablement or provider cardinality.
+
+### Availability Unit — No Regression
+
+**Claim Source:** durable file verified by inspection this session (`read_file`);
+the pass/`ok` line is the reported result of the preceding `./smackerel.sh test unit --go`
+run, not re-executed here.
+
+`internal/recommendation/availability/runtime_test.go` (read this session)
+unit-covers the live adapter with the same adversarial cases as the gate, on a
+`stubLister` (no stack, no probe):
+
+```text
+TestServiceSnapshotFromRegistry
+  empty registry enabled is not ready (the bug)        -> unavailable / zero_configured_providers / 0,0,0,0
+  one healthy production provider is ready              -> available   / provider_coverage_complete / 1,1,1,0
+  fixture-only registry is not ready                   -> unavailable / zero_configured_providers / 1,0,0,1
+  healthy production plus healthy fixture stays ready   -> available (fixture excluded) / 2,1,1,1
+  only-failing production provider is unavailable       -> unavailable / all_providers_unavailable / 1,1,0,0
+  only-disabled production provider is excluded         -> unavailable / zero_configured_providers / 1,0,0,0
+  healthy production for a different category not ready -> unavailable / zero_category_providers / 1,0,0,0
+  one healthy plus one failing is degraded but ready    -> degraded / partial_provider_coverage / 2,2,1,0
+TestServiceNilListerIsHonestNotReady
+  nil lister enabled                                    -> ready=false / zero_configured_providers
+```
+
+**Reported result:** `./smackerel.sh test unit --go` shows `ok internal/recommendation/availability`
+(no regression). `./smackerel.sh check` exit 0 and `./smackerel.sh lint` exit 0 were
+likewise reported clean for this working tree (the raw check/lint output for the
+availability slice is recorded in the 2026-07-25 section above).
+
+### Scope Reconciliation
+
+- SCOPE-04 Core Outcomes `SCN-039-005-01` (≥1 healthy → ready), `SCN-039-005-02`
+  (enabled + zero → not-ready), and `SCN-039-005-10` (disabled/fixture excluded;
+  one healthy suffices) are checked `[x]` in
+  [scopes/04-availability-startup-truth/scope.md](scopes/04-availability-startup-truth/scope.md)
+  with evidence links to this section.
+- Left `[ ]` (honestly deferred): `SCN-039-005-03` (degraded/unhealthy **live**
+  matrix), the non-scenario startup-authority / required-startup-abort /
+  telemetry / canary-rollback-consumer core outcomes, and the planned live rows
+  `REC04-TP02`, `REC04-TP03`, `REC04-TP04`, `REC04-TP05`, `REC04-TP06`,
+  `REC04-TP07` (the landed live proof is the separate
+  `tests/integration/recommendation_availability_readiness_test.go`, not those
+  planned files). SCOPE-04 stays `in_progress`; the packet stays `blocked`.
