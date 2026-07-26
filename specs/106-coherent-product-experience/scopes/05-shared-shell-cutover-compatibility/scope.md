@@ -75,7 +75,7 @@ Run auth, native Search, HTMX read/mutation, Digest, Assistant, Wiki, Card PRG, 
 |---|---|---|---|---|---|---|
 | XP106-05-U | `unit` | `internal/experience/navigation_projection_test.go` | SCN-106-001, 002, 015 | `TestGeneratedNavigationActiveHierarchyAudienceRoutesAndCompatibilityMap` | `./smackerel.sh test unit --go` | No |
 | XP106-05-I | `integration` | `tests/integration/experience/shell_cutover_test.go` | SCN-106-001, 002, 015 | `TestServerPWAAndCardCutoverShareProjectionSessionAndDeepLinkContracts` | `./smackerel.sh test integration` | Yes |
-| XP106-05-A | `e2e-api` | `tests/e2e/product_shell_e2e_test.go` | SCN-106-001, 002, 015 | `Shared shell routes preserve auth status methods and compatibility without guessed destinations` | `./smackerel.sh test e2e` | Yes |
+| XP106-05-A | `e2e-api` | `tests/e2e/product_shell_e2e_test.go` | SCN-106-001, 002, 015 | `Regression E2E: Shared shell routes preserve auth status methods and compatibility without guessed destinations` | `./smackerel.sh test e2e` | Yes |
 | XP106-05-C | `functional` | `internal/experience/consumer_inventory_test.go` | SCN-106-015 | `TestShellCutoverLeavesNoStaleNavigationRedirectManifestServiceWorkerDocOrTestTarget` | `./smackerel.sh check` | No |
 | UX-E2E-106-001 | `e2e-ui` | `web/pwa/tests/coherent_shell.spec.ts` | SCN-106-001 | `UX-E2E-106-001 one login reaches Assistant and representative legacy PWA and Card routes` | `./smackerel.sh test e2e-ui` | Yes |
 | UX-E2E-106-002 | `e2e-ui` | `web/pwa/tests/coherent_shell.spec.ts` | SCN-106-001 | `UX-E2E-106-002 invalid username and password remain non-enumerating and private` | `./smackerel.sh test e2e-ui` | Yes |
@@ -108,6 +108,12 @@ Run auth, native Search, HTMX read/mutation, Digest, Assistant, Wiki, Card PRG, 
 - [ ] UX-E2E-106-006 passes with evidence in `report.md#ux-e2e-106-006`.
 - [ ] UX-E2E-106-007 passes with evidence in `report.md#ux-e2e-106-007`.
 - [ ] UX-E2E-106-008 passes with evidence in `report.md#ux-e2e-106-008`.
+
+#### Regression And Consumer-Trace Planning
+
+- [ ] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior in the shell cutover (one-session reach across renderers, expired-session clear-before-recovery, deep-link compatibility or explicit redirect) exist and pass — see `report.md#xp106-05-a`.
+- [ ] Broader E2E regression suite passes with no cutover-induced regression across server, PWA, and Card renderers — see `report.md#ux-e2e-106-008`.
+- [ ] Consumer impact sweep is completed for the shell cutover and zero stale first-party references remain across server/PWA/Card navigation, breadcrumbs, redirects, deep links, native forms, HTMX targets, request clients, manifest shortcuts, service worker, and stable hooks — see `report.md#xp106-05-c`.
 
 #### Build Quality Gate
 

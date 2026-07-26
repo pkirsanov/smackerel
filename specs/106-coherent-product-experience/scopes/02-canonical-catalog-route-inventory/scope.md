@@ -52,7 +52,7 @@ The config compiler and route inventory are protected shared surfaces. Canaries 
 |---|---|---|---|---|---|---|---|
 | XP106-02-U | Unit | `unit` | `internal/experience/catalog_test.go` | SCN-106-003 | `TestProductExperienceCatalogRejectsCyclesDuplicatesGuessedRoutesAndUnknownCapabilities` | `./smackerel.sh test unit --go` | No |
 | XP106-02-I | Integration | `integration` | `tests/integration/experience/route_inventory_test.go` | SCN-106-003 | `TestCatalogMatchesRealServerPWAAndCardRouteInventoriesExactly` | `./smackerel.sh test integration` | Yes |
-| XP106-02-A | E2E API regression | `e2e-api` | `tests/e2e/product_experience_catalog_e2e_test.go` | SCN-106-003 | `Generated catalog binds only registered authorized browser destinations and route-free groups` | `./smackerel.sh test e2e` | Yes |
+| XP106-02-A | Regression E2E (API) | `e2e-api` | `tests/e2e/product_experience_catalog_e2e_test.go` | SCN-106-003 | `Generated catalog binds only registered authorized browser destinations and route-free groups` | `./smackerel.sh test e2e` | Yes |
 | XP106-02-W | E2E UI regression | `e2e-ui` | `web/pwa/tests/coherent_catalog.spec.ts` | SCN-106-003 | `catalog projection exposes exact hierarchy while unbound Work leaves have no fabricated link` | `./smackerel.sh test e2e-ui` | Yes |
 | XP106-02-C | Consumer regression | `functional` | `internal/experience/consumer_inventory_test.go` | SCN-106-003 | `TestExperienceConsumerInventoryContainsNoStaleNavigationRedirectManifestServiceWorkerOrTestTarget` | `./smackerel.sh check` | No |
 
@@ -72,6 +72,12 @@ The config compiler and route inventory are protected shared surfaces. Canaries 
 - [x] XP106-02-A passes through real route/auth behavior in `report.md#xp106-02-a`. → Evidence: [report.md#xp106-02-a](report.md#xp106-02-a)
 - [ ] XP106-02-W passes without interception in `report.md#xp106-02-w`.
 - [x] XP106-02-C passes the complete consumer/stale-reference scan in `report.md#xp106-02-c`. → Evidence: [report.md#xp106-02-c](report.md#xp106-02-c)
+
+#### Regression And Consumer-Trace Planning
+
+- [ ] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior in the canonical catalog and route inventory (generated catalog binding, route-free-group href suppression, unbound Work-leaf null href) exist and pass — see `report.md#xp106-02-a`.
+- [ ] Broader E2E regression suite passes with no catalog-induced navigation regression across the server and PWA renderers — see `report.md#xp106-02-w`.
+- [ ] Consumer impact sweep is completed for the catalog and route inventory and zero stale first-party references remain across server navigation, PWA navigation, breadcrumbs, redirects, deep links, API clients, generated clients, service-worker assets, and stable test hooks — see `report.md#xp106-02-c`.
 
 #### Build Quality Gate
 

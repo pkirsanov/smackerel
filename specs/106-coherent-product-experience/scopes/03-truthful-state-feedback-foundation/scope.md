@@ -52,9 +52,9 @@ The state/presentation package and adapters roll back atomically. Rollback never
 
 ## Change Boundary
 
-**Allowed:** shared experience state/presentation types and components, auth/access presentation adapters, common mutation feedback, safe focus/live-region helpers, focused tests.
+**Allowed file families:** shared experience state/presentation types and components, auth/access presentation adapters, common mutation feedback, safe focus/live-region helpers, focused tests.
 
-**Excluded:** auth token issuance or middleware verification, domain state derivation/persistence, provider/route readiness logic, domain API schemas, shell cutover, foreign packets, deployment, spec 079, knb, CCManager, and managed claims.
+**Excluded surfaces:** auth token issuance or middleware verification, domain state derivation/persistence, provider/route readiness logic, domain API schemas, shell cutover, foreign packets, deployment, spec 079, knb, CCManager, and managed claims.
 
 ## Test Plan
 
@@ -62,9 +62,9 @@ The state/presentation package and adapters roll back atomically. Rollback never
 |---|---|---|---|---|---|---|---|
 | XP106-03-U | Unit | `unit` | `internal/experience/state_presenter_test.go` | SCN-106-004, 005, 010 | `TestExperienceStateAvailabilityAndMutationAxesRemainClosedIndependentAndFailClosed` | `./smackerel.sh test unit --go` | No |
 | XP106-03-I | Integration | `integration` | `tests/integration/experience/state_presenter_test.go` | SCN-106-004, 005, 010 | `TestRealOwnerOutcomesProjectWithoutFalseEmptyReadyOrSuccess` | `./smackerel.sh test integration` | Yes |
-| XP106-03-A | E2E API regression | `e2e-api` | `tests/e2e/experience_state_e2e_test.go` | SCN-106-004, 005, 010 | `Availability content auth and mutation outcomes remain structurally distinct through real routes` | `./smackerel.sh test e2e` | Yes |
+| XP106-03-A | Regression E2E (API) | `e2e-api` | `tests/e2e/experience_state_e2e_test.go` | SCN-106-004, 005, 010 | `Availability content auth and mutation outcomes remain structurally distinct through real routes` | `./smackerel.sh test e2e` | Yes |
 | XP106-03-W | E2E UI regression | `e2e-ui` | `web/pwa/tests/coherent_states.spec.ts` | SCN-106-004, 005, 010 | `shared state bands show exact recovery and never collapse failure empty unavailable or success` | `./smackerel.sh test e2e-ui` | Yes |
-| XP106-03-P | Security/privacy regression | `integration` | `tests/integration/experience/privacy_clear_test.go` | SCN-106-004, 005, 010 | `TestSessionLossClearsProtectedPresentationAndSafeStatesExposeNoSensitiveDetail` | `./smackerel.sh test integration` | Yes |
+| XP106-03-P | Shared-infrastructure canary | `integration` | `tests/integration/experience/privacy_clear_test.go` | SCN-106-004, 005, 010 | `Canary: TestSessionLossClearsProtectedPresentationAndSafeStatesExposeNoSensitiveDetail` | `./smackerel.sh test integration` | Yes |
 
 ### Definition of Done - Tiered Validation
 
@@ -81,8 +81,16 @@ The state/presentation package and adapters roll back atomically. Rollback never
 - [ ] XP106-03-I passes against real owner outcomes in `report.md#xp106-03-i`.
 - [ ] XP106-03-A passes through real routes in `report.md#xp106-03-a`.
 - [ ] XP106-03-W passes without interception in `report.md#xp106-03-w`.
-- [ ] XP106-03-P passes privacy-clear and redaction checks in `report.md#xp106-03-p`.
+- [ ] XP106-03-P passes the shared-state privacy-clear and 403-denial canary and redaction checks in `report.md#xp106-03-p`.
+
+#### Shared-Infrastructure And Regression Planning
+
+- [ ] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior in this shared-state foundation (availability/content/auth/mutation exclusivity, 401 privacy clear, 403 denial, duplicate-submit prevention) exist and pass — see `report.md#xp106-03-a`.
+- [ ] Broader E2E regression suite passes with no shared-state-foundation-induced regression across the server and PWA renderers — see `report.md#xp106-03-w`.
+- [ ] Independent canary suite for shared fixture/bootstrap contracts passes before broad suite reruns (legacy authorized empty read, PWA 401 privacy clear, 403 operator denial, native form mutation, HTMX mutation, Card PRG mutation) — see `report.md#xp106-03-p`.
+- [ ] Rollback or restore path for shared infrastructure changes is documented and verified (atomic state/presentation package pointer swap that never restores failure-as-empty, optimistic success, raw errors, or retained protected DOM after 401) — see `report.md#xp106-03-rollback`.
 
 #### Build Quality Gate
 
 - [ ] State exclusivity, privacy, auth/access semantics, no-raw-error, no-sensitive-storage, check, lint, format, artifact lint, traceability, canary, rollback, and directly affected security/testing documentation checks pass with zero warnings.
+- [ ] Change Boundary is respected and zero excluded file families were changed — see `report.md#xp106-03-change-boundary`.
