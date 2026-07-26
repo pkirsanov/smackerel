@@ -2,7 +2,7 @@
 
 Links: [spec.md](../../spec.md) | [design.md](../../design.md) | [scope index](../_index.md) | [report.md](report.md)
 
-**Status:** Not Started
+**Status:** In Progress
 **Scope-Kind:** runtime-behavior
 **Depends On:** SCOPE-106-04
 **External Entry Gate:** BUG-070-001 complete production-session evidence.
@@ -88,6 +88,12 @@ Run auth, native Search, HTMX read/mutation, Digest, Assistant, Wiki, Card PRG, 
 
 ### Definition of Done - Tiered Validation
 
+> **In Progress — additive navigation-projection foundation (XP106-05-U) only; the
+> live renderer cutover is a later slice; the SESSION scenarios SCN-106-001/002
+> (XP106-05-I/A auth, UX-E2E-106-001/002/003/004) are entry-gated on the
+> coordinator's BUG-070-001 production unified session and stay coupled-forward.
+> Every item below except the checked XP106-05-U row remains [ ].**
+
 #### Core Outcomes
 
 - [ ] SCN-106-001, SCN-106-002, and SCN-106-015 hold through one generated shell, one session, truthful recovery, and complete deep-link compatibility.
@@ -97,7 +103,7 @@ Run auth, native Search, HTMX read/mutation, Digest, Assistant, Wiki, Card PRG, 
 
 #### Test Evidence - 12 Rows / 12 Items
 
-- [ ] XP106-05-U passes with evidence in `report.md#xp106-05-u`.
+- [x] XP106-05-U passes with evidence in `report.md#xp106-05-u`.
 - [ ] XP106-05-I passes with evidence in `report.md#xp106-05-i`.
 - [ ] XP106-05-A passes with evidence in `report.md#xp106-05-a`.
 - [ ] XP106-05-C passes with evidence in `report.md#xp106-05-c`.
