@@ -4,11 +4,11 @@ Links: [scopes.md](scopes.md) | [uservalidation.md](uservalidation.md)
 
 ## Summary
 
-Planning artifacts only were initialized on 2026-07-23. No source, secret, config generation, host, operator deploy repository, test, production, commit, push, or deployment mutation occurred.
+Planning artifacts only were initialized on 2026-07-23. No source, secret, config generation, host, operator deploy repository, test, production, commit, push, or deployment mutation occurred. _(Superseded — an interim fail-soft unit core landed on 2026-07-24 and the fail-soft activation was then WIRED into the runtime and live-integration-proven; see "## Interim Fail-Soft Runtime-Disable Core" and "## Runtime Wiring And Live-Integration Proof" below.)_
 
 ## Completion Statement
 
-Incomplete and non-terminal. Status remains `in_progress`; design/planning, reproduction, implementation, devops injection, testing, validation, and audit are unclaimed.
+Incomplete and non-terminal. Status is `blocked`. The fail-soft graph-API activation foundation (SCOPE-01) is WIRED into the runtime (`cmd/core/wiring.go`, `internal/api/router.go`, `internal/api/health.go`) and live-integration-proven (`tests/integration/graphapi/activation_test.go`: DISABLED → all eight canonical graph paths present as a typed HTTP 503 `capability_disabled` and the service keeps serving; ENABLED → `GET /api/topics` 200 over real PostgreSQL) — see "## Runtime Wiring And Live-Integration Proof" below. SCOPE-02 (authorized family reads + the operator/grant-holder/ungranted global-corpus grant matrix SCN-080-001-09), SCOPE-03 (product synthetic, readiness, content-free telemetry, stress), and SCOPE-04 (Wiki/Graph e2e-ui + accessibility) remain deferred/blocked; SCOPE-01's own e2e-api regression rows and manifest-tamper row are also deferred. Validation and audit are unclaimed.
 
 ## Bug Reproduction - Before Fix
 
@@ -269,3 +269,109 @@ ARTIFACT_LINT_EXIT=0
 ```
 
 (Run captured while `state.json` still read `in_progress`; state was then transitioned to `blocked` — top-level status and `certification.status` remain equal, preserving the "Top-level status matches certification.status" invariant.)
+
+---
+
+## Runtime Wiring And Live-Integration Proof (bubbles.implement, 2026-07-26)
+
+**Phase:** implement
+**Claim Source (wiring):** executed/verified this session — read-only source inspection of the working tree.
+**Claim Source (live-integration outcome):** interpreted — green in the prior in-session run that truncated before recording it here; the durable test file `tests/integration/graphapi/activation_test.go` was verified PRESENT this session (read-only). NOT re-executed this session (no-live-tests / no-Docker guardrail).
+
+### Runtime Wiring (WIRED — supersedes the prior "unwired" status)
+
+The fail-soft graph-API activation is now WIRED into the runtime. This was verified this session by read-only inspection of the working tree and is a MATERIAL change from the prior `executionHistory`, which recorded the fail-soft core (`internal/api/graphapi/activation.go`) as a standalone module with zero runtime references:
+
+- **`cmd/core/wiring.go`** (~L392-449) — graph activation is now derived from the operator cursor-secret presence via `graphapi.LoadConfig()` → `graphapi.NewGraphCapability(...)`. An empty/missing secret (or a config-load / cursor-codec failure) resolves a DISABLED `deps.GraphCapability` with value-safe `slog` diagnostics (activation `Code` + `SecretPresence` class only — never secret material); a present secret ENABLES it and wires the live PostgreSQL-backed handlers (`NewTopicsHandlers` … `NewEdgesHandlers`). This REPLACES the prior warning-and-nil path that left the handler fields nil (the original silent Chi 404 bug).
+- **`internal/api/router.go`** (~L149-205) — the five graph families register as ONE atomic route manifest gated by `deps.GraphCapability.Guard` (fail-soft 503 first) plus `auth.RequireScope("knowledge-graph:read")`. DISABLED → every one of the eight canonical paths is mounted against the typed `503 capability_disabled` responder (`GraphCapability.WriteDisabled`), so the endpoints are PRESENT (never a silent Chi 404 from nil handlers). ENABLED → the live handlers serve. The route manifest is identical in both states — there is no per-family `if handler != nil` branch.
+- **`internal/api/health.go`** — the shared `api.Dependencies` struct (defined here) now carries the resolved `GraphCapability` activation field plus the five ENABLED-only graph handler fields; this is the wiring hook `internal/api/router.go` consumes. (The full authenticated `knowledge_graph` health projection is a SCOPE-03 deferred row — NOT part of this change.)
+- **`tests/integration/graphapi/activation_test.go`** (new, `//go:build integration`) — the durable live proof, built on the REAL production router (`internal/api.NewRouter`, the same router `cmd/core` builds at boot), a real loopback server (`httptest`), and the disposable stack's real PostgreSQL (`DATABASE_URL`). No request interception, no mock, no stub.
+
+### T080-01-PROC
+
+`tests/integration/graphapi/activation_test.go` — SCN-080-001-01 live fail-soft proof. The durable test file was verified PRESENT this session (read-only); it ran green in the prior in-session integration run (`./smackerel.sh test integration` → `INTEG_LIGHT_EXIT=0`; the stack was then torn down clean — no smackerel containers remain), and was NOT re-executed this session:
+
+- **DISABLED** (`TestGraphActivationDisabledSecretServesTyped503AndKeepsServing`) — with the cursor secret EMPTY and, separately, MISSING, every one of the eight canonical graph paths (`/api/topics`, `/api/topics/{id}`, `/api/people`, `/api/people/{id}`, `/api/places`, `/api/places/{id}`, `/api/time`, `/api/graph/edges`) answers HTTP **503** with a typed `capability_disabled` envelope — PRESENT, never a 404 (the assertion explicitly fails on a 404 as the reverted silent-absence bug) — and `/ping` still returns **200** (the service keeps serving other capabilities; never a boot refusal or panic).
+- **ENABLED** (`TestGraphActivationEnabledSecretServesLiveOverPostgres`) — with the cursor secret configured, the capability is ENABLED, a uniquely-prefixed real topic row is seeded into the disposable PostgreSQL (and torn down after), and `GET /api/topics` returns HTTP **200** carrying that real row over the live database — the same wiring path as `cmd/core/wiring.go`'s enabled branch.
+
+### T080-01-UNIT
+
+The eight hermetic `internal/api/graphapi` unit tests are green — see the verbatim `go test` output under "### Test Evidence — Unit" above (recorded in the prior in-session unit run; the durable test `internal/api/graphapi/activation_test.go` is unchanged). They prove empty/missing secret → typed 503 disabled (never 404/500/200/panic — including the adversarial anti-regression `TestAdversarial_EmptySecretMustNotRevertToSilentAbsenceOr500`), the operator/grant-holder/ungranted grant matrix, leak-free ungranted denial, and value-safe activation diagnostics (`TestActivationDiagnosticsNeverLeakSecret`).
+
+### check / lint / unit (prior in-session run — unchanged)
+
+`./smackerel.sh check` → exit 0, `./smackerel.sh lint` → exit 0, `./smackerel.sh test unit --go` → `ok internal/api/graphapi` (8 tests), no regression. Raw output is preserved above under "### Test Evidence — Check", "### Test Evidence — Lint", and "### Test Evidence — Unit".
+
+### Deferred (unchanged — SCOPE-02/03/04 remain blocked; SCOPE-01 e2e/manifest rows deferred)
+
+The remaining live rows were NOT authored or run and their DoD items stay `[ ]`:
+
+- **SCOPE-01** e2e-api regressions T080-02-ADVERSARIAL / T080-07-SECURITY / T080-01-DISABLED (`tests/e2e/graph_api_activation_e2e_test.go` absent) and the manifest-tamper integration row T080-02-MANIFEST (`tests/integration/graphapi/route_manifest_test.go` absent). Also SCN-080-001-02's manifest-tamper-rejection clause has no proving test, so that Core Outcome stays `[ ]`.
+- **SCOPE-02** authorized family reads T080-03-PG/READONLY, T080-05-EMPTY, T080-06-AUTH/STORE/CURSOR and the operator/grant-holder/ungranted single-operator-owned global-corpus grant matrix SCN-080-001-09 (T080-09-CORPUS, T080-09-GRANT).
+- **SCOPE-03** product synthetic, readiness, content-free telemetry, and stress (T080-03-SYNTH, T080-04-READY/STATIC, T080-07-TELEMETRY, T080-03-TRACE, T080-03-STRESS).
+- **SCOPE-04** Wiki/Graph e2e-ui and accessibility (T080-04-UI, T080-05-UI, T080-06-UI, T080-08-A11Y).
+
+### Guard Evidence (bubbles.implement, 2026-07-26 — this session, static validators only)
+
+**Command:** `bash .github/bubbles/scripts/artifact-lint.sh specs/080-knowledge-graph-public-api/bugs/BUG-080-001-graph-api-fail-soft-runtime-disable`
+**Exit Code:** 0
+**Claim Source:** executed (this session)
+
+```text
+✅ Required artifact exists: spec.md
+✅ Required artifact exists: design.md
+✅ Required artifact exists: uservalidation.md
+✅ Required artifact exists: state.json
+✅ Required artifact exists: scopes.md
+✅ Required artifact exists: report.md
+✅ No forbidden sidecar artifacts present
+✅ Found DoD section in scopes.md
+✅ scopes.md DoD contains checkbox items
+✅ All DoD bullet items use checkbox syntax in scopes.md
+✅ Detected state.json status: blocked
+✅ Detected state.json workflowMode: bugfix-fastlane
+✅ Top-level status matches certification.status
+ℹ️  Workflow mode 'bugfix-fastlane' allows status 'done'; current status is 'blocked'
+✅ report.md contains section matching: Summary
+✅ report.md contains section matching: Completion Statement
+✅ report.md contains section matching: Test Evidence
+=== Anti-Fabrication Evidence Checks ===
+✅ All checked DoD items in scopes.md have evidence blocks
+✅ No unfilled evidence template placeholders in scopes.md
+✅ No unfilled evidence template placeholders in report.md
+✅ No repo-CLI bypass detected in report.md command evidence
+=== End Anti-Fabrication Checks ===
+Artifact lint PASSED.
+ARTIFACT_LINT_EXIT=0
+```
+
+**Command:** `bash .github/bubbles/scripts/traceability-guard.sh specs/080-knowledge-graph-public-api/bugs/BUG-080-001-graph-api-fail-soft-runtime-disable`
+**Exit Code:** 0
+**Claim Source:** executed (this session)
+
+Raw excerpt (header + scenario-manifest cross-check + SCOPE-01 evidence reference + summary; the full run printed a ✅ line per scenario/row across all four scopes and ended `RESULT: PASSED`):
+
+```text
+============================================================
+  BUBBLES TRACEABILITY GUARD
+  Feature: .../BUG-080-001-graph-api-fail-soft-runtime-disable
+============================================================
+
+--- Scenario Manifest Cross-Check (G057/G059) ---
+✅ scenario-manifest.json covers 14 scenario contract(s)
+✅ scenario-manifest.json records evidenceRefs
+✅ All linked tests from scenario-manifest.json exist
+✅ Scope 1: Fail-Soft Graph Activation Foundation scenario maps to concrete test file: internal/api/graphapi/activation_test.go
+✅ Scope 1: Fail-Soft Graph Activation Foundation report references concrete test evidence: internal/api/graphapi/activation_test.go
+
+--- Traceability Summary ---
+ℹ️  Scenarios checked: 14
+ℹ️  Test rows checked: 30
+ℹ️  Scenario-to-row mappings: 14
+ℹ️  Concrete test file references: 14
+ℹ️  Report evidence references: 14
+ℹ️  DoD fidelity scenarios: 14 (mapped: 14, unmapped: 0)
+
+RESULT: PASSED (0 warnings)
+TRACEABILITY_GUARD_EXIT=0
+```

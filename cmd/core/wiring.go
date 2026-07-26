@@ -390,29 +390,59 @@ func buildAPIDeps(ctx context.Context, cfg *config.Config, svc *coreServices) (*
 		Environment: cfg.Environment,
 	}
 
-	// Spec 080 SCOPE-080-02 — wire Knowledge Graph Public API
-	// topics + people handlers. LoadConfig reads the
-	// KNOWLEDGE_GRAPH_API_* env vars (SCOPE-080-01 SST envelope);
-	// LoadCursorSecret resolves the operator-injected HMAC secret.
-	// If either fails (e.g. the cursor secret env var is not set on
-	// this deployment), we log a warning and leave the handlers nil
-	// so the router skips mounting /api/topics + /api/people; that
-	// keeps unrelated services unaffected when the secret is
-	// genuinely absent in the operator's bundle.
+	// Spec 080 + BUG-080-001 — fail-soft Knowledge Graph Public API
+	// activation. The graph families are ALWAYS represented so their
+	// routes stay PRESENT: activation is derived from the operator
+	// cursor-secret presence (graphapi.ResolveActivation) and carried on
+	// deps.GraphCapability. When the secret is unavailable/empty the
+	// capability resolves DISABLED and internal/api/router.go mounts
+	// every graph path against the typed 503 capability_disabled
+	// responder (present-but-disabled — NEVER the old warning-and-nil
+	// silent Chi 404). When the secret is present the capability is
+	// ENABLED and the live PostgreSQL-backed handlers are wired. Core
+	// boot is never refused for an absent optional enabler. All
+	// diagnostics are value-safe (activation code + presence class only,
+	// never secret material).
 	if gaCfg, err := graphapi.LoadConfig(); err != nil {
-		slog.Warn("graphapi config load failed; /api/topics + /api/people will not be mounted", "error", err)
+		// The whole KNOWLEDGE_GRAPH_API_* envelope is missing/invalid — a
+		// broader SST gap than an absent secret. Fail SOFT anyway: mount a
+		// disabled capability so every graph path answers the typed 503
+		// capability_disabled instead of a silent 404.
+		deps.GraphCapability = graphapi.NewGraphCapability(graphapi.Config{})
+		slog.Warn("graphapi config load failed; graph families mounted behind the fail-soft 503 capability_disabled responder", "error", err)
+	} else if graphCap := graphapi.NewGraphCapability(gaCfg); graphCap.Disabled() {
+		// Cursor secret empty or missing -> typed runtime-disabled
+		// (fail-soft). Families are PRESENT behind the 503 responder; no
+		// cursor material is resolved. Value-safe diagnostics only.
+		deps.GraphCapability = graphCap
+		act := graphCap.Activation()
+		slog.Warn("graphapi capability disabled (fail-soft); graph families mounted behind the typed 503 capability_disabled responder",
+			"code", act.Code,
+			"secret_presence", string(act.SecretPresence))
 	} else if secret, err := gaCfg.LoadCursorSecret(); err != nil {
-		slog.Warn("graphapi cursor secret unavailable; /api/topics + /api/people will not be mounted", "error", err)
+		// Defensive: ResolveActivation classified the secret present but
+		// the read failed. Degrade to the fail-soft 503 responder rather
+		// than leaving nil handlers (a silent 404).
+		deps.GraphCapability = graphapi.NewGraphCapability(graphapi.Config{})
+		slog.Warn("graphapi cursor secret read failed after enabled classification; degrading to the fail-soft 503 capability_disabled responder", "error", err)
 	} else if codec, err := graphapi.NewCursorCodec(secret); err != nil {
-		slog.Warn("graphapi cursor codec construction failed; /api/topics + /api/people will not be mounted", "error", err)
+		// Present-enabler codec construction failure -> fail-soft 503
+		// responder (design.md: never a silent nil-handler absence, never
+		// a boot refusal).
+		deps.GraphCapability = graphapi.NewGraphCapability(graphapi.Config{})
+		slog.Warn("graphapi cursor codec construction failed; degrading to the fail-soft 503 capability_disabled responder", "error", err)
 	} else {
+		// ENABLED: wire the live PostgreSQL-backed handlers and carry the
+		// enabled capability. router.go mounts the full manifest and the
+		// Guard is a transparent passthrough.
 		limits := gaCfg.Limits()
+		deps.GraphCapability = graphCap
 		deps.TopicsHandlers = graphapi.NewTopicsHandlers(svc.pg.Pool, limits, codec)
 		deps.PeopleHandlers = graphapi.NewPeopleHandlers(svc.pg.Pool, limits, codec)
 		deps.PlacesHandlers = graphapi.NewPlacesHandlers(svc.pg.Pool, limits, codec)
 		deps.TimeHandlers = graphapi.NewTimeHandlers(svc.pg.Pool, limits)
 		deps.EdgesHandlers = graphapi.NewEdgesHandlers(svc.pg.Pool, limits, codec)
-		slog.Info("graphapi handlers wired", "list_default", limits.ListDefault, "list_max", limits.ListMax)
+		slog.Info("graphapi handlers wired (capability enabled)", "list_default", limits.ListDefault, "list_max", limits.ListMax)
 	}
 
 	// Spec 044 Scope 02 — wire the per-user bearer-auth subsystem.
