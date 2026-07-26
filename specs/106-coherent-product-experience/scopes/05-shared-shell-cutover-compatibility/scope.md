@@ -106,7 +106,7 @@ Run auth, native Search, HTMX read/mutation, Digest, Assistant, Wiki, Card PRG, 
 - [x] XP106-05-U passes with evidence in `report.md#xp106-05-u`.
 - [ ] XP106-05-I passes with evidence in `report.md#xp106-05-i`.
 - [ ] XP106-05-A passes with evidence in `report.md#xp106-05-a`.
-- [ ] XP106-05-C passes with evidence in `report.md#xp106-05-c`.
+- [x] XP106-05-C passes with evidence in `report.md#xp106-05-c`.
 - [ ] UX-E2E-106-001 passes with evidence in `report.md#ux-e2e-106-001`.
 - [ ] UX-E2E-106-002 passes with evidence in `report.md#ux-e2e-106-002`.
 - [ ] UX-E2E-106-003 passes with evidence in `report.md#ux-e2e-106-003`.
@@ -120,7 +120,7 @@ Run auth, native Search, HTMX read/mutation, Digest, Assistant, Wiki, Card PRG, 
 
 - [ ] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior in the shell cutover (one-session reach across renderers, expired-session clear-before-recovery, deep-link compatibility or explicit redirect) exist and pass — see `report.md#xp106-05-a`.
 - [ ] Broader E2E regression suite passes with no cutover-induced regression across server, PWA, and Card renderers — see `report.md#ux-e2e-106-008`.
-- [ ] Consumer impact sweep is completed for the shell cutover and zero stale first-party references remain across server/PWA/Card navigation, breadcrumbs, redirects, deep links, native forms, HTMX targets, request clients, manifest shortcuts, service worker, and stable hooks — see `report.md#xp106-05-c`.
+- [x] Consumer impact sweep is completed for the shell cutover and zero stale first-party references remain across server/PWA/Card navigation, breadcrumbs, redirects, deep links, native forms, HTMX targets, request clients, manifest shortcuts, service worker, and stable hooks — see `report.md#xp106-05-c`.
 
 #### Build Quality Gate
 
