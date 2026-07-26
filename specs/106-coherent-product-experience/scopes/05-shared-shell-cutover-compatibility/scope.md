@@ -91,6 +91,7 @@ Run auth, native Search, HTMX read/mutation, Digest, Assistant, Wiki, Card PRG, 
 #### Core Outcomes
 
 - [ ] SCN-106-001, SCN-106-002, and SCN-106-015 hold through one generated shell, one session, truthful recovery, and complete deep-link compatibility.
+- [ ] SCN-106-001: one credential login per identity reaches every permitted legacy, HTMX, PWA, JSON, Card, and role-appropriate admin route across the product without a second credential, and a daily user still receives 403 rather than a login loop on operator-only routes.
 - [ ] Desktop, tablet, 390px, and 320px navigation remains stable, named, tooltip-complete, touch-safe, non-overlapping, and authorization-correct.
 - [ ] Old authorities and stale targets are removed only after every consumer and canary passes; rollback remains atomic and non-destructive.
 

@@ -71,6 +71,7 @@ The state/presentation package and adapters roll back atomically. Rollback never
 #### Core Outcomes
 
 - [x] SCN-106-004 optional state, SCN-106-005 unavailable dependency, and SCN-106-010 mutation feedback remain exact, independent, and owner-derived. → Evidence: [report.md#xp106-03-u](report.md#xp106-03-u)
+- [ ] SCN-106-005: an enabled capability whose provider registry has no usable working provider is classified Unavailable or broken with a useful explanation, and user-facing flows do not fabricate results or display a normal ready state.
 - [x] Failure cannot become empty or success; route/flag/health cannot become availability; partial cannot become complete. → Evidence: [report.md#xp106-03-u](report.md#xp106-03-u)
 - [ ] Unified 401 privacy clear, 403 access denial, focus, announcements, pending locks, read-back, and recovery actions behave equivalently across renderers.
 - [ ] Shared-state canaries, privacy checks, and rollback protect every high-fan-out consumer.
