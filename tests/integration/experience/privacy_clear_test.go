@@ -70,7 +70,7 @@ func TestSessionLossClearsProtectedPresentationAndSafeStatesExposeNoSensitiveDet
 	// closedVocabulary is every legitimate string an AuthPresentation may emit:
 	// the closed ViewState values and the closed protected-target values.
 	closedVocabulary := map[string]bool{
-		"": true,
+		"":                                  true,
 		string(experience.ViewUnauthorized): true, string(experience.ViewAccessDenied): true,
 		string(experience.TargetProtectedDOM): true, string(experience.TargetAccessibleLabels): true,
 		string(experience.TargetInMemoryBusinessState): true, string(experience.TargetPendingWork): true,

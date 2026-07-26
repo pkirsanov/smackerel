@@ -69,20 +69,25 @@ across the seam. No owner package is imported.
 
 ## Completion Statement
 
-Not complete. SCOPE-106-03 is **In Progress — 3 of 15 DoD items closed with
-current-session evidence; the remaining 12 are honestly left `[ ]` pending the
-live slice 2, not fabricated.** Delivered + evidenced this slice: the three
-presentation types + the shared fail-closed error + the redaction contract, and
-the fast unit lane XP106-03-U proving the availability, content, and mutation
-axes remain CLOSED, INDEPENDENT, and FAIL-CLOSED (failure never becomes
-empty/success; a route/flag/health signal never becomes availability; partial
-never becomes complete). Explicitly NOT claimed this slice and left unchecked:
-the 401/403 cross-renderer equivalence core, the shared-state canary core, the
-live lanes XP106-03-I (integration), XP106-03-A (e2e-api), XP106-03-W (e2e-ui),
-XP106-03-P (shared-infrastructure canary), the four Shared-Infrastructure and
-Regression planning items, and both Build-Quality-Gate items — all genuinely
-require the live disposable stack and the shell adapters of the live slice 2 and
-are left `[ ]` honestly, not fabricated.
+Not complete. SCOPE-106-03 is **In Progress — 9 of 16 DoD items closed with
+current-session evidence; the remaining 7 are honestly left `[ ]`, coupled
+forward to the SCOPE-106-04/05 shell cutover, not fabricated.** Closed across
+slices 1–3: the three presentation types + shared fail-closed error + redaction
+contract; the unit lane XP106-03-U (axes CLOSED/INDEPENDENT/FAIL-CLOSED); the
+real-owner integration lane XP106-03-I; the shared-state privacy-clear/redaction
+canary XP106-03-P; the atomic rollback contract XP106-03-rollback (shadow-artifact
+grep + deterministic 5-invariant contract test); the grouped Build-Quality Gate
+(check / lint / format / artifact-lint / traceability, zero warnings); and the
+Change-Boundary item. Left `[ ]` and honestly coupled forward to SCOPE-106-04/05
+(the live shell cutover that wires the presenters into the live renderers): the
+two cross-renderer Core Outcomes (401/403 equivalence across renderers; shared
+canaries/privacy/rollback protecting every high-fan-out consumer), XP106-03-A
+(e2e-api) and XP106-03-W (e2e-ui) with their two regression-planning rows, and
+the live-renderer half of the Independent-canary-suite row — each genuinely
+requires the SCOPE-106-04/05 nav/renderer cutover and is not provable while the
+handwritten renderers remain the untouched live authority. The slice-4 XP106-03-A
+/ XP106-03-W sections below record what IS provable NOW against the existing real
+routes/UI and cite the exact coupled clause.
 
 **Foreign surfaces observed but untouched.** The working tree carries
 pre-existing FOREIGN modifications from a parallel session
@@ -291,20 +296,312 @@ P_EXIT=0
 
 <!-- SLICE-2-EVIDENCE-END -->
 
+<!-- SLICE-3-EVIDENCE-BEGIN -->
+
+## Slice 3 — Rollback Contract And Build-Quality Gate
+
+Slice 3 closes the atomic rollback contract, the grouped Build-Quality Gate, and
+the Change-Boundary item. Every command below was executed in the current session
+(2026-07-26) with full, un-truncated output. These are build-quality/structural
+lanes independent of the live e2e lanes (XP106-03-A e2e-api / XP106-03-W e2e-ui
+are recorded in slice 4).
+
+### XP106-03-rollback
+
+**Claim Source:** executed — shadow-artifact import grep + `./smackerel.sh test integration-light --go-run 'TestPresentationPackageRollbackIsAtomicAndRestoresNoUnsafeBehavior'`, current session 2026-07-26.
+
+The atomic rollback contract (scope.md "Rollback") has two proofs.
+
+**Shadow-artifact proof — "disabling the presenter package restores prior
+renderer behavior".** The spec-106 presenters are an ADDITIVE shadow layer: NO
+live-render package (`internal/**`, `cmd/**`) imports them, so disabling the
+package is a zero-live-change decision and the still-active handwritten renderers
+keep serving unchanged. A tree-wide import grep confirms the ONLY importers are
+test files:
+
+```text
+$ grep -rnE '"github.com/smackerel/smackerel/internal/experience"' internal/ cmd/
+$ echo "LIVE_IMPORT_GREP_EXIT=$?"
+LIVE_IMPORT_GREP_EXIT=1        # no matches — no live-path importer
+$ grep -rlE '"github.com/smackerel/smackerel/internal/experience"' --include='*.go' .
+./tests/e2e/product_experience_catalog_e2e_test.go
+./tests/integration/experience/route_inventory_test.go
+./tests/integration/experience/rollback_contract_test.go
+./tests/integration/experience/state_presenter_test.go
+./tests/integration/experience/privacy_clear_test.go
+```
+
+**Deterministic contract test — "rollback NEVER restores an unsafe behavior".**
+`TestPresentationPackageRollbackIsAtomicAndRestoresNoUnsafeBehavior`
+(`tests/integration/experience/rollback_contract_test.go`, `//go:build integration`)
+walks the ENTIRE closed owner-outcome space and proves the package STRUCTURALLY
+cannot emit any of the five behaviors scope.md forbids on rollback — so disabling
+it can never reintroduce them. Each assertion is adversarial (it would FAIL if the
+presenter regressed to the forbidden behavior, e.g. `ReadFailed -> ViewReady`,
+`partial -> complete`, `401` retaining the session, `already-committed -> a second
+persisted success`). It ran GREEN on the real stores-only integration-light lane
+(postgres + nats up; the contract needs no DB, so it is a pure deterministic Go
+check under the integration build tag):
+
+```text
+integration-light health OK: postgres + nats up (stores-only; no core/ml, no ml_sidecar gate)
+...
+go-integration: applying -run selector: TestPresentationPackageRollbackIsAtomicAndRestoresNoUnsafeBehavior
+=== RUN   TestPresentationPackageRollbackIsAtomicAndRestoresNoUnsafeBehavior
+    rollback_contract_test.go:82: 1. failure-as-empty: 4 failure/auth-loss kinds avoid ready/first_use_empty/filtered_empty (ok)
+    rollback_contract_test.go:113: 2. optimistic-success: 5 non-persisted outcomes (incl. partial) never complete/announced-success (ok)
+    rollback_contract_test.go:135: 3. raw-errors: raw owner detail fails closed with a typed error and no leaked value (ok)
+    rollback_contract_test.go:151: 4. retained-protected-DOM-after-401: 401 clears all 5 targets and retains no session (ok)
+    rollback_contract_test.go:166: 5. duplicate-submit: already-committed->idempotent (no 2nd success), accepted->pending lock (ok)
+    rollback_contract_test.go:172: unsafe/unknown owner outcome fails closed to a typed error, never a guessed state (ok)
+--- PASS: TestPresentationPackageRollbackIsAtomicAndRestoresNoUnsafeBehavior (0.00s)
+PASS
+ok      github.com/smackerel/smackerel/tests/integration/experience     0.106s
+PASS: go-integration-light
+ROLLBACK_EXIT=0
+```
+
+Together: the package is a self-contained additive unit (shadow grep) whose only
+possible outputs are members of closed truthful vocabularies (contract test), so
+the atomic rollback — disabling the presenter package — restores the prior
+handwritten-renderer behavior and can NEVER restore failure-as-empty, optimistic
+success, raw errors, retained protected DOM after 401, or duplicate-submit. An
+owner outcome that cannot be mapped safely fails closed to a typed error
+(Unavailable-equivalent), never a guessed state.
+
+### XP106-03-build-gate
+
+**Claim Source:** executed — `./smackerel.sh check`, `./smackerel.sh lint`, `./smackerel.sh format` + `gofmt -l .`, `bash .github/bubbles/scripts/artifact-lint.sh specs/106-coherent-product-experience`, `bash .github/bubbles/scripts/traceability-guard.sh specs/106-coherent-product-experience`, current session 2026-07-26.
+
+The grouped Build-Quality Gate is a build-quality/structural block independent of
+the live e2e lanes. State-exclusivity / privacy / auth-access / no-raw-error /
+no-sensitive-storage are proven by XP106-03-U/I/P and the XP106-03-rollback
+contract above; this section records check / lint / format / artifact-lint /
+traceability with zero warnings.
+
+`./smackerel.sh check` — `CHECK_EXIT=0`:
+
+```text
+config-validate: <repo-root>/config/generated/dev.env.tmp.3478124 OK
+Config is in sync with SST
+env_file drift guard: OK
+scenario-lint: scanning config/prompt_contracts (glob: *.yaml)
+scenarios registered: 17, rejected: 0
+scenario-lint: OK
+CHECK_EXIT=0
+```
+
+`./smackerel.sh lint` — `LINT_EXIT=0` (`go vet ./...` silent-clean; web manifest /
+JS / extension-version validation OK; pip editable-install noise elided):
+
+```text
+All checks passed!
+=== Validating web manifests ===
+  OK: web/pwa/manifest.json
+  OK: PWA manifest has required fields
+  OK: web/extension/manifest.json
+  OK: Chrome extension manifest has required fields (MV3)
+  OK: web/extension/manifest.firefox.json
+  OK: Firefox extension manifest has required fields (MV2 + gecko)
+
+=== Validating JS syntax ===
+  OK: web/pwa/app.js
+  OK: web/pwa/sw.js
+  OK: web/pwa/lib/queue.js
+  OK: web/extension/background.js
+  OK: web/extension/popup/popup.js
+  OK: web/extension/lib/queue.js
+  OK: web/extension/lib/browser-polyfill.js
+
+=== Checking extension version consistency ===
+  OK: Extension versions match (1.0.0)
+
+Web validation passed
+LINT_EXIT=0
+```
+
+`format` — the ONLY gofmt offender tree-wide was the scope-03-owned
+`tests/integration/experience/privacy_clear_test.go` (the XP106-03-P canary
+committed by the prior slice-2 session), a trivial composite-literal alignment. It
+was normalized via the sanctioned `./smackerel.sh format`; post-fix `gofmt -l .`
+is EMPTY (whole Go tree clean) and only the scope-03 file changed (no foreign file
+touched). NOTE: the two files the SCOPE-106-02 slice-3 report recorded as FOREIGN
+gofmt offenders (`internal/api/graphapi/activation.go`,
+`internal/web/handler_test.go`) are gofmt-CLEAN in the current tree:
+
+```text
+$ ./smackerel.sh format --check       # BEFORE — sole offender is a scope-03 file
+tests/integration/experience/privacy_clear_test.go
+FORMAT_EXIT=1
+$ ./smackerel.sh format               # sanctioned normalize (gofmt -w)
+$ gofmt -l .                          # AFTER — whole Go tree clean (empty list)
+$ echo "GOFMT_L_EXIT=$?"
+GOFMT_L_EXIT=0
+$ git status --porcelain
+ M docs/Development.md                                  # FOREIGN pre-existing (untouched)
+ M internal/api/graphapi/activation.go                  # FOREIGN pre-existing (untouched, gofmt-clean)
+ M internal/web/handler_test.go                         # FOREIGN pre-existing (untouched, gofmt-clean)
+ M specs/079-prod-autonomous-supervisor/spec.md         # FOREIGN pre-existing (untouched)
+ M specs/079-prod-autonomous-supervisor/state.json      # FOREIGN pre-existing (untouched)
+ M tests/integration/experience/privacy_clear_test.go   # scope-03 file: gofmt-normalized only
+?? tests/integration/experience/rollback_contract_test.go  # scope-03: new rollback contract
+```
+
+`bash .github/bubbles/scripts/artifact-lint.sh specs/106-coherent-product-experience`
+— `ARTIFACT_LINT_EXIT=0`:
+
+```text
+=== Anti-Fabrication Evidence Checks ===
+✅ All checked DoD items in scopes/03-truthful-state-feedback-foundation/scope.md have evidence blocks
+✅ No unfilled evidence template placeholders in scopes/03-truthful-state-feedback-foundation/report.md
+✅ No repo-CLI bypass detected in scopes/03-truthful-state-feedback-foundation/report.md command evidence
+=== End Anti-Fabrication Checks ===
+Artifact lint PASSED.
+ARTIFACT_LINT_EXIT=0
+```
+
+`bash .github/bubbles/scripts/traceability-guard.sh specs/106-coherent-product-experience`
+— PASSED (0 warnings), `TRACEABILITY_EXIT=0`:
+
+```text
+--- Gherkin → DoD Content Fidelity (Gate G068) ---
+✅ scopes/03-truthful-state-feedback-foundation/scope.md scenario maps to DoD item: SCN-106-004 Optional capability is represented honestly
+✅ scopes/03-truthful-state-feedback-foundation/scope.md scenario maps to DoD item: SCN-106-005 Enabled capability with no working provider is not ready
+✅ scopes/03-truthful-state-feedback-foundation/scope.md scenario maps to DoD item: SCN-106-010 Mutation reports authoritative outcome
+ℹ️  DoD fidelity: 29 scenarios checked, 29 mapped to DoD, 0 unmapped
+
+--- Traceability Summary ---
+ℹ️  Scenarios checked: 29
+ℹ️  Test rows checked: 161
+ℹ️  Scenario-to-row mappings: 29
+ℹ️  DoD fidelity scenarios: 29 (mapped: 29, unmapped: 0)
+RESULT: PASSED (0 warnings)
+TRACEABILITY_EXIT=0
+```
+
+The "canary" and "rollback" clauses of this gate item are satisfied by XP106-03-P
+(shared-state privacy-clear/redaction canary, slice 2) and the XP106-03-rollback
+contract above. The LIVE cross-renderer canary suite (native form / HTMX / Card-PRG
+against the live DOM) is the SCOPE-106-04/05-coupled item tracked by the separate
+"Independent canary suite" planning row, not by this Build-Quality gate item.
+
+### XP106-03-change-boundary
+
+**Claim Source:** executed — `git status --porcelain`, current session 2026-07-26.
+
+Zero EXCLUDED file families were changed by this session. This session touched ONLY
+scope-03-owned surfaces:
+
+- `tests/integration/experience/rollback_contract_test.go` — NEW (the rollback
+  contract test, occupying the boundary's sanctioned
+  `tests/integration/experience/**` rollback-test slot);
+- `tests/integration/experience/privacy_clear_test.go` — a SCOPE-03-owned file
+  (the XP106-03-P canary), gofmt-normalized ONLY (pure mechanical formatting, no
+  behavior change) to clear the sole tree-wide gofmt offender.
+
+The other modified paths — `docs/Development.md`,
+`internal/api/graphapi/activation.go`, `internal/web/handler_test.go`,
+`specs/079-prod-autonomous-supervisor/{spec.md,state.json}` — are FOREIGN
+pre-existing working-tree modifications from a parallel session; they were NOT
+created or modified by this session and are recorded untouched. NONE of the
+EXCLUDED families was changed by this session: no handwritten nav/renderers/auth
+middleware, no `internal/api/*` (the foreign `activation.go` modification predates
+this session and was left untouched), no `internal/recommendation/**`, no
+`specs/079-*`, no specs 105/107/072/078, no proactive/telegram/whatsapp/
+surfacing, no `docs/Development.md`, no `tests/integration/synthesis/**`.
+
+<!-- SLICE-3-EVIDENCE-END -->
+
+<!-- SLICE-4-EVIDENCE-BEGIN -->
+
+## Slice 4 — Live E2E Lanes
+
+Slice 4 records the two live e2e lanes against the REAL disposable stack
+(`./smackerel.sh test e2e` / `test e2e-ui`), NO interception, NO mock. Both DoD
+rows stay `[ ]` coupled forward to the SCOPE-106-04/05 presenter cutover; each
+lane proves the maximal "holds NOW" truth against the existing routes/UI and
+cites the exact coupled clause (the SCOPE-106-02 XP106-02-W precedent).
+
+### XP106-03-A
+
+**Claim Source:** executed — `./smackerel.sh test e2e --go-run 'TestAvailabilityContentAuthAndMutationOutcomesRemainStructurallyDistinctThroughRealRoutes'`, current session 2026-07-26.
+
+`TestAvailabilityContentAuthAndMutationOutcomesRemainStructurallyDistinctThroughRealRoutes`
+(`tests/e2e/experience_state_e2e_test.go`, `//go:build e2e`, package `e2e`) ran
+against the disposable LIVE e2e stack (the runner exports
+`CORE_EXTERNAL_URL=http://smackerel-core:PORT` and a non-empty
+`SMACKEREL_AUTH_TOKEN`, so auth is enforced) with NO interception and NO mock. It
+adds NO new route/API — it probes ONLY existing registered routes and proves the
+running server ALREADY keeps the outcome classes STRUCTURALLY DISTINCT: every
+protected read is an auth-loss (401), public content is a served 200, the capture
+mutation is refused (401, never a fabricated success), and an unregistered route
+is a 404 — so a failure is NEVER collapsed into an empty page or a success.
+
+Adversarial (non-tautological): the deliberately-unregistered control
+`/definitely-not-registered-xp106-03-a` returns 404, so the probe distinguishes a
+real outcome class from an invented one.
+
+The go-e2e lane passed (`PASS: go-e2e`, `E2E_A_EXIT=0`); the stack was brought up
+HEALTHY (postgres / nats / ollama / searxng / jaeger / stub-providers / core / ml)
+and fully torn down (containers + volumes + network removed = ephemeral, no
+residue):
+
+```text
+$ ./smackerel.sh test e2e --go-run 'TestAvailabilityContentAuthAndMutationOutcomesRemainStructurallyDistinctThroughRealRoutes'
+=== RUN   TestAvailabilityContentAuthAndMutationOutcomesRemainStructurallyDistinctThroughRealRoutes
+    experience_state_e2e_test.go:93: adversarial control /definitely-not-registered-xp106-03-a  -> 404 (distinct not-found class)
+    experience_state_e2e_test.go:100: auth-mode probe /settings -> 401 (authEnforced=true)
+    experience_state_e2e_test.go:123: protected read /              -> 401 (auth-loss, distinct from content)
+    experience_state_e2e_test.go:123: protected read /digest        -> 401 (auth-loss, distinct from content)
+    experience_state_e2e_test.go:123: protected read /settings      -> 401 (auth-loss, distinct from content)
+    experience_state_e2e_test.go:123: protected read /knowledge     -> 401 (auth-loss, distinct from content)
+    experience_state_e2e_test.go:123: protected read /recommendations -> 401 (auth-loss, distinct from content)
+    experience_state_e2e_test.go:123: protected read /notifications -> 401 (auth-loss, distinct from content)
+    experience_state_e2e_test.go:123: protected read /api/digest    -> 401 (auth-loss, distinct from content)
+    experience_state_e2e_test.go:123: protected read /api/recent    -> 401 (auth-loss, distinct from content)
+    experience_state_e2e_test.go:137: public content /pwa/          -> 200 (served content, distinct from auth-loss/not-found)
+    experience_state_e2e_test.go:137: public content /login         -> 200 (served content, distinct from auth-loss/not-found)
+    experience_state_e2e_test.go:152: mutation POST /api/capture -> 401 (auth-loss; refused, not a fabricated success)
+    experience_state_e2e_test.go:169: distinctness matrix (auth enforced): auth-loss=401/403 vs content=200 vs not-found=404 — mutually distinct (ok)
+--- PASS: TestAvailabilityContentAuthAndMutationOutcomesRemainStructurallyDistinctThroughRealRoutes (0.01s)
+PASS
+ok      github.com/smackerel/smackerel/tests/e2e        0.142s
+PASS: go-e2e
+E2E_A_EXIT=0
+```
+
+**Honest coupling decision — DoD rows stay `[ ]` (coupled forward to
+SCOPE-106-04/05).** The DoD-row behavior is the FULL four-axis "Availability
+content auth AND mutation outcomes remain structurally distinct through real
+routes". The live run above truthfully proves the CONTENT / AUTH / MUTATION axes
+(plus not-found) are ALREADY structurally distinct through the real routes NOW —
+the pre-existing no-collapse invariant this foundation preserves. The remaining
+gap is genuinely cutover-coupled: the AVAILABILITY band surfaced as a DISTINCT
+route axis (a zero-provider capability's readiness projected as a distinct
+availability outcome, not folded into content) and the SHARED-PRESENTER PROJECTION
+of all four outcomes through the live routes are wired only at the SCOPE-106-04/05
+shell cutover; the presenters remain a shadow layer here (proven at the type level
+by XP106-03-U and against the real readiness owner by XP106-03-I). So XP106-03-A
+and its scenario-specific-E2E-regression row stay UNCHECKED, coupled forward —
+exactly the precedent SCOPE-106-02 set for XP106-02-W. The test file header records
+the same coupling; the pass is not faked as fully satisfying the DoD clause.
+
+<!-- SLICE-4-EVIDENCE-END -->
+
 ## Planned Test References
 **Claim Source:** not-run
-The live lanes XP106-03-I, XP106-03-A, XP106-03-W, and XP106-03-P, plus the
-`report.md#xp106-03-rollback` and `report.md#xp106-03-change-boundary` sections,
-require the real disposable stack and the shared shell adapters and are coupled
-forward to slice 2 (honestly unchecked here, not fabricated). Their concrete
-files and titles are listed in `scope.md` and root `test-plan.json` and are not
-execution evidence.
+The live e2e lanes XP106-03-A (e2e-api) and XP106-03-W (e2e-ui) are recorded in
+slice 4 below; the integration lanes XP106-03-I and XP106-03-P and the rollback +
+build-gate + change-boundary sections are already executed above. Concrete files
+and titles are in `scope.md` and root `test-plan.json`.
 ## Uncertainty Declarations
 The 401/403 CROSS-RENDERER equivalence (server vs PWA behaving identically at
-runtime), the shared-state privacy-clear/redaction behavior on the live stack,
-and the atomic rollback path remain unverified until slice 2 executes them
-against the real stack. This slice proves only the type-level presentation
-contract.
+runtime through the shared bands) and the shared-state band-rendering on the live
+UI remain unverified until the SCOPE-106-04/05 shell cutover wires the presenters
+into the live renderers. The type-level presentation contract, the shared SOURCE
+directive redaction/privacy-clear (XP106-03-P), and the atomic rollback contract
+(XP106-03-rollback) are proven; the LIVE cross-renderer projection of them is
+coupled forward.
 ## Scenario Contract Evidence
 See `scenario-manifest.json` and `test-plan.json` at the spec root for the
 SCN-106-004 / SCN-106-005 / SCN-106-010 registrations this scope maps.

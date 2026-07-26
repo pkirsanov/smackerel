@@ -89,9 +89,9 @@ The state/presentation package and adapters roll back atomically. Rollback never
 - [ ] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior in this shared-state foundation (availability/content/auth/mutation exclusivity, 401 privacy clear, 403 denial, duplicate-submit prevention) exist and pass — see `report.md#xp106-03-a`.
 - [ ] Broader E2E regression suite passes with no shared-state-foundation-induced regression across the server and PWA renderers — see `report.md#xp106-03-w`.
 - [ ] Independent canary suite for shared fixture/bootstrap contracts passes before broad suite reruns (legacy authorized empty read, PWA 401 privacy clear, 403 operator denial, native form mutation, HTMX mutation, Card PRG mutation) — see `report.md#xp106-03-p`.
-- [ ] Rollback or restore path for shared infrastructure changes is documented and verified (atomic state/presentation package pointer swap that never restores failure-as-empty, optimistic success, raw errors, or retained protected DOM after 401) — see `report.md#xp106-03-rollback`.
+- [x] Rollback or restore path for shared infrastructure changes is documented and verified (atomic state/presentation package pointer swap that never restores failure-as-empty, optimistic success, raw errors, or retained protected DOM after 401) — see `report.md#xp106-03-rollback`. → Evidence: [report.md#xp106-03-rollback](report.md#xp106-03-rollback)
 
 #### Build Quality Gate
 
-- [ ] State exclusivity, privacy, auth/access semantics, no-raw-error, no-sensitive-storage, check, lint, format, artifact lint, traceability, canary, rollback, and directly affected security/testing documentation checks pass with zero warnings.
-- [ ] Change Boundary is respected and zero excluded file families were changed — see `report.md#xp106-03-change-boundary`.
+- [x] State exclusivity, privacy, auth/access semantics, no-raw-error, no-sensitive-storage, check, lint, format, artifact lint, traceability, canary, rollback, and directly affected security/testing documentation checks pass with zero warnings. → Evidence: [report.md#xp106-03-build-gate](report.md#xp106-03-build-gate)
+- [x] Change Boundary is respected and zero excluded file families were changed — see `report.md#xp106-03-change-boundary`. → Evidence: [report.md#xp106-03-change-boundary](report.md#xp106-03-change-boundary)
