@@ -9,18 +9,26 @@ unit-verifiable HEALTH-TRUTH slice** of SCOPE-04 was implemented by
 `bubbles.implement`: the pure, database-free `DeriveSynthesisHealth` mapping that
 turns a synthesis persistence **outcome** into a truthful health verdict, plus
 real Go unit tests. All live-DB / integration / e2e work (the durable
-transactional persistence rows and the `/api/health` wiring) is **deferred** and
-the packet remains `blocked` on it. No git, deployment, or production mutation
-occurred.
+transactional persistence rows) was **deferred** on 2026-07-25. On 2026-07-26
+`bubbles.implement` WIRED that mapping into the live `/api/health` path
+(`internal/api/health.go::getCachedIntelligenceHealth`), replacing the
+never-run/probe-error → "up" logic with a `SynthesisPersistenceOutcome` routed
+through `DeriveSynthesisHealth`, and PROVED it live (RED→GREEN) with a new
+real-stack integration test (`tests/integration/synthesis/health_test.go`). The
+packet remains `blocked` on the deferred durable transactional-persistence
+scopes (SCOPE-01..03) and the remaining SCOPE-04 live API/alert/telemetry rows.
+No git, deployment, or production mutation occurred.
 
 ## Completion Statement
 
-Non-terminal. Packet status is `blocked`. Only the pure health-truth
-determination (`internal/intelligence/synthesis_health.go` + its unit tests) is
-implemented and unit-verified. No SCOPE-04 Definition-of-Done item is checked:
-every SCOPE-04 DoD row is a live-system (integration/e2e) row that requires the
-disposable PostgreSQL stack, which was intentionally not brought up in this
-invocation. No certification is claimed.
+Non-terminal. Packet status is `blocked`. The disjoint HEALTH-TRUTH slice is now
+COMPLETE and live-proven: the pure `DeriveSynthesisHealth` mapping (2026-07-25)
+PLUS its live wiring into `/api/health` (2026-07-26), verified by the
+`T004-05-HEALTH` real-stack integration test (RED→GREEN; the disposable stack
+was torn down on exit). Exactly one SCOPE-04 Test-Evidence DoD item
+(`T004-05-HEALTH`) is checked with current-session raw evidence. All durable
+transactional-persistence rows (SCOPE-01..03) and the remaining SCOPE-04 live
+API/alert/telemetry rows remain deferred; no certification is claimed.
 
 ## Bug Reproduction - Before Fix
 
@@ -141,25 +149,126 @@ Web validation passed
 LINT_EXIT=0
 ```
 
-## Deferred (Live-DB) Rows — NOT attempted this invocation
+---
 
-These SCOPE-04 (and prerequisite SCOPE-01..03) rows require the disposable
-PostgreSQL Docker stack, which a concurrent agent was using for its own e2e run;
-they are deferred and are the blocking reason:
+## 2026-07-26 — /api/health Wiring + Live Health-Truth Proof (bubbles.implement)
 
-- `T004-05-HEALTH` — `tests/integration/synthesis/health_test.go` (live never-run/probe-failure health).
+### Wiring — internal/api/health.go
+
+- **Claim Source:** executed (edited this session, 2026-07-26).
+- The buggy `getCachedIntelligenceHealth` slow-path mapping (freshness-probe
+  error → "up"; never-run epoch sentinel → "up") is REPLACED by routing the
+  queryable synthesis run-state through the single HEALTH-TRUTH authority
+  `intelligence.DeriveSynthesisHealth`:
+  - `GetLastSynthesisTime` query error ⇒ `SynthesisPersistenceOutcome{Phase: PhaseProbeError}` ⇒ intelligence status `"down"`.
+  - epoch/zero sentinel (no `synthesis_insights` row) ⇒ `{Phase: PhaseNoRun}` ⇒ `"down"`.
+  - a real persisted last-synthesis timestamp ⇒ `{Phase: PhaseCommitted, ReadBack: ReadBackOK, Output: OutputKindFull, Stale: since(last) > 48h}` ⇒ `"up"` when fresh, `"stale"` when older than the freshness budget.
+- The `DeriveSynthesisHealth` pure mapping is UNCHANGED (reused, NOT
+  reimplemented). The TTL cache, the nil-pool "down" branch, and the
+  alert-delivery probe are preserved. Added const
+  `intelligenceSynthesisFreshnessBudget = 48 * time.Hour` (the preserved
+  threshold). No `internal/` package was added.
+
+### Verify re-run (this session, 2026-07-26)
+
+- `./smackerel.sh check` → `CHECK_EXIT=0`.
+- `./smackerel.sh lint` → `LINT_EXIT=0` ("All checks passed!" + "Web validation passed").
+- `./smackerel.sh test unit --go` → the two target packages pass with NO
+  regression: `ok github.com/smackerel/smackerel/internal/api 5.446s` and
+  `ok github.com/smackerel/smackerel/internal/intelligence (cached)`.
+
+  The suite-level `UNIT_EXIT=1` is an ORTHOGONAL failure, NOT introduced by this
+  change: `internal/docfreshness` `TestDocFreshness_AllInternalPackagesDocumented`
+  reports `internal/acceptance` (tracked at HEAD, undocumented) and
+  `internal/experience` (a CONCURRENT untracked package) missing from
+  `docs/Development.md`. This change added ZERO new `internal/` package (only
+  `internal/api/health.go` was edited); fixing docfreshness requires editing
+  `docs/Development.md`, a forbidden/concurrent file for this packet.
+
+```
+ok      github.com/smackerel/smackerel/internal/api     5.446s
+--- FAIL: TestDocFreshness_AllInternalPackagesDocumented (0.00s)
+    doc_freshness_test.go:161: internal/ package freshness: 42 packages on disk, 2 undocumented
+    doc_freshness_test.go:163: docs/Development.md is STALE: 2 internal/ package(s) exist on disk but are undocumented: acceptance, experience
+FAIL    github.com/smackerel/smackerel/internal/docfreshness    0.011s
+ok      github.com/smackerel/smackerel/internal/experience      0.009s
+ok      github.com/smackerel/smackerel/internal/intelligence    (cached)
+ok      github.com/smackerel/smackerel/internal/web     0.220s
+UNIT_EXIT=1
+```
+
+### T004-05-HEALTH
+
+- **Test:** `tests/integration/synthesis/health_test.go` · `TestNeverRunAndProbeFailureAreNeverUp` (SCN-004-004-05).
+- **Claim Source:** executed (this session, 2026-07-26).
+- **RED** — against the UNWIRED `health.go` (stores-only `test integration-light`
+  lane, real Postgres): `RED_EXIT=1`. The live never-run assertion FAILED
+  because the buggy mapping reported `"up"`, proving the test is a genuine
+  adversarial live guard for the falsely-healthy bug.
+
+```
+=== RUN   TestNeverRunAndProbeFailureAreNeverUp
+    health_test.go:102: never-run: GET /api/health services.intelligence.status = "up"
+    health_test.go:104: FALSELY HEALTHY: never-run synthesis reported intelligence="up"; the pre-fix bug is present (want NOT "up")
+--- FAIL: TestNeverRunAndProbeFailureAreNeverUp (0.01s)
+FAIL
+FAIL    github.com/smackerel/smackerel/tests/integration/synthesis      0.136s
+FAIL: go-integration-light (exit=1)
+Running project-scoped integration-light stack teardown (exit cleanup, timeout 120s)...
+ Container smackerel-test-nats-1  Removed
+ Container smackerel-test-postgres-1  Removed
+RED_EXIT=1
+```
+
+- **GREEN** — against the WIRED `health.go` (full `./smackerel.sh test integration`
+  lane, real disposable stack, NO interception): `GREEN_EXIT=0`. Never-run and a
+  real freshness-probe error (closed pool) both report `"down"`; a fresh
+  persisted synthesis reports `"up"`.
+
+```
+=== RUN   TestNeverRunAndProbeFailureAreNeverUp
+    health_test.go:102: never-run: GET /api/health services.intelligence.status = "down"
+2026/07/26 02:45:09 WARN intelligence freshness check failed error="query last synthesis time: closed pool"
+2026/07/26 02:45:09 WARN alert delivery freshness check failed error="query stale pending alerts: closed pool"
+    health_test.go:120: probe-error: GET /api/health services.intelligence.status = "down"
+    health_test.go:147: fresh-success: GET /api/health services.intelligence.status = "up"
+--- PASS: TestNeverRunAndProbeFailureAreNeverUp (0.02s)
+PASS
+ok      github.com/smackerel/smackerel/tests/integration/synthesis      0.127s
+PASS: python-integration
+GREEN_EXIT=0
+```
+
+- **Stack hygiene:** the full stack was torn down by the lane's exit trap (all
+  `smackerel-test-*` containers, volumes, and network Removed). A defensive
+  `docker ps --filter name=smackerel` + `./smackerel.sh down` (`DOWN_EXIT=0`)
+  confirmed ZERO stray smackerel containers before and after.
+
+## Deferred (Live-DB) Rows — still blocking
+
+The `/api/health` truthful-status WIRING (`T004-05-HEALTH`) is now DONE and
+live-proven above. The remaining rows require the durable transactional
+persistence foundation (SCOPE-01..03) and are the blocking reason:
+
 - `T004-05-API` — `tests/e2e/synthesis_api_e2e_test.go` (live latest-API never-run).
 - `T004-06-ALERT` — `tests/integration/synthesis/alert_test.go` (live stale/failed alert clearing on verified recovery).
 - `T004-07-08-API`, `T004-09-AUTH`, `T004-09-TELEMETRY` — live API/auth/telemetry rows.
-- The `/api/health` wiring that derives a real `SynthesisPersistenceOutcome` from the durable run ledger and calls `DeriveSynthesisHealth` (depends on the SCOPE-01 durable persistence foundation).
+- The FULL DB-derivation of the outcome: deriving a `SynthesisPersistenceOutcome` from the durable run ledger (atomic insight+citation commit + per-insight/per-citation post-commit read-back) rather than the coarse `GetLastSynthesisTime`-based read-back wired now. This is the SCOPE-01 durable persistence foundation.
 - All SCOPE-01 (durable transactional persistence), SCOPE-02 (producers), SCOPE-03 (scheduler/retry), and SCOPE-05 (UI) rows.
 
 ## Uncertainty Declarations
 
-- The pure mapping is fully verified; its live wiring into `/api/health` and the
-  DB-derivation of the outcome are unverified here (deferred).
-- No live SQL counts, red/green integration output, or `/api/health` responses
-  were produced in this invocation.
+- The pure mapping AND its live wiring into `/api/health` are now fully verified
+  (RED→GREEN real-stack integration, `T004-05-HEALTH`). What remains unverified
+  (deferred) is the FULL DB-derivation of the outcome from the durable run
+  ledger — atomic insight+citation commit and the per-insight/per-citation
+  post-commit read-back gate (SCOPE-01..03). The wired derivation uses the
+  coarse read-back available today (a successful `GetLastSynthesisTime` query).
+- The suite-level `./smackerel.sh test unit --go` non-zero exit is an
+  ORTHOGONAL, pre-existing/concurrent `internal/docfreshness` failure
+  (`internal/acceptance` tracked-at-HEAD + `internal/experience` concurrent,
+  both undocumented in the forbidden `docs/Development.md`); this change added
+  no new `internal/` package and did not cause it.
 
 ## Scenario Contract Evidence
 

@@ -395,7 +395,7 @@ Scenario: SCN-004-004-09 Authorization and telemetry preserve privacy
 
 #### Test Evidence - One Item Per Test Plan Row
 
-- [ ] T004-05-HEALTH passes with current-session raw evidence in `report.md#t004-05-health`.
+- [x] T004-05-HEALTH passes with current-session raw evidence in `report.md#t004-05-health`.
 - [ ] T004-05-API passes with current-session raw evidence in `report.md#t004-05-api`.
 - [ ] T004-06-ALERT passes with current-session raw evidence in `report.md#t004-06-alert`.
 - [ ] T004-07-08-API passes with current-session raw evidence in `report.md#t004-07-08-api`.
