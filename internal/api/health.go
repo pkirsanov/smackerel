@@ -651,6 +651,12 @@ type intelligenceHealthSnapshot struct {
 	alertDeliveryStatus string
 }
 
+// intelligenceSynthesisFreshnessBudget is the age past which a durably-persisted
+// synthesis output is reported as stale by /api/health. Preserved from the
+// pre-fix 48h threshold; consumed when building the SynthesisPersistenceOutcome
+// that intelligence.DeriveSynthesisHealth maps to a truthful verdict.
+const intelligenceSynthesisFreshnessBudget = 48 * time.Hour
+
 // getCachedIntelligenceHealth returns a cached intelligence/alert-delivery
 // snapshot, refreshing when the TTL is exceeded. Mirrors getCachedKnowledgeHealth's
 // RWMutex+TTL pattern (BUG-021-002 — stabilize R13). Without caching, every
@@ -678,18 +684,33 @@ func (d *Dependencies) getCachedIntelligenceHealth(ctx context.Context) *intelli
 	if d.IntelligenceEngine.Pool == nil {
 		snapshot.intelligenceStatus = "down"
 	} else {
+		// Route the queryable synthesis run-state through the single HEALTH-TRUTH
+		// authority (intelligence.DeriveSynthesisHealth). This replaces the pre-fix
+		// mapping where a freshness-probe error or a never-run synthesis was
+		// reported "up", so a system that never produced — or could not be
+		// evaluated — no longer reports green (BUG-004-004 SCOPE-04). The richer
+		// per-insight/per-citation atomic post-commit read-back gate is the
+		// deferred durable-persistence slice; the coarse read-back available here
+		// is this successful GetLastSynthesisTime query, which reads a durable
+		// synthesis_insights row back.
 		lastSynthesis, err := d.IntelligenceEngine.GetLastSynthesisTime(ctx)
-		if err != nil {
+		var outcome intelligence.SynthesisPersistenceOutcome
+		switch {
+		case err != nil:
 			slog.Warn("intelligence freshness check failed", "error", err)
-			snapshot.intelligenceStatus = "up"
-		} else if lastSynthesis.IsZero() || lastSynthesis.Year() < 2000 {
-			// No synthesis has ever run (fresh install) — not stale, just not started.
-			snapshot.intelligenceStatus = "up"
-		} else if time.Since(lastSynthesis) > 48*time.Hour {
-			snapshot.intelligenceStatus = "stale"
-		} else {
-			snapshot.intelligenceStatus = "up"
+			outcome = intelligence.SynthesisPersistenceOutcome{Phase: intelligence.PhaseProbeError}
+		case lastSynthesis.IsZero() || lastSynthesis.Year() < 2000:
+			// No synthesis has ever persisted an insight (fresh install / never-run).
+			outcome = intelligence.SynthesisPersistenceOutcome{Phase: intelligence.PhaseNoRun}
+		default:
+			outcome = intelligence.SynthesisPersistenceOutcome{
+				Phase:    intelligence.PhaseCommitted,
+				ReadBack: intelligence.ReadBackOK,
+				Output:   intelligence.OutputKindFull,
+				Stale:    time.Since(lastSynthesis) > intelligenceSynthesisFreshnessBudget,
+			}
 		}
+		snapshot.intelligenceStatus = intelligence.DeriveSynthesisHealth(outcome).IntelligenceStatus
 
 		// Alert delivery pipeline freshness: pending alerts older than 30 minutes
 		// indicate the delivery sweep is not running (2 missed sweep cycles).
