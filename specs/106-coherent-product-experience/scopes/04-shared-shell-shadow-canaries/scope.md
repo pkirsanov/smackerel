@@ -41,9 +41,9 @@ Shadow adapters can be disabled by reverting the product release; active user be
 
 ## Change Boundary
 
-**Allowed:** server/PWA/Card shell adapters in shadow mode, content-free golden fixtures, settled hooks, comparison telemetry, independent canary tests.
+**Allowed file families:** server/PWA/Card shell adapters in shadow mode, content-free golden fixtures, settled hooks, comparison telemetry, independent canary tests.
 
-**Excluded:** user-visible navigation cutover, page-body redesign, domain behavior, route changes, readiness derivation, auth implementation, foreign packets, spec 079, deployment, knb, CCManager, and managed claims.
+**Excluded surfaces:** user-visible navigation cutover, page-body redesign, domain behavior, route changes, readiness derivation, auth implementation, foreign packets, spec 079, deployment, knb, CCManager, and managed claims.
 
 ## Test Plan
 
@@ -51,9 +51,9 @@ Shadow adapters can be disabled by reverting the product release; active user be
 |---|---|---|---|---|---|---|---|
 | XP106-04-U | Unit | `unit` | `internal/experience/renderer_projection_test.go` | SCN-106-003 | `TestServerPWAAndCardShadowAdaptersProduceIdenticalGoldenProjection` | `./smackerel.sh test unit --go` | No |
 | XP106-04-I | Integration | `integration` | `tests/integration/experience/shadow_projection_test.go` | SCN-106-003 | `TestShadowProjectionUsesRealSessionAudienceCatalogAndOwnerStatesWithoutCutover` | `./smackerel.sh test integration` | Yes |
-| XP106-04-A | E2E API regression | `e2e-api` | `tests/e2e/experience_shadow_e2e_test.go` | SCN-106-003 | `Shadow projection digests agree while real routes preserve current authorization and behavior` | `./smackerel.sh test e2e` | Yes |
+| XP106-04-A | Regression E2E (API) | `e2e-api` | `tests/e2e/experience_shadow_e2e_test.go` | SCN-106-003 | `Shadow projection digests agree while real routes preserve current authorization and behavior` | `./smackerel.sh test e2e` | Yes |
 | XP106-04-W | E2E UI regression | `e2e-ui` | `web/pwa/tests/coherent_shell_shadow.spec.ts` | SCN-106-003 | `shadow shell settles with exact parity and does not alter current navigation or page bodies` | `./smackerel.sh test e2e-ui` | Yes |
-| XP106-04-C | Shared-infrastructure canary | `e2e-ui` | `web/pwa/tests/coherent_foundation_canary.spec.ts` | SCN-106-003 | `shadow adapters preserve native Search HTMX read mutation Digest Assistant Wiki Card PRG PWA auth logout and service-worker contracts` | `./smackerel.sh test e2e-ui` | Yes |
+| XP106-04-C | Shared-infrastructure canary | `e2e-ui` | `web/pwa/tests/coherent_foundation_canary.spec.ts` | SCN-106-003 | `Canary: shadow adapters preserve native Search HTMX read mutation Digest Assistant Wiki Card PRG PWA auth logout and service-worker contracts` | `./smackerel.sh test e2e-ui` | Yes |
 | XP106-04-R | Rollback integration | `integration` | `tests/integration/experience/shell_rollback_test.go` | SCN-106-003 | `TestShadowAdapterRollbackRestoresBaselineWithoutRouteDataOrPreferenceMutation` | `./smackerel.sh test integration` | Yes |
 
 ### Definition of Done - Tiered Validation
@@ -73,6 +73,14 @@ Shadow adapters can be disabled by reverting the product release; active user be
 - [ ] XP106-04-C passes every independent canary in `report.md#xp106-04-c`.
 - [ ] XP106-04-R passes the atomic rollback proof in `report.md#xp106-04-r`.
 
+#### Shared-Infrastructure And Regression Planning
+
+- [ ] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior in the shadow adapters (server/PWA/Card projection parity, fail-closed adapter errors, settled markers) exist and pass — see `report.md#xp106-04-a`.
+- [ ] Broader E2E regression suite passes with no shadow-adapter-induced regression to current navigation or page bodies — see `report.md#xp106-04-w`.
+- [ ] Independent canary suite for shared fixture/bootstrap contracts passes before broad suite reruns (native Search, HTMX read, HTMX mutation, Digest, Assistant shell, Wiki, Card PRG, PWA auth, logout/replay, service-worker, non-UI core) — see `report.md#xp106-04-c`.
+- [ ] Rollback or restore path for shared infrastructure changes is documented and verified (atomic asset/adapter release pointer swap that preserves routes and data and installs no static optimistic fallback) — see `report.md#xp106-04-r`.
+
 #### Build Quality Gate
 
 - [ ] Golden parity, canary ordering, privacy, CSP, service-worker, no-interception, rollback, check, lint, format, artifact lint, traceability, and directly affected testing/architecture documentation checks pass with zero warnings.
+- [ ] Change Boundary is respected and zero excluded file families were changed — see `report.md#xp106-04-change-boundary`.
