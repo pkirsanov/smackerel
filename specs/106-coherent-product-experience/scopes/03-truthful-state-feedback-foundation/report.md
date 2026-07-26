@@ -170,6 +170,127 @@ includes traceability/canary/rollback/docs, which are slice 2).
 
 <!-- SLICE-1-EVIDENCE-END -->
 
+<!-- SLICE-2-EVIDENCE-BEGIN -->
+
+### XP106-03-I
+
+**Claim Source:** executed — `./smackerel.sh test integration` and
+`./smackerel.sh test integration-light --go-run 'TestRealOwnerOutcomesProjectWithoutFalseEmptyReadyOrSuccess'`,
+current session 2026-07-26.
+
+`TestRealOwnerOutcomesProjectWithoutFalseEmptyReadyOrSuccess`
+(`tests/integration/experience/state_presenter_test.go`, package
+`integrationexperience`, `//go:build integration`) feeds REAL, owner-classified
+typed outcomes from ACTUAL smackerel domain owners through the spec-106
+presenters — NO mock, NO stub, NO interception:
+
+- **readiness owner** `internal/recommendation/availability.Determine` (the real
+  provider-backed readiness determination). Enabled + zero providers resolves to
+  a real `CapabilityUnavailable` / `CauseZeroConfiguredProviders` / `Ready()==false`
+  → the presenter projects `AvailabilityUnavailable` and the content axis NEVER
+  fabricates a ready/empty/success state (SCN-106-005). A registered route cannot
+  fabricate availability for the same real zero-provider capability (adversarial).
+  Real degraded / available / disabled determinations project their exact truthful
+  state.
+- **persistence + post-commit read-back owner**
+  `internal/intelligence.DeriveSynthesisHealth`. A real committed-but-partial
+  output (`SynthesisDegradedPartial`, `Persisted=false`) maps to `partial`, is
+  never `IsComplete`, and is never `AnnouncesSuccess` (SCN-106-010); a commit whose
+  mandatory read-back gate did not verify is never success. The presenter's
+  `IsComplete` / `AnnouncesSuccess` EXACTLY track the owner's `Persisted` / `Healthy`
+  truth for all six real outcomes.
+- **live digest read owner** `internal/digest.Generator` — a REAL live-PostgreSQL
+  round-trip on the disposable stack: a real populated row written via the real
+  production `HandleDigestResult` and read back via the real `GetLatest` projects
+  `ready` (never false-empty); a real zero-row read projects `first_use_empty`
+  (honest empty, never a fabricated ready). The `INFO digest stored date=2028-05-20`
+  line is the real production write firing.
+
+The planned command `./smackerel.sh test integration` passed (`PASS: go-integration`,
+`INTEGRATION_EXIT=0`); the `-v` per-subtest detail below is from the stores-only
+`integration-light` live lane (same disposable Postgres; the test needs no core/ml)
+and shows all three real-owner sub-lanes green.
+
+```text
+go-integration: applying -run selector: TestRealOwnerOutcomesProjectWithoutFalseEmptyReadyOrSuccess
+...
+ok      github.com/smackerel/smackerel/tests/integration/drive  0.115s [no tests to run]
+?       github.com/smackerel/smackerel/tests/integration/drive/fixtures [no test files]
+=== RUN   TestRealOwnerOutcomesProjectWithoutFalseEmptyReadyOrSuccess
+=== RUN   TestRealOwnerOutcomesProjectWithoutFalseEmptyReadyOrSuccess/readiness_owner_availability_and_content_are_truthful
+=== RUN   TestRealOwnerOutcomesProjectWithoutFalseEmptyReadyOrSuccess/synthesis_owner_partial_never_complete_commit_alone_never_success
+=== RUN   TestRealOwnerOutcomesProjectWithoutFalseEmptyReadyOrSuccess/live_digest_read_never_false_empty
+2026/07/26 05:39:40 INFO digest stored date=2028-05-20 words=42 model=test-model
+--- PASS: TestRealOwnerOutcomesProjectWithoutFalseEmptyReadyOrSuccess (0.03s)
+    --- PASS: TestRealOwnerOutcomesProjectWithoutFalseEmptyReadyOrSuccess/readiness_owner_availability_and_content_are_truthful (0.00s)
+    --- PASS: TestRealOwnerOutcomesProjectWithoutFalseEmptyReadyOrSuccess/synthesis_owner_partial_never_complete_commit_alone_never_success (0.00s)
+    --- PASS: TestRealOwnerOutcomesProjectWithoutFalseEmptyReadyOrSuccess/live_digest_read_never_false_empty (0.03s)
+PASS
+ok      github.com/smackerel/smackerel/tests/integration/experience     0.146s
+...
+PASS: go-integration-light
+INTEGRATION_LIGHT_EXIT=0
+```
+
+### XP106-03-P
+
+**Claim Source:** executed — `./smackerel.sh test integration-light --go-run 'TestSessionLossClearsProtectedPresentationAndSafeStatesExposeNoSensitiveDetail'`,
+current session 2026-07-26.
+
+`TestSessionLossClearsProtectedPresentationAndSafeStatesExposeNoSensitiveDetail`
+(`tests/integration/experience/privacy_clear_test.go`, package
+`integrationexperience`, `//go:build integration`) is the shared-state
+PRIVACY-CLEAR + 403-DENIAL + REDACTION canary. It exercises the REAL
+`experience.AuthenticatedRequestAdapter` and the REAL state/mutation presenters
+(no mock, no interception) and proves:
+
+- **401 privacy clear** — a session loss clears the EXACT closed set of five
+  protected presentation targets (protected DOM, accessible labels, in-memory
+  business state, pending work, graph pixels), retains NO session, and offers a
+  safe re-auth path;
+- **403 denial** — a valid-session access denial RETAINS the session, clears
+  NOTHING, shows access-denied, and never loops through login;
+- **redaction by construction** — every string the emitted presentation directive
+  carries (the single SOURCE every renderer / a11y tree / log / metric / trace /
+  storage surface derives from) is a member of the closed presentation
+  vocabulary, so a stack frame / secret / bearer token / PII email / SQL query /
+  reset URL structurally CANNOT ride along; a JSON walk of the directive rejects
+  any non-vocabulary string;
+- **fail-closed with no leak** — an unclassified auth outcome errors to a typed
+  `*F106PresentationError` and emits a ZERO-value presentation; a state/mutation
+  owner outcome carrying raw detail in a code field fails closed, leaks no
+  presented value, and the error message carries no raw detail.
+
+HONEST coupling-forward: the presenters are not yet wired into the live
+server/PWA routes (cutover is SCOPE-106-04/05), so the LIVE cross-renderer
+surface propagation (real PWA 401 clear, real HTMX / Card-PRG mutation canaries
+against the live DOM/a11y/logs) is coupled forward — see the coupled-forward
+Core Outcomes and the live-renderer canary-suite planning item, left `[ ]`. This
+canary proves the shared SOURCE directive is privacy-clearing and redaction-clean
+by construction, before any consumer adopts it.
+
+```text
+go-integration: applying -run selector: TestSessionLossClearsProtectedPresentationAndSafeStatesExposeNoSensitiveDetail
+=== RUN   TestSessionLossClearsProtectedPresentationAndSafeStatesExposeNoSensitiveDetail
+=== RUN   TestSessionLossClearsProtectedPresentationAndSafeStatesExposeNoSensitiveDetail/401_session_loss_clears_all_protected_presentation_and_retains_no_session
+=== RUN   TestSessionLossClearsProtectedPresentationAndSafeStatesExposeNoSensitiveDetail/403_access_denial_retains_session_and_never_loops_login
+=== RUN   TestSessionLossClearsProtectedPresentationAndSafeStatesExposeNoSensitiveDetail/emitted_auth_presentation_exposes_only_closed_vocabulary_no_sensitive_detail
+=== RUN   TestSessionLossClearsProtectedPresentationAndSafeStatesExposeNoSensitiveDetail/unclassified_auth_outcome_fails_closed_and_leaks_no_protected_value
+=== RUN   TestSessionLossClearsProtectedPresentationAndSafeStatesExposeNoSensitiveDetail/state_and_mutation_presenters_reject_raw_detail_and_leak_no_value
+--- PASS: TestSessionLossClearsProtectedPresentationAndSafeStatesExposeNoSensitiveDetail (0.00s)
+    --- PASS: TestSessionLossClearsProtectedPresentationAndSafeStatesExposeNoSensitiveDetail/401_session_loss_clears_all_protected_presentation_and_retains_no_session (0.00s)
+    --- PASS: TestSessionLossClearsProtectedPresentationAndSafeStatesExposeNoSensitiveDetail/403_access_denial_retains_session_and_never_loops_login (0.00s)
+    --- PASS: TestSessionLossClearsProtectedPresentationAndSafeStatesExposeNoSensitiveDetail/emitted_auth_presentation_exposes_only_closed_vocabulary_no_sensitive_detail (0.00s)
+    --- PASS: TestSessionLossClearsProtectedPresentationAndSafeStatesExposeNoSensitiveDetail/unclassified_auth_outcome_fails_closed_and_leaks_no_protected_value (0.00s)
+    --- PASS: TestSessionLossClearsProtectedPresentationAndSafeStatesExposeNoSensitiveDetail/state_and_mutation_presenters_reject_raw_detail_and_leak_no_value (0.00s)
+PASS
+ok      github.com/smackerel/smackerel/tests/integration/experience     0.108s
+PASS: go-integration-light
+P_EXIT=0
+```
+
+<!-- SLICE-2-EVIDENCE-END -->
+
 ## Planned Test References
 **Claim Source:** not-run
 The live lanes XP106-03-I, XP106-03-A, XP106-03-W, and XP106-03-P, plus the
