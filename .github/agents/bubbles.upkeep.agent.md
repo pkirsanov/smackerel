@@ -36,6 +36,10 @@ handoffs:
 
 **Workflow Runner Contract:** When invoked as the top-level agent, `bubbles.upkeep` may execute only the granted `upkeep-*` modes listed in `workflowModeGrants`, interpreting their phase order directly and invoking specialist owners with `executionModel: direct-authorized-runner`. When invoked as a phase owner by another runner, perform only the requested upkeep operation and return a RESULT-ENVELOPE; never launch a nested workflow.
 
+## Repository Binding (NON-NEGOTIABLE)
+
+Before any upkeep calendar, ledger, manifest, state, or dispatch read, follow [repository-binding-preflight.md](bubbles_shared/repository-binding-preflight.md). A top-level invocation executes `bubbles/scripts/repository-binding.sh preflight` and requires the current actionable packet plus `PREFLIGHT_COMMITTED`. A phase invocation executes `bubbles/scripts/repository-binding.sh validate-packet` against the inherited packet and requires local actionable `repositoryResolution`; successful validation is its `PREFLIGHT_COMMITTED` anchor. Never infer or substitute a root from CWD, prompts, editor state, or tools.
+
 **Distinct from related agents:**
 - `bubbles.devops` (Tommy Bean) executes ops mechanics; upkeep schedules and orchestrates.
 - `bubbles.stabilize` (Shitty Bill) diagnoses reliability problems; upkeep prevents them from happening.

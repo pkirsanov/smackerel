@@ -190,6 +190,19 @@ When `bubbles.super` is invoked by another agent via `runSubagent` (not directly
 
 ```markdown
 ## RESOLUTION-ENVELOPE
+- **repositoryRoot:** <exact canonical root from the committed decision>
+- **repositoryAlias:** <safe alias from the committed decision>
+- **repositoryResolution.sessionId:** <exact session id>
+- **repositoryResolution.decisionId:** <exact decision id>
+- **repositoryResolution.controlRevision:** <exact control revision>
+- **repositoryResolution.controlPathDigest:** <exact canonical external control-path digest>
+- **repositoryResolution.authority:** <exact authority>
+- **repositoryResolution.transition:** <exact transition>
+- **repositoryResolution.scopeKind:** command
+- **repositoryResolution.scopeId:** null
+- **repositoryResolution.targetKind:** <exact target kind>
+- **repositoryResolution.pathVisibility:** local
+- **repositoryResolution.actionable:** true
 - **invokedAs:** subagent
 - **targetAgent:** <authorized top-level runner from workflowModeGrants>
 - **mode:** <resolved workflow mode from the mode registry (`bubbles/workflows/modes.yaml`)>
@@ -211,19 +224,54 @@ When `bubbles.super` is invoked by another agent via `runSubagent` (not directly
 - **compositionHint:** single-outcome | multi-outcome
 ```
 
+Resolution is two-stage. First, resolve repository intent from the raw request and host-supplied bounded candidate descriptors only; do not receive a cross-repository specs listing and do not read candidate repositories. When natural language uniquely selects one declared candidate, execute `bubbles/scripts/repository-binding.sh preflight --resolved-natural-language-root <canonical-root>` and require `PREFLIGHT_COMMITTED`; never relabel that selection as an explicit-root decision. Second, use the current actionable packet to discover or resolve work only under `resolvedRepositoryRoot/specs`.
+
 Resolution rules:
 1. Apply the same intent-to-mode matching, tag selection, and dynamic discovery logic used for direct user requests
-2. Scan `specs/` folders to resolve feature names to paths
+2. After `PREFLIGHT_COMMITTED`, resolve feature names only inside `resolvedRepositoryRoot/specs` using the current actionable packet
 3. If multiple modes could fit, pick the most specific one (prefer `improve-existing` over `iterate` when intent is clear)
 4. Set `confidence: low` only when the intent is genuinely ambiguous — the calling agent will confirm with the user before proceeding
 5. Return tags using the same Tag Selection Matrix applied to direct user recommendations
 6. **Scenario detection:** if the outcome is bigger than one spec/mode AND (spans repos OR chains review→plan→deliver→deploy→operate OR includes a host-mutating deploy), resolve to `autonomous-goal`/`autonomous-sprint` and populate the scenario-aware fields. Compilation + execution belong to `bubbles.goal`/`bubbles.sprint` per `agents/bubbles_shared/scenario-compile.md` — never compile or run the DAG inside `super`.
 7. Resolve `targetAgent` from `workflowModeGrants`. General one-outcome requests target `bubbles.goal`; explicit single-mode requests target `bubbles.workflow`; timed goal sets target `bubbles.sprint`; granted domain modes target their domain orchestrator.
 
+#### FRAMEWORK-ENVELOPE Repository Binding Contract
+
 **FRAMEWORK-ENVELOPE format** (for framework operation requests):
+
+Before executing a framework operation, establish or validate repository binding. A top-level request executes `bubbles/scripts/repository-binding.sh preflight` and requires `PREFLIGHT_COMMITTED`; a subagent request executes `bubbles/scripts/repository-binding.sh validate-packet` against the inherited local actionable packet. Missing, stale, substituted, malformed, cross-scope, public, or redacted packets refuse before the requested framework operation reads repository state or runs a command.
+
+The exact binding field set is:
+
+- `repositoryRoot`
+- `repositoryAlias`
+- `repositoryResolution.sessionId`
+- `repositoryResolution.decisionId`
+- `repositoryResolution.controlRevision`
+- `repositoryResolution.controlPathDigest`
+- `repositoryResolution.authority`
+- `repositoryResolution.transition`
+- `repositoryResolution.scopeKind`
+- `repositoryResolution.scopeId`
+- `repositoryResolution.targetKind`
+- `repositoryResolution.pathVisibility`
+- `repositoryResolution.actionable`
 
 ```markdown
 ## FRAMEWORK-ENVELOPE
+- **repositoryRoot:** <exact canonical root from the current actionable packet>
+- **repositoryAlias:** <safe alias from the current actionable packet>
+- **repositoryResolution.sessionId:** <exact session id>
+- **repositoryResolution.decisionId:** <exact decision id>
+- **repositoryResolution.controlRevision:** <exact control revision>
+- **repositoryResolution.controlPathDigest:** <exact canonical external control-path digest>
+- **repositoryResolution.authority:** <exact authority>
+- **repositoryResolution.transition:** <exact transition>
+- **repositoryResolution.scopeKind:** command
+- **repositoryResolution.scopeId:** null
+- **repositoryResolution.targetKind:** <exact target kind>
+- **repositoryResolution.pathVisibility:** local
+- **repositoryResolution.actionable:** true
 - **invokedAs:** subagent
 - **operation:** <doctor|hooks|upgrade|metrics|lessons|status|...>
 - **result:** <operation output or summary>

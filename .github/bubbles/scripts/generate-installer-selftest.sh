@@ -47,11 +47,25 @@ fi
 fixture_run() {
   local fixture_name="$1"
   local fixture_dir="$FIXTURE_ROOT/$fixture_name"
+  local artifact_path=""
   mkdir -p "$fixture_dir/bubbles/installer" "$fixture_dir/bubbles/scripts"
   cp "$MANIFEST" "$fixture_dir/bubbles/installer/installer.yaml"
   cp "$SCRIPT" "$fixture_dir/bubbles/scripts/generate-installer.sh"
   chmod +x "$fixture_dir/bubbles/scripts/generate-installer.sh"
   cp "$REAL_INSTALL_SH" "$fixture_dir/install.sh"
+  while IFS= read -r artifact_path; do
+    [[ -n "$artifact_path" ]] || continue
+    mkdir -p "$fixture_dir/${artifact_path%/*}"
+    cp "$REPO_ROOT/$artifact_path" "$fixture_dir/$artifact_path"
+  done < <(awk '
+    /^required_artifacts:/ { active=1; next }
+    /^invariants:/ { active=0 }
+    active && /^[[:space:]]*- path:[[:space:]]+/ {
+      line=$0
+      sub(/^[[:space:]]*- path:[[:space:]]+/, "", line)
+      print line
+    }
+  ' "$MANIFEST")
   echo "$fixture_dir"
 }
 
@@ -137,6 +151,32 @@ else
     pass "missing install.sh -> checker exits 2 (manifest/installer-source error)"
   else
     bad "missing install.sh -> checker exited $exit_code (expected 2)"
+  fi
+fi
+
+# ── Assertion 8: missing required artifact source => FAIL ─────────
+fix9="$(fixture_run mutation-missing-required-artifact)"
+rm -f "$fix9/agents/bubbles_shared/repository-binding-preflight.md"
+if BUBBLES_REPO_ROOT="$fix9" bash "$fix9/bubbles/scripts/generate-installer.sh" >"$fix9/check.log" 2>&1; then
+  bad "checker did not reject a missing required repository-binding artifact"
+else
+  if grep -qF 'Required artifact source missing: agents/bubbles_shared/repository-binding-preflight.md' "$fix9/check.log"; then
+    pass "missing required repository-binding artifact -> checker FAILs with exact path"
+  else
+    bad "missing required repository-binding artifact -> checker FAILed without exact path"
+  fi
+fi
+
+# ── Assertion 9: wrong install-step coverage => FAIL ──────────────
+fix10="$(fixture_run mutation-wrong-required-artifact-step)"
+portable_sed_inplace '/path: agents\/bubbles_shared\/repository-binding-preflight.md/{n;s/install_agents_bubbles_shared/install_scripts/;}' "$fix10/bubbles/installer/installer.yaml"
+if BUBBLES_REPO_ROOT="$fix10" bash "$fix10/bubbles/scripts/generate-installer.sh" >"$fix10/check.log" 2>&1; then
+  bad "checker did not reject a required artifact mapped to a non-covering install step"
+else
+  if grep -qF 'is not covered by install step install_scripts' "$fix10/check.log"; then
+    pass "non-covering required-artifact install step -> checker FAILs"
+  else
+    bad "non-covering required-artifact install step -> checker FAILed without coverage finding"
   fi
 fi
 

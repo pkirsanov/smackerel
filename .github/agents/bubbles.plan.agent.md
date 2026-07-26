@@ -13,6 +13,10 @@ handoffs:
 - [`bubbles-capability-foundation-design`](../skills/bubbles-capability-foundation-design/SKILL.md) — plan reusable foundations over one-offs
 - [`bubbles-result-envelope`](../skills/bubbles-result-envelope/SKILL.md) — close with scopes written + next owner
 
+## Repository Binding Entry Contract (NON-NEGOTIABLE)
+
+Before mode-ceiling lookup or any repository-local read, apply [agent-common.md](bubbles_shared/agent-common.md#repository-binding-entry-contract-non-negotiable). A direct surgical invocation executes `bubbles/scripts/repository-binding.sh preflight` and requires an actionable local decision plus `PREFLIGHT_COMMITTED`; a dispatched invocation instead requires the inherited packet and executes `bubbles/scripts/repository-binding.sh validate-packet` against authoritative session control. Any missing, stale, root-substituted, malformed, redacted, or non-actionable packet refuses before local work.
+
 ## Agent Identity
 
 **Name:** bubbles.plan
@@ -290,6 +294,7 @@ Each scope must include:
 - **Consumer Impact Sweep (required when renaming/removing routes, paths, contracts, identifiers, or UI targets):** enumerate every affected consumer and stale-reference search surface: navigation links, breadcrumbs, redirects, API clients, generated clients, deep links, docs, config, and tests.
 - **Shared Infrastructure Impact Sweep (required when modifying shared fixtures, harnesses, or bootstrap/auth/session/storage contracts):** enumerate downstream contract surfaces, likely blast radius, and the independent canary tests that must validate those contracts before broad suite reruns.
 - **Change Boundary (required for narrow repairs and risky refactors):** list allowed file families, explicitly name excluded surfaces that must remain untouched, and make collateral cleanup opt-in rather than implicit.
+- **Wide-Refactor Exception (`expand → migrate → contract`, required when a broad mechanical contract change — renaming/moving/replacing a widely-consumed route, symbol, contract, or schema — CANNOT land as ordinary independently-green vertical slices):** add the new form beside the old (`expand`); move consumer batches while both forms stay valid (`migrate`, each `dependsOn` the expand scope); remove the old form LAST (`contract`, `dependsOn` **all** migrate scopes plus a G043 consumer-trace proof of zero remaining callers). Retains G043 (consumer trace) / G044 (regression) / G067 (shared-infra blast radius) / G069 (collateral containment); uses NO integration-branch escape hatch (trunk / release-train policy stays authoritative). See *Wide-Refactor Sequencing* in [scope-workflow.md](bubbles_shared/scope-workflow.md); mechanically enforced by `bubbles/scripts/expand-migrate-contract-guard.sh`.
 
 4) **Test Plan (Required)**
 - `Gherkin-to-test mapping`: each scenario must map to one or more tests.
@@ -318,6 +323,7 @@ Each scope must include:
 - Consumer impact sweep is completed for every renamed/removed route, path, contract, identifier, or UI target; zero stale first-party references remain
 - Shared Infrastructure Impact Sweep, canary coverage, and rollback/restore proof exist for every protected shared fixture/bootstrap change
 - Change Boundary is respected and zero excluded file families changed for narrow repairs or risky refactors
+- Wide refactors follow `expand → migrate → contract`: the `contract` scope depends on ALL `migrate` scopes and on a G043 consumer-trace proof of zero remaining old-form callers; no integration-branch escape hatch is used
 - Docs updated (spec/design/API/architecture/dev/testing) as required
 - Policies complied with (explicitly list the relevant ones)
 - Services build/run using repo standard commands (see `copilot-instructions.md`)

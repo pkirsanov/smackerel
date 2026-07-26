@@ -1,3 +1,7 @@
+---
+applyTo: "**"
+---
+
 # Agent File Guidelines
 
 > Adapted from [github/awesome-copilot](https://github.com/github/awesome-copilot) (MIT License).
@@ -148,6 +152,28 @@ Focus instruction content on rules the AI cannot infer from the code alone — s
 ## Bubbles Governance (MANDATORY for bubbles.* agents)
 
 All `bubbles.*` agents MUST follow these governance rules and reference canonical docs rather than duplicating policy blocks.
+
+### VS Code Session Repository Context (NON-NEGOTIABLE)
+
+Before any repository-sensitive Bubbles command, resolve host context with the
+installed `repository-binding-host-context.sh` (under `bubbles/scripts/` in the
+source repo or `.github/bubbles/scripts/` downstream). In VS Code, pass the
+host-provided per-chat value exactly as:
+
+```text
+--session-log "{{VSCODE_TARGET_SESSION_LOG}}"
+```
+
+Also pass every host-declared workspace folder as an explicit
+`--workspace-root`. Consume the adapter's `sessionId`, `sessionControlFile`,
+`expectedControlRevision`, and canonical `workspaceRoots` in
+`repository-binding.sh preflight`; pass `expectedControlRevision` verbatim as
+`--expected-control-revision`. If preflight reports a stale revision, rerun the
+host adapter and retry with its new observation rather than guessing a value. Never derive
+session identity or repository authority from CWD, prompt source, active editor,
+workspace order, process ID, generic host repository metadata, or a repo-local
+session file. If the host does not resolve the session-log token, refuse before
+repository-local reads or writes; there is no fallback.
 
 Key governance references (authoritative sources — do NOT duplicate inline):
 - [agent-common.md](../agents/bubbles_shared/agent-common.md) — Anti-fabrication, evidence standards, sequential completion, specialist chain, and quality work standards

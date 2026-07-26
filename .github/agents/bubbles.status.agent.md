@@ -87,6 +87,8 @@ When `mode: live` is specified, bubbles.status goes beyond reading artifacts:
 
 ## Context Loading
 
+Validate any inherited packet with `bubbles/scripts/repository-binding.sh validate-packet`, then execute `bubbles/scripts/repository-binding.sh preflight` and require the current local actionable packet plus `PREFLIGHT_COMMITTED`. Stale, substituted, malformed, or redacted packets refuse before reads. All paths below are resolved under that exact `repositoryRoot`; no state, runtime, CWD, prompt, or editor path may select or substitute a repository.
+
 Read the following files:
 
 1. Current feature's `state.json` - Execution and certification state (v3 control plane: `execution.currentPhase`, `certification.status`, `certification.completedScopes`)
@@ -333,6 +335,19 @@ When status can identify a concrete continuation target, append:
 
 ```markdown
 ## CONTINUATION-ENVELOPE
+- repositoryRoot: <exact canonical root from the current actionable packet>
+- repositoryAlias: <safe alias from the current actionable packet>
+- repositoryResolution.sessionId: <exact session id>
+- repositoryResolution.decisionId: <exact decision id>
+- repositoryResolution.controlRevision: <exact control revision>
+- repositoryResolution.controlPathDigest: <exact canonical external control-path digest>
+- repositoryResolution.authority: <exact authority>
+- repositoryResolution.transition: <exact transition>
+- repositoryResolution.scopeKind: command
+- repositoryResolution.scopeId: null
+- repositoryResolution.targetKind: <exact target kind>
+- repositoryResolution.pathVisibility: local
+- repositoryResolution.actionable: true
 - source: bubbles.status
 - target: specs/<NNN-feature> | specs/<NNN-feature>/bugs/BUG-... | none
 - targetType: feature | bug | ops | framework | none

@@ -38,6 +38,8 @@ Control-plane law also requires owner-only remediation and concrete result envel
 
 > **💡 Tip:** `bubbles.goal` is the universal execution endpoint. `bubbles.super` resolves and advises; `bubbles.workflow` runs one mode; `bubbles.sprint` runs several goals under a clock.
 
+> **💡 Tip:** In a multi-root workspace, bind the intended work repository before targetless work. Supply `repositoryRoot: <canonical-repository-root>` on the first command or start with targeted work that resolves uniquely. Later targetless commands may continue the same host session's durable boundary; CWD, active editor, prompt location, and workspace order never choose for you.
+
 > **💡 Tip:** Install and bootstrap recipes target downstream project repos. If you are inside the Bubbles source repository, maintain the framework directly and validate with `bash bubbles/scripts/cli.sh ...` instead of rerunning `install.sh` in that checkout.
 
 > **💡 Tip:** Repo-readiness is advisory framework guidance, not delivery certification. Use framework ops when you want to know if a repo is well-prepared for agentic work; use `bubbles.validate` when you need completion authority.

@@ -31,6 +31,24 @@ User → /bubbles.goal (or /bubbles.sprint)
 - Each node runs in its own repo's command surface and is certified by `bubbles.validate`
   **in that repo**. The scenario ledger aggregates per-repo results; it never certifies across repos.
 
+## Repository Scope And Affinity
+
+Before reading repository state or compiling `repos[]`, goal/sprint performs command-level repository preflight. Every scenario repository is then declared with an explicit canonical root:
+
+```yaml
+repos:
+  - id: product
+    repositoryRoot: <product-repository-root>
+  - id: adapter
+    repositoryRoot: <adapter-repository-root>
+```
+
+A symbolic repo id is routing shorthand, not authority. Before each node runs, the orchestrator derives and validates a local actionable packet with the exact command session ID and control revision, the node's canonical root and decision ID, `scopeKind: goal-node`, `scopeId: <node-id>`, `authority: scoped-scenario-node`, and `transition: scoped-override`. Packet-file consumers validate and read that provenance from one immutable private capture. Missing, ambiguous, ineligible, or non-canonical node roots refuse as `GOAL_NODE_REPOSITORY_UNRESOLVED`; a node never inherits CWD, prompt/tool context, or the top-level command root.
+
+The command-level session ID, canonical root, decision ID, and control revision are checked after every node result or refusal. Node order, node failure, and cross-repo completion cannot mutate top-level session affinity. Public scenario output replaces local roots with `<redacted-local-root>` and is non-actionable.
+
+Repository selection does not widen ownership. Product work remains in the product repository, deployment topology remains in its owning adapter repository, and framework changes remain upstream-first in the canonical Bubbles source repository.
+
 ## Quick Start — Natural Language
 
 ```
@@ -92,6 +110,8 @@ per-action-node — is the permission.
   forbidden set from `modes.yaml` so it never drifts.
 - **Every node references a real mode or agent**, declares a repo in `repos[]`, and uses
   exactly one of `mode`/`agent`.
+- **Every declared repo has one canonical `repositoryRoot`.** Every node validates a scoped
+  `goal-node` packet; symbolic ids, top-level affinity, CWD, and node order cannot supply it.
 - **Action nodes are fully gated** (`approvalRequired: true` + `riskClass` + `opsPacket`).
 - **`dependsOn` forms a DAG** (no cycles, no dangling references).
 - **`rootOutcome` is a complete Outcome Contract** (Gate **G070** shape: intent,

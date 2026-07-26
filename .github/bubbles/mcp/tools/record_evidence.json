@@ -33,7 +33,12 @@
     "required": ["command"]
   },
   "script": "tool-log.sh",
-  "argsTemplate": ["--", "${command}"],
+  "argsTemplate": ["--", "${command}", "${args*}"],
+  "envTemplate": {
+    "BUBBLES_SPEC": "${spec}",
+    "BUBBLES_SCOPE": "${scope}",
+    "BUBBLES_TOOL_LOG_TAGS": "${tags}"
+  },
   "annotations": {
     "readOnlyHint": false,
     "destructiveHint": true,

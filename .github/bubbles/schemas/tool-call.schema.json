@@ -5,7 +5,7 @@
   "description": "One JSONL line in .specify/runtime/tool-calls.jsonl. Records a single gate-relevant command invocation with provenance fields the evidence gate can verify deterministically. Schema v2 (v5.2) adds schemaVersion + framework provenance; readers MUST accept both v1 (no schemaVersion) and v2 entries.",
   "type": "object",
   "required": ["ts", "sessionId", "cmd", "exitCode"],
-  "additionalProperties": true,
+  "additionalProperties": false,
   "properties": {
     "schemaVersion": {
       "type": "integer",

@@ -9,6 +9,16 @@ Use this file as an index and compatibility reference, not as the default full-c
 
 Load the smallest authoritative module set that matches the role and current phase. Do not recreate shared rules inside prompts or secondary docs.
 
+## Repository Binding Entry Contract (NON-NEGOTIABLE)
+
+Every repository-sensitive agent applies this contract before mode-ceiling lookup, feature or state resolution, repository-local reads, relative path expansion, queue/work selection, commands, edits, or dispatch:
+
+1. **Direct top-level invocation:** establish the command decision with `bubbles/scripts/repository-binding.sh preflight` using the host-supplied session id, external session control file, declared workspace roots, and explicit or successfully resolved target intent. Require an actionable local packet and `PREFLIGHT_COMMITTED` before continuing. A direct invocation never treats an inherited packet, CWD, prompt/editor/tool state, or workspace order as top-level authority.
+2. **Dispatched phase-owner invocation:** require the inherited actionable packet and run `bubbles/scripts/repository-binding.sh validate-packet` against the authoritative host-private session control file before any local read. Session id, canonical `repositoryRoot`, decision id, control revision, scope, path visibility, and actionability must match exactly. Missing, stale, root-substituted, cross-scope, malformed, redacted, or non-actionable packets refuse with zero repository-local side effects.
+3. Preserve the validated decision unchanged through every child dispatch and `RESULT-ENVELOPE`. Repository selection does not weaken artifact ownership, work-boundary, or framework-source rules.
+
+Agents with a top-level workflow-mode grant always use branch 1 at their entry. Phase owners use branch 2 when dispatched and branch 1 only for an explicit surgical top-level invocation. The consumer inventory is derived mechanically from `bubbles/agent-capabilities.yaml`; agents do not maintain a second roster.
+
 ## Philosophy — Evidence Is the Agent's Sensory Input
 
 Observability and execution evidence are not only anti-fabrication controls for human reviewers — they are the agent's **sensory input for closing its own loops**. Captured traces, test output, and SLO metrics are how an agent perceives what its change actually did: read the signal, locate the gap, fix it, re-run, and confirm the signal moved. An agent that cannot observe the runtime is working blind and can only assert; an agent that captures and reads real evidence can diagnose and self-correct. This is why the framework treats telemetry and captured output as first-class — they are the feedback channel that turns a one-shot guess into a closed control loop.
@@ -86,6 +96,24 @@ Required behavior:
 - Direct specialist continuation commands such as `/bubbles.implement`, `/bubbles.test`, `/bubbles.validate`, or `/bubbles.audit` are allowed only when the user explicitly asks for a surgical direct-agent invocation.
 - Read-only continuation surfaces may emit a `## CONTINUATION-ENVELOPE` carrying `target`, `intent`, `preferredWorkflowMode`, `tags`, and `reason` so `bubbles.workflow` can consume the recommendation safely.
 - If a continuation recommendation came from recap, status, handoff, or another advisory surface, treat it as intent-routing metadata, not as permission to bypass workflow orchestration.
+
+Repository-sensitive continuation is actionable only when it also carries this exact current decision unchanged:
+
+- `repositoryRoot`
+- `repositoryAlias`
+- `repositoryResolution.sessionId`
+- `repositoryResolution.decisionId`
+- `repositoryResolution.controlRevision`
+- `repositoryResolution.controlPathDigest`
+- `repositoryResolution.authority`
+- `repositoryResolution.transition`
+- `repositoryResolution.scopeKind`
+- `repositoryResolution.scopeId`
+- `repositoryResolution.targetKind`
+- `repositoryResolution.pathVisibility`
+- `repositoryResolution.actionable`
+
+The consumer MUST run `bubbles/scripts/repository-binding.sh validate-packet` before any read, write, listing, discovery, or dispatch. Stale revisions, substituted roots, malformed packets, and cross-scope packets refuse. A public projection uses `repositoryRoot: <redacted-local-root>`, `repositoryResolution.pathVisibility: redacted`, and `repositoryResolution.actionable: false`; it is non-actionable and cannot resume work.
 
 ## Top-Level Adversarial Sample Execution Contract (NON-NEGOTIABLE)
 

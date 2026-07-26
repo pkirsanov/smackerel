@@ -155,6 +155,12 @@ VERIFICATION_STATES = {
 }
 IDENTIFIER = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$")
 SHA256 = re.compile(r"^sha256:[0-9a-f]{64}$")
+# RFC 3339 date-time (schema `invokedAt` format: date-time). The timezone
+# offset must be "Z"/"z" or "±HH:MM" with the colon present; the compact
+# ISO-8601 offset "±HHMM" that datetime.fromisoformat tolerates is NOT RFC 3339.
+RFC3339_DATE_TIME = re.compile(
+    r"^\d{4}-\d{2}-\d{2}[Tt]\d{2}:\d{2}:\d{2}(\.\d+)?([Zz]|[+-]\d{2}:\d{2})$"
+)
 
 
 def reject_constant(value):
@@ -192,7 +198,12 @@ def validate_string(value, path, errors, identifier=False, maximum=4096):
 def validate_timestamp(value, path, errors):
     if not validate_string(value, path, errors, maximum=128):
         return
-    candidate = value[:-1] + "+00:00" if value.endswith("Z") else value
+    # Enforce RFC 3339 explicitly before any tolerant parse: datetime.fromisoformat
+    # accepts the compact ISO-8601 offset "+0000" on Python 3.11+, which the
+    # schema-declared `format: date-time` (RFC 3339) forbids.
+    if RFC3339_DATE_TIME.fullmatch(value):
+        return
+    candidate = value[:-1] + "+00:00" if value.endswith(("Z", "z")) else value
     try:
         parsed = datetime.datetime.fromisoformat(candidate)
     except ValueError:
@@ -200,6 +211,8 @@ def validate_timestamp(value, path, errors):
         return
     if parsed.tzinfo is None:
         add_error(errors, "schema-date-time", path, "date-time must include a timezone")
+    else:
+        add_error(errors, "schema-date-time", path, "expected RFC 3339 date-time")
 
 
 def validate_verification(value, path, errors):

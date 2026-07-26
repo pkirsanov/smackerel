@@ -7,6 +7,7 @@
 #   - --check dry-run reports rewrites without modifying anything
 #   - --write applies the rewrites byte-correctly
 #   - --write is idempotent (second run is no-op)
+#   - DISCOVERY SCOPE evidence lines remain byte-identical while adjacent executable references migrate
 #   - default scope excludes framework internals (bubbles/scripts/*, agents/, skills/)
 #   - real install.sh dry-run produces the expected v5 -> v6 rewrites
 #
@@ -147,6 +148,56 @@ if BUBBLES_REPO_ROOT="$fix5b" bash "$SCRIPT" --check --aliases-file "$ALIASES_FI
   pass "self-named primitive --check is idempotent (exit 0, no double-apply)"
 else
   bad "self-named primitive NOT idempotent — --check still reports pending rewrites"
+fi
+
+# ── Assertion T3.5: DISCOVERY SCOPE evidence is immutable ───────
+fix_t35="$FIXTURE_ROOT/fixture-discovery-scope-t35"
+mkdir -p "$fix_t35"
+cat > "$fix_t35/adversarial.md" <<'EOF'
+DISCOVERY SCOPE evidence: `/bubbles.full-delivery`; `/bubbles.workflow full-delivery`; mode=full-delivery; run-mode full-delivery; workflow full-delivery
+Execute `/bubbles.full-delivery` now.
+Execute `/bubbles.workflow bugfix-fastlane` now.
+Execute `bubbles.goal mode=full-delivery` now.
+Execute `run-mode release-train-promote` now.
+Execute `workflow bugfix-fastlane` now.
+EOF
+sed -n '1p' "$fix_t35/adversarial.md" > "$fix_t35/original-evidence-line"
+
+t35_write_ok=0
+if BUBBLES_REPO_ROOT="$fix_t35" bash "$SCRIPT" --write --aliases-file "$ALIASES_FIXTURE" --paths "$fix_t35/adversarial.md" >/dev/null 2>&1; then
+  t35_write_ok=1
+  pass "T3.5 adversary -> first --write completes"
+else
+  bad "T3.5 adversary -> first --write exited non-zero"
+fi
+
+sed -n '1p' "$fix_t35/adversarial.md" > "$fix_t35/migrated-evidence-line"
+if [[ $t35_write_ok -eq 1 ]] && cmp -s "$fix_t35/original-evidence-line" "$fix_t35/migrated-evidence-line"; then
+  pass "T3.5 adversary -> complete DISCOVERY SCOPE line is byte-identical"
+else
+  bad "T3.5 adversary -> DISCOVERY SCOPE line changed"
+  diff -u "$fix_t35/original-evidence-line" "$fix_t35/migrated-evidence-line" || true
+fi
+
+if [[ $t35_write_ok -eq 1 ]] \
+  && grep -qF "Execute \`/bubbles.implement\` now." "$fix_t35/adversarial.md" \
+  && grep -qF "Execute \`/bubbles.workflow fix target:bug action:fastlane\` now." "$fix_t35/adversarial.md" \
+  && grep -qF "Execute \`bubbles.goal mode=implement action:full-delivery target:spec\` now." "$fix_t35/adversarial.md" \
+  && grep -qF "Execute \`run-mode ship target:release-train action:promote\` now." "$fix_t35/adversarial.md" \
+  && grep -qF "Execute \`workflow fix target:bug action:fastlane\` now." "$fix_t35/adversarial.md"; then
+  pass "T3.5 adversary -> adjacent executable legacy references migrate"
+else
+  bad "T3.5 adversary -> adjacent executable references did not all migrate"
+  cat "$fix_t35/adversarial.md"
+fi
+
+cp "$fix_t35/adversarial.md" "$fix_t35/before-second-write.md"
+if second_out=$(BUBBLES_REPO_ROOT="$fix_t35" bash "$SCRIPT" --write --aliases-file "$ALIASES_FIXTURE" --paths "$fix_t35/adversarial.md" 2>&1) \
+  && cmp -s "$fix_t35/before-second-write.md" "$fix_t35/adversarial.md" \
+  && [[ "$second_out" == *'0 file(s) rewritten in place'* ]]; then
+  pass "T3.5 adversary -> second --write is byte-idempotent"
+else
+  bad "T3.5 adversary -> second --write changed the fixture or reported pending rewrites: $second_out"
 fi
 
 # ── Assertion 6: default scope excludes framework internals ──────

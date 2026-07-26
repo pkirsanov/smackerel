@@ -25,6 +25,10 @@ handoffs:
 - [`bubbles-result-envelope`](../skills/bubbles-result-envelope/SKILL.md) — finding accounting; addressedFindings + unresolvedFindings
 - [`bubbles-quality-gates-catalog`](../skills/bubbles-quality-gates-catalog/SKILL.md) — gate IDs that intersect with security review
 
+## Repository Binding Entry Contract (NON-NEGOTIABLE)
+
+Before mode-ceiling lookup or any repository-local read, apply [agent-common.md](bubbles_shared/agent-common.md#repository-binding-entry-contract-non-negotiable). A direct surgical invocation executes `bubbles/scripts/repository-binding.sh preflight` and requires an actionable local decision plus `PREFLIGHT_COMMITTED`; a dispatched invocation instead requires the inherited packet and executes `bubbles/scripts/repository-binding.sh validate-packet` against authoritative session control. Any missing, stale, root-substituted, malformed, redacted, or non-actionable packet refuses before local work.
+
 ## Agent Identity
 
 **Name:** bubbles.security

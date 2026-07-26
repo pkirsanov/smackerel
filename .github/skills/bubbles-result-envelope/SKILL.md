@@ -14,6 +14,26 @@ Return work to `bubbles.workflow` (or another orchestrator) with a machine-reada
 - Emitting a continuation envelope from `bubbles.recap`, `bubbles.status`, `bubbles.handoff`, `bubbles.super`
 - Routing a foreign-artifact finding to its owner
 
+## Repository Binding (repository-sensitive invocations)
+
+Before consuming or emitting a repository-sensitive result, validate the inherited actionable packet with `bubbles/scripts/repository-binding.sh validate-packet`. The RESULT-ENVELOPE echoes this exact closed field set unchanged:
+
+- `repositoryRoot`
+- `repositoryAlias`
+- `repositoryResolution.sessionId`
+- `repositoryResolution.decisionId`
+- `repositoryResolution.controlRevision`
+- `repositoryResolution.controlPathDigest`
+- `repositoryResolution.authority`
+- `repositoryResolution.transition`
+- `repositoryResolution.scopeKind`
+- `repositoryResolution.scopeId`
+- `repositoryResolution.targetKind`
+- `repositoryResolution.pathVisibility`
+- `repositoryResolution.actionable`
+
+Stale revisions, root substitution, cross-scope substitution, malformed packets, and public/redacted projections are refusals. Public projections use `<redacted-local-root>` with `repositoryResolution.pathVisibility: redacted` and `repositoryResolution.actionable: false`; they are non-actionable and cannot resume or dispatch work.
+
 ## Envelope shape (terminal — completion or block)
 ```
 ## RESULT-ENVELOPE

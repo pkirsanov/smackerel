@@ -53,6 +53,98 @@ capabilities:
     - docs/generated/competitive-capabilities.md
     - docs/CHEATSHEET.md
 
+  durable-work-repository-boundary:
+    label: Durable work-repository boundary
+    state: partial
+    summary: Source implementation, focused regression consumers, blocking G129 registration, framework-validate wiring, and generated documentation are present for canonical repository preflight, same-session affinity, TARGETLESS_MODE, resolved-root discovery, packet propagation, redacted public projection, and scoped goal nodes. Full framework validation, release checks, release-manifest regeneration, and release publication remain pending.
+    ownerSurface: bubbles/scripts/repository-binding.sh
+    releaseIntroduced: unreleased
+    docsRefs:
+    - improvements/IMP-103-session-repository-affinity.md
+    - docs/guides/AI_ENVIRONMENT.md
+    - docs/guides/CONTROL_PLANE_SCHEMAS.md
+    - docs/guides/WORKFLOW_MODES.md
+    - docs/recipes/resume-work.md
+    - docs/recipes/cross-repo-scenario.md
+    evidenceRefs:
+    - bubbles/scripts/repository-binding.sh
+    - bubbles/scripts/repository-binding-host-context.sh
+    - bubbles/schemas/repository-binding.schema.json
+    - agents/bubbles_shared/repository-binding-preflight.md
+    - bubbles/scripts/repository-binding-selftest.sh
+    - bubbles/scripts/repository-binding-host-context-selftest.sh
+    - bubbles/scripts/repository-binding-conformance-guard.sh
+    - bubbles/scripts/repository-binding-conformance-guard-selftest.sh
+    - tests/regression/test_repository_binding.sh
+    - bubbles/registry/gates.yaml
+    consumers:
+    - agents/bubbles.analyst.agent.md
+    - agents/bubbles.audit.agent.md
+    - agents/bubbles.bug.agent.md
+    - agents/bubbles.chaos.agent.md
+    - agents/bubbles.design.agent.md
+    - agents/bubbles.devops.agent.md
+    - agents/bubbles.docs.agent.md
+    - agents/bubbles.gaps.agent.md
+    - agents/bubbles.goal.agent.md
+    - agents/bubbles.grill.agent.md
+    - agents/bubbles.handoff.agent.md
+    - agents/bubbles.harden.agent.md
+    - agents/bubbles.implement.agent.md
+    - agents/bubbles.iterate.agent.md
+    - agents/bubbles.journey.agent.md
+    - agents/bubbles.plan.agent.md
+    - agents/bubbles.propagate.agent.md
+    - agents/bubbles.recap.agent.md
+    - agents/bubbles.redteam.agent.md
+    - agents/bubbles.regression.agent.md
+    - agents/bubbles.releases.agent.md
+    - agents/bubbles.retro.agent.md
+    - agents/bubbles.security.agent.md
+    - agents/bubbles.simplify.agent.md
+    - agents/bubbles.sprint.agent.md
+    - agents/bubbles.stabilize.agent.md
+    - agents/bubbles.status.agent.md
+    - agents/bubbles.super.agent.md
+    - agents/bubbles.test.agent.md
+    - agents/bubbles.train.agent.md
+    - agents/bubbles.upkeep.agent.md
+    - agents/bubbles.ux.agent.md
+    - agents/bubbles.validate.agent.md
+    - agents/bubbles.workflow.agent.md
+    - agents/bubbles_shared/agent-common.md
+    - agents/bubbles_shared/operating-baseline.md
+    - agents/bubbles_shared/repository-binding-preflight.md
+    - agents/bubbles_shared/scenario-compile.md
+    - agents/bubbles_shared/workflow-delegation-core.md
+    - agents/bubbles_shared/workflow-execution-loops.md
+    - agents/bubbles_shared/workflow-input-bootstrap.md
+    - agents/bubbles_shared/workflow-phase-engine.md
+    - bubbles/agent-capabilities.yaml
+    - bubbles/registry/gates.yaml
+    - bubbles/schemas/result-envelope.schema.json
+    - bubbles/scripts/cli.sh
+    - bubbles/scripts/context-compactor.sh
+    - bubbles/scripts/framework-validate.sh
+    - bubbles/scripts/migrate-modes-v5-to-v6.sh
+    - bubbles/scripts/repository-binding-host-context.sh
+    - bubbles/scripts/result-envelope-validate.sh
+    - bubbles/scripts/scenario-compile-lint.sh
+    - bubbles/scripts/state-snapshot.sh
+    - bubbles/workflows/modes.yaml
+    - instructions/bubbles-agents.instructions.md
+    - skills/bubbles-result-envelope/SKILL.md
+    competitorTags:
+    - claude-code
+    - cursor
+    - cline
+    - roo-code
+    freshnessTargets:
+    - docs/guides/AI_ENVIRONMENT.md
+    - docs/guides/CONTROL_PLANE_SCHEMAS.md
+    - docs/guides/WORKFLOW_MODES.md
+    - docs/generated/competitive-capabilities.md
+
   cross-train-propagation:
     label: Cross-train propagation
     state: shipped

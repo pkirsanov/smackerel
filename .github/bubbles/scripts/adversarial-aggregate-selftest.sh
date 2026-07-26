@@ -192,6 +192,29 @@ duplicate_invocation_b["invocationId"] = "same-runtime-invocation-01"
 write("duplicate-invocation-a.json", duplicate_invocation_a)
 write("duplicate-invocation-b.json", duplicate_invocation_b)
 
+# BUG-016: RFC 3339 invokedAt acceptance/rejection fixtures. "Z" and "+00:00"
+# are valid RFC 3339 offsets; the compact ISO-8601 offset "+0000", an
+# offset-less value, and a malformed value are not.
+timestamp_valid_z = sample("timestamp-valid-z")
+timestamp_valid_z["invokedAt"] = "2026-07-14T12:00:00Z"
+write("timestamp-valid-z.json", timestamp_valid_z)
+
+timestamp_valid_offset = sample("timestamp-valid-offset")
+timestamp_valid_offset["invokedAt"] = "2026-07-14T12:00:00+00:00"
+write("timestamp-valid-offset.json", timestamp_valid_offset)
+
+timestamp_compact_offset = sample("timestamp-compact-offset")
+timestamp_compact_offset["invokedAt"] = "2026-07-14T12:00:00+0000"
+write("timestamp-compact-offset.json", timestamp_compact_offset)
+
+timestamp_no_timezone = sample("timestamp-no-timezone")
+timestamp_no_timezone["invokedAt"] = "2026-07-14T12:00:00"
+write("timestamp-no-timezone.json", timestamp_no_timezone)
+
+timestamp_malformed = sample("timestamp-malformed")
+timestamp_malformed["invokedAt"] = "14 July 2026 noon"
+write("timestamp-malformed.json", timestamp_malformed)
+
 unknown_field = sample("unknown-field")
 unknown_field["majorityHint"] = "clear"
 write("unknown-field.json", unknown_field)
@@ -566,6 +589,33 @@ assert_status "reversed duplicate invocation inputs exit two" 2
 assert_eq "reversed duplicate invocation output is byte-stable" \
   "$RUN_STDOUT" "$duplicate_invocation_output"
 
+# 7c. RFC 3339 invokedAt: "Z" and "+00:00" are accepted; the compact ISO-8601
+# offset "+0000", an offset-less value, and a malformed value are rejected as
+# schema-date-time. Guards BUG-016 (datetime.fromisoformat tolerates "+0000").
+run_aggregate --expected-samples 1 "$tmp/timestamp-valid-z.json"
+assert_status "RFC 3339 Z invokedAt aggregates cleanly" 0
+assert_json_value "RFC 3339 Z invokedAt is agreement-clear" outcome '"agreement-clear"'
+
+run_aggregate --expected-samples 1 "$tmp/timestamp-valid-offset.json"
+assert_status "RFC 3339 +00:00 invokedAt aggregates cleanly" 0
+assert_json_value "RFC 3339 +00:00 invokedAt is agreement-clear" outcome '"agreement-clear"'
+
+assert_aggregation_error_case \
+  "compact ISO-8601 offset invokedAt" \
+  "$tmp/timestamp-compact-offset.json" \
+  schema-date-time \
+  invokedAt
+assert_aggregation_error_case \
+  "offset-less invokedAt" \
+  "$tmp/timestamp-no-timezone.json" \
+  schema-date-time \
+  invokedAt
+assert_aggregation_error_case \
+  "malformed invokedAt" \
+  "$tmp/timestamp-malformed.json" \
+  schema-date-time \
+  invokedAt
+
 assert_aggregation_error_case \
   "malformed JSON" \
   "$tmp/malformed.json" \
@@ -702,6 +752,7 @@ active_source_surfaces=(
   "agents/bubbles.super.agent.md"
   "agents/bubbles_shared/agent-common.md"
   "bubbles/workflows.yaml"
+  "bubbles/workflows/modes.yaml"
   "skills/bubbles-workflow-mode-resolution/SKILL.md"
   "docs/recipes/adversarial-verification.md"
   "docs/recipes/cross-model-review.md"
@@ -1093,6 +1144,22 @@ if [[ "$source_scan_status" -eq 0 ]]; then
 else
   record_fail "active current-contract source terminology is honest and complete"
   printf '%s\n' "$source_scan_output" | sed 's/^/    /'
+fi
+
+# 14. BUG-017: the active redteam-to-doc adversarial posture tuple in modes.yaml
+# uses the canonical samples axis (IMP-020 S2), never the deprecated `passes`
+# axis. Dedicated slash-delimited check because the terminology scanner's
+# `passes:`/`passes=` syntax patterns intentionally do not match `mode/passes/teeth`.
+modes_yaml="$REPO_ROOT/bubbles/workflows/modes.yaml"
+if grep -qF 'mode/samples/teeth' "$modes_yaml"; then
+  record_pass
+else
+  record_fail "modes.yaml advertises the canonical mode/samples/teeth adversarial posture tuple"
+fi
+if grep -qF 'mode/passes/teeth' "$modes_yaml"; then
+  record_fail "modes.yaml still advertises the deprecated mode/passes/teeth adversarial posture tuple"
+else
+  record_pass
 fi
 
 echo "adversarial-aggregate-selftest: $pass passed, $fail failed"

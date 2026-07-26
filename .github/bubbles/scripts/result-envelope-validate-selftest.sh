@@ -41,16 +41,6 @@ mkdir -p "$TEST_ROOT_BASE"
 TEST_ROOT="$(mktemp -d -p "$TEST_ROOT_BASE")"
 trap 'rm -rf "$TEST_ROOT"' EXIT
 
-# Helper: build a fake agents dir with the given agent file contents and
-# run the validator against it. Sets RC + OUT.
-run_validator() {
-  local fixture_dir="$1"; shift
-  set +e
-  OUT="$(AGENTS_DIR="$fixture_dir" "$VALIDATOR" "$@" 2>&1)"
-  RC=$?
-  set -e
-}
-
 # Re-implement run_validator without AGENTS_DIR env override since the
 # script resolves it from $REPO_ROOT, not from env. Use a wrapper script.
 WRAPPER="$TEST_ROOT/wrapper.sh"

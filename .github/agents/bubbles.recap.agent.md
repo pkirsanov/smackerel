@@ -18,9 +18,10 @@ description: Session recap — summarize what was done, what's in progress, and 
 
 ## Behavior
 
-1. Review the current conversation history
-2. Check `specs/*/state.json` for any active spec work — read `certification.status`, `execution.currentPhase`, and `workflowMode`
-3. Produce a structured recap:
+1. Validate any inherited packet with `bubbles/scripts/repository-binding.sh validate-packet`, then execute `bubbles/scripts/repository-binding.sh preflight` and require the current local actionable packet plus `PREFLIGHT_COMMITTED`; stale, substituted, malformed, or redacted packets stop before conversation-derived repository paths or state scans.
+2. Review the current conversation history only as advisory context after `PREFLIGHT_COMMITTED`.
+3. Check `specs/*/state.json` only under the committed `repositoryRoot` for active spec work — read `certification.status`, `execution.currentPhase`, and `workflowMode`.
+4. Produce a structured recap:
    - **Done** — Commits, file changes, fixes, decisions completed
    - **In Progress** — Work started but not finished
    - **Open** — Requests mentioned but not acted on
@@ -42,6 +43,19 @@ When recap can identify a concrete continuation target, end the response with:
 
 ```markdown
 ## CONTINUATION-ENVELOPE
+- repositoryRoot: <exact canonical root from the current actionable packet>
+- repositoryAlias: <safe alias from the current actionable packet>
+- repositoryResolution.sessionId: <exact session id>
+- repositoryResolution.decisionId: <exact decision id>
+- repositoryResolution.controlRevision: <exact control revision>
+- repositoryResolution.controlPathDigest: <exact canonical external control-path digest>
+- repositoryResolution.authority: <exact authority>
+- repositoryResolution.transition: <exact transition>
+- repositoryResolution.scopeKind: command
+- repositoryResolution.scopeId: null
+- repositoryResolution.targetKind: <exact target kind>
+- repositoryResolution.pathVisibility: local
+- repositoryResolution.actionable: true
 - source: bubbles.recap
 - target: specs/<NNN-feature> | specs/<NNN-feature>/bugs/BUG-... | none
 - targetType: feature | bug | ops | framework | none

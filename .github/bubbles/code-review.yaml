@@ -40,6 +40,27 @@ dispatch:
   docs:
     primaryAgent: bubbles.docs
     purpose: Documentation drift, missing docs, stale docs
+axes:
+  spec-fidelity:
+    name: Contract/Spec Fidelity
+    mandatory: true
+    separateContext: true
+    verdicts: [ passed, failed ]
+    purpose: Does the diff implement the originating requirement/spec without omission or scope injection?
+    lenses: [ gaps, validate ]
+  engineering-standards:
+    name: Engineering Standards/Quality
+    mandatory: true
+    separateContext: true
+    verdicts: [ passed, failed ]
+    purpose: Does the diff follow repository policy and sound engineering practice?
+    lenses: [ harden, simplify, stabilize, devops, security, tests, docs ]
+axisPolicy:
+  runInSeparateContexts: true
+  dedupeScope: within-axis
+  crossAxisFinding: retain-under-both-with-shared-fingerprint
+  noAxisCollapse: A failed axis stays visible and independently routeable; no aggregate priority list may convert a failed axis into an overall clean result. Neither verdict is derived from the other.
+  optionalLensesEnrichEngineeringAxis: Optional security/stability/tests/docs/simplify lenses enrich the engineering axis; they never collapse the two top-level verdicts into one score.
 profiles:
   engineering-sweep:
     description: Balanced engineering review across code quality, drift, stability, tests, and docs

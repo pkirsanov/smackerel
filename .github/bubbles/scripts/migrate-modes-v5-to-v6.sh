@@ -67,7 +67,10 @@ done
 # ── Parse the alias map: v5_mode -> v6 primitive + tag set ───────
 declare -A V5_TO_V6=()
 
-mapfile -t alias_lines < <(awk '
+declare -a alias_lines=()
+while IFS= read -r alias_line; do
+  alias_lines+=("$alias_line")
+done < <(awk '
   /^v5Aliases:/ { in_aliases=1; next }
   in_aliases && /^[a-zA-Z]/ && !/^[[:space:]]/ { in_aliases=0 }
   in_aliases && /^  [a-zA-Z0-9._-]+:$/ {
@@ -233,6 +236,7 @@ scan_file() {
     # We use perl in-place with multi-pattern alternation.
     if grep -qE "(/bubbles\\.${v5}\\b|mode=${v5}\\b|run-mode[[:space:]]+${v5}\\b|workflow[[:space:]]+${v5}\\b)" "$tmpfile"; then
       perl -pi -e "
+        next if /DISCOVERY SCOPE/;
         s|/bubbles\\.${v5}\\b|/bubbles.${v6_first}|g;
         s|mode=${v5}\\b${la}|mode=${v6}|g;
         s|run-mode[[:space:]]+${v5}\\b${la}|run-mode ${v6}|g;
@@ -264,7 +268,7 @@ echo "migrate-modes-v5-to-v6: scanned ${#SEARCH_PATHS[@]} file(s); $rewrite_coun
 
 if [[ ${#changed_files[@]} -gt 0 ]]; then
   for f in "${changed_files[@]}"; do
-    rel="${f#$REPO_ROOT/}"
+    rel="${f#"$REPO_ROOT"/}"
     echo "  - $rel"
   done
 fi

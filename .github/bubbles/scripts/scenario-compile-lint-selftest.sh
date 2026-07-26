@@ -65,6 +65,25 @@ write_clean() {
   ]
 }
 JSON
+  jq --arg root "$REPO_ROOT" --arg session "scenario-selftest" \
+    --arg controlPathDigest "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" '
+    .repos |= map(. + {repositoryRoot: $root, repositoryAlias: .id})
+    | .nodes |= map(. + {
+        repositoryResolution: {
+          sessionId: $session,
+          decisionId: ("rb:" + $session + ":1:node:" + .id),
+          controlRevision: 1,
+          controlPathDigest: $controlPathDigest,
+          authority: "scoped-scenario-node",
+          transition: "scoped-override",
+          scopeKind: "goal-node",
+          scopeId: .id,
+          targetKind: "goal-node",
+          pathVisibility: "local",
+          actionable: true
+        }
+      })
+  ' "$F" > "$F.tmp" && mv "$F.tmp" "$F"
 }
 
 assert_pass() {
@@ -170,7 +189,22 @@ write_clean
 jq '.rootOutcome.hardConstraints = []' "$F" > "$F.tmp" && mv "$F.tmp" "$F"
 assert_fail "empty rootOutcome.hardConstraints rejected"
 
-# 18. --list-forbidden derivation contains all 6 fan-out modes
+# 18. repository alias missing
+write_clean
+jq 'del(.repos[0].repositoryAlias)' "$F" > "$F.tmp" && mv "$F.tmp" "$F"
+assert_fail "repository declaration missing repositoryAlias rejected"
+
+# 19. repository alias contains a path separator
+write_clean
+jq '.repos[0].repositoryAlias = "forged/alias"' "$F" > "$F.tmp" && mv "$F.tmp" "$F"
+assert_fail "repositoryAlias containing a separator rejected"
+
+# 20. repository aliases are unique
+write_clean
+jq '.repos[1].repositoryAlias = .repos[0].repositoryAlias' "$F" > "$F.tmp" && mv "$F.tmp" "$F"
+assert_fail "duplicate repositoryAlias rejected"
+
+# 21. --list-forbidden derivation contains all 6 fan-out modes
 forbidden="$("$LINT" --list-forbidden "$REPO_ROOT" 2>/dev/null || true)"
 for m in iterate autonomous-goal autonomous-sprint stochastic-quality-sweep retro-quality-sweep idea-to-release-completion; do
   if ! grep -qx "$m" <<< "$forbidden"; then
@@ -179,7 +213,7 @@ for m in iterate autonomous-goal autonomous-sprint stochastic-quality-sweep retr
 done
 echo "PASS: --list-forbidden derives all 6 requiresTopLevelRuntime fan-out modes"
 
-# 19-20. release-packet coverage (IMP-006 / Gate G101)
+# 22-23. release-packet coverage (IMP-006 / Gate G101)
 COVROOT="$TMP/covroot"
 mkdir -p "$COVROOT/docs/releases/mvp"
 cat > "$COVROOT/docs/releases/mvp/features.md" <<'MD'
@@ -209,9 +243,28 @@ write_covered() {
   ]
 }
 JSON
+  jq --arg root "$REPO_ROOT" --arg session "coverage-selftest" \
+    --arg controlPathDigest "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" '
+    .repos |= map(. + {repositoryRoot: $root, repositoryAlias: .id})
+    | .nodes |= map(. + {
+        repositoryResolution: {
+          sessionId: $session,
+          decisionId: ("rb:" + $session + ":1:node:" + .id),
+          controlRevision: 1,
+          controlPathDigest: $controlPathDigest,
+          authority: "scoped-scenario-node",
+          transition: "scoped-override",
+          scopeKind: "goal-node",
+          scopeId: .id,
+          targetKind: "goal-node",
+          pathVisibility: "local",
+          actionable: true
+        }
+      })
+  ' "$F" > "$F.tmp" && mv "$F.tmp" "$F"
 }
 
-# 19. covered scenario → exit 0
+# 22. covered scenario → exit 0
 write_covered
 if "$LINT" "$F" "$COVROOT" >/dev/null 2>&1; then
   echo "PASS: targetReleasePacket coverage — all required features covered (exit 0)"
@@ -219,7 +272,7 @@ else
   echo "FAIL: covered release-phase scenario should pass"; "$LINT" "$F" "$COVROOT"; exit 1
 fi
 
-# 20. under-scoped scenario (required feature 'billing' uncovered) → exit 1
+# 23. under-scoped scenario (required feature 'billing' uncovered) → exit 1
 write_covered
 jq '(.nodes[] | select(.id=="deliver-billing") | .coversFeatures) = []' "$F" > "$F.tmp" && mv "$F.tmp" "$F"
 rc=0

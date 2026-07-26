@@ -31,11 +31,7 @@
 
 set -euo pipefail
 
-ALLOWED_TYPES="diagnostic planning delivery verification action ongoing-ops"
-
-# Fallback fan-out set used only when modes.yaml / yq are unavailable. The
-# authoritative source is modes.yaml constraints.requiresTopLevelRuntime.
-FALLBACK_FORBIDDEN="iterate autonomous-goal autonomous-sprint stochastic-quality-sweep retro-quality-sweep idea-to-release-completion"
+ALLOWED_TYPES=(diagnostic planning delivery verification action ongoing-ops)
 
 err() { echo "[scenario-compile-lint][ERROR] $*" >&2; FAILED=1; }
 info() { echo "[scenario-compile-lint] $*"; }
@@ -68,7 +64,13 @@ derive_forbidden() {
     if [[ -n "$out" ]]; then echo "$out"; return; fi
   fi
   # Fallback
-  printf '%s\n' $FALLBACK_FORBIDDEN
+  printf '%s\n' \
+    iterate \
+    autonomous-goal \
+    autonomous-sprint \
+    stochastic-quality-sweep \
+    retro-quality-sweep \
+    idea-to-release-completion
 }
 
 known_modes() {
@@ -93,6 +95,16 @@ in_list() {
   return 1
 }
 
+canonical_git_root() {
+  local candidate="$1"
+  local physical_candidate
+  local git_root
+
+  physical_candidate="$(cd -P -- "$candidate" 2>/dev/null && pwd -P)" || return 1
+  git_root="$(git -C "$physical_candidate" rev-parse --show-toplevel 2>/dev/null)" || return 1
+  (cd -P -- "$git_root" 2>/dev/null && pwd -P)
+}
+
 # ---- --list-forbidden short-circuit ----
 if [[ "${1:-}" == "--list-forbidden" ]]; then
   ROOT="$(resolve_repo_root "${2:-}")"
@@ -107,6 +119,7 @@ FAILED=0
 [[ -n "$SCENARIO" ]] || { echo "usage: scenario-compile-lint.sh <scenario-json> [repo-root]" >&2; exit 2; }
 [[ -f "$SCENARIO" ]] || { err "scenario file not found: $SCENARIO"; exit 1; }
 command -v jq >/dev/null 2>&1 || { err "jq is required"; exit 1; }
+command -v git >/dev/null 2>&1 || { err "git is required"; exit 1; }
 jq -e . "$SCENARIO" >/dev/null 2>&1 || { err "scenario is not valid JSON: $SCENARIO"; exit 1; }
 
 # ---- top-level fields ----
@@ -122,9 +135,38 @@ SCEN_ID="$(jq -r '.scenarioId // ""' "$SCENARIO")"
 # ---- repos ----
 REPO_COUNT="$(jq -r '(.repos // []) | length' "$SCENARIO")"
 [[ "$REPO_COUNT" -gt 0 ]] || err "repos[] must be non-empty"
-mapfile -t REPO_IDS < <(jq -r '(.repos // [])[].id // ""' "$SCENARIO")
-for rid in "${REPO_IDS[@]}"; do
+REPO_IDS=()
+REPO_ALIASES=()
+while IFS= read -r repo_id; do
+  REPO_IDS[${#REPO_IDS[@]}]="$repo_id"
+done < <(jq -r '(.repos // [])[].id // ""' "$SCENARIO")
+for ((i = 0; i < REPO_COUNT; i++)); do
+  rid="$(jq -r ".repos[$i].id // \"\"" "$SCENARIO")"
+  rroot="$(jq -r ".repos[$i].repositoryRoot // \"\"" "$SCENARIO")"
+  ralias="$(jq -r ".repos[$i].repositoryAlias // \"\"" "$SCENARIO")"
   [[ -n "$rid" ]] || err "a repos[] entry is missing an id"
+  case "$ralias" in
+    ""|[!A-Za-z0-9]*|*[!A-Za-z0-9._-]*)
+      err "repos[$i] '$rid': repositoryAlias must be one safe path segment"
+      ;;
+    *)
+      if in_list "$ralias" "${REPO_ALIASES[@]}"; then
+        err "repos[$i] '$rid': repositoryAlias '$ralias' is duplicated"
+      else
+        REPO_ALIASES[${#REPO_ALIASES[@]}]="$ralias"
+      fi
+      ;;
+  esac
+  if [[ -z "$rroot" ]]; then
+    err "repos[$i] '$rid': repositoryRoot missing; a canonical absolute Git root is required"
+  elif [[ "$rroot" != /* ]]; then
+    err "repos[$i] '$rid': repositoryRoot must be an absolute canonical Git root"
+  else
+    canonical_root="$(canonical_git_root "$rroot" 2>/dev/null || true)"
+    if [[ -z "$canonical_root" || "$canonical_root" != "$rroot" ]]; then
+      err "repos[$i] '$rid': repositoryRoot is missing, ineligible, or not the canonical Git root"
+    fi
+  fi
 done
 
 # ---- nodes ----
@@ -132,12 +174,20 @@ NODE_COUNT="$(jq -r '(.nodes // []) | length' "$SCENARIO")"
 [[ "$NODE_COUNT" -gt 0 ]] || { err "nodes[] must be non-empty"; }
 
 # Derive the forbidden fan-out set + known modes/agents.
-mapfile -t FORBIDDEN < <(derive_forbidden "$ROOT")
-mapfile -t MODES < <(known_modes "$ROOT")
-mapfile -t AGENTS < <(known_agents "$ROOT")
+FORBIDDEN=()
+while IFS= read -r forbidden_mode; do
+  FORBIDDEN[${#FORBIDDEN[@]}]="$forbidden_mode"
+done < <(derive_forbidden "$ROOT")
+MODES=()
+while IFS= read -r known_mode; do
+  MODES[${#MODES[@]}]="$known_mode"
+done < <(known_modes "$ROOT")
+AGENTS=()
+while IFS= read -r known_agent; do
+  AGENTS[${#AGENTS[@]}]="$known_agent"
+done < <(known_agents "$ROOT")
 
-declare -A SEEN_NODE_IDS
-declare -A NODE_DEPS
+NODE_IDS=()
 
 if [[ "${NODE_COUNT:-0}" -gt 0 ]]; then
   for ((i = 0; i < NODE_COUNT; i++)); do
@@ -156,15 +206,15 @@ if [[ "${NODE_COUNT:-0}" -gt 0 ]]; then
     # id present + unique
     if [[ -z "$nid" ]]; then
       err "nodes[$i]: id missing"
-    elif [[ -n "${SEEN_NODE_IDS[$nid]:-}" ]]; then
+    elif in_list "$nid" "${NODE_IDS[@]}"; then
       err "duplicate node id '$nid'"
     else
-      SEEN_NODE_IDS[$nid]=1
+      NODE_IDS[${#NODE_IDS[@]}]="$nid"
     fi
 
     # type
-    if ! in_list "$ntype" $ALLOWED_TYPES; then
-      err "$label: type '$ntype' invalid (allowed: $ALLOWED_TYPES)"
+    if ! in_list "$ntype" "${ALLOWED_TYPES[@]}"; then
+      err "$label: type '$ntype' invalid (allowed: ${ALLOWED_TYPES[*]})"
     fi
 
     # repo
@@ -172,6 +222,28 @@ if [[ "${NODE_COUNT:-0}" -gt 0 ]]; then
       err "$label: repo missing"
     elif ! in_list "$nrepo" "${REPO_IDS[@]}"; then
       err "$label: repo '$nrepo' not declared in repos[]"
+    fi
+
+    if ! jq -e --argjson index "$i" --arg nodeId "$nid" '
+      .nodes[$index].repositoryResolution as $resolution
+      | ($resolution | type == "object")
+      and (($resolution | keys | sort) ==
+        (["sessionId", "decisionId", "controlRevision", "controlPathDigest", "authority", "transition",
+          "scopeKind", "scopeId", "targetKind", "pathVisibility", "actionable"] | sort))
+      and ($resolution.sessionId | type == "string" and length > 0)
+      and ($resolution.controlRevision | type == "number" and . >= 1 and floor == .)
+      and ($resolution.controlPathDigest | type == "string" and test("^sha256:[0-9a-f]{64}$"))
+      and $resolution.decisionId ==
+        ("rb:" + $resolution.sessionId + ":" + ($resolution.controlRevision | tostring) + ":node:" + $nodeId)
+      and $resolution.authority == "scoped-scenario-node"
+      and $resolution.transition == "scoped-override"
+      and $resolution.scopeKind == "goal-node"
+      and $resolution.scopeId == $nodeId
+      and $resolution.targetKind == "goal-node"
+      and $resolution.pathVisibility == "local"
+      and $resolution.actionable == true
+    ' "$SCENARIO" >/dev/null 2>&1; then
+      err "$label: repositoryResolution must be the exact local actionable goal-node decision for '$nid'"
     fi
 
     # exactly one of mode/agent
@@ -208,39 +280,43 @@ if [[ "${NODE_COUNT:-0}" -gt 0 ]]; then
       [[ -n "$nops" ]] || err "$label: ongoing-ops node requires opsPacket"
     fi
 
-    # collect deps (validated after all ids known)
-    deps="$(jq -r ".nodes[$i].dependsOn // [] | .[]" "$SCENARIO" 2>/dev/null | tr '\n' ' ')"
-    NODE_DEPS[$nid]="$deps"
   done
 
   # dependsOn references + self-ref
-  for nid in "${!NODE_DEPS[@]}"; do
-    for dep in ${NODE_DEPS[$nid]}; do
+  for ((i = 0; i < NODE_COUNT; i++)); do
+    nid="$(jq -r ".nodes[$i].id // \"\"" "$SCENARIO")"
+    while IFS= read -r dep; do
+      [[ -n "$dep" ]] || continue
       if [[ "$dep" == "$nid" ]]; then
         err "node '$nid': dependsOn references itself"
-      elif [[ -z "${SEEN_NODE_IDS[$dep]:-}" ]]; then
+      elif ! in_list "$dep" "${NODE_IDS[@]}"; then
         err "node '$nid': dependsOn references unknown node '$dep'"
       fi
-    done
+    done < <(jq -r ".nodes[$i].dependsOn // [] | .[]" "$SCENARIO" 2>/dev/null)
   done
 
   # Cycle detection via Kahn's algorithm.
-  declare -A RESOLVED
+  RESOLVED=()
   resolved_count=0
-  total_nodes="${#SEEN_NODE_IDS[@]}"
+  total_nodes="${#NODE_IDS[@]}"
   progress=1
   while [[ "$resolved_count" -lt "$total_nodes" && "$progress" -eq 1 ]]; do
     progress=0
-    for nid in "${!SEEN_NODE_IDS[@]}"; do
-      [[ -n "${RESOLVED[$nid]:-}" ]] && continue
+    for ((i = 0; i < NODE_COUNT; i++)); do
+      nid="$(jq -r ".nodes[$i].id // \"\"" "$SCENARIO")"
+      in_list "$nid" "${RESOLVED[@]}" && continue
       all_deps_resolved=1
-      for dep in ${NODE_DEPS[$nid]:-}; do
+      while IFS= read -r dep; do
+        [[ -n "$dep" ]] || continue
         # ignore unknown deps (already reported); only gate on known unresolved deps
-        [[ -z "${SEEN_NODE_IDS[$dep]:-}" ]] && continue
-        if [[ -z "${RESOLVED[$dep]:-}" ]]; then all_deps_resolved=0; break; fi
-      done
+        in_list "$dep" "${NODE_IDS[@]}" || continue
+        if ! in_list "$dep" "${RESOLVED[@]}"; then
+          all_deps_resolved=0
+          break
+        fi
+      done < <(jq -r ".nodes[$i].dependsOn // [] | .[]" "$SCENARIO" 2>/dev/null)
       if [[ "$all_deps_resolved" -eq 1 ]]; then
-        RESOLVED[$nid]=1
+        RESOLVED[${#RESOLVED[@]}]="$nid"
         resolved_count=$((resolved_count + 1))
         progress=1
       fi
@@ -264,10 +340,16 @@ TARGET_PHASE="$(jq -r '.rootOutcome.targetReleasePacket // ""' "$SCENARIO")"
 if [[ -n "$TARGET_PHASE" ]]; then
   FEATURES_MD="$ROOT/docs/releases/$TARGET_PHASE/features.md"
   if [[ -f "$FEATURES_MD" ]]; then
-    mapfile -t REQUIRED_FEATURES < <(grep -oE 'bubbles:feature[^>]*' "$FEATURES_MD" 2>/dev/null |
+    REQUIRED_FEATURES=()
+    while IFS= read -r required_feature; do
+      REQUIRED_FEATURES[${#REQUIRED_FEATURES[@]}]="$required_feature"
+    done < <(grep -oE 'bubbles:feature[^>]*' "$FEATURES_MD" 2>/dev/null |
       grep -E 'delivery=required' |
       grep -oE 'id=[^[:space:]>]+' | sed -E 's/^id=//')
-    mapfile -t COVERED_FEATURES < <(jq -r '[ .nodes[]? | select(.type=="delivery") | (.coversFeatures // [])[] ] | .[]' "$SCENARIO" 2>/dev/null || true)
+    COVERED_FEATURES=()
+    while IFS= read -r covered_feature; do
+      COVERED_FEATURES[${#COVERED_FEATURES[@]}]="$covered_feature"
+    done < <(jq -r '[ .nodes[]? | select(.type=="delivery") | (.coversFeatures // [])[] ] | .[]' "$SCENARIO" 2>/dev/null || true)
     for feat in "${REQUIRED_FEATURES[@]}"; do
       [[ -n "$feat" ]] || continue
       if ! in_list "$feat" "${COVERED_FEATURES[@]}"; then

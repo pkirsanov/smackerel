@@ -15,6 +15,10 @@
 #   provenance_write write ${TARGET}/bubbles/.install-source.json
 #   mcp_register     write/merge the Bubbles server entry (unique per-repo id) into repo-root .vscode/mcp.json
 #
+# `required_artifacts` names capability-specific files that MUST be present in
+# the source payload and structurally covered by an existing install step. This
+# proves exact distribution coverage without duplicating directory/glob copies.
+#
 # Each step must declare:
 #   name              human-readable step name (must appear in install.sh as info() or section comment)
 #   type              one of the step types above
@@ -35,271 +39,363 @@
 version: 1
 
 steps:
-  # ── Phase 1: framework surface install ────────────────────────────
-  - name: install_agents
-    type: directory_copy
-    target_dir: agents
-    source_dir: agents
-    marker: 'Installing agents'
-    bug_class: missing-agent-tree
-    required: true
+# ── Phase 1: framework surface install ────────────────────────────
+- name: install_agents
+  type: directory_copy
+  target_dir: agents
+  source_dir: agents
+  marker: 'Installing agents'
+  bug_class: missing-agent-tree
+  required: true
 
-  - name: install_agents_bubbles_shared
-    type: directory_copy
-    target_dir: agents/bubbles_shared
-    source_dir: agents/bubbles_shared
-    marker: 'agents/bubbles_shared'
-    bug_class: missing-shared-agents
-    required: true
+- name: install_agents_bubbles_shared
+  type: directory_copy
+  target_dir: agents/bubbles_shared
+  source_dir: agents/bubbles_shared
+  marker: 'agents/bubbles_shared'
+  bug_class: missing-shared-agents
+  required: true
 
-  - name: install_prompts
-    type: glob_install
-    target_dir: prompts
-    glob: prompts/bubbles.*.prompt.md
-    marker: 'Installing prompts'
-    bug_class: missing-prompts
-    required: true
+- name: install_prompts
+  type: glob_install
+  target_dir: prompts
+  glob: prompts/bubbles.*.prompt.md
+  marker: 'Installing prompts'
+  bug_class: missing-prompts
+  required: true
 
-  - name: install_workflows
-    type: glob_install
-    target_dir: bubbles
-    glob: bubbles/*.yaml
-    marker: 'Installing workflow config and registries'
-    bug_class: missing-workflow-config
-    required: true
+- name: install_workflows
+  type: glob_install
+  target_dir: bubbles
+  glob: bubbles/*.yaml
+  marker: 'Installing workflow config and registries'
+  bug_class: missing-workflow-config
+  required: true
 
-  - name: install_release_manifest
-    type: file_copy
-    target_dir: bubbles
-    source_file: bubbles/release-manifest.json
-    marker: 'release-manifest.json'
-    bug_class: missing-release-manifest
-    required: true
+- name: install_release_manifest
+  type: file_copy
+  target_dir: bubbles
+  source_file: bubbles/release-manifest.json
+  marker: 'release-manifest.json'
+  bug_class: missing-release-manifest
+  required: true
 
-  - name: install_scripts
-    type: glob_install
-    target_dir: bubbles/scripts
-    glob: bubbles/scripts/*.sh
-    chmod: '+x'
-    marker: 'Installing governance scripts'
-    bug_class: missing-chmod
-    required: true
+- name: install_scripts
+  type: glob_install
+  target_dir: bubbles/scripts
+  glob: bubbles/scripts/*.sh
+  chmod: '+x'
+  marker: 'Installing governance scripts'
+  bug_class: missing-chmod
+  required: true
 
-  - name: install_adapters
-    type: directory_copy
-    target_dir: bubbles/adapters
-    source_dir: bubbles/adapters
-    chmod: '+x'
-    marker: 'Installing framework adapters'
-    bug_class: missing-adapter-tree
-    required: true
+- name: install_adapters
+  type: directory_copy
+  target_dir: bubbles/adapters
+  source_dir: bubbles/adapters
+  chmod: '+x'
+  marker: 'Installing framework adapters'
+  bug_class: missing-adapter-tree
+  required: true
 
-  - name: install_schemas
-    type: directory_copy
-    target_dir: bubbles/schemas
-    source_dir: bubbles/schemas
-    marker: 'Installing framework schemas'
-    bug_class: missing-schemas
-    required: true
+- name: install_schemas
+  type: directory_copy
+  target_dir: bubbles/schemas
+  source_dir: bubbles/schemas
+  marker: 'Installing framework schemas'
+  bug_class: missing-schemas
+  required: true
 
-  - name: install_registry
-    type: directory_copy
-    target_dir: bubbles/registry
-    source_dir: bubbles/registry
-    marker: 'Installing framework registry'
-    bug_class: missing-registry
-    required: true
+- name: install_registry
+  type: directory_copy
+  target_dir: bubbles/registry
+  source_dir: bubbles/registry
+  marker: 'Installing framework registry'
+  bug_class: missing-registry
+  required: true
 
-  - name: install_mcp
-    type: directory_copy
-    target_dir: bubbles/mcp
-    source_dir: bubbles/mcp
-    marker: 'Installing MCP server'
-    bug_class: missing-mcp-surface
-    required: true
+- name: install_mcp
+  type: directory_copy
+  target_dir: bubbles/mcp
+  source_dir: bubbles/mcp
+  marker: 'Installing MCP server'
+  bug_class: missing-mcp-surface
+  required: true
 
-  - name: register_mcp_vscode
-    type: mcp_register
-    target_dir: .vscode/mcp.json
-    marker: 'Registering Bubbles MCP server'
-    bug_class: mcp-server-id-collision
-    required: true
-    # Multi-root VS Code workspaces read each folder's own .vscode/mcp.json.
-    # A shared generic server id ("bubbles") across folders makes the editor's
-    # MCP gateway refuse to start any of them (perpetual "Update Tools", never
-    # connects). install.sh registers the server under a UNIQUE per-repo id
-    # (bubbles-<repo-slug>) and manages only that one entry; every other server
-    # in the file is operator-owned and left untouched. Repo-rooted write:
-    # target is repo-root .vscode/mcp.json, NOT ${TARGET}/.vscode/mcp.json.
+- name: register_mcp_vscode
+  type: mcp_register
+  target_dir: .vscode/mcp.json
+  marker: 'Registering Bubbles MCP server'
+  bug_class: mcp-server-id-collision
+  required: true
+  # Multi-root VS Code workspaces read each folder's own .vscode/mcp.json.
+  # A shared generic server id ("bubbles") across folders makes the editor's
+  # MCP gateway refuse to start any of them (perpetual "Update Tools", never
+  # connects). install.sh registers the server under a UNIQUE per-repo id
+  # (bubbles-<repo-slug>) and manages only that one entry; every other server
+  # in the file is operator-owned and left untouched. Repo-rooted write:
+  # target is repo-root .vscode/mcp.json, NOT ${TARGET}/.vscode/mcp.json.
 
-  - name: install_workflow_alias_map
-    type: directory_copy
-    target_dir: bubbles/workflows
-    source_dir: bubbles/workflows
-    marker: 'Installing workflow alias map'
-    bug_class: missing-workflow-alias-map
-    required: true
+- name: install_workflow_alias_map
+  type: directory_copy
+  target_dir: bubbles/workflows
+  source_dir: bubbles/workflows
+  marker: 'Installing workflow alias map'
+  bug_class: missing-workflow-alias-map
+  required: true
 
-  - name: install_installer_manifest
-    type: directory_copy
-    target_dir: bubbles/installer
-    source_dir: bubbles/installer
-    marker: 'Installing installer manifest'
-    bug_class: missing-installer-manifest
-    required: true
+- name: install_installer_manifest
+  type: directory_copy
+  target_dir: bubbles/installer
+  source_dir: bubbles/installer
+  marker: 'Installing installer manifest'
+  bug_class: missing-installer-manifest
+  required: true
 
-  - name: install_cheatsheet_registry
-    type: directory_copy
-    target_dir: bubbles/cheatsheet
-    source_dir: bubbles/cheatsheet
-    marker: 'cheatsheet'
-    bug_class: missing-cheatsheet-registry
-    required: false
+- name: install_cheatsheet_registry
+  type: directory_copy
+  target_dir: bubbles/cheatsheet
+  source_dir: bubbles/cheatsheet
+  marker: 'cheatsheet'
+  bug_class: missing-cheatsheet-registry
+  required: false
 
-  # ── Phase 2: repo-root gitignore writes (HIGH bug-risk surface) ──
-  - name: gitignore_improvements_root
-    type: gitignore_add
-    gitignore_root: repo-root
-    gitignore_line: 'improvements/'
-    marker: 'improvements/ to .gitignore'
-    bug_class: wrong-gitignore-root
-    required: true
-    # Historical bug ce01576: improvements/ was being written into
-    # .github/.gitignore instead of repo-root .gitignore, so git still
-    # tracked the scratch directory. The check verifies the gitignore
-    # path is RELATIVE TO REPO ROOT, not RELATIVE TO ${TARGET}.
+# ── Phase 2: repo-root gitignore writes (HIGH bug-risk surface) ──
+- name: gitignore_improvements_root
+  type: gitignore_add
+  gitignore_root: repo-root
+  gitignore_line: 'improvements/'
+  marker: 'improvements/ to .gitignore'
+  bug_class: wrong-gitignore-root
+  required: true
+  # Historical bug ce01576: improvements/ was being written into
+  # .github/.gitignore instead of repo-root .gitignore, so git still
+  # tracked the scratch directory. The check verifies the gitignore
+  # path is RELATIVE TO REPO ROOT, not RELATIVE TO ${TARGET}.
 
   # ── Phase 3: optional shared content (--agents-only flips these off) ──
-  - name: install_instructions
-    type: glob_install
-    target_dir: instructions
-    glob: instructions/*.md
-    marker: 'Installing shared instructions'
-    bug_class: missing-instructions
-    required: false
-    flag_gate: not_agents_only
+- name: install_instructions
+  type: glob_install
+  target_dir: instructions
+  glob: instructions/*.md
+  marker: 'Installing shared instructions'
+  bug_class: missing-instructions
+  required: false
+  flag_gate: not_agents_only
 
-  - name: install_skills
-    type: directory_copy
-    target_dir: skills
-    source_dir: skills
-    marker: 'Installing shared skills'
-    bug_class: missing-skills
-    required: false
-    flag_gate: not_agents_only
+- name: install_skills
+  type: directory_copy
+  target_dir: skills
+  source_dir: skills
+  marker: 'Installing shared skills'
+  bug_class: missing-skills
+  required: false
+  flag_gate: not_agents_only
 
-  # ── Phase 4: bootstrap scaffolding (no --bootstrap = skip) ───────
-  - name: install_bootstrap_templates
-    type: directory_copy
-    target_dir: templates
-    source_dir: templates
-    marker: 'Installing bootstrap templates'
-    bug_class: missing-templates
-    required: false
+# ── Phase 4: bootstrap scaffolding (no --bootstrap = skip) ───────
+- name: install_bootstrap_templates
+  type: directory_copy
+  target_dir: templates
+  source_dir: templates
+  marker: 'Installing bootstrap templates'
+  bug_class: missing-templates
+  required: false
 
-  - name: install_bootstrap_defaults
-    type: directory_copy
-    target_dir: .specify
-    source_dir: .specify
-    marker: 'Installing bootstrap defaults'
-    bug_class: missing-bootstrap-defaults
-    required: false
+- name: install_bootstrap_defaults
+  type: directory_copy
+  target_dir: .specify
+  source_dir: .specify
+  marker: 'Installing bootstrap defaults'
+  bug_class: missing-bootstrap-defaults
+  required: false
 
-  - name: install_framework_docs
-    type: directory_copy
-    target_dir: docs
-    source_dir: docs
-    marker: 'Installing framework docs'
-    bug_class: missing-framework-docs
-    required: false
+- name: install_framework_docs
+  type: directory_copy
+  target_dir: docs
+  source_dir: docs
+  marker: 'Installing framework docs'
+  bug_class: missing-framework-docs
+  required: false
 
-  # ── Phase 5: migrations ─────────────────────────────────────────
-  - name: migration_legacy_instructions
-    type: migration_rename
-    legacy_renames:
-      - "agents.instructions.md:bubbles-agents.instructions.md"
-      - "skills.instructions.md:bubbles-skills.instructions.md"
-      - "docker-lifecycle-governance.instructions.md:bubbles-docker-lifecycle-governance.instructions.md"
-    target_dir: instructions
-    marker: 'Migrated: instructions'
-    bug_class: stale-legacy-instruction
-    required: true
+# ── Phase 5: migrations ─────────────────────────────────────────
+- name: migration_legacy_instructions
+  type: migration_rename
+  legacy_renames:
+  - "agents.instructions.md:bubbles-agents.instructions.md"
+  - "skills.instructions.md:bubbles-skills.instructions.md"
+  - "docker-lifecycle-governance.instructions.md:bubbles-docker-lifecycle-governance.instructions.md"
+  target_dir: instructions
+  marker: 'Migrated: instructions'
+  bug_class: stale-legacy-instruction
+  required: true
 
-  - name: migration_legacy_skills
-    type: migration_rename
-    legacy_renames:
-      - "skill-authoring:bubbles-skill-authoring"
-      - "docker-port-standards:bubbles-docker-port-standards"
-      - "spec-template-bdd:bubbles-spec-template-bdd"
-      - "docker-lifecycle-governance:bubbles-docker-lifecycle-governance"
-    target_dir: skills
-    marker: 'Migrated: skills'
-    bug_class: stale-legacy-skill
-    required: true
+- name: migration_legacy_skills
+  type: migration_rename
+  legacy_renames:
+  - "skill-authoring:bubbles-skill-authoring"
+  - "docker-port-standards:bubbles-docker-port-standards"
+  - "spec-template-bdd:bubbles-spec-template-bdd"
+  - "docker-lifecycle-governance:bubbles-docker-lifecycle-governance"
+  target_dir: skills
+  marker: 'Migrated: skills'
+  bug_class: stale-legacy-skill
+  required: true
 
-  # ── Phase 6: provenance ─────────────────────────────────────────
-  - name: version_stamp
-    type: version_stamp
-    target_file: bubbles/.version
-    source_file: VERSION
-    marker: 'Bubbles v'
-    bug_class: missing-version-stamp
-    required: true
+# ── Phase 6: provenance ─────────────────────────────────────────
+- name: version_stamp
+  type: version_stamp
+  target_file: bubbles/.version
+  source_file: VERSION
+  marker: 'Bubbles v'
+  bug_class: missing-version-stamp
+  required: true
 
-  - name: install_provenance
-    type: provenance_write
-    target_file: bubbles/.install-source.json
-    required_fields:
-      - installedVersion
-      - installMode
-      - sourceRef
-      - sourceGitSha
-      - sourceDirty
-      - installedAt
-    marker: 'Install provenance written'
-    bug_class: missing-install-provenance
-    required: true
+- name: install_provenance
+  type: provenance_write
+  target_file: bubbles/.install-source.json
+  required_fields:
+  - installedVersion
+  - installMode
+  - sourceRef
+  - sourceGitSha
+  - sourceDirty
+  - installedAt
+  marker: 'Install provenance written'
+  bug_class: missing-install-provenance
+  required: true
+
+# ── IMP-103 repository-binding activation inventory ───────────────
+# Broader agent/shared/skill/schema trees remain owned by the directory/glob
+# steps above. These entries pin the exact minimum repository-binding payload
+# so a future installer refactor cannot silently omit one activation surface.
+required_artifacts:
+- path: agents/bubbles_shared/repository-binding-preflight.md
+  install_step: install_agents_bubbles_shared
+- path: agents/bubbles.workflow.agent.md
+  install_step: install_agents
+- path: agents/bubbles.super.agent.md
+  install_step: install_agents
+- path: agents/bubbles.iterate.agent.md
+  install_step: install_agents
+- path: agents/bubbles.goal.agent.md
+  install_step: install_agents
+- path: agents/bubbles.sprint.agent.md
+  install_step: install_agents
+- path: agents/bubbles.recap.agent.md
+  install_step: install_agents
+- path: agents/bubbles.status.agent.md
+  install_step: install_agents
+- path: agents/bubbles.handoff.agent.md
+  install_step: install_agents
+- path: agents/bubbles.bug.agent.md
+  install_step: install_agents
+- path: agents/bubbles.journey.agent.md
+  install_step: install_agents
+- path: agents/bubbles.propagate.agent.md
+  install_step: install_agents
+- path: agents/bubbles.releases.agent.md
+  install_step: install_agents
+- path: agents/bubbles.retro.agent.md
+  install_step: install_agents
+- path: agents/bubbles.stabilize.agent.md
+  install_step: install_agents
+- path: agents/bubbles.train.agent.md
+  install_step: install_agents
+- path: agents/bubbles.upkeep.agent.md
+  install_step: install_agents
+- path: agents/bubbles_shared/agent-common.md
+  install_step: install_agents_bubbles_shared
+- path: agents/bubbles_shared/operating-baseline.md
+  install_step: install_agents_bubbles_shared
+- path: agents/bubbles_shared/scenario-compile.md
+  install_step: install_agents_bubbles_shared
+- path: agents/bubbles_shared/workflow-delegation-core.md
+  install_step: install_agents_bubbles_shared
+- path: agents/bubbles_shared/workflow-execution-loops.md
+  install_step: install_agents_bubbles_shared
+- path: agents/bubbles_shared/workflow-input-bootstrap.md
+  install_step: install_agents_bubbles_shared
+- path: agents/bubbles_shared/workflow-phase-engine.md
+  install_step: install_agents_bubbles_shared
+- path: agents/bubbles_shared/quality-gates.md
+  install_step: install_agents_bubbles_shared
+- path: bubbles/scripts/repository-binding.sh
+  install_step: install_scripts
+- path: bubbles/scripts/repository-binding-selftest.sh
+  install_step: install_scripts
+- path: bubbles/scripts/repository-binding-host-context.sh
+  install_step: install_scripts
+- path: bubbles/scripts/repository-binding-host-context-selftest.sh
+  install_step: install_scripts
+- path: bubbles/scripts/repository-binding-conformance-guard.sh
+  install_step: install_scripts
+- path: bubbles/scripts/repository-binding-conformance-guard-selftest.sh
+  install_step: install_scripts
+- path: bubbles/scripts/state-snapshot.sh
+  install_step: install_scripts
+- path: bubbles/scripts/context-compactor.sh
+  install_step: install_scripts
+- path: bubbles/scripts/result-envelope-validate.sh
+  install_step: install_scripts
+- path: bubbles/scripts/scenario-compile-lint.sh
+  install_step: install_scripts
+- path: bubbles/scripts/framework-validate.sh
+  install_step: install_scripts
+- path: bubbles/scripts/cli.sh
+  install_step: install_scripts
+- path: bubbles/schemas/repository-binding.schema.json
+  install_step: install_schemas
+- path: bubbles/schemas/result-envelope.schema.json
+  install_step: install_schemas
+- path: bubbles/workflows/modes.yaml
+  install_step: install_workflow_alias_map
+- path: bubbles/registry/gates.yaml
+  install_step: install_registry
+- path: skills/bubbles-result-envelope/SKILL.md
+  install_step: install_skills
+- path: skills/bubbles-quality-gates-catalog/SKILL.md
+  install_step: install_skills
 
 # ── Invariants enforced by the checker ──────────────────────────
 invariants:
-  - id: gitignore_root_is_repo_root
-    description: |
-      gitignore_add steps with gitignore_root=repo-root MUST NOT be
-      implemented by writing into ${TARGET}/.gitignore. The check
-      greps install.sh for the gitignore_line and verifies the
-      surrounding context references ".gitignore" (no ${TARGET}/
-      prefix) and that the write is preceded by [[ ! -f ".gitignore" ]]
-      style root-relative existence checks.
-    closes_bug: ce01576
+- id: gitignore_root_is_repo_root
+  description: |
+    gitignore_add steps with gitignore_root=repo-root MUST NOT be
+    implemented by writing into ${TARGET}/.gitignore. The check
+    greps install.sh for the gitignore_line and verifies the
+    surrounding context references ".gitignore" (no ${TARGET}/
+    prefix) and that the write is preceded by [[ ! -f ".gitignore" ]]
+    style root-relative existence checks.
+  closes_bug: ce01576
 
-  - id: scripts_are_chmod_x
-    description: |
-      install_scripts step MUST chmod +x the destination tree. The
-      check verifies install.sh contains `chmod +x "${TARGET}"/bubbles/scripts/*.sh`
-      OR an equivalent find ... -exec chmod +x {} ; statement.
-    closes_bug: missing-chmod
+- id: scripts_are_chmod_x
+  description: |
+    install_scripts step MUST chmod +x the destination tree. The
+    check verifies install.sh contains `chmod +x "${TARGET}"/bubbles/scripts/*.sh`
+    OR an equivalent find ... -exec chmod +x {} ; statement.
+  closes_bug: missing-chmod
 
-  - id: adapter_files_are_chmod_x
-    description: |
-      install_adapters step MUST chmod +x adapter shell scripts. The
-      check verifies install.sh contains `find "${TARGET}/bubbles/adapters" -type f -name '*.sh' -exec chmod +x`
-      OR equivalent.
-    closes_bug: adapter-not-executable
+- id: adapter_files_are_chmod_x
+  description: |
+    install_adapters step MUST chmod +x adapter shell scripts. The
+    check verifies install.sh contains `find "${TARGET}/bubbles/adapters" -type f -name '*.sh' -exec chmod +x`
+    OR equivalent.
+  closes_bug: adapter-not-executable
 
-  - id: every_step_has_a_marker
-    description: |
-      Each step's marker MUST appear as a literal substring in
-      install.sh. This is the structural guarantee that the step is
-      present. Missing marker => generator-check FAIL.
-    closes_bug: silent-step-deletion
+- id: every_step_has_a_marker
+  description: |
+    Each step's marker MUST appear as a literal substring in
+    install.sh. This is the structural guarantee that the step is
+    present. Missing marker => generator-check FAIL.
+  closes_bug: silent-step-deletion
 
-  - id: provenance_records_required_fields
-    description: |
-      .install-source.json MUST carry every declared provenance field
-      (installedVersion, installMode, sourceRef, sourceGitSha,
-      sourceDirty, targetRepoSlug, installedAt). The check greps
-      install.sh for the cat > heredoc emitting .install-source.json and
-      verifies every field name appears. targetRepoSlug is the
-      repo-relative repo-binding marker (IMP-025 SCOPE-5) consumed by
-      repo-binding-preflight.sh.
-    closes_bug: missing-provenance-field
+- id: provenance_records_required_fields
+  description: |
+    .install-source.json MUST carry every declared provenance field
+    (installedVersion, installMode, sourceRef, sourceGitSha,
+    sourceDirty, targetRepoSlug, installedAt). The check greps
+    install.sh for the cat > heredoc emitting .install-source.json and
+    verifies every field name appears. targetRepoSlug is the
+    repo-relative repo-binding marker (IMP-025 SCOPE-5) consumed by
+    repo-binding-preflight.sh.
+  closes_bug: missing-provenance-field

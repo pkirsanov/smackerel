@@ -68,11 +68,69 @@ adoption_profile_ids() {
 }
 
 mapfile -t managed_entries < <(bubbles_framework_manifest_entries "$REPO_ROOT" false)
+
+# BUG-015 (BUG015-F1): the golden-task eval HARNESS is framework-source-only, not a
+# downstream product tool. Its selftest is wired through run_check_self_only (SKIPPED
+# in downstream framework-validate), and the entire bubbles/eval/ payload it consumes
+# — task-v2.schema.json + evaluator-result.schema.json, golden tasks, regression data —
+# is classified source-only below. The blanket `bubbles/scripts/*.sh` managed glob in
+# bubbles_framework_manifest_entries() nonetheless swept eval-harness.sh + its selftest
+# into the managed set, so install.sh shipped the harness downstream while its required
+# schemas stayed source-only: a broken relative ref (`../eval/schemas/...`) that makes
+# eval-harness.sh exit 2 with schema-contract-unavailable on every downstream call.
+# Reclassify the harness pair as source-only so the manifest's managed section no longer
+# owns them; install.sh's existing managed-script prune (release_manifest_owns_managed_path)
+# then removes them downstream, keeping the eval subsystem cohesively source-only. No
+# downstream-run script invokes eval-harness.sh at runtime (eval-heldout-guard.sh only
+# names it in comments; forecast-eval-check.sh is standalone), so this creates no
+# dangling reference.
+eval_source_only_scripts=(
+  "bubbles/scripts/eval-harness.sh"
+  "bubbles/scripts/eval-harness-selftest.sh"
+)
+filtered_managed_entries=()
+for managed_entry in "${managed_entries[@]}"; do
+  demote_entry=false
+  for eval_script in "${eval_source_only_scripts[@]}"; do
+    if [[ "$managed_entry" == "$eval_script" ]]; then
+      demote_entry=true
+      break
+    fi
+  done
+  [[ "$demote_entry" == true ]] && continue
+  filtered_managed_entries+=("$managed_entry")
+done
+managed_entries=("${filtered_managed_entries[@]}")
+
 source_only_entries=()
+for eval_script in "${eval_source_only_scripts[@]}"; do
+  [[ -f "$REPO_ROOT/$eval_script" ]] || continue
+  bubbles_manifest_entry_is_tracked "$REPO_ROOT" "$eval_script" || continue
+  source_only_entries+=("$eval_script")
+done
+# BUG015-F2: the adversarial-sample record schema is now MANAGED (installed)
+# because the managed agent-common.md red-team contract names it as the
+# authoritative record schema. bubbles_framework_manifest_entries() enumerates it
+# in the managed set above, so it MUST NOT also be swept into source-only here — a
+# path in BOTH checksum sections is a provenance defect (install-provenance and
+# release-manifest selftests reject it). The other two eval schemas (task-v2 /
+# evaluator-result) stay source-only: BUG015-F1 demoted the eval-harness itself,
+# which downstream never runs.
+eval_managed_schemas=(
+  "bubbles/eval/schemas/adversarial-sample.schema.json"
+)
 while IFS= read -r eval_source_path; do
   [[ -f "$eval_source_path" ]] || continue
   eval_relative_path="${eval_source_path#$REPO_ROOT/}"
   bubbles_manifest_entry_is_tracked "$REPO_ROOT" "$eval_relative_path" || continue
+  eval_entry_is_managed=false
+  for eval_managed_schema in "${eval_managed_schemas[@]}"; do
+    if [[ "$eval_relative_path" == "$eval_managed_schema" ]]; then
+      eval_entry_is_managed=true
+      break
+    fi
+  done
+  [[ "$eval_entry_is_managed" == true ]] && continue
   source_only_entries+=("$eval_relative_path")
 done < <(find "$REPO_ROOT/bubbles/eval" -type f 2>/dev/null | LC_ALL=C sort)
 while IFS= read -r regression_test_path; do
@@ -81,6 +139,24 @@ while IFS= read -r regression_test_path; do
   bubbles_manifest_entry_is_tracked "$REPO_ROOT" "$regression_relative_path" || continue
   source_only_entries+=("$regression_relative_path")
 done < <(find "$REPO_ROOT/tests/regression" -maxdepth 1 -type f -name '*.sh' 2>/dev/null | LC_ALL=C sort)
+
+# IMP-102 / SCOPE-10: the per-agent effective-bundle budget file is a source-repo
+# artifact consumed ONLY by agent-bundle-size-budget.sh --check, which
+# framework-validate runs via run_check_self_only (source-only). Downstream installs
+# carry agents under .github/agents and never run the live budget check, so the
+# committed ceilings are integrity-tracked here but NOT shipped downstream.
+agent_bundle_budget_entry="bubbles/agent-bundle-budgets.json"
+if [[ -f "$REPO_ROOT/$agent_bundle_budget_entry" ]] &&
+  bubbles_manifest_entry_is_tracked "$REPO_ROOT" "$agent_bundle_budget_entry"; then
+  source_only_entries+=("$agent_bundle_budget_entry")
+fi
+
+# Keep the source-only inventory deterministically sorted. The demoted eval-harness
+# pair lives under bubbles/scripts/, which sorts between bubbles/eval/** and
+# tests/regression/**, so it must be merged into sort order rather than appended.
+if [[ "${#source_only_entries[@]}" -gt 0 ]]; then
+  mapfile -t source_only_entries < <(printf '%s\n' "${source_only_entries[@]}" | LC_ALL=C sort)
+fi
 
 payload_git_sha=''
 payload_generated_at=''

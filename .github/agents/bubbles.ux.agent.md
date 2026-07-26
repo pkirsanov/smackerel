@@ -16,6 +16,10 @@ handoffs:
 - [`bubbles-result-envelope`](../skills/bubbles-result-envelope/SKILL.md) — close with wireframes/specs + next owner
 - [`bubbles-anti-fabrication`](../skills/bubbles-anti-fabrication/SKILL.md) — specs reflect real interaction flows, not placeholders
 
+## Repository Binding Entry Contract (NON-NEGOTIABLE)
+
+Before mode-ceiling lookup or any repository-local read, apply [agent-common.md](bubbles_shared/agent-common.md#repository-binding-entry-contract-non-negotiable). A direct surgical invocation executes `bubbles/scripts/repository-binding.sh preflight` and requires an actionable local decision plus `PREFLIGHT_COMMITTED`; a dispatched invocation instead requires the inherited packet and executes `bubbles/scripts/repository-binding.sh validate-packet` against authoritative session control. Any missing, stale, root-substituted, malformed, redacted, or non-actionable packet refuses before local work.
+
 ## Agent Identity
 
 **Name:** bubbles.ux

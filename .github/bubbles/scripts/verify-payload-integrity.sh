@@ -41,6 +41,7 @@
 # Usage:
 #   verify-payload-integrity.sh [--target DIR] [--manifest FILE]
 #                               [--install-profile full|agents-only] [--quiet]
+#                               [--require-manifest]
 #
 #   --target DIR     Install root that holds the managed trees (default: .github)
 #   --manifest FILE  release-manifest.json to verify against
@@ -48,11 +49,19 @@
 #   --install-profile
 #                    Install shape to verify (default: full)
 #   --quiet          Suppress the success line (failures always print to stderr)
+#   --require-manifest
+#                    Treat an ABSENT manifest as a hard FAILURE (exit 1) instead
+#                    of an advisory skip. A REAL install (install.sh) passes this
+#                    because it knows a manifest MUST be present; a manifest that
+#                    is gone at verify time means the payload is incomplete
+#                    (truncated download / partial extraction). Every other caller
+#                    keeps the advisory-on-missing default (IMP-102 SCOPE-6).
 #
 # Exit codes:
 #   0 = every required managed file is present and matches
-#       (or manifest absent -> advisory)
-#   1 = one or more required managed files are missing or mismatch the manifest
+#       (or manifest absent AND --require-manifest not set -> advisory)
+#   1 = one or more required managed files are missing or mismatch the manifest,
+#       OR the manifest is absent while --require-manifest is set
 #   2 = usage / environment error (unknown flag, or no sha256 tool)
 #
 set -euo pipefail
@@ -61,6 +70,7 @@ TARGET_DIR=".github"
 MANIFEST_FILE=""
 INSTALL_PROFILE="full"
 QUIET="false"
+REQUIRE_MANIFEST="false"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -68,17 +78,23 @@ while [[ $# -gt 0 ]]; do
     --manifest)        MANIFEST_FILE="$2"; shift 2 ;;
     --install-profile) INSTALL_PROFILE="$2"; shift 2 ;;
     --quiet)           QUIET="true"; shift ;;
+    --require-manifest) REQUIRE_MANIFEST="true"; shift ;;
     -h | --help)
       cat <<'EOF'
 Usage: verify-payload-integrity.sh [--target DIR] [--manifest FILE]
                                    [--install-profile full|agents-only] [--quiet]
+                                   [--require-manifest]
 
 Verifies every required framework-managed file against the canonical sha256
 recorded in the release manifest (managedFileChecksums). Missing or mismatched
 required files are hard failures. Source-only entries are outside the managed
 section; agents-only and unselected optional-skill omissions remain valid.
 
-Exit codes: 0 = clean, 1 = missing/mismatch found, 2 = usage / no sha256 tool.
+--require-manifest makes an ABSENT manifest a hard failure (a real install passes
+this); without it a missing manifest is an advisory skip.
+
+Exit codes: 0 = clean, 1 = missing/mismatch (or absent manifest under
+--require-manifest), 2 = usage / no sha256 tool.
 EOF
       exit 0
       ;;
@@ -101,10 +117,19 @@ esac
 
 say() { [[ "$QUIET" == "true" ]] || printf '%s\n' "$*"; }
 
-# A missing manifest is advisory, never fatal here: install.sh's own preflight
-# already refuses to install without a manifest, and an older downstream layout
-# predating this file should not hard-fail a re-scan.
+# A missing manifest is advisory BY DEFAULT: an older downstream layout predating
+# this file should not hard-fail a re-scan. But a REAL install (install.sh) knows a
+# manifest MUST be present — it verified one in its own preflight — and passes
+# --require-manifest so that a manifest which is absent AT VERIFY TIME (a truncated
+# download that dropped the manifest, or a partial extraction) is a hard FAILURE
+# here instead of a green skip that would let an incomplete payload install
+# silently (IMP-102 SCOPE-6). The advisory path is preserved for every other
+# caller (re-scan of an older downstream layout, python3-absent drift context).
 if [[ ! -f "$MANIFEST_FILE" ]]; then
+  if [[ "$REQUIRE_MANIFEST" == "true" ]]; then
+    echo "verify-payload-integrity: FAILED — release manifest is REQUIRED but absent at ${MANIFEST_FILE}. A real install must verify the installed payload against the release manifest; a missing manifest means the payload is incomplete or the manifest failed to download." >&2
+    exit 1
+  fi
   say "verify-payload-integrity: no release manifest at ${MANIFEST_FILE} — skipped (advisory)"
   exit 0
 fi

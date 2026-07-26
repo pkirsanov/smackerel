@@ -238,30 +238,30 @@ fi
 # Per-packet exemption support (per upstream fix proposal — artifact-only fastlanes)
 # Read policySnapshot.tdd.exempt + exemptReason from state.json.
 tdd_exempt="$({
-  python3 -c "
-import json
+  python3 -c '
+import json, sys
 try:
-    with open('$state_file') as f:
+    with open(sys.argv[1]) as f:
         data = json.load(f)
-    tdd = (data.get('policySnapshot', {}) or {}).get('tdd', {}) or {}
-    print('true' if tdd.get('exempt') is True else 'false')
+    tdd = (data.get("policySnapshot", {}) or {}).get("tdd", {}) or {}
+    print("true" if tdd.get("exempt") is True else "false")
 except Exception:
-    print('false')
-" 2>/dev/null
+    print("false")
+' "$state_file"
 } || echo "false")"
 
 tdd_exempt_reason="$({
-  python3 -c "
-import json
+  python3 -c '
+import json, sys
 try:
-    with open('$state_file') as f:
+    with open(sys.argv[1]) as f:
         data = json.load(f)
-    tdd = (data.get('policySnapshot', {}) or {}).get('tdd', {}) or {}
-    r = tdd.get('exemptReason', '') or ''
+    tdd = (data.get("policySnapshot", {}) or {}).get("tdd", {}) or {}
+    r = tdd.get("exemptReason", "") or ""
     print(r.strip())
 except Exception:
-    print('')
-" 2>/dev/null
+    print("")
+' "$state_file"
 } || echo "")"
 
 # Eligible modes for opt-in exemption (artifact-only fastlanes + always-exempt docs/reconcile)
@@ -342,12 +342,14 @@ pending_transition_failures=0
 # ONLY when they carry routedTo + (routedToCommit|routedToSpec|routedToTicket) + productAction=="none"
 # (and crossRepoFollowUp:true when routed to an external/upstream owner).
 tr_analysis="$({
-  python3 -c "
+  python3 -c '
 import json, re, sys
+dq = chr(34)
+sep = "; "
 try:
-    with open('$state_file') as f:
+    with open(sys.argv[1]) as f:
         data = json.load(f)
-    trs = data.get('transitionRequests', []) or []
+    trs = data.get("transitionRequests", []) or []
     if not isinstance(trs, list):
         trs = []
     blocking = []
@@ -355,44 +357,44 @@ try:
     for tr in trs:
         if not isinstance(tr, dict):
             continue
-        status = (tr.get('status') or '').strip()
-        tr_id = tr.get('id') or tr.get('transitionRequestId') or '<unknown>'
-        if status in ('', 'closed', 'resolved', 'done', 'cancelled', 'rejected'):
+        status = (tr.get("status") or "").strip()
+        tr_id = tr.get("id") or tr.get("transitionRequestId") or "<unknown>"
+        if status in ("", "closed", "resolved", "done", "cancelled", "rejected"):
             continue
-        if status == 'open':
-            routed_to = (tr.get('routedTo') or '').strip()
-            routed_commit = (tr.get('routedToCommit') or '').strip()
-            routed_spec = (tr.get('routedToSpec') or '').strip()
-            routed_ticket = (tr.get('routedToTicket') or '').strip()
-            product_action = (tr.get('productAction') or '').strip()
-            cross_repo = bool(tr.get('crossRepoFollowUp'))
+        if status == "open":
+            routed_to = (tr.get("routedTo") or "").strip()
+            routed_commit = (tr.get("routedToCommit") or "").strip()
+            routed_spec = (tr.get("routedToSpec") or "").strip()
+            routed_ticket = (tr.get("routedToTicket") or "").strip()
+            product_action = (tr.get("productAction") or "").strip()
+            cross_repo = bool(tr.get("crossRepoFollowUp"))
             problems = []
             if not routed_to:
-                problems.append('missing routedTo')
+                problems.append("missing routedTo")
             if not (routed_commit or routed_spec or routed_ticket):
-                problems.append('missing routedToCommit/Spec/Ticket')
-            if product_action != 'none':
-                problems.append(f'productAction is \"{product_action}\" not \"none\"')
-            if routed_commit and not re.fullmatch(r'[0-9a-f]{7,40}', routed_commit):
-                problems.append(f'routedToCommit not a hex SHA: {routed_commit}')
-            if routed_ticket and not re.match(r'https?://', routed_ticket):
-                problems.append('routedToTicket not a URL')
-            looks_external = bool(re.search(r'upstream|external|bubbles\\.', routed_to, re.I))
+                problems.append("missing routedToCommit/Spec/Ticket")
+            if product_action != "none":
+                problems.append(f"productAction is {dq}{product_action}{dq} not {dq}none{dq}")
+            if routed_commit and not re.fullmatch(r"[0-9a-f]{7,40}", routed_commit):
+                problems.append(f"routedToCommit not a hex SHA: {routed_commit}")
+            if routed_ticket and not re.match(r"https?://", routed_ticket):
+                problems.append("routedToTicket not a URL")
+            looks_external = bool(re.search(r"upstream|external|bubbles\.", routed_to, re.I))
             if looks_external and not cross_repo:
-                problems.append('routed externally but crossRepoFollowUp is not true')
+                problems.append("routed externally but crossRepoFollowUp is not true")
             if problems:
                 blocking.append((tr_id, status, problems))
             else:
                 routed_open.append((tr_id, routed_to))
         else:
-            blocking.append((tr_id, status, ['status is not open/closed/resolved']))
+            blocking.append((tr_id, status, ["status is not open/closed/resolved"]))
     for tr_id, status, probs in blocking:
-        print(f'BLOCK\\t{tr_id}\\t{status}\\t{\"; \".join(probs)}')
+        print(f"BLOCK\t{tr_id}\t{status}\t{sep.join(probs)}")
     for tr_id, routed_to in routed_open:
-        print(f'OK\\t{tr_id}\\t{routed_to}')
+        print(f"OK\t{tr_id}\t{routed_to}")
 except Exception as e:
-    print(f'ERR\\t{e}')
-" 2>/dev/null
+    print(f"ERR\t{e}")
+' "$state_file"
 } || true)"
 
 if echo "$tr_analysis" | grep -q '^ERR'; then
@@ -423,16 +425,16 @@ else
 fi
 
 rework_nonempty="$({
-  python3 -c "
-import json
+  python3 -c '
+import json, sys
 try:
-    with open('$state_file') as f:
+    with open(sys.argv[1]) as f:
         data = json.load(f)
-    rq = data.get('reworkQueue', []) or []
-    print('true' if isinstance(rq, list) and len(rq) > 0 else 'false')
+    rq = data.get("reworkQueue", []) or []
+    print("true" if isinstance(rq, list) and len(rq) > 0 else "false")
 except Exception:
-    print('false')
-" 2>/dev/null
+    print("false")
+' "$state_file"
 } || echo "false")"
 if [[ "$rework_nonempty" == "true" ]]; then
   fail "state.json still contains non-empty reworkQueue entries — open rework remains (Gate G061)"

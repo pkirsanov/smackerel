@@ -32,6 +32,26 @@ Workflow execution is default-deny. Gate G064 requires an authorized top-level r
 
 Continuation-shaped input includes plain `continue`/`next`, but also phrases like `fix all found`, `fix the rest`, and `address the rest` after a workflow run. Those should preserve the active workflow mode whenever workflow packets, run-state, or active spec state make that mode recoverable.
 
+## Repository Binding Before Modes And Discovery
+
+Every repository-sensitive front door runs `bubbles/scripts/repository-binding.sh preflight` before reading repository state, expanding relative targets, scanning `specs/`, selecting work, invoking a repository command, or dispatching a specialist. An explicit `repositoryRoot` is normalized to the physical Git top-level and committed as the work boundary before local discovery.
+
+Repository authority is resolved in this order:
+
+1. one valid explicit `repositoryRoot` or exact concrete target;
+2. one valid durable work boundary from successful targeted work earlier in the same interactive session;
+3. the sole eligible canonical root in a true single-repository workspace.
+
+Ambient CWD, prompt location, host `repository` metadata, active editor, tool state, recent files, timestamps, and workspace order are never authority.
+
+An explicit `mode:` without a concrete spec/bug/ops target is `TARGETLESS_MODE`, including `mode:` plus `repositoryRoot`. Preflight commits the repository first. The mode then either applies its concrete-target requirement or, when `autoDiscoverAllSpecs` is allowed, discovers only `<resolved repositoryRoot>/specs` after the `DISCOVERY SCOPE` event. `bubbles.iterate` follows the same rule before it picks work.
+
+Successful targeted work establishes or deliberately switches same-session affinity. Continuation, status, recap, handoff, and result packets preserve the exact session ID, canonical root, decision ID, and control revision; packet-file consumers validate and read that provenance from one immutable private capture. A new interactive session does not inherit authority from an old repository-local session mirror.
+
+In an unbound multi-root workspace, targetless work refuses instead of choosing a first root. The stable refusal requests `repositoryRoot: <canonical-repository-root>`, leaves affinity unchanged, and guarantees zero repository-local side effects.
+
+Local packets are actionable (`pathVisibility: local`, `actionable: true`). Public or committed projections replace the root with `<redacted-local-root>` and are non-actionable. Cross-repository goal/sprint nodes carry explicit per-node roots and scoped decisions; node order never changes the top-level boundary. Repository selection also preserves ownership: framework-managed changes remain upstream-first in the canonical Bubbles source repository.
+
 ## Review Is Not A Workflow Mode
 
 `bubbles.code-review` and `bubbles.system-review` are intentionally agents, not workflow modes.

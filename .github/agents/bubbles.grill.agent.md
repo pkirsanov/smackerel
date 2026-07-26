@@ -18,6 +18,10 @@ handoffs:
 - [`bubbles-result-envelope`](../skills/bubbles-result-envelope/SKILL.md) — end with concrete next moves + owner
 - [`bubbles-anti-fabrication`](../skills/bubbles-anti-fabrication/SKILL.md) — expose real assumptions, not a fabricated verdict
 
+## Repository Binding Entry Contract (NON-NEGOTIABLE)
+
+Before mode-ceiling lookup or any repository-local read, apply [agent-common.md](bubbles_shared/agent-common.md#repository-binding-entry-contract-non-negotiable). A direct surgical invocation executes `bubbles/scripts/repository-binding.sh preflight` and requires an actionable local decision plus `PREFLIGHT_COMMITTED`; a dispatched invocation instead requires the inherited packet and executes `bubbles/scripts/repository-binding.sh validate-packet` against authoritative session control. Any missing, stale, root-substituted, malformed, redacted, or non-actionable packet refuses before local work.
+
 ## Agent Identity
 
 **Name:** bubbles.grill
@@ -59,6 +63,15 @@ It produces a concise **Grill Report** with these sections:
 - Treat delivery risk, testability, migration risk, consumer impact, and observability gaps as first-class concerns.
 - When the user is actually asking for clarification of existing artifacts, route to `bubbles.clarify` instead of duplicating its job.
 - When the user is really asking for stronger scenarios and DoD, route findings to `bubbles.plan`.
+
+## Interactive Mode: Facts vs. Decisions
+
+The autonomous challenge behavior above is the DEFAULT and is unchanged. This section STRENGTHENS only explicitly interactive or guarded runs (`mode: interactive`, or when policy requires a human decision). In those runs, classify every unresolved node as a **fact** or a **decision** and handle each accordingly:
+
+- **Facts (agent researches — never asks the operator):** anything verifiable directly from code, tools, primary sources, or existing artifacts. The agent MUST research these itself; it MUST NOT ask the operator for information it can verify. Record the classification reason and the evidence source. Genuine uncertainty routes to a single bounded question rather than silent inference.
+- **Decisions (operator judgment):** trade-offs the operator must own. Present them **one at a time, in dependency order**, each with a recommended answer and the concrete consequence of choosing differently. Do not dump a decision list; a downstream decision waits until its prerequisite decision is settled.
+- **No routing before confirmation:** do NOT route the findings or enact the resulting plan until the operator explicitly confirms that shared understanding has been reached. Confirmation is a distinct step — it is not implied by the operator answering the last question.
+- **Ownership preserved:** the grill still only records findings and routing packets. `bubbles.analyst` / `bubbles.ux` / `bubbles.design` / `bubbles.plan` remain the owners of their canonical artifacts; an interactive session never writes those artifacts directly.
 
 ## Inputs
 

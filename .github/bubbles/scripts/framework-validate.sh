@@ -1,6 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# IMP-102 SCOPE-5: Bubbles requires bash 4.0+ — the framework uses associative
+# arrays (declare -A) pervasively (12+ scripts, plus many selftests below). On
+# stock macOS bash 3.2 these constructs fail; the shipped command surface must
+# fail LOUDLY and EARLY (before sourcing any helper or running any declare -A
+# selftest) instead of silently masking the breakage from installers/doctor/CI.
+if [[ -z "${BASH_VERSINFO:-}" ]] || (( ${BASH_VERSINFO[0]:-0} < 4 )); then
+  printf 'ERROR: Bubbles requires bash 4.0+ (found %s). Install a newer bash (e.g. `brew install bash` on macOS) and re-run.\n' "${BASH_VERSION:-unknown}" >&2
+  exit 1
+fi
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/guard-lib.sh"
 if [[ "$(basename "$(dirname "$SCRIPT_DIR")")" == "bubbles" && "$(basename "$(dirname "$(dirname "$SCRIPT_DIR")")")" == ".github" ]]; then
@@ -179,20 +189,40 @@ run_check "Inventory parity check selftest (IMP-005)" bash "$SCRIPT_DIR/inventor
 # Live parity check is framework-source-only: skills/INVENTORY.md is a source-repo
 # artifact and is not vendored into downstream install trees.
 run_check_self_only "Inventory parity check (live, IMP-005)" bash "$SCRIPT_DIR/inventory-parity-check.sh" "$REPO_ROOT"
+# Skill invocation/description-load classification (IMP-021 SCOPE-5): a hermetic
+# selftest proving the report sums auto-discovery description bytes and flags a
+# class-less skill row, PLUS a live source-only report (skills/INVENTORY.md is a
+# source-repo artifact) that prints the aggregate always-loaded description load
+# report-only (exit 0, no threshold) and fails only if a real row omits its class.
+run_check "Skill description-load report selftest (IMP-021 SCOPE-5)" bash "$SCRIPT_DIR/skill-description-load-selftest.sh"
+run_check_self_only "Skill description-load report (live, IMP-021 SCOPE-5)" bash "$SCRIPT_DIR/skill-description-load.sh" --repo-root "$REPO_ROOT" --summary
 # Case-collision guard (IMP-017): the hermetic selftest PLUS a live scan of the
 # repo's tracked files. The live check is deliberately NOT source-only — a
 # case-only duplicate path is a defect in ANY git repo (downstream installs
 # included), and the guard no-ops gracefully outside a git work tree.
 run_check "Case-collision guard selftest (IMP-017)" bash "$SCRIPT_DIR/case-collision-guard-selftest.sh"
 run_check "Case-collision guard (live, IMP-017)" bash "$SCRIPT_DIR/case-collision-guard.sh" --repo-root "$REPO_ROOT"
+# Workflow YAML validity (IMP-102 / SCOPE-3): live scan of every
+# .github/workflows/*.yml|*.yaml PLUS an always-on adversarial red fixture
+# reproducing the col-0 python-continuation defect that silently disabled the
+# CI state-transition anti-fabrication chain. Not source-only — a workflow
+# GitHub cannot load is a defect in ANY repo; it no-ops when no workflows /
+# no PyYAML are present.
+run_check "Workflow YAML validity selftest (IMP-102 / SCOPE-3)" bash "$SCRIPT_DIR/workflow-yaml-validity-selftest.sh"
 # macOS/WSL portability guard: run its HERMETIC selftest (green + one red fixture
 # per class + self-portability), NOT a scan of the framework's own scripts (which
 # intentionally use raw timeout/sed -i mediated by guard-lib + the PATH shim).
 macos_portability_guard_timeout_seconds="${BUBBLES_MACOS_PORTABILITY_GUARD_SELFTEST_TIMEOUT_SECONDS:-120}"
 run_check "macOS portability guard selftest (bubbles-cross-platform-shell)" bubbles_run_with_timeout "$macos_portability_guard_timeout_seconds" bash "$SCRIPT_DIR/macos-portability-guard-selftest.sh"
+# Bash baseline guard (IMP-102 / SCOPE-5): proves the shipped command surface
+# (cli.sh, framework-validate.sh) fails LOUDLY and EARLY on bash < 4 instead of
+# silently masking declare -A breakage — positive static + functional + an
+# adversarial guard-removed fixture that must break the static check.
+run_check "Bash baseline guard selftest (IMP-102 / SCOPE-5)" bash "$SCRIPT_DIR/bash-baseline-guard-selftest.sh"
 run_check_self_only "Installer manifest check (v6.0 / B9)" bash "$SCRIPT_DIR/generate-installer.sh"
 run_check_self_only "Installer manifest selftest (v6.0 / B9)" bash "$SCRIPT_DIR/generate-installer-selftest.sh"
 run_check_self_only "Payload integrity verifier selftest (IMP-101 / SCOPE-8)" bash "$SCRIPT_DIR/verify-payload-integrity-selftest.sh"
+run_check_self_only "Upgrade transactionality selftest (IMP-102 / SCOPE-6)" bash "$SCRIPT_DIR/upgrade-transactionality-selftest.sh"
 if [[ -x "$SCRIPT_DIR/migrate-modes-v5-to-v6.sh" ]]; then
   run_check_self_only "Migrate-modes-v5-to-v6 selftest (v6.0 / C1)" bash "$SCRIPT_DIR/migrate-modes-v5-to-v6-selftest.sh"
 fi
@@ -201,6 +231,18 @@ if [[ -x "$SCRIPT_DIR/generate-modes-block.sh" ]]; then
   run_check "Modes split no-duplication (v6.1 / S2)" bash "$SCRIPT_DIR/generate-modes-block.sh" --check
 fi
 run_check "Gates registry selftest (v5.2 / F4)" bash "$SCRIPT_DIR/gates-registry-selftest.sh"
+# IMP-102 / SCOPE-9: gate-coverage map — advisory generated doc mapping every
+# gate to its enforcing surface(s) (modes / state-transition-guard / framework-
+# validate scripts / CI). --check keeps the committed doc fresh; the selftest
+# proves the freshness check catches drift. Source-only: the map reflects THIS
+# repo's own scripts/guard/CI surfaces, so it is meaningful only in the source
+# checkout (the generator + selftest SKIP gracefully when inputs are absent).
+if [[ -x "$SCRIPT_DIR/generate-gate-coverage-map.sh" ]]; then
+  run_check_self_only "Gate-coverage map drift (IMP-102 / SCOPE-9)" bash "$SCRIPT_DIR/generate-gate-coverage-map.sh" --check
+fi
+if [[ -x "$SCRIPT_DIR/generate-gate-coverage-map-selftest.sh" ]]; then
+  run_check_self_only "Gate-coverage map generator selftest (IMP-102 / SCOPE-9)" bash "$SCRIPT_DIR/generate-gate-coverage-map-selftest.sh"
+fi
 if [[ -x "$SCRIPT_DIR/mode-family-inventory-selftest.sh" ]]; then
   run_check "Mode-family inventory selftest (v6.1 / R5)" bash "$SCRIPT_DIR/mode-family-inventory-selftest.sh"
 fi
@@ -222,6 +264,12 @@ if [[ -f "$SCRIPT_DIR/adversarial-aggregate-selftest.sh" ]]; then
 fi
 if [[ -x "$SCRIPT_DIR/control-plane-policy-activation-selftest.sh" ]]; then
   run_check "Control-plane policy-activation selftest (G055-G060 SST precedence + G060 red->green ordering)" bash "$SCRIPT_DIR/control-plane-policy-activation-selftest.sh"
+fi
+if [[ -x "$SCRIPT_DIR/control-plane-rce-selftest.sh" ]]; then
+  run_check "Control-plane RCE selftest (IMP-102 / SCOPE-4 — no shell interpolation into python3 -c)" bash "$SCRIPT_DIR/control-plane-rce-selftest.sh"
+fi
+if [[ -x "$SCRIPT_DIR/evidence-admission-hardening-selftest.sh" ]]; then
+  run_check "Evidence-admission hardening selftest (IMP-102 / SCOPE-1)" bash "$SCRIPT_DIR/evidence-admission-hardening-selftest.sh"
 fi
 if [[ -x "$SCRIPT_DIR/tool-capture-shim-selftest.sh" ]]; then
   run_check "Tool-capture shim selftest (v6.1 / R2)" bash "$SCRIPT_DIR/tool-capture-shim-selftest.sh"
@@ -252,9 +300,13 @@ fi
 if [[ -x "$SCRIPT_DIR/mcp-http-transport-selftest.sh" ]]; then
   run_check "MCP HTTP transport selftest (v6.1 / R9)" bash "$SCRIPT_DIR/mcp-http-transport-selftest.sh"
 fi
+if [[ -x "$SCRIPT_DIR/mcp-trust-boundary-selftest.sh" ]]; then
+  run_check "MCP trust-boundary selftest (IMP-102 / SCOPE-7)" bash "$SCRIPT_DIR/mcp-trust-boundary-selftest.sh"
+fi
 run_check "Workflow registry consistency" bash "$SCRIPT_DIR/workflow-registry-consistency.sh" --quiet
 run_check "Mode resolver validate" bash "$SCRIPT_DIR/mode-resolver.sh" --validate
 run_check "Mode resolver selftest" bash "$SCRIPT_DIR/mode-resolver-selftest.sh"
+run_check "Mode-resolver phase-multiplicity selftest (IMP-102 / SCOPE-2)" bash "$SCRIPT_DIR/mode-resolver-phase-multiplicity-selftest.sh"
 run_check "Risk-tier resolver selftest (BFW-01 / IMP-021)" bash "$SCRIPT_DIR/risk-tier-resolve-selftest.sh"
 run_check "Rapid-tool-delivery mode selftest (IMP-100 Phase 1)" bash "$SCRIPT_DIR/rapid-tool-delivery-mode-selftest.sh"
 run_check "Work-boundary resolver selftest (IMP-100 Phase 4 R6)" bash "$SCRIPT_DIR/work-boundary-resolve-selftest.sh"
@@ -305,6 +357,16 @@ run_check_self_only "Framework-validate tiering selftest (IMP-012)" bash "$SCRIP
 run_check_self_only "Install provenance selftest" bash "$SCRIPT_DIR/install-provenance-selftest.sh"
 run_check_self_only "Trust doctor selftest" bash "$SCRIPT_DIR/trust-doctor-selftest.sh"
 run_check "Repo-binding preflight selftest (BFW-05 / IMP-025)" bash "$SCRIPT_DIR/repo-binding-preflight-selftest.sh"
+# The aggregate reports each focused IMP-103 suite, including the conformance
+# guard selftest. Do not add a second standalone conformance-selftest run here.
+run_check "Repository work-boundary aggregate selftest (IMP-103 / G129)" \
+  bash "$SCRIPT_DIR/cli.sh" repository-binding-selftest --suite=all
+run_check "Repository host-context bridge selftest (IMP-103 / G129)" \
+  bash "$SCRIPT_DIR/repository-binding-host-context-selftest.sh"
+# The live guard checks canonical source consumers and therefore has no valid
+# downstream equivalent; hermetic aggregate coverage still runs downstream.
+run_check_self_only "Repository work-boundary conformance guard (live, G129)" \
+  bash "$SCRIPT_DIR/repository-binding-conformance-guard.sh" --root "$REPO_ROOT"
 run_check "Finding closure selftest" bash "$SCRIPT_DIR/finding-closure-selftest.sh"
 run_check "Super surface selftest" bash "$SCRIPT_DIR/super-surface-selftest.sh"
 run_check "Workflow delegation selftest" bash "$SCRIPT_DIR/workflow-delegation-selftest.sh"
@@ -341,6 +403,7 @@ run_check "Design-experiment guard selftest (IMP-100 Phase 4 / IMP-026 SCOPE-8)"
 run_check "Work-tracker projection selftest (IMP-100 Phase 4 / IMP-026 SCOPE-7)" bash "$SCRIPT_DIR/work-tracker-project-selftest.sh"
 run_check "Scope context-fit lint selftest (IMP-100 Phase 4 / IMP-026 SCOPE-6)" bash "$SCRIPT_DIR/scope-context-fit-lint-selftest.sh"
 run_check "Expand-migrate-contract guard selftest (IMP-100 Phase 4 / IMP-026 SCOPE-2)" bash "$SCRIPT_DIR/expand-migrate-contract-guard-selftest.sh"
+run_check "IMP-021 interaction-discipline contracts selftest (SCOPE-1/3/4 + SCOPE-2 wiring)" bash "$SCRIPT_DIR/imp021-interaction-contracts-selftest.sh"
 run_check "Post-certification spec edit guard selftest" bash "$SCRIPT_DIR/post-cert-spec-edit-guard-selftest.sh"
 run_check "Inter-spec dependency guard selftest" bash "$SCRIPT_DIR/inter-spec-dependency-guard-selftest.sh"
 run_check "Strict terminal status guard selftest" bash "$SCRIPT_DIR/strict-terminal-status-guard-selftest.sh"
@@ -360,6 +423,10 @@ fi
 
 if [[ -x "$SCRIPT_DIR/state-snapshot-selftest.sh" ]]; then
   run_check "State snapshot selftest" bash "$SCRIPT_DIR/state-snapshot-selftest.sh"
+fi
+
+if [[ -x "$SCRIPT_DIR/runtime-concurrency-selftest.sh" ]]; then
+  run_check "Runtime concurrency selftest (IMP-102 / SCOPE-8)" bash "$SCRIPT_DIR/runtime-concurrency-selftest.sh"
 fi
 
 if [[ -x "$SCRIPT_DIR/implementation-reality-scan-selftest.sh" ]]; then
@@ -577,6 +644,21 @@ if [[ -x "$SCRIPT_DIR/effective-bundle-budget.sh" ]]; then
   # effectiveBundleMaxBytes budget. With no budget configured it is purely
   # informational (never blocks); opt-in blocking is per .github/bubbles-project.yaml.
   run_check_self_only "Effective-bundle budget (live)" bash "$SCRIPT_DIR/effective-bundle-budget.sh" "$REPO_ROOT"
+fi
+
+# IMP-102 / SCOPE-10: ratcheting PER-AGENT effective-bundle size budget. The
+# hermetic selftest runs everywhere (it builds its own fixtures + guards the
+# real-tree sync case). The live --check is source-only: it measures the
+# framework's OWN agents against the committed per-agent ceilings in
+# bubbles/agent-bundle-budgets.json, which is a source-repo artifact (classified
+# source-only in the release manifest, not shipped downstream where agents/ lives
+# under .github/agents). Mirrors the effective-bundle-budget wiring above.
+if [[ -x "$SCRIPT_DIR/agent-bundle-size-budget-selftest.sh" ]]; then
+  run_check "Agent bundle-size budget selftest (IMP-102 / SCOPE-10)" bash "$SCRIPT_DIR/agent-bundle-size-budget-selftest.sh"
+fi
+
+if [[ -x "$SCRIPT_DIR/agent-bundle-size-budget.sh" ]]; then
+  run_check_self_only "Agent bundle-size budget (ratcheting per-agent, IMP-102 / SCOPE-10)" bash "$SCRIPT_DIR/agent-bundle-size-budget.sh" --check --repo-root "$REPO_ROOT"
 fi
 
 if [[ "$LIST_TIER_ONLY" == "true" ]]; then

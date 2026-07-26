@@ -14,11 +14,16 @@ Use this module to keep routing responsibilities separated across the Bubbles fr
 
 Classify incoming workflow requests into exactly one of these buckets before Phase 0:
 
-1. `STRUCTURED` — explicit `mode:` keyword is present WITH concrete spec targets. `bubbles.workflow` may continue directly. **NOTE:** If spec targets are present but NO explicit `mode:` keyword exists, this is NOT structured — classify as `VAGUE` and delegate to `bubbles.super` for intent resolution. The presence of spec targets alone does not make a request structured.
-2. `CONTINUATION` — continuation envelopes, run-state, recap/status/handoff packets, or explicit continuation language tied to active workflow state are present. Preserve the active workflow mode when possible. **Binding re-validation (IMP-025 MR3):** when a continuation envelope carries a `provenance` block (`repositoryRoot` / `agentSourceRoot` / `frameworkVersion`), re-validate the repo↔agent binding on resume before mutable work — run `bubbles/scripts/repo-binding-preflight.sh --repo-root <repositoryRoot> --agent-source <agentSourceRoot>` (or `--canonical-source` for framework work). A binding mismatch is a REFUSE: the resumed session is bound to a different workspace root than the handoff assumed; surface the mismatch + remediation instead of editing.
-3. `VAGUE` — plain-English goal with no explicit `mode:` keyword, OR spec targets present without `mode:`. Delegate to `bubbles.super` and consume a `RESOLUTION-ENVELOPE`. This includes requests with planning-intent language ("plan", "design", "scope", "create specs", "create bugs", "planning cycle") even when the user names specific specs or features — the intent still needs NL-to-mode translation.
-4. `CONTINUE` — generic keep-going language with no recoverable active workflow target. Resolve through `bubbles.super` and route to `bubbles.goal` or `bubbles.iterate`; the workflow runner does not pick unrelated work.
-5. `FRAMEWORK` — framework operations such as doctor, hooks, upgrade, status, metrics, lessons, gates, or install. Delegate to `bubbles.super` and consume a `FRAMEWORK-ENVELOPE`.
+1. `STRUCTURED` — explicit `mode:` keyword is present WITH concrete spec targets, concrete bug targets, or concrete ops targets. `bubbles.workflow` may continue directly. **NOTE:** If concrete targets are present but NO explicit `mode:` keyword exists, this is NOT structured — classify as `VAGUE` and delegate to `bubbles.super` for intent resolution. The presence of targets alone does not make a request structured.
+2. `TARGETLESS_MODE` — explicit `mode:` keyword is present without concrete spec, bug, or ops targets. Mode-only input and `mode:` plus `repositoryRoot` are both `TARGETLESS_MODE`; `repositoryRoot` selects the repository but is not a concrete work target. Repository preflight MUST commit before mode-specific target requirements or discovery are evaluated.
+3. `CONTINUATION` — continuation envelopes, run-state, recap/status/handoff packets, or explicit continuation language tied to active workflow state are present. Preserve the active workflow mode when possible. **Binding re-validation (IMP-025 MR3):** when a continuation envelope carries a `provenance` block (`repositoryRoot` / `agentSourceRoot` / `frameworkVersion`), re-validate the repo↔agent binding on resume before mutable work — run `bubbles/scripts/repo-binding-preflight.sh --repo-root <repositoryRoot> --agent-source <agentSourceRoot>` (or `--canonical-source` for framework work). A binding mismatch is a REFUSE: the resumed session is bound to a different workspace root than the handoff assumed; surface the mismatch + remediation instead of editing.
+4. `VAGUE` — plain-English goal with no explicit `mode:` keyword, OR spec targets present without `mode:`. Delegate to `bubbles.super` and consume a `RESOLUTION-ENVELOPE`. This includes requests with planning-intent language ("plan", "design", "scope", "create specs", "create bugs", "planning cycle") even when the user names specific specs or features — the intent still needs NL-to-mode translation.
+5. `CONTINUE` — generic keep-going language with no recoverable active workflow target. Resolve through `bubbles.super` and route to `bubbles.goal` or `bubbles.iterate`; the workflow runner does not pick unrelated work.
+6. `FRAMEWORK` — framework operations such as doctor, hooks, upgrade, status, metrics, lessons, gates, or install. Delegate to `bubbles.super` and consume a `FRAMEWORK-ENVELOPE`.
+
+### Repository Binding Preflight (MANDATORY)
+
+Every classified request MUST complete `bubbles/scripts/repository-binding.sh preflight` and obtain `PREFLIGHT_COMMITTED` before reading repository-local state, expanding a relative target, scanning a repository, selecting work, invoking a repository-owned command, or dispatching a specialist. Classification does not authorize repository-local work. Mode-specific target requirements and any auto-discovery rule are evaluated only after preflight, against the committed `repositoryRoot` and its current actionable packet.
 
 ### Work-Boundary Preflight (R6 — anti-wandering)
 
@@ -43,8 +48,8 @@ Backward-compatible: a feature with no declared `workBoundary` (or no `state.jso
 Before applying the classification contract, perform this literal substring check:
 
 1. **Scan the raw user input for the exact token `mode:`**
-2. If `mode:` is NOT present anywhere in the input → classify as `VAGUE` → delegate to `bubbles.super`
-3. If `mode:` IS present → continue to the classification rules above
+2. If `mode:` is NOT present anywhere in the input → continue to the no-mode classification rules above. Preserve `CONTINUATION`, `VAGUE`, `CONTINUE`, and `FRAMEWORK` semantics; never classify the request as `STRUCTURED` or `TARGETLESS_MODE`.
+3. If `mode:` IS present → classify as `STRUCTURED` only when a concrete spec, bug, or ops target is also present; otherwise classify as `TARGETLESS_MODE`.
 
 **There are ZERO exceptions.** The following do NOT constitute structured input:
 - Action verbs: "execute", "plan", "deliver", "implement", "run", "complete", "invoke"
@@ -75,7 +80,7 @@ Before applying the classification contract, perform this literal substring chec
 
 - `RESOLUTION-ENVELOPE` provides the resolved workflow mode, targets, and optional tags for Phase 0.
 - `WORK-ENVELOPE` provides the resolved spec, scope, workflow mode, and work type for Phase 0.
-- `FRAMEWORK-ENVELOPE` is terminal for framework operations; report the result and stop instead of entering the workflow phase engine.
+- `FRAMEWORK-ENVELOPE` is terminal for framework operations, but it is still repository-sensitive: carry the exact `repositoryRoot`, `repositoryAlias`, and complete `repositoryResolution` unchanged; run `bubbles/scripts/repository-binding.sh validate-packet` and compare with the dispatch packet before reporting. Stale, substituted, malformed, cross-scope, public, or redacted framework envelopes refuse. Only after exact validation may the runner report the result and stop instead of entering the workflow phase engine.
 
 ### Continuation Preservation Rules
 
@@ -87,7 +92,7 @@ Before applying the classification contract, perform this literal substring chec
 
 Use this summary before Phase 0 when no explicit `mode:` is present:
 
-1. `STRUCTURED` input (explicit `mode:` + spec targets) stays inside `bubbles.workflow`.
+1. `STRUCTURED` input (explicit `mode:` + concrete spec, bug, or ops targets) stays inside `bubbles.workflow`.
 2. `VAGUE` input (no `mode:` keyword, OR natural-language intent even with spec targets) delegates to `bubbles.super` and consumes only a `RESOLUTION-ENVELOPE`.
 3. `CONTINUE` input with no recoverable active workflow delegates resolution to `bubbles.super` and routes to the returned top-level runner.
 4. `FRAMEWORK` input delegates to `bubbles.super` and consumes only a `FRAMEWORK-ENVELOPE`.

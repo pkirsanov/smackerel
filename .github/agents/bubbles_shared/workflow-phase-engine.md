@@ -2,6 +2,28 @@
 
 Use this module as the canonical source for the sequential per-spec execution engine and workflow closeout contract in `bubbles.workflow`.
 
+## Repository Binding Consumer Contract
+
+The phase engine MUST validate the current actionable repository-binding packet and require `PREFLIGHT_COMMITTED` before repository-local state reads, relative-path expansion, candidate scans, work selection, repository-owned commands, or specialist dispatch. A missing, stale, redacted, root-substituted, or field-incomplete packet refuses before side effects.
+
+Every repository-sensitive consumer requires all of these fields unchanged:
+
+- repositoryRoot
+- repositoryAlias
+- repositoryResolution.sessionId
+- repositoryResolution.decisionId
+- repositoryResolution.controlRevision
+- repositoryResolution.controlPathDigest
+- repositoryResolution.authority
+- repositoryResolution.transition
+- repositoryResolution.scopeKind
+- repositoryResolution.scopeId
+- repositoryResolution.targetKind
+- repositoryResolution.pathVisibility
+- repositoryResolution.actionable
+
+When a phase requires targetless stochastic or iterate discovery, it MUST call `bubbles/scripts/repository-binding.sh discover-specs` with the current actionable packet after preflight. It may consume candidates only after the exact event `DISCOVERY SCOPE mode=<mode> root=<resolvedRepositoryRoot>/specs`; it must never reconstruct a discovery root from ambient state.
+
 ### Phase 1: Per-Spec Orchestration Loop
 
 This section owns the full sequential single-spec execution contract, including:

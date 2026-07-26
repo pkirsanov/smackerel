@@ -125,6 +125,19 @@ This agent is intentionally lighter than `bubbles.workflow` and narrower than `b
 3. If neither is provided, use `defaultProfile` from `bubbles/code-review.yaml`
 4. If the request triggers any escalation rule from `bubbles/code-review.yaml`, route to `bubbles.system-review`
 
+### Mandatory Review Axes (Orthogonal Verdicts)
+
+Every run reports TWO independent top-level axes, each resolved from the `axes:` block in `bubbles/code-review.yaml`, each in its OWN specialist context, each with its own verdict (`passed`/`failed`) and its own findings:
+
+- **Contract/Spec Fidelity** — does the diff implement the originating requirement/spec without omission or scope injection? Fed by the `gaps` and `validate` lenses.
+- **Engineering Standards/Quality** — does the diff follow repository policy and sound engineering practice? Fed by the `harden`, `simplify`, `stabilize`, `devops`, `security`, `tests`, and `docs` lenses.
+
+Rules:
+- Run the two axes in SEPARATE specialist contexts; report a verdict plus findings for EACH.
+- Deduplicate findings WITHIN an axis. A finding that belongs to both axes is retained under BOTH with a shared fingerprint so cross-axis identity stays visible.
+- Optional security/stability/tests/docs/simplify lenses enrich the Engineering axis; they never collapse the two top-level verdicts into one score.
+- A failure on EITHER axis stays visible and independently routeable. No aggregate priority list may convert a failed axis into an overall clean result — `Spec: failed / Standards: passed` and `Spec: passed / Standards: failed` are both reported unchanged.
+
 ### What It Reuses
 
 - `bubbles.gaps` for code-vs-spec/design/requirements drift
@@ -159,41 +172,46 @@ Every run MUST produce the same structure, in this order:
 - Lenses used
 - Inputs consulted
 
-## 2. Engineering Summary
+## 2. Axis Verdicts (MANDATORY — orthogonal, never merged)
+- **Contract/Spec Fidelity:** passed|failed — <one-line basis>
+- **Engineering Standards/Quality:** passed|failed — <one-line basis>
+
+Report BOTH verdicts every run. A failed axis stays `failed` here even when the other axis passes and even when the prioritized action list is short; neither verdict is derived from the other.
+
+## 3. Engineering Summary
 - Overall code health assessment
 - Top engineering priorities
 - Key code risks
 - Engineering assessment
 
-## 3. Findings by Lens
-### Gaps / Spec Alignment
-### Hardening / Quality
-### Simplification
-### Stability / Infrastructure
-### Security / Compliance
-### Validation
-### Tests / Test Realism
-### Documentation
+## 4. Findings by Axis
+### Contract/Spec Fidelity (lenses: gaps, validate)
+### Engineering Standards/Quality (lenses: harden, simplify, stabilize, devops, security, tests, docs)
 
 For each finding use:
 - `ID`
+- `Axis`: spec-fidelity|engineering-standards
+- `Fingerprint`: stable id shared across axes when the same underlying issue appears on both
 - `Severity`: critical|high|medium|low
 - `Impact`: correctness|operational|security|quality|docs
 - `Location`
 - `Finding`
 - `Recommendation`
 
-## 4. Prioritized Actions
+## 5. Prioritized Actions (per axis — no cross-axis merge)
+For EACH axis independently:
 1. Immediate
 2. Near-term
 3. Backlog
 
-## 5. Artifact Outputs
+No aggregate list may convert a failed axis into an overall clean result.
+
+## 6. Artifact Outputs
 - Summary doc written: yes|no
 - Follow-up command(s): optional
 ```
 
-If a requested lens finds nothing material, keep the section and state `No material findings.`
+If a requested axis or lens finds nothing material, keep its subsection and state `No material findings.`
 
 ---
 
@@ -232,11 +250,13 @@ Dispatch each requested lens to the mapped specialist from `bubbles/code-review.
 
 When dispatching, explicitly tell the specialist it is contributing to an engineering code review rather than a product/system review or a spec-completion flow.
 
-### Phase 3: Normalize and Prioritize
+### Phase 3: Resolve Axis Verdicts (no cross-axis merge)
 
-1. Deduplicate overlapping findings from multiple lenses
-2. Merge them into one prioritized action list
-3. Tag each finding as:
+1. Assign every finding to its axis (Contract/Spec Fidelity or Engineering Standards/Quality) from the lens→axis map in `bubbles/code-review.yaml`.
+2. Deduplicate findings WITHIN each axis. A finding that belongs to BOTH axes is retained under both with a shared `Fingerprint`.
+3. Compute an INDEPENDENT verdict per axis: `failed` if that axis holds any unresolved blocking finding, else `passed`. Neither verdict is derived from the other.
+4. Produce prioritized actions PER AXIS. No aggregate priority list may convert a failed axis into an overall clean result.
+5. Tag each finding as:
    - `fix directly`
    - `route to system-review`
    - `document only`

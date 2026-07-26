@@ -42,6 +42,10 @@ handoffs:
 
 **Workflow Runner Contract:** When invoked as the top-level agent, `bubbles.journey` may execute its granted `journey-refinement` mode, invoking each phase owner directly with `executionModel: direct-authorized-runner`. When invoked for the `journey` phase by another runner, perform only the guided journey phase and return a RESULT-ENVELOPE; never launch a nested workflow.
 
+## Repository Binding (NON-NEGOTIABLE)
+
+Before any feature, runtime config, state, user-validation, telemetry, or dispatch read, follow [repository-binding-preflight.md](bubbles_shared/repository-binding-preflight.md). A top-level invocation executes `bubbles/scripts/repository-binding.sh preflight` and requires the current actionable packet plus `PREFLIGHT_COMMITTED`. A phase invocation executes `bubbles/scripts/repository-binding.sh validate-packet` against the inherited packet and requires local actionable `repositoryResolution`; successful validation is its `PREFLIGHT_COMMITTED` anchor. Never infer or substitute a root from CWD, prompts, editor state, or tools.
+
 **Core stance:** A journey ALWAYS works toward a concrete user GOAL. It drives the real running product step by step and, at each step, captures the outcome as one of `{works | unclear | inconvenient | missing | broken}`. It is the THIRD stance alongside `bubbles.chaos` (stochastic/random) and `bubbles.redteam` (adversarial): **cooperative-guided on finished results, WITH the user.** Stated plainly: **grill pressure-tests ideas pre-build; redteam attacks finished results; journey walks the finished result with the user and refines it.**
 
 **Behavioral Rules (follow Autonomous Operation within Guardrails in agent-common.md — EXCEPT the checkpoint-interactive override in the Interaction Model section below, which this agent is the one deliberate exception to):**

@@ -19,6 +19,8 @@
 #   agnosticity [--staged]        Check portable Bubbles surfaces for drift
 #   guard <spec>                  Run state transition guard on a spec
 #   runtime-selftest              Run runtime lease selftest coverage
+#   repository-binding-selftest [--suite=foundation|all]
+#                                 Run focused or aggregate repository-binding selftests
 #   finding-closure-selftest      Run finding-set closure selftest coverage
 #   scan <spec>                   Run implementation reality scan on a spec
 #   regression-quality [args...]  Run bailout/adversarial regression quality scan on test files or dirs
@@ -49,6 +51,16 @@
 
 set -uo pipefail
 
+# IMP-102 SCOPE-5: Bubbles requires bash 4.0+ — the framework uses associative
+# arrays (declare -A) pervasively (12+ scripts). On stock macOS bash 3.2 these
+# constructs fail; previously cli.sh sourced them under `set -uo pipefail` WITHOUT
+# `-e` and returned exit 0, silently MASKING the breakage from installers/doctor/
+# CI. Fail LOUDLY and EARLY (before sourcing any declare -A script) instead.
+if [[ -z "${BASH_VERSINFO:-}" ]] || (( ${BASH_VERSINFO[0]:-0} < 4 )); then
+  printf 'ERROR: Bubbles requires bash 4.0+ (found %s). Install a newer bash (e.g. `brew install bash` on macOS) and re-run.\n' "${BASH_VERSION:-unknown}" >&2
+  exit 1
+fi
+
 # Source fun mode support
 source "$(dirname "${BASH_SOURCE[0]}")/fun-mode.sh"
 
@@ -78,6 +90,30 @@ CONTROL_PLANE_EVENT_FILE="$CONTROL_PLANE_RUNTIME_DIR/framework-events.jsonl"
 CONTROL_PLANE_RUN_STATE_FILE="$CONTROL_PLANE_RUNTIME_DIR/workflow-runs.json"
 ACTION_RISK_REGISTRY_FILE="$FRAMEWORK_DIR/action-risk-registry.yaml"
 ADOPTION_PROFILES_FILE="$FRAMEWORK_DIR/adoption-profiles.yaml"
+
+configure_repository_binding_test_root() {
+  local test_root="${BUBBLES_REPOSITORY_BINDING_TEST_ROOT:-}"
+
+  [[ "${CURRENT_BUBBLES_COMMAND:-}" == "repository-binding-selftest" ]] || return 0
+  if [[ -z "$test_root" ]]; then
+    test_root="$(mktemp -d "${TMPDIR:-/tmp}/bubbles-repository-binding-cli.XXXXXX")" || {
+      echo "repository-binding-selftest: unable to create hermetic CLI bookkeeping root" >&2
+      return 2
+    }
+  elif [[ "$test_root" != /* ]]; then
+    echo "repository-binding-selftest: BUBBLES_REPOSITORY_BINDING_TEST_ROOT must be absolute" >&2
+    return 2
+  fi
+
+  mkdir -p "$test_root/.specify/memory" "$test_root/.specify/runtime" || return 2
+  test_root="$(cd -P -- "$test_root" && pwd -P)" || return 2
+  SESSION_FILE="$test_root/.specify/memory/bubbles.session.json"
+  CONTROL_PLANE_RUNTIME_DIR="$test_root/.specify/runtime"
+  CONTROL_PLANE_RUNTIME_FILE="$CONTROL_PLANE_RUNTIME_DIR/resource-leases.json"
+  CONTROL_PLANE_EVENT_FILE="$CONTROL_PLANE_RUNTIME_DIR/framework-events.jsonl"
+  CONTROL_PLANE_RUN_STATE_FILE="$CONTROL_PLANE_RUNTIME_DIR/workflow-runs.json"
+  printf 'repository-binding-selftest: CLI bookkeepingRoot=%s\n' "$test_root"
+}
 
 # ── Colors ──────────────────────────────────────────────────────────
 if [[ -t 1 ]]; then
@@ -625,6 +661,20 @@ begin_cli_run_state() {
   CURRENT_RUN_POSTURE="$(classify_run_posture "${CURRENT_BUBBLES_COMMAND:-unknown}" "${CURRENT_BUBBLES_ARGS:-}")"
   CURRENT_RISK_CLASS="$(command_effective_risk_class "${CURRENT_BUBBLES_COMMAND:-unknown}" "${CURRENT_BUBBLES_ARGS:-}")"
 
+  # Read-only (pure observation) commands MUST NOT open, lock, or mutate the
+  # run-state registry. `bubbles status`, `specs`, `dod`, etc. only inspect
+  # state, so recording them as active/recent runs churns the shared registry
+  # file on every invocation and risks clobbering a concurrent owning command's
+  # run-state (the registry write is itself an unlocked read-modify-write). Only
+  # owning/mutating commands are tracked as runs. The append-only framework-event
+  # audit log below still records every command, read-only included.
+  if [[ "$CURRENT_RISK_CLASS" == "read_only" ]]; then
+    CURRENT_RUN_STATE_TRACKED=false
+    record_framework_event "framework_command_started" "pending" 0 "args=${CURRENT_BUBBLES_ARGS:-}" "$CURRENT_RISK_CLASS" "$(first_tracking_target "${CURRENT_BUBBLES_ARGS:-}")" "$CURRENT_RUN_ID"
+    return 0
+  fi
+  CURRENT_RUN_STATE_TRACKED=true
+
   ensure_run_state_registry
   active_lines="$(run_state_lines activeRuns)"
   new_line="$(build_run_record_line "$CURRENT_RUN_ID" 'active' "$CURRENT_RUN_STARTED_AT" "$CURRENT_RUN_STARTED_AT" '' 'pending' 0 "$(first_tracking_target "${CURRENT_BUBBLES_ARGS:-}")" "$(runtime_attachment_for_session "$CURRENT_SESSION_ID")" "$CURRENT_RUN_POSTURE" "$CURRENT_RISK_CLASS")"
@@ -649,6 +699,11 @@ complete_cli_run_state() {
   local target runtime_attachment active_lines recent_lines line updated_recent completed_line
 
   [[ -n "${CURRENT_RUN_ID:-}" ]] || return 0
+
+  # Read-only commands never opened a run-state record (see begin_cli_run_state);
+  # do not create one on completion either, so pure observation leaves run-state
+  # untouched end to end.
+  [[ "${CURRENT_RUN_STATE_TRACKED:-true}" == true ]] || return 0
 
   ensure_run_state_registry
   target="$(first_tracking_target "${CURRENT_BUBBLES_ARGS:-}")"
@@ -1170,6 +1225,8 @@ Commands:
   guard <spec>                  Run state transition guard on a spec
   guard-selftest                Run the transition guard selftest suite
   runtime-selftest              Run the runtime lease selftest suite
+  repository-binding-selftest [--suite=foundation|all]
+                                Run focused or aggregate repository-binding selftests
   finding-closure-selftest      Run the finding-set closure selftest suite
   workflow-selftest             Run workflow command-surface smoke checks
   scan <spec>                   Run implementation reality scan on a spec
@@ -1482,6 +1539,11 @@ cmd_session() {
 
 cmd_trajectory() {
   bash "$SCRIPT_DIR/trajectory-inspector.sh" --repo-root "$REPO_ROOT" "$@"
+}
+
+cmd_repository_binding_selftest() {
+  BUBBLES_REPOSITORY_BINDING_CLI_BOUNDARY=1 \
+    bash "$SCRIPT_DIR/repository-binding-selftest.sh" "$@"
 }
 
 cmd_lint() {
@@ -3115,20 +3177,40 @@ cmd_upgrade() {
     return
   fi
 
-  # Download and run install.sh
+  # Download and run install.sh. cli.sh runs `set -uo pipefail` WITHOUT `-e`, so a
+  # failed install does NOT abort this function on its own; each branch's exit
+  # status MUST be captured explicitly (IMP-102 SCOPE-6). Without this, a broken
+  # install fell through to the unconditional "✅ Upgrade complete." + `fun_summary
+  # pass` below, reporting success for a failed upgrade. The curl|bash branch
+  # relies on `pipefail` so a curl failure (not just the bash side) is also caught.
   proj_root="$(project_root)"
+  local install_rc=0
   if [[ -n "$local_source" ]]; then
-    bash "$local_source/install.sh" --local-source "$local_source"
+    bash "$local_source/install.sh" --local-source "$local_source" || install_rc=$?
   elif [[ -n "${BUBBLES_SOURCE_OVERRIDE_DIR:-}" ]]; then
     export BUBBLES_SOURCE_OVERRIDE_DIR
-    bash "$BUBBLES_SOURCE_OVERRIDE_DIR/install.sh" "$target_version"
+    bash "$BUBBLES_SOURCE_OVERRIDE_DIR/install.sh" "$target_version" || install_rc=$?
   else
-    curl -fsSL "https://raw.githubusercontent.com/${repo}/${target_version}/install.sh" | bash -s -- "$target_version"
+    curl -fsSL "https://raw.githubusercontent.com/${repo}/${target_version}/install.sh" | bash -s -- "$target_version" || install_rc=$?
   fi
 
-  # Run doctor to validate
+  if [[ "$install_rc" -ne 0 ]]; then
+    echo "❌ Upgrade failed: install.sh exited $install_rc" >&2
+    fun_summary fail
+    return "$install_rc"
+  fi
+
+  # Run doctor to validate. A non-zero doctor result means the upgrade landed an
+  # inconsistent framework state; surface it and stop rather than declaring
+  # success. Doctor runs ONLY after a clean install (guaranteed by the guard above).
   echo ""
-  cmd_doctor
+  local doctor_rc=0
+  cmd_doctor || doctor_rc=$?
+  if [[ "$doctor_rc" -ne 0 ]]; then
+    echo "❌ Upgrade incomplete: doctor validation failed (exit $doctor_rc)" >&2
+    fun_summary fail
+    return "$doctor_rc"
+  fi
 
   # Staleness recommendations
   echo ""
@@ -3179,6 +3261,7 @@ main() {
   CURRENT_BUBBLES_ARGS="$*"
   COMMAND_START_MS="$(current_epoch_ms)"
   CLI_RECORDING_ACTIVE=true
+  configure_repository_binding_test_root || return $?
   begin_cli_run_state
   trap 'record_cli_completion $?' EXIT
 
@@ -3195,6 +3278,7 @@ main() {
     guard)              cmd_guard "$@" ;;
     guard-selftest)     cmd_guard_selftest "$@" ;;
     runtime-selftest)   cmd_runtime_selftest "$@" ;;
+    repository-binding-selftest) cmd_repository_binding_selftest "$@" ;;
     finding-closure-selftest) cmd_finding_closure_selftest "$@" ;;
     workflow-selftest)  cmd_workflow_selftest "$@" ;;
     scan)               cmd_scan "$@" ;;
