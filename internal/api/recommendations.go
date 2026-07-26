@@ -12,6 +12,7 @@ import (
 
 	"github.com/smackerel/smackerel/internal/config"
 	"github.com/smackerel/smackerel/internal/recommendation"
+	recavailability "github.com/smackerel/smackerel/internal/recommendation/availability"
 	recprovider "github.com/smackerel/smackerel/internal/recommendation/provider"
 	"github.com/smackerel/smackerel/internal/recommendation/reactive"
 	recstore "github.com/smackerel/smackerel/internal/recommendation/store"
@@ -358,14 +359,72 @@ type providerOperatorView struct {
 	ConfiguredCategories []string `json:"configured_categories,omitempty"`
 }
 
+// availabilityCountsView is the bounded, credential-free provider tally the
+// recommendation status endpoint surfaces alongside the readiness verdict.
+type availabilityCountsView struct {
+	Declared          int `json:"declared"`
+	Eligible          int `json:"eligible"`
+	HealthyEligible   int `json:"healthy_eligible"`
+	UnhealthyEligible int `json:"unhealthy_eligible"`
+	Fixtures          int `json:"fixtures"`
+}
+
+// availabilityView is the honest recommendation-readiness projection returned by
+// GET /api/recommendations/providers. Readiness is derived by the availability
+// gate over the real configured-provider state (BUG-039-005): an enabled
+// capability with zero eligible healthy production providers reports
+// ready=false, never false-ready from enablement or registry cardinality.
+type availabilityView struct {
+	Enabled   bool                   `json:"enabled"`
+	Ready     bool                   `json:"ready"`
+	State     string                 `json:"state"`
+	Cause     string                 `json:"cause"`
+	Category  string                 `json:"category"`
+	Operation string                 `json:"operation"`
+	Counts    availabilityCountsView `json:"counts"`
+}
+
+// computeAvailabilityView derives the live recommendation readiness verdict from
+// the real provider registry via the availability gate. Readiness is evaluated
+// for the primary place-request path; the evaluated category and operation are
+// reported so the projection is transparent, never a bare boolean. Reuses the
+// availability Service gate rather than re-deriving readiness.
+func (h *RecommendationHandlers) computeAvailabilityView(ctx context.Context) availabilityView {
+	var lister recavailability.ProviderLister
+	if h.registry != nil {
+		lister = h.registry
+	}
+	snap := recavailability.NewService(lister, h.cfg.Enabled, 0, time.Now).
+		Snapshot(ctx, recommendation.CategoryPlace, recavailability.OperationRequest, false)
+	return availabilityView{
+		Enabled:   snap.Enabled,
+		Ready:     snap.Ready(),
+		State:     string(snap.State),
+		Cause:     string(snap.Cause),
+		Category:  string(snap.Category),
+		Operation: string(snap.Operation),
+		Counts: availabilityCountsView{
+			Declared:          snap.Counts.Declared,
+			Eligible:          snap.Counts.Eligible,
+			HealthyEligible:   snap.Counts.HealthyEligible,
+			UnhealthyEligible: snap.Counts.UnhealthyEligible,
+			Fixtures:          snap.Counts.Fixtures,
+		},
+	}
+}
+
 // ListProviders handles GET /api/recommendations/providers. The default
 // response is the sanitized end-user view; operators may pass
 // `?view=operator` to request the detailed view that includes provider
 // reasons, attribution labels, and config-sourced quota windows. API keys
-// MUST NEVER be included in either view.
+// MUST NEVER be included in either view. Every response also carries the honest
+// `availability` readiness verdict derived from the availability gate over the
+// real registry (BUG-039-005) so no consumer can infer false-ready from the
+// mere presence of the endpoint or the provider count.
 func (h *RecommendationHandlers) ListProviders(w http.ResponseWriter, r *http.Request) {
+	avail := h.computeAvailabilityView(r.Context())
 	if h.registry == nil {
-		writeJSON(w, http.StatusOK, map[string]any{"providers": []any{}})
+		writeJSON(w, http.StatusOK, map[string]any{"providers": []any{}, "availability": avail})
 		return
 	}
 	view := strings.TrimSpace(r.URL.Query().Get("view"))
@@ -391,7 +450,7 @@ func (h *RecommendationHandlers) ListProviders(w http.ResponseWriter, r *http.Re
 			detail = enrichOperatorViewFromConfig(detail, h.cfg)
 			out = append(out, detail)
 		}
-		writeJSON(w, http.StatusOK, map[string]any{"providers": out, "view": "operator"})
+		writeJSON(w, http.StatusOK, map[string]any{"providers": out, "view": "operator", "availability": avail})
 		return
 	}
 	out := make([]providerView, 0, len(providers))
@@ -408,7 +467,7 @@ func (h *RecommendationHandlers) ListProviders(w http.ResponseWriter, r *http.Re
 			Status:      string(health.Status),
 		})
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"providers": out, "view": "sanitized"})
+	writeJSON(w, http.StatusOK, map[string]any{"providers": out, "view": "sanitized", "availability": avail})
 }
 
 // enrichOperatorViewFromConfig populates the operator-only fields by mapping

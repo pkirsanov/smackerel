@@ -89,6 +89,12 @@ func (p *FixtureProvider) SetHealth(status RuntimeStatus, reason string) {
 	p.health.Reason = reason
 }
 
+// IsFixtureProvider marks this provider as a build- and type-isolated test
+// fixture (BUG-039-005). The availability readiness gate uses this TYPED marker
+// — never an ID prefix — to exclude fixtures from every production readiness
+// denominator, so a fixture-only registry can never report false-ready.
+func (p *FixtureProvider) IsFixtureProvider() bool { return true }
+
 func (p *FixtureProvider) placeFacts(query ReducedQuery) []Fact {
 	now := time.Now().UTC()
 	lowerQuery := strings.ToLower(query.Query)
