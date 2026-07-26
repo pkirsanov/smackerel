@@ -67,22 +67,22 @@ Shadow adapters can be disabled by reverting the product release; active user be
 #### Test Evidence - 6 Rows / 6 Items
 
 - [x] XP106-04-U passes with current-session evidence in `report.md#xp106-04-u`.
-- [ ] XP106-04-I passes against real session and owner inputs in `report.md#xp106-04-i`.
+- [x] XP106-04-I passes against real session and owner inputs in `report.md#xp106-04-i`.
 - [ ] XP106-04-A passes through real routes in `report.md#xp106-04-a`.
 - [ ] XP106-04-W passes without interception in `report.md#xp106-04-w`.
 - [ ] XP106-04-C passes every independent canary in `report.md#xp106-04-c`.
-- [ ] XP106-04-R passes the atomic rollback proof in `report.md#xp106-04-r`.
+- [x] XP106-04-R passes the atomic rollback proof in `report.md#xp106-04-r`.
 
 #### Shared-Infrastructure And Regression Planning
 
 - [ ] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior in the shadow adapters (server/PWA/Card projection parity, fail-closed adapter errors, settled markers) exist and pass — see `report.md#xp106-04-a`.
 - [ ] Broader E2E regression suite passes with no shadow-adapter-induced regression to current navigation or page bodies — see `report.md#xp106-04-w`.
 - [ ] Independent canary suite for shared fixture/bootstrap contracts passes before broad suite reruns (native Search, HTMX read, HTMX mutation, Digest, Assistant shell, Wiki, Card PRG, PWA auth, logout/replay, service-worker, non-UI core) — see `report.md#xp106-04-c`.
-- [ ] Rollback or restore path for shared infrastructure changes is documented and verified (atomic asset/adapter release pointer swap that preserves routes and data and installs no static optimistic fallback) — see `report.md#xp106-04-r`.
+- [x] Rollback or restore path for shared infrastructure changes is documented and verified (atomic asset/adapter release pointer swap that preserves routes and data and installs no static optimistic fallback) — see `report.md#xp106-04-r`.
 
 #### Build Quality Gate
 
 - [ ] Golden parity, canary ordering, privacy, CSP, service-worker, no-interception, rollback, check, lint, format, artifact lint, traceability, and directly affected testing/architecture documentation checks pass with zero warnings.
 - [ ] Change Boundary is respected and zero excluded file families were changed — see `report.md#xp106-04-change-boundary`.
 
-> **Slice status (honest coupling):** Slice 1 (shared shell shadow adapters + the XP106-04-U unit golden-parity lane) is proven with current-session evidence in `report.md#xp106-04-u`; Core Outcomes 1 and 2 and XP106-04-U are checked. The integration (XP106-04-I), e2e-api (XP106-04-A), e2e-ui (XP106-04-W), shared-infrastructure canary (XP106-04-C), and rollback (XP106-04-R) lanes, Core Outcome 3, the shared-infrastructure/regression rows, and the Build Quality Gate are coupled-forward to a later slice (they require the live stack); the authenticated PWA-auth canary is additionally gated on BUG-070-001's unified production browser session. All of those remain unchecked.
+> **Slice status (honest coupling):** Slice 1 (shared shell shadow adapters + the XP106-04-U unit golden-parity lane) and slice 2 (the XP106-04-I integration + XP106-04-R rollback live lanes) are proven with current-session evidence in `report.md#xp106-04-u`, `report.md#xp106-04-i`, and `report.md#xp106-04-r`; Core Outcomes 1 and 2, XP106-04-U, XP106-04-I, XP106-04-R, and the shared-infrastructure rollback/restore-path row are checked. The e2e-api (XP106-04-A), e2e-ui (XP106-04-W), and shared-infrastructure canary (XP106-04-C) lanes, Core Outcome 3 (its high-fan-out canary half is still open), the two E2E-regression rows, and the Build Quality Gate are coupled-forward to a later slice (they require real browser routes / the live PWA DOM); the authenticated PWA-auth canary is additionally gated on BUG-070-001's unified production browser session. All of those remain unchecked.
