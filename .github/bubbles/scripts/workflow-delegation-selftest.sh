@@ -27,6 +27,7 @@ fi
 # fall back to workflows.yaml for pre-split repos with an inline modes: block.
 MODES_FILE="$BUBBLES_DIR/workflows/modes.yaml"
 [[ -f "$MODES_FILE" ]] || MODES_FILE="$BUBBLES_DIR/workflows.yaml"
+DELEGATION_CORE="$AGENTS_DIR/bubbles_shared/workflow-delegation-core.md"
 
 failures=0
 
@@ -63,13 +64,50 @@ check_no_pattern() {
   fi
 }
 
+classification_contract_class() {
+  local marker="$1"
+
+  awk -v marker="$marker" '
+    index($0, marker) > 0 && $0 ~ /^[0-9]+\. `[A-Z_]+`/ {
+      line = $0
+      sub(/^[0-9]+\. `/, "", line)
+      sub(/`.*/, "", line)
+      print line
+      exit
+    }
+  ' "$DELEGATION_CORE"
+}
+
+check_classification_case() {
+  local input_shape="$1"
+  local contract_marker="$2"
+  local expected_class="$3"
+  local actual_class=""
+
+  actual_class="$(classification_contract_class "$contract_marker")"
+  printf 'CLASSIFIER TABLE input=%s expected=%s actual=%s contract=%s\n' \
+    "$input_shape" "$expected_class" "${actual_class:-missing}" "$DELEGATION_CORE"
+  if [[ "$actual_class" == "$expected_class" ]]; then
+    pass "$input_shape is classified as $expected_class by the authoritative delegation contract"
+  else
+    fail "$input_shape expected $expected_class from the authoritative delegation contract, got ${actual_class:-missing}"
+  fi
+}
+
 echo "Running workflow-delegation selftest..."
 echo "Scenario: workflow orchestration should delegate vague intent routing to super and work picking to iterate instead of duplicating those responsibilities."
 
-check_pattern "$AGENTS_DIR/bubbles_shared/workflow-delegation-core.md" '`bubbles\.super` is the ONLY natural-language dispatcher' "Shared delegation core assigns natural-language routing to super"
-check_pattern "$AGENTS_DIR/bubbles_shared/workflow-delegation-core.md" '`bubbles\.iterate` is the ONLY highest-priority work picker' "Shared delegation core assigns work selection to iterate"
-check_pattern "$AGENTS_DIR/bubbles_shared/workflow-delegation-core.md" 'MUST NOT recreate a local intent-to-mode keyword table' "Shared delegation core forbids duplicate workflow intent tables"
-check_pattern "$AGENTS_DIR/bubbles_shared/workflow-delegation-core.md" 'MUST NOT maintain its own work-priority heuristic' "Shared delegation core forbids duplicate workflow work pickers"
+# T3.1 reads the classification from the authoritative numbered contract. The
+# expected column is independent test truth; actual values are never copied from
+# the table or supplied to repository-binding preflight as tautological input.
+check_classification_case "mode-only" "Mode-only input" "TARGETLESS_MODE"
+check_classification_case "mode+repositoryRoot" '`mode:` plus `repositoryRoot`' "TARGETLESS_MODE"
+check_classification_case "mode+concrete-target" "concrete spec targets, concrete bug targets, or concrete ops targets" "STRUCTURED"
+
+check_pattern "$DELEGATION_CORE" '`bubbles\.super` is the ONLY natural-language dispatcher' "Shared delegation core assigns natural-language routing to super"
+check_pattern "$DELEGATION_CORE" '`bubbles\.iterate` is the ONLY highest-priority work picker' "Shared delegation core assigns work selection to iterate"
+check_pattern "$DELEGATION_CORE" 'MUST NOT recreate a local intent-to-mode keyword table' "Shared delegation core forbids duplicate workflow intent tables"
+check_pattern "$DELEGATION_CORE" 'MUST NOT maintain its own work-priority heuristic' "Shared delegation core forbids duplicate workflow work pickers"
 check_pattern "$AGENTS_DIR/bubbles.workflow.agent.md" '`bubbles\.super` is the ONLY natural-language dispatcher' "Workflow agent delegates vague routing to super"
 check_pattern "$AGENTS_DIR/bubbles.workflow.agent.md" 'returns `route_required` to that registered meta-mode owner' "Workflow agent routes work discovery to iterate without nesting it"
 check_pattern "$AGENTS_DIR/bubbles.workflow.agent.md" '^tools: \[.*agent.*\]' "Workflow agent frontmatter exposes subagent tool"
@@ -98,7 +136,7 @@ check_pattern "$MODES_FILE" 'allowDirectMappedWorkflowExecution: true' "Workflow
 check_pattern "$BUBBLES_DIR/workflows.yaml" '^workflowExecutionPolicy:' "Workflow policy declares authorized mode runners"
 check_pattern "$BUBBLES_DIR/workflows.yaml" 'defaultExecutionModel: direct-authorized-runner' "Workflow policy defaults to direct authorized runners"
 check_pattern "$BUBBLES_DIR/agent-capabilities.yaml" '^workflowModeGrants:' "Capability registry declares per-agent workflow grants"
-check_pattern "$AGENTS_DIR/bubbles_shared/workflow-delegation-core.md" 'executionModel: direct-authorized-runner' "Shared delegation core defines direct workflow execution"
+check_pattern "$DELEGATION_CORE" 'executionModel: direct-authorized-runner' "Shared delegation core defines direct workflow execution"
 check_pattern "$AGENTS_DIR/bubbles.workflow.agent.md" 'exactly one resolved workflow mode' "Workflow agent is a single-mode runner"
 check_pattern "$AGENTS_DIR/bubbles.goal.agent.md" 'Universal goal endpoint' "Goal agent is the universal outcome endpoint"
 check_no_pattern "$AGENTS_DIR/bubbles.goal.agent.md" 'preferred: runSubagent\(bubbles\.workflow\)' "Goal agent must not prefer nested workflow-agent execution"
@@ -107,7 +145,7 @@ check_no_pattern "$AGENTS_DIR/bubbles.sprint.agent.md" 'prefer one runSubagent\(
 check_no_pattern "$AGENTS_DIR/bubbles.workflow.agent.md" 'invoke `bubbles\.iterate` for generic work discovery' "Workflow must not invoke iterate as an unbounded fallback"
 check_pattern "$AGENTS_DIR/bubbles.sprint.agent.md" 'direct-authorized-runner' "Sprint directly executes granted goal workflows"
 check_pattern "$AGENTS_DIR/bubbles.workflow.agent.md" 'direct-authorized-runner' "Workflow agent documents direct authorized execution"
-check_pattern "$AGENTS_DIR/bubbles_shared/workflow-delegation-core.md" 'Do not assume a subagent can invoke another subagent' "Delegation core documents one-level runtime compatibility"
+check_pattern "$DELEGATION_CORE" 'Do not assume a subagent can invoke another subagent' "Delegation core documents one-level runtime compatibility"
 check_pattern "$AGENTS_DIR/bubbles.goal.agent.md" 'execute_mode_directly: bugfix-fastlane' "Goal directly executes bug remediation modes"
 check_pattern "$AGENTS_DIR/bubbles.sprint.agent.md" 'Never invoke `bubbles.goal`' "Sprint forbids nested goal execution"
 

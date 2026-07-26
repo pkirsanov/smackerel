@@ -7,7 +7,7 @@
 ## Prerequisites
 
 - A git repository
-- `curl`, `tar`, and `bash` (available on macOS, Linux, WSL)
+- `curl`, `tar`, and `bash` **4.0 or newer** (Linux/WSL ship bash 4+; macOS ships bash 3.2 as `/bin/bash`, so install a newer one with `brew install bash` — the Bubbles command surface fails loudly on bash < 4)
 - A SHA-256 utility (`sha256sum` or `shasum`) for install provenance checksums
 - VS Code with GitHub Copilot Chat extension
 
@@ -39,6 +39,8 @@ This installs:
 - Workflow config → `.github/bubbles/workflows.yaml`
 - Agent registries → `.github/bubbles/agent-ownership.yaml`, `.github/bubbles/agent-capabilities.yaml`
 - Governance scripts → `.github/bubbles/scripts/*.sh`
+
+> **Source-only media is not shipped.** The downstream install payload is exactly the set of files tracked in `bubbles/release-manifest.json` (agents, prompts, shared docs, instructions, skills, workflow config, registries, and governance scripts — copied under `.github/` above). Repo-root media such as `pictures/` (~411 MiB of README/branding art) is **source-only**: it has zero release-manifest entries and is never copied by `install.sh`, so it does not ride along in a downstream install even though it lives in the source-archive tarball.
 
 And with `--bootstrap`, also creates:
 - `.github/copilot-instructions.md` — project policies and commands

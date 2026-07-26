@@ -212,6 +212,7 @@ end-to-end flows.
 - [structured-commits.md](recipes/structured-commits.md)
 - [system-review.md](recipes/system-review.md)
 - [tdd-first-execution.md](recipes/tdd-first-execution.md)
+- [tool-trust-and-untrusted-content.md](recipes/tool-trust-and-untrusted-content.md)
 - [update-docs.md](recipes/update-docs.md)
 - [upkeep-monthly.md](recipes/upkeep-monthly.md)
 - [upgrade-to-v6.md](recipes/upgrade-to-v6.md)

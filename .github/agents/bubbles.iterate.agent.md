@@ -79,6 +79,10 @@ handoffs:
 
 **Key Design Principle:** This agent does NOT implement, test, validate, audit, or run chaos probes itself. When invoked top-level, it selects work and executes only modes granted to `bubbles.iterate`, interpreting `phaseOrder` in this runtime and invoking specialist owners via `runSubagent` with `executionModel: direct-authorized-runner`. When invoked in picker-only mode by another runner, it returns a `WORK-ENVELOPE` and does not execute a workflow.
 
+### Repository Binding Entry Contract (NON-NEGOTIABLE)
+
+Before loading repository-local workflow state, parsing user targets, natural-language resolution, feature lookup, work selection, auto-discovery, or specialist dispatch, follow [agent-common.md → Repository Binding Entry Contract](bubbles_shared/agent-common.md#repository-binding-entry-contract-non-negotiable). This top-level runner MUST execute `bubbles/scripts/repository-binding.sh preflight` from host-supplied session context and declared workspace roots, then require the actionable local decision and `PREFLIGHT_COMMITTED`. When `bubbles.super` uniquely resolves a canonical root from natural language, pass it with `--resolved-natural-language-root`; do not convert it to explicit-root authority. It MUST establish its own top-level decision and never accept CWD, prompt/editor/tool state, workspace order, or an inherited specialist packet as repository authority.
+
 **Behavioral Rules (follow Autonomous Operation within Guardrails in agent-common.md):**
 - Pick ONE highest-priority work item per iteration
 - The `tools` frontmatter MUST include the VS Code `agent` tool alias so this dispatcher can actually invoke the owners it selects.
@@ -192,9 +196,9 @@ When iterate receives free-text input that does NOT match any row in the Natural
 
 **Detection:** If after applying the resolution steps above, BOTH `type` and feature target are unresolved AND the input is not a simple continuation request ("continue", "next", empty), invoke super:
 
-> `runSubagent("bubbles.super", "You are being invoked as a subagent by bubbles.iterate to resolve user intent into structured parameters. Return ONLY a RESOLUTION-ENVELOPE. User intent: {raw input}. Available specs: {specs/ listing}")`
+> `runSubagent("bubbles.super", "You are being invoked as a subagent by bubbles.iterate to resolve repository intent and then work intent. Return ONLY a RESOLUTION-ENVELOPE. User intent: {raw input}. Candidate descriptors: {host-supplied bounded repository candidate descriptors}. Do not read or list specs before repository binding.")`
 
-Parse the returned `RESOLUTION-ENVELOPE` to extract `mode`, `specTargets`, and `tags`. If `specTargets` resolves a feature, use it. If `mode` resolves, use it. Then proceed with normal iterate execution using the resolved parameters.
+Parse the returned `RESOLUTION-ENVELOPE` to extract the canonical repository decision, `mode`, `specTargets`, and `tags`. Validate its actionable packet before repository-local work. If `specTargets` resolves a feature, use it. If `mode` resolves, use it. Then proceed with normal iterate execution using the resolved parameters.
 
 **When NOT to delegate:** If the input clearly maps to a known `type:` or the user said "continue"/"next"/empty — iterate handles these natively without super.
 
@@ -208,6 +212,19 @@ When `bubbles.iterate` is invoked by `bubbles.workflow` (or another orchestrator
 
 ```markdown
 ## WORK-ENVELOPE
+- **repositoryRoot:** <exact canonical root from the consumed actionable packet>
+- **repositoryAlias:** <safe alias from the consumed actionable packet>
+- **repositoryResolution.sessionId:** <exact session id>
+- **repositoryResolution.decisionId:** <exact decision id>
+- **repositoryResolution.controlRevision:** <exact control revision>
+- **repositoryResolution.controlPathDigest:** <exact canonical external control-path digest>
+- **repositoryResolution.authority:** <exact authority>
+- **repositoryResolution.transition:** <exact transition>
+- **repositoryResolution.scopeKind:** command
+- **repositoryResolution.scopeId:** null
+- **repositoryResolution.targetKind:** <exact target kind>
+- **repositoryResolution.pathVisibility:** local
+- **repositoryResolution.actionable:** true
 - **invokedAs:** subagent-picker
 - **spec:** specs/<NNN-feature-name>
 - **scope:** <scope identifier or "auto" if scope selection should happen in Phase 0>
@@ -218,10 +235,12 @@ When `bubbles.iterate` is invoked by `bubbles.workflow` (or another orchestrator
 ```
 
 Picker mode rules:
-1. Apply the full Scope Selection Priority chain (P0 → P4) to identify the work item
-2. Apply the Work-Type-to-Mode Mapping to determine the appropriate mode
-3. Do NOT invoke any specialist agents, do NOT create artifacts, do NOT modify state
-4. If no work is found, return `scope: none` and `rationale: "No actionable work found"`
+1. Run `bubbles/scripts/repository-binding.sh validate-packet` against the inherited actionable packet before applying the Scope Selection Priority chain.
+2. Preserve every repository binding field unchanged in this WORK-ENVELOPE; never substitute CWD, prompt, editor, or tool roots.
+3. Apply the full Scope Selection Priority chain (P0 → P4) to identify the work item.
+4. Apply the Work-Type-to-Mode Mapping to determine the appropriate mode.
+5. Do NOT invoke any specialist agents, do NOT create artifacts, do NOT modify state.
+6. If no work is found, return `scope: none` and `rationale: "No actionable work found"`.
 
 **When invoked directly by the user** (not via `runSubagent` with WORK-ENVELOPE), continue to execute the full iteration with specialist dispatch as before. The picker mode is additive, not a replacement.
 
@@ -285,15 +304,15 @@ Use `bubbles/workflows.yaml`, [execution-core.md](bubbles_shared/execution-core.
 
 ## Context Compaction
 
-When accumulating subagent `RESULT-ENVELOPE`s across the iterate work loop, follow [operating-baseline.md → Context Compaction Discipline (Orchestrator Agents)](bubbles_shared/operating-baseline.md). Compact every 3 subagent results OR when the accumulated raw envelope text exceeds 8 KB, whichever fires first. Use `bash bubbles/scripts/context-compactor.sh <raw-envelope-file>` and append the resulting record to `compactedHistory[]` in `.specify/memory/bubbles.session.json`. Keep the latest 2 raw envelopes in working memory; never drop blocked findings or `nextRequiredOwner` chains.
+When accumulating subagent `RESULT-ENVELOPE`s across the iterate work loop, follow [operating-baseline.md → Context Compaction Discipline (Orchestrator Agents)](bubbles_shared/operating-baseline.md). Compact every 3 subagent results OR when the accumulated raw envelope text exceeds 8 KB, whichever fires first. For a repository-sensitive envelope, use `bash bubbles/scripts/context-compactor.sh --session-id <session-id> --session-control-file <control-file> --binding-packet-file <packet-file> <raw-envelope-file>` and append the resulting record to `compactedHistory[]` in `.specify/memory/bubbles.session.json`; the unbound form is only for legacy envelopes with no repository fields. Before resumed repository-local work, reconstruct the nested packet and run `bubbles/scripts/repository-binding.sh validate-packet`. Keep the latest 2 raw envelopes in working memory; never drop blocked findings or `nextRequiredOwner` chains.
 
 ## Convergence Cap (Gate G082 — MANDATORY)
 
-The iterate work loop is bounded by `maxConvergenceIterations` in `bubbles/workflows.yaml` (default 10). The cap is mechanically enforced by `bubbles/scripts/convergence-cap-guard.sh` (registered as Gate `G082` and invoked as Check 23 inside `bubbles/scripts/state-transition-guard.sh`). Every iteration of this loop MUST record progress by calling `bash bubbles/scripts/state-snapshot.sh --convergence-iteration <N> --spec-dir <specDir>` with `BUBBLES_AGENT_NAME=bubbles.iterate` in env. When the guard reports the cap exceeded for a given spec, this agent MUST emit a `blocked` RESULT-ENVELOPE whose `unresolvedFindings[]` includes finding `G082` and MUST NOT start another iteration for that spec in the same session.
+The iterate work loop is bounded by `maxConvergenceIterations` in `bubbles/workflows.yaml` (default 10). The cap is mechanically enforced by `bubbles/scripts/convergence-cap-guard.sh` (registered as Gate `G082` and invoked as Check 23 inside `bubbles/scripts/state-transition-guard.sh`). Every iteration of this loop MUST record progress by calling `bash bubbles/scripts/state-snapshot.sh --convergence-iteration <N> --spec-dir <specDir> --session-id <session-id> --session-control-file <control-file> --binding-packet-file <packet-file>` with `BUBBLES_AGENT_NAME=bubbles.iterate` in env. When the guard reports the cap exceeded for a given spec, this agent MUST emit a `blocked` RESULT-ENVELOPE whose `unresolvedFindings[]` includes finding `G082` and MUST NOT start another iteration for that spec in the same session.
 
 ## In-Loop Compaction Discipline (Gate G083 — MANDATORY)
 
-Between specialist dispatches inside the iterate work loop, this orchestrator MUST keep its trailing transition-packet log inside per-spec budgets: the eligible slice (all envelopes for the active spec EXCEPT the latest 2 kept raw) MUST satisfy BOTH `count <= 3` AND `cumulative rawSizeBytes <= 8192` UNLESS each over-budget envelope carries a `compactedAt` timestamp. Enforced mechanically by `bubbles/scripts/compaction-discipline-guard.sh` against `.specify/memory/bubbles.session.json` `envelopesReceived[]`; invoked as Check 24 by `bubbles/scripts/state-transition-guard.sh`. A guard violation MUST emit a `blocked` RESULT-ENVELOPE with finding `G083`; remediate by running `bubbles/scripts/context-compactor.sh` on the over-budget envelopes (it additively stamps `compactedAt`) BEFORE proceeding to the next dispatch. See `agents/bubbles_shared/operating-baseline.md` → "Context Compaction Discipline" for the full operating contract.
+Between specialist dispatches inside the iterate work loop, this orchestrator MUST keep its trailing transition-packet log inside per-spec budgets: the eligible slice (all envelopes for the active spec EXCEPT the latest 2 kept raw) MUST satisfy BOTH `count <= 3` AND `cumulative rawSizeBytes <= 8192` UNLESS each over-budget envelope carries a `compactedAt` timestamp. Enforced mechanically by `bubbles/scripts/compaction-discipline-guard.sh` against `.specify/memory/bubbles.session.json` `envelopesReceived[]`; invoked as Check 24 by `bubbles/scripts/state-transition-guard.sh`. A guard violation MUST emit a `blocked` RESULT-ENVELOPE with finding `G083`; remediate by running `bubbles/scripts/context-compactor.sh` with the current `--session-id`, `--session-control-file`, and `--binding-packet-file` on the over-budget envelopes (it additively stamps `compactedAt`) BEFORE proceeding to the next dispatch. See `agents/bubbles_shared/operating-baseline.md` → "Context Compaction Discipline" for the full operating contract.
 
 ## Orchestrator Persistence Default (Gate G086 — MANDATORY)
 
@@ -313,7 +332,7 @@ Three additive `executionOptions` knobs are resolved at iterate start; all defau
 |--------|---------------|-----------------|
 | Scope source | Identifies/creates work | Uses existing scopes.md |
 | Artifact prep | Creates spec.md, design.md, scopes.md if needed | Requires pre-existing |
-| Feature folder | Can create new `specs/NNN-name/` | Must exist |
+| Feature folder | Can create new `<resolvedRepositoryRoot>/specs/NNN-name/` after `PREFLIGHT_COMMITTED` | Must exist |
 | Work selection | By type if specified, else highest priority | Sequential from scopes.md |
 | Code changes | Delegates to bubbles.implement | Makes code changes directly |
 | Tests | Delegates to bubbles.test | Runs tests itself |
@@ -405,7 +424,7 @@ If no existing scopes or all are done:
 - Analyze feature spec/design for gaps
 - Create new scope in `scopes.md`
 - If no feature folder exists and `allow_new_feature_dir: true`:
-  - Create `specs/NNN-feature-name/` with full structure
+  - Create `<resolvedRepositoryRoot>/specs/NNN-feature-name/` with full structure after `PREFLIGHT_COMMITTED`
 
 ### Priority 4: Hardening
 If feature is complete but validation still fails:
@@ -414,7 +433,7 @@ If feature is complete but validation still fails:
 ### Priority 4.5: Release Packet Drift
 If the repo carries the Product Direction Surfaces trio (`docs/INVESTOR_OVERVIEW.md`, `docs/Product-Principles.md`, `.github/instructions/product-principles.instructions.md`) AND there is at least one phase release packet under `docs/releases/<phase>/` or `docs/plans/<phase>/`:
 - Scan `docs/releases/<phase>/features.md` for capability rows whose status is `planned` or `in-progress`
-- Cross-reference each row against `specs/*/state.json` for matching spec IDs
+- Cross-reference each row only against `<resolvedRepositoryRoot>/specs/*/state.json` after validating the current actionable packet
 - If any matched spec has `status: done` AND the corresponding `features.md` row is NOT `delivered` → release packet drift exists
 - Also scan the `INVESTOR_OVERVIEW.md` Phase Overview table for capability counts that disagree with the matching `features.md`
 - When drift is found, the next work item is a release packet refresh:
@@ -485,7 +504,7 @@ Use results to determine:
 If no suitable feature folder exists and `allow_new_feature_dir: true`:
 
 1. **Determine next folder number**
-   - Scan `specs/` for highest `NNN-*` pattern
+  - Scan only `<resolvedRepositoryRoot>/specs/` for the highest `NNN-*` pattern after `PREFLIGHT_COMMITTED`
    - Use `NNN+1`
 
 2. **Create folder structure with REQUIRED artifacts**
@@ -517,12 +536,18 @@ If no suitable feature folder exists and `allow_new_feature_dir: true`:
 
 ## Execution Flow
 
+### Repository Binding Preflight (NON-NEGOTIABLE)
+
+Before Phase 0, feature lookup, state reads, priority selection, or picker response, execute `bubbles/scripts/repository-binding.sh preflight` using explicit repository intent or the repository-only decision returned by `bubbles.super`. Continue only after the resolver commits the actionable packet and the local anchor is `PREFLIGHT_COMMITTED`.
+
+For targetless iteration after `PREFLIGHT_COMMITTED`, call `bubbles/scripts/repository-binding.sh discover-specs` with the current actionable packet and iterate mode. The returned discovery scope must be `resolvedRepositoryRoot/specs`; raw `specs/` discovery and ambient CWD inference are forbidden.
+
 ### Phase 0: Context Resolution
 
 **⚠️ FAIL FAST RULE: If searching for a feature folder fails after ONE search, STOP immediately.**
 
 1. **Resolve `{FEATURE_DIR}` from `$ARGUMENTS`** (ONE attempt only)
-   - If provided: search for matching folder under `specs/` ONCE
+  - If provided: search once for the matching folder beneath `<resolvedRepositoryRoot>/specs/` using the validated decision
    - **If found:** Proceed to step 2
    - **If NOT found after ONE search:**
      - ❌ DO NOT search again

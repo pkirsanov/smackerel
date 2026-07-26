@@ -58,38 +58,79 @@ emit_pass() {
 
 # ── Parse the manifest ───────────────────────────────────────────
 # Pure bash parser — extract a list of (name, marker, required, type)
-# tuples. The YAML shape is constrained so a simple awk script suffices.
+# tuples plus required-artifact mappings. The YAML shape is constrained so a
+# simple awk script suffices.
 
 mapfile -t parsed_lines < <(awk '
-  /^steps:/ { in_steps=1; in_inv=0; next }
-  /^invariants:/ { in_steps=0; in_inv=1; next }
-  in_steps && /^  - name:[[:space:]]+/ {
+  function emit_step() {
     if (current_name != "") {
-      printf "STEP\t%s\t%s\t%s\t%s\n", current_name, current_marker, current_required, current_type
+      printf "STEP\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n", current_name, current_marker, current_required, current_type, current_source_dir, current_glob, current_source_file
+      current_name=""
     }
-    current_name=$3; current_marker=""; current_required="true"; current_type=""
+  }
+  function emit_artifact() {
+    if (artifact_path != "") {
+      printf "ARTIFACT\t%s\t%s\n", artifact_path, artifact_step
+      artifact_path=""
+    }
+  }
+  function clean_value(value) {
+    gsub(/^[\47"]|[\47"]$/, "", value)
+    return value
+  }
+  /^steps:/ { in_steps=1; in_artifacts=0; in_inv=0; next }
+  /^required_artifacts:/ {
+    emit_step()
+    in_steps=0; in_artifacts=1; in_inv=0; next
+  }
+  /^invariants:/ {
+    emit_step()
+    emit_artifact()
+    in_steps=0; in_artifacts=0; in_inv=1; next
+  }
+  in_steps && /^[[:space:]]*- name:[[:space:]]+/ {
+    emit_step()
+    line=$0
+    sub(/^[[:space:]]*- name:[[:space:]]+/, "", line)
+    current_name=clean_value(line); current_marker=""; current_required="true"; current_type=""
+    current_source_dir="-"; current_glob="-"; current_source_file="-"
     next
   }
-  in_steps && /^    type:[[:space:]]+/ { current_type=$2; next }
-  in_steps && /^    marker:[[:space:]]+/ {
+  in_steps && /^[[:space:]]+type:[[:space:]]+/ { current_type=$2; next }
+  in_steps && /^[[:space:]]+source_dir:[[:space:]]+/ { current_source_dir=clean_value($2); next }
+  in_steps && /^[[:space:]]+glob:[[:space:]]+/ { current_glob=clean_value($2); next }
+  in_steps && /^[[:space:]]+source_file:[[:space:]]+/ { current_source_file=clean_value($2); next }
+  in_steps && /^[[:space:]]+marker:[[:space:]]+/ {
     line=$0
     sub(/^[[:space:]]+marker:[[:space:]]+/, "", line)
-    gsub(/^[\47"]|[\47"]$/, "", line)
-    current_marker=line
+    current_marker=clean_value(line)
     next
   }
-  in_steps && /^    required:[[:space:]]+/ { current_required=$2; next }
-  in_inv && /^  - id:[[:space:]]+/ {
+  in_steps && /^[[:space:]]+required:[[:space:]]+/ { current_required=$2; next }
+  in_artifacts && /^[[:space:]]*- path:[[:space:]]+/ {
+    emit_artifact()
+    line=$0
+    sub(/^[[:space:]]*- path:[[:space:]]+/, "", line)
+    artifact_path=clean_value(line)
+    artifact_step=""
+    next
+  }
+  in_artifacts && /^[[:space:]]+install_step:[[:space:]]+/ {
+    artifact_step=clean_value($2)
+    next
+  }
+  in_inv && /^[[:space:]]*- id:[[:space:]]+/ {
+    line=$0
+    sub(/^[[:space:]]*- id:[[:space:]]+/, "", line)
     if (current_inv != "") {
       printf "INV\t%s\n", current_inv
     }
-    current_inv=$3
+    current_inv=clean_value(line)
     next
   }
   END {
-    if (current_name != "") {
-      printf "STEP\t%s\t%s\t%s\t%s\n", current_name, current_marker, current_required, current_type
-    }
+    emit_step()
+    emit_artifact()
     if (current_inv != "") {
       printf "INV\t%s\n", current_inv
     }
@@ -97,10 +138,12 @@ mapfile -t parsed_lines < <(awk '
 ' "$INSTALLER_YAML")
 
 declare -a steps=()
+declare -a required_artifacts=()
 declare -a invariants=()
 for ln in "${parsed_lines[@]}"; do
   case "$ln" in
     STEP$'\t'*) steps+=("${ln#STEP$'\t'}") ;;
+    ARTIFACT$'\t'*) required_artifacts+=("${ln#ARTIFACT$'\t'}") ;;
     INV$'\t'*) invariants+=("${ln#INV$'\t'}") ;;
   esac
 done
@@ -114,7 +157,7 @@ fi
 
 # ── Step check: every required step's marker appears in install.sh ─
 for stuple in "${steps[@]}"; do
-  IFS=$'\t' read -r sname smarker srequired _ <<<"$stuple"
+  IFS=$'\t' read -r sname smarker srequired _ _ _ _ <<<"$stuple"
   if [[ "$srequired" != "true" ]]; then
     continue
   fi
@@ -126,6 +169,55 @@ for stuple in "${steps[@]}"; do
     emit_pass "Step $sname marker present: $smarker"
   else
     emit_fail "Step $sname marker missing from install.sh: $smarker (bug class: missing step)"
+  fi
+done
+
+# ── Required-artifact coverage ───────────────────────────────────
+# Each capability-specific artifact must exist and be covered by the declared
+# directory/glob/file copy step. The step marker must also exist in install.sh,
+# proving that coverage is implemented rather than merely declared.
+for atuple in "${required_artifacts[@]}"; do
+  IFS=$'\t' read -r artifact_path artifact_step <<<"$atuple"
+  artifact_source_exists="false"
+  artifact_step_found="false"
+  artifact_step_covers="false"
+  artifact_step_implemented="false"
+
+  [[ -f "$REPO_ROOT/$artifact_path" ]] && artifact_source_exists="true"
+
+  for stuple in "${steps[@]}"; do
+    IFS=$'\t' read -r sname smarker _ stype ssource_dir sglob ssource_file <<<"$stuple"
+    [[ "$sname" == "$artifact_step" ]] || continue
+    artifact_step_found="true"
+    case "$stype" in
+      directory_copy)
+        [[ "$artifact_path" == "${ssource_dir}/"* ]] && artifact_step_covers="true"
+        ;;
+      glob_install)
+        # The canonical manifest field is intentionally interpreted as a glob.
+        # shellcheck disable=SC2053
+        [[ "$artifact_path" == $sglob ]] && artifact_step_covers="true"
+        ;;
+      file_copy)
+        [[ "$artifact_path" == "$ssource_file" ]] && artifact_step_covers="true"
+        ;;
+    esac
+    if [[ -n "$smarker" ]] && grep -qF -- "$smarker" "$INSTALL_SH"; then
+      artifact_step_implemented="true"
+    fi
+    break
+  done
+
+  if [[ "$artifact_source_exists" != "true" ]]; then
+    emit_fail "Required artifact source missing: $artifact_path"
+  elif [[ "$artifact_step_found" != "true" ]]; then
+    emit_fail "Required artifact $artifact_path references unknown install step: $artifact_step"
+  elif [[ "$artifact_step_covers" != "true" ]]; then
+    emit_fail "Required artifact $artifact_path is not covered by install step $artifact_step"
+  elif [[ "$artifact_step_implemented" != "true" ]]; then
+    emit_fail "Required artifact $artifact_path maps to unimplemented install step $artifact_step"
+  else
+    emit_pass "Required artifact covered: $artifact_path -> $artifact_step"
   fi
 done
 
@@ -179,7 +271,7 @@ fi
 
 # ── Summary ──────────────────────────────────────────────────────
 echo
-echo "generate-installer.sh: $step_count step(s), ${#invariants[@]} invariant id(s) declared"
+echo "generate-installer.sh: $step_count step(s), ${#required_artifacts[@]} required artifact(s), ${#invariants[@]} invariant id(s) declared"
 if [[ $fail_count -eq 0 ]]; then
   echo "generate-installer.sh: PASS"
   exit 0

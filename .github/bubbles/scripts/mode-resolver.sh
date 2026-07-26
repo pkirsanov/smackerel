@@ -8,9 +8,12 @@
 # Resolution semantics:
 #   - Maps deep-merge (mode wins over templates; later templates in the
 #     `inherits:` list win over earlier templates)
-#   - Arrays CONCATENATE then DEDUPLICATE (preserving first-occurrence
-#     order, except `.requiredGates` which is sorted alphabetically as a
-#     canonical gate set)
+#   - Arrays CONCATENATE, preserving order AND multiplicity. Only genuinely
+#     SET-valued fields (requiredGates, tags) are then deduplicated; ordered
+#     phase lists (phaseOrder, tailPhases, findingDeliveryPhases, ...) keep
+#     every occurrence — they may legitimately repeat a phase (IMP-102 /
+#     SCOPE-2). `.requiredGates` is additionally sorted alphabetically as a
+#     canonical gate set.
 #   - Scalars: latest-wins
 #   - Cycles in inherits chains are detected and rejected
 #   - Unknown template names are rejected
@@ -133,7 +136,9 @@ Hard dependency: yq (mikefarah, v4+) — https://github.com/mikefarah/yq
 
 Resolution semantics:
   - Maps deep-merge; later sources win over earlier sources
-  - Arrays concatenate then deduplicate
+  - Arrays concatenate, preserving order AND multiplicity; only set-valued
+    fields (requiredGates, tags) are deduplicated, so ordered phase lists
+    (phaseOrder, tailPhases, ...) may legitimately repeat a phase
   - .requiredGates is sorted alphabetically as a canonical gate set
   - Cycles in inherits chains are rejected
   - Unknown template names are rejected
@@ -240,10 +245,19 @@ resolve_mode_to_file() {
   yq ".modes.\"$name\" | del(.inherits)" "$WORKFLOWS_FILE" > "$own"
   _merge_into "$out" "$own"
 
-  # Dedup all sequences (preserves first-occurrence order; safe because
-  # ordered arrays like phaseOrder, tailPhases, findingDeliveryPhases
-  # never contain duplicates in practice).
-  yq -i '(.. | select(tag == "!!seq")) |= unique' "$out"
+  # Dedup ONLY genuinely set-valued fields (IMP-102 / SCOPE-2). The prior
+  # blanket `(.. | select(tag == "!!seq")) |= unique` was WRONG: ordered phase
+  # lists legitimately REPEAT a phase — e.g. a baseline `validate` and a
+  # post-remediation certification `validate` (harden-to-doc, gaps-to-doc,
+  # harden-gaps-to-doc, reconcile-to-doc, stabilize-to-doc, improve-existing,
+  # stochastic-quality-sweep), or `releases` declared TWICE
+  # (idea-to-release-completion). Blanket unique silently deleted the second
+  # occurrence, collapsing the resolved phaseOrder (validate 2->1). Dedup is
+  # therefore scoped to set-valued field NAMES only (requiredGates, tags);
+  # every other sequence — phaseOrder, tailPhases, findingDeliveryPhases,
+  # bootstrapAgents, planningChainAgents, ... — keeps its order AND
+  # multiplicity. requiredGates is additionally sorted below.
+  yq -i '(.. | select(key == "requiredGates" or key == "tags")) |= (select(tag == "!!seq") | unique) // .' "$out"
 
   # Sort .requiredGates alphabetically as a canonical gate set.
   if yq -e '.requiredGates | type == "!!seq"' "$out" >/dev/null 2>&1; then

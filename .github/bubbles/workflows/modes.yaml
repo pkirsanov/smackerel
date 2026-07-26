@@ -529,7 +529,7 @@ modes:
       requireNoDefaultsNoFallbacks: true
       requireIntegrationCompleteness: true
       # Adversarial-verification control plane (IMP-002): the redteam phase
-      # resolves its effective posture (mode/passes/teeth) via
+      # resolves its effective posture (mode/samples/teeth) via
       # adversarial-resolve.sh. mode=off short-circuits the phase to a
       # completed_diagnostic no-op (zero behavior change on upgrade).
       adversarialControlPlane: true
@@ -962,7 +962,7 @@ modes:
       # Stochastic round execution model — NOT sequential phaseOrder.
       # The orchestrator runs N rounds, each round:
       #   1. Pick a random spec from the spec pool
-      #      - Default pool: ALL specs discovered from specs/ folder
+      #      - Default pool: ALL specs discovered from resolvedRepositoryRoot/specs after preflight
       #      - Optional: user provides spec targets (range, list, paths) to limit the pool
       #   2. Pick a random trigger from triggerAgentPool (or user-specified subset)
       #   3. Resolve the trigger-owned mapped workflow mode from triggerWorkflowModes
@@ -970,10 +970,12 @@ modes:
       #   5. Record the mapped workflow outcome and execution model in the sweep ledger
       # After all rounds: parent records a sweep summary only; mapped modes own docs/finalize
       stochasticRoundExecution: true
-      # Spec pool discovery: when no spec targets provided, discover ALL spec
-      # folders under specs/ as the pool. User can restrict with standard spec
-      # target syntax (range: 011-037, list: 011,027,037, paths: specs/...).
+      # Spec pool discovery: when no spec targets are provided, discover ALL
+      # spec folders inside the resolved repository. User targets are resolved
+      # only after the same repository preflight.
       autoDiscoverAllSpecs: true
+      repositoryPreflightRequired: true
+      discoveryScope: resolvedRepositoryRoot/specs
       # Default trigger pool — all probing/quality agents
       # User can override with triggerAgents option to limit the pool
       triggerAgentPool: [ chaos, harden, gaps, simplify, stabilize, test, devops, validate, improve, security, regression ]
@@ -1044,8 +1046,11 @@ modes:
       #   5. Next round: re-evaluate priorities and pick the next work item
       # After all rounds: per-spec finalize for any spec that was touched
       iterativeRoundExecution: true
-      # When no spec targets provided, iterate picks across ALL specs
+      # When no spec targets are provided, iterate picks across all specs in the
+      # resolved repository after validating the current actionable packet.
       autoDiscoverAllSpecs: true
+      repositoryPreflightRequired: true
+      discoveryScope: resolvedRepositoryRoot/specs
       # Priority-driven work selection (deterministic, not random)
       priorityDrivenWorkSelection: true
       # Auto-mode selection — iterate determines the correct workflow mode

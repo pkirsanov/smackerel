@@ -105,9 +105,67 @@
       "type": "array",
       "items": { "type": "string" },
       "description": "Session ids from tool-calls.jsonl that prove this invocation's claims. Read by v5.2 evidence gate."
+    },
+    "repositoryRoot": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Canonical absolute root for a local actionable result, or <redacted-local-root> for a public non-actionable projection."
+    },
+    "repositoryAlias": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Safe display alias for repositoryRoot."
+    },
+    "repositoryResolution": {
+      "$ref": "repository-binding.schema.json#/$defs/repositoryResolution",
+      "description": "Repository decision provenance echoed by an actionable result."
     }
   },
   "allOf": [
+    {
+      "if": {
+        "anyOf": [
+          { "required": ["repositoryRoot"] },
+          { "required": ["repositoryAlias"] },
+          { "required": ["repositoryResolution"] }
+        ]
+      },
+      "then": {
+        "required": ["repositoryRoot", "repositoryAlias", "repositoryResolution"]
+      }
+    },
+    {
+      "if": {
+        "required": ["repositoryResolution"],
+        "properties": {
+          "repositoryResolution": {
+            "required": ["pathVisibility"],
+            "properties": { "pathVisibility": { "const": "redacted" } }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "repositoryRoot": { "const": "<redacted-local-root>" }
+        }
+      }
+    },
+    {
+      "if": {
+        "required": ["repositoryResolution"],
+        "properties": {
+          "repositoryResolution": {
+            "required": ["pathVisibility"],
+            "properties": { "pathVisibility": { "const": "local" } }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "repositoryRoot": { "pattern": "^/" }
+        }
+      }
+    },
     {
       "if": { "properties": { "outcome": { "const": "route_required" } } },
       "then": {

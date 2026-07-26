@@ -2,6 +2,28 @@
 
 Use this module as the canonical source for the non-batch input-enrichment, research, bootstrap, and pre-implementation readiness contracts in `bubbles.workflow`.
 
+## Repository Binding Producer Contract
+
+Before reading repository-local state, expanding relative targets, scanning candidates, selecting work, invoking repository-owned commands, or dispatching specialists, input bootstrap MUST call `bubbles/scripts/repository-binding.sh preflight` and require `PREFLIGHT_COMMITTED`. Classification, prompt location, process CWD, editor state, and host metadata do not authorize local work.
+
+Every repository-sensitive producer retains the current actionable packet without dropping or substituting any of these fields:
+
+- repositoryRoot
+- repositoryAlias
+- repositoryResolution.sessionId
+- repositoryResolution.decisionId
+- repositoryResolution.controlRevision
+- repositoryResolution.controlPathDigest
+- repositoryResolution.authority
+- repositoryResolution.transition
+- repositoryResolution.scopeKind
+- repositoryResolution.scopeId
+- repositoryResolution.targetKind
+- repositoryResolution.pathVisibility
+- repositoryResolution.actionable
+
+After preflight, targetless stochastic or iterate bootstrap MUST call `bubbles/scripts/repository-binding.sh discover-specs` with that current actionable packet and the active mode. Candidate enumeration starts only after the exact event `DISCOVERY SCOPE mode=<mode> root=<resolvedRepositoryRoot>/specs`; no raw or CWD-relative discovery is executable.
+
 ### Phase 0.3: Analysis Loop
 
 **Scope:** This section owns the single-spec analysis pipeline when `batch` is false and the selected mode includes `analyze`.

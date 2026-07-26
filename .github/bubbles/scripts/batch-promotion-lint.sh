@@ -27,6 +27,16 @@
 #   0 = OK (within limit, or no promotions detected)
 #   1 = Batch limit exceeded — fabrication risk
 #   2 = Usage error
+#
+# Override (hardened — NOT a bare replayable flag):
+#   BUBBLES_BATCH_PROMOTION_OVERRIDE="<actor>:<expiryEpoch>:<sha>"
+#   Honored ONLY when the token is well-formed, unexpired (expiry >= now), and
+#   its <sha> is a prefix of the current target commit (staged/paths → HEAD,
+#   ref → the inspected ref). Every honored override is appended to an
+#   append-only audit ledger (BUBBLES_BATCH_PROMOTION_LEDGER; default
+#   <repo>/.specify/runtime/batch-promotion-override-ledger.jsonl). A bare "1"
+#   is refused, an expired token is refused, and a token bound to a different
+#   sha is refused — so the flag can no longer be trivially replayed.
 # =============================================================================
 set -euo pipefail
 
@@ -88,6 +98,102 @@ status = data.get("status")
 if isinstance(status, str):
     print(status)
 ' "$content" 2>/dev/null || true
+}
+
+# -----------------------------------------------------------------------------
+# Override hardening (BUBBLES_BATCH_PROMOTION_OVERRIDE)
+# -----------------------------------------------------------------------------
+# The override is NOT a bare replayable flag. It requires a token that binds an
+# actor, an expiry (epoch seconds), and the target commit sha the promotion is
+# based on:  BUBBLES_BATCH_PROMOTION_OVERRIDE="<actor>:<expiryEpoch>:<sha>".
+# The token is REFUSED when malformed, expired, or bound to a sha that does not
+# match the current target commit. A legacy bare "1" no longer works. Every
+# honored override appends an append-only audit line to the ledger.
+
+resolve_target_sha() {
+  # Echo the commit sha the current batch is based on, or empty if unavailable.
+  git rev-parse --git-dir >/dev/null 2>&1 || { echo ""; return; }
+  case "$mode" in
+    ref) git rev-parse --verify --quiet "${git_ref}^{commit}" 2>/dev/null || echo "" ;;
+    *) git rev-parse --verify --quiet "HEAD^{commit}" 2>/dev/null || echo "" ;;
+  esac
+}
+
+default_override_ledger() {
+  local root
+  if root="$(git rev-parse --show-toplevel 2>/dev/null)" && [[ -n "$root" ]]; then
+    echo "$root/.specify/runtime/batch-promotion-override-ledger.jsonl"
+  else
+    echo "$PWD/.specify/runtime/batch-promotion-override-ledger.jsonl"
+  fi
+}
+
+# Returns 0 (honored) or 1 (not honored / refused). Prints the reason on refusal.
+honor_batch_promotion_override() {
+  local raw="${BUBBLES_BATCH_PROMOTION_OVERRIDE:-}"
+  [[ -n "$raw" && "$raw" != "0" ]] || return 1
+
+  if [[ "$raw" != *:*:* ]]; then
+    echo "🔴 REFUSED: BUBBLES_BATCH_PROMOTION_OVERRIDE is not a valid token." >&2
+    echo "   A bare value (e.g. '1') is NOT accepted. Use:" >&2
+    echo "     BUBBLES_BATCH_PROMOTION_OVERRIDE=<actor>:<expiryEpoch>:<sha>" >&2
+    return 1
+  fi
+
+  local actor rest expiry token_sha
+  actor="${raw%%:*}"
+  rest="${raw#*:}"
+  expiry="${rest%%:*}"
+  token_sha="${rest#*:}"
+
+  if [[ -z "$actor" || -z "$expiry" || -z "$token_sha" || "$token_sha" == *:* ]]; then
+    echo "🔴 REFUSED: override token must be exactly <actor>:<expiryEpoch>:<sha>." >&2
+    return 1
+  fi
+  if ! [[ "$expiry" =~ ^[0-9]+$ ]]; then
+    echo "🔴 REFUSED: override expiry '$expiry' is not an epoch integer." >&2
+    return 1
+  fi
+  local now
+  now="$(date -u +%s)"
+  if (( expiry < now )); then
+    echo "🔴 REFUSED: override token EXPIRED (expiry=$expiry < now=$now)." >&2
+    return 1
+  fi
+  if [[ ${#token_sha} -lt 7 ]]; then
+    echo "🔴 REFUSED: override sha '$token_sha' too short (need >=7 hex chars)." >&2
+    return 1
+  fi
+  local target_sha
+  target_sha="$(resolve_target_sha)"
+  if [[ -z "$target_sha" ]]; then
+    echo "🔴 REFUSED: cannot resolve a target commit sha to bind the override to." >&2
+    return 1
+  fi
+  if [[ "$target_sha" != "$token_sha"* ]]; then
+    echo "🔴 REFUSED: override sha '$token_sha' does not match target commit '${target_sha:0:12}'." >&2
+    return 1
+  fi
+
+  # Honored — binding an append-only audit line is MANDATORY. If the ledger
+  # cannot be written, the override is refused (no silent unaudited bypass).
+  local ledger ts
+  ledger="${BUBBLES_BATCH_PROMOTION_LEDGER:-$(default_override_ledger)}"
+  ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  if ! mkdir -p "$(dirname "$ledger")" 2>/dev/null; then
+    echo "🔴 REFUSED: cannot create ledger dir for $ledger — refusing to honor override." >&2
+    return 1
+  fi
+  if ! printf '{"ts":"%s","actor":"%s","targetSha":"%s","tokenSha":"%s","expiry":%s,"mode":"%s","promotions":%s}\n' \
+    "$ts" "$actor" "$target_sha" "$token_sha" "$expiry" "$mode" "${#promoted_files[@]}" >> "$ledger"; then
+    echo "🔴 REFUSED: cannot append audit line to $ledger — refusing to honor override." >&2
+    return 1
+  fi
+
+  echo ""
+  echo "⚠️  WARN: BUBBLES_BATCH_PROMOTION_OVERRIDE honored — actor='$actor' sha='${target_sha:0:12}' expiry=$expiry"
+  echo "   Append-only audit line recorded: $ledger"
+  return 0
 }
 
 promoted_files=()
@@ -208,11 +314,11 @@ echo "  Batch promotion of multiple specs in a single commit is a documented"
 echo "  fabrication pattern. Each spec MUST be promoted in its own commit"
 echo "  with its own state-transition-guard run."
 echo ""
-echo "  To override (requires explicit human approval), set:"
-echo "    BUBBLES_BATCH_PROMOTION_OVERRIDE=1"
-if [[ "${BUBBLES_BATCH_PROMOTION_OVERRIDE:-0}" == "1" ]]; then
-  echo ""
-  echo "⚠️  WARN: BUBBLES_BATCH_PROMOTION_OVERRIDE=1 — exiting 0 under override"
+echo "  To override (requires explicit, expiring, sha-bound human approval), set:"
+echo "    BUBBLES_BATCH_PROMOTION_OVERRIDE=<actor>:<expiryEpoch>:<sha>"
+echo "    (a bare '1' is no longer accepted; the token binds actor+expiry+target"
+echo "     sha, is refused when expired or sha-mismatched, and is audited)"
+if honor_batch_promotion_override; then
   exit 0
 fi
 exit 1

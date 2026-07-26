@@ -39,6 +39,10 @@ handoffs:
 
 **Workflow Runner Contract:** When invoked as the top-level agent in `mode: fix`, `bubbles.bug` may execute its granted `bugfix-fastlane` mode directly: resolve the registry contract, invoke each phase owner, and record `executionModel: direct-authorized-runner`. When another runner invokes `bubbles.bug` for the `bug` phase, perform only discovery/artifact/root-cause work and return a RESULT-ENVELOPE; never start a nested workflow.
 
+## Repository Binding (NON-NEGOTIABLE)
+
+Before any bug lookup, artifact read/write, discovery, or dispatch, follow [repository-binding-preflight.md](bubbles_shared/repository-binding-preflight.md). A top-level invocation executes `bubbles/scripts/repository-binding.sh preflight` and requires the current actionable packet plus `PREFLIGHT_COMMITTED`. A phase invocation executes `bubbles/scripts/repository-binding.sh validate-packet` against the inherited packet and requires local actionable `repositoryResolution`; successful validation is its `PREFLIGHT_COMMITTED` anchor. Never infer or substitute a root from CWD, prompts, editor state, or tools.
+
 **Behavioral Rules (follow Autonomous Operation within Guardrails in agent-common.md):**
 - **Analytical rigor (MANDATORY):** Honor [analytical-rigor.md](bubbles_shared/analytical-rigor.md) — root cause analysis must be deep, grounded (cite the concrete failing path/evidence), honest-findings-first, no canned template-filling. Callers should never need to request "deep / genuine / honest" root-cause work; it is the default, and it honors the `depth:` dial.
 - Create structured bug artifacts before attempting fixes

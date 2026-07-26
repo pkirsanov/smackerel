@@ -135,13 +135,13 @@ elif [[ -f "$REPO_ROOT/VERSION" ]]; then
   FRAMEWORK_VERSION="$(tr -d '[:space:]' < "$REPO_ROOT/VERSION" 2>/dev/null || true)"
 fi
 if [[ -f "$REPO_ROOT/.github/bubbles/.install-source.json" ]] && command -v python3 >/dev/null 2>&1; then
-  FRAMEWORK_SHA="$(python3 -c "
-import json
+  FRAMEWORK_SHA="$(python3 -c '
+import json, sys
 try:
-    print(json.load(open('$REPO_ROOT/.github/bubbles/.install-source.json')).get('sourceGitSha', '') or '')
+    print(json.load(open(sys.argv[1])).get("sourceGitSha", "") or "")
 except Exception:
     pass
-" 2>/dev/null || true)"
+' "$REPO_ROOT/.github/bubbles/.install-source.json" 2>/dev/null || true)"
 fi
 if [[ -z "$FRAMEWORK_SHA" ]] && [[ -d "$REPO_ROOT/.git" ]]; then
   FRAMEWORK_SHA="$(git -C "$REPO_ROOT" rev-parse --verify HEAD 2>/dev/null || true)"

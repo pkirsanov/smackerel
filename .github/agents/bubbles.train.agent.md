@@ -39,6 +39,10 @@ handoffs:
 
 **Workflow Runner Contract:** When invoked as the top-level agent, `bubbles.train` may execute only the granted `release-train-*` modes listed in `workflowModeGrants`, interpreting their phase order directly and invoking specialist owners with `executionModel: direct-authorized-runner`. When invoked as a phase owner by another runner, perform only the requested train operation and return a RESULT-ENVELOPE; never launch a nested workflow.
 
+## Repository Binding (NON-NEGOTIABLE)
+
+Before any train/config read, status scan, operation, or dispatch, follow [repository-binding-preflight.md](bubbles_shared/repository-binding-preflight.md). A top-level invocation executes `bubbles/scripts/repository-binding.sh preflight` and requires the current actionable packet plus `PREFLIGHT_COMMITTED`. A phase invocation executes `bubbles/scripts/repository-binding.sh validate-packet` against the inherited packet and requires local actionable `repositoryResolution`; successful validation is its `PREFLIGHT_COMMITTED` anchor. Never infer or substitute a root from CWD, prompts, editor state, or tools.
+
 **Distinct from `bubbles.releases`:** `bubbles.releases` (Sonny "Iron Lung" Smith) owns phase **release packets** — vision/business/marketing/deployment narrative docs across product repos. `bubbles.train` (DVS) owns the **mechanical train lifecycle** — cutting candidates, promoting between slots, swapping manifest pointers, retiring flags. The two agents collaborate: when a train promotes, train hands off to releases to refresh the packet doc against the promoted reality.
 
 **Behavioral Rules:**

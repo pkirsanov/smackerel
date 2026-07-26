@@ -98,17 +98,38 @@ else
   fail "Managed checksum inventory includes IMP-020 S2 aggregator selftest"
 fi
 
-if manifest_section_has_path sourceOnlyFileChecksums 'bubbles/eval/schemas/adversarial-sample.schema.json'; then
-  pass "Source-only checksum inventory includes IMP-020 S2 sample schema"
+# BUG015-F2: the adversarial-sample record schema is now MANAGED because the
+# managed agent-common.md red-team contract names it as the authoritative record
+# schema; the installed package must ship it. It must appear ONLY in the managed
+# section and never in source-only (a path in both sections is a provenance defect).
+if manifest_section_has_path managedFileChecksums 'bubbles/eval/schemas/adversarial-sample.schema.json'; then
+  pass "Managed checksum inventory includes IMP-020 S2 sample schema (BUG015-F2)"
 else
-  fail "Source-only checksum inventory includes IMP-020 S2 sample schema"
+  fail "Managed checksum inventory includes IMP-020 S2 sample schema (BUG015-F2)"
 fi
 
-if ! manifest_section_has_path managedFileChecksums 'bubbles/eval/schemas/adversarial-sample.schema.json'; then
-  pass "IMP-020 S2 sample schema remains source-only"
+if ! manifest_section_has_path sourceOnlyFileChecksums 'bubbles/eval/schemas/adversarial-sample.schema.json'; then
+  pass "IMP-020 S2 sample schema is no longer source-only (BUG015-F2)"
 else
-  fail "IMP-020 S2 sample schema remains source-only"
+  fail "IMP-020 S2 sample schema is no longer source-only (BUG015-F2)"
 fi
+
+# Scope guard (BUG015-F1): the eval-harness runtime schemas MUST remain
+# source-only. Promoting them would re-ship the harness's broken downstream ref.
+for eval_runtime_schema in \
+  'bubbles/eval/schemas/task-v2.schema.json' \
+  'bubbles/eval/schemas/evaluator-result.schema.json'; do
+  if manifest_section_has_path sourceOnlyFileChecksums "$eval_runtime_schema"; then
+    pass "Source-only inventory retains eval-harness schema: $eval_runtime_schema"
+  else
+    fail "Source-only inventory retains eval-harness schema: $eval_runtime_schema"
+  fi
+  if ! manifest_section_has_path managedFileChecksums "$eval_runtime_schema"; then
+    pass "eval-harness schema stays out of managed set: $eval_runtime_schema"
+  else
+    fail "eval-harness schema stays out of managed set: $eval_runtime_schema"
+  fi
+done
 
 profiles="$(bubbles_json_array_joined "$manifest_file" supportedProfiles ', ')"
 [[ "$profiles" == *foundation* ]] && pass "Manifest exposes foundation as a supported profile" || fail "Manifest exposes foundation as a supported profile"

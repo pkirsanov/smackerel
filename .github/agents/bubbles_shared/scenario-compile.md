@@ -87,8 +87,12 @@ rootOutcome:                       # IS an Outcome Contract (Gate G070 shape)
 repos:
   - id: <product>
     role: product
+    repositoryRoot: <canonical-absolute-git-root>
+    repositoryAlias: <safe-local-display-alias>
   - id: <adapter>
     role: deployment-adapter
+    repositoryRoot: <canonical-absolute-git-root>
+    repositoryAlias: <safe-local-display-alias>
 nodes:
   - id: <node-id>
     type: diagnostic | planning | delivery | verification | action | ongoing-ops
@@ -99,11 +103,49 @@ nodes:
     approvalRequired: true|false   # MUST be true for action nodes
     riskClass: <action-risk-registry class>   # REQUIRED for action nodes
     dependsOn: [ <node-id>, ... ]  # forms the DAG; must reference existing node ids
+    repositoryResolution:          # local actionable node decision; never command affinity
+      sessionId: <host-session-id>
+      decisionId: rb:<session-id>:<control-revision>:node:<node-id>
+      controlRevision: <current-command-revision>
+      controlPathDigest: sha256:<canonical-external-control-path-digest>
+      authority: scoped-scenario-node
+      transition: scoped-override
+      scopeKind: goal-node
+      scopeId: <node-id>
+      targetKind: goal-node
+      pathVisibility: local
+      actionable: true
     coversFeatures: [ <feature-id>, ... ]   # delivery nodes only; the release-packet
                                             # feature ids this node delivers. REQUIRED
                                             # coverage when rootOutcome.targetReleasePacket
                                             # is set (Gate G101).
 ```
+
+Each node dispatch and node result derives its root and safe alias from the referenced `repos[]` entry and carries this exact binding object unchanged:
+
+- `repositoryRoot`
+- `repositoryAlias`
+- `repositoryResolution.sessionId`
+- `repositoryResolution.decisionId`
+- `repositoryResolution.controlRevision`
+- `repositoryResolution.controlPathDigest`
+- `repositoryResolution.authority`
+- `repositoryResolution.transition`
+- `repositoryResolution.scopeKind`
+- `repositoryResolution.scopeId`
+- `repositoryResolution.targetKind`
+- `repositoryResolution.pathVisibility`
+- `repositoryResolution.actionable`
+
+Before dispatch, validate the derived packet against the compiled declaration rather than packet shape or caller-authored expectations:
+
+```text
+repository-binding.sh validate-packet \
+  --scenario-file <compiled-scenario.json> \
+  --node-id <node.id>
+```
+
+The validator derives `repositoryRoot`, `repositoryAlias`, and the complete `repositoryResolution` from `repos[node.repo]` and the declared node. A missing declaration, caller-forged alias, eligible packet for another repository, or packet for another node refuses; none can pass merely because the packet shape and root are otherwise valid.
 
 ### Node Types And Their Completion Proof
 
@@ -135,7 +177,7 @@ mode and certified by `bubbles.validate` in that repo.
    never drifts.
 2. **Every node references a real mode or agent.** `mode` must exist in `modes.yaml`;
    `agent` must exist in `agent-capabilities.yaml`. Exactly one of `mode`/`agent` per node.
-3. **Every node declares a repo** that exists in `repos[]`.
+3. **Every repo declares one canonical root and safe alias; every node declares a repo.** Each `repos[]` entry has a canonical absolute Git `repositoryRoot` and a single-segment `repositoryAlias`. Every node references one declared repo and carries the exact local actionable `goal-node` decision for that node id. Missing, ambiguous, ineligible, non-canonical, or alias-mismatched declarations refuse; command affinity, CWD, prompts, and tool context are never inherited as node identity.
 4. **`action` nodes are fully gated.** `approvalRequired: true` AND `riskClass` set AND
    `opsPacket` set. Approval is PRE-mutation (see "Approval" below).
 5. **`ongoing-ops` nodes declare an `opsPacket`.**
@@ -165,6 +207,7 @@ artifact ownership rules. Concretely:
   reachable, the scenario node for that repo is `blocked` — do NOT fabricate cross-repo work.
 - Framework-managed files in a downstream repo are READ-ONLY (see
   [operating-baseline.md](operating-baseline.md) → Framework File Immutability).
+- Repository selection never widens artifact authority. After binding each node, run `bubbles/scripts/framework-write-guard.sh` for framework-managed paths. The upstream-first authoring boundary remains authoritative: canonical Bubbles repository changes land upstream even when a downstream repository was selected for product work.
 
 ## Approval For Action Nodes (reuse the propagate token pattern)
 

@@ -10,6 +10,9 @@ You have a single goal — a feature to implement, a bug to fix, an ops or stabi
 
 ```
 /bubbles.goal  <your goal in plain English>
+
+# In an unbound multi-root session:
+/bubbles.goal  repositoryRoot: <canonical-repository-root> <your goal in plain English>
 ```
 
 ## Examples
@@ -70,13 +73,18 @@ You have a single goal — a feature to implement, a bug to fix, an ops or stabi
 
 ## What Happens
 
-1. Tyrone parses your goal, searches the codebase for existing work
-2. Creates spec/design/scopes if they don't exist
-3. Implements all scopes sequentially
-4. Runs full verify suite: unit + integration + E2E + chaos + validate + audit
-5. Remediates ALL findings (searches web/docs if stuck)
-6. Loops until convergence (zero findings + all gates pass) or max 10 iterations
-7. Produces a result envelope with completion status
+1. Repository preflight commits one canonical work repository before any codebase or spec search
+2. Tyrone parses the goal and searches only inside that repository for existing work
+3. Creates spec/design/scopes if they don't exist
+4. Implements all scopes sequentially
+5. Runs full verify suite: unit + integration + E2E + chaos + validate + audit
+6. Remediates ALL findings (searches web/docs if stuck)
+7. Loops until convergence (zero findings + all gates pass) or max 10 iterations
+8. Produces a result envelope that echoes the exact session ID, canonical root, decision ID, and control revision from the current validated repository decision
+
+Repository authority is explicit target intent, the current host session's durable work boundary, or the sole eligible root in a true single-repository workspace. CWD, prompt location, active editor, recent files, and workspace order never select the repository.
+
+For a goal that intentionally spans repositories, use the [Cross-Repo Goal Scenario](cross-repo-scenario.md) contract. Each declared repository has its own explicit canonical root, and each node receives a scoped `goal-node` decision. Node execution order does not switch the top-level session boundary.
 
 ## When To Use
 

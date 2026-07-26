@@ -1,0 +1,408 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bubbles.dev/schemas/repository-binding.schema.json",
+  "title": "Bubbles Repository Binding",
+  "oneOf": [
+    { "$ref": "#/$defs/controlRecord" },
+    { "$ref": "#/$defs/actionablePacket" },
+    { "$ref": "#/$defs/redactedPacket" },
+    { "$ref": "#/$defs/scopedNodePacket" },
+    { "$ref": "#/$defs/refusal" }
+  ],
+  "$defs": {
+    "authority": {
+      "enum": [
+        "explicit-repository-root",
+        "concrete-target",
+        "resolved-natural-language",
+        "durable-work-boundary",
+        "single-eligible-repository",
+        "scoped-scenario-node"
+      ]
+    },
+    "commandAuthority": {
+      "enum": [
+        "explicit-repository-root",
+        "concrete-target",
+        "resolved-natural-language",
+        "durable-work-boundary",
+        "single-eligible-repository"
+      ]
+    },
+    "establishingAuthority": {
+      "enum": [
+        "explicit-repository-root",
+        "concrete-target",
+        "resolved-natural-language",
+        "single-eligible-repository"
+      ]
+    },
+    "transition": {
+      "enum": [
+        "established",
+        "continued",
+        "confirmed",
+        "switched",
+        "scoped-override",
+        "unchanged-on-refusal"
+      ]
+    },
+    "commandTransition": {
+      "enum": ["established", "continued", "confirmed", "switched"]
+    },
+    "commandTargetKind": {
+      "enum": [
+        "repository-root",
+        "absolute-target",
+        "relative-target",
+        "natural-language",
+        "inherited-boundary",
+        "sole-eligible-repository"
+      ]
+    },
+    "commandSemantics": {
+      "oneOf": [
+        {
+          "properties": {
+            "authority": { "const": "explicit-repository-root" },
+            "transition": { "enum": ["established", "confirmed", "switched"] },
+            "targetKind": { "const": "repository-root" }
+          }
+        },
+        {
+          "properties": {
+            "authority": { "const": "concrete-target" },
+            "transition": { "enum": ["established", "confirmed", "switched"] },
+            "targetKind": { "enum": ["absolute-target", "relative-target"] }
+          }
+        },
+        {
+          "properties": {
+            "authority": { "const": "resolved-natural-language" },
+            "transition": { "enum": ["established", "confirmed", "switched"] },
+            "targetKind": { "const": "natural-language" }
+          }
+        },
+        {
+          "properties": {
+            "authority": { "const": "durable-work-boundary" },
+            "transition": { "const": "continued" },
+            "targetKind": { "const": "inherited-boundary" }
+          }
+        },
+        {
+          "properties": {
+            "authority": { "const": "single-eligible-repository" },
+            "transition": { "const": "established" },
+            "targetKind": { "const": "sole-eligible-repository" }
+          }
+        }
+      ]
+    },
+    "commandResolution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sessionId",
+        "decisionId",
+        "controlRevision",
+        "controlPathDigest",
+        "authority",
+        "transition",
+        "scopeKind",
+        "scopeId",
+        "targetKind",
+        "pathVisibility",
+        "actionable"
+      ],
+      "allOf": [{ "$ref": "#/$defs/commandSemantics" }],
+      "properties": {
+        "sessionId": { "type": "string", "pattern": "^[A-Za-z0-9._:-]+$" },
+        "decisionId": { "type": "string", "pattern": "^rb:.+:[1-9][0-9]*$" },
+        "controlRevision": { "type": "integer", "minimum": 1 },
+        "controlPathDigest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+        "authority": { "$ref": "#/$defs/commandAuthority" },
+        "transition": { "$ref": "#/$defs/commandTransition" },
+        "scopeKind": { "const": "command" },
+        "scopeId": { "type": "null" },
+        "targetKind": { "$ref": "#/$defs/commandTargetKind" },
+        "pathVisibility": { "const": "local" },
+        "actionable": { "const": true }
+      }
+    },
+    "actionablePacket": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repositoryRoot", "repositoryAlias", "repositoryResolution"],
+      "properties": {
+        "repositoryRoot": { "type": "string", "pattern": "^/" },
+        "repositoryAlias": { "type": "string", "minLength": 1 },
+        "repositoryResolution": { "$ref": "#/$defs/commandResolution" }
+      }
+    },
+    "scopedNodeResolution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sessionId",
+        "decisionId",
+        "controlRevision",
+        "controlPathDigest",
+        "authority",
+        "transition",
+        "scopeKind",
+        "scopeId",
+        "targetKind",
+        "pathVisibility",
+        "actionable"
+      ],
+      "properties": {
+        "sessionId": { "type": "string", "pattern": "^[A-Za-z0-9._:-]+$" },
+        "decisionId": { "type": "string", "pattern": "^rb:.+:[1-9][0-9]*:node:.+$" },
+        "controlRevision": { "type": "integer", "minimum": 1 },
+        "controlPathDigest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+        "authority": { "const": "scoped-scenario-node" },
+        "transition": { "const": "scoped-override" },
+        "scopeKind": { "const": "goal-node" },
+        "scopeId": { "type": "string", "minLength": 1 },
+        "targetKind": { "const": "goal-node" },
+        "pathVisibility": { "const": "local" },
+        "actionable": { "const": true }
+      }
+    },
+    "repositoryResolution": {
+      "oneOf": [
+        { "$ref": "#/$defs/commandResolution" },
+        { "$ref": "#/$defs/scopedNodeResolution" },
+        { "$ref": "#/$defs/redactedResolution" }
+      ]
+    },
+    "scopedNodePacket": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repositoryRoot", "repositoryAlias", "repositoryResolution"],
+      "properties": {
+        "repositoryRoot": { "type": "string", "pattern": "^/" },
+        "repositoryAlias": { "type": "string", "minLength": 1 },
+        "repositoryResolution": { "$ref": "#/$defs/scopedNodeResolution" }
+      }
+    },
+    "redactedResolution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sessionId",
+        "decisionId",
+        "controlRevision",
+        "controlPathDigest",
+        "authority",
+        "transition",
+        "scopeKind",
+        "scopeId",
+        "targetKind",
+        "pathVisibility",
+        "actionable"
+      ],
+      "properties": {
+        "sessionId": { "type": "string", "pattern": "^[A-Za-z0-9._:-]+$" },
+        "decisionId": { "type": "string", "minLength": 1 },
+        "controlRevision": { "type": "integer", "minimum": 1 },
+        "controlPathDigest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+        "authority": { "$ref": "#/$defs/authority" },
+        "transition": { "$ref": "#/$defs/transition" },
+        "scopeKind": { "enum": ["command", "goal-node"] },
+        "scopeId": { "type": ["string", "null"] },
+        "targetKind": {
+          "enum": [
+            "repository-root",
+            "absolute-target",
+            "relative-target",
+            "natural-language",
+            "inherited-boundary",
+            "sole-eligible-repository",
+            "goal-node"
+          ]
+        },
+        "pathVisibility": { "const": "redacted" },
+        "actionable": { "const": false }
+      },
+      "oneOf": [
+        {
+          "allOf": [{ "$ref": "#/$defs/commandSemantics" }],
+          "properties": {
+            "authority": { "$ref": "#/$defs/commandAuthority" },
+            "transition": { "$ref": "#/$defs/commandTransition" },
+            "scopeKind": { "const": "command" },
+            "scopeId": { "type": "null" },
+            "targetKind": { "$ref": "#/$defs/commandTargetKind" },
+            "decisionId": { "pattern": "^rb:.+:[1-9][0-9]*$" }
+          }
+        },
+        {
+          "properties": {
+            "authority": { "const": "scoped-scenario-node" },
+            "transition": { "const": "scoped-override" },
+            "scopeKind": { "const": "goal-node" },
+            "scopeId": { "type": "string", "minLength": 1 },
+            "targetKind": { "const": "goal-node" },
+            "decisionId": { "pattern": "^rb:.+:[1-9][0-9]*:node:.+$" }
+          }
+        }
+      ]
+    },
+    "redactedPacket": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repositoryRoot", "repositoryAlias", "repositoryResolution"],
+      "properties": {
+        "repositoryRoot": { "const": "<redacted-local-root>" },
+        "repositoryAlias": { "type": "string", "minLength": 1 },
+        "repositoryResolution": { "$ref": "#/$defs/redactedResolution" }
+      }
+    },
+    "transitionEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "allOf": [{ "$ref": "#/$defs/commandSemantics" }],
+      "required": [
+        "revision",
+        "decisionId",
+        "fromRepositoryRoot",
+        "toRepositoryRoot",
+        "fromRepositoryAlias",
+        "toRepositoryAlias",
+        "authority",
+        "transition",
+        "targetKind",
+        "timestamp"
+      ],
+      "properties": {
+        "revision": { "type": "integer", "minimum": 1 },
+        "decisionId": { "type": "string", "minLength": 1 },
+        "fromRepositoryRoot": { "type": ["string", "null"], "pattern": "^/" },
+        "toRepositoryRoot": { "type": "string", "pattern": "^/" },
+        "fromRepositoryAlias": { "type": ["string", "null"] },
+        "toRepositoryAlias": { "type": "string", "minLength": 1 },
+        "authority": { "$ref": "#/$defs/commandAuthority" },
+        "transition": { "$ref": "#/$defs/commandTransition" },
+        "targetKind": { "$ref": "#/$defs/commandTargetKind" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      }
+    },
+    "controlRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "sessionId", "controlPathDigest", "revision", "currentBinding", "transitionHistory"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "sessionId": { "type": "string", "pattern": "^[A-Za-z0-9._:-]+$" },
+        "controlPathDigest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+        "revision": { "type": "integer", "minimum": 1 },
+        "currentBinding": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "repositoryRoot",
+            "repositoryAlias",
+            "establishedDecisionId",
+            "establishedAuthority",
+            "establishedAt",
+            "lastDecisionId"
+          ],
+          "properties": {
+            "repositoryRoot": { "type": "string", "pattern": "^/" },
+            "repositoryAlias": { "type": "string", "minLength": 1 },
+            "establishedDecisionId": { "type": "string", "minLength": 1 },
+            "establishedAuthority": { "$ref": "#/$defs/establishingAuthority" },
+            "establishedAt": { "type": "string", "format": "date-time" },
+            "lastDecisionId": { "type": "string", "minLength": 1 }
+          }
+        },
+        "transitionHistory": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/transitionEntry" }
+        }
+      }
+    },
+    "refusal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "outcome",
+        "reasonCode",
+        "observedSignals",
+        "trustedBoundaryState",
+        "requiredInput",
+        "remediation",
+        "affinity",
+        "repoLocalSideEffects"
+      ],
+      "properties": {
+        "outcome": { "const": "refused" },
+        "reasonCode": {
+          "enum": [
+            "EXPLICIT_REPOSITORY_ROOT_NOT_FOUND",
+            "EXPLICIT_REPOSITORY_ROOT_INELIGIBLE",
+            "TARGET_ALIAS_AMBIGUOUS",
+            "TARGETLESS_MULTI_ROOT_UNBOUND",
+            "BOUNDARY_STALE",
+            "BOUNDARY_CONFLICT",
+            "BOUNDARY_MALFORMED",
+            "CONTROL_LOCK_BUSY",
+            "NO_ELIGIBLE_REPOSITORY",
+            "GOAL_NODE_REPOSITORY_UNRESOLVED"
+          ]
+        },
+        "observedSignals": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["kind", "repository", "authority"],
+            "properties": {
+              "kind": { "type": "string", "minLength": 1 },
+              "repository": { "type": "string", "minLength": 1 },
+              "authority": { "enum": ["diagnostic-only", "explicit-invalid", "boundary-record"] }
+            }
+          }
+        },
+        "trustedBoundaryState": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "repository"],
+          "properties": {
+            "status": { "enum": ["absent", "valid", "stale", "conflicting", "malformed"] },
+            "repository": { "type": "string", "minLength": 1 }
+          }
+        },
+        "requiredInput": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["field", "requirement"],
+          "properties": {
+            "field": { "const": "repositoryRoot" },
+            "requirement": { "const": "one eligible canonical repository root" }
+          }
+        },
+        "remediation": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["input"],
+          "properties": {
+            "input": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["repositoryRoot"],
+              "properties": {
+                "repositoryRoot": { "const": "<canonical-repository-root>" }
+              }
+            }
+          }
+        },
+        "affinity": { "const": "unchanged" },
+        "repoLocalSideEffects": { "const": "zero" }
+      }
+    }
+  }
+}

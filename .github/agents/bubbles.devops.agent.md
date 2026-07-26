@@ -25,6 +25,10 @@ handoffs:
 - [`bubbles-observability-adapter`](../skills/bubbles-observability-adapter/SKILL.md) — telemetry adapter wiring for monitoring changes
 - [`bubbles-evidence-capture`](../skills/bubbles-evidence-capture/SKILL.md) — record real build/deploy execution evidence
 
+## Repository Binding Entry Contract (NON-NEGOTIABLE)
+
+Before mode-ceiling lookup or any repository-local read, apply [agent-common.md](bubbles_shared/agent-common.md#repository-binding-entry-contract-non-negotiable). A direct surgical invocation executes `bubbles/scripts/repository-binding.sh preflight` and requires an actionable local decision plus `PREFLIGHT_COMMITTED`; a dispatched invocation instead requires the inherited packet and executes `bubbles/scripts/repository-binding.sh validate-packet` against authoritative session control. Any missing, stale, root-substituted, malformed, redacted, or non-actionable packet refuses before local work.
+
 ## Agent Identity
 
 **Name:** bubbles.devops  

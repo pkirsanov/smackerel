@@ -20,6 +20,16 @@ Shows:
 - Current phase
 - Any blocked items
 
+## Repository Scope In Multi-Root Workspaces
+
+Status validates or establishes the work-repository decision before it reads any `state.json` or runtime file. If the current host session is already bound, `/bubbles.status` continues that exact repository. In a new or unbound multi-root session, make the root explicit:
+
+```
+/bubbles.status  repositoryRoot: <canonical-repository-root>
+```
+
+CWD, active editor, prompt location, recent files, and workspace order never select the status repository. Public status/continuation output uses `<redacted-local-root>` and is non-actionable; local same-session continuation requires the exact current session ID, canonical root, decision ID, and control revision from one validated packet capture.
+
 ## For a Specific Feature
 
 ```

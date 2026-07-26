@@ -323,28 +323,127 @@ EOF
 }
 
 lock_acquired=false
+# Holder-identity file written inside the lock dir on acquire. Its presence lets
+# a later acquirer decide whether a held lock belongs to a still-live, non-stale
+# holder or to a crashed one (SIGKILLed holders never run the release trap, so a
+# bare `mkdir` lock would persist forever and deadlock every future acquire).
+RUNTIME_LOCK_PID_FILE="$RUNTIME_LOCK_DIR/holder.pid"
+
+# Portable directory mtime in epoch seconds (GNU `stat -c` / BSD `stat -f`).
+runtime_lock_mtime_epoch() {
+  stat -c %Y "$1" 2>/dev/null || stat -f %m "$1" 2>/dev/null || printf '%s' '0'
+}
+
+runtime_lock_stale_after_seconds() {
+  local minutes="${CFG_RUNTIME_STALE_AFTER_MINUTES:-60}"
+  [[ "$minutes" =~ ^[0-9]+$ ]] || minutes=60
+  printf '%s' "$(( minutes * 60 ))"
+}
+
+# Decide whether the currently-held lock dir is stale (recoverable) or owned by a
+# live, non-stale holder. Returns 0 = stale (safe to break), 1 = live.
+# Stale when: the holder pid file is missing/unreadable/non-numeric, OR the pid is
+# not a running process (`kill -0` fails), OR the lock dir mtime is older than
+# staleAfterMinutes even if a pid is still alive (defensive age cap).
+runtime_lock_is_stale() {
+  local pid='' mtime now age max
+
+  [[ -d "$RUNTIME_LOCK_DIR" ]] || return 0
+
+  if [[ -f "$RUNTIME_LOCK_PID_FILE" ]]; then
+    pid="$(cat "$RUNTIME_LOCK_PID_FILE" 2>/dev/null || true)"
+  fi
+  pid="${pid//[[:space:]]/}"
+
+  max="$(runtime_lock_stale_after_seconds)"
+  mtime="$(runtime_lock_mtime_epoch "$RUNTIME_LOCK_DIR")"
+  now="$(date -u +%s 2>/dev/null || printf '%s' '0')"
+  age=-1
+  if [[ "$mtime" =~ ^[0-9]+$ && "$now" =~ ^[0-9]+$ ]]; then
+    age=$(( now - mtime ))
+  fi
+
+  if [[ -n "$pid" && "$pid" =~ ^[0-9]+$ ]]; then
+    # A holder pid is recorded: a dead holder is stale immediately; a live holder
+    # is stale only once the lock has outlived staleAfterMinutes (defensive).
+    if ! kill -0 "$pid" 2>/dev/null; then
+      return 0
+    fi
+    if [[ "$max" =~ ^[0-9]+$ ]] && (( age > max )); then
+      return 0
+    fi
+    return 1
+  fi
+
+  # No holder pid recorded yet. mkdir wins the lock, THEN the holder records its
+  # pid, so there is a brief window with the dir present but no pid file. A
+  # freshly created lock is treated as an in-flight acquirer (not stale); only a
+  # lock dir aged past staleAfterMinutes with no live holder is genuinely stale.
+  # This closes the acquire/pid-write TOCTOU so two waiters cannot both break a
+  # live holder's fresh lock.
+  if [[ "$max" =~ ^[0-9]+$ ]] && (( age > max )); then
+    return 0
+  fi
+  return 1
+}
+
+break_stale_registry_lock() {
+  rm -rf "$RUNTIME_LOCK_DIR" 2>/dev/null || true
+}
+
+# Atomic acquire attempt via `mkdir` (create-if-absent is a single filesystem op).
+# On success, record the holder pid and arm the release trap.
+_mkdir_registry_lock() {
+  if mkdir "$RUNTIME_LOCK_DIR" 2>/dev/null; then
+    printf '%s\n' "$$" > "$RUNTIME_LOCK_PID_FILE" 2>/dev/null || true
+    lock_acquired=true
+    trap 'release_registry_lock' EXIT INT TERM
+    return 0
+  fi
+  return 1
+}
 
 acquire_registry_lock() {
   ensure_runtime_registry
 
-  if mkdir "$RUNTIME_LOCK_DIR" 2>/dev/null; then
-    lock_acquired=true
-    trap 'release_registry_lock' EXIT INT TERM
-  else
-    die "Runtime lease registry is busy. Another session may be updating it."
-  fi
+  local _
+  for _ in 1 2 3 4 5; do
+    if _mkdir_registry_lock; then
+      return 0
+    fi
+
+    # Lock is held. If the holder is stale (crashed / too old), break it and
+    # retry immediately so a SIGKILLed holder can never deadlock the registry.
+    if runtime_lock_is_stale; then
+      break_stale_registry_lock
+      if _mkdir_registry_lock; then
+        return 0
+      fi
+    fi
+
+    # Held by a live, non-stale holder: brief backoff for transient contention.
+    sleep 0.2
+  done
+
+  die "Runtime lease registry is busy. Another session may be updating it."
 }
 
 # Non-fatal lock attempt for the capacity --wait poll loop: returns 1 instead of
 # dying when the registry is momentarily busy, so a waiting acquire keeps polling
-# rather than aborting on transient contention from another session.
+# rather than aborting on transient contention from another session. A stale lock
+# (crashed holder) is broken here too so the poll loop cannot spin forever.
 try_acquire_registry_lock() {
   ensure_runtime_registry
 
-  if mkdir "$RUNTIME_LOCK_DIR" 2>/dev/null; then
-    lock_acquired=true
-    trap 'release_registry_lock' EXIT INT TERM
+  if _mkdir_registry_lock; then
     return 0
+  fi
+
+  if runtime_lock_is_stale; then
+    break_stale_registry_lock
+    if _mkdir_registry_lock; then
+      return 0
+    fi
   fi
 
   return 1
@@ -352,7 +451,8 @@ try_acquire_registry_lock() {
 
 release_registry_lock() {
   if [[ "$lock_acquired" == true ]]; then
-    rmdir "$RUNTIME_LOCK_DIR" 2>/dev/null || true
+    rm -f "$RUNTIME_LOCK_PID_FILE" 2>/dev/null || true
+    rmdir "$RUNTIME_LOCK_DIR" 2>/dev/null || rm -rf "$RUNTIME_LOCK_DIR" 2>/dev/null || true
     lock_acquired=false
     trap - EXIT INT TERM
   fi

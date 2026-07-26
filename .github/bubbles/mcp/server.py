@@ -623,6 +623,150 @@ class PromptCatalog:
 # stdout/stderr verbatim and surface the exit code so the calling agent
 # sees the raw evidence — no summarization, no truncation by the server.
 
+# Caps on individual argument sizes (IMP-102 / SCOPE-7 defect #2). A tools/call
+# is a thin wrapper around a bash twin; no legitimate argument is anywhere near
+# these bounds. They exist to reject obviously-abusive payloads before they
+# reach subprocess/argv.
+MAX_ARG_STRING_BYTES = 1 * 1024 * 1024   # 1 MiB per string argument
+MAX_ARG_ARRAY_LEN = 10_000               # elements per array argument
+
+# An argv template element that is EXACTLY ${var*} expands element-wise from a
+# list argument into zero or more argv entries (empty/missing list -> zero).
+_ARRAY_EXPAND_RE = re.compile(r"^\$\{([A-Za-z_][A-Za-z0-9_]*)\*\}$")
+
+
+def _json_type_matches(value: Any, json_type: str) -> bool:
+    """True if `value` matches a JSON Schema primitive type name."""
+    if json_type == "string":
+        return isinstance(value, str)
+    if json_type == "integer":
+        return isinstance(value, int) and not isinstance(value, bool)
+    if json_type == "number":
+        return isinstance(value, (int, float)) and not isinstance(value, bool)
+    if json_type == "boolean":
+        return isinstance(value, bool)
+    if json_type == "array":
+        return isinstance(value, list)
+    if json_type == "object":
+        return isinstance(value, dict)
+    if json_type == "null":
+        return value is None
+    return True  # unknown type name -> do not reject
+
+
+def _reject_oversized_args(name: str, arguments: dict[str, Any]) -> None:
+    """Reject obviously-oversized string/array arguments (memory/argv guard)."""
+    for key, value in arguments.items():
+        if isinstance(value, str) and len(
+            value.encode("utf-8", "ignore")
+        ) > MAX_ARG_STRING_BYTES:
+            raise _JsonRpcError(
+                ERR_INVALID_PARAMS,
+                f"invalid arguments for tool '{name}': field '{key}' exceeds "
+                f"{MAX_ARG_STRING_BYTES}-byte string cap",
+            )
+        if isinstance(value, list) and len(value) > MAX_ARG_ARRAY_LEN:
+            raise _JsonRpcError(
+                ERR_INVALID_PARAMS,
+                f"invalid arguments for tool '{name}': field '{key}' exceeds "
+                f"{MAX_ARG_ARRAY_LEN}-element array cap",
+            )
+
+
+def _validate_arguments(spec: dict[str, Any], arguments: dict[str, Any]) -> None:
+    """Validate (defaults-merged) arguments against the tool's inputSchema.
+
+    Raises _JsonRpcError(ERR_INVALID_PARAMS, ...) on any violation so the
+    caller NEVER executes the bash twin with unvalidated input (IMP-102 /
+    SCOPE-7 defect #2). Uses jsonschema.Draft7Validator when importable;
+    otherwise falls back to a minimal validator that still rejects unknown
+    top-level keys (additionalProperties:false semantics) and enforces
+    `required` + declared primitive types.
+    """
+    name = spec.get("name", "?")
+    _reject_oversized_args(name, arguments)
+    schema = spec.get("inputSchema") or {}
+    if not isinstance(schema, dict) or not schema:
+        return
+    # Closed by default: unknown top-level fields are rejected unless the
+    # schema explicitly opts into additionalProperties.
+    effective = dict(schema)
+    if "additionalProperties" not in effective:
+        effective["additionalProperties"] = False
+
+    try:
+        import jsonschema  # type: ignore
+    except ImportError:
+        jsonschema = None  # type: ignore
+
+    if jsonschema is not None:
+        validator = jsonschema.Draft7Validator(effective)
+        errors = sorted(validator.iter_errors(arguments), key=lambda e: list(e.path))
+        if errors:
+            detail = "; ".join(
+                f"{'/'.join(str(p) for p in e.path) or '<root>'}: {e.message}"
+                for e in errors[:5]
+            )
+            raise _JsonRpcError(
+                ERR_INVALID_PARAMS,
+                f"invalid arguments for tool '{name}': {detail}",
+            )
+        return
+
+    # Minimal fallback (no jsonschema on the runtime).
+    properties = effective.get("properties") or {}
+    if effective.get("additionalProperties") is False:
+        unknown = [k for k in arguments if k not in properties]
+        if unknown:
+            raise _JsonRpcError(
+                ERR_INVALID_PARAMS,
+                f"invalid arguments for tool '{name}': unknown field(s): "
+                f"{', '.join(sorted(unknown))}",
+            )
+    for required in effective.get("required", []):
+        if required not in arguments or arguments[required] is None:
+            raise _JsonRpcError(
+                ERR_INVALID_PARAMS,
+                f"invalid arguments for tool '{name}': missing required field "
+                f"'{required}'",
+            )
+    for key, value in arguments.items():
+        prop_spec = properties.get(key)
+        if not isinstance(prop_spec, dict):
+            continue
+        declared = prop_spec.get("type")
+        if isinstance(declared, str) and not _json_type_matches(value, declared):
+            raise _JsonRpcError(
+                ERR_INVALID_PARAMS,
+                f"invalid arguments for tool '{name}': field '{key}' expected "
+                f"type {declared}",
+            )
+
+
+def _render_env_value(template: str, arguments: dict[str, Any]) -> str:
+    """Substitute `${var}` scalars in an envTemplate value.
+
+    Missing/None values render as the empty string (the caller omits empty env
+    vars). Unknown placeholders render empty rather than raising — env
+    rendering is best-effort and must never block an otherwise-valid tool call.
+    """
+    out = template
+    i = 0
+    while True:
+        start = out.find("${", i)
+        if start == -1:
+            break
+        end = out.find("}", start + 2)
+        if end == -1:
+            break
+        var = out[start + 2 : end]
+        value = arguments.get(var)
+        text = "" if value is None else str(value)
+        out = out[:start] + text + out[end + 1 :]
+        i = start + len(text)
+    return out
+
+
 def _render_args(template: list[str], arguments: dict[str, Any]) -> list[str]:
     """Substitute `${var}` placeholders in argsTemplate with arguments[var].
 
@@ -633,12 +777,32 @@ def _render_args(template: list[str], arguments: dict[str, Any]) -> list[str]:
                    substituted with ''). This lets the catalog declare
                    `argsTemplate: ["${action}", "${gate_id?}"]` and produce
                    either `[json, G024]` or just `[list]` depending on input.
+      ${var*}    — array expansion; the argv element MUST be exactly `${var*}`.
+                   The list argument `var` expands element-wise into zero or
+                   more argv entries (empty/missing list -> zero entries). Lets
+                   the catalog declare `argsTemplate: ["--", "${command}",
+                   "${args*}"]` so the wrapped command's own arguments survive
+                   (IMP-102 / SCOPE-7 defect #3). A non-list value raises
+                   ValueError.
 
     Unknown placeholders (not `?`-suffixed) raise ValueError so the caller
     gets ERR_INVALID_PARAMS rather than passing the literal text down.
     """
     rendered: list[str] = []
     for tok in template:
+        expand = _ARRAY_EXPAND_RE.match(tok)
+        if expand:
+            var = expand.group(1)
+            value = arguments.get(var)
+            if value is None:
+                continue
+            if not isinstance(value, list):
+                raise ValueError(
+                    f"argument {var} must be an array for ${{{var}*}} expansion"
+                )
+            for item in value:
+                rendered.append(str(item))
+            continue
         if "${" not in tok:
             rendered.append(tok)
             continue
@@ -687,6 +851,11 @@ def _execute_tool(
     for prop, prop_spec in properties.items():
         if prop not in merged_args and "default" in prop_spec:
             merged_args[prop] = prop_spec["default"]
+    # Validate the (defaults-merged) arguments against the declared inputSchema
+    # BEFORE execution. Unknown/oversized/wrong-type fields are rejected with a
+    # JSON-RPC invalid-params error (raised, not returned) rather than passed
+    # down to the bash twin (IMP-102 / SCOPE-7 defect #2).
+    _validate_arguments(spec, merged_args)
     try:
         rendered_args = _render_args(spec.get("argsTemplate", []), merged_args)
     except ValueError as exc:
@@ -696,6 +865,19 @@ def _execute_tool(
         }
 
     cmd = ["bash", spec["_scriptAbsPath"], *rendered_args]
+    # Render an optional envTemplate: named env vars whose values come from the
+    # (defaults-merged) arguments. Empty/missing values are omitted; the rest
+    # are merged onto os.environ so the wrapped run still inherits PATH etc.
+    # (IMP-102 / SCOPE-7 defect #3). Tools without an envTemplate are
+    # unaffected (env=None -> inherit os.environ unchanged).
+    run_env: Optional[dict[str, str]] = None
+    env_template = spec.get("envTemplate") or {}
+    if isinstance(env_template, dict) and env_template:
+        run_env = dict(os.environ)
+        for env_key, tmpl in env_template.items():
+            value = _render_env_value(str(tmpl), merged_args)
+            if value:
+                run_env[env_key] = value
     timeout = int(
         os.environ.get(
             "BUBBLES_MCP_TOOL_TIMEOUT", spec.get("timeoutSeconds", DEFAULT_TOOL_TIMEOUT_SECONDS)
@@ -711,6 +893,7 @@ def _execute_tool(
             text=True,
             timeout=timeout,
             check=False,
+            env=run_env,
         )
     except subprocess.TimeoutExpired as exc:
         return {
@@ -994,6 +1177,66 @@ class _JsonRpcError(Exception):
 # from CI runners and shared/cloud environments, not just a local stdio shell.
 # Same JSON-RPC dispatch as stdio (Server.handle_message); only framing differs.
 
+# Host names that are always safe to bind without a token (loopback-only).
+_LOOPBACK_HOST_NAMES = frozenset({"localhost"})
+
+# Default cap on the HTTP request body (IMP-102 / SCOPE-7 defect #4). Overridable
+# via BUBBLES_MCP_MAX_BODY_BYTES. A JSON-RPC tools/call body is tiny; this bound
+# stops a trivial memory-exhaustion DoS from an oversized Content-Length.
+DEFAULT_MAX_BODY_BYTES = 10 * 1024 * 1024  # 10 MiB
+
+
+def _is_loopback_host(host: str) -> bool:
+    """True if `host` is a loopback bind target safe to serve without a token."""
+    h = (host or "").strip()
+    if h.startswith("[") and h.endswith("]"):
+        h = h[1:-1]
+    if h.lower() in _LOOPBACK_HOST_NAMES:
+        return True
+    try:
+        import ipaddress
+        return ipaddress.ip_address(h).is_loopback
+    except ValueError:
+        return False
+
+
+def _http_bind_refusal_reason(host: str, auth_token: str) -> Optional[str]:
+    """Return an error string if binding `host` without a token must be refused.
+
+    An HTTP transport with NO bearer token exposes an UNAUTHENTICATED
+    tools/call surface that executes bash scripts. Binding that to any
+    non-loopback interface hands arbitrary command execution to the network,
+    so we refuse to start (IMP-102 / SCOPE-7 defect #1). Loopback
+    (127.0.0.1 / ::1 / localhost) stays tokenless for local dev; a token
+    (BUBBLES_MCP_HTTP_TOKEN) lifts the restriction. Terminate TLS at a reverse
+    proxy in front of the token-guarded transport.
+    """
+    if auth_token:
+        return None
+    if _is_loopback_host(host):
+        return None
+    return (
+        f"refusing to bind non-loopback host {host!r} without "
+        f"BUBBLES_MCP_HTTP_TOKEN — an unauthenticated HTTP transport would let "
+        f"any client on that interface execute bash scripts. Set "
+        f"BUBBLES_MCP_HTTP_TOKEN=<token> (and terminate TLS via a reverse "
+        f"proxy in front of it), or bind 127.0.0.1 for local-only use."
+    )
+
+
+def _http_max_body_bytes() -> int:
+    """Resolve the HTTP request-body cap (BUBBLES_MCP_MAX_BODY_BYTES override)."""
+    raw = os.environ.get("BUBBLES_MCP_MAX_BODY_BYTES", "").strip()
+    if raw:
+        try:
+            parsed = int(raw)
+            if parsed > 0:
+                return parsed
+        except ValueError:
+            pass
+    return DEFAULT_MAX_BODY_BYTES
+
+
 def serve_http(server: "Server", host: str, port: int,
                logger: logging.Logger) -> int:
     """Serve the MCP JSON-RPC surface over HTTP POST.
@@ -1001,10 +1244,21 @@ def serve_http(server: "Server", host: str, port: int,
     Single endpoint: POST / (or POST /rpc) with a JSON-RPC request body;
     responds with the JSON-RPC response body. GET /health returns 200 for
     liveness probes. Optional bearer-token auth via BUBBLES_MCP_HTTP_TOKEN.
+
+    Refuses to start when binding a non-loopback host without a token
+    (IMP-102 / SCOPE-7 defect #1) and caps the request body size
+    (defect #4). Returns a nonzero exit on refusal.
     """
     import http.server
 
     auth_token = os.environ.get("BUBBLES_MCP_HTTP_TOKEN", "").strip()
+    max_body_bytes = _http_max_body_bytes()
+
+    refusal = _http_bind_refusal_reason(host, auth_token)
+    if refusal:
+        sys.stderr.write(f"bubbles-mcp: {refusal}\n")
+        logger.error("HTTP bind refused: %s", refusal)
+        return 2
 
     class _Handler(http.server.BaseHTTPRequestHandler):
         # Quiet the default stderr access log; route through our file logger.
@@ -1040,8 +1294,21 @@ def serve_http(server: "Server", host: str, port: int,
                 return
             try:
                 length = int(self.headers.get("Content-Length", "0"))
-            except ValueError:
+            except (TypeError, ValueError):
                 length = 0
+            if length < 0:
+                length = 0
+            # Reject an oversized body BEFORE reading it — do not pull the
+            # attacker-declared byte count into memory (IMP-102 / SCOPE-7
+            # defect #4).
+            if length > max_body_bytes:
+                self._send_json(413, {"jsonrpc": "2.0", "id": None,
+                                      "error": {"code": ERR_INVALID_REQUEST,
+                                                "message": (
+                                                    f"request body too large: "
+                                                    f"{length} > {max_body_bytes} "
+                                                    f"bytes")}})
+                return
             raw = self.rfile.read(length) if length > 0 else b""
             try:
                 msg = json.loads(raw.decode("utf-8")) if raw else {}

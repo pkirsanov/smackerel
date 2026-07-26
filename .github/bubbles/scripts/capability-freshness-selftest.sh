@@ -15,6 +15,12 @@ fail() {
   failures=$((failures + 1))
 }
 
+# Count capabilities in a ledger fixture whose state equals <want>. Exact
+# four-space match so capability ids and narrative prose are never miscounted.
+count_state() {
+  awk -v want="$2" '$0 == "    state: " want { n++ } END { print n + 0 }' "$1"
+}
+
 rewrite_once() {
   local file_path="$1"
   local from_text="$2"
@@ -31,7 +37,7 @@ rewrite_once() {
     }
     { print }
     END { if (replaced == 0) exit 2 }
-  ' "$file_path" > "$temp_file"
+  ' "$file_path" >"$temp_file"
   mv "$temp_file" "$file_path"
 }
 
@@ -61,7 +67,24 @@ echo "Scenario: generated docs or issue status drift must fail loudly before rel
 BUBBLES_REPO_ROOT="$TMP_ROOT" bash "$SCRIPT_DIR/generate-capability-ledger-docs.sh" >/dev/null
 pass "Fresh fixture generated from the capability ledger"
 
-rewrite_once "$TMP_ROOT/docs/generated/competitive-capabilities.md" 'State summary: 22 shipped, 1 partial, 0 proposed.' 'State summary: 2 shipped, 1 partial, 4 proposed.'
+# Exact counts computed from the fixture ledger source (never an arbitrary
+# [0-9]+ regex). The regenerated summary must match these precisely.
+fixture_shipped="$(count_state "$TMP_ROOT/bubbles/capability-ledger.yaml" shipped)"
+fixture_partial="$(count_state "$TMP_ROOT/bubbles/capability-ledger.yaml" partial)"
+fixture_proposed="$(count_state "$TMP_ROOT/bubbles/capability-ledger.yaml" proposed)"
+expected_summary="State summary: ${fixture_shipped} shipped, ${fixture_partial} partial, ${fixture_proposed} proposed."
+
+if grep -qxF "$expected_summary" "$TMP_ROOT/docs/generated/competitive-capabilities.md"; then
+  pass "Generated summary matches the fixture-derived counts (${fixture_shipped}/${fixture_partial}/${fixture_proposed})"
+else
+  fail "Generated summary matches the fixture-derived counts (${fixture_shipped}/${fixture_partial}/${fixture_proposed})"
+fi
+
+# Drift fixture derived from the exact counts: bump shipped by one so the summary
+# no longer matches the regenerated ledger truth (no arbitrary magic numbers).
+drift_summary="State summary: $((fixture_shipped + 1)) shipped, ${fixture_partial} partial, ${fixture_proposed} proposed."
+rewrite_once "$TMP_ROOT/docs/generated/competitive-capabilities.md" \
+  "$expected_summary" "$drift_summary"
 expect_check_failure "Generated capability guide drift is detected"
 
 BUBBLES_REPO_ROOT="$TMP_ROOT" bash "$SCRIPT_DIR/generate-capability-ledger-docs.sh" >/dev/null

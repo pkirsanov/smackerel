@@ -314,6 +314,17 @@ bubbles_framework_manifest_entries() {
     bubbles_print_manifest_entry "$source_root" "$relative_path"
   done < <(find "$source_root/bubbles/schemas" -type f 2>/dev/null | LC_ALL=C sort)
 
+  # BUG015-F2: the adversarial-sample record schema is a MANAGED framework file
+  # because the installed agents/bubbles_shared/agent-common.md red-team contract
+  # names it as the authoritative record schema (schema version 1). Ship exactly
+  # this ONE eval schema downstream so record-producing agents and reviewers can
+  # resolve it at the referenced path. The other two eval schemas (task-v2 /
+  # evaluator-result) are consumed only by the source-only eval-harness (BUG015-F1)
+  # and stay source-only, so this is a single explicit entry — NOT a
+  # bubbles/eval/schemas glob that would sweep the two harness schemas in.
+  bubbles_print_manifest_entry "$source_root" \
+    "bubbles/eval/schemas/adversarial-sample.schema.json"
+
   # v5.2.1 (F4 installer fix): bubbles/registry/gates.yaml is canonical for
   # the workflows.yaml gates: block. Installed downstream so
   # generate-gates-block.sh and gates-registry-selftest.sh have something

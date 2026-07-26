@@ -92,10 +92,13 @@ fi
 # write) demotes them to the v6 policy automatically.
 DIFF_EVIDENCE_CUTOFF="2026-06-04"
 if [[ "$STRICT" != "1" ]] && [[ -f "$SPEC_DIR/state.json" ]]; then
-  AUTO_DECISION="$(python3 - <<PY
-import json, sys, subprocess
+  AUTO_DECISION="$(SPEC_DIR="$SPEC_DIR" REPO_ROOT="$REPO_ROOT" DIFF_EVIDENCE_CUTOFF="$DIFF_EVIDENCE_CUTOFF" python3 - <<'PY'
+import json, sys, subprocess, os
+spec_dir = os.environ["SPEC_DIR"]
+repo_root = os.environ["REPO_ROOT"]
+cutoff = os.environ["DIFF_EVIDENCE_CUTOFF"]
 try:
-    d = json.load(open("$SPEC_DIR/state.json"))
+    d = json.load(open(os.path.join(spec_dir, "state.json")))
 except Exception:
     print("unknown"); sys.exit(0)
 mod = (d.get('modernization') or {})
@@ -109,13 +112,13 @@ if choice == 'enforce':
 has_mod_block = bool(mod)
 try:
     first = subprocess.check_output(
-        ['git', '-C', "$REPO_ROOT", 'log', '--diff-filter=A', '--format=%cI', '--', "$SPEC_DIR"],
+        ['git', '-C', repo_root, 'log', '--diff-filter=A', '--format=%cI', '--', spec_dir],
         stderr=subprocess.DEVNULL, text=True,
     ).strip().splitlines()
     first_date = first[-1][:10] if first else ""
 except Exception:
     first_date = ""
-if first_date and first_date < "$DIFF_EVIDENCE_CUTOFF" and not has_mod_block:
+if first_date and first_date < cutoff and not has_mod_block:
     # Pre-cutoff spec with no modernization block — v5 grandfather.
     print('advisory'); sys.exit(0)
 # Everything else: v6 default-on.
@@ -139,16 +142,16 @@ fi
 # Resolve baseSha.
 BASE_SHA="$BASE_SHA_OVERRIDE"
 if [[ -z "$BASE_SHA" ]] && [[ -f "$SPEC_DIR/state.json" ]]; then
-  BASE_SHA="$(python3 -c "
+  BASE_SHA="$(python3 -c '
 import json, sys
 try:
-    d = json.load(open('$SPEC_DIR/state.json'))
-    eh = d.get('executionHistory', [])
+    d = json.load(open(sys.argv[1]))
+    eh = d.get("executionHistory", [])
     if eh:
-        print(eh[0].get('baseSha', ''))
+        print(eh[0].get("baseSha", ""))
 except Exception:
     pass
-" 2>/dev/null)"
+' "$SPEC_DIR/state.json" 2>/dev/null)"
 fi
 
 if [[ -z "$BASE_SHA" ]]; then
@@ -182,15 +185,15 @@ CHANGED_FILES_RAW="$(git -C "$REPO_ROOT" diff --name-status "$BASE_SHA"..HEAD 2>
 # cross-reference against the diff.
 SCOPE_FILES_JOINED="$(printf '%s\n' "${SCOPE_FILES[@]}")"
 
-python3 - <<PY
+REPO_ROOT="$REPO_ROOT" BASE_SHA="$BASE_SHA" STRICT="$STRICT" SCOPE_FILES_JOINED="$SCOPE_FILES_JOINED" CHANGED_FILES_RAW="$CHANGED_FILES_RAW" python3 - <<'PY'
 import os, re, sys
 from pathlib import Path
 
-repo_root = "$REPO_ROOT"
-base_sha = "$BASE_SHA"
-strict = $STRICT
-scope_files = """$SCOPE_FILES_JOINED""".strip().splitlines()
-changed_raw = """$CHANGED_FILES_RAW""".strip().splitlines()
+repo_root = os.environ["REPO_ROOT"]
+base_sha = os.environ["BASE_SHA"]
+strict = int(os.environ.get("STRICT") or "0")
+scope_files = os.environ["SCOPE_FILES_JOINED"].strip().splitlines()
+changed_raw = os.environ["CHANGED_FILES_RAW"].strip().splitlines()
 
 # Parse diff: status -> set of paths.
 added_paths = set()
@@ -236,7 +239,7 @@ for sf in scope_files:
         claims.append((str(Path(sf).resolve()).removeprefix(repo_root.rstrip('/') + '/'), i, body, paths))
 
 if not claims:
-    print(f"diff-evidence-guard: PASS (no DoD path-claims to verify in $(echo "${SCOPE_FILES[@]}" | wc -w) scope file(s); baseSha={base_sha[:12]})")
+    print(f"diff-evidence-guard: PASS (no DoD path-claims to verify in {len(scope_files)} scope file(s); baseSha={base_sha[:12]})")
     sys.exit(0)
 
 mismatches = []

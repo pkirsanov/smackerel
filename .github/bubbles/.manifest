@@ -6,6 +6,8 @@ bubbles/scripts/adversarial-aggregate-selftest.sh
 bubbles/scripts/adversarial-aggregate.sh
 bubbles/scripts/adversarial-resolve-selftest.sh
 bubbles/scripts/adversarial-resolve.sh
+bubbles/scripts/agent-bundle-size-budget-selftest.sh
+bubbles/scripts/agent-bundle-size-budget.sh
 bubbles/scripts/agent-ownership-lint-selftest.sh
 bubbles/scripts/agent-ownership-lint.sh
 bubbles/scripts/agent-roster-coverage-selftest.sh
@@ -25,6 +27,7 @@ bubbles/scripts/assurance-resolve-selftest.sh
 bubbles/scripts/assurance-resolve.sh
 bubbles/scripts/audit-result-contract-lint-selftest.sh
 bubbles/scripts/audit-result-contract-lint.sh
+bubbles/scripts/bash-baseline-guard-selftest.sh
 bubbles/scripts/batch-promotion-lint-selftest.sh
 bubbles/scripts/batch-promotion-lint.sh
 bubbles/scripts/bubbles-drift-check-selftest.sh
@@ -51,6 +54,7 @@ bubbles/scripts/context-compactor-selftest.sh
 bubbles/scripts/context-compactor.sh
 bubbles/scripts/continuation-routing-selftest.sh
 bubbles/scripts/control-plane-policy-activation-selftest.sh
+bubbles/scripts/control-plane-rce-selftest.sh
 bubbles/scripts/convergence-cap-guard-selftest.sh
 bubbles/scripts/convergence-cap-guard.sh
 bubbles/scripts/delivery-implementation-delta-guard-selftest.sh
@@ -83,6 +87,7 @@ bubbles/scripts/eval-harness-selftest.sh
 bubbles/scripts/eval-harness.sh
 bubbles/scripts/eval-heldout-guard-selftest.sh
 bubbles/scripts/eval-heldout-guard.sh
+bubbles/scripts/evidence-admission-hardening-selftest.sh
 bubbles/scripts/evidence-receipt-check-selftest.sh
 bubbles/scripts/evidence-receipt-check.sh
 bubbles/scripts/evidence-tool-log-bridge-selftest.sh
@@ -110,6 +115,8 @@ bubbles/scripts/generate-capability-ledger-docs.sh
 bubbles/scripts/generate-cheatsheet-selftest.sh
 bubbles/scripts/generate-cheatsheet.sh
 bubbles/scripts/generate-framework-stats.sh
+bubbles/scripts/generate-gate-coverage-map-selftest.sh
+bubbles/scripts/generate-gate-coverage-map.sh
 bubbles/scripts/generate-gates-block.sh
 bubbles/scripts/generate-installer-selftest.sh
 bubbles/scripts/generate-installer.sh
@@ -119,6 +126,7 @@ bubbles/scripts/governance-index-lint-selftest.sh
 bubbles/scripts/governance-index-lint.sh
 bubbles/scripts/guard-lib.sh
 bubbles/scripts/handoff-cycle-check.sh
+bubbles/scripts/imp021-interaction-contracts-selftest.sh
 bubbles/scripts/implementation-reality-scan-selftest.sh
 bubbles/scripts/implementation-reality-scan.sh
 bubbles/scripts/install-bubbles-hooks.sh
@@ -147,11 +155,13 @@ bubbles/scripts/mcp-grant-selftest.sh
 bubbles/scripts/mcp-grant-sync.sh
 bubbles/scripts/mcp-http-transport-selftest.sh
 bubbles/scripts/mcp-server-selftest.sh
+bubbles/scripts/mcp-trust-boundary-selftest.sh
 bubbles/scripts/migrate-modes-v5-to-v6-selftest.sh
 bubbles/scripts/migrate-modes-v5-to-v6.sh
 bubbles/scripts/mode-alias-selftest.sh
 bubbles/scripts/mode-family-inventory-selftest.sh
 bubbles/scripts/mode-family-inventory.sh
+bubbles/scripts/mode-resolver-phase-multiplicity-selftest.sh
 bubbles/scripts/mode-resolver-selftest.sh
 bubbles/scripts/mode-resolver.sh
 bubbles/scripts/model-tier-advisory-selftest.sh
@@ -222,6 +232,12 @@ bubbles/scripts/repo-drift-report-selftest.sh
 bubbles/scripts/repo-drift-report.sh
 bubbles/scripts/repo-readiness.sh
 bubbles/scripts/report-section-autofix.sh
+bubbles/scripts/repository-binding-conformance-guard-selftest.sh
+bubbles/scripts/repository-binding-conformance-guard.sh
+bubbles/scripts/repository-binding-host-context-selftest.sh
+bubbles/scripts/repository-binding-host-context.sh
+bubbles/scripts/repository-binding-selftest.sh
+bubbles/scripts/repository-binding.sh
 bubbles/scripts/requirement-mechanism-guard-selftest.sh
 bubbles/scripts/requirement-mechanism-guard.sh
 bubbles/scripts/result-envelope-validate-selftest.sh
@@ -232,6 +248,7 @@ bubbles/scripts/retro-framework-health-selftest.sh
 bubbles/scripts/retro-framework-health.sh
 bubbles/scripts/risk-tier-resolve-selftest.sh
 bubbles/scripts/risk-tier-resolve.sh
+bubbles/scripts/runtime-concurrency-selftest.sh
 bubbles/scripts/runtime-lease-selftest.sh
 bubbles/scripts/runtime-leases.sh
 bubbles/scripts/scaffold-gate-selftest.sh
@@ -247,6 +264,8 @@ bubbles/scripts/session-cap-guard-selftest.sh
 bubbles/scripts/session-cap-guard.sh
 bubbles/scripts/shellcheck-lint-selftest.sh
 bubbles/scripts/shellcheck-lint.sh
+bubbles/scripts/skill-description-load-selftest.sh
+bubbles/scripts/skill-description-load.sh
 bubbles/scripts/skill-evolution-selftest.sh
 bubbles/scripts/skill-evolution.sh
 bubbles/scripts/spec-dashboard.sh
@@ -280,6 +299,7 @@ bubbles/scripts/transition-contract-resolver-selftest.sh
 bubbles/scripts/transition-contract-resolver.sh
 bubbles/scripts/trust-doctor-selftest.sh
 bubbles/scripts/trust-metadata.sh
+bubbles/scripts/upgrade-transactionality-selftest.sh
 bubbles/scripts/upkeep-calendar-selftest.sh
 bubbles/scripts/upkeep-calendar.sh
 bubbles/scripts/v4.1.0-selftest.sh
@@ -304,6 +324,7 @@ bubbles/scripts/workflow-registry-consistency.sh
 bubbles/scripts/workflow-runner-grants-lint-selftest.sh
 bubbles/scripts/workflow-runner-grants-lint.sh
 bubbles/scripts/workflow-surface-selftest.sh
+bubbles/scripts/workflow-yaml-validity-selftest.sh
 bubbles/scripts/yaml-schema-validate.sh
 bubbles/scripts/scope-universe-resolver.py
 bubbles/scripts/guards/control-plane-checks.sh
@@ -316,11 +337,13 @@ bubbles/adapters/observability/prometheus.sh
 bubbles/schemas/adoption-profiles.schema.json
 bubbles/schemas/capability-ledger.schema.json
 bubbles/schemas/propagation-policy.schema.json
+bubbles/schemas/repository-binding.schema.json
 bubbles/schemas/result-envelope.schema.json
 bubbles/schemas/scenario-manifest.schema.json
 bubbles/schemas/tool-call.schema.json
 bubbles/schemas/tool-trust-registry.schema.json
 bubbles/schemas/workflows.schema.json
+bubbles/eval/schemas/adversarial-sample.schema.json
 bubbles/registry/gates.yaml
 bubbles/registry/optional-skills.txt
 bubbles/mcp/clients/claude.json
@@ -385,6 +408,7 @@ docs/examples/rest-api-endpoint.example.md
 docs/generated/competitive-capabilities.md
 docs/generated/framework-stats.json
 docs/generated/framework-stats.md
+docs/generated/gate-coverage-map.md
 docs/generated/interop-migration-matrix.md
 docs/generated/issue-status.md
 docs/governance-index.md
@@ -562,6 +586,7 @@ agents/bubbles_shared/plan-bootstrap.md
 agents/bubbles_shared/planning-core.md
 agents/bubbles_shared/project-config-contract.md
 agents/bubbles_shared/quality-gates.md
+agents/bubbles_shared/repository-binding-preflight.md
 agents/bubbles_shared/review-core.md
 agents/bubbles_shared/scenario-compile.md
 agents/bubbles_shared/scope-templates.md

@@ -1,0 +1,337 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bubbles.dev/eval/schemas/adversarial-sample.schema.json",
+  "title": "Bubbles adversarial sample result v1",
+  "description": "Closed per-sample result contract for same-runtime correlated adversarial evaluation. Credential and secret values are forbidden in every field.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "sampleId",
+    "sampleSemantics",
+    "status",
+    "verdict",
+    "invokedAt",
+    "invocationId",
+    "provenance",
+    "findings"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "sampleId": {
+      "$ref": "#/$defs/identifier"
+    },
+    "sampleSemantics": {
+      "const": "same-runtime-correlated"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "completed",
+        "error",
+        "unavailable"
+      ]
+    },
+    "verdict": {
+      "type": "string",
+      "enum": [
+        "clear",
+        "findings",
+        "error",
+        "unavailable"
+      ]
+    },
+    "invokedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "invocationId": {
+      "$ref": "#/$defs/identifier"
+    },
+    "provenance": {
+      "$ref": "#/$defs/provenance"
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/finding"
+      }
+    },
+    "error": {
+      "$ref": "#/$defs/error"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "completed"
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "then": {
+        "properties": {
+          "verdict": {
+            "enum": [
+              "clear",
+              "findings"
+            ]
+          }
+        },
+        "not": {
+          "required": [
+            "error"
+          ]
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "error"
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "then": {
+        "required": [
+          "error"
+        ],
+        "properties": {
+          "verdict": {
+            "const": "error"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "unavailable"
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "then": {
+        "required": [
+          "error"
+        ],
+        "properties": {
+          "verdict": {
+            "const": "unavailable"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "verdict": {
+            "const": "clear"
+          }
+        },
+        "required": [
+          "verdict"
+        ]
+      },
+      "then": {
+        "properties": {
+          "findings": {
+            "maxItems": 0
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "verdict": {
+            "const": "findings"
+          }
+        },
+        "required": [
+          "verdict"
+        ]
+      },
+      "then": {
+        "properties": {
+          "findings": {
+            "minItems": 1
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 160,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+    },
+    "nonEmptyString": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4096
+    },
+    "provenanceIdentity": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "verificationState": {
+      "type": "string",
+      "enum": [
+        "host-verified",
+        "provider-verified",
+        "self-reported",
+        "unverified"
+      ]
+    },
+    "runtimeProvenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "runtimeId",
+        "verificationState",
+        "evidenceRef"
+      ],
+      "properties": {
+        "runtimeId": {
+          "$ref": "#/$defs/provenanceIdentity"
+        },
+        "verificationState": {
+          "$ref": "#/$defs/verificationState"
+        },
+        "evidenceRef": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      }
+    },
+    "modelProvenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider",
+        "modelId",
+        "verificationState",
+        "evidenceRef"
+      ],
+      "properties": {
+        "provider": {
+          "$ref": "#/$defs/provenanceIdentity"
+        },
+        "modelId": {
+          "$ref": "#/$defs/provenanceIdentity"
+        },
+        "verificationState": {
+          "$ref": "#/$defs/verificationState"
+        },
+        "evidenceRef": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      }
+    },
+    "toolProvenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "inventoryId",
+        "inventoryHash",
+        "verificationState",
+        "evidenceRef"
+      ],
+      "properties": {
+        "inventoryId": {
+          "$ref": "#/$defs/provenanceIdentity"
+        },
+        "inventoryHash": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "verificationState": {
+          "$ref": "#/$defs/verificationState"
+        },
+        "evidenceRef": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "runtime",
+        "model",
+        "tools"
+      ],
+      "properties": {
+        "runtime": {
+          "$ref": "#/$defs/runtimeProvenance"
+        },
+        "model": {
+          "$ref": "#/$defs/modelProvenance"
+        },
+        "tools": {
+          "$ref": "#/$defs/toolProvenance"
+        }
+      }
+    },
+    "finding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "category",
+        "target",
+        "evidenceRef",
+        "claim",
+        "blocking"
+      ],
+      "properties": {
+        "category": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "target": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "evidenceRef": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "claim": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "blocking": {
+          "type": "boolean"
+        }
+      }
+    },
+    "error": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "code",
+        "message"
+      ],
+      "properties": {
+        "code": {
+          "$ref": "#/$defs/identifier"
+        },
+        "message": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      }
+    }
+  }
+}

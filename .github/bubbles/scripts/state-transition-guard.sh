@@ -839,15 +839,15 @@ if [[ "$ceiling_forbids_code" == "true" ]]; then
     #   - recursive glob (trailing '/**'): "<product>/home-lab/tests/**"
     deliverable_files_list=""
     if command -v python3 &>/dev/null; then
-      deliverable_files_list="$(python3 -c "
-import json
+      deliverable_files_list="$(python3 -c '
+import json, sys
 try:
-    d=json.load(open('$state_file'))
-    for f in (d.get('deliverableFiles') or []):
+    d=json.load(open(sys.argv[1]))
+    for f in (d.get("deliverableFiles") or []):
         if isinstance(f,str) and f.strip():
             print(f.strip())
 except Exception:
-    pass" 2>/dev/null || true)"
+    pass' "$state_file" 2>/dev/null || true)"
     fi
 
     is_deliverable_file() {
@@ -1578,7 +1578,7 @@ if [[ -n "$state_workflow_mode" ]]; then
 
   if [[ ${#planning_required_agents[@]} -gt 0 ]]; then
     execution_history_agents="$({
-      python3 -c "import json; data=json.load(open('$state_file')); execution=(data.get('execution') or {}); history=(execution.get('executionHistory') or data.get('executionHistory') or []); print('\\n'.join((entry.get('agent') or '') for entry in history if isinstance(entry, dict) and entry.get('agent')))"
+      python3 -c 'import json, sys; data=json.load(open(sys.argv[1])); execution=(data.get("execution") or {}); history=(execution.get("executionHistory") or data.get("executionHistory") or []); print("\n".join((entry.get("agent") or "") for entry in history if isinstance(entry, dict) and entry.get("agent")))' "$state_file"
     } || true)"
 
     missing_planning_agents=0
@@ -1612,40 +1612,40 @@ if [[ -n "$state_workflow_mode" ]]; then
   # + optional provenanceMode/expandedBy/expansionReason/expansionEvidenceRef).
   # Emits one line per (agent, phase) with provenanceMode and parent-expansion metadata.
   execution_history_block="$({
-    python3 -c "
+    python3 -c '
 import json, sys, os
-spec_dir = os.path.dirname('$state_file')
-with open('$state_file') as f:
+spec_dir = os.path.dirname(sys.argv[1])
+with open(sys.argv[1]) as f:
     data = json.load(f)
-history = data.get('execution', {}).get('executionHistory', data.get('executionHistory', []))
+history = data.get("execution", {}).get("executionHistory", data.get("executionHistory", []))
 for entry in history:
-    agent = entry.get('agent', '')
-    phases = entry.get('phasesExecuted', [])
-    provenance = entry.get('provenanceMode', 'specialist')
-    expanded_by = entry.get('expandedBy', '')
-    reason = (entry.get('expansionReason', '') or '').replace('\\t', ' ').replace('\\n', ' ')
-    ev_ref = (entry.get('expansionEvidenceRef', '') or '').replace('\\t', ' ')
+    agent = entry.get("agent", "")
+    phases = entry.get("phasesExecuted", [])
+    provenance = entry.get("provenanceMode", "specialist")
+    expanded_by = entry.get("expandedBy", "")
+    reason = (entry.get("expansionReason", "") or "").replace("\t", " ").replace("\n", " ")
+    ev_ref = (entry.get("expansionEvidenceRef", "") or "").replace("\t", " ")
     for p in phases:
-        print(f'{agent}\\t{p}\\t{provenance}\\t{expanded_by}\\t{reason}\\t{ev_ref}')
-" 2>/dev/null
+        print(f"{agent}\t{p}\t{provenance}\t{expanded_by}\t{reason}\t{ev_ref}")
+' "$state_file" 2>/dev/null
   } || true)"
 
   if [[ -n "$execution_history_block" ]]; then
     claimed_phases="$({
-      python3 -c "
-import json
-with open('$state_file') as f:
+      python3 -c '
+import json, sys
+with open(sys.argv[1]) as f:
     data = json.load(f)
-claims = data.get('execution', {}).get('completedPhaseClaims', [])
-certified = data.get('certification', {}).get('certifiedCompletedPhases', [])
+claims = data.get("execution", {}).get("completedPhaseClaims", [])
+certified = data.get("certification", {}).get("certifiedCompletedPhases", [])
 def _phase_name(entry):
     if isinstance(entry, str):
         return entry
     if isinstance(entry, dict):
-        candidate = entry.get('phase')
+        candidate = entry.get("phase")
         if isinstance(candidate, str):
             return candidate
-        candidate = entry.get('name')
+        candidate = entry.get("name")
         if isinstance(candidate, str):
             return candidate
     return None
@@ -1656,7 +1656,7 @@ for entry in list(claims) + list(certified):
         names.append(resolved)
 for p in set(names):
     print(p)
-" 2>/dev/null
+' "$state_file" 2>/dev/null
     } || true)"
 
     # Orchestrator allowlist for parent-expansion (sourced from workflows.yaml is future work;
@@ -2199,6 +2199,9 @@ source "$SCRIPT_DIR/guards/planning-checks.sh"
 # =============================================================================
 echo "--- Check 9: DoD Evidence Presence ---"
 check9_failures_before="$failures"
+# IMP-102 SCOPE-1 fix #3 (ADVISORY): count prose-only evidence blocks accepted
+# this run so Check 9 can report the would-fail count without blocking (R1).
+check9_advisory_count=0
 checked_without_evidence=0
 checked_with_evidence=0
 
@@ -2221,6 +2224,7 @@ _tool_log_covers_dod_item() {
   repo_root="$(cd "$scope_dir" && git rev-parse --show-toplevel 2>/dev/null || pwd)"
   local log_path="$repo_root/.specify/runtime/tool-calls.jsonl"
   [[ -f "$log_path" ]] || return 1
+  local schema_path="$SCRIPT_DIR/../schemas/tool-call.schema.json"
   local spec_slug
   spec_slug="$(basename "$(cd "$scope_dir" && (cd .. 2>/dev/null && pwd) || pwd)")"
   # If the scope_dir IS the spec dir (single-file mode), use its basename.
@@ -2228,19 +2232,36 @@ _tool_log_covers_dod_item() {
     spec_slug="$(basename "$scope_dir")"
   fi
   SCOPE_DIR="$scope_dir" SPEC_SLUG="$spec_slug" LOG_PATH="$log_path" DOD_LINE="$dod_line" \
+  SCHEMA_PATH="$schema_path" \
     python3 - <<'PY'
 import json, os, re, sys
 log_path = os.environ['LOG_PATH']
 spec_slug = os.environ['SPEC_SLUG']
 dod = os.environ['DOD_LINE']
 
-# Tokenize DoD body (lower, strip leading `- [x] `, keep alpha-num/dot/slash/dash tokens).
-body = re.sub(r'^- \[x\] ', '', dod)
+# Tokenize DoD body (lower, strip leading `- [x]`/`- [X]`, keep alpha-num/dot/slash/dash tokens).
+# IMP-102 SCOPE-1 fix #5: accept uppercase `[X]` identically to `[x]`.
+body = re.sub(r'^- \[[xX]\] ', '', dod)
 toks_re = re.compile(r'[a-zA-Z][a-zA-Z0-9._/-]{2,}')
 STOP = {'the','and','for','with','this','that','from','into','have','test','tests','file','files','code','docs','doc'}
 dod_toks = {t.lower() for t in toks_re.findall(body)} - STOP
 if len(dod_toks) < 2:
     sys.exit(1)
+
+# IMP-102 SCOPE-1 fix #4b: authenticate each tool-log line against the
+# tool-call schema when jsonschema is importable. A line that does NOT validate
+# (e.g. a forged entry with unknown keys under additionalProperties:false) is
+# NON-matching. When jsonschema is NOT importable, skip validation gracefully
+# and fall back to the token match so honest offline flows are unaffected.
+_validator = None
+_schema_path = os.environ.get('SCHEMA_PATH', '')
+if _schema_path and os.path.isfile(_schema_path):
+    try:
+        from jsonschema import Draft7Validator
+        with open(_schema_path) as _sf:
+            _validator = Draft7Validator(json.load(_sf))
+    except Exception:
+        _validator = None
 
 try:
     with open(log_path) as f:
@@ -2252,9 +2273,17 @@ try:
                 d = json.loads(raw)
             except Exception:
                 continue
-            # Match this spec OR framework-level entries.
+            # IMP-102 SCOPE-1 fix #4b: a schema-invalid (e.g. forged) line is
+            # NON-matching when a validator is available.
+            if _validator is not None and next(_validator.iter_errors(d), None) is not None:
+                continue
+            # Match this spec. IMP-102 SCOPE-1 fix #6: an entry with an EMPTY
+            # spec names nothing — it MUST NOT bleed into every spec's evidence.
+            # Treat an empty spec as NON-matching (the entry must name its spec).
             sf = (d.get('spec') or '').strip()
-            if sf and sf != spec_slug and not sf.startswith(spec_slug.split('-', 1)[0]):
+            if not sf:
+                continue
+            if sf != spec_slug and not sf.startswith(spec_slug.split('-', 1)[0]):
                 continue
             if d.get('exitCode') != 0:
                 continue
@@ -2319,9 +2348,18 @@ resolve_evidence_by_reference() {
   local end_line
   end_line="$(awk -v start="$anchor_line" 'NR>start && /^#+[[:space:]]/ { print NR; exit }' "$report_path")"
   [[ -z "$end_line" ]] && end_line="$(wc -l < "$report_path")"
-  local block_lines
-  block_lines="$(sed -n "$((anchor_line+1)),${end_line}p" "$report_path" | grep -cE '\S' || true)"
+  local block_text block_lines
+  block_text="$(sed -n "$((anchor_line+1)),${end_line}p" "$report_path")"
+  block_lines="$(printf '%s\n' "$block_text" | grep -cE '\S' || true)"
   if [[ "${block_lines:-0}" -ge 10 ]]; then
+    # IMP-102 SCOPE-1 fix #3 (ADVISORY, proposal R1): a resolved ≥10-line block
+    # with NO fenced command-output signature is still ACCEPTED (documentation /
+    # attestation DoD items legitimately use prose), but we emit an advisory and
+    # count it. Advisory-for-one-release, NOT blocking.
+    if ! printf '%s\n' "$block_text" | grep -qE '```|Exit Code:|^[[:space:]]*\$ |Executed:|Command:'; then
+      check9_advisory_count=$((${check9_advisory_count:-0} + 1))
+      info "Check-9 ADVISORY: evidence block for anchor '#${anchor}' in $(basename "$report_path") has no command-output signature (prose-only); accepted as documentation/attestation evidence"
+    fi
     return 0
   fi
   return 1
@@ -2338,8 +2376,15 @@ _c9_inline_evidence_re='(Executed:|Command:|Evidence|```|Exit Code:|Raw Output)'
 for scope_path in ${scope_files[@]+"${scope_files[@]}"}; do
   [[ -f "$scope_path" ]] || continue
   scope_dir="$(dirname "$scope_path")"
+  # IMP-102 SCOPE-1 fix #7: resolve each identical checked line to ITS OWN
+  # occurrence — the Nth identical `- [x]` line resolves to the Nth matching
+  # line number instead of always the first — so a duplicated DoD line cannot
+  # borrow the first occurrence's evidence window.
+  declare -A _c9_line_seen=()
   while IFS= read -r line; do
-    item_line_num="$({ grep -nF -- "$line" "$scope_path" | head -1 | cut -d: -f1; } || true)"
+    _c9_occ=$(( ${_c9_line_seen["$line"]:-0} + 1 ))
+    _c9_line_seen["$line"]=$_c9_occ
+    item_line_num="$({ grep -nF -- "$line" "$scope_path" | sed -n "${_c9_occ}p" | cut -d: -f1; } || true)"
     if [[ -n "$item_line_num" ]]; then
       next_lines="$({ sed -n "$((item_line_num+1)),$((item_line_num+15))p" "$scope_path"; } || true)"
 
@@ -2373,7 +2418,17 @@ for scope_path in ${scope_files[@]+"${scope_files[@]}"}; do
             fail "DoD item [x] references '$link_target' but anchor missing OR block <10 non-blank lines in $(relative_artifact_path "$scope_path"): $(echo "$line" | head -c 80)"
           fi
         else
-          checked_with_evidence=$((checked_with_evidence + 1))
+          # IMP-102 SCOPE-1 fix #1: a marker WITHOUT a resolvable
+          # report.md#anchor markdown link passes ONLY if it still points at a
+          # report.md reference (bare `report.md[#anchor]`) OR carries an inline
+          # evidence block OR a plain report.md markdown link. A truly-bare
+          # marker (e.g. `→ Evidence: done`) with none of these is FABRICATION.
+          if [[ "$line" == *"report.md"* ]] || [[ "$_c9_inline" -eq 1 ]] || [[ "$_c9_link" -eq 1 ]]; then
+            checked_with_evidence=$((checked_with_evidence + 1))
+          else
+            checked_without_evidence=$((checked_without_evidence + 1))
+            fail "DoD item [x] has a bare Evidence marker with no report.md reference or inline evidence block in $(relative_artifact_path "$scope_path"): $(echo "$line" | head -c 80)"
+          fi
         fi
       # 2. v4.1.x: markdown link to report.md (with or without #anchor) on the
       # same line counts as evidence-by-reference. Anchored links are
@@ -2393,18 +2448,33 @@ for scope_path in ${scope_files[@]+"${scope_files[@]}"}; do
             fail "DoD item [x] links '$link_target' but anchor missing OR block <10 non-blank lines in $(relative_artifact_path "$scope_path"): $(echo "$line" | head -c 80)"
           fi
         else
-          # Plain report.md link with no anchor — verify file presence
+          # Plain report.md link with no anchor — IMP-102 SCOPE-1 fix #2:
+          # require the linked report.md to EXIST and carry ≥10 non-blank lines.
+          # An empty/near-empty report.md is not evidence merely because the
+          # file is present.
           rel_report="${link_target##*/}"
           [[ -z "$rel_report" ]] && rel_report="report.md"
-          if [[ -f "$scope_dir/report.md" ]]; then
+          plain_report_path="$scope_dir/$rel_report"
+          [[ -f "$plain_report_path" ]] || plain_report_path="$scope_dir/report.md"
+          plain_report_lines=0
+          [[ -f "$plain_report_path" ]] && plain_report_lines="$(grep -cE '\S' "$plain_report_path" 2>/dev/null || echo 0)"
+          if [[ -f "$plain_report_path" ]] && [[ "${plain_report_lines:-0}" -ge 10 ]]; then
             checked_with_evidence=$((checked_with_evidence + 1))
           else
             checked_without_evidence=$((checked_without_evidence + 1))
-            fail "DoD item [x] links report.md but no report.md exists in $scope_dir: $(echo "$line" | head -c 80)"
+            fail "DoD item [x] links report.md but it is missing or has <10 non-blank lines in $scope_dir: $(echo "$line" | head -c 80)"
           fi
         fi
       # 3. Inline evidence block within next 15 lines (v4.0.x behavior)
       elif [[ "$_c9_inline" -eq 1 ]]; then
+        # IMP-102 SCOPE-1 fix #3 (ADVISORY): a ≥10-line inline block with no
+        # fenced command-output signature is accepted as prose documentation /
+        # attestation evidence, but counted as an advisory (R1, non-blocking).
+        _c9_inline_nonblank="$(printf '%s\n' "$next_lines" | grep -cE '\S' || true)"
+        if [[ "${_c9_inline_nonblank:-0}" -ge 10 ]] && ! printf '%s\n' "$next_lines" | grep -qE '```|Exit Code:|^[[:space:]]*\$ |Executed:|Command:'; then
+          check9_advisory_count=$((${check9_advisory_count:-0} + 1))
+          info "Check-9 ADVISORY: inline evidence block in $(relative_artifact_path "$scope_path") has no command-output signature (prose-only); accepted as documentation/attestation evidence"
+        fi
         checked_with_evidence=$((checked_with_evidence + 1))
       # 4. v5.2 / F1: structured tool-log entry covers this DoD item.
       # Accept the DoD as evidenced when bubbles/scripts/evidence-tool-log-bridge.sh
@@ -2421,13 +2491,16 @@ for scope_path in ${scope_files[@]+"${scope_files[@]}"}; do
         fail "DoD item [x] has NO evidence block in $(relative_artifact_path "$scope_path"): $(echo "$line" | head -c 80)"
       fi
     fi
-  done < <(grep -E '^\- \[x\] ' "$scope_path" 2>/dev/null || true)
+  done < <(grep -E '^\- \[[xX]\] ' "$scope_path" 2>/dev/null || true)
 done
 
 if [[ "$checked_without_evidence" -eq 0 ]] && [[ "$checked_with_evidence" -gt 0 ]]; then
   pass "All $checked_with_evidence checked DoD items across resolved scope files have evidence blocks"
 elif [[ "$checked_with_evidence" -eq 0 ]] && [[ "$total_checked" -gt 0 ]]; then
   fail "ALL checked DoD items across resolved scope files lack evidence blocks — BULK FABRICATION DETECTED"
+fi
+if [[ "${check9_advisory_count:-0}" -gt 0 ]]; then
+  info "Check-9 advisory: $check9_advisory_count prose-only evidence block(s) accepted this run (would-fail count under a future blocking command-output policy; IMP-102 SCOPE-1 R1 advisory)"
 fi
 if [[ "$failures" -gt "$check9_failures_before" ]]; then
   record_failed_check Check-9-evidence

@@ -74,6 +74,10 @@ handoffs:
 
 **Project-Agnostic Design:** This agent contains NO project-specific commands, paths, or tools. When dispatching specialist agents via `runSubagent`, include the project's `agents.md` path so specialists can resolve commands. See [project-config-contract.md](bubbles_shared/project-config-contract.md) for indirection rules.
 
+## Repository Binding Entry Contract (NON-NEGOTIABLE)
+
+Before loading repository-local workflow state, parsing user targets, resolving a mode, listing work, or dispatching a specialist, follow [agent-common.md → Repository Binding Entry Contract](bubbles_shared/agent-common.md#repository-binding-entry-contract-non-negotiable). This top-level runner MUST execute `bubbles/scripts/repository-binding.sh preflight` from host-supplied session context and declared workspace roots, then require the actionable local decision and `PREFLIGHT_COMMITTED`. It MUST establish its own top-level decision and never accept CWD, prompt/editor/tool state, workspace order, or an inherited specialist packet as repository authority.
+
 **Behavioral Rules:**
 - Load and enforce `bubbles/workflows.yaml` plus `bubbles/agent-capabilities.yaml::workflowModeGrants` first.
 - **Single-root-mode boundary:** Execute exactly one resolved workflow mode per invocation. Accept either an explicit `mode:` or one `RESOLUTION-ENVELOPE` from `bubbles.super`. Do not decompose broad goals, build a goal queue, compile an open-ended multi-mode strategy, or select unrelated work.
@@ -192,7 +196,7 @@ Review-shaped requests are not implicit permission for planning or delivery work
 
 ## Context Compaction
 
-When accumulating subagent `RESULT-ENVELOPE`s across the per-spec orchestration loop, follow [operating-baseline.md → Context Compaction Discipline (Orchestrator Agents)](bubbles_shared/operating-baseline.md). Compact every 3 subagent results OR when the accumulated raw envelope text exceeds 8 KB, whichever fires first. Use `bash bubbles/scripts/context-compactor.sh <raw-envelope-file>` and append the resulting record to `compactedHistory[]` in `.specify/memory/bubbles.session.json`. Keep the latest 2 raw envelopes in working memory; never drop blocked findings or `nextRequiredOwner` chains.
+When accumulating subagent `RESULT-ENVELOPE`s across the per-spec orchestration loop, follow [operating-baseline.md → Context Compaction Discipline (Orchestrator Agents)](bubbles_shared/operating-baseline.md). Compact every 3 subagent results OR when the accumulated raw envelope text exceeds 8 KB, whichever fires first. For a repository-sensitive envelope, use `bash bubbles/scripts/context-compactor.sh --session-id <session-id> --session-control-file <control-file> --binding-packet-file <packet-file> <raw-envelope-file>` and append the resulting record to `compactedHistory[]` in `.specify/memory/bubbles.session.json`; the unbound form is only for legacy envelopes with no repository fields. Before resumed repository-local work, reconstruct the nested packet and run `bubbles/scripts/repository-binding.sh validate-packet`. Keep the latest 2 raw envelopes in working memory; never drop blocked findings or `nextRequiredOwner` chains.
 
 ## User Input
 
@@ -303,17 +307,32 @@ Follow [workflow-mode-resolution.md](bubbles_shared/workflow-mode-resolution.md)
 
 ## Execution Model
 
+### Repository Binding Preflight (NON-NEGOTIABLE)
+
+Before Phase -1, repository-local state, spec listing, work selection, or specialist dispatch:
+
+1. Resolve repository intent only from the raw request and host-supplied bounded candidate descriptors. For vague multi-root intent, `bubbles.super` performs this repository-only stage without reading any candidate repository.
+2. Execute `bubbles/scripts/repository-binding.sh preflight` with the host session id, external session control file, request class, and declared workspace roots. Pass operator-supplied roots as `--repository-root`; pass a canonical root uniquely selected by natural-language resolution as `--resolved-natural-language-root` so its authority remains `resolved-natural-language`.
+3. Require the committed actionable packet and record the local control anchor `PREFLIGHT_COMMITTED`. A refusal stops the workflow with zero repository-local side effects.
+4. Validate any inherited packet with `bubbles/scripts/repository-binding.sh validate-packet`; its `repositoryResolution.actionable` must be `true` and `pathVisibility` must be `local`.
+5. For a targetless workflow after `PREFLIGHT_COMMITTED`, call `bubbles/scripts/repository-binding.sh discover-specs` with the current actionable packet and active mode. Accept only the pool rooted at `resolvedRepositoryRoot/specs`.
+
+The committed `repositoryRoot`, `repositoryAlias`, and `repositoryResolution` are immutable inputs to every later phase. CWD, prompt paths, editor state, and tool context are diagnostics only.
+
+The ordering is literal: `repository-binding.sh preflight` → `PREFLIGHT_COMMITTED` → `### Phase 0: Resolve Inputs`. No `state.json` read may occur before that committed anchor.
+
 ### Phase -1: Intent Resolution (MANDATORY — runs before Phase 0)
 
-Before Phase 0, follow [workflow-delegation-core.md](bubbles_shared/workflow-delegation-core.md) and classify the request as `STRUCTURED`, `CONTINUATION`, `VAGUE`, `CONTINUE`, or `FRAMEWORK`.
+Before Phase 0, follow [workflow-delegation-core.md](bubbles_shared/workflow-delegation-core.md) and classify the request as `STRUCTURED`, `TARGETLESS_MODE`, `CONTINUATION`, `VAGUE`, `CONTINUE`, or `FRAMEWORK`.
 
 **⛔ HARD STOP GATE — MANDATORY BEFORE ANY CLASSIFICATION:**
 
-Perform this literal check FIRST:
-1. Scan the raw user input for the exact substring `mode:`
-2. If `mode:` is NOT present → the request is `VAGUE` → invoke `bubbles.super` via `runSubagent` → consume `RESOLUTION-ENVELOPE` → proceed to Phase 0 with resolved mode
-3. If `mode:` IS present → continue to classification below
-4. **There is NO exception to this gate.** Natural language descriptions, action verbs ("execute", "plan", "deliver", "implement"), spec references, feature names, and numbered lists do NOT constitute structured input. Only the literal `mode:` keyword does.
+Perform this literal syntactic check FIRST without reading repository state:
+1. Scan the raw user input for the exact substring `mode:` and for a concrete spec, bug, or ops target token.
+2. If `mode:` is absent, classify the request as `VAGUE`, invoke `bubbles.super` via `runSubagent` for repository-only then bound work resolution, consume its `RESOLUTION-ENVELOPE`, and proceed with that resolved mode.
+3. If `mode:` and a concrete target are both present, classify the request as `STRUCTURED`.
+4. If `mode:` is present without a concrete target, classify the request as `TARGETLESS_MODE`. A `repositoryRoot` selects a repository but is not a concrete work target. Apply mode-specific target requirements only after `PREFLIGHT_COMMITTED`; auto-discovery, when the mode permits it, must use the committed decision and `repository-binding.sh discover-specs`.
+5. **There is NO exception to this gate.** Natural language descriptions, action verbs ("execute", "plan", "deliver", "implement"), feature names, repository roots, and numbered lists do not create concrete work-target authority.
 
 **⛔ ANTI-PATTERNS (each is a policy violation):**
 - ❌ Input: "execute full planning workflows for each recommendation" → Agent classifies as STRUCTURED → **WRONG** (no `mode:`)
@@ -321,6 +340,7 @@ Perform this literal check FIRST:
 - ❌ Input: "create specs and run the planning chain" → Agent proceeds without super delegation → **WRONG** (no `mode:`)
 - ❌ Input: "specs/099-108 plan these features" → Agent treats spec targets as structured input → **WRONG** (no `mode:`)
 - ✅ Input: "specs/099-108 mode: product-to-planning" → Agent classifies as STRUCTURED → **CORRECT** (`mode:` present)
+- ✅ Input: "mode: stochastic-quality-sweep" → Agent classifies as TARGETLESS_MODE → **CORRECT** (no concrete target; repository preflight and mode rules run before discovery)
 - ✅ Input: "execute full planning workflows for each recommendation" → Agent classifies as VAGUE → delegates to super → **CORRECT**
 
 Delegation boundary:
@@ -337,6 +357,19 @@ Accepted packet shape:
 
 ```markdown
 ## CONTINUATION-ENVELOPE
+- repositoryRoot: <exact canonical root from the current actionable packet>
+- repositoryAlias: <safe alias from the current actionable packet>
+- repositoryResolution.sessionId: <exact session id>
+- repositoryResolution.decisionId: <exact decision id>
+- repositoryResolution.controlRevision: <exact control revision>
+- repositoryResolution.controlPathDigest: <exact canonical external control-path digest>
+- repositoryResolution.authority: <exact authority>
+- repositoryResolution.transition: <exact transition>
+- repositoryResolution.scopeKind: command
+- repositoryResolution.scopeId: null
+- repositoryResolution.targetKind: <exact target kind>
+- repositoryResolution.pathVisibility: local
+- repositoryResolution.actionable: true
 - target: specs/<NNN-feature> | specs/<NNN-feature>/bugs/BUG-... | none
 - targetType: feature | bug | ops | framework | none
 - intent: continue delivery | close bug | validate release readiness | publish docs | framework follow-up
@@ -346,6 +379,7 @@ Accepted packet shape:
 ```
 
 Rules:
+- Before reading the target or repository state, run `bubbles/scripts/repository-binding.sh validate-packet` against the carried decision. Stale revisions, root substitution, malformed packets, and public/redacted projections refuse.
 - If the packet provides a concrete `target` and `preferredWorkflowMode`, verify the mode grant. Continue only when `bubbles.workflow` is granted that mode; otherwise route to its registered top-level owner.
 - Preserve an active granted mode such as `stochastic-quality-sweep` or `full-delivery`. Route excluded meta modes such as `iterate` to their registered owner.
 - If the surrounding prose includes raw specialist guidance such as `/bubbles.implement`, `/bubbles.test`, `/bubbles.validate`, or `/bubbles.audit`, treat that as advisory text only. Do NOT mirror it back into execution.
@@ -367,23 +401,27 @@ Rules:
 
 There is no generic work-discovery fallback inside `bubbles.workflow`. Use `/bubbles.iterate` for priority-driven selection or `/bubbles.goal continue` for outcome-level continuation.
 
+#### FRAMEWORK-ENVELOPE Consumer Contract
+
 **FRAMEWORK → invoke `bubbles.super` via `runSubagent`:**
 
+Before dispatch, run `bubbles/scripts/repository-binding.sh validate-packet` against the current local actionable decision. A missing, stale, substituted, malformed, cross-scope, public, or redacted packet refuses before `runSubagent`.
+
 Prompt contract:
-> "You are being invoked as a subagent by `bubbles.workflow` to execute a framework operation. Execute the requested operation and return a `## FRAMEWORK-ENVELOPE` section with fields: `operation`, `result`, `status` (success/failed/info)."
+> "You are being invoked as a subagent by `bubbles.workflow` to execute a framework operation. Validate the inherited repository packet before any read or command. Execute the requested operation and return a `## FRAMEWORK-ENVELOPE` section carrying `repositoryRoot`, `repositoryAlias`, `repositoryResolution.sessionId`, `repositoryResolution.decisionId`, `repositoryResolution.controlRevision`, `repositoryResolution.controlPathDigest`, `repositoryResolution.authority`, `repositoryResolution.transition`, `repositoryResolution.scopeKind`, `repositoryResolution.scopeId`, `repositoryResolution.targetKind`, `repositoryResolution.pathVisibility`, `repositoryResolution.actionable`, `operation`, `result`, and `status` (success/failed/info). Echo the repository binding unchanged."
 
-Parse the returned `FRAMEWORK-ENVELOPE` and report the result to the user. **STOP** — no phase execution is needed for framework operations.
+Parse the returned `FRAMEWORK-ENVELOPE`, run `bubbles/scripts/repository-binding.sh validate-packet` on its binding, and compare every binding field with the dispatch packet. Report the result only when the returned local actionable decision is unchanged. Otherwise refuse before consuming or reporting the result. **STOP** — no phase execution is needed for framework operations.
 
-**Fallback:** If classification is ambiguous (could be VAGUE or STRUCTURED), prefer STRUCTURED interpretation. If classification is ambiguous between VAGUE and CONTINUE, prefer VAGUE (let super figure it out).
+**Fallback:** There is no `STRUCTURED` ambiguity: only literal `mode:` plus a concrete spec, bug, or ops target qualifies. Literal `mode:` without such a target is always `TARGETLESS_MODE`. If classification is ambiguous between `VAGUE` and `CONTINUE`, prefer `VAGUE` and let super resolve intent.
 
 ### Phase 0: Resolve Inputs
 
 1. Parse target specs from explicit structured input or from envelopes returned in Phase -1. Do NOT run a second local natural-language inference pass.
-2. Resolve each spec folder under `specs/`.
+2. Validate the current actionable packet, then resolve each spec folder only beneath `<resolvedRepositoryRoot>/specs/`. Never expand a relative spec target against CWD, prompt source, editor state, or another workspace root.
 3. **Select workflow mode:**
    - If explicit `mode: X` provided → use that mode
    - If Phase -1 returned a `RESOLUTION-ENVELOPE` or `WORK-ENVELOPE` → use that resolved mode and any resolved tags
-   - If structured spec targets are present but no explicit `mode:` was supplied → use the registry default mode for workflow execution
+  - If a validated `RESOLUTION-ENVELOPE` or `WORK-ENVELOPE` supplies targets without a raw-input `mode:` token → use the mode carried by that envelope; do not reclassify it as raw `STRUCTURED` input
    - If neither text nor mode resolves → fall back to `defaultMode: full-delivery` from workflows.yaml
    - **Always confirm the resolved mode** before starting execution
 4. **Resolve batch execution (MANDATORY — do NOT skip):**
@@ -431,7 +469,7 @@ Parse the returned `FRAMEWORK-ENVELOPE` and report the result to the user. **STO
    - For modes with `analyze`, the one-shot review runs after analyze so it can judge the refreshed intent against current active artifacts.
    - For modes without `analyze`, the one-shot review runs before the first improvement or implementation-capable phase.
 
-If no specs resolve, STOP with explicit examples. **Exception:** `stochastic-quality-sweep` and `iterate` modes do NOT require spec targets — they auto-discover all spec folders under `specs/` when none are provided (see Phase 0.9 and Phase 0.10 respectively).
+If no specs resolve, STOP with explicit examples. **Exception:** after `PREFLIGHT_COMMITTED`, `stochastic-quality-sweep` and `iterate` may consume only the pool returned by `repository-binding.sh discover-specs` for `<resolvedRepositoryRoot>/specs/` (see Phase 0.9 and Phase 0.10). They never enumerate a raw or ambient `specs/` path.
 
 **⚠️ ITERATE MODE ROUTING:** If `mode: iterate`, **SKIP Phase 0.3 through Phase 1 — go directly to Phase 0.10.** The iterate loop handles all work selection, mode determination, and specialist dispatch internally.
 
@@ -530,7 +568,7 @@ Retained workflow-agent anchors:
 - `mode: stochastic-quality-sweep` is randomized round-based execution across the active spec pool.
 - **SYNCHRONOUS ROUND LOOP:** Each round MUST execute the mapped workflow contract in this runtime, WAIT for every phase owner's terminal `## RESULT-ENVELOPE`, and record the outcome BEFORE starting the next round. Batching round selections without executing mapped modes is FORBIDDEN.
 - Each round picks a spec and trigger, resolves `triggerWorkflowModes`, and executes that mapped mode through its phase owners with `executionModel: direct-authorized-runner`.
-- **⚠️ EXECUTION TARGET IS ALWAYS THE MAPPED WORKFLOW MODE (ABSOLUTE).** For EVERY round: look up `triggerWorkflowModes[trigger]` → get the mapped mode → execute its phase contract for `specs/{spec}` in the current runtime. Four known failure modes are FORBIDDEN:
+- **⚠️ EXECUTION TARGET IS ALWAYS THE MAPPED WORKFLOW MODE (ABSOLUTE).** For EVERY round: look up `triggerWorkflowModes[trigger]` → get the mapped mode → execute its phase contract for `<resolvedRepositoryRoot>/specs/{spec}` in the current runtime. Four known failure modes are FORBIDDEN:
   - ❌ **Failure Mode 1 (default-to-implement):** Dispatching `runSubagent("bubbles.implement", ...)` instead of resolving the mapped mode contract. This skips the trigger probe and gives every spec identical treatment.
   - ❌ **Failure Mode 2 (direct-trigger-agent only):** Dispatching `runSubagent("bubbles.chaos", ...)` or `runSubagent("bubbles.harden", ...)` as the whole round. This runs only the probe and skips the implementation/quality chain.
   - ❌ **Failure Mode 3 (finding-only):** The mapped mode runs the trigger phase, discovers findings, but stops and returns findings as a summary/table WITHOUT executing the finding-owned planning chain (analyst → ux → design → plan) and delivery chain (implement → test → validate → audit → docs). This is the most common sweep failure — the mode must REMEDIATE, not just REPORT.
@@ -562,8 +600,8 @@ Retained workflow-agent anchors:
 - `mode: full-delivery` is the maximum-assurance workflow-of-workflows.
 - Full-delivery keeps cycling per spec until validate-owned certification is truly `done` or explicitly `blocked`.
 - The parent owns round control and final certification; the child bundles remain `test-to-doc`, `harden-gaps-to-doc`, `validate-to-doc`, and `bugfix-fastlane` when defects are discovered.
-- **Mechanical cap (Gate G082):** Maximum `maxConvergenceIterations` per spec per session (default 10, defined in `bubbles/workflows.yaml`). Enforced by `bubbles/scripts/convergence-cap-guard.sh` and invoked as Check 23 by `bubbles/scripts/state-transition-guard.sh`. Every convergence iteration MUST call `bubbles/scripts/state-snapshot.sh --convergence-iteration <N> --spec-dir <specDir>` (with `BUBBLES_AGENT_NAME=bubbles.workflow` set in env) so the guard can observe progress. Exceeding the cap MUST emit a `blocked` RESULT-ENVELOPE with finding `G082` and STOP further convergence iterations for that spec.
-- **In-loop compaction discipline (Gate G083):** Between specialist dispatches inside the convergence loop, the orchestrator MUST keep its trailing transition-packet log inside per-spec budgets: the eligible slice (all envelopes for the active spec EXCEPT the latest 2 kept raw) MUST satisfy BOTH `count <= 3` AND `cumulative rawSizeBytes <= 8192` UNLESS each over-budget envelope carries a `compactedAt` timestamp. Enforced mechanically by `bubbles/scripts/compaction-discipline-guard.sh` against `.specify/memory/bubbles.session.json` `envelopesReceived[]`; invoked as Check 24 by `bubbles/scripts/state-transition-guard.sh`. A guard violation MUST emit a `blocked` RESULT-ENVELOPE with finding `G083`; remediate by running `bubbles/scripts/context-compactor.sh` on the over-budget envelopes (it additively stamps `compactedAt`) BEFORE proceeding to the next dispatch. See `agents/bubbles_shared/operating-baseline.md` → "Context Compaction Discipline" for the full operating contract.
+- **Mechanical cap (Gate G082):** Maximum `maxConvergenceIterations` per spec per session (default 10, defined in `bubbles/workflows.yaml`). Enforced by `bubbles/scripts/convergence-cap-guard.sh` and invoked as Check 23 by `bubbles/scripts/state-transition-guard.sh`. Every convergence iteration MUST call `bubbles/scripts/state-snapshot.sh --convergence-iteration <N> --spec-dir <specDir> --session-id <session-id> --session-control-file <control-file> --binding-packet-file <packet-file>` (with `BUBBLES_AGENT_NAME=bubbles.workflow` set in env) so the guard can observe progress. Exceeding the cap MUST emit a `blocked` RESULT-ENVELOPE with finding `G082` and STOP further convergence iterations for that spec.
+- **In-loop compaction discipline (Gate G083):** Between specialist dispatches inside the convergence loop, the orchestrator MUST keep its trailing transition-packet log inside per-spec budgets: the eligible slice (all envelopes for the active spec EXCEPT the latest 2 kept raw) MUST satisfy BOTH `count <= 3` AND `cumulative rawSizeBytes <= 8192` UNLESS each over-budget envelope carries a `compactedAt` timestamp. Enforced mechanically by `bubbles/scripts/compaction-discipline-guard.sh` against `.specify/memory/bubbles.session.json` `envelopesReceived[]`; invoked as Check 24 by `bubbles/scripts/state-transition-guard.sh`. A guard violation MUST emit a `blocked` RESULT-ENVELOPE with finding `G083`; remediate by running `bubbles/scripts/context-compactor.sh` with the current `--session-id`, `--session-control-file`, and `--binding-packet-file` on the over-budget envelopes (it additively stamps `compactedAt`) BEFORE proceeding to the next dispatch. See `agents/bubbles_shared/operating-baseline.md` → "Context Compaction Discipline" for the full operating contract.
 - **Orchestrator persistence default (Gate G086):** After any non-terminal phase, this orchestrator MUST automatically continue to the next phase. It may stop only for convergence achieved, max iterations reached, user requests stop, or fundamental impossibility. Enforced by `bubbles/scripts/orchestrator-persistence-lint.sh` (registered as Gate `G086` and invoked as Check 27 inside `bubbles/scripts/state-transition-guard.sh`); lint findings MUST surface in a `blocked` RESULT-ENVELOPE with finding `G086`.
 - **Delivery implementation delta (Gate G093):** Done-ceiling delivery rounds MUST not certify a run that changed only `specs/` or `.specify/`. `bubbles/scripts/delivery-implementation-delta-guard.sh` classifies git diff paths and G053-compatible Code Diff Evidence; `state-transition-guard.sh` invokes it as Check 29B. If it reports G093, emit a `blocked` RESULT-ENVELOPE with changed-path classification and route to implementation/test/docs, or downgrade to a below-done planning-only workflow where G087 governs linkage.
 
@@ -586,6 +624,8 @@ Retained workflow-agent anchors:
 Follow [workflow-phase-engine.md](bubbles_shared/workflow-phase-engine.md) for the authoritative sequential execution engine and [workflow-fix-cycle-protocol.md](bubbles_shared/workflow-fix-cycle-protocol.md) for the finding-owned closure contract.
 
 Retained workflow-agent anchors:
+- Before each specialist dispatch, run `bubbles/scripts/repository-binding.sh validate-packet` against the current command packet and control record. Dispatch only when it is local and `actionable`; public or redacted projections cannot dispatch work.
+- Include `repositoryRoot`, `repositoryAlias`, and the complete `repositoryResolution` unchanged in the specialist prompt. Require the specialist `RESULT-ENVELOPE` to echo that binding unchanged, then compare it with the original dispatch packet before consuming any result.
 - Phase 1 is for sequential single-spec execution. Batch work belongs in Phase 0.8.
 - This agent MUST actively invoke specialist agents for every phase via `runSubagent`.
 - The orchestrator MUST enforce the Pre-Spec Advancement Gate (Gate G019) before advancing to the next spec.

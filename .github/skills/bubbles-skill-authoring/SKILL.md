@@ -61,6 +61,21 @@ Beyond the workflow itself, a `SKILL.md` SHOULD include these two sections when 
 - Put schemas, examples, and long lists into `references/`.
 - Link references explicitly and say when to open them.
 
+## Invocation Class & Description Load (IMP-021 SCOPE-5)
+Every skill carries an authoring decision, recorded in `skills/INVENTORY.md` (NOT in SKILL.md frontmatter — use harness-supported metadata only; do not invent unsupported VS Code frontmatter):
+
+- **`auto-discovery-required`** — a broadly-triggered policy/discovery skill the model should always be able to surface (anti-fabrication, dod-validation, evidence-capture, config-sst, status-transition, …). When uncertain, default to this and note why.
+- **`explicit-invocation-sufficient`** — a narrow skill reached only via a specific agent, recipe, or task (deployment-target-adapter, release-train-model, upkeep-cadence, cinematic-design, …).
+
+This harness auto-loads EVERY skill's `description:` into the model context, so the class is a recorded judgment that informs future pruning — it is NOT a per-skill load toggle. It **supplements** `bubbles-skills-first-discovery`; it does not replace semantic discovery.
+
+Because every `description:` is always loaded, it is a shared context budget. Author each `description:`:
+- **Lead with the behavior verb** ("Enforce…", "Capture…", "Route…", "Resolve…"), not a noun phrase or a restatement of the title.
+- **Carry one trigger per genuinely different branch.** A skill that fires on three distinct situations lists three distinct triggers.
+- **Remove synonym lists that restate one branch.** "Use when adding, inserting, appending, or writing a config value" is one branch dressed as four — collapse it.
+
+Record the class and the `description:` byte length (`DescBytes`) in `skills/INVENTORY.md`. `bubbles/scripts/skill-description-load.sh` reports the aggregate always-loaded description load **report-only** (no blocking threshold until calibration evidence supports one) and fails only if a row omits its class or `DescBytes`.
+
 ## Tooling and File Operations
 - Prefer editor-native file tools for creating and editing files.
 - Do not tell users to run shell commands to create files that the agent can create directly.

@@ -89,7 +89,10 @@ for yaml_rel, schema_name, optional in pairs:
         continue
     print(f"yaml-schema-validate: PASS  {yaml_rel}")
 
-# v5.1 / M9: scenario-manifest.json — repo-wide scan under specs/**.
+# v5.1 / M9: scenario-manifest.json — repo-wide RECURSIVE scan under specs/**.
+# The glob is recursive so nested manifests (per-bug specs/<f>/bugs/<b>/ and
+# grouped specs) are validated too, not just top-level specs/<f>/. Scoped to
+# specs/ so tests/ fixtures are never swept in. Sorted for deterministic order.
 scenario_schema = schemas_dir / "scenario-manifest.schema.json"
 if scenario_schema.exists():
     with open(scenario_schema) as f:
@@ -97,7 +100,7 @@ if scenario_schema.exists():
     validator = Draft7Validator(schema)
     found = 0
     failed_here = 0
-    for manifest in repo_root.glob("specs/*/scenario-manifest.json"):
+    for manifest in sorted(repo_root.glob("specs/**/scenario-manifest.json")):
         found += 1
         try:
             with open(manifest) as f:
@@ -116,9 +119,9 @@ if scenario_schema.exists():
             failures += 1
             failed_here += 1
     if found and not failed_here:
-        print(f"yaml-schema-validate: PASS  specs/*/scenario-manifest.json ({found} file(s))")
+        print(f"yaml-schema-validate: PASS  specs/**/scenario-manifest.json ({found} file(s))")
     elif not found:
-        print("yaml-schema-validate: SKIP  specs/*/scenario-manifest.json (none present)")
+        print("yaml-schema-validate: SKIP  specs/**/scenario-manifest.json (none present)")
 
 if failures:
     sys.exit(1)

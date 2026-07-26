@@ -11,7 +11,7 @@ The version 3 state model, `policySnapshot`, `certification.*`, and `scenario-ma
 
 ## Schema Set
 
-The control plane needs fifteen concrete schema surfaces:
+The control plane needs seventeen concrete schema surfaces:
 
 1. Agent capability registry
 2. Execution policy registry
@@ -28,6 +28,8 @@ The control plane needs fifteen concrete schema surfaces:
 13. Action risk classification registry
 14. Project test impact map
 15. Project trace contract registry
+16. Repository binding control record
+17. Repository binding decision and refusal packets
 
 The newer surfaces above are active runtime or framework surfaces:
 
@@ -37,9 +39,67 @@ The newer surfaces above are active runtime or framework surfaces:
 - `action risk classification registry` is active at `bubbles/action-risk-registry.yaml`
 - `project test impact map` is optional project-owned config under `.github/bubbles-project.yaml` or `bubbles-project.yaml` and is consumed by `bubbles/scripts/test-impact-plan.sh`
 - `project trace contract registry` is optional project-owned config under `.github/bubbles-project.yaml` or `bubbles-project.yaml` and is consumed by `bubbles/scripts/trace-contract-guard.sh`
+- `repository binding control` is host-private same-session state outside candidate repositories and is owned by `bubbles/scripts/repository-binding.sh`
+- `repository binding decision/refusal packets` conform to `bubbles/schemas/repository-binding.schema.json`; actionable packets are local-only and public projections are redacted and non-actionable
 - `framework-validate` and `release-check` are operational command surfaces that sit on top of these schemas rather than replacing them
 
 ## Extension Surface Notes
+
+### Repository Binding Control And Decision
+
+Schema file: `bubbles/schemas/repository-binding.schema.json`
+
+Production owner: `bubbles/scripts/repository-binding.sh`
+
+Purpose: bind every repository-sensitive command to one canonical Git worktree before repository-local state, relative path expansion, `specs/` enumeration, work selection, repository commands, or specialist dispatch.
+
+The host supplies an opaque `sessionId`, a private `sessionControlFile` outside every candidate repository, and the workspace-root inventory. The control record carries the current binding plus append-only transition history. The repository-local `.specify/memory/bubbles.session.json` mirror is written only after selection and is never authority.
+
+Authority is closed and ordered: one valid explicit repository root or exact target, then one valid same-session durable boundary, then the sole eligible canonical root in a true single-repository inventory. CWD, prompt source, host metadata, editor/tool state, recent files, timestamps, and workspace order are diagnostic-only.
+
+`mode:` without a concrete spec/bug/ops target is `TARGETLESS_MODE`, even when an explicit `repositoryRoot` is present. Preflight commits the repository decision first; the selected mode then applies its own target requirement. Modes that permit discovery call `discover-specs`, which emits `DISCOVERY SCOPE` and enumerates only `<repositoryRoot>/specs`.
+
+An actionable command packet has this closed shape:
+
+```yaml
+repositoryRoot: <canonical-repository-root>
+repositoryAlias: <safe-repository-alias>
+repositoryResolution:
+  sessionId: <host-session-id>
+  decisionId: <decision-id>
+  controlRevision: 1
+  authority: explicit-repository-root
+  transition: established
+  scopeKind: command
+  scopeId: null
+  targetKind: repository-root
+  pathVisibility: local
+  actionable: true
+```
+
+Packet-file consumers first make one private immutable capture, then validate the packet and extract its root from those same bytes. Every child consumer validates the exact session ID, canonical root, decision ID, control revision, and scope before acting. Goal/sprint node packets use `scopeKind: goal-node`, the node ID as `scopeId`, `authority: scoped-scenario-node`, and `transition: scoped-override`; they do not mutate command-level affinity.
+
+A public or committed projection changes only the execution-sensitive fields:
+
+```yaml
+repositoryRoot: <redacted-local-root>
+repositoryResolution:
+  pathVisibility: redacted
+  actionable: false
+```
+
+That projection is descriptive only. It cannot authorize discovery, mirror writes, repository commands, continuation, or dispatch.
+
+Stable refusals carry a reason code, observed authoritative state, `requiredInput.field: repositoryRoot`, canonical-root remediation, `affinity: unchanged`, and `repoLocalSideEffects: zero`. A failed explicit switch preserves the prior valid boundary; stale, malformed, conflicting, substituted, cross-scope, or redacted packets fail closed.
+
+CLI surface:
+
+```text
+bubbles/scripts/repository-binding.sh preflight
+bubbles/scripts/repository-binding.sh validate-packet
+bubbles/scripts/repository-binding.sh discover-specs
+bubbles/scripts/repository-binding.sh mirror-session
+```
 
 ### Workflow Run-State Record
 
@@ -757,6 +817,20 @@ Proposed payload: returned by every agent or mapped-mode phase invocation.
   "agent": "bubbles.gaps",
   "roleClass": "diagnostic",
   "outcome": "route_required",
+  "repositoryRoot": "<canonical-repository-root>",
+  "repositoryAlias": "catalog-repo",
+  "repositoryResolution": {
+    "sessionId": "<host-session-id>",
+    "decisionId": "<decision-id>",
+    "controlRevision": 1,
+    "authority": "concrete-target",
+    "transition": "established",
+    "scopeKind": "command",
+    "scopeId": null,
+    "targetKind": "absolute-target",
+    "pathVisibility": "local",
+    "actionable": true
+  },
   "featureDir": "specs/042-catalog-assistant",
   "scopeIds": ["02-search-flow"],
   "dodItems": ["DOD-02-04"],
@@ -780,6 +854,9 @@ Proposed payload: returned by every agent or mapped-mode phase invocation.
 - diagnostic and certification agents may return `completed_diagnostic`, `route_required`, or `blocked`
 - `route_required` must reference a concrete packet or embedded packet payload
 - `blocked` must carry a concrete reason plus evidence references
+- repository-sensitive results must echo the exact current local actionable repository decision unchanged, including session ID, canonical root, decision ID, and control revision from one immutable packet capture
+- stale, root-substituted, malformed, cross-scope, or redacted decisions cannot be consumed as results
+- committed/public result projections must redact the root and set `pathVisibility: redacted`, `actionable: false`
 
 ## 6. Transition Request Packet
 

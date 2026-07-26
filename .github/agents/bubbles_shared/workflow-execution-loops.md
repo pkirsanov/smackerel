@@ -35,10 +35,11 @@ This section owns the full stochastic sweep contract, including:
 
 #### Step 0: Pool Resolution
 
-1. **Spec pool.** If the user provided spec targets, use those. Otherwise discover ALL spec folders under `specs/` as the pool.
-2. **Trigger pool.** If the user provided `triggerAgents`, use those. Otherwise use the full `triggerAgentPool` from `workflows.yaml`.
-3. **Round count.** Use the user's `maxRounds` if provided, else `defaultMaxRounds` from `workflows.yaml`.
-4. **Time budget.** Use the user's `minutes` if provided, else `defaultTimeBudgetMinutes`. When set, continue rounds until time runs out (finish the active round).
+1. **Repository preflight.** Require `PREFLIGHT_COMMITTED` and retain the current actionable repository-binding packet before expanding targets or constructing any pool.
+2. **Spec pool.** If the user provided spec targets, resolve them only inside the committed repository. Otherwise call `bubbles/scripts/repository-binding.sh discover-specs` with the current actionable packet and the active mode. Accept the returned pool only after its exact `DISCOVERY SCOPE` line names `<resolvedRepositoryRoot>/specs`; the executable discovery scope is `resolvedRepositoryRoot/specs`. Raw unqualified executable discovery is forbidden.
+3. **Trigger pool.** If the user provided `triggerAgents`, use those. Otherwise use the full `triggerAgentPool` from `workflows.yaml`.
+4. **Round count.** Use the user's `maxRounds` if provided, else `defaultMaxRounds` from `workflows.yaml`.
+5. **Time budget.** Use the user's `minutes` if provided, else `defaultTimeBudgetMinutes`. When set, continue rounds until time runs out (finish the active round).
 
 #### Step 1: Round Loop (SYNCHRONOUS — One Round At A Time)
 

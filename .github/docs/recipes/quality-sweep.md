@@ -60,8 +60,13 @@ If you want the standalone quality bundle without the full no-loose-ends certifi
 Don't know what to check? Let the system randomly pick:
 
 ```
-/bubbles.workflow validate action:stochastic scope:portfolio
+/bubbles.workflow  mode: stochastic-quality-sweep
+
+# Required when the current multi-root session has no durable work boundary:
+/bubbles.workflow  mode: stochastic-quality-sweep repositoryRoot: <canonical-repository-root>
 ```
+
+The mode-only form is `TARGETLESS_MODE`, not structured target authority. Repository preflight must commit first. In a multi-root session with neither an explicit root nor a valid same-session boundary, the sweep refuses instead of choosing from CWD, prompt location, active editor, recent files, or workspace order. After preflight, its pool is exactly `<resolved-repository-root>/specs`.
 
 The stochastic parent now does exactly two things per round before execution: pick a spec and pick a trigger. After that it executes the mapped trigger-owned end-to-end workflow mode and **waits for it to complete** before starting the next round.
 
@@ -95,6 +100,8 @@ When a stochastic sweep turns up real work, keep the remediation inside workflow
 ```
 
 Those follow-ups now preserve the active sweep context when continuation state is available, so the system keeps the workflow-owned fix/finalize chain instead of collapsing into raw `/bubbles.implement` or `/bubbles.test` advice.
+
+If continuation cannot be recovered safely, workflow may fall back to `bubbles.iterate`, but iterate validates the same repository decision and discovers only under the resolved root. It does not use ambient workspace state to pick a different repository.
 
 The sweep is not allowed to stop at a scoreboard. Each round must either finish through the mapped trigger-owned workflow mode or emit a workflow-owned continuation packet that preserves the non-terminal mapped-mode outcome. A summary-only finish is invalid while routed or blocked work remains.
 

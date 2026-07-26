@@ -458,10 +458,12 @@ assert_bug_009_source_only_release_entry \
   'tests/regression/test_26_state_transition_spec_mjs_path.sh' \
   'BUG-019'
 
-# IMP-020 S2: top-level governance scripts are install-managed. bubbles/eval is
-# source-only under the current installer; the aggregator embeds its matching
-# manual validator and does not load this schema at runtime, so downstream
-# execution remains complete without fabricating a managed schema installation.
+# IMP-020 S2 / BUG015-F2: top-level governance scripts are install-managed. The
+# adversarial-sample record schema named by the installed agent-common.md red-team
+# contract (schema version 1) is now MANAGED too, so downstream record producers
+# and reviewers can resolve the authoritative schema at its referenced path.
+# BUG015-F1 keeps the eval-HARNESS runtime schemas (task-v2 / evaluator-result)
+# source-only because the harness itself is source-only and never runs downstream.
 imp_020_s2_executable_paths=(
   bubbles/scripts/adversarial-resolve.sh
   bubbles/scripts/adversarial-resolve-selftest.sh
@@ -471,11 +473,22 @@ imp_020_s2_executable_paths=(
 for imp_020_s2_path in "${imp_020_s2_executable_paths[@]}"; do
   assert_bug_009_managed_install "$imp_020_s2_path" true 'IMP-020 S2'
 done
-assert_bug_009_source_only_release_entry \
+assert_bug_009_managed_install \
   'bubbles/eval/schemas/adversarial-sample.schema.json' \
+  false \
+  'IMP-020 S2'
+# Scope guard (BUG015-F1): the two eval-harness runtime schemas MUST stay
+# source-only. Promoting them would re-ship the harness's broken downstream ref.
+assert_bug_009_source_only_release_entry \
+  'bubbles/eval/schemas/task-v2.schema.json' \
   'IMP-020 S2' \
-  'source-only schema' \
-  'source-only schema'
+  'source-only eval-harness schema' \
+  'source-only eval-harness schema'
+assert_bug_009_source_only_release_entry \
+  'bubbles/eval/schemas/evaluator-result.schema.json' \
+  'IMP-020 S2' \
+  'source-only eval-harness schema' \
+  'source-only eval-harness schema'
 
 # Packaging repair: both trees were already enumerated under
 # managedFileChecksums, so the real installer must project them downstream with

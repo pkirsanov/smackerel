@@ -7,9 +7,10 @@
 # managed file, (3) hard-fails a corrupted installed file, (4) ignores the
 # separate source-only manifest section, (5) preserves agents-only omissions,
 # (6) preserves unselected optional-skill omissions but requires opted-in ones,
-# (7) treats a missing manifest as advisory, (8) errors on unknown profiles and
-# bypass-shaped flags, and (9) resolves default paths. No repo dependency; no
-# network; no persistent state.
+# (7) treats a missing manifest as advisory by default but hard-fails it under
+# --require-manifest, (8) errors on unknown profiles and bypass-shaped flags,
+# and (9) resolves default paths. No repo dependency; no network; no persistent
+# state.
 #
 # NOTE: this selftest intentionally uses shell redirection to WRITE its OWN
 # throwaway fixtures under a mktemp dir when it RUNS. That is normal script
@@ -181,6 +182,29 @@ if bash "$VERIFY" --target "$TARGET" --manifest "$WORK/does-not-exist.json" --qu
   pass "missing manifest is advisory (exit 0)"
 else
   fail "missing manifest should be advisory (exit 0)"
+fi
+
+# ── Case 7b: missing manifest under --require-manifest hard-fails (exit 1) ──
+# A real install (install.sh) passes --require-manifest so a manifest that is gone
+# at verify time is a hard failure, not a green skip (IMP-102 SCOPE-6).
+require_missing_rc=0
+bash "$VERIFY" --target "$TARGET" --manifest "$WORK/does-not-exist.json" --require-manifest --quiet >/dev/null 2>&1 || require_missing_rc=$?
+if [[ "$require_missing_rc" -eq 1 ]]; then
+  pass "missing manifest under --require-manifest hard-fails (exit 1)"
+else
+  fail "missing manifest under --require-manifest should exit 1, got $require_missing_rc"
+fi
+require_missing_err="$(bash "$VERIFY" --target "$TARGET" --manifest "$WORK/does-not-exist.json" --require-manifest 2>&1 || true)"
+if printf '%s' "$require_missing_err" | grep -q "release manifest is REQUIRED but absent"; then
+  pass "--require-manifest failure explains the required-but-absent manifest"
+else
+  fail "--require-manifest failure should explain required-but-absent manifest, got: $require_missing_err"
+fi
+# A present manifest is unaffected by --require-manifest (clean still verifies).
+if bash "$VERIFY" --target "$TARGET" --manifest "$WORK/manifest.json" --require-manifest --quiet; then
+  pass "--require-manifest still verifies a present clean manifest (exit 0)"
+else
+  fail "--require-manifest should still verify a present clean manifest (exit 0)"
 fi
 
 # ── Case 8: unknown profile and bypass-shaped flag error (exit 2) ──

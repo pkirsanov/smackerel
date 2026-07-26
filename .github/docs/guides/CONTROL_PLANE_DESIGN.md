@@ -1,6 +1,6 @@
 # Bubbles Control Plane Design
 
-This document proposes the next-step architecture for Bubbles so delegation, state transitions, behavior contracts, and workflow modes are enforced by a machine-readable control plane instead of being scattered across prompt prose.
+This document describes the Bubbles control-plane architecture so delegation, state transitions, behavior contracts, workflow modes, and repository-sensitive execution are enforced by machine-readable contracts instead of being scattered across prompt prose. Some sections retain rollout-oriented language for work that is not yet active; active contracts are identified by their production owner and schema.
 
 Related documents:
 - [Control Plane Rollout](CONTROL_PLANE_ROLLOUT.md)
@@ -42,6 +42,7 @@ The target architecture must satisfy all of the following:
 14. The framework must expose a first-class self-validation surface so shipping or upgrading Bubbles does not depend on tribal knowledge of which scripts to chain.
 15. Repo-readiness guidance must stay separate from completion certification so repos can be assessed without weakening validate-owned authority.
 16. Framework actions should advertise their risk class so advice, automation, and future approvals can reason about blast radius explicitly.
+17. Every repository-sensitive command must commit one canonical work repository before local discovery or dispatch, preserve that decision across continuation, and refuse multi-root ambiguity without ambient inference.
 
 ## Non-Goals
 
@@ -54,7 +55,7 @@ This design does not propose:
 
 ## Architecture Overview
 
-The new control plane has eleven cooperating parts.
+The control plane has the cooperating parts below.
 
 ### 1. Agent Capability Registry
 
@@ -125,6 +126,26 @@ The runtime coordination defaults also belong here:
 - runtime lease TTL
 - stale-lease detection threshold
 - reuse policy for shared-compatible stacks
+
+### 2.1. Durable Work-Repository Boundary
+
+Repository-sensitive execution has a separate authority problem from agent-source identity and per-task path scope. The production owner is `bubbles/scripts/repository-binding.sh`, backed by `bubbles/schemas/repository-binding.schema.json` and the shared prompt contract in `agents/bubbles_shared/repository-binding-preflight.md`.
+
+The host supplies an opaque session ID, a private control-file path outside every candidate repository, and the workspace-root inventory. Preflight canonicalizes eligible Git worktrees and atomically commits one command-level decision before repository-local session reads, relative target expansion, `specs/` discovery, work selection, repository commands, or specialist dispatch.
+
+Authority is closed and ordered:
+
+1. one valid explicit `repositoryRoot` or exact concrete target;
+2. one valid same-session durable work boundary established by successful targeted work;
+3. the sole eligible root in a true single-repository inventory.
+
+CWD, prompt source, host repository metadata, active editor, tool state, recent files, timestamps, and workspace order are diagnostic-only. An explicit `repositoryRoot` is normalized to the physical Git top-level and bound before any repository-local discovery. `mode:` without a concrete spec/bug/ops target is `TARGETLESS_MODE`; preflight commits first, then mode-specific target rules apply. Auto-discovery uses only `<resolved-repository-root>/specs` after the `DISCOVERY SCOPE` event.
+
+The actionable packet carries the exact session ID, canonical root/alias, decision ID, control revision, authority, transition, scope, target kind, visibility, and actionability. Packet-file consumers capture the caller's packet once, then validate, extract the root, and compare provenance from those same immutable private bytes. Resolution, work, dispatch, result, continuation, recap, status, handoff, and compaction consumers preserve the exact current decision. Public or committed projection replaces the root with `<redacted-local-root>` and sets `pathVisibility: redacted`, `actionable: false`.
+
+Cross-repository goal/sprint nodes receive explicit scoped decisions (`scopeKind: goal-node`, `authority: scoped-scenario-node`, `transition: scoped-override`) and cannot mutate top-level affinity. Repository binding also preserves existing ownership: selecting a downstream root never authorizes edits to installed framework files; framework work remains upstream-first.
+
+The S1-S4 source implementation and focused regression consumers are present, and G129 is registered as a blocking guard against ambient repository inference. This documentation reconciliation does not claim full framework or release validation, generated-artifact freshness, release publication, or shipped capability status.
 
 ### 2.5. Runtime Lease Registry
 
