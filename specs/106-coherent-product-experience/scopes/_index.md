@@ -61,7 +61,7 @@ Planning authority: [spec.md](../spec.md) and [design.md](../design.md). Executi
 |---|---|---|---|---|---|
 | 01 | [Source-locked visual assets and appearance foundation](01-source-locked-visual-foundation/scope.md) | — | — | Shared assets, themes, typography, CSP, service worker | In Progress |
 | 02 | [Canonical catalog and exact route inventory](02-canonical-catalog-route-inventory/scope.md) | 01 | — | Config, route manifests, navigation consumers | In Progress |
-| 03 | [Truthful state and feedback foundation](03-truthful-state-feedback-foundation/scope.md) | 01, 02 | — | Shared state, auth recovery presentation, mutations | Not Started |
+| 03 | [Truthful state and feedback foundation](03-truthful-state-feedback-foundation/scope.md) | 01, 02 | — | Shared state, auth recovery presentation, mutations | In Progress |
 | 04 | [Shared shell shadow adapters and canaries](04-shared-shell-shadow-canaries/scope.md) | 01, 02, 03 | BUG-070-001 for API-backed session canaries | Server, PWA, Card chrome, shared harness | Not Started |
 | 05 | [Shared shell cutover and compatibility](05-shared-shell-cutover-compatibility/scope.md) | 04 | BUG-070-001 | Server/PWA navigation, deep links, redirects | Not Started |
 | 06 | [Search, Today, Digest, and synthesis composition](06-search-today-digest-synthesis/scope.md) | 05 | BUG-002-006, BUG-002-007, BUG-004-004 | Search, Today/Digest, synthesis projection | Not Started |
