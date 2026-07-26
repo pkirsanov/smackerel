@@ -2577,3 +2577,265 @@ environments:
     searxng_enabled: "${ENABLE_SEARXNG}"
     searxng_host_port: "${SEARXNG_HOST_PORT}"
     searxng_bind_address: "${SEARXNG_BIND_ADDRESS}"
+
+# ─────────────────────────────────────────────────────────────────────
+# Spec 106 SCOPE-106-02 — Product Experience Catalog (SST).
+#
+# One content-free, cross-renderer surface identity + route-binding catalog.
+# `./smackerel.sh config generate` extracts this block and writes the generated
+# artifact internal/experience/catalog.gen.json, which the internal/experience
+# Go package embeds via //go:embed (GENERATED, never handwritten).
+#
+# Grounded on the REAL router (internal/api/router.go), the card web routes
+# (internal/web/cardrewards.go), and the real web/pwa/ pages. NO invented
+# endpoints: every active leaf binds an exact registered route; route-free
+# groups (Work/Sources/Admin) and honestly-unavailable leaves carry an empty
+# ("") href. Lists/Meals/Expenses stay UNAVAILABLE (API-only, no browser page);
+# Graph stays UNAVAILABLE pending spec 105 registering /knowledge/graph.
+#
+# This block ADDS the generated catalog ALONGSIDE the still-active handwritten
+# appShellNav / appnav.js::ITEMS; the shell cutover is a later scope (04/05).
+# ─────────────────────────────────────────────────────────────────────
+product_experience:
+  schema_version: smackerel-product-experience/v1
+  surfaces:
+    - id: assistant
+      label: Assistant
+      kind: linked_leaf
+      parent_id: ""
+      order: 10
+      capability_id: cap.assistant
+      audiences: [daily_user, operator]
+      href: /assistant
+      current_paths: [/assistant]
+      renderer_support: [pwa]
+      local_view_id: ""
+      readiness_discoverability_policy: ready_when_journey_ready
+    - id: capture
+      label: Capture
+      kind: linked_leaf
+      parent_id: ""
+      order: 20
+      capability_id: cap.capture
+      audiences: [daily_user, operator]
+      href: /pwa/
+      current_paths: [/pwa/]
+      renderer_support: [pwa]
+      local_view_id: ""
+      readiness_discoverability_policy: ready_when_journey_ready
+    - id: search
+      label: Search
+      kind: linked_leaf
+      parent_id: ""
+      order: 30
+      capability_id: cap.search
+      audiences: [daily_user, operator]
+      href: /
+      current_paths: [/]
+      renderer_support: [server]
+      local_view_id: ""
+      readiness_discoverability_policy: ready_when_journey_ready
+    - id: today
+      label: Today
+      kind: linked_leaf
+      parent_id: ""
+      order: 40
+      capability_id: cap.today
+      audiences: [daily_user, operator]
+      href: /digest
+      current_paths: [/digest]
+      renderer_support: [server]
+      local_view_id: ""
+      readiness_discoverability_policy: ready_when_journey_ready
+    - id: knowledge
+      label: Knowledge
+      kind: linked_leaf
+      parent_id: ""
+      order: 50
+      capability_id: cap.knowledge
+      audiences: [daily_user, operator]
+      href: /knowledge
+      current_paths: [/knowledge]
+      renderer_support: [server]
+      local_view_id: ""
+      readiness_discoverability_policy: ready_when_journey_ready
+    - id: knowledge_wiki
+      label: Wiki
+      kind: linked_leaf
+      parent_id: knowledge
+      order: 10
+      capability_id: cap.knowledge.wiki
+      audiences: [daily_user, operator]
+      href: /pwa/wiki.html
+      current_paths: [/pwa/wiki.html]
+      renderer_support: [pwa]
+      local_view_id: ""
+      readiness_discoverability_policy: ready_when_journey_ready
+    - id: knowledge_graph
+      label: Graph
+      kind: linked_leaf
+      parent_id: knowledge
+      order: 20
+      capability_id: cap.knowledge.graph
+      audiences: [daily_user, operator]
+      href: ""
+      current_paths: []
+      renderer_support: [server]
+      local_view_id: ""
+      readiness_discoverability_policy: unavailable_pending_dependency
+    - id: work
+      label: Work
+      kind: route_group
+      parent_id: ""
+      order: 60
+      capability_id: cap.work
+      audiences: [daily_user, operator]
+      href: ""
+      current_paths: []
+      renderer_support: [server, pwa]
+      local_view_id: ""
+      readiness_discoverability_policy: route_free_group
+    - id: work_lists
+      label: Lists
+      kind: linked_leaf
+      parent_id: work
+      order: 10
+      capability_id: cap.work.lists
+      audiences: [daily_user, operator]
+      href: ""
+      current_paths: []
+      renderer_support: [server]
+      local_view_id: ""
+      readiness_discoverability_policy: unavailable_pending_ownership
+    - id: work_meals
+      label: Meals
+      kind: linked_leaf
+      parent_id: work
+      order: 20
+      capability_id: cap.work.meals
+      audiences: [daily_user, operator]
+      href: ""
+      current_paths: []
+      renderer_support: [server]
+      local_view_id: ""
+      readiness_discoverability_policy: unavailable_pending_ownership
+    - id: work_expenses
+      label: Expenses
+      kind: linked_leaf
+      parent_id: work
+      order: 30
+      capability_id: cap.work.expenses
+      audiences: [daily_user, operator]
+      href: ""
+      current_paths: []
+      renderer_support: [server]
+      local_view_id: ""
+      readiness_discoverability_policy: unavailable_pending_ownership
+    - id: cards
+      label: Cards
+      kind: linked_leaf
+      parent_id: ""
+      order: 70
+      capability_id: cap.cards
+      audiences: [daily_user, operator]
+      href: /cards
+      current_paths: [/cards]
+      renderer_support: [card]
+      local_view_id: ""
+      readiness_discoverability_policy: ready_when_journey_ready
+    - id: recommendations
+      label: Recommendations
+      kind: linked_leaf
+      parent_id: ""
+      order: 80
+      capability_id: cap.recommendations
+      audiences: [daily_user, operator]
+      href: /recommendations
+      current_paths: [/recommendations]
+      renderer_support: [server]
+      local_view_id: ""
+      readiness_discoverability_policy: ready_when_journey_ready
+    - id: sources
+      label: Sources
+      kind: route_group
+      parent_id: ""
+      order: 90
+      capability_id: cap.sources
+      audiences: [daily_user, operator]
+      href: ""
+      current_paths: []
+      renderer_support: [server, pwa]
+      local_view_id: ""
+      readiness_discoverability_policy: route_free_group
+    - id: sources_connectors
+      label: Connectors
+      kind: linked_leaf
+      parent_id: sources
+      order: 10
+      capability_id: cap.sources.connectors
+      audiences: [daily_user, operator]
+      href: /pwa/connectors.html
+      current_paths: [/pwa/connectors.html]
+      renderer_support: [pwa]
+      local_view_id: ""
+      readiness_discoverability_policy: ready_when_journey_ready
+    - id: sources_photos
+      label: Photos
+      kind: linked_leaf
+      parent_id: sources
+      order: 20
+      capability_id: cap.sources.photos
+      audiences: [daily_user, operator]
+      href: /pwa/photo-health.html
+      current_paths: [/pwa/photo-health.html]
+      renderer_support: [pwa]
+      local_view_id: ""
+      readiness_discoverability_policy: ready_when_journey_ready
+    - id: activity
+      label: Activity
+      kind: linked_leaf
+      parent_id: ""
+      order: 100
+      capability_id: cap.activity
+      audiences: [daily_user, operator]
+      href: /notifications
+      current_paths: [/notifications]
+      renderer_support: [server]
+      local_view_id: ""
+      readiness_discoverability_policy: ready_when_journey_ready
+    - id: settings
+      label: Settings
+      kind: linked_leaf
+      parent_id: ""
+      order: 110
+      capability_id: cap.settings
+      audiences: [daily_user, operator]
+      href: /settings
+      current_paths: [/settings]
+      renderer_support: [server]
+      local_view_id: ""
+      readiness_discoverability_policy: ready_when_journey_ready
+    - id: admin
+      label: Admin
+      kind: route_group
+      parent_id: ""
+      order: 120
+      capability_id: cap.admin
+      audiences: [operator]
+      href: ""
+      current_paths: []
+      renderer_support: [server, pwa]
+      local_view_id: ""
+      readiness_discoverability_policy: route_free_group
+    - id: admin_models
+      label: Models
+      kind: linked_leaf
+      parent_id: admin
+      order: 10
+      capability_id: cap.admin.models
+      audiences: [operator]
+      href: /pwa/model-connections.html
+      current_paths: [/pwa/model-connections.html]
+      renderer_support: [pwa]
+      local_view_id: ""
+      readiness_discoverability_policy: operator_only_when_ready
