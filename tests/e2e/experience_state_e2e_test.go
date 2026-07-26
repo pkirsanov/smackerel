@@ -3,7 +3,8 @@
 // Spec 106 SCOPE-106-03 — XP106-03-A (regression E2E, e2e-api).
 //
 // "Availability content auth and mutation outcomes remain structurally distinct
-//  through real routes."
+//
+//	through real routes."
 //
 // HONESTY / COUPLING NOTE (read before extending this file):
 // The spec-106 renderer-neutral presenters are NOT yet wired into the live

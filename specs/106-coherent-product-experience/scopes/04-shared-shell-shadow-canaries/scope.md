@@ -2,7 +2,7 @@
 
 Links: [spec.md](../../spec.md) | [design.md](../../design.md) | [scope index](../_index.md) | [report.md](report.md)
 
-**Status:** Not Started
+**Status:** In Progress
 **Scope-Kind:** runtime-behavior
 **Depends On:** SCOPE-106-01, SCOPE-106-02, SCOPE-106-03
 **External Entry Gate:** BUG-070-001 must supply the production browser-session canary before API-backed shadow acceptance.
@@ -60,13 +60,13 @@ Shadow adapters can be disabled by reverting the product release; active user be
 
 #### Core Outcomes
 
-- [ ] Server, PWA, and Card shadow adapters produce identical content-free projections from one catalog and owner truth without changing active navigation.
-- [ ] Settled hooks, projection digests, audience/current state, safe DOM construction, and fail-closed adapter errors are consistent.
+- [x] Server, PWA, and Card shadow adapters produce identical content-free projections from one catalog and owner truth without changing active navigation.
+- [x] Settled hooks, projection digests, audience/current state, safe DOM construction, and fail-closed adapter errors are consistent.
 - [ ] Every high-fan-out downstream canary passes before cutover, and the rollback restores the captured baseline without route/data/preference mutation.
 
 #### Test Evidence - 6 Rows / 6 Items
 
-- [ ] XP106-04-U passes with current-session evidence in `report.md#xp106-04-u`.
+- [x] XP106-04-U passes with current-session evidence in `report.md#xp106-04-u`.
 - [ ] XP106-04-I passes against real session and owner inputs in `report.md#xp106-04-i`.
 - [ ] XP106-04-A passes through real routes in `report.md#xp106-04-a`.
 - [ ] XP106-04-W passes without interception in `report.md#xp106-04-w`.
@@ -84,3 +84,5 @@ Shadow adapters can be disabled by reverting the product release; active user be
 
 - [ ] Golden parity, canary ordering, privacy, CSP, service-worker, no-interception, rollback, check, lint, format, artifact lint, traceability, and directly affected testing/architecture documentation checks pass with zero warnings.
 - [ ] Change Boundary is respected and zero excluded file families were changed — see `report.md#xp106-04-change-boundary`.
+
+> **Slice status (honest coupling):** Slice 1 (shared shell shadow adapters + the XP106-04-U unit golden-parity lane) is proven with current-session evidence in `report.md#xp106-04-u`; Core Outcomes 1 and 2 and XP106-04-U are checked. The integration (XP106-04-I), e2e-api (XP106-04-A), e2e-ui (XP106-04-W), shared-infrastructure canary (XP106-04-C), and rollback (XP106-04-R) lanes, Core Outcome 3, the shared-infrastructure/regression rows, and the Build Quality Gate are coupled-forward to a later slice (they require the live stack); the authenticated PWA-auth canary is additionally gated on BUG-070-001's unified production browser session. All of those remain unchecked.

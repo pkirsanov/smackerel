@@ -197,7 +197,7 @@
   "execution": {
     "activeAgent": "bubbles.implement",
     "currentPhase": "implement",
-    "currentScope": "SCOPE-106-03",
+    "currentScope": "SCOPE-106-04",
     "substate": "implemented",
     "runStartedAt": "2026-07-26T02:05:26Z",
     "completedPhaseClaims": [
