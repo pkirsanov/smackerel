@@ -8,20 +8,20 @@ renderer-neutral `ExperienceProjection` is built from the generated catalog, the
 shell appearance, and the readiness-owned availability state contract, and rendered
 through three SHADOW adapters (server / PWA / Card) into content-free comparison
 fixtures + a deterministic projection digest. This is SHADOW mode only: no active
-navigation, route, page body, or behavior is changed. The XP106-04-U unit lane, and
-— added in slice 2 — the XP106-04-I integration and XP106-04-R rollback lanes, pass
-on the live stack with current-session evidence below. The e2e-api / e2e-ui /
-shared-infrastructure canary lanes and the authenticated PWA-auth canary remain
-coupled-forward to later slices (BUG-070-001 supplies the production browser-session
-canary).
+navigation, route, page body, or behavior is changed. The XP106-04-U unit lane, the
+XP106-04-I integration and XP106-04-R rollback lanes, and — added in this slice — the
+XP106-04-A e2e-api shadow-safety lane pass on the live stack with current-session
+evidence below. The e2e-ui (XP106-04-W) / shared-infrastructure canary (XP106-04-C)
+lanes and the authenticated-session shadow-parity acceptance remain coupled-forward
+to later slices (BUG-070-001 supplies the production browser-session canary).
 ## Decision Record
 The scope owns shadow renderer adapters and high-fan-out canaries only.
 ## Completion Statement
-Not complete — status remains `in_progress`. Slice 1 (XP106-04-U shared shell shadow
-adapters + unit golden-parity) and slice 2 (XP106-04-I integration + XP106-04-R
-rollback, both on the live stack) are proven with current-session evidence; the
-e2e-api, e2e-ui, and shared-infrastructure canary lanes are coupled-forward and their
-DoD items remain unchecked.
+Not complete — status remains `in_progress`. The XP106-04-U unit, XP106-04-I
+integration, XP106-04-R rollback, and XP106-04-A e2e-api shadow-safety lanes are
+proven with current-session evidence on the live stack; the e2e-ui (XP106-04-W) and
+shared-infrastructure canary (XP106-04-C) lanes, and the authenticated-session
+shadow-parity acceptance, are coupled-forward and their DoD items remain unchecked.
 ## Code Diff Evidence
 Slice 2 adds live-lane test coverage only — no production/implementation code
 changed. New file `tests/integration/experience/shadow_projection_test.go`
@@ -119,6 +119,87 @@ PASS: go-integration-light
 
 Implementation file: `tests/integration/experience/shadow_projection_test.go` (new).
 
+### XP106-04-A
+
+Regression E2E (e2e-api, SCN-106-003): through the REAL registered routes on the live
+`./smackerel.sh test e2e` stack (core+ml+postgres+nats, auth ENFORCED via a non-empty
+`SMACKEREL_AUTH_TOKEN`), the renderer-neutral `ExperienceProjection` built from the
+REAL generated catalog renders through the three SHADOW adapters (server / PWA / Card)
+to an IDENTICAL projection digest per real audience (the "shadow projection digests
+agree" half: daily_user 18 surfaces, operator 20 surfaces, server==pwa==card each);
+AND every route the shadow projection binds is a REAL registered route (no projected
+href 404s; an adversarial unregistered control DOES 404 — non-tautological); AND the
+routes' CURRENT authorization + behavior are UNCHANGED by the shadow adapters:
+protected server routes (`/`, `/cards`, `/digest`, `/knowledge`, `/notifications`,
+`/recommendations`, `/settings`) still return an auth outcome (401) unauthenticated,
+public routes (`/assistant` 302, `/pwa/…` 200) still serve, and no live response
+carries the shadow fixture's content-free markers or the projection digest (SHADOW
+mode is not wired into any live response). It fails CLOSED without altering the live
+route: a tampered projection (a navigate leaf loses its route) surfaces a visible
+`ShadowFailure` (non-settled, typed `*F106PresentationError`, no optimistic fixture)
+on all three adapters while the `/pwa/` live route is byte-identical (same status +
+body sha256) before and after. No interception, no mock, no auth injection, no
+invented endpoints.
+
+HONEST AUTH COUPLING: this lane runs UNAUTHENTICATED and proves the AUTHORIZATION
+DECISION shadow mode preserves (protected→auth outcome, public→served). The
+AUTHENTICATED-SESSION acceptance (observing the shadow parity inside the rendered
+authenticated shell) is coupled-forward to BUG-070-001's unified production browser
+session — the scope's declared External Entry Gate — and is NOT faked here.
+
+Command and full captured PASS output (current session; no `/home/...` paths in the
+output; soft line-wraps from the 80-column terminal capture rejoined into their
+logical lines):
+
+```text
+$ ./smackerel.sh test e2e --go-run 'ShadowProjectionDigestsAgree'
+go-e2e: applying -run selector: ShadowProjectionDigestsAgree
+=== RUN   TestShadowProjectionDigestsAgreeWhileRealRoutesPreserveCurrentAuthorizationAndBehavior
+=== RUN   TestShadowProjectionDigestsAgreeWhileRealRoutesPreserveCurrentAuthorizationAndBehavior/shadow_projection_digests_agree_across_server_pwa_card
+    experience_shadow_e2e_test.go:238: digest-parity audience=daily_user surfaces=18 server==pwa==card digest=sha256:403e6a5cba58bc758751c8b605a2aba219604b32d8c33ab843f86a89ea2a6818
+    experience_shadow_e2e_test.go:238: digest-parity audience=operator   surfaces=20 server==pwa==card digest=sha256:04f7c457d0910c344a5c356fc144e1d0a80fc3340189644d511fc8c8a20804f3
+    experience_shadow_e2e_test.go:260: adversarial control /definitely-not-registered-xp106-04-a    -> 404 (distinct not-found class)
+    experience_shadow_e2e_test.go:268: auth-mode probe /knowledge -> 401 (authEnforced=true)
+=== RUN   TestShadowProjectionDigestsAgreeWhileRealRoutesPreserveCurrentAuthorizationAndBehavior/real_routes_preserve_current_authorization_and_behavior
+    experience_shadow_e2e_test.go:322: protected route /                              -> 401 (auth outcome; authorization preserved)
+    experience_shadow_e2e_test.go:303: public   route /assistant                      -> 302 (served; behavior preserved)
+    experience_shadow_e2e_test.go:322: protected route /cards                         -> 401 (auth outcome; authorization preserved)
+    experience_shadow_e2e_test.go:322: protected route /digest                        -> 401 (auth outcome; authorization preserved)
+    experience_shadow_e2e_test.go:322: protected route /knowledge                     -> 401 (auth outcome; authorization preserved)
+    experience_shadow_e2e_test.go:322: protected route /notifications                 -> 401 (auth outcome; authorization preserved)
+    experience_shadow_e2e_test.go:303: public   route /pwa/                           -> 200 (served; behavior preserved)
+    experience_shadow_e2e_test.go:303: public   route /pwa/connectors.html            -> 200 (served; behavior preserved)
+    experience_shadow_e2e_test.go:303: public   route /pwa/model-connections.html     -> 200 (served; behavior preserved)
+    experience_shadow_e2e_test.go:303: public   route /pwa/photo-health.html          -> 200 (served; behavior preserved)
+    experience_shadow_e2e_test.go:303: public   route /pwa/wiki.html                  -> 200 (served; behavior preserved)
+    experience_shadow_e2e_test.go:322: protected route /recommendations               -> 401 (auth outcome; authorization preserved)
+    experience_shadow_e2e_test.go:322: protected route /settings                      -> 401 (auth outcome; authorization preserved)
+=== RUN   TestShadowProjectionDigestsAgreeWhileRealRoutesPreserveCurrentAuthorizationAndBehavior/live_responses_carry_no_shadow_markers
+    experience_shadow_e2e_test.go:366: shadow-marker scan /pwa/          -> 200 (no shadow sentinel / no projection digest in live body)
+    experience_shadow_e2e_test.go:366: shadow-marker scan /login         -> 200 (no shadow sentinel / no projection digest in live body)
+=== RUN   TestShadowProjectionDigestsAgreeWhileRealRoutesPreserveCurrentAuthorizationAndBehavior/adapter_fail_closed_does_not_alter_live_route_or_install_fallback
+    experience_shadow_e2e_test.go:426: fail-closed pwa    adapter -> visible ShadowFailure, non-settled, no optimistic fixture
+    experience_shadow_e2e_test.go:426: fail-closed card   adapter -> visible ShadowFailure, non-settled, no optimistic fixture
+    experience_shadow_e2e_test.go:426: fail-closed server adapter -> visible ShadowFailure, non-settled, no optimistic fixture
+    experience_shadow_e2e_test.go:441: live route /pwa/    identical before/after fail-closed: status=200 body-sha256=130a7cf817415434
+--- PASS: TestShadowProjectionDigestsAgreeWhileRealRoutesPreserveCurrentAuthorizationAndBehavior (0.02s)
+    --- PASS: TestShadowProjectionDigestsAgreeWhileRealRoutesPreserveCurrentAuthorizationAndBehavior/shadow_projection_digests_agree_across_server_pwa_card (0.00s)
+    --- PASS: TestShadowProjectionDigestsAgreeWhileRealRoutesPreserveCurrentAuthorizationAndBehavior/real_routes_preserve_current_authorization_and_behavior (0.01s)
+    --- PASS: TestShadowProjectionDigestsAgreeWhileRealRoutesPreserveCurrentAuthorizationAndBehavior/live_responses_carry_no_shadow_markers (0.00s)
+    --- PASS: TestShadowProjectionDigestsAgreeWhileRealRoutesPreserveCurrentAuthorizationAndBehavior/adapter_fail_closed_does_not_alter_live_route_or_install_fallback (0.00s)
+PASS
+ok      github.com/smackerel/smackerel/tests/e2e        0.146s
+PASS: go-e2e
+```
+
+Implementation file: `tests/e2e/experience_shadow_e2e_test.go` (new).
+
+Supporting lanes (this slice, current session): `./smackerel.sh check` → OK (`Config
+is in sync with SST`, `env_file drift guard: OK`, `scenario-lint: OK` — 17 registered,
+0 rejected); `./smackerel.sh format --check` → `75 files already formatted` (the new
+e2e file is gofmt-clean). The `./smackerel.sh test e2e` lane brought up and tore down
+its own disposable stack.
+
 ### XP106-04-R
 
 Rollback lane (SCN-106-003): captures an explicit baseline of current renderer
@@ -166,10 +247,11 @@ Supporting lanes (slice 2, current session): `./smackerel.sh check` → OK (`Con
 in sync with SST`, `env_file drift guard: OK`, `scenario-lint: OK` — 17 registered, 0
 rejected); `gofmt -l` on the two touched files prints nothing (gofmt-clean).
 
-Coupled-forward (unchecked, honest): XP106-04-A (e2e-api), XP106-04-W (e2e-ui), and
-XP106-04-C (shared-infra canary) require real browser routes / the live PWA DOM in a
-later slice; the authenticated PWA-auth canary is additionally gated on BUG-070-001's
-unified production browser session.
+Coupled-forward (unchecked, honest): XP106-04-W (e2e-ui) and XP106-04-C (shared-infra
+canary) require the live PWA browser DOM in a later slice; the authenticated PWA-auth
+canary + the authenticated-session shadow-parity acceptance are additionally gated on
+BUG-070-001's unified production browser session. XP106-04-A (e2e-api) is proven
+above in `report.md#xp106-04-a`.
 ## Planned Test References
 **Claim Source:** not-run
 Planned execution uses `./smackerel.sh`; the concrete not-yet-authored files and titles are listed in `scope.md` and root `test-plan.json` and are not execution evidence.
