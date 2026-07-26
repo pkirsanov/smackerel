@@ -125,54 +125,82 @@ func NewRouter(deps *Dependencies) http.Handler {
 				r.Get("/internal/telegram-message-artifact", deps.AnnotationHandlers.ResolveTelegramMessageArtifact)
 			}
 
-			// Spec 080 SCOPE-080-02 — Knowledge Graph Public API
-			// topics + people endpoints. Mirror the spec 027 scope 9
-			// annotation pattern: per-user bearer auth (outer
-			// bearerAuthMiddleware) AND the `knowledge-graph:read`
-			// scope claim. Shared-token / bootstrap sessions bypass
-			// the scope check per RequireScope's source switch.
-			if deps.TopicsHandlers != nil || deps.PeopleHandlers != nil {
+			// Spec 080 + BUG-080-001 — Knowledge Graph Public API
+			// (fail-soft activation). The five graph families (topics,
+			// people, places, time, edges) register as ONE atomic route
+			// manifest gated by the outer bearerAuthMiddleware plus the
+			// `knowledge-graph:read` scope claim (shared-token /
+			// bootstrap sessions bypass the scope check per
+			// RequireScope's source switch).
+			//
+			// BUG-080-001 fail-soft: activation is derived from the
+			// operator cursor-secret presence in cmd/core/wiring.go and
+			// carried on deps.GraphCapability. When the secret is
+			// unavailable the capability resolves DISABLED and EVERY
+			// known graph path is STILL mounted — against the typed
+			// graphapi 503 `capability_disabled` responder — so the
+			// endpoints are PRESENT (never a silent Chi 404 from nil
+			// handlers) and the process keeps serving other
+			// capabilities. When the secret is present the capability is
+			// ENABLED and the live PostgreSQL-backed handlers serve. The
+			// route manifest is IDENTICAL in both states (design.md
+			// "Atomic Wiring And Route Registration"); there is no
+			// per-family `if handler != nil` branch.
+			if deps.GraphCapability != nil {
 				r.Group(func(r chi.Router) {
+					// Fail-soft gate FIRST: a DISABLED capability
+					// short-circuits every registered graph path to the
+					// typed 503 capability_disabled before the scope
+					// claim is consulted, so a disabled deployment is
+					// honestly "present-but-disabled". When ENABLED the
+					// Guard is a transparent passthrough.
+					r.Use(deps.GraphCapability.Guard)
 					r.Use(auth.RequireScope("knowledge-graph:read"))
-					if deps.TopicsHandlers != nil {
+
+					if deps.GraphCapability.Disabled() {
+						// DISABLED: no live handlers exist (no cursor
+						// codec). Register the SAME manifest against the
+						// typed 503 disabled responder so the paths are
+						// present and never fall through to a Chi 404.
+						// (The Guard above already answers 503 first;
+						// this terminal responder keeps the paths
+						// registered and 503-answering even if the Guard
+						// is ever reordered.)
+						disabled := func(w http.ResponseWriter, _ *http.Request) {
+							deps.GraphCapability.WriteDisabled(w)
+						}
 						r.Route("/topics", func(r chi.Router) {
-							r.Get("/", deps.TopicsHandlers.ListTopics)
-							r.Get("/{id}", deps.TopicsHandlers.GetTopic)
+							r.Get("/", disabled)
+							r.Get("/{id}", disabled)
 						})
-					}
-					if deps.PeopleHandlers != nil {
 						r.Route("/people", func(r chi.Router) {
-							r.Get("/", deps.PeopleHandlers.ListPeople)
-							r.Get("/{id}", deps.PeopleHandlers.GetPerson)
+							r.Get("/", disabled)
+							r.Get("/{id}", disabled)
 						})
-					}
-				})
-			}
-
-			// Spec 080 SCOPE-080-03 — places + time endpoints. Same
-			// per-user bearer + scope claim pattern as scope 02.
-			if deps.PlacesHandlers != nil || deps.TimeHandlers != nil {
-				r.Group(func(r chi.Router) {
-					r.Use(auth.RequireScope("knowledge-graph:read"))
-					if deps.PlacesHandlers != nil {
 						r.Route("/places", func(r chi.Router) {
-							r.Get("/", deps.PlacesHandlers.ListPlaces)
-							r.Get("/{id}", deps.PlacesHandlers.GetPlace)
+							r.Get("/", disabled)
+							r.Get("/{id}", disabled)
 						})
+						r.Get("/time", disabled)
+						r.Get("/graph/edges", disabled)
+						return
 					}
-					if deps.TimeHandlers != nil {
-						r.Get("/time", deps.TimeHandlers.GetTime)
-					}
-				})
-			}
 
-			// Spec 080 SCOPE-080-04 — graph edges handler.
-			// GET /api/graph/edges?source=kind:id behind the same
-			// per-user bearer + knowledge-graph:read scope claim as
-			// scopes 02/03.
-			if deps.EdgesHandlers != nil {
-				r.Group(func(r chi.Router) {
-					r.Use(auth.RequireScope("knowledge-graph:read"))
+					// ENABLED: live PostgreSQL-backed handlers
+					// (guaranteed non-nil in this branch).
+					r.Route("/topics", func(r chi.Router) {
+						r.Get("/", deps.TopicsHandlers.ListTopics)
+						r.Get("/{id}", deps.TopicsHandlers.GetTopic)
+					})
+					r.Route("/people", func(r chi.Router) {
+						r.Get("/", deps.PeopleHandlers.ListPeople)
+						r.Get("/{id}", deps.PeopleHandlers.GetPerson)
+					})
+					r.Route("/places", func(r chi.Router) {
+						r.Get("/", deps.PlacesHandlers.ListPlaces)
+						r.Get("/{id}", deps.PlacesHandlers.GetPlace)
+					})
+					r.Get("/time", deps.TimeHandlers.GetTime)
 					r.Get("/graph/edges", deps.EdgesHandlers.ListEdges)
 				})
 			}

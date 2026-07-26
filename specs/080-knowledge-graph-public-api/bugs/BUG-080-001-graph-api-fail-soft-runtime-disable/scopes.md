@@ -43,17 +43,17 @@ flowchart LR
 
 | Scope | Outcome | Surfaces | Depends On | Status |
 |---|---|---|---|---|
-| SCOPE-01 | Empty/missing enabler fails soft to a typed disabled capability; routes activate atomically when enabled | config, core wiring, router, route manifest | - | Not Started |
-| SCOPE-02 | Authorized Graph reads report truthful data and failure states | PostgreSQL readers, HTTP contracts, auth, cursors | SCOPE-01 | Not Started |
-| SCOPE-03 | Read-only synthetic and readiness prove actual Graph behavior | validate synthetic, health, metrics, traces, alerts | SCOPE-02 | Not Started |
-| SCOPE-04 | Knowledge surfaces render the same honest state accessibly | PWA Knowledge/Wiki, status, responsive UI, Playwright | SCOPE-03 | Not Started |
+| SCOPE-01 | Empty/missing enabler fails soft to a typed disabled capability; routes activate atomically when enabled | config, core wiring, router, route manifest | - | In Progress |
+| SCOPE-02 | Authorized Graph reads report truthful data and failure states | PostgreSQL readers, HTTP contracts, auth, cursors | SCOPE-01 | In Progress |
+| SCOPE-03 | Read-only synthetic and readiness prove actual Graph behavior | validate synthetic, health, metrics, traces, alerts | SCOPE-02 | Blocked |
+| SCOPE-04 | Knowledge surfaces render the same honest state accessibly | PWA Knowledge/Wiki, status, responsive UI, Playwright | SCOPE-03 | Blocked |
 
 ---
 
 ## Scope 1: Fail-Soft Graph Activation Foundation
 
 **Scope ID:** SCOPE-01  
-**Status:** Not Started  
+**Status:** In Progress  
 **Scope-Kind:** runtime-behavior  
 **Foundation:** true  
 **Depends On:** -
@@ -121,18 +121,18 @@ Scenario: SCN-080-001-07 Activation diagnostics are value-safe
 
 #### Core Outcomes
 
-- [ ] SCN-080-001-01: When the optional cursor-secret enabler is missing or resolves empty, the capability resolves the typed HTTP 503 `capability_disabled` disabled state for every known graph path and the service continues to boot and serve other capabilities (never a silent 404, opaque 500, panic, or boot refusal), and diagnostics name only the value-safe code and the config or indirection name.
+- [x] SCN-080-001-01: When the optional cursor-secret enabler is missing or resolves empty, the capability resolves the typed HTTP 503 `capability_disabled` disabled state for every known graph path and the service continues to boot and serve other capabilities (never a silent 404, opaque 500, panic, or boot refusal), and diagnostics name only the value-safe code and the config or indirection name. → Evidence: report.md#t080-01-proc
 - [ ] SCN-080-001-02: With a present cursor-secret enabler (enabled activation), valid limits, and PostgreSQL available, all eight required family routes register as one authenticated group, and removing or duplicating any manifest entry rejects construction rather than mounting a subset.
-- [ ] SCN-080-001-07: Whether secret resolution or cursor-codec construction succeeds or fails, startup logs, errors, metrics, and traces contain only activation mode, safe code, and non-secret config identity, never secret bytes, length, hash, cursor body, or authentication material.
-- [ ] Graph activation is one capability derived from the enabler's presence; an empty/missing enabler resolves the typed 503 `capability_disabled` disabled state (the service keeps serving; never a silent 404, opaque 500, panic, or boot refusal), and the enabled state mounts the full manifest atomically.
-- [ ] Every required route is derived from one canonical manifest and remains behind bearer authentication plus `knowledge-graph:read`.
-- [ ] Secret values and sensitive derivatives cannot enter errors, logs, metrics, traces, health, or test output.
-- [ ] The generic product/deploy ownership boundary and source/config rollback contract are preserved.
+- [x] SCN-080-001-07: Whether secret resolution or cursor-codec construction succeeds or fails, startup logs, errors, metrics, and traces contain only activation mode, safe code, and non-secret config identity, never secret bytes, length, hash, cursor body, or authentication material. → Evidence: report.md#t080-01-unit
+- [x] Graph activation is one capability derived from the enabler's presence; an empty/missing enabler resolves the typed 503 `capability_disabled` disabled state (the service keeps serving; never a silent 404, opaque 500, panic, or boot refusal), and the enabled state mounts the full manifest atomically. → Evidence: report.md#t080-01-proc
+- [x] Every required route is derived from one canonical manifest and remains behind bearer authentication plus `knowledge-graph:read`. → Evidence: report.md#t080-01-proc
+- [x] Secret values and sensitive derivatives cannot enter errors, logs, metrics, traces, health, or test output. → Evidence: report.md#t080-01-unit
+- [x] The generic product/deploy ownership boundary and source/config rollback contract are preserved. → Evidence: report.md#t080-01-proc
 
 #### Test Evidence - One Item Per Test Plan Row
 
-- [ ] T080-01-UNIT passes with current-session raw evidence in `report.md#t080-01-unit`.
-- [ ] T080-01-PROC passes with current-session raw evidence in `report.md#t080-01-proc`.
+- [x] T080-01-UNIT passes with current-session raw evidence in `report.md#t080-01-unit`. → Evidence: report.md#t080-01-unit
+- [x] T080-01-PROC passes with current-session raw evidence in `report.md#t080-01-proc`. → Evidence: report.md#t080-01-proc
 - [ ] T080-02-MANIFEST passes with current-session raw evidence in `report.md#t080-02-manifest`.
 - [ ] T080-02-ADVERSARIAL first fails against warning-and-nil/omitted-route behavior, then passes with the repair; both outputs are recorded in `report.md#t080-02-adversarial`.
 - [ ] T080-07-SECURITY passes with value-safe output in `report.md#t080-07-security`.
@@ -147,7 +147,7 @@ Scenario: SCN-080-001-07 Activation diagnostics are value-safe
 ## Scope 2: Authorized Graph Read Truth
 
 **Scope ID:** SCOPE-02  
-**Status:** Not Started  
+**Status:** In Progress  
 **Scope-Kind:** runtime-behavior  
 **Depends On:** SCOPE-01
 
@@ -248,7 +248,7 @@ Scenario: SCN-080-001-09 Explicit grant controls the global graph
 ## Scope 3: Product Read Synthetic And Readiness Truth
 
 **Scope ID:** SCOPE-03  
-**Status:** Not Started  
+**Status:** Blocked  
 **Scope-Kind:** runtime-behavior  
 **Depends On:** SCOPE-02
 
@@ -333,7 +333,7 @@ Scenario: SCN-080-001-07 Synthetic and telemetry disclose no content
 ## Scope 4: Wiki And Graph State Integration
 
 **Scope ID:** SCOPE-04  
-**Status:** Not Started  
+**Status:** Blocked  
 **Scope-Kind:** runtime-behavior  
 **Depends On:** SCOPE-03
 

@@ -331,20 +331,30 @@ type Dependencies struct {
 	// RUNTIME_TRUSTED_PROXIES (comma-separated CIDRs).
 	TrustedProxies []string
 
-	// Spec 080 SCOPE-080-02 — Knowledge Graph Public API handlers.
-	// nil when the graphapi cursor secret is not provisioned (the
-	// router mounts the routes only when both are non-nil).
+	// Spec 080 SCOPE-080-02..04 — Knowledge Graph Public API handlers.
+	// Non-nil ONLY in the ENABLED activation state (operator cursor
+	// secret present); resolved together with GraphCapability in
+	// cmd/core/wiring.go. In the DISABLED (fail-soft) state these stay
+	// nil and internal/api/router.go serves the typed 503
+	// capability_disabled responder for every graph path instead.
 	TopicsHandlers *graphapi.TopicsHandlers
 	PeopleHandlers *graphapi.PeopleHandlers
-	// Spec 080 SCOPE-080-03 — places + time handlers. Nil when the
-	// graphapi cursor secret / config is not provisioned (router
-	// mounts the routes only when non-nil).
+	// Spec 080 SCOPE-080-03 — places + time handlers (ENABLED only).
 	PlacesHandlers *graphapi.PlacesHandlers
 	TimeHandlers   *graphapi.TimeHandlers
-	// Spec 080 SCOPE-080-04 — graph edges handler. Nil when the
-	// graphapi cursor secret / config is not provisioned (router
-	// mounts /api/graph/edges only when non-nil).
+	// Spec 080 SCOPE-080-04 — graph edges handler (ENABLED only).
 	EdgesHandlers *graphapi.EdgesHandlers
+
+	// Spec 080 + BUG-080-001 — fail-soft graph activation capability.
+	// Carries the resolved enabled/disabled activation derived from the
+	// operator cursor-secret presence (graphapi.ResolveActivation in
+	// cmd/core/wiring.go). Non-nil whenever the KNOWLEDGE_GRAPH_API_*
+	// envelope loaded (enabled OR disabled). internal/api/router.go
+	// mounts the atomic graph route manifest gated on this field:
+	// DISABLED -> every path answers the typed 503 capability_disabled
+	// (present-but-disabled, never a silent Chi 404); ENABLED -> the
+	// Guard is a passthrough and the live handlers above serve.
+	GraphCapability *graphapi.GraphCapability
 }
 
 // DBHealthChecker is the interface for database health checks.
