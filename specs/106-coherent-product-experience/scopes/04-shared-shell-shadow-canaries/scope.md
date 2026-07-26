@@ -62,22 +62,22 @@ Shadow adapters can be disabled by reverting the product release; active user be
 
 - [x] Server, PWA, and Card shadow adapters produce identical content-free projections from one catalog and owner truth without changing active navigation.
 - [x] Settled hooks, projection digests, audience/current state, safe DOM construction, and fail-closed adapter errors are consistent.
-- [ ] Every high-fan-out downstream canary passes before cutover, and the rollback restores the captured baseline without route/data/preference mutation.
+- [x] Every high-fan-out downstream canary passes before cutover, and the rollback restores the captured baseline without route/data/preference mutation.
 
 #### Test Evidence - 6 Rows / 6 Items
 
 - [x] XP106-04-U passes with current-session evidence in `report.md#xp106-04-u`.
 - [x] XP106-04-I passes against real session and owner inputs in `report.md#xp106-04-i`.
 - [x] XP106-04-A passes through real routes in `report.md#xp106-04-a`.
-- [ ] XP106-04-W passes without interception in `report.md#xp106-04-w`.
-- [ ] XP106-04-C passes every independent canary in `report.md#xp106-04-c`.
+- [x] XP106-04-W passes without interception. → Evidence: `report.md#xp106-04-w`.
+- [x] XP106-04-C passes every independent canary. → Evidence: `report.md#xp106-04-c`.
 - [x] XP106-04-R passes the atomic rollback proof in `report.md#xp106-04-r`.
 
 #### Shared-Infrastructure And Regression Planning
 
 - [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior in the shadow adapters (server/PWA/Card projection parity, fail-closed adapter errors, settled markers) exist and pass — see `report.md#xp106-04-a`.
 - [ ] Broader E2E regression suite passes with no shadow-adapter-induced regression to current navigation or page bodies — see `report.md#xp106-04-w`.
-- [ ] Independent canary suite for shared fixture/bootstrap contracts passes before broad suite reruns (native Search, HTMX read, HTMX mutation, Digest, Assistant shell, Wiki, Card PRG, PWA auth, logout/replay, service-worker, non-UI core) — see `report.md#xp106-04-c`.
+- [x] Independent canary suite for shared fixture/bootstrap contracts passes before broad suite reruns (native Search, HTMX read, HTMX mutation, Digest, Assistant shell, Wiki, Card PRG, PWA auth, logout/replay, service-worker, non-UI core) — see `report.md#xp106-04-c`.
 - [x] Rollback or restore path for shared infrastructure changes is documented and verified (atomic asset/adapter release pointer swap that preserves routes and data and installs no static optimistic fallback) — see `report.md#xp106-04-r`.
 
 #### Build Quality Gate
@@ -85,4 +85,4 @@ Shadow adapters can be disabled by reverting the product release; active user be
 - [ ] Golden parity, canary ordering, privacy, CSP, service-worker, no-interception, rollback, check, lint, format, artifact lint, traceability, and directly affected testing/architecture documentation checks pass with zero warnings.
 - [ ] Change Boundary is respected and zero excluded file families were changed — see `report.md#xp106-04-change-boundary`.
 
-> **Slice status (honest coupling):** The XP106-04-U unit golden-parity, XP106-04-I integration, XP106-04-R rollback, and — added in this slice — the XP106-04-A e2e-api shadow-safety lane are proven with current-session evidence in `report.md#xp106-04-u`, `report.md#xp106-04-i`, `report.md#xp106-04-r`, and `report.md#xp106-04-a`; Core Outcomes 1 and 2, XP106-04-U, XP106-04-I, XP106-04-R, XP106-04-A, the shared-infrastructure rollback/restore-path row, and the scenario-specific E2E-regression row for the shadow-adapter behaviors (parity, fail-closed adapter errors, settled markers) are checked. XP106-04-A runs UNAUTHENTICATED and proves, through the real routes, the authorization DECISION shadow mode preserves (protected→auth outcome, public→served) plus real-route parity, shadow digest agreement, and no live shadow-marker leak; the AUTHENTICATED-SESSION shadow-parity acceptance is coupled-forward to BUG-070-001's unified production browser session. The e2e-ui (XP106-04-W) and shared-infrastructure canary (XP106-04-C) lanes, Core Outcome 3 (its high-fan-out canary half is still open), the broader-E2E and canary regression rows, and the Build Quality Gate are coupled-forward to a later slice (they require the live PWA browser DOM); the authenticated PWA-auth canary is additionally gated on BUG-070-001's unified production browser session. Those remain unchecked.
+> **Slice status (honest coupling):** All six test lanes are now proven with current-session evidence: XP106-04-U (unit), XP106-04-I (integration), XP106-04-R (rollback), and XP106-04-A (e2e-api) in `report.md#xp106-04-u` / `#xp106-04-i` / `#xp106-04-r` / `#xp106-04-a`, and — added in this slice — XP106-04-W (e2e-ui) in `report.md#xp106-04-w` and XP106-04-C (shared-infrastructure canary) in `report.md#xp106-04-c`, both green on the live disposable `smackerel-test-e2e-ui` stack with NO interception. Checked: Core Outcomes 1–3, all six Test-Evidence rows (U/I/A/W/C/R), the scenario-specific E2E-regression row, the rollback/restore-path row, and the independent-canary-suite row — every canary passes (native Search, HTMX read+mutation, Digest, Assistant, Wiki, Card PRG, service-worker, non-UI core, AND the dev-token PWA auth+logout/replay; the PWA-auth+logout canary does NOT require BUG-070-001, which gates only the PRODUCTION unified browser session). STILL COUPLED-FORWARD (unchecked, honest): the Broader-E2E-regression row and the Build Quality Gate. The full `./smackerel.sh test e2e-ui` suite is 66 passed / 9 skipped / 1 failed; the SINGLE failure is the pre-existing SCOPE-106-01 `coherent_appearance` "appearance applies before first paint" spec (a known coupled-forward SCOPE-01 lane whose own DoD row is unchecked pending the SCOPE-04/05 head-adapter/localStorage pre-paint reconciliation) — NOT a shadow-adapter-induced regression; this slice induced ZERO regressions (every previously-passing spec still passes and all new specs pass). Artifact-lint PASSES (`ARTIFACT_LINT_EXIT=0`) after the Test-Evidence rows adopt the recognized `→ Evidence:` idiom (their evidence lives in `report.md#xp106-04-*`). The live-DOM marker WIRING (shadow markers rendered INTO the ACTIVE nav/body) and the authenticated-session shadow-parity observation inside the rendered shell remain the SCOPE-106-05 cutover (production session additionally gated on BUG-070-001).

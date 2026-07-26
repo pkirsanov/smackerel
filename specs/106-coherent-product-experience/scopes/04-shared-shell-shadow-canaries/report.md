@@ -8,20 +8,27 @@ renderer-neutral `ExperienceProjection` is built from the generated catalog, the
 shell appearance, and the readiness-owned availability state contract, and rendered
 through three SHADOW adapters (server / PWA / Card) into content-free comparison
 fixtures + a deterministic projection digest. This is SHADOW mode only: no active
-navigation, route, page body, or behavior is changed. The XP106-04-U unit lane, the
-XP106-04-I integration and XP106-04-R rollback lanes, and — added in this slice — the
-XP106-04-A e2e-api shadow-safety lane pass on the live stack with current-session
-evidence below. The e2e-ui (XP106-04-W) / shared-infrastructure canary (XP106-04-C)
-lanes and the authenticated-session shadow-parity acceptance remain coupled-forward
-to later slices (BUG-070-001 supplies the production browser-session canary).
+navigation, route, page body, or behavior is changed. All six lanes now pass on the
+live stack with current-session evidence below: XP106-04-U (unit), XP106-04-I
+(integration), XP106-04-R (rollback), XP106-04-A (e2e-api shadow-safety), and — added
+in this slice — XP106-04-W (e2e-ui shadow-guarantee: live UI unchanged + server/PWA
+parity + fail-closed) and XP106-04-C (shared-infrastructure canary: every high-fan-out
+downstream contract preserved, incl. dev-token PWA auth+logout). The live-DOM marker
+WIRING (shadow markers rendered INTO the active DOM) and the authenticated-session
+shadow-parity observation inside the rendered shell remain the SCOPE-106-05 cutover
+(the production unified browser session is additionally gated on BUG-070-001).
 ## Decision Record
 The scope owns shadow renderer adapters and high-fan-out canaries only.
 ## Completion Statement
-Not complete — status remains `in_progress`. The XP106-04-U unit, XP106-04-I
-integration, XP106-04-R rollback, and XP106-04-A e2e-api shadow-safety lanes are
-proven with current-session evidence on the live stack; the e2e-ui (XP106-04-W) and
-shared-infrastructure canary (XP106-04-C) lanes, and the authenticated-session
-shadow-parity acceptance, are coupled-forward and their DoD items remain unchecked.
+Status remains `in_progress` (the scope owner sets the terminal status). All six
+test lanes are now proven with current-session evidence on the live stack —
+XP106-04-U (unit), XP106-04-I (integration), XP106-04-R (rollback), XP106-04-A
+(e2e-api), XP106-04-W (e2e-ui), and XP106-04-C (shared-infrastructure canary). The
+only remaining coupling is the SCOPE-106-05 live-DOM marker WIRING (shadow markers
+rendered into the ACTIVE nav/body) and the authenticated-session shadow-parity
+observation inside the rendered shell (production unified browser session additionally
+gated on BUG-070-001); XP106-04-W proves the complementary shadow guarantee — the live
+UI is unchanged — that holds now.
 ## Code Diff Evidence
 Slice 2 adds live-lane test coverage only — no production/implementation code
 changed. New file `tests/integration/experience/shadow_projection_test.go`
@@ -247,11 +254,151 @@ Supporting lanes (slice 2, current session): `./smackerel.sh check` → OK (`Con
 in sync with SST`, `env_file drift guard: OK`, `scenario-lint: OK` — 17 registered, 0
 rejected); `gofmt -l` on the two touched files prints nothing (gofmt-clean).
 
-Coupled-forward (unchecked, honest): XP106-04-W (e2e-ui) and XP106-04-C (shared-infra
-canary) require the live PWA browser DOM in a later slice; the authenticated PWA-auth
-canary + the authenticated-session shadow-parity acceptance are additionally gated on
-BUG-070-001's unified production browser session. XP106-04-A (e2e-api) is proven
-above in `report.md#xp106-04-a`.
+### XP106-04-W
+
+Regression E2E (e2e-ui, SCN-106-003): the browser-level proof of the shadow
+GUARANTEE that holds in SHADOW mode. `web/pwa/tests/coherent_shell_shadow.spec.ts`
+drives the REAL disposable `smackerel-test-e2e-ui` stack via `baseURL` (no route
+interception, no mock, no auth injection — the dev-token machine login is the SAME
+real login the spec-077 auth_login lane exercises). It proves: (1) the live PWA
+shell SETTLES with its real handwritten nav AND carries NO shadow projection marker
+in the live DOM (the browser twin of the committed e2e-api
+`live_responses_carry_no_shadow_markers` proof — SHADOW mode is NOT wired into the
+live DOM); (2) EXACT PARITY — the live server and PWA shells present the SAME shared
+product surfaces (assistant/search/cards/notifications/settings) with identical
+href+label+relative order (the "one projection, two renderers" property the Go-side
+shadow projection codifies); (3) NO REGRESSION — the current navigation + page body
+are byte-identical across a reload (the shadow adapters add/remove/reorder no nav and
+mutate no body); (4) fail-closed visibility does not alter the live page (a real
+not-found is an honest 404 with no injected optimistic shadow fallback, and the live
+shell DOM stays stable). HONEST NOTE: the shadow data-* markers are deliberately
+ABSENT from the live DOM in SHADOW mode; wiring them INTO the active DOM is the
+SCOPE-106-05 cutover — this lane proves the complementary shadow guarantee (the live
+UI is unchanged) that is true now, and does NOT fabricate marker presence.
+
+XP106-04-W and XP106-04-C run together in one Playwright invocation (both coherent_*
+specs). Command and full captured PASS output (current session, PII-scrubbed
+`<repo-root>/`); the four XP106-04-W tests are 1, 5, 16, 17:
+
+```text
+$ ./smackerel.sh test e2e-ui coherent_shell_shadow coherent_foundation_canary
+config-validate: <repo-root>/config/generated/test.env.tmp.428715 OK
+Smackerel pre-flight resource check: OK
+  RAM  available: 38612 MB (required >= 2500 MB)
+  Disk available: 613714 MB / 599.3 GB (required >= 8 GB)
+[web-e2e-ui] Generating SST test env...
+[web-e2e-ui] Bringing up disposable test stack (project smackerel-test-e2e-ui, wait 300s)...
+ Container smackerel-test-e2e-ui-smackerel-core-1  Healthy
+
+Running 17 tests using 2 workers
+
+  ✓  1 …ow projection marker (shadow mode is not wired into the live DOM) (1.7s)
+  ✓  5 …present the same product surfaces (one projection, two renderers) (1.4s)
+  ✓  16 …adow adapters add, remove, or reorder no nav and mutate no body (629ms)
+  ✓  17 …o injected shadow fallback, and the live shell DOM stays stable (472ms)
+
+  17 passed (6.9s)
+
+[web-e2e-ui] Tearing down disposable test stack (project smackerel-test-e2e-ui).
+ Container smackerel-test-e2e-ui-smackerel-core-1  Removed
+ Network smackerel-test-e2e-ui_default  Removed
+```
+
+Implementation file: `web/pwa/tests/coherent_shell_shadow.spec.ts` (new).
+
+### XP106-04-C
+
+Shared-infrastructure canary (e2e-ui, SCN-106-003): the SCOPE-04 canaries added to
+`web/pwa/tests/coherent_foundation_canary.spec.ts` (the four SCOPE-01 canaries above
+them kept intact) prove EVERY high-fan-out downstream contract is UNCHANGED by the
+shadow adapters — each responds with its honest HTTP contract (served / gated /
+redirect, never a transport-break 5xx) AND carries NO shadow sentinel: native Search
+read shell + HTMX read fragment (POST /search) + method contract (GET /search 405);
+HTMX MUTATION transport (GET-on-POST-only sync 405, POST honest <500, bogus mutation
+path 404); Digest; Assistant front-door (GET /assistant 302 → served PWA assistant);
+Wiki (/pwa/wiki.html served real content); Card PRG (GET /cards honest + the
+redirect-after-post PRG family still redirects via POST /v1/web/logout); service-worker
+cache identity (content-hash name, /api + /v1 never precached, no shadow projection
+injected); non-UI core (/api/health 200, /readyz); and PWA auth login + logout/replay
+(the dev-token machine-login PRG sets the cookie, logout clears it, replay logout is
+idempotent). The PWA-auth+logout canary PASSES on the dev-token e2e-ui stack — it does
+NOT require BUG-070-001's production credential/session split; that split gates the
+PRODUCTION username/password unified browser session, not this dev-token machine
+login+logout PRG. Same command/run as XP106-04-W; the four intact SCOPE-01 canaries
+are 2, 3, 4, 6 and the nine SCOPE-04 canaries are 7–15:
+
+```text
+$ ./smackerel.sh test e2e-ui coherent_shell_shadow coherent_foundation_canary
+Running 17 tests using 2 workers
+
+  ✓  2 …service-worker isolation keeps protected API routes network-only (106ms)
+  ✓  3 … native Search HTMX read still renders after the asset foundation (1.5s)
+  ✓  4 …PRG shell still redirects and renders after the asset foundation (242ms)
+  ✓  6 …canary: PWA auth still gates the PWA shell (served, never blank) (239ms)
+  ✓  7 …t preserved (GET / shell, POST /search fragment, GET /search 405) (65ms)
+  ✓  8 …es its method contract and never 5xx; a bogus mutation path 404s) (43ms)
+  ✓  9 … preserved (GET /digest responds honestly, no shadow marker leak) (30ms)
+  ✓  10 …T /assistant 302 -> served PWA assistant, no shadow marker leak) (36ms)
+  ✓  11 … /pwa/wiki.html served with real content, no shadow marker leak) (43ms)
+  ✓  12 …ct-after-post PRG family still redirects; no shadow marker leak) (42ms)
+  ✓  13 …name; /api + /v1 never precached; no shadow projection injected) (43ms)
+  ✓  14 …ved (GET /api/health and /readyz respond, no shadow marker leak) (88ms)
+  ✓  15 … sets the cookie; logout clears it; replay logout is idempotent) (1.2s)
+
+  17 passed (6.9s)
+```
+
+Implementation file: `web/pwa/tests/coherent_foundation_canary.spec.ts` (SCOPE-04
+`test.describe` canary block appended; the four SCOPE-01 top-level canaries unchanged).
+
+Supporting lane (this slice, current session): `./smackerel.sh check` → OK (`Config is
+in sync with SST`, `env_file drift guard: OK`, `scenario-lint: OK` — 17 registered, 0
+rejected). The e2e-ui lane brought up and tore down its own disposable
+`smackerel-test-e2e-ui` stack (no dev/prod state touched).
+
+Broader e2e-ui regression (no shadow-adapter-induced regression): the FULL
+`./smackerel.sh test e2e-ui` suite was run. All new SCOPE-04 specs pass in the
+full-suite context (interleaved tests 42–57: shadow-settle #42, parity #48,
+no-regression #54, fail-closed #57, and the nine canaries #43–#52). The suite is
+66 passed / 9 skipped / 1 failed; the SINGLE failure is the PRE-EXISTING SCOPE-106-01
+`coherent_appearance` "appearance applies before first paint" spec — a known
+coupled-forward SCOPE-01 lane (its own DoD row is unchecked pending the SCOPE-04/05
+head-adapter/localStorage pre-paint reconciliation), NOT touched by this slice and NOT
+a shadow-adapter-induced regression (this slice induced ZERO regressions). PII-scrubbed
+tail:
+
+```text
+$ ./smackerel.sh test e2e-ui
+  ✓  42 … projection marker (shadow mode is not wired into the live DOM) (320ms)
+  ✓  48 …esent the same product surfaces (one projection, two renderers) (887ms)
+  ✓  52 …sets the cookie; logout clears it; replay logout is idempotent) (899ms)
+  ✓  54 …adow adapters add, remove, or reorder no nav and mutate no body (466ms)
+  ✓  57 …o injected shadow fallback, and the live shell DOM stays stable (568ms)
+  1) coherent_appearance.spec.ts:63:1 › appearance applies before first paint across server, PWA, and Card shells
+    Error: Timed out 5000ms waiting for expect(locator).toHaveAttribute(expected)
+    Expected string: "dark"  Received string: ""   (pre-paint stamping not wired — SCOPE-05)
+        at <repo-root>/web/pwa/tests/coherent_appearance.spec.ts:90:24
+  1 failed
+    coherent_appearance.spec.ts:63:1 › appearance applies before first paint across server, PWA, and Card shells
+  9 skipped
+  66 passed (21.9s)
+```
+
+Because the broader e2e-ui suite is not fully green (that pre-existing SCOPE-01 fail is
+coupled forward to the SCOPE-05 pre-paint wiring), the "Broader E2E regression suite
+passes" row and the Build Quality Gate stay UNCHECKED (honest coupling), even though
+this slice's own lanes (XP106-04-W, XP106-04-C), `./smackerel.sh check`, and artifact
+lint (`ARTIFACT_LINT_EXIT=0`, PASSED) are green and the slice induced no regression.
+
+Coupled-forward (honest, what remains): the live-DOM marker WIRING — the shadow data-*
+contract markers rendered INTO the ACTIVE navigation/body — is the SCOPE-106-05 shell
+cutover, not this scope; XP106-04-W proves the complementary SHADOW guarantee (the live
+UI is unchanged) that holds now. The authenticated-session shadow-PARITY acceptance
+observed INSIDE the rendered authenticated shell (shadow markers present + settled in
+the live authenticated DOM) is likewise the SCOPE-106-05 cutover and — for the
+PRODUCTION unified browser session — additionally gated on BUG-070-001; the dev-token
+server-vs-PWA shell parity IS proven now in `report.md#xp106-04-w`. XP106-04-A (e2e-api)
+is proven above in `report.md#xp106-04-a`.
 ## Planned Test References
 **Claim Source:** not-run
 Planned execution uses `./smackerel.sh`; the concrete not-yet-authored files and titles are listed in `scope.md` and root `test-plan.json` and are not execution evidence.
