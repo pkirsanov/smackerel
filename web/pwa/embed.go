@@ -4,5 +4,5 @@ package pwa
 
 import "embed"
 
-//go:embed *.html *.css *.js *.json *.svg lib generated
+//go:embed *.html *.css *.js *.json *.svg lib generated fonts
 var StaticFiles embed.FS

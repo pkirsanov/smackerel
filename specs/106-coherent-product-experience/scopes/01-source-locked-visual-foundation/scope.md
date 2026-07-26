@@ -42,9 +42,9 @@ Assets, manifest, CSP references, pre-paint code, and service-worker cache ident
 
 ## Change Boundary
 
-**Allowed:** shared experience asset sources, manifest/compiler, token/component CSS, same-origin font/icon bytes and licenses, appearance codec/config, server/PWA head adapters, service-worker static inventory, and focused tests.
+**Allowed file families:** shared experience asset sources, manifest/compiler, token/component CSS, same-origin font/icon bytes and licenses, appearance codec/config, server/PWA head adapters, service-worker static inventory, and focused tests.
 
-**Excluded:** navigation cutover, product-data APIs, auth issuance, domain templates beyond asset consumption, Cards/Graph business behavior, foreign spec packets, spec 079, deployment adapters, knb, CCManager, release-train configuration, and managed readiness claims.
+**Excluded surfaces:** navigation cutover, product-data APIs, auth issuance, domain templates beyond asset consumption, Cards/Graph business behavior, foreign spec packets, spec 079, deployment adapters, knb, CCManager, release-train configuration, and managed readiness claims.
 
 ## Test Plan
 
@@ -52,9 +52,10 @@ Assets, manifest, CSP references, pre-paint code, and service-worker cache ident
 |---|---|---|---|---|---|---|---|
 | XP106-01-U | Unit | `unit` | `internal/web/experience_assets_test.go` | SCN-106-009 | `TestExperienceAssetManifestLocksSourcesLicensesBytesTokensAndAppearanceEnums` | `./smackerel.sh test unit --go` | No |
 | XP106-01-I | Integration | `integration` | `tests/integration/web/experience_assets_test.go` | SCN-106-009 | `TestServerPWAAndCardHeadsServeTheSameVerifiedAssetsUnderStrictCSP` | `./smackerel.sh test integration` | Yes |
-| XP106-01-A | E2E API regression | `e2e-api` | `tests/e2e/experience_assets_e2e_test.go` | SCN-106-009 | `Experience assets expose immutable headers exact digests and network-only protected routes` | `./smackerel.sh test e2e` | Yes |
+| XP106-01-A | Regression E2E (API) | `e2e-api` | `tests/e2e/experience_assets_e2e_test.go` | SCN-106-009 | `Experience assets expose immutable headers exact digests and network-only protected routes` | `./smackerel.sh test e2e` | Yes |
 | XP106-01-W | E2E UI regression | `e2e-ui` | `web/pwa/tests/coherent_appearance.spec.ts` | SCN-106-009 | `source-locked appearance applies before first paint across server PWA and Card canaries` | `./smackerel.sh test e2e-ui` | Yes |
-| XP106-01-C | Shared-infrastructure canary | `e2e-ui` | `web/pwa/tests/coherent_foundation_canary.spec.ts` | SCN-106-009 | `asset cutover preserves native Search HTMX read HTMX mutation PWA auth Card PRG and service-worker isolation` | `./smackerel.sh test e2e-ui` | Yes |
+| XP106-01-C | Shared-infrastructure canary | `e2e-ui` | `web/pwa/tests/coherent_foundation_canary.spec.ts` | SCN-106-009 | `Canary: asset cutover preserves native Search HTMX read HTMX mutation PWA auth Card PRG and service-worker isolation` | `./smackerel.sh test e2e-ui` | Yes |
+| XP106-01-R | Rollback integration | `integration` | `tests/integration/experience/shell_rollback_test.go` | SCN-106-009 | `TestExperienceFoundationRollbackIsAtomicImmutablePointerSwapWithoutAssetTokenCSPorSWWeakening` | `./smackerel.sh test integration` | Yes |
 
 ### Definition of Done - Tiered Validation
 
@@ -63,16 +64,25 @@ Assets, manifest, CSP references, pre-paint code, and service-worker cache ident
 - [ ] `SCN-106-009 Theme follows the user across renderers`: System, Light, Dark, Comfortable, and Compact resolve before first paint and remain coherent across server and PWA renderers while forced colors and reduced motion stay platform-controlled and no credential or business value enters appearance storage.
 - [x] One source-locked same-origin manifest and token source serves all renderers with explicit source, license, digest, CSP, and cache policy. → Evidence: [report.md#xp106-01-u](report.md#xp106-01-u) (per-asset real SHA-256/source/license/CSP-class/SW-cache-policy + semantic token source) and [report.md#build-quality](report.md#build-quality).
 - [ ] Typography, icons, controls, stable dimensions, no-overlap, no-nested-card, contrast, forced-colors, and reduced-motion contracts are mechanically enforceable.
-- [ ] Independent canaries and the immutable rollback unit protect every high-fan-out consumer before renderer migration.
+- [x] Independent canaries and the immutable rollback unit protect every high-fan-out consumer before renderer migration. → Evidence: [report.md#xp106-01-c](report.md#xp106-01-c) (4 shared-infrastructure canaries green) and [report.md#xp106-01-r](report.md#xp106-01-r) (immutable rollback pointer).
 
-#### Test Evidence - 5 Rows / 5 Items
+#### Test Evidence - 6 Rows / 6 Items
 
-- [x] XP106-01-U passes with current-session evidence in `report.md#xp106-01-u`.
-- [ ] XP106-01-I passes with current-session evidence in `report.md#xp106-01-i`.
+- [x] XP106-01-U passes with current-session evidence → Evidence: [report.md#xp106-01-u](report.md#xp106-01-u).
+- [x] XP106-01-I passes with current-session evidence → Evidence: [report.md#xp106-01-i](report.md#xp106-01-i).
 - [ ] XP106-01-A passes with current-session evidence in `report.md#xp106-01-a`.
 - [ ] XP106-01-W passes without interception or auth injection in `report.md#xp106-01-w`.
-- [ ] XP106-01-C passes every independent shared-infrastructure canary in `report.md#xp106-01-c`.
+- [x] XP106-01-C passes every independent shared-infrastructure canary → Evidence: [report.md#xp106-01-c](report.md#xp106-01-c).
+- [x] XP106-01-R passes with current-session evidence → Evidence: [report.md#xp106-01-r](report.md#xp106-01-r).
+
+#### Shared-Infrastructure And Regression Planning
+
+- [ ] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior in this foundation (asset serving, digest identity, network-only protected routes) exist and pass — see `report.md#xp106-01-a`.
+- [ ] Broader E2E regression suite passes with no foundation-induced regression across the shared renderers — see `report.md#xp106-01-w`.
+- [ ] Independent canary suite for shared fixture/bootstrap contracts passes before broad suite reruns (native Search, HTMX read, HTMX mutation, PWA auth, Card PRG, service-worker isolation) — see `report.md#xp106-01-c`.
+- [x] Rollback or restore path for shared infrastructure changes is documented and verified (immutable asset/manifest/CSP/service-worker-identity pointer swap) → Evidence: [report.md#xp106-01-r](report.md#xp106-01-r).
 
 #### Build Quality Gate
 
 - [ ] Source locking, trusted-source allowlist, license inventory, CSP, service-worker safety, no-hardcoded-token, no-nested-card, contrast, check, lint, format, artifact lint, traceability, rollback, and directly affected security/design documentation checks pass with zero warnings.
+- [x] Change Boundary is respected and zero excluded file families were changed → Evidence: [report.md#change-boundary](report.md#change-boundary) (git-scoped change set: every changed file maps to an Allowed file family; zero Excluded surfaces touched).
