@@ -146,6 +146,80 @@ foundation `.go` file). It is DISTINCT from the LIVE deep-link rows XP106-05-I
 scenarios SCN-106-001/002 and the live-renderer cutover — remain entry-gated on
 the coordinator's BUG-070-001 production unified session and stay unchecked /
 coupled-forward.
+
+### server-nav-cutover
+
+**Outcome: PARITY PRE-CHECK FAILED → SERVER APP-SHELL NAV CUTOVER NOT PERFORMED.**
+This is a READ-ONLY pre-check result; no live renderer, test, DoD item, or
+`state.json` status was changed by this slice.
+
+This slice attempted the SCOPE-106-05 server app-shell nav cutover (Impl Plan #1):
+switch the hardcoded server `{{define "app-shell-nav"}}` partial
+(`internal/web/appshell.go`) to render its links by iterating the committed
+`NavigationProjection`'s ordered visible nav, byte-identical to the current nav.
+Per the cutover discipline — parity FIRST, never force a cutover if the projection
+does not byte-match the current nav — a READ-ONLY parity pre-check was run BEFORE
+touching any renderer. It does NOT hold: the projection's ordered visible nav for
+a representative authenticated `daily_user` differs from the current hardcoded
+partial across set, order, label, AND stable `data-nav` key. The cutover was
+therefore NOT performed and no renderer was touched.
+
+**Read-only pre-check (run from `<repo-root>/`):**
+
+```text
+$ sed -n '31p' internal/web/appshell.go | grep -oE 'href="[^"]*" data-nav="[^"]*">[^<]*'
+href="/assistant" data-nav="assistant">Assistant
+href="/" data-nav="search">Search
+href="/knowledge" data-nav="knowledge">Knowledge
+href="/cards" data-nav="cards">Cards
+href="/notifications" data-nav="notifications">Notifications
+href="/settings" data-nav="settings">Settings
+
+$ jq -r '[.surfaces[] | select(.parent_id=="") | select(.audiences|index("daily_user"))] | sort_by(.order)[] | "order=\(.order) id=\(.id) label=\(.label) href=\(if .href=="" then "(none/group)" else .href end) policy=\(.readiness_discoverability_policy)"' internal/experience/catalog.gen.json
+order=10 id=assistant label=Assistant href=/assistant policy=ready_when_journey_ready
+order=20 id=capture label=Capture href=/pwa/ policy=ready_when_journey_ready
+order=30 id=search label=Search href=/ policy=ready_when_journey_ready
+order=40 id=today label=Today href=/digest policy=ready_when_journey_ready
+order=50 id=knowledge label=Knowledge href=/knowledge policy=ready_when_journey_ready
+order=60 id=work label=Work href=(none/group) policy=route_free_group
+order=70 id=cards label=Cards href=/cards policy=ready_when_journey_ready
+order=80 id=recommendations label=Recommendations href=/recommendations policy=ready_when_journey_ready
+order=90 id=sources label=Sources href=(none/group) policy=route_free_group
+order=100 id=activity label=Activity href=/notifications policy=ready_when_journey_ready
+order=110 id=settings label=Settings href=/settings policy=ready_when_journey_ready
+```
+
+**Exact mismatch (decisive across every dimension the parity contract names):**
+
+- **SET:** the projection's `daily_user` visible top level adds `capture`
+  (`/pwa/`), `today` (`/digest`), `recommendations` (`/recommendations`), and the
+  two route-free groups `work` + `sources` that the current 6-link server partial
+  does NOT contain.
+- **ORDER:** the shared targets are interleaved with those extras (`capture`
+  between assistant↔search; `today` between search↔knowledge; `recommendations`
+  between cards↔activity), so even the shared subset is not in the partial's
+  order.
+- **LABEL + stable KEY:** `/notifications` is catalog surface `activity` labeled
+  **"Activity"**, whereas the current partial renders it with
+  `data-nav="notifications"` labeled **"Notifications"** — the wayfinding label
+  AND the stable hook key differ.
+- **RENDERER AUTHORING SIGNAL:** the catalog marks `assistant`
+  `renderer_support=["pwa"]` and `cards` `renderer_support=["card"]`, yet the
+  current server partial renders both server-side; `renderer_support` is not even
+  carried on `ProjectedSurface`, so the projection cannot reproduce a server-only
+  subset. This confirms the generated catalog was authored as the FUTURE unified
+  IA, not as a byte-copy of the current transitional server nav.
+
+**Disposition:** catalog/projection ↔ current-server-nav RECONCILIATION finding
+owned by SCOPE-106-02 (canonical catalog + route inventory), NOT something
+SCOPE-05 may paper over by force-fitting the renderer or weakening a test. The
+server cutover stays BLOCKED until the generated catalog and the current server
+partial are reconciled to one agreed nav (either the catalog is adjusted to
+preserve the current transitional server nav, or the server nav is intentionally
+migrated to the new IA under its own guarded slice with updated canaries). No DoD
+row is checked by this slice; no forbidden file (070 login shell `internal/api/**`,
+`web/pwa/**` app code, the Card renderer chrome, `internal/experience/*.go`
+non-test) was touched.
 ## Planned Test References
 **Claim Source:** not-run
 Planned execution uses `./smackerel.sh`; the concrete not-yet-authored files and titles are listed in `scope.md` and root `test-plan.json` and are not execution evidence.
