@@ -327,3 +327,180 @@ returns empty) and the final GREEN run above (`ok internal/acceptance 0.013s`,
   every emitted code is confirmed registry-known. RED-against-permissive proven
   above for the state-changing-selector canary; a permissive guard returning nil
   fails every one.
+
+## SCOPE-01 Part 2 — Manifest / Policy / Result / Reducer / Evidence Contract (bubbles.implement 2026-07-26T04:09:30Z)
+
+**Session summary.** SCOPE-01 Part 2 landed the remaining contract-foundation
+layer as unit/functional-testable Go in `internal/acceptance/`, CONSUMING the
+Part 1 types (`failure_registry.go`, `read_only_guard.go`) without modifying
+them. New source: `manifest.go` (the `ProductJourneyManifest` +
+`CompiledAcceptancePolicy` + fail-closed `Compile`), `product_journeys.go` (the
+Go-literal SST manifest covering all 14 journey groups + `DefaultPolicyConfig`),
+`result_validator.go` (`AcceptanceResultValidator.Validate`),
+`verdict_reducer.go` (`VerdictReducer.Reduce`), and `evidence.go`
+(`EvidenceSanitizer.Sanitize`). New tests:
+`internal/acceptance/manifest_test.go` (TP-102-01-01),
+`internal/acceptance/result_validator_test.go` (TP-102-01-02),
+`internal/acceptance/verdict_reducer_test.go` (TP-102-01-03), and
+`internal/acceptance/manifest_coverage_test.go` (TP-102-01-06). No live stack was
+used, nothing was committed, and no concurrent-locked path was touched.
+
+Concrete test-file traceability (SCN-102-001-07 / SCN-102-001-12 →
+`internal/acceptance/manifest_test.go` and the sibling
+`internal/acceptance/result_validator_test.go`,
+`internal/acceptance/verdict_reducer_test.go`,
+`internal/acceptance/manifest_coverage_test.go`; Part 1 rows
+`internal/acceptance/failure_registry_test.go`,
+`internal/acceptance/read_only_guard_test.go`,
+`internal/acceptance/fault_profile_registry_test.go`,
+`internal/acceptance/fault_profile_production_inert_test.go`).
+
+### Evidence: gofmt (my 9 new files only)
+
+Provenance: executed (host `gofmt`, files named explicitly to avoid any
+concurrent-locked path).
+
+```
+=== gofmt -l on my 9 files (empty == clean) ===
+GOFMT_CLEAN_EXIT=0
+```
+
+### Evidence: `./smackerel.sh check` (exit 0)
+
+Provenance: executed. (The `config-validate` temp-file absolute path is
+placeholderized to `<repo>` for repo pii-hygiene; the OK statuses and exit code
+are verbatim.)
+
+```
+config-validate: <repo>/config/generated/dev.env.tmp.374224 OK
+Config is in sync with SST
+env_file drift guard: OK
+scenario-lint: scanning config/prompt_contracts (glob: *.yaml)
+scenarios registered: 17, rejected: 0
+scenario-lint: OK
+CHECK_EXIT=0
+```
+
+### Evidence: `./smackerel.sh lint` (exit 0)
+
+Provenance: executed (tail of the Go+web lint run).
+
+```
+Successfully installed ... smackerel-ml-0.1.0 ...
+All checks passed!
+=== Validating web manifests ===
+  OK: web/pwa/manifest.json
+  OK: PWA manifest has required fields
+  OK: web/extension/manifest.json
+  OK: Chrome extension manifest has required fields (MV3)
+  OK: web/extension/manifest.firefox.json
+  OK: Firefox extension manifest has required fields (MV2 + gecko)
+
+=== Validating JS syntax ===
+  OK: web/pwa/app.js
+  OK: web/pwa/sw.js
+  ... (all JS OK)
+
+=== Checking extension version consistency ===
+  OK: Extension versions match (1.0.0)
+
+Web validation passed
+LINT_EXIT=0
+```
+
+### Evidence: package-scoped 4-test run (exit 0)
+
+Provenance: executed —
+`./smackerel.sh test unit --go --go-run '<the four TP-102-01-01/02/03/06 tests>'`.
+The wrapper expands to `go test -run '<selector>' -count=1 ./...`; only
+`internal/acceptance` contains matching tests, so every other package reports
+`[no tests to run]` and `internal/acceptance` reports `ok`. (Under `--go-run`,
+`internal/docfreshness` reports `ok ... [no tests to run]`, so the orthogonal
+concurrently-locked-`docs/Development.md` doc-freshness failure of the UNFILTERED
+`test unit --go` run does not occur here.)
+
+```
++ go test -run 'TestManifestRequiresEveryDeclaredJourneyDependencyAndAssertion|TestResultValidatorRejectsMissingDuplicateUnknownAndMismatchedRows|TestAllowedEmptyQuietOptionalAndDegradedRequireExactPolicy|TestManifestCoversAllProductJourneyGroupsAndRouteAuthorities' -count=1 ./...
+ok      github.com/smackerel/smackerel/cmd/config-validate      0.019s [no tests to run]
+ok      github.com/smackerel/smackerel/cmd/core 0.226s [no tests to run]
+ok      github.com/smackerel/smackerel/cmd/scenario-lint        0.216s [no tests to run]
+ok      github.com/smackerel/smackerel/internal/acceptance      0.035s
+ok      github.com/smackerel/smackerel/internal/agent   0.065s [no tests to run]
+ok      github.com/smackerel/smackerel/internal/docfreshness    0.005s [no tests to run]
+UNIT_GO_RUN_EXIT=0
+```
+
+`ok github.com/smackerel/smackerel/internal/acceptance 0.035s` with
+`UNIT_GO_RUN_EXIT=0` and zero `--- FAIL`/`panic` lines confirms all four tests
+pass. (`go test` without `-v` prints one `ok <pkg>` summary line rather than
+per-test lines; the `-run` selector names exactly the four functions, so `ok`
+covers all four.)
+
+### Evidence: env-specific-literal scan on my 9 files (empty == clean)
+
+Provenance: executed. The `smackerel.io/product-journeys/v1` /
+`smackerel.io/product-acceptance-result/v1` schema identifiers carry no `://`
+scheme, so they are not URLs.
+
+```
+=== scan ONLY my 9 new files for env-specific literals (MUST be empty) ===
+MY_FILES_CLEAN_NO_ENV_LITERALS
+```
+
+### RED → GREEN adversarial reasoning (Part 2 rows)
+
+Every Part 2 test opens with a valid-input subtest (canonical manifest compiles,
+valid envelope validates, all-required-pass reduces to `accepted`) and then a
+table of independent single-field mutations, each asserting exactly one closed
+`E102-JOURNEY-CONTRACT-*` code (verified registry-known by `wantContractCode`).
+Because each mutation flips exactly one field and asserts one specific closed
+code, a permissive implementation that skipped that one check would return a
+compiled policy / `ValidatedResult{Valid:true}` / an `accepted` verdict and fail
+that subtest — so the canaries are real, not tautological.
+
+- **TP-102-01-01** (`TestManifestRequiresEveryDeclaredJourneyDependencyAndAssertion`):
+  the canonical manifest compiles and covers every closed group; then 13
+  independent canaries — removing a required journey (`E102-...-MISSING-JOURNEY`),
+  dropping a dependency and an empty-packet dependency (`-MALFORMED`), dropping the
+  accessibility and status assertions (`-MALFORMED`), implicit/unset requiredness
+  (`-MALFORMED`), an unknown group enum, an unregistered failure code, a
+  category-mismatched failure code (`-UNKNOWN-ENUM`), an unresolvable timeout
+  reference (`-MALFORMED`), a health-only required journey (`-MALFORMED`), a
+  mutating selector (`-UNSAFE-MUTATION`, via the reused Part 1 static guard), and
+  an unsafe evidence field (`-EVIDENCE-UNSAFE`) — EACH independently fails
+  compilation. A permissive `Compile` returning a policy would fail every one.
+- **TP-102-01-02** (`TestResultValidatorRejectsMissingDuplicateUnknownAndMismatchedRows`):
+  a valid envelope validates (`accepted-degraded`, required 1/1); then 16 canaries
+  — missing result (`-MISSING`), unsupported schema and unsupported mode
+  (`-UNSUPPORTED`), empty digest and zero timestamp (`-MALFORMED`), missing
+  signature (`-SIGNATURE`), unknown verdict / unknown outcome / unregistered code
+  (`-UNKNOWN-ENUM`), manifest-id mismatch (`-MANIFEST-MISMATCH`), release mismatch
+  (`-RELEASE-MISMATCH`), observed-before-activation and future-skew staleness
+  (`-STALE-RESULT`), duplicate row (`-DUPLICATE-JOURNEY`), unsafe evidence field
+  (`-EVIDENCE-UNSAFE`), and a non-reconciling aggregate count (`-MALFORMED`) —
+  EACH yields `contract-invalid` with one closed code. No row is ignored or
+  guessed compatible.
+- **TP-102-01-03** (`TestAllowedEmptyQuietOptionalAndDegradedRequireExactPolicy`):
+  all-required-pass reduces to `accepted`; `allowed-empty` on `search.read`
+  (policy-permitted) degrades to `accepted-degraded`, but `allowed-empty` /
+  `allowed-degraded` on `session.login-reuse` (which permits ONLY `passed`) fails
+  closed to `contract-invalid`; an explicit optional `allowed-optional` degrades
+  but is accepted; a not-evaluated (health-only) required journey yields
+  `rejected`, NEVER `accepted`; a required failure yields `rejected`; an absent
+  (empty) policy and a result for an unknown journey each fail closed to
+  `contract-invalid`; and a blocked required prerequisite yields
+  `blocked-prerequisite`. A reducer that honored an allowed-* outcome without an
+  exact policy rule, or promoted a not-evaluated required journey, would fail
+  these subtests.
+- **TP-102-01-06** (`TestManifestCoversAllProductJourneyGroupsAndRouteAuthorities`,
+  functional): the canonical manifest compiles, `CoveredGroups()` equals the full
+  closed 14-group set, and `CoveredRoutes()` covers every route authority in
+  `DefaultRouteSideEffectRegistry()`; the canary removes each of the Search,
+  Synthesis, and Models groups' journeys in turn and asserts coverage goes red AND
+  compilation now fails — so removing any group turns it red (not a tautology).
+
+`EvidenceSanitizer.Sanitize` (`evidence.go`) rounds out the foundation
+(value-safe evidence entries; unsafe field name or target-literal value rejects
+with `-EVIDENCE-UNSAFE`/`-MALFORMED`, never echoing the raw value), reusing the
+Part 1 `scanEvidenceFields`/`targetLiteral` helpers so evidence safety and the
+read-only static guard share one source of truth.
