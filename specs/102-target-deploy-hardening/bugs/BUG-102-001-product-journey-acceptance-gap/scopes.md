@@ -61,7 +61,7 @@ flowchart LR
 
 | Scope | Primary Outcome | Required External Evidence | Status |
 |---|---|---|---|
-| SCOPE-01 | Product-owned manifest/result/policy/failure foundation | None | In Progress (fault-registry foundation unit-verified; manifest/validator/reducer/read-only-guard remainder and live acceptance deferred) |
+| SCOPE-01 | Product-owned manifest/result/policy/failure foundation | None | In Progress (fault-registry + closed E102 failure-code registry + production read-only guard unit-verified; manifest/policy/result/evidence schemas + reducer + validator remainder and live acceptance deferred) |
 | SCOPE-02 | Production-readonly runner and real session | BUG-070-001 | Not Started |
 | SCOPE-03 | Search, Digest, Assistant, Wiki/Graph, Knowledge | BUG-002-006, BUG-002-007, BUG-073-006, BUG-080-001, spec 104 SCOPE-08, specs 105/106 where applicable | Not Started |
 | SCOPE-04 | Cards, Recommendations, Notifications, Photos/Drive, Models, Synthesis, Status/Health | BUG-083-002, BUG-039-005, BUG-004-004, spec 106 where applicable | Not Started |
@@ -86,7 +86,7 @@ flowchart LR
 **Foundation:** true  
 **Depends On:** None
 
-> **Partial delivery (bubbles.implement 2026-07-25):** The production-inert, test-only, machine-readable fault-profile REGISTRY FOUNDATION (JOURNEY-016 / SCN-102-001-12; TP-102-01-07, TP-102-01-08) is implemented and unit-verified — see [report.md](report.md). The remaining SCOPE-01 contract foundation (manifest/policy/result/evidence schemas, failure registry, read-only guard, reducer, validator — TP-102-01-01..06 / SCN-102-001-07) and all live-stack product-journey acceptance execution (SCOPE-02..05) are DEFERRED; those DoD items remain unchecked.
+> **Partial delivery (bubbles.implement 2026-07-25 → 2026-07-26):** The production-inert, test-only, machine-readable fault-profile REGISTRY FOUNDATION (JOURNEY-016 / SCN-102-001-12; TP-102-01-07, TP-102-01-08) was implemented and unit-verified on 2026-07-25, and the closed `E102-JOURNEY-*` FAILURE-CODE REGISTRY (TP-102-01-04) plus the production READ-ONLY STATIC GUARD (TP-102-01-05) landed and were unit-verified on 2026-07-26 — see [report.md](report.md). The remaining SCOPE-01 contract foundation (manifest/policy/result/evidence schemas, deterministic reducer, and result validator — TP-102-01-01/02/03/06) and the whole `SCN-102-001-07` core outcome, plus all live-stack product-journey acceptance execution (SCOPE-02..05), are DEFERRED to Part 2; those DoD items remain unchecked.
 
 ### Use Cases
 
@@ -154,8 +154,8 @@ Scenario: SCN-102-001-12 Fault profiles are disposable and production-inert
 - [ ] TP-102-01-01 passes with current-session evidence in report.md.
 - [ ] TP-102-01-02 passes with current-session evidence in report.md.
 - [ ] TP-102-01-03 passes with current-session evidence in report.md.
-- [ ] TP-102-01-04 passes with current-session evidence in report.md.
-- [ ] TP-102-01-05 passes with current-session evidence in report.md.
+- [x] TP-102-01-04 passes with current-session evidence in report.md. → Evidence: [report.md](report.md) (unit — TestEveryFailureCodeHasOneCategoryAndOwner)
+- [x] TP-102-01-05 passes with current-session evidence in report.md. → Evidence: [report.md](report.md) (unit — TestProductionManifestRejectsWritesInterceptionInjectionAndTargetLiterals)
 - [ ] TP-102-01-06 passes with current-session evidence in report.md.
 - [x] TP-102-01-07 passes with current-session evidence in report.md. → Evidence: [report.md](report.md) (unit — TestFaultProfileRegistryRequiresEveryDeclaredFieldAndRejectsFirstPartyInterception)
 - [x] TP-102-01-08 passes with current-session evidence in report.md. → Evidence: [report.md](report.md) (unit — TestProductionRoutesConfigRequestsAndUIExposeNoFaultSelectorOrTrigger)

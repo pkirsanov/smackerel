@@ -134,3 +134,196 @@ The immutable product-journey ACCEPTANCE producer is off-traffic and LIVE; per t
 
 - SCOPE-02..05 live-stack journeys (Session, Search, Digest, Assistant, Wiki/Graph, Recommendations, Cards, Synthesis, aggregate release artifact and adapter handoff) — real off-traffic Playwright/API observation against a deployed candidate.
 - SCOPE-01 remainder: manifest/policy/result/evidence schemas, failure registry, read-only guard, reducer, validator (TP-102-01-01..06 / SCN-102-001-07).
+
+## Failure Registry + Read-Only Guard (Part 1, bubbles.implement, 2026-07-26)
+
+This increment lands the two unit-verifiable SCOPE-01 contract-foundation
+components that the 2026-07-25 section above listed as deferred: the closed
+`E102-JOURNEY-*` failure registry (TP-102-01-04 / `SCN-102-001-07`) and the
+production read-only static guard (TP-102-01-05 / `SCN-102-001-07`). It is
+contract-only and unit-only: **no Docker stack was brought up, no live
+integration/e2e test was run, and no concurrent `smackerel-test-*` stack was
+touched or torn down** (baseline and final `docker ps -a --filter name=smackerel`
+both = 0 containers; the concurrent spec-106 lane owns that stack).
+
+### IMPLEMENTED (four files under `internal/acceptance/`, module `github.com/smackerel/smackerel`)
+
+- `internal/acceptance/failure_registry.go` — the CLOSED product-journey
+  acceptance vocabularies: aggregate verdicts (`accepted`, `accepted-degraded`,
+  `blocked-prerequisite`, `rejected`, `contract-invalid`, `timed-out`), journey
+  outcomes (`passed`, `allowed-empty`, `allowed-quiet`, `allowed-optional`,
+  `allowed-degraded`, `failed`, `blocked`, `timed-out`, `not-evaluated`), and the
+  full `E102-JOURNEY-*` code set from design.md `## Closed Failure-Code Registry`
+  as an immutable `map[FailureCode]FailureMeta{Category, Owner}`. Each code maps
+  to exactly one category (the design error family) and one owner (the owning
+  journey group, or `acceptance-contract` for the contract-integrity family).
+  `Validate()` fails closed (`ErrFailureRegistryInvalid` → contract-invalid) on an
+  empty/malformed code, an unknown category or owner, a duplicate code, a
+  category filed against the wrong family prefix, or an owner that is not the
+  category's canonical owner. `LookupFailure` returns `(meta, ok)` — an unknown or
+  unvalidated lookup is not-ok, never a guessed default. The one cross-cutting
+  stem (`E102-JOURNEY-CONTRACT-CAPABILITY-*` vs `E102-JOURNEY-CONTRACT-*`) is
+  disambiguated by ordered longest-prefix matching.
+- `internal/acceptance/read_only_guard.go` — the production read-only static
+  guard. `ScanProductionSurface` fails closed over a value-safe surface
+  (classified routes + selectors + evidence-field identifiers + raw runner-source
+  text) and rejects: an unclassified route, an unknown/production-forbidden
+  side-effect class, canonical-classification drift, a mutating HTTP method, a
+  POST that is neither `session-establish` nor `read-compute`, a state-changing
+  selector, request interception (`page.route`/`context.route`/`route.fulfill`/…),
+  credential/cookie injection, a direct datastore read, a service-container exec,
+  a concrete target literal (URL/host/tailnet/IPv4/operator-path/private-key), and
+  a forbidden evidence field. Each rejection carries one closed contract code
+  (`E102-JOURNEY-CONTRACT-UNSAFE-MUTATION` or `-EVIDENCE-UNSAFE`) declared in the
+  registry; the offending raw value is never echoed.
+- `internal/acceptance/failure_registry_test.go` — TP-102-01-04
+  (`TestEveryFailureCodeHasOneCategoryAndOwner`).
+- `internal/acceptance/read_only_guard_test.go` — TP-102-01-05
+  (`TestProductionManifestRejectsWritesInterceptionInjectionAndTargetLiterals`).
+
+DEFERRED to Part 2 (not claimed here): the SCOPE-01 manifest/policy/result/
+evidence schemas, the deterministic reducer, and the result validator
+(TP-102-01-01/02/03/06) plus the whole `SCN-102-001-07` core outcome, and all
+SCOPE-02..05 live-stack journeys.
+
+### TEST-EVIDENCE (current session, 2026-07-26)
+
+**Format (`./smackerel.sh format --check`) — my four files are gofmt-clean.**
+The first run flagged one of my files; I formatted ONLY that file with host
+`gofmt` (`go version go1.25.10 linux/amd64`, identical to the go-tooling
+container) — never the in-place repo `format`, which would rewrite the
+concurrent-locked `internal/web/handler_test.go`. The re-run flags only two
+pre-existing/concurrent files and none of mine:
+
+```
+$ ./smackerel.sh format --check        # run 1 (before formatting my file)
+internal/acceptance/read_only_guard_test.go
+internal/api/graphapi/activation.go
+internal/web/handler_test.go
+FORMAT_CHECK_EXIT=1
+
+$ gofmt -w internal/acceptance/read_only_guard_test.go   # my own new file only
+$ git status --short internal/acceptance/                 # still only my 4 files
+?? internal/acceptance/failure_registry.go
+?? internal/acceptance/failure_registry_test.go
+?? internal/acceptance/read_only_guard.go
+?? internal/acceptance/read_only_guard_test.go
+
+$ ./smackerel.sh format --check        # run 2 (after)
+internal/api/graphapi/activation.go
+internal/web/handler_test.go
+FORMAT_CHECK_EXIT=1
+```
+
+The residual exit 1 is entirely the two pre-existing/concurrent files
+(`internal/api/graphapi/activation.go`, and the concurrent-locked
+`internal/web/handler_test.go`); all four `internal/acceptance/` files are
+absent from the list, i.e. gofmt-clean.
+
+**Check (`./smackerel.sh check`) — exit 0 (home path redacted per no-PII policy):**
+
+```
+$ ./smackerel.sh check
+config-validate: <repo>/config/generated/dev.env.tmp.<n> OK
+Config is in sync with SST
+env_file drift guard: OK
+scenario-lint: scanning config/prompt_contracts (glob: *.yaml)
+scenarios registered: 17, rejected: 0
+scenario-lint: OK
+CHECK_EXIT=0
+```
+
+**Lint (`./smackerel.sh lint`) — exit 0.** `go vet ./...` (go-lint.sh) ran first
+and produced NO output (silent = zero findings over the new `internal/acceptance`
+package); python `ruff` and web validation follow:
+
+```
+$ ./smackerel.sh lint
+All checks passed!
+=== Validating web manifests ===
+  OK: web/pwa/manifest.json
+  OK: PWA manifest has required fields
+  OK: web/extension/manifest.json
+  OK: Chrome extension manifest has required fields (MV3)
+  OK: web/extension/manifest.firefox.json
+  OK: Firefox extension manifest has required fields (MV2 + gecko)
+=== Validating JS syntax ===
+  OK: web/pwa/app.js
+  OK: web/pwa/sw.js
+  OK: web/pwa/lib/queue.js
+  OK: web/extension/background.js
+  OK: web/extension/popup/popup.js
+  OK: web/extension/lib/queue.js
+  OK: web/extension/lib/browser-polyfill.js
+=== Checking extension version consistency ===
+  OK: Extension versions match (1.0.0)
+Web validation passed
+LINT_EXIT=0
+```
+
+**Unit (`./smackerel.sh test unit --go --go-run '<TP-102-01-04>|<TP-102-01-05>'`)
+— exit 0; `internal/acceptance` executed and passed.** The `--go-run` selector
+runs only my two tests (with every adversarial subtest); every other package —
+including the orthogonal `internal/docfreshness` doc-freshness test on the
+concurrent-locked `docs/Development.md` — reports `[no tests to run]`, so that
+known debt is filtered out and never fails this run:
+
+```
+$ ./smackerel.sh test unit --go --go-run 'TestEveryFailureCodeHasOneCategoryAndOwner|TestProductionManifestRejectsWritesInterceptionInjectionAndTargetLiterals'
++ go test -run 'TestEveryFailureCodeHasOneCategoryAndOwner|TestProductionManifestRejectsWritesInterceptionInjectionAndTargetLiterals' ./...
+[go-unit] applying -run selector: TestEveryFailureCodeHasOneCategoryAndOwner|TestProductionManifestRejectsWritesInterceptionInjectionAndTargetLiterals
+ok      github.com/smackerel/smackerel/cmd/alertmanager-ntfy-bridge     0.010s [no tests to run]
+ok      github.com/smackerel/smackerel/internal/acceptance      0.013s
+ok      github.com/smackerel/smackerel/internal/docfreshness    0.008s [no tests to run]
+[go-unit] go test ./... finished OK
+FINAL_UNIT_EXIT=0
+```
+
+The `internal/acceptance` line is `ok ... 0.013s` with NO `[no tests to run]` —
+i.e. `TestEveryFailureCodeHasOneCategoryAndOwner` and
+`TestProductionManifestRejectsWritesInterceptionInjectionAndTargetLiterals` (and
+all their adversarial subtests) executed and passed; a failing or uncompilable
+package would exit non-zero.
+
+### RED→GREEN adversarial proof (canaries genuinely detect a permissive impl)
+
+The adversarial subtests are not tautological. Each asserts a specific
+fail-closed outcome, so a permissive implementation makes them RED. This was
+proven empirically: I temporarily neutralized ONE check in each file — the
+duplicate-code branch in `FailureRegistry.Validate()` and the
+state-changing-selector branch in `scanSelectors()` — and re-ran the two tests.
+Exactly the two matching canaries turned RED:
+
+```
+--- FAIL: TestEveryFailureCodeHasOneCategoryAndOwner (0.00s)
+    --- FAIL: TestEveryFailureCodeHasOneCategoryAndOwner/adversarial:_duplicate_code (0.00s)
+--- FAIL: TestProductionManifestRejectsWritesInterceptionInjectionAndTargetLiterals (0.00s)
+    --- FAIL: TestProductionManifestRejectsWritesInterceptionInjectionAndTargetLiterals/adversarial:_state-changing_selector (0.00s)
+FAIL
+FAIL    github.com/smackerel/smackerel/internal/acceptance      0.019s
+```
+
+Both neutralizations were then reverted (a `grep -rn "TEMP-CANARY" internal/acceptance/`
+returns empty) and the final GREEN run above (`ok internal/acceptance 0.013s`,
+`FINAL_UNIT_EXIT=0`) confirms the restored, correct implementation passes.
+
+- **TP-102-01-04** (`TestEveryFailureCodeHasOneCategoryAndOwner`): asserts the
+  canonical registry validates and every closed code has exactly one closed
+  category and its category's canonical owner; unknown-code lookup is not-ok;
+  and independent canaries (duplicate code, ownerless code, owner-mismatch,
+  category-mismatch, unknown category, code outside every family prefix, empty
+  registry) EACH make `Validate()` return `errors.Is(ErrFailureRegistryInvalid)`
+  (contract-invalid). RED-against-permissive proven above for the duplicate-code
+  canary; the other canaries fail identically against a permissive `Validate()`.
+- **TP-102-01-05**
+  (`TestProductionManifestRejectsWritesInterceptionInjectionAndTargetLiterals`):
+  a valid read-only surface passes; then 14 independent canaries — state-changing
+  selector, unclassified route, non-session/non-read-compute POST, mutating
+  method, production-forbidden `fixture-write` class, canonical drift, request
+  interception, credential/cookie injection, direct datastore read,
+  service-container exec, target literal (runner source, IPv4, route template),
+  and forbidden evidence field — EACH turn the fixture red with the expected
+  closed `E102-JOURNEY-CONTRACT-UNSAFE-MUTATION` or `-EVIDENCE-UNSAFE` code, and
+  every emitted code is confirmed registry-known. RED-against-permissive proven
+  above for the state-changing-selector canary; a permissive guard returning nil
+  fails every one.
