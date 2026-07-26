@@ -55,10 +55,19 @@ type ExperienceAssetSource string
 
 const (
 	SourceFirstParty ExperienceAssetSource = "first-party"
+	// SourceVendoredOFL is a third-party SIL-OFL-1.1 font whose exact bytes are
+	// committed same-origin in web/pwa/fonts and byte-integrity-locked here. The
+	// trusted acquisition source (pinned @fontsource npm package + integrity) is
+	// recorded in the asset Provenance and in web/pwa/package-lock.json.
+	SourceVendoredOFL ExperienceAssetSource = "vendored-ofl"
 )
 
-// firstPartyLicense is the licence carried by every first-party same-origin asset.
-const firstPartyLicense = "Smackerel repository LICENSE"
+const (
+	// firstPartyLicense is the licence carried by every first-party same-origin asset.
+	firstPartyLicense = "Smackerel repository LICENSE"
+	// oflLicense is the licence carried by every vendored web/pwa/fonts byte.
+	oflLicense = "SIL Open Font License 1.1"
+)
 
 // ExperienceAsset is one byte-integrity-locked same-origin asset.
 type ExperienceAsset struct {
@@ -68,6 +77,9 @@ type ExperienceAsset struct {
 	EmbedPath string
 	Source    ExperienceAssetSource
 	License   string
+	// Provenance records the trusted acquisition source for a vendored third-party
+	// asset (pinned npm package@version + integrity). It is empty for first-party.
+	Provenance string
 	// SHA256 is the lowercase hex digest of the exact served bytes.
 	SHA256    string
 	Size      int64
@@ -108,24 +120,47 @@ type ExperienceAssetManifest struct {
 // experienceAssetSpec declares the locked assets by embed path + metadata. The
 // bytes/size/digest are filled from the real embed at build time.
 type experienceAssetSpec struct {
-	embedPath string
-	mediaType string
-	cspClass  ExperienceAssetCSPClass
+	embedPath  string
+	mediaType  string
+	cspClass   ExperienceAssetCSPClass
+	source     ExperienceAssetSource
+	license    string
+	provenance string
+}
+
+// fp declares a first-party same-origin asset spec.
+func fp(embedPath, mediaType string, cspClass ExperienceAssetCSPClass) experienceAssetSpec {
+	return experienceAssetSpec{embedPath, mediaType, cspClass, SourceFirstParty, firstPartyLicense, ""}
+}
+
+// ofl declares a vendored SIL-OFL-1.1 font spec with its trusted acquisition
+// provenance (pinned @fontsource npm package@version + sha512 integrity).
+func ofl(embedPath, provenance string) experienceAssetSpec {
+	return experienceAssetSpec{embedPath, "font/woff2", CSPClassFont, SourceVendoredOFL, oflLicense, provenance}
 }
 
 // lockedAssetSpecs is the closed set of same-origin foundation assets. Adding an
 // asset is a reviewed change here; a missing declared asset fails the build.
 var lockedAssetSpecs = []experienceAssetSpec{
-	{"experience-appearance.js", "text/javascript; charset=utf-8", CSPClassScript},
-	{"experience-tokens.css", "text/css; charset=utf-8", CSPClassStyle},
-	{"style.css", "text/css; charset=utf-8", CSPClassStyle},
-	{"app.js", "text/javascript; charset=utf-8", CSPClassScript},
-	{"lib/appnav.js", "text/javascript; charset=utf-8", CSPClassScript},
-	{"lib/queue.js", "text/javascript; charset=utf-8", CSPClassScript},
-	{"icon.svg", "image/svg+xml", CSPClassImage},
+	fp("experience-appearance.js", "text/javascript; charset=utf-8", CSPClassScript),
+	fp("experience-tokens.css", "text/css; charset=utf-8", CSPClassStyle),
+	fp("style.css", "text/css; charset=utf-8", CSPClassStyle),
+	fp("app.js", "text/javascript; charset=utf-8", CSPClassScript),
+	fp("lib/appnav.js", "text/javascript; charset=utf-8", CSPClassScript),
+	fp("lib/queue.js", "text/javascript; charset=utf-8", CSPClassScript),
+	fp("icon.svg", "image/svg+xml", CSPClassImage),
+	// Vendored SIL-OFL-1.1 fonts (same-origin woff2 bytes committed in web/pwa/fonts;
+	// trusted source pinned in web/pwa/package-lock.json with sha512 integrity).
+	ofl("fonts/ibm-plex-sans-latin-400-normal.woff2", "@fontsource/ibm-plex-sans@5.3.0 (registry.npmjs.org; sha512-CbE4CbbEEZJX860XyUiRpsksXIQR8Rp2XDva2VO53NJox9tVNtusrysd2x5YkUEY3ErQ66W1IiiQL8/wihhw5w==; IBM Plex Sans, SIL OFL 1.1)"),
+	ofl("fonts/ibm-plex-sans-latin-600-normal.woff2", "@fontsource/ibm-plex-sans@5.3.0 (registry.npmjs.org; sha512-CbE4CbbEEZJX860XyUiRpsksXIQR8Rp2XDva2VO53NJox9tVNtusrysd2x5YkUEY3ErQ66W1IiiQL8/wihhw5w==; IBM Plex Sans, SIL OFL 1.1)"),
+	ofl("fonts/source-serif-4-latin-400-normal.woff2", "@fontsource/source-serif-4@5.3.0 (registry.npmjs.org; sha512-yQz8xmIgMzks8zQbpuca3UYtjxK798XCyQAGdDXmzBgvV7sdoK6d0YvE9F9kiYxORCEMRBgGZDZsSYcXj5KvwA==; Source Serif 4, SIL OFL 1.1)"),
+	ofl("fonts/source-serif-4-latin-600-normal.woff2", "@fontsource/source-serif-4@5.3.0 (registry.npmjs.org; sha512-yQz8xmIgMzks8zQbpuca3UYtjxK798XCyQAGdDXmzBgvV7sdoK6d0YvE9F9kiYxORCEMRBgGZDZsSYcXj5KvwA==; Source Serif 4, SIL OFL 1.1)"),
+	ofl("fonts/ibm-plex-mono-latin-400-normal.woff2", "@fontsource/ibm-plex-mono@5.3.0 (registry.npmjs.org; sha512-eTgnZjZEGk1QtD3ZstF+Vclo2HLAni8YMy34/DxllwZvyz1lR/1RF/xTiAquOBO7MvqBx8D2Ig2WCPMVfdZu7Q==; IBM Plex Mono, SIL OFL 1.1)"),
 }
 
 // externalDependencies is the honest record of assets not yet same-origin locked.
+// The three OFL fonts are now vendored same-origin (see lockedAssetSpecs); only
+// htmx remains external, owned by BUG-002-006.
 var externalDependencies = []ExternalExperienceDependency{
 	{
 		Name:            "htmx.org@1.9.12",
@@ -134,30 +169,6 @@ var externalDependencies = []ExternalExperienceDependency{
 		CurrentSource:   "https://unpkg.com/htmx.org@1.9.12 (pinned CDN <script> in internal/web/templates.go)",
 		IntendedLicense: "BSD-0 / MIT (htmx)",
 		Note:            "BUG-002-006 owns the same-origin vendoring + digest; this manifest references that digest once it exists and embeds no second copy.",
-	},
-	{
-		Name:            "IBM Plex Sans",
-		Owner:           "spec 106 SCOPE-106-01",
-		Status:          ExtStatusNotVendored,
-		CurrentSource:   "declared family in experience-tokens.css with platform fallback",
-		IntendedLicense: "SIL OFL 1.1",
-		Note:            "same-origin .woff2 byte vendoring requires a network fetch unavailable in this build environment; no digest fabricated.",
-	},
-	{
-		Name:            "Source Serif 4",
-		Owner:           "spec 106 SCOPE-106-01",
-		Status:          ExtStatusNotVendored,
-		CurrentSource:   "declared family in experience-tokens.css with platform fallback",
-		IntendedLicense: "SIL OFL 1.1",
-		Note:            "same-origin .woff2 byte vendoring requires a network fetch unavailable in this build environment; no digest fabricated.",
-	},
-	{
-		Name:            "IBM Plex Mono",
-		Owner:           "spec 106 SCOPE-106-01",
-		Status:          ExtStatusNotVendored,
-		CurrentSource:   "declared family in experience-tokens.css with platform fallback",
-		IntendedLicense: "SIL OFL 1.1",
-		Note:            "same-origin .woff2 byte vendoring requires a network fetch unavailable in this build environment; no digest fabricated.",
 	},
 }
 
@@ -177,12 +188,19 @@ func BuildExperienceAssetManifest() (*ExperienceAssetManifest, error) {
 		if spec.mediaType == "" || spec.cspClass == "" {
 			return nil, fmt.Errorf("experience asset manifest: declared asset %q is missing media type or CSP class", spec.embedPath)
 		}
+		if spec.source == "" || spec.license == "" {
+			return nil, fmt.Errorf("experience asset manifest: declared asset %q is missing source or license", spec.embedPath)
+		}
+		if spec.source == SourceVendoredOFL && spec.provenance == "" {
+			return nil, fmt.Errorf("experience asset manifest: vendored asset %q must record its trusted-source provenance", spec.embedPath)
+		}
 		sum := sha256.Sum256(data)
 		assets = append(assets, ExperienceAsset{
 			ServedPath: "/pwa/" + spec.embedPath,
 			EmbedPath:  spec.embedPath,
-			Source:     SourceFirstParty,
-			License:    firstPartyLicense,
+			Source:     spec.source,
+			License:    spec.license,
+			Provenance: spec.provenance,
 			SHA256:     hex.EncodeToString(sum[:]),
 			Size:       int64(len(data)),
 			MediaType:  spec.mediaType,

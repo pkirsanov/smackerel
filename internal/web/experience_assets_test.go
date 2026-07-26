@@ -44,8 +44,26 @@ func TestExperienceAssetManifestLocksSourcesLicensesBytesTokensAndAppearanceEnum
 		if a.Size <= 0 {
 			t.Errorf("asset %s has non-positive size %d", a.ServedPath, a.Size)
 		}
-		if a.License != firstPartyLicense {
-			t.Errorf("asset %s license = %q, want first-party %q", a.ServedPath, a.License, firstPartyLicense)
+		switch a.Source {
+		case SourceFirstParty:
+			if a.License != firstPartyLicense {
+				t.Errorf("first-party asset %s license = %q, want %q", a.ServedPath, a.License, firstPartyLicense)
+			}
+			if a.Provenance != "" {
+				t.Errorf("first-party asset %s must not carry vendored provenance, got %q", a.ServedPath, a.Provenance)
+			}
+		case SourceVendoredOFL:
+			if a.License != oflLicense {
+				t.Errorf("vendored font %s license = %q, want %q", a.ServedPath, a.License, oflLicense)
+			}
+			if a.CSPClass != CSPClassFont {
+				t.Errorf("vendored OFL asset %s CSP class = %q, want font-src", a.ServedPath, a.CSPClass)
+			}
+			if a.Provenance == "" {
+				t.Errorf("vendored font %s must record its trusted-source provenance", a.ServedPath)
+			}
+		default:
+			t.Errorf("asset %s has unknown source %q", a.ServedPath, a.Source)
 		}
 		if !strings.HasPrefix(a.ServedPath, "/pwa/") {
 			t.Errorf("asset %s is not served same-origin under /pwa/", a.ServedPath)
@@ -110,20 +128,47 @@ func TestExperienceAssetManifestLocksSourcesLicensesBytesTokensAndAppearanceEnum
 	} else if htmx.Status != ExtStatusPendingSameOrigin || htmx.Owner != "BUG-002-006" {
 		t.Errorf("htmx external record wrong: %+v", htmx)
 	}
+	// The three OFL fonts are now vendored same-origin and MUST NOT be recorded as
+	// external/pending (no fabricated digest, no system-font fallback shortcut).
 	for _, font := range []string{"IBM Plex Sans", "Source Serif 4", "IBM Plex Mono"} {
-		d, ok := extByName[font]
-		if !ok {
-			t.Errorf("font %q is not recorded as an external dependency", font)
-			continue
-		}
-		if d.Status != ExtStatusNotVendored {
-			t.Errorf("font %q status = %q, want %q (no fabricated digest)", font, d.Status, ExtStatusNotVendored)
+		if _, ok := extByName[font]; ok {
+			t.Errorf("font %q is still recorded as external, but it is now vendored same-origin", font)
 		}
 	}
-	// A font MUST NOT appear as a source-locked ExperienceAsset (no fabricated bytes).
+	// Every declared font family MUST be locked as a same-origin CSPClassFont asset
+	// backed by real vendored bytes with recorded OFL trusted-source provenance.
+	wantFonts := map[string]bool{
+		"/pwa/fonts/ibm-plex-sans-latin-400-normal.woff2":  false,
+		"/pwa/fonts/ibm-plex-sans-latin-600-normal.woff2":  false,
+		"/pwa/fonts/source-serif-4-latin-400-normal.woff2": false,
+		"/pwa/fonts/source-serif-4-latin-600-normal.woff2": false,
+		"/pwa/fonts/ibm-plex-mono-latin-400-normal.woff2":  false,
+	}
+	fontCount := 0
 	for _, a := range m.Assets {
-		if a.CSPClass == CSPClassFont {
-			t.Errorf("a font is locked as a same-origin asset (%s) but no font bytes are vendored", a.ServedPath)
+		if a.CSPClass != CSPClassFont {
+			continue
+		}
+		fontCount++
+		if a.Source != SourceVendoredOFL || a.License != oflLicense {
+			t.Errorf("vendored font %s wrong source/license: source=%q license=%q", a.ServedPath, a.Source, a.License)
+		}
+		if a.MediaType != "font/woff2" {
+			t.Errorf("vendored font %s media type = %q, want font/woff2", a.ServedPath, a.MediaType)
+		}
+		if !strings.Contains(a.Provenance, "OFL") {
+			t.Errorf("vendored font %s provenance missing OFL trusted-source record: %q", a.ServedPath, a.Provenance)
+		}
+		if _, ok := wantFonts[a.ServedPath]; ok {
+			wantFonts[a.ServedPath] = true
+		}
+	}
+	if fontCount == 0 {
+		t.Error("no fonts locked as same-origin assets; the OFL fonts must be vendored, not system-font-fallback")
+	}
+	for path, seen := range wantFonts {
+		if !seen {
+			t.Errorf("expected vendored font %s is not locked in the manifest", path)
 		}
 	}
 
