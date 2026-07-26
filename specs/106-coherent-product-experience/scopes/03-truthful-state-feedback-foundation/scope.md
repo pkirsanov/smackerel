@@ -2,7 +2,7 @@
 
 Links: [spec.md](../../spec.md) | [design.md](../../design.md) | [scope index](../_index.md) | [report.md](report.md)
 
-**Status:** Not Started
+**Status:** In Progress
 **Scope-Kind:** runtime-behavior
 **Tags:** foundation:true
 **Depends On:** SCOPE-106-01, SCOPE-106-02
@@ -70,14 +70,14 @@ The state/presentation package and adapters roll back atomically. Rollback never
 
 #### Core Outcomes
 
-- [ ] SCN-106-004 optional state, SCN-106-005 unavailable dependency, and SCN-106-010 mutation feedback remain exact, independent, and owner-derived.
-- [ ] Failure cannot become empty or success; route/flag/health cannot become availability; partial cannot become complete.
+- [x] SCN-106-004 optional state, SCN-106-005 unavailable dependency, and SCN-106-010 mutation feedback remain exact, independent, and owner-derived. → Evidence: [report.md#xp106-03-u](report.md#xp106-03-u)
+- [x] Failure cannot become empty or success; route/flag/health cannot become availability; partial cannot become complete. → Evidence: [report.md#xp106-03-u](report.md#xp106-03-u)
 - [ ] Unified 401 privacy clear, 403 access denial, focus, announcements, pending locks, read-back, and recovery actions behave equivalently across renderers.
 - [ ] Shared-state canaries, privacy checks, and rollback protect every high-fan-out consumer.
 
 #### Test Evidence - 5 Rows / 5 Items
 
-- [ ] XP106-03-U passes with current-session evidence in `report.md#xp106-03-u`.
+- [x] XP106-03-U passes with current-session evidence in `report.md#xp106-03-u`. → Evidence: [report.md#xp106-03-u](report.md#xp106-03-u)
 - [ ] XP106-03-I passes against real owner outcomes in `report.md#xp106-03-i`.
 - [ ] XP106-03-A passes through real routes in `report.md#xp106-03-a`.
 - [ ] XP106-03-W passes without interception in `report.md#xp106-03-w`.
