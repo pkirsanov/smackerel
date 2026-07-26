@@ -2,7 +2,7 @@
 
 Links: [spec.md](../../spec.md) | [design.md](../../design.md) | [scope index](../_index.md) | [report.md](report.md)
 
-**Status:** Not Started
+**Status:** In Progress
 **Scope-Kind:** runtime-behavior
 **Tags:** foundation:true
 **Depends On:** SCOPE-106-01
@@ -61,17 +61,17 @@ The config compiler and route inventory are protected shared surfaces. Canaries 
 #### Core Outcomes
 
 - [ ] `SCN-106-003 Navigation inventories agree`: one required catalog generates equivalent server/PWA labels, order, hierarchy, current paths, exact registered destinations, audience, renderer support, and active state; route-free groups and unproven Work leaves have no guessed href.
-- [ ] Exact consumer inventory and compatibility mapping preserve all current URLs, forms, deep links, hooks, assets, clients, docs, and tests.
-- [ ] Lists, Meals, and Expenses have observed API/browser-route ownership or remain unavailable with null href; no endpoint or parent route is guessed.
+- [x] Exact consumer inventory and compatibility mapping preserve all current URLs, forms, deep links, hooks, assets, clients, docs, and tests. → Evidence: [report.md#xp106-02-c](report.md#xp106-02-c)
+- [x] Lists, Meals, and Expenses have observed API/browser-route ownership or remain unavailable with null href; no endpoint or parent route is guessed. → Evidence: [report.md#xp106-02-u](report.md#xp106-02-u)
 - [ ] Catalog/config canaries and rollback protect current routing without creating a second readiness authority.
 
 #### Test Evidence - 5 Rows / 5 Items
 
-- [ ] XP106-02-U passes with current-session evidence in `report.md#xp106-02-u`.
+- [x] XP106-02-U passes with current-session evidence in `report.md#xp106-02-u`. → Evidence: [report.md#xp106-02-u](report.md#xp106-02-u)
 - [ ] XP106-02-I passes against actual route inventories in `report.md#xp106-02-i`.
 - [ ] XP106-02-A passes through real route/auth behavior in `report.md#xp106-02-a`.
 - [ ] XP106-02-W passes without interception in `report.md#xp106-02-w`.
-- [ ] XP106-02-C passes the complete consumer/stale-reference scan in `report.md#xp106-02-c`.
+- [x] XP106-02-C passes the complete consumer/stale-reference scan in `report.md#xp106-02-c`. → Evidence: [report.md#xp106-02-c](report.md#xp106-02-c)
 
 #### Build Quality Gate
 

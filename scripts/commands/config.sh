@@ -3102,6 +3102,29 @@ chmod 0644 "$PROM_OUT_FILE"
 echo "Generated $PROM_OUT_FILE"
 
 # ─────────────────────────────────────────────────────────────────────
+# Spec 106 SCOPE-106-02 — Product Experience Catalog generation.
+#
+# Extract the `product_experience` block from config/smackerel.yaml (SST) and
+# write the generated, //go:embed-consumed catalog artifact for the
+# internal/experience Go package. The catalog is GENERATED here, never
+# handwritten. This step writes ONLY under internal/experience/ (never
+# config/generated/), so the `check` config-drift guard is unaffected.
+# Fail-loud (SST): a missing/unparseable block aborts generation — no fallback.
+# ─────────────────────────────────────────────────────────────────────
+PE_SCHEMA_JSON="$(yaml_get_json 'product_experience.schema_version')"
+PE_SURFACES_JSON="$(yaml_get_json 'product_experience.surfaces')"
+if [[ -z "$PE_SCHEMA_JSON" || -z "$PE_SURFACES_JSON" ]]; then
+  echo "ERROR: config/smackerel.yaml product_experience.{schema_version,surfaces} missing or unparseable (spec 106 SCOPE-106-02). No fallback." >&2
+  exit 1
+fi
+PE_CATALOG_DIR="$REPO_ROOT/internal/experience"
+PE_CATALOG_FILE="$PE_CATALOG_DIR/catalog.gen.json"
+mkdir -p "$PE_CATALOG_DIR"
+printf '{"schema_version":%s,"surfaces":%s}\n' "$PE_SCHEMA_JSON" "$PE_SURFACES_JSON" >"$PE_CATALOG_FILE"
+chmod 0644 "$PE_CATALOG_FILE"
+echo "Generated $PE_CATALOG_FILE"
+
+# ─────────────────────────────────────────────────────────────────────
 # Build-Once Deploy-Many: emit deterministic config bundle (per bubbles G074)
 #
 # When --bundle is set, package the generated env file + nats.conf into a
