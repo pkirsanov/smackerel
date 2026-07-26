@@ -6,8 +6,8 @@
   "releaseTrain": "mvp",
   "flagsIntroduced": [],
   "status": "blocked",
-  "statusReason": "SCOPE-01 contract-foundation Part 1 unit-verified: fault-registry FOUNDATION (JOURNEY-016/SCN-102-001-12, TP-102-01-07/08) plus the closed E102-JOURNEY-* failure-code registry (TP-102-01-04) and production read-only static guard (TP-102-01-05). Blocked: the live-stack product-journey acceptance execution (SCOPE-02..05) and the SCOPE-01 manifest/policy/result/evidence-schema + reducer + validator remainder (TP-102-01-01/02/03/06, SCN-102-001-07) are deferred and not claimed.",
-  "blockedReason": "Live product-journey ACCEPTANCE execution is off-traffic and LIVE and requires bringing up a deployed candidate plus real Playwright/API observation under Docker; it was deliberately deferred by operator constraint (no Docker stack; unit-only this run). Only the unit-verifiable fault-registry FOUNDATION was implemented: config/acceptance/fault-profiles.v1.yaml + fault-profiles.v1.schema.json and internal/acceptance/fault_profile_registry.go with its two committed unit tests (TP-102-01-07, TP-102-01-08). Unblock path: run the live acceptance rows (SCOPE-02..05) against an off-traffic candidate and complete the SCOPE-01 manifest/policy/result/reducer/validator/read-only-guard remainder (TP-102-01-01..06/SCN-102-001-07). Product dependencies (BUG-070-001, BUG-002-006/007, BUG-073-006, BUG-080-001, BUG-004-004, BUG-039-005, BUG-083-002) and spec 104 Scope 8 remain independent prerequisites.",
+  "statusReason": "SCOPE-01 product-journey contract foundation is fully unit/functional-verified and Done (Part 1 + Part 2): the closed E102-JOURNEY-* failure-code registry (TP-102-01-04), the production read-only static guard (TP-102-01-05), the test-only production-inert fault-profile registry (TP-102-01-07/08), and the versioned manifest/policy/result/evidence contracts + fail-closed reducer + result validator (TP-102-01-01/02/03/06, SCN-102-001-07) all pass. Blocked: the live-stack product-journey acceptance execution (SCOPE-02..05) remains deferred pending an off-traffic candidate stack and the product dependencies.",
+  "blockedReason": "Live product-journey ACCEPTANCE execution is off-traffic and LIVE and requires bringing up a deployed candidate plus real Playwright/API observation under Docker; it was deliberately deferred by operator constraint (no Docker stack; unit/functional-only this run). SCOPE-01 is now fully complete (manifest/policy/result/evidence schemas + reducer + validator + failure registry + read-only guard + fault-profile registry, TP-102-01-01..08). Unblock path: run the live acceptance rows (SCOPE-02..05) against an off-traffic candidate. Product dependencies (BUG-070-001, BUG-002-006/007, BUG-073-006, BUG-080-001, BUG-004-004, BUG-039-005, BUG-083-002) and spec 104 Scope 8 / specs 105/106 remain independent prerequisites.",
   "workflowMode": "bugfix-fastlane",
   "linkedImplementationSpec": null,
   "linkedPlanningPacket": null,
@@ -44,21 +44,21 @@
   "faultProfilePolicy": {"registry":"test-only machine-readable","productionExposure":"forbidden","requiredFields":["stableId","journey","setup","teardown","parallelism","expectedRequest","expectedResponseOrTermination","evidence","noFirstPartyInterception"]},
   "dependencyEvidencePolicy": {"spec104ObservedStatus":"blocked","eligibleEvidence":["completed scopes only","scope-08 bounded Assistant evidence"],"forbiddenClaim":"spec 104 done"},
   "requirementsRecovery": {"reviewId":"2026-07-24-independent-planning-review","status":"analyst_reconciled","addressedFindings":["GRILL-02","GRILL-04","GRILL-05","GRILL-10","SR-012"],"activeRequirementsRef":"spec.md","certificationClaimed":false},
-  "execution": {"activeAgent":"bubbles.implement","currentPhase":"implement","currentScope":1,"runStartedAt":"2026-07-25T00:00:00Z","completedPhaseClaims":[],"pendingTransitionRequests":[],"audit":{"schemaVersion":"audit-run/v1","runId":null,"currentAttemptId":null,"attempts":[]}},
+  "execution": {"activeAgent":"bubbles.implement","currentPhase":"implement","currentScope":1,"runStartedAt":"2026-07-25T00:00:00Z","completedPhaseClaims":[{"phase":"implement","scope":1,"agent":"bubbles.implement","claimedAt":"2026-07-26T04:12:00Z","substate":"implemented","note":"SCOPE-01 contract foundation (manifest/policy/result/reducer/validator/evidence + Part 1 registry/guard/fault-registry) unit/functional-verified; TP-102-01-01..08 pass"}],"pendingTransitionRequests":[],"audit":{"schemaVersion":"audit-run/v1","runId":null,"currentAttemptId":null,"attempts":[]}},
   "certification": {
     "status": "blocked",
-    "completedScopes": [],
+    "completedScopes": ["SCOPE-01"],
     "certifiedCompletedPhases": [],
     "scopeProgress": [
       {
         "scope": 1,
         "scopeId": "SCOPE-01",
         "name": "Product Journey Contract Foundation",
-        "status": "in_progress",
+        "status": "done",
         "dependsOn": [],
         "scopeDir": null,
         "evidenceFile": "report.md",
-        "certifiedAt": null
+        "certifiedAt": "2026-07-26T04:12:00Z"
       },
       {
         "scope": 2,
@@ -170,12 +170,21 @@
       "runStartedAt": "2026-07-26T03:30:00Z",
       "runEndedAt": "2026-07-26T03:33:20Z",
       "summary": "Part 1 of the SCOPE-01 contract foundation (unit-only, NO Docker stack): landed the closed E102-JOURNEY-* FAILURE-CODE REGISTRY (internal/acceptance/failure_registry.go + failure_registry_test.go, TP-102-01-04 / SCN-102-001-07) and the production READ-ONLY STATIC GUARD (internal/acceptance/read_only_guard.go + read_only_guard_test.go, TP-102-01-05 / SCN-102-001-07). The registry maps every design.md closed code to exactly one category and one owner as an immutable map; Validate() fails closed (contract-invalid) on empty/duplicate/ownerless/category-mismatched/owner-mismatched codes, LookupFailure returns not-ok for unknowns, and the closed aggregate-verdict and journey-outcome enums were added. The guard fails closed on unclassified routes, production writes/state-changing selectors, mutating methods, non-session/non-read-compute POST, request interception, credential/cookie injection, direct datastore reads, service-container exec, concrete target literals, and forbidden evidence fields, emitting only closed E102-JOURNEY-CONTRACT-UNSAFE-MUTATION/-EVIDENCE-UNSAFE codes. Verified this session: ./smackerel.sh check (exit 0), ./smackerel.sh lint (go vet silent-clean + ruff + web, LINT_EXIT=0), ./smackerel.sh format --check (all four internal/acceptance files gofmt-clean; only pre-existing/concurrent files flagged), and ./smackerel.sh test unit --go --go-run for the two tests (ok internal/acceptance 0.013s, FINAL_UNIT_EXIT=0, docfreshness filtered to [no tests to run]); the two named canaries were proven RED against a temporarily-neutralized permissive impl and GREEN after full restore. Status kept blocked, certification untouched: the SCOPE-01 manifest/policy/result/evidence schemas + reducer + validator remainder (TP-102-01-01/02/03/06 / SCN-102-001-07) and all SCOPE-02..05 live-stack acceptance remain deferred to Part 2. The concurrent smackerel-test stack was not brought up or touched; no commit, push, or deployment occurred; work left uncommitted for the orchestrator."
+    },
+    {
+      "agent": "bubbles.implement",
+      "phasesExecuted": ["implement"],
+      "statusBefore": "blocked",
+      "statusAfter": "blocked",
+      "runStartedAt": "2026-07-26T03:50:00Z",
+      "runEndedAt": "2026-07-26T04:12:00Z",
+      "summary": "Part 2 of the SCOPE-01 contract foundation (unit/functional only, NO Docker stack): landed the remaining manifest/policy/result/reducer/evidence contract layer in internal/acceptance/, CONSUMING the Part 1 failure_registry.go + read_only_guard.go without modifying them. New source: manifest.go (ProductJourneyManifest + CompiledAcceptancePolicy + fail-closed Compile emitting closed E102-JOURNEY-CONTRACT-* codes on missing journey/dependency/assertion, implicit requiredness, unknown/duplicate/mismatched enum or code, unresolvable timeout/freshness ref, health-only success, or production-unsafe field via the reused read_only_guard ScanProductionSurface), product_journeys.go (the Go-literal SST manifest + DefaultPolicyConfig covering all 14 journey groups and every DefaultRouteSideEffectRegistry route authority), result_validator.go (AcceptanceResultValidator.Validate rejecting missing/malformed/incomplete/duplicated/stale/unsafe/unsupported/release-mismatched envelopes as contract-invalid with one closed code, reconciling aggregate counts), verdict_reducer.go (VerdictReducer.Reduce honoring allowed-empty/quiet/optional/degraded ONLY by an exact compiled policy rule; absent/ambiguous policy and health-only/not-evaluated required journeys fail closed to contract-invalid/rejected, never accepted), and evidence.go (EvidenceSanitizer.Sanitize producing content-free entries and rejecting an unsafe field name or target-literal value without echoing it). New tests: manifest_test.go (TP-102-01-01, 13 adversarial canaries), result_validator_test.go (TP-102-01-02, 16 canaries), verdict_reducer_test.go (TP-102-01-03, allowed-* exact-policy + absent-policy + health-only + blocked-prereq canaries), manifest_coverage_test.go (TP-102-01-06, functional group+route coverage with remove-a-group red canary). Verified this session: ./smackerel.sh check (CHECK_EXIT=0), ./smackerel.sh lint (All checks passed! / Web validation passed, LINT_EXIT=0), host gofmt -l on the 9 new files (clean, GOFMT_CLEAN_EXIT=0), ./smackerel.sh test unit --go --go-run for the four named tests (ok internal/acceptance 0.035s, UNIT_GO_RUN_EXIT=0; under --go-run internal/docfreshness is [no tests to run], so the orthogonal concurrently-locked docs/Development.md doc-freshness failure of the unfiltered run does not occur), and an env-literal scan of the 9 new files (MY_FILES_CLEAN_NO_ENV_LITERALS). SCOPE-01 is now Done (TP-102-01-01..08 all pass); scopeProgress[0]=done, completedScopes=[1]. Top-level status and certification.status remain blocked: SCOPE-02..05 need a live off-traffic candidate stack plus the product dependencies (BUG-070-001, BUG-002-006/007, BUG-073-006, BUG-080-001, BUG-004-004, BUG-039-005, BUG-083-002) and spec 104 Scope 8 / specs 105/106. No Docker stack was brought up; no concurrent-locked path (docs/Development.md, internal/web|experience|whatsapp|proactive, tests/integration|e2e, web/pwa, specs/079|106|107) was touched; nothing was committed, pushed, or deployed."
     }
   ],
   "activeBugs": [],
   "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-07-26T03:33:20Z",
+  "lastUpdatedAt": "2026-07-26T04:12:00Z",
   "scopeLayout": "single-file",
   "artifacts": {"bug":"bug.md","spec":"spec.md","design":"design.md","scopes":"scopes.md","report":"report.md","uservalidation":"uservalidation.md","scenarioManifest":"scenario-manifest.json","testPlan":"test-plan.json"},
   "statusDiscipline": {"validStatuses":["not_started","in_progress","blocked","specs_hardened","docs_updated","validated","done"],"scopePickupRule":"All dependsOn scopes must be Done. Pick the lowest-numbered eligible scope.","scopeDoneGates":["G020","G021","G022","G023","G024","G025","G055","G056","G057","G058","G059","G060","G061"],"specDoneRequires":"All scopes done and validate-owned certification permits promotion."},

@@ -61,7 +61,7 @@ flowchart LR
 
 | Scope | Primary Outcome | Required External Evidence | Status |
 |---|---|---|---|
-| SCOPE-01 | Product-owned manifest/result/policy/failure foundation | None | In Progress (fault-registry + closed E102 failure-code registry + production read-only guard unit-verified; manifest/policy/result/evidence schemas + reducer + validator remainder and live acceptance deferred) |
+| SCOPE-01 | Product-owned manifest/result/policy/failure foundation | None | Done (fault-registry + closed E102 failure-code registry + production read-only guard + manifest/policy/result/evidence schemas + reducer + validator all unit/functional-verified — TP-102-01-01..08 pass) |
 | SCOPE-02 | Production-readonly runner and real session | BUG-070-001 | Not Started |
 | SCOPE-03 | Search, Digest, Assistant, Wiki/Graph, Knowledge | BUG-002-006, BUG-002-007, BUG-073-006, BUG-080-001, spec 104 SCOPE-08, specs 105/106 where applicable | Not Started |
 | SCOPE-04 | Cards, Recommendations, Notifications, Photos/Drive, Models, Synthesis, Status/Health | BUG-083-002, BUG-039-005, BUG-004-004, spec 106 where applicable | Not Started |
@@ -80,7 +80,7 @@ flowchart LR
 
 ## Scope 01: Product Journey Contract Foundation
 
-**Status:** In Progress  
+**Status:** Done  
 **Priority:** P0  
 **Scope-Kind:** contract-only  
 **Foundation:** true  
@@ -143,26 +143,26 @@ Scenario: SCN-102-001-12 Fault profiles are disposable and production-inert
 
 #### Core Outcomes
 
-- [ ] `SCN-102-001-07 Contract mismatch fails closed`: missing, malformed, incomplete, duplicated, stale, unsafe, unsupported, or release-mismatched results become `contract-invalid` with one closed code and no tolerated row; an allowed true-empty, quiet, optional-unconfigured, or degraded outcome is produced only by an exact compiled policy rule, and absent or ambiguous policy fails closed.
+- [x] `SCN-102-001-07 Contract mismatch fails closed`: missing, malformed, incomplete, duplicated, stale, unsafe, unsupported, or release-mismatched results become `contract-invalid` with one closed code and no tolerated row; an allowed true-empty, quiet, optional-unconfigured, or degraded outcome is produced only by an exact compiled policy rule, and absent or ambiguous policy fails closed. → Evidence: [report.md](report.md) (SCOPE-01 Part 2 — result_validator_test.go TP-102-01-02 + verdict_reducer_test.go TP-102-01-03; `ok internal/acceptance 0.035s`, UNIT_GO_RUN_EXIT=0)
 - [x] `SCN-102-001-12 Fault profiles are disposable and production-inert`: the test-only machine-readable fault-profile registry is accepted only when every profile declares stable ID, owning journey, setup, teardown, parallelism/isolation, expected request, expected response or termination, permitted evidence, and no-first-party-interception, and production routes, configuration, requests, and UI expose no fault selector or trigger. → Evidence: [report.md](report.md) (unit — internal/acceptance/fault_profile_registry_test.go + fault_profile_production_inert_test.go; `ok internal/acceptance 0.199s`, UNIT_EXIT=0)
-- [ ] Versioned manifest/policy/result/evidence contracts cover every required journey and all closed states/codes without defaults.
-- [ ] Reducer and validator fail closed on every contract, safety, privacy, dependency, freshness, and count inconsistency.
-- [ ] Static guard (including the production-inert fault guard), Change Boundary, independent canaries, and pre-consumer rollback are complete.
+- [x] Versioned manifest/policy/result/evidence contracts cover every required journey and all closed states/codes without defaults. → Evidence: [report.md](report.md) (SCOPE-01 Part 2 — manifest.go/product_journeys.go/result_validator.go/evidence.go; manifest_coverage_test.go TP-102-01-06 covers all 14 groups + every route authority)
+- [x] Reducer and validator fail closed on every contract, safety, privacy, dependency, freshness, and count inconsistency. → Evidence: [report.md](report.md) (SCOPE-01 Part 2 — verdict_reducer_test.go TP-102-01-03 + result_validator_test.go TP-102-01-02 adversarial canaries)
+- [x] Static guard (including the production-inert fault guard), Change Boundary, independent canaries, and pre-consumer rollback are complete. → Evidence: [report.md](report.md) (SCOPE-01 Part 2 — Compile reuses the Part 1 ScanProductionSurface guard; manifest_test.go TP-102-01-01 mutating-selector + unsafe-evidence canaries; fault guard proven by Part 1 TP-102-01-07/08; additive rollback per Change Boundary)
 
 #### Test Evidence Parity
 
-- [ ] TP-102-01-01 passes with current-session evidence in report.md.
-- [ ] TP-102-01-02 passes with current-session evidence in report.md.
-- [ ] TP-102-01-03 passes with current-session evidence in report.md.
+- [x] TP-102-01-01 passes with current-session evidence in report.md. → Evidence: [report.md](report.md) (unit — TestManifestRequiresEveryDeclaredJourneyDependencyAndAssertion)
+- [x] TP-102-01-02 passes with current-session evidence in report.md. → Evidence: [report.md](report.md) (unit — TestResultValidatorRejectsMissingDuplicateUnknownAndMismatchedRows)
+- [x] TP-102-01-03 passes with current-session evidence in report.md. → Evidence: [report.md](report.md) (unit — TestAllowedEmptyQuietOptionalAndDegradedRequireExactPolicy)
 - [x] TP-102-01-04 passes with current-session evidence in report.md. → Evidence: [report.md](report.md) (unit — TestEveryFailureCodeHasOneCategoryAndOwner)
 - [x] TP-102-01-05 passes with current-session evidence in report.md. → Evidence: [report.md](report.md) (unit — TestProductionManifestRejectsWritesInterceptionInjectionAndTargetLiterals)
-- [ ] TP-102-01-06 passes with current-session evidence in report.md.
+- [x] TP-102-01-06 passes with current-session evidence in report.md. → Evidence: [report.md](report.md) (functional — TestManifestCoversAllProductJourneyGroupsAndRouteAuthorities)
 - [x] TP-102-01-07 passes with current-session evidence in report.md. → Evidence: [report.md](report.md) (unit — TestFaultProfileRegistryRequiresEveryDeclaredFieldAndRejectsFirstPartyInterception)
 - [x] TP-102-01-08 passes with current-session evidence in report.md. → Evidence: [report.md](report.md) (unit — TestProductionRoutesConfigRequestsAndUIExposeNoFaultSelectorOrTrigger)
 
 #### Build Quality Gate
 
-- [ ] Scope-owned check/lint/format, schema/registry consistency, artifact lint, traceability, source-locking, target-generic/privacy scans, zero-warning, and zero-deferral checks pass.
+- [x] Scope-owned check/lint/format, schema/registry consistency, artifact lint, traceability, source-locking, target-generic/privacy scans, zero-warning, and zero-deferral checks pass. → Evidence: [report.md](report.md) (SCOPE-01 Part 2 — `./smackerel.sh check` CHECK_EXIT=0, `./smackerel.sh lint` LINT_EXIT=0 "All checks passed!"/"Web validation passed", gofmt GOFMT_CLEAN_EXIT=0, env-literal scan MY_FILES_CLEAN_NO_ENV_LITERALS, 4-test run UNIT_GO_RUN_EXIT=0)
 
 ## Scope 02: Production-Readonly Runner And Real Session
 
