@@ -375,3 +375,169 @@ Raw excerpt (header + scenario-manifest cross-check + SCOPE-01 evidence referenc
 RESULT: PASSED (0 warnings)
 TRACEABILITY_GUARD_EXIT=0
 ```
+
+## Atomic Route-Manifest Closure + Deferred-Row Disposition (bubbles.implement, 2026-07-27)
+
+**Phase:** implement
+**Claim Source (T080-02-MANIFEST):** executed this session — `./smackerel.sh test integration-light --go-run 'TestGraphRouteManifestRegistersAllFamiliesAtomically'` ran green against the disposable stack's REAL PostgreSQL; stack torn down clean afterward.
+
+This session closes SCOPE-01's atomic route-manifest row and its dependent Core
+Outcome, and precisely characterizes why the remaining three e2e-api rows stay
+`[ ]` (a harness limitation outside SCOPE-01's change boundary).
+
+### Genuine defect found + fixed in-boundary (design gap SCN-080-001-02)
+
+design.md ("Atomic Wiring And Route Registration" / `F080-ROUTE-MANIFEST-INCOMPLETE`)
+requires a canonical route registrar that "validates this complete manifest
+before calling Chi" so that "removing any descriptor fails construction". The
+shipped code had NO such manifest — `internal/api/router.go` hardcoded the eight
+graph routes, so a dropped route would silently mount a **seven-route subset**
+(the exact silent-absence class this bug fix exists to eliminate). That is why
+SCN-080-001-02's manifest-tamper clause had no proving test and stayed `[ ]`.
+
+Closed in-boundary (SCOPE-01 Change Boundary allows `internal/api/graphapi/**`
+and router registration):
+
+- **`internal/api/graphapi/manifest.go`** (new) — `CanonicalGraphRouteManifest()`
+  (the eight design.md families, each `GET` + `knowledge-graph:read`),
+  `ValidateGraphRouteManifest(entries)` (rejects a missing/duplicated/unknown
+  family, non-GET method, empty path, or wrong scope with the typed, value-safe
+  `F080-ROUTE-MANIFEST-INCOMPLETE` error naming only the family + route contract
+  — never secret material), and `MustValidateGraphRouteManifest()`.
+- **`internal/api/router.go`** — one added call, `graphapi.MustValidateGraphRouteManifest()`,
+  BEFORE the graph group registers, so an incomplete/duplicated canonical
+  manifest REJECTS router construction (fail-loud panic) rather than mounting a
+  subset. The existing (proven) route registration is unchanged — no regression
+  to T080-01-PROC.
+
+### T080-02-MANIFEST
+
+`tests/integration/graphapi/route_manifest_test.go` (new, `//go:build integration`) —
+`TestGraphRouteManifestRegistersAllFamiliesAtomically`, built on the REAL
+production router (`internal/api.NewRouter`), a real loopback server (`httptest`),
+and the disposable stack's real PostgreSQL (`DATABASE_URL`). No interception, no
+mock, no stub. Proves both SCN-080-001-02 clauses: (1) all eight families mount
+as ONE authenticated group (chi.Walk equivalence + unauthed→401 / authed→served);
+(2) removing OR duplicating any manifest entry rejects construction (adversarial
+red→green vs the old silent-subset behavior).
+
+**Command:** `./smackerel.sh test integration-light --go-run 'TestGraphRouteManifestRegistersAllFamiliesAtomically'`
+**Exit Code:** 0 (`INTEGRATION_LIGHT_EXIT=0`) — stores-only lane (postgres+nats); this test needs only PostgreSQL (in-process production router), so the light lane is the correct integration surface.
+
+```text
+=== RUN   TestGraphRouteManifestRegistersAllFamiliesAtomically
+=== RUN   TestGraphRouteManifestRegistersAllFamiliesAtomically/canonical_manifest_is_complete_and_router_validates
+    route_manifest_test.go:129: manifest entry: GET    /api/topics/         family=topics scope=knowledge-graph:read
+    route_manifest_test.go:129: manifest entry: GET    /api/topics/{id}     family=topic_detail scope=knowledge-graph:read
+    route_manifest_test.go:129: manifest entry: GET    /api/people/         family=people scope=knowledge-graph:read
+    route_manifest_test.go:129: manifest entry: GET    /api/people/{id}     family=person_detail scope=knowledge-graph:read
+    route_manifest_test.go:129: manifest entry: GET    /api/places/         family=places scope=knowledge-graph:read
+    route_manifest_test.go:129: manifest entry: GET    /api/places/{id}     family=place_detail scope=knowledge-graph:read
+    route_manifest_test.go:129: manifest entry: GET    /api/time            family=time scope=knowledge-graph:read
+    route_manifest_test.go:129: manifest entry: GET    /api/graph/edges     family=edges scope=knowledge-graph:read
+=== RUN   TestGraphRouteManifestRegistersAllFamiliesAtomically/removing_any_manifest_entry_rejects_construction
+    route_manifest_test.go:155: remove topics       -> REJECTED: [F080-ROUTE-MANIFEST-INCOMPLETE] required family "topics" is absent; the manifest MUST mount all 8 families atomically, never a subset
+    route_manifest_test.go:155: remove topic_detail -> REJECTED: [F080-ROUTE-MANIFEST-INCOMPLETE] required family "topic_detail" is absent; the manifest MUST mount all 8 families atomically, never a subset
+    route_manifest_test.go:155: remove people       -> REJECTED: [F080-ROUTE-MANIFEST-INCOMPLETE] required family "people" is absent; the manifest MUST mount all 8 families atomically, never a subset
+    route_manifest_test.go:155: remove person_detail -> REJECTED: [F080-ROUTE-MANIFEST-INCOMPLETE] required family "person_detail" is absent; the manifest MUST mount all 8 families atomically, never a subset
+    route_manifest_test.go:155: remove places       -> REJECTED: [F080-ROUTE-MANIFEST-INCOMPLETE] required family "places" is absent; the manifest MUST mount all 8 families atomically, never a subset
+    route_manifest_test.go:155: remove place_detail -> REJECTED: [F080-ROUTE-MANIFEST-INCOMPLETE] required family "place_detail" is absent; the manifest MUST mount all 8 families atomically, never a subset
+    route_manifest_test.go:155: remove time         -> REJECTED: [F080-ROUTE-MANIFEST-INCOMPLETE] required family "time" is absent; the manifest MUST mount all 8 families atomically, never a subset
+    route_manifest_test.go:155: remove edges        -> REJECTED: [F080-ROUTE-MANIFEST-INCOMPLETE] required family "edges" is absent; the manifest MUST mount all 8 families atomically, never a subset
+=== RUN   TestGraphRouteManifestRegistersAllFamiliesAtomically/duplicating_any_manifest_entry_rejects_construction
+    route_manifest_test.go:175: duplicate topics       -> REJECTED: [F080-ROUTE-MANIFEST-INCOMPLETE] family "topics" is registered 2 times; each required family MUST appear exactly once
+    route_manifest_test.go:175: duplicate topic_detail -> REJECTED: [F080-ROUTE-MANIFEST-INCOMPLETE] family "topic_detail" is registered 2 times; each required family MUST appear exactly once
+    route_manifest_test.go:175: duplicate edges        -> REJECTED: [F080-ROUTE-MANIFEST-INCOMPLETE] family "edges" is registered 2 times; each required family MUST appear exactly once
+=== RUN   TestGraphRouteManifestRegistersAllFamiliesAtomically/disabled_router_mounts_all_eight_present
+    route_manifest_test.go:187: DISABLED router mounted graph routes:
+          GET /api/graph/edges
+          GET /api/people/
+          GET /api/people/{id}
+          GET /api/places/
+          GET /api/places/{id}
+          GET /api/time
+          GET /api/topics/
+          GET /api/topics/{id}
+=== RUN   TestGraphRouteManifestRegistersAllFamiliesAtomically/enabled_router_mounts_all_eight_as_one_authenticated_group
+    route_manifest_test.go:262: ENABLED router mounted graph routes:
+          GET /api/graph/edges
+          GET /api/people/
+          GET /api/people/{id}
+          GET /api/places/
+          GET /api/places/{id}
+          GET /api/time
+          GET /api/topics/
+          GET /api/topics/{id}
+    route_manifest_test.go:283: unauthed GET /api/topics                                 -> 401 (behind bearer)
+    route_manifest_test.go:302: authed   GET /api/topics                                 -> 200 application/json; charset=utf-8
+    route_manifest_test.go:283: unauthed GET /api/topics/bug080-manifest-nonexistent     -> 401 (behind bearer)
+    route_manifest_test.go:302: authed   GET /api/topics/bug080-manifest-nonexistent     -> 404 application/json; charset=utf-8
+    route_manifest_test.go:283: unauthed GET /api/people                                 -> 401 (behind bearer)
+    route_manifest_test.go:302: authed   GET /api/people                                 -> 200 application/json; charset=utf-8
+    route_manifest_test.go:283: unauthed GET /api/graph/edges                            -> 401 (behind bearer)
+    route_manifest_test.go:302: authed   GET /api/graph/edges                            -> 200 application/json; charset=utf-8
+    route_manifest_test.go:322: authed   GET /api/topics?limit=50 -> 200, seeded topic bug080-manifest-20260727170415.762772-topic-0 present (live PostgreSQL)
+--- PASS: TestGraphRouteManifestRegistersAllFamiliesAtomically (0.09s)
+    --- PASS: TestGraphRouteManifestRegistersAllFamiliesAtomically/canonical_manifest_is_complete_and_router_validates (0.00s)
+    --- PASS: TestGraphRouteManifestRegistersAllFamiliesAtomically/removing_any_manifest_entry_rejects_construction (0.00s)
+    --- PASS: TestGraphRouteManifestRegistersAllFamiliesAtomically/duplicating_any_manifest_entry_rejects_construction (0.00s)
+    --- PASS: TestGraphRouteManifestRegistersAllFamiliesAtomically/disabled_router_mounts_all_eight_present (0.00s)
+    --- PASS: TestGraphRouteManifestRegistersAllFamiliesAtomically/enabled_router_mounts_all_eight_as_one_authenticated_group (0.09s)
+PASS
+ok      github.com/smackerel/smackerel/tests/integration/graphapi       0.231s
+INTEGRATION_LIGHT_EXIT=0
+```
+
+(The duplicate-rejection block above is a 3-of-8 excerpt; the run rejected all
+eight one-entry duplications with the identical `…registered 2 times…` typed
+error. The enabled auth-group block is a 4-of-8 excerpt; the run drove all eight
+family paths — every one unauthed→401, authed→served JSON — see the full raw
+terminal capture from this session.)
+
+### Quality gates (this session)
+
+- `./smackerel.sh check` → exit 0 (config-validate + scenario-lint OK).
+- `./smackerel.sh lint` → exit 0 (`All checks passed!` — Go/golangci + ruff + web manifests; includes the new `manifest.go` + `router.go`).
+- `bash .github/bubbles/scripts/pii-scan.sh` → exit 0 (`no leaks found` / `pii-scan: clean.`).
+- `gofmt -l internal/api/graphapi/manifest.go internal/api/router.go tests/integration/graphapi/route_manifest_test.go` → empty (my three files are gofmt-clean).
+- `./smackerel.sh format --check` → exit 1, flagging ONLY `internal/assistant/facade.go` — a **pre-existing, committed, foreign** file (git-committed 2026-07-27 06:24 under "BUG-069-005 assistant intent-compiler fixes (in_progress — dedicated to late completion)"), OUTSIDE SCOPE-01's change boundary. It is not this session's regression and was deliberately NOT touched (artifact ownership + bounded-slice discipline). Recorded as an out-of-boundary pre-existing finding, not a SCOPE-01 defect.
+
+### DoD rows closed this session
+
+- **Core Outcome SCN-080-001-02** → `[x]` (T080-02-MANIFEST: all eight families mount as one authenticated group; remove/duplicate rejects construction).
+- **Test Evidence T080-02-MANIFEST** → `[x]` (live integration, evidence above).
+
+### Still deferred — e2e-api rows (HARNESS LIMITATION, owner: bubbles.devops)
+
+The three SCOPE-01 e2e-api rows in `tests/e2e/graph_api_activation_e2e_test.go`
+stay `[ ]`. They were NOT faked. Root cause, verified this session:
+
+- **T080-01-DISABLED** and **T080-02-ADVERSARIAL** both require the running
+  `smackerel-core` container in the **DISABLED** activation state (cursor-secret
+  enabler empty/missing) so a true-container e2e can prove `503 capability_disabled`
+  (and, for the adversarial, `503`-not-`404` vs the old behavior). The e2e stack
+  ALWAYS boots ENABLED: `config/generated/test.env` sets `KNOWLEDGE_GRAPH_API_CURSOR_SECRET`
+  non-empty (line 195), and `docker-compose.yml` sources it from `env_file` with
+  no per-run override (the core `environment:` block does not touch it). A
+  disabled-mode running stack needs a NEW compose flavor / `./smackerel.sh test e2e`
+  enabled+disabled split — a harness/compose change OUTSIDE SCOPE-01's Change
+  Boundary (which lists `config/smackerel.yaml`, `internal/config/**`,
+  `internal/api/graphapi/**`, router registration, and the named tests — NOT
+  `docker-compose*.yml` or `smackerel.sh`). The DISABLED behavior IS already
+  live-proven at the integration tier (T080-01-PROC, `[x]`), and value-safe
+  disabled diagnostics are unit-proven (T080-01-UNIT, `[x]`).
+- **T080-07-SECURITY** needs to assert the cursor-secret value never appears in
+  activation output surfaced via the API. The e2e go-test runner is only given
+  `DATABASE_URL` / `SMACKEREL_AUTH_TOKEN` / `CORE_EXTERNAL_URL` (smackerel.sh e2e
+  lane `-e` passthrough), NOT `KNOWLEDGE_GRAPH_API_CURSOR_SECRET`, so the test
+  process has no secret value to assert-absent; and activation emits only
+  container-local `slog` (value-safe) with no HTTP-surfaced activation-status
+  endpoint yet (that projection is a SCOPE-03 deferred row). A strong live
+  enabled-stack value-safe assertion is therefore not achievable without harness
+  support; the value-safety of activation diagnostics is unit-proven
+  (SCN-080-001-07, `[x]`).
+
+Because these three rows remain open, the SCOPE-01 **Build Quality Gate** row
+also stays `[ ]` (it requires all scope-specific E2E regressions to pass), and
+SCOPE-01 stays **In Progress**. The BUG top-level `state.json` status stays
+`blocked` (SCOPE-02/03/04 remain deferred).
