@@ -28,9 +28,9 @@
   "requiresRevalidation": false,
   "execution": {
     "activeAgent": "bubbles.analyst",
-    "currentPhase": "harden",
+    "currentPhase": "analyze",
     "currentScope": null,
-    "runStartedAt": "2026-06-03T12:00:00Z",
+    "runStartedAt": "2026-07-23T08:13:15Z",
     "completedPhaseClaims": [
       {
         "phase": "analyze",
@@ -43,6 +43,13 @@
         "agent": "bubbles.analyst",
         "completedAt": "2026-06-03T12:00:00Z",
         "summary": "Design hardening completed via principle-derived autonomous ratification (7 safety dimensions + 5 open design questions resolved in uservalidation.md). Authority: product-principles.instructions.md, copilot-instructions.md deployment ownership clauses, smackerel-no-defaults, bubbles-deployment-target-adapter, bubbles-env-pollution-isolation, bubbles-upkeep-operations, bubbles-backup-bcdr-doctrine, knb sibling repo concrete pattern."
+      },
+      {
+        "phase": "analyze",
+        "agent": "bubbles.analyst",
+        "completedAt": "2026-07-23T08:16:08Z",
+        "evidenceRef": "spec.md#production-processing-signal-contract-2026-07-23-review-reconciliation",
+        "summary": "Reconciled the measured processing-health finding into the existing supervisor packet: historical 12k failed/507 pending debt is separate from current 131 provider errors/2 timeouts; added deduplicated active-anomaly, recovery, privacy, and no-alert-noise requirements plus SCN-079-A07..A09."
       }
     ],
     "pendingTransitionRequests": []
@@ -88,6 +95,15 @@
       "runStartedAt": "2026-06-03T12:00:00Z",
       "runEndedAt": "2026-06-03T12:00:00Z",
       "summary": "Principle-derived autonomous ratification per operator dispatch 'resolve spec 79 based on project/bubbles design/env principles'. Filled all 7 safety-dimension checkboxes and all 5 open design questions in uservalidation.md by deriving answers from product-principles.instructions.md (P1-P10), copilot-instructions.md (Deployment Ownership Boundary, No Env-Specific Content, Build-Once Deploy-Many, Tailnet-Edge Bind Pattern), smackerel-no-defaults.instructions.md, bubbles-deployment-target-adapter.instructions.md, bubbles-env-pollution-isolation.instructions.md, bubbles-upkeep-operations.instructions.md, bubbles-backup-bcdr-doctrine SKILL, and the knb sibling repo concrete deploy-adapter pattern (sops+age secrets at smackerel/secrets/<env>.enc.env). Updated spec.md §11 framing line. Appended report.md ratification section. Transitioned status in_progress -> specs_hardened (terminal-for-mode for spec-scope-hardening). No foreign-artifact mutations; only touched specs/079-* files."
+    },
+    {
+      "agent": "bubbles.analyst",
+      "phasesExecuted": ["analyze"],
+      "statusBefore": "specs_hardened",
+      "statusAfter": "specs_hardened",
+      "runStartedAt": "2026-07-23T08:13:15Z",
+      "runEndedAt": "2026-07-23T08:16:08Z",
+      "summary": "Reconciled analyst-owned production-processing health requirements only. No design, scope, report, user validation, certification, source, test, commit, push, deployment, or knb file was changed; downstream design/plan/validation reconciliation is route-required."
     }
   ]
 }

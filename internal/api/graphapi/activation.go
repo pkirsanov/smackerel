@@ -53,11 +53,11 @@ const (
 	CodeActivationOK = "OK"
 	// CodeCursorSecretEmpty marks the DISABLED activation reached when
 	// the named cursor-secret env var resolves to an empty value.
-	CodeCursorSecretEmpty = "F080-CURSOR-SECRET-EMPTY"  //gitleaks:allow
+	CodeCursorSecretEmpty = "F080-CURSOR-SECRET-EMPTY" //gitleaks:allow
 	// CodeCursorSecretMissing marks the DISABLED activation reached
 	// when the cursor-secret indirection is unset (no env name, or the
 	// named env var is absent).
-	CodeCursorSecretMissing = "F080-CURSOR-SECRET-MISSING"  //gitleaks:allow
+	CodeCursorSecretMissing = "F080-CURSOR-SECRET-MISSING" //gitleaks:allow
 )
 
 // ErrCapabilityDisabled is the canonical typed response for the
