@@ -17,12 +17,12 @@ Detection is limited to these MECHANICAL surfaces. A gate with none of them may 
 
 ## Coverage Summary
 
-- Gates defined: **110**
+- Gates defined: **112**
 - Referenced by ≥1 workflow mode: **65**
-- Not referenced by any mode: **45**
-  - of those, enforced by state-transition-guard: **33**
-  - of those, enforced by a framework-validate script: **36**
-  - of those, enforced in CI: **33**
+- Not referenced by any mode: **47**
+  - of those, enforced by state-transition-guard: **35**
+  - of those, enforced by a framework-validate script: **38**
+  - of those, enforced in CI: **35**
 - Gates with NO detected MECHANICAL surface (may be agent-behavior-enforced; REVIEW): **5** — G038, G066, G071, G078, G079
 
 ## All Gates
@@ -48,14 +48,14 @@ Detection is limited to these MECHANICAL surfaces. A gate with none of them may 
 | G018 | dod_completion_gate | 22 | — | — | — |
 | G019 | sequential_spec_completion_gate | 25 | — | — | — |
 | G020 | cross_agent_verification_gate | 25 | — | 1 | — |
-| G021 | anti_fabrication_gate | 25 | Check 20 | 3 | guard |
-| G022 | specialist_completion_gate | 25 | Check 6B | 3 | guard |
+| G021 | anti_fabrication_gate | 25 | Check 20 | 4 | guard |
+| G022 | specialist_completion_gate | 25 | Check 6B | 5 | guard |
 | G023 | state_transition_guard_gate | 25 | — | — | — |
 | G024 | all_scopes_done_before_spec_done_gate | 25 | ref | 3 | guard |
 | G025 | per_dod_item_raw_evidence_gate | 25 | — | 2 | — |
 | G026 | sla_stress_coverage_gate | 22 | ref | — | guard |
 | G027 | phase_scope_coherence_gate | 25 | Check 15 | 1 | guard |
-| G028 | implementation_reality_scan_gate | 23 | Check 16 | 4 | guard |
+| G028 | implementation_reality_scan_gate | 23 | Check 16 | 5 | guard |
 | G029 | integration_completeness_gate | 23 | — | 2 | — |
 | G031 | findings_artifact_update_gate | 9 | — | 1 | — |
 | G032 | business_analysis_gate | 4 | — | — | — |
@@ -65,11 +65,11 @@ Detection is limited to these MECHANICAL surfaces. A gate with none of them may 
 | G036 | red_green_traceability_gate | 2 | — | — | — |
 | G037 | scope_size_discipline_gate | 0 | — | 1 | — |
 | G038 | failure_recovery_containment_gate | 0 | — | — | — |
-| G040 | incomplete_work_language_gate | 25 | Check 18 | 4 | guard |
+| G040 | incomplete_work_language_gate | 25 | Check 18 | 5 | guard |
 | G041 | dod_format_integrity_gate | 0 | Check 4A, Check 4B | 2 | guard |
 | G042 | artifact_ownership_enforcement_gate | 0 | Check 3G | 1 | guard |
 | G043 | consumer_trace_gate | 0 | ref | 2 | guard |
-| G044 | comprehensive_regression_gate | 25 | — | 7 | — |
+| G044 | comprehensive_regression_gate | 25 | — | 8 | — |
 | G047 | idor_auth_bypass_gate | 25 | — | 2 | — |
 | G048 | silent_decode_failure_gate | 25 | — | 2 | — |
 | G051 | test_env_dependency_gate | 25 | Check 19 | 2 | guard |
@@ -86,11 +86,11 @@ Detection is limited to these MECHANICAL surfaces. A gate with none of them may 
 | G064 | workflow_runner_authorization_gate | 0 | Check 3H | 6 | guard |
 | G066 | phase_claim_provenance_gate | 0 | — | — | — |
 | G067 | shared_infrastructure_blast_radius_gate | 0 | ref | 1 | guard |
-| G068 | dod_gherkin_content_fidelity_gate | 0 | Check 22 | 6 | guard |
+| G068 | dod_gherkin_content_fidelity_gate | 0 | Check 22 | 7 | guard |
 | G069 | collateral_change_containment_gate | 0 | ref | 1 | guard |
 | G070 | outcome_contract_gate | 0 | — | 1 | — |
 | G071 | execution_only_validation_gate | 0 | — | — | — |
-| G072 | evidence_provenance_gate | 0 | Check 40 | 3 | guard |
+| G072 | evidence_provenance_gate | 0 | Check 40 | 4 | guard |
 | G073 | planning_only_source_edit_lockout_gate | 30 | Check 3B | 6 | guard |
 | G074 | workflow_mode_consistency_gate | 3 | ref | — | guard |
 | G075 | scope_index_parity_gate | 0 | ref | — | guard |
@@ -114,7 +114,7 @@ Detection is limited to these MECHANICAL surfaces. A gate with none of them may 
 | G093 | delivery_implementation_delta_gate | 0 | Check 29B | 3 | guard |
 | G094 | capability_foundation_gate | 0 | Check 34 | 5 | guard |
 | G095 | discovered_issue_disposition_gate | 0 | Check 35 | 6 | guard |
-| G097 | requirement_mechanism_correspondence_gate | 0 | Check 36 | 6 | guard |
+| G097 | requirement_mechanism_correspondence_gate | 0 | Check 36 | 7 | guard |
 | G098 | observability_posture_declared_gate | 0 | Check 37 | 7 | guard |
 | G099 | observability_opt_out_freshness_gate | 0 | Check 38 | 9 | guard |
 | G100 | observability_slo_evidence_gate | 0 | Check 39 | 5 | guard |
@@ -139,6 +139,8 @@ Detection is limited to these MECHANICAL surfaces. A gate with none of them may 
 | G127 | capability_consumer_freshness_gate | 0 | — | 4 | — |
 | G128 | session_cap_enforcement_gate | 0 | Check 40 | 7 | guard |
 | G129 | repository_binding_classification_discovery_conformance_gate | 0 | — | 1 | — |
+| G130 | domain_invariant_correspondence_gate | 0 | Check 41 | 4 | guard |
+| G131 | domain_model_consistency_gate | 0 | Check 42 | 3 | guard |
 
 ## Gates Not Referenced By Any Mode
 
@@ -157,11 +159,11 @@ These gates are intentionally enforced OUTSIDE the mode `requiredGates` lists. E
 | G064 | workflow_runner_authorization_gate | Check 3H | 6 | guard | agent-ownership-lint.sh, framework-validate.sh, scenario-compile-lint-selftest.sh, scenario-compile-lint.sh, state-transition-guard-selftest.sh, workflow-runner-grants-lint.sh |
 | G066 | phase_claim_provenance_gate | — | — | — | — |
 | G067 | shared_infrastructure_blast_radius_gate | ref | 1 | guard | imp021-interaction-contracts-selftest.sh |
-| G068 | dod_gherkin_content_fidelity_gate | Check 22 | 6 | guard | audit-result-contract-lint-selftest.sh, capability-freshness-selftest.sh, dod-section-lib.sh, evidence-admission-hardening-selftest.sh, state-transition-guard-selftest.sh, traceability-guard.sh |
+| G068 | dod_gherkin_content_fidelity_gate | Check 22 | 7 | guard | audit-result-contract-lint-selftest.sh, capability-freshness-selftest.sh, dod-section-lib.sh, evidence-admission-hardening-selftest.sh, state-transition-guard-selftest.sh, state-transition-required-specialists-selftest.sh, +1 more |
 | G069 | collateral_change_containment_gate | ref | 1 | guard | imp021-interaction-contracts-selftest.sh |
 | G070 | outcome_contract_gate | — | 1 | — | scenario-compile-lint.sh |
 | G071 | execution_only_validation_gate | — | — | — | — |
-| G072 | evidence_provenance_gate | Check 40 | 3 | guard | claim-source-lint.sh, framework-validate.sh, gate-strength-lint.sh |
+| G072 | evidence_provenance_gate | Check 40 | 4 | guard | claim-source-lint.sh, domain-model-consistency.sh, framework-validate.sh, gate-strength-lint.sh |
 | G075 | scope_index_parity_gate | ref | — | guard | — |
 | G076 | phantom_scope_detection_gate | ref | — | guard | — |
 | G077 | execution_history_plausibility_gate | ref | — | guard | — |
@@ -182,7 +184,7 @@ These gates are intentionally enforced OUTSIDE the mode `requiredGates` lists. E
 | G093 | delivery_implementation_delta_gate | Check 29B | 3 | guard | delivery-implementation-delta-guard-selftest.sh, delivery-implementation-delta-guard.sh, state-transition-guard-selftest.sh |
 | G094 | capability_foundation_gate | Check 34 | 5 | guard | capability-foundation-guard-selftest.sh, capability-foundation-guard.sh, guard-lib.sh, rapid-tool-delivery-mode-selftest.sh, release-manifest-selftest.sh |
 | G095 | discovered_issue_disposition_gate | Check 35 | 6 | guard | discovered-issue-disposition-guard-selftest.sh, discovered-issue-disposition-guard.sh, evidence-admission-hardening-selftest.sh, framework-validate.sh, scaffold-gate-selftest.sh, state-transition-guard-selftest.sh |
-| G097 | requirement_mechanism_correspondence_gate | Check 36 | 6 | guard | capability-consumer-freshness.sh, framework-validate.sh, release-delivery-reconciliation-guard.sh, requirement-mechanism-guard-selftest.sh, requirement-mechanism-guard.sh, scaffold-gate-selftest.sh |
+| G097 | requirement_mechanism_correspondence_gate | Check 36 | 7 | guard | capability-consumer-freshness.sh, domain-invariant-guard.sh, framework-validate.sh, release-delivery-reconciliation-guard.sh, requirement-mechanism-guard-selftest.sh, requirement-mechanism-guard.sh, +1 more |
 | G098 | observability_posture_declared_gate | Check 37 | 7 | guard | cli.sh, framework-validate.sh, observability-check.sh, observability-opt-out-guard.sh, observability-posture-guard-selftest.sh, observability-posture-guard.sh, +1 more |
 | G099 | observability_opt_out_freshness_gate | Check 38 | 9 | guard | cli.sh, framework-validate.sh, gate-id-grep-selftest.sh, observability-opt-out-guard-selftest.sh, observability-opt-out-guard.sh, observability-posture-guard-selftest.sh, +3 more |
 | G100 | observability_slo_evidence_gate | Check 39 | 5 | guard | framework-validate.sh, observability-check.sh, observability-slo-guard-selftest.sh, observability-slo-guard.sh, scaffold-gate-selftest.sh |
@@ -191,4 +193,6 @@ These gates are intentionally enforced OUTSIDE the mode `requiredGates` lists. E
 | G127 | capability_consumer_freshness_gate | — | 4 | — | capability-consumer-freshness-selftest.sh, capability-consumer-freshness.sh, framework-validate.sh, scaffold-gate-selftest.sh |
 | G128 | session_cap_enforcement_gate | Check 40 | 7 | guard | framework-validate.sh, rapid-tool-delivery-mode-selftest.sh, risk-tier-resolve.sh, scaffold-gate-selftest.sh, session-cap-guard-selftest.sh, session-cap-guard.sh, +1 more |
 | G129 | repository_binding_classification_discovery_conformance_gate | — | 1 | — | framework-validate.sh |
+| G130 | domain_invariant_correspondence_gate | Check 41 | 4 | guard | domain-invariant-guard-selftest.sh, domain-invariant-guard.sh, domain-model-consistency.sh, framework-validate.sh |
+| G131 | domain_model_consistency_gate | Check 42 | 3 | guard | domain-model-consistency-selftest.sh, domain-model-consistency.sh, framework-validate.sh |
 

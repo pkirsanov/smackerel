@@ -1,0 +1,93 @@
+<!--
+  templates/DomainModel.md.tmpl — STARTER TEMPLATE (Facet-B domain-model narrative).
+
+  Consumed downstream only: a product repo that opts into a `domainModel:` block
+  (Facet A) in `.github/bubbles-project.yaml` copies this file to `docs/DomainModel.md`
+  and replaces every {{PLACEHOLDER}} and the Order / Refund / Payment example content
+  with its own domain. The Bubbles framework source repo ships no product domain of its
+  own, so this stays a template here and is instantiated only downstream.
+
+  Registered in bubbles/docs-registry.yaml (owner: bubbles.docs, required: false). Its
+  five `##` sections ARE the registry's requiredSections — Domain Glossary · Entity Graph
+  · Lifecycles And State Machines · Business Rules And Invariants · Authoritative
+  References — so keep all five headings intact; a downstream copy then satisfies the
+  registry contract by construction.
+-->
+
+# {{PROJECT_NAME}} — Domain Model
+
+> **Facet B** (human-readable narrative) of the product domain model.
+> Managed doc — owner: `bubbles.docs`; kept current on closeout by the docs-registry policy.
+> **Authoritative sources this doc points at (never copies):**
+> - Formal, machine-checkable rules → `.github/bubbles-project.yaml` `domainModel:` (Facet A, Gate G130)
+> - Ratified top-level safety invariants → `.specify/memory/constitution.md` → Business Invariants (Facet C)
+>
+> This doc holds the *why* and the *shape*; the config holds the *enforceable rule*. On any conflict, the config wins.
+
+---
+
+## Domain Glossary
+
+The shared vocabulary every spec, design, and test uses for this domain. One row per term.
+
+| Term | Definition (plain English) | Aliases / terms to avoid | Related entities |
+|------|----------------------------|--------------------------|------------------|
+| Order | A customer's confirmed purchase request | "cart" (pre-confirmation only) | Payment, Refund |
+| <Term> | <what it means in this business> | <synonyms; terms NOT to use> | <Entity, Entity> |
+
+> **TODO:** Replace the example row with this project's real terms.
+
+---
+
+## Entity Graph
+
+Entities and their relationships. Keep this a picture, not a schema — field-level shape lives in each feature's `design.md → ## Data Model`; enforceable constraints live in Facet-A config.
+
+```mermaid
+erDiagram
+    ORDER  ||--o{ PAYMENT : "settled by"
+    ORDER  ||--o| REFUND  : "at most one (INV-ONE-REFUND-PER-ORDER)"
+    BUYER  ||--o{ ORDER   : places
+```
+
+---
+
+## Lifecycles And State Machines
+
+For each entity with a lifecycle, its legal states and transitions. The **authoritative** allowed-states / terminal set is `domainModel.entities.<Entity>.states` / `.terminal` in Facet-A config; this diagram is the human view.
+
+```mermaid
+stateDiagram-v2
+    [*] --> created
+    created --> paid
+    paid --> shipped
+    paid --> refunded
+    shipped --> refunded
+    refunded --> [*]
+```
+
+---
+
+## Business Rules And Invariants
+
+A narrative index that **points at** the authoritative definition — it does not re-encode the formal rule (no duplication → no drift). One row per invariant.
+
+| Invariant | Why it matters (rationale) | Authoritative rule | Enforced by | Proven by |
+|-----------|----------------------------|--------------------|-------------|-----------|
+| `INV-ONE-REFUND-PER-ORDER` | A double refund pays a customer twice — direct financial loss | Facet-A `domainModel.invariants[INV-ONE-REFUND-PER-ORDER]` | db-unique-index | `tests/refund_test.rs::second_refund_rejected` |
+| `INV-...` | <business consequence if violated> | Facet-A `domainModel.invariants[INV-...]` | <mechanism> | <test id/path> |
+
+**Ratified safety invariants (Facet C) this model refines** — from `constitution.md` → Business Invariants:
+
+- "Bookings must never result in double-charges" → refined by `INV-ONE-REFUND-PER-ORDER`, `INV-...`
+
+---
+
+## Authoritative References
+
+The hub tying the three homes together. Keep these links current.
+
+- **Facet A (formal rules):** `.github/bubbles-project.yaml` `domainModel:` (or `config/domain-model.yaml` when `$ref`'d) — enforced by Gate G130.
+- **Facet C (ratified safety invariants):** `.specify/memory/constitution.md` → Business Invariants.
+- **System architecture (how it's built):** `docs/Architecture.md`.
+- **Feature views (per-feature deltas):** `specs/<NNN-feature>/design.md → ## Data Model`.

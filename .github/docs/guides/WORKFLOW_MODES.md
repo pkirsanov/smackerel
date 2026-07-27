@@ -151,6 +151,32 @@ The workflow runner does not keep its own second routing brain. `bubbles.super` 
 
 **Not sure which mode?** Ask the super: `/bubbles.super  which mode should I use for <your situation>`
 
+## Delivery Strategy & Achieved Assurance
+
+Two **orthogonal** axes govern how work is delivered and how much you can trust the result. Do not conflate them — one is the process you run, the other is the evidence-derived outcome.
+
+**Axis 1 — Delivery strategy (how much scope-appropriate process runs).** Two real lanes ship today:
+
+- `full-delivery` — the default, maximum-assurance lane. It already **is** the balanced default: phase-relevance auto-skips irrelevant phases with recorded reasons, so there is deliberately **no** `balanced` mode.
+- `rapid-tool-delivery` — the risk-proportional fast lane for a single low-risk, build-free tool increment. It keeps the full integrity contract and relaxes only the heavyweight planning chain. `risk-tier-resolve.sh` fail-closed-escalates any high-risk trigger (auth, payments, secrets, PII, DB migration, deploy, prod, host-singleton, cross-product) to `full-delivery`.
+
+**Axis 2 — Achieved assurance (the evidence-derived result).** `bubbles.validate` **derives** the achieved level from certification evidence via `assurance-derive.sh` (fail-closed — any incompleteness derives *down*). Assurance is **requestable but never declarable**: you can ask for a level, but you cannot self-assign it, and it is never a "quality slider" the user picks. Three levels, each mapping to a terminal status:
+
+| Achieved assurance | Terminal status | What it means |
+|--------------------|-----------------|---------------|
+| `full` | `done` | Implementation complete + full test coverage + all tests passing + an **independent audit**. |
+| `fast` | `delivered_fast` | Same as `full` **minus** the independent audit (`missingForFull = [independent-audit]`). Terminal only for `rapid-tool-delivery`. |
+| `prototype` | `delivered_prototype` | Verification is incomplete or failing. A delivered spike — **never deployable**, and never terminal under normal delivery modes. |
+
+`prototype` is the fail-closed floor, not a user-chosen tier: it is the *derived* result when coverage or a passing test is missing. A throwaway proof-of-concept is an **intent** (the `.design-experiment` worktree), not the bottom of a quality ladder.
+
+**Front-door strategy verbs** let you steer strategy without naming a mode:
+
+- `fast` → `rapid-tool-delivery` (always through `risk-tier-resolve.sh`, so it self-escalates on any high-risk trigger).
+- `highest` → `full-delivery` with optional phases forced on and the adversarial `samples` dial raised.
+
+Quality floors never move: `fast` remains risk-gated and inherits the full integrity contract, and `prototype` never ships.
+
 ## Adoption Profiles Are Not Workflow Modes
 
 Workflow modes decide phase order. Adoption profiles decide how Bubbles explains bootstrap and readiness guidance.
@@ -252,6 +278,16 @@ select → bootstrap → implement → test → regression → simplify → stab
 ```
 
 **Use when:** A feature is missing spec/design/scope readiness and you want the workflow to repair that planning debt before continuing delivery.
+
+### <img src="../../icons/bill-wrench.svg" width="20"> rapid-tool-delivery
+
+Risk-proportional fast lane for a single low-risk, build-free tool increment. It runs a short phase chain but keeps the **full delivery integrity contract** (every universal gate, anti-fabrication, per-DoD-item raw evidence, tests-for-all-scenarios, implementation-reality scan) — it relaxes ONLY the heavyweight mandatory planning chain. Eligibility is resolved mechanically by `risk-tier-resolve.sh`: any high-risk trigger (auth, payments, secrets, PII, DB migration, deploy, prod, host-singleton, cross-product) escalates to `full-delivery`, so it can never shed gates on risky work. Its achievement certifies as `delivered_fast` (fast assurance — full assurance minus the independent audit).
+
+```
+select → implement → test → validate → docs → finalize
+```
+
+**Use when:** A single low-risk, build-free tool increment where you want fewer phases without dropping the integrity contract. Self-escalates to `full-delivery` on any high-risk trigger.
 
 ### <img src="../../icons/julian-glass.svg" width="20"> iterate
 
@@ -572,6 +608,7 @@ analyze → ux
 | `product-to-delivery` | Discovery → delivery | Product ideas |
 | `spec-scope-hardening` (with analyze) | Analysis only | Early exploration |
 | `bugfix-fastlane` | Reproduce → fix → test → regression → gaps → harden → validate → audit (loops until certified) | Bug fixes |
+| `rapid-tool-delivery` | Select → implement → test → validate → docs → finalize (low-risk fast lane; escalates to full-delivery on any high-risk trigger; certifies `delivered_fast`) | Single low-risk, build-free tool increment |
 | `iterate` | Implement → test loop | Continuing work |
 | `harden-to-doc` | Harden → fix → test → docs | Code quality |
 | `gaps-to-doc` | Gaps → fix → test → docs | Gap closure |
