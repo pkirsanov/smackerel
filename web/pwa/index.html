@@ -11,6 +11,10 @@
   <link rel="manifest" href="/pwa/manifest.json">
   <link rel="icon" href="/pwa/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="/pwa/icon.svg">
+  <!-- Spec 106 SCOPE-106-01 — synchronous pre-paint appearance resolver: sets
+       html[data-theme]/[data-density] from the smk_appearance cookie BEFORE the
+       stylesheet applies, coherent with the server head-adapter (SCN-106-009). -->
+  <script src="/pwa/experience-appearance.js"></script>
   <link rel="stylesheet" href="/pwa/style.css">
 </head>
 

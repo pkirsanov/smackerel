@@ -44,6 +44,16 @@ func NewRouter(deps *Dependencies) http.Handler {
 	r.Use(middleware.Heartbeat("/ping"))
 	r.Use(securityHeadersMiddleware)
 
+	// Spec 106 SCOPE-106-01 — server head-adapter: resolve the smk_appearance
+	// cookie and stamp data-theme/data-density onto <html> before first paint,
+	// coherent with the PWA pre-paint resolver (SCN-106-009). Injected from
+	// cmd/core as web.AppearanceHeadStamp to avoid the api->web import cycle; nil
+	// in router unit tests. Runs after securityHeaders so the CSP it sets is
+	// preserved through the buffered stamp.
+	if deps.AppearanceHeadMiddleware != nil {
+		r.Use(deps.AppearanceHeadMiddleware)
+	}
+
 	// CORS — configured via SST (CORSAllowedOrigins from smackerel.yaml).
 	// Default: no origins allowed (same-origin only). Set cors.allowed_origins
 	// in smackerel.yaml to enable cross-origin access for web clients.
