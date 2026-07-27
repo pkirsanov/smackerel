@@ -13,6 +13,32 @@ Purpose: canonical source for execution evidence and anti-fabrication requiremen
 - **Empty-output evidence:** When a tool prints nothing on success, capture `$?` explicitly (`bash <tool>; echo "exit=$?"`). Never record "no output" as the only evidence — always pair with exit code.
 - **Windowed reads for evidence:** When a script's output is >100 lines, capture only the relevant 10-30 line window for evidence (with line-number annotations: "lines 42-58 of full output"). Full output is preserved by the script's own logging if needed for retro analysis.
 
+## Evidence by Reference (avoid double-paste)
+
+The same ≥10-line raw terminal output MUST NOT be carried twice — once inlined under a `[x]` DoD item in `scopes.md` and again in `report.md`. When the raw output already lives in `report.md` (or in the structured tool-call log), a DoD item MAY **reference** that evidence instead of re-pasting it. The transition guard (`state-transition-guard.sh` Check 9) resolves the reference and treats a resolved reference as **equivalent to an inline ≥10-line evidence block**.
+
+Reference is **opt-in and default-preserving**: an inline ≥10-line evidence block placed directly under a `[x]` item (the format in "Evidence Attribution" above) remains fully valid. The `**Claim Source:**` tag (`executed | interpreted | not-run`) is still required on the referenced evidence — a reference changes *where* the raw output lives, never *whether* it must be real executed output.
+
+There are exactly TWO supported reference forms. Do NOT invent an `evidence://` URI or any other scheme — these two shapes are the only references the guard resolves.
+
+### 1. Markdown `report.md#anchor` reference
+
+Shape the DoD item so the `Evidence:` marker links to a `report.md` anchor:
+
+```
+- [x] <item description> → Evidence: [<anchor>](report.md#<anchor>)
+```
+
+The guard follows the link to the `report.md` anchor — an HTML `<a name="…">`, an explicit `{#anchor}` attribute, or a GitHub-slugified heading — and counts the non-blank lines from that anchor heading to the next heading (or end of file). The item is satisfied only when that block has **≥10 non-blank lines**. A plain `report.md` link with no `#anchor` (e.g. `[report.md](report.md)`) is accepted only when `report.md` exists with ≥10 non-blank lines total.
+
+**Fail-closed:** an unresolvable anchor, or a resolved block with fewer than 10 non-blank lines, does NOT satisfy the item — the guard FAILS that DoD line (it is never a silent pass). Keep the referenced `report.md` block as raw executed output with its `**Claim Source:**` tag.
+
+### 2. Structured tool-log reference (`record_evidence`)
+
+Wrap the gate-relevant command with the `record_evidence` MCP tool. It runs the command and appends a structured entry (argv, `exitCode`, stdout/stderr hashes, spec slug) to `.specify/runtime/tool-calls.jsonl`. The guard then covers the matching DoD item automatically: it accepts the item when a log entry (a) names this spec, (b) has `exitCode == 0`, and (c) whose recorded command shares ≥2 distinct alpha-tokens with the DoD item body (common words like `the`/`test`/`docs` do not count). No inline paste is needed for that item.
+
+**Fail-closed:** a missing log, a schema-invalid or spec-less log line, a non-zero exit, or a command that does not token-match the DoD body does NOT cover the item — the guard falls through and FAILS that DoD line. The structured log entry is the evidence of record; the `**Claim Source:**` convention still applies to any human-readable evidence kept alongside it.
+
 ## Analysis-As-Execution Is Fabrication (NON-NEGOTIABLE — Gate G071)
 
 Reading source files, artifact files, or code that a command would inspect and predicting what the command would output is **fabrication**, regardless of whether the prediction is accurate. This applies to all agents, and especially to validation and audit agents invoking lint, guard, or test scripts.

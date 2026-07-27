@@ -21,28 +21,71 @@
 # PASS (exit 0) for a clean exploration or an unmarked directory.
 # Exit 2 = usage error (missing --worktree or path not found).
 #
+# ── --lingering mode (IMP-107 SCOPE-3, gap WT-EXPERIMENT-LINGER) ────────────
+# The default mode above enforces the "no completion/certification LEAKAGE" half
+# of the design-experiment contract. `--lingering` enforces the OTHER half —
+# "capture then DELETE": a `.design-experiment`-marked worktree that STILL
+# EXISTS after its run should have finalized is itself a finding (the mandated
+# post-capture removal never happened), UNLESS a live IMP-023 writer-lease
+# covers it (a lease-held experiment is still LIVE, not lingering — it reuses
+# runtime-leases.sh exactly as worktree-reap.sh does):
+#     design-experiment-guard.sh --lingering --worktree <dir>
+# CONTRACT: advisory-first — it PRINTS the LINGERING finding and exits 0 by
+# default so the SCOPE-1 hygiene report / reaper / doctor advisory can consume
+# it without a hard gate. Pass `--strict` to make a lingering experiment a hard
+# failure (exit 1) for a finalize/CI step. No marker -> no-op exit 0 (as always).
+# The default (non-`--lingering`) leakage-REFUSE behavior is byte-unchanged.
+#
 # Advisory-until-adopted: a workflow MAY invoke this before merging or
 # certifying. There is NO bypass flag — a design-experiment becomes deliverable
 # only by being re-planned as a normal scope, never by skipping this check.
 # Uses only grep/find (no jq/yq dependency) so it runs identically on WSL+macOS.
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+LEASES_SH="$SCRIPT_DIR/runtime-leases.sh"
+
 usage() {
   cat <<'EOF'
-Usage: design-experiment-guard.sh --worktree <dir>
+Usage: design-experiment-guard.sh --worktree <dir> [--lingering [--strict]]
 
-A `.design-experiment`-marked worktree MUST NOT leak completion/certification
-state into durable artifacts. REFUSES (exit 1) on a terminal certification/top-
-level status, a non-empty completedScopes, or a checked DoD item (`- [x]`).
-PASS (exit 0) for a clean exploration or an unmarked directory. Exit 2 = usage.
-No bypass flag.
+Default mode (no --lingering) — the no-LEAKAGE half of the design-experiment
+contract. A `.design-experiment`-marked worktree MUST NOT leak completion/
+certification state into durable artifacts. REFUSES (exit 1) on a terminal
+certification/top-level status, a non-empty completedScopes, or a checked DoD
+item (`- [x]`). PASS (exit 0) for a clean exploration or an unmarked directory.
+
+--lingering mode (IMP-107 SCOPE-3) — the capture-then-DELETE half. Reports a
+LINGERING finding when the marker is present (worktree not yet deleted) AND no
+live writer-lease covers it. Advisory: PRINTS the finding and exits 0 by
+default; add --strict to exit 1 on a lingering experiment. No marker -> no-op
+exit 0. Reuses runtime-leases.sh to skip a LEASE-HELD (still-live) experiment.
+
+Exit 2 = usage error (missing --worktree or path not found). No bypass flag.
 EOF
 }
 
+# 0 (true) iff a live IMP-023 writer-lease covers the worktree. Reuses
+# runtime-leases.sh's own effective status (its `summary` reports active=N) and
+# only probes when the worktree already owns a lease registry file, so this
+# stays READ-ONLY — identical to worktree-hygiene-report.sh / worktree-reap.sh.
+lease_held() {
+  local p="$1" active
+  [[ -f "$p/.specify/runtime/resource-leases.json" ]] || return 1
+  [[ -x "$LEASES_SH" ]] || return 1
+  active="$(BUBBLES_REPO_ROOT="$p" bash "$LEASES_SH" summary 2>/dev/null | sed -nE 's/.*active=([0-9]+).*/\1/p' | head -1 || true)"
+  [[ "$active" =~ ^[0-9]+$ ]] || active=0
+  [[ "$active" -gt 0 ]]
+}
+
 worktree=""
+lingering=false
+strict=false
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --worktree) worktree="${2:-}"; shift 2 ;;
+    --lingering) lingering=true; shift ;;
+    --strict) strict=true; shift ;;
     -h | --help) usage; exit 0 ;;
     *) echo "design-experiment-guard: unknown option: $1" >&2; usage >&2; exit 2 ;;
   esac
@@ -58,9 +101,29 @@ if [[ ! -d "$worktree" ]]; then
   exit 2
 fi
 
-# Not a design-experiment (no marker) → no-op.
+# Not a design-experiment (no marker) → no-op (both modes).
 if [[ ! -f "$worktree/.design-experiment" ]]; then
   echo "[design-experiment-guard] OK — no .design-experiment marker; not a design-experiment (no-op)."
+  exit 0
+fi
+
+# --lingering (IMP-107 SCOPE-3): the "capture then DELETE" half. A marked
+# worktree that STILL EXISTS after its run finalized is itself a finding —
+# UNLESS a live writer-lease covers it (still live, not lingering). This mode
+# never inspects durable-artifact leakage; that is the default mode's job.
+if [[ "$lingering" == true ]]; then
+  if lease_held "$worktree"; then
+    echo "[design-experiment-guard] OK — .design-experiment worktree is LEASE-HELD (live run); not lingering."
+    exit 0
+  fi
+  echo "[design-experiment-guard] LINGERING: a .design-experiment worktree still exists after its run should have finalized:"
+  echo "  - $worktree (.design-experiment marker present; no live writer-lease)"
+  echo "  A design-experiment is disposable by construction: capture its findings into the durable spec/design,"
+  echo "  then DELETE the worktree + its branch. Reap it with:"
+  echo "    worktree-reap.sh --experiments --yes   (or: cli.sh doctor --heal)"
+  if [[ "$strict" == true ]]; then
+    exit 1
+  fi
   exit 0
 fi
 

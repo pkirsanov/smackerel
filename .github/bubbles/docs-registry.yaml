@@ -8,11 +8,23 @@ managedDocs:
     audience: engineers
     publishSources: [ feature, ops ]
     requiredSections:
-      - Current System Shape
-      - Major Components
-      - Data And Control Flows
-      - Integration Boundaries
-      - Authoritative References
+    - Current System Shape
+    - Major Components
+    - Data And Control Flows
+    - Integration Boundaries
+    - Authoritative References
+  domainModel:
+    path: docs/DomainModel.md
+    owner: bubbles.docs
+    required: false
+    audience: engineers
+    publishSources: [ feature, ops ]
+    requiredSections:
+    - Domain Glossary
+    - Entity Graph
+    - Lifecycles And State Machines
+    - Business Rules And Invariants
+    - Authoritative References
   api:
     path: docs/API.md
     owner: bubbles.docs
@@ -20,11 +32,11 @@ managedDocs:
     audience: integrators
     publishSources: [ feature, ops ]
     requiredSections:
-      - Overview
-      - Authentication And Authorization
-      - Endpoints Or Contracts
-      - Error Behavior
-      - Change Notes
+    - Overview
+    - Authentication And Authorization
+    - Endpoints Or Contracts
+    - Error Behavior
+    - Change Notes
   development:
     path: docs/Development.md
     owner: bubbles.docs
@@ -32,10 +44,10 @@ managedDocs:
     audience: contributors
     publishSources: [ feature, ops ]
     requiredSections:
-      - Setup
-      - Local Workflow
-      - Project Conventions
-      - Verification Commands
+    - Setup
+    - Local Workflow
+    - Project Conventions
+    - Verification Commands
   testing:
     path: docs/Testing.md
     owner: bubbles.docs
@@ -43,10 +55,10 @@ managedDocs:
     audience: contributors
     publishSources: [ feature, ops ]
     requiredSections:
-      - Test Types
-      - Execution Commands
-      - Evidence Expectations
-      - Failure Triage
+    - Test Types
+    - Execution Commands
+    - Evidence Expectations
+    - Failure Triage
   deployment:
     path: docs/Deployment.md
     owner: bubbles.docs
@@ -54,10 +66,10 @@ managedDocs:
     audience: operators
     publishSources: [ ops, feature ]
     requiredSections:
-      - Build Inputs
-      - Deployment Flow
-      - Environment Requirements
-      - Rollback Or Recovery
+    - Build Inputs
+    - Deployment Flow
+    - Environment Requirements
+    - Rollback Or Recovery
   operations:
     path: docs/Operations.md
     owner: bubbles.docs
@@ -65,10 +77,10 @@ managedDocs:
     audience: operators
     publishSources: [ ops, feature ]
     requiredSections:
-      - Runbook Entry Points
-      - Observability And Alerts
-      - Troubleshooting
-      - Recovery Actions
+    - Runbook Entry Points
+    - Observability And Alerts
+    - Troubleshooting
+    - Recovery Actions
 
 policy:
   publishManagedDocsOnCloseout: true

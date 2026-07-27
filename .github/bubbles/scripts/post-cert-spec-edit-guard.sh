@@ -194,6 +194,117 @@ if [[ -z "$certified_epoch" ]]; then
   exit 2
 fi
 
+# ---------------------------------------------------------------------------
+# IMP-106 SCOPE-3 (DOM-LINEAGE) — advisory domain-invariant re-verification flag.
+#
+# When a domain invariant's `rule` text in the domainModel: block changes AFTER
+# certification, every scenario in this spec's scenario-manifest.json whose
+# `invariantRefs` includes that invariant id is FLAGGED for re-verification.
+# This realizes "a source changed -> dependent facts must be re-examined" on the
+# artifacts Bubbles already owns (see improvements/IMP-106-...md SCOPE-3 and
+# bubbles/schemas/scenario-manifest.schema.json).
+#
+# ADVISORY ONLY: it prints notes to stdout and NEVER changes the exit code. It
+# is a strict no-op unless BOTH (a) a domainModel: block exists
+# (.github/bubbles-project.yaml or bubbles-project.yaml, inline or via `$ref:`)
+# AND (b) at least one scenario in this spec carries invariantRefs. It reuses
+# G088's post-certifiedAt edit-detection shape: compare the domain-model source
+# as-of-certification (git) against the current working tree. YAML invariant
+# parsing is best-effort (advisory); the JSON manifest is parsed with jq.
+# ---------------------------------------------------------------------------
+emit_invariant_reverification_advisory() {
+  local manifest="$SPEC_DIR_ABS/scenario-manifest.json"
+  [[ -f "$manifest" ]] || return 0
+
+  # (b) advisory posture: at least one scenario must carry a non-empty
+  # invariantRefs array, else this spec has not opted into invariant lineage.
+  if ! jq -e '[.scenarios[]? | select((.invariantRefs // []) | type == "array" and length > 0)] | length > 0' "$manifest" >/dev/null 2>&1; then
+    return 0
+  fi
+
+  # (a) locate the domainModel: source — the project yaml (inline) or its $ref.
+  local dm_src="" candidate
+  for candidate in ".github/bubbles-project.yaml" "bubbles-project.yaml"; do
+    if [[ -f "$REPO_ROOT/$candidate" ]] && grep -qE '^[[:space:]]*domainModel:' "$REPO_ROOT/$candidate"; then
+      dm_src="$candidate"
+      break
+    fi
+  done
+  [[ -n "$dm_src" ]] || return 0
+
+  # Best-effort `$ref:` indirection: if the domainModel block points at another
+  # file that actually carries invariant declarations, parse that file instead.
+  local dm_ref
+  # shellcheck disable=SC2016  # literal `$ref` is a YAML key, not a shell expansion
+  dm_ref="$(grep -E '\$ref:' "$REPO_ROOT/$dm_src" 2>/dev/null | head -n 1 | sed -E 's/.*\$ref:[[:space:]]*//; s/[[:space:]}].*$//' || true)"
+  if [[ -n "$dm_ref" && -f "$REPO_ROOT/$dm_ref" ]] && grep -qE '(^|[[:space:]])id:[[:space:]]*INV-|invariants:' "$REPO_ROOT/$dm_ref" 2>/dev/null; then
+    dm_src="$dm_ref"
+  fi
+
+  # Best-effort YAML parser: emit "<INV-id>\t<rule text>" for each invariant.
+  # Tracks the current `id: INV-*` and pairs it with the next `rule:` value.
+  # shellcheck disable=SC2016  # awk program is a literal; $0/$1 are awk fields
+  local parse_awk='
+    /^[[:space:]]*-?[[:space:]]*id:[[:space:]]*INV-/ {
+      line=$0
+      sub(/^[[:space:]]*-?[[:space:]]*id:[[:space:]]*/, "", line)
+      sub(/[[:space:]]*(#.*)?$/, "", line)
+      cur=line
+      next
+    }
+    /^[[:space:]]*rule:[[:space:]]*/ {
+      if (cur != "") {
+        r=$0
+        sub(/^[[:space:]]*rule:[[:space:]]*/, "", r)
+        print cur "\t" r
+        cur=""
+      }
+      next
+    }
+  '
+
+  # Current (working-tree) invariant rules — captures uncommitted edits too.
+  local cur_pairs=""
+  cur_pairs="$(awk "$parse_awk" "$REPO_ROOT/$dm_src" 2>/dev/null || true)"
+
+  # Certified (as-of-certifiedAt) invariant rules from git history.
+  local cert_commit="" cert_pairs=""
+  cert_commit="$(git -C "$REPO_ROOT" rev-list -1 --before="$certified_at" HEAD -- "$dm_src" 2>/dev/null || true)"
+  if [[ -n "$cert_commit" ]]; then
+    cert_pairs="$(git -C "$REPO_ROOT" show "$cert_commit:$dm_src" 2>/dev/null | awk "$parse_awk" 2>/dev/null || true)"
+  fi
+  # No pre-certification snapshot => no prior rule text to diff => nothing to
+  # flag (a newly-introduced model is not a post-cert rule EDIT).
+  [[ -n "$cert_pairs" ]] || return 0
+
+  # Domain-invariant ids referenced by this spec's scenarios.
+  local ref_ids=""
+  ref_ids="$(jq -r '[.scenarios[]? | (.invariantRefs // []) | .[]?] | unique | .[]?' "$manifest" 2>/dev/null || true)"
+  [[ -n "$ref_ids" ]] || return 0
+
+  local flagged_any=0 rid cur_rule cert_rule scenarios
+  while IFS= read -r rid; do
+    [[ -n "$rid" ]] || continue
+    cur_rule="$(printf '%s\n' "$cur_pairs"  | awk -F'\t' -v id="$rid" '$1==id{sub(/^[^\t]*\t/,""); print; exit}' || true)"
+    cert_rule="$(printf '%s\n' "$cert_pairs" | awk -F'\t' -v id="$rid" '$1==id{sub(/^[^\t]*\t/,""); print; exit}' || true)"
+    # Flag ONLY when an existing invariant's rule text was edited: both sides
+    # present and different. An unchanged rule is never flagged, so editing an
+    # UNRELATED invariant cannot flag a scenario that does not reference it.
+    if [[ -n "$cur_rule" && -n "$cert_rule" && "$cur_rule" != "$cert_rule" ]]; then
+      scenarios="$(jq -r --arg inv "$rid" '.scenarios[]? | select((.invariantRefs // []) | index($inv)) | (.id // .scenarioId // "unknown")' "$manifest" 2>/dev/null | tr '\n' ' ' | sed -E 's/[[:space:]]+$//' || true)"
+      if [[ "$flagged_any" -eq 0 ]]; then
+        echo "post-cert-spec-edit-guard: ADVISORY (IMP-106 DOM-LINEAGE) — domainModel invariant rule(s) changed after certification; re-verify dependent scenarios/scopes for $spec_rel"
+        flagged_any=1
+      fi
+      echo "  - invariant $rid rule edited after certifiedAt=$certified_at; flagged scenarios: ${scenarios:-<none-mapped>}"
+    fi
+  done <<< "$ref_ids"
+
+  return 0
+}
+
+emit_invariant_reverification_advisory
+
 requires_type="$(state_type_for 'if has("requiresRevalidation") then (.requiresRevalidation | type) else "missing" end')"
 requires_revalidation="false"
 if [[ "$requires_type" == "boolean" ]]; then

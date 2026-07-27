@@ -15,7 +15,7 @@ The `bubbles.regression` agent (Steve French) enforces cross-feature regression 
 
 - **G044 (regression baseline):** Test baseline snapshot before/after implementation — any previously-passing test that now fails is a REGRESSION.
 - **G044 (comprehensive regression — cross-spec phase):** Tests from DONE specs must be re-executed after changes to verify no cross-feature interference.
-- **G044 (comprehensive regression — conflict detection phase):** New specs scanned for route collisions, shared table mutations, contradictory business rules, and API contract conflicts against existing specs.
+- **G044 (comprehensive regression — conflict detection phase):** New specs scanned for route collisions, shared table mutations, contradictory business rules, and API contract conflicts against existing specs. When the project declares a `domainModel:` SST (delivered by Gate G130; consistency-nudged by Gate G131), the "contradictory business rules" sweep gains a STRUCTURED target — a spec's declared state transition can be diffed against the shared `domainModel` state machine, instead of only grepping prose across specs.
 
 ## Enforcement
 

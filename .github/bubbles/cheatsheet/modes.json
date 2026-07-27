@@ -388,5 +388,12 @@
     "description": "Bounded, armed, read-only chaos-monkey probing of a LIVE system (Green Bastard on a leash). Requires arming + target allowlist; restore-or-fix; never certifies.",
     "description_html": "Bounded, armed, read-only chaos-monkey probing of a LIVE system (Green Bastard on a leash). Requires arming + target allowlist; restore-or-fix; never certifies.",
     "html_quote": "This is my park now. Let's see what holds."
+  },
+  {
+    "name": "rapid-tool-delivery",
+    "alias": "in-and-out-legit",
+    "description": "Risk-proportional fast lane for one low-risk, build-free tool increment — fewer phases, full integrity contract; escalates to full-delivery on any high-risk trigger; certifies `delivered_fast`",
+    "description_html": "Risk-proportional fast lane for one low-risk, build-free tool increment. Fewer phases, but the full integrity contract. Any high-risk trigger (auth/payments/secrets/PII/DB-migration/deploy/prod/host-singleton/cross-product) escalates to full-delivery. Certifies `delivered_fast` (fast assurance — full minus the independent audit).",
+    "html_quote": "In and out, boys. But we still do it right."
   }
 ]

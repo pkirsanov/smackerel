@@ -189,6 +189,8 @@ Under `parallelScopes=dag`, DAG-independent scopes execute concurrently in separ
 
 **Cleanup on abandon:** if a worktree scope fails or is abandoned, the parent drops that worktree and its branch — no partial shared-state mutation survives (mirroring `gitIsolation` whole-run rollback).
 
+**Finalize-reap (mechanized teardown, IMP-107 / SCOPE-2 — gap `WT-TEARDOWN`).** The teardown above is a NAMED, mechanical step — not a manual hope. After a scope's branch is merged (completed) OR its run is rolled back (abandoned), the parent runs the **finalize-reap**: `bubbles/scripts/worktree-reap.sh` (equivalently `cli.sh doctor --heal`, which invokes it). A **completed** scope's worktree becomes `MERGED` (branch fully in trunk, 0 unique commits) and an **abandoned** / rolled-back scope's becomes `PRUNABLE` (its directory dropped); the SAFE reaper reaps BOTH end-states and their fully-merged local branches, while REFUSING `UNMERGED` / `DIRTY` / `LEASE-HELD` worktrees — it never eats un-merged or uncommitted work, and never disturbs a live IMP-023 writer-lease. So "the parent drops that worktree and its branch" is a checkable finalize-reap invocation over the EXISTING safe reaper (SCOPE-1) — mechanized, not manual, adding NO new teardown logic.
+
 **Acquire-before-mutate enforcement (IMP-023 writer-lease).** This contract is MECHANIZED — no longer advisory. Integration points:
 
 - **Parent dispatch:** before the first mutable write the parent acquires the target lease — `runtime writer-acquire --target <spec-dir> --paths source,tests,report`.
@@ -278,6 +280,7 @@ Use these rules for every scope status change.
   - If the scope renames/removes any route, path, contract, identifier, or UI target, the DoD includes a consumer impact sweep item and the affected consumer flows are validated
   - If the scope changes shared fixtures, harnesses, or bootstrap/auth/session/storage infrastructure, the DoD includes a Shared Infrastructure Impact Sweep, an independent canary suite item, and a rollback/restore item
   - If the scope is a narrow repair or risky refactor, the DoD includes a Change Boundary item and evidence that zero excluded file families changed
+  - These sweep conditions are risk-proportional — `bubbles/scripts/risk-tier-resolve.sh` `riskClass` keys them (low → only triggered sweeps fire; high/unknown → all applicable sweeps required, fail-closed); see feature-templates.md → "Risk-proportional sweep application (SWEEP-PROP)"
    - Matching raw evidence is present in the scope's `report.md` (must contain legitimate terminal output signals per command-backed block)
   - Scope entry in `state.json` is updated in `certification.scopeProgress` and `certification.completedScopes`
   - `certification.completedScopes` matches the actual set of Done scopes exactly — no stale omissions, no extra carried-forward entries

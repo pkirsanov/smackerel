@@ -159,3 +159,17 @@ routes:
   targetAgent: bubbles.goal
   targetMode: rapid-tool-delivery
   summary: "Risk-proportional fast lane for a single low-risk build-free tool increment; escalates to full-delivery on any high-risk trigger"
+
+# ─────────────────────────────────────────────────────────────────────────
+# Highest-assurance strategy verb (bubbles.workflow runs full-delivery)
+# The symmetric partner to the fast lane. full-delivery already IS the balanced
+# default (phase-relevance auto-skips irrelevant phases with recorded reasons),
+# so there is deliberately NO separate `balanced` mode.
+# ─────────────────────────────────────────────────────────────────────────
+- phrases:
+  - "highest assurance"
+  - "maximum rigor"
+  - "highest"
+  targetAgent: bubbles.workflow
+  targetMode: full-delivery
+  summary: "Highest-assurance strategy verb: run the maximum-assurance full-delivery lane with every relevant phase on"

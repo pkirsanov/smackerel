@@ -4,6 +4,10 @@
     "meaning": "When one root mode is already active, recap, status, and handoff preserve that mode and route back to its authorized runner instead of dropping into raw specialists."
   },
   {
+    "term": "evidence by reference",
+    "meaning": "A `[x]` DoD item may cite already-captured evidence instead of re-pasting ≥10 raw lines: a `report.md#anchor` link (resolved to a ≥10-non-blank-line block) or a `record_evidence` tool-log entry in `.specify/runtime/tool-calls.jsonl`. Opt-in and fail-closed — inline evidence stays fully valid; an unresolvable anchor or missing log entry does not satisfy the item."
+  },
+  {
     "term": "universal goal endpoint",
     "meaning": "`bubbles.goal` owns one requested outcome and may execute zero, one, or several authorized workflows plus direct specialist phases until convergence."
   },
@@ -366,5 +370,25 @@
   {
     "term": "dry-run plan",
     "meaning": "`dryRun: plan` resolves the full convergence plan and reports intended changes WITHOUT mutating code or state — a propose-only preview that extends parallelScopes=dag-dry to the whole loop."
+  },
+  {
+    "term": "delivery strategy",
+    "meaning": "How much scope-appropriate process runs. Two lanes ship today: `full-delivery` (default, maximum-assurance — already the balanced default via phase-relevance auto-skip) and `rapid-tool-delivery` (the low-risk build-free fast lane). Orthogonal to achieved assurance; there is deliberately no `balanced` mode."
+  },
+  {
+    "term": "achieved assurance",
+    "meaning": "The evidence-derived result of a delivery, DERIVED by `bubbles.validate` via `assurance-derive.sh` (fail-closed — any incompleteness derives down). Three levels: `full`→`done`, `fast`→`delivered_fast`, `prototype`→`delivered_prototype`. Requestable, never declarable — not a quality slider the user picks."
+  },
+  {
+    "term": "delivered_fast",
+    "meaning": "Terminal status for `fast` achieved assurance: implementation complete + full test coverage + all tests passing, but NO independent audit (`missingForFull = [independent-audit]`). Terminal only for `rapid-tool-delivery`."
+  },
+  {
+    "term": "rapid-tool-delivery",
+    "meaning": "Risk-proportional fast lane for one low-risk, build-free tool increment. Keeps the full integrity contract, relaxes only the heavyweight planning chain, and `risk-tier-resolve.sh` fail-closed-escalates any high-risk trigger (auth/payments/secrets/PII/DB-migration/deploy/prod/host-singleton/cross-product) to `full-delivery`. Certifies `delivered_fast`."
+  },
+  {
+    "term": "prototype assurance",
+    "meaning": "The fail-closed assurance floor: verification incomplete or failing (missing coverage OR a failing test). Maps to `delivered_prototype` — never deployable, never terminal under normal delivery modes. A derived result, not a user-chosen tier; a throwaway POC is an intent (`.design-experiment`), not the bottom of a quality ladder."
   }
 ]

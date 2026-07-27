@@ -606,6 +606,24 @@ if [[ "$scope_defined_scenarios" -gt 0 ]]; then
     if [[ "$manifest_missing_files" -eq 0 ]]; then
       pass "All linked tests from scenario-manifest.json exist"
     fi
+
+    # IMP-106 SCOPE-3 (DOM-LINEAGE) — advisory scenario→invariant lineage edges.
+    # A scenario carrying invariantRefs:["INV-..."] DECLARES an edge to the
+    # domain invariant(s) it exercises. This reuses the existing declared/
+    # inferred/ambiguous edge-confidence vocabulary; an invariantRefs edge is
+    # always 'declared' because the reference is explicit (there is no inference
+    # or ambiguity path for an invariant reference, unlike scenario↔Test-Plan/DoD
+    # prose matching). Advisory only (info) — it never fails and never changes the
+    # exit code — and a strict no-op when no invariantRefs are present, so a repo
+    # that has not opted into a domainModel: block is unaffected. Full per-scope
+    # integration into the Test Plan / DoD edge loops is intentionally NOT
+    # attempted here to avoid destabilizing that logic; see
+    # improvements/IMP-106-product-domain-ontology-and-invariant-anchoring.md
+    # (SCOPE-3) and bubbles/schemas/scenario-manifest.schema.json.
+    invariant_edge_total="$(grep -Eo '"INV-[A-Z0-9-]+"' "$scenario_manifest_file" 2>/dev/null | wc -l | tr -d '[:space:]' || true)"
+    if [[ -n "$invariant_edge_total" && "$invariant_edge_total" -gt 0 ]]; then
+      info "scenario→invariant lineage edges (IMP-106 DOM-LINEAGE, advisory): declared=$invariant_edge_total"
+    fi
   fi
 else
   info "No scope-defined Gherkin scenarios found — scenario manifest cross-check skipped"

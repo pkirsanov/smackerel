@@ -1000,6 +1000,31 @@ fi
 echo ""
 
 # =============================================================================
+# CHECK 3I: Assurance Certification Consistency (IMP-105 SCOPE-1)
+# =============================================================================
+echo "--- Check 3I: Assurance Certification Consistency ---"
+assurance_cert_check_script="$SCRIPT_DIR/assurance-certification-check.sh"
+if [[ -f "$assurance_cert_check_script" ]]; then
+  _c3i_rc=0
+  bubbles_run_with_timeout 30 bash "$assurance_cert_check_script" --feature-dir "$feature_dir" >/tmp/bubbles-assurance-cert-check.$$ 2>&1 || _c3i_rc=$?
+  if [[ "$_c3i_rc" -eq 124 ]]; then
+    fail "Assurance certification consistency check TIMED OUT after 30s — cannot certify the recorded assurance block"
+  elif [[ "$_c3i_rc" -eq 0 ]]; then
+    pass "Recorded certification.assurance block is internally consistent (or absent — backward-compatible no-op)"
+  else
+    fail "Recorded certification.assurance block is internally inconsistent — full has no gaps, fast must list independent-audit, prototype must be non-empty"
+    while IFS= read -r lint_line; do
+      [[ -n "$lint_line" ]] || continue
+      echo "   → $lint_line"
+    done < /tmp/bubbles-assurance-cert-check.$$
+  fi
+  rm -f /tmp/bubbles-assurance-cert-check.$$
+else
+  warn "Assurance certification consistency check script not found at $assurance_cert_check_script — skipping (advisory)"
+fi
+echo ""
+
+# =============================================================================
 # CHECK 4: ALL DoD items must be checked [x] — ZERO unchecked allowed
 # =============================================================================
 echo "--- Check 4: DoD Completion (Zero Unchecked) ---"
@@ -1542,6 +1567,65 @@ if [[ -n "$state_workflow_mode" ]]; then
       required_specialists=("validate" "audit" "docs")
       ;;
   esac
+
+  # IMP-105-SCOPE-3-FALLBACK-BEGIN
+  # IMP-105 SCOPE-3 — close the Check 6 fail-open hole. A mode ABSENT from the
+  # explicit case above left required_specialists empty, so Check 6 imposed ZERO
+  # specialist-completion enforcement (the historical rapid-tool-delivery bug).
+  # For any unlisted mode, DERIVE a safe non-empty fallback: the intersection of
+  # the mode's declared phaseOrder with the canonical delivery-specialist phase
+  # set. Control/planning/conditional phases (select finalize discover analyze
+  # bootstrap interrogate releases devops redteam bug review journey) are excluded
+  # by that intersection (they are simply not in the core set). TWO further guards
+  # keep the fallback from over-requiring modes whose phaseOrder is NOT a
+  # parent-execution contract (empirically verified against the whole mode
+  # registry — a mini shadow-compare of the UNLISTED set the fallback governs):
+  #   (a) PROFILE — derive ONLY for delivery-completion profiles. planning-maturity
+  #       modes (product-to-planning, spec-scope-hardening) declare a full delivery
+  #       phaseOrder as the PLAN of future work, not phases the parent executes at
+  #       planning maturity, so they are excluded. (Modes with no transitionAudit
+  #       profile never reach Check 6 — transition-contract-resolver.sh blocks them
+  #       first with E009-AUDIT-PROFILE-MISSING/UNSUPPORTED.)
+  #   (b) DISPATCHER — skip FAN-OUT / top-level-runtime modes
+  #       (requiresTopLevelRuntime: true — autonomous-goal, autonomous-sprint,
+  #       idea-to-release-completion, retro-quality-sweep): their phaseOrder is a
+  #       DISPATCH plan; the specialist phases run in the child workflows they
+  #       dispatch, exactly why the explicit table pins the listed dispatchers
+  #       iterate / stochastic-quality-sweep to a minimal {validate,audit} set.
+  # After both guards, the only unlisted modes that DERIVE are genuine delivery
+  # modes omitted from the table by oversight (devops-to-doc, redteam-to-doc,
+  # retro-to-harden, retro-to-simplify, delivery-lockdown) — precisely the fail-
+  # open hole this scope closes. The explicit per-mode table stays authoritative
+  # for listed modes; full table replacement with per-mode shadow-compare is
+  # IMP-105 SCOPE-7's job, not this scope's.
+  if [[ ${#required_specialists[@]} -eq 0 && -n "$state_workflow_mode" && ( "$transition_audit_profile" == "delivery-completion-v1" || "$transition_audit_profile" == "delivery-completion-fast-v1" ) ]]; then
+    _imp105_resolved="$(BUBBLES_MODE_GRANDFATHER=1 bubbles_run_with_timeout 30 bash "$SCRIPT_DIR/mode-resolver.sh" "$state_workflow_mode" 2>/dev/null || true)"
+    if [[ -z "$_imp105_resolved" ]]; then
+      warn "Check 6: mode '$state_workflow_mode' absent from explicit table AND its definition is unresolvable — cannot derive a specialist requirement (advisory)"
+    elif [[ "$(yq -r '.constraints.requiresTopLevelRuntime // false' <<< "$_imp105_resolved" 2>/dev/null || echo false)" == "true" ]]; then
+      info "Check 6: mode '$state_workflow_mode' is a top-level-runtime dispatcher (requiresTopLevelRuntime) — specialist completion is delegated to the child workflows it dispatches; its phaseOrder is a dispatch plan, NOT a parent requirement, so it is NOT derived (IMP-105 SCOPE-3 avoids dispatcher over-require)"
+    else
+      _imp105_phase_order="$(yq -r '.phaseOrder[]' <<< "$_imp105_resolved" 2>/dev/null || true)"
+      if [[ -n "$_imp105_phase_order" ]]; then
+        _imp105_core="implement test regression simplify gaps harden stabilize security validate audit chaos docs"
+        while IFS= read -r _imp105_ph; do
+          [[ -n "$_imp105_ph" ]] || continue
+          for _imp105_c in $_imp105_core; do
+            if [[ "$_imp105_ph" == "$_imp105_c" ]]; then
+              required_specialists+=("$_imp105_ph")
+              break
+            fi
+          done
+        done <<< "$_imp105_phase_order"
+        if [[ ${#required_specialists[@]} -gt 0 ]]; then
+          info "Check 6: mode '$state_workflow_mode' absent from explicit table — derived ${#required_specialists[@]} required specialist phase(s) from its phaseOrder (IMP-105 SCOPE-3 fallback closes the fail-open default)"
+        fi
+      else
+        warn "Check 6: mode '$state_workflow_mode' absent from explicit table AND its phaseOrder is empty/unresolvable — cannot derive a specialist requirement (advisory)"
+      fi
+    fi
+  fi
+  # IMP-105-SCOPE-3-FALLBACK-END
 
   if [[ ${#required_specialists[@]} -gt 0 ]]; then
     missing_phases=0

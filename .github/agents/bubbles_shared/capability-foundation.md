@@ -28,6 +28,18 @@ Otherwise the doctrine is out of scope. Single-implementation utilities, bug fix
 | UX | UI capability: reusable primitives and composition rules when two or more screens or cross-feature reuse exist | `spec.md` -> `### UI Primitives` under `## UI Wireframes` |
 | Plan | Implementation order: foundation scopes precede overlay scopes when a split exists | `scopes.md` / `scopes/_index.md` dependency graph |
 
+### Product-Domain SST Threading (always available)
+
+The Layer Ownership table above is **trigger-gated** by the Proportionality Clause — it activates only when a second provider, adapter, or variant appears. A repo that opts into the **product-domain SST** (an OPTIONAL `domainModel:` block in `.github/bubbles-project.yaml`, a sibling of `traceContracts:`, delivered by Gate G130) threads a SECOND, **always-available** surface alongside it. Where the capability-foundation model above is per-feature and proportionality-gated, the product-domain SST is **product-wide and standing**: one source of truth for entities and business invariants that every feature references instead of re-deriving. This threading is additive to the table above; it does not replace it, and it is a clean no-op on any repo that has not declared a `domainModel:` block.
+
+| Layer | Threads the shared `domainModel:` SST by |
+|-------|------------------------------------------|
+| Analyst | REFERENCING the shared `domainModel:` and PROPOSING new domain concepts INTO it, instead of re-deriving a domain model per feature. |
+| Design | EXTENDING the shared model from `design.md` `## Data Model` / `## Capability Foundation`: new entities and invariants are **promoted up** into `domainModel.entities` / `domainModel.invariants`, never siloed in one feature. |
+| Plan | Mapping each `SCN-*` scenario to the domain concept(s) it touches (its `invariantRefs`), so a domain-rule change flags the dependent scopes/tests for re-verification. |
+| Validate | Running **G130** (domain-invariant correspondence — anchors each declared invariant to enforcing code or an adversarial test) and **G131** (domain-model consistency — nudges a feature that siloes an entity/invariant to promote it up) against the shared model. |
+| Docs | Publishing the human-readable narrative counterpart to the managed doc `docs/DomainModel.md`; the constitution's ratified Business Invariants remain the top-level safety list that `domainModel.invariants` refine by `INV-*` id. |
+
 ## Required Sections When Proportionality Applies
 
 ### Analyst (`spec.md`)

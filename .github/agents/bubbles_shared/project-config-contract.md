@@ -350,6 +350,22 @@ traceContracts:
         warning:
           - slow span
 
+# Product domain invariants (G130) — OPTIONAL, opt-in. Sibling of traceContracts:.
+# Declares entity states + business invariants so domain-invariant-guard.sh checks
+# each is enforced-by-code or proved-by an adversarial test (else a blocking
+# finding). Absent = clean no-op. Inline, or `domainModel: { $ref: config/domain-model.yaml }`.
+domainModel:
+  entities:
+    Order:
+      states: [created, paid, shipped, refunded]
+      terminal: [refunded]
+  invariants:
+    - id: INV-ORDER-STATUS-ENUM
+      rule: "Order.status ∈ {created, paid, shipped, refunded}"
+      kind: enumeration          # enumeration | cardinality | disjointness | state-machine
+      enforcedBy: [db-constraint, type]
+      provedBy: ["tests/order_status_test.rs::rejects_unknown_status"]
+
 # Operator-managed MCP tool grants for restricted orchestrators (v7.1+)
 # The five framework-managed orchestrators (bubbles.goal/sprint/iterate/bug/
 # workflow) ship a `tools:` allowlist whose defaults include `bubbles` (the
@@ -586,6 +602,44 @@ Guards reject malformed evidence (missing `observed`/`target`, or evidence for t
 - `.specify/runtime/observability/<workflow>.<signal>.json` — **the parsed metric artifact** the SLO guard reads. It is an *output* of the captured run, never a second source of truth.
 
 `.specify/runtime/` MUST be gitignored (the framework ships `.specify/runtime/.gitignore` = `*` + `!.gitignore`).
+
+### `domainModel` Contract (G130)
+
+`domainModel` is an OPTIONAL **top-level block** in `.github/bubbles-project.yaml` — a **sibling of `traceContracts:`**, not a child of it. It lets a project declare its PRODUCT business invariants (the states an entity may occupy, and the structural rules those states must always satisfy) so Gate **G130** (`bubbles/scripts/domain-invariant-guard.sh`) can mechanically check that each declared invariant is actually ANCHORED in code or an adversarial test — not merely asserted in prose. It is the domain-invariant sibling of `requirement-mechanism-guard.sh` (G097): where G097 asks *"a requirement names PKCE/OAuth2/HMAC — does the code implement it?"*, G130 asks *"a `domainModel` declares `Order.status ∈ {created,paid,shipped,refunded}` — is it enforced, or just documented?"*
+
+Worked example (project-owned `.github/bubbles-project.yaml`; never overwritten on upgrade):
+
+```yaml
+domainModel:                          # OPTIONAL top-level block — sibling of traceContracts:
+  entities:
+    Order:
+      states: [created, paid, shipped, refunded]
+      terminal: [refunded]
+  invariants:
+    - id: INV-ORDER-STATUS-ENUM       # INV-* id; an Outcome-Contract Hard Constraint MAY name it
+      rule: "Order.status ∈ {created, paid, shipped, refunded}"
+      kind: enumeration               # enumeration | cardinality | disjointness | state-machine
+      enforcedBy: [db-constraint, type]                                # code-evidence tokens
+      provedBy: ["tests/order_status_test.rs::rejects_unknown_status"] # adversarial reject test(s)
+```
+
+| Field | Meaning |
+|-------|---------|
+| `entities.<Entity>.states` | The complete set of states the entity may occupy. |
+| `entities.<Entity>.terminal` | The subset of `states` that are terminal (no further transition). |
+| `invariants[].id` | Stable `INV-*` identifier. A feature's Outcome-Contract Hard Constraint MAY name this id; G130 then checks it is enforced-by-code or proved-by an adversarial test. |
+| `invariants[].rule` | Human-readable statement of the invariant. |
+| `invariants[].kind` | One of `enumeration` \| `cardinality` \| `disjointness` \| `state-machine`. |
+| `invariants[].enforcedBy` | Mechanism tokens the guard greps for in the scope's declared implementation files (same backtick-path extraction as G028/G097) — e.g. `db-constraint`, `type`, `check`, `state-machine`. |
+| `invariants[].provedBy` | Zero or more linked tests; a linked test that ADVERSARIALLY rejects the violating input anchors the invariant. |
+
+Storage: `domainModel` MAY be written **inline** in `.github/bubbles-project.yaml`, OR extracted to a separate file and referenced with `domainModel: { $ref: config/domain-model.yaml }` (matching the existing `config/<project>.yaml` SST pattern). The guard resolves the `$ref` and applies the identical checks either way.
+
+Rules:
+- **Advisory-until-configured.** `domainModel` is OPTIONAL. A repo with NO `domainModel:` block is a **clean no-op** — Gate G130 exits 0 and never blocks (the Bubbles source repo declares none). The gate gains teeth only once a repo opts in.
+- For each declared invariant, G130 clears it when ANY of: (a) an `enforcedBy` mechanism token appears in the scope's declared implementation files, (b) a linked `provedBy` test adversarially rejects the violating input, OR (c) an explicit justification discloses the gap (a `## Domain-Invariant Justifications` section in `spec.md`/`report.md`, or an `Invariant-Justification: <INV-id> — <reason>` line). Only an invariant with NONE of the three is a blocking finding — warn-and-require-justification, exactly like G097.
+- **Grandfathered by `state.json.createdAt`.** Specs whose `createdAt` is absent or earlier than the guard's cutoff are WARN-only, so adopting the gate never retroactively blocks already-closed work.
+- There is no `--skip`/`--force`/bypass. A legitimately-external or deferred invariant is cleared by one disclosure line.
 
 ---
 

@@ -3,8 +3,11 @@
 # =============================================================================
 # guards/tail-delegated-gates.sh  (M4 guard split)
 # =============================================================================
-# Checks 26-39: the delegated tail gates G085-G095, G097, and G098-G100
-# (observability posture/opt-out/SLO). This fragment is the body of the `else`
+# Checks 26-39 + 41-42: the delegated tail gates G085-G095, G097, G098-G100
+# (observability posture/opt-out/SLO), G130 (domain-invariant correspondence,
+# advisory-until-configured), and G131 (domain-model consistency, advisory).
+# This fragment is the body of the
+# `else`
 # branch of the BUBBLES_STATE_TRANSITION_GUARD_SELFTEST_FAST
 # fast-path conditional in state-transition-guard.sh; it is sourced in the same
 # shell scope so pass/fail/warn/info, the failures/warnings counters, and
@@ -418,5 +421,72 @@ elif [[ -x "$obs_slo_guard" ]]; then
   fi
 else
   info "observability-slo-guard.sh not present at $obs_slo_guard; skipping (advisory)"
+fi
+echo ""
+
+# =============================================================================
+# CHECK 41: Domain-Invariant Correspondence (Gate G130)
+# =============================================================================
+# Mechanical wrapper around bubbles/scripts/domain-invariant-guard.sh — the
+# advisory-until-configured sibling of G097 (Check 36) applied to PRODUCT
+# domain invariants instead of named security/contract mechanisms. When a repo
+# opts in with a `domainModel:` block in .github/bubbles-project.yaml (sibling
+# of traceContracts:), each declared invariant MUST be ANCHORED by ONE of:
+# (a) code evidence of an enforcedBy mechanism token in the scope's declared
+# implementation files, (b) an adversarial provedBy test that rejects the
+# violating input, OR (c) a disclosed justification line. Only a declared
+# invariant with NEITHER enforcement NOR an adversarial proving test NOR a
+# justification is a BLOCKING finding — warn-and-require-justification, exactly
+# like G097. The gate is INERT (clean no-op, exit 0) unless a domainModel: block
+# is declared, so it NEVER blocks a repo (including the Bubbles source repo)
+# that has not opted in. Specs whose state.json createdAt is absent or before
+# the cutoff are grandfathered to WARN. Runs in an isolated subprocess (the
+# `bash "$guard"` child) so the guard's own set -e can never abort this guard.
+echo "--- Check 41: Domain-Invariant Correspondence (Gate G130) ---"
+domain_invariant_guard="$SCRIPT_DIR/domain-invariant-guard.sh"
+if [[ -x "$domain_invariant_guard" ]]; then
+  if run_guard_in_feature_repo bash "$domain_invariant_guard" "$feature_dir" --quiet > /dev/null 2>&1; then
+    pass "Domain-invariant correspondence satisfied, disclosed, not applicable (no domainModel), or grandfathered (Gate G130)"
+  else
+    fail "Domain-invariant correspondence guard failed — Gate G130. Run 'bash $domain_invariant_guard $feature_dir' for the unanchored-invariant list"
+    info "A finding is a domainModel.invariants[] entry with NEITHER enforcedBy code evidence in the scope's declared implementation files NOR an adversarial provedBy test NOR a disclosed justification"
+    info "Remediate by ONE of: (a) implement/point at the enforcedBy mechanism, (b) add an adversarial provedBy test that rejects the violating input, OR (c) add a '## Domain-Invariant Justifications' section (spec.md or report.md) — or an 'Invariant-Justification: <INV-id> — <reason>' line"
+    info "Opt-in only: this gate is INERT unless a domainModel: block is declared in .github/bubbles-project.yaml (sibling of traceContracts:)"
+  fi
+else
+  info "domain-invariant-guard.sh not present at $domain_invariant_guard; skipping (advisory)"
+fi
+echo ""
+
+# =============================================================================
+# CHECK 42: Domain-Model Consistency (Gate G131, advisory)
+# =============================================================================
+# Mechanical wrapper around bubbles/scripts/domain-model-consistency.sh — the
+# DOM-SST sibling of G130. When a repo opts in with a `domainModel:` block in
+# .github/bubbles-project.yaml (sibling of traceContracts:), this NUDGES when a
+# feature siloes its domain: (1) a `design.md ## Data Model` entity not promoted
+# to the shared `domainModel.entities`, or (2) an Outcome-Contract Hard Constraint
+# referencing an `INV-*` not declared in `domainModel.invariants`. ADVISORY: the
+# guard exits 0 (nudges printed, non-blocking) by DEFAULT — it exits non-zero ONLY
+# when the repo explicitly sets `domainModelConsistencyGuard: block`. So this check
+# NEVER blocks a repo (including the Bubbles source repo) that has not opted into
+# blocking; the guard self-gates its own enforcement. The gate is INERT (clean
+# no-op, exit 0) unless a `domainModel:` block is declared. Run WITH --quiet so
+# no-op/clean transitions stay silent and only the advisory nudges surface; the
+# exit code decides pass/fail. Runs in an isolated subprocess (the `bash "$guard"`
+# child) so the guard's own set flags can never abort this guard.
+echo "--- Check 42: Domain-Model Consistency (Gate G131, advisory) ---"
+domain_model_consistency_guard="$SCRIPT_DIR/domain-model-consistency.sh"
+if [[ -x "$domain_model_consistency_guard" ]]; then
+  if run_guard_in_feature_repo bash "$domain_model_consistency_guard" "$feature_dir" --quiet; then
+    pass "Domain-model consistency ran — advisory nudges (if any) printed above are non-blocking, or not applicable (no domainModel) (Gate G131)"
+  else
+    fail "Domain-model consistency guard failed — Gate G131 (only when domainModelConsistencyGuard: block is set). Run 'bash $domain_model_consistency_guard $feature_dir' for the promote-list"
+    info "A nudge is a design.md '## Data Model' entity not promoted to domainModel.entities, OR an Outcome-Contract Hard Constraint referencing an INV-* not declared in domainModel.invariants"
+    info "Remediate by promoting the entity/invariant into the shared domainModel (so every feature references one product-domain SST), or clear the opt-in"
+    info "Advisory by default: this gate exits 0 (nudges only) unless domainModelConsistencyGuard: block is set in .github/bubbles-project.yaml"
+  fi
+else
+  info "domain-model-consistency.sh not present at $domain_model_consistency_guard; skipping (advisory)"
 fi
 echo ""
