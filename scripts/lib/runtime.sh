@@ -122,6 +122,31 @@ smackerel_compose() {
     args+=(--profile test)
   fi
 
+  # BUG-080-001 SCOPE-01 — optional TEST-ONLY compose overlay hook.
+  #
+  # A caller MAY layer one extra compose file on top of docker-compose.yml by
+  # exporting SMACKEREL_COMPOSE_OVERRIDE_FILE. This is a HARNESS LANE SELECTOR,
+  # not runtime configuration: it names a repo-local compose file, carries no
+  # service value, and has NO default — when the variable is unset the compose
+  # argv is byte-for-byte what it was before, so every existing lane is
+  # untouched. When it IS set it must resolve to a real file; a bad path fails
+  # loud here rather than silently degrading to the base-only stack
+  # (smackerel-no-defaults / Gate G028).
+  #
+  # Because BOTH `up` and `down` funnel through this one wrapper, a lane that
+  # exports the variable gets a symmetric bring-up/teardown pair for free.
+  #
+  # Current consumer: the `./smackerel.sh test e2e` graph-disabled phase, which
+  # points it at docker-compose.graph-disabled.override.yml to boot a core with
+  # the graph activation enabler explicitly empty.
+  if [[ -n "${SMACKEREL_COMPOSE_OVERRIDE_FILE:-}" ]]; then
+    if [[ ! -f "$SMACKEREL_COMPOSE_OVERRIDE_FILE" ]]; then
+      echo "ERROR: SMACKEREL_COMPOSE_OVERRIDE_FILE is set but is not a readable file: $SMACKEREL_COMPOSE_OVERRIDE_FILE" >&2
+      return 1
+    fi
+    args+=(-f "$SMACKEREL_COMPOSE_OVERRIDE_FILE")
+  fi
+
   # Prevent docker compose exec from hanging on stdin in non-interactive contexts
   # (e.g. when run under timeout or piped shells)
   if [[ "${1:-}" == "exec" ]]; then

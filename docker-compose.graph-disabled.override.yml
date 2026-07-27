@@ -1,0 +1,83 @@
+# docker-compose.graph-disabled.override.yml
+#
+# BUG-080-001 SCOPE-01 — TEST-ONLY overlay that boots `smackerel-core` in the
+# fail-soft graph **DISABLED** activation state so the e2e-api tier can prove
+# the typed-503 contract against a REAL container over REAL HTTP.
+#
+# WHY THIS EXISTS
+# ---------------
+# The graph public API's activation enabler is the cursor HMAC secret named by
+# KNOWLEDGE_GRAPH_API_CURSOR_SECRET_ENV (config/smackerel.yaml
+# knowledge_graph_api.cursor_secret_env = "KNOWLEDGE_GRAPH_API_CURSOR_SECRET").
+# `graphapi.Config.ClassifyCursorSecret` (internal/api/graphapi/activation.go)
+# resolves:
+#
+#   secret present (non-empty)  -> ActivationEnabled
+#   secret SET but EMPTY        -> ActivationDisabled  (F080-CURSOR-SECRET-EMPTY)
+#   env name unset / var absent -> ActivationDisabled  (F080-CURSOR-SECRET-MISSING)
+#
+# The shared SST test env (config/generated/test.env) always emits a NON-EMPTY
+# KNOWLEDGE_GRAPH_API_CURSOR_SECRET (scripts/commands/config.sh mints one for
+# the dev/test envs), and docker-compose.yml sources it via `env_file:` with no
+# per-run override. So the default `./smackerel.sh test e2e` stack can only ever
+# boot an ENABLED core, and these two SCOPE-01 rows had no live-container proof:
+#
+#   T080-01-DISABLED     TestE2E_GraphActivation_DisabledServesTyped503AndKeepsServing
+#   T080-02-ADVERSARIAL  TestE2E_GraphActivation_DisabledAdversarialRedGreen
+#
+# WHAT THIS DOES
+# --------------
+# Overrides EXACTLY ONE key on EXACTLY ONE service: it sets
+# KNOWLEDGE_GRAPH_API_CURSOR_SECRET to the EXPLICIT empty value on
+# `smackerel-core`. Compose merges `environment:` as a mapping (base keys are
+# preserved) and `environment:` wins over `env_file:`, so the container boots
+# with the enabler SET-BUT-EMPTY — the exact `SecretEmpty` class the fail-soft
+# repair must answer with a typed 503 `capability_disabled`.
+#
+# No new service, no new port, no new volume, no new network. The overlay is a
+# pure in-place mutation of the existing core, which is what keeps teardown
+# perfectly symmetric with the existing project-scoped
+# `./smackerel.sh --env test down --volumes` (`--remove-orphans`) path — there is
+# nothing extra for the standard teardown to miss.
+#
+# FAIL-LOUD / NO-DEFAULTS (smackerel-no-defaults / Gate G028)
+# -----------------------------------------------------------
+# The empty value below is an EXPLICIT literal declared by the harness, NOT a
+# `${VAR:-default}` / `${VAR-default}` substitution fallback. That distinction is
+# the whole point: the DISABLED activation state must be something the harness
+# STATES, never something a missing value silently produces. This file
+# introduces no `${VAR:-...}` form, no new env var, and no SST key. The SST
+# source (config/smackerel.yaml) and the generated env files are UNTOUCHED — the
+# generated test.env still carries its real non-empty secret for the ENABLED
+# lane and for the T080-07-SECURITY leak-needle.
+#
+# TEST ISOLATION (G115)
+# ---------------------
+# Consumed ONLY by the `./smackerel.sh test e2e` graph-disabled phase, which
+# runs INSIDE the same E2E suite lock and boots this overlay onto a FRESH,
+# project-scoped, ephemeral `test` stack (`down --volumes` -> `up`) AFTER the
+# enabled Go-e2e block has finished. Exactly one core is live at any moment, so
+# there is zero NATS/Postgres contention with the enabled stack (the pipeline
+# subscribers in cmd/core/services.go use no queue groups, so two concurrent
+# cores would double-consume and pollute shared state). It touches no prod,
+# monitoring, or backup surface.
+#
+# SCOPE (every other lane UNTOUCHED)
+# ----------------------------------
+# Loaded ONLY when SMACKEREL_COMPOSE_OVERRIDE_FILE points here
+# (scripts/lib/runtime.sh::smackerel_compose). The dev/integration/stress lanes,
+# the e2e-ui lane (docker-compose.e2e-ui.override.yml), and the PRODUCTION stack
+# (deploy/compose.deploy.yml) never load this file. docker-compose.yml itself is
+# unchanged, so the dev-compose contract tests
+# (internal/deploy/dev_compose_default_fallback_test.go,
+# internal/deploy/compose_contract_test.go) stay green.
+
+services:
+  smackerel-core:
+    environment:
+      # EXPLICIT empty value — the fail-soft DISABLED enabler state.
+      # Mapping form `KEY: ""` sets the variable to the empty string (the
+      # list form `- KEY` without `=` would instead pass through from the
+      # host, which is NOT what this contract needs). This overrides the
+      # non-empty value the base service inherits from `env_file:`.
+      KNOWLEDGE_GRAPH_API_CURSOR_SECRET: "" #gitleaks:allow

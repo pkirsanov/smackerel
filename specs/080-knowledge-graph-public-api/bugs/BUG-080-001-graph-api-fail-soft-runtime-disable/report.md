@@ -40,6 +40,27 @@ No test result is claimed.
 
 - Exact config/wiring branches and strict-acceptance omission are not locally confirmed.
 - No secret value was read and no red/green regression exists.
+- **(2026-07-27, bubbles.implement)** T080-02-ADVERSARIAL: the GREEN half is
+  proven by a live DISABLED-stack `--- PASS` and the test is structurally
+  adversarial (`regression-quality-guard --bugfix` → "Adversarial signal
+  detected"). The **RED half is NOT proven**: no failing run of
+  `TestE2E_GraphActivation_DisabledAdversarialRedGreen` against pre-fix
+  warning-and-nil/omitted-route behavior was ever captured, and the fail-soft
+  repair was committed before the harness existed, so it cannot be produced
+  retroactively without a deliberate reversion or an ENABLED-stack contrast run.
+  The DoD row demands "both outputs are recorded", so the row stays `[ ]`.
+  Routed to `bubbles.plan` as finding F-1.
+- **(2026-07-27, bubbles.implement)** The SCOPE-01 Build Quality Gate row stays
+  `[ ]` on two clauses only: "no skipped checks" (the F-1 RED capture) and
+  "documentation alignment" (finding F-2 — the stale HARNESS LIMITATION header
+  comment in `tests/e2e/graph_api_activation_e2e_test.go`). All other clauses of
+  that row were executed green this invocation.
+- **(2026-07-27, bubbles.implement)** The e2e raw output transcribed in
+  "## E2E Harness Unblock + SCOPE-01 e2e Closure (2026-07-27)" was executed by
+  the **parent orchestrator** in this session, not by this invocation. This
+  invocation re-ran only the static gates (check, lint, format --check,
+  pii-scan, artifact-lint, traceability-guard) and verified the harness wiring
+  read-only.
 
 ## Scenario Contract Evidence
 
@@ -507,7 +528,39 @@ terminal capture from this session.)
 - **Core Outcome SCN-080-001-02** → `[x]` (T080-02-MANIFEST: all eight families mount as one authenticated group; remove/duplicate rejects construction).
 - **Test Evidence T080-02-MANIFEST** → `[x]` (live integration, evidence above).
 
-### Still deferred — e2e-api rows (HARNESS LIMITATION, owner: bubbles.devops)
+### ~~Still deferred — e2e-api rows (HARNESS LIMITATION, owner: bubbles.devops)~~ — SUPERSEDED 2026-07-27
+
+> **STATUS: RESOLVED / SUPERSEDED.** The blocker described below was cleared on
+> 2026-07-27 by the bubbles.devops harness delivery (`docker-compose.graph-disabled.override.yml`,
+> the serial graph-disabled `./smackerel.sh test e2e` phase, and the fail-loud
+> `SMACKEREL_COMPOSE_OVERRIDE_FILE` hook in `scripts/lib/runtime.sh`). All three
+> rows now have live-stack evidence — see
+> "## E2E Harness Unblock + SCOPE-01 e2e Closure (2026-07-27)" below.
+>
+> **The original T080-07-SECURITY diagnosis below was FACTUALLY WRONG and is
+> retained only as an audit record — do not act on it.** It asserted the e2e
+> runner "is only given `DATABASE_URL` / `SMACKEREL_AUTH_TOKEN` /
+> `CORE_EXTERNAL_URL` … NOT `KNOWLEDGE_GRAPH_API_CURSOR_SECRET`, so the test
+> process has no secret value to assert-absent." That is false. The ENABLED
+> go-e2e lane in `smackerel.sh` passes `--env-file "$env_file"`
+> (`smackerel.sh:2114`, feeding `config/generated/test.env`) IN ADDITION to the
+> named `-e` passthroughs, and `config/generated/test.env:195` defines
+> `KNOWLEDGE_GRAPH_API_CURSOR_SECRET`. The secret was therefore ALWAYS present
+> in the runner env. The earlier author enumerated only the visually adjacent
+> `-e` flags and did not read the `--env-file` line one row above them. No
+> harness change was ever required for T080-07-SECURITY; the test simply had
+> never been run. When run on 2026-07-27 it passed first time and logged
+> `secret length=64`, proving the needle was live.
+>
+> **Why this correction is recorded rather than deleted:** a wrong recorded
+> blocker is self-perpetuating — it converts a runnable test into permanently
+> deferred work, because every later reader trusts the recorded diagnosis
+> instead of re-deriving it. The T080-01-DISABLED / T080-02-ADVERSARIAL half of
+> the diagnosis below WAS correct (a genuinely DISABLED container really did
+> require a new compose flavor). The T080-07-SECURITY half was not. Both are
+> kept verbatim so the distinction stays auditable.
+
+**Original (superseded) text follows.**
 
 The three SCOPE-01 e2e-api rows in `tests/e2e/graph_api_activation_e2e_test.go`
 stay `[ ]`. They were NOT faked. Root cause, verified this session:
@@ -541,3 +594,288 @@ Because these three rows remain open, the SCOPE-01 **Build Quality Gate** row
 also stays `[ ]` (it requires all scope-specific E2E regressions to pass), and
 SCOPE-01 stays **In Progress**. The BUG top-level `state.json` status stays
 `blocked` (SCOPE-02/03/04 remain deferred).
+
+**End of superseded text.** See the next section for the resolving evidence.
+
+---
+
+## E2E Harness Unblock + SCOPE-01 e2e Closure (2026-07-27)
+
+**Provenance of the e2e output in this section:** the run below was executed by
+the **parent orchestrator in this session** on 2026-07-27 (start
+`2026-07-27T18:59:04+00:00`, end `2026-07-27T19:06:30+00:00`, terminal marker
+`===E2E_EXIT=0===`). This `bubbles.implement` invocation **did not re-run** the
+~8-minute suite; it transcribes that session-local raw output verbatim and
+attributes it accordingly. No additional e2e run is claimed. The static gates in
+"### Quality gates (2026-07-27, this invocation)" WERE executed by this
+invocation.
+
+**Command:** `./smackerel.sh test e2e --go-run 'TestE2E_GraphActivation'`
+**Exit Code:** 0 (`===E2E_EXIT=0===`)
+**Claim Source:** executed (parent orchestrator, this session)
+
+### Harness delivered by bubbles.devops (what unblocked these rows)
+
+| File | Change | Status |
+|---|---|---|
+| `docker-compose.graph-disabled.override.yml` | NEW — overrides `smackerel-core` to boot with an EMPTY `KNOWLEDGE_GRAPH_API_CURSOR_SECRET`, producing the fail-soft DISABLED activation state | new, untracked |
+| `smackerel.sh` | Serial graph-disabled e2e phase (runs LAST, recycles the stack, exports `SMACKEREL_E2E_GRAPH_DISABLED_URL` to the runner) | modified |
+| `scripts/lib/runtime.sh` | `SMACKEREL_COMPOSE_OVERRIDE_FILE` hook — fail-loud, no default | modified |
+
+Verified read-only by this invocation: `smackerel.sh:2305` exports
+`SMACKEREL_E2E_GRAPH_DISABLED_URL=http://smackerel-core:${core_container_port}`
+for the graph-disabled phase, which is exactly the variable
+`disabledGraphStackURL()` requires — so the two disabled tests **ran** rather
+than hitting their `t.Skip` guard. `scripts/lib/runtime.sh:142-147` implements
+the fail-loud override hook.
+
+### T080-07-SECURITY
+
+**Scenario:** SCN-080-001-07 — Graph activation output never contains secret or
+cursor material.
+**Tier:** `e2e-api`, ENABLED stack, real HTTP against the live `smackerel-core`
+container. No request interception, no mock.
+**Claim Source:** executed (parent orchestrator, this session)
+
+```text
+go-e2e: applying -run selector: TestE2E_GraphActivation
+=== RUN   TestE2E_GraphActivation_NeverLeaksSecretOrCursorMaterial
+    graph_api_activation_e2e_test.go:204: probe topics_page1                 status=200 bodyLen=284 rawSecretAbsent=true
+    graph_api_activation_e2e_test.go:204: probe topics_page2_cursor_decode   status=200 bodyLen=284 rawSecretAbsent=true
+    graph_api_activation_e2e_test.go:204: probe people                       status=200 bodyLen=29 rawSecretAbsent=true
+    graph_api_activation_e2e_test.go:204: probe places                       status=200 bodyLen=29 rawSecretAbsent=true
+    graph_api_activation_e2e_test.go:204: probe time                         status=400 bodyLen=98 rawSecretAbsent=true
+    graph_api_activation_e2e_test.go:204: probe edges_topic_source           status=200 bodyLen=29 rawSecretAbsent=true
+    graph_api_activation_e2e_test.go:204: probe invalid_cursor_error         status=400 bodyLen=114 rawSecretAbsent=true
+    graph_api_activation_e2e_test.go:204: probe health                       status=200 bodyLen=1295 rawSecretAbsent=true
+    graph_api_activation_e2e_test.go:208: VALUE-SAFE: 8 live graph/activation API probes surfaced NO cursor-secret material (raw/hex/base64/sha256); secret length=64
+--- PASS: TestE2E_GraphActivation_NeverLeaksSecretOrCursorMaterial (0.05s)
+ok      github.com/smackerel/smackerel/tests/e2e        0.180s
+PASS: go-e2e
+```
+
+**Why this is a real assertion and not a vacuous pass:** the test `t.Skip`s if
+`KNOWLEDGE_GRAPH_API_CURSOR_SECRET` is absent or shorter than 8 chars. It did
+not skip, and it logged `secret length=64` — so the leak needle was the ACTUAL
+deployed 64-char secret, and all seven derived needle classes (raw, hex,
+base64_std, base64_rawurl, sha256_hex, sha256_b64, sha256_rawurlb) were searched
+across both response bodies and headers on all 8 probes. The `topics_page1` →
+`topics_page2_cursor_decode` pair exercised a real HMAC-signed `nextCursor`
+round trip, so live cursor material was genuinely surfaced and scanned. The
+assertion is value-safe: the secret is searched-for, never logged.
+
+### T080-01-DISABLED
+
+**Scenario:** SCN-080-001-01 — empty/missing enabler yields the typed 503
+`capability_disabled` state and the service keeps serving other capabilities.
+**Tier:** `e2e-api`, DISABLED stack, real HTTP against a genuinely
+disabled-graph `smackerel-core` container.
+**Claim Source:** executed (parent orchestrator, this session)
+
+```text
+Running graph-DISABLED e2e phase (BUG-080-001 SCOPE-01: T080-01-DISABLED + T080-02-ADVERSARIAL)...
+Container smackerel-test-smackerel-core-1  Healthy
+go-e2e: applying -run selector: TestE2E_GraphActivation_Disabled
+=== RUN   TestE2E_GraphActivation_DisabledServesTyped503AndKeepsServing
+--- PASS: TestE2E_GraphActivation_DisabledServesTyped503AndKeepsServing (0.02s)
+=== RUN   TestE2E_GraphActivation_DisabledAdversarialRedGreen
+--- PASS: TestE2E_GraphActivation_DisabledAdversarialRedGreen (0.01s)
+PASS
+ok      github.com/smackerel/smackerel/tests/e2e        0.179s
+PASS: go-e2e-graph-disabled
+===E2E_EXIT=0===
+```
+
+The test drove all eight canonical manifest paths (`/api/topics`,
+`/api/topics/does-not-exist`, `/api/people`, `/api/people/does-not-exist`,
+`/api/places`, `/api/places/does-not-exist`, `/api/time`, `/api/graph/edges`),
+requiring `503` + a typed `capability_disabled` envelope on every one, then
+asserted `/api/health` still returns `200` — the "keeps serving" clause.
+
+**Value-safe proof the override genuinely produced the DISABLED state** (secret
+never printed; length only). This is the differential control that rules out a
+vacuous pass against an accidentally-enabled core:
+
+```text
+A) BASELINE (no override):   smackerel-core: enabler_len=64   smackerel-ml: enabler_len=64
+B) WITH graph-disabled override: smackerel-core: enabler_len=0    smackerel-ml: enabler_len=64
+C) bad override path: ERROR: SMACKEREL_COMPOSE_OVERRIDE_FILE is set but is not a readable file: /nonexistent/nope.yml  (exit 1 — fails loud)
+```
+
+Row A vs row B is the proof: the override drove `smackerel-core`'s enabler from
+length 64 to length 0 while leaving `smackerel-ml` untouched at 64, so the
+DISABLED assertions ran against a core that was really disabled, and the
+override's blast radius was correctly scoped to one service. Row C proves the
+hook is fail-loud with no silent default.
+
+### T080-02-ADVERSARIAL
+
+**Scenario:** SCN-080-001-02 (fail-soft leg) — empty/missing enabler serves the
+typed 503 `capability_disabled`, never a silent 404 nil-handler absence or an
+opaque 500.
+**Tier:** `e2e-api`, DISABLED stack (same run as T080-01-DISABLED above).
+**Claim Source:** executed (parent orchestrator, this session) — **GREEN half only**
+
+GREEN evidence is the `TestE2E_GraphActivation_DisabledAdversarialRedGreen`
+`--- PASS` line in the T080-01-DISABLED block above. The test drives
+`GET /api/topics/` — the exact path the pre-fix router answered with a bare Chi
+404 — and `t.Fatalf`s on `404` (RED reproduced), `t.Fatalf`s on `500` (opaque
+degradation), and passes ONLY on a `503` carrying a typed `capability_disabled`
+envelope.
+
+**Anti-false-positive guards (executed by THIS invocation's parent in this
+session):**
+
+```text
+bash .github/bubbles/scripts/regression-quality-guard.sh tests/e2e/graph_api_activation_e2e_test.go
+  REGRESSION QUALITY RESULT: 0 violation(s), 0 warning(s)   GUARD_EXIT=0
+bash .github/bubbles/scripts/regression-quality-guard.sh --bugfix tests/e2e/graph_api_activation_e2e_test.go
+  ✅ Adversarial signal detected      0 violation(s), 0 warning(s)   BUGFIX_GUARD_EXIT=0
+```
+
+`--bugfix` reporting "Adversarial signal detected" confirms the test is
+STRUCTURALLY adversarial — it cannot pass against the reintroduced bug. That
+satisfies the framework's adversarial-regression standard.
+
+**HONEST GAP — this row remains `[ ]`.** The DoD item as written requires that
+the test "**first fails** against warning-and-nil/omitted-route behavior, then
+passes with the repair; **both outputs are recorded**". Only the GREEN output
+exists. No RED run of this e2e test against pre-fix behavior was ever captured:
+the fail-soft repair was already committed before the harness existed, and
+"## Bug Reproduction - Before Fix" in this report is explicitly
+`Claim Source: interpreted historical input` with "no red/green regression
+exists". Marking this row `[x]` would assert a recorded RED output that does not
+exist. See "## Uncertainty Declarations" and the routed finding below.
+
+### Quality gates (2026-07-27, this invocation)
+
+All executed by THIS `bubbles.implement` invocation. Raw output is reproduced in
+the session transcript; exit codes below.
+
+| Gate | Command | Exit |
+|---|---|---|
+| Check | `./smackerel.sh check` | 0 |
+| Lint | `./smackerel.sh lint` | 0 (`All checks passed!`) |
+| Format | `./smackerel.sh format --check` | 0 |
+| PII scan | `bash .github/bubbles/scripts/pii-scan.sh` | 0 (`no leaks found` / `pii-scan: clean.`) |
+| Artifact lint | `bash .github/bubbles/scripts/artifact-lint.sh specs/080-…/BUG-080-001-…` | 0 (`Artifact lint PASSED.`) |
+| Traceability guard | `bash .github/bubbles/scripts/traceability-guard.sh specs/080-…/BUG-080-001-…` | 0 (`RESULT: PASSED (0 warnings)`) |
+
+```text
+$ ./smackerel.sh check
+config-validate: <repo-root>/config/generated/dev.env.tmp.551875 OK
+Config is in sync with SST
+env_file drift guard: OK
+scenario-lint: scanning config/prompt_contracts (glob: *.yaml)
+scenarios registered: 17, rejected: 0
+scenario-lint: OK
+CHECK_EXIT=0
+
+$ ./smackerel.sh lint
+All checks passed!
+LINT_EXIT=0
+
+$ ./smackerel.sh format --check
+FORMAT_CHECK_AFTER_EXIT=0
+
+$ bash .github/bubbles/scripts/pii-scan.sh
+7:14PM INF 0 commits scanned.
+7:14PM INF scan completed in 10.3ms
+7:14PM INF no leaks found
+🫧 pii-scan: clean.
+PII_SCAN_EXIT=0
+
+$ bash .github/bubbles/scripts/traceability-guard.sh specs/080-knowledge-graph-public-api/bugs/BUG-080-001-graph-api-fail-soft-runtime-disable
+--- Traceability Summary ---
+RESULT: PASSED (0 warnings)
+TRACEABILITY_EXIT=0
+```
+
+### gofmt repair (pre-existing, unblocks the Build Quality Gate)
+
+`./smackerel.sh format --check` previously exited 1 flagging ONLY
+`internal/assistant/facade.go` — a committed, foreign file from the spec-069
+consolidation merge, recorded in the prior session as an out-of-boundary
+pre-existing finding. Because the SCOPE-01 Build Quality Gate row explicitly
+requires `./smackerel.sh format --check` to pass, that finding blocked the row
+(and `git push`). Repaired this invocation with `./smackerel.sh format`.
+
+**Verified purely cosmetic — zero semantic change:**
+
+```text
+$ git --no-pager diff --stat internal/assistant/facade.go
+ internal/assistant/facade.go | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+$ git --no-pager diff internal/assistant/facade.go
+@@ -210,7 +210,7 @@ type Facade struct {
+        // producing a provider-error the provenance gate then masks as
+        // "saved as an idea"). Returns the marshaled Forecast JSON or a
+        // classified error.
+-       weatherLookup func(ctx context.Context, location string) (json.RawMessage, error)
++       weatherLookup        func(ctx context.Context, location string) (json.RawMessage, error)
+         compiledInteractions *compiledInteractions
+ }
+```
+
+The single changed line is struct-field alignment padding between the field name
+`weatherLookup` and its type — gofmt aligning it with the adjacent
+`compiledInteractions` field. The identifier, type, comment, and all surrounding
+code are byte-identical. No behavior, signature, or assistant failure-honesty
+logic changed.
+
+### DoD rows closed this invocation
+
+- **Test Evidence T080-07-SECURITY** → `[x]` (live ENABLED-stack, 8 probes, real 64-char secret needle).
+- **Test Evidence T080-01-DISABLED** → `[x]` (live DISABLED-stack, 8 canonical paths typed 503 + health 200, differential enabler-length control).
+- **Test Evidence T080-02-ADVERSARIAL** → stays `[ ]` (GREEN proven; RED output not recorded — see the HONEST GAP above).
+- **Build Quality Gate** → stays `[ ]` (see the assessment below).
+
+### Build Quality Gate assessment (SCOPE-01)
+
+The row requires: "Scope-specific unit/integration/E2E regressions,
+`./smackerel.sh check`, `./smackerel.sh lint`, `./smackerel.sh format --check`,
+source-lock/config checks, artifact-lint, traceability guard, documentation
+alignment, zero warnings, and change-boundary review all pass with executed
+evidence and **no skipped checks**."
+
+| Clause | Verdict |
+|---|---|
+| Scope-specific unit / integration / E2E regressions pass | ✅ unit + integration previously green; e2e green this session (`===E2E_EXIT=0===`) |
+| `./smackerel.sh check` | ✅ exit 0 |
+| `./smackerel.sh lint` | ✅ exit 0, `All checks passed!` |
+| `./smackerel.sh format --check` | ✅ exit 0 (repaired this invocation) |
+| source-lock / config checks | ✅ folded into `check` (config-in-sync + env_file drift guard OK) |
+| artifact-lint | ✅ exit 0 |
+| traceability guard | ✅ exit 0, `RESULT: PASSED (0 warnings)` |
+| zero warnings | ✅ 0 warnings across lint + traceability |
+| change-boundary review | ✅ amended + attributed — see scopes.md "Change Boundary" |
+| documentation alignment | ⚠️ **NOT satisfied** — see below |
+| **no skipped checks** | ⚠️ **NOT satisfied** — the T080-02-ADVERSARIAL RED half was never run |
+
+**Row stays `[ ]`.** Two clauses fail honestly:
+
+1. **"no skipped checks"** — T080-02-ADVERSARIAL's required RED capture was
+   never executed. A gate row that certifies "no skipped checks" cannot be
+   checked while a sibling row in the same scope is open precisely because a
+   required output is missing.
+2. **"documentation alignment"** — the header comment block of
+   `tests/e2e/graph_api_activation_e2e_test.go` (lines 24-41) still narrates the
+   now-resolved HARNESS LIMITATION and states the two disabled tests "`t.Skip`
+   with a precise reason … until then". That text is now false: the harness
+   exports `SMACKEREL_E2E_GRAPH_DISABLED_URL` and both tests run. Leaving a
+   stale blocker narrative in the test file would recreate exactly the
+   self-perpetuating-deferral failure this report corrects above. Correcting it
+   is a test-file edit that was NOT in this invocation's assigned change set, so
+   it is routed rather than silently made.
+
+Every other clause is green. Once the two findings below are closed, this row
+and T080-02-ADVERSARIAL close together.
+
+### Routed findings (open — owner action required)
+
+| # | Finding | Owner | Detail |
+|---|---|---|---|
+| F-1 | T080-02-ADVERSARIAL DoD demands a recorded RED output that does not and cannot retroactively exist | `bubbles.plan` | Either (a) reword the row to the framework adversarial-regression standard actually enforced by `regression-quality-guard --bugfix` ("the test is constructed to fail against the reintroduced bug", already ✅), or (b) keep the literal red→green requirement and commission a RED capture (e.g. run the adversarial test against the ENABLED stack, or temporarily revert the fail-soft branch behind a harness flag). Row text is plan-owned; `bubbles.implement` must not rewrite a DoD behavioral claim to match delivery. |
+| F-2 | `tests/e2e/graph_api_activation_e2e_test.go` header (lines 24-41) still documents the resolved HARNESS LIMITATION and a `t.Skip` that no longer occurs | `bubbles.implement` (follow-up) or `bubbles.devops` | Update the comment to state the harness now exports `SMACKEREL_E2E_GRAPH_DISABLED_URL` via the serial graph-disabled phase. Blocks the "documentation alignment" clause of the Build Quality Gate row. |
+
