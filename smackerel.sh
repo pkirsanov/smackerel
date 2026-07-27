@@ -2213,6 +2213,120 @@ case "$COMMAND" in
           echo "Skipping Ollama agent E2E (set SMACKEREL_TEST_OLLAMA=1 to enable tests/e2e/agent/happy_path_test.go)"
         fi
 
+        # BUG-080-001 SCOPE-01 — graph-DISABLED e2e phase.
+        #
+        # WHY A SEPARATE PHASE. The graph public API's activation enabler is the
+        # cursor HMAC secret (internal/api/graphapi/activation.go: a secret that
+        # is SET-but-EMPTY resolves ActivationDisabled -> typed 503
+        # capability_disabled). The shared SST test env always emits a NON-EMPTY
+        # KNOWLEDGE_GRAPH_API_CURSOR_SECRET, so the ENABLED stack above can never
+        # exercise the fail-soft DISABLED path over real HTTP. That left two
+        # SCOPE-01 rows without live-container proof:
+        #
+        #   T080-01-DISABLED     TestE2E_GraphActivation_DisabledServesTyped503AndKeepsServing
+        #   T080-02-ADVERSARIAL  TestE2E_GraphActivation_DisabledAdversarialRedGreen
+        #
+        # (The third SCOPE-01 e2e row, T080-07-SECURITY, needs the ENABLED core
+        # and already runs in the go-e2e block above.)
+        #
+        # WHY SEQUENTIAL, NOT A SECOND CONCURRENT CORE. Same E2E suite lock, one
+        # locked run — but the disabled core is booted SERIALLY onto a FRESH
+        # project-scoped ephemeral stack instead of alongside the enabled one.
+        # The pipeline subscribers in cmd/core/services.go subscribe WITHOUT
+        # queue groups, so two concurrent cores sharing one NATS/Postgres would
+        # double-consume and pollute the shared e2e state (G115). Serial keeps
+        # exactly one core live at any moment, needs no new host port and no new
+        # SST key, and keeps teardown symmetric with the existing project-scoped
+        # `down --volumes --remove-orphans` path.
+        #
+        # WHY LAST. This phase recycles the test stack, so it runs AFTER every
+        # other block that expects the enabled stack to still be up (including
+        # the opt-in Ollama block above).
+        e2e_graph_disabled_override="$SCRIPT_DIR/docker-compose.graph-disabled.override.yml"
+        # Fixed selector: only these two tests belong to this phase. Go's -run
+        # takes an unanchored regex, so this prefix matches both.
+        e2e_graph_disabled_run_selector="TestE2E_GraphActivation_Disabled"
+
+        e2e_graph_disabled_phase_applies() {
+          # The assistant package selector targets ./tests/e2e/assistant, a
+          # different package entirely.
+          if [[ -n "$GO_E2E_PACKAGE_SELECTOR" ]]; then
+            return 1
+          fi
+          # Full lane always proves the disabled contract.
+          if [[ -z "$GO_E2E_RUN_SELECTOR" ]]; then
+            return 0
+          fi
+          # Targeted lane: only pay for the extra stack cycle when the caller's
+          # selector can actually reach the graph-activation tests.
+          [[ "$GO_E2E_RUN_SELECTOR" == *Graph* ]]
+        }
+
+        if e2e_graph_disabled_phase_applies; then
+          echo ""
+          echo "Running graph-DISABLED e2e phase (BUG-080-001 SCOPE-01: T080-01-DISABLED + T080-02-ADVERSARIAL)..."
+          e2e_graph_disabled_status=0
+
+          # Recycle the enabled stack first — base compose only; the overlay is
+          # not exported yet.
+          e2e_down_test_stack "before graph-disabled e2e phase" || e2e_graph_disabled_status=$?
+
+          if [[ "$e2e_graph_disabled_status" -eq 0 ]]; then
+            # Exported so BOTH the `up` below and the matching `down` after the
+            # phase layer the same overlay
+            # (scripts/lib/runtime.sh::smackerel_compose). e2e_run_child
+            # propagates the parent environment to the child.
+            export SMACKEREL_COMPOSE_OVERRIDE_FILE="$e2e_graph_disabled_override"
+            set +e
+            e2e_run_child "$SCRIPT_DIR/scripts/lib/run-with-timeout.sh" --kill-after=30s 600 "$SCRIPT_DIR/smackerel.sh" --env test up
+            e2e_graph_disabled_status=$?
+            set -e
+            if [[ "$e2e_graph_disabled_status" -ne 0 ]]; then
+              echo "ERROR: graph-disabled test stack failed to start (exit ${e2e_graph_disabled_status})" >&2
+            fi
+          fi
+
+          if [[ "$e2e_graph_disabled_status" -eq 0 ]]; then
+            set +e
+            e2e_run_child docker run --rm \
+              --network "$compose_network" \
+              -v "$SCRIPT_DIR:/workspace" \
+              -v smackerel-gomod-cache:/go/pkg/mod \
+              -v smackerel-gobuild-cache:/root/.cache/go-build \
+              -w /workspace \
+              --env-file "$env_file" \
+              -e "CORE_EXTERNAL_URL=http://smackerel-core:${core_container_port}" \
+              -e "DATABASE_URL=postgres://${pg_user}:${pg_pass}@postgres:${pg_container_port}/${pg_db}?sslmode=disable" \
+              -e "POSTGRES_URL=postgres://${pg_user}:${pg_pass}@postgres:${pg_container_port}/${pg_db}?sslmode=disable" \
+              -e "NATS_URL=nats://${auth_token}@nats:${nats_container_port}" \
+              -e "SMACKEREL_AUTH_TOKEN=${auth_token}" \
+              -e "QF_DECISIONS_BASE_URL=${qf_decisions_base_url}" \
+              -e "SMACKEREL_TEST_ENV_FILE=/workspace/${env_file#$SCRIPT_DIR/}" \
+              -e "SMACKEREL_E2E_GRAPH_DISABLED_URL=http://smackerel-core:${core_container_port}" \
+              golang:1.25.10-bookworm bash /workspace/scripts/runtime/go-e2e.sh --run "$e2e_graph_disabled_run_selector"
+            e2e_graph_disabled_status=$?
+            set -e
+          fi
+
+          # Symmetric teardown: the overlay is still exported here, so `down`
+          # resolves the same compose file set that `up` did.
+          e2e_graph_disabled_teardown_status=0
+          e2e_down_test_stack "after graph-disabled e2e phase" || e2e_graph_disabled_teardown_status=$?
+          unset SMACKEREL_COMPOSE_OVERRIDE_FILE
+          if [[ "$e2e_graph_disabled_status" -eq 0 && "$e2e_graph_disabled_teardown_status" -ne 0 ]]; then
+            e2e_graph_disabled_status="$e2e_graph_disabled_teardown_status"
+          fi
+
+          if [[ "$e2e_graph_disabled_status" -eq 0 ]]; then
+            echo "PASS: go-e2e-graph-disabled"
+          else
+            echo "FAIL: go-e2e-graph-disabled (exit=${e2e_graph_disabled_status})"
+            if [[ "$e2e_overall_status" -eq 0 ]]; then
+              e2e_overall_status="$e2e_graph_disabled_status"
+            fi
+          fi
+        fi
+
         if [[ "$e2e_overall_status" -ne 0 ]]; then
           exit "$e2e_overall_status"
         fi

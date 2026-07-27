@@ -210,7 +210,7 @@ type Facade struct {
 	// producing a provider-error the provenance gate then masks as
 	// "saved as an idea"). Returns the marshaled Forecast JSON or a
 	// classified error.
-	weatherLookup func(ctx context.Context, location string) (json.RawMessage, error)
+	weatherLookup        func(ctx context.Context, location string) (json.RawMessage, error)
 	compiledInteractions *compiledInteractions
 }
 
