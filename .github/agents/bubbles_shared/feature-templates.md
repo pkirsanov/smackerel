@@ -13,7 +13,7 @@ State the user pain, system gap, and why now. Keep it user-visible and testable.
 ## Outcome Contract
 **Intent:** [1-3 sentences: what outcome should be achieved from the user/system perspective]
 **Success Signal:** [Observable, testable proof that the outcome was achieved — not "tests pass" but "user can do X and sees Y"]
-**Hard Constraints:** [Business invariants that must hold regardless of implementation approach — these survive model upgrades]
+**Hard Constraints:** [Business invariants that must hold regardless of implementation approach — these survive model upgrades. A Hard Constraint MAY name a declared `domainModel.invariants[].id` (`INV-*`), which Gate G130 then checks is enforced-by-code or proved-by an adversarial test.]
 **Failure Condition:** [What would make this feature a failure even if all tests pass]
 
 ## Goals
@@ -55,7 +55,7 @@ Summarize architecture intent, supported surfaces, and key constraints.
 Components, data flow, integrations, and ownership boundaries.
 
 ## Data Model
-Entities, relationships, migrations, and lifecycle constraints.
+Entities, relationships, migrations, and lifecycle constraints. When the project declares a `domainModel:` SST (the optional block in `.github/bubbles-project.yaml`, a sibling of `traceContracts:`), this section SHOULD **reference and extend** that shared model rather than siloing a per-feature model — promote new entities and invariants UP into `domainModel.entities` / `domainModel.invariants`. Gate **G131** (advisory) nudges on drift: a `## Data Model` entity not present in the shared model, or an Outcome-Contract Hard Constraint naming an `INV-*` not declared in `domainModel.invariants`.
 
 ## API/Contracts
 Endpoints, request/response shapes, error model, and versioning.
@@ -142,6 +142,8 @@ Use the Test Plan table from scope-workflow.md and map each Gherkin scenario to 
 
 **Shared infrastructure changes MUST include an explicit canary row:** add at least one `Canary:` row tied to the shared fixture/bootstrap contract surfaces that could cascade silently. The canary must run before the broader suite reruns and must not rely solely on the changed fixture validating itself.
 
+**Risk-proportional sweep application (SWEEP-PROP):** The Shared Infrastructure Impact Sweep, Change Boundary, Consumer Impact Sweep, and `Canary:` rows above are CONDITIONAL — each applies ONLY when its specific trigger is present in the scope's changed surface, never as blanket boilerplate. `bubbles/scripts/risk-tier-resolve.sh` is the canonical classifier: a scope it resolves `riskClass=low` (a positive build-free/static/isolated signal AND zero high-risk triggers) carries ONLY the sweeps whose specific triggers actually fire — it MUST NOT carry inapplicable sweep subsections as ceremony. A scope it resolves `riskClass=high` or `riskClass=unknown` (any auth / payments / secrets / PII / DB-migration / deploy / prod / host-singleton / cross-product trigger, OR a shared-fixture / harness / bootstrap / rename / removal / risky-refactor change) MUST include every applicable sweep; `unknown` is fail-closed and treated as high, so ambiguity NEVER skips a sweep. This is risk-PROPORTIONAL, not risk-OPTIONAL: it removes inapplicable ceremony from genuinely trivial scopes; it never lets a high-fan-out or consumer-facing change skip its sweep.
+
 Regression tests are previously missed tests: add them to feature/component-specific test files (no generic cross-feature regression files).
 
 If the scope declares latency/performance SLAs, add explicit `stress` rows to the Test Plan.
@@ -178,6 +180,12 @@ All DoD entries MUST be markdown checkboxes (`- [ ]` or `- [x]`). Non-checkbox D
 Record raw execution evidence in the matching report file:
 - single-file mode: `report.md`
 - per-scope mode: `scopes/NN-name/report.md`
+
+Each `- [x]` item MUST be backed by real ≥10-line raw execution evidence, provided by ANY ONE of these equivalent forms (see evidence-rules.md → "Evidence by Reference"):
+- Inline (default): a ≥10-line raw output block directly under the item.
+- Reference: `- [x] <item> → Evidence: [<anchor>](report.md#<anchor>)` resolving to a ≥10-line block under that anchor in `report.md`.
+- Tool-log: wrap the command with the `record_evidence` MCP tool (writes `.specify/runtime/tool-calls.jsonl`); the guard then covers the matching item automatically.
+An unresolvable anchor, a <10-line block, or a missing/mismatched tool-log entry is fail-closed (the item stays unproven). The `**Claim Source:**` tag is required in every form.
 ```
 
 ## report.md Template

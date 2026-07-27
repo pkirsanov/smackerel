@@ -72,6 +72,10 @@ bubbles/scripts/docs-registry-effective.sh
 bubbles/scripts/docs-registry-resolve.sh
 bubbles/scripts/dod-section-lib-selftest.sh
 bubbles/scripts/dod-section-lib.sh
+bubbles/scripts/domain-invariant-guard-selftest.sh
+bubbles/scripts/domain-invariant-guard.sh
+bubbles/scripts/domain-model-consistency-selftest.sh
+bubbles/scripts/domain-model-consistency.sh
 bubbles/scripts/done-spec-audit-selftest.sh
 bubbles/scripts/done-spec-audit.sh
 bubbles/scripts/downstream-framework-write-guard.sh
@@ -238,6 +242,8 @@ bubbles/scripts/repository-binding-host-context-selftest.sh
 bubbles/scripts/repository-binding-host-context.sh
 bubbles/scripts/repository-binding-selftest.sh
 bubbles/scripts/repository-binding.sh
+bubbles/scripts/required-specialists-consistency-selftest.sh
+bubbles/scripts/required-specialists-consistency.sh
 bubbles/scripts/requirement-mechanism-guard-selftest.sh
 bubbles/scripts/requirement-mechanism-guard.sh
 bubbles/scripts/result-envelope-validate-selftest.sh
@@ -279,6 +285,7 @@ bubbles/scripts/state-snapshot.sh
 bubbles/scripts/state-transition-guard-perf-selftest.sh
 bubbles/scripts/state-transition-guard-selftest.sh
 bubbles/scripts/state-transition-guard.sh
+bubbles/scripts/state-transition-required-specialists-selftest.sh
 bubbles/scripts/strict-terminal-status-guard-selftest.sh
 bubbles/scripts/strict-terminal-status-guard.sh
 bubbles/scripts/super-surface-selftest.sh
@@ -325,6 +332,12 @@ bubbles/scripts/workflow-runner-grants-lint-selftest.sh
 bubbles/scripts/workflow-runner-grants-lint.sh
 bubbles/scripts/workflow-surface-selftest.sh
 bubbles/scripts/workflow-yaml-validity-selftest.sh
+bubbles/scripts/worktree-finalize-reap-selftest.sh
+bubbles/scripts/worktree-hygiene-guard-selftest.sh
+bubbles/scripts/worktree-hygiene-report.sh
+bubbles/scripts/worktree-reap.sh
+bubbles/scripts/worktree-spawn-selftest.sh
+bubbles/scripts/worktree-spawn.sh
 bubbles/scripts/yaml-schema-validate.sh
 bubbles/scripts/scope-universe-resolver.py
 bubbles/scripts/guards/control-plane-checks.sh
@@ -346,6 +359,7 @@ bubbles/schemas/workflows.schema.json
 bubbles/eval/schemas/adversarial-sample.schema.json
 bubbles/registry/gates.yaml
 bubbles/registry/optional-skills.txt
+bubbles/registry/required-specialists.yaml
 bubbles/mcp/clients/claude.json
 bubbles/mcp/clients/cline.json
 bubbles/mcp/clients/cursor.json
@@ -380,6 +394,7 @@ bubbles/installer/installer.yaml
 bubbles/scripts/hooks/git-env-sanitize-selftest.sh
 bubbles/scripts/hooks/git-env-sanitize.sh
 bubbles/scripts/hooks/pre-push.sh
+templates/DomainModel.md.tmpl
 templates/agents.md.tmpl
 templates/constitution.md.tmpl
 templates/copilot-instructions.md.tmpl
@@ -466,10 +481,12 @@ docs/recipes/observe-production.md
 docs/recipes/ops-packet-work.md
 docs/recipes/outcome-first-specs.md
 docs/recipes/parallel-scopes.md
+docs/recipes/parallel-worktrees.md
 docs/recipes/plan-only.md
 docs/recipes/post-impl-hardening.md
 docs/recipes/propagate-changes.md
 docs/recipes/quality-sweep.md
+docs/recipes/rapid-tool-delivery.md
 docs/recipes/readiness-review.md
 docs/recipes/reconcile-redesign-existing-feature.md
 docs/recipes/regression-check.md

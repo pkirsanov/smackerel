@@ -141,6 +141,73 @@ assert_stderr_contains() {
   fi
 }
 
+assert_stdout_lacks() {
+  local label="$1"
+  local needle="$2"
+  if grep -qF "$needle" "$WORKSPACE/stdout.last"; then
+    ko "$label stdout unexpectedly contains '$needle'"
+    cat "$WORKSPACE/stdout.last"
+  else
+    ok "$label stdout does not contain '$needle'"
+  fi
+}
+
+# --- IMP-106 SCOPE-3 (DOM-LINEAGE) fixture helpers ---
+# Write a .github/bubbles-project.yaml with an inline domainModel: block carrying
+# two invariants (INV-REFUND-ONCE, INV-STATUS-ENUM) whose rule text is caller-set.
+write_project_domain_model() {
+  local repo="$1"
+  local refund_rule="$2"
+  local status_rule="$3"
+  mkdir -p "$repo/.github"
+  cat > "$repo/.github/bubbles-project.yaml" <<EOF
+schemaVersion: 1
+domainModel:
+  entities:
+    order:
+      states: [paid, shipped, refunded]
+      terminal: [refunded]
+  invariants:
+    - id: INV-REFUND-ONCE
+      rule: $refund_rule
+      kind: cardinality
+      enforcedBy: src/refund.rs
+      provedBy: tests/refund_once.rs
+    - id: INV-STATUS-ENUM
+      rule: $status_rule
+      kind: enumeration
+      enforcedBy: src/status.rs
+      provedBy: tests/status_enum.rs
+EOF
+}
+
+# Write specs/300-certified/scenario-manifest.json with a single scenario. Pass
+# an invariantRefs JSON array literal (e.g. '["INV-REFUND-ONCE"]') or the token
+# "none" to omit the invariantRefs field entirely.
+write_scenario_manifest() {
+  local repo="$1"
+  local refs="$2"
+  local refs_field=""
+  if [[ "$refs" != "none" ]]; then
+    refs_field=", \"invariantRefs\": $refs"
+  fi
+  cat > "$repo/specs/300-certified/scenario-manifest.json" <<EOF
+{
+  "schemaVersion": 1,
+  "spec": "specs/300-certified",
+  "scenarios": [
+    {
+      "id": "SCN-300-001",
+      "title": "Refund happens at most once",
+      "requiredTestType": "integration",
+      "linkedTests": ["tests/refund_once.rs"],
+      "evidenceRefs": ["report.md#refund"]$refs_field
+    }
+  ]
+}
+EOF
+}
+
 echo "=== post-cert-spec-edit-guard-selftest (Gate G088) ==="
 
 echo ""
@@ -261,6 +328,64 @@ assert_exit "S8 touched legacy done_with_concerns" 1
 assert_stderr_contains "S8" "G088"
 assert_stderr_contains "S8" "G092"
 assert_stderr_contains "S8" "done plus observations or blocked"
+
+echo ""
+echo "--- N1: DOM-LINEAGE — editing a referenced invariant's rule flags its scenario (advisory) ---"
+repo="$(stage_repo n1-invariant-rule-edited)"
+write_truth_files "$repo"
+write_state "$repo" "done" '"2026-05-01T00:00:00Z"' "false" '[]'
+write_project_domain_model "$repo" "A paid order can be refunded at most once" "order status is one of paid shipped refunded"
+write_scenario_manifest "$repo" '["INV-REFUND-ONCE"]'
+commit_all "$repo" "2026-04-30T00:00:00Z" "baseline certified spec with domain model"
+# Post-certification edit to the REFERENCED invariant's rule text only.
+write_project_domain_model "$repo" "A paid order can be refunded at most once per calendar day" "order status is one of paid shipped refunded"
+commit_all "$repo" "2026-05-02T00:00:00Z" "post-cert domain invariant rule edit"
+run_guard "$repo"
+assert_exit "N1 advisory keeps exit unchanged" 0
+assert_stdout_contains "N1" "ADVISORY (IMP-106 DOM-LINEAGE)"
+assert_stdout_contains "N1" "INV-REFUND-ONCE"
+assert_stdout_contains "N1" "SCN-300-001"
+
+echo ""
+echo "--- N2: DOM-LINEAGE — invariantRefs present but NO domainModel block is a strict no-op ---"
+repo="$(stage_repo n2-no-domain-model)"
+write_truth_files "$repo"
+write_state "$repo" "done" '"2026-05-01T00:00:00Z"' "false" '[]'
+write_scenario_manifest "$repo" '["INV-REFUND-ONCE"]'
+commit_all "$repo" "2026-04-30T00:00:00Z" "baseline certified spec, no domain model block"
+run_guard "$repo"
+assert_exit "N2 no domainModel no-op" 0
+assert_stdout_contains "N2" "PASS Gate G088"
+assert_stdout_lacks "N2" "ADVISORY (IMP-106 DOM-LINEAGE)"
+
+echo ""
+echo "--- N3: DOM-LINEAGE — editing an UNRELATED invariant does not flag a non-referencing scenario ---"
+repo="$(stage_repo n3-unrelated-invariant)"
+write_truth_files "$repo"
+write_state "$repo" "done" '"2026-05-01T00:00:00Z"' "false" '[]'
+write_project_domain_model "$repo" "A paid order can be refunded at most once" "order status is one of paid shipped refunded"
+write_scenario_manifest "$repo" '["INV-REFUND-ONCE"]'
+commit_all "$repo" "2026-04-30T00:00:00Z" "baseline certified spec with two invariants"
+# Post-certification edit to INV-STATUS-ENUM only; the scenario references INV-REFUND-ONCE.
+write_project_domain_model "$repo" "A paid order can be refunded at most once" "order status is strictly one of paid shipped refunded canceled"
+commit_all "$repo" "2026-05-02T00:00:00Z" "post-cert edit to unrelated invariant"
+run_guard "$repo"
+assert_exit "N3 unrelated invariant no-op" 0
+assert_stdout_lacks "N3" "ADVISORY (IMP-106 DOM-LINEAGE)"
+
+echo ""
+echo "--- N4: DOM-LINEAGE — domainModel present but scenario carries no invariantRefs is a no-op ---"
+repo="$(stage_repo n4-no-invariant-refs)"
+write_truth_files "$repo"
+write_state "$repo" "done" '"2026-05-01T00:00:00Z"' "false" '[]'
+write_project_domain_model "$repo" "A paid order can be refunded at most once" "order status is one of paid shipped refunded"
+write_scenario_manifest "$repo" "none"
+commit_all "$repo" "2026-04-30T00:00:00Z" "baseline certified spec, scenario without invariantRefs"
+write_project_domain_model "$repo" "A paid order can be refunded at most once per day" "order status is one of paid shipped refunded"
+commit_all "$repo" "2026-05-02T00:00:00Z" "post-cert rule edit with no referencing scenario"
+run_guard "$repo"
+assert_exit "N4 no invariantRefs no-op" 0
+assert_stdout_lacks "N4" "ADVISORY (IMP-106 DOM-LINEAGE)"
 
 echo ""
 echo "=== Selftest verdict ==="

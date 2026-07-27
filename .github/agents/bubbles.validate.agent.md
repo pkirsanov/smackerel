@@ -245,14 +245,15 @@ unchanged: all scopes are Done, all DoD and evidence requirements pass, the
 delivery audit verdict is valid, and the full completion chain is required
 before `done` certification.
 
-#### Record the achieved assurance assessment (IMP-100 Phase 3, choke point #1)
+#### Record the achieved assurance assessment AND drive the terminal status (IMP-100 Phase 3 / IMP-105 SCOPE-1, choke point #1)
 
-At terminal certification, additionally record validate's ASSESSMENT of the
-achieved assurance level as validate-owned bookkeeping under
-`certification.assurance`. This is ADDITIVE and INFORMATIONAL — it never alters
-the terminal status mirror, scope statuses, DoD, `completedScopes`, or audit
-history, and a spec with no `certification.assurance` block remains valid
-(backward-compatible). Derive it mechanically, never by assertion:
+At terminal certification, record validate's ASSESSMENT of the achieved
+assurance level as validate-owned bookkeeping under `certification.assurance`,
+AND drive the terminal status from that derived level. The assurance BOOKKEEPING
+(the `missingForFull` gap list) is additive and never rewrites scope statuses,
+DoD, `completedScopes`, or audit history; a spec with no `certification.assurance`
+block remains valid (backward-compatible). Derive it mechanically, never by
+assertion:
 
 1. From the completion evidence you just verified, determine four booleans:
    implementation complete (all required scopes Done), full test coverage
@@ -263,7 +264,7 @@ history, and a spec with no `certification.assurance` block remains valid
 2. Run, via `run_in_terminal` (never by predicting its output):
    `bash bubbles/scripts/assurance-derive.sh --implement-complete <t|f> --tests-complete <t|f> --tests-passed <t|f> --audit-complete <t|f>`
    (optionally `--risk-class` from `risk-tier-resolve.sh`). Read the printed
-   `achievedLevel` and `missingForFull`.
+   `achievedLevel`, `terminalStatus`, and `missingForFull`.
 3. Record `certification.assurance = { "level": <achievedLevel>, "missingForFull": [<gaps or empty>] }`
    verbatim from that output. `assurance-derive.sh` is fail-closed and derives
    DOWN, so never record a higher level than the evidence supports.
@@ -271,13 +272,34 @@ history, and a spec with no `certification.assurance` block remains valid
    `run_in_terminal`, `bash bubbles/scripts/assurance-certification-check.sh --feature-dir <FEATURE_DIR>`
    (it REFUSES a block whose `level` and `missingForFull` contradict the
    derivation invariants). A refusal means the record was mangled — re-derive.
+5. Drive the terminal status from the derived level, GATED by terminal-for-mode.
+   Run, via `run_in_terminal`,
+   `bash bubbles/scripts/is-terminal-for-mode.sh <terminalStatus> <resolved-workflow-mode>`
+   using the `terminalStatus` printed by `assurance-derive.sh`
+   (`full`→`done`, `fast`→`delivered_fast`, `prototype`→`delivered_prototype`):
+   - Exit 0 (the derived `terminalStatus` IS terminal-for-mode): set BOTH
+     `state.json` `status` and `certification.status` to `<terminalStatus>`.
+     This certifies `full` as `done` and the `rapid-tool-delivery` fast lane as
+     `delivered_fast` (its declared `terminalAlias`).
+   - Exit 1 (the derived `terminalStatus` is NOT terminal-for-mode — e.g. a
+     `full-delivery` run that only reached `fast`, or any run that only reached
+     `prototype` under a mode that does not declare `delivered_prototype`): the
+     increment is NOT terminal for this mode. DO NOT advance to a terminal
+     status — keep `in_progress` (or set `blocked`) and surface `missingForFull`
+     as the remaining work. This preserves the anti-fabrication floor: a fast
+     lane that only reached prototype is never `done`.
 
-This makes the achieved assurance level auditable at certification and available
-to the deploy choke points (`assurance-resolve.sh` decides deploy-eligibility
-from it; G101 release reconciliation already refuses a `delivered_prototype`
-required feature) WITHOUT changing the terminal status. Driving a DISTINCT
-terminal status (`delivered_fast` / `delivered_prototype`) from the level, and
-the guard-side consistency enforcement, are the remaining Phase-3 steps.
+This makes the achieved assurance level auditable AND the driver of the terminal
+status: `full`→`done` and the fast lane→`delivered_fast` are certified directly
+from evidence, while a derived level whose `terminalStatus` is not
+terminal-for-mode keeps the spec non-terminal. It remains available to the deploy
+choke points (`assurance-resolve.sh` decides deploy-eligibility from it; G101
+release reconciliation refuses a `delivered_prototype` required feature) and is
+backward-compatible: a `full-delivery` run achieving `full` still certifies
+`done`, and a spec with no assurance derivation still certifies `done` via the
+existing completion chain. The guard-side consistency teeth (Check 3I in
+`state-transition-guard.sh`, invoking `assurance-certification-check.sh`) refuse
+a hand-edited or fabricated block.
 
 ### Step 2B: Contract Verification (MANDATORY for API changes)
 

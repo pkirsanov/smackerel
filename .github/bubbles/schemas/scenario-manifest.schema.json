@@ -49,7 +49,15 @@
               "replacedBy": { "type": "string" }
             }
           },
-          "tags": { "type": "array", "items": { "type": "string" } }
+          "tags": { "type": "array", "items": { "type": "string" } },
+          "invariantRefs": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^INV-[A-Z0-9-]+$"
+            },
+            "description": "OPTIONAL (IMP-106 SCOPE-3, DOM-LINEAGE). Domain-invariant ids from domainModel.invariants[].id (e.g. INV-REFUND-ONCE) that this scenario exercises. Links each SCN-* to the static business invariant(s) it proves, so lineage is answerable both directions (which test proves invariant X / which requirement justifies this scope). Advisory and no-op unless the repo declares a domainModel: block; NOT part of required."
+          }
         }
       }
     }

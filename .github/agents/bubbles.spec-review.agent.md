@@ -119,6 +119,10 @@ Redundant or superseded active content should influence these classifications. E
 - Is old planning content still formatted as executable truth instead of being isolated as superseded history?
 - Are there duplicated scenario families or duplicated contract descriptions that could mislead maintenance agents?
 
+### 8. Domain-Invariant Lineage Check (DOM-LINEAGE)
+- Editing a `domainModel.invariants[].rule` flags every scenario/scope whose `scenario-manifest.json` `invariantRefs` includes that invariant id for re-verification (IMP-106 SCOPE-3, surfaced advisorily by `post-cert-spec-edit-guard.sh`). Treat a changed domain rule as drift on the dependent scenarios so spec-review surfaces domain-rule drift, not just spec-text drift.
+- Advisory and no-op unless the repo declares a `domainModel:` block AND scenarios carry `invariantRefs`; it never blocks an opted-out repo.
+
 ---
 
 ## User Input

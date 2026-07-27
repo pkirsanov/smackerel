@@ -85,6 +85,30 @@ The `agnosticity-lint.sh --staged` pre-commit check detects project-specific con
 - `simplifier`: `implement-bootstrap.md`
 - `chaos`: `test-bootstrap.md`
 
+### Phase-Local Authoring Reference (opt-in bundle reduction)
+
+The heavy authoring modules — `project-config-contract.md`, `scope-workflow.md`, and `feature-templates.md` — are **phase-local / specialist-owned authoring reference**. They are load-bearing for the PLANNING and AUTHORING specialists (`bubbles.plan`, `bubbles.analyst`, `bubbles.design`, `bubbles.implement`), which need their full text to author specs, scopes, DoD templates, and artifact structure. An orchestrator that *purely routes* — selecting the next scope and dispatching to the owning specialist — does not need the full text of these modules pinned into its own always-loaded reference closure to make a routing decision.
+
+A repo therefore MAY reduce an orchestrator's effective bundle by ensuring these modules are referenced from the phase-specific `*-bootstrap.md` profiles above (loaded when the orchestrator dispatches into that phase) rather than from the orchestrator's own top-level closure. The dispatched specialist still loads the full authoring reference through its bootstrap profile, so no authoring capability is lost — the reduction only changes WHEN the heavy text is loaded (on dispatch into planning/authoring) versus ALWAYS (in the router's closure).
+
+**⚠️ OPT-IN and eval-gated — NOT a completed default (R3).** These modules are load-bearing: an orchestrator body may carry `MANDATORY: Follow ... scope-workflow.md` and reference `project-config-contract.md` for indirection rules, so moving them out of the always-loaded closure is exactly the kind of change a held-out task evaluation exists to catch. A repo MUST validate, via a held-out evaluation showing **zero gate-detection regression**, that the orchestrator still detects and routes every gate correctly BEFORE relying on this reduction. `framework-validate` cannot substitute for that eval — it exercises scripts and selftests, not LLM routing behavior. Until such an eval passes for a given repo, keep the authoring modules referenced exactly as the agent files ship them; do NOT blind-rewire an `*.agent.md` reference to chase a smaller bundle.
+
+### Effective-Bundle Budget (opt-in, measured, eval-gated)
+
+The effective bundle is the static transitive closure of `agents/bubbles_shared/*.md` references reachable from an agent file. Two already-shipped scripts operate on it:
+
+- **Measure:** `bash bubbles/scripts/effective-bundle-measure.sh <agent-file>` — reports the closure's `totalBytes` and per-file breakdown for one agent.
+- **Budget check:** `bash bubbles/scripts/effective-bundle-budget.sh` — flags agents whose effective bundle exceeds a repo-declared cap.
+
+The budget is **inert until a downstream repo configures it** in `.github/bubbles-project.yaml`:
+
+- `effectiveBundleMaxBytes: <N>` — sets the cap. **Advisory by default**: over-budget agents are flagged and the check still exits `0`.
+- `effectiveBundleBudget: block` — makes the cap **blocking** (the check exits `1` when an agent is over budget).
+
+**Measured baseline (for reference):** the largest orchestrator bundle is `bubbles.workflow` at **≈ 491,622 bytes** (measured with `effective-bundle-measure.sh`; note this closure includes `operating-baseline.md` itself, so this figure drifts slightly as the shared modules evolve). Its three heaviest shared modules are `project-config-contract.md` (54,949 B), `scope-workflow.md` (47,621 B), and `feature-templates.md` (20,545 B) — together **≈ 123 KB / ~25%** of the closure, all of it planning/authoring reference (see the Phase-Local Authoring Reference note above).
+
+**⚠️ A BLOCKING budget MUST only be set AFTER a held-out eval confirms no gate-detection regression (R3).** Setting `effectiveBundleBudget: block` before validating the reduction risks forcing an orchestrator below the point where it still loads a load-bearing contract. Start advisory, reduce via the phase-local seam, run the held-out eval, and only then consider making the budget blocking.
+
 ## Autonomous Operation
 
 - Non-interactive by default unless the prompt explicitly opts into bounded questioning.

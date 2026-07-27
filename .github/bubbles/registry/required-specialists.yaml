@@ -1,0 +1,65 @@
+# bubbles/registry/required-specialists.yaml
+#
+# Canonical mode -> required delivery-specialist phases (IMP-105 SCOPE-7 / ONT-UNIFY).
+#
+# SINGLE SOURCE OF TRUTH for the mode->required-specialists mapping that
+# state-transition-guard.sh Check 6 ("Specialist Phase Completion", Gate G022)
+# enforces. The guard still carries that mapping as a hardcoded
+# `case "$state_workflow_mode" in ... esac`, because its arms carry load-bearing
+# inline documentation (e.g. the rapid-tool-delivery rationale) that a data-only
+# generator cannot reproduce byte-identically, and rewriting the critical guard
+# is high-risk. This registry MIRRORS that case exactly.
+#
+# ENFORCEMENT: bubbles/scripts/required-specialists-consistency.sh compares the
+# guard's Check 6 case against this registry (same mode keys, same ORDERED
+# specialist lists) and fails on any drift — a missing mode, an extra mode, or a
+# reordered/changed list. It is wired into framework-validate.sh as a continuous
+# shadow-compare, so the guard's hardcoded case and this registry can never
+# silently diverge. This is the continuous shadow-compare that resolves the
+# "full table replacement" IMP-105 SCOPE-3 explicitly deferred to SCOPE-7.
+#
+# TO CHANGE a mode's required specialists: edit BOTH the guard's Check 6 case AND
+# this registry in the SAME change; the consistency guard proves they match.
+#
+# ORDERING IS SIGNIFICANT: each list is byte-faithful to its guard case arm,
+# including element order. Legacy / currently-unrouted arms (feature-bootstrap,
+# batch-*, redesign-existing, product-discovery, ...) are preserved verbatim so
+# the shadow-compare stays exact — do NOT drop or "clean up" any arm; that would
+# silently change Gate G022 enforcement.
+#
+# The broader 12-primitive unified delivery-policy model (Intent, DeliveryStrategy,
+# WorkflowMode, RiskClass, Phase, Gate, Artifact, AgentOwner, EvidenceClaim,
+# AchievedAssurance, ReleaseAssuranceFloor, TerminalState) remains the larger
+# ONT-UNIFY direction; this registry canonicalizes the one relationship
+# (mode -> required specialists) IMP-105 SCOPE-3 deferred to SCOPE-7.
+version: 1
+modes:
+  value-first-e2e-batch: [ implement, test, regression, simplify, stabilize, security, docs, validate, audit, chaos ]
+  full-delivery: [ implement, test, regression, simplify, gaps, harden, stabilize, security, validate, audit, chaos, docs ]
+  feature-bootstrap: [ implement, test, regression, simplify, stabilize, security, docs, validate, audit ]
+  bugfix-fastlane: [ implement, test, regression, simplify, stabilize, security, validate, audit ]
+  rapid-tool-delivery: [ implement, test, validate, docs ]
+  chaos-hardening: [ chaos, implement, test, regression, simplify, stabilize, security, validate, audit, docs ]
+  harden-to-doc: [ harden, implement, test, regression, simplify, stabilize, security, chaos, validate, audit, docs ]
+  gaps-to-doc: [ gaps, implement, test, regression, simplify, stabilize, security, chaos, validate, audit, docs ]
+  harden-gaps-to-doc: [ harden, gaps, implement, test, regression, simplify, stabilize, security, chaos, validate, audit, docs ]
+  reconcile-to-doc: [ implement, test, regression, simplify, stabilize, security, validate, audit, chaos, docs ]
+  test-to-doc: [ test, validate, audit, docs ]
+  chaos-to-doc: [ chaos, validate, audit, docs ]
+  batch-implement: [ implement, test, regression, simplify, stabilize, security, docs, validate, audit, chaos ]
+  batch-harden: [ harden, implement, test, regression, simplify, stabilize, security, validate, audit, chaos, docs ]
+  batch-gaps: [ gaps, implement, test, regression, simplify, stabilize, security, validate, audit, chaos, docs ]
+  batch-harden-gaps: [ harden, gaps, implement, test, regression, simplify, stabilize, security, validate, audit, chaos, docs ]
+  batch-improve-existing: [ harden, gaps, implement, test, regression, simplify, stabilize, security, validate, audit, chaos, docs ]
+  batch-reconcile-to-doc: [ implement, test, validate, audit, chaos, docs ]
+  product-to-delivery: [ implement, test, regression, simplify, stabilize, security, docs, validate, audit, chaos ]
+  improve-existing: [ harden, gaps, implement, test, regression, simplify, stabilize, security, validate, audit, chaos, docs ]
+  redesign-existing: [ implement, test, regression, simplify, stabilize, security, docs, validate, audit, chaos ]
+  stabilize-to-doc: [ stabilize, implement, test, regression, simplify, security, chaos, validate, audit, docs ]
+  security-to-doc: [ security, implement, test, regression, simplify, stabilize, devops, chaos, validate, audit, docs ]
+  regression-to-doc: [ regression, implement, test, simplify, stabilize, devops, security, chaos, validate, audit, docs ]
+  simplify-to-doc: [ simplify, test, validate, audit, docs ]
+  iterate: [ validate, audit ]
+  stochastic-quality-sweep: [ validate, audit ]
+  product-discovery: [ harden, docs, validate, audit ]
+  validate-to-doc: [ validate, audit, docs ]
