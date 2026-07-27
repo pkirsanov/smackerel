@@ -5,7 +5,43 @@ package config
 import (
 	"strings"
 	"testing"
+	"time"
 )
+
+func TestIntentCompilerRequiredWhenAssistantHTTPEnabled(t *testing.T) {
+	t.Setenv("AGENT_ROUTING_CONFIDENCE_FLOOR", "0.65")
+	cfg := &Config{Assistant: AssistantConfig{
+		Enabled:             true,
+		BorderlineFloor:     0.75,
+		TelegramEnabled:     true,
+		ContextStateKey:     "transport_user",
+		TelegramMode:        "long_poll",
+		TelegramWebhookPath: "/v1/telegram/webhook",
+		IntentCompiler: IntentCompilerConfig{
+			Enabled:               false,
+			ModelRole:             "assistant_intent_compiler",
+			ProviderName:          "ollama",
+			ProviderURL:           "http://ollama:11434",
+			PromptContractVersion: "intent-compiler-v1",
+			SchemaVersion:         "v1",
+			Timeout:               time.Second,
+			ConfidenceFloor:       0.6,
+			MaxContextTurns:       8,
+			MaxOutputBytes:        16384,
+			RetryBudget:           1,
+		},
+	}}
+
+	err := cfg.validateAssistantConfig()
+	if err == nil || !strings.Contains(err.Error(), "F069-INTENT-COMPILER-DISABLED") {
+		t.Fatalf("enabled transport with compiler disabled error = %v, want F069-INTENT-COMPILER-DISABLED", err)
+	}
+
+	cfg.Assistant.IntentCompiler.Enabled = true
+	if err := cfg.validateAssistantConfig(); err != nil {
+		t.Fatalf("explicitly enabled compiler should satisfy transport coherence: %v", err)
+	}
+}
 
 // TestIntentCompilerConfigRequiresEverySSTKey asserts the spec 068
 // SCOPE-1 SST keys are all REQUIRED (no defaults; smackerel-no-defaults
@@ -16,6 +52,8 @@ func TestIntentCompilerConfigRequiresEverySSTKey(t *testing.T) {
 	requiredKeys := []string{
 		"ASSISTANT_INTENT_COMPILER_ENABLED",
 		"ASSISTANT_INTENT_COMPILER_MODEL_ROLE",
+		"ASSISTANT_INTENT_COMPILER_PROVIDER_NAME",
+		"ASSISTANT_INTENT_COMPILER_PROVIDER_URL",
 		"ASSISTANT_INTENT_COMPILER_PROMPT_CONTRACT_VERSION",
 		"ASSISTANT_INTENT_COMPILER_SCHEMA_VERSION",
 		"ASSISTANT_INTENT_COMPILER_TIMEOUT_MS",
@@ -57,6 +95,8 @@ func TestIntentCompilerConfigRequiresEverySSTKey(t *testing.T) {
 	t.Run("fully_populated_no_errors", func(t *testing.T) {
 		t.Setenv("ASSISTANT_INTENT_COMPILER_ENABLED", "true")
 		t.Setenv("ASSISTANT_INTENT_COMPILER_MODEL_ROLE", "assistant_intent_compiler")
+		t.Setenv("ASSISTANT_INTENT_COMPILER_PROVIDER_NAME", "ollama")
+		t.Setenv("ASSISTANT_INTENT_COMPILER_PROVIDER_URL", "http://ollama:11434")
 		t.Setenv("ASSISTANT_INTENT_COMPILER_PROMPT_CONTRACT_VERSION", "intent-compiler-v1")
 		t.Setenv("ASSISTANT_INTENT_COMPILER_SCHEMA_VERSION", "v1")
 		t.Setenv("ASSISTANT_INTENT_COMPILER_TIMEOUT_MS", "5000")
@@ -72,6 +112,7 @@ func TestIntentCompilerConfigRequiresEverySSTKey(t *testing.T) {
 		}
 		ic := cfg.Assistant.IntentCompiler
 		if !ic.Enabled || ic.ModelRole != "assistant_intent_compiler" ||
+			ic.ProviderName != "ollama" || ic.ProviderURL != "http://ollama:11434" ||
 			ic.PromptContractVersion != "intent-compiler-v1" || ic.SchemaVersion != "v1" ||
 			ic.Timeout.Milliseconds() != 5000 || ic.ConfidenceFloor != 0.6 ||
 			ic.MaxContextTurns != 8 || ic.MaxOutputBytes != 16384 || ic.RetryBudget != 1 {
@@ -85,6 +126,8 @@ func TestIntentCompilerConfigRequiresEverySSTKey(t *testing.T) {
 		base := map[string]string{
 			"ASSISTANT_INTENT_COMPILER_ENABLED":                 "true",
 			"ASSISTANT_INTENT_COMPILER_MODEL_ROLE":              "x",
+			"ASSISTANT_INTENT_COMPILER_PROVIDER_NAME":           "ollama",
+			"ASSISTANT_INTENT_COMPILER_PROVIDER_URL":            "http://ollama:11434",
 			"ASSISTANT_INTENT_COMPILER_PROMPT_CONTRACT_VERSION": "v1",
 			"ASSISTANT_INTENT_COMPILER_SCHEMA_VERSION":          "v1",
 			"ASSISTANT_INTENT_COMPILER_TIMEOUT_MS":              "1000",

@@ -27,16 +27,18 @@ import (
 func TestAssistantHTTPE2E_ConfirmAcceptExecutesGatedActionOnce(t *testing.T) {
 	stack := loadHTTPTurnLiveStack(t)
 	waitHTTPTurnHealthy(t, stack, 30*time.Second)
+	isolateRequiredAssistantConversation(t, stack)
+	pool := openRequiredAssistantPool(t)
+	item := "test-bug069005-oat-milk-" + timestamp()
 
-	// Turn 1: ask for a reminder — known scenario that proposes a
-	// ConfirmCard before executing the gated action (schedule the
-	// reminder).
+	// Turn 1: request a compiled list write. The real list store must remain
+	// unchanged until the issued ConfirmRef is accepted.
 	turn1Req := httpadapter.TurnRequest{
 		SchemaVersion:      httpadapter.SchemaVersionV1,
 		TransportMessageID: "e2e-scope3-confirm-1-" + timestamp(),
 		Kind:               string(contracts.KindText),
 		TransportHint:      "web",
-		Text:               "remind me to drink water at 18:00",
+		Text:               "add " + item + " to my shopping list",
 	}
 	resp1, body1 := postAssistantTurn(t, stack, turn1Req)
 	if resp1.StatusCode != 200 {
@@ -50,8 +52,10 @@ func TestAssistantHTTPE2E_ConfirmAcceptExecutesGatedActionOnce(t *testing.T) {
 		t.Fatalf("turn 1 facade_invoked = false; want true")
 	}
 	if env1.ConfirmCard == nil {
-		t.Skipf("turn 1 did not produce a ConfirmCard on the live stack (status=%q, capture_route=%v); cannot exercise confirm round-trip without a deterministic confirm fixture",
-			env1.Status, env1.CaptureRoute)
+		t.Fatalf("turn 1 returned no required ConfirmCard (status=%q, capture_route=%v, body=%q)", env1.Status, env1.CaptureRoute, env1.Body)
+	}
+	if got := listCountBySourceQuery(t, pool, turn1Req.TransportMessageID); got != 0 {
+		t.Fatalf("list count before confirm = %d, want 0", got)
 	}
 
 	// Turn 2: callback with kind=confirm and accept.
@@ -77,6 +81,13 @@ func TestAssistantHTTPE2E_ConfirmAcceptExecutesGatedActionOnce(t *testing.T) {
 	if env2.Transport != httpadapter.TransportName {
 		t.Errorf("turn 2 transport = %q, want %q", env2.Transport, httpadapter.TransportName)
 	}
+	if env2.ErrorCause != "" {
+		t.Fatalf("turn 2 confirmation failed: error_cause=%q body=%q", env2.ErrorCause, env2.Body)
+	}
+	if got := listCountBySourceQuery(t, pool, turn1Req.TransportMessageID); got != 1 {
+		t.Fatalf("list count after confirm = %d, want 1", got)
+	}
+	assertSingleListItem(t, pool, turn1Req.TransportMessageID, item)
 	// Replay protection: a second confirm with the same ref MUST
 	// NOT execute the gated action a second time.
 	turn3Req := turn2Req
@@ -89,8 +100,11 @@ func TestAssistantHTTPE2E_ConfirmAcceptExecutesGatedActionOnce(t *testing.T) {
 	if err := json.Unmarshal(body3, &env3); err != nil {
 		t.Fatalf("turn 3 decode: %v\nbody=%s", err, string(body3))
 	}
-	if env3.Status == string(contracts.StatusReminderConfirmed) {
-		t.Errorf("replay confirm returned StatusReminderConfirmed; gated action was executed twice")
+	if env3.ErrorCause != string(contracts.ErrNoMatch) {
+		t.Errorf("replay error_cause = %q, want %q", env3.ErrorCause, contracts.ErrNoMatch)
+	}
+	if got := listCountBySourceQuery(t, pool, turn1Req.TransportMessageID); got != 1 {
+		t.Fatalf("list count after replay = %d, want exactly 1", got)
 	}
 }
 

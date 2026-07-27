@@ -211,6 +211,7 @@ type Facade struct {
 	// "saved as an idea"). Returns the marshaled Forecast JSON or a
 	// classified error.
 	weatherLookup func(ctx context.Context, location string) (json.RawMessage, error)
+	compiledInteractions *compiledInteractions
 }
 
 // NewFacade constructs a Facade. All non-Now config fields and every
@@ -606,6 +607,24 @@ func (f *Facade) Handle(ctx context.Context, msg contracts.AssistantMessage) (re
 		return resp, nil
 	}
 
+	if confirmResp, handled, confirmErr := f.handlePendingConfirm(ctx, msg, conv, emittedAt); handled {
+		return confirmResp, confirmErr
+	}
+
+	if f.compiledInteractions != nil {
+		resumedMsg, resumedConv, resumedResp, handled, resumeErr := f.resolveCompilerDisambig(
+			ctx, msg, conv, transportLabel, emittedAt,
+		)
+		if resumeErr != nil {
+			return contracts.AssistantResponse{}, resumeErr
+		}
+		if handled {
+			return resumedResp, nil
+		}
+		msg = resumedMsg
+		conv = resumedConv
+	}
+
 	// --- Step 1.5: pending disambiguation resolver ---
 	//
 	// Spec 061 SCOPE-09 — when the prior turn left a PendingDisambig
@@ -845,6 +864,15 @@ func (f *Facade) Handle(ctx context.Context, msg contracts.AssistantMessage) (re
 	// when non-nil/non-empty; otherwise a deterministic fallback that
 	// names the missing slots.
 	if compiledOK && conv.PendingConfirm == nil && requiresClarification(compiled) {
+		if f.compiledInteractions != nil {
+			clarifyResp, proposed, clarifyErr := f.proposeCompilerDisambiguation(ctx, msg, conv, compiled, emittedAt)
+			if clarifyErr != nil {
+				return contracts.AssistantResponse{}, fmt.Errorf("assistant: compiler disambiguation: %w", clarifyErr)
+			}
+			if proposed {
+				return clarifyResp, nil
+			}
+		}
 		body := buildClarificationBody(compiled)
 		resp = contracts.AssistantResponse{
 			Status:     contracts.StatusUnavailable,
@@ -883,6 +911,13 @@ func (f *Facade) Handle(ctx context.Context, msg contracts.AssistantMessage) (re
 	// confirm-reply path.
 	if compiledOK && conv.PendingConfirm == nil && intent.RequiresConfirmation(compiled) {
 		intent.SideEffectBlockedTotal.WithLabelValues(string(compiled.SideEffectClass), "missing_confirmation").Inc()
+		if f.compiledInteractions != nil {
+			confirmResp, confirmErr := f.proposeCompiledAction(ctx, msg, conv, compiled, emittedAt)
+			if confirmErr != nil {
+				return contracts.AssistantResponse{}, fmt.Errorf("assistant: propose compiled action: %w", confirmErr)
+			}
+			return confirmResp, nil
+		}
 		resp = contracts.AssistantResponse{
 			Status:       contracts.StatusUnavailable,
 			ErrorCause:   contracts.ErrMissingScope,
@@ -893,6 +928,29 @@ func (f *Facade) Handle(ctx context.Context, msg contracts.AssistantMessage) (re
 		conv = f.appendTurnAndPersist(ctx, conv, msg, resp, emittedAt)
 		f.writeAudit(ctx, msg, BandLow, nil, nil, resp)
 		return resp, nil
+	}
+
+	// A resolved compiled weather read already carries the canonical location
+	// slot needed by the existing location and weather capabilities. Execute it
+	// through those injected capabilities before the generic LLM executor so the
+	// response is sourced from the provider rather than synthesized without
+	// attribution. Ambiguous locations remain owned by the persistent choice
+	// path and do not reach weather until selection.
+	if compiledOK && conv.PendingConfirm == nil {
+		weatherResp, handled, weatherErr := f.handleResolvedCompiledWeather(ctx, msg, conv, compiled, emittedAt)
+		if weatherErr != nil {
+			return contracts.AssistantResponse{}, fmt.Errorf("assistant: resolved compiled weather: %w", weatherErr)
+		}
+		if handled {
+			turnScenarioID = compiledWeatherScenarioID
+			turnAssistantTurnID = facadeTurnIDFromTime(emittedAt)
+			if weatherResp.CaptureRoute {
+				turnBand = BandLow
+			} else {
+				turnBand = BandHigh
+			}
+			return weatherResp, nil
+		}
 	}
 
 	// --- Step 3.7: spec 095 SCOPE-06 — retrieval-strategy routing (additive) ---

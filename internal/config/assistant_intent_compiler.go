@@ -22,14 +22,20 @@ import (
 // IntentCompilerConfig holds the spec 068 SCOPE-1 SST values.
 // design.md §Configuration enumerates the keys.
 type IntentCompilerConfig struct {
-	// Enabled gates compiler invocation. When false the facade
-	// follows its existing path; Scope 2 will wire compilation into
-	// the facade flow when Enabled=true.
+	// Enabled gates compiler invocation. A disabled compiler is valid only
+	// when the whole user-facing assistant surface is disabled; cross-field
+	// validation rejects enabled transports with this value false.
 	Enabled bool
 
 	// ModelRole names the LLM bridge model role used for compilation.
 	// Resolved by the ML sidecar bridge.
 	ModelRole string
+
+	// ProviderName is the bounded provider identity returned by the ML route.
+	ProviderName string
+
+	// ProviderURL is the explicit Ollama-compatible endpoint the ML route calls.
+	ProviderURL string
 
 	// PromptContractVersion identifies the compiler prompt contract
 	// the sidecar must honor. Bumped any time the prompt schema or
@@ -130,6 +136,8 @@ func loadIntentCompilerConfig(cfg *Config, errs *[]string) {
 
 	mustBool("ASSISTANT_INTENT_COMPILER_ENABLED", &cfg.Assistant.IntentCompiler.Enabled)
 	mustString("ASSISTANT_INTENT_COMPILER_MODEL_ROLE", &cfg.Assistant.IntentCompiler.ModelRole)
+	mustString("ASSISTANT_INTENT_COMPILER_PROVIDER_NAME", &cfg.Assistant.IntentCompiler.ProviderName)
+	mustString("ASSISTANT_INTENT_COMPILER_PROVIDER_URL", &cfg.Assistant.IntentCompiler.ProviderURL)
 	mustString("ASSISTANT_INTENT_COMPILER_PROMPT_CONTRACT_VERSION", &cfg.Assistant.IntentCompiler.PromptContractVersion)
 	mustString("ASSISTANT_INTENT_COMPILER_SCHEMA_VERSION", &cfg.Assistant.IntentCompiler.SchemaVersion)
 	var timeoutMs int

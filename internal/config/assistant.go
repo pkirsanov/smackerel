@@ -517,6 +517,9 @@ func (c *Config) validateAssistantConfig() error {
 				return fmt.Errorf("[F061-PROD-SAFETY] URL %s contains test-only %q reference (value=%q) but SMACKEREL_ENV=%q (only \"test\" permitted); reject startup", key, stubSubstring, val, c.Environment)
 			}
 		}
+		if strings.Contains(c.Assistant.IntentCompiler.ProviderURL, "intent-compiler-provider") {
+			return fmt.Errorf("[F069-PROD-SAFETY] assistant.intent_compiler provider URL references the test-only compiler provider while SMACKEREL_ENV=%q", c.Environment)
+		}
 	}
 	// Spec 061 SCOPE-09a OTel substrate validation (rules §7.2-OTel-A
 	// and -B) lives in loadAssistantConfig — running it here too
@@ -544,8 +547,14 @@ func (c *Config) validateAssistantConfig() error {
 	}
 	// Rule #3 — at least one transport MUST be enabled when the
 	// capability is enabled.
-	if !c.Assistant.TelegramEnabled {
-		return fmt.Errorf("ASSISTANT_ENABLED=true requires at least one assistant.transports.*.enabled=true (spec 061 design §7.2 rule #3); only telegram is wired in v1 and ASSISTANT_TRANSPORTS_TELEGRAM_ENABLED=false")
+	transportEnabled := c.Assistant.TelegramEnabled || c.Assistant.WhatsappEnabled || c.Assistant.HTTP.HTTPEnabled
+	if !transportEnabled {
+		return fmt.Errorf("ASSISTANT_ENABLED=true requires at least one assistant.transports.*.enabled=true (spec 061 design §7.2 rule #3)")
+	}
+	compilerConfigLoaded := c.Assistant.IntentCompiler.ModelRole != "" ||
+		c.Assistant.IntentCompiler.ProviderName != "" || c.Assistant.IntentCompiler.ProviderURL != ""
+	if compilerConfigLoaded && !c.Assistant.IntentCompiler.Enabled {
+		return fmt.Errorf("[F069-INTENT-COMPILER-DISABLED] enabled assistant transport requires ASSISTANT_INTENT_COMPILER_ENABLED=true; raw-text routing is forbidden")
 	}
 	// Rule #4 — non-recommended state_key emits WARN.
 	switch c.Assistant.ContextStateKey {
