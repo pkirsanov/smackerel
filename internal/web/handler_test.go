@@ -258,9 +258,9 @@ func TestSearchSemanticFormAndTypedFullPageFragmentStateMatrix(t *testing.T) {
 		{"unicode-space", "\u00a0\u2003"},
 	}
 	paths := []struct {
-		name   string
-		htmx   bool
-		marker string
+		name    string
+		htmx    bool
+		marker  string
 		wantDoc bool
 	}{
 		{"native", false, `data-search-form`, true},

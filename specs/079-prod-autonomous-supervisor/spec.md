@@ -98,6 +98,35 @@ This spec is bound by `.github/instructions/product-principles.instructions.md` 
 - **Main Flow:** Anomaly detected → supervisor scans `specs/*/state.json` for `status ∈ {in_progress, specs_hardened}` whose `## Outcome Contract` or scenario manifest covers the symptom → if found, supervisor records a deference ledger entry pointing to the active spec and takes NO action.
 - **Postconditions:** No duplicate bug; ledger entry preserves the deference decision.
 
+### UC-079-004: Distinguish Historical Processing Debt From Active Degradation
+- **Actor:** Operator and Supervisor
+- **Preconditions:** Processing outcomes can be grouped by time window, source
+  family, classifier/provider outcome, and queue age without exposing artifact
+  content.
+- **Main Flow:**
+  1. The supervisor separates historical failed/pending records from the current
+     processing window.
+  2. It identifies whether the current failure rate, timeout rate, oldest
+     pending age, or backlog growth is actively harming new processing.
+  3. Static historical debt is recorded as a remediation cohort rather than an
+     active incident.
+  4. Sustained current provider errors, timeouts, or a growing/stuck queue open
+     one deduplicated actionable anomaly with source-family and failure-class
+     evidence.
+  5. Recovery closes or resolves the same anomaly; it does not create a second
+     success notification.
+- **Alternative Flows:**
+  - A historical cohort is concentrated in one source family, such as card
+    source pages, while current processing is healthy: report the cohort and
+    suppress an outage alert.
+  - Current failures are below the declared action threshold: retain
+    observations for trend analysis without notifying.
+  - An active spec or bug already owns the failure signature: defer to that
+    packet and link the new evidence.
+- **Postconditions:** The operator can tell "old work needs a remediation
+  campaign" from "new work is failing now" without inspecting personal
+  artifacts or receiving duplicate alerts.
+
 ---
 
 ## 6. Business Scenarios (Gherkin)
@@ -162,6 +191,93 @@ And the supervisor writes one ledger entry action=write-refused, reason="token-e
 And the supervisor continues running in read-only mode
 And no partial bug folder is left on disk
 ```
+
+### SCN-079-A07: Historical backlog does not masquerade as a current outage
+```gherkin
+Given the deployed store contains approximately 12,000 historical failed records
+And approximately 507 historical records remain pending
+And those records are concentrated in card source pages
+And the current processing window is within its declared success, latency, and queue-age thresholds
+When the supervisor evaluates processing health
+Then it records one historical remediation cohort with source-family, age, and count evidence
+And it does not open or notify a current outage
+And it does not show the end user an unread-backlog counter
+```
+
+### SCN-079-A08: Sustained current provider degradation opens one actionable anomaly
+```gherkin
+Given the current evergreen-classifier window records 131 provider errors and 2 timeouts
+And no active alert currently represents that failure signature
+And the declared action threshold and minimum observation window are exceeded
+When the supervisor evaluates processing health
+Then it opens one deduplicated anomaly for the current provider-degradation signature
+And the evidence identifies the time window, provider outcome class, affected source family, queue growth, and last successful processing time
+And no artifact content, title, person, place, query, or secret is included
+And repeated observations update the same anomaly rather than producing alert spam
+```
+
+### SCN-079-A09: Recovery closes the same processing anomaly
+```gherkin
+Given a provider-degradation anomaly is active
+When the current processing window returns within its declared success, latency, and queue-age thresholds for the recovery window
+Then the same anomaly transitions to recovered with the recovery evidence and timestamps
+And no separate success notification is sent
+And the historical remediation cohort remains independently tracked until its records are reconciled
+```
+
+### Production Processing Signal Contract (2026-07-23 Review Reconciliation)
+
+The live review established two different business conditions that MUST remain
+separate:
+
+| Signal | Observed Review Fact | Required Classification |
+|---|---|---|
+| Historical processing debt | Approximately 12k failed and 507 pending records, concentrated in card source pages | Remediation cohort; not by itself a live outage |
+| Current provider degradation | Evergreen classifier recorded 131 provider errors and 2 timeouts in the current review window | Active anomaly when the declared threshold/window is crossed |
+| Alert state | No active alert represented the current classifier degradation | Detection coverage gap; active harm must become actionable |
+| Current general health | Current-day processing was healthier than the historical aggregate | Evidence that lifetime counts cannot define current incident state |
+
+#### Additional Domain Primitives
+
+- `ProcessingHealthWindow` - bounded current observations containing total,
+  success, provider-error, timeout, queue growth, oldest pending age, and last
+  success time. Lifecycle: `collecting -> healthy | degraded | recovered`.
+- `HistoricalRemediationCohort` - immutable selection criteria plus count/age
+  trend for old failed or pending work. Lifecycle: `identified -> reconciling ->
+  cleared`.
+- `ProcessingAnomaly` - deduplicated current failure signature linked to
+  evidence windows and any owning spec/bug. Lifecycle: `candidate -> active ->
+  deferred | recovered | suppressed`.
+
+#### Requirements
+
+- **R-079-001:** The supervisor SHALL calculate current processing health from
+  a bounded declared window and SHALL NOT infer a current outage from lifetime
+  failed/pending totals alone.
+- **R-079-002:** The supervisor SHALL group historical failed and pending work
+  into non-sensitive remediation cohorts by source family, failure class, age,
+  and retry eligibility.
+- **R-079-003:** Current provider errors, timeouts, queue growth, oldest-pending
+  age, and last-success age SHALL be evaluated against explicit configuration
+  with no hidden default thresholds.
+- **R-079-004:** When a current processing threshold remains exceeded for its
+  declared observation window, the supervisor SHALL create or update one
+  deduplicated actionable anomaly.
+- **R-079-005:** An active processing anomaly SHALL expose the current window,
+  outcome classes, affected source families, queue trend, and last-success age
+  without artifact content or other personal data.
+- **R-079-006:** Repeated observations of the same signature SHALL update the
+  same anomaly and respect the operator notification budget.
+- **R-079-007:** Recovery SHALL transition the same anomaly only after a
+  declared recovery window; it SHALL NOT emit a standalone success
+  notification.
+- **R-079-008:** Historical remediation and current incident lifecycles SHALL
+  remain independent so current recovery cannot falsely close historical debt.
+- **R-079-009:** If an active spec or bug already owns the signature, the
+  supervisor SHALL append/link current evidence through its deference path and
+  SHALL NOT create a duplicate packet.
+- **R-079-010:** The operator SHALL be able to inspect these health classes and
+  evidence from a read-only surface, including healthy/no-active-alert state.
 
 ---
 
