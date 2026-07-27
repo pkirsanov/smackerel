@@ -12,6 +12,7 @@ import (
 	"github.com/go-chi/cors"
 	"github.com/go-chi/httprate"
 
+	"github.com/smackerel/smackerel/internal/api/graphapi"
 	"github.com/smackerel/smackerel/internal/auth"
 	"github.com/smackerel/smackerel/internal/metrics"
 )
@@ -157,6 +158,15 @@ func NewRouter(deps *Dependencies) http.Handler {
 			// "Atomic Wiring And Route Registration"); there is no
 			// per-family `if handler != nil` branch.
 			if deps.GraphCapability != nil {
+				// BUG-080-001 SCN-080-001-02 — validate the canonical route
+				// manifest BEFORE registering any graph route. An incomplete
+				// or duplicated manifest REJECTS construction (fail-loud panic)
+				// rather than silently mounting a SUBSET of graph families
+				// (design.md "Atomic Wiring And Route Registration"). The
+				// canonical manifest is always valid, so this never panics in
+				// production; it is a guardrail against a future edit drifting
+				// the manifest into an incoherent subset.
+				graphapi.MustValidateGraphRouteManifest()
 				r.Group(func(r chi.Router) {
 					// Fail-soft gate FIRST: a DISABLED capability
 					// short-circuits every registered graph path to the

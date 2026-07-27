@@ -122,7 +122,7 @@ Scenario: SCN-080-001-07 Activation diagnostics are value-safe
 #### Core Outcomes
 
 - [x] SCN-080-001-01: When the optional cursor-secret enabler is missing or resolves empty, the capability resolves the typed HTTP 503 `capability_disabled` disabled state for every known graph path and the service continues to boot and serve other capabilities (never a silent 404, opaque 500, panic, or boot refusal), and diagnostics name only the value-safe code and the config or indirection name. → Evidence: report.md#t080-01-proc
-- [ ] SCN-080-001-02: With a present cursor-secret enabler (enabled activation), valid limits, and PostgreSQL available, all eight required family routes register as one authenticated group, and removing or duplicating any manifest entry rejects construction rather than mounting a subset.
+- [x] SCN-080-001-02: With a present cursor-secret enabler (enabled activation), valid limits, and PostgreSQL available, all eight required family routes register as one authenticated group, and removing or duplicating any manifest entry rejects construction rather than mounting a subset. → Evidence: report.md#t080-02-manifest
 - [x] SCN-080-001-07: Whether secret resolution or cursor-codec construction succeeds or fails, startup logs, errors, metrics, and traces contain only activation mode, safe code, and non-secret config identity, never secret bytes, length, hash, cursor body, or authentication material. → Evidence: report.md#t080-01-unit
 - [x] Graph activation is one capability derived from the enabler's presence; an empty/missing enabler resolves the typed 503 `capability_disabled` disabled state (the service keeps serving; never a silent 404, opaque 500, panic, or boot refusal), and the enabled state mounts the full manifest atomically. → Evidence: report.md#t080-01-proc
 - [x] Every required route is derived from one canonical manifest and remains behind bearer authentication plus `knowledge-graph:read`. → Evidence: report.md#t080-01-proc
@@ -133,7 +133,7 @@ Scenario: SCN-080-001-07 Activation diagnostics are value-safe
 
 - [x] T080-01-UNIT passes with current-session raw evidence in `report.md#t080-01-unit`. → Evidence: report.md#t080-01-unit
 - [x] T080-01-PROC passes with current-session raw evidence in `report.md#t080-01-proc`. → Evidence: report.md#t080-01-proc
-- [ ] T080-02-MANIFEST passes with current-session raw evidence in `report.md#t080-02-manifest`.
+- [x] T080-02-MANIFEST passes with current-session raw evidence in `report.md#t080-02-manifest`.
 - [ ] T080-02-ADVERSARIAL first fails against warning-and-nil/omitted-route behavior, then passes with the repair; both outputs are recorded in `report.md#t080-02-adversarial`.
 - [ ] T080-07-SECURITY passes with value-safe output in `report.md#t080-07-security`.
 - [ ] T080-01-DISABLED passes with current-session raw evidence in `report.md#t080-01-disabled`.
