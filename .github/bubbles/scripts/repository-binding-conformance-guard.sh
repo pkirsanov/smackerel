@@ -1075,7 +1075,7 @@ check_binding_fields "agents/bubbles_shared/workflow-input-bootstrap.md"
 check_binding_fields "agents/bubbles_shared/workflow-phase-engine.md"
 check_exact_binding_section "agents/bubbles.recap.agent.md" "## CONTINUATION-ENVELOPE"
 check_exact_binding_section "agents/bubbles.status.agent.md" "## CONTINUATION-ENVELOPE"
-check_exact_binding_section "agents/bubbles.handoff.agent.md" '## Step 1: The "Handoff" Prompt'
+check_exact_binding_section "agents/bubbles.handoff.agent.md" "## Step 1: Emit The Handoff Packet (DEFAULT — the agent produces it)"
 check_exact_binding_section "agents/bubbles_shared/agent-common.md" "## Workflow-Only Continuation Convention (NON-NEGOTIABLE)"
 check_exact_binding_section "agents/bubbles.super.agent.md" "#### FRAMEWORK-ENVELOPE Repository Binding Contract"
 check_exact_binding_section "agents/bubbles.workflow.agent.md" "#### FRAMEWORK-ENVELOPE Consumer Contract"

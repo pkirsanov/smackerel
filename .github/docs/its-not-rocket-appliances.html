@@ -331,7 +331,7 @@
   <img src="../icons/bubbles-logo.svg" alt="Bubbles Logo">
   <h1>BUBBLES</h1>
   <!-- GENERATED:FRAMEWORK_STATS_HTML_VERSION_HEADER_START -->
-  <div class="subtitle">Agent Orchestration System v7.20.3</div>
+  <div class="subtitle">Agent Orchestration System v7.21.0</div>
   <!-- GENERATED:FRAMEWORK_STATS_HTML_VERSION_HEADER_END -->
   <div class="subtitle">Sunnyvale Trailer Park Software Division</div>
   <div class="tagline">"It Ain't Rocket Appliances, But It Works."</div>
@@ -1385,6 +1385,12 @@
     <div class="wf-desc">Bounded, armed, read-only chaos-monkey probing of a LIVE system (Green Bastard on a leash). Requires arming + target allowlist; restore-or-fix; never certifies.</div>
     <div class="wf-quote">"This is my park now. Let&#x27;s see what holds."</div>
   </div>
+  <div class="workflow-card">
+    <div class="wf-name">rapid-tool-delivery</div>
+    <div class="wf-alias">→ sunnyvale in-and-out-legit</div>
+    <div class="wf-desc">Risk-proportional fast lane for one low-risk, build-free tool increment. Fewer phases, but the full integrity contract. Any high-risk trigger (auth/payments/secrets/PII/DB-migration/deploy/prod/host-singleton/cross-product) escalates to full-delivery. Certifies <code>delivered_fast</code> (fast assurance — full minus the independent audit).</div>
+    <div class="wf-quote">"In and out, boys. But we still do it right."</div>
+  </div>
 <!-- GENERATED:HTML_MODES_CARDS_END -->
 </div>
 
@@ -1395,6 +1401,10 @@
   <div class="workflow-card">
     <div class="wf-name">workflow-only continuation</div>
     <div class="wf-desc">When one root mode is already active, recap, status, and handoff preserve that mode and route back to its authorized runner instead of dropping into raw specialists.</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">evidence by reference</div>
+    <div class="wf-desc">A <code>[x]</code> DoD item may cite already-captured evidence instead of re-pasting ≥10 raw lines: a <code>report.md#anchor</code> link (resolved to a ≥10-non-blank-line block) or a <code>record_evidence</code> tool-log entry in <code>.specify/runtime/tool-calls.jsonl</code>. Opt-in and fail-closed — inline evidence stays fully valid; an unresolvable anchor or missing log entry does not satisfy the item.</div>
   </div>
   <div class="workflow-card">
     <div class="wf-name">universal goal endpoint</div>
@@ -1759,6 +1769,26 @@
   <div class="workflow-card">
     <div class="wf-name">dry-run plan</div>
     <div class="wf-desc"><code>dryRun: plan</code> resolves the full convergence plan and reports intended changes WITHOUT mutating code or state — a propose-only preview that extends parallelScopes=dag-dry to the whole loop.</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">delivery strategy</div>
+    <div class="wf-desc">How much scope-appropriate process runs. Two lanes ship today: <code>full-delivery</code> (default, maximum-assurance — already the balanced default via phase-relevance auto-skip) and <code>rapid-tool-delivery</code> (the low-risk build-free fast lane). Orthogonal to achieved assurance; there is deliberately no <code>balanced</code> mode.</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">achieved assurance</div>
+    <div class="wf-desc">The evidence-derived result of a delivery, DERIVED by <code>bubbles.validate</code> via <code>assurance-derive.sh</code> (fail-closed — any incompleteness derives down). Three levels: <code>full</code>→<code>done</code>, <code>fast</code>→<code>delivered_fast</code>, <code>prototype</code>→<code>delivered_prototype</code>. Requestable, never declarable — not a quality slider the user picks.</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">delivered_fast</div>
+    <div class="wf-desc">Terminal status for <code>fast</code> achieved assurance: implementation complete + full test coverage + all tests passing, but NO independent audit (<code>missingForFull = [independent-audit]</code>). Terminal only for <code>rapid-tool-delivery</code>.</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">rapid-tool-delivery</div>
+    <div class="wf-desc">Risk-proportional fast lane for one low-risk, build-free tool increment. Keeps the full integrity contract, relaxes only the heavyweight planning chain, and <code>risk-tier-resolve.sh</code> fail-closed-escalates any high-risk trigger (auth/payments/secrets/PII/DB-migration/deploy/prod/host-singleton/cross-product) to <code>full-delivery</code>. Certifies <code>delivered_fast</code>.</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">prototype assurance</div>
+    <div class="wf-desc">The fail-closed assurance floor: verification incomplete or failing (missing coverage OR a failing test). Maps to <code>delivered_prototype</code> — never deployable, never terminal under normal delivery modes. A derived result, not a user-chosen tier; a throwaway POC is an intent (<code>.design-experiment</code>), not the bottom of a quality ladder.</div>
   </div>
 <!-- GENERATED:HTML_VOCABULARY_CARDS_END -->
 </div>
@@ -2356,8 +2386,8 @@
 </table>
 
 <!-- GENERATED:FRAMEWORK_STATS_HTML_GATES_START -->
-<!-- ═══════════════════════════════ THE 110 GATES ═══════════════════════════════ -->
-<div class="section-title"><img src="../icons/lahey-badge.svg" width="24" style="vertical-align: middle; margin-right: 8px;"> The 110 Gates of Sunnyvale (Quality Never Takes a Day Off)</div>
+<!-- ═══════════════════════════════ THE 112 GATES ═══════════════════════════════ -->
+<div class="section-title"><img src="../icons/lahey-badge.svg" width="24" style="vertical-align: middle; margin-right: 8px;"> The 112 Gates of Sunnyvale (Quality Never Takes a Day Off)</div>
 <!-- GENERATED:FRAMEWORK_STATS_HTML_GATES_END -->
 
 <div class="phase-flow">
@@ -2382,7 +2412,7 @@
 
 <p style="color: var(--text-muted); font-size: 0.85rem; margin-top: 1rem; font-style: italic;">
   <!-- GENERATED:FRAMEWORK_STATS_HTML_QUOTE_START -->
-  "110 gates, boys. That's more security than the trailer park has ever had.
+  "112 gates, boys. That's more security than the trailer park has ever had.
   Something's fucky? We'll find it. That's greasy? We'll clean it.
   Red first, green after. Small scopes. Tiny fix loops.
   Can't defer things either — you can't just NOT do things, Corey!
@@ -2395,10 +2425,10 @@
 <div class="footer">
   <div class="big-quote">"Have a good one, boys."</div>
   <!-- GENERATED:FRAMEWORK_STATS_HTML_VERSION_FOOTER_START -->
-  <p>Bubbles Agent System v7.20.3 — Sunnyvale Trailer Park Software Division</p>
+  <p>Bubbles Agent System v7.21.0 — Sunnyvale Trailer Park Software Division</p>
   <!-- GENERATED:FRAMEWORK_STATS_HTML_VERSION_FOOTER_END -->
   <!-- GENERATED:FRAMEWORK_STATS_HTML_FOOTER_START -->
-  <p>110 Gates • 41 Agents • 61 Workflow Modes • 30 Phases • 0 Shit Hawks</p>
+  <p>112 Gates • 41 Agents • 61 Workflow Modes • 30 Phases • 0 Shit Hawks</p>
   <!-- GENERATED:FRAMEWORK_STATS_HTML_FOOTER_END -->
   <p style="margin-top: 0.5rem;">© 2026 — All rights reserved by the residents of Sunnyvale Trailer Park</p>
   <p style="margin-top: 0.25rem; font-size: 0.75rem; color: #555;">"It's not rocket appliances."</p>

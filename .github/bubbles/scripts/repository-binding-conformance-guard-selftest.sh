@@ -203,7 +203,7 @@ Validate with `repository-binding.sh validate-packet` before operation execution
 EOF
   write_binding_contract "$root/agents/bubbles.recap.agent.md" "## CONTINUATION-ENVELOPE"
   write_binding_contract "$root/agents/bubbles.status.agent.md" "## CONTINUATION-ENVELOPE"
-  write_binding_contract "$root/agents/bubbles.handoff.agent.md" '## Step 1: The "Handoff" Prompt'
+  write_binding_contract "$root/agents/bubbles.handoff.agent.md" "## Step 1: Emit The Handoff Packet (DEFAULT — the agent produces it)"
   write_binding_contract "$root/agents/bubbles_shared/agent-common.md" \
     "## Workflow-Only Continuation Convention (NON-NEGOTIABLE)"
   cat >>"$root/agents/bubbles_shared/agent-common.md" <<'EOF'

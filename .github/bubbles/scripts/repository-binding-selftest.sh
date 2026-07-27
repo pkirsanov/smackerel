@@ -3017,7 +3017,7 @@ run_front_doors_goal_nodes_suite() {
   recap_continuation="$(markdown_last_heading_tail "$RECAP_AGENT" "## CONTINUATION-ENVELOPE")"
   status_context="$(markdown_subtree "$STATUS_AGENT" "## Context Loading")"
   status_continuation="$(markdown_last_heading_tail "$STATUS_AGENT" "## CONTINUATION-ENVELOPE")"
-  handoff_prompt="$(markdown_subtree "$HANDOFF_AGENT" '## Step 1: The "Handoff" Prompt')"
+  handoff_prompt="$(markdown_subtree "$HANDOFF_AGENT" "## Step 1: Emit The Handoff Packet (DEFAULT — the agent produces it)")"
   common_continuation="$(markdown_subtree "$AGENT_COMMON" "## Workflow-Only Continuation Convention (NON-NEGOTIABLE)")"
   assert_text_before "$case_id" "recap commits preflight before active state scans" \
     "$recap_behavior" 'PREFLIGHT_COMMITTED' 'specs/*/state.json'
