@@ -135,14 +135,21 @@ type Dependencies struct {
 	SearchEngine       Searcher
 	DigestGen          DigestGenerator
 	WebHandler         WebUI
-	OAuthHandler       OAuthFlow
-	TelegramBot        TelegramHealthChecker
-	ConnectorRegistry  ConnectorHealthLister
-	ArtifactStore      ArtifactQuerier
-	ContextHandler     *ContextHandler
-	BookmarkPub        BookmarkPublisher
-	OllamaURL          string
-	AuthToken          string
+	// AppearanceHeadMiddleware, when set, is the spec 106 SCOPE-106-01 server
+	// head-adapter (web.AppearanceHeadStamp): it resolves the smk_appearance
+	// cookie and stamps the resolved data-theme/data-density onto the <html>
+	// element of server-rendered HTML pages before first paint. Injected from
+	// cmd/core to avoid the api->web import cycle; nil in router unit tests
+	// (no stamping, no behavior change).
+	AppearanceHeadMiddleware func(http.Handler) http.Handler
+	OAuthHandler             OAuthFlow
+	TelegramBot              TelegramHealthChecker
+	ConnectorRegistry        ConnectorHealthLister
+	ArtifactStore            ArtifactQuerier
+	ContextHandler           *ContextHandler
+	BookmarkPub              BookmarkPublisher
+	OllamaURL                string
+	AuthToken                string
 	// Environment is the deployment environment value (allowed: development |
 	// test | production) sourced from runtime.environment in smackerel.yaml
 	// via SMACKEREL_ENV. MIT-040-S-004 — bearerAuthMiddleware uses this to

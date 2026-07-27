@@ -199,15 +199,18 @@ func buildAPIDeps(ctx context.Context, cfg *config.Config, svc *coreServices) (*
 	// after the capability-layer Facade is constructed.
 	svc.assistantHTTPHandler = httpadapter.NewLateBoundHandler()
 	deps := &api.Dependencies{
-		DB:                              svc.pg,
-		NATS:                            svc.nc,
-		IntelligenceEngine:              svc.intEngine,
-		StartTime:                       time.Now(),
-		MLSidecarURL:                    cfg.MLSidecarURL,
-		Pipeline:                        svc.proc,
-		SearchEngine:                    svc.searchEngine,
-		DigestGen:                       svc.digestGen,
-		WebHandler:                      svc.webHandler,
+		DB:                 svc.pg,
+		NATS:               svc.nc,
+		IntelligenceEngine: svc.intEngine,
+		StartTime:          time.Now(),
+		MLSidecarURL:       cfg.MLSidecarURL,
+		Pipeline:           svc.proc,
+		SearchEngine:       svc.searchEngine,
+		DigestGen:          svc.digestGen,
+		WebHandler:         svc.webHandler,
+		// Spec 106 SCOPE-106-01 — server head-adapter for first-paint appearance
+		// stamping (data-theme/data-density from the smk_appearance cookie).
+		AppearanceHeadMiddleware:        web.AppearanceHeadStamp,
 		OAuthHandler:                    svc.oauthHandler,
 		ContextHandler:                  svc.contextHandler,
 		ArtifactStore:                   svc.pg,
