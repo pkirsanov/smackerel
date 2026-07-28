@@ -21,6 +21,7 @@ package graphapi
 import (
 	"fmt"
 	"net/http"
+	"slices"
 	"strings"
 )
 
@@ -53,6 +54,18 @@ var requiredGraphFamilies = []GraphRouteFamily{
 	FamilyPeople, FamilyPersonDetail,
 	FamilyPlaces, FamilyPlaceDetail,
 	FamilyTime, FamilyEdges,
+}
+
+// RequiredGraphFamilies returns a copy of the canonical, ordered
+// eight-family set. It is the single authoritative family taxonomy: the
+// route-manifest validator above, the BUG-080-001 SCOPE-03 product read
+// synthetic (internal/graphsynthetic), and the authenticated health
+// capability projection all derive their family list from THIS function,
+// so a family can never be added to one surface and silently omitted
+// from another. The returned slice is a clone, so a caller cannot mutate
+// the canonical order.
+func RequiredGraphFamilies() []GraphRouteFamily {
+	return slices.Clone(requiredGraphFamilies)
 }
 
 // GraphRouteEntry is one row of the canonical route manifest: a family,
