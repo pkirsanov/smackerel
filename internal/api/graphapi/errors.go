@@ -136,8 +136,14 @@ var (
 
 // WriteError emits the uniform JSON error envelope from raw arguments.
 // Handlers that already hold an APIError SHOULD prefer WriteAPIError.
+//
+// BUG-080-001 SCOPE-02: every graph error body — including the typed
+// 503 capability_disabled and the typed 503 store_unavailable — is an
+// existence signal about private graph content, so it carries the
+// private/no-store contract (privacy.go) just like a success body.
 func WriteError(w http.ResponseWriter, status int, code, field, message string) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	SetPrivateNoStore(w)
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(ErrorEnvelope{
 		Error: ErrorBody{Code: code, Message: message, Field: field},

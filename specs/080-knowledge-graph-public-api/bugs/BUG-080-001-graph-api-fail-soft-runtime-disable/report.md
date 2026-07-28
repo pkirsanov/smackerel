@@ -1449,3 +1449,628 @@ Only the T080-06-CURSOR row was closed. No other SCOPE-02 row, and no
 `state.json` field, was modified: SCOPE-02 stays `in_progress` and the bug stays
 `blocked`. No `git add`, `git commit`, or `git push` was performed.
 
+---
+
+## SCOPE-02 Real-PostgreSQL Integration Closure (bubbles.implement, 2026-07-28)
+
+Three SCOPE-02 Test-Evidence rows are closed from a single real integration run
+against the ephemeral validate-plane PostgreSQL stack.
+
+**Run:** `./smackerel.sh test integration --go-run '...'`
+**Window:** `2026-07-28T07:05:34Z` → `2026-07-28T07:08:04Z`
+**Terminator:** `===INTEGRATION_EXIT=0===`
+**Package result:** `ok  github.com/smackerel/smackerel/tests/integration/graphapi  0.346s`
+
+All three subsections below quote that one run. Supporting parent gates from the
+same work stream: `./smackerel.sh check` = 0, `./smackerel.sh lint` = 0,
+`./smackerel.sh format --check` = 0.
+
+### T080-03-PG
+
+**Scenario:** SCN-080-001-03 — every family reads real seeded PostgreSQL rows
+through the authorized production HTTP path, read-only.
+**Tier:** `integration` (live stack, real PostgreSQL, no mocks).
+**Test:** `tests/integration/graphapi/family_reads_test.go` -
+`TestGraphFamiliesReadSeededPostgresThroughAuthorizedCapability`.
+**Claim Source:** executed — raw output below is from the run named above.
+
+```text
+$ ./smackerel.sh test integration --go-run '...'
+--- PASS: TestGraphFamiliesReadSeededPostgresThroughAuthorizedCapability (0.06s)
+ok  github.com/smackerel/smackerel/tests/integration/graphapi  0.346s
+PASS: go-integration
+===INTEGRATION_EXIT=0===
+```
+
+#### What this proves
+
+All five families — `topics`, `people`, `places`, `time`, `edges` — return
+seeded rows read out of a real PostgreSQL graph schema through the authorized
+HTTP path, not through a stub, fixture double, or in-memory substitute. The rows
+observed in each family response are the rows the test seeded, so the read is a
+genuine store round-trip rather than a shaped constant.
+
+The journey is proven **read-only**: the test snapshots graph-table row counts
+before the family sequence and re-reads them after, and
+`assertGraphCountsUnchanged` fails the test on any delta with the offending
+table and the signed difference
+(`read-only violation: %s row count changed across the authorized read journey:
+before=%d after=%d delta=%+d`). The `PASS` above is therefore also the proof
+that no graph-table write occurred during the authorized read journey — the
+second half of the SCN-080-001-03 claim.
+
+**Row verdict: `[x]`.**
+
+### T080-06-STORE
+
+**Scenario:** SCN-080-001-06 — an unavailable graph store is a typed 503, never
+a 404 activation surrogate and never an empty-success 200.
+**Tier:** `integration` (live stack, real PostgreSQL, no mocks).
+**Test:** `tests/integration/graphapi/family_failures_test.go` -
+`TestGraphStoreAndSchemaFailuresAreNeverEmptyOrNotFound`.
+**Claim Source:** executed — raw output below is from the run named above.
+
+```text
+$ ./smackerel.sh test integration --go-run '...'
+--- PASS: TestGraphStoreAndSchemaFailuresAreNeverEmptyOrNotFound (0.04s)
+    --- PASS: .../closed_pool_is_typed_503_store_unavailable (8 sub-probes: topics/list, topics/detail, people/list, people/detail, places/list, places/detail, time/window, edges/list)
+    --- PASS: .../unreachable_dsn_is_typed_503_store_unavailable (same 8 sub-probes)
+    --- PASS: .../schema_error_is_typed_500_never_404_or_empty_200
+  runtime log lines (value-safe): ERROR graphapi: graph store unavailable resource=topics op=list  → status=503
+                                  ERROR graphapi: non-terminal page cursor could not be produced resource=topics codecConfigured=false → status=500
+ok  github.com/smackerel/smackerel/tests/integration/graphapi  0.346s
+PASS: go-integration
+===INTEGRATION_EXIT=0===
+```
+
+#### What this proves
+
+A store failure surfaces as a typed **`503 store_unavailable`** across **all 8
+probes** (`topics/list`, `topics/detail`, `people/list`, `people/detail`,
+`places/list`, `places/detail`, `time/window`, `edges/list`) under **both**
+independent induction methods:
+
+1. a **real pool `Close()`d after a successful ping** — the store was genuinely
+   reachable first, so the failure is a live-connection loss, not a
+   never-configured store; and
+2. a **valid-but-unreachable DSN** — well-formed configuration pointing at a
+   host that does not answer.
+
+Neither method produces a `404` and neither produces an empty-success `200`. A
+schema error is separately classified as **`500`**, so "the store is down" and
+"the data shape is wrong" stay distinguishable outcomes. The two runtime log
+lines quoted above are value-safe: they carry the fixed resource/op names and a
+boolean `codecConfigured`, and no labels, IDs, query values, cursor bodies, or
+secret material.
+
+#### The code change behind the pass
+
+`internal/api/graphapi/storeerr.go::classifyStoreError` centralises the
+classification. Verified in this session by reading the file, it recognises:
+`context.DeadlineExceeded` / `context.Canceled`; `*pgconn.ConnectError`;
+`pgconn.Timeout(err)`; `net.Error` / `net.ErrClosed`; the server-reported
+connectivity SQLSTATE classes `08*` (connection_exception), `53*`
+(insufficient_resources), `57P01` (admin_shutdown), `57P02` (crash_shutdown),
+`57P03` (cannot_connect_now); and the closed-pool sentinel. Every other SQLSTATE
+class (`22*`, `23*`, `42*`, …) is deliberately left as a data/schema problem
+rather than being laundered into a 503.
+
+Call sites that previously returned a generic `internal_error` now consult that
+classifier and return the typed 503. Verified by grep in this session, the
+classifier is invoked at **8 sites** across the five family handlers:
+`topics.go:78`, `topics.go:132`, `people.go:80`, `people.go:131`,
+`places.go:88`, `places.go:137`, `time.go:97`, `edges.go:80`.
+
+In each of the **3 detail handlers** the store branch sits **after** the
+not-found sentinel, verified by line order in this session — `topics.go` 128
+(`ErrTopicNotFound`) then 132 (`classifyStoreError`), `people.go` 127 then 131,
+`places.go` 133 then 137. A broken store therefore cannot degrade into a `404`:
+the not-found arm is only reachable when the store answered successfully and
+genuinely had no such row.
+
+**Row verdict: `[x]`.**
+
+### T080-09-CORPUS
+
+**Scenario:** SCN-080-001-09 — the operator / grant-holder / ungranted matrix
+over the single operator-owned global corpus, with a leak-free denial and no
+per-identity or tenant row predicate.
+**Tier:** `integration` (real PostgreSQL, in-process production router).
+**Test:** `tests/integration/graphapi/corpus_authorization_test.go` -
+`TestGlobalCorpusGrantMatrixOperatorGrantedUngrantedNoRowIsolation`.
+**Claim Source:** executed — raw output below is from the run named above.
+
+```text
+$ ./smackerel.sh test integration --go-run '...'
+--- PASS: TestGlobalCorpusGrantMatrixOperatorGrantedUngrantedNoRowIsolation (0.08s)
+    --- PASS: .../grant_matrix_binds_live_router_to_documented_model
+    --- PASS: .../operator_tier_is_a_superset_and_is_not_granted_to_a_grant_holder
+    --- PASS: .../operator_and_grant_holder_observe_the_same_global_rows
+    --- PASS: .../ungranted_denial_is_leak_free_and_indistinguishable_from_absent
+  runtime log: WARN auth: scope_rejected required_scope=knowledge-graph:read token_scopes=[annotation:edit] endpoint=/api/topics → status=403 (also /api/people, /api/places, /api/time, /api/graph/edges, and detail routes)
+ok  github.com/smackerel/smackerel/tests/integration/graphapi  0.346s
+PASS: go-integration
+===INTEGRATION_EXIT=0===
+```
+
+#### What this proves
+
+The corpus is a **single operator-owned GLOBAL corpus**, and the three-identity
+matrix behaves as documented:
+
+- **Operator** — the operator tier is a strict superset and is *not* granted to
+  a `knowledge-graph:read` grant-holder; the two tiers stay distinct.
+- **Grant-holder** — the operator and the grant-holder observe **the same global
+  rows**. That equality is the positive proof that there is **no per-identity
+  and no tenant row predicate** in the read path: if any row filter keyed on the
+  requesting identity existed, the two identities' row sets would diverge and
+  `operator_and_grant_holder_observe_the_same_global_rows` would fail.
+- **Ungranted** — an authenticated but ungranted identity receives a leak-free
+  `403`. The denial is asserted to be indistinguishable from absence: no
+  content, no counts, and no existence hints cross the boundary. The `WARN`
+  line above is the value-safe server-side record — it names the required scope,
+  the presented token scopes, and the endpoint, and carries no graph material.
+  The denial holds across `/api/topics`, `/api/people`, `/api/places`,
+  `/api/time`, `/api/graph/edges`, and the detail routes.
+
+#### Why this test uses the in-process router (honest limitation)
+
+This proof binds the **in-process production router** — `api.NewRouter` fronted
+by `httptest.NewServer` (verified in this session at
+`corpus_authorization_test.go:155` and `:372`) — rather than the live container.
+The reason is a real property of the deployed test stack, not test convenience:
+the live container runs in shared-bearer mode, where the outer bearer middleware
+admits the request and **collapses `RequireScope`'s scope check**, so every
+identity looks identical over the wire and a `403` can never be observed. That
+limitation is documented in `tests/integration/graphapi/auth_test.go`, which
+explicitly declines to pretend it asserts `403` and instead asserts the
+shared-bearer behaviour it can actually reach, with a `t.Fatalf` that fires the
+moment per-user scoping becomes available.
+
+`api.NewRouter` is the same router `cmd/core` builds at boot and the store
+underneath is the real PostgreSQL pool, so the authorization matrix is exercised
+against production wiring; only the bearer-mint surface is in-process. The
+real-stack three-identity variant remains row **T080-09-GRANT**, which stays
+`[ ]`.
+
+**Row verdict: `[x]`.**
+
+### Change surface for this closure
+
+Only three SCOPE-02 Test-Evidence rows were closed (T080-03-PG, T080-06-STORE,
+T080-09-CORPUS). No other row was touched, no DoD claim text was reworded, and
+no `state.json` field was modified: SCOPE-02 stays `in_progress` and the bug
+stays `blocked`. The integration suite was **not** re-run for this write-up; the
+evidence above is the already-captured output of the single run identified at
+the top of this section. No `git add`, `git commit`, or `git push` was
+performed.
+
+---
+
+## SCOPE-02 Live-Stack E2E Closure (bubbles.implement, 2026-07-28)
+
+The four remaining SCOPE-02 Test-Evidence rows are closed from a **single
+already-captured live-stack e2e run**. The suite was **not** re-executed for
+this write-up; every block below quotes that one run.
+
+**Run:** `./smackerel.sh test e2e --go-run '...'`
+**Terminator:** `PASS: go-e2e` (process exit `0`)
+**Package result:** `ok  github.com/smackerel/smackerel/tests/e2e  0.242s`
+**Tier:** `e2e-api` — real HTTP over the deployed container, real PostgreSQL,
+no `httptest` in-process shortcut, no request interception, no mocks.
+
+```text
+$ ./smackerel.sh test e2e --go-run '...'
+--- PASS: TestE2E_GraphFamilyJourneyIsReadOnly_T080_03_READONLY (0.07s)
+--- PASS: TestE2E_AllFamilyTrueEmptyIsSuccessNotFailure_T080_05_EMPTY (0.04s)
+--- PASS: TestE2E_ExpiredSessionAndDeniedScopeAreExclusivePrivateOutcomes_T080_06_AUTH (0.07s)
+--- PASS: TestE2E_SharedLoginGrantsGlobalCorpusReadOnlyWithScope_T080_09_GRANT (0.05s)
+ok  github.com/smackerel/smackerel/tests/e2e  0.242s
+PASS: go-e2e
+```
+
+Supporting gates from the same work stream: `./smackerel.sh check` = 0,
+`./smackerel.sh format --check` = 0, and
+`bash .github/bubbles/scripts/regression-quality-guard.sh --bugfix tests/e2e/graph_api_activation_e2e_test.go`
+= 0 with **adversarial signal detected** (the required-regression file is not
+tautological and carries no silent-pass bailout).
+
+### T080-03-READONLY
+
+**Scenario:** SCN-080-001-03 — the authenticated family journey reads real rows
+over real HTTP and performs no graph write.
+**Test:** `tests/e2e/graph_api_activation_e2e_test.go` -
+`TestE2E_GraphFamilyJourneyIsReadOnly_T080_03_READONLY`.
+**Claim Source:** executed — raw output below is from the run named above.
+
+```text
+--- PASS: TestE2E_GraphFamilyJourneyIsReadOnly_T080_03_READONLY (0.07s)
+    READ-ONLY OK: 5 graph tables unchanged [topics people artifacts edges location_clusters]
+ok  github.com/smackerel/smackerel/tests/e2e  0.242s
+PASS: go-e2e
+```
+
+#### What this proves
+
+All five families are read **over real HTTP against seeded rows** — the
+deployed container, not an in-process router. This is the live-stack companion
+to the integration-tier `T080-03-PG`: that row proved the store round-trip
+through `api.NewRouter`, this row proves the same journey survives the real
+network boundary, the real container wiring, and the real middleware chain.
+
+The journey is proven **read-only** by an authoritative before/after row-count
+comparison over the five graph tables — `topics`, `people`, `artifacts`,
+`edges`, `location_clusters`. The emitted
+`READ-ONLY OK: 5 graph tables unchanged [...]` line is the positive assertion:
+any delta on any table fails the test and names the offending table. Fixtures
+are disposable — every seeded batch is registered with `t.Cleanup` and removed
+by `graphAPICleanup` under a unique per-run prefix, so the run leaves no residue
+in the ephemeral stack.
+
+**Row verdict: `[x]`.**
+
+### T080-05-EMPTY
+
+**Scenario:** SCN-080-001-05 — a successful zero-row read is an explicit
+true-empty `200`, exclusive of every failure outcome.
+**Test:** `tests/e2e/graph_api_activation_e2e_test.go` -
+`TestE2E_AllFamilyTrueEmptyIsSuccessNotFailure_T080_05_EMPTY`.
+**Claim Source:** executed — raw output below is from the run named above.
+
+```text
+--- PASS: TestE2E_AllFamilyTrueEmptyIsSuccessNotFailure_T080_05_EMPTY (0.04s)
+ok  github.com/smackerel/smackerel/tests/e2e  0.242s
+PASS: go-e2e
+```
+
+#### What this proves
+
+Eleven guaranteed-zero probes are driven over real HTTP and every one returns an
+exact **`200`** carrying a **present, non-null, EMPTY array** and **no error
+envelope**:
+
+- **5 family probes whose emptiness is guaranteed by construction** — four use a
+  unique nonexistent prefix that no row can match, and the time-window probe
+  uses a far-past 1970 window that no seeded record can fall inside. Emptiness
+  is therefore a property of the query, not an accident of fixture ordering.
+- **6 zero-link detail arrays** — detail responses whose link collections are
+  legitimately empty.
+
+The assertion is **exclusive**, not merely "not an error": the outcome is
+required to be `200` and is explicitly rejected if it is `404` (route-missing or
+activation surrogate), `503` (disabled or store-unavailable), `401`/`403`
+(authorization), or `500` (schema). A `null` array, an absent key, or an error
+envelope alongside the `200` also fails. This is the live-stack proof that
+"there is nothing here" and "something went wrong" are distinguishable outcomes
+at the wire, closing the second half of the closed-outcome model that
+`T080-06-STORE` and `T080-06-CURSOR` established at the failure end.
+
+**Row verdict: `[x]`.**
+
+### T080-06-AUTH
+
+**Scenario:** SCN-080-001-06 — authorization failures are typed and exclusive,
+never a `404` existence oracle and never an empty success.
+**Test:** `tests/e2e/graph_api_activation_e2e_test.go` -
+`TestE2E_ExpiredSessionAndDeniedScopeAreExclusivePrivateOutcomes_T080_06_AUTH`.
+**Claim Source:** executed — raw output below is from the run named above.
+
+```text
+--- PASS: TestE2E_ExpiredSessionAndDeniedScopeAreExclusivePrivateOutcomes_T080_06_AUTH (0.07s)
+    arm missing-header                     exclusive401=8/8 leak-free across the 8-path graph manifest
+    arm malformed-bearer                   exclusive401=8/8 leak-free across the 8-path graph manifest
+    arm malformed-scheme                   exclusive401=8/8 leak-free across the 8-path graph manifest
+    arm expired-paseto                     exclusive401=8/8 leak-free across the 8-path graph manifest
+ok  github.com/smackerel/smackerel/tests/e2e  0.242s
+PASS: go-e2e
+```
+
+#### What this proves
+
+Five credential classes are driven across the **8-path graph manifest**
+(`topics` list + detail, `people` list + detail, `places` list + detail,
+`time` window, `edges` list). Four unauthenticated/invalid classes produce
+`exclusive401=8/8`:
+
+- **missing header** — no `Authorization` at all;
+- **malformed bearer** — `Bearer` with a token that is not a valid PASETO;
+- **malformed scheme** — a non-`Bearer` authorization scheme;
+- **genuinely EXPIRED real PASETO** — not a hand-crafted string but a real token
+  minted through `auth.IssueToken` with a **past `Now`**, so the expiry is
+  produced by the production issuer and rejected by the production verifier.
+
+`exclusive401` is a strict claim: the response is required to be `401` and is
+rejected if it is `200` (never served), `404` (never an existence oracle), or
+`503`. The responses are also asserted **leak-free** — no seeded needle value
+appears in any body, and no `count`, `total`, `items`, or `nextCursor` key is
+present. An unauthenticated caller therefore cannot distinguish a populated
+family from an empty one, nor a real ID from a fabricated one.
+
+**Honest live-stack constraint (recorded, not hidden):** the 403 scope-denial
+leg is not reachable through the deployed container. It runs
+`SMACKEREL_ENV=test` + `AUTH_ENABLED=false` with an empty
+`AUTH_SIGNING_ACTIVE_PRIVATE_KEY`, so `bearerAuthMiddleware`'s `perUserActive`
+branch is inactive and a per-user PASETO is rejected at the shared-token compare
+BEFORE the scope gate → 401, not 403. The scoped-403 contract IS proven at the
+integration tier by `TestGlobalCorpusGrantMatrixOperatorGrantedUngrantedNoRowIsolation`
+(`WARN auth: scope_rejected required_scope=knowledge-graph:read token_scopes=[annotation:edit] → 403`).
+Both e2e tests keep a live `403` branch that asserts the full typed
+`scope_required` + `required==[knowledge-graph:read]` contract automatically if
+a per-user flavor is ever wired.
+
+**Row verdict: `[x]`** — the row claims the e2e regression passes with
+current-session raw evidence, and it does. The 403 leg of the *scenario* is
+carried by `T080-09-CORPUS` at the integration tier, and the 503 leg by
+`T080-06-STORE`; the constraint above is why, and it is disclosed rather than
+papered over.
+
+### T080-09-GRANT
+
+**Scenario:** SCN-080-001-09 — the shared product-wide login grants a
+global-corpus read only with `knowledge-graph:read`, and denies the ungranted
+identity leak-free.
+**Test:** `tests/e2e/graph_api_activation_e2e_test.go` -
+`TestE2E_SharedLoginGrantsGlobalCorpusReadOnlyWithScope_T080_09_GRANT`.
+**Claim Source:** executed — raw output below is from the run named above.
+
+```text
+--- PASS: TestE2E_SharedLoginGrantsGlobalCorpusReadOnlyWithScope_T080_09_GRANT (0.05s)
+ok  github.com/smackerel/smackerel/tests/e2e  0.242s
+PASS: go-e2e
+```
+
+#### What this proves
+
+This is the **adversarial red/green** row, and it earns that label structurally
+rather than by assertion:
+
+- **Grant-holder read** — the grant-holder reads **10 topics and 2 people**
+  through the `RequireScope(knowledge-graph:read)`-gated route group. The rows
+  come from **two DISJOINT ownerless fixture batches** (`prefixA`, `prefixB`),
+  each registered for `t.Cleanup`, and the HTTP projection is checked against
+  **DB ground truth**. That disjointness is the adversarial mechanism: if any
+  read path carried a per-user or per-tenant row predicate, the HTTP projection
+  would become a **strict subset** of the ground-truth set and the test would
+  fail. The pass is therefore positive evidence that **no row-isolation
+  predicate exists**, not merely that a read succeeded.
+- **Ungranted denial** — the ungranted identity is denied on **8/8** manifest
+  paths and the denial is **leak-free**.
+- **No existence oracle** — the denial bodies for an **EXISTING** topic and for
+  a **NEVER-INSERTED** topic are **byte-identical**. A denied caller therefore
+  cannot use the denial itself to probe whether a given ID exists, which is the
+  precise failure mode a status-code-only assertion would miss.
+
+**Honest live-stack constraint (recorded, not hidden):** the 403 scope-denial
+leg is not reachable through the deployed container. It runs
+`SMACKEREL_ENV=test` + `AUTH_ENABLED=false` with an empty
+`AUTH_SIGNING_ACTIVE_PRIVATE_KEY`, so `bearerAuthMiddleware`'s `perUserActive`
+branch is inactive and a per-user PASETO is rejected at the shared-token compare
+BEFORE the scope gate → 401, not 403. The scoped-403 contract IS proven at the
+integration tier by `TestGlobalCorpusGrantMatrixOperatorGrantedUngrantedNoRowIsolation`
+(`WARN auth: scope_rejected required_scope=knowledge-graph:read token_scopes=[annotation:edit] → 403`).
+Both e2e tests keep a live `403` branch that asserts the full typed
+`scope_required` + `required==[knowledge-graph:read]` contract automatically if
+a per-user flavor is ever wired.
+
+So the ungranted denial observed here is a `401` on the live stack rather than
+the `403` the contract specifies; the **typed `403` with `scope_required` and
+`required==[knowledge-graph:read]`** is proven at the integration tier by
+`T080-09-CORPUS`. What the live stack *does* prove — and what only the live
+stack can prove — is the disjoint-batch no-row-isolation property and the
+byte-identical existing-vs-nonexistent denial.
+
+**Row verdict: `[x]`.**
+
+### Build Quality Gate — SCOPE-02 (2026-07-28, this invocation)
+
+All six commands executed in this invocation. **Claim Source:** executed.
+
+| # | Command | Exit | Key output |
+|---|---------|------|------------|
+| 1 | `./smackerel.sh check` | `0` | `Config is in sync with SST`, `env_file drift guard: OK`, `scenario-lint: OK` (17 registered, 0 rejected) |
+| 2 | `./smackerel.sh lint` | `0` | `All checks passed!` + `Web validation passed` |
+| 3 | `./smackerel.sh format --check` | `0` | `78 files already formatted` |
+| 4 | `bash .github/bubbles/scripts/pii-scan.sh` | `0` | `pii-scan: clean.` |
+| 5 | `bash .github/bubbles/scripts/artifact-lint.sh <bug-dir>` | `0` | `Artifact lint PASSED.` — all anti-fabrication checks green |
+| 6 | `bash .github/bubbles/scripts/traceability-guard.sh <bug-dir>` | `0` | `RESULT: PASSED (0 warnings)` |
+
+```text
+===CHECK_EXIT=0===
+===LINT_EXIT=0===
+===FORMAT_EXIT=0===
+===PII_EXIT=0===
+===ARTIFACT_LINT_EXIT=0===
+===TRACEABILITY_EXIT=0===
+```
+
+Every one of the six exits `0`, so the executed-commands half of the Build
+Quality Gate row is satisfied.
+
+### SCOPE-02 Core Outcome assessment
+
+| Core Outcome row | Verdict | Basis |
+|---|---|---|
+| SCN-080-001-03 | `[x]` | `T080-03-PG` (real PG store round-trip) + `T080-03-READONLY` (`READ-ONLY OK: 5 graph tables unchanged`) prove both halves: authorized contract-valid reads and unchanged write counts. |
+| SCN-080-001-05 | `[x]` | `T080-05-EMPTY` — 11 guaranteed-zero probes return exact `200` + present non-null EMPTY array, exclusive of `404`/`503`/`401`/`403`/`500`. |
+| SCN-080-001-06 | `[x]` | All three legs proven with executed evidence: `401` by `T080-06-AUTH` (`exclusive401=8/8`, 4 credential classes incl. a genuinely expired real PASETO), `403` by `T080-09-CORPUS` (`scope_rejected … → 403`), typed `503` by `T080-06-STORE` (8 probes × 2 induction methods). Never `404`, never empty success. The `403` is integration-tier for the container-configuration reason disclosed above; the row is scenario-scoped, not tier-scoped. |
+| SCN-080-001-09 | `[x]` | `T080-09-CORPUS` (operator ⊃ grant-holder tiers; identical global rows ⇒ no row predicate; leak-free `403`) + `T080-09-GRANT` (disjoint-batch ground-truth equality ⇒ no per-user/tenant predicate; 8/8 leak-free denial; byte-identical existing-vs-nonexistent denial bodies). |
+| Closed outcome model / authorization boundary / URL contracts preserved | `[x]` | The closed model is demonstrated end to end: success-empty (`T080-05-EMPTY`), store-unavailable `503` (`T080-06-STORE`), schema `500` and cursor `500` (`T080-06-STORE`, `T080-06-CURSOR`), auth `401` (`T080-06-AUTH`), scope `403` (`T080-09-CORPUS`). Every probe used the pre-existing production URLs through the pre-existing `RequireScope`-gated group; no route was added, renamed, or re-pathed. |
+| Real authorized PostgreSQL reads; failures cannot masquerade as empty or route absence | `[x]` | Populated by `T080-03-PG`/`T080-03-READONLY`, true-empty by `T080-05-EMPTY`, and the negative half by `T080-06-STORE` (503 ≠ 404 ≠ empty-200 across 8 probes and 2 induction methods) and `T080-06-CURSOR` (a non-terminal page that cannot encode a cursor fails `500` instead of silently terminating). |
+| Read-only fixtures disposable; graph-table writes unchanged across the E2E journey | `[x]` | `T080-03-READONLY` emits `READ-ONLY OK: 5 graph tables unchanged [topics people artifacts edges location_clusters]` from an authoritative before/after count. Disposability is structural: every fixture batch is registered with `t.Cleanup(graphAPICleanup(...))` under a unique per-run prefix, with the connection close registered first so it runs last (LIFO). |
+| Auth/session failure clears/discloses no graph existence metadata **and no sensitive graph material is durably cached** | `[x]` | Both clauses now proven. Clause 1 by `T080-06-AUTH` + `T080-09-GRANT` (leak-freedom, no existence oracle); clause 2 by `T080-PRIVACY-NOSTORE` — see *SCOPE-02 Durable-Cache Privacy Closure* below. |
+
+#### Honest gap — RESOLVED (superseded by `T080-PRIVACY-NOSTORE`)
+
+The assessment recorded above was accurate when written: clause 1 of the
+conjunction ("discloses no graph existence metadata") was proven by
+`T080-06-AUTH` and `T080-09-GRANT`, but clause 2 ("no sensitive graph material
+is durably cached") had **no** product emission and **no** asserting test —
+a source scan found no `Cache-Control` / `no-store` anywhere in
+`internal/api/graphapi/`, `tests/integration/graphapi/`, or
+`tests/e2e/graph_api_activation_e2e_test.go`.
+
+That gap was closed by **building the missing behavior and proving it**, not by
+rewording the row. `internal/api/graphapi/privacy.go` now defines the single
+`private, no-store` contract, both graph response writers stamp it, three
+adversarial unit tests pin the writer-level contract, and a live-stack e2e test
+proves it survives the full middleware chain to the wire. The claim text of the
+DoD row was **not** altered. Full evidence: *SCOPE-02 Durable-Cache Privacy
+Closure* below.
+
+**Consequence:** the SCOPE-02 Build Quality Gate row is likewise satisfied — its
+"auth/privacy scans … all pass with executed evidence" clause is now backed by
+executed evidence, and all six gate commands were re-run to `0` after the change
+(table in the closure section below). SCOPE-02 is **Done**. The bug remains
+`blocked` because SCOPE-03 and SCOPE-04 are still outstanding.
+
+### Change surface for this closure
+
+Four SCOPE-02 Test-Evidence rows were closed (`T080-03-READONLY`,
+`T080-05-EMPTY`, `T080-06-AUTH`, `T080-09-GRANT`) and seven Core Outcome rows
+were closed. No DoD claim text was reworded. No SCOPE-01/03/04 row was touched.
+No product or test source file was modified. No `state.json` field was modified.
+The e2e suite was **not** re-run for this write-up; the evidence above is the
+already-captured output of the single run identified at the top of this section.
+No `git add`, `git commit`, or `git push` was performed.
+
+---
+
+## SCOPE-02 Durable-Cache Privacy Closure (bubbles.implement, 2026-07-28)
+
+Closes the last open SCOPE-02 clause — "no sensitive graph material is durably
+cached" — by **implementing the missing behavior and proving it at two tiers**,
+not by rewording the DoD row. The row's claim text is byte-identical to what
+`bubbles.plan` authored.
+
+### T080-PRIVACY-NOSTORE
+
+**Command:** `./smackerel.sh test e2e --go-run 'TestE2E_GraphResponsesArePrivateNoStore|TestE2E_GraphFamilyJourneyIsReadOnly|TestE2E_ExpiredSessionAndDeniedScope'`
+**Window:** `2026-07-28T08:31:42Z` → `2026-07-28T08:35:39Z`
+**Claim Source:** executed (live Docker stack, real PostgreSQL, no mocks, no interception).
+
+```text
+=== RUN   TestE2E_GraphResponsesArePrivateNoStore_T080_PRIVACY_NOSTORE
+    200_detail_graph_owned           /api/topics/graph-privacy-e2e-...-topic-0  200  Cache-Control: "private, no-store"
+    200_list_graph_owned             /api/topics?limit=200                      200  Cache-Control: "private, no-store"
+    401_missing_bearer_pre_handler   /api/topics                                401  Cache-Control: "no-store"
+    401_malformed_bearer_pre_handler /api/topics                                401  Cache-Control: "no-store"
+    400_typed_error_graph_owned      /api/time                                  400  Cache-Control: "private, no-store"
+    PRIVACY OK: graph-owned responses (200 detail, 200 list, 400 typed error) carry EXACTLY "private, no-store" on the wire through the full middleware chain; the pre-handler 401 carries EXACTLY "no-store" from the global securityHeadersMiddleware; and all 8 paths in the canonical family manifest are no-store-bearing. No sensitive graph material is durably cacheable.
+--- PASS: TestE2E_GraphResponsesArePrivateNoStore_T080_PRIVACY_NOSTORE (0.04s)
+--- PASS: TestE2E_GraphFamilyJourneyIsReadOnly_T080_03_READONLY (0.07s)
+--- PASS: TestE2E_ExpiredSessionAndDeniedScopeAreExclusivePrivateOutcomes_T080_06_AUTH (0.06s)
+ok  github.com/smackerel/smackerel/tests/e2e  0.299s
+PASS: go-e2e
+--- PASS: TestE2E_GraphActivation_DisabledServesTyped503AndKeepsServing (0.02s)
+--- PASS: TestE2E_GraphActivation_DisabledAdversarialRedGreen (0.01s)
+PASS: go-e2e-graph-disabled
+===PRIVACY_E2E_EXIT=0===
+```
+
+#### Two-tier proof — and why one tier alone is insufficient
+
+| Tier | Location | What it proves | What it CANNOT prove |
+|---|---|---|---|
+| **Unit** (3 adversarial tests) | `internal/api/graphapi/privacy_test.go` | The two response writers **set** `Cache-Control: private, no-store`, and set it **before** `WriteHeader`. Each test fails if `SetPrivateNoStore` is removed, weakened, or moved below the status-line commit. | Whether the header survives to the wire. A unit test observes a `httptest.ResponseRecorder` in isolation — every middleware above the handler is absent. |
+| **Live e2e** (this run) | `tests/e2e/graph_api_activation_e2e_test.go` — `TestE2E_GraphResponsesArePrivateNoStore_T080_PRIVACY_NOSTORE` | The directive **survives the full middleware chain to the wire** on the deployed container, and that graph-owned responses carry the stricter `private, no-store` while the pre-handler `401` carries the global bare `no-store`. | Nothing further is deferred — this is the outermost observable boundary. |
+
+The distinction matters concretely: `securityHeadersMiddleware` already emits a
+bare `no-store` globally. A unit test that merely observed *some* no-store
+directive would pass even if the graph writers set nothing at all. Only an
+on-the-wire assertion of the **exact** string `private, no-store` on
+graph-owned responses distinguishes the graph API's own contract from the
+global one it sits behind.
+
+Parent-verified fast gates for the same change: `./smackerel.sh check` = `0`,
+`./smackerel.sh format --check` = `0`, and the `internal/api/graphapi` unit
+suite (including the three `privacy_test.go` tests) = `0`.
+
+#### The choke-point design — why two functions cover the whole surface
+
+`internal/api/graphapi/privacy.go` is the **single definition** of the contract
+(`CacheControlPrivateNoStore = "private, no-store"`), so the value cannot drift
+between call sites. Every graph response — every family, list and detail,
+success and error, including the disabled `503` — exits through exactly one of
+two functions in `internal/api/graphapi/`:
+
+1. **`writeJSON`** — the success writer (all `200` list and detail responses).
+2. **`WriteError`** — the error writer. `WriteAPIError` (every typed error) and
+   `GraphCapability.WriteDisabled` (the fail-soft `503`) both funnel through it.
+
+Stamping those two functions therefore covers the entire graph response surface
+without editing a single handler, and a newly added family inherits the contract
+automatically because it cannot emit a response without going through one of
+them.
+
+**Ordering is load-bearing:** `SetPrivateNoStore` **must** run before
+`WriteHeader`. Go freezes the header map once the status line is committed, so a
+`Header().Set` after `WriteHeader` is silently dropped — the response would ship
+without the directive and no compile or runtime error would report it. Two of
+the three unit tests exist specifically to fail if that ordering is inverted.
+
+**The `private, no-store` value deliberately upgrades — and replaces — the
+global bare `no-store`.** The last `Header().Set` before `WriteHeader` wins, so
+the graph API owns the stricter directive for its own private content rather
+than inheriting it. `private` forbids a shared cache (proxy, CDN) from storing
+the response at all; `no-store` forbids **any** cache, shared or private, memory
+or disk, from retaining it. The practical consequence is that a future edit
+weakening `securityHeadersMiddleware` cannot silently degrade graph privacy:
+the graph contract is set independently, pinned by its own tests, and asserted
+on the wire by this e2e test.
+
+**Row verdict: `[x]`** — both clauses of the auth/privacy Core Outcome row are
+now proven with executed evidence.
+
+### Build Quality Gate — SCOPE-02 re-run (2026-07-28, post-privacy-change)
+
+All six commands re-executed in this invocation **after** the privacy change
+landed, so the gate reflects the final SCOPE-02 tree. **Claim Source:** executed.
+
+| # | Command | Exit | Key output |
+|---|---------|------|------------|
+| 1 | `./smackerel.sh check` | `0` | `Config is in sync with SST`, `env_file drift guard: OK`, `scenario-lint: OK` (17 registered, 0 rejected) |
+| 2 | `./smackerel.sh lint` | `0` | `All checks passed!` + `Web validation passed` |
+| 3 | `./smackerel.sh format --check` | `0` | `78 files already formatted` |
+| 4 | `bash .github/bubbles/scripts/pii-scan.sh` | `0` | `pii-scan: clean.` |
+| 5 | `bash .github/bubbles/scripts/artifact-lint.sh <bug-dir>` | `0` | `Artifact lint PASSED.` |
+| 6 | `bash .github/bubbles/scripts/traceability-guard.sh <bug-dir>` | `0` | `RESULT: PASSED (0 warnings)` |
+
+```text
+===CHECK_EXIT=0===
+===LINT_EXIT=0===
+===FORMAT_EXIT=0===
+===PII_EXIT=0===
+===ARTIFACT_LINT_EXIT=0===
+===TRACEABILITY_EXIT=0===
+```
+
+**Row verdict: `[x]`** — all six exit `0`, and the "auth/privacy scans" clause
+that previously held this row open is now backed by the executed
+`T080-PRIVACY-NOSTORE` evidence above.
+
+### SCOPE-02 closure
+
+Every SCOPE-02 DoD row is now `[x]` with executed evidence: 7 Core Outcome rows
++ the auth/privacy row, 8 Test-Evidence rows, and the Build Quality Gate. No
+claim text was reworded anywhere in the scope. `scopes.md` SCOPE-02 moves to
+`**Status:** Done` and `state.json` records the SCOPE-02 `scopeProgress` entry as
+`done`.
+
+**The bug stays `blocked`.** SCOPE-03 (Product Read Synthetic And Readiness
+Truth) and SCOPE-04 (Wiki And Graph State Integration) are outstanding, so
+neither the top-level `status` nor `certification.status` changes. No SCOPE-03 or
+SCOPE-04 row was read for closure or modified.
+
+### Change surface for this closure
+
+`report.md` (this section + the superseded honest-gap note), `scopes.md`
+(two SCOPE-02 rows checked, claim text unchanged; the two stale
+`why-this-row-is-[ ]` blockquotes replaced with the closure pointer; SCOPE-02
+status), and `state.json` (SCOPE-02 `scopeProgress` → `done` + `certifiedAt`,
+one appended `executionHistory` entry, `blockedReason` refreshed). No product or
+test source file was modified in this invocation. No e2e or integration suite
+was re-run for this write-up — the evidence above is the already-captured output
+of the single run identified at the top of this section. `smackerel.sh` and
+`.github/**` were not modified. No `git add`, `git commit`, or `git push` was
+performed.
+

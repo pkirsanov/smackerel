@@ -94,6 +94,14 @@ func (h *TimeHandlers) GetTime(w http.ResponseWriter, r *http.Request) {
 
 	rows, qerr := h.Source.ArtifactsInWindow(r.Context(), from, to)
 	if qerr != nil {
+		if storeErr := classifyStoreError(qerr); storeErr != nil {
+			// design.md §"Closed Read Outcomes": store-unavailable is a
+			// typed 503 — never a 404 and never a 200 with an empty
+			// days array. Value-safe log: no SQL, DSN, or row data.
+			slog.Error("graphapi: graph store unavailable", "resource", "time", "op", "window")
+			WriteAPIError(w, storeErr)
+			return
+		}
 		slog.Error("graphapi: time query failed", "err", qerr)
 		WriteError(w, http.StatusInternalServerError, "internal_error", "", "failed to load time window")
 		return

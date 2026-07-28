@@ -77,6 +77,14 @@ func (h *PeopleHandlers) ListPeople(w http.ResponseWriter, r *http.Request) {
 
 	rows, hasNext, err := h.Source.ListPeople(r.Context(), limit, offset)
 	if err != nil {
+		if storeErr := classifyStoreError(err); storeErr != nil {
+			// design.md §"Closed Read Outcomes": store-unavailable is a
+			// typed 503 — never a 404 and never a 200 with an empty
+			// items array. Value-safe log: no SQL, DSN, or row data.
+			slog.Error("graphapi: graph store unavailable", "resource", "people", "op", "list")
+			WriteAPIError(w, storeErr)
+			return
+		}
 		slog.Error("graphapi: list people failed", "err", err)
 		WriteError(w, http.StatusInternalServerError, "internal_error", "", "failed to list people")
 		return
@@ -118,6 +126,12 @@ func (h *PeopleHandlers) GetPerson(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		if errors.Is(err, ErrPersonNotFound) {
 			WriteError(w, http.StatusNotFound, "not_found", "id", "person not found")
+			return
+		}
+		if storeErr := classifyStoreError(err); storeErr != nil {
+			// A broken store MUST NOT degrade into "person not found".
+			slog.Error("graphapi: graph store unavailable", "resource", "people", "op", "detail")
+			WriteAPIError(w, storeErr)
 			return
 		}
 		slog.Error("graphapi: get person failed", "id", id, "err", err)
