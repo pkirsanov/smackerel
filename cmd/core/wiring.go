@@ -448,6 +448,22 @@ func buildAPIDeps(ctx context.Context, cfg *config.Config, svc *coreServices) (*
 		slog.Info("graphapi handlers wired (capability enabled)", "list_default", limits.ListDefault, "list_max", limits.ListMax)
 	}
 
+	// BUG-080-001 SCOPE-03 — product readiness projection. Every branch
+	// above leaves deps.GraphCapability non-nil, so readiness is ALWAYS
+	// wired against the resolved explicit activation policy. It answers
+	// the authenticated Graph capability detail on GET /api/health and
+	// the strict Graph readiness question on GET /readyz?strict=true from
+	// that policy plus a published graphsynthetic aggregate — never from
+	// static assets, route presence, or database liveness. Construction
+	// is FAIL-LOUD: a nil policy or a non-positive freshness bound
+	// refuses boot rather than leaving a surface that silently answers
+	// "not ready" for a wiring reason instead of a truthful one.
+	graphReadiness, err := api.NewGraphReadiness(deps.GraphCapability, api.GraphObservationMaxAge)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("graph readiness projection: %w", err)
+	}
+	deps.GraphReadiness = graphReadiness
+
 	// Spec 044 Scope 02 — wire the per-user bearer-auth subsystem.
 	// Production deployments (`auth.enabled=true`) need the verifier
 	// options pre-populated with the active+prior public keys so the

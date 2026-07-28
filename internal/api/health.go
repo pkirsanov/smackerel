@@ -362,6 +362,17 @@ type Dependencies struct {
 	// (present-but-disabled, never a silent Chi 404); ENABLED -> the
 	// Guard is a passthrough and the live handlers above serve.
 	GraphCapability *graphapi.GraphCapability
+
+	// GraphReadiness is the BUG-080-001 SCOPE-03 product readiness
+	// projection. It derives the AUTHENTICATED Graph capability detail
+	// on GET /api/health and the STRICT Graph readiness answer on
+	// GET /readyz?strict=true from exactly two inputs: the explicit
+	// activation policy on GraphCapability and a published, validated
+	// graphsynthetic aggregate. nil in router unit tests and in any
+	// deployment that has not wired it — both surfaces then fail CLOSED
+	// (no capability section, no ready Graph journey) rather than
+	// inferring readiness from mounted routes or database liveness.
+	GraphReadiness *GraphReadiness
 }
 
 // DBHealthChecker is the interface for database health checks.
@@ -397,6 +408,11 @@ type HealthResponse struct {
 	BuildTime  string                   `json:"build_time,omitempty"`
 	Services   map[string]ServiceStatus `json:"services"`
 	Knowledge  *KnowledgeHealthSection  `json:"knowledge,omitempty"`
+	// Graph is the BUG-080-001 SCOPE-03 Knowledge Graph capability
+	// detail. It is populated ONLY for authenticated callers and is
+	// omitted entirely otherwise, so the unauthenticated response shape
+	// is unchanged.
+	Graph *GraphHealthSection `json:"graph,omitempty"`
 }
 
 // KnowledgeHealthSection represents knowledge layer stats in the health response.
@@ -560,6 +576,22 @@ func (d *Dependencies) HealthHandler(w http.ResponseWriter, r *http.Request) {
 		if knowledgeHealthCh != nil {
 			resp.Knowledge = <-knowledgeHealthCh
 		}
+
+		// BUG-080-001 SCOPE-03 — Knowledge Graph capability detail. It
+		// lives INSIDE this authenticated branch for the same reason the
+		// service topology above does: per-family read outcomes are
+		// capability detail, and an unauthenticated caller must keep
+		// seeing the aggregate-only response. The detail is derived from
+		// the explicit activation policy plus the published synthetic
+		// aggregate, so a disabled deployment reports policy_disabled and
+		// an unproven one reports unavailable — neither can read as ready.
+		// It is informational: it deliberately does NOT feed the aggregate
+		// `status` above, because a deliberately-disabled Graph capability
+		// is a valid deployment state and not a process fault.
+		if d.GraphReadiness != nil {
+			graph := d.GraphReadiness.Snapshot()
+			resp.Graph = &graph
+		}
 	}
 
 	// Liveness vs readiness (redteam F1 / BUG-050-002): /api/health is ALWAYS
@@ -594,12 +626,35 @@ func healthStrictRequested(r *http.Request) bool {
 // Only checks core DB connectivity. Returns 200 when the service can serve
 // requests, 503 when it cannot. Intended for Docker HEALTHCHECK and
 // orchestrator readiness probes (separate from the full /api/health liveness check).
+//
+// BUG-080-001 SCOPE-03 — callers on the operator / monitoring / knb
+// verify.sh path OPT IN to STRICT readiness via ?strict=true, which
+// additionally requires the Knowledge Graph journey to be PROVEN ready:
+// the explicit activation policy must be ENABLED and a fresh published
+// graphsynthetic aggregate must report available. Static Wiki assets, a
+// mounted graph route manifest, and general database liveness cannot
+// satisfy it — the check reads d.graphJourneyReady, which has no branch
+// capable of deriving ready from any of them, and which fails CLOSED
+// when the readiness projection is unwired. A deliberately DISABLED
+// deployment reports policy_disabled and therefore does not satisfy
+// strict readiness either; that is the truthful answer, and it is why
+// strict is an explicit opt-in. The default (no param — what the Docker
+// HEALTHCHECK sends) is byte-for-byte unchanged.
 func (d *Dependencies) ReadyzHandler(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
 	defer cancel()
 
 	w.Header().Set("Content-Type", "application/json")
 	if d.DB == nil || !d.DB.Healthy(ctx) {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		w.Write([]byte(`{"ready":false}`))
+		return
+	}
+	// Strict readiness stays AGGREGATE-ONLY on the wire: /readyz is an
+	// unauthenticated orchestrator probe, so it reports a single boolean
+	// and never the Graph capability detail. That detail is available to
+	// AUTHENTICATED callers of GET /api/health only.
+	if healthStrictRequested(r) && !d.graphJourneyReady() {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		w.Write([]byte(`{"ready":false}`))
 		return
