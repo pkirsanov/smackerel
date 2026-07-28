@@ -86,14 +86,22 @@ func (h *PeopleHandlers) ListPeople(w http.ResponseWriter, r *http.Request) {
 	}
 
 	next := ""
-	if hasNext && h.Codec != nil {
+	if hasNext {
 		encoded, encErr := h.Codec.Encode(CursorPayload{
 			Resource: "people",
 			Offset:   int64(offset + len(rows)),
 		})
-		if encErr == nil {
-			next = encoded
+		if encErr != nil || encoded == "" {
+			// design.md §"Completeness Envelope": cursor encode failure
+			// is a schema error when hasNext is true; it cannot silently
+			// emit an empty cursor. Server-side inconsistency → 500, not
+			// 400. Value-safe log: no cursor body, no secret.
+			slog.Error("graphapi: non-terminal page cursor could not be produced",
+				"resource", "people", "codecConfigured", h.Codec != nil)
+			WriteAPIError(w, ErrSchemaError)
+			return
 		}
+		next = encoded
 	}
 
 	writeJSON(w, http.StatusOK, peopleListResponse{Items: rows, NextCursor: next})

@@ -28,7 +28,7 @@ func (s *stubTopicsSource) GetTopic(ctx context.Context, id string) (*TopicDetai
 
 func newTopicsTestHandlers(t *testing.T, src TopicsSource) *TopicsHandlers {
 	t.Helper()
-	codec, err := NewCursorCodec([]byte("test-secret-for-graphapi-handlers"))
+	codec, err := NewCursorCodec([]byte(testCursorSecret))
 	if err != nil {
 		t.Fatalf("NewCursorCodec: %v", err)
 	}
@@ -222,3 +222,8 @@ func TestTopicsHandlers_GetTopic_NotFound(t *testing.T) {
 		t.Fatalf("body must use error envelope, got %s", rec.Body.String())
 	}
 }
+
+// The T080-06-CURSOR / SCN-080-001-06 contract (a non-terminal page
+// whose continuation cursor cannot be produced) is asserted once, for
+// every paginated family, in cursor_test.go —
+// TestNonTerminalPageCannotLoseCursorEncodeFailure.

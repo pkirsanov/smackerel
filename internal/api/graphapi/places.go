@@ -93,14 +93,22 @@ func (h *PlacesHandlers) ListPlaces(w http.ResponseWriter, r *http.Request) {
 		rows = []PlaceRow{}
 	}
 	next := ""
-	if hasNext && h.Codec != nil {
+	if hasNext {
 		encoded, encErr := h.Codec.Encode(CursorPayload{
 			Resource: "places",
 			Offset:   int64(offset + len(rows)),
 		})
-		if encErr == nil {
-			next = encoded
+		if encErr != nil || encoded == "" {
+			// design.md §"Completeness Envelope": cursor encode failure
+			// is a schema error when hasNext is true; it cannot silently
+			// emit an empty cursor. Server-side inconsistency → 500, not
+			// 400. Value-safe log: no cursor body, no secret.
+			slog.Error("graphapi: non-terminal page cursor could not be produced",
+				"resource", "places", "codecConfigured", h.Codec != nil)
+			WriteAPIError(w, ErrSchemaError)
+			return
 		}
+		next = encoded
 	}
 	writeJSON(w, http.StatusOK, placesListResponse{Items: rows, NextCursor: next})
 }

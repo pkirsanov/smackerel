@@ -256,7 +256,7 @@ Scenario: SCN-080-001-09 Explicit grant controls the global graph
 - [ ] T080-05-EMPTY passes with current-session raw evidence in `report.md#t080-05-empty`.
 - [ ] T080-06-AUTH passes with current-session raw evidence in `report.md#t080-06-auth`.
 - [ ] T080-06-STORE passes with current-session raw evidence in `report.md#t080-06-store`.
-- [ ] T080-06-CURSOR passes with current-session raw evidence in `report.md#t080-06-cursor`.
+- [x] T080-06-CURSOR passes with current-session raw evidence in `report.md#t080-06-cursor`.
 - [ ] T080-09-CORPUS passes with current-session raw evidence proving the operator/grant-holder/ungranted authorization matrix and the absence of any per-identity or tenant row predicate in `report.md#t080-09-corpus`.
 - [ ] T080-09-GRANT first fails if an ungranted identity can read graph content, counts, or existence hints or if a per-user/tenant row predicate is introduced, then passes with the real-stack shared-login three-identity proof; both outputs are recorded in `report.md#t080-09-grant`.
 
