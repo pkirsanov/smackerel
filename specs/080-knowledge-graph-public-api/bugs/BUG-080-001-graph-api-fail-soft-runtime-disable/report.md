@@ -2353,3 +2353,105 @@ section), and `scopes.md` (one SCOPE-03 Test-Evidence row checked, claim text
 unchanged). No product source file was modified. `smackerel.sh` and `.github/**`
 were **not** modified — both belong to a concurrent session.
 
+---
+
+## SCOPE-03 Test Evidence — T080-03-TRACE
+
+Evidence below is raw, unedited output captured in THIS session (2026-07-28,
+~22:42 UTC) from the repo-standard CLI.
+
+<a id="t080-03-trace"></a>
+
+### T080-03-TRACE
+
+**Command:** `./smackerel.sh test integration --go-run 'TestGraphActivationAndFamilyReadTelemetryUsesClosedContentFreeAttributes'`
+**Exit code:** `0` (`ORCHESTRATOR_VERIFY_EXIT=0`, `PASS: go-integration`)
+**File:** `tests/integration/graphapi/observability_test.go`
+
+```
+=== RUN   TestGraphActivationAndFamilyReadTelemetryUsesClosedContentFreeAttributes
+    observability_test.go:521: inspected 39 spans carrying 469 attributes in total (3 activation, 32 family_read, 4 aggregate)
+=== RUN   TestGraphActivationAndFamilyReadTelemetryUsesClosedContentFreeAttributes/span_names_are_graph_owned_and_disjoint_from_core_health_workflow
+=== RUN   TestGraphActivationAndFamilyReadTelemetryUsesClosedContentFreeAttributes/activation_telemetry_attributes_are_closed
+    observability_test.go:631: activation: inspected 3 spans / 33 attributes
+=== RUN   TestGraphActivationAndFamilyReadTelemetryUsesClosedContentFreeAttributes/family_read_telemetry_attributes_are_closed
+    observability_test.go:702: family_read: inspected 32 spans / 384 attributes across 8 families, 4 read states, 11 distinct codes
+=== RUN   TestGraphActivationAndFamilyReadTelemetryUsesClosedContentFreeAttributes/identity_attributes_are_present_but_empty_on_every_graph_span
+    observability_test.go:740: identity: inspected 39 spans / 273 tracer-owned attributes (5 identity + status + error_cause per span)
+=== RUN   TestGraphActivationAndFamilyReadTelemetryUsesClosedContentFreeAttributes/no_span_attribute_carries_content
+    observability_test.go:838: content scan: 469 attributes across 39 spans checked against 5 forbidden values, the UUID shape, and URL schemes
+--- PASS: TestGraphActivationAndFamilyReadTelemetryUsesClosedContentFreeAttributes (0.00s)
+    --- PASS: TestGraphActivationAndFamilyReadTelemetryUsesClosedContentFreeAttributes/span_names_are_graph_owned_and_disjoint_from_core_health_workflow (0.00s)
+    --- PASS: TestGraphActivationAndFamilyReadTelemetryUsesClosedContentFreeAttributes/activation_telemetry_attributes_are_closed (0.00s)
+    --- PASS: TestGraphActivationAndFamilyReadTelemetryUsesClosedContentFreeAttributes/family_read_telemetry_attributes_are_closed (0.00s)
+    --- PASS: TestGraphActivationAndFamilyReadTelemetryUsesClosedContentFreeAttributes/identity_attributes_are_present_but_empty_on_every_graph_span (0.00s)
+    --- PASS: TestGraphActivationAndFamilyReadTelemetryUsesClosedContentFreeAttributes/no_span_attribute_carries_content (0.00s)
+PASS
+ok      github.com/smackerel/smackerel/tests/integration/graphapi       0.122s
+```
+
+#### What this proves
+
+Graph **trace** attributes are closed and content-free, and graph spans are
+structurally separate from the one registered trace workflow:
+
+- **The run is not vacuous.** Spans are produced by the REAL adapter —
+  `graphsynthetic.NewTelemetryObserver(tr, …)` at `observability_test.go:392`,
+  driving the REAL generic tracer (`internal/assistant/tracing`) over an
+  OpenTelemetry SDK provider wired to `tracetest.NewInMemoryExporter` (the same
+  capture pattern `internal/assistant/tracing/tracer_test.go` already uses).
+  There is no `NopObserver`, no mock of the code under test, no `t.Skip`, and no
+  early return. Two independent `t.Fatalf` guards prevent a hollow pass: one if
+  the constructor returns `nil`, one if the observer records **zero** spans.
+- **Span counts derive from the source of truth, so they cannot drift.** The
+  expected total is computed as `3 activation + len(graphapi.RequiredGraphFamilies())
+  × len(readStates) + len(graphsynthetic.AggregateStates())` — 3 + 8×4 + 4 = 39.
+  A mismatch is `t.Fatalf`. Adding a ninth family or a fifth aggregate state
+  makes this test fail until it is genuinely exercised.
+- **Span names are a closed graph-owned set**: exactly `graph.activation`,
+  `graph.family_read`, and `graph.synthetic_aggregate`, each at its expected
+  count, with no fourth name permitted.
+- **Disjointness from `core.health` is asserted three ways** — exact-name
+  collision, nesting under the `core.health.` namespace, and any `health`
+  substring. All 39 spans pass all three.
+- **Every attribute value is checked against its closed vocabulary**: activation
+  `mode`/`outcome`/`code`/`secret_presence` (33 attributes over 3 spans); read
+  `family`/`outcome`/`code`/`evidence_ref`/`duration_ms` (384 attributes over 32
+  spans spanning all 8 canonical families, 4 read states, and 11 distinct codes);
+  and the aggregate `activation`/`state`/`code`/`evidence_ref`/`family_count`.
+- **Identity attributes are present but provably empty.** The generic tracer
+  stamps 5 identity attributes on every span; the graph adapter passes all five
+  as the empty string on purpose — a synthetic observation belongs to no user
+  session, assistant turn, scenario, or correlation. 273 tracer-owned attributes
+  were verified across 39 spans.
+- **Content-freeness is proven against real values from this run**, not a
+  hypothetical list: 469 attributes across 39 spans were each checked against 5
+  forbidden values plus the UUID shape and `http(s)://` schemes. Failure
+  messages name only the span+attribute descriptor, never the value.
+
+#### Scope constraint honored (stated explicitly)
+
+The repository registers exactly **one** trace workflow, `core.health`
+(`.github/bubbles-project.yaml` → `traceContracts.workflows`), covering
+`/api/health` liveness and unrelated to the Knowledge Graph. Consistent with
+`internal/graphsynthetic/telemetry.go`, this test:
+
+- does **not** invent, declare, register, or reference an `observabilityWorkflow`
+  for the graph — graph spans are PLAIN spans, not a registered workflow;
+- does **not** claim a graph-specific G080 or G100 trace/SLO contract, because
+  none is registered;
+- does **not** emit into, reuse, or assert a graph outcome against `core.health`.
+  That name appears in the file for exactly one purpose — proving the graph span
+  names are disjoint from it.
+
+The verbatim strings `observabilityWorkflow`, `G080`, and `G100` appear in this
+file only inside the header comment that **denies** claiming them.
+
+### Change surface for this closure
+
+`tests/integration/graphapi/observability_test.go` (new file, 861 lines; no
+existing test file touched), `report.md` (this section), and `scopes.md` (one
+SCOPE-03 Test-Evidence row checked, claim text unchanged). No product source
+file was modified. `smackerel.sh` and `.github/**` were **not** modified — both
+belong to a concurrent session.
+

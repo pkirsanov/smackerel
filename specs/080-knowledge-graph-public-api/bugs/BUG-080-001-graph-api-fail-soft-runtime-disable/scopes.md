@@ -342,7 +342,7 @@ Scenario: SCN-080-001-07 Synthetic and telemetry disclose no content
 - [x] T080-04-READY passes with current-session raw evidence in `report.md#t080-04-ready`.
 - [x] T080-04-STATIC passes with current-session raw evidence in `report.md#t080-04-static`.
 - [x] T080-07-TELEMETRY passes with value-safe current-session raw evidence in `report.md#t080-07-telemetry`.
-- [ ] T080-03-TRACE proves closed content-free graph telemetry in `report.md#t080-03-trace` without misusing `core.health`.
+- [x] T080-03-TRACE proves closed content-free graph telemetry in `report.md#t080-03-trace` without misusing `core.health`.
 - [ ] T080-03-STRESS proves bounded concurrent synthetic reads in `report.md#t080-03-stress`.
 
 #### Build Quality Gate
