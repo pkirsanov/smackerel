@@ -62,11 +62,15 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"net/url"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/prometheus/client_golang/prometheus"
+	dto "github.com/prometheus/client_model/go"
 
 	"github.com/smackerel/smackerel/internal/api/graphapi"
 	"github.com/smackerel/smackerel/internal/graphsynthetic"
@@ -589,5 +593,551 @@ func TestE2E_StaticWikiAndGreenLivenessCannotSatisfyGraphReadiness_T080_04_STATI
 		if _, present := raw["graph"]; present {
 			t.Fatalf("unauthenticated GET /api/health EXPOSED the `graph` capability section; Knowledge Graph capability detail MUST be withheld from unauthenticated callers (CWE-200) and is available to AUTHENTICATED callers only")
 		}
+	})
+}
+
+// ---- T080-07-TELEMETRY helpers (value-safe by construction) ----
+
+// graphTelemetryForbidden is ONE content value that genuinely exists in the
+// current run and that a graph metric label may never carry. `descriptor` is
+// a value-safe NAME for the value and is the ONLY half that is ever printed;
+// `value` is the needle and is NEVER emitted into a failure message, a log
+// line, or a diff.
+type graphTelemetryForbidden struct {
+	descriptor string
+	value      string
+}
+
+// graphTelemetryUUIDPattern matches a canonical UUID. No member of any closed
+// graph label vocabulary — a canonical family name, a read state, an
+// aggregate state, an activation mode, or an "OK"/F080-* diagnostic code —
+// can match it, so a hit is by definition an identifier that escaped into a
+// label rather than a false positive.
+var graphTelemetryUUIDPattern = regexp.MustCompile(`(?i)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}`)
+
+// graphTelemetryForbiddenHit reports the DESCRIPTOR of the first forbidden
+// value contained (case-insensitively) in haystack, or "" when the haystack
+// is clean. It returns the descriptor rather than the match so a caller
+// structurally cannot print the offending content.
+//
+// The empty-needle guard is hygiene only: an empty needle is a substring of
+// every string and would make every check fire. The caller asserts every
+// forbidden value is non-empty before use, so the guard is unreachable in a
+// correctly-configured run and can never mask a real hit.
+func graphTelemetryForbiddenHit(haystack string, forbidden []graphTelemetryForbidden) string {
+	lower := strings.ToLower(haystack)
+	for _, f := range forbidden {
+		if f.value == "" {
+			continue
+		}
+		if strings.Contains(lower, strings.ToLower(f.value)) {
+			return f.descriptor
+		}
+	}
+	return ""
+}
+
+// TestE2E_GraphSyntheticAndTelemetryAreContentFree_T080_07_TELEMETRY is
+// BUG-080-001 SCOPE-03 row T080-07-TELEMETRY (SCN-080-001-07), e2e-api tier.
+//
+// SCOPE: METRICS CONTENT-SAFETY ONLY. This repository registers exactly ONE
+// trace workflow, `core.health`, and it is UNRELATED to the Knowledge Graph.
+// This test therefore does NOT assert, register, or emit any graph trace
+// workflow, does NOT claim a graph-specific trace or SLO contract, and does
+// NOT touch `core.health` in any direction. It proves one thing: the graph
+// telemetry surface carries CLOSED VOCABULARY VALUES ONLY and leaks no
+// content.
+//
+// It runs against the LIVE disposable stack over REAL HTTP with a REAL scoped
+// session. There is NO request interception, NO mock, NO stub, and NO canned
+// response — the synthetic reads the actual running smackerel-core container
+// over a socket, and the metrics asserted below are the ones that read
+// actually produced.
+//
+// Why it is genuinely adversarial rather than tautological: sub-test A drives
+// the synthetic through the REAL graphsynthetic.TelemetryObserver (NOT
+// NopObserver), which is what populates the process-local Prometheus default
+// registry. Sub-tests B, C, and D then FAIL if a metric family is ABSENT — a
+// missing family means nothing was emitted and every content assertion would
+// be vacuous, so "emitted nothing" cannot masquerade as "leaked nothing".
+// Sub-test D's forbidden list is built from values that DEMONSTRABLY exist in
+// this run (the live bearer credential, the rows this test just seeded, the
+// target host), so it would catch a real leak rather than only a hypothetical
+// one.
+//
+// VALUE SAFETY OF THIS TEST ITSELF: the bearer credential and every seeded
+// identifier are needles only. Every failure message names the metric, the
+// label, and a value-safe DESCRIPTOR of what leaked, and prints a redacted
+// marker in place of the content. There is no path in this file that emits a
+// credential or a seeded value.
+func TestE2E_GraphSyntheticAndTelemetryAreContentFree_T080_07_TELEMETRY(t *testing.T) {
+	cfg := loadE2EConfig(t)
+	waitForHealth(t, cfg, 30*time.Second)
+	dbURL := requireEnvForGraphAPI(t)
+
+	conn, err := pgx.Connect(context.Background(), dbURL)
+	if err != nil {
+		t.Fatalf("pgx.Connect: %v", err)
+	}
+	// Ordering matters and is load-bearing: t.Cleanup runs LIFO, so the
+	// connection close is registered FIRST in order to run LAST. Registering
+	// it later (or using `defer conn.Close(...)`, which always runs BEFORE
+	// every t.Cleanup) would close the connection while the fixture DELETEs
+	// were still pending, turning cleanup into a silent no-op and leaking
+	// rows into the shared graph tables.
+	t.Cleanup(func() { _ = conn.Close(context.Background()) })
+
+	prefix := "graph-telemetry-e2e-" + time.Now().UTC().Format("20060102150405.000000")
+	t.Cleanup(func() { graphAPICleanup(t, conn, prefix) })
+
+	// Real, disposable rows so the family reads below are GENUINELY populated
+	// and the telemetry they produce describes actual work.
+	topicIDs := graphAPISeedTopics(t, conn, prefix, 2)
+	personIDs := graphAPISeedPeople(t, conn, prefix, 1)
+	artifactIDs := graphAPISeedArtifacts(t, conn, prefix, 3)
+	for _, artifactID := range artifactIDs {
+		graphAPISeedEdge(t, conn, prefix, "artifact", artifactID, "topic", topicIDs[0], "mentions", 1.0)
+		graphAPISeedEdge(t, conn, prefix, "artifact", artifactID, "person", personIDs[0], "mentions", 1.0)
+	}
+	graphAPISeedEdge(t, conn, prefix, "topic", topicIDs[0], "person", personIDs[0], "co-occurs", 1.0)
+	graphAPISeedEdge(t, conn, prefix, "topic", topicIDs[1], "person", personIDs[0], "co-occurs", 1.0)
+
+	// Same determinism promotion as the acceptance synthetic above: the
+	// edges read is seeded from the FIRST row of GET /api/topics/, whose
+	// ordering is server policy across ALL topics, so the seeded topic is
+	// promoted above the current maximum to keep the read genuinely
+	// populated rather than incidentally empty.
+	if _, err := conn.Exec(context.Background(),
+		`UPDATE topics
+		    SET momentum_score = COALESCE((SELECT MAX(momentum_score) FROM topics), 0) + 1,
+		        capture_count_total = COALESCE((SELECT MAX(capture_count_total) FROM topics), 0) + 1
+		  WHERE id = $1`, topicIDs[0]); err != nil {
+		t.Fatalf("promote seeded topic to first position in the momentum ordering: %v", err)
+	}
+
+	// graphAPISeedTopics writes the generated id into BOTH `id` and `name`,
+	// so the seeded topic's label IS its id. Both are listed explicitly so
+	// the forbidden set documents each content class it defends, and
+	// graphAPISeedArtifacts derives its human title as `<id>-title`.
+	seededTopicID := topicIDs[0]
+	seededTopicLabel := topicIDs[0]
+	seededArtifactTitle := artifactIDs[0] + "-title"
+
+	parsedCore, err := url.Parse(cfg.CoreURL)
+	if err != nil {
+		t.Fatalf("parse CORE_EXTERNAL_URL as a URL: %v", err)
+	}
+	if parsedCore.Host == "" {
+		t.Fatalf("CORE_EXTERNAL_URL %q carries no host; the target-host arm of the content-safety assertions below would be vacuous", cfg.CoreURL)
+	}
+
+	// The forbidden content set. EVERY entry is a value that DEMONSTRABLY
+	// exists in this run, which is what makes the content assertions capable
+	// of catching a real leak rather than a hypothetical one.
+	forbidden := []graphTelemetryForbidden{
+		{"the live bearer credential", cfg.AuthToken},
+		{"the seeded fixture prefix", prefix},
+		{"a seeded topic id", seededTopicID},
+		{"a seeded topic label", seededTopicLabel},
+		{"a second seeded topic id", topicIDs[1]},
+		{"a seeded person id", personIDs[0]},
+		{"a seeded artifact title", seededArtifactTitle},
+		{"the core base URL", cfg.CoreURL},
+		{"the core host:port authority", parsedCore.Host},
+		{"the core hostname", parsedCore.Hostname()},
+	}
+	for _, f := range forbidden {
+		if f.value == "" {
+			t.Fatalf("forbidden content entry %q resolved to an EMPTY value; an empty needle matches every string and would make every content assertion below meaningless", f.descriptor)
+		}
+	}
+
+	// redact renders a value for a diagnostic message, substituting a
+	// value-safe marker whenever the value carries known forbidden content.
+	// A vocabulary escape is still fully diagnosable (metric, label, and the
+	// class of what leaked) without the message itself becoming the leak.
+	redact := func(v string) string {
+		if descriptor := graphTelemetryForbiddenHit(v, forbidden); descriptor != "" {
+			return "<redacted: contains " + descriptor + ">"
+		}
+		return v
+	}
+
+	// gatherGraphFamilies snapshots every smackerel_graph_* family currently
+	// in the PROCESS-LOCAL default registry — the registry the in-process
+	// TelemetryObserver writes to.
+	gatherGraphFamilies := func(t *testing.T) map[string]*dto.MetricFamily {
+		t.Helper()
+		gathered, err := prometheus.DefaultGatherer.Gather()
+		if err != nil {
+			t.Fatalf("prometheus.DefaultGatherer.Gather: %v", err)
+		}
+		out := make(map[string]*dto.MetricFamily, 4)
+		for _, mf := range gathered {
+			if strings.HasPrefix(mf.GetName(), "smackerel_graph_") {
+				out[mf.GetName()] = mf
+			}
+		}
+		return out
+	}
+
+	// ---- the closed label vocabularies, sourced from the real constants ----
+
+	// mode (activation) — graphapi.ActivationState.
+	activationModeVocab := map[string]bool{
+		string(graphapi.ActivationEnabled):  true,
+		string(graphapi.ActivationDisabled): true,
+	}
+	// outcome (activation) — telemetry.go emits the activation OUTCOME class,
+	// whose two members are spelled identically to the two activation states.
+	activationOutcomeVocab := map[string]bool{
+		string(graphapi.ActivationEnabled):  true,
+		string(graphapi.ActivationDisabled): true,
+	}
+	// family — the canonical eight-family route manifest.
+	familyVocab := map[string]bool{}
+	for _, f := range graphapi.RequiredGraphFamilies() {
+		familyVocab[string(f)] = true
+	}
+	// outcome (family read) — the closed graphsynthetic read states.
+	readStateVocab := map[string]bool{
+		string(graphsynthetic.StatePopulated): true,
+		string(graphsynthetic.StateTrueEmpty): true,
+		string(graphsynthetic.StateFailed):    true,
+		string(graphsynthetic.StateDisabled):  true,
+	}
+	// state (aggregate) — the closed graphsynthetic aggregate states, which
+	// are also the full key space of the one-hot gauge.
+	declaredAggregateStates := graphsynthetic.AggregateStates()
+	aggregateStateVocab := map[string]bool{}
+	for _, s := range declaredAggregateStates {
+		aggregateStateVocab[string(s)] = true
+	}
+
+	inSet := func(set map[string]bool) func(string) bool {
+		return func(v string) bool { return set[v] }
+	}
+	// code — either the literal OK (graphsynthetic.CodeOK and
+	// graphapi.CodeActivationOK are both "OK") or an F080-* diagnostic.
+	isClosedCode := func(v string) bool {
+		return v == graphsynthetic.CodeOK || strings.HasPrefix(v, "F080-")
+	}
+
+	// The four graph metric families and the closed vocabulary each of their
+	// labels must draw from. A label outside this map is itself a violation.
+	graphLabelRules := map[string]map[string]func(string) bool{
+		"smackerel_graph_activation_total": {
+			"mode":    inSet(activationModeVocab),
+			"outcome": inSet(activationOutcomeVocab),
+			"code":    isClosedCode,
+		},
+		"smackerel_graph_read_requests_total": {
+			"family":  inSet(familyVocab),
+			"outcome": inSet(readStateVocab),
+		},
+		"smackerel_graph_read_duration_seconds": {
+			"family":  inSet(familyVocab),
+			"outcome": inSet(readStateVocab),
+		},
+		"smackerel_graph_synthetic_result": {
+			"state": inSet(aggregateStateVocab),
+		},
+	}
+
+	now := time.Now().UTC()
+	synthCfg := graphsynthetic.Config{
+		BaseURL:        cfg.CoreURL,
+		BearerToken:    cfg.AuthToken,
+		WindowFrom:     now.Add(-30 * 24 * time.Hour),
+		WindowTo:       now.Add(1 * time.Hour),
+		RequestTimeout: 15 * time.Second,
+		EdgeSourceKind: "topic",
+		// Only the two families this harness structurally cannot seed (no
+		// place seeder exists anywhere in tests/ or internal/).
+		AllowEmptyFamilies: []graphapi.GraphRouteFamily{
+			graphapi.FamilyPlaces,
+			graphapi.FamilyPlaceDetail,
+		},
+		OptionalFamilies: []graphapi.GraphRouteFamily{},
+		HTTPClient:       &http.Client{Timeout: 20 * time.Second},
+	}
+
+	activation := graphapi.Activation{
+		State:          graphapi.ActivationEnabled,
+		SecretPresence: graphapi.SecretPresent,
+		Code:           graphapi.CodeActivationOK,
+	}
+
+	// Recorded by sub-test A and cross-checked by sub-test C. If A never
+	// reaches a validated aggregate this stays empty, and C's one-hot
+	// cross-check then FAILS rather than silently passing — an unrun
+	// synthetic must never look like a clean one.
+	var observedAggregateState string
+
+	t.Run("Regression: Graph synthetic and telemetry are content-free (the real telemetry observer emits against the live stack)", func(t *testing.T) {
+		// The REAL adapter, NOT NopObserver: this is what writes the four
+		// smackerel_graph_* families into the process-local registry that
+		// every sub-test below reads. A nil tracer is the supported
+		// metrics-only posture (spans are skipped, metrics and logs
+		// continue); a nil logger resolves to the process default.
+		observer := graphsynthetic.NewTelemetryObserver(nil, nil)
+
+		synth, err := graphsynthetic.New(synthCfg, observer)
+		if err != nil {
+			t.Fatalf("graphsynthetic.New: %v", err)
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+		defer cancel()
+
+		result, err := synth.Run(ctx, activation)
+		if err != nil {
+			t.Fatalf("Synthetic.Run against the live stack: %v", err)
+		}
+		if err := result.Validate(); err != nil {
+			t.Fatalf("aggregate failed its own closed-vocabulary contract: %v", err)
+		}
+
+		// Every canonical family must have produced an observation, so the
+		// per-family counter and histogram below describe real reads across
+		// the whole manifest rather than a single lucky one.
+		required := graphapi.RequiredGraphFamilies()
+		if len(result.Families) != len(required) {
+			t.Fatalf("aggregate carries %d family rows; the canonical manifest requires exactly %d, so the telemetry surface was not fully exercised (families: %s)",
+				len(result.Families), len(required), graphSynthFamilyTriples(result.Families))
+		}
+		for i, want := range required {
+			if result.Families[i].Family != want {
+				t.Errorf("family row %d is %q; canonical order requires %q", i, result.Families[i].Family, want)
+			}
+		}
+		if result.ObservedAt.IsZero() {
+			t.Errorf("aggregate carries a zero observation time; a real observation MUST be timestamped")
+		}
+		if !aggregateStateVocab[string(result.State)] {
+			t.Fatalf("aggregate carries state %q, which is OUTSIDE the closed aggregate vocabulary", result.State)
+		}
+
+		observedAggregateState = string(result.State)
+		t.Logf("synthetic observed aggregate state=%q code=%q across %d canonical families",
+			result.State, result.Code, len(result.Families))
+	})
+
+	t.Run("Regression: Graph synthetic and telemetry are content-free (every graph metric label draws from its closed vocabulary)", func(t *testing.T) {
+		families := gatherGraphFamilies(t)
+
+		for name, rules := range graphLabelRules {
+			mf, present := families[name]
+			if !present {
+				// A Prometheus *Vec with no observed child yields no family
+				// at all, so ABSENCE proves the observer never emitted.
+				// Tolerating it would make every content assertion in this
+				// test vacuous, so it is a hard failure.
+				t.Errorf("metric family %q is ABSENT from the process registry; the real TelemetryObserver did not emit it, so the content-safety assertions covering it would be vacuous", name)
+				continue
+			}
+			if len(mf.GetMetric()) == 0 {
+				t.Errorf("metric family %q is present with ZERO series; nothing was actually observed for it", name)
+				continue
+			}
+
+			for _, m := range mf.GetMetric() {
+				seen := make(map[string]bool, len(rules))
+				for _, lp := range m.GetLabel() {
+					labelName := lp.GetName()
+					seen[labelName] = true
+
+					check, declared := rules[labelName]
+					if !declared {
+						t.Errorf("metric %q carries UNDECLARED label %q; the graph label set is CLOSED and an undeclared label is an uncontrolled cardinality/content surface",
+							name, redact(labelName))
+						continue
+					}
+					if !check(lp.GetValue()) {
+						t.Errorf("metric %q label %q carries value %q, which is OUTSIDE its closed vocabulary; only closed-vocabulary values may ever reach a graph metric label",
+							name, labelName, redact(lp.GetValue()))
+					}
+				}
+				for declaredLabel := range rules {
+					if !seen[declaredLabel] {
+						t.Errorf("metric %q has a series missing its declared label %q; the label set is fixed", name, declaredLabel)
+					}
+				}
+			}
+		}
+	})
+
+	t.Run("Regression: Graph synthetic and telemetry are content-free (the aggregate gauge is one-hot across every declared state)", func(t *testing.T) {
+		const gaugeName = "smackerel_graph_synthetic_result"
+
+		families := gatherGraphFamilies(t)
+		mf, present := families[gaugeName]
+		if !present {
+			t.Fatalf("metric family %q is ABSENT from the process registry; the aggregate observation was never emitted, so the one-hot contract cannot be evaluated", gaugeName)
+		}
+
+		// The series count must equal the DECLARED key space exactly. A
+		// short set means a state was never written; a long set means a
+		// stale series survives and could be mistaken for current truth.
+		if len(mf.GetMetric()) != len(declaredAggregateStates) {
+			t.Fatalf("%s exposes %d series; the declared aggregate-state key space has exactly %d entries, so a stale or missing series could be mistaken for the current truth",
+				gaugeName, len(mf.GetMetric()), len(declaredAggregateStates))
+		}
+
+		values := make(map[string]float64, len(declaredAggregateStates))
+		for _, m := range mf.GetMetric() {
+			state := ""
+			for _, lp := range m.GetLabel() {
+				if lp.GetName() == "state" {
+					state = lp.GetValue()
+				}
+			}
+			if m.GetGauge() == nil {
+				t.Fatalf("%s series state=%q is not a gauge sample; the one-hot contract requires a gauge", gaugeName, redact(state))
+			}
+			values[state] = m.GetGauge().GetValue()
+		}
+
+		hot := make([]string, 0, 1)
+		for _, state := range declaredAggregateStates {
+			value, present := values[string(state)]
+			if !present {
+				t.Errorf("declared aggregate state %q has NO series on %s; every declared state MUST be written on each observation so a reader can tell current from stale",
+					state, gaugeName)
+				continue
+			}
+			switch value {
+			case 1:
+				hot = append(hot, string(state))
+			case 0:
+				// Correctly zeroed non-current state.
+			default:
+				t.Errorf("aggregate state %q carries gauge value %v on %s; a ONE-HOT gauge admits only 0 or 1", state, value, gaugeName)
+			}
+		}
+
+		if len(hot) != 1 {
+			t.Fatalf("%s has %d series set to 1 (%s); EXACTLY one declared aggregate state may be current",
+				gaugeName, len(hot), strings.Join(hot, ","))
+		}
+		if hot[0] != observedAggregateState {
+			t.Fatalf("%s reports current aggregate state %q while the synthetic run observed %q; the published gauge and the returned aggregate MUST be the same observation",
+				gaugeName, hot[0], observedAggregateState)
+		}
+	})
+
+	t.Run("Regression: Graph synthetic and telemetry are content-free (no graph metric label carries content)", func(t *testing.T) {
+		families := gatherGraphFamilies(t)
+		if len(families) == 0 {
+			t.Fatalf("no smackerel_graph_* metric family is present in the process registry; nothing was emitted, so a content-free assertion here would prove nothing")
+		}
+
+		inspected := 0
+		for name, mf := range families {
+			for _, m := range mf.GetMetric() {
+				for _, lp := range m.GetLabel() {
+					inspected++
+					labelName := lp.GetName()
+					labelValue := lp.GetValue()
+
+					// A label NAME is printable only when it is clean; a
+					// name that itself carries content is reported by class.
+					if descriptor := graphTelemetryForbiddenHit(labelName, forbidden); descriptor != "" {
+						t.Errorf("metric %q: a label NAME carries FORBIDDEN content (%s); a graph label may never carry a credential, a seeded identifier or label, or a target host [name redacted]",
+							name, descriptor)
+					}
+					if descriptor := graphTelemetryForbiddenHit(labelValue, forbidden); descriptor != "" {
+						t.Errorf("metric %q label %q: the VALUE carries FORBIDDEN content (%s); a graph label may never carry a credential, a seeded identifier or label, or a target host [value redacted]",
+							name, labelName, descriptor)
+					}
+					if graphTelemetryUUIDPattern.MatchString(labelValue) {
+						t.Errorf("metric %q label %q: the VALUE matches a UUID; graph labels are closed vocabularies and no member of any of them is an identifier [value redacted]",
+							name, labelName)
+					}
+					lowered := strings.ToLower(labelValue)
+					if strings.Contains(lowered, "http://") || strings.Contains(lowered, "https://") {
+						t.Errorf("metric %q label %q: the VALUE carries a URL scheme; a graph label may never carry a target host [value redacted]",
+							name, labelName)
+					}
+				}
+			}
+		}
+
+		if inspected == 0 {
+			t.Fatalf("walked %d smackerel_graph_* metric families but inspected ZERO label pairs; the content-free assertions did not actually execute", len(families))
+		}
+		t.Logf("inspected %d label pairs across %d smackerel_graph_* metric families against %d forbidden content values",
+			inspected, len(families), len(forbidden))
+	})
+
+	t.Run("Regression: Graph synthetic and telemetry are content-free (the live scrape surface leaks no content)", func(t *testing.T) {
+		// The scrape endpoint is mounted unauthenticated at the router root
+		// (internal/api/router.go: r.Handle("/metrics", metrics.Handler())).
+		// The bearer header graphAPIGet attaches is simply ignored there and
+		// never appears in the response.
+		resp, body := graphAPIGet(t, cfg, "/metrics")
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("GET /metrics returned HTTP %d; the Prometheus scrape endpoint MUST answer HTTP %d",
+				resp.StatusCode, http.StatusOK)
+		}
+		if len(body) == 0 {
+			t.Fatalf("GET /metrics returned HTTP 200 with an EMPTY body; the scrape endpoint is not genuinely exposing a registry")
+		}
+
+		text := string(body)
+		lowered := strings.ToLower(text)
+
+		// Whole-body scan list. It deliberately EXCLUDES the BARE hostname:
+		// that value is this deployment's OWN service identity and appears
+		// legitimately across unrelated non-graph surfaces (NATS durable
+		// consumer names such as "smackerel-core-processed", the tracing
+		// service name), so a bare-hostname substring rule over the ENTIRE
+		// registry would flag the deployment naming itself rather than a
+		// content leak. The bare hostname is still fully enforced where the
+		// value-safety contract actually binds: against every graph label in
+		// the sub-test above, and against every smackerel_graph_* sample
+		// line below. The credential, every seeded identifier and label, the
+		// full base URL, and the host:port authority remain in force here.
+		bodyForbidden := make([]graphTelemetryForbidden, 0, len(forbidden))
+		for _, f := range forbidden {
+			if f.value == parsedCore.Hostname() {
+				continue
+			}
+			bodyForbidden = append(bodyForbidden, f)
+		}
+		if len(bodyForbidden) == 0 {
+			t.Fatalf("the whole-body forbidden set is EMPTY; the live-scrape content assertion would prove nothing")
+		}
+
+		for _, f := range bodyForbidden {
+			if strings.Contains(lowered, strings.ToLower(f.value)) {
+				t.Errorf("the live /metrics scrape body contains FORBIDDEN content (%s); no credential, seeded identifier or label, or target host may reach a scrape surface [value redacted]",
+					f.descriptor)
+			}
+		}
+
+		// Server-side graph series, if any, are held to the FULL forbidden
+		// set including the bare hostname.
+		//
+		// Their ABSENCE is ACCEPTABLE and is NOT a failure: this synthetic
+		// runs in the TEST process and writes to the TEST process's registry,
+		// not the server's, and nothing in production wiring publishes a
+		// synthetic observation. The server may therefore legitimately expose
+		// zero smackerel_graph_* series. The point of this arm is solely that
+		// nothing content-bearing leaks onto the scrape surface — which the
+		// whole-body assertion above proves unconditionally.
+		graphSampleLines := 0
+		for _, line := range strings.Split(text, "\n") {
+			if !strings.HasPrefix(line, "smackerel_graph_") {
+				continue
+			}
+			graphSampleLines++
+			if descriptor := graphTelemetryForbiddenHit(line, forbidden); descriptor != "" {
+				t.Errorf("a server-side smackerel_graph_* sample line carries FORBIDDEN content (%s); graph telemetry may never carry a credential, a seeded identifier or label, or a target host [line redacted]",
+					descriptor)
+			}
+		}
+		t.Logf("live scrape body is %d bytes and exposed %d smackerel_graph_* sample lines (zero is acceptable: the synthetic runs in the test process, not the server); checked against %d forbidden content values",
+			len(body), graphSampleLines, len(bodyForbidden))
 	})
 }
