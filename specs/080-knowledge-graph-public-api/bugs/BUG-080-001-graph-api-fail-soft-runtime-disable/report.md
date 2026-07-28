@@ -50,11 +50,25 @@ No test result is claimed.
   retroactively without a deliberate reversion or an ENABLED-stack contrast run.
   The DoD row demands "both outputs are recorded", so the row stays `[ ]`.
   Routed to `bubbles.plan` as finding F-1.
+  **→ RESOLVED 2026-07-28.** The "deliberate reversion" path was taken: a
+  throwaway `git worktree` reintroduced the defect and the unmodified test
+  failed against it (`===RED_EXIT=1===`). Both halves are recorded; row is `[x]`.
 - **(2026-07-27, bubbles.implement)** The SCOPE-01 Build Quality Gate row stays
   `[ ]` on two clauses only: "no skipped checks" (the F-1 RED capture) and
   "documentation alignment" (finding F-2 — the stale HARNESS LIMITATION header
   comment in `tests/e2e/graph_api_activation_e2e_test.go`). All other clauses of
   that row were executed green this invocation.
+  **→ RESOLVED 2026-07-28.** F-1 and F-2 are both closed; all 8 gate commands
+  re-run to exit 0 this session; row is `[x]` and SCOPE-01 is `Done`.
+- **(2026-07-28, bubbles.implement) Open residue, non-blocking.** The throwaway
+  RED worktree was deregistered from git, but an orphaned copy of the mutated
+  `router.go` remains at `/tmp/smk-red/internal/api/router.go` (outside the
+  repository, untracked, unreferenced). `main`'s `router.go` is verified
+  byte-identical to HEAD. Disclosed rather than omitted; safe to delete.
+- **(2026-07-28, bubbles.implement) Scope of this closure.** Only SCOPE-01 is
+  closed. The bug's top-level `status` and `certification.status` remain
+  `blocked` on SCOPE-02 (`in_progress`) and SCOPE-03/04 (`blocked`). No
+  SCOPE-02/03/04 row was inspected, executed, or altered.
 - **(2026-07-27, bubbles.implement)** The e2e raw output transcribed in
   "## E2E Harness Unblock + SCOPE-01 e2e Closure (2026-07-27)" was executed by
   the **parent orchestrator** in this session, not by this invocation. This
@@ -747,6 +761,13 @@ the fail-soft repair was already committed before the harness existed, and
 exists". Marking this row `[x]` would assert a recorded RED output that does not
 exist. See "## Uncertainty Declarations" and the routed finding below.
 
+> **SUPERSEDED 2026-07-28.** The gap above was closed by *executing the missing
+> check*, not by rewording the row: a throwaway `git worktree` reintroduced the
+> original defect and the unmodified test failed against it
+> (`===RED_EXIT=1===`, 8/8 canonical paths bare `404`). Both halves are now
+> recorded in "## Adversarial RED→GREEN Closure + F-1/F-2 Resolution
+> (bubbles.implement, 2026-07-28)" below, and this row is now `[x]`.
+
 ### Quality gates (2026-07-27, this invocation)
 
 All executed by THIS `bubbles.implement` invocation. Raw output is reproduced in
@@ -828,8 +849,8 @@ logic changed.
 
 - **Test Evidence T080-07-SECURITY** → `[x]` (live ENABLED-stack, 8 probes, real 64-char secret needle).
 - **Test Evidence T080-01-DISABLED** → `[x]` (live DISABLED-stack, 8 canonical paths typed 503 + health 200, differential enabler-length control).
-- **Test Evidence T080-02-ADVERSARIAL** → stays `[ ]` (GREEN proven; RED output not recorded — see the HONEST GAP above).
-- **Build Quality Gate** → stays `[ ]` (see the assessment below).
+- **Test Evidence T080-02-ADVERSARIAL** → stays `[ ]` (GREEN proven; RED output not recorded — see the HONEST GAP above). *(SUPERSEDED 2026-07-28 → now `[x]`.)*
+- **Build Quality Gate** → stays `[ ]` (see the assessment below). *(SUPERSEDED 2026-07-28 → now `[x]`.)*
 
 ### Build Quality Gate assessment (SCOPE-01)
 
@@ -872,10 +893,450 @@ evidence and **no skipped checks**."
 Every other clause is green. Once the two findings below are closed, this row
 and T080-02-ADVERSARIAL close together.
 
+> **SUPERSEDED 2026-07-28.** Both findings ARE now closed, and — exactly as
+> predicted above — the two rows closed together. See the 2026-07-28 re-verdict
+> table below.
+
 ### Routed findings (open — owner action required)
+
+> **STATUS 2026-07-28: BOTH RESOLVED.** See
+> "## Adversarial RED→GREEN Closure + F-1/F-2 Resolution (2026-07-28)" below.
+> The table is retained verbatim as the historical record of why the two rows
+> were held open on 2026-07-27.
 
 | # | Finding | Owner | Detail |
 |---|---|---|---|
 | F-1 | T080-02-ADVERSARIAL DoD demands a recorded RED output that does not and cannot retroactively exist | `bubbles.plan` | Either (a) reword the row to the framework adversarial-regression standard actually enforced by `regression-quality-guard --bugfix` ("the test is constructed to fail against the reintroduced bug", already ✅), or (b) keep the literal red→green requirement and commission a RED capture (e.g. run the adversarial test against the ENABLED stack, or temporarily revert the fail-soft branch behind a harness flag). Row text is plan-owned; `bubbles.implement` must not rewrite a DoD behavioral claim to match delivery. |
 | F-2 | `tests/e2e/graph_api_activation_e2e_test.go` header (lines 24-41) still documents the resolved HARNESS LIMITATION and a `t.Skip` that no longer occurs | `bubbles.implement` (follow-up) or `bubbles.devops` | Update the comment to state the harness now exports `SMACKEREL_E2E_GRAPH_DISABLED_URL` via the serial graph-disabled phase. Blocks the "documentation alignment" clause of the Build Quality Gate row. |
+
+---
+
+## Adversarial RED→GREEN Closure + F-1/F-2 Resolution (bubbles.implement, 2026-07-28)
+
+This invocation records the **missing RED half** of T080-02-ADVERSARIAL, which
+was the sole reason that row and the SCOPE-01 Build Quality Gate stayed `[ ]`.
+Option (b) of finding F-1 was taken: the literal red→green DoD requirement was
+**kept**, and the RED capture was **commissioned** — not the easier option (a)
+of rewording the row to match what had already been delivered.
+
+### T080-02-ADVERSARIAL
+
+**Scenario:** SCN-080-001-02 (fail-soft leg) — empty/missing enabler serves the
+typed 503 `capability_disabled`, never a silent 404 nil-handler absence or an
+opaque 500.
+**Tier:** `e2e-api`, DISABLED stack.
+**Claim Source:** executed — **BOTH halves now recorded.**
+
+#### RED capture method (throwaway defect reintroduction)
+
+A **detached, throwaway `git worktree`** was created at `/tmp/smk-red` from
+commit `6a12f1f4`. In that disposable tree ONLY, `internal/api/router.go` was
+mutated to **reintroduce the original BUG-080-001 defect**:
+
+1. the `r.Use(deps.GraphCapability.Guard)` fail-soft middleware was **removed**; and
+2. the `if deps.GraphCapability.Disabled()` branch was emptied so it registers
+   **ZERO routes** — reproducing the original "warning-and-nil / omitted routes
+   → bare Chi 404" behavior.
+
+The **UNMODIFIED** test file was then run against it. The worktree was destroyed
+immediately afterwards (`git worktree remove --force`).
+
+**`main` was never mutated.** Verified this session:
+
+```text
+$ git log -1 --format='%H %ci %s'
+6a12f1f4c35a8bfc3aab965b6d674921cc56a47c 2026-07-28 02:51:16 +0000 docs(080 BUG-080-001 F-2): correct stale HARNESS LIMITATION text in graph activation e2e
+
+$ git diff HEAD -- internal/api/router.go
+(end of diff)              # empty — main's router.go is byte-identical to HEAD
+
+$ git worktree list
+<repo-root>  6a12f1f4 [main]     # only the main tree; the RED worktree is deregistered
+```
+
+**Exact mutation applied (verified, not asserted).** Diff of HEAD's repaired
+`router.go` against the mutated RED copy:
+
+```text
+$ diff <(git show HEAD:internal/api/router.go) <RED-tree>/internal/api/router.go
+177d176
+<                                       r.Use(deps.GraphCapability.Guard)
+181,205c180,182
+<                                               // DISABLED: no live handlers exist (no cursor
+<                                               // codec). Register the SAME manifest against the
+<                                               // typed 503 disabled responder so the paths are
+<                                               // present and never fall through to a Chi 404.
+<                                               disabled := func(w http.ResponseWriter, _ *http.Request) {
+<                                                       deps.GraphCapability.WriteDisabled(w)
+<                                               }
+<                                               r.Route("/topics", func(r chi.Router) {
+<                                                       r.Get("/", disabled)
+<                                                       r.Get("/{id}", disabled)
+<                                               })
+<                                               r.Route("/people", func(r chi.Router) {
+<                                                       r.Get("/", disabled)
+<                                                       r.Get("/{id}", disabled)
+<                                               })
+<                                               r.Route("/places", func(r chi.Router) {
+<                                                       r.Get("/", disabled)
+<                                                       r.Get("/{id}", disabled)
+<                                               })
+<                                               r.Get("/time", disabled)
+<                                               r.Get("/graph/edges", disabled)
+---
+>                                               // RED MUTATION (throwaway): register NOTHING so a
+>                                               // disabled capability falls through to a bare Chi 404 —
+>                                               // the ORIGINAL BUG-080-001 defect.
+DIFF_EXIT=1
+```
+
+This is exactly the two-part defect described above and nothing else: the Guard
+line deleted, and all eight canonical route registrations replaced by a comment.
+
+#### Why this RED is a genuine defect reproduction, not a harness artifact
+
+Two independent properties rule out the "the test just couldn't reach the
+server" explanation:
+
+1. **It is not an auth artifact.** The test authenticates with
+   `SMACKEREL_AUTH_TOKEN`. A missing route therefore yields `404` (no route
+   match) rather than the `401` an unauthenticated probe would produce. The
+   observed status is `404`, so the request was authenticated and simply found
+   no handler.
+2. **Nothing could have intercepted ahead of the 404.** Because the disabled
+   branch registered zero routes, the surviving
+   `RequireScope("knowledge-graph:read")` middleware never executes for those
+   paths — there is no route for it to attach to. The `404` is the bare Chi
+   no-match, which is precisely the original defect.
+
+Additionally, **all EIGHT canonical families returned 404** — the omission was
+total, not path-specific, matching a whole-manifest absence rather than a
+single-route typo.
+
+#### RED — raw output
+
+Command: `cd <RED-tree> && ./smackerel.sh test e2e --go-run 'TestE2E_GraphActivation_Disabled'`
+Window: `2026-07-28T02:54:16Z` → `2026-07-28T03:00:40Z`. Exit: **`===RED_EXIT=1===`** (non-zero EXPECTED — this is the evidence).
+
+```text
+go-e2e: applying -run selector: TestE2E_GraphActivation_Disabled
+=== RUN   TestE2E_GraphActivation_DisabledServesTyped503AndKeepsServing
+    graph_api_activation_e2e_test.go:242: path /api/topics status=404 body=404 page not found
+        ; want 503 capability_disabled (never a silent 404 / opaque 500)
+    graph_api_activation_e2e_test.go:242: path /api/topics/does-not-exist status=404 body=404 page not found
+    graph_api_activation_e2e_test.go:242: path /api/people status=404 body=404 page not found
+    graph_api_activation_e2e_test.go:242: path /api/people/does-not-exist status=404 body=404 page not found
+    graph_api_activation_e2e_test.go:242: path /api/places status=404 body=404 page not found
+    graph_api_activation_e2e_test.go:242: path /api/places/does-not-exist status=404 body=404 page not found
+    graph_api_activation_e2e_test.go:242: path /api/time status=404 body=404 page not found
+    graph_api_activation_e2e_test.go:242: path /api/graph/edges status=404 body=404 page not found
+--- FAIL: TestE2E_GraphActivation_DisabledServesTyped503AndKeepsServing (0.03s)
+=== RUN   TestE2E_GraphActivation_DisabledAdversarialRedGreen
+    graph_api_activation_e2e_test.go:280: RED reproduced: GET /api/topics/ returned a silent 404 nil-handler absence — the original BUG-080-001 behavior; the fail-soft repair regressed
+--- FAIL: TestE2E_GraphActivation_DisabledAdversarialRedGreen (0.01s)
+FAIL
+FAIL    github.com/smackerel/smackerel/tests/e2e        0.296s
+FAIL: go-e2e-graph-disabled (exit=1)
+===RED_EXIT=1===
+```
+
+#### GREEN — raw output
+
+Command: `./smackerel.sh test e2e --go-run 'TestE2E_GraphActivation'` on the
+unmutated tree. Window: `2026-07-28T01:22:56Z` → `2026-07-28T02:50:53Z`. Exit:
+**`===F2_GREEN_EXIT=0===`**.
+
+```text
+go-e2e: applying -run selector: TestE2E_GraphActivation_Disabled
+=== RUN   TestE2E_GraphActivation_DisabledServesTyped503AndKeepsServing
+--- PASS: TestE2E_GraphActivation_DisabledServesTyped503AndKeepsServing (0.03s)
+=== RUN   TestE2E_GraphActivation_DisabledAdversarialRedGreen
+--- PASS: TestE2E_GraphActivation_DisabledAdversarialRedGreen (0.01s)
+PASS
+ok      github.com/smackerel/smackerel/tests/e2e        0.164s
+PASS: go-e2e-graph-disabled
+===F2_GREEN_EXIT=0===
+```
+
+#### Controlled comparison
+
+**The test code is identical in both runs; only the product code differs.**
+
+| | RED | GREEN |
+|---|---|---|
+| `internal/api/router.go` | mutated (Guard removed, 0 routes registered) | unmutated |
+| `tests/e2e/graph_api_activation_e2e_test.go` | unchanged | unchanged |
+| Result | `FAIL` — 8/8 paths bare `404` | `PASS` — typed `503 capability_disabled` |
+| Exit | `1` | `0` |
+
+**Timing precision (recorded rather than rounded):** the GREEN run ended at
+`02:50:53Z` and commit `6a12f1f4` was authored at `02:51:16Z` — 23 seconds
+later. GREEN therefore ran against the working tree that *became* `6a12f1f4`,
+and the RED worktree was checked out *at* `6a12f1f4` (started `02:54:16Z`).
+Since `6a12f1f4` is a comments-and-skip-message-only commit (see F-2 below),
+**both runs executed byte-identical assertion code.**
+
+**Row verdict: `[x]`.** The DoD requirement — "first fails against
+warning-and-nil/omitted-route behavior, then passes with the repair; both
+outputs are recorded" — is now literally satisfied, without any rewording of
+the DoD row.
+
+#### Residue disclosure (honest, non-blocking)
+
+`git worktree remove --force` deregistered the RED worktree (`git worktree list`
+shows only the main tree; `git rev-parse` inside `/tmp/smk-red` reports "not a
+git repository"), but an **orphaned copy of the mutated `router.go` remains on
+disk at `/tmp/smk-red/internal/api/router.go`**. It is outside the repository,
+untracked, unreferenced by any build, and `main`'s `router.go` is verified
+byte-identical to HEAD. It was deliberately left in place this session because
+it is the artifact the mutation diff above was computed from; it is scratch
+space in `/tmp` and can be deleted at any time. This is disclosed rather than
+omitted.
+
+### F-1 — RESOLVED
+
+The RED half is now captured and recorded above. F-1 was closed by **executing
+the missing check**, not by rewording the plan-owned DoD row — no DoD
+behavioral claim was rewritten to match delivery.
+
+### F-2 — RESOLVED
+
+The stale `HARNESS LIMITATION` narrative in
+`tests/e2e/graph_api_activation_e2e_test.go` was corrected in commit
+`6a12f1f4` (comments + one `t.Skip` message only; **every assertion
+byte-identical**), and the corrected file was live-verified by the GREEN run
+recorded above.
+
+```text
+$ git show --stat 6a12f1f4
+ tests/e2e/graph_api_activation_e2e_test.go | 37 +++++++++++++++++-------------
+ 1 file changed, 21 insertions(+), 16 deletions(-)
+
+$ grep -c 'HARNESS LIMITATION' tests/e2e/graph_api_activation_e2e_test.go
+0
+```
+
+The header now states that the disabled core is supplied by the `graph-disabled`
+phase of `./smackerel.sh test e2e` via
+`docker-compose.graph-disabled.override.yml`, which exports
+`SMACKEREL_E2E_GRAPH_DISABLED_URL`. The "documentation alignment" clause of the
+Build Quality Gate is therefore satisfied.
+
+### Build Quality Gate — re-run (2026-07-28, this invocation)
+
+All eight commands executed by THIS invocation. Raw output below; exit codes in
+the table.
+
+| Gate | Command | Exit |
+|---|---|---|
+| Check | `./smackerel.sh check` | 0 |
+| Lint | `./smackerel.sh lint` | 0 |
+| Format | `./smackerel.sh format --check` | 0 |
+| PII scan | `bash .github/bubbles/scripts/pii-scan.sh` | 0 |
+| Artifact lint | `bash .github/bubbles/scripts/artifact-lint.sh $B` | 0 |
+| Traceability guard | `bash .github/bubbles/scripts/traceability-guard.sh $B` | 0 |
+| Regression quality guard | `bash .github/bubbles/scripts/regression-quality-guard.sh tests/e2e/graph_api_activation_e2e_test.go` | 0 |
+| Regression quality guard (`--bugfix`) | `bash .github/bubbles/scripts/regression-quality-guard.sh --bugfix tests/e2e/graph_api_activation_e2e_test.go` | 0 |
+
+```text
+$ ./smackerel.sh check
+config-validate: <repo-root>/config/generated/dev.env.tmp.433307 OK
+Config is in sync with SST
+env_file drift guard: OK
+scenario-lint: scanning config/prompt_contracts (glob: *.yaml)
+scenarios registered: 17, rejected: 0
+scenario-lint: OK
+CHECK_EXIT=0
+
+$ ./smackerel.sh lint
+All checks passed!
+=== Validating web manifests ===
+  OK: web/pwa/manifest.json
+  OK: PWA manifest has required fields
+  OK: web/extension/manifest.json
+  OK: Chrome extension manifest has required fields (MV3)
+  OK: web/extension/manifest.firefox.json
+  OK: Firefox extension manifest has required fields (MV2 + gecko)
+
+=== Validating JS syntax ===
+  OK: web/pwa/app.js
+  OK: web/pwa/sw.js
+  OK: web/pwa/lib/queue.js
+  OK: web/extension/background.js
+  OK: web/extension/popup/popup.js
+  OK: web/extension/lib/queue.js
+  OK: web/extension/lib/browser-polyfill.js
+
+=== Checking extension version consistency ===
+  OK: Extension versions match (1.0.0)
+
+Web validation passed
+LINT_EXIT=0
+
+$ ./smackerel.sh format --check
+78 files already formatted
+FORMAT_CHECK_EXIT=0
+
+$ bash .github/bubbles/scripts/regression-quality-guard.sh tests/e2e/graph_api_activation_e2e_test.go
+============================================================
+  BUBBLES REGRESSION QUALITY GUARD
+  Repo: <repo-root>
+  Timestamp: 2026-07-28T03:08:23Z
+  Bugfix mode: false
+============================================================
+
+ℹ️  Scanning tests/e2e/graph_api_activation_e2e_test.go
+
+============================================================
+  REGRESSION QUALITY RESULT: 0 violation(s), 0 warning(s)
+  Files scanned: 1
+============================================================
+RQG_EXIT=0
+
+$ bash .github/bubbles/scripts/regression-quality-guard.sh --bugfix tests/e2e/graph_api_activation_e2e_test.go
+============================================================
+  BUBBLES REGRESSION QUALITY GUARD
+  Repo: <repo-root>
+  Timestamp: 2026-07-28T03:08:23Z
+  Bugfix mode: true
+============================================================
+
+ℹ️  Scanning tests/e2e/graph_api_activation_e2e_test.go
+✅ Adversarial signal detected in tests/e2e/graph_api_activation_e2e_test.go
+
+============================================================
+  REGRESSION QUALITY RESULT: 0 violation(s), 0 warning(s)
+  Files scanned: 1
+  Files with adversarial signals: 1
+============================================================
+RQG_BUGFIX_EXIT=0
+```
+
+<!-- PII-safe: absolute operator paths are rendered as <repo-root> per the repo's
+     no-env-specific-content policy (gitleaks rule linux-home-username-leak). -->
+
+```text
+$ bash .github/bubbles/scripts/pii-scan.sh
+3:11AM INF 0 commits scanned.
+3:11AM INF scan completed in 26ms
+3:11AM INF no leaks found
+🫧 pii-scan: clean.
+PII_SCAN_EXIT=0
+
+$ bash .github/bubbles/scripts/artifact-lint.sh $B
+✅ Required artifact exists: spec.md
+✅ Required artifact exists: design.md
+✅ Required artifact exists: uservalidation.md
+✅ Required artifact exists: state.json
+✅ Required artifact exists: scopes.md
+✅ Required artifact exists: report.md
+✅ No forbidden sidecar artifacts present
+✅ Found DoD section in scopes.md
+✅ scopes.md DoD contains checkbox items
+✅ All DoD bullet items use checkbox syntax in scopes.md
+✅ Found Checklist section in uservalidation.md
+✅ uservalidation checklist contains checkbox entries
+✅ uservalidation checklist has checked-by-default entries
+✅ All checklist bullet items use checkbox syntax
+✅ Detected state.json status: blocked
+✅ Detected state.json workflowMode: bugfix-fastlane
+✅ state.json v3 has required field: status
+✅ state.json v3 has required field: execution
+✅ state.json v3 has required field: certification
+✅ state.json v3 has required field: policySnapshot
+✅ state.json v3 has recommended field: transitionRequests
+✅ state.json v3 has recommended field: reworkQueue
+✅ state.json v3 has recommended field: executionHistory
+✅ Top-level status matches certification.status
+ℹ️  Workflow mode 'bugfix-fastlane' allows status 'done'; current status is 'blocked'
+✅ report.md contains section matching: Summary
+✅ report.md contains section matching: Completion Statement
+✅ report.md contains section matching: Test Evidence
+✅ Mode-specific report gates skipped (status not in promotion set)
+
+=== Anti-Fabrication Evidence Checks ===
+✅ All checked DoD items in scopes.md have evidence blocks
+✅ No unfilled evidence template placeholders in scopes.md
+✅ No unfilled evidence template placeholders in report.md
+✅ No repo-CLI bypass detected in report.md command evidence
+
+=== End Anti-Fabrication Checks ===
+
+Artifact lint PASSED.
+ARTIFACT_LINT_EXIT=0
+
+$ bash .github/bubbles/scripts/traceability-guard.sh $B
+============================================================
+  BUBBLES TRACEABILITY GUARD
+  Feature: <repo-root>/specs/080-knowledge-graph-public-api/bugs/BUG-080-001-graph-api-fail-soft-runtime-disable
+  Timestamp: 2026-07-28T03:12:07Z
+============================================================
+
+--- Scenario Manifest Cross-Check (G057/G059) ---
+✅ scenario-manifest.json covers 14 scenario contract(s)
+✅ scenario-manifest.json records evidenceRefs
+✅ All linked tests from scenario-manifest.json exist
+
+ℹ️  Checking traceability for Scope 1: Fail-Soft Graph Activation Foundation
+✅ Scope 1 scenario mapped to Test Plan row: SCN-080-001-01 ...
+✅ Scope 1 scenario maps to concrete test file: internal/api/graphapi/activation_test.go
+✅ Scope 1 report references concrete test evidence: internal/api/graphapi/activation_test.go
+✅ Scope 1 scenario mapped to Test Plan row: SCN-080-001-02 ...
+✅ Scope 1 scenario mapped to Test Plan row: SCN-080-001-07 ...
+ℹ️  Scope 1 summary: scenarios=3 test_rows=7
+   (Scopes 2-4 checked identically; all ✅ — full transcript in the session log.)
+
+--- Gherkin → DoD Content Fidelity (Gate G068) ---
+✅ 14/14 scenarios map to DoD items (unmapped: 0)
+
+--- Traceability Summary ---
+ℹ️  Scenarios checked: 14
+ℹ️  Test rows checked: 30
+ℹ️  Scenario-to-row mappings: 14
+ℹ️  Concrete test file references: 14
+ℹ️  Report evidence references: 14
+ℹ️  DoD fidelity scenarios: 14 (mapped: 14, unmapped: 0)
+ℹ️  Edge confidence (IMP-015 Scope B): declared=14 inferred=0 ambiguous=14
+
+RESULT: PASSED (0 warnings)
+TRACEABILITY_EXIT=0
+```
+
+**All 8 gate commands exited 0.**
+
+### Build Quality Gate assessment (SCOPE-01) — 2026-07-28 re-verdict
+
+| Clause | Verdict |
+|---|---|
+| Scope-specific unit / integration / E2E regressions pass | ✅ unit + integration green; e2e green (`===F2_GREEN_EXIT=0===`) |
+| `./smackerel.sh check` | ✅ exit 0 |
+| `./smackerel.sh lint` | ✅ exit 0, `All checks passed!` |
+| `./smackerel.sh format --check` | ✅ exit 0, `78 files already formatted` |
+| source-lock / config checks | ✅ folded into `check` (config-in-sync + env_file drift guard OK) |
+| artifact-lint | ✅ exit 0 |
+| traceability guard | ✅ exit 0 |
+| zero warnings | ✅ 0 warnings across lint, traceability, and both regression guards |
+| change-boundary review | ✅ amended + attributed — see scopes.md "Change Boundary" |
+| **documentation alignment** | ✅ **NOW SATISFIED** — F-2 resolved in `6a12f1f4`; `grep -c 'HARNESS LIMITATION'` = 0 |
+| **no skipped checks** | ✅ **NOW SATISFIED** — F-1 resolved; the T080-02-ADVERSARIAL RED capture was executed and is recorded above |
+
+**Row verdict: `[x]`.** Both previously-failing clauses are satisfied by
+executed evidence; every other clause remains green.
+
+### DoD rows closed this invocation
+
+- **Test Evidence T080-02-ADVERSARIAL** → `[x]` (RED `===RED_EXIT=1===` + GREEN `===F2_GREEN_EXIT=0===`, same test bytes, differing product code).
+- **Build Quality Gate (SCOPE-01)** → `[x]` (all 8 gates exit 0; both blocking clauses satisfied).
+
+**SCOPE-01 is now fully closed: 0 unchecked rows.**
+
+### Scope closure
+
+`SCOPE-01` status → `Done` in `scopes.md`; `certification.scopeProgress[SCOPE-01]`
+→ `"done"` in `state.json`.
+
+**The bug's top-level `status` and `certification.status` REMAIN `blocked`.**
+SCOPE-02 is `in_progress` and SCOPE-03/04 are `blocked`, with ~46 DoD rows still
+unchecked across them. No SCOPE-02/03/04 row was touched by this invocation.
+No `git add`, `git commit`, or `git push` was performed.
 
