@@ -81,7 +81,16 @@ esac
 
 [[ -d "$SPEC_DIR" ]] || { echo "evidence-tool-log-bridge: spec dir missing" >&2; exit 2; }
 
+# IMP-027 SCOPE-4 / SEC-2: this is the RECEIPT BRIDGE. Skipping it silently
+# meant receipt-backed evidence simply did not exist for that run.
+BUBBLES_DEP_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=bubbles/scripts/dependency-posture.sh
+[[ -f "$BUBBLES_DEP_LIB_DIR/dependency-posture.sh" ]] && source "$BUBBLES_DEP_LIB_DIR/dependency-posture.sh"
+
 if ! command -v python3 >/dev/null 2>&1; then
+  if declare -F bubbles_require_dep >/dev/null 2>&1; then
+    bubbles_require_dep "evidence-tool-log-bridge" "python3 is not installed" || exit 0
+  fi
   echo "evidence-tool-log-bridge: SKIP (python3 not installed)"
   exit 0
 fi

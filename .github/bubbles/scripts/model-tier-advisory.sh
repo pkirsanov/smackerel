@@ -12,6 +12,13 @@
 # Usage:
 #   model-tier-advisory.sh check [--enforce] --mode <mode> --phase <phase>
 #   model-tier-advisory.sh resolve --mode <mode> --phase <phase>   # prints floor
+#   model-tier-advisory.sh retirement [--tier <tier>]              # IMP-027/S11
+#
+# `retirement` reports which `modelCompensation` gates have met the TIER half
+# of their registry `retireWhen` criterion at the given (or active) model tier.
+# It never turns a gate off, and it prints the unmet EVIDENCE half every time:
+# no harness yet drives a model across the golden-task corpus to produce the
+# rates those criteria are written against. See gate-retirement.sh.
 #
 # Environment:
 #   BUBBLES_ACTIVE_MODEL    identifier of the model in use (e.g. 'sonnet-4.5',
@@ -36,12 +43,17 @@ usage() {
 Usage:
   model-tier-advisory.sh check [--enforce] --mode <mode> --phase <phase>
   model-tier-advisory.sh resolve --mode <mode> --phase <phase>
+  model-tier-advisory.sh retirement [--tier <tier>]
 
 Reads workflows.yaml model-tier policy and checks whether the active model
 (BUBBLES_ACTIVE_MODEL) meets the floor for <mode>/<phase>. BLOCKING (exit 1)
 for enforced phases (modeDefaults.modelFloorEnforcedPhases or --enforce) when the
 active model is known and below floor; advisory (exit 0) otherwise. Never blocks
 when the model is unknown or no floor is declared.
+
+`retirement` reports gate retirement CANDIDACY at a model tier. It is always
+advisory and can never retire a gate: the measurement half of every criterion
+is unmet because no harness produces those rates yet.
 USAGE
 }
 
@@ -50,23 +62,115 @@ OP="$1"; shift
 MODE=""
 PHASE=""
 ENFORCE="0"
+TIER=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --mode) MODE="$2"; shift 2;;
     --phase) PHASE="$2"; shift 2;;
+    --tier) TIER="$2"; shift 2;;
     --enforce) ENFORCE="1"; shift;;
     -h|--help) usage; exit 0;;
     *) usage; exit 2;;
   esac
 done
 
-[[ -z "$MODE" || -z "$PHASE" ]] && { usage; exit 2; }
 [[ -f "$WORKFLOWS" ]] || { echo "model-tier-advisory: workflows.yaml missing" >&2; exit 2; }
 
 if ! command -v python3 >/dev/null 2>&1; then
   echo "model-tier-advisory: SKIP (python3 not installed)"
   exit 0
 fi
+
+# IMP-027 / SCOPE-11 — obsolescence curve. Handled before the mode/phase
+# requirement below because retirement candidacy is a property of the gate
+# registry and the model tier, not of any single mode/phase.
+if [[ "$OP" == "retirement" ]]; then
+  WORKFLOWS="$WORKFLOWS" TIER="${TIER:-${BUBBLES_ACTIVE_MODEL:-}}" python3 - <<'PY'
+import os, sys
+
+try:
+    import yaml
+except ImportError:
+    print("model-tier-advisory: SKIP (PyYAML not installed)")
+    sys.exit(0)
+
+with open(os.environ['WORKFLOWS']) as f:
+    data = yaml.safe_load(f) or {}
+
+TIER_RANK = {'haiku-class': 1, 'sonnet-class': 2, 'opus-class': 3}
+
+
+def tier_of(model_id: str) -> int:
+    if not model_id:
+        return 0
+    mid = model_id.lower()
+    if 'haiku' in mid:
+        return TIER_RANK['haiku-class']
+    if 'opus' in mid:
+        return TIER_RANK['opus-class']
+    if 'gpt-5' in mid or 'gpt5' in mid:
+        return TIER_RANK['opus-class']
+    if 'sonnet' in mid or 'gpt-4' in mid:
+        return TIER_RANK['sonnet-class']
+    return TIER_RANK['sonnet-class']
+
+
+declared = (os.environ.get('TIER') or '').strip()
+rank = tier_of(declared)
+
+gates = {
+    gid: meta
+    for gid, meta in (data.get('gates') or {}).items()
+    if isinstance(meta, dict) and str(meta.get('classification')) == 'modelCompensation'
+}
+
+eligible, blocked, uncharted = [], [], []
+for gid in sorted(gates):
+    crit = gates[gid].get('retireWhen')
+    if not isinstance(crit, dict) or 'minTier' not in crit:
+        uncharted.append(gid)
+        continue
+    need = TIER_RANK.get(str(crit['minTier']), 0)
+    row = (gid, crit)
+    if rank and rank >= need:
+        eligible.append(row)
+    else:
+        blocked.append(row)
+
+if not declared:
+    print("model-tier retirement: model-unknown — set BUBBLES_ACTIVE_MODEL or "
+          "pass --tier to evaluate the tier half of each criterion")
+else:
+    print(f"model-tier retirement: evaluating at tier '{declared}'")
+print(f"  modelCompensation gates: {len(gates)}")
+
+if uncharted:
+    print(f"  NO CRITERION RECORDED ({len(uncharted)}): {', '.join(uncharted)}")
+    print("    These carry unbounded cost in time. Run: gate-retirement.sh bind")
+
+if declared:
+    print(f"  tier precondition MET ({len(eligible)}): "
+          + (', '.join(g for g, _ in eligible) if eligible else "none"))
+    print(f"  tier precondition NOT met ({len(blocked)}): "
+          + (', '.join(f"{g}(needs {c['minTier']})" for g, c in blocked)
+             if blocked else "none"))
+
+print("")
+print("  NOTHING IS RETIRED BY THIS REPORT. Each criterion has two halves and")
+print("  only the TIER half is evaluated above. The EVIDENCE half is UNMET for")
+print("  every gate without exception: retiring a gate requires the named rate")
+print("  measured below its threshold across its window of real model runs, and")
+print("  no harness produces those rates yet. The golden-task corpus scores a")
+print("  delivered artifact; it does not drive a model, so it cannot report how")
+print("  often a tier produces a dishonest one. Turning a gate off on tier")
+print("  eligibility alone would substitute 'the model is probably better now'")
+print("  for a measurement — the exact move the gate exists to prevent.")
+sys.exit(0)
+PY
+  exit 0
+fi
+
+[[ -z "$MODE" || -z "$PHASE" ]] && { usage; exit 2; }
 
 ACTIVE="${BUBBLES_ACTIVE_MODEL:-}"
 

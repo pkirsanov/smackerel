@@ -53,7 +53,15 @@ done
 
 [[ -d "$SPEC_DIR" ]] || { echo "diff-evidence-guard: spec dir missing: $SPEC_DIR" >&2; exit 2; }
 
+# IMP-027 SCOPE-4 / SEC-2: both of these were `exit 0`.
+BUBBLES_DEP_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=bubbles/scripts/dependency-posture.sh
+[[ -f "$BUBBLES_DEP_LIB_DIR/dependency-posture.sh" ]] && source "$BUBBLES_DEP_LIB_DIR/dependency-posture.sh"
+
 if ! command -v git >/dev/null 2>&1; then
+  if declare -F bubbles_require_dep >/dev/null 2>&1; then
+    bubbles_require_dep "diff-evidence-guard" "git is not installed" || exit 0
+  fi
   echo "diff-evidence-guard: SKIP (git not installed)"
   exit 0
 fi
@@ -62,6 +70,9 @@ REPO_ROOT="$(cd "$SPEC_DIR" && git rev-parse --show-toplevel 2>/dev/null || true
 [[ -n "$REPO_ROOT" ]] || { echo "diff-evidence-guard: SKIP (not a git repo)"; exit 0; }
 
 if ! command -v python3 >/dev/null 2>&1; then
+  if declare -F bubbles_require_dep >/dev/null 2>&1; then
+    bubbles_require_dep "diff-evidence-guard" "python3 is not installed" || exit 0
+  fi
   echo "diff-evidence-guard: SKIP (python3 not installed)"
   exit 0
 fi

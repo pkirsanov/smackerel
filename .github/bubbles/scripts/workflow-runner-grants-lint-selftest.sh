@@ -89,6 +89,42 @@ awk '
 mv "$TMPDIR/goal-mutated.md" "$fixture/agents/bubbles.goal.agent.md"
 run_case nested-runner "$fixture" 1 "nested workflow-runner dispatch found"
 
+# ── Frontmatter dispatch surface (IMP-027 SCOPE-1) ──────────────────────────
+# Each case mutates ONLY the frontmatter, proving the lint reads the surface the
+# VS Code runtime actually obeys — the body-only patterns above cannot see these.
+
+frontmatter_set() {
+  # frontmatter_set <agent-file> <line-to-insert-after-description>
+  local target="$1" injected="$2"
+  awk -v inject="$injected" '
+    /^description:/ && !done { print; print inject; done=1; next }
+    { print }
+  ' "$target" >"$TMPDIR/fm-mutated.md"
+  mv "$TMPDIR/fm-mutated.md" "$target"
+}
+
+fresh_fixture "$fixture"
+frontmatter_set "$fixture/agents/bubbles.bug.agent.md" "disable-model-invocation: true"
+run_case dual-role-invocation-blocked "$fixture" 1 "dual-role phase owner and MUST NOT set disable-model-invocation"
+
+fresh_fixture "$fixture"
+awk '!/^disable-model-invocation:[[:space:]]*true[[:space:]]*$/' \
+  "$fixture/agents/bubbles.goal.agent.md" >"$TMPDIR/goal-noflag.md"
+mv "$TMPDIR/goal-noflag.md" "$fixture/agents/bubbles.goal.agent.md"
+run_case pure-runner-missing-flag "$fixture" 1 "MUST set disable-model-invocation: true"
+
+fresh_fixture "$fixture"
+frontmatter_set "$fixture/agents/bubbles.implement.agent.md" "agents: [bubbles.workflow]"
+run_case allowlist-names-pure-runner "$fixture" 1 "names a pure top-level runner"
+
+fresh_fixture "$fixture"
+frontmatter_set "$fixture/agents/bubbles.goal.agent.md" "    send: true"
+run_case auto-submitting-handoff "$fixture" 1 "auto-submitting handoff"
+
+fresh_fixture "$fixture"
+frontmatter_set "$fixture/agents/bubbles.goal.agent.md" "    agent: bubbles.not-a-real-agent"
+run_case unknown-frontmatter-agent "$fixture" 1 "references unknown agent"
+
 if [[ "$failures" -gt 0 ]]; then
   echo "workflow-runner-grants-lint-selftest: FAIL ($failures assertion(s))" >&2
   exit 1

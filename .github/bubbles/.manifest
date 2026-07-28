@@ -35,6 +35,8 @@ bubbles/scripts/bubbles-drift-check.sh
 bubbles/scripts/bubbles-graph-neighbors.sh
 bubbles/scripts/bubbles-hub-report-selftest.sh
 bubbles/scripts/bubbles-hub-report.sh
+bubbles/scripts/bundle-cost-report-selftest.sh
+bubbles/scripts/bundle-cost-report.sh
 bubbles/scripts/capability-consumer-freshness-selftest.sh
 bubbles/scripts/capability-consumer-freshness.sh
 bubbles/scripts/capability-foundation-guard-selftest.sh
@@ -47,6 +49,8 @@ bubbles/scripts/claim-source-lint-selftest.sh
 bubbles/scripts/claim-source-lint.sh
 bubbles/scripts/cli.sh
 bubbles/scripts/code-search.sh
+bubbles/scripts/codeindex-resolve-selftest.sh
+bubbles/scripts/codeindex-resolve.sh
 bubbles/scripts/compaction-discipline-guard-selftest.sh
 bubbles/scripts/compaction-discipline-guard.sh
 bubbles/scripts/competitive-docs-selftest.sh
@@ -59,6 +63,7 @@ bubbles/scripts/convergence-cap-guard-selftest.sh
 bubbles/scripts/convergence-cap-guard.sh
 bubbles/scripts/delivery-implementation-delta-guard-selftest.sh
 bubbles/scripts/delivery-implementation-delta-guard.sh
+bubbles/scripts/dependency-posture.sh
 bubbles/scripts/deploy-manifest-assurance-lint-selftest.sh
 bubbles/scripts/deploy-manifest-assurance-lint.sh
 bubbles/scripts/design-experiment-guard-selftest.sh
@@ -87,6 +92,7 @@ bubbles/scripts/effective-bundle-measure-selftest.sh
 bubbles/scripts/effective-bundle-measure.sh
 bubbles/scripts/env-pollution-scan-selftest.sh
 bubbles/scripts/env-pollution-scan.sh
+bubbles/scripts/eval-corpus-selftest.sh
 bubbles/scripts/eval-harness-selftest.sh
 bubbles/scripts/eval-harness.sh
 bubbles/scripts/eval-heldout-guard-selftest.sh
@@ -105,13 +111,23 @@ bubbles/scripts/forecast-eval-check-selftest.sh
 bubbles/scripts/forecast-eval-check.sh
 bubbles/scripts/framework-dogfood-guard-selftest.sh
 bubbles/scripts/framework-dogfood-guard.sh
+bubbles/scripts/framework-health-evidence-lint-selftest.sh
+bubbles/scripts/framework-health-evidence-lint.sh
 bubbles/scripts/framework-validate-tier-selftest.sh
 bubbles/scripts/framework-validate.sh
 bubbles/scripts/fun-mode.sh
+bubbles/scripts/gate-bands-selftest.sh
+bubbles/scripts/gate-bands.sh
 bubbles/scripts/gate-catalog-freshness.sh
+bubbles/scripts/gate-classification-selftest.sh
+bubbles/scripts/gate-classification.sh
+bubbles/scripts/gate-enforcement-selftest.sh
+bubbles/scripts/gate-enforcement.sh
 bubbles/scripts/gate-id-grep-selftest.sh
 bubbles/scripts/gate-id-grep.sh
 bubbles/scripts/gate-meta.sh
+bubbles/scripts/gate-retirement-selftest.sh
+bubbles/scripts/gate-retirement.sh
 bubbles/scripts/gate-strength-lint-selftest.sh
 bubbles/scripts/gate-strength-lint.sh
 bubbles/scripts/gates-registry-selftest.sh
@@ -266,6 +282,10 @@ bubbles/scripts/scenario-compile-lint.sh
 bubbles/scripts/scope-context-fit-lint-selftest.sh
 bubbles/scripts/scope-context-fit-lint.sh
 bubbles/scripts/scope-universe-resolver-selftest.sh
+bubbles/scripts/security-gate-selftest.sh
+bubbles/scripts/security-gate.sh
+bubbles/scripts/selftest-coverage-lint-selftest.sh
+bubbles/scripts/selftest-coverage-lint.sh
 bubbles/scripts/session-cap-guard-selftest.sh
 bubbles/scripts/session-cap-guard.sh
 bubbles/scripts/shellcheck-lint-selftest.sh
@@ -313,6 +333,8 @@ bubbles/scripts/v4.1.0-selftest.sh
 bubbles/scripts/v5.2-selftest.sh
 bubbles/scripts/v5.3-selftest.sh
 bubbles/scripts/v7-selftest.sh
+bubbles/scripts/validate-cache-selftest.sh
+bubbles/scripts/validate-cache.sh
 bubbles/scripts/validation-latency-report-selftest.sh
 bubbles/scripts/validation-latency-report.sh
 bubbles/scripts/value-selection-lint-selftest.sh
@@ -345,6 +367,8 @@ bubbles/scripts/guards/planning-checks.sh
 bubbles/scripts/guards/sensitive-client-storage-scan.py
 bubbles/scripts/guards/tail-convergence-gates.sh
 bubbles/scripts/guards/tail-delegated-gates.sh
+bubbles/adapters/codeindex/codegraph.sh
+bubbles/adapters/codeindex/none.sh
 bubbles/adapters/observability/none.sh
 bubbles/adapters/observability/prometheus.sh
 bubbles/schemas/adoption-profiles.schema.json
@@ -360,6 +384,7 @@ bubbles/eval/schemas/adversarial-sample.schema.json
 bubbles/registry/gates.yaml
 bubbles/registry/optional-skills.txt
 bubbles/registry/required-specialists.yaml
+bubbles/registry/selftest-denylist.txt
 bubbles/mcp/clients/claude.json
 bubbles/mcp/clients/cline.json
 bubbles/mcp/clients/cursor.json
@@ -683,6 +708,7 @@ skills/bubbles-capability-foundation-design/SKILL.md
 skills/bubbles-cinematic-design/SKILL.md
 skills/bubbles-cinematic-design/references/patterns.md
 skills/bubbles-cinematic-design/references/presets.md
+skills/bubbles-code-index-adapter/SKILL.md
 skills/bubbles-config-bundle-per-train/SKILL.md
 skills/bubbles-config-sst/SKILL.md
 skills/bubbles-cross-platform-shell/SKILL.md
@@ -716,5 +742,6 @@ skills/bubbles-supply-chain-source-locking/SKILL.md
 skills/bubbles-test-environment-isolation/SKILL.md
 skills/bubbles-test-integrity/SKILL.md
 skills/bubbles-upkeep-cadence/SKILL.md
+skills/bubbles-vscode-agent-constraints/SKILL.md
 skills/bubbles-workflow-execution-loops/SKILL.md
 skills/bubbles-workflow-mode-resolution/SKILL.md

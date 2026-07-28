@@ -1,0 +1,18 @@
+# Selftest deny-list — IMP-027 SCOPE-2b
+#
+# framework-validate.sh discovers every bubbles/scripts/*-selftest.sh and runs
+# any that its enumerated checks did not already cover. That means a NEW
+# selftest is executed the moment it is committed, with no wiring step — which
+# is the point: COV-2 was a class of silently-unwired selftests, not a set of
+# individual oversights.
+#
+# A selftest listed here is deliberately NOT run by the discovery sweep. Each
+# entry MUST carry a reason on the line above it. `selftest-coverage-lint.sh`
+# fails when an entry has no reason, and when a denied selftest no longer
+# exists (so this file cannot rot).
+#
+# Format: one basename per line. Blank lines and `#` comments ignored.
+# Every entry MUST be preceded by a comment line giving the reason.
+#
+# (No entries. Every selftest in the tree is executed — either by an enumerated
+# framework-validate check or by the discovery sweep.)

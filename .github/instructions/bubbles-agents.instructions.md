@@ -35,6 +35,35 @@ model: <model-preference>  # e.g., claude-sonnet-4-20250514, gpt-4.1
 ---
 ```
 
+### Dispatch-Control Frontmatter (host-runtime enforced)
+
+These fields are read by the VS Code runtime, not by the model. A delegation rule
+expressible here MUST be expressed here — body prose is advisory, frontmatter is
+enforced. Enforced by `bubbles/scripts/workflow-runner-grants-lint.sh` (Gate G064).
+
+| Field | Meaning | Default |
+|-------|---------|---------|
+| `agents:` | Subagent allowlist. `*` = all, `[]` = none. **An explicit listing OVERRIDES a target's `disable-model-invocation`.** | `*` |
+| `disable-model-invocation:` | Prevents this agent from being dispatched as a subagent. | `false` |
+| `user-invocable:` | Whether the agent appears in the chat agents dropdown. | `true` |
+| `handoffs:` | Buttons shown **after the turn ends**; the user clicks to **switch** agents. NOT subagent dispatch. | none |
+| `handoffs[].send` | Auto-submits the handoff prompt. Bubbles requires this stay unset. | `false` |
+
+Rules for `bubbles.*` agents:
+
+- **Pure top-level runners** (granted a workflow mode but never a declared `owner:` phase)
+  MUST set `disable-model-invocation: true`.
+- **Dual-role agents** (granted runner AND declared phase owner) MUST NOT set it — doing so
+  breaks the phase dispatch they exist to serve.
+- No agent may name a pure top-level runner in `agents:`; that would override the flag.
+- Never set `handoffs[].send: true`.
+- Dispatch requires the `agent` tool alias in `tools:`; a body allowlist alone does nothing.
+
+Full authoring guidance, the depth-1 subagent constraint, and a design-review checklist
+live in the [`bubbles-vscode-agent-constraints`](../skills/bubbles-vscode-agent-constraints/SKILL.md)
+skill; the role split and precedence rationale live in
+[`workflow-delegation-core.md`](../agents/bubbles_shared/workflow-delegation-core.md).
+
 ## Prompt Shim Pattern
 
 This repo uses a **prompt shim + agent definition** architecture:

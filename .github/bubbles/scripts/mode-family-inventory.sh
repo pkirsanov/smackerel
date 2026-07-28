@@ -51,7 +51,14 @@ done
 [[ -f "$WORKFLOWS" ]] || { echo "mode-family-inventory: workflows.yaml missing at $WORKFLOWS" >&2; exit 2; }
 [[ -f "$ALIASES" ]] || { echo "mode-family-inventory: aliases.yaml missing at $ALIASES" >&2; exit 2; }
 
+# IMP-027 SCOPE-4 / SEC-2: was `exit 0`.
+# shellcheck source=bubbles/scripts/dependency-posture.sh
+[[ -f "$SCRIPT_DIR/dependency-posture.sh" ]] && source "$SCRIPT_DIR/dependency-posture.sh"
+
 if ! command -v python3 >/dev/null 2>&1; then
+  if declare -F bubbles_require_dep >/dev/null 2>&1; then
+    bubbles_require_dep "mode-family-inventory" "python3 is not installed" || exit 0
+  fi
   echo "mode-family-inventory: SKIP (python3 not installed)"
   exit 0
 fi

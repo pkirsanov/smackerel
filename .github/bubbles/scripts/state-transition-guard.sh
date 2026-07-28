@@ -2243,6 +2243,9 @@ if [[ ${#test_files_in_plan[@]} -gt 0 ]]; then
       unique_match_count="$({ printf '%s\n' "$unique_match" | grep -c .; } || true)"
       if [[ "$unique_match_count" -eq 1 ]]; then
         warn "Test Plan uses basename-only path '$test_path'; uniquely resolved to $(echo "$unique_match" | sed "s#^$feature_dir/../..##")"
+      elif [[ "$transition_audit_profile" == "planning-maturity-v1" ]]; then
+        info "Future implementation-owned file is not physically required at planning maturity: $test_path"
+        missing_test_files=$((missing_test_files + 1))
       else
         record_failed_check Check-8-contract
         fail "Test Plan references non-existent or non-resolvable file: $test_path"
@@ -2381,6 +2384,47 @@ sys.exit(1)
 PY
 }
 
+# IMP-027 SCOPE-3 (EV-1): does a DoD item assert an EXECUTION OUTCOME?
+#
+# README's evidence guarantee is specifically about execution claims — 'a
+# narrative "all tests pass" with no terminal output is rejected as
+# fabrication'. It is NOT a claim that every DoD item must be receipted.
+# Documentation, design-decision, and attestation items legitimately carry
+# prose, and failing those would manufacture false failures at scale.
+#
+# So the command-output requirement is CLAIM-TYPED, not global. This matcher
+# decides which side of that line an item falls on. It is deliberately anchored
+# to the VERB+SUBJECT shape of an execution assertion rather than to bare
+# keywords: "documented the test strategy" must NOT match, while "unit tests
+# pass" must.
+dod_item_claims_execution() {
+  local item_text="${1:-}"
+  [[ -z "$item_text" ]] && return 1
+  local probe
+  probe="$(printf '%s' "$item_text" | tr '[:upper:]' '[:lower:]')"
+
+  # Strip the Evidence: pointer — anchor slugs routinely contain words like
+  # "test" and would otherwise decide the claim type by accident.
+  probe="${probe%%→ evidence:*}"
+  probe="${probe%%evidence:*}"
+
+  # Negative guard first: an item ABOUT execution artifacts that does not itself
+  # assert an execution outcome (authoring, documenting, planning, designing).
+  if [[ "$probe" =~ (documented|document|describe[sd]?|plan(ned|s)?\ |design(ed|s)?\ |written|writes|author(ed|s)?|specif(y|ied|ies)|record(ed|s)?\ the) ]]; then
+    # ...unless it ALSO asserts an outcome ("tests written and passing").
+    if [[ ! "$probe" =~ (pass(es|ing|ed)?|green|succeed(s|ed|ing)?|exit\ code\ 0|0\ failures|clean) ]]; then
+      return 1
+    fi
+  fi
+
+  # Positive: an execution SUBJECT paired with an outcome/imperative.
+  if [[ "$probe" =~ (test|suite|build|compil|lint|clippy|fmt|format|coverage|benchmark|selftest|e2e|integration|smoke|stress|migration|deploy|guard|scan|audit) ]] &&
+     [[ "$probe" =~ (pass(es|ing|ed)?|run(s|ning)?|execut(e|ed|es|ing)|succeed(s|ed|ing)?|green|clean|exit\ code|0\ (failures|errors|warnings)|no\ (failures|errors|warnings)|complete[sd]?|verif(y|ied|ies)) ]]; then
+    return 0
+  fi
+  return 1
+}
+
 # v4.1.0: Evidence-by-reference resolver. When a DoD line is shaped like
 #   - [x] Item description → Evidence: [anchor-name](report.md#anchor-name)
 # follow the link to the report.md anchor and verify a ≥10-line evidence
@@ -2392,6 +2436,7 @@ PY
 resolve_evidence_by_reference() {
   local scope_dir="$1"
   local link_target="$2"     # e.g. "report.md#scope-3-cosign"
+  local dod_item_text="${3:-}"  # IMP-027 SCOPE-3: decides the claim type
   local rel_report="${link_target%%#*}"
   local anchor="${link_target##*#}"
   [[ -z "$anchor" || "$anchor" == "$link_target" ]] && return 1
@@ -2406,13 +2451,22 @@ resolve_evidence_by_reference() {
   # Normalize anchor: GitHub-style slugify (lower, spaces->dash, strip non-alnum/dash)
   local anchor_lower
   anchor_lower="$(echo "$anchor" | tr '[:upper:]' '[:lower:]')"
-  # Find the anchor — match either an HTML anchor <a name="X">, an explicit
-  # {#anchor} attribute, or a Markdown heading whose GitHub slug matches.
+  # Find the anchor — match either an HTML anchor <a name="X"> / <a id="X">,
+  # an explicit {#anchor} attribute, or a Markdown heading whose GitHub slug
+  # matches.
+  #
+  # IMP-102 fix (Defect 3): `<a id="X">` is the modern HTML anchor form and the
+  # shape agents naturally emit, but the matcher previously accepted ONLY
+  # `<a name="X">`, so a perfectly valid anchor resolved as "missing" and the
+  # DoD item hard-failed. Matching the tag first and the attribute second also
+  # tolerates attribute order (`<a class="x" id="y">`). This strictly REDUCES
+  # false failures — it cannot newly fail anything that resolves today.
   local anchor_line
   anchor_line="$(awk -v a="$anchor_lower" '
     BEGIN { IGNORECASE=1 }
-    /<a[[:space:]]+name=/ {
-      if (tolower($0) ~ "name=\""a"\"") { print NR; exit }
+    /<a[[:space:]]/ {
+      hay = tolower($0)
+      if (hay ~ "name=\""a"\"" || hay ~ "id=\""a"\"") { print NR; exit }
     }
     /\{#[^}]+\}/ {
       if (tolower($0) ~ "\\{#"a"\\}") { print NR; exit }
@@ -2428,19 +2482,46 @@ resolve_evidence_by_reference() {
     }
   ' "$report_path")"
   [[ -z "$anchor_line" ]] && return 1
-  # Count non-blank lines from anchor_line+1 until next heading or EOF
+  # Count non-blank lines from anchor_line+1 until next heading or EOF.
+  #
+  # IMP-102 fix (Defect 2): the end-of-block scan is FENCE-AWARE. A pasted shell
+  # comment inside the evidence fence (e.g. `# TP-03-01 rollback accounting`)
+  # matches /^#+[[:space:]]/ and previously terminated the block early, so the
+  # ≥10-non-blank-line rule measured a fraction of the real evidence and emitted
+  # a FALSE block-too-short failure. Only a `#` heading OUTSIDE a fenced block
+  # ends the evidence window. Fence state is tracked from line 1 so it is
+  # correct by the time the anchor line is reached. This strictly REDUCES false
+  # failures — the window can only grow, never shrink.
   local end_line
-  end_line="$(awk -v start="$anchor_line" 'NR>start && /^#+[[:space:]]/ { print NR; exit }' "$report_path")"
+  end_line="$(awk -v start="$anchor_line" '
+    {
+      probe = $0
+      sub(/^[[:space:]]+/, "", probe)
+      if (probe ~ /^```/) { in_fence = !in_fence; next }
+    }
+    NR>start && !in_fence && /^#+[[:space:]]/ { print NR; exit }
+  ' "$report_path")"
   [[ -z "$end_line" ]] && end_line="$(wc -l < "$report_path")"
   local block_text block_lines
   block_text="$(sed -n "$((anchor_line+1)),${end_line}p" "$report_path")"
   block_lines="$(printf '%s\n' "$block_text" | grep -cE '\S' || true)"
   if [[ "${block_lines:-0}" -ge 10 ]]; then
-    # IMP-102 SCOPE-1 fix #3 (ADVISORY, proposal R1): a resolved ≥10-line block
-    # with NO fenced command-output signature is still ACCEPTED (documentation /
-    # attestation DoD items legitimately use prose), but we emit an advisory and
-    # count it. Advisory-for-one-release, NOT blocking.
+    # A resolved ≥10-line block carrying NO command-output signature.
+    #
+    # IMP-102 SCOPE-1 fix #3 made this an ADVISORY because documentation and
+    # attestation DoD items legitimately use prose.
+    #
+    # IMP-027 SCOPE-3 (EV-1) narrows that blanket permission WITHOUT
+    # reintroducing false failures: the permission stands for items that do not
+    # assert an execution outcome, and is WITHDRAWN for items that do. This is
+    # what closes the gap between README's stated guarantee and the code — a
+    # narrative "all tests pass" with no terminal output is now refused, while
+    # "architecture decision recorded in design.md" still passes on prose.
     if ! printf '%s\n' "$block_text" | grep -qE '```|Exit Code:|^[[:space:]]*\$ |Executed:|Command:'; then
+      if dod_item_claims_execution "$dod_item_text"; then
+        check9_prose_execution_anchor="$anchor"
+        return 1
+      fi
       check9_advisory_count=$((${check9_advisory_count:-0} + 1))
       info "Check-9 ADVISORY: evidence block for anchor '#${anchor}' in $(basename "$report_path") has no command-output signature (prose-only); accepted as documentation/attestation evidence"
     fi
@@ -2495,11 +2576,16 @@ for scope_path in ${scope_files[@]+"${scope_files[@]}"}; do
         # link handler below.
         link_target="$(echo "$line" | grep -oE '\[[^]]+\]\([^)]*report\.md#[A-Za-z0-9_-]+\)' | head -1 | sed -E 's/.*\(([^)]+)\)$/\1/' || true)"
         if [[ -n "$link_target" ]]; then
-          if resolve_evidence_by_reference "$scope_dir" "$link_target"; then
+          check9_prose_execution_anchor=""
+          if resolve_evidence_by_reference "$scope_dir" "$link_target" "$line"; then
             checked_with_evidence=$((checked_with_evidence + 1))
           else
             checked_without_evidence=$((checked_without_evidence + 1))
-            fail "DoD item [x] references '$link_target' but anchor missing OR block <10 non-blank lines in $(relative_artifact_path "$scope_path"): $(echo "$line" | head -c 80)"
+            if [[ -n "${check9_prose_execution_anchor:-}" ]]; then
+              fail "DoD item [x] asserts an EXECUTION outcome but its evidence block '#${check9_prose_execution_anchor}' contains no command output (prose-only) in $(relative_artifact_path "$scope_path"): $(echo "$line" | head -c 80)"
+            else
+              fail "DoD item [x] references '$link_target' but anchor missing OR block <10 non-blank lines in $(relative_artifact_path "$scope_path"): $(echo "$line" | head -c 80)"
+            fi
           fi
         else
           # IMP-102 SCOPE-1 fix #1: a marker WITHOUT a resolvable
@@ -2525,11 +2611,16 @@ for scope_path in ${scope_files[@]+"${scope_files[@]}"}; do
         # not (e.g. exotic link shapes).
         link_target="$(echo "$line" | grep -oE '\[[^]]+\]\([^)]*report\.md(#[A-Za-z0-9_.-]+)?\)' | head -1 | sed -E 's/.*\(([^)]+)\)$/\1/' || true)"
         if [[ "$link_target" == *"#"* ]]; then
-          if resolve_evidence_by_reference "$scope_dir" "$link_target"; then
+          check9_prose_execution_anchor=""
+          if resolve_evidence_by_reference "$scope_dir" "$link_target" "$line"; then
             checked_with_evidence=$((checked_with_evidence + 1))
           else
             checked_without_evidence=$((checked_without_evidence + 1))
-            fail "DoD item [x] links '$link_target' but anchor missing OR block <10 non-blank lines in $(relative_artifact_path "$scope_path"): $(echo "$line" | head -c 80)"
+            if [[ -n "${check9_prose_execution_anchor:-}" ]]; then
+              fail "DoD item [x] asserts an EXECUTION outcome but its evidence block '#${check9_prose_execution_anchor}' contains no command output (prose-only) in $(relative_artifact_path "$scope_path"): $(echo "$line" | head -c 80)"
+            else
+              fail "DoD item [x] links '$link_target' but anchor missing OR block <10 non-blank lines in $(relative_artifact_path "$scope_path"): $(echo "$line" | head -c 80)"
+            fi
           fi
         else
           # Plain report.md link with no anchor — IMP-102 SCOPE-1 fix #2:
@@ -2765,42 +2856,117 @@ fi
 echo ""
 
 # =============================================================================
-# CHECK 12: Duplicate evidence detection
+# CHECK 12: Duplicate evidence detection (Gate G021)
 # =============================================================================
-echo "--- Check 12: Duplicate Evidence Detection ---"
-for scope_path in ${scope_files[@]+"${scope_files[@]}"}; do
-  [[ -f "$scope_path" ]] || continue
-  evidence_hashes=()
-  in_evidence=0
-  current_evidence=""
-  duplicate_found="false"
+# IMP-102 fix (Defect 1): Check 12 previously had TWO independent blindnesses,
+# either sufficient alone to keep it from ever firing on a real artifact:
+#   1. It iterated ONLY `scope_files` and never opened `report_files` — but the
+#      evidence-by-reference convention (see resolve_evidence_by_reference)
+#      puts the fenced blocks in report.md.
+#   2. It matched ONLY 4-space-indented fences, while real artifacts write
+#      fences at column 0 almost exclusively.
+# The fix scans BOTH surfaces and recognises fences at ANY indentation, but it
+# does so at TWO severities so a previously-blind blocking gate cannot
+# retro-break already-certified downstream packets:
+#
+#   * LEGACY surface — scope files, 4-space-indented fences — stays BLOCKING
+#     with byte-identical detection semantics. Zero behaviour change.
+#   * NEWLY COVERED surface — scope + report files, fences at any indentation —
+#     is ADVISORY (info + counter, never `fail`). Some repetition is
+#     legitimate (e.g. one shared environment-context block quoted by sibling
+#     scopes), and downstream repos carry `done` packets certified while this
+#     surface was blind. This mirrors the framework's own established
+#     precedent for newly-activated enforcement (see `check9_advisory_count`
+#     above: "Advisory-for-one-release, NOT blocking"). Promote the advisory
+#     surface to blocking in a later release once downstream repos have
+#     drained the backlog.
+_c12_fence_any_re='^[[:space:]]*```'
+
+# Detect an exact-duplicate fenced evidence block within a single artifact.
+#   $1 = file path
+#   $2 = fence mode:
+#        "legacy-4space" — open on a 4-space `    ```` prefix, close on an
+#                          exact `    ```` line (the historical semantics)
+#        "any-indent"    — toggle on any fence line at any indentation,
+#                          covering both ```lang openers and bare ``` closers
+# Returns 0 when a duplicate block is found, 1 otherwise.
+#
+# Block text is compared directly instead of hashed: it yields the identical
+# equality relation the previous md5 implementation did, removes a GNU-only
+# `md5sum` dependency (macOS ships `md5`, not `md5sum`), and drops two forks
+# per block. The concatenation shape is byte-for-byte what was hashed before.
+c12_has_duplicate_evidence_block() {
+  local file_path="$1"
+  local fence_mode="$2"
+  local blocks=()
+  local in_evidence=0
+  local current_evidence=""
+  local line=""
+  local prev_block=""
+  local is_open=0
+  local is_close=0
+
   while IFS= read -r line; do
-    # BUG-005: bash glob builtins replace per-line echo|grep fence forks.
-    if [[ "$in_evidence" -eq 0 ]] && [[ "$line" == '    ```'* ]]; then
+    is_open=0
+    is_close=0
+    if [[ "$fence_mode" == "legacy-4space" ]]; then
+      # BUG-005: bash glob builtins replace per-line echo|grep fence forks.
+      [[ "$line" == '    ```'* ]] && is_open=1
+      [[ "$line" == '    ```' ]] && is_close=1
+    elif [[ "$line" =~ $_c12_fence_any_re ]]; then
+      is_open=1
+      is_close=1
+    fi
+
+    if [[ "$in_evidence" -eq 0 ]] && [[ "$is_open" -eq 1 ]]; then
       in_evidence=1
       current_evidence=""
-    elif [[ "$in_evidence" -eq 1 ]] && [[ "$line" == '    ```' ]]; then
+    elif [[ "$in_evidence" -eq 1 ]] && [[ "$is_close" -eq 1 ]]; then
       in_evidence=0
       if [[ -n "$current_evidence" ]]; then
-        evidence_hash="$(echo "$current_evidence" | md5sum | cut -d' ' -f1)"
-        for prev_hash in ${evidence_hashes[@]+"${evidence_hashes[@]}"}; do
-          if [[ "$evidence_hash" == "$prev_hash" ]]; then
-            fail "Duplicate evidence blocks detected in $(relative_artifact_path "$scope_path") — COPY-PASTE FABRICATION"
-            duplicate_found="true"
-            break 2
+        for prev_block in ${blocks[@]+"${blocks[@]}"}; do
+          if [[ "$current_evidence" == "$prev_block" ]]; then
+            return 0
           fi
         done
-        evidence_hashes+=("$evidence_hash")
+        blocks+=("$current_evidence")
       fi
     elif [[ "$in_evidence" -eq 1 ]]; then
       current_evidence="${current_evidence}${line}"
     fi
-  done < "$scope_path"
+  done < "$file_path"
 
-  if [[ "$duplicate_found" == "false" ]]; then
-    pass "No duplicate evidence blocks in $(relative_artifact_path "$scope_path")"
+  return 1
+}
+
+echo "--- Check 12: Duplicate Evidence Detection ---"
+c12_advisory_count=0
+
+for scope_path in ${scope_files[@]+"${scope_files[@]}"}; do
+  [[ -f "$scope_path" ]] || continue
+  if c12_has_duplicate_evidence_block "$scope_path" "legacy-4space"; then
+    fail "Duplicate evidence blocks detected in $(relative_artifact_path "$scope_path") — COPY-PASTE FABRICATION"
+    continue
+  fi
+
+  pass "No duplicate evidence blocks in $(relative_artifact_path "$scope_path")"
+  if c12_has_duplicate_evidence_block "$scope_path" "any-indent"; then
+    c12_advisory_count=$((c12_advisory_count + 1))
+    info "Check-12 ADVISORY: duplicate evidence block in $(relative_artifact_path "$scope_path") on the any-indentation fence surface — copy-paste fabrication indicator, NOT blocking this release (Gate G021 newly-covered surface)"
   fi
 done
+
+for report_path in ${report_files[@]+"${report_files[@]}"}; do
+  [[ -f "$report_path" ]] || continue
+  if c12_has_duplicate_evidence_block "$report_path" "any-indent"; then
+    c12_advisory_count=$((c12_advisory_count + 1))
+    info "Check-12 ADVISORY: duplicate evidence block in $(relative_artifact_path "$report_path") on the any-indentation fence surface — copy-paste fabrication indicator, NOT blocking this release (Gate G021 newly-covered surface)"
+  fi
+done
+
+if [[ "$c12_advisory_count" -gt 0 ]]; then
+  info "Check-12 advisory: $c12_advisory_count artifact(s) carry duplicate evidence blocks on the newly-covered any-indentation surface (would-fail count under a future blocking policy)"
+fi
 echo ""
 
 # =============================================================================
@@ -3384,6 +3550,39 @@ stg_scenario_matches_dod() {
   local word_count=0
   local half_threshold=0
 
+  # IMP-027 SCOPE-8 (EV-3): structural linkage beats a lexical proxy.
+  #
+  # Word overlap is an INFERENCE about whether a DoD item preserves a
+  # scenario's behavioral claim, and every threshold it uses (>=3 words, >=50%)
+  # is a tuning knob rather than a fact. That is the documented root of the
+  # G068 false-positive/false-negative pair: rewording a scenario breaks the
+  # match, and unrelated items sharing vocabulary create one.
+  #
+  # When the scenario carries a stable SCN-* ID, the linkage is a FACT and no
+  # inference is needed: the DoD item either cites that ID or it does not. This
+  # is deterministic and has no threshold to tune.
+  #
+  # Deliberately NO-OP-UNLESS-EARNED, matching Check 43's pattern: the ID path
+  # engages ONLY when the scenario actually carries an ID. Specs that have not
+  # adopted SCN-* IDs keep today's word-overlap behavior EXACTLY, so this
+  # cannot newly fail an existing artifact and removes no enforcement.
+  #
+  # Divergence from the proposal, recorded deliberately: it also asked that the
+  # lexical scan be demoted to advisory. That is NOT done here. Demoting it
+  # would silently switch G068 off for every project that has not adopted IDs
+  # — which today is effectively all of them — trading a tuning-accuracy
+  # problem for a no-enforcement problem. The lexical path stays authoritative
+  # exactly where no structural fact is available to replace it.
+  local scenario_scn
+  scenario_scn="$(printf '%s' "$scenario" | grep -oE 'SCN-[A-Za-z0-9][A-Za-z0-9_-]*' | head -1 || true)"
+  if [[ -n "$scenario_scn" ]]; then
+    # Word-boundary compare so SCN-1 does not match SCN-12.
+    if printf '%s' "$dod_item" | grep -qE "(^|[^A-Za-z0-9_-])${scenario_scn}([^A-Za-z0-9_-]|\$)"; then
+      return 0
+    fi
+    return 1
+  fi
+
   dod_norm="$(stg_normalize_text "$dod_item")"
   words="$(stg_significant_words "$scenario")"
   if [[ -z "$words" ]]; then
@@ -3466,6 +3665,84 @@ elif [[ "$dod_fidelity_failures" -gt 0 ]]; then
   info "If a DoD item was rewritten to describe different behavior, route to bubbles.plan for plan correction"
 else
   pass "All $dod_fidelity_total Gherkin scenarios have faithful DoD items (Gate G068)"
+fi
+echo ""
+
+# =============================================================================
+# CHECK 43: Evidence Receipt Staleness (IMP-027 SCOPE-3, EV-2)
+# =============================================================================
+# Markdown evidence has one property it can never have: freshness. A pasted
+# terminal block proves a command ran ONCE, against SOME version of the tree,
+# and nothing in the artifact records which. Receipts written by tool-log.sh
+# DO record it — each carries an `inputClosure` of the files the evidence
+# depended on, hashed at capture time.
+#
+# evidence-receipt-check.sh already knows how to compare those hashes against
+# the working tree, but until now it was reachable ONLY from its own selftest,
+# so no transition ever consulted it. That made the receipt rail decorative:
+# a spec could carry receipts captured before the very change under review and
+# certify anyway.
+#
+# This check consults it on the transition path. It is deliberately
+# NO-OP-UNLESS-EARNED:
+#   - no tool log                     -> skipped (the overwhelming majority)
+#   - receipts present, none stale    -> passes
+#   - receipts present, some stale    -> FAILS, naming them
+#   - checker unavailable/errors      -> INFO, never blocks
+# A project that never adopts receipts is unaffected; a project that adopts
+# them cannot then certify against evidence its own recorded inputs invalidate.
+echo "--- Check 43: Evidence Receipt Staleness (IMP-027 SCOPE-3) ---"
+c43_repo_root="$(cd "$feature_dir" && git rev-parse --show-toplevel 2>/dev/null || pwd)"
+c43_log="$c43_repo_root/.specify/runtime/tool-calls.jsonl"
+c43_checker="$SCRIPT_DIR/evidence-receipt-check.sh"
+if [[ ! -f "$c43_log" ]]; then
+  info "No tool-call receipt log at .specify/runtime/tool-calls.jsonl; receipt staleness not applicable (markdown evidence rail)"
+elif [[ ! -x "$c43_checker" && ! -f "$c43_checker" ]]; then
+  info "evidence-receipt-check.sh not present; skipping receipt staleness"
+else
+  c43_out=""
+  c43_rc=0
+  c43_out="$(bash "$c43_checker" --log "$c43_log" --repo-root "$c43_repo_root" --strict 2>&1)" || c43_rc=$?
+  case "$c43_rc" in
+    0)
+      pass "Evidence receipts consulted; no stale receipt backs this transition"
+      ;;
+    1)
+      fail "Evidence receipt(s) are STALE — an input file changed after the evidence was captured, so the recorded result no longer describes the current tree. Re-run the affected command(s) to refresh the receipt. Detail: $(printf '%s' "$c43_out" | tr '\n' ' ' | head -c 400)"
+      ;;
+    *)
+      info "evidence-receipt-check.sh could not produce a report (exit $c43_rc); receipt staleness not evaluated this run"
+      ;;
+  esac
+
+  # IMP-027 SCOPE-8 (EV-3): clone detection by receipt hash, not text similarity.
+  #
+  # Check 20 (G021) answers "is this evidence a copy of that evidence?" with an
+  # 80%-similarity score over prose. That is a proxy: legitimately similar
+  # output (two runs of the same suite) scores high, and a lightly-edited
+  # forgery scores low. Receipts carry stdoutHash, which turns the same question
+  # into an exact comparison.
+  #
+  # The rule is deliberately narrow, because the naive one is wrong: identical
+  # output from a RE-RUN of the SAME command is normal and must never fire.
+  # What cannot happen honestly is identical stdout under DIFFERENT commands —
+  # `cargo test` and `npm run lint` do not produce byte-identical output. That
+  # is the signature of one captured result being reused to back a second,
+  # unrelated claim, which is exactly what G021 exists to catch.
+  if command -v jq >/dev/null 2>&1; then
+    c43_clones="$(jq -rs '
+      map(select((.stdoutHash // "") != "" and (.cmd // "") != ""))
+      | group_by(.stdoutHash)
+      | map(select((map(.cmd) | unique | length) > 1))
+      | .[]
+      | "\(.[0].stdoutHash[0:12])… reused by: \(map(.cmd) | unique | join(" AND "))"
+    ' "$c43_log" 2>/dev/null || true)"
+    if [[ -n "$c43_clones" ]]; then
+      fail "Evidence receipt CLONE — one captured stdout is cited by two different commands, which cannot happen from honest execution: $(printf '%s' "$c43_clones" | tr '\n' ';' | head -c 400)"
+    else
+      pass "No receipt clones (no stdout hash shared across differing commands)"
+    fi
+  fi
 fi
 echo ""
 

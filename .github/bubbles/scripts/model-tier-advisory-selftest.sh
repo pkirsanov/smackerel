@@ -99,6 +99,91 @@ else
   fail "resolve expected 'opus-class', got '$resolved'"
 fi
 
+# ---------------------------------------------------------------------------
+# IMP-027 / SCOPE-11 — `retirement` reports gate obsolescence candidacy.
+#
+# The load-bearing assertion is not which gates come back eligible; it is that
+# the report can NEVER be read as clearance to turn a gate off. Tier
+# eligibility is only half a criterion, and the measured half does not exist
+# yet. A report that omitted that caveat would look exactly like a green light.
+# ---------------------------------------------------------------------------
+RETIRE_FIXTURE="$TMPDIR/retire-workflows.yaml"
+cat > "$RETIRE_FIXTURE" <<'YAML'
+modes:
+  full-delivery:
+    description: fixture mode
+modeDefaults:
+  modelFloor:
+    default: ""
+  modelFloorEnforcedPhases: [ audit ]
+gates:
+  G001:
+    name: never_retires_gate
+    classification: businessInvariant
+    description: Deployment artifacts must be signed before release.
+  G002:
+    name: strict_model_gate
+    classification: modelCompensation
+    retireWhen: { minTier: opus-class, metric: fabricated-evidence-rate, threshold: 0.005, window: 50 }
+    description: Raw execution evidence is captured per policy.
+  G003:
+    name: lenient_model_gate
+    classification: modelCompensation
+    retireWhen: { minTier: sonnet-class, metric: routing-omission-rate, threshold: 0.02, window: 20 }
+    description: Each specialist agent's output MUST be verified by the orchestrator.
+YAML
+
+retire_out() {
+  # retire_out <tier>  — prints the retirement report for a declared tier
+  if [[ -n "${1:-}" ]]; then
+    BUBBLES_WORKFLOWS_FILE="$RETIRE_FIXTURE" bash "$TARGET" retirement --tier "$1" 2>&1
+  else
+    BUBBLES_WORKFLOWS_FILE="$RETIRE_FIXTURE" env -u BUBBLES_ACTIVE_MODEL \
+      bash "$TARGET" retirement 2>&1
+  fi
+}
+
+expect_in() {
+  local label="$1" needle="$2" haystack="$3"
+  if grep -qF -- "$needle" <<<"$haystack"; then
+    pass "$label"
+  else
+    fail "$label — missing '$needle'. Output: $haystack"
+  fi
+}
+
+OPUS_OUT="$(retire_out opus-4.7)"
+expect_in "retirement counts only modelCompensation gates" \
+  "modelCompensation gates: 2" "$OPUS_OUT"
+expect_in "opus meets both tier preconditions" \
+  "tier precondition MET (2): G002, G003" "$OPUS_OUT"
+
+HAIKU_OUT="$(retire_out haiku-3.5)"
+expect_in "haiku meets neither tier precondition" \
+  "tier precondition MET (0): none" "$HAIKU_OUT"
+expect_in "haiku report names the tier each gate still needs" \
+  "G002(needs opus-class)" "$HAIKU_OUT"
+
+SONNET_OUT="$(retire_out sonnet-4.5)"
+expect_in "sonnet discriminates between the two criteria" \
+  "tier precondition MET (1): G003" "$SONNET_OUT"
+
+UNKNOWN_OUT="$(retire_out "")"
+expect_in "unknown model is reported, not guessed" "model-unknown" "$UNKNOWN_OUT"
+
+# The caveat must be present at EVERY tier, including the one where everything
+# is eligible — that is precisely when a reader is most likely to act on it.
+for tier_out_label in "opus:$OPUS_OUT" "haiku:$HAIKU_OUT" "unknown:$UNKNOWN_OUT"; do
+  label="${tier_out_label%%:*}"
+  body="${tier_out_label#*:}"
+  expect_in "retirement states nothing is retired ($label)" \
+    "NOTHING IS RETIRED BY THIS REPORT" "$body"
+  expect_in "retirement states the evidence half is unmet ($label)" \
+    "The EVIDENCE half is UNMET" "$body"
+done
+
+MODEL="opus-4.7" run 0 "retirement is advisory and never blocks" -- retirement
+
 echo ""
 echo "[model-tier-advisory-selftest] $pass_count passed, $fail_count failed"
 [[ "$fail_count" -eq 0 ]] || exit 1

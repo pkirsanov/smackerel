@@ -171,10 +171,23 @@ for sub in agents instructions docs bubbles/scripts; do
   fi
 done
 
+# IMP-027 SCOPE-10: README.md is the framework's most-read surface and carried a
+# reference to a RETIRED gate (former G039, absorbed by G038) that no scan could
+# see because the roots above are directories only. Scan it explicitly.
+if [[ -f "$repo_root/README.md" ]]; then
+  scan_roots+=("$repo_root/README.md")
+fi
+
 if [[ "${#scan_roots[@]}" -eq 0 ]]; then
   echo "gate-id-grep: no scan roots present under $repo_root" >&2
   exit 2
 fi
+
+# This scanner and its selftest necessarily CONTAIN illustrative duplicate-ID
+# examples ("G028, G028") in their documentation and fixtures. Scanning them
+# reports the examples as findings, which is a false positive that would make
+# the live scan permanently red. Exclude exactly those two files by name.
+self_exclude_re='/(gate-id-grep|gate-id-grep-selftest)\.sh:'
 
 # --- Detect duplicate-adjacent findings ------------------------------------
 #
@@ -193,7 +206,7 @@ unknown_findings_file="$(mktemp)"
 "$GREP_BIN" -rPn --binary-files=without-match \
   '\b(G[0-9]{3})\b[ ,]+\1\b' \
   "${scan_roots[@]}" \
-  > "$dup_findings_file" 2>/dev/null || true
+  2>/dev/null | grep -vE "$self_exclude_re" > "$dup_findings_file" || true
 
 dup_count="$(wc -l < "$dup_findings_file" | tr -d ' ')"
 

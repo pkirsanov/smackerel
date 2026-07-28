@@ -9,7 +9,7 @@ Purpose: canonical source for regression permanence requirements.
 - Rename/removal work requires consumer-facing regression coverage, not just producer-surface checks.
 - Bug-fix regressions must include at least one adversarial case that would fail if the bug were reintroduced; a tautological case that already satisfies the broken path is not protective coverage.
 
-## Cross-Spec Regression (Gates G044, G044, G044)
+## Cross-Spec Regression (Gate G044)
 
 The `bubbles.regression` agent (Steve French) enforces cross-feature regression prevention:
 

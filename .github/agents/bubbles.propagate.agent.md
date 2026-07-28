@@ -1,5 +1,6 @@
 ---
 description: Cross-train change propagation operator — forward-merges fixes/features across declared release-train chains, backports under approval guard, audits propagation drift; owns propagation-policy.yaml + propagation-ledger.yaml
+disable-model-invocation: true
 handoffs:
   - label: Validate Receiving Train
     agent: bubbles.validate

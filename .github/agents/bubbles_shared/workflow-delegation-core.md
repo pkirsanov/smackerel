@@ -70,6 +70,51 @@ Before applying the classification contract, perform this literal substring chec
 - A domain orchestrator invoked as a phase owner performs only that phase and returns its result envelope. It may execute its granted workflow modes only when it owns the top-level runtime.
 - If the active orchestrator itself lacks `agent`/`runSubagent`, return `blocked`; do not emulate owner work inline and do not claim a delegation happened.
 
+### Frontmatter Dispatch Surface (G064 mechanical enforcement)
+
+The rules above are body prose — the model may ignore them. The VS Code runtime obeys
+**frontmatter**, so the same law is additionally expressed there and enforced by
+`bubbles/scripts/workflow-runner-grants-lint.sh`. Field semantics (VS Code custom-agent
+and subagent specifications, retrieved 2026-07-28):
+
+| Field | Meaning | Bubbles usage |
+|---|---|---|
+| `handoffs:` | Button rendered **after the turn ends**; the user clicks it and **switches** to the target agent with a pre-filled prompt. Not subagent dispatch. | Retained. Handoffs between orchestrators are legitimate — control returns to the user, who starts a fresh top-level run. |
+| `handoffs[].send` | Auto-submits the pre-filled prompt. | MUST remain unset. An auto-submitting handoff converts a human-gated transfer into an automated chain. |
+| `agents:` | Subagent allowlist. Omitted = `*` (all). `[]` = none. | Omitted by default. No agent may name a **pure top-level runner**. |
+| `disable-model-invocation:` | Prevents *this* agent from being dispatched as a subagent. | `true` on exactly the 6 pure top-level runners. |
+| `user-invocable:` | Whether the agent appears in the chat dropdown. | Left at default `true` so every runner stays selectable. |
+
+**Role split** — derived from `workflowModeGrants` (granted runners) intersected with
+declared `owner:` phases in `workflows.yaml`:
+
+| Role | Agents | `disable-model-invocation` |
+|---|---|---|
+| **Pure top-level runner** — never a declared phase owner | `goal`, `propagate`, `sprint`, `train`, `upkeep`, `workflow` | **`true` (required)** |
+| **Dual-role** — granted runner AND declared phase owner | `bug`, `iterate`, `journey`, `releases`, `retro`, `stabilize` | **forbidden** — setting it would break their `owner:` phase dispatch |
+
+**Precedence, and why `agents:` matters.** An explicit `agents:` listing **overrides**
+`disable-model-invocation: true`. The two are therefore NOT independent layers: the
+allowlist wins. The flag stays effective only because no agent names a pure runner in
+`agents:` — which the lint enforces. Treat `disable-model-invocation:` as the default
+posture and the allowlist prohibition as the control that preserves it.
+
+**Depth assumption.** This model assumes the VS Code default in which subagents cannot
+invoke further subagents. Enabling `chat.subagents.allowInvocationsFromSubagents` raises
+the limit to depth 5, at which point nested runner dispatch becomes possible and G064
+degrades from structurally impossible to convention-only. `bubbles doctor` surfaces the
+setting as an advisory; it is operator-owned and cannot be enforced from the repo.
+
+**Residual limitation (do not overstate the guarantee).** `agents:` is *name-based*. It
+cannot distinguish "dispatch `bubbles.bug` to own the bugfix phase" from "dispatch
+`bubbles.bug` to run the `bugfix-fastlane` mode" — both are `runSubagent(bubbles.bug)`.
+For the six dual-role agents the allowlist therefore constrains **who** may be dispatched,
+never **what they may be asked to do**. The body-prose contract above and the
+`call_runSubagent` body check remain necessary for that half of the law.
+
+See the [`bubbles-vscode-agent-constraints`](../../skills/bubbles-vscode-agent-constraints/SKILL.md)
+skill for the full authoring rules and design-review checklist.
+
 - When the request is `VAGUE`, invoke `bubbles.super` as a subagent and require a `## RESOLUTION-ENVELOPE` only.
 - When the request is `CONTINUE` and no concrete workflow continuation can be recovered, invoke `bubbles.super` for a `RESOLUTION-ENVELOPE` and route to its `targetAgent`.
 - When the request is `FRAMEWORK`, invoke `bubbles.super` as a subagent and require a `## FRAMEWORK-ENVELOPE` only.
