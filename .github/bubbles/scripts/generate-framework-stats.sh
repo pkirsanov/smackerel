@@ -144,6 +144,11 @@ else
   alias_extra=0
 fi
 phase_count=$(count_section_entries phases '^  [a-z][a-z0-9-]*:')
+# IMP-027 SCOPE-10: the state-transition guard's labeled check count is a
+# documented figure (FRAMEWORK_CONCEPTS.md) that drifted to "~22" while the
+# guard grew to its current size. Derive it so prose can never drift again.
+guard_check_count=$(grep -oE '^[[:space:]]*echo "--- Check [0-9]+[A-Z]?:' "$repo_root/bubbles/scripts/state-transition-guard.sh" 2>/dev/null | grep -oE 'Check [0-9]+[A-Z]?' | sort -u | wc -l | tr -d ' ')
+[ -n "$guard_check_count" ] || guard_check_count=0
 
 summary_line="$agent_count Agents · $gate_count Gates · $workflow_mode_count Workflow Modes · $phase_count Phases"
 generated_at=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
@@ -219,6 +224,24 @@ if [ "$check_only" = true ]; then
   printf '%s\n' "Framework stats are current: $summary_line (v$version)"
   exit 0
 fi
+
+block_temp=$(mktemp)
+cat <<EOF > "$block_temp"
+$workflow_mode_count modes cover the spectrum from full delivery to narrow operations:
+EOF
+replace_block "$repo_root/docs/guides/FRAMEWORK_CONCEPTS.md" "GENERATED:FRAMEWORK_STATS_CONCEPTS_MODES_START" "GENERATED:FRAMEWORK_STATS_CONCEPTS_MODES_END" "$block_temp"
+
+block_temp=$(mktemp)
+cat <<EOF > "$block_temp"
+| **State transition guard** | Runs $guard_check_count checks before any status transition to "done" |
+EOF
+replace_block "$repo_root/docs/guides/FRAMEWORK_CONCEPTS.md" "GENERATED:FRAMEWORK_STATS_CONCEPTS_GUARDROW_START" "GENERATED:FRAMEWORK_STATS_CONCEPTS_GUARDROW_END" "$block_temp"
+
+block_temp=$(mktemp)
+cat <<EOF > "$block_temp"
+Prose governance documents are necessary for context but insufficient for enforcement. AI agents routinely ignore or reinterpret written rules. The breakthrough came from **scripts that mechanically block state transitions** when conditions aren't met. The state transition guard alone runs $guard_check_count automated checks. When an agent can't advance without passing a script, compliance stops being optional.
+EOF
+replace_block "$repo_root/docs/guides/FRAMEWORK_CONCEPTS.md" "GENERATED:FRAMEWORK_STATS_CONCEPTS_GUARDPROSE_START" "GENERATED:FRAMEWORK_STATS_CONCEPTS_GUARDPROSE_END" "$block_temp"
 
 block_temp=$(mktemp)
 cat <<EOF > "$block_temp"

@@ -477,6 +477,89 @@ The reconciliation left the navigation ordering unchanged for both locales.
 This paragraph provides the twelfth non-blank prose line for the fixture block.
 EOF
 
+# ---- BLOCKING (IMP-027 SCOPE-3): SAME prose block, but an EXECUTION claim ----
+# Paired deliberately with the ADVISORY fixture above. The evidence block below
+# is byte-identical in SHAPE (>=10 non-blank prose lines, no command output);
+# the ONLY difference is that the DoD item asserts an execution outcome instead
+# of a documentary one. That isolation is what proves the new rule keys on the
+# CLAIM TYPE and not on the block, and it is what makes README's guarantee
+# ('a narrative "all tests pass" with no terminal output is rejected as
+# fabrication') literally true in code.
+prose_execution_dir="$tmp_root/specs/958-c9-prose-execution-claim"
+emit_pass_fixture "$prose_execution_dir"
+append_probe "$prose_execution_dir/scopes.md" \
+  '- [x] Full integration and e2e suites pass with zero failures -> Evidence: [suites](report.md#suites)'
+cat <<'EOF' >>"$prose_execution_dir/report.md"
+
+### Suites
+
+The integration suite and the end-to-end suite were both exercised against the
+ephemeral stack for this iteration and the maintainer reviewed the results in
+detail before recording this attestation for the scope.
+Every scenario enumerated in the test plan was walked through and the observed
+behavior matched the specification in each case without deviation.
+The reviewer additionally confirmed that no scenario was skipped and that the
+suites covered each boundary condition named in the design document.
+Coverage was inspected and judged sufficient for the behavior under change.
+No regressions were observed in any previously passing area of the product.
+This paragraph provides the twelfth non-blank prose line for the fixture block.
+EOF
+
+# ---- CHECK 43 (IMP-027 SCOPE-3, EV-2): receipt staleness on the transition path ----
+# The guard resolves the receipt log at REPO root (`git rev-parse --show-toplevel`
+# from the feature dir), which is correct for production but means a fixture
+# cannot simply drop a log beside its own spec — it would resolve to the shared
+# selftest tmp root and read another fixture's log. Each receipt fixture is
+# therefore given its OWN git root via `git init`, making it genuinely hermetic.
+#
+# The FRESH and STALE fixtures are IDENTICAL except that the stale one's input
+# file is mutated AFTER its receipt is written. That isolation is what proves
+# Check 43 compares the recorded hashes rather than merely noticing a log.
+_emit_receipt_fixture() {
+  local dir="$1" mutate="$2"
+  emit_pass_fixture "$dir"
+  mkdir -p "$dir/.specify/runtime" "$dir/src"
+  git -C "$dir" init --quiet >/dev/null 2>&1 || return 1
+  printf 'original content\n' >"$dir/src/mod.rs"
+  local h
+  h="$(sha256sum "$dir/src/mod.rs" | awk '{print $1}')"
+  printf '{"ts":"2026-07-28T00:00:00Z","cmd":"cargo test","spec":"001-x","inputClosure":[{"path":"src/mod.rs","sha256":"%s"}]}\n' \
+    "$h" >"$dir/.specify/runtime/tool-calls.jsonl"
+  [[ "$mutate" == "mutate" ]] && printf 'MUTATED after the receipt was captured\n' >"$dir/src/mod.rs"
+  return 0
+}
+
+receipt_fresh_dir="$tmp_root/specs/959-c43-receipt-fresh"
+_emit_receipt_fixture "$receipt_fresh_dir" keep
+
+receipt_stale_dir="$tmp_root/specs/960-c43-receipt-stale"
+_emit_receipt_fixture "$receipt_stale_dir" mutate
+
+# ---- CHECK 43 clone detection (IMP-027 SCOPE-8, EV-3) ----
+# Emits two receipts sharing one stdoutHash. The ONLY difference between the
+# two fixtures is whether the two receipts name the SAME command:
+#   same cmd  -> an honest re-run of a deterministic suite  -> MUST PASS
+#   diff cmd  -> one captured output reused for a second claim -> MUST BLOCK
+# Without the same-cmd fixture the check would look correct while silently
+# failing every project that runs its test suite twice.
+_emit_clone_fixture() {
+  local dir="$1" second_cmd="$2"
+  emit_pass_fixture "$dir"
+  mkdir -p "$dir/.specify/runtime"
+  git -C "$dir" init --quiet >/dev/null 2>&1 || return 1
+  {
+    printf '{"ts":"2026-07-28T00:00:00Z","cmd":"cargo test","spec":"001-x","exitCode":0,"stdoutHash":"deadbeefcafe1234deadbeefcafe1234deadbeefcafe1234deadbeefcafe1234"}\n'
+    printf '{"ts":"2026-07-28T00:05:00Z","cmd":"%s","spec":"001-x","exitCode":0,"stdoutHash":"deadbeefcafe1234deadbeefcafe1234deadbeefcafe1234deadbeefcafe1234"}\n' "$second_cmd"
+  } >"$dir/.specify/runtime/tool-calls.jsonl"
+  return 0
+}
+
+clone_diffcmd_dir="$tmp_root/specs/961-c43-clone-different-commands"
+_emit_clone_fixture "$clone_diffcmd_dir" 'npm run lint'
+
+clone_samecmd_dir="$tmp_root/specs/962-c43-clone-same-command-rerun"
+_emit_clone_fixture "$clone_samecmd_dir" 'cargo test'
+
 # ---- BLOCKING (#1): truly-bare `-> Evidence: done` marker ----
 bare_marker_dir="$tmp_root/specs/953-c9-bare-marker"
 emit_pass_fixture "$bare_marker_dir"
@@ -580,7 +663,23 @@ assert_passes "$advisory_prose_dir" yes \
   "ADVISORY (#3): resolved 12-line prose block accepted AND emits Check-9 ADVISORY"
 
 echo ""
+echo "=== CHECK 43 receipt staleness (IMP-027 SCOPE-3, EV-2) ==="
+assert_passes "$receipt_fresh_dir" any \
+  "CHECK 43 (fresh): receipt whose inputClosure still matches the tree passes"
+assert_blocks_with "$receipt_stale_dir" \
+  "Evidence receipt(s) are STALE" \
+  "CHECK 43 (stale): receipt whose input changed after capture BLOCKS"
+assert_blocks_with "$clone_diffcmd_dir" \
+  "Evidence receipt CLONE" \
+  "CHECK 43 (clone): one stdout hash cited by TWO DIFFERENT commands BLOCKS"
+assert_passes "$clone_samecmd_dir" any \
+  "CHECK 43 (re-run): same stdout hash from the SAME command is honest, passes"
+
+echo ""
 echo "=== BLOCKING FAIL cases ==="
+assert_blocks_with "$prose_execution_dir" \
+  "asserts an EXECUTION outcome but its evidence block" \
+  "BLOCK (IMP-027 SCOPE-3): prose-only block backing an EXECUTION claim"
 assert_blocks_with "$bare_marker_dir" \
   "has a bare Evidence marker with no report.md reference or inline evidence block" \
   "BLOCK (#1): truly-bare '-> Evidence: done' marker"

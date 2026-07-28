@@ -52,7 +52,15 @@ USAGE
 [[ $# -lt 1 ]] && { usage; exit 2; }
 OP="$1"; shift
 
+# IMP-027 SCOPE-4 / SEC-2: was `exit 0`.
+BUBBLES_DEP_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=bubbles/scripts/dependency-posture.sh
+[[ -f "$BUBBLES_DEP_LIB_DIR/dependency-posture.sh" ]] && source "$BUBBLES_DEP_LIB_DIR/dependency-posture.sh"
+
 if ! command -v python3 >/dev/null 2>&1; then
+  if declare -F bubbles_require_dep >/dev/null 2>&1; then
+    bubbles_require_dep "parallel-fanout" "python3 is not installed" || exit 0
+  fi
   echo "parallel-fanout: SKIP (python3 not installed)" >&2
   exit 0
 fi

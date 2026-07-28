@@ -22,6 +22,48 @@
             "description": {
               "type": "string",
               "minLength": 10
+            },
+            "classification": {
+              "description": "IMP-027 SCOPE-2c. modelCompensation gates exist because models are unreliable and SHOULD retire as models improve; businessInvariant gates encode a rule that holds regardless of executor and never retire; hybrid is genuinely both. Without this split there is no way to answer which gates could ever be turned off.",
+              "type": "string",
+              "enum": ["modelCompensation", "businessInvariant", "hybrid"]
+            },
+            "retireWhen": {
+              "description": "IMP-027 SCOPE-11. The measurement that would have to hold before this modelCompensation gate could be retired: the named metric must stay below threshold across `window` independent runs on a model of at least minTier. Legal ONLY on modelCompensation gates - businessInvariant and hybrid gates encode a rule that holds regardless of executor and never retire. Recording the criterion does NOT retire anything: no harness yet drives a model across the golden-task corpus to produce these rates, so every criterion is currently unmet on its evidence precondition. Retirement is a human edit backed by that measurement, never a tool inference.",
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["minTier", "metric", "threshold", "window"],
+              "properties": {
+                "minTier": {
+                  "description": "Lowest model tier at which measuring this gate's retirement is even worth doing.",
+                  "type": "string",
+                  "enum": ["haiku-class", "sonnet-class", "opus-class"]
+                },
+                "metric": {
+                  "description": "The observed failure rate that must fall below threshold. Named after the failure this gate prevents, so the measurement is specific to the gate rather than a generic quality score.",
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9-]*-rate$"
+                },
+                "threshold": {
+                  "description": "Rate in (0,1), exclusive. Scales with blast radius: a false completion claim is unrecoverable because it is believed rather than noticed, so those gates carry tighter bounds than formatting gates.",
+                  "type": "number",
+                  "exclusiveMinimum": 0,
+                  "exclusiveMaximum": 1
+                },
+                "window": {
+                  "description": "Number of independent runs the rate must hold across. A single clean run is not evidence.",
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            },
+            "enforcedBy": {              "description": "IMP-027 SCOPE-2a. Declares the surface(s) that actually enforce this gate, so docs/generated/gate-coverage-map.md is derived from a declaration instead of inferred by grepping gate IDs out of scripts. 'mode-required' means a mode demands the gate but no dedicated mechanical enforcer implements it; 'unbound' means no enforcement surface exists and is deliberately left visible rather than hidden behind a plausible-looking binding.",
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "string",
+                "pattern": "^(guard-check:[0-9]+[A-Za-z]?|script:[A-Za-z0-9_./-]+\\.sh|ci:[A-Za-z0-9_.-]+|mode-required|behavioral:bubbles\\.[a-z-]+|unbound)$"
+              }
             }
           }
         }

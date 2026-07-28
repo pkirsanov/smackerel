@@ -247,6 +247,31 @@ Required output schema in the retrospective data model:
 
 Allowed `slo` values are `pass`, `degraded`, and `failed`. A retrospective may include the legacy R7 metric keys (`avgLoopIterations`, `maxConvergenceIterations`, `compactionFrequency`, `preExistingDeferralCount`, `snapshotCompleteness`) as supporting context, but the `convergenceHealth` object is the required handoff schema.
 
+### Step 5c: Context-Cost Proxy
+
+Every retrospective MUST include a `## Context Cost` section populated by:
+
+```bash
+bash bubbles/scripts/bundle-cost-report.sh --json
+```
+
+Report, per agent: `bytes`, `targetBytes`, `overBy`, `dispatches`, and
+`costProxy` (`bytes × dispatches`). Rank by `costProxy`, not by `bytes` — the
+orchestrator is dispatched far more often than any specialist, so the largest
+bundle and the largest actual cost are not the same agent.
+
+**Report only what the script measured.** `costProxy` is a byte count multiplied
+by a counted dispatch. It is NOT a token count and NOT a dollar figure; both are
+unmeasurable here and inventing either is fabrication (see the excluded
+dimensions in `activityTracking.measuredDimensions`). If `dispatchesObserved` is
+`false`, say the weighting is absent rather than implying traffic that was never
+recorded.
+
+Flag any agent over its role target as an observation. Do NOT recommend moving
+authoring modules out of an orchestrator's closure to close the gap: that
+reduction is gated on a held-out routing eval (R3 in `operating-baseline.md`),
+and the golden-task corpus does not satisfy it.
+
 ### Step 6: Produce Retrospective
 
 Write to `.specify/memory/retros/YYYY-MM-DD.md`:
@@ -270,6 +295,16 @@ Write to `.specify/memory/retros/YYYY-MM-DD.md`:
 | {gate_id} | {pass} | {fail} | {rate}% |
 - **Most-failed gate:** {gate} — {count} failures ({pattern description})
 - **Most-retried phase:** {phase} — {avg_retries} retries avg
+
+## Context Cost
+| Agent | Role | Bytes | Target | Over By | Dispatches | Cost Proxy |
+|-------|------|-------|--------|---------|------------|------------|
+| {agent} | {role} | {bytes} | {targetBytes} | {overBy} | {dispatches} | {costProxy} |
+
+*Cost proxy = bundle bytes × dispatches. Measured, not estimated — it is neither
+a token count nor a dollar figure. Ranked by cost proxy, since the most-dispatched
+agent, not the largest one, is the real expense. `{dispatchesObserved: false}`
+means no dispatch data was recorded and every agent is weighted equally.*
 
 ## Hotspots — File Churn
 | File | Changes | Specs Touching It |

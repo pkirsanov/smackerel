@@ -2648,6 +2648,231 @@ EOF
   fi
 fi
 
+echo "Running Check 8 basename-only planning-maturity exemption (flat-layout root deliverables)..."
+# A flat-layout repository keeps its deliverables at the repository root (for example
+# `rldata.js`), so a planned NEW root-level module can only be referenced by basename —
+# there is no directory to prefix. Before the fix, Check 8 evaluated its basename-only
+# branch BEFORE the planning-maturity exemption, so an unresolvable basename hard-failed
+# while an equivalent slash path (`tests/foo.spec.mjs`) was exempt. That asymmetry made
+# the planning ceiling unreachable for flat-layout repositories.
+check8_basename_planning_dir="$tmp_root/specs/931-check8-basename-planning"
+check8_basename_delivery_dir="$tmp_root/specs/932-check8-basename-delivery"
+emit_honest_planning_fixture "$check8_basename_planning_dir"
+emit_honest_planning_fixture "$check8_basename_delivery_dir"
+for check8_basename_dir in "$check8_basename_planning_dir" "$check8_basename_delivery_dir"; do
+  bubbles_sed_inplace \
+    's;^| Broader regression |.*$;| Broader regression | `regression` | `rlbasenameonlyfixture.js` | Preserve planning and delivery profile isolation. | `bash rlbasenameonlyfixture.js` | No |;' \
+    "$check8_basename_dir/scopes.md"
+done
+set_fixture_contract "$check8_basename_delivery_dir/state.json" "autonomous-goal" "done"
+
+check8_basename_planning_log="$tmp_root/check8-basename-planning.log"
+check8_basename_planning_status="$(run_capture "$check8_basename_planning_log" bash "$GUARD_SCRIPT" "$check8_basename_planning_dir")"
+if [[ "$check8_basename_planning_status" -eq 0 ]]; then
+  pass "Check 8: planning maturity exempts an unresolvable basename-only root deliverable"
+else
+  fail "Check 8: planning maturity should exempt a basename-only root deliverable (observed $check8_basename_planning_status)"
+  sed -n '1,260p' "$check8_basename_planning_log"
+fi
+assert_log_not_contains "$check8_basename_planning_log" "non-existent or non-resolvable file: rlbasenameonlyfixture.js" "Check 8: planning maturity emits no basename-only resolution failure"
+assert_log_contains "$check8_basename_planning_log" "planning maturity: rlbasenameonlyfixture.js" "Check 8: basename-only root deliverable is reported as a future implementation-owned file"
+
+# Adversarial half: the exemption MUST stay profile-scoped. Under delivery completion the
+# same unresolvable basename still hard-fails, so "fixing" the bug by deleting the check
+# outright — rather than gating it on the audit profile — regresses this assertion.
+check8_basename_delivery_log="$tmp_root/check8-basename-delivery.log"
+check8_basename_delivery_status="$(run_capture "$check8_basename_delivery_log" bash "$GUARD_SCRIPT" "$check8_basename_delivery_dir")"
+if [[ "$check8_basename_delivery_status" -eq 1 ]]; then
+  pass "Check 8 adversarial: delivery completion still rejects an unresolvable basename-only path"
+else
+  fail "Check 8 adversarial: delivery completion must still reject an unresolvable basename-only path (observed $check8_basename_delivery_status)"
+fi
+assert_log_contains "$check8_basename_delivery_log" "non-existent or non-resolvable file: rlbasenameonlyfixture.js" "Check 8 adversarial: delivery completion retains basename-only enforcement"
+
+# =============================================================================
+# IMP-102: evidence-resolution defects (Check 12 surface, Check 9 anchor window)
+# =============================================================================
+# Three independently verified defects. Every fixture below is ADVERSARIAL:
+# reverting the corresponding guard fix MUST make its assertion fail, otherwise
+# the regression proves nothing.
+
+echo "Running Check 12 duplicate-evidence surface coverage (Gate G021)..."
+
+# --- Defect 1a: column-0 duplicates in report.md are now SEEN (advisory) -----
+# Check 12 iterated ONLY scope_files and matched ONLY 4-space-indented fences,
+# so two byte-identical column-0 blocks in report.md — the canonical
+# copy-paste-fabrication shape under the evidence-by-reference convention,
+# where the fenced output lives in report.md and DoD items link to it — were
+# structurally invisible. The newly-covered surface is ADVISORY, not blocking,
+# so downstream packets certified while it was blind cannot be retro-broken.
+# Adversarial: with the old scope-files-only / 4-space-only matcher restored,
+# the advisory line is never emitted and assert_log_contains fails.
+c12_report_dup_dir="$tmp_root/specs/940-c12-report-duplicate"
+emit_base_fixture "$c12_report_dup_dir"
+mutate_delivery_contract "$c12_report_dup_dir/state.json"
+cat <<'EOF' >> "$c12_report_dup_dir/report.md"
+
+### Duplicate Probe Alpha
+
+```text
+$ bash scripts/gtt-driver-discovery.sh --probe
+discovered 3 drivers
+driver-a ready
+driver-b ready
+driver-c ready
+exit code: 0
+```
+
+### Duplicate Probe Beta
+
+```text
+$ bash scripts/gtt-driver-discovery.sh --probe
+discovered 3 drivers
+driver-a ready
+driver-b ready
+driver-c ready
+exit code: 0
+```
+EOF
+
+c12_report_dup_log="$tmp_root/c12-report-duplicate.log"
+c12_report_dup_status="$(run_capture "$c12_report_dup_log" bash "$GUARD_SCRIPT" "$c12_report_dup_dir")"
+if [[ "$c12_report_dup_status" -eq 0 ]]; then
+  pass "Check 12: newly-covered report.md duplicate surface stays advisory (transition not blocked)"
+else
+  fail "Check 12: report.md duplicate-evidence surface must be advisory, not blocking (observed $c12_report_dup_status)"
+  sed -n '1,260p' "$c12_report_dup_log"
+fi
+assert_log_contains "$c12_report_dup_log" "Check-12 ADVISORY: duplicate evidence block in report.md" "Check 12: byte-identical column-0 blocks in report.md raise the G021 advisory"
+assert_log_not_contains "$c12_report_dup_log" "Duplicate evidence blocks detected in report.md" "Check 12: the newly-covered report.md surface does NOT emit a blocking failure"
+
+# --- Defect 1b: the LEGACY blocking surface is unchanged ---------------------
+# Adversarial guard against an over-broad "fix": if the whole of Check 12 were
+# demoted to advisory, or the legacy 4-space scope-file matcher were dropped
+# while widening the fence pattern, this assertion fails. Detection semantics
+# and severity on the historical surface must be byte-identical.
+c12_scope_dup_dir="$tmp_root/specs/941-c12-scope-duplicate"
+emit_base_fixture "$c12_scope_dup_dir"
+mutate_delivery_contract "$c12_scope_dup_dir/state.json"
+cat <<'EOF' >> "$c12_scope_dup_dir/scopes.md"
+
+### Evidence Appendix
+
+    ```text
+    $ bash scripts/legacy-indented-probe.sh
+    probe complete
+    exit code: 0
+    ```
+
+    ```text
+    $ bash scripts/legacy-indented-probe.sh
+    probe complete
+    exit code: 0
+    ```
+EOF
+
+c12_scope_dup_log="$tmp_root/c12-scope-duplicate.log"
+c12_scope_dup_status="$(run_capture "$c12_scope_dup_log" bash "$GUARD_SCRIPT" "$c12_scope_dup_dir")"
+if [[ "$c12_scope_dup_status" -eq 1 ]]; then
+  pass "Check 12 adversarial: legacy 4-space scope-file duplicate detection still BLOCKS"
+else
+  fail "Check 12 adversarial: legacy 4-space scope-file duplicates must still block (observed $c12_scope_dup_status)"
+  sed -n '1,260p' "$c12_scope_dup_log"
+fi
+assert_log_contains "$c12_scope_dup_log" "Duplicate evidence blocks detected in scopes.md" "Check 12 adversarial: legacy blocking message is preserved verbatim"
+
+echo "Running Check 9 evidence-anchor resolution defects (in-fence comments, <a id>)..."
+
+# --- Defect 2: in-fence '#' comments no longer truncate the evidence window --
+# resolve_evidence_by_reference() ended the evidence block at the first line
+# matching /^#+[[:space:]]/ WITHOUT skipping fenced code, so a pasted shell
+# comment (`# TP-03-01 rollback accounting`) closed the window early and the
+# >=10-non-blank-line rule measured a fraction of the real block, producing a
+# FALSE block-too-short BLOCK. This fixture's block holds 12 non-blank lines
+# but only 4 before the in-fence comment.
+# Adversarial: restore the fence-blind awk scan and the guard hard-fails with
+# "anchor missing OR block <10 non-blank lines", so both assertions flip.
+# The anchor here is a plain heading slug, so this fixture is independent of
+# the Defect 3 fix.
+c9_fence_comment_dir="$tmp_root/specs/942-c9-fence-comment"
+emit_base_fixture "$c9_fence_comment_dir"
+mutate_delivery_contract "$c9_fence_comment_dir/state.json"
+bubbles_sed_inplace \
+  's;^- \[x\] Documentation route metadata is recorded consistently across artifacts.*$;- [x] Documentation route metadata is recorded consistently across artifacts -> Evidence: [fence-comment-evidence](report.md#fence-comment-evidence);' \
+  "$c9_fence_comment_dir/scopes.md"
+cat <<'EOF' >> "$c9_fence_comment_dir/report.md"
+
+### Fence Comment Evidence
+
+```text
+$ bash scripts/rollback-accounting.sh --dry-run
+resolved 4 pending entries
+# TP-03-01 rollback accounting
+entry 1 reconciled
+entry 2 reconciled
+entry 3 reconciled
+entry 4 reconciled
+$ bash scripts/rollback-accounting.sh --verify
+verify: 4/4 reconciled
+verify exit code: 0
+```
+EOF
+
+c9_fence_comment_log="$tmp_root/c9-fence-comment.log"
+c9_fence_comment_status="$(run_capture "$c9_fence_comment_log" bash "$GUARD_SCRIPT" "$c9_fence_comment_dir")"
+if [[ "$c9_fence_comment_status" -eq 0 ]]; then
+  pass "Check 9: an evidence block containing an in-fence '#' comment resolves against its full length"
+else
+  fail "Check 9: in-fence '#' comment must not truncate the evidence window (observed $c9_fence_comment_status)"
+  sed -n '1,260p' "$c9_fence_comment_log"
+fi
+assert_log_not_contains "$c9_fence_comment_log" "block <10 non-blank lines" "Check 9: no false block-too-short failure when a '#' comment sits inside the fence"
+
+# --- Defect 3: <a id="X"> anchors resolve ------------------------------------
+# The anchor matcher accepted only <a name="X">, a {#X} attribute, or a heading
+# whose GitHub slug equals X. `<a id="X">` — the modern HTML form and what
+# agents naturally emit — resolved as "anchor missing" and hard-failed a
+# perfectly good evidence reference.
+# Adversarial: restore the `/<a[[:space:]]+name=/` matcher and the anchor is
+# unresolvable (the section heading slug deliberately does NOT equal the anchor
+# name), so the guard blocks and both assertions flip. The fenced block carries
+# no '#' lines, so this fixture is independent of the Defect 2 fix.
+c9_html_id_dir="$tmp_root/specs/943-c9-html-id-anchor"
+emit_base_fixture "$c9_html_id_dir"
+mutate_delivery_contract "$c9_html_id_dir/state.json"
+bubbles_sed_inplace \
+  's;^- \[x\] Documentation route metadata is recorded consistently across artifacts.*$;- [x] Documentation route metadata is recorded consistently across artifacts -> Evidence: [html-id-evidence](report.md#html-id-evidence);' \
+  "$c9_html_id_dir/scopes.md"
+cat <<'EOF' >> "$c9_html_id_dir/report.md"
+
+### Anchored By Modern Html Attribute
+
+<a id="html-id-evidence"></a>
+
+```text
+$ bash scripts/verify-adapter-parity.sh
+adapter 01 parity ok
+adapter 02 parity ok
+adapter 03 parity ok
+adapter 04 parity ok
+adapter 05 parity ok
+adapter 06 parity ok
+adapter 07 parity ok
+adapter 08 parity ok
+exit code: 0
+```
+EOF
+
+c9_html_id_log="$tmp_root/c9-html-id-anchor.log"
+c9_html_id_status="$(run_capture "$c9_html_id_log" bash "$GUARD_SCRIPT" "$c9_html_id_dir")"
+if [[ "$c9_html_id_status" -eq 0 ]]; then
+  pass "Check 9: an <a id=\"...\"> anchor resolves for evidence-by-reference"
+else
+  fail "Check 9: <a id=\"...\"> anchors must resolve for evidence-by-reference (observed $c9_html_id_status)"
+  sed -n '1,260p' "$c9_html_id_log"
+fi
+assert_log_not_contains "$c9_html_id_log" "anchor missing OR block <10 non-blank lines" "Check 9: no false anchor-missing failure for an <a id> anchor"
+
 echo "----------------------------------------"
 if [[ "$failures" -gt 0 ]]; then
   echo "state-transition-guard selftest failed with $failures issue(s)."

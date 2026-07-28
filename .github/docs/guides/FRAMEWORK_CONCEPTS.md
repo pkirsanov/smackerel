@@ -165,7 +165,9 @@ Users describe what they want in natural language. A single orchestrator resolve
 
 ### 5.2 Workflow Modes
 
-~32 modes cover the spectrum from full delivery to narrow operations:
+<!-- GENERATED:FRAMEWORK_STATS_CONCEPTS_MODES_START -->
+61 modes cover the spectrum from full delivery to narrow operations:
+<!-- GENERATED:FRAMEWORK_STATS_CONCEPTS_MODES_END -->
 
 | Category | Examples |
 |----------|---------|
@@ -235,7 +237,9 @@ Gates are not just documentation — they are enforced by scripts:
 
 | Script | Purpose |
 |--------|---------|
-| **State transition guard** | Runs ~22 checks before any status transition to "done" |
+<!-- GENERATED:FRAMEWORK_STATS_CONCEPTS_GUARDROW_START -->
+| **State transition guard** | Runs 40 checks before any status transition to "done" |
+<!-- GENERATED:FRAMEWORK_STATS_CONCEPTS_GUARDROW_END -->
 | **Artifact lint** | Validates artifact structure, template compliance, deferral language |
 | **Implementation reality scan** | Detects stubs, fake data, hardcoded responses, default values |
 | **Regression quality guard** | Detects silent-pass patterns in required tests |
@@ -506,7 +510,9 @@ Explicitly not tracked: token counts, dollar costs, thinking time, agent efficie
 
 ### 18.1 Mechanical Enforcement Over Prose Rules
 
-Prose governance documents are necessary for context but insufficient for enforcement. AI agents routinely ignore or reinterpret written rules. The breakthrough came from **scripts that mechanically block state transitions** when conditions aren't met. The state transition guard alone runs ~22 automated checks. When an agent can't advance without passing a script, compliance stops being optional.
+<!-- GENERATED:FRAMEWORK_STATS_CONCEPTS_GUARDPROSE_START -->
+Prose governance documents are necessary for context but insufficient for enforcement. AI agents routinely ignore or reinterpret written rules. The breakthrough came from **scripts that mechanically block state transitions** when conditions aren't met. The state transition guard alone runs 40 automated checks. When an agent can't advance without passing a script, compliance stops being optional.
+<!-- GENERATED:FRAMEWORK_STATS_CONCEPTS_GUARDPROSE_END -->
 
 ### 18.2 Artifact Ownership Boundaries
 

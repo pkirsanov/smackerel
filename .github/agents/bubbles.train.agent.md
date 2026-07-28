@@ -1,5 +1,6 @@
 ---
 description: Release train operator - cuts, promotes, rolls back, and retires named release trains; owns feature-flag lifecycle (introduction, default-off enforcement on other trains, retirement after ship)
+disable-model-invocation: true
 handoffs:
   - label: DevOps Execution
     agent: bubbles.devops

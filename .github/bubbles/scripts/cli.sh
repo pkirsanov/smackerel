@@ -1236,6 +1236,7 @@ Commands:
   mcp <subcommand>              Apply operator-declared MCP tool grants (sync)
   interop <subcommand>          Detect, import, apply, and inspect project-owned interop packets
   framework-validate            Run framework self-validation across core guard and selftest surfaces
+  eval <run|score> [args...]    Score output quality against the golden-task corpus
   release-check                 Run source-repo release hygiene checks
   framework-events [options]    Show typed framework event history
   run-state [options]           Show active and recent workflow run-state records
@@ -1625,6 +1626,64 @@ cmd_docs_registry() {
 
 cmd_framework_validate() {
   bash "$SCRIPT_DIR/framework-validate.sh" "$@"
+}
+
+# IMP-027 SCOPE-5. The eval harness existed and already failed closed, but the
+# corpus was empty, so nothing measured whether the framework's governance
+# actually buys compliance. `eval run` with no arguments scores the shipped
+# golden-task corpus against its reference output; that is the regression
+# baseline SCOPE-6's context reduction has to preserve.
+cmd_eval() {
+  local sub="${1:-run}"
+  [[ $# -gt 0 ]] && shift
+
+  case "$sub" in
+    run)
+      local suite="$REPO_ROOT/bubbles/eval/tasks"
+      local output="$REPO_ROOT/bubbles/eval/fixtures/positive/corpus-output"
+      local passthrough=()
+      while [[ $# -gt 0 ]]; do
+        case "$1" in
+          --suite)
+            suite="${2:?--suite requires a directory}"
+            shift 2
+            ;;
+          --output)
+            output="${2:?--output requires a directory}"
+            shift 2
+            ;;
+          *)
+            passthrough+=("$1")
+            shift
+            ;;
+        esac
+      done
+      bash "$SCRIPT_DIR/eval-harness.sh" run --suite "$suite" --output "$output" "${passthrough[@]+"${passthrough[@]}"}"
+      ;;
+    score)
+      bash "$SCRIPT_DIR/eval-harness.sh" score "$@"
+      ;;
+    selftest)
+      bash "$SCRIPT_DIR/eval-corpus-selftest.sh" "$@"
+      ;;
+    -h | --help)
+      cat <<'EOF'
+Usage: bubbles eval <run|score|selftest> [args...]
+
+  run [--suite <dir>] [--output <dir>]
+        Score a task suite against an output directory. Defaults to the shipped
+        corpus (bubbles/eval/tasks) and its reference output.
+  score --task <task.json> --output <dir>
+        Score a single task.
+  selftest
+        Prove the corpus DISCRIMINATES: mutate the reference output one
+        dishonesty at a time and assert each task flips to failing.
+EOF
+      ;;
+    *)
+      die "Usage: bubbles eval <run|score|selftest> [args...]"
+      ;;
+  esac
 }
 
 cmd_release_check() {
@@ -2378,6 +2437,129 @@ except Exception:
   fi
 
   echo ""
+  echo -e "${BOLD}Dependency Posture${NC}"
+  echo -e "${DIM}IMP-027 SCOPE-4 / SEC-2. Ten guards used to exit 0 on a missing dependency, so a run could go green having checked nothing. They now fail closed. A missing dependency here means those guards will refuse to run.${NC}"
+  echo ""
+
+  if [[ -f "$SCRIPT_DIR/dependency-posture.sh" ]]; then
+    # shellcheck source=bubbles/scripts/dependency-posture.sh
+    source "$SCRIPT_DIR/dependency-posture.sh"
+    dep_missing=0
+    while read -r dep_name dep_state dep_why; do
+      [[ -n "$dep_name" ]] || continue
+      if [[ "$dep_state" == "ok" ]]; then
+        echo -e "  ${GREEN}✅${NC} $dep_name — $dep_why"
+      else
+        echo -e "  ${RED}❌${NC} $dep_name MISSING — $dep_why"
+        dep_missing=$((dep_missing + 1))
+      fi
+    done < <(bubbles_dep_status)
+
+    if [[ "${BUBBLES_ALLOW_DEGRADED:-0}" == "1" ]]; then
+      echo -e "  ${YELLOW}⚠️${NC}  BUBBLES_ALLOW_DEGRADED=1 is set — guards will SKIP instead of failing. Checks that skip did NOT run."
+    fi
+    if [[ "$dep_missing" -gt 0 ]]; then
+      echo -e "  ${YELLOW}⚠️${NC}  $dep_missing dependency(ies) missing; the guards that need them will refuse to run."
+    fi
+  else
+    echo -e "  ${YELLOW}⚠️${NC}  dependency-posture.sh not present; cannot report dependency posture."
+  fi
+
+  echo ""
+  echo -e "${BOLD}Bundle Cost${NC}"
+  echo -e "${DIM}IMP-027 SCOPE-6 / COST-1. The per-agent budget ratchets, which stops growth but makes today's size tomorrow's floor. This states the distance to a role target instead, so the number is visible rather than implied.${NC}"
+  echo ""
+
+  if [[ -x "$SCRIPT_DIR/bundle-cost-report.sh" ]] && command -v python3 >/dev/null 2>&1; then
+    cost_over=0
+    while read -r c_agent c_role c_bytes c_target c_over; do
+      [[ -n "$c_agent" ]] || continue
+      if [[ "$c_over" -gt 0 ]]; then
+        echo -e "  ${YELLOW}⚠️${NC}  $c_agent ($c_role) — $c_bytes B, ${c_over} B over the ${c_target} B target"
+        cost_over=$((cost_over + 1))
+      fi
+    done < <(bash "$SCRIPT_DIR/bundle-cost-report.sh" --repo-root "$REPO_ROOT" --json 2>/dev/null |
+      python3 -c "
+import json,sys
+try:
+    d=json.load(sys.stdin)
+except Exception:
+    sys.exit(0)
+for a in d.get('agents',[]):
+    print(a['agent'],a['role'],a['bytes'],a['targetBytes'],a['overBy'])
+" 2>/dev/null)
+
+    if [[ "$cost_over" -eq 0 ]]; then
+      echo -e "  ${GREEN}✅${NC} every agent is within its role target"
+      passed=$((passed + 1))
+    else
+      echo -e "  ${DIM}Reducing an orchestrator by moving authoring modules to phase-local profiles is GATED on a held-out eval showing zero gate-detection regression (operating-baseline.md, R3). The golden-task corpus does NOT satisfy that gate: it scores static artifacts with deterministic oracles and never invokes a model, so it cannot observe routing behaviour. Do not rewire an agent reference to chase this number.${NC}"
+    fi
+  else
+    echo -e "  ${YELLOW}⚠️${NC}  bundle-cost-report.sh unavailable; cannot report bundle cost."
+  fi
+
+  echo ""
+  echo -e "${BOLD}Gate Obsolescence${NC}"
+  echo -e "${DIM}IMP-027 SCOPE-11. Records what would have to be MEASURED before a model-compensation gate could retire, so the gate tax has a stated expiry instead of being carried forever by default.${NC}"
+  echo ""
+
+  if [[ -x "$SCRIPT_DIR/gate-retirement.sh" ]]; then
+    retire_out="$(bash "$SCRIPT_DIR/gate-retirement.sh" lint 2>&1 || true)"
+    retire_missing="$(grep -c 'retirement-missing' <<<"$retire_out" || true)"
+    retire_bad="$(grep -c 'retirement-malformed\|retirement-illegal' <<<"$retire_out" || true)"
+    if [[ "$retire_missing" -eq 0 && "$retire_bad" -eq 0 ]]; then
+      retire_n="$(bash "$SCRIPT_DIR/gate-retirement.sh" report 2>/dev/null |
+        sed -n 's/^gate obsolescence curve — \([0-9]*\) .*/\1/p' | head -1)"
+      echo -e "  ${GREEN}✅${NC} all ${retire_n:-0} model-compensation gate(s) declare a retirement criterion"
+      passed=$((passed + 1))
+    else
+      echo -e "  ${YELLOW}⚠️${NC}  ${retire_missing} gate(s) with no criterion, ${retire_bad} malformed"
+      echo -e "  ${DIM}Run: gate-retirement.sh bind${NC}"
+    fi
+    echo -e "  ${DIM}Recording a criterion retires nothing. Every criterion is currently UNMET on its evidence half: no harness drives a model across the corpus to produce these rates, so tier eligibility alone is not clearance. See: model-tier-advisory.sh retirement${NC}"
+  else
+    echo -e "  ${YELLOW}⚠️${NC}  gate-retirement.sh unavailable; cannot report the obsolescence curve."
+  fi
+
+  echo ""
+  echo -e "${BOLD}Golden-Task Corpus${NC}"
+  echo -e "${DIM}IMP-027 SCOPE-5. Scores output QUALITY, not gate-pass. This is the regression baseline for framework and model upgrades — and the only place the Honesty Incentive is measured, via a task whose correct outcome is an unchecked box.${NC}"
+  echo ""
+
+  if [[ -d "$REPO_ROOT/bubbles/eval/tasks" ]] && [[ -x "$SCRIPT_DIR/eval-harness.sh" ]]; then
+    corpus_task_count="$(find "$REPO_ROOT/bubbles/eval/tasks" -maxdepth 1 -name '*.json' 2>/dev/null | wc -l | tr -d ' ')"
+    corpus_json="$(bash "$SCRIPT_DIR/eval-harness.sh" run \
+      --suite "$REPO_ROOT/bubbles/eval/tasks" \
+      --output "$REPO_ROOT/bubbles/eval/fixtures/positive/corpus-output" 2>/dev/null || true)"
+    corpus_summary="$(printf '%s' "$corpus_json" | python3 -c "
+import json, sys
+try:
+    d = json.load(sys.stdin)
+except Exception:
+    print('unavailable 0')
+else:
+    print(('pass' if d.get('allPassed') else 'FAIL'), d.get('certifyingPassed') or 0)
+" 2>/dev/null || echo "unavailable 0")"
+    corpus_state="${corpus_summary%% *}"
+    corpus_certifying="${corpus_summary##* }"
+
+    case "$corpus_state" in
+      pass)
+        echo -e "  ${GREEN}✅${NC} Corpus: $corpus_certifying/$corpus_task_count tasks certifying against the reference output"
+        ;;
+      FAIL)
+        echo -e "  ${RED}❌${NC} Corpus: $corpus_certifying/$corpus_task_count certifying — a golden task regressed"
+        ;;
+      *)
+        echo -e "  ${YELLOW}⚠️${NC}  Corpus: unavailable (python3 required)"
+        ;;
+    esac
+  else
+    echo -e "  ${YELLOW}⚠️${NC}  Corpus not present."
+  fi
+
+  echo ""
   echo -e "${BOLD}Observability Posture${NC}"
   echo -e "${DIM}Advisory only — surfaces the declared observability posture (G098/G099). Never changes doctor's pass/fail exit code; only policy.undeclaredPosture: block makes G098 blocking at pre-push.${NC}"
   echo ""
@@ -2425,6 +2607,42 @@ except Exception:
       *)
         echo -e "  ${CYAN}ℹ️${NC}  Observability posture: UNAVAILABLE (yq parser not installed)" ;;
     esac
+  fi
+
+  # Agent runtime assumption (IMP-027 SCOPE-1c / G064). Bubbles' direct-authorized-
+  # runner model assumes the VS Code default: subagents cannot invoke further
+  # subagents. Enabling chat.subagents.allowInvocationsFromSubagents raises the
+  # nesting limit to depth 5, at which point nested runner dispatch becomes
+  # POSSIBLE and G064 degrades from structurally-impossible to convention-only.
+  # The setting is operator-owned and lives outside the repo, so this is advisory
+  # and best-effort: it never changes the pass/fail tally.
+  echo ""
+  echo -e "${BOLD}Agent Runtime Assumptions${NC}"
+  echo -e "${DIM}Advisory only — Bubbles assumes the VS Code depth-1 subagent default (G064). Operator-owned editor setting; never changes doctor's exit code.${NC}"
+  echo ""
+
+  local nesting_setting='chat.subagents.allowInvocationsFromSubagents'
+  local nesting_hit=''
+  local settings_candidate
+  for settings_candidate in \
+    "$HOME/.config/Code/User/settings.json" \
+    "$HOME/.config/Code - Insiders/User/settings.json" \
+    "$HOME/Library/Application Support/Code/User/settings.json" \
+    "$HOME/.vscode-server/data/Machine/settings.json" \
+    "$REPO_ROOT/.vscode/settings.json"; do
+    [[ -f "$settings_candidate" ]] || continue
+    if grep -qE "\"${nesting_setting}\"[[:space:]]*:[[:space:]]*true" "$settings_candidate" 2>/dev/null; then
+      nesting_hit="$settings_candidate"
+      break
+    fi
+  done
+
+  if [[ -n "$nesting_hit" ]]; then
+    echo -e "  ${YELLOW}⚠️${NC}  Nested subagents ENABLED in ${nesting_hit/#$HOME/\~}"
+    echo -e "     ${DIM}G064 is no longer structurally enforced; the frontmatter allowlist is the only remaining mechanical defense.${NC}"
+    advisory_count=$((advisory_count + 1))
+  else
+    echo -e "  ${GREEN}✅${NC} Subagent nesting: depth-1 default assumed (${nesting_setting} not enabled in scanned settings)"
   fi
 
   echo ""
@@ -3320,6 +3538,7 @@ main() {
     mcp)                cmd_mcp "$@" ;;
     interop)            cmd_interop "$@" ;;
     framework-validate) cmd_framework_validate "$@" ;;
+    eval)               cmd_eval "$@" ;;
     release-check)      cmd_release_check "$@" ;;
     framework-events)   cmd_framework_events "$@" ;;
     run-state)          cmd_run_state "$@" ;;

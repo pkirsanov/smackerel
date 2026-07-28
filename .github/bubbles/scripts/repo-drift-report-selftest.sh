@@ -253,11 +253,21 @@ repo="$(stage_repo s5-framework-validate)"
 mkdir -p "$repo/bubbles/scripts" "$repo/agents"
 cp "$FRAMEWORK_VALIDATE" "$repo/bubbles/scripts/framework-validate.sh"
 cp "$REPORT" "$repo/bubbles/scripts/repo-drift-report.sh"
+# Libraries that framework-validate SOURCES (not executes) must be the real
+# files, never stubs. `source` runs in framework-validate's own shell, so a stub
+# ending in `exit 0` terminates the whole validation run — and because it exits
+# 0, the run looks like a silent PASS that validated nothing. (In a sourced
+# file `$0` is the PARENT script, which is why the stub's own marker printed
+# framework-validate.sh's path and made this look like self-stubbing.)
+for _lib in guard-lib.sh validate-cache.sh; do
+  [[ -f "$SCRIPT_DIR/$_lib" ]] && cp "$SCRIPT_DIR/$_lib" "$repo/bubbles/scripts/$_lib"
+done
 chmod +x "$repo/bubbles/scripts/framework-validate.sh" "$repo/bubbles/scripts/repo-drift-report.sh"
 while IFS= read -r script_name; do
   [[ -n "$script_name" ]] || continue
   case "$script_name" in
     framework-validate.sh|repo-drift-report.sh) continue ;;
+    guard-lib.sh|validate-cache.sh) continue ;;
   esac
   cat > "$repo/bubbles/scripts/$script_name" <<'EOF'
 #!/usr/bin/env bash

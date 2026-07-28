@@ -1,6 +1,7 @@
 ---
 description: Autonomous multi-goal sprint controller — accepts a mixed list of feature, bug, ops, or cleanup goals plus a time budget, prioritizes by effort and impact, executes each goal to completion using the convergence loop, manages wall-clock time, and stops gracefully when budget expires
 tools: [read, search, edit, agent, todo, web, execute, bubbles-smackerel, playwright]
+disable-model-invocation: true
 handoffs:
   - label: Goal Execution
     agent: bubbles.goal

@@ -65,6 +65,66 @@ failures=0
 skipped=0
 declare -a failed_check_labels=()
 
+# IMP-027 SCOPE-7 support: the hermetic-selftest result cache, and the
+# changed-surface filter both live outside this script so they can be tested on
+# their own. Absence degrades to the previous behaviour (run everything).
+FRAMEWORK_VERSION="unknown"
+[[ -f "$REPO_ROOT/VERSION" ]] && FRAMEWORK_VERSION="$(tr -d '[:space:]' <"$REPO_ROOT/VERSION" 2>/dev/null || echo unknown)"
+# shellcheck source=bubbles/scripts/validate-cache.sh
+# IMP-027 SCOPE-7 cache helpers. Sourced ONLY when the file actually defines the
+# cache API. `source` runs in THIS shell, so a sibling that merely exits would
+# terminate framework-validate mid-run — and because it exits 0, the run would
+# look like a silent PASS that validated nothing. Confirming the function is
+# defined before sourcing keeps a malformed or stubbed sibling from being able
+# to end the validation run.
+#
+# The check uses ONLY bash builtins (`$(<file)` + glob compare). An external
+# `grep` here runs before the portability harness has a full PATH and shows up
+# as an unexpected command invocation in the BUG-021 deadline regression, which
+# asserts the canonical success path shells out to nothing optional.
+if [[ -f "$SCRIPT_DIR/validate-cache.sh" ]]; then
+  _validate_cache_src="$(<"$SCRIPT_DIR/validate-cache.sh")"
+  if [[ "$_validate_cache_src" == *"validate_cache_key()"* ]]; then
+    source "$SCRIPT_DIR/validate-cache.sh"
+  fi
+  unset _validate_cache_src
+fi
+
+# Paths the working tree has modified relative to HEAD, resolved once.
+CHANGED_PATHS=""
+changed_paths_load() {
+  [[ -n "$CHANGED_PATHS" ]] && return 0
+  if command -v git >/dev/null 2>&1 && git -C "$REPO_ROOT" rev-parse --git-dir >/dev/null 2>&1; then
+    CHANGED_PATHS="$(
+      {
+        git -C "$REPO_ROOT" diff --name-only HEAD 2>/dev/null || true
+        git -C "$REPO_ROOT" ls-files --others --exclude-standard 2>/dev/null || true
+      } | sort -u
+    )"
+  fi
+  # A tree with no detectable changes must not silently skip everything.
+  [[ -n "$CHANGED_PATHS" ]] || CHANGED_PATHS="__NO_GIT__"
+}
+
+# changed_surface_touches <selftest-path>
+#
+# A selftest owns itself and the script it tests: `X-selftest.sh` -> `X.sh`.
+# That mapping is DERIVED, not enumerated, so a new selftest is covered the
+# moment it exists.
+changed_surface_touches() {
+  local selftest="$1"
+  changed_paths_load
+  [[ "$CHANGED_PATHS" == "__NO_GIT__" ]] && return 0
+
+  local base subject
+  base="$(basename "$selftest")"
+  subject="${base%-selftest.sh}.sh"
+
+  printf '%s\n' "$CHANGED_PATHS" | grep -qxF "bubbles/scripts/$base" && return 0
+  printf '%s\n' "$CHANGED_PATHS" | grep -qxF "bubbles/scripts/$subject" && return 0
+  return 1
+}
+
 # IMP-012 tiering (opt-in, non-breaking). Default tier=full runs EVERY check
 # exactly as before. `--tier=core` runs only the fast, high-signal structural
 # subset (registry/lint/generator/scan selftests) for a quick local signal;
@@ -73,6 +133,38 @@ declare -a failed_check_labels=()
 # exits 0 (no execution) — used by the tiering selftest and by operators.
 VALIDATE_TIER="${BUBBLES_VALIDATE_TIER:-full}"
 LIST_TIER_ONLY="false"
+
+# IMP-027 SCOPE-7 (PERF-1). --tier=core took 260s for 16 of 209 checks; the full
+# tier is what pre-push runs. A ~25-minute serial pre-push is the strongest
+# practical incentive toward the bypass behaviour this framework exists to
+# prevent, so wall clock is a governance concern.
+#
+# --changed-only  restrict to checks whose owned surface the working tree
+#                 actually touched. Ownership is DERIVED (a selftest owns the
+#                 script it tests), never a hand-maintained manifest -- that
+#                 enumeration habit is what COV-2 was.
+# --no-cache      ignore the hermetic-selftest result cache for this run.
+CHANGED_ONLY="false"
+# IMP-027 SCOPE-7: the result cache is OPT-IN (--cache), never on by default.
+#
+# Two independent reasons, both found by tests rather than by reasoning:
+#
+#  1. CORRECTNESS. validate_cache_key() hashes only the SELFTEST file, not the
+#     script under test. A `foo-selftest.sh` that exercises `foo.sh` therefore
+#     keeps returning a cached PASS after `foo.sh` changes — the same staleness
+#     class that guard Check 43 exists to catch in evidence. Until the key
+#     covers the tested surface, a cached PASS is not a proof.
+#
+#  2. IT DEFEATS DEADLINE ENFORCEMENT. tests/regression/test_28 mutates this
+#     validator to prove an overdue target gets killed by the watchdog. A cached
+#     result returns instantly, so the target never runs long enough to be
+#     killed, `mac.finished` appears, and the deadline assertion fails. A cache
+#     that can suppress a safety mechanism must not be the default.
+#
+# Speed is worth having, but only when explicitly requested by someone who knows
+# the run is not exercising timing or a changed script under test.
+CACHE_ENABLED="false"
+cache_hits=0
 for _arg in "$@"; do
   case "$_arg" in
     --tier=core | --tier=full) VALIDATE_TIER="${_arg#--tier=}" ;;
@@ -80,11 +172,17 @@ for _arg in "$@"; do
       VALIDATE_TIER="${_arg#--list-tier=}"
       LIST_TIER_ONLY="true"
       ;;
+    --changed-only) CHANGED_ONLY="true" ;;
+    --cache) CACHE_ENABLED="true" ;;
+    --no-cache) CACHE_ENABLED="false" ;;
     -h | --help)
-      echo "Usage: framework-validate.sh [--tier=core|full] [--list-tier=core|full]"
+      echo "Usage: framework-validate.sh [--tier=core|full] [--list-tier=core|full] [--changed-only] [--cache] [--no-cache]"
       echo "  (no flag)        run every check (full tier — unchanged default)"
       echo "  --tier=core      run only the fast structural/lint/generator subset"
       echo "  --list-tier=core dry-list what the core tier runs/skips, then exit 0"
+      echo "  --changed-only   run only checks whose owned surface the tree touched"
+      echo "  --cache          OPT IN to the hermetic-selftest result cache (off by default)"
+      echo "  --no-cache       ignore the hermetic-selftest result cache"
       exit 0
       ;;
     *)
@@ -132,9 +230,42 @@ run_check() {
     return 0
   fi
 
+  # IMP-027 SCOPE-7. Both filters below apply ONLY to hermetic selftests, which
+  # the framework's own contract says build their own fixtures and depend on
+  # nothing outside their source. A live guard reads the working tree -- the
+  # very thing that changes between runs -- so skipping one would report a
+  # verdict about a tree that was never inspected.
+  local _script=""
+  if [[ "${1:-}" == "bash" && "$#" -eq 2 ]]; then
+    case "$(basename "${2:-}")" in
+      *-selftest.sh) _script="$2" ;;
+    esac
+  fi
+
+  if [[ -n "$_script" && "$CHANGED_ONLY" == "true" ]] && ! changed_surface_touches "$_script"; then
+    echo "==> $label"
+    echo "SKIP: $label (--changed-only; neither the selftest nor the script it tests was modified)"
+    skipped=$((skipped + 1))
+    echo
+    return 0
+  fi
+
+  local _cache_key=""
+  if [[ -n "$_script" && "$CACHE_ENABLED" == "true" ]] && declare -F validate_cache_key >/dev/null 2>&1; then
+    _cache_key="$(validate_cache_key "$_script" "$FRAMEWORK_VERSION" 2>/dev/null || true)"
+    if [[ -n "$_cache_key" ]] && validate_cache_get "$_cache_key"; then
+      echo "==> $label"
+      echo "PASS: $label (cached — script unchanged since it last passed)"
+      cache_hits=$((cache_hits + 1))
+      echo
+      return 0
+    fi
+  fi
+
   echo "==> $label"
   if "$@"; then
     echo "PASS: $label"
+    [[ -n "$_cache_key" ]] && validate_cache_put "$_cache_key" 0
   else
     echo "FAIL: $label"
     failures=$((failures + 1))
@@ -239,6 +370,70 @@ run_check "Gates registry selftest (v5.2 / F4)" bash "$SCRIPT_DIR/gates-registry
 # checkout (the generator + selftest SKIP gracefully when inputs are absent).
 if [[ -x "$SCRIPT_DIR/generate-gate-coverage-map.sh" ]]; then
   run_check_self_only "Gate-coverage map drift (IMP-102 / SCOPE-9)" bash "$SCRIPT_DIR/generate-gate-coverage-map.sh" --check
+fi
+# IMP-027 SCOPE-2a: the coverage map is now generated from the registry's
+# declared `enforcedBy` field. These verify that no gate declares an enforcer
+# that does not resolve, which is what made the previous grep-derived map
+# untrustworthy in both directions.
+if [[ -x "$SCRIPT_DIR/gate-enforcement.sh" ]]; then
+  run_check_self_only "Gate enforcement bindings resolve (IMP-027 SCOPE-2a)" bash "$SCRIPT_DIR/gate-enforcement.sh" lint --repo-root "$REPO_ROOT"
+fi
+if [[ -x "$SCRIPT_DIR/gate-enforcement-selftest.sh" ]]; then
+  run_check "Gate enforcement selftest (IMP-027 SCOPE-2a)" bash "$SCRIPT_DIR/gate-enforcement-selftest.sh"
+fi
+# IMP-027 SCOPE-2c: every gate must declare whether it compensates for model
+# unreliability (and can retire as models improve) or encodes a business
+# invariant (and never can). 99 of 112 were unclassified.
+if [[ -x "$SCRIPT_DIR/gate-classification.sh" ]]; then
+  run_check_self_only "Gate classification complete (IMP-027 SCOPE-2c)" bash "$SCRIPT_DIR/gate-classification.sh" lint --repo-root "$REPO_ROOT"
+fi
+# IMP-027 SCOPE-2d: the documented gate bands were hand-written and wrong, and
+# customGatesDiscovery advertised G100+ for project gates while the framework
+# itself occupies G110-G131. Both are now derived and checked.
+if [[ -x "$SCRIPT_DIR/gate-bands.sh" ]]; then
+  run_check_self_only "Gate-band strings current (IMP-027 SCOPE-2d)" bash "$SCRIPT_DIR/gate-bands.sh" --check --repo-root "$REPO_ROOT"
+fi
+# IMP-027 SCOPE-11: a modelCompensation gate with no recorded retirement
+# criterion carries unbounded cost in time — nobody can say what would have to
+# be true to turn it off, so it is carried forever by default. `lint` keeps
+# that backlog visible; it does not (and cannot) retire anything.
+if [[ -x "$SCRIPT_DIR/gate-retirement-selftest.sh" ]]; then
+  run_check "Gate retirement selftest (IMP-027 SCOPE-11)" bash "$SCRIPT_DIR/gate-retirement-selftest.sh"
+fi
+if [[ -x "$SCRIPT_DIR/gate-retirement.sh" ]]; then
+  run_check_self_only "Gate retirement criteria recorded (IMP-027 SCOPE-11)" bash "$SCRIPT_DIR/gate-retirement.sh" lint
+fi
+# IMP-027 SCOPE-4 / SEC-3: G034 was a businessInvariant gate with no enforcer
+# and no agent reference — its entire enforcement was "appears in a mode's
+# requiredGates list". These give it a mechanical surface.
+if [[ -x "$SCRIPT_DIR/security-gate.sh" ]]; then
+  run_check_self_only "Security gate (G034, IMP-027 SCOPE-4)" bash "$SCRIPT_DIR/security-gate.sh" --repo-root "$REPO_ROOT"
+fi
+if [[ -x "$SCRIPT_DIR/security-gate-selftest.sh" ]]; then
+  # self-only, like its sibling above: a selftest validates framework SOURCE and
+  # has no meaning in a downstream/fixture tree. Registering it as a plain
+  # run_check made it execute inside minimal fixture repos and changed their
+  # aggregate failure count, which broke the BUG-021 deadline regression's
+  # "exactly 1 failing check" contract.
+  run_check_self_only "Security gate selftest (G034, IMP-027 SCOPE-4)" bash "$SCRIPT_DIR/security-gate-selftest.sh"
+fi
+# IMP-027 SCOPE-6 / COST-1: distance-to-target and the dispatch-weighted cost
+# proxy. The report itself is advisory (a ratchet stops growth but never states
+# a destination); only its selftest is blocking, so a broken closure walk cannot
+# silently report a healthy repo.
+if [[ -x "$SCRIPT_DIR/bundle-cost-report-selftest.sh" ]]; then
+  run_check "Bundle cost report selftest (COST-1, IMP-027 SCOPE-6)" bash "$SCRIPT_DIR/bundle-cost-report-selftest.sh"
+fi
+# IMP-027 SCOPE-5: the golden-task corpus. The live run proves the reference
+# output still satisfies every task (the regression baseline); the selftest
+# proves the corpus can FAIL, which is what stops it becoming a rubber stamp.
+if [[ -x "$SCRIPT_DIR/eval-harness.sh" ]] && [[ -d "$REPO_ROOT/bubbles/eval/tasks" ]]; then
+  run_check_self_only "Golden-task corpus baseline (IMP-027 SCOPE-5)" bash "$SCRIPT_DIR/eval-harness.sh" run \
+    --suite "$REPO_ROOT/bubbles/eval/tasks" \
+    --output "$REPO_ROOT/bubbles/eval/fixtures/positive/corpus-output"
+fi
+if [[ -x "$SCRIPT_DIR/eval-corpus-selftest.sh" ]]; then
+  run_check_self_only "Golden-task corpus discriminates (IMP-027 SCOPE-5)" bash "$SCRIPT_DIR/eval-corpus-selftest.sh"
 fi
 if [[ -x "$SCRIPT_DIR/generate-gate-coverage-map-selftest.sh" ]]; then
   run_check_self_only "Gate-coverage map generator selftest (IMP-102 / SCOPE-9)" bash "$SCRIPT_DIR/generate-gate-coverage-map-selftest.sh"
@@ -448,6 +643,12 @@ fi
 if [[ -x "$SCRIPT_DIR/gate-id-grep-selftest.sh" ]]; then
   run_check "Gate ID grep selftest" bash "$SCRIPT_DIR/gate-id-grep-selftest.sh"
 fi
+# IMP-027 SCOPE-10: run the LIVE scan too, not only its selftest. Previously a
+# retired gate ID could sit in README/docs prose indefinitely because nothing
+# executed the scanner against the real tree.
+if [[ -x "$SCRIPT_DIR/gate-id-grep.sh" ]]; then
+  run_check_self_only "Gate ID grep (live, IMP-027 SCOPE-10)" bash "$SCRIPT_DIR/gate-id-grep.sh" --repo-root "$REPO_ROOT"
+fi
 
 if [[ -x "$SCRIPT_DIR/release-packet-location-guard-selftest.sh" ]]; then
   run_check "Release packet location guard selftest" bash "$SCRIPT_DIR/release-packet-location-guard-selftest.sh"
@@ -590,6 +791,15 @@ if [[ -x "$SCRIPT_DIR/retro-framework-health-selftest.sh" ]]; then
   run_check "Retro framework-health selftest" bash "$SCRIPT_DIR/retro-framework-health-selftest.sh"
 fi
 
+# IMP-027 SCOPE-9: G125 had ZERO enforcer scripts. retro-framework-health.sh is
+# the generator, not a verifier. These two run the independent check.
+if [[ -x "$SCRIPT_DIR/framework-health-evidence-lint-selftest.sh" ]]; then
+  run_check "Framework-health evidence lint selftest (G125, IMP-027 SCOPE-9)" bash "$SCRIPT_DIR/framework-health-evidence-lint-selftest.sh"
+fi
+if [[ -x "$SCRIPT_DIR/framework-health-evidence-lint.sh" ]]; then
+  run_check_self_only "Framework-health evidence lint (live, G125)" bash "$SCRIPT_DIR/framework-health-evidence-lint.sh" --repo-root "$REPO_ROOT"
+fi
+
 if [[ -x "$SCRIPT_DIR/intent-routes-lint-selftest.sh" ]]; then
   run_check "Intent routes lint selftest" bash "$SCRIPT_DIR/intent-routes-lint-selftest.sh"
 fi
@@ -667,6 +877,99 @@ fi
 
 if [[ -x "$SCRIPT_DIR/agent-bundle-size-budget.sh" ]]; then
   run_check_self_only "Agent bundle-size budget (ratcheting per-agent, IMP-102 / SCOPE-10)" bash "$SCRIPT_DIR/agent-bundle-size-budget.sh" --check --repo-root "$REPO_ROOT"
+fi
+
+# ---------------------------------------------------------------------------
+# IMP-027 SCOPE-2b — selftest discovery sweep
+#
+# Everything above is an ENUMERATED check: a human wired it by hand. That
+# enumeration is exactly how COV-2 happened — 8 selftests existed in the tree
+# and were never executed by anything, because adding a file and adding its
+# run_check line are two separate acts and only the first is required to
+# commit.
+#
+# This sweep closes the class rather than the instances. It globs every
+# bubbles/scripts/*-selftest.sh, skips the ones already named by an enumerated
+# check above, skips anything explicitly denied in
+# bubbles/registry/selftest-denylist.txt, and runs the remainder. A newly
+# committed selftest is therefore executed with no wiring step at all.
+#
+# The enumerated checks are deliberately left in place: they carry tier
+# assignments, install-mode gating, and arguments that a glob cannot infer.
+# ---------------------------------------------------------------------------
+if [[ "$LIST_TIER_ONLY" != "true" ]]; then
+  selftest_denylist="$REPO_ROOT/bubbles/registry/selftest-denylist.txt"
+
+  # BUG-021. This sweep decides WHAT RUNS by matching each discovered name
+  # against this validator's own source, so reading that source is control
+  # flow, not decoration. The first version read it with `$(cat ... 2>/dev/null
+  # || true)`, which made an EXTERNAL tool load-bearing. Under a minimal PATH --
+  # exactly what tests/regression/test_28_framework_validate_portable_timeout.sh
+  # constructs, and what a hardened CI image can present -- `cat` is absent, the
+  # error was swallowed, `fv_source` collapsed to empty, no name ever matched,
+  # and every already-enumerated selftest was silently run a SECOND time outside
+  # the watchdog that bounds it. That is a wrong verdict reported as a pass.
+  #
+  # Read with the bash builtin so the sweep depends on nothing but bash, and
+  # refuse LOUDLY if the source cannot be read at all, rather than degrading
+  # into "re-run everything". The denylist is parsed with builtins for the same
+  # reason: no external tool may decide what this validator executes.
+  fv_source=""
+  if [[ -r "$SCRIPT_DIR/framework-validate.sh" ]]; then
+    fv_source="$(<"$SCRIPT_DIR/framework-validate.sh")"
+  fi
+
+  if [[ -z "$fv_source" ]]; then
+    echo "==> Discovered selftest sweep (IMP-027 SCOPE-2b)"
+    echo "FAIL: cannot read $SCRIPT_DIR/framework-validate.sh to identify already-enumerated selftests"
+    echo "      refusing to re-run every selftest unbounded; fix the install rather than ignoring this"
+    failures=$((failures + 1))
+    failed_check_labels+=("Discovered selftest sweep (IMP-027 SCOPE-2b)")
+    echo
+  else
+    # Newline-delimited denied names, read ONCE with builtins. Semantics match
+    # the previous grep pair exactly: blank lines and lines whose first
+    # non-space character is '#' are ignored, and a name must match a whole
+    # line exactly.
+    selftest_denied_names=$'\n'
+    if [[ -f "$selftest_denylist" ]]; then
+      while IFS= read -r selftest_deny_line || [[ -n "$selftest_deny_line" ]]; do
+        selftest_deny_trimmed="${selftest_deny_line#"${selftest_deny_line%%[![:space:]]*}"}"
+        [[ -z "$selftest_deny_trimmed" || "$selftest_deny_trimmed" == '#'* ]] && continue
+        selftest_denied_names+="$selftest_deny_line"$'\n'
+      done <"$selftest_denylist"
+    fi
+
+    for selftest_path in "$SCRIPT_DIR"/*-selftest.sh; do
+      [[ -f "$selftest_path" ]] || continue
+      selftest_name="${selftest_path##*/}"
+
+      # Already wired by an enumerated check above.
+      case "$fv_source" in
+        *"$selftest_name"*) continue ;;
+      esac
+
+      # Explicitly denied, with a documented reason.
+      case "$selftest_denied_names" in
+        *$'\n'"$selftest_name"$'\n'*)
+          echo "==> Discovered selftest: $selftest_name"
+          echo "SKIP: $selftest_name (denied in bubbles/registry/selftest-denylist.txt)"
+          skipped=$((skipped + 1))
+          echo
+          continue
+          ;;
+      esac
+
+      run_check "Discovered selftest: $selftest_name (IMP-027 SCOPE-2b)" bash "$selftest_path"
+    done
+  fi
+fi
+
+if [[ -x "$SCRIPT_DIR/selftest-coverage-lint.sh" ]]; then
+  run_check_self_only "Selftest coverage lint (IMP-027 SCOPE-2b)" bash "$SCRIPT_DIR/selftest-coverage-lint.sh" --repo-root "$REPO_ROOT"
+fi
+if [[ -x "$SCRIPT_DIR/selftest-coverage-lint-selftest.sh" ]]; then
+  run_check "Selftest coverage lint selftest (IMP-027 SCOPE-2b)" bash "$SCRIPT_DIR/selftest-coverage-lint-selftest.sh"
 fi
 
 if [[ "$LIST_TIER_ONLY" == "true" ]]; then

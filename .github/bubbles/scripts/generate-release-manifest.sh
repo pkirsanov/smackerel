@@ -231,6 +231,13 @@ trap 'rm -f "$temp_output"' EXIT
   printf '  "gitSha": "%s",\n' "$git_sha"
   printf '  "generatedAt": "%s",\n' "$generated_at"
   printf '  "capabilityLedgerVersion": %s,\n' "$capability_ledger_version"
+  # IMP-027 SCOPE-4 / SEC-1. install.sh guarded payload verification with
+  # `if [[ -f "$PAYLOAD_VERIFIER" ]]` and no else branch, so deleting one file
+  # from a tarball silently disabled integrity checking for the whole install.
+  # Declaring the requirement here lets the installer tell "legacy payload that
+  # predates the verifier" apart from "payload that should have shipped it and
+  # did not" — the second is a tampering signal and now refuses.
+  printf '  "payloadVerifierRequired": %s,\n' 'true'
 
   printf '  "supportedProfiles": ['
   for idx in "${!supported_profiles[@]}"; do

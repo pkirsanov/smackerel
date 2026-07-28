@@ -1,5 +1,6 @@
 ---
 description: Recurring operational upkeep - executes scheduled backup verifications, restore drills, BCDR drills, patch cycles, and secret rotations from a per-repo upkeep calendar; routes failures to the right owner
+disable-model-invocation: true
 handoffs:
   - label: DevOps Execution
     agent: bubbles.devops

@@ -16,12 +16,23 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 SCHEMAS_DIR="$REPO_ROOT/bubbles/schemas"
 
+# IMP-027 SCOPE-4 / SEC-2: these were `exit 0`. A schema validator that skips
+# reports success for a check that never ran.
+# shellcheck source=bubbles/scripts/dependency-posture.sh
+[[ -f "$SCRIPT_DIR/dependency-posture.sh" ]] && source "$SCRIPT_DIR/dependency-posture.sh"
+
 if ! command -v python3 >/dev/null 2>&1; then
+  if declare -F bubbles_require_dep >/dev/null 2>&1; then
+    bubbles_require_dep "yaml-schema-validate" "python3 is not installed" || exit 0
+  fi
   echo "yaml-schema-validate: SKIP (python3 not installed)"
   exit 0
 fi
 
 if ! python3 -c "import yaml, jsonschema" >/dev/null 2>&1; then
+  if declare -F bubbles_require_dep >/dev/null 2>&1; then
+    bubbles_require_dep "yaml-schema-validate" "PyYAML or jsonschema is not installed (python3 -m pip install --user pyyaml jsonschema)" || exit 0
+  fi
   echo "yaml-schema-validate: SKIP (PyYAML or jsonschema not installed)"
   echo "  Install with: python3 -m pip install --user pyyaml jsonschema"
   exit 0

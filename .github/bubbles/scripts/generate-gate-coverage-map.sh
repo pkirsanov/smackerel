@@ -70,11 +70,21 @@ done
   exit 2
 }
 
+# IMP-027 SCOPE-4 / SEC-2: both were `exit 0`.
+# shellcheck source=bubbles/scripts/dependency-posture.sh
+[[ -f "$SCRIPT_DIR/dependency-posture.sh" ]] && source "$SCRIPT_DIR/dependency-posture.sh"
+
 if ! command -v python3 >/dev/null 2>&1; then
+  if declare -F bubbles_require_dep >/dev/null 2>&1; then
+    bubbles_require_dep "generate-gate-coverage-map" "python3 is not installed" || exit 0
+  fi
   echo "generate-gate-coverage-map: SKIP (python3 not installed)"
   exit 0
 fi
 if ! python3 -c "import yaml" >/dev/null 2>&1; then
+  if declare -F bubbles_require_dep >/dev/null 2>&1; then
+    bubbles_require_dep "generate-gate-coverage-map" "PyYAML is not installed" || exit 0
+  fi
   echo "generate-gate-coverage-map: SKIP (PyYAML not installed)"
   exit 0
 fi
@@ -108,14 +118,44 @@ def load_yaml(rel):
 # 1. Defined gates (id -> name), sorted.
 gates_data = load_yaml("bubbles/registry/gates.yaml")
 gates = {}
+enforced_by = {}
 for gid, meta in (gates_data.get("gates") or {}).items():
     if not re.fullmatch(r"G\d{3}", str(gid)):
         continue
     name = ""
+    declared = []
     if isinstance(meta, dict):
         name = str(meta.get("name") or "")
+        raw_eb = meta.get("enforcedBy")
+        if isinstance(raw_eb, str):
+            declared = [raw_eb]
+        elif isinstance(raw_eb, list):
+            declared = [str(x) for x in raw_eb]
     gates[gid] = name
+    enforced_by[gid] = declared
 gate_ids = sorted(gates)
+
+# IMP-027 SCOPE-2a: the verdict now comes from the DECLARED `enforcedBy` field,
+# not from grepping gate ids out of scripts. Grep produced false positives (a
+# gate merely mentioned in a comment looked enforced) and false negatives (a
+# gate enforced by a check that never spells its id looked unenforced). The
+# grep-derived columns below are retained as corroboration only.
+MECHANICAL_KINDS = ("guard-check", "script", "ci")
+
+
+def declared_kinds(gid):
+    return {v.split(":", 1)[0] for v in enforced_by.get(gid, [])}
+
+
+def is_mechanical(gid):
+    return bool(declared_kinds(gid) & set(MECHANICAL_KINDS))
+
+
+def declared_cell(gid):
+    vals = enforced_by.get(gid, [])
+    if not vals:
+        return "(undeclared)"
+    return ", ".join("`" + v + "`" for v in vals)
 
 # 2. Mode requiredGates (union of modes.yaml + workflows.yaml).
 gate_modes = {gid: set() for gid in gates}
@@ -248,6 +288,13 @@ no_mode_fw = [g for g in no_mode if fw_scripts[g]]
 no_mode_ci = [g for g in no_mode if ci_cell(g) != "—"]
 no_surface = [g for g in gate_ids if not has_any_surface(g)]
 
+# Declared-field partitions (the authoritative view).
+mechanical = [g for g in gate_ids if is_mechanical(g)]
+mode_only = [g for g in gate_ids if declared_kinds(g) == {"mode-required"}]
+behavioral_only = [g for g in gate_ids if declared_kinds(g) == {"behavioral"}]
+unbound = [g for g in gate_ids if "unbound" in declared_kinds(g)]
+undeclared = [g for g in gate_ids if not enforced_by.get(g)]
+
 
 def md_escape(text):
     return text.replace("|", "\\|")
@@ -270,6 +317,7 @@ lines.append(
 lines.append("")
 lines.append("Column meanings:")
 lines.append("")
+lines.append("- **Enforced By (declared)** — the authoritative `enforcedBy` value from `bubbles/registry/gates.yaml`. `guard-check:N` / `script:<path>` / `ci:<workflow>` are mechanical; `mode-required` means a mode demands the gate but no dedicated enforcer implements it; `behavioral:<agent>` is agent-behavior enforcement by design; `unbound` is a genuine coverage gap.")
 lines.append("- **# Modes** — how many `modes.yaml` / `workflows.yaml` modes list the gate in `requiredGates`.")
 lines.append("- **state-transition-guard** — the guard's labeled `Check N` that names the gate, `ref` when the gate id appears in the guard or a `bubbles/scripts/guards/**` fragment without a labeled check, else `—`.")
 lines.append("- **framework-validate scripts** — count of OTHER `bubbles/scripts/**/*.sh` files (selftests, lints, standalone guards run by `framework-validate.sh`) that reference the gate id (the transition guard is excluded — it has its own column).")
@@ -291,24 +339,32 @@ lines.append("")
 lines.append("## Coverage Summary")
 lines.append("")
 lines.append(f"- Gates defined: **{total}**")
+lines.append(f"- Declared mechanically enforced (`guard-check:` / `script:` / `ci:`): **{len(mechanical)}**")
+lines.append(f"- Declared `mode-required` only (a mode requires it; no dedicated mechanical enforcer): **{len(mode_only)}**")
+lines.append(f"- Declared `behavioral:` (agent-behavior enforcement, by design): **{len(behavioral_only)}**")
+if unbound:
+    lines.append(f"- Declared `unbound` (NO enforcement surface — genuine coverage gap): **{len(unbound)}** — {', '.join(unbound)}")
+else:
+    lines.append("- Declared `unbound`: **0**")
+if undeclared:
+    lines.append(f"- Missing an `enforcedBy` declaration entirely: **{len(undeclared)}** — {', '.join(undeclared)}")
+lines.append("")
+lines.append("Corroborating (grep-derived, advisory) numbers:")
+lines.append("")
 lines.append(f"- Referenced by ≥1 workflow mode: **{len(with_mode)}**")
 lines.append(f"- Not referenced by any mode: **{len(no_mode)}**")
-lines.append(f"  - of those, enforced by state-transition-guard: **{len(no_mode_guard)}**")
-lines.append(f"  - of those, enforced by a framework-validate script: **{len(no_mode_fw)}**")
-lines.append(f"  - of those, enforced in CI: **{len(no_mode_ci)}**")
-if no_surface:
-    lines.append(f"- Gates with NO detected MECHANICAL surface (may be agent-behavior-enforced; REVIEW): **{len(no_surface)}** — {', '.join(no_surface)}")
-else:
-    lines.append("- Gates with NO detected mechanical surface: **0**")
+lines.append(f"  - of those, referenced by state-transition-guard: **{len(no_mode_guard)}**")
+lines.append(f"  - of those, referenced by a framework-validate script: **{len(no_mode_fw)}**")
+lines.append(f"  - of those, referenced in CI: **{len(no_mode_ci)}**")
 lines.append("")
 lines.append("## All Gates")
 lines.append("")
-lines.append("| Gate | Name | # Modes | state-transition-guard | framework-validate scripts | CI |")
-lines.append("| --- | --- | --- | --- | --- | --- |")
+lines.append("| Gate | Name | Enforced By (declared) | # Modes | state-transition-guard | framework-validate scripts | CI |")
+lines.append("| --- | --- | --- | --- | --- | --- | --- |")
 for gid in gate_ids:
     name = md_escape(gates[gid]) or "—"
     lines.append(
-        f"| {gid} | {name} | {len(gate_modes[gid])} | {guard_cell(gid)} | {fw_cell(gid)} | {ci_cell(gid)} |"
+        f"| {gid} | {name} | {declared_cell(gid)} | {len(gate_modes[gid])} | {guard_cell(gid)} | {fw_cell(gid)} | {ci_cell(gid)} |"
     )
 lines.append("")
 lines.append("## Gates Not Referenced By Any Mode")

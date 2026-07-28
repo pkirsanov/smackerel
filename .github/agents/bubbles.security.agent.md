@@ -72,6 +72,29 @@ Before mode-ceiling lookup or any repository-local read, apply [agent-common.md]
 
 **⚠️ Honesty Incentive + Evidence Provenance:** Enforce [evidence-rules.md](bubbles_shared/evidence-rules.md). Every evidence block MUST include a `**Claim Source:**` tag (`executed`, `interpreted`, `not-run`). When a security finding is based on code analysis rather than executed proof-of-concept, label it `interpreted` with an explanation. When a finding cannot be verified via execution, use an Uncertainty Declaration. A fabricated security finding (or a false "no findings") is infinitely worse than an honest gap.
 
+## Gate G034 — security_gate (OWNED BY THIS AGENT)
+
+`G034 security_gate` is one of the framework's `businessInvariant` gates and this
+agent owns it. Until IMP-027 SCOPE-4 it had **no enforcer script and no reference
+in any agent, including this one** — its entire enforcement was "the gate appears
+in a mode's `requiredGates` list", which means an LLM reading YAML and deciding it
+felt satisfied.
+
+It now has two enforcement surfaces, and this agent MUST use both:
+
+1. **Mechanical floor** — run `bash bubbles/scripts/security-gate.sh --repo-root <repo>`
+   and record the raw output. It checks committed key material, inline credential
+   literals, silent `curl … | bash` remote execution, world-writable tracked
+   files, and `eval` on command substitution. Exit 0 is the floor, not the
+   verdict.
+2. **This agent's judgement** — the mechanical floor cannot reason about
+   injection, SSRF, auth bypass, or business-logic authorization. That analysis
+   is this agent's responsibility, and its findings carry the `Claim Source`
+   discipline above.
+
+A G034 pass claim without the script's raw output is unsupported: the gate is
+`businessInvariant`, so "I reviewed it and it looked fine" is not evidence.
+
 ## Shared Agent Patterns
 
 **MANDATORY:** Follow all patterns in [agent-common.md](bubbles_shared/agent-common.md) and scope workflow in [scope-workflow.md](bubbles_shared/scope-workflow.md).

@@ -184,6 +184,76 @@ for runner_file in \
   fi
 done
 
+# ── Frontmatter dispatch surface (G064, IMP-027 SCOPE-1) ────────────────────
+#
+# The body checks above only see structural YAML blocks. The VS Code runtime
+# reads FRONTMATTER, so the dispatch controls must be enforced there too:
+#
+#   agents:                    subagent allowlist (omitted = '*' = all)
+#   disable-model-invocation:  this agent may not be dispatched as a subagent
+#   handoffs[].send:           auto-submit a handoff instead of waiting for a click
+#
+# PURE top-level runners are never a declared `owner:` phase, so they must never
+# be dispatched as a subagent -> disable-model-invocation: true.
+# DUAL-ROLE agents are BOTH a granted runner AND a declared phase owner, so they
+# MUST stay subagent-invocable -> the flag is forbidden on them.
+#
+# An explicit `agents:` listing OVERRIDES disable-model-invocation, so no agent
+# may name a pure runner in its allowlist; that is what keeps the flag effective.
+pure_runners="bubbles.goal bubbles.propagate bubbles.sprint bubbles.train bubbles.upkeep bubbles.workflow"
+dual_role_runners="bubbles.bug bubbles.iterate bubbles.journey bubbles.releases bubbles.retro bubbles.stabilize"
+
+frontmatter_of() {
+  awk '/^---[[:space:]]*$/ { n++; next } n == 1 { print } n > 1 { exit }' "$1"
+}
+
+for agent_file in "$AGENTS_DIR"/bubbles.*.agent.md; do
+  [[ -f "$agent_file" ]] || continue
+  agent_base="$(basename "$agent_file" .agent.md)"
+  front="$(frontmatter_of "$agent_file")"
+
+  # (i) no agent may list a PURE top-level runner in its subagent allowlist
+  for pure in $pure_runners; do
+    if printf '%s\n' "$front" | grep -qE "^[[:space:]]*-?[[:space:]]*['\"]?${pure}['\"]?[[:space:]]*[],]?[[:space:]]*$" \
+      && printf '%s\n' "$front" | grep -qE '^agents:'; then
+      fail "$agent_base frontmatter agents: lists pure top-level runner '$pure' (overrides its disable-model-invocation)"
+    fi
+  done
+  if printf '%s\n' "$front" | grep -qE '^agents:.*\b(goal|propagate|sprint|train|upkeep|workflow)\b'; then
+    fail "$agent_base frontmatter agents: inline list names a pure top-level runner"
+  fi
+
+  # (ii) disable-model-invocation on exactly the pure runners
+  has_flag=false
+  printf '%s\n' "$front" | grep -qE '^disable-model-invocation:[[:space:]]*true[[:space:]]*$' && has_flag=true
+  case " $pure_runners " in
+    *" $agent_base "*)
+      [[ "$has_flag" == "true" ]] \
+        || fail "$agent_base is a pure top-level runner and MUST set disable-model-invocation: true" ;;
+    *)
+      case " $dual_role_runners " in
+        *" $agent_base "*)
+          [[ "$has_flag" == "false" ]] \
+            || fail "$agent_base is a dual-role phase owner and MUST NOT set disable-model-invocation (breaks its owner: phase dispatch)" ;;
+        *)
+          [[ "$has_flag" == "false" ]] \
+            || fail "$agent_base is not a pure top-level runner; disable-model-invocation is not permitted" ;;
+      esac ;;
+  esac
+
+  # (iii) handoffs must stay human-gated
+  if printf '%s\n' "$front" | grep -qE '^[[:space:]]*send:[[:space:]]*true[[:space:]]*$'; then
+    fail "$agent_base declares an auto-submitting handoff (send: true); handoffs MUST stay user-gated"
+  fi
+
+  # (iv) every declared handoff / allowlist target must resolve to a real agent
+  while IFS= read -r target; do
+    [[ -n "$target" ]] || continue
+    [[ -f "$AGENTS_DIR/${target}.agent.md" ]] \
+      || fail "$agent_base references unknown agent '$target' in frontmatter"
+  done < <(printf '%s\n' "$front" | grep -oE '^[[:space:]]*agent:[[:space:]]*bubbles\.[a-z-]+' | sed -E 's/.*(bubbles\.[a-z-]+)/\1/' | sort -u)
+done
+
 if [[ "$failures" -gt 0 ]]; then
   echo "workflow-runner-grants-lint: FAIL ($failures violation(s))" >&2
   exit 1
