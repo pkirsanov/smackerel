@@ -77,6 +77,14 @@ func (h *EdgesHandlers) ListEdges(w http.ResponseWriter, r *http.Request) {
 
 	rows, hasNext, srcErr := h.Source.ListEdges(r.Context(), kind, id, limit, offset)
 	if srcErr != nil {
+		if storeErr := classifyStoreError(srcErr); storeErr != nil {
+			// design.md §"Closed Read Outcomes": store-unavailable is a
+			// typed 503 — never a 404 and never a 200 with an empty
+			// items array. Value-safe log: no SQL, DSN, or row data.
+			slog.Error("graphapi: graph store unavailable", "resource", "edges", "op", "list")
+			WriteAPIError(w, storeErr)
+			return
+		}
 		slog.Error("graphapi: list edges failed", "kind", kind, "id", id, "err", srcErr)
 		WriteError(w, http.StatusInternalServerError, "internal_error", "", "failed to list edges")
 		return

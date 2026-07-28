@@ -85,6 +85,14 @@ func (h *PlacesHandlers) ListPlaces(w http.ResponseWriter, r *http.Request) {
 	}
 	rows, hasNext, err := h.Source.ListPlaces(r.Context(), limit, offset)
 	if err != nil {
+		if storeErr := classifyStoreError(err); storeErr != nil {
+			// design.md §"Closed Read Outcomes": store-unavailable is a
+			// typed 503 — never a 404 and never a 200 with an empty
+			// items array. Value-safe log: no SQL, DSN, or row data.
+			slog.Error("graphapi: graph store unavailable", "resource", "places", "op", "list")
+			WriteAPIError(w, storeErr)
+			return
+		}
 		slog.Error("graphapi: list places failed", "err", err)
 		WriteError(w, http.StatusInternalServerError, "internal_error", "", "failed to list places")
 		return
@@ -124,6 +132,12 @@ func (h *PlacesHandlers) GetPlace(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		if errors.Is(err, ErrPlaceNotFound) {
 			WriteError(w, http.StatusNotFound, "not_found", "id", "place not found")
+			return
+		}
+		if storeErr := classifyStoreError(err); storeErr != nil {
+			// A broken store MUST NOT degrade into "place not found".
+			slog.Error("graphapi: graph store unavailable", "resource", "places", "op", "detail")
+			WriteAPIError(w, storeErr)
 			return
 		}
 		slog.Error("graphapi: get place failed", "id", id, "err", err)

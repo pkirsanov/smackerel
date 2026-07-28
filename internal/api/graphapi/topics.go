@@ -75,6 +75,14 @@ func (h *TopicsHandlers) ListTopics(w http.ResponseWriter, r *http.Request) {
 
 	rows, hasNext, err := h.Source.ListTopics(r.Context(), limit, offset)
 	if err != nil {
+		if storeErr := classifyStoreError(err); storeErr != nil {
+			// design.md §"Closed Read Outcomes": store-unavailable is a
+			// typed 503 — never a 404 and never a 200 with an empty
+			// items array. Value-safe log: no SQL, DSN, or row data.
+			slog.Error("graphapi: graph store unavailable", "resource", "topics", "op", "list")
+			WriteAPIError(w, storeErr)
+			return
+		}
 		slog.Error("graphapi: list topics failed", "err", err)
 		WriteError(w, http.StatusInternalServerError, "internal_error", "", "failed to list topics")
 		return
@@ -119,6 +127,12 @@ func (h *TopicsHandlers) GetTopic(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		if errors.Is(err, ErrTopicNotFound) {
 			WriteError(w, http.StatusNotFound, "not_found", "id", "topic not found")
+			return
+		}
+		if storeErr := classifyStoreError(err); storeErr != nil {
+			// A broken store MUST NOT degrade into "topic not found".
+			slog.Error("graphapi: graph store unavailable", "resource", "topics", "op", "detail")
+			WriteAPIError(w, storeErr)
 			return
 		}
 		slog.Error("graphapi: get topic failed", "id", id, "err", err)
@@ -177,8 +191,14 @@ func parseListPagination(r *http.Request, limits Limits, codec *CursorCodec, res
 
 // writeJSON is a small helper for the success path. The error path
 // uses WriteError / WriteAPIError to guarantee the graphapi envelope.
+//
+// BUG-080-001 SCOPE-02: every graph success body carries private
+// knowledge-graph content (labels, topology, counts, opaque cursors),
+// so it advertises the private/no-store contract (privacy.go) and is
+// never durably cached by a proxy or a browser.
 func writeJSON(w http.ResponseWriter, status int, body any) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	SetPrivateNoStore(w)
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(body)
 }
