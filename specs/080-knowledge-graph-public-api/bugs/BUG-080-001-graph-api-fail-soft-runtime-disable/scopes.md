@@ -53,7 +53,7 @@ flowchart LR
 ## Scope 1: Fail-Soft Graph Activation Foundation
 
 **Scope ID:** SCOPE-01  
-**Status:** In Progress  
+**Status:** Done  
 **Scope-Kind:** runtime-behavior  
 **Foundation:** true  
 **Depends On:** -
@@ -155,13 +155,13 @@ boundary, and every Excluded item stays excluded.
 - [x] T080-01-UNIT passes with current-session raw evidence in `report.md#t080-01-unit`. → Evidence: report.md#t080-01-unit
 - [x] T080-01-PROC passes with current-session raw evidence in `report.md#t080-01-proc`. → Evidence: report.md#t080-01-proc
 - [x] T080-02-MANIFEST passes with current-session raw evidence in `report.md#t080-02-manifest`.
-- [ ] T080-02-ADVERSARIAL first fails against warning-and-nil/omitted-route behavior, then passes with the repair; both outputs are recorded in `report.md#t080-02-adversarial`. → Evidence: report.md#t080-02-adversarial (GREEN half proven — live DISABLED-stack `--- PASS` 2026-07-27 + `regression-quality-guard --bugfix` "Adversarial signal detected"; RED half NOT recorded, so this row stays unchecked. See report.md "## Uncertainty Declarations" and routed finding F-1 to bubbles.plan.)
+- [x] T080-02-ADVERSARIAL first fails against warning-and-nil/omitted-route behavior, then passes with the repair; both outputs are recorded in `report.md#t080-02-adversarial`. → Evidence: report.md#t080-02-adversarial (BOTH halves recorded 2026-07-28. RED: a throwaway detached `git worktree` at commit `6a12f1f4` reintroduced the original defect in `internal/api/router.go` — `GraphCapability.Guard` removed AND the DISABLED branch emptied to register ZERO routes — and the UNMODIFIED test failed against it, all 8 canonical families returning a bare Chi `404`, `===RED_EXIT=1===`. GREEN: the same test bytes on the unmutated tree, `--- PASS` ×2, `===F2_GREEN_EXIT=0===`. `main` never mutated (`git diff HEAD -- internal/api/router.go` empty); the exact mutation diff is recorded. Routed finding F-1 RESOLVED by executing the missing capture, not by rewording this row.)
 - [x] T080-07-SECURITY passes with value-safe output in `report.md#t080-07-security`. → Evidence: report.md#t080-07-security
 - [x] T080-01-DISABLED passes with current-session raw evidence in `report.md#t080-01-disabled`. → Evidence: report.md#t080-01-disabled
 
 #### Build Quality Gate
 
-- [ ] Scope-specific unit/integration/E2E regressions, `./smackerel.sh check`, `./smackerel.sh lint`, `./smackerel.sh format --check`, source-lock/config checks, artifact-lint, traceability guard, documentation alignment, zero warnings, and change-boundary review all pass with executed evidence and no skipped checks. → Evidence: report.md#build-quality-gate-assessment-scope-01 (2026-07-27: regressions ✅ `===E2E_EXIT=0===`, check ✅ 0, lint ✅ 0, format --check ✅ 0 after repairing the pre-existing `internal/assistant/facade.go` gofmt violation, source-lock/config ✅ 0, artifact-lint ✅ 0, traceability guard ✅ 0 `PASSED (0 warnings)`, zero warnings ✅, change-boundary review ✅ amended+attributed. STAYS UNCHECKED on two clauses: "no skipped checks" — the T080-02-ADVERSARIAL RED capture was never run (finding F-1, bubbles.plan); and "documentation alignment" — the stale HARNESS LIMITATION header comment in `tests/e2e/graph_api_activation_e2e_test.go` (finding F-2).)
+- [x] Scope-specific unit/integration/E2E regressions, `./smackerel.sh check`, `./smackerel.sh lint`, `./smackerel.sh format --check`, source-lock/config checks, artifact-lint, traceability guard, documentation alignment, zero warnings, and change-boundary review all pass with executed evidence and no skipped checks. → Evidence: report.md#build-quality-gate-assessment-scope-01 (2026-07-28 re-run, all 8 commands exit 0: regressions ✅ `===F2_GREEN_EXIT=0===`, check ✅ 0, lint ✅ 0 `All checks passed!` + `Web validation passed`, format --check ✅ 0 `78 files already formatted`, source-lock/config ✅ 0 folded into check, artifact-lint ✅ 0, traceability guard ✅ 0, regression-quality-guard ✅ 0 violations, `--bugfix` ✅ `Adversarial signal detected`, zero warnings ✅, change-boundary review ✅ amended+attributed. BOTH previously-failing clauses now SATISFIED: "no skipped checks" — the T080-02-ADVERSARIAL RED capture was executed (F-1 RESOLVED); and "documentation alignment" — the stale HARNESS LIMITATION text was corrected in commit `6a12f1f4`, `grep -c` = 0 (F-2 RESOLVED).)
 
 ---
 
