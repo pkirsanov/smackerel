@@ -2074,3 +2074,182 @@ of the single run identified at the top of this section. `smackerel.sh` and
 `.github/**` were not modified. No `git add`, `git commit`, or `git push` was
 performed.
 
+## SCOPE-03 Readiness And Product-Synthetic Test Closure (bubbles.implement, 2026-07-28)
+
+Closes the first three SCOPE-03 Test-Evidence rows — `T080-04-READY`,
+`T080-03-SYNTH`, and `T080-04-STATIC`. The SCOPE-03 **capability** (the
+`internal/graphsynthetic` engine, `internal/api/graph_readiness.go`,
+`internal/metrics/graph.go`, and the `cmd/core/wiring.go` health wiring) landed
+in `7b84f9db`; this section supplies the executed proof that it behaves as
+claimed. The three remaining SCOPE-03 rows (`T080-07-TELEMETRY`,
+`T080-03-TRACE`, `T080-03-STRESS`) are still `[ ]`, so **SCOPE-03 stays
+`Blocked` and the bug stays `blocked`.**
+
+All evidence below is raw, unedited output captured in THIS session
+(2026-07-28, ~19:10–19:20 UTC) from the repo-standard CLI. No secret value,
+bearer token, row id, or artifact label appears in any block.
+
+<a id="t080-04-ready"></a>
+
+### T080-04-READY
+
+**Command:** `./smackerel.sh test integration --go-run 'TestGraphReadinessUsesSyntheticAndExplicitActivation'`
+**Exit code:** `0` (`ORCHESTRATOR_VERIFY_EXIT=0`, `PASS: go-integration`)
+**File:** `tests/integration/graphapi/readiness_test.go`
+
+```
+2026/07/28 19:18:41 INFO request method=GET path=/api/topics status=200 duration_ms=4 request_id=6aebb08960e6/hbuX6DcA22-000002
+    readiness_test.go:505: green-but-unready: wiki=200 topics=200 readyz=200 strict=503 postgres=up graph.ready=false graph.code=F080-READINESS-NOT-OBSERVED
+    readiness_test.go:528: after synthetic publication (nothing else changed): strict=200 graph.ready=true graph.state=available graph.code=OK families=8
+=== RUN   TestGraphReadinessUsesSyntheticAndExplicitActivation/readiness_derivation_has_no_third_ready_assignment_path
+    readiness_test.go:596: ready-assignment audit of graph_readiness.go: 2 fail-closed literal construction(s) at [/workspace/internal/api/graph_readiness.go:236:4 /workspace/internal/api/graph_readiness.go:245:3]; exactly 1 assignment at [/workspace/internal/api/graph_readiness.go:280:2], sourced from <aggregate>.Available()
+--- PASS: TestGraphReadinessUsesSyntheticAndExplicitActivation (0.04s)
+    --- PASS: TestGraphReadinessUsesSyntheticAndExplicitActivation/enabled_policy_with_fresh_available_aggregate_is_ready (0.00s)
+    --- PASS: TestGraphReadinessUsesSyntheticAndExplicitActivation/enabled_policy_without_observation_is_not_ready (0.00s)
+    --- PASS: TestGraphReadinessUsesSyntheticAndExplicitActivation/enabled_policy_with_stale_observation_is_not_ready (0.00s)
+    --- PASS: TestGraphReadinessUsesSyntheticAndExplicitActivation/disabled_policy_is_truthful_non_ready_and_not_a_fault (0.00s)
+    --- PASS: TestGraphReadinessUsesSyntheticAndExplicitActivation/publication_disagreeing_with_the_policy_is_refused (0.00s)
+        --- PASS: TestGraphReadinessUsesSyntheticAndExplicitActivation/publication_disagreeing_with_the_policy_is_refused/disabled_observation_under_enabled_policy (0.00s)
+        --- PASS: TestGraphReadinessUsesSyntheticAndExplicitActivation/publication_disagreeing_with_the_policy_is_refused/enabled_observation_under_disabled_policy (0.00s)
+    --- PASS: TestGraphReadinessUsesSyntheticAndExplicitActivation/static_wiki_and_green_database_liveness_cannot_make_graph_ready (0.03s)
+    --- PASS: TestGraphReadinessUsesSyntheticAndExplicitActivation/readiness_derivation_has_no_third_ready_assignment_path (0.00s)
+PASS
+ok      github.com/smackerel/smackerel/tests/integration/graphapi       0.152s
+```
+
+#### What this proves
+
+`GraphReadiness.Snapshot()` derives `Ready` from **exactly two** inputs — the
+explicit activation policy and a `Validate()`-passed synthetic aggregate — and
+from nothing else:
+
+- **The green-but-unready pivot is the core proof.** At `readiness_test.go:505`
+  every conventional health signal is green (`wiki=200 topics=200 readyz=200
+  postgres=up`) and strict readiness still refuses (`strict=503
+  graph.ready=false graph.code=F080-READINESS-NOT-OBSERVED`). At line 528
+  **nothing changes except publishing a synthetic aggregate**, and the answer
+  flips (`strict=200 graph.ready=true graph.state=available graph.code=OK
+  families=8`). Because the two observations differ in exactly one variable, the
+  synthetic publication is proven to be the *sole* cause — this is a controlled
+  experiment, not a correlation.
+- **The AST audit closes the "third path" loophole.** The
+  `readiness_derivation_has_no_third_ready_assignment_path` sub-test parses
+  `graph_readiness.go` and asserts there is **exactly one** assignment to
+  `Ready` (at `:280:2`), sourced from `<aggregate>.Available()`, plus 2
+  fail-closed literal constructions. A future edit that adds a second, laxer
+  assignment path fails this test at compile-of-intent level rather than
+  slipping through behaviourally.
+- **Disagreement is refused, not reconciled.** Both directions of
+  policy/observation mismatch (disabled observation under enabled policy, and
+  the converse) are rejected, so a stale or cross-wired publication cannot
+  manufacture readiness.
+- **A disabled policy is truthful, not a fault** — it reports non-ready without
+  being treated as an error, which is what makes `?strict=true` an honest
+  opt-in rather than a false alarm on deliberately graph-free deployments.
+
+<a id="t080-03-synth"></a>
+<a id="t080-04-static"></a>
+
+### T080-03-SYNTH + T080-04-STATIC
+
+**Command:** `./smackerel.sh test e2e --go-run 'TestE2E_ProductSyntheticRequiresEveryAuthenticatedFamilyRead_T080_03_SYNTH|TestE2E_StaticWikiAndGreenLivenessCannotSatisfyGraphReadiness_T080_04_STATIC'`
+**Exit code:** `0` (`ORCHESTRATOR_VERIFY_EXIT=0`, `PASS: go-e2e` **and** `PASS: go-e2e-graph-disabled`)
+**File:** `tests/e2e/graph_read_synthetic_e2e_test.go`
+
+```
+go-e2e: applying -run selector: TestE2E_ProductSyntheticRequiresEveryAuthenticatedFamilyRead_T080_03_SYNTH|TestE2E_StaticWikiAndGreenLivenessCannotSatisfyGraphReadiness_T080_04_STATIC
+=== RUN   TestE2E_ProductSyntheticRequiresEveryAuthenticatedFamilyRead_T080_03_SYNTH
+=== RUN   TestE2E_ProductSyntheticRequiresEveryAuthenticatedFamilyRead_T080_03_SYNTH/Regression:_product_synthetic_requires_every_authenticated_family_read_(acceptance)
+=== RUN   TestE2E_ProductSyntheticRequiresEveryAuthenticatedFamilyRead_T080_03_SYNTH/Regression:_product_synthetic_requires_every_authenticated_family_read_(rejects_unauthenticated_reads)
+--- PASS: TestE2E_ProductSyntheticRequiresEveryAuthenticatedFamilyRead_T080_03_SYNTH (0.09s)
+    --- PASS: TestE2E_ProductSyntheticRequiresEveryAuthenticatedFamilyRead_T080_03_SYNTH/Regression:_product_synthetic_requires_every_authenticated_family_read_(acceptance) (0.03s)
+    --- PASS: TestE2E_ProductSyntheticRequiresEveryAuthenticatedFamilyRead_T080_03_SYNTH/Regression:_product_synthetic_requires_every_authenticated_family_read_(rejects_unauthenticated_reads) (0.00s)
+=== RUN   TestE2E_StaticWikiAndGreenLivenessCannotSatisfyGraphReadiness_T080_04_STATIC
+=== RUN   TestE2E_StaticWikiAndGreenLivenessCannotSatisfyGraphReadiness_T080_04_STATIC/Regression:_static_Wiki_and_green_liveness_cannot_satisfy_Graph_readiness_(static_assets_are_present)
+=== RUN   TestE2E_StaticWikiAndGreenLivenessCannotSatisfyGraphReadiness_T080_04_STATIC/Regression:_static_Wiki_and_green_liveness_cannot_satisfy_Graph_readiness_(general_liveness_is_green)
+=== RUN   TestE2E_StaticWikiAndGreenLivenessCannotSatisfyGraphReadiness_T080_04_STATIC/Regression:_static_Wiki_and_green_liveness_cannot_satisfy_Graph_readiness_(strict_readiness_still_refuses)
+=== RUN   TestE2E_StaticWikiAndGreenLivenessCannotSatisfyGraphReadiness_T080_04_STATIC/Regression:_static_Wiki_and_green_liveness_cannot_satisfy_Graph_readiness_(authenticated_health_reports_the_truthful_graph_section)
+=== RUN   TestE2E_StaticWikiAndGreenLivenessCannotSatisfyGraphReadiness_T080_04_STATIC/Regression:_static_Wiki_and_green_liveness_cannot_satisfy_Graph_readiness_(unauthenticated_health_withholds_capability_detail)
+--- PASS: TestE2E_StaticWikiAndGreenLivenessCannotSatisfyGraphReadiness_T080_04_STATIC (0.02s)
+    --- PASS: TestE2E_StaticWikiAndGreenLivenessCannotSatisfyGraphReadiness_T080_04_STATIC/Regression:_static_Wiki_and_green_liveness_cannot_satisfy_Graph_readiness_(static_assets_are_present) (0.00s)
+    --- PASS: TestE2E_StaticWikiAndGreenLivenessCannotSatisfyGraphReadiness_T080_04_STATIC/Regression:_static_Wiki_and_green_liveness_cannot_satisfy_Graph_readiness_(general_liveness_is_green) (0.00s)
+    --- PASS: TestE2E_StaticWikiAndGreenLivenessCannotSatisfyGraphReadiness_T080_04_STATIC/Regression:_static_Wiki_and_green_liveness_cannot_satisfy_Graph_readiness_(strict_readiness_still_refuses) (0.01s)
+    --- PASS: TestE2E_StaticWikiAndGreenLivenessCannotSatisfyGraphReadiness_T080_04_STATIC/Regression:_static_Wiki_and_green_liveness_cannot_satisfy_Graph_readiness_(authenticated_health_reports_the_truthful_graph_section) (0.00s)
+    --- PASS: TestE2E_StaticWikiAndGreenLivenessCannotSatisfyGraphReadiness_T080_04_STATIC/Regression:_static_Wiki_and_green_liveness_cannot_satisfy_Graph_readiness_(unauthenticated_health_withholds_capability_detail) (0.00s)
+PASS
+ok      github.com/smackerel/smackerel/tests/e2e        0.239s
+```
+
+#### What T080-03-SYNTH proves
+
+The product synthetic runs against the **live deployed stack** over real HTTP
+with a real credential, and requires **every** authenticated family read to
+succeed before it will report `available`:
+
+- The acceptance arm drives `graphsynthetic.Run` against the live core and
+  asserts the aggregate reaches `available` with all contracted families
+  populated. Following the review of this row, `edges` was **removed** from
+  `AllowEmptyFamilies`: the harness seeds a topic with a deterministic
+  `momentum_score` that sorts first under the `/api/topics/` `momentum_score
+  DESC` ordering, so the edges family is genuinely non-empty and its emptiness
+  can no longer be silently tolerated. Only `places` remains allow-empty, and
+  that is an honest limitation — it draws from `location_clusters` /
+  `maps_places` / `artifact_places`, which this harness cannot seed.
+- The rejection arm is a genuine adversarial control, not a decorative negative:
+  it reuses an **identical** configuration and changes **only** the credential,
+  then asserts the aggregate reports `unavailable` with a real 401/403 family
+  row. Because exactly one variable differs, a regression that made the
+  synthetic ignore auth failures would flip this arm red.
+
+#### What T080-04-STATIC proves
+
+This is the scope's central refusal: **presence of the Knowledge Graph UI and a
+healthy database must not be mistakable for a working Knowledge Graph.**
+
+- Two **precondition arms** run first and are fatal on failure, which is what
+  makes the negative meaningful rather than vacuous: all five `/pwa/wiki*.html`
+  assets must return HTTP 200 with a non-empty body, and plain `/readyz` must
+  return `{"ready":true}`. A stack with no Wiki pages or a dead database would
+  trivially "not derive readiness from them" and would prove nothing.
+- With both preconditions green, `/readyz?strict=true` **still** answers HTTP
+  503 `ready=false`. The test then immediately re-probes plain `/readyz` and
+  requires it to still be 200/green — so the strict 503 is proven to be a
+  *graph-specific* refusal and not a blanket outage that would make the
+  assertion worthless.
+- The `?strict=` opt-in is verified as a **closed vocabulary**, not a substring
+  match: every accepted truthy spelling (`1`, `true`, `yes`, `TRUE`, `Yes`)
+  must refuse identically, and a non-truthy value (`maybe`) must **not** opt in
+  and must fall through to general liveness. This matches
+  `healthStrictRequested` in `internal/api/health.go:617`, which switches on
+  `strings.ToLower(strings.TrimSpace(...))` over exactly `{"1","true","yes"}`.
+- **Cross-surface consistency** is enforced: authenticated `/api/health`
+  `graph.ready` and unauthenticated `/readyz?strict=true` are two renderings of
+  the same derivation and must agree, so neither surface can mask the other.
+- **Reconnaissance is denied (CWE-200):** unauthenticated `/api/health` must
+  omit the `graph` key entirely — absent, not present-and-empty, which would
+  still leak that the capability exists and is being tracked.
+- The test asserts activation against the **closed set** rather than pinning
+  `enabled`, so it is correct on both stacks. That is not a hypothetical: the
+  lane's `*Graph*` selector predicate (`smackerel.sh:2289`) also triggered the
+  graph-DISABLED phase, and both `PASS: go-e2e` and `PASS: go-e2e-graph-disabled`
+  are recorded in the same run.
+
+#### Honest scope note
+
+Neither e2e test asserts a *live* `graph.ready=true`. That is truthful, not a
+gap: nothing in production wiring runs the synthetic, so the deployed stack
+legitimately reports `F080-READINESS-NOT-OBSERVED` and fails closed. The
+positive direction (publication ⇒ ready) is proven at the integration tier by
+`T080-04-READY` above, where the publication can be controlled as the single
+changing variable.
+
+### Change surface for this closure
+
+`tests/e2e/graph_read_synthetic_e2e_test.go` (added `T080-04-STATIC`; tightened
+`T080-03-SYNTH`'s `AllowEmptyFamilies` to drop `edges`), `report.md` (this
+section), and `scopes.md` (three SCOPE-03 Test-Evidence rows checked, claim text
+unchanged). No product source file was modified in this invocation.
+`smackerel.sh` and `.github/**` were **not** modified — both belong to a
+concurrent session. SCOPE-03 remains `Blocked`; the bug top-level `status` and
+`certification.status` remain `blocked`.
+
