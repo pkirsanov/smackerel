@@ -60,6 +60,7 @@ package e2e
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"strings"
 	"testing"
@@ -285,6 +286,308 @@ func TestE2E_ProductSyntheticRequiresEveryAuthenticatedFamilyRead_T080_03_SYNTH(
 			t.Fatalf("no family row recorded a %q read with code %q or %q under an INVALID bearer credential; the stack did not reject the request as unauthenticated/forbidden: per-family family=state=code: %s",
 				graphsynthetic.StateFailed, graphsynthetic.CodeUnauthenticated, graphsynthetic.CodeForbidden,
 				graphSynthFamilyTriples(agg.Families))
+		}
+	})
+}
+
+// TestE2E_StaticWikiAndGreenLivenessCannotSatisfyGraphReadiness_T080_04_STATIC
+// is BUG-080-001 SCOPE-03 row T080-04-STATIC (SCN-080-001-04), e2e-api tier.
+//
+// It proves the negative that the acceptance synthetic above cannot: NEITHER
+// the fully-present static Wiki UI NOR green general database liveness can
+// promote the Knowledge Graph journey to "ready". Strict readiness is derived
+// ONLY from the explicit activation policy plus a fresh PUBLISHED synthetic
+// aggregate (internal/api/graph_readiness.go Snapshot), and that derivation
+// has no branch capable of reading a served asset, a mounted route, or a
+// database handle.
+//
+// This runs against the LIVE disposable stack over REAL HTTP. There is NO
+// request interception, NO mock, NO stub, and NO canned response — every
+// assertion is the actual running smackerel-core container answering an
+// actual socket.
+//
+// Why it is genuinely adversarial rather than tautological: sub-tests A and B
+// FIRST establish that the two tempting-but-wrong readiness proxies are BOTH
+// green — the five Knowledge Graph Wiki pages really are served (HTTP 200,
+// non-empty), and /readyz really does report ready:true. Only then does
+// sub-test C demand that /readyz?strict=true STILL refuse. If anyone rewired
+// readiness to derive from mounted routes, served static files, or DB health,
+// the strict arm would flip to 200 and this test would FAIL. Conversely, if
+// strict were merely failing for an unrelated blanket reason, the immediate
+// re-probe of plain /readyz inside sub-test C would also be red — so the
+// refusal is pinned as specifically graph-driven.
+//
+// The pinned live-stack truth: nothing in production wiring publishes a
+// synthetic observation (cmd/core/wiring.go constructs the readiness
+// projection; no publisher calls GraphReadiness.Publish). The authenticated
+// capability section therefore reports the fail-closed starting state and
+// /readyz?strict=true answers 503. That is the CORRECT truthful answer, and
+// it is exactly what this test pins.
+//
+// VALUE SAFETY: every diagnostic emitted here is drawn from CLOSED
+// vocabularies only — HTTP status codes, the readiness boolean, the closed
+// activation states {enabled,disabled}, the closed aggregate states
+// {available,degraded,unavailable,policy_disabled}, the closed F080 diagnostic
+// codes, and the constant evidence reference. The bearer token, row ids,
+// labels, and cursor bodies are NEVER logged and structurally cannot appear.
+//
+// The activation state is deliberately NOT asserted to be "enabled": it is
+// read from whatever the stack reports and checked against the closed set, so
+// this test is correct on BOTH the default stack and the graph-disabled
+// override stack. Under a DISABLED policy the projection reports
+// policy_disabled with ready=false, which still does not satisfy strict
+// readiness — the refusal this test pins holds either way.
+func TestE2E_StaticWikiAndGreenLivenessCannotSatisfyGraphReadiness_T080_04_STATIC(t *testing.T) {
+	cfg := loadE2EConfig(t)
+	waitForHealth(t, cfg, 30*time.Second)
+
+	// The REAL Knowledge Graph journey UI assets, served unauthenticated from
+	// the embedded PWA bundle mounted at /pwa/* (internal/api/router.go).
+	// These are the same paths the existing tests/e2e/wiki suite drives.
+	staticWikiPages := []string{
+		"/pwa/wiki.html",
+		"/pwa/wiki_topics.html",
+		"/pwa/wiki_people.html",
+		"/pwa/wiki_places.html",
+		"/pwa/wiki_time.html",
+	}
+
+	// The CLOSED readiness-projection diagnostic vocabulary
+	// (internal/api/graph_readiness.go). A code outside this set — or outside
+	// the F080-SYNTH-* aggregate family — is rejected rather than tolerated.
+	readinessProjectionCodes := map[string]bool{
+		"F080-READINESS-NOT-OBSERVED":        true,
+		"F080-READINESS-STALE":               true,
+		"F080-READINESS-ACTIVATION-MISMATCH": true,
+		"F080-READINESS-CONFIG-INVALID":      true,
+	}
+	// The CLOSED aggregate state vocabulary (internal/graphsynthetic/result.go).
+	aggregateStates := map[string]bool{
+		string(graphsynthetic.AggregateAvailable):      true,
+		string(graphsynthetic.AggregateDegraded):       true,
+		string(graphsynthetic.AggregateUnavailable):    true,
+		string(graphsynthetic.AggregatePolicyDisabled): true,
+	}
+	// The CLOSED activation vocabulary (internal/api/graphapi/activation.go).
+	activationStates := map[string]bool{
+		string(graphapi.ActivationEnabled):  true,
+		string(graphapi.ActivationDisabled): true,
+	}
+
+	// probeReadyz issues an UNAUTHENTICATED GET against /readyz with the
+	// supplied raw query suffix and returns the observed status code plus the
+	// decoded `ready` boolean. /readyz is an orchestrator probe and carries no
+	// credential, which is precisely the point: an anonymous caller must not
+	// be able to coax a ready answer out of static assets or DB liveness.
+	probeReadyz := func(t *testing.T, query string) (int, bool) {
+		t.Helper()
+		path := "/readyz" + query
+		resp, err := (&http.Client{Timeout: 15 * time.Second}).Get(cfg.CoreURL + path)
+		if err != nil {
+			t.Fatalf("unauthenticated GET %s against the live stack: %v", path, err)
+		}
+		body, err := readBody(resp)
+		if err != nil {
+			t.Fatalf("read response body of unauthenticated GET %s: %v", path, err)
+		}
+		var payload struct {
+			Ready bool `json:"ready"`
+		}
+		if err := json.Unmarshal(body, &payload); err != nil {
+			t.Fatalf("unauthenticated GET %s returned a body that is not the {\"ready\":bool} readiness contract: %v", path, err)
+		}
+		return resp.StatusCode, payload.Ready
+	}
+
+	// Recorded by sub-test C so sub-test D can assert the authenticated
+	// capability section and the unauthenticated strict probe tell the SAME
+	// story. Sub-test D re-probes independently when C did not get that far,
+	// so the consistency assertion can never be silently skipped.
+	var strictObserved bool
+	var strictStatus int
+	var strictReady bool
+
+	t.Run("Regression: static Wiki and green liveness cannot satisfy Graph readiness (static assets are present)", func(t *testing.T) {
+		// PRECONDITION ARM. The Graph journey's UI must genuinely be there,
+		// otherwise the strict refusal in sub-test C would be proving nothing
+		// — a stack with no Wiki pages trivially "does not derive readiness
+		// from Wiki pages". A non-200 here is therefore fatal, not tolerable.
+		client := &http.Client{Timeout: 15 * time.Second}
+		for _, page := range staticWikiPages {
+			resp, err := client.Get(cfg.CoreURL + page)
+			if err != nil {
+				t.Fatalf("unauthenticated GET %s against the live stack: %v", page, err)
+			}
+			body, err := readBody(resp)
+			if err != nil {
+				t.Fatalf("read response body of unauthenticated GET %s: %v", page, err)
+			}
+			if resp.StatusCode != http.StatusOK {
+				t.Fatalf("GET %s returned HTTP %d; the Knowledge Graph Wiki UI MUST be fully served for the strict-readiness refusal below to be a meaningful negative rather than a vacuous one",
+					page, resp.StatusCode)
+			}
+			if len(body) == 0 {
+				t.Fatalf("GET %s returned HTTP 200 with an EMPTY body; the asset is not genuinely present", page)
+			}
+		}
+	})
+
+	t.Run("Regression: static Wiki and green liveness cannot satisfy Graph readiness (general liveness is green)", func(t *testing.T) {
+		// PRECONDITION ARM. General database liveness must genuinely be green,
+		// so that the strict refusal below cannot be dismissed as "the stack
+		// was simply down".
+		status, ready := probeReadyz(t, "")
+		if status != http.StatusOK {
+			t.Fatalf("unauthenticated GET /readyz returned HTTP %d; general liveness MUST be green for the strict-readiness refusal below to be a meaningful negative", status)
+		}
+		if !ready {
+			t.Fatalf("unauthenticated GET /readyz returned HTTP 200 with ready=false; the general liveness contract is {\"ready\":true} on 200")
+		}
+	})
+
+	t.Run("Regression: static Wiki and green liveness cannot satisfy Graph readiness (strict readiness still refuses)", func(t *testing.T) {
+		// ADVERSARIAL CORE. Static Wiki assets are proven served (sub-test A)
+		// and general liveness is proven green (sub-test B). Strict readiness
+		// MUST STILL refuse, because it is derived ONLY from the explicit
+		// activation policy plus a fresh published synthetic aggregate.
+		status, ready := probeReadyz(t, "?strict=true")
+		strictObserved = true
+		strictStatus = status
+		strictReady = ready
+
+		if status == http.StatusOK || ready {
+			t.Fatalf("GET /readyz?strict=true returned HTTP %d with ready=%t; static Wiki assets and green database liveness were ALLOWED to satisfy Knowledge Graph readiness. Strict readiness MUST derive ONLY from the explicit activation policy plus a fresh published synthetic aggregate, and MUST fail closed otherwise",
+				status, ready)
+		}
+		if status != http.StatusServiceUnavailable {
+			t.Fatalf("GET /readyz?strict=true returned HTTP %d; an unproven Knowledge Graph journey MUST answer HTTP %d",
+				status, http.StatusServiceUnavailable)
+		}
+
+		// The refusal must be GRAPH-driven, not a blanket outage. Re-probe
+		// plain /readyz immediately afterwards: if the stack had simply gone
+		// unhealthy, this would be red too, and the strict assertion above
+		// would be worthless.
+		plainStatus, plainReady := probeReadyz(t, "")
+		if plainStatus != http.StatusOK || !plainReady {
+			t.Fatalf("immediately after the strict refusal, plain GET /readyz returned HTTP %d with ready=%t; the strict 503 is a BLANKET failure rather than a graph-specific refusal, so it proves nothing about Knowledge Graph readiness derivation",
+				plainStatus, plainReady)
+		}
+
+		// The strict opt-in is a CLOSED contract, not a substring match: every
+		// accepted truthy spelling must refuse...
+		for _, spelling := range []string{"1", "true", "yes", "TRUE", "Yes"} {
+			truthyStatus, truthyReady := probeReadyz(t, "?strict="+spelling)
+			if truthyStatus != http.StatusServiceUnavailable || truthyReady {
+				t.Errorf("GET /readyz?strict=%s returned HTTP %d with ready=%t; this is an accepted truthy opt-in spelling and MUST refuse with HTTP %d and ready=false exactly as ?strict=true does",
+					spelling, truthyStatus, truthyReady, http.StatusServiceUnavailable)
+			}
+		}
+		// ...and a NON-truthy spelling must NOT opt in, proving the parameter
+		// is parsed against a closed vocabulary rather than merely detected.
+		nonTruthyStatus, nonTruthyReady := probeReadyz(t, "?strict=maybe")
+		if nonTruthyStatus != http.StatusOK || !nonTruthyReady {
+			t.Errorf("GET /readyz?strict=maybe returned HTTP %d with ready=%t; %q is NOT an accepted truthy opt-in value, so the probe MUST fall through to general liveness (HTTP %d, ready=true)",
+				nonTruthyStatus, nonTruthyReady, "maybe", http.StatusOK)
+		}
+	})
+
+	t.Run("Regression: static Wiki and green liveness cannot satisfy Graph readiness (authenticated health reports the truthful graph section)", func(t *testing.T) {
+		resp, body := graphAPIGet(t, cfg, "/api/health")
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("authenticated GET /api/health returned HTTP %d; the liveness endpoint MUST answer HTTP %d",
+				resp.StatusCode, http.StatusOK)
+		}
+
+		var payload struct {
+			Graph *struct {
+				Ready       bool   `json:"ready"`
+				Activation  string `json:"activation"`
+				State       string `json:"state"`
+				Code        string `json:"code"`
+				EvidenceRef string `json:"evidence_ref"`
+			} `json:"graph"`
+		}
+		if err := json.Unmarshal(body, &payload); err != nil {
+			t.Fatalf("authenticated GET /api/health returned a body that does not decode against the health contract: %v", err)
+		}
+		if payload.Graph == nil {
+			t.Fatalf("authenticated GET /api/health omitted the `graph` capability section; an AUTHENTICATED caller MUST receive the Knowledge Graph capability detail")
+		}
+
+		if payload.Graph.Ready {
+			t.Fatalf("authenticated /api/health reports a READY Knowledge Graph capability (state=%q code=%q); no synthetic observation is published on this stack, so a ready section means readiness was derived from something other than the activation policy plus a fresh published aggregate",
+				payload.Graph.State, payload.Graph.Code)
+		}
+		if payload.Graph.EvidenceRef != graphsynthetic.AggregateEvidenceRef {
+			t.Errorf("graph capability section carries evidence_ref %q; it MUST be the constant %q",
+				payload.Graph.EvidenceRef, graphsynthetic.AggregateEvidenceRef)
+		}
+		if !activationStates[payload.Graph.Activation] {
+			t.Errorf("graph capability section carries activation %q; it MUST be within the closed set {%q,%q}",
+				payload.Graph.Activation, graphapi.ActivationEnabled, graphapi.ActivationDisabled)
+		}
+		if !aggregateStates[payload.Graph.State] {
+			t.Errorf("graph capability section carries state %q; it MUST be within the closed aggregate set {%q,%q,%q,%q}",
+				payload.Graph.State,
+				graphsynthetic.AggregateAvailable, graphsynthetic.AggregateDegraded,
+				graphsynthetic.AggregateUnavailable, graphsynthetic.AggregatePolicyDisabled)
+		}
+		// Accept the CLOSED union: a readiness-projection code, or an
+		// aggregate code from the F080-SYNTH-* family. Anything else is a
+		// vocabulary escape and is rejected.
+		if !readinessProjectionCodes[payload.Graph.Code] && !strings.HasPrefix(payload.Graph.Code, "F080-SYNTH-") {
+			t.Errorf("graph capability section carries code %q; it MUST be a readiness-projection code (F080-READINESS-NOT-OBSERVED / -STALE / -ACTIVATION-MISMATCH / -CONFIG-INVALID) or an F080-SYNTH-* aggregate code",
+				payload.Graph.Code)
+		}
+
+		// CROSS-SURFACE CONSISTENCY. The authenticated capability detail and
+		// the unauthenticated strict probe are two renderings of the SAME
+		// derivation and MUST agree. A ready section beside a strict 503 (or a
+		// non-ready section beside a strict 200) is a contradiction that would
+		// let one surface mask the other.
+		observedStatus, observedReady := strictStatus, strictReady
+		if !strictObserved {
+			observedStatus, observedReady = probeReadyz(t, "?strict=true")
+		}
+		if observedReady != payload.Graph.Ready {
+			t.Fatalf("CONTRADICTION: /readyz?strict=true reports ready=%t (HTTP %d) while authenticated /api/health reports graph.ready=%t; both surfaces render the SAME readiness derivation and MUST agree",
+				observedReady, observedStatus, payload.Graph.Ready)
+		}
+		if payload.Graph.Ready && observedStatus == http.StatusServiceUnavailable {
+			t.Fatalf("CONTRADICTION: authenticated /api/health reports a READY graph capability while /readyz?strict=true answers HTTP %d",
+				observedStatus)
+		}
+		if !payload.Graph.Ready && observedStatus == http.StatusOK {
+			t.Fatalf("CONTRADICTION: authenticated /api/health reports graph.ready=false while /readyz?strict=true answers HTTP %d; the strict probe was satisfied by something other than a ready Knowledge Graph journey",
+				observedStatus)
+		}
+	})
+
+	t.Run("Regression: static Wiki and green liveness cannot satisfy Graph readiness (unauthenticated health withholds capability detail)", func(t *testing.T) {
+		// Capability detail is withheld from unauthenticated callers to deny
+		// reconnaissance (CWE-200). The `graph` key must be ABSENT — not
+		// present-and-empty, which would still leak that the capability exists
+		// and is being tracked.
+		resp, err := (&http.Client{Timeout: 15 * time.Second}).Get(cfg.CoreURL + "/api/health")
+		if err != nil {
+			t.Fatalf("unauthenticated GET /api/health against the live stack: %v", err)
+		}
+		body, err := readBody(resp)
+		if err != nil {
+			t.Fatalf("read response body of unauthenticated GET /api/health: %v", err)
+		}
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("unauthenticated GET /api/health returned HTTP %d; the default liveness answer MUST be HTTP %d",
+				resp.StatusCode, http.StatusOK)
+		}
+
+		var raw map[string]json.RawMessage
+		if err := json.Unmarshal(body, &raw); err != nil {
+			t.Fatalf("unauthenticated GET /api/health returned a body that is not a JSON object: %v", err)
+		}
+		if _, present := raw["graph"]; present {
+			t.Fatalf("unauthenticated GET /api/health EXPOSED the `graph` capability section; Knowledge Graph capability detail MUST be withheld from unauthenticated callers (CWE-200) and is available to AUTHENTICATED callers only")
 		}
 	})
 }
