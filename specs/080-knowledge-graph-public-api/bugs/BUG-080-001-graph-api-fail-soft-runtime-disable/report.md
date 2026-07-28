@@ -2253,3 +2253,103 @@ unchanged). No product source file was modified in this invocation.
 concurrent session. SCOPE-03 remains `Blocked`; the bug top-level `status` and
 `certification.status` remain `blocked`.
 
+## SCOPE-03 Telemetry Content-Safety Closure (bubbles.implement, 2026-07-28)
+
+Closes the fourth SCOPE-03 Test-Evidence row — `T080-07-TELEMETRY`, the
+executed proof for `SCN-080-001-07` ("Secret values never leave the config
+boundary"). Two SCOPE-03 rows remain `[ ]` (`T080-03-TRACE`, `T080-03-STRESS`),
+so **SCOPE-03 stays `Blocked` and the bug stays `blocked`.**
+
+Evidence below is raw, unedited output captured in THIS session (2026-07-28,
+~19:43 UTC) from the repo-standard CLI.
+
+<a id="t080-07-telemetry"></a>
+
+### T080-07-TELEMETRY
+
+**Command:** `./smackerel.sh test e2e --go-run 'TestE2E_GraphSyntheticAndTelemetryAreContentFree_T080_07_TELEMETRY'`
+**Exit code:** `0` (`ORCHESTRATOR_VERIFY_EXIT=0`, `PASS: go-e2e` **and** `PASS: go-e2e-graph-disabled`)
+**File:** `tests/e2e/graph_read_synthetic_e2e_test.go`
+
+```
+2026/07/28 19:43:33 INFO graph family read observed family=edges state=populated code=OK evidence_ref=graph-read/edges duration_ms=2
+2026/07/28 19:43:33 INFO graph read synthetic aggregate observed activation=enabled state=available code=OK evidence_ref=graph-read/aggregate duration_ms=22 family_count=8
+    graph_read_synthetic_e2e_test.go:922: synthetic observed aggregate state="available" code="OK" across 8 canonical families
+    graph_read_synthetic_e2e_test.go:1069: inspected 39 label pairs across 4 smackerel_graph_* metric families against 10 forbidden content values
+    graph_read_synthetic_e2e_test.go:1140: live scrape body is 24552 bytes and exposed 0 smackerel_graph_* sample lines (zero is acceptable: the synthetic runs in the test process, not the server); checked against 9 forbidden content values
+--- PASS: TestE2E_GraphSyntheticAndTelemetryAreContentFree_T080_07_TELEMETRY (0.10s)
+    --- PASS: TestE2E_GraphSyntheticAndTelemetryAreContentFree_T080_07_TELEMETRY/Regression:_Graph_synthetic_and_telemetry_are_content-free_(the_real_telemetry_observer_emits_against_the_live_stack) (0.02s)
+    --- PASS: TestE2E_GraphSyntheticAndTelemetryAreContentFree_T080_07_TELEMETRY/Regression:_Graph_synthetic_and_telemetry_are_content-free_(every_graph_metric_label_draws_from_its_closed_vocabulary) (0.00s)
+    --- PASS: TestE2E_GraphSyntheticAndTelemetryAreContentFree_T080_07_TELEMETRY/Regression:_Graph_synthetic_and_telemetry_are_content-free_(the_aggregate_gauge_is_one-hot_across_every_declared_state) (0.00s)
+    --- PASS: TestE2E_GraphSyntheticAndTelemetryAreContentFree_T080_07_TELEMETRY/Regression:_Graph_synthetic_and_telemetry_are_content-free_(no_graph_metric_label_carries_content) (0.00s)
+    --- PASS: TestE2E_GraphSyntheticAndTelemetryAreContentFree_T080_07_TELEMETRY/Regression:_Graph_synthetic_and_telemetry_are_content-free_(the_live_scrape_surface_leaks_no_content) (0.00s)
+PASS
+ok      github.com/smackerel/smackerel/tests/e2e        0.214s
+```
+
+#### What this proves
+
+Graph telemetry carries only closed-vocabulary values and structurally cannot
+carry content:
+
+- **The run is not vacuous.** The test drives the REAL
+  `graphsynthetic.NewTelemetryObserver(nil, nil)` — not `NopObserver` — against
+  the live stack, and the logged aggregate (`state=available code=OK
+  family_count=8`) proves all eight canonical families genuinely emitted. All
+  four `smackerel_graph_*` metric families must be PRESENT; a missing family is
+  a hard failure precisely so the vocabulary and content assertions cannot pass
+  over an empty registry.
+- **Every label value is checked against its closed vocabulary** — `mode`,
+  activation `outcome`, `family` (the canonical eight), read `outcome`/`state`,
+  aggregate `state`, and `code` (`OK` or `F080-*`). An unknown value fails with
+  the metric, label, and offending value named. 39 label pairs across 4 metric
+  families were inspected in this run.
+- **The aggregate gauge is verified ONE-HOT**: exactly one series is `1`, every
+  other declared aggregate state is `0`, and the series count equals the number
+  of declared states — so a stale series can never be misread as current truth.
+- **Content-freeness is proven against real values from this run**, not a
+  hypothetical list: the live credential, the seeded topic's id and label, the
+  seeded prefix, the base URL, and the `host:port` authority — 10 forbidden
+  values in total — are each checked as a case-insensitive substring against
+  every label name and value. UUID-shaped values and `http(s)://` are rejected
+  outright. Failure messages print only the metric+label descriptor and a
+  redacted marker, never the secret.
+
+#### Two honest limitations, stated rather than hidden
+
+1. **The whole-body live-scrape scan uses 9 of the 10 forbidden values.** The
+   one excluded is the BARE hostname (the deployment's own service identity),
+   which legitimately appears across unrelated non-graph surfaces such as NATS
+   durable consumer names (`smackerel-core-processed`) and the tracing service
+   name. A bare-substring rule over the entire registry would flag the
+   deployment's own naming rather than a leak. The exclusion is narrow and
+   documented in the code, and the bare hostname remains **fully enforced**
+   where the value-safety contract actually binds: against every graph label,
+   and against every `smackerel_graph_*` sample line. A `t.Fatalf` guard fires
+   if the whole-body forbidden set were ever to become empty, so this arm can
+   never degrade into proving nothing.
+2. **The live scrape exposed 0 `smackerel_graph_*` sample lines.** This is
+   truthful, not a gap: the synthetic runs in the TEST process and writes to
+   the TEST process's registry, and nothing in production wiring publishes a
+   synthetic observation, so the server's registry legitimately has none. The
+   whole-body content assertion still ran unconditionally over 24552 bytes. No
+   claim is made that server-side graph series were inspected.
+
+#### Trace-workflow boundary respected
+
+This row is about METRICS content-safety only. The repository registers exactly
+one trace workflow, `core.health`, and it is unrelated to the Knowledge Graph.
+Consistent with `internal/graphsynthetic/telemetry.go`, this test does **not**
+invent an `observabilityWorkflow`, does **not** claim a graph-specific G080/G100
+trace or SLO contract, and does **not** emit into, reuse, or assert on
+`core.health`.
+
+### Change surface for this closure
+
+`tests/e2e/graph_read_synthetic_e2e_test.go` (+550 lines, 0 deletions — the two
+pre-existing tests are byte-for-byte untouched; the import block gained
+`net/url`, `regexp`, the Prometheus client, and `dto`), `report.md` (this
+section), and `scopes.md` (one SCOPE-03 Test-Evidence row checked, claim text
+unchanged). No product source file was modified. `smackerel.sh` and `.github/**`
+were **not** modified — both belong to a concurrent session.
+
