@@ -22,18 +22,20 @@
 //     NEVER logged.
 //
 //   - T080-01-DISABLED and T080-02-ADVERSARIAL (require a DISABLED-graph core).
-//     The default `./smackerel.sh test e2e` harness boots exactly ONE core in
-//     the ENABLED activation state: config/generated/test.env sets a non-empty
-//     KNOWLEDGE_GRAPH_API_CURSOR_SECRET and docker-compose.yml sources it via
-//     env_file with no per-run override, so a true-container e2e proof of the
-//     fail-soft DISABLED path (typed 503 capability_disabled, never a silent
-//     404 / opaque 500 / panic) needs a NEW disabled-mode stack flavor. That
-//     harness change is tracked as a bubbles.devops finding in the BUG-080-001
-//     report.md ("HARNESS LIMITATION"). Both tests below are written to run
-//     UNCHANGED the moment that harness exports the disabled core's base URL as
-//     SMACKEREL_E2E_GRAPH_DISABLED_URL; until then they t.Skip with a precise
-//     reason. The DISABLED fail-soft behavior is ALREADY live-proven at the
-//     integration tier (tests/integration/graphapi/activation_test.go —
+//     A disabled-graph core is provided by the `graph-disabled` phase of
+//     `./smackerel.sh test e2e`, which recycles the stack onto
+//     docker-compose.graph-disabled.override.yml (that overlay sets
+//     KNOWLEDGE_GRAPH_API_CURSOR_SECRET to an EXPLICIT empty value on
+//     smackerel-core, so activation resolves the typed DISABLED state) and
+//     exports that core's base URL as SMACKEREL_E2E_GRAPH_DISABLED_URL. Both
+//     tests below run there unchanged and prove the fail-soft contract over
+//     real HTTP: a typed 503 capability_disabled, never a silent 404, an
+//     opaque 500, or a panic. They still t.Skip when
+//     SMACKEREL_E2E_GRAPH_DISABLED_URL is absent — e.g. a targeted `--go-run`
+//     selector that never reaches the graph-disabled phase — so an
+//     ENABLED-stack-only run stays meaningful instead of failing spuriously.
+//     The same behavior is additionally proven at the integration tier
+//     (tests/integration/graphapi/activation_test.go —
 //     TestGraphActivationDisabledSecretServesTyped503AndKeepsServing, and
 //     route_manifest_test.go — disabled_router_mounts_all_eight_present) and at
 //     the unit tier (internal/api/graphapi/activation_test.go —
@@ -65,14 +67,17 @@ import (
 const cursorSecretEnvName = "KNOWLEDGE_GRAPH_API_CURSOR_SECRET"
 
 // disabledGraphStackURL returns the base URL of a smackerel-core booted in
-// the fail-soft DISABLED graph activation state, or skips the calling test
-// when the default (ENABLED-only) harness has not provided one. See the file
-// header + the BUG-080-001 report.md "HARNESS LIMITATION" finding.
+// the fail-soft DISABLED graph activation state. That URL is supplied by the
+// `graph-disabled` phase of `./smackerel.sh test e2e`, which recycles the
+// stack onto docker-compose.graph-disabled.override.yml and exports
+// SMACKEREL_E2E_GRAPH_DISABLED_URL. A skip here therefore means only that the
+// current run did not include that phase (e.g. a targeted `--go-run`
+// selector), not that the harness is missing. See the file header.
 func disabledGraphStackURL(t *testing.T) string {
 	t.Helper()
 	base := strings.TrimRight(strings.TrimSpace(os.Getenv("SMACKEREL_E2E_GRAPH_DISABLED_URL")), "/")
 	if base == "" {
-		t.Skip("e2e: SMACKEREL_E2E_GRAPH_DISABLED_URL not set — the default `./smackerel.sh test e2e` harness boots a single ENABLED core (config/generated/test.env sets a non-empty " + cursorSecretEnvName + "; docker-compose.yml has no per-run override). A DISABLED-mode core is a bubbles.devops harness finding (BUG-080-001 report.md). The DISABLED fail-soft behavior is already proven at the integration tier (T080-01-PROC) and unit tier (T080-01-UNIT).")
+		t.Skip("e2e: SMACKEREL_E2E_GRAPH_DISABLED_URL not set — this test runs in the `graph-disabled` phase of `./smackerel.sh test e2e`, which boots smackerel-core via docker-compose.graph-disabled.override.yml with an explicitly empty " + cursorSecretEnvName + ". A targeted --go-run selector that does not reach that phase skips here by design. The DISABLED fail-soft behavior is additionally proven at the integration tier (T080-01-PROC) and the unit tier (T080-01-UNIT).")
 	}
 	return base
 }
