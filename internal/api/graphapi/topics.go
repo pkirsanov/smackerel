@@ -84,14 +84,25 @@ func (h *TopicsHandlers) ListTopics(w http.ResponseWriter, r *http.Request) {
 	}
 
 	next := ""
-	if hasNext && h.Codec != nil {
+	if hasNext {
 		encoded, encErr := h.Codec.Encode(CursorPayload{
 			Resource: "topics",
 			Offset:   int64(offset + len(rows)),
 		})
-		if encErr == nil {
-			next = encoded
+		if encErr != nil || encoded == "" {
+			// design.md §"Completeness Envelope": cursor encode failure
+			// is a schema error when hasNext is true; it cannot silently
+			// emit an empty cursor (which every client reads as "last
+			// page", i.e. silent data truncation). A nil Codec reaches
+			// here too — Encode has a nil-receiver guard. This is a
+			// server-side inconsistency, not client input, so it is 500
+			// and never 400. Value-safe log: no cursor body, no secret.
+			slog.Error("graphapi: non-terminal page cursor could not be produced",
+				"resource", "topics", "codecConfigured", h.Codec != nil)
+			WriteAPIError(w, ErrSchemaError)
+			return
 		}
+		next = encoded
 	}
 
 	writeJSON(w, http.StatusOK, topicsListResponse{Items: rows, NextCursor: next})

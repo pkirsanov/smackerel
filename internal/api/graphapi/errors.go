@@ -15,6 +15,14 @@ const (
 	CodeLimitExceeded   = "limit_exceeded"
 	CodeUnauthenticated = "unauthenticated"
 	CodeForbidden       = "forbidden"
+	// CodeSchemaError narrows the previously generic internal_error for
+	// internal projection inconsistency (design.md §"Closed Read
+	// Outcomes": `schema-error` → 500 `schema_error`).
+	CodeSchemaError = "schema_error"
+	// CodeStoreUnavailable narrows the previously generic internal_error
+	// for store connectivity/timeout failure (design.md §"Closed Read
+	// Outcomes": `store-unavailable` → 503 `store_unavailable`).
+	CodeStoreUnavailable = "store_unavailable"
 )
 
 // ErrorEnvelope is the uniform JSON shape every spec 080 endpoint
@@ -104,6 +112,25 @@ var (
 		Code:    CodeInvalidKind,
 		Message: "source kind is not recognized",
 		Field:   "kind",
+	}
+	// ErrSchemaError is the typed 500 for an internal projection
+	// inconsistency — the server holds data it cannot render into a
+	// contract-valid response (e.g. a non-terminal page whose
+	// continuation cursor cannot be produced). Per design.md the
+	// message is value-safe: it names no SQL, table, column, row value,
+	// or driver text.
+	ErrSchemaError = &APIError{
+		Status:  http.StatusInternalServerError,
+		Code:    CodeSchemaError,
+		Message: "internal projection inconsistency; the response could not be rendered completely",
+	}
+	// ErrStoreUnavailable is the typed 503 for graph store
+	// connectivity/timeout failure. Value-safe for the same reason as
+	// ErrSchemaError.
+	ErrStoreUnavailable = &APIError{
+		Status:  http.StatusServiceUnavailable,
+		Code:    CodeStoreUnavailable,
+		Message: "graph store is unavailable; the read could not be served",
 	}
 )
 

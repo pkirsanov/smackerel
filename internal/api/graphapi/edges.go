@@ -92,14 +92,23 @@ func (h *EdgesHandlers) ListEdges(w http.ResponseWriter, r *http.Request) {
 	}
 
 	next := ""
-	if hasNext && h.Codec != nil {
+	if hasNext {
 		encoded, encErr := h.Codec.Encode(CursorPayload{
 			Resource: "edges",
 			Offset:   int64(offset + len(items)),
 		})
-		if encErr == nil {
-			next = encoded
+		if encErr != nil || encoded == "" {
+			// design.md §"Completeness Envelope": cursor encode failure
+			// is a schema error when hasNext is true; it cannot silently
+			// emit an empty cursor. Server-side inconsistency → 500, not
+			// 400. Value-safe log: no source id, no cursor body, no
+			// secret.
+			slog.Error("graphapi: non-terminal page cursor could not be produced",
+				"resource", "edges", "codecConfigured", h.Codec != nil)
+			WriteAPIError(w, ErrSchemaError)
+			return
 		}
+		next = encoded
 	}
 
 	writeJSON(w, http.StatusOK, edgesListResponse{Items: items, NextCursor: next})

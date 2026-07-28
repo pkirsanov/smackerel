@@ -296,3 +296,11 @@ func TestResolveEdges_UnknownKind_IsError(t *testing.T) {
 		t.Fatalf("want ErrReasonRenderUnknownKind, got %v", err)
 	}
 }
+
+// --- T080-06-CURSOR / SCN-080-001-06 (edges family) ------------------
+//
+// The "a non-terminal page must never be rendered as terminal"
+// contract is asserted once, for every paginated family (topics AND
+// edges), in cursor_test.go —
+// TestNonTerminalPageCannotLoseCursorEncodeFailure. The edges family
+// is driven there via paginatedEdgesSource + mountEdgesRouter.

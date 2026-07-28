@@ -1340,3 +1340,112 @@ SCOPE-02 is `in_progress` and SCOPE-03/04 are `blocked`, with ~46 DoD rows still
 unchecked across them. No SCOPE-02/03/04 row was touched by this invocation.
 No `git add`, `git commit`, or `git push` was performed.
 
+## Cursor Completeness Guard RED→GREEN (bubbles.implement, 2026-07-28)
+
+### T080-06-CURSOR
+
+**Scenario:** SCN-080-001-06 — a non-terminal page can never lose its cursor.
+**Tier:** `unit`.
+**Test:** `internal/api/graphapi/cursor_test.go` -
+`TestNonTerminalPageCannotLoseCursorEncodeFailure`.
+**Claim Source:** executed — both halves captured in this session.
+
+#### The defect, stated plainly
+
+Previously, when `hasNext == true` **and** the cursor codec was unusable (encode
+error, or a `nil` codec that was never wired), the handler answered **HTTP 200
+with an empty `nextCursor`**. Every client reads an empty `nextCursor` as "this
+was the last page", so the remaining pages were dropped without any error
+surface: **silent data truncation**.
+
+The fix makes that condition a typed **HTTP 500 `schema_error`**, per
+`design.md` § "Completeness Envelope". It spans all four paginated families —
+`internal/api/graphapi/topics.go`, `people.go`, `places.go`, `edges.go` — plus
+the new typed errors `ErrSchemaError` (500) and `ErrStoreUnavailable` (503) in
+`internal/api/graphapi/errors.go`.
+
+#### Test-location honesty note
+
+The Test Plan row for T080-06-CURSOR names `cursor_test.go`. The test had been
+delivered as duplicated per-family cases inside `topics_test.go` and
+`edges_test.go`. Those duplicates were **removed** and the test was
+**consolidated into `cursor_test.go`** so the shipped code CONFORMS to the
+planned Test Plan row. The plan was **not** edited to match the code — the code
+was moved to match the plan.
+
+#### RED — defect temporarily reintroduced in `topics.go`
+
+Only the cursor guard in `internal/api/graphapi/topics.go` was reverted to the
+old silent form (`if encErr == nil { next = encoded }`, keeping `if hasNext {`
+so a `nil` codec still reaches `Encode`'s nil-receiver guard). The test file was
+**not** touched. Command and raw output (terminal hard-wrap at 80 columns
+unwrapped; bytes otherwise verbatim):
+
+```text
+$ ./smackerel.sh test unit --go --go-run 'TestNonTerminalPageCannotLoseCursorEncodeFailure'
+--- FAIL: TestNonTerminalPageCannotLoseCursorEncodeFailure (0.00s)
+    --- FAIL: TestNonTerminalPageCannotLoseCursorEncodeFailure/topics (0.00s)
+        --- FAIL: TestNonTerminalPageCannotLoseCursorEncodeFailure/topics/adversarial_non_terminal_page_with_unusable_codec_is_500_schema_error (0.00s)
+            --- FAIL: TestNonTerminalPageCannotLoseCursorEncodeFailure/topics/adversarial_non_terminal_page_with_unusable_codec_is_500_schema_error/nil_codec (0.00s)
+                cursor_test.go:334: fail-soft regression: non-terminal page answered 200; a lost cursor must never look like the last page (body={"items":[{"id":"T1","label":"label-T1","linkedArtifactCount":0,"peopleCount":0,"placeCount":0},{"id":"T2","label":"label-T2","linkedArtifactCount":0,"peopleCount":0,"placeCount":0}],"nextCursor":""}
+                    )
+            --- FAIL: TestNonTerminalPageCannotLoseCursorEncodeFailure/topics/adversarial_non_terminal_page_with_unusable_codec_is_500_schema_error/codec_without_secret (0.00s)
+                cursor_test.go:334: fail-soft regression: non-terminal page answered 200; a lost cursor must never look like the last page (body={"items":[{"id":"T1","label":"label-T1","linkedArtifactCount":0,"peopleCount":0,"placeCount":0},{"id":"T2","label":"label-T2","linkedArtifactCount":0,"peopleCount":0,"placeCount":0}],"nextCursor":""}
+                    )
+        --- FAIL: TestNonTerminalPageCannotLoseCursorEncodeFailure/topics/value_safety_500_body_discloses_no_secret_or_cursor_material (0.00s)
+            cursor_test.go:406: unusable codec: want 500, got 200 (body={"items":[{"id":"T1","label":"label-T1","linkedArtifactCount":0,"peopleCount":0,"placeCount":0},{"id":"T2","label":"label-T2","linkedArtifactCount":0,"peopleCount":0,"placeCount":0}],"nextCursor":""}
+                )
+FAIL
+FAIL    github.com/smackerel/smackerel/internal/api/graphapi    0.005s
+FAIL
+===RED_EXIT=1===
+```
+
+The failure body is the defect itself, verbatim: `"nextCursor":""` alongside a
+`200` on a page that has more rows behind it.
+
+#### Restore verification (byte-identical)
+
+`topics.go` was restored before the GREEN run and the restore was verified
+against the pre-RED baseline, not asserted:
+
+```text
+$ git --no-pager diff --stat internal/api/graphapi/topics.go
+ internal/api/graphapi/topics.go | 17 ++++++++++++++---
+ 1 file changed, 14 insertions(+), 3 deletions(-)
+```
+
+`14 insertions(+), 3 deletions(-)` is exactly the pre-RED baseline, and the full
+`git diff` shows the typed `WriteAPIError(w, ErrSchemaError); return` guard back
+in place.
+
+#### GREEN — same test bytes, repaired product code
+
+```text
+$ ./smackerel.sh test unit --go --go-run 'TestNonTerminalPageCannotLoseCursorEncodeFailure'
+ok      github.com/smackerel/smackerel/internal/api/graphapi    0.011s
+===GREEN_EXIT=0===
+```
+
+The `ok` line carries **no** `[no tests to run]` suffix, so the `-run` filter
+genuinely matched and executed the consolidated test.
+
+#### Supporting gates (verified in this session's work stream)
+
+```text
+$ ./smackerel.sh check              → CHECK_EXIT=0
+$ ./smackerel.sh format --check     → FORMAT_EXIT=0
+$ bash .github/bubbles/scripts/regression-quality-guard.sh --bugfix internal/api/graphapi/cursor_test.go
+✅ Adversarial signal detected
+0 violations
+BUGFIX_GUARD_EXIT=0
+```
+
+**Row verdict: `[x]`.** The test lives where the Test Plan row says it lives, it
+fails against the reintroduced defect and passes against the fix with identical
+test bytes, and the supporting quality gates are clean.
+
+Only the T080-06-CURSOR row was closed. No other SCOPE-02 row, and no
+`state.json` field, was modified: SCOPE-02 stays `in_progress` and the bug stays
+`blocked`. No `git add`, `git commit`, or `git push` was performed.
+
