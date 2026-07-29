@@ -1,0 +1,268 @@
+{
+  "version": 3,
+  "feature": "109-mcp-knowledge-server",
+  "specDir": "specs/109-mcp-knowledge-server",
+  "generatedBy": "bubbles.plan",
+  "generatedAt": "2026-07-29T00:00:00Z",
+  "workflowMode": "product-to-planning",
+  "statusCeiling": "specs_hardened",
+  "note": "Contract entries only. No scenario has been executed; this packet is planning-only and claims no test evidence. SCN-109-001 through SCN-109-015 originate in spec.md section 7. SCN-109-P01 through SCN-109-P05 are plan-derived because spec.md section 7 authors no documentation, release, tool-name or resource scenario; each names the exact spec.md requirement it traces to.",
+  "scenarios": [
+    {
+      "id": "SCN-109-001",
+      "title": "Raw content never crosses the MCP boundary",
+      "origin": "spec.md#7",
+      "plannedIn": "SCOPE-03",
+      "status": "planned",
+      "traces": ["D2", "P-PROJ", "spec.md#9"],
+      "expectedTests": [
+        { "id": "TP-03-04", "category": "integration", "command": "./smackerel.sh test integration" },
+        { "id": "TP-03-08", "category": "e2e-api", "command": "./smackerel.sh test e2e" },
+        { "id": "TP-01-04", "category": "unit", "command": "./smackerel.sh test unit" }
+      ]
+    },
+    {
+      "id": "SCN-109-002",
+      "title": "A legacy Smackerel bearer is rejected at /mcp",
+      "origin": "spec.md#7",
+      "plannedIn": "SCOPE-01",
+      "status": "planned",
+      "traces": ["D3", "F-109-004", "P-AUTHZ"],
+      "expectedTests": [
+        { "id": "TP-01-01", "category": "unit", "command": "./smackerel.sh test unit" },
+        { "id": "TP-01-02", "category": "unit", "command": "./smackerel.sh test unit" }
+      ]
+    },
+    {
+      "id": "SCN-109-003",
+      "title": "tools/list reflects the presented credential",
+      "origin": "spec.md#7",
+      "plannedIn": "SCOPE-02",
+      "alsoPlannedIn": ["SCOPE-03", "SCOPE-04", "SCOPE-05"],
+      "status": "planned",
+      "traces": ["P-DETERMINISTIC", "R-109-UX11", "R-109-UX12", "UC-109-002"],
+      "expectedTests": [
+        { "id": "TP-02-02", "category": "unit", "command": "./smackerel.sh test unit" },
+        { "id": "TP-02-04", "category": "integration", "command": "./smackerel.sh test integration" },
+        { "id": "TP-03-03", "category": "integration", "command": "./smackerel.sh test integration" },
+        { "id": "TP-04-02", "category": "unit", "command": "./smackerel.sh test unit" },
+        { "id": "TP-05-04", "category": "e2e-api", "command": "./smackerel.sh test e2e" }
+      ],
+      "sliceNote": "Scope 02 proves the context-only half and byte-identity; the client-B memory-read half is proven in Scope 03 (TP-03-03) because memory-read does not exist until then. Scopes 04 and 05 prove the opt-in toolset slices."
+    },
+    {
+      "id": "SCN-109-004",
+      "title": "No fabricated capability is advertised",
+      "origin": "spec.md#7",
+      "plannedIn": "SCOPE-02",
+      "alsoPlannedIn": ["SCOPE-04", "SCOPE-07"],
+      "status": "planned",
+      "traces": ["F-109-005", "P8 Trust Through Transparency", "P-SVC"],
+      "expectedTests": [
+        { "id": "TP-02-03", "category": "unit", "command": "./smackerel.sh test unit" },
+        { "id": "TP-02-05", "category": "integration", "command": "./smackerel.sh test integration" },
+        { "id": "TP-04-03", "category": "integration", "command": "./smackerel.sh test integration" },
+        { "id": "TP-07-04", "category": "integration", "command": "./smackerel.sh test integration" }
+      ]
+    },
+    {
+      "id": "SCN-109-005",
+      "title": "Remote-inference egress is denied without a grant",
+      "origin": "spec.md#7",
+      "plannedIn": "SCOPE-03",
+      "status": "planned",
+      "traces": ["D1", "P-EGRESS", "OF-3 step 5"],
+      "expectedTests": [
+        { "id": "TP-03-05", "category": "integration", "command": "./smackerel.sh test integration" }
+      ]
+    },
+    {
+      "id": "SCN-109-006",
+      "title": "Granted remote-inference egress is always audited",
+      "origin": "spec.md#7",
+      "plannedIn": "SCOPE-03",
+      "status": "planned",
+      "traces": ["D1", "UC-109-007", "OF-4 step 3", "R-109-UX9"],
+      "expectedTests": [
+        { "id": "TP-03-06", "category": "integration", "command": "./smackerel.sh test integration" }
+      ]
+    },
+    {
+      "id": "SCN-109-007",
+      "title": "Retrieval fallback is reported, not hidden",
+      "origin": "spec.md#7",
+      "plannedIn": "SCOPE-03",
+      "status": "planned",
+      "traces": ["UC-109-004", "R-109-UX15", "R-109-UX16", "R-109-UX17", "F-109-002"],
+      "expectedTests": [
+        { "id": "TP-03-01", "category": "unit", "command": "./smackerel.sh test unit" },
+        { "id": "TP-03-07", "category": "e2e-api", "command": "./smackerel.sh test e2e" }
+      ]
+    },
+    {
+      "id": "SCN-109-008",
+      "title": "Provider failure is surfaced as a failure",
+      "origin": "spec.md#7",
+      "plannedIn": "SCOPE-01",
+      "status": "planned",
+      "traces": ["P-HONEST", "R-109-UX19", "R-109-UX20", "R-109-UX21", "BUG-061-008", "BUG-061-009"],
+      "expectedTests": [
+        { "id": "TP-01-05", "category": "unit", "command": "./smackerel.sh test unit" }
+      ]
+    },
+    {
+      "id": "SCN-109-009",
+      "title": "Protocol errors and tool errors are distinguished",
+      "origin": "spec.md#7",
+      "plannedIn": "SCOPE-01",
+      "status": "planned",
+      "traces": ["R-109-UX22", "spec.md#12 OutcomeInputSchemaViolation carve-out"],
+      "expectedTests": [
+        { "id": "TP-01-05", "category": "unit", "command": "./smackerel.sh test unit" }
+      ]
+    },
+    {
+      "id": "SCN-109-010",
+      "title": "Scope challenges disclose only what is missing",
+      "origin": "spec.md#7",
+      "plannedIn": "SCOPE-05",
+      "status": "planned",
+      "traces": ["R-109-UX14", "R-109-UX7", "spec.md#10 Scope Minimization", "UC-109-005"],
+      "expectedTests": [
+        { "id": "TP-05-02", "category": "unit", "command": "./smackerel.sh test unit" },
+        { "id": "TP-05-03", "category": "integration", "command": "./smackerel.sh test integration" }
+      ]
+    },
+    {
+      "id": "SCN-109-011",
+      "title": "Sessions are never used for authentication",
+      "origin": "spec.md#7",
+      "plannedIn": "SCOPE-01",
+      "status": "planned",
+      "traces": ["D3", "P-AUTHZ", "OF-5 step 2"],
+      "expectedTests": [
+        { "id": "TP-01-03", "category": "unit", "command": "./smackerel.sh test unit" }
+      ]
+    },
+    {
+      "id": "SCN-109-012",
+      "title": "hospitality-read is honestly unavailable",
+      "origin": "spec.md#7",
+      "plannedIn": "SCOPE-06",
+      "status": "planned-blocked",
+      "blockedBy": ["BUG-019-003"],
+      "traces": ["F-109-001", "R-109-UX13", "spec.md#9 external-reference honesty rule", "spec.md#18 item 5"],
+      "expectedTests": [
+        { "id": "TP-06-01", "category": "unit", "command": "./smackerel.sh test unit" },
+        { "id": "TP-06-02", "category": "unit", "command": "./smackerel.sh test unit" },
+        { "id": "TP-06-03", "category": "integration", "command": "./smackerel.sh test integration" }
+      ],
+      "note": "The honestly-unavailable behavior IS testable now and is planned. SERVING guest context is blocked until BUG-019-003 persists artifacts.source_ref."
+    },
+    {
+      "id": "SCN-109-013",
+      "title": "A write proposal requires an explicit confirmation",
+      "origin": "spec.md#7",
+      "plannedIn": null,
+      "status": "deferred",
+      "traces": ["D5 memory-write off (later)", "UC-109-006", "design.md#8"],
+      "expectedTests": [],
+      "note": "memory-write is off by decision D5. design.md section 8 settles the confirm.Machine mapping now so the deferral does not become a redesign, but no scope in this packet delivers it. Planning it here would ship an off-by-decision toolset."
+    },
+    {
+      "id": "SCN-109-014",
+      "title": "An expired proposal cannot be confirmed",
+      "origin": "spec.md#7",
+      "plannedIn": null,
+      "status": "deferred",
+      "traces": ["D5 memory-write off (later)", "UC-109-006 alternative", "design.md#8"],
+      "expectedTests": [],
+      "note": "Deferred with SCN-109-013 for the same reason."
+    },
+    {
+      "id": "SCN-109-015",
+      "title": "MCP never pushes",
+      "origin": "spec.md#7",
+      "plannedIn": "SCOPE-01",
+      "status": "planned",
+      "traces": ["D4", "P-PULL", "docs/smackerel.md section 1.4 budget", "P6"],
+      "expectedTests": [
+        { "id": "TP-01-07", "category": "e2e-api", "command": "./smackerel.sh test e2e" }
+      ]
+    },
+    {
+      "id": "SCN-109-P01",
+      "title": "Every spec.md section 15 documentation row is satisfied",
+      "origin": "plan-derived",
+      "tracesRequirement": "spec.md#15 Documentation table",
+      "plannedIn": "SCOPE-07",
+      "status": "planned",
+      "traces": ["spec.md#15", "UX-F-002"],
+      "expectedTests": [
+        { "id": "TP-07-03", "category": "unit", "command": "./smackerel.sh test unit" }
+      ]
+    },
+    {
+      "id": "SCN-109-P02",
+      "title": "The flag is default-ON in exactly one train",
+      "origin": "plan-derived",
+      "tracesRequirement": "spec.md#15 Flag contract, spec.md#17 Release Train",
+      "plannedIn": "SCOPE-07",
+      "status": "planned",
+      "traces": ["spec.md#15", "spec.md#17", "bubbles-release-trains policy", "smackerel-no-defaults"],
+      "expectedTests": [
+        { "id": "TP-07-01", "category": "unit", "command": "./smackerel.sh test unit" },
+        { "id": "TP-07-02", "category": "unit", "command": "./smackerel.sh test unit" },
+        { "id": "TP-07-05", "category": "e2e-api", "command": "./smackerel.sh test e2e" }
+      ]
+    },
+    {
+      "id": "SCN-109-P03",
+      "title": "Every documented claim about egress is honest",
+      "origin": "plan-derived",
+      "tracesRequirement": "spec.md D1 honest limitation, spec.md#15, spec.md#16",
+      "plannedIn": "SCOPE-07",
+      "status": "planned",
+      "traces": ["D1", "spec.md#15", "spec.md#16", "UX-F-005"],
+      "expectedTests": [
+        { "id": "TP-07-03", "category": "unit", "command": "./smackerel.sh test unit" },
+        { "id": "TP-07-04", "category": "integration", "command": "./smackerel.sh test integration" }
+      ]
+    },
+    {
+      "id": "SCN-109-P04",
+      "title": "Every served tool name matches the D5 Tool Inventory",
+      "origin": "plan-derived",
+      "tracesRequirement": "spec.md D5 Tool Inventory, T1 name rule, T2 ordering contract",
+      "plannedIn": "SCOPE-02",
+      "status": "planned",
+      "traces": ["spec.md#3 D5", "spec.md#8.2", "P-DETERMINISTIC", "F-109-005", "design.md#3"],
+      "expectedTests": [
+        { "id": "TP-02-07", "category": "unit", "command": "./smackerel.sh test unit" }
+      ],
+      "note": "Closes F-109-TOOLNAME. The packet previously named toolsets but never named the individual tools a client sees in tools/list. A tool name is a public wire contract that clients pin in config, so the D5 Tool Inventory is now normative and manifest registration refuses any name absent from it."
+    },
+    {
+      "id": "SCN-109-P05",
+      "title": "A resource URI never carries PII",
+      "origin": "plan-derived",
+      "tracesRequirement": "spec.md section 9B R-109-RES2 URI templates, R-109-RES3 no-PII constraint, section 9B.2 no-enumeration exclusion",
+      "plannedIn": "SCOPE-03",
+      "status": "planned",
+      "traces": ["spec.md#9B", "D2", "P-PROJ", "R-109-UX12", "F-109-006", "design.md#7"],
+      "expectedTests": [
+        { "id": "TP-03-10", "category": "integration", "command": "./smackerel.sh test integration" }
+      ],
+      "note": "Closes F-109-RESOURCES. D4a deletes resource SUBSCRIPTIONS only, so Resources as a read primitive were neither specified nor excluded. resource_link plus the five URI templates are in scope and reinforce D2; an enumerable resources/list is permanently excluded as a corpus-enumeration oracle."
+    }
+  ],
+  "coverage": {
+    "specScenarioCount": 15,
+    "planDerivedScenarioCount": 5,
+    "plannedScenarioCount": 18,
+    "deferredScenarioCount": 2,
+    "totalTestPlanRows": 38,
+    "totalTestDodItems": 38,
+    "parity": true
+  }
+}

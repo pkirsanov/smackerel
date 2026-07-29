@@ -1,0 +1,484 @@
+{
+  "version": 3,
+  "feature": "109-mcp-knowledge-server",
+  "specDir": "specs/109-mcp-knowledge-server",
+  "title": "MCP Knowledge Server",
+  "status": "specs_hardened",
+  "workflowMode": "product-to-planning",
+  "releaseTrain": "next",
+  "flagsIntroduced": [
+    "mcpKnowledgeServer"
+  ],
+  "createdAt": "2026-07-29T00:00:00Z",
+  "lastUpdatedAt": "2026-07-29T00:00:00Z",
+  "planningOnly": true,
+  "planningOnlyJustification": "This packet is a planning artifact only and carries no implementation. It was authored under workflow mode product-to-planning (statusCeiling specs_hardened) with Gate G073 Source Code Edit Lockout ACTIVE: zero source files were modified and zero tests were executed. No MCP server exists in the repository (spec.md section 1), so there is no implementation spec to link to. Delivery of the seven planned scopes is deliberately deferred to a separate future run under a delivery-capable mode (full-delivery), and is additionally gated on the spec.md section 18 operator review; when that delivery packet exists, linkedImplementationSpec should be set to it and planningOnly cleared. Scope 06 additionally waits on BUG-019-003.",
+  "linkedImplementationSpec": null,
+  "plannedFixWorkflowMode": "full-delivery",
+  "execution": {
+    "activeAgent": "bubbles.plan",
+    "workflowMode": "product-to-planning",
+    "statusCeiling": "specs_hardened",
+    "currentPhase": "plan",
+    "focus": "planning_only",
+    "completedPhases": [
+      "analyze",
+      "ux",
+      "design",
+      "plan"
+    ],
+    "completedScopes": [],
+    "totalScopes": 7,
+    "scopeLayout": "single-file",
+    "blockedReason": null,
+    "loopCount": 0,
+    "runStartedAt": "2026-07-29T00:00:00Z",
+    "statusBefore": "in_progress",
+    "statusAfter": "specs_hardened"
+  },
+  "certification": {
+    "status": "specs_hardened",
+    "certifiedBy": null,
+    "certifiedAt": null,
+    "ceilingReached": "specs_hardened",
+    "evidenceComplete": false,
+    "evidenceNote": "Planning-only packet. No MCP server exists (spec.md section 1), therefore no execution evidence is claimed and none is fabricated. Certification to a terminal implementation status requires bubbles.validate after the seven planned scopes execute; Scope 06 cannot execute until BUG-019-003 is fixed.",
+    "gatesEvaluated": [],
+    "certifiedCompletedPhases": [],
+    "certifiedCompletedPhasesNote": "EMPTY by design, not by omission (Gate G022). This packet was authored by an analyst -> ux -> design -> plan chain, but no phase completed as a separately-provenanced, independently-certified specialist dispatch with its own recorded evidence. Under the anti-fabrication contract a phase may only be listed here when its provenance can be shown; listing analyze/ux/design/plan without that provenance would be an invented claim. Under-claiming is correct; over-claiming would be fabrication. What actually ran is recorded factually in executionHistory, and the planning chain itself is independently verified by Gate G091 (analyst -> ux -> design -> plan), which passes.",
+    "scopeProgress": [
+      { "scope": 1, "status": "not_started" },
+      { "scope": 2, "status": "not_started" },
+      { "scope": 3, "status": "not_started" },
+      { "scope": 4, "status": "not_started" },
+      { "scope": 5, "status": "not_started" },
+      { "scope": 6, "status": "blocked", "blockedReason": "Gated on BUG-019-003: artifacts.source_ref is never persisted by the connector front door, so no stable external reference per artifact exists. spec.md section 9's external-reference honesty rule forbids synthesizing one, so hospitality-read is planned as honestly unavailable and SERVING hospitality.get_guest_context waits on the fix." },
+      { "scope": 7, "status": "not_started" }
+    ],
+    "lockdownState": {
+      "active": false,
+      "lockedScenarioIds": []
+    },
+    "ceilingNote": "specs_hardened is the declared statusCeiling and terminal status for workflow mode product-to-planning. This packet is terminal-for-mode. Promotion to 'done' is FORBIDDEN from this mode and requires a delivery-capable mode plus the full evidence chain specified across the seven scopes in scopes.md, and the spec.md section 18 operator review gate.",
+    "outstandingFindings": [
+      {
+        "id": "UX-F-001",
+        "summary": "RESOLVED by design.md section 4. memory-read's corpus grant is now an MCP-owned data-scope Grant kind carried in MCP's own credential, not spec 108's corpus:read scope. A corpus denial renders as Case A (unauthorized-toolset, byte-identical to nonexistent) with the granularity confined to the ledger denial_reason column.",
+        "plannedIn": "SCOPE-03",
+        "status": "resolved",
+        "blocking": false
+      },
+      {
+        "id": "UX-F-002",
+        "summary": "OPEN. docs/smackerel.md section 17.1 (confidence signals) is absent from the spec.md section 15 documentation table, yet section 9A.5 ties R-109-UX15 through R-109-UX18 to it. Scope 07 plans the 17.1 row as a recorded planning decision; amending spec.md section 15 is not permitted under G073 in this mode.",
+        "plannedIn": "SCOPE-07",
+        "routedTo": "bubbles.analyst",
+        "status": "open",
+        "blocking": false
+      },
+      {
+        "id": "UX-F-003",
+        "summary": "OPEN. Principle numbering. Trust Through Transparency is Principle 8 in docs/Product-Principles.md; there is no Principle 11, and the commissioning reference does not resolve. Scope 07 writes the alignment note against Principle 8 and records the discrepancy. No principle is invented.",
+        "plannedIn": "SCOPE-07",
+        "routedTo": "operator-section-18-review",
+        "status": "open",
+        "blocking": false
+      },
+      {
+        "id": "UX-F-004",
+        "summary": "OPEN. spec.md section 2's Success Signal names source_kind, retrieval_strategy, retrieval_fell_back, and trace_token but omits retrieval_reason and retrieval_contract_known, both of which section 9 returns and R-109-UX15 / R-109-UX18 depend on. Scope 03 plans and tests all six provenance fields; the editorial correction to section 2 is routed to the section 18 operator pass.",
+        "plannedIn": "SCOPE-03",
+        "routedTo": "operator-section-18-review",
+        "status": "open",
+        "blocking": false
+      },
+      {
+        "id": "UX-F-005",
+        "summary": "OPEN. D1 describes remote-inference as 'fully coded but default-OFF' while section 1 states no MCP server exists today; read literally these conflict. The intended meaning is 'fully specified'. Scope 03 plans it as fully specified and default-OFF per client. Editorial correction routed to section 18 item 1 (D1 acceptance).",
+        "plannedIn": "SCOPE-03",
+        "routedTo": "operator-section-18-review",
+        "status": "open",
+        "blocking": false
+      },
+      {
+        "id": "F-109-OF2-AMEND",
+        "summary": "OPEN, surfaced by design.md section 4. OF-2 now requires a corpus data-scope grant/revoke step alongside its toolset step, and OF-2 step 4's 'operator effective list equals client tools/list' invariant holds only if the operator-side computation runs the same four-term intersection including the data-scope term. Scopes 03 and 07 plan to the amended behavior; amending spec.md section 9A.3 requires a mode that permits spec edits.",
+        "plannedIn": "SCOPE-07",
+        "routedTo": "bubbles.analyst",
+        "status": "open",
+        "blocking": false
+      },
+      {
+        "id": "F-109-001",
+        "summary": "BLOCKING for J4. artifacts.source_ref is never persisted by the connector front door (BUG-019-003), so no stable external reference exists and section 9's honesty rule forbids synthesizing one. hospitality-read is specified and registered as honestly unavailable; serving it waits on the fix.",
+        "plannedIn": "SCOPE-06",
+        "status": "open",
+        "blocking": true
+      },
+      {
+        "id": "F-109-002",
+        "summary": "RISK. Spec 109 becomes spec 095's first live consumer of internal/retrieval/routing, whose request-path integration is deferred (PKT-095-A/B/C) and whose live coverage is deferred (F-095-E2E-LIVE). Scope 03 owns its own cmd/core wiring for the MCP path and funds live e2e-api coverage; PKT-095-A/B/C are explicitly not prerequisites. The e2e discharge is for the MCP path only and no artifact may claim 095 is generally proven.",
+        "plannedIn": "SCOPE-03",
+        "status": "open",
+        "blocking": false
+      },
+      {
+        "id": "F-109-003",
+        "summary": "SCOPE CONSTRAINT. Per-artifact sensitivity ceilings are unimplementable: the artifacts table has no sensitivity column and the four satellite vocabularies are incompatible. D1 controls on client inference locality instead; no scope claims sensitivity-based filtering.",
+        "plannedIn": null,
+        "status": "accepted-constraint",
+        "blocking": false
+      },
+      {
+        "id": "F-109-004",
+        "summary": "BLOCKING, in scope. IssueToken sets no audience and the Audience type in request_authenticator.go is unwired to issuance, so a positive audience check is impossible today. Scope 01 wires it and verifies with positive equality, never a negative filter.",
+        "plannedIn": "SCOPE-01",
+        "status": "open",
+        "blocking": true
+      },
+      {
+        "id": "F-109-005",
+        "summary": "DESIGN CONSTRAINT. agent.SideEffectClass (read|write|external) cannot derive four orthogonal MCP hints, and agent.All() contains 19 non-capabilities (7 noop_* plus 12 constant-success handlers). The MCP manifest is explicit and hand-maintained; no passthrough. Scope 02 proves the 19 never appear.",
+        "plannedIn": "SCOPE-02",
+        "status": "open",
+        "blocking": false
+      },
+      {
+        "id": "F-109-006",
+        "summary": "DESIGN CONSTRAINT. SearchFilters has no source_id and SearchResult does not carry one, so source-level egress cannot be a post-filter; a post-filter after ranking and LIMIT would leak source existence through result counts. Scope 03 requires the domain service to apply the predicate in SQL before ranking and before LIMIT.",
+        "plannedIn": "SCOPE-03",
+        "status": "open",
+        "blocking": false
+      }
+    ]
+  },
+  "policySnapshot": {
+    "source": ".specify/memory/bubbles.config.json",
+    "capturedAt": "2026-07-29T00:00:00Z",
+    "workflowMode": "product-to-planning",
+    "workflowModeSource": "operator-directive",
+    "statusCeiling": "specs_hardened",
+    "sourceEditsPermitted": false,
+    "sourceEditLockout": {
+      "mode": "on",
+      "gate": "G073",
+      "source": "workflow-mode-constraint"
+    },
+    "grill": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "tdd": {
+      "mode": "scenario-first",
+      "source": "repo-default"
+    },
+    "autoCommit": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "lockdown": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "regression": {
+      "mode": "protected-scenarios",
+      "source": "repo-default"
+    },
+    "validation": {
+      "mode": "certification-required",
+      "source": "repo-default"
+    },
+    "evidenceRequired": false,
+    "testCategories": [
+      "unit",
+      "integration",
+      "e2e-api"
+    ],
+    "canonicalCommands": {
+      "unit": "./smackerel.sh test unit",
+      "integration": "./smackerel.sh test integration",
+      "e2e-api": "./smackerel.sh test e2e",
+      "check": "./smackerel.sh check",
+      "lint": "./smackerel.sh lint",
+      "format": "./smackerel.sh format --check",
+      "configGenerate": "./smackerel.sh config generate"
+    },
+    "gates": [
+      "G025",
+      "G073",
+      "G115"
+    ]
+  },
+  "scopes": [
+    {
+      "id": "SCOPE-01",
+      "name": "MCP Foundation - Credential, Authorizer, Projection, Refusal, Audit, Transport",
+      "status": "Not Started",
+      "dependsOn": [],
+      "foundation": true,
+      "testPlanRows": 7,
+      "scenarios": [
+        "SCN-109-002",
+        "SCN-109-008",
+        "SCN-109-009",
+        "SCN-109-011",
+        "SCN-109-015"
+      ]
+    },
+    {
+      "id": "SCOPE-02",
+      "name": "context Toolset + Readiness-Filtered Deterministic Discovery",
+      "status": "Not Started",
+      "dependsOn": [
+        "SCOPE-01"
+      ],
+      "foundation": false,
+      "testPlanRows": 5,
+      "scenarios": [
+        "SCN-109-003",
+        "SCN-109-004"
+      ]
+    },
+    {
+      "id": "SCOPE-03",
+      "name": "memory-read Over The Spec-095 Executor + Projection Enforcement",
+      "status": "Not Started",
+      "dependsOn": [
+        "SCOPE-01",
+        "SCOPE-02"
+      ],
+      "foundation": false,
+      "testPlanRows": 8,
+      "scenarios": [
+        "SCN-109-001",
+        "SCN-109-003",
+        "SCN-109-005",
+        "SCN-109-006",
+        "SCN-109-007"
+      ]
+    },
+    {
+      "id": "SCOPE-04",
+      "name": "person-context Toolset",
+      "status": "Not Started",
+      "dependsOn": [
+        "SCOPE-01",
+        "SCOPE-02"
+      ],
+      "foundation": false,
+      "testPlanRows": 4,
+      "scenarios": [
+        "SCN-109-003",
+        "SCN-109-004"
+      ]
+    },
+    {
+      "id": "SCOPE-05",
+      "name": "graph-read Toolset + Scope-Minimized Step-Up Challenge",
+      "status": "Not Started",
+      "dependsOn": [
+        "SCOPE-01",
+        "SCOPE-02",
+        "SCOPE-04"
+      ],
+      "foundation": false,
+      "testPlanRows": 4,
+      "scenarios": [
+        "SCN-109-003",
+        "SCN-109-010"
+      ]
+    },
+    {
+      "id": "SCOPE-06",
+      "name": "hospitality-read Toolset",
+      "status": "Blocked",
+      "dependsOn": [
+        "SCOPE-01",
+        "SCOPE-02"
+      ],
+      "foundation": false,
+      "testPlanRows": 3,
+      "scenarios": [
+        "SCN-109-012"
+      ],
+      "blockedReason": "BLOCKED on BUG-019-003 (specs/019-connector-wiring/bugs/BUG-019-003-source-ref-never-persisted/, status specs_hardened): artifacts.source_ref is never persisted by the connector front door, so no stable external reference per artifact exists. spec.md section 9's external-reference honesty rule forbids synthesizing one, and spec.md F-109-001 records hospitality-read as specified but not delivered. Per spec.md section 18 item 5 the toolset waits rather than shipping a fabricated external reference. The scope is planned and testable as honestly unavailable (registered with Readiness.Available=false, omitted from tools/list, method-not-found on invocation, capability-unavailable on the operator surface); SERVING hospitality.get_guest_context is unblocked only by the BUG-019-003 fix.",
+      "blockedBy": [
+        "BUG-019-003"
+      ]
+    },
+    {
+      "id": "SCOPE-07",
+      "name": "Documentation, Release Packet, Configuration, And Flag Bundles",
+      "status": "Not Started",
+      "dependsOn": [
+        "SCOPE-03",
+        "SCOPE-04",
+        "SCOPE-05"
+      ],
+      "foundation": false,
+      "testPlanRows": 5,
+      "scenarios": [
+        "SCN-109-004",
+        "SCN-109-P01",
+        "SCN-109-P02",
+        "SCN-109-P03"
+      ]
+    }
+  ],
+  "transitionRequests": [
+    {
+      "requestedStatus": "specs_hardened",
+      "requestedBy": "bubbles.plan",
+      "requestedAt": "2026-07-29T00:00:00Z",
+      "mode": "product-to-planning",
+      "rationale": "Planning artifacts complete: scopes.md, report.md, uservalidation.md, scenario-manifest.json written. Seven scopes in dependency order; 43 Test Plan rows each with a matching DoD item, plus 14 standing regression DoD items (two per scope) for 57 test DoD items in total. Every scope carries a persistent scenario-specific Regression E2E row. Scope 06 is recorded Blocked on BUG-019-003 rather than silently planned as deliverable. No source edited under the G073 lockout. This is the ceiling for product-to-planning; no higher status is requested.",
+      "resolution": "granted-at-ceiling"
+    }
+  ],
+  "reworkQueue": [],
+  "reworkQueueNote": "EMPTY because all six previously-queued items were RESOLVED INLINE in this planning packet rather than deferred (Gate G061). None was dropped: every one is still recorded as a standing finding in certification.outstandingFindings with a named owner, and every one is now visible planned work closed by a named DoD item. RQ-109-01 (OF-2 corpus data-scope step) was resolved by planning Scopes 03 and 07 directly to the amended four-term-intersection behavior, so the plan is correct whether or not spec.md section 9A.3 is later reworded; the wording amendment remains as finding F-109-OF2-AMEND routed to bubbles.analyst, because spec.md is not owned by bubbles.plan and was correctly not rewritten to suit the plan. RQ-109-02 (missing section 17.1 documentation row) was resolved by making the docs/smackerel.md section 17.1 confidence-signal tie a first-class Scope 07 DoD item, so the documentation ships regardless of when the section 15 table is amended; the table amendment stays as UX-F-002. RQ-109-03 (section 2 Success Signal omits retrieval_reason and retrieval_contract_known) was resolved by planning and testing all SIX provenance fields in Scope 03 (TP-03-01 asserts they are non-omittable), which makes the editorial gap in section 2 unable to cause an implementation gap; the correction stays as UX-F-004. RQ-109-04 (D1 'fully coded' wording) was resolved by planning Scope 03 to the unambiguous meaning ('fully specified, default-OFF per client'), so no scope can be built on the contradictory reading; the wording fix stays as UX-F-005 for the section 18 pass. RQ-109-05 (principle numbering) was resolved by a Scope 07 DoD item that cites Principle 8 by name and carries the section 16 honest discrepancy verbatim, inventing no principle; whether a local-first principle is added stays an owner decision as UX-F-003. RQ-109-06 (hospitality-read delivery) was resolved by planning Scope 06 as a first-class, testable, honestly-unavailable registration with a named blocking DoD item that forbids emitting any synthesized external_ref, and by recording the scope Blocked on BUG-019-003 in both state.json and scopes.md rather than planning it as deliverable. Nothing here is hidden, unowned, or postponed to an unnamed future session.",
+  "executionHistory": [
+    {
+      "agent": "bubbles.analyst",
+      "mode": "product-to-planning",
+      "phasesExecuted": [
+        "bootstrap",
+        "analyze"
+      ],
+      "startedAt": "2026-07-29T00:00:00Z",
+      "finishedAt": "2026-07-29T00:00:00Z",
+      "statusBefore": "not_started",
+      "statusAfter": "in_progress",
+      "outcome": "completed_owned",
+      "artifactsWritten": [
+        "spec.md"
+      ],
+      "artifactsNotTouched": [
+        "design.md",
+        "scopes.md",
+        "report.md",
+        "uservalidation.md",
+        "scenario-manifest.json"
+      ],
+      "summary": "Authored the MCP Knowledge Server specification: intent, success signal, hard constraints, the D1-D5 decisions, the toolset and refusal vocabularies, the section 15 documentation table, and the section 18 operator review gate. Surfaced findings F-109-001 through F-109-006, including the BUG-019-003 dependency that leaves hospitality-read specified but not deliverable. No source edited, no tests executed, no evidence claimed."
+    },
+    {
+      "agent": "bubbles.ux",
+      "mode": "product-to-planning",
+      "phasesExecuted": [
+        "ux"
+      ],
+      "startedAt": "2026-07-29T00:00:00Z",
+      "finishedAt": "2026-07-29T00:00:00Z",
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "outcome": "completed_owned",
+      "artifactsWritten": [
+        "spec.md"
+      ],
+      "artifactsNotTouched": [
+        "design.md",
+        "scopes.md",
+        "report.md",
+        "uservalidation.md",
+        "scenario-manifest.json"
+      ],
+      "summary": "Added spec.md section 9A, the Non-UI UX Contract: the operator and client-developer experience requirements R-109-UX01 through R-109-UX18, the OF-1 through OF-3 operator flows, and the refusal-rendering cases. Raised findings UX-F-001 through UX-F-005 covering the corpus-grant ownership ambiguity, the missing section 17.1 documentation row, the principle-numbering mismatch, the incomplete section 2 Success Signal, and the D1 'fully coded' wording conflict. No source edited, no tests executed, no evidence claimed."
+    },
+    {
+      "agent": "bubbles.design",
+      "mode": "product-to-planning",
+      "phasesExecuted": [
+        "design"
+      ],
+      "startedAt": "2026-07-29T00:00:00Z",
+      "finishedAt": "2026-07-29T00:00:00Z",
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "outcome": "completed_owned",
+      "artifactsWritten": [
+        "design.md"
+      ],
+      "artifactsNotTouched": [
+        "spec.md",
+        "scopes.md",
+        "report.md",
+        "uservalidation.md",
+        "scenario-manifest.json"
+      ],
+      "summary": "Authored the design: the MCP-owned audience-bound credential and authorizer, the four-gate authorization pipeline, the raw-content-incapable projection type, the refusal vocabulary and Case A indistinguishability rule, the audit ledger, and the memory-write deferral mapping. Section 4 resolves UX-F-001 by making the corpus grant an MCP-owned data-scope Grant kind rather than consuming spec 108's corpus:read, which surfaced the new open finding F-109-OF2-AMEND. No source edited, no tests executed, no evidence claimed."
+    },
+    {
+      "agent": "bubbles.plan",
+      "mode": "product-to-planning",
+      "phasesExecuted": [
+        "plan"
+      ],
+      "startedAt": "2026-07-29T00:00:00Z",
+      "finishedAt": "2026-07-29T00:00:00Z",
+      "statusBefore": "in_progress",
+      "statusAfter": "specs_hardened",
+      "outcome": "completed_owned",
+      "artifactsWritten": [
+        "scopes.md",
+        "report.md",
+        "uservalidation.md",
+        "scenario-manifest.json",
+        "state.json"
+      ],
+      "artifactsNotTouched": [
+        "spec.md",
+        "design.md"
+      ],
+      "summary": "Converted the spec and design into a seven-scope sequential plan: MCP foundation, context toolset with readiness-filtered discovery, memory-read over the spec-095 executor with projection enforcement, person-context, graph-read with the scope-minimized step-up challenge, hospitality-read as honestly unavailable, and the documentation/release/configuration scope. 43 Test Plan rows each with a matching DoD item, plus 14 standing regression DoD items (two per scope) for 57 test DoD items in total. Scope 06 recorded Blocked on BUG-019-003 rather than planned as deliverable. No source edited under the G073 lockout, no tests executed, no evidence claimed."
+    },
+    {
+      "agent": "bubbles.plan",
+      "mode": "product-to-planning",
+      "phasesExecuted": [
+        "plan"
+      ],
+      "startedAt": "2026-07-29T00:00:00Z",
+      "finishedAt": "2026-07-29T00:00:00Z",
+      "statusBefore": "specs_hardened",
+      "statusAfter": "specs_hardened",
+      "outcome": "completed_owned",
+      "artifactsWritten": [
+        "spec.md",
+        "scopes.md",
+        "design.md",
+        "report.md",
+        "uservalidation.md",
+        "state.json"
+      ],
+      "artifactsNotTouched": [
+        "scenario-manifest.json"
+      ],
+      "summary": "RATIFICATION RUN. The operator DELEGATED all seven spec.md section 18 decisions with the standing instruction 'pick the best option for long term, no shortcuts'. Section 18 was converted from an open review gate into a ratified decision record dated 2026-07-29, preserving item numbering 1-7 so every existing cross-reference stays valid. Decisions: (1) D1 accepted, with a NEW binding honesty constraint - the only permitted egress claim is 'Smackerel never sends your knowledge anywhere; a client you explicitly authorize may', and any text implying Smackerel enforces client-side inference locality is a defect; (2) D2 accepted as permanent with no escape hatch, and no future spec may add a raw-content toolset without superseding it; (3) D4 accepted WITH A CARVE-OUT - prompts, Apps, subscriptions and notifications/tools/list_changed are permanently deleted, but OAuth 2.1 + DCR + RFC 9728 are NOT deleted, they are out of scope with the named re-open trigger 'a client outside the operator's control must connect to /mcp', because calling them permanently deleted would have been overclaiming; (4) external toolset accepted permanently off; (5) J4 sequencing accepted, hospitality-read waits for BUG-019-003; (6) spec 095 exposure accepted, with its side benefit and its first-consumer risk both recorded; (7) principle gap RESOLVED BY ADDITION - docs/Product-Principles.md gains Principle 11 'Your Data Stays Yours' and Constitution C1 is not the sole carrier. Consequential edits: spec.md D4 and section 13 amended to carry the item-3 split; section 16's principle-gap note changed from open owner decision to resolved; section 9A.7 re-routed UX-F-002, UX-F-004 and UX-F-005 to bubbles.analyst because the gate closed WITHOUT deciding them - they are spec.md wording corrections, not product decisions, and recording them as ratified would have been overclaiming. scopes.md Scope 07 gained two owner-sign-off DoD items (add Principle 11 to the owner-ratified docs/Product-Principles.md, and add a matching block to its BLOCKING companion enforcement file .github/instructions/product-principles.instructions.md) and TP-07-03 was extended to verify both, with an adversarial case that fails if the principle ships unenforced; a pre-existing fused TP-07-05/TP-07-06 markdown table row was repaired into two rows with content preserved verbatim. OWNERSHIP DEVIATION, recorded rather than hidden: spec.md and design.md are not bubbles.plan-owned artifacts and were edited only under the operator's explicit written instruction to convert section 18 and to correct any artifact still asserting these decisions are open. NO status change (specs_hardened before and after), NO certification field altered, NO phase claim added, NO implementation claimed, NO test executed, NO evidence asserted. docs/Product-Principles.md itself was NOT edited - it is owner-ratified and its amendment is a delivery-time obligation requiring owner sign-off."
+    },
+    {
+      "agent": "bubbles.plan",
+      "mode": "product-to-planning",
+      "phasesExecuted": [
+        "plan"
+      ],
+      "startedAt": "2026-07-29T00:00:00Z",
+      "finishedAt": "2026-07-29T00:00:00Z",
+      "statusBefore": "specs_hardened",
+      "statusAfter": "specs_hardened",
+      "outcome": "completed_owned",
+      "artifactsWritten": [
+        "spec.md",
+        "design.md",
+        "scopes.md",
+        "scenario-manifest.json",
+        "state.json"
+      ],
+      "artifactsNotTouched": [
+        "report.md",
+        "uservalidation.md"
+      ],
+      "summary": "GAP-CLOSURE RUN. Two verified gaps closed, additively. GAP 1 - NO MCP TOOL NAMES EXISTED. The packet named toolsets (context, memory-read, graph-read, hospitality-read, person-context, memory-write) but never named the individual tools a client sees in tools/list; the only concrete smackerel_ names in spec.md were the five Prometheus metric families. An MCP tool name is a stable PUBLIC WIRE CONTRACT that clients pin in config, so it must be planned rather than emerge from an implementation. spec.md D5 gained a normative Tool Inventory table (Tool, Toolset, Required grants, readOnly, destructive, idempotent, openWorld, Description) covering nine names: smackerel_active_topics, smackerel_daily_brief, smackerel_server_context, smackerel_get_artifact, smackerel_recall, smackerel_person_context, smackerel_graph_neighbors, smackerel_graph_topic, smackerel_guesthost_context. ADJUSTMENT RECORDED HONESTLY: the request suggested six names; nine are listed because section 8.2 already enumerates eight served logical tools, and naming only six would have left graph.get_topic, context.get_daily_brief and context.get_active_topics as orphans - an internal contradiction inside a hardened spec, which is the exact defect class this run exists to remove. Every row maps to its section 8.2 logical identifier, and section 8.2 gained context.get_server_context so the two tables are two-way consistent. Three normative notes added: T1 name rule (1-128 chars, case-sensitive, unique, A-Za-z0-9_-. only; registration refuses a duplicate, an out-of-charset name, or a name absent from the inventory), T2 ordering contract (the table row order IS the deterministic tools/list order and is exactly design.md section 5's (toolset ordinal, name ascending) sort, so the two are one fact rather than two competing sources; MAY vary by credential per request, MUST NOT vary per-connection), and T3 annotations-are-advisory (the MCP specification requires clients to treat annotations as untrusted, so server-side P-AUTHZ / P-EGRESS / P-PROJ is what enforces). T4 records that memory-write, assistant, operations and external export no names. GAP 2 - MCP RESOURCES WERE NEITHER SPECIFIED NOR EXCLUDED. D4a deletes resource SUBSCRIPTIONS only, so Resources as a read primitive were simply absent - zero occurrences of resource_link, smackerel://, resources/list or a URI template anywhere in the packet. Silence was the defect. New spec.md section 9B records the ratified split. IN SCOPE: resource_link entries in tool results (returning a REFERENCE instead of inlining content directly reinforces D2 - a link is categorically not content_raw and it removes the pressure to inline a body), smackerel_recall returning compact Projections plus resource_link entries, and exactly five URI templates - smackerel://artifact/{id}, smackerel://topic/{id}, smackerel://person/{id}, smackerel://place/{id}, smackerel://guesthost/{kind}/{opaque-id}. BINDING R-109-RES3: no PII in a resource URI - no guest email, no person name, no raw external identifier - because a URI is an egress surface in its own right (logged by intermediaries, rendered in client UIs, retained where the body is not), so a PII-bearing URI would make D2 true of the payload and false of the envelope. EXCLUDED and added to section 13: no enumerable resources/list over the corpus and no whole-graph resource, because an enumerable list is a CORPUS-ENUMERATION ORACLE that leaks existence and volume even when every individual read is denied, contradicting the bare-403 / no-existence-oracle denial doctrine R-109-UX12 and F-109-006 enforce everywhere else. Resources are addressable by template, never browsable. design.md records where names are registered (internal/mcp/capability, Descriptor.ID as a literal on the manifest slice, validated at registration against the D5 inventory, never derived from agent.All() or a map key) and where resource_link is emitted (internal/mcp/projection owns the single ResourceURI(kind, id) constructor whose id is an OpaqueID newtype - so a name or email address is a COMPILE ERROR rather than a review finding, the same structural stance mechanism 1 takes for content_raw - with transport appending links beside the typed []projection.Artifact and registering no resources/list). Consistency preserved with P-PROJ and section 7 mechanisms 1-3: a resource_link is a sibling transport content entry, never a Projection field, so section 9's closed field set is untouched. scopes.md gained SCN-109-P04 with TP-02-07 (unit, two-way set equality against the D5 inventory plus the T1 name rule plus inventory-order serving; adversarial against registering a well-formed name absent from the inventory) and SCN-109-P05 with TP-03-10 (integration, seeded person name and email markers scanned across every emitted URI; adversarial against a human-readable title slug, which passes a payload-only content_raw scan and fails only this one because the leak is in the envelope). Test Plan rows 43 to 45 with matching DoD items; test DoD items 57 to 59; Scope 02 6 to 7 rows, Scope 03 9 to 10 rows. scenario-manifest.json kept at EXACT SCN-109-* parity with scopes.md. OWNERSHIP DEVIATION, recorded rather than hidden: spec.md and design.md are not bubbles.plan-owned artifacts and were edited only under the operator's explicit written instruction to close these two gaps in this directory. NO status change (specs_hardened before and after), NO certification field altered, NO phase claim added, NO version / workflowMode / planningOnly / releaseTrain / flagsIntroduced change, NO decision of record weakened (D1, D2, D3, D4a, D4b and D5 all stand), NO implementation claimed, NO test executed, NO evidence asserted."
+    }
+  ]
+}
