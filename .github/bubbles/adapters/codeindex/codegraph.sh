@@ -104,7 +104,33 @@ case "$VERB" in
   impact)
     [ "$#" -ge 1 ] || die "impact requires <symbol>"
     require_provider
-    run_provider "$CG_BIN" impact "$1" --depth "${CODEINDEX_DEPTH:-3}" --json
+    # Same trap as `affected`, different verb: the provider's `impact --json`
+    # emits an OBJECT ({symbol, depth, nodeCount, edgeCount, affected}) while
+    # the contract — and `selftest impact` — declares an ARRAY. A length check
+    # on the object counts 5 KEYS instead of N affected symbols, so a consumer
+    # would read a 31-symbol blast radius as "5" and under-react.
+    #
+    # Found by validating the LIVE adapter after `affected` was already fixed:
+    # the first contract selftest exercised routes/status/symbols/affected but
+    # not impact, so the sibling instance survived. Part B now covers every
+    # record verb for exactly this reason.
+    #
+    # `node` does the extraction rather than python/jq because the provider is
+    # itself a node package: if the provider can run at all, node is present.
+    impact_out="$("$CG_BIN" impact "$1" --depth "${CODEINDEX_DEPTH:-3}" --json 2>/dev/null)" ||
+      die "provider invocation failed: $CG_BIN impact $1"
+    [ -n "$impact_out" ] || die "provider returned empty output: impact $1"
+    printf '%s' "$impact_out" | node -e '
+      let s = "";
+      process.stdin.on("data", d => (s += d)).on("end", () => {
+        let o;
+        try { o = JSON.parse(s); } catch (e) { process.exit(1); }
+        const a = Array.isArray(o) ? o
+                : (o && Array.isArray(o.affected) ? o.affected : null);
+        if (a === null) process.exit(1);
+        process.stdout.write(JSON.stringify(a) + "\n");
+      });
+    ' || die "could not normalize impact output to a JSON array"
     ;;
   affected)
     [ "$#" -ge 1 ] || die "affected requires at least one <file>"

@@ -189,17 +189,58 @@ else
   CGA="$ADAPTER_DIR/codegraph.sh"
   export CODEINDEX_ROOT="$LIVE_ROOT" CODEINDEX_CODEGRAPH_BIN="$CG_BIN"
 
-  out="$(bash "$CGA" routes 2>/dev/null)"
-  printf '%s' "$out" | assert_shape array &&
-    ok "live routes is an array" || bad "live routes is NOT an array"
+  # EVERY record verb, ENUMERATED — never hand-picked.
+  #
+  # The first version of this file checked routes/status/symbols/affected by
+  # hand and simply omitted `impact`. So when `impact` turned out to carry the
+  # identical object-instead-of-array defect that `affected` had, this suite
+  # reported 37/37 while the bug was live in four repositories. A verb that is
+  # not listed cannot fail loudly; the omission WAS the bug.
+  LIVE_RECORD_VERBS="routes symbols impact"
+  for verb in $LIVE_RECORD_VERBS; do
+    case "$verb" in
+      routes) out="$(bash "$CGA" routes 2>/dev/null)" ;;
+      *)      out="$(bash "$CGA" "$verb" Handler 2>/dev/null)" ;;
+    esac
+    n="$(printf '%s' "$out" | python3 -c '
+import sys, json
+try:
+    d = json.load(sys.stdin)
+    print(len(d) if isinstance(d, list) else -1)
+except Exception:
+    print(-1)
+' 2>/dev/null || echo -1)"
+    if printf '%s' "$out" | assert_shape array; then
+      ok "live $verb is an array ($n entries)"
+    else
+      bad "live $verb is NOT an array — object-instead-of-array regression"
+    fi
+  done
 
   out="$(bash "$CGA" status 2>/dev/null)"
   printf '%s' "$out" | assert_shape object &&
     ok "live status is an object" || bad "live status is NOT an object"
 
-  out="$(bash "$CGA" symbols Handler 2>/dev/null)"
-  printf '%s' "$out" | assert_shape array &&
-    ok "live symbols is an array" || bad "live symbols is NOT an array"
+  # META-ASSERTION: every verb the adapter DECLARES via `selftest` must appear
+  # in the live coverage above. This is the check that would have caught the
+  # missing `impact` case without anyone noticing the omission by eye.
+  declared=""
+  for v in symbols impact affected routes status freshness sync; do
+    bash "$CGA" selftest "$v" >/dev/null 2>&1 && declared="$declared $v"
+  done
+  covered="$LIVE_RECORD_VERBS status affected freshness sync"
+  uncovered=""
+  for v in $declared; do
+    case " $covered " in
+      *" $v "*) ;;
+      *) uncovered="$uncovered $v" ;;
+    esac
+  done
+  if [ -z "$uncovered" ]; then
+    ok "live coverage includes every declared verb ($(echo "$declared" | wc -w) verbs)"
+  else
+    bad "declared but NOT live-tested:$uncovered — a verb that is not exercised cannot regress loudly"
+  fi
 
   # The verb that regressed. Assert BOTH shape and that it can carry real
   # entries — an array that is always empty would satisfy the shape check while
