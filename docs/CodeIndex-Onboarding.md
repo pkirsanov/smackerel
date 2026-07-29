@@ -88,6 +88,38 @@ SQLite WAL cannot be enabled and reads block on writes.
 
 ---
 
+## Maintenance — the index goes stale
+
+An index is a point-in-time snapshot. The moment code changes, facts derived
+from it may be wrong — and `symbols`/`impact`/`affected`/`routes` output looks
+**identical** whether the index is current or a week old. The adapter makes that
+detectable:
+
+```bash
+A=.github/bubbles/adapters/codeindex/codegraph.sh
+bash $A freshness   # exit 0 = current, 2 = STALE, 1 = cannot look
+bash $A sync        # bring it up to date (~1.5s)
+```
+
+**Self-heal at consumer time — this is the pattern, not a background hook:**
+
+```bash
+bash $A freshness >/dev/null 2>&1 || bash $A sync >/dev/null 2>&1
+```
+
+Put that immediately before anything that reads the index. It stays correct with
+`adapter: none` too: the none adapter returns `{}` exit 0 for both verbs, so the
+line is a harmless no-op in a repo that never adopts a provider.
+
+A git hook is an optional optimization, not a requirement — `sync` is cheap
+enough to check at read time, and `.git/hooks/` is not versioned so it would not
+reach other clones or CI.
+
+Note: `sync` detects **content** changes, not `mtime`. `touch` alone will not
+mark an index stale.
+
+---
+
 ## Reversal
 
 ```bash

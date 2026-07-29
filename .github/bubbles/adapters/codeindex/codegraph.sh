@@ -14,6 +14,23 @@
 #   routes             → `codegraph query --kind route` → JSON ARRAY of routes
 #   status             → `codegraph status`   → JSON MAP of index health
 #
+# Plus two contract EXTENSIONS:
+#   freshness          → JSON MAP; exit 0 fresh, 2 STALE, 1 cannot determine
+#   sync               → JSON MAP; re-syncs the index, then reports freshness
+#
+# `freshness` exists because a stale index is the quiet failure mode: it returns
+# the right shape and plausible data derived from code that no longer exists.
+# Without it a consumer cannot distinguish "no dependents" from "index is a week
+# behind" — the same trap as [] vs exit 1, one level up.
+#
+# `sync` is the ONLY mutating verb, and exists so index maintenance is a
+# contract capability rather than provider-specific operator knowledge:
+#
+#   <adapter> freshness || <adapter> sync
+#
+# is wireable into any repo CLI or git hook, stays correct if the provider is
+# swapped, and is a safe no-op under `adapter: none`.
+#
 # Output: normalized JSON to stdout. Adapter failure exits 1; the framework
 # treats that as "code index unavailable", NOT as a framework failure. A
 # consumer MUST degrade to its existing behavior on exit 1, never block on it.
@@ -124,11 +141,79 @@ case "$VERB" in
     require_provider
     run_provider "$CG_BIN" status --json
     ;;
+  freshness)
+    # A stale index answers CONFIDENTLY WRONG: correct shape, correct-looking
+    # data, derived from code that no longer exists. That is the same class of
+    # failure as returning [] when the index is missing, so it gets the same
+    # treatment — a distinct, checkable signal rather than silence.
+    #
+    # Exit codes are the contract here (shell-native, no JSON parsing needed by
+    # the caller):
+    #   0 = fresh   — index matches the worktree
+    #   2 = STALE   — index is behind; findings may be wrong
+    #   1 = unavailable / cannot determine (same as every other verb)
+    #
+    # Determinability is NOT optional: if the provider stops reporting
+    # pendingChanges, this exits 1 rather than assuming fresh. Never report
+    # fresh on an answer we could not actually read.
+    require_provider
+    status_json="$(run_provider "$CG_BIN" status --json)"
+    compact="$(printf '%s' "$status_json" | tr -d ' \n')"
+
+    pend="$(printf '%s' "$compact" | sed -n 's/.*"pendingChanges":{\([^}]*\)}.*/\1/p')"
+    [ -n "$pend" ] ||
+      die "cannot determine freshness: provider status exposes no pendingChanges field"
+
+    added="$(printf '%s' "$pend" | sed -n 's/.*"added":\([0-9][0-9]*\).*/\1/p')"
+    modified="$(printf '%s' "$pend" | sed -n 's/.*"modified":\([0-9][0-9]*\).*/\1/p')"
+    removed="$(printf '%s' "$pend" | sed -n 's/.*"removed":\([0-9][0-9]*\).*/\1/p')"
+    added="${added:-0}"
+    modified="${modified:-0}"
+    removed="${removed:-0}"
+    total=$((added + modified + removed))
+
+    mismatch="$(printf '%s' "$compact" | sed -n 's/.*"worktreeMismatch":\([^,}]*\).*/\1/p')"
+
+    stale="false"
+    reason="null"
+    if [ "$total" -gt 0 ]; then
+      stale="true"
+      reason="\"$total pending change(s): added=$added modified=$modified removed=$removed\""
+    elif [ -n "$mismatch" ] && [ "$mismatch" != "null" ]; then
+      stale="true"
+      reason="\"worktree mismatch reported by provider\""
+    fi
+
+    printf '{"stale":%s,"pendingChanges":{"added":%s,"modified":%s,"removed":%s},"reason":%s}\n' \
+      "$stale" "$added" "$modified" "$removed" "$reason"
+
+    if [ "$stale" = "true" ]; then
+      exit 2
+    fi
+    exit 0
+    ;;
+  sync)
+    # Bring the index back in line with the worktree. This is the ONLY mutating
+    # verb; every other one is read-only.
+    #
+    # It exists so a repository can self-heal without hard-coding provider
+    # knowledge: `freshness || sync` is wireable into any repo CLI or git hook
+    # and stays correct if the provider is swapped. With `adapter: none` it is a
+    # no-op, so the same wiring is safe in a repo that never opted in.
+    #
+    # Incremental, not a rebuild: measured ~1.5s for a no-op on a 4,896-file
+    # index. Use the provider's `init`/`index` for a full rebuild.
+    require_provider
+    "$CG_BIN" sync --quiet >/dev/null 2>&1 ||
+      die "provider sync failed: $CG_BIN sync --quiet"
+    # Report the post-sync state so a caller can confirm the heal actually took.
+    exec "$0" freshness
+    ;;
   selftest)
     # Canonical shapes, provider-free, for offline shape validation.
     case "${1:-}" in
       symbols|impact|affected|routes) echo '[]'; exit 0 ;;
-      status) echo '{}'; exit 0 ;;
+      status|freshness|sync) echo '{}'; exit 0 ;;
       *) die "selftest requires a known verb" ;;
     esac
     ;;
@@ -137,10 +222,14 @@ case "$VERB" in
 codegraph.sh — CodeGraph code-index adapter
 Usage: codegraph.sh <verb> [args...]
 Verbs: symbols <query> | impact <symbol> | affected <file>... | routes | status
+       freshness         (is the index behind the worktree?)
+       sync              (bring the index back in line; the only mutating verb)
        selftest <verb>   (canonical shape, no provider needed)
 Env:   CODEINDEX_ROOT (default: $PWD), CODEINDEX_CODEGRAPH_BIN (default: codegraph),
        CODEINDEX_LIMIT, CODEINDEX_DEPTH
 Exit:  0 ok | 1 provider missing / no index / provider failure (= "unavailable")
+       2 freshness/sync only: index is STALE (never emitted by other verbs)
+Note:  <file> arguments are REPO-RELATIVE (relative to CODEINDEX_ROOT).
 EOF
     exit 0
     ;;

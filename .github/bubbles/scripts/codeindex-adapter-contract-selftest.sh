@@ -122,6 +122,14 @@ for adapter in "$ADAPTER_DIR"/*.sh; do
   printf '%s' "$out" | assert_shape object &&
     ok "$name selftest status declares an object" ||
     bad "$name selftest status is not an object (got: ${out:0:40})"
+  out="$(bash "$adapter" selftest freshness 2>/dev/null)"
+  printf '%s' "$out" | assert_shape object &&
+    ok "$name selftest freshness declares an object" ||
+    bad "$name selftest freshness is not an object (got: ${out:0:40})"
+  out="$(bash "$adapter" selftest sync 2>/dev/null)"
+  printf '%s' "$out" | assert_shape object &&
+    ok "$name selftest sync declares an object" ||
+    bad "$name selftest sync is not an object (got: ${out:0:40})"
 done
 
 echo ""
@@ -141,6 +149,22 @@ if [ -f "$NONE" ]; then
       bad "none $verb -> '$out' exit $rc (want [] exit 0)"
     fi
   done
+  for verb in status freshness; do
+    out="$(bash "$NONE" "$verb" 2>/dev/null)"; rc=$?
+    if [ "$rc" -eq 0 ] && [ "$out" = "{}" ]; then
+      ok "none $verb -> {} exit 0"
+    else
+      bad "none $verb -> '$out' exit $rc (want {} exit 0)"
+    fi
+  done
+  # `sync` under `none` MUST be a succeeding no-op, otherwise a repo cannot wire
+  # `freshness || sync` unconditionally without breaking non-adopting repos.
+  out="$(bash "$NONE" sync 2>/dev/null)"; rc=$?
+  if [ "$rc" -eq 0 ] && [ "$out" = "{}" ]; then
+    ok "none sync -> {} exit 0 (safe no-op)"
+  else
+    bad "none sync -> '$out' exit $rc (want {} exit 0)"
+  fi
 else
   bad "none.sh adapter is missing"
 fi
@@ -221,6 +245,45 @@ EOF
   # Error paths must fail loudly, never emit a neutral [].
   bash "$CGA" symbols >/dev/null 2>&1
   [ $? -eq 1 ] && ok "missing-argument exits 1 (not a silent [])" || bad "missing argument did not exit 1"
+
+  # freshness: shape plus a REAL stale round trip. A freshness check that can
+  # only ever answer "fresh" is worse than none — it manufactures confidence.
+  # Build a throwaway index in a temp dir so no real repository is touched.
+  out="$(bash "$CGA" freshness 2>/dev/null)"; rc=$?
+  if printf '%s' "$out" | assert_shape object && { [ "$rc" -eq 0 ] || [ "$rc" -eq 2 ]; }; then
+    ok "live freshness is an object with a contract exit ($rc)"
+  else
+    bad "live freshness bad shape or exit (rc=$rc)"
+  fi
+
+  probe_dir="$(mktemp -d)"
+  printf 'def a(x):\n    return x + 1\n' > "$probe_dir/m.py"
+  if (cd "$probe_dir" && CODEGRAPH_TELEMETRY=0 DO_NOT_TRACK=1 CODEGRAPH_NO_DAEMON=1 \
+        "$CG_BIN" init >/dev/null 2>&1); then
+    rc_fresh=0; rc_stale=0
+    CODEINDEX_ROOT="$probe_dir" bash "$CGA" freshness >/dev/null 2>&1 || rc_fresh=$?
+    printf 'def b(y):\n    return y - 1\n' > "$probe_dir/extra.py"
+    CODEINDEX_ROOT="$probe_dir" bash "$CGA" freshness >/dev/null 2>&1 || rc_stale=$?
+    if [ "$rc_fresh" -eq 0 ] && [ "$rc_stale" -eq 2 ]; then
+      ok "ADVERSARIAL: freshness flips 0 -> 2 when the tree changes"
+    else
+      bad "ADVERSARIAL: freshness did not flip (fresh=$rc_fresh stale=$rc_stale; want 0 then 2)"
+    fi
+    # sync must actually HEAL, not merely exit 0. A sync that reports success
+    # while leaving the index stale is the same false-confidence failure.
+    rc_sync=0
+    CODEINDEX_ROOT="$probe_dir" bash "$CGA" sync >/dev/null 2>&1 || rc_sync=$?
+    rc_after=0
+    CODEINDEX_ROOT="$probe_dir" bash "$CGA" freshness >/dev/null 2>&1 || rc_after=$?
+    if [ "$rc_sync" -eq 0 ] && [ "$rc_after" -eq 0 ]; then
+      ok "sync heals a stale index (stale -> sync -> fresh)"
+    else
+      bad "sync did not heal (sync=$rc_sync after=$rc_after; want 0 and 0)"
+    fi
+  else
+    note "could not build throwaway index; stale round trip skipped"
+  fi
+  rm -rf "$probe_dir"
 fi
 
 echo ""

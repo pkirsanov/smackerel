@@ -15,10 +15,16 @@
 #   affected  <file>...      → JSON array → neutral empty value: []
 #   routes                   → JSON array → neutral empty value: []
 #   status                   → JSON map   → neutral empty value: {}
+#   freshness                → JSON map   → neutral empty value: {}
 #
-# `status` is a MAP (index freshness/health key -> value); the other four are
-# ARRAYS of records. This mirrors the observability adapter contract, where
-# fetch-alerts is an array and the remaining verbs are maps.
+# `status` and `freshness` are MAPS (index health / staleness key -> value);
+# the other four are ARRAYS of records. This mirrors the observability adapter
+# contract, where fetch-alerts is an array and the remaining verbs are maps.
+#
+# NOTE on `freshness`: with no index configured there is nothing to be stale,
+# so this returns the neutral map and exits 0. It does NOT claim "fresh" — a
+# consumer that reached here has already been told by every other verb that no
+# structural facts exist, and must skip rather than trust an emptiness.
 
 set -euo pipefail
 
@@ -30,8 +36,16 @@ case "$VERB" in
     echo '[]'
     exit 0
     ;;
-  status)
-    # Index freshness/health normalizes to a JSON MAP; neutral empty is {}.
+  status|freshness)
+    # Index health / staleness normalize to a JSON MAP; neutral empty is {}.
+    echo '{}'
+    exit 0
+    ;;
+  sync)
+    # The only mutating verb. With no index configured there is nothing to
+    # sync, so this is a deliberate no-op that SUCCEEDS: it lets a repo wire
+    # `freshness || sync` into its CLI or a git hook unconditionally, and stay
+    # correct whether or not a provider is ever adopted.
     echo '{}'
     exit 0
     ;;
@@ -40,7 +54,7 @@ case "$VERB" in
     # provider installed. Lets a shape lint validate this adapter offline.
     case "${2:-}" in
       symbols|impact|affected|routes) echo '[]'; exit 0 ;;
-      status) echo '{}'; exit 0 ;;
+      status|freshness|sync) echo '{}'; exit 0 ;;
       *) echo "[none][ERROR] selftest requires a known verb" >&2; exit 1 ;;
     esac
     ;;
@@ -49,7 +63,8 @@ case "$VERB" in
 none.sh — no-op code-index adapter (framework default)
 Usage: none.sh <verb> [args...]
 Verbs: symbols <query> (-> []) | impact <symbol> (-> []) |
-       affected <file>... (-> []) | routes (-> []) | status (-> {})
+       affected <file>... (-> []) | routes (-> []) | status (-> {}) |
+       freshness (-> {}) | sync (-> {}, no-op)
        selftest <verb> (-> canonical neutral shape)
 EOF
     exit 0
