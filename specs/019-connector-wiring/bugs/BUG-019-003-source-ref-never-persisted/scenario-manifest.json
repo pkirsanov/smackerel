@@ -1,0 +1,264 @@
+{
+  "schemaVersion": 1,
+  "version": 1,
+  "spec": "specs/019-connector-wiring/bugs/BUG-019-003-source-ref-never-persisted",
+  "featureDir": "specs/019-connector-wiring/bugs/BUG-019-003-source-ref-never-persisted",
+  "generatedAt": "2026-07-28T00:00:00Z",
+  "manifestNotes": {
+    "authoringMode": "product-to-planning",
+    "statusCeiling": "specs_hardened",
+    "linkedTestsPolicy": "linkedTests is intentionally EMPTY for every scenario. This packet was authored under Gate G073 (Source Code Edit Lockout); no test file exists yet. Populating linkedTests with paths that do not exist would be fabrication and would also fail traceability-guard.sh's linked-test file-existence check. The planned test identifiers and their target suites are carried in plannedTests and are specified in full in scopes.md. The fixer populates linkedTests as each test is authored.",
+    "idPatternNote": "Scenario ids use the operator-mandated stable form SCN-BUG-019-003-NNN so that a single identifier is traceable across spec.md, scopes.md, report.md, and this manifest. This form carries more hyphen-separated segments than the canonical scenario-manifest.schema.json id pattern ^SCN-[A-Z0-9]+-[0-9]+$. The divergence is recorded here rather than silently introduced; it matches the sibling convention already in use at specs/019-connector-wiring/bugs/BUG-019-002-scn-019-004-005-fidelity-gap/scenario-manifest.json."
+  },
+  "scenarios": [
+    {
+      "id": "SCN-BUG-019-003-001",
+      "scenarioId": "SCN-BUG-019-003-001",
+      "title": "Connector-supplied source_ref is persisted for every connector",
+      "requiredTestType": "integration",
+      "scopeRef": "scope-1-reproduce-and-lock-the-defect",
+      "scope": "scope-1-reproduce-and-lock-the-defect",
+      "gherkin": {
+        "given": "an ephemeral test database with an empty artifacts table, and a connector produces a RawArtifact whose SourceRef is a non-empty stable external identifier carrying a URL distinct from that SourceRef",
+        "when": "PublishRawArtifact ingests the artifact through the shared front door at internal/pipeline/ingest.go",
+        "then": "the persisted artifacts row has source_ref equal to the connector-supplied SourceRef, source_url equal to the connector-supplied URL, and the two columns are not conflated in either direction"
+      },
+      "behaviorClass": "data-integrity",
+      "changeType": "bugfix",
+      "regressionRequired": true,
+      "findingRefs": ["F-BUG-019-003-001"],
+      "linkedTests": [],
+      "plannedTests": [
+        "T-BUG-019-003-1-01",
+        "T-BUG-019-003-1-05",
+        "T-BUG-019-003-2-04",
+        "T-BUG-019-003-2-08"
+      ],
+      "evidenceRefs": [
+        "bug.md#f-bug-019-003-001-d1--source_ref-is-never-persisted",
+        "report.md#verification-baseline",
+        "scopes.md#scope-1--reproduce-the-defect-and-lock-it-with-a-failing-adversarial-regression"
+      ],
+      "lockdown": { "state": "unlocked" },
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "id": "SCN-BUG-019-003-002",
+      "scenarioId": "SCN-BUG-019-003-002",
+      "title": "An absent source_ref persists as SQL NULL rather than empty string",
+      "requiredTestType": "unit",
+      "scopeRef": "scope-2-restore-persistence-and-correct-the-probe",
+      "scope": "scope-2-restore-persistence-and-correct-the-probe",
+      "gherkin": {
+        "given": "an ephemeral test database with an empty artifacts table, and a connector produces a RawArtifact whose SourceRef is the empty string",
+        "when": "PublishRawArtifact ingests the artifact",
+        "then": "the persisted artifacts row has source_ref IS NULL and does not have source_ref equal to the empty string, preserving the distinction between no identifier and an empty identifier"
+      },
+      "behaviorClass": "data-integrity",
+      "changeType": "bugfix",
+      "regressionRequired": true,
+      "findingRefs": ["F-BUG-019-003-001"],
+      "linkedTests": [],
+      "plannedTests": ["T-BUG-019-003-2-03"],
+      "evidenceRefs": [
+        "spec.md#eb-1--provenance-persistence-is-universal",
+        "design.md#solution-approach",
+        "scopes.md#scope-2--restore-source_ref-persistence-and-correct-the-dedup-probe"
+      ],
+      "lockdown": { "state": "unlocked" },
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "id": "SCN-BUG-019-003-003",
+      "scenarioId": "SCN-BUG-019-003-003",
+      "title": "Re-ingesting the same external entity with changed content deduplicates by source_ref",
+      "requiredTestType": "integration",
+      "scopeRef": "scope-2-restore-persistence-and-correct-the-probe",
+      "scope": "scope-2-restore-persistence-and-correct-the-probe",
+      "gherkin": {
+        "given": "an artifact has already been ingested with source_id 'bookmarks' and source_ref 'https://example.test/a', and the upstream item's title and body have since changed so its content_hash differs from the stored row",
+        "when": "PublishRawArtifact ingests the changed item with the same source_id and the same source_ref",
+        "then": "the dedup probe matches the existing row by source_ref scoped to source_id, no second artifacts row exists for that source_id and source_ref pair, and the dedup decision does not depend on content_hash equality"
+      },
+      "behaviorClass": "deduplication-correctness",
+      "changeType": "bugfix",
+      "regressionRequired": true,
+      "adversarial": true,
+      "adversarialNote": "This is the load-bearing adversarial scenario. The fixture MUST use two artifacts sharing source_id and source_ref but carrying DIFFERENT content_hash values, so the pre-existing ON CONFLICT (content_hash) clause cannot mask a missing source_ref path. A fixture using byte-identical artifacts is tautological and is explicitly disallowed.",
+      "findingRefs": ["F-BUG-019-003-002"],
+      "linkedTests": [],
+      "plannedTests": [
+        "T-BUG-019-003-1-03",
+        "T-BUG-019-003-2-01",
+        "T-BUG-019-003-2-05",
+        "T-BUG-019-003-2-06"
+      ],
+      "evidenceRefs": [
+        "bug.md#f-bug-019-003-002-d2--dedup-probes-the-wrong-column",
+        "design.md#re-ingestion-semantics-and-the-over-suppression-risk",
+        "scopes.md#adversarial-regression-requirement-blocking"
+      ],
+      "lockdown": { "state": "unlocked" },
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "id": "SCN-BUG-019-003-004",
+      "scenarioId": "SCN-BUG-019-003-004",
+      "title": "Identical source_ref values from different connectors are not falsely deduplicated",
+      "requiredTestType": "integration",
+      "scopeRef": "scope-2-restore-persistence-and-correct-the-probe",
+      "scope": "scope-2-restore-persistence-and-correct-the-probe",
+      "gherkin": {
+        "given": "an artifact has already been ingested with source_id 'discord' and source_ref '12345', and a different connector produces a RawArtifact with source_id 'youtube' and the identical source_ref '12345', the two carrying different content and therefore different content_hash values",
+        "when": "PublishRawArtifact ingests the second artifact",
+        "then": "both artifacts rows are retained and the discord row is neither overwritten nor suppressed by the youtube row"
+      },
+      "behaviorClass": "deduplication-correctness",
+      "changeType": "bugfix",
+      "regressionRequired": true,
+      "adversarial": true,
+      "adversarialNote": "Inverse adversarial guard. This scenario fails if a fixer corrects the probe column without adding source_id scoping, which would introduce a new cross-connector false-positive dedup defect strictly worse than the bug being fixed.",
+      "findingRefs": ["F-BUG-019-003-002"],
+      "linkedTests": [],
+      "plannedTests": ["T-BUG-019-003-1-04", "T-BUG-019-003-2-02"],
+      "evidenceRefs": [
+        "spec.md#eb-2--deduplication-compares-like-with-like-scoped-by-source",
+        "design.md#complexity-tracking",
+        "scopes.md#adversarial-regression-requirement-blocking"
+      ],
+      "lockdown": { "state": "unlocked" },
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "id": "SCN-BUG-019-003-005",
+      "scenarioId": "SCN-BUG-019-003-005",
+      "title": "GuestHost booking context resolves by the identifier its API contract advertises",
+      "requiredTestType": "e2e-api",
+      "scopeRef": "scope-4-guesthost-booking-identity-semantics",
+      "scope": "scope-4-guesthost-booking-identity-semantics",
+      "gherkin": {
+        "given": "the GuestHost connector has ingested a booking artifact through the shared front door and the D3 identity-semantics decision has been resolved and implemented",
+        "when": "a caller requests booking context using the identifier the API contract advertises",
+        "then": "the booking artifact is found rather than returning a no-rows error, and the returned context carries the booking's guest, property, and stay-date fields"
+      },
+      "behaviorClass": "api-contract",
+      "changeType": "bugfix",
+      "regressionRequired": true,
+      "blocked": false,
+      "blockedReason": null,
+      "unblockedNote": "Previously gated on the D3 GuestHost booking identity-semantics decision. That decision was made by this packet as Option 4 (source_ref = event.EntityID for booking event types, event.ID retained in metadata, coupled to Re-ingestion Option B) and RATIFIED on 2026-07-29 via TR-BUG-019-003-001. Ratifier: owner-delegated ratification 2026-07-29; criterion: best long-term option, no shortcuts; recorded by bubbles.bug on behalf of the operator. This scenario is therefore no longer decision-blocked. Like all eight scenarios in this planning packet it remains unexecuted (linkedTests is empty) until a bugfix-fastlane delivery run implements Scope 4.",
+      "findingRefs": ["F-BUG-019-003-003"],
+      "linkedTests": [],
+      "plannedTests": [
+        "T-BUG-019-003-4-01",
+        "T-BUG-019-003-4-02",
+        "T-BUG-019-003-4-03",
+        "T-BUG-019-003-4-04"
+      ],
+      "evidenceRefs": [
+        "bug.md#f-bug-019-003-003-d3--guesthost-booking-identity-semantics-decided--option-4",
+        "design.md#d3-identity-semantics-decision-decided--option-4",
+        "spec.md#resolved-decision--d3-guesthost-booking-identity-semantics",
+        "uservalidation.md#owner-ratification--2026-07-29",
+        "scopes.md#scope-4--guesthost-booking-identity-semantics-d3-decided--option-4"
+      ],
+      "lockdown": { "state": "unlocked" },
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "id": "SCN-BUG-019-003-006",
+      "scenarioId": "SCN-BUG-019-003-006",
+      "title": "Bookmark re-sync is idempotent when the bookmark title changes",
+      "requiredTestType": "integration",
+      "scopeRef": "scope-3-verify-downstream-consumers",
+      "scope": "scope-3-verify-downstream-consumers",
+      "gherkin": {
+        "given": "the bookmarks connector has already ingested a bookmark whose normalized URL is stored as its source_ref, and the same bookmark is re-exported upstream with a changed title so its content_hash differs",
+        "when": "the bookmarks connector runs a second sync containing that bookmark",
+        "then": "the batch dedup query recognises the normalized URL as already known, the bookmark is filtered out of the new-only result set, and exactly one artifacts row exists for that normalized URL"
+      },
+      "behaviorClass": "deduplication-correctness",
+      "changeType": "bugfix",
+      "regressionRequired": true,
+      "findingRefs": ["F-BUG-019-003-001", "F-BUG-019-003-002"],
+      "linkedTests": [],
+      "plannedTests": [
+        "T-BUG-019-003-3-01",
+        "T-BUG-019-003-3-02",
+        "T-BUG-019-003-3-03"
+      ],
+      "evidenceRefs": [
+        "bug.md#confirmed-broken-consumers",
+        "scopes.md#scope-3--verify-downstream-consumers-and-resolve-the-processorgo-omission"
+      ],
+      "lockdown": { "state": "unlocked" },
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "id": "SCN-BUG-019-003-007",
+      "scenarioId": "SCN-BUG-019-003-007",
+      "title": "Pre-existing NULL source_ref rows are backfilled where reconstructable and counted where not",
+      "requiredTestType": "integration",
+      "scopeRef": "scope-5-backfill-existing-null-source-ref-rows",
+      "scope": "scope-5-backfill-existing-null-source-ref-rows",
+      "gherkin": {
+        "given": "the artifacts table contains rows ingested before the fix whose source_ref is NULL, some belonging to connectors whose source_ref is deterministically reconstructable from persisted columns and others belonging to connectors whose source_ref is not reconstructable from any persisted column",
+        "when": "the backfill migration runs",
+        "then": "the reconstructable rows have source_ref populated with the reconstructed identifier, the non-reconstructable rows retain source_ref IS NULL rather than receiving a fabricated value, and the count of remaining non-reconstructable rows is reported so the residual is measurable"
+      },
+      "behaviorClass": "data-migration",
+      "changeType": "bugfix",
+      "regressionRequired": true,
+      "findingRefs": ["F-BUG-019-003-001"],
+      "linkedTests": [],
+      "plannedTests": [
+        "T-BUG-019-003-5-01",
+        "T-BUG-019-003-5-02",
+        "T-BUG-019-003-5-03",
+        "T-BUG-019-003-5-04",
+        "T-BUG-019-003-5-05"
+      ],
+      "evidenceRefs": [
+        "design.md#backfill--migration-strategy",
+        "design.md#what-the-residual-means-for-historical-dedup",
+        "scopes.md#scope-5--backfill-existing-null-source_ref-rows"
+      ],
+      "lockdown": { "state": "unlocked" },
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "id": "SCN-BUG-019-003-008",
+      "scenarioId": "SCN-BUG-019-003-008",
+      "title": "The composite source index becomes a live access path",
+      "requiredTestType": "integration",
+      "scopeRef": "scope-2-restore-persistence-and-correct-the-probe",
+      "scope": "scope-2-restore-persistence-and-correct-the-probe",
+      "gherkin": {
+        "given": "source_ref is persisted for connector artifacts",
+        "when": "a dedup or consumer lookup filters artifacts by source_id together with source_ref",
+        "then": "the query is served by the idx_artifacts_source composite index and the index's second key column is no longer universally NULL for connector traffic"
+      },
+      "behaviorClass": "data-integrity",
+      "changeType": "bugfix",
+      "regressionRequired": true,
+      "findingRefs": ["F-BUG-019-003-001"],
+      "linkedTests": [],
+      "plannedTests": ["T-BUG-019-003-2-07"],
+      "evidenceRefs": [
+        "spec.md#eb-3--the-composite-index-becomes-live",
+        "bug.md#f-bug-019-003-001-d1--source_ref-is-never-persisted",
+        "scopes.md#scope-2--restore-source_ref-persistence-and-correct-the-dedup-probe"
+      ],
+      "lockdown": { "state": "unlocked" },
+      "replacedBy": null,
+      "invalidatedBy": null
+    }
+  ]
+}

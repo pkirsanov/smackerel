@@ -1,0 +1,274 @@
+{
+  "version": 3,
+  "spec": "specs/019-connector-wiring/bugs/BUG-019-003-source-ref-never-persisted",
+  "parentSpec": "specs/019-connector-wiring",
+  "status": "specs_hardened",
+  "workflowMode": "product-to-planning",
+  "plannedFixWorkflowMode": "bugfix-fastlane",
+  "releaseTrain": "mvp",
+  "flagsIntroduced": [],
+  "releaseTrainRationale": "Selected 'mvp' over 'next'. config/release-trains.yaml declares exactly two active trains: 'mvp' (phase active, target_slot self-hosted, 'Current self-hosted train (ingest + digest + delivery foundation)') and 'next' (phase active, target_slot staging, 'Next promotion candidate (synthesis + multi-source coordination)'). This is a defect in ALREADY-SHIPPED behaviour inside the ingestion foundation, which is explicitly mvp's scope; the connector roster is documented as LOCKED at MVP (docs/releases/mvp/features.md line 104) and the affected code path internal/pipeline/ingest.go is mvp-delivered. Assigning it to 'next' would imply the corrected provenance behaviour is a forthcoming enhancement rather than a repair of behaviour operators already depend on, and would leave the shipped self-hosted train carrying the defect.",
+  "severity": "high",
+  "discovered": "2026-07-28T00:00:00Z",
+  "resolved": null,
+  "lastUpdatedAt": "2026-07-29T00:00:00Z",
+  "planningOnly": true,
+  "planningOnlyJustification": "This packet is a planning artifact only and carries no implementation. It was authored under workflow mode product-to-planning (statusCeiling specs_hardened) with Gate G073 Source Code Edit Lockout ACTIVE: zero source files were modified and zero tests were executed. It therefore has no implementation spec to link to. Delivery is deliberately deferred to a separate future run under bugfix-fastlane, which is requested from the operator as TR-BUG-019-003-003; when that delivery packet exists, linkedImplementationSpec should be set to it and planningOnly cleared.",
+  "linkedImplementationSpec": null,
+  "title": "artifacts.source_ref is never persisted by the connector ingestion front door",
+  "ownership": {
+    "owningSpec": "specs/019-connector-wiring",
+    "rationale": "The defective statements are in the shared ingestion front door internal/pipeline/ingest.go::PublishRawArtifact, which every registered connector's output passes through via internal/connector/supervisor.go:362. Every affected connector produces a correct RawArtifact.SourceRef in its own normalizer; the value is lost after the connector boundary inside shared pipeline code. Filing against an individual connector spec would misattribute a shared-infrastructure defect to a correct component."
+  },
+  "findings": [
+    {
+      "id": "F-BUG-019-003-001",
+      "label": "D1 — source_ref omitted from the ingestion INSERT column list; RawArtifact.SourceRef silently dropped",
+      "kind": "defect",
+      "status": "open",
+      "evidence": "internal/pipeline/ingest.go:94 (INSERT column list); internal/pipeline/processor.go:523 (second INSERT); only writers are internal/connector/photos/store.go:124,197,363 and internal/drive/scan/service.go:316; column declared at internal/db/migrations/001_initial_schema.sql:29 and indexed at :68"
+    },
+    {
+      "id": "F-BUG-019-003-002",
+      "label": "D2 — dedup probe compares a source-ref against the source_url column",
+      "kind": "defect",
+      "status": "open",
+      "evidence": "internal/pipeline/ingest.go:47-52 — comment states 'Dedup by source_ref' while the SQL filters source_url and binds artifact.SourceRef"
+    },
+    {
+      "id": "F-BUG-019-003-003",
+      "label": "D3 — GuestHost booking sourceRef is the activity-event ID, not the booking entity ID; identity-semantics decision required",
+      "kind": "design-question",
+      "status": "decided",
+      "decision": "Option 4 — persist artifacts.source_ref = event.EntityID for booking event types and retain event.ID in metadata, coupled to Re-ingestion Option B (update-in-place).",
+      "decidedBy": "bubbles.bug (packet decision of record; ratification routed via TR-BUG-019-003-001)",
+      "decidedAt": "2026-07-28T00:00:00Z",
+      "ratified": true,
+      "ratifiedAt": "2026-07-29T00:00:00Z",
+      "ratifiedBy": "Owner-delegated ratification 2026-07-29; criterion: best long-term option, no shortcuts. Recorded by bubbles.bug on behalf of the operator.",
+      "ratificationNote": "The owner delegated the call with a stated decision criterion rather than selecting the option individually. No claim is made that the owner hand-picked Option 4, and no product authority is claimed by bubbles.bug. Recorded in uservalidation.md as OR-01 and in spec.md#resolved-decision--d3-guesthost-booking-identity-semantics.",
+      "implementedByScopes": ["Scope 4"],
+      "owner": "specs/013-guesthost-connector owner + API contract owner",
+      "evidence": "internal/connector/guesthost/normalizer.go:26 sets sourceRef := event.ID; the business entity is ActivityEvent.EntityID at internal/connector/guesthost/types.go:10; internal/api/context.go:284 looks up a booking ID, with a stale assertion in the comment at :276-277",
+      "note": "DECIDED as Option 4 (design.md#d3-identity-semantics-decision-decided--option-4) and RATIFIED 2026-07-29 via TR-BUG-019-003-001. Rationale: the consumer contract is expressed in business-entity terms, source_ref is the indexed identity column (idx_artifacts_source), retaining event.ID in metadata preserves audit lineage at zero cost, and every other connector keys source_ref on the stable external entity. Keying on event.ID would force every future consumer to carry an event->entity join the index cannot serve. Option 4 is PROHIBITED without Re-ingestion Option B, because the three booking lifecycle events collide on one ref by design and skip-on-match would freeze bookings in their created state. Ratification is now recorded; Scope 4 is no longer decision-blocked, though it remains unexecuted until a bugfix-fastlane delivery run."
+    },
+    {
+      "id": "F-BUG-019-003-004",
+      "label": "Corroboration — certified BUG-016-W3 was reasoned against a dedup mechanism that does not exist",
+      "kind": "corroborating-evidence",
+      "status": "recorded",
+      "evidence": "specs/016-weather-connector/bugs/BUG-016-W3-source-ref-collision/bug.md:78 states 'Pipeline deduplication uses SourceRef as part of artifact identity'; bug.md:42 quotes a test message asserting 'would cause pipeline dedup collision'. Both premises are falsified by D1+D2.",
+      "boundary": "BUG-016-W3 is a foreign artifact owned by specs/016-weather-connector. It was NOT reopened, modified, or re-certified. Its own fix remains independently valid. A note-only routing candidate is raised in bug.md#routing for its owner to consider after BUG-019-003 is fixed."
+    },
+    {
+      "id": "F-BUG-019-003-005",
+      "label": "Scoping correction — the maps and photos source_ref sites read location_clusters and photos, not artifacts, and are unaffected",
+      "kind": "scope-correction",
+      "status": "recorded",
+      "evidence": "internal/db/migrations/001_initial_schema.sql:322-323 shows location_clusters is a separate table with source_ref TEXT NOT NULL, correctly written by internal/connector/maps/connector.go:475 and read by internal/connector/maps/patterns.go:225. internal/connector/photos/routing.go:288 reads the photos table. internal/knowledge/sensitivity_query.go:116 degrades safely via COALESCE(source_url, COALESCE(source_ref, '')).",
+      "note": "Recorded so the fixer does not spend effort on unaffected code. Captured as a Non-Goal in spec.md."
+    }
+  ],
+  "scenarioCoverage": {
+    "totalScenarios": 8,
+    "coveredScenarios": 0,
+    "fidelity": "0/8",
+    "note": "Scenarios are DECLARED and registered in scenario-manifest.json but none are covered by an executed test. Planning mode (Gate G073) forbids test execution; claiming coverage here would be fabrication. SCN-BUG-019-003-005 is additionally blocked on the D3 ruling."
+  },
+  "execution": {
+    "activeAgent": "bubbles.bug",
+    "currentPhase": "finalize",
+    "executionModel": "direct-authorized-runner",
+    "completedPhaseClaims": [],
+    "completedPhaseClaimsNote": "Intentionally EMPTY, and certification.certifiedCompletedPhases is EMPTY for the same reason. This packet was authored end-to-end by a single bubbles.bug dispatch in one planning run. No specialist agent (bubbles.analyze / bubbles.select / bubbles.bootstrap / bubbles.harden / bubbles.docs) was dispatched, so NO phase carries specialist provenance under Gate G022 and no phase completion is claimed. The five phase claims previously recorded in certifiedCompletedPhases were unearned and have been REMOVED rather than back-filled with invented provenance; the five per-entry completedAt stamps that accompanied them were all identical because the work was one continuous run, not five sequential phases, so they have been removed too rather than staggered. Under-claiming is correct here; over-claiming would be fabrication. What the single run actually did is recorded factually in executionHistory and, descriptively and WITHOUT any phase-completion or timestamp assertion, in authoringNotes below.",
+    "authoringNotes": [
+      {
+        "topic": "defect verification",
+        "agent": "bubbles.bug",
+        "note": "Verified each supplied defect claim by direct read-only source inspection rather than accepting it. Confirmed D1 (internal/pipeline/ingest.go:94), D2 (:51), and D3 (internal/connector/guesthost/normalizer.go:27 vs types.go:10). Enumerated the only artifacts.source_ref writers repo-wide. Established the blast radius as 17 registered connectors (cmd/core/connectors.go:73-79) routed through one publish loop (internal/connector/supervisor.go:362). Confirmed the BUG-016-W3 false-premise corroboration. Found and recorded one correction to the triage premise: the maps source_ref sites operate on location_clusters, not artifacts, and are unaffected."
+      },
+      {
+        "topic": "ownership, severity, and train selection",
+        "agent": "bubbles.bug",
+        "note": "Classified ownership to specs/019-connector-wiring (shared ingestion front door, not any single connector). Selected severity HIGH with a four-part argument (total blast radius, silent failure, broken shipped API with no workaround, corrupted downstream reasoning) and explicitly argued why it is not Critical. Selected release train mvp over next with recorded rationale."
+      },
+      {
+        "topic": "packet and scenario creation",
+        "agent": "bubbles.bug",
+        "note": "Created the 8-artifact bug packet: bug.md, spec.md, design.md, scopes.md, report.md, uservalidation.md, scenario-manifest.json, state.json. Declared 8 stable scenarios SCN-BUG-019-003-001 through -008 and registered them in scenario-manifest.json with empty linkedTests (no test exists yet; fabricating paths would fail the traceability guard's file-existence check)."
+      },
+      {
+        "topic": "plan hardening against fabrication risk",
+        "agent": "bubbles.bug",
+        "note": "Hardened the plan against three fabrication and correctness risks. (1) Adversarial regression contract: the fixture must use two artifacts sharing source_id and source_ref but carrying different content_hash, so the pre-existing ON CONFLICT (content_hash) clause cannot mask a missing source_ref path; plus an inverse fixture that fails if the probe is corrected without source_id scoping. (2) Over-suppression risk: activating a never-active dedup path with today's skip-on-match branch would ship a new content-staleness defect, so an explicit A/B/C re-ingestion decision is required. (3) Backfill honesty: per-connector reconstructability classified from source, with weather (weather.go:150,273-275) and google-maps-timeline (maps/normalizer.go:132-140) proven non-reconstructable and explicitly forbidden from fabricated backfill."
+      },
+      {
+        "topic": "propagation surface enumeration (planned, not performed)",
+        "agent": "bubbles.bug",
+        "note": "Enumerated the documentation, release, and capability propagation surface as unchecked Scope 6 DoD items with exact verified paths: docs/smackerel.md:2490 (§17.1 Trust Architecture 'Full provenance' claim) and :2945 (§22.7 connector inventory); docs/API.md:35,170,274; docs/Architecture.md:34,44; docs/releases/mvp/features.md:104,196; .github/bubbles/capability-ledger.yaml. Verified read-only that the capability ledger is framework-owned and carries no product provenance capability, so its DoD item is written as a re-verification item rather than an edit item. No documentation file was modified (Gate G073)."
+      }
+    ],
+    "blockedReason": null,
+    "sourceFilesModified": 0,
+    "testsExecuted": 0,
+    "boundaryStatement": "Authored under workflow mode product-to-planning with Gate G073 (Source Code Edit Lockout) ACTIVE. Files created: the 8 artifacts in this bug folder only. Files modified: none. Source, migration, config, test, and documentation files edited: zero. Tests executed: zero."
+  },
+  "executionHistory": [
+    {
+      "agent": "bubbles.bug",
+      "phasesExecuted": ["analyze", "select", "bootstrap", "harden", "docs"],
+      "statusBefore": "not_started",
+      "statusAfter": "specs_hardened",
+      "runStartedAt": "2026-07-28T00:00:00Z",
+      "runFinishedAt": "2026-07-28T00:00:00Z",
+      "summary": "Authored the BUG-019-003 planning packet under product-to-planning (statusCeiling specs_hardened, Gate G073 active). Independently re-verified every supplied defect claim at file:line, recorded 5 findings including one unresolved owner decision (D3) and one correction to the triage premise (maps/photos sites unaffected), specified 8 stable scenarios, planned 6 sequential scopes with paired Test Plan and DoD, mandated an adversarial non-tautological regression contract, produced an honest per-connector backfill reconstructability analysis that forbids fabricated refs, and enumerated the docs/release/capability propagation surface as unchecked DoD items with exact paths. Zero source files modified; zero tests executed."
+    },
+    {
+      "agent": "bubbles.bug",
+      "phasesExecuted": [],
+      "statusBefore": "specs_hardened",
+      "statusAfter": "specs_hardened",
+      "runStartedAt": "2026-07-29T00:00:00Z",
+      "runFinishedAt": "2026-07-29T00:00:00Z",
+      "summary": "Ratification and internal-drift reconciliation run under the same product-to-planning mode (Gate G073 active; zero source, migration, config, test, or documentation files touched; zero tests executed). Recorded owner-delegated ratification of all three transition requests: TR-BUG-019-003-001 RATIFIED as D3 Option 4 (source_ref = event.EntityID for booking event types, event.ID retained in metadata, coupled to Re-ingestion Option B); TR-BUG-019-003-002 ACCEPTED as advisory, scheduled as a post-fix premise-correction annotation to specs/016-weather-connector/bugs/BUG-016-W3-source-ref-collision/ with NO re-certification and NO modification in this run; TR-BUG-019-003-003 APPROVED for delivery via bugfix-fastlane starting at Scope 1 so the adversarial regression is observed FAILING before any source change. Attribution recorded truthfully as owner-delegated (criterion: best long-term option, no shortcuts), NOT as per-option owner selection, and no product authority is claimed by the agent. Also reconciled a verified internal drift: spec.md asserted the D3 decision was UNRESOLVED and linked a dead anchor design.md#d3-identity-semantics-decision-unresolved, contradicting bug.md:125 (Decision of record: Option 4), design.md's DECIDED heading, scopes.md Scope 4, and the state.json finding. The same stale assertion and/or dead anchor was found in 4 further packet files beyond the one reported, and all were reconciled: spec.md, uservalidation.md (PV-07 + Acceptance), report.md (Summary, Scenario Coverage, Unresolved Items, Routing Raised, Completion Statement), bug.md (Routing table), and scenario-manifest.json (SCN-BUG-019-003-005 blocked flag + evidenceRefs). No promotion occurred: status, certification.status, workflowMode, planningOnly, version, and completedPhaseClaims are unchanged, and every scope remains not_started with all DoD items unchecked.",
+      "boundaryStatement": "Files modified: 6, all inside specs/019-connector-wiring/bugs/BUG-019-003-source-ref-never-persisted/ (spec.md, uservalidation.md, report.md, bug.md, scenario-manifest.json, state.json). Files modified outside the packet: zero. Source, migration, config, test, and documentation files edited: zero. Tests executed: zero. specs/016-weather-connector/ was NOT opened for modification.",
+      "claimSource": "executed"
+    }
+  ],
+  "policySnapshot": {
+    "workflowMode": "product-to-planning",
+    "workflowModeSource": "operator-directive",
+    "sourceEditLockout": {
+      "mode": "on",
+      "gate": "G073",
+      "source": "workflow-mode-constraint"
+    },
+    "grill": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "tdd": {
+      "mode": "scenario-first",
+      "source": "repo-default"
+    },
+    "autoCommit": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "lockdown": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "regression": {
+      "mode": "protected-scenarios",
+      "source": "repo-default"
+    },
+    "validation": {
+      "mode": "certification-required",
+      "source": "repo-default"
+    }
+  },
+  "certification": {
+    "status": "specs_hardened",
+    "certifiedAt": null,
+    "certifiedBy": null,
+    "completedScopes": [],
+    "certifiedCompletedPhases": [],
+    "certifiedCompletedPhasesNote": "EMPTY by correction. This previously listed analyze/select/bootstrap/harden/docs, but a single bubbles.bug dispatch authored the entire packet and none of those ran as a separately-provenanced specialist phase. The unearned claims were removed rather than given invented provenance (Gate G022).",
+    "scopeProgress": [
+      { "scope": 1, "status": "not_started" },
+      { "scope": 2, "status": "not_started" },
+      { "scope": 3, "status": "not_started" },
+      { "scope": 4, "status": "not_started", "blockedReason": null, "unblockedNote": "Previously gated on the D3 GuestHost booking identity-semantics decision (F-BUG-019-003-003). That decision was ratified as Option 4 on 2026-07-29 via TR-BUG-019-003-001, so this scope is no longer decision-blocked. It remains not_started because this packet is planning-only; execution awaits a bugfix-fastlane delivery run." },
+      { "scope": 5, "status": "not_started" },
+      { "scope": 6, "status": "not_started" }
+    ],
+    "lockdownState": {
+      "active": false,
+      "lockedScenarioIds": []
+    },
+    "ceilingNote": "specs_hardened is the declared statusCeiling and terminalAlias for workflow mode product-to-planning. This packet is terminal-for-mode. Promotion to 'done' is FORBIDDEN from this mode and requires a delivery-capable mode (bugfix-fastlane), the D3 owner ruling, and the full evidence chain specified across the six scopes in scopes.md."
+  },
+  "transitionRequests": [
+    {
+      "id": "TR-BUG-019-003-001",
+      "requestedBy": "bubbles.bug",
+      "requestedAt": "2026-07-28T00:00:00Z",
+      "type": "owner-ratification",
+      "target": "specs/013-guesthost-connector owner + API contract owner",
+      "routedTo": "specs/013-guesthost-connector",
+      "routedToSpec": "specs/013-guesthost-connector",
+      "productAction": "none",
+      "finding": "F-BUG-019-003-003",
+      "summary": "RATIFICATION REQUESTED (not a blocker). This packet DECIDES D3 as Option 4: persist artifacts.source_ref = event.EntityID for booking event types and retain event.ID in metadata, coupled to Re-ingestion Option B (update-in-place). Options table and full justification: design.md#d3-identity-semantics-decision-decided--option-4. Because the decision has an API-contract consequence (booking.created/updated/cancelled are three events for one booking, which Option 4 collapses to one artifact), the guesthost connector owner and the API contract owner should ratify or overturn it. Scope 4 implements it; Scopes 2-3 are unaffected either way. If overturned, Scope 4 is re-planned.",
+      "status": "resolved",
+      "resolution": "ratified",
+      "resolvedAt": "2026-07-29T00:00:00Z",
+      "resolvedBy": "Owner-delegated ratification 2026-07-29; criterion: best long-term option, no shortcuts. Recorded by bubbles.bug on behalf of the operator.",
+      "outcome": "RATIFIED AS OPTION 4. artifacts.source_ref carries event.EntityID for booking event types, event.ID is retained in metadata, coupled to Re-ingestion Option B (update-in-place). Option 4 without Option B remains prohibited.",
+      "outcomeRationale": "Long-term rationale of record: the consumer contract at internal/api/context.go:284 is expressed in BUSINESS-ENTITY terms (it looks up by booking id). Event IDs are transport artifacts; entity IDs are domain identity. Three events (booking.created / booking.updated / booking.cancelled) collapse to one booking, so the many-to-one relation only resolves when the indexed provenance column is keyed on the entity. Keying on event.ID would require every future consumer to carry an event->entity join that idx_artifacts_source (source_id, source_ref) cannot serve.",
+      "attributionNote": "The owner delegated the call with a stated decision criterion rather than selecting the option individually. No claim is made that the owner hand-picked this option, and no product authority is claimed by bubbles.bug; the agent recorded the owner's delegated ratification.",
+      "recordedIn": [
+        "uservalidation.md OR-01",
+        "spec.md#resolved-decision--d3-guesthost-booking-identity-semantics",
+        "bug.md#routing",
+        "report.md Resolved Decisions"
+      ]
+    },
+    {
+      "id": "TR-BUG-019-003-002",
+      "requestedBy": "bubbles.bug",
+      "requestedAt": "2026-07-28T00:00:00Z",
+      "type": "note-only-routing",
+      "target": "specs/016-weather-connector owner",
+      "routedTo": "specs/016-weather-connector",
+      "routedToSpec": "specs/016-weather-connector/bugs/BUG-016-W3-source-ref-collision",
+      "productAction": "none",
+      "finding": "F-BUG-019-003-004",
+      "summary": "Advisory only. BUG-016-W3-source-ref-collision was analysed and certified on the premise that pipeline deduplication uses SourceRef as artifact identity (bug.md:78), which D1+D2 falsify. That packet was NOT reopened or modified by this work and its own fix remains independently valid. After BUG-019-003 is fixed, the owner may wish to append a premise-correction annotation. No re-certification is implied.",
+      "status": "resolved",
+      "resolution": "accepted",
+      "resolvedAt": "2026-07-29T00:00:00Z",
+      "resolvedBy": "Owner-delegated ratification 2026-07-29; criterion: best long-term option, no shortcuts. Recorded by bubbles.bug on behalf of the operator.",
+      "outcome": "ACCEPTED AS ADVISORY. After this bug's fix lands, a premise-correction annotation is to be appended to specs/016-weather-connector/bugs/BUG-016-W3-source-ref-collision/. NO re-certification of that packet is implied or authorised.",
+      "scheduledFollowUp": true,
+      "followUpPrecondition": "The BUG-019-003 fix must land first. Until then the annotation is not written.",
+      "boundaryHeldInRatificationRun": "Nothing under specs/016-weather-connector/ was opened for modification or edited during the 2026-07-29 ratification run. This remains a scheduled follow-up only.",
+      "attributionNote": "The owner delegated the call with a stated decision criterion rather than selecting the option individually. No claim is made that the owner hand-picked this option, and no product authority is claimed by bubbles.bug; the agent recorded the owner's delegated ratification.",
+      "recordedIn": [
+        "uservalidation.md OR-02",
+        "bug.md#routing",
+        "report.md Routing Raised"
+      ]
+    },
+    {
+      "id": "TR-BUG-019-003-003",
+      "requestedBy": "bubbles.bug",
+      "requestedAt": "2026-07-28T00:00:00Z",
+      "type": "mode-escalation",
+      "target": "operator",
+      "routedTo": "operator",
+      "routedToSpec": "specs/019-connector-wiring/bugs/BUG-019-003-source-ref-never-persisted",
+      "productAction": "none",
+      "summary": "Delivery of this fix requires a mode whose statusCeiling permits 'done'. product-to-planning cannot implement (constraint allowImplementationForFindings: false, focus: planning_only, Gate G073 active). Recommended delivery mode: bugfix-fastlane, starting at Scope 1 so the adversarial regression is observed FAILING before any source change. The operator chooses when to schedule delivery; no product action is required to close this packet at its planning ceiling.",
+      "status": "resolved",
+      "resolution": "approved",
+      "resolvedAt": "2026-07-29T00:00:00Z",
+      "resolvedBy": "Owner-delegated ratification 2026-07-29; criterion: best long-term option, no shortcuts. Recorded by bubbles.bug on behalf of the operator.",
+      "outcome": "APPROVED. Delivery may proceed under bugfix-fastlane, starting at Scope 1 so the adversarial regression fixture is observed FAILING before any source change.",
+      "approvedDeliveryMode": "bugfix-fastlane",
+      "approvedEntryScope": 1,
+      "doesNotPromoteThisPacket": "Approval schedules a delivery run; it does not substitute for one. status and certification.status remain specs_hardened and planningOnly remains true. This packet stays planning-only until a delivery-mode run actually executes and produces the evidence chain specified across the six scopes.",
+      "attributionNote": "The owner delegated the call with a stated decision criterion rather than selecting the option individually. No claim is made that the owner hand-picked this option, and no product authority is claimed by bubbles.bug; the agent recorded the owner's delegated ratification.",
+      "recordedIn": [
+        "uservalidation.md OR-03",
+        "report.md Completion Statement"
+      ]
+    }
+  ],
+  "reworkQueue": [],
+  "rollback": {
+    "command": "git revert HEAD",
+    "rationale": "This change set is artifact-only: 8 new files under specs/019-connector-wiring/bugs/BUG-019-003-source-ref-never-persisted/ and zero modifications to any existing file. Reverting removes the packet with no production-code, migration, config, test, or documentation interference. Note that reverting does NOT undo the defect it documents — the defect at internal/pipeline/ingest.go:51,94 predates this packet and is unaffected either way."
+  }
+}
