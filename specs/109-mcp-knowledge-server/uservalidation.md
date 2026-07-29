@@ -60,7 +60,7 @@ Nothing below claims a capability is built. No MCP server exists yet (`spec.md` 
 ### Findings Handling
 
 - [x] UX-F-001 is genuinely **resolved** by `design.md` §4 — not merely reworded.
-- [x] UX-F-002, UX-F-004, and UX-F-005 remain **OPEN** with named owners, and were not silently resolved by this packet. UX-F-003 is **partially resolved** — by the operator's own ratified §18 item 7, not by this packet.
+- [x] UX-F-002, UX-F-004, and UX-F-005 remain **OPEN** with named owners, and were not silently resolved by this packet. UX-F-003 is **resolved** — its *numbering* half was always a statement of fact, and its *principle-gap* half was settled by the operator's own ratified §18 item 7 and delivered by the owner's 2026-07-29 amendment, not invented by this packet.
 - [x] F-109-OF2-AMEND (new, surfaced by `design.md` §4) is recorded as open and routed rather than applied to `spec.md`.
 - [x] F-109-002 is handled honestly: MCP owns its own wiring, funds live coverage, and discharges F-095-E2E-LIVE **for the MCP path only** — no artifact claims spec 095 is generally proven.
 
@@ -68,7 +68,7 @@ Nothing below claims a capability is built. No MCP server exists yet (`spec.md` 
 
 - [x] `report.md` records **no** test output, because no test has been run and none could be.
 - [x] `state.json` sits at `specs_hardened` — the mode ceiling — and never claims `done`.
-- [x] `spec.md` and `design.md` were read only; no source file was created or modified under the G073 lockout; no other spec folder was touched.
+- [x] `design.md` was read only; **no source file** was created or modified under the G073 lockout; no other spec folder was touched. `spec.md` was edited only under explicit operator instruction — to convert §18 into a ratified decision record, and to reconcile §9A.7 / §16 / §18 to the shipped `Principle 11 — Local-First Data Ownership` title — and every such edit is recorded as an ownership deviation in `state.json` `executionHistory` rather than hidden.
 
 ### Operator Decision Record — RATIFIED (`spec.md` §18)
 
@@ -82,7 +82,7 @@ pre-decided by this packet. `spec.md` §18 carries the full rationale for each.
 - [x] **4. `external` toolset** — ACCEPTED, permanently off; Smackerel will never be an MCP proxy server.
 - [x] **5. J4 sequencing** — ACCEPTED. `hospitality-read` ships only after BUG-019-003; the STR host job waits rather than shipping a fabricated external reference.
 - [x] **6. Spec 095 exposure** — ACCEPTED. MCP is the first live consumer of `internal/retrieval/routing`, with live integration and e2e coverage funded here. Side benefit (retires part of 095's deferred debt for the MCP path) and risk (first-consumer defects are expected) are both recorded.
-- [x] **7. Principle gap** — RESOLVED by **addition**: `docs/Product-Principles.md` gains `Principle 11 — Your Data Stays Yours`; Constitution C1 is not the sole carrier. The edit itself is a delivery-time Scope 07 obligation **requiring owner sign-off**, together with a matching block in its BLOCKING companion enforcement file.
+- [x] **7. Principle gap** — RESOLVED by **addition**, and **DELIVERED 2026-07-29**. Under the owner sign-off this item required, `docs/Product-Principles.md` gained `Principle 11 — Local-First Data Ownership` together with a matching block in its BLOCKING companion enforcement file. Constitution C1 is **not** the sole carrier: C1 governs *how the system is built*, Principle 11 governs *what the product promises*. `spec.md` §16 cites P11 as the product-track carrier with C1 as the engineering-track cross-reference, and Scope 07 now carries the shipped surfaces as **verification** DoD items rather than as edits to make.
 
 **Not ratified by this gate.** UX-F-002, UX-F-004, and UX-F-005 were bundled into "the §18 pass" for
 convenience but are `spec.md` wording corrections, not product decisions. They remain **OPEN** and

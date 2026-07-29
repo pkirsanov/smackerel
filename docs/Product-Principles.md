@@ -1,10 +1,10 @@
 # Smackerel — Product Principles
 
-> **STATUS**: Ratified 2026-06-03; companion enforcement file in [`.github/instructions/product-principles.instructions.md`](../.github/instructions/product-principles.instructions.md) is BLOCKING.
+> **STATUS**: All 11 product principles are ratified and BINDING; companion enforcement file in [`.github/instructions/product-principles.instructions.md`](../.github/instructions/product-principles.instructions.md) is BLOCKING.
 >
 > The constitution defines the **engineering principles** (10 numbered Core Principles) that are already NON-NEGOTIABLE on their own enforcement track. The design doc defines the **product design principles** (13 principles in §2). This document surfaces the **product-level principles** (the WHY and the user-facing contracts) at a higher abstraction level than the design doc's design principles.
 >
-> Each principle below cites its evidence source. The principles were ratified by the owner on 2026-06-03; the [companion enforcement file](../.github/instructions/product-principles.instructions.md) is now binding.
+> Each principle below cites its evidence source. **Principles 1–10** were ratified by the owner on **2026-06-03**. **Principle 11** was ratified later, on **2026-07-29**, by owner delegation after spec 109's design review identified it as a gap; it was not part of the original surfacing pass. The [companion enforcement file](../.github/instructions/product-principles.instructions.md) is binding for all 11.
 
 ---
 
@@ -12,10 +12,10 @@
 
 | Audience | What To Do |
 |----------|-----------|
-| **Product owner** | Principles 1–10 are ratified (2026-06-03). Edits go through the normal product-principles change process. |
-| **Engineering** | Principles 1–10 are binding via the companion enforcement file. |
+| **Product owner** | Principles 1–11 are ratified (1–10 on 2026-06-03; 11 on 2026-07-29). Edits go through the normal product-principles change process. |
+| **Engineering** | Principles 1–11 are binding via the companion enforcement file. |
 | **Spec authors** | When writing a feature spec touching a principle area, reference the principle by number and cite `docs/Product-Principles.md`. |
-| **AI agents** | Read this file alongside the constitution. Principles 1–10 are BLOCKING; constitution rules (C1–C10) remain NON-NEGOTIABLE on their own track. |
+| **AI agents** | Read this file alongside the constitution. Principles 1–11 are BLOCKING; constitution rules (C1–C10) remain NON-NEGOTIABLE on their own track. |
 
 ---
 
@@ -25,7 +25,7 @@ These are **already binding** in [`.specify/memory/constitution.md`](../.specify
 
 | # | Constitution Principle | Source |
 |---|------------------------|--------|
-| **C1** | Local-First Knowledge Ownership | Constitution Core Principle 1 |
+| **C1** | Local-First Knowledge Ownership | Constitution Core Principle 1 — product-track counterpart is **Principle 11** (below); C1 remains in force on the engineering track |
 | **C2** | Go-First Runtime, Python-Only ML Sidecar | Constitution Core Principle 2 |
 | **C3** | Processed Knowledge Beats Raw Dumps | Constitution Core Principle 3 |
 | **C4** | Explainable Synthesis | Constitution Core Principle 4 |
@@ -182,9 +182,32 @@ This is a customer-trust principle for both products. Smackerel users know perso
 
 ---
 
+## Principle 11 — Local-First Data Ownership
+
+**Status**: Ratified 2026-07-29 (owner-delegated; recorded via spec 109 §18 decision 7)
+**Evidence**: [`docs/smackerel.md`](smackerel.md) §2 Design Principle 9 ("Own your data"), §17.2 Security Model ("No exfiltration"), §18.2 Local-First Model, §21.4 Unique Value Proposition; [`docs/INVESTOR_OVERVIEW.md`](INVESTOR_OVERVIEW.md) ("Constitution Principle 1 is a moat, not a constraint"); [`.specify/memory/constitution.md`](../.specify/memory/constitution.md) Core Principle 1 (Local-First Knowledge Ownership)
+
+The user's knowledge graph — artifacts, summaries, embeddings, graph relationships, digests — lives on hardware the user controls. Smackerel **never transmits that knowledge on its own initiative**: per design doc §17.2, the system sends nothing to external services beyond the LLM processing the operator has explicitly configured, and it performs no outbound email, no posting, and no external API writes.
+
+Where a capability lets an **authorized external client** read the corpus, **local inference is the default** and remote inference is an **explicit, per-client, audited operator grant** — never a default, never a build-time switch, never silent.
+
+**Honesty constraint (binding on all copy).** Smackerel **cannot technically verify where a client's model executes**. No server can: the server sees a client, never the client's inference topology. That is a property of the protocol, not a Smackerel weakness, and no future release closes it. The **only** permitted claim shape is therefore:
+
+> *"Smackerel never sends your knowledge anywhere; a client you explicitly authorize may."*
+
+That sentence is literally true and independently verifiable, because it asserts only what Smackerel's own egress does. Any copy implying that Smackerel **enforces**, **verifies**, **guarantees**, or **attests** client-side inference locality is a **defect** — in product docs, the investor narrative, operator surfaces, release packets, and marketing alike. This constraint is what keeps the §21.4 UVP claim truthful.
+
+Ownership also means **exit is unconditional**: the user can export, relocate, or delete the entire corpus without asking permission, and accumulated value must never become a switching barrier.
+
+**Why this is a product principle and not only an engineering one.** Local-first is the product's single biggest differentiator — design doc §21.4 states it as the UVP ("your data never leaves your machine … this is Smackerel's moat") and `docs/INVESTOR_OVERVIEW.md` calls it "a moat, not a constraint" — yet until 2026-07-29 it was carried **only** by Constitution C1, which this document declares to be a **separate enforcement track**. A product claim this load-bearing must live on the track that actually governs product review. Constitution C1 remains in force on the engineering track; this principle is the product-track carrier.
+
+**Implication for product decisions**: Reject any feature that makes cloud processing the default, requires a hosted service for core function, or claims verified client-side locality. Integration surfaces (MCP, connectors, exports) default to local; remote egress is an audited exception, granted per client — never global, never implicit.
+
+---
+
 ## Surfacing Process (How This File Got Built)
 
-This file was generated by reading existing repo evidence:
+**Principles 1–10** were generated by reading existing repo evidence in the 2026-06-03 surfacing pass:
 
 | Source Read | What It Surfaced |
 |-------------|------------------|
@@ -195,18 +218,26 @@ This file was generated by reading existing repo evidence:
 | [`docs/smackerel.md`](smackerel.md) §2 Design Principles | All 10 principles trace to design doc §2 entries |
 | [`docs/smackerel.md`](smackerel.md) §11 Knowledge Lifecycle | Principle 3 lifecycle states |
 
+**Principle 11 was NOT surfaced in that pass.** It was added later, by a different route, and the record must not be retro-fitted:
+
+| Source Read | What It Surfaced | When |
+|-------------|------------------|------|
+| [`specs/109-mcp-knowledge-server/spec.md`](../specs/109-mcp-knowledge-server/spec.md) §18 decision 7 | **Principle 11 — Local-First Data Ownership.** Spec 109's design review found that local-first — stated as the UVP in design doc §21.4 and as "a moat, not a constraint" in `docs/INVESTOR_OVERVIEW.md` — was carried **only** by Constitution C1, which this document declares a separate enforcement track. That left a load-bearing **product claim with no product principle**, forcing spec 109's decision D1 to borrow an engineering principle to justify a product decision. The gap was closed by addition. | Identified 2026-07-29; ratified 2026-07-29 by owner delegation |
+
+The original 2026-06-03 pass missing this principle is itself a recorded fact, not a defect in the record: the surfacing pass read the design doc's §2 principle table and the constitution, and local-first was present in **both** — which is exactly why it was assumed covered and was not promoted to the product track.
+
 NO principles were fabricated. Every principle traces to existing source. The owner's job is to confirm each surfaced principle accurately reflects current product direction.
 
 ---
 
 ## Ratification Process
 
-1. Owner reviews each principle in this file (1-10; C1-C10 already live).
+1. Owner reviews each principle in this file (1-11; C1-C10 already live).
 2. Owner approves, edits, or rejects each principle.
 3. Owner stamps each principle as "Ratified YYYY-MM-DD" once confirmed.
 4. Once ALL principles are ratified, the [companion enforcement file](../.github/instructions/product-principles.instructions.md) becomes binding policy.
 
-Principles 1–10 were ratified 2026-06-03. The companion enforcement file is now binding. The constitution remains the sole NON-NEGOTIABLE engineering authority on its own track.
+Principles 1–10 were ratified 2026-06-03. **Principle 11 was ratified 2026-07-29** by owner delegation, recorded via `specs/109-mcp-knowledge-server/spec.md` §18 decision 7; it was added after the original pass and carries its own later date rather than being folded into the 2026-06-03 stamp. The companion enforcement file is binding for all 11. The constitution remains the sole NON-NEGOTIABLE engineering authority on its own track.
 
 ---
 
@@ -214,5 +245,5 @@ Principles 1–10 were ratified 2026-06-03. The companion enforcement file is no
 
 - [`.specify/memory/constitution.md`](../.specify/memory/constitution.md) — Engineering principles (NON-NEGOTIABLE)
 - [`docs/smackerel.md`](smackerel.md) — Authoritative product and architecture design (source for all surfaced principles)
-- [`.github/instructions/product-principles.instructions.md`](../.github/instructions/product-principles.instructions.md) — Product principles enforcement (BLOCKING; ratified 2026-06-03)
+- [`.github/instructions/product-principles.instructions.md`](../.github/instructions/product-principles.instructions.md) — Product principles enforcement (BLOCKING; P1–P10 ratified 2026-06-03, P11 ratified 2026-07-29)
 - [`docs/INVESTOR_OVERVIEW.md`](INVESTOR_OVERVIEW.md) — Investor-facing platform overview
