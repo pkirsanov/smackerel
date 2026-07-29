@@ -75,3 +75,12 @@ traceContracts:
   workflows:
     core.health:
       slo: core.health
+# Optional, ADVISORY-ONLY code-index seam (skill: bubbles-code-index-adapter).
+# Derives structural source facts (symbols / impact / affected-tests / routes)
+# instead of asserting them from hand-maintained lists. It is NEVER a blocking
+# verdict and no gate consumes it. Default when absent is `none`.
+#
+# `codegraph` requires a local index built with `codegraph init`; `.codegraph/`
+# is gitignored. Onboarding + reversal: docs/CodeIndex-Onboarding.md
+codeIndex:
+  adapter: codegraph

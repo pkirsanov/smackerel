@@ -1,7 +1,17 @@
 # Code-Index Onboarding (Smackerel)
 
-**Status:** NOT onboarded. This document records the measured fit assessment and
-the exact steps to onboard. Onboarding is optional and reversible.
+**Status:** ONBOARDED 2026-07-29. `codeIndex.adapter: codegraph` is set in
+`.github/bubbles-project.yaml` and a local index exists. The seam is
+ADVISORY-ONLY — no gate consumes it and it is never a blocking verdict.
+Reversal is at the end of this file.
+
+**Measured index (2026-07-29):** 2,331 files → 40,009 nodes / 114,711 edges,
+~132 MB. `routes` returns 444 entries.
+
+**Every clone must rebuild.** `.codegraph/` is gitignored, so the index is NOT
+distributed. A fresh clone resolves `adapter=codegraph` but has no index, and the
+adapter then exits 1 ("could not look") rather than returning a misleading `[]`.
+Run the `codegraph init` step below after cloning.
 
 **Framework contract:** [`bubbles-code-index-adapter`](../.github/skills/bubbles-code-index-adapter/SKILL.md)
 (skill, vendored) — the generic doctrine, the 5-verb contract, and the rules for
