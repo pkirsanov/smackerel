@@ -13,6 +13,20 @@
 #
 # Format: one basename per line. Blank lines and `#` comments ignored.
 # Every entry MUST be preceded by a comment line giving the reason.
-#
-# (No entries. Every selftest in the tree is executed — either by an enumerated
-# framework-validate check or by the discovery sweep.)
+
+# Already executed by framework-validate through
+# `bash "$SCRIPT_DIR/cli.sh" repository-binding-selftest --suite=all`. That
+# wrapper sets BUBBLES_REPOSITORY_BINDING_CLI_BOUNDARY=1, which the suite itself
+# asserts (case RB-CLI-BOUNDARY-EXECUTED). The sweep dedupes against enumerated
+# checks by FILE name, and the cli spelling of that check carries no `.sh`, so
+# discovery cannot see it as already-wired. A direct second run therefore fails
+# that assertion BY CONSTRUCTION — the suite is contracted to run only through
+# the CLI boundary.
+repository-binding-selftest.sh
+
+# Executed as a child suite by repository-binding-selftest.sh, which holds it in
+# CONFORMANCE_SELFTEST and runs it as the `conformance` suite. That reference
+# lives in a sibling script rather than in framework-validate.sh, so the sweep
+# cannot observe it. Discovery would re-run the entire conformance suite for
+# zero additional coverage.
+repository-binding-conformance-guard-selftest.sh
