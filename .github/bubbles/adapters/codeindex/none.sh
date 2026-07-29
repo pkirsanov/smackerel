@@ -31,7 +31,7 @@ set -euo pipefail
 VERB="${1:-}"
 
 case "$VERB" in
-  symbols|impact|affected|routes)
+  symbols|impact|affected|routes|indexed)
     # Record-list verbs normalize to a JSON ARRAY; neutral empty is [].
     echo '[]'
     exit 0
@@ -53,7 +53,7 @@ case "$VERB" in
     # Shape selftest: emit the canonical neutral shape for <verb> with no
     # provider installed. Lets a shape lint validate this adapter offline.
     case "${2:-}" in
-      symbols|impact|affected|routes) echo '[]'; exit 0 ;;
+      symbols|impact|affected|routes|indexed) echo '[]'; exit 0 ;;
       status|freshness|sync) echo '{}'; exit 0 ;;
       *) echo "[none][ERROR] selftest requires a known verb" >&2; exit 1 ;;
     esac

@@ -121,6 +121,63 @@ CHANGED_N=$(printf '%s\n' "$CHANGED" | grep -c . || true)
 
 [ "$CHANGED_N" -gt 0 ] || emit_degraded "no changed files to analyze"
 
+# --- indexability triage ------------------------------------------------------
+# "0 affected tests" has TWO causes that demand opposite reactions:
+#   (a) nothing graph-participating changed  -> correct, boring, no subset exists
+#   (b) the graph missed an edge             -> a correctness risk
+# Reporting a bare "would skip 100%" conflates them. During validation this
+# ambiguity produced a false alarm: a repo showed 0/1938 affected and looked like
+# a graph gap, when the only changed file was a shell script the provider cannot
+# parse. Ask the index which changed files actually carry graph nodes.
+INDEXABLE_N=-1
+if INDEXED_JSON="$(bash "$ADAPTER" indexed 2>/dev/null)" && [ -n "$INDEXED_JSON" ]; then
+  # The inventory is large (~300KB on a mid-size repo), which exceeds the
+  # per-variable environment limit — passing it via env fails with
+  # "Argument list too long". Big payload goes on stdin; the changed list is
+  # small, so it rides in argv.
+  CHANGED_ARR=()
+  while IFS= read -r _line; do
+    [ -n "$_line" ] && CHANGED_ARR+=("$_line")
+  done <<EOF
+$CHANGED
+EOF
+  INDEXABLE_N="$(printf '%s' "$INDEXED_JSON" | python3 -c '
+import sys, json
+try:
+    idx = json.load(sys.stdin)
+except Exception:
+    print(-1); raise SystemExit
+# nodeCount == 0 means the file is known to the index but carries no symbols, so
+# it can never yield a dependent. Only nodeCount > 0 is graph-participating.
+live = {r.get("path") for r in idx if isinstance(r, dict) and (r.get("nodeCount") or 0) > 0}
+print(sum(1 for c in sys.argv[1:] if c in live))
+' "${CHANGED_ARR[@]}" 2>/dev/null || echo -1)"
+fi
+
+# -1 is the could-not-triage sentinel; never leak it into the report.
+if [ "$INDEXABLE_N" -ge 0 ] 2>/dev/null; then
+  INDEXABLE_LABEL="$INDEXABLE_N"
+else
+  INDEXABLE_LABEL="unknown"
+fi
+
+if [ "$INDEXABLE_N" = "0" ]; then
+  if [ "$AS_JSON" -eq 1 ]; then
+    printf '{"mode":"shadow","degraded":true,"reason":"no graph-participating files changed","changedFiles":%s,"indexableChanged":0,"affectedTests":0,"totalTests":0,"gating":false}\n' "$CHANGED_N"
+  else
+    echo "test-impact-shadow: NO SUBSET DERIVABLE"
+    echo ""
+    echo "  changed files:        $CHANGED_N"
+    echo "  graph-participating:  0"
+    echo ""
+    echo "  None of the changed files carry graph nodes — they are docs, config,"
+    echo "  or a language this provider cannot parse. That is NOT a graph gap and"
+    echo "  NOT evidence that tests can be skipped; no subset exists to derive."
+    echo "  Run the full suite."
+  fi
+  exit 0
+fi
+
 # --- total test inventory ----------------------------------------------------
 TOTAL_TESTS=0
 for pat in "${TEST_PATTERNS[@]}"; do
@@ -156,22 +213,29 @@ else
 fi
 
 if [ "$AS_JSON" -eq 1 ]; then
-  printf '{"mode":"shadow","degraded":false,"adapter":"%s","changedFiles":%s,"totalTests":%s,"affectedTests":%s,"wouldSkip":%s,"wouldSkipPct":%s,"gating":false}\n' \
-    "$(basename "$ADAPTER" .sh)" "$CHANGED_N" "$TOTAL_TESTS" "$AFFECTED_N" "$WOULD_SKIP" "$PCT"
+  printf '{"mode":"shadow","degraded":false,"adapter":"%s","changedFiles":%s,"indexableChanged":%s,"totalTests":%s,"affectedTests":%s,"wouldSkip":%s,"wouldSkipPct":%s,"gating":false}\n' \
+    "$(basename "$ADAPTER" .sh)" "$CHANGED_N" "$INDEXABLE_N" "$TOTAL_TESTS" "$AFFECTED_N" "$WOULD_SKIP" "$PCT"
   exit 0
 fi
 
 echo "test-impact-shadow (REPORT ONLY — nothing was skipped)"
 echo ""
-echo "  adapter:        $(basename "$ADAPTER" .sh)"
-echo "  changed files:  $CHANGED_N"
-echo "  test inventory: $TOTAL_TESTS"
-echo "  derived subset: $AFFECTED_N"
-echo "  would skip:     $WOULD_SKIP  (${PCT}%)"
+echo "  adapter:             $(basename "$ADAPTER" .sh)"
+echo "  changed files:       $CHANGED_N"
+echo "  graph-participating: $INDEXABLE_LABEL"
+echo "  test inventory:      $TOTAL_TESTS"
+echo "  derived subset:      $AFFECTED_N"
+echo "  would skip:          $WOULD_SKIP  (${PCT}%)"
 echo ""
 if [ "$AFFECTED_N" -eq 0 ]; then
-  echo "  ⚠️  The derived subset is EMPTY while $CHANGED_N file(s) changed."
-  echo "      Treat that as a graph gap, not as 'no tests needed'."
+  if [ "$INDEXABLE_N" -gt 0 ] 2>/dev/null; then
+    echo "  ⚠️  The derived subset is EMPTY while $INDEXABLE_N graph-participating"
+    echo "      file(s) changed. Those files ARE in the graph, so this is a"
+    echo "      candidate GRAPH GAP — not evidence that no tests are needed."
+  else
+    echo "  ⚠️  The derived subset is EMPTY and graph-participation is $INDEXABLE_LABEL,"
+    echo "      so 'nothing indexable changed' and 'graph gap' cannot be told apart."
+  fi
 fi
 echo "  This is evidence for a divergence log, NOT a plan."
 echo "  Run the FULL suite. If the full suite fails while this subset would have"
