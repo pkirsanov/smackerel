@@ -105,12 +105,20 @@ seven-token set: `authorized`, `unauthorized-toolset`, `unauthorized-egress-clas
 - **UX-F-002 — OPEN.** `docs/smackerel.md` §17.1 (confidence signals) is not in the §15 documentation
   table, yet §9A.5 ties R-109-UX15–UX18 to it. Scope 07 plans the §17.1 row **as a planning decision
   recorded here**, not as a silent spec amendment; `spec.md` §15 is not edited by this packet (G073).
-- **UX-F-003 — PARTIALLY RESOLVED (2026-07-29).** Principle numbering. Trust Through Transparency is
-  **Principle 8** in `docs/Product-Principles.md`, and there was no Principle 11 — both statements of
-  fact, still true. The *principle-gap* half is now **settled by ratified `spec.md` §18 item 7**: the
-  document **gains** `Principle 11 — Your Data Stays Yours` at delivery, under **owner sign-off**,
-  together with a matching block in its BLOCKING companion enforcement file. Scope 07 carries both as
-  named DoD items. This packet still invents nothing and applies nothing.
+- **UX-F-003 — RESOLVED (2026-07-29).** Principle numbering. Trust Through Transparency is
+  **Principle 8** in `docs/Product-Principles.md`, and at the time the finding was raised there was no
+  Principle 11 — both statements of fact when written. The *principle-gap* half was settled by ratified
+  `spec.md` §18 item 7 and has since been **delivered**: on 2026-07-29 the owner exercised the sign-off
+  that item required and `docs/Product-Principles.md` gained
+  **`## Principle 11 — Local-First Data Ownership`** (`**Status**: Ratified 2026-07-29`), together with a
+  matching `### Principle 11` block in its BLOCKING companion enforcement file. The title was finalised at
+  that sign-off, and `spec.md` §18 item 7 now records the shipped name with the working title kept only as
+  a labelled historical note; every substantive element of the ratified decision is unchanged. `spec.md`
+  §16 has been refreshed to cite **Principle 11 — Local-First Data Ownership** as the product-track
+  carrier, with Constitution C1 retained as the engineering-track cross-reference, and its alignment table
+  carries a P11 row. Nothing about this finding remains open. Scope 07 carries the shipped artifacts as
+  **verification** DoD items rather than as edits to make.
+  **This packet still invents nothing; the principle amendment was applied by the owner, not by this packet.**
 - **UX-F-004 — OPEN.** §2's Success Signal omits `retrieval_reason` and `retrieval_contract_known`,
   both of which §9 returns and R-109-UX15/UX18 depend on. Scope 03 plans and tests **all six**
   provenance fields. The §2 editorial correction was **not** decided by the §18 gate (which closed
@@ -815,8 +823,10 @@ And no document claims a capability the running server does not serve
   agent that never inherits Smackerel's own system-prompt defense, and the D3 no-token-passthrough rule.
 - **`docs/smackerel.md` §21 (Competitive Landscape).** Add an **MCP row**. Fabric.so already ships MCP
   (§21.1 strength), so this is explicitly a **parity** move; the **differentiating** move is D1+D2 —
-  provably local-first by default and never emitting raw content. Annotate honestly: the D1 control is
-  an operator declaration, **not verified**. Record that the row this actually strengthens is
+  local-first by default and never emitting raw content. Write it in the only shape Principle 11 permits:
+  *"Smackerel never sends your knowledge anywhere; a client you explicitly authorize may."* Annotate
+  honestly: the D1 control is an operator declaration, **not verified**, and no server can verify a
+  connected client's inference locality. Record that the row this actually strengthens is
   "Local-first / own your data", and that shipping MCP without D1+D2 would have made the §21.4 UVP false.
 - **`docs/smackerel.md` §22 (Connector Ecosystem & Reuse).** Add MCP to the integration inventory as a
   **sibling integration capability** — explicitly **not** a connector (connectors are ingress and are
@@ -856,25 +866,42 @@ And no document claims a capability the running server does not serve
   `remote-inference` is deliberately **not** a flag: it is a per-client registry grant, so no build can
   enable it globally.
 - **`docs/Product-Principles.md` alignment note.** Record the §16 alignment against **Principle 8 —
-  Trust Through Transparency** (UX-F-003: there is no pre-existing Principle 11), plus P2, P3, P4, P5,
-  P6, P10. Carry the §16 principle-gap note in its **ratified** form: the commissioning brief cited
-  "Principle 9 — Own your data", Principle 9 is actually "Design For Restart, Not Perfection", and no
-  *existing* numbered principle states data ownership — that commitment is carried today by
-  Constitution C1, `docs/smackerel.md` §21.4, and `docs/INVESTOR_OVERVIEW.md`.
-- **`docs/Product-Principles.md` NEW Principle 11 — OWNER SIGN-OFF REQUIRED.** Ratified `spec.md` §18
-  item 7 (2026-07-29) decides the gap **closes by addition**: the document gains **Principle 11 — Your
-  Data Stays Yours**, using the paragraph ratified in §18 item 7 verbatim, in the house format
-  (`## Principle 11 — Your Data Stays Yours` + `**Status**: Ratified <date>`), placed after Principle 10
-  and before `## Surfacing Process`. Constitution C1 is **not** the sole carrier.
-  **This amends an owner-ratified document** (`docs/Product-Principles.md` is stamped "Ratified
-  2026-06-03" and states edits go through the normal product-principles change process), so it MUST NOT
-  be applied by an agent without recorded owner sign-off.
-  Because that document's companion enforcement file
-  `.github/instructions/product-principles.instructions.md` is declared **BLOCKING** and carries a
-  per-principle enforcement block for each of P1–P10, the same change set MUST add a matching
-  **Principle 11** enforcement block — otherwise the product's single biggest differentiator ships as
-  an unenforced principle, which is exactly the "claim with no enforcement track" gap §18 item 7
-  exists to close.
+  Trust Through Transparency** (UX-F-003: at the time that finding was raised there was no Principle 11),
+  plus P2, P3, P4, P5, P6, P10 — **and now P11**. Carry the §16 principle-gap note in its **delivered**
+  form: the commissioning brief cited "Principle 9 — Own your data", Principle 9 is actually "Design For
+  Restart, Not Perfection", and until 2026-07-29 no numbered product principle stated data ownership — that
+  commitment was carried only by Constitution C1, `docs/smackerel.md` §21.4, and `docs/INVESTOR_OVERVIEW.md`.
+  As of 2026-07-29 the product-track carrier exists: **Principle 11 — Local-First Data Ownership**. C1
+  remains in force on the engineering track and is cited as the cross-reference, no longer as the sole carrier.
+- **`docs/Product-Principles.md` NEW Principle 11 — DELIVERED 2026-07-29, now a verification item.** Ratified `spec.md` §18
+  item 7 (2026-07-29) decided the gap **closes by addition**. The owner exercised the sign-off that item required on
+  2026-07-29 and applied the amendment directly, so this bullet is no longer an obligation to *make* the edit — it is an
+  obligation to *verify* it.
+  **As shipped:** `docs/Product-Principles.md` carries **`## Principle 11 — Local-First Data Ownership`** with
+  `**Status**: Ratified 2026-07-29 (owner-delegated; recorded via spec 109 §18 decision 7)`, placed after Principle 10 and
+  before `## Surfacing Process`. Constitution C1 is **not** the sole carrier; C1 remains in force on the engineering track
+  and the principles document's C1 row now cross-references P11 as the product-track counterpart.
+  **Naming — settled, with its provenance kept.** §18 item 7 put the working title *"Your Data Stays Yours"*
+  and a draft paragraph to the owner, both explicitly labelled proposals for sign-off. Sign-off is precisely
+  where a proposal is finalised, and the owner chose the name **Local-First Data Ownership**. `spec.md` §18
+  item 7 now records the shipped name and keeps the working title only as a labelled historical note. Every
+  substantive element of the draft survives in the shipped principle: local-first storage, no
+  Smackerel-initiated transmission, local inference as the default for external-client read surfaces, remote
+  inference as an explicit per-client audited grant, the binding honesty constraint with its exact permitted
+  claim sentence, and unconditional export/relocate/delete with no switching barrier. The ratified
+  **decision** ("add a product principle; C1 is not the sole carrier") is unchanged.
+  **Also shipped in the same change set:** the companion enforcement file
+  `.github/instructions/product-principles.instructions.md` — declared **BLOCKING** and carrying a per-principle enforcement
+  block for each of P1–P10 — gained a matching **Principle 11** block with four runnable grep checks (false verified-locality
+  claim; cloud/remote processing default in the SST; remote-egress grant lacking an audit record; export/delete gated behind
+  an entitlement) and six `BLOCKING` action rows. Shipping the principle without its enforcement block would have left the
+  product's single biggest differentiator unenforced — the exact "claim with no enforcement track" gap §18 item 7 exists to
+  close.
+  **`spec.md` §16 — refreshed, no longer pre-delivery.** §16 now cites **Principle 11 — Local-First Data Ownership**
+  as the product-track carrier of the local-first claim, retains **Constitution C1** as the **engineering-track**
+  cross-reference rather than as the sole carrier, carries a **P11 row** in its alignment table, and no longer
+  states that this spec cites only ten ratified principles. Scope 07 carries the shipped surfaces as
+  **verification** DoD items below; none of them is an edit this packet still owes.
 
 ### Test Plan
 
@@ -882,7 +909,7 @@ And no document claims a capability the running server does not serve
 |---|---|---|---|---|
 | TP-07-01 | unit | `internal/config` flag-bundle parity test | `mcpKnowledgeServer` is `true` in `config/feature-flags.next.yaml`, `false` in `config/feature-flags.mvp.yaml`, and `true` in **exactly one** train across every declared train in `config/release-trains.yaml` (SCN-109-P02) | `./smackerel.sh test unit` |
 | TP-07-02 | unit | `cmd/core` config-resolution test | `mcp.knowledge_server` resolves fail-loud: absent or malformed aborts startup with the named error. Adversarial: a `${VAR:-…}` or `os.Getenv`-with-default implementation silently boots and fails this test (SCN-109-P02) | `./smackerel.sh test unit` |
-| TP-07-03 | unit | `internal/docs` documentation-contract test | Every `spec.md` §15 target file exists and carries its required section anchor — `docs/smackerel.md` §17.1/§17.2/§21/§22, `docs/API.md` `/mcp` + "MCP toolset availability", `docs/Operations.md` MCP runbook, `docs/Architecture.md`, `docs/INVESTOR_OVERVIEW.md`, `docs/Product-Principles.md` alignment note, and the `next` release packet's `features.md`. **Also** (ratified §18 item 7): `docs/Product-Principles.md` carries a `## Principle 11 — Your Data Stays Yours` heading with a `**Status**: Ratified` stamp, **and** `.github/instructions/product-principles.instructions.md` carries a matching Principle 11 enforcement block. Adversarial: adding the principle to the principles document but **not** to the BLOCKING companion enforcement file fails this test — an unenforced principle is the gap, not the fix (SCN-109-P01) | `./smackerel.sh test unit` |
+| TP-07-03 | unit | `internal/docs` documentation-contract test | Every `spec.md` §15 target file exists and carries its required section anchor — `docs/smackerel.md` §17.1/§17.2/§21/§22, `docs/API.md` `/mcp` + "MCP toolset availability", `docs/Operations.md` MCP runbook, `docs/Architecture.md`, `docs/INVESTOR_OVERVIEW.md`, `docs/Product-Principles.md` alignment note, and the `next` release packet's `features.md`. **Also** (ratified §18 item 7, delivered 2026-07-29): `docs/Product-Principles.md` carries a `## Principle 11 — Local-First Data Ownership` heading with a `**Status**: Ratified` stamp, **and** `.github/instructions/product-principles.instructions.md` carries a matching `### Principle 11 — Local-First Data Ownership` enforcement block. Adversarial: adding the principle to the principles document but **not** to the BLOCKING companion enforcement file fails this test — an unenforced principle is the gap, not the fix (SCN-109-P01) | `./smackerel.sh test unit` |
 | TP-07-04 | integration | doc/registry consistency check on the ephemeral stack | The toolsets documented as **delivered** equal the toolsets the running server actually serves, by two-way set equality; `hospitality-read` and `memory-write` appear as specified-not-delivered with their reasons and appear in **neither** served set. Adversarial: a docs-only assertion passes while the server serves a different set (SCN-109-004) | `./smackerel.sh test integration` |
 | TP-07-05 | e2e-api | `/mcp` on the ephemeral stack with the `next` bundle | With `config/feature-flags.next.yaml` applied, `/mcp` is mounted and `initialize` succeeds; with the `mvp` bundle applied, `/mcp` is not served. | `./smackerel.sh test e2e` |
 | TP-07-06 | e2e-api | `/mcp` regression suite on the ephemeral stack | **Regression E2E** — persistent scenario-specific regression for SCN-109-004, SCN-109-P01, SCN-109-P02 and SCN-109-P03 against the live stack: the documented-delivered toolset set still equals the served set by two-way equality, `hospitality-read` and `memory-write` still appear in neither served set, and the flag still gates `/mcp` per train with no default. Fails if documentation drifts ahead of what the server actually serves — the exact dishonesty this feature exists to prevent; also proves the broader e2e suite shows no green→red drift from this scope | `./smackerel.sh test e2e` |
@@ -900,9 +927,10 @@ And no document claims a capability the running server does not serve
 - [ ] The capability-ledger surface records the honest delivery state (`hospitality-read` and `memory-write` specified-not-delivered with reasons); if no ledger file exists, the same inventory lands in `docs/API.md` and the placement is stated in the release packet
 - [ ] The `next` release packet under `docs/releases/` and its `features.md` carry the MCP entry, the flag name, the owning train, the honest delivery state, and the `remote-inference` egress opt-in
 - [ ] `config/release-trains.yaml` confirms `next` is declared and records spec 109's targeting
-- [ ] `docs/Product-Principles.md` alignment note cites **Principle 8** (UX-F-003) and carries the §16 principle-gap note in its **ratified** form — recorded as resolved by §18 item 7, not as an open owner decision
-- [ ] **OWNER SIGN-OFF REQUIRED (amends an owner-ratified document).** `docs/Product-Principles.md` gains **`## Principle 11 — Your Data Stays Yours`** with a `**Status**: Ratified <date>` stamp, using the paragraph ratified in `spec.md` §18 item 7 verbatim, placed after Principle 10 and before `## Surfacing Process`. That document is stamped "Ratified 2026-06-03" and states edits go through the normal product-principles change process, so **no agent may apply this without recorded owner sign-off**; absent sign-off this scope is **Blocked on this item**, never silently skipped or downgraded
-- [ ] **OWNER SIGN-OFF REQUIRED (same change set).** `.github/instructions/product-principles.instructions.md` — the **BLOCKING** companion enforcement file, which carries a per-principle enforcement block for each of P1–P10 — gains a matching **Principle 11** enforcement block. Shipping the principle without its enforcement block would leave the product's single biggest differentiator unenforced, which is the exact "product claim with no enforcement track" gap §18 item 7 exists to close
+- [ ] `docs/Product-Principles.md` alignment note cites **Principle 8** (UX-F-003) **and Principle 11**, and carries the §16 principle-gap note in its **delivered** form — recorded as resolved by §18 item 7 and shipped 2026-07-29, not as an open owner decision
+- [ ] **Verification (§18 item 7 delivered 2026-07-29).** `docs/Product-Principles.md` carries `## Principle 11 — Local-First Data Ownership` with a `**Status**: Ratified 2026-07-29 (owner-delegated; recorded via spec 109 §18 decision 7)` stamp, placed after Principle 10 and before `## Surfacing Process`, and its body carries the binding honesty constraint — that Smackerel cannot technically verify client-side inference locality, and the only permitted claim shape is *"Smackerel never sends your knowledge anywhere; a client you explicitly authorize may."* **Local-First Data Ownership** is the shipped and settled title; every spec 109 artifact cites it, and `spec.md` §18 item 7 records the working title put to the owner only as a labelled historical note
+- [ ] **Verification (same change set).** `.github/instructions/product-principles.instructions.md` — the **BLOCKING** companion enforcement file — carries a matching `### Principle 11 — Local-First Data Ownership` block whose grep checks are runnable against this repo's layout and whose action rows read `BLOCKING (enforced via grep in PR review + pre-push)`, consistent with P1–P10. A principle present in the principles document but absent from the enforcement companion is the gap, not the fix
+- [ ] **Verification (`spec.md` §16 alignment, refreshed).** `spec.md` §16 cites **Principle 11 — Local-First Data Ownership** as the product-track carrier of the local-first claim, retains **Constitution C1** as the **engineering-track** cross-reference rather than as the sole carrier, carries a **P11 row** in its alignment table, and no longer contains the pre-delivery sentence "until it lands, this spec continues to cite only the ten existing ratified principles". The delivered `docs/Product-Principles.md` alignment note (bullet above) must match this citation — a doc that cites P8 alone while §16 cites P8 **and** P11 is drift, not a fix
 - [ ] `TP-07-01` unit test passes — flag default-ON in exactly one train, default-OFF elsewhere
 - [ ] `TP-07-02` unit test passes — `mcp.knowledge_server` fail-loud with no fallback default
 - [ ] `TP-07-03` unit test passes — every §15 target file and section anchor present

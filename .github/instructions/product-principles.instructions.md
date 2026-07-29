@@ -4,7 +4,7 @@ applyTo: "**"
 
 # Smackerel Product Principles Enforcement
 
-> **STATUS**: Ratified 2026-06-03 by owner; BINDING. Until 2026-06-03 this file was advisory; from this date forward, principles 1–10 are blocking.
+> **STATUS**: BINDING. Principles 1–10 were ratified by the owner 2026-06-03; **Principle 11 was ratified 2026-07-29** by owner delegation (recorded via `specs/109-mcp-knowledge-server/spec.md` §18 decision 7). Until 2026-06-03 this file was advisory; from that date forward principles 1–10 are blocking, and Principle 11 is blocking from 2026-07-29.
 >
 > This file is the agent-facing enforcement layer. When this file disagrees with `Product-Principles.md`, the principles document wins; this file MUST be updated to match. The [`.specify/memory/constitution.md`](../../.specify/memory/constitution.md) engineering principles (C1-C10) remain NON-NEGOTIABLE on their own track.
 
@@ -12,7 +12,7 @@ applyTo: "**"
 
 ## How This File Works
 
-`docs/Product-Principles.md` is the human-readable product strategy. The constitution defines the binding engineering principles (C1-C10). This file translates each ratified **product principle** (1-10) into:
+`docs/Product-Principles.md` is the human-readable product strategy. The constitution defines the binding engineering principles (C1-C10). This file translates each ratified **product principle** (1-11) into:
 
 1. **Spec authoring requirements** (what every new feature spec MUST include)
 2. **Enforcement grep checks** (mechanical detection of violations in code)
@@ -24,7 +24,7 @@ applyTo: "**"
 
 **Every new feature spec under `specs/`** that touches one of the principle areas MUST include a `## Product Principle Alignment` section declaring:
 
-- Which principle(s) (1-10) the feature implements or extends
+- Which principle(s) (1-11) the feature implements or extends
 - If the feature appears to violate a principle, why the deviation is justified
 - Evidence linking the feature back to the principle's source document (`docs/Product-Principles.md` and/or `docs/smackerel.md`)
 
@@ -32,9 +32,9 @@ Specs missing this section MUST be rejected by `/bubbles.plan` and `/bubbles.des
 
 ---
 
-## Per-Principle Enforcement (Activated After Ratification — 2026-06-03)
+## Per-Principle Enforcement (Activated After Ratification — P1–P10 on 2026-06-03, P11 on 2026-07-29)
 
-Each principle below has enforcement actions. After ratification (2026-06-03), the actions are blocking and enforced via grep in PR review and pre-push.
+Each principle below has enforcement actions. After ratification, the actions are blocking and enforced via grep in PR review and pre-push.
 
 ### Principle 1 — Observe First, Ask Second
 
@@ -185,6 +185,40 @@ grep -rn 'QFDecisionPacket\|CalibrationBadge\|DataProvenanceBadge' internal/
 | QF packet metadata (`CalibrationBadge`, `DataProvenanceBadge`, packet IDs, intent/scenario IDs, trace IDs, deep links) MUST be preserved without modification | BLOCKING (enforced via grep in PR review + pre-push) |
 | `PersonalEvidenceBundle` exports MUST include source, sensitivity, consent, provenance metadata | BLOCKING (enforced via grep in PR review + pre-push) |
 | Cross-product schema changes MUST update QF spec 063 FIRST, then Smackerel | BLOCKING (enforced via grep in PR review + pre-push) |
+
+### Principle 11 — Local-First Data Ownership
+
+Ratified 2026-07-29 (later than P1–P10; see `docs/Product-Principles.md` Surfacing Process).
+
+```bash
+# 1. FALSE-CLAIM DEFECT — copy asserting VERIFIED/ENFORCED client-side locality (BLOCKING).
+# Smackerel cannot verify where a client's model executes. The only permitted claim shape is
+# "Smackerel never sends your knowledge anywhere; a client you explicitly authorize may."
+grep -rniE 'verified local|verifies local|enforces local|guaranteed local|locally verified|attests? local|guarantees local' internal/ ml/ web/ docs/
+
+# 2. CLOUD/REMOTE PROCESSING DEFAULT in the SST config (BLOCKING).
+# Constitution C1: cloud LLMs may be optional helpers, never the shipped default.
+# Current clean state: config/smackerel.yaml carries `provider: "ollama"`.
+grep -rniE '^[[:space:]]*(provider|routing|inference_mode)[[:space:]]*:[[:space:]]*["'"'"']?(cloud|remote|openai|anthropic)' config/*.yaml
+
+# 3. REMOTE-EGRESS GRANT WITHOUT AN AUDIT RECORD (BLOCKING).
+# Prints any file naming a remote-egress/remote-inference grant that emits no audit entry.
+# Empty output = clean.
+grep -rlniE 'remote[_-]?inference|remoteInference|remote[_-]?egress' internal/ ml/ web/ config/ 2>/dev/null | xargs -r grep -Lil 'audit'
+
+# 4. EXIT GATED BEHIND AN ENTITLEMENT (BLOCKING) — export/delete/purge must stay unconditional.
+# Empty output = clean.
+grep -rlniE 'func .*(Export|Delete|Purge|Wipe)' internal/ --include='*.go' | xargs -r grep -lniE 'licen[cs]e|subscription|entitlement|paywall|billing[_ ]?tier'
+```
+
+| Action | Status |
+|--------|--------|
+| Copy MUST NOT claim Smackerel verifies, enforces, guarantees, or attests client-side inference locality; the only permitted claim shape is *"Smackerel never sends your knowledge anywhere; a client you explicitly authorize may."* | BLOCKING (enforced via grep in PR review + pre-push) |
+| Cloud/remote processing MUST NOT be the shipped default in the SST config or in code; local inference is the default and cloud is an opt-in helper | BLOCKING (enforced via grep in PR review + pre-push) |
+| Any capability that lets an authorized external client read the corpus MUST default to local inference; remote inference MUST be an explicit, per-client, audited operator grant — never global, never a build-time switch, never silent | BLOCKING (enforced via grep in PR review + pre-push) |
+| Every remote-egress path MUST emit an audit record naming the granted client | BLOCKING (enforced via grep in PR review + pre-push) |
+| Corpus export, relocation, and deletion MUST remain unconditional; accumulated value MUST NOT become a switching barrier | BLOCKING (enforced via grep in PR review + pre-push) |
+| A feature that requires a hosted service for core function MUST be rejected | BLOCKING (enforced via grep in PR review + pre-push) |
 
 ---
 

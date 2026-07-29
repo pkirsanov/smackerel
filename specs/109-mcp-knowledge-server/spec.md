@@ -261,9 +261,12 @@ memory product, and the §21.4 UVP claim would become false. So the competitive 
 is precise:
 
 - **Parity move:** ship MCP at all (closes the Fabric gap).
-- **Differentiating move:** ship MCP that is *provably* local-first by default and
-  *never* emits raw content (D1 + D2). That combination is the thing competitors
-  structurally cannot copy without abandoning their hosted model.
+- **Differentiating move:** ship MCP that is local-first *by default* and *never* emits raw
+  content (D1 + D2). Stated in the only shape Principle 11 permits: *"Smackerel never sends
+  your knowledge anywhere; a client you explicitly authorize may."* That combination is the
+  thing competitors structurally cannot copy without abandoning their hosted model. It is
+  **not** a claim that Smackerel verifies where a connected client's model executes — no
+  server can, and D1's control is an operator declaration.
 
 `docs/smackerel.md` §21 MUST be updated with an MCP row and an honest annotation of the
 D1 limitation (operator declaration, not verified).
@@ -948,13 +951,17 @@ UX rule:
   intended tie for R-109-UX15–UX18, §15 needs the row. **Still OPEN** — the §18 gate
   closed on 2026-07-29 without deciding it; it is a `spec.md` amendment, not a product
   decision. Routed to `bubbles.analyst` (Scope 07 already plans the §17.1 update).
-- **UX-F-003 — Principle numbering.** The trust-through-transparency principle is
-  **Principle 8** in `docs/Product-Principles.md`, which is what §16 cites and what
-  §9A.5 uses. A commissioning reference to "Principle 11" does not resolve — that
-  document has ten principles. **Partially resolved 2026-07-29:** the *principle-gap* half
-  is settled by ratified §18 item 7, which adds **Principle 11 — Your Data Stays Yours**
-  at delivery under owner sign-off. The *numbering* half was always a statement of fact.
-  This spec still invents no principle and still cites only the ten ratified ones.
+- **UX-F-003 — Principle numbering. RESOLVED 2026-07-29.** The trust-through-transparency
+  principle is **Principle 8** in `docs/Product-Principles.md`, which is what §16 cites and
+  what §9A.5 uses. When this finding was raised that document carried ten principles, so a
+  commissioning reference to "Principle 11" did not resolve — both statements of fact at the
+  time. The *numbering* half was always a statement of fact and stands. The *principle-gap*
+  half was settled by ratified §18 item 7 and has since been **delivered**: under the owner
+  sign-off that item required, `docs/Product-Principles.md` gained
+  **Principle 11 — Local-First Data Ownership**, together with a matching enforcement block
+  in its BLOCKING companion `.github/instructions/product-principles.instructions.md`. §16
+  now cites that shipped principle. This spec still invents no principle: P11 was authored
+  and ratified by the owner, not by this spec.
 - **UX-F-004 — §2's Success Signal enumerates a subset of §9's provenance fields.** It
   names `source_kind`, `retrieval_strategy`, `retrieval_fell_back`, and `trace_token` but
   omits `retrieval_reason` and `retrieval_contract_known`, both of which §9 returns and
@@ -1249,23 +1256,29 @@ Principle numbers and names are cited from `docs/Product-Principles.md`.
 | **P2 — Vague In, Precise Out** | `memory.search` accepts a natural-language query compiled into an `intent.CompiledIntent`; it does not demand exact tags or dates. Semantic retrieval stays the primary path. |
 | **P3 — Knowledge Breathes** | `lifecycle_state` is a first-class Projection field, so external clients see lifecycle rather than a flat, static snapshot. |
 | **P10 — QF Companion Boundary** | Untouched. No MCP tool initiates trade approval, mandate change, execution, or financial advice. |
+| **P11 — Local-First Data Ownership** | The product-track carrier of the local-first claim, and the principle D1 and D2 exist to satisfy. Local inference is the default egress class for this external-client read surface; `remote-inference` is an explicit, per-client, individually audited operator grant — never global, never a build-time switch (D1) — and `content_raw` never crosses the boundary at all (D2). P11's **binding honesty constraint** governs every artifact in this feature: no MCP surface, doc, or operator screen may claim Smackerel enforces, verifies, guarantees, or attests a connected client's inference locality. The permitted claim shape is *"Smackerel never sends your knowledge anywhere; a client you explicitly authorize may."* |
 
-**Principle-gap note — RESOLVED by ratified §18 item 7 (2026-07-29).** The commissioning
-brief cited *"Product Principle 9 — Own your data"*. `docs/Product-Principles.md` Principle 9
-is **"Design For Restart, Not Perfection"**, and no numbered product principle states data
-ownership — the local-first commitment is carried today by **Constitution C1 (Local-First)**,
-`docs/smackerel.md` §21.4 (UVP), and `docs/INVESTOR_OVERVIEW.md`. Those numbering facts stand.
-The open question they raised — whether `docs/Product-Principles.md` should gain an explicit
-local-first principle, or whether C1 remains the sole carrier — is **decided**: the document
-**gains** a new principle, proposed as **Principle 11 — Your Data Stays Yours** (§18 item 7
-carries the proposed text). Constitution C1 is **not** the sole carrier, because
-`docs/Product-Principles.md` states the constitution is a separate enforcement track, and a
-product claim this load-bearing must live on the product track.
+**Principle-gap note — RESOLVED by ratified §18 item 7, DELIVERED 2026-07-29.** The
+commissioning brief cited *"Product Principle 9 — Own your data"*. `docs/Product-Principles.md`
+Principle 9 is **"Design For Restart, Not Perfection"**, and until 2026-07-29 no numbered
+product principle stated data ownership — the local-first commitment was carried only by
+**Constitution C1 (Local-First)**, `docs/smackerel.md` §21.4 (UVP), and
+`docs/INVESTOR_OVERVIEW.md`. Those numbering facts stand. The open question they raised —
+whether `docs/Product-Principles.md` should gain an explicit local-first principle, or whether
+C1 remains the sole carrier — was **decided by addition** and has since **shipped**: under the
+owner sign-off §18 item 7 required, that document gained
+**`## Principle 11 — Local-First Data Ownership`** (`**Status**: Ratified 2026-07-29`), with a
+matching enforcement block in its BLOCKING companion
+`.github/instructions/product-principles.instructions.md`.
 
-The edit to `docs/Product-Principles.md` is **not** made by this spec and **not** made by this
-packet: that document is owner-ratified, so the amendment is a delivery-time obligation in
-`scopes.md` Scope 07, flagged as **requiring explicit owner sign-off**. Until it lands, this
-spec continues to cite only the ten existing ratified principles and invents none.
+**Two tracks, not one carrier.** **Principle 11** is the product-track carrier of the
+local-first claim; **Constitution C1** remains in force as the **engineering-track**
+cross-reference, not as the sole carrier. `docs/Product-Principles.md` frames the split
+directly: C1 governs *how the system is built*; Principle 11 governs *what the product
+promises*. This spec therefore cites P11 as a shipped, ratified principle above and invents
+none. The amendment to `docs/Product-Principles.md` was authored and signed off by the owner —
+**not** by this spec and **not** by this packet — and `scopes.md` Scope 07 now carries it as
+delivery-time **verification** items rather than as edits to make.
 
 ---
 
@@ -1483,15 +1496,26 @@ estimated as if the substrate were already proven.
 **Decision.** `docs/Product-Principles.md` **gains** an explicit local-first / data-ownership
 product principle. **Constitution C1 does NOT remain the sole carrier.**
 
-**Proposed number.** **Principle 11** — the next available number.
-`docs/Product-Principles.md` currently carries exactly ten principles (1–10), all stamped
-"Ratified 2026-06-03".
+**Number — as shipped.** **Principle 11** — the next available number. When this decision was
+taken `docs/Product-Principles.md` carried exactly ten principles (1–10), all stamped
+"Ratified 2026-06-03"; it now carries eleven.
 
-**Proposed name.** **Principle 11 — Your Data Stays Yours.**
+**Name — as shipped.** **Principle 11 — Local-First Data Ownership.** *(Historical record: the
+working title put to the owner in this section was "Your Data Stays Yours", explicitly labelled
+a proposal for sign-off. Sign-off is where a proposal is finalised, and on 2026-07-29 the owner
+finalised the title as **Local-First Data Ownership** with every substantive element below
+preserved. The ratified **decision** — add a product principle; C1 is not the sole carrier — is
+unchanged.)*
 
-**Proposed text (one paragraph, for owner sign-off):**
+**Text — drafted here for sign-off; `docs/Product-Principles.md` carries the authoritative
+wording.** The draft below is retained as the record of what was put to the owner, retitled to
+the shipped name. Every element of it survives in the shipped principle: local-first storage,
+no Smackerel-initiated transmission, local inference as the default for external-client read
+surfaces, remote inference as an explicit per-client audited grant, the binding honesty
+constraint with its exact permitted claim sentence, and unconditional export/relocate/delete
+with no switching barrier.
 
-> **Principle 11 — Your Data Stays Yours.** Smackerel runs on hardware the user controls, and
+> **Principle 11 — Local-First Data Ownership.** Smackerel runs on hardware the user controls, and
 > the user's knowledge never leaves it by Smackerel's own action. Capture, storage, embedding,
 > retrieval, and synthesis execute locally by default; local inference is the default and only
 > enabled egress class, and any remote-inference path is an explicit, per-client, individually
@@ -1506,32 +1530,37 @@ product principle. **Constitution C1 does NOT remain the sole carrier.**
 **Rationale.** `docs/Product-Principles.md` states explicitly that the constitution is a
 **separate enforcement track**. Local-first is the product's single biggest differentiator —
 `docs/smackerel.md` §21.4 states it as the UVP, and `docs/INVESTOR_OVERVIEW.md` calls it *"a
-moat, not a constraint"* — yet it exists only as an **engineering** constitution principle
-(C1). That is a real gap: a **product claim with no product principle**. D1's entire posture
-rests on it, which means D1 currently borrows an engineering principle to justify a product
-decision. Closing the gap puts the load-bearing commitment on the track that actually governs
-product review.
+moat, not a constraint"* — yet **at the time of this decision** it existed only as an
+**engineering** constitution principle (C1). That was a real gap: a **product claim with no
+product principle**. D1's entire posture rests on it, which meant D1 was borrowing an
+engineering principle to justify a product decision. Closing the gap puts the load-bearing
+commitment on the track that actually governs product review.
 
-**GOVERNANCE CONSTRAINT — the edit is NOT made here.** `docs/Product-Principles.md` is an
-owner-ratified document ("Ratified 2026-06-03"; *"Edits go through the normal product-principles
-change process"*). This section records the **decision only**. The edit itself is a
-**delivery-time obligation** carried by `scopes.md` **Scope 07**, where it is flagged as
-**requiring explicit owner sign-off** because it amends a ratified product document. No agent
-and no planning packet may apply it unilaterally.
+**GOVERNANCE CONSTRAINT — the edit was NOT made here.** `docs/Product-Principles.md` is an
+owner-ratified document (*"Edits go through the normal product-principles change process"*).
+This section records the **decision only**; no agent and no planning packet may apply such an
+amendment unilaterally. **Discharged 2026-07-29:** the owner exercised the explicit sign-off
+this item required and applied the amendment directly, outside this packet. `scopes.md`
+**Scope 07** therefore now carries it as delivery-time **verification** items — confirm the
+principle is present, and confirm its enforcement block is present — rather than as edits to
+make.
 
 **Enforcement companion — same change set, no shortcut.** `docs/Product-Principles.md` declares
 its companion file `.github/instructions/product-principles.instructions.md` **BLOCKING**, and
 that file carries a per-principle enforcement block for each of P1–P10. Principle 11 therefore
 ships with a matching enforcement block **in the same change set**. Adding the principle without
 it would leave the product's biggest differentiator unenforced — which is the very "claim with no
-enforcement track" shape this item exists to eliminate. Scope 07 carries this as a second
-owner-sign-off DoD item, and TP-07-03 fails if the principle lands without the enforcement block.
+enforcement track" shape this item exists to eliminate. That block shipped alongside the
+principle on 2026-07-29; Scope 07 carries its presence as a **verification** DoD item, and
+TP-07-03 fails if the principle is ever present without it.
 
-**Consequence.** §16's honest-discrepancy note is updated from "open owner decision" to
-"resolved — Principle 11 to be added at delivery, owner sign-off required". **UX-F-003**'s
-*principle-gap* half is resolved by this item; its *numbering* half (Trust Through Transparency
-is Principle 8, and the commissioning brief's "Principle 11" pointed at a principle that did
-not yet exist) was always a statement of fact, not an open question.
+**Consequence.** §16 now cites **Principle 11 — Local-First Data Ownership** as the
+product-track carrier of the local-first claim, with **Constitution C1** retained as the
+**engineering-track** cross-reference rather than as the sole carrier, and §16's alignment table
+carries a P11 row. **UX-F-003**'s *principle-gap* half is resolved by this item and delivered;
+its *numbering* half (Trust Through Transparency is Principle 8, and the commissioning brief's
+"Principle 11" pointed at a principle that did not yet exist) was always a statement of fact,
+not an open question.
 
 ---
 
