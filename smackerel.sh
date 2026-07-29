@@ -705,8 +705,35 @@ smackerel_run_down() {
   fi
 }
 
+# Host resource preflight for heavy (multi-minute, multi-GB) commands.
+#
+# Optional and host-local: a NO-OP when the guards are not on PATH, so CI and
+# other developer machines are unaffected. Turns two silent, expensive failure
+# modes into an actionable refusal BEFORE a long build starts:
+#   - OOM-kill (exit 137) when the shared WSL host is out of RAM
+#   - disk-full wedge when C: (which backs the WSL vhdx) has no room left
+# Opt out with SMACKEREL_SKIP_HOST_PREFLIGHT=1. Thresholds live in the guards.
+host_resource_preflight() {
+  [[ "${SMACKEREL_SKIP_HOST_PREFLIGHT:-}" == "1" ]] && return 0
+
+  if command -v oom-preflight.sh >/dev/null 2>&1; then
+    oom-preflight.sh || return 1
+  fi
+  if command -v disk-preflight.sh >/dev/null 2>&1; then
+    disk-preflight.sh || return 1
+  fi
+  return 0
+}
+
 COMMAND="${1:-help}"
 shift || true
+
+# Gate only the heavy commands; status/logs stay instant.
+case "$COMMAND" in
+  build | test | up)
+    host_resource_preflight || exit 1
+    ;;
+esac
 
 case "$COMMAND" in
   config)
