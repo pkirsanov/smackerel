@@ -167,6 +167,7 @@ bubbles/scripts/interop-registry.sh
 bubbles/scripts/inventory-parity-check-selftest.sh
 bubbles/scripts/inventory-parity-check.sh
 bubbles/scripts/is-terminal-for-mode.sh
+bubbles/scripts/judge-adapter-contract-selftest.sh
 bubbles/scripts/macos-portability-guard-selftest.sh
 bubbles/scripts/macos-portability-guard.sh
 bubbles/scripts/management-truth-lint-selftest.sh
@@ -372,6 +373,7 @@ bubbles/scripts/guards/tail-convergence-gates.sh
 bubbles/scripts/guards/tail-delegated-gates.sh
 bubbles/adapters/codeindex/codegraph.sh
 bubbles/adapters/codeindex/none.sh
+bubbles/adapters/judge/ollama.sh
 bubbles/adapters/observability/none.sh
 bubbles/adapters/observability/prometheus.sh
 bubbles/schemas/adoption-profiles.schema.json
