@@ -404,9 +404,38 @@ maintenance debt, and they make every future contract audit less trustworthy.
 There is currently **no mechanical checker** for sections 3 and 4 — they are
 review-enforced only. This is a known gap, not a claim of coverage. Do not
 describe orphan prevention as "enforced" until a checker exists and is wired
-into `./smackerel.sh lint`. See
-[`docs/CodeIndex-Onboarding.md`](../docs/CodeIndex-Onboarding.md) for the
-derived-route-inventory option.
+into `./smackerel.sh lint`.
+
+**Why the sibling guard does not port.** GuestHost enforces the identical policy
+with `scripts/lint/orphan-endpoint-guard.sh`, a grep-based route-vs-consumer
+diff. That approach works there because routes are registered flat
+(`protected.HandleFunc("/guests/{id}", …)`). It does **not** work here: smackerel
+uses chi's nested `r.Route()` / `r.Mount()`, so a registered path is a *relative
+fragment*, not a full path.
+
+```go
+r.Route("/topics", func(r chi.Router) {
+    r.Get("/", …)        // extracts as "/"      — meaningless alone
+    r.Get("/{id}", …)    // extracts as "/{id}"  — meaningless alone
+})
+```
+
+Measured (2026-07-29): 189 distinct extracted paths across 54 non-test route
+files, of which **64 are bare fragments** (`/`, `/{id}`, single-segment). The
+`/topics` block appears twice in `router.go` — once wired to `disabled`, once to
+live handlers — so a fragment does not even resolve uniquely to one mount.
+
+The code-index `routes` verb does not close this either: it reports 444 route
+nodes but likewise does not reconstruct chi nesting (sample: `ANY /`).
+
+**What a real checker needs:** Go AST analysis that walks the chi router tree and
+composes the mount prefix chain into full paths. Until that exists, a grep-based
+guard would over-report so badly it would be worse than nothing — the finding
+list would be dominated by unresolvable fragments and get ignored, which is how
+a gate becomes noise. Do not ship one to close this box.
+
+See [`docs/CodeIndex-Onboarding.md`](../docs/CodeIndex-Onboarding.md) for what
+the code index does and does not provide here.
 
 ---
 
