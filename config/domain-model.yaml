@@ -1,0 +1,16 @@
+entities:
+  Topic:
+    states: [emerging, active, hot, cooling, dormant, archived]
+    terminal: []
+  AssistantResponse:
+    states: [thinking, answered, checking_weather, checking_email, reminder_proposed, reminder_confirmed, reminder_cancelled, saved_as_idea, unavailable]
+    terminal: [answered, reminder_confirmed, reminder_cancelled, saved_as_idea, unavailable]
+
+invariants:
+  - id: INV-SM-SOURCED-DERIVED-OUTPUT
+    rule: "An AssistantResponse from a source-required scenario with a non-empty body and no valid source is unavailable with no_grounded_answer, never answered or saved_as_idea"
+    kind: disjointness
+    enforcedBy: [check]
+    provedBy:
+      - "internal/assistant/provenance/gate_test.go::TestEnforce_BS007"
+      - "internal/assistant/openknowledge/citeback/enforcement_test.go::TestCiteback_FabricatedSourceFlipsToRefusal"
