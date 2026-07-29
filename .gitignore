@@ -116,3 +116,8 @@ improvements/
 
 # Agent-local repository memory (never commit — may contain machine-local PII tokens)
 /memories/
+
+# Code-index provider index (optional, opt-in — see docs/CodeIndex-Onboarding.md).
+# Large. MUST stay ignored: an untracked index of this size can be swept into an
+# unrelated commit when several agent sessions share the worktree.
+.codegraph/

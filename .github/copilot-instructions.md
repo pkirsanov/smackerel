@@ -347,6 +347,69 @@ dispatch, `translateFinalToBody`), verify ALL of the following:
 
 ---
 
+## API Contract Enforcement (NON-NEGOTIABLE)
+
+Smackerel is a multi-consumer system. `internal/api/` carries **517 route
+registrations across 72 files**, served to the PWA (`web/pwa/`), the Chrome
+bridge extension (`extensions/chrome-bridge/`), the Telegram delivery surface,
+the MCP tool surface, and external API consumers.
+
+Every route and every data contract MUST have an explicit, verified consumer and
+MUST NOT drift.
+
+### 1) No Invented Endpoints (ABSOLUTE)
+
+- Clients MUST ONLY call routes that already exist in the Go router with the
+  correct method and path.
+- NEVER invent routes, paths, query params, or request/response fields "because
+  they seem right".
+- If a route or field is missing, the only valid options are: add it to the
+  backend (with tests and docs) and then update the client, OR change the client
+  to use an existing route.
+
+### 2) Data Contract Parity (Client ↔ Backend)
+
+- Request/response field names MUST match exactly.
+- Client-side types MUST match the backend contract, including optional vs
+  required.
+- When changing a contract, update **all** affected consumers (PWA, Chrome
+  bridge, Telegram, MCP) in the same change set, or explicitly scope the change
+  to one consumer and document why.
+
+### 3) Endpoint Ownership (Every Route Must Have a Consumer)
+
+Every backend route MUST be in exactly one of these buckets:
+
+1. **Consumed by a first-party client in this repo** — PWA, Chrome bridge,
+   Telegram delivery, or an MCP tool.
+2. **External-only** — a documented public/integration route intentionally not
+   used by a first-party client.
+
+A route in neither bucket is an **ORPHAN**.
+
+### 4) Orphaned Endpoints Are Forbidden
+
+An orphaned route MUST be resolved by exactly one of:
+
+1. **Delete it** (with its tests and docs) if obsolete.
+2. **Wire it into a first-party client** and add/update tests.
+3. **Publish it as external** — document it (audience, auth, rate limits,
+   stability expectations) and add tests proving it is stable.
+
+"We might need it later" is not a bucket. Dead routes are attack surface and
+maintenance debt, and they make every future contract audit less trustworthy.
+
+### 5) Enforcement Status (HONEST)
+
+There is currently **no mechanical checker** for sections 3 and 4 — they are
+review-enforced only. This is a known gap, not a claim of coverage. Do not
+describe orphan prevention as "enforced" until a checker exists and is wired
+into `./smackerel.sh lint`. See
+[`docs/CodeIndex-Onboarding.md`](../docs/CodeIndex-Onboarding.md) for the
+derived-route-inventory option.
+
+---
+
 ## Terminal Discipline
 
 See `instructions/terminal-discipline.instructions.md` for current terminal rules.
