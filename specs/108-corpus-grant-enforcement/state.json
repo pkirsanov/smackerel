@@ -1,0 +1,263 @@
+{
+  "version": 3,
+  "feature": "108-corpus-grant-enforcement",
+  "specDir": "specs/108-corpus-grant-enforcement",
+  "title": "Corpus Grant Enforcement",
+  "status": "specs_hardened",
+  "workflowMode": "product-to-planning",
+  "releaseTrain": "next",
+  "flagsIntroduced": [
+    "corpusGrantEnforcement"
+  ],
+  "createdAt": "2026-07-28T00:00:00Z",
+  "lastUpdatedAt": "2026-07-29T00:00:00Z",
+  "planningOnly": true,
+  "planningOnlyJustification": "This packet is a planning artifact only and carries no implementation. It was authored under workflow mode product-to-planning (statusCeiling specs_hardened) with Gate G073 Source Code Edit Lockout ACTIVE: zero source files were modified and zero tests were executed. It therefore has no implementation spec to link to. Delivery of the five planned scopes is deliberately deferred to a separate future run under a delivery-capable mode (full-delivery); when that delivery packet exists, linkedImplementationSpec should be set to it and planningOnly cleared.",
+  "linkedImplementationSpec": null,
+  "plannedFixWorkflowMode": "full-delivery",
+  "execution": {
+    "activeAgent": "bubbles.plan",
+    "workflowMode": "product-to-planning",
+    "statusCeiling": "specs_hardened",
+    "currentPhase": "plan",
+    "focus": "planning_only",
+    "completedPhases": [
+      "analyze",
+      "design",
+      "plan"
+    ],
+    "completedScopes": [],
+    "totalScopes": 5,
+    "scopeLayout": "single-file",
+    "blockedReason": null,
+    "loopCount": 0,
+    "runStartedAt": "2026-07-28T00:00:00Z",
+    "statusBefore": "in_progress",
+    "statusAfter": "specs_hardened"
+  },
+  "certification": {
+    "status": "specs_hardened",
+    "certifiedBy": null,
+    "certifiedAt": null,
+    "ceilingReached": "specs_hardened",
+    "evidenceComplete": false,
+    "evidenceNote": "Planning-only packet. No implementation exists, therefore no execution evidence is claimed. Certification to a terminal implementation status requires bubbles.validate after the five planned scopes execute.",
+    "gatesEvaluated": [],
+    "certifiedCompletedPhases": [],
+    "certifiedCompletedPhasesNote": "EMPTY by design, not by omission (Gate G022). This packet was authored by an analyst -> ux -> design -> plan chain, but no phase completed as a separately-provenanced, independently-certified specialist dispatch with its own recorded evidence. Under the anti-fabrication contract a phase may only be listed here when its provenance can be shown; listing analyze/design/plan without that provenance would be an invented claim. Under-claiming is correct; over-claiming would be fabrication. What actually ran is recorded factually in executionHistory, and the planning chain itself is independently verified by Gate G091 (analyst -> ux -> design -> plan), which passes.",
+    "scopeProgress": [
+      { "scope": 1, "status": "not_started" },
+      { "scope": 2, "status": "not_started" },
+      { "scope": 3, "status": "not_started" },
+      { "scope": 4, "status": "not_started", "blockedReason": "Gated on F-108-TELEGRAM-01: the Telegram bridge token's actual corpus:read scope claim is unknown until the OBSERVE window from Scope 02 has been measured, so the remedy cannot be chosen yet." },
+      { "scope": 5, "status": "not_started", "blockedReason": "Gated on F-108-FLAG-DEFAULT-DIVERGENCE: design.md 4/9 records corpusGrantEnforcement false in BOTH trains, while the enforced release-train policy requires default-ON in exactly one owning train. DoD-05-06 blocks until bubbles.design reconciles design.md; this planning packet does not silently overwrite it." }
+    ],
+    "lockdownState": {
+      "active": false,
+      "lockedScenarioIds": []
+    },
+    "ceilingNote": "specs_hardened is the declared statusCeiling and terminal status for workflow mode product-to-planning. This packet is terminal-for-mode. Promotion to 'done' is FORBIDDEN from this mode and requires a delivery-capable mode plus the full evidence chain specified across the five scopes in scopes.md.",
+    "outstandingFindings": [
+      {
+        "id": "F-108-SURFACE-01",
+        "summary": "auth.RegisteredScopeSurfaces does not include 'corpus', so an operator cannot mint a token carrying corpus:read.",
+        "plannedIn": "SCOPE-01",
+        "blocking": true
+      },
+      {
+        "id": "F-108-TELEGRAM-01",
+        "summary": "The Telegram bridge token's corpus:read scope is unknown or provably insufficient; the bridge breaks at ENFORCE.",
+        "plannedIn": "SCOPE-04",
+        "blocking": true
+      },
+      {
+        "id": "F-108-GRANT-MECHANISM-01",
+        "summary": "Granting corpus:read is a token rotation, not a flag flip. Must be documented in docs/smackerel.md 17.2.",
+        "plannedIn": "SCOPE-05",
+        "blocking": false
+      },
+      {
+        "id": "F-108-FLAG-DEFAULT-DIVERGENCE",
+        "summary": "design.md 4/9 records corpusGrantEnforcement false in BOTH trains; the enforced release-train policy requires default-ON in exactly one owning train. Scope 05 is planned to the enforced policy (next=ON, mvp=OFF) and blocks on bubbles.design reconciling design.md. Not silently applied from this planning packet.",
+        "plannedIn": "SCOPE-05",
+        "routedTo": "bubbles.design",
+        "blocking": true
+      }
+    ]
+  },
+  "policySnapshot": {
+    "source": ".specify/memory/bubbles.config.json",
+    "capturedAt": "2026-07-28T00:00:00Z",
+    "workflowMode": "product-to-planning",
+    "workflowModeSource": "operator-directive",
+    "statusCeiling": "specs_hardened",
+    "sourceEditsPermitted": false,
+    "sourceEditLockout": {
+      "mode": "on",
+      "gate": "G073",
+      "source": "workflow-mode-constraint"
+    },
+    "grill": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "tdd": {
+      "mode": "scenario-first",
+      "source": "repo-default"
+    },
+    "autoCommit": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "lockdown": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "regression": {
+      "mode": "protected-scenarios",
+      "source": "repo-default"
+    },
+    "validation": {
+      "mode": "certification-required",
+      "source": "repo-default"
+    },
+    "evidenceRequired": false,
+    "testCategories": [
+      "unit",
+      "integration",
+      "e2e-api",
+      "stress"
+    ],
+    "canonicalCommands": {
+      "unit": "./smackerel.sh test unit",
+      "integration": "./smackerel.sh test integration",
+      "e2e-api": "./smackerel.sh test e2e",
+      "stress": "./smackerel.sh test stress",
+      "check": "./smackerel.sh check",
+      "lint": "./smackerel.sh lint",
+      "format": "./smackerel.sh format --check",
+      "configGenerate": "./smackerel.sh config generate"
+    },
+    "gates": [
+      "G025",
+      "G073",
+      "G115"
+    ]
+  },
+  "scopes": [
+    {
+      "id": "SCOPE-01",
+      "name": "Scope Registration Prerequisite",
+      "status": "Not Started",
+      "dependsOn": [],
+      "foundation": true,
+      "testPlanRows": 4,
+      "scenarios": [
+        "SCN-108-P01",
+        "SCN-108-P02"
+      ]
+    },
+    {
+      "id": "SCOPE-02",
+      "name": "Observe-Stage Plumbing",
+      "status": "Not Started",
+      "dependsOn": [
+        "SCOPE-01"
+      ],
+      "foundation": false,
+      "testPlanRows": 6,
+      "scenarios": [
+        "SCN-108-C03",
+        "SCN-108-C05",
+        "SCN-108-O01",
+        "SCN-108-O02"
+      ]
+    },
+    {
+      "id": "SCOPE-03",
+      "name": "Gate Mount",
+      "status": "Not Started",
+      "dependsOn": [
+        "SCOPE-02"
+      ],
+      "foundation": false,
+      "testPlanRows": 10,
+      "scenarios": [
+        "SCN-108-G01",
+        "SCN-108-D01",
+        "SCN-108-G02",
+        "SCN-108-G03",
+        "SCN-108-C04"
+      ]
+    },
+    {
+      "id": "SCOPE-04",
+      "name": "Caller Remediation",
+      "status": "Not Started",
+      "dependsOn": [
+        "SCOPE-03"
+      ],
+      "foundation": false,
+      "testPlanRows": 7,
+      "scenarios": [
+        "SCN-108-E01",
+        "SCN-108-E02",
+        "SCN-108-E03"
+      ]
+    },
+    {
+      "id": "SCOPE-05",
+      "name": "Docs, Release Train, Flag Bundles",
+      "status": "Not Started",
+      "dependsOn": [
+        "SCOPE-04"
+      ],
+      "foundation": false,
+      "testPlanRows": 5,
+      "scenarios": [
+        "SCN-108-R01",
+        "SCN-108-R02",
+        "SCN-108-R03"
+      ]
+    }
+  ],
+  "transitionRequests": [
+    {
+      "requestedStatus": "specs_hardened",
+      "requestedBy": "bubbles.plan",
+      "requestedAt": "2026-07-28T00:00:00Z",
+      "mode": "product-to-planning",
+      "rationale": "Planning artifacts complete: scopes.md, report.md, uservalidation.md, scenario-manifest.json written. Five scopes in dependency order with Test Plan to DoD parity. No source edited. This is the ceiling for product-to-planning; no higher status is requested.",
+      "resolution": "granted-at-ceiling"
+    }
+  ],
+  "reworkQueue": [],
+  "reworkQueueNote": "EMPTY because both previously-queued items were RESOLVED INLINE in this planning packet rather than deferred (Gate G061). RQ-108-01 (flag-default divergence) was resolved by planning Scope 05 explicitly to the mechanically-enforced release-train policy (next=ON as the owning train, mvp=OFF), recording the divergence from design.md 4/9 openly in the scopes.md 'Planning Note - Flag Default Divergence' section, and converting the outstanding work into blocking DoD item DoD-05-06 plus the standing finding F-108-FLAG-DEFAULT-DIVERGENCE, which remains routed to bubbles.design (design.md is not owned by bubbles.plan and was correctly not edited). RQ-108-02 (Telegram remedy selection) was resolved by planning it as a first-class, blocking Scope 04 deliverable: the design-sanctioned two-option remedy is enumerated in the Scope 04 Implementation Plan, constrained by the Shared Infrastructure Impact Sweep and Change Boundary, and closed by a named DoD item that forbids widening dailyUserGrants as a workaround. Neither item is deferred, hidden, or unowned; both are now visible planned work with a named blocking gate and a recorded owner.",
+  "executionHistory": [
+    {
+      "agent": "bubbles.plan",
+      "mode": "product-to-planning",
+      "phasesExecuted": [
+        "bootstrap",
+        "plan"
+      ],
+      "startedAt": "2026-07-28T00:00:00Z",
+      "finishedAt": "2026-07-28T00:00:00Z",
+      "statusBefore": "in_progress",
+      "statusAfter": "specs_hardened",
+      "outcome": "completed_owned",
+      "artifactsWritten": [
+        "scopes.md",
+        "report.md",
+        "uservalidation.md",
+        "scenario-manifest.json",
+        "state.json"
+      ],
+      "artifactsNotTouched": [
+        "spec.md",
+        "design.md"
+      ],
+      "summary": "Converted the ratified spec and design into a five-scope sequential plan: scope registration prerequisite, observe-stage plumbing, gate mount with the T8 adversarial route-manifest test, caller remediation, and docs/release-train/flag-bundle updates. 17 SCN-108 scenarios, 24 Test Plan rows with matching DoD test items. No source edited, no tests executed, no evidence claimed."
+    }
+  ]
+}
