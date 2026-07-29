@@ -44,13 +44,14 @@ Nothing below claims a capability is built. No MCP server exists yet (`spec.md` 
 - [x] `content_raw` never leaving `/mcp` under any configuration — including a fully local client you trust — is right, with no "raw mode" escape hatch.
 - [x] Enforcing it **structurally** (a projection type that cannot express raw content) rather than by review or a struct tag is right.
 - [x] Treating the marshal-time guard as a **detector**, not the control, is right.
-- [x] All six provenance fields being mandatory and non-omittable — including `retrieval_reason` and `retrieval_contract_known`, which §2's Success Signal omits (UX-F-004) — is right.
+- [x] All six provenance fields being mandatory and non-omittable — including `retrieval_reason` and `retrieval_contract_known`, which §2's Success Signal originally omitted (UX-F-004, corrected in §2 on 2026-07-29 so §2 now agrees with §9) — is right.
 - [x] A retrieval fallback being `isError=false` / `degraded-fallback` rather than an error is right; and "no results found" over a provider error being forbidden is right.
 
 ### Documentation, Release, And Configuration (Scope 07)
 
 - [x] Every `spec.md` §15 documentation row is planned with a concrete DoD item: `docs/smackerel.md` §17.2, §21 (MCP row — Fabric.so already ships MCP), §22 (sibling integration capability, not a connector), `docs/API.md`, `docs/Operations.md`, `docs/Architecture.md`, `docs/INVESTOR_OVERVIEW.md`.
-- [x] Adding the `docs/smackerel.md` §17.1 row (UX-F-002) as a recorded planning decision — rather than silently amending `spec.md` §15 — is right.
+- [x] Adding the `docs/smackerel.md` §17.1 row (UX-F-002) is right — originally recorded as a planning decision rather than a silent spec amendment by a non-owner, and since **applied to `spec.md` §15 by its owner** on 2026-07-29.
+- [x] Declaring `docs/Product-Principles.md` as a `spec.md` §15 documentation target (added 2026-07-29) is right — TP-07-03 already asserted against it, so the spec now declares what the test checks.
 - [x] The capability-ledger surface recording the honest delivery state (`hospitality-read` and `memory-write` as **specified, not delivered**, with reasons) is right.
 - [x] The `next` release packet under `docs/releases/` and its `features.md` carrying the MCP entry, flag name, owning train, honest delivery state, and the `remote-inference` opt-in is right.
 - [x] `mcpKnowledgeServer` default-ON in **exactly one** train (`next`) and default-OFF in `mvp` is right, and the parity test enforcing it is right.
@@ -60,15 +61,41 @@ Nothing below claims a capability is built. No MCP server exists yet (`spec.md` 
 ### Findings Handling
 
 - [x] UX-F-001 is genuinely **resolved** by `design.md` §4 — not merely reworded.
-- [x] UX-F-002, UX-F-004, and UX-F-005 remain **OPEN** with named owners, and were not silently resolved by this packet. UX-F-003 is **resolved** — its *numbering* half was always a statement of fact, and its *principle-gap* half was settled by the operator's own ratified §18 item 7 and delivered by the owner's 2026-07-29 amendment, not invented by this packet.
-- [x] F-109-OF2-AMEND (new, surfaced by `design.md` §4) is recorded as open and routed rather than applied to `spec.md`.
+- [x] UX-F-002, UX-F-004, and UX-F-005 were correctly recorded **OPEN** with named owners at
+  planning close and were **not** silently resolved by the planning packet. **All three were
+  subsequently RESOLVED on 2026-07-29** by their recorded owner `bubbles.analyst`: §15 gained the
+  `docs/smackerel.md` §17.1 row (UX-F-002); §2's Success Signal now enumerates the complete
+  six-field §9 provenance set (UX-F-004); and D1 now reads "fully **specified** but
+  **default-OFF**" (UX-F-005). All three are editorial corrections — no ratified decision was
+  reopened or weakened. UX-F-003 is **resolved** — its *numbering* half was always a statement of
+  fact, and its *principle-gap* half was settled by the operator's own ratified §18 item 7 and
+  delivered by the owner's 2026-07-29 amendment, not invented by this packet.
+- [x] The report's original justification for UX-F-002 — *"amending `spec.md` §15 is not permitted
+  under G073 in this mode"* — was **factually wrong** and has been corrected. G073 forbids changes
+  *outside* `spec.md, design.md, scopes.md, report.md, uservalidation.md, state.json, docs/**,
+  .github/**`; `spec.md` is on the permitted list. The real reason all of these stayed open was
+  **artifact ownership** — `bubbles.plan` and `bubbles.ux` correctly declined to rewrite
+  analyst-owned `spec.md` sections. **That routing was right; the gate citation was not**, and
+  correcting it matters because a fabricated gate constraint left in the record becomes precedent.
+- [x] F-109-OF2-AMEND (new, surfaced by `design.md` §4) was recorded as open and routed rather than
+  applied to `spec.md` by a non-owner. **RESOLVED 2026-07-29** by `bubbles.analyst`: §9A.3's OF-2
+  now carries an explicit `corpus` data-scope grant/revoke step, an effective-result operator
+  surface step, data-scope revocation, and the four-term intersection requirement for the
+  operator-side effective-list computation. Scopes 03 and 07 were **verified** to already plan to
+  that behavior, so no planned work changed.
+- [x] A fifth defect found in re-review — `scopes.md` TP-07-03 asserts *"every `spec.md` §15 target
+  file exists"* and names `docs/Product-Principles.md`, but §15 declared no such row — was
+  **RESOLVED 2026-07-29** by adding the row, carrying both the §16 alignment note and the
+  delivered-Principle-11 verification (principles file **and** its BLOCKING companion). The row is
+  a **verification** obligation only; no agent may amend the owner-ratified principles document.
 - [x] F-109-002 is handled honestly: MCP owns its own wiring, funds live coverage, and discharges F-095-E2E-LIVE **for the MCP path only** — no artifact claims spec 095 is generally proven.
+- [x] The six inherited spec findings F-109-001…006 are **untouched** by the 2026-07-29 editorial pass — they are delivery constraints, not wording defects, and remain as recorded.
 
 ### Evidence Honesty
 
 - [x] `report.md` records **no** test output, because no test has been run and none could be.
 - [x] `state.json` sits at `specs_hardened` — the mode ceiling — and never claims `done`.
-- [x] `design.md` was read only; **no source file** was created or modified under the G073 lockout; no other spec folder was touched. `spec.md` was edited only under explicit operator instruction — to convert §18 into a ratified decision record, and to reconcile §9A.7 / §16 / §18 to the shipped `Principle 11 — Local-First Data Ownership` title — and every such edit is recorded as an ownership deviation in `state.json` `executionHistory` rather than hidden.
+- [x] `design.md` was read only; **no source file** was created or modified under the G073 lockout; no other spec folder was touched. `spec.md` was edited only under explicit operator instruction — to convert §18 into a ratified decision record, to reconcile §9A.7 / §16 / §18 to the shipped `Principle 11 — Local-First Data Ownership` title, and on 2026-07-29 to apply the five editorial corrections (UX-F-002, UX-F-004, UX-F-005, F-109-OF2-AMEND, and the §15 `docs/Product-Principles.md` row) — and every such edit is recorded as an ownership deviation in `state.json` `executionHistory` rather than hidden. Those `spec.md` edits are **inside** G073's permitted set: G073 constrains changes *outside* `spec.md, design.md, scopes.md, report.md, uservalidation.md, state.json, docs/**, .github/**`.
 
 ### Operator Decision Record — RATIFIED (`spec.md` §18)
 
@@ -85,5 +112,9 @@ pre-decided by this packet. `spec.md` §18 carries the full rationale for each.
 - [x] **7. Principle gap** — RESOLVED by **addition**, and **DELIVERED 2026-07-29**. Under the owner sign-off this item required, `docs/Product-Principles.md` gained `Principle 11 — Local-First Data Ownership` together with a matching block in its BLOCKING companion enforcement file. Constitution C1 is **not** the sole carrier: C1 governs *how the system is built*, Principle 11 governs *what the product promises*. `spec.md` §16 cites P11 as the product-track carrier with C1 as the engineering-track cross-reference, and Scope 07 now carries the shipped surfaces as **verification** DoD items rather than as edits to make.
 
 **Not ratified by this gate.** UX-F-002, UX-F-004, and UX-F-005 were bundled into "the §18 pass" for
-convenience but are `spec.md` wording corrections, not product decisions. They remain **OPEN** and
-are re-routed to `bubbles.analyst`.
+convenience but are `spec.md` wording corrections, not product decisions. **The gate did not decide
+them** — that statement was true when written and remains the historical record. They were routed to
+`bubbles.analyst`, and **that owner resolved all three on 2026-07-29**, together with
+F-109-OF2-AMEND and the §15 `docs/Product-Principles.md` gap found in re-review. Recording their
+later resolution does **not** retroactively make them ratified: they were corrected by their owner,
+not decided by this gate.

@@ -61,8 +61,15 @@ otherwise for that specific client.
 `initialize` succeeds; `tools/list` returns a deterministically ordered toolset that
 contains **only** tools the presented credential is actually authorized for and that are
 **backed by real domain services**; `memory.search` returns projected artifacts carrying
-`source_kind`, `retrieval_strategy`, `retrieval_fell_back`, and a `trace_token`; and a
+the **complete** §9 provenance set — `source_kind`, `retrieval_strategy`,
+`retrieval_reason`, `retrieval_fell_back`, `retrieval_contract_known`, and a
+`trace_token` — every one of them non-omittable per R-109-UX15 and R-109-UX18; and a
 byte-level inspection of every response shows **zero occurrences of `content_raw`**.
+
+*(Corrected 2026-07-29, UX-F-004: this enumeration previously named four of the six
+provenance fields, omitting `retrieval_reason` and `retrieval_contract_known`. §9 is the
+authoritative field table and returns all six; §2 was the incomplete restatement, so §2
+was brought into agreement with §9 rather than §9 narrowed to match §2.)*
 
 **Hard Constraints.**
 - `content_raw` is never returned over `/mcp`, in any toolset, at any egress class (D2).
@@ -94,8 +101,15 @@ rather than relitigating them.
 ### D1 — Egress posture: local-inference default, remote-inference opt-in per client
 
 `local-inference` is the **default and only enabled egress class**. `remote-inference`
-is fully coded but **default-OFF**, enabled only per-client by an explicit operator
-grant, and **every** remote-class invocation is recorded in the MCP audit ledger.
+is fully **specified** but **default-OFF**, enabled only per-client by an explicit
+operator grant, and **every** remote-class invocation is recorded in the MCP audit
+ledger.
+
+*(Corrected 2026-07-29, UX-F-005: this sentence previously described `remote-inference`
+as already **implemented** and default-OFF, which read literally contradicts §1's "no MCP
+server exists today". The posture ratified by §18 item 1 is unchanged — remote egress is
+a per-client, individually audited operator grant, off by default. Only the inaccurate
+implementation claim was removed.)*
 
 Rationale: Constitution C1 (Local-First); `docs/smackerel.md` §21.4 UVP — *"your data
 never leaves your machine"*; `docs/INVESTOR_OVERVIEW.md` — *"Defend Local-First as a
@@ -759,18 +773,51 @@ file (that is an explicit §2 Failure Condition).
    rejected as not issued for the MCP audience, with a `WWW-Authenticate` challenge and
    no tool executed (SCN-109-002).
 
-**OF-2 — Grant / revoke a toolset** (D5, §8.1 `Grant` lifecycle, UC-109-002)
+**OF-2 — Grant / revoke a toolset and a data scope** (D5, §8.1 `Grant` lifecycle, UC-109-002)
+
+*Amended 2026-07-29 (F-109-OF2-AMEND), following `design.md` §4's resolution of UX-F-001.
+Because the corpus grant is MCP-owned and carried as a third `Grant` **kind**
+(`data-scope`), a toolset grant alone is no longer sufficient for `memory-read`, and the
+step-4 invariant became conditional. Steps 3 and 4 below are new; step 6 (formerly 4)
+carries the amended invariant. No ratified decision changes: D5's toolset inventory, D3's
+credential ownership, and §9A.1's seven-token vocabulary are untouched.*
 
 1. Operator grants toolset `T` to client `C`. → **Observable:** the grant moves
-   `absent → granted`; `C`'s next `tools/list` includes `T`'s tools.
+   `absent → granted`; `C`'s next `tools/list` includes `T`'s tools — **unless** `T`
+   declares a `RequiredData` scope `C` does not hold (see step 3).
 2. Operator grants a toolset blocked by a finding (`hospitality-read`). → **Observable:**
    the grant is recorded, and the operator surface reports `capability-unavailable` with
    the BUG-019-003 reason; `tools/list` still omits the tools (SCN-109-012).
-3. Operator revokes `T` from `C`. → **Observable:** the grant moves `granted → revoked`;
-   because credentials are per-request input and never connection state, `C`'s **next**
-   request no longer sees `T`'s tools — no reconnect required.
-4. Operator lists `C`'s effective toolsets. → **Observable:** the list is identical to
+3. **Operator grants the `corpus` data scope to client `C`.** `memory-read`'s descriptors
+   declare `RequiredData: [corpus]`, so its toolset grant is necessary but not sufficient.
+   → **Observable:** the `data-scope` grant moves `absent → granted`, and only now does
+   `C`'s next `tools/list` include `memory.*`. Before it, `C` holds the `memory-read`
+   toolset grant and still sees **nothing** — the client experiences §9A.4 **Case A**
+   verbatim (tools omitted, method-not-found on invocation, no envelope, no challenge),
+   because a distinct client-visible corpus token would itself be an existence oracle
+   (R-109-UX12). The ledger's separate `denial_reason` column carries the corpus
+   granularity; honesty here is owed to the operator, not to the client (R-109-UX13).
+4. **The operator surface shows the *effective* result, not the grant just made.** A
+   recorded grant that produces no visible tool is exactly the "I granted it and nothing
+   happened" confusion step 2 already handles for `hospitality-read`; the same treatment
+   is required for a missing data scope. → **Observable:** after step 1 without step 3,
+   the surface states that `memory-read` is granted but inert for want of the `corpus`
+   data scope, and names granting it as the remediation.
+5. Operator revokes `T` — or revokes the `corpus` data scope — from `C`. → **Observable:**
+   the grant moves `granted → revoked`; because credentials are per-request input and
+   never connection state, `C`'s **next** request no longer sees the affected tools — no
+   reconnect required. Revoking the data scope alone withdraws `memory.*` while leaving
+   every other granted toolset intact.
+6. Operator lists `C`'s effective toolsets. → **Observable:** the list is identical to
    what `C`'s own `tools/list` returns for that credential (UC-109-002 postcondition).
+   **This invariant holds only if the operator-side computation runs the same four-term
+   intersection the server runs** —
+   `tools(granted_toolsets) ∩ tools(credential_scope) ∩ tools(granted_data_scopes) ∩ tools(allowed_egress_classes(client))`
+   (`design.md` §4, §5). Computing the operator view from toolset grants alone breaks the
+   invariant on day one, the moment a client holds `memory-read` without `corpus`. The
+   operator surface therefore **MUST** call the same authorizer the request path calls
+   rather than reimplement the set logic; a second implementation is a divergence waiting
+   to happen, and the divergence is silent.
 
 **OF-3 — Grant / revoke `remote-inference` egress class** (UC-109-007, D1 — HIGHEST CONSEQUENCE)
 
@@ -902,7 +949,11 @@ degraded one. Rendering rules:
 **Principle tie.** This is the retrieval-path expression of **Product Principle 8 — Trust
 Through Transparency**, already claimed in §16 ("every projection carries retrieval
 provenance and a `trace_token`"). It composes with the confidence-signal surface at
-`docs/smackerel.md` §17.1 — see UX-F-002 for that reference's status.
+`docs/smackerel.md` §17.1, which §15 now carries as a funded documentation row
+(UX-F-002, resolved 2026-07-29): §17.1's **Confidence signals** trust mechanism is
+expressed on the MCP path as `retrieval_reason`, `retrieval_contract_known`, and
+`retrieval_fell_back` rather than as hedged prose in Smackerel's own voice, because the
+consumer here is a foreign agent that reads fields, not sentences.
 
 ---
 
@@ -935,7 +986,12 @@ UX rule:
 
 ---
 
-### 9A.7 UX Findings Routed Onward (not resolved here)
+### 9A.7 UX Findings — Disposition
+
+*Section retitled 2026-07-29. It was "Routed Onward (not resolved here)"; the three
+remaining editorial findings have since been resolved by their recorded owner
+(`bubbles.analyst`), so the heading no longer describes the contents. Each entry keeps its
+original statement of the problem — the audit trail matters — with its resolution appended.*
 
 - **UX-F-001 — `memory-read`'s "corpus grant" is undefined in the capability model.**
   D5 gates `memory-read` on "credential **+ corpus grant**" and §8.2 repeats "corpus grant
@@ -946,11 +1002,25 @@ UX rule:
   MCP-owned grant or spec 108's scope. This changes OF-2's observable outcomes and the
   `unauthorized-toolset` vs a distinct corpus-denial rendering. Routed to `bubbles.plan` /
   `bubbles.design`; **not** invented here.
+  **RESOLVED by `design.md` §4** — MCP owns its corpus-read grant as a third `Grant` kind
+  (`data-scope`), with four independent reasons and the rejected alternative recorded.
 - **UX-F-002 — `docs/smackerel.md` §17.1 is not in the §15 documentation table.** §15
-  funds updates to §17.2, §21, and §22 only. If §17.1's confidence signals are the
-  intended tie for R-109-UX15–UX18, §15 needs the row. **Still OPEN** — the §18 gate
-  closed on 2026-07-29 without deciding it; it is a `spec.md` amendment, not a product
-  decision. Routed to `bubbles.analyst` (Scope 07 already plans the §17.1 update).
+  funded updates to §17.2, §21, and §22 only. If §17.1's confidence signals are the
+  intended tie for R-109-UX15–UX18, §15 needs the row.
+  **RESOLVED 2026-07-29 by `bubbles.analyst`.** §15's documentation table now carries a
+  `docs/smackerel.md` §17.1 row, and it records the specific tie: §17.1's **Confidence
+  signals** trust mechanism is expressed on the MCP path as the spec-095
+  `StrategySelection` honest-degradation fields — `retrieval_reason`,
+  `retrieval_contract_known`, `retrieval_fell_back` — carried on every Projection (§9),
+  with `degraded-fallback` rendered as a successful-but-degraded answer and never as
+  confidence (R-109-UX15–UX18). §9A.5's "Principle tie" was updated to match.
+  *Correction of record:* this finding was previously recorded as blocked because
+  "amending `spec.md` §15 is not permitted under G073 in this mode". **That was wrong.**
+  G073 forbids edits *outside* `spec.md, design.md, scopes.md, report.md,
+  uservalidation.md, state.json, docs/**, .github/**` — `spec.md` is on the permitted
+  list. The genuine reason this stayed open is **artifact ownership**: `bubbles.plan` and
+  `bubbles.ux` correctly declined to rewrite analyst-owned `spec.md` sections. That
+  routing was right; the gate citation was not.
 - **UX-F-003 — Principle numbering. RESOLVED 2026-07-29.** The trust-through-transparency
   principle is **Principle 8** in `docs/Product-Principles.md`, which is what §16 cites and
   what §9A.5 uses. When this finding was raised that document carried ten principles, so a
@@ -965,14 +1035,52 @@ UX rule:
 - **UX-F-004 — §2's Success Signal enumerates a subset of §9's provenance fields.** It
   names `source_kind`, `retrieval_strategy`, `retrieval_fell_back`, and `trace_token` but
   omits `retrieval_reason` and `retrieval_contract_known`, both of which §9 returns and
-  R-109-UX15 / R-109-UX18 depend on. Editorial. **Still OPEN** — the §18 gate closed on
-  2026-07-29 without deciding it, because it is a wording correction to `spec.md` rather
-  than a product decision. Re-routed to `bubbles.analyst`.
-- **UX-F-005 — D1 describes `remote-inference` as "fully coded but default-OFF"** while
+  R-109-UX15 / R-109-UX18 depend on. Editorial.
+  **RESOLVED 2026-07-29 by `bubbles.analyst`.** §2's Success Signal now enumerates the
+  complete six-field §9 provenance set and states the non-omittability rule. §9 was **not**
+  narrowed to match §2: §9 is the authoritative field table, §2 was the incomplete
+  restatement, and the incomplete restatement is what moved. `scopes.md` TP-03-01 already
+  tested all six, so no planned work changes.
+- **UX-F-005 — D1's prose asserted `remote-inference` was already implemented** while
   §1 states no MCP server exists today. Read literally these conflict. The intended
-  meaning is presumably that the class is fully *specified* and ships default-OFF.
-  **Still OPEN** — ratified §18 item 1 accepted D1's *posture*; it did not correct D1's
-  *prose*. Re-routed to `bubbles.analyst`.
+  meaning is that the class is fully *specified* and ships default-OFF.
+  **RESOLVED 2026-07-29 by `bubbles.analyst`.** D1 now reads "fully **specified** but
+  **default-OFF**". The ratified §18 item 1 **posture** is untouched — remote egress
+  remains a per-client, individually audited operator grant that Smackerel cannot verify
+  and does not claim to — and only the inaccurate implementation claim was removed. §18
+  item 1's "Not resolved by this item" paragraph was updated to record the subsequent fix
+  without rewriting what the gate did.
+- **F-109-OF2-AMEND — OF-2 was incomplete after `design.md` §4** (surfaced by
+  `design.md` §4, not by this section originally). Two gaps: OF-2 had no `corpus`
+  data-scope grant/revoke step, so a `memory-read` toolset grant appeared to be
+  sufficient when it is not; and OF-2's "operator effective list == client `tools/list`"
+  invariant holds only if the operator-side computation runs the same four-term
+  intersection the server runs.
+  **RESOLVED 2026-07-29 by `bubbles.analyst`.** §9A.3's OF-2 was amended: a new step 3
+  grants the `corpus` data scope and states that the client experiences Case A verbatim
+  until it exists; a new step 4 requires the operator surface to show the *effective*
+  result rather than the grant just made; step 5 covers data-scope revocation; and step 6
+  states the four-term intersection explicitly and requires the operator surface to call
+  the same authorizer the request path calls. `scopes.md` Scope 03 (`data-scope` as a
+  third `GrantKind`, authorizer evaluating the full four-term intersection, TP-03-02) and
+  Scope 07 (`docs/Operations.md` runbook "grant/revoke the `corpus` data scope", DoD item
+  naming F-109-OF2-AMEND) were **already planned to the amended behavior** — verified
+  against `scopes.md` before relying on it — so this brings §9A.3 into line with the plan
+  rather than creating new work.
+- **§15 lacked a `docs/Product-Principles.md` row (found in re-review 2026-07-29).**
+  `scopes.md` TP-07-03 asserts *"every `spec.md` §15 target file exists"* and then names
+  the `docs/Product-Principles.md` alignment note plus the delivered Principle 11
+  assertions — but §15's table declared no such row, so the test asserted against a target
+  the spec never declared.
+  **RESOLVED 2026-07-29 by `bubbles.analyst`.** §15 now carries a `docs/Product-Principles.md`
+  row with both obligations: the §16 Product Principle Alignment note (citing P8 and P11,
+  with the principle-gap note in its *delivered* form), and verification that the shipped
+  `## Principle 11 — Local-First Data Ownership` is present **together with** its matching
+  `### Principle 11` block in the BLOCKING companion
+  `.github/instructions/product-principles.instructions.md`. The row is explicitly a
+  **verification** obligation — the principle and its enforcement block were authored and
+  signed off by the owner outside this packet (§18 item 7), and nothing in §15 authorises
+  an agent to amend an owner-ratified document.
 
 ---
 
@@ -1215,13 +1323,15 @@ Every item below is required before this spec may reach a terminal status.
 
 | File | Required change |
 |---|---|
+| `docs/smackerel.md` §17.1 (Trust Architecture) | Extend the **Confidence signals** trust mechanism to cover the MCP retrieval path. §17.1 currently expresses confidence only as low-similarity hedging in Smackerel's own voice; the MCP surface expresses it as structured provenance an external agent can read. Record that `retrieval_reason`, `retrieval_contract_known`, and `retrieval_fell_back` — the spec-095 `StrategySelection` honest-degradation fields carried on every Projection (§9) — are the MCP expression of this mechanism, and that a `degraded-fallback` is rendered as a successful-but-degraded answer, never as an error and never as confidence (R-109-UX15–UX18). This is the §15 row that §9A.5's "Principle tie" depends on. |
 | `docs/smackerel.md` §17.2 (Trust & Security) | Add the MCP boundary: D2 injection-containment rationale, why "content is data, not instructions" does not transfer to foreign agents, and the D3 no-token-passthrough rule. |
 | `docs/smackerel.md` §21 (Competitive Landscape) | Add an MCP row. Fabric.so already ships MCP (§21.1 strength); record Smackerel's parity + the D1/D2 differentiation, with the honest "operator declaration, not verified" annotation. |
 | `docs/smackerel.md` §22 (Connector Ecosystem & Reuse) | Add MCP to the integration inventory as a **sibling integration capability**, explicitly not a connector and not an assistant transport. |
 | `docs/API.md` | Document `/mcp`: transport (stateless Streamable HTTP), credential + audience requirement, toolset inventory, Projection Contract, failure-semantics table, scope-challenge behavior. |
-| `docs/Operations.md` | Operator runbook: register a client, issue an MCP credential, grant/revoke toolsets, grant/revoke `remote-inference`, read the MCP audit ledger, interpret the metrics in §11. |
+| `docs/Operations.md` | Operator runbook: register a client, issue an MCP credential, grant/revoke toolsets, **grant/revoke the `corpus` data scope** (OF-2, F-109-OF2-AMEND), grant/revoke `remote-inference`, read the MCP audit ledger, interpret the metrics in §11. |
 | `docs/Architecture.md` | Place the MCP capability layer in the architecture: mounted at `/mcp` on `smackerel-core`, consuming domain services directly, with no internal HTTP hop and no assistant `TransportAdapter`. |
 | `docs/INVESTOR_OVERVIEW.md` | Update the local-first moat narrative: MCP is shipped **and** local-first is preserved by D1 + D2. State the limitation honestly. |
+| `docs/Product-Principles.md` | Two obligations. **(a) Alignment note.** Carry the §16 Product Principle Alignment record for this feature, citing **Principle 8 — Trust Through Transparency** and **Principle 11 — Local-First Data Ownership**, and carrying the §16 principle-gap note in its *delivered* form (resolved by ratified §18 item 7 and shipped 2026-07-29), not as an open owner decision. **(b) Delivered-principle verification.** Confirm the shipped `## Principle 11 — Local-First Data Ownership` (`**Status**: Ratified 2026-07-29`) is present **and** that its BLOCKING companion `.github/instructions/product-principles.instructions.md` carries the matching `### Principle 11 — Local-First Data Ownership` enforcement block. The principle and its enforcement block were authored and signed off by the **owner** on 2026-07-29, outside this packet — this row is a verification obligation, not a licence to amend an owner-ratified document. A principle present in the principles file but absent from the BLOCKING companion is the gap, not the fix. |
 
 **Configuration**
 
@@ -1240,6 +1350,28 @@ switched on globally by a build.
 
 **State.** The feature's `state.json` must declare `releaseTrain: "next"` and
 `flagsIntroduced: ["mcpKnowledgeServer"]`.
+
+**Amendment record — two documentation rows added 2026-07-29.**
+
+- **`docs/smackerel.md` §17.1 (UX-F-002).** §9A.5's "Principle tie" already stated that the
+  honest-degradation surface "composes with the confidence-signal surface at
+  `docs/smackerel.md` §17.1", but §15 funded updates to §17.2, §21, and §22 only — so
+  R-109-UX15–UX18 pointed at a documentation target this section never declared. The row
+  above closes that. `scopes.md` Scope 07 had already planned the §17.1 update and
+  TP-07-03 already asserts a §17.1 anchor, so this brings §15 into agreement with work
+  that was already planned rather than adding new work.
+- **`docs/Product-Principles.md` (found in re-review 2026-07-29).** `scopes.md` TP-07-03
+  asserts *"every `spec.md` §15 target file exists"* and then explicitly names the
+  `docs/Product-Principles.md` alignment note plus the delivered Principle 11 assertions —
+  but §15 declared no such row, so the test asserted against a target the spec never
+  declared. The row above declares it. It is a **verification** obligation: the principle
+  and its BLOCKING enforcement block were authored and signed off by the owner outside
+  this packet (§18 item 7), and nothing here authorises an agent to amend an
+  owner-ratified document.
+
+Neither row changes a ratified decision, a toolset, an egress posture, or the flag
+contract. Both are documentation-target declarations that make §15 consistent with §9A.5,
+§16, and the already-written Scope 07 plan.
 
 ---
 
@@ -1309,9 +1441,16 @@ existing cross-reference in `design.md`, `scopes.md`, `report.md`, `uservalidati
 **Ratification boundary — what this gate did and did not settle.** It ratifies exactly the
 seven decisions below. It does **not** ratify the editorial findings **UX-F-002**,
 **UX-F-004**, and **UX-F-005**, which §9A.7 had bundled into "the operator's §18 pass" for
-convenience. Those are wording corrections to `spec.md`, not product decisions; they remain
-**OPEN**, owned by `bubbles.analyst`, and are re-routed accordingly in §9A.7. Recording them
-as ratified would be overclaiming.
+convenience. Those are wording corrections to `spec.md`, not product decisions; at the time
+this gate closed they remained **OPEN**, owned by `bubbles.analyst`. Recording them as
+ratified would have been overclaiming.
+
+> **Subsequent to this gate — 2026-07-29.** Those three findings, together with
+> **F-109-OF2-AMEND** and a §15 gap found in re-review, were resolved by their recorded
+> owner (`bubbles.analyst`) in a later run. This note does **not** revise the boundary
+> statement above: the gate genuinely did not decide them, and that remains the historical
+> record. It records only that the owner subsequently did. See §9A.7 for each disposition.
+> None of the seven decisions below was reopened, weakened, or renegotiated.
 
 **Status effect.** Ratification closes the review gate. It does **not** change this packet's
 status: the workflow mode remains `product-to-planning` with ceiling `specs_hardened`, no
@@ -1349,10 +1488,16 @@ as SCN-109-P03 and a blocking DoD item.
 **Permanence.** Permanent. The honesty constraint binds every future surface, not just this
 feature's documentation pass.
 
-**Not resolved by this item.** UX-F-005 (D1's "fully coded but default-OFF" wording, which
-read literally conflicts with §1's "no MCP server exists") is an editorial defect in D1's
-prose, not a question about D1's posture. It remains OPEN — see the ratification boundary
-above.
+**Not resolved by this item.** UX-F-005 — D1's original prose asserting `remote-inference`
+was already **implemented**, which read literally conflicts with §1's "no MCP server
+exists" — is an editorial defect in D1's *prose*, not a question about D1's *posture*. It
+was **OPEN** when this gate closed; see the ratification boundary above.
+
+> **Resolved subsequently — 2026-07-29** by `bubbles.analyst`. D1 now reads "fully
+> **specified** but **default-OFF**". The posture ratified here is unchanged in every
+> respect: `local-inference` remains the default and only enabled egress class, remote
+> remains an explicit per-client individually audited grant, and the BINDING CONSTRAINT
+> above continues to bind every surface.
 
 ### 2. D2 absoluteness — **ACCEPTED, permanent, no escape hatch** (permanent)
 
@@ -1572,6 +1717,6 @@ not an open question.
 | Ratified by | Operator, by explicit delegation |
 | Delegation instruction | *"pick the best option for long term, no shortcuts."* |
 | Items ratified | 1–7 (all) |
-| Items **not** ratified by this gate | UX-F-002, UX-F-004, UX-F-005 (editorial; owner `bubbles.analyst`) |
+| Items **not** ratified by this gate | UX-F-002, UX-F-004, UX-F-005 (editorial; owner `bubbles.analyst`). **Accurate as of the gate.** All three were subsequently resolved by that owner on 2026-07-29 — the gate genuinely did not decide them; see §9A.7. |
 | Decisions amended as a result | D4 (§3) and §13 — item 3's OAuth/DCR/RFC-9728 carve-out |
 | Status effect | None. Mode `product-to-planning`, ceiling and status remain `specs_hardened`. |
