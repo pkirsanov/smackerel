@@ -137,6 +137,43 @@ Measure the repository first (`git ls-files | sed -E 's/.*\.//' | sort | uniq -c
 | sort -rn`) rather than assuming. A provider that cannot parse the dominant
 language of a repository provides no value there regardless of its benchmarks.
 
+## Two access paths (do not confuse them)
+
+| Path | Consumer | Mechanism | Freshness |
+|---|---|---|---|
+| **MCP** | agents, interactively | the provider's own MCP server, registered in the editor's MCP config | provider-managed (watcher + debounced sync + connect-time catch-up) |
+| **Adapter** | scripts, gates, CLIs | `adapters/codeindex/<provider>.sh <verb>` | caller-managed: `freshness \|\| sync` |
+
+An agent asking "who calls this?" should use the MCP path. A lint deriving an
+inventory should use the adapter path. Registering one does not give you the
+other, and **neither is created by setting `codeIndex.adapter`** — that config
+only tells the adapter path which provider to use.
+
+## When an agent should reach for the index
+
+Availability is not usage. An agent handed a new tool with no guidance keeps
+grepping, and the integration stays inert. Reach for the index FIRST on
+structural questions — these are exactly the cases where grep is weakest:
+
+| Question | Why grep is worse |
+|---|---|
+| Where is this symbol defined? | grep finds every mention, not the definition |
+| Who calls this? | grep cannot distinguish call from comment, string, or import |
+| What breaks if I change this? | grep has no transitive closure |
+| Which tests can this diff reach? | grep has no dependency graph at all |
+| What endpoints exist? | grep misses builder-wired and nested registrations |
+
+Fall back to grep or direct reads when the index returns empty, reports stale,
+or exits non-zero — and when the question is textual rather than structural
+("where do we mention this TODO"), grep was always the right tool.
+
+Two habits that keep this honest:
+
+- **Confirm before escalating.** A derived fact is a claim. Open the source for a
+  sample before acting on a count.
+- **Prefer it while editing, not only while investigating.** Blast radius is most
+  useful *before* the change, not after the review.
+
 ## Legitimate consumers
 
 Both are **advisory** and both must degrade cleanly on `none` or exit 1:
