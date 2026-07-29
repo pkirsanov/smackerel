@@ -29,6 +29,12 @@ scans:
     patterns:
     errorHandling: ''
 
+# Product-domain SST (G130/G131). The extracted model points to the existing
+# topic lifecycle and assistant provenance contracts instead of copying schemas
+# here.
+domainModel:
+  $ref: config/domain-model.yaml
+
 # =============================================================================
 # Observability posture (IMP-001 / G098-G100). Project-owned, never overwritten.
 # =============================================================================
