@@ -30,8 +30,7 @@ scans:
     errorHandling: ''
 
 # Product-domain SST (G130/G131). The extracted model points to the existing
-# topic lifecycle and assistant provenance contracts instead of copying schemas
-# here.
+# topic lifecycle and assistant provenance contracts instead of copying schemas.
 domainModel:
   $ref: config/domain-model.yaml
 

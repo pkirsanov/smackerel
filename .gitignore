@@ -121,3 +121,9 @@ improvements/
 # Large. MUST stay ignored: an untracked index of this size can be swept into an
 # unrelated commit when several agent sessions share the worktree.
 .codegraph/
+
+# Bubbles session-state lock artifacts (e.g. .specify/memory/bubbles.session.json.flock).
+# Transient, zero-byte, never belongs in history. MUST stay ignored: an untracked
+# lock file can be swept into an unrelated commit when several agent sessions
+# share the worktree.
+*.flock
