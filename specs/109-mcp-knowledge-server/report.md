@@ -42,10 +42,20 @@ BUG-019-003 rather than planned as deliverable.
 | `state.json` | v3 execution/certification state at the `specs_hardened` ceiling | Written |
 | `scenario-manifest.json` | Stable `SCN-*` contract entries with planned scope and expected live tests | Written |
 
-**Not written, deliberately.** `spec.md` and `design.md` were **read only**. Under mode
-`product-to-planning` the G073 source-edit lockout is active and the ceiling is `specs_hardened`; no
-file under `internal/`, `cmd/`, `config/`, or `docs/` was created or modified, and no other spec
-folder was touched.
+**Not written by `bubbles.plan`, deliberately.** `spec.md` and `design.md` were **read
+only** by the planning agent, because they are owned by `bubbles.analyst` / `bubbles.ux`
+and `bubbles.design` respectively. Under mode `product-to-planning` the G073 source-edit
+lockout is also active and the ceiling is `specs_hardened`; no file under `internal/`,
+`cmd/`, `config/`, or `docs/` was created or modified, and no other spec folder was
+touched.
+
+**Precision on G073, added 2026-07-29.** G073 forbids changes *outside*
+`spec.md, design.md, scopes.md, report.md, uservalidation.md, state.json, docs/**,
+.github/**`. It therefore constrains **source code**, not `spec.md`. `spec.md` was left
+unedited by `bubbles.plan` for **ownership** reasons, not because G073 forbade it. Later
+`spec.md` edits in this packet — the §18 ratification record, the Principle 11
+reconciliation, and the 2026-07-29 analyst corrections below — were made by the owning
+agent and are all inside G073's permitted set.
 
 ---
 
@@ -111,7 +121,57 @@ using:
 
 ## Findings Carried Forward
 
-### Resolved during this packet
+### Resolved 2026-07-29 by `bubbles.analyst` (were open at planning close)
+
+The five rows below were recorded **OPEN** when this planning packet closed. They were
+resolved in a subsequent `bubbles.analyst` run by their recorded owner. **The rows are
+retained rather than deleted** — the audit trail of what was open, and why, is the point.
+Every resolution is an editorial correction to analyst-owned `spec.md` sections. **No
+ratified decision (D1–D5, or any of the seven §18 items) was reopened, weakened, or
+renegotiated, no implementation is claimed, and no test was executed.**
+
+> **Correction of record — a false gate constraint this report previously carried.** The
+> UX-F-002 row below used to justify its OPEN status with *"amending `spec.md` §15 is not
+> permitted under G073 in this mode."* **That was factually wrong.** G073
+> (`planning_only_source_edit_lockout_gate`) forbids changes *outside*
+> `spec.md, design.md, scopes.md, report.md, uservalidation.md, state.json, docs/**,
+> .github/**` — `spec.md` is explicitly on the **permitted** list. The real reason these
+> findings stayed open was **artifact ownership**: `bubbles.plan` and `bubbles.ux`
+> correctly declined to rewrite analyst-owned `spec.md` sections and routed them to the
+> owning agent instead. **That routing was right; the gate citation was not.** The
+> justification is corrected here so this packet no longer carries a fabricated gate
+> constraint that a future reader could cite as precedent.
+
+| Finding | Status | What changed, and where |
+|---|---|---|
+| **UX-F-002** — `docs/smackerel.md` §17.1 (confidence signals) was absent from the §15 documentation table, yet §9A.5 ties R-109-UX15–UX18 to it | **RESOLVED** 2026-07-29 | `spec.md` §15 gained a `docs/smackerel.md` §17.1 (Trust Architecture) row recording the specific tie: §17.1's **Confidence signals** trust mechanism is expressed on the MCP path as the spec-095 `StrategySelection` honest-degradation fields `retrieval_reason`, `retrieval_contract_known`, and `retrieval_fell_back` carried on every Projection (§9), with `degraded-fallback` rendered as a successful-but-degraded answer and never as confidence. §9A.5's "Principle tie" was updated from "see UX-F-002 for that reference's status" to the now-funded row. §9A.7's entry records the disposition. Scope 07 had already planned the §17.1 update and TP-07-03 already asserts a §17.1 anchor, so **no planned work changed** — §15 was brought into agreement with the plan. |
+| **UX-F-004** — §2's Success Signal omitted `retrieval_reason` and `retrieval_contract_known`, both of which §9 returns and R-109-UX15/UX18 depend on | **RESOLVED** 2026-07-29 | `spec.md` §2's Success Signal now enumerates the complete six-field §9 provenance set — `source_kind`, `retrieval_strategy`, `retrieval_reason`, `retrieval_fell_back`, `retrieval_contract_known`, `trace_token` — and states the R-109-UX15/UX18 non-omittability rule, with an inline correction note. **§9 was not narrowed to match §2**: §9 is the authoritative field table, §2 was the incomplete restatement, and the restatement is what moved. `scopes.md` TP-03-01 already tested all six, so **no planned work changed**. |
+| **UX-F-005** — D1's prose asserted `remote-inference` was already implemented while §1 says no MCP server exists; read literally these conflict | **RESOLVED** 2026-07-29 | `spec.md` D1 now reads "fully **specified** but **default-OFF**", with an inline correction note. The **posture** ratified by §18 item 1 is untouched — `local-inference` remains the default and only enabled egress class, remote remains an explicit per-client individually audited grant, and the BINDING CONSTRAINT on claim shape still binds every surface. Only the inaccurate implementation claim was removed. §18 item 1's "Not resolved by this item" paragraph and §9A.7's entry record the correction without rewriting what the gate did. The stale phrasing is now absent from `spec.md` entirely. |
+| **F-109-OF2-AMEND** — OF-2 lacked a `corpus` data-scope grant/revoke step, and OF-2 step 4's effective-list invariant held only conditionally | **RESOLVED** 2026-07-29 | `spec.md` §9A.3's OF-2 was amended and retitled "Grant / revoke a toolset **and a data scope**": new **step 3** grants the `corpus` data scope and states the client experiences §9A.4 Case A verbatim until it exists (a distinct client-visible corpus token would be an existence oracle — R-109-UX12); new **step 4** requires the operator surface to show the *effective* result, not the grant just made; **step 5** covers data-scope revocation; **step 6** states the four-term intersection explicitly and requires the operator surface to call the **same authorizer the request path calls** rather than reimplement the set logic. **Verified before relying on it:** `scopes.md` Scope 03 already requires `data-scope` as a third `GrantKind` with the authorizer evaluating the full four-term intersection (plus TP-03-02), and Scope 07's `docs/Operations.md` plan and DoD already name the `corpus` data-scope grant/revoke step against F-109-OF2-AMEND. So this brought §9A.3 into line with the existing plan; **no planned work changed**. |
+| **§15 lacked a `docs/Product-Principles.md` row** (found in re-review 2026-07-29) | **RESOLVED** 2026-07-29 | `scopes.md` TP-07-03 asserts *"every `spec.md` §15 target file exists"* and then names the `docs/Product-Principles.md` alignment note plus the delivered Principle 11 assertions — but §15 declared no such row, so the test asserted against a target the spec never declared. `spec.md` §15 now carries the row with both obligations: **(a)** the §16 Product Principle Alignment note citing **P8 — Trust Through Transparency** and **P11 — Local-First Data Ownership**, with the principle-gap note in its *delivered* form; **(b)** verification that the shipped `## Principle 11 — Local-First Data Ownership` is present **together with** its matching `### Principle 11` enforcement block in the BLOCKING companion `.github/instructions/product-principles.instructions.md` — a principle present in one but not the other is the gap, not the fix. The row is explicitly a **verification** obligation: P11 and its enforcement block were authored and signed off by the **owner** on 2026-07-29 outside this packet (§18 item 7), and nothing in §15 authorises an agent to amend an owner-ratified document. |
+
+**Residual, honestly recorded — two foreign-artifact instances of the same false G073
+citation are NOT corrected here.** The identical mistaken justification also appears in
+`scopes.md` (line ~107, *"`spec.md` §15 is not edited by this packet (G073)"*, and line
+~772, *"this packet may not edit `spec.md` (G073)"*) and in `design.md` (§4 closing,
+*"spec.md is not edited by this design (mode `product-to-planning`, G073 source-edit
+lockout)"*). Those artifacts are owned by `bubbles.plan` and `bubbles.design`
+respectively, not by `bubbles.analyst`, and `scopes.md` additionally carries lint-enforced
+Test Plan ↔ DoD parity. Rewriting them from here would be exactly the ownership violation
+that produced the original routing. **Routed to their owners**, with the correction
+already stated above: substitute the ownership rationale for the G073 citation. Note that
+`scopes.md` line ~139 already states it correctly for F-109-OF2-AMEND — *"amending
+`spec.md` §9A.3 is owned by `bubbles.analyst` under a mode that permits spec edits"* — so
+the correct framing already exists in that file and can simply be applied to the other two
+sites.
+
+**One further residual — `state.json`.** The same false citation is embedded in
+`certification.outstandingFindings[UX-F-002].summary`. `certification.*` is validate-owned
+and is explicitly out of bounds for this agent; the resolution of all five findings is
+recorded additively in `executionHistory` instead. **Routed to `bubbles.validate`** to
+reconcile `certification.outstandingFindings` and strike the G073 citation.
+
+### Resolved during the original planning packet
 
 | Finding | Resolution |
 |---|---|
@@ -120,12 +180,18 @@ using:
 
 ### Open — routed, not silently resolved
 
+**All four rows in the table below were CLOSED on 2026-07-29** by `bubbles.analyst`, the
+recorded owner. They are retained verbatim as the historical record of what was open at
+planning close and how it was routed; each row's disposition is in the *"Resolved
+2026-07-29"* table above. The `bubbles.analyst` routing shown in the right-hand column is
+what actually happened — the owner picked them up and closed them.
+
 | Finding | Status | Where planned | Routed to |
 |---|---|---|---|
-| **UX-F-002** — `docs/smackerel.md` §17.1 (confidence signals) is absent from the §15 documentation table, yet §9A.5 ties R-109-UX15–UX18 to it | **OPEN** | Scope 07 plans the §17.1 update as a recorded planning decision | `bubbles.analyst` (RQ-109-02) — amending `spec.md` §15 is not permitted under G073 in this mode |
-| **UX-F-004** — §2's Success Signal omits `retrieval_reason` and `retrieval_contract_known`, both of which §9 returns and R-109-UX15/UX18 depend on | **OPEN** | Scope 03 plans and tests **all six** provenance fields (TP-03-01) | `bubbles.analyst` — re-routed: the §18 gate closed 2026-07-29 on the seven product decisions and did **not** decide this editorial correction (RQ-109-03) |
-| **UX-F-005** — D1 says `remote-inference` is "fully coded but default-OFF" while §1 says no MCP server exists; read literally these conflict. Intended meaning: "fully **specified**" | **OPEN** | Scope 03 plans it as fully specified and default-OFF per client | `bubbles.analyst` — re-routed: ratified §18 item 1 accepted D1's *posture* but did **not** correct D1's *prose* (RQ-109-04) |
-| **F-109-OF2-AMEND** — new, surfaced by `design.md` §4. OF-2 needs a `corpus` data-scope grant/revoke step, and OF-2 step 4's effective-list invariant holds only if the operator-side computation runs the same four-term intersection | **OPEN** | Scopes 03 and 07 are already planned to the amended behavior; Scope 07's `docs/Operations.md` DoD item names the data-scope step explicitly | `bubbles.analyst` (RQ-109-01) |
+| **UX-F-002** — `docs/smackerel.md` §17.1 (confidence signals) is absent from the §15 documentation table, yet §9A.5 ties R-109-UX15–UX18 to it | ~~OPEN~~ → **CLOSED 2026-07-29** | Scope 07 plans the §17.1 update as a recorded planning decision | `bubbles.analyst` (RQ-109-02) — held for the **owning agent** because `spec.md` §15 is analyst-owned and `bubbles.plan` does not rewrite it. *(This cell previously cited G073; that citation was wrong and is corrected above.)* |
+| **UX-F-004** — §2's Success Signal omits `retrieval_reason` and `retrieval_contract_known`, both of which §9 returns and R-109-UX15/UX18 depend on | ~~OPEN~~ → **CLOSED 2026-07-29** | Scope 03 plans and tests **all six** provenance fields (TP-03-01) | `bubbles.analyst` — re-routed: the §18 gate closed 2026-07-29 on the seven product decisions and did **not** decide this editorial correction (RQ-109-03) |
+| **UX-F-005** — D1's prose asserted `remote-inference` was already implemented while §1 says no MCP server exists; read literally these conflict. Intended meaning: "fully **specified**" | ~~OPEN~~ → **CLOSED 2026-07-29** | Scope 03 plans it as fully specified and default-OFF per client | `bubbles.analyst` — re-routed: ratified §18 item 1 accepted D1's *posture* but did **not** correct D1's *prose* (RQ-109-04) |
+| **F-109-OF2-AMEND** — new, surfaced by `design.md` §4. OF-2 needs a `corpus` data-scope grant/revoke step, and OF-2 step 4's effective-list invariant holds only if the operator-side computation runs the same four-term intersection | ~~OPEN~~ → **CLOSED 2026-07-29** | Scopes 03 and 07 are already planned to the amended behavior; Scope 07's `docs/Operations.md` DoD item names the data-scope step explicitly | `bubbles.analyst` (RQ-109-01) |
 
 ### Spec findings inherited
 
@@ -161,15 +227,23 @@ item, plus 14 standing regression DoD items — 57 test DoD items in total),
 contract entries — 16 planned, 2 deferred).
 
 Not claimed: any implementation, any test result, any execution evidence, and any status above
-`specs_hardened`. `spec.md` and `design.md` were read only; no source file was created or modified
-under the G073 lockout; no other spec folder was touched.
+`specs_hardened`. No source file was created or modified under the G073 lockout; no other spec
+folder was touched. `design.md` was read only. `spec.md` was read only **by `bubbles.plan`**;
+it was subsequently edited by its owning agent under explicit operator instruction — to record
+the §18 ratification, to reconcile to the shipped Principle 11, and on 2026-07-29 to make the
+five editorial corrections recorded above — each recorded in `state.json` `executionHistory`.
 
-Open findings UX-F-002, UX-F-004, UX-F-005, and F-109-OF2-AMEND remain recorded as
-**open** with named owners in `state.json` `certification.outstandingFindings`; UX-F-003 is
-**partially resolved** (see the table above). None was silently resolved, and none is deferred: each
-is resolved inline in the plan by a named scope and a blocking DoD item (see `state.json`
-`reworkQueueNote`, which is why `reworkQueue` is empty rather than queued). Scope 06 is recorded
-**Blocked** on BUG-019-003 rather than planned as deliverable.
+Findings UX-F-002, UX-F-004, UX-F-005, and F-109-OF2-AMEND were recorded as **open** with
+named owners at planning close; **all four — plus a fifth found in re-review (§15 lacked a
+`docs/Product-Principles.md` row) — were RESOLVED on 2026-07-29** by their recorded owner
+`bubbles.analyst`. See *"Resolved 2026-07-29"* above for each disposition; the original
+OPEN rows are retained rather than deleted. UX-F-001 was resolved by `design.md` §4 and
+UX-F-003 is resolved. None was ever silently resolved, and none was deferred: each was
+also resolved inline in the plan by a named scope and a blocking DoD item (see
+`state.json` `reworkQueueNote`, which is why `reworkQueue` is empty rather than queued).
+The six inherited spec findings **F-109-001…006 remain as recorded** — they are delivery
+constraints, not editorial defects, and nothing in the 2026-07-29 pass touched them. Scope
+06 is still recorded **Blocked** on BUG-019-003 rather than planned as deliverable.
 
 **Operator review gate \u2014 CLOSED 2026-07-29.** All seven `spec.md` §18 decisions were **ratified by
 operator delegation** under the instruction *"pick the best option for long term, no shortcuts."*
@@ -182,13 +256,25 @@ operator delegation** under the instruction *"pick the best option for long term
   would have been overclaiming. `spec.md` D4 and §13 were updated to match.
 - **The gate did not decide everything it was carrying.** UX-F-002, UX-F-004, and UX-F-005 had been
   bundled into "the operator's §18 pass" for convenience. They are wording corrections to `spec.md`,
-  not product decisions, so the ratification did **not** settle them. They are re-routed to
-  `bubbles.analyst` rather than being quietly marked resolved.
+  not product decisions, so the ratification did **not** settle them. They were re-routed to
+  `bubbles.analyst` rather than being quietly marked resolved. **That owner closed all three on
+  2026-07-29** (together with F-109-OF2-AMEND and the §15 `docs/Product-Principles.md` gap). This
+  does not revise the gate record: the gate genuinely did not decide them, and §18's ratification
+  boundary still says so.
 
-**Next owner:** two, in parallel.
+**Next owner.**
 
 1. **A delivery-capable run** (this packet is `planningOnly` under `product-to-planning`), starting
-   at **Scope 01**. Scope 07 additionally requires **owner sign-off** before amending the
-   owner-ratified `docs/Product-Principles.md` and its BLOCKING companion enforcement file.
-2. **`bubbles.analyst`**, for the three editorial `spec.md` corrections the §18 gate did not decide
-   (UX-F-002, UX-F-004, UX-F-005) plus F-109-OF2-AMEND.
+   at **Scope 01**. Scope 07's `docs/Product-Principles.md` obligations are now **verification**
+   items — the principle and its BLOCKING companion enforcement block shipped by owner sign-off on
+   2026-07-29 — so no agent amends that owner-ratified document.
+2. **`bubbles.validate`**, to reconcile `state.json` `certification.outstandingFindings`: mark
+   UX-F-002, UX-F-004, UX-F-005, and F-109-OF2-AMEND resolved, and strike the false
+   *"not permitted under G073"* justification embedded in UX-F-002's summary.
+   `certification.*` is validate-owned and was correctly not written by this analyst run.
+3. **`bubbles.plan` and `bubbles.design`**, to correct the same false G073 citation where it
+   survives in their own artifacts (`scopes.md` ~L107 and ~L772; `design.md` §4 closing) —
+   substituting the ownership rationale, which `scopes.md` ~L139 already states correctly.
+
+~~2. `bubbles.analyst`, for the three editorial `spec.md` corrections the §18 gate did not decide
+(UX-F-002, UX-F-004, UX-F-005) plus F-109-OF2-AMEND.~~ **Done 2026-07-29.**

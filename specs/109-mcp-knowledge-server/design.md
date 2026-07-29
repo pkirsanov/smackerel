@@ -336,8 +336,8 @@ is the operator-visible cost of (a):
   day one.
 
 This is recorded here as a design consequence and routed to `bubbles.plan` for the §9A.3
-OF-2 amendment; **spec.md is not edited by this design** (mode `product-to-planning`,
-G073 source-edit lockout).
+OF-2 amendment; **spec.md is not edited by this design** (mode `product-to-planning`;
+`spec.md` is `bubbles.analyst`-owned, so amending it is that owner's call, not this design's).
 
 **Refusal token emitted on a corpus denial: `unauthorized-toolset`.**
 

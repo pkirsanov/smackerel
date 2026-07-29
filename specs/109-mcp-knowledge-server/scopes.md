@@ -102,9 +102,13 @@ seven-token set: `authorized`, `unauthorized-toolset`, `unauthorized-egress-clas
   credential, as a third `Grant` **kind** (`data-scope`), not a second grant system. Planned in
   **Scope 03**. A corpus denial emits `unauthorized-toolset` to the client (Case A, byte-identical to
   nonexistent) and carries the corpus granularity in the ledger's `denial_reason` column only.
-- **UX-F-002 — OPEN.** `docs/smackerel.md` §17.1 (confidence signals) is not in the §15 documentation
-  table, yet §9A.5 ties R-109-UX15–UX18 to it. Scope 07 plans the §17.1 row **as a planning decision
-  recorded here**, not as a silent spec amendment; `spec.md` §15 is not edited by this packet (G073).
+- **UX-F-002 — RESOLVED 2026-07-29 by `bubbles.analyst`, verified by `bubbles.validate`.** The defect
+  was that `docs/smackerel.md` §17.1 (confidence signals) was absent from the §15 documentation table
+  even though §9A.5 tied R-109-UX15–UX18 to it. `spec.md` §15 now carries the `docs/smackerel.md` §17.1
+  row and records the specific tie, so §15 and §9A.5 agree. Scope 07's §17.1 work is therefore funded by
+  the spec rather than carried here as a planning-only decision. This packet still did not edit
+  `spec.md` — not because a gate forbade it, but because `spec.md` is **`bubbles.analyst`-owned**; the
+  correction was routed to that owner and applied there.
 - **UX-F-003 — RESOLVED (2026-07-29).** Principle numbering. Trust Through Transparency is
   **Principle 8** in `docs/Product-Principles.md`, and at the time the finding was raised there was no
   Principle 11 — both statements of fact when written. The *principle-gap* half was settled by ratified
@@ -119,19 +123,30 @@ seven-token set: `authorized`, `unauthorized-toolset`, `unauthorized-egress-clas
   carries a P11 row. Nothing about this finding remains open. Scope 07 carries the shipped artifacts as
   **verification** DoD items rather than as edits to make.
   **This packet still invents nothing; the principle amendment was applied by the owner, not by this packet.**
-- **UX-F-004 — OPEN.** §2's Success Signal omits `retrieval_reason` and `retrieval_contract_known`,
-  both of which §9 returns and R-109-UX15/UX18 depend on. Scope 03 plans and tests **all six**
-  provenance fields. The §2 editorial correction was **not** decided by the §18 gate (which closed
-  2026-07-29 on the seven product decisions only) and is re-routed to `bubbles.analyst`.
-- **UX-F-005 — OPEN.** D1 calls `remote-inference` "fully coded but default-OFF" while §1 states no
-  MCP server exists. Read literally these conflict; the intended meaning is "fully **specified**".
-  Scope 03 plans it as fully specified and default-OFF. Ratified §18 item 1 accepted D1's *posture*
-  but did **not** correct D1's *prose*, so this stays OPEN and is re-routed to `bubbles.analyst`.
-- **F-109-OF2-AMEND — OPEN (new, surfaced by `design.md` §4).** OF-2 now needs a `corpus` data-scope
-  grant/revoke step alongside its toolset step, and OF-2 step 4's "operator effective list ==
-  client `tools/list`" invariant holds **only if** the operator-side computation runs the same
-  four-term intersection. Scope 03 and Scope 07 plan to the amended behavior; amending `spec.md`
-  §9A.3 is owned by `bubbles.analyst` under a mode that permits spec edits.
+- **UX-F-004 — RESOLVED 2026-07-29 by `bubbles.analyst`, verified by `bubbles.validate`.** The defect
+  was that §2's Success Signal omitted `retrieval_reason` and `retrieval_contract_known`, both of which
+  §9 returns and R-109-UX15/UX18 depend on. `spec.md` §2's Success Signal now enumerates the complete
+  six-field §9 provenance set, so §2 and §9 agree. Scope 03's plan is unchanged — it already planned and
+  tested **all six** provenance fields, and now traces to a spec that states all six. The correction was
+  editorial and outside the §18 gate (which closed 2026-07-29 on the seven product decisions only), so
+  it was routed to `bubbles.analyst` as the `spec.md` owner and applied there.
+- **UX-F-005 — RESOLVED 2026-07-29 by `bubbles.analyst`, verified by `bubbles.validate`.** The defect
+  was D1's *prose*: it described `remote-inference` with the phrase "fully coded but default-OFF" while
+  §1 states no MCP server exists — read literally, a contradiction, since the intended meaning was
+  "fully **specified**". **That phrasing is quoted here only as the historical record of what the defect
+  said; it is not a live claim, and the phrase no longer appears anywhere in `spec.md`.** D1 now reads
+  "fully **specified** but **default-OFF**, enabled only per-client by an explicit operator grant". Scope 03's plan is unchanged — it always planned fully specified and
+  default-OFF. Ratified §18 item 1 accepted D1's *posture* but did not correct its prose, so the
+  editorial fix was routed to `bubbles.analyst` as the `spec.md` owner and applied there.
+- **F-109-OF2-AMEND — RESOLVED 2026-07-29 by `bubbles.analyst`, verified by `bubbles.validate`.**
+  Surfaced by `design.md` §4: OF-2 needed a `corpus` data-scope grant/revoke step alongside its toolset
+  step, and OF-2 step 4's "operator effective list == client `tools/list`" invariant held **only if**
+  the operator-side computation ran the same four-term intersection. `spec.md` §9A.3 now carries that
+  amendment — OF-2 is retitled "Grant / revoke a toolset and a data scope" and carries the `corpus`
+  grant step, the effective-result step (the operator surface shows the *effective* result, not the
+  grant just made), the revocation step, and the four-term intersection stated explicitly. Scope 03 and
+  Scope 07 already planned to the amended behavior and now trace to a spec that states it. The amendment
+  was applied by `bubbles.analyst` as the `spec.md` owner, exactly as this entry anticipated.
 
 ---
 
@@ -769,8 +784,9 @@ And no fabricated external reference is emitted
 ### Use Cases (Gherkin)
 
 Scenarios below are **planning-derived** (`SCN-109-P01…P03`): `spec.md` §7 authors no documentation
-or release scenario, and this packet may not edit `spec.md` (G073). Each names the exact `spec.md`
-requirement row it traces to. `SCN-109-004` is reused verbatim because the documentation obligation
+or release scenario, and this packet did not edit `spec.md` — `spec.md` is **`bubbles.analyst`-owned**,
+so authoring scenarios into it is that owner's call, not this planning packet's. Each names the exact
+`spec.md` requirement row it traces to. `SCN-109-004` is reused verbatim because the documentation obligation
 is the same no-fabricated-capability invariant, expressed on the docs surface.
 
 **SCN-109-P01 — Every `spec.md` §15 documentation row is satisfied (traces: §15 Documentation table)**
