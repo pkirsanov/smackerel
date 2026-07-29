@@ -35,8 +35,8 @@ selftest that runs with no provider installed.
 
 ## The contract
 
-Five verbs. Four return a JSON **array** of records; `status` returns a JSON
-**map**. Neutral empty values are `[]` and `{}` respectively.
+Seven verbs. Four return a JSON **array** of records; `status`, `freshness`, and
+`sync` return a JSON **map**. Neutral empty values are `[]` and `{}`.
 
 | Verb | Args | Shape | Neutral | Answers |
 |---|---|---|---|---|
@@ -44,7 +44,13 @@ Five verbs. Four return a JSON **array** of records; `status` returns a JSON
 | `impact` | `<symbol>` | array | `[]` | blast radius — what breaks if this changes |
 | `affected` | `<file>...` | array | `[]` | which tests can this diff actually reach |
 | `routes` | — | array | `[]` | full route/endpoint inventory |
-| `status` | — | map | `{}` | index freshness and health |
+| `status` | — | map | `{}` | index health and statistics |
+| `freshness` | — | map | `{}` | **is the index still true?** (see exit 2) |
+| `sync` | — | map | `{}` | bring a stale index up to date (only mutating verb) |
+
+`<file>` arguments are **repo-relative** — relative to `CODEINDEX_ROOT`, not to
+the caller's CWD. The adapter may be invoked from anywhere in a multi-root
+workspace, so caller-relative paths have no stable meaning.
 
 Plus `selftest <verb>`, which emits the canonical shape **with no provider
 installed** so a shape lint can validate any adapter offline.
@@ -55,12 +61,28 @@ installed** so a shape lint can validate any adapter offline.
 |---|---|---|
 | 0 + neutral value | indexed, nothing found | proceed; absence is a real answer |
 | 0 + records | indexed, facts available | may use as advisory input |
+| **2** (`freshness` only) | indexed but **STALE** — the code moved | treat facts as untrustworthy; `sync`, or degrade |
 | 1 | provider missing / no index / provider failed | degrade to existing behavior |
 
 A provider adapter MUST NOT emit a neutral value when it is merely unavailable.
 `[]` means "I looked and found nothing"; exit 1 means "I could not look." A
 consumer that conflates them will silently report a clean result for an
 unindexed repository — the exact false-green this seam exists to prevent.
+
+`freshness` extends the same principle to time. An index is a point-in-time
+snapshot: the moment a file changes, every fact derived from it may be wrong,
+and nothing about `symbols`/`impact`/`affected`/`routes` output looks any
+different. Exit 2 makes "confidently answering from last week's code" a
+detectable state rather than an invisible one.
+
+Critically, an adapter that **cannot determine** freshness MUST exit 2, not 0.
+"I don't know whether I'm stale" is not "I am fresh" — defaulting to fresh
+reintroduces the silent-wrong-answer failure this verb exists to close.
+
+`sync` is the only verb permitted to mutate anything, and it mutates only the
+index — never the working tree, never git state. Because `none` returns `{}`
+exit 0, a repository can wire `freshness || sync` unconditionally into a CLI or
+git hook and stay correct whether or not a provider is ever adopted.
 
 ## Wiring a repository (opt-in)
 

@@ -73,6 +73,7 @@ Every recipe solves a specific problem. Find yours, follow the steps.
 | 57 | [Live Deployment Convergence](recipes/live-deployment-convergence.md) | `bubbles.goal` | Converge a real target through connector activation, approved seed data, Playwright journeys, and live four-layer proof |
 | 58 | [Rapid Tool Delivery](recipes/rapid-tool-delivery.md) | `rapid-tool-delivery` | Low-risk, build-free single-tool increment (fast lane) |
 | 59 | [Parallel Worktrees](recipes/parallel-worktrees.md) | `worktree-spawn` | Spawn→work→reap isolated worktrees safely |
+| 60 | [Use A Code Index](recipes/use-a-code-index.md) | `codeIndex.adapter` | Derive structural facts (routes, blast radius, affected tests) through swappable code-index adapters |
 
 ---
 

@@ -2689,9 +2689,16 @@ cmd_hooks() {
       local hook_name="${1:-}"
 
       if [[ "$hook_name" == "--all" || -z "$hook_name" ]]; then
-        # Install all built-in hooks
-        cat > "$hooks_json" << 'HJEOF'
-{
+        # Install all built-in hooks.
+        #
+        # MERGE rather than overwrite. This block used to `cat >` a hardcoded
+        # document containing only pre-commit and pre-push, which silently
+        # DELETED every other registered hook class — observed deregistering
+        # "pre-tool" (pre-tool-risk-gate), removing a real-time risk gate with
+        # no warning. Built-ins stay authoritative for their OWN keys; keys this
+        # installer does not own are preserved untouched.
+        local builtin_hooks_json
+        builtin_hooks_json='{
   "pre-commit": [
     {"name": "artifact-lint", "type": "builtin"},
     {"name": "agnosticity-lint", "type": "builtin"},
@@ -2702,9 +2709,56 @@ cmd_hooks() {
     {"name": "guard-changed-done-specs", "type": "builtin"},
     {"name": "reality-scan", "type": "builtin"}
   ]
-}
-HJEOF
+}'
+        if command -v python3 >/dev/null 2>&1; then
+          BUBBLES_HOOKS_JSON_PATH="$hooks_json" \
+          BUBBLES_BUILTIN_HOOKS="$builtin_hooks_json" \
+          python3 - <<'HOOKMERGE'
+import json, os
+
+path = os.environ["BUBBLES_HOOKS_JSON_PATH"]
+builtin = json.loads(os.environ["BUBBLES_BUILTIN_HOOKS"])
+
+existing = {}
+if os.path.isfile(path):
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            loaded = json.load(handle)
+        if isinstance(loaded, dict):
+            existing = loaded
+    except (OSError, ValueError):
+        existing = {}
+
+# Existing first so unowned keys keep their original position; built-ins then
+# overwrite only the keys this installer owns.
+merged = dict(existing)
+merged.update(builtin)
+
+# No-op when nothing changes, so a repeat install leaves the file byte-identical
+# instead of reflowing it. Rewriting an unchanged file produces diff churn that
+# hides the one install that DID change something.
+if merged == existing:
+    raise SystemExit(0)
+
+with open(path, "w", encoding="utf-8") as handle:
+    json.dump(merged, handle, indent=2)
+    handle.write("\n")
+HOOKMERGE
+        else
+          printf '%s\n' "$builtin_hooks_json" > "$hooks_json"
+        fi
         _regenerate_hooks "$hooks_json" "$git_hooks_dir"
+        # Re-append the maintainer framework guard.
+        #
+        # _regenerate_hooks rewrites pre-push from scratch, which WIPES the block
+        # appended by install-bubbles-hooks.sh (framework-validate +
+        # release-check). Losing it silently downgrades push protection to the
+        # generic downstream set, so a framework-source push can land without
+        # full validation. install-bubbles-hooks.sh is idempotent and appends.
+        if [[ -f "$FRAMEWORK_DIR/scripts/install-bubbles-hooks.sh" ]]; then
+          bash "$FRAMEWORK_DIR/scripts/install-bubbles-hooks.sh" >/dev/null 2>&1 \
+            || echo "⚠️  could not re-append the framework-validate guard; run: bash $FRAMEWORK_DIR/scripts/install-bubbles-hooks.sh" >&2
+        fi
         echo "✅ All built-in hooks installed"
       else
         echo "Installing single hook: $hook_name (add to hooks.json manually for now)"
@@ -2805,6 +2859,36 @@ if git diff --cached --name-only | grep -q '^specs/'; then
       fi
     fi
   done
+fi
+# Release-manifest freshness (framework-source trees only).
+#
+# The manifest pins a sha256 of each managed file's POST-change content, and
+# `install provenance` + `trust doctor` both verify against it. Committing a
+# managed file without regenerating therefore does not merely warn — it makes
+# the branch unpushable for EVERY session, and the failure surfaces at someone
+# else's pre-push 20+ minutes later rather than at the author's commit.
+#
+# Fires only when a manifest-managed file is staged AND the manifest is not,
+# which is exactly that failure mode and nothing else. Unrelated dirty managed
+# files in the working tree do not trip it, so there are no false positives.
+# The -f guard keeps this inert in downstream installs, which have no
+# bubbles/release-manifest.json at this path.
+if [[ -f bubbles/release-manifest.json ]]; then
+  staged_files="$(git diff --cached --name-only)"
+  if ! printf '%s\n' "$staged_files" | grep -qx 'bubbles/release-manifest.json'; then
+    while IFS= read -r staged_file; do
+      [[ -n "$staged_file" ]] || continue
+      if grep -qF "\"path\": \"$staged_file\"" bubbles/release-manifest.json 2>/dev/null; then
+        echo "🫧 Bubbles pre-commit: release manifest freshness..."
+        echo "❌ $staged_file is manifest-managed but bubbles/release-manifest.json is not staged." >&2
+        echo "   The manifest pins a checksum of this file's new content." >&2
+        echo "   Run:  bash bubbles/scripts/generate-release-manifest.sh" >&2
+        echo "   Then: git add bubbles/release-manifest.json" >&2
+        failed=1
+        break
+      fi
+    done <<< "$staged_files"
+  fi
 fi
 exit $failed
 PCHOOK
