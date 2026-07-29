@@ -88,6 +88,35 @@ SQLite WAL cannot be enabled and reads block on writes.
 
 ---
 
+## Agent access (MCP) — this is what makes agents actually use it
+
+The Bubbles adapter serves *scripts and gates*. Agents reach the graph through
+CodeGraph's own MCP server, registered in `.vscode/mcp.json` (**tracked here**):
+
+```json
+"codegraph": {
+  "type": "stdio",
+  "command": "npx",
+  "args": ["-y", "@colbymchenry/codegraph@1.5.0", "serve", "--mcp", "--path", "${workspaceFolder}"],
+  "env": { "CODEGRAPH_TELEMETRY": "0", "DO_NOT_TRACK": "1" }
+}
+```
+
+The version is **pinned**, per the supply-chain source-locking policy. `npx` is
+used rather than an absolute path so no home directory leaks into a tracked file.
+
+Verified by real JSON-RPC handshake: `initialize` → `codegraph 1.5.0`,
+`tools/list` → **one** tool, `codegraph_explore` (args `query`, `maxFiles`,
+`projectPath`). Note the README also mentions `codegraph_node`; 1.5.0 exposes
+only `codegraph_explore`.
+
+In MCP mode CodeGraph maintains its own freshness — file watcher with debounced
+auto-sync, a per-file staleness banner during the debounce window, and
+connect-time reconciliation. The adapter's `freshness`/`sync` verbs cover the
+*script* path, where no watcher is running.
+
+---
+
 ## Maintenance — the index goes stale
 
 An index is a point-in-time snapshot. The moment code changes, facts derived

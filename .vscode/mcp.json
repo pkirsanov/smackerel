@@ -1,5 +1,21 @@
 {
     "servers": {
+        "codegraph": {
+            "type": "stdio",
+            "command": "npx",
+            "args": [
+                "-y",
+                "@colbymchenry/codegraph@1.5.0",
+                "serve",
+                "--mcp",
+                "--path",
+                "${workspaceFolder}"
+            ],
+            "env": {
+                "CODEGRAPH_TELEMETRY": "0",
+                "DO_NOT_TRACK": "1"
+            }
+        },
         "bubbles-smackerel": {
             "type": "stdio",
             "command": "python3",
