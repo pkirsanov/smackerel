@@ -710,3 +710,26 @@ capabilities:
     freshnessTargets:
     - improvements/IMP-004-capability-consumer-freshness.md
     - docs/generated/competitive-capabilities.md
+
+  code-index-adapter:
+    label: Code-index adapter seam
+    state: partial
+    summary: >
+      Opt-in, default-off seam letting a downstream repository expose derived structural source facts (symbols, blast radius, affected tests, route inventory) to repo-local gates and lints through a swappable provider adapter. Targets the "coverage asserted from a hand-written list rather than derived from the file surface" defect class, where a gate emits an absolute correctness claim about a scope it does not cover and stays green. Contract is 5 verbs (`symbols`, `impact`, `affected`, `routes`, `status`) plus a provider-free `selftest <verb>` shape mode; record-list verbs normalize to a JSON array, `status` to a map. Provider unavailability exits 1 and MUST NOT be conflated with a neutral empty value, so a consumer can never report clean for an unindexed repository. PARTIAL because the seam, its resolver, its hermetic contract selftest, the doctrine skill, and the downstream recipe all ship and validate, but NO framework consumer is wired yet — the two intended consumers (reachability nudges for the integration-completeness family, and deriving an impact-aware validation map) remain unbuilt, and adoption is per-repo via `codeIndex.adapter`.
+    ownerSurface: bubbles/adapters/codeindex/
+    releaseIntroduced: unreleased
+    docsRefs:
+    - docs/recipes/use-a-code-index.md
+    - skills/bubbles-code-index-adapter/SKILL.md
+    - docs/CATALOG.md
+    evidenceRefs:
+    - bubbles/adapters/codeindex/none.sh
+    - bubbles/adapters/codeindex/codegraph.sh
+    - bubbles/scripts/codeindex-resolve.sh
+    - bubbles/scripts/codeindex-resolve-selftest.sh
+    - skills/bubbles-code-index-adapter/SKILL.md
+    competitorTags:
+    - swe-agent
+    - graphrag
+    freshnessTargets:
+    - docs/recipes/use-a-code-index.md

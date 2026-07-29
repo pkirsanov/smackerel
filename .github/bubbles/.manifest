@@ -49,6 +49,7 @@ bubbles/scripts/claim-source-lint-selftest.sh
 bubbles/scripts/claim-source-lint.sh
 bubbles/scripts/cli.sh
 bubbles/scripts/code-search.sh
+bubbles/scripts/codeindex-adapter-contract-selftest.sh
 bubbles/scripts/codeindex-resolve-selftest.sh
 bubbles/scripts/codeindex-resolve.sh
 bubbles/scripts/compaction-discipline-guard-selftest.sh
@@ -539,6 +540,7 @@ docs/recipes/update-docs.md
 docs/recipes/upgrade-to-v6.md
 docs/recipes/upgrade-to-v7.md
 docs/recipes/upkeep-monthly.md
+docs/recipes/use-a-code-index.md
 docs/recipes/ux-single-file-sweep.md
 docs/recipes/validation-latency-budgets.md
 docs/v4.1.0-delivered-pending-activation.md

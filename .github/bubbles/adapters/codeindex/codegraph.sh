@@ -52,6 +52,19 @@ require_provider() {
     die "provider '$CG_BIN' not found on PATH; set CODEINDEX_CODEGRAPH_BIN or install it. No auto-install is performed."
   [ -d "$CODEINDEX_ROOT/.codegraph" ] ||
     die "no index at '$CODEINDEX_ROOT/.codegraph'; run '$CG_BIN init' in that repository first."
+  # The provider resolves its project by CWD, and `status`/`sync` accept no
+  # --path flag at all (only query/impact/affected do). Without this cd,
+  # CODEINDEX_ROOT was validated and then IGNORED: pointing it at another
+  # repository silently read whichever index happened to sit in the caller's
+  # CWD, or failed with a confusing provider error that named the wrong repo.
+  # Enter the validated root so every verb agrees on one target.
+  #
+  # Consequence, and it is deliberate: <file> arguments to `affected` are
+  # REPO-RELATIVE (relative to CODEINDEX_ROOT), not relative to the caller's
+  # CWD. That is the only stable contract when the adapter may be invoked from
+  # anywhere in a multi-root workspace.
+  cd "$CODEINDEX_ROOT" ||
+    die "cannot enter CODEINDEX_ROOT '$CODEINDEX_ROOT'"
 }
 
 # Emit a bare JSON array/map on stdout, or fail loudly. Never emit partial JSON.
@@ -79,7 +92,29 @@ case "$VERB" in
   affected)
     [ "$#" -ge 1 ] || die "affected requires at least one <file>"
     require_provider
-    run_provider "$CG_BIN" affected "$@" --json
+    # The provider's `affected --json` emits an OBJECT
+    # ({changedFiles, affectedTests, totalDependentsTraversed}), while every
+    # other verb here — and `selftest affected` — emits a JSON ARRAY. Passing the
+    # object through hands consumers two shapes for one contract, and a naive
+    # length check counts 3 KEYS instead of N affected tests. That is a
+    # silent-undercount trap of exactly the kind this adapter exists to prevent:
+    # a test-impact consumer would "helpfully" skip nearly every test.
+    # Emit the affectedTests list itself, as an array, so the contract holds.
+    # `--quiet` is the provider's own line-per-path mode; empty is a legitimate
+    # "no affected tests" result and MUST yield [] rather than a failure.
+    affected_out="$("$CG_BIN" affected "$@" --quiet 2>/dev/null)" ||
+      die "provider invocation failed: $CG_BIN affected $* --quiet"
+    printf '%s' "$affected_out" | awk '
+      BEGIN { printf "["; sep = "" }
+      NF {
+        line = $0
+        gsub(/\\/, "\\\\", line)
+        gsub(/"/, "\\\"", line)
+        printf "%s\"%s\"", sep, line
+        sep = ","
+      }
+      END { print "]" }
+    '
     ;;
   routes)
     require_provider
