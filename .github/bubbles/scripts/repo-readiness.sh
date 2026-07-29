@@ -258,7 +258,14 @@ if [[ -n "$ADOPTION_PROFILES_FILE" ]]; then
   fi
 fi
 
-if [[ -d "$TARGET_ROOT/.git" ]]; then
+# A normal clone has .git as a DIRECTORY, but a `git worktree` (and a submodule)
+# has .git as a FILE holding a `gitdir:` pointer. Accepting only the directory
+# form reported a false "Not a git repository root" for every readiness run
+# inside a worktree, which cascaded into profile-transition-selftest failing for
+# a reason unrelated to the tree under test. That matters because a pristine
+# worktree pinned to a commit is the standard way to get a verdict immune to
+# concurrent edits — so this check was actively undermining verification.
+if [[ -d "$TARGET_ROOT/.git" || -f "$TARGET_ROOT/.git" ]]; then
   add_check pass "Git repository" "$TARGET_ROOT"
 else
   add_check fail "Git repository" "Not a git repository root"
