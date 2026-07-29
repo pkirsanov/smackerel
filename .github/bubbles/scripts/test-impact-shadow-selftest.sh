@@ -1,0 +1,128 @@
+#!/usr/bin/env bash
+# bubbles/scripts/test-impact-shadow-selftest.sh
+#
+# Selftest for test-impact-shadow.sh.
+#
+# The property under test is UNUSUAL: this script's correctness is mostly about
+# what it MUST NOT do. A test-impact tool that quietly becomes authoritative is
+# the exact failure the shadow design exists to prevent, so the assertions below
+# are deliberately weighted toward refusal and degradation, not happy-path math.
+#
+# Every case is constructed to FAIL if the corresponding property regresses:
+#   T1/T2  fail if degradation stops being honest (a missing index or a `none`
+#          adapter must NEVER yield a subset).
+#   T3     fails if the tool ever reports gating:true.
+#   T4     fails if a bypass-shaped flag is accepted.
+#   T5     fails if an exit code ever encodes "safe to skip".
+
+set -uo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+TARGET="$SCRIPT_DIR/test-impact-shadow.sh"
+
+WORK="$(mktemp -d)"
+trap 'rm -rf "$WORK"' EXIT INT TERM
+
+PASS=0
+FAIL=0
+ok()  { echo "  ✅ $1"; PASS=$((PASS + 1)); }
+bad() { echo "  ❌ $1"; FAIL=$((FAIL + 1)); }
+
+echo "test-impact-shadow-selftest"
+echo ""
+
+if ! command -v python3 >/dev/null 2>&1; then
+  echo "  SKIP (python3 not installed)"
+  exit 0
+fi
+
+# --- fixture: a repo whose adapter resolves to `none` ------------------------
+FIX_NONE="$WORK/repo-none"
+mkdir -p "$FIX_NONE/.github/bubbles/scripts" "$FIX_NONE/.github/bubbles/adapters/codeindex"
+cp "$SCRIPT_DIR/codeindex-resolve.sh" "$FIX_NONE/.github/bubbles/scripts/" 2>/dev/null
+cp "$SCRIPT_DIR/../adapters/codeindex/none.sh" "$FIX_NONE/.github/bubbles/adapters/codeindex/" 2>/dev/null
+( cd "$FIX_NONE" && git init -q . && git config user.email t@t && git config user.name t &&
+  echo hi > a.txt && git add -A && git commit -qm init && echo changed > a.txt ) >/dev/null 2>&1
+
+# --- T1: `none` adapter must degrade, never produce a subset -----------------
+out="$(bash "$TARGET" --repo-root "$FIX_NONE" 2>&1)"; rc=$?
+if [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q 'DEGRADED'; then
+  ok "T1 adapter=none degrades honestly (exit 0, no subset)"
+else
+  bad "T1 adapter=none did not degrade (rc=$rc): ${out:0:80}"
+fi
+
+# T1b: the degraded report must NOT claim a subset was derived.
+if printf '%s' "$out" | grep -qi 'would skip'; then
+  bad "T1b degraded output claimed a skip figure"
+else
+  ok "T1b degraded output claims no skip figure"
+fi
+
+# --- T2: a repo with no resolver at all must degrade -------------------------
+FIX_BARE="$WORK/repo-bare"
+mkdir -p "$FIX_BARE"
+( cd "$FIX_BARE" && git init -q . ) >/dev/null 2>&1
+out="$(bash "$TARGET" --repo-root "$FIX_BARE" 2>&1)"; rc=$?
+if [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q 'DEGRADED'; then
+  ok "T2 no resolver degrades honestly"
+else
+  bad "T2 no resolver did not degrade (rc=$rc)"
+fi
+
+# --- T3: ADVERSARIAL — JSON must never report gating:true --------------------
+out="$(bash "$TARGET" --repo-root "$FIX_NONE" --json 2>&1)"
+verdict="$(printf '%s' "$out" | python3 -c '
+import sys, json
+try:
+    d = json.load(sys.stdin)
+except Exception:
+    print("NOTJSON"); raise SystemExit
+if d.get("gating") is True:
+    print("GATING_TRUE")
+elif d.get("mode") != "shadow":
+    print("MODE_NOT_SHADOW")
+else:
+    print("OK")
+' 2>/dev/null || echo NOTJSON)"
+case "$verdict" in
+  OK)      ok "T3 ADVERSARIAL: JSON is mode=shadow and never gating:true" ;;
+  NOTJSON) bad "T3 JSON output was not parseable" ;;
+  *)       bad "T3 ADVERSARIAL FAILED: $verdict" ;;
+esac
+
+# --- T4: ADVERSARIAL — bypass-shaped flags rejected --------------------------
+bypass_ok=1
+for flag in --skip --force --gate --authoritative --apply; do
+  bash "$TARGET" "$flag" >/dev/null 2>&1
+  [ $? -eq 2 ] || bypass_ok=0
+done
+[ "$bypass_ok" -eq 1 ] &&
+  ok "T4 ADVERSARIAL: bypass/gating-shaped flags all exit 2" ||
+  bad "T4 a bypass/gating-shaped flag was accepted"
+
+# --- T5: ADVERSARIAL — no exit code may encode "safe to skip" ----------------
+# The tool has exactly two documented exits: 0 (report produced) and 2 (usage).
+# If a third ever appears it risks being read as a go/no-go signal.
+bash "$TARGET" --repo-root "$FIX_NONE" >/dev/null 2>&1;  rc_none=$?
+bash "$TARGET" --repo-root "$FIX_BARE" >/dev/null 2>&1;  rc_bare=$?
+bash "$TARGET" --nonsense            >/dev/null 2>&1;    rc_bad=$?
+if [ "$rc_none" -eq 0 ] && [ "$rc_bare" -eq 0 ] && [ "$rc_bad" -eq 2 ]; then
+  ok "T5 ADVERSARIAL: exit codes are only 0 (report) / 2 (usage)"
+else
+  bad "T5 unexpected exit codes: none=$rc_none bare=$rc_bare bad=$rc_bad"
+fi
+
+# --- T6: the tool must not execute or mutate anything ------------------------
+before="$(cd "$FIX_NONE" && git status --porcelain | sort)"
+bash "$TARGET" --repo-root "$FIX_NONE" >/dev/null 2>&1
+after="$(cd "$FIX_NONE" && git status --porcelain | sort)"
+[ "$before" = "$after" ] &&
+  ok "T6 leaves the working tree untouched" ||
+  bad "T6 MUTATED the working tree"
+
+echo ""
+echo "  passed: $PASS   failed: $FAIL"
+[ "$FAIL" -eq 0 ] || exit 1
+echo "✅ test-impact-shadow-selftest: all assertions passed"
+exit 0

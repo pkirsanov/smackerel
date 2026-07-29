@@ -312,6 +312,8 @@ bubbles/scripts/strict-terminal-status-guard.sh
 bubbles/scripts/super-surface-selftest.sh
 bubbles/scripts/test-impact-plan-selftest.sh
 bubbles/scripts/test-impact-plan.sh
+bubbles/scripts/test-impact-shadow-selftest.sh
+bubbles/scripts/test-impact-shadow.sh
 bubbles/scripts/tool-capture-shim-selftest.sh
 bubbles/scripts/tool-capture-shim.sh
 bubbles/scripts/tool-log-selftest.sh
