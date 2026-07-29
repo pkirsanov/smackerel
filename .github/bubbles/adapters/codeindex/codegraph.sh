@@ -163,6 +163,21 @@ case "$VERB" in
     require_provider
     run_provider "$CG_BIN" query "" --kind route --limit "${CODEINDEX_LIMIT:-5000}" --json
     ;;
+  indexed)
+    require_provider
+    # Which files does the index actually KNOW about, and which of those carry
+    # graph nodes? A changed file with nodeCount == 0 — shell, YAML, Markdown, or
+    # any language this provider cannot parse — participates in no edges, so NO
+    # dependent can ever be derived from it.
+    #
+    # Without this, a consumer cannot tell "nothing indexable changed" apart from
+    # "the graph missed an edge", and those demand OPPOSITE reactions: the first
+    # is correct and boring, the second is a correctness risk. That exact
+    # ambiguity produced a false alarm during validation — a shadow report of
+    # "0 affected, would skip 100%" looked like a graph gap when the only changed
+    # file was a shell script the provider cannot parse.
+    run_provider "$CG_BIN" files --json
+    ;;
   status)
     require_provider
     run_provider "$CG_BIN" status --json
@@ -238,7 +253,7 @@ case "$VERB" in
   selftest)
     # Canonical shapes, provider-free, for offline shape validation.
     case "${1:-}" in
-      symbols|impact|affected|routes) echo '[]'; exit 0 ;;
+      symbols|impact|affected|routes|indexed) echo '[]'; exit 0 ;;
       status|freshness|sync) echo '{}'; exit 0 ;;
       *) die "selftest requires a known verb" ;;
     esac

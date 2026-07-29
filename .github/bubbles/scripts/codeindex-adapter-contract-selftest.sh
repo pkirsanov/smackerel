@@ -112,7 +112,7 @@ echo "Part A2 — declared selftest shapes"
 for adapter in "$ADAPTER_DIR"/*.sh; do
   [ -f "$adapter" ] || continue
   name="$(basename "$adapter" .sh)"
-  for verb in symbols impact affected routes; do
+  for verb in symbols impact affected routes indexed; do
     out="$(bash "$adapter" selftest "$verb" 2>/dev/null)"
     printf '%s' "$out" | assert_shape array &&
       ok "$name selftest $verb declares an array" ||
@@ -196,11 +196,11 @@ else
   # identical object-instead-of-array defect that `affected` had, this suite
   # reported 37/37 while the bug was live in four repositories. A verb that is
   # not listed cannot fail loudly; the omission WAS the bug.
-  LIVE_RECORD_VERBS="routes symbols impact"
+  LIVE_RECORD_VERBS="routes symbols impact indexed"
   for verb in $LIVE_RECORD_VERBS; do
     case "$verb" in
-      routes) out="$(bash "$CGA" routes 2>/dev/null)" ;;
-      *)      out="$(bash "$CGA" "$verb" Handler 2>/dev/null)" ;;
+      routes|indexed) out="$(bash "$CGA" "$verb" 2>/dev/null)" ;;
+      *)              out="$(bash "$CGA" "$verb" Handler 2>/dev/null)" ;;
     esac
     n="$(printf '%s' "$out" | python3 -c '
 import sys, json
@@ -225,7 +225,7 @@ except Exception:
   # in the live coverage above. This is the check that would have caught the
   # missing `impact` case without anyone noticing the omission by eye.
   declared=""
-  for v in symbols impact affected routes status freshness sync; do
+  for v in symbols impact affected routes indexed status freshness sync; do
     bash "$CGA" selftest "$v" >/dev/null 2>&1 && declared="$declared $v"
   done
   covered="$LIVE_RECORD_VERBS status affected freshness sync"

@@ -35,8 +35,9 @@ selftest that runs with no provider installed.
 
 ## The contract
 
-Seven verbs. Four return a JSON **array** of records; `status`, `freshness`, and
-`sync` return a JSON **map**. Neutral empty values are `[]` and `{}`.
+Eight verbs. Four return a JSON **array** of records; `status`, `freshness`, and
+`sync` return a JSON **map**; `indexed` returns an **array** of file records.
+Neutral empty values are `[]` and `{}`.
 
 | Verb | Args | Shape | Neutral | Answers |
 |---|---|---|---|---|
@@ -44,9 +45,19 @@ Seven verbs. Four return a JSON **array** of records; `status`, `freshness`, and
 | `impact` | `<symbol>` | array | `[]` | blast radius — what breaks if this changes |
 | `affected` | `<file>...` | array | `[]` | which tests can this diff actually reach |
 | `routes` | — | array | `[]` | full route/endpoint inventory |
+| `indexed` | — | array | `[]` | **which files carry graph nodes** (see below) |
 | `status` | — | map | `{}` | index health and statistics |
 | `freshness` | — | map | `{}` | **is the index still true?** (see exit 2) |
 | `sync` | — | map | `{}` | bring a stale index up to date (only mutating verb) |
+
+`indexed` exists to disambiguate an empty result. "Zero affected tests" has two
+causes that demand opposite reactions: nothing graph-participating changed
+(correct and boring), or the graph missed an edge (a correctness risk). They look
+identical in a subset count. Each record carries a `nodeCount`; **`nodeCount == 0`
+means the file is known to the index but carries no symbols**, so it can never
+yield a dependent. A consumer that reports a would-skip percentage without this
+triage will raise false alarms — and, worse, teach its readers to ignore real ones.
+
 
 `<file>` arguments are **repo-relative** — relative to `CODEINDEX_ROOT`, not to
 the caller's CWD. The adapter may be invoked from anywhere in a multi-root
