@@ -251,7 +251,11 @@ case "$VERB" in
     "$CG_BIN" sync --quiet >/dev/null 2>&1 ||
       die "provider sync failed: $CG_BIN sync --quiet"
     # Report the post-sync state so a caller can confirm the heal actually took.
-    exec "$0" freshness
+    # Re-entered via `bash`, not `exec "$0"`: every other verb is invoked as
+    # `bash <adapter>` and so never needs the file's own executable bit, which
+    # made `sync` the only verb that could fail with an opaque exit 126 wherever
+    # an install path drops modes (archive extraction, `cp` without -p, COPY).
+    exec bash "$0" freshness
     ;;
   capabilities)
     # This provider implements every contract verb against a real provider
