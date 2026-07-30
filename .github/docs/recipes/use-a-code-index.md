@@ -5,11 +5,15 @@ question — "does anything actually reach this endpoint?", "which tests can thi
 diff touch?", "what breaks if I change this?" — by grepping, or by consulting a
 list somebody maintains by hand.
 
-> **Consumer status:** this adapter layer ships **INERT**. Unlike the
-> observability adapters, **no framework consumer is wired yet**. Opting in
-> today gives you a uniform CLI surface for your own repo-local gates and lints;
-> it does not change any Bubbles behavior. Treat that as the honest state, not
-> as a soon-to-land promise.
+> **Consumer status:** one framework consumer is wired —
+> [`test-impact-shadow.sh`](../../bubbles/scripts/test-impact-shadow.sh) — and it
+> is deliberately **ADVISORY ONLY**. It reports the test subset a code index
+> *would* have selected so you can compare it against reality; it never skips a
+> test, never gates, and no exit code it returns encodes "safe to skip". No
+> gating consumer exists. Opting in today gives you a uniform CLI surface for
+> your own repo-local gates and lints plus that shadow report; it does not
+> change any pass/fail Bubbles behavior. Treat that as the honest state, not as
+> a soon-to-land promise.
 
 ---
 
@@ -36,8 +40,14 @@ mutations. The audit was not wrong about what it measured; it was wrong that
 |---------|--------------|----------|
 | `none` | Every verb returns its neutral empty value (`[]` / `{}`). Safe default. | — |
 | `codegraph` | Wraps the `codegraph` CLI (local tree-sitter → SQLite; no API key, no network) | `codegraph` on PATH or `CODEINDEX_CODEGRAPH_BIN`, plus an index in the repo |
+| `codebase-memory` | Wraps the `codebase-memory-mcp` CLI (MIT, single static binary, local-only). **Parses shell**, which `codegraph` does not — so it is the only provider that can see this framework's own source. Declares `affected` and `freshness` *unsupported* rather than approximating them. | `codebase-memory-mcp` on PATH or `CODEINDEX_CODEBASE_MEMORY_BIN`, plus `python3` |
 
-Live in `bubbles/adapters/codeindex/<name>.sh`. The contract is 5 verbs:
+Providers are not interchangeable, and the differences are load-bearing: pick
+`codegraph` when you need test-impact or a real freshness signal, and
+`codebase-memory` when you need shell coverage. Ask any adapter what it actually
+supports with `capabilities` instead of assuming.
+
+Live in `bubbles/adapters/codeindex/<name>.sh`. The contract is 8 verbs:
 
 | Verb | Args | Shape | Answers |
 |------|------|-------|---------|
@@ -45,7 +55,27 @@ Live in `bubbles/adapters/codeindex/<name>.sh`. The contract is 5 verbs:
 | `impact` | `<symbol>` | array | blast radius — what breaks if this changes |
 | `affected` | `<file>...` | array | which tests can this diff actually reach |
 | `routes` | — | array | full route/endpoint inventory |
-| `status` | — | map | index freshness and health |
+| `indexed` | — | array | which files the index actually covers |
+| `status` | — | map | index health |
+| `freshness` | — | map | is the index current (**exit 2 = STALE**) |
+| `sync` | — | map | bring the index up to date |
+
+Plus two non-fact verbs: `selftest <verb>` (provider-free shape check) and
+`capabilities` (a map of verb → `native` \| `derived` \| `unsupported`).
+
+### The exit codes are the contract
+
+| Exit | Means |
+|------|-------|
+| `0` + records | facts |
+| `0` + `[]` / `{}` | **indexed, and genuinely found nothing** |
+| `2` | `freshness` only — the index is STALE |
+| `1` | **could not look** — no provider, no index, verb unsupported |
+
+Conflating `0` + `[]` with `1` is the single trap this seam exists to prevent:
+the first means "I checked, there is nothing", the second means "I could not
+check". A consumer that treats them alike will report clean on an unindexed
+repository. An adapter that cannot determine freshness MUST exit `2`, never `0`.
 
 ---
 
@@ -110,14 +140,32 @@ bash .github/bubbles/scripts/codeindex-resolve.sh --repo-root . --names-only
 bash .github/bubbles/adapters/codeindex/codegraph.sh status
 ```
 
-**6. Use it.** Two starting points, in order of payoff:
+**6. Use it.** Start with `affected`, and run it in shadow before trusting it:
 
 - **Impact-aware validation.** If your repo has no `testImpact:` map, every
   change runs the full suite. `affected` derives the mapping from the real
-  dependency graph instead of asking someone to maintain it.
-- **Orphan / reachability checks.** If your repo has a written "every endpoint
-  must have a consumer" policy with no mechanical enforcement, `routes` plus
-  `impact` turns that prose into a check.
+  dependency graph instead of asking someone to maintain it. Run
+  [`test-impact-shadow.sh`](../../bubbles/scripts/test-impact-shadow.sh)
+  alongside the real suite first and keep a divergence log; it never gates, and
+  no exit code it returns means "safe to skip". Promote to gating only after
+  that log stays empty. Measured on an 8,276-file Go+TS repo: one changed file
+  selected 141 of 1,793 tests — a *candidate* 92% skip, not a result.
+- **Blast radius before a change.** `impact` and `symbols` answer "what calls
+  this" far better than grep, need no freshness beyond a sync, and nothing gates
+  on them — so they are safe to adopt on day one.
+- **Coverage-claim honesty.** `indexed` reports which files the index actually
+  covers, so a gate can refuse to claim "all" beyond its own scope — the exact
+  defect class in *Why this exists* above.
+
+> **Do NOT use `routes` for orphan-endpoint detection.** It is the obvious
+> reading of this seam and it does not work on either shipped provider. Measured
+> on a Go+TS repo, codegraph's 955 `route` nodes are frontend React-Router
+> entries and *test-file* routes, not backend HTTP handlers; a Go repo using
+> chi's nested `r.Route()` yields fragments like `ANY /` because the mount-prefix
+> chain is never reconstructed. `codebase-memory` is no better: route
+> `file_path` is empty and only 34 of 1,427 routes carry a `HANDLES` edge.
+> Closing an "every endpoint must have a consumer" policy mechanically needs
+> language-aware router-tree analysis that neither provider performs today.
 
 **To reverse everything:** `codegraph uninit --force`, remove the
 `.gitignore`/exclude line, `rm -rf ~/.cache/codegraph-eval`, and set
@@ -174,7 +222,9 @@ See [skill: bubbles-code-index-adapter](../../skills/bubbles-code-index-adapter/
 
 Short version:
 1. Create `bubbles/adapters/codeindex/<name>.sh`, `chmod +x`.
-2. Implement all 5 verbs plus `selftest <verb>` in a `case` statement.
+2. Implement all 8 verbs plus `selftest <verb>` and `capabilities` in a `case`
+   statement. A verb you cannot support honestly should report `unsupported` in
+   `capabilities` and exit 1 — never return a confident approximation.
 3. Normalize provider output to the canonical shapes — never pass a raw
    provider envelope through.
 4. Fail loud (exit 1) when the provider or index is missing. No auto-install,

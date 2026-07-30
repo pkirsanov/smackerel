@@ -56,7 +56,7 @@ Options:
 Project config (project-owned, never framework-managed):
 
   codeIndex:
-    adapter: none | codegraph
+    adapter: none | codegraph | codebase-memory
 EOF
 }
 
@@ -120,7 +120,7 @@ fi
 # traverse out of the adapter directory.
 case "$ADAPTER" in
   *[!a-z0-9-]* | '' | -*)
-    fail "invalid codeIndex.adapter '$ADAPTER' (expected a lowercase token such as none or codegraph)"
+    fail "invalid codeIndex.adapter '$ADAPTER' (expected a lowercase token such as none, codegraph or codebase-memory)"
     ;;
 esac
 

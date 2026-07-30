@@ -709,23 +709,32 @@ bash bubbles/scripts/cli.sh sunnyvale <alias>        # Resolve a Sunnyvale alias
 bash bubbles/scripts/cli.sh aliases                  # List all Sunnyvale aliases
 ```
 
-**What it does:** Validates the Bubbles installation is complete and correct.
+**What it does:** Validates that the Bubbles installation is complete and correct, then reports non-blocking advisories.
 
 ```bash
 bash bubbles/scripts/cli.sh doctor
 bash bubbles/scripts/cli.sh doctor --heal
 ```
 
-**Checks:**
-- Required files exist (agents, scripts, prompts, workflows.yaml)
-- Project config files exist (copilot-instructions.md, constitution.md, agents.md)
-- No unfilled TODO markers in project config
-- Git hooks installed and current
-- Governance version matches installed version
-- Custom gate scripts exist and are executable
-- Generated docs up-to-date
+**Checks (affect the exit code):**
+- Required framework files exist (agents, governance scripts, `workflows.yaml`, control-plane policy registry)
+- Scripts are executable and a version stamp is present
+- Portable surfaces pass the agnosticity lint
+- Workflow registry and documented control-plane surfaces agree
+- Agent instruction budgets are within the hard limit
+- Runtime lease registry is readable and conflict-free
+- Downstream only: framework-managed files still match install provenance
+- Project config files, `specs/`, and custom gate scripts exist
+- The golden-task corpus still certifies against the reference output
 
-When `--heal` is used, auto-fixes what it can.
+**Advisories (never change the exit code):**
+- Framework drift vs the release manifest, governance hub snapshot, worktree hygiene
+- Hook health: hooks installed, Bubbles-managed, and — in the framework source repo — `pre-push` still carrying the framework-validate guard
+- Adoption profile progress and project-readiness gaps
+- Dependency posture, bundle cost, gate obsolescence
+- Observability posture (G098/G099) and the depth-1 subagent assumption (G064)
+
+Plain `doctor` is read-only. `--heal` is the only mutating form: it chmods scripts, creates `specs/`, generates the project scan config, and reaps merged/prunable/experiment worktrees. The summary reports `N passed, N failed, N advisory`, where the advisory count equals the number of warnings printed above it.
 
 ### 4. Git Hooks Management
 

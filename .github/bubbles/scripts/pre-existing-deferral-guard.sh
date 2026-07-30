@@ -230,6 +230,17 @@ BEGIN {
   wp[++wp_count] = "FIXME:"
   wp[++wp_count] = "HACK:"
   wp[++wp_count] = "STUB:"
+
+  # Certifying-window membership: the caller passes (via -v cw_files) the
+  # newline-joined list of report.md targets that carry EXACTLY ONE
+  # <!-- bubbles:certifying-window-begin --> marker. In those files the
+  # frozen prior-window history (every line BEFORE the out-of-fence marker)
+  # is dropped before phrase matching, mirroring artifact-lint.sh Check 3.
+  # scope.md targets are never members, so they are always fully scanned.
+  cw_n = split(cw_files, cw_arr, "\n")
+  for (cw_i = 1; cw_i <= cw_n; cw_i++) {
+    if (cw_arr[cw_i] != "") is_cw[cw_arr[cw_i]] = 1
+  }
 }
 
 function reset_state() {
@@ -238,8 +249,19 @@ function reset_state() {
 }
 
 # Awk built-in NR resets per-file when using ENDFILE handler. We
-# instead reset on every FNR == 1.
-FNR == 1 { reset_state() }
+# instead reset on every FNR == 1. before_window engages ONLY for report.md
+# targets that carry exactly one certifying-window marker (see BEGIN).
+FNR == 1 { reset_state(); before_window = (FILENAME in is_cw) ? 1 : 0 }
+
+# Certifying-window pre-marker suppression (report.md single-marker only),
+# mirroring artifact-lint.sh Check 3. While before_window is set we still
+# track fences so the marker is honored only OUT of a code fence, then drop
+# every pre-marker line (including the marker line itself). Once the marker
+# is seen, before_window clears and post-marker lines fall through to the
+# normal exempt/fence/active rules — current-window enforcement is unchanged.
+before_window && /^[[:space:]]*```/ { in_fence = !in_fence; next }
+before_window && !in_fence && /<!-- bubbles:certifying-window-begin -->/ { before_window = 0; next }
+before_window { next }
 
 # H2 header detection. Anything starting with "## " is an H2; check
 # whether it is an exempt section header.
@@ -316,10 +338,37 @@ END {
 }
 '
 
+# Certifying-window boundary (report.md ONLY, opt-in, at most ONE per file),
+# mirroring artifact-lint.sh Check 3. A single out-of-fence
+# <!-- bubbles:certifying-window-begin --> marker freezes the prior-window
+# history region (every line BEFORE it) so a current-window transition does
+# not re-adjudicate already-validated history. INTEGRITY: opt-in PER FILE (a
+# marker-less report.md is scanned in full — no silent fleet-wide disable);
+# >1 marker is malformed/ambiguous and fails loud (exit 2, matching this
+# guard's exit-2 discipline); suppression applies to report.md targets ONLY
+# (scope.md is always fully scanned).
+CW_MARKER='<!-- bubbles:certifying-window-begin -->'
+CW_REPORT_FILES=""
+for _cw_target in "${TARGETS[@]}"; do
+  case "$_cw_target" in
+    */report.md)
+      _cw_count="$(grep -cF -- "$CW_MARKER" "$_cw_target" 2>/dev/null || true)"
+      if [[ "$_cw_count" -gt 1 ]]; then
+        echo "pre-existing-deferral-guard: multiple certifying-window markers ($_cw_count) in $_cw_target — at most one is allowed (it marks the single current certifying-window start)" >&2
+        exit 2
+      elif [[ "$_cw_count" -eq 1 ]]; then
+        CW_REPORT_FILES="${CW_REPORT_FILES}${_cw_target}"$'\n'
+        _cw_line="$(grep -nF -- "$CW_MARKER" "$_cw_target" | head -1 | cut -d: -f1)"
+        info "skipped $((_cw_line - 1)) lines before certifying-window-begin (prior-window history) in $_cw_target"
+      fi
+      ;;
+  esac
+done
+
 # Run awk over all targets at once so we get a unified violations stream.
 # We capture the exit code separately to avoid losing it under set -e.
 set +e
-awk "$AWK_PROG" "${TARGETS[@]}" > "$VIOLATIONS_FILE" 2>/dev/null
+awk -v cw_files="$CW_REPORT_FILES" "$AWK_PROG" "${TARGETS[@]}" > "$VIOLATIONS_FILE" 2>/dev/null
 AWK_RC=$?
 set -e
 

@@ -7,16 +7,19 @@
 # either on PATH or via CODEINDEX_CODEGRAPH_BIN. NO default install path, NO
 # auto-install, NO network fetch — fail-fast instead.
 #
-# Verbs (all 5 are mandatory per the codeindex adapter contract):
+# Verbs (the 5 CORE verbs are mandatory per the codeindex adapter contract):
 #   symbols  <query>   → `codegraph query`    → JSON ARRAY of symbol records
 #   impact   <symbol>  → `codegraph impact`   → JSON ARRAY of affected records
 #   affected <file>... → `codegraph affected` → JSON ARRAY of test file paths
 #   routes             → `codegraph query --kind route` → JSON ARRAY of routes
 #   status             → `codegraph status`   → JSON MAP of index health
 #
-# Plus two contract EXTENSIONS:
+# Plus four contract EXTENSIONS:
+#   indexed            → JSON ARRAY of {path,nodeCount}; which files the index
+#                        knows about, and which of those carry graph nodes
 #   freshness          → JSON MAP; exit 0 fresh, 2 STALE, 1 cannot determine
 #   sync               → JSON MAP; re-syncs the index, then reports freshness
+#   capabilities       → JSON MAP of verb → native | derived | unsupported
 #
 # `freshness` exists because a stale index is the quiet failure mode: it returns
 # the right shape and plausible data derived from code that no longer exists.
@@ -250,11 +253,20 @@ case "$VERB" in
     # Report the post-sync state so a caller can confirm the heal actually took.
     exec "$0" freshness
     ;;
+  capabilities)
+    # This provider implements every contract verb against a real provider
+    # call, so all eight are declared `native`. Declaring them explicitly (as
+    # opposed to relying on the absent-means-native default) keeps the
+    # provider-neutral contract selftest exercising the FULL live surface here
+    # rather than silently skipping verbs.
+    printf '{"symbols":"native","impact":"native","affected":"native","routes":"native","indexed":"native","status":"native","freshness":"native","sync":"native"}\n'
+    exit 0
+    ;;
   selftest)
     # Canonical shapes, provider-free, for offline shape validation.
     case "${1:-}" in
       symbols|impact|affected|routes|indexed) echo '[]'; exit 0 ;;
-      status|freshness|sync) echo '{}'; exit 0 ;;
+      status|freshness|sync|capabilities) echo '{}'; exit 0 ;;
       *) die "selftest requires a known verb" ;;
     esac
     ;;
@@ -263,8 +275,10 @@ case "$VERB" in
 codegraph.sh — CodeGraph code-index adapter
 Usage: codegraph.sh <verb> [args...]
 Verbs: symbols <query> | impact <symbol> | affected <file>... | routes | status
+       indexed           (which files the index knows, and their node counts)
        freshness         (is the index behind the worktree?)
        sync              (bring the index back in line; the only mutating verb)
+       capabilities      (JSON map: verb -> native | derived | unsupported)
        selftest <verb>   (canonical shape, no provider needed)
 Env:   CODEINDEX_ROOT (default: $PWD), CODEINDEX_CODEGRAPH_BIN (default: codegraph),
        CODEINDEX_LIMIT, CODEINDEX_DEPTH

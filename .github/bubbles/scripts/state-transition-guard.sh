@@ -3319,11 +3319,48 @@ else
     fi
   done
 
-  # Also scan report files for deferral language
+  # Also scan report files for deferral language.
+  #
+  # Certifying-window boundary (report.md ONLY, opt-in, at most ONE per file),
+  # mirroring artifact-lint.sh Check 3: a single out-of-fence
+  # <!-- bubbles:certifying-window-begin --> marker splits report.md into a
+  # FROZEN prior-window history region (every line BEFORE the marker) and the
+  # current certifying window (every line AFTER it). Pre-marker lines are
+  # suppressed from this G040 scan — they were authored and validated in prior
+  # specialist rounds and the append-only audit rule forbids rewriting them, so
+  # a current-window transition MUST NOT re-adjudicate frozen prior history.
+  # INTEGRITY (mirrors artifact-lint exactly): the exemption is opt-in PER FILE
+  # (a marker-less report.md is enforced in FULL — the marker can never silently
+  # disable G040 fleet-wide); >1 marker fails loud (ambiguous window start) AND
+  # grants NO exemption (falls through to full enforcement); only report.md
+  # targets are affected (the scope.md scan above is unchanged); post-marker
+  # (current-window) enforcement is UNCHANGED and still strict.
+  deferral_strip_report_awk='
+    BEGIN { before_window = bw }
+    /^```/ || /^    ```/ { in_block = !in_block; next }
+    /<!-- bubbles:g040-skip-begin -->/ { skip = 1; next }
+    /<!-- bubbles:g040-skip-end -->/ { skip = 0; next }
+    !in_block && /<!-- bubbles:certifying-window-begin -->/ { before_window = 0; next }
+    !in_block && !skip && !before_window { print }
+  '
   for rpt_path in ${report_files[@]+"${report_files[@]}"}; do
     [[ -f "$rpt_path" ]] || continue
+
+    # Resolve the certifying-window posture for THIS report.md (report-only).
+    rpt_before_window=0
+    cw_marker_count="$(grep -cF -- '<!-- bubbles:certifying-window-begin -->' "$rpt_path" || true)"
+    if [[ "$cw_marker_count" -gt 1 ]]; then
+      # Ambiguous window start: fail loud AND grant no exemption — bw stays 0 so
+      # the whole file (pre-marker prose included) is fully enforced.
+      fail "Multiple <!-- bubbles:certifying-window-begin --> markers ($cw_marker_count) in ${rpt_path#$feature_dir/} — at most one is allowed (it marks the single current certifying-window start) (Gate G040)"
+    elif [[ "$cw_marker_count" -eq 1 ]]; then
+      rpt_before_window=1
+      cw_marker_line="$(grep -nF -- '<!-- bubbles:certifying-window-begin -->' "$rpt_path" | head -1 | cut -d: -f1)"
+      info "Skipped $((cw_marker_line - 1)) lines before <!-- bubbles:certifying-window-begin --> (prior-window history) in ${rpt_path#$feature_dir/} (Gate G040)"
+    fi
+
     report_deferral_hits="$({
-      awk "$deferral_strip_awk" "$rpt_path" | grep -iE "$deferral_pattern" | grep -viE "$deferral_exclusion_pattern" | wc -l || true
+      awk -v bw="$rpt_before_window" "$deferral_strip_report_awk" "$rpt_path" | grep -iE "$deferral_pattern" | grep -viE "$deferral_exclusion_pattern" | wc -l || true
     } || true)"
 
     if [[ "$report_deferral_hits" -gt 0 ]]; then

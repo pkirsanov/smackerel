@@ -102,7 +102,7 @@ Project-owned config, never framework-managed:
 ```yaml
 # .github/bubbles-project.yaml
 codeIndex:
-  adapter: codegraph      # or: none (default)
+  adapter: codegraph      # or: codebase-memory, none (default)
 ```
 
 Resolve it:
@@ -124,14 +124,20 @@ Resolution rules that matter:
 ## Adding a provider adapter
 
 1. Create `bubbles/adapters/codeindex/<provider>.sh`, `chmod +x`.
-2. Implement all five verbs plus `selftest <verb>`.
+2. Implement all eight verbs plus `selftest <verb>` and `capabilities`.
 3. Normalize provider output to the canonical shapes — never pass a raw
    provider envelope through.
 4. Fail loud on missing provider/index (exit 1). No auto-install, no network
    fetch, no default binary path.
 5. Force provider telemetry **off** if the provider ships it on by default.
-6. Add the provider to the selftest's contract sweep and confirm all five verb
+6. Add the provider to the selftest's contract sweep and confirm all verb
    selftests pass with no provider installed.
+7. Declare any verb you cannot support honestly as `unsupported` in
+   `capabilities` and exit 1 for it. Do **not** approximate. A plausible-looking
+   wrong answer is worse than a refusal: an `affected` derivation that returns 6
+   test files when the true blast radius is 1,193 will be trusted, and the 1,187
+   skipped tests fail silently. Refusal degrades the consumer to the full suite,
+   which is merely slow.
 
 ## Choosing a provider
 
@@ -192,8 +198,14 @@ Both are **advisory** and both must degrade cleanly on `none` or exit 1:
 1. **Reachability nudges (integration-completeness family).** "Every shipped
    artifact has a real consumer" is a graph-reachability question. Where it is
    currently satisfied by an existence check plus authoring discipline, an
-   `impact`/`routes` derivation can surface artifacts with no inbound edge as a
+   `impact` derivation can surface artifacts with no inbound edge as a
    nudge — never as the verdict.
+   **`routes` does NOT close this today**, on either shipped provider. Measured:
+   codegraph's route nodes on a Go+TS repo are frontend router entries and
+   test-file routes rather than backend handlers, a chi-nested Go router yields
+   bare fragments (`ANY /`) because the mount-prefix chain is not reconstructed,
+   and `codebase-memory` emits an empty route `file_path` with a `HANDLES` edge
+   on a small minority of routes. Treat `routes` as a rough inventory only.
 2. **Impact-aware validation planning.** Where a test-impact map is
    hand-maintained (or absent, in which case the full suite always runs),
    `affected` derives the same mapping from the real dependency graph.
@@ -212,7 +224,8 @@ A derived fact is still a claim. When a consumer reports one:
 
 ## See also
 
-- `bubbles/adapters/codeindex/` — `none.sh` (default), provider adapters
+- `bubbles/adapters/codeindex/` — `none.sh` (default), `codegraph.sh`,
+  `codebase-memory.sh` (the only provider that parses shell)
 - `bubbles/scripts/codeindex-resolve.sh` — resolver
 - `bubbles/scripts/codeindex-resolve-selftest.sh` — hermetic contract selftest
 - `bubbles-observability-adapter` — the adapter pattern this mirrors

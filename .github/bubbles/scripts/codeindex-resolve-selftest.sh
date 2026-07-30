@@ -162,17 +162,37 @@ esac
 bash "$ADAPTERS/codegraph.sh" bogusverb >/dev/null 2>&1
 assert_exit "T15 codegraph.sh unknown verb exits 1" "$?" 1
 
-# ── T16: every adapter implements all 5 contract verbs via selftest ─────────
+# ── T16: every adapter implements all 8 contract verbs via selftest ─────────
+# The contract is EIGHT verbs, not five. This loop previously checked only
+# symbols/impact/affected/routes/status, so `indexed`, `freshness` and `sync`
+# — the three that carry the staleness and indexability signals — could be
+# dropped by a new adapter without any selftest noticing.
 for adapter in "$ADAPTERS"/*.sh; do
   name="$(basename "$adapter")"
   missing=''
-  for v in symbols impact affected routes status; do
+  for v in symbols impact affected routes indexed status freshness sync; do
     bash "$adapter" selftest "$v" >/dev/null 2>&1 || missing="$missing $v"
   done
   if [ -z "$missing" ]; then
-    ok "T16 $name implements all 5 contract verbs"
+    ok "T16 $name implements all 8 contract verbs"
   else
     bad "T16 $name missing verb selftest:$missing"
+  fi
+done
+
+# ── T17: `capabilities` is OPTIONAL, but must be a JSON map when present ────
+# An adapter may decline to declare capabilities (absent ⇒ no restrictions
+# claimed). What it may NOT do is emit something a consumer would misread —
+# an array, or a bare token — so the shape is checked whenever it is offered.
+for adapter in "$ADAPTERS"/*.sh; do
+  name="$(basename "$adapter")"
+  if OUT="$(bash "$adapter" capabilities 2>/dev/null)"; then
+    case "$OUT" in
+      '{'*'}') ok "T17 $name capabilities emits a JSON map" ;;
+      *) bad "T17 $name capabilities must emit a JSON map, got: $OUT" ;;
+    esac
+  else
+    ok "T17 $name declines capabilities (optional verb)"
   fi
 done
 

@@ -1270,6 +1270,68 @@ PY
   } >> "$feature_dir/report.md"
 }
 
+emit_g040_cw_fixture() {
+  # G040 / Check 18 certifying-window fixture builder (report.md marker parity
+  # with artifact-lint.sh Check 3). Exercises the prior-window suppression added
+  # to the Check 18 report scan.
+  #
+  # Args:
+  #   feature_dir   — destination directory
+  #   marker_count  — number of <!-- bubbles:certifying-window-begin --> markers
+  #                   to emit (0, 1, or 2)
+  #   pre_prose     — narrative placed BEFORE the first marker (prior-window
+  #                   history region)
+  #   post_prose    — narrative placed AFTER the marker (current certifying
+  #                   window); pass "" to omit the current-window section
+  local feature_dir="$1"
+  local marker_count="$2"
+  local pre_prose="$3"
+  local post_prose="${4:-}"
+
+  emit_base_fixture "$feature_dir"
+  mutate_delivery_contract "$feature_dir/state.json"
+
+  # Promote to a delivery-completion (done) transition so Check 18 is active,
+  # mirroring emit_g040_fixture's status mutation.
+  python3 - "$feature_dir/state.json" <<'PY'
+import json
+import sys
+
+path = sys.argv[1]
+with open(path, encoding="utf-8") as handle:
+    data = json.load(handle)
+
+data["status"] = "done"
+cert = data.setdefault("certification", {})
+cert["status"] = "done"
+
+with open(path, "w", encoding="utf-8") as handle:
+    json.dump(data, handle, indent=2)
+    handle.write("\n")
+PY
+
+  {
+    echo ""
+    echo "## Prior-Window History"
+    echo ""
+    echo "$pre_prose"
+    if [[ "$marker_count" -ge 1 ]]; then
+      echo ""
+      echo "<!-- bubbles:certifying-window-begin -->"
+    fi
+    if [[ "$marker_count" -ge 2 ]]; then
+      echo ""
+      echo "<!-- bubbles:certifying-window-begin -->"
+    fi
+    if [[ -n "$post_prose" ]]; then
+      echo ""
+      echo "## Current Certifying Window"
+      echo ""
+      echo "$post_prose"
+    fi
+  } >> "$feature_dir/report.md"
+}
+
 mutate_execution_history_implausible() {
   local state_file="$1"
 
@@ -1461,6 +1523,10 @@ g040_neg_skip_markers_dir="$tmp_root/specs/924-g040-negative-skip-markers"
 g040_pos_skip_marker_outside_dir="$tmp_root/specs/925-g040-positive-skip-marker-outside"
 g040_neg_spec_063_excerpt_dir="$tmp_root/specs/926-g040-negative-spec-063-excerpt"
 g040_pos_strict_done_mixed_dir="$tmp_root/specs/927-g040-positive-strict-done-mixed"
+g040_cw_pre_skipped_dir="$tmp_root/specs/934-g040-cw-pre-marker-skipped"
+g040_cw_post_blocks_dir="$tmp_root/specs/935-g040-cw-post-marker-blocks"
+g040_cw_no_marker_dir="$tmp_root/specs/936-g040-cw-no-marker-full-enforcement"
+g040_cw_two_markers_dir="$tmp_root/specs/937-g040-cw-two-markers-fail-loud"
 g064_framework_root="$tmp_root/framework-g064"
 g064_feature_dir="$g064_framework_root/specs/902-transition-guard-selftest-unauthorized-workflow-runner"
 mkdir -p "$tmp_root/specs"
@@ -1569,6 +1635,21 @@ emit_g040_fixture "$g040_pos_strict_done_mixed_dir" "done" \
   echo "## Genuinely Deferred Item"
   echo "We punted to Phase 3 the entire migration of legacy adapters; that work was not done in this scope."
 } >> "$g040_pos_strict_done_mixed_dir/report.md"
+
+# G040 / Check 18 certifying-window boundary fixtures (report.md marker parity
+# with artifact-lint.sh Check 3). Four adversarial shapes: pre-marker deferral
+# is frozen prior-window history (skipped); post-marker deferral still blocks;
+# a marker-less report is enforced in full; two markers fail loud with no
+# exemption.
+emit_g040_cw_fixture "$g040_cw_pre_skipped_dir" 1 \
+  "Several action items were deferred to next sprint in the prior release cycle." ""
+emit_g040_cw_fixture "$g040_cw_post_blocks_dir" 1 \
+  "All prior-round work is complete and green." \
+  "One migration task was deferred to next sprint and is not done."
+emit_g040_cw_fixture "$g040_cw_no_marker_dir" 0 \
+  "Several action items were deferred to next sprint per planning notes." ""
+emit_g040_cw_fixture "$g040_cw_two_markers_dir" 2 \
+  "Several action items were deferred to next sprint in the prior release cycle." ""
 
 clone_framework_surface "$g064_framework_root"
 mkdir -p "$g064_framework_root/specs"
@@ -2575,6 +2656,37 @@ echo "Running G040 Check 18 — positive: status=done with mixed schema tokens A
 g040_pos_mixed_log="$tmp_root/g040-pos-mixed.log"
 run_capture "$g040_pos_mixed_log" bash "$GUARD_SCRIPT" "$g040_pos_strict_done_mixed_dir" >/dev/null
 assert_log_contains "$g040_pos_mixed_log" "deferral language hit" "G040 Check 18 BLOCKs under status=done when real deferral prose ('punted to Phase 3') accompanies schema followUp* tokens"
+
+# ----------------------------------------------------------------------------
+# G040 / Check 18 — certifying-window boundary (report.md marker parity with
+# artifact-lint.sh Check 3). Four adversarial cases prove the boundary is a
+# real audit-trail-preservation exemption and NOT a silent weakening:
+#   (1) a forbidden phrase BEFORE a single marker is SKIPPED (prior-window);
+#   (2) the SAME phrase AFTER the marker still BLOCKS (current-window strict);
+#   (3) a report with NO marker still enforces in FULL (pre-marker phrase blocks);
+#   (4) TWO markers fail loud AND grant no exemption (pre-marker phrase blocks).
+# ----------------------------------------------------------------------------
+echo "Running G040 Check 18 — certifying-window: pre-marker deferral is SKIPPED..."
+g040_cw_pre_log="$tmp_root/g040-cw-pre-skipped.log"
+run_capture "$g040_cw_pre_log" bash "$GUARD_SCRIPT" "$g040_cw_pre_skipped_dir" >/dev/null
+assert_log_not_contains "$g040_cw_pre_log" "deferral language hit" "G040 Check 18: deferral prose BEFORE a single certifying-window marker is frozen prior-window history (not re-adjudicated)"
+assert_log_contains "$g040_cw_pre_log" "before <!-- bubbles:certifying-window-begin --> (prior-window history)" "G040 Check 18: emits the prior-window skip info line (mirrors artifact-lint Check 3)"
+
+echo "Running G040 Check 18 — certifying-window: post-marker deferral still BLOCKS..."
+g040_cw_post_log="$tmp_root/g040-cw-post-blocks.log"
+run_capture "$g040_cw_post_log" bash "$GUARD_SCRIPT" "$g040_cw_post_blocks_dir" >/dev/null
+assert_log_contains "$g040_cw_post_log" "deferral language hit" "G040 Check 18: deferral prose AFTER the marker (current certifying window) still BLOCKS"
+
+echo "Running G040 Check 18 — certifying-window: NO marker enforces in full..."
+g040_cw_none_log="$tmp_root/g040-cw-no-marker.log"
+run_capture "$g040_cw_none_log" bash "$GUARD_SCRIPT" "$g040_cw_no_marker_dir" >/dev/null
+assert_log_contains "$g040_cw_none_log" "deferral language hit" "G040 Check 18: a marker-less report.md is enforced in FULL (the marker can never silently disable G040)"
+
+echo "Running G040 Check 18 — certifying-window: TWO markers fail loud (no exemption)..."
+g040_cw_two_log="$tmp_root/g040-cw-two-markers.log"
+run_capture "$g040_cw_two_log" bash "$GUARD_SCRIPT" "$g040_cw_two_markers_dir" >/dev/null
+assert_log_contains "$g040_cw_two_log" "Multiple <!-- bubbles:certifying-window-begin --> markers" "G040 Check 18: >1 certifying-window marker fails loud (ambiguous window start)"
+assert_log_contains "$g040_cw_two_log" "deferral language hit" "G040 Check 18: ambiguous (>1 marker) report grants NO exemption — pre-marker deferral still BLOCKS (full enforcement)"
 
 # ----------------------------------------------------------------------------
 # Check 14 — Implementation Completeness: word-boundary TODO/FIXME/HACK/STUB scan
