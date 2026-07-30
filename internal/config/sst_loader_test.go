@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"runtime"
 	"testing"
+
+	"github.com/smackerel/smackerel/internal/testsupport/configgen"
 )
 
 // Spec 051 SCN-051-S02 / FR-051-005 — Go driver for the SST-loader
@@ -34,7 +36,10 @@ func TestSSTLoader_RejectsDevPostgresPassword_SelfHosted(t *testing.T) {
 	scriptPath := filepath.Join(repoRoot, "scripts", "commands", "config_secret_rejection_test.sh")
 
 	cmd := exec.Command("bash", scriptPath)
-	cmd.Env = append(cmd.Environ(), "REPO_ROOT="+repoRoot, "SMACKEREL_HARDWARE_TIER=cpu")
+	// configgen.HermeticEnv supplies the fail-loud inputs the SST loader
+	// requires and deliberately has no committed value for; the shell script
+	// inherits them when it invokes config.sh.
+	cmd.Env = append(append(cmd.Environ(), "REPO_ROOT="+repoRoot), configgen.HermeticEnv()...)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("SST loader shell test failed: %v\n--- output ---\n%s\n--- end ---", err, string(out))

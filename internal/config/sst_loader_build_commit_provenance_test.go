@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"runtime"
 	"testing"
+
+	"github.com/smackerel/smackerel/internal/testsupport/configgen"
 )
 
 // redteam F6 / BUG-029-008 — Go driver for the build-commit provenance shell
@@ -43,10 +45,6 @@ func TestSSTLoader_BuildCommitProvenance_BUG029008(t *testing.T) {
 	cmd := exec.Command("bash", scriptPath)
 	cmd.Env = append(cmd.Environ(),
 		"REPO_ROOT="+repoRoot,
-		// config.sh requires the hardware tier and is normally fed it by the
-		// smackerel.sh wrapper, which this direct exec bypasses. Mirrors the
-		// sibling sst_loader_self_hosted_runtime_env_test.go cmd.Env.
-		"SMACKEREL_HARDWARE_TIER=cpu",
 		// Make config.sh's `git -C "$REPO_ROOT" rev-parse` work under the Docker
 		// test surface (golang container runs as root; the host-owned /workspace
 		// mount otherwise trips git's "dubious ownership" guard). Test-harness
@@ -56,6 +54,10 @@ func TestSSTLoader_BuildCommitProvenance_BUG029008(t *testing.T) {
 		"GIT_CONFIG_KEY_0=safe.directory",
 		"GIT_CONFIG_VALUE_0=*",
 	)
+	// config.sh requires a hardware tier and an Ollama daemon URL and is
+	// normally fed both by the smackerel.sh wrapper, which this direct exec
+	// bypasses. Mirrors the sibling sst_loader_self_hosted_runtime_env_test.go.
+	cmd.Env = append(cmd.Env, configgen.HermeticEnv()...)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("BUG-029-008 build-commit provenance shell test failed: %v\n--- output ---\n%s\n--- end ---", err, string(out))

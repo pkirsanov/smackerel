@@ -82,6 +82,12 @@ func sstGuardSkipFile(path string) bool {
 	if strings.Contains(path, string(filepath.Separator)+"tests"+string(filepath.Separator)) {
 		return true
 	}
+	// Test-support packages: non-_test.go helpers that only test code may
+	// import. Verified test-only — a production import would fail the
+	// "no hardcoded Ollama values" contract this guard exists to enforce.
+	if strings.Contains(path, string(filepath.Separator)+"testsupport"+string(filepath.Separator)) {
+		return true
+	}
 	// Vendored / generated trees.
 	if strings.Contains(path, string(filepath.Separator)+".venv"+string(filepath.Separator)) {
 		return true

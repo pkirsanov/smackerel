@@ -71,6 +71,7 @@ import (
 	"testing"
 
 	"github.com/smackerel/smackerel/internal/config"
+	"github.com/smackerel/smackerel/internal/testsupport/configgen"
 	"gopkg.in/yaml.v3"
 )
 
@@ -215,9 +216,10 @@ func runConfigGenerate(t *testing.T, repoRoot, env, outputDir string, extraEnv .
 	// e.g. the A4 opt-out test) can run without needing cmd/ + go.mod + internal/
 	// in the sandbox repo root.
 	binEnv := []string{"SMACKEREL_CONFIG_VALIDATE_BIN=" + bundleSecretConfigValidateBin(t)}
-	// Spec 061 SCOPE-06c — config.sh requires SMACKEREL_HARDWARE_TIER (fail-loud
-	// per smackerel-no-defaults). Pin to cpu for deterministic bundle generation.
-	binEnv = append(binEnv, "SMACKEREL_HARDWARE_TIER=cpu")
+	// config.sh fail-loud inputs that have no committed value (smackerel-no-defaults):
+	// the hardware tier (Spec 061 SCOPE-06c) and the Ollama daemon URL. Pinned via
+	// the shared helper so bundle generation stays deterministic and hermetic.
+	binEnv = append(binEnv, configgen.HermeticEnv()...)
 	cmd.Env = append(append(os.Environ(), binEnv...), extraEnv...)
 	out, err := cmd.CombinedOutput()
 	exitCode := 0
