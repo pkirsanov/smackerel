@@ -364,6 +364,118 @@ assert_exit "S6" 0
 assert_stdout_contains "S6" "PASS Gate G084"
 
 # -----------------------------------------------------------------------
+# S7 — Forbidden phrase BEFORE a single certifying-window marker in report.md
+#      is frozen prior-window history and is SKIPPED → exit 0 (mirrors
+#      artifact-lint.sh Check 3 opt-in prior-window exemption).
+# -----------------------------------------------------------------------
+echo "[S7] Pre-marker forbidden phrase in report.md should exit 0 (frozen prior-window)"
+S7_DIR="$(new_spec_dir s7-cw-pre-marker-skipped)"
+cat > "$S7_DIR/report.md" <<'EOF'
+# Report
+
+## Prior-Window History
+
+An earlier session recorded a pre-existing failure — out of session scope.
+
+<!-- bubbles:certifying-window-begin -->
+
+## Current Window
+
+All current-window evidence is complete and green.
+EOF
+run_guard "$S7_DIR"
+assert_exit "S7" 0
+assert_stdout_contains "S7" "PASS Gate G084"
+
+# -----------------------------------------------------------------------
+# S8 — The SAME phrase AFTER the marker (current window) still BLOCKS → exit 1
+#      (ADVERSARIAL: proves current-window strictness is intact).
+# -----------------------------------------------------------------------
+echo "[S8] Post-marker forbidden phrase in report.md should exit 1 (current-window strict)"
+S8_DIR="$(new_spec_dir s8-cw-post-marker-blocks)"
+cat > "$S8_DIR/report.md" <<'EOF'
+# Report
+
+## Prior-Window History
+
+All prior-round evidence is complete.
+
+<!-- bubbles:certifying-window-begin -->
+
+## Current Window
+
+This window still admits a pre-existing failure — out of session scope.
+EOF
+run_guard "$S8_DIR"
+assert_exit "S8" 1
+assert_stderr_contains "S8" "G084"
+
+# -----------------------------------------------------------------------
+# S9 — A marker-less report.md is enforced in FULL → exit 1 (ADVERSARIAL:
+#      the marker can never silently disable G084 fleet-wide).
+# -----------------------------------------------------------------------
+echo "[S9] Forbidden phrase with NO marker should exit 1 (marker-less = full enforcement)"
+S9_DIR="$(new_spec_dir s9-cw-no-marker)"
+cat > "$S9_DIR/report.md" <<'EOF'
+# Report
+
+## Notes
+
+An earlier session recorded a pre-existing failure — out of session scope.
+EOF
+run_guard "$S9_DIR"
+assert_exit "S9" 1
+assert_stderr_contains "S9" "G084"
+
+# -----------------------------------------------------------------------
+# S10 — TWO certifying-window markers are ambiguous → exit 2 (fail loud).
+# -----------------------------------------------------------------------
+echo "[S10] Two certifying-window markers should exit 2 (ambiguous window start)"
+S10_DIR="$(new_spec_dir s10-cw-two-markers)"
+cat > "$S10_DIR/report.md" <<'EOF'
+# Report
+
+## Prior-Window History
+
+An earlier session recorded a pre-existing failure — out of session scope.
+
+<!-- bubbles:certifying-window-begin -->
+
+<!-- bubbles:certifying-window-begin -->
+
+## Current Window
+
+Done.
+EOF
+run_guard "$S10_DIR"
+assert_exit "S10" 2
+assert_stderr_contains "S10" "multiple certifying-window markers"
+
+# -----------------------------------------------------------------------
+# S11 — A certifying-window marker in scope.md grants NO exemption
+#       (pre-marker suppression is report.md-only) → exit 1 (ADVERSARIAL:
+#       proves scope.md is always fully scanned).
+# -----------------------------------------------------------------------
+echo "[S11] Marker in scope.md grants no exemption (report.md-only) → exit 1"
+S11_DIR="$(new_spec_dir s11-cw-scope-md-no-exemption)"
+cat > "$S11_DIR/scopes/01-only-scope/scope.md" <<'EOF'
+# SCOPE-1
+
+## Implementation Plan
+
+An earlier note admits a pre-existing failure — out of session scope.
+
+<!-- bubbles:certifying-window-begin -->
+
+## Later
+
+Done.
+EOF
+run_guard "$S11_DIR"
+assert_exit "S11" 1
+assert_stderr_contains "S11" "G084"
+
+# -----------------------------------------------------------------------
 # Verdict
 # -----------------------------------------------------------------------
 

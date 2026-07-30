@@ -85,7 +85,23 @@ The `agnosticity-lint.sh --staged` pre-commit check detects project-specific con
 - `simplifier`: `implement-bootstrap.md`
 - `chaos`: `test-bootstrap.md`
 
-### Phase-Local Authoring Reference (opt-in bundle reduction)
+### Phase-Local Authoring Reference (opt-in bundle reduction) — SUPERSEDED 2026-07-29
+
+**⛔ DO NOT ACT ON THIS SECTION. Its premise was disproven; the reduction it
+describes is a no-op.** Retained for provenance, not as guidance. The corrected
+account is in the R3 block below.
+
+This section assumed the heavy authoring modules are "pinned into the
+orchestrator's always-loaded reference closure", and that the reduction "only
+changes WHEN the heavy text is loaded versus ALWAYS". **Neither is true.** A
+markdown link inside an `*.agent.md` body is just text; nothing inlines it, so
+the modules were ALREADY loaded on demand. A fresh `bubbles.workflow` session
+confirmed it holds "only the governance references that *point* to" 
+`scope-workflow.md` and never read its contents.
+
+So the proposed change moves a module from on-demand to on-demand. It frees
+nothing, while rewriting a `MANDATORY: Follow …` directive — the single edit R3
+names as its own motivating hazard. **Cost: real. Benefit: zero.**
 
 The heavy authoring modules — `project-config-contract.md`, `scope-workflow.md`, and `feature-templates.md` — are **phase-local / specialist-owned authoring reference**. They are load-bearing for the PLANNING and AUTHORING specialists (`bubbles.plan`, `bubbles.analyst`, `bubbles.design`, `bubbles.implement`), which need their full text to author specs, scopes, DoD templates, and artifact structure. An orchestrator that *purely routes* — selecting the next scope and dispatching to the owning specialist — does not need the full text of these modules pinned into its own always-loaded reference closure to make a routing decision.
 
@@ -110,6 +126,96 @@ The budget is **inert until a downstream repo configures it** in `.github/bubble
 **Measured baseline (for reference):** the largest orchestrator bundle is `bubbles.workflow` at **≈ 491,622 bytes** (measured with `effective-bundle-measure.sh`; note this closure includes `operating-baseline.md` itself, so this figure drifts slightly as the shared modules evolve). Its three heaviest shared modules are `project-config-contract.md` (54,949 B), `scope-workflow.md` (47,621 B), and `feature-templates.md` (20,545 B) — together **≈ 123 KB / ~25%** of the closure, all of it planning/authoring reference (see the Phase-Local Authoring Reference note above).
 
 **⚠️ A BLOCKING budget MUST only be set AFTER a held-out eval confirms no gate-detection regression (R3).** Setting `effectiveBundleBudget: block` before validating the reduction risks forcing an orchestrator below the point where it still loads a load-bearing contract. Start advisory, reduce via the phase-local seam, run the held-out eval, and only then consider making the budget blocking.
+
+**⚠️ UNVERIFIED PREMISE — check this before acting on any bundle figure.** Every
+number in this section, and `effective-bundle-measure.sh` itself, rests on the
+assertion in that script's header: *"an agent's effective loaded prompt is NOT
+just its agent.md — it is that file PLUS every shared contract it transitively
+references."* That is an assumption, not a measurement of runtime behaviour, and
+direct observation contradicts it.
+
+In a VS Code Copilot session (2026-07-29) the agent received `*.instructions.md`
+files inline — they carry `applyTo: "**"` — and skills as *descriptions plus
+paths*, to be fetched with `read_file` on demand. It did NOT receive
+`scope-workflow.md`, `project-config-contract.md`, or `feature-templates.md`
+inline. Those were read on demand, when needed.
+
+If that holds generally, the transitive closure measures **everything reachable
+by link**, not everything loaded — a different quantity, and probably a much
+larger one. A reduction chasing the closure figure would then be optimising a
+number that is not the context cost, while still changing the orchestrator's
+contract. It would also explain why the 160,000 B target never looked reachable.
+
+**Scope of this evidence:** first-person and behavioural, for `bubbles.goal`.
+That agent's file references `agent-common.md`, `operating-baseline.md`, and
+`scenario-compile.md` (4-module closure). The running session received **none**
+of their content — demonstrated, not asserted: when it needed R3's text it had to
+`grep` for it, and its first pattern missed. An agent cannot search for text it
+is already holding.
+
+The mechanism explains it. `applyTo: "**"` instruction files are inlined by an
+explicit VS Code feature. A markdown link inside an `*.agent.md` body is just
+text; nothing resolves or inlines it. The agent must call `read_file`. So the
+"transitive closure" is a documentation-linkage graph, not a prompt.
+
+**CONFIRMED for `bubbles.workflow` — 2026-07-29.** A fresh `bubbles.workflow`
+session was asked, without tools, to define the "Isolated Design-Experiment
+Contract" and the `contextFit` field from `scope-workflow.md`. It answered:
+
+> "That text is not in my context. I have not loaded `scope-workflow.md` from the
+> bubbles repo in this session. What I have is only the governance references
+> that *point* to it … the file's actual contents were never read."
+
+That is the measured agent, not an inference from another one, and it draws the
+exact distinction at issue: it holds the POINTERS, never the CONTENTS.
+
+**Therefore the closure is NOT the loaded prompt, and every byte figure in this
+section is a linkage measurement rather than a context cost.** Do NOT budget,
+reduce, or set `effectiveBundleBudget` against these numbers believing they are
+context. A reduction that moves an already-on-demand module frees nothing and
+only risks the routing behaviour R3 protects.
+
+**Measured 2026-07-29 — read this before attempting the reduction.** The three
+modules named above were analysed with `bubbles/scripts/gate-attribution.sh`
+(deterministic; resolves the closure and reports which modules are the SOLE
+carrier of a gate reference). Findings:
+
+| Question | Answer |
+|---|---|
+| Closure modules / gate ids referenced | 42 / 100 |
+| Gates with exactly one carrying module | 54 |
+| Moving all three to on-demand | frees 130,284 B, leaves **0 gates unreachable** |
+| Gates that become pointer-only | **7** — G005 G047 G048 G051 G199 G900 (`project-config-contract.md`), G037 (`scope-workflow.md`) |
+| Modules carrying no sole gate | 33, totalling 236,194 B |
+
+Use `gate-attribution.sh <agent.md> --ondemand <mods>` before ANY reduction. It
+decides reachability exactly and needs no model, so it is valid where a routing
+eval is unavailable. Reachability is necessary, NOT sufficient: it proves the
+agent CAN still reach a gate, never that it WILL load the module at the right
+moment. The 7 pointer-only gates above are the routing eval's priority cases —
+the other 93 keep an always-loaded carrier and are unaffected by construction.
+
+**The 160,000 B target is not reachable by this reduction.** 505,847 - 130,284 =
+375,563 B, still 215,563 B over. Closing that gap needs reducing the agent file
+itself (72,472 B) plus further on-demand moves, each with its own reachability
+and routing questions. Do not treat the three-module move as sufficient.
+
+**Two measurement traps, both hit for real while producing the numbers above.**
+A surrogate model reading the bundle over HTTP and listing gate ids does NOT
+satisfy R3 — it measures that model's text recall, not the orchestrator's
+routing, so its verdict is invalid at any context size. And an over-long prompt
+is silently truncated from the FRONT by some servers, which produced a
+reproducible-but-wrong result: determinism proved stability, never validity.
+Verify the instrument measures the intended subject before trusting its
+resolution.
+
+**Deduplication is not available here.** The anti-fabrication doctrine across
+`critical-requirements.md`, `agent-common.md`, `quality-gates.md` and
+`evidence-rules.md` was measured for redundancy: 68 distinct normative clauses,
+**0** appearing in more than one file; 55 gate ids, **2** shared. These files
+PARTITION the doctrine rather than repeat it. Their combined size is not
+duplicated content, and collapsing them would delete normative statements rather
+than dedupe them.
 
 ## Autonomous Operation
 

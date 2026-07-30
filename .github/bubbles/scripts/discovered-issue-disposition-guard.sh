@@ -155,9 +155,27 @@ fi
 
 # Scan report.md narrative (excluding the Discovered Issues table itself)
 if [[ -f "$report_md" ]]; then
-  # Strip the Discovered Issues section so we don't flag the table headers
+  # Certifying-window boundary (report.md, opt-in, at most ONE), mirroring
+  # artifact-lint.sh Check 3: a single out-of-fence
+  # <!-- bubbles:certifying-window-begin --> marker freezes the prior-window
+  # history region (every line BEFORE it), which the paragraph walk below must
+  # NOT re-adjudicate. INTEGRITY: opt-in per file (a marker-less report.md is
+  # scanned in full); >1 marker is malformed/ambiguous and fails loud (exit 2).
+  cw_count="$(grep -cF -- '<!-- bubbles:certifying-window-begin -->' "$report_md" 2>/dev/null || true)"
+  if [[ "$cw_count" -gt 1 ]]; then
+    echo "G095 ERROR: multiple certifying-window markers ($cw_count) in $report_md — at most one is allowed (it marks the single current certifying-window start)" >&2
+    exit 2
+  fi
+  # Strip the Discovered Issues table itself so we don't flag its headers, AND
+  # (when exactly one certifying-window marker is present) drop the frozen
+  # prior-window history region before the marker. Fences are tracked so the
+  # marker is honored only out-of-fence, matching artifact-lint.sh Check 3.
   tmp_report="$(mktemp)"
-  awk '
+  awk -v cw="$cw_count" '
+    BEGIN { before_window = (cw == 1) ? 1 : 0 }
+    before_window && /^[[:space:]]*```/ { in_fence = !in_fence; next }
+    before_window && !in_fence && /<!-- bubbles:certifying-window-begin -->/ { before_window = 0; next }
+    before_window { next }
     /^## Discovered Issues/ { skip=1; next }
     /^## / && skip { skip=0 }
     !skip { print }

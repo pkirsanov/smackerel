@@ -98,16 +98,49 @@ esac
 
 export CODEINDEX_ROOT="$REPO_ROOT"
 
+# --- capability probe --------------------------------------------------------
+# Verb support is NOT uniform across providers, and guessing produces actively
+# misleading failure text: a provider that cannot REPORT freshness is not the
+# same as an index that IS stale, and a provider without `affected` has not
+# "returned nothing". Ask the adapter what it supports. Absent or unparseable
+# output leaves every level "unknown", preserving the original behavior for any
+# adapter that predates this verb.
+CAPS_JSON="$(bash "$ADAPTER" capabilities 2>/dev/null || true)"
+[ -n "$CAPS_JSON" ] || CAPS_JSON='{}'
+
+cap_level() {
+  printf '%s' "$CAPS_JSON" | python3 -c '
+import sys, json
+try:
+    caps = json.load(sys.stdin)
+except Exception:
+    print("unknown"); raise SystemExit
+v = caps.get(sys.argv[1]) if isinstance(caps, dict) else None
+print(v if isinstance(v, str) and v else "unknown")
+' "$1" 2>/dev/null || echo unknown
+}
+
 # --- freshness gate ----------------------------------------------------------
 # A stale index yields a stale subset, and a stale subset looks exactly like a
 # fresh one. Self-heal, and degrade honestly if that is not possible.
-bash "$ADAPTER" freshness >/dev/null 2>&1
-fresh_rc=$?
-if [ "$fresh_rc" -eq 2 ]; then
-  bash "$ADAPTER" sync >/dev/null 2>&1 || emit_degraded "index is STALE and sync failed"
-  bash "$ADAPTER" freshness >/dev/null 2>&1 || emit_degraded "index still STALE after sync"
-elif [ "$fresh_rc" -ne 0 ]; then
-  emit_degraded "cannot determine index freshness (adapter exit $fresh_rc)"
+FRESHNESS_VERIFIED=true
+if [ "$(cap_level freshness)" = "unsupported" ]; then
+  # The provider cannot distinguish fresh from stale. Reporting "still STALE
+  # after sync" here would be a false claim — nothing is KNOWN to be stale.
+  # Force a resync so the graph is current as of now, and mark the report
+  # unverified rather than implying a freshness check that never happened.
+  FRESHNESS_VERIFIED=false
+  bash "$ADAPTER" sync >/dev/null 2>&1 ||
+    emit_degraded "provider cannot report freshness and the forced resync failed"
+else
+  bash "$ADAPTER" freshness >/dev/null 2>&1
+  fresh_rc=$?
+  if [ "$fresh_rc" -eq 2 ]; then
+    bash "$ADAPTER" sync >/dev/null 2>&1 || emit_degraded "index is STALE and sync failed"
+    bash "$ADAPTER" freshness >/dev/null 2>&1 || emit_degraded "index still STALE after sync"
+  elif [ "$fresh_rc" -ne 0 ]; then
+    emit_degraded "cannot determine index freshness (adapter exit $fresh_rc)"
+  fi
 fi
 
 # --- changed files -----------------------------------------------------------
@@ -186,6 +219,13 @@ for pat in "${TEST_PATTERNS[@]}"; do
 done
 
 # --- derived affected set ----------------------------------------------------
+# A provider may legitimately not implement `affected` — deriving a test subset
+# is the hardest verb and a wrong answer is worse than no answer. That is a
+# capability gap, not a malfunction, and must not be reported as one.
+if [ "$(cap_level affected)" = "unsupported" ]; then
+  emit_degraded "provider does not support 'affected' — no test subset is derivable from this index"
+fi
+
 # shellcheck disable=SC2086
 AFFECTED_JSON="$(printf '%s\n' "$CHANGED" | xargs -r bash "$ADAPTER" affected 2>/dev/null)"
 if [ -z "$AFFECTED_JSON" ]; then
@@ -213,8 +253,8 @@ else
 fi
 
 if [ "$AS_JSON" -eq 1 ]; then
-  printf '{"mode":"shadow","degraded":false,"adapter":"%s","changedFiles":%s,"indexableChanged":%s,"totalTests":%s,"affectedTests":%s,"wouldSkip":%s,"wouldSkipPct":%s,"gating":false}\n' \
-    "$(basename "$ADAPTER" .sh)" "$CHANGED_N" "$INDEXABLE_N" "$TOTAL_TESTS" "$AFFECTED_N" "$WOULD_SKIP" "$PCT"
+  printf '{"mode":"shadow","degraded":false,"adapter":"%s","changedFiles":%s,"indexableChanged":%s,"totalTests":%s,"affectedTests":%s,"wouldSkip":%s,"wouldSkipPct":%s,"freshnessVerified":%s,"gating":false}\n' \
+    "$(basename "$ADAPTER" .sh)" "$CHANGED_N" "$INDEXABLE_N" "$TOTAL_TESTS" "$AFFECTED_N" "$WOULD_SKIP" "$PCT" "$FRESHNESS_VERIFIED"
   exit 0
 fi
 
@@ -227,6 +267,12 @@ echo "  test inventory:      $TOTAL_TESTS"
 echo "  derived subset:      $AFFECTED_N"
 echo "  would skip:          $WOULD_SKIP  (${PCT}%)"
 echo ""
+if [ "$FRESHNESS_VERIFIED" != "true" ]; then
+  echo "  ⚠️  This provider cannot report index freshness, so a resync was forced"
+  echo "      rather than verified. The graph is current as of this run, but no"
+  echo "      freshness check confirmed it — treat the subset as UNVERIFIED."
+  echo ""
+fi
 if [ "$AFFECTED_N" -eq 0 ]; then
   if [ "$INDEXABLE_N" -gt 0 ] 2>/dev/null; then
     echo "  ⚠️  The derived subset is EMPTY while $INDEXABLE_N graph-participating"

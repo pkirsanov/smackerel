@@ -276,6 +276,102 @@ else
 fi
 
 # -----------------------------------------------------------------------
+# S9: pre-marker forbidden phrase is frozen prior-window history → exit 0
+#     (certifying-window boundary, report.md marker parity with
+#      artifact-lint.sh Check 3; opt-in prior-window exemption).
+# -----------------------------------------------------------------------
+s9="$(new_spec_dir s9-cw-pre-marker-skipped)"
+cat >"$s9/report.md" <<'EOF'
+# Report
+
+## Prior-Window History
+
+An earlier round left the currency rounding bug out of scope for that session.
+
+<!-- bubbles:certifying-window-begin -->
+
+## Current Window
+
+All current-window findings are dispositioned.
+EOF
+run_guard "$s9"
+if [[ "$RC" -eq 0 ]]; then
+  pass "S9 pre-marker 'out of scope' is frozen prior-window history (exit 0)"
+else
+  bad "S9 pre-marker deferral expected exit 0, got $RC"
+fi
+
+# -----------------------------------------------------------------------
+# S10: the SAME phrase AFTER the marker still BLOCKs → exit 1
+#      (ADVERSARIAL: current-window strictness intact).
+# -----------------------------------------------------------------------
+s10="$(new_spec_dir s10-cw-post-marker-blocks)"
+cat >"$s10/report.md" <<'EOF'
+# Report
+
+## Prior-Window History
+
+All prior rounds are complete.
+
+<!-- bubbles:certifying-window-begin -->
+
+## Current Window
+
+The currency rounding bug is out of scope for this session, so we left it.
+EOF
+run_guard "$s10"
+if [[ "$RC" -eq 1 ]]; then
+  pass "S10 post-marker 'out of scope' without disposition still BLOCKs (exit 1)"
+else
+  bad "S10 post-marker deferral expected exit 1, got $RC"
+fi
+
+# -----------------------------------------------------------------------
+# S11: a marker-less report.md is enforced in FULL → exit 1
+#      (ADVERSARIAL: the marker can never silently disable G095).
+# -----------------------------------------------------------------------
+s11="$(new_spec_dir s11-cw-no-marker)"
+cat >"$s11/report.md" <<'EOF'
+# Report
+
+## Test Evidence
+
+The currency rounding bug is out of scope for this session, so we left it.
+EOF
+run_guard "$s11"
+if [[ "$RC" -eq 1 ]]; then
+  pass "S11 marker-less report is enforced in FULL (exit 1)"
+else
+  bad "S11 marker-less deferral expected exit 1, got $RC"
+fi
+
+# -----------------------------------------------------------------------
+# S12: TWO certifying-window markers are ambiguous → exit 2 (fail loud).
+# -----------------------------------------------------------------------
+s12="$(new_spec_dir s12-cw-two-markers)"
+cat >"$s12/report.md" <<'EOF'
+# Report
+
+## Prior-Window History
+
+The currency rounding bug is out of scope for this session.
+
+<!-- bubbles:certifying-window-begin -->
+
+<!-- bubbles:certifying-window-begin -->
+
+## Current Window
+
+Done.
+EOF
+run_guard "$s12"
+if [[ "$RC" -eq 2 ]]; then
+  pass "S12 two certifying-window markers exit 2 (ambiguous window start)"
+else
+  bad "S12 two-marker report expected exit 2, got $RC"
+fi
+
+# -----------------------------------------------------------------------
 # Verdict
 # -----------------------------------------------------------------------
 echo

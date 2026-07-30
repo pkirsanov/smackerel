@@ -16,10 +16,17 @@
 #   routes                   → JSON array → neutral empty value: []
 #   status                   → JSON map   → neutral empty value: {}
 #   freshness                → JSON map   → neutral empty value: {}
+#   capabilities             → JSON map   → neutral empty value: {}
 #
 # `status` and `freshness` are MAPS (index health / staleness key -> value);
 # the other four are ARRAYS of records. This mirrors the observability adapter
 # contract, where fetch-alerts is an array and the remaining verbs are maps.
+#
+# NOTE on `capabilities`: an OPTIONAL declaration of which verbs a provider
+# actually supports (native / derived / unsupported). This adapter declares
+# NOTHING — the neutral empty map — because it supports every verb neutrally.
+# A consumer MUST treat an absent or empty declaration as "no restrictions
+# claimed", exactly as it did before the verb existed.
 #
 # NOTE on `freshness`: with no index configured there is nothing to be stale,
 # so this returns the neutral map and exits 0. It does NOT claim "fresh" — a
@@ -36,8 +43,9 @@ case "$VERB" in
     echo '[]'
     exit 0
     ;;
-  status|freshness)
-    # Index health / staleness normalize to a JSON MAP; neutral empty is {}.
+  status|freshness|capabilities)
+    # Index health / staleness / capability declaration normalize to a JSON
+    # MAP; neutral empty is {}.
     echo '{}'
     exit 0
     ;;
@@ -54,7 +62,7 @@ case "$VERB" in
     # provider installed. Lets a shape lint validate this adapter offline.
     case "${2:-}" in
       symbols|impact|affected|routes|indexed) echo '[]'; exit 0 ;;
-      status|freshness|sync) echo '{}'; exit 0 ;;
+      status|freshness|sync|capabilities) echo '{}'; exit 0 ;;
       *) echo "[none][ERROR] selftest requires a known verb" >&2; exit 1 ;;
     esac
     ;;
@@ -63,8 +71,9 @@ case "$VERB" in
 none.sh — no-op code-index adapter (framework default)
 Usage: none.sh <verb> [args...]
 Verbs: symbols <query> (-> []) | impact <symbol> (-> []) |
-       affected <file>... (-> []) | routes (-> []) | status (-> {}) |
-       freshness (-> {}) | sync (-> {}, no-op)
+       affected <file>... (-> []) | routes (-> []) | indexed (-> []) |
+       status (-> {}) | freshness (-> {}) | sync (-> {}, no-op) |
+       capabilities (-> {}, no restrictions claimed)
        selftest <verb> (-> canonical neutral shape)
 EOF
     exit 0

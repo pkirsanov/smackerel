@@ -1,10 +1,18 @@
 #!/usr/bin/env bash
 # Effective Prompt-Bundle Measurement (IMP-100 Phase 6 / IMP-020 S5 — AF-006)
 # ---------------------------------------------------------------------------
-# An agent's effective loaded prompt is NOT just its agent.md — it is that file
-# PLUS every shared contract it transitively references (agents/bubbles_shared/*.md).
-# This tool measures that closure so the real loaded bundle is observable (and can
-# be tracked / budgeted) instead of guessed from the agent file alone.
+# ⚠️ THIS TOOL MEASURES REACHABILITY, NOT LOADED CONTEXT. A prior version of this
+# header asserted that an agent's effective loaded prompt is its agent.md PLUS
+# every transitively referenced shared contract. That assertion was never measured
+# and is FALSE for the VS Code runtime: a markdown link inside an *.agent.md body
+# is just text, so the agent must call read_file. Confirmed 2026-07-29 — a fresh
+# bubbles.workflow session reported it holds the governance references that POINT
+# to scope-workflow.md but had never read its contents.
+#
+# What this tool reports is the transitive DOCUMENTATION-LINKAGE closure: how much
+# text an agent could reach by following its references. That is a useful surface
+# signal (sprawl, coupling, reachability), but it is NOT a context-window cost and
+# MUST NOT be budgeted as one. See agents/bubbles_shared/operating-baseline.md (R3).
 #
 # It resolves the transitive closure of `bubbles_shared/<name>.md` references
 # starting from the agent file (bounded, cycle-safe), and reports each file's

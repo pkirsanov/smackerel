@@ -177,17 +177,66 @@ echo ""
 echo "Part B — live adapter output vs declared shape"
 
 LIVE_ROOT="${CODEINDEX_SELFTEST_ROOT:-}"
-CG_BIN="${CODEINDEX_CODEGRAPH_BIN:-codegraph}"
+# WHICH adapter to exercise. Defaults to codegraph so existing operator wiring
+# keeps working, but this section is no longer CodeGraph-specific: it used to
+# probe for a `.codegraph` directory and the `codegraph` binary by name, which
+# meant a second provider could never be live-tested at all.
+LIVE_ADAPTER="${CODEINDEX_SELFTEST_ADAPTER:-codegraph}"
+ADAPTER_SH="$ADAPTER_DIR/$LIVE_ADAPTER.sh"
 
 if [ -z "$LIVE_ROOT" ]; then
   note "SKIP (set CODEINDEX_SELFTEST_ROOT to an indexed repository to enable)"
-elif [ ! -d "$LIVE_ROOT/.codegraph" ]; then
-  note "SKIP (no index at $LIVE_ROOT/.codegraph)"
-elif ! command -v "$CG_BIN" >/dev/null 2>&1; then
-  note "SKIP (provider '$CG_BIN' not on PATH)"
+elif [ ! -f "$ADAPTER_SH" ]; then
+  note "SKIP (no adapter '$LIVE_ADAPTER' at $ADAPTER_SH)"
+elif ! CODEINDEX_ROOT="$LIVE_ROOT" bash "$ADAPTER_SH" status >/dev/null 2>&1; then
+  # Availability is probed THROUGH THE CONTRACT rather than by looking for a
+  # provider-specific marker directory. `status` exiting 0 is precisely the
+  # contract's definition of "the index is reachable", so this works for any
+  # provider without the selftest knowing anything about its on-disk layout.
+  note "SKIP ($LIVE_ADAPTER status not reachable for $LIVE_ROOT — provider missing or repo not indexed)"
 else
-  CGA="$ADAPTER_DIR/codegraph.sh"
-  export CODEINDEX_ROOT="$LIVE_ROOT" CODEINDEX_CODEGRAPH_BIN="$CG_BIN"
+  CGA="$ADAPTER_SH"
+  export CODEINDEX_ROOT="$LIVE_ROOT"
+
+  # Capability declaration, if the adapter offers one. Absent ⇒ every verb is
+  # assumed native, which is exactly how this suite behaved before the verb
+  # existed. This is what lets an honestly-partial provider be live-tested for
+  # what it DOES support, while still being held to failing loudly on what it
+  # does not — rather than the suite either failing it wholesale or skipping it.
+  CAPS="$(bash "$CGA" capabilities 2>/dev/null || echo '{}')"
+  cap_of() {
+    printf '%s' "$CAPS" | CAP_VERB="$1" python3 -c '
+import json, os, sys
+try:
+    d = json.load(sys.stdin)
+except Exception:
+    d = {}
+if not isinstance(d, dict):
+    d = {}
+print(d.get(os.environ["CAP_VERB"], "native"))
+' 2>/dev/null || echo native
+  }
+
+  # An UNSUPPORTED verb still has a contract: it must fail loudly, never emit a
+  # neutral [] or {}. "I cannot do this" and "I looked and found nothing" must
+  # stay distinguishable, which is the whole point of the exit-code contract.
+  assert_unsupported() {
+    local verb="$1" expect_rc="$2" out rc
+    shift 2
+    out="$(bash "$CGA" "$verb" "$@" 2>/dev/null)"
+    rc=$?
+    case "$out" in
+      '[]' | '{}')
+        bad "unsupported $verb emitted a NEUTRAL value — indistinguishable from a real empty result"
+        return
+        ;;
+    esac
+    if [ "$rc" -eq "$expect_rc" ]; then
+      ok "unsupported $verb fails loudly with the contract exit ($rc)"
+    else
+      bad "unsupported $verb exited $rc, want $expect_rc"
+    fi
+  }
 
   # EVERY record verb, ENUMERATED — never hand-picked.
   #
@@ -198,6 +247,13 @@ else
   # not listed cannot fail loudly; the omission WAS the bug.
   LIVE_RECORD_VERBS="routes symbols impact indexed"
   for verb in $LIVE_RECORD_VERBS; do
+    if [ "$(cap_of "$verb")" = "unsupported" ]; then
+      case "$verb" in
+        routes|indexed) assert_unsupported "$verb" 1 ;;
+        *)              assert_unsupported "$verb" 1 Handler ;;
+      esac
+      continue
+    fi
     case "$verb" in
       routes|indexed) out="$(bash "$CGA" "$verb" 2>/dev/null)" ;;
       *)              out="$(bash "$CGA" "$verb" Handler 2>/dev/null)" ;;
@@ -247,7 +303,14 @@ except Exception:
   # hiding the same undercount. Sample several candidates: any single file may
   # legitimately have no dependent tests.
   probes="$(cd "$LIVE_ROOT" && git ls-files '*.rs' '*.go' '*.ts' '*.py' 2>/dev/null | head -25)"
-  if [ -n "$probes" ]; then
+  if [ "$(cap_of affected)" = "unsupported" ]; then
+    # A provider may honestly decline test-impact selection — that is a valid
+    # capability profile, not a defect. What it must NOT do is return a
+    # plausible-but-wrong list, because a silently undercounted test blast
+    # radius is indistinguishable from a correct small one. So the assertion
+    # here is that it REFUSES, not that it answers.
+    assert_unsupported affected 1 "$(printf '%s' "$probes" | head -1)"
+  elif [ -n "$probes" ]; then
     shape_ok=1
     max_n=0
     max_file=""
@@ -287,44 +350,63 @@ EOF
   bash "$CGA" symbols >/dev/null 2>&1
   [ $? -eq 1 ] && ok "missing-argument exits 1 (not a silent [])" || bad "missing argument did not exit 1"
 
-  # freshness: shape plus a REAL stale round trip. A freshness check that can
-  # only ever answer "fresh" is worse than none — it manufactures confidence.
-  # Build a throwaway index in a temp dir so no real repository is touched.
+  # freshness: shape plus a contract exit. An UNSUPPORTED freshness must still
+  # exit 2, never 0 — the contract requires "cannot determine" to be treated as
+  # STALE, because reporting fresh on an answer the adapter could not actually
+  # read is precisely the false-confidence failure this verb exists to prevent.
   out="$(bash "$CGA" freshness 2>/dev/null)"; rc=$?
-  if printf '%s' "$out" | assert_shape object && { [ "$rc" -eq 0 ] || [ "$rc" -eq 2 ]; }; then
+  freshness_cap="$(cap_of freshness)"
+  if [ "$freshness_cap" = "unsupported" ]; then
+    if printf '%s' "$out" | assert_shape object && [ "$rc" -eq 2 ]; then
+      ok "unsupported freshness reports STALE (exit 2), never a false 'fresh'"
+    else
+      bad "unsupported freshness must emit an object and exit 2 (got rc=$rc)"
+    fi
+  elif printf '%s' "$out" | assert_shape object && { [ "$rc" -eq 0 ] || [ "$rc" -eq 2 ]; }; then
     ok "live freshness is an object with a contract exit ($rc)"
   else
     bad "live freshness bad shape or exit (rc=$rc)"
   fi
 
-  probe_dir="$(mktemp -d)"
-  printf 'def a(x):\n    return x + 1\n' > "$probe_dir/m.py"
-  if (cd "$probe_dir" && CODEGRAPH_TELEMETRY=0 DO_NOT_TRACK=1 CODEGRAPH_NO_DAEMON=1 \
-        "$CG_BIN" init >/dev/null 2>&1); then
-    rc_fresh=0; rc_stale=0
-    CODEINDEX_ROOT="$probe_dir" bash "$CGA" freshness >/dev/null 2>&1 || rc_fresh=$?
-    printf 'def b(y):\n    return y - 1\n' > "$probe_dir/extra.py"
-    CODEINDEX_ROOT="$probe_dir" bash "$CGA" freshness >/dev/null 2>&1 || rc_stale=$?
-    if [ "$rc_fresh" -eq 0 ] && [ "$rc_stale" -eq 2 ]; then
-      ok "ADVERSARIAL: freshness flips 0 -> 2 when the tree changes"
-    else
-      bad "ADVERSARIAL: freshness did not flip (fresh=$rc_fresh stale=$rc_stale; want 0 then 2)"
-    fi
-    # sync must actually HEAL, not merely exit 0. A sync that reports success
-    # while leaving the index stale is the same false-confidence failure.
-    rc_sync=0
-    CODEINDEX_ROOT="$probe_dir" bash "$CGA" sync >/dev/null 2>&1 || rc_sync=$?
-    rc_after=0
-    CODEINDEX_ROOT="$probe_dir" bash "$CGA" freshness >/dev/null 2>&1 || rc_after=$?
-    if [ "$rc_sync" -eq 0 ] && [ "$rc_after" -eq 0 ]; then
-      ok "sync heals a stale index (stale -> sync -> fresh)"
-    else
-      bad "sync did not heal (sync=$rc_sync after=$rc_after; want 0 and 0)"
-    fi
+  # The stale round trip needs a THROWAWAY index, and building one is the only
+  # genuinely provider-specific step in this file. Rather than hard-code
+  # `codegraph init`, the operator supplies it via CODEINDEX_SELFTEST_INIT_CMD
+  # (evaluated with CWD set to the throwaway dir). Absent ⇒ noted skip, not a
+  # silent pass.
+  INIT_CMD="${CODEINDEX_SELFTEST_INIT_CMD:-}"
+  if [ "$freshness_cap" = "unsupported" ]; then
+    note "stale round trip skipped ($LIVE_ADAPTER declares freshness unsupported)"
+  elif [ -z "$INIT_CMD" ]; then
+    note "stale round trip skipped (set CODEINDEX_SELFTEST_INIT_CMD to build a throwaway index)"
   else
-    note "could not build throwaway index; stale round trip skipped"
+    probe_dir="$(mktemp -d)"
+    printf 'def a(x):\n    return x + 1\n' > "$probe_dir/m.py"
+    if (cd "$probe_dir" && DO_NOT_TRACK=1 eval "$INIT_CMD" >/dev/null 2>&1); then
+      rc_fresh=0; rc_stale=0
+      CODEINDEX_ROOT="$probe_dir" bash "$CGA" freshness >/dev/null 2>&1 || rc_fresh=$?
+      printf 'def b(y):\n    return y - 1\n' > "$probe_dir/extra.py"
+      CODEINDEX_ROOT="$probe_dir" bash "$CGA" freshness >/dev/null 2>&1 || rc_stale=$?
+      if [ "$rc_fresh" -eq 0 ] && [ "$rc_stale" -eq 2 ]; then
+        ok "ADVERSARIAL: freshness flips 0 -> 2 when the tree changes"
+      else
+        bad "ADVERSARIAL: freshness did not flip (fresh=$rc_fresh stale=$rc_stale; want 0 then 2)"
+      fi
+      # sync must actually HEAL, not merely exit 0. A sync that reports success
+      # while leaving the index stale is the same false-confidence failure.
+      rc_sync=0
+      CODEINDEX_ROOT="$probe_dir" bash "$CGA" sync >/dev/null 2>&1 || rc_sync=$?
+      rc_after=0
+      CODEINDEX_ROOT="$probe_dir" bash "$CGA" freshness >/dev/null 2>&1 || rc_after=$?
+      if [ "$rc_sync" -eq 0 ] && [ "$rc_after" -eq 0 ]; then
+        ok "sync heals a stale index (stale -> sync -> fresh)"
+      else
+        bad "sync did not heal (sync=$rc_sync after=$rc_after; want 0 and 0)"
+      fi
+    else
+      note "could not build throwaway index; stale round trip skipped"
+    fi
+    rm -rf "$probe_dir"
   fi
-  rm -rf "$probe_dir"
 fi
 
 echo ""

@@ -121,6 +121,90 @@ after="$(cd "$FIX_NONE" && git status --porcelain | sort)"
   ok "T6 leaves the working tree untouched" ||
   bad "T6 MUTATED the working tree"
 
+# --- capability-awareness fixtures -------------------------------------------
+# Verb support is NOT uniform across providers. A provider that cannot REPORT
+# freshness is not the same as an index that IS stale, and a provider without
+# `affected` has not "returned nothing". These fixtures pin that distinction:
+# they FAIL if the consumer regresses to running the sync/re-check dance and
+# then blaming the index for a limitation of the provider.
+make_stub_repo() {
+  local dir="$1"
+  mkdir -p "$dir/.github/bubbles/scripts" "$dir/.github/bubbles/adapters/codeindex"
+  cp "$SCRIPT_DIR/codeindex-resolve.sh" "$dir/.github/bubbles/scripts/"
+  printf 'codeIndex:\n  adapter: codebase-memory\n' >"$dir/.github/bubbles-project.yaml"
+  cat >"$dir/.github/bubbles/adapters/codeindex/codebase-memory.sh" <<'STUB'
+#!/usr/bin/env bash
+# Stub provider — selftest use only. Capability levels come from the
+# environment so one stub covers several support matrices.
+f="${STUB_FRESHNESS:-native}"
+a="${STUB_AFFECTED:-native}"
+case "$1" in
+  capabilities) printf '{"symbols":"native","impact":"native","affected":"%s","routes":"native","indexed":"native","status":"native","freshness":"%s","sync":"native"}\n' "$a" "$f" ;;
+  freshness)    [ "$f" = "unsupported" ] && exit 2; echo '{}' ;;
+  sync|status)  echo '{}' ;;
+  indexed)      echo '[{"path":"a.txt","nodeCount":3}]' ;;
+  affected)     [ "$a" = "unsupported" ] && exit 1; echo '["t/thing_test.sh"]' ;;
+  *)            echo '[]' ;;
+esac
+exit 0
+STUB
+  chmod +x "$dir/.github/bubbles/adapters/codeindex/codebase-memory.sh"
+  ( cd "$dir" && git init -q . && git config user.email t@t && git config user.name t &&
+    echo hi >a.txt && mkdir -p t && echo test >t/thing_test.sh &&
+    git add -A && git commit -qm init && echo changed >a.txt ) >/dev/null 2>&1
+}
+
+FIX_CAP="$WORK/repo-cap"
+make_stub_repo "$FIX_CAP"
+
+# --- T7: an unsupported verb is a capability gap, not a malfunction ----------
+out="$(STUB_FRESHNESS=unsupported STUB_AFFECTED=unsupported bash "$TARGET" --repo-root "$FIX_CAP" 2>&1)"; rc=$?
+if [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q "does not support 'affected'"; then
+  ok "T7 unsupported 'affected' is named as a capability gap"
+else
+  bad "T7 did not name the capability gap (rc=$rc): ${out:0:120}"
+fi
+
+# T7b: ADVERSARIAL — it must not blame the INDEX for a PROVIDER limitation.
+if printf '%s' "$out" | grep -qi 'still STALE'; then
+  bad "T7b blamed the index ('still STALE') for an unreportable freshness verb"
+else
+  ok "T7b ADVERSARIAL: never blames the index for an unreportable freshness"
+fi
+
+# --- T8: unverifiable freshness is disclosed, never silently claimed ---------
+out="$(STUB_FRESHNESS=unsupported STUB_AFFECTED=native bash "$TARGET" --repo-root "$FIX_CAP" --json 2>&1)"
+verdict="$(printf '%s' "$out" | python3 -c '
+import sys, json
+try:
+    d = json.load(sys.stdin)
+except Exception:
+    print("NOTJSON"); raise SystemExit
+print("OK" if d.get("degraded") is False and d.get("freshnessVerified") is False else "BAD:%s" % d)
+' 2>/dev/null)"
+if [ "$verdict" = "OK" ]; then
+  ok "T8 discloses freshnessVerified:false instead of implying a check ran"
+else
+  bad "T8 freshness honesty regressed: $verdict"
+fi
+
+# T8b: ADVERSARIAL — a provider that CAN report freshness must still say true,
+# otherwise T8 would pass by hardcoding false.
+out="$(STUB_FRESHNESS=native STUB_AFFECTED=native bash "$TARGET" --repo-root "$FIX_CAP" --json 2>&1)"
+verdict="$(printf '%s' "$out" | python3 -c '
+import sys, json
+try:
+    d = json.load(sys.stdin)
+except Exception:
+    print("NOTJSON"); raise SystemExit
+print("OK" if d.get("freshnessVerified") is True else "BAD:%s" % d)
+' 2>/dev/null)"
+if [ "$verdict" = "OK" ]; then
+  ok "T8b ADVERSARIAL: a real freshness check still reports verified:true"
+else
+  bad "T8b freshnessVerified is hardcoded, not measured: $verdict"
+fi
+
 echo ""
 echo "  passed: $PASS   failed: $FAIL"
 [ "$FAIL" -eq 0 ] || exit 1

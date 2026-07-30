@@ -117,11 +117,14 @@ bubbles/scripts/framework-health-evidence-lint.sh
 bubbles/scripts/framework-validate-tier-selftest.sh
 bubbles/scripts/framework-validate.sh
 bubbles/scripts/fun-mode.sh
+bubbles/scripts/gate-attribution-selftest.sh
+bubbles/scripts/gate-attribution.sh
 bubbles/scripts/gate-bands-selftest.sh
 bubbles/scripts/gate-bands.sh
 bubbles/scripts/gate-catalog-freshness.sh
 bubbles/scripts/gate-classification-selftest.sh
 bubbles/scripts/gate-classification.sh
+bubbles/scripts/gate-detection-selftest.sh
 bubbles/scripts/gate-enforcement-selftest.sh
 bubbles/scripts/gate-enforcement.sh
 bubbles/scripts/gate-id-grep-selftest.sh
@@ -371,6 +374,7 @@ bubbles/scripts/guards/planning-checks.sh
 bubbles/scripts/guards/sensitive-client-storage-scan.py
 bubbles/scripts/guards/tail-convergence-gates.sh
 bubbles/scripts/guards/tail-delegated-gates.sh
+bubbles/adapters/codeindex/codebase-memory.sh
 bubbles/adapters/codeindex/codegraph.sh
 bubbles/adapters/codeindex/none.sh
 bubbles/adapters/judge/ollama.sh
