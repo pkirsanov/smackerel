@@ -1002,7 +1002,29 @@ tier_interactive_model_or_override() {
 # Spec 045 BUG-045-001 — per-env overrides preserved as tier-orthogonal layer.
 LLM_MODEL="$(tier_interactive_model_or_override llm_model)"
 LLM_API_KEY="$(required_value llm.api_key)"
-OLLAMA_URL="$(required_value llm.ollama_url)"
+
+# Approved-min-set directive (2026-07-30) — the Ollama daemon address is an
+# OPERATOR-SUPPLIED seam, never a committed value. Every environment now
+# targets the operator's shared host daemon, whose address is per-operator
+# deployment topology and MUST NOT live in this repo
+# (product-deployment-boundary). Resolution order, fail-loud per
+# smackerel-no-defaults (NEVER a silent localhost/container default):
+#   1. SMACKEREL_OLLAMA_URL   — the operator seam. Dev: the gitignored
+#                               .smackerel.local.env (sourced with `set -a` by
+#                               smackerel.sh before any subcommand). Deploy:
+#                               the adapter's app.env injection.
+#   2. llm.ollama_url         — SST key, intentionally "" in this repo. A
+#                               downstream overlay MAY set it.
+#   3. abort [F-OLLAMA-URL-MISSING]
+OLLAMA_URL="${SMACKEREL_OLLAMA_URL-}"
+if [[ -z "$OLLAMA_URL" ]]; then
+  OLLAMA_URL="$(required_value llm.ollama_url)"
+fi
+if [[ -z "$OLLAMA_URL" ]]; then
+  echo "[F-OLLAMA-URL-MISSING] No Ollama daemon URL resolved. Set SMACKEREL_OLLAMA_URL in .smackerel.local.env at repo root (copy .smackerel.local.env.example to start), or have the deploy adapter inject it into app.env. The address is operator deployment topology and is deliberately NOT committed to this repo (product-deployment-boundary); there is no default." >&2
+  exit 1
+fi
+
 OLLAMA_MODEL="$(tier_interactive_model_or_override ollama_model)"
 OLLAMA_VISION_MODEL="$(tier_interactive_model_or_override ollama_vision_model)"
 
@@ -2094,7 +2116,16 @@ ANNOTATIONS_LIST_MY_MAX_LIMIT="$(required_value annotations.list_my_max_limit)"
 ASSISTANT_INTENT_COMPILER_ENABLED="$(env_override_value intent_compiler_enabled assistant.intent_compiler.enabled)"
 ASSISTANT_INTENT_COMPILER_MODEL_ROLE="$(required_value assistant.intent_compiler.model_role)"
 ASSISTANT_INTENT_COMPILER_PROVIDER_NAME="$(env_override_value intent_compiler_provider_name llm.provider)"
-ASSISTANT_INTENT_COMPILER_PROVIDER_URL="$(env_override_value intent_compiler_provider_url llm.ollama_url)"
+# Base value is the RESOLVED Ollama URL, not the raw llm.ollama_url SST key —
+# that key is now the deliberately-empty operator seam, so reading it directly
+# would hand every env without an explicit override an empty provider URL.
+# A per-env override (e.g. environments.test.intent_compiler_provider_url)
+# still wins.
+if ASSISTANT_INTENT_COMPILER_PROVIDER_URL="$(yaml_get "environments.$TARGET_ENV.intent_compiler_provider_url" 2>/dev/null)"; then
+  :
+else
+  ASSISTANT_INTENT_COMPILER_PROVIDER_URL="$OLLAMA_URL"
+fi
 ASSISTANT_INTENT_COMPILER_PROMPT_CONTRACT_VERSION="$(required_value assistant.intent_compiler.prompt_contract_version)"
 ASSISTANT_INTENT_COMPILER_SCHEMA_VERSION="$(required_value assistant.intent_compiler.schema_version)"
 ASSISTANT_INTENT_COMPILER_TIMEOUT_MS="$(required_value assistant.intent_compiler.timeout_ms)"
