@@ -172,6 +172,31 @@ fi
 echo ""
 
 # ---------------------------------------------------------------------------
+# Part A4 — no adapter may re-enter itself via `exec "$0"`.
+# ---------------------------------------------------------------------------
+# Every verb is invoked as `bash <adapter>`, so an adapter never needs its own
+# executable bit — EXCEPT at a bare `exec "$0"`, which runs the file as a
+# program. That made `sync` the single verb that could die with an opaque exit
+# 126 wherever an install path drops modes (archive extraction, `cp` without
+# -p, a Docker COPY), while every other verb kept working. Measured: the bare
+# form exits 126 with the bit stripped, `exec bash "$0"` exits 0.
+echo "Part A4 — no self-exec that depends on the adapter's own mode bit"
+
+selfexec_hits=0
+selfexec_scanned=0
+for adapter in "$ADAPTER_DIR"/*.sh; do
+  [ -f "$adapter" ] || continue
+  selfexec_scanned=$((selfexec_scanned + 1))
+  if grep -qE '^[[:space:]]*exec[[:space:]]+"\$0"' "$adapter"; then
+    bad "$(basename "$adapter") re-enters itself with bare exec \"\$0\" (use: exec bash \"\$0\")"
+    selfexec_hits=$((selfexec_hits + 1))
+  fi
+done
+[ "$selfexec_hits" -eq 0 ] && ok "no adapter uses bare exec \"\$0\" ($selfexec_scanned scanned)"
+
+echo ""
+
+# ---------------------------------------------------------------------------
 # Part B — LIVE. Only when a provider and a real index are reachable.
 # ---------------------------------------------------------------------------
 echo "Part B — live adapter output vs declared shape"

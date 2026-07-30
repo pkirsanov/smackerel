@@ -19,6 +19,48 @@ else
   REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 fi
 
+# Concurrency guard. framework-validate is NOT safe to run twice at once: a
+# number of selftests and lints below use FIXED scratch paths (e.g.
+# /tmp/bubbles-capability-check, /tmp/bubbles-agent-ownership-lint,
+# $HOME/.cache/bubbles-installer-selftest) with no per-run suffix. Two
+# simultaneous runs therefore delete and rewrite each other's fixtures midway,
+# which surfaces as a scatter of unrelated red checks that ALL pass when re-run
+# individually — an expensive false alarm that looks exactly like a real
+# regression. Measured: 8 spurious failures from one overlapping run.
+#
+# `flock` holds the lock on fd 9 and the kernel releases it when the process
+# dies, so this cannot leave a stale lock behind and needs no bypass flag. Where
+# `flock` is absent (stock macOS), the guard degrades to a no-op rather than
+# risking a lock we cannot reliably reap — matching how the optional-dependency
+# selftests degrade elsewhere in this suite.
+#
+# The guard MUST be re-entrant. Several selftests legitimately run a NESTED
+# framework-validate as part of their fixture (v5.3-selftest runs one against a
+# synthesized downstream install; repo-drift-report-selftest runs one to capture
+# drift output). Those are children of an outer run that already owns the lock,
+# so a naive guard refuses them and fails the very suite it is protecting —
+# measured: 3 red checks (v5.3 G1, tiering IMP-012, repo-drift IMP-027). The
+# exported marker below is inherited only by descendants of a holding run, so
+# nested invocations pass through while two INDEPENDENT top-level runs still
+# contend.
+if [[ -z "${BUBBLES_FRAMEWORK_VALIDATE_LOCK_HELD:-}" ]] && command -v flock >/dev/null 2>&1; then
+  _fv_lockfile="${TMPDIR:-/tmp}/bubbles-framework-validate.lock"
+  # Probe writability on a THROWAWAY command first. `exec 9>file` with no command
+  # applies its redirections to the shell PERMANENTLY, so appending an error
+  # suppressor there (`exec 9>file 2>/dev/null`) silences stderr for the entire
+  # run — every selftest's diagnostics included. Keep the exec line bare.
+  if : >"$_fv_lockfile" 2>/dev/null; then
+    exec 9>"$_fv_lockfile"
+    if ! flock -n 9; then
+      printf 'ERROR: another framework-validate run is already in progress on this machine.\n' >&2
+      printf '       Concurrent runs corrupt each other'"'"'s shared scratch fixtures and produce\n' >&2
+      printf '       false failures. Wait for the other run to finish, then re-run.\n' >&2
+      exit 1
+    fi
+    export BUBBLES_FRAMEWORK_VALIDATE_LOCK_HELD=1
+  fi
+fi
+
 # macOS portability shim. BSD userland diverges from GNU coreutils on `sed -i`
 # (BSD needs `sed -i ''`) and lacks `timeout` (coreutils ships `gsed`/`gtimeout`).
 # Several selftests below invoke `sed -i` / `timeout` in GNU form. When the GNU

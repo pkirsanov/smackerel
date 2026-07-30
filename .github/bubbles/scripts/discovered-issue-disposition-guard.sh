@@ -8,6 +8,12 @@
 # "skipping", "will fix later", "not my session" without filing a
 # corresponding artifact is forbidden and counts as fabrication.
 #
+# Scanning is NARRATIVE-ONLY: fenced code blocks (```) are blanked before the
+# paragraph walk, because the Execution Evidence Standard requires verbatim
+# terminal captures in report.md and a quoted guard/grep line is evidence, not
+# a deferral. An unterminated fence is scanned verbatim (fail-safe toward
+# detection) rather than swallowing the rest of the file.
+#
 # Usage:
 #   bash discovered-issue-disposition-guard.sh <spec-dir>
 #   bash discovered-issue-disposition-guard.sh <spec-dir> --envelope <envelope-file>
@@ -96,11 +102,58 @@ report_has_today_disposition() {
   ' "$report_md"
 }
 
+# Helper: blank out fenced code blocks (```), LINE-COUNT-PRESERVINGLY, so that
+# verbatim terminal captures — which Bubbles' own Execution Evidence Standard
+# REQUIRES in report.md — are never misread as narrative deferral. Without this
+# the guard re-flags its own quoted output: documenting a G095 finding would
+# manufacture the next one, and the more disciplined the evidence, the more
+# violations are invented.
+#
+# Fence delimiter lines are blanked too, so a fence is a hard paragraph break
+# (markdown-correct) rather than glue joining the narrative on either side of it.
+# The delimiter pattern matches the certifying-window helper below, including its
+# indented-fence tolerance.
+#
+# UNBALANCED FENCE (odd delimiter count → still open at EOF): fail SAFE toward
+# DETECTION. The unterminated region is emitted VERBATIM so the remainder of the
+# file is still scanned; the caller warns on stderr. A stray fence must never
+# silently disable the gate — a false negative here is far worse than the false
+# positive this helper exists to remove. Signalled via exit status 3.
+strip_fenced_blocks() {
+  awk '
+    function emit_blanks(n,   i) { for (i = 0; i < n; i++) print "" }
+    /^[[:space:]]*```/ {
+      if (in_fence) { emit_blanks(bn + 1); bn = 0; in_fence = 0 }
+      else          { in_fence = 1; bn = 1; buf[1] = $0 }
+      next
+    }
+    in_fence { buf[++bn] = $0; next }
+    { print }
+    END {
+      if (in_fence) {
+        for (i = 1; i <= bn; i++) print buf[i]
+        exit 3
+      }
+    }
+  ' "$1" > "$2"
+}
+
 # Helper: scan a file for forbidden phrases not paired with disposition refs
 scan_file() {
   local file="$1"
   local context="$2"
+  # Path cited in findings. Line numbers below are 1:1 with this file, because
+  # every suppression upstream blanks lines instead of deleting them.
+  local display_file="${3:-$1}"
   [[ -f "$file" ]] || return 0
+
+  local scan_src
+  local strip_rc=0
+  scan_src="$(mktemp)"
+  strip_fenced_blocks "$file" "$scan_src" || strip_rc=$?
+  if [[ "$strip_rc" -eq 3 ]]; then
+    echo "G095 WARNING: unbalanced code fence in $display_file — the unterminated region is scanned VERBATIM (fail-safe: a stray fence must not disable G095)." >&2
+  fi
 
   # Read the file paragraph by paragraph (blank-line separated)
   local current_para=""
@@ -109,7 +162,7 @@ scan_file() {
   while IFS= read -r line || [[ -n "$line" ]]; do
     line_num=$((line_num + 1))
     if [[ -z "$line" ]]; then
-      check_paragraph "$current_para" "$file" "$para_line" "$context"
+      check_paragraph "$current_para" "$display_file" "$para_line" "$context"
       current_para=""
       para_line=0
     else
@@ -119,9 +172,11 @@ scan_file() {
       current_para="${current_para}${line}
 "
     fi
-  done < "$file"
+  done < "$scan_src"
   # Final paragraph
-  [[ -n "$current_para" ]] && check_paragraph "$current_para" "$file" "$para_line" "$context"
+  [[ -n "$current_para" ]] && check_paragraph "$current_para" "$display_file" "$para_line" "$context"
+  rm -f "$scan_src"
+  return 0
 }
 
 check_paragraph() {
@@ -166,21 +221,31 @@ if [[ -f "$report_md" ]]; then
     echo "G095 ERROR: multiple certifying-window markers ($cw_count) in $report_md — at most one is allowed (it marks the single current certifying-window start)" >&2
     exit 2
   fi
-  # Strip the Discovered Issues table itself so we don't flag its headers, AND
-  # (when exactly one certifying-window marker is present) drop the frozen
-  # prior-window history region before the marker. Fences are tracked so the
-  # marker is honored only out-of-fence, matching artifact-lint.sh Check 3.
+  # Locate the certifying-window marker, fence-aware (the marker is honored only
+  # out-of-fence, matching artifact-lint.sh Check 3). Emits its line number.
+  cw_line="$(awk '
+    /^[[:space:]]*```/ { in_fence = !in_fence; next }
+    !in_fence && /<!-- bubbles:certifying-window-begin -->/ { print NR; exit }
+  ' "$report_md")"
+  if [[ "$cw_count" -eq 1 && -z "$cw_line" ]]; then
+    # The marker exists but is fence-shadowed, so the window start is
+    # unresolvable. Honoring it would blank the WHOLE file and silently disable
+    # G095 — the catastrophic false negative. Scan-on-doubt instead.
+    echo "G095 WARNING: certifying-window marker in $report_md is inside a code fence — window ignored, the report is scanned in FULL (fail-safe)." >&2
+  fi
+  # Suppress the frozen prior-window history region (every line up to and
+  # including the marker) and the Discovered Issues table itself. Suppression
+  # BLANKS lines rather than deleting them, so finding line numbers stay 1:1
+  # with the real report.md and remain actionable.
   tmp_report="$(mktemp)"
-  awk -v cw="$cw_count" '
-    BEGIN { before_window = (cw == 1) ? 1 : 0 }
-    before_window && /^[[:space:]]*```/ { in_fence = !in_fence; next }
-    before_window && !in_fence && /<!-- bubbles:certifying-window-begin -->/ { before_window = 0; next }
-    before_window { next }
-    /^## Discovered Issues/ { skip=1; next }
+  awk -v cwline="${cw_line:-0}" '
+    NR <= cwline { print ""; next }
+    /^## Discovered Issues/ { skip=1; print ""; next }
     /^## / && skip { skip=0 }
-    !skip { print }
+    skip { print ""; next }
+    { print }
   ' "$report_md" > "$tmp_report"
-  scan_file "$tmp_report" "report.md"
+  scan_file "$tmp_report" "report.md" "$report_md"
   rm -f "$tmp_report"
 fi
 

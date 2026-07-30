@@ -31,6 +31,18 @@ set -uo pipefail
 #   S7   Report-and-wait phrase ("recommend filing")     → exit 1  (ADVERSARIAL:
 #        with no disposition                              reported-but-unfiled)
 #   S8   Report-and-wait phrase + inline BUG-NNN         → exit 0
+#   S13  Forbidden phrase INSIDE a fenced block        → exit 0  (REGRESSION:
+#        (verbatim evidence capture)                             evidence is
+#                                                                not deferral)
+#   S14  Fenced evidence + an out-of-fence deferral    → exit 1  (ADVERSARIAL:
+#                                                                fence fix did
+#                                                                not relax the
+#                                                                gate)
+#   S15  Unterminated fence, deferral after it         → exit 1  (ADVERSARIAL:
+#                                                                scan-on-doubt,
+#                                                                no false neg)
+#   S16  Indented fence delimiters                     → exit 0
+#   S17  Finding cites real report.md path + true line → exit 1
 #
 # Reference:
 #   bubbles/registry/gates.yaml → G095
@@ -369,6 +381,141 @@ if [[ "$RC" -eq 2 ]]; then
   pass "S12 two certifying-window markers exit 2 (ambiguous window start)"
 else
   bad "S12 two-marker report expected exit 2, got $RC"
+fi
+
+# -----------------------------------------------------------------------
+# S13: forbidden phrase INSIDE a fenced code block → exit 0
+#      (REGRESSION: the Execution Evidence Standard requires verbatim terminal
+#       captures in report.md. Quoting the guard's own BLOCK line — or a grep
+#       hit — is EVIDENCE, not a deferral. Before the fence fix, documenting a
+#       G095 finding manufactured the next one.)
+# -----------------------------------------------------------------------
+s13="$(new_spec_dir s13-fenced-evidence)"
+cat >"$s13/report.md" <<'EOF'
+# Report
+
+## Test Evidence
+
+Finding AUD-F3 was RESOLVED via the in-paragraph-citation path; see BUG-003.
+
+Verbatim guard capture:
+
+```text
+🔴 G095 BLOCK: report.md:3198 — forbidden deferral phrase 'out of scope' without disposition citation
+```
+
+Verbatim grep capture:
+
+```text
+3205:  the panel was out of scope for that round
+```
+EOF
+run_guard "$s13"
+if [[ "$RC" -eq 0 ]]; then
+  pass "S13 forbidden phrase inside a fenced block is evidence, not deferral (exit 0)"
+else
+  bad "S13 fenced-evidence expected exit 0, got $RC"
+fi
+
+# -----------------------------------------------------------------------
+# S14: the SAME fenced evidence PLUS an out-of-fence deferral → exit 1
+#      (ADVERSARIAL: proves fence stripping is narrowly scoped and did NOT
+#       blanket-disable detection. Fails if the fix over-reaches.)
+# -----------------------------------------------------------------------
+s14="$(new_spec_dir s14-fence-plus-real-deferral)"
+cat >"$s14/report.md" <<'EOF'
+# Report
+
+## Test Evidence
+
+Verbatim guard capture:
+
+```text
+🔴 G095 BLOCK: report.md:3198 — forbidden deferral phrase 'out of scope'
+```
+
+The currency rounding bug is out of scope for this session, so we left it.
+EOF
+run_guard "$s14"
+if [[ "$RC" -eq 1 ]]; then
+  pass "S14 out-of-fence deferral still BLOCKs alongside fenced evidence (exit 1)"
+else
+  bad "S14 fence+real-deferral expected exit 1, got $RC"
+fi
+
+# -----------------------------------------------------------------------
+# S15: UNBALANCED (unterminated) fence, deferral after it → exit 1
+#      (ADVERSARIAL: a stray fence must never silently disable scanning for the
+#       rest of the file. Fail-safe toward detection — the unterminated region
+#       is scanned VERBATIM. A false negative here is far worse than a false
+#       positive, so scan-on-doubt is the contract.)
+# -----------------------------------------------------------------------
+s15="$(new_spec_dir s15-unbalanced-fence)"
+cat >"$s15/report.md" <<'EOF'
+# Report
+
+## Test Evidence
+
+```text
+a stray opening fence that is never closed
+
+The currency rounding bug is out of scope for this session, so we left it.
+EOF
+run_guard "$s15"
+if [[ "$RC" -eq 1 ]]; then
+  pass "S15 unterminated fence still scans the remainder — deferral BLOCKs (exit 1)"
+else
+  bad "S15 unbalanced-fence expected exit 1, got $RC"
+fi
+
+# -----------------------------------------------------------------------
+# S16: INDENTED fence delimiters are honored → exit 0
+#      (parity with the certifying-window helper's /^[[:space:]]*```/ pattern)
+# -----------------------------------------------------------------------
+s16="$(new_spec_dir s16-indented-fence)"
+cat >"$s16/report.md" <<'EOF'
+# Report
+
+## Test Evidence
+
+All assertions green. Nested list evidence:
+
+  ```text
+  the panel was out of scope for that round
+  ```
+EOF
+run_guard "$s16"
+if [[ "$RC" -eq 0 ]]; then
+  pass "S16 indented fence delimiters are honored (exit 0)"
+else
+  bad "S16 indented fence expected exit 0, got $RC"
+fi
+
+# -----------------------------------------------------------------------
+# S17: finding cites the REAL report.md path and TRUE line number → exit 1
+#      (suppressed regions are blanked, not deleted, so `path:line` stays
+#       actionable even when a Discovered Issues table precedes the narrative)
+# -----------------------------------------------------------------------
+s17="$(new_spec_dir s17-line-fidelity)"
+cat >"$s17/report.md" <<EOF
+# Report
+
+## Discovered Issues
+
+| Observed | Disposition | Reference |
+|----------|-------------|-----------|
+| $YESTERDAY | bug-filed | BUG-001 |
+
+## Narrative
+
+The currency rounding bug is out of scope for this session, so we left it.
+EOF
+# The offending narrative is on line 11 of the real report.md.
+s17_out="$(bash "$GUARD_SCRIPT" "$s17" 2>&1)"
+if grep -qF "$s17/report.md:11" <<<"$s17_out"; then
+  pass "S17 finding cites the real report.md path at its true line (11)"
+else
+  bad "S17 expected finding at '$s17/report.md:11', got: $(grep -m1 'G095 BLOCK' <<<"$s17_out")"
 fi
 
 # -----------------------------------------------------------------------

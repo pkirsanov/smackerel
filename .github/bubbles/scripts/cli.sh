@@ -3588,6 +3588,15 @@ cmd_upgrade() {
   # install fell through to the unconditional "✅ Upgrade complete." + `fun_summary
   # pass` below, reporting success for a failed upgrade. The curl|bash branch
   # relies on `pipefail` so a curl failure (not just the bash side) is also caught.
+  # ⚠️  EVERYTHING BELOW THIS POINT RUNS AGAINST A REPLACED SCRIPT.
+  # install.sh overwrites this very file while bash is still executing it. bash
+  # reads a script incrementally by BYTE OFFSET, so once cli.sh changes size on
+  # disk, any later read resumes mid-token in the new bytes — which surfaced as
+  # `syntax error near unexpected token ')'` and a bogus exit 2 printed AFTER
+  # "✅ Upgrade complete.", on an upgrade that had in fact fully succeeded.
+  # Therefore every path from here on MUST `exit`, never `return`: returning
+  # hands control back to the dispatcher at the bottom of the file, which is
+  # exactly the read that lands in the rewritten bytes.
   proj_root="$(project_root)"
   local install_rc=0
   if [[ -n "$local_source" ]]; then
@@ -3602,7 +3611,7 @@ cmd_upgrade() {
   if [[ "$install_rc" -ne 0 ]]; then
     echo "❌ Upgrade failed: install.sh exited $install_rc" >&2
     fun_summary fail
-    return "$install_rc"
+    exit "$install_rc"   # exit, not return — see the replaced-script note above
   fi
 
   # Run doctor to validate. A non-zero doctor result means the upgrade landed an
@@ -3614,7 +3623,7 @@ cmd_upgrade() {
   if [[ "$doctor_rc" -ne 0 ]]; then
     echo "❌ Upgrade incomplete: doctor validation failed (exit $doctor_rc)" >&2
     fun_summary fail
-    return "$doctor_rc"
+    exit "$doctor_rc"   # exit, not return — see the replaced-script note above
   fi
 
   # Staleness recommendations
@@ -3649,6 +3658,11 @@ cmd_upgrade() {
   echo ""
   echo "✅ Upgrade complete."
   fun_summary pass
+  # exit, not fall through — see the replaced-script note above. Falling off the
+  # end of this function returns into `main`'s dispatch and then to the bottom of
+  # a file that install.sh has already rewritten underneath us, which is what
+  # turned a fully successful upgrade into a trailing syntax error + exit 2.
+  exit 0
 }
 
 # ── Main dispatch ───────────────────────────────────────────────────
