@@ -1,7 +1,7 @@
 # Smackerel Delivery Plan — LLM Wiki, Second Brain, Extended Scenarios
 
 **Snapshot:** 2026-08-02
-**Type:** delivery plan. The diagnostic evidence behind it is [`Product_Direction_2026-07-31.md`](Product_Direction_2026-07-31.md).
+**Type:** delivery plan. One-page summary: [`Strategy.md`](Strategy.md). Diagnostic evidence: [`Product_Direction_2026-07-31.md`](Product_Direction_2026-07-31.md).
 **Status:** advisory. No spec, scope, state, source, test, or config file was changed to produce it.
 **Scope:** this repository only — nothing outside the smackerel repo root was read or written.
 
