@@ -504,6 +504,17 @@ jq '.certification.status = "blocked"' "$status_mismatch_feature/state.json" > "
 mv "$status_mismatch_temp" "$status_mismatch_feature/state.json"
 assert_failure "certification mirror mismatch" 69 E009-TARGET-MISMATCH bash "$RESOLVER" "$status_mismatch_feature"
 
+# A value-free "mirrors disagree" was read as a status-ceiling defect and produced
+# a false framework bug report, so the detail must carry both values and the owner.
+mirror_stderr="$WORKSPACE/certification_mirror_mismatch.stderr"
+if grep -q "top-level status 'in_progress'" "$mirror_stderr" \
+  && grep -q "certification.status 'blocked'" "$mirror_stderr" \
+  && grep -q 'bubbles.validate-owned' "$mirror_stderr"; then
+  pass "certification mirror mismatch names both mirror values and the owning agent"
+else
+  fail_test "certification mirror mismatch names both mirror values and the owning agent"
+fi
+
 terminal_mismatch_feature="$WORKSPACE/specs/014-terminal-mismatch"
 write_feature "$terminal_mismatch_feature" product-to-planning docs_updated
 assert_failure "terminal target mismatch" 69 E009-TARGET-MISMATCH bash "$RESOLVER" "$terminal_mismatch_feature"
