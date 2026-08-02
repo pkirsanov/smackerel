@@ -231,13 +231,14 @@ BEGIN {
   wp[++wp_count] = "HACK:"
   wp[++wp_count] = "STUB:"
 
-  # Certifying-window membership: the caller passes (via -v cw_files) the
+  # Certifying-window membership: the caller passes (via the environment, since
+  # BSD awk rejects a literal newline in a -v assignment) the
   # newline-joined list of report.md targets that carry EXACTLY ONE
   # <!-- bubbles:certifying-window-begin --> marker. In those files the
   # frozen prior-window history (every line BEFORE the out-of-fence marker)
   # is dropped before phrase matching, mirroring artifact-lint.sh Check 3.
   # scope.md targets are never members, so they are always fully scanned.
-  cw_n = split(cw_files, cw_arr, "\n")
+  cw_n = split(ENVIRON["BUBBLES_CW_REPORT_FILES"], cw_arr, "\n")
   for (cw_i = 1; cw_i <= cw_n; cw_i++) {
     if (cw_arr[cw_i] != "") is_cw[cw_arr[cw_i]] = 1
   }
@@ -368,7 +369,7 @@ done
 # Run awk over all targets at once so we get a unified violations stream.
 # We capture the exit code separately to avoid losing it under set -e.
 set +e
-awk -v cw_files="$CW_REPORT_FILES" "$AWK_PROG" "${TARGETS[@]}" > "$VIOLATIONS_FILE" 2>/dev/null
+BUBBLES_CW_REPORT_FILES="$CW_REPORT_FILES" awk "$AWK_PROG" "${TARGETS[@]}" > "$VIOLATIONS_FILE" 2>/dev/null
 AWK_RC=$?
 set -e
 

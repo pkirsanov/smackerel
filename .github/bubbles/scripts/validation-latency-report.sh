@@ -175,16 +175,16 @@ summary_program='
   def agent_of($e): ($e.agent // "unknown");
   def event_from($source; $e):
     (parse_ts($e.runStartedAt // $e.startedAt // $e.phaseStartedAt // $e.startAt // $e.startTime)) as $start |
-    (parse_ts($e.runCompletedAt // $e.completedAt // $e.phaseCompletedAt // $e.endAt // $e.endTime)) as $end |
-    if $start != null and $end != null and $end >= $start then
+    (parse_ts($e.runCompletedAt // $e.completedAt // $e.phaseCompletedAt // $e.endAt // $e.endTime)) as $endTs |
+    if $start != null and $endTs != null and $endTs >= $start then
       phases($e)[] as $phase |
       {
         source: $source,
         phase: $phase,
         agent: agent_of($e),
         spec: spec_of($e),
-        endEpoch: $end,
-        durationSeconds: ($end - $start)
+        endEpoch: $endTs,
+        durationSeconds: ($endTs - $start)
       }
     else empty end;
   def events:
@@ -223,16 +223,16 @@ rows_program='
   def agent_of($e): ($e.agent // "unknown");
   def event_from($source; $e):
     (parse_ts($e.runStartedAt // $e.startedAt // $e.phaseStartedAt // $e.startAt // $e.startTime)) as $start |
-    (parse_ts($e.runCompletedAt // $e.completedAt // $e.phaseCompletedAt // $e.endAt // $e.endTime)) as $end |
-    if $start != null and $end != null and $end >= $start then
+    (parse_ts($e.runCompletedAt // $e.completedAt // $e.phaseCompletedAt // $e.endAt // $e.endTime)) as $endTs |
+    if $start != null and $endTs != null and $endTs >= $start then
       phases($e)[] as $phase |
       {
         source: $source,
         phase: $phase,
         agent: agent_of($e),
         spec: spec_of($e),
-        endEpoch: $end,
-        durationSeconds: ($end - $start)
+        endEpoch: $endTs,
+        durationSeconds: ($endTs - $start)
       }
     else empty end;
   def events:

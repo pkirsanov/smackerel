@@ -5,7 +5,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 ADAPTER="$SCRIPT_DIR/repository-binding-host-context.sh"
 RESOLVER="$SCRIPT_DIR/repository-binding.sh"
 INSTRUCTION="$SCRIPT_DIR/../../instructions/bubbles-agents.instructions.md"
-TMP_ROOT="$(mktemp -d)"
+# macOS mktemp -d sits under the /var symlink; canonicalize the fixture root.
+TMP_ROOT="$(cd "$(mktemp -d)" && pwd -P)"
 trap 'rm -rf "$TMP_ROOT"' EXIT INT TERM
 
 passes=0
@@ -60,7 +61,9 @@ else
 fi
 control_file="$(jq -r '.sessionControlFile' <<< "$context_a")"
 control_parent="$(dirname "$control_file")"
-if [[ "$control_file" == "$TMP_ROOT/control-home/"* && "$(ls -ld "$control_parent" | awk '{print $1}')" == "drwx------" ]]; then
+# Match the tolerant glob the adapter itself uses: macOS suffixes the mode field
+# with '@' (xattr) or '+' (ACL).
+if [[ "$control_file" == "$TMP_ROOT/control-home/"* && "$(ls -ld "$control_parent" | awk '{print $1}')" == drwx------* ]]; then
   pass 'control path is external and its immediate parent is mode 0700'
 else
   fail 'control path must be external under a private parent'

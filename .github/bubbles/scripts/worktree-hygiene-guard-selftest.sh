@@ -42,7 +42,8 @@ FAILURES=0
 pass() { echo "PASS: $1"; }
 fail() { echo "FAIL: $1"; FAILURES=$((FAILURES + 1)); }
 
-TMP_ROOT="$(mktemp -d)"
+# macOS mktemp -d sits under the /var symlink; canonicalize the fixture root.
+TMP_ROOT="$(cd "$(mktemp -d)" && pwd -P)"
 trap 'rm -rf "$TMP_ROOT"' EXIT INT TERM
 REPO="$TMP_ROOT/repo"
 

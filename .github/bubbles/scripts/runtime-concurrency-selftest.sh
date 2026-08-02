@@ -59,7 +59,8 @@ if ! command -v jq >/dev/null 2>&1; then
   exit 0
 fi
 
-TMP_ROOT="$(mktemp -d)"
+# macOS mktemp -d sits under the /var symlink; canonicalize the fixture root.
+TMP_ROOT="$(cd "$(mktemp -d)" && pwd -P)"
 BG_PIDS=()
 
 cleanup() {
