@@ -41,6 +41,21 @@ Scenario: [Short scenario]
 - Each criterion must map to a scenario and a test.
 - Include negative/error cases.
 
+## Exposure Contract
+
+| Capability | Surface class | Surface id | Status | Plan |
+|---|---|---|---|---|
+| signal-emit | httpRoute | POST /api/v1/signals/emit | delivered | — |
+| signal-emit | uiRoute | /signals/new | planned | specs/081-signals-ui |
+| retention-sweeper | internal | libs/retention::sweep | internal | called by services/scheduler |
+
+- One row per capability **per surface** a caller can reach it through.
+- `delivered` MUST correspond to a record in the repo's derived surface inventory. A surface id no derivation command returns is a claim, not a delivery.
+- `planned` MUST name a target spec or release phase. "Later" is not a plan.
+- `internal` declares a capability deliberately reachable only by other in-repo code, and MUST name that caller. An internal surface is declared, not undeclared — silence is still a finding.
+- A capability with **no** `delivered` row and **no** `planned` row is the orphan condition: built, tested, and unreachable.
+- This is the artifact that enforces *"every implementation must deliver value; don't hide/reduce value"* — value that is built but unreachable is recorded as an open commitment rather than silently lost.
+
 ```
 
 ## design.md Template

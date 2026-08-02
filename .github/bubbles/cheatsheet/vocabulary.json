@@ -390,5 +390,77 @@
   {
     "term": "prototype assurance",
     "meaning": "The fail-closed assurance floor: verification incomplete or failing (missing coverage OR a failing test). Maps to `delivered_prototype` — never deployable, never terminal under normal delivery modes. A derived result, not a user-chosen tier; a throwaway POC is an intent (`.design-experiment`), not the bottom of a quality ladder."
+  },
+  {
+    "term": "gate",
+    "meaning": "A numbered policy (`Gxxx`) declared in `bubbles/registry/gates.yaml`. A gate states WHAT must hold; it is not itself executable. Its `enforcedBy:` field names the guard, lint, or scan that mechanically enforces it, or `mode-required` when only agent behavior carries it.",
+    "notInsteadOf": ["guard", "check"],
+    "commonMisuse": "Do not write 'gate' for the script that enforces it — that is a guard."
+  },
+  {
+    "term": "guard",
+    "meaning": "An executable script under `bubbles/scripts/` (39 named `*-guard.sh`) that mechanically enforces one or more gates and exits non-zero on violation.",
+    "notInsteadOf": ["gate", "lint"],
+    "commonMisuse": "Do not write 'guard' when you mean the policy — that is a gate."
+  },
+  {
+    "term": "lint",
+    "meaning": "An executable script under `bubbles/scripts/` (24 named `*-lint.sh`) that checks the STRUCTURE or FORM of an artifact — required sections, schema shape, naming — rather than the truth of a claim.",
+    "notInsteadOf": ["guard", "scan"],
+    "commonMisuse": "Do not write 'lint' for a behavioral or evidence check — that is a guard."
+  },
+  {
+    "term": "scan",
+    "meaning": "An executable script under `bubbles/scripts/` (3 named `*-scan.sh`) that sweeps a whole corpus for a forbidden PATTERN, such as `env-pollution-scan.sh`. A scan has no single declaring artifact.",
+    "notInsteadOf": ["lint", "guard"],
+    "commonMisuse": "Do not write 'scan' for a single-artifact structural check — that is a lint."
+  },
+  {
+    "term": "check",
+    "meaning": "A NUMBERED step inside a composite guard — `state-transition-guard.sh` runs 67 of them. It is also the suffix of 8 standalone `*-check.sh` scripts, so the word carries two senses.",
+    "notInsteadOf": ["gate", "guard"],
+    "commonMisuse": "Do not use bare 'check' where 'gate' or 'guard' is meant. Write 'Check <N>' for the numbered step and name the script explicitly for the standalone form."
+  },
+  {
+    "term": "scope",
+    "meaning": "A DURABLE unit of work in `scopes.md`, identified `SCOPE-N`. A fresh specialist handed ONLY the spec's durable artifacts MUST be able to execute it without replaying the session that produced it.",
+    "notInsteadOf": ["task"],
+    "commonMisuse": "Do not write 'task' for a Bubbles scope — `tasks.md` is a speckit artifact with different ownership."
+  },
+  {
+    "term": "task",
+    "meaning": "A speckit artifact row in `tasks.md`, produced by `speckit.tasks`. Bubbles does not plan work as tasks; its durable planning unit is the scope.",
+    "notInsteadOf": ["scope"],
+    "commonMisuse": "Do not use 'task' as a synonym for scope — they come from different planning surfaces and different owners."
+  },
+  {
+    "term": "specialist",
+    "meaning": "A `bubbles.*` agent that owns one workflow phase and is invoked by an authorized runner via `runSubagent`. Specialists execute the work; runners route it.",
+    "notInsteadOf": ["owner", "subagent"],
+    "commonMisuse": "Do not call a workflow runner a specialist — runners route, specialists execute."
+  },
+  {
+    "term": "subagent",
+    "meaning": "A specialist executing as a depth-1 dispatch from a top-level runner through the VS Code `agent` tool. Always one word.",
+    "notInsteadOf": ["specialist", "handoff"],
+    "commonMisuse": "Never spell it 'sub-agent'. A subagent dispatch is not a handoff — a handoff switches agents after the turn ends."
+  },
+  {
+    "term": "owner",
+    "meaning": "The agent named in `workflows.yaml` `phases[<phase>].owner`, or the agent that owns an artifact per the ownership table. Ownership is a declaration; specialist is a role.",
+    "notInsteadOf": ["specialist"],
+    "commonMisuse": "Do not write 'owner' for whoever happens to be editing — the owner is the declared agent."
+  },
+  {
+    "term": "route",
+    "meaning": "To hand work to its declared owner by emitting a `route_required` result envelope naming `nextRequiredOwner`. Routing is a machine-readable outcome.",
+    "notInsteadOf": ["handoff", "packet"],
+    "commonMisuse": "A narrative 'suggested next step' is not a route. Without a `route_required` envelope, nothing was routed."
+  },
+  {
+    "term": "handoff",
+    "meaning": "A VS Code `handoffs:` frontmatter entry — a button shown AFTER the turn ends that the user clicks to SWITCH agents. It is neither subagent dispatch nor routing.",
+    "notInsteadOf": ["route", "subagent"],
+    "commonMisuse": "Do not describe a subagent dispatch or a `route_required` envelope as a handoff — the runtime meaning differs."
   }
 ]

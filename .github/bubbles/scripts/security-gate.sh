@@ -85,7 +85,11 @@ cd "$repo_root"
 if command -v git >/dev/null 2>&1 && git rev-parse --git-dir >/dev/null 2>&1; then
   mapfile -t tracked < <(git ls-files 2>/dev/null || true)
 else
-  mapfile -t tracked < <(find . -type f -not -path './.git/*' -printf '%P\n' 2>/dev/null || true)
+  # NOT `find -printf '%P\n'`: -printf is a GNU extension that BSD/macOS find
+  # rejects with "unknown primary or operator". That failure emptied the
+  # denominator and made this gate report OK on every non-git tree on macOS —
+  # a green gate that had inspected nothing. Strip the leading './' instead.
+  mapfile -t tracked < <(find . -type f -not -path './.git/*' 2>/dev/null | sed 's|^\./||' || true)
 fi
 
 if [[ "${#tracked[@]}" -eq 0 ]]; then

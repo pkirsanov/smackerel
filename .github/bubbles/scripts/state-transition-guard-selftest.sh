@@ -347,6 +347,341 @@ EOF
 EOF
 }
 
+set_g061_transition_request() {
+  local state_file="$1"
+  local request_id="$2"
+  local routed_spec="$3"
+  local routing_class="$4"
+  local cross_repo="$5"
+
+  python3 -c '
+import json, sys
+
+state_file = sys.argv[1]
+with open(state_file) as handle:
+    state = json.load(handle)
+state["status"] = "in_progress"
+state["workflowMode"] = "autonomous-goal"
+state["policySnapshot"]["workflowMode"] = "autonomous-goal"
+state["certification"]["status"] = "in_progress"
+state["transitionRequests"] = [{
+    "id": sys.argv[2],
+    "status": "open",
+    "routedTo": "bubbles.validate",
+    "routedToSpec": sys.argv[3],
+    "productAction": "none",
+    "routingClass": sys.argv[4],
+    "crossRepoFollowUp": json.loads(sys.argv[5]),
+}]
+with open(state_file, "w") as handle:
+    json.dump(state, handle, indent=2)
+    handle.write("\n")
+' "$state_file" "$request_id" "$routed_spec" "$routing_class" "$cross_repo"
+}
+
+set_g061_transition_requests_json() {
+  local state_file="$1"
+  local requests_json="$2"
+
+  python3 -c '
+import json, sys
+
+state_file = sys.argv[1]
+with open(state_file) as handle:
+    state = json.load(handle)
+state["status"] = "in_progress"
+state["workflowMode"] = "autonomous-goal"
+state["policySnapshot"]["workflowMode"] = "autonomous-goal"
+state["certification"]["status"] = "in_progress"
+state["transitionRequests"] = json.loads(sys.argv[2])
+with open(state_file, "w") as handle:
+    json.dump(state, handle, indent=2)
+    handle.write("\n")
+' "$state_file" "$requests_json"
+}
+
+assert_g061_blocked_case() {
+  local feature_dir="$1"
+  local case_name="$2"
+  local requests_json="$3"
+  local expected_problem="$4"
+  local label="$5"
+  local log_file="$tmp_root/g061-$case_name.log"
+
+  set_g061_transition_requests_json "$feature_dir/state.json" "$requests_json"
+  run_capture "$log_file" bash "$GUARD_SCRIPT" "$feature_dir" >/dev/null
+  assert_log_contains "$log_file" "$expected_problem" "$label"
+}
+
+run_g061_regression_cases() {
+  local fixture_repo="$tmp_root/g061-fixture-repo"
+  local same_repo_dir="$fixture_repo/specs/061-same-repo-specialist"
+  local same_repo_alias="$fixture_repo/specs/061-same-repo-alias"
+  local external_blocked_dir="$fixture_repo/specs/062-external-blocked"
+  local external_allowed_dir="$fixture_repo/specs/063-external-allowed"
+  local same_repo_log="$tmp_root/g061-same-repo.log"
+  local external_blocked_log="$tmp_root/g061-external-blocked.log"
+  local external_allowed_log="$tmp_root/g061-external-allowed.log"
+  local string_false_log="$tmp_root/g061-string-false.log"
+  local traversal_log="$tmp_root/g061-traversal.log"
+  local absolute_log="$tmp_root/g061-absolute.log"
+  local symlink_log="$tmp_root/g061-symlink.log"
+  local non_list_log="$tmp_root/g061-non-list.log"
+  local non_object_log="$tmp_root/g061-non-object.log"
+
+  clone_framework_surface "$fixture_repo"
+
+  emit_base_fixture "$same_repo_dir"
+  set_g061_transition_request \
+    "$same_repo_dir/state.json" \
+    "TR-G061-SAME-REPO" \
+    "specs/061-same-repo-specialist" \
+    "specialist" \
+    "false"
+  run_capture "$same_repo_log" bash "$GUARD_SCRIPT" "$same_repo_dir" >/dev/null
+  assert_log_contains "$same_repo_log" \
+    "--- Check 3F: Transition And Rework Packets (Gate G061) ---" \
+    "G061 same-repo case reaches Check 3F"
+  assert_log_contains "$same_repo_log" \
+    "transitionRequest TR-G061-SAME-REPO is open-but-routed to 'bubbles.validate' (Gate G061 allowance)" \
+    "G061 allows bubbles.validate routing to the currently guarded spec"
+  assert_log_not_contains "$same_repo_log" \
+    "transitionRequest TR-G061-SAME-REPO (status=open) lacks routing fields" \
+    "G061 does not classify a same-spec specialist route as external"
+
+  emit_base_fixture "$external_blocked_dir"
+  set_g061_transition_request \
+    "$external_blocked_dir/state.json" \
+    "TR-G061-EXTERNAL-BLOCKED" \
+    "specs/999-upstream-target" \
+    "specialist" \
+    "false"
+  run_capture "$external_blocked_log" bash "$GUARD_SCRIPT" "$external_blocked_dir" >/dev/null
+  assert_log_contains "$external_blocked_log" \
+    "transitionRequest TR-G061-EXTERNAL-BLOCKED (status=open) lacks routing fields: routed externally but crossRepoFollowUp is not true (Gate G061)" \
+    "G061 blocks an external/upstream route without crossRepoFollowUp"
+  assert_log_not_contains "$external_blocked_log" \
+    "transitionRequest TR-G061-EXTERNAL-BLOCKED is open-but-routed" \
+    "G061 does not admit the incomplete external route"
+
+  emit_base_fixture "$external_allowed_dir"
+  set_g061_transition_request \
+    "$external_allowed_dir/state.json" \
+    "TR-G061-EXTERNAL-ALLOWED" \
+    "specs/999-upstream-target" \
+    "specialist" \
+    "true"
+  run_capture "$external_allowed_log" bash "$GUARD_SCRIPT" "$external_allowed_dir" >/dev/null
+  assert_log_contains "$external_allowed_log" \
+    "transitionRequest TR-G061-EXTERNAL-ALLOWED is open-but-routed to 'bubbles.validate' (Gate G061 allowance)" \
+    "G061 allows a complete external route with crossRepoFollowUp"
+  assert_log_not_contains "$external_allowed_log" \
+    "transitionRequest TR-G061-EXTERNAL-ALLOWED (status=open) lacks routing fields" \
+    "G061 keeps the complete external route non-blocking"
+
+  assert_g061_blocked_case \
+    "$same_repo_dir" \
+    "commit-false" \
+    '[{"id":"TR-G061-COMMIT-FALSE","status":"open","routedTo":"bubbles.validate","routedToCommit":"abcdef0","productAction":"none","routingClass":"specialist","crossRepoFollowUp":false}]' \
+    "transitionRequest TR-G061-COMMIT-FALSE (status=open) lacks routing fields: routed externally but crossRepoFollowUp is not true (Gate G061)" \
+    "G061 requires crossRepoFollowUp for a commit route"
+
+  assert_g061_blocked_case \
+    "$same_repo_dir" \
+    "ticket-false" \
+    '[{"id":"TR-G061-TICKET-FALSE","status":"open","routedTo":"bubbles.validate","routedToTicket":"https://example.invalid/issues/61","productAction":"none","routingClass":"specialist","crossRepoFollowUp":false}]' \
+    "transitionRequest TR-G061-TICKET-FALSE (status=open) lacks routing fields: routed externally but crossRepoFollowUp is not true (Gate G061)" \
+    "G061 requires crossRepoFollowUp for a ticket route"
+
+  assert_g061_blocked_case \
+    "$same_repo_dir" \
+    "external-class-false" \
+    '[{"id":"TR-G061-EXTERNAL-CLASS-FALSE","status":"open","routedTo":"bubbles.validate","routedToSpec":"specs/061-same-repo-specialist","productAction":"none","routingClass":"external","crossRepoFollowUp":false}]' \
+    "transitionRequest TR-G061-EXTERNAL-CLASS-FALSE (status=open) lacks routing fields: routed externally but crossRepoFollowUp is not true (Gate G061)" \
+    "G061 requires crossRepoFollowUp for an explicit external routing class"
+
+  assert_g061_blocked_case \
+    "$same_repo_dir" \
+    "upstream-class-false" \
+    '[{"id":"TR-G061-UPSTREAM-CLASS-FALSE","status":"open","routedTo":"bubbles.validate","routedToSpec":"specs/061-same-repo-specialist","productAction":"none","routingClass":"upstream","crossRepoFollowUp":false}]' \
+    "transitionRequest TR-G061-UPSTREAM-CLASS-FALSE (status=open) lacks routing fields: routed externally but crossRepoFollowUp is not true (Gate G061)" \
+    "G061 requires crossRepoFollowUp for an explicit upstream routing class"
+
+  set_g061_transition_request \
+    "$external_blocked_dir/state.json" \
+    "TR-G061-STRING-FALSE" \
+    "specs/999-upstream-target" \
+    "specialist" \
+    '"false"'
+  run_capture "$string_false_log" bash "$GUARD_SCRIPT" "$external_blocked_dir" >/dev/null
+  assert_log_contains "$string_false_log" \
+    "transitionRequest TR-G061-STRING-FALSE (status=open) lacks routing fields: crossRepoFollowUp must be a JSON boolean (Gate G061)" \
+    "G061 rejects a string crossRepoFollowUp value with a type-specific reason"
+  assert_log_not_contains "$string_false_log" \
+    "transitionRequest TR-G061-STRING-FALSE is open-but-routed" \
+    "G061 does not treat a string crossRepoFollowUp value as true"
+
+  set_g061_transition_request \
+    "$same_repo_dir/state.json" \
+    "TR-G061-TRAVERSAL" \
+    "specs/./061-same-repo-specialist" \
+    "specialist" \
+    "false"
+  run_capture "$traversal_log" bash "$GUARD_SCRIPT" "$same_repo_dir" >/dev/null
+  assert_log_contains "$traversal_log" \
+    "transitionRequest TR-G061-TRAVERSAL (status=open) lacks routing fields: routed externally but crossRepoFollowUp is not true (Gate G061)" \
+    "G061 rejects an ambiguous traversal alias of the guarded spec"
+
+  assert_g061_blocked_case \
+    "$same_repo_dir" \
+    "duplicate-separator" \
+    '[{"id":"TR-G061-DUPLICATE-SEPARATOR","status":"open","routedTo":"bubbles.validate","routedToSpec":"specs//061-same-repo-specialist","productAction":"none","routingClass":"specialist","crossRepoFollowUp":false}]' \
+    "transitionRequest TR-G061-DUPLICATE-SEPARATOR (status=open) lacks routing fields: routed externally but crossRepoFollowUp is not true (Gate G061)" \
+    "G061 rejects a duplicate-separator alias of the guarded spec"
+
+  assert_g061_blocked_case \
+    "$same_repo_dir" \
+    "backslash" \
+    '[{"id":"TR-G061-BACKSLASH","status":"open","routedTo":"bubbles.validate","routedToSpec":"specs/061-same-repo\\specialist","productAction":"none","routingClass":"specialist","crossRepoFollowUp":false}]' \
+    "transitionRequest TR-G061-BACKSLASH (status=open) lacks routing fields: routed externally but crossRepoFollowUp is not true (Gate G061)" \
+    "G061 rejects a backslash alias of the guarded spec"
+
+  assert_g061_blocked_case \
+    "$same_repo_dir" \
+    "surrounding-whitespace" \
+    '[{"id":"TR-G061-SURROUNDING-WHITESPACE","status":"open","routedTo":"bubbles.validate","routedToSpec":" specs/061-same-repo-specialist ","productAction":"none","routingClass":"specialist","crossRepoFollowUp":false}]' \
+    "transitionRequest TR-G061-SURROUNDING-WHITESPACE (status=open) lacks routing fields: routed externally but crossRepoFollowUp is not true (Gate G061)" \
+    "G061 rejects a surrounding-whitespace alias of the guarded spec"
+
+  assert_g061_blocked_case \
+    "$same_repo_dir" \
+    "parent-traversal" \
+    '[{"id":"TR-G061-PARENT-TRAVERSAL","status":"open","routedTo":"bubbles.validate","routedToSpec":"specs/alias/../061-same-repo-specialist","productAction":"none","routingClass":"specialist","crossRepoFollowUp":false}]' \
+    "transitionRequest TR-G061-PARENT-TRAVERSAL (status=open) lacks routing fields: routed externally but crossRepoFollowUp is not true (Gate G061)" \
+    "G061 rejects a parent-traversal alias of the guarded spec"
+
+  set_g061_transition_request \
+    "$same_repo_dir/state.json" \
+    "TR-G061-ABSOLUTE" \
+    "$same_repo_dir" \
+    "specialist" \
+    "false"
+  run_capture "$absolute_log" bash "$GUARD_SCRIPT" "$same_repo_dir" >/dev/null
+  assert_log_contains "$absolute_log" \
+    "transitionRequest TR-G061-ABSOLUTE (status=open) lacks routing fields: routed externally but crossRepoFollowUp is not true (Gate G061)" \
+    "G061 rejects an absolute alias of the guarded spec"
+
+  ln -s "061-same-repo-specialist" "$same_repo_alias"
+  set_g061_transition_request \
+    "$same_repo_dir/state.json" \
+    "TR-G061-SYMLINK" \
+    "specs/061-same-repo-alias" \
+    "specialist" \
+    "false"
+  run_capture "$symlink_log" bash "$GUARD_SCRIPT" "$same_repo_dir" >/dev/null
+  assert_log_contains "$symlink_log" \
+    "transitionRequest TR-G061-SYMLINK (status=open) lacks routing fields: routed externally but crossRepoFollowUp is not true (Gate G061)" \
+    "G061 does not resolve a symlink alias as the guarded spec"
+
+  set_g061_transition_requests_json \
+    "$same_repo_dir/state.json" \
+    '{"id":"TR-G061-NON-LIST"}'
+  run_capture "$non_list_log" bash "$GUARD_SCRIPT" "$same_repo_dir" >/dev/null
+  assert_log_contains "$non_list_log" \
+    "transitionRequest <queue> (status=malformed) lacks routing fields: transitionRequests is not a list (Gate G061)" \
+    "G061 blocks a non-list transitionRequests queue"
+
+  set_g061_transition_requests_json \
+    "$same_repo_dir/state.json" \
+    '["TR-G061-NON-OBJECT"]'
+  run_capture "$non_object_log" bash "$GUARD_SCRIPT" "$same_repo_dir" >/dev/null
+  assert_log_contains "$non_object_log" \
+    "transitionRequest <entry:0> (status=malformed) lacks routing fields: transitionRequests[0] is not an object (Gate G061)" \
+    "G061 blocks a non-object transitionRequests entry"
+
+  assert_g061_blocked_case \
+    "$same_repo_dir" \
+    "type-status" \
+    '[{"id":"TR-G061-TYPE-STATUS","status":1,"routedTo":"bubbles.validate","routedToSpec":"specs/061-same-repo-specialist","productAction":"none","routingClass":"specialist","crossRepoFollowUp":false}]' \
+    "transitionRequest TR-G061-TYPE-STATUS (status=<invalid>) lacks routing fields: status must be a JSON string (Gate G061)" \
+    "G061 blocks a present non-string status"
+
+  assert_g061_blocked_case \
+    "$same_repo_dir" \
+    "type-id" \
+    '[{"id":1,"transitionRequestId":"TR-G061-TYPE-ID","status":"open","routedTo":"bubbles.validate","routedToSpec":"specs/061-same-repo-specialist","productAction":"none","routingClass":"specialist","crossRepoFollowUp":false}]' \
+    "transitionRequest TR-G061-TYPE-ID (status=open) lacks routing fields: id must be a JSON string (Gate G061)" \
+    "G061 blocks a present non-string id"
+
+  assert_g061_blocked_case \
+    "$same_repo_dir" \
+    "type-transition-request-id" \
+    '[{"id":"TR-G061-TYPE-TRANSITION-REQUEST-ID","transitionRequestId":1,"status":"open","routedTo":"bubbles.validate","routedToSpec":"specs/061-same-repo-specialist","productAction":"none","routingClass":"specialist","crossRepoFollowUp":false}]' \
+    "transitionRequest TR-G061-TYPE-TRANSITION-REQUEST-ID (status=open) lacks routing fields: transitionRequestId must be a JSON string (Gate G061)" \
+    "G061 blocks a present non-string transitionRequestId"
+
+  assert_g061_blocked_case \
+    "$same_repo_dir" \
+    "type-routed-to" \
+    '[{"id":"TR-G061-TYPE-ROUTED-TO","status":"open","routedTo":1,"routedToSpec":"specs/061-same-repo-specialist","productAction":"none","routingClass":"specialist","crossRepoFollowUp":false}]' \
+    "transitionRequest TR-G061-TYPE-ROUTED-TO (status=open) lacks routing fields: routedTo must be a JSON string (Gate G061)" \
+    "G061 blocks a present non-string routedTo"
+
+  assert_g061_blocked_case \
+    "$same_repo_dir" \
+    "type-routed-to-commit" \
+    '[{"id":"TR-G061-TYPE-ROUTED-TO-COMMIT","status":"open","routedTo":"bubbles.validate","routedToCommit":1,"routedToSpec":"specs/061-same-repo-specialist","productAction":"none","routingClass":"specialist","crossRepoFollowUp":false}]' \
+    "transitionRequest TR-G061-TYPE-ROUTED-TO-COMMIT (status=open) lacks routing fields: routedToCommit must be a JSON string (Gate G061)" \
+    "G061 blocks a present non-string routedToCommit"
+
+  assert_g061_blocked_case \
+    "$same_repo_dir" \
+    "type-routed-to-spec" \
+    '[{"id":"TR-G061-TYPE-ROUTED-TO-SPEC","status":"open","routedTo":"bubbles.validate","routedToCommit":"abcdef0","routedToSpec":1,"productAction":"none","routingClass":"specialist","crossRepoFollowUp":true}]' \
+    "transitionRequest TR-G061-TYPE-ROUTED-TO-SPEC (status=open) lacks routing fields: routedToSpec must be a JSON string (Gate G061)" \
+    "G061 blocks a present non-string routedToSpec"
+
+  assert_g061_blocked_case \
+    "$same_repo_dir" \
+    "type-routed-to-ticket" \
+    '[{"id":"TR-G061-TYPE-ROUTED-TO-TICKET","status":"open","routedTo":"bubbles.validate","routedToSpec":"specs/061-same-repo-specialist","routedToTicket":1,"productAction":"none","routingClass":"specialist","crossRepoFollowUp":false}]' \
+    "transitionRequest TR-G061-TYPE-ROUTED-TO-TICKET (status=open) lacks routing fields: routedToTicket must be a JSON string (Gate G061)" \
+    "G061 blocks a present non-string routedToTicket"
+
+  assert_g061_blocked_case \
+    "$same_repo_dir" \
+    "type-product-action" \
+    '[{"id":"TR-G061-TYPE-PRODUCT-ACTION","status":"open","routedTo":"bubbles.validate","routedToSpec":"specs/061-same-repo-specialist","productAction":1,"routingClass":"specialist","crossRepoFollowUp":false}]' \
+    "transitionRequest TR-G061-TYPE-PRODUCT-ACTION (status=open) lacks routing fields: productAction must be a JSON string (Gate G061)" \
+    "G061 blocks a present non-string productAction"
+
+  assert_g061_blocked_case \
+    "$same_repo_dir" \
+    "type-routing-class" \
+    '[{"id":"TR-G061-TYPE-ROUTING-CLASS","status":"open","routedTo":"bubbles.validate","routedToSpec":"specs/061-same-repo-specialist","productAction":"none","routingClass":1,"crossRepoFollowUp":false}]' \
+    "transitionRequest TR-G061-TYPE-ROUTING-CLASS (status=open) lacks routing fields: routingClass must be a JSON string (Gate G061)" \
+    "G061 blocks a present non-string routingClass"
+
+  assert_g061_blocked_case \
+    "$same_repo_dir" \
+    "type-cross-repo-follow-up" \
+    '[{"id":"TR-G061-TYPE-CROSS-REPO-FOLLOW-UP","status":"open","routedTo":"bubbles.validate","routedToSpec":"specs/999-upstream-target","productAction":"none","routingClass":"specialist","crossRepoFollowUp":1}]' \
+    "transitionRequest TR-G061-TYPE-CROSS-REPO-FOLLOW-UP (status=open) lacks routing fields: crossRepoFollowUp must be a JSON boolean (Gate G061)" \
+    "G061 blocks numeric crossRepoFollowUp instead of treating 1 as true"
+}
+
+if [[ "${BUBBLES_STATE_TRANSITION_GUARD_G061_ONLY:-0}" == "1" ]]; then
+  run_g061_regression_cases
+  if [[ "$failures" -gt 0 ]]; then
+    echo "state-transition-guard G061 selftest failed with $failures issue(s)."
+    exit 1
+  fi
+  echo "state-transition-guard G061 selftest passed."
+  exit 0
+fi
+
+run_g061_regression_cases
+
 emit_honest_planning_fixture() {
   local feature_dir="$1"
   local future_test="$feature_dir/tests/regression/planning-maturity-future-test.sh"

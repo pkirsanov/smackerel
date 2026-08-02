@@ -14,10 +14,16 @@
 # (`verticalPlanGuard: block`), matching the advisory-until-configured posture of
 # other coverage gates. There is no `--skip`/`--force` bypass.
 #
-# Classification is structural (does a scope reference a consumer-visible
-# surface?), not keyword-counting: a scope is "consumer" when its body references
-# a route/endpoint/UI/CLI/operator surface, else "foundation". Ambiguous scopes
-# are treated as foundation (conservative — advisory only).
+# Classification is PROSE KEYWORD MATCHING, not structural analysis (stated
+# honestly per IMP-031 SCOPE-1 — an earlier version of this header claimed the
+# opposite). A scope is classified "consumer" when a case-insensitive extended
+# regex (`grep -qiE "$consumer_re"`) matches the scope's markdown body against a
+# fixed vocabulary of route/endpoint/UI/CLI/operator words; otherwise it is
+# "foundation". This reads the PLAN TEXT only — it never inspects a router
+# table, a source tree, or a running system, so a scope that genuinely ships a
+# consumer surface while describing it in other words WILL be misclassified as
+# foundation, and prose that merely mentions a surface WILL count as consumer.
+# Ambiguous scopes are treated as foundation (conservative — advisory only).
 #
 # It ALSO enforces a risk-adjusted scope BUDGET (IMP-022 SCOPE-2, bound to the
 # Phase-1 tier): when the feature's state.json workflowMode is the low-risk
@@ -25,6 +31,20 @@
 # <= 3 increments) — the fast lane is for ONE usable increment, not a sprawling
 # build. Every other mode is unbounded, exactly as before. Same advisory/block
 # posture; conservative (unknown/absent mode is NOT treated as low-risk).
+#
+# It ALSO enforces a PER-INCREMENT exposure requirement (IMP-031 SCOPE-4). The
+# horizontal check above only asks "is the FIRST usable increment early?", which
+# a plan satisfies by exposing scope 1 and then burying scopes 2..N. The rule
+# operators actually need is per scope: every delivery scope names at least one
+# consumer surface, OR carries an explicit
+#     Exposure-Deferred: <reason> -> <spec section>
+# line pointing at the committed plan for exposing it. One frontend suffices — a
+# CLI command counts. A deferral that names no target section is a finding, not
+# a pass: silence is precisely the failure mode being closed. Both `->` and the
+# Unicode arrow are accepted. This check inherits the same prose-keyword
+# imprecision described above and the same advisory/block knob; it stays
+# prose-based until IMP-031 SCOPE-3 supplies a derived surface inventory to
+# reconcile against.
 set -euo pipefail
 
 usage() {
@@ -32,9 +52,11 @@ usage() {
 Usage: vertical-delivery-plan-guard.sh <feature-dir>
 
 Flags a horizontal plan (>=3 leading foundation-only scopes before the first
-consumer-visible increment) AND, for the low-risk rapid-tool-delivery tier, a
-scope-budget breach (> 5 active scopes). Advisory (exit 0 + warning) by default;
-blocks (exit 1) only when .github/bubbles-project.yaml sets verticalPlanGuard: block.
+consumer-visible increment), a low-risk rapid-tool-delivery scope-budget breach
+(> 5 active scopes), and any delivery scope that neither names a consumer
+surface nor carries an `Exposure-Deferred: <reason> -> <spec section>` line.
+Advisory (exit 0 + warning) by default; blocks (exit 1) only when
+.github/bubbles-project.yaml sets verticalPlanGuard: block.
 EOF
 }
 
@@ -174,7 +196,52 @@ if [[ -f "$state_file" ]]; then
   fi
 fi
 
-if [[ "$verdict" == "ok" && "$budget_verdict" == "ok" ]]; then
+# ---------------------------------------------------------------------------
+# Per-increment exposure requirement (IMP-031 SCOPE-4).
+# A scope satisfies the rule by naming a consumer surface (already classified
+# above) OR by carrying `Exposure-Deferred: <reason> -> <spec section>`. Both
+# halves are mandatory: a bare `Exposure-Deferred:` with no named target is the
+# silence this check exists to catch, so it is reported as MALFORMED rather than
+# quietly accepted.
+# ---------------------------------------------------------------------------
+trim() { printf '%s' "$1" | sed -E 's/^[*[:space:]]+//; s/[[:space:]]+$//'; }
+
+unexposed_list=""
+malformed_list=""
+i=0
+while IFS= read -r name; do
+  i=$((i + 1))
+  body_file="$scope_bodies_dir/scope-$i.body"
+  if grep -qiE "$consumer_re" "$body_file" 2>/dev/null; then
+    continue
+  fi
+  payload="$(grep -iE 'Exposure-Deferred[[:space:]]*:' "$body_file" 2>/dev/null | head -n1 | sed -E 's/^.*[Ee]xposure-[Dd]eferred[[:space:]]*:[[:space:]]*//' || true)"
+  if [[ -z "$payload" ]]; then
+    unexposed_list="${unexposed_list}    scope $i: $name"$'\n'
+    continue
+  fi
+  # Normalize the Unicode arrow to ASCII with a byte-safe bash expansion. BSD
+  # sed and multibyte patterns do not mix reliably across locales, and this
+  # guard must behave identically on macOS and Linux.
+  normalized="${payload//→/->}"
+  if [[ "$normalized" == *"->"* ]]; then
+    reason="$(trim "${normalized%%->*}")"
+    target="$(trim "${normalized#*->}")"
+  else
+    reason="$(trim "$normalized")"
+    target=""
+  fi
+  if [[ -z "$reason" || -z "$target" ]]; then
+    malformed_list="${malformed_list}    scope $i: $name"$'\n'
+  fi
+done < "$scope_bodies_dir/names"
+
+exposure_verdict="ok"
+if [[ -n "$unexposed_list" || -n "$malformed_list" ]]; then
+  exposure_verdict="unexposed"
+fi
+
+if [[ "$verdict" == "ok" && "$budget_verdict" == "ok" && "$exposure_verdict" == "ok" ]]; then
   if [[ "$first_consumer" -gt 0 ]]; then
     echo "[vertical-delivery-plan-guard] OK — first usable increment is early (scope $first_consumer of $scope_count); no horizontal chain; within scope budget."
   else
@@ -208,6 +275,25 @@ lead="$((first_consumer > 0 ? first_consumer - 1 : scope_count))"
     echo "  Remediation: keep the fast lane to a single low-risk, build-free usable increment —"
     echo "  split the surplus scopes into a separate feature, or re-plan as full-delivery if the"
     echo "  work is genuinely large. risk-tier-resolve.sh escalates any high-risk trigger anyway."
+  fi
+  if [[ "$exposure_verdict" != "ok" ]]; then
+    echo "[vertical-delivery-plan-guard] UNEXPOSED INCREMENT in $feature_dir:"
+    if [[ -n "$unexposed_list" ]]; then
+      echo "  These scopes name no consumer surface and declare no deferral:"
+      printf '%s' "$unexposed_list"
+    fi
+    if [[ -n "$malformed_list" ]]; then
+      echo "  These scopes declare Exposure-Deferred but name no target section:"
+      printf '%s' "$malformed_list"
+    fi
+    echo "  Remediation: give each listed scope a consumer surface it can be reached"
+    echo "  through — a route, a screen, or a CLI command is enough — or record the"
+    echo "  commitment explicitly:"
+    echo "      Exposure-Deferred: <why this increment ships unexposed> -> <spec section>"
+    echo "  The target must be a real section of the plan (for example the spec's"
+    echo "  Exposure Contract), because a deferral with no destination is the silent"
+    echo "  loss this check exists to prevent. Work that ships with no way to reach it"
+    echo "  has not delivered its value; it has only spent the effort."
   fi
 } >&2
 

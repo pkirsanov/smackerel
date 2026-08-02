@@ -12,7 +12,7 @@ Produce evidence blocks that pass the Bubbles ≥10-line raw-output standard and
 - Recording per-DoD-item evidence inline in `scopes.md`
 - Filling out `report.md` evidence sections (Test Evidence, Verification, Round-trip, Freshness)
 - Capturing bug reproduction (before-fix and after-fix) evidence
-- Recording specialist sub-agent run output
+- Recording specialist subagent run output
 
 ## Required evidence shape
 For every command/tool whose outcome you cite:

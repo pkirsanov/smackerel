@@ -1790,6 +1790,54 @@
     <div class="wf-name">prototype assurance</div>
     <div class="wf-desc">The fail-closed assurance floor: verification incomplete or failing (missing coverage OR a failing test). Maps to <code>delivered_prototype</code> — never deployable, never terminal under normal delivery modes. A derived result, not a user-chosen tier; a throwaway POC is an intent (<code>.design-experiment</code>), not the bottom of a quality ladder.</div>
   </div>
+  <div class="workflow-card">
+    <div class="wf-name">gate</div>
+    <div class="wf-desc">A numbered policy (<code>Gxxx</code>) declared in <code>bubbles/registry/gates.yaml</code>. A gate states WHAT must hold; it is not itself executable. Its <code>enforcedBy:</code> field names the guard, lint, or scan that mechanically enforces it, or <code>mode-required</code> when only agent behavior carries it.</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">guard</div>
+    <div class="wf-desc">An executable script under <code>bubbles/scripts/</code> (39 named <code>*-guard.sh</code>) that mechanically enforces one or more gates and exits non-zero on violation.</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">lint</div>
+    <div class="wf-desc">An executable script under <code>bubbles/scripts/</code> (24 named <code>*-lint.sh</code>) that checks the STRUCTURE or FORM of an artifact — required sections, schema shape, naming — rather than the truth of a claim.</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">scan</div>
+    <div class="wf-desc">An executable script under <code>bubbles/scripts/</code> (3 named <code>*-scan.sh</code>) that sweeps a whole corpus for a forbidden PATTERN, such as <code>env-pollution-scan.sh</code>. A scan has no single declaring artifact.</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">check</div>
+    <div class="wf-desc">A NUMBERED step inside a composite guard — <code>state-transition-guard.sh</code> runs 67 of them. It is also the suffix of 8 standalone <code>*-check.sh</code> scripts, so the word carries two senses.</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">scope</div>
+    <div class="wf-desc">A DURABLE unit of work in <code>scopes.md</code>, identified <code>SCOPE-N</code>. A fresh specialist handed ONLY the spec&#x27;s durable artifacts MUST be able to execute it without replaying the session that produced it.</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">task</div>
+    <div class="wf-desc">A speckit artifact row in <code>tasks.md</code>, produced by <code>speckit.tasks</code>. Bubbles does not plan work as tasks; its durable planning unit is the scope.</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">specialist</div>
+    <div class="wf-desc">A <code>bubbles.*</code> agent that owns one workflow phase and is invoked by an authorized runner via <code>runSubagent</code>. Specialists execute the work; runners route it.</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">subagent</div>
+    <div class="wf-desc">A specialist executing as a depth-1 dispatch from a top-level runner through the VS Code <code>agent</code> tool. Always one word.</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">owner</div>
+    <div class="wf-desc">The agent named in <code>workflows.yaml</code> <code>phases[&lt;phase&gt;].owner</code>, or the agent that owns an artifact per the ownership table. Ownership is a declaration; specialist is a role.</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">route</div>
+    <div class="wf-desc">To hand work to its declared owner by emitting a <code>route_required</code> result envelope naming <code>nextRequiredOwner</code>. Routing is a machine-readable outcome.</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">handoff</div>
+    <div class="wf-desc">A VS Code <code>handoffs:</code> frontmatter entry — a button shown AFTER the turn ends that the user clicks to SWITCH agents. It is neither subagent dispatch nor routing.</div>
+  </div>
 <!-- GENERATED:HTML_VOCABULARY_CARDS_END -->
 </div>
 

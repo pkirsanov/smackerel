@@ -10,11 +10,14 @@ FAILURES=0
 pass() { echo "PASS: $1"; }
 fail() { echo "FAIL: $1"; FAILURES=$((FAILURES + 1)); }
 
-# Foundation-only scope: DB/service/model boilerplate, NO consumer surface.
+# Foundation-only scope: DB/service/model boilerplate, NO consumer surface, but
+# COMPLIANT with the IMP-031 SCOPE-4 per-increment exposure rule because it
+# declares a well-formed deferral naming a target section.
 foundation_scope() { # $1=n $2=name
   cat <<EOF
 ## Scope $1: $2 persistence
 Status: [ ] Not started
+Exposure-Deferred: backing store only, nothing to reach yet → spec.md#exposure-contract
 ### Use Cases (Gherkin)
 Given the persistent store
 When a migration runs
@@ -22,6 +25,30 @@ Then the $2 table exists
 ### Implementation Plan
 - DB schema/migrations: add $2 table
 - Components/files: migrations/00$1_$2.sql
+- service layer: ${2}Repository business logic
+EOF
+}
+
+# Foundation scope with NO consumer surface and NO deferral — the exact silence
+# the per-increment exposure rule closes (IMP-031 SCOPE-4).
+unexposed_scope() { # $1=n $2=name
+  cat <<EOF
+## Scope $1: $2 persistence
+Status: [ ] Not started
+### Implementation Plan
+- DB schema/migrations: add $2 table
+- service layer: ${2}Repository business logic
+EOF
+}
+
+# Foundation scope whose deferral names no target section — a promise with no
+# destination, which must be reported rather than accepted.
+malformed_deferral_scope() { # $1=n $2=name
+  cat <<EOF
+## Scope $1: $2 persistence
+Status: [ ] Not started
+Exposure-Deferred: later
+### Implementation Plan
 - service layer: ${2}Repository business logic
 EOF
 }
@@ -194,6 +221,74 @@ if [[ "$rc" -eq 0 ]] \
   pass "T13 vertical twin (same 14 scopes, early consumer) passes clean (exit 0)"
 else
   fail "T13 vertical twin should pass clean (rc=$rc)"
+fi
+
+# ── T14: early consumer at scope 1, scopes 2-5 backend-only with NO deferral →
+#         the horizontal check is satisfied (consumer is scope 1) yet four
+#         increments ship unreachable → UNEXPOSED INCREMENT finding, exit 0.
+d="$TMP_ROOT/t14"; mkdir -p "$d"
+{ consumer_scope 1 "dashboard"; echo; for n in 2 3 4 5; do unexposed_scope "$n" "layer$n"; echo; done; } > "$d/scopes.md"
+out="$("$GUARD" "$d" 2>&1)" && rc=0 || rc=$?
+if [[ "$rc" -eq 0 ]] \
+  && printf '%s\n' "$out" | grep -q 'UNEXPOSED INCREMENT' \
+  && printf '%s\n' "$out" | grep -q 'scope 2: ' \
+  && printf '%s\n' "$out" | grep -q 'scope 5: ' \
+  && ! printf '%s\n' "$out" | grep -q 'HORIZONTAL PLAN'; then
+  pass "T14 early-consumer plan with 4 unexposed backend scopes is flagged (exit 0)"
+else
+  fail "T14 unexposed backend scopes should be flagged even with an early consumer (rc=$rc)"
+fi
+
+# ── T15: the SAME plan with well-formed deferrals → clean, exit 0. Proves the
+#         rule rewards a recorded commitment instead of demanding a surface.
+d="$TMP_ROOT/t15"; mkdir -p "$d"
+{ consumer_scope 1 "dashboard"; echo; for n in 2 3 4 5; do foundation_scope "$n" "layer$n"; echo; done; } > "$d/scopes.md"
+out="$("$GUARD" "$d" 2>&1)" && rc=0 || rc=$?
+if [[ "$rc" -eq 0 ]] && ! printf '%s\n' "$out" | grep -q 'UNEXPOSED INCREMENT'; then
+  pass "T15 same plan with Exposure-Deferred lines naming a target passes clean (exit 0)"
+else
+  fail "T15 declared deferrals should satisfy the exposure rule (rc=$rc)"
+fi
+
+# ── T16: deferral with no target section → MALFORMED, reported not accepted.
+d="$TMP_ROOT/t16"; mkdir -p "$d"
+{ consumer_scope 1 "dashboard"; echo; malformed_deferral_scope 2 "audit"; } > "$d/scopes.md"
+out="$("$GUARD" "$d" 2>&1)" && rc=0 || rc=$?
+if [[ "$rc" -eq 0 ]] \
+  && printf '%s\n' "$out" | grep -q 'declare Exposure-Deferred but name no target section' \
+  && printf '%s\n' "$out" | grep -q 'scope 2: '; then
+  pass "T16 deferral naming no target section is reported as malformed (exit 0)"
+else
+  fail "T16 targetless deferral should be reported (rc=$rc)"
+fi
+
+# ── T17: ASCII `->` arrow is accepted exactly like the Unicode arrow. The guard
+#         must not depend on multibyte matching to behave on macOS vs Linux.
+d="$TMP_ROOT/t17"; mkdir -p "$d"
+{
+  consumer_scope 1 "dashboard"; echo
+  printf '%s\n' '## Scope 2: audit persistence' 'Status: [ ] Not started' \
+    'Exposure-Deferred: backing store only -> spec.md#exposure-contract' \
+    '### Implementation Plan' '- service layer: AuditRepository business logic'
+} > "$d/scopes.md"
+out="$("$GUARD" "$d" 2>&1)" && rc=0 || rc=$?
+if [[ "$rc" -eq 0 ]] && ! printf '%s\n' "$out" | grep -q 'UNEXPOSED INCREMENT'; then
+  pass "T17 ASCII -> arrow accepted identically to the Unicode arrow (exit 0)"
+else
+  fail "T17 ASCII arrow deferral should satisfy the exposure rule (rc=$rc)"
+fi
+
+# ── T18: unexposed increments + verticalPlanGuard: block opt-in → exit 1.
+d="$TMP_ROOT/exposureblock"; mkdir -p "$d/.github" "$d/specs/feat"
+printf 'verticalPlanGuard: block\n' > "$d/.github/bubbles-project.yaml"
+{ consumer_scope 1 "dashboard"; echo; unexposed_scope 2 "audit"; } > "$d/specs/feat/scopes.md"
+out="$( (cd "$d" && "$GUARD" specs/feat) 2>&1)" && rc=0 || rc=$?
+if [[ "$rc" -eq 1 ]] \
+  && printf '%s\n' "$out" | grep -q 'UNEXPOSED INCREMENT' \
+  && printf '%s\n' "$out" | grep -q 'verticalPlanGuard: block'; then
+  pass "T18 unexposed increment with verticalPlanGuard: block FAILS (exit 1)"
+else
+  fail "T18 unexposed increment with block config should fail (rc=$rc)"
 fi
 
 echo

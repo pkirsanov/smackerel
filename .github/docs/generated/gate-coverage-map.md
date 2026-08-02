@@ -67,7 +67,7 @@ Corroborating (grep-derived, advisory) numbers:
 | G031 | findings_artifact_update_gate | `mode-required` | 9 | — | 1 | — |
 | G032 | business_analysis_gate | `mode-required` | 4 | — | — | — |
 | G033 | design_readiness_gate | `mode-required` | 22 | — | — | — |
-| G034 | security_gate | `script:bubbles/scripts/security-gate.sh`, `behavioral:bubbles.security` | 22 | — | 3 | — |
+| G034 | security_gate | `script:bubbles/scripts/security-gate.sh`, `behavioral:bubbles.security` | 22 | — | 4 | — |
 | G035 | vertical_slice_gate | `mode-required` | 22 | — | 1 | — |
 | G036 | red_green_traceability_gate | `mode-required` | 2 | — | — | — |
 | G037 | scope_size_discipline_gate | `script:bubbles/scripts/scope-context-fit-lint.sh` | 0 | — | 1 | — |
@@ -88,12 +88,12 @@ Corroborating (grep-derived, advisory) numbers:
 | G058 | lockdown_gate | `script:bubbles/scripts/guards/control-plane-checks.sh` | 1 | Check 3D | — | guard |
 | G059 | regression_contract_gate | `script:bubbles/scripts/guards/control-plane-checks.sh` | 25 | Check 3D | 1 | guard |
 | G060 | scenario_tdd_gate | `script:bubbles/scripts/guards/control-plane-checks.sh` | 3 | Check 3E | 4 | guard |
-| G061 | rework_packet_gate | `script:bubbles/scripts/guards/control-plane-checks.sh` | 25 | Check 3F | — | guard |
+| G061 | rework_packet_gate | `script:bubbles/scripts/guards/control-plane-checks.sh` | 25 | Check 3F | 1 | guard |
 | G063 | concrete_result_gate | `guard-check:3G` | 0 | Check 3G | 2 | guard |
 | G064 | workflow_runner_authorization_gate | `guard-check:3H` | 0 | Check 3H | 7 | guard |
 | G066 | phase_claim_provenance_gate | `guard-check:6B` | 0 | — | — | — |
 | G067 | shared_infrastructure_blast_radius_gate | `script:bubbles/scripts/guards/planning-checks.sh` | 0 | ref | 1 | guard |
-| G068 | dod_gherkin_content_fidelity_gate | `guard-check:22` | 0 | Check 22 | 7 | guard |
+| G068 | dod_gherkin_content_fidelity_gate | `guard-check:22` | 0 | Check 22 | 8 | guard |
 | G069 | collateral_change_containment_gate | `script:bubbles/scripts/guards/planning-checks.sh` | 0 | ref | 1 | guard |
 | G070 | outcome_contract_gate | `unbound` | 0 | — | 1 | — |
 | G071 | execution_only_validation_gate | `unbound` | 0 | — | — | — |
@@ -166,7 +166,7 @@ These gates are intentionally enforced OUTSIDE the mode `requiredGates` lists. E
 | G064 | workflow_runner_authorization_gate | Check 3H | 7 | guard | agent-ownership-lint.sh, cli.sh, framework-validate.sh, scenario-compile-lint-selftest.sh, scenario-compile-lint.sh, state-transition-guard-selftest.sh, +1 more |
 | G066 | phase_claim_provenance_gate | — | — | — | — |
 | G067 | shared_infrastructure_blast_radius_gate | ref | 1 | guard | imp021-interaction-contracts-selftest.sh |
-| G068 | dod_gherkin_content_fidelity_gate | Check 22 | 7 | guard | audit-result-contract-lint-selftest.sh, capability-freshness-selftest.sh, dod-section-lib.sh, evidence-admission-hardening-selftest.sh, state-transition-guard-selftest.sh, state-transition-required-specialists-selftest.sh, +1 more |
+| G068 | dod_gherkin_content_fidelity_gate | Check 22 | 8 | guard | audit-result-contract-lint-selftest.sh, capability-freshness-selftest.sh, dod-section-lib.sh, evidence-admission-hardening-selftest.sh, state-transition-guard-selftest.sh, state-transition-required-specialists-selftest.sh, +2 more |
 | G069 | collateral_change_containment_gate | ref | 1 | guard | imp021-interaction-contracts-selftest.sh |
 | G070 | outcome_contract_gate | — | 1 | — | scenario-compile-lint.sh |
 | G071 | execution_only_validation_gate | — | — | — | — |

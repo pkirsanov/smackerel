@@ -197,6 +197,65 @@ done
 echo ""
 
 # ---------------------------------------------------------------------------
+# Part A5 — an AMBIGUOUS symbol must be reported as ambiguous, not as a
+# malformed payload.
+# ---------------------------------------------------------------------------
+# codebase-memory answers an ambiguous name with a different shape
+# (status/message/suggestions, no callees/callers). The adapter used to fall
+# straight through to doc["callees"] and report "provider payload missing
+# expected field: 'callees'" — blaming the payload for a caller-side problem and
+# throwing away the qualified names needed to disambiguate. Driven through a
+# stub provider so this stays hermetic.
+echo "Part A5 — ambiguous symbol is reported as ambiguous"
+
+CBM_ADAPTER="$ADAPTER_DIR/codebase-memory.sh"
+if [ -f "$CBM_ADAPTER" ] && command -v python3 >/dev/null 2>&1; then
+  a5_dir="$(mktemp -d)"
+  a5_repo="$a5_dir/repo"; mkdir -p "$a5_repo"
+  a5_stub="$a5_dir/stub-provider"
+  cat >"$a5_stub" <<STUB
+#!/usr/bin/env bash
+# Minimal codebase-memory stand-in: resolves one project, then answers
+# trace_path with the provider's real ambiguous-result shape.
+for a in "\$@"; do
+  case "\$a" in
+    list_projects)
+      printf '{"projects":[{"name":"stub-proj","root_path":"%s"}]}' "$a5_repo"; exit 0 ;;
+    trace_path)
+      printf '{"status":"ambiguous","message":"2 matches for \\\\"dup\\\\".","suggestions":["stub-proj.a.dup","stub-proj.b.dup"]}'; exit 0 ;;
+  esac
+done
+exit 0
+STUB
+  chmod +x "$a5_stub"
+
+  a5_err="$a5_dir/err"
+  CODEINDEX_ROOT="$a5_repo" CODEINDEX_CODEBASE_MEMORY_BIN="$a5_stub" \
+    bash "$CBM_ADAPTER" impact dup >/dev/null 2>"$a5_err"
+  a5_rc=$?
+
+  [ "$a5_rc" -eq 1 ] \
+    && ok "ambiguous symbol exits 1 (could-not-look)" \
+    || bad "ambiguous symbol exited $a5_rc (want 1)"
+  grep -q 'ambiguous' "$a5_err" \
+    && ok "error names the ambiguity" \
+    || bad "error does not mention ambiguity: $(head -1 "$a5_err")"
+  grep -q 'stub-proj.a.dup' "$a5_err" && grep -q 'stub-proj.b.dup' "$a5_err" \
+    && ok "error lists the candidate qualified names" \
+    || bad "error drops the disambiguating candidates"
+  # ADVERSARIAL: the pre-fix message must not come back.
+  grep -q 'missing expected field' "$a5_err" \
+    && bad "ADVERSARIAL: reports a malformed payload instead of an ambiguous name" \
+    || ok "ADVERSARIAL: does not blame the payload shape"
+
+  rm -rf "$a5_dir"
+else
+  ok "SKIP Part A5 (codebase-memory adapter or python3 unavailable)"
+fi
+
+echo ""
+
+# ---------------------------------------------------------------------------
 # Part B — LIVE. Only when a provider and a real index are reachable.
 # ---------------------------------------------------------------------------
 echo "Part B — live adapter output vs declared shape"

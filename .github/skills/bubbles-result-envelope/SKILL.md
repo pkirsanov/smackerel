@@ -10,7 +10,7 @@ Return work to `bubbles.workflow` (or another orchestrator) with a machine-reada
 
 ## When to use
 - End of every `bubbles.*` agent invocation
-- Returning from a sub-agent dispatch
+- Returning from a subagent dispatch
 - Emitting a continuation envelope from `bubbles.recap`, `bubbles.status`, `bubbles.handoff`, `bubbles.super`
 - Routing a foreign-artifact finding to its owner
 
