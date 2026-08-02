@@ -139,7 +139,17 @@ AUTH_HEADER=()
 [[ -n "${PROMETHEUS_BEARER_TOKEN:-}" ]] && AUTH_HEADER=(-H "Authorization: Bearer ${PROMETHEUS_BEARER_TOKEN}")
 
 urlencode() {
-  jq -nr --arg v "$1" '$v|@uri'
+  # jq 1.6 @uri mirrors encodeURIComponent and leaves !'()* bare; jq 1.7 encodes
+  # them. Normalize to the RFC 3986 form so the query string is version-stable.
+  jq -nr --arg v "$1" '
+    $v
+    | @uri
+    | gsub("!"; "%21")
+    | gsub("'\''"; "%27")
+    | gsub("\\("; "%28")
+    | gsub("\\)"; "%29")
+    | gsub("\\*"; "%2A")
+  '
 }
 
 call() {

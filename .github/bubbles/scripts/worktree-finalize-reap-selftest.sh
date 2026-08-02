@@ -51,7 +51,8 @@ if ! command -v git >/dev/null 2>&1; then
   exit 1
 fi
 
-TMP_ROOT="$(mktemp -d)"
+# macOS mktemp -d sits under the /var symlink; canonicalize the fixture root.
+TMP_ROOT="$(cd "$(mktemp -d)" && pwd -P)"
 trap 'rm -rf "$TMP_ROOT"' EXIT INT TERM
 REPO="$TMP_ROOT/repo"
 

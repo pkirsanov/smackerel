@@ -106,7 +106,8 @@ for required_command in git jq mktemp; do
   fi
 done
 
-TMP_ROOT="$(mktemp -d)" || {
+# macOS mktemp -d sits under the /var symlink; canonicalize the fixture root.
+TMP_ROOT="$(cd "$(mktemp -d)" && pwd -P)" || {
   echo "repository-binding-selftest: could not create hermetic fixture root" >&2
   exit 2
 }

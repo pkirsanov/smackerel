@@ -10,6 +10,9 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/guard-lib.sh"
+
 REPO_ROOT="${1:-.}"
 CAL_FILE="$REPO_ROOT/config/upkeep-calendar.yaml"
 LEDGER="${UPKEEP_LEDGER:-/srv/backups/upkeep-ledger.jsonl}"
@@ -56,7 +59,7 @@ while IFS=$'\t' read -r tid cadence; do
   if [[ -f "$LEDGER" ]]; then
     last_iso="$(jq -r --arg t "$tid" 'select(.task==$t and .outcome=="success") | .finished_at' "$LEDGER" 2>/dev/null | tail -1)"
     if [[ -n "$last_iso" && "$last_iso" != "null" ]]; then
-      last_epoch="$(date -u -d "$last_iso" +%s 2>/dev/null || echo 0)"
+      last_epoch="$(bubbles_iso_to_epoch "$last_iso" 2>/dev/null || echo 0)"
     else
       last_iso="never"
     fi
