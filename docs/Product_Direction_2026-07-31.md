@@ -1,5 +1,26 @@
 # System Review Summary: Smackerel Full System
 
+> **Looking for the plan? Read [`Product_Delivery_Plan.md`](Product_Delivery_Plan.md) instead.**
+>
+> This file is the **diagnostic evidence** — 29 findings (`D1`–`D29`) organised by
+> review lens, with per-finding file and line references. It answers *"what is
+> wrong and how do we know?"*
+>
+> The delivery plan answers *"what do we build, in what order, and how do we know
+> when each pillar is done?"* It organises the same findings around the three
+> product pillars (LLM wiki, second brain, extended scenarios), adds measured
+> scope-of-work counts, and corrects three claims below:
+>
+> - `D17`/`D18` — the capability registry is **half-built**, not missing
+>   (`internal/experience/catalog.gen.json` already declares 20 surfaces).
+> - `D6` — the cross-source synthesis producer is **real and correct**; the defect
+>   is that nothing consumes what it writes.
+> - `D13` — the edge weights are not at `search.go:392`. They are constants in
+>   `internal/graph/linker.go` (`:323` same-day = 0.5, `:364` same-source = 0.7)
+>   ranked at `search.go:843-844`. The corrected reading is worse: same-day and
+>   semantic relations **share the single edge type `RELATED_TO`**, so it is a
+>   type collision, not only a weighting imbalance.
+
 **Snapshot:** 2026-08-01
 **Review mode:** full
 **Depth:** deep
