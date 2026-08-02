@@ -2515,6 +2515,33 @@ except Exception:
     passed=$((passed + 1))
   fi
 
+  # Check 16: state.json bookkeeping drift (IMP-032 / EV-4, COV-4).
+  #
+  # Advisory only, on purpose. Under-claimed status asserts nothing false, so
+  # blocking it would push agents toward premature promotion — the exact failure
+  # the anti-fabrication gates exist to prevent.
+  local consistency_scan="$SCRIPT_DIR/state-consistency-scan.sh"
+  if is_framework_repo; then
+    echo -e "  ${GREEN}✅${NC} state.json consistency scan not required in the Bubbles source repo"
+    passed=$((passed + 1))
+  elif [[ ! -f "$consistency_scan" ]]; then
+    echo -e "  ${YELLOW}⚠️${NC}  state-consistency-scan.sh unavailable — status/certification drift is unchecked"
+    advisory_count=$((advisory_count + 1))
+  else
+    local consistency_findings
+    consistency_findings="$(bash "$consistency_scan" --repo-root "$proj_root" --quiet 2>/dev/null | grep '^FINDING: ' || true)"
+    if [[ -z "$consistency_findings" ]]; then
+      echo -e "  ${GREEN}✅${NC} No state.json status/certification drift detected"
+      passed=$((passed + 1))
+    else
+      while IFS= read -r consistency_line; do
+        [[ -n "$consistency_line" ]] || continue
+        echo -e "  ${YELLOW}⚠️${NC}  ${consistency_line#FINDING: }"
+        advisory_count=$((advisory_count + 1))
+      done <<< "$consistency_findings"
+    fi
+  fi
+
   echo ""
   echo -e "${BOLD}Dependency Posture${NC}"
   echo -e "${DIM}IMP-027 SCOPE-4 / SEC-2. Ten guards used to exit 0 on a missing dependency, so a run could go green having checked nothing. They now fail closed. A missing dependency here means those guards will refuse to run.${NC}"

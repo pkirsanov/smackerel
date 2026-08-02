@@ -141,7 +141,9 @@ if [[ "$certification_status_type" != "missing" && "$certification_status_type" 
 fi
 certification_status="$(jq -r '.certification.status // ""' "$state_file")"
 if [[ -n "$certification_status" && "$certification_status" != "$current_status" ]]; then
-  fail 69 E009-TARGET-MISMATCH "top-level and certification status mirrors disagree"
+  # This fires before the registry lookup below, so the guard reports targetStatus
+  # UNRESOLVED. Name both values and the owner or that gets read as a ceiling defect.
+  fail 69 E009-TARGET-MISMATCH "top-level status '$current_status' does not match certification.status '$certification_status' — certification.* is bubbles.validate-owned, so route the reconciliation there instead of advancing status alone"
 fi
 
 if ! MODE_NAME="$workflow_mode" yq -e '.modes[strenv(MODE_NAME)] | type == "!!map"' "$MODES_FILE" >/dev/null 2>&1; then

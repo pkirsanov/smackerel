@@ -71,12 +71,37 @@ bash bubbles/scripts/cli.sh framework-validate            # in source repo
 bash .github/bubbles/scripts/cli.sh framework-validate    # in downstream repo
 ```
 
+## Status is two mirrors — never write one alone
+`state.json` records the lifecycle status twice: top-level `status` and `certification.status`. They are one fact in two places. `transition-contract-resolver.sh` refuses any spec whose mirrors disagree.
+
+The refusal is `E009-TARGET-MISMATCH` at exit 69. It fires BEFORE the mode registry is read, so the guard then reports `workflowMode`, `auditProfile` and `targetStatus` as `UNRESOLVED`. Those `UNRESOLVED` values are a symptom of the early exit. They are NOT evidence that a status ceiling is unsupported.
+
+`certification.*` is `bubbles.validate`-owned, so every other agent has exactly one legal move:
+
+- Do NOT advance `status` alone. A half-write leaves the spec unresolvable and every later guard run fails.
+- Do NOT hand-edit `certification.status` to match. That forges a certification record.
+- DO emit `route_required` to `bubbles.validate` naming the observed divergence.
+
+This applies in both directions. A `status` that lags the spec's own scopes and execution record is still a bookkeeping defect that only `bubbles.validate` may correct.
+
+```
+route_required
+  target: bubbles.validate
+  reason: status-mirror divergence
+  feature: specs/<NNN-feature>
+  observed: status=<top-level value> certification.status=<mirror value>
+  evidence: <verbatim resolver or guard output showing the disagreement>
+  request: certify the transition the guard already passes, or restate status to match the evidence
+```
+
 ## Failure recovery
 If any guard exits non-zero:
 1. Read the failing check label and the suggested remediation.
 2. Fix the underlying gap in the spec/artifact/code.
 3. Re-run the guard.
 4. Do NOT lower the status target. Do NOT add a bypass flag.
+
+On `E009-TARGET-MISMATCH`, read the detail line before diagnosing. It names both mirror values and the owning agent, and a contract-resolution refusal is never a defect in the framework's ceiling handling.
 
 ## Authoritative modules
 - `agents/bubbles_shared/state-gates.md` — state-claim integrity

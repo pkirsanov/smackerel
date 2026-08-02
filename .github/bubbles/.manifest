@@ -302,6 +302,8 @@ bubbles/scripts/spec-dashboard.sh
 bubbles/scripts/spec-review-handoff-selftest.sh
 bubbles/scripts/stale-deferral-lint-selftest.sh
 bubbles/scripts/stale-deferral-lint.sh
+bubbles/scripts/state-consistency-scan-selftest.sh
+bubbles/scripts/state-consistency-scan.sh
 bubbles/scripts/state-linkage-backfill-selftest.sh
 bubbles/scripts/state-linkage-backfill.sh
 bubbles/scripts/state-snapshot-selftest.sh
@@ -450,7 +452,7 @@ docs/DEPRECATIONS.md
 docs/Framework_Convergence_Health.md
 docs/Framework_Improvements_Delivered.md
 docs/MCP.md
-docs/Product-Review-2026-07-31.md
+docs/Product-Review-2026-08-02.md
 docs/SCOPE_POLICY.md
 docs/Spec_Implementation_Alignment.md
 docs/decisions/ADR-001-v6.1-review-followups.md
