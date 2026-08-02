@@ -3577,6 +3577,43 @@ stg_significant_words() {
   done
 }
 
+# G068 false-positive fix: whole-word overlap with no stemming meant a single
+# singular/plural mismatch could sink an otherwise near-verbatim DoD item.
+# Scenario "JSON request rejected" scored 2 against DoD "JSON requests rejected
+# with 415" — below the >=3 floor — because "request" != "requests".
+# Kept to regular -s/-es forms; no general stemmer, so unrelated words still
+# cannot collide. MUST stay aligned with word_matches_text in traceability-guard.sh.
+stg_word_matches_text() {
+  local word="$1"
+  local text=" $2 "
+  local singular
+  local tok
+
+  case "$text" in
+    *" $word "* | *" ${word}s "* | *" ${word}es "*) return 0 ;;
+  esac
+
+  if [[ "$word" == *es && ${#word} -gt 4 ]]; then
+    singular="${word%es}"
+    case "$text" in *" $singular "*) return 0 ;; esac
+  fi
+  if [[ "$word" == *s && ${#word} -gt 3 ]]; then
+    singular="${word%s}"
+    case "$text" in *" $singular "*) return 0 ;; esac
+  fi
+
+  # Inflection/derivation, e.g. persisted~persist and stale~staleness. Bounded
+  # to stems of 5+ chars so short roots cannot collide (test~testament).
+  [[ ${#word} -ge 5 ]] || return 1
+  for tok in $2; do
+    case "$tok" in "$word"*) return 0 ;; esac
+    [[ ${#tok} -ge 5 ]] || continue
+    case "$word" in "$tok"*) return 0 ;; esac
+  done
+
+  return 1
+}
+
 stg_scenario_matches_dod() {
   local scenario="$1"
   local dod_item="$2"
@@ -3630,7 +3667,7 @@ stg_scenario_matches_dod() {
   while IFS= read -r word; do
     [[ -n "$word" ]] || continue
     word_count=$((word_count + 1))
-    if [[ " $dod_norm " == *" $word "* ]]; then
+    if stg_word_matches_text "$word" "$dod_norm"; then
       score=$((score + 1))
     fi
   done <<< "$words"
@@ -3832,6 +3869,75 @@ if [[ -x "$SCRIPT_DIR/claim-source-lint.sh" ]]; then
     pass "Claim-Source provenance: execution-evidence blocks carry a valid tag (or advisory)"
   else
     fail "Claim-Source provenance findings under claimSourceProvenanceGuard: block (G072)"
+  fi
+  echo ""
+fi
+
+# =============================================================================
+# CHECK 44: Plan Dependency Depth (IMP-031 SCOPE-8 / IMP-022 SCOPE-3 + SCOPE-4)
+# CHECK 45: Release Assurance deploy-eligibility (IMP-031 SCOPE-8 / IMP-100 P3)
+# =============================================================================
+# Both scripts shipped complete, with selftests wired into framework-validate,
+# and NO production caller. A selftest proves a guard CAN detect something; it
+# never lets the guard detect anything. Until this wiring they could not fail a
+# real transition, so their green selftests were assurance about nothing.
+#
+# Wired straight through rather than wrapped in a new report-only knob: each
+# script already owns its own posture and no-op rules, and re-deciding them here
+# would fork the contract.
+#   - plan-dependency-depth-guard.sh exits 1 ONLY under an operator-selected
+#     block posture; otherwise findings print advisory and it exits 0.
+#   - release-assurance-gate.sh no-ops without config/release-trains.yaml, skips
+#     without yq, and skips any spec lacking certification.assurance.level or
+#     releaseTrain. It exits 1 only for a certified feature whose achieved
+#     assurance is below its target train's floor — a real deploy-eligibility
+#     breach the operator explicitly configured a floor to catch.
+# Each runs in its own subprocess so its `set -e` cannot abort this guard.
+if [[ -x "$SCRIPT_DIR/plan-dependency-depth-guard.sh" ]]; then
+  echo "--- Check 44: Plan Dependency Depth (horizontal-layer DAG analysis) ---"
+  if fixture_gate_skip "plan dependency depth"; then
+    :
+  elif bash "$SCRIPT_DIR/plan-dependency-depth-guard.sh" "$feature_dir"; then
+    pass "Plan dependency depth: no blocking horizontal-plan violation"
+  else
+    fail "Plan dependency depth violation under block posture (every consumer-visible scope sits behind >=3 foundation scopes)"
+  fi
+  echo ""
+fi
+
+if [[ -x "$SCRIPT_DIR/release-assurance-gate.sh" ]]; then
+  echo "--- Check 45: Release Assurance deploy-eligibility ---"
+  if fixture_gate_skip "release assurance"; then
+    :
+  elif bash "$SCRIPT_DIR/release-assurance-gate.sh" "$guard_repo_root"; then
+    pass "Release assurance: no certified feature targets a train above its achieved assurance"
+  else
+    fail "Release assurance breach: a certified feature's achieved assurance is below its target train's minimum floor"
+  fi
+  echo ""
+fi
+
+# --------------------------------------------------------------------------
+# Check 46 (IMP-031 SCOPE-6): run the vertical-delivery plan guard for real.
+#
+# The guard has shipped since IMP-022 with a 13-case selftest and no production
+# caller, so the only plan it has ever classified is a fixture. A guard that
+# only runs its own selftest proves it CAN detect something while never being
+# allowed to detect anything.
+#
+# This wiring adds NO blocking threshold of its own. The guard is advisory by
+# construction and exits non-zero only when the repo has explicitly opted in
+# with `verticalPlanGuard: block` in .github/bubbles-project.yaml, so an
+# unconfigured repo can only ever see a warning here.
+# --------------------------------------------------------------------------
+if [[ -x "$SCRIPT_DIR/vertical-delivery-plan-guard.sh" ]]; then
+  echo "--- Check 46: Vertical-delivery plan shape (horizontal chain / scope budget / per-increment exposure) ---"
+  if fixture_gate_skip "vertical delivery plan"; then
+    :
+  elif bash "$SCRIPT_DIR/vertical-delivery-plan-guard.sh" "$feature_dir"; then
+    pass "Vertical-delivery plan: no blocking plan-shape violation"
+  else
+    fail "Vertical-delivery plan violation under block posture (horizontal chain, low-risk scope budget, or an increment with no consumer surface and no declared deferral)"
   fi
   echo ""
 fi

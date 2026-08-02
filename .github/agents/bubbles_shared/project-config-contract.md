@@ -366,6 +366,18 @@ domainModel:
       enforcedBy: [db-constraint, type]
       provedBy: ["tests/order_status_test.rs::rejects_unknown_status"]
 
+# Reachable-surface inventory (IMP-031) — OPTIONAL, opt-in. Sibling of domainModel:.
+# Names the classes of surface through which a caller can actually reach this
+# product, and the project-owned command that DERIVES each one from source. It
+# supplies the denominator that reachability checks have been missing. Absent =
+# clean no-op. A declared class that derives nothing is a hard failure, never a pass.
+surfaces:
+  schemaVersion: 1
+  classes:
+    httpRoute:  { derive: "scripts/inventory/http-routes.sh" }
+    cliCommand: { derive: "scripts/inventory/cli-commands.sh" }
+    uiRoute:    { derive: "scripts/inventory/ui-routes.sh" }
+
 # Operator-managed MCP tool grants for restricted orchestrators (v7.1+)
 # The five framework-managed orchestrators (bubbles.goal/sprint/iterate/bug/
 # workflow) ship a `tools:` allowlist whose defaults include `bubbles` (the
@@ -640,6 +652,37 @@ Rules:
 - For each declared invariant, G130 clears it when ANY of: (a) an `enforcedBy` mechanism token appears in the scope's declared implementation files, (b) a linked `provedBy` test adversarially rejects the violating input, OR (c) an explicit justification discloses the gap (a `## Domain-Invariant Justifications` section in `spec.md`/`report.md`, or an `Invariant-Justification: <INV-id> — <reason>` line). Only an invariant with NONE of the three is a blocking finding — warn-and-require-justification, exactly like G097.
 - **Grandfathered by `state.json.createdAt`.** Specs whose `createdAt` is absent or earlier than the guard's cutoff are WARN-only, so adopting the gate never retroactively blocks already-closed work.
 - There is no `--skip`/`--force`/bypass. A legitimately-external or deferred invariant is cleared by one disclosure line.
+
+### `surfaces` Contract (Reachable-Surface Inventory)
+
+`surfaces` is an OPTIONAL **top-level block** in `.github/bubbles-project.yaml` — a **sibling of `domainModel:`**, not a child of it. It answers a question the framework could not previously ask: *through which surfaces can a caller actually reach this product?*
+
+Every reachability check needs two numbers — how many surfaces exist, and how many are accounted for. Bubbles has always been able to read the second from a spec. The first has never had a source, so a check could only compare a declaration against itself and report agreement. `surfaces` supplies the missing denominator by naming the classes of surface a product exposes and the command that derives each class from source.
+
+Worked example (project-owned `.github/bubbles-project.yaml`; never overwritten on upgrade):
+
+```yaml
+surfaces:                             # OPTIONAL top-level block — sibling of domainModel:
+  schemaVersion: 1
+  classes:
+    httpRoute:  { derive: "scripts/inventory/http-routes.sh" }
+    cliCommand: { derive: "scripts/inventory/cli-commands.sh" }
+    uiRoute:    { derive: "scripts/inventory/ui-routes.sh" }
+```
+
+| Field | Meaning |
+|-------|---------|
+| `schemaVersion` | Currently `1`. Lets the shape change later without silently reinterpreting an old declaration. |
+| `classes.<name>` | One kind of surface this product exposes. The name is project-chosen (`httpRoute`, `cliCommand`, `uiRoute`, `rokuScreen`, `mcpTool`, `htmlTool`, …) because what counts as reachable differs by stack. |
+| `classes.<name>.derive` | The command that produces the inventory for that class. |
+
+Rules:
+
+- **Each `derive` command is project-owned.** The framework does not know how a given repo routes HTTP, registers CLI subcommands, or mounts screens, and guessing would produce a denominator nobody can trust. The project supplies the command; the framework consumes its output. The command emits one normalized record per reachable surface, carrying `class`, `id`, `path`, and `sourceFile`.
+- **Wire format.** One TAB-separated record per line on stdout — `<class>\t<id>\t<path>\t<sourceFile>`. Blank lines and `#` comment lines are ignored. A record whose class field disagrees with the class it was derived for is rejected, because a derivation that mislabels its own output cannot be reconciled against anything. `bubbles/scripts/surface-reachability-guard.sh` is the consumer.
+- **A repo may instead set `derive: codeIndex`** to route through the existing `codeindex-resolve.sh` adapter, which gives the `codeIndex.adapter` seam its first gate consumer. A repo whose language has a usable index gets its inventory without writing a bespoke script; a repo without one keeps the script path.
+- **Fail loud, never silently empty.** A declared class whose derive command errors, is missing, or returns **zero** records while source for that class exists is a hard failure. This is the most important rule here. The failure this contract exists to prevent is a check that passed because it examined nothing, and a contract that treats an empty inventory as agreement would reproduce that failure with more ceremony. An empty result is a broken derivation until proven otherwise.
+- **Absent means no-op.** A repo with no `surfaces:` block is untouched: consumers of this contract exit 0 and report nothing. The block gains meaning only once a repo opts in, so adoption is per-repo and reversible.
 
 ---
 

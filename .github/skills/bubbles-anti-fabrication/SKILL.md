@@ -22,7 +22,7 @@ Never claim work happened that did not actually execute in the current session. 
 4. **No narrative substitutes.** Strings like "all tests pass", "verified", "endpoint works", "UI looks correct" are not evidence. Show the command and output.
 5. **No template stubs.** Placeholder text like `[ACTUAL output, ≥10 lines]` left in place is fabrication.
 6. **No batch checking.** Marking many DoD items `[x]` in one edit without per-item execution is fabrication regardless of how confident the agent is.
-7. **No fabricated specialists.** Claiming `bubbles.audit`, `bubbles.chaos`, `bubbles.validate`, or any specialist agent ran without an actual sub-agent invocation in this session is fabrication.
+7. **No fabricated specialists.** Claiming `bubbles.audit`, `bubbles.chaos`, `bubbles.validate`, or any specialist agent ran without an actual subagent invocation in this session is fabrication.
 
 ## Self-check (run before every status transition)
 1. Did I actually run a tool/terminal command for this DoD item in this session?

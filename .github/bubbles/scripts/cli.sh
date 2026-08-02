@@ -25,6 +25,9 @@
 #   scan <spec>                   Run implementation reality scan on a spec
 #   regression-quality [args...]  Run bailout/adversarial regression quality scan on test files or dirs
 #   docs-registry [mode]          Show framework-default or effective managed-doc registry
+#   release-train-backfill [repo] Advisory: propose releaseTrain for specs missing one
+#   work-tracker-project --feature-dir <dir>
+#                                 Project a feature's state.json into a neutral work item
 #   framework-write-guard         Check downstream framework-managed files against install provenance
 #   interop <subcommand>          Detect, import, apply, and inspect project-owned interop packets
 #   framework-validate            Run framework self-validation across core guard and selftest surfaces
@@ -1232,6 +1235,9 @@ Commands:
   scan <spec>                   Run implementation reality scan on a spec
   regression-quality [args...]  Run bailout/adversarial regression quality scan on test files or dirs
   docs-registry [mode]          Show framework-default or effective managed-doc registry
+  release-train-backfill [repo] Advisory: propose releaseTrain for specs missing one (never mutates)
+  work-tracker-project --feature-dir <dir>
+                                Project a feature's state.json into a provider-neutral work item
   framework-write-guard         Check downstream framework-managed files against install provenance
   mcp <subcommand>              Apply operator-declared MCP tool grants (sync)
   interop <subcommand>          Detect, import, apply, and inspect project-owned interop packets
@@ -1626,6 +1632,20 @@ cmd_docs_registry() {
 
 cmd_framework_validate() {
   bash "$SCRIPT_DIR/framework-validate.sh" "$@"
+}
+
+# IMP-031 SCOPE-8 (WIRE-CLI). Both scripts below shipped complete, with
+# selftests wired into framework-validate, and no way for an operator to reach
+# them: no cli.sh subcommand, no agent prose, no guard call. Their selftests
+# proved they worked while nothing could run them. Exposing them here is the
+# whole remediation — neither script's behaviour changes, and both are
+# read-only advisory surfaces (no mutation, no network, no secrets).
+cmd_release_train_backfill() {
+  bash "$SCRIPT_DIR/release-train-backfill-planner.sh" "$@"
+}
+
+cmd_work_tracker_project() {
+  bash "$SCRIPT_DIR/work-tracker-project.sh" "$@"
 }
 
 # IMP-027 SCOPE-5. The eval harness existed and already failed closed, but the
@@ -3703,6 +3723,8 @@ main() {
     scan)               cmd_scan "$@" ;;
     regression-quality) cmd_regression_quality "$@" ;;
     docs-registry)      cmd_docs_registry "$@" ;;
+    release-train-backfill) cmd_release_train_backfill "$@" ;;
+    work-tracker-project) cmd_work_tracker_project "$@" ;;
     framework-write-guard) cmd_framework_write_guard "$@" ;;
     mcp)                cmd_mcp "$@" ;;
     interop)            cmd_interop "$@" ;;

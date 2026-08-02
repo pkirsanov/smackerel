@@ -230,6 +230,19 @@ if err:
         sys.exit(0)
     sys.stderr.write("[codebase-memory][ERROR] provider error: %s\n" % err)
     sys.exit(1)
+# An ambiguous name comes back in a DIFFERENT shape — status/message/suggestions,
+# with no callees/callers. Without this branch the KeyError below reported
+# "payload missing expected field: callees", which blamed the payload shape for a
+# caller-side problem and discarded the qualified names needed to disambiguate.
+if doc.get("status") == "ambiguous":
+    cands = [s if isinstance(s, str) else s.get("qualified_name", str(s))
+             for s in doc.get("suggestions", [])]
+    sys.stderr.write(
+        "[codebase-memory][ERROR] symbol name is ambiguous (%d matches); "
+        "re-run impact with one of these qualified names:\n" % len(cands))
+    for c in cands:
+        sys.stderr.write("  %s\n" % c)
+    sys.exit(1)
 try:
     out = ([dict(r, direction="callee") for r in doc["callees"]] +
            [dict(r, direction="caller") for r in doc["callers"]])

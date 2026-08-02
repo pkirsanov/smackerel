@@ -46,7 +46,7 @@ Before mode-ceiling lookup or any repository-local read, apply [agent-common.md]
 - If `socratic: true`, switch into a tightly bounded discovery interview: ask only targeted questions that materially change requirements, architecture direction, or UX outcomes; stop after `socraticQuestions` questions or earlier if ambiguity is resolved
 
 **Artifact Ownership:**
-- Owns analyst-managed business sections in `spec.md` only (actors, personas, use cases, business scenarios, competitive analysis, improvement proposals, UI scenario matrix, non-functional requirements, outcome contract)
+- Owns analyst-managed business sections in `spec.md` only (actors, personas, use cases, business scenarios, competitive analysis, improvement proposals, UI scenario matrix, non-functional requirements, outcome contract, exposure contract)
 - May update `state.json.execution` only
 - MUST NOT edit `design.md`, `scopes.md`, `report.md`, `uservalidation.md`, or `state.json.certification.*`
 - If analysis reveals required design or planning changes, return a concrete owner-targeted route or invoke the owning agent only when the caller explicitly asked for downstream promotion
@@ -392,6 +392,11 @@ When writing, update only analyst-owned sections of `spec.md`:
 **Hard Constraints:** [Business invariants that must hold regardless of implementation approach]
 **Failure Condition:** [What would make this feature a failure even if all tests pass]
 
+## Exposure Contract
+| Capability | Surface class | Surface id | Status | Plan |
+|---|---|---|---|---|
+| [capability] | httpRoute \| uiRoute \| cliCommand \| internal | [route, command, or symbol] | delivered \| planned \| internal | [target spec/phase, or the in-repo caller] |
+
 ## Use Cases
 ### UC-001: [Use Case Name]
 - **Actor:** ...
@@ -439,6 +444,8 @@ Then [business outcome]
 ```
 
 **Outcome Contract is MANDATORY (Gate G070).** The `## Outcome Contract` section MUST be present and non-empty in `spec.md` before bootstrap phase can complete. If missing after Phase 8, this is a BLOCKING failure.
+
+**Exposure Contract (IMP-031 SCOPE-5).** The Outcome Contract states what value the feature must produce; the Exposure Contract states how a caller reaches it. Write one row per capability **per surface**, and keep it machine-readable — a reachability check reconciles the `delivered` rows against the repo's derived surface inventory, so a surface id no derivation command returns is a claim rather than a delivery. `planned` MUST name a target spec or release phase; "later" is not a plan. `internal` is a legitimate status for a capability deliberately reachable only by other in-repo code, and MUST name that caller — an internal surface is declared, not undeclared. A capability with no `delivered` row and no `planned` row is the orphan condition: built, tested, and unreachable. This is where *"every implementation must deliver value; don't hide/reduce value"* becomes an artifact instead of an aspiration, because value that shipped without a way to reach it is recorded as an open commitment rather than quietly lost.
 
 Preserve any existing spec.md sections not owned by this agent. Merge, don't overwrite.
 Within analyst-owned sections, reconcile instead of blindly appending. Active sections must reflect only the current truth.

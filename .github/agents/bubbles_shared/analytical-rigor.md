@@ -14,6 +14,16 @@ This module is the analytical-deliverable counterpart to the E2E Test Substance 
 
 4. **No canned template-filling.** A section template is a checklist of what to consider, not a form to populate with plausible text. If a section has no real content for this target, write `None found — <specific reason>`, never invented boilerplate. Declare uncertainty (see [evidence-rules.md](evidence-rules.md) → Uncertainty Declaration Protocol) instead of confident filler.
 
+## Prose Form Is Tier 2 (never overrides Rule 3)
+
+Controlled technical prose — short sentences, active voice, one instruction per sentence, one name per concept — is a **Tier 2** concern. The Four Rigor Rules above are **Tier 1**.
+
+Precedence is absolute: **form never overrides Rule 3 (honest findings first).** If naming the uncomfortable result takes a long sentence, write the long sentence. A clean, confident, well-punctuated, hollow paragraph is still a FAILED analysis. An agent may not trade a surfaced weakness for a tidier sentence.
+
+Form governs generated technical prose — `spec.md`, `design.md`, `report.md`, `scopes.md`, managed docs, refusal messages. It NEVER governs verbatim evidence: rewording captured command output to improve its prose corrupts the evidence, which [critical-requirements.md](critical-requirements.md) forbids outright.
+
+See the `bubbles-technical-prose` skill for the mechanically checkable rules.
+
 ## Depth Dial
 
 Honor an optional `depth:` parameter when the caller supplies one:

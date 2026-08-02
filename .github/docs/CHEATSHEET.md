@@ -355,6 +355,18 @@ Some TPB characters carry different agent roles when their narrative context leg
 | `delivered_fast` | Terminal status for `fast` achieved assurance: implementation complete + full test coverage + all tests passing, but NO independent audit (`missingForFull = [independent-audit]`). Terminal only for `rapid-tool-delivery`. |
 | `rapid-tool-delivery` | Risk-proportional fast lane for one low-risk, build-free tool increment. Keeps the full integrity contract, relaxes only the heavyweight planning chain, and `risk-tier-resolve.sh` fail-closed-escalates any high-risk trigger (auth/payments/secrets/PII/DB-migration/deploy/prod/host-singleton/cross-product) to `full-delivery`. Certifies `delivered_fast`. |
 | `prototype assurance` | The fail-closed assurance floor: verification incomplete or failing (missing coverage OR a failing test). Maps to `delivered_prototype` — never deployable, never terminal under normal delivery modes. A derived result, not a user-chosen tier; a throwaway POC is an intent (`.design-experiment`), not the bottom of a quality ladder. |
+| `gate` | A numbered policy (`Gxxx`) declared in `bubbles/registry/gates.yaml`. A gate states WHAT must hold; it is not itself executable. Its `enforcedBy:` field names the guard, lint, or scan that mechanically enforces it, or `mode-required` when only agent behavior carries it. |
+| `guard` | An executable script under `bubbles/scripts/` (39 named `*-guard.sh`) that mechanically enforces one or more gates and exits non-zero on violation. |
+| `lint` | An executable script under `bubbles/scripts/` (24 named `*-lint.sh`) that checks the STRUCTURE or FORM of an artifact — required sections, schema shape, naming — rather than the truth of a claim. |
+| `scan` | An executable script under `bubbles/scripts/` (3 named `*-scan.sh`) that sweeps a whole corpus for a forbidden PATTERN, such as `env-pollution-scan.sh`. A scan has no single declaring artifact. |
+| `check` | A NUMBERED step inside a composite guard — `state-transition-guard.sh` runs 67 of them. It is also the suffix of 8 standalone `*-check.sh` scripts, so the word carries two senses. |
+| `scope` | A DURABLE unit of work in `scopes.md`, identified `SCOPE-N`. A fresh specialist handed ONLY the spec's durable artifacts MUST be able to execute it without replaying the session that produced it. |
+| `task` | A speckit artifact row in `tasks.md`, produced by `speckit.tasks`. Bubbles does not plan work as tasks; its durable planning unit is the scope. |
+| `specialist` | A `bubbles.*` agent that owns one workflow phase and is invoked by an authorized runner via `runSubagent`. Specialists execute the work; runners route it. |
+| `subagent` | A specialist executing as a depth-1 dispatch from a top-level runner through the VS Code `agent` tool. Always one word. |
+| `owner` | The agent named in `workflows.yaml` `phases[<phase>].owner`, or the agent that owns an artifact per the ownership table. Ownership is a declaration; specialist is a role. |
+| `route` | To hand work to its declared owner by emitting a `route_required` result envelope naming `nextRequiredOwner`. Routing is a machine-readable outcome. |
+| `handoff` | A VS Code `handoffs:` frontmatter entry — a button shown AFTER the turn ends that the user clicks to SWITCH agents. It is neither subagent dispatch nor routing. |
 <!-- GENERATED:CHEATSHEET_VOCABULARY_END -->
 
 ---

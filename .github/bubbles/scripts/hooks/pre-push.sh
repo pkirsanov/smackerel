@@ -35,12 +35,16 @@ fi
 # followed by a full validate + release-check before cutting a release.
 PREPUSH_TIER="${BUBBLES_PREPUSH_TIER:-full}"
 
+# Per-process paths: a fixed name is silently overwritten by any concurrent push on the same machine.
+PREPUSH_VALIDATE_LOG="/tmp/bubbles-pre-push-validate.$$.log"
+PREPUSH_RELEASE_LOG="/tmp/bubbles-pre-push-release.$$.log"
+
 if [[ "$PREPUSH_TIER" == "core" ]]; then
   echo "🫧 bubbles pre-push: tier=core (fast structural gate — full validate + release-check still required before a release)"
-  if ! bash "$SCRIPT_DIR/framework-validate.sh" --tier=core >/tmp/bubbles-pre-push-validate.log 2>&1; then
-    echo "❌ framework-validate (core tier) failed. Full log: /tmp/bubbles-pre-push-validate.log"
+  if ! bash "$SCRIPT_DIR/framework-validate.sh" --tier=core >"$PREPUSH_VALIDATE_LOG" 2>&1; then
+    echo "❌ framework-validate (core tier) failed. Full log: $PREPUSH_VALIDATE_LOG"
     echo "    Tail:"
-    tail -30 /tmp/bubbles-pre-push-validate.log | sed 's/^/      /'
+    tail -30 "$PREPUSH_VALIDATE_LOG" | sed 's/^/      /'
     echo ""
     echo "    Fix the failures and retry the push. There is no bypass."
     exit 1
@@ -49,10 +53,10 @@ if [[ "$PREPUSH_TIER" == "core" ]]; then
   exit 0
 fi
 
-if ! bash "$SCRIPT_DIR/framework-validate.sh" >/tmp/bubbles-pre-push-validate.log 2>&1; then
-  echo "❌ framework-validate failed. Full log: /tmp/bubbles-pre-push-validate.log"
+if ! bash "$SCRIPT_DIR/framework-validate.sh" >"$PREPUSH_VALIDATE_LOG" 2>&1; then
+  echo "❌ framework-validate failed. Full log: $PREPUSH_VALIDATE_LOG"
   echo "    Tail:"
-  tail -30 /tmp/bubbles-pre-push-validate.log | sed 's/^/      /'
+  tail -30 "$PREPUSH_VALIDATE_LOG" | sed 's/^/      /'
   echo ""
   echo "    Fix the failures and retry the push. There is no bypass."
   exit 1
@@ -61,10 +65,10 @@ echo "✅ framework-validate passed"
 
 if [[ -x "$SCRIPT_DIR/release-check.sh" ]]; then
   echo "🫧 bubbles pre-push: running release-check..."
-  if ! bash "$SCRIPT_DIR/release-check.sh" >/tmp/bubbles-pre-push-release.log 2>&1; then
-    echo "❌ release-check failed. Full log: /tmp/bubbles-pre-push-release.log"
+  if ! bash "$SCRIPT_DIR/release-check.sh" >"$PREPUSH_RELEASE_LOG" 2>&1; then
+    echo "❌ release-check failed. Full log: $PREPUSH_RELEASE_LOG"
     echo "    Tail:"
-    tail -30 /tmp/bubbles-pre-push-release.log | sed 's/^/      /'
+    tail -30 "$PREPUSH_RELEASE_LOG" | sed 's/^/      /'
     echo ""
     echo "    Fix the failures and retry the push. There is no bypass."
     exit 1

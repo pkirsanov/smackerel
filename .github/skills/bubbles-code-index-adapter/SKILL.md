@@ -95,6 +95,35 @@ index — never the working tree, never git state. Because `none` returns `{}`
 exit 0, a repository can wire `freshness || sync` unconditionally into a CLI or
 git hook and stay correct whether or not a provider is ever adopted.
 
+### An ambiguous symbol answers in a different shape (measured)
+
+Exit codes are not the only thing that varies by outcome. On `codebase-memory`,
+the `trace_path` call backing `impact` answers an **ambiguous** symbol name with
+a payload that shares no keys with the success payload:
+
+```json
+{"status": "ambiguous", "message": "N matches for ...", "suggestions": ["<qualified-name>", "..."]}
+```
+
+There is no `callees` and no `callers`. A normalizer that indexes straight into
+`callees` raises a `KeyError`, and the resulting message blames the provider for
+a malformed payload when the fault is caller-side — the query was too
+under-specified to resolve. Worse, that misdiagnosis discards `suggestions`, the
+one field that fixes it.
+
+Fixed in `79fe941`: the adapter now detects the ambiguous shape, names it as
+ambiguity, and prints the candidate qualified names. Re-running `impact` with one
+of them resolves normally (measured:
+`<root>.bubbles.scripts.guard-lib.bubbles_sed_inplace` → 0 callees, 4 callers).
+
+The exit code stays **1**, which is the correct contract value: the adapter
+genuinely could not look. Returning `[]` exit 0 here would tell the consumer
+"nothing calls this symbol" about a symbol that has four callers.
+
+Generalize the handling, not the special case — an adapter MUST branch on the
+shape a provider actually returned before indexing into it. A provider is free to
+answer a question it cannot answer with a different structure.
+
 ## Wiring a repository (opt-in)
 
 Project-owned config, never framework-managed:
@@ -153,6 +182,26 @@ adopting — this is the most common selection error.
 Measure the repository first (`git ls-files | sed -E 's/.*\.//' | sort | uniq -c
 | sort -rn`) rather than assuming. A provider that cannot parse the dominant
 language of a repository provides no value there regardless of its benchmarks.
+
+### A documentation-heavy repository indexes its headings as symbols (measured)
+
+`codebase-memory` parses markdown, and it indexes **headings as symbols**. In a
+documentation-dominant repository the symbol space is therefore mostly prose
+structure rather than code.
+
+Measured on a documentation-dominant repository (>1,300 tracked `.md` files): the
+query `symbols fail` returned 200 hits almost entirely composed of spec and
+design headings — entries shaped like
+`...specs.011-....scopes.06-log-snapshot-on-failure` — rather than the shell
+functions the query was aimed at. The same index answers **distinctive** names
+correctly: `active_lines` → impact 2, `adopt_preflight` → impact 5,
+`all_records_exec` → impact 11.
+
+So the constraint is a query discipline, not a defect: **ask for distinctive
+names.** A generic or common-word query against this provider returns a wall of
+heading matches and looks exactly like a broken index. It is not one — it is a
+correctly-indexed repository answering a question too broad to discriminate.
+Judging index health from a generic query will retire a working integration.
 
 ## Two access paths (do not confuse them)
 

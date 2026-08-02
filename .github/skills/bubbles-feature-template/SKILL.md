@@ -16,7 +16,7 @@ Produce feature artifacts that match the canonical shape so the state-transition
 ## Required artifacts (every feature)
 | File | Owner | Notes |
 |------|-------|-------|
-| `spec.md` | analyst (creation), clarify (revision) | acceptance criteria + Gherkin scenarios |
+| `spec.md` | analyst (creation), clarify (revision) | acceptance criteria + Gherkin scenarios + exposure contract |
 | `design.md` | design | objective research pass for brownfield; Design Brief at the top |
 | `scopes.md` or `scopes/_index.md` + `scopes/NN-name/scope.md` | plan | DAG `Depends On`, Test Plan ↔ DoD parity |
 | `report.md` (or per-scope `report.md`) | implement/test (or scope owners) | inline ≥10-line evidence per DoD item |

@@ -339,35 +339,89 @@ echo "--- Check 3F: Transition And Rework Packets (Gate G061) ---"
 pending_transition_failures=0
 
 # Use python to inspect transitionRequests properly: allow status=="open" entries
-# ONLY when they carry routedTo + (routedToCommit|routedToSpec|routedToTicket) + productAction=="none"
-# (and crossRepoFollowUp:true when routed to an external/upstream owner).
+# ONLY when they carry routedTo + (routedToCommit|routedToSpec|routedToTicket) + productAction=="none".
+# A route to the currently guarded spec is same-repo regardless of agent name. A
+# different spec, commit/ticket target, or explicit external/upstream routing
+# class requires crossRepoFollowUp:true.
 tr_analysis="$({
   python3 -c '
 import json, re, sys
 dq = chr(34)
 sep = "; "
+
+def clean_spec_identifier(value):
+    return bool(
+        isinstance(value, str)
+        and value
+        and value == value.strip()
+        and value.startswith("specs/")
+        and "\\" not in value
+        and all(part not in ("", ".", "..") for part in value.split("/"))
+    )
+
+def control_field_type_problems(request):
+    problems = []
+    string_fields = (
+        "status",
+        "id",
+        "transitionRequestId",
+        "routedTo",
+        "routedToCommit",
+        "routedToSpec",
+        "routedToTicket",
+        "productAction",
+        "routingClass",
+    )
+    for name in string_fields:
+        if name in request and not isinstance(request[name], str):
+            problems.append(f"{name} must be a JSON string")
+    if "crossRepoFollowUp" in request and not isinstance(request["crossRepoFollowUp"], bool):
+        problems.append("crossRepoFollowUp must be a JSON boolean")
+    return problems
+
+def text_field(request, name):
+    value = request.get(name)
+    return value.strip() if isinstance(value, str) else ""
+
 try:
+    current_spec = sys.argv[2]
+    repository_root = sys.argv[3]
+    repository_prefix = repository_root.rstrip("/") + "/"
+    if not current_spec.startswith(repository_prefix):
+        raise ValueError("guarded spec is outside the repository root")
+    current_spec_identifier = current_spec[len(repository_prefix):]
+    if not clean_spec_identifier(current_spec_identifier):
+        raise ValueError("guarded spec does not have a clean repository-relative identifier")
     with open(sys.argv[1]) as f:
         data = json.load(f)
-    trs = data.get("transitionRequests", []) or []
-    if not isinstance(trs, list):
-        trs = []
+    trs = data.get("transitionRequests", [])
     blocking = []
     routed_open = []
-    for tr in trs:
+    if not isinstance(trs, list):
+        blocking.append(("<queue>", "malformed", ["transitionRequests is not a list"]))
+        trs = []
+    for index, tr in enumerate(trs):
         if not isinstance(tr, dict):
+            blocking.append((f"<entry:{index}>", "malformed", [f"transitionRequests[{index}] is not an object"]))
             continue
-        status = (tr.get("status") or "").strip()
-        tr_id = tr.get("id") or tr.get("transitionRequestId") or "<unknown>"
+        status = text_field(tr, "status")
+        tr_id = text_field(tr, "id") or text_field(tr, "transitionRequestId") or "<unknown>"
+        type_problems = control_field_type_problems(tr)
+        if type_problems:
+          status_label = "<invalid>" if "status" in tr and not isinstance(tr["status"], str) else status
+          blocking.append((tr_id, status_label, type_problems))
+          continue
         if status in ("", "closed", "resolved", "done", "cancelled", "rejected"):
             continue
         if status == "open":
-            routed_to = (tr.get("routedTo") or "").strip()
-            routed_commit = (tr.get("routedToCommit") or "").strip()
-            routed_spec = (tr.get("routedToSpec") or "").strip()
-            routed_ticket = (tr.get("routedToTicket") or "").strip()
-            product_action = (tr.get("productAction") or "").strip()
-            cross_repo = bool(tr.get("crossRepoFollowUp"))
+            routed_to = text_field(tr, "routedTo")
+            routed_commit = text_field(tr, "routedToCommit")
+            routed_spec_value = tr.get("routedToSpec")
+            routed_spec = text_field(tr, "routedToSpec")
+            routed_ticket = text_field(tr, "routedToTicket")
+            product_action = text_field(tr, "productAction")
+            routing_class = text_field(tr, "routingClass")
+            cross_repo = tr.get("crossRepoFollowUp") is True
             problems = []
             if not routed_to:
                 problems.append("missing routedTo")
@@ -379,7 +433,16 @@ try:
                 problems.append(f"routedToCommit not a hex SHA: {routed_commit}")
             if routed_ticket and not re.match(r"https?://", routed_ticket):
                 problems.append("routedToTicket not a URL")
-            looks_external = bool(re.search(r"upstream|external|bubbles\.", routed_to, re.I))
+            same_spec_route = bool(
+                clean_spec_identifier(routed_spec_value)
+                and routed_spec_value == current_spec_identifier
+            )
+            looks_external = bool(
+                routed_commit
+                or routed_ticket
+                or (routed_spec and not same_spec_route)
+                or re.search(r"upstream|external", routing_class, re.I)
+            )
             if looks_external and not cross_repo:
                 problems.append("routed externally but crossRepoFollowUp is not true")
             if problems:
@@ -394,7 +457,7 @@ try:
         print(f"OK\t{tr_id}\t{routed_to}")
 except Exception as e:
     print(f"ERR\t{e}")
-' "$state_file"
+' "$state_file" "$feature_abs" "$guard_repo_root"
 } || true)"
 
 if echo "$tr_analysis" | grep -q '^ERR'; then

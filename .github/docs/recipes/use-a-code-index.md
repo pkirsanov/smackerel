@@ -211,7 +211,7 @@ repository. That is the same false-green this recipe exists to eliminate.
    which. During the investigation above, the *hand* count was the wrong one —
    which is the point, but it cuts both ways.
 4. **Do not adopt this for agent context or token savings.** It does not reduce
-   an agent's prompt-bundle cost, and delegation to file-reading sub-agents
+   an agent's prompt-bundle cost, and delegation to file-reading subagents
    erases the benefit anyway.
 
 ---

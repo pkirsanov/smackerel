@@ -18,9 +18,13 @@ set -euo pipefail
 REPO_ROOT="${BUBBLES_REPO_ROOT:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"
 SCRIPT="${REPO_ROOT}/bubbles/scripts/migrate-modes-v5-to-v6.sh"
 
-FIXTURE_ROOT="${HOME}/.cache/bubbles-migrate-modes-selftest"
-rm -rf "$FIXTURE_ROOT"
-mkdir -p "$FIXTURE_ROOT"
+# Per-run root. A fixed path here was destructive: this script starts by
+# rm -rf'ing the root, so a second concurrent run wiped the first run's fixtures
+# mid-flight and produced unrelated failures that all passed when re-run alone.
+FIXTURE_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/bubbles-migrate-modes-selftest.XXXXXX")"
+# The old fixed root self-cleaned by rm -rf'ing itself on the NEXT run; a per-run
+# root has no next run, so it must clean up after itself or it leaks.
+trap 'rm -rf "$FIXTURE_ROOT"' EXIT
 
 declare -i pass_count=0
 declare -i fail_count=0

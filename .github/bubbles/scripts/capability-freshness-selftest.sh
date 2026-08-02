@@ -43,16 +43,19 @@ rewrite_once() {
 
 expect_check_failure() {
   local label="$1"
-  if BUBBLES_REPO_ROOT="$TMP_ROOT" bash "$SCRIPT_DIR/generate-capability-ledger-docs.sh" --check >/tmp/bubbles-capability-check.out 2>&1; then
+  if BUBBLES_REPO_ROOT="$TMP_ROOT" bash "$SCRIPT_DIR/generate-capability-ledger-docs.sh" --check >"$CHECK_OUT" 2>&1; then
     fail "$label"
   else
     pass "$label"
-    cat /tmp/bubbles-capability-check.out
+    cat "$CHECK_OUT"
   fi
 }
 
 TMP_ROOT="$(mktemp -d)"
-trap 'rm -rf "$TMP_ROOT" /tmp/bubbles-capability-check.out' EXIT
+# Per-run file: the previous fixed /tmp path meant a second concurrent run's EXIT
+# trap deleted this one's output mid-read.
+CHECK_OUT="$(mktemp "${TMPDIR:-/tmp}/bubbles-capability-check.XXXXXX")"
+trap 'rm -rf "$TMP_ROOT" "$CHECK_OUT"' EXIT
 
 mkdir -p "$TMP_ROOT/bubbles" "$TMP_ROOT/docs/issues" "$TMP_ROOT/docs/generated"
 cp "$ROOT_DIR/bubbles/capability-ledger.yaml" "$TMP_ROOT/bubbles/capability-ledger.yaml"
