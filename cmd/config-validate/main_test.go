@@ -208,6 +208,7 @@ func TestRun_OversizedModel_ExitsOne(t *testing.T) {
 			"PHOTOS_INTELLIGENCE_AESTHETIC_MODEL", "PHOTOS_INTELLIGENCE_OCR_MODEL",
 			"AGENT_PROVIDER_DEFAULT_MODEL", "AGENT_PROVIDER_REASONING_MODEL",
 			"AGENT_PROVIDER_FAST_MODEL", "AGENT_PROVIDER_VISION_MODEL", "AGENT_PROVIDER_OCR_MODEL",
+			"ASSISTANT_OPEN_KNOWLEDGE_LLM_MODEL_ID", "ASSISTANT_OPEN_KNOWLEDGE_SYNTHESIS_MODEL_ID",
 		} {
 			if strings.HasPrefix(ln, key+"=") {
 				lines[i] = key + "=\"bug-045-fixture-llm-6gib\""
@@ -218,6 +219,17 @@ func TestRun_OversizedModel_ExitsOne(t *testing.T) {
 		}
 		if strings.HasPrefix(ln, "PHOTOS_INTELLIGENCE_EMBED_MODEL=") {
 			lines[i] = `PHOTOS_INTELLIGENCE_EMBED_MODEL="bug-045-fixture-embed-512mib"`
+		}
+		// Pin the envelope so the fixture stays oversized regardless of the live limit.
+		if strings.HasPrefix(ln, "OLLAMA_MEMORY_LIMIT=") {
+			lines[i] = "OLLAMA_MEMORY_LIMIT=8G"
+		}
+		// These allowlists are JSON arrays, so they need array form rather than a quoted scalar.
+		if strings.HasPrefix(ln, "ASSISTANT_OPEN_KNOWLEDGE_SWITCHABLE_MODELS=") {
+			lines[i] = `ASSISTANT_OPEN_KNOWLEDGE_SWITCHABLE_MODELS=["bug-045-fixture-llm-6gib"]`
+		}
+		if strings.HasPrefix(ln, "ASSISTANT_OPEN_KNOWLEDGE_TOOL_CAPABLE_GATHER_MODELS=") {
+			lines[i] = `ASSISTANT_OPEN_KNOWLEDGE_TOOL_CAPABLE_GATHER_MODELS=["bug-045-fixture-llm-6gib"]`
 		}
 	}
 	tmp := filepath.Join(t.TempDir(), "oversized.env")
@@ -234,7 +246,9 @@ func TestRun_OversizedModel_ExitsOne(t *testing.T) {
 		"PHOTOS_INTELLIGENCE_AESTHETIC_MODEL", "PHOTOS_INTELLIGENCE_OCR_MODEL",
 		"AGENT_PROVIDER_DEFAULT_MODEL", "AGENT_PROVIDER_REASONING_MODEL",
 		"AGENT_PROVIDER_FAST_MODEL", "AGENT_PROVIDER_VISION_MODEL", "AGENT_PROVIDER_OCR_MODEL",
-		"ML_MODEL_MEMORY_PROFILES_JSON", "PHOTOS_INTELLIGENCE_EMBED_MODEL",
+		"ASSISTANT_OPEN_KNOWLEDGE_LLM_MODEL_ID", "ASSISTANT_OPEN_KNOWLEDGE_SYNTHESIS_MODEL_ID",
+		"ASSISTANT_OPEN_KNOWLEDGE_SWITCHABLE_MODELS", "ASSISTANT_OPEN_KNOWLEDGE_TOOL_CAPABLE_GATHER_MODELS",
+		"ML_MODEL_MEMORY_PROFILES_JSON", "PHOTOS_INTELLIGENCE_EMBED_MODEL", "OLLAMA_MEMORY_LIMIT",
 	} {
 		snapshot[key] = os.Getenv(key)
 		keyCopy := key

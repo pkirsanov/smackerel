@@ -146,7 +146,7 @@ func weatherIntentJSON(t *testing.T) string {
 		"side_effect_class":"external_read",
 		"scenario_hint":"weather_query",
 		"tool_hints":["location_normalize","weather_lookup"],
-		"normalized_request":{"query":"weather Boise, Idaho tomorrow"},
+		"normalized_request":{"query":"weather boise id tomorrow"},
 		"slots":{"location":{"raw":"boise id"},"window":"tomorrow"},
 		"missing_slots":[],
 		"confidence":0.92,

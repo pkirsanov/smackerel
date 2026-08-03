@@ -109,7 +109,7 @@ func TestFacadeResolvedCompiledWeatherSourceFailuresCaptureSafely(t *testing.T) 
 		if err != nil {
 			t.Fatalf("Handle: %v", err)
 		}
-		assertCompiledWeatherCapture(t, response, contracts.ErrProviderUnavailable)
+		assertCompiledWeatherHonestFailure(t, response)
 		if executor.invocations != 0 {
 			t.Fatalf("generic executor invocations = %d, want 0", executor.invocations)
 		}
@@ -139,7 +139,7 @@ func TestFacadeResolvedCompiledWeatherSourceFailuresCaptureSafely(t *testing.T) 
 		if err != nil {
 			t.Fatalf("Handle: %v", err)
 		}
-		assertCompiledWeatherCapture(t, response, contracts.ErrSlotMissing)
+		assertCompiledWeatherHonestFailure(t, response)
 		if weatherCalls != 0 {
 			t.Fatalf("weather calls = %d, want 0 for invalid canonical location", weatherCalls)
 		}
@@ -278,13 +278,16 @@ func ambiguousSpringfieldEnvelope(now time.Time) microtools.Envelope {
 	}
 }
 
-func assertCompiledWeatherCapture(t *testing.T, response contracts.AssistantResponse, cause contracts.ErrorCause) {
+// BUG-061-008/009: a band-high turn must surface an honest failure; "saved as an idea" is band-low only.
+// The requires-provenance gate rewrites a source-less body into the canonical refusal, so the
+// user-visible cause is ErrNoGroundedAnswer; the specific upstream cause survives as a metrics label.
+func assertCompiledWeatherHonestFailure(t *testing.T, response contracts.AssistantResponse) {
 	t.Helper()
-	if response.Status != contracts.StatusSavedAsIdea || !response.CaptureRoute {
-		t.Fatalf("failure status/capture = %q/%t, want saved_as_idea/true", response.Status, response.CaptureRoute)
+	if response.Status != contracts.StatusUnavailable || response.CaptureRoute {
+		t.Fatalf("failure status/capture = %q/%t, want unavailable/false", response.Status, response.CaptureRoute)
 	}
-	if response.ErrorCause != cause {
-		t.Fatalf("failure cause = %q, want %q", response.ErrorCause, cause)
+	if response.ErrorCause != contracts.ErrNoGroundedAnswer {
+		t.Fatalf("failure cause = %q, want %q", response.ErrorCause, contracts.ErrNoGroundedAnswer)
 	}
 	if len(response.Sources) != 0 {
 		t.Fatalf("failure sources = %d, want 0", len(response.Sources))
