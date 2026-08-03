@@ -332,8 +332,13 @@ func TestFacadeWeatherIntegration_AntiFabrication_MissingProviderTriggersRefusal
 	if resp.Body != canonicalRefusal {
 		t.Errorf("Body = %q; want canonical refusal %q (anti-fabrication: gate refuses missing-attribution Final)", resp.Body, canonicalRefusal)
 	}
-	if !resp.CaptureRoute {
-		t.Errorf("CaptureRoute=false; gate did NOT fire on missing-attribution Final (anti-fabrication regression)")
+	// BUG-061-009: the gate refuses into an honest band-high shape, never the band-low capture ack.
+	if resp.Status != contracts.StatusUnavailable || resp.ErrorCause != contracts.ErrNoGroundedAnswer {
+		t.Errorf("status/cause = %q/%q; want %q/%q (gate did NOT fire on missing-attribution Final)",
+			resp.Status, resp.ErrorCause, contracts.StatusUnavailable, contracts.ErrNoGroundedAnswer)
+	}
+	if resp.CaptureRoute {
+		t.Errorf("CaptureRoute=true; a band-high refusal must never render the capture acknowledgement")
 	}
 	if len(resp.Sources) != 0 {
 		t.Errorf("Sources len = %d; want 0 (assembler refused to fabricate)", len(resp.Sources))

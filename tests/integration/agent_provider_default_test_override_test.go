@@ -95,7 +95,7 @@ func TestAgentProviderDefaultModelTestOverride(t *testing.T) {
 	devEnvText := string(devEnvBytes)
 
 	const wantTestModelLine = "AGENT_PROVIDER_DEFAULT_MODEL=qwen2.5:0.5b-instruct"
-	const wantDevModelLine = "AGENT_PROVIDER_DEFAULT_MODEL=gemma3:4b"
+	const testOnlyModel = "qwen2.5:0.5b-instruct"
 
 	if !strings.Contains(testEnvText, wantTestModelLine) {
 		t.Errorf("generated test.env must contain %q (spec 061 BS-002-LLM-PROVIDER-TIMEOUT fix); got line: %q",
@@ -104,14 +104,19 @@ func TestAgentProviderDefaultModelTestOverride(t *testing.T) {
 		)
 	}
 
-	if !strings.Contains(devEnvText, wantDevModelLine) {
-		t.Errorf("generated dev.env must contain %q (production binding preserved — override is test-only); got line: %q",
-			wantDevModelLine,
-			findAgentProviderDefaultLine(devEnvText),
-		)
+	// The base binding legitimately changes as the model set evolves; the invariant
+	// under test is that the test-only override never leaks into dev.
+	devLine := findAgentProviderDefaultLine(devEnvText)
+	devModel := strings.TrimPrefix(devLine, "AGENT_PROVIDER_DEFAULT_MODEL=")
+	if devLine == "" || devModel == "" {
+		t.Errorf("generated dev.env must bind AGENT_PROVIDER_DEFAULT_MODEL to a non-empty model; got line: %q", devLine)
+	}
+	if devModel == testOnlyModel {
+		t.Errorf("generated dev.env inherited the test-only override %q (production binding must be preserved); got line: %q",
+			testOnlyModel, devLine)
 	}
 
-	t.Logf("test.env pins AGENT_PROVIDER_DEFAULT_MODEL=qwen2.5:0.5b-instruct; dev.env keeps AGENT_PROVIDER_DEFAULT_MODEL=gemma3:4b (per-env override working)")
+	t.Logf("test.env pins AGENT_PROVIDER_DEFAULT_MODEL=%s; dev.env keeps %s (per-env override working)", testOnlyModel, devModel)
 }
 
 // findAgentProviderDefaultLine returns the first line in `text` whose key is
