@@ -2,8 +2,8 @@
   "installedVersion": "7.22.0",
   "installMode": "local-source",
   "sourceRef": "main",
-  "sourceGitSha": "374c8acc13e3b23e12b56e929c6f21bd9174c850",
+  "sourceGitSha": "e0b9ae614baa7b548f7041e00890d4224378868e",
   "sourceDirty": false,
   "targetRepoSlug": "smackerel",
-  "installedAt": "2026-08-03T21:29:17Z"
+  "installedAt": "2026-08-03T22:25:14Z"
 }
