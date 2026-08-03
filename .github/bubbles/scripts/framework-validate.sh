@@ -670,6 +670,7 @@ run_check "Retro convergence health selftest" bash "$SCRIPT_DIR/retro-convergenc
 run_check "Planning workflow chain guard selftest" bash "$SCRIPT_DIR/planning-workflow-chain-guard-selftest.sh"
 run_check "Capability foundation guard selftest" bash "$SCRIPT_DIR/capability-foundation-guard-selftest.sh"
 run_check "State linkage backfill selftest" bash "$SCRIPT_DIR/state-linkage-backfill-selftest.sh"
+run_check "State certification reconcile selftest (IMP-032 SCOPE-4b)" bash "$SCRIPT_DIR/state-certification-reconcile-selftest.sh"
 run_check "Planning packet linkage guard selftest" bash "$SCRIPT_DIR/planning-packet-linkage-guard-selftest.sh"
 run_check "Vertical-delivery plan guard selftest (BFW-02 / IMP-022)" bash "$SCRIPT_DIR/vertical-delivery-plan-guard-selftest.sh"
 run_check "Surface reachability guard selftest (IMP-031 SCOPE-3)" bash "$SCRIPT_DIR/surface-reachability-guard-selftest.sh"
