@@ -314,6 +314,8 @@ bubbles/scripts/spec-dashboard.sh
 bubbles/scripts/spec-review-handoff-selftest.sh
 bubbles/scripts/stale-deferral-lint-selftest.sh
 bubbles/scripts/stale-deferral-lint.sh
+bubbles/scripts/state-certification-reconcile-selftest.sh
+bubbles/scripts/state-certification-reconcile.sh
 bubbles/scripts/state-consistency-scan-selftest.sh
 bubbles/scripts/state-consistency-scan.sh
 bubbles/scripts/state-linkage-backfill-selftest.sh

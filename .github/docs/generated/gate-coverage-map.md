@@ -81,7 +81,7 @@ Corroborating (grep-derived, advisory) numbers:
 | G048 | silent_decode_failure_gate | `mode-required` | 25 | — | 2 | — |
 | G051 | test_env_dependency_gate | `guard-check:19` | 25 | Check 19 | 2 | guard |
 | G052 | artifact_freshness_guard_gate | `guard-check:13A` | 0 | Check 13A | — | guard |
-| G053 | implementation_delta_evidence_gate | `guard-check:13B` | 0 | Check 13B | 3 | guard |
+| G053 | implementation_delta_evidence_gate | `guard-check:13B` | 0 | Check 13B | 4 | guard |
 | G055 | policy_provenance_gate | `script:bubbles/scripts/guards/control-plane-checks.sh` | 25 | Check 3A | 3 | guard |
 | G056 | validate_certification_gate | `script:bubbles/scripts/guards/control-plane-checks.sh` | 25 | Check 3H | 1 | guard |
 | G057 | scenario_manifest_gate | `script:bubbles/scripts/guards/control-plane-checks.sh` | 25 | Check 3C | 1 | guard |
@@ -162,7 +162,7 @@ These gates are intentionally enforced OUTSIDE the mode `requiredGates` lists. E
 | G042 | artifact_ownership_enforcement_gate | Check 3G | 2 | guard | agent-ownership-lint.sh, gate-bands-selftest.sh |
 | G043 | consumer_trace_gate | ref | 2 | guard | expand-migrate-contract-guard.sh, imp021-interaction-contracts-selftest.sh |
 | G052 | artifact_freshness_guard_gate | Check 13A | — | guard | — |
-| G053 | implementation_delta_evidence_gate | Check 13B | 3 | guard | delivery-implementation-delta-guard-selftest.sh, delivery-implementation-delta-guard.sh, state-transition-guard-selftest.sh |
+| G053 | implementation_delta_evidence_gate | Check 13B | 4 | guard | delivery-implementation-delta-guard-selftest.sh, delivery-implementation-delta-guard.sh, state-certification-reconcile.sh, state-transition-guard-selftest.sh |
 | G063 | concrete_result_gate | Check 3G | 2 | guard | agent-ownership-lint.sh, state-transition-guard-selftest.sh |
 | G064 | workflow_runner_authorization_gate | Check 3H | 7 | guard | agent-ownership-lint.sh, cli.sh, framework-validate.sh, scenario-compile-lint-selftest.sh, scenario-compile-lint.sh, state-transition-guard-selftest.sh, +1 more |
 | G066 | phase_claim_provenance_gate | — | — | — | — |

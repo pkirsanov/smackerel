@@ -74,7 +74,7 @@ bash .github/bubbles/scripts/cli.sh framework-validate    # in downstream repo
 ## Status is two mirrors — never write one alone
 `state.json` records the lifecycle status twice: top-level `status` and `certification.status`. They are one fact in two places. `transition-contract-resolver.sh` refuses any spec whose mirrors disagree.
 
-The refusal is `E009-TARGET-MISMATCH` at exit 69. It fires BEFORE the mode registry is read, so the guard then reports `workflowMode`, `auditProfile` and `targetStatus` as `UNRESOLVED`. Those `UNRESOLVED` values are a symptom of the early exit. They are NOT evidence that a status ceiling is unsupported.
+The refusal is `E009-STATUS-MIRROR` at exit 69. It fires BEFORE the mode registry is read, so the guard then reports `workflowMode`, `auditProfile` and `targetStatus` as `UNRESOLVED`. Those `UNRESOLVED` values are a symptom of the early exit. They are NOT evidence that a status ceiling is unsupported.
 
 `certification.*` is `bubbles.validate`-owned, so every other agent has exactly one legal move:
 
@@ -93,6 +93,23 @@ route_required
   evidence: <verbatim resolver or guard output showing the disagreement>
   request: certify the transition the guard already passes, or restate status to match the evidence
 ```
+
+### What `bubbles.validate` does with that packet
+`bubbles.validate` owns the repair and runs it through
+[`state-certification-reconcile.sh`](../../bubbles/scripts/state-certification-reconcile.sh),
+which is dry-run by default:
+
+```bash
+bash bubbles/scripts/state-certification-reconcile.sh specs/<NNN-feature>
+BUBBLES_AGENT_NAME=bubbles.validate bash bubbles/scripts/state-certification-reconcile.sh specs/<NNN-feature> --apply
+```
+
+The tool does not edit the mirror on request. It re-runs the transition guard
+against a candidate in which the mirrors already agree, and writes
+`certification.status` only on a `PASS` verdict. Exit 3 means the guard refused,
+so the status is genuinely ahead of its evidence and the spec needs the work
+finished or the status restated. The tool never invents `certifiedAt` and never
+lowers top-level `status`.
 
 ## Failure recovery
 If any guard exits non-zero:
