@@ -36,6 +36,19 @@
 # `cli.sh doctor` can report degraded posture rather than the operator
 # discovering it from a green run that checked nothing.
 
+# Resolve a satisfying interpreter BEFORE any probe runs. python-env.sh owns the
+# managed virtualenv; activating it here means the scripts that source this
+# module — and every bare `python3` they invoke — get the provisioned
+# interpreter with no call-site change. Absent or unprovisioned, this is a
+# no-op and the probes below correctly report MISSING.
+_bubbles_posture_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [[ -f "$_bubbles_posture_dir/python-env.sh" ]]; then
+  # shellcheck source=/dev/null
+  . "$_bubbles_posture_dir/python-env.sh"
+  bubbles_python_activate >/dev/null 2>&1 || true
+fi
+unset _bubbles_posture_dir
+
 # bubbles_require_dep <script-label> <what-is-missing>
 bubbles_require_dep() {
   local label="$1"
@@ -49,8 +62,13 @@ bubbles_require_dep() {
   echo "$label: FAIL — $missing" >&2
   echo "  This guard cannot verify anything without it, and reporting success" >&2
   echo "  for a check that never ran is the failure mode this refuses to have." >&2
-  echo "  Install the dependency, or set BUBBLES_ALLOW_DEGRADED=1 to proceed" >&2
-  echo "  with an explicitly degraded posture that 'cli.sh doctor' will report." >&2
+  echo "  Provision the managed environment:" >&2
+  echo "      bash bubbles/scripts/python-env.sh --provision" >&2
+  echo "  Inspect posture with '--check'. Do NOT reach for a one-off" >&2
+  echo "  'pip install --break-system-packages' or a /tmp virtualenv: both are" >&2
+  echo "  undone by the next PATH change and leave no reproducible record." >&2
+  echo "  Or set BUBBLES_ALLOW_DEGRADED=1 to proceed with an explicitly" >&2
+  echo "  degraded posture that 'cli.sh doctor' will report." >&2
   exit 1
 }
 

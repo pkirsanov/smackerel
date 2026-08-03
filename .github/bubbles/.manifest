@@ -116,6 +116,7 @@ bubbles/scripts/framework-dogfood-guard-selftest.sh
 bubbles/scripts/framework-dogfood-guard.sh
 bubbles/scripts/framework-health-evidence-lint-selftest.sh
 bubbles/scripts/framework-health-evidence-lint.sh
+bubbles/scripts/framework-validate-changed-only-selftest.sh
 bubbles/scripts/framework-validate-tier-selftest.sh
 bubbles/scripts/framework-validate.sh
 bubbles/scripts/fun-mode.sh
@@ -233,6 +234,8 @@ bubbles/scripts/project-scan-setup.sh
 bubbles/scripts/prometheus-adapter-fetch-selftest.sh
 bubbles/scripts/propagation-policy-guard-selftest.sh
 bubbles/scripts/propagation-policy-guard.sh
+bubbles/scripts/python-env-selftest.sh
+bubbles/scripts/python-env.sh
 bubbles/scripts/rapid-tool-delivery-mode-selftest.sh
 bubbles/scripts/reference-existence-lint-selftest.sh
 bubbles/scripts/reference-existence-lint.sh
@@ -573,6 +576,7 @@ docs/v5.2-design.md
 docs/v6-mcp-design.md
 bubbles/workflows.yaml
 bubbles/agnosticity-allowlist.txt
+bubbles/requirements.txt
 bubbles/action-risk-registry.yaml
 bubbles/adoption-profiles.yaml
 bubbles/agent-capabilities.yaml

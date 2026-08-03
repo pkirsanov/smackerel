@@ -71,6 +71,20 @@ source "$(dirname "${BASH_SOURCE[0]}")/fun-mode.sh"
 source "$(dirname "${BASH_SOURCE[0]}")/aliases.sh"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Resolve the managed Python interpreter ONCE, for every cli.sh command, before
+# any subcommand runs. bubbles_python_activate exports PATH, so every child
+# process inherits it — framework-validate and the ~15 selftests that call
+# `python3 -c "import yaml"` directly are covered without editing each one, and
+# a selftest added tomorrow is covered too. No-op unless the managed environment
+# is provisioned AND PATH's python3 does not already satisfy, so an operator who
+# installed the packages their own way keeps their interpreter.
+# Provision with: bash bubbles/scripts/python-env.sh --provision
+if [[ -f "$SCRIPT_DIR/python-env.sh" ]]; then
+  # shellcheck source=bubbles/scripts/python-env.sh
+  source "$SCRIPT_DIR/python-env.sh"
+  bubbles_python_activate >/dev/null 2>&1 || true
+fi
 if [[ "$(basename "$(dirname "$SCRIPT_DIR")")" == "bubbles" && "$(basename "$(dirname "$(dirname "$SCRIPT_DIR")")")" == ".github" ]]; then
   REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
   FRAMEWORK_DIR="$REPO_ROOT/.github/bubbles"

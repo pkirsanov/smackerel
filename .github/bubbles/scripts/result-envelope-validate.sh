@@ -145,8 +145,33 @@ fi
 [[ -f "$SCHEMA" ]] || { echo "result-envelope-validate: schema missing at $SCHEMA" >&2; exit 2; }
 [[ -d "$AGENTS_DIR" ]] || { echo "result-envelope-validate: agents/ missing at $AGENTS_DIR" >&2; exit 2; }
 
+# Dependency posture (IMP-027 / SCOPE-4). dependency-posture.sh's own header
+# lists this script among the ten that silently skipped on a missing dependency,
+# but it never actually sourced the module. Sourcing it here honors that
+# contract AND activates the managed interpreter from python-env.sh, so a
+# provisioned environment satisfies the import without any PATH ceremony.
+_rev_script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [[ -f "$_rev_script_dir/dependency-posture.sh" ]]; then
+  # shellcheck source=/dev/null
+  . "$_rev_script_dir/dependency-posture.sh"
+fi
+unset _rev_script_dir
+
 if ! command -v python3 >/dev/null 2>&1; then
+  if declare -f bubbles_require_dep >/dev/null 2>&1; then
+    bubbles_require_dep "result-envelope-validate" \
+      "python3 — result envelopes cannot be schema-validated without it" || exit 0
+  fi
   echo "result-envelope-validate: SKIP (python3 not installed)"
+  exit 0
+fi
+
+if ! python3 -c 'import jsonschema' >/dev/null 2>&1; then
+  if declare -f bubbles_require_dep >/dev/null 2>&1; then
+    bubbles_require_dep "result-envelope-validate" \
+      "the python 'jsonschema' module — result envelopes cannot be schema-validated without it" || exit 0
+  fi
+  echo "result-envelope-validate: SKIP (python jsonschema not installed)"
   exit 0
 fi
 
@@ -168,8 +193,11 @@ validated_packet = os.environ.get('VALIDATED_PACKET', '')
 try:
     import jsonschema
 except Exception:
-    print("result-envelope-validate: SKIP (python jsonschema not installed)")
-    sys.exit(0)
+    # Unreachable after the bash preflight above. Kept as a hard failure rather
+    # than a skip so no path through this script can report success for a
+    # validation that never ran.
+    print("result-envelope-validate: FAIL - jsonschema missing after preflight", file=sys.stderr)
+    sys.exit(2)
 
 schema = json.loads(schema_path.read_text())
 binding_packet = json.loads(validated_packet) if binding_required else None

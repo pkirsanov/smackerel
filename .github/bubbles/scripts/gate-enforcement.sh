@@ -94,6 +94,12 @@ if [[ ! -f "$GATES" ]]; then
   echo "gate-enforcement: SKIP (bubbles/registry/gates.yaml missing)"
   exit 0
 fi
+# Resolve the managed interpreter before probing (bubbles/scripts/python-env.sh).
+_ge_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=/dev/null
+[[ -f "$_ge_dir/dependency-posture.sh" ]] && . "$_ge_dir/dependency-posture.sh"
+unset _ge_dir
+
 if ! command -v python3 >/dev/null 2>&1; then
   echo "gate-enforcement: SKIP (python3 not installed)"
   exit 0

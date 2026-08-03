@@ -2,8 +2,8 @@
 #
 # Install Bubbles source-repo pre-push hook for framework maintainers.
 # Idempotent. If a pre-push hook already exists, this script INJECTS
-# the release-check pass (which runs framework-validate) before the
-# final exit instead of replacing the existing hook.
+# the framework-validate pass before the final exit instead of
+# replacing the existing hook.
 
 set -euo pipefail
 
@@ -23,7 +23,8 @@ if [[ ! -f "$HOOK_DST" ]]; then
   cp "$HOOK_SRC" "$HOOK_DST"
   chmod +x "$HOOK_DST"
   echo "Installed pre-push hook → .git/hooks/pre-push"
-  echo "Runs release-check (framework-validate included) on every push. No bypass."
+  echo "Runs framework-validate --tier=core on every push. No bypass."
+  echo "CI runs the full release-check; BUBBLES_PREPUSH_TIER=full runs it locally."
   exit 0
 fi
 
@@ -43,5 +44,6 @@ fi
 
 chmod +x "$HOOK_DST"
 echo "Appended bubbles framework guard to existing .git/hooks/pre-push"
-echo "Runs release-check (framework-validate included) after existing checks. No bypass."
+echo "Runs framework-validate --tier=core after existing checks. No bypass."
+echo "CI runs the full release-check; BUBBLES_PREPUSH_TIER=full runs it locally."
 

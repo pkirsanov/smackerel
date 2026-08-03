@@ -76,6 +76,14 @@ done
 
 [[ -f "$WORKFLOWS" ]] || { echo "model-tier-advisory: workflows.yaml missing" >&2; exit 2; }
 
+# Resolve the managed interpreter before probing, so a provisioned environment
+# satisfies the import even when PATH's python3 does not. See
+# bubbles/scripts/python-env.sh. No-op when unprovisioned.
+_mta_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=/dev/null
+[[ -f "$_mta_dir/dependency-posture.sh" ]] && . "$_mta_dir/dependency-posture.sh"
+unset _mta_dir
+
 if ! command -v python3 >/dev/null 2>&1; then
   echo "model-tier-advisory: SKIP (python3 not installed)"
   exit 0

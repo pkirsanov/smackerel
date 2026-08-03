@@ -3,8 +3,8 @@
 # Bubbles source-repo pre-push hook (v5.0.1).
 #
 # Installed by `bash bubbles/scripts/install-bubbles-hooks.sh` for
-# framework maintainers. Runs release-check before any push to origin,
-# which executes framework-validate as its own first check. NO bypass flags.
+# framework maintainers. Runs the fast structural CORE tier by default;
+# the full release gate runs in CI. NO bypass flags.
 #
 # This is the framework eating its own dog food: the framework's
 # release process refuses pushes that would ship framework drift.
@@ -28,19 +28,24 @@ if [[ ! -x "$SCRIPT_DIR/framework-validate.sh" ]]; then
   exit 0
 fi
 
-# Proportional validation (IMP-100 Phase 5 / R8): a maintainer may opt into the
-# fast structural CORE tier for routine local pushes via BUBBLES_PREPUSH_TIER=core.
-# The DEFAULT stays the FULL validate + release-check — the release gate is never
-# silently weakened (CI does not run the full suite). A core-tier push MUST be
-# followed by a full validate + release-check before cutting a release.
-PREPUSH_TIER="${BUBBLES_PREPUSH_TIER:-full}"
+# Proportional validation (IMP-100 Phase 5 / R8). The DEFAULT is the fast
+# structural CORE tier (~90s, 16 checks); `BUBBLES_PREPUSH_TIER=full` runs the
+# whole release gate locally and is what a release cut should use.
+#
+# Core-by-default is safe because the full gate is NOT skipped, only relocated:
+# .github/workflows/agnosticity.yml runs `cli.sh release-check` on every pull
+# request and every push to main, on Linux AND macOS. A local full run for each
+# routine push re-computes a verdict CI produces anyway, and a ~30-minute hook
+# is the strongest practical incentive toward the bypass behaviour this
+# framework exists to prevent.
+PREPUSH_TIER="${BUBBLES_PREPUSH_TIER:-core}"
 
 # Per-process paths: a fixed name is silently overwritten by any concurrent push on the same machine.
 PREPUSH_VALIDATE_LOG="/tmp/bubbles-pre-push-validate.$$.log"
 PREPUSH_RELEASE_LOG="/tmp/bubbles-pre-push-release.$$.log"
 
 if [[ "$PREPUSH_TIER" == "core" ]]; then
-  echo "🫧 bubbles pre-push: tier=core (fast structural gate — full validate + release-check still required before a release)"
+  echo "🫧 bubbles pre-push: tier=core (fast structural gate — the full release gate runs in CI, and BUBBLES_PREPUSH_TIER=full runs it here)"
   if ! bash "$SCRIPT_DIR/framework-validate.sh" --tier=core >"$PREPUSH_VALIDATE_LOG" 2>&1; then
     echo "❌ framework-validate (core tier) failed. Full log: $PREPUSH_VALIDATE_LOG"
     echo "    Tail:"
@@ -49,7 +54,7 @@ if [[ "$PREPUSH_TIER" == "core" ]]; then
     echo "    Fix the failures and retry the push. There is no bypass."
     exit 1
   fi
-  echo "✅ framework-validate (core tier) passed — run a FULL validate + release-check before cutting a release."
+  echo "✅ framework-validate (core tier) passed — CI runs the full release-check; use BUBBLES_PREPUSH_TIER=full before cutting a release."
   exit 0
 fi
 
