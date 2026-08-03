@@ -17,7 +17,7 @@
       "scopeId": "SCOPE-2",
       "scopeName": "Location Normalization and Ambiguity Handling",
       "tests": [
-        { "type": "unit", "category": "unit", "file": "internal/agent/tools/microtools/location_normalize_test.go", "scenarioId": "SCN-065-A01", "description": "Palm Springs CA resolves to California", "command": "./smackerel.sh test unit", "liveSystem": false },
+        { "type": "unit", "category": "unit", "file": "internal/agent/tools/microtools/location_normalize_test.go", "scenarioId": "SCN-065-A01", "description": "boise id resolves to Boise, Idaho", "command": "./smackerel.sh test unit", "liveSystem": false },
         { "type": "integration", "category": "integration", "file": "tests/integration/assistant/microtools_location_test.go", "scenarioId": "SCN-065-A02", "description": "SF resolves through provider-backed location normalization", "command": "./smackerel.sh test integration", "liveSystem": true },
         { "type": "Regression E2E", "category": "e2e-api", "file": "tests/e2e/assistant/microtools_http_test.go", "scenarioId": "SCN-065-A03", "description": "Springfield produces candidate clarification instead of a guessed city", "command": "./smackerel.sh test e2e", "liveSystem": true }
       ]

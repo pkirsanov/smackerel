@@ -206,7 +206,7 @@ func TestIntentTraceRedactionLeavesNoRawSlotValueInPayload(t *testing.T) {
 	const secretText = "MY-PRIVATE-USER-TEXT-CANARY"
 	red := redactor.Redact(policy, secretText, map[string]any{
 		"phone_number": secretPhone,
-		"location":     "palm springs",
+		"location":     "boise id",
 	})
 	traceID := ns + "-trace"
 	turnID := ns + "-turn"

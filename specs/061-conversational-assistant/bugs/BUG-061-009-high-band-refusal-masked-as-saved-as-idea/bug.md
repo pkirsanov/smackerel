@@ -13,11 +13,13 @@ closed one path; this closes the remaining one and converts the ad-hoc
 "saved as an idea" catch-all into a single enforced invariant so the class
 cannot recur.
 
-## Reproduction (live, home-lab bot)
+## Reproduction (live, deployed bot)
+
+Concrete target identity and runtime log-access details belong in `<knb-repo>`.
 
 1. On Telegram, send `/ask how smackerel works as second brain or llm wiki?`
 2. Observed reply: `saved as an idea — i'll surface it later.`
-3. Home-lab core logs for the same turn:
+3. Core logs from the deployed runtime for the same turn:
    - `openknowledge.turn status=success termination=final` (the agent answered)
    - `assistant_turn status=saved_as_idea` (the facade discarded the answer)
 

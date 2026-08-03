@@ -47,4 +47,4 @@ All regression execution must use the repository-owned disposable test stack and
 
 ## Deployment Boundary
 
-This branch changes source/tests/packet only. It does not operate evo-x2, modify `knb`, or deploy a runtime.
+This packet changes repository-local source, tests, and planning artifacts only. It does not operate `<deploy-host>`, deploy to `<target>`, or modify target-specific runtime configuration. All concrete deployment configuration belongs exclusively in `<knb-repo>`.

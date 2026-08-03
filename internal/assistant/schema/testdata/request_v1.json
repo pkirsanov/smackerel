@@ -3,7 +3,7 @@
   "transport_message_id": "test-turn-001",
   "kind": "text",
   "transport_hint": "web",
-  "text": "weather in palm springs ca tomorrow",
+  "text": "weather in boise id tomorrow",
   "confirm_ref": "",
   "confirm_choice": "",
   "disambiguation_ref": "",

@@ -183,12 +183,15 @@ With toolchains PRESENT, `text_only.descriptor.json` was deliberately corrupted 
 schema-valid). The canary failed loud (`t.Fatalf`), proving the present-but-drift path is
 untouched. The fixture was then restored via `git checkout` (no permanent change):
 
+> Transcript sanitized: location identifiers are replaced with `<redacted-location>`
+> placeholders per the PII policy. All other characters are verbatim.
+
 ```
 $ go test -count=1 -v -run 'TestRenderDescriptorV1_CrossLanguageCanary/text_only' ./tests/unit/clients/...
 === RUN   TestRenderDescriptorV1_CrossLanguageCanary/text_only
     render_descriptor_canary_test.go:257: js renderer output deviates from golden
         --- js ---
-        {"schema_version":"render-descriptor.v1","nodes":[{"kind":"text","text":"The weather in Palm Springs tomorrow is sunny, 78F."}]}
+        {"schema_version":"render-descriptor.v1","nodes":[{"kind":"text","text":"The weather in <redacted-location> tomorrow is sunny, 78F."}]}
         --- golden ---
         { ... "text": "DRIFT-INJECTED-DELIBERATELY-BUG-073-003-restore-via-git-checkout" ... }
 --- FAIL: TestRenderDescriptorV1_CrossLanguageCanary/text_only (0.19s)

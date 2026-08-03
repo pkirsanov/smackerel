@@ -1021,7 +1021,8 @@ production behavior end-to-end rather than tautologically:
   before the canary subtest runs (matching the production startup
   order in `cmd/core`).
 - `SCN-065-A03_location_overlay_rewrites_query` reported
-  `provider saw "springfield", want "Palm Springs, California"` —
+  `provider saw "springfield", want "<redacted-location>, California"`
+  (location identifier redacted) —
   the shared stub's `lastQuery` had been overwritten by the
   ambiguous SCN-065-A02 subtest before the overlay assertion ran.
   Fixed by giving the overlay subtest its own dedicated provider so
@@ -1750,10 +1751,10 @@ is preserved verbatim.
 
 ```
 $ ./smackerel.sh config generate 2>&1 | tail -5
-config-validate: /home/philipk/smackerel/config/generated/dev.env.tmp.26772 OK
-Generated /home/philipk/smackerel/config/generated/dev.env
-Generated /home/philipk/smackerel/config/generated/nats.conf
-Generated /home/philipk/smackerel/config/generated/prometheus.yml
+config-validate: <repo-root>/config/generated/dev.env.tmp.26772 OK
+Generated <repo-root>/config/generated/dev.env
+Generated <repo-root>/config/generated/nats.conf
+Generated <repo-root>/config/generated/prometheus.yml
 ```
 
 ```
@@ -1778,7 +1779,7 @@ $ go vet ./... 2>&1 | grep -v "PASS\|spec_077\|node v22" | tail -5
 **Claim Source:** executed.
 
 ```
-$ env -i bash -c "cd /home/philipk/smackerel && set -a && source config/generated/dev.env && unset LEGACY_RETIREMENT_OBSERVATION_CRON_EXPR && set +a && exec go test ./internal/config/... -run TestLegacyRetirement_MissingEachRequired" 2>&1 | grep -E "PASS|FAIL|---" | tail -10
+$ env -i bash -c "cd <repo-root> && set -a && source config/generated/dev.env && unset LEGACY_RETIREMENT_OBSERVATION_CRON_EXPR && set +a && exec go test ./internal/config/... -run TestLegacyRetirement_MissingEachRequired" 2>&1 | grep -E "PASS|FAIL|---" | tail -10
 ```
 
 (See unit-suite output above — the new keys participate in `TestLegacyRetirement_MissingEachRequiredKeyFailsLoud`-class assertions through the extended `baseLegacyRetirementEnv()`; dropping any one of the three new keys causes `LoadLegacyRetirement` to return `[F075-SST-MISSING]` naming the dropped key.)
@@ -2580,7 +2581,7 @@ ok      github.com/smackerel/smackerel/internal/assistant/legacyretirement (PASS
 #### Step 1 — Repo-wide check (`./smackerel.sh check`)
 
 ```text
-config-validate: /home/philipk/smackerel/config/generated/dev.env.tmp.354025 OK
+config-validate: <repo-root>/config/generated/dev.env.tmp.354025 OK
 Config is in sync with SST
 env_file drift guard: OK
 scenario-lint: scanning config/prompt_contracts (glob: *.yaml)

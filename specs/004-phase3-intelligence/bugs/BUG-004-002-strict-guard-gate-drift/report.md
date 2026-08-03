@@ -12,9 +12,9 @@ This BUG closes the 20 BLOCKs via 18 scope-level planning insertions in `specs/0
 $ ls -la specs/004-phase3-intelligence/bugs/BUG-004-002-strict-guard-gate-drift/spec.md \
         specs/004-phase3-intelligence/bugs/BUG-004-002-strict-guard-gate-drift/design.md \
         specs/004-phase3-intelligence/bugs/BUG-004-002-strict-guard-gate-drift/scopes.md
--rw-r--r-- 1 philipk philipk  ~/smackerel/specs/004-phase3-intelligence/bugs/BUG-004-002-strict-guard-gate-drift/spec.md
--rw-r--r-- 1 philipk philipk  ~/smackerel/specs/004-phase3-intelligence/bugs/BUG-004-002-strict-guard-gate-drift/design.md
--rw-r--r-- 1 philipk philipk  ~/smackerel/specs/004-phase3-intelligence/bugs/BUG-004-002-strict-guard-gate-drift/scopes.md
+-rw-r--r-- 1 <local-user> <local-group>  ~/smackerel/specs/004-phase3-intelligence/bugs/BUG-004-002-strict-guard-gate-drift/spec.md
+-rw-r--r-- 1 <local-user> <local-group>  ~/smackerel/specs/004-phase3-intelligence/bugs/BUG-004-002-strict-guard-gate-drift/design.md
+-rw-r--r-- 1 <local-user> <local-group>  ~/smackerel/specs/004-phase3-intelligence/bugs/BUG-004-002-strict-guard-gate-drift/scopes.md
 ```
 
 The plan is enumerated in `scopes.md` Scope 1 (Planning Edits — 19 closed findings) and Scope 2 (Structured Commit Landing — 1 closed finding). The fix is text-only; no production source touched.

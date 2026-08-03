@@ -145,9 +145,9 @@ ad-hoc text.
   open-knowledge, and expense requests all include the same sequence:
   `raw_turn_received -> intent_compiled -> intent_validated ->
   route_selected -> tool_or_action_executed -> response_synthesized`.
-- Weather request `"weather in palm springs ca tomorrow"` compiles to
+- Weather request `"weather in boise id tomorrow"` compiles to
   `{ action_class: "external_lookup", scenario_hint: "weather_query",
-  slots.location.raw: "palm springs ca", slots.window: "tomorrow" }`,
+  slots.location.raw: "boise id", slots.window: "tomorrow" }`,
   then spec 065 `location_normalize` produces the canonical location
   before `weather_lookup` calls Open-Meteo.
 - Recipe/list request `"make a shopping list for Pad Thai and Caesar"`
@@ -205,10 +205,10 @@ scenario instead of clarify/capture.
 ```gherkin
 Scenario: SCN-068-A01 — Weather NL compiles before route
   Given the intent compiler is enabled
-  When the user sends "weather in palm springs ca tomorrow"
+  When the user sends "weather in boise id tomorrow"
   Then the compiler returns a valid CompiledIntent with action_class = "external_lookup"
   And scenario_hint = "weather_query"
-  And slots.location.raw = "palm springs ca"
+  And slots.location.raw = "boise id"
   And slots.window = "tomorrow"
   And the router receives the CompiledIntent before selecting weather_query
 
@@ -471,7 +471,7 @@ Scenario: SCN-068-A09 — Side-effect class gates execution
 
 ```mermaid
 stateDiagram-v2
-  [*] --> RawTurn: weather in palm springs ca tomorrow
+  [*] --> RawTurn: weather in boise id tomorrow
   RawTurn --> CompileIntent
   CompileIntent --> ValidateIntent
   ValidateIntent --> RouteWeather

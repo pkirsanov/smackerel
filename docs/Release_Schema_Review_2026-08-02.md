@@ -33,10 +33,14 @@
 bash .github/bubbles/scripts/release-train-guard.sh "$(pwd)"
 ```
 
-Result: **exit 1**, 7 errors, 266 warnings. Error lines (repository-absolute path prefixes elided as `...`):
+Result: **exit 1**, 7 errors, 266 warnings. Error lines follow.
+
+> Transcript sanitized: repository-absolute path prefixes are elided as `...`, and knb-owned
+> target-slot values are replaced with `<redacted-*>` placeholders per the deployment-boundary
+> policy. All other characters are verbatim.
 
 ```
-[release-train-guard][ERROR] train 'mvp' has invalid target_slot 'self-hosted' (expected prod|staging|home-lab|none)
+[release-train-guard][ERROR] train 'mvp' has invalid target_slot '<redacted-target-slot>' (expected prod|staging|<redacted-allowed-slot>|none)
 [release-train-guard][ERROR] spec .../specs/069-assistant-http-transport/bugs/BUG-069-004-http-turn-dedup status=in_progress missing releaseTrain field
 [release-train-guard][ERROR] spec .../specs/061-conversational-assistant/bugs/BUG-061-008-execution-errors-masked-as-saved-as-idea status=in_progress missing releaseTrain field
 [release-train-guard][ERROR] spec .../specs/061-conversational-assistant/bugs/BUG-061-007-weather-shortcut-masked-as-saved-as-idea status=in_progress missing releaseTrain field
@@ -76,7 +80,7 @@ Same command with `--phase mvp`. Result: **exit 0**, 36 feature annotations, 5 `
 
 G110 is a **failing gate today**, not a latent risk. Evidence A. Two distinct causes:
 
-1. [`config/release-trains.yaml`](../config/release-trains.yaml) L16 sets `target_slot: self-hosted` for train `mvp`, outside the guard's allowed enum `prod|staging|home-lab|none`. (Train `next` is valid: `target_slot: staging`, L22.)
+1. [`config/release-trains.yaml`](../config/release-trains.yaml) L16 sets an unsupported `target_slot` for train `mvp`. This review omits concrete target values because knb owns their binding. Train `next` uses a G110-accepted slot at L22.
 2. Five `in_progress` bug specs carry no `releaseTrain` field: `BUG-069-004`, `BUG-061-008`, `BUG-061-007`, `BUG-061-006`, `BUG-003-002`.
 
 **Impact.** Every guarded train operation refuses while this stands. No plan of record covers this defect.
@@ -177,7 +181,7 @@ Because no gate was executed, the plan reviewed the packets (the G101 axis) and 
 
 | # | Defect | Axis | Addressed by `Product_Direction_2026-07-31.md`? |
 |---:|---|---|---|
-| 1 | F1a — invalid `target_slot: self-hosted` on train `mvp` | G110 | no |
+| 1 | F1a — G110-rejected `target_slot` on train `mvp` | G110 | no |
 | 2 | F1b — 5 `in_progress` bug specs missing `releaseTrain` | G110 | no |
 | 3 | F2 — v1 G101 binding is vacuous (1 optional annotation) | G101 | no |
 | 4 | F3 — three vocabularies; dangling `deferred-to:release-v1` | G101 | no |
@@ -249,7 +253,7 @@ The two guard invocations were **not** re-run for this document; their exit code
 
 | Finding | Route to | Action |
 |---|---|---|
-| F1 | `bubbles.train` | Correct `target_slot` for train `mvp` to a value in `prod\|staging\|home-lab\|none`; add `releaseTrain` to the 5 `in_progress` bug specs. Restores G110. |
+| F1 | `bubbles.train` | Correct train `mvp` release metadata so G110 accepts its abstract slot. Keep the concrete deployment binding in knb. Add `releaseTrain` to the 5 `in_progress` bug specs. Restores G110. |
 | F2-F9 | `bubbles.releases` | Packet reconciliation, census completeness, phase index, `next` packet, vocabulary unification, contradiction resolution, live dispatch lists. |
 | F10 improvements | plan owner / owning agents per the table above | Promote and re-sequence A4-LEDGER; widen its invariant. |
 

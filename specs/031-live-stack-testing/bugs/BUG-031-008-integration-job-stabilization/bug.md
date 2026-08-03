@@ -76,6 +76,10 @@ mocks/interception.
 - Platform: Linux, Docker-backed ephemeral test stack; CI = `ubuntu-latest`, `timeout-minutes: 30`
 
 ## Error Output (reproduced this session @ origin/main 28851e7a — full transcripts in report.md)
+
+> Transcript sanitized: location identifiers are replaced with `<redacted-location>`
+> placeholders per the PII policy. All other characters are verbatim.
+
 ```text
 # C1 — docker absent in the containerized go-integration runner (NOT a -T issue)
 cli_auth_passthrough_test.go:104: expected exit code 2 for `auth` with no subcommand, got 1
@@ -95,7 +99,7 @@ microtools_registry_canary_test.go:88: SCOPE-1 must not register "entity_resolve
 microtools_prompt_contract_test.go:79: weather scenario allowed_tools = [weather_lookup]; want to include "location_normalize"
 
 # C4 — test-stack geocode stub returns Reykjavík for all inputs (separate from C3b)
-microtools_location_test.go:87: name = "Reykjavík", want to contain "Palm Springs"
+microtools_location_test.go:87: name = "Reykjavík", want to contain "<redacted-location>"
 microtools_location_test.go:90: admin1 = "", want "California"
 ```
 The verbatim, session-captured reproduction + post-fix transcripts (≥10 lines each) are in `report.md`.

@@ -1,8 +1,8 @@
 # Design: 065 Generic Micro-Tools
 
-Owner: `bubbles.design`  
-Workflow mode: `product-to-planning`  
-Status ceiling for this pass: `specs_hardened`  
+Owner: `bubbles.design`
+Workflow mode: `product-to-planning`
+Status ceiling for this pass: `specs_hardened`
 Source requirements: [spec.md](spec.md)
 
 ## Design Brief
@@ -77,7 +77,7 @@ Input:
 
 ```json
 {
-  "input": "palm springs ca",
+  "input": "boise id",
   "country_hint": "US",
   "locale": "en-US",
   "max_candidates": 5
@@ -88,12 +88,12 @@ Resolved `value`:
 
 ```json
 {
-  "name": "Palm Springs",
+  "name": "Boise",
   "country": "United States",
   "country_code": "US",
-  "admin1": "California",
-  "lat": 33.8303,
-  "lon": -116.5453,
+  "admin1": "Idaho",
+  "lat": 43.62,
+  "lon": -116.20,
   "provider_id": "provider-specific-id"
 }
 ```
@@ -167,7 +167,7 @@ Provider errors produce schema-valid `failed` envelopes. Schema violations remai
 
 | Scenario | Test Type | Test Location | Assertion |
 |----------|-----------|---------------|-----------|
-| SCN-065-A01 | integration | `tests/integration/assistant/microtools_location_test.go` | `palm springs ca` resolves to California with provider attribution |
+| SCN-065-A01 | integration | `tests/integration/assistant/microtools_location_test.go` | `boise id` resolves to Idaho with provider attribution |
 | SCN-065-A02 | integration | `tests/integration/assistant/microtools_location_test.go` | `sf` resolves to San Francisco |
 | SCN-065-A03 | e2e-api | `tests/e2e/assistant/microtools_http_test.go` | ambiguous `springfield` produces clarification |
 | SCN-065-A04 | unit + e2e-api | `internal/agent/tools/microtools/unit_test.go` and HTTP E2E | flour conversion returns numeric grams with source |

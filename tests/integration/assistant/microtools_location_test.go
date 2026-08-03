@@ -2,8 +2,8 @@
 
 // Spec 065 SCOPE-2 — location_normalize live-provider integration.
 //
-// SCN-065-A01: "palm springs ca" → canonical "Palm Springs" with
-//              admin1 "California" via open-meteo.
+// SCN-065-A01: "boise id" → canonical "Boise" with
+//              admin1 "Idaho" via open-meteo.
 // SCN-065-A02: "sf" → canonical name containing "San Francisco" with
 //              admin1 "California" via open-meteo.
 // SCN-065-A03: "springfield" → ambiguous envelope with a bounded
@@ -95,18 +95,18 @@ func TestLocationNormalizeIntegration_OpenMeteoCanonicalLocations(t *testing.T) 
 	wireLiveOpenMeteoLocationProvider(t)
 	skipIfStubGeocoder(t)
 
-	t.Run("palm_springs_ca_resolves_to_California", func(t *testing.T) {
-		env := callLocationNormalize(t, "palm springs ca")
+	t.Run("boise_id_resolves_to_Idaho", func(t *testing.T) {
+		env := callLocationNormalize(t, "boise id")
 		if env.Status != microtools.StatusResolved {
 			t.Fatalf("status = %q, want %q for canonical-state-abbrev input", env.Status, microtools.StatusResolved)
 		}
 		name, _ := env.Value["name"].(string)
 		admin1, _ := env.Value["admin1"].(string)
-		if !strings.Contains(strings.ToLower(name), "palm springs") {
-			t.Errorf("name = %q, want to contain \"Palm Springs\"", name)
+		if !strings.Contains(strings.ToLower(name), "boise") {
+			t.Errorf("name = %q, want to contain \"Boise\"", name)
 		}
-		if !strings.EqualFold(admin1, "California") {
-			t.Errorf("admin1 = %q, want \"California\"", admin1)
+		if !strings.EqualFold(admin1, "Idaho") {
+			t.Errorf("admin1 = %q, want \"Idaho\"", admin1)
 		}
 		if env.Source.Provider != "open-meteo" {
 			t.Errorf("source.provider = %q, want \"open-meteo\"", env.Source.Provider)

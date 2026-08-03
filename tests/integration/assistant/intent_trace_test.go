@@ -143,7 +143,7 @@ func TestIntentTraceRecordsCompileValidateRouteToolResponseSequence(t *testing.T
 		UserID:    "u-trace",
 		Transport: "telegram",
 		Kind:      contracts.KindText,
-		Text:      "weather in palm springs ca tomorrow",
+		Text:      "weather in boise id tomorrow",
 	})
 	if err != nil {
 		t.Fatalf("Handle: %v", err)
@@ -260,7 +260,7 @@ func TestIntentTraceDistinguishesClarifyFailureAndOperationalBypass(t *testing.T
 	readTransport := &stubTransport{resolve: func(_ string) string { return weatherIntentJSON(t) }}
 	readCompiler := buildCompiler(t, readTransport)
 	readCI, readTrace, err := readCompiler.Compile(context.Background(), intent.RawTurn{
-		UserID: "u-trace-read", Transport: "telegram", Text: "weather palm springs ca tomorrow",
+		UserID: "u-trace-read", Transport: "telegram", Text: "weather boise id tomorrow",
 	})
 	if err != nil {
 		t.Fatalf("read Compile err: %v", err)

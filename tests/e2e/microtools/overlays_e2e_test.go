@@ -75,7 +75,7 @@ func callTool(t *testing.T, name string, args any) microtools.Envelope {
 
 // stubLocationProvider records the exact normalized query forwarded
 // to the geocoder so SCN-065-A03 can assert the overlay rule rewrote
-// "palm springs ca" into the canonical "Palm Springs, California"
+// "boise id" into the canonical "Boise, Idaho"
 // before the provider was contacted (i.e. no raw user PII leaked).
 type stubLocationProvider struct {
 	byQuery   map[string][]microtools.LocationCandidate
@@ -113,8 +113,8 @@ func TestMicroToolOverlays_FullMatrix(t *testing.T) {
 	// regardless; wiring services here ensures their handlers can also
 	// execute against deterministic stubs in the per-scenario subtests.
 	locProv := &stubLocationProvider{byQuery: map[string][]microtools.LocationCandidate{
-		"Palm Springs, California": {
-			{Name: "Palm Springs", Admin1: "California", Country: "United States", Latitude: 33.83, Longitude: -116.55, Confidence: 1.0},
+		"Boise, Idaho": {
+			{Name: "Boise", Admin1: "Idaho", Country: "United States", Latitude: 43.62, Longitude: -116.20, Confidence: 1.0},
 		},
 		"springfield": {
 			{Name: "Springfield", Admin1: "Illinois", Country: "United States", Latitude: 39.78, Longitude: -89.65, Confidence: 0.55},
@@ -165,15 +165,15 @@ func TestMicroToolOverlays_FullMatrix(t *testing.T) {
 	})
 
 	t.Run("SCN-065-A01_location_normalize_resolved", func(t *testing.T) {
-		env := callTool(t, microtools.LocationNormalizeToolName, map[string]string{"input": "palm springs ca"})
+		env := callTool(t, microtools.LocationNormalizeToolName, map[string]string{"input": "boise id"})
 		if env.Status != microtools.StatusResolved {
 			t.Fatalf("status=%q, want resolved (env=%+v)", env.Status, env)
 		}
-		if got := env.Value["name"]; got != "Palm Springs" {
-			t.Errorf("value.name=%v, want Palm Springs", got)
+		if got := env.Value["name"]; got != "Boise" {
+			t.Errorf("value.name=%v, want Boise", got)
 		}
-		if got := env.Value["admin1"]; got != "California" {
-			t.Errorf("value.admin1=%v, want California", got)
+		if got := env.Value["admin1"]; got != "Idaho" {
+			t.Errorf("value.admin1=%v, want Idaho", got)
 		}
 	})
 
@@ -196,13 +196,13 @@ func TestMicroToolOverlays_FullMatrix(t *testing.T) {
 	t.Run("SCN-065-A03_location_overlay_rewrites_query", func(t *testing.T) {
 		// Use a dedicated provider/services pair so the overlay
 		// assertion is not polluted by the queries other subtests
-		// issued. The raw user phrase "palm springs ca" MUST be
-		// rewritten into the canonical "Palm Springs, California"
+		// issued. The raw user phrase "boise id" MUST be
+		// rewritten into the canonical "Boise, Idaho"
 		// before the stub provider sees it; if the overlay regressed,
 		// `lastQuery` would not match.
 		overlayProv := &stubLocationProvider{byQuery: map[string][]microtools.LocationCandidate{
-			"Palm Springs, California": {
-				{Name: "Palm Springs", Admin1: "California", Country: "United States", Latitude: 33.83, Longitude: -116.55, Confidence: 1.0},
+			"Boise, Idaho": {
+				{Name: "Boise", Admin1: "Idaho", Country: "United States", Latitude: 43.62, Longitude: -116.20, Confidence: 1.0},
 			},
 		}}
 		microtools.SetLocationServices(&microtools.LocationServices{
@@ -212,13 +212,13 @@ func TestMicroToolOverlays_FullMatrix(t *testing.T) {
 			AmbiguityMaxCands: 5,
 			Timeout:           2 * time.Second,
 		})
-		env := callTool(t, microtools.LocationNormalizeToolName, map[string]string{"input": "palm springs ca"})
+		env := callTool(t, microtools.LocationNormalizeToolName, map[string]string{"input": "boise id"})
 		if env.Status != microtools.StatusResolved {
 			t.Fatalf("overlay branch status=%q, want resolved", env.Status)
 		}
-		if overlayProv.lastQuery != "Palm Springs, California" {
+		if overlayProv.lastQuery != "Boise, Idaho" {
 			t.Fatalf("overlay rule regressed: provider saw %q, want %q (raw colloquial input leaked into geocoder query)",
-				overlayProv.lastQuery, "Palm Springs, California")
+				overlayProv.lastQuery, "Boise, Idaho")
 		}
 	})
 

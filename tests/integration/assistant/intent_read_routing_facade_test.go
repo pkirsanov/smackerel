@@ -146,8 +146,8 @@ func weatherIntentJSON(t *testing.T) string {
 		"side_effect_class":"external_read",
 		"scenario_hint":"weather_query",
 		"tool_hints":["location_normalize","weather_lookup"],
-		"normalized_request":{"query":"weather palm springs ca tomorrow"},
-		"slots":{"location":{"raw":"palm springs ca"},"window":"tomorrow"},
+		"normalized_request":{"query":"weather Boise, Idaho tomorrow"},
+		"slots":{"location":{"raw":"boise id"},"window":"tomorrow"},
 		"missing_slots":[],
 		"confidence":0.92,
 		"clarification_prompt":null,
@@ -199,13 +199,13 @@ func answerIntentJSON(t *testing.T) string {
 // --- TestIntentReadRoutingFacade_WeatherCompilesBeforeRouteAndNormalizesLocation
 // SCN-068-A01.
 //
-// Drive the facade with "weather in palm springs ca tomorrow". Assert:
+// Drive the facade with "weather in boise id tomorrow". Assert:
 //   - compiler is called exactly once
 //   - compiler is called BEFORE the router
 //   - router envelope ScenarioID == "weather_query" (from scenario_hint)
 //   - router envelope StructuredContext carries compiled_intent with
 //     action_class=external_lookup, scenario_hint=weather_query, and
-//     slots.location.raw="palm springs ca"
+//     slots.location.raw="boise id"
 func TestIntentReadRoutingFacade_WeatherCompilesBeforeRouteAndNormalizesLocation(t *testing.T) {
 	ft := &stubTransport{resolve: func(_ string) string { return weatherIntentJSON(t) }}
 	compiler := buildCompiler(t, ft)
@@ -221,7 +221,7 @@ func TestIntentReadRoutingFacade_WeatherCompilesBeforeRouteAndNormalizesLocation
 		UserID:    "u-weather",
 		Transport: "telegram",
 		Kind:      contracts.KindText,
-		Text:      "weather in palm springs ca tomorrow",
+		Text:      "weather in boise id tomorrow",
 	})
 	if err != nil {
 		t.Fatalf("Handle: %v", err)
@@ -253,8 +253,8 @@ func TestIntentReadRoutingFacade_WeatherCompilesBeforeRouteAndNormalizesLocation
 	}
 	slots, _ := ci["slots"].(map[string]any)
 	loc, _ := slots["location"].(map[string]any)
-	if loc["raw"] != "palm springs ca" {
-		t.Fatalf("compiled_intent.slots.location.raw = %v, want %q", loc["raw"], "palm springs ca")
+	if loc["raw"] != "boise id" {
+		t.Fatalf("compiled_intent.slots.location.raw = %v, want %q", loc["raw"], "boise id")
 	}
 	if win := slots["window"]; win != "tomorrow" {
 		t.Fatalf("compiled_intent.slots.window = %v, want tomorrow", win)
@@ -327,7 +327,7 @@ func TestIntentReadRoutingFacade_ReadIntentsNeverRouteFromRawTextOnly(t *testing
 		body     string
 		scenario string
 	}{
-		{name: "external_lookup", text: "weather in palm springs ca tomorrow", body: weatherIntentJSON(t), scenario: "weather_query"},
+		{name: "external_lookup", text: "weather in boise id tomorrow", body: weatherIntentJSON(t), scenario: "weather_query"},
 		{name: "retrieve", text: "what did I save about ACL tags last month?", body: retrievalIntentJSON(t), scenario: "retrieval_qa"},
 		{name: "answer", text: "what is the capital of france?", body: answerIntentJSON(t), scenario: "retrieval_qa"},
 	}

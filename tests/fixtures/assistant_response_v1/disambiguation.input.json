@@ -3,16 +3,16 @@
   "transport": "web",
   "transport_message_id": "fixture-disambiguation-001",
   "status": "awaiting_disambiguation",
-  "body": "Which Palm Springs did you mean?",
+  "body": "Which Springfield did you mean?",
   "sources": [],
   "sources_overflow_count": 0,
   "confirm_card": null,
   "disambiguation_prompt": {
-    "disambiguation_ref": "disambig-palm-springs-001",
+    "disambiguation_ref": "disambig-springfield-001",
     "timeout_seconds": 60,
     "choices": [
-      {"number": 1, "id": "ps-ca", "label": "Palm Springs, CA", "shortcut": ""},
-      {"number": 2, "id": "ps-fl", "label": "Palm Springs, FL", "shortcut": ""}
+      {"number": 1, "id": "springfield-il", "label": "Springfield, IL", "shortcut": ""},
+      {"number": 2, "id": "springfield-ma", "label": "Springfield, MA", "shortcut": ""}
     ]
   },
   "error_cause": "",

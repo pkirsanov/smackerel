@@ -53,7 +53,8 @@ Excluded:
 - product runtime search/Drive code
 - arbitrary sleeps or longer health waits
 - synthesis/assistant packets
-- deployment adapters, manifests, secrets, evo-x2, `knb`, and release-train bundles
+- `<knb-repo>`-owned deployment adapters, `<target>` manifests, `<deploy-host>` topology, and target secrets. Product test-harness code remains target-agnostic.
+- release-train bundles
 
 ## Complexity Tracking
 

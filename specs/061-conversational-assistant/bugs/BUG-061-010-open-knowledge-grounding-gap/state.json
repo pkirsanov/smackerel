@@ -4,10 +4,10 @@
   "spec": "specs/061-conversational-assistant",
   "severity": "S3",
   "status": "blocked",
-  "blockedReason": "Fix DELIVERED and live — resolved by supersession via spec 104 (option A: self-knowledge ingestion into the dedicated smackerel_self pgvector namespace, surfaced via the self_knowledge tool). Deployed to home-lab and verified live 2026-07-23 (core 3b6261a9 / ml 25f36dc5; smackerel_self corpus ingested); /ask now answers product meta-questions with real citations, with the cite-back verifier + BUG-061-009 honest refusal unchanged as the fallback. This diagnosis bug did NO implementation itself (it routed its fix to spec 104), so it cannot satisfy the done-status specialist-phase gate (implement/test/validate/audit) on its own artifact without fabrication — hence terminal status blocked, mirroring spec 104. The single genuinely-remaining item is the operator's live Telegram behavioral smoke test, shared with spec 104 (operator-only: agents cannot send Telegram / prod HTTP needs a PASETO token); the behavior is already e2e-proven — and as of commit 4a7c545d the RENDER half is AUTOMATED via internal/telegram/assistant_connector_smoke_test.go, a connector-only /ask smoke (inject inbound + capture rendered outbound, no Telegram client) asserting the grounded cited answer + the honest refusal at the exact connector boundary the user sees. The remaining operator item is narrowed to a final live-prod confirmation. No further agent work remains on this bug.",
+  "blockedReason": "Fix DELIVERED and live — resolved by supersession via spec 104 (option A: self-knowledge ingestion into the dedicated smackerel_self pgvector namespace, surfaced via the self_knowledge tool). Deployed through the knb-owned adapter and verified live 2026-07-23 (core 3b6261a9 / ml 25f36dc5; smackerel_self corpus ingested); /ask now answers product meta-questions with real citations, with the cite-back verifier + BUG-061-009 honest refusal unchanged as the fallback. This diagnosis bug did NO implementation itself (it routed its fix to spec 104), so it cannot satisfy the done-status specialist-phase gate (implement/test/validate/audit) on its own artifact without fabrication — hence terminal status blocked, mirroring spec 104. The single genuinely-remaining item is the operator's live Telegram behavioral smoke test, shared with spec 104 (operator-only: agents cannot send Telegram / prod HTTP needs a PASETO token); the behavior is already e2e-proven — and as of commit 4a7c545d the RENDER half is AUTOMATED via internal/telegram/assistant_connector_smoke_test.go, a connector-only /ask smoke (inject inbound + capture rendered outbound, no Telegram client) asserting the grounded cited answer + the honest refusal at the exact connector boundary the user sees. The remaining operator item is narrowed to a final live-deployment confirmation. No further agent work remains on this bug.",
   "workflowMode": "bugfix-fastlane",
   "owner": "bubbles.goal",
-  "discoveredBy": "operator (live /ask on the home-lab bot; diagnosed during BUG-061-009 close-out)",
+  "discoveredBy": "operator (live /ask on the deployed bot; diagnosed during BUG-061-009 close-out)",
   "discoveredAt": "2026-07-23",
   "lastUpdatedAt": "2026-07-23",
   "dependsOn": [
@@ -17,7 +17,7 @@
     "summary": "Grounding/data gap, not a code defect. Neither web_search (public web doesn't know the private product — searxng returns Super Mario Wiki for 'smackerel') nor internal_retrieval (product's own docs never ingested) nor the local LLM (no training data on a private product) can ground an answer about smackerel itself. The cite-back verifier + provenance gate correctly refuse the uncited synthesis.",
     "liveEvidence": [
       "open_knowledge wired: provider=searxng model=gemma4:26b synthesis_model=qwen3:30b-a3b tool_count=4 (core startup log)",
-      "ENABLE_SEARXNG=true present in /var/lib/smackerel/compose/app.env (prod)",
+      "ENABLE_SEARXNG=true present in the knb-owned generated app env on <deploy-host>",
       "direct searxng query 'smackerel second brain' -> top result 'Smackerel - Super Mario Wiki ... enemies that appear in Super Mario Bros. Wonder ... resemble flatfish' (public web has no knowledge of the product)"
     ]
   },
@@ -25,10 +25,10 @@
     "status": "blocked",
     "achievedAssuranceLevel": "resolved by supersession — fix option A delivered + deployed + verified via spec 104; blocked only on the shared operator smoke",
     "gatesPassed": [
-      "root-cause diagnosis with live home-lab evidence",
+      "root-cause diagnosis with live <deploy-target> evidence",
       "fix direction chosen (option A: self-knowledge ingestion into a dedicated system-knowledge collection)",
       "fix delivered by spec 104 (all 8 scopes; unit+integration+e2e green)",
-      "deployed to home-lab + verified live (core 3b6261a9, ml 25f36dc5; smackerel_self corpus ingested)"
+      "deployed through the knb-owned adapter + verified live (core 3b6261a9, ml 25f36dc5; smackerel_self corpus ingested)"
     ],
     "pendingGates": [
       "operator live Telegram behavioral smoke test — the same single item tracked on spec 104 (operator-only)"

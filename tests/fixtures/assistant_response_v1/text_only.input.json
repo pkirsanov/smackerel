@@ -3,7 +3,7 @@
   "transport": "web",
   "transport_message_id": "fixture-text-only-001",
   "status": "rendered",
-  "body": "The weather in Palm Springs tomorrow is sunny, 78F.",
+  "body": "The weather in Boise tomorrow is sunny, 78F.",
   "sources": [],
   "sources_overflow_count": 0,
   "confirm_card": null,

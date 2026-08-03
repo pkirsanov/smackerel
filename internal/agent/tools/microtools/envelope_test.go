@@ -13,7 +13,7 @@ func validResolvedEnvelope() Envelope {
 	return Envelope{
 		SchemaVersion: CurrentSchemaVersion,
 		Status:        StatusResolved,
-		Value:         map[string]any{"name": "Palm Springs"},
+		Value:         map[string]any{"name": "Jordan Lee"},
 		Source: Source{
 			Provider:    "open-meteo",
 			Kind:        SourceKindHTTPProvider,

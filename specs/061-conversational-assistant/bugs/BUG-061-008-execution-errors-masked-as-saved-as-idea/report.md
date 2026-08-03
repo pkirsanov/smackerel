@@ -18,7 +18,7 @@ the guard were reverted (P2). An `ExecutionErrorSurfacedTotal` metric makes surf
 observable (P3). The deterministic-dispatch seam and the failure-honesty invariant are
 documented in `docs/smackerel.md` §3.8.6 and encoded as a review-checklist rule in
 `.github/copilot-instructions.md` (P4, P5). All BUG-061-008 tests pass; the pre-existing
-fabrication-guard tests remain green (the fix does not over-correct). Live home-lab deploy +
+fabrication-guard tests remain green (the fix does not over-correct). Live `<target>` deploy +
 operator behavioral confirmation are tracked below and in `uservalidation.md`.
 
 ## P1 evidence {#p1-evidence}
@@ -116,23 +116,23 @@ Full suite green for the affected packages (`go test ./... finished OK`, exit 0)
 `internal/assistant` and `internal/agent` packages report `ok`. Per-scenario PASS lines are in
 the P1/P2 blocks above.
 
-## Deploy + Live Verification (self-hosted home-lab) {#deploy-verify}
+## Deploy + Live Verification (`<target>`) {#deploy-verify}
 
 The P1–P5 fix (sourceSha `19fe72c8`) was built, operator-cosign-signed, deployed on-host, and
 verified running healthy this session (`local-operator` trust model).
 
-### Build + sign (accel tier, on the target)
+### Build + sign (knb-owned configured tier on `<deploy-host>`)
 
-`smackerel.sh build --target self-hosted` — all phases green:
+`smackerel.sh build --target <target>` — all phases green:
 - Trivy CRITICAL/HIGH gate: PASS (0 vulnerabilities).
 - Pushed + cosign-signed (operator key) + SBOM-attested:
-  - core `ghcr.io/pkirsanov/smackerel-core@sha256:b4a59eef24f2956896710797360f5ef1b3be7a35574819441e116e6c50faed73`
-  - ml   `ghcr.io/pkirsanov/smackerel-ml@sha256:c43fad4afc6d86287f5fe93029694dfad85a74fa9281a94bd4f870220fc5d455`
-- Config bundle `config-bundle-self-hosted-19fe72c8…` pushed + signed; signed local-build-manifest emitted.
+  - core `ghcr.io/<operator>/smackerel-core@sha256:b4a59eef24f2956896710797360f5ef1b3be7a35574819441e116e6c50faed73`
+  - ml   `ghcr.io/<operator>/smackerel-ml@sha256:c43fad4afc6d86287f5fe93029694dfad85a74fa9281a94bd4f870220fc5d455`
+- Config bundle `config-bundle-<target>-19fe72c8…` pushed + signed; signed local-build-manifest emitted.
 
 ### Deploy (on-host local-operator apply → recreate)
 
-`promote.sh --target home-lab --product smackerel --local-build-manifest <manifest> --operator <op>`
+`<knb-repo>/scripts/deploy/promote.sh --target <target> --product smackerel --local-build-manifest <manifest> --operator <operator>`
 (on-host, under passwordless sudo, with the operator cosign pubkey + ghcr docker-config).
 The adapter verified the release proof (cosign verified both images + attestations against the
 operator pubkey), decrypted the bundle secrets, and recreated `smackerel-core` + `smackerel-ml`
@@ -141,8 +141,8 @@ operator pubkey), decrypted the bundle secrets, and recreated `smackerel-core` +
 ### Live running-state verification (this session, read-only)
 
 ```text
-smackerel-home-lab-smackerel-core-1 | running/healthy restarts=0 | sha256:b4a59eef… | MATCHES P1-P5 CORE
-smackerel-home-lab-smackerel-ml-1   | running/healthy restarts=0 | sha256:c43fad4a… | MATCHES P1-P5 ML
+smackerel-<target>-smackerel-core-1 | running/healthy restarts=0 | sha256:b4a59eef… | MATCHES P1-P5 CORE
+smackerel-<target>-smackerel-ml-1   | running/healthy restarts=0 | sha256:c43fad4a… | MATCHES P1-P5 ML
 ```
 
 Both containers run the EXACT P1–P5 digests and are healthy (0 restarts); core startup log shows

@@ -92,5 +92,6 @@ masking fails the suite).
 
 ## Deploy
 
-Same local-operator home-lab path as BUG-061-007 (build → cosign-sign → on-host promote/apply
-→ verify running digests + health). Recreate rollout.
+Use the same local-operator deployment contract as BUG-061-007: build, cosign-sign,
+promote/apply through `<knb-repo>/<product>/<target>/...`, then verify running digests
+and health on `<deploy-host>`. Recreate the rollout.

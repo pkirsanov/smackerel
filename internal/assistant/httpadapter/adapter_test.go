@@ -54,7 +54,7 @@ func TestHTTPAdapterTranslatesTextTurnToAssistantMessage(t *testing.T) {
 		TransportMessageID: "test-turn-001",
 		Kind:               string(contracts.KindText),
 		TransportHint:      "web",
-		Text:               "weather in palm springs ca tomorrow",
+		Text:               "weather in boise id tomorrow",
 	}
 	msg, err := adapter.Translate(context.Background(), &translatePayload{UserID: "u-1", Request: req})
 	if err != nil {

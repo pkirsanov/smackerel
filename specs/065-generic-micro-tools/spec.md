@@ -28,7 +28,7 @@ accumulating per-tool brittleness that gets patched inside their
 system prompt or as scenario-local Go code:
 
 - **Weather**: 6+ commits in two weeks fixing Open-Meteo geocoding
-  fragility (`"palm springs ca"` not matching, trailing-token retry
+  fragility (`"boise id"` not matching, trailing-token retry
   reverted, prompt-side location normalization landed). The fix
   belongs in a reusable tool, not in one scenario's prompt.
 - **Recipes**: ingredient and unit handling needs the same kind of
@@ -55,7 +55,7 @@ normalization code paths, prompts will balloon, and the
 | **Agent Loop (spec 037 executor, spec 064 planner)** | Generic LLM ↔ tool dispatcher. | Chain micro-tools to normalize tool inputs and synthesize precise outputs without scenario-specific Go code. | Calls allowlisted micro-tools per scenario contract. |
 | **Scenario author** | Writes a new scenario YAML in `config/prompt_contracts/`. | Compose existing micro-tools (`location_normalize`, `unit_convert`, `entity_resolve`, `calculator`) instead of writing custom Go normalization code. | Lists micro-tools in `allowed_tools`; does NOT write normalization in `system_prompt`. |
 | **Operator** | Owns SST configuration. | Enable/disable specific micro-tools; configure provider (e.g. which geocoder backs `location_normalize`); set per-tool timeout / cache TTL. | Edits `config/smackerel.yaml` `assistant.tools.<tool_name>.*`. |
-| **Human user (chat owner)** | Issues NL requests. | Get correct answers regardless of input-string variance (`"sf"`, `"palm springs ca"`, `"1 lb of flour"`). | Existing transport permissions. |
+| **Human user (chat owner)** | Issues NL requests. | Get correct answers regardless of input-string variance (`"sf"`, `"boise id"`, `"1 lb of flour"`). | Existing transport permissions. |
 
 ---
 
@@ -114,7 +114,7 @@ failed.
 
 | Principle | Alignment | Evidence |
 |-----------|-----------|----------|
-| **P1 Observe First, Ask Second** | Tools resolve ambiguity (`"sf"`, `"palm springs ca"`) without asking the user. Borderline cases still flow to the spec 061 disambiguation prompt. | Success Signal; SCN-065-A03. |
+| **P1 Observe First, Ask Second** | Tools resolve ambiguity (`"sf"`, `"boise id"`) without asking the user. Borderline cases still flow to the spec 061 disambiguation prompt. | Success Signal; SCN-065-A03. |
 | **P2 Vague In, Precise Out** | Core thesis. Vague input strings are normalized to canonical entities before the next tool call. | Outcome Contract Intent. |
 | **P4 Source-Qualified Processing** | Tool outputs preserve source metadata (which geocoder resolved a name; which conversion table produced a unit). | Hard Constraint 3, 4. |
 | **P5 One Graph, Many Views** | No new persistent store; tool results flow through existing artifact / trace surfaces. | Design (TBD by bubbles.design). |
@@ -131,8 +131,8 @@ scenario-manifest registration during `bubbles.plan`.
 ```gherkin
 Scenario: SCN-065-A01 — location_normalize resolves abbreviated US state
   Given the assistant is configured with location_normalize backed by open-meteo geocoding
-  When the agent calls location_normalize with input "palm springs ca"
-  Then the tool returns a canonical location { name, country, admin1, lat, lon } with admin1 = "California"
+  When the agent calls location_normalize with input "boise id"
+  Then the tool returns a canonical location { name, country, admin1, lat, lon } with admin1 = "Idaho"
   And the call succeeds without retry within the per-tool timeout
 
 Scenario: SCN-065-A02 — location_normalize resolves common city nickname
@@ -295,13 +295,13 @@ Scenario: SCN-065-A07 — fail-loud on missing SST config
 ┌────────────────────────────────────────────────────────────────────────────┐
 │ Assistant Trace: [trace_id]                         [Copy] [Open Turn]    │
 ├────────────────────────────────────────────────────────────────────────────┤
-│ Raw turn: "weather in palm springs ca tomorrow"                           │
+│ Raw turn: "weather in boise id tomorrow"                                  │
 │ Compiled action: external_lookup  Scenario: weather_query                  │
 │                                                                            │
 │ ┌──────────────────────────────────────────────────────────────────────┐   │
 │ │ Tool Calls                                                            │   │
 │ │ Name                Status      Input Summary        Output Summary   │   │
-│ │ location_normalize  resolved    palm springs ca      Palm Springs, CA │   │
+│ │ location_normalize  resolved    boise id             Boise, Idaho     │   │
 │ │ weather_lookup      resolved    lat/lon + tomorrow   forecast ready   │   │
 │ └──────────────────────────────────────────────────────────────────────┘   │
 │                                                                            │

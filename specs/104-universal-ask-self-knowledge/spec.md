@@ -16,7 +16,7 @@ refuses **honestly** when it can't ground an answer (BUG-061-009). But it has a
 blind spot that is inexcusable for a personal "second brain": **it cannot answer
 questions about smackerel itself.**
 
-Live evidence (BUG-061-010, home-lab, 2026-07-23): `/ask how does smackerel work
+Live evidence (BUG-061-010, <deployment-target>, 2026-07-23): `/ask how does smackerel work
 as a second brain?` grounds **zero** sources and refuses, because:
 
 - `web_search` (searxng, enabled) resolves the token "smackerel" to a **Super

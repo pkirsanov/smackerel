@@ -429,7 +429,7 @@ The Round 18 baseline `state-transition-guard.sh specs/011-maps-connector` run p
 ```text
 $ ls -la ~/smackerel/data/maps-import/
 total 4
--rw-r--r-- 1 philipk philipk 0 .gitkeep
+-rw-r--r-- 1 <local-user> <local-group> 0 .gitkeep
 (maps-import dir present, mountable at /data/maps-import via MAPS_IMPORT_DIR)
 
 $ grep -n "MAPS_IMPORT_DIR" docker-compose.yml

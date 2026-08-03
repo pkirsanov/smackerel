@@ -92,7 +92,7 @@ Request:
   "schema_version": "v1",
   "model_id": "sst-resolved-model-id",
   "prompt_contract_version": "intent-compiler-v1",
-  "raw_turn": {"text": "weather in palm springs ca tomorrow", "transport": "telegram"},
+  "raw_turn": {"text": "weather in boise id tomorrow", "transport": "telegram"},
   "conversation_context": [],
   "response_schema": "compiled-intent-v1"
 }

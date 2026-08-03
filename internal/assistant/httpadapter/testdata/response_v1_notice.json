@@ -3,7 +3,7 @@
   "transport": "web",
   "transport_message_id": "test-turn-002",
   "status": "checking_weather",
-  "body": "Tomorrow in Palm Springs: 32C, sunny.",
+  "body": "Tomorrow in Boise: 32C, sunny.",
   "sources": [],
   "sources_overflow_count": 0,
   "confirm_card": null,
@@ -19,7 +19,7 @@
   "emitted_at": "2026-06-01T00:00:00Z",
   "notice": {
     "command": "/weather",
-    "replacement_example": "weather in palm springs tomorrow",
+    "replacement_example": "weather in Boise tomorrow",
     "copy_key": "spec066.weather",
     "window_id": "2026Q2"
   }

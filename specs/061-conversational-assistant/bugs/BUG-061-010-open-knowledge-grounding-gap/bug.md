@@ -2,8 +2,8 @@
 
 - **Severity:** S3 (product capability gap, not a correctness defect)
 - **Spec:** specs/061-conversational-assistant (mechanism lives in specs/064-open-ended-knowledge-agent + specs/084-open-knowledge-reasoning-loop)
-- **Discovered:** 2026-07-23, during the BUG-061-009 close-out (operator `/ask how smackerel works as second brain or llm wiki?`)
-- **Status:** blocked (fix DELIVERED + live via spec 104; only the shared operator Telegram smoke remains — see "Resolution")
+- **Discovered:** 2026-07-23, during the BUG-061-009 close-out (human `/ask how smackerel works as second brain or llm wiki?`)
+- **Status:** blocked (fix DELIVERED + live via spec 104; only the shared human-owned Telegram smoke remains — see "Resolution")
 - **Depends on:** BUG-061-009 (done) — that fix made this case *refuse honestly* ("I don't have a sourced answer for that.") instead of masking it as "saved as an idea". This bug is about making it *answer*.
 
 ## Symptom
@@ -14,16 +14,16 @@ open_knowledge agent runs to completion (`status=success termination=final`) but
 grounds **zero** sources, so the cite-back verifier + provenance gate correctly
 refuse the uncited synthesis.
 
-## Root cause (live evidence, home-lab deploy host, 2026-07-23)
+## Root cause (live deployment evidence, 2026-07-23)
 
 The open_knowledge agent has two grounding tools — `internal_retrieval` (the
 user's knowledge graph) and `web_search` (searxng) — and **both come up empty for
 a question about this private product**:
 
 1. **web_search is enabled and working**, but the public web has no knowledge of
-   this product. `ENABLE_SEARXNG=true` in the prod env; the agent is wired
-   `provider=searxng model=gemma4:26b synthesis_model=qwen3:30b-a3b tool_count=4`.
-   A direct searxng query for `smackerel second brain` returns:
+  this product. The deployed search integration returned results; concrete
+  target and model wiring belongs in `<knb-repo>`. A direct search-provider
+  query for `smackerel second brain` returns:
 
    > "Smackerel — Super Mario Wiki … Smackerels are enemies that appear in Super
    > Mario Bros. Wonder. They resemble flatfish, with both eyes on the same side
@@ -37,10 +37,10 @@ a question about this private product**:
    captured smackerel's own product docs into the knowledge graph, so there is no
    artifact describing "smackerel the second brain" to retrieve and cite.
 
-3. **The local LLM has no training data on a private product.** gemma4:26b /
-   qwen3:30b-a3b cannot know a private product's design from weights, so even
-   relaxing provenance would produce a *hallucinated* answer (likely about the
-   Mario enemy), not a correct one.
+3. **The configured local models have no training data on a private product.**
+  They cannot know a private product's design from weights, so even relaxing
+  provenance would produce a *hallucinated* answer (likely about the Mario
+  enemy), not a correct one.
 
 **Therefore the refusal is correct.** The gap is that the "second brain" has
 never been told about itself — there is no grounded source, anywhere, that knows
@@ -82,7 +82,7 @@ sources.
 
 **RESOLVED by supersession — fix option A delivered by [spec 104](../../../104-universal-ask-self-knowledge/).**
 
-The operator/owner chose **option A with a dedicated system-knowledge collection**
+The product owner chose **option A with a dedicated system-knowledge collection**
 (the recommended variant), and it was fully designed + implemented + deployed as
 spec 104 (Universal /ask + Self-Knowledge Grounding). smackerel's own SSTs
 (scenarios, shortcuts, skills, curated docs) are now derived fresh-by-construction
@@ -94,15 +94,17 @@ answers with real citations to the product's own knowledge; the cite-back verifi
 for anything ungroundable.
 
 This diagnosis bug required **no separate implementation** — it routed its fix to
-spec 104. Live verification: core `sha256:3b6261a9…` + ml `sha256:25f36dc5…`
-running/healthy on home-lab; `smackerel_self` corpus ingested (13 artifacts,
-embeddings async). The single remaining item — the operator's live Telegram
-behavioral smoke test — is tracked on spec 104 (operator-only; agent cannot send
-Telegram / prod HTTP needs PASETO); the behavior is already e2e-proven.
+spec 104. Deployment verification recorded the core and ML artifacts as running
+and healthy on `<deploy-target>`; concrete artifact pins and target details belong
+in `<knb-repo>`. The `smackerel_self` corpus was ingested (13 artifacts, embeddings
+async). The single remaining item — a human-owned live Telegram behavioral smoke
+test — is tracked on spec 104 because it requires access to the deployed messaging
+channel and authenticated runtime endpoint; the behavior is already e2e-proven.
 
-As of commit `4a7c545d` the RENDER half of that operator smoke is AUTOMATED —
+As of commit `4a7c545d` the RENDER half of that human-owned smoke is AUTOMATED —
 `internal/telegram/assistant_connector_smoke_test.go` is a connector-only `/ask`
 smoke that injects a synthetic inbound update through the real Telegram connector
 (bot dispatch + adapter) and captures the rendered outbound, asserting the grounded
 cited answer + the honest refusal (never "saved as an idea") with no Telegram
-client. The remaining operator item is narrowed to a final live-prod confirmation.
+client. The remaining human-owned item is narrowed to a final live deployment
+confirmation.

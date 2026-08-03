@@ -138,7 +138,7 @@ func TestIntentClarifyFacade_AmbiguousLocationNeverRoutesWeatherLookup(t *testin
 	f2, router2, _ := buildClarifyFacade(t, weatherIntentJSON(t), exec2)
 	if _, err := f2.Handle(context.Background(), contracts.AssistantMessage{
 		UserID: "u-clarify-3", Transport: "telegram", Kind: contracts.KindText,
-		Text: "weather in palm springs ca tomorrow",
+		Text: "weather in boise id tomorrow",
 	}); err != nil {
 		t.Fatalf("baseline Handle: %v", err)
 	}

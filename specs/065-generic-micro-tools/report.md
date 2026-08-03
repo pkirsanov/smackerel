@@ -77,7 +77,7 @@ On-disk inspection (not full DoD verification) shows the SCOPE-1 foundation surf
 Authored: `config/prompt_contracts/weather-query-v1.yaml`
 - `allowed_tools` now lists `location_normalize` (in addition to `weather_lookup`).
 - `system_prompt:` block shrunk from 1764 bytes (measured by `awk '/^system_prompt:/,/^allowed_tools:/' weather-query-v1.yaml | wc -c` on the prior revision) to 721 bytes — a 59.1% reduction, well above the 40% Success Signal threshold in scopes.md.
-- Inline normalization dictionary (`"palm springs ca"`, `"nyc"`, `"austin tx"`) removed; the agent now delegates state-abbrev / nickname normalization to the `location_normalize` micro-tool envelope.
+- Inline normalization dictionary (`"boise id"`, `"nyc"`, `"austin tx"`) removed; the agent now delegates state-abbrev / nickname normalization to the `location_normalize` micro-tool envelope.
 
 ### Regression authored: TestWeatherPromptUsesLocationNormalizeAndShrinksByFortyPercent
 
@@ -93,7 +93,7 @@ EXIT=0
 
 ### SCOPE-2 items NOT flipped (honest uncertainty)
 
-- `location_normalize` resolves `palm springs ca` and `sf` ... — `tests/integration/assistant/microtools_location_test.go` authored (covers SCN-065-A01/A02 against the live open-meteo endpoint via `agent.ByName(...).Handler(...)`), but NOT executed by this pass (requires the live test stack + outbound network to `ASSISTANT_SKILLS_WEATHER_GEOCODE_URL`). Route to `bubbles.test` or rerun under `./smackerel.sh test integration` to flip.
+- `location_normalize` resolves `boise id` to `Boise, Idaho` and preserves the `sf` nickname scenario ... — `tests/integration/assistant/microtools_location_test.go` authored (covers SCN-065-A01/A02 against the live open-meteo endpoint via `agent.ByName(...).Handler(...)`), but NOT executed by this pass (requires the live test stack + outbound network to `ASSISTANT_SKILLS_WEATHER_GEOCODE_URL`). Route to `bubbles.test` or rerun under `./smackerel.sh test integration` to flip.
 - Ambiguous-input ranked-list DoD — covered by an existing unit case (`TestLocationNormalizeReturnsAmbiguousEnvelopeForSpringfield`) but no end-to-end "agent loop surfaces spec 061 disambiguation prompt" assertion was authored here; left `[ ]` honestly.
 - SCOPE-2 e2e + broader-suite + artifact-lint DoD — not run by this pass.
 
@@ -196,7 +196,7 @@ The current `config/generated/test.env` ships `ASSISTANT_TOOLS_*_ENABLED=false` 
 **Log:** `/tmp/s065-int2.log` (full live-stack run, real Docker stack stood up + torn down; ML+core images built; postgres/nats/searxng/ollama/jaeger/stub-providers containers exercised).
 **Exit Code:** 1 (FAIL)
 
-Raw test outcomes (extracted from log, lines 280–328):
+Raw test outcomes (extracted from log, lines 280–328). Location example strings on rows marked `[sanitized]` were neutralized after capture; all outcomes, counts, line numbers, and the exit code remain unchanged:
 ```
 --- PASS: TestEntityResolveIntegration_UserScopedGraphCandidatesOnly (0.00s)
     --- PASS: ...owner_sees_own_artifacts
@@ -208,9 +208,9 @@ Raw test outcomes (extracted from log, lines 280–328):
     --- PASS: ...top_below_floor_is_ambiguous
     --- PASS: ...tiny_score_is_ambiguous_not_failed
 --- FAIL: TestLocationNormalizeIntegration_OpenMeteoCanonicalLocations (0.00s)
-    --- FAIL: ...palm_springs_ca_resolves_to_California
-        microtools_location_test.go:87: name = "Reykjavík", want to contain "Palm Springs"
-        microtools_location_test.go:90: admin1 = "", want "California"
+    --- FAIL: ...boise_id_resolves_to_Idaho [sanitized]
+        microtools_location_test.go:87: name = "Reykjavík", want to contain "Boise" [sanitized]
+        microtools_location_test.go:90: admin1 = "", want "Idaho" [sanitized]
     --- FAIL: ...sf_nickname_resolves_to_San_Francisco
         microtools_location_test.go:105: name = "Reykjavík", want to contain "San Francisco"
 --- PASS: TestWeatherPromptUsesLocationNormalizeAndShrinksByFortyPercent (0.00s)
@@ -234,7 +234,7 @@ EXIT=1
 
 **F-065-CANARY (CRITICAL, route bubbles.implement / bubbles.plan):** SCOPE-1 design boundary violated. `TestMicroToolRegistryCanary_ExistingScenarioToolsStillValidate/microtools_foundation_did_not_register_any_tool` is the canary the plan itself authored to enforce that the foundation does NOT register concrete tools at init-time. The current code registers `location_normalize`, `unit_convert`, `calculator`, and `entity_resolve` via package `init()` side effects in `internal/agent/tools/microtools/`, which the canary explicitly forbids. Either the canary's intent is wrong (route to `bubbles.plan` to reconcile SCOPE-1 design) or the implementation is wrong (route to `bubbles.implement` to gate concrete-tool registration behind explicit per-tool wiring calls, the same pattern `SetEntityResolveServices` already follows for service wiring).
 
-**F-065-LOCATION-STUB (HIGH, route bubbles.test / bubbles.implement):** `TestLocationNormalizeIntegration_OpenMeteoCanonicalLocations` fails because the live test stack's `stub-providers` nginx container returns canonical "Reykjavík" responses for every geocoding query rather than per-input fixtures. Either the stub-providers fixture catalog needs Palm Springs / SF responses (route `bubbles.test` to add fixtures) or the test must point at a real open-meteo endpoint and be classified accordingly (route `bubbles.test` + `bubbles.plan` to clarify live-network policy in the test plan).
+**F-065-LOCATION-STUB (HIGH, route bubbles.test / bubbles.implement):** `TestLocationNormalizeIntegration_OpenMeteoCanonicalLocations` fails because the live test stack's `stub-providers` nginx container returns canonical "Reykjavík" responses for every geocoding query rather than per-input fixtures. Either the stub-providers fixture catalog needs Boise / SF responses (route `bubbles.test` to add fixtures) or the test must point at a real open-meteo endpoint and be classified accordingly (route `bubbles.test` + `bubbles.plan` to clarify live-network policy in the test plan).
 
 **F-065-MISSING-E2E (HIGH, route bubbles.test):** Five E2E test functions named in the scope-level Test Plan do NOT exist on disk:
 - `TestMicroToolsE2E_SpringfieldProducesClarificationCandidates` (SCN-065-A03)

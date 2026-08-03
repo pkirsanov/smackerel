@@ -25,7 +25,7 @@ func TestHTTPAssistantTurnGoldenContractV1(t *testing.T) {
 			"transport_message_id":  "test-turn-001",
 			"kind":                  "text",
 			"transport_hint":        "web",
-			"text":                  "weather in palm springs ca tomorrow",
+			"text":                  "weather in boise id tomorrow",
 			"confirm_ref":           "",
 			"confirm_choice":        "",
 			"disambiguation_ref":    "",
@@ -69,7 +69,7 @@ func TestHTTPAssistantTurnGoldenContractV1(t *testing.T) {
 		emittedAt := time.Date(2026, 5, 31, 0, 0, 0, 0, time.UTC)
 		resp := contracts.AssistantResponse{
 			Status: contracts.StatusCheckingWeather,
-			Body:   "Tomorrow in Palm Springs: 32C, sunny.",
+			Body:   "Tomorrow in Boise: 32C, sunny.",
 			Sources: []contracts.Source{{
 				ID:    "open-meteo-forecast",
 				Title: "open-meteo",
@@ -122,12 +122,12 @@ func TestHTTPAssistantTurnGoldenContractV1(t *testing.T) {
 		emittedAt := time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)
 		resp := contracts.AssistantResponse{
 			Status:    contracts.StatusCheckingWeather,
-			Body:      "Tomorrow in Palm Springs: 32C, sunny.",
+			Body:      "Tomorrow in Boise: 32C, sunny.",
 			Sources:   nil,
 			EmittedAt: emittedAt,
 			LegacyRetirementNotice: &contracts.NoticePayload{
 				Command:            "/weather",
-				ReplacementExample: "weather in palm springs tomorrow",
+				ReplacementExample: "weather in Boise tomorrow",
 				CopyKey:            "spec066.weather",
 				WindowID:           "2026Q2",
 			},

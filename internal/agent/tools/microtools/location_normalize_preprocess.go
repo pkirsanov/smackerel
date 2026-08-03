@@ -4,7 +4,7 @@
 // The downstream geocoders (open-meteo today; others tomorrow) accept
 // "City", "City, Region", "City, Country", and postal codes but they
 // do NOT understand the colloquial forms users actually type:
-//   "palm springs ca"   — trailing 2-letter US state abbreviation
+//   "boise id"          — trailing 2-letter US state abbreviation
 //   "sf"                — single common city nickname
 //   "nyc"               — single common city nickname
 //
@@ -62,8 +62,7 @@ var cityNicknames = map[string]string{
 //     ignoring outer whitespace) → return the canonical form.
 //  2. If input ends in a 2-letter US state abbreviation (preceded by
 //     whitespace) → expand the abbreviation to the full state name
-//     and re-join with ", ". E.g. "palm springs ca" → "Palm Springs,
-//     California".
+//     and re-join with ", ". E.g. "boise id" → "Boise, Idaho".
 //
 // Anything else is returned with outer whitespace trimmed.
 //

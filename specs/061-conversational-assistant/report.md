@@ -4912,7 +4912,7 @@ Build evidence:
 ```
 go build ./... && go vet ./... && CGO_ENABLED=0 GOOS=linux go build -tags e2e -o /tmp/test-core ./cmd/core
 BUILD_OK
--rwxr-xr-x 1 philipk philipk 45173700 May 28 21:10 /tmp/test-core
+-rwxr-xr-x 1 <local-user> <local-group> 45173700 May 28 21:10 /tmp/test-core
 ```
 
 #### SCOPE-08 substrate: `cmd/core/wiring_assistant_skills.go` — `wireNotificationSkillServices`
