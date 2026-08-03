@@ -126,7 +126,10 @@ func TestDriveConfigGenerateAndRuntimeValidationStayInSync(t *testing.T) {
 		"--config", tmpYAML,
 		"--env", "dev",
 	)
-	advCmd.Env = append(os.Environ(), "TARGET_ENV_GUARD=integration-038-001-adv")
+	advCmd.Env = append(os.Environ(), "TARGET_ENV_GUARD=integration-038-001-adv",
+		// Satisfy the Ollama URL precondition so the adversarial run reaches the
+		// drive-key validation this test asserts on.
+		"SMACKEREL_OLLAMA_URL=http://127.0.0.1:11434")
 	advOut, advErr := advCmd.CombinedOutput()
 	advExit := 0
 	if advErr != nil {

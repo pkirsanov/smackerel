@@ -148,6 +148,9 @@ func generateEnvForSelfHostedNoHardcode(t *testing.T, root, targetEnv, outDir st
 		// generator-side dev-default guard; the model fields (the assertion
 		// target) are unaffected. dev is non-production-class and ignores it.
 		"POSTGRES_PASSWORD=selfhosted-no-hardcode-integration-test-not-the-dev-default",
+		// Same shape: satisfy the Ollama URL precondition (operator topology, never
+		// committed) with a generic loopback so generation reaches the model fields.
+		"SMACKEREL_OLLAMA_URL=http://127.0.0.1:11434",
 	)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
