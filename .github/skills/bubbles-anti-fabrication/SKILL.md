@@ -36,10 +36,14 @@ If any answer is "no", do not mark the item `[x]`. Execute first.
 This skill is a discovery shim. The full enforceable policy lives in:
 - `agents/bubbles_shared/critical-requirements.md` — Honesty Incentive, hard non-negotiables
 - `agents/bubbles_shared/evidence-rules.md` — Evidence Provenance Taxonomy, ≥10-line rule, Uncertainty Declaration Protocol
+- `agents/bubbles_shared/claim-grounding.md` — whether the underlying FACT was verified at all
 - `agents/bubbles_shared/completion-governance.md` — sequential completion, deferral blocking, red/green traceability
 - `bubbles/scripts/state-transition-guard.sh` — mechanical enforcement that runs in pre-push
 
 Read the module that matches the specific question. Do not rewrite these rules inside agent prompts.
+
+## Sibling policy — grounding the FACT, not just the COMMAND
+This skill governs whether a claimed EXECUTION happened. It does not govern whether the underlying FACT was ever checked. An agent can run a command honestly and still be wrong because the claim that motivated it was never verified against the repo. For that, load `bubbles-claim-grounding`: never assert, edit, or recommend on a fact you did not read, execute, or retrieve in this session.
 
 ## Mechanical detection
 The framework auto-detects fabrication via:

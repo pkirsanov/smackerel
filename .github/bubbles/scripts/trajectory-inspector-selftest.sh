@@ -315,7 +315,7 @@ else
 fi
 
 for token in \
-  "6. Validation Latency (--latency)" \
+  "7. Validation Latency (--latency)" \
   "# Validation Latency Report" \
   "| Phase |" \
   "| implement | all | specs/777-fake | 1 | 15m0s | 15m0s | 15m0s | 30m0s | yes |"

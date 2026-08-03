@@ -94,7 +94,7 @@ The single code block must contain:
 2.  **Current State:** (What is working/broken)
 3.  **Active Files:** (List of files actively being edited)
 4.  **Key Decisions/Constraints:** (Architectural choices/restrictions)
-5.  **Todo List State:** (Current todo list items with their statuses — not-started, in-progress, completed)
+5.  **Todo List State:** (Current todo list items with their statuses — not-started, in-progress, completed. Reconcile this list against the durable open-work register — `bash bubbles/scripts/cli.sh open-work`, a READ — and name any item present here but absent there, because a handoff packet that is never pasted into a new chat is lost, whereas the register survives. Recording it is `closeout`'s job, not this agent's.)
 6.  **Test State:** (Last test run results: command, exit code, pass/fail counts, skip count, any failures)
 7.  **Evidence References:** (List of evidence already recorded in report.md — section anchors and what they prove)
 8.  **Baseline Health:** (Pre-change baseline test counts if captured: total/passing/failing/skipped)

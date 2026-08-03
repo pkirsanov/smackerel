@@ -106,6 +106,10 @@ fi
 failures=0
 skipped=0
 declare -a failed_check_labels=()
+# PERF. This suite is serial and its membership grows automatically via the
+# discovery sweep, so its wall clock only ever goes up. Recording each check's
+# cost is what makes that cost attributable instead of a single opaque number.
+declare -a check_durations=()
 
 # IMP-027 SCOPE-7 support: the hermetic-selftest result cache, and the
 # changed-surface filter both live outside this script so they can be tested on
@@ -189,22 +193,21 @@ LIST_TIER_ONLY="false"
 CHANGED_ONLY="false"
 # IMP-027 SCOPE-7: the result cache is OPT-IN (--cache), never on by default.
 #
-# Two independent reasons, both found by tests rather than by reasoning:
+# The original CORRECTNESS objection is now closed. validate_cache_key() used to
+# hash only the SELFTEST file, so a `foo-selftest.sh` kept returning a cached
+# PASS after `foo.sh` changed — the same staleness class guard Check 43 exists
+# to catch in evidence. The key now covers the selftest AND the script it tests,
+# so editing either one invalidates the entry.
 #
-#  1. CORRECTNESS. validate_cache_key() hashes only the SELFTEST file, not the
-#     script under test. A `foo-selftest.sh` that exercises `foo.sh` therefore
-#     keeps returning a cached PASS after `foo.sh` changes — the same staleness
-#     class that guard Check 43 exists to catch in evidence. Until the key
-#     covers the tested surface, a cached PASS is not a proof.
-#
-#  2. IT DEFEATS DEADLINE ENFORCEMENT. tests/regression/test_28 mutates this
-#     validator to prove an overdue target gets killed by the watchdog. A cached
-#     result returns instantly, so the target never runs long enough to be
-#     killed, `mac.finished` appears, and the deadline assertion fails. A cache
-#     that can suppress a safety mechanism must not be the default.
+# One reason to stay opt-in survives, and it was found by a test rather than by
+# reasoning: IT DEFEATS DEADLINE ENFORCEMENT. tests/regression/test_28 mutates
+# this validator to prove an overdue target gets killed by the watchdog. A
+# cached result returns instantly, so the target never runs long enough to be
+# killed, `mac.finished` appears, and the deadline assertion fails. A cache that
+# can suppress a safety mechanism must not be the default.
 #
 # Speed is worth having, but only when explicitly requested by someone who knows
-# the run is not exercising timing or a changed script under test.
+# the run is not exercising timing.
 CACHE_ENABLED="false"
 cache_hits=0
 for _arg in "$@"; do
@@ -305,6 +308,7 @@ run_check() {
   fi
 
   echo "==> $label"
+  local _started="$SECONDS"
   if "$@"; then
     echo "PASS: $label"
     [[ -n "$_cache_key" ]] && validate_cache_put "$_cache_key" 0
@@ -313,6 +317,7 @@ run_check() {
     failures=$((failures + 1))
     failed_check_labels+=("$label")
   fi
+  check_durations+=("$((SECONDS - _started))|$label")
   echo
 }
 
@@ -647,7 +652,12 @@ run_check "Plan dependency-depth guard selftest (IMP-100 Phase 4 / IMP-022 SCOPE
 run_check "Execution substate guard selftest (IMP-100 Phase 2 / IMP-024 SCOPE-3)" bash "$SCRIPT_DIR/execution-substate-guard-selftest.sh"
 run_check "Evidence receipt check selftest (IMP-100 Phase 2 / IMP-024 SCOPE-1+2)" bash "$SCRIPT_DIR/evidence-receipt-check-selftest.sh"
 run_check "Design-experiment guard selftest (IMP-100 Phase 4 / IMP-026 SCOPE-8)" bash "$SCRIPT_DIR/design-experiment-guard-selftest.sh"
-run_check "Worktree hygiene guard selftest (IMP-107 / SCOPE-1)" bash "$SCRIPT_DIR/worktree-hygiene-guard-selftest.sh"
+run_check "Worktree hygiene guard selftest (IMP-107 / SCOPE-1; IMP-033 / SCOPE-1)" bash "$SCRIPT_DIR/worktree-hygiene-guard-selftest.sh"
+run_check "Doctor hygiene surface selftest (IMP-033 / SCOPE-2 — EV-5)" bash "$SCRIPT_DIR/doctor-hygiene-surface-selftest.sh"
+run_check "Open-work register selftest (IMP-033 / SCOPE-3 — WIP-1, WIP-2)" bash "$SCRIPT_DIR/open-work-report-selftest.sh"
+run_check "Closeout safety-contract selftest (IMP-033 / SCOPE-4 — WIP-3)" bash "$SCRIPT_DIR/closeout-report-selftest.sh"
+run_check "Open-work surface selftest (IMP-033 / SCOPE-6 — WIP-1)" bash "$SCRIPT_DIR/open-work-surface-selftest.sh"
+run_check "Multi-root honesty selftest (IMP-033 / SCOPE-7 — WIP-3)" bash "$SCRIPT_DIR/multi-root-honesty-selftest.sh"
 run_check "Worktree finalize-reap selftest (IMP-107 / SCOPE-2 — WT-TEARDOWN)" bash "$SCRIPT_DIR/worktree-finalize-reap-selftest.sh"
 run_check "Worktree spawn selftest (IMP-107 / SCOPE-5 — WT-HARNESS)" bash "$SCRIPT_DIR/worktree-spawn-selftest.sh"
 run_check "Work-tracker projection selftest (IMP-100 Phase 4 / IMP-026 SCOPE-7)" bash "$SCRIPT_DIR/work-tracker-project-selftest.sh"
@@ -900,6 +910,29 @@ if [[ -x "$SCRIPT_DIR/claim-source-lint.sh" ]]; then
   run_check_self_only "Claim-Source provenance lint (live)" bash "$SCRIPT_DIR/claim-source-lint.sh" "$REPO_ROOT"
 fi
 
+if [[ -x "$SCRIPT_DIR/reference-existence-lint-selftest.sh" ]]; then
+  run_check "Reference-existence lint selftest (G132)" bash "$SCRIPT_DIR/reference-existence-lint-selftest.sh"
+fi
+
+if [[ -x "$SCRIPT_DIR/reference-existence-lint.sh" ]]; then
+  # Source-only: scans the framework's OWN claim-bearing governance surfaces for
+  # phantom path references (G132). The surface is named explicitly because the
+  # lint has no default surface. docs/examples/ is EXCLUDED on purpose: an
+  # example artifact legitimately renders self-referential links such as
+  # [bug.md](bug.md) that describe a hypothetical spec folder rather than
+  # claiming a path in this repo. Advisory-until-opt-in, so it never blocks here.
+  run_check_self_only "Reference-existence lint (live, G132)" bash "$SCRIPT_DIR/reference-existence-lint.sh" \
+    "$REPO_ROOT/agents" \
+    "$REPO_ROOT/skills" \
+    "$REPO_ROOT/instructions" \
+    "$REPO_ROOT/prompts" \
+    "$REPO_ROOT/docs/guides" \
+    "$REPO_ROOT/docs/recipes" \
+    "$REPO_ROOT/docs/generated" \
+    "$REPO_ROOT/docs/governance-index.md" \
+    "$REPO_ROOT/README.md"
+fi
+
 if [[ -x "$SCRIPT_DIR/effective-bundle-budget-selftest.sh" ]]; then
   run_check "Effective-bundle budget selftest" bash "$SCRIPT_DIR/effective-bundle-budget-selftest.sh"
 fi
@@ -1022,6 +1055,40 @@ fi
 if [[ "$LIST_TIER_ONLY" == "true" ]]; then
   echo "Tier listing complete (tier=$VALIDATE_TIER). No checks were executed."
   exit 0
+fi
+
+# PERF report. Printed on success AND on failure, because the run costs the
+# same either way and the total is only actionable next to the checks that
+# bought it. Ranking is done in-shell: this is the canonical success path, so
+# it must not depend on any external tool (BUG-021).
+if [[ ${#check_durations[@]} -gt 0 ]]; then
+  perf_remaining=("${check_durations[@]}")
+  perf_lines=""
+  perf_rank=0
+  while [[ "$perf_rank" -lt 10 && ${#perf_remaining[@]} -gt 0 ]]; do
+    perf_best_idx=-1
+    perf_best_secs=0
+    for perf_i in "${!perf_remaining[@]}"; do
+      perf_secs="${perf_remaining[$perf_i]%%|*}"
+      if [[ "$perf_secs" -gt "$perf_best_secs" ]]; then
+        perf_best_secs="$perf_secs"
+        perf_best_idx="$perf_i"
+      fi
+    done
+    # Everything left cost under a second; there is nothing more to report.
+    [[ "$perf_best_idx" -ge 0 ]] || break
+    perf_lines+="$(printf '  %4ds  %s' "$perf_best_secs" "${perf_remaining[$perf_best_idx]#*|}")"$'\n'
+    unset "perf_remaining[$perf_best_idx]"
+    perf_remaining=("${perf_remaining[@]}")
+    perf_rank=$((perf_rank + 1))
+  done
+
+  echo "Wall clock: ${SECONDS}s across ${#check_durations[@]} executed check(s)."
+  if [[ -n "$perf_lines" ]]; then
+    echo "Slowest checks (>=1s):"
+    printf '%s' "$perf_lines"
+  fi
+  echo
 fi
 
 if [[ "$failures" -gt 0 ]]; then

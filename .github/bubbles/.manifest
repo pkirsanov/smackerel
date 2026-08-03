@@ -48,6 +48,8 @@ bubbles/scripts/case-collision-guard.sh
 bubbles/scripts/claim-source-lint-selftest.sh
 bubbles/scripts/claim-source-lint.sh
 bubbles/scripts/cli.sh
+bubbles/scripts/closeout-report-selftest.sh
+bubbles/scripts/closeout-report.sh
 bubbles/scripts/code-search.sh
 bubbles/scripts/codeindex-adapter-contract-selftest.sh
 bubbles/scripts/codeindex-resolve-selftest.sh
@@ -75,6 +77,7 @@ bubbles/scripts/diff-evidence-guard.sh
 bubbles/scripts/discovered-issue-disposition-guard-selftest.sh
 bubbles/scripts/discovered-issue-disposition-guard.sh
 bubbles/scripts/docs-registry-resolve.sh
+bubbles/scripts/doctor-hygiene-surface-selftest.sh
 bubbles/scripts/dod-section-lib-selftest.sh
 bubbles/scripts/dod-section-lib.sh
 bubbles/scripts/domain-invariant-guard-selftest.sh
@@ -190,6 +193,7 @@ bubbles/scripts/mode-resolver-selftest.sh
 bubbles/scripts/mode-resolver.sh
 bubbles/scripts/model-tier-advisory-selftest.sh
 bubbles/scripts/model-tier-advisory.sh
+bubbles/scripts/multi-root-honesty-selftest.sh
 bubbles/scripts/observability-adapter-lint-selftest.sh
 bubbles/scripts/observability-adapter-lint.sh
 bubbles/scripts/observability-check-selftest.sh
@@ -202,6 +206,9 @@ bubbles/scripts/observability-posture-guard-selftest.sh
 bubbles/scripts/observability-posture-guard.sh
 bubbles/scripts/observability-slo-guard-selftest.sh
 bubbles/scripts/observability-slo-guard.sh
+bubbles/scripts/open-work-report-selftest.sh
+bubbles/scripts/open-work-report.sh
+bubbles/scripts/open-work-surface-selftest.sh
 bubbles/scripts/orchestrator-persistence-lint-selftest.sh
 bubbles/scripts/orchestrator-persistence-lint.sh
 bubbles/scripts/orchestrator-tool-frontmatter-lint-selftest.sh
@@ -227,6 +234,8 @@ bubbles/scripts/prometheus-adapter-fetch-selftest.sh
 bubbles/scripts/propagation-policy-guard-selftest.sh
 bubbles/scripts/propagation-policy-guard.sh
 bubbles/scripts/rapid-tool-delivery-mode-selftest.sh
+bubbles/scripts/reference-existence-lint-selftest.sh
+bubbles/scripts/reference-existence-lint.sh
 bubbles/scripts/regen-derived-selftest.sh
 bubbles/scripts/regen-derived.sh
 bubbles/scripts/registry-consistency-selftest.sh
@@ -438,6 +447,7 @@ templates/agents.md.tmpl
 templates/constitution.md.tmpl
 templates/copilot-instructions.md.tmpl
 templates/observability.yaml.tmpl
+templates/open-work.md.tmpl
 templates/propagation-policy.yaml.tmpl
 templates/release-trains.yaml.tmpl
 templates/terminal-discipline.instructions.md.tmpl
@@ -626,6 +636,7 @@ agents/bubbles_shared/audit-bootstrap.md
 agents/bubbles_shared/audit-core.md
 agents/bubbles_shared/bug-templates.md
 agents/bubbles_shared/capability-foundation.md
+agents/bubbles_shared/claim-grounding.md
 agents/bubbles_shared/clarify-bootstrap.md
 agents/bubbles_shared/completion-governance.md
 agents/bubbles_shared/consumer-trace.md
@@ -725,6 +736,7 @@ skills/bubbles-capability-foundation-design/SKILL.md
 skills/bubbles-cinematic-design/SKILL.md
 skills/bubbles-cinematic-design/references/patterns.md
 skills/bubbles-cinematic-design/references/presets.md
+skills/bubbles-claim-grounding/SKILL.md
 skills/bubbles-code-index-adapter/SKILL.md
 skills/bubbles-config-bundle-per-train/SKILL.md
 skills/bubbles-config-sst/SKILL.md

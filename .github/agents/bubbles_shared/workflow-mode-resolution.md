@@ -28,6 +28,9 @@ Use this table to select the correct mode based on the execution goal.
 | Audit only | `audit-only` | `validated` | select -> audit -> finalize |
 | Final validation + audit + docs | `validate-to-doc` | `validated` | select -> validate -> audit -> docs -> finalize |
 | Resume from saved state | `resume-only` | `in_progress` | select -> finalize |
+
+**`resume-only` carries `requireOpenWorkReview: true`.** Before the `select` phase picks any work, run `bash bubbles/scripts/cli.sh open-work` and NAME the carried-over items in the response. A resumed session is the last cheap moment to recover something the previous session left open; after it, the loose end is indistinguishable from work that was never started. This is surfacing, not gating — an open item never blocks resumption, and the operator decides whether to pick it up.
+
 | Discover requirements, design UX, then deliver | `product-to-delivery` | `done` | analyze -> select -> bootstrap -> implement -> test -> regression -> simplify -> stabilize -> devops -> security -> docs -> validate -> audit -> chaos -> releases -> finalize |
 | Idea -> release packet bootstrap -> spec/design/scopes -> ship -> release packet refresh that flips the capability to delivered | `idea-to-release-completion` | `done` | analyze -> releases (bootstrap-or-refresh) -> select -> bootstrap -> implement -> test -> regression -> simplify -> stabilize -> devops -> security -> docs -> validate -> audit -> chaos -> releases (refresh) -> finalize |
 | Analyze existing feature, reconcile stale claims, then improve competitively | `improve-existing` | `done` | analyze -> [one-shot spec-review default] -> select -> validate -> harden -> gaps -> implement -> test -> regression -> simplify -> stabilize -> devops -> security -> validate -> audit -> chaos -> docs -> finalize |

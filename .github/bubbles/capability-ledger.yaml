@@ -60,7 +60,6 @@ capabilities:
     ownerSurface: bubbles/scripts/repository-binding.sh
     releaseIntroduced: unreleased
     docsRefs:
-    - improvements/IMP-103-session-repository-affinity.md
     - docs/guides/AI_ENVIRONMENT.md
     - docs/guides/CONTROL_PLANE_SCHEMAS.md
     - docs/guides/WORKFLOW_MODES.md
@@ -694,7 +693,6 @@ capabilities:
     ownerSurface: bubbles/scripts/capability-consumer-freshness.sh
     releaseIntroduced: v7.11.0
     docsRefs:
-    - improvements/IMP-004-capability-consumer-freshness.md
     - bubbles/schemas/capability-ledger.schema.json
     evidenceRefs:
     - bubbles/scripts/capability-consumer-freshness.sh
@@ -708,7 +706,6 @@ capabilities:
     - swe-agent
     - capability-ledger
     freshnessTargets:
-    - improvements/IMP-004-capability-consumer-freshness.md
     - docs/generated/competitive-capabilities.md
 
   code-index-adapter:

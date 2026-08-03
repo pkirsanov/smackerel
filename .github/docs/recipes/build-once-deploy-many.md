@@ -154,7 +154,6 @@ Use this before merging any change that touches `deploy/`, `.github/workflows/bu
 - Instructions: [`bubbles-deployment-target.instructions.md`](../../instructions/bubbles-deployment-target.instructions.md)
 - Instructions: [`bubbles-config-sst.instructions.md`](../../instructions/bubbles-config-sst.instructions.md)
 - Instructions: [`bubbles-docker-lifecycle-governance.instructions.md`](../../instructions/bubbles-docker-lifecycle-governance.instructions.md)
-- Instructions: [`bubbles-docker-ports.instructions.md`](../../instructions/bubbles-docker-ports.instructions.md)
 - Instructions: [`bubbles-test-environment-isolation.instructions.md`](../../instructions/bubbles-test-environment-isolation.instructions.md)
 - State Gate: **G081 (Build-Once Deploy-Many Integrity)** — `agents/bubbles_shared/state-gates.md`
 - Related recipe: [DevOps Work](devops-work.md) — focused devops execution lane

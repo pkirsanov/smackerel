@@ -17,6 +17,9 @@ Replace eager-loading of `agents/bubbles_shared/*.md` with on-demand skill loadi
 | If you are about to... | Load this skill |
 |------------------------|-----------------|
 | Mark a DoD item `[x]` or claim a test/build passed | `bubbles-anti-fabrication` |
+| Assert what a file, API, config key, gate, or spec contains | `bubbles-claim-grounding` |
+| Cite a path, script, gate ID, skill, or spec directory | `bubbles-claim-grounding` |
+| Proceed on a premise you could not verify | `bubbles-claim-grounding` |
 | Write a `report.md` evidence section or capture terminal output | `bubbles-evidence-capture` |
 | Transition a scope to `Done` or a spec to `done` | `bubbles-dod-validation` |
 | Change `state.json` status or run pre-push status checks | `bubbles-status-transition` |

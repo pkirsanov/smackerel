@@ -257,6 +257,33 @@ else
   pass "f8 --porcelain unchanged (no branch/stash lines; reaper contract intact)"
 fi
 
+# IMP-033 SCOPE-1: the reaper's input contract must be BYTE-IDENTICAL after the
+# new local/remote line was added. Structural proof (a "before" binary is not
+# available inside a hermetic fixture): every emitted line is a 7-field worktree
+# record and NONE of the three summary lines leaks in.
+if printf '%s\n' "$porc" | grep -q 'worktree-hygiene-local'; then
+  fail "f9 --porcelain leaked the IMP-033 local/remote line into the reaper contract"
+else
+  pass "f9 --porcelain carries no worktree-hygiene-local line"
+fi
+bad_field_lines="$(printf '%s\n' "$porc" | sed '/^$/d' | awk -F'\t' 'NF != 7' | wc -l | tr -d ' ')"
+if [[ "$bad_field_lines" == "0" ]]; then
+  pass "f10 --porcelain emits only 7-field worktree records (byte-shape unchanged)"
+else
+  fail "f10 --porcelain emitted $bad_field_lines line(s) without exactly 7 tab fields"
+fi
+
+# IMP-033 SCOPE-1 on the RICH fixture, read off the pristine report: the main
+# repo is clean (its WIP was stashed), has no remote, and owns 8 non-trunk local
+# branches. The branch count is deliberately NOT the stale count on line 2 (1) —
+# proving the two counters are distinct rather than a duplicated metric.
+loc_sum="$(printf '%s\n' "$rep_default" | sed -n 's/^worktree-hygiene-local: //p' | tail -1)"
+if [[ "$loc_sum" == "0 dirty files (primary), 0 untracked, remote=none, 8 non-trunk local branches" ]]; then
+  pass "f11 local/remote summary correct on the rich fixture (branch count distinct from the stale count)"
+else
+  fail "f11 local/remote summary mismatch: '$loc_sum'"
+fi
+
 # =====================================================================
 # (d) design-experiment-guard.sh --lingering (IMP-107 SCOPE-3) + a regression
 #     proving the DEFAULT (non --lingering) leakage-REFUSE mode is unchanged.
@@ -423,6 +450,169 @@ if git -C "$REPO" stash list 2>/dev/null | grep -q "selftest-wip-stash"; then
   pass "g3 stash survived the reaper (never auto-dropped)"
 else
   fail "g3 stash was dropped (REPORT-ONLY violated)"
+fi
+
+# =====================================================================
+# (h) IMP-033 SCOPE-1 (gap COV-5): the primary-worktree + remote line.
+#     Each case gets its OWN throwaway repo so the rich fixture's counts above
+#     stay untouched. These are the two leak vectors the linked-worktree
+#     enumeration is structurally blind to: uncommitted work in the checkout
+#     the operator types in, and commits that exist only on this machine.
+#     Every degraded state is asserted by NAME — the whole point is that a
+#     failed or impossible lookup must never render as a reassuring `0 ahead`.
+# =====================================================================
+local_line() {
+  BUBBLES_REPO_ROOT="$1" bash "$REPORT_SH" "${@:2}" 2>/dev/null \
+    | sed -n 's/^worktree-hygiene-local: //p' | tail -1
+}
+
+mk_repo() {
+  local d="$1"
+  setup git init -q "$d"
+  setup git -C "$d" config user.email "selftest@bubbles.local"
+  setup git -C "$d" config user.name "Bubbles Selftest"
+  setup git -C "$d" config commit.gpgsign false
+  setup git -C "$d" symbolic-ref HEAD refs/heads/main
+  printf 'base\n' > "$d/base.txt"
+  setup git -C "$d" add -A
+  setup git -C "$d" commit -qm base
+}
+
+assert_local() {
+  local label="$1" want="$2" got="$3"
+  if [[ "$got" == "$want" ]]; then pass "$label"; else fail "$label — expected '$want', got '$got'"; fi
+}
+
+# h1 — clean tree, no remote. The baseline the other cases must differ from.
+H_CLEAN="$TMP_ROOT/h-clean"
+mk_repo "$H_CLEAN"
+assert_local "h1 clean + no remote reports remote=none (never a fabricated 0 ahead)" \
+  "0 dirty files (primary), 0 untracked, remote=none, 0 non-trunk local branches" \
+  "$(local_line "$H_CLEAN")"
+
+# h2 — dirty AND untracked, with DIFFERENT counts (1 vs 2). A detector that
+#      lumped every porcelain line into both counters would report 3/3 here.
+H_DIRTY="$TMP_ROOT/h-dirty"
+mk_repo "$H_DIRTY"
+printf 'modified\n' >> "$H_DIRTY/base.txt"
+printf 'a\n' > "$H_DIRTY/untracked-a.txt"
+printf 'b\n' > "$H_DIRTY/untracked-b.txt"
+assert_local "h2 dirty(1) and untracked(2) counted separately" \
+  "1 dirty files (primary), 2 untracked, remote=none, 0 non-trunk local branches" \
+  "$(local_line "$H_DIRTY")"
+
+# h3 — ahead>0 against a real (local, no-network) remote.
+H_BARE="$TMP_ROOT/h-bare.git"
+setup git init -q --bare "$H_BARE"
+H_AHEAD="$TMP_ROOT/h-ahead"
+mk_repo "$H_AHEAD"
+setup git -C "$H_AHEAD" remote add origin "$H_BARE"
+setup git -C "$H_AHEAD" push -q origin main
+printf 'one\n' > "$H_AHEAD/one.txt"
+setup git -C "$H_AHEAD" add -A
+setup git -C "$H_AHEAD" commit -qm "unpushed one"
+printf 'two\n' > "$H_AHEAD/two.txt"
+setup git -C "$H_AHEAD" add -A
+setup git -C "$H_AHEAD" commit -qm "unpushed two"
+assert_local "h3 two unpushed commits reported as 2 ahead" \
+  "0 dirty files (primary), 0 untracked, 2 ahead / 0 behind origin/main (unfetched), 0 non-trunk local branches" \
+  "$(local_line "$H_AHEAD")"
+
+# h4 — ahead AND behind, with DIFFERENT counts (1 vs 1 would be tautological, so
+#      diverge by 1 ahead / 2 behind). Proves the left/right fields are not swapped.
+H_BARE2="$TMP_ROOT/h-bare2.git"
+setup git init -q --bare "$H_BARE2"
+H_DIV="$TMP_ROOT/h-diverged"
+mk_repo "$H_DIV"
+setup git -C "$H_DIV" remote add origin "$H_BARE2"
+setup git -C "$H_DIV" push -q origin main
+div_base="$(git -C "$H_DIV" rev-parse HEAD)"
+printf 'r1\n' > "$H_DIV/r1.txt"; setup git -C "$H_DIV" add -A; setup git -C "$H_DIV" commit -qm "remote one"
+printf 'r2\n' > "$H_DIV/r2.txt"; setup git -C "$H_DIV" add -A; setup git -C "$H_DIV" commit -qm "remote two"
+setup git -C "$H_DIV" push -q origin main
+setup git -C "$H_DIV" reset -q --hard "$div_base"
+printf 'l1\n' > "$H_DIV/l1.txt"; setup git -C "$H_DIV" add -A; setup git -C "$H_DIV" commit -qm "local one"
+assert_local "h4 diverged tree reports 1 ahead / 2 behind (fields not transposed)" \
+  "0 dirty files (primary), 0 untracked, 1 ahead / 2 behind origin/main (unfetched), 0 non-trunk local branches" \
+  "$(local_line "$H_DIV")"
+
+# h5 — a remote is configured but its trunk ref was never fetched. Reporting
+#      `0 ahead` here would be the exact false-clean this scope exists to close.
+H_NOREF="$TMP_ROOT/h-noref"
+H_BARE3="$TMP_ROOT/h-bare3.git"
+setup git init -q --bare "$H_BARE3"
+mk_repo "$H_NOREF"
+setup git -C "$H_NOREF" remote add origin "$H_BARE3"
+assert_local "h5 configured-but-never-fetched remote reports remote-untracked" \
+  "0 dirty files (primary), 0 untracked, remote-untracked (origin/main never fetched), 0 non-trunk local branches" \
+  "$(local_line "$H_NOREF")"
+
+# h6 — detached HEAD: there is no branch to compare, and the report says so.
+H_DET="$TMP_ROOT/h-detached"
+mk_repo "$H_DET"
+setup git -C "$H_DET" checkout -q --detach HEAD
+assert_local "h6 detached HEAD named explicitly" \
+  "0 dirty files (primary), 0 untracked, detached-HEAD, 0 non-trunk local branches" \
+  "$(local_line "$H_DET")"
+
+# h7 — --fetch SUCCEEDS against the local bare remote -> labelled (fetched).
+#      Built deterministically (never `git clone`, whose trunk depends on the
+#      host's init.defaultBranch): pin main, fetch, hard-reset onto origin/main
+#      so the histories genuinely share a base, then add one local commit.
+H_FETCH_OK="$TMP_ROOT/h-fetch-ok"
+mk_repo "$H_FETCH_OK"
+setup git -C "$H_FETCH_OK" remote add origin "$H_BARE"
+setup git -C "$H_FETCH_OK" fetch -q origin
+setup git -C "$H_FETCH_OK" reset -q --hard origin/main
+printf 'local only\n' > "$H_FETCH_OK/local.txt"
+setup git -C "$H_FETCH_OK" add -A
+setup git -C "$H_FETCH_OK" commit -qm "local only commit"
+assert_local "h7 --fetch success labelled (fetched)" \
+  "0 dirty files (primary), 0 untracked, 1 ahead / 0 behind origin/main (fetched), 0 non-trunk local branches" \
+  "$(local_line "$H_FETCH_OK" --fetch)"
+
+# h8 — --fetch FAILS (remote URL points nowhere) but the last-known ref still
+#      exists: the comparison falls back to it AND is labelled remote-unverified.
+H_FETCH_FAIL="$TMP_ROOT/h-fetch-fail"
+mk_repo "$H_FETCH_FAIL"
+setup git -C "$H_FETCH_FAIL" remote add origin "$H_BARE2"
+setup git -C "$H_FETCH_FAIL" fetch -q origin
+setup git -C "$H_FETCH_FAIL" remote set-url origin "$TMP_ROOT/definitely-not-a-repo.git"
+ff_line="$(local_line "$H_FETCH_FAIL" --fetch)"
+if printf '%s' "$ff_line" | grep -q '(remote-unverified)'; then
+  pass "h8 failed/offline fetch labelled (remote-unverified), not silently reported as fresh"
+else
+  fail "h8 failed fetch was not labelled remote-unverified: '$ff_line'"
+fi
+
+# h9 — the DEFAULT run must NOT fetch (this script is read-only; fetch writes
+#      refs/remotes/*). Proven by pointing the remote at nothing and observing
+#      the default run still succeeds and is labelled (unfetched).
+def_line="$(local_line "$H_FETCH_FAIL")"
+if printf '%s' "$def_line" | grep -q '(unfetched)'; then
+  pass "h9 default run does not fetch (read-only contract preserved)"
+else
+  fail "h9 default run label wrong: '$def_line'"
+fi
+
+# h10 — --porcelain on a DIRTY primary emits nothing at all (no linked
+#       worktrees), proving the new facts never reach the reaper's contract.
+h10_porc="$(BUBBLES_REPO_ROOT="$H_DIRTY" bash "$REPORT_SH" --porcelain 2>/dev/null || true)"
+if [[ -z "$(printf '%s' "$h10_porc" | tr -d '[:space:]')" ]]; then
+  pass "h10 --porcelain silent on a dirty primary with no linked worktrees"
+else
+  fail "h10 --porcelain emitted output for a dirty primary: '$h10_porc'"
+fi
+
+# h11 — advisory contract holds in every degraded state (always exit 0).
+h11_rc=0
+for h11_repo in "$H_CLEAN" "$H_DIRTY" "$H_AHEAD" "$H_DIV" "$H_NOREF" "$H_DET" "$H_FETCH_FAIL"; do
+  BUBBLES_REPO_ROOT="$h11_repo" bash "$REPORT_SH" >/dev/null 2>&1 || h11_rc=$?
+done
+if [[ "$h11_rc" -eq 0 ]]; then
+  pass "h11 report exits 0 in every degraded state (advisory, never a gate)"
+else
+  fail "h11 report exited $h11_rc in a degraded state"
 fi
 
 echo

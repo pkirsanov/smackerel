@@ -574,6 +574,12 @@ modes:
     requiredGates: [ G001, G011, G012, G073 ]
     constraints:
       requireExistingSession: true
+      # A resumed session is the only moment at which work carried over from the
+      # PREVIOUS session can still be recovered cheaply. The select phase must
+      # name what is already open before it picks anything new, so a loose end
+      # is not silently outlived by the session that created it. Surfacing only
+      # — an open item never blocks resumption.
+      requireOpenWorkReview: true
 
   product-to-delivery:
     description: Full pipeline from business analysis through UX, design, scopes, implementation, testing, and quality gates. Analyst/UX phases skippable if spec.md already has their output. Optional `releases` phase at the end refreshes the release packet (features.md / Phase Overview) when the delivered capability is declared in a phase release packet.

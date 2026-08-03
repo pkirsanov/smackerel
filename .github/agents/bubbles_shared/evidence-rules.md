@@ -168,6 +168,7 @@ An Uncertainty Declaration is a **positive signal**, not a failure. It gives the
 
 ## Related Modules
 
+- [claim-grounding.md](claim-grounding.md) — whether the underlying FACT was verified at all (this module governs whether the COMMAND ran)
 - [artifact-ownership.md](artifact-ownership.md) — who may write to which artifacts (evidence blocks follow the same ownership)
 - [completion-governance.md](completion-governance.md) — what "complete" means and what deferral language blocks it
 - [state-gates.md](state-gates.md) — mechanical gate definitions including G040 (incomplete work language) and G066 (phase-claim provenance)

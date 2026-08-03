@@ -15,8 +15,11 @@
 # ---------------------
 # ONLY hermetic selftests. The framework's selftest contract is that they build
 # their own fixtures under mktemp and assert behaviour that depends on nothing
-# outside their own source. That makes sha256(script) a sound cache key: if the
-# script has not changed, its verdict cannot have changed.
+# outside their own source AND the script they test. The key therefore covers
+# BOTH: sha256(selftest) + sha256(script-under-test). Hashing only the selftest
+# kept serving a cached PASS after its subject changed — a verdict about code
+# that was never re-examined, which is the same staleness class the evidence
+# guards exist to catch.
 #
 # LIVE GUARDS ARE NEVER CACHED. They read the working tree, which is exactly
 # what changes between runs. Caching one would mean reporting a verdict about a
@@ -59,7 +62,21 @@ validate_cache_key() {
   esac
 
   local digest
-  digest="$(sha256sum "$script" 2>/dev/null | cut -d' ' -f1)" || return 1
+  # A selftest owns itself AND the script it tests: `X-selftest.sh` -> `X.sh`.
+  # Both go into the key, so editing either one invalidates the entry. Digests
+  # are taken over STDIN so no file path leaks into the hash.
+  local subject="${script%-selftest.sh}.sh"
+  local self_digest subject_digest
+  self_digest="$(sha256sum <"$script" 2>/dev/null | cut -d' ' -f1)" || return 1
+  [[ -n "$self_digest" ]] || return 1
+
+  subject_digest="absent"
+  if [[ -f "$subject" ]]; then
+    subject_digest="$(sha256sum <"$subject" 2>/dev/null | cut -d' ' -f1)" || return 1
+    [[ -n "$subject_digest" ]] || return 1
+  fi
+
+  digest="$(printf '%s %s' "$self_digest" "$subject_digest" | sha256sum 2>/dev/null | cut -d' ' -f1)" || return 1
   [[ -n "$digest" ]] || return 1
   printf '%s-%s' "$version" "$digest"
 }
