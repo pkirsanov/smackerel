@@ -87,6 +87,7 @@ func buildOversizedEnvFile(t *testing.T, root string) string {
 		"PHOTOS_INTELLIGENCE_AESTHETIC_MODEL", "PHOTOS_INTELLIGENCE_OCR_MODEL",
 		"AGENT_PROVIDER_DEFAULT_MODEL", "AGENT_PROVIDER_REASONING_MODEL",
 		"AGENT_PROVIDER_FAST_MODEL", "AGENT_PROVIDER_VISION_MODEL", "AGENT_PROVIDER_OCR_MODEL",
+		"ASSISTANT_OPEN_KNOWLEDGE_LLM_MODEL_ID", "ASSISTANT_OPEN_KNOWLEDGE_SYNTHESIS_MODEL_ID",
 	}
 
 	lines := strings.Split(live, "\n")
@@ -106,6 +107,17 @@ func buildOversizedEnvFile(t *testing.T, root string) string {
 		}
 		if strings.HasPrefix(ln, "PHOTOS_INTELLIGENCE_EMBED_MODEL=") {
 			lines[i] = `PHOTOS_INTELLIGENCE_EMBED_MODEL="bug-045-fixture-embed-512mib"`
+		}
+		// Pin the envelope so the fixture stays oversized regardless of the live limit.
+		if strings.HasPrefix(ln, "OLLAMA_MEMORY_LIMIT=") {
+			lines[i] = "OLLAMA_MEMORY_LIMIT=8G"
+		}
+		// These allowlists are JSON arrays, so they need array form rather than a quoted scalar.
+		if strings.HasPrefix(ln, "ASSISTANT_OPEN_KNOWLEDGE_SWITCHABLE_MODELS=") {
+			lines[i] = `ASSISTANT_OPEN_KNOWLEDGE_SWITCHABLE_MODELS=["bug-045-fixture-llm-6gib"]`
+		}
+		if strings.HasPrefix(ln, "ASSISTANT_OPEN_KNOWLEDGE_TOOL_CAPABLE_GATHER_MODELS=") {
+			lines[i] = `ASSISTANT_OPEN_KNOWLEDGE_TOOL_CAPABLE_GATHER_MODELS=["bug-045-fixture-llm-6gib"]`
 		}
 	}
 
@@ -222,6 +234,7 @@ func TestConfigValidate_AC5c_WrapperPropagatesRejection(t *testing.T) {
 	}
 	llmModelReplaced := false
 	ollamaModelReplaced := false
+	memoryLimitReplaced := false
 	for i := testBlockStart + 1; i < testBlockEnd; i++ {
 		switch {
 		case strings.HasPrefix(yamlLines[i], "    llm_model:"):
@@ -230,6 +243,9 @@ func TestConfigValidate_AC5c_WrapperPropagatesRejection(t *testing.T) {
 		case strings.HasPrefix(yamlLines[i], "    ollama_model:"):
 			yamlLines[i] = `    ollama_model: "bug-045-fixture-llm-20gib"`
 			ollamaModelReplaced = true
+		case strings.HasPrefix(yamlLines[i], "    ollama_memory_limit:"):
+			yamlLines[i] = `    ollama_memory_limit: "8G"`
+			memoryLimitReplaced = true
 		}
 	}
 	var missingOverrides []string
@@ -238,6 +254,10 @@ func TestConfigValidate_AC5c_WrapperPropagatesRejection(t *testing.T) {
 	}
 	if !ollamaModelReplaced {
 		missingOverrides = append(missingOverrides, `    ollama_model: "bug-045-fixture-llm-20gib"`)
+	}
+	// Pin the envelope so the fixture stays oversized regardless of the live limit.
+	if !memoryLimitReplaced {
+		missingOverrides = append(missingOverrides, `    ollama_memory_limit: "8G"`)
 	}
 	if len(missingOverrides) > 0 {
 		yamlLines = append(yamlLines[:testBlockStart+1], append(missingOverrides, yamlLines[testBlockStart+1:]...)...)
@@ -271,7 +291,12 @@ func TestConfigValidate_AC5c_WrapperPropagatesRejection(t *testing.T) {
 		"--env", "test",
 	)
 	cmd.Dir = root
-	cmd.Env = append(os.Environ(), "TARGET_ENV_GUARD=integration-045-001-bug")
+	// Satisfy the Ollama URL precondition with a generic loopback so validation
+	// reaches the model-envelope check this test is about.
+	cmd.Env = append(os.Environ(),
+		"TARGET_ENV_GUARD=integration-045-001-bug",
+		"SMACKEREL_OLLAMA_URL=http://127.0.0.1:11434",
+	)
 	out, err := cmd.CombinedOutput()
 	exitCode := 0
 	if err != nil {
