@@ -635,7 +635,7 @@ func TestParseCitations_UnknownKind(t *testing.T) {
 // web_search calls.
 //
 // Reproduction (live self-hosted evidence on 2026-06-02):
-//   - User asked "/ask palm springs ca, humidity"
+//   - User asked "/ask boise id, humidity"
 //   - openknowledge.turn log: 4 iterations, 3 web_search outcome=success,
 //     status=success, num_sources=0, termination=final
 //   - Facade response: capture_route=true, status=saved_as_idea,
@@ -660,9 +660,9 @@ func TestParseCitations_UnknownKind(t *testing.T) {
 func TestAgent_EmptyCitationsSalvage_AttachesTraceSources(t *testing.T) {
 	// Model: do a web search, then write a text answer with empty
 	// <CITATIONS>[]</CITATIONS> (the production failure shape).
-	finalWithEmptyCites := "Palm Springs humidity averages around 30% in summer.\n<CITATIONS>[]</CITATIONS>"
+	finalWithEmptyCites := "Boise humidity averages around 30% in summer.\n<CITATIONS>[]</CITATIONS>"
 	fl := &fakeLLM{t: t, responses: []llm.Result{
-		toolUse("w1", "fake_web", `{"query":"palm springs humidity"}`, 100),
+		toolUse("w1", "fake_web", `{"query":"Boise, Idaho humidity"}`, 100),
 		endTurn(finalWithEmptyCites, 50),
 	}}
 	r := newRegistry(t)
@@ -670,7 +670,7 @@ func TestAgent_EmptyCitationsSalvage_AttachesTraceSources(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
-	got, err := a.Run(context.Background(), "palm springs humidity")
+	got, err := a.Run(context.Background(), "boise id humidity")
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -681,7 +681,7 @@ func TestAgent_EmptyCitationsSalvage_AttachesTraceSources(t *testing.T) {
 	if got.TerminationReason != TerminationFinal {
 		t.Fatalf("TerminationReason=%q want final", got.TerminationReason)
 	}
-	if got.FinalText != "Palm Springs humidity averages around 30% in summer." {
+	if got.FinalText != "Boise humidity averages around 30% in summer." {
 		t.Errorf("FinalText=%q must be preserved verbatim from model output", got.FinalText)
 	}
 	if len(got.Sources) == 0 {
@@ -730,10 +730,10 @@ func TestAgent_EmptyCitationsSalvage_DoesNotFireWithoutTraceSources(t *testing.T
 // regresses the production failure pattern seen on self-hosted 2026-06-02
 // where /ask returned bodies like:
 //
-//	"I am unable to provide the humidity for Palm Springs, CA,
+//	"I am unable to provide the humidity for Boise, Idaho,
 //	 because no search tools were executed to retrieve this information."
 //
-// EVEN THOUGH 3 web_search calls had returned real Palm Springs weather
+// EVEN THOUGH 3 web_search calls had returned real Boise weather
 // snippets (AccuWeather: 13% humidity / 100°F RealFeel, etc).
 //
 // The user sees text that lies about its own trace. Empty-citations
@@ -747,30 +747,30 @@ func TestAgent_EmptyCitationsSalvage_DoesNotFireWithoutTraceSources(t *testing.T
 // This test ALSO asserts the salvaged body contains text from the
 // tool result snippet exactly (proves real synthesis, not a stub).
 func TestAgent_BodyQualitySalvage_ReplacesUngroundedExcuseWithSnippets(t *testing.T) {
-	snippet := "Palm Springs current humidity is 13% with RealFeel 100°F."
+	snippet := "Boise current humidity is 13% with RealFeel 100°F."
 	// Production-shape excuse text.
-	excuse := "I am unable to provide the humidity for Palm Springs, CA, " +
+	excuse := "I am unable to provide the humidity for Boise, Idaho, " +
 		"because no search tools were executed to retrieve this information.\n" +
 		"<CITATIONS>[]</CITATIONS>"
 	// Custom registry with a fake web tool that returns the exact
 	// snippet text we will assert appears in the salvaged body.
 	r := ok.NewRegistry([]string{"fake_web"})
 	if err := r.Register(fakeWebTool{
-		url:     "https://accuweather.test/palm-springs",
-		hash:    "psprings001",
+		url:     "https://accuweather.test/boise",
+		hash:    "boise001",
 		snippet: snippet,
 	}); err != nil {
 		t.Fatalf("register: %v", err)
 	}
 	fl := &fakeLLM{t: t, responses: []llm.Result{
-		toolUse("w1", "fake_web", `{"query":"palm springs humidity"}`, 100),
+		toolUse("w1", "fake_web", `{"query":"Boise, Idaho humidity"}`, 100),
 		endTurn(excuse, 80),
 	}}
 	a, err := New(fl, r, citeback.Verify, baseCfg(5, 1000, 1.0, 10.0, 10.0, 0.8, func(int) float64 { return 0 }))
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
-	got, err := a.Run(context.Background(), "palm springs humidity")
+	got, err := a.Run(context.Background(), "boise id humidity")
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -802,7 +802,7 @@ func TestAgent_BodyQualitySalvage_ReplacesUngroundedExcuseWithSnippets(t *testin
 // excuse), the salvage MUST NOT rewrite it. Otherwise good answers
 // would be silently mangled.
 func TestAgent_BodyQualitySalvage_PreservesGoodAnswer(t *testing.T) {
-	goodAnswer := "Palm Springs is currently 100°F with 13% humidity per AccuWeather.\n<CITATIONS>[]</CITATIONS>"
+	goodAnswer := "Boise is currently 100°F with 13% humidity per AccuWeather.\n<CITATIONS>[]</CITATIONS>"
 	r := ok.NewRegistry([]string{"fake_web"})
 	if err := r.Register(fakeWebTool{
 		url: "https://accuweather.test/x", hash: "h", snippet: "different snippet text",
@@ -821,7 +821,7 @@ func TestAgent_BodyQualitySalvage_PreservesGoodAnswer(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
-	expected := "Palm Springs is currently 100°F with 13% humidity per AccuWeather."
+	expected := "Boise is currently 100°F with 13% humidity per AccuWeather."
 	if got.FinalText != expected {
 		t.Fatalf("good answer was mangled by salvage: got %q want %q", got.FinalText, expected)
 	}

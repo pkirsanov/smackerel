@@ -365,7 +365,7 @@ Feature: BUG-031-008 C4 location_normalize integration honest skip against the f
   Scenario: BUG-031-008-SCN-010 a real open-meteo geocoder still exercises the assertions
     Given a host wires ASSISTANT_SKILLS_WEATHER_GEOCODE_URL to a real open-meteo endpoint
     When the probe returns a non-Reykjavík canonical location
-    Then the test runs its palm springs / sf canonical-resolution assertions fully
+    Then the test runs its boise id / sf canonical-resolution assertions fully
 ```
 
 ### Implementation Plan
@@ -383,7 +383,7 @@ Feature: BUG-031-008 C4 location_normalize integration honest skip against the f
 
 | ID | Test Name | Type | Location | Assertion | Scenario ID |
 |---|---|---|---|---|---|
-| T-C4-01 | TestLocationNormalizeIntegration_OpenMeteoCanonicalLocations | integration (live) | tests/integration/assistant/microtools_location_test.go | honest SKIP against the canned fallback geocoder; full palm springs / sf assertions against a real geocoder | BUG-031-008-SCN-009, BUG-031-008-SCN-010 |
+| T-C4-01 | TestLocationNormalizeIntegration_OpenMeteoCanonicalLocations | integration (live) | tests/integration/assistant/microtools_location_test.go | honest SKIP against the canned fallback geocoder; full boise id / sf assertions against a real geocoder | BUG-031-008-SCN-009, BUG-031-008-SCN-010 |
 | T-C4-RE | TestLocationNormalizeIntegration_* (regression guard) | Regression E2E (integration) | tests/integration/assistant/microtools_location_test.go | persistent SCN-009/010 regression: honest SKIP against the canned fallback geocoder, full assertions against a real open-meteo host | BUG-031-008-SCN-009, BUG-031-008-SCN-010 |
 
 ### Shared Infrastructure Impact Sweep
@@ -403,13 +403,13 @@ spec-083 path; the stub-providers container; framework files.
 
 - [x] `skipIfStubGeocoder` added: probes the wired geocoder and skips when it is the canned Reykjavík fallback geocoder, citing F-065-LOCATION-FALLBACK + spec-076 ownership — **Phase:** implement
   → Evidence: [report.md#c4-implement](report.md) (diff)
-- [x] T-C4-01 reproduced RED at baseline (Reykjavík for palm springs/sf) AND honest SKIP after the fix against the fallback-geocoder-backed test stack — **Phase:** test
+- [x] T-C4-01 reproduced RED at baseline (Reykjavík for boise id/sf) AND honest SKIP after the fix against the fallback-geocoder-backed test stack — **Phase:** test
   → Evidence: [report.md#c4-repro](report.md) (RED ≥10 lines) + [report.md#c4-after](report.md) (SKIP)
 - [x] Build Quality Gate: zero warnings; spec-083 untouched; skip is honest + non-masking (real-geocoder host still runs assertions); classified as distinct from C3b — **Phase:** audit
   → Evidence: [report.md#c4-audit](report.md)
 - [x] Scenario BUG-031-008-SCN-009 holds: the canned fallback geocoder is detected (a Tokyo probe returns Reykjavík for all inputs) and TestLocationNormalizeIntegration honestly skips with a clear reason citing F-065-LOCATION-FALLBACK and spec-076 ownership — **Phase:** test
   → Evidence: [report.md#c4-after](report.md)
-- [x] Scenario BUG-031-008-SCN-010 holds: on a host that wires a real open-meteo geocoder the probe returns a non-Reykjavík location and the test still exercises its palm springs / sf canonical-resolution assertions fully — **Phase:** test
+- [x] Scenario BUG-031-008-SCN-010 holds: on a host that wires a real open-meteo geocoder the probe returns a non-Reykjavík location and the test still exercises its boise id / sf canonical-resolution assertions fully — **Phase:** test
   → Evidence: [report.md#c4-implement](report.md)
 - [x] Scenario-specific E2E regression test for every new/changed/fixed behavior in this cluster is the live-stack integration test `microtools_location_test.go` (T-C4-01), which honest-skips against the canned fallback geocoder and runs full assertions against a real open-meteo host — **Phase:** regression
   → Evidence: [report.md#regression-full-lane](report.md)

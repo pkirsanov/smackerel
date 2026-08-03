@@ -67,7 +67,7 @@ type canonicalRender struct {
 	Actions    []canonicalAction
 }
 
-// disambigButtonLine matches a Telegram body line "1. Palm Springs, CA".
+// disambigButtonLine matches a Telegram body line "1. Springfield, IL".
 var disambigButtonLine = regexp.MustCompile(`^(\d+)\.\s+(.+)$`)
 
 type captureSenderDisambig struct {

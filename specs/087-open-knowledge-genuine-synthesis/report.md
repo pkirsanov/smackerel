@@ -336,12 +336,12 @@ A/B + `verify` did not run. `nextRequiredOwner: operator/user-session`.
 
 Record-only; this spec's status and history are unchanged. The split-synthesis
 self-hosted model this spec introduced
-(`environments.self-hosted.assistant_open_knowledge_synthesis_model_id: deepseek-r1:7b`)
+(`environments.<target>.assistant_open_knowledge_synthesis_model_id: deepseek-r1:7b`)
 has been superseded by the operator's optimized self-hosted model set:
 **`gpt-oss:20b`** (the tool-capable synthesis / substrate model) + **`gemma4:26b`**
 (gather / vision / ml). Those are the only two models the operator's self-hosted
 Ollama host pulls, so `config/smackerel.yaml`
-`environments.self-hosted.assistant_open_knowledge_synthesis_model_id` now resolves
+`environments.<target>.assistant_open_knowledge_synthesis_model_id` now resolves
 to `gpt-oss:20b` and the deepseek synthesis arm is retired from the self-hosted
 active selection. The spec-087 synthesis-split machinery and trust invariants
 (cite-back, provenance, `<think>`-strip + retry-before-salvage) are unchanged —
@@ -457,7 +457,7 @@ the cite-back / provenance trust perimeter is untouched by the 087 commit.
 
 ```text
 $ git show 9d0716b3 -- config/smackerel.yaml | grep '^+.*synthesis'
-+    synthesis_model_id: "gemma3:4b" # REQUIRED ("" permitted when enabled=false). Spec 087 — synthesis turn model; home-lab override = deepseek-r1:7b ...
++    synthesis_model_id: "gemma3:4b" # REQUIRED ("" permitted when enabled=false). Spec 087 — synthesis turn model; <target> override = deepseek-r1:7b ...
 +    synthesis_retry_budget: 1 # REQUIRED: >= 0 when enabled. Spec 087 — escalated synthesis retries before honest salvage. NOT a hidden default: 0 is explicit.
 +    assistant_open_knowledge_synthesis_model_id: "deepseek-r1:7b"
 

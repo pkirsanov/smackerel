@@ -266,10 +266,14 @@ weather_lookup` optimization or re-bloat the (already-shrunk) prompt.
 ## Cluster 4 (C4) — TestLocationNormalizeIntegration fallback-geocoder (distinct cluster)
 
 ### c4-repro (RED — separate from C3b; test-stack geocode stub returns Reykjavík)
+
+> Transcript sanitized: location identifiers are replaced with `<redacted-location>`
+> placeholders per the PII policy. All other characters are verbatim.
+
 ```
 $ ./smackerel.sh test integration --go-run 'TestLocationNormalizeIntegration'
-=== RUN   TestLocationNormalizeIntegration_OpenMeteoCanonicalLocations/palm_springs_ca_resolves_to_California
-    microtools_location_test.go:87: name = "Reykjavík", want to contain "Palm Springs"
+=== RUN   TestLocationNormalizeIntegration_OpenMeteoCanonicalLocations/<redacted-location>_ca_resolves_to_California
+    microtools_location_test.go:87: name = "Reykjavík", want to contain "<redacted-location>"
     microtools_location_test.go:90: admin1 = "", want "California"
 === RUN   TestLocationNormalizeIntegration_OpenMeteoCanonicalLocations/sf_nickname_resolves_to_San_Francisco
     microtools_location_test.go:105: name = "Reykjavík", want to contain "San Francisco"

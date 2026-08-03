@@ -339,7 +339,7 @@ Scenario: SCN-069-A11 — E2E suite drives the live stack without Telegram
 │ schema_version: [v1]                                                       │
 │ transport_message_id: [test-turn-001]                                      │
 │ kind: [text v]      transport_hint: [web v]                                │
-│ text: [weather in palm springs ca tomorrow________________________]        │
+│ text: [weather in fresno ca tomorrow________________________]              │
 │                                                                            │
 │ [Send Turn] [Reset Conversation] [Copy JSON]                               │
 │                                                                            │
@@ -378,10 +378,10 @@ Scenario: SCN-069-A11 — E2E suite drives the live stack without Telegram
 │ Smackerel Assistant                                           │
 ├──────────────────────────────────────────────────────────────┤
 │ You                                                          │
-│ weather in palm springs ca tomorrow                          │
+│ weather in fresno ca tomorrow                                │
 │                                                              │
 │ Assistant                                                    │
-│ It looks warm tomorrow in Palm Springs, California.           │
+│ It looks warm tomorrow in Fresno, California.                 │
 │ High: [value]  Low: [value]  Source: [weather provider]       │
 │                                                              │
 │ [Sources] [Trace]                                             │

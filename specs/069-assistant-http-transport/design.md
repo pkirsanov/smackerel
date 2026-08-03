@@ -104,7 +104,7 @@ No new table is required. Existing `assistant_conversations` stores state for `t
   "transport_message_id": "test-turn-001",
   "kind": "text",
   "transport_hint": "web",
-  "text": "weather in palm springs ca tomorrow",
+  "text": "weather in boise id tomorrow",
   "confirm_ref": null,
   "confirm_choice": null,
   "disambiguation_ref": null,

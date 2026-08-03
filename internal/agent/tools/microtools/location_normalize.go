@@ -166,7 +166,7 @@ func init() { locRegisterOnce.Do(registerLocationNormalize) }
 func registerLocationNormalize() {
 	agent.RegisterTool(agent.Tool{
 		Name:             LocationNormalizeToolName,
-		Description:      "Resolve a colloquial location string (e.g. \"palm springs ca\", \"sf\") to a canonical {name, admin1, country, lat, lon} envelope with provider attribution; returns status=ambiguous with a ranked candidate list when input is borderline.",
+		Description:      "Resolve a colloquial location string (e.g. \"boise id\", \"sf\") to a canonical {name, admin1, country, lat, lon} envelope with provider attribution; returns status=ambiguous with a ranked candidate list when input is borderline.",
 		InputSchema:      locationInputSchema,
 		OutputSchema:     locationOutputSchema,
 		SideEffectClass:  agent.SideEffectExternal,

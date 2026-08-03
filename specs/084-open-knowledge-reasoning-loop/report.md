@@ -245,7 +245,7 @@ Subject: feat(open-knowledge): question-agnostic reasoning loop — decompose/re
 -               WriteTimeout: 1800 * time.Second,
 +               // Spec 064 SCOPE-17 / Spec 084 — WriteTimeout sized for the longest
 +               // THIS request context, so WriteTimeout — not the substrate timeout_ms —
-+               // so 6 × 600s = 3600s. Realistic GPU / home-lab turns complete in
++               // so 6 × 600s = 3600s. Realistic GPU / deployment-target turns complete in
 +               WriteTimeout: 3600 * time.Second,
 ```
 
@@ -564,7 +564,7 @@ perimeter (cite-back + provenance) untouched. The committed SST diff changed ONL
 $ git show f103be6a -- config/smackerel.yaml | grep '^[+-]'
 -    max_iterations: 4 # REQUIRED: > 0 when enabled. Spec 064 ...
 -    per_query_token_budget: 64000 # REQUIRED: > 0 when enabled. Spec 064 ...
-+    max_iterations: 6 # REQUIRED: > 0 when enabled. Spec 084 ... Model matrix unchanged (gemma4:26b home-lab / gemma3:4b dev).
++    max_iterations: 6 # REQUIRED: > 0 when enabled. Spec 084 ... Model matrix unchanged (gemma4:26b <target> / gemma3:4b dev).
 +    per_query_token_budget: 128000 # REQUIRED: > 0 when enabled. Spec 084 ... 50% of gemma4:26b ctx (262144); ... pure safety guardrail.
 
 $ grep -nE 'max_iterations|per_query_token_budget' config/smackerel.yaml | grep ':-'

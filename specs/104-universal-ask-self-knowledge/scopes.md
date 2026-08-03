@@ -4,8 +4,9 @@ Eight sequential scopes. Substrate first (searcher → corpus → ingest), then 
 tool + doc source + human twin, then trust integration, then e2e + deploy. Every
 live-category test uses the ephemeral test stack (no prod writes).
 
-Commands: build/test/lint via `./smackerel.sh`; build+deploy on the home-lab host
-per the BUG-061-009 recipe (local box has OOM pressure — do NOT build locally).
+Commands: build/test/lint via `./smackerel.sh`; build+deploy through the knb-owned
+`<target>` adapter on `<deploy-host>` per the BUG-061-009 recipe (the development
+machine is resource-constrained — do NOT build there).
 
 ---
 
@@ -236,9 +237,9 @@ Scenario: grounded meta-answer is cited; ungroundable refuses honestly
 **Depends On:** Scope 6, Scope 7
 **FR:** all (end-to-end)
 
-E2E `/ask` meta-question flows against the live stack; build + deploy on-host
-(local-operator) to the home-lab bot; verify running digests + healthy + the
-self-knowledge corpus ingested.
+E2E `/ask` meta-question flows against the live stack; build + deploy through the
+knb-owned `<target>` adapter under `local-operator` on `<deploy-host>`; verify
+running digests + healthy + the self-knowledge corpus ingested.
 
 ```gherkin
 Scenario: live /ask about smackerel answers with citations
@@ -254,6 +255,6 @@ Scenario: live /ask about smackerel answers with citations
 
 ### Definition of Done
 - [x] E2E meta-question flow passes on the ephemeral stack (cited answer) → `TestSelfKnowledge_AskMetaQuestion_GroundedCitedAnswer_E2E` + `_AskUngroundable_RefusesHonestly_E2E` PASS (Evidence: report.md#scope-8)
-- [x] Built + operator-cosign-signed + deployed on-host; running digests healthy; corpus ingested (verified) → core sha256:3b6261a9… + ml sha256:25f36dc5… running/healthy/0-restarts; 13 smackerel_self artifacts ingested (Evidence: report.md#scope-8)
-- [x] Operator behavioral smoke test recorded (or noted operator-only) → noted operator-only (agent cannot send Telegram; prod HTTP needs PASETO); behavior e2e-proven + deploy-verified (Evidence: report.md#scope-8)
+- [x] Built + signed with the cosign identity managed by `<operator>` + deployed through `<target>` on `<deploy-host>`; running digests healthy; corpus ingested (verified) → core sha256:3b6261a9… + ml sha256:25f36dc5… running/healthy/0-restarts; 13 smackerel_self artifacts ingested (Evidence: report.md#scope-8)
+- [x] `<operator>` behavioral smoke test recorded (or noted operator-only) → noted operator-only (agent cannot send Telegram; the deployed HTTP surface needs PASETO); behavior e2e-proven + deploy-verified (Evidence: report.md#scope-8)
 - [x] Build Quality Gate clean → module compiles; format clean; Trivy gate passed in the signed build (Evidence: report.md#scope-8)

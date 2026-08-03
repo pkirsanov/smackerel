@@ -25,7 +25,7 @@ trust integration → e2e + deploy).
 
 ### Scope 1 — general embedding-backed namespace SemanticSearcher {#scope-1}
 
-Built + tested on the home-lab host (local box under OOM pressure). Source SHA a26d9985.
+Built + tested on `<deploy-host>` (under OOM pressure). Source SHA a26d9985.
 
 **Unit (`./smackerel.sh test unit --go --go-run SemanticSearcher`) — exit 0:**
 
@@ -61,7 +61,7 @@ lint) — fixed here.
 
 ### Scope 2 — self-knowledge corpus derivation {#scope-2}
 
-Built + tested on the home-lab host. Source SHA ea3762f5.
+Built + tested on `<deploy-host>`. Source SHA ea3762f5.
 
 **Unit (`./smackerel.sh test unit --go --go-run "Derive|SelfKnowledge"`) — exit 0:**
 
@@ -130,7 +130,7 @@ files returned empty (format clean); 0 warnings.
 
 ### Scope 5 — product-doc corpus source {#scope-5}
 
-Built + tested on the home-lab host. Source SHA a50b37ca.
+Built + tested on `<deploy-host>`. Source SHA a50b37ca.
 
 **Unit (`./smackerel.sh test unit --go --go-run "DocCorpus|ExtractDocSection"`) — exit 0:**
 
@@ -194,7 +194,7 @@ never be cited via self_knowledge.
 **Build Quality Gate (scopes 5–7):** whole module compiled clean (all packages `ok`,
 zero FAIL across unit + integration runs); `gofmt -l` empty; 0 warnings. (One
 cross-function scope slip — `manifest` referenced in `wireAssistantTelegramAdapter` —
-was caught by the module `go test` on the home-lab host, fixed in a50b37ca, and
+was caught by the module `go test` on `<deploy-host>`, fixed in a50b37ca, and
 re-verified green.)
 
 ### Scope 8 — E2E + deploy + verify {#scope-8}
@@ -222,17 +222,17 @@ were never updated — e2e is not in the pre-push hook) — fixed here (4 stubs,
 failing 2026-07-21, before any spec-104 work). Re-run on HEAD: `--- PASS (0.02s)`,
 exit 0. Unrelated to self-knowledge.
 
-**Build (`./smackerel.sh build --target self-hosted`) — exit 0:**
+**Build (`./smackerel.sh build --target <target>`) — exit 0:**
 
 ```
-core: ghcr.io/pkirsanov/smackerel-core@sha256:3b6261a915afc2df5144bf6f15fb61d9793894b520b0feb01da46be80471ef5b
-ml:   ghcr.io/pkirsanov/smackerel-ml@sha256:25f36dc55c7be2138f1b49c3e90b57892a6797bc421432a3cfecb7f80088830e
+core: ghcr.io/<operator>/smackerel-core@sha256:3b6261a915afc2df5144bf6f15fb61d9793894b520b0feb01da46be80471ef5b
+ml:   ghcr.io/<operator>/smackerel-ml@sha256:25f36dc55c7be2138f1b49c3e90b57892a6797bc421432a3cfecb7f80088830e
 [5/7] cosign sign (operator key) — core + ml signed
 [6/7] syft SBOM + cosign attest — core + ml attested
 ___SMKBUILD_EXIT=0___
 ```
 
-**Deploy (`promote.sh --target home-lab --product smackerel`, sudo -n) — exit 0:**
+**Deploy (`<knb-repo>/scripts/deploy/promote.sh --target <target> --product smackerel`, sudo -n) — exit 0:**
 
 ```
 The cosign claims were validated (core + ml)
@@ -246,8 +246,8 @@ ___SMKDEPLOY_EXIT=0___
 **Live verification (docker inspect + prod DB):**
 
 ```
-smackerel-home-lab-smackerel-core-1 :: running health=healthy restarts=0 :: smackerel-core@sha256:3b6261a9…
-smackerel-home-lab-smackerel-ml-1   :: running health=healthy restarts=0 :: smackerel-ml@sha256:25f36dc5…
+smackerel-<target>-smackerel-core-1 :: running health=healthy restarts=0 :: smackerel-core@sha256:3b6261a9…
+smackerel-<target>-smackerel-ml-1   :: running health=healthy restarts=0 :: smackerel-ml@sha256:25f36dc5…
 self-knowledge corpus (source_id=smackerel_self): total=13 embedded=5→7→… kinds=capability,product,recipe,article,idea,note
 ```
 

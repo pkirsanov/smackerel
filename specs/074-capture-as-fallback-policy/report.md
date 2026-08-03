@@ -117,7 +117,7 @@ This pass re-validated the SCOPE-074-04A DoD items against current evidence.
 
 ```text
 $ ./smackerel.sh check
-config-validate: /home/philipk/smackerel/config/generated/dev.env.tmp.XXXXXX OK
+config-validate: <repo-root>/config/generated/dev.env.tmp.XXXXXX OK
 Config is in sync with SST
 env_file drift guard: OK
 scenario-lint: scanning config/prompt_contracts (glob: *.yaml)

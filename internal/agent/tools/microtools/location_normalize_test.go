@@ -1,5 +1,5 @@
 // Spec 065 SCOPE-2 — unit tests for location_normalize covering
-// SCN-065-A01 (palm springs ca → California), SCN-065-A02 (sf → San
+// SCN-065-A01 (boise id → Boise, Idaho), SCN-065-A02 (sf → San
 // Francisco), and SCN-065-A03 (springfield → ambiguous candidate
 // list). Provider is stubbed because these tests assert the
 // handler's contract (preprocessing, ranking, envelope shaping,
@@ -74,28 +74,28 @@ func callHandler(t *testing.T, input string) Envelope {
 	return env
 }
 
-// SCN-065-A01: "palm springs ca" → resolved Palm Springs, California.
-func TestLocationNormalizeMapsOpenMeteoPalmSpringsCA(t *testing.T) {
+// SCN-065-A01: "boise id" → resolved Boise, Idaho.
+func TestLocationNormalizeMapsOpenMeteoBoiseID(t *testing.T) {
 	prov := &stubProvider{
 		name: "open-meteo",
 		byQuery: map[string][]LocationCandidate{
-			"Palm Springs, California": {
-				{Name: "Palm Springs", Admin1: "California", Country: "United States", Latitude: 33.83, Longitude: -116.55, Confidence: 1.0},
+			"Boise, Idaho": {
+				{Name: "Boise", Admin1: "Idaho", Country: "United States", Latitude: 43.62, Longitude: -116.20, Confidence: 1.0},
 			},
 		},
 	}
 	SetLocationServices(newTestServices(t, prov))
 	t.Cleanup(ResetLocationServicesForTest)
 
-	env := callHandler(t, "palm springs ca")
+	env := callHandler(t, "boise id")
 	if env.Status != StatusResolved {
 		t.Fatalf("status = %q, want resolved (env=%+v)", env.Status, env)
 	}
-	if got := env.Value["admin1"]; got != "California" {
-		t.Errorf("value.admin1 = %v, want California", got)
+	if got := env.Value["admin1"]; got != "Idaho" {
+		t.Errorf("value.admin1 = %v, want Idaho", got)
 	}
-	if got := env.Value["name"]; got != "Palm Springs" {
-		t.Errorf("value.name = %v, want Palm Springs", got)
+	if got := env.Value["name"]; got != "Boise" {
+		t.Errorf("value.name = %v, want Boise", got)
 	}
 	if env.Source.Provider != "open-meteo" || env.Source.Kind != SourceKindHTTPProvider {
 		t.Errorf("source = %+v, want provider=open-meteo kind=http_provider", env.Source)
@@ -103,8 +103,8 @@ func TestLocationNormalizeMapsOpenMeteoPalmSpringsCA(t *testing.T) {
 	if prov.callCount != 1 {
 		t.Errorf("provider Geocode call count = %d, want 1", prov.callCount)
 	}
-	if prov.lastQuery != "Palm Springs, California" {
-		t.Errorf("preprocessor sent %q, want %q", prov.lastQuery, "Palm Springs, California")
+	if prov.lastQuery != "Boise, Idaho" {
+		t.Errorf("preprocessor sent %q, want %q", prov.lastQuery, "Boise, Idaho")
 	}
 }
 
@@ -256,7 +256,7 @@ func TestNormalizeQueryRules(t *testing.T) {
 	cases := []struct {
 		in, want string
 	}{
-		{"palm springs ca", "Palm Springs, California"},
+		{"boise id", "Boise, Idaho"},
 		{"Austin TX", "Austin, Texas"},
 		{"sf", "San Francisco, California"},
 		{"SF", "San Francisco, California"},

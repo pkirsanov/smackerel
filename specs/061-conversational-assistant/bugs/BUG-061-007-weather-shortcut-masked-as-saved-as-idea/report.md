@@ -16,7 +16,7 @@ is untouched when the seam is not wired.
 Code-complete and unit-verified. One scope; three adversarial regression tests GREEN; the
 weather tool handler refactor preserves its contract; both changed Go packages compile and
 pass; adversarial regression-quality guard PASS. Live-stack validation on the running
-self-hosted bot is pending the home-lab deploy of the fixed SHA.
+self-hosted bot is pending the `<target>` deploy of the fixed SHA.
 
 ## Root cause (code-path trace) {#repro-red}
 
@@ -97,27 +97,27 @@ scenario-lint: OK
 See "After Fix — unit evidence" and "Regression quality" above. Command exit status: the CLI
 printed `[go-unit] go test ./... finished OK` and returned success; the guard returned exit 0.
 
-## Deploy + Live Verification (self-hosted home-lab) {#deploy-verify}
+## Deploy + Live Verification (`<target>`) {#deploy-verify}
 
 The fix (sourceSha `d4755abd`, which also carries a grpc → v1.82.1 CVE bump that
 unblocked the Trivy gate — see below) was built + operator-cosign-signed + deployed
-to the running self-hosted home-lab host and verified live this session
+to the running `<deploy-host>` and verified live this session
 (`local-operator` trust model).
 
-### Build + sign (accel tier, on the target)
+### Build + sign (knb-owned configured tier on `<deploy-host>`)
 
-`smackerel.sh build --target self-hosted` — 9/9 phases green:
+`smackerel.sh build --target <target>` — 9/9 phases green:
 - Trivy CRITICAL/HIGH gate: PASS (0 vulnerabilities). The first build FAILED the gate
   on a HIGH in `google.golang.org/grpc v1.81.1` (GHSA-hrxh-6v49-42gf, newly in Trivy's
   DB); bumping grpc to v1.82.1 (commit `d4755abd`) cleared it.
 - Pushed + cosign-signed (operator key) + SBOM-attested:
-  - core `ghcr.io/pkirsanov/smackerel-core@sha256:44ed9984…`
-  - ml   `ghcr.io/pkirsanov/smackerel-ml@sha256:30ea2392…`
-- Config bundle `config-bundle-self-hosted-d4755abd…` (sha256 `ea288c7b…`) pushed + signed.
+  - core `ghcr.io/<operator>/smackerel-core@sha256:44ed9984…`
+  - ml   `ghcr.io/<operator>/smackerel-ml@sha256:30ea2392…`
+- Config bundle `config-bundle-<target>-d4755abd…` (sha256 `ea288c7b…`) pushed + signed.
 
 ### Deploy (on-host local-operator apply → recreate)
 
-`promote.sh --target home-lab --product smackerel --local-build-manifest <manifest> --operator <op>`
+`<knb-repo>/scripts/deploy/promote.sh --target <target> --product smackerel --local-build-manifest <manifest> --operator <operator>`
 (on-host, under passwordless sudo, with the operator cosign pubkey + ghcr docker-config).
 The adapter verified the release proof (cosign verified BOTH images + attestations against
 the operator pubkey), decrypted the bundle secrets (mode 0600), and recreated
@@ -126,8 +126,8 @@ the operator pubkey), decrypted the bundle secrets (mode 0600), and recreated
 ### Live running-state verification (this session, read-only)
 
 ```text
-smackerel-home-lab-smackerel-core-1 | running/healthy | sha256:44ed9984… | MATCHES CORE FIX
-smackerel-home-lab-smackerel-ml-1   | running/healthy | sha256:30ea2392… | MATCHES ML FIX
+smackerel-<target>-smackerel-core-1 | running/healthy | sha256:44ed9984… | MATCHES CORE FIX
+smackerel-<target>-smackerel-ml-1   | running/healthy | sha256:30ea2392… | MATCHES ML FIX
 ```
 
 Both containers run the EXACT fix digests and are healthy; core startup log shows

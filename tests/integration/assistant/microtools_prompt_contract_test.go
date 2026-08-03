@@ -88,7 +88,7 @@ func TestWeatherPromptUsesLocationNormalizeAndShrinksByFortyPercent(t *testing.T
 		// dictionary the micro-tool now owns. If they reappear in
 		// the prompt the test fails so a reviewer audits why the
 		// dictionary leaked back into the LLM context.
-		needles := []string{`"palm springs ca"`, `"nyc"`}
+		needles := []string{`"boise id"`, `"nyc"`}
 		body := string(raw)
 		for _, n := range needles {
 			if strings.Contains(body, n) {

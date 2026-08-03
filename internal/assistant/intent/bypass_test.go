@@ -29,7 +29,7 @@ func TestOperationalCommandBypassRecordsTraceLabel(t *testing.T) {
 		{name: "leading_whitespace_status", text: "   /status", wantHit: true, wantCmd: "/status"},
 		{name: "trailing_args_status", text: "/status now please", wantHit: true, wantCmd: "/status"},
 		{name: "non_operational_ask", text: "/ask what time is it", wantHit: false},
-		{name: "non_operational_weather", text: "/weather palm springs", wantHit: false},
+		{name: "non_operational_weather", text: "/weather boise id", wantHit: false},
 		{name: "non_operational_remind", text: "/remind tomorrow", wantHit: false},
 		{name: "natural_text", text: "make a shopping list", wantHit: false},
 		{name: "empty", text: "", wantHit: false},

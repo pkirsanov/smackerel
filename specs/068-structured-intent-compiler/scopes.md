@@ -159,10 +159,10 @@ Scenario: SCN-068-A07 — Operational commands bypass compiler explicitly
 ```gherkin
 Scenario: SCN-068-A01 — Weather NL compiles before route
   Given the intent compiler is enabled
-  When the user sends "weather in palm springs ca tomorrow"
+  When the user sends "weather in boise id tomorrow"
   Then the compiler returns a valid CompiledIntent with action_class = "external_lookup"
   And scenario_hint = "weather_query"
-  And slots.location.raw = "palm springs ca"
+  And slots.location.raw = "boise id"
   And slots.window = "tomorrow"
   And the router receives the CompiledIntent before selecting weather_query
 
@@ -246,7 +246,7 @@ Scenario: SCN-068-A02 — Retrieval NL compiles before route
 
   **Evidence (Phase: implement):** `go test -tags=integration -count=1 ./tests/integration/assistant/...` → exit 0. `bash .github/bubbles/scripts/artifact-lint.sh specs/068-structured-intent-compiler` → exit 0 (see [report.md → Scope 2 Execution Evidence](report.md#scope-2-execution-evidence)). **Claim Source:** executed.
 
-- [x] SCN-068-A01 — Weather NL compiles before route: compiler returns valid `CompiledIntent` with `action_class=external_lookup`, `scenario_hint=weather_query`, `slots.location.raw="palm springs ca"`, `slots.window="tomorrow"`; router receives `CompiledIntent` before selecting `weather_query`.
+- [x] SCN-068-A01 — Weather NL compiles before route: compiler returns valid `CompiledIntent` with `action_class=external_lookup`, `scenario_hint=weather_query`, `slots.location.raw="boise id"`, `slots.window="tomorrow"`; router receives `CompiledIntent` before selecting `weather_query`.
 - [x] SCN-068-A02 — Retrieval NL compiles before route: compiler returns `action_class=retrieve`, `scenario_hint=retrieval_qa`, `normalized_request.query` preserves user question; retrieval scenario receives structured context, not raw text only.
 - [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior — in-process integration tests `TestIntentReadRoutingFacade_*` cover SCN-068-A01/A02 + `TestIntentReadRoutingFacade_ReadIntentsNeverRouteFromRawTextOnly` is the persistent regression; cross-spec HTTP-route E2E rows owned by spec 069 wire-up are recorded per `## Cross-Spec E2E Ownership`.
 - [x] Broader E2E regression suite passes — `go test -tags=integration -count=1 ./tests/integration/assistant/...` exit 0 (HTTP-route `./smackerel.sh test e2e` for SCN-068-A01/A02 is owned by spec 069 wire-up per `## Cross-Spec E2E Ownership`).

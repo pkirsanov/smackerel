@@ -397,10 +397,10 @@ Each `.gitkeep` is matched by its `!` exception line — git will track them. On
 
 ```
 $ ls -la data/bookmarks-import/.gitkeep data/maps-import/.gitkeep data/browser-history/History/.gitkeep data/twitter-archive/.gitkeep
--rw-r--r-- 1 philipk philipk 0 May 17 23:17 data/bookmarks-import/.gitkeep
--rw-r--r-- 1 philipk philipk 0 May 17 23:18 data/browser-history/History/.gitkeep
--rw-r--r-- 1 philipk philipk 0 May 17 23:18 data/maps-import/.gitkeep
--rw-r--r-- 1 philipk philipk 0 May 17 23:18 data/twitter-archive/.gitkeep
+-rw-r--r-- 1 <local-user> <local-group> 0 May 17 23:17 data/bookmarks-import/.gitkeep
+-rw-r--r-- 1 <local-user> <local-group> 0 May 17 23:18 data/browser-history/History/.gitkeep
+-rw-r--r-- 1 <local-user> <local-group> 0 May 17 23:18 data/maps-import/.gitkeep
+-rw-r--r-- 1 <local-user> <local-group> 0 May 17 23:18 data/twitter-archive/.gitkeep
 exit code: 0
 ```
 

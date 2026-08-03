@@ -7,13 +7,13 @@
   "sources": [
     {
       "id": "src-nws-1",
-      "title": "NWS forecast — Palm Springs, CA",
+      "title": "NWS forecast — Boise, Idaho",
       "kind": "web",
       "artifact_id": "",
       "artifact_captured_at": "",
       "provider_name": "",
       "provider_retrieved_at": "",
-      "url": "https://forecast.weather.gov/MapClick.php?lat=33.83&lon=-116.55",
+      "url": "https://forecast.weather.gov/MapClick.php?lat=43.62&lon=-116.20",
       "web_provider": "nws",
       "web_fetched_at": "2026-06-01T00:00:00Z",
       "web_content_hash": "sha256:nws-001",

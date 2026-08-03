@@ -56,7 +56,7 @@ Excluded:
 - arbitrary sleeps or longer blind timeouts
 - all-package E2E execution in this invocation
 - synthesis/assistant packet edits
-- evo-x2, `knb`, deploy adapters/manifests, secrets, and release-train bundles
+- `<deploy-host>`, `<knb-repo>`, deploy adapters/manifests, secrets, and release-train bundles
 
 ### Single-Implementation Justification
 

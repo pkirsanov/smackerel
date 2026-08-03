@@ -44,4 +44,4 @@ Shell changes must remain WSL/Linux and macOS compatible. Docker label filtering
 
 ## Deployment Boundary
 
-This is local test-harness code only. No target deployment, `knb`, evo-x2, manifest, or secret changes are permitted.
+This is repository-local test-harness behavior only. It does not authorize deployment to `<target>` or changes to `<deploy-host>`, manifests, secrets, or other target-specific configuration. All concrete deployment configuration belongs exclusively in `<knb-repo>`.

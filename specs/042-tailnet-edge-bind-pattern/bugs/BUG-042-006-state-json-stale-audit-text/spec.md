@@ -135,5 +135,5 @@ A reader of `specs/042-tailnet-edge-bind-pattern/state.json` at HEAD `eec1437c` 
   - `TestComposeContract_AdversarialDefaultFallbackBind` (BUG-042-004) — rejects `:-` form for `smackerel-core` + `smackerel-ml`
   - `TestComposeContract_AdversarialOllamaLiteralBind` (BUG-042-003) — rejects literal + `:-` for `ollama`
   - `TestComposeContract_AdversarialPrometheusLiteralBindAndFallbackForms` (BUG-042-005) — rejects literal + `:-` for `prometheus`
-- **Precedent:** spec 044 stale-audit reconciliation HL-RESCAN-007 close-out at HEAD `b715d143` (`fix(044): close HL-RESCAN-007 — mark stale audit text as superseded + scrub stray philipk PII`) — the established `[SUPERSEDED 2026-05-14 by spec 042 hardening; ...]` annotation pattern this fix replicates.
+- **Precedent:** spec 044 stale-audit reconciliation HL-RESCAN-007 close-out at HEAD `b715d143` (`fix(044): close HL-RESCAN-007 — mark stale audit text as superseded + scrub stray <operator> PII`) — the established `[SUPERSEDED 2026-05-14 by spec 042 hardening; ...]` annotation pattern this fix replicates.
 - **Live file (correct on HEAD):** [`deploy/compose.deploy.yml`](../../../../deploy/compose.deploy.yml) lines 128, 185, 243, 315 — all use `${HOST_BIND_ADDRESS:?HOST_BIND_ADDRESS must be set by deploy adapter}:`

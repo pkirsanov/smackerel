@@ -4,19 +4,19 @@
   "spec": "specs/061-conversational-assistant",
   "severity": "S2",
   "status": "blocked",
-  "blockedReason": "Agent-side work is COMPLETE and deploy-verified; the only remaining step is an OPERATOR behavioral smoke test the agent cannot perform. The INV-HB-REFUSAL fix is implemented, unit-proven by the cross-path invariant test (TestExecutionErrorHonesty_* exercises the exact open_knowledge OK-but-uncited path and asserts StatusUnavailable + honest body, never the capture acknowledgement), built + operator-cosign-signed, deployed on-host (local-operator promote/apply), and verified running/healthy on the home-lab bot (core sha256:dc8963683bc87f6d07b5460a009755c8cd400b5dd56ae20d0f3094307e570c32, ml sha256:ef16adc279b908b3777e9afbf9558dbbdfe9b8611b741c12cccc5d39db4c1b23, 0 restarts). The agent cannot send Telegram messages and the prod assistant HTTP API requires a per-user PASETO token (shared token -> 401). OPERATOR NEXT-STEP (then flip status to done): on Telegram, send /ask <a question the bot cannot ground> and confirm the reply is an honest 'I don't have a sourced answer for that.' (never 'saved as an idea'); confirm a genuine dropped thought (unrouted) still replies 'saved as an idea — i'll surface it later.'.",
+  "blockedReason": "Agent-side work is COMPLETE and deploy-verified; the only remaining step is an OPERATOR behavioral smoke test the agent cannot perform. The INV-HB-REFUSAL fix is implemented, unit-proven by the cross-path invariant test (TestExecutionErrorHonesty_* exercises the exact open_knowledge OK-but-uncited path and asserts StatusUnavailable + honest body, never the capture acknowledgement), built + operator-cosign-signed, deployed through the knb-owned adapter (local-operator promote/apply), and verified running/healthy on the deployed bot at <deploy-host> (core sha256:dc8963683bc87f6d07b5460a009755c8cd400b5dd56ae20d0f3094307e570c32, ml sha256:ef16adc279b908b3777e9afbf9558dbbdfe9b8611b741c12cccc5d39db4c1b23, 0 restarts). The agent cannot send Telegram messages and the prod assistant HTTP API requires a per-user PASETO token (shared token -> 401). OPERATOR NEXT-STEP (then flip status to done): on Telegram, send /ask <a question the bot cannot ground> and confirm the reply is an honest 'I don't have a sourced answer for that.' (never 'saved as an idea'); confirm a genuine dropped thought (unrouted) still replies 'saved as an idea — i'll surface it later.'.",
   "workflowMode": "bugfix-fastlane",
   "owner": "bubbles.goal",
-  "discoveredBy": "operator (live /ask on the home-lab bot after BUG-061-008 P1-P5 shipped)",
+  "discoveredBy": "operator (live /ask on the deployed bot after BUG-061-008 P1-P5 shipped)",
   "discoveredAt": "2026-07-23",
   "lastUpdatedAt": "2026-07-23",
   "rootCause": {
     "summary": "open_knowledge (requires_provenance) produced an OK answer with no citations. The provenance gate correctly refuses the uncited body but rewrites to Status=StatusSavedAsIdea + CaptureRoute=true with ErrorCause unset; canonicalizeSuccessfulCaptureResponse then overwrites the gate's honest body ('I don't have a sourced answer for that.') with the generic capture acknowledgement ('saved as an idea — i'll surface it later.'). BUG-061-008 P1 only guarded NON-OK outcomes, so this OK-but-uncited path was left intact — and its P2 test asserted the OK+no-sources case SHOULD return saved_as_idea, test-locking the reported behavior. An honest open_knowledge refusal renderer exists but is bypassed (it fires only when ErrorCause matches a spec-064 RefusalCause, which the gate leaves empty) and even it appends a confusing '(saved as idea)' suffix."
   },
   "resolution": "Enforce INV-HB-REFUSAL: 'saved as an idea' is band-LOW-only. SCOPE-01 makes the provenance gate refuse into an honest shape (StatusUnavailable + new ErrNoGroundedAnswer + honest body + CaptureRoute=false) uniformly across every requires_provenance scenario. SCOPE-02 scopes canonicalizeSuccessfulCaptureResponse to band-low (band-high residual StatusSavedAsIdea is converted to the honest refusal). SCOPE-03 flips the BUG-061-008 OK-no-sources assertion to honest-refusal and extends the cross-path invariant test so a single test proves no band-high requires_provenance path can render the capture acknowledgement (class-killer). SCOPE-04 renders the honest body verbatim for ErrNoGroundedAnswer, drops the '(saved as idea)' suffix from the open_knowledge refusal renderer, reword the 5 refusal cause strings, and upgrades G021 refusal-vs-answer distinguishability from a user-visible string to a structural (Status/ErrorCause) contract across Telegram + WhatsApp. SCOPE-05 diagnoses + routes the grounding gap and encodes the invariant in docs + the review checklist.",
-  "codeVsDeployment": "deployed. Built (build --target self-hosted, exit 0), operator-cosign-signed + SBOM-attested, and applied on-host (local-operator promote/apply under sudo -n) to the home-lab bot. Running core+ml digests match the build and are healthy with 0 restarts.",
+  "codeVsDeployment": "deployed. Built (build --target <build-target>, exit 0), operator-cosign-signed + SBOM-attested, and applied through the knb-owned adapter (local-operator promote/apply under sudo -n) to the deployed bot. Running core+ml digests match the build and are healthy with 0 restarts.",
   "deployment": {
-    "target": "home-lab (self-hosted)",
+    "target": "<deploy-target>",
     "trustModel": "local-operator",
     "sourceSha": "2e84a1b4df78c3b1932ddf91def2ededcf34cb9e",
     "verifiedAt": "2026-07-23T20:29Z",
@@ -70,8 +70,8 @@
       "check (SST/config/scenario-lint OK)",
       "lint (go vet + ruff + web: All checks passed!)",
       "artifact-lint.sh (PASSED, exit 0)",
-      "build --target self-hosted (exit 0; cosign-signed + SBOM-attested; signed local-build-manifest emitted)",
-      "deploy home-lab on-host (promote/apply exit 0; cosign verified; strict current-release health accepted; running core+ml digests match build, healthy, 0 restarts)"
+      "build --target <build-target> (exit 0; cosign-signed + SBOM-attested; signed local-build-manifest emitted)",
+      "deploy via knb-owned Smackerel adapter (promote/apply exit 0; cosign verified; strict current-release health accepted; running core+ml digests match build, healthy, 0 restarts)"
     ],
     "pendingGates": [
       "operator live Telegram behavioral smoke test (operator-only: prod assistant HTTP requires per-user PASETO; behavior unit-proven by TestExecutionErrorHonesty_* cross-path invariant)"
