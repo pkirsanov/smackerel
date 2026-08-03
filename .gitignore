@@ -77,6 +77,9 @@ node_modules/
 # Android/Gradle project-local caches
 **/.gradle/
 
+# Dart/Flutter project-local caches
+clients/mobile/assistant/.dart_tool/
+
 # Spec 077 SCOPE-1b — Playwright artifacts for the PWA e2e-ui harness.
 # Generated under web/pwa/ by `./smackerel.sh test e2e-ui` (Playwright
 # reporters write here). Never committed.
