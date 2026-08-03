@@ -3,6 +3,11 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 GUARD_SCRIPT="$SCRIPT_DIR/state-transition-guard.sh"
+
+# A bare `timeout` exits 127 on a stock macOS runner, which ships neither GNU
+# coreutils nor gtimeout. guard-lib's helper falls back to a bash watchdog.
+# shellcheck source=guard-lib.sh
+. "$SCRIPT_DIR/guard-lib.sh"
 guard_timeout_seconds="${BUBBLES_WORKFLOW_PLANNING_PROVENANCE_GUARD_TIMEOUT_SECONDS:-45}"
 
 case "$guard_timeout_seconds" in
@@ -41,7 +46,9 @@ run_capture() {
   shift
 
   set +e
-  timeout "$timeout_seconds" "$@" >"$log_file" 2>&1
+  # </dev/null matches every sibling selftest: the guard must never inherit an
+  # interactive stdin. It is NOT what bounds the runtime — see OW-009.
+  bubbles_run_with_timeout "$timeout_seconds" "$@" </dev/null >"$log_file" 2>&1
   local status=$?
   set -e
 
@@ -133,7 +140,7 @@ Demonstrate that the workflow cannot claim planning artifacts are valid when the
 - [x] Planning provenance remains owner-recorded in execution history -> Evidence: report.md#summary
 EOF
 
-  sed -i "s|__SCENARIO_TEST__|$scenario_test|g" "$feature_dir/scopes.md"
+  bubbles_sed_inplace "s|__SCENARIO_TEST__|$scenario_test|g" "$feature_dir/scopes.md"
 
   cat <<'EOF' > "$feature_dir/uservalidation.md"
 # User Validation
@@ -167,7 +174,7 @@ Expected result: transition blocked because planning specialists are missing fro
 ```
 EOF
 
-  sed -i "s|__FEATURE_DIR__|$feature_dir|g" "$feature_dir/report.md"
+  bubbles_sed_inplace "s|__FEATURE_DIR__|$feature_dir|g" "$feature_dir/report.md"
 
   cat <<'EOF' > "$feature_dir/state.json"
 {

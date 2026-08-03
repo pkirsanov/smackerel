@@ -13,13 +13,13 @@ This also applies when an existing feature's active planning artifacts are stale
 ## The Command
 
 ```
-/bubbles.workflow  specs/050-my-new-feature mode: product-discovery
+/bubbles.workflow  specs/050-my-new-feature plan action:harden target:scope analyze: true
 
-/bubbles.workflow  specs/050-my-new-feature mode: product-discovery grillMode: required-on-ambiguity backlogExport: tasks
+/bubbles.workflow  specs/050-my-new-feature plan action:harden target:scope analyze: true grillMode: required-on-ambiguity backlogExport: tasks
 
-/bubbles.workflow  specs/019-booking-page mode: spec-scope-hardening backlogExport: tasks
+/bubbles.workflow  specs/019-booking-page plan action:harden target:scope backlogExport: tasks
 
-/bubbles.workflow  specs/019-booking-page mode: redesign-existing backlogExport: tasks
+/bubbles.workflow  specs/019-booking-page implement action:full-delivery prelude:analyze-design-plan target:product requireExistingImplementation: true backlogExport: tasks
 ```
 
 **Phases:**

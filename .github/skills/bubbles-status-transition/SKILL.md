@@ -101,7 +101,7 @@ If any guard exits non-zero:
 3. Re-run the guard.
 4. Do NOT lower the status target. Do NOT add a bypass flag.
 
-On `E009-TARGET-MISMATCH`, read the detail line before diagnosing. It names both mirror values and the owning agent, and a contract-resolution refusal is never a defect in the framework's ceiling handling.
+On `E009-STATUS-MIRROR`, read the detail line before diagnosing. It names both mirror values and the owning agent, and a contract-resolution refusal is never a defect in the framework's ceiling handling.
 
 ## Authoritative modules
 - `agents/bubbles_shared/state-gates.md` — state-claim integrity

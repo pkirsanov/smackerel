@@ -653,7 +653,7 @@ Skills are portable procedural checklists auto-installed to every repo. They act
 | Continue toward the active outcome | `/bubbles.goal  continue` |
 | New feature from scratch | `/bubbles.goal  <describe outcome>` |
 | Full delivery pipeline as one known mode | `/bubbles.workflow  <feature> mode: full-delivery` |
-| Improve legacy feature with one stale-spec pass first | `/bubbles.workflow  improve-existing for <feature> specReview: once-before-implement` |
+| Improve legacy feature with one stale-spec pass first | `/bubbles.workflow  improve action:analyze-and-harden target:existing-feature for <feature> specReview: once-before-implement` |
 | Fix a focused bug workflow | `/bubbles.bug  mode: fix <describe bug>` |
 | Plan and scope a feature | `/bubbles.plan  <feature>` |
 | Need framework help or advice? | `/bubbles.super  help me <describe goal>` |
@@ -690,7 +690,7 @@ The super resolves intent and generates commands. A workflow runner may call it 
 
 | You Ask | The Super Responds With |
 |---------|-------------------|
-| `/bubbles.super  I have a new feature idea for search` | Recommended sequence: analyst → ux → workflow product-to-delivery |
+| `/bubbles.super  I have a new feature idea for search` | Recommended sequence: analyst → ux → workflow implement action:full-delivery prelude:analyze-design-plan target:product |
 | `/bubbles.super  I want to make the booking feature better` | `/bubbles.workflow  <booking-spec> mode: improve-existing` |
 | `/bubbles.super  review this repo before we decide what to spec` | `/bubbles.system-review  scope: full-system output: summary-doc` |
 | `/bubbles.super  which mode should I use?` | Decision tree based on your situation |
@@ -748,8 +748,8 @@ The super resolves intent and generates commands. A workflow runner may call it 
 | Harden weak spots | `/bubbles.harden` |
 | Security scan | `/bubbles.security` |
 | Check for regressions | `/bubbles.regression` |
-| Quality sweep | `/bubbles.workflow  harden-gaps-to-doc` |
-| Release lockdown | `/bubbles.workflow  full-delivery` |
+| Quality sweep | `/bubbles.workflow  validate action:harden-and-gaps finalize:docs` |
+| Release lockdown | `/bubbles.workflow  implement action:full-delivery target:spec` |
 
 ### Success & Wrap-Up
 

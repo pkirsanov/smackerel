@@ -76,7 +76,7 @@ Backport is intentionally awkward. The default policy ships with `backportRequir
 
 1. Mark the edge `backportable: true`.
 2. Decide whether `backportRequiresApproval` stays true (recommended for any edge touching prod).
-3. When operator invokes `/bubbles.workflow propagate-backport from prod to experimental`:
+3. When operator invokes `/bubbles.workflow propagate action:backport from prod to experimental`:
    - J-Roc emits `route_required` with `action: human-approval` listing the commits + diff summary.
    - Operator reviews, then re-invokes with `--approval-token=<sha>` (the sha is the approval anchor).
    - J-Roc records the approval token in the ledger entry.
@@ -110,7 +110,7 @@ cp templates/propagation-policy.yaml.tmpl propagation-policy.yaml
 # Edit defaultFlow[] to declare your edges
 bash bubbles/scripts/propagation-policy-guard.sh
 # Should exit 0. If not, fix the reported issues.
-/bubbles.workflow propagate-audit   # safe first run, no mutation
+/bubbles.workflow propagate action:audit-drift   # safe first run, no mutation
 ```
 
 ## Gate reference

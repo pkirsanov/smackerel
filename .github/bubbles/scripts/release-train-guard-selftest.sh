@@ -19,6 +19,12 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 GUARD="$SCRIPT_DIR/release-train-guard.sh"
 
+# A bare `timeout` exits 127 on a stock macOS runner, which ships neither GNU
+# coreutils nor gtimeout. guard-lib's helper falls back to a bash watchdog and
+# preserves 124 on timeout, which the 124 branches below rely on.
+# shellcheck source=guard-lib.sh
+. "$SCRIPT_DIR/guard-lib.sh"
+
 [[ -x "$GUARD" ]] || { echo "FAIL: $GUARD not executable" >&2; exit 1; }
 command -v yq >/dev/null 2>&1 || { echo "SKIP: yq not installed"; exit 0; }
 
@@ -58,7 +64,7 @@ EOF
 
 assert_pass() {
   local desc="$1"
-  if timeout 10 "$GUARD" "$TMP" </dev/null >/dev/null 2>&1; then
+  if bubbles_run_with_timeout 10 "$GUARD" "$TMP" </dev/null >/dev/null 2>&1; then
     echo "PASS: $desc"
   else
     local rc=$?
@@ -66,7 +72,7 @@ assert_pass() {
       echo "FAIL: $desc (guard timed out after 10s)" >&2
     else
       echo "FAIL: $desc (expected exit 0, got $rc)" >&2
-      timeout 5 "$GUARD" "$TMP" </dev/null >&2 || true
+      bubbles_run_with_timeout 5 "$GUARD" "$TMP" </dev/null >&2 || true
     fi
     exit 1
   fi
@@ -75,7 +81,7 @@ assert_pass() {
 assert_fail() {
   local desc="$1"
   local rc=0
-  timeout 10 "$GUARD" "$TMP" </dev/null >/dev/null 2>&1 || rc=$?
+  bubbles_run_with_timeout 10 "$GUARD" "$TMP" </dev/null >/dev/null 2>&1 || rc=$?
   if [[ $rc -eq 1 ]]; then
     echo "PASS: $desc"
   elif [[ $rc -eq 124 ]]; then

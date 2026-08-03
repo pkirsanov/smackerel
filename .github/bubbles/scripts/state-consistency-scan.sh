@@ -9,7 +9,7 @@
 # Two drift classes were invisible until an operator happened to run a guard by hand:
 #
 #   1. mirror-divergence — top-level `status` and `certification.status` disagree.
-#      transition-contract-resolver.sh refuses such a spec with E009-TARGET-MISMATCH
+#      transition-contract-resolver.sh refuses such a spec with E009-STATUS-MIRROR
 #      BEFORE it reads the mode registry, so the spec is unresolvable and every later
 #      guard run reports targetStatus UNRESOLVED. This is produced by advancing
 #      `status` alone, which is easy to do because `certification.*` is
@@ -124,7 +124,7 @@ while IFS= read -r state_file; do
   [[ -n "$status" ]] || continue
 
   if [[ -n "$cert_status" && "$cert_status" != "$status" ]]; then
-    printf 'FINDING: mirror-divergence: %s: status=%s certification.status=%s — spec is unresolvable (E009-TARGET-MISMATCH); route to bubbles.validate\n' \
+    printf 'FINDING: mirror-divergence: %s: status=%s certification.status=%s — spec is unresolvable (E009-STATUS-MIRROR); route to bubbles.validate\n' \
       "$rel" "$status" "$cert_status"
     mirror_findings=$((mirror_findings + 1))
   fi

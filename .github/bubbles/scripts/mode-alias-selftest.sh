@@ -19,6 +19,10 @@
 #      b. Unknown tag for known primitive -> mode-resolver rejects.
 #      c. Duplicate (primitive, tag) tuple -> mode-resolver rejects.
 #
+# Also enforces one invariant of the SECOND alias surface,
+# bubbles/scripts/aliases.sh:
+#  10. Every _MODE_ALIASES target resolves to a real mode (OW-010).
+#
 # Replaces nothing; complements mode-resolver-selftest.sh which proves
 # template inheritance correctness.
 
@@ -29,6 +33,7 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 RESOLVER="$SCRIPT_DIR/mode-resolver.sh"
 WORKFLOWS_FILE="$REPO_ROOT/bubbles/workflows.yaml"
 ALIASES_FILE="$REPO_ROOT/bubbles/workflows/aliases.yaml"
+SHELL_ALIASES_FILE="$SCRIPT_DIR/aliases.sh"
 
 failures=0
 pass() { echo "PASS: $1"; }
@@ -204,6 +209,48 @@ if [[ "$expectation_count" -gt 0 ]]; then
   fi
 else
   pass "selftestExpectations is empty (skipped)"
+fi
+
+# 10. bubbles/scripts/aliases.sh mode-alias targets resolve (OW-010).
+#
+# Checks 1-9 read bubbles/workflows/aliases.yaml only. The Sunnyvale alias
+# table lives in a SECOND file, bubbles/scripts/aliases.sh, and nothing
+# asserted its targets exist. A mode consolidation left three targets
+# (product-discovery, redesign-existing, feature-bootstrap) pointing at modes
+# that had been removed, and this selftest still reported all green.
+#
+# The table is parsed, not sourced: `declare -A` needs bash 4, and macOS ships
+# bash 3.2, so sourcing would skip this check exactly where it is needed.
+#
+# Targets are resolved under BUBBLES_MODE_GRANDFATHER=1 because the table holds
+# v5 mode names, which the v7 resolver accepts only under the grandfather path.
+# A dead target fails even WITH grandfather, so this still catches the defect.
+if [[ -f "$SHELL_ALIASES_FILE" ]]; then
+  shell_alias_rows="$(
+    awk '/^declare -A _MODE_ALIASES=\(/ { inblk = 1; next }
+         inblk && /^\)/ { inblk = 0; next }
+         inblk' "$SHELL_ALIASES_FILE" |
+      sed -nE 's/^[[:space:]]*\[([^]]+)\]="([^"]+)".*/\1'$'\t''\2/p'
+  )"
+  shell_alias_count="$(printf '%s' "$shell_alias_rows" | grep -c . || true)"
+
+  if [[ "$shell_alias_count" -eq 0 ]]; then
+    fail "aliases.sh: parsed 0 mode aliases — the _MODE_ALIASES table moved or changed shape"
+  else
+    shell_alias_failures=0
+    while IFS=$'\t' read -r alias_name alias_target; do
+      [[ -z "$alias_target" ]] && continue
+      if ! BUBBLES_MODE_GRANDFATHER=1 bash "$RESOLVER" "$alias_target" >/dev/null 2>&1; then
+        fail "aliases.sh: [$alias_name] targets '$alias_target', which does not resolve"
+        shell_alias_failures=$((shell_alias_failures + 1))
+      fi
+    done <<<"$shell_alias_rows"
+    if [[ "$shell_alias_failures" -eq 0 ]]; then
+      pass "every aliases.sh mode-alias target resolves ($shell_alias_count aliases)"
+    fi
+  fi
+else
+  fail "aliases.sh: missing shell alias file: $SHELL_ALIASES_FILE"
 fi
 
 if [[ "$failures" -gt 0 ]]; then

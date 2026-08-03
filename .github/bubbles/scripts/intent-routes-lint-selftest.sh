@@ -16,6 +16,11 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LINT="$SCRIPT_DIR/intent-routes-lint.sh"
 
+# A bare `timeout` exits 127 on a stock macOS runner, which ships neither GNU
+# coreutils nor gtimeout. guard-lib's helper falls back to a bash watchdog.
+# shellcheck source=guard-lib.sh
+. "$SCRIPT_DIR/guard-lib.sh"
+
 [[ -x "$LINT" ]] || { echo "FAIL: $LINT not executable" >&2; exit 1; }
 command -v yq >/dev/null 2>&1 || { echo "SKIP: yq not installed"; exit 0; }
 
@@ -62,12 +67,12 @@ EOF
 
 assert_pass() {
   local desc="$1"
-  if timeout 10 "$LINT" "$TMP" </dev/null >/dev/null 2>&1; then
+  if bubbles_run_with_timeout 10 "$LINT" "$TMP" </dev/null >/dev/null 2>&1; then
     echo "PASS: $desc"
   else
     local rc=$?
     echo "FAIL: $desc (expected exit 0, got $rc)" >&2
-    timeout 5 "$LINT" "$TMP" </dev/null >&2 || true
+    bubbles_run_with_timeout 5 "$LINT" "$TMP" </dev/null >&2 || true
     exit 1
   fi
 }
@@ -75,12 +80,12 @@ assert_pass() {
 assert_fail() {
   local desc="$1"
   local rc=0
-  timeout 10 "$LINT" "$TMP" </dev/null >/dev/null 2>&1 || rc=$?
+  bubbles_run_with_timeout 10 "$LINT" "$TMP" </dev/null >/dev/null 2>&1 || rc=$?
   if [[ $rc -eq 1 ]]; then
     echo "PASS: $desc"
   else
     echo "FAIL: $desc (expected exit 1, got $rc)" >&2
-    timeout 5 "$LINT" "$TMP" </dev/null >&2 || true
+    bubbles_run_with_timeout 5 "$LINT" "$TMP" </dev/null >&2 || true
     exit 1
   fi
 }
