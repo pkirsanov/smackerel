@@ -62,7 +62,8 @@ func TestHTTPAdapter_MissingRequiredKey_FailsLoud(t *testing.T) {
 	// Build the binary into a temp dir so we do not pollute the repo.
 	binDir := t.TempDir()
 	binPath := filepath.Join(binDir, "smackerel-core")
-	buildCmd := exec.Command("go", "build", "-o", binPath, "./cmd/core")
+	// -buildvcs=false: the containerised runner cannot read repo VCS metadata.
+	buildCmd := exec.Command("go", "build", "-buildvcs=false", "-o", binPath, "./cmd/core")
 	buildCmd.Dir = repoRoot
 	buildCmd.Env = append(os.Environ(), "CGO_ENABLED=0")
 	if out, err := buildCmd.CombinedOutput(); err != nil {

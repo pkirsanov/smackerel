@@ -437,7 +437,8 @@ func TestChaos_037_ReplayCLIErrorPaths(t *testing.T) {
 	binPath := filepath.Join(binDir, "smackerel-chaos-cli")
 	buildCtx, buildCancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer buildCancel()
-	build := exec.CommandContext(buildCtx, "go", "build", "-o", binPath, "./cmd/core")
+	// -buildvcs=false: the containerised runner cannot read repo VCS metadata.
+	build := exec.CommandContext(buildCtx, "go", "build", "-buildvcs=false", "-o", binPath, "./cmd/core")
 	build.Dir = repoRoot
 	var buildErr bytes.Buffer
 	build.Stderr = &buildErr
