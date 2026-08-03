@@ -310,10 +310,12 @@ func (f *Facade) handleResolvedCompiledWeather(
 		compiledScenarioID(compiled) != compiledWeatherScenarioID {
 		return contracts.AssistantResponse{}, false, nil
 	}
+	// Unwired capabilities are not a provider outage: leave the turn unhandled so
+	// the generic router/executor path can still serve it.
 	if f.compiledInteractions == nil ||
 		f.compiledInteractions.locationResolver == nil ||
 		f.compiledInteractions.weatherResolver == nil {
-		return f.compiledWeatherFailure(ctx, msg, conv, contracts.ErrProviderUnavailable, contracts.ProvenanceCauseLookupError, emittedAt), true, nil
+		return contracts.AssistantResponse{}, false, nil
 	}
 	if !f.manifest.Enabled(compiledWeatherScenarioID) {
 		resp := contracts.AssistantResponse{
