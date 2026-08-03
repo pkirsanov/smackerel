@@ -1,0 +1,120 @@
+{
+  "version": 3,
+  "featureDir": "specs/_ops/OPS-006-local-git-reconciliation",
+  "featureName": "OPS-006: Local Git reconciliation",
+  "status": "in_progress",
+  "workflowMode": "stabilize-to-doc",
+  "planningOnly": false,
+  "execution": {
+    "activeAgent": "bubbles.devops",
+    "currentPhase": "devops",
+    "currentScope": "Scope 2",
+    "completedPhaseClaims": [
+      "devops",
+      "plan"
+    ],
+    "executionHistory": [
+      {
+        "agent": "bubbles.devops",
+        "phasesExecuted": [
+          "devops"
+        ],
+        "scope": "Scope 1",
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "recordedAt": "2026-08-03T01:15:21Z",
+        "evidenceRefs": [
+          "report.md#recovery-and-ref-verification",
+          "report.md#tag-verification",
+          "report.md#ignored-archive-completeness",
+          "report.md#unreachable-preservation-and-classification",
+          "report.md#current-genericity-and-recovery-safeguards"
+        ],
+        "summary": "Scope 1 preservation and semantic classification completed from report-backed execution evidence. All protected refs, classified tags, ignored archive entries, branches, worktrees, stashes, and unreachable objects remained undeleted; no integration, commit, push, cleanup, test, validate, audit, or terminal-certification completion is claimed."
+      },
+      {
+        "agent": "bubbles.plan",
+        "phasesExecuted": [
+          "plan"
+        ],
+        "scope": "Scope 1",
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "recordedAt": "2026-08-03T01:15:21Z",
+        "evidenceRefs": [
+          "scopes.md#scope-1-preserve-and-classify-hidden-refs-and-ignored-work",
+          "report.md#completion-statement"
+        ],
+        "summary": "Scope 1 planning status and evidence links record preservation and classification as Done, while Scope 2 remains In Progress and Scope 3 remains Not Started. No Scope 2 DoD, test, validate, audit, deletion, cleanup, push, or terminal-certification completion is claimed."
+      }
+    ]
+  },
+  "policySnapshot": {
+    "workflowMode": "stabilize-to-doc",
+    "tdd": {
+      "mode": "exempt",
+      "source": "ops-artifact-only"
+    },
+    "grill": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "autoCommit": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "lockdown": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "regression": {
+      "mode": "protected-scenarios",
+      "source": "repo-default"
+    },
+    "validation": {
+      "mode": "certification-required",
+      "source": "repo-default"
+    }
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "certification": {
+    "status": "in_progress",
+    "completedScopes": [
+      "Scope 1"
+    ],
+    "certifiedCompletedPhases": [],
+    "scopeProgress": [
+      {
+        "scope": 1,
+        "name": "Preserve and classify hidden refs and ignored work",
+        "status": "Done",
+        "dependsOn": []
+      },
+      {
+        "scope": 2,
+        "name": "Genericize and integrate durable records",
+        "status": "In Progress",
+        "dependsOn": [
+          1
+        ]
+      },
+      {
+        "scope": 3,
+        "name": "Validate, commit, push, clean up, and prove final invariants",
+        "status": "Not Started",
+        "dependsOn": [
+          2
+        ]
+      }
+    ],
+    "lockdownState": {
+      "active": false,
+      "lockedScenarioIds": []
+    }
+  },
+  "activeBugs": [],
+  "resolvedBugs": [],
+  "failures": [],
+  "scopeLayout": "single-file"
+}
