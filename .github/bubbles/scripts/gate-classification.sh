@@ -81,6 +81,12 @@ if [[ ! -f "$GATES" ]]; then
   echo "gate-classification: SKIP (bubbles/registry/gates.yaml missing)"
   exit 0
 fi
+# Resolve the managed interpreter before probing (bubbles/scripts/python-env.sh).
+_gc_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=/dev/null
+[[ -f "$_gc_dir/dependency-posture.sh" ]] && . "$_gc_dir/dependency-posture.sh"
+unset _gc_dir
+
 if ! command -v python3 >/dev/null 2>&1 || ! python3 -c "import yaml" >/dev/null 2>&1; then
   echo "gate-classification: SKIP (python3 + PyYAML not installed)"
   exit 0

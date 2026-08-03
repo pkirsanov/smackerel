@@ -136,7 +136,7 @@ if [[ -f "$SCRIPT_DIR/validate-cache.sh" ]]; then
   unset _validate_cache_src
 fi
 
-# Paths the working tree has modified relative to HEAD, resolved once.
+# Paths this run should treat as changed, resolved once.
 CHANGED_PATHS=""
 changed_paths_load() {
   [[ -n "$CHANGED_PATHS" ]] && return 0
@@ -147,8 +147,18 @@ changed_paths_load() {
         git -C "$REPO_ROOT" ls-files --others --exclude-standard 2>/dev/null || true
       } | sort -u
     )"
+    # At push time the work is already committed, so the working-tree diff is
+    # empty and --changed-only would degrade to the full suite. Fall back to
+    # the commits that are not yet upstream -- what a push actually carries.
+    if [[ -z "$CHANGED_PATHS" ]]; then
+      local _base="${BUBBLES_CHANGED_BASE:-}"
+      [[ -n "$_base" ]] || _base="$(git -C "$REPO_ROOT" rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>/dev/null || true)"
+      if [[ -n "$_base" ]]; then
+        CHANGED_PATHS="$(git -C "$REPO_ROOT" diff --name-only "$_base...HEAD" 2>/dev/null || true)"
+      fi
+    fi
   fi
-  # A tree with no detectable changes must not silently skip everything.
+  # No detectable change set must run everything, never skip everything.
   [[ -n "$CHANGED_PATHS" ]] || CHANGED_PATHS="__NO_GIT__"
 }
 
@@ -270,11 +280,6 @@ run_check() {
     return 0
   fi
 
-  if [[ "$LIST_TIER_ONLY" == "true" ]]; then
-    echo "WOULD-RUN: $label"
-    return 0
-  fi
-
   # IMP-027 SCOPE-7. Both filters below apply ONLY to hermetic selftests, which
   # the framework's own contract says build their own fixtures and depend on
   # nothing outside their source. A live guard reads the working tree -- the
@@ -287,7 +292,22 @@ run_check() {
     esac
   fi
 
+  # Decided before the dry-list return so `--list-tier` reflects it too.
+  local _changed_skip="false"
   if [[ -n "$_script" && "$CHANGED_ONLY" == "true" ]] && ! changed_surface_touches "$_script"; then
+    _changed_skip="true"
+  fi
+
+  if [[ "$LIST_TIER_ONLY" == "true" ]]; then
+    if [[ "$_changed_skip" == "true" ]]; then
+      echo "WOULD-SKIP (--changed-only): $label"
+    else
+      echo "WOULD-RUN: $label"
+    fi
+    return 0
+  fi
+
+  if [[ "$_changed_skip" == "true" ]]; then
     echo "==> $label"
     echo "SKIP: $label (--changed-only; neither the selftest nor the script it tests was modified)"
     skipped=$((skipped + 1))
@@ -597,6 +617,7 @@ run_check_self_only "Scan-lib helpers selftest (IMP-009)" bash "$SCRIPT_DIR/scan
 run_check_self_only "DoD section lib selftest (BUG-026)" bash "$SCRIPT_DIR/dod-section-lib-selftest.sh"
 run_check_self_only "Scope universe resolver selftest (BUG-026)" bash "$SCRIPT_DIR/scope-universe-resolver-selftest.sh"
 run_check_self_only "Framework-validate tiering selftest (IMP-012)" bash "$SCRIPT_DIR/framework-validate-tier-selftest.sh"
+run_check_self_only "Framework-validate changed-only selftest (IMP-027 SCOPE-7)" bash "$SCRIPT_DIR/framework-validate-changed-only-selftest.sh"
 run_check_self_only "Install provenance selftest" bash "$SCRIPT_DIR/install-provenance-selftest.sh"
 run_check_self_only "Trust doctor selftest" bash "$SCRIPT_DIR/trust-doctor-selftest.sh"
 run_check "Repo-binding preflight selftest (BFW-05 / IMP-025)" bash "$SCRIPT_DIR/repo-binding-preflight-selftest.sh"

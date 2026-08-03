@@ -404,6 +404,12 @@ bubbles_framework_manifest_entries() {
   bubbles_print_manifest_entry "$source_root" 'bubbles/workflows.yaml'
   bubbles_print_manifest_entry "$source_root" 'bubbles/agnosticity-allowlist.txt'
 
+  # bubbles/requirements.txt is the pinned dependency set python-env.sh installs.
+  # Managed and shipped downstream for the same reason as the allowlist above:
+  # without it, `python-env.sh --provision` has nothing to install from in an
+  # installed tree, and the declared python dependencies stay unobtainable.
+  bubbles_print_manifest_entry "$source_root" 'bubbles/requirements.txt'
+
   for file_path in "$source_root"/bubbles/*.yaml; do
     [[ -f "$file_path" ]] || continue
     relative_path="bubbles/$(basename "$file_path")"

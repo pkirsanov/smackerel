@@ -1,0 +1,50 @@
+# Bubbles managed Python dependencies.
+#
+# WHY THIS FILE EXISTS
+# --------------------
+# bubbles/scripts/dependency-posture.sh declares python3 + PyYAML + jsonschema
+# REQUIRED ("a guard that skips is a guard that lies"), but the framework
+# shipped no supported way to obtain them. Every operator and every agent
+# session therefore invented its own shortcut — `pip install
+# --break-system-packages`, or a throwaway virtualenv under /tmp that vanishes
+# on reboot and is referenced by nothing. This file plus
+# bubbles/scripts/python-env.sh replace those shortcuts with one reproducible
+# provisioning path.
+#
+# Provision with:
+#   bash bubbles/scripts/python-env.sh --provision
+#
+# SOURCE LOCKING
+# --------------
+# Exactly one explicit index. No --extra-index-url, no implicit fall-through.
+# This mirrors the build-time source-locking rule the framework ships to
+# downstream repos in instructions/bubbles-supply-chain-source-locking.instructions.md.
+--index-url https://pypi.org/simple
+
+# HASH PINNING — DELIBERATE, DOCUMENTED DEVIATION
+# -----------------------------------------------
+# The shipped source-locking instruction asks for hash-pinned
+# (`--require-hashes`) requirements. That is NOT applied here, and the reason is
+# recorded rather than hidden:
+#
+#   `--require-hashes` needs a hash for every artifact actually installed.
+#   PyYAML and rpds-py ship platform-specific binary wheels (rpds-py is a Rust
+#   extension), so a hash set captured on macOS/arm64 would refuse to install on
+#   the Linux CI leg, and sdist-only installation would require a Rust toolchain
+#   on every machine. A cross-platform hash set is regenerable, but it must be
+#   regenerated per platform per bump or it silently becomes the thing that
+#   blocks CI.
+#
+# What IS locked: a single explicit index, and an exact `==` pin on the COMPLETE
+# dependency closure (direct and transitive), so a resolve is reproducible for a
+# given platform. Revisit hash pinning if this set ever becomes pure-Python.
+
+# --- direct ---
+PyYAML==6.0.3
+jsonschema==4.26.0
+
+# --- transitive closure of jsonschema, pinned so resolution is reproducible ---
+attrs==26.1.0
+jsonschema-specifications==2025.9.1
+referencing==0.37.0
+rpds-py==2026.6.3
