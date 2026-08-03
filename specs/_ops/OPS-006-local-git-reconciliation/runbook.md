@@ -212,10 +212,12 @@ plus interpreted semantic review. See
 
 The committed helper reports exactly 27 nonterminal paths. The genericization
 repair discovered four further open items that the helper cannot see because
-they carry no `state.json`. This table therefore records 31 paths. The first 27
-rows keep the helper's path order. The four discovered rows are appended last
-and sorted among themselves. This table records current state without mutating
-any existing packet.
+they carry no `state.json`. Scope 3 execution added one further row for the
+validation chain that was not completed before the push. This table therefore
+records 32 paths. The first 27 rows keep the helper's path order. The four
+discovered rows are appended next and sorted among themselves. The Scope 3
+validation-chain row is appended last. This table records current state without
+mutating any existing packet.
 
 | Path | Status | Mode | Current owner | Phase | Exact safe next action |
 |---|---|---|---|---|---|
@@ -245,16 +247,24 @@ any existing packet.
 | `specs/105-connected-knowledge-graph-explorer` | `in_progress` | `full-delivery` | `bubbles.plan` | `harden` | Keep gated until `BUG-080-001` is complete, then pick up `SCOPE-01`. |
 | `specs/106-coherent-product-experience` | `in_progress` | `full-delivery` | `bubbles.implement` | `implement` | Finish and evidence `SCOPE-106-01` before advancing shell cutover. |
 | `specs/107-proactive-correlated-experience` | `blocked` | `full-delivery` | `bubbles.implement` | `implement` | After Specs 105 and 106 ship, resume `SCOPE-03B2`. |
-| `specs/_ops/OPS-006-local-git-reconciliation` | `in_progress` | `stabilize-to-doc` | `bubbles.devops` | `devops` | finish Scope 2 validation/commit, then Scope 3 push and cleanup. |
+| `specs/_ops/OPS-006-local-git-reconciliation` | `in_progress` | `stabilize-to-doc` | `bubbles.test` | `test` | Commit, rebase, push, and cleanup are already executed. Complete the outstanding validation chain in the row below, then re-verify both recovery artifacts after cleanup and resolve the two `unassigned` owners before any terminal claim. |
 | `cmd/config-validate :: TestRun_OversizedModel_ExitsOne` | `open` | `unassigned` | `bubbles.test` | `test` | Under Spec 045, extend the fixture env-override list to cover the `ASSISTANT_OPEN_KNOWLEDGE_*` model keys, or add those models to the fixture profile set. |
 | `internal/assistant :: TestFacadeResolvedCompiledWeatherSourceFailuresCaptureSafely` | `open` | `unassigned` | `bubbles.test` | `test` | With `bubbles.plan` under the BUG-061-008 and BUG-061-009 lineage, reconcile the stale pre-honesty expectation in `assertCompiledWeatherCapture` without weakening the honesty behavior. |
 | `specs/031-live-stack-testing` | `open` | `unassigned` | `bubbles.workflow` | `validate` | With `bubbles.validate`, record the missing `gaps` and `harden` phase records, then rerun artifact lint. |
 | `specs/069-assistant-http-transport` | `open` | `unassigned` | `bubbles.workflow` | `validate` | With `bubbles.validate`, record the missing `gaps` and `harden` phase records and repair the two `report.md` evidence blocks, then rerun artifact lint. |
+| `specs/_ops/OPS-006-local-git-reconciliation :: unrun validation chain` | `open` | `stabilize-to-doc` | `bubbles.test` | `test` | Run, in this order, `./smackerel.sh lint`, `./smackerel.sh test unit --python`, `./smackerel.sh build`, `./smackerel.sh test integration`, `./smackerel.sh test e2e`, `./smackerel.sh test stress`, and `bash .github/bubbles/scripts/cli.sh framework-validate`, each with full unfiltered output, then record the results against the Scope 2 and Scope 3 test-evidence items. `./smackerel.sh test unit --go` must still exit `1` on exactly the two documented pre-existing failures and on nothing else. |
 
 **Claim Source:** executed mode-aware inventory for the 27 helper-derived rows,
-executed repair verification for the four discovered rows, plus interpreted
-state-bound actions. See `report.md#mode-aware-nonterminal-inventory` and
-`report.md#genericization-repair-verification`.
+executed repair verification for the four discovered rows, plus executed Scope 3
+validation-gap observation for the final row, plus interpreted state-bound
+actions. See `report.md#mode-aware-nonterminal-inventory`,
+`report.md#genericization-repair-verification`, and
+`report.md#integration-push-cleanup-and-final-invariants`.
+
+The validation-chain row is scoped to OPS-006 and is not a helper-visible path,
+so rerunning the mode-aware helper will continue to report 27. The Scope 2
+diff, ledger, and handoff completeness check must be rerun against a refreshed
+inventory because this row changes the table.
 
 ### Discovered Open Work Detail
 
@@ -614,7 +624,7 @@ Complete this table before integration:
 
 | Path | Current status | Workflow mode | Next owner | Exact next action |
 |---|---|---|---|---|
-| See `Mode-Aware Nonterminal Handoff` | 31 current paths | Recorded per path | Recorded per path | Recorded per path |
+| See `Mode-Aware Nonterminal Handoff` | 32 current paths | Recorded per path | Recorded per path | Recorded per path |
 
 Include valid actions recovered from tagged handoff content. Cite the source tag
 or bundle object ID without copying sensitive text.
@@ -715,6 +725,25 @@ The three reported main commit IDs must match. Record the pushed commit ID and
 the full validation command outcomes.
 
 ## Phase 13: Remove Reviewed Local Residue
+
+> **ALREADY EXECUTED ON 2026-08-03. DO NOT RERUN THIS PHASE.**
+>
+> This phase completed after the verified push of
+> `8a4e553d2b41bfc63bf82cb34ddb8423025fcb1a`. Both protected recovery artifacts
+> were re-verified immediately BEFORE cleanup and are deliberately RETAINED, not
+> deleted. Exactly 51 refs under `refs/ops/OPS-006/` were deleted, being 9
+> dangling and 42 unreachable recovery refs, and exactly 11 local tags were
+> deleted, being the 8 `archive/*` tags plus
+> `contributor-scrub-backup-pre-20260727`,
+> `pii-scrub-backup-pre-20260614`, and `pii-scrub-backup-pre2-20260614`. Every
+> deletion named its full ref or tag. No wildcard, no `git gc`, no `git prune`,
+> and no reflog expiry was used.
+>
+> The repository now reports zero `refs/ops` refs and zero local tags, so
+> rerunning the commands below would fail on missing refs and would prove
+> nothing. A future session MUST NOT re-create or re-delete any of these refs or
+> tags. The commands are kept verbatim as the executed record. See
+> `report.md#integration-push-cleanup-and-final-invariants`.
 
 Do not begin this phase until every disposition exists on verified
 `origin/main`. Both recovery archives must also verify successfully.

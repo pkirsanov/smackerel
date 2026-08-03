@@ -5,7 +5,7 @@
 - **Claim source:** Scope 1 executed evidence and current tracked-work state.
 - This plan derives from `objective.md` and `runbook.md`.
 - Scope 1 recovery, classification, and safeguard evidence is recorded in `report.md`. It claims no cleanup, commit, push, or source-ref deletion.
-- Scope 2 is in progress because generic tracked changes are present. Scope 3 has not started.
+- Scope 2 is in progress because the generic changes are committed and pushed while their unit, lint, integration, E2E, stress, build, and framework legs are not complete. Scope 3 is in progress because commit, rebase, push, cleanup, and the Git-state invariants are proven while the complete validation chain is not.
 - Execution requires a fresh actionable Smackerel repository binding.
 - Execute scopes strictly in order. A later scope cannot start until every DoD item in the preceding scope has current-session evidence.
 - Runtime and governance commands must use the repository command surfaces and portable timeout helper named in `runbook.md`.
@@ -70,7 +70,7 @@
 |---|---|---|---|---|
 | 1 | Complete semantic inventory with verified recovery and one class per item | Local refs, unreachable commits, ignored work, recovery material, review ledger | Inventory parity, archive verification, secret/PII controls | Done |
 | 2 | Generic integrated work plus durable dispositions and handoffs | Approved source/tests/docs, temporary branch, review ledger, handoff table | Targeted unit, functional, integration, E2E, and diff checks | In progress |
-| 3 | Verified remote integration and residue-free local state | Repository CLI, `main`, remote tracking, reviewed local residue, closeout record | Full validation chain, push identity, final invariant checks | Not started |
+| 3 | Verified remote integration and residue-free local state | Repository CLI, `main`, remote tracking, reviewed local residue, closeout record | Full validation chain, push identity, final invariant checks | In progress |
 
 ## Scope 1: Preserve And Classify Hidden Refs And Ignored Work
 
@@ -221,8 +221,8 @@ This bootstrap scope changes no runtime behavior, so it does not claim a live E2
 
 **Depends On:** Scope 1.
 
-**Claim Source:** current tracked work observed; DoD not yet evidenced
-**Evidence State:** Generic tracked changes are present, so Scope 2 is in progress. Scope 1 report evidence does not close any Scope 2 item. Every Scope 2 checkbox remains unchecked pending direct current-session evidence for its own behavior and quality gates.
+**Claim Source:** executed for the committed and pushed generic changes; unexecuted for the outstanding validation legs
+**Evidence State:** The generic changes are committed as `b4652c94` and `fdc04cad` and are present on verified `origin/main` at `8a4e553d`. Items closed below have current-session evidence in [Integration, push, cleanup, and final invariants](report.md#integration-push-cleanup-and-final-invariants). Every remaining checkbox stays unchecked because `./smackerel.sh lint`, `./smackerel.sh test unit --python`, `./smackerel.sh test integration`, `./smackerel.sh test e2e`, and `./smackerel.sh build` were not completed in this session, and `./smackerel.sh test unit --go` exits `1`.
 
 ### Outcome
 
@@ -312,13 +312,17 @@ Their success does not imply that recovered runtime behavior existed.
 
 #### Core Items
 
-- [ ] Every `INTEGRATED` item is generic, owned, provenance-preserving, free of defaults and sensitive values, and represented by a coherent local commit on the temporary branch. Evidence: integrating commit and disposition row.
-- [ ] Every non-integrated item has a complete durable disposition record with semantic evidence and verified recovery metadata. Evidence: review ledger.
+- [x] Every `INTEGRATED` item is generic, owned, provenance-preserving, free of defaults and sensitive values, and represented by a coherent local commit on the temporary branch. Evidence: integrating commit and disposition row.
+	- Evidence: [Commit inventory, safety-gate results, and pushed head](report.md#integration-push-cleanup-and-final-invariants). `b4652c94` is atomic across the ignore rule and the five `.dart_tool` untrackings. `fdc04cad` carries the genericization at 80 files, 410 insertions, and 383 deletions. Both cleared the private-token scan, the untracked packet scan, and the knb deployment-boundary gate before commit and again before push.
+- [x] Every non-integrated item has a complete durable disposition record with semantic evidence and verified recovery metadata. Evidence: review ledger.
+	- Evidence: [Unreachable classification with zero unclassified rows](report.md#unreachable-preservation-and-classification), [tag classification](report.md#tag-verification), [ignored archive classification](report.md#ignored-archive-completeness), and [the ledger reaching verified `origin/main` in commit `8a4e553d`](report.md#integration-push-cleanup-and-final-invariants).
 - [ ] Generated outputs remain ignored and are reproducible through the repository CLI before their local copies are eligible for cleanup. Evidence: reproducibility record.
-- [ ] Every tracked nonterminal spec and bug has status, workflow mode, next owner, and exact next action, with no execution or certification state mutation. Evidence: next-session handoff table.
+- [x] Every tracked nonterminal spec and bug has status, workflow mode, next owner, and exact next action, with no execution or certification state mutation. Evidence: next-session handoff table.
+	- Evidence: [Mode-aware inventory at 27 helper-derived paths](report.md#mode-aware-nonterminal-inventory), [`OWNER_FIELDS_UNCHANGED` across all 8 redacted `state.json` files](report.md#genericization-repair-verification), and [the 32-row ledger on verified `origin/main`](report.md#integration-push-cleanup-and-final-invariants).
 - [ ] Consumer and shared-infrastructure impact sweeps are complete for every integrated change. Evidence: integration review record.
 - [ ] No stale first-party reference or unplanned shared-contract change remains. Evidence: integration review record.
-- [ ] All local tags, temporary recovery refs, original ignored source copies, and the temporary branch remain available pending verified push. Evidence: pre-Scope-3 inventory.
+- [x] All local tags, temporary recovery refs, original ignored source copies, and the temporary branch remain available pending verified push. Evidence: pre-Scope-3 inventory.
+	- Evidence: [Cleanup ordered strictly after the verified push, with both recovery artifacts re-verified beforehand and retained](report.md#integration-push-cleanup-and-final-invariants). The bundle verifies with exit `0` and lists all 65 refs, covering the 9 dangling refs, the 42 unreachable refs, and the 11 tags.
 
 #### Test Evidence Items
 
@@ -335,14 +339,15 @@ Their success does not imply that recovered runtime behavior existed.
 
 ## Scope 3: Validate, Commit, Push, Clean Up, And Prove Final Invariants
 
-**Status:** [ ] Not started.
+**Status:** [~] In progress.
 
 **Scope-Kind:** `bootstrap`.
 
 **Depends On:** Scope 2.
 
-**Claim Source:** planned
-**Uncertainty Declaration:** No Scope 3 validation, commit, push, cleanup, ref mutation, or DoD check was attempted during planning. Every unchecked item requires Scope 2 completion followed by later execution of the complete validation, remote verification, exact cleanup, and final-invariant checks with observed evidence.
+**Claim Source:** executed for commit, rebase, push, cleanup, and the Git-state invariants; unexecuted for the complete validation chain
+**Evidence State:** Three coherent commits reached verified `origin/main` at `8a4e553d2b41bfc63bf82cb34ddb8423025fcb1a` by non-force fast-forward push, cleanup ran only after that verified push, and the branch, worktree, stash, tag, `refs/ops`, status, and parity invariants were re-observed unfiltered in the current session. Evidence is in [Integration, push, cleanup, and final invariants](report.md#integration-push-cleanup-and-final-invariants).
+**Uncertainty Declaration:** The complete validation chain was NOT completed. `./smackerel.sh lint`, `./smackerel.sh test unit --python`, `./smackerel.sh test integration`, `./smackerel.sh test e2e`, `./smackerel.sh test stress`, and `bash .github/bubbles/scripts/cli.sh framework-validate` were not run at all, and `./smackerel.sh build` was not run to completion. `./smackerel.sh test unit --go` exits `1` on the two documented pre-existing failures. Two Final-Invariant-Check rows are also unproven: the recovery artifacts were verified BEFORE cleanup rather than after it, and the handoff ledger still carries two `unassigned` owners. Every item depending on those commands or rows stays unchecked, and the scope stays In Progress.
 
 ### Outcome
 
@@ -463,20 +468,28 @@ Run the exact unfiltered checks from `runbook.md` and interpret them as follows:
 
 #### Core Items
 
-- [ ] Every retained change and every durable disposition or handoff record is present in coherent local commits before `main` advances. Evidence: commit inventory and review ledger.
+- [x] Every retained change and every durable disposition or handoff record is present in coherent local commits before `main` advances. Evidence: commit inventory and review ledger.
+	- Evidence: [Three-commit inventory with per-commit file and line counts](report.md#integration-push-cleanup-and-final-invariants). `b4652c94` and `fdc04cad` carry the retained generic changes and `8a4e553d` carries the disposition and handoff records.
 - [ ] Any remote movement is reconciled onto the newer base and the complete validation chain is rerun. Evidence: remote reconciliation record.
-- [ ] No newer remote state is overwritten. Evidence: remote reconciliation record.
-- [ ] Local `main` advances by fast-forward only and is pushed without force or tag publication. Evidence: push record.
-- [ ] Local, remote-tracking, and remote `main` identities match after a fresh fetch. Evidence: push-verification record.
-- [ ] Cleanup begins only after verified push and successful re-verification of both recovery artifacts. Evidence: cleanup precondition record.
-- [ ] Only exact reviewed tags, ignored items, temporary recovery refs, and the temporary branch are removed. Evidence: cleanup record.
-- [ ] No broad cleanup or object pruning occurs. Evidence: cleanup record.
+- [x] No newer remote state is overwritten. Evidence: remote reconciliation record.
+	- Evidence: [Rebase onto `1ca7bcb6` with exit `0` and zero conflicts, then a non-force push over the `1ca7bcb6..8a4e553d` fast-forward range](report.md#integration-push-cleanup-and-final-invariants).
+- [x] Local `main` advances by fast-forward only and is pushed without force or tag publication. Evidence: push record.
+	- Evidence: [`PUSH_REFSPEC=refs/heads/main:refs/heads/main`, `RANGE=1ca7bcb6..8a4e553d` with no `+` prefix, `PUSH_EXIT=0`, `FORCE=false`, `TAGS_PUSHED=0`](report.md#integration-push-cleanup-and-final-invariants).
+- [x] Local, remote-tracking, and remote `main` identities match after a fresh fetch. Evidence: push-verification record.
+	- Evidence: [Three-way identity where local `main`, remote-tracking `main`, and the `git ls-remote` head all resolve to `8a4e553d2b41bfc63bf82cb34ddb8423025fcb1a`, with ahead/behind at `0 0`](report.md#integration-push-cleanup-and-final-invariants).
+- [x] Cleanup begins only after verified push and successful re-verification of both recovery artifacts. Evidence: cleanup precondition record.
+	- Evidence: [`CLEANUP_ORDER=after-verified-push`, bundle verify exit `0` reporting `The bundle records a complete history` across 65 refs, and both artifact digests re-checked before cleanup](report.md#integration-push-cleanup-and-final-invariants).
+- [x] Only exact reviewed tags, ignored items, temporary recovery refs, and the temporary branch are removed. Evidence: cleanup record.
+	- Evidence: [51 `refs/ops/OPS-006/` refs and 11 local tags deleted, each by full ref or tag name, with `WILDCARD=false` on both](report.md#integration-push-cleanup-and-final-invariants).
+- [x] No broad cleanup or object pruning occurs. Evidence: cleanup record.
+	- Evidence: [`CLEANUP_GC_RUN=false`, `CLEANUP_PRUNE_RUN=false`, `CLEANUP_REFLOG_EXPIRE_RUN=false`](report.md#integration-push-cleanup-and-final-invariants).
 - [ ] Every final invariant in the Final Invariant Checks table passes in the current session. Evidence: closeout record.
 - [ ] The final next-session handoff has no unknown owner or vague action, and owner-controlled status and certification fields remain unchanged. Evidence: handoff and tracked-state comparison.
 
 #### Test Evidence Items
 
-- [ ] SCN-OPS006-007 config generation and compile checks pass with current-session raw output. Evidence: Scope 3 test record.
+- [x] SCN-OPS006-007 config generation and compile checks pass with current-session raw output. Evidence: Scope 3 test record.
+	- Evidence: [`CHECK_EXIT=0` with config in sync with the SST and scenario-lint reporting 17 registered and 0 rejected](report.md#genericization-repair-verification), restated as `VALIDATION_COMPLETED_config_generate=0` and `VALIDATION_COMPLETED_check=0` in [the Scope 3 record](report.md#integration-push-cleanup-and-final-invariants).
 - [ ] SCN-OPS006-007 lint, format, and diff checks pass with zero warnings. Evidence: Scope 3 test record.
 - [ ] SCN-OPS006-007 Go unit tests pass with current-session raw output. Evidence: Scope 3 test record.
 - [ ] SCN-OPS006-007 Python unit tests pass with current-session raw output. Evidence: Scope 3 test record.
@@ -485,7 +498,8 @@ Run the exact unfiltered checks from `runbook.md` and interpret them as follows:
 - [ ] SCN-OPS006-007 stress tests pass with current-session raw output. Evidence: Scope 3 test record.
 - [ ] SCN-OPS006-007 build passes with current-session raw output and zero warnings. Evidence: Scope 3 test record.
 - [ ] SCN-OPS006-007 framework validation passes with current-session raw output. Evidence: Scope 3 test record.
-- [ ] SCN-OPS006-007 and SCN-OPS006-008 remote movement, non-force push, and three-way identity verification checks pass. Evidence: Scope 3 push-verification record.
+- [x] SCN-OPS006-007 and SCN-OPS006-008 remote movement, non-force push, and three-way identity verification checks pass. Evidence: Scope 3 push-verification record.
+	- Evidence: [Rebase exit `0` with zero conflicts onto the advanced `1ca7bcb6` base, `PUSH_EXIT=0` with `FORCE=false` and `TAGS_PUSHED=0`, and `PUSH_IDENTITY_THREE_WAY=MATCH`](report.md#integration-push-cleanup-and-final-invariants).
 - [ ] SCN-OPS006-009 exact cleanup and all final invariant, ledger, retained-work, recovery, and handoff checks pass. Evidence: Scope 3 closeout record.
 
 #### Build Quality Gate
