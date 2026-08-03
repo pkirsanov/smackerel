@@ -1266,6 +1266,13 @@ Commands:
   aliases                       List all Sunnyvale aliases
   trajectory [options]          Print human-readable trajectory report from
                                 session, lessons, and per-spec state
+  open-work [--format json]     What is still open in this repository, with the
+                                next owner and next action for each item
+                                (--lint exits 1 on a defective register row)
+  closeout [--apply]            Session-boundary reconciliation: hygiene, a
+                                disposition per branch and stash, unrecorded
+                                residue, and the exact commands. Report-only by
+                                default; --apply is the ONLY execution mechanism
   help                          Show this help message
 HELPEOF
 }
@@ -1546,6 +1553,19 @@ cmd_session() {
 
 cmd_trajectory() {
   bash "$SCRIPT_DIR/trajectory-inspector.sh" --repo-root "$REPO_ROOT" "$@"
+}
+
+# IMP-033 SCOPE-3. A thin entry point over the SAME aggregator that renders
+# section 6 of the trajectory report. It exists as its own command because
+# `closeout` needs a machine-readable `--json` form, and a human-readable
+# trajectory report should not be forced to carry one. It does not re-derive
+# anything.
+cmd_open_work() {
+  bash "$SCRIPT_DIR/open-work-report.sh" --repo-root "$REPO_ROOT" "$@"
+}
+
+cmd_closeout() {
+  bash "$SCRIPT_DIR/closeout-report.sh" --repo-root "$REPO_ROOT" "$@"
 }
 
 cmd_repository_binding_selftest() {
@@ -2035,6 +2055,18 @@ cmd_dag() {
   echo '```'
 }
 
+# IMP-033 SCOPE-2 helper. Pull one integer out of a worktree-hygiene summary
+# line, defaulting to 0 when the pattern is absent so a shape change degrades to
+# "nothing observed" rather than to an empty string in an arithmetic test.
+# `|` is the sed delimiter (the ahead/behind pattern contains a literal `/`), so
+# callers must not put `|` in a pattern.
+hygiene_count() {
+  local line="$1" pattern="$2" n
+  n="$(printf '%s\n' "$line" | sed -nE "s|$pattern|\\1|p" | head -1)"
+  [[ "$n" =~ ^[0-9]+$ ]] || n=0
+  printf '%s' "$n"
+}
+
 cmd_doctor() {
   local heal=false
   for arg in "$@"; do
@@ -2244,35 +2276,145 @@ except Exception:
     fi
   fi
 
-  # Worktree hygiene advisory (IMP-107 / SCOPE-1 + SCOPE-3) — informational,
-  # non-blocking. Surfaces lingering MERGED/PRUNABLE/EXPERIMENT worktree debris
-  # every doctor run WITHOUT ever changing the pass/fail tally (advisory only,
-  # like the runtime-leases advisory it mirrors). `--heal` reaps the MERGED/
-  # PRUNABLE set AND lingering `.design-experiment` worktrees (SCOPE-3) via
-  # worktree-reap.sh --experiments (dry-run otherwise). Reuses the IMP-023
-  # writer-lease so a LEASE-HELD worktree is skipped and a concurrent live run
-  # is never disturbed.
+  # Worktree hygiene advisory (IMP-107 / SCOPE-1 + SCOPE-3; IMP-033 / SCOPE-2) —
+  # informational, non-blocking. Surfaces lingering MERGED/PRUNABLE/EXPERIMENT
+  # worktree debris every doctor run WITHOUT ever changing the pass/fail tally
+  # (advisory only, like the runtime-leases advisory it mirrors). `--heal` reaps
+  # the MERGED/PRUNABLE set AND lingering `.design-experiment` worktrees
+  # (SCOPE-3) via worktree-reap.sh --experiments (dry-run otherwise). Reuses the
+  # IMP-023 writer-lease so a LEASE-HELD worktree is skipped and a concurrent
+  # live run is never disturbed.
+  #
+  # IMP-033 SCOPE-2 (gap EV-5) fixes two defects here. First, this block used to
+  # grep the FIRST summary line only, so the detector's stale-branch + stash line
+  # was computed and then silently discarded before an operator ever saw it.
+  # Second, and worse, it printed a GREEN TICK reading "0 dirty" over a
+  # repository holding uncommitted work and unpushed commits — a condition the
+  # first line is structurally incapable of observing. The tick now requires
+  # EVERY observed counter across ALL THREE lines to be zero AND the remote
+  # comparison to have actually been observable. A state the detector could not
+  # inspect can no longer be certified clean.
   if [[ -x "$SCRIPT_DIR/worktree-hygiene-report.sh" ]]; then
-    local wt_summary wt_line wt_merged wt_prunable wt_experiment
+    local wt_summary wt_line wt_branch_line wt_local_line
     wt_summary="$(bash "$SCRIPT_DIR/worktree-hygiene-report.sh" 2>/dev/null || true)"
     wt_line="$(printf '%s\n' "$wt_summary" | sed -n 's/^worktree-hygiene: //p' | tail -1)"
+    wt_branch_line="$(printf '%s\n' "$wt_summary" | sed -n 's/^worktree-hygiene-branches: //p' | tail -1)"
+    wt_local_line="$(printf '%s\n' "$wt_summary" | sed -n 's/^worktree-hygiene-local: //p' | tail -1)"
     if [[ -n "$wt_line" ]]; then
-      wt_merged="$(printf '%s\n' "$wt_line" | sed -nE 's/.*\(([0-9]+) merged.*/\1/p')"
-      wt_prunable="$(printf '%s\n' "$wt_line" | sed -nE 's/.*, ([0-9]+) prunable.*/\1/p')"
-      wt_experiment="$(printf '%s\n' "$wt_line" | sed -nE 's/.* ([0-9]+) experiment.*/\1/p')"
-      wt_merged="${wt_merged:-0}"
-      wt_prunable="${wt_prunable:-0}"
-      wt_experiment="${wt_experiment:-0}"
-      if [[ "$wt_merged" -eq 0 && "$wt_prunable" -eq 0 && "$wt_experiment" -eq 0 ]]; then
-        echo -e "  ${GREEN}✅${NC} Worktree hygiene: ${wt_line}"
+      local wt_total wt_merged wt_prunable wt_experiment
+      local wt_stale wt_stashes
+      local wt_dirty wt_untracked wt_ahead wt_behind wt_branches
+      local wt_remote_observable=true
+
+      wt_total="$(hygiene_count "$wt_line" '^([0-9]+) worktrees.*')"
+      wt_merged="$(hygiene_count "$wt_line" '.*\(([0-9]+) merged.*')"
+      wt_prunable="$(hygiene_count "$wt_line" '.*, ([0-9]+) prunable.*')"
+      wt_experiment="$(hygiene_count "$wt_line" '.* ([0-9]+) experiment.*')"
+
+      wt_stale="$(hygiene_count "$wt_branch_line" '^([0-9]+) stale local branches.*')"
+      wt_stashes="$(hygiene_count "$wt_branch_line" '.*, ([0-9]+) stashes.*')"
+
+      wt_dirty="$(hygiene_count "$wt_local_line" '^([0-9]+) dirty files.*')"
+      wt_untracked="$(hygiene_count "$wt_local_line" '.*, ([0-9]+) untracked,.*')"
+      wt_ahead="$(hygiene_count "$wt_local_line" '.*, ([0-9]+) ahead / .*')"
+      wt_behind="$(hygiene_count "$wt_local_line" '.* ([0-9]+) behind .*')"
+      wt_branches="$(hygiene_count "$wt_local_line" '.*, ([0-9]+) non-trunk local branches.*')"
+
+      # `remote=none` is an OBSERVED absence and stays certifiable. The other
+      # three degraded states mean the comparison could not be made at all, and
+      # certifying an uninspected state is precisely the EV-5 defect.
+      case "$wt_local_line" in
+        *remote-untracked*|*remote-unverified*|*detached-HEAD*) wt_remote_observable=false ;;
+      esac
+
+      if [[ "$wt_total" -eq 0 && "$wt_stale" -eq 0 && "$wt_stashes" -eq 0 \
+            && "$wt_dirty" -eq 0 && "$wt_untracked" -eq 0 \
+            && "$wt_ahead" -eq 0 && "$wt_behind" -eq 0 && "$wt_branches" -eq 0 \
+            && "$wt_remote_observable" == true ]]; then
+        echo -e "  ${GREEN}✅${NC} Worktree hygiene: nothing outstanding — ${wt_line}; ${wt_local_line}"
       else
-        echo -e "  ${YELLOW}⚠️${NC}  Worktree hygiene: ${wt_line} — run 'worktree-reap.sh --experiments' (dry-run) or 'doctor --heal'"
-        advisory_count=$((advisory_count + 1))
-        if [[ "$heal" == "true" ]]; then
-          bash "$SCRIPT_DIR/worktree-reap.sh" --experiments --yes >/dev/null 2>&1 || true
-          echo -e "  ${GREEN}🔧${NC} Reaped ${wt_merged} merged + ${wt_prunable} prunable + ${wt_experiment} lingering experiment(s) (lease-held skipped)"
-          healed=$((healed + 1))
+        # Ranked so the surface stays worth reading. A dirty tree mid-session is
+        # normal and renders as a NOTE; work that can be lost at the session
+        # boundary renders as a WARNING with the command that resolves it.
+        if [[ "$wt_merged" -gt 0 || "$wt_prunable" -gt 0 || "$wt_experiment" -gt 0 ]]; then
+          echo -e "  ${YELLOW}⚠️${NC}  Worktree hygiene: ${wt_line} — run 'worktree-reap.sh --experiments' (dry-run) or 'doctor --heal'"
+          advisory_count=$((advisory_count + 1))
+          if [[ "$heal" == "true" ]]; then
+            bash "$SCRIPT_DIR/worktree-reap.sh" --experiments --yes >/dev/null 2>&1 || true
+            echo -e "  ${GREEN}🔧${NC} Reaped ${wt_merged} merged + ${wt_prunable} prunable + ${wt_experiment} lingering experiment(s) (lease-held skipped)"
+            healed=$((healed + 1))
+          fi
+        elif [[ "$wt_total" -gt 0 ]]; then
+          echo -e "  ${CYAN}ℹ️${NC}  Worktree hygiene: ${wt_line} — nothing reapable (unmerged/dirty/lease-held are never auto-reaped)"
         fi
+
+        # SCOPE-2: this line existed and was thrown away before it reached an
+        # operator. Stale branches and stashes both hold work that no remote has.
+        if [[ -n "$wt_branch_line" && ( "$wt_stale" -gt 0 || "$wt_stashes" -gt 0 ) ]]; then
+          echo -e "  ${YELLOW}⚠️${NC}  Local branches/stashes: ${wt_branch_line} — run 'bash bubbles/scripts/cli.sh closeout' to triage"
+          advisory_count=$((advisory_count + 1))
+        fi
+
+        if [[ -n "$wt_local_line" ]]; then
+          if [[ "$wt_remote_observable" != true ]]; then
+            echo -e "  ${YELLOW}⚠️${NC}  Primary worktree: ${wt_local_line} — the remote comparison could not be made, so nothing here is certified clean"
+            advisory_count=$((advisory_count + 1))
+          elif [[ "$wt_ahead" -gt 0 || "$wt_behind" -gt 0 || "$wt_branches" -gt 0 ]]; then
+            echo -e "  ${YELLOW}⚠️${NC}  Primary worktree: ${wt_local_line} — run 'bash bubbles/scripts/cli.sh closeout' before ending the session"
+            advisory_count=$((advisory_count + 1))
+          elif [[ "$wt_dirty" -gt 0 || "$wt_untracked" -gt 0 ]]; then
+            echo -e "  ${CYAN}ℹ️${NC}  Primary worktree: ${wt_local_line} — uncommitted work is normal mid-session, and is not recorded anywhere until committed"
+          fi
+        fi
+      fi
+    fi
+  fi
+
+  # SCOPE-6: an end-of-session invariant cannot be enforced at end of session —
+  # the operator simply stops typing, and a git hook is useless because the
+  # failure mode is precisely NOT pushing. The enforceable moment is the NEXT
+  # session's first repository-bound command, and `doctor` is the one command
+  # an operator reliably runs then. So the register is surfaced here, and only
+  # surfaced: refusing to start work because the PREVIOUS session left something
+  # open would punish the operator for the framework's own gap. This section
+  # never changes doctor's exit code.
+  echo ""
+  echo -e "${BOLD}Open Work${NC}"
+  echo -e "${DIM}Advisory only. Carried over from previous sessions: non-terminal specs and bugs, PROPOSED improvements, and authored residue rows from .specify/memory/open-work.md. Residue is listed first because it is the only class that exists nowhere else — a derived row can be rediscovered from its artifact, an unrecorded loose end cannot.${NC}"
+  echo ""
+
+  if ! command -v jq >/dev/null 2>&1; then
+    echo -e "  ${CYAN}ℹ️${NC}  jq not installed — open work not surfaced (run 'bash bubbles/scripts/cli.sh open-work' directly)"
+  else
+    local ow_json='' ow_count=0 ow_defects=0 ow_root=''
+    # Same injection point the hygiene section above uses. Both sections must
+    # describe the SAME repository, or doctor reports one repo's cleanliness
+    # beside another repo's open work.
+    ow_root="${BUBBLES_REPO_ROOT:-$REPO_ROOT}"
+    ow_json="$(bash "$SCRIPT_DIR/open-work-report.sh" --repo-root "$ow_root" --format json 2>/dev/null || true)"
+    if [[ -z "$ow_json" ]] || ! printf '%s' "$ow_json" | jq -e . >/dev/null 2>&1; then
+      echo -e "  ${CYAN}ℹ️${NC}  Open-work register could not be read — nothing here is certified"
+    else
+      ow_count="$(printf '%s' "$ow_json" | jq '.items | length')"
+      ow_defects="$(printf '%s' "$ow_json" | jq '.defects | length')"
+      if [[ "$ow_count" -eq 0 && "$ow_defects" -eq 0 ]]; then
+        echo -e "  ${GREEN}✅${NC} Open work: nothing carried over"
+      else
+        local ow_line=''
+        # Residue first, then everything else, each group in register order.
+        while IFS= read -r ow_line; do
+          [[ -n "$ow_line" ]] || continue
+          echo -e "  ${YELLOW}⚠️${NC}  ${ow_line}"
+          advisory_count=$((advisory_count + 1))
+        done < <(printf '%s' "$ow_json" | jq -r '
+          (.items | map(select(.kind == "residue")) + map(select(.kind != "residue")))[]
+          | "\(.id) (\(.kind), \(.state)) — \(.nextAction) [owner: \(.nextOwner)]"')
+        while IFS= read -r ow_line; do
+          [[ -n "$ow_line" ]] || continue
+          echo -e "  ${YELLOW}⚠️${NC}  Register defect: ${ow_line}"
+          advisory_count=$((advisory_count + 1))
+        done < <(printf '%s' "$ow_json" | jq -r '.defects[]')
+        echo -e "  ${DIM}Run 'bash bubbles/scripts/cli.sh open-work' for detail, or 'closeout' to reconcile.${NC}"
       fi
     fi
   fi
@@ -3777,6 +3919,8 @@ main() {
     sunnyvale)          cmd_sunnyvale "$@" ;;
     aliases)            cmd_aliases "$@" ;;
     trajectory)         cmd_trajectory "$@" ;;
+    open-work)          cmd_open_work "$@" ;;
+    closeout)           cmd_closeout "$@" ;;
     help|-h|--help)     cmd_help ;;
     *)                  die "Unknown command: $command\nRun 'bubbles help' for usage." ;;
   esac

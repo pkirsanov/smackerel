@@ -77,6 +77,22 @@ check "editing the script changes its key" "yes" "$([[ "$new_key" != "$key" ]] &
 validate_cache_get "$new_key" && got=hit || got=miss
 check "an edited script misses the cache" "miss" "$got"
 
+# --- editing the SCRIPT UNDER TEST invalidates the entry --------------------
+# The defect this pins: a key built from the selftest alone kept serving a
+# cached PASS after its subject changed, certifying code nothing re-examined.
+printf '#!/usr/bin/env bash\nexit 0\n' >"$WORK/subject.sh"
+printf '#!/usr/bin/env bash\nexit 0\n' >"$WORK/subject-selftest.sh"
+subject_key="$(validate_cache_key "$WORK/subject-selftest.sh" 1.0.0)"
+validate_cache_put "$subject_key" 0
+validate_cache_get "$subject_key" && got=hit || got=miss
+check "an unchanged selftest+subject pair hits the cache" "hit" "$got"
+
+printf '#!/usr/bin/env bash\n# subject changed\nexit 0\n' >"$WORK/subject.sh"
+subject_key_after="$(validate_cache_key "$WORK/subject-selftest.sh" 1.0.0)"
+check "editing the SCRIPT UNDER TEST changes the key" "yes" "$([[ "$subject_key_after" != "$subject_key" ]] && echo yes || echo no)"
+validate_cache_get "$subject_key_after" && got=hit || got=miss
+check "an edited subject misses the cache" "miss" "$got"
+
 # --- a version bump invalidates every entry --------------------------------
 bumped="$(validate_cache_key "$WORK/thing-selftest.sh" 2.0.0)"
 check "a framework version bump changes the key" "yes" "$([[ "$bumped" != "$new_key" ]] && echo yes || echo no)"

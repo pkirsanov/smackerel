@@ -49,6 +49,7 @@ Observability and execution evidence are not only anti-fabrication controls for 
 | Consumer rename/removal rules | `consumer-trace.md` |
 | Persistent regression expectations | `e2e-regression.md` |
 | Evidence-specific rules | `evidence-rules.md` |
+| Claim grounding and assumption handling (NON-NEGOTIABLE) | [claim-grounding.md](claim-grounding.md) |
 | Shared test-substance rules | `test-fidelity.md` |
 | Untrusted content and tool-trust boundary (NON-NEGOTIABLE) | `untrusted-content.md` |
 
@@ -63,6 +64,10 @@ Observability and execution evidence are not only anti-fabrication controls for 
 | What is the Honesty Incentive? | `critical-requirements.md` |
 | What are the evidence provenance rules? | `evidence-rules.md` → Evidence Provenance Taxonomy |
 | What is an Uncertainty Declaration? | `evidence-rules.md` → Uncertainty Declaration Protocol |
+| May I assert this without reading the file? | [claim-grounding.md](claim-grounding.md) → The Grounding Rule |
+| What counts as a source for a factual claim? | [claim-grounding.md](claim-grounding.md) → Admissible Sources |
+| I must proceed on an unverified premise — how do I record it? | [claim-grounding.md](claim-grounding.md) → Assumption Ledger |
+| May I cite a gate ID, script, or path I have not opened? | [claim-grounding.md](claim-grounding.md) → No Phantom References (G132) |
 | What are Spot-Check Recommendations? | `audit-core.md` → Spot-Check Recommendations |
 | What Tier 2 checks apply to this agent? | `validation-profiles.md` |
 | What test categories and evidence rules apply? | `quality-gates.md`, `evidence-rules.md`, `test-fidelity.md` |

@@ -223,6 +223,7 @@ than dedupe them.
 - Fix the smallest blocked unit first, then re-run the narrowest relevant verification.
 - Route foreign-artifact changes to the owning specialist instead of editing them inline.
 - **Honesty over completion:** When evidence is ambiguous, prefer leaving a DoD item `[ ]` with an Uncertainty Declaration over marking `[x]` with uncertain evidence. A wrong answer is 3x worse than an honest gap. See `critical-requirements.md` → Honesty Incentive.
+- **Grounded claims only:** Never assert, edit, or recommend on a fact you did not read, execute, or retrieve in this session. Recall, naming inference, and plausibility are not sources. Record an unavoidable unverified premise as a labeled Assumption. See [claim-grounding.md](claim-grounding.md).
 - **Evidence provenance:** Every evidence block must include a `**Claim Source:**` tag (`executed`, `interpreted`, `not-run`). See `evidence-rules.md` → Evidence Provenance Taxonomy.
 
 ## Run-Level Rollback (gitIsolation)

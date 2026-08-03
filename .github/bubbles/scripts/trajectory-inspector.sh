@@ -16,6 +16,10 @@
 #   3. Scope progression (active spec scopes by status)
 #   4. Recent lessons (last N lines of lessons.md)
 #   5. Active specs (status + workflowMode for each specs/*/state.json)
+#   6. Open work (IMP-033 SCOPE-3 — the committed open-work register plus the
+#      derived non-terminal artifacts, rendered through open-work-report.sh so
+#      there is exactly one aggregator behind this section and `cli.sh
+#      open-work`)
 #
 # Args:
 #   --session <id>      Inspect a specific session JSON file by sessionId
@@ -625,8 +629,22 @@ else
 fi
 echo
 
+# Section 6: Open work (IMP-033 SCOPE-3)
+# Sections 1-5 above describe the CURRENT session. This one describes what
+# outlives it. It delegates to open-work-report.sh rather than re-deriving the
+# rows, because a second aggregator would drift from `cli.sh open-work` and the
+# operator would have two answers to one question.
+print_header "6. Open Work (register + derived non-terminal artifacts)"
+open_work_report="$SCRIPT_DIR/open-work-report.sh"
+if [[ -f "$open_work_report" ]]; then
+  bash "$open_work_report" --repo-root "$repo_root" 2>/dev/null | sed 's/^/  /'
+else
+  echo "  open-work-report.sh not found at $open_work_report"
+fi
+echo
+
 if [[ "$show_latency" == "true" ]]; then
-  print_header "6. Validation Latency (--latency)"
+  print_header "7. Validation Latency (--latency)"
   latency_report="$SCRIPT_DIR/validation-latency-report.sh"
   if [[ -f "$latency_report" ]]; then
     latency_args=(--repo-root "$repo_root" --since "$latency_since")

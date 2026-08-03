@@ -1,7 +1,7 @@
 # <img src="../icons/bubbles-glasses.svg" width="28"> Bubbles Cheat Sheet
 
 <!-- GENERATED:FRAMEWORK_STATS_SUMMARY_START -->
-> **41 Agents · 112 Gates · 61 Workflow Modes · 30 Phases**
+> **41 Agents · 113 Gates · 61 Workflow Modes · 30 Phases**
 <!-- GENERATED:FRAMEWORK_STATS_SUMMARY_END -->
 >
 > *"It Ain't Rocket Appliances, But It Works."*
@@ -372,7 +372,7 @@ Some TPB characters carry different agent roles when their narrative context leg
 ---
 
 <!-- GENERATED:FRAMEWORK_STATS_CHEATSHEET_GATES_START -->
-## <img src="../icons/lahey-badge.svg" width="32"> The 112 Gates
+## <img src="../icons/lahey-badge.svg" width="32"> The 113 Gates
 <!-- GENERATED:FRAMEWORK_STATS_CHEATSHEET_GATES_END -->
 
 **Phase flow:**
@@ -711,6 +711,8 @@ The super resolves intent and generates commands. A workflow runner may call it 
 | `/bubbles.super  import my Claude Code or Cursor setup without touching framework files` | `bash bubbles/scripts/cli.sh interop import --review-only` and the project-owned intake path |
 | `/bubbles.super  apply only the safe project-owned interop outputs` | `bash bubbles/scripts/cli.sh interop apply --safe` with proposal fallback for collisions |
 | `/bubbles.super  why are my parallel sessions colliding?` | `bubbles runtime doctor` plus the right recovery step |
+| `/bubbles.super  I am done for the day, what is still open?` | `bash bubbles/scripts/cli.sh closeout` — reports the session boundary and prints the commands, it does NOT run them. Add `--apply` only after reading the report; it deletes fully-merged unleased branches with `git branch -d` and archives the session, and refuses per item on anything unmerged, dirty, leased, or checked out. There is no `--force`. |
+| `/bubbles.super  what work is carried over from last time?` | `bash bubbles/scripts/cli.sh open-work` — the committed register, which is what survives a closed chat window |
 | `/bubbles.super  reuse the validation stack if it is compatible` | `bubbles runtime acquire --purpose validation --share-mode shared-compatible --fingerprint-file docker-compose.yml` |
 | `/bubbles.super  turn this problem into the right Bubbles prompts` | A command sequence with brief reasons for each step |
 

@@ -25,6 +25,45 @@ fail() {
   exit 2
 }
 
+# IMP-033 / SCOPE-7. A workspace root that is not a Git worktree is a hard,
+# unbypassable refusal, and it stays one: authority resolution is the wrong
+# place to become permissive. What was wrong was not the refusal but its
+# uselessness — it named the problem and left the operator to reconstruct the
+# invocation by hand, which in a seven-root workspace is the moment the
+# operator abandons the tool and works unbound instead.
+#
+# So the refusal now prints the exact command with the offending root REMOVED.
+# The exit code and the fail-closed behaviour are unchanged; only the operator's
+# next step is now typed out rather than inferred. Nothing is auto-retried:
+# dropping a declared root is a decision about which repositories the session
+# has authority over, and that decision belongs to the operator.
+fail_non_git_root() {
+  local offending="$1"
+  local remaining="" root=""
+  while IFS= read -r root; do
+    [[ -n "$root" ]] || continue
+    [[ "$root" != "$offending" ]] || continue
+    remaining="${remaining} --workspace-root $(shell_quote "$root")"
+  done <<< "$workspace_roots"
+
+  printf 'repository-binding-host-context: workspace root is not a Git worktree: %s\n' "$offending" >&2
+  if [[ -z "$remaining" ]]; then
+    printf '  It was the only declared root, so there is no reduced command to run.\n' >&2
+    printf '  Declare a root that is a Git worktree, or run git init in %s.\n' "$offending" >&2
+  else
+    printf '  Re-run without it (this drops that root from the session, it does not make it usable):\n' >&2
+    printf '    bash bubbles/scripts/repository-binding-host-context.sh --session-log %s%s\n' \
+      "$(shell_quote "$session_log")" "$remaining" >&2
+  fi
+  exit 2
+}
+
+# Single-quote for the shell, so a root containing a space or a quote produces a
+# command the operator can paste rather than one that silently splits.
+shell_quote() {
+  printf "'%s'" "${1//\'/\'\\\'\'}"
+}
+
 path_has_symlink_component() {
   local path="$1"
   local remainder
@@ -188,7 +227,7 @@ canonical_roots=""
 while IFS= read -r candidate; do
   [[ -n "$candidate" ]] || continue
   [[ "$candidate" == /* ]] || fail 'workspace roots must be absolute'
-  canonical_root="$(canonical_git_root "$candidate")" || fail "workspace root is not a Git worktree: $candidate"
+  canonical_root="$(canonical_git_root "$candidate")" || fail_non_git_root "$candidate"
   if ! printf '%s\n' "$canonical_roots" | grep -Fqx -- "$canonical_root"; then
     canonical_roots="${canonical_roots}${canonical_roots:+$'\n'}$canonical_root"
   fi

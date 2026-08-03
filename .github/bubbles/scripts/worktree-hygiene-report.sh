@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# worktree-hygiene-report.sh (IMP-107 / SCOPE-1 + SCOPE-3 + SCOPE-4 + SCOPE-5 — gaps WT-TEARDOWN, WT-STALE, WT-HARNESS)
+# worktree-hygiene-report.sh (IMP-107 / SCOPE-1 + SCOPE-3 + SCOPE-4 + SCOPE-5 — gaps WT-TEARDOWN, WT-STALE, WT-HARNESS;
+#                             IMP-033 / SCOPE-1 — gap COV-5)
 # ---------------------------------------------------------------------------
 # ADVISORY, READ-ONLY worktree-hygiene detector. Enumerates the repo's LINKED
 # git worktrees and classifies each so the create->merge->DROP contract that is
@@ -41,20 +42,50 @@
 # Default is inert-friendly: a repo with only a fresh trunk and no stashes is a
 # clean no-op.
 #
+# IMP-033 SCOPE-1 (gap COV-5) closes the detector's two blind spots. Everything
+# above enumerates LINKED worktrees only — the main worktree is skipped by
+# design (it is never a reap candidate) and no remote comparison exists at all
+# (`origin/HEAD` was consulted solely to derive the trunk BRANCH NAME). So a
+# checkout holding uncommitted work, or commits that exist locally and nowhere
+# else, reported all-zeros. A THIRD summary line (DEFAULT mode only) reports
+# exactly those facts, and NOTHING the first two lines already carry:
+#   worktree-hygiene-local: D dirty files (primary), U untracked, <remote-field>, N non-trunk local branches
+# The stash count is deliberately NOT restated (line 2 already ends with it — a
+# metric duplicated across two lines is a metric that can disagree with itself).
+# The branch counters are deliberately named apart: line 2 counts STALE branches
+# (the threshold-filtered subset), line 3 counts ALL non-trunk local branches.
+# They are different numbers by design.
+#
+# <remote-field> degrades HONESTLY rather than printing a reassuring zero:
+#   A ahead / B behind <remote>/<trunk> (fetched|unfetched|remote-unverified)
+#   remote=none          — no remote is configured
+#   remote-untracked     — a remote exists but <remote>/<trunk> was never fetched
+#   detached-HEAD        — the primary worktree has no branch to compare
+# Freshness is explicit because a stale remote-tracking ref is the exact failure
+# this scope exists to close. The DEFAULT is `unfetched`: this script stays
+# read-only, and `git fetch` writes refs/remotes/*. Pass --fetch to opt into a
+# bounded network refresh; a failed/offline fetch reports `remote-unverified`
+# and the comparison falls back to the last-known ref.
+#
 # Modes:
 #   (default)     human-readable worktree detail + one machine summary line, then
-#                 (SCOPE-4) stale-branch + stash detail + a SECOND summary line
+#                 (SCOPE-4) stale-branch + stash detail + a SECOND summary line,
+#                 then (IMP-033) a THIRD primary-worktree + remote summary line
 #   --porcelain   one TAB-separated line per LINKED worktree, for the reaper
-#                 (UNCHANGED by SCOPE-4 — emits NO branch/stash lines):
+#                 (UNCHANGED by SCOPE-4 and by IMP-033 SCOPE-1 — emits NO
+#                 branch/stash/local lines):
 #                 CLASS\tPATH\tBRANCH\tAHEAD\tBEHIND\tDIRTY\tAGEDAYS
 #   --branch-age-days N   flag a branch (with unique commits) older than N days (default 14)
 #   --branch-ahead N      flag a branch >= N commits ahead of trunk (default 200)
+#   --fetch       opt into a bounded `git fetch` before the ahead/behind compare
 #   --help        usage, exit 0
 #
 # The summary lines (default mode only; --porcelain omits them) are:
 #   worktree-hygiene: N worktrees (M merged, U unmerged, P prunable, D dirty, L lease-held, E experiment)
 #   worktree-hygiene-branches: S stale local branches (age>=Ad or ahead>=B), T stashes
-# `cli.sh doctor` greps the FIRST line only (its tally is unaffected by SCOPE-4).
+#   worktree-hygiene-local: D dirty files (primary), U untracked, <remote-field>, N non-trunk local branches
+# `cli.sh doctor` consumes ALL THREE (IMP-033 SCOPE-2); before that scope it
+# grepped the first and silently discarded the second.
 # There is NO --skip / --force / bypass flag.
 #
 # SCOPE-5 (gap WT-HARNESS) additionally RECOGNIZES the `.bubbles-worktree`
@@ -84,38 +115,57 @@ fi
 
 LEASES_SH="$SCRIPT_DIR/runtime-leases.sh"
 
+# Portable `timeout` for the opt-in --fetch (IMP-033 SCOPE-1). guard-lib.sh is
+# idempotent and sets no shell options, so sourcing it here is side-effect free.
+if [[ -f "$SCRIPT_DIR/guard-lib.sh" ]]; then
+  # shellcheck source=/dev/null
+  . "$SCRIPT_DIR/guard-lib.sh"
+fi
+
 usage() {
   cat <<'EOF'
-Usage: worktree-hygiene-report.sh [--porcelain] [--branch-age-days N] [--branch-ahead N] [--help]
+Usage: worktree-hygiene-report.sh [--porcelain] [--branch-age-days N] [--branch-ahead N] [--fetch] [--help]
 
 Advisory, READ-ONLY report of linked git worktrees and their hygiene class
 (PRUNABLE | LEASE-HELD | EXPERIMENT | DIRTY | UNMERGED | MERGED), plus (SCOPE-4,
-report-only) stale/long-lived local branches and lingering stashes. Always exits 0.
+report-only) stale/long-lived local branches and lingering stashes, plus
+(IMP-033 SCOPE-1, report-only) the PRIMARY worktree's uncommitted/untracked
+counts and its ahead/behind position versus the remote. Always exits 0.
 
   (no args)            Human-readable worktree detail + a machine summary line
                        consumed by doctor, then a stale-branch + stash section
-                       and a second (branch/stash) machine summary line.
+                       and a second (branch/stash) machine summary line, then a
+                       third (primary-worktree + remote) machine summary line.
   --porcelain          One TAB-separated line per linked worktree for
-                       worktree-reap.sh (UNCHANGED by SCOPE-4 — NO branch/stash):
+                       worktree-reap.sh (UNCHANGED by SCOPE-4 and IMP-033 — NO
+                       branch/stash/local lines):
                        CLASS<TAB>PATH<TAB>BRANCH<TAB>AHEAD<TAB>BEHIND<TAB>DIRTY<TAB>AGEDAYS
   --branch-age-days N  Flag a local branch (with unique commits) older than N
                        days. Default 14. Also settable via the flat
                        .github/bubbles-project.yaml key worktreeBranchAgeDays.
   --branch-ahead N     Flag a local branch >= N commits ahead of trunk. Default
                        200. Also settable via worktreeBranchAheadLimit.
+  --fetch              Opt into a bounded `git fetch` before the ahead/behind
+                       comparison. OFF by default so the script stays read-only
+                       (fetch writes refs/remotes/*); the default comparison is
+                       labelled `unfetched`, and a failed fetch is labelled
+                       `remote-unverified` rather than reported as clean.
   --help               Show this help and exit 0.
 
-Reads only; never removes a worktree, branch, or stash. Branches/stashes are
-SURFACED ONLY (worktree-reap.sh never reaps them). No --skip/--force/bypass flag.
+Reads only; never removes a worktree, branch, or stash, and never commits,
+pushes, or resets. Branches/stashes/local state are SURFACED ONLY
+(worktree-reap.sh never reaps them). No --skip/--force/bypass flag.
 EOF
 }
 
 PORCELAIN=false
+DO_FETCH=false
 branch_age_days_flag=""
 branch_ahead_flag=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --porcelain) PORCELAIN=true; shift ;;
+    --fetch) DO_FETCH=true; shift ;;
     --branch-age-days)
       shift
       if [[ $# -eq 0 || ! "$1" =~ ^[0-9]+$ ]]; then
@@ -157,6 +207,7 @@ if ! git -C "$REPO_ROOT" rev-parse --git-dir >/dev/null 2>&1; then
     echo "[worktree-hygiene] $REPO_ROOT is not a git repository (advisory no-op)."
     echo "worktree-hygiene: 0 worktrees (0 merged, 0 unmerged, 0 prunable, 0 dirty, 0 lease-held, 0 experiment)"
     echo "worktree-hygiene-branches: 0 stale local branches (age>=${BRANCH_AGE_DAYS}d or ahead>=${BRANCH_AHEAD}), 0 stashes"
+    echo "worktree-hygiene-local: 0 dirty files (primary), 0 untracked, remote=none, 0 non-trunk local branches"
   fi
   exit 0
 fi
@@ -259,12 +310,20 @@ classify_worktree() {
 n_total=0 n_merged=0 n_unmerged=0 n_prunable=0 n_dirty=0 n_lease=0 n_exp=0
 detail_lines=""
 machine_lines=""
+# IMP-033 SCOPE-1: the main worktree is skipped as a reap candidate below, but
+# its path is what the new local/remote summary line reports on — it is the
+# checkout the operator types in, and the one blind spot the linked-worktree
+# enumeration structurally cannot see.
+primary_wt_path=""
 
 flush_record() {
   local path="$1" head="$2" branch="$3" detached="$4" prunable="$5" is_main="$6"
   [[ -n "$path" ]] || return 0
   # The main worktree is never a reap candidate; skip it silently.
-  [[ "$is_main" -eq 1 ]] && return 0
+  if [[ "$is_main" -eq 1 ]]; then
+    primary_wt_path="$path"
+    return 0
+  fi
 
   local fields cls ahead behind dirty age
   fields="$(classify_worktree "$path" "$branch" "$head" "$detached" "$prunable")"
@@ -429,4 +488,103 @@ else
   printf '%s\n' "$stash_detail"
 fi
 echo "worktree-hygiene-branches: ${n_stale_branches} stale local branches (age>=${BRANCH_AGE_DAYS}d or ahead>=${BRANCH_AHEAD}), ${n_stashes} stashes"
+
+# --- IMP-033 SCOPE-1 (gap COV-5): primary worktree + remote ------------------
+# The two leak vectors the sections above are structurally blind to: work that
+# is uncommitted in the checkout the operator types in, and commits that exist
+# locally and nowhere else. REPORT-ONLY and never emitted in --porcelain, so the
+# reaper's input contract is byte-unchanged.
+PRIMARY_WT="${primary_wt_path:-$REPO_ROOT}"
+
+count_matching() {
+  # Count lines of stdin matching (or, with -v, not matching) a pattern, without
+  # letting grep's "no match => exit 1" leak through pipefail.
+  local n
+  n="$(grep -c "$@" 2>/dev/null || true)"
+  [[ "$n" =~ ^[0-9]+$ ]] || n=0
+  printf '%s' "$n"
+}
+
+primary_status="$(git -C "$PRIMARY_WT" status --porcelain 2>/dev/null | sed '/^$/d' || true)"
+n_primary_dirty="$(printf '%s' "$primary_status" | sed '/^$/d' | count_matching -v '^??')"
+n_primary_untracked="$(printf '%s' "$primary_status" | sed '/^$/d' | count_matching '^??')"
+
+# All non-trunk local branches. Deliberately NOT the stale subset reported on
+# line 2 — these are different numbers and the labels say so.
+n_local_branches=0
+while IFS= read -r _brname; do
+  [[ -n "$_brname" ]] || continue
+  [[ "$_brname" == "$TRUNK" ]] && continue
+  n_local_branches=$((n_local_branches + 1))
+done < <(git -C "$REPO_ROOT" for-each-ref --format='%(refname:short)' refs/heads 2>/dev/null)
+
+# Remote selection: `origin` when present, else the first configured remote.
+remote_name=""
+while IFS= read -r _rname; do
+  [[ -n "$_rname" ]] || continue
+  if [[ "$_rname" == "origin" ]]; then remote_name="origin"; break; fi
+  [[ -n "$remote_name" ]] || remote_name="$_rname"
+done < <(git -C "$REPO_ROOT" remote 2>/dev/null)
+
+# Opt-in bounded refresh. OFF by default: this script is read-only and a fetch
+# writes refs/remotes/*. A failed fetch is reported, never silently swallowed.
+fetch_state="unfetched"
+if [[ "$DO_FETCH" == true && -n "$remote_name" ]]; then
+  if command -v bubbles_run_with_timeout >/dev/null 2>&1; then
+    if bubbles_run_with_timeout 20 git -C "$REPO_ROOT" fetch --quiet "$remote_name" >/dev/null 2>&1; then
+      fetch_state="fetched"
+    else
+      fetch_state="remote-unverified"
+    fi
+  elif git -C "$REPO_ROOT" fetch --quiet "$remote_name" >/dev/null 2>&1; then
+    fetch_state="fetched"
+  else
+    fetch_state="remote-unverified"
+  fi
+fi
+
+# Remote field. Degrades to a NAMED state rather than a reassuring `0 ahead`.
+head_detached=0
+git -C "$PRIMARY_WT" symbolic-ref -q HEAD >/dev/null 2>&1 || head_detached=1
+
+remote_field=""
+n_ahead=0
+n_behind=0
+if [[ "$head_detached" -eq 1 ]]; then
+  remote_field="detached-HEAD"
+elif [[ -z "$remote_name" ]]; then
+  remote_field="remote=none"
+else
+  remote_ref="$remote_name/$TRUNK"
+  if ! git -C "$REPO_ROOT" rev-parse --verify --quiet "refs/remotes/$remote_ref" >/dev/null 2>&1; then
+    remote_field="remote-untracked ($remote_ref never fetched)"
+  else
+    ab_out="$(git -C "$PRIMARY_WT" rev-list --left-right --count "$remote_ref...HEAD" 2>/dev/null || true)"
+    if [[ -z "$ab_out" ]]; then
+      remote_field="remote-unverified ($remote_ref not comparable)"
+    else
+      n_behind="$(printf '%s' "$ab_out" | awk '{print $1}')"
+      n_ahead="$(printf '%s' "$ab_out" | awk '{print $2}')"
+      [[ "$n_ahead" =~ ^[0-9]+$ ]] || n_ahead=0
+      [[ "$n_behind" =~ ^[0-9]+$ ]] || n_behind=0
+      remote_field="${n_ahead} ahead / ${n_behind} behind ${remote_ref} (${fetch_state})"
+    fi
+  fi
+fi
+
+echo "[worktree-hygiene] Primary worktree + remote (IMP-033 SCOPE-1 — the checkout you type in, which the sections above never inspect):"
+echo "  primary=$PRIMARY_WT"
+if [[ "$n_primary_dirty" -eq 0 && "$n_primary_untracked" -eq 0 ]]; then
+  echo "  (working tree clean — 0 uncommitted, 0 untracked)"
+else
+  printf '  %s uncommitted tracked change(s), %s untracked path(s) — not recorded anywhere until committed\n' \
+    "$n_primary_dirty" "$n_primary_untracked"
+fi
+case "$remote_field" in
+  detached-HEAD)  echo "  HEAD is detached — no branch to compare against a remote" ;;
+  remote=none)    echo "  no remote configured — local commits exist only on this machine" ;;
+  remote-untracked*) echo "  $remote_field — cannot tell what is or is not published" ;;
+  *)              echo "  $remote_field" ;;
+esac
+echo "worktree-hygiene-local: ${n_primary_dirty} dirty files (primary), ${n_primary_untracked} untracked, ${remote_field}, ${n_local_branches} non-trunk local branches"
 exit 0

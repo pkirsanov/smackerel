@@ -24,13 +24,13 @@ description: Session recap — summarize what was done, what's in progress, and 
 4. Produce a structured recap:
    - **Done** — Commits, file changes, fixes, decisions completed
    - **In Progress** — Work started but not finished
-   - **Open** — Requests mentioned but not acted on
+   - **Open** — Requests mentioned but not acted on. Reconcile against `bash bubbles/scripts/cli.sh open-work`, the only record that outlives the chat window, and name gaps for `closeout`.
    - **Workflow Continuation** — one recommended `/bubbles.workflow ...` command plus fallback context when no spec work is active
 
 ## Output Rules
 
 - Keep it short. Use bullet points. No fluff.
-- Do NOT modify any files or state.
+- Do NOT modify any files or state. Reading the register is a read; writing it is `closeout`'s job.
 - Do NOT record execution history or phase claims — this agent is purely informational.
 - Continuation suggestions are informational only; they must not be treated as completion state, copied into `report.md`, or interpreted as deferred required work.
 - Default to workflow-only continuation guidance. Recommend `/bubbles.workflow ...` with a resolved mode instead of raw `/bubbles.implement`, `/bubbles.test`, or `/bubbles.validate` commands unless the user explicitly asked for a direct specialist.

@@ -18,8 +18,8 @@ Detection is limited to these MECHANICAL surfaces. A gate with none of them may 
 
 ## Coverage Summary
 
-- Gates defined: **112**
-- Declared mechanically enforced (`guard-check:` / `script:` / `ci:`): **74**
+- Gates defined: **113**
+- Declared mechanically enforced (`guard-check:` / `script:` / `ci:`): **75**
 - Declared `mode-required` only (a mode requires it; no dedicated mechanical enforcer): **35**
 - Declared `behavioral:` (agent-behavior enforcement, by design): **1**
 - Declared `unbound` (NO enforcement surface — genuine coverage gap): **2** — G070, G071
@@ -27,9 +27,9 @@ Detection is limited to these MECHANICAL surfaces. A gate with none of them may 
 Corroborating (grep-derived, advisory) numbers:
 
 - Referenced by ≥1 workflow mode: **65**
-- Not referenced by any mode: **47**
+- Not referenced by any mode: **48**
   - of those, referenced by state-transition-guard: **35**
-  - of those, referenced by a framework-validate script: **40**
+  - of those, referenced by a framework-validate script: **41**
   - of those, referenced in CI: **35**
 
 ## All Gates
@@ -148,6 +148,7 @@ Corroborating (grep-derived, advisory) numbers:
 | G129 | repository_binding_classification_discovery_conformance_gate | `script:bubbles/scripts/repository-binding-conformance-guard.sh` | 0 | — | 1 | — |
 | G130 | domain_invariant_correspondence_gate | `script:bubbles/scripts/domain-invariant-guard-selftest.sh`, `script:bubbles/scripts/domain-invariant-guard.sh` | 0 | Check 41 | 4 | guard |
 | G131 | domain_model_consistency_gate | `script:bubbles/scripts/claim-source-lint.sh`, `script:bubbles/scripts/domain-model-consistency-selftest.sh`, `script:bubbles/scripts/domain-model-consistency.sh` | 0 | Check 42 | 5 | guard |
+| G132 | reference_existence_gate | `script:bubbles/scripts/reference-existence-lint-selftest.sh`, `script:bubbles/scripts/reference-existence-lint.sh` | 0 | — | 3 | — |
 
 ## Gates Not Referenced By Any Mode
 
@@ -202,4 +203,5 @@ These gates are intentionally enforced OUTSIDE the mode `requiredGates` lists. E
 | G129 | repository_binding_classification_discovery_conformance_gate | — | 1 | — | framework-validate.sh |
 | G130 | domain_invariant_correspondence_gate | Check 41 | 4 | guard | domain-invariant-guard-selftest.sh, domain-invariant-guard.sh, domain-model-consistency.sh, framework-validate.sh |
 | G131 | domain_model_consistency_gate | Check 42 | 5 | guard | domain-model-consistency-selftest.sh, domain-model-consistency.sh, framework-validate.sh, gate-bands-selftest.sh, gate-bands.sh |
+| G132 | reference_existence_gate | — | 3 | — | framework-validate.sh, reference-existence-lint-selftest.sh, reference-existence-lint.sh |
 

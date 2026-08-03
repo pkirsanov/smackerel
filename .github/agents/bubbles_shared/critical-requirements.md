@@ -162,6 +162,16 @@ A fabricated completion is infinitely worse than an honest gap. An incorrect evi
    - For **unit tests**: provide input, call the function/method, assert the output reflects correct processing by that unit. Mocks of **external** dependencies (third-party APIs, non-owned services) are allowed — but the mock must simulate realistic external behavior, and the assertion must verify that the code under test responded correctly to that external behavior, not that the mock returned what it was told to return.
    - For **integration/e2e/stress/functional tests**: the system under test must be real and running. Assertions must verify end-to-end behavior where real code processed real (or realistically simulated) input. Asserting on canned response data injected by the test harness is self-validation.
 
+24. **Grounded Claims Only — No Assuming, No Guessing**
+   - Every factual assertion about the system, and every action, edit, recommendation, routing decision, or refusal derived from one, MUST trace to a source the agent actually read, executed, or retrieved in the CURRENT session. See [claim-grounding.md](claim-grounding.md) for the full contract.
+   - Admissible sources are exactly four: a repository artifact opened this session, output captured this session from a real command or tool run, external research retrieved this session, or an operator statement made this session.
+   - Training recall, inference from a name, inference from a convention, a prior session, and a subagent assertion that carries no source of its own are NOT sources. Being right does not satisfy this policy — an accurate guess and an inaccurate guess are the same violation, because neither is repeatable or reviewable.
+   - **Read before you assert.** Do not state what a function, route, config key, gate, spec, or test contains without opening the artifact that decides it.
+   - **Read before you edit.** Read the region being changed, in this session, before changing it. Establish why code exists before deleting or replacing it.
+   - **Verify before you recommend.** Do not recommend a command, flag, script, or path without confirming it exists in this repository. Do not report an absence without naming the search performed.
+   - **No phantom references.** Never cite a gate ID, script, module, agent, skill, spec directory, or file path that was not confirmed to exist. Planned-but-undelivered work MUST be labeled as such at the point of citation, never written in the present tense. Mechanically checked by Gate G132 (`bubbles/scripts/reference-existence-lint.sh`) for paths and by `bubbles/scripts/gate-id-grep.sh` for gate IDs.
+   - When work genuinely cannot proceed without an unverified premise, the agent MUST record an **Assumption** in the shape defined by [claim-grounding.md](claim-grounding.md) → Assumption Ledger. An assumption MUST NOT satisfy a DoD item, close a finding, or support a completion claim.
+
 ---
 
 ## Enforcement Rules
@@ -220,5 +230,6 @@ Before reporting completion, all answers must be **YES**:
 16. Does every evidence block include a `**Claim Source:**` provenance tag (`executed`, `interpreted`, or `not-run`)? Are all `interpreted` blocks accompanied by an `**Interpretation:**` explanation?
 17. Were any DoD items left `[ ]` after agent work? If so, does each have a specific Uncertainty Declaration explaining what was attempted, what was observed, and what would resolve it?
 18. Was the Honesty Incentive respected? Did the agent prefer honest gaps over fabricated completions when evidence was ambiguous?
+19. Is every factual claim traceable to an admissible source read, executed, or retrieved in this session, with zero phantom references and every unverified premise recorded as a labeled Assumption?
 
 If any answer is **NO**, completion is prohibited.

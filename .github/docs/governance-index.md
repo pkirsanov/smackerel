@@ -51,6 +51,7 @@ agent reads.
 - [audit-core.md](../agents/bubbles_shared/audit-core.md)
 - [bug-templates.md](../agents/bubbles_shared/bug-templates.md)
 - [capability-foundation.md](../agents/bubbles_shared/capability-foundation.md)
+- [claim-grounding.md](../agents/bubbles_shared/claim-grounding.md)
 - [clarify-bootstrap.md](../agents/bubbles_shared/clarify-bootstrap.md)
 - [completion-governance.md](../agents/bubbles_shared/completion-governance.md)
 - [consumer-trace.md](../agents/bubbles_shared/consumer-trace.md)
@@ -131,6 +132,7 @@ Discoverable procedural workflows packaged as model skills.
 
 - [bubbles-config-sst](../skills/bubbles-config-sst/SKILL.md)
 - [bubbles-capability-foundation-design](../skills/bubbles-capability-foundation-design/SKILL.md)
+- [bubbles-claim-grounding](../skills/bubbles-claim-grounding/SKILL.md)
 - [bubbles-deployment-target-adapter](../skills/bubbles-deployment-target-adapter/SKILL.md)
 - [bubbles-docker-lifecycle-governance](../skills/bubbles-docker-lifecycle-governance/SKILL.md)
 - [bubbles-docker-port-standards](../skills/bubbles-docker-port-standards/SKILL.md)
@@ -138,7 +140,6 @@ Discoverable procedural workflows packaged as model skills.
 - [bubbles-repo-readiness](../skills/bubbles-repo-readiness/SKILL.md)
 - [bubbles-skill-authoring](../skills/bubbles-skill-authoring/SKILL.md)
 - [bubbles-spec-template-bdd](../skills/bubbles-spec-template-bdd/SKILL.md)
-- [bubbles-tailnet-edge-pattern](../skills/bubbles-tailnet-edge-pattern/SKILL.md)
 - [bubbles-test-environment-isolation](../skills/bubbles-test-environment-isolation/SKILL.md)
 - [bubbles-test-integrity](../skills/bubbles-test-integrity/SKILL.md)
 

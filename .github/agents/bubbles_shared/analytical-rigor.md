@@ -4,11 +4,13 @@ Shared contract for the QUALITY of analysis, review, diagnosis, and design outpu
 
 This module is the analytical-deliverable counterpart to the E2E Test Substance gate: the presence of a section is not substance. It composes with — and never weakens — the Honesty Incentive in [critical-requirements.md](critical-requirements.md) and the evidence/uncertainty rules in [evidence-rules.md](evidence-rules.md). Anti-fabrication governs whether a *completion/test claim* is real; this module governs whether the *analysis itself* is deep, grounded, and honest.
 
+[claim-grounding.md](claim-grounding.md) is the prerequisite layer beneath Rule 2. It defines what counts as a source, forbids phantom references, and specifies how to record an unavoidable assumption. This module raises the bar on analysis built from grounded facts. It never authorizes analysis built from ungrounded ones.
+
 ## The Four Rigor Rules (non-negotiable)
 
 1. **Deep, not surface.** Reason from the actual system and domain to a real conclusion. Trace the concrete path — files, routes, models, data flows, contracts, prior artifacts — before asserting a capability, gap, risk, or requirement. Restating the request, summarizing what the code obviously is, or listing generic best practices is not analysis.
 
-2. **Grounded, not generic.** Every actor, capability, gap, risk, requirement, finding, and proposal MUST cite concrete evidence: a real file/route/model/symbol, an observed competitor behavior, a named domain constraint, a measured value, or a specific prior artifact. Output that could be pasted unchanged into a different feature — or a different project — is canned filler and fails this rule.
+2. **Grounded, not generic.** Every actor, capability, gap, risk, requirement, finding, and proposal MUST cite concrete evidence: a real file/route/model/symbol, an observed competitor behavior, a named domain constraint, a measured value, or a specific prior artifact. The cited thing MUST exist and MUST have been read this session — see [claim-grounding.md](claim-grounding.md). Output that could be pasted unchanged into a different feature — or a different project — is canned filler and fails this rule.
 
 3. **Honest findings first.** Surface the uncomfortable results — contradictions, unproven assumptions, missing scenarios, weak or untestable requirements, silent design conflicts, hidden coupling — as the primary content, not an appendix. A tidy report that rubber-stamps a flawed input is a FAILED analysis, not a passing one. "Looks good" with nothing named at stake is a red flag: state explicitly what you checked and what would have made you reject it.
 
