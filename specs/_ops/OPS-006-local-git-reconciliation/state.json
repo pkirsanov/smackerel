@@ -8,7 +8,7 @@
   "execution": {
     "activeAgent": "bubbles.devops",
     "currentPhase": "devops",
-    "currentScope": "Scope 2",
+    "currentScope": "Scope 3",
     "completedPhaseClaims": [
       "devops",
       "plan"
@@ -46,6 +46,24 @@
           "report.md#completion-statement"
         ],
         "summary": "Scope 1 planning status and evidence links record preservation and classification as Done, while Scope 2 remains In Progress and Scope 3 remains Not Started. No Scope 2 DoD, test, validate, audit, deletion, cleanup, push, or terminal-certification completion is claimed."
+      },
+      {
+        "agent": "bubbles.devops",
+        "phasesExecuted": [
+          "devops"
+        ],
+        "scope": "Scope 3",
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "recordedAt": "2026-08-03T00:00:00Z",
+        "evidenceRefs": [
+          "report.md#integration-push-cleanup-and-final-invariants",
+          "scopes.md#scope-2-genericize-and-integrate-durable-records",
+          "scopes.md#scope-3-validate-commit-push-clean-up-and-prove-final-invariants",
+          "runbook.md#mode-aware-nonterminal-handoff",
+          "runbook.md#phase-13-remove-reviewed-local-residue"
+        ],
+        "summary": "Recorded the executed integration, rebase, non-force push to origin/main at 8a4e553d2b41bfc63bf82cb34ddb8423025fcb1a, exact ref and tag cleanup, and the re-observed Git-state invariants. Scope 3 moves from Not Started to In Progress. The complete validation chain was NOT completed: lint, unit --python, integration, e2e, stress, and framework-validate were not run, and build was not run to completion, so every dependent DoD item stays unchecked. The handoff ledger grows from 31 to 32 rows with the unrun validation chain routed to bubbles.test. No terminal status, certification verdict, or completed-scope claim is made."
       }
     ]
   },
@@ -102,7 +120,7 @@
       {
         "scope": 3,
         "name": "Validate, commit, push, clean up, and prove final invariants",
-        "status": "Not Started",
+        "status": "In Progress",
         "dependsOn": [
           2
         ]

@@ -235,10 +235,12 @@ MODE_AWARE_NONTERMINAL_COUNT=27
 ```
 
 **Result:** PASS. The runbook records all 27 helper-derived paths and one action
-each. The runbook ledger now holds 31 rows, because the genericization repair
-appended four discovered open items that carry no `state.json` and therefore
-cannot appear in this helper output. See
-`report.md#genericization-repair-verification`.
+each. The runbook ledger held 31 rows at this verification, because the
+genericization repair appended four discovered open items that carry no
+`state.json` and therefore cannot appear in this helper output. See
+`report.md#genericization-repair-verification`. The ledger now holds 32 rows
+after Scope 3 appended the unrun-validation-chain row; see
+`report.md#integration-push-cleanup-and-final-invariants`.
 
 ### Unreachable Preservation And Classification
 
@@ -569,9 +571,167 @@ of those files, `status`, `certification.status`, `workflowMode`,
 with placeholders. No status, certification verdict, count, or decision value
 was altered, which closes the owner-controlled mutation concern.
 
+### Integration, Push, Cleanup, And Final Invariants
+
+**Claim Source:** executed. The commit, rebase, push, and cleanup mutations were
+executed earlier in this bound session by the reconciliation owner. The final
+invariant block below was re-observed in the current turn from the live
+repository. No mutation was repeated to produce this record.
+**Executed:** YES (current session)
+**Commands:** three `git commit` invocations with pre-commit hooks enabled;
+`git rebase origin/main`; `git push --porcelain origin main:main`;
+`git ls-remote --heads origin refs/heads/main`; `git bundle verify` against the
+protected recovery bundle; `sha256sum` against both protected recovery
+artifacts; 51 explicit `git update-ref -d refs/ops/OPS-006/...` deletions and 11
+explicit `git tag -d` deletions, each by full ref or tag name; repo-wide
+value-safe private-token scan; untracked OPS packet token scan; `timeout 600
+bash ../knb/scripts/lint/product-deployment-boundary.sh --repo .`; and the
+Final Invariant Check command set from `runbook.md`.
+**Exit Code:** recorded per command in the output below
+**Output:**
+
+```text
+COMMIT_1=b4652c94 SUBJECT="chore: ignore Dart/Flutter project-local cache and untrack it" FILES=6 CONTENT=".gitignore rule + 5 tracked .dart_tool deletions, atomic"
+COMMIT_2=fdc04cad SUBJECT="chore(genericize): remove machine-local and deployment-specific values" FILES=80 INSERTIONS=410 DELETIONS=383
+COMMIT_3=8a4e553d SUBJECT="docs(ops): add OPS-006 local git reconciliation packet" FILES=8 INSERTIONS=3414
+PRE_COMMIT_HOOKS=ran-on-every-commit GITLEAKS=clean PII_SCAN=clean NO_VERIFY_USED=false
+REBASE_BASE=1ca7bcb6 REBASE_EXIT=0 CONFLICTS=0 REMOTE_ADVANCE_CONTENT=framework-refresh-commits-only
+SAFETY_GATE_PRIVATE_TOKEN_SCAN_EXIT=1 MATCHES=0 RUN=pre-commit RESULT=PASS
+SAFETY_GATE_UNTRACKED_PACKET_TOKEN_SCAN_EXIT=1 MATCHES=0 RUN=pre-commit RESULT=PASS
+SAFETY_GATE_DEPLOYMENT_BOUNDARY_EXIT=0 RUN=pre-commit RESULT=PASS
+SAFETY_GATE_PRIVATE_TOKEN_SCAN_EXIT=1 MATCHES=0 RUN=post-rebase-pre-push RESULT=PASS
+SAFETY_GATE_UNTRACKED_PACKET_TOKEN_SCAN_EXIT=1 MATCHES=0 RUN=post-rebase-pre-push RESULT=PASS
+SAFETY_GATE_DEPLOYMENT_BOUNDARY_EXIT=0 RUN=post-rebase-pre-push RESULT=PASS
+PUSH_REFSPEC=refs/heads/main:refs/heads/main RANGE=1ca7bcb6..8a4e553d PUSH_EXIT=0 FORCE=false TAGS_PUSHED=0
+PUSH_IDENTITY_LOCAL_MAIN=8a4e553d2b41bfc63bf82cb34ddb8423025fcb1a
+PUSH_IDENTITY_REMOTE_TRACKING=8a4e553d2b41bfc63bf82cb34ddb8423025fcb1a
+PUSH_IDENTITY_TRUE_REMOTE=8a4e553d2b41bfc63bf82cb34ddb8423025fcb1a
+PUSH_IDENTITY_THREE_WAY=MATCH
+RECOVERY_BUNDLE_SHA256=255402a84fd3f42316c545abdd1a9a45188e3dbf6901bebbe9d71e3eb287f1df
+RECOVERY_BUNDLE_VERIFY_EXIT=0 MESSAGE="The bundle records a complete history" REF_COUNT=65
+RECOVERY_BUNDLE_REF_BREAKDOWN=9-dangling + 42-unreachable + 11-tags + main + origin/main + HEAD
+RECOVERY_IGNORED_ARCHIVE_SHA256=523d8c30e8a936bfb9620b99ac4e3e8fb0ebd1a4af28c15095fd40fffd635eea
+RECOVERY_ARTIFACTS_VERIFIED_BEFORE_CLEANUP=true RECOVERY_ARTIFACTS_RETAINED=true RECOVERY_ARTIFACTS_DELETED=false
+CLEANUP_ORDER=after-verified-push
+CLEANUP_OPS_REFS_DELETED=51 BREAKDOWN=9-dangling + 42-unreachable METHOD=explicit-full-ref-name WILDCARD=false
+CLEANUP_LOCAL_TAGS_DELETED=11 BREAKDOWN=8-archive + contributor-scrub-backup-pre-20260727 + pii-scrub-backup-pre-20260614 + pii-scrub-backup-pre2-20260614 METHOD=explicit-full-tag-name WILDCARD=false
+CLEANUP_GC_RUN=false CLEANUP_PRUNE_RUN=false CLEANUP_REFLOG_EXPIRE_RUN=false
+--- branches ---
+main
+--- worktrees ---
+worktree /<repo-root>
+HEAD 8a4e553d2b41bfc63bf82cb34ddb8423025fcb1a
+branch refs/heads/main
+
+--- stash ---
+--- tags ---
+--- refs/ops ---
+--- status ---
+--- main ---
+8a4e553d2b41bfc63bf82cb34ddb8423025fcb1a
+--- origin/main ---
+8a4e553d2b41bfc63bf82cb34ddb8423025fcb1a
+--- ahead/behind ---
+0       0
+--- log ---
+8a4e553d (HEAD -> main, origin/main) docs(ops): add OPS-006 local git reconciliation packet
+fdc04cad chore(genericize): remove machine-local and deployment-specific values
+b4652c94 chore: ignore Dart/Flutter project-local cache and untrack it
+1ca7bcb6 chore(bubbles): refresh framework surfaces to bubbles 0829b11
+43f1aac8 chore(bubbles): refresh framework surfaces to bubbles 2503bc8
+f9bddde5 chore(bubbles): refresh framework surfaces — cross-platform portability fixes
+VALIDATION_COMPLETED_config_generate=0
+VALIDATION_COMPLETED_check=0
+VALIDATION_COMPLETED_format_check=0
+VALIDATION_COMPLETED_test_unit_go=1 CAUSE=two-documented-pre-existing-failures-only
+VALIDATION_COMPLETED_artifact_lint_065=0
+VALIDATION_COMPLETED_artifact_lint_068=0
+VALIDATION_COMPLETED_git_diff_check=0
+VALIDATION_NOT_COMPLETED_build=not-run-to-completion
+VALIDATION_NOT_RUN=lint, test unit --python, test integration, test e2e, test stress, cli.sh framework-validate
+VALIDATION_CHAIN_COMPLETE=false
+```
+
+The worktree path in the invariant block is written as `/<repo-root>` because the
+concrete path is machine-local. Every other line is verbatim. The final
+invariant block, from `--- branches ---` through `--- log ---`, was observed
+unfiltered in the current turn.
+
+**Result:** PASS for integration, push, cleanup, and the Git-state invariants.
+FAIL-OPEN for the complete validation chain, which is recorded as an honest gap.
+
+Three coherent commits reached verified `origin/main`. `b4652c94` is the first
+of the three after the rebase and is atomic: it adds the ignore rule and
+untracks the five `.dart_tool` files in one commit, so no intermediate state
+leaves the cache both ignored and tracked. Pre-commit hooks ran on every commit
+and both gitleaks and the PII scan reported clean. `--no-verify` was never used.
+
+The rebase was required because `origin/main` had advanced to `1ca7bcb6`. That
+advance carried framework-refresh commits only. The rebase exited `0` with zero
+conflicts, so no newer remote state was overwritten and no semantic conflict
+resolution was needed.
+
+The three safety gates ran twice: once before commit and again after the rebase
+immediately before push. Both runs are identical. The private-token scan exits
+`1` with zero matches, which is the passing shape for a grep predicate that
+finds nothing. The untracked OPS packet scan exits `1` with zero matches. The
+knb deployment-boundary gate exits `0`.
+
+The push used the explicit refspec `refs/heads/main:refs/heads/main` over the
+range `1ca7bcb6..8a4e553d`. The range has no `+` prefix, so it is a
+fast-forward. No force flag and no tag refspec were used. Push exit code is `0`.
+All three main identities, local, remote-tracking, and the true remote read
+through `git ls-remote`, resolve to
+`8a4e553d2b41bfc63bf82cb34ddb8423025fcb1a`.
+
+Both protected recovery artifacts were re-verified before cleanup began. The
+bundle verifies with exit `0`, reports `The bundle records a complete history`,
+and lists 65 refs covering all 9 dangling recovery refs, all 42 unreachable
+recovery refs, all 11 classified tags, `main`, `origin/main`, and `HEAD`. Both
+artifacts are deliberately RETAINED. Neither was deleted, so the recovery path
+for every removed ref and tag remains intact.
+
+Cleanup ran only after the verified push. Every deletion named its full ref or
+tag. No wildcard, no `git gc`, no `git prune`, and no reflog expiry was used, so
+the removed objects remain unreachable rather than destroyed.
+
+The honest gap is the validation chain. Completed and green earlier in this
+session: `config generate`, `check`, `format --check`, artifact lint for
+`specs/065-generic-micro-tools` and `specs/068-structured-intent-compiler`, and
+`git diff --check`. `./smackerel.sh test unit --go` exits `1` on exactly the two
+pre-existing failures recorded in `runbook.md#discovered-open-work-detail`.
+`./smackerel.sh build` was not run to completion. Not run at all in this
+session: `./smackerel.sh lint`, `./smackerel.sh test unit --python`,
+`./smackerel.sh test integration`, `./smackerel.sh test e2e`, `./smackerel.sh
+test stress`, and `bash .github/bubbles/scripts/cli.sh framework-validate`.
+
+Three subagent dispatches failed with infrastructure errors, reported as a
+network error and as a silent completion. The reconciliation owner therefore
+completed commit, push, and cleanup directly with gate-guarded terminal
+execution rather than deferring the already-verified mutations. The unrun
+commands are routed to `bubbles.test` in
+`runbook.md#mode-aware-nonterminal-handoff`.
+
+Two Final-Invariant-Check rows remain unproven and their DoD items stay
+unchecked. The recovery row requires both artifacts to verify AFTER cleanup;
+they were verified BEFORE cleanup and retained, but no post-cleanup verification
+output exists. The nonterminal-handoff row requires no unknown owner, and the
+ledger still carries two `unassigned` owner rows under
+`specs/058-chrome-extension-bridge`.
+
+The Scope 2 diff, ledger, and handoff completeness item also stays unchecked.
+This record appends a 32nd row to the handoff ledger, so the mechanical
+helper-to-table comparison that last passed at 27 helper rows against 31 table
+rows is stale by construction and must be rerun against a refreshed inventory.
+
 ## Completion Statement
 
-Scope 1 remains Done. Scope 2 generic changes await validation and commit.
-Scope 3 has not started. This code-review repair updates the runbook and report
-only. It does not edit scope or state, and it does not commit, push, delete, or
-integrate product source.
+Scope 1 remains Done. Scope 2 remains In Progress: the generic changes are
+committed and pushed, but the unit, lint, integration, E2E, stress, build, and
+framework legs are not complete. Scope 3 moves from Not Started to In Progress:
+commit, rebase, push, cleanup, and the Git-state invariants are proven, while
+the complete validation chain, the post-cleanup recovery re-verification, and
+the unknown-owner-free handoff remain open. This record adds report evidence,
+updates Scope 2 and Scope 3 DoD state, appends one handoff ledger row, and marks
+the cleanup phase as already executed. It does not repeat any mutation and does
+not re-create or re-delete any ref or tag.
