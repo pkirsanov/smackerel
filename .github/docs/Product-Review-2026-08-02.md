@@ -3,6 +3,13 @@
 **Reviewed:** 2026-08-02 | **Repository:** Bubbles | **Baseline:** v7.22.0 at `725b641`
 **Type:** standalone diagnostic and corrective roadmap | **Status:** analysis, not certification
 
+> **Post-review disposition (2026-08-03):** The v7.22 controlled technical-prose
+> and feature-surface reachability implementation was briefly rolled back to the
+> v7.21.0 baseline and has since been reinstated, so those capabilities are
+> present in the current tree. IMP-032 SCOPE-2a/3/4a/5 landed after this review;
+> SCOPE-1 was withdrawn and SCOPE-2b and SCOPE-4b remain deferred. BUG-004,
+> BUG-005, and BUG-006 remain open in `BUGS.md`.
+
 ## 1. Executive Verdict
 Bubbles addresses a real engineering problem: agentic delivery produces persuasive completion claims without a dependable, inspectable link between intent, execution, source state, and outcome. The repository has unusually deep machinery for contracts, evidence, workflow state, validation, and certification.
 
@@ -121,7 +128,7 @@ v7.22.0 adds an Exposure Contract and `surface-reachability-guard.sh`. This is v
 The framework needs generated, reusable, repository-owned attachment plus an explicit doctor state. It must adopt advisory-first rollout and measure false positives before blocking all consumers.
 
 ### 7.3 Usability and truth drift
-The source-repository `status` and `blocked` CLI paths still mirror mutable top-level state rather than explaining derived certification truth, so they can emit contradictory false-green output. v7.22.0 corrects `doctor` hook documentation, but the status-mirror remedy is only a proposal in IMP-032. README still recommends `bubbles hooks install --all` without limiting it to the framework source repo, conflicting with the scoped framework-ops recipe. Handoff documentation implies stale packet or fresh-chat authority and persistence that the runtime does not provide. The MCP catalog lists 11 of 12 tools and omits `check_observability`, while historical v6 MCP design text still says the server is not implemented.
+The source-repository `status` and `blocked` CLI paths still mirror mutable top-level state rather than explaining derived certification truth, so they can emit contradictory false-green output. IMP-032 now enriches the mirror-mismatch stderr, documents the validate-owned route, and adds an advisory status-consistency scan, while its structured-result and reconciliation-writer scopes remain deferred. README still recommends `bubbles hooks install --all` without limiting it to the framework source repo, conflicting with the scoped framework-ops recipe. Handoff documentation implies stale packet or fresh-chat authority and persistence that the runtime does not provide. The MCP catalog lists 11 of 12 tools and omits `check_observability`, while historical v6 MCP design text still says the server is not implemented.
 
 These are not merely documentation defects. They show that users cannot reliably infer the current control state from the product's own surfaces.
 

@@ -197,7 +197,16 @@ for imp in "${imp_files[@]}"; do
   fi
 
   # --- Check 4: discoverable from the index --------------------------------
-  if [[ -f "$index_file" ]] && ! grep -qF "$base" "$index_file" 2>/dev/null; then
+  #
+  # INDEX.md rows key on the bare proposal id (`| IMP-014 | ... |`), NOT on the
+  # filename. Matching on "$base" (e.g. IMP-014-governance-hub.md) therefore
+  # never matches a well-formed row and would report every indexed proposal as
+  # missing. Match on the id prefix instead.
+  imp_id=""
+  if [[ "$base" =~ ^(IMP-[0-9]{3}) ]]; then
+    imp_id="${BASH_REMATCH[1]}"
+  fi
+  if [[ -f "$index_file" ]] && [[ -n "$imp_id" ]] && ! grep -qF "$imp_id" "$index_file" 2>/dev/null; then
     report "index-row-missing" "$rel has no row in improvements/INDEX.md"
   fi
 

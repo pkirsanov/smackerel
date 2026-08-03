@@ -40,18 +40,18 @@ Use this when the existing feature is fundamentally right and you want competiti
 Use this when requirements, UX, design, and scopes all need reconciliation before delivery.
 
 ```text
-/bubbles.workflow  redesign-existing for booking
+/bubbles.workflow  implement action:full-delivery prelude:analyze-design-plan target:product requireExistingImplementation: true for booking
 ```
 
 Optional tags:
 
 ```text
-/bubbles.workflow  redesign-existing for booking grillMode: required-on-ambiguity socratic: true socraticQuestions: 4 backlogExport: tasks
+/bubbles.workflow  implement action:full-delivery prelude:analyze-design-plan target:product requireExistingImplementation: true for booking grillMode: required-on-ambiguity socratic: true socraticQuestions: 4 backlogExport: tasks
 ```
 
 ---
 
-## What `redesign-existing` Does
+## What `requireExistingImplementation: true` Does
 
 1. Re-runs analysis on the current feature instead of trusting old requirements.
 2. Reconciles stale analyst-owned sections so only one active business truth remains.

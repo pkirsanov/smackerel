@@ -21,6 +21,11 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 GUARD="$SCRIPT_DIR/propagation-policy-guard.sh"
 
+# A bare `timeout` exits 127 on a stock macOS runner, which ships neither GNU
+# coreutils nor gtimeout. guard-lib's helper falls back to a bash watchdog.
+# shellcheck source=guard-lib.sh
+. "$SCRIPT_DIR/guard-lib.sh"
+
 [[ -x "$GUARD" ]] || { echo "FAIL: $GUARD not executable" >&2; exit 1; }
 command -v yq >/dev/null 2>&1 || { echo "SKIP: yq not installed"; exit 0; }
 
@@ -83,12 +88,12 @@ EOF
 
 assert_pass() {
   local desc="$1"
-  if timeout "$SELFTEST_TIMEOUT" "$GUARD" "$TMP" </dev/null >/dev/null 2>&1; then
+  if bubbles_run_with_timeout "$SELFTEST_TIMEOUT" "$GUARD" "$TMP" </dev/null >/dev/null 2>&1; then
     echo "PASS: $desc"
   else
     local rc=$?
     echo "FAIL: $desc (expected exit 0, got $rc)" >&2
-    timeout 5 "$GUARD" "$TMP" </dev/null >&2 || true
+    bubbles_run_with_timeout 5 "$GUARD" "$TMP" </dev/null >&2 || true
     exit 1
   fi
 }
@@ -96,12 +101,12 @@ assert_pass() {
 assert_fail() {
   local desc="$1"
   local rc=0
-  timeout "$SELFTEST_TIMEOUT" "$GUARD" "$TMP" </dev/null >/dev/null 2>&1 || rc=$?
+  bubbles_run_with_timeout "$SELFTEST_TIMEOUT" "$GUARD" "$TMP" </dev/null >/dev/null 2>&1 || rc=$?
   if [[ $rc -eq 1 ]]; then
     echo "PASS: $desc"
   else
     echo "FAIL: $desc (expected exit 1, got $rc)" >&2
-    timeout 5 "$GUARD" "$TMP" </dev/null >&2 || true
+    bubbles_run_with_timeout 5 "$GUARD" "$TMP" </dev/null >&2 || true
     exit 1
   fi
 }
@@ -115,7 +120,7 @@ assert_pass "no policy file → skip"
 setup_clean_fixture
 rm "$TMP/propagation-policy.yaml"
 rc=0
-timeout "$SELFTEST_TIMEOUT" "$GUARD" --require-policy "$TMP" </dev/null >/dev/null 2>&1 || rc=$?
+bubbles_run_with_timeout "$SELFTEST_TIMEOUT" "$GUARD" --require-policy "$TMP" </dev/null >/dev/null 2>&1 || rc=$?
 if [[ $rc -eq 1 ]]; then
   echo "PASS: no policy file with --require-policy rejected (G121)"
 else

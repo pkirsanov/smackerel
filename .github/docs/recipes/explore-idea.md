@@ -11,16 +11,18 @@ You have a vague product idea. You need to flesh it out — understand the probl
 ## The Command
 
 ```
-/bubbles.workflow  product-discovery for my-idea
+/bubbles.workflow  plan action:harden target:scope analyze: true for my-idea
 ```
 
 If you want the system to interview you first instead of inferring the missing context autonomously:
 
 ```
-/bubbles.workflow  product-discovery for my-idea socratic: true socraticQuestions: 5
+/bubbles.workflow  plan action:harden target:scope analyze: true for my-idea socratic: true socraticQuestions: 5
 ```
 
-**Phases:** analyze → ux
+**Phases:** select → bootstrap → harden → docs → validate → audit → finalize, with `analyze` added up front by the `analyze: true` tag.
+
+The analyst, UX, design, and planning specialists run inside `bootstrap`. No implementation happens — the status ceiling is `specs_hardened`.
 
 ## Or Step by Step
 

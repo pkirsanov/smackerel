@@ -502,7 +502,7 @@ write_feature "$status_mismatch_feature" product-to-planning
 status_mismatch_temp="$WORKSPACE/status-mismatch.json"
 jq '.certification.status = "blocked"' "$status_mismatch_feature/state.json" > "$status_mismatch_temp"
 mv "$status_mismatch_temp" "$status_mismatch_feature/state.json"
-assert_failure "certification mirror mismatch" 69 E009-TARGET-MISMATCH bash "$RESOLVER" "$status_mismatch_feature"
+assert_failure "certification mirror mismatch" 69 E009-STATUS-MIRROR bash "$RESOLVER" "$status_mismatch_feature"
 
 # A value-free "mirrors disagree" was read as a status-ceiling defect and produced
 # a false framework bug report, so the detail must carry both values and the owner.

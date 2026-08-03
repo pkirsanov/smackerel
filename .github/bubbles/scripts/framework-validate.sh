@@ -59,6 +59,13 @@ if [[ -z "${BUBBLES_FRAMEWORK_VALIDATE_LOCK_HELD:-}" ]] && command -v flock >/de
     fi
     export BUBBLES_FRAMEWORK_VALIDATE_LOCK_HELD=1
   fi
+elif [[ -z "${BUBBLES_FRAMEWORK_VALIDATE_LOCK_HELD:-}" ]]; then
+  # flock absent (stock macOS ships none). The guard degrades to a no-op, so say
+  # so — a silent degrade lets an operator believe concurrent-run protection is
+  # active when it is not.
+  printf 'NOTE: flock not found — concurrent-run protection is OFF for this run.\n' >&2
+  printf '      Two independent framework-validate runs would corrupt each other'"'"'s\n' >&2
+  printf '      shared scratch fixtures. Run only one at a time on this machine.\n' >&2
 fi
 
 # macOS portability shim. BSD userland diverges from GNU coreutils on `sed -i`

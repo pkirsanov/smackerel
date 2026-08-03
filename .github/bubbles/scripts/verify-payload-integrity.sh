@@ -212,7 +212,66 @@ failures=""
 # One pass over managedFileChecksums. The awk section detection mirrors the
 # existing release_manifest_owns_managed_path() parser in install.sh (no JSON
 # dependency; BSD/GNU awk compatible). Each emitted record is "<path>\t<sha256>".
-while IFS=$'\t' read -r rel_path expected_sha; do
+#
+# Hashing is BATCHED (OW-005): the previous form called sha256_of() per managed
+# file, which spawned two processes each (the sha tool plus an awk to trim the
+# path). At ~775 managed files that measured ~6s per pass versus ~0.06s for a
+# single batched invocation. The loop's semantics are unchanged — only the
+# source of actual_sha moves from a per-file spawn to a precomputed join.
+MANIFEST_RECORDS="$(mktemp)"
+EXISTING_PATHS="$(mktemp)"
+ACTUAL_HASHES="$(mktemp)"
+JOINED_RECORDS="$(mktemp)"
+trap 'rm -f "$MANIFEST_RECORDS" "$EXISTING_PATHS" "$ACTUAL_HASHES" "$JOINED_RECORDS"' EXIT
+
+awk '
+  BEGIN { section_line = "  \"managedFileChecksums\": [" }
+  $0 == section_line { in_section = 1; next }
+  in_section && ($0 == "  ]," || $0 == "  ]") { exit }
+  in_section {
+    path_value = $0
+    sub(/^.*"path": "/, "", path_value)
+    sub(/".*/, "", path_value)
+    sha_value = $0
+    sub(/^.*"sha256": "/, "", sha_value)
+    sub(/".*/, "", sha_value)
+    if (path_value != "" && sha_value != "")
+      print path_value "\t" sha_value
+  }
+' "$MANIFEST_FILE" >"$MANIFEST_RECORDS"
+
+# Only hash files that are actually present; [[ -f ]] is a shell builtin, so
+# this filtering pass costs no subprocesses.
+while IFS=$'\t' read -r rel_path _expected_sha; do
+  [[ -n "$rel_path" ]] || continue
+  [[ -f "${TARGET_DIR}/${rel_path}" ]] && printf '%s\n' "$rel_path"
+done <"$MANIFEST_RECORDS" >"$EXISTING_PATHS"
+
+# Hash from inside TARGET_DIR so the tool reports the relative path verbatim,
+# which keeps the join key identical to the manifest key.
+if [[ -s "$EXISTING_PATHS" ]]; then
+  (
+    cd "$TARGET_DIR" 2>/dev/null || exit 0
+    tr '\n' '\0' <"$EXISTING_PATHS" | xargs -0 "${SHA_CMD[@]}" 2>/dev/null
+  ) | awk '{ hash = $1; sub(/^[^ ]+[ ]+/, ""); print $0 "\t" hash }' >"$ACTUAL_HASHES"
+fi
+
+# Join expected (manifest) with actual (batch) on the relative path. Records
+# with no actual hash emit an empty third field, which the loop treats exactly
+# as the old "could not hash installed file" branch did.
+#
+# The file discriminator is FILENAME, deliberately NOT the usual NR == FNR
+# idiom: when every managed file is absent the actual-hash file is empty, and
+# NR == FNR then stays true while reading the SECOND file, swallowing every
+# manifest record into the lookup and printing nothing. That would make the
+# verifier exit 0 on a payload with missing required files — a silent loss of
+# exactly the detection this script exists to provide.
+awk -F'\t' -v actual_file="$ACTUAL_HASHES" '
+  FILENAME == actual_file { actual[$1] = $2; next }
+  { print $1 "\t" $2 "\t" ($1 in actual ? actual[$1] : "") }
+' "$ACTUAL_HASHES" "$MANIFEST_RECORDS" >"$JOINED_RECORDS"
+
+while IFS=$'\t' read -r rel_path expected_sha actual_sha; do
   [[ -n "$rel_path" ]] || continue
   installed="${TARGET_DIR}/${rel_path}"
   if [[ ! -f "$installed" ]]; then
@@ -225,8 +284,7 @@ while IFS=$'\t' read -r rel_path expected_sha; do
     required managed file is missing"
     continue
   fi
-  actual_sha=""
-  if ! actual_sha="$(sha256_of "$installed" 2>/dev/null)"; then
+  if [[ -z "$actual_sha" ]]; then
     failures="${failures}
   ${rel_path}
     could not hash installed file"
@@ -240,23 +298,7 @@ while IFS=$'\t' read -r rel_path expected_sha; do
   else
     verified=$((verified + 1))
   fi
-done < <(
-  awk '
-    BEGIN { section_line = "  \"managedFileChecksums\": [" }
-    $0 == section_line { in_section = 1; next }
-    in_section && ($0 == "  ]," || $0 == "  ]") { exit }
-    in_section {
-      path_value = $0
-      sub(/^.*"path": "/, "", path_value)
-      sub(/".*/, "", path_value)
-      sha_value = $0
-      sub(/^.*"sha256": "/, "", sha_value)
-      sub(/".*/, "", sha_value)
-      if (path_value != "" && sha_value != "")
-        print path_value "\t" sha_value
-    }
-  ' "$MANIFEST_FILE"
-)
+done <"$JOINED_RECORDS"
 
 if [[ -n "$failures" ]]; then
   echo "verify-payload-integrity: FAILED — ${verified} file(s) verified, but the following required framework file(s) are missing or do NOT match the release manifest (corruption or incomplete download):${failures}" >&2

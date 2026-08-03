@@ -40,6 +40,10 @@ fi
 # framework exists to prevent.
 PREPUSH_TIER="${BUBBLES_PREPUSH_TIER:-core}"
 
+# Per-process paths prevent concurrent pushes from overwriting each other's logs.
+PREPUSH_VALIDATE_LOG="/tmp/bubbles-pre-push-validate.$$.log"
+PREPUSH_RELEASE_LOG="/tmp/bubbles-pre-push-release.$$.log"
+
 # Per-process paths: a fixed name is silently overwritten by any concurrent push on the same machine.
 PREPUSH_VALIDATE_LOG="/tmp/bubbles-pre-push-validate.$$.log"
 PREPUSH_RELEASE_LOG="/tmp/bubbles-pre-push-release.$$.log"

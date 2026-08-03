@@ -410,8 +410,15 @@ export BUBBLES_REPO_ROOT="$tmp_root"
 
 # Materialize the OLD (pre-fix) guard inside the CLONE so its sibling fragments +
 # schema resolve; used ONLY for the non-tautology teeth-proof.
+# A shallow clone (actions/checkout default fetch-depth: 1) does not carry that
+# commit, so the teeth-proof degrades to SKIP rather than failing the selftest.
 OLD_GUARD="$tmp_root/bubbles/scripts/state-transition-guard.sh"
-git -C "$REPO_ROOT" show "$OLD_GUARD_REF:bubbles/scripts/state-transition-guard.sh" >"$OLD_GUARD"
+OLD_GUARD_AVAILABLE=1
+if git -C "$REPO_ROOT" rev-parse --verify --quiet "${OLD_GUARD_REF}^{commit}" >/dev/null 2>&1; then
+  git -C "$REPO_ROOT" show "$OLD_GUARD_REF:bubbles/scripts/state-transition-guard.sh" >"$OLD_GUARD"
+else
+  OLD_GUARD_AVAILABLE=0
+fi
 
 # ---- CONTROL PASS (a): bare `- [x]` item + inline fenced command block ----
 control_inline_dir="$tmp_root/specs/950-c9-control-inline"
@@ -718,10 +725,14 @@ assert_check9_covers "$toollog_ok_dir" \
 
 echo ""
 echo "=== NON-TAUTOLOGY: #1 and #5 must PASS on the OLD guard ($OLD_GUARD_REF) ==="
-assert_old_guard_passes "$bare_marker_dir" \
-  "NON-TAUTOLOGY (#1): bare-marker fixture passes the OLD guard"
-assert_old_guard_passes "$uppercase_dir" \
-  "NON-TAUTOLOGY (#5): uppercase-checkbox fixture passes the OLD guard"
+if [[ "$OLD_GUARD_AVAILABLE" -eq 1 ]]; then
+  assert_old_guard_passes "$bare_marker_dir" \
+    "NON-TAUTOLOGY (#1): bare-marker fixture passes the OLD guard"
+  assert_old_guard_passes "$uppercase_dir" \
+    "NON-TAUTOLOGY (#5): uppercase-checkbox fixture passes the OLD guard"
+else
+  echo "SKIP: NON-TAUTOLOGY (#1/#5) — old-guard commit $OLD_GUARD_REF is absent from this clone (shallow checkout); fetch full history to run the teeth-proof"
+fi
 
 echo ""
 echo "=============================================================="

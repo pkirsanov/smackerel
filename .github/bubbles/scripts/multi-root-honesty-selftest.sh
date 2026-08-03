@@ -37,6 +37,9 @@ CLOSEOUT="$SCRIPT_DIR/closeout-report.sh"
 # would fail for a reason that has nothing to do with the behaviour being tested.
 TMP_ROOT="$(cd "$(mktemp -d)" && pwd -P)"
 trap 'rm -rf "$TMP_ROOT"' EXIT
+mkdir -p "$TMP_ROOT/control-home"
+chmod 700 "$TMP_ROOT/control-home"
+export BUBBLES_SESSION_CONTROL_HOME="$TMP_ROOT/control-home"
 
 failures=0
 pass() { printf 'PASS: %s\n' "$1"; }

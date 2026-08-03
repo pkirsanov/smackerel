@@ -172,7 +172,7 @@ Ledger entry: propagation-ledger.yaml +1 line
 Operation: backport
 Edge: prod → experimental
 Reason: backportRequiresApproval=true in policy
-Next step: operator runs /bubbles.workflow propagate-backport from prod to experimental --approval-token=<sha>
+Next step: operator runs /bubbles.workflow propagate action:backport from prod to experimental --approval-token=<sha>
 ```
 
 ### 🔴 BLOCKED
