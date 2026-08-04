@@ -999,6 +999,18 @@ tier_interactive_model_or_override() {
   fi
 }
 
+# Vision slots fall back to the base multimodal model, never the tier's
+# interactive (text) model, which is not guaranteed to be multimodal.
+vision_model_or_override() {
+  local override_key="$1"
+  local value
+  if value="$(yaml_get "environments.$TARGET_ENV.$override_key" 2>/dev/null)"; then
+    printf '%s' "$value"
+  else
+    printf '%s' "$(required_value llm.ollama_vision_model)"
+  fi
+}
+
 # Spec 045 BUG-045-001 — per-env overrides preserved as tier-orthogonal layer.
 LLM_MODEL="$(tier_interactive_model_or_override llm_model)"
 LLM_API_KEY="$(required_value llm.api_key)"
@@ -1026,7 +1038,7 @@ if [[ -z "$OLLAMA_URL" ]]; then
 fi
 
 OLLAMA_MODEL="$(tier_interactive_model_or_override ollama_model)"
-OLLAMA_VISION_MODEL="$(tier_interactive_model_or_override ollama_vision_model)"
+OLLAMA_VISION_MODEL="$(vision_model_or_override ollama_vision_model)"
 
 # Spec 096 SCOPE-01 — Multi-Provider Model Connection registry. The
 # llm.connections[] list is carried as ONE compact JSON array
@@ -1882,7 +1894,7 @@ AGENT_PROVIDER_FAST_MODEL="$(tier_interactive_model_or_override agent_provider_f
 AGENT_PROVIDER_VISION_PROVIDER="$(required_value agent.provider_routing.vision.provider)"
 # Spec 061 SCOPE-06c — vision falls back to the interactive cell on cpu (no
 # separate vision model on 0.5b); accel can opt-up via environments.<env>.
-AGENT_PROVIDER_VISION_MODEL="$(tier_interactive_model_or_override agent_provider_vision_model)"
+AGENT_PROVIDER_VISION_MODEL="$(vision_model_or_override agent_provider_vision_model)"
 AGENT_PROVIDER_OCR_PROVIDER="$(required_value agent.provider_routing.ocr.provider)"
 # Per-env override (mirrors OLLAMA_MEMORY_LIMIT / OLLAMA_ENABLED): a
 # production-class target (e.g. self-hosted) sets the OCR specialist to its pulled
