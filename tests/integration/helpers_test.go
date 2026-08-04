@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -14,11 +15,60 @@ import (
 	"github.com/nats-io/nats.go/jetstream"
 )
 
+// devStackMarkers are the SST-derived identifiers that appear ONLY in the
+// persistent dev/prod stack's connection URLs. config/smackerel.yaml pins dev
+// to host ports 40001-40002 (core/ml) and 42001-42006 (infra), while the
+// disposable test stack uses 45001-45002 and 47001-47006. These prefixes
+// therefore separate the two WITHOUT matching the container-internal ports
+// (:5432, :4222, :8080) that every stack shares — the in-network URLs the
+// `test integration` lane injects must keep passing.
+var devStackMarkers = []string{
+	"smackerel-dev",
+	"smackerel-prod",
+	":4000", // dev core/ml host-port prefix (core_host_port 40001, ml_host_port 40002)
+	":4200", // dev infra host-port prefix (postgres 42001, nats 42002-42003)
+}
+
+// disposableStackViolation reports a live-stack connection URL that points at
+// the persistent dev/prod stack instead of the disposable test stack. Env
+// access is injected so the adversarial cases can exercise it without mutating
+// process state.
+//
+// The returned error names the offending variable and the matched marker but
+// NEVER the value: DATABASE_URL and NATS_URL embed credentials, and test
+// output is not a safe place for them.
+func disposableStackViolation(lookup func(string) string) error {
+	for _, key := range []string{"DATABASE_URL", "NATS_URL"} {
+		value := lookup(key)
+		if value == "" {
+			continue
+		}
+		for _, marker := range devStackMarkers {
+			if strings.Contains(value, marker) {
+				return fmt.Errorf("%s contains persistent dev/prod stack marker %q — refuse to run; live-stack integration tests require the disposable test stack (Compose project smackerel-test, host ports 45001-45002/47001-47006)", key, marker)
+			}
+		}
+	}
+	return nil
+}
+
+// requireDisposableStack fails loudly when the live-stack env points at the
+// persistent dev stack. This package contains committed destructive DDL —
+// TestMigrations_TableDropAndRecreate drops lists/list_items with CASCADE and
+// COMMITS the drop — so the assertion must run BEFORE any connection is opened.
+func requireDisposableStack(t *testing.T) {
+	t.Helper()
+	if err := disposableStackViolation(os.Getenv); err != nil {
+		t.Fatalf("integration: %v", err)
+	}
+}
+
 // testPool returns a pgxpool connected to the test database.
 // The pool is closed automatically when the test completes.
 // Skips the test if DATABASE_URL is not set.
 func testPool(t *testing.T) *pgxpool.Pool {
 	t.Helper()
+	requireDisposableStack(t)
 
 	dbURL := os.Getenv("DATABASE_URL")
 	if dbURL == "" {
@@ -47,6 +97,7 @@ func testPool(t *testing.T) *pgxpool.Pool {
 // Skips the test if NATS_URL is not set.
 func testNATSConn(t *testing.T) *nats.Conn {
 	t.Helper()
+	requireDisposableStack(t)
 
 	natsURL := os.Getenv("NATS_URL")
 	if natsURL == "" {

@@ -641,3 +641,192 @@ $ git diff --stat -- specs/031-live-stack-testing/state.json specs/031-live-stac
 ### Outcome
 
 **`route_required`** — drift catalog finalized; artifact state reconciled to match strict-guard verdict; remediation routed via `BUG-031-006-strict-guard-gate-drift`. `nextRequiredOwner: bubbles.design` (to design the closure across the 5 scopes).
+
+---
+
+## Gaps Evidence
+
+**Executed:** YES
+**Phase Agent:** bubbles.gaps
+**Command:** `./smackerel.sh test unit --go`
+**Claim Source:** direct execution in this session (2026-08-04) + direct file reads
+
+Spec/design promises were traced against real source before the verification run. Every
+promised artifact in `design.md` § *Integration Test Structure* / *E2E Test Structure*
+exists on disk, every `Test*` function named in the `scopes.md` Test Plans exists, the SST
+test-isolation block is real, and the ML readiness gate is wired into production (not dead
+code). Verification command exited 0 with zero `FAIL` lines across 146 `ok` packages,
+including `internal/api` (the package that owns the readiness gate).
+
+```
+$ ./smackerel.sh test unit --go
+oom-preflight: OK — 36988 MB available (need 6000 MB; swap used 40 MB).
+disk-preflight: OK — C: 149 GB free (need 40 GB), WSL / 596 GB free (need 25 GB).
++ source /workspace/scripts/runtime/_ensure_envsubst.sh
+[go-unit] envsubst missing — installing gettext-base
+[go-unit] gettext-base install OK
+ok      github.com/smackerel/smackerel/internal/api     5.686s
+ok      github.com/smackerel/smackerel/internal/api/graphapi    (cached)
+ok      github.com/smackerel/smackerel/tests/e2e/agent  (cached)
+ok      github.com/smackerel/smackerel/tests/integration        (cached) [no tests to run]
+ok      github.com/smackerel/smackerel/tests/observability      (cached)
+ok      github.com/smackerel/smackerel/tests/stress/readiness   (cached)
+ok      github.com/smackerel/smackerel/tests/unit/clients       (cached)
+ok      github.com/smackerel/smackerel/web/pwa/tests    (cached)
++ echo '[go-unit] go test ./... finished OK'
+[go-unit] go test ./... finished OK
+UNIT_GO_EXIT=0
+```
+
+### Promise-vs-Reality Trace (all ✅ MATCH)
+
+```
+$ for f in tests/integration/helpers_test.go tests/integration/db_migration_test.go tests/integration/nats_stream_test.go tests/integration/artifact_crud_test.go tests/integration/ml_readiness_test.go tests/e2e/capture_process_search_test.go tests/e2e/domain_e2e_test.go tests/e2e/browser_history_e2e_test.go tests/e2e/lib/helpers.sh tests/stress/ml_readiness_timeout_stress_test.go internal/api/ml_readiness.go internal/api/health.go; do if [ -f "$f" ]; then echo "PRESENT $(wc -l < "$f" | tr -d ' ') lines  $f"; else echo "ABSENT                 $f"; fi; done
+PRESENT 144 lines  tests/integration/helpers_test.go
+PRESENT 305 lines  tests/integration/db_migration_test.go
+PRESENT 508 lines  tests/integration/nats_stream_test.go
+PRESENT 1033 lines  tests/integration/artifact_crud_test.go
+PRESENT 152 lines  tests/integration/ml_readiness_test.go
+PRESENT 253 lines  tests/e2e/capture_process_search_test.go
+PRESENT 212 lines  tests/e2e/domain_e2e_test.go
+PRESENT 377 lines  tests/e2e/browser_history_e2e_test.go
+PRESENT 253 lines  tests/e2e/lib/helpers.sh
+PRESENT 285 lines  tests/stress/ml_readiness_timeout_stress_test.go
+PRESENT 52 lines  internal/api/ml_readiness.go
+PRESENT 907 lines  internal/api/health.go
+```
+
+| Spec/design promise | Reality | Verdict |
+|---|---|---|
+| 5 integration test files (design § Integration Test Structure) | all present, 2142 LOC total | ✅ MATCH |
+| 3 E2E test files + `lib/helpers.sh` (design § E2E Test Structure) | all present | ✅ MATCH |
+| Scope 2 `TestMigrations_*` (6 named) | 8 present (`db_migration_test.go:15,50,81,115,135,162,269,289`) | ✅ MATCH (superset) |
+| Scope 3 `TestNATS_*` (4 named) | 7 present (`nats_stream_test.go:17,96,166,240,310,391,486`) | ✅ MATCH (superset) |
+| Scope 4 CRUD/vector/annotation/list funcs (5 named) | 13 present (`artifact_crud_test.go:20…998`) | ✅ MATCH (superset) |
+| Scope 5 `TestE2E_CaptureProcessSearch` | present `capture_process_search_test.go:51` (+ adversarial `:204`, + `domain_e2e_test.go:19`) | ✅ MATCH |
+| Scope 6 `TestMLReadiness_*` (4 named) | 5 integration (`ml_readiness_test.go:21,59,88,101,119`) + 3 stress (`:148,202,249`) | ✅ MATCH (superset) |
+| Spec AC "11 streams verified" | all 11 named streams in `expectedStreams` (`nats_stream_test.go:70-72`) | ✅ MATCH |
+| SCN-LST-005 SST isolation (project + ports + volumes) | `config/smackerel.yaml:2586-2608` — `compose_project: smackerel-test`, 47001-47005/45001-45002, `smackerel-test-*` volumes | ✅ MATCH |
+| Scope 6 SST flow `services.ml.readiness_timeout_s` → `buildCoreServices` | `config/smackerel.yaml:1844→1853` → `scripts/commands/config.sh:727` → `internal/config/config.go:1209,1251` → `cmd/core/services.go:305-307` | ✅ MATCH |
+| Spec AC "falls back to text mode" | `internal/api/search.go:327` returns `"text_fallback"` on `!isMLHealthy(ctx)` | ✅ MATCH |
+| `WaitForMLReady` reachable from production (not dead code) | called at `cmd/core/services.go:307` | ✅ MATCH |
+
+### Findings (7 — 2 medium, 5 low; no 🔴 MISSING, no functional defect)
+
+**G-031-GAPS-001 🟣 DIVERGENT (medium) — readiness gate is non-blocking; Scope 6 Gherkin promises blocking-then-vector.**
+`design.md` says "core **blocks** search NATS operations until ML sidecar reports healthy";
+`spec.md` Gherkin says "the core **waits** for sidecar health before attempting NATS embed";
+`scopes.md` Scope 6 Gherkin adds "**And search completes via vector mode (not text fallback)**".
+Reality: `cmd/core/services.go:307` dispatches `go svc.searchEngine.WaitForMLReady(ctx, readinessTimeout)`
+in a background goroutine, and `internal/api/search.go:327` returns `"text_fallback"` immediately
+when the sidecar is not yet healthy. The in-code comment at `cmd/core/services.go:298-304`
+documents this as a **deliberate** trade (the HTTP listener must bind so `/api/health` answers the
+Docker healthcheck `start_period` on a cold build) and states outright that "Search requests that
+arrive before the gate completes fall back to text mode". Spec's acceptance criterion
+("readiness gate prevents search embed timeouts during container cold start") **is** satisfied — the
+embed is skipped, so nothing times out. The stronger Scope-6 Gherkin clause is **not**.
+*Follow-up owner:* `bubbles.plan` (Scope 6 Gherkin) + design.md owner. *Action:* reword the Gherkin
+to the implemented non-blocking contract, or open a bug if blocking was genuinely intended.
+
+**G-031-GAPS-002 ⬛ UNTESTED / proxy test (medium) — `TestMLReadiness_WaitForHealthy` carries a scenario it does not validate.**
+`tests/integration/ml_readiness_test.go:15-20` reproduces the Scope 6 Gherkin verbatim as the test's
+doc comment, including "When a search request arrives within 10s of startup" and "And search
+completes via vector mode (not text fallback)". The body (`:21-56`) constructs
+`api.SearchEngine{MLSidecarURL, HealthCacheTTL}` with **no `Pool` and no `NATS`**, calls
+`WaitForMLReady` directly, and asserts only `ready == true` and `elapsed >= 2s`. It issues **no
+search request** and makes **no vector-vs-text-fallback assertion**. None of the 5 integration funcs
+or 3 stress funcs exercises the production background-goroutine dispatch at `cmd/core/services.go:307`.
+*Follow-up owner:* `bubbles.test` (+ `bubbles.plan` for the Scope 6 Test Plan row). *Action:* either
+add a test that performs a search during the gate window and asserts the search mode, or retitle the
+scenario comment to the behavior actually asserted.
+
+**G-031-GAPS-003 🟣 DIVERGENT (low) — `design.md` Key Design Decision #1 promises `docker-compose.test.yml`; it does not exist.**
+`ls docker-compose*.yml` → `docker-compose.e2e-ui.override.yml`, `docker-compose.graph-disabled.override.yml`,
+`docker-compose.prod.yml`, `docker-compose.yml` only. `scopes.md` Scope 1 documents the deliberate
+supersession ("No additional `docker-compose.test.yml` override needed — the existing SST pipeline is
+the correct pattern"), and `design.md`'s own § *Test Stack Configuration* already describes the SST
+approach — so `design.md` contradicts itself. *Follow-up owner:* design.md owner.
+
+**G-031-GAPS-004 🟣 DIVERGENT (low) — `design.md` Risks table names a port block that does not exist.**
+Risk #1 mitigation says "Use offset ports (15432, 14222, 18080, 18081)".
+`grep -nE "15432|14222|18080|18081" config/smackerel.yaml` → zero matches. Actual test allocation is
+47001-47005 + 45001/45002, which `design.md` § *Test Stack Configuration* already states correctly.
+*Follow-up owner:* design.md owner.
+
+**G-031-GAPS-005 🟣 DIVERGENT (low) — `design.md` pseudocode names the wrong file and symbol.**
+`design.md` § *ML Sidecar Readiness Gate* is headed `// internal/api/search.go` and declares
+`func (s *SearchEngine) waitForMLReady(...)` (unexported). Reality is `internal/api/ml_readiness.go`
+with the exported `func (s *SearchEngine) WaitForMLReady(...)`; `grep -rn "waitForMLReady" internal/ tests/`
+returns zero matches repo-wide. `scopes.md` already records the real path, so only design.md is stale.
+*Follow-up owner:* design.md owner.
+
+**G-031-GAPS-006 🔵 UNDOCUMENTED (low) — stream count drifted; three spec surfaces disagree.**
+`scopes.md` § *Execution Outline* says "verify **9** streams"; `spec.md` and the Scope 3 Gherkin say
+"**11** streams"; `nats_stream_test.go:70-72` `expectedStreams` asserts **12** (the 11 plus `WEATHER`),
+while `streamCaps`/`smacknats.AllStreams()` at `:25-42` covers **15** (adds `DRIVE`, `PHOTOS`, `AGENT`).
+Spec 031's acceptance criterion is satisfied — all 11 named streams are asserted. `DRIVE`/`PHOTOS`/`AGENT`
+are created by the provisioning loop but are not in the explicit existence-verification list; they belong
+to later specs, not 031. *Follow-up owner:* `bubbles.plan` (reconcile the outline's "9").
+
+**G-031-GAPS-007 🔵 stale evidence (low) — two `wc -l` figures in `scopes.md` DoD evidence are outdated.**
+Scope 5 evidence claims `tests/e2e/capture_process_search_test.go` → `166`; actual **253**.
+Scope 3 evidence claims `tests/integration/nats_stream_test.go` → `401`; actual **508**.
+The other two are accurate (`db_migration_test.go` 305 ✅, `internal/api/ml_readiness.go` 52 ✅). Both files
+grew via later chaos/spec-046 additions, so the implementation is a **superset** of what was recorded —
+no behavior is missing. *Follow-up owner:* `bubbles.plan`.
+
+**Observation (not a finding).** `scopes.md` § *Change Boundary* lists `cmd/core/**` as an excluded
+surface, while the Scope 6 DoD claims the SST flow terminates in `buildCoreServices` and the production
+call site is in fact `cmd/core/services.go:307`. The Change Boundary was added later by BUG-031-006 to
+constrain *closure* edits, so the pre-existing call site is not a boundary violation — but the two texts
+are in tension and a future reader could misread one as contradicting the other.
+
+### Verdict
+
+**⚠️ MINOR_GAPS_REMAIN** — every `spec.md` acceptance criterion has real implementation backed by real
+tests, the readiness gate is genuinely wired into production, and `./smackerel.sh test unit --go` is
+green (exit 0). No requirement is 🔴 MISSING and no functional defect was found. The 7 findings are
+documentation-fidelity drift (5 low) plus one implemented-contract-vs-stated-contract divergence and its
+matching proxy test (2 medium), all recorded above as observation-shaped follow-ups with named owners.
+
+### Outcome
+
+**`completed_diagnostic`** — gaps phase executed and recorded. Findings are severity low/medium with
+follow-up owners named; none requires blocking remediation, and none is owned by `bubbles.gaps`
+(`spec.md`, `design.md`, `scopes.md` are foreign-owned; this phase appended to `report.md` and recorded
+its own phase only).
+
+## Harden Evidence — bubbles.harden (2026-08-04)
+
+**Executed:** YES (current session)
+**Agent:** `bubbles.harden`
+**Claim Source:** executed — every claim below traces to a command run in this session.
+
+### HARDEN-031-001 — live-stack integration helpers could open the persistent dev stack
+
+`tests/integration` commits destructive DDL: `TestMigrations_TableDropAndRecreate` runs `DROP TABLE ... CASCADE` and COMMITS it against whatever `DATABASE_URL` resolves to. `testPool` and `testNATSConn` applied no stack assertion, so a mis-set `DATABASE_URL` would have destroyed the persistent dev stack rather than the disposable test stack.
+
+The sibling stress lane already guards this way (`tests/stress/ml_readiness_timeout_stress_test.go`), but its markers cover only the core host-port prefixes (`:4000`/`:4100`) and would NOT catch the dev postgres on `42001` — which is the adversarial case now covered.
+
+Fix: `requireDisposableStack` refuses before any connection is opened when `DATABASE_URL` or `NATS_URL` carries a persistent dev/prod marker. The refusal names the offending variable and the matched marker but never the value, because both URLs embed credentials.
+
+Files: `tests/integration/helpers_test.go`, new `tests/integration/helpers_disposable_stack_test.go`.
+
+### Executed verification
+
+```
+$ ./smackerel.sh check
+exit=0
+
+$ ./smackerel.sh test integration
+--- PASS: TestDisposableStackGuard_RejectsDevPostgresHostPort (0.00s)
+--- PASS: TestDisposableStackGuard_RejectsDevNATSHostPort (0.00s)
+--- PASS: TestDisposableStackGuard_DoesNotLeakCredentials (0.00s)
+--- PASS: TestDisposableStackGuard_AllowsTestStackURLs (0.00s)
+    --- PASS: TestDisposableStackGuard_AllowsTestStackURLs/in-network_container_ports_injected_by_smackerel.sh (0.00s)
+    --- PASS: TestDisposableStackGuard_AllowsTestStackURLs/disposable_test_stack_host_ports (0.00s)
+--- PASS: TestDisposableStackGuard_AllowsUnsetEnv (0.00s)
+(0 FAIL lines across the full integration suite)
+```
+
+**Uncertainty Declaration:** the guard is proven by the unit-level adversarial cases above and by the full integration suite still passing with the real injected URLs. It was **not** exercised by actually pointing `DATABASE_URL` at the live dev stack, which would have risked the very data loss the guard exists to prevent.

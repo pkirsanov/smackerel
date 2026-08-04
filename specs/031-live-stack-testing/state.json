@@ -53,7 +53,9 @@
       "regression",
       "simplify",
       "stabilize",
-      "security"
+      "security",
+      "gaps",
+      "harden"
     ],
     "scopeProgress": [
       {
