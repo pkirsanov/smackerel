@@ -187,7 +187,7 @@ cors:
 # envelope arithmetic there and docs/Operations.md "Model Envelope Sizing".
 llm:
   provider: "ollama" # REQUIRED: set to ollama, openai, or anthropic
-  model: qwen3:30b-a3b # APPROVED min-set generalist (31801 MiB resident @ num_ctx 32768 × 4 parallel)
+  model: gemma3:4b # GENERIC commodity base; operator selection is adapter-injected at apply (knb model_selection)
   api_key: "dev-not-needed-for-ollama"
   # OPERATOR-SUPPLIED SEAM — intentionally EMPTY here. The shared host Ollama
   # address is per-operator deployment topology and MUST NOT be committed
@@ -197,11 +197,11 @@ llm:
   # when neither this key nor SMACKEREL_OLLAMA_URL yields a value — never a
   # silent localhost/container default (smackerel-no-defaults).
   ollama_url: ""
-  ollama_model: qwen3:30b-a3b # APPROVED min-set generalist
-  ollama_vision_model: gemma4:26b # APPROVED min-set vision/multimodal (24772 MiB resident @ num_ctx 8192 × 4 parallel)
-  ollama_ocr_model: deepseek-ocr:3b # APPROVED min-set OCR specialist (2828 MiB resident @ num_ctx 4096 × 4 parallel)
-  ollama_reasoning_model: qwen3:30b-a3b # APPROVED min-set reasoning (the min-set carries no separate reasoning specialist)
-  ollama_fast_model: qwen3:30b-a3b # APPROVED min-set fast role (MoE: 30B total / 3B active, so it IS the fast path)
+  ollama_model: gemma3:4b # GENERIC commodity base
+  ollama_vision_model: gemma3:4b # GENERIC commodity multimodal base (text+vision at q4_K_M)
+  ollama_ocr_model: deepseek-ocr:3b # commodity OCR specialist (2828 MiB resident @ num_ctx 4096 × 4 parallel)
+  ollama_reasoning_model: gemma3:4b # GENERIC commodity base
+  ollama_fast_model: gemma3:4b # GENERIC commodity base
 
   # ───────────────────────────────────────────────────────────────────
   # Spec 096 SCOPE-01 — Multi-Provider AI Model Connections (registry).
@@ -1155,7 +1155,7 @@ models:
   tiers:
     cpu:
       interactive:
-        model: qwen3:30b-a3b
+        model: gemma3:4b
         retrieval_qa_timeout_ms: 120000
         retrieval_qa_per_tool_timeout_ms: 60000
         # BUG-061-003 — recipe_search shares the retrieval substrate so
@@ -1163,20 +1163,20 @@ models:
         recipe_search_timeout_ms: 120000
         recipe_search_per_tool_timeout_ms: 60000
       background:
-        model: qwen3:30b-a3b
+        model: gemma3:4b
         retrieval_qa_timeout_ms: 300000
         retrieval_qa_per_tool_timeout_ms: 150000
         recipe_search_timeout_ms: 300000
         recipe_search_per_tool_timeout_ms: 150000
     accel:
       interactive:
-        model: qwen3:30b-a3b
+        model: gemma3:4b
         retrieval_qa_timeout_ms: 120000
         retrieval_qa_per_tool_timeout_ms: 60000
         recipe_search_timeout_ms: 120000
         recipe_search_per_tool_timeout_ms: 60000
       background:
-        model: qwen3:30b-a3b
+        model: gemma3:4b
         retrieval_qa_timeout_ms: 300000
         retrieval_qa_per_tool_timeout_ms: 150000
         recipe_search_timeout_ms: 300000
@@ -1378,10 +1378,10 @@ assistant:
     provider: "searxng" # REQUIRED: "searxng" | "brave" | "tavily"
     provider_endpoint: "http://searxng:8080" # REQUIRED ("" permitted when enabled=false)
     provider_api_key: "" # REQUIRED ("" allowed for searxng; brave/tavily must be non-empty when enabled)
-    llm_model_id: "gemma4:26b" # REQUIRED ("" permitted when enabled=false). APPROVED MIN-SET (2026-07-30) — the GATHER (tool-calling) turns. gemma4:26b is the min-set's proven tool-caller; the superseded gemma3:4b errors "does not support tools" under tools=[], so it was never a valid gather model — dev only got away with it because dev had no daemon. Dev now issues against the shared host daemon, so the gather model must be genuinely tool-capable. The forced-final SYNTHESIS turn uses synthesis_model_id below.
-    synthesis_model_id: "qwen3:30b-a3b" # REQUIRED ("" permitted when enabled=false). Spec 087 — model for the tools-stripped forced-final SYNTHESIS turn (and its retries). APPROVED MIN-SET (2026-07-30): qwen3:30b-a3b is the operator-optimized standing synthesis default (per 2026-06-21), superseding the interim gpt-oss:20b and spec 089's deepseek-r1:32b. This base value now MATCHES the self-hosted params.yaml override (model_selection.assistant_open_knowledge_synthesis_model_id) instead of diverging from it. Envelope: 31801 MiB resident (18432 weights + 13369 KV @ num_ctx 32768 × 4 parallel) inside the 32768 MiB / 32G envelope under the default max_loaded_models=1 swap posture; if an operator raises max_loaded_models above 1, the standing-default co-residence guard in validateModelEnvelopes enforces gather+synthesis fail-loud.
-    switchable_models: [ "qwen3:30b-a3b" ] # REQUIRED non-empty when enabled. Spec 088 — the allowlist of models /ask may be runtime-switched TO on the SYNTHESIS turn (per-request --model= / API model). APPROVED MIN-SET (2026-07-30): the min-set's only synthesis-class model, == the standing synthesis default above (switching to it is a no-op that keeps the path testable). Each entry MUST have a model_memory_profiles entry AND co-resident-fit the env ollama envelope when loaded alongside llm_model_id (gather) — validated fail-loud in internal/config/config.go::validateModelEnvelopes (G028 / FR-10). NEVER a silent default.
-    tool_capable_gather_models: [ "gemma4:26b" ] # REQUIRED non-empty when enabled. Spec 089 — the allowlist of models the GATHER (tool-calling) turn may be runtime-switched TO (--gather-model= / API gather_model). Each MUST be tool-calling-capable on Ollama. APPROVED MIN-SET (2026-07-30): gemma4:26b is the min-set's tool-capable model and the baseline llm_model_id, satisfying the invariant that the baseline MUST be a member (the no-override gather path always passes). Each entry MUST have a model_memory_profiles entry — validated fail-loud in internal/config/config.go::validateModelEnvelopes (G028 / FR-8). NEVER a silent default.
+    llm_model_id: "gemma3:4b" # REQUIRED ("" permitted when enabled=false). GENERIC commodity base for the GATHER (tool-calling) turns. NOTE: gemma3:4b is NOT tool-calling-capable on Ollama (it errors "does not support tools"), so a working gather path REQUIRES a tool-capable model supplied by the deploy adapter (knb model_selection.assistant_open_knowledge_llm_model_id) or a local dev override. The base stays generic per the product-deployment boundary; operator/hardware-specific model selection is NEVER pinned here.
+    synthesis_model_id: "gemma3:4b" # REQUIRED ("" permitted when enabled=false). Spec 087 — model for the tools-stripped forced-final SYNTHESIS turn (and its retries). GENERIC commodity base (3584 weights + 1573 KV @ num_ctx 8192 × 4 parallel = 5157 MiB, inside the 8192 MiB / 8G commodity envelope). The operator's real synthesis model is adapter-injected at apply (knb model_selection.assistant_open_knowledge_synthesis_model_id).
+    switchable_models: [ "gemma3:4b" ] # REQUIRED non-empty when enabled. Spec 088 — the allowlist of models /ask may be runtime-switched TO on the SYNTHESIS turn (per-request --model= / API model). GENERIC commodity base, == the standing synthesis default above (switching to it is a no-op that keeps the path testable). Each entry MUST have a model_memory_profiles entry AND co-resident-fit the env ollama envelope when loaded alongside llm_model_id (gather) — validated fail-loud in internal/config/config.go::validateModelEnvelopes (G028 / FR-10). NEVER a silent default.
+    tool_capable_gather_models: [ "gemma3:4b" ] # REQUIRED non-empty when enabled. Spec 089 — the allowlist of models the GATHER (tool-calling) turn may be runtime-switched TO (--gather-model= / API gather_model). GENERIC commodity base satisfying the invariant that the baseline llm_model_id MUST be a member. NOTE: the commodity base is not itself tool-calling-capable; a genuinely tool-capable allowlist is adapter-injected at apply (knb model_selection.assistant_open_knowledge_tool_capable_gather_models). Each entry MUST have a model_memory_profiles entry — validated fail-loud in internal/config/config.go::validateModelEnvelopes (G028 / FR-8). NEVER a silent default.
     max_iterations: 6 # REQUIRED: > 0 when enabled. Spec 084 — raised 4->6 = 5 tool-calling turns + 1 forced-synthesis turn for multi-hop reasoning (comparison/why/recommend questions need evidence on every side before answering; the agent strips tools on the last iteration to force a text answer). Model matrix unchanged (gemma4:26b self-hosted / gemma3:4b dev).
     synthesis_retry_budget: 1 # REQUIRED: >= 0 when enabled. Spec 087 — number of stronger-prompt SYNTHESIS retries when the forced-final synthesis turn comes back empty/ungrounded, BEFORE the honest snippet salvage fires. 1 = one escalated "you already analyzed this; WRITE the verdict now, no <think>, no preamble" retry (rescues deepseek-r1's "thinks but does not conclude" failure mode). 0 = no retry (the exact spec-084 salvage timing). NOT a hidden default: 0 is an explicit, documented operator choice. Raising this raises the WriteTimeout worst case (cmd/core/main.go: (max_iterations + synthesis_retry_budget) * llm_timeout_ms).
     per_query_token_budget: 128000 # REQUIRED: > 0 when enabled. Spec 084 — raised 64000->128000: web_search snippets are re-added to context each iteration so cumulative tokens grow ~quadratically with iteration count; 4->6 iterations is ~2.25x, so the 6th synthesis turn needs headroom to avoid a premature cap_tokens refusal. 128000 = 50% of gemma4:26b ctx (262144); the production CostFn is zero-cost (local Ollama + searxng) so this budget is a pure safety guardrail.
@@ -1639,28 +1639,26 @@ agent:
     per_tool_timeout_ms_ceiling: 30000 # REQUIRED
   provider_routing:
     # Maps scenario.model_preference → ml/app/agent.py provider/model. SST.
-    # APPROVED MIN-SET ONLY (2026-07-30). Every role resolves to a model the
-    # shared host Ollama daemon actually carries. `reasoning` and `ocr` are
-    # read directly from here (env_override_value); `default`/`fast`/`vision`
-    # are superseded at generate time by the models.tiers interactive value
-    # or a per-env override, and are kept truthful so a future reader is not
-    # misled about which model a role denotes.
+    # GENERIC COMMODITY BASE. Operator/hardware-specific selection is
+    # adapter-injected at apply (knb model_selection) and never pinned here.
+    # `reasoning` and `ocr` are read directly from here (env_override_value);
+    # `default`/`fast`/`vision` are superseded at generate time by the
+    # models.tiers interactive value or a per-env override, and are kept
+    # truthful so a future reader is not misled about which model a role
+    # denotes.
     default:
       provider: "ollama"
-      model: "qwen3:30b-a3b"
+      model: "gemma3:4b"
     reasoning:
-      # The min-set carries no separate reasoning specialist; qwen3:30b-a3b
-      # IS the reasoning model (it supersedes deepseek-r1:7b/32b).
+      # The commodity base carries no separate reasoning specialist.
       provider: "ollama"
-      model: "qwen3:30b-a3b"
+      model: "gemma3:4b"
     fast:
-      # MoE: 30B total / 3B active per token, so the generalist IS the fast
-      # path. There is no smaller approved model to fall back to.
       provider: "ollama"
-      model: "qwen3:30b-a3b"
+      model: "gemma3:4b"
     vision:
       provider: "ollama"
-      model: "gemma4:26b"
+      model: "gemma3:4b"
     ocr:
       provider: "ollama"
       model: "deepseek-ocr:3b"
@@ -1814,14 +1812,15 @@ photos:
     # count). Applies to scope.photo_ids; removal_ids share the same cap.
     actions_max_scope_size: 50
   intelligence:
-    # APPROVED MIN-SET ONLY (2026-07-30). classify / sensitivity / aesthetic
-    # are all VISION tasks over photo binaries, so they route to the approved
-    # multimodal model; OCR keeps its approved specialist; embeddings run in
-    # the ml sidecar against the approved embedding model.
-    classify_model: gemma4:26b
+    # GENERIC COMMODITY BASE. classify / sensitivity / aesthetic are all
+    # VISION tasks over photo binaries, so they route to the commodity
+    # multimodal model; OCR keeps its specialist; embeddings run in the ml
+    # sidecar against the embedding model. Operator-specific selection is
+    # adapter-injected at apply (knb model_selection).
+    classify_model: gemma3:4b
     embed_model: nomic-embed-text
-    sensitivity_model: gemma4:26b
-    aesthetic_model: gemma4:26b
+    sensitivity_model: gemma3:4b
+    aesthetic_model: gemma3:4b
     ocr_model: deepseek-ocr:3b
     max_inflight_per_connector: 2
   providers:
@@ -2072,6 +2071,10 @@ services:
     # its model envs to it, so the validator and the ml sidecar's num_ctx
     # lookup both REQUIRE the profile to exist.
     model_memory_profiles:
+    - model: "gemma3:4b"
+      weights_mib: 3584 # 3.5 GiB multimodal (text+vision) at q4_K_M — commodity base
+      kv_mib_per_1k_ctx: 48
+      num_ctx: 8192
     - model: "gemma4:26b"
       weights_mib: 16384 # ~16 GiB MoE 26B at q4
       kv_mib_per_1k_ctx: 256 # gemma wide-head KV per 1k ctx per sequence
@@ -2115,29 +2118,25 @@ deploy_resources:
   smackerel_ml:
     cpus: "2.0"
     memory: "3G"
-  # APPROVED MIN-SET ENVELOPE (raised 8G → 32G, 2026-07-30). This is the
-  # sizing contract validateModelEnvelopes checks every configured model
-  # against; it is NOT a limit smackerel imposes on the operator's shared
-  # host daemon. Under the default on-demand-swap posture
+  # GENERIC COMMODITY ENVELOPE. This is the sizing contract
+  # validateModelEnvelopes checks every configured model against; it is NOT a
+  # limit smackerel imposes on the operator's shared host daemon. The
+  # operator's real envelope is adapter-injected at apply
+  # (knb model_selection.ollama_memory_limit), so this value sizes only the
+  # generic commodity base. Under the default on-demand-swap posture
   # (infrastructure.ollama.max_loaded_models: 1) the validator requires each
-  # model to fit ALONE, so the envelope must cover the LARGEST approved
+  # model to fit ALONE, so the envelope must cover the LARGEST configured
   # model. Arithmetic (resident = weights + kv_per_1k × num_ctx/1000 ×
   # num_parallel, num_parallel = 4):
-  #   qwen3:30b-a3b    18432 + 102×32768×4/1000 = 31801 MiB  ← largest
-  #   gemma4:26b       16384 + 256× 8192×4/1000 = 24772 MiB
+  #   gemma3:4b         3584 +  48× 8192×4/1000 =  5157 MiB  ← largest
   #   deepseek-ocr:3b   2304 +  32× 4096×4/1000 =  2828 MiB
-  # 31801 MiB ≤ 32768 MiB ("32G"), so every approved model fits. 8G (8192)
-  # could not hold ANY of them — the old value was sized for the eliminated
-  # 4B-class laptop models.
-  #
-  # Deliberately NOT sized for co-residence: raising max_loaded_models above
-  # 1 makes the validator require the working-set SUM (qwen3 31801 + gemma4
-  # 24772 = 56573 MiB), which 32G refuses fail-loud. That refusal is correct
-  # — an operator opting into co-residence must raise this envelope in their
-  # deploy overlay first. See docs/Operations.md "Model Envelope Sizing".
+  # 5157 MiB ≤ 8192 MiB ("8G"), so every commodity model fits. Operator-class
+  # models (qwen3:30b-a3b 31801 MiB, gemma4:26b 24772 MiB) do NOT fit here by
+  # design — they arrive with the adapter-injected 48G envelope.
+  # See docs/Operations.md "Model Envelope Sizing".
   ollama:
     cpus: "4.0"
-    memory: "32G"
+    memory: "8G"
   # Spec 049 FR-049-005(c) — Prometheus runs hardened with explicit CPU
   # and memory envelopes. Profile-gated (monitoring); when the operator
   # enables `--profile monitoring`, the deploy adapter MUST emit
@@ -2575,20 +2574,15 @@ environments:
     searxng_bind_address: "127.0.0.1"
     # APPROVED MIN-SET ONLY (2026-07-30) — dev issues these against the
     # shared host Ollama daemon (SMACKEREL_OLLAMA_URL), which carries only
-    # the approved models. These four keys are the per-env overrides that
-    # win over the models.tiers interactive value.
-    agent_provider_default_model: "qwen3:30b-a3b"
-    agent_provider_fast_model: "qwen3:30b-a3b"
-    llm_model: "qwen3:30b-a3b"
-    ollama_model: "qwen3:30b-a3b"
-    # REQUIRED override, not optional polish: AGENT_PROVIDER_VISION_MODEL and
-    # OLLAMA_VISION_MODEL fall back to the tier INTERACTIVE model when no
-    # per-env key is set. That was harmless while interactive was gemma3:4b
-    # (itself multimodal); with qwen3:30b-a3b as interactive it would
-    # silently route vision work to a text-only model. Pin the approved
-    # vision model explicitly.
-    agent_provider_vision_model: "gemma4:26b"
-    ollama_vision_model: "gemma4:26b"
+    # the approved models.
+    #
+    # No per-env model overrides: dev inherits the SAME generic commodity
+    # base the self-hosted bundle resolves, so the product repo pins no
+    # operator/hardware-specific model anywhere (product-deployment
+    # boundary). An operator who wants their real models in dev sets them in
+    # the gitignored .smackerel.local.env. Vision slots resolve from
+    # llm.ollama_vision_model (a multimodal model), not the tier interactive
+    # model, so no explicit vision pin is needed here.
   test:
     compose_project: smackerel-test
     postgres_host_port: 47001
