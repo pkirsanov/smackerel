@@ -39,7 +39,7 @@
 #   audit-done [--changed|--recertify-all]  Audit done specs using advisory/changed/recertification profiles
 #   autofix <spec>                Scaffold missing report sections
 #   metrics <subcommand>          Manage metrics and activity tracking
-#   lessons [--all|compact]       View or compact lessons-learned memory
+#   lessons [add|--all|compact]   Record, view, or compact lessons-learned memory
 #   skill-proposals [subcommand]  Show or dismiss generated skill proposals
 #   profile [subcommand]          Show, list, or change adoption profiles plus developer observations
 #   sunnyvale <alias>             Resolve a Sunnyvale alias (agent or mode)
@@ -1271,7 +1271,7 @@ Commands:
   hooks <subcommand>            Manage git hooks (catalog|list|install|add|remove|run|status)
   project [gates <subcmd>]      Manage project extensions (bubbles-project.yaml)
   metrics <subcommand>          Manage metrics (enable|disable|activity-enable|activity-disable|status|summary|gates|agents)
-  lessons [--all|compact]       View or compact lessons-learned memory
+  lessons [add|--all|compact]   Record, view, or compact lessons-learned memory
   skill-proposals [subcommand]  Show or dismiss generated skill proposals
   profile [subcommand]          Show, list, or change adoption profiles plus developer observations
   upgrade [version] [--dry-run] Upgrade Bubbles to latest or specific version
@@ -3532,6 +3532,44 @@ cmd_lessons() {
   local subcmd="${1:-}"
 
   case "$subcmd" in
+    add)
+      shift
+      local problem="" root_cause="" fix="" applies_when="" flag=""
+      while [[ $# -gt 0 ]]; do
+        flag="$1"
+        case "$flag" in
+          --problem|--root-cause|--fix|--applies-when)
+            # Guard the value BEFORE shifting: `shift 2` with one argument left
+            # fails without shifting, which would spin this loop forever.
+            if [[ $# -lt 2 ]]; then
+              die "lessons add: $flag requires a value"
+            fi
+            case "$flag" in
+              --problem) problem="$2" ;;
+              --root-cause) root_cause="$2" ;;
+              --fix) fix="$2" ;;
+              --applies-when) applies_when="$2" ;;
+            esac
+            shift 2
+            ;;
+          *) die "Unknown lessons add option: $flag. Expected --problem, --root-cause, --fix, --applies-when" ;;
+        esac
+      done
+      if [[ -z "$problem" || -z "$root_cause" || -z "$fix" || -z "$applies_when" ]]; then
+        die "lessons add requires all four fields: --problem, --root-cause, --fix, --applies-when"
+      fi
+      # One entry is one LINE because the skill-evolution detector clusters per
+      # line; splitting the four fields across lines would fragment the cluster.
+      local entry
+      entry="$(printf -- '- problem: %s; root cause: %s; fix: %s; applies when: %s' \
+        "$problem" "$root_cause" "$fix" "$applies_when" | tr '\n|' '  ')"
+      mkdir -p "$(dirname "$lessons_file")"
+      if [[ ! -f "$lessons_file" ]]; then
+        printf '# Lessons\n\n' > "$lessons_file"
+      fi
+      printf '%s\n' "$entry" >> "$lessons_file"
+      echo "✅ Recorded 1 lesson in .specify/memory/lessons.md"
+      ;;
     compact)
       if [[ ! -f "$lessons_file" ]]; then
         echo "No lessons file found."
@@ -3566,7 +3604,7 @@ cmd_lessons() {
         echo "No lessons recorded yet."
       fi
       ;;
-    *) die "Unknown lessons subcommand: $subcmd. Try: compact, --all, or no argument for recent" ;;
+    *) die "Unknown lessons subcommand: $subcmd. Try: add, compact, --all, or no argument for recent" ;;
   esac
 }
 

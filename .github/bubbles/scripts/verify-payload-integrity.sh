@@ -147,6 +147,39 @@ fi
 
 sha256_of() { "${SHA_CMD[@]}" "$1" | awk '{print $1}'; }
 
+# Grant-aware reconcile, mirroring downstream-framework-write-guard.sh. A
+# restricted orchestrator's `tools:` line is a rendered surface: the installer
+# materializes the per-repo MCP server id (bubbles-<slug>) and mcp-grant-sync
+# injects operator-declared grants. Both are legitimate derivations, so the
+# installed bytes differ from the canonical bytes the manifest pins. Reusing the
+# shared canonicalizer keeps ONE implementation of that transform instead of a
+# second copy here that could drift from it.
+VPI_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+RECONCILE_AVAILABLE="false"
+MCP_GRANT_CONFIG=""
+if [[ -f "$VPI_SCRIPT_DIR/mcp-grant-reconcile.sh" ]]; then
+  # shellcheck source=/dev/null
+  source "$VPI_SCRIPT_DIR/mcp-grant-reconcile.sh"
+  RECONCILE_AVAILABLE="true"
+  vpi_project_root="$(cd "$TARGET_DIR" 2>/dev/null && pwd || true)"
+  [[ "$vpi_project_root" == */.github ]] && vpi_project_root="${vpi_project_root%/.github}"
+  [[ -n "$vpi_project_root" ]] && MCP_GRANT_CONFIG="$(bubbles_mcp_config_path "$vpi_project_root")"
+fi
+
+# Print the canonicalized sha256 for a restricted orchestrator, or return 1 when
+# the path is not one. Only consulted AFTER a literal mismatch, so the fast path
+# is untouched and this can never mask a file that already verifies.
+reconciled_sha_of() {
+  local rel_path="$1" installed="$2" base_name agent_name
+  [[ "$RECONCILE_AVAILABLE" == "true" ]] || return 1
+  case "$rel_path" in agents/*.agent.md) ;; *) return 1 ;; esac
+  base_name="${rel_path##*/}"
+  agent_name="${base_name%.agent.md}"
+  bubbles_mcp_is_restricted_agent "$agent_name" || return 1
+  bubbles_mcp_reconcile_to_stdout "$installed" "$MCP_GRANT_CONFIG" "$agent_name" \
+    | "${SHA_CMD[@]}" | awk '{print $1}'
+}
+
 project_config_path() {
   if [[ -f "${TARGET_DIR}/bubbles-project.yaml" ]]; then
     printf '%s\n' "${TARGET_DIR}/bubbles-project.yaml"
@@ -291,6 +324,15 @@ while IFS=$'\t' read -r rel_path expected_sha actual_sha; do
     continue
   fi
   if [[ "$actual_sha" != "$expected_sha" ]]; then
+    # A restricted orchestrator may legitimately differ only in its rendered
+    # `tools:` line. Strip the declared grants and de-materialize the per-repo
+    # server id, then re-check against the UNCHANGED canonical hash. Any other
+    # edit leaves a non-canonical reconstruction and still fails.
+    reconciled_sha="$(reconciled_sha_of "$rel_path" "$installed" || true)"
+    if [[ -n "$reconciled_sha" && "$reconciled_sha" == "$expected_sha" ]]; then
+      verified=$((verified + 1))
+      continue
+    fi
     failures="${failures}
   ${rel_path}
     expected ${expected_sha}

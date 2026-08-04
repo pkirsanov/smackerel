@@ -1040,6 +1040,12 @@ skillEvolution:
   #   bubbles.create-skill enforces it as a pre-scaffold quality gate.
   enabled: true
   triggerThreshold: 3 # Same lesson pattern 3+ times before proposing
+  # Lessons are model-authored prose, so grouping is token overlap rather than
+  # whole-line equality: paraphrases of one root cause must reach
+  # triggerThreshold. Ratio is |shared| / |smaller set| over content tokens,
+  # and a cluster also needs 3+ shared tokens so a short generic lesson cannot
+  # merge into a long specific one. Raise toward 1.0 to merge less.
+  similarityThreshold: 0.6
   sourceFile: .specify/memory/lessons.md
   proposalFile: .specify/memory/skill-proposals.md
   autoCreate: false # Propose only, user approves

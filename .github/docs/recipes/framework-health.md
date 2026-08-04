@@ -81,11 +81,20 @@ bash bubbles/scripts/cli.sh skill-proposals --dismiss   # clear them
 
 The flow:
 
-1. **Repetition detected** — `skill-evolution.sh` counts exact-normalized repeated lines in `.specify/memory/lessons.md`. At `triggerThreshold` (default 3) it writes a proposal to `.specify/memory/skill-proposals.md`. *"Same greasy mistake three times, boys."*
-2. **Quality bar** — each proposal carries the creation bar **Reusable · Non-trivial · Specific · Verified**. A one-off or unverified lesson does not qualify.
-3. **Dedup before create** — search the existing `.github/skills/` set and `skills/INVENTORY.md` first; prefer UPDATING a near-match over standing up a duplicate. When the skill set is large, review the least-recently-modified skills for deprecation (anti-hoarding) — promotion and pruning are the two ends of one lifecycle.
-4. **Decision rule** — *do it once → a prompt is fine; recurring + non-obvious + verified → promote to a skill.*
-5. **Author** — when a proposal clears the bar, `bubbles.create-skill` scaffolds the new `SKILL.md` (including the **When NOT to use** and **Works well with** sections) and records it in `skills/INVENTORY.md`.
+1. **Lesson recorded** — at result-envelope close, a run that diagnosed and fixed a non-obvious failure records ONE structured entry:
+
+   ```
+   bash bubbles/scripts/cli.sh lessons add \
+     --problem "<what broke>" --root-cause "<why it broke>" \
+     --fix "<what resolved it>" --applies-when "<recall condition>"
+   ```
+
+   The file is append-only and multi-writer. Nothing requires a lesson per run — a per-run quota would manufacture filler and bury the repeated signal this loop depends on.
+2. **Repetition detected** — `skill-evolution.sh` groups entries in `.specify/memory/lessons.md` by content-token overlap rather than exact text, so three paraphrases of one root cause still count as three. Joining a cluster needs `similarityThreshold` (default 0.6) overlap *and* 3+ shared tokens, so two lessons that merely share vocabulary stay apart. At `triggerThreshold` (default 3) it writes a proposal to `.specify/memory/skill-proposals.md` naming the representative line **and its grouped variants**, so you can reject a bad merge on sight. *"Same greasy mistake three times, boys."*
+3. **Quality bar** — each proposal carries the creation bar **Reusable · Non-trivial · Specific · Verified**. A one-off or unverified lesson does not qualify.
+4. **Dedup before create** — search the existing `.github/skills/` set and `skills/INVENTORY.md` first; prefer UPDATING a near-match over standing up a duplicate. When the skill set is large, review the least-recently-modified skills for deprecation (anti-hoarding) — promotion and pruning are the two ends of one lifecycle.
+5. **Decision rule** — *do it once → a prompt is fine; recurring + non-obvious + verified → promote to a skill.*
+6. **Author** — when a proposal clears the bar, `bubbles.create-skill` scaffolds the new `SKILL.md` (including the **When NOT to use** and **Works well with** sections) and records it in `skills/INVENTORY.md`.
 
 Like the retro proposal pass, this loop is proposal-first: it never auto-creates a skill. You review the proposal, then author with `bubbles.create-skill`. See the `bubbles-skill-authoring` skill for the full template + quality-bar contract.
 
