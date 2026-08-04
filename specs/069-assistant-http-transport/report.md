@@ -151,12 +151,14 @@ FAIL: go-e2e (exit=1)
 1. `POST /api/assistant/turn` returns 404 because the route was **never mounted** in `internal/api/router.go`. The `Server.AssistantTurnHandler http.Handler` field is declared in `internal/api/health.go:261` and assigned in `cmd/core/wiring.go:225`, but `internal/api/router.go` contains zero references to `AssistantTurnHandler` and never registers the `/api/assistant/turn` route.
 2. Mounted the route as a minimal in-scope fix:
 
+<!-- bubbles:evidence-legitimacy-skip-begin -->
 ```go
 // internal/api/router.go (inside the authenticated /api group)
 if deps.AssistantTurnHandler != nil {
     r.Method(http.MethodPost, "/assistant/turn", deps.AssistantTurnHandler)
 }
 ```
+<!-- bubbles:evidence-legitimacy-skip-end -->
 
 3. Re-ran e2e (`/tmp/tp074-e2e.log`, parallel TP-074 e2e against the same image):
 
@@ -663,4 +665,119 @@ tests/stress/assistant/http_turn_stress_test.go
 | 2026-06-02 | Wrapper-level Ollama agent E2E skip phrase (`Skipping Ollama agent E2E`) observed in archived SCOPE-5 rerun log | Foreign to spec 069 — belongs to spec 043 real-LLM E2E harness; no spec-069 regression | specs/043-ollama-test-infrastructure |
 | 2026-06-02 | `internal/config/TestSSTLoader_SelfHostedEmitsProductionRuntimeEnv_BUG051001` failure observed during cross-spec regression sweep | Foreign to spec 069; tracked by BUG-051-001 | specs/051-self-hosted-sst-loader/bugs/BUG-051-001 |
 | 2026-06-02 | Historical SCOPE-5 wrapper-driven e2e blocked by `smackerel-test-smackerel-core-1` unhealthy | Resolved by Scope 2 UserID Binding (cmd/core now starts cleanly with shared_user_id SST key) — see Scope 2 evidence block | report.md#scope-2--userid-binding-2026-06-02 |
+| 2026-08-04 | GAP-069-G01 — SCN-069-A06 live-stack assertions bypassed by behavior-conditional `t.Skipf` | Routed to `bubbles.test` | report.md#gaps-evidence--bubblesgaps-2026-08-04 |
+| 2026-08-04 | GAP-069-G02 — 4 design-declared observability metrics absent from non-test code | Routed to `bubbles.implement` | report.md#gaps-evidence--bubblesgaps-2026-08-04 |
+| 2026-08-04 | GAP-069-G03 — design error table declares `auth_invalid`; implementation emits only `auth_required` | Routed to `bubbles.design` (narrow design.md correction) | report.md#gaps-evidence--bubblesgaps-2026-08-04 |
+
+## Gaps Evidence — bubbles.gaps (2026-08-04)
+
+**Executed:** YES (current session)
+**Agent:** `bubbles.gaps`
+**HEAD:** `33f0af7f`
+**Method:** spec.md/design.md requirement extraction → implementation audit → scenario-to-test traceability → executed verification via `./smackerel.sh`.
+**Claim Source:** executed (all findings below trace to a command run in this session or a file read at `33f0af7f`).
+
+### Step 1 — Executed verification (repo CLI)
+
+Command: `./smackerel.sh test unit --go --go-run 'GoldenContract|TransportHint|Dedup|HTTPAdapter|AssistantTurn'`
+
+```
+$ ./smackerel.sh test unit --go --go-run 'GoldenContract|TransportHint|Dedup|HTTPAdapter|AssistantTurn'
+ok      github.com/smackerel/smackerel/internal/assistant       0.216s
+ok      github.com/smackerel/smackerel/internal/assistant/contracts     0.023s
+ok      github.com/smackerel/smackerel/internal/assistant/httpadapter   0.091s
+ok      github.com/smackerel/smackerel/internal/assistant/intent/policyguard    0.019s
+ok      github.com/smackerel/smackerel/internal/assistant/transportconfig       0.021s
+ok      github.com/smackerel/smackerel/internal/telegram/assistant_adapter      0.031s
+ok      github.com/smackerel/smackerel/internal/whatsapp/assistant_adapter      0.028s
+ok_packages=145
+FAIL_lines=0
+EXIT=0
+```
+
+### Step 2 — Contract audit (verbatim)
+
+```
+$ git rev-parse --short HEAD
+33f0af7f
+$ grep -c 'assistant/turn' internal/api/router.go
+3
+$ ls internal/assistant/httpadapter/testdata/
+request_v1.json  response_v1.json  response_v1_notice.json
+$ grep -c 'ASSISTANT_TRANSPORTS_HTTP_' internal/assistant/transportconfig/http.go
+9
+$ grep -rn 'smackerel_assistant_http_turns_total' --include=*.go internal/ | wc -l
+0
+$ grep -rn 'auth_invalid' --include=*.go . | wc -l
+0
+$ grep -n 't.Skipf' tests/e2e/assistant/http_capture_test.go
+72:  t.Skipf("live stack did not route open-ended text into capture fallback (status=%q); HTTP wire forwarding is covered by SCOPE-1a/3 tests",
+106: t.Skipf("live stack did not route into capture fallback (status=%q); cannot assert acknowledgement shape parity without a deterministic capture fixture",
+EXIT=0
+```
+
+### Step 3 — Requirements coverage (✅ MATCH — no gap)
+
+| Requirement (source) | Status | Location verified |
+|---|---|---|
+| Package implementing `TransportAdapter` for `"web"` (§6) | ✅ | `internal/assistant/httpadapter/` (11 files) |
+| Route `POST /api/assistant/turn` under bearer group (§6) | ✅ | `internal/api/router.go:99` |
+| 8 required `assistant.transports.http.*` SST keys (design §Configuration) | ✅ | `config/smackerel.yaml:1336-1344` |
+| NO-DEFAULTS fail-loud on missing keys (Hard Constraint 3) | ✅ | `internal/assistant/transportconfig/http.go` (9 REQUIRED env entries) |
+| Golden contract test pins v1 (SCN-069-A07) | ✅ | `golden_contract_test.go` — exact key-set + `reflect.DeepEqual` + `RenderJSON`/`Validate` round-trip |
+| Spec 067 transport-branch guard (§6) | ✅ | `internal/assistant/intent/policyguard/transport_branch.go` + 3 test mirrors |
+| Capture invoked **exactly once** (SCN-069-A06 clause 1) | ✅ | `internal/assistant/httpadapter/dedup_test.go:202-215` hard-asserts `captureCalls != 1` → fail |
+| SCN-069-A01..A11 traced to test code | ✅ | 11/11 scenario IDs resolve to ≥1 test file |
+| All 11 design-declared test locations exist | ✅ | 11/11 present on disk |
+| 6 of 7 design error codes emitted | ✅ | `auth_required`, `scope_required`, `invalid_assistant_turn`, `body_too_large`, `rate_limited`, `assistant_turn_failed` |
+
+### Step 4 — Findings
+
+| ID | Type | Finding | Evidence | Owner |
+|---|---|---|---|---|
+| GAP-069-G01 | 🟡 PARTIAL | `http_capture_test.go:72,106` call `t.Skipf` on an **observed-behavior** condition (`!env.CaptureRoute`), not an environment-availability condition. Every SCN-069-A06 live-stack assertion (canonical `saved_as_idea` status, non-empty body, empty `error_cause`, nil confirm/disambig) sits *after* the skip, so a live stack that stops routing into capture-fallback yields SKIP (green) instead of FAIL. Mitigating: the "exactly once" clause is hard-asserted at unit level (`dedup_test.go:202`), so A06 is degraded, not unverified. | Step 2 | `bubbles.test` |
+| GAP-069-G02 | 🔴 MISSING | All 4 metrics in design.md §Observability And Failure Handling (`smackerel_assistant_http_turns_total`, `..._http_turn_latency_seconds`, `..._http_rejections_total`, `..._transport_parity_total`) have 0 non-test occurrences. Metric names in this repo are declared as full literal `Name:` strings (no Prometheus namespace/subsystem composition — verified in `internal/assistant/metrics/metrics.go`), so this is genuine absence, not a naming miss. Facade-level metrics (`smackerel_assistant_facade_turns_total`) exist and cover the shared path, but not the HTTP-transport-specific observability the design declares. Scope note: these metrics are **not** in spec.md §6 Acceptance Criteria — this is a design-vs-implementation gap only. | Step 2 | `bubbles.implement` |
+| GAP-069-G03 | 🟣 DIVERGENT | design.md error table declares `auth_required` / `auth_invalid` for the 401 row; `auth_invalid` appears nowhere in the repo (0 occurrences, test or non-test). `adapter.go:365` emits `auth_required` for both missing and invalid tokens. SCN-069-A02 (401 + facade not invoked) is still satisfied, and collapsing the two is arguably better security practice. Low severity — recommend correcting design.md rather than adding the code. | Step 2 | `bubbles.design` |
+
+### Verdict
+
+⚠️ **MINOR_GAPS_REMAIN** — 3 findings, none invalidating a delivered §6 acceptance criterion. Every acceptance criterion in spec.md §6 verified present. No fabricated gaps: the "capture invoked exactly once" clause was initially suspected missing and was withdrawn after `dedup_test.go:202` was read.
+
+**Uncertainty Declaration:** live-stack behavior of SCN-069-A06 was **not** executed in this pass (no live stack was brought up; `CORE_EXTERNAL_URL` unset). GAP-069-G01 is established by static reading of the skip control flow, which is sufficient to prove the bailout exists; it does not assert how often the live stack actually takes that branch.
+
+## Harden Evidence — bubbles.harden (2026-08-04)
+
+**Executed:** YES (current session)
+**Agent:** `bubbles.harden`
+**Claim Source:** executed — every claim below traces to a command run in this session.
+
+### HARDEN-069-H01 — late-bound assistant handler could serve the bare adapter
+
+`LateBoundHandler.ServeHTTP` served the adapter whenever `adapter != nil`, applying the SCOPE-2 pre-facade middleware chain only when it happened to be installed. Facade wiring runs in a background goroutine while the chi listener is already serving `POST /api/assistant/turn`, so a partially bound handler is reachable by real traffic. In that window a request bypassed the `assistant:turn` scope gate, the per-user rate limit, and the body-size cap that bounds the adapter's `io.ReadAll`.
+
+Fix: binding is now fail-closed — the handler answers 503 `assistant_http_not_ready` unless BOTH the adapter and the chain are installed. `wireAssistantHTTPAdapter` additionally installs the chain BEFORE the adapter, making the refusal window zero-length.
+
+Files: `internal/assistant/httpadapter/late_binding.go`, `cmd/core/wiring_assistant_facade.go`, new `internal/assistant/httpadapter/late_binding_failclosed_test.go` (3 tests).
+
+### Executed verification
+
+```
+$ ./smackerel.sh test unit --go --go-run 'LateBound|FailClosed|Adapter'
++ go test -run 'LateBound|FailClosed|Adapter' -count=1 ./...
+[go-unit] starting go test ./...
+ok      github.com/smackerel/smackerel/internal/assistant/httpadapter   0.075s
+[go-unit] go test ./... finished OK
+
+$ ./smackerel.sh check
+exit=0
+
+$ ./smackerel.sh lint
+exit=0
+
+$ ./smackerel.sh test unit --go
+(0 FAIL lines across all packages)
+exit=0
+```
+
+**Uncertainty Declaration:** the fail-closed window is proven by the new unit tests and by static reading of the wiring order. It was **not** reproduced against a live stack racing a real bind, so this pass does not measure how wide the window was in practice.
 

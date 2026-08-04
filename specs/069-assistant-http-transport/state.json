@@ -47,7 +47,7 @@
     "status": "done",
     "completedAt": "2026-06-02T08:00:00Z",
     "evidenceRef": "report.md#scope-2--userid-binding-2026-06-02",
-    "certifiedCompletedPhases": ["implement", "test", "stabilize", "spec-review", "simplify", "security", "regression", "docs", "chaos", "validate", "audit"],
+    "certifiedCompletedPhases": ["implement", "test", "stabilize", "spec-review", "simplify", "security", "regression", "docs", "chaos", "validate", "audit", "gaps", "harden"],
     "scopeProgress": {
       "total": 7,
       "notStarted": 0,
@@ -163,6 +163,15 @@
         "runCompletedAt": "2026-06-02T06:00:00Z",
         "evidenceRef": "report.md#regression-evidence--bubblesregression-2026-06-02",
         "summary": "Cross-spec regression pass across in-flight specs 074/075/069/065/066/067 at HEAD 3864e385. go build ./... RC=0. Touched assistant packages including internal/assistant/httpadapter all PASS. F061-SCENARIO-MISSING scenario-loader failures are pre-existing foreign-blocker already documented in this spec's prior bubbles.test claim — baseline ≡ HEAD, delta = 0, NO NEW REGRESSION. This spec remains the sink for routed F074-04B-ASSISTANT-HTTP-LATE-BIND-TEST-INFRA (SCOPE-1d in flight); no new collisions or contract breaks. Design coherent. Coverage stable; no tests deleted/skipped/weakened. No deployment-surface diff. Verdict: REGRESSION_FREE for spec 069. Claim Source: executed (build+go test RC=0; outputs in /tmp/reg-build.log + /tmp/reg-units.log) / not-run (live-stack — pre-existing foreign-blocker baseline). HEAD unchanged."
+      },
+      {
+        "agent": "bubbles.gaps",
+        "phase": "gaps",
+        "claimedAt": "2026-08-04T01:30:00Z",
+        "runStartedAt": "2026-08-04T01:05:00Z",
+        "runCompletedAt": "2026-08-04T01:30:00Z",
+        "evidenceRef": "report.md#gaps-evidence--bubblesgaps-2026-08-04",
+        "summary": "Spec/design vs implementation gap audit at HEAD 33f0af7f. Executed ./smackerel.sh test unit --go (145 ok packages, 0 FAIL, EXIT=0; internal/assistant/httpadapter + intent/policyguard + transportconfig all PASS). Verified MATCH: httpadapter package present; route POST /api/assistant/turn wired at internal/api/router.go:99; 8 required assistant.transports.http.* SST keys present in config/smackerel.yaml:1336-1344 AND enforced fail-loud via 9 REQUIRED entries in internal/assistant/transportconfig/http.go (Hard Constraint 3); golden contract test is substantive (exact key-set + reflect.DeepEqual + RenderJSON/Validate round-trip, 3 testdata fixtures); spec-067 transport-branch policy guard present with 3 test mirrors; all 11 SCN-069-A01..A11 IDs trace to >=1 test file; all 11 design-declared test locations exist on disk; 6/7 design error codes emitted. 3 findings: GAP-069-G01 (PARTIAL, -> bubbles.test) tests/e2e/assistant/http_capture_test.go:72,106 bail out via behavior-conditional t.Skipf on !env.CaptureRoute, bypassing every SCN-069-A06 live-stack assertion — degraded not unverified, since the 'exactly once' clause is hard-asserted at internal/assistant/httpadapter/dedup_test.go:202; GAP-069-G02 (MISSING, -> bubbles.implement) all 4 design.md Observability metrics have 0 non-test occurrences and repo metrics use literal Name: strings so absence is genuine, though these metrics are NOT in spec.md §6 acceptance criteria (design-vs-implementation only); GAP-069-G03 (DIVERGENT, -> bubbles.design) design error table declares auth_invalid which appears 0 times repo-wide, adapter.go:365 emits auth_required for both missing and invalid tokens while SCN-069-A02 stays satisfied. Verdict: MINOR_GAPS_REMAIN — no delivered §6 acceptance criterion invalidated. No spec.md/design.md/scopes.md/uservalidation.md or certification field written (gaps is diagnostic). Claim Source: executed (unit RC=0 + verbatim contract greps in report.md) / not-run (live-stack SCN-069-A06 branch — CORE_EXTERNAL_URL unset; G01 established by static control-flow read). No source or test files modified."
       }
     ],
     "completedScopes": [

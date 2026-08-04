@@ -387,7 +387,6 @@ func wireAssistantHTTPAdapter(cfg *config.Config, svc *coreServices, facade cont
 	if err != nil {
 		return fmt.Errorf("construct HTTP adapter: %w", err)
 	}
-	svc.assistantHTTPHandler.SetAdapter(adapter)
 	// SCOPE-2 pre-facade middleware chain, wired in front of the
 	// late-bound adapter. PreFacadeChain composes, in order:
 	// auth.RequireScope(RequiredScope) — 403 for per-user PASETO
@@ -400,7 +399,14 @@ func wireAssistantHTTPAdapter(cfg *config.Config, svc *coreServices, facade cont
 	// CORS, real-IP, and request-id remain router-owned
 	// (internal/api/router.go); this chain only adds the
 	// assistant-route-local layers between bearer-auth and the adapter.
+	//
+	// Order is load-bearing (spec 069 harden HARDEN-069-H01): this
+	// wiring runs in a background goroutine while the listener already
+	// serves POST /api/assistant/turn, so the chain is installed BEFORE
+	// the adapter. LateBoundHandler is fail-closed on a partial bind,
+	// and this ordering makes that refusal window zero-length.
 	svc.assistantHTTPHandler.SetMiddleware(httpadapter.PreFacadeChain(transportCfg))
+	svc.assistantHTTPHandler.SetAdapter(adapter)
 	slog.Info("assistant HTTP adapter wired and bound",
 		"schema_version", transportCfg.SchemaVersion,
 		"body_size_max_bytes", transportCfg.BodySizeMaxBytes,
