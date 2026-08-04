@@ -784,6 +784,7 @@ The super resolves intent and generates commands. A workflow runner may call it 
 | Diagnose runtime conflicts | `/bubbles.super show runtime lease conflicts` | `bubbles runtime doctor` |
 | Reclaim stale runtime leases | `/bubbles.super reclaim stale runtime leases` | `bubbles runtime reclaim-stale` |
 | View lessons learned | `/bubbles.super show lessons` | `bubbles lessons` |
+| Record a lesson | `/bubbles.super record lesson` | `bubbles lessons add --problem "..." --root-cause "..." --fix "..." --applies-when "..."` |
 | Compact old lessons | `/bubbles.super compact lessons` | `bubbles lessons compact` |
 | View skill proposals | `/bubbles.super show skill proposals` | `bubbles skill-proposals` |
 | View developer profile | `/bubbles.super show profile` | `bubbles profile` |

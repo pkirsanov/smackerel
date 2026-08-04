@@ -36,12 +36,16 @@ trap 'rm -rf "$TMP_ROOT"' EXIT
 # (skillEvolution.triggerThreshold: 3). The caller writes lessons.md.
 build_tree() {
   local tree="$1"
+  local similarity="${2:-}"
   mkdir -p "$tree/bubbles/scripts" "$tree/.specify/memory"
   cp "$REAL_SCRIPT" "$tree/bubbles/scripts/skill-evolution.sh"
   {
     echo "skillEvolution:"
     echo "  enabled: true"
     echo "  triggerThreshold: 3"
+    if [[ -n "$similarity" ]]; then
+      echo "  similarityThreshold: ${similarity}"
+    fi
   } > "$tree/bubbles/workflows.yaml"
 }
 
@@ -117,6 +121,90 @@ if [[ ! -f "$NEG_PROPOSALS" ]] && printf '%s\n' "$RUN_OUT" | grep -q "No skill p
   pass "below-threshold lessons produce no proposal (threshold gate intact)"
 else
   fail "adversarial: below-threshold lessons unexpectedly produced a proposal"
+fi
+
+# ── Paraphrase tree: one root cause, three wordings, zero identical lines ──
+# This is the case that fails under whole-line equality (IMP-034 LRN-2) and is
+# the regression guard that keeps the loop from silently re-breaking.
+PARA="$TMP_ROOT/para"
+build_tree "$PARA"
+{
+  echo "# Lessons"
+  echo
+  echo "- health check failed because the service was still starting"
+  echo "- health check failed since the service had not finished starting"
+  echo "- health check failed while the service was starting up"
+} > "$PARA/.specify/memory/lessons.md"
+
+PARA_PROPOSALS="$PARA/.specify/memory/skill-proposals.md"
+
+run_script "$PARA" show
+
+# (e) paraphrased lessons describing one root cause cluster into one proposal.
+if [[ -f "$PARA_PROPOSALS" ]] \
+  && [[ "$(grep -c '^## Skill Proposal:' "$PARA_PROPOSALS")" -eq 1 ]] \
+  && grep -q '^- Observed: 3 times' "$PARA_PROPOSALS"; then
+  pass "paraphrased lessons (no identical lines) cluster into one proposal"
+else
+  fail "expected exactly one proposal observed 3 times for the paraphrase set"
+fi
+
+# (f) the proposal shows what was grouped so a reviewer can reject a bad merge.
+if grep -q '^- Grouped variants:' "$PARA_PROPOSALS" \
+  && grep -q 'had not finished starting' "$PARA_PROPOSALS" \
+  && grep -q 'was starting up' "$PARA_PROPOSALS"; then
+  pass "proposal lists the grouped variants alongside the representative"
+else
+  fail "proposal did not list the grouped variants"
+fi
+
+# ── Near-miss tree: three DIFFERENT root causes sharing vocabulary ──
+# Without this, SCOPE-1 could pass by over-merging everything (IMP-034 R1).
+MISS="$TMP_ROOT/miss"
+build_tree "$MISS"
+{
+  echo "# Lessons"
+  echo
+  echo "- health check returned 500 because the database connection pool was exhausted"
+  echo "- health check used the wrong port in the compose file so nothing responded"
+  echo "- health check ran before migrations finished and reported a false failure"
+} > "$MISS/.specify/memory/lessons.md"
+
+MISS_PROPOSALS="$MISS/.specify/memory/skill-proposals.md"
+
+run_script "$MISS" show
+
+# (g) shared vocabulary alone MUST NOT cluster distinct root causes.
+if [[ ! -f "$MISS_PROPOSALS" ]]; then
+  pass "distinct root causes sharing vocabulary do not over-merge"
+else
+  fail "adversarial: distinct root causes were merged into a proposal"
+fi
+
+# ── Strict tree: same paraphrases, similarityThreshold raised to 1.0 ──
+# Proves two things at once: similarityThreshold is really read from the
+# registry (not ignored), and at exact-match strictness the paraphrase set
+# goes back to producing nothing — which is the pre-IMP-034 behavior this
+# change exists to fix.
+STRICT="$TMP_ROOT/strict"
+build_tree "$STRICT" "1.0"
+{
+  echo "# Lessons"
+  echo
+  echo "- health check failed because the service was still starting"
+  echo "- health check failed since the service had not finished starting"
+  echo "- health check failed while the service was starting up"
+} > "$STRICT/.specify/memory/lessons.md"
+
+STRICT_PROPOSALS="$STRICT/.specify/memory/skill-proposals.md"
+
+run_script "$STRICT" show
+
+# (h) the similarity knob is live, and exact strictness reproduces the old miss.
+if [[ ! -f "$STRICT_PROPOSALS" ]]; then
+  pass "similarityThreshold is honored (1.0 stops the paraphrase cluster)"
+else
+  fail "similarityThreshold appears ignored: paraphrases clustered at 1.0"
 fi
 
 if [[ "$failures" -gt 0 ]]; then

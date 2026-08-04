@@ -93,7 +93,7 @@ Corroborating (grep-derived, advisory) numbers:
 | G064 | workflow_runner_authorization_gate | `guard-check:3H` | 0 | Check 3H | 7 | guard |
 | G066 | phase_claim_provenance_gate | `guard-check:6B` | 0 | — | — | — |
 | G067 | shared_infrastructure_blast_radius_gate | `script:bubbles/scripts/guards/planning-checks.sh` | 0 | ref | 1 | guard |
-| G068 | dod_gherkin_content_fidelity_gate | `guard-check:22` | 0 | Check 22 | 8 | guard |
+| G068 | dod_gherkin_content_fidelity_gate | `guard-check:22` | 0 | Check 22 | 9 | guard |
 | G069 | collateral_change_containment_gate | `script:bubbles/scripts/guards/planning-checks.sh` | 0 | ref | 1 | guard |
 | G070 | outcome_contract_gate | `unbound` | 0 | — | 1 | — |
 | G071 | execution_only_validation_gate | `unbound` | 0 | — | — | — |
@@ -167,7 +167,7 @@ These gates are intentionally enforced OUTSIDE the mode `requiredGates` lists. E
 | G064 | workflow_runner_authorization_gate | Check 3H | 7 | guard | agent-ownership-lint.sh, cli.sh, framework-validate.sh, scenario-compile-lint-selftest.sh, scenario-compile-lint.sh, state-transition-guard-selftest.sh, +1 more |
 | G066 | phase_claim_provenance_gate | — | — | — | — |
 | G067 | shared_infrastructure_blast_radius_gate | ref | 1 | guard | imp021-interaction-contracts-selftest.sh |
-| G068 | dod_gherkin_content_fidelity_gate | Check 22 | 8 | guard | audit-result-contract-lint-selftest.sh, capability-freshness-selftest.sh, dod-section-lib.sh, evidence-admission-hardening-selftest.sh, state-transition-guard-selftest.sh, state-transition-required-specialists-selftest.sh, +2 more |
+| G068 | dod_gherkin_content_fidelity_gate | Check 22 | 9 | guard | audit-result-contract-lint-selftest.sh, capability-freshness-selftest.sh, dod-section-lib.sh, evidence-admission-hardening-selftest.sh, skill-evolution.sh, state-transition-guard-selftest.sh, +3 more |
 | G069 | collateral_change_containment_gate | ref | 1 | guard | imp021-interaction-contracts-selftest.sh |
 | G070 | outcome_contract_gate | — | 1 | — | scenario-compile-lint.sh |
 | G071 | execution_only_validation_gate | — | — | — | — |

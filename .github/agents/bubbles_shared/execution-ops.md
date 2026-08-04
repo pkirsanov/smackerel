@@ -4,12 +4,25 @@ Use this file for bounded retry behavior and auxiliary workflow operations that 
 
 ## Lessons-Learned Memory
 
-When the repository maintains a lessons-learned memory, agents may append concise entries describing:
+Record a lesson at ONE defined point: result-envelope close, when the run
+diagnosed and fixed a non-obvious failure. Use the supported write path so the
+entry is structured and the file stays append-only:
 
-- problem
-- root cause
-- fix
-- when the lesson applies
+```bash
+bash bubbles/scripts/cli.sh lessons add \
+  --problem "<what broke>" \
+  --root-cause "<why it broke>" \
+  --fix "<what resolved it>" \
+  --applies-when "<the condition that should trigger recall>"
+```
+
+That is one structured write at a known boundary. It is NOT continuous memory
+maintenance during the run.
+
+The obligation is conditional. A run that diagnosed nothing non-obvious writes
+nothing, and no gate requires a lesson per run. A per-run counter would
+manufacture filler and degrade the clustering that turns repeated lessons into
+skill proposals.
 
 Keep lessons short and actionable.
 

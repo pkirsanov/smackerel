@@ -784,6 +784,7 @@ bash bubbles/scripts/cli.sh metrics agents
 bash bubbles/scripts/cli.sh lessons
 bash bubbles/scripts/cli.sh lessons --all
 bash bubbles/scripts/cli.sh lessons compact
+bash bubbles/scripts/cli.sh lessons add --problem "<what broke>" --root-cause "<why it broke>" --fix "<what resolved it>" --applies-when "<recall condition>"
 ```
 
 ### 9. Runtime Coordination

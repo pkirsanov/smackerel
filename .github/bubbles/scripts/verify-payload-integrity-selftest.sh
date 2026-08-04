@@ -239,6 +239,67 @@ else
   fail "default target (.github) should resolve and verify"
 fi
 
+# ── Cases 11-13: grant-aware reconcile for restricted orchestrators ─
+# A restricted agent's `tools:` line is a RENDERED surface: the installer
+# materializes the per-repo MCP id (bubbles-<slug>) and mcp-grant-sync injects
+# operator-declared grants. The manifest pins the CANONICAL bytes, so the
+# verifier canonicalizes before comparing. These cases prove that is a
+# canonicalization and NOT a blind spot: only the declared render is accepted.
+RWORK="$(mktemp -d)"
+trap 'rm -rf "$WORK" "$RWORK"' EXIT
+RTARGET="$RWORK/.github"
+mkdir -p "$RTARGET/agents" "$RTARGET/bubbles"
+CANON_AGENT="$RTARGET/agents/bubbles.workflow.agent.md"
+write_agent() {
+  {
+    printf -- '---\n'
+    printf 'description: demo orchestrator\n'
+    printf 'tools: [%s]\n' "$1"
+    printf -- '---\n'
+    printf 'body\n'
+    [[ -n "${2:-}" ]] && printf '%s\n' "$2"
+  } >"$CANON_AGENT"
+}
+CANON_TOOLS='read, search, edit, agent, todo, web, execute, bubbles, playwright'
+write_agent "$CANON_TOOLS"
+SHA_CANON="$(sha_of "$CANON_AGENT")"
+{
+  printf '{\n'
+  printf '  "version": "test",\n'
+  printf '  "gitSha": "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef",\n'
+  printf '  "managedFileChecksums": [\n'
+  printf '    {"path": "agents/bubbles.workflow.agent.md", "sha256": "%s"}\n' "$SHA_CANON"
+  printf '  ],\n'
+  printf '  "sourceOnlyFileChecksums": [],\n'
+  printf '  "docsDigest": "n/a"\n'
+  printf '}\n'
+} >"$RTARGET/bubbles/release-manifest.json"
+
+run_reconcile_case() {
+  (cd "$RWORK" && BUBBLES_MCP_FORCE_SERVER_TOKEN=bubbles-acme bash "$VERIFY" --target .github --quiet)
+}
+
+write_agent "${CANON_TOOLS/bubbles, /bubbles-acme, }"
+if run_reconcile_case; then
+  pass "materialized per-repo MCP id verifies against the canonical hash"
+else
+  fail "materialized per-repo MCP id should verify against the canonical hash"
+fi
+
+write_agent "${CANON_TOOLS/bubbles, /bubbles-acme, }, eviltool"
+if run_reconcile_case; then
+  fail "an undeclared tool on the rendered line must NOT verify"
+else
+  pass "an undeclared tool on the rendered line still fails integrity"
+fi
+
+write_agent "${CANON_TOOLS/bubbles, /bubbles-acme, }" 'malicious appended body line'
+if run_reconcile_case; then
+  fail "a body tamper on a restricted agent must NOT verify"
+else
+  pass "a body tamper on a restricted agent still fails integrity"
+fi
+
 echo "---"
 echo "verify-payload-integrity-selftest: ${pass_count} passed, ${fail_count} failed"
 [[ "$fail_count" -eq 0 ]]
