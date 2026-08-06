@@ -201,6 +201,82 @@ else
   echo "$out9"
 fi
 
+# --- Case 10/11: per-repo MCP alias is expected, real edits still drift -------
+# install.sh registers the MCP server as bubbles-<repo-slug> and mcp-grant-sync
+# rewrites that id into the restricted orchestrators' tools: line AFTER the
+# checksum snapshot. The manifest records the canonical `bubbles` token, so
+# before IMP-036 follow-up every downstream install reported those agents as
+# DRIFTED forever. Case 10 pins that they are IN-SYNC; case 11 is the
+# adversarial pair proving the normalization did not blind the check.
+build_alias_root() {
+  local root="$1"
+  mkdir -p "$root/bubbles/scripts" "$root/agents"
+  cp "$SCRIPT_DIR/mcp-grant-reconcile.sh" "$root/bubbles/scripts/mcp-grant-reconcile.sh"
+  # Hash the CANONICAL form into the manifest, then write the per-repo form to
+  # disk — exactly what install.sh + mcp-grant-sync.sh produce downstream.
+  printf -- '---\nname: goal\ntools: [read, agent, bubbles]\n---\nbody\n' >"$root/agents/bubbles.goal.agent.md"
+  local h
+  h="$(sha "$root/agents/bubbles.goal.agent.md")"
+  printf -- '---\nname: goal\ntools: [read, agent, bubbles-aliasfixture]\n---\nbody\n' >"$root/agents/bubbles.goal.agent.md"
+  cat >"$root/bubbles/release-manifest.json" <<EOF
+{
+  "schemaVersion": 1,
+  "version": "9.9.9",
+  "managedFileCount": 1,
+  "managedFileChecksums": [
+    { "path": "agents/bubbles.goal.agent.md", "sha256": "$h" }
+  ]
+}
+EOF
+}
+
+r10="$work/aliasfixture/.github"
+build_alias_root "$r10"
+set +e
+out10="$(bash "$DRIFT" --root "$r10" 2>&1)"
+c10=$?
+set -e
+if [[ "$c10" -eq 0 ]] && grep -q "drifted : 0" <<<"$out10"; then
+  pass "per-repo MCP alias rewrite is not reported as drift"
+else
+  fail "per-repo MCP alias should be IN-SYNC (got exit $c10)"
+  echo "$out10"
+fi
+
+printf '\n<!-- unauthorized local edit -->\n' >>"$r10/agents/bubbles.goal.agent.md"
+set +e
+out11="$(bash "$DRIFT" --root "$r10" 2>&1)"
+c11=$?
+set -e
+if [[ "$c11" -eq 1 ]] && grep -q "DRIFTED  agents/bubbles.goal.agent.md" <<<"$out11"; then
+  pass "a real edit to an aliased agent is still DRIFTED"
+else
+  fail "alias normalization must not mask a genuine edit (got exit $c11)"
+  echo "$out11"
+fi
+
+# --- Case 12: agents/ orphans are namespace-scoped ----------------------------
+# agents/ is mixed ownership. A retired framework agent (bubbles.*) left behind
+# by an upgrade is an orphan; an operator-owned agent that the framework never
+# shipped is not. Both live in the same directory, so the rule must discriminate
+# by namespace rather than by "absent from manifest".
+r12="$work/orphanfixture/.github"
+build_root "$r12"
+printf -- '---\nname: retired\n---\nbody\n' >"$r12/agents/bubbles.bootstrap.agent.md"
+printf -- '---\nname: operator\n---\nbody\n' >"$r12/agents/speckit.plan.agent.md"
+set +e
+out12="$(bash "$DRIFT" --root "$r12" 2>&1)"
+c12=$?
+set -e
+if [[ "$c12" -eq 0 ]] \
+  && grep -q "ORPHAN   agents/bubbles.bootstrap.agent.md" <<<"$out12" \
+  && ! grep -q "speckit.plan" <<<"$out12"; then
+  pass "a retired bubbles.* agent is ORPHAN while an operator-owned agent is not"
+else
+  fail "agents/ orphan detection must be scoped to the bubbles.* namespace (got exit $c12)"
+  echo "$out12"
+fi
+
 if [[ "$failures" -eq 0 ]]; then
   echo "[bubbles-drift-check-selftest] OK"
 else

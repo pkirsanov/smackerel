@@ -101,7 +101,35 @@ if ! command -v python3 >/dev/null 2>&1; then
   exit 0
 fi
 
-BUBBLES_DRIFT_ROOT="$ROOT" BUBBLES_DRIFT_FORMAT="$FORMAT" python3 - "$MANIFEST" <<'PYEOF'
+# install.sh registers the MCP server under a per-repo id (bubbles-<repo-slug>)
+# so VS Code does not dedup-disable it across a multi-root workspace, and
+# mcp-grant-sync.sh rewrites that id into the restricted orchestrators' tools:
+# line AFTER the checksum snapshot is taken. The manifest records the canonical
+# token, so without normalization every downstream install reports those agents
+# as DRIFTED forever — which is why the write guard and mcp-grant-sync both
+# report in-sync while this check did not. Resolve the token from the same lib
+# install.sh uses; in a source tree it already equals the placeholder, so the
+# normalization below is a no-op there.
+#
+# Source the lib from the ROOT BEING CHECKED, not from this script's own tree:
+# the lib derives the slug from its own BASH_SOURCE path, so under `--root
+# <other-install>` the script-local copy would answer for the wrong repo.
+BUBBLES_DRIFT_MCP_TOKEN=""
+BUBBLES_DRIFT_MCP_PLACEHOLDER=""
+for _mcp_lib in "$ROOT/bubbles/scripts/mcp-grant-reconcile.sh" "$SCRIPT_DIR/mcp-grant-reconcile.sh"; do
+  [[ -f "$_mcp_lib" ]] || continue
+  # shellcheck source=/dev/null
+  if source "$_mcp_lib" 2>/dev/null; then
+    BUBBLES_DRIFT_MCP_TOKEN="$(bubbles_mcp_server_token 2>/dev/null || printf '')"
+    BUBBLES_DRIFT_MCP_PLACEHOLDER="${BUBBLES_MCP_SERVER_PLACEHOLDER:-}"
+  fi
+  break
+done
+
+BUBBLES_DRIFT_ROOT="$ROOT" BUBBLES_DRIFT_FORMAT="$FORMAT" \
+BUBBLES_DRIFT_MCP_TOKEN="$BUBBLES_DRIFT_MCP_TOKEN" \
+BUBBLES_DRIFT_MCP_PLACEHOLDER="$BUBBLES_DRIFT_MCP_PLACEHOLDER" \
+python3 - "$MANIFEST" <<'PYEOF'
 import hashlib
 import json
 import os
@@ -197,6 +225,23 @@ def sha256_file(path):
     return h.hexdigest()
 
 
+_MCP_TOKEN = os.environ.get("BUBBLES_DRIFT_MCP_TOKEN", "")
+_MCP_PLACEHOLDER = os.environ.get("BUBBLES_DRIFT_MCP_PLACEHOLDER", "")
+_MCP_NORMALIZE = bool(_MCP_TOKEN) and bool(_MCP_PLACEHOLDER) and _MCP_TOKEN != _MCP_PLACEHOLDER
+
+
+def sha256_mcp_normalized(path):
+    """Hash an agent file with the per-repo MCP server id folded back to canonical.
+
+    Only the server token is substituted, so a genuine hand-edit anywhere else in
+    the file still fails to match and is still reported as drift.
+    """
+    with open(path, "rb") as fh:
+        blob = fh.read()
+    blob = blob.replace(_MCP_TOKEN.encode("utf-8"), _MCP_PLACEHOLDER.encode("utf-8"))
+    return hashlib.sha256(blob).hexdigest()
+
+
 in_sync = 0
 drifted = []
 missing = []
@@ -219,6 +264,11 @@ for entry in entries:
     except OSError as exc:
         (opted_out if _rel_is_opted_out(rel) else missing).append(rel)
         continue
+    if got != want and _MCP_NORMALIZE and rel.startswith("agents/") and rel.endswith(".agent.md"):
+        try:
+            got = sha256_mcp_normalized(abspath)
+        except OSError:
+            pass
     if got == want:
         in_sync += 1
     else:
@@ -237,6 +287,24 @@ for sub in ("bubbles/scripts", "bubbles/scripts/guards"):
             continue
         rel = f"{sub}/{name}"
         if rel not in managed_paths and os.path.isfile(os.path.join(d, name)):
+            orphans.append(rel)
+
+# agents/ is a MIXED directory: the framework owns the bubbles.* namespace, the
+# operator owns everything else (speckit.*, repo-local helpers). So only a
+# bubbles.*.agent.md absent from the manifest is an orphan.
+#
+# The install prune cannot find these. Its trust anchor is the PREVIOUS
+# manifest, so an agent dropped by the framework BEFORE the agents/ prune
+# existed (IMP-008) had already fallen out of that anchor and became permanently
+# invisible. bubbles.bootstrap, removed upstream in 8a4f32d, survived that way in
+# three downstream repos. Reporting it is what makes the residue actionable.
+agents_dir = os.path.join(root, "agents")
+if os.path.isdir(agents_dir):
+    for name in os.listdir(agents_dir):
+        if not (name.startswith("bubbles.") and name.endswith(".agent.md")):
+            continue
+        rel = f"agents/{name}"
+        if rel not in managed_paths and os.path.isfile(os.path.join(agents_dir, name)):
             orphans.append(rel)
 
 drifted.sort()
