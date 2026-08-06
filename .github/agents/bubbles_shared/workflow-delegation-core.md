@@ -64,11 +64,14 @@ Before applying the classification contract, perform this literal substring chec
 
 ### Runtime Depth Compatibility Contract
 
-- Do not assume a subagent can invoke another subagent. Some host runtimes expose `agent`/`runSubagent` only to the active top-level agent.
+**Measured, not assumed (2026-08-06).** A subagent dispatched on this runtime has **no dispatch tool at all**. An agent invoked via `runSubagent` was asked to enumerate its own tools and to attempt a nested dispatch: its tool list contains no `runSubagent`, no `agent`, and no dispatcher under any name, and a capability search for one returned nothing. The second hop therefore cannot fail loudly, because there is nothing present to fail — which is exactly why it surfaced as silent parent-expansion. Downstream state carries `parent-expanded` **3,951 times** with `runtime lacks runSubagent` **325 times**, covering 13-33% of recorded invocations per repo.
+
+- **A specialist may NEVER dispatch a specialist.** There is one dispatching agent per run: the active top-level runner. A phase owner that needs another phase owner returns `route_required` **upward** to that runner, which performs the next dispatch at depth 1. `route_required` is an upward return, never a lateral call.
+- Do not assume a subagent can invoke another subagent. Some host runtimes expose `agent`/`runSubagent` only to the active top-level agent, and the VS Code default measured above is one of them.
 - Workflow-running orchestrators MUST NOT invoke another workflow-running orchestrator as a subagent. The active top-level runner resolves the mode itself, verifies its grant in `workflowModeGrants`, invokes the required phase owners directly, and records `executionModel: direct-authorized-runner`.
 - Envelope-only utility dispatch remains allowed: `bubbles.super` may return a resolution envelope and `bubbles.iterate` may return a picker-only work envelope because neither path launches a nested workflow.
 - A domain orchestrator invoked as a phase owner performs only that phase and returns its result envelope. It may execute its granted workflow modes only when it owns the top-level runtime.
-- If the active orchestrator itself lacks `agent`/`runSubagent`, return `blocked`; do not emulate owner work inline and do not claim a delegation happened.
+- If the active orchestrator itself lacks `agent`/`runSubagent`, return `blocked`; do not emulate owner work inline and do not claim a delegation happened. Emulating the work and recording it as a specialist run is the failure this contract exists to prevent, and the rate is now counted: `state-transition-guard.sh` emits `parentExpandedPhases` and `gate-hit-log.sh report` prints the expansion rate per repo.
 
 ### Frontmatter Dispatch Surface (G064 mechanical enforcement)
 
@@ -99,8 +102,9 @@ allowlist wins. The flag stays effective only because no agent names a pure runn
 `agents:` — which the lint enforces. Treat `disable-model-invocation:` as the default
 posture and the allowlist prohibition as the control that preserves it.
 
-**Depth assumption.** This model assumes the VS Code default in which subagents cannot
-invoke further subagents. Enabling `chat.subagents.allowInvocationsFromSubagents` raises
+**Depth assumption, now measured.** This model assumes the VS Code default in which subagents cannot
+invoke further subagents, and a 2026-08-06 probe confirmed it directly: a dispatched subagent's tool
+list contains no dispatcher at all. Enabling `chat.subagents.allowInvocationsFromSubagents` raises
 the limit to depth 5, at which point nested runner dispatch becomes possible and G064
 degrades from structurally impossible to convention-only. `bubbles doctor` surfaces the
 setting as an advisory; it is operator-owned and cannot be enforced from the repo.

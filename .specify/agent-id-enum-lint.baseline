@@ -1,0 +1,20 @@
+# agent-id-enum-lint baseline (IMP-036 SCOPE-7)
+# Pre-existing free-text agent ids, frozen so the lint can run at all.
+# This file may only SHRINK. Never add a new id here to silence a failure.
+# Regenerate deliberately: agent-id-enum-lint.sh <repo> --update-baseline
+ADOPT-EXISTING
+GitHub Copilot
+bubbles.analyst+ux+design+plan
+bubbles.analyze
+bubbles.bootstrap
+bubbles.discovery
+bubbles.finalize
+bubbles.gaps+plan
+bubbles.governance-remediation
+bubbles.improve
+bubbles.improve+plan
+bubbles.plan-legacy-discharge
+bubbles.planning
+bubbles.reconcile
+bubbles.select
+bubbles.workflow gaps-to-doc

@@ -1,5 +1,5 @@
 ---
-applyTo: "**"
+applyTo: "config/release-trains.yaml,config/feature-flags.*.yaml,specs/**"
 ---
 
 # Release Trains Policy (NON-NEGOTIABLE)

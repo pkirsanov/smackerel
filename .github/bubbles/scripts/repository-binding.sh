@@ -209,7 +209,10 @@ path_has_symlink_component() {
       component="$remainder"
       remainder=""
     fi
-    [[ -n "$component" && "$component" != "." && "$component" != ".." ]] || return 0
+    # An empty component comes from a redundant separator (a trailing-slash
+    # XDG_RUNTIME_DIR yields "//"); it is not a path element to inspect.
+    [[ -n "$component" ]] || continue
+    [[ "$component" != "." && "$component" != ".." ]] || return 0
     cursor="$cursor/$component"
     [[ ! -L "$cursor" ]] || return 0
     [[ -e "$cursor" ]] || return 1

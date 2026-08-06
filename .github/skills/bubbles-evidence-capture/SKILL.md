@@ -36,6 +36,34 @@ Rules:
 - Do not paste expected output. Paste observed output.
 - Do not invent line counts, durations, or row counts.
 
+## Large output: use the compact verifiable form
+
+Above roughly 40 lines, paste the compact form instead of the whole transcript.
+Generate it by running the command THROUGH the capture tool, which is what makes
+the exit code and hash impossible to author by hand:
+
+```
+bash bubbles/scripts/evidence-capture.sh --label "unit tests" -- <command...>
+```
+
+It emits the command, the exit code, the line count, a sha256 of the FULL output,
+the first and last 20 lines, and a re-runnable verify hint. A reviewer checks it
+with:
+
+```
+bash bubbles/scripts/evidence-capture.sh --verify <sha256> -- <command...>
+```
+
+This is STRONGER than a pasted transcript, not a relaxation. A transcript proves
+only that text was pasted and cannot be checked; a hash can be re-derived, and
+`--verify` exits 3 when the output no longer matches. It also keeps absolute
+paths out of evidence, which is a recurring cause of blocked commits when the
+secret and PII scanners fire.
+
+What does NOT change: evidence still comes from real execution in the current
+session. That rule was never the cost. Report files reached 79,416 to 121,311
+lines per repo per 60 days, and the transcript volume was.
+
 ## Categories that require live execution
 | DoD claim | Required action | Forbidden substitute |
 |-----------|-----------------|----------------------|

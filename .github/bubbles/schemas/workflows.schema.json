@@ -64,6 +64,16 @@
                 "type": "string",
                 "pattern": "^(guard-check:[0-9]+[A-Za-z]?|script:[A-Za-z0-9_./-]+\\.sh|ci:[A-Za-z0-9_.-]+|mode-required|behavioral:bubbles\\.[a-z-]+|unbound)$"
               }
+            },
+            "since": {
+              "description": "IMP-036 SCOPE-8. Framework version in which this gate first appeared, derived from git history by gate-vintage-annotate.sh. A spec delivered before this version was never measured against this gate, so a sweep that reopens it is re-litigating closed work under rules that did not exist. Consumed by gate-vintage-guard.sh, which reports the mismatch and never auto-excuses it.",
+              "type": "string",
+              "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+            },
+            "sinceDate": {
+              "description": "IMP-036 SCOPE-8. ISO date of the commit that introduced this gate. Compared against a spec's first-commit date because specs record dates, not framework versions.",
+              "type": "string",
+              "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
             }
           }
         }

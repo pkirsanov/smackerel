@@ -1,5 +1,5 @@
 ---
-applyTo: "**"
+applyTo: "config/upkeep-calendar.yaml,config/release-trains.yaml,**/backup*.sh,**/restore*.sh,**/upkeep*"
 ---
 
 # Upkeep Operations Policy (NON-NEGOTIABLE)

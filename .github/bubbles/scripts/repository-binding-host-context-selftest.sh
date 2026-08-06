@@ -23,8 +23,10 @@ create_repo() {
   printf '#!/usr/bin/env bash\n' >"$root/bubbles/scripts/cli.sh"
 }
 
-mkdir -p "$TMP_ROOT/session-logs/chat-a" "$TMP_ROOT/session-logs/chat-b" "$TMP_ROOT/control-home"
+mkdir -p "$TMP_ROOT/session-logs/chat-a" "$TMP_ROOT/session-logs/chat-b" \
+  "$TMP_ROOT/control-home" "$TMP_ROOT/xdg-runtime" "$TMP_ROOT/home"
 chmod 700 "$TMP_ROOT/control-home"
+chmod 700 "$TMP_ROOT/xdg-runtime"
 create_repo "$TMP_ROOT/repo-a"
 create_repo "$TMP_ROOT/repo-b"
 
@@ -37,6 +39,21 @@ context_a_reordered="$(cd "$TMP_ROOT/repo-b" && BUBBLES_SESSION_CONTROL_HOME="$T
 context_b="$(BUBBLES_SESSION_CONTROL_HOME="$TMP_ROOT/control-home" bash "$ADAPTER" \
   --session-log "$TMP_ROOT/session-logs/chat-b" \
   --workspace-root "$TMP_ROOT/repo-a" --workspace-root "$TMP_ROOT/repo-b")"
+
+xdg_context=""
+if xdg_context="$(BUBBLES_SESSION_CONTROL_HOME='' XDG_RUNTIME_DIR="$TMP_ROOT/xdg-runtime/" HOME="$TMP_ROOT/home" \
+    bash "$ADAPTER" --session-log "$TMP_ROOT/session-logs/chat-a" \
+    --workspace-root "$TMP_ROOT/repo-a" 2>/dev/null)"; then
+  xdg_control_file="$(jq -r '.sessionControlFile' <<< "$xdg_context")"
+  if [[ "$xdg_control_file" == "$TMP_ROOT/xdg-runtime/bubbles/repository-binding/"* && \
+        "$xdg_control_file" != *//* ]]; then
+    pass 'trailing-slash XDG runtime produces a normalized private control path'
+  else
+    fail 'trailing-slash XDG runtime must not produce an empty path component'
+  fi
+else
+  fail 'trailing-slash XDG runtime must remain a valid private control base'
+fi
 
 if [[ "$(jq -r '.expectedControlRevision' <<< "$context_a")" == "0" ]]; then
   pass 'new chat context supplies expected control revision zero'

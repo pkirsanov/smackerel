@@ -108,7 +108,7 @@ State-modifying and diagnostic agents MUST end with EXACTLY ONE of these four ou
 |---------|-------------|
 | `completed_owned` | A state-modifying agent finished its owned work: all owned DoD items `[x]` with evidence, no unresolved findings, all gates pass |
 | `completed_diagnostic` | A read-only/analysis agent (audit, review, regression, security, …) finished its diagnostic pass: findings packaged for owners, no owned DoD to check |
-| `route_required` | Found work that belongs to another specialist; package it as a finding with `nextRequiredOwner` |
+| `route_required` | Found work that belongs to another specialist; package it as a finding with `nextRequiredOwner`. This is an **upward return to the active top-level runner**, which performs the next dispatch. You MUST NOT dispatch that owner yourself: a subagent on this runtime has no dispatch tool at all, so the call would not fail loudly, it would silently do nothing and tempt you to do the work inline and record it as a delegation. |
 | `blocked` | Cannot proceed; external dependency, missing input, or mechanical gate refuses |
 
 `done_with_concerns` is **legacy read-only compatibility only** (pre-G092 specs carrying `legacyStatusCompatibility:true`); it is **not** a valid new RESULT-ENVELOPE outcome. To ship non-blocking notes, validate certifies `done` with an `observations[]` array (severity `low`/`medium`), or a diagnostic agent surfaces observation-shaped findings (`followUpOwner`/`followUpAction`) for the orchestrator to attach — see [completion-governance.md](../../agents/bubbles_shared/completion-governance.md#legacy-status-done_with_concerns). Anything warranting `high` severity is `blocked`, not a concern.
