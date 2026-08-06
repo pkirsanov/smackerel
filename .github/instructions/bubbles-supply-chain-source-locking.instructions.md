@@ -1,5 +1,5 @@
 ---
-applyTo: "**"
+applyTo: "**/Cargo.toml,**/Cargo.lock,**/package.json,**/package-lock.json,**/go.mod,**/go.sum,**/requirements*.txt,**/constraints*.txt,**/pyproject.toml,**/.npmrc,**/deny.toml,**/pip.conf"
 ---
 
 # Supply-Chain Source Locking Policy (NON-NEGOTIABLE)

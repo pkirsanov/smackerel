@@ -10,7 +10,7 @@ Close every finding raised in a round. No cherry-picking. No silent disappearanc
 
 ## When to use
 - Workflow agent dispatches a fix cycle round
-- Handling a `route_required` packet from a specialist
+- Handling a `route_required` packet from a specialist. The packet returns UPWARD to the active top-level runner, which owns every dispatch in the run. A specialist never dispatches another specialist, because a dispatched agent has no dispatch tool on this runtime.
 - Inheriting a rework packet from a previous round
 - Resolving validate/audit findings that the implement agent must address
 

@@ -1,7 +1,3 @@
----
-applyTo: "**"
----
-
 # bubbles-propagation — non-negotiable cross-train propagation rules
 
 Loaded automatically in every workspace that has `agents/bubbles.propagate.agent.md`.

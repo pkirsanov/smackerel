@@ -1,0 +1,7 @@
+# collected-test-count-guard baseline (IMP-036 SCOPE-3)
+# Existing zero-test evidence blocks, keyed as <relpath>|<signal text>.
+# Some are legitimate: a bug reproduction section is SUPPOSED to show the
+# failing output. The guard cannot tell a reproduction from a passing claim,
+# so existing hits are frozen and only NEW ones fail.
+# This file may only SHRINK. Never add an entry to silence a failure.
+

@@ -80,7 +80,10 @@ path_has_symlink_component() {
       component="$remainder"
       remainder=""
     fi
-    [[ -n "$component" && "$component" != "." && "$component" != ".." ]] || return 0
+    # An empty component comes from a redundant separator (a trailing-slash
+    # XDG_RUNTIME_DIR yields "//"); it is not a path element to inspect.
+    [[ -n "$component" ]] || continue
+    [[ "$component" != "." && "$component" != ".." ]] || return 0
     cursor="$cursor/$component"
     [[ ! -L "$cursor" ]] || return 0
     [[ -e "$cursor" ]] || return 1
@@ -187,7 +190,7 @@ session_id="vscode-${session_digest:0:32}"
 control_home="${BUBBLES_SESSION_CONTROL_HOME:-}"
 if [[ -z "$control_home" ]]; then
   if [[ -n "${XDG_RUNTIME_DIR:-}" && "$XDG_RUNTIME_DIR" == /* && -d "$XDG_RUNTIME_DIR" && -O "$XDG_RUNTIME_DIR" ]]; then
-    control_home="$XDG_RUNTIME_DIR/bubbles/repository-binding"
+    control_home="${XDG_RUNTIME_DIR%/}/bubbles/repository-binding"
   else
     [[ -n "${HOME:-}" && "$HOME" == /* ]] || fail 'HOME or XDG_RUNTIME_DIR is required for host-private state'
     control_home="$HOME/.local/state/bubbles/repository-binding"

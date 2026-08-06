@@ -58,6 +58,11 @@ transition_required_gate_ids=()
 passed_gate_ids=()
 failed_gate_ids=()
 failed_check_ids=()
+# IMP-036 SCOPE-2: parent-expansion is already gated (registered orchestrator,
+# >=20-char reason naming the missing capability, resolvable evidence ref). What
+# was missing is VISIBILITY: a rate nobody counts cannot show whether SCOPE-1's
+# single-orchestrator rule actually reduced expansion.
+parent_expanded_phases=0
 
 list_contains() {
   local needle="$1"
@@ -148,10 +153,40 @@ emit_transition_result() {
   printf 'failedGateIds: %s\n' "$(format_result_list ${failed_gate_ids[@]+"${failed_gate_ids[@]}"})"
   printf 'failedChecks: %s\n' "$(format_result_list ${failed_check_ids[@]+"${failed_check_ids[@]}"})"
   printf 'blockingCode: %s\n' "$blocking_code"
+  printf 'parentExpandedPhases: %s\n' "${parent_expanded_phases:-0}"
   printf 'failureCount: %s\n' "$failure_count"
   printf 'exitStatus: %s\n' "$exit_status"
   printf 'verdict: %s\n' "$verdict"
   printf '%s\n' 'END TRANSITION_GUARD_RESULT_V1'
+
+  # IMP-036 SCOPE-4: append-only gate-hit telemetry. Observes only; retires
+  # nothing. The helper swallows its own failures so a read-only log directory
+  # can never turn into a blocked commit.
+  local passed_str="" failed_str=""
+  for gate_id in ${effective_passed_gate_ids[@]+"${effective_passed_gate_ids[@]}"}; do
+    passed_str+="$gate_id "
+  done
+  for gate_id in ${failed_gate_ids[@]+"${failed_gate_ids[@]}"}; do
+    failed_str+="$gate_id "
+  done
+  if [[ -f "$SCRIPT_DIR/gate-hit-log.sh" ]]; then
+    if ! declare -F bubbles_gate_hit_append >/dev/null 2>&1; then
+      # shellcheck disable=SC1091
+      source "$SCRIPT_DIR/gate-hit-log.sh" 2>/dev/null || true
+    fi
+    if declare -F bubbles_gate_hit_append >/dev/null 2>&1; then
+      bubbles_gate_hit_append \
+        --repo-root "${guard_repo_root:-$PWD}" \
+        --spec "${feature_dir:-}" \
+        --mode "$transition_workflow_mode" \
+        --target-status "$transition_target_status" \
+        --verdict "$verdict" \
+        --exit-status "$exit_status" \
+        --passed "$passed_str" \
+        --failed "$failed_str" \
+        --parent-expanded "${parent_expanded_phases:-0}" >/dev/null 2>&1 || true
+    fi
+  fi
 }
 
 block_contract() {
@@ -1813,6 +1848,7 @@ for p in set(names):
                 provenance_failures=$((provenance_failures + 1))
               else
                 pass "Phase '$claimed_phase' has parent-expanded provenance from $pe_expanded_by — INFO[G022-PARENT-EXPANDED] reason: $pe_reason → $ev_resolved"
+                parent_expanded_phases=$((parent_expanded_phases + 1))
                 matched="true"
               fi
             fi

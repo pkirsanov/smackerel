@@ -8,6 +8,8 @@ bubbles/scripts/adversarial-resolve-selftest.sh
 bubbles/scripts/adversarial-resolve.sh
 bubbles/scripts/agent-bundle-size-budget-selftest.sh
 bubbles/scripts/agent-bundle-size-budget.sh
+bubbles/scripts/agent-id-enum-lint-selftest.sh
+bubbles/scripts/agent-id-enum-lint.sh
 bubbles/scripts/agent-ownership-lint-selftest.sh
 bubbles/scripts/agent-ownership-lint.sh
 bubbles/scripts/agent-roster-coverage-selftest.sh
@@ -54,6 +56,8 @@ bubbles/scripts/code-search.sh
 bubbles/scripts/codeindex-adapter-contract-selftest.sh
 bubbles/scripts/codeindex-resolve-selftest.sh
 bubbles/scripts/codeindex-resolve.sh
+bubbles/scripts/collected-test-count-guard-selftest.sh
+bubbles/scripts/collected-test-count-guard.sh
 bubbles/scripts/compaction-discipline-guard-selftest.sh
 bubbles/scripts/compaction-discipline-guard.sh
 bubbles/scripts/competitive-docs-selftest.sh
@@ -101,6 +105,8 @@ bubbles/scripts/eval-harness.sh
 bubbles/scripts/eval-heldout-guard-selftest.sh
 bubbles/scripts/eval-heldout-guard.sh
 bubbles/scripts/evidence-admission-hardening-selftest.sh
+bubbles/scripts/evidence-capture-selftest.sh
+bubbles/scripts/evidence-capture.sh
 bubbles/scripts/evidence-receipt-check-selftest.sh
 bubbles/scripts/evidence-receipt-check.sh
 bubbles/scripts/evidence-tool-log-bridge-selftest.sh
@@ -130,6 +136,8 @@ bubbles/scripts/gate-classification.sh
 bubbles/scripts/gate-detection-selftest.sh
 bubbles/scripts/gate-enforcement-selftest.sh
 bubbles/scripts/gate-enforcement.sh
+bubbles/scripts/gate-hit-log-selftest.sh
+bubbles/scripts/gate-hit-log.sh
 bubbles/scripts/gate-id-grep-selftest.sh
 bubbles/scripts/gate-id-grep.sh
 bubbles/scripts/gate-meta.sh
@@ -137,6 +145,9 @@ bubbles/scripts/gate-retirement-selftest.sh
 bubbles/scripts/gate-retirement.sh
 bubbles/scripts/gate-strength-lint-selftest.sh
 bubbles/scripts/gate-strength-lint.sh
+bubbles/scripts/gate-vintage-annotate.sh
+bubbles/scripts/gate-vintage-guard.sh
+bubbles/scripts/gate-vintage-selftest.sh
 bubbles/scripts/gates-registry-selftest.sh
 bubbles/scripts/generate-capability-ledger-docs.sh
 bubbles/scripts/generate-cheatsheet-selftest.sh
