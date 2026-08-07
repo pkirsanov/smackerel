@@ -68,6 +68,7 @@ normalize_lessons() {
     /^[[:space:]]*$/ { next }
     {
       line = $0
+      sub(/[[:space:]]*<!--[[:space:]]*bubbles-lesson-meta:.*-->[[:space:]]*$/, "", line)
       sub(/^[[:space:]]*[-*+]/, "", line)
       sub(/^[[:space:]]*[0-9]+[.)][[:space:]]*/, "", line)
       gsub(/\|/, " ", line)

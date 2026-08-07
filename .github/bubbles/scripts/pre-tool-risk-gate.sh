@@ -274,6 +274,12 @@ effective_risk_class() {
       [[ "$command_args" == *'--fix'* || "$command_args" == *'--reopen-failing'* ]] && { printf 'owned_mutation'; return; } ;;
     policy)
       [[ "$command_args" == set* || "$command_args" == reset* ]] && { printf 'owned_mutation'; return; } ;;
+    recall)
+      case "${command_args%% *}" in
+        search|read|status|freshness) printf 'read_only'; return ;;
+        sync) printf 'owned_mutation'; return ;;
+        *) printf 'owned_mutation'; return ;;
+      esac ;;
     runtime)
       case "${command_args%% *}" in
         release|reclaim-stale) printf 'runtime_teardown'; return ;;

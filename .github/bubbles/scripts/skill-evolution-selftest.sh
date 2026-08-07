@@ -181,6 +181,36 @@ else
   fail "adversarial: distinct root causes were merged into a proposal"
 fi
 
+# ── Metadata compatibility tree: legacy + anchored entries are equivalent ──
+META="$TMP_ROOT/meta"
+build_tree "$META"
+{
+  echo "# Lessons"
+  echo
+  echo '- problem: config drift; root cause: generated state was stale; fix: regenerate state; applies when: config changes'
+  echo '- problem: config drift; root cause: generated state was stale; fix: regenerate state; applies when: config changes <!-- bubbles-lesson-meta:{"lessonId":"lesson-one","metadataPoison":"copper-signal"} -->'
+  echo '- problem: config drift; root cause: generated state was stale; fix: regenerate state; applies when: config changes <!-- bubbles-lesson-meta:{"lessonId":"lesson-two","metadataPoison":"violet-signal"} -->'
+} > "$META/.specify/memory/lessons.md"
+
+META_PROPOSALS="$META/.specify/memory/skill-proposals.md"
+
+run_script "$META" show
+
+if [[ -f "$META_PROPOSALS" ]] \
+  && grep -qF -- '- Pattern: problem: config drift; root cause: generated state was stale; fix: regenerate state; applies when: config changes' "$META_PROPOSALS" \
+  && grep -q '^- Observed: 3 times' "$META_PROPOSALS"; then
+  pass "legacy and anchored equivalent lessons cluster as one visible pattern"
+else
+  fail "lesson metadata changed legacy clustering behavior"
+fi
+
+if [[ -f "$META_PROPOSALS" ]] \
+  && ! grep -Eq 'bubbles-lesson-meta|lesson-one|lesson-two|copper-signal|violet-signal' "$META_PROPOSALS"; then
+  pass "lesson metadata tokens do not influence proposal grouping"
+else
+  fail "lesson metadata leaked into skill-evolution proposal content"
+fi
+
 # ── Strict tree: same paraphrases, similarityThreshold raised to 1.0 ──
 # Proves two things at once: similarityThreshold is really read from the
 # registry (not ignored), and at exact-match strictness the paraphrase set

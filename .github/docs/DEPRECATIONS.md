@@ -22,6 +22,8 @@ Source of truth: `bubbles/workflows/aliases.yaml`. Resolver: `bubbles/scripts/mo
 
 **What is NOT removed — existing artifacts are unaffected.** The v5 names remain the canonical **registry keys** inside `bubbles/workflows/modes.yaml`. `state.json.workflowMode` continues to store those keys, and the guards (`state-transition-guard.sh`, `artifact-lint.sh`, `is-terminal-for-mode.sh`) resolve status ceilings by direct registry lookup of the stored key. There is **no `state.json` schema change** and **no per-spec migration**: every already-complete spec, scope, bug, and ops artifact keeps validating exactly as before. Tools that resolve a persisted mode programmatically pass `--grandfather` / set `BUBBLES_MODE_GRANDFATHER=1`, which the guards do automatically. Only **new operator input** must use the v6 form.
 
+**The grandfather path is permanent, not a deprecation window (decided 2026-08-06, closes OW-011).** It reads persisted data, so it cannot expire while that data exists. Measured across the six consuming repos: **1,665 specs carry a `workflowMode`**, and the two most-common persisted values (`bugfix-fastlane`, `full-delivery`) exit 3 *without* the flag and 0 *with* it. Retiring `BUBBLES_MODE_GRANDFATHER` would therefore require migrating all 1,665 persisted values first — and those values **are** the registry keys, so the migration would buy no simplification, only churn against an audit trail. Treat `mode: <key>` as a permanently supported programmatic read form. Do not schedule its removal.
+
 ### Canonical 15 v6 primitives
 
 `analyze`, `plan`, `implement`, `test`, `validate`, `fix`, `ship`, `propagate`, `upkeep`, `review`, `improve`, `docs`, `iterate`, `resume`, `framework-health`.

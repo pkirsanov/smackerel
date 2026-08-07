@@ -115,6 +115,12 @@ bubbles/scripts/execution-substate-guard-selftest.sh
 bubbles/scripts/execution-substate-guard.sh
 bubbles/scripts/expand-migrate-contract-guard-selftest.sh
 bubbles/scripts/expand-migrate-contract-guard.sh
+bubbles/scripts/experience-recall-adapter-contract-selftest.sh
+bubbles/scripts/experience-recall-cli-selftest.sh
+bubbles/scripts/experience-recall-index-selftest.sh
+bubbles/scripts/experience-recall-resolve-selftest.sh
+bubbles/scripts/experience-recall-resolve.sh
+bubbles/scripts/experience-recall.sh
 bubbles/scripts/finding-closure-selftest.sh
 bubbles/scripts/forecast-eval-check-selftest.sh
 bubbles/scripts/forecast-eval-check.sh
@@ -162,6 +168,7 @@ bubbles/scripts/generate-modes-block.sh
 bubbles/scripts/generate-release-manifest.sh
 bubbles/scripts/governance-index-lint-selftest.sh
 bubbles/scripts/governance-index-lint.sh
+bubbles/scripts/guard-lib-timeout-selftest.sh
 bubbles/scripts/guard-lib.sh
 bubbles/scripts/handoff-cycle-check.sh
 bubbles/scripts/imp021-interaction-contracts-selftest.sh
@@ -278,6 +285,7 @@ bubbles/scripts/repo-binding-preflight.sh
 bubbles/scripts/repo-drift-report-selftest.sh
 bubbles/scripts/repo-drift-report.sh
 bubbles/scripts/repo-readiness.sh
+bubbles/scripts/repo-slug.sh
 bubbles/scripts/report-section-autofix.sh
 bubbles/scripts/repository-binding-conformance-guard-selftest.sh
 bubbles/scripts/repository-binding-conformance-guard.sh
@@ -321,6 +329,7 @@ bubbles/scripts/skill-description-load-selftest.sh
 bubbles/scripts/skill-description-load.sh
 bubbles/scripts/skill-evolution-selftest.sh
 bubbles/scripts/skill-evolution.sh
+bubbles/scripts/spec-dashboard-selftest.sh
 bubbles/scripts/spec-dashboard.sh
 bubbles/scripts/spec-review-handoff-selftest.sh
 bubbles/scripts/stale-deferral-lint-selftest.sh
@@ -398,6 +407,7 @@ bubbles/scripts/worktree-reap.sh
 bubbles/scripts/worktree-spawn-selftest.sh
 bubbles/scripts/worktree-spawn.sh
 bubbles/scripts/yaml-schema-validate.sh
+bubbles/scripts/experience-recall-index.py
 bubbles/scripts/scope-universe-resolver.py
 bubbles/scripts/guards/control-plane-checks.sh
 bubbles/scripts/guards/planning-checks.sh
@@ -407,11 +417,14 @@ bubbles/scripts/guards/tail-delegated-gates.sh
 bubbles/adapters/codeindex/codebase-memory.sh
 bubbles/adapters/codeindex/codegraph.sh
 bubbles/adapters/codeindex/none.sh
+bubbles/adapters/experience-recall/local-lexical.sh
+bubbles/adapters/experience-recall/none.sh
 bubbles/adapters/judge/ollama.sh
 bubbles/adapters/observability/none.sh
 bubbles/adapters/observability/prometheus.sh
 bubbles/schemas/adoption-profiles.schema.json
 bubbles/schemas/capability-ledger.schema.json
+bubbles/schemas/experience-recall.schema.json
 bubbles/schemas/propagation-policy.schema.json
 bubbles/schemas/repository-binding.schema.json
 bubbles/schemas/result-envelope.schema.json
@@ -665,6 +678,7 @@ agents/bubbles_shared/e2e-regression.md
 agents/bubbles_shared/evidence-rules.md
 agents/bubbles_shared/execution-core.md
 agents/bubbles_shared/execution-ops.md
+agents/bubbles_shared/experience-recall.md
 agents/bubbles_shared/feature-templates.md
 agents/bubbles_shared/implement-bootstrap.md
 agents/bubbles_shared/managed-docs.md

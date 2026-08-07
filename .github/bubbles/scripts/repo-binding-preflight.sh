@@ -19,6 +19,10 @@
 # mismatch (refuse), 2 = usage error. No --skip/--force bypass.
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=bubbles/scripts/repo-slug.sh
+source "$SCRIPT_DIR/repo-slug.sh"
+
 usage() {
   cat <<'EOF'
 Usage: repo-binding-preflight.sh [--repo-root <dir>] [--agent-source <slug>] [--canonical-source]
@@ -34,14 +38,6 @@ With neither --agent-source nor --canonical-source, the expected slug is read fr
 <repo-root>/.github/bubbles/.install-source.json "targetRepoSlug" when present;
 absent that marker, the check is advisory (exit 0) with remediation.
 EOF
-}
-
-# Shared repo-slug derivation — MUST match install.sh's mcp_repo_slug logic.
-repo_slug_of() {
-  local name="$1"
-  printf '%s' "$name" \
-    | LC_ALL=C tr '[:upper:]' '[:lower:]' \
-    | LC_ALL=C sed -e 's/[^a-z0-9]/-/g' -e 's/--*/-/g' -e 's/^-//' -e 's/-$//'
 }
 
 repo_root=""
@@ -72,7 +68,7 @@ if [[ ! -d "$repo_root" ]]; then
   echo "repo-binding-preflight: repo root not found: $repo_root" >&2
   exit 2
 fi
-target_slug="$(repo_slug_of "$(basename "$repo_root")")"
+target_slug="$(bubbles_repo_slug_of "$(basename "$repo_root")" 2>/dev/null || true)"
 [[ -n "$target_slug" ]] || target_slug="repo"
 
 # Resolve the expected (agent-source) slug.
