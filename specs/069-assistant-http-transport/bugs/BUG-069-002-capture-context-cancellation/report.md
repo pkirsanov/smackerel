@@ -133,7 +133,7 @@ stores-only helper landed and the durability lane went green in commit `f00a2132
 ```text
 $ git --no-pager show --stat f00a2132 -- tests/integration/capture_disconnect_durability_test.go
 commit f00a2132caca179b397185a139d3fb6370c21c70
-Author: Philippe Kirsanov <pkirsanov@gmail.com>
+Author: Philippe Kirsanov <redacted>
 Date:   Tue Jun 30 11:36:51 2026 -0700
 
     test(integration): stores-only schema+stream provisioning helper; durability green (BUG-099-002 done)

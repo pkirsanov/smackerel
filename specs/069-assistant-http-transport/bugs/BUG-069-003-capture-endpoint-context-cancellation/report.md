@@ -108,7 +108,7 @@ FAIL
 ```text
 $ git --no-pager show --stat d395d00c -- internal/api/capture.go
 commit d395d00c1b8e021291b57c91655f5fdee03583cd
-Author: Philippe Kirsanov <pkirsanov@gmail.com>
+Author: Philippe Kirsanov <redacted>
 Date:   Tue Jun 30 02:14:05 2026 -0700
 
     fix(api): decouple /api/capture durable write from request cancellation (BUG-069-003)
@@ -199,7 +199,7 @@ green in commit `f00a2132` (shared order-2 deliverable with BUG-069-002):
 ```text
 $ git --no-pager show --stat f00a2132 -- tests/integration/capture_disconnect_durability_test.go
 commit f00a2132caca179b397185a139d3fb6370c21c70
-Author: Philippe Kirsanov <pkirsanov@gmail.com>
+Author: Philippe Kirsanov <redacted>
 Date:   Tue Jun 30 11:36:51 2026 -0700
 
     test(integration): stores-only schema+stream provisioning helper; durability green (BUG-099-002 done)
@@ -237,7 +237,7 @@ is dispatched on `context.WithoutCancel(r.Context())` at exactly ONE call site
 ```text
 $ git --no-pager show d395d00c -- internal/api/capture.go
 commit d395d00c1b8e021291b57c91655f5fdee03583cd
-Author: Philippe Kirsanov <pkirsanov@gmail.com>
+Author: Philippe Kirsanov <redacted>
 Date:   Tue Jun 30 02:14:05 2026 -0700
 
     fix(api): decouple /api/capture durable write from request cancellation (BUG-069-003)
@@ -346,7 +346,7 @@ Git-backed proof — the committed diff in `internal/api/capture.go` (executed t
 ```text
 $ git show d395d00c -- internal/api/capture.go
 commit d395d00c1b8e021291b57c91655f5fdee03583cd
-Author: Philippe Kirsanov <pkirsanov@gmail.com>
+Author: Philippe Kirsanov <redacted>
 Date:   Tue Jun 30 02:14:05 2026 -0700
 
     fix(api): decouple /api/capture durable write from request cancellation (BUG-069-003)
