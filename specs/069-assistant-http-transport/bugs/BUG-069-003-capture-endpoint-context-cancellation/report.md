@@ -40,13 +40,13 @@ break).
 $ grep -n 'CaptureHandler\|d.Pipeline.Process' internal/api/capture.go
 57:// CaptureHandler handles POST /api/capture.
 58:func (d *Dependencies) CaptureHandler(w http.ResponseWriter, r *http.Request) {
-110:	result, err := d.Pipeline.Process(context.WithoutCancel(r.Context()), &pipeline.ProcessRequest{
+110: result, err := d.Pipeline.Process(context.WithoutCancel(r.Context()), &pipeline.ProcessRequest{
 
 # The downstream pipeline write is context-honoring — a cancelled ctx aborts the
 # Postgres INSERT (storeInitialArtifact, line 431/499) and the NATS publish (line 471):
 $ grep -n 'storeInitialArtifact\|p.NATS.Publish' internal/pipeline/processor.go
-431:	if err := p.storeInitialArtifact(ctx, artifactID, extracted, req, string(tier)); err != nil {
-471:	if err := p.NATS.Publish(ctx, smacknats.SubjectArtifactsProcess, data); err != nil {
+431: if err := p.storeInitialArtifact(ctx, artifactID, extracted, req, string(tier)); err != nil {
+471: if err := p.NATS.Publish(ctx, smacknats.SubjectArtifactsProcess, data); err != nil {
 499:func (p *Processor) storeInitialArtifact(ctx context.Context, id string, result *extract.Result, req *ProcessRequest, tier string) error {
 ```
 
@@ -108,7 +108,7 @@ FAIL
 ```text
 $ git --no-pager show --stat d395d00c -- internal/api/capture.go
 commit d395d00c1b8e021291b57c91655f5fdee03583cd
-Author: Philippe Kirsanov <redacted>
+Author: pkirsanov <redacted>
 Date:   Tue Jun 30 02:14:05 2026 -0700
 
     fix(api): decouple /api/capture durable write from request cancellation (BUG-069-003)
@@ -124,34 +124,34 @@ index cad8fe85..42647c4c 100644
  package api
 
  import (
-+	"context"
- 	"encoding/json"
- 	"errors"
- 	"log/slog"
++ "context"
+  "encoding/json"
+  "errors"
+  "log/slog"
 @@ -92,8 +93,21 @@ func (d *Dependencies) CaptureHandler(w http.ResponseWriter, r *http.Request) {
- 		return
- 	}
+   return
+  }
 
--	// Process the capture
--	result, err := d.Pipeline.Process(r.Context(), &pipeline.ProcessRequest{
-+	// Process the capture.
-+	//
-+	// Capture-as-fallback is inviolable (Hard Constraint 5 / BS-001 /
-+	// policySnapshot.captureAsFallback="inviolable"): the user's capture MUST
-+	// persist even if the client has already disconnected. net/http cancels
-+	// r.Context() the instant the connection drops, which would abort the
-+	// downstream pipeline.Process Postgres INSERT (storeInitialArtifact) and
-+	// NATS publish (submitForProcessing) — both context-honoring — and
-+	// silently lose the capture. Decouple the durable write from request
-+	// cancellation while preserving request-scoped values (request id / trace
-+	// correlation via middleware.GetReqID, consumed by submitForProcessing for
-+	// the artifact TraceID). Same root cause as BUG-069-002 (assistant
-+	// /api/assistant/turn), here at the direct /api/capture endpoint —
-+	// F-069-CR-CAPTURE-ENDPOINT-CTX-CANCEL.
-+	result, err := d.Pipeline.Process(context.WithoutCancel(r.Context()), &pipeline.ProcessRequest{
- 		URL:          req.URL,
- 		Text:         req.Text,
- 		VoiceURL:     req.VoiceURL,
+- // Process the capture
+- result, err := d.Pipeline.Process(r.Context(), &pipeline.ProcessRequest{
++ // Process the capture.
++ //
++ // Capture-as-fallback is inviolable (Hard Constraint 5 / BS-001 /
++ // policySnapshot.captureAsFallback="inviolable"): the user's capture MUST
++ // persist even if the client has already disconnected. net/http cancels
++ // r.Context() the instant the connection drops, which would abort the
++ // downstream pipeline.Process Postgres INSERT (storeInitialArtifact) and
++ // NATS publish (submitForProcessing) — both context-honoring — and
++ // silently lose the capture. Decouple the durable write from request
++ // cancellation while preserving request-scoped values (request id / trace
++ // correlation via middleware.GetReqID, consumed by submitForProcessing for
++ // the artifact TraceID). Same root cause as BUG-069-002 (assistant
++ // /api/assistant/turn), here at the direct /api/capture endpoint —
++ // F-069-CR-CAPTURE-ENDPOINT-CTX-CANCEL.
++ result, err := d.Pipeline.Process(context.WithoutCancel(r.Context()), &pipeline.ProcessRequest{
+   URL:          req.URL,
+   Text:         req.Text,
+   VoiceURL:     req.VoiceURL,
 ```
 
 Working-tree status when captured during the fix session: `M internal/api/capture.go` (fix), `?? internal/api/capture_disconnect_test.go` (new regression). The fix is now **committed at `d395d00c`** (working tree clean) — the committed `git show` is in the Code Diff Evidence section below.
@@ -199,7 +199,7 @@ green in commit `f00a2132` (shared order-2 deliverable with BUG-069-002):
 ```text
 $ git --no-pager show --stat f00a2132 -- tests/integration/capture_disconnect_durability_test.go
 commit f00a2132caca179b397185a139d3fb6370c21c70
-Author: Philippe Kirsanov <redacted>
+Author: pkirsanov <redacted>
 Date:   Tue Jun 30 11:36:51 2026 -0700
 
     test(integration): stores-only schema+stream provisioning helper; durability green (BUG-099-002 done)
@@ -237,7 +237,7 @@ is dispatched on `context.WithoutCancel(r.Context())` at exactly ONE call site
 ```text
 $ git --no-pager show d395d00c -- internal/api/capture.go
 commit d395d00c1b8e021291b57c91655f5fdee03583cd
-Author: Philippe Kirsanov <redacted>
+Author: pkirsanov <redacted>
 Date:   Tue Jun 30 02:14:05 2026 -0700
 
     fix(api): decouple /api/capture durable write from request cancellation (BUG-069-003)
@@ -250,15 +250,15 @@ index cad8fe85..42647c4c 100644
  package api
 
  import (
-+	"context"
- 	"encoding/json"
++ "context"
+  "encoding/json"
 @@ -92,8 +93,21 @@ func (d *Dependencies) CaptureHandler(w http.ResponseWriter, r *http.Request) {
--	// Process the capture
--	result, err := d.Pipeline.Process(r.Context(), &pipeline.ProcessRequest{
-+	// […14-line "capture-as-fallback is inviolable" comment; full verbatim text in the Code Diff Evidence section below…]
-+	result, err := d.Pipeline.Process(context.WithoutCancel(r.Context()), &pipeline.ProcessRequest{
+- // Process the capture
+- result, err := d.Pipeline.Process(r.Context(), &pipeline.ProcessRequest{
++ // […14-line "capture-as-fallback is inviolable" comment; full verbatim text in the Code Diff Evidence section below…]
++ result, err := d.Pipeline.Process(context.WithoutCancel(r.Context()), &pipeline.ProcessRequest{
 $ grep -n 'WithoutCancel' internal/api/capture.go
-110:	result, err := d.Pipeline.Process(context.WithoutCancel(r.Context()), &pipeline.ProcessRequest{
+110: result, err := d.Pipeline.Process(context.WithoutCancel(r.Context()), &pipeline.ProcessRequest{
 ```
 
 ### Completion Statement
@@ -268,6 +268,7 @@ no nested `runSubagent` in this runtime) discovered and **fixed**
 F-069-CR-CAPTURE-ENDPOINT-CTX-CANCEL: the direct `/api/capture` durable write was
 bound to `r.Context()` and silently dropped the user's capture on client
 disconnect. The fix (`d.Pipeline.Process(context.WithoutCancel(r.Context()), …)`
+
 + the previously-absent `"context"` import in `internal/api/capture.go`) is
 **landed and unit-verified** by an adversarial RED→GREEN regression re-captured
 this session (R1 exit 1 → R3 exit 0), the fix diff (R2), and a green `internal/api`
@@ -310,8 +311,8 @@ this bug packet.
 
 **Owner:** bubbles.test · **fixSequence order-2** (shared with BUG-069-002 order-2) · **Claim Source:** executed — live `integration-light` run on a real Postgres+NATS stack (stores-only lane), captured 2026-06-30. The two bugs share one root cause and one durable processor path, so order-2 is ONE shared regression (no duplicate live-stack harness):
 
-- **Test file:** `tests/integration/capture_disconnect_durability_test.go` (`//go:build integration`, package `integration`; committed at `f00a2132`)
-- **Test:** `TestCaptureDisconnectDurability_ProcessorSurvivesClientCancel`
++ **Test file:** `tests/integration/capture_disconnect_durability_test.go` (`//go:build integration`, package `integration`; committed at `f00a2132`)
++ **Test:** `TestCaptureDisconnectDurability_ProcessorSurvivesClientCancel`
 
 It exercises the durable path THIS bug's fix relies on — `internal/api/capture.go::CaptureHandler` dispatching `pipeline.Processor.Process(context.WithoutCancel(r.Context()), …) → submitForProcessing → storeInitialArtifact INSERT + NATS.Publish` — the identical path `/api/assistant/turn` (BUG-069-002) uses, against a REAL `pipeline.Processor` + Postgres + NATS.
 
@@ -334,7 +335,7 @@ The fix is a single durable-write call-site change in `internal/api/capture.go` 
 
 ```text
 $ grep -n 'd.Pipeline.Process(' internal/api/capture.go
-110:	result, err := d.Pipeline.Process(context.WithoutCancel(r.Context()), &pipeline.ProcessRequest{
+110: result, err := d.Pipeline.Process(context.WithoutCancel(r.Context()), &pipeline.ProcessRequest{
 $ grep -nc 'context.WithoutCancel' internal/api/capture.go
 1
 $ git log --oneline -n 1 -- internal/api/capture.go
@@ -346,7 +347,7 @@ Git-backed proof — the committed diff in `internal/api/capture.go` (executed t
 ```text
 $ git show d395d00c -- internal/api/capture.go
 commit d395d00c1b8e021291b57c91655f5fdee03583cd
-Author: Philippe Kirsanov <redacted>
+Author: pkirsanov <redacted>
 Date:   Tue Jun 30 02:14:05 2026 -0700
 
     fix(api): decouple /api/capture durable write from request cancellation (BUG-069-003)
@@ -361,22 +362,22 @@ index cad8fe85..42647c4c 100644
  package api
 
  import (
-+	"context"
- 	"encoding/json"
- 	"errors"
- 	"log/slog"
++ "context"
+  "encoding/json"
+  "errors"
+  "log/slog"
 @@ -92,8 +93,21 @@ func (d *Dependencies) CaptureHandler(w http.ResponseWriter, r *http.Request) {
- 		return
- 	}
+   return
+  }
 
--	// Process the capture
--	result, err := d.Pipeline.Process(r.Context(), &pipeline.ProcessRequest{
-+	// Process the capture.
-+	// […14-line "capture-as-fallback is inviolable" comment; full verbatim text rendered in [R2] above…]
-+	result, err := d.Pipeline.Process(context.WithoutCancel(r.Context()), &pipeline.ProcessRequest{
- 		URL:          req.URL,
- 		Text:         req.Text,
- 		VoiceURL:     req.VoiceURL,
+- // Process the capture
+- result, err := d.Pipeline.Process(r.Context(), &pipeline.ProcessRequest{
++ // Process the capture.
++ // […14-line "capture-as-fallback is inviolable" comment; full verbatim text rendered in [R2] above…]
++ result, err := d.Pipeline.Process(context.WithoutCancel(r.Context()), &pipeline.ProcessRequest{
+   URL:          req.URL,
+   Text:         req.Text,
+   VoiceURL:     req.VoiceURL,
 ```
 
 `internal/api/capture.go` is a runtime source file (not an artifact), satisfying the Gate G053 non-artifact delta requirement.
