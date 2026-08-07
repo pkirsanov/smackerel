@@ -30,10 +30,31 @@ bubbles_run_with_timeout() {
     gtimeout "${secs}s" "$@"
     return $?
   fi
-  # Fallback watchdog (rare: only hosts without coreutils timeout).
+  # Fallback watchdog (rare: only hosts without coreutils timeout, e.g. a stock
+  # macOS PATH). Two properties are load-bearing; do not simplify either away:
+  #
+  #   1. The watchdog's stdout/stderr go to /dev/null. A background subshell
+  #      inherits the caller's pipe, so when the caller is a command
+  #      substitution -- `out="$(bubbles_run_with_timeout 120 ...)"` -- the
+  #      substitution reads until EOF, and EOF does not arrive while the
+  #      watchdog still holds the write end. That made an instantly-returning
+  #      command block for the FULL timeout.
+  #
+  #   2. The watchdog polls in 1s steps instead of one long `sleep "$secs"`.
+  #      Killing the subshell does not reap a `sleep` grandchild, so a single
+  #      long sleep survives as an orphan for its full duration. Polling lets
+  #      the watchdog notice the command finished and exit within ~1s.
   "$@" &
   local cmd_pid=$!
-  ( sleep "$secs"; kill -TERM "$cmd_pid" 2>/dev/null ) &
+  (
+    waited=0
+    while [ "$waited" -lt "$secs" ]; do
+      sleep 1
+      kill -0 "$cmd_pid" 2>/dev/null || exit 0
+      waited=$((waited + 1))
+    done
+    kill -TERM "$cmd_pid" 2>/dev/null
+  ) >/dev/null 2>&1 &
   local watch_pid=$!
   local rc=0
   wait "$cmd_pid" 2>/dev/null || rc=$?

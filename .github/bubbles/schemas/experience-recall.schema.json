@@ -1,0 +1,507 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bubbles.dev/schemas/experience-recall.schema.json",
+  "title": "Bubbles Evidence-Backed Experience Recall Contract",
+  "description": "Provider-neutral normalized record, query, result, freshness, lifecycle, and provider contracts. Recalled experience is always advisory.",
+  "oneOf": [
+    { "$ref": "#/$defs/record" },
+    { "$ref": "#/$defs/query" },
+    { "$ref": "#/$defs/result" },
+    { "$ref": "#/$defs/freshness" },
+    { "$ref": "#/$defs/lifecycle" },
+    { "$ref": "#/$defs/provider" }
+  ],
+  "$defs": {
+    "schemaVersion": {
+      "type": "integer",
+      "const": 1
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "nullableRef": {
+      "oneOf": [
+        { "type": "string", "minLength": 1, "maxLength": 512 },
+        { "type": "null" }
+      ]
+    },
+    "nullableDateTime": {
+      "oneOf": [
+        { "type": "string", "format": "date-time" },
+        { "type": "null" }
+      ]
+    },
+    "kind": {
+      "type": "string",
+      "enum": [
+        "compacted-result",
+        "lesson",
+        "owner-decision",
+        "finding",
+        "outcome"
+      ]
+    },
+    "sourceTrust": {
+      "type": "string",
+      "enum": [
+        "executed-result",
+        "historical-result",
+        "reviewed-lesson",
+        "anchored-lesson",
+        "owner-approved",
+        "historical-finding",
+        "historical-outcome"
+      ]
+    },
+    "recallAuthority": {
+      "type": "string",
+      "const": "advisory"
+    },
+    "sourceAnchor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["relativePath", "selector", "contentDigest", "observedAt"],
+      "properties": {
+        "relativePath": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024,
+          "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"
+        },
+        "selector": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "contentDigest": { "$ref": "#/$defs/digest" },
+        "observedAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "freshness": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["contractType", "state", "sourceDigest", "checkedAt"],
+      "properties": {
+        "contractType": { "const": "freshness" },
+        "state": {
+          "type": "string",
+          "enum": ["fresh", "stale", "unknown", "disabled"]
+        },
+        "sourceDigest": {
+          "oneOf": [
+            { "$ref": "#/$defs/digest" },
+            { "type": "null" }
+          ]
+        },
+        "checkedAt": { "type": "string", "format": "date-time" },
+        "reason": {
+          "oneOf": [
+            { "type": "string", "minLength": 1, "maxLength": 512 },
+            { "type": "null" }
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "state": { "enum": ["fresh", "stale"] } },
+            "required": ["state"]
+          },
+          "then": {
+            "properties": { "sourceDigest": { "$ref": "#/$defs/digest" } }
+          }
+        }
+      ]
+    },
+    "lifecycle": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "contractType",
+        "state",
+        "admittedAt",
+        "supersededAt",
+        "expiredAt",
+        "deletedAt"
+      ],
+      "properties": {
+        "contractType": { "const": "lifecycle" },
+        "state": {
+          "type": "string",
+          "enum": ["admitted", "superseded", "expired", "deleted"]
+        },
+        "admittedAt": { "type": "string", "format": "date-time" },
+        "supersededAt": { "$ref": "#/$defs/nullableDateTime" },
+        "expiredAt": { "$ref": "#/$defs/nullableDateTime" },
+        "deletedAt": { "$ref": "#/$defs/nullableDateTime" }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "state": { "const": "admitted" } },
+            "required": ["state"]
+          },
+          "then": {
+            "properties": {
+              "supersededAt": { "const": null },
+              "expiredAt": { "const": null },
+              "deletedAt": { "const": null }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": { "state": { "const": "superseded" } },
+            "required": ["state"]
+          },
+          "then": {
+            "properties": {
+              "supersededAt": { "type": "string", "format": "date-time" },
+              "expiredAt": { "const": null },
+              "deletedAt": { "const": null }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": { "state": { "const": "expired" } },
+            "required": ["state"]
+          },
+          "then": {
+            "properties": {
+              "supersededAt": { "const": null },
+              "expiredAt": { "type": "string", "format": "date-time" },
+              "deletedAt": { "const": null }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": { "state": { "const": "deleted" } },
+            "required": ["state"]
+          },
+          "then": {
+            "properties": {
+              "supersededAt": { "const": null },
+              "expiredAt": { "const": null },
+              "deletedAt": { "type": "string", "format": "date-time" }
+            }
+          }
+        }
+      ]
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "extractor",
+        "extractorVersion",
+        "provider",
+        "providerVersion",
+        "derivedAt"
+      ],
+      "properties": {
+        "extractor": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "extractorVersion": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "provider": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "providerVersion": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "derivedAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "searchableFields": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["identifiers", "phrases", "tags"],
+      "properties": {
+        "identifiers": {
+          "type": "array",
+          "maxItems": 100,
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1, "maxLength": 256 }
+        },
+        "phrases": {
+          "type": "array",
+          "maxItems": 100,
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1, "maxLength": 512 }
+        },
+        "tags": {
+          "type": "array",
+          "maxItems": 100,
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1, "maxLength": 128 }
+        }
+      }
+    },
+    "recordMetadata": {
+      "type": "object",
+      "required": [
+        "recordId",
+        "kind",
+        "repositoryAlias",
+        "specRef",
+        "scopeRef",
+        "scenarioRefs",
+        "sourceAnchor",
+        "sourceTrust",
+        "recallAuthority",
+        "freshness",
+        "lifecycle",
+        "provenance"
+      ],
+      "properties": {
+        "recordId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "kind": { "$ref": "#/$defs/kind" },
+        "repositoryAlias": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+        },
+        "specRef": { "$ref": "#/$defs/nullableRef" },
+        "scopeRef": { "$ref": "#/$defs/nullableRef" },
+        "scenarioRefs": {
+          "type": "array",
+          "maxItems": 100,
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1, "maxLength": 128 }
+        },
+        "sourceAnchor": { "$ref": "#/$defs/sourceAnchor" },
+        "sourceTrust": { "$ref": "#/$defs/sourceTrust" },
+        "recallAuthority": { "$ref": "#/$defs/recallAuthority" },
+        "freshness": { "$ref": "#/$defs/freshness" },
+        "lifecycle": { "$ref": "#/$defs/lifecycle" },
+        "provenance": { "$ref": "#/$defs/provenance" }
+      }
+    },
+    "record": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "contractType",
+        "schemaVersion",
+        "recordId",
+        "kind",
+        "summary",
+        "searchableFields",
+        "repositoryAlias",
+        "specRef",
+        "scopeRef",
+        "scenarioRefs",
+        "sourceAnchor",
+        "sourceTrust",
+        "recallAuthority",
+        "freshness",
+        "lifecycle",
+        "provenance"
+      ],
+      "allOf": [{ "$ref": "#/$defs/recordMetadata" }],
+      "properties": {
+        "contractType": { "const": "record" },
+        "schemaVersion": { "$ref": "#/$defs/schemaVersion" },
+        "recordId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "kind": { "$ref": "#/$defs/kind" },
+        "summary": { "type": "string", "minLength": 1, "maxLength": 2000 },
+        "searchableFields": { "$ref": "#/$defs/searchableFields" },
+        "repositoryAlias": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+        },
+        "specRef": { "$ref": "#/$defs/nullableRef" },
+        "scopeRef": { "$ref": "#/$defs/nullableRef" },
+        "scenarioRefs": {
+          "type": "array",
+          "maxItems": 100,
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1, "maxLength": 128 }
+        },
+        "sourceAnchor": { "$ref": "#/$defs/sourceAnchor" },
+        "sourceTrust": { "$ref": "#/$defs/sourceTrust" },
+        "recallAuthority": { "$ref": "#/$defs/recallAuthority" },
+        "freshness": { "$ref": "#/$defs/freshness" },
+        "lifecycle": { "$ref": "#/$defs/lifecycle" },
+        "provenance": { "$ref": "#/$defs/provenance" }
+      }
+    },
+    "query": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "contractType",
+        "schemaVersion",
+        "text",
+        "repositoryAlias",
+        "specRef",
+        "scopeRef"
+      ],
+      "properties": {
+        "contractType": { "const": "query" },
+        "schemaVersion": { "$ref": "#/$defs/schemaVersion" },
+        "text": { "type": "string", "minLength": 1, "maxLength": 1000 },
+        "repositoryAlias": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+        },
+        "specRef": { "$ref": "#/$defs/nullableRef" },
+        "scopeRef": { "$ref": "#/$defs/nullableRef" },
+        "kinds": {
+          "type": "array",
+          "default": [],
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/kind" }
+        },
+        "sourceTrust": {
+          "type": "array",
+          "default": [],
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/sourceTrust" }
+        },
+        "lifecycleStates": {
+          "type": "array",
+          "default": ["admitted"],
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "enum": ["admitted", "superseded", "expired", "deleted"]
+          }
+        },
+        "freshnessStates": {
+          "type": "array",
+          "default": [],
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "enum": ["fresh", "stale", "unknown", "disabled"]
+          }
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 20,
+          "default": 5
+        }
+      }
+    },
+    "score": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["exactIdentifier", "exactPhrase", "tokenOverlap", "tagOverlap", "total"],
+      "properties": {
+        "exactIdentifier": { "type": "number", "minimum": 0 },
+        "exactPhrase": { "type": "number", "minimum": 0 },
+        "tokenOverlap": { "type": "number", "minimum": 0 },
+        "tagOverlap": { "type": "number", "minimum": 0 },
+        "total": { "type": "number", "minimum": 0 }
+      }
+    },
+    "result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "contractType",
+        "schemaVersion",
+        "recordId",
+        "kind",
+        "snippet",
+        "repositoryAlias",
+        "specRef",
+        "scopeRef",
+        "scenarioRefs",
+        "sourceAnchor",
+        "sourceTrust",
+        "recallAuthority",
+        "freshness",
+        "lifecycle",
+        "provenance",
+        "score"
+      ],
+      "allOf": [{ "$ref": "#/$defs/recordMetadata" }],
+      "properties": {
+        "contractType": { "const": "result" },
+        "schemaVersion": { "$ref": "#/$defs/schemaVersion" },
+        "recordId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "kind": { "$ref": "#/$defs/kind" },
+        "snippet": { "type": "string", "minLength": 1, "maxLength": 1024 },
+        "repositoryAlias": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+        },
+        "specRef": { "$ref": "#/$defs/nullableRef" },
+        "scopeRef": { "$ref": "#/$defs/nullableRef" },
+        "scenarioRefs": {
+          "type": "array",
+          "maxItems": 100,
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1, "maxLength": 128 }
+        },
+        "sourceAnchor": { "$ref": "#/$defs/sourceAnchor" },
+        "sourceTrust": { "$ref": "#/$defs/sourceTrust" },
+        "recallAuthority": { "$ref": "#/$defs/recallAuthority" },
+        "freshness": { "$ref": "#/$defs/freshness" },
+        "lifecycle": { "$ref": "#/$defs/lifecycle" },
+        "provenance": { "$ref": "#/$defs/provenance" },
+        "score": { "$ref": "#/$defs/score" }
+      }
+    },
+    "providerCapabilities": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "search",
+        "read",
+        "status",
+        "freshness",
+        "sync",
+        "export",
+        "delete",
+        "capabilities"
+      ],
+      "properties": {
+        "search": { "enum": ["neutral", "native", "derived", "unsupported"] },
+        "read": { "enum": ["neutral", "native", "derived", "unsupported"] },
+        "status": { "enum": ["neutral", "native", "derived", "unsupported"] },
+        "freshness": { "enum": ["neutral", "native", "derived", "unsupported"] },
+        "sync": { "enum": ["neutral", "native", "derived", "unsupported"] },
+        "export": { "enum": ["neutral", "native", "derived", "unsupported"] },
+        "delete": { "enum": ["neutral", "native", "derived", "unsupported"] },
+        "capabilities": { "enum": ["neutral", "native", "derived", "unsupported"] }
+      }
+    },
+    "provider": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "contractType",
+        "schemaVersion",
+        "adapter",
+        "providerVersion",
+        "capabilities",
+        "networkAccess",
+        "automaticInstall",
+        "defaultBinaryPath"
+      ],
+      "properties": {
+        "contractType": { "const": "provider" },
+        "schemaVersion": { "$ref": "#/$defs/schemaVersion" },
+        "adapter": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]*$",
+          "maxLength": 64
+        },
+        "providerVersion": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "capabilities": { "$ref": "#/$defs/providerCapabilities" },
+        "networkAccess": { "const": false },
+        "automaticInstall": { "const": false },
+        "defaultBinaryPath": { "type": "null" }
+      }
+    }
+  }
+}

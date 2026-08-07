@@ -19,6 +19,14 @@ commands:
     overrides:
       set: owned_mutation
       reset: owned_mutation
+  recall:
+    defaultRiskClass: owned_mutation
+    overrides:
+      search: read_only
+      read: read_only
+      status: read_only
+      freshness: read_only
+      sync: owned_mutation
   runtime:
     defaultRiskClass: read_only
     overrides:

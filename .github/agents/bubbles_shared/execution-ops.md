@@ -19,6 +19,34 @@ bash bubbles/scripts/cli.sh lessons add \
 That is one structured write at a known boundary. It is NOT continuous memory
 maintenance during the run.
 
+Add an eligible recall anchor only when the run has a real source:
+
+```bash
+bash bubbles/scripts/cli.sh lessons add \
+  --problem "<what broke>" \
+  --root-cause "<why it broke>" \
+  --fix "<what resolved it>" \
+  --applies-when "<the condition that should trigger recall>" \
+  --repository-alias "<active repository alias>" \
+  --source-path "<contained repository-relative file>" \
+  --source-selector "<stable selector inside that file>" \
+  --review-state anchored
+```
+
+The four anchor fields are one optional group. Supply all four or none. The
+review state must be `anchored` or `reviewed`. The source path must name a
+contained regular file without symlink components. It must not name the lessons
+file itself.
+
+The writer captures the current source digest and observation time. It appends
+those values with a stable lesson ID in a trailing metadata comment.
+`skill-evolution.sh` strips that comment before clustering.
+
+The legacy four-field command remains valid. With no anchor group, the writer
+sets `reviewState` to `unanchored`. It records no repository alias, source
+anchor, or source digest. The lesson remains skill-evolution input, but the
+local recall index excludes it instead of inventing provenance.
+
 The obligation is conditional. A run that diagnosed nothing non-obvious writes
 nothing, and no gate requires a lesson per run. A per-run counter would
 manufacture filler and degrade the clustering that turns repeated lessons into

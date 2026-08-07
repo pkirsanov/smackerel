@@ -45,7 +45,7 @@ Every project using Bubbles MUST have these files:
 | `.specify/memory/agents.md` | **Command registry** — CLI entrypoint, build/test/lint/format commands, file organization, naming conventions, tech stack declaration | **YES** |
 | `.specify/memory/constitution.md` | **Governance principles** — project-specific principles layered on top of universal governance | **YES** |
 | `.github/copilot-instructions.md` | **Project policies** — project-specific rules, testing requirements, Docker config, port allocation, command tables | **YES** |
-| `.github/bubbles-project.yaml` | **Project-owned framework extensions** — scan-pattern overrides, managed-doc registry overrides, impact-aware validation maps, trace contracts, and custom gates (G900+; framework reserves G001-G199) | **OPTIONAL** |
+| `.github/bubbles-project.yaml` | **Project-owned framework extensions** — adapter selections, scan-pattern overrides, managed-doc registry overrides, impact-aware validation maps, trace contracts, and custom gates (G900+; framework reserves G001-G199) | **OPTIONAL** |
 | `.vscode/mcp.json` | **MCP server configuration** — team-shared AI tool access (cross-repo search, issue trackers, etc.). The installer auto-registers its own `bubbles-<repo-slug>` server entry here (creating the file if absent); every other server stays project-owned. | **OPTIONAL** |
 | `.vscode/extensions.json` | **Recommended extensions** — team-consistent AI tooling (Copilot, etc.) | **OPTIONAL** |
 
@@ -378,6 +378,11 @@ surfaces:
     cliCommand: { derive: "scripts/inventory/cli-commands.sh" }
     uiRoute:    { derive: "scripts/inventory/ui-routes.sh" }
 
+# Optional evidence-backed experience recall provider. Absent and explicit
+# `none` both resolve to the dependency-free neutral adapter.
+experienceRecall:
+  adapter: none
+
 # Operator-managed MCP tool grants for restricted orchestrators (v7.1+)
 # The five framework-managed orchestrators (bubbles.goal/sprint/iterate/bug/
 # workflow) ship a `tools:` allowlist whose defaults include `bubbles` (the
@@ -404,6 +409,65 @@ mcp:
 | **YAML structure** | Simple `key: value` or `key: [list]` format parseable by `sed`/`awk` in bash scripts |
 
 `regressionQuality.*` follows the standard override model: if provided, those lists replace the generic fallback patterns used by `regression-quality-guard.sh`.
+
+### `experienceRecall` Contract
+
+`experienceRecall` is an optional top-level block in project-owned
+`.github/bubbles-project.yaml`:
+
+```yaml
+# Default neutral provider
+experienceRecall:
+  adapter: none
+```
+
+To opt into the repository-local provider:
+
+```yaml
+# Explicit repository-local lexical provider
+experienceRecall:
+  adapter: local-lexical
+```
+
+| Adapter value | Resolution and runtime requirement |
+|---|---|
+| omitted or `none` | Select the dependency-free neutral provider |
+| `local-lexical` | Select the shipped local deterministic provider and require `python3` with its standard library |
+| another safe token | Resolve a matching installed adapter or fail loud when it is unavailable |
+
+The value is an adapter name only. It must not contain a path, URL, executable
+name, shell fragment, host, credential, or provider setting.
+
+The resolver accepts tokens matching `^[a-z0-9][a-z0-9-]*$`. Shipped adapter
+names also stay within the provider schema's 64-character limit. Adapter
+selection resolves to
+`bubbles/adapters/experience-recall/<adapter>.sh` inside the installed
+framework.
+
+Resolution follows this order:
+
+1. Read `.github/bubbles-project.yaml` when it exists.
+2. Otherwise, read root `bubbles-project.yaml` when it exists.
+3. Resolve an absent file, block, or key to `none`.
+4. Reject an unsafe token before adapter lookup.
+5. Reject a safe but unavailable adapter without falling back.
+
+Normal resolver output contains `adapter`, `adapterPath`, and `repoRoot`.
+`--names-only` emits only `adapter=<name>`. Invalid or unavailable adapters
+exit `1`. Resolver usage errors and missing repository roots exit `2`.
+
+The `none` adapter is dependency-free and performs no recall work. It emits
+`[]` for `search` and `export`. It emits `{}` for every other provider verb.
+
+The `local-lexical` adapter is an explicit opt-in. It supports `search`,
+`read`, `status`, `freshness`, and `sync` through a repository-local derived
+index. It reports `export` and `delete` as unsupported. It does not install
+Python or any package when `python3` is unavailable.
+
+This block remains project-owned. Framework upgrades must never add, normalize,
+or overwrite this block. See
+[`experience-recall.md`](experience-recall.md) for corpus, authority, provider,
+freshness, lifecycle, and isolation rules.
 
 ### `scans.sensitiveClientStorage` Contract
 
@@ -734,6 +798,7 @@ When adopting Bubbles for a new project, populate these files:
 - [ ] `config/<project>.yaml` — Create the SST config file with ports, services, infrastructure, environments
 - [ ] `scripts/commands/config.sh` (or equivalent) — Create the config generator that parses SST and writes derived files
 - [ ] `.github/copilot-instructions.md` → SST section — Document generated files, per-language enforcement, port allocation
+- [ ] `.github/bubbles-project.yaml` — (Optional) Select project-owned adapters and framework extensions
 - [ ] `.vscode/mcp.json` — (Optional) Configure team-shared MCP servers for cross-repo AI tool access (the installer auto-registers its own `bubbles-<repo-slug>` entry; other servers stay project-owned)
 - [ ] `.vscode/extensions.json` — (Optional) Recommend AI extensions for the team
 - [ ] `bubbles/workflows.yaml` — Copy as-is (project-agnostic) or customize modes
@@ -802,6 +867,7 @@ When adopting Bubbles for a new project, populate these files:
 | `.specify/memory/agents.md` | Command registry, file organization, naming, tech stack | ALL sections — this is the project's operational manual |
 | `.specify/memory/constitution.md` | Governance principles | Add domain-specific principles (e.g., Rhai, simulation data) on top of universal ones |
 | `.github/copilot-instructions.md` | Project policies, Docker config, language rules, testing commands | ALL project-specific sections; reference `agent-common.md` for governance |
+| `.github/bubbles-project.yaml` | Project-owned adapter selections and framework extensions | Optional top-level blocks such as `experienceRecall`, custom gates, scans, and local contracts |
 | `.github/skills/<project-skill>/SKILL.md` | Domain-specific skills (e.g., chaos-execution, protobuf-only) | Fully project-specific — create per project needs |
 | `.github/instructions/<project>.instructions.md` | Project-specific instruction files (e.g., ui-design, docker-ports) | Fully project-specific — create per project needs |
 | `.github/agents/push.agent.md` (if exists) | Project-specific push workflow | Project-specific — NOT portable across repos |

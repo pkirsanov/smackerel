@@ -50,6 +50,7 @@ Observability and execution evidence are not only anti-fabrication controls for 
 | Persistent regression expectations | `e2e-regression.md` |
 | Evidence-specific rules | `evidence-rules.md` |
 | Claim grounding and assumption handling (NON-NEGOTIABLE) | [claim-grounding.md](claim-grounding.md) |
+| Evidence-backed experience recall | [experience-recall.md](experience-recall.md) |
 | Shared test-substance rules | `test-fidelity.md` |
 | Untrusted content and tool-trust boundary (NON-NEGOTIABLE) | `untrusted-content.md` |
 

@@ -30,6 +30,10 @@ commands:
     defaultRiskClass: read_only
     overrides:
       set: owned_mutation
+  recall:
+    defaultRiskClass: read_only
+    overrides:
+      sync: owned_mutation
   runtime:
     defaultRiskClass: read_only
     overrides:
@@ -83,6 +87,27 @@ expect_exit 3 "--risk-class destructive_mutation blocks" -- --risk-class destruc
 # --resolve prints the class without gating
 resolved="$(bash "$TARGET" --resolve runtime release lease-1 2>/dev/null || true)"
 if [[ "$resolved" == "runtime_teardown" ]]; then pass "--resolve prints effective class"; else fail "--resolve got '$resolved' (expected runtime_teardown)"; fi
+
+for recall_read_verb in search read status freshness; do
+  recall_read_risk="$(bash "$TARGET" --resolve recall "$recall_read_verb" query 2>/dev/null || true)"
+  if [[ "$recall_read_risk" == "read_only" ]]; then
+    pass "recall $recall_read_verb resolves read_only"
+  else
+    fail "recall $recall_read_verb risk mismatch (got $recall_read_risk)"
+  fi
+done
+recall_sync_risk="$(bash "$TARGET" --resolve recall sync 2>/dev/null || true)"
+if [[ "$recall_sync_risk" == "owned_mutation" ]]; then
+  pass "recall sync resolves owned_mutation"
+else
+  fail "recall sync risk mismatch (got $recall_sync_risk)"
+fi
+recall_unknown_risk="$(bash "$TARGET" --resolve recall future-mutation 2>/dev/null || true)"
+if [[ "$recall_unknown_risk" == "owned_mutation" ]]; then
+  pass "unknown recall verbs resolve conservatively before CLI usage refusal"
+else
+  fail "unknown recall verb received weaker risk '$recall_unknown_risk'"
+fi
 
 # env override: escalate runtime_teardown into the block set
 rc=0; BUBBLES_RISK_BLOCK="destructive_mutation external_side_effect runtime_teardown" bash "$TARGET" runtime release lease-1 >/dev/null 2>&1 || rc=$?

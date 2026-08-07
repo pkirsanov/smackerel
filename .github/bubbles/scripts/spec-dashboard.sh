@@ -35,6 +35,7 @@ in_progress_specs=0
 blocked_specs=0
 not_started_specs=0
 other_specs=0
+unknown_mode_specs=()
 
 printf "\n${BLUE}═══════════════════════════════════════════════════════════════════════════${NC}\n"
 printf "${BLUE}  Bubbles Spec Progress Dashboard${NC}\n"
@@ -48,10 +49,13 @@ for state_file in $(find "$SPECS_DIR" -maxdepth 2 -name "state.json" -not -path 
   spec_name="$(basename "$spec_dir")"
 
   # Extract status (prefer certification.status when present)
+  # The trailing `.*` is load-bearing: without it sed replaces only the matched
+  # span and leaves the rest of the JSON line, so `"status": "done",` yielded
+  # `done,` — which matches no case arm and silently fell into "other".
   status="$({
     grep -A12 '"certification"' "$state_file" 2>/dev/null \
       | grep -m1 '"status"' \
-      | sed -E 's/.*"status"[[:space:]]*:[[:space:]]*"([^"]+)"/\1/'
+      | sed -E 's/.*"status"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/'
   } || true)"
   if [[ -z "$status" ]]; then
     status="$(grep -oE '"status"[[:space:]]*:[[:space:]]*"[^"]+"' "$state_file" 2>/dev/null | head -1 | sed -E 's/.*"([^"]+)"$/\1/' || echo "unknown")"
@@ -74,7 +78,11 @@ for state_file in $(find "$SPECS_DIR" -maxdepth 2 -name "state.json" -not -path 
     } || true)"
   fi
   if [[ -n "$completed_scopes_block" ]]; then
-    done_count="$(echo "$completed_scopes_block" | grep -cE '"[^"]+"' || echo "0")"
+    # grep -c already PRINTS 0 on no-match and exits 1, so `|| echo 0` appends a
+    # second line and the variable becomes "0\n0" — which then blows up `-gt` as
+    # a syntax error. Take the count, then normalize an empty result instead.
+    done_count="$(echo "$completed_scopes_block" | grep -cE '"[^"]+"' || true)"
+    [[ "$done_count" =~ ^[0-9]+$ ]] || done_count=0
   else
     done_count=0
   fi
@@ -82,9 +90,11 @@ for state_file in $(find "$SPECS_DIR" -maxdepth 2 -name "state.json" -not -path 
   # Count total scopes from scopes.md
   total_scopes=0
   if [[ -f "$spec_dir/scopes.md" ]]; then
-    total_scopes="$(grep -cE '^## Scope [0-9]+|^# Scope [0-9]+|^### Scope [0-9]+|Status:' "$spec_dir/scopes.md" 2>/dev/null || echo "0")"
+    total_scopes="$(grep -cE '^## Scope [0-9]+|^# Scope [0-9]+|^### Scope [0-9]+|Status:' "$spec_dir/scopes.md" 2>/dev/null || true)"
+    [[ "$total_scopes" =~ ^[0-9]+$ ]] || total_scopes=0
     # Rough: count Status: lines as scope count
-    status_lines="$(grep -c 'Status:' "$spec_dir/scopes.md" 2>/dev/null || echo "0")"
+    status_lines="$(grep -c 'Status:' "$spec_dir/scopes.md" 2>/dev/null || true)"
+    [[ "$status_lines" =~ ^[0-9]+$ ]] || status_lines=0
     if [[ "$status_lines" -gt 0 ]]; then
       total_scopes="$status_lines"
     fi
@@ -96,11 +106,20 @@ for state_file in $(find "$SPECS_DIR" -maxdepth 2 -name "state.json" -not -path 
   scope_info="${done_count}/${total_scopes}"
 
   # Color status — "done" or terminal-for-mode both count as completed.
+  #
+  # is-terminal-for-mode.sh exits 1 for "not terminal" but 2 for "this mode is
+  # not in the registry at all". Collapsing those loses a real signal: a spec
+  # that finished under an invented mode name is reported as unfinished forever,
+  # and the stderr line naming the bad mode is discarded. Keep them apart so bad
+  # control-plane data reads as bad data instead of as remaining work.
   is_terminal=1
+  unknown_mode=1
   if [[ -n "$mode" && "$mode" != "-" ]]; then
-    if bash "$(dirname "${BASH_SOURCE[0]}")/is-terminal-for-mode.sh" "$status" "$mode" >/dev/null 2>&1; then
-      is_terminal=0
-    fi
+    bash "$(dirname "${BASH_SOURCE[0]}")/is-terminal-for-mode.sh" "$status" "$mode" >/dev/null 2>&1
+    case $? in
+      0) is_terminal=0 ;;
+      2) unknown_mode=0 ;;
+    esac
   fi
   case "$status" in
     done) status_display="${GREEN}done${NC}"; ((done_specs++)) ;;
@@ -117,6 +136,12 @@ for state_file in $(find "$SPECS_DIR" -maxdepth 2 -name "state.json" -not -path 
       fi
       ;;
   esac
+
+  # Flag an unresolvable mode wherever it appears, including on a literal "done"
+  # spec, because the mode name is what every mode-driven consumer keys on.
+  if [[ "$unknown_mode" -eq 0 ]]; then
+    unknown_mode_specs+=("$spec_name ($mode)")
+  fi
 
   ((total_specs++))
 
@@ -154,6 +179,14 @@ printf "  Specs: ${GREEN}%d done${NC} | ${YELLOW}%d in_progress${NC} | ${RED}%d 
 
 if [[ "$bug_total" -gt 0 ]]; then
   printf "  Bugs:  ${GREEN}%d fixed${NC} | ${RED}%d open${NC} | %d total\n" "$bug_done" "$bug_open" "$bug_total"
+fi
+
+if [[ "${#unknown_mode_specs[@]}" -gt 0 ]]; then
+  printf "  ${YELLOW}%d spec(s) carry a workflowMode that is not in the registry${NC}\n" "${#unknown_mode_specs[@]}"
+  printf "    every mode-driven consumer keys on this field, so these resolve to no status ceiling:\n"
+  for entry in "${unknown_mode_specs[@]}"; do
+    printf "      %s\n" "$entry"
+  done
 fi
 
 if [[ "$total_specs" -gt 0 ]]; then

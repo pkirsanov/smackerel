@@ -40,6 +40,7 @@
 #   autofix <spec>                Scaffold missing report sections
 #   metrics <subcommand>          Manage metrics and activity tracking
 #   lessons [add|--all|compact]   Record, view, or compact lessons-learned memory
+#   recall <subcommand>           Search, read, inspect, or sync experience recall
 #   skill-proposals [subcommand]  Show or dismiss generated skill proposals
 #   profile [subcommand]          Show, list, or change adoption profiles plus developer observations
 #   sunnyvale <alias>             Resolve a Sunnyvale alias (agent or mode)
@@ -606,6 +607,13 @@ command_effective_risk_class() {
       else
         printf '%s' "$default_risk"
       fi
+      ;;
+    recall)
+      case "${command_args%% *}" in
+        search|read|status|freshness) printf '%s' 'read_only' ;;
+        sync) printf '%s' 'owned_mutation' ;;
+        *) printf '%s' 'owned_mutation' ;;
+      esac
       ;;
     runtime)
       case "${command_args%% *}" in
@@ -1272,6 +1280,8 @@ Commands:
   project [gates <subcmd>]      Manage project extensions (bubbles-project.yaml)
   metrics <subcommand>          Manage metrics (enable|disable|activity-enable|activity-disable|status|summary|gates|agents)
   lessons [add|--all|compact]   Record, view, or compact lessons-learned memory
+  recall <subcommand>           Experience recall (search|read|status|freshness|sync)
+                                Freshness exits: 0 fresh, 3 stale, 4 unknown, 5 disabled
   skill-proposals [subcommand]  Show or dismiss generated skill proposals
   profile [subcommand]          Show, list, or change adoption profiles plus developer observations
   upgrade [version] [--dry-run] Upgrade Bubbles to latest or specific version
@@ -2271,6 +2281,36 @@ cmd_doctor() {
       advisory_count=$((advisory_count + 1))
     fi
   fi
+
+  # Check 11b: Control-plane ratchet lints (IMP-036 SCOPE-3 / SCOPE-7, OW-015).
+  # These shipped wired into nothing: no runner referenced them, and `project
+  # gates add` only appends a declaration that no framework code executes, so a
+  # declared gate can look wired and stay inert. Running them here is the one
+  # place that reaches every consuming repo on upgrade without editing six
+  # uncommitted, mutually-different .git/hooks/pre-push files.
+  #
+  # Blocking, not advisory: both are RATCHETS seeded from the repo's own current
+  # state, so a clean repo passes by construction and only NEW drift fails. An
+  # advisory ratchet is a contradiction — it would report the drift it exists to
+  # refuse. Absent baseline is not a failure: a repo that has never seeded one
+  # is reported as unseeded rather than blocked.
+  local ratchet
+  for ratchet in agent-id-enum-lint collected-test-count-guard; do
+    [[ -x "$SCRIPT_DIR/${ratchet}.sh" ]] || continue
+    local ratchet_baseline="$REPO_ROOT/.specify/${ratchet}.baseline"
+    if [[ ! -f "$ratchet_baseline" ]]; then
+      echo -e "  ${YELLOW}⚠️${NC}  ${ratchet}: no baseline at .specify/${ratchet}.baseline (seed with --update-baseline)"
+      advisory_count=$((advisory_count + 1))
+      continue
+    fi
+    if bash "$SCRIPT_DIR/${ratchet}.sh" "$REPO_ROOT" >/dev/null 2>&1; then
+      echo -e "  ${GREEN}✅${NC} ${ratchet}: no new drift beyond the recorded baseline"
+      passed=$((passed + 1))
+    else
+      echo -e "  ${RED}❌${NC} ${ratchet}: new drift beyond the baseline (run 'bash .github/bubbles/scripts/${ratchet}.sh .' for detail)"
+      failed=$((failed + 1))
+    fi
+  done
 
   # Check 12: Governance hub snapshot (IMP-014) — informational, non-blocking.
   # Surfaces the single most-depended-on governance node so an operator sees the
@@ -3527,6 +3567,60 @@ cmd_metrics() {
   esac
 }
 
+lesson_source_file() {
+  local relative_path="$1"
+  local current_path="$REPO_ROOT"
+  local component=""
+  local -a components=()
+
+  [[ -n "$relative_path" && "$relative_path" != /* ]] || return 1
+  IFS='/' read -r -a components <<< "$relative_path"
+  [[ "${#components[@]}" -gt 0 ]] || return 1
+  for component in "${components[@]}"; do
+    [[ -n "$component" && "$component" != "." && "$component" != ".." ]] || return 1
+    current_path="$current_path/$component"
+    [[ ! -L "$current_path" ]] || return 1
+  done
+  [[ -f "$current_path" ]] || return 1
+  printf '%s' "$current_path"
+}
+
+lesson_metadata_json() {
+  local lesson_id="$1"
+  local captured_at="$2"
+  local repository_alias="$3"
+  local review_state="$4"
+  local source_path="$5"
+  local source_selector="$6"
+  local source_digest="$7"
+
+  command -v python3 >/dev/null 2>&1 || die "lessons add requires python3 to encode lesson metadata"
+  python3 -c '
+import json
+import sys
+
+lesson_id, captured_at, repository_alias, review_state, source_path, source_selector, source_digest = sys.argv[1:]
+source_anchor = None
+if source_path:
+    source_anchor = {
+        "contentDigest": source_digest,
+        "observedAt": captured_at,
+        "relativePath": source_path,
+        "selector": source_selector,
+    }
+metadata = {
+    "capturedAt": captured_at,
+    "lessonId": lesson_id,
+    "repositoryAlias": repository_alias or None,
+    "reviewState": review_state,
+    "schemaVersion": 1,
+    "sourceAnchor": source_anchor,
+}
+print(json.dumps(metadata, ensure_ascii=True, separators=(",", ":"), sort_keys=True))
+' "$lesson_id" "$captured_at" "$repository_alias" "$review_state" \
+    "$source_path" "$source_selector" "$source_digest"
+}
+
 cmd_lessons() {
   local lessons_file="$REPO_ROOT/.specify/memory/lessons.md"
   local subcmd="${1:-}"
@@ -3535,10 +3629,11 @@ cmd_lessons() {
     add)
       shift
       local problem="" root_cause="" fix="" applies_when="" flag=""
+      local repository_alias="" source_path="" source_selector="" review_state=""
       while [[ $# -gt 0 ]]; do
         flag="$1"
         case "$flag" in
-          --problem|--root-cause|--fix|--applies-when)
+          --problem|--root-cause|--fix|--applies-when|--repository-alias|--source-path|--source-selector|--review-state)
             # Guard the value BEFORE shifting: `shift 2` with one argument left
             # fails without shifting, which would spin this loop forever.
             if [[ $# -lt 2 ]]; then
@@ -3549,20 +3644,73 @@ cmd_lessons() {
               --root-cause) root_cause="$2" ;;
               --fix) fix="$2" ;;
               --applies-when) applies_when="$2" ;;
+              --repository-alias) repository_alias="$2" ;;
+              --source-path) source_path="$2" ;;
+              --source-selector) source_selector="$2" ;;
+              --review-state) review_state="$2" ;;
             esac
             shift 2
             ;;
-          *) die "Unknown lessons add option: $flag. Expected --problem, --root-cause, --fix, --applies-when" ;;
+          *) die "Unknown lessons add option: $flag. Expected the four lesson fields and optional source metadata" ;;
         esac
       done
       if [[ -z "$problem" || -z "$root_cause" || -z "$fix" || -z "$applies_when" ]]; then
         die "lessons add requires all four fields: --problem, --root-cause, --fix, --applies-when"
       fi
+      if [[ "$problem$root_cause$fix$applies_when" == *"<!-- bubbles-lesson-meta:"* ]]; then
+        die "lessons add field values must not contain the reserved lesson metadata marker"
+      fi
+
+      local source_group_count=0
+      [[ -n "$repository_alias" ]] && source_group_count=$((source_group_count + 1))
+      [[ -n "$source_path" ]] && source_group_count=$((source_group_count + 1))
+      [[ -n "$source_selector" ]] && source_group_count=$((source_group_count + 1))
+      [[ -n "$review_state" ]] && source_group_count=$((source_group_count + 1))
+      if [[ "$source_group_count" -ne 0 && "$source_group_count" -ne 4 ]]; then
+        die "lessons add source metadata requires --repository-alias, --source-path, --source-selector, and --review-state together"
+      fi
+
+      local source_digest="" source_abs=""
+      if [[ "$source_group_count" -eq 4 ]]; then
+        [[ "$repository_alias" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ && "${#repository_alias}" -le 128 ]] ||
+          die "lessons add --repository-alias does not satisfy the recall contract"
+        [[ "${#source_path}" -le 1024 ]] || die "lessons add --source-path is too long"
+        [[ "${#source_selector}" -le 512 ]] || die "lessons add --source-selector is too long"
+        case "$review_state" in
+          anchored|reviewed) ;;
+          *) die "lessons add --review-state must be anchored or reviewed" ;;
+        esac
+        if ! source_abs="$(lesson_source_file "$source_path")"; then
+          die "lessons add --source-path must name a contained regular file without symlink components"
+        fi
+        [[ "$source_abs" != "$lessons_file" ]] ||
+          die "lessons add cannot anchor a lesson to the lessons file being appended"
+        source_digest="sha256:$(bubbles_sha256_file "$source_abs")" ||
+          die "lessons add could not digest --source-path"
+      else
+        review_state="unanchored"
+      fi
+
       # One entry is one LINE because the skill-evolution detector clusters per
       # line; splitting the four fields across lines would fragment the cluster.
-      local entry
-      entry="$(printf -- '- problem: %s; root cause: %s; fix: %s; applies when: %s' \
+      local visible_entry identity_material lesson_id captured_at metadata_json entry previous_lessons_digest
+      visible_entry="$(printf -- '- problem: %s; root cause: %s; fix: %s; applies when: %s' \
         "$problem" "$root_cause" "$fix" "$applies_when" | tr '\n|' '  ')"
+      captured_at="$(bubbles_current_timestamp)"
+      if [[ -f "$lessons_file" ]]; then
+        previous_lessons_digest="$(bubbles_sha256_file "$lessons_file")" ||
+          die "lessons add could not digest the existing lessons file"
+      else
+        previous_lessons_digest="$(printf '' | bubbles_sha256_stdin)" ||
+          die "lessons add could not initialize lesson identity"
+      fi
+      identity_material="${visible_entry}|${repository_alias}|${source_path}|${source_selector}|${captured_at}|${previous_lessons_digest}"
+      lesson_id="lesson-$(printf '%s' "$identity_material" | bubbles_sha256_stdin)" ||
+        die "lessons add could not derive a stable lesson id"
+      metadata_json="$(lesson_metadata_json "$lesson_id" "$captured_at" "$repository_alias" \
+        "$review_state" "$source_path" "$source_selector" "$source_digest")" ||
+        die "lessons add could not encode lesson metadata"
+      entry="$visible_entry <!-- bubbles-lesson-meta:$metadata_json -->"
       mkdir -p "$(dirname "$lessons_file")"
       if [[ ! -f "$lessons_file" ]]; then
         printf '# Lessons\n\n' > "$lessons_file"
@@ -3610,6 +3758,10 @@ cmd_lessons() {
 
 cmd_skill_proposals() {
   bash "$SCRIPT_DIR/skill-evolution.sh" "${1:-show}"
+}
+
+cmd_recall() {
+  bash "$SCRIPT_DIR/experience-recall.sh" "$@"
 }
 
 cmd_profile() {
@@ -3964,6 +4116,7 @@ main() {
     project)            cmd_project "$@" ;;
     metrics)            cmd_metrics "$@" ;;
     lessons)            cmd_lessons "$@" ;;
+    recall)             cmd_recall "$@" ;;
     skill-proposals)    cmd_skill_proposals "$@" ;;
     profile)            cmd_profile "$@" ;;
     upgrade)            cmd_upgrade "$@" ;;

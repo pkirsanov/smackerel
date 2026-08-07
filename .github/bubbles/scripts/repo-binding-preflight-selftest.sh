@@ -4,11 +4,25 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PREFLIGHT="$SCRIPT_DIR/repo-binding-preflight.sh"
+SLUG_HELPER="$SCRIPT_DIR/repo-slug.sh"
 TMP_ROOT="$(mktemp -d)"
 trap 'rm -rf "$TMP_ROOT"' EXIT INT TERM
 FAILURES=0
 pass() { echo "PASS: $1"; }
 fail() { echo "FAIL: $1"; FAILURES=$((FAILURES + 1)); }
+
+# shellcheck source=bubbles/scripts/repo-slug.sh
+source "$SLUG_HELPER"
+
+installer_slug_of() {
+  local name="$1"
+  local slug=""
+  slug="$(printf '%s' "$name" \
+    | LC_ALL=C tr '[:upper:]' '[:lower:]' \
+    | LC_ALL=C sed -e 's/[^a-z0-9]/-/g' -e 's/--*/-/g' -e 's/^-//' -e 's/-$//')"
+  [[ -n "$slug" ]] || slug="repo"
+  printf '%s' "$slug"
+}
 
 echo "Running repo-binding-preflight selftest..."
 
@@ -97,6 +111,37 @@ if [[ "$rc" -eq 0 ]] && printf '%s\n' "$out" | grep -q 'matches target repo'; th
   pass "T8b installed targetRepoSlug marker matching the MCP-id slug binds cleanly"
 else
   fail "T8b marker matching MCP-id slug should bind (rc=$rc)"
+fi
+
+# T9: shared helper remains byte-equivalent to the installer's current
+# targetRepoSlug/MCP-id semantics for representative repository basenames.
+for slug_case in \
+  'MixedCaseRepo|mixedcaserepo' \
+  'Repo With Spaces|repo-with-spaces' \
+  'Repo.Name_with+Punctuation|repo-name-with-punctuation' \
+  'A___B...C|a-b-c' \
+  '--Leading---And---Trailing--|leading-and-trailing' \
+  '!!!|repo'; do
+  slug_input="${slug_case%%|*}"
+  slug_expected="${slug_case##*|}"
+  slug_actual="$(bubbles_repo_slug_of "$slug_input" 2>/dev/null || true)"
+  installer_actual="$(installer_slug_of "$slug_input")"
+  if [[ "$slug_actual" == "$slug_expected" && "$slug_actual" == "$installer_actual" ]]; then
+    pass "T9 helper/installer parity: '$slug_input' -> '$slug_expected'"
+  else
+    fail "T9 helper/installer parity: '$slug_input' expected '$slug_expected', helper='${slug_actual:-empty}', installer='$installer_actual'"
+  fi
+done
+
+if bubbles_repo_slug_of '' >/dev/null 2>&1; then
+  fail "T10 empty repository-name input must be impossible"
+else
+  pass "T10 empty repository-name input is rejected"
+fi
+if bubbles_repo_slug_of 'parent/repo' >/dev/null 2>&1; then
+  fail "T11 path-shaped repository-name input must be impossible"
+else
+  pass "T11 path-shaped repository-name input is rejected"
 fi
 
 echo

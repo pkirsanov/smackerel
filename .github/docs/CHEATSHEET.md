@@ -786,6 +786,13 @@ The super resolves intent and generates commands. A workflow runner may call it 
 | View lessons learned | `/bubbles.super show lessons` | `bubbles lessons` |
 | Record a lesson | `/bubbles.super record lesson` | `bubbles lessons add --problem "..." --root-cause "..." --fix "..." --applies-when "..."` |
 | Compact old lessons | `/bubbles.super compact lessons` | `bubbles lessons compact` |
+| Search recalled experience | — | `bubbles recall search "<query>" [--limit N] [--kind KIND ...] [--trust TRUST ...] [--spec-ref REF] [--scope-ref REF] [--format json\|text]` |
+| Read recalled experience | — | `bubbles recall read <record-id> [--format json\|text]` |
+| Check recall status | — | `bubbles recall status [--format json\|text]` |
+| Check recall freshness | — | `bubbles recall freshness [--format json\|text]` |
+| Synchronize recall | — | `bubbles recall sync [--format json\|text]` |
+| Recall provider posture | — | `local-lexical` is opt-in. `none` is the disabled, non-blocking default. Only `sync` mutates recall state. |
+| Interpret recall output | — | Freshness exits: `0` fresh, `3` stale, `4` unknown, `5` disabled. Provider or malformed response: `1`. Usage: `2`. Output is advisory and source-linked. It cannot serve as evidence or authority. |
 | View skill proposals | `/bubbles.super show skill proposals` | `bubbles skill-proposals` |
 | View developer profile | `/bubbles.super show profile` | `bubbles profile` |
 | Clear stale preferences | `/bubbles.super clear stale profile` | `bubbles profile --clear-stale` |
