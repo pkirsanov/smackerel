@@ -133,7 +133,7 @@ stores-only helper landed and the durability lane went green in commit `f00a2132
 ```text
 $ git --no-pager show --stat f00a2132 -- tests/integration/capture_disconnect_durability_test.go
 commit f00a2132caca179b397185a139d3fb6370c21c70
-Author: Philippe Kirsanov <redacted>
+Author: pkirsanov <redacted>
 Date:   Tue Jun 30 11:36:51 2026 -0700
 
     test(integration): stores-only schema+stream provisioning helper; durability green (BUG-099-002 done)
@@ -156,7 +156,7 @@ no-internals-leak path (`assistant_turn_failed`, unchanged by the fix) is intact
 $ grep -nc 'context.WithoutCancel' internal/assistant/httpadapter/adapter.go
 1
 $ grep -n 'assistant_turn_failed' internal/assistant/httpadapter/adapter.go
-368:		a.writeError(w, http.StatusInternalServerError, "assistant_turn_failed", req.TransportMessageID, requestID, true)
+368:  a.writeError(w, http.StatusInternalServerError, "assistant_turn_failed", req.TransportMessageID, requestID, true)
 ```
 
 ### Completion Statement
@@ -259,7 +259,7 @@ following greps confirm the single decoupled call site is in place on disk:
 
 ```text
 $ grep -n 'a.capture(' internal/assistant/httpadapter/adapter.go
-382:		a.capture(context.WithoutCancel(r.Context()), userID, req.TransportMessageID, req.Text)
+382:  a.capture(context.WithoutCancel(r.Context()), userID, req.TransportMessageID, req.Text)
 $ grep -nc 'context.WithoutCancel' internal/assistant/httpadapter/adapter.go
 1
 ```
@@ -276,21 +276,21 @@ index 70ae0fc7..962c9844 100644
 --- a/internal/assistant/httpadapter/adapter.go
 +++ b/internal/assistant/httpadapter/adapter.go
 @@ -370,7 +370,16 @@ func (a *HTTPAdapter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
- 	}
+  }
  
- 	if resp.CaptureRoute {
--		a.capture(r.Context(), userID, req.TransportMessageID, req.Text)
-+		// Capture-as-fallback is inviolable (Hard Constraint 5 / BS-001):
-+		// the user's prompt MUST persist even if the client has already
-+		// disconnected. net/http cancels r.Context() the instant the
-+		// connection drops, which would abort the downstream
-+		// pipeline.Process Postgres INSERT / NATS publish and silently
-+		// lose the prompt. Decouple the durable capture write from
-+		// request cancellation while preserving request-scoped values
-+		// (request id, trace correlation via middleware.GetReqID).
-+		// Spec 069 chaos Round 39 — F-069-CHAOS39-CAPTURE-CTX-CANCEL.
-+		a.capture(context.WithoutCancel(r.Context()), userID, req.TransportMessageID, req.Text)
- 	}
+  if resp.CaptureRoute {
+-  a.capture(r.Context(), userID, req.TransportMessageID, req.Text)
++  // Capture-as-fallback is inviolable (Hard Constraint 5 / BS-001):
++  // the user's prompt MUST persist even if the client has already
++  // disconnected. net/http cancels r.Context() the instant the
++  // connection drops, which would abort the downstream
++  // pipeline.Process Postgres INSERT / NATS publish and silently
++  // lose the prompt. Decouple the durable capture write from
++  // request cancellation while preserving request-scoped values
++  // (request id, trace correlation via middleware.GetReqID).
++  // Spec 069 chaos Round 39 — F-069-CHAOS39-CAPTURE-CTX-CANCEL.
++  a.capture(context.WithoutCancel(r.Context()), userID, req.TransportMessageID, req.Text)
+  }
 ```
 
 The `git show eadfada7` diff is the committed source of the same one-line decoupling rendered above — `internal/assistant/httpadapter/adapter.go` is a runtime source file (not an artifact), satisfying the Gate G053 non-artifact delta requirement.
