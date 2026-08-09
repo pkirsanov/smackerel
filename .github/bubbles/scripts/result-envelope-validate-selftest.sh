@@ -38,7 +38,9 @@ fail() { echo "FAIL: $1"; failures=$((failures + 1)); }
 
 TEST_ROOT_BASE="${HOME}/.cache/bubbles-result-envelope-selftest"
 mkdir -p "$TEST_ROOT_BASE"
-TEST_ROOT="$(mktemp -d -p "$TEST_ROOT_BASE")"
+# A template inside the base directory, not `-p`: the parent-directory flag is
+# GNU-only and BSD mktemp rejects it, which took this selftest down on macOS.
+TEST_ROOT="$(mktemp -d "$TEST_ROOT_BASE/run.XXXXXX")"
 trap 'rm -rf "$TEST_ROOT"' EXIT
 
 # Re-implement run_validator without AGENTS_DIR env override since the
@@ -112,13 +114,13 @@ fi
 
 # 2. v6 default — malformed BLOCKS, missing still warns.
 run_fixture "$repo_malformed"
-if [[ "$RC" -ne 0 ]] && echo "$OUT" | grep -q MALFORMED; then
+if [[ "$RC" -ne 0 ]] && grep -q MALFORMED <<< "$OUT"; then
   pass "2a. v6 default (no flags) blocks on malformed envelope"
 else
   fail "2a. v6 default malformed: rc=$RC out=$OUT"
 fi
 run_fixture "$repo_none"
-if [[ "$RC" -eq 0 ]] && echo "$OUT" | grep -q -E 'Advisory|missing'; then
+if [[ "$RC" -eq 0 ]] && grep -q -E 'Advisory|missing' <<< "$OUT"; then
   pass "2b. v6 default still warns (not blocks) on missing envelope"
 else
   fail "2b. v6 default missing: rc=$RC out=$OUT"
@@ -177,7 +179,7 @@ else
 fi
 # advisory still warns but exits 0 — that's by design (advisory never blocks).
 run_fixture "$repo_invalid" --advisory
-if [[ "$RC" -eq 0 ]] && echo "$OUT" | grep -q MALFORMED; then
+if [[ "$RC" -eq 0 ]] && grep -q MALFORMED <<< "$OUT"; then
   pass "7c. advisory still reports invalid outcome but exits 0 (by design)"
 else
   fail "7c. invalid outcome advisory: rc=$RC out=$OUT"
@@ -189,6 +191,66 @@ if [[ "$RC" -eq 0 ]]; then
   pass "8. valid envelope passes in v6 default mode"
 else
   fail "8. valid envelope: rc=$RC out=$OUT"
+fi
+
+# 9. IMP-038 SCOPE-4 / GF-3 — routing is not resolution.
+# Each fixture below is schema-VALID, so it would sail through without the
+# accounting check. That is the point: these are the shapes that read as a
+# clean, closed result while the work was actually handed to someone else.
+ENV_ROUTED_AS_ADDRESSED=$'# Agent\n\n## RESULT-ENVELOPE\n\n```json\n{\n  "agent": "bubbles.testagent",\n  "outcome": "completed_owned",\n  "summary": "claimed closure on a routed finding",\n  "findings": [\n    { "id": "F-1", "severity": "warn", "owner": "bubbles.devops", "summary": "flaky deploy step", "disposition": "routed", "filedArtifact": "specs/_ops/OPS-7/ops.md", "goalImpact": "independent" }\n  ],\n  "addressedFindings": ["F-1"]\n}\n```\n'
+ENV_BLOCKING_AS_ADDRESSED=$'# Agent\n\n## RESULT-ENVELOPE\n\n```json\n{\n  "agent": "bubbles.testagent",\n  "outcome": "completed_owned",\n  "summary": "claimed closure on a blocking-external finding",\n  "findings": [\n    { "id": "F-2", "severity": "blocker", "owner": "bubbles.devops", "summary": "upstream contract breaks the success signal", "disposition": "bug-filed", "filedArtifact": "specs/x/bugs/BUG-9/bug.md", "goalImpact": "blocking-external" }\n  ],\n  "addressedFindings": ["F-2"]\n}\n```\n'
+ENV_INDEPENDENT_UNFILED=$'# Agent\n\n## RESULT-ENVELOPE\n\n```json\n{\n  "agent": "bubbles.testagent",\n  "outcome": "completed_owned",\n  "summary": "independent finding with nothing filed",\n  "findings": [\n    { "id": "F-3", "severity": "warn", "owner": "bubbles.docs", "summary": "stale guide section", "goalImpact": "independent" }\n  ],\n  "unresolvedFindings": ["F-3"]\n}\n```\n'
+ENV_ROUTED_UNRESOLVED_OK=$'# Agent\n\n## RESULT-ENVELOPE\n\n```json\n{\n  "agent": "bubbles.testagent",\n  "outcome": "route_required",\n  "summary": "routed finding accounted honestly",\n  "nextRequiredOwner": "bubbles.devops",\n  "findings": [\n    { "id": "F-4", "severity": "warn", "owner": "bubbles.devops", "summary": "flaky deploy step", "disposition": "routed", "filedArtifact": "specs/_ops/OPS-7/ops.md", "goalImpact": "independent" }\n  ],\n  "unresolvedFindings": ["F-4"]\n}\n```\n'
+ENV_REQUIRED_FIXED_OK=$'# Agent\n\n## RESULT-ENVELOPE\n\n```json\n{\n  "agent": "bubbles.testagent",\n  "outcome": "completed_owned",\n  "summary": "required finding actually fixed",\n  "findings": [\n    { "id": "F-5", "severity": "blocker", "owner": "bubbles.implement", "summary": "in-boundary defect blocking the contract", "disposition": "fixed-in-session", "goalImpact": "required" }\n  ],\n  "addressedFindings": ["F-5"]\n}\n```\n'
+ENV_LEGACY_NO_IMPACT=$'# Agent\n\n## RESULT-ENVELOPE\n\n```json\n{\n  "agent": "bubbles.testagent",\n  "outcome": "completed_owned",\n  "summary": "pre-IMP-038 envelope with no goalImpact",\n  "findings": [\n    { "id": "F-6", "severity": "warn", "owner": "bubbles.implement", "summary": "legacy finding shape" }\n  ],\n  "addressedFindings": ["F-6"]\n}\n```\n'
+
+repo_routed_addressed="$(make_fixture_repo routed_addressed "$ENV_ROUTED_AS_ADDRESSED")"
+repo_blocking_addressed="$(make_fixture_repo blocking_addressed "$ENV_BLOCKING_AS_ADDRESSED")"
+repo_independent_unfiled="$(make_fixture_repo independent_unfiled "$ENV_INDEPENDENT_UNFILED")"
+repo_routed_ok="$(make_fixture_repo routed_ok "$ENV_ROUTED_UNRESOLVED_OK")"
+repo_required_ok="$(make_fixture_repo required_ok "$ENV_REQUIRED_FIXED_OK")"
+repo_legacy="$(make_fixture_repo legacy_no_impact "$ENV_LEGACY_NO_IMPACT")"
+
+run_fixture "$repo_routed_addressed"
+if [[ "$RC" -ne 0 ]] && grep -q 'routing hands work to an owner' <<< "$OUT"; then
+  pass "9a. a routed finding reported as addressed is refused"
+else
+  fail "9a. routed-as-addressed: rc=$RC out=$OUT"
+fi
+
+run_fixture "$repo_blocking_addressed"
+if [[ "$RC" -ne 0 ]] && grep -q 'blocking-external' <<< "$OUT"; then
+  pass "9b. a blocking-external finding reported as addressed is refused"
+else
+  fail "9b. blocking-as-addressed: rc=$RC out=$OUT"
+fi
+
+run_fixture "$repo_independent_unfiled"
+if [[ "$RC" -ne 0 ]] && grep -q 'names no filedArtifact' <<< "$OUT"; then
+  pass "9c. an independent finding with no filed artifact is refused as undischarged"
+else
+  fail "9c. independent-unfiled: rc=$RC out=$OUT"
+fi
+
+run_fixture "$repo_routed_ok"
+if [[ "$RC" -eq 0 ]]; then
+  pass "9d. a routed finding kept in unresolvedFindings with its artifact passes"
+else
+  fail "9d. routed-honest: rc=$RC out=$OUT"
+fi
+
+run_fixture "$repo_required_ok"
+if [[ "$RC" -eq 0 ]]; then
+  pass "9e. a required finding genuinely fixed in session passes as addressed"
+else
+  fail "9e. required-fixed: rc=$RC out=$OUT"
+fi
+
+run_fixture "$repo_legacy"
+if [[ "$RC" -eq 0 ]]; then
+  pass "9f. a pre-IMP-038 finding with no goalImpact still validates (additive)"
+else
+  fail "9f. legacy finding shape: rc=$RC out=$OUT"
 fi
 
 if [[ "$failures" -gt 0 ]]; then

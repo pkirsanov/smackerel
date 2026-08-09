@@ -15,6 +15,7 @@ State the user pain, system gap, and why now. Keep it user-visible and testable.
 **Success Signal:** [Observable, testable proof that the outcome was achieved — not "tests pass" but "user can do X and sees Y"]
 **Hard Constraints:** [Business invariants that must hold regardless of implementation approach — these survive model upgrades. A Hard Constraint MAY name a declared `domainModel.invariants[].id` (`INV-*`), which Gate G130 then checks is enforced-by-code or proved-by an adversarial test.]
 **Failure Condition:** [What would make this feature a failure even if all tests pass]
+**Goal Contract Trace:** [`gc:<sessionId>:<revision>` — the frozen Goal Contract this spec serves, plus one sentence naming which part of its intent or success signal this spec delivers. Omit ONLY when the spec predates the run's contract or the run froze none. Read the current value with `bubbles/scripts/goal-contract.sh read --session-file <session> --field .goalId`; never hand-author it.]
 
 ## Goals
 - Concrete outcomes that can be verified by tests.
@@ -122,6 +123,7 @@ Links: [spec.md](spec.md) | [design.md](design.md) | [uservalidation.md](userval
 **Status:** Not Started | In Progress | Done | Blocked
 **Priority:** P0 | P1 | P2 | P3
 **Depends On:** [None | scope IDs]
+**Goal Contribution:** [One sentence naming the concrete part of the frozen Goal Contract's intent or success signal this scope delivers. A scope that cannot name one is not part of the approved outcome — route it as a separate packet rather than absorbing it. Required for every scope that is not `Not Started` when the run froze a Goal Contract.]
 
 ### Gherkin Scenarios
 - Given/When/Then scenarios
@@ -326,9 +328,16 @@ Rules:
   "planningOnly": false,
   "planningOnlyJustification": null,
   "specDependsOn": [],
+  "workBoundary": {
+    "repositoryRoots": ["<repo-slug>"],
+    "specTargets": ["specs/NNN-feature-name"],
+    "allowedPaths": ["path/prefix/**"],
+    "crossRepoPolicy": "forbidden"
+  },
   "certifiedAt": null,
   "requiresRevalidation": false,
   "execution": {
+    "goalContractRef": null,
     "activeAgent": "bubbles.workflow",
     "currentPhase": "context | discover | bootstrap | implement | test | regression | docs | validate | audit | chaos | finalize",
     "currentScope": null,
@@ -435,6 +444,9 @@ Artifact-only modes set their ceiling status (e.g., `specs_hardened` for `spec-s
 **`execution` vs `certification`:** execution records runtime claims. certification is the validate-owned authoritative state.
 **`status` mirror invariant:** `status` and `certification.status` are one fact recorded twice. Every write to one MUST carry a matching write to the other. `certification.*` is `bubbles.validate`-owned, so an agent that finds `status` stale MUST route the correction to `bubbles.validate` rather than advance `status` alone. A half-write leaves the spec unresolvable and every later guard run fails `E009-STATUS-MIRROR`.
 **`execution.audit`:** additive audit evidence only. It is not workflow configuration or certification authority. New templates contain no attempt and no positive verdict; only `bubbles.audit` appends attempts, and validate/finalize must re-resolve the transition contract before consuming one.
+**`workBoundary`:** the immutable per-task work boundary that `bubbles/scripts/work-boundary-resolve.sh` enforces — the anti-wandering contract. `crossRepoPolicy` is a closed enum (`forbidden` | `authorized`) and defaults to `forbidden`; `allowedPaths` accepts an exact path, a `dir/` prefix, or a `prefix/**` glob. Do not hand-author it when a Goal Contract exists: run `bubbles/scripts/goal-contract.sh sync-boundary --session-file <session> --state-file <spec>/state.json`, which copies `.goalContract.workBoundary` verbatim so the enforced boundary and the approved one cannot drift. That sync seeds an absent boundary and accepts a narrowing, but REFUSES a widening (exit 3) and leaves the file untouched — widening reach is an expansion and belongs in `goal-contract.sh revise --approval-note`.
+**`execution.goalContractRef`:** `null` until `bubbles/scripts/goal-contract.sh mirror` runs, then exactly `{ "goalId": "gc:<sessionId>:<revision>", "revision": <int>, "sourceRequestDigest": "sha256:<64 hex>" }` — the three-field projection and nothing more. Intent, success signal, hard constraints, and the boundary are deliberately NOT mirrored here (IMP-038 R5: contract fields must not inflate every prompt); read them from `.goalContract` in the session file.
+**Historical specs stay readable.** A spec written before IMP-038 carries neither key, and every read path still works: `work-boundary-resolve.sh` without `--strict` answers `in-boundary` when no boundary is declared. That permissiveness is READ-ONLY-compatible and MUST NOT be used to authorize an edit. A new MUTABLE run creates and freezes both keys before its first source edit, and authorizes that edit with `work-boundary-resolve.sh --strict --require-allowed-paths`, which REFUSES an undeclared boundary (exit 3) or an undeclared path surface (exit 4) instead of waving it through.
 **`policySnapshot`:** records the effective grill/TDD/auto-commit/lockdown/regression/validation settings together with provenance.
 **`scopeLayout`:** `single-file` uses `scopes.md` + `report.md`; `per-scope-directory` uses `scopes/_index.md` plus `scopes/NN-name/scope.md` and `scopes/NN-name/report.md`.  
 **`certification.scopeProgress`:** Machine-readable scope registry for dependency pickup, status sync, and evidence location.

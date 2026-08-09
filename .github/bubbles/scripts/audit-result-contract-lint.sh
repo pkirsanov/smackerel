@@ -64,6 +64,7 @@ TRANSITION_FIELDS=(
   failedGateIds
   failedChecks
   blockingCode
+  parentExpandedPhases
   failureCount
   exitStatus
   verdict
@@ -337,7 +338,7 @@ validate_result_contract() {
   local addressed_findings unresolved_findings next_required_owner supersedes_attempt_id resume_from_phase
   local guard_schema guard_workflow_mode guard_profile guard_target_status guard_digest guard_revision
   local guard_classes guard_not_applicable guard_passed_gates guard_failed_gates guard_failed_checks
-  local guard_blocking_code guard_failure_count guard_exit_status guard_verdict
+  local guard_blocking_code guard_parent_expanded guard_failure_count guard_exit_status guard_verdict
   local human_key expected_human observed_human
 
   [[ -f "$result_file" ]] || fail INPUT "result file does not exist: $result_file"
@@ -410,6 +411,7 @@ validate_result_contract() {
   guard_failed_gates="$(field_value "$transition_block" failedGateIds)"
   guard_failed_checks="$(field_value "$transition_block" failedChecks)"
   guard_blocking_code="$(field_value "$transition_block" blockingCode)"
+  guard_parent_expanded="$(field_value "$transition_block" parentExpandedPhases)"
   guard_failure_count="$(field_value "$transition_block" failureCount)"
   guard_exit_status="$(field_value "$transition_block" exitStatus)"
   guard_verdict="$(field_value "$transition_block" verdict)"
@@ -433,6 +435,7 @@ validate_result_contract() {
   [[ "$resume_from_phase" == "none" || "$resume_from_phase" =~ ^[1-6]$ ]] || fail ENUM 'resumeFromPhase must be none or phase 1-6'
   [[ "$supersedes_attempt_id" == "none" || "$supersedes_attempt_id" =~ ^[-A-Za-z0-9._:]+$ ]] || fail ENUM 'supersedesAttemptId is malformed'
   [[ "$guard_failure_count" =~ ^[0-9]+$ ]] || fail GUARD_SCHEMA 'guard failureCount must be numeric'
+  [[ "$guard_parent_expanded" =~ ^[0-9]+$ ]] || fail GUARD_SCHEMA 'guard parentExpandedPhases must be numeric'
   case "$guard_exit_status:$guard_verdict" in 0:PASS|1:FAIL|2:BLOCKED) ;; *) fail GUARD_SCHEMA "guard exitStatus/verdict drift: $guard_exit_status/$guard_verdict" ;; esac
   case "$guard_verdict" in
     PASS)

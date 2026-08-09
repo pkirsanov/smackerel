@@ -167,6 +167,70 @@ else
   echo "  run 2: $run_two"
 fi
 
+# ---- Case 5: goal identity survives compaction verbatim (IMP-038 SCOPE-3) --
+#
+# The point of preserving these three fields is that a SUBSTITUTED ref must
+# still be detectable after compaction. Deriving them from the session file
+# would silently replace a wrong ref with the right one and destroy the
+# evidence — so the fixture below carries a deliberately wrong digest and the
+# test asserts that exact wrong value comes back out.
+
+goal_fixture="$TMP_ROOT/goal-envelope.md"
+write_fixture "$goal_fixture" "agent: bubbles.implement
+outcome: completed
+goalId: gc:vscode-abc123:2
+revision: 2
+sourceRequestDigest: sha256:1111111111111111111111111111111111111111111111111111111111111111
+nextRequiredOwner: bubbles.test"
+
+goal_out="$("$COMPACTOR" "$goal_fixture")"
+
+if printf '%s' "$goal_out" | grep -q '"goalId":"gc:vscode-abc123:2"' \
+   && printf '%s' "$goal_out" | grep -q '"revision":2,' \
+   && printf '%s' "$goal_out" | grep -q '"sourceRequestDigest":"sha256:1111111111111111111111111111111111111111111111111111111111111111"'; then
+  pass "Goal identity is preserved verbatim through compaction"
+else
+  fail "Goal identity must survive compaction unchanged"
+  echo "  output: $goal_out"
+fi
+
+# `revision` is an integer in the schema; emitting it quoted would make a
+# downstream verify-ref comparison fail on type rather than on substance.
+if printf '%s' "$goal_out" | grep -q '"revision":"2"'; then
+  fail "revision must be emitted as a JSON integer, not a quoted string"
+  echo "  output: $goal_out"
+else
+  pass "revision is emitted as a JSON integer"
+fi
+
+# A wrong digest must arrive at the verifier unchanged. This is the assertion
+# that fails if compaction ever starts "helpfully" repairing the ref.
+substituted_fixture="$TMP_ROOT/substituted-goal-envelope.md"
+write_fixture "$substituted_fixture" "agent: bubbles.implement
+outcome: completed
+goalId: gc:someone-elses-session:1
+revision: 1
+sourceRequestDigest: sha256:0000000000000000000000000000000000000000000000000000000000000000"
+
+substituted_out="$("$COMPACTOR" "$substituted_fixture")"
+
+if printf '%s' "$substituted_out" | grep -q '"goalId":"gc:someone-elses-session:1"' \
+   && printf '%s' "$substituted_out" | grep -q '"sourceRequestDigest":"sha256:0000000000000000000000000000000000000000000000000000000000000000"'; then
+  pass "A substituted goal ref survives compaction so resume can still catch it"
+else
+  fail "Compaction must NOT repair or drop a substituted goal ref"
+  echo "  output: $substituted_out"
+fi
+
+# A pre-IMP-038 or read-only envelope froze no contract; null is the honest
+# record, and it must not be confused with a present-but-empty ref.
+if printf '%s' "$minimal_out" | grep -q '"goalRef":null'; then
+  pass "An envelope with no goal identity records goalRef as null"
+else
+  fail "An envelope with no goal identity must record goalRef as null"
+  echo "  output: $minimal_out"
+fi
+
 # ---- Sanity: --help exits 0 and prints usage ------------------------------
 
 if "$COMPACTOR" --help >/dev/null 2>&1; then

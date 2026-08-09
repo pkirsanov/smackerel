@@ -56,6 +56,8 @@ PROVIDER_OUTPUT=""
 PROVIDER_RC=0
 FORMAT="json"
 FORMAT_SEEN=0
+TRANSITION_REASON=""
+TRANSITION_REASON_SEEN=0
 
 usage() {
   cat <<'EOF'
@@ -68,17 +70,32 @@ Repository-rooted subcommands:
   status [--format json|text]
   freshness [--format json|text]
   sync [--format json|text]
+  delete <record-id> [--reason TEXT] [--format json|text]
+  admit <record-id> [--reason TEXT] [--format json|text]
+  lifecycle list [--format json|text]
+  lifecycle set <state> <record-id> [--reason TEXT] [--format json|text]
+  export --limit N [--record-id ID ...] [--kind KIND ...] [--state STATE ...]
+         [--output REPO-RELATIVE-PATH] [--format json|text]
 
 The repository root and repository alias are derived from this installed twin.
 Public --repo-root, --repository-alias, and --adapter overrides are refused.
 
-Freshness exits:
-  0 fresh
-  3 stale
-  4 unknown
-  5 disabled
-  1 provider or malformed-response failure
+Lifecycle states form the closed machine
+admitted -> superseded | expired | deleted. Only an explicit admit reverses a
+transition. Deletion changes derived recall state and the lifecycle ledger only;
+it never deletes or rewrites the source artifact.
+
+Export requires an explicit --limit. It emits normalized records and source
+anchors, never raw source bodies and never transcript data.
+
+Exit codes:
+  0 success (freshness: fresh)
+  1 provider, engine, or malformed-response failure
   2 usage error
+  3 freshness: stale
+  4 freshness: unknown
+  5 experience recall adapter is disabled
+  6 lifecycle or export refusal
 EOF
 }
 
@@ -184,6 +201,23 @@ run_provider() {
   PROVIDER_RC=0
   set +e
   PROVIDER_OUTPUT="$(bash "$ADAPTER_PATH" "$@")"
+  PROVIDER_RC=$?
+  set -e
+}
+
+run_engine() {
+  local engine="$SCRIPT_DIR/experience-recall-lifecycle.py"
+  command -v python3 >/dev/null 2>&1 || {
+    echo "experience-recall: python3 is required for lifecycle and export operations" >&2
+    exit 1
+  }
+  [[ -f "$engine" ]] || {
+    echo "experience-recall: lifecycle engine not found: $engine" >&2
+    exit 1
+  }
+  PROVIDER_RC=0
+  set +e
+  PROVIDER_OUTPUT="$(python3 "$engine" "$@" --repo-root "$REPO_ROOT" --repository-alias "$REPOSITORY_ALIAS")"
   PROVIDER_RC=$?
   set -e
 }
@@ -406,6 +440,84 @@ if True:
       return False
     return not require_synced or value.get("synced") is True
 
+  def valid_lifecycle_transition(value):
+    keys = {
+      "contractType", "schemaVersion", "adapter", "repositoryAlias", "recordId",
+      "previousState", "state", "transitionedAt", "reason", "sourceAnchor",
+      "sourcePreserved", "ledgerPath", "ledgerEntries", "lifecycleCounts",
+    }
+    if not exact_keys(value, keys, keys):
+      return False
+    counts = value["lifecycleCounts"]
+    return (
+      value["contractType"] == "lifecycle-transition"
+      and value["schemaVersion"] == 1
+      and text(value["adapter"], 1, 64)
+      and isinstance(value["repositoryAlias"], str)
+      and ALIAS.fullmatch(value["repositoryAlias"]) is not None
+      and text(value["recordId"], 1, 128)
+      and value["previousState"] in LIFECYCLE_STATES
+      and value["state"] in LIFECYCLE_STATES
+      and text(value["transitionedAt"], 1, 64)
+      and nullable_text(value["reason"], 512)
+      and valid_anchor(value["sourceAnchor"])
+      # A transition that did not preserve its source artifact is refused.
+      and value["sourcePreserved"] in (True, None)
+      and text(value["ledgerPath"], 1, 1024)
+      and nonnegative_integer(value["ledgerEntries"])
+      and isinstance(counts, dict)
+      and set(counts) == LIFECYCLE_STATES
+      and all(nonnegative_integer(counts[key]) for key in LIFECYCLE_STATES)
+    )
+
+  def valid_ledger_entry(value):
+    keys = {
+      "contractType", "schemaVersion", "sequence", "repositoryAlias", "recordId",
+      "anchorKey", "sourceAnchor", "state", "transitionedAt", "reason",
+    }
+    if not exact_keys(value, keys, keys):
+      return False
+    return (
+      value["contractType"] == "lifecycle-entry"
+      and value["schemaVersion"] == 1
+      and type(value["sequence"]) is int
+      and value["sequence"] >= 1
+      and isinstance(value["repositoryAlias"], str)
+      and ALIAS.fullmatch(value["repositoryAlias"]) is not None
+      and text(value["recordId"], 1, 128)
+      and isinstance(value["anchorKey"], str)
+      and DIGEST.fullmatch(value["anchorKey"]) is not None
+      and valid_anchor(value["sourceAnchor"])
+      and value["state"] in LIFECYCLE_STATES
+      and text(value["transitionedAt"], 1, 64)
+      and nullable_text(value["reason"], 512)
+    )
+
+  def valid_ledger(value):
+    keys = {
+      "contractType", "schemaVersion", "adapter", "repositoryAlias", "ledgerPath",
+      "entryCount", "effectiveCounts", "entries",
+    }
+    if not exact_keys(value, keys, keys):
+      return False
+    counts = value["effectiveCounts"]
+    entries = value["entries"]
+    return (
+      value["contractType"] == "lifecycle-ledger"
+      and value["schemaVersion"] == 1
+      and text(value["adapter"], 1, 64)
+      and isinstance(value["repositoryAlias"], str)
+      and ALIAS.fullmatch(value["repositoryAlias"]) is not None
+      and text(value["ledgerPath"], 1, 1024)
+      and nonnegative_integer(value["entryCount"])
+      and isinstance(counts, dict)
+      and set(counts) == LIFECYCLE_STATES
+      and all(nonnegative_integer(counts[key]) for key in LIFECYCLE_STATES)
+      and isinstance(entries, list)
+      and value["entryCount"] == len(entries)
+      and all(valid_ledger_entry(item) for item in entries)
+    )
+
   valid = False
   if operation == "search":
     valid = isinstance(payload, list) and len(payload) <= 20 and all(valid_result(item) for item in payload)
@@ -417,6 +529,12 @@ if True:
     valid = valid_freshness(payload)
   elif operation == "sync":
     valid = valid_status(payload, require_freshness=False, require_synced=True)
+  elif operation == "lifecycle":
+    valid = valid_lifecycle_transition(payload)
+  elif operation == "ledger":
+    valid = valid_ledger(payload)
+  elif operation == "export":
+    valid = isinstance(payload, list) and len(payload) <= 20 and all(valid_record(item) for item in payload)
   else:
     invalid("unknown-operation")
 
@@ -641,6 +759,142 @@ freshness_exit() {
   esac
 }
 
+render_lifecycle_text() {
+  python3 -c '
+import json
+import sys
+import unicodedata
+
+def one_line(value):
+    if value is None:
+        return "none"
+    if value is True:
+        return "true"
+    if value is False:
+        return "false"
+    safe = "".join("?" if unicodedata.category(character).startswith("C") or unicodedata.category(character) in {"Zl", "Zp"} else character for character in str(value))
+    return " ".join(safe.split())
+
+transition = json.loads(sys.argv[1])
+if not isinstance(transition, dict):
+    raise SystemExit("experience-recall: lifecycle response is not an object")
+counts = transition.get("lifecycleCounts", {})
+anchor = transition.get("sourceAnchor", {})
+print(
+    "record={record} previous={previous} state={state} at={at}".format(
+        record=one_line(transition.get("recordId")),
+        previous=one_line(transition.get("previousState")),
+        state=one_line(transition.get("state")),
+        at=one_line(transition.get("transitionedAt")),
+    )
+)
+print(
+    "source={path} selector={selector} sourcePreserved={preserved}".format(
+        path=one_line(anchor.get("relativePath")),
+        selector=one_line(anchor.get("selector")),
+        preserved=one_line(transition.get("sourcePreserved")),
+    )
+)
+print(
+    "ledger={ledger} entries={entries} reason={reason}".format(
+        ledger=one_line(transition.get("ledgerPath")),
+        entries=int(transition.get("ledgerEntries", 0)),
+        reason=one_line(transition.get("reason")),
+    )
+)
+print(
+    "lifecycle admitted={admitted} superseded={superseded} expired={expired} deleted={deleted}".format(
+        admitted=int(counts.get("admitted", 0)),
+        superseded=int(counts.get("superseded", 0)),
+        expired=int(counts.get("expired", 0)),
+        deleted=int(counts.get("deleted", 0)),
+    )
+)
+' "$PROVIDER_OUTPUT"
+}
+
+render_ledger_text() {
+  python3 -c '
+import json
+import sys
+import unicodedata
+
+def one_line(value):
+    if value is None:
+        return "none"
+    safe = "".join("?" if unicodedata.category(character).startswith("C") or unicodedata.category(character) in {"Zl", "Zp"} else character for character in str(value))
+    return " ".join(safe.split())
+
+ledger = json.loads(sys.argv[1])
+if not isinstance(ledger, dict):
+    raise SystemExit("experience-recall: lifecycle ledger response is not an object")
+counts = ledger.get("effectiveCounts", {})
+print(
+    "ledger={ledger} repository={repository} entries={entries}".format(
+        ledger=one_line(ledger.get("ledgerPath")),
+        repository=one_line(ledger.get("repositoryAlias")),
+        entries=int(ledger.get("entryCount", 0)),
+    )
+)
+print(
+    "effective admitted={admitted} superseded={superseded} expired={expired} deleted={deleted}".format(
+        admitted=int(counts.get("admitted", 0)),
+        superseded=int(counts.get("superseded", 0)),
+        expired=int(counts.get("expired", 0)),
+        deleted=int(counts.get("deleted", 0)),
+    )
+)
+entries = ledger.get("entries", [])
+if not entries:
+    print("No lifecycle transitions recorded.")
+for entry in entries:
+    anchor = entry.get("sourceAnchor", {})
+    print(
+        "seq={sequence} record={record} state={state} at={at} source={source} reason={reason}".format(
+            sequence=int(entry.get("sequence", 0)),
+            record=one_line(entry.get("recordId")),
+            state=one_line(entry.get("state")),
+            at=one_line(entry.get("transitionedAt")),
+            source=one_line(anchor.get("relativePath")),
+            reason=one_line(entry.get("reason")),
+        )
+    )
+' "$PROVIDER_OUTPUT"
+}
+
+render_export_text() {
+  python3 -c '
+import json
+import sys
+import unicodedata
+
+def one_line(value):
+    if value is None:
+        return "none"
+    safe = "".join("?" if unicodedata.category(character).startswith("C") or unicodedata.category(character) in {"Zl", "Zp"} else character for character in str(value))
+    return " ".join(safe.split())
+
+records = json.loads(sys.argv[1])
+if not isinstance(records, list):
+    raise SystemExit("experience-recall: export response is not an array")
+print("exported={count} bodies=excluded transcripts=excluded".format(count=len(records)))
+if not records:
+    print("No records matched the bounded export selection.")
+for record in records:
+    anchor = record.get("sourceAnchor", {})
+    print(
+        "record={record} kind={kind} trust={trust} lifecycle={lifecycle} source={source} selector={selector}".format(
+            record=one_line(record.get("recordId")),
+            kind=one_line(record.get("kind")),
+            trust=one_line(record.get("sourceTrust")),
+            lifecycle=one_line(record.get("lifecycle", {}).get("state")),
+            source=one_line(anchor.get("relativePath")),
+            selector=one_line(anchor.get("selector")),
+        )
+    )
+' "$PROVIDER_OUTPUT"
+}
+
 cmd_search() {
   local query="${1:-}"
   local limit="5"
@@ -851,6 +1105,194 @@ cmd_sync() {
   fi
 }
 
+refuse_disabled() {
+  local operation="$1"
+  local message="$2"
+  if [[ "$FORMAT" == "json" ]]; then
+    disabled_refusal_json "$operation"
+  else
+    echo "Experience recall disabled (adapter=none); $message is unavailable."
+  fi
+  return 5
+}
+
+parse_transition_options() {
+  TRANSITION_REASON=""
+  TRANSITION_REASON_SEEN=0
+  local operation="$1"
+  shift
+  local option=""
+  FORMAT="json"
+  while [[ $# -gt 0 ]]; do
+    option="$1"
+    reject_derived_control "$option"
+    case "$option" in
+      --reason)
+        [[ $# -ge 2 ]] || fail_usage "--reason requires a value"
+        [[ "$TRANSITION_REASON_SEEN" -eq 0 ]] || fail_usage "--reason may be specified once"
+        TRANSITION_REASON_SEEN=1
+        validate_public_value "--reason" "$2" || return 1
+        TRANSITION_REASON="$2"
+        shift 2
+        ;;
+      --format)
+        [[ $# -ge 2 ]] || fail_usage "--format requires a value"
+        set_format "$2"
+        shift 2
+        ;;
+      *) fail_usage "unknown $operation option: $option" ;;
+    esac
+  done
+}
+
+run_transition() {
+  local operation="$1"
+  local state="$2"
+  local record_id="$3"
+  shift 3
+  [[ -n "$record_id" && "$record_id" != --* ]] || fail_usage "$operation requires a record id"
+  validate_public_value "record id" "$record_id" || return 1
+  parse_transition_options "$operation" "$@" || return 1
+
+  if [[ "$ADAPTER" == "none" ]]; then
+    refuse_disabled "$operation" "$operation"
+    return $?
+  fi
+
+  local -a engine_args=(set --record-id "$record_id" --state "$state")
+  [[ "$TRANSITION_REASON_SEEN" -eq 0 ]] || engine_args+=(--reason "$TRANSITION_REASON")
+  run_engine "${engine_args[@]}"
+  propagate_provider_failure || return $?
+  validate_provider_response lifecycle || return 1
+  if [[ "$FORMAT" == "json" ]]; then
+    printf '%s\n' "$PROVIDER_OUTPUT"
+  else
+    render_lifecycle_text
+  fi
+}
+
+cmd_delete() {
+  run_transition delete deleted "${1:-}" "${@:2}"
+}
+
+cmd_admit() {
+  run_transition admit admitted "${1:-}" "${@:2}"
+}
+
+cmd_lifecycle() {
+  local action="${1:-}"
+  case "$action" in
+    list)
+      shift
+      parse_simple_format "lifecycle list" "$@"
+      if [[ "$ADAPTER" == "none" ]]; then
+        refuse_disabled lifecycle "lifecycle list"
+        return $?
+      fi
+      run_engine ledger
+      propagate_provider_failure || return $?
+      validate_provider_response ledger || return 1
+      if [[ "$FORMAT" == "json" ]]; then
+        printf '%s\n' "$PROVIDER_OUTPUT"
+      else
+        render_ledger_text
+      fi
+      ;;
+    set)
+      [[ $# -ge 3 ]] || fail_usage "lifecycle set requires a state and a record id"
+      local state="$2"
+      case "$state" in
+        admitted | superseded | expired | deleted) ;;
+        *) fail_usage "lifecycle set state must be admitted, superseded, expired, or deleted" ;;
+      esac
+      run_transition "lifecycle set" "$state" "$3" "${@:4}"
+      ;;
+    '' | --*) fail_usage "lifecycle requires the action 'list' or 'set'" ;;
+    *) fail_usage "unknown lifecycle action: $action" ;;
+  esac
+}
+
+cmd_export() {
+  local limit=""
+  local output=""
+  local option=""
+  local -a record_ids=()
+  local -a kinds=()
+  local -a states=()
+  local limit_seen=0
+  local output_seen=0
+
+  FORMAT="json"
+  while [[ $# -gt 0 ]]; do
+    option="$1"
+    reject_derived_control "$option"
+    case "$option" in
+      --limit)
+        [[ $# -ge 2 ]] || fail_usage "--limit requires a value"
+        [[ "$limit_seen" -eq 0 ]] || fail_usage "--limit may be specified once"
+        limit_seen=1
+        limit="$2"
+        shift 2
+        ;;
+      --record-id)
+        [[ $# -ge 2 ]] || fail_usage "--record-id requires a value"
+        validate_public_value "--record-id" "$2" || return 1
+        record_ids+=("$2")
+        shift 2
+        ;;
+      --kind)
+        [[ $# -ge 2 ]] || fail_usage "--kind requires a value"
+        validate_public_value "--kind" "$2" || return 1
+        kinds+=("$2")
+        shift 2
+        ;;
+      --state)
+        [[ $# -ge 2 ]] || fail_usage "--state requires a value"
+        validate_public_value "--state" "$2" || return 1
+        states+=("$2")
+        shift 2
+        ;;
+      --output)
+        [[ $# -ge 2 ]] || fail_usage "--output requires a value"
+        [[ "$output_seen" -eq 0 ]] || fail_usage "--output may be specified once"
+        output_seen=1
+        validate_public_value "--output" "$2" || return 1
+        output="$2"
+        shift 2
+        ;;
+      --format)
+        [[ $# -ge 2 ]] || fail_usage "--format requires a value"
+        set_format "$2"
+        shift 2
+        ;;
+      *) fail_usage "unknown export option: $option" ;;
+    esac
+  done
+  [[ "$limit_seen" -eq 1 ]] || fail_usage "export requires an explicit --limit"
+  [[ "$limit" =~ ^[0-9]+$ && "$limit" -ge 1 && "$limit" -le 20 ]] ||
+    fail_usage "--limit must be an integer from 1 through 20"
+
+  if [[ "$ADAPTER" == "none" ]]; then
+    refuse_disabled export export
+    return $?
+  fi
+
+  local -a engine_args=(export --limit "$limit")
+  for option in ${record_ids[@]+"${record_ids[@]}"}; do engine_args+=(--record-id "$option"); done
+  for option in ${kinds[@]+"${kinds[@]}"}; do engine_args+=(--kind "$option"); done
+  for option in ${states[@]+"${states[@]}"}; do engine_args+=(--state "$option"); done
+  [[ "$output_seen" -eq 0 ]] || engine_args+=(--output "$output")
+
+  run_engine "${engine_args[@]}"
+  propagate_provider_failure || return $?
+  validate_provider_response export || return 1
+  if [[ "$FORMAT" == "json" ]]; then
+    printf '%s\n' "$PROVIDER_OUTPUT"
+  else
+    render_export_text
+  fi
+}
+
 main() {
   local subcommand="${1:-}"
   case "$subcommand" in
@@ -858,10 +1300,7 @@ main() {
       usage
       return 0
       ;;
-    search | read | status | freshness | sync) ;;
-    export | delete | admit | lifecycle)
-      fail_usage "subcommand '$subcommand' is not available in this scope"
-      ;;
+    search | read | status | freshness | sync | delete | admit | lifecycle | export) ;;
     *) fail_usage "unknown subcommand: $subcommand" ;;
   esac
   shift
@@ -873,6 +1312,10 @@ main() {
     status) cmd_status "$@" ;;
     freshness) cmd_freshness "$@" ;;
     sync) cmd_sync "$@" ;;
+    delete) cmd_delete "$@" ;;
+    admit) cmd_admit "$@" ;;
+    lifecycle) cmd_lifecycle "$@" ;;
+    export) cmd_export "$@" ;;
   esac
 }
 

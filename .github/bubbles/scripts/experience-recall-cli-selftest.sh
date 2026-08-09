@@ -49,7 +49,7 @@ assert_rc() {
 assert_stdout_contains() {
   local label="$1"
   local expected="$2"
-  if grep -qF "$expected" "$LAST_OUT"; then
+  if grep -qF -e "$expected" "$LAST_OUT"; then
     pass "$label"
   else
     fail "$label"
@@ -60,7 +60,7 @@ assert_stdout_contains() {
 assert_stderr_contains() {
   local label="$1"
   local expected="$2"
-  if grep -qF "$expected" "$LAST_ERR"; then
+  if grep -qF -e "$expected" "$LAST_ERR"; then
     pass "$label"
   else
     fail "$label"
@@ -71,7 +71,7 @@ assert_stderr_contains() {
 assert_stdout_not_contains() {
   local label="$1"
   local unexpected="$2"
-  if grep -qF "$unexpected" "$LAST_OUT"; then
+  if grep -qF -e "$unexpected" "$LAST_OUT"; then
     fail "$label"
     echo "  stdout: $(cat "$LAST_OUT")"
   else
@@ -82,7 +82,7 @@ assert_stdout_not_contains() {
 assert_stderr_not_contains() {
   local label="$1"
   local unexpected="$2"
-  if grep -qF "$unexpected" "$LAST_ERR"; then
+  if grep -qF -e "$unexpected" "$LAST_ERR"; then
     fail "$label"
     echo "  stderr: $(cat "$LAST_ERR")"
   else
@@ -491,11 +491,110 @@ assert_rc "the twin rejects a separated adapter override" 2
 run_case bash "$NONE_CLI" recall status --adapter=none
 assert_rc "the CLI rejects an equals-form adapter override" 2
 
-for unavailable_subcommand in export delete admit lifecycle; do
-  run_case bash "$NONE_CLI" recall "$unavailable_subcommand"
-  assert_rc "the CLI does not expose $unavailable_subcommand before its owning scope" 2
-  assert_stderr_contains "$unavailable_subcommand refusal names the scope boundary" "not available in this scope"
+# The curation family (delete, admit, lifecycle, export) is exposed. A bare
+# invocation is a usage error that names the missing argument, and usage refusal
+# is ordered ahead of the disabled contract.
+for usage_case in \
+  "delete|delete requires a record id" \
+  "admit|admit requires a record id" \
+  "lifecycle|lifecycle requires the action 'list' or 'set'" \
+  "export|export requires an explicit --limit"; do
+  usage_subcommand="${usage_case%%|*}"
+  usage_message="${usage_case##*|}"
+  run_case bash "$NONE_CLI" recall "$usage_subcommand"
+  assert_rc "bare recall $usage_subcommand is a usage error, not a disabled refusal" 2
+  assert_stderr_contains "bare recall $usage_subcommand names the missing argument" "$usage_message"
 done
+
+# With arguments satisfied, the disabled adapter owns the outcome: exit 5 with a
+# structured refusal that carries the invoked operation.
+for disabled_case in \
+  "delete rec-scope4|delete" \
+  "admit rec-scope4|admit" \
+  "lifecycle list|lifecycle" \
+  "lifecycle set superseded rec-scope4|lifecycle set" \
+  "export --limit 3|export"; do
+  disabled_args="${disabled_case%%|*}"
+  disabled_operation="${disabled_case##*|}"
+  # shellcheck disable=SC2086
+  run_case bash "$NONE_CLI" recall $disabled_args
+  assert_rc "recall $disabled_args takes the disabled exit under adapter none" 5
+  assert_json_file "recall $disabled_args emits the structured disabled refusal" \
+    "data['contractType'] == 'refusal' and data['adapter'] == 'none' and data['state'] == 'disabled' and data['operation'] == '$disabled_operation'"
+  assert_stderr_not_contains "recall $disabled_args refuses without engine leakage" "Traceback"
+done
+
+# Bounded selectors and the closed lifecycle enum are usage errors (exit 2) even
+# though the adapter is disabled, so validation cannot hide behind exit 5.
+for precedence_case in \
+  "export --limit 0|--limit must be an integer from 1 through 20" \
+  "export --limit 21|--limit must be an integer from 1 through 20" \
+  "export --limit 3 --limit 4|--limit may be specified once" \
+  "lifecycle set retired rec-scope4|lifecycle set state must be admitted, superseded, expired, or deleted" \
+  "lifecycle set admitted|lifecycle set requires a state and a record id" \
+  "lifecycle inspect|unknown lifecycle action: inspect" \
+  "delete rec-scope4 --reason|--reason requires a value" \
+  "admit rec-scope4 --bogus|unknown admit option: --bogus"; do
+  precedence_args="${precedence_case%%|*}"
+  precedence_message="${precedence_case##*|}"
+  # shellcheck disable=SC2086
+  run_case bash "$NONE_CLI" recall $precedence_args
+  assert_rc "recall $precedence_args refuses on usage grounds ahead of the disabled contract" 2
+  assert_stderr_contains "recall $precedence_args names the rejected input" "$precedence_message"
+done
+
+# The curation family keeps the derived-control invariant of the read-only family.
+for derived_case in \
+  "delete rec-scope4 --repo-root /tmp|repository root is derived" \
+  "admit rec-scope4 --repository-alias other|repository alias is derived" \
+  "lifecycle list --adapter none|adapter selection comes from repository config" \
+  "export --limit 3 --repo-root=/tmp|repository root is derived"; do
+  derived_args="${derived_case%%|*}"
+  derived_message="${derived_case##*|}"
+  # shellcheck disable=SC2086
+  run_case bash "$NONE_CLI" recall $derived_args
+  assert_rc "recall $derived_args refuses the derived-control override" 2
+  assert_stderr_contains "recall $derived_args explains the derived control" "$derived_message"
+done
+
+run_case bash "$NONE_CLI" recall delete rec-scope4 --format text
+assert_rc "text-format delete keeps the disabled exit" 5
+assert_stdout_contains "text-format delete names the disabled adapter" "disabled (adapter=none)"
+
+run_case bash "$NONE_CLI" recall export --limit 3 --format text
+assert_rc "text-format export keeps the disabled exit" 5
+assert_stdout_contains "text-format export names the disabled adapter" "disabled (adapter=none)"
+
+run_case bash "$NONE_CLI" recall export --limit 5 --output evidence/disabled-export.json
+assert_rc "disabled export refuses before honoring --output" 5
+if [[ ! -e "$NONE_REPO/evidence/disabled-export.json" ]]; then
+  pass "disabled export writes no output file"
+else
+  fail "disabled export wrote an output file"
+fi
+
+for scope4_risk_args in 'delete rec-scope4' 'admit rec-scope4' 'lifecycle list' 'export --limit 3'; do
+  # shellcheck disable=SC2086
+  run_case bash "$NONE_CLI" recall $scope4_risk_args
+  assert_last_cli_risk "CLI classifies recall $scope4_risk_args as owned_mutation" \
+    "$NONE_REPO" "$scope4_risk_args" "owned_mutation"
+done
+
+run_case bash "$NONE_CLI" help
+assert_rc "CLI help succeeds with the curation family exposed" 0
+assert_stdout_contains "CLI help inventories the full recall family" \
+  "search|read|status|freshness|sync|delete|admit|lifecycle|export"
+assert_stdout_contains "CLI help documents the lifecycle and export refusal exit" \
+  "6 lifecycle or export refusal"
+
+run_case bash "$NONE_TWIN" --help
+assert_rc "the twin usage succeeds" 0
+assert_stdout_contains "the twin usage documents the closed lifecycle machine" \
+  "admitted -> superseded | expired | deleted"
+assert_stdout_contains "the twin usage bounds export behind an explicit limit" \
+  "Export requires an explicit --limit"
+assert_stdout_contains "the twin usage keeps source artifacts out of deletion" \
+  "it never deletes or rewrites the source artifact"
 
 if [[ ! -e "$NONE_REPO/.specify/runtime/experience-recall" ]]; then
   pass "disabled read-only recall commands create no recall runtime state"

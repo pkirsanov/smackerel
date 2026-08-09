@@ -233,7 +233,7 @@ is_live_system_test_file() {
       matched_lines="$(grep -F "$base_name" "$scope_file" 2>/dev/null || true)"
     fi
 
-    if echo "$matched_lines" | grep -Eiq 'integration|e2e-api|e2e-ui|live-stack|live stack|live-system|live system|real-stack|real stack'; then
+    if grep -Eiq 'integration|e2e-api|e2e-ui|live-stack|live stack|live-system|live system|real-stack|real stack' <<< "$matched_lines"; then
       return 0
     fi
   done
@@ -343,7 +343,7 @@ for impl_file in "${impl_files[@]}"; do
   # Only scan backend files (rs, go, py, java) for backend stub patterns
   if [[ "$file_ext" == "rs" || "$file_ext" == "go" || "$file_ext" == "py" || "$file_ext" == "java" || "$file_ext" == "scala" ]]; then
     # Skip test files — stubs/mocks in test files are a separate concern
-    if echo "$impl_file" | grep -qE '(test|spec|_test\.rs|_test\.go|test_)'; then
+    if grep -qE '(test|spec|_test\.rs|_test\.go|test_)' <<< "$impl_file"; then
       continue
     fi
 
@@ -548,7 +548,7 @@ go_package_has_external_call() {
 
   while IFS= read -r neighbor; do
     [[ -z "$neighbor" ]] && continue
-    if echo "$neighbor" | grep -qE '(_test\.go|/testdata/)'; then
+    if grep -qE '(_test\.go|/testdata/)' <<< "$neighbor"; then
       continue
     fi
     if grep -qE "$INTEGRATION_EXTERNAL_CALL_PATTERNS" "$neighbor" 2>/dev/null; then
@@ -563,11 +563,11 @@ for impl_file in "${impl_files[@]}"; do
   file_ext="${impl_file##*.}"
 
   if [[ "$file_ext" == "rs" || "$file_ext" == "go" || "$file_ext" == "py" || "$file_ext" == "java" || "$file_ext" == "scala" || "$file_ext" == "ts" || "$file_ext" == "tsx" || "$file_ext" == "js" || "$file_ext" == "jsx" ]]; then
-    if echo "$impl_file" | grep -qE '(test|spec|_test\.|\.test\.|\.spec\.|__tests__|__mocks__|e2e|playwright)'; then
+    if grep -qE '(test|spec|_test\.|\.test\.|\.spec\.|__tests__|__mocks__|e2e|playwright)' <<< "$impl_file"; then
       continue
     fi
 
-    if ! echo "$impl_file" | grep -qiE "$INTEGRATION_FILE_PATTERNS"; then
+    if ! grep -qiE "$INTEGRATION_FILE_PATTERNS" <<< "$impl_file"; then
       continue
     fi
 
@@ -602,11 +602,11 @@ for impl_file in "${impl_files[@]}"; do
         # suspicious patterns (mock/fake/Math.random/return nil/...) are
         # untouched.
         if [[ "$pattern" == 'noop' || "$pattern" == 'no-op' ]]; then
-          if echo "$matched_line" | grep -qiE '(tracing\.|tracer|\bspan\b|otel|opentelemetry|telemetry|endspan|startspan|setstatus|newtracer|tracerprovider|spanstatus|statuscode|noop(tr|span|meter|trace|provider|logger|exporter))'; then
+          if grep -qiE '(tracing\.|tracer|\bspan\b|otel|opentelemetry|telemetry|endspan|startspan|setstatus|newtracer|tracerprovider|spanstatus|statuscode|noop(tr|span|meter|trace|provider|logger|exporter))' <<< "$matched_line"; then
             continue
           fi
           _noop_quote='["'"'"'`]'
-          if echo "$matched_line" | grep -qiE "${_noop_quote}(noop|no-op)${_noop_quote}"; then
+          if grep -qiE "${_noop_quote}(noop|no-op)${_noop_quote}" <<< "$matched_line"; then
             continue
           fi
         fi
@@ -763,7 +763,7 @@ for impl_file in "${impl_files[@]}"; do
 
     # Check if this looks like a data-fetching file (hook, service, api)
     is_data_file="false"
-    if echo "$file_basename" | grep -qiE '(hook|service|api|fetch|data|store|query|use[A-Z])'; then
+    if grep -qiE '(hook|service|api|fetch|data|store|query|use[A-Z])' <<< "$file_basename"; then
       is_data_file="true"
     fi
     # Also check if file contains "export function use" or "export const use" (custom hook pattern)
@@ -800,7 +800,7 @@ for impl_file in "${impl_files[@]}"; do
 
   # Only scan Rust production files
   if [[ "$file_ext" == "rs" ]]; then
-    if echo "$impl_file" | grep -qE '(test|spec|_test\.rs|tests/)'; then
+    if grep -qE '(test|spec|_test\.rs|tests/)' <<< "$impl_file"; then
       continue
     fi
     for pattern in "${PROHIBITED_SIM_PATTERNS[@]}"; do
@@ -1054,7 +1054,7 @@ for impl_file in "${impl_files[@]}"; do
   fi
 
   # Only scan handler/route/controller-like files
-  if ! echo "$impl_file" | grep -qiE "$IDOR_HANDLER_FILTER"; then
+  if ! grep -qiE "$IDOR_HANDLER_FILTER" <<< "$impl_file"; then
     continue
   fi
 

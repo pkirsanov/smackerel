@@ -16,7 +16,9 @@ REAL_WORKFLOWS="$ROOT_DIR/bubbles/workflows.yaml"
 # HOME-based TMP_DIR — snap-confined yq cannot access /tmp.
 _selftest_tmp_base="${TMPDIR:-$HOME/.cache}"
 mkdir -p "$_selftest_tmp_base"
-TMP_DIR="$(mktemp -d -p "$_selftest_tmp_base" bubbles-mode-resolver-test.XXXXXX)"
+# A template inside the base directory, not `-p`: the parent-directory flag is
+# GNU-only and BSD mktemp rejects it, which took this selftest down on macOS.
+TMP_DIR="$(mktemp -d "$_selftest_tmp_base/bubbles-mode-resolver-test.XXXXXX")"
 selftest_timeout_seconds="${BUBBLES_MODE_RESOLVER_SELFTEST_TIMEOUT_SECONDS:-30}"
 
 failures=0
@@ -39,8 +41,8 @@ fail() { echo "FAIL: $1" >&2; failures=$((failures + 1)); }
 run_resolver() {
   local fixture="$1"; shift
   local out_file err_file
-  out_file="$(mktemp -p "$TMP_DIR")"
-  err_file="$(mktemp -p "$TMP_DIR")"
+  out_file="$(mktemp "$TMP_DIR/out.XXXXXX")"
+  err_file="$(mktemp "$TMP_DIR/err.XXXXXX")"
   set +e
   # v7: this selftest exercises resolution mechanics (template inheritance,
   # tag grammar) against KNOWN registry/fixture modes, not new operator input.

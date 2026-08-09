@@ -75,7 +75,9 @@ fi
 
 _tmp_base="${TMPDIR:-$HOME/.cache}"
 mkdir -p "$_tmp_base"
-TMP_DIR="$(mktemp -d -p "$_tmp_base" bubbles-reqspec-selftest.XXXXXX)"
+# A template inside the base directory, not `-p`: the parent-directory flag is
+# GNU-only and BSD mktemp rejects it, which took this selftest down on macOS.
+TMP_DIR="$(mktemp -d "$_tmp_base/bubbles-reqspec-selftest.XXXXXX")"
 cleanup() {
   if [[ "$failures" -eq 0 && "${KEEP_SELFTEST_TMP:-0}" != "1" ]]; then
     rm -rf "$TMP_DIR"

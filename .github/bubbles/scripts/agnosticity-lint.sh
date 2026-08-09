@@ -155,7 +155,7 @@ context_permits_concrete_tool_reference() {
   local context
   context="$(sed -n "${start},${end}p" "$REPO_ROOT/$file" | tr '[:upper:]' '[:lower:]')"
 
-  if echo "$context" | grep -qE 'must never|never hardcode|do not hardcode|forbidden|prohibited|blocked|negative example|wrong example|guessing project commands|avoid assuming|bad example'; then
+  if grep -qE 'must never|never hardcode|do not hardcode|forbidden|prohibited|blocked|negative example|wrong example|guessing project commands|avoid assuming|bad example' <<< "$context"; then
     return 0
   fi
 

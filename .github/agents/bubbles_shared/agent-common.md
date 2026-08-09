@@ -77,7 +77,7 @@ Observability and execution evidence are not only anti-fabrication controls for 
 | What happens on retries, timeouts, or auto-commit? | `execution-ops.md` |
 | What is the 3-strike escalation protocol? | `execution-ops.md` |
 | How do workflow phases and state transitions work? | `scope-workflow.md`, `state-gates.md` |
-| How does smart phase routing (skip/re-evaluate) work? | `workflows.yaml` → `phaseRelevance` section |
+| How does smart phase routing (skip/re-evaluate) work? | `bubbles/scripts/phase-relevance-resolve.sh` (the executable verdict every runner consumes); rules live in `bubbles/workflows/modes.yaml` → `phaseRelevance` |
 | How do mechanical vs taste decisions work? | `workflows.yaml` → `decisionPolicy` section |
 | How do correlated adversarial samples run? | `agent-common.md` → Top-Level Adversarial Sample Execution Contract; `bubbles/scripts/adversarial-aggregate.sh` |
 | How does test-plan.json handoff work? | `planning-core.md`, `test-bootstrap.md` |

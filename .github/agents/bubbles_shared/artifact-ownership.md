@@ -22,6 +22,7 @@ Artifact authorship is a hard boundary, not a suggestion. Violations are blockin
 | `test-plan.json` | `bubbles.plan` | Machine-readable test handoff; `bubbles.test` reads it, never writes it |
 | `.specify/memory/retros/*.md` | `bubbles.retro` | Read-only retrospective reports |
 | `.specify/memory/lessons.md` | All execution agents (append-only, multi-writer) | One structured entry at result-envelope close via `cli.sh lessons add`; never edited in place; `bubbles.super` owns compaction |
+| `.specify/runtime/experience-recall/**` derived recall store and lifecycle ledger | `bubbles.super` | Derived state, never source authority — see Derived Recall Lifecycle State below; destructive-path selftests belong to `bubbles.test` |
 | Product code / tests | `bubbles.implement`, `bubbles.test` | Per their phase ownership |
 | Operational code / CI/CD / deploy / monitoring surfaces | `bubbles.devops` | Pipelines, build/release automation, deployment config, dashboards, alerts, observability wiring |
 | Managed docs (declared in the effective managed-doc registry) | `bubbles.docs` | Must reflect real implementation state |
@@ -57,6 +58,16 @@ Owning one planning artifact does NOT grant permission to mutate sibling plannin
 
 **DoD Text Immutability (NON-NEGOTIABLE):** The text description of existing DoD items is owned by `bubbles.plan` and MUST NOT be modified by execution agents. `bubbles.implement` may only transition checkboxes (`- [ ]` → `- [x]`) and append inline evidence blocks beneath items. Rewriting a DoD item's behavioral claim to match what was delivered instead of what the Gherkin scenario specified is **content fabrication** — semantically equivalent to deleting the original DoD item and inventing a new one. If the planned DoD text does not match what can be delivered, the agent MUST route to `bubbles.plan` for a plan correction, not silently rewrite the item.
 
+## Derived Recall Lifecycle State
+
+The evidence-backed experience recall store and its lifecycle ledger live under `.specify/runtime/experience-recall` (`index.jsonl`, `status.json`, `lifecycle.jsonl`). This state is **derived, never source authority** — it sits at tier 4 (advisory) in the recall authority hierarchy defined in [experience-recall.md](experience-recall.md).
+
+Ownership belongs to `bubbles.super`. Selftests covering its destructive paths belong to `bubbles.test`.
+
+**Deleting a recall record does NOT delete or modify the source artifact.** `recall delete` writes a source-anchor tombstone to the lifecycle ledger; that tombstone removes the record from default search and prevents automatic re-admission when `recall sync` rebuilds the index. It is a recall-only state change, and an explicit `recall admit` reverses it.
+
+The lifecycle state machine is closed: `admitted -> superseded | expired | deleted`.
+
 ## Forbidden Artifacts (NON-NEGOTIABLE)
 
 These filenames MUST NOT exist anywhere under `specs/<feature>/` (or `specs/<feature>/bugs/<bug>/`). Their content belongs inside owned artifacts.
@@ -87,4 +98,5 @@ The ownership contract is enforced at three levels:
 
 - [evidence-rules.md](evidence-rules.md) — evidence attribution is an ownership rule (agents may only write evidence for their own phase)
 - [completion-governance.md](completion-governance.md) — the completion chain that artifact ownership supports
+- [experience-recall.md](experience-recall.md) — the recall authority hierarchy and closed lifecycle that the derived recall state is bound by
 - [state-gates.md](state-gates.md) — mechanical gate definitions including G042 (artifact ownership enforcement) and G066 (phase-claim provenance)

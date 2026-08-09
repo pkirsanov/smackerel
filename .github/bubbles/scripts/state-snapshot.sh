@@ -458,6 +458,13 @@ NEXT_TURN="$(jq '
 
 # Append a new record. We use --argjson for ints, --arg for strings, and
 # pass scope_id / note as strings that may be empty (mapped to null below).
+#
+# `goalRef` is DERIVED from `.goalContract` in this same read, never accepted as
+# a flag (IMP-038 SCOPE-3 / GF-1, GF-5). A caller-supplied ref could disagree
+# with the contract the turn actually ran under, which is precisely the
+# substitution this field exists to make detectable. It is `null` for a
+# read-only or pre-IMP-038 run that froze no contract. The projection matches
+# `goal-contract.sh ref` exactly: identity plus boundary, no contract prose.
 TMP_FILE="$(mktemp "$SESSION_DIR/.bubbles.session.json.update.XXXXXX")"
 
 jq \
@@ -469,7 +476,15 @@ jq \
   --arg mode "$MODE" \
   --arg agent "$AGENT_NAME" \
   '
+  def goal_ref:
+    if (.goalContract | type) == "object" then
+      { goalId: .goalContract.goalId,
+        revision: .goalContract.revision,
+        sourceRequestDigest: .goalContract.sourceRequestDigest,
+        workBoundary: .goalContract.workBoundary }
+    else null end;
   . as $root
+  | ($root | goal_ref) as $goalRef
   | ($root + {
       turnSnapshots: ((($root.turnSnapshots // []) + [
         {
@@ -479,7 +494,8 @@ jq \
           scopeId: (if $scope_id == "" then null else $scope_id end),
           mode: $mode,
           note: (if $note == "" then null else $note end),
-          agent: $agent
+          agent: $agent,
+          goalRef: $goalRef
         }
       ]))
     })
@@ -506,7 +522,15 @@ if [[ -n "$CONV_ITER" && -n "$SPEC_DIR" ]]; then
     --argjson iterationCount "$CONV_ITER" \
     --arg lastUpdated "$TIMESTAMP" \
     '
+    def goal_ref:
+      if (.goalContract | type) == "object" then
+        { goalId: .goalContract.goalId,
+          revision: .goalContract.revision,
+          sourceRequestDigest: .goalContract.sourceRequestDigest,
+          workBoundary: .goalContract.workBoundary }
+      else null end;
     . as $root
+    | ($root | goal_ref) as $goalRef
     | ($root.convergenceLoops // []) as $loops
     | ([ $loops[]
          | select(.specDir != $specDir or .agent != $agent)
@@ -514,7 +538,8 @@ if [[ -n "$CONV_ITER" && -n "$SPEC_DIR" ]]; then
          specDir: $specDir,
          agent: $agent,
          iterationCount: $iterationCount,
-         lastUpdated: $lastUpdated
+         lastUpdated: $lastUpdated,
+         goalRef: $goalRef
        }]) as $updated
     | $root + { convergenceLoops: $updated }
     ' "$SESSION_FILE" > "$CONV_TMP"

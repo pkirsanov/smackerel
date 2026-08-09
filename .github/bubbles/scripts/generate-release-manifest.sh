@@ -87,6 +87,12 @@ mapfile -t managed_entries < <(bubbles_framework_manifest_entries "$REPO_ROOT" f
 eval_source_only_scripts=(
   "bubbles/scripts/eval-harness.sh"
   "bubbles/scripts/eval-harness-selftest.sh"
+  # Its labeled corpus lives under bubbles/eval/, which is source-only in full,
+  # so shipping the scorer downstream would ship a script that can only ever
+  # SKIP. Retrieval quality is a framework-development measurement; the six
+  # recall selftests that exercise the SHIPPED provider, CLI, and authority
+  # firewall stay managed and do run downstream.
+  "bubbles/scripts/experience-recall-eval-selftest.sh"
 )
 filtered_managed_entries=()
 for managed_entry in "${managed_entries[@]}"; do

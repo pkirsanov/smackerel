@@ -40,7 +40,7 @@
 #   autofix <spec>                Scaffold missing report sections
 #   metrics <subcommand>          Manage metrics and activity tracking
 #   lessons [add|--all|compact]   Record, view, or compact lessons-learned memory
-#   recall <subcommand>           Search, read, inspect, or sync experience recall
+#   recall <subcommand>           Search, read, inspect, sync, or curate experience recall
 #   skill-proposals [subcommand]  Show or dismiss generated skill proposals
 #   profile [subcommand]          Show, list, or change adoption profiles plus developer observations
 #   sunnyvale <alias>             Resolve a Sunnyvale alias (agent or mode)
@@ -1280,8 +1280,9 @@ Commands:
   project [gates <subcmd>]      Manage project extensions (bubbles-project.yaml)
   metrics <subcommand>          Manage metrics (enable|disable|activity-enable|activity-disable|status|summary|gates|agents)
   lessons [add|--all|compact]   Record, view, or compact lessons-learned memory
-  recall <subcommand>           Experience recall (search|read|status|freshness|sync)
+  recall <subcommand>           Experience recall (search|read|status|freshness|sync|delete|admit|lifecycle|export)
                                 Freshness exits: 0 fresh, 3 stale, 4 unknown, 5 disabled
+                                Curation exits: 2 usage, 5 disabled, 6 lifecycle or export refusal
   skill-proposals [subcommand]  Show or dismiss generated skill proposals
   profile [subcommand]          Show, list, or change adoption profiles plus developer observations
   upgrade [version] [--dry-run] Upgrade Bubbles to latest or specific version

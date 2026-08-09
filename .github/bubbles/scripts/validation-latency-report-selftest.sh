@@ -207,6 +207,57 @@ assert_exit "S6 missing" 0
 assert_stdout_contains "S6" "No session JSON found"
 
 echo ""
+echo "--- S7: parent-expanded composite id is attributed to its expander (OW-013) ---"
+# ADVERSARIAL: a parent-expanded run carries a COMPOSITE agent id. Grouping on
+# the raw string would emit a bogus "a+b+c" bucket and hide the real executor.
+# This case fails if agent_of() stops honouring provenanceMode/expandedBy.
+repo="$(stage_repo s7-parent-expanded)"
+cat > "$repo/.specify/memory/bubbles.session.json" <<'EOF'
+{
+  "sessionId": "parent-expansion-session",
+  "executionHistory": [
+    {
+      "agent": "bubbles.implement+test+validate",
+      "provenanceMode": "parent-expanded",
+      "expandedBy": "bubbles.workflow",
+      "phase": "implement",
+      "specDir": "specs/901-expansion-fixture",
+      "runStartedAt": "2020-01-01T00:00:00Z",
+      "runCompletedAt": "2020-01-01T00:05:00Z"
+    }
+  ],
+  "turnSnapshots": []
+}
+EOF
+run_report "$repo" --since 7 --group agent --now "2020-01-02T00:00:00Z"
+assert_exit "S7 parent-expanded" 0
+assert_stdout_contains "S7" "bubbles.workflow"
+assert_stdout_not_contains "S7" "bubbles.implement+test+validate"
+
+echo ""
+echo "--- S8: a genuine single-agent run is NOT rewritten ---"
+# Guards the other direction: absent parent-expansion the raw id must survive.
+repo="$(stage_repo s8-direct)"
+cat > "$repo/.specify/memory/bubbles.session.json" <<'EOF'
+{
+  "sessionId": "direct-dispatch-session",
+  "executionHistory": [
+    {
+      "agent": "bubbles.implement",
+      "phase": "implement",
+      "specDir": "specs/902-direct-fixture",
+      "runStartedAt": "2020-01-01T00:00:00Z",
+      "runCompletedAt": "2020-01-01T00:05:00Z"
+    }
+  ],
+  "turnSnapshots": []
+}
+EOF
+run_report "$repo" --since 7 --group agent --now "2020-01-02T00:00:00Z"
+assert_exit "S8 direct" 0
+assert_stdout_contains "S8" "bubbles.implement"
+
+echo ""
 echo "=== Selftest verdict ==="
 printf '  Total assertions: %d\n' "$((PASS_COUNT + FAIL_COUNT))"
 printf '  Passed:           %d\n' "$PASS_COUNT"

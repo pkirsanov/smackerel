@@ -13,6 +13,12 @@
 #              agents at once would block every push without rolling
 #              authoring work first).
 #
+# IMP-037 / SCOPE-6 adds a recall-authority refusal. An envelope that cites a
+# recall record id, the recall index, or a recall export as EVIDENCE is refused
+# in EVERY mode — including --advisory — because it is an authority breach, not
+# a schema nit. It is handled like the repository-provenance class, which also
+# blocks unconditionally.
+#
 # Usage:
 #   result-envelope-validate.sh                  # v6.0 default: malformed
 #                                                # blocks, missing warns
@@ -56,6 +62,10 @@ resolve_source_script_dir() {
 
 SOURCE_SCRIPT_DIR="$(resolve_source_script_dir)"
 REPOSITORY_BINDING="$SOURCE_SCRIPT_DIR/repository-binding.sh"
+# Recall shapes are derived from the real indexer, never restated. See the
+# load_recall_constants() comment below for why the fallback cannot drift.
+RECALL_INDEX_SOURCE="$SCRIPT_DIR/experience-recall-index.py"
+[[ -f "$RECALL_INDEX_SOURCE" ]] || RECALL_INDEX_SOURCE="$SOURCE_SCRIPT_DIR/experience-recall-index.py"
 
 MODE="v6-default"  # v6.0 / B3 default: malformed blocks, missing warns.
 SESSION_ID=""
@@ -180,9 +190,10 @@ SCHEMA="$SCHEMA" \
 MODE="$MODE" \
 BINDING_REQUIRED="$BINDING_REQUIRED" \
 VALIDATED_PACKET="$VALIDATED_PACKET" \
+RECALL_INDEX_SOURCE="$RECALL_INDEX_SOURCE" \
 python3 - <<'PY'
-import json, os, re, sys
-from pathlib import Path
+import ast, json, os, re, sys
+from pathlib import Path, PurePosixPath
 
 agents_dir = Path(os.environ['AGENTS_DIR'])
 schema_path = Path(os.environ['SCHEMA'])
@@ -276,6 +287,189 @@ def repository_projection_error(doc):
             )
     return None
 
+def finding_accounting_error(doc):
+    """IMP-038 SCOPE-4 / GF-3: routing is not resolution.
+
+    A routed finding was handed to another owner, not fixed. Reporting it in
+    addressedFindings is how a bounded run claims closure it never performed,
+    and it reads as a clean result to anyone scanning the envelope. The same
+    applies to `blocking-external`, which by definition the parent could not
+    close. `independent` permits the parent to CONTINUE; it never permits the
+    parent to claim the work is done, and it still requires the disposition
+    artifact to exist.
+    """
+    findings = doc.get('findings')
+    if not isinstance(findings, list):
+        return None
+    addressed = doc.get('addressedFindings')
+    addressed_ids = set(addressed) if isinstance(addressed, list) else set()
+    for entry in findings:
+        if not isinstance(entry, dict):
+            continue
+        fid = entry.get('id')
+        impact = entry.get('goalImpact')
+        disposition = entry.get('disposition')
+        filed = entry.get('filedArtifact')
+        if fid in addressed_ids:
+            if disposition == 'routed':
+                return (
+                    f"finding '{fid}' is disposition=routed but reported in "
+                    'addressedFindings; routing hands work to an owner, it does not close it'
+                )
+            if impact == 'blocking-external':
+                return (
+                    f"finding '{fid}' is goalImpact=blocking-external but reported in "
+                    'addressedFindings; the parent blocks on it rather than closing it'
+                )
+        needs_artifact = disposition == 'routed' or impact == 'independent'
+        if needs_artifact and not (isinstance(filed, str) and filed.strip()):
+            return (
+                f"finding '{fid}' is {'disposition=routed' if disposition == 'routed' else 'goalImpact=independent'} "
+                'but names no filedArtifact; an undischarged finding is not closed'
+            )
+    return None
+
+# ---------------------------------------------------------------------------
+# IMP-037 / SCOPE-6: recall artifacts can never become evidence.
+#
+# Recalled experience is authority tier 4 and always `advisory`. Reading it is
+# fine. CITING it is the breach: the moment a recall artifact appears in an
+# evidence field it has acquired an authority it does not have, and the claim it
+# backs was never independently re-read.
+#
+# The three refused shapes are DERIVED from the real indexer
+# (experience-recall-index.py), not restated here, so a change to the record-id
+# format or the derived-state directory cannot silently outrun this guard. The
+# literals below are only the fallback for a tree that ships the validator
+# without the indexer; experience-recall-authority-selftest.sh asserts they
+# still equal the indexer's own constants, so the fallback cannot drift unseen.
+FALLBACK_RECORD_ID_PATTERN = r'^recall-[0-9a-f]{64}$'
+FALLBACK_RUNTIME_PARTS = ('.specify', 'runtime', 'experience-recall')
+RECALL_EXPORT_SCAN_BYTES = 256 * 1024
+# Closed set. Deliberately NOT `summary` or `blocker.reason`: an agent SHOULD be
+# able to say in prose that it consulted advisory recall. Scanning narrative
+# fields would refuse the honest disclosure this contract wants to encourage.
+EVIDENCE_FIELDS = ('evidenceRefs', 'toolCalls', 'evidence', 'dodRef')
+
+def load_recall_constants(source):
+    """Read the indexer's own RECORD_ID_RE and RUNTIME_PARTS without importing it."""
+    pattern, parts = FALLBACK_RECORD_ID_PATTERN, FALLBACK_RUNTIME_PARTS
+    try:
+        tree = ast.parse(Path(source).read_text(encoding='utf-8'))
+    except Exception:
+        return pattern, parts
+    for node in tree.body:
+        if not isinstance(node, ast.Assign) or len(node.targets) != 1:
+            continue
+        target = node.targets[0]
+        if not isinstance(target, ast.Name):
+            continue
+        if target.id == 'RUNTIME_PARTS':
+            try:
+                value = ast.literal_eval(node.value)
+            except Exception:
+                continue
+            if isinstance(value, (tuple, list)) and value and all(isinstance(p, str) for p in value):
+                parts = tuple(value)
+        elif target.id == 'RECORD_ID_RE' and isinstance(node.value, ast.Call) and node.value.args:
+            try:
+                literal = ast.literal_eval(node.value.args[0])
+            except Exception:
+                continue
+            if isinstance(literal, str) and literal:
+                pattern = literal
+    return pattern, parts
+
+recall_pattern, recall_runtime_parts = load_recall_constants(
+    os.environ.get('RECALL_INDEX_SOURCE', '')
+)
+# The indexer anchors its regex to match a whole value. An evidence citation
+# embeds the id inside a longer string, so search the unanchored body.
+RECALL_RECORD_ID_RE = re.compile(recall_pattern.strip('^$'))
+RECALL_RUNTIME_DIR = '/'.join(recall_runtime_parts)
+repo_root = agents_dir.parent
+
+def iter_citation_strings(node, path):
+    if isinstance(node, str):
+        yield path, node
+    elif isinstance(node, list):
+        for index, item in enumerate(node):
+            yield from iter_citation_strings(item, f'{path}[{index}]')
+    elif isinstance(node, dict):
+        for key, value in node.items():
+            yield from iter_citation_strings(value, f'{path}.{key}')
+
+def iter_evidence_citations(node, path=''):
+    if isinstance(node, dict):
+        for key, value in node.items():
+            child = f'{path}.{key}' if path else key
+            if key in EVIDENCE_FIELDS:
+                yield from iter_citation_strings(value, child)
+            else:
+                yield from iter_evidence_citations(value, child)
+    elif isinstance(node, list):
+        for index, item in enumerate(node):
+            yield from iter_evidence_citations(item, f'{path}[{index}]')
+
+def citation_path(citation):
+    """Strip a `#anchor` fragment and reject non-path citations."""
+    candidate = citation.split('#', 1)[0].strip().replace('\\', '/')
+    if not candidate or candidate.startswith(('http://', 'https://')):
+        return None
+    while candidate.startswith('./'):
+        candidate = candidate[2:]
+    return candidate or None
+
+def is_recall_export_file(relative):
+    """Classify by CONTENT, because `export --output` takes a caller-named path.
+
+    A name-based rule would be evaded by renaming the file, and would also
+    over-block an innocent path that merely looks recall-ish. An unreadable,
+    absent, or non-export file is not a violation.
+    """
+    try:
+        pure = PurePosixPath(relative)
+        if pure.is_absolute() or any(part == '..' for part in pure.parts):
+            return False
+        target = repo_root / pure
+        if target.is_symlink() or not target.is_file():
+            return False
+        if target.stat().st_size > RECALL_EXPORT_SCAN_BYTES:
+            return False
+        payload = json.loads(target.read_text(encoding='utf-8'))
+    except Exception:
+        return False
+    for entry in payload if isinstance(payload, list) else [payload]:
+        if not isinstance(entry, dict) or entry.get('contractType') != 'record':
+            continue
+        if 'recallAuthority' not in entry:
+            continue
+        record_id = entry.get('recordId')
+        if isinstance(record_id, str) and RECALL_RECORD_ID_RE.fullmatch(record_id):
+            return True
+    return False
+
+def recall_refusal(field, kind, citation):
+    return (
+        f"{field} cites {kind} ('{citation}'). Recalled experience is advisory "
+        "(authority tier 4): it can never satisfy a DoD item or serve as execution "
+        "evidence. Re-read the current source and cite that anchor instead - the "
+        "spec/scope path, the report.md evidence anchor, or the decision artifact."
+    )
+
+def recall_authority_error(doc):
+    for field, citation in iter_evidence_citations(doc):
+        if RECALL_RECORD_ID_RE.search(citation):
+            return recall_refusal(field, 'a recall record id', citation)
+        relative = citation_path(citation)
+        if relative is None:
+            continue
+        if RECALL_RUNTIME_DIR in relative:
+            return recall_refusal(field, 'a recall index path', citation)
+        if is_recall_export_file(relative):
+            return recall_refusal(field, 'a recall export path', citation)
+    return None
+
 # Match a fenced block that looks like an envelope. Two acceptable shapes:
 #   1. ```json result_envelope:        ```  ... ```
 #   2. <!-- result_envelope --> ```json ... ```
@@ -297,6 +491,7 @@ agents_with_envelope = 0
 agents_missing_envelope = []
 malformed_envelopes = []  # list of (path, error_text)
 repository_binding_errors = []
+recall_authority_errors = []
 
 for p in sorted(agents_dir.glob('*.agent.md')):
     total_agents += 1
@@ -316,6 +511,10 @@ for p in sorted(agents_dir.glob('*.agent.md')):
         except json.JSONDecodeError as e:
             malformed_envelopes.append((p.name, f"JSON parse error: {e}"))
             continue
+        recall_error = recall_authority_error(doc)
+        if recall_error:
+            recall_authority_errors.append((p.name, recall_error))
+            continue
         projection_error = repository_projection_error(doc)
         if projection_error:
             error_text = f"Repository provenance error: {projection_error}"
@@ -333,12 +532,16 @@ for p in sorted(agents_dir.glob('*.agent.md')):
                 error_text = f"Repository provenance error: {provenance_error}"
                 malformed_envelopes.append((p.name, error_text))
                 repository_binding_errors.append((p.name, error_text))
+        accounting_error = finding_accounting_error(doc)
+        if accounting_error:
+            malformed_envelopes.append((p.name, f"Finding accounting error: {accounting_error}"))
 
 # Report.
 print(f"result-envelope-validate: scanned {total_agents} agent file(s)")
 print(f"  with valid envelope: {agents_with_envelope}")
 print(f"  missing envelope: {len(agents_missing_envelope)}")
 print(f"  malformed envelope(s): {len(malformed_envelopes)}")
+print(f"  recall-authority violation(s): {len(recall_authority_errors)}")
 print(f"  mode: {mode}")
 
 if agents_missing_envelope and mode != "strict":
@@ -353,11 +556,16 @@ if agents_missing_envelope and mode != "strict":
 for name, err in malformed_envelopes[:10]:
     print(f"  MALFORMED: {name}: {err}")
 
+for name, err in recall_authority_errors[:10]:
+    print(f"  RECALL-AUTHORITY: {name}: {err}")
+
 # Exit policy:
 #   advisory     -> always 0
 #   v6-default   -> 1 iff any malformed; missing warns only
 #   strict       -> 1 iff any malformed OR missing
-if repository_binding_errors:
+# Repository-provenance and recall-authority breaches are authority failures,
+# not schema nits, so they block in EVERY mode including advisory.
+if repository_binding_errors or recall_authority_errors:
     sys.exit(1)
 if mode == "advisory":
     sys.exit(0)

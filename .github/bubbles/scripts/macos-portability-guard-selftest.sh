@@ -11,6 +11,13 @@
 #   - RED fixtures   (one per detected class, each reintroducing exactly ONE
 #                     GNU/bash-4.x-only construct) -> exit 1, and the guard NAMES
 #                     that class in its output.
+#   - ADVERSARIAL fixtures (the portable form a class recommends, staged one
+#                     character away from that class's violation) -> exit 0, so a
+#                     class that over-matches is caught here rather than in a
+#                     downstream repo.
+#   - REGRESSION fixture (real pre-fix call sites reconstructed from the commit
+#                     that repaired them) -> exit 1, keeping the blind spot that
+#                     let them accumulate permanently closed.
 #   - Self-portability: the guard parses (bash -n); the guard scanning its OWN
 #                     source exits 0; and the guard source (comments stripped)
 #                     contains no literal GNU-only form.
@@ -78,6 +85,18 @@ assert_red() {
     pass "RED $name -> exit 1 + names '$class'"
   else
     fail "RED $name -> expected exit 1 + '$class', got rc=$GUARD_RC"
+    printf '%s\n' "$GUARD_OUT"
+  fi
+}
+
+# assert_green <name> <fixture-file>
+assert_green() {
+  local name="$1" file="$2"
+  run_guard "$file"
+  if [[ "$GUARD_RC" -eq 0 ]]; then
+    pass "GREEN $name -> exit 0"
+  else
+    fail "GREEN $name -> expected exit 0, got rc=$GUARD_RC"
     printf '%s\n' "$GUARD_OUT"
   fi
 }
@@ -155,6 +174,48 @@ assert_red "class12-paste" "class-12 paste-no-stdin-operand" "$TMPDIR/c12.sh"
 mk "$TMPDIR/c13.sh" 'now="$(date +%s%N)"'
 assert_red "class13-date-ns" "class-13 date-nanoseconds" "$TMPDIR/c13.sh"
 
+mk "$TMPDIR/c14.sh" 'd="$(mktemp -d -p "$base")"'
+assert_red "class14-mktemp-parent-dir" "class-14 mktemp-parent-dir" "$TMPDIR/c14.sh"
+
+mk "$TMPDIR/c14-cluster.sh" 'd="$(mktemp -dp "$base")"'
+assert_red "class14-short-flag-cluster" "class-14 mktemp-parent-dir" "$TMPDIR/c14-cluster.sh"
+
+mk "$TMPDIR/c14-long.sh" 'f="$(mktemp --tmpdir="$base")"'
+assert_red "class14-tmpdir-long-option" "class-14 mktemp-parent-dir" "$TMPDIR/c14-long.sh"
+
+mk "$TMPDIR/c15.sh" 'f="$(mktemp "$base/run.XXXXXX.yaml")"'
+assert_red "class15-mktemp-nontrailing-x" "class-15 mktemp-nontrailing-x" "$TMPDIR/c15.sh"
+
+# --- ADVERSARIAL fixtures: the portable form each class recommends ---------
+# One character separates each of these from its RED twin above. They fail the
+# selftest if a class widens into the form it exists to recommend.
+
+mk "$TMPDIR/a14.sh" 'd="$(mktemp -d "$base/run.XXXXXX")"'
+assert_green "adversarial14-directory-in-template" "$TMPDIR/a14.sh"
+
+mk "$TMPDIR/a15.sh" 'f="$(mktemp "$base/run.XXXXXX")"'
+assert_green "adversarial15-x-run-ends-the-template" "$TMPDIR/a15.sh"
+
+# --- REGRESSION: the pre-fix call sites the guard used to miss -------------
+# Reconstructed from commit 583923a, which repaired thirteen mktemp -p sites
+# (nine of them in production mode-resolver.sh) that the guard had reported
+# clean, because neither construct had a detection class at the time. The second
+# line also carries the extension after the X run, the variant BSD mktemp leaves
+# unsubstituted instead of rejecting.
+
+mk "$TMPDIR/regression-583923a.sh" \
+  'TEST_ROOT="$(mktemp -d -p "$TEST_ROOT_BASE")"' \
+  '_composed_file="$(mktemp -p "$TMP_DIR" workflows-composed.XXXXXX.yaml)"'
+run_guard "$TMPDIR/regression-583923a.sh"
+if [[ "$GUARD_RC" -eq 1 ]] \
+  && printf '%s\n' "$GUARD_OUT" | grep -Fq "class-14 mktemp-parent-dir" \
+  && printf '%s\n' "$GUARD_OUT" | grep -Fq "class-15 mktemp-nontrailing-x"; then
+  pass "REGRESSION 583923a pre-fix mktemp sites -> exit 1 + names both classes"
+else
+  fail "REGRESSION 583923a expected exit 1 + class-14 + class-15, got rc=$GUARD_RC"
+  printf '%s\n' "$GUARD_OUT"
+fi
+
 # --- Directory-surface + PORTABILITY_SCAN_PATHS wiring --------------------
 
 dir_surface="$TMPDIR/surface"
@@ -219,7 +280,7 @@ fi
 # so the guard's own [[:space:]] pattern strings never false-match. 'timeout' is
 # intentionally omitted (it is a substring of the helper names).
 code_only="$(grep -vE '^[[:space:]]*#' "$TARGET" || true)"
-gnu_forms='sed -i|date -d|stat -c|readlink -f|grep -[a-zA-Z]*P|df --output|/bin/(true|false)|mktemp --suffix|date [+]%s%N|\[\[ -v '
+gnu_forms='sed -i|date -d|stat -c|readlink -f|grep -[a-zA-Z]*P|df --output|/bin/(true|false)|mktemp --suffix|mktemp -[a-zA-Z]*p |mktemp --tmpdir|XXXXXX[.]|date [+]%s%N|\[\[ -v '
 gnu_hits="$(printf '%s\n' "$code_only" | grep -nE "$gnu_forms" 2>/dev/null || true)"
 if [[ -z "$gnu_hits" ]]; then
   pass "guard source (comments stripped) has no literal GNU-only form"

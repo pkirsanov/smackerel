@@ -46,31 +46,31 @@ if (( cycles_found > 0 )); then
 
     window="$(awk -v start="$line_number" 'NR >= start && NR <= start + 30 { print }' "$target_file")"
 
-    if echo "$window" | grep -Fq '| Rank | Candidate | Type | userImpact (0-5) | deliveryBlocker (0-5) | complianceRisk (0-5) | regressionRisk (0-5) | readiness (0-5) | effortInverse (0-5) | Weighted Score (0-100) |'; then
+    if grep -Fq '| Rank | Candidate | Type | userImpact (0-5) | deliveryBlocker (0-5) | complianceRisk (0-5) | regressionRisk (0-5) | readiness (0-5) | effortInverse (0-5) | Weighted Score (0-100) |' <<< "$window"; then
       pass "Cycle at line $line_number contains required table header"
     else
       fail "Cycle at line $line_number missing required table header"
     fi
 
-    if echo "$window" | grep -Eq '^- Tie-breaker applied: '; then
+    if grep -Eq '^- Tie-breaker applied: ' <<< "$window"; then
       pass "Cycle at line $line_number includes tie-breaker line"
     else
       fail "Cycle at line $line_number missing '- Tie-breaker applied:' line"
     fi
 
-    if echo "$window" | grep -Eq '^- Selected item: '; then
+    if grep -Eq '^- Selected item: ' <<< "$window"; then
       pass "Cycle at line $line_number includes selected item line"
     else
       fail "Cycle at line $line_number missing '- Selected item:' line"
     fi
 
-    if echo "$window" | grep -Eq '^- Selected workflow mode: '; then
+    if grep -Eq '^- Selected workflow mode: ' <<< "$window"; then
       pass "Cycle at line $line_number includes selected workflow mode line"
     else
       fail "Cycle at line $line_number missing '- Selected workflow mode:' line"
     fi
 
-    if echo "$window" | grep -Eq '^- Why highest value now: '; then
+    if grep -Eq '^- Why highest value now: ' <<< "$window"; then
       pass "Cycle at line $line_number includes rationale line"
     else
       fail "Cycle at line $line_number missing '- Why highest value now:' line"

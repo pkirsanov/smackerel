@@ -323,3 +323,35 @@ detect_red_green_ordering() {
   done
   return 1
 }
+
+# bubbles_ci_annotate_failure <label>
+# Emit a GitHub Actions `::error::` workflow command naming a failing check.
+#
+# WHY (OW-002). Raw CI logs are NOT readable without privilege: `GET
+# /actions/jobs/<id>/logs` requires repo admin and answers 403 to an
+# unprivileged caller, so a red macOS release-hygiene job could not be
+# attributed to a specific check from a machine without an admin token.
+# Check-run ANNOTATIONS carry no such requirement — `GET
+# /repos/<owner>/<repo>/check-runs/<id>/annotations` answered unauthenticated on
+# 2026-08-07. Emitting one annotation per failing check therefore makes every
+# future failure attributable with ZERO credentials, from any machine.
+#
+# ADDITIVE, never a replacement. Callers keep printing their existing plain
+# `FAIL: <label>` line — other tooling and the selftests parse it. This only
+# ADDS a line.
+#
+# GATED on GitHub's own signal. Nothing is emitted unless GITHUB_ACTIONS is
+# exactly "true", so local runs stay byte-identical to before.
+#
+# ESCAPED per GitHub's workflow-command rules, so a label carrying `%` or an
+# embedded newline cannot truncate the annotation or forge a second command.
+# `%` MUST be substituted FIRST — otherwise the `%` that %0D/%0A introduce
+# would itself be re-escaped into %250D/%250A.
+bubbles_ci_annotate_failure() {
+  [[ "${GITHUB_ACTIONS:-}" == "true" ]] || return 0
+  local msg="${1-}"
+  msg="${msg//%/%25}"
+  msg="${msg//$'\r'/%0D}"
+  msg="${msg//$'\n'/%0A}"
+  printf '::error::%s\n' "$msg"
+}

@@ -380,6 +380,15 @@ artifacts_updated_v="$(extract_any "$raw_file" artifactsUpdated artifacts_update
 evidence_raw="$(extract_any "$raw_file" evidenceRefs evidence_refs evidence)"
 next_owner_v="$(extract_any "$raw_file" nextRequiredOwner next_required_owner nextOwner)"
 blocked_reason_v="$(extract_any "$raw_file" blockedReason blocked_reason blocker)"
+# Goal identity is read from the ENVELOPE, not derived from the session file
+# (IMP-038 SCOPE-3 / GF-1, GF-5). Deriving it would overwrite a substituted ref
+# with the correct one and erase the very evidence resume needs; preserving what
+# the specialist actually asserted is what lets `goal-contract.sh verify-ref`
+# still catch the substitution after compaction. Preserved verbatim, never
+# summarized or truncated.
+goal_id_v="$(extract_any "$raw_file" goalId goal_id)"
+goal_revision_v="$(extract_any "$raw_file" revision goalRevision goal_revision)"
+goal_digest_v="$(extract_any "$raw_file" sourceRequestDigest source_request_digest)"
 timestamp_v="$(file_timestamp "$raw_file")"
 evidence_compact="$(truncate_text "$evidence_raw" 5)"
 
@@ -466,6 +475,20 @@ emit_nullable_binding() {
   printf '"evidenceRefs":%s,' "$(emit "$evidence_compact")"
   printf '"nextRequiredOwner":%s,' "$(emit "$next_owner_v")"
   printf '"blockedReason":%s,' "$(emit "$blocked_reason_v")"
+  # `null` when the run froze no Goal Contract (read-only or pre-IMP-038).
+  if [[ -n "$goal_id_v" || -n "$goal_revision_v" || -n "$goal_digest_v" ]]; then
+    printf '"goalRef":{'
+    printf '"goalId":%s,' "$(emit "$goal_id_v")"
+    if [[ "$goal_revision_v" =~ ^[0-9]+$ ]]; then
+      printf '"revision":%s,' "$goal_revision_v"
+    else
+      printf '"revision":%s,' "$(emit "$goal_revision_v")"
+    fi
+    printf '"sourceRequestDigest":%s' "$(emit "$goal_digest_v")"
+    printf '},'
+  else
+    printf '"goalRef":null,'
+  fi
   if [[ "$BINDING_REQUIRED" == true ]]; then
     printf '"repositoryRoot":%s,' "$(emit "$repository_root_v")"
     printf '"repositoryAlias":%s,' "$(emit "$repository_alias_v")"

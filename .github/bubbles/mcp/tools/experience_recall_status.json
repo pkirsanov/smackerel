@@ -1,0 +1,24 @@
+{
+  "name": "experience_recall_status",
+  "description": "Report this repository's experience-recall health in one shot: which adapter is wired (or adapter=none when the capability is disabled), the index identity, record/candidate/exclusion counts, the lifecycle tally (admitted/superseded/expired/deleted), active exclusions, and the freshness verdict — exactly as emitted by the experience-recall.sh bash twin. READ-ONLY: this tool adds NO scoring, NO freshness computation, and NO source validation of its own; it shells out to the twin and returns its stdout/stderr/exit code verbatim. A disabled adapter is a REAL answer, not a failure: the twin exits 0 with an explicit disabled payload, so use this before `search_experience` to tell 'recall is off' apart from 'recall is on and found nothing'. Status never mutates the index; re-indexing (sync) and every other mutating subcommand (admit, delete, lifecycle, export) are deliberately CLI-only and are NOT reachable from MCP.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "format": {
+        "type": "string",
+        "enum": ["json", "text"],
+        "description": "Output format. Defaults to json (the machine-readable status payload). Use text for the human-readable rendering.",
+        "default": "json"
+      }
+    }
+  },
+  "script": "experience-recall.sh",
+  "argsTemplate": ["status", "--format", "${format}"],
+  "annotations": {
+    "readOnlyHint": true,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "successExitCodes": [0]
+}

@@ -106,6 +106,15 @@ Unless the user explicitly asks for a narrower mode, `bubbles.validate` MUST run
 
 Before running mechanical validation, verify the feature satisfies its declared outcome:
 
+0. **Run the mechanical presence and traceability check first** (IMP-038 SCOPE-6):
+
+   ```
+   bash bubbles/scripts/goal-fidelity-guard.sh --boundary pre-certification \
+       --session-file .specify/memory/bubbles.session.json --spec-dir <FEATURE_DIR>
+   ```
+
+   Exit 1 is a validation FAILURE — do not proceed to the substance steps below with a spec that has no Outcome Contract, no report evidence referencing the declared signal, or a certification claim aimed at a Goal Contract revision the session has already superseded. Until IMP-038 SCOPE-6, G070 declared `enforcedBy: [ unbound ]` and its description credited a check `artifact-lint.sh` never contained, so for ordinary feature work the goal-to-spec and spec-to-implementation links rested on agent judgement alone. They are now mechanical; steps 2-4 remain yours because no script can judge whether evidence genuinely demonstrates a signal.
+
 1. **Read spec.md → Outcome Contract section:**
    - If `Outcome Contract` section is missing or empty → validation FAILS (G070). Route to `bubbles.analyst` to create it.
    - Extract `Intent`, `Success Signal`, `Hard Constraints`, and `Failure Condition` fields.

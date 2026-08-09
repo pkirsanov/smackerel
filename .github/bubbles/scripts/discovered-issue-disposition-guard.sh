@@ -189,7 +189,7 @@ check_paragraph() {
   while IFS= read -r match; do
     [[ -z "$match" ]] && continue
     # Check if same paragraph contains a disposition reference
-    if ! echo "$para" | grep -qiE "$disposition_re"; then
+    if ! grep -qiE "$disposition_re" <<< "$para"; then
       # No inline disposition. Check report.md for today's row.
       if ! report_has_today_disposition; then
         echo "🔴 G095 BLOCK: $context $file:$line_num — forbidden deferral phrase '$match' without disposition citation and no '## Discovered Issues' row for $today in $report_md"

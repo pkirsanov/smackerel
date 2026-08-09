@@ -1,0 +1,29 @@
+{
+  "name": "read_experience",
+  "description": "Read ONE experience-recall record by its record id — returns the normalized record plus its source anchors (spec/scope refs, kind, trust, lifecycle state, freshness) exactly as emitted by the experience-recall.sh bash twin. Obtain the record id from `search_experience` first. READ-ONLY: this tool adds NO scoring, NO freshness computation, and NO source validation of its own; it shells out to the twin and returns its stdout/stderr/exit code verbatim. A record id that is unknown, or a repo whose experience-recall adapter is disabled (adapter=none, twin exit 5), surfaces as a structured error result rather than a fake empty success — treat isError=true as 'the read did not happen', never as 'no such experience'. Reading never mutates the record, the lifecycle ledger, or the source artifact; the mutating subcommands (sync, admit, delete, lifecycle, export) are deliberately CLI-only and are NOT reachable from MCP.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "record_id": {
+        "type": "string",
+        "description": "The record id to read, as returned by search_experience. Must not begin with '--'."
+      },
+      "format": {
+        "type": "string",
+        "enum": ["json", "text"],
+        "description": "Output format. Defaults to json (the machine-readable record payload). Use text for the human-readable rendering.",
+        "default": "json"
+      }
+    },
+    "required": ["record_id"]
+  },
+  "script": "experience-recall.sh",
+  "argsTemplate": ["read", "${record_id}", "--format", "${format}"],
+  "annotations": {
+    "readOnlyHint": true,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "successExitCodes": [0]
+}

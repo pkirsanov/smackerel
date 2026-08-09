@@ -52,6 +52,15 @@ Retained workflow-agent anchors that must still be honored:
 - **The orchestrator MUST enforce the Planning-Only Mode Gate (Gate G070) before any `implement` phase:** If the active workflow mode has `statusCeiling` below `done`, the `implement` phase MUST NOT be invoked. Instead, mark the spec as `route_required` with `nextRequiredOwner: bubbles.implement`. This gate also applies when the user's original request contained planning-only intent language (see workflow-mode-resolution.md → Reciprocal Status Ceiling Warning).
 - The state transition guard (G023) remains the first blocking check before any `done` promotion.
 
+#### Phase Relevance Resolution (MANDATORY — one verdict, every runner)
+
+Before dispatching each phase, obtain the skip/run verdict from `bubbles/scripts/phase-relevance-resolve.sh` rather than deciding here. The contract — invocation, the four authorized runners sharing one verdict, the three fail-to-`run` properties, and the absence of any skip-forcing flag — is [operating-baseline.md → Phase Relevance Resolution](operating-baseline.md).
+
+Two obligations belong to this phase loop specifically:
+
+- **Record every decision** in `executionHistory` using the registry's `skipRecordSchema` (`phase`, `outcome: skipped`, `reason`, `changedSurface`, `reevaluated`, `reevaluationTrigger`). A skip that leaves no record is indistinguishable from a phase that was never considered.
+- **Re-evaluate every skip** when a `reevaluateTriggers` event occurs — artifact modified, scope surface expanded, gate failure, or a prior phase routing new work. A phase skipped earlier MUST be dispatched if the new surface makes it relevant.
+
 #### Finding-Owned Closure Protocol (MANDATORY — NON-NEGOTIABLE)
 
 **Reference:** [workflow-fix-cycle-protocol.md](workflow-fix-cycle-protocol.md) for the full closure contract.
@@ -70,13 +79,21 @@ Retained workflow-agent anchors that must still be honored:
    - An operational issue → route via `bubbles.devops`
    - A new capability need → create new spec folder
 
-3. **Invoke the finding-owned planning chain** (when mode constraint `requireFindingOwnedPlanningWorkflow` is true):
+2a. **Classify its goal impact** (IMP-038 SCOPE-4 / GF-3). Steps 3 and 4 — the mandatory planning and delivery chains — apply to `required` findings: those inside the work boundary that the Goal Contract cannot be satisfied while open. They are NOT the closure path for every finding:
+
+   - `required` → run steps 3 and 4 in full before advancing.
+   - `blocking-external` → BLOCK the parent. File the disposition, then request the operator-approved expansion or external repair. Do not deliver it inline; it is outside the approved boundary.
+   - `independent` → discharge through its `G095` disposition under a SEPARATE scoped packet, then continue the parent. Filing plus routing IS the closure here; inline delivery is not required and would be unrequested work.
+
+   Use `work-boundary-resolve.sh` for the in/out-of-boundary split, then ask whether the success signal and every hard constraint survive with the finding open. The full contract is [operating-baseline.md → Goal Impact](operating-baseline.md). This does NOT permit cherry-picking: an in-boundary finding that blocks the contract is `required`, and a `required` finding is completed, never routed away.
+
+3. **Invoke the finding-owned planning chain** — for `required` findings — (when mode constraint `requireFindingOwnedPlanningWorkflow` is true):
    - `bubbles.analyst` — analyze the finding's impact and requirements
    - `bubbles.ux` — ONLY when the finding touches UI or a user-visible journey
    - `bubbles.design` — update design.md with the fix/change design
    - `bubbles.plan` — update scopes.md with new/modified scope, Gherkin scenarios, test plan, and DoD
 
-4. **Invoke the finding-owned delivery chain** (when mode constraint `requireTerminalFindingClosure` is true):
+4. **Invoke the finding-owned delivery chain** — for `required` findings — (when mode constraint `requireTerminalFindingClosure` is true):
    - `bubbles.implement` — implement the fix/change (pass the full finding ledger, require one-to-one closure)
    - `bubbles.test` — execute all tests for the changed scope
    - `bubbles.validate` — validate the fix against the spec

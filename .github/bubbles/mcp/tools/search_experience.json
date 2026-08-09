@@ -1,0 +1,36 @@
+{
+  "name": "search_experience",
+  "description": "Search this repository's evidence-backed experience-recall index for prior work relevant to a natural-language query — returns the ranked, trust-classified record set (record ids, kind, trust, spec/scope anchors, freshness) emitted by the experience-recall.sh bash twin. READ-ONLY: this tool adds NO scoring, NO freshness computation, and NO source validation of its own; it shells out to the twin and returns its stdout/stderr/exit code verbatim, so the CLI and MCP surfaces can never disagree. IMPORTANT — an empty result is AMBIGUOUS: when the repo's experience-recall adapter is disabled (adapter=none) the twin still exits 0 and prints an empty array, which is indistinguishable from a healthy index with no matches. Call `experience_recall_status` to tell 'recall is off' apart from 'recall is on and found nothing'. Use `read_experience` to pull one record's full body. The twin's filter flags (--kind/--trust/--spec-ref/--scope-ref) and every mutating subcommand (sync, admit, delete, lifecycle, export) are deliberately CLI-only and are NOT reachable from MCP.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "query": {
+        "type": "string",
+        "description": "Natural-language query text, e.g. 'flaky e2e login redirect'. Must not begin with '--'."
+      },
+      "limit": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 20,
+        "description": "Maximum number of records to return (1-20). Matches the twin's own bound.",
+        "default": 5
+      },
+      "format": {
+        "type": "string",
+        "enum": ["json", "text"],
+        "description": "Output format. Defaults to json (the machine-readable record payload). Use text for the human-readable rendering.",
+        "default": "json"
+      }
+    },
+    "required": ["query"]
+  },
+  "script": "experience-recall.sh",
+  "argsTemplate": ["search", "${query}", "--limit", "${limit}", "--format", "${format}"],
+  "annotations": {
+    "readOnlyHint": true,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "successExitCodes": [0]
+}

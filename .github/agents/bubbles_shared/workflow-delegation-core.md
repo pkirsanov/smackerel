@@ -33,7 +33,7 @@ At **each specialist dispatch**, before handing candidate work to a phase owner,
 
 ```
 bubbles/scripts/work-boundary-resolve.sh --feature-dir <FEATURE_DIR> --candidate-repo <slug> \
-    [--candidate-spec <id>] [--candidate-path <path>]
+    [--candidate-spec <id>] [--candidate-path <path>] [--strict] [--require-allowed-paths]
 ```
 
 - `disposition=in-boundary` → dispatch inline as normal.
@@ -41,7 +41,21 @@ bubbles/scripts/work-boundary-resolve.sh --feature-dir <FEATURE_DIR> --candidate
 - `disposition=route-cross-repo` → a different-repo finding under `crossRepoPolicy: authorized`: route to the owning repo (route-only, never inline).
 - `disposition=refuse-cross-repo` → a different-repo finding under the default forbidden policy: REFUSE; surface the boundary + remediation instead of editing the other repo. This is the direct stop for the "started on repo A, wandered into fixing repo B" failure.
 
-Backward-compatible: a feature with no declared `workBoundary` (or no `state.json`) resolves `in-boundary` (no behavior change); a present-but-malformed boundary exits 2 (fail-closed). The resolver COMPOSES with — does not replace — `repo-binding-preflight.sh`: preflight verifies the repo↔agent binding, the resolver classifies each candidate change against the boundary.
+**Which invocation form to use (IMP-038 GF-2).** The three forms differ ONLY in how they treat an *undeclared* boundary; a complete boundary classifies identically in all three.
+
+| Caller | Form | Undeclared boundary |
+| --- | --- | --- |
+| Read-only diagnostic, reporting, legacy caller | no flag | `in-boundary` (permissive) |
+| Any **mutable** run, at every specialist dispatch | `--strict` | REFUSE, exit 3 |
+| The **first source mutation** of a mutable run | `--strict --require-allowed-paths` | REFUSE, exit 3 or 4 |
+
+A mutable runner MUST NOT authorize a source edit from the permissive form. Permissiveness exists so a pre-IMP-038 spec stays *readable*; it was never a licence to edit with no declared repository, spec, or path reach. Strict mode closes exactly that absence hole: it refuses (exit 3) when `state.json`, `workBoundary`, `repositoryRoots`, `specTargets`, or `crossRepoPolicy` is missing or empty, and `--require-allowed-paths` additionally refuses (exit 4) when no mutation path surface is declared. `--require-allowed-paths` implies `--strict`, so a mutation check can never be weaker than the planning check. A present-but-malformed boundary is still exit 2 in every mode.
+
+**Re-run the resolver for each candidate returned by a specialist** — every repository, spec, and changed path in the result — not only once before dispatch. A specialist's returned surface is the surface that actually needs classifying.
+
+**Deriving the boundary.** Do not hand-author `workBoundary`. Freeze a Goal Contract, then run `bubbles/scripts/goal-contract.sh sync-boundary --session-file <session> --state-file <FEATURE_DIR>/state.json`, which copies the approved boundary verbatim so the enforced boundary and the approved one cannot drift. A planner may **narrow** a frozen boundary without approval and `sync-boundary` writes it. **Widening** is REFUSED (exit 3) and leaves `state.json` untouched — more reach is an expansion, and an expansion belongs in `goal-contract.sh revise --approval-note`, where it carries a recorded operator approval.
+
+The resolver COMPOSES with — does not replace — `repo-binding-preflight.sh`: preflight verifies the repo↔agent binding, the resolver classifies each candidate change against the boundary. There is no `--force` / `--skip` / `--ignore`: widen the declared boundary through a contract revision, never skip the check.
 
 ### ⛔ Literal `mode:` Gate (MANDATORY — NON-NEGOTIABLE)
 

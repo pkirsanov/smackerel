@@ -287,6 +287,16 @@ exit_conditions:
 
 **Orchestrator persistence default (Gate G086):** After any non-terminal phase, this orchestrator MUST automatically continue to the next phase. It may stop only for convergence achieved, max iterations reached, user requests stop, or fundamental impossibility. Enforced by `bubbles/scripts/orchestrator-persistence-lint.sh` (registered as Gate `G086` and invoked as Check 27 inside `bubbles/scripts/state-transition-guard.sh`); lint findings MUST surface in a `blocked` RESULT-ENVELOPE with finding `G086`.
 
+## Experience Recall (Advisory)
+
+This orchestrator is authorized to consume Evidence-Backed Experience Recall at ONE context boundary per goal-node phase, following [operating-baseline.md → Experience Recall Consumption (Orchestrator Agents)](bubbles_shared/operating-baseline.md) and the full contract in [experience-recall.md](bubbles_shared/experience-recall.md).
+
+Consume ONLY AFTER repository binding is validated AND current source, specs, scopes, and state are loaded — never before. Query with the current goal and target scope: `bash bubbles/scripts/experience-recall.sh search "<goal + scope>" --limit 5 --format json`. The repository root and alias are DERIVED from the installed twin and cannot be passed — `--repo-root`, `--repository-alias`, and `--adapter` are refused, which is what makes cross-repository recall structurally impossible. Retain at most 5 hit summaries, drill into at most 2 records (`read <record-id>`), and label the block `advisory recalled experience`.
+
+Recall is authority tier 4. DISCARD the block before any repository decision, tool authorization, DoD decision, status transition, Skill mutation, or agent dispatch. NEVER cite a recall record id, the recall index path, or a recall export as evidence — cite the independently re-read source anchor instead (`result-envelope-validate.sh` refuses such an envelope in every mode, including `--advisory`).
+
+Unavailable, disabled, stale, or empty recall MUST NOT block the goal: record the state and continue. Never restate absent recall as a clean history or a novel problem.
+
 ## Context Compaction
 
 When accumulating specialist `RESULT-ENVELOPE`s across convergence iterations, follow [operating-baseline.md → Context Compaction Discipline (Orchestrator Agents)](bubbles_shared/operating-baseline.md). Compact every 3 subagent results OR when the accumulated raw envelope text exceeds 8 KB, whichever fires first. For a repository-sensitive envelope, use `bash bubbles/scripts/context-compactor.sh --session-id <session-id> --session-control-file <control-file> --binding-packet-file <packet-file> <raw-envelope-file>` and append the resulting record to `compactedHistory[]` in `.specify/memory/bubbles.session.json`; the unbound form is only for legacy envelopes with no repository fields. Before resumed repository-local work, reconstruct the nested packet and run `bubbles/scripts/repository-binding.sh validate-packet`. Keep the latest 2 raw envelopes in working memory; never drop blocked findings or `nextRequiredOwner` chains.

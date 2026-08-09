@@ -1,0 +1,332 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bubbles.dev/schemas/goal-contract.schema.json",
+  "title": "Bubbles Goal Contract",
+  "description": "One immutable Goal Contract per mutable top-level run (IMP-038 SCOPE-1 / GF-1). Frozen before planning, persisted at `.goalContract` in `.specify/memory/bubbles.session.json`, and mirrored into each targeted spec's `state.json.execution.goalContractRef` by stable id + revision + digest only. `$defs.outcomeCore` is the SHARED outcome model: the goal contract and a compiled scenario `rootOutcome` both derive from it instead of maintaining two outcome models.",
+  "$ref": "#/$defs/goalContract",
+  "$defs": {
+    "nonEmptyString": {
+      "type": "string",
+      "minLength": 1
+    },
+    "nonEmptyStringArray": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/nonEmptyString"
+      }
+    },
+    "sha256Digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "goalId": {
+      "type": "string",
+      "pattern": "^gc:[A-Za-z0-9._-]+:[0-9]+$",
+      "description": "gc:<sessionId>:<revision>. The sessionId segment excludes ':' so the id stays unambiguously parseable."
+    },
+    "outcomeCore": {
+      "type": "object",
+      "description": "The shared outcome model (Gate G070 shape). Consumed by BOTH `#/$defs/goalContract` and `#/$defs/scenarioRootOutcome`. Deliberately NOT closed with additionalProperties:false: it is a mixin applied via allOf, where a closed object cannot see sibling properties, and closing it would reject compiled scenarios that already validate today.",
+      "properties": {
+        "intent": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "successSignal": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "hardConstraints": {
+          "$ref": "#/$defs/nonEmptyStringArray"
+        },
+        "failureCondition": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      },
+      "required": [
+        "intent",
+        "successSignal",
+        "hardConstraints"
+      ]
+    },
+    "scenarioRootOutcome": {
+      "description": "A compiled scenario's `rootOutcome`, expressed as `outcomeCore` plus the two scenario-only tightenings that `bubbles/scripts/scenario-compile-lint.sh` already enforces: `failureCondition` is REQUIRED and `hardConstraints` must be non-empty. Kept open (no additionalProperties:false) so every scenario that validates today keeps validating.",
+      "allOf": [
+        {
+          "$ref": "#/$defs/outcomeCore"
+        }
+      ],
+      "type": "object",
+      "properties": {
+        "intent": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "successSignal": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "hardConstraints": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/nonEmptyStringArray"
+            }
+          ],
+          "minItems": 1
+        },
+        "failureCondition": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "targetReleasePacket": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      },
+      "required": [
+        "intent",
+        "successSignal",
+        "hardConstraints",
+        "failureCondition"
+      ]
+    },
+    "targetReferenceKind": {
+      "enum": [
+        "repository",
+        "spec",
+        "path",
+        "release-phase",
+        "ops-packet"
+      ]
+    },
+    "targetReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "value"
+      ],
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/targetReferenceKind"
+        },
+        "value": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      }
+    },
+    "workBoundary": {
+      "type": "object",
+      "description": "Mirrors the shape `bubbles/scripts/work-boundary-resolve.sh` validates fail-closed. repositoryRoots is required and non-empty; specTargets/allowedPaths are optional arrays of non-empty strings; crossRepoPolicy is a closed enum defaulting to 'forbidden'.",
+      "additionalProperties": false,
+      "required": [
+        "repositoryRoots"
+      ],
+      "properties": {
+        "repositoryRoots": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/nonEmptyStringArray"
+            }
+          ],
+          "minItems": 1
+        },
+        "specTargets": {
+          "$ref": "#/$defs/nonEmptyStringArray"
+        },
+        "allowedPaths": {
+          "$ref": "#/$defs/nonEmptyStringArray"
+        },
+        "crossRepoPolicy": {
+          "enum": [
+            "forbidden",
+            "authorized"
+          ],
+          "default": "forbidden"
+        }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "runner",
+        "sessionId",
+        "repositoryAlias"
+      ],
+      "properties": {
+        "runner": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "sessionId": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "repositoryAlias": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      }
+    },
+    "approvalState": {
+      "enum": [
+        "auto-frozen",
+        "operator-approved",
+        "pending-expansion"
+      ],
+      "description": "auto-frozen = the full-autonomy initial freeze, valid without an extra operator check-in. operator-approved = an expansion or revision the operator approved. pending-expansion = a revision was requested and is NOT yet approved."
+    },
+    "approval": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "state",
+        "approvedAt",
+        "approvalNote"
+      ],
+      "properties": {
+        "state": {
+          "$ref": "#/$defs/approvalState"
+        },
+        "approvedAt": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "approvalNote": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "goalContract": {
+      "type": "object",
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "$ref": "#/$defs/outcomeCore"
+        }
+      ],
+      "required": [
+        "schemaVersion",
+        "goalId",
+        "revision",
+        "sourceRequestDigest",
+        "intent",
+        "successSignal",
+        "hardConstraints",
+        "nonGoals",
+        "targetReferences",
+        "workBoundary",
+        "createdAt",
+        "provenance",
+        "approval",
+        "supersedes"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": "goal-contract/v1"
+        },
+        "goalId": {
+          "$ref": "#/$defs/goalId"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "sourceRequestDigest": {
+          "$ref": "#/$defs/sha256Digest"
+        },
+        "intent": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "successSignal": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "hardConstraints": {
+          "$ref": "#/$defs/nonEmptyStringArray"
+        },
+        "failureCondition": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "nonGoals": {
+          "$ref": "#/$defs/nonEmptyStringArray"
+        },
+        "targetReferences": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/targetReference"
+          }
+        },
+        "workBoundary": {
+          "$ref": "#/$defs/workBoundary"
+        },
+        "createdAt": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+        },
+        "provenance": {
+          "$ref": "#/$defs/provenance"
+        },
+        "approval": {
+          "$ref": "#/$defs/approval"
+        },
+        "supersedes": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/goalId"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "goalId of the prior revision; null for revision 1."
+        }
+      }
+    },
+    "goalContractRef": {
+      "type": "object",
+      "description": "The ONLY projection written into a spec's `state.json.execution.goalContractRef`. Intent, successSignal, constraints, and boundary are deliberately NOT mirrored (IMP-038 R5: keep prompts and state small).",
+      "additionalProperties": false,
+      "required": [
+        "goalId",
+        "revision",
+        "sourceRequestDigest"
+      ],
+      "properties": {
+        "goalId": {
+          "$ref": "#/$defs/goalId"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "sourceRequestDigest": {
+          "$ref": "#/$defs/sha256Digest"
+        }
+      }
+    },
+    "goalRef": {
+      "type": "object",
+      "description": "The goal identity carried by a TRANSITION (IMP-038 SCOPE-3 / GF-1, GF-5): specialist dispatch packets, RESULT-ENVELOPE and route-required payloads, invocation ledgers, turn and convergence snapshots, compacted history records, continuation and resume packets, and validation/audit attempts. Produced only by `goal-contract.sh ref` and checked only by `goal-contract.sh verify-ref`. Unlike `goalContractRef`, which is the minimal durable spec-local pointer, a transition ref also carries `workBoundary`, because its verifier must confirm the work stayed inside the declared reach. Intent, successSignal, hardConstraints, and targets stay OUT (R5).",
+      "additionalProperties": false,
+      "required": [
+        "goalId",
+        "revision",
+        "sourceRequestDigest"
+      ],
+      "properties": {
+        "goalId": {
+          "$ref": "#/$defs/goalId"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "sourceRequestDigest": {
+          "$ref": "#/$defs/sha256Digest"
+        },
+        "workBoundary": {
+          "$ref": "#/$defs/workBoundary",
+          "description": "Required for a MUTABLE transition (`verify-ref --require-boundary`). It may be NARROWER than the frozen contract's boundary; it may never be wider."
+        }
+      }
+    }
+  }
+}

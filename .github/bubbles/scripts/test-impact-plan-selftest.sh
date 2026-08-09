@@ -5,7 +5,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PLANNER="$SCRIPT_DIR/test-impact-plan.sh"
 TMP_BASE="${TMPDIR:-$HOME/.cache}"
 mkdir -p "$TMP_BASE"
-TMP_DIR="$(mktemp -d -p "$TMP_BASE" bubbles-test-impact-plan.XXXXXX)"
+# A template inside the base directory, not `-p`: the parent-directory flag is
+# GNU-only and BSD mktemp rejects it, which took this selftest down on macOS.
+TMP_DIR="$(mktemp -d "$TMP_BASE/bubbles-test-impact-plan.XXXXXX")"
 failures=0
 
 cleanup() {

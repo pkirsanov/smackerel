@@ -908,8 +908,8 @@ except Exception:
     # Check staged files
     while IFS= read -r changed_file; do
       [[ -z "$changed_file" ]] && continue
-      if echo "$changed_file" | grep -qE "$source_code_pattern"; then
-        if ! echo "$changed_file" | grep -qE "$allowed_path_pattern"; then
+      if grep -qE "$source_code_pattern" <<< "$changed_file"; then
+        if ! grep -qE "$allowed_path_pattern" <<< "$changed_file"; then
           if is_deliverable_file "$changed_file"; then
             pass "Staged file '$changed_file' is declared in deliverableFiles[] manifest — permitted under ceiling '$ceiling_label'"
             continue
@@ -923,8 +923,8 @@ except Exception:
     # Check unstaged working tree changes
     while IFS= read -r changed_file; do
       [[ -z "$changed_file" ]] && continue
-      if echo "$changed_file" | grep -qE "$source_code_pattern"; then
-        if ! echo "$changed_file" | grep -qE "$allowed_path_pattern"; then
+      if grep -qE "$source_code_pattern" <<< "$changed_file"; then
+        if ! grep -qE "$allowed_path_pattern" <<< "$changed_file"; then
           if is_deliverable_file "$changed_file"; then
             pass "Working-tree file '$changed_file' is declared in deliverableFiles[] manifest — permitted under ceiling '$ceiling_label'"
             continue
@@ -940,8 +940,8 @@ except Exception:
     if [[ -n "$last_commit_msg" ]]; then
       while IFS= read -r changed_file; do
         [[ -z "$changed_file" ]] && continue
-        if echo "$changed_file" | grep -qE "$source_code_pattern"; then
-          if ! echo "$changed_file" | grep -qE "$allowed_path_pattern"; then
+        if grep -qE "$source_code_pattern" <<< "$changed_file"; then
+          if ! grep -qE "$allowed_path_pattern" <<< "$changed_file"; then
             if is_deliverable_file "$changed_file"; then
               continue
             fi
@@ -1399,7 +1399,13 @@ sla_scope_count=0
 for scope_path in ${scope_files[@]+"${scope_files[@]}"}; do
   [[ -f "$scope_path" ]] || continue
 
-  if grep -Eiq 'latency|throughput|p95|p99|response time|sla|slo' "$scope_path"; then
+  # `sla` and `slo` are word-bounded; the rest are not. Unbounded, the two
+  # three-letter terms match any word merely CONTAINING them — "slot", "slope",
+  # "slow", "slate", "Slack", "translate" — so a scope that says "slot" once was
+  # told it had a latency SLA and owed stress coverage it had no reason to write.
+  # The longer terms need no boundary: nothing innocent contains "latency" or
+  # "throughput". Guarded by a selftest case below.
+  if grep -Eiq 'latency|throughput|p95|p99|response time|\bsla\b|\bslo\b' "$scope_path"; then
     sla_scope_count=$((sla_scope_count + 1))
     if grep -Eq '^\|[[:space:]]*Stress[[:space:]]*\|' "$scope_path" || grep -Eiq 'stress' "$scope_path"; then
       pass "SLA-sensitive scope includes stress coverage: ${scope_path#$feature_dir/}"
@@ -1443,7 +1449,14 @@ if not isinstance(execution_phase_claims, list):
 if not isinstance(legacy_phases, list):
     legacy_phases = []
 
-selected_phases = certification_phases or execution_phase_claims or legacy_phases
+# MERGE, never short-circuit. A truthy `certifiedCompletedPhases` used to win
+# outright via `or`, so a spec carrying certification ["validate"] alongside 14
+# execution claims reported every other phase as unrecorded — while Check 6B,
+# reading completedPhaseClaims directly, passed those same entries. One run then
+# asserted both "phase not recorded" and "that phase's record has valid
+# provenance". Concatenating is safe: _phase_name() below normalizes bare
+# strings and dict claim records alike, and dict.fromkeys dedups the result.
+selected_phases = list(certification_phases) + list(execution_phase_claims) + list(legacy_phases)
 
 # v4.1.0: phaseStubs[] — a phase can be honestly declared as no-work-needed
 # via state.json.execution.phaseStubs[<phase>] = {reason: "...", justification: "..."}
@@ -1665,7 +1678,7 @@ if [[ -n "$state_workflow_mode" ]]; then
   if [[ ${#required_specialists[@]} -gt 0 ]]; then
     missing_phases=0
     for specialist_phase in "${required_specialists[@]}"; do
-      if echo "$state_completed_phases_block" | grep -qE "\"$specialist_phase\""; then
+      if grep -qE "\"$specialist_phase\"" <<< "$state_completed_phases_block"; then
         pass "Required phase '$specialist_phase' recorded in execution/certification phase records"
       else
         fail "Required phase '$specialist_phase' NOT in execution/certification phase records (Gate G022 violation)"
@@ -1826,7 +1839,7 @@ for p in set(names):
             elif [[ -z "$pe_reason" ]] || [[ "${#pe_reason}" -lt 20 ]]; then
               fail "Phase '$claimed_phase' claims parent-expansion but expansionReason is empty or <20 chars (Gate G022). Got: '$pe_reason'"
               provenance_failures=$((provenance_failures + 1))
-            elif ! echo "$pe_reason" | grep -qiE "$expansion_reason_regex"; then
+            elif ! grep -qiE "$expansion_reason_regex" <<< "$pe_reason"; then
               fail "Phase '$claimed_phase' expansionReason does not name the missing capability (must mention one of: runSubagent, tool unavailable, nested runtime, capability missing, parent-expand). Got: '$pe_reason' (Gate G022)"
               provenance_failures=$((provenance_failures + 1))
             elif [[ -z "$pe_ev_ref" ]]; then
@@ -1973,8 +1986,15 @@ except Exception:
     sys.exit(0)
 
 history = []
-container = data.get("execution", {}) if isinstance(data.get("execution"), dict) else data
-raw = container.get("executionHistory", [])
+# executionHistory is written at the TOP level by most agents and under
+# execution.* by others. Selecting only one location silently yields [] for the
+# other, which turned this whole check into a no-op that reported "fewer than 3
+# entries" against a packet holding fourteen. Check 6B already falls back this
+# way; if this check does not, the two disagree about the same array.
+execution_obj = data.get("execution") if isinstance(data.get("execution"), dict) else {}
+raw = execution_obj.get("executionHistory")
+if not isinstance(raw, list):
+    raw = data.get("executionHistory")
 if not isinstance(raw, list):
     raw = []
 
@@ -1982,8 +2002,17 @@ entries = []
 for entry in raw:
     if not isinstance(entry, dict):
         continue
-    started = parse_ts(entry.get("runStartedAt"))
-    completed = parse_ts(entry.get("runCompletedAt"))
+    # Entry timestamps are startedAt plus completedAt or finishedAt.
+    # runStartedAt is an EXECUTION-level field, not an entry field: across every
+    # recorded packet it appears zero times on an entry, so reading it here made
+    # the loop `continue` on all of them. This check had never once evaluated an
+    # entry, which is why it did not catch a set of fabricated timestamps.
+    started = parse_ts(entry.get("startedAt") or entry.get("runStartedAt"))
+    completed = parse_ts(
+        entry.get("completedAt")
+        or entry.get("finishedAt")
+        or entry.get("runCompletedAt")
+    )
     if started is None or completed is None:
         continue
     phases = entry.get("phasesExecuted") or []
@@ -1994,6 +2023,15 @@ for entry in raw:
         "started": started,
         "completed": completed,
         "phases": [p for p in phases if isinstance(p, str)],
+        # An entry may DECLARE that its span was never measured — the writer
+        # stored one instant rather than a start and a finish. That is a
+        # different condition from a fabricated span, and conflating them makes
+        # the zero-duration signal unusable on any record written before a span
+        # was required. The declaration must carry a substantive reason, so it
+        # cannot be used as a silent exemption, and it is reported either way.
+        "unmeasured": entry.get("durationUnmeasured") is True,
+        "unmeasured_reason": (entry.get("durationUnmeasuredReason") or "").strip()
+            if isinstance(entry.get("durationUnmeasuredReason"), str) else "",
     })
 
 if len(entries) < 3:
@@ -2012,11 +2050,22 @@ if intervals and len(set(intervals)) == 1 and intervals[0] > 0:
 
 # Check zero-duration entries (excluding intentionally zero phases)
 zero_dur_offenders = []
+unmeasured_spans = []
+UNMEASURED_REASON_MIN = 20
 for e in entries:
     duration = (e["completed"] - e["started"]).total_seconds()
     if duration <= 0:
         if not e["phases"] or any(p not in ZERO_DURATION_EXEMPT for p in e["phases"]):
-            zero_dur_offenders.append(f"{e['agent']}:{','.join(e['phases']) or '?'}")
+            label = f"{e['agent']}:{','.join(e['phases']) or '?'}"
+            # A declared-unmeasured span is surfaced, not blocked. An EMPTY or
+            # perfunctory reason is still an offender: the declaration has to
+            # cost something or it is just a bypass with extra steps.
+            if e["unmeasured"] and len(e["unmeasured_reason"]) >= UNMEASURED_REASON_MIN:
+                unmeasured_spans.append(label)
+            else:
+                zero_dur_offenders.append(label)
+if unmeasured_spans:
+    print(f"UNMEASURED_SPANS={'|'.join(unmeasured_spans)}")
 if zero_dur_offenders:
     print(f"ZERO_DURATION={'|'.join(zero_dur_offenders)}")
 
@@ -2045,6 +2094,13 @@ else
   uniform_interval="$(echo "$exec_history_analysis" | grep -E '^UNIFORM_INTERVAL=' | head -n 1 | sed 's/^UNIFORM_INTERVAL=//' || true)"
   if [[ -n "$uniform_interval" ]]; then
     fail "executionHistory has $exec_count entries with identical ${uniform_interval}s intervals — FABRICATION INDICATOR"
+  fi
+
+  # Surfaced, never silent: a declared-unmeasured span is a weaker record than a
+  # measured one, and a reader should be told which entries carry that weakness.
+  unmeasured_line="$(echo "$exec_history_analysis" | grep -E '^UNMEASURED_SPANS=' | head -n 1 | sed 's/^UNMEASURED_SPANS=//' || true)"
+  if [[ -n "$unmeasured_line" ]]; then
+    info "executionHistory declares unmeasured spans (single instant recorded, reason given): $unmeasured_line"
   fi
 
   zero_dur_line="$(echo "$exec_history_analysis" | grep -E '^ZERO_DURATION=' | head -n 1 | sed 's/^ZERO_DURATION=//' || true)"
@@ -2095,8 +2151,13 @@ print(f"ROUND={round_count}")
 if last_clean is not None:
     print(f"LAST_CLEAN={last_clean}")
 
-container = data.get("execution", {}) if isinstance(data.get("execution"), dict) else data
-history = container.get("executionHistory", [])
+# Same top-level / execution.* fallback as Check 7A. Without it this counted zero
+# implement runs on a packet that records one, then "passed" by agreeing with its
+# own empty read.
+execution_obj = data.get("execution") if isinstance(data.get("execution"), dict) else {}
+history = execution_obj.get("executionHistory")
+if not isinstance(history, list):
+    history = data.get("executionHistory")
 if not isinstance(history, list):
     history = []
 
@@ -3136,10 +3197,10 @@ if [[ -n "$state_workflow_mode" ]]; then
       # Check if implement/test phases are claimed
       has_implement="false"
       has_test="false"
-      if echo "$state_completed_phases_block" | grep -qE '"implement"'; then
+      if grep -qE '"implement"' <<< "$state_completed_phases_block"; then
         has_implement="true"
       fi
-      if echo "$state_completed_phases_block" | grep -qE '"test"'; then
+      if grep -qE '"test"' <<< "$state_completed_phases_block"; then
         has_test="true"
       fi
 
@@ -3296,7 +3357,19 @@ if [[ "$transition_audit_profile" == "planning-maturity-v1" ]]; then
 elif [[ "$state_status" == "done_with_concerns" && "$(json_first_bool "legacyStatusCompatibility" "$state_file" || true)" == "true" ]]; then
   info "Check 18 skipped: state.json status is legacy read-only 'done_with_concerns' with legacyStatusCompatibility:true (Gate G040/G092)"
 else
-  deferral_pattern='deferred|defer to|deferred to|future scope|future work|future iteration|follow-up|follow up|followup|out of scope|not in scope|beyond scope|will address later|address later|revisit later|separate ticket|separate issue|separate PR|tracked separately|handled separately|punt\b|punted|postpone|postponed|skip for now|skipped for now|not implemented yet|not yet implemented|placeholder|temporary workaround'
+  # NOTE on the `placeholder` term (Gate G040 false-positive class). Every other
+  # term in this list is prose that ADMITS deferral ("deferred", "out of scope",
+  # "skip for now"). The bare noun `placeholder` is not: it is ordinary UI, DOM
+  # and test vocabulary, and it appears most often in artifacts that FORBID one
+  # — "the empty state renders with no placeholder card", "do not synthesise a
+  # placeholder item". Matching the bare noun therefore flagged prose asserting
+  # the exact opposite of deferral. It is narrowed to admission-bearing forms
+  # ("is a placeholder", "placeholder value/until/for now"), which still catch a
+  # genuine "this is a placeholder until X" admission while ignoring a noun that
+  # merely names an artifact. Guarded by two selftest cases below: a negative
+  # (prohibition prose must NOT block) and its adversarial twin (a real
+  # admission MUST still block), so the narrowing cannot silently disable it.
+  deferral_pattern='deferred|defer to|deferred to|future scope|future work|future iteration|follow-up|follow up|followup|out of scope|not in scope|beyond scope|will address later|address later|revisit later|separate ticket|separate issue|separate PR|tracked separately|handled separately|punt\b|punted|postpone|postponed|skip for now|skipped for now|not implemented yet|not yet implemented|(is|are|was|were|remains?|stays?|left|leaving)[[:space:]]+(still[[:space:]]+)?an?[[:space:]]+placeholder|placeholder[[:space:]]+(value|until|for now)|temporary workaround'
   # Strategy (i): exclude schema-canonical follow-up field names mandated
   # by completion-governance.md AND the canonical "Follow-Up Narrative"
   # section heading itself. Both are schema-structural usage, not deferred-
@@ -3478,10 +3551,10 @@ for scope_path in ${scope_files[@]+"${scope_files[@]}"}; do
   in_evidence=0
   current_block=""
   while IFS= read -r line; do
-    if [[ "$in_evidence" -eq 0 ]] && echo "$line" | grep -qE '^    ```'; then
+    if [[ "$in_evidence" -eq 0 ]] && grep -qE '^    ```' <<< "$line"; then
       in_evidence=1
       current_block=""
-    elif [[ "$in_evidence" -eq 1 ]] && echo "$line" | grep -qE '^    ```$'; then
+    elif [[ "$in_evidence" -eq 1 ]] && grep -qE '^    ```$' <<< "$line"; then
       in_evidence=0
       if [[ -n "$current_block" ]]; then
         evidence_blocks+=("$current_block")
@@ -3517,10 +3590,14 @@ for scope_path in ${scope_files[@]+"${scope_files[@]}"}; do
       fi
 
       # Count shared lines (exact match)
+      # NOTE: `-e` is REQUIRED. Without it, any evidence line beginning with '-'
+      # (a markdown bullet, an SQL '--' comment, a diff '-' line) is parsed by
+      # grep as an OPTION, which exits 2. Exit 2 was then read as "not shared",
+      # undercounting shared_lines and making this fabrication gate FAIL OPEN.
       shared_lines=0
       while IFS= read -r a_line; do
         [[ -z "$a_line" ]] && continue
-        if echo "$block_b" | grep -qF "$a_line"; then
+        if grep -qF -e "$a_line" <<< "$block_b"; then
           shared_lines=$((shared_lines + 1))
         fi
       done <<< "$block_a"
@@ -3548,8 +3625,8 @@ echo ""
 echo "--- Check 21: Spec Review Enforcement (specReview policy) ---"
 if [[ "$state_status" == "done" ]] && [[ -n "$state_workflow_mode" ]]; then
   spec_review_required_modes="improve-existing|reconcile-to-doc|redesign-existing|full-delivery"
-  if echo "$state_workflow_mode" | grep -qE "^($spec_review_required_modes)$"; then
-    if echo "$state_completed_phases_block" | grep -qE '"spec-review"'; then
+  if grep -qE "^($spec_review_required_modes)$" <<< "$state_workflow_mode"; then
+    if grep -qE '"spec-review"' <<< "$state_completed_phases_block"; then
       pass "Spec-review phase recorded for legacy-improvement mode '$state_workflow_mode'"
     else
       fail "Legacy-improvement mode '$state_workflow_mode' requires a spec-review phase (specReview: once-before-implement) but 'spec-review' is NOT in execution/certification phase records"
@@ -3840,8 +3917,27 @@ else
   # is the signature of one captured result being reused to back a second,
   # unrelated claim, which is exactly what G021 exists to catch.
   if command -v jq >/dev/null 2>&1; then
-    c43_clones="$(jq -rs '
-      map(select((.stdoutHash // "") != "" and (.cmd // "") != ""))
+    # An EMPTY stdout is excluded, and that exclusion is what makes the rule
+    # correct rather than merely narrow. Every command that writes nothing to
+    # stdout hashes to e3b0c442… — the SHA-256 of the empty string — so a
+    # `grep` with no match, a run that wrote only to stderr, and a `--help`
+    # that exited 127 all collide with each other. Reading that collision as
+    # forgery accuses honest work of the single most serious thing this guard
+    # can allege. A receipt with no stdout also has no evidentiary content to
+    # clone, so excluding it removes the false-positive class without weakening
+    # the check: a real forgery reuses a SUBSTANTIVE captured result, which is
+    # by definition non-empty.
+    #
+    # The DIGEST is the discriminator, not `stdoutBytes`. `stdoutBytes` is
+    # optional, so keying the exemption on it meant an absent field defaulted
+    # to 0 and silently excluded a genuine clone from detection (BUG-007's
+    # first fix over-corrected exactly this way). Every receipt of every
+    # vintage carries a stdoutHash, so the empty-string digest identifies
+    # empty stdout with no field required. An explicitly-present
+    # `stdoutBytes: 0` is still honoured; an ABSENT one exempts nothing.
+    c43_empty_stdout_sha256="e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    c43_clones="$(jq -rs --arg empty_sha "$c43_empty_stdout_sha256" '
+      map(select((.stdoutHash // "") != "" and (.cmd // "") != "" and (.stdoutHash != $empty_sha) and ((has("stdoutBytes") and .stdoutBytes == 0) | not)))
       | group_by(.stdoutHash)
       | map(select((map(.cmd) | unique | length) > 1))
       | .[]

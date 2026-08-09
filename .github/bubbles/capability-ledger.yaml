@@ -734,3 +734,46 @@ capabilities:
     - graphrag
     freshnessTargets:
     - docs/recipes/use-a-code-index.md
+
+  experience-recall:
+    label: Evidence-backed experience recall
+    state: shipped
+    summary: >
+      Relevance retrieval over Bubbles-owned structured experience -- compacted RESULT-ENVELOPE history, anchored lessons, owner decisions, findings, and outcomes -- without promoting any of it to current authority. Targets the "prior incident is retained but unfindable" defect class, where a repository already holds the record of a problem it is about to repeat. Every hit is authority tier 4 and permanently `recallAuthority: advisory`; a valid source anchor never promotes the hit, so a caller must independently re-read the source before relying on it. The authority boundary is MECHANICAL, not advisory prose: result-envelope-validate.sh refuses any envelope citing a recall record id, the recall index directory, or a content-classified recall export in an evidence field, and refuses it in every mode including --advisory. Repository isolation is structural rather than documented -- the public twin derives repository root and alias from its own install location and refuses --repo-root, --repository-alias, and --adapter -- so cross-repository recall is not expressible. The corpus is closed: raw host transcripts, chat logs, terminal scrollback, arbitrary Markdown, source text, and inferred personas are inadmissible, and unanchored legacy lessons are excluded from recall while remaining valid skill-evolution input. Two providers ship: `none` (the default, which returns empty and changes no behavior anywhere) and `local-lexical` (deterministic, standard-library only, no network, no model, no daemon). Retrieval quality is measured rather than asserted -- a labeled corpus records macro precision and recall at the result bound, and a document-frequency guard plus relevance floor raised measured macro precision from 0.54 to 1.00 with recall held at 1.00.
+    ownerSurface: bubbles/adapters/experience-recall/
+    releaseIntroduced: unreleased
+    docsRefs:
+    - docs/recipes/evidence-backed-experience-recall.md
+    - docs/CATALOG.md
+    - docs/CHEATSHEET.md
+    evidenceRefs:
+    - bubbles/adapters/experience-recall/none.sh
+    - bubbles/adapters/experience-recall/local-lexical.sh
+    - bubbles/scripts/experience-recall-resolve.sh
+    - bubbles/scripts/experience-recall-index.py
+    - bubbles/scripts/experience-recall.sh
+    - bubbles/scripts/experience-recall-lifecycle.py
+    - bubbles/schemas/experience-record.schema.json
+    - bubbles/eval/fixtures/experience-recall/corpus.json
+    - bubbles/scripts/experience-recall-resolve-selftest.sh
+    - bubbles/scripts/experience-recall-adapter-contract-selftest.sh
+    - bubbles/scripts/experience-recall-index-selftest.sh
+    - bubbles/scripts/experience-recall-cli-selftest.sh
+    - bubbles/scripts/experience-recall-lifecycle-selftest.sh
+    - bubbles/scripts/experience-recall-authority-selftest.sh
+    - bubbles/scripts/experience-recall-eval-selftest.sh
+    - agents/bubbles_shared/experience-recall.md
+    consumers:
+    - bubbles/scripts/result-envelope-validate.sh # gating consumer - refuses recall artifacts cited as evidence in every mode
+    - bubbles/scripts/cli.sh # exposes the recall subcommand family
+    - bubbles/mcp/server.py # read-only MCP twins over search/read/status
+    - agents/bubbles.workflow.agent.md # bounded per-phase advisory consumption
+    - agents/bubbles.goal.agent.md # bounded per-phase advisory consumption
+    - agents/bubbles.sprint.agent.md # bounded per-round advisory consumption
+    - agents/bubbles.iterate.agent.md # bounded per-phase advisory consumption
+    - agents/bubbles_shared/operating-baseline.md # orchestrator consumption discipline
+    competitorTags:
+    - claude-code
+    - graphrag
+    freshnessTargets:
+    - docs/recipes/evidence-backed-experience-recall.md

@@ -37,12 +37,17 @@ servers:
     hostEnforceable: true
     description: The per-repo Bubbles MCP server (bubbles-<repo-slug>). Read tools are read_only; evidence/routing tools are owned mutations.
     operations:
-      read_spec:        { riskClass: read_only,      capability: read,  egress: none, permittedDataClasses: [public, internal], approvalRequired: false }
-      search_code:      { riskClass: read_only,      capability: read,  egress: none, permittedDataClasses: [public, internal], approvalRequired: false }
-      check_gate:       { riskClass: read_only,      capability: read,  egress: none, permittedDataClasses: [public, internal], approvalRequired: false }
-      graph_neighbors:  { riskClass: read_only,      capability: read,  egress: none, permittedDataClasses: [public, internal], approvalRequired: false }
-      record_evidence:  { riskClass: owned_mutation, capability: write, egress: none, permittedDataClasses: [public, internal], approvalRequired: false }
-      route_finding:    { riskClass: owned_mutation, capability: write, egress: none, permittedDataClasses: [public, internal], approvalRequired: false }
+      read_spec:                 { riskClass: read_only,      capability: read,  egress: none, permittedDataClasses: [public, internal], approvalRequired: false }
+      search_code:               { riskClass: read_only,      capability: read,  egress: none, permittedDataClasses: [public, internal], approvalRequired: false }
+      check_gate:                { riskClass: read_only,      capability: read,  egress: none, permittedDataClasses: [public, internal], approvalRequired: false }
+      graph_neighbors:           { riskClass: read_only,      capability: read,  egress: none, permittedDataClasses: [public, internal], approvalRequired: false }
+      # IMP-037 S5: read-only recall wrappers over the experience-recall.sh bash twin.
+      # sync/admit/delete/lifecycle/export stay CLI-only and are NOT registered here.
+      search_experience:         { riskClass: read_only,      capability: read,  egress: none, permittedDataClasses: [public, internal], approvalRequired: false }
+      read_experience:           { riskClass: read_only,      capability: read,  egress: none, permittedDataClasses: [public, internal], approvalRequired: false }
+      experience_recall_status:  { riskClass: read_only,      capability: read,  egress: none, permittedDataClasses: [public, internal], approvalRequired: false }
+      record_evidence:           { riskClass: owned_mutation, capability: write, egress: none, permittedDataClasses: [public, internal], approvalRequired: false }
+      route_finding:             { riskClass: owned_mutation, capability: write, egress: none, permittedDataClasses: [public, internal], approvalRequired: false }
 
   # ---- Ambient editor tools: real but NOT interceptable by Bubbles alone ----
   host-builtin:

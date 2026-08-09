@@ -79,7 +79,9 @@ fi
 # (Snap binary yq has the `home` interface but not the `tmp` slot.)
 _resolver_tmp_base="${TMPDIR:-$HOME/.cache}"
 mkdir -p "$_resolver_tmp_base"
-TMP_DIR="$(mktemp -d -p "$_resolver_tmp_base" bubbles-mode-resolver.XXXXXX)"
+# A template inside the base directory, not `-p`: the parent-directory flag is
+# GNU-only and BSD mktemp rejects it. Every mktemp call below uses this form.
+TMP_DIR="$(mktemp -d "$_resolver_tmp_base/bubbles-mode-resolver.XXXXXX")"
 trap 'rm -rf "$TMP_DIR"' EXIT
 
 # v6.1 (S2 true split): the canonical mode registry lives in its own file
@@ -90,7 +92,11 @@ trap 'rm -rf "$TMP_DIR"' EXIT
 # unchanged: (a) selftests that pass self-contained fixtures, and (b) any
 # pre-split or downstream-transitional workflows.yaml that still embeds modes.
 if [[ -f "$MODES_FILE" ]] && ! grep -qE '^modes:' "$WORKFLOWS_FILE"; then
-  _composed_file="$(mktemp -p "$TMP_DIR" workflows-composed.XXXXXX.yaml)"
+  # BSD mktemp only substitutes TRAILING Xs, so the .yaml extension is added by
+  # renaming after creation rather than by embedding it in the template.
+  _composed_file="$(mktemp "$TMP_DIR/workflows-composed.XXXXXX")"
+  mv "$_composed_file" "$_composed_file.yaml"
+  _composed_file="$_composed_file.yaml"
   yq eval-all '. as $item ireduce ({}; . * $item)' "$WORKFLOWS_FILE" "$MODES_FILE" > "$_composed_file"
   WORKFLOWS_FILE="$_composed_file"
 fi
@@ -169,7 +175,7 @@ _merge_into() {
   local target="$1"
   local source="$2"
   local merged
-  merged="$(mktemp -p "$TMP_DIR")"
+  merged="$(mktemp "$TMP_DIR/merge.XXXXXX")"
   yq eval-all '. as $item ireduce ({}; . *+ $item)' "$target" "$source" > "$merged"
   mv "$merged" "$target"
 }
@@ -188,7 +194,7 @@ resolve_template_to_file() {
   local new_visited="${visited:+$visited,}$name"
 
   local out
-  out="$(mktemp -p "$TMP_DIR")"
+  out="$(mktemp "$TMP_DIR/template.XXXXXX")"
   echo '{}' > "$out"
 
   local inherits
@@ -208,7 +214,7 @@ resolve_template_to_file() {
   fi
 
   local own
-  own="$(mktemp -p "$TMP_DIR")"
+  own="$(mktemp "$TMP_DIR/template-own.XXXXXX")"
   yq ".modeTemplates.\"$name\" | del(.inherits)" "$WORKFLOWS_FILE" > "$own"
   _merge_into "$out" "$own"
 
@@ -221,7 +227,7 @@ resolve_mode_to_file() {
   mode_exists "$name" || die "unknown mode: $name"
 
   local out
-  out="$(mktemp -p "$TMP_DIR")"
+  out="$(mktemp "$TMP_DIR/mode.XXXXXX")"
   echo '{}' > "$out"
 
   local inherits
@@ -241,7 +247,7 @@ resolve_mode_to_file() {
   fi
 
   local own
-  own="$(mktemp -p "$TMP_DIR")"
+  own="$(mktemp "$TMP_DIR/mode-own.XXXXXX")"
   yq ".modes.\"$name\" | del(.inherits)" "$WORKFLOWS_FILE" > "$own"
   _merge_into "$out" "$own"
 
@@ -449,7 +455,7 @@ cmd_validate() {
   while IFS= read -r tname; do
     [[ -z "$tname" ]] && continue
     local err_file
-    err_file="$(mktemp -p "$TMP_DIR")"
+    err_file="$(mktemp "$TMP_DIR/template-err.XXXXXX")"
     if ! validate_template_chain_cached "$tname" "" > /dev/null 2> "$err_file"; then
       echo "FAIL: template '$tname' failed to resolve:" >&2
       cat "$err_file" >&2
@@ -464,7 +470,7 @@ cmd_validate() {
   while IFS= read -r mname; do
     [[ -z "$mname" ]] && continue
     local err_file
-    err_file="$(mktemp -p "$TMP_DIR")"
+    err_file="$(mktemp "$TMP_DIR/mode-err.XXXXXX")"
     if ! validate_mode_inherits_cached "$mname" > /dev/null 2> "$err_file"; then
       echo "FAIL: mode '$mname' failed to resolve:" >&2
       cat "$err_file" >&2

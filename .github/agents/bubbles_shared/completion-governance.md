@@ -89,6 +89,13 @@ When a workflow round, audit, harden pass, stabilize pass, security review, gap 
 - Fixing only the easy subset while narrating the remaining findings as larger, later, separate, or follow-up work is invalid.
 - The workflow and implement agents must reject responses that claim success without enumerating addressed versus unresolved findings.
 
+**Routing stays valid closure, with a boundary condition (IMP-038 SCOPE-4 / GF-3).** Routing closes a finding only when the finding is `independent` — outside the requested outcome's critical path, affecting neither the success signal nor any hard constraint. Two consequences follow:
+
+- A `routed` finding is NEVER reported in `addressedFindings`. It goes in `unresolvedFindings` with its filed artifact path, because the parent handed it to an owner rather than fixing it. An `independent` finding with no filed artifact on disk is not discharged at all.
+- A finding that prevents the success signal or violates a hard constraint cannot be routed away. In-boundary it is `required` and must be completed; out-of-boundary it is `blocking-external` and the parent BLOCKS pending an operator-approved expansion or an external repair.
+
+This is the boundary between bounded delivery and the invalid example below: bounded delivery declines work that provably does not affect the requested outcome, whereas the invalid example declines work that does. Classification is defined in [operating-baseline.md → Goal Impact](operating-baseline.md), and `independent` must survive final validation against the success signal and every hard constraint — a claim of independence that cannot be demonstrated is `blocking-external`.
+
 Invalid example:
 
 - "The timing attack is fixable now. The JWT migration is a larger change. Let me fix the timing attack."

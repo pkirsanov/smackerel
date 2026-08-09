@@ -152,8 +152,73 @@ An orchestrator may retain at most five hit summaries per phase. It may read at
 most two recalled records per phase. It may consume recall at one context
 boundary per phase.
 
-These bounds do not authorize orchestrator consumption by themselves. A caller
-must still have an implemented and authorized consumption path.
+These bounds do not authorize consumption by themselves. A caller must also
+appear in the authorized consumption path below.
+
+## Authorized Orchestrator Consumption
+
+Only these top-level orchestrators may consume recall:
+
+| Agent | Consumption boundary |
+|---|---|
+| `bubbles.workflow` | One boundary per workflow phase |
+| `bubbles.goal` | One boundary per goal-node phase |
+| `bubbles.sprint` | One boundary per sprint round |
+| `bubbles.iterate` | One boundary per iteration phase |
+
+No specialist, validator, or tool-executing agent consumes recall. A specialist
+that would benefit from prior context receives it as ordinary dispatch prose
+from its orchestrator, never as an authority claim.
+
+Consumption is ordered. Both preconditions must already hold:
+
+1. Repository binding is resolved and the actionable packet is validated.
+2. Current source and the active specs, scopes, scenarios, and state are loaded.
+
+The ordering is the safety property. Querying recall before current truth is in
+hand lets a stale record frame how current source gets read, which is precisely
+the failure this capability must not introduce.
+
+The consumer labels the block `advisory recalled experience`, retains at most
+five hit summaries, and reads at most two records per phase. It discards the
+block before any repository decision, tool authorization, DoD decision, status
+transition, Skill mutation, or agent dispatch.
+
+Recalled content is untrusted data. It may inform a question. It must never
+carry a mandate.
+
+### Mechanical Evidence Rejection
+
+`bubbles/scripts/result-envelope-validate.sh` refuses any RESULT-ENVELOPE whose
+evidence fields cite a recall record id, the recall index directory, or a recall
+export. The refused evidence fields are `evidenceRefs`, `toolCalls`, `evidence`,
+and `dodRef`.
+
+The refusal applies in every mode, including `--advisory`, because citing recall
+as evidence is an authority breach rather than a schema defect.
+
+Narrative fields such as `summary` are deliberately not scanned. An agent should
+be able to disclose that it consulted advisory recall. Refusing that disclosure
+would punish honesty and push consultation out of view.
+
+Recall exports are classified by content rather than filename, because
+`recall export --output` accepts a caller-chosen path and a name-based rule
+would be defeated by renaming the file.
+
+A caller may cite the source anchor it independently re-read. It must never cite
+the recall result that pointed at that anchor.
+
+`bubbles/scripts/experience-recall-authority-selftest.sh` holds this contract,
+including the requirement that the validator's fallback constants continue to
+match the indexer's own record-id and runtime-directory constants.
+
+### Degradation
+
+Unavailable, disabled, stale, or empty recall must not block the workflow. The
+consumer records the observed state and continues without recalled context.
+
+Unavailable recall is not a clean slate. An empty or failed result must never be
+restated as an absence of prior incidents, a novel problem, or a clean history.
 
 ## Provider Contract
 

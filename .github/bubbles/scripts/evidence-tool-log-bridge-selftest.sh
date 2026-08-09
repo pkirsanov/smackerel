@@ -46,7 +46,7 @@ EOF
 
 # 1+2. No tool-log file present.
 out_text="$(bash "$BRIDGE" "$TEST_ROOT/specs/042-foo" 2>&1 || true)"
-if echo "$out_text" | grep -q 'no tool-call log'; then
+if grep -q 'no tool-call log' <<< "$out_text"; then
   pass "1. text mode with no log reports advisory"
 else
   fail "1. text mode with no log: got '$out_text'"

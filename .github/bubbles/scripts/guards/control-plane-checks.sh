@@ -460,7 +460,7 @@ except Exception as e:
 ' "$state_file" "$feature_abs" "$guard_repo_root"
 } || true)"
 
-if echo "$tr_analysis" | grep -q '^ERR'; then
+if grep -q '^ERR' <<< "$tr_analysis"; then
   # Fall back to legacy check if state.json is malformed
   if grep -A6 '"transitionRequests"' "$state_file" | grep -qE '"TR-|"transitionRequestId"'; then
     fail "state.json still contains non-empty transitionRequests — validation routing is not complete (Gate G061)"
@@ -469,14 +469,14 @@ if echo "$tr_analysis" | grep -q '^ERR'; then
     pass "state.json transitionRequests queue is empty"
   fi
 else
-  if echo "$tr_analysis" | grep -q '^BLOCK'; then
+  if grep -q '^BLOCK' <<< "$tr_analysis"; then
     while IFS=$'\t' read -r marker tr_id status probs; do
       [[ "$marker" == "BLOCK" ]] || continue
       fail "transitionRequest $tr_id (status=$status) lacks routing fields: $probs (Gate G061)"
       pending_transition_failures=$((pending_transition_failures + 1))
     done <<< "$tr_analysis"
   fi
-  if echo "$tr_analysis" | grep -q '^OK'; then
+  if grep -q '^OK' <<< "$tr_analysis"; then
     while IFS=$'\t' read -r marker tr_id routed_to; do
       [[ "$marker" == "OK" ]] || continue
       pass "transitionRequest $tr_id is open-but-routed to '$routed_to' (Gate G061 allowance)"

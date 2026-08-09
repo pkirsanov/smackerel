@@ -27,6 +27,10 @@ commands:
       status: read_only
       freshness: read_only
       sync: owned_mutation
+      delete: owned_mutation
+      admit: owned_mutation
+      lifecycle: owned_mutation
+      export: owned_mutation
   runtime:
     defaultRiskClass: read_only
     overrides:

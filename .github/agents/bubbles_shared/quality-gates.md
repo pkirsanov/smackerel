@@ -197,9 +197,9 @@ Before any final completion claim, confirm:
 - test and evidence gates are satisfied
 - no required live-stack gaps remain
 
-## Gate Family Reference (G082–G132)
+## Gate Family Reference (G082–G133)
 
-> **Range:** the canonical gate set runs G001–G132 (G096 is burned; G101 is the
+> **Range:** the canonical gate set runs G001–G133 (G096 is burned; G101 is the
 > release-delivery reconciliation gate; G102–G109 is a reserved gap). The
 > sections above narrate the foundational gates
 > (G001–G081) by topic. This reference covers the later gate families so the
@@ -258,5 +258,8 @@ Before any final completion claim, confirm:
 
 **Claim grounding (G132)** — the mechanical half of the No Phantom References rule in [claim-grounding.md](claim-grounding.md):
 - **G132** `reference_existence_gate` — ADVISORY-UNTIL-OPT-IN phantom-reference detector. A phantom reference is a citation to a path that does not exist. It is the most damaging ungrounded claim because it READS as verified evidence and it PROPAGATES: the next agent treats it as established and builds on it. DIVISION OF LABOR: G021 verifies a claimed COMMAND ran, G072 tags HOW an evidence block supports its claim, `gate-id-grep.sh` resolves GATE ID references — none verify that a cited PATH exists. G132 owns path references. Checks relative markdown link targets, resolved against the linking file's directory. Deliberately skips external schemes, absolute paths, bare `#anchor` links, placeholder targets containing `< > { } $ *`, fenced code blocks, inline code spans, and bare backticked paths (a `.github/bubbles/...` path is often a downstream projection that correctly does not exist in a source checkout). Caller-supplied scan surface with NO default. Inline exemption `ref-ok:<reason>`; no `--skip`/`--force`/allowlist bypass. Advisory by default; blocks ONLY under `referenceExistenceGuard: block`. LIMIT: catches dead paths, not a live path whose content fails to support the claim. Enforced by `reference-existence-lint.sh`.
+
+**Test-evidence substance (G133)** — evidence that proves nothing is not evidence:
+- **G133** `collected_test_count_gate` — BLOCKING; refuses test evidence whose own output states that ZERO tests ran. This is the gap the ≥10-line raw-output rule left open: a downstream e2e suite collected no tests for 15 days while twelve spec commits recorded passing-looking evidence, because the runner exited non-zero (which reads as ordinary test failure) and raw output from a broken runner is still raw output. The missing assertion was never "is there output" but "did any test actually run". Scans ONLY text inside fenced code blocks — the fence is what separates captured runner output from prose (an earlier prose-scanning version was circular: the sentence "No tests found in this area were affected" supplied its own context word). Inside a fence, an explicit collection-zero signal from jest, playwright, pytest, go, cargo, vitest, mocha or `node --test` is a finding. The pattern set is deliberately small because generic patterns drown the signal (bare `0 total` matched jest's `Snapshots: 0 total` 354 times; bare `0 passed` matched the tail of `10 passed`). Evidence with no recognisable count is REPORTED, not failed — runner formats vary too widely for absence to be proof. RATCHET: pre-existing hits are frozen in a per-repo `<repo>/.specify/collected-test-count-guard.baseline` that the consuming repo generates with `--update-baseline`; it may shrink, never grow. No `--skip`/`--force`/`--ignore` bypass — evidence that proves nothing is fixed by re-running the suite, never by suppressing the check. Enforced by `collected-test-count-guard.sh`.
 
 - no fabricated, deferred, or contradictory claims remain

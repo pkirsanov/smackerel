@@ -8,6 +8,11 @@ if [[ "$(basename "$(dirname "$SCRIPT_DIR")")" == "bubbles" && "$(basename "$(di
 fi
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
+# Shared helpers. Needed for bubbles_ci_annotate_failure (OW-002), which turns
+# each FAIL below into a check-run annotation when running under GitHub Actions.
+# shellcheck source=guard-lib.sh
+source "$SCRIPT_DIR/guard-lib.sh"
+
 # Optional --fix: regenerate stale derived artifacts (in dependency order) BEFORE
 # running the freshness gates, so a VERSION/gate bump that staled framework-stats
 # / cheatsheet / capability-ledger-docs / release-manifest is remediated in one
@@ -39,6 +44,10 @@ run_check() {
     echo "PASS: $label"
   else
     echo "FAIL: $label"
+    # Additive, GitHub-gated (OW-002): raw job logs need admin (403), but
+    # check-run annotations are readable unauthenticated. Local output is
+    # unchanged.
+    bubbles_ci_annotate_failure "FAIL: $label"
     failures=$((failures + 1))
   fi
   echo
@@ -101,6 +110,7 @@ if [[ "$RELEASE_CHECK_FIX" -eq 1 ]]; then
     echo "PASS: derived artifacts regenerated and fresh"
   else
     echo "FAIL: regen-derived reported a still-stale artifact after regeneration"
+    bubbles_ci_annotate_failure "FAIL: regen-derived reported a still-stale artifact after regeneration"
     failures=$((failures + 1))
   fi
   echo

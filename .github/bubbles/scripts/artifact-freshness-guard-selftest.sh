@@ -135,6 +135,121 @@ else
   sed -n '1,160p' "$log2"
 fi
 
+# --- Case 3: "suppressed"/"superseded" as DOMAIN VOCABULARY inside a
+# sentence-shaped heading is NOT a freshness boundary → exit 0 ---
+#
+# Regression guard. The predicate used to match the word anywhere in a heading,
+# so a behavioural scenario titled "Only suppressed dispositions are eligible"
+# was read as "everything below this point is archived" and condemned every
+# later heading in the spec as stale.
+vocab_feature="$TMPDIR/specs/300-domain-vocabulary"
+mkdir -p "$vocab_feature"
+write_state "$vocab_feature"
+
+cat > "$vocab_feature/spec.md" <<'EOF'
+# Spec — Domain Vocabulary
+
+## BS-300-005: Only suppressed dispositions are eligible
+
+A disposition that was suppressed upstream is the only eligible input.
+
+## BS-300-006: A superseded observation is withheld
+
+An observation superseded by a later one is withheld rather than shown.
+
+## Functional Requirements
+
+These are ACTIVE requirements and must not be reported as stale.
+
+## Lifecycle
+
+Also active.
+EOF
+
+cat > "$vocab_feature/scopes.md" <<'EOF'
+# Scopes
+
+## Scope 01: Active Scope
+
+**Status:** Done
+
+### Definition of Done
+
+- [x] Behavior implemented -> Evidence: report.md#test-evidence
+EOF
+
+echo "[selftest artifact-freshness-guard] Case 3: domain vocabulary is not a boundary → exit 0"
+log3="$TMPDIR/log3.txt"
+set +e
+bash "$GUARD" "$vocab_feature" >"$log3" 2>&1
+status3=$?
+set -e
+if [[ "$status3" -eq 0 ]]; then
+  pass "sentence-shaped heading containing 'suppressed' does not trip a boundary (got $status3)"
+else
+  fail "domain vocabulary must not trip a freshness boundary (got $status3)"
+  sed -n '1,160p' "$log3"
+fi
+if grep -Fq 'active-looking heading' "$log3"; then
+  fail "no heading should be reported active-after-boundary in Case 3"
+  sed -n '1,160p' "$log3"
+else
+  pass "no active-after-boundary findings emitted for domain vocabulary"
+fi
+
+# --- Case 4 (ADVERSARIAL): a REAL section marker MUST still be detected, so
+# Case 3's narrowing cannot silently disable the check it narrows ---
+boundary_feature="$TMPDIR/specs/400-real-boundary"
+mkdir -p "$boundary_feature"
+write_state "$boundary_feature"
+
+cat > "$boundary_feature/spec.md" <<'EOF'
+# Spec — Real Boundary
+
+## Goal
+
+Ship the active feature.
+
+## Superseded Requirements
+
+Frozen history below this point.
+
+## Functional Requirements
+
+This heading is ACTIVE-looking and sits after a real boundary, so it MUST fail.
+EOF
+
+cat > "$boundary_feature/scopes.md" <<'EOF'
+# Scopes
+
+## Scope 01: Active Scope
+
+**Status:** Done
+
+### Definition of Done
+
+- [x] Behavior implemented -> Evidence: report.md#test-evidence
+EOF
+
+echo "[selftest artifact-freshness-guard] Case 4 (adversarial): real boundary still detected → exit 1"
+log4="$TMPDIR/log4.txt"
+set +e
+bash "$GUARD" "$boundary_feature" >"$log4" 2>&1
+status4=$?
+set -e
+if [[ "$status4" -ne 0 ]]; then
+  pass "a real 'Superseded Requirements' section marker still trips the boundary (got $status4)"
+else
+  fail "narrowing must not disable boundary detection for real section markers (got $status4)"
+  sed -n '1,160p' "$log4"
+fi
+if grep -Fq 'active-looking heading' "$log4"; then
+  pass "active-after-boundary violation still surfaced"
+else
+  fail "expected 'active-looking heading' in output"
+  sed -n '1,160p' "$log4"
+fi
+
 if [[ "$failures" -eq 0 ]]; then
   echo "[selftest artifact-freshness-guard] PASS"
   exit 0

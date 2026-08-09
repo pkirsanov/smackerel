@@ -62,6 +62,80 @@ workflows:
 EOF
 }
 
+# --- PCRE grep guard (adversarial) ----------------------------------------
+#
+# A grep without -P (BSD/macOS default) would make the scans return zero
+# matches and the gate would SILENTLY PASS. The guard must fail-fast (exit 2)
+# instead. Stage a stub grep that rejects -P and confirm exit 2. This would
+# regress to a false-negative exit 0 if the guard were removed.
+#
+# This case runs FIRST on purpose. It is the one assertion that needs no PCRE
+# engine, so running it before the optional-dependency gate below means a host
+# without GNU grep -- a stock macOS runner -- still proves the guard is present
+# instead of skipping the whole suite.
+
+pcre_root="$TMPDIR/repo-pcre"
+seed_repo "$pcre_root"
+
+stub_dir="$TMPDIR/stub-grep"
+mkdir -p "$stub_dir"
+real_grep="$(command -v grep)"
+cat > "$stub_dir/grep" <<EOF
+#!/usr/bin/env bash
+for a in "\$@"; do
+  [ "\$a" = "-P" ] && { echo "grep: invalid option -- P" >&2; exit 2; }
+done
+exec "$real_grep" "\$@"
+EOF
+chmod +x "$stub_dir/grep"
+
+set +e
+pcre_log="$TMPDIR/pcre.log"
+BUBBLES_GREP="$stub_dir/grep" bash "$TARGET" --repo-root "$pcre_root" >"$pcre_log" 2>&1
+pcre_rc=$?
+set -e
+
+if [[ "$pcre_rc" -eq 2 ]]; then
+  pass "missing grep -P fail-fasts with exit 2 (no silent pass)"
+else
+  fail "missing grep -P expected exit 2, got $pcre_rc"
+  sed -n '1,40p' "$pcre_log"
+fi
+
+if grep -Fq "requires GNU grep with PCRE (-P) support" "$pcre_log"; then
+  pass "missing grep -P prints the PCRE guard message"
+else
+  fail "missing grep -P did not print the PCRE guard message"
+  sed -n '1,40p' "$pcre_log"
+fi
+
+# --- Optional-dependency gate --------------------------------------------
+#
+# Every fixture assertion below runs the target's real scans, and those scans
+# need a PCRE-capable grep. Stock macOS ships BSD grep, which has none, so on
+# such a host the target correctly refuses with exit 2 and all twelve fixture
+# assertions fail against expectations of 0 and 1. That is the dependency being
+# absent, not the gate being broken.
+#
+# Gate the ASSERTIONS that need the dependency, never the whole suite: the
+# adversarial guard case above has already run, so a removed guard is still
+# caught here on a host with no PCRE engine. This follows the same graceful
+# degradation the framework uses for its other optional dependencies.
+if printf 'x\n' | grep -P 'x' >/dev/null 2>&1; then
+  : # system grep provides the engine
+elif command -v ggrep >/dev/null 2>&1 && printf 'x\n' | ggrep -P 'x' >/dev/null 2>&1; then
+  : # GNU grep installed alongside BSD grep (Homebrew or MacPorts)
+else
+  echo "  SKIP: fixture scans (no PCRE-capable grep; install GNU grep to run them)"
+  echo
+  if [[ "$failures" -eq 0 ]]; then
+    echo "[selftest gate-id-grep] SKIP — PCRE guard verified; fixture scans need a PCRE-capable grep"
+    exit 0
+  fi
+  echo "[selftest gate-id-grep] FAIL — $failures assertion(s) failed"
+  exit 1
+fi
+
 # --- Clean fixture --------------------------------------------------------
 
 clean_root="$TMPDIR/repo-clean"
@@ -216,48 +290,6 @@ if grep -Fq "FINDING: unknown-gate-id:" "$unk_strict_log" \
 else
   fail "unknown strict missing unknown-gate-id G099 finding"
   sed -n '1,40p' "$unk_strict_log"
-fi
-
-# --- PCRE grep guard (adversarial) ----------------------------------------
-#
-# A grep without -P (BSD/macOS default) would make the scans return zero
-# matches and the gate would SILENTLY PASS. The guard must fail-fast (exit 2)
-# instead. Stage a stub grep that rejects -P and confirm exit 2. This would
-# regress to a false-negative exit 0 if the guard were removed.
-
-pcre_root="$TMPDIR/repo-pcre"
-seed_repo "$pcre_root"
-
-stub_dir="$TMPDIR/stub-grep"
-mkdir -p "$stub_dir"
-real_grep="$(command -v grep)"
-cat > "$stub_dir/grep" <<EOF
-#!/usr/bin/env bash
-for a in "\$@"; do
-  [ "\$a" = "-P" ] && { echo "grep: invalid option -- P" >&2; exit 2; }
-done
-exec "$real_grep" "\$@"
-EOF
-chmod +x "$stub_dir/grep"
-
-set +e
-pcre_log="$TMPDIR/pcre.log"
-BUBBLES_GREP="$stub_dir/grep" bash "$TARGET" --repo-root "$pcre_root" >"$pcre_log" 2>&1
-pcre_rc=$?
-set -e
-
-if [[ "$pcre_rc" -eq 2 ]]; then
-  pass "missing grep -P fail-fasts with exit 2 (no silent pass)"
-else
-  fail "missing grep -P expected exit 2, got $pcre_rc"
-  sed -n '1,40p' "$pcre_log"
-fi
-
-if grep -Fq "requires GNU grep with PCRE (-P) support" "$pcre_log"; then
-  pass "missing grep -P prints the PCRE guard message"
-else
-  fail "missing grep -P did not print the PCRE guard message"
-  sed -n '1,40p' "$pcre_log"
 fi
 
 # --- Summary --------------------------------------------------------------

@@ -13,7 +13,9 @@ fi
 
 WORKSPACE_BASE="${HOME:-.}/.cache"
 mkdir -p "$WORKSPACE_BASE"
-WORKSPACE="$(mktemp -d -p "$WORKSPACE_BASE" bubbles-g093-selftest-XXXXXXXX)"
+# A template inside the base directory, not `-p`: the parent-directory flag is
+# GNU-only and BSD mktemp rejects it, which took this selftest down on macOS.
+WORKSPACE="$(mktemp -d "$WORKSPACE_BASE/bubbles-g093-selftest-XXXXXXXX")"
 cleanup() {
   rm -rf "$WORKSPACE" 2>/dev/null || true
 }

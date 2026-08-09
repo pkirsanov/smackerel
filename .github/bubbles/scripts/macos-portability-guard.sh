@@ -276,6 +276,20 @@ report "class-13 date-nanoseconds" \
       'bubbles_now_ms')" \
   "use bubbles_now_ms (numeric-guards the %N and falls back to seconds)"
 
+# 14. mktemp -p / --tmpdir — GNU-only parent-directory flag; BSD mktemp rejects
+#     it outright. The flag run is walked so a short-form cluster (-dp) is caught
+#     and a path that merely contains "-p" is not.
+report "class-14 mktemp-parent-dir" \
+  "$(scan_class 'mktemp[[:space:]]+(-[^[:space:]]+[[:space:]]+)*(-[[:alnum:]]*p([^[:alnum:]]|$)|--tmpdir)')" \
+  'put the directory in the template instead: mktemp -d "$dir/run.XXXXXX"'
+
+# 15. mktemp template carrying characters after the X run — BSD mktemp
+#     substitutes TRAILING Xs only, so the extension survives and the literal Xs
+#     land in the filename instead of failing loud.
+report "class-15 mktemp-nontrailing-x" \
+  "$(scan_class "mktemp[[:space:]].*X{6,}[^X\"'[:space:])|;&]")" \
+  'end the template with the X run, then rename to add the extension'
+
 echo
 if [[ "$violations" -gt 0 ]]; then
   echo "FAIL: $violations macOS-portability construct class(es) found in the scanned surface."

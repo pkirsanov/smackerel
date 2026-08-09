@@ -126,9 +126,10 @@ write_transition_block() {
   local failed_gates="${10}"
   local failed_checks="${11}"
   local blocking_code="${12}"
-  local failure_count="${13}"
-  local exit_status="${14}"
-  local verdict="${15}"
+  local parent_expanded="${13}"
+  local failure_count="${14}"
+  local exit_status="${15}"
+  local verdict="${16}"
   cat > "$file" <<EOF
 BEGIN TRANSITION_GUARD_RESULT_V1
 schemaVersion: transition-guard-result/v1
@@ -143,6 +144,7 @@ passedGateIds: $passed_gates
 failedGateIds: $failed_gates
 failedChecks: $failed_checks
 blockingCode: $blocking_code
+parentExpandedPhases: $parent_expanded
 failureCount: $failure_count
 exitStatus: $exit_status
 verdict: $verdict
@@ -250,7 +252,7 @@ write_planning_clean() {
   mkdir -p "$case_dir"
   attempt="$(attempt_json attempt-clean ACTIVE "$REVISION" "$DIGEST" planning-maturity-v1 specs_hardened PLANNING_AUDIT_CLEAN completed_diagnostic report.md#audit-attempt-clean '[]' '[]')"
   write_state "$target" run-clean '"attempt-clean"' "[$attempt]"
-  write_transition_block "$result" product-to-planning planning-maturity-v1 specs_hardened "$DIGEST" "$REVISION" '[universal,planning-maturity]' '[Check-4-completion,Check-5-all-done,Check-8-file-existence,Check-11-execution-evidence]' '[G040,G068,G073,G087,G091]' '[]' '[]' none 0 0 PASS
+  write_transition_block "$result" product-to-planning planning-maturity-v1 specs_hardened "$DIGEST" "$REVISION" '[universal,planning-maturity]' '[Check-4-completion,Check-5-all-done,Check-8-file-existence,Check-11-execution-evidence]' '[G040,G068,G073,G087,G091]' '[]' '[]' none 2 0 0 PASS
   append_human_view "$result" "$target" product-to-planning planning-maturity specs_hardened PLANNING_AUDIT_CLEAN
   cat >> "$result" <<'EOF'
 planning: planning ceiling certified
@@ -268,7 +270,7 @@ write_planning_rework() {
   mkdir -p "$case_dir"
   attempt="$(attempt_json attempt-rework ACTIVE "$REVISION" "$DIGEST" planning-maturity-v1 specs_hardened PLANNING_REWORK_REQUIRED route_required report.md#audit-attempt-rework '[]' '["F009-G068"]')"
   write_state "$target" run-rework '"attempt-rework"' "[$attempt]"
-  write_transition_block "$result" product-to-planning planning-maturity-v1 specs_hardened "$DIGEST" "$REVISION" '[universal,planning-maturity]' '[Check-4-completion,Check-5-all-done,Check-8-file-existence,Check-11-execution-evidence]' '[G040,G073,G087,G091]' '[G068]' '[]' TRANSITION_GUARD_FAILED 1 1 FAIL
+  write_transition_block "$result" product-to-planning planning-maturity-v1 specs_hardened "$DIGEST" "$REVISION" '[universal,planning-maturity]' '[Check-4-completion,Check-5-all-done,Check-8-file-existence,Check-11-execution-evidence]' '[G040,G073,G087,G091]' '[G068]' '[]' TRANSITION_GUARD_FAILED 0 1 1 FAIL
   append_human_view "$result" "$target" product-to-planning planning-maturity specs_hardened PLANNING_REWORK_REQUIRED
   cat >> "$result" <<'EOF'
 planning: planning rework required
@@ -287,7 +289,7 @@ write_delivery_refusal() {
   mkdir -p "$case_dir"
   attempt="$(attempt_json attempt-delivery ACTIVE "$REVISION" "$DIGEST" delivery-completion-v1 "done" DO_NOT_SHIP route_required report.md#audit-attempt-delivery '[]' '["F009-DELIVERY"]')"
   write_state "$target" run-delivery '"attempt-delivery"' "[$attempt]"
-  write_transition_block "$result" full-delivery delivery-completion-v1 "done" "$DIGEST" "$REVISION" '[universal,delivery-completion]' '[]' '[G073]' '[]' '[Check-4-completion,Check-5-all-done,Check-8-file-existence,Check-11-execution-evidence]' TRANSITION_GUARD_FAILED 4 1 FAIL
+  write_transition_block "$result" full-delivery delivery-completion-v1 "done" "$DIGEST" "$REVISION" '[universal,delivery-completion]' '[]' '[G073]' '[]' '[Check-4-completion,Check-5-all-done,Check-8-file-existence,Check-11-execution-evidence]' TRANSITION_GUARD_FAILED 0 4 1 FAIL
   append_human_view "$result" "$target" full-delivery delivery-completion "done" DO_NOT_SHIP
   cat >> "$result" <<'EOF'
 planning: not separately certified
@@ -305,7 +307,7 @@ write_metadata_blocked() {
   mkdir -p "$case_dir"
   attempt="$(attempt_json attempt-metadata ACTIVE UNRESOLVED UNRESOLVED UNRESOLVED UNRESOLVED BLOCKED blocked report.md#audit-attempt-metadata '[]' '["F009-METADATA"]')"
   write_state "$target" run-metadata '"attempt-metadata"' "[$attempt]"
-  write_transition_block "$result" UNRESOLVED UNRESOLVED UNRESOLVED UNRESOLVED UNRESOLVED '[]' '[]' '[]' '[]' '[contract-resolution]' E009-MODE-UNKNOWN 1 2 BLOCKED
+  write_transition_block "$result" UNRESOLVED UNRESOLVED UNRESOLVED UNRESOLVED UNRESOLVED '[]' '[]' '[]' '[]' '[contract-resolution]' E009-MODE-UNKNOWN 0 1 2 BLOCKED
   append_human_view "$result" "$target" UNRESOLVED UNRESOLVED UNRESOLVED BLOCKED
   cat >> "$result" <<'EOF'
 planning: not evaluated
@@ -323,7 +325,7 @@ write_source_lockout() {
   mkdir -p "$case_dir"
   attempt="$(attempt_json attempt-lockout ACTIVE "$REVISION" "$DIGEST" planning-maturity-v1 specs_hardened BLOCKED blocked report.md#audit-attempt-lockout '[]' '["F009-G073"]')"
   write_state "$target" run-lockout '"attempt-lockout"' "[$attempt]"
-  write_transition_block "$result" product-to-planning planning-maturity-v1 specs_hardened "$DIGEST" "$REVISION" '[universal,planning-maturity]' '[Check-4-completion,Check-5-all-done,Check-8-file-existence,Check-11-execution-evidence]' '[]' '[G073]' '[source-edit-lockout]' TRANSITION_GUARD_FAILED 1 1 FAIL
+  write_transition_block "$result" product-to-planning planning-maturity-v1 specs_hardened "$DIGEST" "$REVISION" '[universal,planning-maturity]' '[Check-4-completion,Check-5-all-done,Check-8-file-existence,Check-11-execution-evidence]' '[]' '[G073]' '[source-edit-lockout]' TRANSITION_GUARD_FAILED 0 1 1 FAIL
   append_human_view "$result" "$target" product-to-planning planning-maturity specs_hardened BLOCKED
   cat >> "$result" <<'EOF'
 planning: not evaluated
@@ -344,7 +346,7 @@ write_interrupted() {
   prior="$(attempt_json attempt-prior SUPERSEDED "$REVISION" "$DIGEST" planning-maturity-v1 specs_hardened PLANNING_REWORK_REQUIRED route_required report.md#audit-attempt-prior '[]' '["F009-OPEN"]')"
   current="$(attempt_json attempt-interrupted INCOMPLETE "$REVISION" "$DIGEST" planning-maturity-v1 specs_hardened INTERRUPTED blocked none '[]' '["F009-OPEN"]')"
   write_state "$target" run-interrupted null "[$prior,$current]"
-  write_transition_block "$result" product-to-planning planning-maturity-v1 specs_hardened "$DIGEST" "$REVISION" '[universal,planning-maturity]' '[Check-4-completion,Check-5-all-done,Check-8-file-existence,Check-11-execution-evidence]' '[G040,G068,G073,G087,G091]' '[]' '[]' none 0 0 PASS
+  write_transition_block "$result" product-to-planning planning-maturity-v1 specs_hardened "$DIGEST" "$REVISION" '[universal,planning-maturity]' '[Check-4-completion,Check-5-all-done,Check-8-file-existence,Check-11-execution-evidence]' '[G040,G068,G073,G087,G091]' '[]' '[]' none 0 0 0 PASS
   append_human_view "$result" "$target" product-to-planning planning-maturity specs_hardened INTERRUPTED
   cat >> "$result" <<'EOF'
 planning: not evaluated
@@ -365,7 +367,7 @@ write_rework_closed() {
   prior="$(attempt_json attempt-old SUPERSEDED "$REVISION" "$DIGEST" planning-maturity-v1 specs_hardened PLANNING_REWORK_REQUIRED route_required report.md#audit-attempt-old '[]' '["F009-CLOSED"]')"
   current="$(attempt_json attempt-new ACTIVE "$REVISION" "$DIGEST" planning-maturity-v1 specs_hardened PLANNING_AUDIT_CLEAN completed_diagnostic report.md#audit-attempt-new '["F009-CLOSED"]' '[]')"
   write_state "$target" run-rework-closed '"attempt-new"' "[$prior,$current]"
-  write_transition_block "$result" product-to-planning planning-maturity-v1 specs_hardened "$DIGEST" "$REVISION" '[universal,planning-maturity]' '[Check-4-completion,Check-5-all-done,Check-8-file-existence,Check-11-execution-evidence]' '[G040,G068,G073,G087,G091]' '[]' '[]' none 0 0 PASS
+  write_transition_block "$result" product-to-planning planning-maturity-v1 specs_hardened "$DIGEST" "$REVISION" '[universal,planning-maturity]' '[Check-4-completion,Check-5-all-done,Check-8-file-existence,Check-11-execution-evidence]' '[G040,G068,G073,G087,G091]' '[]' '[]' none 0 0 0 PASS
   append_human_view "$result" "$target" product-to-planning planning-maturity specs_hardened PLANNING_AUDIT_CLEAN
   cat >> "$result" <<'EOF'
 planning: planning ceiling certified
@@ -430,6 +432,10 @@ MALFORMED="$WORKSPACE/malformed.txt"
 mutate_result "$PLANNING_CLEAN/result.txt" "$MALFORMED" 's/^passedGateIds: \[G040,G068,G073,G087,G091\]$/passedGateIds: G040,G068/'
 run_fail 'malformed collection is rejected' "$MALFORMED" 'collection syntax'
 
+PARENT_EXPANDED="$WORKSPACE/parent-expanded.txt"
+mutate_result "$PLANNING_CLEAN/result.txt" "$PARENT_EXPANDED" 's/^parentExpandedPhases: 2$/parentExpandedPhases: banana/'
+run_fail 'non-numeric guard parentExpandedPhases is rejected' "$PARENT_EXPANDED" 'guard parentExpandedPhases must be numeric'
+
 SHIPMENT="$WORKSPACE/shipment.txt"
 awk '/^BEGIN AUDIT_RESULT_V1$/ { print "workflow action: approved for merge and shipped" } { print }' "$PLANNING_CLEAN/result.txt" > "$SHIPMENT"
 run_fail 'planning shipment language is rejected' "$SHIPMENT" 'shipment or positive delivery language'
@@ -460,7 +466,7 @@ mutate_result "$DELIVERY_REFUSAL/result.txt" "$DELIVERY_DRIFT" 's/^deliveryEvalu
 run_fail 'delivery verdict drift is rejected' "$DELIVERY_DRIFT" 'delivery refusal field combination is inconsistent'
 
 COLOR="$WORKSPACE/color.txt"
-awk 'NR == 18 { printf "\033[31m" } { print }' "$PLANNING_CLEAN/result.txt" > "$COLOR"
+awk 'NR == 19 { printf "\033[31m" } { print }' "$PLANNING_CLEAN/result.txt" > "$COLOR"
 run_fail 'ANSI/color output is rejected' "$COLOR" 'non-ASCII, control, color'
 
 MULTI_ACTIVE="$WORKSPACE/multiple-active"

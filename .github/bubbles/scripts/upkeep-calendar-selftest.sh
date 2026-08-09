@@ -20,7 +20,7 @@ trap 'rm -rf "$TMP"' EXIT
 
 # 1. Missing calendar → exits 0 with skip message
 output="$("$CAL" "$TMP" </dev/null 2>&1)"
-echo "$output" | grep -q "no upkeep tasks configured" && echo "PASS: missing calendar handled" || { echo "FAIL: missing calendar handling" >&2; echo "$output" >&2; exit 1; }
+grep -q "no upkeep tasks configured" <<< "$output" && echo "PASS: missing calendar handled" || { echo "FAIL: missing calendar handling" >&2; echo "$output" >&2; exit 1; }
 
 # 2. Calendar present + no ledger → all DUE
 rm -rf "$TMP" && mkdir -p "$TMP/config"
@@ -33,7 +33,7 @@ tasks:
     cadence: quarterly
 EOF
 output="$(UPKEEP_LEDGER="$TMP/no-ledger.jsonl" "$CAL" "$TMP" </dev/null 2>&1)"
-if echo "$output" | grep -q "backup.*DUE" && echo "$output" | grep -q "bcdr-drill.*DUE"; then
+if grep -q "backup.*DUE" <<< "$output" && grep -q "bcdr-drill.*DUE" <<< "$output"; then
   echo "PASS: tasks marked DUE when no ledger"
 else
   echo "FAIL: tasks not marked DUE when no ledger" >&2
@@ -45,7 +45,7 @@ fi
 NOW_ISO="$(date -u +%FT%TZ)"
 printf '{"task":"backup","outcome":"success","finished_at":"%s"}\n' "$NOW_ISO" > "$TMP/ledger.jsonl"
 output="$(UPKEEP_LEDGER="$TMP/ledger.jsonl" "$CAL" "$TMP" </dev/null 2>&1)"
-if echo "$output" | grep -q "backup.*ok"; then
+if grep -q "backup.*ok" <<< "$output"; then
   echo "PASS: recent backup marked ok"
 else
   echo "FAIL: recent backup not marked ok" >&2

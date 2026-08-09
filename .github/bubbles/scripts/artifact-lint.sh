@@ -662,14 +662,14 @@ if [[ -f "$state_file" ]]; then
 
     # Check completedScopes is array of strings (not numbers)
     if [[ -n "$state_completed_scopes_block" ]]; then
-      if echo "$state_completed_scopes_block" | grep -Eq '\[[[:space:]]*[0-9]'; then
+      if grep -Eq '\[[[:space:]]*[0-9]' <<< "$state_completed_scopes_block"; then
         warn "state.json completedScopes contains numbers — canonical schema requires string scope identifiers"
       fi
     fi
 
     # Check completed phases / claims are array of strings (not objects)
     if [[ -n "$state_completed_phases_block" ]]; then
-      if echo "$state_completed_phases_block" | grep -q '"completedAt"'; then
+      if grep -q '"completedAt"' <<< "$state_completed_phases_block"; then
         warn "state.json completion phase block uses legacy object format — supported for compatibility; prefer simple string entries in new state files"
       fi
     fi
@@ -683,7 +683,7 @@ if [[ -f "$state_file" ]]; then
     if [[ "$state_workflow_mode" == "full-delivery" ]] && [[ "$state_status" == "done" ]]; then
       strict_required_phases=("validate" "audit" "chaos")
       for strict_phase in "${strict_required_phases[@]}"; do
-        if echo "$state_completed_phases_block" | grep -Eq "\"$strict_phase\""; then
+        if grep -Eq "\"$strict_phase\"" <<< "$state_completed_phases_block"; then
           pass "Strict mode completedPhases includes '$strict_phase'"
         else
           fail "$state_workflow_mode done status requires completedPhases to include '$strict_phase'"
@@ -732,7 +732,7 @@ if [[ -f "$state_file" ]]; then
       # Cross-check completedScopes array in state.json
       state_completed_scopes="$state_completed_scopes_block"
 
-      if [[ "$done_scopes" -gt 0 ]] && echo "$state_completed_scopes" | grep -qE '\[\s*\]'; then
+      if [[ "$done_scopes" -gt 0 ]] && grep -qE '\[\s*\]' <<< "$state_completed_scopes"; then
         fail "scopes.md shows $done_scopes Done scope(s) but state.json completedScopes is empty — INCONSISTENCY"
       fi
     fi
@@ -778,7 +778,7 @@ if [[ -f "$state_file" ]]; then
       if [[ ${#mode_required_specialists[@]} -gt 0 ]]; then
         missing_specialist_count=0
         for sp in "${mode_required_specialists[@]}"; do
-          if echo "$state_completed_phases_block" | grep -qE "\"$sp\""; then
+          if grep -qE "\"$sp\"" <<< "$state_completed_phases_block"; then
             pass "Required specialist phase '$sp' found in execution/certification phase records"
           else
             fail "Required specialist phase '$sp' missing from execution/certification phase records (Gate G022 — FABRICATION)"
@@ -796,8 +796,8 @@ if [[ -f "$state_file" ]]; then
     # ============================================================
     if [[ "$state_status" == "done" ]]; then
       spec_review_required_modes="improve-existing|reconcile-to-doc|redesign-existing|full-delivery"
-      if echo "$state_workflow_mode" | grep -qE "^($spec_review_required_modes)$"; then
-        if echo "$state_completed_phases_block" | grep -qE '"spec-review"'; then
+      if grep -qE "^($spec_review_required_modes)$" <<< "$state_workflow_mode"; then
+        if grep -qE '"spec-review"' <<< "$state_completed_phases_block"; then
           pass "Spec-review phase recorded for legacy-improvement mode '$state_workflow_mode'"
         else
           fail "Legacy-improvement mode '$state_workflow_mode' requires spec-review phase but 'spec-review' is NOT in completed phases"
@@ -871,10 +871,10 @@ if [[ -f "$state_file" ]]; then
       # Check if implementation phases are claimed
       has_implement_phase="false"
       has_test_phase="false"
-      if echo "$state_completed_phases_block" | grep -qE '"implement"'; then
+      if grep -qE '"implement"' <<< "$state_completed_phases_block"; then
         has_implement_phase="true"
       fi
-      if echo "$state_completed_phases_block" | grep -qE '"test"'; then
+      if grep -qE '"test"' <<< "$state_completed_phases_block"; then
         has_test_phase="true"
       fi
 
@@ -1006,7 +1006,7 @@ if [[ -f "$state_file" ]]; then
     ' "$state_file"
   } || true)"
 
-  if [[ -n "$notebook_dependency_block" ]] && echo "$notebook_dependency_block" | grep -q '"notebookCorpusDependencyMap"'; then
+  if [[ -n "$notebook_dependency_block" ]] && grep -q '"notebookCorpusDependencyMap"' <<< "$notebook_dependency_block"; then
     pass "Detected notebookCorpusDependencyMap in state.json"
 
     notebook_dependency_refs="$({
@@ -1077,7 +1077,7 @@ if [[ -f "$state_file" ]]; then
     ' "$state_file"
   } || true)"
 
-  if [[ -n "$transcript_dependency_block" ]] && echo "$transcript_dependency_block" | grep -q '"transcriptDependencyMap"'; then
+  if [[ -n "$transcript_dependency_block" ]] && grep -q '"transcriptDependencyMap"' <<< "$transcript_dependency_block"; then
     pass "Detected transcriptDependencyMap in state.json"
 
     transcript_dependency_refs="$({
@@ -1236,19 +1236,19 @@ if [[ -f "$report_file" ]]; then
         continue
       fi
 
-      if echo "$strict_section_content" | grep -Eq '^\*\*Executed:\*\* YES'; then
+      if grep -Eq '^\*\*Executed:\*\* YES' <<< "$strict_section_content"; then
         pass "Strict section '$strict_section' includes Executed: YES"
       else
         fail "$state_workflow_mode done status requires '**Executed:** YES' in section '$strict_section'"
       fi
 
-      if echo "$strict_section_content" | grep -Eq '^\*\*Command:\*\* '; then
+      if grep -Eq '^\*\*Command:\*\* ' <<< "$strict_section_content"; then
         pass "Strict section '$strict_section' includes command evidence"
       else
         fail "$state_workflow_mode done status requires '**Command:**' evidence in section '$strict_section'"
       fi
 
-      if echo "$strict_section_content" | grep -Eq "^\*\*Phase Agent:\*\* .*${strict_agent}"; then
+      if grep -Eq "^\*\*Phase Agent:\*\* .*${strict_agent}" <<< "$strict_section_content"; then
         pass "Strict section '$strict_section' includes phase agent marker '${strict_agent}'"
       else
         fail "$state_workflow_mode done status requires '**Phase Agent:** ${strict_agent}' marker in section '$strict_section'"
@@ -1347,14 +1347,14 @@ for scope_path in "${scope_files[@]}"; do
   [[ -f "$scope_path" ]] || continue
   checked_items_without_evidence=0
   while IFS= read -r line; do
-    if echo "$line" | grep -qiE '(→[[:space:]]*Evidence:|Evidence:)'; then
+    if grep -qiE '(→[[:space:]]*Evidence:|Evidence:)' <<< "$line"; then
       continue
     fi
 
     item_line_num="$({ grep -nF -- "$line" "$scope_path" | head -1 | cut -d: -f1; } || true)"
     if [[ -n "$item_line_num" ]]; then
       next_lines="$({ sed -n "$((item_line_num+1)),$((item_line_num+15))p" "$scope_path"; } || true)"
-      if echo "$next_lines" | grep -qiE '(Executed:|Command:|Evidence|```|Exit Code:)'; then
+      if grep -qiE '(Executed:|Command:|Evidence|```|Exit Code:)' <<< "$next_lines"; then
         :
       else
         checked_items_without_evidence=$((checked_items_without_evidence + 1))
@@ -1410,11 +1410,11 @@ if [[ -n "$_project_cli" ]]; then
     bypass_commands=""
     while IFS= read -r line; do
       # Match **Command:** `...` lines and extract the command
-      if echo "$line" | grep -qE '^\*\*Command:\*\*'; then
+      if grep -qE '^\*\*Command:\*\*' <<< "$line"; then
         cmd_text="$(echo "$line" | sed -n 's/.*`\(.*\)`.*/\1/p')"
         [[ -z "$cmd_text" ]] && continue
         # Check for forbidden direct tool invocations (must use the project CLI)
-        if echo "$cmd_text" | grep -qE '^(go test|go build|go run|cargo test|cargo build|cargo clippy|npm test|npm run|npx jest|npx playwright|node |python |python3 |docker compose|docker-compose)'; then
+        if grep -qE '^(go test|go build|go run|cargo test|cargo build|cargo clippy|npm test|npm run|npx jest|npx playwright|node |python |python3 |docker compose|docker-compose)' <<< "$cmd_text"; then
           bypass_commands="${bypass_commands}   -> $(basename "$current_report_file"): ${cmd_text}"$'\n'
         fi
       fi
@@ -1523,14 +1523,14 @@ if [[ -f "$current_report_file" ]] && [[ "$state_status" == "done" ]]; then
       prev_line="$line"
       continue
     fi
-    if [[ "$in_code_block" -eq 0 ]] && echo "$line" | grep -qE '^```'; then
+    if [[ "$in_code_block" -eq 0 ]] && grep -qE '^```' <<< "$line"; then
       in_code_block=1
       code_block_lines=0
       code_block_content=""
       code_block_header="$prev_line"
       code_block_skip=$in_skip_region
       code_block_prewindow=$in_pre_window
-    elif [[ "$in_code_block" -eq 1 ]] && echo "$line" | grep -qE '^```$'; then
+    elif [[ "$in_code_block" -eq 1 ]] && grep -qE '^```$' <<< "$line"; then
       in_code_block=0
       evidence_sections_checked=$((evidence_sections_checked + 1))
 
@@ -1557,42 +1557,42 @@ if [[ -f "$current_report_file" ]] && [[ "$state_status" == "done" ]]; then
         terminal_signals=0
 
         # Test runner output patterns
-        if echo "$code_block_content" | grep -qiE '(passed|failed|ok$| PASS | FAIL |test result:|Tests:.*suites|✓|✗|PASSED|FAILED)'; then
+        if grep -qiE '(passed|failed|ok$| PASS | FAIL |test result:|Tests:.*suites|✓|✗|PASSED|FAILED)' <<< "$code_block_content"; then
           terminal_signals=$((terminal_signals + 1))
         fi
 
         # Exit/status/compiler patterns
-        if echo "$code_block_content" | grep -qiE '(exit code|Exit Code:|error\[|warning\[|Compiling |Finished |error:|warning:|WARN |ERROR |INFO )'; then
+        if grep -qiE '(exit code|Exit Code:|error\[|warning\[|Compiling |Finished |error:|warning:|WARN |ERROR |INFO )' <<< "$code_block_content"; then
           terminal_signals=$((terminal_signals + 1))
         fi
 
         # File paths with extensions (e.g., src/foo.rs, tests/bar.py, ./path/to/file)
-        if echo "$code_block_content" | grep -qE '([a-zA-Z0-9_-]+/[a-zA-Z0-9_.-]+\.(rs|py|ts|tsx|js|go|sh|sql|toml|yaml|json|proto|md)|\./)'; then
+        if grep -qE '([a-zA-Z0-9_-]+/[a-zA-Z0-9_.-]+\.(rs|py|ts|tsx|js|go|sh|sql|toml|yaml|json|proto|md)|\./)' <<< "$code_block_content"; then
           terminal_signals=$((terminal_signals + 1))
         fi
 
         # Timing/duration/metric patterns
-        if echo "$code_block_content" | grep -qiE '(in [0-9]+(\.[0-9]+)?(s|ms|m)|elapsed|finished in|Duration|[0-9]+\.[0-9]+s$)'; then
+        if grep -qiE '(in [0-9]+(\.[0-9]+)?(s|ms|m)|elapsed|finished in|Duration|[0-9]+\.[0-9]+s$)' <<< "$code_block_content"; then
           terminal_signals=$((terminal_signals + 1))
         fi
 
         # Build tool / test framework names
-        if echo "$code_block_content" | grep -qiE '(cargo |npm |pytest|go test|jest |playwright|vitest|running [0-9]+ test|test result:)'; then
+        if grep -qiE '(cargo |npm |pytest|go test|jest |playwright|vitest|running [0-9]+ test|test result:)' <<< "$code_block_content"; then
           terminal_signals=$((terminal_signals + 1))
         fi
 
         # Count/summary patterns (e.g., "12 passed", "0 failed", "3 errors")
-        if echo "$code_block_content" | grep -qE '[0-9]+ (passed|failed|errors?|warnings?|skipped|ignored|tests?)'; then
+        if grep -qE '[0-9]+ (passed|failed|errors?|warnings?|skipped|ignored|tests?)' <<< "$code_block_content"; then
           terminal_signals=$((terminal_signals + 1))
         fi
 
         # HTTP/curl patterns
-        if echo "$code_block_content" | grep -qiE '(HTTP/|status.*[0-9]{3}|curl |GET /|POST /|PUT /|DELETE /|Content-Type)'; then
+        if grep -qiE '(HTTP/|status.*[0-9]{3}|curl |GET /|POST /|PUT /|DELETE /|Content-Type)' <<< "$code_block_content"; then
           terminal_signals=$((terminal_signals + 1))
         fi
 
         # grep/ls/filesystem output patterns
-        if echo "$code_block_content" | grep -qE '(^[dl-][rwx-]{9} |^[0-9]+:|^\$ |^> )'; then
+        if grep -qE '(^[dl-][rwx-]{9} |^[0-9]+:|^\$ |^> )' <<< "$code_block_content"; then
           terminal_signals=$((terminal_signals + 1))
         fi
 
@@ -1664,7 +1664,7 @@ if [[ -f "$current_report_file" ]] && [[ "$state_status" == "done" ]]; then
     fi
     [[ "$in_code" -eq 1 ]] && continue
     [[ "$line" =~ ^# ]] && continue
-    if echo "$line" | grep -iqE '(all tests pass|everything works|no issues found|verified successfully|confirmed working|tests are green|builds successfully|all checks pass)'; then
+    if grep -iqE '(all tests pass|everything works|no issues found|verified successfully|confirmed working|tests are green|builds successfully|all checks pass)' <<< "$line"; then
       summary_phrases+="   -> ${line}"$'\n'
     fi
   done < "$current_report_file"
@@ -1701,7 +1701,7 @@ if [[ -f "$state_file" ]] && [[ "$state_status" == "done" ]] && [[ -n "$state_wo
 
   if [[ ${#required_specialists[@]} -gt 0 ]]; then
     for specialist_phase in "${required_specialists[@]}"; do
-      if echo "$state_completed_phases_block" | grep -qE "\"$specialist_phase\""; then
+      if grep -qE "\"$specialist_phase\"" <<< "$state_completed_phases_block"; then
         pass "Required specialist phase '$specialist_phase' recorded in execution/certification phase records"
       else
         fail "Required specialist phase '$specialist_phase' NOT in execution/certification phase records (Gate G022 violation)"
@@ -1713,8 +1713,8 @@ fi
 # Check 5B: Spec review enforcement for legacy-improvement modes
 if [[ -f "$state_file" ]] && [[ "$state_status" == "done" ]] && [[ -n "$state_workflow_mode" ]]; then
   spec_review_required="improve-existing|reconcile-to-doc|redesign-existing|full-delivery"
-  if echo "$state_workflow_mode" | grep -qE "^($spec_review_required)$"; then
-    if echo "$state_completed_phases_block" | grep -qE '"spec-review"'; then
+  if grep -qE "^($spec_review_required)$" <<< "$state_workflow_mode"; then
+    if grep -qE '"spec-review"' <<< "$state_completed_phases_block"; then
       pass "Spec-review phase recorded for '$state_workflow_mode' (specReview enforcement)"
     else
       fail "'$state_workflow_mode' done status requires spec-review phase but 'spec-review' NOT in completed phases"
@@ -1729,10 +1729,10 @@ for scope_path in "${scope_files[@]}"; do
   in_evidence=0
   current_evidence=""
   while IFS= read -r line; do
-    if [[ "$in_evidence" -eq 0 ]] && echo "$line" | grep -qE '^    ```'; then
+    if [[ "$in_evidence" -eq 0 ]] && grep -qE '^    ```' <<< "$line"; then
       in_evidence=1
       current_evidence=""
-    elif [[ "$in_evidence" -eq 1 ]] && echo "$line" | grep -qE '^    ```$'; then
+    elif [[ "$in_evidence" -eq 1 ]] && grep -qE '^    ```$' <<< "$line"; then
       in_evidence=0
       if [[ -n "$current_evidence" ]]; then
         for prev_evidence in "${evidence_blocks[@]}"; do

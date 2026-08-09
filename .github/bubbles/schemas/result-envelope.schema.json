@@ -2,9 +2,12 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://github.com/pkirsanov/bubbles/schemas/result-envelope.schema.json",
   "title": "Bubbles agent RESULT-ENVELOPE (machine-readable, v5.1 / M3)",
-  "description": "Structured form of the markdown RESULT-ENVELOPE every Bubbles agent emits. Workflow agent parses the JSON instead of grepping prose. Markdown envelope MUST still be emitted alongside for human readability — JSON envelope is additive, not a replacement.",
+  "description": "Structured form of the markdown RESULT-ENVELOPE every Bubbles agent emits. Workflow agent parses the JSON instead of grepping prose. Markdown envelope MUST still be emitted alongside for human readability \u2014 JSON envelope is additive, not a replacement.",
   "type": "object",
-  "required": ["agent", "outcome"],
+  "required": [
+    "agent",
+    "outcome"
+  ],
   "additionalProperties": true,
   "properties": {
     "agent": {
@@ -37,55 +40,124 @@
     },
     "evidenceRefs": {
       "type": "array",
-      "items": { "type": "string" },
+      "items": {
+        "type": "string"
+      },
       "description": "References to evidence: report.md anchors, tool-log session ids, file paths, commit SHAs."
     },
     "findings": {
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["id", "severity", "owner", "summary"],
+        "required": [
+          "id",
+          "severity",
+          "owner",
+          "summary"
+        ],
         "additionalProperties": true,
         "properties": {
-          "id": { "type": "string", "minLength": 1 },
-          "severity": { "type": "string", "enum": ["info", "warn", "blocker"] },
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "info",
+              "warn",
+              "blocker"
+            ]
+          },
           "owner": {
             "type": "string",
             "description": "Agent name responsible for closing this finding."
           },
-          "summary": { "type": "string", "minLength": 1 },
-          "scopeRef": { "type": "string" },
-          "dodRef": { "type": "string" },
-          "scenarioRef": { "type": "string" }
+          "summary": {
+            "type": "string",
+            "minLength": 1
+          },
+          "scopeRef": {
+            "type": "string"
+          },
+          "dodRef": {
+            "type": "string"
+          },
+          "scenarioRef": {
+            "type": "string"
+          },
+          "goalImpact": {
+            "enum": [
+              "required",
+              "blocking-external",
+              "independent"
+            ],
+            "description": "What this finding means for the requested outcome (IMP-038 SCOPE-4 / GF-3). ORTHOGONAL to the G095 disposition, which records what was filed. `required`: inside the work boundary and the Goal Contract cannot be satisfied while it is open - complete the finding-owned planning and delivery chain. `blocking-external`: outside the boundary but it prevents the success signal or violates a hard constraint - BLOCK the parent. `independent`: affects neither the success signal nor any hard constraint - discharge via its G095 disposition under a separate packet and continue. An `independent` claim that cannot be demonstrated at final validation is `blocking-external`."
+          },
+          "disposition": {
+            "enum": [
+              "fixed-in-session",
+              "bug-filed",
+              "spec-filed",
+              "ops-filed",
+              "routed",
+              "status-adjusted"
+            ],
+            "description": "The Gate G095 disposition. Unchanged closed set; recorded alongside goalImpact."
+          },
+          "filedArtifact": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Path to the artifact that discharges the disposition, on disk as of this turn. Required for a `routed` or `independent` finding: an `independent` finding with no filed artifact is NOT discharged."
+          }
         }
       }
     },
     "addressedFindings": {
       "type": "array",
-      "items": { "type": "string" },
+      "items": {
+        "type": "string"
+      },
       "description": "IDs from a prior packet's findings[] that this invocation closed."
     },
     "unresolvedFindings": {
       "type": "array",
-      "items": { "type": "string" },
+      "items": {
+        "type": "string"
+      },
       "description": "IDs from a prior packet's findings[] that this invocation could not close. MUST be empty when outcome=completed_owned."
     },
     "nextOwner": {
-      "type": ["string", "null"],
+      "type": [
+        "string",
+        "null"
+      ],
       "description": "Required when outcome=route_required (preferred field name). Agent name expected to act next. May be aliased as nextRequiredOwner for backwards compatibility. null is permitted for non-routing outcomes."
     },
     "nextRequiredOwner": {
-      "type": ["string", "null"],
+      "type": [
+        "string",
+        "null"
+      ],
       "description": "Legacy alias for nextOwner. Either field satisfies the outcome=route_required requirement; new agents SHOULD prefer nextOwner."
     },
     "blocker": {
       "type": "object",
-      "required": ["reason"],
+      "required": [
+        "reason"
+      ],
       "additionalProperties": true,
       "properties": {
-        "reason": { "type": "string", "minLength": 1 },
-        "owner": { "type": "string" },
-        "missingInput": { "type": "string" }
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        },
+        "owner": {
+          "type": "string"
+        },
+        "missingInput": {
+          "type": "string"
+        }
       },
       "description": "Required when outcome=blocked. Describes concretely what prevents progress."
     },
@@ -93,17 +165,32 @@
       "type": "object",
       "additionalProperties": true,
       "properties": {
-        "target": { "type": "string" },
-        "intent": { "type": "string" },
-        "preferredWorkflowMode": { "type": "string" },
-        "tags": { "type": "array", "items": { "type": "string" } },
-        "reason": { "type": "string" }
+        "target": {
+          "type": "string"
+        },
+        "intent": {
+          "type": "string"
+        },
+        "preferredWorkflowMode": {
+          "type": "string"
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "reason": {
+          "type": "string"
+        }
       },
       "description": "Optional continuation envelope for advisory/read-only surfaces."
     },
     "toolCalls": {
       "type": "array",
-      "items": { "type": "string" },
+      "items": {
+        "type": "string"
+      },
       "description": "Session ids from tool-calls.jsonl that prove this invocation's claims. Read by v5.2 evidence gate."
     },
     "repositoryRoot": {
@@ -119,68 +206,136 @@
     "repositoryResolution": {
       "$ref": "repository-binding.schema.json#/$defs/repositoryResolution",
       "description": "Repository decision provenance echoed by an actionable result."
+    },
+    "goalRef": {
+      "$ref": "goal-contract.schema.json#/$defs/goalRef",
+      "description": "Goal identity echoed by a specialist result (IMP-038 SCOPE-3 / GF-1, GF-5). Present whenever the run froze a Goal Contract. Verified with `goal-contract.sh verify-ref`, which refuses an omitted field, a substituted goalId/revision/digest, and a workBoundary wider than the frozen contract's."
     }
   },
   "allOf": [
     {
       "if": {
         "anyOf": [
-          { "required": ["repositoryRoot"] },
-          { "required": ["repositoryAlias"] },
-          { "required": ["repositoryResolution"] }
+          {
+            "required": [
+              "repositoryRoot"
+            ]
+          },
+          {
+            "required": [
+              "repositoryAlias"
+            ]
+          },
+          {
+            "required": [
+              "repositoryResolution"
+            ]
+          }
         ]
       },
       "then": {
-        "required": ["repositoryRoot", "repositoryAlias", "repositoryResolution"]
+        "required": [
+          "repositoryRoot",
+          "repositoryAlias",
+          "repositoryResolution"
+        ]
       }
     },
     {
       "if": {
-        "required": ["repositoryResolution"],
+        "required": [
+          "repositoryResolution"
+        ],
         "properties": {
           "repositoryResolution": {
-            "required": ["pathVisibility"],
-            "properties": { "pathVisibility": { "const": "redacted" } }
+            "required": [
+              "pathVisibility"
+            ],
+            "properties": {
+              "pathVisibility": {
+                "const": "redacted"
+              }
+            }
           }
         }
       },
       "then": {
         "properties": {
-          "repositoryRoot": { "const": "<redacted-local-root>" }
+          "repositoryRoot": {
+            "const": "<redacted-local-root>"
+          }
         }
       }
     },
     {
       "if": {
-        "required": ["repositoryResolution"],
+        "required": [
+          "repositoryResolution"
+        ],
         "properties": {
           "repositoryResolution": {
-            "required": ["pathVisibility"],
-            "properties": { "pathVisibility": { "const": "local" } }
+            "required": [
+              "pathVisibility"
+            ],
+            "properties": {
+              "pathVisibility": {
+                "const": "local"
+              }
+            }
           }
         }
       },
       "then": {
         "properties": {
-          "repositoryRoot": { "pattern": "^/" }
+          "repositoryRoot": {
+            "pattern": "^/"
+          }
         }
       }
     },
     {
-      "if": { "properties": { "outcome": { "const": "route_required" } } },
+      "if": {
+        "properties": {
+          "outcome": {
+            "const": "route_required"
+          }
+        }
+      },
       "then": {
         "anyOf": [
-          { "required": ["nextOwner"] },
-          { "required": ["nextRequiredOwner"] }
+          {
+            "required": [
+              "nextOwner"
+            ]
+          },
+          {
+            "required": [
+              "nextRequiredOwner"
+            ]
+          }
         ]
       }
     },
     {
-      "if": { "properties": { "outcome": { "const": "blocked" } } },
+      "if": {
+        "properties": {
+          "outcome": {
+            "const": "blocked"
+          }
+        }
+      },
       "then": {
         "anyOf": [
-          { "required": ["blocker"] },
-          { "required": ["blockedReason"] }
+          {
+            "required": [
+              "blocker"
+            ]
+          },
+          {
+            "required": [
+              "blockedReason"
+            ]
+          }
         ]
       }
     }

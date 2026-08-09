@@ -20,7 +20,7 @@ trap 'rm -rf "$TMP"' EXIT
 
 # 1. Missing config
 output="$("$AUDIT" "$TMP" </dev/null 2>&1)"
-echo "$output" | grep -q "skipping" && echo "PASS: missing config handled" || { echo "FAIL: missing config handling" >&2; exit 1; }
+grep -q "skipping" <<< "$output" && echo "PASS: missing config handled" || { echo "FAIL: missing config handling" >&2; exit 1; }
 
 # Set up fixture
 rm -rf "$TMP" && mkdir -p "$TMP/config" "$TMP/specs/001-active" "$TMP/specs/002-frozen" "$TMP/specs/003-retired"
@@ -57,7 +57,7 @@ EOF
 output="$("$AUDIT" "$TMP" 2>&1)"
 
 # Active train flag should NOT appear
-if echo "$output" | grep -q "feature_a"; then
+if grep -q "feature_a" <<< "$output"; then
   echo "FAIL: active-train flag should not be overdue" >&2
   echo "$output" >&2
   exit 1
@@ -65,7 +65,7 @@ fi
 echo "PASS: active-train flag not flagged"
 
 # Frozen train flag should appear as grace
-if echo "$output" | grep -q "feature_b.*grace"; then
+if grep -q "feature_b.*grace" <<< "$output"; then
   echo "PASS: frozen-train flag flagged as grace"
 else
   echo "FAIL: frozen-train flag not flagged as grace" >&2
@@ -74,7 +74,7 @@ else
 fi
 
 # Retired train flag should appear as VIOLATION
-if echo "$output" | grep -q "feature_c.*VIOLATION"; then
+if grep -q "feature_c.*VIOLATION" <<< "$output"; then
   echo "PASS: retired-train flag flagged as VIOLATION"
 else
   echo "FAIL: retired-train flag not flagged as VIOLATION" >&2
@@ -83,7 +83,7 @@ else
 fi
 
 # Overall violation count
-if echo "$output" | grep -q "VIOLATION: 1 flag"; then
+if grep -q "VIOLATION: 1 flag" <<< "$output"; then
   echo "PASS: violation count correct"
 else
   echo "FAIL: violation count not reported" >&2

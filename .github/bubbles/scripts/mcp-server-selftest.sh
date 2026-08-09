@@ -11,7 +11,7 @@
 #   T1.  Server starts and responds to `initialize` with protocolVersion +
 #        serverInfo + capabilities.
 #   T2.  `ping` returns `{}`.
-#   T3.  `tools/list` returns the full declared tool catalog (>= 11 tools
+#   T3.  `tools/list` returns the full declared tool catalog (>= 15 tools
 #        in the source repo).
 #   T4.  Every declared tool references an existing bash twin under
 #        bubbles/scripts/.
@@ -51,6 +51,19 @@
 #        non-empty dependents[] of {source,provenance,line} objects.
 #   T22. `tools/call` for `graph_neighbors` with an obviously-unknown node
 #        returns a structured error result (isError=true), never a crash.
+#   T23. `tools/list` includes the three IMP-037 S5 experience-recall verbs:
+#        `search_experience`, `read_experience`, `experience_recall_status`.
+#   T24. Each of those three declares the READ-ONLY annotation set exactly
+#        (readOnlyHint true, destructiveHint false, idempotentHint true,
+#        openWorldHint false) — a regression that flips any hint fails here.
+#   T25. Each of those three is a thin wrapper over the SAME existing bash twin
+#        (experience-recall.sh) and names its matching subcommand as argv[0],
+#        AND — adversarially — the catalog loader still fail-fasts (exit 1) when
+#        a recall tool points at a missing twin, proving T4's invariant is real
+#        for this tool shape rather than merely unexercised.
+#   T26. The MCP surface exposes ONLY the read-only recall subcommands: no tool
+#        in the catalog wraps experience-recall.sh's mutating subcommands
+#        (sync/delete/admit/lifecycle/export), which stay CLI-only.
 #
 # Exit 0 = all assertions pass. Exit 1 = at least one failed.
 
@@ -97,6 +110,9 @@ required_tools=(
   list_open_findings
   check_observability
   graph_neighbors
+  search_experience
+  read_experience
+  experience_recall_status
 )
 
 # T4 is a static pre-check that doesn't require server boot.
@@ -260,10 +276,10 @@ fi
 # T3: tools/list
 tools_reply="$(get 3)"
 n_tools="$(echo "$tools_reply" | python3 -c "import json,sys; r=json.load(sys.stdin); print(len(r['result']['tools']))")"
-if [[ "$n_tools" -ge 11 ]]; then
-  pass "T3: tools/list returned $n_tools tools (>= 11 required)"
+if [[ "$n_tools" -ge 15 ]]; then
+  pass "T3: tools/list returned $n_tools tools (>= 15 required)"
 else
-  fail "T3: tools/list returned only $n_tools tools (expected >= 11)"
+  fail "T3: tools/list returned only $n_tools tools (expected >= 15)"
 fi
 
 # T5: tools/call unknown
@@ -525,6 +541,125 @@ if [[ "$ok" == "YES" ]]; then
   pass "T22: graph_neighbors unknown node returned a structured error result"
 else
   fail "T22: graph_neighbors unknown node did not return structured error: $gn_bad_reply"
+fi
+
+# ---------------------------------------------------------------------------
+# IMP-037 SCOPE-5: read-only experience-recall verbs over the existing bash twin
+# ---------------------------------------------------------------------------
+recall_tools=(search_experience read_experience experience_recall_status)
+
+# T23: tools/list includes all three recall verbs.
+ok="$(echo "$tools_reply" | python3 -c "
+import json,sys
+r = json.load(sys.stdin)
+names = {t.get('name') for t in (r.get('result') or {}).get('tools') or []}
+want = {'search_experience', 'read_experience', 'experience_recall_status'}
+print('YES' if want <= names else 'NO:' + ','.join(sorted(want - names)))
+")"
+if [[ "$ok" == "YES" ]]; then
+  pass "T23: tools/list includes search_experience, read_experience, experience_recall_status"
+else
+  fail "T23: tools/list missing recall verbs ($ok): $tools_reply"
+fi
+
+# T24: each recall verb declares the READ-ONLY annotation set EXACTLY. Asserting
+# all four hints (not just readOnlyHint) means a regression that flips any one of
+# them — e.g. marking a recall read destructive — fails here.
+ok="$(echo "$tools_reply" | python3 -c "
+import json,sys
+r = json.load(sys.stdin)
+tools = {t.get('name'): t for t in (r.get('result') or {}).get('tools') or []}
+want = {
+    'readOnlyHint': True,
+    'destructiveHint': False,
+    'idempotentHint': True,
+    'openWorldHint': False,
+}
+bad = []
+for name in ('search_experience', 'read_experience', 'experience_recall_status'):
+    got = (tools.get(name) or {}).get('annotations') or {}
+    if {k: got.get(k) for k in want} != want:
+        bad.append(f'{name}={got}')
+print('YES' if not bad else 'NO:' + '; '.join(bad))
+")"
+if [[ "$ok" == "YES" ]]; then
+  pass "T24: all three recall verbs declare the read-only annotation set (readOnly/idempotent true, destructive/openWorld false)"
+else
+  fail "T24: recall annotations wrong ($ok)"
+fi
+
+# T25a: each recall verb is a THIN wrapper — same experience-recall.sh twin, and
+# the matching subcommand is argv[0] of its argsTemplate (no MCP-side logic).
+twin_ok=1
+for tool in "${recall_tools[@]}"; do
+  case "$tool" in
+    search_experience) want_subcommand="search" ;;
+    read_experience) want_subcommand="read" ;;
+    experience_recall_status) want_subcommand="status" ;;
+    *) want_subcommand="<unmapped>" ;;
+  esac
+  spec_file="$MCP_DIR/tools/${tool}.json"
+  declared_script="$(python3 -c "import json,sys;print(json.load(open(sys.argv[1])).get('script','<none>'))" "$spec_file")"
+  declared_arg0="$(python3 -c "import json,sys;a=json.load(open(sys.argv[1])).get('argsTemplate') or ['<none>'];print(a[0])" "$spec_file")"
+  if [[ "$declared_script" != "experience-recall.sh" ]]; then
+    fail "T25a: '$tool' wraps '$declared_script', expected the experience-recall.sh bash twin"
+    twin_ok=0
+  elif [[ ! -f "$SCRIPTS_DIR/experience-recall.sh" ]]; then
+    fail "T25a: '$tool' references missing twin $SCRIPTS_DIR/experience-recall.sh"
+    twin_ok=0
+  elif [[ "$declared_arg0" != "$want_subcommand" ]]; then
+    fail "T25a: '$tool' argsTemplate[0] is '$declared_arg0', expected subcommand '$want_subcommand'"
+    twin_ok=0
+  fi
+done
+if [[ "$twin_ok" -eq 1 ]]; then
+  pass "T25a: all three recall verbs invoke the existing experience-recall.sh twin with their matching subcommand"
+fi
+
+# T25b (ADVERSARIAL): the catalog loader must still fail-fast when a recall tool
+# points at a missing twin. Without this, T25a/T4 would only prove the current
+# catalog happens to be correct, not that a broken one is REJECTED. We stage a
+# throwaway repo root holding a single, deliberately-broken recall tool and
+# assert the server exits 1 with the missing-script diagnostic.
+fixture_root="$(mktemp -d -t bubbles-mcp-recall.XXXXXX)"
+mkdir -p "$fixture_root/bubbles/mcp/tools" "$fixture_root/bubbles/scripts"
+cp "$SCRIPTS_DIR/experience-recall.sh" "$fixture_root/bubbles/scripts/experience-recall.sh"
+python3 -c "
+import json,sys
+spec = json.load(open(sys.argv[1]))
+spec['script'] = 'experience-recall-DELETED.sh'
+json.dump(spec, open(sys.argv[2], 'w'), indent=2)
+" "$MCP_DIR/tools/search_experience.json" "$fixture_root/bubbles/mcp/tools/search_experience.json"
+fixture_rc=0
+fixture_err="$(BUBBLES_MCP_REPO_ROOT="$fixture_root" BUBBLES_MCP_LOG_LEVEL=ERROR \
+  python3 "$SERVER" </dev/null 2>&1 >/dev/null)" || fixture_rc=$?
+rm -rf "$fixture_root"
+if [[ "$fixture_rc" -eq 1 && "$fixture_err" == *"references missing script"* ]]; then
+  pass "T25b: catalog loader fail-fasts (exit 1) when a recall tool points at a missing bash twin"
+else
+  fail "T25b: broken recall tool did not fail-fast — rc=$fixture_rc stderr=$fixture_err"
+fi
+
+# T26: the MCP surface stays READ-ONLY for recall. No catalog entry may wrap the
+# twin's mutating subcommands; sync/delete/admit/lifecycle/export are CLI-only.
+ok="$(python3 -c "
+import glob, json, os, sys
+tools_dir = sys.argv[1]
+mutating = {'sync', 'delete', 'admit', 'lifecycle', 'export'}
+leaked = []
+for path in sorted(glob.glob(os.path.join(tools_dir, '*.json'))):
+    spec = json.load(open(path))
+    if spec.get('script') != 'experience-recall.sh':
+        continue
+    args = spec.get('argsTemplate') or []
+    if args and args[0] in mutating:
+        leaked.append(f\"{spec.get('name')}->{args[0]}\")
+print('YES' if not leaked else 'NO:' + ','.join(leaked))
+" "$MCP_DIR/tools")"
+if [[ "$ok" == "YES" ]]; then
+  pass "T26: no MCP tool exposes experience-recall's mutating subcommands (sync/delete/admit/lifecycle/export stay CLI-only)"
+else
+  fail "T26: mutating recall subcommand leaked onto the MCP surface ($ok)"
 fi
 
 echo

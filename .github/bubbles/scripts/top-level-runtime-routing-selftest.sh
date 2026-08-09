@@ -149,7 +149,7 @@ if [[ -z "$toplevel_section" ]]; then
   fail "T5: could not extract Top-level-runtime modes section (regex change?)"
 else
   for mode in "${FAN_OUT_MODES[@]}"; do
-    if echo "$toplevel_section" | grep -q -F "\`${mode}\`"; then
+    if grep -q -F "\`${mode}\`" <<< "$toplevel_section"; then
       pass "T5: ${mode} listed in Top-level-runtime modes section"
     else
       fail "T5: ${mode} NOT listed in Top-level-runtime modes section"

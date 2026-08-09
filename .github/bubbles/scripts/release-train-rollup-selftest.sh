@@ -53,15 +53,15 @@ EOF
 # 1. No trains file
 rm -rf "$TMP" && mkdir -p "$TMP"
 out="$("$ROLLUP" "$TMP" 2>&1)"
-echo "$out" | grep -q "No config/release-trains.yaml" || { echo "FAIL: case 1 missing informational message"; echo "$out"; exit 1; }
+grep -q "No config/release-trains.yaml" <<< "$out" || { echo "FAIL: case 1 missing informational message"; echo "$out"; exit 1; }
 echo "PASS: no trains file → informational"
 
 # 2. Three trains
 setup_three_trains
 out="$("$ROLLUP" "$TMP")"
-echo "$out" | grep -q '^| experimental ' || { echo "FAIL: case 2 experimental row missing"; echo "$out"; exit 1; }
-echo "$out" | grep -q '^| mvp ' || { echo "FAIL: case 2 mvp row missing"; echo "$out"; exit 1; }
-echo "$out" | grep -q '^| prod ' || { echo "FAIL: case 2 prod row missing"; echo "$out"; exit 1; }
+grep -q '^| experimental ' <<< "$out" || { echo "FAIL: case 2 experimental row missing"; echo "$out"; exit 1; }
+grep -q '^| mvp ' <<< "$out" || { echo "FAIL: case 2 mvp row missing"; echo "$out"; exit 1; }
+grep -q '^| prod ' <<< "$out" || { echo "FAIL: case 2 prod row missing"; echo "$out"; exit 1; }
 echo "PASS: 3 trains report 3 rows"
 
 # 3. Open flags counted

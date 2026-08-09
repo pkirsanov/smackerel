@@ -73,7 +73,7 @@ cat > "$fix1/README.md" <<'EOF'
 This file contains no v5 mode references.
 EOF
 if out=$(BUBBLES_REPO_ROOT="$fix1" bash "$SCRIPT" --check --aliases-file "$ALIASES_FIXTURE" --paths "$fix1/README.md" 2>&1); then
-  if echo "$out" | grep -qF 'PASS (no rewrites needed)'; then
+  if grep -qF 'PASS (no rewrites needed)' <<< "$out"; then
     pass "empty corpus -> --check exits 0 with PASS message"
   else
     bad "empty corpus -> exit 0 but no PASS message: $out"
@@ -227,7 +227,7 @@ echo 'ref: refs/heads/main' > "$fix6/.git/HEAD"
 if out=$(BUBBLES_REPO_ROOT="$fix6" bash "$SCRIPT" --check --aliases-file "$ALIASES_FIXTURE" 2>&1); then
   bad "default-scope dry-run exited 0 (expected 2 — operator-guide.md needs rewriting)"
 else
-  if echo "$out" | grep -qF 'docs/operator-guide.md' && ! echo "$out" | grep -qF 'bubbles/scripts/internal.sh' && ! echo "$out" | grep -qF 'agents/some.agent.md' && ! echo "$out" | grep -qF 'skills/some-skill/SKILL.md'; then
+  if grep -qF 'docs/operator-guide.md' <<< "$out" && ! grep -qF 'bubbles/scripts/internal.sh' <<< "$out" && ! grep -qF 'agents/some.agent.md' <<< "$out" && ! grep -qF 'skills/some-skill/SKILL.md' <<< "$out"; then
     pass "default scope picks up docs/operator-guide.md but excludes bubbles/scripts/, agents/, skills/"
   else
     bad "default scope did not behave as expected. Output:"

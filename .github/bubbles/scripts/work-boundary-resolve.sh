@@ -16,18 +16,42 @@
 #   refuse-cross-repo  a DIFFERENT repo AND crossRepoPolicy=forbidden (the default)
 #                      → REFUSE; never touch another repo unless explicitly authorized
 #
-# Backward-compatible: a feature with NO `workBoundary` block (or no state.json)
-# resolves `in-boundary` — nothing declared to enforce — so existing specs are
-# unaffected (default-off, opt-in).
+# Backward-compatible (DEFAULT, non-strict): a feature with NO `workBoundary`
+# block (or no state.json) resolves `in-boundary` — nothing declared to enforce —
+# so existing specs are unaffected (default-off, opt-in).
 # Fail-closed: a workBoundary that is PRESENT but malformed (missing/empty/non-array
 # repositoryRoots, non-string entries, non-array optional lists, or a
 # crossRepoPolicy outside {forbidden,authorized}) is a hard error (exit 2) — a
 # declared-but-broken boundary MUST NOT silently pass.
 #
-# It is a RESOLVER (advisory decision on stdout), not a gate: exit 0 when it can
-# decide, exit 2 on usage error / missing parser / malformed boundary. It composes
-# with (does NOT replace) repo-binding-preflight.sh, which guards the separate
-# agent-source-repo INSTALL binding; this adds the per-task ALLOWED-SCOPE decision.
+# STRICT MODE (`--strict`, IMP-038 SCOPE-2 / GF-2) closes the ABSENCE hole that
+# permissiveness leaves open: an autonomous run could enter MUTABLE execution —
+# real source edits — with no declared repository, spec, or path boundary at all,
+# and nothing refused. `--strict` REFUSES an undeclared boundary instead of
+# answering `in-boundary`. It is NOT a bypass: it only ever makes the resolver
+# MORE demanding. Strict changes the handling of ABSENCE, never the
+# classification — a complete boundary classifies identically in both modes.
+# `--require-allowed-paths` adds the narrower FIRST-SOURCE-MUTATION requirement
+# (a declared allowedPaths) and implies `--strict`, so it can never resolve to a
+# weaker check than strict alone.
+#
+# The default (non-strict) form is READ-ONLY-COMPATIBLE: it exists for legacy
+# advisory callers and for reporting. It MUST NOT be used to authorize a new
+# source edit — use `--strict --require-allowed-paths` for that.
+#
+# It is a RESOLVER (advisory decision on stdout), not a gate. Exit codes (closed set):
+#   0  decided — a disposition was printed on stdout
+#   2  usage error, missing jq, unreadable state.json, or a PRESENT-but-malformed
+#      workBoundary (unchanged in both modes)
+#   3  strict refusal — NO declared boundary: no state.json, no workBoundary, or a
+#      missing/empty repositoryRoots | specTargets | crossRepoPolicy
+#   4  strict refusal — --require-allowed-paths given and workBoundary.allowedPaths
+#      is absent or empty (no declared mutation surface)
+#
+# It composes with (does NOT replace) repo-binding-preflight.sh, which guards the
+# separate agent-source-repo INSTALL binding; this adds the per-task ALLOWED-SCOPE
+# decision. There is no --force / --skip / --ignore: widen the declared boundary
+# (via goal-contract.sh revise + sync-boundary), never skip the check.
 #
 # Output (stdout), three lines:
 #   disposition=<in-boundary|route-same-repo|route-cross-repo|refuse-cross-repo>
@@ -38,15 +62,35 @@ set -euo pipefail
 usage() {
   cat <<'EOF'
 Usage: work-boundary-resolve.sh --feature-dir <dir> --candidate-repo <slug> \
-                                [--candidate-spec <id>] [--candidate-path <path>]
+                                [--candidate-spec <id>] [--candidate-path <path>] \
+                                [--strict] [--require-allowed-paths]
 
 Reads <feature-dir>/state.json ".workBoundary" and classifies the candidate:
   disposition=<in-boundary|route-same-repo|route-cross-repo|refuse-cross-repo>
   repoMatch=<true|false>
   reason=<why>
 
-Backward-compatible: no workBoundary (or no state.json) → in-boundary.
-Fail-closed: a present-but-malformed workBoundary exits 2.
+Modes:
+  (default)                 READ-ONLY-COMPATIBLE. No workBoundary (or no
+                            state.json) -> in-boundary. MUST NOT be used to
+                            authorize a source edit.
+  --strict                  REFUSE (exit 3) when no boundary is declared:
+                            no state.json, no workBoundary, or a missing/empty
+                            repositoryRoots | specTargets | crossRepoPolicy.
+                            Classification of a complete boundary is identical
+                            to the default mode.
+  --require-allowed-paths   Implies --strict, and additionally REFUSES (exit 4)
+                            when workBoundary.allowedPaths is absent or empty.
+                            Required before the FIRST SOURCE MUTATION.
+
+Exit codes (closed set):
+  0  decided — a disposition was printed
+  2  usage error, missing jq, or a PRESENT-but-malformed workBoundary
+  3  strict refusal — no declared boundary
+  4  strict refusal — --require-allowed-paths with no declared allowedPaths
+
+There is no --force / --skip / --ignore. Widen the declared boundary (goal-contract.sh
+revise + sync-boundary), never skip the check.
 EOF
 }
 
@@ -54,12 +98,17 @@ feature_dir=""
 candidate_repo=""
 candidate_spec=""
 candidate_path=""
+strict="false"
+require_allowed_paths="false"
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --feature-dir) feature_dir="${2:-}"; shift 2 ;;
     --candidate-repo) candidate_repo="${2:-}"; shift 2 ;;
     --candidate-spec) candidate_spec="${2:-}"; shift 2 ;;
     --candidate-path) candidate_path="${2:-}"; shift 2 ;;
+    --strict) strict="true"; shift ;;
+    # Implies --strict: a mutation check must never be weaker than the planning check.
+    --require-allowed-paths) require_allowed_paths="true"; strict="true"; shift ;;
     -h|--help) usage; exit 0 ;;
     *) echo "work-boundary-resolve: unknown option: $1" >&2; usage >&2; exit 2 ;;
   esac
@@ -79,10 +128,20 @@ decide() {
   exit 0
 }
 
+# refuse_strict <exit-code> <message> — a strict-mode absence refusal.
+refuse_strict() {
+  local code="$1"; shift
+  echo "work-boundary-resolve: REFUSED (strict) — $*" >&2
+  exit "$code"
+}
+
 state="$feature_dir/state.json"
 
 # No state.json → nothing declared to enforce (backward-compatible permissive).
 if [[ ! -f "$state" ]]; then
+  if [[ "$strict" == "true" ]]; then
+    refuse_strict 3 "no state.json at $feature_dir. A mutable run MUST declare a workBoundary (repositoryRoots, specTargets, crossRepoPolicy) before dispatch — freeze a Goal Contract and run 'goal-contract.sh sync-boundary --session-file <s> --state-file $state'."
+  fi
   decide "in-boundary" "unknown" "no state.json at $feature_dir — no boundary to enforce"
 fi
 
@@ -97,6 +156,9 @@ fi
 
 # No workBoundary block → backward-compatible permissive.
 if [[ "$(jq -r 'has("workBoundary")' "$state")" != "true" ]]; then
+  if [[ "$strict" == "true" ]]; then
+    refuse_strict 3 "$state declares no workBoundary. A mutable run MUST NOT edit source with no declared repository, spec, or path boundary — run 'goal-contract.sh sync-boundary --session-file <s> --state-file $state'."
+  fi
   decide "in-boundary" "unknown" "no workBoundary declared — backward-compatible permissive"
 fi
 
@@ -106,6 +168,16 @@ fi
 if [[ "$(jq -r '.workBoundary | type' "$state")" != "object" ]]; then
   echo "work-boundary-resolve: workBoundary must be an object" >&2
   exit 2
+fi
+
+# Strict PRESENCE check, before the type checks so a present-but-malformed value
+# still reports as malformed (exit 2) rather than as undeclared (exit 3).
+if [[ "$strict" == "true" ]]; then
+  for required_key in repositoryRoots specTargets crossRepoPolicy; do
+    if [[ "$(jq -r --arg k "$required_key" '.workBoundary | has($k)' "$state")" != "true" ]]; then
+      refuse_strict 3 "workBoundary.$required_key is not declared. Strict mode requires repositoryRoots, specTargets, and crossRepoPolicy — an undeclared dimension is unbounded reach, not a permissive default."
+    fi
+  done
 fi
 # repositoryRoots: required, non-empty array of strings.
 if [[ "$(jq -r '.workBoundary.repositoryRoots | type' "$state" 2>/dev/null)" != "array" ]]; then
@@ -134,6 +206,22 @@ case "$cross_policy" in
   forbidden|authorized) ;;
   *) echo "work-boundary-resolve: workBoundary.crossRepoPolicy must be 'forbidden' or 'authorized'" >&2; exit 2 ;;
 esac
+
+# ---------------------------------------------------------------------------
+# Strict EMPTINESS checks. An empty list declares nothing, so strict mode treats
+# it exactly like an absent key. (repositoryRoots non-emptiness is already a hard
+# error above, in BOTH modes, so it is not repeated here.)
+# ---------------------------------------------------------------------------
+if [[ "$strict" == "true" ]]; then
+  if [[ "$(jq -r '(.workBoundary.specTargets | length) > 0' "$state")" != "true" ]]; then
+    refuse_strict 3 "workBoundary.specTargets is empty. An empty list declares no spec scope, which is unbounded reach — name the specs this run may touch."
+  fi
+fi
+if [[ "$require_allowed_paths" == "true" ]]; then
+  if [[ "$(jq -r 'if (.workBoundary | has("allowedPaths")) then ((.workBoundary.allowedPaths | length) > 0) else false end' "$state")" != "true" ]]; then
+    refuse_strict 4 "workBoundary.allowedPaths is absent or empty. The first source mutation requires a declared path surface — add --allowed-path entries to the Goal Contract and re-run 'goal-contract.sh sync-boundary'."
+  fi
+fi
 
 # ---------------------------------------------------------------------------
 # Classification.

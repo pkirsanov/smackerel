@@ -110,7 +110,7 @@ if [[ -d "$SPECS_DIR" ]]; then
       continue
     fi
 
-    if ! echo "$TRAIN_IDS" | grep -qxF "$train"; then
+    if ! grep -qxF "$train" <<< "$TRAIN_IDS"; then
       err "spec $(dirname "$state_file") declares releaseTrain '$train' not in registry"
     fi
   done < <(find "$SPECS_DIR" -name state.json -type f 2>/dev/null)

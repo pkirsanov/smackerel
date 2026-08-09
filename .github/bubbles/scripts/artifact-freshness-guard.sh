@@ -124,7 +124,11 @@ for artifact_path in "$feature_dir/spec.md" "$feature_dir/design.md"; do
     fi
 
     title="$(heading_title "$line")"
-    if echo "$title" | grep -qiE 'Superseded|Suppressed'; then
+    # A boundary is a SECTION MARKER ("Superseded", "12. Suppressed Scenarios"),
+    # not the same word used as domain vocabulary inside a sentence-shaped
+    # heading ("Only suppressed dispositions are eligible"). Matching anywhere in
+    # the title made one such heading condemn every heading below it as stale.
+    if echo "$title" | grep -qiE '^([0-9]+[.)]?[[:space:]]+)?(Superseded|Suppressed)([^[:alnum:]]|$)'; then
       if [[ "$boundary_seen" == "false" ]]; then
         boundary_seen="true"
         boundary_heading="$title"

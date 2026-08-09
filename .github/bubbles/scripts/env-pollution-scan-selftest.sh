@@ -42,7 +42,7 @@ assert_fail() {
     echo "FAIL: $desc (expected exit 1, got 0)" >&2
     exit 1
   }
-  if echo "$output" | grep -q "$pattern"; then
+  if grep -q "$pattern" <<< "$output"; then
     echo "PASS: $desc (matched $pattern)"
   else
     echo "FAIL: $desc (output did not match $pattern)" >&2

@@ -172,7 +172,19 @@ summary_program='
       ["unknown"]
     end;
   def spec_of($e): ($e.specDir // $e.featureDir // $e.spec // $e.feature // "unknown");
-  def agent_of($e): ($e.agent // "unknown");
+    # A parent-expanded run is ONE run by the expanding orchestrator, not N runs
+    # by the agents named in the field. Downstream state records those as a
+    # composite id ("bubbles.implement+test+validate+audit+docs"), so grouping on
+    # the raw string invents a bogus per-composite bucket and hides the real
+    # executor. Prefer the structured provenance fields; fall back to the raw id.
+    # Rewriting the historical records instead would fabricate dispatches that
+    # never happened (see OW-013).
+    def agent_of($e):
+      if ($e.provenanceMode // "") == "parent-expanded" and (($e.expandedBy // "") | length) > 0 then
+        $e.expandedBy
+      else
+        ($e.agent // "unknown")
+      end;
   def event_from($source; $e):
     (parse_ts($e.runStartedAt // $e.startedAt // $e.phaseStartedAt // $e.startAt // $e.startTime)) as $start |
     (parse_ts($e.runCompletedAt // $e.completedAt // $e.phaseCompletedAt // $e.endAt // $e.endTime)) as $endTs |
@@ -220,7 +232,15 @@ rows_program='
       ["unknown"]
     end;
   def spec_of($e): ($e.specDir // $e.featureDir // $e.spec // $e.feature // "unknown");
-  def agent_of($e): ($e.agent // "unknown");
+    # Must stay identical to the resolver in the diagnostics program above:
+    # a parent-expanded run is ONE run by its expander, not N by the composite
+    # id. Divergence here silently reintroduces the bogus bucket (OW-013).
+    def agent_of($e):
+      if ($e.provenanceMode // "") == "parent-expanded" and (($e.expandedBy // "") | length) > 0 then
+        $e.expandedBy
+      else
+        ($e.agent // "unknown")
+      end;
   def event_from($source; $e):
     (parse_ts($e.runStartedAt // $e.startedAt // $e.phaseStartedAt // $e.startAt // $e.startTime)) as $start |
     (parse_ts($e.runCompletedAt // $e.completedAt // $e.phaseCompletedAt // $e.endAt // $e.endTime)) as $endTs |

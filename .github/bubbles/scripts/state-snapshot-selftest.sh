@@ -691,6 +691,106 @@ else
   echo "  output: $case10_out"
 fi
 
+# ---- Case 12: goal identity is DERIVED, never caller-supplied (IMP-038 S3) --
+#
+# A snapshot must record the goal the turn actually ran under. Deriving it from
+# `.goalContract` in the same atomic read makes that unforgeable; a flag would
+# let a caller record a ref that disagrees with the contract in force, which is
+# exactly the substitution this field exists to expose.
+
+cases=$((cases + 1))
+case12_root="$TMP_ROOT/case12"
+case12_session_id="snapshot-case12"
+prepare_bound_repo "$case12_root" "$case12_session_id"
+case12_control="$BOUND_CONTROL"
+case12_packet="$BOUND_PACKET"
+case12_session="$case12_root/.specify/memory/bubbles.session.json"
+
+# No contract yet: a read-only or pre-IMP-038 run must still snapshot cleanly.
+BUBBLES_AGENT_NAME="bubbles.goal" bash "$SNAPSHOT" \
+  --session-id "$case12_session_id" --session-control-file "$case12_control" \
+  --binding-packet-file "$case12_packet" \
+  --phase phase_1_understand --mode start >/dev/null
+
+if [[ "$(jq -r '.turnSnapshots[-1].goalRef' "$case12_session")" == "null" ]]; then
+  pass "A turn with no frozen Goal Contract records goalRef as null"
+else
+  fail "goalRef must be null when no contract is frozen (got: $(jq -c '.turnSnapshots[-1].goalRef' "$case12_session"))"
+fi
+
+# Freeze a contract, then snapshot again: the ref must appear, derived.
+case12_request="$TMP_ROOT/case12-request.txt"
+printf 'freeze then snapshot\n' > "$case12_request"
+bash "$SCRIPT_DIR/goal-contract.sh" freeze \
+  --session-file "$case12_session" \
+  --source-request-file "$case12_request" \
+  --intent "thread goal identity through snapshots" \
+  --success-signal "state-snapshot-selftest exits 0" \
+  --target "spec=specs/038-goal-fidelity" \
+  --repository-root bubbles \
+  --spec-target specs/038-goal-fidelity \
+  --allowed-path 'bubbles/scripts/**' \
+  --runner bubbles.goal \
+  --session-id "$case12_session_id" \
+  --repository-alias bubbles >/dev/null 2>&1
+
+BUBBLES_AGENT_NAME="bubbles.goal" bash "$SNAPSHOT" \
+  --session-id "$case12_session_id" --session-control-file "$case12_control" \
+  --binding-packet-file "$case12_packet" \
+  --phase phase_3_execute --mode start \
+  --convergence-iteration 1 --spec-dir specs/038-goal-fidelity >/dev/null
+
+if jq -e '
+  .turnSnapshots[-1].goalRef as $r
+  | $r.goalId == .goalContract.goalId
+    and $r.revision == .goalContract.revision
+    and $r.sourceRequestDigest == .goalContract.sourceRequestDigest
+    and $r.workBoundary == .goalContract.workBoundary
+' "$case12_session" >/dev/null 2>&1; then
+  pass "A turn snapshot derives goalRef from the frozen contract, boundary included"
+else
+  fail "turn snapshot goalRef must match the frozen contract (got: $(jq -c '.turnSnapshots[-1].goalRef' "$case12_session"))"
+fi
+
+if jq -e '
+  .turnSnapshots[-1].goalRef
+  | (has("intent") or has("successSignal") or has("hardConstraints") or has("targets")) | not
+' "$case12_session" >/dev/null 2>&1; then
+  pass "A turn snapshot carries identity + boundary only, no contract prose (R5)"
+else
+  fail "turn snapshot goalRef leaked contract prose: $(jq -c '.turnSnapshots[-1].goalRef | keys_unsorted' "$case12_session")"
+fi
+
+if jq -e '
+  .convergenceLoops[-1].goalRef as $r
+  | $r.goalId == .goalContract.goalId and $r.revision == .goalContract.revision
+' "$case12_session" >/dev/null 2>&1; then
+  pass "A convergence-loop entry carries the same derived goalRef"
+else
+  fail "convergenceLoops goalRef must match the frozen contract (got: $(jq -c '.convergenceLoops[-1].goalRef' "$case12_session"))"
+fi
+
+# The earlier no-contract snapshot must NOT be retroactively rewritten: turn
+# history records what was true at each turn, not what is true now.
+if [[ "$(jq -r '.turnSnapshots[0].goalRef' "$case12_session")" == "null" ]]; then
+  pass "Freezing a contract does not retroactively rewrite earlier snapshots"
+else
+  fail "earlier snapshot was rewritten: $(jq -c '.turnSnapshots[0].goalRef' "$case12_session")"
+fi
+
+# There is no flag to supply a ref, so a caller cannot record a wrong one.
+case12_flag_exit=0
+BUBBLES_AGENT_NAME="bubbles.goal" bash "$SNAPSHOT" \
+  --session-id "$case12_session_id" --session-control-file "$case12_control" \
+  --binding-packet-file "$case12_packet" \
+  --phase phase_3_execute --mode start --goal-ref '{"goalId":"gc:forged:1"}' >/dev/null 2>&1 \
+  || case12_flag_exit=$?
+if [[ "$case12_flag_exit" -eq 2 ]]; then
+  pass "state-snapshot accepts no --goal-ref flag, so a ref cannot be forged"
+else
+  fail "state-snapshot must reject --goal-ref (got exit=$case12_flag_exit)"
+fi
+
 # ---- Case 11: --help contract ----------------------------------------------
 
 if "$SNAPSHOT" --help >/dev/null 2>&1; then
