@@ -106,6 +106,7 @@ Control-plane law also requires owner-only remediation and concrete result envel
 | [Regression Check](regression-check.md) | "I need to make sure new changes didn't break existing features" |
 | [Impact-Aware Validation + Trace Contracts](impact-aware-validation.md) | "I want changed paths to suggest the right first-pass tests, and important workflows to prove trace/log evidence" |
 | [Use A Code Index](use-a-code-index.md) | "A gate or lint answers a structural question by grepping, or from a list somebody maintains by hand — I want it derived from the file surface instead" |
+| [Evidence-Backed Experience Recall](evidence-backed-experience-recall.md) | "My repo already holds the record of a problem it is about to repeat — the compacted result, the lesson, the owner decision — and none of it is findable when it matters" |
 | [Declare Reachable Surfaces](declare-reachable-surfaces.md) | "We built it, tested it, merged it — and I still can't tell whether anybody can actually reach it" |
 | [Post-Implementation Hardening](post-impl-hardening.md) | "I want code cleaned up, stable, secure, and regression-free before shipping" |
 | [Chaos Testing](chaos-testing.md) | "I need to break things to find weaknesses" |

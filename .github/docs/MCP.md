@@ -36,7 +36,7 @@ bash .github/bubbles/scripts/mcp-server-selftest.sh
 | Cursor | `.cursor/mcp.json` (workspace) or `~/.cursor/mcp.json` (global) | `.github/bubbles/mcp/clients/cursor.json` |
 | Cline | `cline_mcp_settings.json` | `.github/bubbles/mcp/clients/cline.json` |
 
-Restart your client. The `bubbles-<repo-slug>` server should appear with 12 annotated tools, 5 static resources, 2 resource templates, and 41 prompts.
+Restart your client. The `bubbles-<repo-slug>` server should appear with 15 annotated tools, 5 static resources, 2 resource templates, and 41 prompts.
 
 ---
 
@@ -55,6 +55,9 @@ Restart your client. The `bubbles-<repo-slug>` server should appear with 12 anno
 | `read_spec` | `artifact-lint.sh` | Inventory + lint a spec directory's artifacts. |
 | `list_open_findings` | `finding-closure-selftest.sh` | Surface the active finding-closure contract. |
 | `graph_neighbors` | `bubbles-graph-neighbors.sh` | Return the reverse-dependency (neighbor) set for one governance node — a script basename, an `agents/bubbles_shared/<x>.md` module, or a `Gxxx` gate — as the unchanged `bubbles-hub-report.sh --node` JSON. Thin twin wraps the read-only IMP-014 hub composer; see below. |
+| `search_experience` | `experience-recall.sh` | Search this repo's experience-recall index for prior work matching a natural-language query. Read-only thin wrapper over `experience-recall.sh search`; see below. |
+| `read_experience` | `experience-recall.sh` | Read one experience-recall record by id, with its source anchors. Read-only thin wrapper over `experience-recall.sh read`. |
+| `experience_recall_status` | `experience-recall.sh` | Report adapter/index health, counts, lifecycle tally, and freshness. Read-only thin wrapper over `experience-recall.sh status`. |
 
 Tool definitions live in `.github/bubbles/mcp/tools/*.json`. Each declares an `inputSchema` (JSON Schema) and an `argsTemplate` with `${var}` (required) and `${var?}` (optional, drop-on-empty) placeholders.
 
@@ -225,7 +228,7 @@ thin wrapper, it is not ready to be a tool.
 
 ## Selftest
 
-`bash .github/bubbles/scripts/mcp-server-selftest.sh` asserts 19 invariants (T1–T19): server boots, every declared tool has a bash twin, `initialize`/`ping`/`tools/list`/`tools/call`/`resources/list`/`resources/read` round-trip correctly, `resources/templates/list` returns the templated catalog, templated reads (`bubbles://gates/{id}`) resolve via the bash twin and surface real `-32004` errors for unknown ids, `prompts/list` returns the prompt catalog, `prompts/get` returns a real prompt body, unknown prompts return `-32005`, `tools/list` exposes planning/safety annotations, `initialize` negotiates the protocol version (echo-when-supported, latest-otherwise), malformed/unknown requests return proper JSON-RPC error codes, and optional `${var?}` substitution works.
+`bash .github/bubbles/scripts/mcp-server-selftest.sh` asserts 26 invariants (T1–T26): server boots, every declared tool has a bash twin, `initialize`/`ping`/`tools/list`/`tools/call`/`resources/list`/`resources/read` round-trip correctly, `resources/templates/list` returns the templated catalog, templated reads (`bubbles://gates/{id}`) resolve via the bash twin and surface real `-32004` errors for unknown ids, `prompts/list` returns the prompt catalog, `prompts/get` returns a real prompt body, unknown prompts return `-32005`, `tools/list` exposes planning/safety annotations, `initialize` negotiates the protocol version (echo-when-supported, latest-otherwise), the three experience-recall verbs load with the read-only annotation set and wrap the `experience-recall.sh` twin (with an adversarial check that a recall tool naming a missing twin still fail-fasts, and that no mutating recall subcommand reaches MCP), malformed/unknown requests return proper JSON-RPC error codes, and optional `${var?}` substitution works.
 
 The selftest is wired into `bubbles/scripts/framework-validate.sh` so the MCP invariant is enforced on every source-side framework-validate run.
 

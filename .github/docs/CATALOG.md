@@ -74,6 +74,7 @@ Every recipe solves a specific problem. Find yours, follow the steps.
 | 58 | [Rapid Tool Delivery](recipes/rapid-tool-delivery.md) | `rapid-tool-delivery` | Low-risk, build-free single-tool increment (fast lane) |
 | 59 | [Parallel Worktrees](recipes/parallel-worktrees.md) | `worktree-spawn` | Spawn→work→reap isolated worktrees safely |
 | 60 | [Use A Code Index](recipes/use-a-code-index.md) | `codeIndex.adapter` | Derive structural facts (routes, blast radius, affected tests) through swappable code-index adapters |
+| 61 | [Evidence-Backed Experience Recall](recipes/evidence-backed-experience-recall.md) | `experienceRecall.adapter` | Retrieve prior structured experience by relevance as tier-4 advisory context that can never become evidence |
 
 ---
 
@@ -98,7 +99,7 @@ Every recipe solves a specific problem. Find yours, follow the steps.
 17 → 18 → 19 → 25 → 26 → 27
 
 ### ⚙️ Operations & Framework
-29 → 30 → 31 → 32 → 33 → 34 → 35 → 51 → 52 → 53
+29 → 30 → 31 → 32 → 33 → 34 → 35 → 51 → 52 → 53 → 61
 
 ### 📋 Day-to-Day
 36 → 37 → 38

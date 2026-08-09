@@ -11,7 +11,7 @@ The version 3 state model, `policySnapshot`, `certification.*`, and `scenario-ma
 
 ## Schema Set
 
-The control plane needs seventeen concrete schema surfaces:
+The control plane needs eighteen concrete schema surfaces:
 
 1. Agent capability registry
 2. Execution policy registry
@@ -30,6 +30,7 @@ The control plane needs seventeen concrete schema surfaces:
 15. Project trace contract registry
 16. Repository binding control record
 17. Repository binding decision and refusal packets
+18. Experience recall record and result
 
 The newer surfaces above are active runtime or framework surfaces:
 
@@ -41,6 +42,7 @@ The newer surfaces above are active runtime or framework surfaces:
 - `project trace contract registry` is optional project-owned config under `.github/bubbles-project.yaml` or `bubbles-project.yaml` and is consumed by `bubbles/scripts/trace-contract-guard.sh`
 - `repository binding control` is host-private same-session state outside candidate repositories and is owned by `bubbles/scripts/repository-binding.sh`
 - `repository binding decision/refusal packets` conform to `bubbles/schemas/repository-binding.schema.json`; actionable packets are local-only and public projections are redacted and non-actionable
+- `experience recall record/result` conform to `bubbles/schemas/experience-record.schema.json`; records are derived state under `.specify/runtime/experience-recall/`, never a source artifact, and every record and result pins `recallAuthority: advisory` so the schema itself refuses any attempt to mint recalled content at a higher authority. Owned by `bubbles/scripts/experience-recall-index.py` and consumed by `bubbles/scripts/experience-recall.sh`
 - `framework-validate` and `release-check` are operational command surfaces that sit on top of these schemas rather than replacing them
 
 ## Extension Surface Notes

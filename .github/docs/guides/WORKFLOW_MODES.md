@@ -89,9 +89,13 @@ See [Cross-Repo Goal Scenario](../recipes/cross-repo-scenario.md) and the contra
 
 ### Smart Phase Routing
 
-Workflow modes support **phase relevance evaluation** — before invoking each phase, the active authorized runner checks whether the phase is relevant to the current scope's changed surface. Irrelevant phases are skipped with a recorded justification.
+Workflow modes support **phase relevance evaluation** — before invoking each phase, the active authorized runner asks `bubbles/scripts/phase-relevance-resolve.sh` whether the phase is relevant to the current scope's changed surface. Irrelevant phases are skipped with a recorded justification.
 
-**Safety guarantees:** Skipped phases are never silent. They're recorded in `executionHistory`. If artifacts change after a skip (e.g., a prior phase adds security-relevant code), the skip decision is re-evaluated and the phase is included if now relevant. Core phases (`implement`, `test`, `validate`, `docs`, `audit`, `finalize`) never skip.
+All four authorized top-level runners (`bubbles.goal`, `bubbles.sprint`, `bubbles.iterate`, `bubbles.workflow`) consume the **same** resolver verdict, so one scope cannot be routed differently depending on which runner picked it up. The resolver reads its rules from `phaseRelevance` in `bubbles/workflows/modes.yaml` and restates none of them.
+
+**Safety guarantees.** Skipped phases are never silent — they're recorded in `executionHistory`. If artifacts change after a skip (for example, a prior phase adds security-relevant code), the skip decision is re-evaluated and the phase is included if now relevant. Core phases (`select`, `bootstrap`, `implement`, `test`, `validate`, `docs`, `audit`, `finalize`) never skip.
+
+The resolver is deliberately biased toward running: a rule with no evaluator, an evaluator with no input, and an empty changed-surface file all resolve to `run`. It reduces irrelevant work, never assurance, and there is no flag that can force a skip.
 
 ### Decision Policy (Orchestrated Workflows)
 
