@@ -227,9 +227,136 @@ else
   fail "guard-lib.sh does not reference GITHUB_ACTIONS"
 fi
 
+# --- Case I: bubbles_ci_failure_detail (OW-002 phase 2) ----------------------
+# Naming WHICH check failed is not enough to diagnose a macOS-only failure when
+# the raw job log is 403 admin-only. The annotation must also carry WHY, so
+# run_check captures the check's output under CI and feeds the failure-shaped
+# lines to the annotation.
+#
+# The harness runs under `set -euo pipefail` — the SAME regime as
+# framework-validate.sh — not under this selftest's laxer `set -uo pipefail`.
+# That is what gives I5/I6 teeth: a helper whose pipeline returns 1 when grep
+# matches nothing aborts its caller on exactly the "fall back to the bare
+# label" path the helper documents, and an inline call here would not notice.
+{
+  printf '#!/usr/bin/env bash\n'
+  printf 'set -euo pipefail\n'
+  printf 'source "%s"\n' "$GUARD_LIB"
+  printf 'bubbles_ci_failure_detail "$1"\n'
+  printf 'printf "HARNESS-SURVIVED\\n"\n'
+} >"$TMP/detail-harness.sh"
+
+# run_detail <fixture-path>  -> stdout+stderr in $OUT, exit status in $DETAIL_RC
+run_detail() {
+  bash "$TMP/detail-harness.sh" "$1" >"$OUT" 2>&1
+  DETAIL_RC=$?
+}
+
+# detail_lines: emitted lines EXCLUDING the harness survival marker.
+detail_lines() { grep -cv '^HARNESS-SURVIVED$' "$OUT" 2>/dev/null || true; }
+
+# Fixture 1: a real-shaped log interleaving passing and failing lines.
+{
+  printf 'PASS: sentinel-should-not-appear\n'
+  printf 'FAIL: sentinel-assertion-mismatch\n'
+  printf 'PASS: another-green-line\n'
+  printf 'ERROR: connection refused\n'
+} >"$TMP/mixed.log"
+
+run_detail "$TMP/mixed.log"
+
+# --- I1: the FAIL line is surfaced -------------------------------------------
+if grep -Fq 'FAIL: sentinel-assertion-mismatch' "$OUT"; then
+  pass "failure_detail: surfaces the failing assertion line from a mixed log"
+else
+  fail "failure_detail: expected the FAIL line, got [$(masked "$(cat "$OUT")")]"
+fi
+
+# --- I2 (adversarial): PASS noise is NOT surfaced ----------------------------
+# Without this, a helper that simply `cat`ed the whole log would satisfy I1.
+if grep -Fq 'PASS: sentinel-should-not-appear' "$OUT"; then
+  fail "failure_detail: leaked a PASS line into the detail body"
+else
+  pass "failure_detail: passing lines absent from the detail body"
+fi
+
+# --- I3: output is capped at 10 lines ----------------------------------------
+# An uncapped body would blow past GitHub's annotation size limit and could
+# push the useful first line out of view.
+: >"$TMP/many.log"
+for i in {1..25}; do
+  printf 'FAIL: assertion number %s\n' "$i" >>"$TMP/many.log"
+done
+run_detail "$TMP/many.log"
+lines="$(detail_lines)"
+if [[ "$lines" == "10" ]]; then
+  pass "failure_detail: caps output at 10 lines given 25 failure lines"
+else
+  fail "failure_detail: expected 10 lines from a 25-line failure log, got $lines"
+fi
+
+# --- I4: a log with no failure-shaped line yields NO detail -------------------
+# The caller keys off empty output to fall back to the bare label.
+{
+  printf 'PASS: everything is fine\n'
+  printf 'ok 1 - nothing to see here\n'
+} >"$TMP/clean.log"
+run_detail "$TMP/clean.log"
+lines="$(detail_lines)"
+if [[ "$lines" == "0" ]]; then
+  pass "failure_detail: emits nothing when the log has no failure-shaped line"
+else
+  fail "failure_detail: expected no detail for a clean log, got [$(masked "$(cat "$OUT")")]"
+fi
+
+# --- I5 (adversarial): the clean-log path must not abort a set -e caller ------
+# This is the regression that makes I4 meaningful. `grep | head | cut` returns 1
+# under pipefail when grep matches nothing; framework-validate.sh assigns the
+# result as the final command of an `&&` list, which `set -e` does NOT exempt.
+# Without a guaranteed 0 return, framework-validate would die mid-run on the
+# fallback path instead of annotating the bare label.
+if [[ "$DETAIL_RC" -eq 0 ]] && grep -Fq 'HARNESS-SURVIVED' "$OUT"; then
+  pass "failure_detail: clean log returns 0 and does not abort a set -euo pipefail caller"
+else
+  fail "failure_detail: clean log aborted the set -e caller (rc=$DETAIL_RC, survived=$(grep -Fc 'HARNESS-SURVIVED' "$OUT" 2>/dev/null || true))"
+fi
+
+# --- I6: a non-existent path is silent and non-fatal under set -e -------------
+run_detail "$TMP/definitely-not-a-real-file.log"
+lines="$(detail_lines)"
+if [[ "$DETAIL_RC" -eq 0 ]] && [[ "$lines" == "0" ]] && grep -Fq 'HARNESS-SURVIVED' "$OUT"; then
+  pass "failure_detail: missing file emits nothing and does not error under set -e"
+else
+  fail "failure_detail: missing file misbehaved (rc=$DETAIL_RC, lines=$lines)"
+fi
+
+# --- Case I7/I8: run_check actually WIRES the detail into the annotation ------
+# Generalizing static guard. I1-I6 prove the helper works; these prove
+# framework-validate.sh still USES it. A future edit that drops the capture or
+# the detail call would leave I1-I6 green while silently restoring the
+# label-only annotation this work exists to replace.
+sed -n '/^run_check() {/,/^}/p' "$FRAMEWORK_VALIDATE" >"$TMP/fv_run_check.body"
+
+if [[ ! -s "$TMP/fv_run_check.body" ]]; then
+  fail "could not extract run_check() from framework-validate.sh (shape changed?)"
+else
+  if grep -Fq 'bubbles_ci_failure_detail' "$TMP/fv_run_check.body"; then
+    pass "framework-validate.sh run_check feeds bubbles_ci_failure_detail into the annotation"
+  else
+    fail "framework-validate.sh run_check no longer calls bubbles_ci_failure_detail"
+  fi
+
+  if grep -Fq 'GITHUB_ACTIONS' "$TMP/fv_run_check.body" &&
+    grep -Fq 'tee "$_cap"' "$TMP/fv_run_check.body"; then
+    pass "framework-validate.sh run_check captures output behind a GITHUB_ACTIONS gate"
+  else
+    fail "framework-validate.sh run_check lost the GITHUB_ACTIONS-gated 'tee \"\$_cap\"' capture"
+  fi
+fi
+
 if [[ "$failures" -ne 0 ]]; then
   printf 'ci-annotation-emitter selftest: %d failure(s)\n' "$failures"
   exit 1
 fi
-printf 'ci-annotation-emitter selftest: OK (14 assertions)\n'
+printf 'ci-annotation-emitter selftest: OK (22 assertions)\n'
 exit 0

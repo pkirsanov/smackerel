@@ -344,18 +344,35 @@ run_check() {
 
   echo "==> $label"
   local _started="$SECONDS"
-  if "$@"; then
+  local _rc=0 _cap=""
+  # Only CI captures output. Locally the invocation stays exactly as it was, so
+  # stdout/stderr separation and byte-for-byte output are preserved.
+  if [[ "${GITHUB_ACTIONS:-}" == "true" ]]; then
+    _cap="$(mktemp)"
+    if "$@" 2>&1 | tee "$_cap"; then _rc=0; else _rc=$?; fi
+  else
+    if "$@"; then _rc=0; else _rc=$?; fi
+  fi
+  if [[ "$_rc" -eq 0 ]]; then
     echo "PASS: $label"
     [[ -n "$_cache_key" ]] && validate_cache_put "$_cache_key" 0
   else
-    echo "FAIL: $label"
     # Additive, GitHub-gated (OW-002): also surface the failing check as a
     # check-run annotation, which is readable UNAUTHENTICATED even though the
-    # raw job log needs admin (403). Local output is unchanged.
-    bubbles_ci_annotate_failure "FAIL: $label"
+    # raw job log needs admin (403). Local output is unchanged. The captured
+    # assertion lines make the failure diagnosable without the 403-gated log.
+    echo "FAIL: $label"
+    local _detail=""
+    [[ -n "$_cap" ]] && _detail="$(bubbles_ci_failure_detail "$_cap")"
+    if [[ -n "$_detail" ]]; then
+      bubbles_ci_annotate_failure "FAIL: ${label}"$'\n'"${_detail}"
+    else
+      bubbles_ci_annotate_failure "FAIL: $label"
+    fi
     failures=$((failures + 1))
     failed_check_labels+=("$label")
   fi
+  [[ -n "$_cap" ]] && rm -f "$_cap"
   check_durations+=("$((SECONDS - _started))|$label")
   echo
 }
@@ -856,6 +873,12 @@ fi
 
 if [[ -x "$SCRIPT_DIR/governance-index-lint-selftest.sh" ]]; then
   run_check "Governance index lint selftest" bash "$SCRIPT_DIR/governance-index-lint-selftest.sh"
+fi
+
+# Source-only: the consulted indexes are framework-layout paths that do not
+# exist in a downstream install, where this would report false orphans.
+if [[ -x "$SCRIPT_DIR/governance-index-lint.sh" ]]; then
+  run_check_self_only "Governance index lint (live)" bash "$SCRIPT_DIR/governance-index-lint.sh" --repo-root "$REPO_ROOT"
 fi
 
 if [[ -x "$SCRIPT_DIR/orchestrator-tool-frontmatter-lint-selftest.sh" ]]; then

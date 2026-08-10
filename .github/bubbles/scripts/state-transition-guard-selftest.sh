@@ -3826,6 +3826,92 @@ else
   fi
 fi
 
+# ----------------------------------------------------------------------------
+# Check 7C — phase-claim execution backing (audit finding A-017-08)
+#
+# Check 7A reads executionHistory only, so a completedPhaseClaims entry with NO
+# backing history entry was structurally invisible: the phase looked claimed and
+# nothing measured it. These cases drive the REAL analyzer extracted from guard
+# source — not a restatement of it — so the test cannot pass while the guard's
+# own logic drifts away from it.
+# ----------------------------------------------------------------------------
+echo "Running Check 7C phase-claim execution backing (A-017-08)..."
+
+c7c_start="$(grep -n 'claim_backing_analysis="\$(python3' "$GUARD_SCRIPT" | head -n 1 | cut -d: -f1 || true)"
+if [[ -z "$c7c_start" ]]; then
+  fail "Check 7C: analyzer block absent from guard source — the check was removed or renamed"
+else
+  pass "Check 7C: analyzer block located in guard source (no test/source drift)"
+
+  c7c_dir="$(mktemp -d)"
+  c7c_end="$(awk -v s="$c7c_start" 'NR>s && $0=="PY"{print NR; exit}' "$GUARD_SCRIPT")"
+  sed -n "$((c7c_start + 1)),$((c7c_end - 1))p" "$GUARD_SCRIPT" >"$c7c_dir/analyzer.py"
+
+  # A: every claim has a run behind it.
+  cat >"$c7c_dir/backed.json" <<'JSON'
+{"execution":{"completedPhaseClaims":[{"phase":"test","agent":"bubbles.test"}],
+ "executionHistory":[{"agent":"bubbles.test","phasesExecuted":["test"]}]}}
+JSON
+
+  # B: a claim with NO backing run — the invisible case A-017-08 named.
+  cat >"$c7c_dir/unbacked.json" <<'JSON'
+{"execution":{"completedPhaseClaims":[{"phase":"test","agent":"bubbles.test"},
+ {"phase":"audit","agent":"bubbles.audit"}],
+ "executionHistory":[{"agent":"bubbles.test","phasesExecuted":["test"]}]}}
+JSON
+
+  # C: more claims than runs — suspicious, not provably false.
+  cat >"$c7c_dir/excess.json" <<'JSON'
+{"execution":{"completedPhaseClaims":[{"phase":"test"},{"phase":"test"}],
+ "executionHistory":[{"agent":"bubbles.test","phasesExecuted":["test"]}]}}
+JSON
+
+  # D: history at the TOP level, which is where most agents write it.
+  cat >"$c7c_dir/toplevel.json" <<'JSON'
+{"execution":{"completedPhaseClaims":[{"phase":"docs","agent":"bubbles.docs"}]},
+ "executionHistory":[{"agent":"bubbles.docs","phasesExecuted":["docs"]}]}
+JSON
+
+  c7c_backed="$(python3 "$c7c_dir/analyzer.py" "$c7c_dir/backed.json" 2>&1 || true)"
+  c7c_unbacked="$(python3 "$c7c_dir/analyzer.py" "$c7c_dir/unbacked.json" 2>&1 || true)"
+  c7c_excess="$(python3 "$c7c_dir/analyzer.py" "$c7c_dir/excess.json" 2>&1 || true)"
+  c7c_toplevel="$(python3 "$c7c_dir/analyzer.py" "$c7c_dir/toplevel.json" 2>&1 || true)"
+
+  if echo "$c7c_unbacked" | grep -q '^UNBACKED=audit$'; then
+    pass "Check 7C: a claimed phase with no executionHistory entry is reported UNBACKED"
+  else
+    fail "Check 7C: an unbacked phase claim went undetected — this is the A-017-08 blind spot (observed: $(echo "$c7c_unbacked" | tr '\n' ' '))"
+  fi
+
+  # Adversarial twin: a detector that flagged everything would satisfy the case
+  # above while proving nothing. The backed fixture must come back clean.
+  if echo "$c7c_backed" | grep -q '^UNBACKED='; then
+    fail "Check 7C: a properly backed claim was reported UNBACKED — the detector fires indiscriminately and proves nothing"
+  else
+    pass "Check 7C adversarial: a properly backed claim is NOT reported (detector discriminates)"
+  fi
+
+  if echo "$c7c_excess" | grep -q '^EXCESS=test(2 claim/1 run)$'; then
+    pass "Check 7C: more claims than runs is reported as EXCESS, with its counts"
+  else
+    fail "Check 7C: claim/run count mismatch went undetected (observed: $(echo "$c7c_excess" | tr '\n' ' '))"
+  fi
+
+  if echo "$c7c_backed" | grep -q '^EXCESS='; then
+    fail "Check 7C adversarial: a 1-claim/1-run packet was reported as EXCESS — the count comparison is wrong"
+  else
+    pass "Check 7C adversarial: a matched claim/run count is NOT reported as EXCESS"
+  fi
+
+  if echo "$c7c_toplevel" | grep -q '^UNBACKED='; then
+    fail "Check 7C: a TOP-level executionHistory was not read — same container bug as BUG-012, every such packet would false-block"
+  else
+    pass "Check 7C: reads a TOP-level executionHistory (BUG-012 container fallback honored)"
+  fi
+
+  rm -rf "$c7c_dir"
+fi
+
 echo "----------------------------------------"
 if [[ "$failures" -gt 0 ]]; then
   echo "state-transition-guard selftest failed with $failures issue(s)."

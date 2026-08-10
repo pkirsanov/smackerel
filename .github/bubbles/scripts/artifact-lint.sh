@@ -277,15 +277,59 @@ PY
 extract_array_block() {
   local array_key="$1"
   local file="$2"
-  awk '/"'"$array_key"'"[[:space:]]*:/ {capture=1} capture {print} capture && /\]/ {exit}' "$file"
+  _extract_json_array "$file" "" "$array_key"
 }
 
 extract_nested_array_block() {
   local parent_key="$1"
   local array_key="$2"
   local file="$3"
-  grep -A60 '"'"$parent_key"'"' "$file" 2>/dev/null \
-    | awk '/"'"$array_key"'"[[:space:]]*:/ {capture=1} capture {print} capture && /\]/ {exit}'
+  _extract_json_array "$file" "$parent_key" "$array_key"
+}
+
+# Parse the JSON instead of scanning lines.
+#
+# The previous implementations were `awk '... capture && /\]/ {exit}'`, with the
+# nested variant additionally windowed by `grep -A60`. Both truncate silently:
+# the awk exits at the FIRST `]`, which any nested array closes, and the 60-line
+# window drops everything after it. A live packet hit both — its
+# completedPhaseClaims spans 96 lines, so the four `implement` claims sat past
+# the window and the linter reported `implement` MISSING while the other eleven
+# phases, which happened to fall inside it, passed.
+#
+# The cost of under-reading here is not a missed check. This block feeds the
+# G022 specialist-phase test, whose failure message is "FABRICATION" — so a
+# truncated read accuses a complete and honest record of forging its own history.
+_extract_json_array() {
+  python3 - "$1" "$2" "$3" <<'PY' 2>/dev/null || true
+import json
+import sys
+
+try:
+    with open(sys.argv[1], encoding="utf-8") as handle:
+        data = json.load(handle)
+except Exception:
+    sys.exit(0)
+
+parent_key = sys.argv[2]
+if parent_key:
+    container = data.get(parent_key)
+    if not isinstance(container, dict):
+        sys.exit(0)
+else:
+    container = data
+
+if not isinstance(container, dict):
+    sys.exit(0)
+
+value = container.get(sys.argv[3])
+if not isinstance(value, list):
+    sys.exit(0)
+
+# Quoted strings are preserved so existing `grep -qE "\"<name>\""` callers keep
+# matching both bare-string entries and {"phase": "<name>"} claim records.
+print(json.dumps(value, indent=2))
+PY
 }
 
 detect_scope_layout() {
@@ -585,13 +629,18 @@ if [[ -f "$state_file" ]]; then
     state_completed_scopes_block="$(extract_array_block "completedScopes" "$state_file" || true)"
   fi
 
-  if [[ -n "$state_certified_completed_phases_block" ]]; then
-    state_completed_phases_block="$state_certified_completed_phases_block"
-  elif [[ -n "$state_execution_phase_claims_block" ]]; then
-    state_completed_phases_block="$state_execution_phase_claims_block"
-  else
-    state_completed_phases_block="$(extract_array_block "completedPhases" "$state_file" || true)"
-  fi
+  # MERGE, never short-circuit — the same repair state-transition-guard.sh took
+  # at its own selected_phases. A non-empty certifiedCompletedPhases used to win
+  # outright, so a packet certifying 3 phases alongside 11 execution claims had
+  # every other phase reported as unrecorded FABRICATION. Worse than the empty
+  # case, which falls through and reads correctly: a PARTIAL certification was
+  # strictly more damaging than none at all. The guard and this linter read the
+  # same arrays and must not disagree about what they contain.
+  state_completed_phases_block="$(printf '%s\n%s\n%s\n' \
+    "$state_certified_completed_phases_block" \
+    "$state_execution_phase_claims_block" \
+    "$(extract_array_block "completedPhases" "$state_file" || true)" \
+    | grep -v '^$' || true)"
 
   if [[ -z "$state_status" ]]; then
     fail "Unable to determine state.json status field"

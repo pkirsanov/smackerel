@@ -119,8 +119,8 @@ def check(label, instance, expected_valid):
 digest = "sha256:" + "a" * 64
 timestamp = "2026-08-06T12:00:00Z"
 anchor = {
-    "relativePath": "improvements/IMP-037-evidence-backed-experience-recall.md",
-    "selector": "#scope-1",
+    "relativePath": "improvements/INDEX.md",
+    "selector": "#imp-037",
     "contentDigest": digest,
     "observedAt": timestamp,
 }

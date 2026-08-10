@@ -88,7 +88,8 @@ import os
 import pathlib
 import sys
 
-root = pathlib.Path(sys.argv[1])
+# macOS TMPDIR is a symlink; the indexer compares against a resolved root.
+root = pathlib.Path(sys.argv[1]).resolve()
 outside = pathlib.Path(sys.argv[2])
 stamp = "2026-08-06T12:00:00Z"
 epoch = 1786017600

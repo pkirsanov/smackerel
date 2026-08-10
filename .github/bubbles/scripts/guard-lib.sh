@@ -355,3 +355,19 @@ bubbles_ci_annotate_failure() {
   msg="${msg//$'\n'/%0A}"
   printf '::error::%s\n' "$msg"
 }
+
+# bubbles_ci_failure_detail <file>
+# Print the failure-shaped lines from a captured check log, at most 10 lines.
+# Empty output means the log carried no recognizable failure line, in which case
+# the caller MUST fall back to the bare label rather than annotating an empty body.
+#
+# Always returns 0. "No failure line found" is a NORMAL outcome of this helper,
+# not an error, and the caller runs under `set -euo pipefail` — a bare
+# `grep | head | cut` would return 1 there (grep finds nothing, pipefail
+# propagates it) and abort the caller mid-run on exactly the fallback path this
+# helper documents. See ci-annotation-emitter-selftest.sh cases I4/I5.
+bubbles_ci_failure_detail() {
+  local file="${1-}"
+  [[ -f "$file" ]] || return 0
+  grep -aE '^[[:space:]]*(FAIL|ERROR|AssertionError|Traceback|not ok|✗|❌)' "$file" 2>/dev/null | head -n 10 | cut -c1-300 || true
+}

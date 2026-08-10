@@ -78,6 +78,25 @@ report() {
   findings=$((findings + 1))
 }
 
+# An inline `security-gate:allow` / `gitleaks:allow` on the offending LINE is
+# an explicit operator acknowledgement, and the same standard this gate
+# already applies to the highest-severity class: a committed key block.
+#
+# It cannot be inferred, it has to be typed on the exact line, and it lands in
+# the diff a reviewer is already reading. Without it a consuming repo cannot
+# resolve a legitimate finding — an official installer one-liner, a hermetic
+# test fixture — except by patching this framework file or switching the gate
+# off, and a gate that gets switched off enforces nothing.
+#
+# Every acknowledgement stays auditable:
+#   grep -rn 'security-gate:allow' .
+acknowledged() {
+  case "$1" in
+    *security-gate:allow* | *gitleaks:allow*) return 0 ;;
+  esac
+  return 1
+}
+
 cd "$repo_root"
 
 # Only inspect tracked files: the working tree may hold local scratch, and a
@@ -109,12 +128,78 @@ done
 while IFS= read -r hit; do
   [[ -n "$hit" ]] || continue
   # A private-key MARKER inside documentation is the doc describing the pattern
-  # (SECURITY-PII-POLICY.md does exactly that). Require the closing marker too,
-  # so only an actual key block counts.
+  # (SECURITY-PII-POLICY.md does exactly that).
   case "$hit" in
     *.md | *security-gate*) continue ;;
   esac
-  grep -q -- '-----END .*PRIVATE KEY-----' "$hit" 2>/dev/null || continue
+  # Requiring only that the closing marker ALSO appears somewhere in the file
+  # asks the wrong question. A test that asserts a PEM prefix on one line and
+  # the matching suffix on the next holds both markers and zero key bytes, and
+  # was reported as committed key material. Co-occurrence of two strings is not
+  # a key block. (The literal markers are deliberately NOT quoted in this
+  # comment: writing them here would make this file trip the very scanners it
+  # exists to complement.)
+  #
+  # Require a base64 payload BETWEEN the markers, so the finding means "this
+  # file carries key material" rather than "this file mentions the words".
+  #
+  # "Payload" has to mean a CONTIGUOUS base64 run, not "enough base64-ish
+  # characters". Deleting punctuation from ordinary prose leaves base64:
+  #   pytest.fail("sidecar did not return a PEM PRIVATE KEY")
+  # strips to 62 such characters and was reported as key material. A real PEM
+  # body line has no interior spaces or punctuation, so the test is whether the
+  # line CONSISTS of base64 once its surrounding quoting is removed.
+  #
+  # The escape handling is load-bearing, not cosmetic. A PEM embedded in a
+  # source string literal carries \n escapes, so its body reads ...bvBRQ\n\ —
+  # not contiguous, and a genuine committed key went UNDETECTED. Each source
+  # line is therefore split on the escape before the segments are judged.
+  #
+  # Splitting the FILE (rather than each line) would be wrong: it moves a
+  # trailing `// gitleaks:allow` off the BEGIN line and revokes the operator's
+  # acknowledgement. The annotation is matched against the ORIGINAL line and
+  # the payload against the segments.
+  #
+  # The block must also CLOSE. A file asserting on a prefix marker has no
+  # closing marker at all; without this the scan ran to EOF and judged
+  # unrelated text as the payload — the real trigger was a banner comment of
+  # '=' characters, contiguous base64 because '=' is padding.
+  #
+  # An inline `gitleaks:allow` / `security-gate:allow` on the BEGIN line is an
+  # explicit operator acknowledgement that the block is a throwaway fixture —
+  # a structurally valid PEM is often the only way to test a PEM parser. It
+  # must be written deliberately and is visible in review; nothing infers it,
+  # so an unannotated real key still fails.
+  awk '
+    {
+      orig = $0
+      segments = split(orig, seg, /\\n/)
+      for (i = 1; i <= segments; i++) {
+        s = seg[i]
+        if (s ~ /-----BEGIN [A-Z ]*PRIVATE KEY-----/) {
+          if (orig ~ /gitleaks:allow|security-gate:allow/) {
+            inblock = 0
+          } else {
+            inblock = 1
+            candidate = 0
+          }
+          continue
+        }
+        if (inblock && s ~ /-----END [A-Z ]*PRIVATE KEY-----/) {
+          if (candidate) { found = 1; exit }
+          inblock = 0
+          continue
+        }
+        if (inblock) {
+          payload = s
+          sub(/^[^A-Za-z0-9+\/=]+/, "", payload)
+          sub(/[^A-Za-z0-9+\/=]+$/, "", payload)
+          if (payload ~ /^[A-Za-z0-9+\/=]{32,}$/) { candidate = 1 }
+        }
+      }
+    }
+    END { exit(found ? 0 : 1) }
+  ' "$hit" 2>/dev/null || continue
   report "secret-material" "$hit contains a private-key block"
 done < <(grep -rl -- '-----BEGIN .*PRIVATE KEY-----' "${tracked[@]}" 2>/dev/null || true)
 
@@ -131,11 +216,21 @@ while IFS= read -r hit; do
   case "$hit" in
     *-selftest.sh* | *dependency-posture.sh* | *security-gate* | *tests/*) continue ;;
   esac
+  acknowledged "$hit" && continue
   report "inline-credentials" "$hit"
 done < <(
   grep -rnE '^[^#]*\b[A-Za-z_]*(PASSWORD|PASSWD|SECRET|TOKEN|APIKEY|API_KEY)[A-Za-z_]*=["'"'"']?[A-Za-z0-9/+_.-]{8,}["'"'"']?' \
     --include='*.sh' --include='*.yaml' --include='*.yml' . 2>/dev/null |
-    grep -vE '=\$|=["'"'"']\$|=["'"'"']{2}|:-|placeholder|example|EXAMPLE|\bfake\b|redact' || true
+    grep -vE '=\$|=["'"'"']\$|=["'"'"']{2}|:-|placeholder|example|EXAMPLE|\bfake\b|redact' |
+    # A value that embeds a substitution is COMPOSED at runtime, so there is no
+    # literal to leak: RUN_TOKEN="depqual-$$-$(date +%s)" is a run identifier,
+    # not a credential. The exclusions above only catch a value that STARTS
+    # with `$`, so any generated value carrying a literal prefix was reported.
+    grep -vE '[$][({]|[$][$]' |
+    # `TOKEN_CHARS='ABC…xyz0123'` is the ALPHABET a random token is drawn from.
+    # The name matches because `[A-Za-z_]*` after TOKEN absorbs the suffix, but
+    # publishing a character set leaks nothing.
+    grep -vE '(_CHARS|_CHARSET|_ALPHABET)=' || true
 )
 
 # --- 3. curl-pipe-shell remote execution -----------------------------------
@@ -163,6 +258,7 @@ while IFS= read -r hit; do
   case "$hit" in
     *"cli.sh"*"install.sh"*) continue ;;
   esac
+  acknowledged "$hit" && continue
   report "curl-pipe-shell" "$hit"
 done < <(
   grep -rnE '(curl|wget)[^|]*\|[[:space:]]*(sudo[[:space:]]+)?(ba)?sh\b' \
@@ -186,6 +282,7 @@ while IFS= read -r hit; do
   case "$hit" in
     *security-gate*) continue ;;
   esac
+  acknowledged "$hit" && continue
   report "eval-on-input" "$hit"
 done < <(
   grep -rnE '^[^#]*\beval[[:space:]]+["'"'"']?\$\(' --include='*.sh' . 2>/dev/null || true

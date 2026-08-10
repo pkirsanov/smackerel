@@ -354,5 +354,54 @@ out="$(run_lint "$d")"
 expect_in "T10 top-level scopeProgress remains deprecated" \
   "$out" "uses deprecated field 'scopeProgress'"
 
+# --- T11: the array extractors must not truncate ------------------------------
+# extract_nested_array_block was `grep -A60 | awk '... /\]/ {exit}'`: it dropped
+# everything past 60 lines AND exited at the first nested `]`. A live packet whose
+# completedPhaseClaims spanned 96 lines had its trailing `implement` claims fall
+# outside the window, and the linter reported `implement` MISSING while the
+# eleven phases inside the window passed. Under-reading here does not soften a
+# check — G022's message is "FABRICATION", so a truncated read accuses an honest
+# record of forging its history.
+d="$(make_fixture t11-long-claims)"
+python3 - "$d/state.json" <<'PY'
+import json, sys
+# Ten leading claims push the array well past the old 60-line window, and each
+# carries a NESTED array so the old first-`]` exit would also have fired early.
+claims = [{"phase": f"filler{i}", "agent": "bubbles.test", "scopes": [1, 2],
+           "claim": "padding entry to push the tail past the old window"}
+          for i in range(10)]
+claims.append({"phase": "implement", "agent": "bubbles.implement", "scopes": [1],
+               "claim": "the tail entry the old extractor could not see"})
+json.dump({
+    "status": "done",
+    "schemaVersion": 3,
+    "workflowMode": "full-delivery",
+    "execution": {"completedPhaseClaims": claims},
+    "certification": {"status": "done", "certifiedCompletedPhases": []},
+}, open(sys.argv[1], "w"), indent=2)
+PY
+claims_lines="$(python3 -c "
+import sys
+raw = open(sys.argv[1]).read()
+start = raw.index('\"completedPhaseClaims\"')
+print(raw[start:].count(chr(10)))
+" "$d/state.json")"
+assertions=$((assertions + 1))
+if [[ "$claims_lines" -gt 60 ]]; then
+  echo "PASS: T11 fixture array spans $claims_lines lines, past the old 60-line window"
+  passes=$((passes + 1))
+else
+  echo "FAIL: T11 fixture array spans only $claims_lines lines — it would not have tripped the old truncation, so this case proves nothing" >&2
+  exit 1
+fi
+out="$(run_lint "$d")"
+# POSITIVE assertion, deliberately: "not reported missing" alone would also hold
+# if the specialist check never ran at all, so this case would pass while proving
+# nothing. Requiring the FOUND line proves the check ran AND read past the window.
+expect_in "T11 the trailing claim past the old window is FOUND" \
+  "$out" "Required specialist phase 'implement' found"
+expect_not_in "T11 the trailing claim is not accused of fabrication" \
+  "$out" "Required specialist phase 'implement' missing"
+
 echo
 echo "artifact-lint selftest: $passes/$assertions assertions passed"

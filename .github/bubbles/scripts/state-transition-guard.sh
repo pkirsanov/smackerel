@@ -2195,6 +2195,101 @@ fi
 echo ""
 
 # =============================================================================
+# CHECK 7C: Phase-Claim Execution Backing
+#
+# Check 7A analyses executionHistory only, so a completedPhaseClaims entry with
+# no history entry behind it is structurally invisible to it — a phase can be
+# claimed complete with no record that it ever ran. Two severities, because the
+# two shapes are not equally damning:
+#   ZERO-BACKING (block) — a phase is claimed and executionHistory holds no entry
+#     for it at all. There is no reading of that which is merely untidy.
+#   EXCESS (warn) — more claims for a phase than recorded runs of it. Usually a
+#     run that forgot its history entry, but incremental claiming from a single
+#     run is a legitimate pattern, so this is surfaced rather than blocked.
+# =============================================================================
+echo "--- Check 7C: Phase-Claim Execution Backing ---"
+claim_backing_analysis="$(python3 - "$state_file" <<'PY'
+import json
+import sys
+
+try:
+    with open(sys.argv[1], encoding="utf-8") as fh:
+        data = json.load(fh)
+except Exception:
+    sys.exit(0)
+
+execution = data.get("execution") if isinstance(data.get("execution"), dict) else {}
+claims = execution.get("completedPhaseClaims")
+if not isinstance(claims, list):
+    claims = []
+
+# Same top-level / execution.* fallback the other executionHistory readers use.
+history = execution.get("executionHistory")
+if not isinstance(history, list):
+    history = data.get("executionHistory")
+if not isinstance(history, list):
+    history = []
+
+claimed = {}
+for claim in claims:
+    if not isinstance(claim, dict):
+        continue
+    phase = claim.get("phase")
+    if isinstance(phase, str) and phase:
+        claimed[phase] = claimed.get(phase, 0) + 1
+
+executed = {}
+for entry in history:
+    if not isinstance(entry, dict):
+        continue
+    phases = entry.get("phasesExecuted") or []
+    if not isinstance(phases, list):
+        continue
+    for phase in phases:
+        if isinstance(phase, str) and phase:
+            executed[phase] = executed.get(phase, 0) + 1
+
+if not claimed:
+    print("NO_CLAIMS=1")
+    sys.exit(0)
+
+unbacked = sorted(p for p in claimed if executed.get(p, 0) == 0)
+excess = sorted(
+    f"{p}({claimed[p]} claim/{executed.get(p, 0)} run)"
+    for p in claimed
+    if executed.get(p, 0) > 0 and claimed[p] > executed.get(p, 0)
+)
+
+print(f"CLAIMED_PHASES={len(claimed)}")
+if unbacked:
+    print(f"UNBACKED={'|'.join(unbacked)}")
+if excess:
+    print(f"EXCESS={'|'.join(excess)}")
+PY
+)"
+
+if echo "$claim_backing_analysis" | grep -q '^NO_CLAIMS=1'; then
+  info "No completedPhaseClaims recorded — phase-claim backing check skipped"
+elif [[ -z "$claim_backing_analysis" ]]; then
+  info "completedPhaseClaims unreadable — phase-claim backing check skipped"
+else
+  cb_unbacked="$(echo "$claim_backing_analysis" | grep -E '^UNBACKED=' | head -n 1 | sed 's/^UNBACKED=//' || true)"
+  cb_excess="$(echo "$claim_backing_analysis" | grep -E '^EXCESS=' | head -n 1 | sed 's/^EXCESS=//' || true)"
+  cb_phases="$(echo "$claim_backing_analysis" | grep -E '^CLAIMED_PHASES=' | head -n 1 | sed 's/^CLAIMED_PHASES=//' || true)"
+
+  if [[ -n "$cb_unbacked" ]]; then
+    fail "completedPhaseClaims claims phase(s) with NO executionHistory entry behind them: $cb_unbacked — a phase cannot be claimed complete with no record that it ran"
+  fi
+  if [[ -n "$cb_excess" ]]; then
+    warn "completedPhaseClaims holds more claims than recorded runs for: $cb_excess — each run should write its own executionHistory entry"
+  fi
+  if [[ -z "$cb_unbacked" ]] && [[ -z "$cb_excess" ]]; then
+    pass "Every claimed phase has at least as many executionHistory runs as claims (${cb_phases:-0} phase(s))"
+  fi
+fi
+echo ""
+
+# =============================================================================
 # CHECK 8: Test file existence — verify Test Plan files exist on disk
 # =============================================================================
 echo "--- Check 8: Test File Existence ---"

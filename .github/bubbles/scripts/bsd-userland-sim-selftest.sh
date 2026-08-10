@@ -40,7 +40,8 @@
 # leaves no /tmp/bubbles-bsd-sim.* behind.
 #
 # Exit 0 = all assertions pass; exit 1 = one or more failed. SKIPs (exit 0) only
-# if a genuinely-required POSIX tool is absent, per the framework convention.
+# if a genuinely-required POSIX tool is absent, or if the host userland is not
+# GNU, per the framework convention.
 
 set -euo pipefail
 
@@ -61,6 +62,14 @@ fi
 for _dep in sed date stat grep sort mktemp ln; do
   if ! command -v "$_dep" >/dev/null 2>&1; then
     echo "[selftest bsd-userland-sim] SKIP ($_dep not installed)"
+    exit 0
+  fi
+done
+
+# Capability probe, never uname: GNU sed/date accept --version, the BSD ones reject it.
+for _dep in sed date; do
+  if ! "$_dep" --version >/dev/null 2>&1; then
+    echo "[selftest bsd-userland-sim] SKIP (non-GNU userland: $_dep rejects --version; the simulator rewrites an accepted BSD spelling into the GNU form before running the real binary, so it requires GNU coreutils underneath and is a GNU/Linux-host tool)"
     exit 0
   fi
 done

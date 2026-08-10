@@ -2939,11 +2939,18 @@ else:
   local nesting_setting='chat.subagents.allowInvocationsFromSubagents'
   local nesting_hit=''
   local settings_candidate
+  # Remote/WSL/Codespaces keeps USER settings under .vscode-server/data/User.
+  # Scanning only .../data/Machine there reports "not enabled" no matter what the
+  # operator set, which is worse than not reporting at all: it is cited as
+  # evidence the setting is off.
   for settings_candidate in \
     "$HOME/.config/Code/User/settings.json" \
     "$HOME/.config/Code - Insiders/User/settings.json" \
     "$HOME/Library/Application Support/Code/User/settings.json" \
+    "$HOME/.vscode-server/data/User/settings.json" \
     "$HOME/.vscode-server/data/Machine/settings.json" \
+    "$HOME/.vscode-server-insiders/data/User/settings.json" \
+    "$HOME/.vscode-server-insiders/data/Machine/settings.json" \
     "$REPO_ROOT/.vscode/settings.json"; do
     [[ -f "$settings_candidate" ]] || continue
     if grep -qE "\"${nesting_setting}\"[[:space:]]*:[[:space:]]*true" "$settings_candidate" 2>/dev/null; then

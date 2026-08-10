@@ -56,7 +56,7 @@ Corroborating (grep-derived, advisory) numbers:
 | G019 | sequential_spec_completion_gate | `mode-required` | 25 | — | 1 | — |
 | G020 | cross_agent_verification_gate | `mode-required` | 25 | — | 1 | — |
 | G021 | anti_fabrication_gate | `guard-check:12` | 25 | Check 20 | 6 | guard |
-| G022 | specialist_completion_gate | `guard-check:6B` | 25 | Check 6B | 7 | guard |
+| G022 | specialist_completion_gate | `guard-check:6B` | 25 | Check 6B | 8 | guard |
 | G023 | state_transition_guard_gate | `mode-required` | 25 | — | — | — |
 | G024 | all_scopes_done_before_spec_done_gate | `script:bubbles/scripts/release-delivery-reconciliation-guard.sh` | 25 | ref | 4 | guard |
 | G025 | per_dod_item_raw_evidence_gate | `script:bubbles/scripts/release-delivery-reconciliation-guard.sh` | 25 | — | 3 | — |
