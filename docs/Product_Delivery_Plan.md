@@ -19,8 +19,9 @@ it says so.
 
 **Re-measured 2026-08-10**, 34 commits after first authoring. Every pillar and
 surface figure held exactly. Two things changed: three new specs (110, 111, 112)
-now carry Stages 4, 6 and the parallel track; and the release-train gate that was
-failing now passes. Both are folded in below. Full verification log:
+now carry Stages 4, 6 and the parallel track; and the release-train gate passes
+against the working tree while still failing at `HEAD` — its fix is uncommitted.
+Both are folded in below. Full verification log:
 [`Delivery_Position_2026-08-10.md`](Delivery_Position_2026-08-10.md).
 
 | If you want to know… | Go to |
@@ -104,7 +105,7 @@ MCP tool list — generated from one registry, not four hand-maintained ones.
 | PWA pages loading the shared nav | **2** |
 | Catalog surfaces declared | 20 |
 | Release trains | 2 (`mvp` → self-hosted, `next` → staging) |
-| Release-train gate (G110) | **passing** (exit 0) |
+| Release-train gate (G110) | **fails at HEAD** (exit 1, 8 errors); fix uncommitted |
 
 The headline: **ingestion and capability foundations are essentially finished — 99
 of 112 specs done. What is unfinished is everything the user actually touches.**
@@ -828,10 +829,11 @@ Not on the critical path; can run alongside any stage after Stage 1. Specs 111
 | Canonical artifact sensitivity + fail-closed egress | `D11` — `artifacts` has no sensitivity column despite design claims that sensitivity governs model routing | **spec 111** |
 | Release claims generated from a runtime ledger | `A4-LEDGER` — the v1 packet says spec 095 is planning-only and `internal/retrieval/` is absent; the spec is `done`, certified, and `internal/retrieval/{evergreen,routing}` exists | `docs/releases/v1/features.md` · ledger generator |
 
-> **Resolved 2026-08-10.** The `Release_Schema_Review` Critical F1 — the
-> release-train guard failing with 7 errors — no longer reproduces;
-> `release-train-guard.sh` exits 0. The ledger row above is the remaining item on
-> this track.
+> **Status 2026-08-10 — F1 fixed locally, not committed.** The
+> `Release_Schema_Review` Critical F1 (release-train guard failing) passes against
+> the **working tree** but still fails at **`HEAD`** with 8 errors. The correction
+> is uncommitted, held by `specs/_ops/OPS-006-local-git-reconciliation`
+> (`in_progress`). **Committing it is the smallest open item on this track.**
 
 ---
 
@@ -942,6 +944,26 @@ Three user-visible sentences, each currently false, each true at completion:
   0/139. Adding a spec that is not 110/111/112 scope-breakout should be treated as
   avoidance of the actual work.
 
+### 5.8 Working-tree state — read before starting
+
+As of 2026-08-10 the repository has uncommitted work that a fresh session must not
+destroy or double-do. **Check `git status` first; do not `git clean`.**
+
+| Path | State | Owner | Action |
+|---|---|---|---|
+| `specs/110-*`, `specs/111-*`, `specs/112-*` | **untracked** | this planning track | Commit before any breakout work — currently unprotected |
+| `config/release-trains.yaml` + 6 `state.json` | modified | `OPS-006-local-git-reconciliation` (`in_progress`) | The F1/G110 fix. Commit closes F1 |
+| `docs/releases/next/`, `docs/releases/README.md` | untracked | release-packet work | Review before committing |
+
+Two consequences worth stating plainly:
+
+1. **The three enabling specs exist only on disk.** They are not in any commit. Any
+   clone of this repository does not have them. This is the highest-priority
+   housekeeping item in the plan.
+2. **G110 passes only against the working tree.** Run it against `HEAD` and it
+   exits 1 with 8 errors. A gate result is only meaningful once you know which
+   tree produced it.
+
 ---
 
 ## 6. Critical path
@@ -998,8 +1020,9 @@ the command surface. Re-run on 2026-08-10 with the release gates added.
 **Re-measurement, 2026-08-10.** 34 commits after first authoring. Held exactly:
 pillar DoD 80/537 (105 `0/139`, 106 `41/238`, 107 `39/160`), 31 PWA pages, 2 with
 shared nav, 27 scenario contracts, 20 catalog surfaces, 99 `done` specs. Changed:
-spec total 109 → 112 (110, 111, 112 authored); `release-train-guard.sh` now exits
-0 having previously failed with 7 errors. Re-verified still open: D25
+spec total 109 → 112 (110, 111, 112 authored, **untracked in git at time of
+writing**); `release-train-guard.sh` exits 0 against the working tree but 1 against
+`HEAD`. Re-verified still open: D25
 (`internal/agent/tools/retrieval/tool.go`, 4 `user_id` references), D27
 (`tests/eval` absent from `scripts/runtime/go-integration.sh`), D28
 (`internal/auth/scope_middleware.go:71,75`). Full log:

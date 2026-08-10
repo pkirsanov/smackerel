@@ -78,20 +78,21 @@ Same command with `--phase mvp`. Result: **exit 0**, 36 feature annotations, 5 `
 
 ### F1 — Release-train SST does not validate (Critical, `bubbles.train`)
 
-> **✅ RESOLVED 2026-08-10.** `release-train-guard.sh` now exits 0 with zero
-> errors. Both causes below were corrected in the 34 commits following this
-> review. Verified in
-> [`Delivery_Position_2026-08-10.md`](Delivery_Position_2026-08-10.md). Retained
-> for the record — and because recommendation #4 below is what surfaced it: the
-> "nothing was run" boundary hid this defect, and running the gate is equally
-> what showed it fixed.
+> **⚠️ STATUS 2026-08-10 — fixed locally, NOT committed.**
+> `release-train-guard.sh` exits 0 against the **working tree** but still **exits 1
+> with 8 errors against `HEAD`**. The correction lives in uncommitted changes to
+> `config/release-trains.yaml` and six `state.json` files, held by
+> `specs/_ops/OPS-006-local-git-reconciliation` (`in_progress`). **F1 is not closed
+> in the repository.** The error count rose from 7 to 8 because `OPS-006` itself
+> was added as an `in_progress` spec without `releaseTrain` after this review.
+> Verified in [`Delivery_Position_2026-08-10.md`](Delivery_Position_2026-08-10.md).
 
-G110 was a **failing gate** at review time, not a latent risk. Evidence A. Two distinct causes:
+G110 is a **failing gate today**, not a latent risk. Evidence A. Two distinct causes:
 
 1. [`config/release-trains.yaml`](../config/release-trains.yaml) L16 sets an unsupported `target_slot` for train `mvp`. This review omits concrete target values because knb owns their binding. Train `next` uses a G110-accepted slot at L22.
 2. Five `in_progress` bug specs carry no `releaseTrain` field: `BUG-069-004`, `BUG-061-008`, `BUG-061-007`, `BUG-061-006`, `BUG-003-002`.
 
-**Impact.** Every guarded train operation refused while this stood. No plan of record covered this defect — it was corrected outside the plan and is now green.
+**Impact.** Every guarded train operation refuses while this stands. No plan of record covers this defect. A local fix exists but is uncommitted (see status note above).
 
 ### F2 — v1's G101 binding is vacuous (High, `bubbles.releases`)
 

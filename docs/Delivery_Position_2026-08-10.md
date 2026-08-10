@@ -37,19 +37,33 @@ The constraint is not backend capability. It is the exposure layer.
 | 31 PWA pages, 2 with shared nav | 31 / 2 | exact |
 | 27 scenario contracts | 27 | exact |
 | 20 catalog surfaces | 20 | exact |
-| **F1: G110 release-train guard FAILS (exit 1, 7 errors)** | **exit 0, 0 errors** | **RESOLVED** |
+| **F1: G110 release-train guard FAILS (exit 1, 7 errors)** | **working tree exit 0; HEAD exit 1, 8 errors** | **see correction** |
 | D27: eval suite in no automated lane | still absent from `go-integration.sh` | open |
 | D28: scope short-circuit at `scope_middleware.go:71,75` | both cases present | open |
 | D25: model-supplied identity in retrieval tool | 4 `user_id` references | open |
 
 ## What Changed In 8 Days
 
-**Resolved — F1, the Release Schema Review's only Critical.**
-`release-train-guard.sh` now exits 0 with zero errors. On 2026-08-02 it exited 1
-with 7 errors (invalid `target_slot` for train `mvp`; five `in_progress` bug
-specs missing `releaseTrain`). That review's recommendation #4 observed that the
-"nothing was run" boundary is what hid F1 — running the gate is equally what
-shows it is now green. **Any plan item scoped to fixing F1 is already done.**
+**F1 — corrected 2026-08-10, after first publication.**
+The first version of this note recorded F1 as resolved by the 34 commits. That was
+wrong, and the error is instructive: `release-train-guard.sh` was run against the
+**working tree**, which exits 0. Run against `HEAD` alone it still **exits 1 with 8
+errors**. The fix exists only as uncommitted local changes to
+`config/release-trains.yaml` and six `state.json` files — the in-flight work of
+`specs/_ops/OPS-006-local-git-reconciliation` (`in_progress`, `stabilize-to-doc`),
+owned by a concurrent session. **No commit fixes F1.**
+
+Errors still present at HEAD:
+
+- train `mvp` has invalid `target_slot 'self-hosted'` (expected `prod|staging|home-lab|none`) — F1a
+- six `in_progress` specs carry no `releaseTrain`: `BUG-069-004`, `BUG-061-008`,
+  `BUG-061-007`, `BUG-061-006`, `BUG-003-002` (the review's five) plus
+  `OPS-006-local-git-reconciliation`, added since the review
+
+The lesson is the same one recommendation #4 of the review already stated, one
+level deeper: running the gate is necessary but not sufficient — **it matters
+which tree you run it against.** A working-tree pass can be someone else's
+uncommitted work.
 
 **Three new specs, correctly routed.** `110-retrieval-quality-foundation` (plan
 problem P8, Stage 4), `111-corpus-portability-sensitivity` (parallel track,
@@ -93,7 +107,10 @@ an acceptance gate that currently runs in no automated lane.
 ## Reproduce
 
 ```bash
-bash .github/bubbles/scripts/release-train-guard.sh "$(pwd)"        # G110
+# G110 — run against BOTH trees; they disagree
+bash .github/bubbles/scripts/release-train-guard.sh "$(pwd)"                    # working tree → 0
+git stash -u && bash .github/bubbles/scripts/release-train-guard.sh "$(pwd)"    # HEAD alone   → 1
+git stash pop
 for s in 105-* 106-* 107-*; do
   d="specs/$s/scopes"
   echo "$s $(grep -h '^- \[x\]' $d/*/scope.md | wc -l)/$(cat $d/*/scope.md | grep -cE '^- \[[ x]\]')"
