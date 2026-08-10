@@ -361,13 +361,33 @@ bubbles_ci_annotate_failure() {
 # Empty output means the log carried no recognizable failure line, in which case
 # the caller MUST fall back to the bare label rather than annotating an empty body.
 #
+# THREE SHAPES ARE RECOGNIZED, in ONE grep pass (so ordering and the 10-line cap
+# stay trivially correct):
+#   1. assertion shapes  — FAIL / ERROR / AssertionError / Traceback / not ok / ✗ / ❌
+#   2. tool-error shapes — a line whose FIRST token is `<tool>:` (awk, sed, jq, …)
+#   3. shell/interpreter phrases ANYWHERE in the line (command not found, …)
+#
+# Shapes 2 and 3 exist because of a measured mis-signal: a macOS check failed
+# with `awk: line 27: syntax error at or near ,`, which starts with none of the
+# shape-1 tokens and was therefore filtered out. The annotation then showed only
+# assertions carrying empty values, making a CRASHED INTERPRETER look like code
+# that runs but produces wrong content. Interpreter-level errors MUST be visible.
+#
+# POSIX ERE ONLY — this also runs against macOS BSD grep. No \s, \+, \?, no
+# `grep -P`. The required `:` right after the tool token is what keeps shape 2
+# bounded: `shellcheck:` and `python-ish:` do not match.
+#
 # Always returns 0. "No failure line found" is a NORMAL outcome of this helper,
 # not an error, and the caller runs under `set -euo pipefail` — a bare
 # `grep | head | cut` would return 1 there (grep finds nothing, pipefail
 # propagates it) and abort the caller mid-run on exactly the fallback path this
-# helper documents. See ci-annotation-emitter-selftest.sh cases I4/I5.
+# helper documents. The trailing `|| true` is LOAD-BEARING.
+# See ci-annotation-emitter-selftest.sh cases I4/I5/I15.
 bubbles_ci_failure_detail() {
   local file="${1-}"
   [[ -f "$file" ]] || return 0
-  grep -aE '^[[:space:]]*(FAIL|ERROR|AssertionError|Traceback|not ok|✗|❌)' "$file" 2>/dev/null | head -n 10 | cut -c1-300 || true
+  local _tools='awk|gawk|mawk|sed|grep|jq|date|stat|sort|python3|python|bash|sh|node'
+  local _phrases='[Cc]ommand not found|[Ss]yntax error|[Uu]nbound variable|[Nn]o such file or directory|[Pp]ermission denied|[Ii]llegal option'
+  local _re="^[[:space:]]*(FAIL|ERROR|AssertionError|Traceback|not ok|✗|❌|(${_tools}):)|(${_phrases})"
+  grep -aE "$_re" "$file" 2>/dev/null | head -n 10 | cut -c1-300 || true
 }

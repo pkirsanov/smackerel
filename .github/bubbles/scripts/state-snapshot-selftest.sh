@@ -309,6 +309,22 @@ run_atomic_success_case() {
     echo "  output: $snapshot_output"
   fi
 
+  # SCOPE-6: the snapshot must be self-describing about the posture that
+  # produced it, so an audit never reconstructs the operator's shell.
+  posture_recorded="$(jq -r '.autonomyPosture // "null"' "$session_file" 2>/dev/null)"
+  if [[ -n "$posture_recorded" && "$posture_recorded" != "null" ]]; then
+    pass "session state records the resolved autonomy posture (got: $posture_recorded)"
+  else
+    fail "session state should record a non-null autonomyPosture"
+  fi
+
+  turn_posture="$(jq -r '.turnSnapshots[-1].posture // "null"' "$session_file" 2>/dev/null)"
+  if [[ "$turn_posture" == "$posture_recorded" ]]; then
+    pass "the turn snapshot carries the same posture as the session record"
+  else
+    fail "turn snapshot posture ($turn_posture) should match session posture ($posture_recorded)"
+  fi
+
   if [[ "$(file_line_count "$rename_proof")" == "2" ]]; then
     pass "exactly two session-file renames occur for a convergence snapshot"
   else
@@ -347,6 +363,69 @@ run_atomic_success_case() {
     pass "successful snapshot leaves no session update temp files"
   else
     fail "successful snapshot left session update temp files"
+  fi
+
+  # SCOPE-5: an auto-resolved decision is recorded with the principle that fired.
+  # Runs LAST in this case, and without the instrumented mv shim, so neither the
+  # rename count nor the turnSnapshots==1 assertion above is disturbed.
+  set +e
+  BUBBLES_AGENT_NAME="bubbles.workflow" \
+    bash "$SNAPSHOT" \
+    --session-id "$session_id" --session-control-file "$control_file" \
+    --binding-packet-file "$binding_packet" \
+    --phase phase_case6_decision --mode start \
+    --decision "chose the POSIX rewrite over installing gawk" \
+    --decision-principle prefer_correct_over_green \
+    --decision-chose posix-rewrite \
+    --decision-considered "posix-rewrite, install-gawk, fail-loud-shim" >/dev/null 2>&1
+  local decision_rc=$?
+  set -e
+
+  if [[ "$decision_rc" -eq 0 ]]; then
+    pass "a snapshot carrying an auto-resolved decision succeeds"
+  else
+    fail "decision snapshot should succeed (exit=$decision_rc)"
+  fi
+
+  if [[ "$(jq -r '.autonomyDecisions | length' "$session_file" 2>/dev/null)" == "1" ]]; then
+    pass "the auto-resolved decision is appended to autonomyDecisions[]"
+  else
+    fail "autonomyDecisions[] should hold exactly one entry"
+  fi
+
+  if [[ "$(jq -r '.autonomyDecisions[-1].principle' "$session_file" 2>/dev/null)" == "prefer_correct_over_green" ]]; then
+    pass "the decision records the principle that fired"
+  else
+    fail "the decision should record its principle"
+  fi
+
+  # The discarded alternatives are what make the ledger auditable.
+  if [[ "$(jq -r '.autonomyDecisions[-1].considered | length' "$session_file" 2>/dev/null)" == "3" ]]; then
+    pass "the decision records every option considered, not just the winner"
+  else
+    fail "considered[] should hold 3 options"
+  fi
+
+  # A turn with no decision must not grow the ledger.
+  if [[ "$(jq -r '.turnSnapshots | length' "$session_file" 2>/dev/null)" -gt "$(jq -r '.autonomyDecisions | length' "$session_file" 2>/dev/null)" ]]; then
+    pass "turns without a decision leave autonomyDecisions[] untouched"
+  else
+    fail "a decision-free turn must not append to autonomyDecisions[]"
+  fi
+
+  set +e
+  BUBBLES_AGENT_NAME="bubbles.workflow" \
+    bash "$SNAPSHOT" \
+    --session-id "$session_id" --session-control-file "$control_file" \
+    --binding-packet-file "$binding_packet" \
+    --phase phase_case6_orphan --mode start \
+    --decision-principle orphaned >/dev/null 2>&1
+  local orphan_rc=$?
+  set -e
+  if [[ "$orphan_rc" -eq 2 ]]; then
+    pass "decision metadata without a decision is a usage error (exit 2)"
+  else
+    fail "decision metadata without --decision should exit 2 (got: $orphan_rc)"
   fi
 }
 

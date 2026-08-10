@@ -2,10 +2,12 @@
 set -euo pipefail
 umask 077
 
-# Portable awk: the 3-arg match($0, /re/, arr) form used below is a GNU awk
-# extension that BSD/macOS awk rejects. Prefer gawk when present (the framework's
-# macOS toolchain provides it alongside gsed/ggrep/gtimeout).
-if command -v gawk >/dev/null 2>&1; then awk() { command gawk "$@"; }; fi
+# Portable awk only: this script uses POSIX awk (2-arg match + RSTART/RLENGTH).
+# Do NOT reintroduce the GNU 3-arg match($0, /re/, arr) form. BSD/macOS awk
+# rejects it, and guarding it behind a `command -v gawk` shim fails SILENTLY on
+# hosts without gawk: awk aborts, emits nothing, and callers read empty fields
+# instead of erroring. The macOS CI runner installs bash only -- it does NOT
+# ship gawk -- so the shim was never a safety net there. Keep every match() 2-arg.
 
 # context-compactor.sh
 # Compact a subagent RESULT-ENVELOPE into a single-line JSON ledger record
@@ -276,8 +278,8 @@ extract_field() {
         next
       }
       if (in_block == 1) {
-        if (match(line, /^[[:space:]]*-[[:space:]]*(.*)$/, m)) {
-          item = trim(m[1])
+        if (match(line, /^[[:space:]]*-[[:space:]]*/)) {
+          item = trim(substr(line, RSTART + RLENGTH))
           if (item != "") {
             if (result != "") result = result "\n"
             result = result item

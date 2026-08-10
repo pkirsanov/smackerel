@@ -29,6 +29,10 @@ bubbles/scripts/assurance-resolve-selftest.sh
 bubbles/scripts/assurance-resolve.sh
 bubbles/scripts/audit-result-contract-lint-selftest.sh
 bubbles/scripts/audit-result-contract-lint.sh
+bubbles/scripts/autonomy-posture-guard-selftest.sh
+bubbles/scripts/autonomy-posture-guard.sh
+bubbles/scripts/autonomy-resolve-selftest.sh
+bubbles/scripts/autonomy-resolve.sh
 bubbles/scripts/bash-baseline-guard-selftest.sh
 bubbles/scripts/batch-promotion-lint-selftest.sh
 bubbles/scripts/batch-promotion-lint.sh

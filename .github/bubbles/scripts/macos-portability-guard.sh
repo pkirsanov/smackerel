@@ -290,6 +290,24 @@ report "class-15 mktemp-nontrailing-x" \
   "$(scan_class "mktemp[[:space:]].*X{6,}[^X\"'[:space:])|;&]")" \
   'end the template with the X run, then rename to add the extension'
 
+# 16. GNU awk 3-argument match(str, re, arr) — a gawk extension. BSD awk (stock
+#     macOS /usr/bin/awk) and mawk REJECT it with a PARSE error, so the WHOLE awk
+#     program dies and every extracted field comes back empty. The failure has no
+#     traceback: it reads as "ran, but produced wrong content". A CONDITIONAL
+#     `command -v gawk && awk(){ command gawk "$@"; }` shim is NOT an exemption
+#     here — that shim no-ops precisely on the machine that lacks gawk, which is
+#     how this class shipped to macOS CI in the first place.
+#     The middle argument is matched structurally (regex literal / string literal
+#     / bare identifier) rather than by counting commas, because a regex literal
+#     may itself contain a comma ({2,4}) or a paren ((.*)). The portable 2-arg
+#     form has no second top-level comma and is therefore never matched.
+#     Per the self-match convention above, the open paren is written escaped, so
+#     this pattern's own source text ("match" + backslash + paren) is not the
+#     literal "match(" it looks for and the guard stays clean on itself.
+report "class-16 awk-3arg-match" \
+  "$(scan_class 'match\([^,]*,[[:space:]]*(/[^/]*/|"[^"]*"|[A-Za-z_][A-Za-z0-9_]*)[[:space:]]*,[[:space:]]*[A-Za-z_][A-Za-z0-9_]*[[:space:]]*\)')" \
+  'rewrite with POSIX 2-arg match(str, re) + RSTART / RLENGTH / substr(); a conditional gawk shim is NOT a fix (it no-ops when gawk is absent)'
+
 echo
 if [[ "$violations" -gt 0 ]]; then
   echo "FAIL: $violations macOS-portability construct class(es) found in the scanned surface."

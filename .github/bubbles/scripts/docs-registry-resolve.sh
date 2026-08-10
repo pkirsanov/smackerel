@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Portable awk: the 3-arg match($0, /re/, arr) form used below is a GNU awk
-# extension that BSD/macOS awk rejects. Prefer gawk when present.
-if command -v gawk >/dev/null 2>&1; then awk() { command gawk "$@"; }; fi
+# Portable awk only: this script uses POSIX awk (kv()/litem() below replace the
+# GNU 3-arg match($0, /re/, arr)). Do NOT reintroduce that form. BSD/macOS awk
+# rejects it, and guarding it behind a `command -v gawk` shim fails SILENTLY on
+# hosts without gawk: awk aborts, emits nothing, and callers read empty fields
+# instead of erroring. Keep every match() 2-arg.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -97,6 +99,31 @@ function set_doc_field(target, key, field, value) {
   target[key SUBSEP field] = trim(value)
 }
 
+# POSIX replacements for the GNU 3-arg match(). kv() sets KEY/VAL for a
+# "<ind><key>: <value>" line at exactly <ind>; litem() returns a "<ind>- <item>"
+# value. Both reject deeper indentation, matching the anchored regexes they replace.
+function kv(line, ind, keypat,   n, s, p) {
+  n = length(ind)
+  if (n > 0 && substr(line, 1, n) != ind) return 0
+  s = substr(line, n + 1)
+  if (substr(s, 1, 1) == " " || substr(s, 1, 1) == "\t") return 0
+  p = index(s, ":")
+  if (p == 0) return 0
+  KEY = substr(s, 1, p - 1)
+  if (keypat != "" && KEY !~ keypat) return 0
+  VAL = trim(substr(s, p + 1))
+  return 1
+}
+
+function litem(line, ind,   n, s) {
+  n = length(ind)
+  if (n > 0 && substr(line, 1, n) != ind) return 0
+  s = substr(line, n + 1)
+  if (substr(s, 1, 1) != "-") return 0
+  ITEM = trim(substr(s, 2))
+  return 1
+}
+
 function parse_framework_registry(file,    line, section, doc_key, list_field, match_arr, field, value) {
   section = ""
   doc_key = ""
@@ -107,8 +134,8 @@ function parse_framework_registry(file,    line, section, doc_key, list_field, m
       continue
     }
 
-    if (match(line, /^version:[[:space:]]*(.*)$/, match_arr)) {
-      version = trim(match_arr[1])
+    if (kv(line, "", "^version$")) {
+      version = VAL
       continue
     }
 
@@ -132,16 +159,16 @@ function parse_framework_registry(file,    line, section, doc_key, list_field, m
     }
 
     if (section == "managedDocs") {
-      if (match(line, /^  ([A-Za-z0-9_-]+):[[:space:]]*$/, match_arr)) {
-        doc_key = match_arr[1]
+      if (kv(line, "  ", "^[A-Za-z0-9_-]+$") && VAL == "") {
+        doc_key = KEY
         note_doc_key(default_doc_seen, default_doc_order, doc_key)
         list_field = ""
         continue
       }
 
-      if (doc_key != "" && match(line, /^    ([A-Za-zA-Z]+):[[:space:]]*(.*)$/, match_arr)) {
-        field = match_arr[1]
-        value = trim(match_arr[2])
+      if (doc_key != "" && kv(line, "    ", "^[A-Za-zA-Z]+$")) {
+        field = KEY
+        value = VAL
         if (field == "requiredSections") {
           list_field = field
           delete default_doc_list[doc_key SUBSEP field]
@@ -152,19 +179,19 @@ function parse_framework_registry(file,    line, section, doc_key, list_field, m
         continue
       }
 
-      if (doc_key != "" && list_field != "" && match(line, /^      -[[:space:]]*(.*)$/, match_arr)) {
-        append_list_value(default_doc_list, doc_key, list_field, trim(match_arr[1]))
+      if (doc_key != "" && list_field != "" && litem(line, "      ")) {
+        append_list_value(default_doc_list, doc_key, list_field, ITEM)
         continue
       }
     }
 
-    if (section == "policy" && match(line, /^  ([A-Za-zA-Z0-9_-]+):[[:space:]]*(.*)$/, match_arr)) {
-      default_policy[match_arr[1]] = trim(match_arr[2])
+    if (section == "policy" && kv(line, "  ", "^[A-Za-zA-Z0-9_-]+$")) {
+      default_policy[KEY] = VAL
       continue
     }
 
-    if (section == "classification" && match(line, /^  ([A-Za-zA-Z0-9_-]+):[[:space:]]*(.*)$/, match_arr)) {
-      default_classification[match_arr[1]] = trim(match_arr[2])
+    if (section == "classification" && kv(line, "  ", "^[A-Za-zA-Z0-9_-]+$")) {
+      default_classification[KEY] = VAL
       continue
     }
   }
@@ -211,24 +238,24 @@ function parse_project_overrides(file,    line, section, subsection, doc_key, li
       continue
     }
 
-    if (match(line, /^  (managedDocs|policy|classification):[[:space:]]*$/, match_arr)) {
-      subsection = match_arr[1]
+    if (kv(line, "  ", "^(managedDocs|policy|classification)$") && VAL == "") {
+      subsection = KEY
       doc_key = ""
       list_field = ""
       continue
     }
 
     if (subsection == "managedDocs") {
-      if (match(line, /^    ([A-Za-z0-9_-]+):[[:space:]]*$/, match_arr)) {
-        doc_key = match_arr[1]
+      if (kv(line, "    ", "^[A-Za-z0-9_-]+$") && VAL == "") {
+        doc_key = KEY
         note_doc_key(override_doc_seen, override_doc_order, doc_key)
         list_field = ""
         continue
       }
 
-      if (doc_key != "" && match(line, /^      ([A-Za-zA-Z]+):[[:space:]]*(.*)$/, match_arr)) {
-        field = match_arr[1]
-        value = trim(match_arr[2])
+      if (doc_key != "" && kv(line, "      ", "^[A-Za-zA-Z]+$")) {
+        field = KEY
+        value = VAL
         if (field == "requiredSections") {
           list_field = field
           delete override_doc_list[doc_key SUBSEP field]
@@ -239,19 +266,19 @@ function parse_project_overrides(file,    line, section, subsection, doc_key, li
         continue
       }
 
-      if (doc_key != "" && list_field != "" && match(line, /^        -[[:space:]]*(.*)$/, match_arr)) {
-        append_list_value(override_doc_list, doc_key, list_field, trim(match_arr[1]))
+      if (doc_key != "" && list_field != "" && litem(line, "        ")) {
+        append_list_value(override_doc_list, doc_key, list_field, ITEM)
         continue
       }
     }
 
-    if (subsection == "policy" && match(line, /^    ([A-Za-zA-Z0-9_-]+):[[:space:]]*(.*)$/, match_arr)) {
-      override_policy[match_arr[1]] = trim(match_arr[2])
+    if (subsection == "policy" && kv(line, "    ", "^[A-Za-zA-Z0-9_-]+$")) {
+      override_policy[KEY] = VAL
       continue
     }
 
-    if (subsection == "classification" && match(line, /^    ([A-Za-zA-Z0-9_-]+):[[:space:]]*(.*)$/, match_arr)) {
-      override_classification[match_arr[1]] = trim(match_arr[2])
+    if (subsection == "classification" && kv(line, "    ", "^[A-Za-zA-Z0-9_-]+$")) {
+      override_classification[KEY] = VAL
       continue
     }
   }

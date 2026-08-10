@@ -114,8 +114,10 @@ def launch(host, token=None, extra_env=None, port=None):
     )
 
 
-def wait_up(proc, port, tries=50):
-    for _ in range(tries):
+def wait_up(proc, port, deadline_s=30.0):
+    # Wall-clock bounded: a macOS CI runner needs well over the old ~5s budget.
+    end = time.monotonic() + deadline_s
+    while time.monotonic() < end:
         if proc.poll() is not None:
             return False
         c = socket.socket()
@@ -194,7 +196,9 @@ schema_port = free_port()
 proc = launch("127.0.0.1", port=schema_port)
 try:
     if not wait_up(proc, schema_port):
-        _, err = proc.communicate(timeout=5)
+        # Kill first: the process is still running, so a timed communicate() would raise and lose this diagnostic.
+        proc.kill()
+        _, err = proc.communicate()
         bad(f"live 127.0.0.1 tokenless did not come up; stderr={err!r}")
     else:
         ok("live: --host 127.0.0.1 tokenless starts (loopback stays tokenless)")
@@ -336,7 +340,8 @@ body_port = free_port()
 proc = launch("127.0.0.1", extra_env={"BUBBLES_MCP_MAX_BODY_BYTES": "64"}, port=body_port)
 try:
     if not wait_up(proc, body_port):
-        _, err = proc.communicate(timeout=5)
+        proc.kill()
+        _, err = proc.communicate()
         bad(f"body-cap server did not come up; stderr={err!r}")
     else:
         s = socket.socket()

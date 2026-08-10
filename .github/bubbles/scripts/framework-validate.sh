@@ -603,6 +603,12 @@ fi
 if [[ -x "$SCRIPT_DIR/adversarial-resolve-selftest.sh" ]]; then
   run_check "Adversarial-resolve control plane selftest (IMP-002 / S0)" bash "$SCRIPT_DIR/adversarial-resolve-selftest.sh"
 fi
+if [[ -x "$SCRIPT_DIR/autonomy-resolve-selftest.sh" ]]; then
+  run_check "Autonomy-resolve posture selftest (IMP-039 / SCOPE-1)" bash "$SCRIPT_DIR/autonomy-resolve-selftest.sh"
+fi
+if [[ -x "$SCRIPT_DIR/autonomy-posture-guard-selftest.sh" ]]; then
+  run_check "Autonomy posture consistency selftest (G135 / IMP-039 SCOPE-7)" bash "$SCRIPT_DIR/autonomy-posture-guard-selftest.sh"
+fi
 if [[ -f "$SCRIPT_DIR/adversarial-aggregate-selftest.sh" ]]; then
   # The selftest validates the source-only eval schema and canonical source surfaces.
   run_check_self_only "Adversarial aggregate selftest (IMP-020 / S2)" bash "$SCRIPT_DIR/adversarial-aggregate-selftest.sh"

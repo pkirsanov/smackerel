@@ -36,9 +36,10 @@ SERVER_PID=$!
 cleanup() { kill "$SERVER_PID" 2>/dev/null || true; wait "$SERVER_PID" 2>/dev/null || true; rm -f "$LOG"; }
 trap cleanup EXIT INT TERM
 
-# Wait for the port to accept connections (up to ~5s).
+# Wall-clock bounded: a macOS CI runner needs well over the old ~5s budget.
 ready=0
-for _ in $(seq 1 50); do
+_deadline=$((SECONDS + 30))
+while (( SECONDS < _deadline )); do
   if python3 -c "import socket,sys; s=socket.socket(); s.settimeout(0.2)
 sys.exit(0 if s.connect_ex(('127.0.0.1',$PORT))==0 else 1)" 2>/dev/null; then
     ready=1; break

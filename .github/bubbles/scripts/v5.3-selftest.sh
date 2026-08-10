@@ -34,7 +34,9 @@ fail() { echo "FAIL: $1" >&2; failures=$((failures + 1)); }
 
 # --- T2: source-mode detection on the framework repo itself ---
 if [[ -f "$ROOT_DIR/install.sh" && -f "$ROOT_DIR/VERSION" ]]; then
-  src_out="$(bash "$SCRIPT_DIR/framework-validate.sh" 2>&1 | head -5 || true)"
+  # Window must clear any stderr preamble (macOS emits a 3-line flock-absent NOTE
+  # before the banner); head still SIGPIPEs the run early so this stays cheap.
+  src_out="$(bash "$SCRIPT_DIR/framework-validate.sh" 2>&1 | head -30 || true)"
   if grep -q "Install mode: source" <<<"$src_out"; then
     pass "T2: framework-validate reports install-mode=source from framework repo"
   else
@@ -124,7 +126,7 @@ for f in workflow-delegation-core.md workflow-orchestration-core.md workflow-inp
 done
 
 # --- T1: downstream-mode detection ---
-ds_out="$(bash "$tmp_root/.github/bubbles/scripts/framework-validate.sh" 2>&1 | head -5 || true)"
+ds_out="$(bash "$tmp_root/.github/bubbles/scripts/framework-validate.sh" 2>&1 | head -30 || true)"
 if grep -q "Install mode: downstream" <<<"$ds_out"; then
   pass "T1: framework-validate reports install-mode=downstream from synthesized .github/ tree"
 else

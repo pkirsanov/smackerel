@@ -354,9 +354,158 @@ else
   fi
 fi
 
+# --- Case I9-I17: TOOL/INTERPRETER errors must be surfaced, not filtered out --
+# WHY (measured). A macOS check failed with
+#     awk: line 27: syntax error at or near ,
+# That line starts with none of FAIL/ERROR/AssertionError/Traceback/not ok, so
+# the shape-1-only extractor dropped it. The annotation then carried only failed
+# assertions with empty values, which made a CRASHED INTERPRETER look like code
+# that runs but produces wrong content — a mis-signal that cost a long
+# investigation. I9-I12 are the regression guards for that exact failure mode.
+{
+  printf 'PASS: green line that must not appear\n'
+  printf 'awk: line 27: syntax error at or near ,\n'
+  printf 'jq: error (at <stdin>:0): null (null) has no keys\n'
+  printf 'bash: line 3: foo: command not found\n'
+  printf '/usr/lib/thing.sh: line 9: MYVAR: unbound variable\n'
+  printf 'sed: -i requires an argument\n'
+  printf 'ok 2 - benign\n'
+} >"$TMP/toolerr.log"
+run_detail "$TMP/toolerr.log"
+
+# --- I9: the awk parse error (the measured mis-signal) is surfaced ------------
+if grep -Fq 'awk: line 27: syntax error at or near ,' "$OUT"; then
+  pass "failure_detail: surfaces an awk interpreter parse error"
+else
+  fail "failure_detail: dropped the awk parse error, got [$(masked "$(cat "$OUT")")]"
+fi
+
+# --- I10: a jq tool error is surfaced ----------------------------------------
+if grep -Fq 'jq: error (at <stdin>:0): null' "$OUT"; then
+  pass "failure_detail: surfaces a jq tool error"
+else
+  fail "failure_detail: dropped the jq tool error"
+fi
+
+# --- I11: a shell 'command not found' is surfaced ----------------------------
+if grep -Fq 'bash: line 3: foo: command not found' "$OUT"; then
+  pass "failure_detail: surfaces a shell 'command not found'"
+else
+  fail "failure_detail: dropped the 'command not found' line"
+fi
+
+# --- I12: the phrase branch fires on a line whose first token is NOT a tool ---
+# `/usr/lib/thing.sh:` is not in the tool alternation, so only the unanchored
+# phrase branch can catch it. Without that branch this assertion goes red.
+if grep -Fq '/usr/lib/thing.sh: line 9: MYVAR: unbound variable' "$OUT"; then
+  pass "failure_detail: phrase branch catches an error on a non-tool-prefixed line"
+else
+  fail "failure_detail: dropped an 'unbound variable' line lacking a tool prefix"
+fi
+
+# --- I13 (adversarial): benign lines in the SAME log are still NOT surfaced ---
+# Without this, widening the regex all the way to `cat` would satisfy I9-I12.
+leaked=''
+grep -Fq 'PASS: green line that must not appear' "$OUT" && leaked="$leaked [PASS line]"
+grep -Fq 'ok 2 - benign' "$OUT" && leaked="$leaked [ok line]"
+if [[ -z "$leaked" ]]; then
+  pass "failure_detail: benign lines absent from a log full of tool errors"
+else
+  fail "failure_detail: widened regex leaked benign lines:$leaked"
+fi
+
+# --- I14: every pre-existing assertion shape still matches (regression guard) -
+# The tool/phrase branches are ADDITIVE. If shape 1 were lost, this goes red
+# while I9-I12 stay green.
+{
+  printf 'Traceback (most recent call last):\n'
+  printf 'AssertionError: expected 1 got 0\n'
+  printf 'not ok 3 - legacy tap failure\n'
+  printf 'ERROR: legacy error line\n'
+  printf 'FAIL: legacy fail line\n'
+  printf '✗ legacy cross marker\n'
+  printf '❌ legacy emoji marker\n'
+  printf 'PASS: legacy green line\n'
+} >"$TMP/legacy.log"
+run_detail "$TMP/legacy.log"
+legacy_missing=''
+while IFS= read -r want; do
+  grep -Fq "$want" "$OUT" || legacy_missing="$legacy_missing [$want]"
+done <<'LEGACY_SHAPES'
+Traceback (most recent call last):
+AssertionError: expected 1 got 0
+not ok 3 - legacy tap failure
+ERROR: legacy error line
+FAIL: legacy fail line
+✗ legacy cross marker
+❌ legacy emoji marker
+LEGACY_SHAPES
+if [[ -z "$legacy_missing" ]]; then
+  pass "failure_detail: all 7 pre-existing assertion shapes still captured"
+else
+  fail "failure_detail: lost pre-existing shape(s):$legacy_missing"
+fi
+
+# --- I15 (adversarial): zero exit under pipefail when NOTHING matches ---------
+# This is the pipefail landmine restated for the WIDENED regex. Every line below
+# is a deliberate NEAR MISS: `shellcheck:`/`python-ish:`/`sorted:` prove the tool
+# branch requires the colon immediately after the token, `failures:` proves shape
+# 1 stayed case-sensitive, `notok` proves `not ok` still needs its space. So grep
+# matches nothing, returns 1, pipefail propagates it — and only the load-bearing
+# `|| true` keeps the set -euo pipefail harness alive.
+{
+  printf 'PASS: everything nominal\n'
+  printf 'shellcheck: no issues found\n'
+  printf 'python-ish: fine\n'
+  printf 'sorted: yes\n'
+  printf 'notok 4 - hyphenless\n'
+  printf 'failures: 0\n'
+} >"$TMP/nearmiss.log"
+run_detail "$TMP/nearmiss.log"
+lines="$(detail_lines)"
+if [[ "$DETAIL_RC" -eq 0 ]] && [[ "$lines" == "0" ]] && grep -Fq 'HARNESS-SURVIVED' "$OUT"; then
+  pass "failure_detail: near-miss log matches nothing AND returns 0 under set -euo pipefail"
+else
+  fail "failure_detail: near-miss log misbehaved (rc=$DETAIL_RC, lines=$lines, expected rc=0 lines=0)"
+fi
+
+# --- I16: the 10-line cap still holds for the widened regex -------------------
+: >"$TMP/many-tool.log"
+for i in {1..25}; do
+  printf 'awk: line %s: syntax error at or near ,\n' "$i" >>"$TMP/many-tool.log"
+done
+run_detail "$TMP/many-tool.log"
+lines="$(detail_lines)"
+if [[ "$lines" == "10" ]]; then
+  pass "failure_detail: caps output at 10 lines given 25 tool-error lines"
+else
+  fail "failure_detail: expected 10 lines from a 25-line tool-error log, got $lines"
+fi
+
+# --- I17: a long line is still truncated to 300 chars -------------------------
+# An annotation body is size-limited; one runaway line must not consume it.
+long_tail=''
+while [[ "${#long_tail}" -lt 400 ]]; do
+  long_tail="${long_tail}0123456789"
+done
+printf 'awk: syntax error %s\n' "$long_tail" >"$TMP/longline.log"
+run_detail "$TMP/longline.log"
+longest=0
+while IFS= read -r captured; do
+  [[ "$captured" == "HARNESS-SURVIVED" ]] && continue
+  if [[ "${#captured}" -gt "$longest" ]]; then
+    longest="${#captured}"
+  fi
+done <"$OUT"
+if [[ "$longest" -eq 300 ]]; then
+  pass "failure_detail: truncates an over-long tool-error line to 300 chars"
+else
+  fail "failure_detail: expected a 300-char cap, longest captured line was $longest"
+fi
+
 if [[ "$failures" -ne 0 ]]; then
   printf 'ci-annotation-emitter selftest: %d failure(s)\n' "$failures"
   exit 1
 fi
-printf 'ci-annotation-emitter selftest: OK (22 assertions)\n'
+printf 'ci-annotation-emitter selftest: OK (31 assertions)\n'
 exit 0

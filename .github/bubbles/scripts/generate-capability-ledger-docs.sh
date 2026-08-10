@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Portable awk: the 3-arg match($0, /re/, arr) form used below is a GNU awk
-# extension that BSD/macOS awk rejects. Prefer gawk when present.
-if command -v gawk >/dev/null 2>&1; then awk() { command gawk "$@"; }; fi
+# Portable awk only: this script uses POSIX awk (kv()/litem() in each awk program
+# replace the GNU 3-arg match($0, /re/, arr)). Do NOT reintroduce that form.
+# BSD/macOS awk rejects it, and guarding it behind a `command -v gawk` shim fails
+# SILENTLY on hosts without gawk: awk aborts, emits nothing, and callers read
+# empty fields instead of erroring. Keep every match() 2-arg.
 
 # Temp-file cleanup: register every mktemp via _btmp so EXIT/INT/TERM removes them.
 _BTMPS=()
@@ -216,6 +218,28 @@ function trim(value) {
   sub(/[[:space:]]+$/, "", value)
   return value
 }
+function kv(line, ind, keypat,   n, s, p) {
+  n = length(ind)
+  if (n > 0 && substr(line, 1, n) != ind) return 0
+  s = substr(line, n + 1)
+  if (substr(s, 1, 1) == " " || substr(s, 1, 1) == "\t") return 0
+  p = index(s, ":")
+  if (p == 0) return 0
+  KEY = substr(s, 1, p - 1)
+  if (keypat != "" && KEY !~ keypat) return 0
+  VAL = trim(substr(s, p + 1))
+  return 1
+}
+
+function litem(line, ind,   n, s) {
+  n = length(ind)
+  if (n > 0 && substr(line, 1, n) != ind) return 0
+  s = substr(line, n + 1)
+  if (substr(s, 1, 1) != "-") return 0
+  ITEM = trim(substr(s, 2))
+  return 1
+}
+
 function append_value(target_name, key, value, composite) {
   if (value == "") {
     return
@@ -245,15 +269,15 @@ BEGIN {
   section = "capabilities"
   next
 }
-section == "capabilities" && match($0, /^  ([a-z0-9-]+):[[:space:]]*$/, match_arr) {
+section == "capabilities" && kv($0, "  ", "^[a-z0-9-]+$") && VAL == "" {
   flush_capability()
-  cap_id = match_arr[1]
+  cap_id = KEY
   list_field = ""
   next
 }
-section == "capabilities" && cap_id != "" && match($0, /^    ([A-Za-z]+):[[:space:]]*(.*)$/, match_arr) {
-  field = match_arr[1]
-  value = trim(match_arr[2])
+section == "capabilities" && cap_id != "" && kv($0, "    ", "^[A-Za-z]+$") {
+  field = KEY
+  value = VAL
   if (field == "docsRefs" || field == "evidenceRefs" || field == "competitorTags" || field == "issueRefs" || field == "freshnessTargets") {
     list_field = field
     next
@@ -262,8 +286,8 @@ section == "capabilities" && cap_id != "" && match($0, /^    ([A-Za-z]+):[[:spac
   list_field = ""
   next
 }
-section == "capabilities" && cap_id != "" && list_field != "" && match($0, /^    -[[:space:]]*(.*)$/, match_arr) {
-  append_value(list_field, cap_id, trim(match_arr[1]))
+section == "capabilities" && cap_id != "" && list_field != "" && litem($0, "    ") {
+  append_value(list_field, cap_id, ITEM)
   next
 }
 END {
@@ -354,6 +378,28 @@ function trim(value) {
   sub(/[[:space:]]+$/, "", value)
   return value
 }
+function kv(line, ind, keypat,   n, s, p) {
+  n = length(ind)
+  if (n > 0 && substr(line, 1, n) != ind) return 0
+  s = substr(line, n + 1)
+  if (substr(s, 1, 1) == " " || substr(s, 1, 1) == "\t") return 0
+  p = index(s, ":")
+  if (p == 0) return 0
+  KEY = substr(s, 1, p - 1)
+  if (keypat != "" && KEY !~ keypat) return 0
+  VAL = trim(substr(s, p + 1))
+  return 1
+}
+
+function litem(line, ind,   n, s) {
+  n = length(ind)
+  if (n > 0 && substr(line, 1, n) != ind) return 0
+  s = substr(line, n + 1)
+  if (substr(s, 1, 1) != "-") return 0
+  ITEM = trim(substr(s, 2))
+  return 1
+}
+
 function append_list(source_id, field, value, composite) {
   if (value == "") {
     return
@@ -381,15 +427,15 @@ BEGIN {
   in_sources = 1
   next
 }
-in_sources && match($0, /^  ([a-z0-9-]+):[[:space:]]*$/, match_arr) {
+in_sources && kv($0, "  ", "^[a-z0-9-]+$") && VAL == "" {
   flush_source()
-  source_id = match_arr[1]
+  source_id = KEY
   list_field = ""
   next
 }
-in_sources && source_id != "" && match($0, /^    ([A-Za-z]+):[[:space:]]*(.*)$/, match_arr) {
-  field = match_arr[1]
-  value = trim(match_arr[2])
+in_sources && source_id != "" && kv($0, "    ", "^[A-Za-z]+$") {
+  field = KEY
+  value = VAL
   if (field == "detectors" || field == "normalizedClasses" || field == "supportedTargets" || field == "unsupportedTargets") {
     list_field = field
     next
@@ -398,8 +444,8 @@ in_sources && source_id != "" && match($0, /^    ([A-Za-z]+):[[:space:]]*(.*)$/,
   list_field = ""
   next
 }
-in_sources && source_id != "" && list_field != "" && match($0, /^    -[[:space:]]*(.*)$/, match_arr) {
-  append_list(source_id, list_field, trim(match_arr[1]))
+in_sources && source_id != "" && list_field != "" && litem($0, "    ") {
+  append_list(source_id, list_field, ITEM)
   next
 }
 END {

@@ -78,10 +78,14 @@ run_guard() {
 }
 
 # assert_red <name> <class-label> <fixture-file>
+# The label check is a pure-bash substring test, NOT `… | grep -Fq …`: under
+# `set -o pipefail` an early-exiting `grep -q` makes the writer take SIGPIPE, so
+# the pipeline reports 141 and a PRESENT label reads as absent. That raced
+# intermittently and is exactly the kind of flake a wired selftest must not have.
 assert_red() {
   local name="$1" class="$2" file="$3"
   run_guard "$file"
-  if [[ "$GUARD_RC" -eq 1 ]] && printf '%s\n' "$GUARD_OUT" | grep -Fq "$class"; then
+  if [[ "$GUARD_RC" -eq 1 && "$GUARD_OUT" == *"$class"* ]]; then
     pass "RED $name -> exit 1 + names '$class'"
   else
     fail "RED $name -> expected exit 1 + '$class', got rc=$GUARD_RC"
@@ -186,6 +190,18 @@ assert_red "class14-tmpdir-long-option" "class-14 mktemp-parent-dir" "$TMPDIR/c1
 mk "$TMPDIR/c15.sh" 'f="$(mktemp "$base/run.XXXXXX.yaml")"'
 assert_red "class15-mktemp-nontrailing-x" "class-15 mktemp-nontrailing-x" "$TMPDIR/c15.sh"
 
+mk "$TMPDIR/c16.sh" 'awk "{ if (match($0, /x=([0-9])/, m)) print m[1] }" f.txt'
+assert_red "class16-awk-3arg-match" "class-16 awk-3arg-match" "$TMPDIR/c16.sh"
+
+# The conditional gawk shim is the remedy the guidance USED to prescribe. It
+# no-ops on exactly the machine that lacks gawk -- which is the machine whose BSD
+# awk parse-errors on the 3-arg form -- so its presence must NOT suppress the
+# finding. This assertion is what keeps that non-remedy from being reinstated.
+mk "$TMPDIR/c16-shim.sh" \
+  'if command -v gawk >/dev/null 2>&1; then awk() { command gawk "$@"; }; fi' \
+  'awk "{ if (match($0, /x=([0-9])/, m)) print m[1] }" f.txt'
+assert_red "class16-gawk-shim-is-not-an-exemption" "class-16 awk-3arg-match" "$TMPDIR/c16-shim.sh"
+
 # --- ADVERSARIAL fixtures: the portable form each class recommends ---------
 # One character separates each of these from its RED twin above. They fail the
 # selftest if a class widens into the form it exists to recommend.
@@ -195,6 +211,27 @@ assert_green "adversarial14-directory-in-template" "$TMPDIR/a14.sh"
 
 mk "$TMPDIR/a15.sh" 'f="$(mktemp "$base/run.XXXXXX")"'
 assert_green "adversarial15-x-run-ends-the-template" "$TMPDIR/a15.sh"
+
+# The POSIX rewrite class-16 prescribes: 2-arg match() + RSTART/RLENGTH/substr().
+mk "$TMPDIR/a16.sh" 'awk "{ if (match($0, /x=[0-9]/)) print substr($0, RSTART, RLENGTH) }" f.txt'
+assert_green "adversarial16-posix-2arg-match-rstart-rlength" "$TMPDIR/a16.sh"
+
+# 2-arg match() whose pattern is a VARIABLE, not a regex literal -- one comma
+# away from the 3-arg form, and portable.
+mk "$TMPDIR/a16-varpat.sh" 'awk -v p="$re" "{ if (match($0, p)) print RSTART }" f.txt'
+assert_green "adversarial16-2arg-match-with-variable-pattern" "$TMPDIR/a16-varpat.sh"
+
+# The "Do NOT reintroduce ..." guard comments that repaired scripts now carry
+# QUOTE the broken form. Flagging that prose would punish the correct fix.
+mk "$TMPDIR/a16-comment.sh" \
+  '# Do NOT reintroduce the GNU 3-arg match($0, /re/, arr) form. BSD/macOS awk' \
+  '# rejects it with a parse error, so the whole program dies with no traceback.' \
+  'awk "{ print }" f.txt'
+assert_green "adversarial16-3arg-form-only-inside-a-comment" "$TMPDIR/a16-comment.sh"
+
+# The documented inline exemption still applies to class-16, like every class.
+mk "$TMPDIR/a16-pragma.sh" 'awk "{ if (match($0, /re/, m)) print m[1] }" f  # portable-ok: gawk-only devtool, never runs on macOS'
+assert_green "adversarial16-portable-ok-pragma-exempts" "$TMPDIR/a16-pragma.sh"
 
 # --- REGRESSION: the pre-fix call sites the guard used to miss -------------
 # Reconstructed from commit 583923a, which repaired thirteen mktemp -p sites
@@ -207,9 +244,9 @@ mk "$TMPDIR/regression-583923a.sh" \
   'TEST_ROOT="$(mktemp -d -p "$TEST_ROOT_BASE")"' \
   '_composed_file="$(mktemp -p "$TMP_DIR" workflows-composed.XXXXXX.yaml)"'
 run_guard "$TMPDIR/regression-583923a.sh"
-if [[ "$GUARD_RC" -eq 1 ]] \
-  && printf '%s\n' "$GUARD_OUT" | grep -Fq "class-14 mktemp-parent-dir" \
-  && printf '%s\n' "$GUARD_OUT" | grep -Fq "class-15 mktemp-nontrailing-x"; then
+if [[ "$GUARD_RC" -eq 1 \
+  && "$GUARD_OUT" == *"class-14 mktemp-parent-dir"* \
+  && "$GUARD_OUT" == *"class-15 mktemp-nontrailing-x"* ]]; then
   pass "REGRESSION 583923a pre-fix mktemp sites -> exit 1 + names both classes"
 else
   fail "REGRESSION 583923a expected exit 1 + class-14 + class-15, got rc=$GUARD_RC"
@@ -223,7 +260,7 @@ mkdir -p "$dir_surface/nested"
 mk "$dir_surface/clean.sh" 'echo ok'
 mk "$dir_surface/nested/dirty.sh" 'grep -P "x" f'
 run_guard "$dir_surface"
-if [[ "$GUARD_RC" -eq 1 ]] && printf '%s\n' "$GUARD_OUT" | grep -Fq "class-6 grep-pcre"; then
+if [[ "$GUARD_RC" -eq 1 && "$GUARD_OUT" == *"class-6 grep-pcre"* ]]; then
   pass "directory surface recurses into *.sh (nested dirty file caught)"
 else
   fail "directory surface expected exit 1 + class-6, got rc=$GUARD_RC"
@@ -234,7 +271,7 @@ set +e
 env_out="$(PORTABILITY_SCAN_PATHS="$TMPDIR/c1.sh" bash "$TARGET" 2>&1)"
 env_rc=$?
 set -e
-if [[ "$env_rc" -eq 1 ]] && printf '%s\n' "$env_out" | grep -Fq "class-1 raw-timeout"; then
+if [[ "$env_rc" -eq 1 && "$env_out" == *"class-1 raw-timeout"* ]]; then
   pass "PORTABILITY_SCAN_PATHS env surface is honored"
 else
   fail "PORTABILITY_SCAN_PATHS env surface expected exit 1 + class-1, got rc=$env_rc"
@@ -280,7 +317,7 @@ fi
 # so the guard's own [[:space:]] pattern strings never false-match. 'timeout' is
 # intentionally omitted (it is a substring of the helper names).
 code_only="$(grep -vE '^[[:space:]]*#' "$TARGET" || true)"
-gnu_forms='sed -i|date -d|stat -c|readlink -f|grep -[a-zA-Z]*P|df --output|/bin/(true|false)|mktemp --suffix|mktemp -[a-zA-Z]*p |mktemp --tmpdir|XXXXXX[.]|date [+]%s%N|\[\[ -v '
+gnu_forms='sed -i|date -d|stat -c|readlink -f|grep -[a-zA-Z]*P|df --output|/bin/(true|false)|mktemp --suffix|mktemp -[a-zA-Z]*p |mktemp --tmpdir|XXXXXX[.]|date [+]%s%N|\[\[ -v |match\([^,)]*,[^,)]*,'
 gnu_hits="$(printf '%s\n' "$code_only" | grep -nE "$gnu_forms" 2>/dev/null || true)"
 if [[ -z "$gnu_hits" ]]; then
   pass "guard source (comments stripped) has no literal GNU-only form"

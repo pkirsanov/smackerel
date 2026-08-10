@@ -167,12 +167,34 @@ bubbles_python_provision() {
     echo "python-env: reusing managed environment at $venv_dir"
   fi
 
+  # Record the toolchain identity on EVERY run, pass or fail. A provisioning
+  # failure that reports only "it failed" leaves the next reader guessing, and
+  # WHICH interpreter ran — on WHICH platform — is the first fact any diagnosis
+  # needs. Asked of the interpreter itself, never inferred from the host.
+  local venv_identity pip_status=0
+  venv_identity="$("$venv_python" -c 'import sys, platform; print(sys.version.split()[0], platform.system() + "/" + platform.machine())' 2>/dev/null)" ||
+    venv_identity="unreported (the interpreter did not answer)"
+
+  echo "python-env: interpreter $venv_python ($venv_identity)"
   echo "python-env: installing pinned requirements from $requirements"
-  if ! "$venv_python" -m pip install \
+  "$venv_python" -m pip install \
     --disable-pip-version-check \
     --no-input \
-    --requirement "$requirements"; then
-    echo "python-env: dependency installation failed (network unavailable, or a pin no longer resolves)" >&2
+    --requirement "$requirements" || pip_status=$?
+  if [[ "$pip_status" -ne 0 ]]; then
+    # Report what was OBSERVED. The previous message asserted a cause
+    # ("network unavailable, or a pin no longer resolves") that nothing here
+    # measured, which is how a CI leg goes dark: the log named a diagnosis
+    # instead of the data needed to reach one.
+    {
+      echo "python-env: dependency installation FAILED (pip rc=$pip_status)"
+      echo "  interpreter  : $venv_python"
+      echo "  python       : $venv_identity"
+      echo "  requirements : $requirements"
+      echo "  The cause is NOT determined here; pip's own output above is the record."
+      echo "  Common causes: no route to the package index, an index that requires"
+      echo "  auth, or a pin with no distribution for this python/platform."
+    } >&2
     return 2
   fi
 

@@ -174,6 +174,23 @@ A fabricated completion is infinitely worse than an honest gap. An incorrect evi
 
 ---
 
+## Autonomy Floor (what no autonomy level may waive)
+
+`bubbles/workflows.yaml` → `neverStopFor` enumerates what must NOT stop a run. This is its inverse: what no autonomy posture, operator instruction, or escalation may suppress. A blanket "user approves all / unblock all blocks / never stop / deliver 100%" instruction raises throughput; it does NOT authorize anything below.
+
+The posture dial governs **interaction**. It never governs **verification**.
+
+1. **Anti-fabrication, evidence, and status ceilings.** Gates, evidence standards, and status ceilings are not blocks to be unblocked. This is the highest-risk item on this list: "never stop, deliver 100%" is direct pressure to fabricate a terminal state. Per the Honesty Incentive above, an honest gap always beats a fabricated completion.
+2. **Destructive and external actions.** `destructive_mutation`, `external_side_effect`, and `runtime_teardown` (`bubbles/action-risk-registry.yaml`) stay confirm-gated. A blanket pre-approval must not silently authorize a force-push, a dropped store, or a production deploy.
+3. **Secret-value hygiene.** Never auto-waivable. A secret value must never be echoed, logged, committed, or routed through a model.
+4. **Scenario `action`-node approval.** Pre-mutation human approval for host-mutating deploys is retained exactly as specified today.
+5. **Pre-push validation.** Not a block to route around. `--no-verify` stays forbidden.
+6. **Legitimate `blocked`.** An operator-only blocker (absent credential, absent external access) remains a truthful terminal state. Forbidding it would convert a real blocker into a fabricated `done`.
+
+An agent that cannot proceed without waiving one of these MUST stop and say so plainly. "I was told not to stop" is not a justification for any item above.
+
+---
+
 ## Enforcement Rules
 
 - A scope/feature/bug/ops packet cannot be marked complete if any policy above is violated.

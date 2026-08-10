@@ -2,9 +2,11 @@
 
 set -euo pipefail
 
-# Portable awk: the 3-arg match($0, /re/, arr) form used below is a GNU awk
-# extension that BSD/macOS awk rejects. Prefer gawk when present.
-if command -v gawk >/dev/null 2>&1; then awk() { command gawk "$@"; }; fi
+# Portable awk only: this script uses POSIX awk (2-arg match + RSTART/RLENGTH).
+# Do NOT reintroduce the GNU 3-arg match($0, /re/, arr) form. BSD/macOS awk
+# rejects it, and guarding it behind a `command -v gawk` shim fails SILENTLY on
+# hosts without gawk: awk aborts, emits nothing, and callers read empty fields
+# instead of erroring. Keep every match() 2-arg.
 
 # Temp-file cleanup: register every mktemp via _btmp so EXIT/INT/TERM removes them.
 _BTMPS=()
@@ -460,7 +462,14 @@ show_stale() {
   fi
 
   awk -v cutoff="$(date -u -d "${stale_cutoff_days} days ago" +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || date -u -v-"${stale_cutoff_days}"d +"%Y-%m-%dT%H:%M:%SZ")" '
-    match($0, /"timestamp":"([^"]+)"/, ts) && ts[1] < cutoff { print $0; found = 1 }
+    function jsonstr(line, key,   seg) {
+      if (!match(line, "\"" key "\":\"[^\"]+\"")) return ""
+      seg = substr(line, RSTART, RLENGTH)
+      sub("^\"" key "\":\"", "", seg)
+      sub("\"$", "", seg)
+      return seg
+    }
+    { ts = jsonstr($0, "timestamp"); if (ts != "" && ts < cutoff) { print $0; found = 1 } }
     END { if (!found) print "No stale developer observations." }
   ' "$OBSERVATIONS_FILE"
 }
@@ -476,13 +485,23 @@ clear_stale() {
   cutoff="$(date -u -d "${stale_cutoff_days} days ago" +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || date -u -v-"${stale_cutoff_days}"d +"%Y-%m-%dT%H:%M:%SZ")"
   temp_file="$(_btmp)"
   awk -v cutoff="$cutoff" '
-    match($0, /"timestamp":"([^"]+)"/, ts) {
-      if (ts[1] >= cutoff) {
-        print
-      }
-      next
+    function jsonstr(line, key,   seg) {
+      if (!match(line, "\"" key "\":\"[^\"]+\"")) return ""
+      seg = substr(line, RSTART, RLENGTH)
+      sub("^\"" key "\":\"", "", seg)
+      sub("\"$", "", seg)
+      return seg
     }
-    { print }
+    {
+      ts = jsonstr($0, "timestamp")
+      if (ts != "") {
+        if (ts >= cutoff) {
+          print
+        }
+        next
+      }
+      print
+    }
   ' "$OBSERVATIONS_FILE" > "$temp_file"
   mv "$temp_file" "$OBSERVATIONS_FILE"
   write_profile
