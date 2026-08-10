@@ -23,6 +23,11 @@
 #       "FINDING: unknown-gate-id:" with G099 mentioned
 #   - G900+ references in the clean fixture do NOT trigger findings
 #     under --strict (project-local custom-gate allowlist works)
+#   - the scans still work when the only grep on PATH has neither PCRE (-P)
+#     nor the GNU \b word boundary (i.e. stock macOS/BSD grep)
+#   - a broken awk makes the gate REFUSE (exit 2) instead of reporting zero
+#   - word-boundary and adjacency semantics hold at the edges
+#     ("G1234" / "XG123" never match; "G024 G025" is not a duplicate)
 #
 # Cleans up on exit.
 
@@ -62,78 +67,129 @@ workflows:
 EOF
 }
 
-# --- PCRE grep guard (adversarial) ----------------------------------------
+# --- POSIX-tooling guarantee (adversarial) --------------------------------
 #
-# A grep without -P (BSD/macOS default) would make the scans return zero
-# matches and the gate would SILENTLY PASS. The guard must fail-fast (exit 2)
-# instead. Stage a stub grep that rejects -P and confirm exit 2. This would
-# regress to a false-negative exit 0 if the guard were removed.
+# The whole point of the awk rewrite is that this gate runs on stock macOS/BSD
+# userland, where grep has neither PCRE (-P) nor the GNU \b word boundary. Stage
+# a grep that refuses both and run the DUPLICATE fixture through it: the finding
+# must still be reported. Asserting on the duplicate fixture (not the clean one)
+# is what makes this adversarial — a reintroduced GNU-grep dependency would
+# produce an empty scan, which a clean-fixture "exit 0" would happily accept.
 #
-# This case runs FIRST on purpose. It is the one assertion that needs no PCRE
-# engine, so running it before the optional-dependency gate below means a host
-# without GNU grep -- a stock macOS runner -- still proves the guard is present
-# instead of skipping the whole suite.
+# This case runs FIRST on purpose: it needs no optional dependency, so it holds
+# on every host.
 
-pcre_root="$TMPDIR/repo-pcre"
-seed_repo "$pcre_root"
+nopcre_root="$TMPDIR/repo-nopcre"
+seed_repo "$nopcre_root"
+cat > "$nopcre_root/agents/dup-doc.md" <<'EOF'
+# dup-doc
 
-stub_dir="$TMPDIR/stub-grep"
+This line has a copy-paste regression: G028, G028 in a row.
+EOF
+
+stub_dir="$TMPDIR/stub-bin"
 mkdir -p "$stub_dir"
 real_grep="$(command -v grep)"
-cat > "$stub_dir/grep" <<EOF
+cat > "$stub_dir/grep" <<'EOF'
 #!/usr/bin/env bash
-for a in "\$@"; do
-  [ "\$a" = "-P" ] && { echo "grep: invalid option -- P" >&2; exit 2; }
+# Stock BSD/macOS grep simulation: refuses PCRE and the GNU word boundary, the
+# two GNU-only constructs this gate must never depend on again.
+for a in "$@"; do
+  case "$a" in
+    -*P*) echo "grep: invalid option -- P" >&2; exit 2 ;;
+  esac
+  case "$a" in
+    *'\b'*) echo "grep: no GNU word-boundary support" >&2; exit 2 ;;
+  esac
 done
-exec "$real_grep" "\$@"
+exec "${SELFTEST_REAL_GREP:?SELFTEST_REAL_GREP not set}" "$@"
 EOF
 chmod +x "$stub_dir/grep"
 
 set +e
-pcre_log="$TMPDIR/pcre.log"
-BUBBLES_GREP="$stub_dir/grep" bash "$TARGET" --repo-root "$pcre_root" >"$pcre_log" 2>&1
-pcre_rc=$?
+nopcre_log="$TMPDIR/nopcre.log"
+PATH="$stub_dir:$PATH" SELFTEST_REAL_GREP="$real_grep" \
+  bash "$TARGET" --repo-root "$nopcre_root" >"$nopcre_log" 2>&1
+nopcre_rc=$?
 set -e
 
-if [[ "$pcre_rc" -eq 2 ]]; then
-  pass "missing grep -P fail-fasts with exit 2 (no silent pass)"
+if [[ "$nopcre_rc" -eq 1 ]]; then
+  pass "grep without -P/\\b still detects the duplicate (exit 1)"
 else
-  fail "missing grep -P expected exit 2, got $pcre_rc"
-  sed -n '1,40p' "$pcre_log"
+  fail "grep without -P/\\b expected exit 1, got $nopcre_rc"
+  cat "$nopcre_log"
 fi
 
-if grep -Fq "requires GNU grep with PCRE (-P) support" "$pcre_log"; then
-  pass "missing grep -P prints the PCRE guard message"
+if grep -Fq "FINDING: duplicate-adjacent:" "$nopcre_log"; then
+  pass "grep without -P/\\b still prints the duplicate-adjacent finding"
 else
-  fail "missing grep -P did not print the PCRE guard message"
-  sed -n '1,40p' "$pcre_log"
+  fail "grep without -P/\\b lost the duplicate-adjacent finding (silent pass)"
+  cat "$nopcre_log"
 fi
 
-# --- Optional-dependency gate --------------------------------------------
+# --- awk fail-loud guard (adversarial) ------------------------------------
 #
-# Every fixture assertion below runs the target's real scans, and those scans
-# need a PCRE-capable grep. Stock macOS ships BSD grep, which has none, so on
-# such a host the target correctly refuses with exit 2 and all twelve fixture
-# assertions fail against expectations of 0 and 1. That is the dependency being
-# absent, not the gate being broken.
-#
-# Gate the ASSERTIONS that need the dependency, never the whole suite: the
-# adversarial guard case above has already run, so a removed guard is still
-# caught here on a host with no PCRE engine. This follows the same graceful
-# degradation the framework uses for its other optional dependencies.
-if printf 'x\n' | grep -P 'x' >/dev/null 2>&1; then
-  : # system grep provides the engine
-elif command -v ggrep >/dev/null 2>&1 && printf 'x\n' | ggrep -P 'x' >/dev/null 2>&1; then
-  : # GNU grep installed alongside BSD grep (Homebrew or MacPorts)
+# awk drives both scans. A missing or broken awk would emit zero rows, and the
+# gate would SILENTLY PASS. It must refuse with exit 2 instead. Two shapes:
+#   (1) awk absent outright -> the capability probe refuses
+#   (2) awk that satisfies the probe but fails on the real scan -> the scan
+#       guard refuses (this is the shape a naive `|| true` would swallow)
+
+set +e
+noawk_log="$TMPDIR/noawk.log"
+BUBBLES_AWK="$TMPDIR/definitely-not-an-awk" \
+  bash "$TARGET" --repo-root "$nopcre_root" >"$noawk_log" 2>&1
+noawk_rc=$?
+set -e
+
+if [[ "$noawk_rc" -eq 2 ]]; then
+  pass "missing awk fail-fasts with exit 2 (no silent pass)"
 else
-  echo "  SKIP: fixture scans (no PCRE-capable grep; install GNU grep to run them)"
-  echo
-  if [[ "$failures" -eq 0 ]]; then
-    echo "[selftest gate-id-grep] SKIP — PCRE guard verified; fixture scans need a PCRE-capable grep"
-    exit 0
+  fail "missing awk expected exit 2, got $noawk_rc"
+  cat "$noawk_log"
+fi
+
+if grep -Fq "requires a working POSIX awk" "$noawk_log"; then
+  pass "missing awk prints the awk capability guard message"
+else
+  fail "missing awk did not print the awk capability guard message"
+  cat "$noawk_log"
+fi
+
+cat > "$stub_dir/awk-halfbroken" <<'EOF'
+#!/usr/bin/env bash
+# Satisfies the trivial stdin capability probe, fails on any file-operand scan.
+for a in "$@"; do
+  if [ -f "$a" ]; then
+    echo "awk: simulated scan failure" >&2
+    exit 3
   fi
-  echo "[selftest gate-id-grep] FAIL — $failures assertion(s) failed"
-  exit 1
+done
+cat >/dev/null
+echo x
+exit 0
+EOF
+chmod +x "$stub_dir/awk-halfbroken"
+
+set +e
+halfawk_log="$TMPDIR/halfawk.log"
+BUBBLES_AWK="$stub_dir/awk-halfbroken" \
+  bash "$TARGET" --repo-root "$nopcre_root" >"$halfawk_log" 2>&1
+halfawk_rc=$?
+set -e
+
+if [[ "$halfawk_rc" -eq 2 ]]; then
+  pass "awk failing mid-scan fail-fasts with exit 2 (no silent pass)"
+else
+  fail "awk failing mid-scan expected exit 2, got $halfawk_rc"
+  cat "$halfawk_log"
+fi
+
+if grep -Fq "scan failed (awk returned non-zero)" "$halfawk_log"; then
+  pass "awk failing mid-scan prints the scan-failure guard message"
+else
+  fail "awk failing mid-scan did not print the scan-failure guard message"
+  cat "$halfawk_log"
 fi
 
 # --- Clean fixture --------------------------------------------------------
@@ -290,6 +346,107 @@ if grep -Fq "FINDING: unknown-gate-id:" "$unk_strict_log" \
 else
   fail "unknown strict missing unknown-gate-id G099 finding"
   sed -n '1,40p' "$unk_strict_log"
+fi
+
+# --- Word-boundary and adjacency edges ------------------------------------
+#
+# These pin the semantics the awk scanner emulates without GNU \b. The fixture's
+# canonical set is only G028/G044, so every other id here surfaces as an unknown
+# under --strict — which is how "did scan 2 emit this token at all?" becomes
+# observable. "G123" must NEVER appear, because the only two places it could
+# come from are the over-long "G1234" and the prefixed "XG123".
+
+edge_root="$TMPDIR/repo-edge"
+seed_repo "$edge_root"
+cat > "$edge_root/agents/edge-doc.md" <<'EOF'
+DUPSPACE G024 G024 end
+DUPCOMMA G024, G024 end
+DISTINCT G024 G025 end
+OVERLONG G1234 end
+PREFIXED XG123 end
+TRIPLE G026 G027 G029 end
+DOTSEP G044. G044 end
+EOF
+
+set +e
+edge_default_log="$TMPDIR/edge-default.log"
+bash "$TARGET" --repo-root "$edge_root" >"$edge_default_log" 2>&1
+edge_default_rc=$?
+set -e
+
+if [[ "$edge_default_rc" -eq 1 ]]; then
+  pass "edge default exits 1 (duplicates present)"
+else
+  fail "edge default expected exit 1, got $edge_default_rc"
+  cat "$edge_default_log"
+fi
+
+if grep -Fq "DUPSPACE" "$edge_default_log"; then
+  pass "edge: 'G024 G024' is reported as duplicate-adjacent"
+else
+  fail "edge: 'G024 G024' was NOT reported as duplicate-adjacent"
+  cat "$edge_default_log"
+fi
+
+if grep -Fq "DUPCOMMA" "$edge_default_log"; then
+  pass "edge: 'G024, G024' is reported as duplicate-adjacent"
+else
+  fail "edge: 'G024, G024' was NOT reported as duplicate-adjacent"
+  cat "$edge_default_log"
+fi
+
+if grep -Fq "DISTINCT" "$edge_default_log"; then
+  fail "edge: 'G024 G025' was wrongly reported as duplicate-adjacent"
+  cat "$edge_default_log"
+else
+  pass "edge: 'G024 G025' is NOT a duplicate"
+fi
+
+if grep -Fq "DOTSEP" "$edge_default_log"; then
+  fail "edge: 'G044. G044' was wrongly reported (separator is not [ ,]+)"
+  cat "$edge_default_log"
+else
+  pass "edge: 'G044. G044' is NOT a duplicate (separator must be spaces/commas)"
+fi
+
+if grep -Fq "duplicate-adjacent: 2" "$edge_default_log"; then
+  pass "edge: exactly 2 duplicate-adjacent lines reported"
+else
+  fail "edge: expected exactly 2 duplicate-adjacent lines"
+  cat "$edge_default_log"
+fi
+
+set +e
+edge_strict_log="$TMPDIR/edge-strict.log"
+bash "$TARGET" --repo-root "$edge_root" --strict >"$edge_strict_log" 2>&1
+edge_strict_rc=$?
+set -e
+
+if [[ "$edge_strict_rc" -eq 1 ]]; then
+  pass "edge strict exits 1"
+else
+  fail "edge strict expected exit 1, got $edge_strict_rc"
+  cat "$edge_strict_log"
+fi
+
+if grep -Fq "G123" "$edge_strict_log"; then
+  fail "edge: 'G1234'/'XG123' wrongly matched as G123 (word boundary broken)"
+  cat "$edge_strict_log"
+else
+  pass "edge: 'G1234' and 'XG123' never match as G123"
+fi
+
+# `grep -o` semantics: one row per OCCURRENCE, so the TRIPLE line (fixture line
+# 6) must contribute exactly three reference rows, not one.
+triple_rows="$(grep -c 'edge-doc\.md:6:' "$edge_strict_log" || true)"
+if [[ "$triple_rows" -eq 3 ]] \
+   && grep -Fq "G026" "$edge_strict_log" \
+   && grep -Fq "G027" "$edge_strict_log" \
+   && grep -Fq "G029" "$edge_strict_log"; then
+  pass "edge: a line with three ids yields exactly three reference rows"
+else
+  fail "edge: expected 3 reference rows from the TRIPLE line, got $triple_rows"
+  cat "$edge_strict_log"
 fi
 
 # --- Summary --------------------------------------------------------------

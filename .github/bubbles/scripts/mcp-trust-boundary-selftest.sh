@@ -102,11 +102,14 @@ def free_port():
 def launch(host, token=None, extra_env=None, port=None):
     env = dict(os.environ)
     env.pop("BUBBLES_MCP_HTTP_TOKEN", None)
+    # Unbuffered both ways: a child we may have to SIGKILL must not carry its
+    # only diagnostic away inside an unflushed stdio buffer.
+    env["PYTHONUNBUFFERED"] = "1"
     if token:
         env["BUBBLES_MCP_HTTP_TOKEN"] = token
     if extra_env:
         env.update(extra_env)
-    argv = [sys.executable, SERVER, "--transport", "http", "--host", host]
+    argv = [sys.executable, "-u", SERVER, "--transport", "http", "--host", host]
     if port is not None:
         argv += ["--port", str(port)]
     return subprocess.Popen(
@@ -114,20 +117,82 @@ def launch(host, token=None, extra_env=None, port=None):
     )
 
 
-def wait_up(proc, port, deadline_s=30.0):
+class Probe:
+    """wait_up outcome. Truthy only when ready; otherwise it records WHY.
+
+    "the child exited" and "the child is alive but never accepted a connection"
+    need opposite diagnoses, so a bare bool cannot describe the failure.
+    """
+
+    def __init__(self, outcome, host, port):
+        self.outcome = outcome  # "ready" | "exited" | "timeout"
+        self.host = host
+        self.port = port
+
+    def __bool__(self):
+        return self.outcome == "ready"
+
+
+def wait_up(proc, port, deadline_s=30.0, host="127.0.0.1"):
     # Wall-clock bounded: a macOS CI runner needs well over the old ~5s budget.
     end = time.monotonic() + deadline_s
     while time.monotonic() < end:
         if proc.poll() is not None:
-            return False
+            return Probe("exited", host, port)
         c = socket.socket()
         c.settimeout(0.2)
-        rc = c.connect_ex(("127.0.0.1", port))
+        rc = c.connect_ex((host, port))
         c.close()
         if rc == 0:
-            return True
+            return Probe("ready", host, port)
         time.sleep(0.1)
-    return False
+    return Probe("timeout", host, port)
+
+
+STREAM_CAP = 2000
+
+
+def cap(text):
+    text = text or ""
+    if len(text) <= STREAM_CAP:
+        return repr(text)
+    return f"{text[:STREAM_CAP]!r} (truncated from {len(text)} chars)"
+
+
+def drain(proc):
+    """Stop a child and return (rc, stdout, stderr) for reporting.
+
+    terminate() before kill() so the child gets a chance to flush. Every step is
+    guarded: a diagnostic that raises reports less than no diagnostic at all.
+    """
+    out = err = ""
+    try:
+        proc.terminate()
+    except Exception:
+        pass
+    try:
+        out, err = proc.communicate(timeout=5)
+    except subprocess.TimeoutExpired:
+        try:
+            proc.kill()
+        except Exception:
+            pass
+        try:
+            out, err = proc.communicate(timeout=5)
+        except Exception:
+            pass
+    except Exception:
+        pass
+    return proc.returncode, out, err
+
+
+def launch_failure(label, proc, probe):
+    rc, out, err = drain(proc)
+    return (
+        f"{label} did not come up: outcome={probe.outcome} "
+        f"probe={probe.host}:{probe.port} rc={rc} "
+        f"stdout={cap(out)} stderr={cap(err)}"
+    )
 
 
 def stop(proc):
@@ -195,11 +260,9 @@ except subprocess.TimeoutExpired:
 schema_port = free_port()
 proc = launch("127.0.0.1", port=schema_port)
 try:
-    if not wait_up(proc, schema_port):
-        # Kill first: the process is still running, so a timed communicate() would raise and lose this diagnostic.
-        proc.kill()
-        _, err = proc.communicate()
-        bad(f"live 127.0.0.1 tokenless did not come up; stderr={err!r}")
+    probe = wait_up(proc, schema_port)
+    if not probe:
+        bad(launch_failure("live 127.0.0.1 tokenless", proc, probe))
     else:
         ok("live: --host 127.0.0.1 tokenless starts (loopback stays tokenless)")
 
@@ -339,10 +402,9 @@ if rec is not None:
 body_port = free_port()
 proc = launch("127.0.0.1", extra_env={"BUBBLES_MCP_MAX_BODY_BYTES": "64"}, port=body_port)
 try:
-    if not wait_up(proc, body_port):
-        proc.kill()
-        _, err = proc.communicate()
-        bad(f"body-cap server did not come up; stderr={err!r}")
+    probe = wait_up(proc, body_port)
+    if not probe:
+        bad(launch_failure("body-cap server", proc, probe))
     else:
         s = socket.socket()
         s.settimeout(5)

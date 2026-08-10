@@ -166,6 +166,17 @@ rb_expected_consumers() {
 
 # Validate the durable-work-repository-boundary contract against <ledger>.
 # Emits CAP-RB-* diagnostics; returns non-zero on any violation.
+#
+# MEMBERSHIP TESTS BELOW USE A HERESTRING, NOT `printf ... | grep -q`. Do not
+# "simplify" them back into a pipeline. Under `set -o pipefail`, `grep -q` exits
+# the instant it matches, which can SIGPIPE the still-writing producer; bash then
+# reports the pipeline as 141 even though the item WAS found, and the caller
+# reads that as "missing". Measured on this host: with an early match, the
+# pipeline form reported a spurious not-found 342 times in 400, while matching
+# the LAST line (no early exit, so no SIGPIPE) reported 0 in 400 and the
+# herestring form reported 0 in 400. With the short lists here the race lands
+# only ~2.6% of the time, which is precisely why it survived so long as an
+# unexplained intermittent failure rather than an obvious bug.
 validate_rb_capability() {
   local ledger="$1"
   local rc=0
@@ -196,7 +207,7 @@ validate_rb_capability() {
 
   ledger_evidence="$(rb_list "$ledger" "$RB_CAPABILITY" evidenceRefs)"
   for ref in "${RB_REQUIRED_EVIDENCE[@]}"; do
-    if ! printf '%s\n' "$ledger_evidence" | grep -qxF "$ref"; then
+    if ! grep -qxF -- "$ref" <<<"$ledger_evidence"; then
       echo "CAP-RB-EVIDENCE-$ref: required evidence reference missing from the ledger"
       rc=1
     elif [[ ! -f "$ROOT_DIR/$ref" ]]; then
@@ -210,7 +221,7 @@ validate_rb_capability() {
 
   while IFS= read -r item; do
     [[ -n "$item" ]] || continue
-    if ! printf '%s\n' "$ledger_consumers" | grep -qxF "$item"; then
+    if ! grep -qxF -- "$item" <<<"$ledger_consumers"; then
       echo "CAP-RB-CONSUMER-$item: required consumer missing from the ledger"
       rc=1
     fi
@@ -220,7 +231,7 @@ EOF
 
   while IFS= read -r item; do
     [[ -n "$item" ]] || continue
-    if ! printf '%s\n' "$expected" | grep -qxF "$item"; then
+    if ! grep -qxF -- "$item" <<<"$expected"; then
       echo "CAP-RB-CONSUMER-$item: stale consumer is not in the derived union"
       rc=1
     fi
@@ -339,7 +350,7 @@ expect_rb_violation() {
   rb_make_fixture "$kind" "$member" "$fixture"
   if out="$(validate_rb_capability "$fixture" 2>&1)"; then
     fail "$token adversarial fixture must fail ($label)"
-  elif printf '%s\n' "$out" | grep -qF "$token"; then
+  elif grep -qF -- "$token" <<<"$out"; then
     pass "$token adversarial fixture rejected ($label)"
   else
     fail "$token adversarial fixture failed for the wrong reason ($label)"

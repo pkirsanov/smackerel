@@ -27,6 +27,13 @@
 #   default   - only fail on duplicate-adjacent findings
 #   --strict  - also fail on unknown-gate-id findings
 #
+# Portability: both scans are POSIX awk programs (2-arg match() plus
+# RSTART/RLENGTH/substr) driven over a POSIX `find` file list. There is no
+# `grep -P` / PCRE dependency and no gawk extension, so this gate runs on stock
+# macOS/BSD userland without Homebrew. Word boundaries are emulated by testing
+# the characters adjacent to a candidate against [A-Za-z0-9_] — neither GNU `\b`
+# nor BSD `[[:<:]]` is used, since each is absent on the other platform.
+#
 # Scanned roots (relative to --repo-root):
 #   - agents/
 #   - instructions/
@@ -97,33 +104,17 @@ if [[ ! -d "$repo_root" ]]; then
   exit 2
 fi
 
-# --- PCRE grep guard (GNU grep -P required) --------------------------------
+# --- awk capability guard --------------------------------------------------
 #
-# The duplicate-adjacent and reference scans below use `grep -P` for the
-# back-reference (\1) and precise word-boundary matching. On a grep without
-# PCRE support (BSD/macOS default grep, or a GNU grep built --without-pcre),
-# `grep -P` errors out. Because those scans suppress stderr and `|| true` the
-# exit, a missing -P would make the scans return ZERO matches and the gate
-# would SILENTLY PASS — a false negative. Fail loud instead.
-# Override with BUBBLES_GREP (e.g. BUBBLES_GREP=ggrep on macOS).
-# Auto-select a PCRE-capable grep so this gate runs on macOS (BSD grep lacks -P)
-# without the operator pre-setting BUBBLES_GREP. Precedence: explicit BUBBLES_GREP
-# -> system grep (GNU on Linux) -> ggrep (GNU grep from brew/macports on macOS).
-# If none supports -P, the PCRE guard below still fails loud (never silent-pass).
-GREP_BIN="${BUBBLES_GREP:-}"
-if [[ -z "$GREP_BIN" ]]; then
-  if printf 'x\n' | grep -P 'x' >/dev/null 2>&1; then
-    GREP_BIN="grep"
-  elif command -v ggrep >/dev/null 2>&1 && printf 'x\n' | ggrep -P 'x' >/dev/null 2>&1; then
-    GREP_BIN="ggrep"
-  else
-    GREP_BIN="grep"
-  fi
-fi
-if ! printf 'x\n' | "$GREP_BIN" -P 'x' >/dev/null 2>&1; then
-  echo "gate-id-grep: requires GNU grep with PCRE (-P) support; '$GREP_BIN' lacks -P." >&2
-  echo "  This gate cannot scan reliably without -P and refuses to pass silently." >&2
-  echo "  On macOS: 'brew install grep' then re-run with BUBBLES_GREP=ggrep (or put GNU grep first on PATH)." >&2
+# Both scans below run through awk. awk is POSIX-mandated, but if it is missing
+# or cannot execute a trivial program the scans would emit ZERO rows and the
+# gate would SILENTLY PASS — a false negative. Fail loud instead, exactly as the
+# former PCRE guard did for the GNU-only `grep -P` this implementation removed.
+# Override the interpreter with BUBBLES_AWK if a repo needs a specific awk.
+AWK_BIN="${BUBBLES_AWK:-awk}"
+if ! printf 'x\n' | "$AWK_BIN" '{ print }' >/dev/null 2>&1; then
+  echo "gate-id-grep: requires a working POSIX awk; '$AWK_BIN' did not run." >&2
+  echo "  This gate cannot scan reliably without awk and refuses to pass silently." >&2
   exit 2
 fi
 
@@ -140,6 +131,75 @@ gate_source_files=("$workflows_yaml")
 modes_yaml="$repo_root/bubbles/workflows/modes.yaml"
 [[ -f "$modes_yaml" ]] && gate_source_files+=("$modes_yaml")
 
+# --- Shared POSIX-awk gate-ID scanner --------------------------------------
+#
+# One program, three output modes (-v mode=...):
+#   bare  - print each word-bounded G### token             -> "G024"
+#   refs  - print every occurrence with its position       -> "file:line:G024"
+#           (one row per OCCURRENCE, i.e. `grep -o` semantics)
+#   dups  - print the whole line once when it contains the SAME id twice in a
+#           row separated only by spaces/commas            -> "file:line:<line>"
+#
+# Word boundaries: a candidate G### is accepted only when the characters
+# immediately before and after it are absent or non-[A-Za-z0-9_]. That is the
+# ASCII \w rule PCRE's \b applies, expressed with portable string tests, so
+# "G1234" never matches as "G123" and "XG123" never matches at all.
+#
+# Binary skip: a file whose FIRST record carries a C0 control byte (anything
+# below 0x20 except tab/CR, or DEL) is treated as binary and skipped whole —
+# the portable stand-in for `grep --binary-files=without-match`, which awk
+# cannot reproduce exactly because several awks truncate records at NUL.
+# shellcheck disable=SC2016  # awk program text: $0 must NOT be shell-expanded
+AWK_PROG='
+BEGIN {
+  for (i = 1; i < 32; i++) {
+    if (i != 9 && i != 13) ctrl = ctrl sprintf("%c", i)
+  }
+  ctrl = ctrl sprintf("%c", 127)
+}
+function looks_binary(s,   i, n, c) {
+  n = length(s)
+  if (n > 512) n = 512
+  for (i = 1; i <= n; i++) {
+    c = substr(s, i, 1)
+    if (index(ctrl, c) > 0) return 1
+  }
+  return 0
+}
+function is_word(c) { return (c != "" && c ~ /[A-Za-z0-9_]/) }
+FNR == 1 { skipfile = looks_binary($0) }
+skipfile { next }
+{
+  line = $0
+  base = 0
+  rest = line
+  n = 0
+  while (match(rest, /G[0-9][0-9][0-9]/)) {
+    s = base + RSTART
+    if (!is_word((s > 1) ? substr(line, s - 1, 1) : "") \
+        && !is_word(substr(line, s + 4, 1))) {
+      tok = substr(line, s, 4)
+      if (mode == "bare") print tok
+      else if (mode == "refs") printf "%s:%d:%s\n", FILENAME, FNR, tok
+      else { n++; tokv[n] = tok; posv[n] = s }
+      base = s + 3
+    } else {
+      base = s
+    }
+    rest = substr(line, base + 1)
+  }
+  if (mode == "dups") {
+    for (i = 2; i <= n; i++) {
+      if (tokv[i] == tokv[i - 1] \
+          && substr(line, posv[i - 1] + 4, posv[i] - posv[i - 1] - 4) ~ /^[ ,]+$/) {
+        printf "%s:%d:%s\n", FILENAME, FNR, line
+        break
+      }
+    }
+  }
+}
+'
+
 # --- Build canonical gate ID set from workflows.yaml -----------------------
 #
 # Canonical sources are lines mentioning either "requiredGates" or
@@ -153,8 +213,8 @@ while IFS= read -r gate_id; do
   canonical_set["$gate_id"]=1
 done < <(
   grep -E 'requiredGates|delivery-gate-baseline' "${gate_source_files[@]}" \
-    | grep -oE '\bG[0-9]{3}\b' \
-    | sort -u
+    | LC_ALL=C "$AWK_BIN" -v mode=bare "$AWK_PROG" \
+    | LC_ALL=C sort -u
 )
 
 if [[ "${#canonical_set[@]}" -eq 0 ]]; then
@@ -183,30 +243,73 @@ if [[ "${#scan_roots[@]}" -eq 0 ]]; then
   exit 2
 fi
 
+# --- Enumerate the concrete files to scan ----------------------------------
+#
+# `grep -r` followed symlinks named on the command line, never descended into
+# .git, and skipped binary files. `find -H` + the -prune below + the awk binary
+# rule reproduce that with POSIX-only flags. The list is sorted so finding order
+# is stable across platforms (raw readdir order is not).
+
+declare -a scan_files=()
+while IFS= read -r scan_file; do
+  [[ -z "$scan_file" ]] && continue
+  [[ -r "$scan_file" ]] || continue
+  scan_files+=("$scan_file")
+done < <(
+  find -H "${scan_roots[@]}" -name '.git' -prune -o -type f -print 2>/dev/null \
+    | LC_ALL=C sort
+)
+
+if [[ "${#scan_files[@]}" -eq 0 ]]; then
+  echo "gate-id-grep: no readable files under the scan roots of $repo_root" >&2
+  exit 2
+fi
+
+# Run AWK_PROG over every scan file in ARG_MAX-safe batches. Returns non-zero if
+# any batch fails so the caller can fail loud instead of scanning nothing.
+run_scan() {
+  local mode="$1"
+  local -a batch=()
+  local f
+  for f in "${scan_files[@]}"; do
+    batch+=("$f")
+    if [[ "${#batch[@]}" -ge 400 ]]; then
+      LC_ALL=C "$AWK_BIN" -v mode="$mode" "$AWK_PROG" "${batch[@]}" || return 1
+      batch=()
+    fi
+  done
+  if [[ "${#batch[@]}" -gt 0 ]]; then
+    LC_ALL=C "$AWK_BIN" -v mode="$mode" "$AWK_PROG" "${batch[@]}" || return 1
+  fi
+  return 0
+}
+
 # This scanner and its selftest necessarily CONTAIN illustrative duplicate-ID
 # examples ("G028, G028") in their documentation and fixtures. Scanning them
 # reports the examples as findings, which is a false positive that would make
 # the live scan permanently red. Exclude exactly those two files by name.
 self_exclude_re='/(gate-id-grep|gate-id-grep-selftest)\.sh:'
 
+dup_findings_file="$(mktemp)"
+ref_findings_file="$(mktemp)"
+unknown_findings_file="$(mktemp)"
+trap 'rm -f "$dup_findings_file" "$ref_findings_file" "$unknown_findings_file"' EXIT INT TERM
+
 # --- Detect duplicate-adjacent findings ------------------------------------
 #
 # A duplicate-adjacent match is the same G\d{3} ID separated only by
-# spaces and/or commas. Example regex match: "G028, G028" or "G044 G044".
+# spaces and/or commas. Example match: "G028, G028" or "G044 G044".
+# One row per matching LINE, matching the old `grep -n` output contract.
 
-dup_findings_file="$(mktemp)"
-trap 'rm -f "$dup_findings_file" "$ref_findings_file" "$unknown_findings_file"' EXIT INT TERM
-ref_findings_file="$(mktemp)"
-unknown_findings_file="$(mktemp)"
-
-# grep -P is needed for the back-reference \1; we constrain to text files
-# via --binary-files=without-match and skip vendored .git dirs (find roots
-# already exclude .git by virtue of not descending into them).
-# NOTE: -P and -E are mutually exclusive in GNU grep; use -P only.
-"$GREP_BIN" -rPn --binary-files=without-match \
-  '\b(G[0-9]{3})\b[ ,]+\1\b' \
-  "${scan_roots[@]}" \
-  2>/dev/null | grep -vE "$self_exclude_re" > "$dup_findings_file" || true
+if ! dup_raw="$(run_scan dups)"; then
+  echo "gate-id-grep: duplicate-adjacent scan failed (awk returned non-zero)." >&2
+  echo "  Refusing to report zero findings from a scan that did not complete." >&2
+  exit 2
+fi
+if [[ -n "$dup_raw" ]]; then
+  printf '%s\n' "$dup_raw" | grep -vE "$self_exclude_re" > "$dup_findings_file" || true
+fi
+unset dup_raw
 
 dup_count="$(wc -l < "$dup_findings_file" | tr -d ' ')"
 
@@ -215,10 +318,11 @@ dup_count="$(wc -l < "$dup_findings_file" | tr -d ' ')"
 # Collect every <file>:<line>:<G\d{3}> reference, then for each ID check
 # canonical membership. Project-local custom gates (>= G900) are always allowed.
 
-"$GREP_BIN" -rPno --binary-files=without-match \
-  '\bG[0-9]{3}\b' \
-  "${scan_roots[@]}" \
-  > "$ref_findings_file" 2>/dev/null || true
+if ! run_scan refs > "$ref_findings_file"; then
+  echo "gate-id-grep: reference scan failed (awk returned non-zero)." >&2
+  echo "  Refusing to report zero findings from a scan that did not complete." >&2
+  exit 2
+fi
 
 while IFS=: read -r file line id; do
   [[ -z "$id" ]] && continue

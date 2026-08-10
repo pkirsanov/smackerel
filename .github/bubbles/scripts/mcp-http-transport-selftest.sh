@@ -24,29 +24,85 @@ fail_count=0
 pass() { echo "  PASS: $1"; pass_count=$((pass_count + 1)); }
 fail() { echo "  FAIL: $1"; fail_count=$((fail_count + 1)); }
 
+# Print a captured stream, capped so a chatty server cannot flood the CI
+# annotation. python3 is already a hard requirement of this selftest.
+dump_capped() {
+  python3 - "$1" "$2" <<'PY'
+import sys
+label, path = sys.argv[1], sys.argv[2]
+try:
+    with open(path, "r", errors="replace") as fh:
+        text = fh.read()
+except OSError as exc:
+    print(f"    {label}: <unreadable: {exc}>")
+    raise SystemExit(0)
+cap = 2000
+if not text:
+    print(f"    {label}: <empty>")
+elif len(text) <= cap:
+    print(f"    {label}:\n{text}")
+else:
+    print(f"    {label} (truncated from {len(text)} chars):\n{text[:cap]}")
+PY
+}
+
 # Pick a free ephemeral port via python.
 PORT="$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); print(s.getsockname()[1]); s.close()')"
 TOKEN="selftest-token-123"
 LOG="$(mktemp)"
+OUT_LOG="$(mktemp)"
+ERR_LOG="$(mktemp)"
 
-# Start the HTTP transport with auth enabled.
-BUBBLES_MCP_HTTP_TOKEN="$TOKEN" BUBBLES_MCP_LOG_FILE="$LOG" \
-  python3 "$SERVER" --transport http --host 127.0.0.1 --port "$PORT" &
+# Start the HTTP transport with auth enabled. Unbuffered both ways so a child we
+# may have to SIGKILL cannot carry its only diagnostic away in a stdio buffer;
+# stdout and stderr are captured so a failure can actually report them.
+BUBBLES_MCP_HTTP_TOKEN="$TOKEN" BUBBLES_MCP_LOG_FILE="$LOG" PYTHONUNBUFFERED=1 \
+  python3 -u "$SERVER" --transport http --host 127.0.0.1 --port "$PORT" \
+  >"$OUT_LOG" 2>"$ERR_LOG" &
 SERVER_PID=$!
-cleanup() { kill "$SERVER_PID" 2>/dev/null || true; wait "$SERVER_PID" 2>/dev/null || true; rm -f "$LOG"; }
+cleanup() { kill "$SERVER_PID" 2>/dev/null || true; wait "$SERVER_PID" 2>/dev/null || true; rm -f "$LOG" "$OUT_LOG" "$ERR_LOG"; }
 trap cleanup EXIT INT TERM
 
 # Wall-clock bounded: a macOS CI runner needs well over the old ~5s budget.
+# A dead child breaks out early: "exited" and "alive but never accepted a
+# connection" are opposite diagnoses and must not collapse into one outcome.
 ready=0
+outcome="timeout: child still running, never accepted a connection"
 _deadline=$((SECONDS + 30))
 while (( SECONDS < _deadline )); do
+  if ! kill -0 "$SERVER_PID" 2>/dev/null; then
+    outcome="exited: child died before accepting a connection"
+    break
+  fi
   if python3 -c "import socket,sys; s=socket.socket(); s.settimeout(0.2)
 sys.exit(0 if s.connect_ex(('127.0.0.1',$PORT))==0 else 1)" 2>/dev/null; then
     ready=1; break
   fi
   sleep 0.1
 done
-if [[ "$ready" -eq 1 ]]; then pass "HTTP transport accepts connections on :$PORT"; else fail "server never came up on :$PORT"; cat "$LOG" 2>/dev/null; echo ""; echo "[mcp-http-transport-selftest] $pass_count passed, $((fail_count+1)) failed"; exit 1; fi
+
+if [[ "$ready" -eq 1 ]]; then
+  pass "HTTP transport accepts connections on :$PORT"
+else
+  # Graceful stop first so buffered output flushes; SIGKILL only as a fallback.
+  if kill -0 "$SERVER_PID" 2>/dev/null; then
+    kill -TERM "$SERVER_PID" 2>/dev/null || true
+    _stop_deadline=$((SECONDS + 5))
+    while (( SECONDS < _stop_deadline )) && kill -0 "$SERVER_PID" 2>/dev/null; do
+      sleep 0.1
+    done
+    kill -KILL "$SERVER_PID" 2>/dev/null || true
+  fi
+  wait "$SERVER_PID" 2>/dev/null
+  server_rc=$?
+  fail "server never came up on :$PORT — outcome=$outcome probe=127.0.0.1:$PORT rc=$server_rc"
+  dump_capped "server stdout" "$OUT_LOG"
+  dump_capped "server stderr" "$ERR_LOG"
+  dump_capped "server log file" "$LOG"
+  echo ""
+  echo "[mcp-http-transport-selftest] $pass_count passed, $fail_count failed"
+  exit 1
+fi
 
 # Helper: POST a JSON body, print "HTTP_STATUS\n<body>".
 http_post() {
@@ -114,6 +170,13 @@ else
 fi
 
 echo ""
+if [[ "$fail_count" -ne 0 ]]; then
+  # The server's streams are captured now, so a later-test failure must still
+  # surface them rather than losing what used to be inherited output.
+  dump_capped "server stdout" "$OUT_LOG"
+  dump_capped "server stderr" "$ERR_LOG"
+  dump_capped "server log file" "$LOG"
+fi
 echo "[mcp-http-transport-selftest] $pass_count passed, $fail_count failed"
 [[ "$fail_count" -eq 0 ]] || exit 1
 echo "[mcp-http-transport-selftest] OK"
