@@ -1,8 +1,8 @@
 # Smackerel Delivery Plan — LLM Wiki, Second Brain, Extended Scenarios
 
-**Snapshot:** 2026-08-02
-**Type:** delivery plan. One-page summary: [`Strategy.md`](Strategy.md). Diagnostic evidence: [`Product_Direction_2026-07-31.md`](Product_Direction_2026-07-31.md).
-**Status:** advisory. No spec, scope, state, source, test, or config file was changed to produce it.
+**Snapshot:** 2026-08-10 (re-measured; first authored 2026-08-02)
+**Type:** delivery plan. One-page summary: [`Strategy.md`](Strategy.md). Diagnostic evidence: [`Product_Direction_2026-07-31.md`](Product_Direction_2026-07-31.md). Verification log: [`Delivery_Position_2026-08-10.md`](Delivery_Position_2026-08-10.md).
+**Status:** plan of record. Specs 110, 111 and 112 name this document as their plan of record.
 **Scope:** this repository only — nothing outside the smackerel repo root was read or written.
 
 ---
@@ -13,9 +13,15 @@ Smackerel is trying to be three things at once. This document names them in plai
 language, measures exactly how far each one has got, lists the problems that are
 currently in the way, and gives a stage-by-stage plan to finish all three.
 
-Every number here was produced by a command run against the repository on
-2026-08-02. Nothing is estimated. Where a claim comes from reading code rather
-than running the product, it says so.
+Every number here was produced by a command run against the repository. Nothing is
+estimated. Where a claim comes from reading code rather than running the product,
+it says so.
+
+**Re-measured 2026-08-10**, 34 commits after first authoring. Every pillar and
+surface figure held exactly. Two things changed: three new specs (110, 111, 112)
+now carry Stages 4, 6 and the parallel track; and the release-train gate that was
+failing now passes. Both are folded in below. Full verification log:
+[`Delivery_Position_2026-08-10.md`](Delivery_Position_2026-08-10.md).
 
 | If you want to know… | Go to |
 |---|---|
@@ -23,9 +29,10 @@ than running the product, it says so.
 | How far along are we? | [§2 Scoreboard](#2-scoreboard--where-each-pillar-stands-today) |
 | What is broken right now? | [§3 The eleven problems](#3-the-eleven-problems-in-plain-english) |
 | What do we do, in what order? | [§4 The plan](#4-the-plan--six-stages) |
-| What blocks what? | [§5 Critical path](#5-critical-path) |
-| What are we deliberately *not* doing? | [§6 The freeze list](#6-the-freeze-list--what-we-are-not-doing-yet) |
-| How were these numbers produced? | [§7 Method and evidence limits](#7-method-and-evidence-limits) |
+| **How do we actually execute it?** | [**§5 Execution plan**](#5-execution-plan--how-we-get-there) |
+| What blocks what? | [§6 Critical path](#6-critical-path) |
+| What are we deliberately *not* doing? | [§7 The freeze list](#7-the-freeze-list--what-we-are-not-doing-yet) |
+| How were these numbers produced? | [§8 Method and evidence limits](#8-method-and-evidence-limits) |
 
 ---
 
@@ -82,11 +89,12 @@ MCP tool list — generated from one registry, not four hand-maintained ones.
 
 | Measure | Value |
 |---|---:|
-| Specs total | **109** |
+| Specs total | **112** |
 | — `done` | 99 |
 | — `in_progress` | 2 (105, 106) |
 | — `blocked` | 4 (058, 096, 104, 107) |
 | — planning-only (`specs_hardened`) | 4 (063, 079, 108, 109) |
+| — `not_started`, fully planned | **3** (110, 111, 112) |
 | Bug artifacts total | 241 |
 | — non-terminal | 20 |
 | Connectors implemented | 19 |
@@ -96,9 +104,10 @@ MCP tool list — generated from one registry, not four hand-maintained ones.
 | PWA pages loading the shared nav | **2** |
 | Catalog surfaces declared | 20 |
 | Release trains | 2 (`mvp` → self-hosted, `next` → staging) |
+| Release-train gate (G110) | **passing** (exit 0) |
 
 The headline: **ingestion and capability foundations are essentially finished — 99
-of 109 specs done. What is unfinished is everything the user actually touches.**
+of 112 specs done. What is unfinished is everything the user actually touches.**
 
 ### The three specs that carry the three pillars
 
@@ -111,8 +120,25 @@ All remaining product work concentrates in three specs. This is the whole job.
 | **107**-proactive-correlated-experience | B — second brain | 11 | **39 / 160** | 24% |
 | **Total** | | **37** | **80 / 537** | **15%** |
 
-Pillar C has no single spec: it is the 22 unsurfaced scenarios, plus spec 109
-(MCP, planning-only) and spec 108 (corpus grants, planning-only).
+Those three figures are unchanged across 34 commits between 2026-08-02 and
+2026-08-10. **No pillar DoD item was completed in that window.** That is the single
+most important number in this document.
+
+### The three specs that carry the enabling work
+
+Authored after the first snapshot; each names this plan as its plan of record.
+All three have `spec.md`, `design.md` and `scopes.md`, and **none has scopes broken
+out into per-scope directories yet** — that is their first execution step.
+
+| Spec | Serves | Train | Workflow mode | Status |
+|---|---|---|---|---|
+| **110**-retrieval-quality-foundation | Stage 4 · P8 · unblocks A + C | `mvp` | `full-delivery` | planned, 0 scopes |
+| **112**-capability-registry | Stage 6 · Pillar C · D17 D18 | `next` | `product-to-planning` | planned, 0 scopes |
+| **111**-corpus-portability-sensitivity | Parallel track · D11 D12 D23 | `next` | `product-to-planning` | planned, 0 scopes |
+
+Pillar C is carried by spec 112 (registry) plus spec 109 (MCP) and the 22
+unsurfaced scenarios; spec 108 (corpus grants) carries the Stage 1 authorisation
+work.
 
 ### Per-scope detail
 
@@ -701,12 +727,15 @@ things with evidence, expand outward and deep-link back in — **Pillar A comple
 
 ### Stage 4 — Retrieval that actually finds
 
-**Fixes:** P8 · **Pillars A and C both depend on it**
+**Fixes:** P8 · **Delivers:** spec 110 · **Pillars A and C both depend on it**
 
 **Work.** SST-resolved embedding model. `artifact_chunks` with bounded overlap and
 HNSW. Resumable re-embed. Hybrid fusion with the winning chunk preserved as
 evidence. A measured eval corpus wired into a named lane with an executed-assertion
 count.
+
+**First step:** break spec 110's `scopes.md` into per-scope directories. It is
+planned (spec + design + scopes) but has zero scopes broken out.
 
 **Size.** 5 source files + 1 migration + 1 eval corpus + 1 lane change.
 
@@ -757,7 +786,7 @@ with a reason and a citation, mark one wrong and have it stick — **Pillar B co
 
 ### Stage 6 — Ask anything, from anywhere
 
-**Fixes:** the 22 unsurfaced scenarios · **Delivers:** spec 109 · **Pillar C**
+**Fixes:** the 22 unsurfaced scenarios · **Delivers:** specs 112 and 109 · **Pillar C**
 
 **Work.** Define one capability registry entry per capability: ID, user intent,
 domain service, required principal and grants, provenance requirement, side-effect
@@ -773,6 +802,7 @@ The registry is not built from scratch: `internal/experience/` already has
 surfaces to cover capabilities too.
 
 **Size.** 22 scenario declarations + registry extension + spec 109 delivery.
+Spec 112 carries the registry and needs its scopes broken out first.
 
 **Done when**
 ```bash
@@ -789,29 +819,144 @@ governed corpus from VS Code or a Claude-compatible client — **Pillar C comple
 
 ### Parallel track — ownership and operations
 
-Not on the critical path; can run alongside any stage after Stage 1.
+Not on the critical path; can run alongside any stage after Stage 1. Specs 111
+(portability + sensitivity) and the ledger item below carry this track.
 
-| Item | Problem | Files |
+| Item | Problem | Home |
 |---|---|---|
-| Versioned `CorpusBundle` for export / import / delete | `D12` `D23` — export emits only `processing_status='processed'` rows and paginates on `created_at` alone, so tied timestamps skip rows | `internal/db/postgres.go` · `internal/api/capture.go` · migration |
-| Canonical artifact sensitivity + fail-closed egress | `D11` — `artifacts` has no sensitivity column despite design claims that sensitivity governs model routing | `internal/db/migrations/` · egress call sites |
-| Release claims generated from a runtime ledger | `A4-LEDGER` — the v1 packet says spec 095 is planning-only and `internal/retrieval/` is absent; the spec is `done`, certified, and `internal/retrieval/{evergreen,routing}` exists. A stale `delivery=optional` annotation now controls a Gate G101 enforcement decision | `docs/releases/v1/features.md` · ledger generator |
+| Versioned `CorpusBundle` for export / import / delete | `D12` `D23` — export emits only `processing_status='processed'` rows and paginates on `created_at` alone, so tied timestamps skip rows | **spec 111** |
+| Canonical artifact sensitivity + fail-closed egress | `D11` — `artifacts` has no sensitivity column despite design claims that sensitivity governs model routing | **spec 111** |
+| Release claims generated from a runtime ledger | `A4-LEDGER` — the v1 packet says spec 095 is planning-only and `internal/retrieval/` is absent; the spec is `done`, certified, and `internal/retrieval/{evergreen,routing}` exists | `docs/releases/v1/features.md` · ledger generator |
+
+> **Resolved 2026-08-10.** The `Release_Schema_Review` Critical F1 — the
+> release-train guard failing with 7 errors — no longer reproduces;
+> `release-train-guard.sh` exits 0. The ledger row above is the remaining item on
+> this track.
 
 ---
 
-## 5. Critical path
+## 5. Execution plan — how we get there
+
+§4 says *what* each stage delivers. This section says *how the work actually
+moves* — the routing, the concurrency, the unit of progress, and the checkpoints.
+
+### 5.1 The shape of the job
+
+| Work | Remaining | Form |
+|---|---:|---|
+| Spec 106 — the shell | 197 DoD | scopes exist; execute |
+| Spec 105 — the wiki | 139 DoD | scopes exist; execute |
+| Spec 107 — the brain | 121 DoD | scopes exist; execute |
+| **Pillar subtotal** | **457 DoD** | **execution-ready** |
+| Specs 110, 111, 112 | 0 scopes | **plan first, then execute** |
+
+Two different kinds of work. 457 DoD items are ready to execute right now. Three
+specs need scopes broken out before a single line can be written. Those are
+different activities and should not be queued behind one another.
+
+### 5.2 Two lanes, run concurrently
+
+**Lane 1 — the critical path.** Strictly sequential. Each stage's exit gate is the
+next stage's entry gate.
+
+**Lane 2 — planning and parallel work.** Runs alongside Lane 1 from day one.
+Breaking scopes out of 110/111/112 has no dependency on the shell, and finishing
+that planning *before* Lane 1 reaches Stage 4 is what keeps the critical path from
+stalling on an unplanned spec.
+
+The failure mode this avoids: reaching Stage 4 with spec 110 still at zero scopes,
+and having to stop delivery to plan.
+
+### 5.3 Routing table
+
+Every stage names its spec, its workflow mode, and the condition that lets the
+next stage start. Nothing here invents a new process — these are existing Bubbles
+modes against existing specs.
+
+| # | Stage | Spec | Mode | Entry condition | Exit gate |
+|---|---|---|---|---|---|
+| 1 | Stop leaking | 108, 019, 081, 061, 040-bug | `full-delivery` | none — start now | §4 Stage 1 commands green **and** eval gate reports non-zero executed assertions |
+| 2 | One front door | **106** | `full-delivery` | Stage 1 exit | 106 → `done`; unblocks 107/SCOPE-03B2 mechanically |
+| 3 | Wiki you can walk | **105** | `full-delivery` | Stage 2 + Stage 4 exit | 105 → `done` · **Pillar A** |
+| 4 | Retrieval that finds | **110** | `full-delivery` | Stage 1 exit + 110 scoped | eval lane names plan node, p95, assertion count |
+| 5 | Brain speaks first | **107** | `full-delivery` | Stage 2 exit | 107 → `done` · **Pillar B** |
+| 6 | Ask anywhere | **112**, 109 | `full-delivery` | Stages 3 + 5 exit + 112 scoped | registry coverage test green · **Pillar C** |
+| P | Parallel | **111**, ledger | `product-to-planning` → `full-delivery` | Stage 1 exit | export/import/delete round-trips; sensitivity fail-closed |
+
+### 5.4 The unit of progress is a scope, not a spec
+
+A spec at 197 remaining DoD items is not a work item — it is a queue. The
+increment that counts is **one scope taken to `Done` with every DoD item checked
+and inline evidence recorded.**
+
+This matters because of what the last eight days showed: 34 commits, real work
+landed, and **zero pillar DoD items moved.** Activity is not progress. The only
+number that changes the headline is DoD completion on 105, 106 and 107.
+
+Standing rule: **no scope is `Done` while any DoD item is unchecked**, and no spec
+is `done` while any scope is not `Done`. Gates G024/G025 enforce this
+mechanically; do not route around them.
+
+### 5.5 Checkpoints
+
+| When | Do | Why |
+|---|---|---|
+| Each scope closed | Re-run that spec's exit commands | Catch regressions while the change is small |
+| Each stage closed | Re-run §4 stage commands + `release-train-guard.sh` | Stage exit is a real gate, not a judgement call |
+| Every ~30 commits | Re-measure §2 with the §8 commands | This document went stale in one Critical inside 8 days |
+
+The third row is not bureaucracy. The 2026-08-02 snapshot recorded the
+release-train gate as failing and uncovered by any plan; by 2026-08-10 it passed.
+A plan that is not re-measured starts directing work at problems that are already
+fixed.
+
+### 5.6 What "full product delivery" means
+
+Complete when all three pillar specs are `done`, and:
+
+```bash
+./smackerel.sh test unit && ./smackerel.sh test integration && ./smackerel.sh test e2e-ui
+bash .github/bubbles/scripts/release-train-guard.sh "$(pwd)"
+bash .github/bubbles/scripts/release-delivery-reconciliation-guard.sh \
+  --repo-root "$(pwd)" --phase v1 --require-coverage
+```
+
+…all exit 0, with 105/106/107 at `done`, user-facing scenarios raised from 5
+toward 27, and PWA pages consolidated onto the 20 declared catalog surfaces.
+
+Three user-visible sentences, each currently false, each true at completion:
+
+1. Open any topic, person, place or date and see a connected, cited page.
+2. Open one daily surface and see a handful of things that matter, with reasons.
+3. Ask for any capability in plain language, from the product or an MCP client.
+
+### 5.7 Standing constraints
+
+- **The freeze list (§7) is binding.** Its whole purpose is protecting the 457.
+- **No page 32.** Consolidation is the Stage 2 deliverable; a new destination page
+  makes it worse.
+- **Stage 1 is not optional and not parallelisable with the rest.** Stages 2–6 all
+  widen access to the corpus; widening access with those five holes open makes
+  each one worse.
+- **Specification is no longer the constraint.** 112 specs, 99 done, Pillar A at
+  0/139. Adding a spec that is not 110/111/112 scope-breakout should be treated as
+  avoidance of the actual work.
+
+---
+
+## 6. Critical path
 
 ```mermaid
 graph LR
     S1["Stage 1<br/>Stop leaking / losing<br/>P1-P5"] --> S2["Stage 2<br/>One front door<br/>spec 106 · 197 DoD"]
     S2 --> S3["Stage 3<br/>Wiki you can walk<br/>spec 105 · 139 DoD<br/>PILLAR A"]
     S2 --> S5["Stage 5<br/>Brain speaks first<br/>spec 107 · 121 DoD<br/>PILLAR B"]
-    S1 --> S4["Stage 4<br/>Retrieval that finds<br/>P8"]
+    S1 --> S4["Stage 4<br/>Retrieval that finds<br/>spec 110 · P8"]
     S4 --> S3
-    S4 --> S6["Stage 6<br/>Ask anywhere<br/>spec 109<br/>PILLAR C"]
+    S4 --> S6["Stage 6<br/>Ask anywhere<br/>spec 112 + 109<br/>PILLAR C"]
     S3 --> S6
     S5 --> S6
-    S1 -.-> PT["Parallel<br/>export/delete · sensitivity · ledger"]
+    S1 -.-> PT["Parallel<br/>spec 111 · ledger"]
 ```
 
 **One-line version:** Stage 2 is the bottleneck. Spec 106 gates spec 107 directly
@@ -828,7 +973,7 @@ until the shell exists.
 
 ---
 
-## 6. The freeze list — what we are *not* doing yet
+## 7. The freeze list — what we are *not* doing yet
 
 Adding any of these before Stage 5 completes makes the product worse, not better.
 
@@ -842,13 +987,23 @@ Adding any of these before Stage 5 completes makes the product worse, not better
 
 ---
 
-## 7. Method and evidence limits
+## 8. Method and evidence limits
 
 **What was executed.** Every count, status, path and line reference came from
-commands run against this repository root on 2026-08-02: `jq` over 109
-`state.json` files, DoD checkbox counts over 37 `scope.md` files, directory
-listings for connectors and PWA pages, `grep` against named source files, and
-`./smackerel.sh test --help` for the command surface.
+commands run against this repository root: `jq` over the `state.json` files, DoD
+checkbox counts over the `scope.md` files, directory listings for connectors and
+PWA pages, `grep` against named source files, and `./smackerel.sh test --help` for
+the command surface. Re-run on 2026-08-10 with the release gates added.
+
+**Re-measurement, 2026-08-10.** 34 commits after first authoring. Held exactly:
+pillar DoD 80/537 (105 `0/139`, 106 `41/238`, 107 `39/160`), 31 PWA pages, 2 with
+shared nav, 27 scenario contracts, 20 catalog surfaces, 99 `done` specs. Changed:
+spec total 109 → 112 (110, 111, 112 authored); `release-train-guard.sh` now exits
+0 having previously failed with 7 errors. Re-verified still open: D25
+(`internal/agent/tools/retrieval/tool.go`, 4 `user_id` references), D27
+(`tests/eval` absent from `scripts/runtime/go-integration.sh`), D28
+(`internal/auth/scope_middleware.go:71,75`). Full log:
+[`Delivery_Position_2026-08-10.md`](Delivery_Position_2026-08-10.md).
 
 **What was NOT executed.** No product build, no test suite, no live stack, no
 browser journey, no database query, no exploit, no deployment probe, no network
@@ -898,7 +1053,10 @@ claims:
    edge type `RELATED_TO`, so the defect is a type collision, not only a
    weighting imbalance.
 
-**Scope statement.** This document changed nothing else. No spec, design, scope,
-report, state, source, test or config artifact was created or modified. Routing any
-stage into implementation still requires the normal Bubbles workflow — diagnostic
-review is not an implementation bypass.
+**Scope statement.** The 2026-08-02 authoring changed no spec, design, scope,
+report, state, source, test or config artifact. The 2026-08-10 revision added §5
+and folded in re-measured figures; it likewise changed no source, test or config
+file. Specs 110, 111 and 112 were authored separately through the normal Bubbles
+planning workflow and name this document as their plan of record. Routing any
+stage into implementation still requires that workflow — a plan is not an
+implementation bypass.

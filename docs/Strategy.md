@@ -1,6 +1,6 @@
 # Smackerel — Strategy on One Page
 
-**Updated:** 2026-08-02 · Detail: [`Product_Delivery_Plan.md`](Product_Delivery_Plan.md) · Evidence: [`Product_Direction_2026-07-31.md`](Product_Direction_2026-07-31.md) · Principles: [`Product-Principles.md`](Product-Principles.md)
+**Updated:** 2026-08-02 · re-measured 2026-08-10 · Detail: [`Product_Delivery_Plan.md`](Product_Delivery_Plan.md) · Evidence: [`Product_Direction_2026-07-31.md`](Product_Direction_2026-07-31.md) · Principles: [`Product-Principles.md`](Product-Principles.md)
 
 ---
 
@@ -52,13 +52,18 @@ The foundations are essentially built. The surfaces are not.
 
 | | |
 |---|---:|
-| Specs done | **99 of 109** |
+| Specs done | **99 of 112** |
 | Connectors shipped | **19** |
 | Capabilities built · exposed to users | **27 · 5** |
 | Remaining product work (3 specs) | **80 of 537** items |
 
 Translation: we can ingest almost anything and reason over it, but a user cannot yet navigate
 it, trust what it surfaces, or ask for most of what it can already do.
+
+**Re-measured 2026-08-10.** Every figure above held across 34 commits — including
+`80 of 537`, unchanged. No pillar item was completed in that window. Three new
+specs (110, 111, 112) now carry the enabling work; the release-train gate that was
+failing now passes. See [`Delivery_Position_2026-08-10.md`](Delivery_Position_2026-08-10.md).
 
 ## How we get there — six stages
 

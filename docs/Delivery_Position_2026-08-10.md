@@ -7,6 +7,12 @@ reader knows which numbers still hold.
 
 Every figure below was produced by running a command, not by reading a document.
 
+**Acted on.** `Product_Delivery_Plan.md` has been updated from these findings: it
+now carries the re-measured baseline, routes specs 110/111/112 into Stages 4, 6 and
+the parallel track, and adds §5 "Execution plan — how we get there".
+`Strategy.md` and `Release_Schema_Review_2026-08-02.md` (F1 marked resolved) were
+updated to match.
+
 ## Headline
 
 **Smackerel's backend is built. The product is not assembled.**
