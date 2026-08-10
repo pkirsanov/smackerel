@@ -1,0 +1,212 @@
+{
+  "version": 3,
+  "feature": "111-corpus-portability-sensitivity",
+  "specDir": "specs/111-corpus-portability-sensitivity",
+  "title": "Corpus Portability & Artifact Sensitivity",
+  "status": "not_started",
+  "workflowMode": "product-to-planning",
+  "releaseTrain": "next",
+  "flagsIntroduced": [],
+  "flagsIntroducedNote": "EMPTY by design, not by omission. A capability of this size warrants a feature flag, but G111 requires an introduced flag to be default-OFF in every non-owning train's bundle, which means editing config/feature-flags.mvp.yaml — an artifact owned by bubbles.train and outside this authoring run's permitted surface. Naming a flag here without that bundle entry would be a declaration with no backing configuration: it would read as done and be unenforced. The flag declaration is routed to bubbles.train as spec.md finding F-111-FLAG-01, marked BLOCKING, and must be resolved before delivery scopes begin.",
+  "createdAt": "2026-08-04T00:00:00Z",
+  "lastUpdatedAt": "2026-08-04T00:00:00Z",
+  "planningOnly": true,
+  "planningOnlyJustification": "Requirements-authoring only. bubbles.analyst authored spec.md; zero source files were modified and zero tests were executed. design.md and scopes.md are honest initial artifacts created so the packet is structurally complete and lintable — they carry no ratified decision and no ratified plan, and each names its real owner (bubbles.design and bubbles.plan respectively). This packet has NOT reached the product-to-planning ceiling of specs_hardened, because the design and planning passes have not run under their own owners and three findings block the design pass.",
+  "linkedImplementationSpec": null,
+  "plannedFixWorkflowMode": "full-delivery",
+  "execution": {
+    "activeAgent": "bubbles.analyst",
+    "workflowMode": "product-to-planning",
+    "statusCeiling": "specs_hardened",
+    "currentPhase": "analyze",
+    "focus": "requirements_authoring_only",
+    "completedPhases": [
+      "analyze"
+    ],
+    "completedScopes": [],
+    "totalScopes": 8,
+    "scopeLayout": "single-file",
+    "blockedReason": null,
+    "loopCount": 0,
+    "runStartedAt": "2026-08-04T00:00:00Z",
+    "statusBefore": "not_started",
+    "statusAfter": "not_started"
+  },
+  "certification": {
+    "status": "not_started",
+    "certifiedBy": null,
+    "certifiedAt": null,
+    "ceilingReached": null,
+    "evidenceComplete": false,
+    "evidenceNote": "No implementation exists and no test was executed, therefore no execution evidence is claimed and none is fabricated. The E1-E12 rows in spec.md section 3 are current-state SOURCE OBSERVATIONS re-verified against the working tree on 2026-08-04 — statements about what the code says today, each with a file and line reference — and they are explicitly NOT test results. They prove the defects exist; they prove nothing about a fix.",
+    "gatesEvaluated": [],
+    "certifiedCompletedPhases": [],
+    "certifiedCompletedPhasesNote": "EMPTY by design, not by omission (Gate G022). One phase ran — bubbles.analyst requirements authoring — but it did not complete as a separately-provenanced, independently-certified specialist dispatch with its own recorded evidence. Under the anti-fabrication contract a phase may be listed here only when its provenance can be shown. What actually ran is recorded factually in executionHistory. Under-claiming is correct; over-claiming would be fabrication.",
+    "scopeProgress": [
+      { "scope": 1, "status": "not_started" },
+      { "scope": 2, "status": "not_started" },
+      { "scope": 3, "status": "not_started" },
+      { "scope": 4, "status": "not_started" },
+      { "scope": 5, "status": "not_started" },
+      { "scope": 6, "status": "not_started" },
+      { "scope": 7, "status": "not_started" },
+      { "scope": 8, "status": "not_started" }
+    ],
+    "lockdownState": {
+      "active": false,
+      "lockedScenarioIds": []
+    },
+    "ceilingNote": "specs_hardened is the declared statusCeiling for workflow mode product-to-planning. This packet is at not_started and has NOT reached that ceiling. Reaching it requires the bubbles.design and bubbles.plan passes to run under their own owners; three BLOCKING or HIGH findings (F-111-FLAG-01, F-111-MANIFEST-01, F-111-108-01) gate that work. Promotion to 'done' is FORBIDDEN from this mode and requires a delivery-capable mode plus the full evidence chain across the eight scopes in scopes.md.",
+    "outstandingFindings": [
+      {
+        "id": "F-111-FLAG-01",
+        "summary": "No feature flag is declared. G111 requires an introduced flag to be default-OFF in every non-owning train's bundle, which requires editing config/feature-flags.mvp.yaml — owned by bubbles.train and outside this run's permitted surface. flagsIntroduced is deliberately empty rather than falsely populated.",
+        "routedTo": "bubbles.train",
+        "status": "open",
+        "blocking": true
+      },
+      {
+        "id": "F-111-MANIFEST-01",
+        "summary": "The manifest's initial record-class list is not fixed by spec.md. It must be derived from the store rather than hand-listed, or it will be incomplete on the day it is written — which is the original defect reproduced in a new location.",
+        "routedTo": "bubbles.design",
+        "status": "open",
+        "blocking": true
+      },
+      {
+        "id": "F-111-110-01",
+        "summary": "Spec 110 introduces passages, a second copy of user content, and routes their portability here via F-110-EGRESS-01. If 110 lands first, the manifest must include passages from its first version. The ordering between the two specs is a real dependency.",
+        "routedTo": "bubbles.design",
+        "status": "open",
+        "blocking": false
+      },
+      {
+        "id": "F-111-108-01",
+        "summary": "The egress decision consumes grants that spec 108 defines and enforces. Spec 108 targets the same 'next' train and is specs_hardened, not delivered. SCOPE-08 cannot execute before 108's grant model exists.",
+        "routedTo": "bubbles.plan",
+        "status": "open",
+        "blocking": false
+      },
+      {
+        "id": "F-111-BACKFILL-01",
+        "summary": "Persisting sensitivity leaves every existing artifact unset, and R-111-25 makes unset a refusal. Enabling the fail-closed gate without a backfill or a declared migration posture would refuse legitimate existing traffic. The migration posture must be an explicit decision.",
+        "routedTo": "bubbles.design",
+        "status": "open",
+        "blocking": false
+      },
+      {
+        "id": "F-111-TEMPLATE-01",
+        "summary": "The authoring brief required conformance to .specify/templates/spec-template.md; that file does not exist in this repository (.specify/templates/ is absent; the template exists only in sibling workspace repositories). spec.md follows the adjacent spec's structure and the Bubbles BDD scenario contract instead. Either the template should be installed or the instruction corrected.",
+        "routedTo": "operator via bubbles.plan",
+        "status": "open",
+        "blocking": false
+      },
+      {
+        "id": "F-111-DELETE-01",
+        "summary": "Deletion interacts with records derived from artifacts (relationships, summaries, collections). Whether deleting an artifact deletes, orphans, or rewrites its derivatives is undecided and affects both delete correctness and round-trip parity.",
+        "routedTo": "bubbles.design",
+        "status": "open",
+        "blocking": false
+      },
+      {
+        "id": "F-111-CENSUS-01",
+        "summary": "Canonical content hash per record class requires a defined serialisation order and field set per class. Undefined, parity comparison is not reproducible across instances, so SCOPE-05 cannot be specified.",
+        "routedTo": "bubbles.design",
+        "status": "open",
+        "blocking": false
+      }
+    ]
+  },
+  "policySnapshot": {
+    "source": ".specify/memory/bubbles.config.json",
+    "capturedAt": "2026-08-04T00:00:00Z",
+    "workflowMode": "product-to-planning",
+    "workflowModeSource": "operator-directive",
+    "statusCeiling": "specs_hardened",
+    "sourceEditsPermitted": false,
+    "sourceEditLockout": {
+      "mode": "on",
+      "gate": "G073",
+      "source": "workflow-mode-constraint"
+    },
+    "grill": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "tdd": {
+      "mode": "scenario-first",
+      "source": "repo-default"
+    },
+    "autoCommit": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "lockdown": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "regression": {
+      "mode": "protected-scenarios",
+      "source": "repo-default"
+    },
+    "validation": {
+      "mode": "certification-required",
+      "source": "repo-default"
+    },
+    "evidenceRequired": false,
+    "testCategories": [
+      "unit",
+      "integration",
+      "e2e-api",
+      "stress"
+    ],
+    "canonicalCommands": {
+      "unit": "./smackerel.sh test unit",
+      "integration": "./smackerel.sh test integration",
+      "e2e-api": "./smackerel.sh test e2e",
+      "stress": "./smackerel.sh test stress",
+      "check": "./smackerel.sh check",
+      "lint": "./smackerel.sh lint",
+      "format": "./smackerel.sh format --check",
+      "configGenerate": "./smackerel.sh config generate"
+    },
+    "gates": [
+      "G025",
+      "G073",
+      "G110",
+      "G111",
+      "G115"
+    ]
+  },
+  "scopes": [
+    { "id": "SCOPE-01", "name": "Corpus manifest", "status": "Not Started", "dependsOn": [] },
+    { "id": "SCOPE-02", "name": "Stable, lossless traversal", "status": "Not Started", "dependsOn": ["SCOPE-01"] },
+    { "id": "SCOPE-03", "name": "Export against the manifest", "status": "Not Started", "dependsOn": ["SCOPE-01", "SCOPE-02", "SCOPE-07"] },
+    { "id": "SCOPE-04", "name": "Import against the manifest", "status": "Not Started", "dependsOn": ["SCOPE-01", "SCOPE-07"] },
+    { "id": "SCOPE-05", "name": "Proven round-trip parity", "status": "Not Started", "dependsOn": ["SCOPE-03", "SCOPE-04", "SCOPE-06"] },
+    { "id": "SCOPE-06", "name": "Deletion at every scope", "status": "Not Started", "dependsOn": ["SCOPE-01"] },
+    { "id": "SCOPE-07", "name": "Persisted sensitivity with provenance", "status": "Not Started", "dependsOn": [] },
+    { "id": "SCOPE-08", "name": "One fail-closed egress decision", "status": "Not Started", "dependsOn": ["SCOPE-07"] }
+  ],
+  "scopesNote": "Derived from the requirement groups in spec.md section 8 as a starting shape, NOT a ratified plan. bubbles.plan owns scopes.md and may restructure, merge, split, or reorder any of it.",
+  "transitionRequests": [],
+  "transitionRequestsNote": "EMPTY. No status transition is requested by this run. The packet stays at not_started because only requirements authoring occurred; design and planning have not run under their own owners.",
+  "reworkQueue": [],
+  "executionHistory": [
+    {
+      "agent": "bubbles.analyst",
+      "phasesExecuted": ["analyze"],
+      "workflowMode": "product-to-planning",
+      "statusBefore": "not_started",
+      "statusAfter": "not_started",
+      "startedAt": "2026-08-04T00:00:00Z",
+      "finishedAt": "2026-08-04T00:00:00Z",
+      "outcome": "completed_owned",
+      "summary": "Authored spec.md for corpus portability and artifact sensitivity from diagnostic findings D12, D23, D11, governed by docs/Product-Principles.md Principle 11 (Local-First Data Ownership, ratified 2026-07-29, BLOCKING). Produced a domain capability model with 8 binding policies, 5 actors, 5 use cases, 25 Gherkin scenarios with stable SCN-111-* ids (including the two mandated boundary scenarios: SCN-111-B01 tied-timestamp page boundary and SCN-111-C02 failed-capture round-trip survival), 29 requirements, 6 non-functional requirements, 6 non-goals, 8 routed findings, product principle alignment, release-train declaration, and an exposure contract. Zero source files changed, zero tests executed, zero DoD boxes checked.",
+      "sourceVerification": "All four defect claims in the authoring brief were re-read against the working tree before being written into spec.md, and all four hold. TWO LINE REFERENCES IN THE BRIEF WERE WRONG AND WERE CORRECTED RATHER THAN COPIED: the processed-only export filter is at internal/db/postgres.go:122, not :92; and the artifacts sensitivity gap is that NO line in the whole artifacts declaration (001_initial_schema.sql:16-63) defines a sensitivity column, not that :24 does something wrong. Two supporting facts the brief did not state were also found and recorded: canonical sensitivity columns already exist for other record classes (drive_files.sensitivity with a CHECK constraint; the photo_sensitivity enum), making the artifacts gap an inconsistency with the repository's own established pattern rather than an open design question (E9); and a repository-wide search returns no remote-egress decision or audit symbol outside test files, confirming there is no location today where such a decision could be recorded (E10).",
+      "unverifiablePremise": "The authoring brief instructed conformance to .specify/templates/spec-template.md. That file DOES NOT EXIST in this repository — .specify/templates/ is absent, and the template exists only in sibling workspace repositories. spec.md therefore follows the structure established by the adjacent spec in this repository together with the Bubbles BDD scenario contract, and the discrepancy is recorded as finding F-111-TEMPLATE-01 rather than silently ignored or falsely claimed as satisfied.",
+      "releaseTrainRationale": "Chose 'next' (target_slot staging) over 'mvp' (target_slot home-lab) on four grounds. (1) This introduces a fail-closed enforcement point — the same change class spec 108 explicitly declared 'next' for in its own words: 'security-posture change; MUST NOT ship on mvp'. (2) The egress decision consumes spec 108's grants, which are themselves on 'next'; shipping the gate on 'mvp' would split one security posture across two trains and have the gate validate a grant vocabulary the mvp train does not enforce. (3) Whole-corpus deletion is irreversible, and proving export-import-delete parity on staging before exposing corpus erasure on the live self-hosted host is the correct order for a capability whose failure mode is permanent data loss. (4) Persisting sensitivity leaves every existing artifact unset, and unset is a refusal, so enabling this against a live corpus before the F-111-BACKFILL-01 migration posture is decided would refuse legitimate traffic. The honest cost of this choice — that the mvp train remains non-conformant with Principle 11's unconditional-exit guarantee until promotion — is stated explicitly in spec.md rather than obscured by the train choice.",
+      "artifactOwnershipDeviation": "bubbles.analyst owns spec.md and authored it. design.md (bubbles.design), scopes.md (bubbles.plan), report.md and uservalidation.md (delivery agents) were created in this run under an explicit operator instruction to produce the full initial artifact set so the packet is structurally complete and lintable. Each carries a header naming its real owner and stating that its contents are provisional and carry no ratified decision, plan, or evidence.",
+      "constraintsHonored": "No source file changed. No other spec touched (specs/110-retrieval-quality-foundation left untouched). config/release-trains.yaml, config/feature-flags.mvp.yaml, config/feature-flags.next.yaml and docs/releases/ were read only and not modified. No concrete hostnames, IP addresses, tailnet identifiers, or operator paths appear in any artifact. No DoD box pre-checked. No evidence written for work not done."
+    }
+  ]
+}

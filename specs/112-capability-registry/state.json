@@ -1,0 +1,229 @@
+{
+  "version": 3,
+  "feature": "112-capability-registry",
+  "specDir": "specs/112-capability-registry",
+  "title": "Capability Registry",
+  "status": "not_started",
+  "workflowMode": "product-to-planning",
+  "releaseTrain": "next",
+  "flagsIntroduced": [],
+  "flagsIntroducedNote": "EMPTY by design, not by omission. This feature declares default-off behaviour on the mvp train, which is the behaviour a feature flag would implement. G111 requires an introduced flag to be default-OFF in every non-owning train's bundle, which means editing config/feature-flags.mvp.yaml and config/feature-flags.next.yaml — both owned by bubbles.train and outside this authoring run's permitted surface. Naming a flag here without those bundle entries would be a declaration that reads as enforced and is not. The flag declaration is routed to bubbles.train as spec.md finding F-112-FLAG-01, marked BLOCKING, and must be resolved before delivery scopes begin.",
+  "createdAt": "2026-08-04T00:00:00Z",
+  "lastUpdatedAt": "2026-08-04T00:00:00Z",
+  "planningOnly": true,
+  "planningOnlyJustification": "Requirements-authoring only. bubbles.analyst authored spec.md; zero source files were modified and zero tests were executed. design.md and scopes.md are honest initial artifacts created so the packet is structurally complete and lintable — they carry no ratified decision and no ratified plan, and each names its real owner (bubbles.design and bubbles.plan respectively). This packet has NOT reached the product-to-planning ceiling of specs_hardened, because the design and planning passes have not run under their own owners and four BLOCKING findings gate that work.",
+  "linkedImplementationSpec": null,
+  "plannedFixWorkflowMode": "full-delivery",
+  "execution": {
+    "activeAgent": "bubbles.analyst",
+    "workflowMode": "product-to-planning",
+    "statusCeiling": "specs_hardened",
+    "currentPhase": "analyze",
+    "focus": "requirements_authoring_only",
+    "completedPhases": [
+      "analyze"
+    ],
+    "completedScopes": [],
+    "totalScopes": 9,
+    "scopeLayout": "single-file",
+    "blockedReason": null,
+    "loopCount": 0,
+    "runStartedAt": "2026-08-04T00:00:00Z",
+    "statusBefore": "not_started",
+    "statusAfter": "not_started"
+  },
+  "certification": {
+    "status": "not_started",
+    "certifiedBy": null,
+    "certifiedAt": null,
+    "ceilingReached": null,
+    "evidenceComplete": false,
+    "evidenceNote": "No implementation exists and no test was executed, therefore no execution evidence is claimed and none is fabricated. The E1-E19 rows in spec.md section 3 are current-state SOURCE OBSERVATIONS re-verified against the working tree on 2026-08-04 — statements about what the repository contains today, each with a file and, where applicable, a line reference — and they are explicitly NOT test results. They prove the defects exist; they prove nothing about a fix.",
+    "gatesEvaluated": [],
+    "certifiedCompletedPhases": [],
+    "certifiedCompletedPhasesNote": "EMPTY by design, not by omission (Gate G022). One phase ran — bubbles.analyst requirements authoring — but it did not complete as a separately-provenanced, independently-certified specialist dispatch with its own recorded evidence. Under the anti-fabrication contract a phase may be listed here only when its provenance can be shown. What actually ran is recorded factually in executionHistory. Under-claiming is correct; over-claiming would be fabrication.",
+    "scopeProgress": [
+      { "scope": 1, "status": "not_started" },
+      { "scope": 2, "status": "not_started" },
+      { "scope": 3, "status": "not_started" },
+      { "scope": 4, "status": "not_started" },
+      { "scope": 5, "status": "not_started" },
+      { "scope": 6, "status": "not_started" },
+      { "scope": 7, "status": "not_started" },
+      { "scope": 8, "status": "not_started" },
+      { "scope": 9, "status": "not_started" }
+    ],
+    "lockdownState": {
+      "active": false,
+      "lockedScenarioIds": []
+    },
+    "ceilingNote": "specs_hardened is the declared statusCeiling for workflow mode product-to-planning. This packet is at not_started and has NOT reached that ceiling. Reaching it requires the bubbles.design and bubbles.plan passes to run under their own owners; four BLOCKING findings (F-112-FLAG-01, F-112-108-01, F-112-UNIT-01, F-112-UNIVERSE-01) gate that work. Promotion to 'done' is FORBIDDEN from this mode and requires a delivery-capable mode plus the full evidence chain across the nine scopes in scopes.md.",
+    "outstandingFindings": [
+      {
+        "id": "F-112-FLAG-01",
+        "summary": "No feature flag is declared. A cutover that replaces live navigation and widens natural-language reach warrants a flag, but G111 requires an introduced flag to be default-OFF in every non-owning train's bundle, which requires editing config/feature-flags.mvp.yaml — owned by bubbles.train and outside this run's permitted surface. flagsIntroduced is deliberately empty rather than falsely populated.",
+        "routedTo": "bubbles.train",
+        "status": "open",
+        "blocking": true
+      },
+      {
+        "id": "F-112-108-01",
+        "summary": "R-112-23 through R-112-26 depend on spec 108's corpus:read grant model. Spec 108 is specs_hardened — planned, not delivered — and targets the same 'next' train. Surfacing capabilities before that boundary is enforceable violates policy P4 (reach never outruns the guard). SCOPE-03 and everything downstream of it cannot execute first.",
+        "routedTo": "bubbles.plan",
+        "status": "open",
+        "blocking": true
+      },
+      {
+        "id": "F-112-UNIT-01",
+        "summary": "The registry's unit is the capability; the built artifacts are prompt contracts, and the mapping is not 1:1 — 17 of 27 contracts carry a routable id, 10 are pipeline stages that carry none. The rule that decides what constitutes one capability, and how contracts bind to capabilities, is undecided. Getting it wrong reproduces the original duplication at a new granularity.",
+        "routedTo": "bubbles.design",
+        "status": "open",
+        "blocking": true
+      },
+      {
+        "id": "F-112-UNIVERSE-01",
+        "summary": "R-112-31 requires the coverage check to compare against an independently derived universe of built capabilities. How that universe is derived — and how it avoids the circularity already present at tests/integration/experience/route_inventory_test.go:92-100, where the expected set is built from the catalog under validation — is undecided. Without this the check cannot fail and is decorative.",
+        "routedTo": "bubbles.design",
+        "status": "open",
+        "blocking": true
+      },
+      {
+        "id": "F-112-109-01",
+        "summary": "Spec 109 explicitly forbids deriving the MCP tool list by passthrough from agent.All(). The external tool projection must therefore be a per-capability declared projection, not a blanket export of the capability set. Reconciling R-112-08 with that constraint is a design decision.",
+        "routedTo": "bubbles.design",
+        "status": "open",
+        "blocking": false
+      },
+      {
+        "id": "F-112-CUTOVER-01",
+        "summary": "Three navigation authorities are live and already divergent, and internal/experience/catalog.go:10 records that their cutover was deferred to a later scope of the shell specification. Whether this feature performs that cutover or hands it to the shell spec is undecided, and R-112-09 cannot be satisfied by whichever spec does not.",
+        "routedTo": "bubbles.plan",
+        "status": "open",
+        "blocking": false
+      },
+      {
+        "id": "F-112-ALIAS-01",
+        "summary": "The slash alias table and the assistant registry currently contradict each other on /ask, /recipe and /cook. Generating both from one descriptor forces a decision about which existing behaviour is correct. That decision changes shipped user-visible behaviour for at least one token and cannot be made silently by a generator.",
+        "routedTo": "bubbles.design",
+        "status": "open",
+        "blocking": false
+      },
+      {
+        "id": "F-112-ISLANDS-01",
+        "summary": "29 of 31 first-party PWA pages render no shared navigation. R-112-20 is satisfiable in principle by a core that reaches only surfaces which render navigation at all, which would make the guarantee vacuous on most pages. The relationship between this feature's guarantee and the island pages must be stated rather than assumed.",
+        "routedTo": "bubbles.design",
+        "status": "open",
+        "blocking": false
+      },
+      {
+        "id": "F-112-TEMPLATE-01",
+        "summary": "The authoring brief noted that .specify/templates/spec-template.md is expected to govern spec structure; that file does not exist in this repository (.specify/ contains only memory/, metrics/ and runtime/). spec.md follows the adjacent sibling spec's structure and the Bubbles BDD scenario contract instead. Either the template should be installed or the instruction corrected.",
+        "routedTo": "operator via bubbles.plan",
+        "status": "open",
+        "blocking": false
+      },
+      {
+        "id": "F-112-110-01",
+        "summary": "Sibling spec 110-retrieval-quality-foundation has no state.json, so it carries no releaseTrain or flagsIntroduced declaration. Observed while reading siblings for consistency and NOT modified here, because that spec is outside this run's permitted surface. Recorded because gate G110 covers train declaration across specs.",
+        "routedTo": "bubbles.plan",
+        "status": "open",
+        "blocking": false
+      }
+    ]
+  },
+  "policySnapshot": {
+    "source": ".specify/memory/bubbles.config.json",
+    "capturedAt": "2026-08-04T00:00:00Z",
+    "workflowMode": "product-to-planning",
+    "workflowModeSource": "operator-directive",
+    "statusCeiling": "specs_hardened",
+    "sourceEditsPermitted": false,
+    "sourceEditLockout": {
+      "mode": "on",
+      "gate": "G073",
+      "source": "workflow-mode-constraint"
+    },
+    "grill": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "tdd": {
+      "mode": "scenario-first",
+      "source": "repo-default"
+    },
+    "autoCommit": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "lockdown": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "regression": {
+      "mode": "protected-scenarios",
+      "source": "repo-default"
+    },
+    "validation": {
+      "mode": "certification-required",
+      "source": "repo-default"
+    },
+    "evidenceRequired": false,
+    "testCategories": [
+      "unit",
+      "integration",
+      "e2e-api",
+      "stress"
+    ],
+    "canonicalCommands": {
+      "unit": "./smackerel.sh test unit",
+      "integration": "./smackerel.sh test integration",
+      "e2e-api": "./smackerel.sh test e2e",
+      "stress": "./smackerel.sh test stress",
+      "check": "./smackerel.sh check",
+      "lint": "./smackerel.sh lint",
+      "format": "./smackerel.sh format --check",
+      "configGenerate": "./smackerel.sh config generate"
+    },
+    "gates": [
+      "G025",
+      "G073",
+      "G110",
+      "G111",
+      "G115"
+    ]
+  },
+  "scopes": [
+    { "id": "SCOPE-01", "name": "The capability descriptor record", "status": "Not Started", "dependsOn": [] },
+    { "id": "SCOPE-02", "name": "Declared exposure for every built capability", "status": "Not Started", "dependsOn": ["SCOPE-01"] },
+    { "id": "SCOPE-03", "name": "Per-capability authorization", "status": "Not Started", "dependsOn": ["SCOPE-01"] },
+    { "id": "SCOPE-04", "name": "Assistant intent projection", "status": "Not Started", "dependsOn": ["SCOPE-01", "SCOPE-02", "SCOPE-03"] },
+    { "id": "SCOPE-05", "name": "Navigation core projection, digest included", "status": "Not Started", "dependsOn": ["SCOPE-01"] },
+    { "id": "SCOPE-06", "name": "Alias projection", "status": "Not Started", "dependsOn": ["SCOPE-01", "SCOPE-02", "SCOPE-03"] },
+    { "id": "SCOPE-07", "name": "External tool projection", "status": "Not Started", "dependsOn": ["SCOPE-01", "SCOPE-02", "SCOPE-03"] },
+    { "id": "SCOPE-08", "name": "The coverage check", "status": "Not Started", "dependsOn": ["SCOPE-01", "SCOPE-02", "SCOPE-03"] },
+    { "id": "SCOPE-09", "name": "Retirement of the hand-maintained inventories", "status": "Not Started", "dependsOn": ["SCOPE-04", "SCOPE-05", "SCOPE-06", "SCOPE-07"] }
+  ],
+  "scopesNote": "Derived from the requirement groups in spec.md section 8 as a starting shape, NOT a ratified plan. bubbles.plan owns scopes.md and may restructure, merge, split, or reorder any of it.",
+  "transitionRequests": [],
+  "transitionRequestsNote": "EMPTY. No status transition is requested by this run. The packet stays at not_started because only requirements authoring occurred; design and planning have not run under their own owners.",
+  "reworkQueue": [],
+  "executionHistory": [
+    {
+      "agent": "bubbles.analyst",
+      "phasesExecuted": ["analyze"],
+      "workflowMode": "product-to-planning",
+      "statusBefore": "not_started",
+      "statusAfter": "not_started",
+      "startedAt": "2026-08-04T00:00:00Z",
+      "finishedAt": "2026-08-04T00:00:00Z",
+      "outcome": "completed_owned",
+      "summary": "Authored spec.md for one capability registry projecting to every reachability surface, from diagnostic findings D17 and D18, governed by Pillar C of docs/Product_Delivery_Plan.md. Produced a domain capability model with 9 binding policies, 5 actors, 5 use cases, 26 Gherkin scenarios with stable SCN-112-* ids across five groups (one record many projections, declared exposure, guaranteed navigation core, authorization, coverage check), 33 requirements, 6 non-functional requirements, 7 non-goals, 10 routed findings, product principle alignment, release-train declaration, and an exposure contract. Zero source files changed, zero tests executed, zero DoD boxes checked.",
+      "sourceVerification": "Every claim in the authoring brief was re-read against the working tree before being written into spec.md, and all hold. 27 contracts confirmed in config/prompt_contracts/; exactly 5 user_facing: true confirmed at config/assistant/scenarios.yaml:26,34,42,56,72 with the five named ids matching; 31 first-party PWA pages confirmed with exactly 2 (assistant.html, index.html) loading web/pwa/lib/appnav.js; internal/experience/ confirmed to contain catalog.gen.json with 20 surfaces under schema smackerel-product-experience/v1 plus navigation_projection.go, renderer_projection.go, consumer_inventory.go, state and mutation presenters and validator.go. TWO FACTS WERE FOUND THAT THE BRIEF DID NOT STATE, BOTH STRENGTHENING IT. First, the capability reference already exists and points at nothing: every catalog surface carries a capability_id and validator.go:99 already emits an unknown-capability violation, but no capability record exists anywhere — in config/smackerel.yaml capability_id appears only as a surface attribute (:2706-2934) with no capabilities: block, and the only production-shaped test supplies the universe via iCapsOf(cat) at tests/integration/experience/route_inventory_test.go:92-100, deriving the expected set from the catalog under validation so the check is circular and cannot fail. Second, the predicted drift is already real and was demonstrated with three live contradictions: web/pwa/lib/appnav.js:22 asserts it mirrors internal/web/appshell.go:31 but the two have diverged (capture/connectors/photos PWA-only, knowledge server-only); internal/assistant/shortcuts.go:47 maps /ask to open_knowledge while config/assistant/scenarios.yaml:25-31 assigns /ask to retrieval_qa; and shortcuts.go:50-51 ships /recipe and /cook while scenarios.yaml records recipe_search with an empty shortcut and a comment that the set is frozen without them.",
+      "claimSharpened": "THE BRIEF'S FIGURE OF 22 UNSURFACED CAPABILITIES WAS NARROWED TO 11 ON EVIDENCE, NOT ACCEPTED AS GIVEN. D17 and the plan of record both reach 22 as 27 minus 5; the arithmetic is correct but the units are mixed, because a prompt contract is not a capability. Ten of the 27 contracts declare a pipeline type (domain-extraction x3, query-augment, lint-audit, ingest-synthesis, drive-folder-context, drive-classification, digest-assembly, cross-source-connection) and carry no routable id: at all — they are invoked directly by their owning service and were never dispatchable. One more, e2e_ollama_smoke, is a test harness by its own description. Only the 17 contracts declaring type: scenario carry a routable id. The genuinely unsurfaced dispatchable set is therefore 11: alert_timing_evaluate, annotation_classify, expertise_classify, hospitality_concern_evaluate, recommendation_feedback, recommendation_reactive, recommendation_watch_evaluate, recommendation_why, relationship_cooling_evaluate, resurface_evaluate, retrieval_evergreen. This narrows the count and strengthens the finding: the real defect is that the repository cannot tell you which number is right, because nothing records whether a contract is unsurfaced deliberately or by omission. D18 was likewise held to its stated scope — a core-membership finding, not an unreachability claim — because internal/web/templates.go:79-84 appends the digest link after including the shared partial, so the digest IS reachable in the server shell while absent from the shared core.",
+      "unverifiablePremise": "The authoring brief noted that .specify/templates/spec-template.md is expected to govern spec structure. That file DOES NOT EXIST in this repository — .specify/ contains only memory/, metrics/ and runtime/; there is no templates/ directory. spec.md therefore follows the structure established by the adjacent sibling spec in this repository together with the Bubbles BDD scenario contract, and the discrepancy is recorded as finding F-112-TEMPLATE-01 rather than silently ignored or falsely claimed as satisfied.",
+      "releaseTrainRationale": "Chose 'next' (target_slot staging) over 'mvp' (target_slot home-lab) on four grounds. (1) This feature RAISES REACH while the guard that should bound it is not delivered: surfacing the eleven currently-undeclared dispatchable capabilities makes them invocable by anyone who can talk to the assistant, and the per-capability authorization that bounds that — spec 108's corpus:read — is specs_hardened, not delivered, and targets 'next'. Shipping the exposure on the live train while its boundary lives on the other train is exactly what policy P4 forbids. (2) Both hard dependencies are on 'next': spec 108 (grants) and spec 109 (external tool surface) are both specs_hardened there, so a registry on 'mvp' would project into a tool list that does not exist on that train and declare grants that train does not enforce. (3) It replaces three live and already-divergent navigation authorities on a running shell, which is a change with real regression surface on every page a user touches; proving it on staging first is the correct order. (4) The sibling precedent is consistent — spec 111 chose 'next' on the same reasoning, and spec 108 states in its own words that a security-posture change MUST NOT ship on mvp. The honest cost of this choice — that the mvp train keeps the D17/D18 reachability gap for longer — is stated explicitly in spec.md rather than obscured by the train choice.",
+      "artifactOwnershipDeviation": "bubbles.analyst owns spec.md and authored it. design.md (bubbles.design), scopes.md (bubbles.plan), report.md and uservalidation.md (delivery agents) were created in this run under an explicit operator instruction to produce the full initial artifact set so the packet is structurally complete and lintable. Each carries a header naming its real owner and stating that its contents are provisional and carry no ratified decision, plan, or evidence.",
+      "constraintsHonored": "No source file changed. No other spec touched — specs/110-retrieval-quality-foundation and specs/111-corpus-portability-sensitivity were read for consistency and left byte-unchanged, and spec 110's missing state.json was RECORDED as finding F-112-110-01 rather than fixed, because that spec is outside this run's permitted surface. config/release-trains.yaml, config/feature-flags.mvp.yaml, config/feature-flags.next.yaml and docs/releases/ were read only and not modified. No concrete hostnames, IP addresses, tailnet identifiers, or operator paths appear in any artifact. No DoD box pre-checked. No evidence written for work not done."
+    }
+  ]
+}

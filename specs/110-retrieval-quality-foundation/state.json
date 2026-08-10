@@ -1,0 +1,279 @@
+{
+  "version": 3,
+  "feature": "110-retrieval-quality-foundation",
+  "specDir": "specs/110-retrieval-quality-foundation",
+  "title": "Retrieval Quality Foundation",
+  "status": "not_started",
+  "workflowMode": "full-delivery",
+  "releaseTrain": "mvp",
+  "releaseTrainNote": "Declared 'mvp' to match the reasoned declaration already carried by this packet's own artifacts (spec.md section 'Release Train', and the headers of spec.md, report.md and scopes.md). This is NOT the train the two sibling specs authored in the same session chose. Specs 111 and 112 both chose 'next', and their recorded reason does not transfer: 111 chose 'next' because it introduces a fail-closed egress enforcement point whose grants are defined by spec 108, which is itself on 'next'; 112 chose 'next' because it RAISES reach while spec 108's per-capability authorization that would bound it is not yet delivered. Spec 110 introduces no authorization change at all — Non-Goal 1 states it changes what retrieval finds, never whose corpus it searches — and consumes nothing from spec 108. The security-posture argument that moved both siblings is therefore simply absent here, and copying it would be a borrowed justification rather than a real one. See executionHistory[1].releaseTrainRationale for the four grounds on which 'mvp' was affirmed on this spec's own merits, and for the honest cost of that choice.",
+  "flagsIntroduced": [],
+  "flagsIntroducedNote": "EMPTY by design, not by omission, and this DIVERGES from this packet's own spec.md, which is recorded rather than hidden. spec.md section 'Release Train' proposes the flag name `chunkedHybridRetrieval` and correctly states that the bundle edits are owned by bubbles.train. Verified on 2026-08-04 by repo-wide grep: `chunkedHybridRetrieval` occurs in exactly three places, all of them prose inside this spec folder (spec.md:449, spec.md:457, design.md:63). It is absent from config/feature-flags.mvp.yaml and absent from config/feature-flags.next.yaml, both of which currently declare only card_rewards and clientReleaseLaneB. Listing the flag here while no bundle carries it would produce a declaration that reads as configured and is enforced by nothing — the exact anti-pattern spec 111 named in its own flagsIntroducedNote. Note that release-train-guard.sh Check 8 would NOT have caught this: it errors only when a named flag is default-ON in a non-owning train, and an absent flag reads as 'unset' and passes. The declaration would therefore have been silently wrong rather than loudly wrong, which is a stronger reason to leave it empty. Routed to bubbles.train as F-110-FLAG-01. The flag must be declared in both bundles before SCOPE-02 or SCOPE-04 executes, because it is what decides which retrieval representation serves reads during the re-embed window.",
+  "createdAt": "2026-08-04T00:00:00Z",
+  "lastUpdatedAt": "2026-08-04T00:00:00Z",
+  "planningOnly": false,
+  "planningOnlyJustification": null,
+  "planningOnlyNote": "DELIBERATELY false, and this is a considered divergence from siblings 111 and 112 rather than an oversight. Both siblings set planningOnly:true because they are `product-to-planning` packets whose delivery is expected to happen later under a separate implementation spec (each carries plannedFixWorkflowMode:'full-delivery' and linkedImplementationSpec:null). Spec 110 is not shaped that way: spec.md, report.md and scopes.md all declare workflowMode `full-delivery`, and the five scopes in scopes.md are this spec's own delivery scopes, executed under this spec. It is its own implementation target. Setting planningOnly:true here would assert that this packet has no delivery target, which is false. G087 (planning-packet-implementation-linkage) enforces the linkage requirement only at status `specs_hardened`; this packet is `not_started`, so no linkage obligation is currently active.",
+  "linkedImplementationSpec": null,
+  "linkedImplementationSpecNote": "null because this spec delivers itself. There is no separate downstream implementation spec to point at.",
+  "execution": {
+    "activeAgent": "bubbles.analyst",
+    "workflowMode": "full-delivery",
+    "statusCeiling": "done",
+    "currentPhase": "analyze",
+    "focus": "requirements_authoring_only",
+    "completedPhases": [
+      "analyze"
+    ],
+    "completedScopes": [],
+    "totalScopes": 5,
+    "scopeLayout": "single-file",
+    "blockedReason": null,
+    "loopCount": 0,
+    "runStartedAt": "2026-08-04T00:00:00Z",
+    "statusBefore": "not_started",
+    "statusAfter": "not_started"
+  },
+  "certification": {
+    "status": "not_started",
+    "certifiedBy": null,
+    "certifiedAt": null,
+    "ceilingReached": null,
+    "evidenceComplete": false,
+    "evidenceNote": "No implementation exists, no test was executed, and no metric was measured, therefore no execution evidence is claimed and none is fabricated. The E1-E12 rows in spec.md section 3 are current-state SOURCE OBSERVATIONS produced by read-only inspection of the working tree on 2026-08-04 — each names the file and the construct it read — and they are explicitly NOT test results. spec.md section 3 states their limit in its own words: no EXPLAIN was executed and no latency was measured, so D1 remains an unresolved ambiguity with two unacceptable branches rather than a measured result. Those rows prove the defects exist; they prove nothing about a fix.",
+    "gatesEvaluated": [],
+    "gatesEvaluatedNote": "EMPTY by design. Two guards were executed against this packet during the state.json repair run and their exit codes are recorded in executionHistory[1].verification, but a guard run is not a certification: no delivery gate in the full-delivery required set has been evaluated, because no delivery work has occurred.",
+    "certifiedCompletedPhases": [],
+    "certifiedCompletedPhasesNote": "EMPTY by design, not by omission (Gate G022). One phase ran — bubbles.analyst requirements authoring — but it did not complete as a separately-provenanced, independently-certified specialist dispatch with its own recorded evidence. Under the anti-fabrication contract a phase may be listed here only when its provenance can be shown. What actually ran is recorded factually in executionHistory. Under-claiming is correct; over-claiming would be fabrication.",
+    "scopeProgress": [
+      { "scope": 1, "status": "not_started" },
+      { "scope": 2, "status": "not_started" },
+      { "scope": 3, "status": "not_started" },
+      { "scope": 4, "status": "not_started" },
+      { "scope": 5, "status": "not_started" }
+    ],
+    "lockdownState": {
+      "active": false,
+      "lockedScenarioIds": []
+    },
+    "ceilingNote": "The declared statusCeiling for workflow mode full-delivery is `done`. This packet is at `not_started` and is nowhere near that ceiling. Reaching it requires the design pass, the plan pass, and the full delivery specialist chain recorded in requiredSpecialists, plus executed evidence for every Definition-of-Done item across the five scopes in scopes.md. Three BLOCKING findings (F-110-DIM-01, F-110-PLAN-01, F-110-LANE-01) gate the design pass and must be resolved by bubbles.design before any scope executes. F-110-PLAN-01 in particular blocks any declaration of a quality floor, because nothing may declare a floor before the query plan is actually measured.",
+    "outstandingFindings": [
+      {
+        "id": "F-110-DIM-01",
+        "summary": "Changing the declared embedding model also changes the vector width (E5/E6: the declared model is not the 384-dimension one the column was sized for), so re-embedding is simultaneously a column-type migration on the corpus's largest table, with its own downtime, disk and rollback profile. The plan of record names re-embedding but does not name this. Sharpened by the mvp train choice: this migration lands on the live corpus, not on staging.",
+        "routedTo": "bubbles.design",
+        "status": "open",
+        "blocking": true
+      },
+      {
+        "id": "F-110-PLAN-01",
+        "summary": "D1's two branches are both still open (E8: ivfflat probes never set; E9: no approximate-nearest-neighbour graph index exists — the single hnsw match in the repository is a test-fixture sentence, not an index). Which branch is true determines whether this is primarily an accuracy fix or primarily a latency fix, and therefore what the first measured floors even mean. Nothing may declare a floor before this is executed.",
+        "routedTo": "bubbles.design then bubbles.test",
+        "status": "open",
+        "blocking": true
+      },
+      {
+        "id": "F-110-LANE-01",
+        "summary": "E12 shows the precedent failure is still live: tests/eval/assistant/acceptance_test.go carries a //go:build integration tag and ./tests/eval/... is absent from the integration lane's package list, so an existing gate whose thresholds the SST calls non-negotiable executes in no lane. Adding this spec's gate to the same directory without fixing the lane would ship a second gate that never runs. Whether the fix is extending the existing lane or declaring a new named one is a design call.",
+        "routedTo": "bubbles.design",
+        "status": "open",
+        "blocking": true
+      },
+      {
+        "id": "F-110-FLOOR-01",
+        "summary": "R-110-18 requires floors to come from measurement, but the first run has no prior measurement to compare against. The first execution is therefore baseline-establishing, not gating, and that transition must be an explicit recorded step or the first green run will be mistaken for a passed gate.",
+        "routedTo": "bubbles.plan",
+        "status": "open",
+        "blocking": false
+      },
+      {
+        "id": "F-110-CORPUS-01",
+        "summary": "NFR-110-3 forbids using a real user corpus, but a vague query with a known answer is only meaningful against content rich enough to be ambiguous. Authoring 100+ genuinely vague cases over synthetic content is real work and is trivially under-scoped into 100 keyword lookups, which would measure nothing.",
+        "routedTo": "bubbles.plan",
+        "status": "open",
+        "blocking": false
+      },
+      {
+        "id": "F-110-EGRESS-01",
+        "summary": "Passages persist a second copy of raw user content in a new location, so every existing rule about content handling, retention, export and deletion must extend to it or portability and deletion silently become incomplete. Interacts directly with spec 111's manifest record classes.",
+        "routedTo": "bubbles.design then spec 111",
+        "status": "open",
+        "blocking": false
+      },
+      {
+        "id": "F-110-SUMMARY-01",
+        "summary": "R-110-04 requires indexing actual content while constraint C110-4 retains a summary-vector signal in the fusion. Whether the summary vector remains a distinct signal or becomes redundant once passages exist is unresolved, and keeping a redundant signal would add cost without evidence of benefit.",
+        "routedTo": "bubbles.design",
+        "status": "open",
+        "blocking": false
+      },
+      {
+        "id": "F-110-METRIC-01",
+        "summary": "Product Principle 2 states the metric as >75% correct on first result for vague queries. Whether that number becomes the declared accuracy@1 floor, or whether the measured baseline is lower and the gap is recorded honestly, is a product decision — not one the gate should make by adopting whatever it first measures.",
+        "routedTo": "operator via bubbles.plan",
+        "status": "open",
+        "blocking": false
+      },
+      {
+        "id": "F-110-FLAG-01",
+        "summary": "NEW, raised by this state.json repair run. spec.md proposes the gating flag `chunkedHybridRetrieval`, but repo-wide grep on 2026-08-04 finds it only in this spec folder's prose — it is absent from config/feature-flags.mvp.yaml and config/feature-flags.next.yaml. flagsIntroduced is therefore a deliberate empty array rather than a falsely-populated one, because both bundles are owned by bubbles.train and outside this run's permitted surface. Note that release-train-guard.sh Check 8 would not have caught the false declaration: an absent flag reads as 'unset' and passes, so the error would have been silent. The flag must exist as default-ON in mvp and default-OFF in next before the cutover scopes execute.",
+        "routedTo": "bubbles.train",
+        "status": "open",
+        "blocking": true
+      },
+      {
+        "id": "F-110-TRAIN-01",
+        "summary": "NEW, raised by this state.json repair run, and materially sharper than the sibling note it derives from. Spec 111 recorded F-111-110-01 as an ordering dependency between 110 and 111. Now that both specs carry a train declaration, it is a CROSS-TRAIN dependency: 110 targets mvp, 111 targets next. If 110 ships first on mvp, the live train gains passages — a second content-bearing copy of user data — while the export, deletion and round-trip parity coverage for that record class lives on the other train. Product Principle 11's unconditional-exit guarantee is therefore weakened on the LIVE train, not on staging, for the whole interval between the two promotions. spec.md records the tension under Principle 11 and F-110-EGRESS-01, but not the cross-train consequence, because neither spec had a train declaration when it was written. Either 111's manifest must include passages before 110 promotes on mvp, or the interval must be an explicitly accepted operator decision.",
+        "routedTo": "bubbles.plan",
+        "status": "open",
+        "blocking": false
+      },
+      {
+        "id": "F-110-SIBLING-01",
+        "summary": "NEW, raised by this state.json repair run. Sibling spec 112 carries finding F-112-110-01, which records that specs/110-retrieval-quality-foundation has no state.json and therefore no releaseTrain or flagsIntroduced declaration. That condition is closed by this run. F-112-110-01 could not be updated here because specs/112-capability-registry is outside this run's permitted surface, so the sibling finding is now stale and should be marked resolved by its owner.",
+        "routedTo": "bubbles.plan",
+        "status": "open",
+        "blocking": false
+      }
+    ]
+  },
+  "policySnapshot": {
+    "source": ".specify/memory/bubbles.config.json",
+    "capturedAt": "2026-08-04T00:00:00Z",
+    "workflowMode": "full-delivery",
+    "workflowModeSource": "declared by this packet's own artifacts (spec.md, report.md and scopes.md headers)",
+    "statusCeiling": "done",
+    "statusCeilingSource": ".github/bubbles/workflows.yaml modeTemplates.base-delivery (statusCeiling: done); full-delivery is defaultMode at line 2",
+    "requiredSpecialists": [
+      "implement",
+      "test",
+      "regression",
+      "simplify",
+      "gaps",
+      "harden",
+      "stabilize",
+      "security",
+      "validate",
+      "audit",
+      "chaos",
+      "docs"
+    ],
+    "requiredSpecialistsSource": ".github/bubbles/registry/required-specialists.yaml line 38 (full-delivery)",
+    "sourceEditsPermitted": true,
+    "sourceEditLockout": {
+      "mode": "off",
+      "gate": "G073",
+      "source": "workflow-mode-constraint"
+    },
+    "sourceEditsNote": "sourceEditsPermitted describes the MODE's policy, not what this run did. full-delivery permits source edits when delivery begins. Zero source files have been changed by any run against this packet to date.",
+    "grill": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "tdd": {
+      "mode": "scenario-first",
+      "source": "repo-default"
+    },
+    "autoCommit": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "lockdown": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "regression": {
+      "mode": "protected-scenarios",
+      "source": "repo-default"
+    },
+    "validation": {
+      "mode": "certification-required",
+      "source": "repo-default"
+    },
+    "evidenceRequired": true,
+    "evidenceRequiredNote": "true because full-delivery has a `done` ceiling and every Definition-of-Done item will require inline raw execution evidence (G025). No evidence exists yet, which is precisely why status is not_started.",
+    "testCategories": [
+      "unit",
+      "integration",
+      "e2e-api",
+      "stress"
+    ],
+    "canonicalCommands": {
+      "unit": "./smackerel.sh test unit",
+      "integration": "./smackerel.sh test integration",
+      "e2e-api": "./smackerel.sh test e2e",
+      "stress": "./smackerel.sh test stress",
+      "check": "./smackerel.sh check",
+      "lint": "./smackerel.sh lint",
+      "format": "./smackerel.sh format --check",
+      "configGenerate": "./smackerel.sh config generate"
+    },
+    "gates": [
+      "G025",
+      "G073",
+      "G087",
+      "G110",
+      "G111",
+      "G115"
+    ],
+    "gatesNote": "This is the packet-relevant subset identified at authoring time, NOT the resolved required-gate set for full-delivery. The authoritative set is resolved from .github/bubbles/workflows.yaml by the mode resolver and enforced by state-transition-guard.sh at transition time; it is deliberately not transcribed here, because a hand-copied gate list that drifts from the resolver is worse than no list. certification.gatesEvaluated is empty because none of these has been evaluated for delivery."
+  },
+  "scopes": [
+    { "id": "SCOPE-01", "name": "Semantic Index Identity Contract", "status": "Not Started", "dependsOn": [] },
+    { "id": "SCOPE-02", "name": "Passage Model And Content Indexing", "status": "Not Started", "dependsOn": ["SCOPE-01"] },
+    { "id": "SCOPE-03", "name": "Query Plan Measurement And Bounded Ingest Lookup", "status": "Not Started", "dependsOn": ["SCOPE-01"] },
+    { "id": "SCOPE-04", "name": "Hybrid Fusion And Winning-Passage Evidence", "status": "Not Started", "dependsOn": ["SCOPE-02"] },
+    { "id": "SCOPE-05", "name": "Evaluation Corpus, Executed Gate And Lane Wiring", "status": "Not Started", "dependsOn": ["SCOPE-02", "SCOPE-03", "SCOPE-04"] }
+  ],
+  "scopesNote": "Transcribed from the Proposed Scope Table in scopes.md, which that file itself labels a PROVISIONAL DECOMPOSITION proposed by requirements analysis and explicitly not a ratified plan. bubbles.plan owns scopes.md and may restructure, merge, split or reorder any of it. Three of the five scopes are blocked on unresolved findings rather than merely unstarted: SCOPE-01 and SCOPE-02 on F-110-DIM-01, SCOPE-03 on F-110-PLAN-01, and SCOPE-05 on F-110-LANE-01, F-110-CORPUS-01 and F-110-FLOOR-01.",
+  "transitionRequests": [],
+  "transitionRequestsNote": "EMPTY. No status transition is requested by this run. The packet stays at not_started; this run added a missing artifact and changed no claim about progress.",
+  "reworkQueue": [],
+  "executionHistory": [
+    {
+      "agent": "bubbles.analyst",
+      "phasesExecuted": ["analyze"],
+      "workflowMode": "full-delivery",
+      "statusBefore": "not_started",
+      "statusAfter": "not_started",
+      "startedAt": "2026-08-04T00:00:00Z",
+      "finishedAt": "2026-08-04T00:00:00Z",
+      "outcome": "completed_owned",
+      "summary": "Authored spec.md for retrieval quality from the plan of record (docs/Product_Delivery_Plan.md section 3 P8, section 4 Stage 4) and the diagnostic memo (docs/Product_Direction_2026-07-31.md D1, D2, D3, D5, D15, VAL-1), governed by docs/Product-Principles.md Principle 2 (Vague In, Precise Out). Produced a problem statement naming four compounding retrieval defects plus one ingest-side defect, an outcome contract, a twelve-row source-verified evidence base, a domain capability model, 18 requirements, 6 non-functional requirements, 5 non-goals, 15 Gherkin scenarios with stable SCN-110-* ids, 8 routed findings, product principle alignment, and a release-train declaration. Zero source files changed, zero tests executed, zero DoD boxes checked.",
+      "artifactOwnershipDeviation": "bubbles.analyst owns spec.md and authored it. design.md (bubbles.design), scopes.md (bubbles.plan), report.md and uservalidation.md (delivery agents) were created in this run under an explicit operator instruction to produce the full initial artifact set so the packet is structurally complete and lintable. Each carries a header naming its real owner and stating that its contents are provisional and carry no ratified decision, plan, or evidence.",
+      "knownDefect": "This run did NOT produce state.json, despite report.md asserting that it did and referring twice to state.json.executionHistory. That gap was the packet's only artifact-lint failure and is repaired by the next entry.",
+      "knownDefectNote": "Recorded retrospectively by the repair run. This entry is a reconstruction of the authoring run assembled from the artifacts that run left behind (spec.md, design.md, scopes.md, report.md, uservalidation.md) — it is not a contemporaneous record, because no state file existed to write one into. Nothing in it asserts an execution or a result that those artifacts do not already state."
+    },
+    {
+      "agent": "bubbles.analyst",
+      "phasesExecuted": ["analyze"],
+      "workflowMode": "full-delivery",
+      "statusBefore": "not_started",
+      "statusAfter": "not_started",
+      "startedAt": "2026-08-04T00:00:00Z",
+      "finishedAt": "2026-08-04T00:00:00Z",
+      "outcome": "completed_owned",
+      "summary": "Narrow packet repair under operator directive. Created this state.json, the packet's only missing required artifact. No other file in this spec folder was modified, no source file was touched, no sibling spec was touched, and no train or flag configuration was edited. Status was not advanced: the packet was not_started before this run and is not_started after it.",
+      "defectVerification": "The defect was confirmed by execution before it was repaired, not assumed. `bash .github/bubbles/scripts/artifact-lint.sh specs/110-retrieval-quality-foundation` exited 1 with exactly one issue, and the failing line was `Missing required artifact: specs/110-retrieval-quality-foundation/state.json`. Every other check in that run passed, including the DoD-checkbox discipline checks and the anti-fabrication evidence checks. The brief's diagnosis was therefore correct and complete — the missing state file was the only issue, and nothing else was changed on suspicion.",
+      "verification": [
+        {
+          "command": "bash .github/bubbles/scripts/artifact-lint.sh specs/110-retrieval-quality-foundation",
+          "exitCodeBefore": 1,
+          "exitCodeAfter": 0,
+          "result": "Artifact lint PASSED. The single pre-existing issue is resolved. The post-fix run additionally exercised the v3 schema checks that could not run while the file was absent, and all passed: required fields status, execution, certification and policySnapshot present; recommended fields transitionRequests, reworkQueue and executionHistory present; and 'Top-level status matches certification.status'."
+        },
+        {
+          "command": "bash .github/bubbles/scripts/release-train-guard.sh \"$(pwd)\"",
+          "exitCodeBefore": 0,
+          "exitCodeAfter": 0,
+          "result": "release-train-guard PASSED (2 trains) — G110 and G111 are unchanged and were not regressed by adding this train declaration. 267 output lines, 0 ERROR lines, 0 'G111 violation' lines, 0 'not in registry' lines. Spec 110 produces no line of its own in the guard output at all: Check 5+6 skips status `not_started`, and Check 8 has nothing to evaluate because flagsIntroduced is empty. Every remaining line is a pre-existing grandfathered WARN about historical done-status specs that predate the train registry, none of which this run touched."
+        }
+      ],
+      "verificationNote": "These are artifact-level guard runs against the packet structure. They are NOT feature test evidence and must never be cited as such. No product build, no test suite, no live stack and no database query was run, because no feature code exists.",
+      "releaseTrainRationale": "Affirmed `mvp` (config/release-trains.yaml id: mvp, phase: active, target_slot: home-lab, flags_bundle: config/feature-flags.mvp.yaml) on this spec's own merits, after testing whether the siblings' reasoning transfers. IT DOES NOT. Spec 111 chose `next` because it introduces a fail-closed egress enforcement point whose grant vocabulary is defined by spec 108, which is itself on `next`; spec 112 chose `next` because it raises reach while the per-capability authorization that would bound it is undelivered. Spec 110 introduces NO authorization change whatsoever — Non-Goal 1 states it changes what retrieval finds, never whose corpus it searches — and consumes nothing from spec 108. There is no security posture here that could be split across two trains, so the argument that moved both siblings is absent, and importing it would have been a borrowed justification. Four grounds support `mvp`. (1) This is a correctness fix to a promise the live train ALREADY MAKES: Product Principle 2's stated contract is >75% correct on first result for vague queries, it is ratified and BLOCKING, and spec.md section 3 establishes that no executed measurement of it exists anywhere in the repository. A fix to a shipped promise belongs on the train that shipped it. (2) The failure mode — a user cannot find a fact they saved — is being experienced on `mvp` today; deferring it to staging defers the user's relief, not the risk. (3) There is no hard dependency on a `next`-train spec. F-110-EGRESS-01 routes passage portability to spec 111, but that is a routed follow-on, not a prerequisite: all five scopes can execute without any artifact spec 111 produces. (4) The plan of record places P8 in Stage 4 on the critical path with Pillars A and C both depending on it, so holding it on staging stalls two dependent pillars. THE HONEST COST, stated rather than obscured by the train choice, is twofold and is recorded as findings rather than as reassurance. First, F-110-DIM-01: re-embedding is simultaneously a column-width migration on the corpus's largest table, and choosing `mvp` means that migration lands on the LIVE corpus — mitigated by the gating flag and by the resumability hard constraint in the outcome contract, but not eliminated, which is why F-110-DIM-01 is BLOCKING on bubbles.design before any scope executes. Second, F-110-TRAIN-01: passages add a second content-bearing copy of user data to the live train while spec 111, which covers its export and deletion, targets `next` — so Principle 11's unconditional-exit guarantee is weakened on the live train for the interval between the two promotions.",
+      "behaviourOnOtherTrain": "Unchanged on `next`. The `next` train continues to serve the existing single-vector retrieval path, and the identity-agreement refusal and passage-plus-fusion path do not activate there. When bubbles.train declares the gating flag it ships default-OFF in config/feature-flags.next.yaml for G111 parity, exactly as card_rewards and clientReleaseLaneB are handled today, until bubbles.train promotes.",
+      "divergencesFromSiblings": "Three, each deliberate and each recorded in the field it affects rather than left for a reader to notice. (1) releaseTrain is `mvp`, not `next` — see releaseTrainRationale above. (2) planningOnly is false, not true: both siblings are product-to-planning packets whose delivery happens under a separate future spec, whereas spec 110 declares full-delivery in three of its own artifacts and its five scopes are its own delivery scopes, so asserting it has no implementation target would be false. (3) workflowMode is full-delivery with statusCeiling `done`, not product-to-planning with ceiling specs_hardened, because that is what this packet's own artifacts declare; the sibling shape was not copied over the packet's own declaration.",
+      "constraintsHonored": "Only specs/110-retrieval-quality-foundation/state.json was created. No other file in that folder was modified — spec.md, design.md, scopes.md, report.md and uservalidation.md are byte-unchanged, so the divergence between spec.md's proposed flag name and this file's empty flagsIntroduced is recorded in flagsIntroducedNote and routed as F-110-FLAG-01 rather than resolved by editing spec.md, which was outside the narrow repair. No source file changed. Sibling specs 111 and 112 were read for schema shape and left byte-unchanged; 112's now-stale finding F-112-110-01 was routed as F-110-SIBLING-01 rather than edited. config/release-trains.yaml, config/feature-flags.mvp.yaml, config/feature-flags.next.yaml and docs/releases/ were read only and not modified. No concrete hostnames, IP addresses, tailnet identifiers, or operator paths appear anywhere in this file. No DoD box was checked. No status was advanced. No evidence was written for work not done."
+    }
+  ]
+}
