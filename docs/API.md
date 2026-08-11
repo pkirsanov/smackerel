@@ -374,6 +374,119 @@ posted at least one extension artifact.
 within the trailing 30 days; older rows still contribute first/last seen
 timestamps but a zero recent count.
 
+### Corpus Read Surface — `corpus:read` (Spec 108)
+
+Spec 108 gates the corpus-read surface on the `corpus:read` scope claim. The
+gate is mounted on the **route manifest** in `internal/api/router.go`, not
+inside handler bodies, so the requirement is auditable from the routing table
+and a new corpus handler cannot ship ungated by omission.
+
+> **Sixteen route groups, not eight.** The gated surface is **sixteen**
+> route groups, ratified by spec 108 `spec.md` §18 decision 5 (F-108-ADJ-01)
+> and shipped as a closed sixteen-value `route_group` label set in
+> `internal/metrics/auth.go`. Some upstream planning prose still says
+> "eight" — that text predates decision 5 and is stale. **Do not "correct"
+> this table back to eight.** Eight was Tier A alone; Tier B was brought in
+> scope because those endpoints compute over the same global corpus, and
+> leaving them bearer-only would have made this a boundary with a documented
+> hole.
+
+The two tiers differ in documentation only. **Both carry the same grant and
+the same denial shape**; the split is not a difference in authority.
+
+#### Tier A — raw corpus retrieval (groups 1–8)
+
+| # | Method | Path | `route_group` | Required scope |
+|---|---|---|---|---|
+| 1 | `POST` | `/api/search` | `search` | `corpus:read` |
+| 2 | `GET` | `/api/digest` | `digest` | `corpus:read` |
+| 3 | `GET` | `/api/recent` | `recent` | `corpus:read` |
+| 4 | `GET` | `/api/artifact/{id}` | `artifact_detail` | `corpus:read` |
+| 5 | `GET` | `/api/artifacts/{id}/domain` | `artifact_domain` | `corpus:read` |
+| 6 | `GET` | `/api/export` | `export` | `corpus:read` |
+| 7 | `POST` | `/api/context-for` | `context_for` | `corpus:read` |
+| 8 | `GET` | `/api/knowledge/concepts`, `/concepts/{id}`, `/entities`, `/entities/{id}`, `/lint`, `/stats` | `knowledge` | `corpus:read` |
+
+Group 8 is registered as one chi sub-router and the gate attaches to the
+enclosing group, so all six knowledge endpoints inherit the requirement as a
+unit and a seventh cannot be added ungated.
+
+#### Tier B — corpus-derived Phase-5 intelligence (groups 9–16)
+
+| # | Method | Path | `route_group` | Required scope |
+|---|---|---|---|---|
+| 9 | `GET` | `/api/expertise` | `expertise` | `corpus:read` |
+| 10 | `GET` | `/api/learning-paths` | `learning_paths` | `corpus:read` |
+| 11 | `GET` | `/api/subscriptions` | `subscriptions` | `corpus:read` |
+| 12 | `GET` | `/api/serendipity` | `serendipity` | `corpus:read` |
+| 13 | `GET` | `/api/content-fuel` | `content_fuel` | `corpus:read` |
+| 14 | `GET` | `/api/quick-references` | `quick_references` | `corpus:read` |
+| 15 | `GET` | `/api/monthly-report` | `monthly_report` | `corpus:read` |
+| 16 | `GET` | `/api/seasonal-patterns` | `seasonal_patterns` | `corpus:read` |
+
+Tier B is registered behind a `deps.IntelligenceEngine != nil` conditional.
+That conditional is **enclosed by** the gated group, never the reverse.
+Inverting it would register all eight endpoints **outside** the gate exactly
+when the engine is configured — that is, whenever they actually serve
+corpus-derived signal.
+
+#### Routes deliberately NOT gated, and why
+
+Omission from the gate is a decision, not an oversight. Each of these is
+excluded for a stated reason:
+
+| Route(s) | Method | Why it is not gated on `corpus:read` |
+|---|---|---|
+| `/api/capture` | `POST` | Write path. Ingest is not a corpus *read*; gating it would break capture for every daily user. |
+| `/api/bookmarks/import` | `POST` | Write path, same reasoning. |
+| `/api/assistant/turn` | `POST` | Already gated on the `assistant:turn` claim. Its corpus access is **mediated** by the assistant facade, not raw retrieval. |
+| `/api/artifacts/{id}/annotations*`, `/api/annotations`, `/api/artifacts/{id}/tags/{tag}` | `POST`/`GET`/`DELETE` | Already gated on `annotation:edit`. Annotation bodies are user-authored content, not corpus content. |
+| `/api/topics`, `/api/people`, `/api/places`, `/api/time`, `/api/graph/edges` | `GET` | Already gated on `knowledge-graph:read`, which daily users legitimately hold. Adding `corpus:read` here would **revoke** an existing grant rather than add a boundary. |
+| `/api/internal/telegram-message-artifact` | `POST`/`GET` | Internal id↔id mapping. Returns no corpus content. |
+| `/api/health`, `/readyz`, `/metrics` | `GET` | Unauthenticated by design; carry no corpus data. |
+
+#### Denial envelope and its zero-leakage guarantee
+
+Under ENFORCE, a principal without `corpus:read` receives the standard
+`403 scope_required` envelope documented under
+[Error Behavior](#403-scope_required-spec-060), with
+`required` set to `["corpus:read"]`:
+
+```text
+HTTP/1.1 403 Forbidden
+Content-Type: application/json
+
+{"error":"scope_required","required":["corpus:read"]}
+```
+
+The zero-leakage guarantee is what makes this a boundary rather than an
+existence oracle. The denial body MUST NOT contain, and does not contain:
+
+- result counts, including a `0` or any "no results" phrasing
+- artifact ids, titles, domains, or snippets
+- any signal distinguishing a **resolvable** id from a **non-existent** one
+
+Consequences that clients and integrators can rely on:
+
+- **Identical shape across every route group.** `GET /api/artifact/{id}` for a
+  non-existent id and for an existing id are byte-identical when denied.
+- **No 403-versus-404 discrimination.** The gate runs **before** the handler,
+  so a denied principal never learns whether the id resolves. A denied caller
+  cannot enumerate the corpus by probing status codes.
+- **A wildcard `*` in a token scope claim is NOT honored.** A wildcard-scoped
+  token is denied exactly like an empty-scoped one.
+- **No `WWW-Authenticate` challenge and no retry hint.** The remedy is an
+  operator grant, which is a **token rotation** — not a client-side retry and
+  not a re-auth. See
+  [Operations.md → Corpus Grant Metrics And The OBSERVE → ENFORCE Rollout](Operations.md#corpus-grant-metrics-and-the-observe--enforce-rollout-spec-108).
+- **`shared_token` and `bootstrap` sessions bypass the check**, per the
+  documented `RequireScope` source switch. They never receive this `403`.
+
+Under OBSERVE the gate denies **nothing**. Requests without `corpus:read` are
+served normally and only increment
+`smackerel_auth_corpus_grant_would_deny_total`. Client behavior is therefore
+unchanged until the stage flips.
+
 ## Error Behavior
 
 Notification API handlers use the shared API error envelope:
@@ -445,22 +558,31 @@ Metrics:
 | `smackerel_auth_scope_rejected_total` | `required_scope`, `user_id` | Per `403 scope_required` response. `required_scope` is the first-missing scope; cardinality bounded by the closed set of scopes wired at construction. |
 | `smackerel_auth_scope_check_bypassed_total` | `source` | Per `RequireScope` invocation against a `shared_token` or `bootstrap` session. `source` is a closed set of two values. |
 
-RequireScope endpoint wiring matrix (initial):
+RequireScope endpoint wiring matrix:
 
 | Route | Required Scope | Wired By |
 |---|---|---|
 | `POST /v1/connectors/extension/ingest` | `extension:bookmarks,history` | spec 058 implementation |
+| The **sixteen** corpus route groups — see [Corpus Read Surface](#corpus-read-surface--corpusread-spec-108) for the per-endpoint table | `corpus:read` | spec 108 implementation (ENFORCE stage only) |
+
+The corpus row is mounted **conditionally on the resolved stage**: under
+OBSERVE the `RequireScope` half is not mounted at all and nothing is denied;
+under ENFORCE it is mounted on the enclosing route group so one mount covers
+all sixteen. The stage is resolved once at startup from
+`SMACKEREL_AUTH_CORPUS_GRANT_ENFORCEMENT` and fails loudly when absent, empty,
+or malformed.
 
 Spec 060 ships the `RequireScope` primitive and the supporting CLI / docs
 only. Endpoint wiring of `RequireScope(...)` on pre-existing routes is OUT
 of scope for spec 060; consumer specs wire their own scope requirements as
 part of the same change set that introduces the route (spec 058 wires the
-extension ingest route above).
+extension ingest route above; spec 108 wires the corpus route groups).
 
 ## Change Notes
 
 | Date | Change |
 |------|--------|
+| 2026-08-11 | Spec 108 — documented the corpus read surface: **sixteen** gated route groups (Tier A raw retrieval 1–8, Tier B corpus-derived Phase-5 intelligence 9–16) each requiring `corpus:read`, the routes deliberately left ungated and why, the `403 scope_required` denial envelope for `corpus:read` and its zero-leakage guarantee (no counts, no ids, no 403-vs-404 discrimination, wildcard scope not honored), and the stage-conditional `RequireScope` wiring row. The gated surface is **sixteen**, not eight — `spec.md` §18 decision 5 superseded the original eight-group scope; upstream planning prose still saying "eight" is stale. |
 | 2026-06-02 | Spec 072 — added WhatsApp Business webhook endpoints (`GET`/`POST` at the configured `assistant.transports.whatsapp.webhook_path`, default `/v1/assistant/transports/whatsapp/webhook`). GET handles Meta hub-mode verification challenge using `WHATSAPP_WEBHOOK_VERIFY_TOKEN`. POST requires a valid `X-Hub-Signature-256` HMAC over the raw request body keyed by `WHATSAPP_APP_SECRET`; unsigned or tampered bodies are rejected before the assistant facade is invoked. Duplicate Meta deliveries with the same `TransportMessageID` are deduplicated and invoke the facade and capture-as-fallback path exactly once. Responses render as text, interactive buttons (≤3 choices), interactive list (>3 choices), or text fallback per the WhatsApp Cloud API render table; the `template` message family is never emitted from the assistant outbound path. The transport disables independently of Telegram and HTTP via `ASSISTANT_TRANSPORTS_WHATSAPP_ENABLED=false`. |
 | 2026-05-28 | Spec 060 — documented `403 scope_required` response shape (`{"error":"scope_required","required":[<first-missing>]}`), `auth_scope_rejected_total` / `auth_scope_check_bypassed_total` metrics, misconfigured-router `500 middleware_misconfigured` behavior, and the initial `RequireScope` endpoint wiring matrix (spec 058 extension ingest). |
 | 2026-05-28 | Added spec 058 Chrome Extension Bridge ingestion endpoint (`POST /v1/connectors/extension/ingest`), per-item response shape, error matrix, and the admin devices read-only view (`GET /v1/admin/extension/devices`). |

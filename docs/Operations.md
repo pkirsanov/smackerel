@@ -2864,6 +2864,224 @@ histogram_quantile(0.95,
 sum(increase(smackerel_auth_token_revocation_total[1h])) by (reason)
 ```
 
+##### Corpus Grant Metrics And The OBSERVE → ENFORCE Rollout (Spec 108)
+
+Spec 108 gates the corpus-read surface on the `corpus:read` scope claim. The
+rollout is staged: **OBSERVE** counts who *would* be denied and denies nobody,
+**ENFORCE** actually returns `403`. This section is the operator runbook for
+reading the observation telemetry (UC-108-001), deciding whether the flip is
+safe, performing the flip, and rolling back.
+
+> **Sixteen route groups, not eight.** The gated surface is **sixteen**
+> `route_group` values, ratified by `spec.md` §18 decision 5 (F-108-ADJ-01) and
+> shipped as a closed sixteen-value set in
+> [`internal/metrics/auth.go`](../internal/metrics/auth.go)
+> (`CorpusRouteGroups()`). Some upstream planning prose still says "eight" —
+> that text predates decision 5 and is stale. **Do not "correct" this runbook
+> back to eight.** Eight was Tier A alone; Tier B (the corpus-derived Phase-5
+> intelligence endpoints) was brought in scope precisely because leaving it
+> bearer-only would have shipped a boundary with a documented hole.
+
+###### The three metrics and their closed label sets
+
+All three live in [`internal/metrics/auth.go`](../internal/metrics/auth.go)
+under the existing `smackerel_auth_*` prefix. No parallel metric family is
+introduced.
+
+| Metric name | Type | Labels | Increments / set when |
+|---|---|---|---|
+| `smackerel_auth_corpus_grant_would_deny_total` | Counter | `route_group` (closed set of **16**), `user_id`, `session_source` | A request reached a gated corpus route group **without** `corpus:read`. Under OBSERVE it was served anyway; the counter is the counterfactual "this would have been a 403". |
+| `smackerel_auth_corpus_grant_allowed_total` | Counter | `route_group` (closed set of **16**), `session_source` | A request reached a gated corpus route group **carrying** `corpus:read`. This is the denominator. **It has no `user_id` label** — see the coverage caveat below. |
+| `smackerel_auth_corpus_grant_enforcement_mode` | Gauge | (none) | Set once at startup: `0` = OBSERVE, `1` = ENFORCE. Lets a dashboard state the stage without reading config. |
+
+`route_group` label values — Tier A (raw corpus retrieval) then Tier B
+(corpus-derived Phase-5 intelligence):
+
+| Tier | `route_group` values |
+|---|---|
+| **A (1–8)** | `search`, `digest`, `recent`, `artifact_detail`, `artifact_domain`, `export`, `context_for`, `knowledge` |
+| **B (9–16)** | `expertise`, `learning_paths`, `subscriptions`, `serendipity`, `content_fuel`, `quick_references`, `monthly_report`, `seasonal_patterns` |
+
+The set is closed by construction. `CorpusGrantGate.Observe` validates the
+route group **at wiring time** and panics on an unknown value, so a raw request
+path can never become a label value and `/api/artifact/{id}` can never explode
+into a per-artifact series.
+
+`session_source` is the existing closed session-source enum. Only
+`per_user_token` ever appears on these two counters: `shared_token` and
+`bootstrap` sessions bypass `RequireScope` under ENFORCE, so counting them
+would make the would-deny counter a false predictor of the ENFORCE outcome and
+would pad the grant list with principals that will never be denied.
+
+Each would-be denial also emits one structured `warn` log:
+`event=corpus_grant_would_deny`, `route_group`, `user_id`, `session_source`,
+`required_grant=corpus:read`, `enforcement_mode=observe`. It records *who*, never
+*what they searched for* — no query text and no artifact ids.
+
+###### UC-108-001 — "who would have been denied?"
+
+The observation query. A non-empty result set is exactly the list of principals
+that must be granted `corpus:read` before the flip, or explicitly accepted as
+intentionally denied:
+
+```promql
+# The grant list: principals × route groups that would 403 under ENFORCE.
+sum by (user_id, route_group) (increase(smackerel_auth_corpus_grant_would_deny_total[7d]))
+
+# The denominator: granted traffic per group. NOTE: no user_id label.
+sum by (route_group) (increase(smackerel_auth_corpus_grant_allowed_total[7d]))
+
+# Which stage is this process actually running? 0 = OBSERVE, 1 = ENFORCE.
+smackerel_auth_corpus_grant_enforcement_mode
+```
+
+###### Go / no-go criterion for the ENFORCE flip
+
+`OBSERVE-CLEAN` is the bar that authorizes the flip. All of the following must
+hold, conjunctively (`spec.md` §18 decision 1):
+
+1. **Duration.** At least **14 consecutive days** in OBSERVE. The stage is
+   resolved from SST at process start, so a restart that re-resolves the *same*
+   stage does not reset the clock; a stage *change* does.
+2. **Coverage — the part that actually retires the risk.** Every one of the
+   **sixteen** route groups must either show **real observed traffic** in the
+   window, **or** carry a recorded `idle-by-design` attestation that names a
+   **reason** and a **named principal** that would have exercised that group.
+   **A zero counter over a silently idle group is never read as clean.** An
+   elapsed-time-only window does not retire the risk it exists to retire: it can
+   expire while a monthly-cadence principal never touched a corpus route, and the
+   operator would then read silence as safety.
+3. **Denial set.** Zero would-deny events attributable to a principal the
+   operator intends to keep. A would-deny attributable to a principal the
+   operator intends to *stop* granting is not a blocker, but that intent MUST be
+   recorded **before** the flip, not after.
+4. **Reset triggers.** The window **resets to day zero** on any new principal
+   enrollment or any new client surface. Both change the denominator, so the
+   accumulated window no longer describes the population being flipped.
+5. **Proactive rotation precondition.** **No principal with unknowable grants
+   may remain unrotated at flip time.** A token issued before migration 063
+   records `granted_scopes IS NULL` and renders as `unknown` in `auth
+   list-users`. `unknown` means the pre-flip roster is not fully known, so the
+   flip's blast radius cannot be computed. Rotate those principals **before**
+   the flip, issuing a deliberate scope set for each. That makes the roster
+   determinate by construction rather than by recovery.
+
+**Honest limit on criterion 2 (F-108-COVERAGE-LABEL-01, still open).** The
+ratified bar is a **per-principal × per-route-group** matrix. The shipped metric
+set cannot compute it: `..._would_deny_total` carries `user_id` but only counts
+*denials*, so a **granted** principal's traffic is invisible to it, and
+`..._allowed_total` carries **no `user_id`**, so per-principal coverage cannot be
+reconstructed from it either. Until that label gap is closed, each matrix cell is
+satisfiable only by observed traffic at the group level **plus explicit per-cell
+operator attestation**. Do not claim per-principal coverage from these two
+counters — they cannot support the claim.
+
+###### Granting `corpus:read` is a token rotation, not a flag flip
+
+Authority is carried in the minted token's `scope` claim. Granting `corpus:read`
+to an existing principal therefore means **re-minting and redistributing that
+principal's token**. There is no database row to toggle and no admin control that
+edits an existing token's grants.
+
+`corpus` is a registered scope surface as of spec 108 Scope 01, so this works
+without the `--allow-unknown-surface` escape hatch:
+
+```bash
+# New principal, minted with corpus access.
+./smackerel.sh auth enroll --notes 'analyst workstation' \
+  --scope assistant:turn --scope knowledge-graph:read --scope corpus:read <user-id>
+
+# Read the CURRENT recorded grant set before you rotate. Do this first.
+./smackerel.sh auth list-users
+
+# Existing principal: rotate, naming the FULL intended scope list.
+./smackerel.sh auth rotate --prior-token-id <old-id> \
+  --scope annotation:edit --scope knowledge-graph:read --scope corpus:read <user-id>
+```
+
+> **FOOT-GUN — `F-108-GRANT-MECHANISM-01`. A rotation that names any `--scope`
+> REPLACES the scope set; it does not add to it.**
+>
+> `resolveRotationScopes` ([`cmd/core/cmd_auth.go`](../cmd/core/cmd_auth.go))
+> treats a non-empty `--scope` list as an **explicit replace**. A rotation issued
+> as `--scope corpus:read` alone therefore **silently drops every scope the
+> principal previously held** — `annotation:edit` and `knowledge-graph:read`
+> included. There is no warning, no diff, and no confirmation prompt. The
+> operator discovers the loss when an unrelated surface starts returning `403`.
+>
+> **Always name the full intended scope list on every rotation.**
+>
+> **Mitigation that now exists.** `smackerel auth list-users` has a `GRANTS`
+> column showing the principal's **recorded** scope set, so you can read the
+> current list before rotating instead of needing the old wire token. Its three
+> renderings are distinct on purpose and must not be conflated:
+>
+> | `GRANTS` cell | Means |
+> |---|---|
+> | `corpus:read,annotation:edit` | The recorded set. Copy it, add what you are granting, pass the whole list. |
+> | `(none)` | Recorded as **no** grants (`granted_scopes = '{}'`). A real answer. |
+> | `unknown` | `granted_scopes IS NULL` — the token predates grant recording. **Nobody recorded what it grants.** This is not "no grants"; it is "no answer". |
+> | `(no active token)` | The principal has no active unexpired token to preserve from. |
+>
+> The preserve-mode rotation (`auth rotate --prior-token-id <id> <user-id>` with
+> **no** `--scope`) reads the recorded set and refuses rather than guessing when
+> it is `unknown`. That refusal is correct behavior: an unknown set must never be
+> silently replaced with an invented one.
+
+###### OBSERVE → ENFORCE → rollback
+
+The stage is resolved **once at startup** from SST. There is no hot reload,
+because a reload path would have to answer "what do I do when the reloaded value
+is absent or malformed?" and every answer to that is a silent default, which
+`smackerel-no-defaults` forbids.
+
+| Layer | Name | Notes |
+|---|---|---|
+| Train flag | `corpusGrantEnforcement` | Owning train `next`. `bubbles.train` owns the ON flip and the retirement; it is not an ad-hoc operator edit. |
+| SST key | `auth.corpus_grant_enforcement` in `config/smackerel.yaml` | Declared with no fallback shape in the resolution path. |
+| Generated env | `SMACKEREL_AUTH_CORPUS_GRANT_ENFORCEMENT` | Emitted into `config/generated/<env>.env` by `config generate`. Uses the `${VAR:?...}` fail-loud form. |
+
+An absent, empty, or malformed value **aborts startup** naming the variable.
+There is no third mode and no per-route override.
+
+**Flip to ENFORCE** (only after `OBSERVE-CLEAN` holds):
+
+```bash
+# 1. Set the flag in the owning train bundle, then compile it into the env.
+./smackerel.sh config generate
+
+# 2. Restart against the SAME image. Local dev:
+./smackerel.sh down && ./smackerel.sh up
+
+# 3. Confirm the stage the process actually resolved (expect 1).
+#    Prometheus: smackerel_auth_corpus_grant_enforcement_mode
+
+# 4. Watch for real denials. Non-zero here means a principal was missed.
+#    Prometheus: sum by (required_scope, user_id) (
+#      increase(smackerel_auth_scope_rejected_total{required_scope="corpus:read"}[15m]))
+```
+
+**Rollback to OBSERVE** — no rebuild and no code change:
+
+1. Set `corpusGrantEnforcement` back to `false` in the owning bundle
+   (`config/feature-flags.next.yaml`).
+2. Regenerate the bundle: `./smackerel.sh config generate`.
+3. Re-apply the **same signed image digest** with the new bundle. On a deployed
+   target this is the adapter's pointer-swap path
+   (`./smackerel.sh deploy-target <target> apply …`). `docker build` is never
+   invoked, and no migration runs.
+
+Denials stop immediately on the restarted process and counting resumes. The flip
+is symmetric and idempotent: worst case for a bad flip is a corpus-wide `403` for
+daily users. Nothing is mutated and nothing is destroyed.
+
+**Retirement contract.** The flag dies with its train plus one cycle. At
+retirement the flag, the OBSERVE branch, and the two would-deny counters are
+deleted **together**, and enforcement becomes unconditional. A permanently
+flagged security control is a permanent bypass surface: while the OBSERVE branch
+exists, a config change can disable the boundary without a code review.
+`bubbles.train` owns both the ON flip and the retirement.
+
 ##### Deprecation Pathway — `production_shared_token_fallback_enabled`
 
 The flag `auth.production_shared_token_fallback_enabled` (default

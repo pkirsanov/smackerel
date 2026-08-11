@@ -2543,6 +2543,88 @@ ships the seven-series authentication metrics surface
 deprecation flag `auth.production_shared_token_fallback_enabled` defaults
 to `false` per FR-AUTH-017.
 
+#### Corpus Read Authority — `corpus:read` (Spec 108)
+
+Spec 108 makes corpus reads an explicit grant rather than an implicit
+consequence of holding any valid bearer. The `corpus:read` scope claim gates
+**sixteen** route groups: Tier A raw corpus retrieval (search, digest, recent,
+artifact detail, artifact domain, export, context-for, knowledge) and Tier B
+corpus-derived Phase-5 intelligence (expertise, learning paths, subscriptions,
+serendipity, content fuel, quick references, monthly report, seasonal
+patterns).
+
+> **Sixteen, not eight.** `spec.md` §18 decision 5 (F-108-ADJ-01) took the
+> gated surface from eight route groups to sixteen, and the shipped
+> `route_group` label set closes at sixteen values. Tier B computes over the
+> same global corpus, so leaving it bearer-only would have produced a
+> partial boundary — a control that advertises a guarantee it does not
+> provide. Planning prose that still says "eight" predates that decision and
+> is stale; **do not revert this section to eight.**
+
+The rollout is staged. Under **OBSERVE** the gate counts who *would* be denied
+and denies nobody; under **ENFORCE** an ungranted principal receives a bare
+`403`. The stage is resolved once at startup from
+`SMACKEREL_AUTH_CORPUS_GRANT_ENFORCEMENT` and fails loudly when absent, empty,
+or malformed. The operator runbook — metrics, go/no-go criterion, flip, and
+rollback — lives at `docs/Operations.md` ("Corpus Grant Metrics And The
+OBSERVE → ENFORCE Rollout"); the wire contract lives at `docs/API.md`
+("Corpus Read Surface").
+
+**Authority is never widened by default.** `dailyUserGrants` remains
+`[assistant:turn, knowledge-graph:read]` and does **not** include
+`corpus:read`. A daily user gains corpus access only by an explicit
+per-principal grant. `operatorGrants` already includes it.
+
+##### Caller-surface compatibility at the ENFORCE flip
+
+| Surface | Credential carrier | Scope source | Breaks at ENFORCE | What the operator must issue |
+|---|---|---|---|---|
+| **PWA / web (daily user)** | `auth_token` cookie set by `POST /v1/web/login` | The operator-enrolled token's `scope` claim | **YES** — search, recent, digest, artifact detail, export, and knowledge all `403` | Rotate the principal's token with `corpus:read` in the scope list |
+| **PWA / web (operator)** | same | `operatorGrants` already includes `corpus:read` | No | Nothing |
+| **Browser extension** | `Authorization: Bearer` from `chrome.storage.local.authToken` | The **principal's** token; there is no extension-specific grant | **YES** if the principal is a daily user | The same token rotation as the principal |
+| **Telegram bridge** | Per-message PASETO from `PerUserTokenMinter` | **Derived** from the mapped principal's *recorded* grant set, narrowed by the bridge delegation ceiling `{corpus:read, annotation:edit}` | **YES** if the mapped principal lacks `corpus:read` | Rotate the **principal's** token. The bridge confers nothing on its own |
+| **Internal service-to-service** (`/api/context-for`, GuestHost connector) | shared token | Bypasses the scope check per the documented `RequireScope` source switch | No | Nothing today. The connector credential does **not** receive `corpus:read`; its guest-context reads are routed to the spec-109 MCP `hospitality-read` path under its own audience-bound credential |
+| **Bootstrap session** | one-shot bootstrap | Bypasses the scope check | No | Nothing |
+| **Prometheus scrape / probes** | unauthenticated | n/a | No | Nothing — `/metrics`, `/readyz`, `/api/health` are ungated |
+
+The Telegram row is the one that changed shape rather than merely changing
+value. The bridge previously minted a **hardcoded** `["annotation:edit"]`
+claim, which located authority at the *minter* instead of at the *principal* —
+a second, divergent authority source. Derivation removes it. The ceiling
+`DeriveTelegramBridgeGrants` applies can only **withhold**, never confer, so
+`derived ⊆ recorded` holds for every input and an ungranted principal stays
+ungranted no matter what reaches the bridge.
+
+##### Granting is a token rotation, not a flag flip
+
+Authority lives in the minted token's `scope` claim, so granting `corpus:read`
+to an existing principal means **re-minting and redistributing that
+principal's token**. There is no database row to toggle. The migration cost is
+per-principal client re-provisioning, and that cost is real: it is why the
+observation window exists.
+
+The admin token page carries a **grant-issuance notice only**. **There is no
+grant editor in this spec** — a surface that edits token authority is a new
+privileged mutation path deserving its own threat model and its own
+adversarial tests, and bolting it onto an auth-enforcement migration would
+widen the blast radius of both. Grants therefore change **exclusively** via
+`smackerel auth rotate …`.
+
+Two operator consequences follow, and both are recorded here because each is
+discoverable only after it breaks something:
+
+- **A rotation that names any `--scope` REPLACES the scope set; it does not
+  add to it.** A rotation issued as `--scope corpus:read` alone silently drops
+  every scope the principal previously held. Always name the full intended
+  list. `smackerel auth list-users` now shows each principal's **recorded**
+  grant set, so the current list can be read before rotating.
+- **Tokens issued before grant recording (migration 063) render as `unknown`,
+  not as "no grants".** `NULL` means nobody recorded what the token grants;
+  `'{}'` means it was recorded as carrying none. The two are distinct facts and
+  are never conflated. Any principal still showing `unknown` must be rotated
+  **before** the ENFORCE flip, because an unknown roster makes the flip's blast
+  radius uncomputable.
+
 ### 17.3 The Privacy Trifecta
 
 ```mermaid
