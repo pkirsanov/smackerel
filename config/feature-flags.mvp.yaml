@@ -8,6 +8,10 @@ flags:
   # train; bubbles.train flips it ON in exactly one owning train ONLY when the
   # operator activates public-store submission. While false it never auto-runs.
   clientReleaseLaneB: false
+  # Spec 108 — corpus grant enforcement OBSERVE→ENFORCE switch. Owned by train
+  # 'next' (specs/108-corpus-grant-enforcement/); default-OFF in EVERY train per
+  # R-108-FL3. 'mvp' observes and counts would-be denials, and never denies.
+  corpusGrantEnforcement: false
 metadata:
   card_rewards:
     owning_spec: specs/083-card-rewards-companion/
@@ -17,3 +21,7 @@ metadata:
     owning_spec: specs/085-client-binary-release/
     introduced_in_train: mvp
     introduced_at: "2026-06-12"
+  corpusGrantEnforcement:
+    owning_spec: specs/108-corpus-grant-enforcement/
+    introduced_in_train: next
+    introduced_at: "2026-08-11"

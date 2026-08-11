@@ -7,4 +7,13 @@ flags:
   # Spec 085 — Lane B (Play Store). Owned by train 'mvp'; dormant (false) here too
   # (default-OFF in every train; G111 parity).
   clientReleaseLaneB: false
+  # Spec 108 — corpus grant enforcement OBSERVE→ENFORCE switch
+  # (specs/108-corpus-grant-enforcement/). 'next' is the OWNING train, yet the flag
+  # still ships dormant (false) here, per R-108-FL3 and design.md §4/§9 — the same
+  # two-stage precedent as clientReleaseLaneB. G111 forbids default-ON on a
+  # NON-owning train but never requires ON anywhere, so all-OFF is conformant.
+  # bubbles.train flips this to true ONLY after a clean observation window; a
+  # premature true would arrive already-enforcing and break callers that have not
+  # yet had the corpus:read token rotation required by docs/smackerel.md §17.2.
+  corpusGrantEnforcement: false
 metadata: {}

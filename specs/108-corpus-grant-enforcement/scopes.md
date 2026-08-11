@@ -14,7 +14,7 @@
 2. **Scope 02 — Observe-Stage Plumbing.** Fail-loud SST config `auth.corpus_grant_enforcement` → `SMACKEREL_AUTH_CORPUS_GRANT_ENFORCEMENT`, the three `smackerel_auth_corpus_grant_*` metrics, and the `corpus_grant_would_deny` structured log fields. The observe middleware is mounted and counts, but **nothing is denied**.
 3. **Scope 03 — Gate Mount.** `r.Use(auth.RequireScope(auth.GrantGlobalCorpusRead))` on the **sixteen** corpus route groups from `spec.md` §4.2 (Tier A 1–8 + Tier B 9–16, the latter brought in scope by §18 decision 5), mounted only in ENFORCE, honoring the stage machine. Carries the **T8 adversarial route-manifest contract test** and the Tier-B conditional-registration guard.
 4. **Scope 04 — Caller Remediation.** The surfaces design.md §5 says break at ENFORCE: PWA/extension daily-user principals and the Telegram bridge (F-108-TELEGRAM-01, whose direction is ratified by §18 decision 3 as **grant derivation**). Also asserts the shared-token / bootstrap bypass is a documented decision, and records that the GuestHost connector credential does **not** receive `corpus:read` (§18 decision 4).
-5. **Scope 05 — Docs, Release Train, Flag Bundles.** `docs/Operations.md`, `docs/API.md`, `docs/smackerel.md` §17.2, the `v1`-gate release packet's `docs/releases/v1/features.md`, `config/release-trains.yaml`, `config/feature-flags.next.yaml` (default-ON for the owning train `next`), `config/feature-flags.mvp.yaml` (default-OFF).
+5. **Scope 05 — Docs, Release Train, Flag Bundles.** `docs/Operations.md`, `docs/API.md`, `docs/smackerel.md` §17.2, the `v1`-gate release packet's `docs/releases/v1/features.md`, `config/release-trains.yaml`, `config/feature-flags.next.yaml` (default-OFF; owning train `next`), `config/feature-flags.mvp.yaml` (default-OFF). *(Corrected 2026-08-11 by `bubbles.plan`; prior wording read "`config/feature-flags.next.yaml` (default-ON for the owning train `next`)" — see the PLAN-TEXT CORRECTION block at the head of Scope 05.)*
 
 ### New Types & Signatures
 
@@ -68,19 +68,39 @@ Route-group label set is closed at **sixteen** values (`spec.md` §4.2, §18 dec
 | Scope 02 | Absent/malformed config **aborts startup** (no silent stage). OBSERVE returns **200** on all sixteen route groups while `..._would_deny_total` increments — proving telemetry works *before* anyone can be denied. |
 | Scope 03 | T8 route-manifest set-equality test fails against current `main` (empty-scope principal is allowed today) and passes only once the gate is mounted, across **both tiers**. The Tier-B guard proves the `deps.IntelligenceEngine != nil` conditional cannot make set-equality pass vacuously. Denial parity proves no existence oracle. |
 | Scope 04 | Every row of the design.md §5 compatibility matrix is exercised — the "unknown" Telegram row becomes a measured row before the flag can be flipped — **and** the adversarial negative case proves a principal *without* `corpus:read` gains no corpus access through Telegram. |
-| Scope 05 | Flag-bundle parity check: `corpusGrantEnforcement` is default-ON in exactly one train and default-OFF in every other; SST key has no default; the retirement contract (§18 decision 6 — flag **and** observe branch deleted together) is recorded. |
+| Scope 05 | Flag-bundle parity check: `corpusGrantEnforcement` is **declared in every train bundle** and **default-OFF in every one of them** (R-108-FL3), with the `mvp` metadata block intact, and the check rejects default-ON on a **non-owning** train (the `G111` condition); SST key has no default; the retirement contract (§18 decision 6 — flag **and** observe branch deleted together) is recorded. *(Corrected 2026-08-11 by `bubbles.plan`; prior wording read "is default-ON in exactly one train and default-OFF in every other".)* |
 
-### Planning Note — Flag Default Divergence (routed, not resolved here)
+### Planning Note — Flag Default "Divergence" (WITHDRAWN — the premise was false)
 
-`design.md` §4/§9 records `corpusGrantEnforcement: false` in **both**
-`config/feature-flags.mvp.yaml` and `config/feature-flags.next.yaml` (R-108-FL3).
-The repo's mechanically-enforced release-train policy
-(`.github/instructions/bubbles-release-trains.instructions.md`, `release-train-guard.sh`)
-requires a flag to be default-ON in **exactly one** owning train and default-OFF in every
-other. Scope 05 is planned to the enforced policy: **`next` = ON (owning train), `mvp` = OFF**.
-This divergence from `design.md` is recorded here rather than silently applied; reconciling
-`design.md` §4/§9 is owned by `bubbles.design`, not by this planning packet. Scope 05 DoD
-item **DoD-05-06** blocks on that reconciliation.
+> **WITHDRAWN 2026-08-11 by `bubbles.plan`.** This note asserted a divergence that does not
+> exist, on a premise that is false. The prior text is preserved verbatim below rather than
+> deleted, because it is the origin of the same claim that propagated into Scope 05.
+>
+> **Prior text (withdrawn):**
+>
+> > `design.md` §4/§9 records `corpusGrantEnforcement: false` in **both**
+> > `config/feature-flags.mvp.yaml` and `config/feature-flags.next.yaml` (R-108-FL3).
+> > The repo's mechanically-enforced release-train policy
+> > (`.github/instructions/bubbles-release-trains.instructions.md`, `release-train-guard.sh`)
+> > requires a flag to be default-ON in **exactly one** owning train and default-OFF in every
+> > other. Scope 05 is planned to the enforced policy: **`next` = ON (owning train), `mvp` = OFF**.
+> > This divergence from `design.md` is recorded here rather than silently applied; reconciling
+> > `design.md` §4/§9 is owned by `bubbles.design`, not by this planning packet. Scope 05 DoD
+> > item **DoD-05-06** blocks on that reconciliation.
+>
+> **Why it is withdrawn.** The release-train policy does **not** require a flag to be default-ON
+> anywhere. `.github/bubbles/scripts/release-train-guard.sh` Check 8 (lines 119–142) loops over
+> every train and **skips the owning train** (`[[ "$tid" == "$spec_train" ]] && continue`,
+> line 132), so it can raise `G111 violation` (line 138) **only** for default-ON on a
+> **non-owning** train. An all-OFF dormant flag is fully conformant. Because the policy never
+> demanded ON, there was never a divergence from `design.md` to reconcile, and `bubbles.design`
+> was never owed a change.
+>
+> **Corrected position.** `corpusGrantEnforcement` ships **default-OFF in every train**, per
+> `spec.md` **R-108-FL3** (line 519), `design.md` **§4** (line 191), and `design.md` **§9**
+> (lines 358–359) — three artifacts that all agree. `bubbles.train` flips `next` ON only after
+> a clean observation window. The full correction, its authority, and its empirical proof are
+> recorded in the **PLAN-TEXT CORRECTION** block at the head of Scope 05.
 
 ### Planning Note — Operator Ratification Of `spec.md` Items 7-10 (recorded 2026-07-29)
 
@@ -1839,16 +1859,86 @@ Web validation passed
 **Depends On:** Scope 04
 **Surfaces:** `docs/Operations.md`, `docs/API.md`, `docs/smackerel.md` §17.2, `docs/releases/v1/features.md`, `config/release-trains.yaml`, `config/feature-flags.next.yaml`, `config/feature-flags.mvp.yaml`
 
+> **PLAN-TEXT CORRECTION — "default-ON in exactly one train" → "default-OFF in every train".
+> Recorded 2026-08-11 by `bubbles.plan`. Prior wording is quoted below rather than silently
+> replaced.**
+>
+> **The withdrawn premise.** Scope 05 was planned on the assertion that *"the enforced
+> release-train policy requires default-ON in exactly one owning train."* **That premise is
+> false.** Every Scope 05 statement derived from it is corrected below.
+>
+> **Authority for the corrected value — three artifacts, all in agreement:**
+> - `spec.md` **R-108-FL3** (line 519): the flag "ships **default-OFF (`false`) in every
+>   train**"; `bubbles.train` flips it ON in the owning train `next` only after the observation
+>   window is clean.
+> - `design.md` **§4** Configuration table (line 191): `false` in **both** bundles.
+> - `design.md` **§9** Documentation & Release Impact table (lines 358–359): `false` in **both**
+>   bundles.
+>
+> **What the guard actually enforces.** `.github/bubbles/scripts/release-train-guard.sh`
+> **Check 8** (lines 119–142) iterates every train and **skips the owning train** —
+> `[[ "$tid" == "$spec_train" ]] && continue` (line 132) — then raises `G111 violation`
+> (line 138) only when a **non-owning** train carries the flag default-ON. There is **no rule
+> requiring ON anywhere**, so an all-OFF dormant flag is conformant.
+>
+> **Empirical proof, not argument.** `config/feature-flags.next.yaml:18` and
+> `config/feature-flags.mvp.yaml:14` both ship `corpusGrantEnforcement: false`, and
+> `bash .github/bubbles/scripts/release-train-guard.sh .` exits **0** — 302 lines, **0** lines
+> matching `G111`, **0** `ERROR` lines, verdict `release-train-guard PASSED (2 trains)`.
+>
+> **Why the corrected value is the safe one, not merely the conformant one.** Spec 108 is a
+> two-stage **OBSERVE→ENFORCE** rollout. A default-ON `next` would arrive **already enforcing**,
+> destroying the observation window Scope 04 exists to produce and breaking live callers that
+> have not yet received the `corpus:read` token rotation `docs/smackerel.md` §17.2 requires
+> (granting is a token rotation, not a flag flip — F-108-GRANT-MECHANISM-01).
+>
+> **Corrected statements — prior wording preserved:**
+>
+> | # | Site | Prior wording (WITHDRAWN) |
+> |---|---|---|
+> | 1 | `SCN-108-R01` title + Gherkin | *"The flag is default-ON in exactly one train"*; *"Then corpusGrantEnforcement is true in exactly one bundle, the owning train next / And it is false in every other bundle, including mvp"* |
+> | 2 | `SCN-108-R05` Given | *"Given corpusGrantEnforcement is default-ON in its owning train next"* |
+> | 3 | `TP-05-01` | *"`corpusGrantEnforcement` is `true` in exactly one bundle (`next`, the owning train) and `false` in every other bundle including `mvp`"* |
+> | 4 | Impl. plan, `feature-flags.next.yaml` bullet | *"`corpusGrantEnforcement: true` (default-ON in the **owning** train)… Flipping the owning train's default is `bubbles.train`'s operation…"* |
+> | 5 | Impl. plan, "Divergence to reconcile" bullet | *"design.md §4/§9 records `false` in **both** bundles; the enforced release-train policy requires default-ON in exactly one owning train. This scope is planned to the enforced policy and blocks on `bubbles.design` reconciling design.md (DoD-05-06)."* |
+> | 6 | `TP-05-06` regression clause | *"the flag stays default-ON in exactly one train"*; *"Fails if a second train flips the flag ON"* |
+> | 7 | DoD — `TP-05-01` item | *"flag default-ON in exactly one train, default-OFF elsewhere, metadata present"* |
+> | 8 | DoD — `TP-05-06` item | *"single-owning-train flag default"* |
+> | 9 | DoD — `DoD-05-06` | *"design.md §4/§9 flag-default divergence reconciled by `bubbles.design` (or the enforced-policy value ratified by the operator) before this scope closes"* |
+>
+> Sites **1–5** are exactly the set `bubbles.implement` routed to `bubbles.plan` (see its
+> routing note under the flag-bundle DoD item below). Sites **6–9** restate the same premise
+> elsewhere in this scope; they are corrected together because leaving them would put the DoD
+> in direct contradiction with the Test Plan rows it references. The premise also appeared
+> outside this scope at **Phase Order item 5**, the **Scope 05 Validation Checkpoint row**, and
+> the top-level **"Planning Note — Flag Default Divergence"**; all three are corrected in place
+> with the same attribution and date.
+>
+> **Time-bound vs permanent assertions.** `TP-05-01` asserts the state this spec **ships**:
+> default-OFF in every train. `TP-05-06` is a **permanent** regression and therefore asserts
+> only the invariants that must hold forever — the flag stays declared in both bundles, the
+> `mvp` metadata stays intact, and the **non-owning** train never goes default-ON. It
+> deliberately does **not** freeze `next` at `false`, because `bubbles.train` flipping `next`
+> ON after a clean observation window is the intended end state, not a regression.
+>
+> **Deliberately NOT edited:** the two verbatim quotations of the withdrawn premise inside
+> `bubbles.implement`'s evidence blocks below. They record what was wrong and how it was
+> refuted; rewriting them would destroy the audit trail.
+>
+> **Nothing about the shipped flag values changed.** `next: false` and `mvp: false` were and
+> remain correct. Only plan text moved.
+
 ### Use Cases (Gherkin)
 
-**SCN-108-R01 — The flag is default-ON in exactly one train**
+**SCN-108-R01 — The flag is declared in every train and default-OFF in every train**
 
 ```gherkin
-Given the flag corpusGrantEnforcement is declared
+Given the flag corpusGrantEnforcement is introduced by spec 108 on the owning train next
 When every train's flag bundle is inspected
-Then corpusGrantEnforcement is true in exactly one bundle, the owning train next
-And it is false in every other bundle, including mvp
+Then corpusGrantEnforcement is declared in every train bundle, both next and mvp
+And its value is false in every one of those bundles
 And the mvp bundle carries the metadata block naming owning_spec, introduced_in_train, and introduced_at
+And no non-owning train carries the flag default-ON, which is the only condition G111 rejects
 And the release-train guard reports zero violations
 ```
 
@@ -1888,7 +1978,7 @@ And the packet therefore does not silently omit a shipped capability
 **SCN-108-R05 — The flag retirement contract is recorded, not implied**
 
 ```gherkin
-Given corpusGrantEnforcement is default-ON in its owning train next
+Given corpusGrantEnforcement ships default-OFF in every train and is owned by the train next
 When the flag lifecycle documentation is inspected
 Then it records that the flag dies with its train plus one cycle
 And it records that at retirement the flag, the observe branch, and the two would-deny counters
@@ -1899,17 +1989,32 @@ And it records that bubbles.train owns both the owning-train flip and the retire
 
 ### Implementation Plan
 
+> **PLAN-TEXT CORRECTION — eight → SIXTEEN (recorded 2026-08-11 by `bubbles.docs` while
+> executing this scope).** The plan text below originally said "the eight corpus route groups"
+> and "all eight route groups". That text predates `spec.md` §18 decision 5 (F-108-ADJ-01),
+> which ratified extending the gate from eight to **sixteen** groups (Tier A 1–8 + Tier B
+> 9–16), and it contradicts the shipped code: `internal/metrics/auth.go` closes the
+> `route_group` label set at **sixteen** values and `internal/api/router.go` mounts the gate on
+> all sixteen. `spec.md` §18 decision 1 states the composition explicitly — "the coverage bar
+> in (b) therefore applies to **all sixteen** gated groups, not to the original eight."
+> The four occurrences inside this scope are corrected to sixteen below. **Do not revert them.**
+> Stale "eight" text remains in foreign-owned artifacts and is flagged, not edited, from here:
+> `design.md` §2 / §4 / §8 / §9 (owner `bubbles.design`; `design.md` lines 76–77 and 159
+> already record the 8→16 supersession and route the §2 table extension to that owner) and
+> `uservalidation.md` item 7 (human-owned; `spec.md` §18 decision 1 already supersedes its
+> count).
+
 - **`docs/Operations.md`** — under the existing **"Authentication Metrics"** heading: the
   three `smackerel_auth_corpus_grant_*` metrics with their closed label sets; the UC-108-001
   observation runbook (`sum by (user_id, route_group) (increase(..._would_deny_total[7d]))`,
   the go/no-go criterion, and the OBSERVE→ENFORCE→rollback procedure from design.md §6).
-  The documented go/no-go criterion is the **ratified coverage bar** (item 7): all eight route
-  groups show real traffic **or** carry a recorded `idle-by-design` attestation with a reason
-  and a named principal — a zero counter over a silently idle group is never read as clean.
-  The runbook also states the **proactive rotation** precondition (item 9): no principal with
-  unknowable grants remains unrotated at flip time.
-- **`docs/API.md`** — add `corpus:read` to the per-endpoint scope column for the eight corpus
-  route groups; document the 403 denial envelope and its zero-leakage guarantee; state
+  The documented go/no-go criterion is the **ratified coverage bar** (item 7): all **sixteen**
+  route groups show real traffic **or** carry a recorded `idle-by-design` attestation with a
+  reason and a named principal — a zero counter over a silently idle group is never read as
+  clean. The runbook also states the **proactive rotation** precondition (item 9): no principal
+  with unknowable grants remains unrotated at flip time.
+- **`docs/API.md`** — add `corpus:read` to the per-endpoint scope column for the **sixteen**
+  corpus route groups; document the 403 denial envelope and its zero-leakage guarantee; state
   explicitly which routes are **not** gated and why.
 - **`docs/smackerel.md` §17.2** — update the caller-surface table with the design.md §5
   compatibility matrix, including which surfaces break at ENFORCE and what the operator must
@@ -1927,10 +2032,12 @@ And it records that bubbles.train owns both the owning-train flip and the retire
 - **`config/release-trains.yaml`** — no structural change; confirm the existing `next` train
   (`phase: active`, `target_slot: staging`) still resolves `flags_bundle:
   config/feature-flags.next.yaml`.
-- **`config/feature-flags.next.yaml`** — `corpusGrantEnforcement: true` (default-ON in the
-  **owning** train) with an owning-spec comment (R-108-CFG1). Flipping the owning train's
-  default is `bubbles.train`'s operation and MUST follow a clean observation window from
-  Scope 04.
+- **`config/feature-flags.next.yaml`** — `corpusGrantEnforcement: false` with an owning-spec
+  comment (R-108-CFG1). `next` is the **owning** train, but the flag still ships **default-OFF**
+  there, per R-108-FL3 and `design.md` §4/§9. Flipping the owning train's default to `true` is
+  `bubbles.train`'s later operation and MUST follow a clean observation window from Scope 04 —
+  it is **not** part of this scope's delivered state. *(Corrected 2026-08-11 by `bubbles.plan`;
+  prior wording required `true`. See the PLAN-TEXT CORRECTION block above.)*
 - **`config/feature-flags.mvp.yaml`** — `corpusGrantEnforcement: false` plus the `metadata:`
   block recording `owning_spec: specs/108-corpus-grant-enforcement/`,
   `introduced_in_train: next`, `introduced_at` (R-108-CFG2, R-108-FL4). `mvp` observes and
@@ -1940,40 +2047,186 @@ And it records that bubbles.train owns both the owning-train flip and the retire
 - **Flag lifecycle (R-108-FL7).** Record that the flag dies with its train + one cycle: once
   enforcement is permanent, `corpusGrantEnforcement`, the observe branch, and the two
   would-deny counters retire together.
-- **Divergence to reconcile.** design.md §4/§9 records `false` in **both** bundles; the
-  enforced release-train policy requires default-ON in exactly one owning train. This scope is
-  planned to the enforced policy and blocks on `bubbles.design` reconciling design.md
-  (DoD-05-06). Do **not** silently edit design.md from this packet.
+- **No divergence to reconcile — the premise was false.** `spec.md` R-108-FL3, `design.md` §4
+  (line 191), and `design.md` §9 (lines 358–359) **all agree**: `false` in **both** bundles.
+  The release-train policy never required default-ON anywhere — `release-train-guard.sh`
+  Check 8 skips the owning train (line 132) and raises `G111` only for a **non-owning** train
+  that is default-ON. This scope is therefore planned to `spec.md`/`design.md` as written and
+  **blocks on nothing**; `bubbles.design` owes no change and `design.md` was not edited from
+  this packet. *(Corrected 2026-08-11 by `bubbles.plan`; prior wording asserted a design.md
+  divergence and a `bubbles.design` dependency (DoD-05-06) — both were artifacts of the false
+  premise. See the PLAN-TEXT CORRECTION block above.)*
 
 ### Test Plan
 
 | ID | Category | Location | What it proves | Command |
 |---|---|---|---|---|
-| TP-05-01 | unit | flag-bundle parity test | `corpusGrantEnforcement` is `true` in exactly one bundle (`next`, the owning train) and `false` in every other bundle including `mvp`; the `mvp` metadata block names `owning_spec`, `introduced_in_train`, `introduced_at` (SCN-108-R01) | `./smackerel.sh test unit` |
+| TP-05-01 | unit | flag-bundle parity test | `corpusGrantEnforcement` is **declared in every train bundle** — `next` **and** `mvp` (R-108-FL2) — and its value is **`false` in every one of them** (R-108-FL3); the `mvp` metadata block names `owning_spec: specs/108-corpus-grant-enforcement/`, `introduced_in_train: next`, and `introduced_at` (R-108-FL4). **Three adversarial cases, all required** — without them the assertion is not falsifiable: **(a) deletion** — a bundle fixture with the flag **absent** is REJECTED, so the test cannot pass if the flag is silently dropped from a bundle; **(b) non-owning-train ON** — a fixture with `mvp: true` is REJECTED, which is precisely the `G111 violation` condition in `release-train-guard.sh` Check 8 (owning train skipped at line 132, error raised at line 138); **(c) all-OFF accepted** — the shipped shape (`next: false`, `mvp: false`) is ACCEPTED, which fails against any rule demanding ON somewhere and is what pins the corrected premise (SCN-108-R01) | `./smackerel.sh test unit` |
 | TP-05-02 | unit | config-compile test | `auth.corpus_grant_enforcement` is declared with **no default value**; no `${VAR:-...}` or getenv-with-default shape exists in the resolution path (SCN-108-R02) | `./smackerel.sh test unit` |
 | TP-05-03 | integration | `./smackerel.sh config generate` across environments | `SMACKEREL_AUTH_CORPUS_GRANT_ENFORCEMENT` is emitted into every generated env file, and a missing key fails generation loudly (SCN-108-R02) | `./smackerel.sh test integration` |
 | TP-05-04 | e2e-api | `./smackerel.sh test e2e` | Against the ephemeral test stack, the documented UC-108-001 runbook query returns the documented shape (`user_id`, `route_group`, count) from the real `/metrics` surface, so the runbook in `docs/Operations.md` is executable and not aspirational (SCN-108-R03) | `./smackerel.sh test e2e` |
 | TP-05-05 | unit | release-packet documentation-contract test | `docs/releases/v1/features.md` carries the corpus grant enforcement entry naming its owning spec `108-corpus-grant-enforcement`, its owning train `next`, and its flag `corpusGrantEnforcement`; fails if the packet omits the shipped capability (SCN-108-R04) | `./smackerel.sh test unit` |
-| TP-05-06 | e2e-api | `./smackerel.sh test e2e` | **Regression E2E** — persistent scenario-specific regression for SCN-108-R01, SCN-108-R02, SCN-108-R03, SCN-108-R04 and SCN-108-R05 against the live stack: the flag stays default-ON in exactly one train, the SST key stays default-free in every generated environment, the documented runbook query keeps returning its documented shape, the v1 release packet keeps recording the capability, and the retirement contract stays recorded. Fails if a second train flips the flag ON, a default is reintroduced, the runbook goes stale, the packet entry is dropped, or the retirement contract is deleted; also proves the broader e2e suite shows no green→red drift | `./smackerel.sh test e2e` |
+| TP-05-06 | e2e-api | `./smackerel.sh test e2e` | **Regression E2E** — persistent scenario-specific regression for SCN-108-R01, SCN-108-R02, SCN-108-R03, SCN-108-R04 and SCN-108-R05 against the live stack. It asserts only the **permanent** invariants: the flag stays declared in **both** bundles, the `mvp` metadata block stays intact, the **non-owning** train `mvp` never goes default-ON, the SST key stays default-free in every generated environment, the documented runbook query keeps returning its documented shape, the v1 release packet keeps recording the capability, and the retirement contract stays recorded. Fails if the flag is deleted from a bundle, if a **non-owning** train flips it ON, if the metadata block is dropped, if a default is reintroduced, if the runbook goes stale, if the packet entry is dropped, or if the retirement contract is deleted; also proves the broader e2e suite shows no green→red drift. It deliberately does **not** pin `next` at `false`, because `bubbles.train` flipping the **owning** train ON after a clean observation window is the intended end state, not a regression | `./smackerel.sh test e2e` |
 | TP-05-07 | unit | flag-lifecycle documentation-contract test | The retirement contract ratified by `spec.md` §18 decision 6 is **recorded, not implied**: the flag-lifecycle documentation states that `corpusGrantEnforcement` dies with its train + one cycle, that the flag, the observe branch, and the two would-deny counters retire **together**, that enforcement becomes unconditional afterwards, and that `bubbles.train` owns both the flip and the retirement. Fails if any of the four clauses is absent, so the obligation cannot decay into an implied one (SCN-108-R05, R-108-FL7) | `./smackerel.sh test unit` |
 
 ### Definition of Done
 
-- [ ] `docs/Operations.md` documents the three `smackerel_auth_corpus_grant_*` metrics with closed label sets and the full UC-108-001 runbook (query, go/no-go criterion, OBSERVE→ENFORCE→rollback with no rebuild step), where the documented go/no-go criterion is the ratified coverage bar (item 7 — traffic on all eight groups or a recorded `idle-by-design` attestation) and the documented preconditions include proactive rotation (item 9)
-- [ ] `docs/API.md` lists `corpus:read` for all eight corpus route groups, documents the 403 envelope and its zero-leakage guarantee, and states which routes are not gated and why
+- [ ] `docs/Operations.md` documents the three `smackerel_auth_corpus_grant_*` metrics with closed label sets and the full UC-108-001 runbook (query, go/no-go criterion, OBSERVE→ENFORCE→rollback with no rebuild step), where the documented go/no-go criterion is the ratified coverage bar (item 7 — traffic on all **sixteen** groups or a recorded `idle-by-design` attestation) and the documented preconditions include proactive rotation (item 9)
+- [ ] `docs/API.md` lists `corpus:read` for all **sixteen** corpus route groups, documents the 403 envelope and its zero-leakage guarantee, and states which routes are not gated and why
 - [ ] `docs/smackerel.md` §17.2 carries the design.md §5 compatibility matrix and records that granting is a token rotation, not a flag flip, and records the ratified admin-surface position (item 8): grant-issuance **notice only**, **no grant editor in this spec**, grants changed exclusively via `smackerel auth rotate …`
 - [ ] `docs/releases/v1/features.md` records the corpus grant enforcement capability with its owning spec `108-corpus-grant-enforcement`, its owning train `next`, and its flag `corpusGrantEnforcement`, so the `v1`-gate packet does not silently omit a shipped capability (SCN-108-R04)
 - [ ] `config/release-trains.yaml` verified — `next` train still resolves `flags_bundle: config/feature-flags.next.yaml`; no structural change made
-- [ ] `config/feature-flags.next.yaml` sets `corpusGrantEnforcement: true` (owning train) and `config/feature-flags.mvp.yaml` sets it `false` with the required `metadata:` block
-- [ ] design.md §4/§9 flag-default divergence reconciled by `bubbles.design` (or the enforced-policy value ratified by the operator) before this scope closes — not silently overwritten from this packet
-- [ ] `TP-05-01` unit test passes — flag default-ON in exactly one train, default-OFF elsewhere, metadata present
+- [x] `config/feature-flags.next.yaml` sets `corpusGrantEnforcement: false` and `config/feature-flags.mvp.yaml` sets it `false` with the required `metadata:` block (**CORRECTED 2026-08-11 by `bubbles.implement` on explicit operator directive — this line previously required `true` for `next`; the correct value is `false` in BOTH bundles. Authority: `spec.md` R-108-FL3 plus `design.md` §4 and §9. Full rationale and the preserved prior wording are recorded immediately below the evidence.**)
+
+  **Claim Source:** executed · **Tree:** WORKING TREE, HEAD=eb7ad5a0
+  **Executed:** YES
+  **Command:** `grep`/`yq` resolution over both bundles, then `release-train-guard.sh`, `./smackerel.sh config generate`, `./smackerel.sh test unit --go`
+  **Exit Code:** 0
+
+  ```text
+  $ grep -n 'corpusGrantEnforcement' config/feature-flags.next.yaml config/feature-flags.mvp.yaml
+  config/feature-flags.next.yaml:18:  corpusGrantEnforcement: false
+  config/feature-flags.mvp.yaml:14:  corpusGrantEnforcement: false
+  config/feature-flags.mvp.yaml:24:  corpusGrantEnforcement:
+
+  $ for b in mvp next; do echo "$b -> $(yq -r '.flags.corpusGrantEnforcement' config/feature-flags.$b.yaml)"; done
+  mvp -> false
+  next -> false
+
+  $ yq -o=json -I=0 '.metadata.corpusGrantEnforcement' config/feature-flags.mvp.yaml
+  {"owning_spec":"specs/108-corpus-grant-enforcement/","introduced_in_train":"next","introduced_at":"2026-08-11"}
+
+  $ yq -r '.metadata.corpusGrantEnforcement' config/feature-flags.next.yaml   # metadata lives in mvp only, per the card_rewards/clientReleaseLaneB precedent
+  null
+
+  $ bash .github/bubbles/scripts/release-train-guard.sh .
+  [release-train-guard] release-train-guard PASSED (2 trains)
+  EXIT=0
+  (302 lines total; ERROR lines: 0; lines matching 'G111': 0; the other 111 lines are
+   pre-existing grandfather WARNs about unrelated specs missing releaseTrain, unchanged
+   from the pre-edit baseline run.)
+
+  $ ./smackerel.sh config generate
+  config-validate: <repo-root>/config/generated/dev.env.tmp.3487941 OK
+  Generated <repo-root>/config/generated/dev.env
+  Generated <repo-root>/config/generated/nats.conf
+  Generated <repo-root>/config/generated/prometheus.yml
+  Generated <repo-root>/internal/experience/catalog.gen.json
+  EXIT=0
+
+  $ ./smackerel.sh test unit --go
+  ok      github.com/smackerel/smackerel/internal/config  33.956s
+  [go-unit] go test ./... finished OK
+  EXIT=0
+  (252 lines total; 145 `ok` packages, 0 FAIL, 13 "no test files".)
+  ```
+
+  **RED proof (captured before the edit):** `grep -n 'corpusGrantEnforcement' config/feature-flags.next.yaml config/feature-flags.mvp.yaml`
+  returned **exit 1** — the flag was declared in neither bundle. The same grep now returns exit 0
+  with three hits, so this item is proven by a state change, not by a tautology.
+
+  R-108-FL2 (declared in **both** bundles) and R-108-FL4 (mvp metadata naming `owning_spec`,
+  `introduced_in_train`, `introduced_at`) are both satisfied. Metadata is carried in `mvp.yaml`
+  only, matching the existing `card_rewards` / `clientReleaseLaneB` shape in this repo — `next.yaml`
+  keeps `metadata: {}`.
+
+  > **DoD-TEXT CORRECTION — `next: true` → `next: false`. Recorded 2026-08-11 by `bubbles.implement`
+  > on explicit operator directive; the prior text is preserved here rather than silently replaced.**
+  > This item previously read *"sets `corpusGrantEnforcement: true` (owning train)"*. **That value was
+  > wrong.** Every governing artifact records default-OFF in **both** bundles: `spec.md` **R-108-FL3**
+  > ("ships **default-OFF (`false`) in every train**"), `design.md` **§4** Configuration table
+  > (line 191), and `design.md` **§9** Documentation & Release Impact table (lines 358–359).
+  > Those three are the authority; this DoD line was the sole dissenting statement in the packet.
+  >
+  > Why the corrected value is the safe one, not merely the compliant one: spec 108 is a two-stage
+  > **OBSERVE→ENFORCE** rollout. Shipping `next: true` would arrive **already enforcing**, destroying
+  > the observation window Scope 04 depends on and breaking live callers that have not yet received
+  > the `corpus:read` token rotation `docs/smackerel.md` §17.2 requires (granting is a token rotation,
+  > not a flag flip — F-108-GRANT-MECHANISM-01). Gate **G111** forbids default-ON on a **non-owning**
+  > train but never requires ON *anywhere* (`release-train-guard.sh` Check 8), so an all-OFF dormant
+  > flag is conformant. `bubbles.train` owns the later flip to `true`.
+  >
+  > **Residual inconsistency, NOT edited from here (routed to `bubbles.plan`):** `SCN-108-R01`,
+  > `SCN-108-R05`, the `TP-05-01` Test Plan row, the Scope 05 Implementation Plan bullet for
+  > `feature-flags.next.yaml`, and its "Divergence to reconcile" bullet all still assert
+  > *default-ON in exactly one train*. Gherkin scenarios and Test Plan rows are `bubbles.plan`-owned;
+  > `bubbles.implement` does not rewrite them.
+
+  > **PLAN-OWNER RATIFICATION — recorded 2026-08-11 by `bubbles.plan`.** The
+  > `bubbles.implement` correction above is **ratified as written**; no revision is required.
+  > Independently re-verified before ratifying, rather than relayed: `spec.md:519` (R-108-FL3)
+  > mandates default-OFF in **every** train; `design.md:191` (§4) and `design.md:358-359` (§9)
+  > both record `false` in **both** bundles; and `release-train-guard.sh` Check 8 skips the
+  > owning train at line 132 (`[[ "$tid" == "$spec_train" ]] && continue`) so line 138 can raise
+  > `G111` **only** for a non-owning train — confirmed by a full guard run against the shipped
+  > all-OFF bundles exiting **0** with **0** `G111` lines and **0** `ERROR` lines.
+  >
+  > The five residual inconsistencies this block routed to `bubbles.plan` — `SCN-108-R01`,
+  > `SCN-108-R05`, the `TP-05-01` row, the `feature-flags.next.yaml` implementation-plan bullet,
+  > and the "Divergence to reconcile" bullet — are now **reconciled**, together with four further
+  > restatements of the same premise (the `TP-05-06` clause, two DoD items, and — outside this
+  > scope — Phase Order item 5, the Scope 05 Validation Checkpoint row, and the top-level
+  > "Planning Note — Flag Default Divergence", which was the premise's origin and is now marked
+  > WITHDRAWN). See the **PLAN-TEXT CORRECTION** block at the head of this scope.
+  >
+  > **The `[x]` on this DoD item was set by `bubbles.implement` on its own executed evidence and
+  > is left exactly as found.** `bubbles.plan` ratified the **wording**, not the tick.
+
+- [x] Flag-default conflict resolved and recorded — **there is no `design.md` §4-vs-§9 divergence**: §4 (line 191) and §9 (lines 358–359) both record `false` in **both** bundles, and both transcribe `spec.md` R-108-FL3 correctly. The real conflict was **plan premise vs spec/design**, and it is resolved in favour of spec/design. `design.md` was NOT edited from this packet and `bubbles.design` owes no change. (**REWORDED 2026-08-11 by `bubbles.plan`.** Prior wording: *"design.md §4/§9 flag-default divergence reconciled by `bubbles.design` (or the enforced-policy value ratified by the operator) before this scope closes — not silently overwritten from this packet"*. That wording mislabelled the subject: it named a §4-vs-§9 divergence that does not exist and implied a `bubbles.design` dependency that never existed. Both were artifacts of the false "default-ON in exactly one owning train" premise — see the PLAN-TEXT CORRECTION block at the head of this scope. The `[x]` and the evidence block below are left as found; only the item's wording changed.)
+
+  **Claim Source:** executed · **Tree:** WORKING TREE, HEAD=eb7ad5a0
+  **Executed:** YES
+  **Command:** `sed`/`grep` reading of `design.md` §4 and §9 and `spec.md` R-108-FL3
+  **Exit Code:** 0
+
+  ```text
+  $ sed -n '186,192p' design.md   # §4 Configuration table
+  ### Configuration
+  | Layer | Name | Value |
+  |---|---|---|
+  | Train flag | `corpusGrantEnforcement` | `false` in `config/feature-flags.mvp.yaml` and `config/feature-flags.next.yaml` (default-OFF in every train, per R-108-FL3). |
+  | SST key | `auth.corpus_grant_enforcement` in `config/smackerel.yaml` | Declared with **no default value**. |
+
+  $ sed -n '358,359p' design.md   # §9 Documentation & Release Impact table
+  | `config/feature-flags.next.yaml` | Add `corpusGrantEnforcement: false` with an owning-spec comment (R-108-CFG1). `bubbles.train` flips it to `true` only after a clean observation window. |
+  | `config/feature-flags.mvp.yaml` | Add `corpusGrantEnforcement: false` plus the `metadata:` block recording `owning_spec: specs/108-corpus-grant-enforcement/`, `introduced_in_train: next`, `introduced_at` (R-108-CFG2, R-108-FL4). `mvp` observes-and-counts, never denies. |
+
+  $ grep -n 'corpusGrantEnforcement' design.md
+  191:| Train flag | `corpusGrantEnforcement` | `false` in ... (default-OFF in every train, per R-108-FL3). |
+  272:1. Set the train flag `corpusGrantEnforcement` back to `false` in the owning bundle
+  358:| `config/feature-flags.next.yaml` | Add `corpusGrantEnforcement: false` ... flips it to `true` only after a clean observation window. |
+  359:| `config/feature-flags.mvp.yaml` | Add `corpusGrantEnforcement: false` plus the `metadata:` block ... |
+
+  $ sed -n '519p' spec.md
+  **R-108-FL3:** The flag ships **default-OFF (`false`) in every train**, mirroring the `clientReleaseLaneB` precedent ...
+  ```
+
+  **Reading: §4 and §9 AGREE — there is no §4-vs-§9 divergence, and `design.md` was NOT edited.**
+  §4 line 191 says `false` in both bundles. §9 lines 358–359 say `false` in both bundles. §6 rollback
+  (line 272) says `false` is the resting state. The single occurrence of `true` anywhere in
+  `design.md` is line 358's *"`bubbles.train` flips it to `true` only after a clean observation
+  window"* — a description of the future operator flip, **not** a shipped default.
+
+  The finding's real subject was therefore mislabelled. It was never an internal `design.md`
+  inconsistency; it was a conflict between `design.md` (which correctly transcribes R-108-FL3) and
+  the planning assumption that *"the enforced release-train policy requires default-ON in exactly
+  one owning train."* **That premise is false.** `release-train-guard.sh` Check 8 raises
+  `G111 violation` only when a flag is default-ON in a train **other than** the owning one; it has
+  no rule requiring ON anywhere. The post-edit guard run above confirms this empirically: both
+  bundles are `false`, and the guard exits 0 with zero `G111` lines.
+
+  Reconciliation therefore required **no change to `design.md`** and none was made. The operator
+  ratified the enforced-policy value as `false` in both trains, and the correction was applied to
+  the one artifact that was actually wrong — the preceding DoD line.
+
+- [ ] `TP-05-01` unit test passes — flag declared in **both** bundles and default-OFF in **every** train, `mvp` metadata block present, and all three adversarial cases hold: absent-flag fixture REJECTED, non-owning-train (`mvp: true`) fixture REJECTED, shipped all-OFF shape ACCEPTED *(reworded 2026-08-11 by `bubbles.plan` to match the corrected `TP-05-01` row; prior wording read "flag default-ON in exactly one train, default-OFF elsewhere, metadata present")*
 - [ ] `TP-05-02` unit test passes — SST key declared with no default; no fallback shape in the resolution path
 - [ ] `TP-05-03` integration test passes — generated env carries the variable for every environment
 - [ ] `TP-05-04` e2e-api test passes — the documented runbook query returns the documented shape against the real `/metrics` surface
 - [ ] `TP-05-05` unit test passes — the `v1` release packet's `features.md` records the capability, its owning spec, its owning train, and its flag
 - [ ] Flag lifecycle recorded (R-108-FL7): flag + observe branch + would-deny counters retire together, train + one cycle
 - [ ] `TP-05-07` unit test passes — the flag-lifecycle documentation carries all four retirement clauses (train + one cycle; flag/observe-branch/counters deleted together; enforcement unconditional afterwards; `bubbles.train` owns the flip and the retirement), so `spec.md` §18 decision 6 is a testable obligation rather than an implied one (SCN-108-R05)
-- [ ] `TP-05-06` regression e2e-api test passes — single-owning-train flag default, default-free SST key, the executable runbook, and the release-packet entry are permanently protected
+- [ ] `TP-05-06` regression e2e-api test passes — the permanent invariants are protected: flag declared in both bundles, `mvp` metadata intact, non-owning train never default-ON, default-free SST key, the executable runbook, and the release-packet entry *(reworded 2026-08-11 by `bubbles.plan` to match the corrected `TP-05-06` row; prior wording read "single-owning-train flag default")*
 - [ ] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior — **Phase:** regression (`TP-05-06`, `./smackerel.sh test e2e`)
 - [ ] Broader E2E regression suite passes — **Phase:** regression (`./smackerel.sh test e2e` exits 0; no previously-passing test regresses)
 - [ ] Build Quality Gate: `./smackerel.sh check`, `./smackerel.sh lint`, `./smackerel.sh format --check` clean with zero warnings; docs and config aligned; no TODO/stub/default introduced
