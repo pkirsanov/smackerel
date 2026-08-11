@@ -36,7 +36,14 @@ var ScopeNameRegex = regexp.MustCompile(`^[a-z][a-z0-9-]*:[a-z0-9,_-]+$`)
 // spec 073 graph-browse UI; annotation:edit, annotation:read). Spec
 // 080 SCOPE-080-01 adds `knowledge-graph` (consumed by the 8
 // read-only Knowledge Graph Public API endpoints; knowledge-graph:read).
-var RegisteredScopeSurfaces = []string{"extension", "annotation", "knowledge-graph"}
+// Spec 108 SCOPE-01 adds `corpus`, the surface of the already-defined
+// GrantGlobalCorpusRead ("corpus:read") constant in
+// browser_session_policy.go. Registration makes that grant MINTABLE via
+// `smackerel auth enroll --scope corpus:read` without the
+// --allow-unknown-surface escape hatch; it does NOT grant it. The daily
+// default grant set is deliberately unchanged — an ungranted daily user
+// stays denied (spec 108 design.md "Resolved Decisions").
+var RegisteredScopeSurfaces = []string{"extension", "annotation", "knowledge-graph", "corpus"}
 
 // ValidateScopeName returns nil when `scope` matches `ScopeNameRegex`
 // and a non-nil error otherwise. The error wraps the offending value

@@ -1853,6 +1853,13 @@ else
   WEB_REGISTRATION_INVITE_TOKEN="$(yaml_get auth.web_registration_invite_token 2>/dev/null)" || WEB_REGISTRATION_INVITE_TOKEN=""
 fi
 
+# Spec 108 R-108-CFG3 / R-108-FL5 — corpus-grant enforcement stage. REQUIRED,
+# no default: required_value aborts `config generate` when the SST key is
+# absent, and the heredoc below emits it with the fail-loud ${VAR:?...} form so
+# an empty resolution can never reach a generated env file. cmd/core resolves
+# the emitted value once at startup (resolveCorpusGrantEnforcement).
+SMACKEREL_AUTH_CORPUS_GRANT_ENFORCEMENT="$(required_value auth.corpus_grant_enforcement)"
+
 # Agent (spec 037 — LLM Scenario Agent & Tool Registry). SST zero-defaults:
 # every value is REQUIRED. Missing keys → config generate exits non-zero.
 AGENT_SCENARIO_DIR="$(required_value agent.scenario_dir)"
@@ -1865,6 +1872,13 @@ AGENT_ROUTING_EMBEDDING_MODEL="$(required_value agent.routing.embedding_model)"
 # BUG-061-004 — assistant NL routing embedder substrate.
 ASSISTANT_ROUTING_EMBEDDER_MODE="$(required_value agent.routing.embedder_mode)"
 ASSISTANT_ROUTING_EMBED_TIMEOUT_MS="$(required_value agent.routing.embed_timeout_ms)"
+# BUG-064-003 — router-construction warm-up contract. Router construction
+# embeds one example per scenario intent_example sequentially; these three
+# values move the cold sentence-transformer load OUTSIDE the measured region
+# and derive the measured region's budget from the work count.
+AGENT_ROUTING_WARMUP_TARGET_LATENCY_MS="$(required_value agent.routing.warmup_target_latency_ms)"
+AGENT_ROUTING_WARMUP_BUDGET_MS="$(required_value agent.routing.warmup_budget_ms)"
+AGENT_ROUTING_BUILD_PER_CALL_BUDGET_MS="$(required_value agent.routing.build_per_call_budget_ms)"
 AGENT_TRACE_RETENTION_DAYS="$(required_value agent.trace.retention_days)"
 AGENT_TRACE_RECORD_LLM_MESSAGES="$(required_value agent.trace.record_llm_messages)"
 AGENT_TRACE_REDACT_MARKER="$(required_value agent.trace.redact_marker)"
@@ -2771,6 +2785,7 @@ AUTH_TELEMETRY_ENABLED=${AUTH_TELEMETRY_ENABLED}
 AUTH_TELEMETRY_METRIC_PREFIX=${AUTH_TELEMETRY_METRIC_PREFIX}
 AUTH_BOOTSTRAP_TOKEN=${AUTH_BOOTSTRAP_TOKEN}
 WEB_REGISTRATION_INVITE_TOKEN=${WEB_REGISTRATION_INVITE_TOKEN}
+SMACKEREL_AUTH_CORPUS_GRANT_ENFORCEMENT=${SMACKEREL_AUTH_CORPUS_GRANT_ENFORCEMENT:?auth.corpus_grant_enforcement resolved empty — spec 108 R-108-FL5 forbids emitting an empty enforcement stage}
 EXPENSES_ENABLED=${EXPENSES_ENABLED}
 EXPENSES_DEFAULT_CURRENCY=${EXPENSES_DEFAULT_CURRENCY}
 EXPENSES_EXPORT_MAX_ROWS=${EXPENSES_EXPORT_MAX_ROWS}
@@ -2824,6 +2839,9 @@ AGENT_ROUTING_FALLBACK_SCENARIO_ID=${AGENT_ROUTING_FALLBACK_SCENARIO_ID}
 AGENT_ROUTING_EMBEDDING_MODEL=${AGENT_ROUTING_EMBEDDING_MODEL}
 ASSISTANT_ROUTING_EMBEDDER_MODE=${ASSISTANT_ROUTING_EMBEDDER_MODE}
 ASSISTANT_ROUTING_EMBED_TIMEOUT_MS=${ASSISTANT_ROUTING_EMBED_TIMEOUT_MS}
+AGENT_ROUTING_WARMUP_TARGET_LATENCY_MS=${AGENT_ROUTING_WARMUP_TARGET_LATENCY_MS}
+AGENT_ROUTING_WARMUP_BUDGET_MS=${AGENT_ROUTING_WARMUP_BUDGET_MS}
+AGENT_ROUTING_BUILD_PER_CALL_BUDGET_MS=${AGENT_ROUTING_BUILD_PER_CALL_BUDGET_MS}
 AGENT_TRACE_RETENTION_DAYS=${AGENT_TRACE_RETENTION_DAYS}
 AGENT_TRACE_RECORD_LLM_MESSAGES=${AGENT_TRACE_RECORD_LLM_MESSAGES}
 AGENT_TRACE_REDACT_MARKER=${AGENT_TRACE_REDACT_MARKER}

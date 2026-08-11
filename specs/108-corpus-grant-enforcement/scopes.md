@@ -236,15 +236,140 @@ And auth.AuthorizeGrant for that session with required "corpus:read" returns aut
 
 ### Definition of Done
 
-- [ ] `auth.RegisteredScopeSurfaces` includes `corpus`; `dailyUserGrants` and `operatorGrants` are unchanged
-- [ ] `TP-01-01` unit test passes — `corpus` surface registered and mapped to `GrantGlobalCorpusRead`
-- [ ] `TP-01-02` unit test passes — `corpus:read` scope claim validates and authorizes
+- [x] `auth.RegisteredScopeSurfaces` includes `corpus`; `dailyUserGrants` and `operatorGrants` are unchanged
+
+  **Claim Source:** executed · **Tree:** WORKING TREE, HEAD=3af96a02
+
+  ```text
+  $ grep -n 'RegisteredScopeSurfaces = ' internal/auth/scopes.go
+  46:var RegisteredScopeSurfaces = []string{"extension", "annotation", "knowledge-graph", "corpus"}
+
+  $ git --no-pager diff -- internal/auth/scopes.go   # +/- lines only
+  -var RegisteredScopeSurfaces = []string{"extension", "annotation", "knowledge-graph"}
+  +// Spec 108 SCOPE-01 adds `corpus`, the surface of the already-defined
+  +// GrantGlobalCorpusRead ("corpus:read") constant in
+  +// browser_session_policy.go. Registration makes that grant MINTABLE via
+  +// `smackerel auth enroll --scope corpus:read` without the
+  +// --allow-unknown-surface escape hatch; it does NOT grant it. The daily
+  +// default grant set is deliberately unchanged — an ungranted daily user
+  +// stays denied (spec 108 design.md "Resolved Decisions").
+  +var RegisteredScopeSurfaces = []string{"extension", "annotation", "knowledge-graph", "corpus"}
+
+  $ git --no-pager diff -- internal/auth/browser_session_policy.go | grep -E '^[+-].*(dailyUserGrants|operatorGrants)'
+  GRANT_DIFF_GREP_EXIT=1 (1 = no matching +/- lines)
+
+  $ git status --porcelain -- internal/auth/browser_session_policy.go
+  STATUS_EXIT=0 (no line above = file unmodified)
+
+  # adversarial guard proving registration did not widen the default grant set:
+  === RUN   TestCorpusSurfaceRegistrationDoesNotWidenDefaultGrants
+  --- PASS: TestCorpusSurfaceRegistrationDoesNotWidenDefaultGrants (0.00s)
+  ```
+
+  `browser_session_policy.go` — which declares both `dailyUserGrants` and `operatorGrants` — is
+  unmodified in the working tree, so neither grant set was widened. Only `scopes.go` changed.
+
+- [x] `TP-01-01` unit test passes — `corpus` surface registered and mapped to `GrantGlobalCorpusRead`
+
+  **Claim Source:** executed · **Tree:** WORKING TREE, HEAD=3af96a02
+
+  ```text
+  $ ./smackerel.sh test unit --go --go-run 'Corpus|ScopeSurface|AuthSurface' --verbose
+
+  === RUN   TestRegisteredScopeSurfaces_ContainsCorpusMappedToGrant
+  --- PASS: TestRegisteredScopeSurfaces_ContainsCorpusMappedToGrant (0.00s)
+  === RUN   TestCorpusReadScopeClaimValidatesAndAuthorizes
+  --- PASS: TestCorpusReadScopeClaimValidatesAndAuthorizes (0.00s)
+  === RUN   TestCorpusSurfaceRegistrationDoesNotWidenDefaultGrants
+  --- PASS: TestCorpusSurfaceRegistrationDoesNotWidenDefaultGrants (0.00s)
+  === RUN   TestRegisteredScopeSurfaces_ContainsExtension
+  --- PASS: TestRegisteredScopeSurfaces_ContainsExtension (0.00s)
+  === RUN   TestRegisteredScopeSurfaces_ContainsAnnotation
+  --- PASS: TestRegisteredScopeSurfaces_ContainsAnnotation (0.00s)
+  === RUN   TestRegisteredScopeSurfaces_ContainsKnowledgeGraph
+  --- PASS: TestRegisteredScopeSurfaces_ContainsKnowledgeGraph (0.00s)
+  === RUN   TestRegisteredScopeSurfaces_ContainsCorpus
+  --- PASS: TestRegisteredScopeSurfaces_ContainsCorpus (0.00s)
+  === RUN   TestExtractScopeSurface
+  --- PASS: TestExtractScopeSurface (0.00s)
+  PASS
+  ok      github.com/smackerel/smackerel/internal/auth    0.045s
+  ```
+
+  Test location note: `TestRegisteredScopeSurfaces_ContainsCorpusMappedToGrant` lives in the
+  new `internal/auth/browser_session_policy_test.go` (untracked in this working tree), matching
+  the TP-01-01 location declared in the Test Plan above.
+
+- [x] `TP-01-02` unit test passes — `corpus:read` scope claim validates and authorizes
+
+  **Claim Source:** executed · **Tree:** WORKING TREE, HEAD=3af96a02
+
+  ```text
+  $ ./smackerel.sh test unit --go --go-run 'Corpus|ScopeSurface|AuthSurface' --verbose
+  ...
+  === RUN   TestCorpusReadScopeClaimValidatesAndAuthorizes
+  --- PASS: TestCorpusReadScopeClaimValidatesAndAuthorizes (0.00s)
+  ...
+  [go-unit] go test ./... finished OK
+  + echo '[go-unit] go test ./... finished OK'
+  UNIT_EXIT=0
+
+  # whole-run failure scan over the captured 739-line run log:
+  FAIL_LINE_COUNT=0
+  PASS_LINE_COUNT=29
+  TOTAL_LINES=739
+  ```
+
+  `TestCorpusReadScopeClaimValidatesAndAuthorizes` asserts SCN-108-P02: a scope claim carrying
+  `corpus:read` validates without an unknown-surface error and `AuthorizeGrant` returns
+  authorized. The run exited 0 with zero `FAIL` lines across every package.
+
 - [ ] `TP-01-03` integration test passes — minted `corpus:read` token round-trips to a granted session
-- [ ] `internal/api/auth_surface_contract_test.go` surface list updated in the same change (no stale contract)
+  <!-- UNPROVEN: the TP-01-03 integration test has not been written or run; no ./smackerel.sh test integration evidence exists for this scope. -->
+
+- [x] `internal/api/auth_surface_contract_test.go` surface list updated in the same change (no stale contract)
+
+  **Claim Source:** executed · **Tree:** WORKING TREE, HEAD=3af96a02
+
+  ```text
+  $ git status --porcelain -- internal/api/auth_surface_contract_test.go
+   M internal/api/auth_surface_contract_test.go
+
+  $ grep -nE 'corpus_scope_surface_registered_without_widening_defaults|IsRegisteredScopeSurface\("corpus"\)|ExtractScopeSurface\(auth.GrantGlobalCorpusRead\)|must NOT widen the daily default grant set' internal/api/auth_surface_contract_test.go
+  122:    t.Run("corpus_scope_surface_registered_without_widening_defaults", func(t *testing.T) {
+  123:            if !auth.IsRegisteredScopeSurface("corpus") {
+  129:            if s := auth.ExtractScopeSurface(auth.GrantGlobalCorpusRead); s != "corpus" {
+  135:                    t.Fatalf("registering the corpus surface must NOT widen the daily default grant set")
+
+  $ ./smackerel.sh test unit --go --go-run 'Corpus|ScopeSurface|AuthSurface' --verbose
+  --- PASS: TestSurfaceInventoryRoleGrantMatrixAndGlobalCorpusGateUseUnifiedAuthenticatorAndRejectBypassHelpers (0.00s)
+      --- PASS: .../role_grant_matrix (0.00s)
+      --- PASS: .../global_corpus_grant_gate (0.00s)
+      --- PASS: .../corpus_scope_surface_registered_without_widening_defaults (0.00s)
+      --- PASS: .../authority_flows_from_unified_authenticator_across_surfaces (0.00s)
+      --- PASS: .../reject_client_supplied_role_and_unverified_session (0.00s)
+  PASS
+  ok      github.com/smackerel/smackerel/internal/api     0.237s
+
+  # the grant boundary still denies the ungranted after registration:
+  --- PASS: TestGraphReadGrantMatrix_GlobalCorpus/ungranted_authenticated_identity_is_denied (0.00s)
+  ok      github.com/smackerel/smackerel/internal/api/graphapi    0.016s
+  ```
+
+  The contract test was updated in the same working-tree change as `scopes.go`, so the surface
+  inventory it asserts is not stale.
+
 - [ ] `TP-01-04` regression e2e-api test passes — `corpus` surface registration and `corpus:read` minting are permanently protected against silent removal
+  <!-- UNPROVEN: not run; the e2e suite currently exits 1 for reasons unrelated to this scope (spec 106 asset headers, BUG-069-004 assistant dedup, a drive-harness env-propagation gap, BUG-031-004), and a red baseline means this item cannot be honestly closed yet. -->
+
 - [ ] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior — **Phase:** regression (`TP-01-04`, `./smackerel.sh test e2e`)
+  <!-- UNPROVEN: depends on TP-01-04, which has not been written or run. -->
+
 - [ ] Broader E2E regression suite passes — **Phase:** regression (`./smackerel.sh test e2e` exits 0; no previously-passing test regresses)
+  <!-- UNPROVEN: the broader e2e suite currently exits 1 on pre-existing unrelated failures, so no green→red delta can be attributed or cleared yet. -->
+
 - [ ] Build Quality Gate: `./smackerel.sh check`, `./smackerel.sh lint`, `./smackerel.sh format --check` clean with zero warnings; no TODO/stub/default introduced
+  <!-- UNPROVEN: check/lint/format were not run in this recording pass; only the scoped unit command was executed. -->
 
 ---
 
@@ -345,19 +470,250 @@ And smackerel_auth_corpus_grant_enforcement_mode reports 0
 
 ### Definition of Done
 
-- [ ] `auth.corpus_grant_enforcement` declared in `config/smackerel.yaml` with no default; generated env emits `SMACKEREL_AUTH_CORPUS_GRANT_ENFORCEMENT`; no `${VAR:-...}` / `os.Getenv`-with-default shape anywhere in the resolution path
-- [ ] Three `smackerel_auth_corpus_grant_*` metrics added to the existing `smackerel_auth_*` family; `smackerel_auth_scope_rejected_total` unchanged and not reused for the observe signal
-- [ ] `TP-02-01` unit test passes — absent config aborts startup naming the variable
-- [ ] `TP-02-02` unit test passes — malformed config aborts startup naming the value
-- [ ] `TP-02-03` unit test passes — metrics register with the closed **16**-value `route_group` label set (Tier A + Tier B)
+- [x] `auth.corpus_grant_enforcement` declared in `config/smackerel.yaml` with no default; generated env emits `SMACKEREL_AUTH_CORPUS_GRANT_ENFORCEMENT`; no `${VAR:-...}` / `os.Getenv`-with-default shape anywhere in the resolution path
+
+  **Claim Source:** executed · **Tree:** WORKING TREE, HEAD=3af96a02
+  **Executed:** YES
+  **Command:** `./smackerel.sh check` plus SST/resolution-path greps (shown inline)
+  **Exit Code:** 0
+
+  ```text
+  $ grep -n -A3 'corpus_grant_enforcement' config/smackerel.yaml
+  1143:  corpus_grant_enforcement: false
+  1144-
+  1145-# Spec 061 SCOPE-06c (Round 71d) — Hardware-tier × model-role matrix.
+  1146-# Switch key: SMACKEREL_HARDWARE_TIER={cpu,accel}. REQUIRED at
+
+  $ grep -n 'CORPUS_GRANT_ENFORCEMENT' scripts/commands/config.sh
+  1861:SMACKEREL_AUTH_CORPUS_GRANT_ENFORCEMENT="$(required_value auth.corpus_grant_enforcement)"
+  2788:SMACKEREL_AUTH_CORPUS_GRANT_ENFORCEMENT=${SMACKEREL_AUTH_CORPUS_GRANT_ENFORCEMENT:?auth.corpus_grant_enforcement resolved empty — spec 108 R-108-FL5 forbids emitting an empty enforcement stage}
+
+  $ grep -n 'SMACKEREL_AUTH_CORPUS_GRANT_ENFORCEMENT' config/generated/*.env
+  config/generated/dev.env:437:SMACKEREL_AUTH_CORPUS_GRANT_ENFORCEMENT=false
+  grep: config/generated/home-lab.env: Permission denied
+  grep: config/generated/self-hosted.env: Permission denied
+  config/generated/test.env:437:SMACKEREL_AUTH_CORPUS_GRANT_ENFORCEMENT=false
+
+  $ grep -nE 'os\.Getenv\([^)]*\)[[:space:]]*;[[:space:]]*if|:-|unwrap_or' cmd/core/wiring_corpus_grant.go
+  GREP_EXIT=1 (1 = no forbidden default shape found)
+
+  $ ./smackerel.sh check
+  config-validate: <repo-root>/config/generated/dev.env.tmp.4007465 OK
+  Config is in sync with SST
+  env_file drift guard: OK
+  CHECK_EXIT=0
+
+  === RUN   TestCorpusGrantEnforcement_ResolverHasNoDefaultShape
+  --- PASS: TestCorpusGrantEnforcement_ResolverHasNoDefaultShape (0.00s)
+  ```
+
+  The key is declared in the YAML SST and resolved with `required_value` + the fail-loud
+  `${VAR:?...}` form — never `${VAR:-...}`. The forbidden-shape grep over the resolution file
+  returned exit 1 (no match), and `TestCorpusGrantEnforcement_ResolverHasNoDefaultShape` asserts
+  the same property in Go. Honest limit: `home-lab.env` and `self-hosted.env` were unreadable
+  (permission denied), so emission is verified for `dev.env` and `test.env` only.
+
+- [x] Three `smackerel_auth_corpus_grant_*` metrics added to the existing `smackerel_auth_*` family; `smackerel_auth_scope_rejected_total` unchanged and not reused for the observe signal
+
+  **Claim Source:** executed · **Tree:** WORKING TREE, HEAD=3af96a02
+  **Executed:** YES
+  **Command:** `./smackerel.sh test unit --go --go-run 'CorpusGrant|Corpus' --verbose` plus metrics-family greps
+  **Exit Code:** 0
+
+  ```text
+  $ grep -nE 'smackerel_auth_corpus_grant_(would_deny_total|allowed_total|enforcement_mode)' internal/metrics/auth.go
+  298://  sum by (user_id, route_group) (increase(smackerel_auth_corpus_grant_would_deny_total[7d]))
+  305:            Name: "smackerel_auth_corpus_grant_would_deny_total",
+  319:            Name: "smackerel_auth_corpus_grant_allowed_total",
+  335:            Name: "smackerel_auth_corpus_grant_enforcement_mode",
+
+  $ grep -n 'smackerel_auth_scope_rejected_total' internal/metrics/auth.go
+  169:            Name: "smackerel_auth_scope_rejected_total",
+
+  $ git --no-pager diff -- internal/metrics/auth.go | grep -cE '^[+-].*scope_rejected'
+  0
+
+  === RUN   TestCorpusGrantMetrics_RegisteredInAuthFamily
+  --- PASS: TestCorpusGrantMetrics_RegisteredInAuthFamily (0.02s)
+  === RUN   TestCorpusGrantMetrics_DoNotReuseScopeRejectedCounter
+  --- PASS: TestCorpusGrantMetrics_DoNotReuseScopeRejectedCounter (0.00s)
+  === RUN   TestCorpusGrantMetrics_WouldDenyAndAllowedIncrementIndependently
+  --- PASS: TestCorpusGrantMetrics_WouldDenyAndAllowedIncrementIndependently (0.00s)
+  === RUN   TestCorpusGrantMetrics_WouldDenyCarriesUserIDAndAllowedDoesNot
+  --- PASS: TestCorpusGrantMetrics_WouldDenyCarriesUserIDAndAllowedDoesNot (0.00s)
+  ok      github.com/smackerel/smackerel/internal/metrics 0.108s
+  ```
+
+  All three counters/gauge live in `internal/metrics/auth.go` alongside the pre-existing
+  `smackerel_auth_*` metrics — the family was extended, not forked. The `scope_rejected` diff
+  count is 0, so line 169 is untouched, and `TestCorpusGrantMetrics_DoNotReuseScopeRejectedCounter`
+  asserts the observe signal does not ride on that counter.
+
+- [x] `TP-02-01` unit test passes — absent config aborts startup naming the variable
+
+  **Claim Source:** executed · **Tree:** WORKING TREE, HEAD=3af96a02
+  **Executed:** YES
+  **Command:** `./smackerel.sh test unit --go --go-run 'CorpusGrant|Corpus' --verbose`
+  **Exit Code:** 0
+
+  ```text
+  === RUN   TestResolveCorpusGrantEnforcement_Observe
+  --- PASS: TestResolveCorpusGrantEnforcement_Observe (0.00s)
+  === RUN   TestResolveCorpusGrantEnforcement_Enforce
+  --- PASS: TestResolveCorpusGrantEnforcement_Enforce (0.00s)
+  === RUN   TestResolveCorpusGrantEnforcement_Absent_FailsLoud
+  --- PASS: TestResolveCorpusGrantEnforcement_Absent_FailsLoud (0.00s)
+  === RUN   TestResolveCorpusGrantEnforcement_Empty_FailsLoud
+  --- PASS: TestResolveCorpusGrantEnforcement_Empty_FailsLoud (0.00s)
+  === RUN   TestCorpusGrantEnforcementEnv_Absent
+  --- PASS: TestCorpusGrantEnforcementEnv_Absent (0.00s)
+  === RUN   TestCorpusGrantEnforcementEnv_Empty
+  --- PASS: TestCorpusGrantEnforcementEnv_Empty (0.00s)
+  === RUN   TestCorpusGrantEnforcement_SingleResolutionPointBeforeListenerBind
+  --- PASS: TestCorpusGrantEnforcement_SingleResolutionPointBeforeListenerBind (0.00s)
+  PASS
+  ok      github.com/smackerel/smackerel/cmd/core 0.361s
+  ```
+
+  `_Absent_FailsLoud` and `_Empty_FailsLoud` cover SCN-108-C03 in `cmd/core`, and
+  `_SingleResolutionPointBeforeListenerBind` pins that the resolution happens once, before the
+  listener binds. Honest limit: these prove the *resolver* aborts and names the variable; they
+  are in-process assertions, not a spawned-process startup abort.
+
+- [x] `TP-02-02` unit test passes — malformed config aborts startup naming the value
+
+  **Claim Source:** executed · **Tree:** WORKING TREE, HEAD=3af96a02
+  **Executed:** YES
+  **Command:** `./smackerel.sh test unit --go --go-run 'CorpusGrant|Corpus' --verbose`
+  **Exit Code:** 0
+
+  ```text
+  === RUN   TestResolveCorpusGrantEnforcement_Malformed_FailsLoud
+  === RUN   TestResolveCorpusGrantEnforcement_Malformed_FailsLoud/"1"
+  === RUN   TestResolveCorpusGrantEnforcement_Malformed_FailsLoud/"0"
+  === RUN   TestResolveCorpusGrantEnforcement_Malformed_FailsLoud/"observe"
+  === RUN   TestResolveCorpusGrantEnforcement_Malformed_FailsLoud/"ENFORCE"
+  --- PASS: TestResolveCorpusGrantEnforcement_Malformed_FailsLoud (0.00s)
+      --- PASS: TestResolveCorpusGrantEnforcement_Malformed_FailsLoud/"1" (0.00s)
+      --- PASS: TestResolveCorpusGrantEnforcement_Malformed_FailsLoud/"0" (0.00s)
+      --- PASS: TestResolveCorpusGrantEnforcement_Malformed_FailsLoud/"t" (0.00s)
+      --- PASS: TestResolveCorpusGrantEnforcement_Malformed_FailsLoud/"f" (0.00s)
+      --- PASS: TestResolveCorpusGrantEnforcement_Malformed_FailsLoud/"TRUE" (0.00s)
+      --- PASS: TestResolveCorpusGrantEnforcement_Malformed_FailsLoud/"False" (0.00s)
+      --- PASS: TestResolveCorpusGrantEnforcement_Malformed_FailsLoud/"observe" (0.00s)
+      --- PASS: TestResolveCorpusGrantEnforcement_Malformed_FailsLoud/"ENFORCE" (0.00s)
+      --- PASS: TestResolveCorpusGrantEnforcement_Malformed_FailsLoud/"yes" (0.00s)
+      --- PASS: TestResolveCorpusGrantEnforcement_Malformed_FailsLoud/"no" (0.00s)
+      --- PASS: TestResolveCorpusGrantEnforcement_Malformed_FailsLoud/"on" (0.00s)
+      --- PASS: TestResolveCorpusGrantEnforcement_Malformed_FailsLoud/"off" (0.00s)
+      --- PASS: TestResolveCorpusGrantEnforcement_Malformed_FailsLoud/"shadow" (0.00s)
+      --- PASS: TestResolveCorpusGrantEnforcement_Malformed_FailsLoud/"dry-run" (0.00s)
+      --- PASS: TestResolveCorpusGrantEnforcement_Malformed_FailsLoud/"_true" (0.00s)
+      --- PASS: TestResolveCorpusGrantEnforcement_Malformed_FailsLoud/"true_" (0.00s)
+  ```
+
+  SCN-108-C05 is covered by 16 adversarial subtests. The set is deliberately hostile — it
+  includes the near-miss values a silent fallback would swallow (`"1"`, `"0"`, `"TRUE"`,
+  `"yes"`), the two stage names a reader would expect to work (`"observe"`, `"ENFORCE"`), and
+  whitespace-adjacent shapes (`"_true"`, `"true_"`). Every one aborts rather than defaulting.
+
+- [x] `TP-02-03` unit test passes — metrics register with the closed **16**-value `route_group` label set (Tier A + Tier B)
+
+  **Claim Source:** executed · **Tree:** WORKING TREE, HEAD=3af96a02
+  **Executed:** YES
+  **Command:** `./smackerel.sh test unit --go --go-run 'CorpusGrant|Corpus' --verbose`
+  **Exit Code:** 0
+
+  ```text
+  === RUN   TestCorpusGrantRouteGroups_ClosedSixteenValueSet
+  --- PASS: TestCorpusGrantRouteGroups_ClosedSixteenValueSet (0.00s)
+  === RUN   TestCorpusGrantRouteGroups_ReturnsDefensiveCopy
+  --- PASS: TestCorpusGrantRouteGroups_ReturnsDefensiveCopy (0.00s)
+  === RUN   TestCorpusGrantRouteGroup_RejectsOutOfSetValues
+  --- PASS: TestCorpusGrantRouteGroup_RejectsOutOfSetValues (0.05s)
+      --- PASS: TestCorpusGrantRouteGroup_RejectsOutOfSetValues/group= (0.00s)
+      --- PASS: TestCorpusGrantRouteGroup_RejectsOutOfSetValues/group=/api/search (0.01s)
+      --- PASS: TestCorpusGrantRouteGroup_RejectsOutOfSetValues/group=/api/search?q=my+private+medical+question (0.00s)
+      --- PASS: TestCorpusGrantRouteGroup_RejectsOutOfSetValues/group=/api/artifact/9f3c2a11-4d5e-4f60-9a7b-1c2d3e4f5a6b (0.01s)
+      --- PASS: TestCorpusGrantRouteGroup_RejectsOutOfSetValues/group=SEARCH (0.00s)
+      --- PASS: TestCorpusGrantRouteGroup_RejectsOutOfSetValues/group=search_ (0.02s)
+      --- PASS: TestCorpusGrantRouteGroup_RejectsOutOfSetValues/group=artifact (0.01s)
+      --- PASS: TestCorpusGrantRouteGroup_RejectsOutOfSetValues/group=unknown (0.00s)
+  === RUN   TestCorpusGrantMetrics_AllEmittedLabelValuesStayInClosedSet
+  --- PASS: TestCorpusGrantMetrics_AllEmittedLabelValuesStayInClosedSet (0.00s)
+  ok      github.com/smackerel/smackerel/internal/metrics 0.108s
+  ```
+
+  `_ClosedSixteenValueSet` pins the cardinality at sixteen (Tier A + Tier B per `spec.md` §4.2),
+  and `_RejectsOutOfSetValues` proves the rejection is real rather than decorative: the raw
+  search path, a raw path carrying a private query string, and an artifact UUID are all refused
+  as label values — which is R-108-O3/O4 (no path, no query text, no artifact id in a label).
+
 - [ ] `TP-02-04` integration test passes — OBSERVE returns 200 on all sixteen groups and counts would-be denials
+  <!-- UNPROVEN: `tests/integration/corpus_grant_observe_test.go` is written but was NOT executed in this recording pass; `./smackerel.sh test integration` (~25 min) was explicitly out of scope. The lane was green at the last full run BEFORE these files were added, so that result does not cover this code — a re-run is required before this row can be claimed. -->
+
 - [ ] `TP-02-05` integration test passes — granted requests count as allowed, would-deny stays flat, mode gauge reports 0
+  <!-- UNPROVEN: same as TP-02-04 — written but not executed in this pass; no `./smackerel.sh test integration` evidence exists for this code. -->
+
 - [ ] Observe middleware is mounted in both stages; no request path can return 403 from this scope
+  <!-- UNPROVEN — and the first half is currently FALSE, not merely unverified. `grep -rn 'CorpusGrantGate' --include='*.go' .` returns non-test hits ONLY in `internal/api/corpus_grant_gate.go` (its own definition) and a doc comment in `internal/metrics/auth.go`: the gate has NO production caller and is NOT referenced by `internal/api/router.go` or `cmd/core/*.go`. `tests/integration/corpus_grant_observe_test.go:15-17` states this deliberately: "Scope 02 does not mount the gate: as of this scope `api.NewCorpusGrantGate` has no production caller, and mounting it on `router.go` is Scope 03." The second half IS proven (`TestCorpusGrantGate_Observe_NeverDeniesInEitherStage` PASS), but this DoD item asserts both. FINDING for bubbles.plan/bubbles.design: this item contradicts the implementation boundary between Scope 02 and Scope 03 and should move to Scope 03 or be split. -->
+
 - [ ] `TP-02-06` regression e2e-api test passes — fail-loud config resolution and OBSERVE-stage counting are permanently protected
+  <!-- UNPROVEN: `./smackerel.sh test e2e` was not executed in this pass. Additionally the e2e lane is currently red on 5 unrelated pre-existing defects (spec 106 asset headers; 3 assistant transport/dedup failures under BUG-069-004; a drive-harness env-propagation gap, BUG-031-004), so a green claim here is not available even on re-run until those are resolved. -->
+
 - [ ] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior — **Phase:** regression (`TP-02-06`, `./smackerel.sh test e2e`)
+  <!-- UNPROVEN: depends on TP-02-06, which was not executed. Also gated behind the unmounted gate — the live-route half of SCN-108-O01/O02 cannot be exercised until Scope 03 mounts the middleware. -->
+
 - [ ] Broader E2E regression suite passes — **Phase:** regression (`./smackerel.sh test e2e` exits 0; no previously-passing test regresses)
+  <!-- UNPROVEN: not executed in this pass; the suite is known-red on the 5 pre-existing defects listed above, so it cannot currently exit 0. -->
+
 - [ ] Live-category tests emit telemetry tagged `env=test*` only; no write to prod monitoring (R-108-O6, G115)
-- [ ] Build Quality Gate: `./smackerel.sh check`, `./smackerel.sh lint`, `./smackerel.sh format --check` clean with zero warnings; no TODO/stub/default introduced
+  <!-- UNPROVEN: no live-category test (integration/e2e/stress) was executed in this pass, so no telemetry was emitted and there is nothing to inspect for env labelling. -->
+
+- [x] Build Quality Gate: `./smackerel.sh check`, `./smackerel.sh lint`, `./smackerel.sh format --check` clean with zero warnings; no TODO/stub/default introduced
+
+  **Claim Source:** executed · **Tree:** WORKING TREE, HEAD=3af96a02
+  **Executed:** YES
+  **Command:** `./smackerel.sh check` · `./smackerel.sh lint` · `./smackerel.sh format --check`
+  **Exit Code:** 0 · 0 · 0
+
+  ```text
+  $ ./smackerel.sh check
+  config-validate: <repo-root>/config/generated/dev.env.tmp.4007465 OK
+  Config is in sync with SST
+  env_file drift guard: OK
+  scenario-lint: scanning config/prompt_contracts (glob: *.yaml)
+  scenarios registered: 17, rejected: 0
+  scenario-lint: OK
+  CHECK_EXIT=0
+
+  $ ./smackerel.sh lint
+  All checks passed!
+  === Validating web manifests ===
+    OK: web/pwa/manifest.json
+    OK: Chrome extension manifest has required fields (MV3)
+    OK: Firefox extension manifest has required fields (MV2 + gecko)
+  === Validating JS syntax ===
+    OK: web/pwa/app.js
+    OK: web/extension/background.js
+  === Checking extension version consistency ===
+    OK: Extension versions match (1.0.0)
+  Web validation passed
+  LINT_EXIT=0
+
+  $ ./smackerel.sh format --check
+  78 files already formatted
+  FORMAT_EXIT=0
+
+  $ grep -nE 'TODO|FIXME|HACK|STUB|unimplemented|panic\("not implemented' cmd/core/wiring_corpus_grant.go internal/api/corpus_grant_gate.go internal/metrics/auth.go
+  TODO_SCAN_EXIT=1 (1 = none found)
+  ```
+
+  All three legs exit 0 with no warning lines. `format --check` runs both `go-format.sh --check`
+  and `python-format.sh --check`; the Go leg emitted no diff output (gofmt prints nothing when
+  every file is formatted) and the Python leg reported 78 files already formatted. The
+  TODO/stub scan over the three non-test files this scope adds or modifies returned exit 1
+  (no match). The "no default" half is carried by the first DoD item above.
 
 ---
 
@@ -602,31 +958,384 @@ contained by an explicit boundary. Collateral cleanup is opt-in and out of scope
 
 ### Definition of Done
 
-- [ ] `r.Use(auth.RequireScope(auth.GrantGlobalCorpusRead))` mounted on the corpus route group in `internal/api/router.go`, inside `bearerAuthMiddleware` and outside the individual route registrations; mounted only in ENFORCE
-- [ ] All **sixteen** route groups from `spec.md` §4.2 (Tier A 1–8 + Tier B 9–16) sit inside the gated group; every still-ungated route from design.md §2 remains ungated and unchanged
-- [ ] The Tier B block's `if deps.IntelligenceEngine != nil` conditional sits **inside** the gated group, so a non-nil engine cannot register the eight Phase-5 routes outside the gate
-- [ ] No per-handler `if !authorized` check added to any corpus handler, Tier A or Tier B
-- [ ] `TP-03-01` unit test passes — `GateGlobalCorpusRead` denies empty and wildcard claims, allows explicit, leaks nothing
+- [x] `r.Use(auth.RequireScope(auth.GrantGlobalCorpusRead))` mounted on the corpus route group in `internal/api/router.go`, inside `bearerAuthMiddleware` and outside the individual route registrations; mounted only in ENFORCE
+
+  **Claim Source:** executed · **Tree:** WORKING TREE, HEAD=3af96a02
+  **Executed:** YES
+  **Command:** `grep -nE 'bearerAuthMiddleware|CorpusGrantGate|RequireScope\(auth\.GrantGlobalCorpusRead\)|r\.Group\(' internal/api/router.go` plus `awk` excerpts of the two group headers
+  **Exit Code:** 0
+
+  ```text
+  $ grep -nE 'bearerAuthMiddleware|RequireScope\(auth\.GrantGlobalCorpusRead\)|r\.Group\(' internal/api/router.go
+  86:             r.Group(func(r chi.Router) {
+  87:                     r.Use(deps.bearerAuthMiddleware)
+  131:                    r.Group(func(r chi.Router) {
+  134:                                    r.Use(auth.RequireScope(auth.GrantGlobalCorpusRead))
+
+  $ awk 'NR>=84 && NR<=88 {printf "%d|%s\n", NR, $0}' internal/api/router.go
+  85|             // Authenticated API routes
+  86|             r.Group(func(r chi.Router) {
+  87|                     r.Use(deps.bearerAuthMiddleware)
+  88|                     r.Post("/capture", deps.CaptureHandler)
+
+  $ awk 'NR>=131 && NR<=137 {printf "%d|%s\n", NR, $0}' internal/api/router.go
+  131|                    r.Group(func(r chi.Router) {
+  132|                            corpusGate := NewCorpusGrantGate(deps.CorpusGrantEnforce)
+  133|                            if deps.CorpusGrantEnforce {
+  134|                                    r.Use(auth.RequireScope(auth.GrantGlobalCorpusRead))
+  135|                            }
+  136|
+  137|                            // Tier A — raw corpus retrieval (groups 1-8).
+  ```
+
+  The gated group (L131) opens **inside** the authenticated group that mounts `bearerAuthMiddleware`
+  (L86–87), so the session the gate reads is already populated. `RequireScope` is a single
+  group-level `r.Use` at L134, not a per-route decoration, and it sits inside
+  `if deps.CorpusGrantEnforce` — so it is mounted in ENFORCE only. `Observe` is applied per route
+  via `r.With(...)` in both stages, which is why the two halves are not interchangeable.
+
+  **What this does NOT establish:** this is a *static structural* proof of the mount. It does not
+  prove a live 403 against a running stack — that is TP-03-02/-03/-06/-07, which are not executed
+  in this packet.
+
+- [x] All **sixteen** route groups from `spec.md` §4.2 (Tier A 1–8 + Tier B 9–16) sit inside the gated group; every still-ungated route from design.md §2 remains ungated and unchanged
+
+  **Claim Source:** executed · **Tree:** WORKING TREE, HEAD=3af96a02
+  **Executed:** YES
+  **Command:** `./smackerel.sh test unit --go --go-run 'CorpusGate' --verbose`
+  **Exit Code:** 0
+
+  ```text
+  [go-unit] applying -run selector: CorpusGate
+  + go test -v -run CorpusGate -count=1 ./...
+  === RUN   TestCorpusGate_AllSixteenRouteGroupsGated
+  === RUN   TestCorpusGate_AllSixteenRouteGroupsGated/expectation_covers_the_closed_sixteen_value_label_set
+  === RUN   TestCorpusGate_AllSixteenRouteGroupsGated/every_expected_corpus_route_is_gated
+  === RUN   TestCorpusGate_AllSixteenRouteGroupsGated/no_unexpected_route_is_gated
+  === RUN   TestCorpusGate_AllSixteenRouteGroupsGated/gated_group_count_is_exactly_sixteen
+  --- PASS: TestCorpusGate_AllSixteenRouteGroupsGated (0.02s)
+      --- PASS: TestCorpusGate_AllSixteenRouteGroupsGated/expectation_covers_the_closed_sixteen_value_label_set (0.00s)
+      --- PASS: TestCorpusGate_AllSixteenRouteGroupsGated/every_expected_corpus_route_is_gated (0.00s)
+      --- PASS: TestCorpusGate_AllSixteenRouteGroupsGated/no_unexpected_route_is_gated (0.00s)
+      --- PASS: TestCorpusGate_AllSixteenRouteGroupsGated/gated_group_count_is_exactly_sixteen (0.00s)
+  === RUN   TestCorpusGate_DoesNotOverReachUngatedRoutes
+  === RUN   TestCorpusGate_DoesNotOverReachUngatedRoutes/observe
+  === RUN   TestCorpusGate_DoesNotOverReachUngatedRoutes/enforce
+  --- PASS: TestCorpusGate_DoesNotOverReachUngatedRoutes (0.01s)
+      --- PASS: TestCorpusGate_DoesNotOverReachUngatedRoutes/observe (0.01s)
+      --- PASS: TestCorpusGate_DoesNotOverReachUngatedRoutes/enforce (0.00s)
+  PASS
+  ok      github.com/smackerel/smackerel/internal/api     0.309s
+  GATEONLY_EXIT=0
+  ```
+
+  Set-equality is asserted in both directions: `every_expected_corpus_route_is_gated` catches a
+  corpus route that escaped the group, `no_unexpected_route_is_gated` catches over-reach, and
+  `gated_group_count_is_exactly_sixteen` catches a seventeenth. `DoesNotOverReachUngatedRoutes`
+  exercises the design.md §2 ungated list in **both** stages, so an ungated route is proven not
+  corpus-denied under ENFORCE either.
+
+  **What this does NOT establish:** the assertion is over the route **manifest** of a router built
+  in-process. It is not a live end-to-end denial against a running stack, and it does not
+  independently prove the ungated handler bodies are byte-unchanged.
+- [x] The Tier B block's `if deps.IntelligenceEngine != nil` conditional sits **inside** the gated group, so a non-nil engine cannot register the eight Phase-5 routes outside the gate
+
+  **Claim Source:** executed · **Tree:** WORKING TREE, HEAD=3af96a02
+  **Executed:** YES
+  **Command:** `awk` excerpt of `internal/api/router.go` L183–190 and L203–208, plus the vacuity-trap test from the `CorpusGate` run
+  **Exit Code:** 0
+
+  ```text
+  $ awk 'NR>=183 && NR<=190 {printf "%d|%s\n", NR, $0}' internal/api/router.go
+  183|                            // engine is configured — that is, whenever these endpoints
+  184|                            // actually serve corpus-derived signal.
+  185|                            if deps.IntelligenceEngine != nil {
+  186|                                    r.With(corpusGate.Observe(metrics.CorpusRouteGroupExpertise)).
+  187|                                            Get("/expertise", ExpertiseHandler(deps.IntelligenceEngine))
+  188|                                    r.With(corpusGate.Observe(metrics.CorpusRouteGroupLearningPaths)).
+  189|                                            Get("/learning-paths", LearningPathsHandler(deps.IntelligenceEngine))
+  190|                                    r.With(corpusGate.Observe(metrics.CorpusRouteGroupSubscriptions)).
+
+  $ awk 'NR>=203 && NR<=208 {printf "%d|%s\n", NR, $0}' internal/api/router.go
+  203|                    })
+  204|                    // ── end corpus-grant gate ─────────────────────────────────
+  206|                    // Bookmark import endpoint (Phase 2)
+  207|                    r.Post("/bookmarks/import", deps.BookmarkImportHandler)
+
+  === RUN   TestCorpusGate_NilIntelligenceEngineIsAVacuityTrap
+  --- PASS: TestCorpusGate_NilIntelligenceEngineIsAVacuityTrap (0.04s)
+  ```
+
+  The conditional opens at L185 and the gated group does not close until L203, so the eight Tier B
+  registrations are lexically enclosed — a non-nil engine cannot register them outside the gate.
+  `TestCorpusGate_NilIntelligenceEngineIsAVacuityTrap` closes the complementary hazard: it makes
+  the nil-engine substitution an explicit failure rather than a silently-passing sixteen-value
+  set-equality over a router that only ever mounted eight.
+
+- [x] No per-handler `if !authorized` check added to any corpus handler, Tier A or Tier B
+
+  **Claim Source:** executed · **Tree:** WORKING TREE, HEAD=3af96a02
+  **Executed:** YES
+  **Command:** `grep -rnE 'if[[:space:]]+!authorized|if[[:space:]]*!.*Authorize|AuthorizeCorpusRead\(|AuthorizeGrant\(' --include='*.go' internal/api cmd | grep -v '_test.go'`
+  **Exit Code:** 0
+
+  ```text
+  $ grep -rnE 'if[[:space:]]+!authorized|if[[:space:]]*!.*Authorize|AuthorizeCorpusRead\(|AuthorizeGrant\(' \
+      --include='*.go' internal/api cmd | grep -v '_test.go'
+  internal/api/router.go:107:                     // sixteen handler bodies. A per-handler `if !authorized` check
+  SCAN_RC=0
+
+  $ grep -rn 'GrantGlobalCorpusRead' --include='*.go' . | grep -v '_test.go'
+  ./internal/auth/browser_session_policy.go:37:   // GrantGlobalCorpusRead authorizes reading the single operator-owned global
+  ./internal/auth/browser_session_policy.go:40:   GrantGlobalCorpusRead = "corpus:read"
+  ./internal/auth/browser_session_policy.go:62:   GrantGlobalCorpusRead,
+  ./internal/auth/browser_session_policy.go:132:// explicit GrantGlobalCorpusRead grant. The operator and a specifically-granted
+  ./internal/auth/browser_session_policy.go:140:  return CorpusDecision{Allowed: slices.Contains(sess.Scopes, GrantGlobalCorpusRead)}
+  ./internal/api/corpus_grant_gate.go:16:// (`auth.RequireScope(auth.GrantGlobalCorpusRead)`) and the mounting of both
+  ./internal/api/corpus_grant_gate.go:131:                "required_grant", auth.GrantGlobalCorpusRead,
+  ./internal/api/router.go:119:                   //   3. auth.RequireScope(auth.GrantGlobalCorpusRead) — the
+  ./internal/api/router.go:134:                                   r.Use(auth.RequireScope(auth.GrantGlobalCorpusRead))
+  ```
+
+  The only hit for the per-handler shape across all non-test Go under `internal/api` and `cmd` is
+  the **prohibiting comment** at `router.go:107` — no handler body performs its own authorization.
+  The second grep corroborates the same conclusion from the other direction: the grant constant has
+  exactly one enforcement referent in non-test code, the group-level `r.Use` at `router.go:134`
+  (the `corpus_grant_gate.go` hits are the Observe half's denial-reason label and a doc comment).
+
+- [x] `TP-03-01` unit test passes — `GateGlobalCorpusRead` denies empty and wildcard claims, allows explicit, leaks nothing
+
+  **Claim Source:** executed · **Tree:** WORKING TREE, HEAD=3af96a02
+  **Executed:** YES
+  **Command:** `./smackerel.sh test unit --go --go-run 'Corpus' --verbose`
+  **Exit Code:** 0
+
+  ```text
+  [go-unit] applying -run selector: Corpus
+  + go test -v -run Corpus -count=1 ./...
+  === RUN   TestRegisteredScopeSurfaces_ContainsCorpusMappedToGrant
+  --- PASS: TestRegisteredScopeSurfaces_ContainsCorpusMappedToGrant (0.00s)
+  === RUN   TestCorpusReadScopeClaimValidatesAndAuthorizes
+  --- PASS: TestCorpusReadScopeClaimValidatesAndAuthorizes (0.00s)
+  === RUN   TestCorpusSurfaceRegistrationDoesNotWidenDefaultGrants
+  --- PASS: TestCorpusSurfaceRegistrationDoesNotWidenDefaultGrants (0.00s)
+  === RUN   TestRegisteredScopeSurfaces_ContainsCorpus
+  --- PASS: TestRegisteredScopeSurfaces_ContainsCorpus (0.00s)
+  PASS
+  ok      github.com/smackerel/smackerel/internal/auth    0.015s
+  CORPUS_ALL_EXIT=0
+
+  $ awk 'NR>=126 && NR<=141 {printf "%d|%s\n", NR, $0}' internal/auth/browser_session_policy.go
+  127|type CorpusDecision struct {
+  128|    Allowed bool
+  129|}
+  136|func GateGlobalCorpusRead(sess Session) CorpusDecision {
+  137|    if slices.Contains(sess.Scopes, wildcardGrant) {
+  138|            return CorpusDecision{Allowed: false}
+  139|    }
+  140|    return CorpusDecision{Allowed: slices.Contains(sess.Scopes, GrantGlobalCorpusRead)}
+  141|}
+  ```
+
+  `TestCorpusReadScopeClaimValidatesAndAuthorizes` covers all four TP-03-01 arms — granted daily
+  user allowed, ungranted daily user denied, bare session denied, `"*"` wildcard denied. The
+  "leaks nothing" half is carried structurally: `CorpusDecision` has exactly one field, `Allowed
+  bool`, so there is no content, count, or domain label for a decision to carry.
+
+  **Selector note (honest):** the earlier `--go-run 'CorpusGate|CorpusGrant'` pass did **not**
+  match these test names, so TP-03-01 was re-run under the broader `Corpus` selector specifically
+  to evidence this item rather than inferred from the narrower run.
 - [ ] `TP-03-02` integration test passes — ENFORCE returns 403 on all sixteen groups
+
+  **Not executed in this packet.** An integration run was already in flight in a separate terminal;
+  running a second would have contended with it and corrupted its evidence. Status: written-or-pending, unclaimed.
+
 - [ ] `TP-03-03` integration test passes — shared-token and bootstrap bypass asserted under ENFORCE
+
+  **Not executed in this packet** — same in-flight-integration-run reason as TP-03-02. Unclaimed.
+
 - [ ] `TP-03-04` adversarial route-manifest test passes AND is demonstrated to **fail against current `main`** (empty-scope principal is allowed today); set-equality catches a seventeenth ungated corpus route
+
+  **Not executed in this packet.** Two independent gaps: the integration run was not executed
+  (see TP-03-02), and the "fails against current `main`" half is a *separate demonstration* — a
+  pre-fix red run — that was not performed here. The unit-tier `TestCorpusGate_AllSixteenRouteGroupsGated`
+  proves set-equality on the manifest but is not that demonstration and must not be substituted for it.
+
 - [ ] `TP-03-05` integration test passes — ENFORCE→OBSERVE rollback restores access with no rebuild
+
+  **Not executed in this packet** — same in-flight-integration-run reason as TP-03-02. Unclaimed.
+
 - [ ] `TP-03-06` e2e-api test passes — granted reads succeed, ungranted refused, body carries no id/title/count
+
+  **Not executed in this packet.** `./smackerel.sh test e2e` is currently red on five unrelated
+  pre-existing defects (spec 106 asset headers; three BUG-069-004 assistant-dedup failures; the
+  drive-harness env-propagation defect; BUG-031-004). Unclaimed.
+
 - [ ] `TP-03-07` e2e-api test passes — denial byte-parity between real and random id
+
+  **Not executed in this packet** — same pre-existing e2e-red reason as TP-03-06. Unclaimed.
+
 - [ ] `TP-03-08` canary integration test passes — shared router-bootstrap ordering, session, and ungated-route contracts intact
+
+  **Not executed in this packet** — same in-flight-integration-run reason as TP-03-02. Unclaimed.
+
 - [ ] `TP-03-09` stress test passes — gate adds no p99 latency regression on the corpus route groups under sustained load
+
+  **Not executed in this packet.** No stress run was performed, so no latency claim is made in
+  either direction. Unclaimed.
+
 - [ ] `TP-03-10` regression e2e-api test passes — enforcement across both tiers, denial parity, documented bypasses, and rollback are permanently protected
+
+  **Not executed in this packet** — same pre-existing e2e-red reason as TP-03-06. Unclaimed.
+
 - [ ] `TP-03-11` integration test passes — all eight Tier B Phase-5 route groups deny an ungranted principal with 403 and the Tier A denial shape, and allow a `corpus:read` holder (§18 decision 5)
+
+  **Not executed in this packet** — same in-flight-integration-run reason as TP-03-02. The
+  unit-tier gate tests prove the eight Tier B groups are *mounted inside* the gate; they do not
+  prove a live 403 or the live denial-body shape.
+
 - [ ] `TP-03-12` adversarial integration test passes — set-equality is evaluated against a non-nil intelligence engine and fails on the nil-engine vacuous-pass path and on Tier B registered outside the gate
+
+  **Not executed in this packet** — same in-flight-integration-run reason as TP-03-02. The
+  unit-tier `TestCorpusGate_NilIntelligenceEngineIsAVacuityTrap` covers the same hazard at the
+  manifest tier, but TP-03-12 is planned as an `integration`-category row in
+  `auth_surface_contract_test.go` and is not claimed from the unit run.
 - [ ] **DoD-03-TIERB-DESIGN:** `design.md` §2's route-inventory table and §8 T2/T4/T8 count language reconciled to the ratified sixteen-group surface by `bubbles.design` before this scope closes — not silently overwritten from this planning packet (routed per the `spec.md` §18 decision 5 planning note)
+
+  **Not satisfied.** `design.md` is unmodified in this working tree (`git status --porcelain
+  specs/108-corpus-grant-enforcement/design.md` → empty), its §2 row still defers the sixteen-row
+  extension to `bubbles.design` (L149), and §8 T4 still reads "all eight route groups" (L311). This
+  is a foreign artifact owned by `bubbles.design`; it is routed, not edited from here.
+
 - [ ] Consumer Impact Sweep completed for the corpus route-group contract change across the PWA, Chrome extension bridge, Telegram bridge, Tier B consumers, external API clients, and docs: zero stale first-party references remain, and the Tier B "zero first-party in-repo callers" negative result is re-verified rather than inherited
+
+  **Not performed in this packet.** No caller enumeration or stale-reference scan was executed, and
+  the Tier B "zero first-party in-repo callers" negative result was explicitly not re-verified.
+
 - [ ] Independent canary suite for shared fixture/bootstrap contracts passes before broad suite reruns
+
+  **Not executed in this packet** — TP-03-08 is the canary and is an integration-category row; see TP-03-08.
+
 - [ ] Rollback or restore path for shared infrastructure changes is documented and verified
+
+  **Not verified in this packet.** The ENFORCE→OBSERVE rollback path is TP-03-05, which was not executed.
+
 - [ ] Change Boundary is respected and zero excluded file families were changed
+
+  **NOT satisfied — deviation found and recorded rather than waived.**
+
+  **Claim Source:** executed · **Tree:** WORKING TREE, HEAD=3af96a02
+  **Executed:** YES
+  **Command:** `git status --porcelain` plus `git --no-pager diff -U2 cmd/core/wiring.go cmd/core/main.go`
+  **Exit Code:** 0
+
+  ```text
+  $ git status --porcelain | grep -E 'cmd/core|internal/api'
+   M cmd/core/main.go
+   M cmd/core/wiring.go
+   M internal/api/auth_surface_contract_test.go
+   M internal/api/health.go
+   M internal/api/router.go
+
+  $ git --no-pager diff -U2 cmd/core/wiring.go
+  +// Spec 108 Scope 03 added corpusGrantEnforce — the stage already resolved
+  +// fail-loud by resolveCorpusGrantEnforcement in run(). It is a REQUIRED
+  +// parameter rather than an optional field assignment so that omitting it is a
+  +// compile error here, not a silent ENFORCE→OBSERVE downgrade at runtime.
+  -func buildAPIDeps(ctx context.Context, cfg *config.Config, svc *coreServices) (...)
+  +func buildAPIDeps(ctx context.Context, cfg *config.Config, svc *coreServices, corpusGrantEnforce bool) (...)
+  +               CorpusGrantEnforce: corpusGrantEnforce,
+
+  $ git --no-pager diff -U2 cmd/core/main.go
+  -       deps, listResolver, listStore, err := buildAPIDeps(ctx, cfg, svc)
+  +       deps, listResolver, listStore, err := buildAPIDeps(ctx, cfg, svc, corpusGrantEnforce)
+  ```
+
+  **F-108-S03-01 (Change Boundary deviation).** This scope's Change Boundary lists `cmd/core` under
+  *Excluded surfaces* ("owned by Scopes 02 and 05") and its *Allowed file families* name only
+  `internal/api/router.go`, `internal/api/auth_surface_contract_test.go`, and new/extended test
+  files under `internal/api` and `internal/auth`. Two non-test surfaces outside that list changed:
+
+  1. `cmd/core/wiring.go` — the `buildAPIDeps` signature gained a required `corpusGrantEnforce bool`
+     and assigns `CorpusGrantEnforce`. The added comment self-attributes to **Scope 03**.
+  2. `internal/api/health.go` — the `Dependencies` struct gained `CorpusGrantEnforce bool` (L190);
+     `health.go` is a non-test file not named in the Allowed list.
+
+  (`cmd/core/main.go`'s stage-resolution block self-attributes to Scope 02; only its one-line
+  `buildAPIDeps` call-site update is a Scope 03 consequence.)
+
+  The changes look *substantively* right — a required parameter makes omission a compile error
+  instead of a silent ENFORCE→OBSERVE downgrade, which is the safer construction. The defect is
+  boundary conformance, not code quality. Resolution is a planning decision (widen Scope 03's
+  Allowed families, or reassign these surfaces to Scope 02), which is owned by `bubbles.plan`; it
+  is therefore **routed, not self-approved here**, and this item stays unchecked.
+
 - [ ] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior — **Phase:** regression (`TP-03-10`, `./smackerel.sh test e2e`)
+
+  **Not executed in this packet** — see TP-03-10 (e2e suite red on five unrelated pre-existing defects).
+
 - [ ] Broader E2E regression suite passes — **Phase:** regression (`./smackerel.sh test e2e` exits 0; no previously-passing test regresses)
+
+  **Not executed in this packet.** `./smackerel.sh test e2e` is currently red on five unrelated
+  pre-existing defects, so no green→red drift claim is made in either direction.
+
 - [ ] Live-category tests emit telemetry tagged `env=test*` only; no write to prod monitoring (R-108-O6, G115)
-- [ ] Build Quality Gate: `./smackerel.sh check`, `./smackerel.sh lint`, `./smackerel.sh format --check` clean with zero warnings; no TODO/stub/default introduced
+
+  **Not evidenced in this packet.** No live-category run (integration / e2e / stress) was executed
+  here, so there is no telemetry emission to inspect.
+
+- [x] Build Quality Gate: `./smackerel.sh check`, `./smackerel.sh lint`, `./smackerel.sh format --check` clean with zero warnings; no TODO/stub/default introduced
+
+  **Claim Source:** executed · **Tree:** WORKING TREE, HEAD=3af96a02
+  **Executed:** YES
+  **Command:** `./smackerel.sh check`; `./smackerel.sh lint`; `./smackerel.sh format --check`; TODO/stub grep over the Scope 03 files
+  **Exit Code:** 0, 0, 0, and 1 (grep 1 = no match)
+
+  ```text
+  $ ./smackerel.sh check
+  config-validate: <repo-root>/config/generated/dev.env.tmp.3912078 OK
+  Config is in sync with SST
+  env_file drift guard: OK
+  scenario-lint: scanning config/prompt_contracts (glob: *.yaml)
+  scenarios registered: 17, rejected: 0
+  scenario-lint: OK
+  CHECK_EXIT=0
+
+  $ ./smackerel.sh lint
+  === Validating web manifests ===
+    OK: web/pwa/manifest.json
+    OK: PWA manifest has required fields
+    OK: web/extension/manifest.json
+    OK: Chrome extension manifest has required fields (MV3)
+    OK: web/extension/manifest.firefox.json
+    OK: Firefox extension manifest has required fields (MV2 + gecko)
+  === Validating JS syntax ===
+    OK: web/pwa/app.js
+    OK: web/pwa/sw.js
+    OK: web/pwa/lib/queue.js
+    OK: web/extension/background.js
+    OK: web/extension/popup/popup.js
+    OK: web/extension/lib/queue.js
+    OK: web/extension/lib/browser-polyfill.js
+  === Checking extension version consistency ===
+    OK: Extension versions match (1.0.0)
+  Web validation passed
+  LINT_EXIT=0
+
+  $ ./smackerel.sh format --check
+  78 files already formatted
+  FORMAT_EXIT=0
+
+  $ grep -nE 'TODO|FIXME|HACK|STUB|unimplemented|panic\("not implemented|:-|unwrap_or' \
+      internal/api/router.go internal/api/health.go internal/api/router_corpus_gate_test.go \
+      cmd/core/wiring.go cmd/core/main.go
+  TODO_SCAN_EXIT=1 (1 = none found)
+  ```
+
+  All three CLI legs exit 0 with no warning lines. The Go half of `lint`/`format` prints nothing
+  when clean (`go vet` and `gofmt` are silent on success), and the Python half reported 78 files
+  already formatted. The TODO/stub/default scan across the five files this scope adds or modifies
+  returned exit 1 (no match).
 
 ---
 
@@ -876,33 +1585,251 @@ This scope repairs callers only. Grant-model changes are explicitly out of bound
 | TP-04-09 | integration | bridge → API against the ephemeral test stack | **ADVERSARIAL negative case:** a mapped Telegram chat whose principal does **NOT** hold `corpus:read` issues a corpus command under ENFORCE → the minted token does not carry the grant, the command is refused 403, and the refusal renders as a permanent operator-actionable condition rather than a transient retry. **Fails if any minter-side hardcoded list grants corpus access to every mapped chat** — the exact shortcut §18 decision 3 rejects, which a naive "Telegram works" test would pass (SCN-108-E04) | `./smackerel.sh test integration` |
 | TP-04-10 | unit | `cmd/core/cmd_auth.go` rotation-semantics test | **Consumer Impact Sweep follow-through.** `resolveRotationScopes` (`cmd_auth.go:596`) **replaces** rather than merges, so rotating a principal to add `corpus:read` without naming the full list silently drops `annotation:edit` — which, once derivation is live, silently revokes the principal's Telegram annotation capability. Proves the sweep's rotation contract: rotating a principal holding `annotation:edit` to add `corpus:read` yields a token carrying **both**, and the replace-not-merge semantic is asserted rather than discovered in production (SCN-108-F02, F-108-GRANT-MECHANISM-01) | `./smackerel.sh test unit` |
 
+### Negative-case proof-layer inventory (design.md §10.10) — verified against the tree 2026-08-11
+
+design.md §10.10 defines five layers that together prove the **negative** case (a principal without
+`corpus:read` gains no corpus access through Telegram). Verified by existence check, not inherited:
+
+| Layer | Expected artifact | Present? | Verification |
+|---|---|---|---|
+| **T1** structural grep guard | `internal/telegram/scope_literal_guard_test.go` | **NO** | `ls` → `No such file or directory`. The *property* holds right now (zero scope literals in non-test `internal/telegram/**`), but nothing mechanically enforces it, so a reintroduced literal would not be caught. Note `internal/auth/bridge_delegation.go:12` already **cites this file as existing** — a stale forward-reference to be corrected. |
+| **T2** subset property `derived(R) ⊆ R` | test over `auth.DeriveTelegramBridgeGrants` | **NO** | `internal/auth/bridge_delegation_test.go` absent; `grep -rn 'DeriveTelegramBridgeGrants' --include='*_test.go' .` → zero hits. The ceiling is implemented and documented as narrow-only, but that property is **unasserted**. |
+| **T3** fail-closed mint | NULL / no-active-token / reader-error → error + zero `MintedTelegramToken` + no shared-bearer substitution | **NO** | `grep -rn 'ErrPrincipalGrantsUnrecorded\|ErrNoDelegableGrant' --include='*_test.go' .` → zero hits. Adjacent *reader*-level fail-closed coverage exists in `internal/auth/principal_grants_test.go`, but that is a different surface from the mint path §10.10 names. |
+| **T4** differential integration (decisive) | corpus 403 **and** annotation write succeeds, same principal, same mint | **NO** | No such test in `tests/integration/`; `corpus_grant_observe_test.go` carries no Telegram/annotation differential. Also un-runnable this pass (integration tier). |
+| **T5** no-persist invariant | after N bridge mints, `auth_tokens` row count and `granted_scopes` untouched | **NO** | `grep -rniE 'no.?persist\|row count' --include='*_test.go' .` returns no bridge-mint invariant test. |
+
+**Adversarial RED demonstrations (§10.10, required and separate from any green run): NOT PRODUCED.**
+T4 must be shown to fail against a tree patched back to the literal list, and T2 against a union
+implementation. Neither capture exists, so no DoD item depending on the negative case is ticked —
+a green run on the fixed tree does not satisfy that requirement.
+
+**Net:** 0 of 5 proof layers exist. What is delivered is the derivation *mechanism*; what is not
+delivered is the proof that it denies.
+
 ### Definition of Done
 
-- [ ] F-108-TELEGRAM-01 resolved by the **ratified** direction only (`spec.md` §18 decision 3): the minted Telegram scope claim is **derived from the mapped principal's persisted grant set**. The hardcoded list at `per_user_token.go:201` is REPLACED; neither the hardcoded-list extension nor the `/api/assistant/turn` re-route is implemented
-- [ ] `F-108-UX-ROSTER-01` (server-side grant readability) is resolved before derivation ships, or this scope is recorded BLOCKED — derivation is **not** worked around with a minter-side list
-- [ ] **§18 decision 4 honored:** the external GuestHost connector credential is **NOT** granted `corpus:read`; Tier A group 7 (`/api/context-for`) being gated with no granted external reader until BUG-019-003 clears is recorded as an accepted consequence, and the migration to the spec-109 `hospitality-read` path is routed to `bubbles.design` on spec 109 rather than solved here
-- [ ] `dailyUserGrants` remains unchanged; no grant set is widened to avoid a caller break (§18 decision 2, permanent)
+- [x] F-108-TELEGRAM-01 resolved by the **ratified** direction only (`spec.md` §18 decision 3): the minted Telegram scope claim is **derived from the mapped principal's persisted grant set**. The hardcoded list at `per_user_token.go:201` is REPLACED; neither the hardcoded-list extension nor the `/api/assistant/turn` re-route is implemented
+
+**Executed:** YES (2026-08-11, tree `<repo-root>`)
+**Command:** `grep -rnE '"[a-z][a-z0-9-]*:[a-z0-9,_-]+"' internal/telegram/ --include='*.go' | grep -v '_test\.go' | grep -viE 'http|application/|text/|image/|multipart'` then `grep -n 'GrantsForPrincipal\|DeriveTelegramBridgeGrants\|ErrNoDelegableGrant\|ErrPrincipalGrantsUnrecorded' internal/telegram/per_user_token.go` then `grep -rn 'assistant/turn' internal/telegram/per_user_token.go internal/telegram/bot.go`
+**Exit Code:** 1 / 0 / 1 (grep rc=1 == zero matches)
+
+```text
+-- scope literals in non-test internal/telegram (ScopeNameRegex shape) --
+grep rc=1 (1 = ZERO matches = literal removed)
+-- derivation call chain --
+60:// ErrPrincipalGrantsUnrecorded is returned when the mapped principal's
+66:var ErrPrincipalGrantsUnrecorded = errors.New("telegram: mapped principal's grants are unrecorded; rotate the token to record them")
+68:// ErrNoDelegableGrant is returned when the principal's grants ARE
+74:var ErrNoDelegableGrant = errors.New("telegram: mapped principal holds no grant the bridge may delegate")
+84:     GrantsForPrincipal(ctx context.Context, userID string) (auth.RecordedGrants, error)
+229:// grant set, never a list held here. `auth.DeriveTelegramBridgeGrants`
+237:    recorded, err := m.grants.GrantsForPrincipal(ctx, userID)
+244:            return nil, fmt.Errorf("telegram: principal %q (token %q): %w", userID, recorded.TokenID, ErrPrincipalGrantsUnrecorded)
+246:    derived := auth.DeriveTelegramBridgeGrants(recorded.Scopes)
+248:            return nil, fmt.Errorf("telegram: principal %q (token %q): %w", userID, recorded.TokenID, ErrNoDelegableGrant)
+-- re-route alternative NOT implemented --
+grep rc=1 (1 = ZERO = re-route not implemented)
+```
+
+**Claim Source:** executed. Proves the *implementation direction* only — the literal is gone and derivation is wired. It does **not** prove the negative case; that needs design.md §10.10 T1–T5, and T1/T2/T3/T4/T5 are all absent (see the unchecked items below).
+
+- [x] `F-108-UX-ROSTER-01` (server-side grant readability) is resolved before derivation ships, or this scope is recorded BLOCKED — derivation is **not** worked around with a minter-side list
+
+**Executed:** YES (2026-08-11, tree `<repo-root>`)
+**Command:** `./smackerel.sh test unit --go --go-run 'Telegram|PerUserToken|GrantsForPrincipal|Grants' --verbose` (grant-reader primitive subset)
+**Exit Code:** 0
+
+```text
+--- PASS: TestDecodeRecordedGrants_ThreeStatesArePairwiseDistinguishable (0.00s)
+--- PASS: TestDecodeRecordedGrants_RecordednessComesFromSQLNotSliceShape (0.00s)
+--- PASS: TestRecordedGrants_ZeroValueFailsClosed (0.00s)
+--- PASS: TestGrantsForPrincipal_RejectsEmptyUserIDWithoutQuerying (0.00s)
+--- PASS: TestStandingTokenGrantsQuery_PinsTheDefinedPredicate (0.00s)
+ok      github.com/smackerel/smackerel/internal/auth    0.030s
+ok      github.com/smackerel/smackerel/cmd/core 0.435s
+ok      github.com/smackerel/smackerel/internal/telegram        0.227s
+```
+
+Server-side readability exists in the tree: `internal/db/migrations/063_auth_token_granted_scopes.sql` adds `auth_tokens.granted_scopes text[]` (nullable, no DB-side default), `internal/auth/bearer_store.go:177` writes it on every insert, and `internal/auth/principal_grants.go` exposes `GrantsForPrincipal`. The three states are held distinct:
+
+```text
+$ grep -n 'granted_scopes' internal/auth/bearer_store.go
+142:// granted_scopes is written on every insert, so the write path never
+177:            granted_scopes
+$ grep -n 'ADD COLUMN' internal/db/migrations/063_auth_token_granted_scopes.sql
+ALTER TABLE auth_tokens ADD COLUMN IF NOT EXISTS granted_scopes text[];
+```
+
+**Claim Source:** executed for the unit rows; interpreted for the SQL — the migration is **not** applied or queried here (that needs a live Postgres, i.e. the integration tier). What is proven is the type contract, the NULL-vs-`'{}'` non-conflation, and the query predicate; not that the column behaves so against a real database.
+- [x] **§18 decision 4 honored:** the external GuestHost connector credential is **NOT** granted `corpus:read`; Tier A group 7 (`/api/context-for`) being gated with no granted external reader until BUG-019-003 clears is recorded as an accepted consequence, and the migration to the spec-109 `hospitality-read` path is routed to `bubbles.design` on spec 109 rather than solved here
+
+**Executed:** YES (2026-08-11, tree `<repo-root>`)
+**Command:** `grep -rniE 'guesthost' --include='*.go' internal/ cmd/ | grep -i 'corpus'` then `grep -rn 'spec 109\|hospitality-read' specs/108-corpus-grant-enforcement/spec.md`
+**Exit Code:** 1 (no grant) / 0 (routing recorded)
+
+```text
+=== GuestHost connector granted corpus:read anywhere? ===
+(none above = not granted)
+
+spec.md:122:| 7 | `POST /api/context-for` | `:109` | none in-repo — **external
+  GuestHost connector** | ... Per §18 decision 4 the connector credential does
+  **NOT** receive `corpus:read`; the correct destination is the spec-109 MCP
+  `hospitality-read` path, itself blocked on BUG-019-003. |
+spec.md:540:4. **Any MCP work.** That is spec 109 — see §12.1.
+spec.md:544:### 12.1 Downstream dependency note — spec 109 is NOT blocked
+spec.md:548:**One-way dependency added by §18 decision 4 (2026-07-29).** ... It
+  does mean `POST /api/context-for` (Tier A group 7) is gated with **no granted
+  external reader** until `hospitality-read` ships, which is itself blocked on
+  **BUG-019-003**. Coordination owner: `bubbles.design` on spec 109.
+spec.md:772:| The external GuestHost connector credential | **NO**, per decision
+  4 | Reads move to the spec-109 MCP `hospitality-read` path under its own
+  credential |
+```
+
+**Claim Source:** executed. Both halves are directly observable: zero code grants `corpus:read` to a GuestHost credential, and the accepted consequence plus the `bubbles.design`/spec-109 coordination owner are recorded in `spec.md` §12.1. No spec-109 artifact was edited by this pass.
+
+- [x] `dailyUserGrants` remains unchanged; no grant set is widened to avoid a caller break (§18 decision 2, permanent)
+
+**Executed:** YES (2026-08-11, tree `<repo-root>`)
+**Command:** `git status --porcelain -- internal/auth/browser_session_policy.go` + `grep -rn 'dailyUserGrants\s*=' --include='*.go' internal/` + `./smackerel.sh test unit --go --go-run '...Grants...' --verbose`
+**Exit Code:** 0
+
+```text
+=== dailyUserGrants definition ===
+internal/auth/browser_session_policy.go:54:var dailyUserGrants = []string{GrantAssistantTurn, GrantKnowledgeGraphRead}
+
+=== is browser_session_policy.go modified in the working tree? ===
+(no entry in `git status --porcelain` output — the file is byte-unchanged;
+ the modified-file list contains internal/auth/{bearer_store,issue,scopes}.go
+ and internal/auth/scopes_test.go, and NOT browser_session_policy.go)
+
+=== the guard test that would fail on a widened default ===
+--- PASS: TestCorpusSurfaceRegistrationDoesNotWidenDefaultGrants (0.00s)
+ok      github.com/smackerel/smackerel/cmd/core 0.435s
+ok      github.com/smackerel/smackerel/internal/auth    0.030s
+```
+
+**Claim Source:** executed. `dailyUserGrants` is still exactly `{assistant:turn, knowledge-graph:read}`, its defining file is byte-unchanged, and the registration guard that would fail on a widened default passes.
 - [ ] `TP-04-01` unit test passes — bridge scope claim derived from the principal with no silent default
+  - **UNCHECKED:** the "no silent default" half is design.md §10.10 **T3**, and T3 does not exist — `grep -rn 'ErrPrincipalGrantsUnrecorded\|ErrNoDelegableGrant' --include='*_test.go' .` returns zero hits, so no test exercises a derivation-failure mint.
 - [ ] `TP-04-02` integration test passes — Telegram corpus command under ENFORCE has an operator-actionable outcome
+  - **UNCHECKED:** integration tier not run by this pass; the concurrent run that did execute ended `INTEGRATION_EXIT=1` with `tests/integration [build failed]` (see the Consumer Impact Sweep item).
 - [ ] `TP-04-03` integration test passes — token rotation (not a flag flip) grants a daily user access
+  - **UNCHECKED:** integration tier not run by this pass; same build failure blocks the package.
 - [ ] `TP-04-04` integration test passes — extension outcome tracks its principal; no extension-specific grant
+  - **UNCHECKED:** integration tier not run by this pass; same build failure blocks the package.
 - [ ] `TP-04-05` e2e-api test passes — all six design.md §5 compatibility rows exercised with their recorded outcome
+  - **UNCHECKED:** `./smackerel.sh test e2e` deliberately not run — red on 5 unrelated pre-existing defects.
 - [ ] `TP-04-08` unit test passes — the minter's hardcoded scope list is gone and the minted claim equals the mapped principal's persisted grants
+  - **UNCHECKED:** only the first half is proven (literal scan, above). No test asserts the minted **claim** — `internal/telegram/per_user_token_test.go` never parses `scope` out of the PASETO, so the Consumer Impact Sweep's own recorded negative result ("no test asserts the minted scope claim today") still holds.
 - [ ] `TP-04-09` adversarial integration test passes — a principal **without** `corpus:read` gains **no** corpus access through Telegram, and the test fails if a minter-side list is reintroduced
-- [ ] `TP-04-10` unit test passes — rotating a principal holding `annotation:edit` to add `corpus:read` yields a token carrying **both**, so the `resolveRotationScopes` replace-not-merge semantic cannot silently revoke Telegram annotation capability once derivation is live (SCN-108-F02)
+  - **UNCHECKED:** this is design.md §10.10 **T4**, the decisive layer. No such test exists in the tree (`tests/integration/corpus_grant_observe_test.go` carries no Telegram/annotation differential), and §10.10 additionally requires an adversarial **RED** demonstration against a tree patched back to the literal — which has not been produced.
+- [x] `TP-04-10` unit test passes — rotating a principal holding `annotation:edit` to add `corpus:read` yields a token carrying **both**, so the `resolveRotationScopes` replace-not-merge semantic cannot silently revoke Telegram annotation capability once derivation is live (SCN-108-F02)
+
+**Executed:** YES (2026-08-11, tree `<repo-root>`)
+**Command:** `./smackerel.sh test unit --go --go-run 'ResolveRotationScopes' --verbose`
+**Exit Code:** 0
+
+```text
+--- PASS: TestResolveRotationScopes_RefusesPreserveWithoutReader (0.00s)
+--- PASS: TestResolveRotationScopes_DemotesOnEmptySentinel (0.00s)
+--- PASS: TestResolveRotationScopes_RejectsEmptySentinelMixedWithNonEmpty (0.00s)
+--- PASS: TestResolveRotationScopes_AcceptsExplicitReplacement (0.00s)
+--- PASS: TestResolveRotationScopes_RejectsInvalidExplicitReplacement (0.00s)
+--- PASS: TestResolveRotationScopes_PreservePathParsesPriorToken (0.00s)
+--- PASS: TestResolveRotationScopes_PreservePathHandlesLegacyPriorToken (0.00s)
+--- PASS: TestResolveRotationScopes_PreservesFromRecordedSet (0.00s)
+--- PASS: TestResolveRotationScopes_RefusesWhenRecordedGrantsAreUnknown (0.00s)
+--- PASS: TestResolveRotationScopes_PreservesRecordedAsNone (0.00s)
+--- PASS: TestResolveRotationScopes_RefusesWhenPrincipalNotProvisioned (0.00s)
+--- PASS: TestResolveRotationScopes_FailsClosedOnReaderError (0.00s)
+--- PASS: TestResolveRotationScopes_NonPreserveModesNeverReadTheRecord (0.00s)
+ok      github.com/smackerel/smackerel/cmd/core 0.652s
+```
+
+`TestResolveRotationScopes_PreservesFromRecordedSet` seeds the recorded set `{corpus:read, annotation:edit}` and asserts preserve-mode returns it **verbatim** — the SCN-108-F02 hazard (silently dropping `annotation:edit`) fails that assertion. `RefusesWhenRecordedGrantsAreUnknown` and `PreservesRecordedAsNone` are a deliberate adversarial pair: both inputs carry zero scopes, so an implementation branching on `len(Scopes)==0` instead of on `Recorded` fails one of the two whichever way it guesses.
+
+**Claim Source:** executed. Note the mechanism is the §10.9 **recorded-set** preserve path, not an `--add-scope` primitive; F-108-UX-ROTATE-ADD-01 remains open by design.
 - [ ] Consumer Impact Sweep completed for the Telegram minter interface change across the minter, `bearerForChat`/`setBearerHeader`, the 13 bridge **API client** call sites, the exported test seam, the production wiring and dev/test Bot constructors, the 9 minter-construction fixtures, the operator CLI grant path, the scope registry, and the docs: zero stale first-party references remain, and each recorded negative result — no test asserts the minted scope claim today, `auth_tokens` has no scopes column, and no redirect/breadcrumb/navigation/deep link/generated client is affected — is **re-verified against the code rather than inherited from this plan**
+  - **UNCHECKED — the sweep is INCOMPLETE, and a stale consumer is currently breaking the build.** `MintForChat` gained a leading `ctx context.Context` parameter, but **6 call sites** in `tests/integration/` were never updated. `./smackerel.sh check` does **not** catch this (it does not compile test packages), which is why it went unnoticed.
+
+**Executed:** YES (2026-08-11, tree `<repo-root>`)
+**Command:** `grep -n 'func (m \*PerUserTokenMinter) MintForChat' internal/telegram/per_user_token.go` then `grep -rn 'MintForChat(' tests/integration/`
+**Exit Code:** 0
+
+```text
+=== current signature ===
+211:func (m *PerUserTokenMinter) MintForChat(ctx context.Context, chatID int64) (MintedTelegramToken, error)
+
+=== stale call sites in tests/integration (still 1-arg) ===
+tests/integration/auth_chaos_scope03_test.go:677:  tok, err := minter.MintForChat(chatID)
+tests/integration/auth_chaos_scope03_test.go:707:  _, err := minter.MintForChat(chatID)
+tests/integration/auth_chaos_scope03_test.go:1068: tok, err := minter.MintForChat(chatID)
+tests/integration/auth_telegram_e2e_test.go:125:   tok, err := minter.MintForChat(12345)
+tests/integration/auth_telegram_e2e_test.go:168:   _, err := minter.MintForChat(99999)
+tests/integration/auth_telegram_e2e_test.go:218:   tok, err := minter.MintForChat(12345)
+
+=== observed consequence in the completed integration run ===
+tests/integration/auth_chaos_scope03_test.go:677:35: not enough arguments in call to minter.MintForChat
+        have (number)
+        want (context.Context, int64)
+FAIL    github.com/smackerel/smackerel/tests/integration [build failed]
+INTEGRATION_EXIT=1
+```
+
+**Claim Source:** executed. Second-order consequence, recorded because it is easy to miss: `tests/integration/corpus_grant_observe_test.go` lives in that same failed-to-build package, so the **Scope 02/03 OBSERVE integration evidence did not execute in that run either**. Routing: test-code repair is `bubbles.test`-owned, but this pass is constrained to `scopes.md`/`state.json`, so the fix is routed rather than applied.
 - [ ] Every "unknown" row in the design.md §5 matrix is now a measured row; the OBSERVE-window go/no-go query returns an empty (or explicitly-accepted) denial set
+  - **UNCHECKED:** requires a real OBSERVE window against a running deployment; none was run by this pass.
 - [ ] **Ratified coverage bar (§18 decision 1, strengthening item 7)** satisfied before the flip is authorised: (a) ≥ 14 consecutive OBSERVE days with the stage resolved from SST at process start; (b) per-principal × per-route-group coverage across all **sixteen** groups, each cell closed by observed traffic **or** a recorded operator `idle-by-design` attestation naming a reason and the principal — including all eight silent Tier B groups; (c) zero would-deny for any principal the operator intends to keep, with intentionally-denied principals recorded **before** the flip; (d) the window reset to day zero on any new principal enrollment or new client surface. No cell is silently unobserved; `OBSERVE-CLEAN` is not asserted otherwise
+  - **UNCHECKED:** the ≥14-day window has not been run, and criterion (b) is presently satisfiable only by operator attestation (`F-108-COVERAGE-LABEL-01` unresolved). Neither exists yet.
 - [ ] **Ratified proactive rotation (item 9)** complete: every principal whose grants are unknowable has been rotated with a deliberately-issued grant set **before** Scope 05 flips the owning-train flag, so no `unknown` grant remains in the pre-flip roster. Recorded as an operator action, not inferred from telemetry
+  - **UNCHECKED:** operator action against a live deployment; no rotation was performed or recorded by this pass.
 - [ ] `TP-04-06` canary integration test passes — shared session/token bootstrap fixtures keep the ungranted daily-user negative case intact
+  - **UNCHECKED:** integration tier not run by this pass; the `tests/integration` package does not currently build.
 - [ ] `TP-04-07` regression e2e-api test passes — grant derivation, the adversarial negative case, the token-rotation grant path, and extension grant inheritance are permanently protected
+  - **UNCHECKED:** `./smackerel.sh test e2e` deliberately not run (red on 5 unrelated pre-existing defects), and no such regression test exists in the tree yet.
 - [ ] Independent canary suite for shared fixture/bootstrap contracts passes before broad suite reruns
+  - **UNCHECKED:** integration tier not run by this pass.
 - [ ] Rollback or restore path for shared infrastructure changes is documented and verified
+  - **UNCHECKED:** migration 063 documents its rollback (`ALTER TABLE auth_tokens DROP COLUMN IF EXISTS granted_scopes;`) but it is documented **only** — no rollback was executed or verified against a database.
 - [ ] Change Boundary is respected and zero excluded file families were changed
+  - **UNCHECKED — an excluded family WAS changed.** The Change Boundary excludes `cmd/core`, yet the §10.9 operator-CLI work modified `cmd/core/cmd_auth.go` (GRANTS column, `auth rotate` NULL refusal) and `cmd/core/wiring.go`. That may be a legitimate consequence of the §10 design landing after this boundary was written, but it is a deviation from the boundary as written and is recorded rather than silently absorbed. Routing: boundary reconciliation is `bubbles.plan`/`bubbles.design`-owned.
 - [ ] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior — **Phase:** regression (`TP-04-07`, `./smackerel.sh test e2e`)
+  - **UNCHECKED:** e2e deliberately not run, and no scenario-specific regression test for SCN-108-E01/E02/E03/E04 exists in the tree.
 - [ ] Broader E2E regression suite passes — **Phase:** regression (`./smackerel.sh test e2e` exits 0; no previously-passing test regresses)
+  - **UNCHECKED:** e2e deliberately not run — red on 5 unrelated pre-existing defects.
 - [ ] Live-category tests emit telemetry tagged `env=test*` only; no write to prod monitoring (R-108-O6, G115)
-- [ ] Build Quality Gate: `./smackerel.sh check`, `./smackerel.sh lint`, `./smackerel.sh format --check` clean with zero warnings; no TODO/stub/default introduced
+  - **UNCHECKED:** no live-category run was performed by this pass, so there is nothing to inspect for telemetry tagging.
+- [x] Build Quality Gate: `./smackerel.sh check`, `./smackerel.sh lint`, `./smackerel.sh format --check` clean with zero warnings; no TODO/stub/default introduced
+
+**Executed:** YES (2026-08-11, tree `<repo-root>`)
+**Command:** `./smackerel.sh check` ; `./smackerel.sh lint` ; `./smackerel.sh format --check` ; `grep -rnE 'TODO|FIXME|HACK|XXX|unimplemented|panic\("not' <scope-04 surface>`
+**Exit Code:** 0 / 0 / 0 / 1 (grep rc=1 == zero matches)
+
+```text
+CHECK_EXIT=0
+config-validate: <repo-root>/config/generated/dev.env.tmp.2393088 OK
+Config is in sync with SST
+env_file drift guard: OK
+scenario-lint: scanning config/prompt_contracts (glob: *.yaml)
+scenarios registered: 17, rejected: 0
+scenario-lint: OK
+---
+FORMAT_EXIT=0
+78 files already formatted
+---
+LINT_EXIT=0
+  OK: Extension versions match (1.0.0)
+Web validation passed
+---
+=== TODO/stub/default scan on Scope 04 surface ===
+(internal/auth/principal_grants.go, internal/auth/bridge_delegation.go,
+ internal/telegram/per_user_token.go, internal/db/migrations/063_*.sql)
+  scan exit=1 (1 = zero matches = clean)
+```
+
+**Claim Source:** executed. Recorded limitation, because it is exactly what let the stale call sites through: `./smackerel.sh check` compiles the **non-test** build only. Its exit 0 does **not** imply the test packages compile — `tests/integration` does not (see the Consumer Impact Sweep item).
 
 ---
 

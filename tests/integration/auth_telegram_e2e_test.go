@@ -100,19 +100,101 @@ func productionTelegramBridgeDeps(
 
 	bot = telegram.NewBotForTest("production", mapping)
 
-	var err error
+	// Spec 108: the mint DERIVES its scope claim from the mapped
+	// principal's persisted grants, so the minter reads through the
+	// real *auth.BearerStore — the same reader production wires. A
+	// fake would prove the bearer verifies while bypassing the
+	// derivation this end-to-end test exists to cover.
+	bearerStore, err := auth.NewBearerStore(pool)
+	if err != nil {
+		t.Fatalf("NewBearerStore: %v", err)
+	}
+	seedTelegramBridgePrincipals(t, bearerStore, mapping, priv, kid, deps.AuthConfig.AtRestHashingKey)
+
 	minter, err = telegram.NewPerUserTokenMinter(telegram.PerUserTokenMinterOptions{
-		Bot:        bot,
-		SigningKey: priv,
-		KeyID:      kid,
-		Issuer:     "smackerel",
-		TTL:        5 * time.Minute,
-		Now:        time.Now,
+		Bot:             bot,
+		PrincipalGrants: bearerStore,
+		SigningKey:      priv,
+		KeyID:           kid,
+		Issuer:          "smackerel",
+		TTL:             5 * time.Minute,
+		Now:             time.Now,
 	})
 	if err != nil {
 		t.Fatalf("NewPerUserTokenMinter: %v", err)
 	}
 	return deps, bot, minter, pool
+}
+
+// seedTelegramBridgePrincipals gives every mapped principal a standing
+// auth_tokens row whose granted_scopes records the full Telegram bridge
+// delegation ceiling, so BearerStore.GrantsForPrincipal answers with a
+// delegable set and the mint proceeds.
+//
+// annotation:edit is load-bearing here, not incidental: the
+// body-smuggling subtest posts to a route behind
+// RequireScope("annotation:edit"), so a principal lacking it would be
+// refused 403 BEFORE the body defense ran — the 400 assertion would
+// then pass for the wrong reason. Scopes come from
+// auth.TelegramBridgeDelegableGrants rather than literals so this
+// fixture cannot drift from the ceiling it mirrors.
+func seedTelegramBridgePrincipals(
+	t *testing.T,
+	store *auth.BearerStore,
+	mapping map[int64]string,
+	signingKey, keyID, hashKey string,
+) {
+	t.Helper()
+	ctx := context.Background()
+	seeded := make(map[string]struct{}, len(mapping))
+	for _, userID := range mapping {
+		if userID == "" {
+			continue
+		}
+		if _, dup := seeded[userID]; dup {
+			continue // several chats may map to one principal
+		}
+		seeded[userID] = struct{}{}
+
+		if err := store.Enroll(ctx, auth.EnrollUserParams{
+			UserID:     userID,
+			EnrolledBy: "telegram-bridge-e2e",
+			Notes:      "spec 044 Scope 03 telegram bridge fixture",
+		}); err != nil {
+			t.Fatalf("Enroll(%q): %v", userID, err)
+		}
+		tokenID := "tg-bridge-standing-" + userID
+		issued, err := auth.IssueToken(auth.IssueOptions{
+			UserID:     userID,
+			TokenID:    tokenID,
+			SigningKey: signingKey,
+			KeyID:      keyID,
+			TTL:        time.Hour,
+			Issuer:     "smackerel",
+			Now:        time.Now,
+			Scopes:     auth.TelegramBridgeDelegableGrants,
+		})
+		if err != nil {
+			t.Fatalf("IssueToken(%q): %v", tokenID, err)
+		}
+		hashed, err := auth.HashToken(issued.WireToken, hashKey)
+		if err != nil {
+			t.Fatalf("HashToken(%q): %v", tokenID, err)
+		}
+		if err := store.PersistToken(ctx, auth.PersistTokenParams{
+			TokenID:       tokenID,
+			UserID:        userID,
+			KeyID:         keyID,
+			IssuedAt:      issued.IssuedAt,
+			ExpiresAt:     issued.ExpiresAt,
+			HashedToken:   hashed,
+			IssuedBy:      "telegram-bridge-e2e",
+			IssuedSource:  "admin_api",
+			GrantedScopes: auth.TelegramBridgeDelegableGrants,
+		}); err != nil {
+			t.Fatalf("PersistToken(%q): %v", tokenID, err)
+		}
+	}
 }
 
 // TestTelegramBridge_MintsPerUserBearer_AdmitsRequest proves the happy
@@ -122,7 +204,7 @@ func TestTelegramBridge_MintsPerUserBearer_AdmitsRequest(t *testing.T) {
 		12345: "tg-user-alice",
 	})
 
-	tok, err := minter.MintForChat(12345)
+	tok, err := minter.MintForChat(context.Background(), 12345)
 	if err != nil {
 		t.Fatalf("MintForChat: %v", err)
 	}
@@ -165,7 +247,10 @@ func TestTelegramBridge_UnmappedChat_MinterRefusesAndCallerCannotProceed(t *test
 		12345: "tg-user-alice",
 	})
 
-	_, err := minter.MintForChat(99999)
+	// tg-user-alice IS fully granted by the fixture, so a refusal here
+	// can only come from the chat→user mapping — never from an absent
+	// grant. That keeps the negative assertion pointed at the mapping.
+	_, err := minter.MintForChat(context.Background(), 99999)
 	if !errors.Is(err, telegram.ErrNoUserMappingForChat) {
 		t.Fatalf("MintForChat err=%v want %v", err, telegram.ErrNoUserMappingForChat)
 	}
@@ -215,7 +300,7 @@ func TestTelegramBridge_BodyClaimedActorRejected(t *testing.T) {
 		t.Fatalf("seed artifacts row: %v", err)
 	}
 
-	tok, err := minter.MintForChat(12345)
+	tok, err := minter.MintForChat(ctx, 12345)
 	if err != nil {
 		t.Fatalf("MintForChat: %v", err)
 	}

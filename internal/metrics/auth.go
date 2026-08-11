@@ -25,9 +25,19 @@
 //     deprecation pathway
 //   - `AuthFailure` — incremented alongside every middleware 401
 //     response
+//   - `AuthCorpusGrantWouldDeny` + `AuthCorpusGrantAllowed` —
+//     recorded from `internal/api::CorpusGrantGate.Observe`
+//     (spec 108 Scope 02) on every corpus route group
+//   - `AuthCorpusGrantEnforcementMode` — set once from the
+//     `cmd/core` startup resolution point
 package metrics
 
-import "github.com/prometheus/client_golang/prometheus"
+import (
+	"errors"
+	"fmt"
+
+	"github.com/prometheus/client_golang/prometheus"
+)
 
 // AuthIssuance counts spec 044 token mints by source. The label is
 // closed-set so cardinality is bounded; new sources MUST extend the
@@ -182,6 +192,181 @@ var AuthScopeCheckBypassed = prometheus.NewCounterVec(
 	[]string{"source"},
 )
 
+// ── Spec 108 Scope 02 — corpus-grant observe-stage telemetry ────────────────
+//
+// These three series extend the `smackerel_auth_*` family declared above; they
+// are deliberately NOT a parallel family and they deliberately do NOT reuse
+// `AuthScopeRejected` for the observe signal (R-108-O2). `AuthScopeRejected`
+// keeps its spec-060 meaning — a real 403 emitted under ENFORCE — so an
+// operator can tell an actual denial apart from a counterfactual one.
+
+// CorpusRouteGroup is the closed-set `route_group` label type for the
+// corpus-grant series. It is a named type so a raw request path cannot reach a
+// label by accident: every emitter takes a CorpusRouteGroup, and the recorders
+// below re-validate it against the canonical set because a Go string
+// conversion can still forge one.
+type CorpusRouteGroup string
+
+// The closed SIXTEEN-value `route_group` set (spec.md §4.2). Tier A (1–8) is
+// raw corpus retrieval; Tier B (9–16) is corpus-derived Phase-5 intelligence,
+// brought in scope by spec.md §18 decision 5. The tier split is documentation,
+// not a difference in authority — both carry `corpus:read`.
+//
+// Raw request paths are NEVER label values (R-108-O3/O4): `/api/artifact/{id}`
+// alone would be per-artifact and therefore unbounded.
+const (
+	// Tier A — raw corpus retrieval.
+	CorpusRouteGroupSearch         CorpusRouteGroup = "search"
+	CorpusRouteGroupDigest         CorpusRouteGroup = "digest"
+	CorpusRouteGroupRecent         CorpusRouteGroup = "recent"
+	CorpusRouteGroupArtifactDetail CorpusRouteGroup = "artifact_detail"
+	CorpusRouteGroupArtifactDomain CorpusRouteGroup = "artifact_domain"
+	CorpusRouteGroupExport         CorpusRouteGroup = "export"
+	CorpusRouteGroupContextFor     CorpusRouteGroup = "context_for"
+	CorpusRouteGroupKnowledge      CorpusRouteGroup = "knowledge"
+
+	// Tier B — corpus-derived Phase-5 intelligence.
+	CorpusRouteGroupExpertise        CorpusRouteGroup = "expertise"
+	CorpusRouteGroupLearningPaths    CorpusRouteGroup = "learning_paths"
+	CorpusRouteGroupSubscriptions    CorpusRouteGroup = "subscriptions"
+	CorpusRouteGroupSerendipity      CorpusRouteGroup = "serendipity"
+	CorpusRouteGroupContentFuel      CorpusRouteGroup = "content_fuel"
+	CorpusRouteGroupQuickReferences  CorpusRouteGroup = "quick_references"
+	CorpusRouteGroupMonthlyReport    CorpusRouteGroup = "monthly_report"
+	CorpusRouteGroupSeasonalPatterns CorpusRouteGroup = "seasonal_patterns"
+)
+
+// corpusRouteGroups is the canonical ordered set, Tier A then Tier B.
+var corpusRouteGroups = []CorpusRouteGroup{
+	CorpusRouteGroupSearch,
+	CorpusRouteGroupDigest,
+	CorpusRouteGroupRecent,
+	CorpusRouteGroupArtifactDetail,
+	CorpusRouteGroupArtifactDomain,
+	CorpusRouteGroupExport,
+	CorpusRouteGroupContextFor,
+	CorpusRouteGroupKnowledge,
+	CorpusRouteGroupExpertise,
+	CorpusRouteGroupLearningPaths,
+	CorpusRouteGroupSubscriptions,
+	CorpusRouteGroupSerendipity,
+	CorpusRouteGroupContentFuel,
+	CorpusRouteGroupQuickReferences,
+	CorpusRouteGroupMonthlyReport,
+	CorpusRouteGroupSeasonalPatterns,
+}
+
+// corpusRouteGroupSet is the membership index for ValidateCorpusRouteGroup.
+var corpusRouteGroupSet = func() map[CorpusRouteGroup]struct{} {
+	set := make(map[CorpusRouteGroup]struct{}, len(corpusRouteGroups))
+	for _, g := range corpusRouteGroups {
+		set[g] = struct{}{}
+	}
+	return set
+}()
+
+// ErrUnknownCorpusRouteGroup is returned when a value outside the closed
+// sixteen-value set reaches a corpus-grant emitter. Callers MUST treat it as a
+// wiring defect: nothing is emitted, so an unbounded label (a raw path, a
+// caller-supplied string) can never become a series.
+var ErrUnknownCorpusRouteGroup = errors.New("metrics: route_group is not one of the sixteen closed-set corpus route groups")
+
+// CorpusRouteGroups returns a copy of the canonical closed set in Tier A then
+// Tier B order. Callers that mount the gate iterate this rather than
+// re-declaring the list, so a seventeenth group cannot be added in one place
+// and forgotten in another.
+func CorpusRouteGroups() []CorpusRouteGroup {
+	out := make([]CorpusRouteGroup, len(corpusRouteGroups))
+	copy(out, corpusRouteGroups)
+	return out
+}
+
+// ValidateCorpusRouteGroup reports whether group is inside the closed set.
+// This is the single membership authority; no emitter may bypass it.
+func ValidateCorpusRouteGroup(group CorpusRouteGroup) error {
+	if _, ok := corpusRouteGroupSet[group]; !ok {
+		return fmt.Errorf("%w: %q", ErrUnknownCorpusRouteGroup, string(group))
+	}
+	return nil
+}
+
+// AuthCorpusGrantWouldDeny counts requests that WOULD have been denied under
+// ENFORCE but were allowed under OBSERVE (design.md §4). The `user_id` label
+// follows the existing `AuthScopeRejected` precedent above and is what makes
+// UC-108-001 answerable:
+//
+//	sum by (user_id, route_group) (increase(smackerel_auth_corpus_grant_would_deny_total[7d]))
+//
+// Cardinality: `route_group` is the closed sixteen-value set, `user_id` is
+// bounded by the operator-controlled principal count, and `session_source` is
+// the existing closed session-source enum.
+var AuthCorpusGrantWouldDeny = prometheus.NewCounterVec(
+	prometheus.CounterOpts{
+		Name: "smackerel_auth_corpus_grant_would_deny_total",
+		Help: "Corpus reads that would be denied under ENFORCE but were allowed under OBSERVE, by route group, principal, and session source",
+	},
+	[]string{"route_group", "user_id", "session_source"},
+)
+
+// AuthCorpusGrantAllowed counts requests that carried `corpus:read`. It is the
+// denominator for the would-deny numerator. It carries no `user_id` — that is
+// a deliberate design.md §4 choice and is exactly why the per-principal
+// coverage bar of §18 decision 1(b) cannot be expressed by these three series
+// (F-108-COVERAGE-LABEL-01, routed to bubbles.design). No fourth metric is
+// invented here to paper over it.
+var AuthCorpusGrantAllowed = prometheus.NewCounterVec(
+	prometheus.CounterOpts{
+		Name: "smackerel_auth_corpus_grant_allowed_total",
+		Help: "Corpus reads that carried the corpus:read grant, by route group and session source",
+	},
+	[]string{"route_group", "session_source"},
+)
+
+// AuthCorpusGrantEnforcementMode reports the resolved stage: 0 = OBSERVE,
+// 1 = ENFORCE. A dashboard reads the stage from here instead of reading config.
+//
+// An unset gauge reads 0, which is indistinguishable from OBSERVE. That is why
+// SetCorpusGrantEnforcementMode is called from the startup resolution point in
+// `cmd/core`, immediately after the fail-loud resolve and before any listener
+// binds: a process that could not resolve the stage never starts, so a
+// serving process has always set this explicitly.
+var AuthCorpusGrantEnforcementMode = prometheus.NewGauge(
+	prometheus.GaugeOpts{
+		Name: "smackerel_auth_corpus_grant_enforcement_mode",
+		Help: "Resolved corpus-grant enforcement stage (0 = OBSERVE, 1 = ENFORCE)",
+	},
+)
+
+// RecordCorpusGrantWouldDeny increments the would-deny counter. It emits
+// nothing and returns ErrUnknownCorpusRouteGroup when group is outside the
+// closed set, so an unbounded label value cannot create a series.
+func RecordCorpusGrantWouldDeny(group CorpusRouteGroup, userID, sessionSource string) error {
+	if err := ValidateCorpusRouteGroup(group); err != nil {
+		return err
+	}
+	AuthCorpusGrantWouldDeny.WithLabelValues(string(group), userID, sessionSource).Inc()
+	return nil
+}
+
+// RecordCorpusGrantAllowed increments the allowed counter under the same
+// closed-set guarantee as RecordCorpusGrantWouldDeny.
+func RecordCorpusGrantAllowed(group CorpusRouteGroup, sessionSource string) error {
+	if err := ValidateCorpusRouteGroup(group); err != nil {
+		return err
+	}
+	AuthCorpusGrantAllowed.WithLabelValues(string(group), sessionSource).Inc()
+	return nil
+}
+
+// SetCorpusGrantEnforcementMode publishes the resolved stage gauge.
+func SetCorpusGrantEnforcementMode(enforce bool) {
+	if enforce {
+		AuthCorpusGrantEnforcementMode.Set(1)
+		return
+	}
+	AuthCorpusGrantEnforcementMode.Set(0)
+}
+
 // NormalizeRevocationReason buckets free-text revocation reasons into
 // a closed-set label value so `AuthRevocation` stays bounded. Unknown
 // reasons land in `"other"`. Empty reasons land in `"unspecified"`.
@@ -245,5 +430,8 @@ func init() {
 		AuthFailure,
 		AuthScopeRejected,
 		AuthScopeCheckBypassed,
+		AuthCorpusGrantWouldDeny,
+		AuthCorpusGrantAllowed,
+		AuthCorpusGrantEnforcementMode,
 	)
 }

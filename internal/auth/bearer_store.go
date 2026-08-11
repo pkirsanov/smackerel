@@ -125,9 +125,28 @@ type PersistTokenParams struct {
 	IssuedBy           string
 	IssuedSource       string
 	RotatedFromTokenID string
+
+	// GrantedScopes is the scope set carried in the token's PASETO
+	// `scope` claim, recorded so a principal's grants are readable
+	// server-side without the wire token (spec 108 design.md §10).
+	// It MUST be the same value the caller passed to IssueToken.
+	//
+	// Nil and empty both persist as '{}' ("recorded as none"), never
+	// as SQL NULL: NULL means "issued before recording existed" and is
+	// produced by migration 063 alone. See PersistToken.
+	GrantedScopes []string
 }
 
 // PersistToken inserts a new auth_tokens row.
+//
+// granted_scopes is written on every insert, so the write path never
+// produces SQL NULL — NULL is reserved for rows that predate migration
+// 063 and means "unknown", a strictly different claim from '{}' ("recorded
+// as none"). pgx encodes a nil []string as NULL and a non-nil empty slice
+// as '{}', so the nil case is normalized here rather than left to the
+// driver. This is not a fallback value: an issuance with no scopes mints a
+// token with no `scope` claim, and '{}' is the faithful record of exactly
+// that (spec 108 design.md §10.4).
 func (s *BearerStore) PersistToken(ctx context.Context, p PersistTokenParams) error {
 	if p.TokenID == "" || p.UserID == "" || p.KeyID == "" || p.HashedToken == "" || p.IssuedBy == "" || p.IssuedSource == "" {
 		return errors.New("auth: PersistToken requires TokenID, UserID, KeyID, HashedToken, IssuedBy, IssuedSource")
@@ -146,14 +165,20 @@ func (s *BearerStore) PersistToken(ctx context.Context, p PersistTokenParams) er
 		rotatedFrom = nil
 	}
 
+	grantedScopes := p.GrantedScopes
+	if grantedScopes == nil {
+		grantedScopes = []string{}
+	}
+
 	_, err := s.pool.Exec(ctx, `
         INSERT INTO auth_tokens (
             token_id, user_id, key_id, issued_at, expires_at,
-            hashed_token, issued_by, issued_source, rotated_from_token_id
+            hashed_token, issued_by, issued_source, rotated_from_token_id,
+            granted_scopes
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
     `, p.TokenID, p.UserID, p.KeyID, p.IssuedAt, p.ExpiresAt,
-		p.HashedToken, p.IssuedBy, p.IssuedSource, rotatedFrom)
+		p.HashedToken, p.IssuedBy, p.IssuedSource, rotatedFrom, grantedScopes)
 	if err != nil {
 		return fmt.Errorf("auth: persist token %q: %w", p.TokenID, err)
 	}

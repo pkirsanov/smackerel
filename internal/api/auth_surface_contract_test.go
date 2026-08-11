@@ -112,7 +112,34 @@ func TestSurfaceInventoryRoleGrantMatrixAndGlobalCorpusGateUseUnifiedAuthenticat
 		}
 	})
 
-	// 3. Authority flows only from the unified authenticator's verified session,
+	// 3. Spec 108 SCOPE-01 — the `corpus` scope surface is registered so the
+	//    grant this contract already gates on is actually MINTABLE. Before
+	//    SCOPE-01 the gate above was unreachable in practice: `corpus:read`
+	//    could not be put on a token without the --allow-unknown-surface
+	//    escape hatch, so no principal could ever hold it. Registration closes
+	//    that gap and must NOT change who holds the grant — the daily default
+	//    set stays exactly as asserted in sub-test 1.
+	t.Run("corpus_scope_surface_registered_without_widening_defaults", func(t *testing.T) {
+		if !auth.IsRegisteredScopeSurface("corpus") {
+			t.Fatalf("scope surface 'corpus' is not registered; auth.GrantGlobalCorpusRead (%q) cannot be minted (spec 108 SCOPE-01, F-108-SURFACE-01)", auth.GrantGlobalCorpusRead)
+		}
+		if err := auth.ValidateScopeName(auth.GrantGlobalCorpusRead); err != nil {
+			t.Fatalf("ValidateScopeName(%q): %v", auth.GrantGlobalCorpusRead, err)
+		}
+		if s := auth.ExtractScopeSurface(auth.GrantGlobalCorpusRead); s != "corpus" {
+			t.Fatalf("surface of %q = %q, want \"corpus\"", auth.GrantGlobalCorpusRead, s)
+		}
+		// Registration makes the grant grantable, never granted: the ungranted
+		// daily user asserted in sub-test 2 must still be denied.
+		if auth.GateGlobalCorpusRead(dailyUser).Allowed {
+			t.Fatalf("registering the corpus surface must NOT widen the daily default grant set")
+		}
+		if d := auth.AuthorizeGrant(dailyUser, auth.GrantGlobalCorpusRead); d.Allowed {
+			t.Fatalf("ungranted daily user must not hold %s after surface registration", auth.GrantGlobalCorpusRead)
+		}
+	})
+
+	// 4. Authority flows only from the unified authenticator's verified session,
 	//    identically across the legacy, /api, and /v1 surfaces.
 	t.Run("authority_flows_from_unified_authenticator_across_surfaces", func(t *testing.T) {
 		verifier := surfaceFakeVerifier{tokens: map[string]auth.VerifiedToken{
@@ -142,7 +169,7 @@ func TestSurfaceInventoryRoleGrantMatrixAndGlobalCorpusGateUseUnifiedAuthenticat
 		}
 	})
 
-	// 4. Reject bypass helpers: a client-supplied role header confers no
+	// 5. Reject bypass helpers: a client-supplied role header confers no
 	//    authority, and a request with no valid token can never inject a role —
 	//    it is rejected 401 before any authorization check.
 	t.Run("reject_client_supplied_role_and_unverified_session", func(t *testing.T) {

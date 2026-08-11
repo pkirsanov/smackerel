@@ -1,0 +1,160 @@
+{
+  "bugId": "BUG-064-003",
+  "title": "TestOpenKnowledgeRouting_FallbackToOpenKnowledge fails: a fixed 30s deadline covers 79 sequential cold-start embed calls in agent.NewRouter",
+  "spec": "specs/064-open-ended-knowledge-agent",
+  "severity": "S2",
+  "status": "in_progress",
+  "workflowMode": "bugfix-fastlane",
+  "releaseTrain": "mvp",
+  "owner": "bubbles.bug",
+  "discoveredBy": "agent session (integration lane run), operator-confirmed",
+  "discoveredAt": "2026-08-11",
+  "lastUpdatedAt": "2026-08-11",
+  "certifiedAt": null,
+  "nextRequiredOwner": "bubbles.validate",
+  "nextRequiredOwnerReason": "Fix landed and is verified at the integration and unit tiers; 10 of 15 DoD items are checked with inline executed evidence. Certification is validate-owned: this packet was NOT self-promoted, scope-01 was NOT marked Done, and certification.* was NOT written. Five items remain unchecked with inline reasons (T2 integration-tier branch, pre-fix RED phase, the composite T1-T4 tick, the build quality gate, and the open owner decision), and report.md is stale with respect to scopes.md.",
+  "execution": {
+    "activeAgent": "bubbles.test",
+    "currentPhase": "test",
+    "completedPhases": [
+      "discovery",
+      "documentation",
+      "analysis",
+      "implement",
+      "test"
+    ],
+    "completedScopes": [],
+    "executionModel": "direct-authorized-runner",
+    "dodProgress": { "total": 15, "checked": 10, "unchecked": 5 },
+    "evidenceLogs": [
+      { "lane": "integration", "command": "./smackerel.sh test integration", "log": "~/s064-integration.log", "lines": 8218, "exitMarker": "INTEGRATION_EXIT=0 (line 8218)", "failLines": 0, "keyEvidence": "~/s064-integration.log:3552,3554,3556,3558,3560,3561-3564,3594,7925,8028,8029,8218" },
+      { "lane": "unit", "command": "./smackerel.sh test unit --go --go-run 'BUG064003|RouterWarmup|Warmup' --verbose", "log": "~/s064-unit.log", "lines": 564, "exitMarker": "[go-unit] go test ./... finished OK (line 564); NO UNIT_EXIT= marker is present in this log", "failLines": 0, "keyEvidence": "~/s064-unit.log:51,53,73-126,128,564" },
+      { "lane": "guard", "command": "bash .github/bubbles/scripts/regression-quality-guard.sh [--bugfix] <2 regression files>", "log": "executed live this session", "exitMarker": "0 (both modes)", "failLines": 0, "keyEvidence": "0 violations, 0 warnings, 2 files with adversarial signals" }
+    ],
+    "uncheckedDodItems": [
+      "T2 integration: unready embedder produces an explicit readiness failure - the green lane never exercised the branch at the integration tier the row declares; proven at the unit tier only (TestBUG064003_UnreadyEmbedderReportsReadinessNotRouting).",
+      "Pre-fix state: T3 and T4 FAIL against the unmodified tree - no RED-phase log exists for these guards.",
+      "Post-fix state: T1-T4 PASS - 3 of 4 proven; blocked solely on T2.",
+      "Build Quality Gate - check/lint/format/artifact-lint were not executed against this tree state, and report.md is not aligned with scopes.md.",
+      "Owner decision for design.md section 5 question 1 - still an open question with no recorded answer."
+    ],
+    "note": "Two sessions are recorded here. Session 1 (bubbles.bug) was scoped by the operator to artifacts + root cause with an explicit instruction not to implement a fix. Session 2 (this one, bubbles.test) recorded evidence for the fix that has since landed in the working tree, reading the operator's preserved logs rather than re-running the ~25 minute integration lane. This session wrote only scopes.md, bug.md and this file's execution history; it did not write certification.*, did not mark scope-01 Done, and did not change the top-level status. design.md and scopes.md were authored directly in session 1 rather than via bubbles.design / bubbles.plan, and remain drafts subject to their owners' review."
+  },
+  "certification": {
+    "status": "in_progress",
+    "certifiedAt": null,
+    "certifiedBy": null,
+    "evidenceRef": "report.md",
+    "lockdownState": { "round": 0, "lastCleanRound": 0 },
+    "scopeProgress": { "total": 1, "done": 0, "inProgress": 0, "notStarted": 1, "blocked": 0 },
+    "certifiedCompletedPhases": [],
+    "gatesPassed": [],
+    "liveEvidence": null
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "reproduction": {
+    "headAtReproduction": "3af96a02",
+    "reproducedRuns": 2,
+    "reproducedOf": 2,
+    "runs": [
+      {
+        "id": "A",
+        "invocation": "./smackerel.sh test integration",
+        "failurePoint": "recipe_search intent_examples[4]",
+        "embedCallOrdinal": 31,
+        "wallClockSeconds": 32.14,
+        "exit": 1,
+        "log": "~/bug011-integration-a9.log:3964-3966"
+      },
+      {
+        "id": "B",
+        "invocation": "./smackerel.sh test integration --go-run 'TestOpenKnowledgeRouting'",
+        "failurePoint": "hospitality_concern_evaluate intent_examples[1]",
+        "embedCallOrdinal": 13,
+        "wallClockSeconds": 33.40,
+        "exit": 1,
+        "log": "~/bug011-flake-check.log:293-295"
+      }
+    ],
+    "note": "No integration run was executed in the filing session; the operator captured both logs previously and directed that the ~20 minute lane not be re-run."
+  },
+  "rootCause": {
+    "primary": "tests/integration/agent/openknowledge_routing_test.go:125 wraps agent.NewRouter in a hard-coded context.WithTimeout(context.Background(), 30*time.Second). internal/agent/router.go:135-180 shows NewRouter issues one sequential HTTP POST /embed per intent_examples entry across every registered scenario — 79 calls at HEAD 3af96a02. A fixed wall clock is therefore applied to variable-cost, cold-start-dominated warm-up work, so the test's verdict tracks ML-sidecar warmth rather than the SCOPE-12 routing contract.",
+    "quantification": "Run A reached call 31 of 79 (30 completed in ~30s, ~1.0 s/call, full set would need ~79s). Run B reached call 13 of 79 (12 completed in ~30s, ~2.5 s/call, full set would need ~197s). An earlier passing run completed all 79 in under 30s (<=0.38 s/call). Per-call latency therefore spans roughly 6x, and 62%-85% of the embed set was still outstanding at deadline expiry — the shortfall is structural, not marginal.",
+    "sstContradiction": "config/smackerel.yaml:1628 declares assistant.routing.embed_timeout_ms: 30000 with the comment 'Spec 064 SCOPE-17 raised from 500ms to accommodate cold sentence-transformer load on first startup'. Production budgets 30s for ONE cold embed call; this test budgets 30s for 79 of them, and separately caps each call at 5s (line 89) — one sixth of the SST value that is present in the container's own env-file at config/generated/test.env:489.",
+    "contributingFactor": "config/smackerel.yaml lines 2465-2495 document that the test stack runs its own Ollama container and performs a genuine cold /api/pull into the disposable smackerel-test-ollama-data volume on every fresh test stack (a deliberate G115 isolation choice). Host at failure: 47GB RAM with ~2GB free, 26GB buff/cache, 130 Docker images / 56.21GB, 839 build-cache entries. This raises cold-start cost; it does not create the defect."
+  },
+  "notAFlakeEvidence": [
+    "Not transient: reproduced 2/2 on consecutive runs with different invocations (full lane, then focused --go-run), both exit=1, same failure mode.",
+    "Not caused by the in-flight BUG-061-011 change: those edits were fully present on disk (written 21:17) when an earlier full integration run at ~21:29 exited 0 with this same test passing. Identical product code, different outcome implies environmental/timing rather than causal.",
+    "Ordering rules it out independently: BUG-061-011 added ./tests/eval/... to the lane package list; scripts/runtime/go-integration.sh runs go test -p 1 with that package listed last, and the full-lane log confirms tests/integration/agent (line 3996) completes ~4400 lines before tests/eval/assistant (line 8429)."
+  ],
+  "secondaryFinding": {
+    "title": "Hard-coded constants in the same code region, checked against .github/instructions/smackerel-no-defaults.instructions.md",
+    "determinations": [
+      "parseFloatEnv(\"AGENT_ROUTING_CONFIDENCE_FLOOR\", 0.65) and parseIntEnv(\"AGENT_ROUTING_CONSIDER_TOP_N\", 5) (lines 119-120, helpers at 217/229) MATCH the policy's forbidden shape — its catch-all clause forbids 'any helper that silently supplies a runtime fallback value' for SST-managed values — and are the exact shape BUG-020-003 and BUG-020-008 removed from production. Production is fail-loud at internal/agent/config.go:155-156 via requireFloat/requireInt.",
+      "HOWEVER they are NOT a gate violation: the repository's mechanical SST guard internal/config/sst_grep_guard_test.go deliberately skips *_test.go (line 75) and any path under tests/ (line 82), with documented rationale at line 13 and a meta-test at lines 285-310. This file is excluded on both counts. The prose has no test-code carve-out; the guard has an explicit one. Whether the prose binds test code is an OWNER DECISION and is deliberately not asserted by this bug.",
+      "They are also currently INERT: config/generated/test.env supplies 0.65 (line 484) and 5 (line 485), exactly matching the hard-coded fallbacks, so the fallback branch is not taken today. The risk is future silent divergence rather than present misbehaviour.",
+      "30*time.Second (line 125) is NOT a no-defaults violation: it is not fallback syntax and shadows no SST key (none exists for an aggregate router-construction budget). The case against it is a design argument on the cold-start evidence, not a policy citation.",
+      "5*time.Second per-call (line 89) is NOT a no-defaults violation either, but IS a genuine divergence from ASSISTANT_ROUTING_EMBED_TIMEOUT_MS=30000. It is not what failed here (no individual call exceeded 5s in either run); it is a latent second failure mode."
+    ]
+  },
+  "designRecommendation": {
+    "chosen": "Option A (embedder-readiness gate before the timed region) plus the Option B per-call SST correction",
+    "rejected": {
+      "option": "Option C — simply enlarge the 30s literal",
+      "reason": "It would not have rescued either recorded failure: run A needed ~79s and run B ~197s. Choosing a number that covers run B is the worst case observed on one host on one day, not a bound, because nothing in the design bounds cold-start cost. It also collides with the lane's go test -timeout 300s. It converts a reproducibly-red gate into an occasionally-red one, which is worse in a specific way: a rare failure is far more likely to be waved through as flaky, and this failure's text already invites mis-attribution to whatever change is in flight."
+    },
+    "tension": "A fixed deadline over a cold-start-dependent operation is inherently timing-fragile. Raising the number buys time without removing the fragility. The only structural remedies are to stop measuring cold start (separate readiness from assertion) or to stop the operation being cold-start dependent (warm the sidecar during stack bring-up, or batch/parallelise the 79 embeds — the latter belongs to spec 064 proper, not to this bug)."
+  },
+  "affectedSurface": [
+    "tests/integration/agent/openknowledge_routing_test.go (LANDED - readiness gate; derived deadline; per-call timeout from SST; fail-loud env reads; parseFloatEnv/parseIntEnv removed)",
+    "tests/integration/agent/routerwarmup/routerwarmup.go (LANDED, new - test-support package holding LoadTimings, LoadRoutingConfig, WaitForWarmEmbedder, BuildReport, BuildRouter)",
+    "internal/agent/bug064003_router_warmup_contract_test.go (LANDED, new - the adversarial contract guards)",
+    "config/smackerel.yaml (LANDED - 3 new REQUIRED keys: warmup_target_latency_ms, warmup_budget_ms, build_per_call_budget_ms)",
+    "scripts/commands/config.sh (LANDED - emits the new keys)",
+    "config/generated/*.env (regenerated output)"
+  ],
+  "affectedSurfaceNote": "The shared working tree also carries several concurrent agents' unrelated changes (for example internal/auth/scopes.go, specs/108-corpus-grant-enforcement/**, config/release-trains.yaml, docs/releases/**). Those are NOT part of this bug's surface and were not touched by this bug.",
+  "modifiedThisSession": [
+    "specs/064-open-ended-knowledge-agent/bugs/BUG-064-003-router-warmup-exceeds-fixed-deadline/scopes.md",
+    "specs/064-open-ended-knowledge-agent/bugs/BUG-064-003-router-warmup-exceeds-fixed-deadline/bug.md",
+    "specs/064-open-ended-knowledge-agent/bugs/BUG-064-003-router-warmup-exceeds-fixed-deadline/state.json",
+    "specs/061-conversational-assistant/bugs/BUG-061-011-eval-gate-runs-in-no-automated-lane/scopes.md (Stage 1 exit-criterion item only, unblocked by this bug's fix)"
+  ],
+  "scopes": [
+    {
+      "id": "scope-01",
+      "title": "Make the SCOPE-12 routing test's verdict independent of embedder cold start",
+      "status": "in_progress"
+    }
+  ],
+  "completedScopes": [],
+  "completedPhases": [
+    "discovery",
+    "documentation",
+    "analysis"
+  ],
+  "artifacts": {
+    "present": ["bug.md", "spec.md", "design.md", "scopes.md", "report.md", "state.json"],
+    "absent": ["uservalidation.md", "scenario-manifest.json"],
+    "absentNote": "Operator scoped this task to exactly six artifacts. Sibling bugs in this spec carry uservalidation.md (all three) and scenario-manifest.json (BUG-064-001, BUG-CHAOS-20260605-001). The omission is deliberate and flagged; it must be closed before this bug can pass artifact lint or reach a terminal status."
+  },
+  "openQuestions": [
+    "Does the no-defaults policy bind test code? The prose has no carve-out; the mechanical guard has an explicit one. If the answer is yes, the guard's *_test.go / tests/ exclusions are themselves a gap worth a separate bug against spec 020.",
+    "Should stack bring-up warm the ML sidecar embedder? That would fix this class of problem for every integration test at once, but it changes smackerel.sh / compose behaviour and belongs to a different owner.",
+    "Is weather_query intended to carry 19 intent examples? It is 24% of total embed cost by itself. Not a defect, but the single largest contributor to warm-up time."
+  ],
+  "relatedSpecs": [
+    "specs/020-security-hardening"
+  ],
+  "relatedBugs": [
+    "specs/020-security-hardening/bugs/BUG-020-003-helpers-unused-fail-soft-cleanup",
+    "specs/020-security-hardening/bugs/BUG-020-008-parseintenv-silent-defaults",
+    "specs/061-conversational-assistant/bugs/BUG-061-011-eval-gate-runs-in-no-automated-lane"
+  ],
+  "relatedBugsNote": "BUG-061-011 is listed ONLY as the unrelated in-flight work during which this defect was incidentally found, and which the evidence in bug.md explicitly exonerates. It is NOT a cause and was not modified.",
+  "createdAt": "2026-08-11T00:23:54Z",
+  "updatedAt": "2026-08-11T05:53:28Z"
+}

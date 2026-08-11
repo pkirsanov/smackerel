@@ -29,17 +29,26 @@
 //   - It does NOT cache tokens — every internal call mints a fresh
 //     short-lived bearer, eliminating multi-tenant leakage classes
 //     (a stale cached token can never be reused for the wrong chat).
-//   - It does NOT touch the database — minting is pure crypto and
-//     hits the auth signing key in memory.
 //   - It does NOT call `Bot.resolveActorUserID` directly to keep the
 //     dependency surface small; callers pass the resolved user_id in.
 //     The companion `MintForChat` helper performs the resolve+mint in
 //     one step for ergonomic use.
+//
+// Spec 108 §18 decision 3 (permanent) changed where the minted scope
+// claim comes from. It used to be a literal in this file. It is now
+// DERIVED from the mapped principal's persisted grant set, narrowed by
+// the delegation ceiling `auth.TelegramBridgeDelegableGrants`. That
+// makes the mint a database read (one per message, under a 5-minute
+// TTL), which is why the mint path carries a context. It also means
+// this package holds no scope literal at all — a structural guard
+// (`scope_literal_guard_test.go`) fails the build if one reappears.
 package telegram
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -48,12 +57,40 @@ import (
 	"github.com/smackerel/smackerel/internal/metrics"
 )
 
+// ErrPrincipalGrantsUnrecorded is returned when the mapped principal's
+// standing token predates grant recording (`granted_scopes IS NULL`).
+// Distinct from "recorded as none" because the operator remedy differs:
+// this one is fixed by rotating the principal's token so its grants are
+// recorded, not by issuing a different grant set. Spec 108 design.md
+// §10.8.
+var ErrPrincipalGrantsUnrecorded = errors.New("telegram: mapped principal's grants are unrecorded; rotate the token to record them")
+
+// ErrNoDelegableGrant is returned when the principal's grants ARE
+// recorded but none of them is delegable to the bridge — the
+// deliberately-demoted ('{}') case and the recorded ∩ ceiling = ∅ case.
+// Both deny, and both are permanent operator-actionable conditions
+// rather than transient failures, so the reply site MUST NOT render
+// them as "try again". Spec 108 design.md §10.8.
+var ErrNoDelegableGrant = errors.New("telegram: mapped principal holds no grant the bridge may delegate")
+
+// PrincipalGrantReader reads a principal's recorded grant set without
+// possessing its wire token. Satisfied by *auth.BearerStore.
+//
+// A consumer-side interface rather than a concrete dependency so the
+// derivation contract is unit-testable without a database, and so a nil
+// reader is a representable, refusable state rather than a panic on the
+// message hot path.
+type PrincipalGrantReader interface {
+	GrantsForPrincipal(ctx context.Context, userID string) (auth.RecordedGrants, error)
+}
+
 // PerUserTokenMinter issues short-lived per-user PASETO bearers on
 // behalf of a Telegram-mapped user. Construct via
 // `NewPerUserTokenMinter`. The minter is safe for concurrent use; it
 // holds only immutable signing material.
 type PerUserTokenMinter struct {
 	bot        *Bot
+	grants     PrincipalGrantReader
 	signingKey string
 	keyID      string
 	issuer     string
@@ -66,6 +103,13 @@ type PerUserTokenMinterOptions struct {
 	// Bot supplies the chat → user mapping + environment via
 	// `Bot.resolveActorUserID`. Required.
 	Bot *Bot
+
+	// PrincipalGrants supplies the mapped principal's persisted grant
+	// set, which is the sole authority source for the minted scope
+	// claim (spec 108 §18 decision 3). Required — a nil reader fails
+	// construction rather than degrading to a literal, because a minter
+	// that cannot read grants has no authority to delegate.
+	PrincipalGrants PrincipalGrantReader
 
 	// SigningKey is the active PASETO v4.public private key (hex form).
 	// Sourced from `auth.AuthConfig.SigningActivePrivateKey` in
@@ -99,6 +143,9 @@ func NewPerUserTokenMinter(opts PerUserTokenMinterOptions) (*PerUserTokenMinter,
 	if opts.Bot == nil {
 		return nil, fmt.Errorf("telegram: PerUserTokenMinter requires a non-nil Bot")
 	}
+	if opts.PrincipalGrants == nil {
+		return nil, fmt.Errorf("telegram: PerUserTokenMinter requires a non-nil PrincipalGrants reader")
+	}
 	if strings.TrimSpace(opts.SigningKey) == "" {
 		return nil, fmt.Errorf("telegram: PerUserTokenMinter requires a non-empty SigningKey")
 	}
@@ -120,6 +167,7 @@ func NewPerUserTokenMinter(opts PerUserTokenMinterOptions) (*PerUserTokenMinter,
 	}
 	return &PerUserTokenMinter{
 		bot:        opts.Bot,
+		grants:     opts.PrincipalGrants,
 		signingKey: opts.SigningKey,
 		keyID:      opts.KeyID,
 		issuer:     issuer,
@@ -157,7 +205,10 @@ type MintedTelegramToken struct {
 //
 // In production, an unmapped chat MUST NOT mint a token; downgrading
 // to a "synthetic" actor would defeat the spec 044 claim-binding.
-func (m *PerUserTokenMinter) MintForChat(chatID int64) (MintedTelegramToken, error) {
+//
+// The dev/test unmapped case returns BEFORE any grant read, so the
+// legacy single-user workflow never depends on grant readability.
+func (m *PerUserTokenMinter) MintForChat(ctx context.Context, chatID int64) (MintedTelegramToken, error) {
 	userID, err := m.bot.resolveActorUserID(chatID)
 	if err != nil {
 		return MintedTelegramToken{}, err
@@ -169,16 +220,52 @@ func (m *PerUserTokenMinter) MintForChat(chatID int64) (MintedTelegramToken, err
 		// failure.
 		return MintedTelegramToken{}, nil
 	}
-	return m.MintForUser(chatID, userID)
+	return m.MintForUser(ctx, chatID, userID)
+}
+
+// deriveGrants resolves the scope claim for a mapped principal.
+//
+// Spec 108 §18 decision 3: the authority is the PRINCIPAL's persisted
+// grant set, never a list held here. `auth.DeriveTelegramBridgeGrants`
+// narrows that set to the bridge's delegation ceiling; it can only
+// withhold, never confer, so derived ⊆ recorded holds for every input.
+//
+// Every failure returns (nil, error) so the caller aborts the mint.
+// None of them returns a partial or defaulted set: absent grant data
+// denies. Spec 108 design.md §10.8.
+func (m *PerUserTokenMinter) deriveGrants(ctx context.Context, userID string) ([]string, error) {
+	recorded, err := m.grants.GrantsForPrincipal(ctx, userID)
+	if err != nil {
+		// Wraps auth.ErrPrincipalNotProvisioned and every read error
+		// alike; errors.Is at the reply site separates them.
+		return nil, fmt.Errorf("telegram: read grants for principal %q: %w", userID, err)
+	}
+	if !recorded.Recorded {
+		return nil, fmt.Errorf("telegram: principal %q (token %q): %w", userID, recorded.TokenID, ErrPrincipalGrantsUnrecorded)
+	}
+	derived := auth.DeriveTelegramBridgeGrants(recorded.Scopes)
+	if len(derived) == 0 {
+		return nil, fmt.Errorf("telegram: principal %q (token %q): %w", userID, recorded.TokenID, ErrNoDelegableGrant)
+	}
+	return derived, nil
 }
 
 // MintForUser issues a short-lived PASETO bearer for an already-
 // resolved user_id. Useful for tests that want to control the chat
 // → user binding directly. Production callers should prefer
 // `MintForChat` so the resolve step runs through the bot's mapping.
-func (m *PerUserTokenMinter) MintForUser(chatID int64, userID string) (MintedTelegramToken, error) {
+//
+// The scope claim is DERIVED, never defaulted. When derivation fails
+// the return is a ZERO MintedTelegramToken plus an error — never a
+// scopeless-but-valid token, which would be a credential that passes
+// authentication and silently fails every gated call.
+func (m *PerUserTokenMinter) MintForUser(ctx context.Context, chatID int64, userID string) (MintedTelegramToken, error) {
 	if strings.TrimSpace(userID) == "" {
 		return MintedTelegramToken{}, fmt.Errorf("telegram: MintForUser requires a non-empty user_id")
+	}
+	scopes, err := m.deriveGrants(ctx, userID)
+	if err != nil {
+		return MintedTelegramToken{}, err
 	}
 	tokenID, err := newTelegramTokenID(chatID)
 	if err != nil {
@@ -192,13 +279,13 @@ func (m *PerUserTokenMinter) MintForUser(chatID int64, userID string) (MintedTel
 		TTL:        m.ttl,
 		Issuer:     m.issuer,
 		Now:        m.now,
-		// Spec 027 Scope 9 — annotation routes are gated by
-		// `auth.RequireScope("annotation:edit")`. Telegram replies are
-		// a first-class annotation producer (Telegram-share capture +
-		// inline reply-as-annotation flows), so the per-user PASETO
-		// MUST carry the `annotation:edit` claim or the gated router
-		// rejects the request with 403 `scope_required`.
-		Scopes: []string{"annotation:edit"},
+		// Derived from the mapped principal's persisted grants. The
+		// token is transient and is NEVER written back as the
+		// principal's recorded set — IssueToken, not
+		// IssueAndPersistToken — because persisting a narrowed set
+		// would ratchet the principal's authority down on every
+		// message. Spec 108 design.md §10.10 T5.
+		Scopes: scopes,
 	})
 	if err != nil {
 		return MintedTelegramToken{}, fmt.Errorf("telegram: mint per-user PASETO: %w", err)

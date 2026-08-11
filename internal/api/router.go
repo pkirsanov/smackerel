@@ -86,7 +86,6 @@ func NewRouter(deps *Dependencies) http.Handler {
 		r.Group(func(r chi.Router) {
 			r.Use(deps.bearerAuthMiddleware)
 			r.Post("/capture", deps.CaptureHandler)
-			r.Post("/search", deps.SearchHandler)
 
 			// Spec 069 SCOPE-1a — Assistant HTTP transport.
 			// POST /api/assistant/turn routes through the late-bound
@@ -98,16 +97,111 @@ func NewRouter(deps *Dependencies) http.Handler {
 			if deps.AssistantTurnHandler != nil {
 				r.Method(http.MethodPost, "/assistant/turn", deps.AssistantTurnHandler)
 			}
-			r.Get("/digest", deps.DigestHandler)
-			r.Get("/recent", deps.RecentHandler)
-			r.Get("/artifact/{id}", deps.ArtifactDetailHandler)
-			r.Get("/artifacts/{id}/domain", deps.DomainDataHandler)
-			r.Get("/export", deps.ExportHandler)
 
-			// Context enrichment endpoint (GuestHost connector)
-			if deps.ContextHandler != nil {
-				r.Post("/context-for", deps.ContextHandler.HandleContextFor)
-			}
+			// ── Spec 108 Scope 03 — corpus-grant gate ─────────────────
+			//
+			// The SIXTEEN corpus route groups of spec.md §4.2 — Tier A raw
+			// retrieval (1-8) and Tier B corpus-DERIVED Phase-5
+			// intelligence (9-16) — are registered inside this ONE group so
+			// the grant is a property of the route manifest rather than of
+			// sixteen handler bodies. A per-handler `if !authorized` check
+			// would be invisible to the manifest, un-auditable, and would
+			// let a new corpus handler ship ungated; there are none, and
+			// none may be added.
+			//
+			// Middleware order, outermost first:
+			//   1. deps.bearerAuthMiddleware (the enclosing group, above) —
+			//      MUST run first: it populates the auth.Session that both
+			//      halves below read.
+			//   2. CorpusGrantGate.Observe — mounted in BOTH stages, never
+			//      denies. Per route group, because its `route_group` label
+			//      is a closed-set wiring-time constant.
+			//   3. auth.RequireScope(auth.GrantGlobalCorpusRead) — the
+			//      ENFORCE half, mounted on this enclosing group so a single
+			//      mount covers all sixteen, and ONLY when the stage
+			//      resolved to ENFORCE.
+			//
+			// Routes deliberately left OUT of this group (design.md §2):
+			// /api/capture and /api/bookmarks/import (write paths),
+			// /api/assistant/turn (mediated, gated by assistant:turn), the
+			// annotation:edit group (user-authored bodies), the
+			// knowledge-graph:read group (a grant daily users legitimately
+			// hold), /api/internal/telegram-message-artifact (id↔id only),
+			// and the unauthenticated /api/health, /metrics, /readyz.
+			r.Group(func(r chi.Router) {
+				corpusGate := NewCorpusGrantGate(deps.CorpusGrantEnforce)
+				if deps.CorpusGrantEnforce {
+					r.Use(auth.RequireScope(auth.GrantGlobalCorpusRead))
+				}
+
+				// Tier A — raw corpus retrieval (groups 1-8).
+				r.With(corpusGate.Observe(metrics.CorpusRouteGroupSearch)).
+					Post("/search", deps.SearchHandler)
+				r.With(corpusGate.Observe(metrics.CorpusRouteGroupDigest)).
+					Get("/digest", deps.DigestHandler)
+				r.With(corpusGate.Observe(metrics.CorpusRouteGroupRecent)).
+					Get("/recent", deps.RecentHandler)
+				r.With(corpusGate.Observe(metrics.CorpusRouteGroupArtifactDetail)).
+					Get("/artifact/{id}", deps.ArtifactDetailHandler)
+				r.With(corpusGate.Observe(metrics.CorpusRouteGroupArtifactDomain)).
+					Get("/artifacts/{id}/domain", deps.DomainDataHandler)
+				r.With(corpusGate.Observe(metrics.CorpusRouteGroupExport)).
+					Get("/export", deps.ExportHandler)
+
+				// Group 7 — context enrichment (external GuestHost
+				// connector). Conditional on the handler being wired, and
+				// the conditional is INSIDE the gate.
+				if deps.ContextHandler != nil {
+					r.With(corpusGate.Observe(metrics.CorpusRouteGroupContextFor)).
+						Post("/context-for", deps.ContextHandler.HandleContextFor)
+				}
+
+				// Group 8 — the six knowledge endpoints. The gate attaches
+				// to the enclosing group so all six inherit it as one unit
+				// and a seventh cannot be added ungated.
+				r.Group(func(r chi.Router) {
+					r.Use(corpusGate.Observe(metrics.CorpusRouteGroupKnowledge))
+					r.Route("/knowledge", func(r chi.Router) {
+						r.Get("/concepts", deps.KnowledgeConceptsHandler)
+						r.Get("/concepts/{id}", deps.KnowledgeConceptDetailHandler)
+						r.Get("/entities", deps.KnowledgeEntitiesHandler)
+						r.Get("/entities/{id}", deps.KnowledgeEntityDetailHandler)
+						r.Get("/lint", deps.KnowledgeLintHandler)
+						r.Get("/stats", deps.KnowledgeStatsHandler)
+					})
+				})
+
+				// Tier B — corpus-derived Phase-5 intelligence (groups
+				// 9-16, R-501..R-508; §18 decision 5). These compute over
+				// the same global corpus, so they carry the same grant and
+				// the same denial shape; the tier split is documentation,
+				// not a difference in authority.
+				//
+				// The `IntelligenceEngine != nil` conditional is ENCLOSED by
+				// the gated group, never the other way round. Inverting it
+				// would register all eight OUTSIDE the gate exactly when the
+				// engine is configured — that is, whenever these endpoints
+				// actually serve corpus-derived signal.
+				if deps.IntelligenceEngine != nil {
+					r.With(corpusGate.Observe(metrics.CorpusRouteGroupExpertise)).
+						Get("/expertise", ExpertiseHandler(deps.IntelligenceEngine))
+					r.With(corpusGate.Observe(metrics.CorpusRouteGroupLearningPaths)).
+						Get("/learning-paths", LearningPathsHandler(deps.IntelligenceEngine))
+					r.With(corpusGate.Observe(metrics.CorpusRouteGroupSubscriptions)).
+						Get("/subscriptions", SubscriptionsHandler(deps.IntelligenceEngine))
+					r.With(corpusGate.Observe(metrics.CorpusRouteGroupSerendipity)).
+						Get("/serendipity", SerendipityHandler(deps.IntelligenceEngine))
+					r.With(corpusGate.Observe(metrics.CorpusRouteGroupContentFuel)).
+						Get("/content-fuel", ContentFuelHandler(deps.IntelligenceEngine))
+					r.With(corpusGate.Observe(metrics.CorpusRouteGroupQuickReferences)).
+						Get("/quick-references", QuickReferencesHandler(deps.IntelligenceEngine))
+					r.With(corpusGate.Observe(metrics.CorpusRouteGroupMonthlyReport)).
+						Get("/monthly-report", MonthlyReportHandler(deps.IntelligenceEngine))
+					r.With(corpusGate.Observe(metrics.CorpusRouteGroupSeasonalPatterns)).
+						Get("/seasonal-patterns", SeasonalPatternsHandler(deps.IntelligenceEngine))
+				}
+			})
+			// ── end corpus-grant gate ─────────────────────────────────
 
 			// Bookmark import endpoint (Phase 2)
 			r.Post("/bookmarks/import", deps.BookmarkImportHandler)
@@ -225,27 +319,9 @@ func NewRouter(deps *Dependencies) http.Handler {
 				})
 			}
 
-			// Knowledge layer endpoints (Scope 3)
-			r.Route("/knowledge", func(r chi.Router) {
-				r.Get("/concepts", deps.KnowledgeConceptsHandler)
-				r.Get("/concepts/{id}", deps.KnowledgeConceptDetailHandler)
-				r.Get("/entities", deps.KnowledgeEntitiesHandler)
-				r.Get("/entities/{id}", deps.KnowledgeEntityDetailHandler)
-				r.Get("/lint", deps.KnowledgeLintHandler)
-				r.Get("/stats", deps.KnowledgeStatsHandler)
-			})
-
-			// Phase 5 intelligence endpoints (R-501..R-508)
-			if deps.IntelligenceEngine != nil {
-				r.Get("/expertise", ExpertiseHandler(deps.IntelligenceEngine))
-				r.Get("/learning-paths", LearningPathsHandler(deps.IntelligenceEngine))
-				r.Get("/subscriptions", SubscriptionsHandler(deps.IntelligenceEngine))
-				r.Get("/serendipity", SerendipityHandler(deps.IntelligenceEngine))
-				r.Get("/content-fuel", ContentFuelHandler(deps.IntelligenceEngine))
-				r.Get("/quick-references", QuickReferencesHandler(deps.IntelligenceEngine))
-				r.Get("/monthly-report", MonthlyReportHandler(deps.IntelligenceEngine))
-				r.Get("/seasonal-patterns", SeasonalPatternsHandler(deps.IntelligenceEngine))
-			}
+			// Knowledge layer endpoints (Scope 3) and the Phase 5
+			// intelligence endpoints (R-501..R-508) are registered above,
+			// inside the spec 108 corpus-grant gate.
 
 			// Actionable list endpoints (spec 028)
 			if deps.ListHandlers != nil {

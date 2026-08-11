@@ -1,0 +1,366 @@
+# Scopes: BUG-064-003 — router warm-up exceeds a fixed deadline in the SCOPE-12 routing test
+
+**Bug:** [bug.md](bug.md) · **Spec:** [spec.md](spec.md) · **Design:** [design.md](design.md)
+**Workflow mode:** `bugfix-fastlane`
+
+> Implementation has landed and the fix is verified at the integration and unit
+> tiers. **10 of 15** Definition-of-Done checkboxes below are checked, each with
+> its own inline raw-output evidence. The remaining **5** are unchecked and each
+> states its reason inline — none is checked on inference. This scope is **not**
+> marked Done and `state.json` is **not** promoted: certification is owned by
+> `bubbles.validate`.
+>
+> Note for the reviewer: [report.md](report.md) still describes the pre-fix
+> artifacts-only session and is now stale with respect to this file. It was
+> outside this pass's permitted edit set and is flagged rather than silently
+> left to disagree.
+
+---
+
+## Scope 1: Make the SCOPE-12 routing test's verdict independent of embedder cold start
+
+**Status:** [ ] In Progress
+**Depends On:** none
+
+### Gherkin Scenarios (regression contract)
+
+```gherkin
+Feature: BUG-064-003 — SCOPE-12 routing test measures routing, not warm-up
+
+  Scenario: SCN-064-003-01 cold sidecar no longer fails the routing assertions
+    Given a freshly created test stack whose ML sidecar embedder is cold
+    And the scenario set declares 79 intent_examples across all scenarios
+    When TestOpenKnowledgeRouting_FallbackToOpenKnowledge runs
+    Then the test reaches all three routing assertions
+    And it does not fail with "NewRouter: embed scenario ... context deadline exceeded"
+
+  Scenario: SCN-064-003-02 an unready embedder reports itself as such
+    Given an ML sidecar that never becomes ready
+    When TestOpenKnowledgeRouting_FallbackToOpenKnowledge runs
+    Then the failure message names embedder readiness as the cause
+    And the message is distinguishable from a routing-assertion failure
+
+  Scenario: SCN-064-003-03 adversarial — a reintroduced fixed wall-clock literal is rejected
+    Given a maintainer wraps agent.NewRouter in a literal context.WithTimeout again
+    When the BUG-064-003 contract guard runs
+    Then the guard FAILS and names the offending file and line
+
+  Scenario: SCN-064-003-04 adversarial — a missing SST routing value fails loud
+    Given AGENT_ROUTING_CONFIDENCE_FLOOR is absent from the environment
+    When the routing test resolves its RoutingConfig
+    Then it fails loud naming the missing variable
+    And it does NOT silently substitute the constant 0.65
+
+  Scenario: SCN-064-003-05 the per-call embed timeout is not stricter than SST
+    Given assistant.routing.embed_timeout_ms is 30000
+    When the routing test constructs its sidecar embedder
+    Then the per-call timeout it passes is not below that SST value
+```
+
+### Implementation Plan
+
+1. Replace the single probe embed (lines 92–96) with a bounded embedder-readiness
+   gate that returns an explicit, distinguishable "embedder not ready" error.
+2. Start the router-construction deadline only after readiness is established,
+   and derive its magnitude from the intent-example count rather than the
+   `30*time.Second` literal at line 125.
+3. Raise the `sidecar.New` per-call timeout (line 89) so it is not stricter than
+   `ASSISTANT_ROUTING_EMBED_TIMEOUT_MS`.
+4. Read `AGENT_ROUTING_CONFIDENCE_FLOOR` and `AGENT_ROUTING_CONSIDER_TOP_N`
+   fail-loud, mirroring `internal/agent/config.go:155-156`; delete the local
+   `parseFloatEnv` / `parseIntEnv` fallback helpers (lines 217, 229).
+5. Add the BUG-064-003 contract guard that mechanically rejects reintroduction of
+   the fixed literal and of the env-fallback helper shape.
+
+Ordering note: step 5 must land RED against the pre-fix tree, otherwise it is
+tautological and cannot detect regression.
+
+### Test Plan
+
+Four rows. The "Test DoD items" group below contains exactly four checkboxes,
+mapping 1:1 to these rows in order.
+
+| # | Test Type | Category | File / Location | Description | Command | Live System |
+|---|-----------|----------|-----------------|-------------|---------|-------------|
+| T1 | Integration | `integration` | `tests/integration/agent/openknowledge_routing_test.go` | On a cold test stack the test reaches and evaluates all three SCOPE-12 routing assertions (SCN-064-003-01) | `./smackerel.sh test integration --go-run 'TestOpenKnowledgeRouting'` | Yes |
+| T2 | Integration | `integration` | `tests/integration/agent/openknowledge_routing_test.go` | An embedder that never becomes ready produces an explicit readiness failure, not a routing failure (SCN-064-003-02) | `./smackerel.sh test integration --go-run 'TestOpenKnowledgeRouting'` | Yes |
+| T3 | Unit (adversarial contract guard) | `unit` | new `*_bug064003_test.go` under `internal/agent/` | Source-shape guard: FAILS if a fixed wall-clock literal wraps `agent.NewRouter` in the SCOPE-12 integration test, or if a local env-fallback helper is reintroduced (SCN-064-003-03) | `./smackerel.sh test unit --go --go-run BUG064003` | No |
+| T4 | Unit (adversarial) | `unit` | new `*_bug064003_test.go` under `internal/agent/` | Absent/unparseable `AGENT_ROUTING_CONFIDENCE_FLOOR` or `AGENT_ROUTING_CONSIDER_TOP_N` fails loud rather than substituting `0.65` / `5`; per-call embed timeout is not stricter than the SST value (SCN-064-003-04, SCN-064-003-05) | `./smackerel.sh test unit --go --go-run BUG064003` | No |
+
+### Definition of Done
+
+#### Test DoD items (exactly 4 — 1:1 with Test Plan rows T1–T4)
+
+- [x] **T1** integration: cold-stack run evaluates all three routing assertions
+  - **Claim Source:** executed · **Tree:** WORKING TREE, HEAD=3af96a02 · **Exit code:** `0`
+  - **Command:** `./smackerel.sh test integration` — preserved at `~/s064-integration.log` (8218 lines), read this session at the line numbers shown; the lane was not re-run.
+  - Raw output evidence (inline, ≥10 lines, no references or summaries):
+    ```
+    ### V1 - the readiness gate ran first, then the budget was derived from the work
+    3552:    openknowledge_routing_test.go:127: embedder warm-up gate passed: probes=1 latencies=[#1=464ms] qualifying=464ms elapsed=464ms
+    3554:    openknowledge_routing_test.go:149: router construction budget: embed_calls=79 per_call_budget=2s (AGENT_ROUTING_BUILD_PER_CALL_BUDGET_MS) derived_build_budget=2m38s
+
+    ### V2 - all three SCOPE-12 routing assertions were REACHED and evaluated
+    3556:    openknowledge_routing_test.go:186: query="weather in paris today" → weather_query (top_score=1.000, reason=similarity_match)
+    3558:    openknowledge_routing_test.go:186: query="explain quantum entanglement briefly" → open_knowledge (top_score=0.248, reason=fallback_clarify)
+    3560:    openknowledge_routing_test.go:186: query="what is 10F in C" → open_knowledge (top_score=0.763, reason=similarity_match)
+
+    ### V3 - verdict: parent and all three subtests PASS; package green
+    3561:--- PASS: TestOpenKnowledgeRouting_FallbackToOpenKnowledge (11.99s)
+    3562:    --- PASS: TestOpenKnowledgeRouting_FallbackToOpenKnowledge/weather-domain-query-does-not-route-to-open-knowledge (0.08s)
+    3563:    --- PASS: TestOpenKnowledgeRouting_FallbackToOpenKnowledge/open-ended-knowledge-question-routes-to-open-knowledge (0.03s)
+    3564:    --- PASS: TestOpenKnowledgeRouting_FallbackToOpenKnowledge/deterministic-tool-question-routes-to-open-knowledge (0.04s)
+    3594:ok      github.com/smackerel/smackerel/tests/integration/agent  20.238s
+    ```
+  - SCN-064-003-01 is discharged: the gate qualified on probe #1 at 464 ms, construction then ran under a 2m38s budget derived from `embed_calls=79`, and the test spent 11.99 s reaching a routing verdict rather than dying at ~32 s inside the warm-up loop.
+- [ ] **T2** integration: unready embedder produces an explicit readiness failure
+  - **Claim Source:** not-run · **Uncertainty Declaration.** Left unchecked deliberately.
+  - The Test Plan declares T2 in the `integration` category, in `tests/integration/agent/openknowledge_routing_test.go`, under `./smackerel.sh test integration`. That lane ran green, which means the embedder **was** ready — `probes=1 ... qualifying=464ms` (log line 3552). A run in which the gate passes cannot exercise the branch that fires when it does not, so this row's declared tier produced no evidence for it.
+  - The branch **exists** in the declared file and is distinguishable by construction — `openknowledge_routing_test.go:125` fails with `"integration: embedder readiness gate failed (this is an ML sidecar readiness verdict, NOT a routing failure)"` — and the behaviour **is** proven, but at the `unit` tier only: `TestBUG064003_UnreadyEmbedderReportsReadinessNotRouting` PASS with subtests `responds_but_never_reaches_warm_latency` and `every_probe_times_out` (`~/s064-unit.log` lines 84–86).
+  - Checking this row would claim `integration`-tier evidence that does not exist. Discharging it requires either a fault-injected integration run against a deliberately-unready sidecar, or an owner decision to reclassify the row to `unit`. Neither is in this pass's edit set.
+- [x] **T3** unit: contract guard rejects a reintroduced fixed wall-clock literal
+  - **Claim Source:** executed · **Tree:** WORKING TREE, HEAD=3af96a02 · **Terminal marker:** `[go-unit] go test ./... finished OK`
+  - **Command:** `./smackerel.sh test unit --go --go-run 'BUG064003|RouterWarmup|Warmup' --verbose` — preserved at `~/s064-unit.log` (564 lines), read this session.
+  - Raw output evidence (inline, ≥10 lines, no references or summaries):
+    ```
+    ### V1 - selector and the exact go invocation
+     51:[go-unit] applying -run selector: BUG064003|RouterWarmup|Warmup
+     53:+ go test -v -run 'BUG064003|RouterWarmup|Warmup' -count=1 ./...
+
+    ### V2 - the source-shape guard for the reintroduced fixed literal (SCN-064-003-03)
+    119:=== RUN   TestBUG064003_RoutingTestCarriesNoWallClockLiteral
+    120:--- PASS: TestBUG064003_RoutingTestCarriesNoWallClockLiteral (0.00s)
+
+    ### V3 - companion guards that make the literal unnecessary rather than merely banned
+    121:=== RUN   TestBUG064003_SSTPublishesTheWarmupContract
+    122:--- PASS: TestBUG064003_SSTPublishesTheWarmupContract (0.00s)
+    123:=== RUN   TestBUG064003_DerivedBudgetScalesWithTheWork
+    124:--- PASS: TestBUG064003_DerivedBudgetScalesWithTheWork (0.00s)
+    125:=== RUN   TestBUG064003_SSTDefaultsFitTheLaneBudget
+    126:--- PASS: TestBUG064003_SSTDefaultsFitTheLaneBudget (0.02s)
+
+    ### V4 - package verdict and lane terminator
+    128:ok      github.com/smackerel/smackerel/internal/agent   1.682s
+    564:[go-unit] go test ./... finished OK
+    ```
+  - **Note on the exit marker.** `~/s064-unit.log` contains **no** `UNIT_EXIT=` line; that marker was not written by this runner. The success evidence quoted is the runner's own terminator at line 564 plus the `ok` package verdict at line 128. No `--- FAIL` / `FAIL github` line appears anywhere in the file.
+- [x] **T4** unit: missing SST routing values fail loud; per-call timeout ≥ SST value
+  - **Claim Source:** executed · **Tree:** WORKING TREE, HEAD=3af96a02 · **Terminal marker:** `[go-unit] go test ./... finished OK`
+  - **Command:** `./smackerel.sh test unit --go --go-run 'BUG064003|RouterWarmup|Warmup' --verbose` — preserved at `~/s064-unit.log`, read this session.
+  - Raw output evidence (inline, ≥10 lines, no references or summaries):
+    ```
+    ### V1 - SCN-064-003-04: absent / empty / unparseable SST routing values fail loud (8 subtests)
+     96:--- PASS: TestBUG064003_RoutingValuesFailLoudWithoutFallback (0.00s)
+     97:    --- PASS: TestBUG064003_RoutingValuesFailLoudWithoutFallback/complete_environment_resolves (0.00s)
+     98:    --- PASS: TestBUG064003_RoutingValuesFailLoudWithoutFallback/confidence_floor_absent (0.00s)
+     99:    --- PASS: TestBUG064003_RoutingValuesFailLoudWithoutFallback/confidence_floor_empty (0.00s)
+    100:    --- PASS: TestBUG064003_RoutingValuesFailLoudWithoutFallback/confidence_floor_unparseable (0.00s)
+    101:    --- PASS: TestBUG064003_RoutingValuesFailLoudWithoutFallback/consider_top_n_absent (0.00s)
+    102:    --- PASS: TestBUG064003_RoutingValuesFailLoudWithoutFallback/consider_top_n_empty (0.00s)
+    103:    --- PASS: TestBUG064003_RoutingValuesFailLoudWithoutFallback/consider_top_n_unparseable (0.00s)
+    104:    --- PASS: TestBUG064003_RoutingValuesFailLoudWithoutFallback/fallback_scenario_id_absent (0.00s)
+
+    ### V2 - SCN-064-003-05: the per-call embed timeout is not stricter than the SST value (6 subtests)
+    112:--- PASS: TestBUG064003_PerCallEmbedTimeoutIsNotStricterThanSST (0.00s)
+    113:    --- PASS: TestBUG064003_PerCallEmbedTimeoutIsNotStricterThanSST/build_unit_above_the_sst_per_call_ceiling_is_rejected (0.00s)
+    114:    --- PASS: TestBUG064003_PerCallEmbedTimeoutIsNotStricterThanSST/build_unit_below_the_proven_warm_latency_is_rejected (0.00s)
+    115:    --- PASS: TestBUG064003_PerCallEmbedTimeoutIsNotStricterThanSST/absent_ASSISTANT_ROUTING_EMBED_TIMEOUT_MS (0.00s)
+    116:    --- PASS: TestBUG064003_PerCallEmbedTimeoutIsNotStricterThanSST/absent_AGENT_ROUTING_WARMUP_TARGET_LATENCY_MS (0.00s)
+    117:    --- PASS: TestBUG064003_PerCallEmbedTimeoutIsNotStricterThanSST/absent_AGENT_ROUTING_WARMUP_BUDGET_MS (0.00s)
+    118:    --- PASS: TestBUG064003_PerCallEmbedTimeoutIsNotStricterThanSST/absent_AGENT_ROUTING_BUILD_PER_CALL_BUDGET_MS (0.00s)
+    ```
+  - Both halves of the row are covered: the `*_absent` / `*_empty` / `*_unparseable` subtests are the adversarial cases that fail if the deleted `0.65` / `5` fallbacks are ever reintroduced, and `build_unit_above_the_sst_per_call_ceiling_is_rejected` is the adversarial case for a per-call unit exceeding `embed_timeout_ms`.
+
+#### Regression-integrity items
+
+- [x] Root cause confirmed against the running system (79 sequential embeds under one 30 s deadline)
+  - **Claim Source:** executed · **Tree:** WORKING TREE, HEAD=3af96a02
+  - **Command:** read the post-fix census from `~/s064-integration.log` and the two pre-fix aborts from `~/bug011-integration-a9.log` and `~/bug011-flake-check.log`; all three logs read this session at the line numbers shown.
+  - Raw output evidence (inline, ≥10 lines, no references or summaries):
+    ```
+    ### V1 - the 79-embed census, measured on the live stack (post-fix run)
+    3554:    openknowledge_routing_test.go:149: router construction budget: embed_calls=79 per_call_budget=2s (AGENT_ROUTING_BUILD_PER_CALL_BUDGET_MS) derived_build_budget=2m38s
+
+    ### V2 - pre-fix run A: aborted at scenario "recipe_search" under the fixed deadline
+    3964:=== RUN   TestOpenKnowledgeRouting_FallbackToOpenKnowledge
+    3965:    openknowledge_routing_test.go:128: build router: agent: NewRouter: embed scenario "recipe_search" intent_examples[4]: sidecar.Embed: POST /embed: Post "http://smackerel-ml:8081/embed": context deadline exceeded
+    3966:--- FAIL: TestOpenKnowledgeRouting_FallbackToOpenKnowledge (32.14s)
+
+    ### V3 - pre-fix run B: same failure mode, DIFFERENT abort point in the same loop
+    293:=== RUN   TestOpenKnowledgeRouting_FallbackToOpenKnowledge
+    294:    openknowledge_routing_test.go:128: build router: agent: NewRouter: embed scenario "hospitality_concern_evaluate" intent_examples[1]: sidecar.Embed: POST /embed: Post "http://smackerel-ml:8081/embed": context deadline exceeded
+    295:--- FAIL: TestOpenKnowledgeRouting_FallbackToOpenKnowledge (33.40s)
+
+    ### V4 - the SST value the single fixed deadline contradicted
+    config/smackerel.yaml:1628:    embed_timeout_ms: 30000 # REQUIRED: per-call timeout for the sidecar /embed roundtrip. Spec 064 SCOPE-17 raised from 500ms to accommodate cold sentence-transformer load on first startup; subsequent calls return in <50ms.
+    ```
+  - The 79-call count is measured, not inferred (V1). Two consecutive pre-fix runs aborted mid-loop at **different** scenarios (V2, V3) — that divergence is what makes the cause the shared deadline rather than any one slow scenario. V4 is the contradiction: production budgets 30 s for **one** cold call; the test budgeted 30 s for all 79.
+- [ ] Pre-fix state: T3 and T4 FAIL against the unmodified tree (proving they are not tautological)
+  - **Claim Source:** not-run · **Uncertainty Declaration.** Left unchecked deliberately.
+  - No log of T3/T4 executed against the pre-fix tree exists. `ls ~/*.log` this session lists only `s064-unit.log` and `s064-integration.log` for this bug, both post-fix, plus the `bug011-*` logs which predate these tests entirely. The guards therefore have no recorded RED phase.
+  - What is available is adjacent but not a substitute: the `--bugfix` guard reports an adversarial signal in both files (item below), and `TestBUG064003_WarmupGateIsLoadBearing/without_the_gate_the_derived_budget_cannot_absorb_cold_start` PASSES, which asserts the pre-fix shape fails *within* a test rather than demonstrating the guard failing against the pre-fix tree. Discharging this item needs the guards run against a checkout without the fix.
+- [ ] Post-fix state: T1–T4 PASS
+  - **Claim Source:** interpreted · **Uncertainty Declaration.** Left unchecked deliberately — **3 of 4**, not 4 of 4.
+  - T1, T3 and T4 are checked above on executed evidence. T2 is not, for the reason stated in its own entry: the green lane never exercised the unready-embedder branch at the `integration` tier the row declares. A composite "T1–T4 PASS" tick would silently promote a 3-of-4 result to 4-of-4.
+  - This item becomes checkable the moment T2 is discharged; nothing else is outstanding.
+- [x] Regression tests contain no silent-pass bailout patterns
+  - **Claim Source:** executed · **Tree:** WORKING TREE, HEAD=3af96a02 · **Exit codes:** `0` (both modes)
+  - **Command:** `bash .github/bubbles/scripts/regression-quality-guard.sh <files>` and the same with `--bugfix`, run live this session against both regression files.
+  - Raw output evidence (inline, ≥10 lines, no references or summaries):
+    ```
+    ### V1 - default mode: bailout / silent-pass scan
+    $ bash .github/bubbles/scripts/regression-quality-guard.sh tests/integration/agent/openknowledge_routing_test.go internal/agent/bug064003_router_warmup_contract_test.go
+    ℹ️  Scanning tests/integration/agent/openknowledge_routing_test.go
+    ℹ️  Scanning internal/agent/bug064003_router_warmup_contract_test.go
+      REGRESSION QUALITY RESULT: 0 violation(s), 0 warning(s)
+      Files scanned: 2
+    GUARD_EXIT=0
+
+    ### V2 - bugfix mode: adversarial-signal requirement
+    $ bash .github/bubbles/scripts/regression-quality-guard.sh --bugfix tests/integration/agent/openknowledge_routing_test.go internal/agent/bug064003_router_warmup_contract_test.go
+      Bugfix mode: true
+    ✅ Adversarial signal detected in tests/integration/agent/openknowledge_routing_test.go
+    ✅ Adversarial signal detected in internal/agent/bug064003_router_warmup_contract_test.go
+      REGRESSION QUALITY RESULT: 0 violation(s), 0 warning(s)
+      Files scanned: 2
+      Files with adversarial signals: 2
+    GUARD_BUGFIX_EXIT=0
+    ```
+  - **What this does not assert.** The guard proves the absence of bailout *shapes*; it does not prove the guards would have failed pre-fix. That is the separate unchecked item above. One `t.Skipf` does remain in the routing test at `openknowledge_routing_test.go:124` and the guard passed it: it fires only on `routerwarmup.ErrEmbedderUnreachable` (no live stack at all), and is a different branch from the `t.Fatalf` readiness verdict at line 125.
+- [x] Full integration lane passes with no collateral regressions
+  - **Claim Source:** executed · **Tree:** WORKING TREE, HEAD=3af96a02 · **Exit code:** `0`
+  - **Command:** `./smackerel.sh test integration` — preserved at `~/s064-integration.log` (8218 lines), read this session; the lane was not re-run.
+  - Raw output evidence (inline, ≥10 lines, no references or summaries):
+    ```
+    ### V1 - lane terminator
+    8218:INTEGRATION_EXIT=0
+
+    ### V2 - zero failures anywhere across all 8218 lines
+    $ grep -cE '^(--- FAIL|FAIL[[:space:]]+github|FAIL:)' ~/s064-integration.log
+    0
+
+    ### V3 - the previously-failing package is now green
+    3594:ok      github.com/smackerel/smackerel/tests/integration/agent  20.238s
+
+    ### V4 - no collateral damage downstream; the eval gate still fires exactly once
+    7925:ASSISTANT_ACCEPTANCE_GATE_V1 executed_assertions=210 rows=150 capture_expected=60 routing_accuracy=1.0000 capture_fallback_rate=1.0000
+    7940:--- PASS: TestAcceptanceGate_RoutingAccuracyAndCaptureFallback (0.00s)
+    8028:ok      github.com/smackerel/smackerel/tests/eval/assistant     0.040s
+    8029:go-integration: acceptance gate executed 210 assertions.
+
+    ### V5 - ephemeral test storage torn down, no residue
+    8214: Volume smackerel-test-postgres-data  Removed
+    8215: Volume smackerel-test-ollama-data  Removed
+    8216: Volume smackerel-test-nats-data  Removed
+    ```
+  - This tick also unblocks the Stage 1 exit-criterion item in `specs/061-conversational-assistant/bugs/BUG-061-011-eval-gate-runs-in-no-automated-lane/scopes.md`, which was held on this lane exiting `0`.
+
+#### Implementation items
+
+- [x] Embedder-readiness gate precedes the timed region
+  - **Claim Source:** executed · **Tree:** WORKING TREE, HEAD=3af96a02
+  - **Command:** read the phase split from the source this session, then confirm the ordering actually observed on the live stack in `~/s064-integration.log` and the gate's load-bearing proof in `~/s064-unit.log`.
+  - Raw output evidence (inline, ≥10 lines, no references or summaries):
+    ```
+    ### V1 - source: Phase 1 (untimed readiness) strictly precedes Phase 2 (timed build)
+    tests/integration/agent/openknowledge_routing_test.go:117:  // Phase 1 — pay the cold start OUTSIDE the measured region. This must
+    tests/integration/agent/openknowledge_routing_test.go:118:  // precede router construction; routerwarmup.BuildRouter refuses a
+    tests/integration/agent/openknowledge_routing_test.go:120:  warm, err := routerwarmup.WaitForWarmEmbedder(context.Background(), embedder, timings, "probe")
+    tests/integration/agent/openknowledge_routing_test.go:125:      t.Fatalf("integration: embedder readiness gate failed (this is an ML sidecar readiness verdict, NOT a routing failure): %v", err)
+    tests/integration/agent/openknowledge_routing_test.go:147:  // Phase 2 — measure only router construction, under a budget derived from
+    tests/integration/agent/openknowledge_routing_test.go:150:  router, err := routerwarmup.BuildRouter(context.Background(), warm, cfg, registered, embedder, timings)
+
+    ### V2 - that ordering observed on the live stack (gate line precedes budget line)
+    3552:    openknowledge_routing_test.go:127: embedder warm-up gate passed: probes=1 latencies=[#1=464ms] qualifying=464ms elapsed=464ms
+    3554:    openknowledge_routing_test.go:149: router construction budget: embed_calls=79 per_call_budget=2s (AGENT_ROUTING_BUILD_PER_CALL_BUDGET_MS) derived_build_budget=2m38s
+
+    ### V3 - the gate is load-bearing, and cannot be bypassed with a fabricated warm result
+     76:--- PASS: TestBUG064003_WarmupGateIsLoadBearing (0.81s)
+     77:    --- PASS: TestBUG064003_WarmupGateIsLoadBearing/without_the_gate_the_derived_budget_cannot_absorb_cold_start (0.20s)
+     78:    --- PASS: TestBUG064003_WarmupGateIsLoadBearing/with_the_gate_the_same_budget_and_embedder_succeed (0.61s)
+     80:--- PASS: TestBUG064003_ZeroWarmResultIsStructurallyRefused (0.00s)
+    ```
+  - The ordering is structural, not conventional: `BuildRouter` takes a `warm` value that only `WaitForWarmEmbedder` can produce, and `TestBUG064003_ZeroWarmResultIsStructurallyRefused` proves a zero-value substitute is rejected. The 464 ms probe was paid outside the measured region.
+- [x] Router-construction budget derives from the intent-example count, not a literal
+  - **Claim Source:** executed · **Tree:** WORKING TREE, HEAD=3af96a02
+  - **Command:** read the derived budget from `~/s064-integration.log`, the SST keys from the working-tree diff of `config/smackerel.yaml`, the guard verdicts from `~/s064-unit.log`, and scan the source for surviving wall-clock literals.
+  - Raw output evidence (inline, ≥10 lines, no references or summaries):
+    ```
+    ### V1 - the budget is a function of the work, and the arithmetic checks out
+    3554:    openknowledge_routing_test.go:149: router construction budget: embed_calls=79 per_call_budget=2s (AGENT_ROUTING_BUILD_PER_CALL_BUDGET_MS) derived_build_budget=2m38s
+         79 embeds x 2s per call = 158s = 2m38s  (vs the old flat 30s for all 79)
+
+    ### V2 - the per-call unit is SST-published, not hardcoded (working-tree additions)
+    $ git diff HEAD -- config/smackerel.yaml
+    +    warmup_target_latency_ms: 1000 # REQUIRED: > 0; probe latency at/below which the embedder counts as warm
+    +    warmup_budget_ms: 60000 # REQUIRED: > 0; ceiling on the readiness wait before an embedder-not-ready failure
+    +    build_per_call_budget_ms: 2000 # REQUIRED: > 0; per-embed unit the router-construction budget is derived from
+
+    ### V3 - guards: the budget scales with the work, the SST publishes the contract, defaults fit the lane
+    120:--- PASS: TestBUG064003_RoutingTestCarriesNoWallClockLiteral (0.00s)
+    122:--- PASS: TestBUG064003_SSTPublishesTheWarmupContract (0.00s)
+    124:--- PASS: TestBUG064003_DerivedBudgetScalesWithTheWork (0.00s)
+    126:--- PASS: TestBUG064003_SSTDefaultsFitTheLaneBudget (0.02s)
+
+    ### V4 - source scan: no wall-clock literal survives (absence IS the pass condition)
+    $ grep -nE 'context\.WithTimeout|[0-9]+\s*\*\s*time\.(Second|Minute)' tests/integration/agent/openknowledge_routing_test.go
+    GREP_EXIT=1 (1 = no matches)
+    ```
+  - Both literals named in the Implementation Plan are gone: the `30*time.Second` router wrapper and the `5*time.Second` per-call ceiling. The per-call value now flows from SST via `timings.EmbedCallTimeout` at `openknowledge_routing_test.go:112`.
+- [x] Local `parseFloatEnv` / `parseIntEnv` fallback helpers removed; env reads are fail-loud
+  - **Claim Source:** executed · **Tree:** WORKING TREE, HEAD=3af96a02
+  - **Command:** scan the source for surviving call sites and helper definitions, read the replacement fail-loud reads, and confirm the adversarial unit coverage in `~/s064-unit.log`.
+  - Raw output evidence (inline, ≥10 lines, no references or summaries):
+    ```
+    ### V1 - no call site and no definition survives; the ONLY hit is a comment naming the deletion
+    $ grep -nE 'parseFloatEnv|parseIntEnv' tests/integration/agent/openknowledge_routing_test.go
+    94:     // parseFloatEnv/parseIntEnv helpers used to swallow exactly that and keep
+         (report.md recorded 4 hits pre-fix: lines 119, 120 call sites and 217, 229 definitions — all gone)
+
+    ### V2 - source: SST reads are now fatal-on-missing, mirroring internal/agent/config.go:155-156
+    tests/integration/agent/openknowledge_routing_test.go:96:   timings, err := routerwarmup.LoadTimings(os.LookupEnv)
+    tests/integration/agent/openknowledge_routing_test.go:100:  cfg, err := routerwarmup.LoadRoutingConfig(os.LookupEnv)
+         each followed immediately by t.Fatalf("integration: %v", err) — no substituted value on the error path
+
+    ### V3 - adversarial unit proof: the deleted 0.65 / 5 fallbacks cannot silently return
+     98:    --- PASS: TestBUG064003_RoutingValuesFailLoudWithoutFallback/confidence_floor_absent (0.00s)
+     99:    --- PASS: TestBUG064003_RoutingValuesFailLoudWithoutFallback/confidence_floor_empty (0.00s)
+    100:    --- PASS: TestBUG064003_RoutingValuesFailLoudWithoutFallback/confidence_floor_unparseable (0.00s)
+    101:    --- PASS: TestBUG064003_RoutingValuesFailLoudWithoutFallback/consider_top_n_absent (0.00s)
+    104:    --- PASS: TestBUG064003_RoutingValuesFailLoudWithoutFallback/fallback_scenario_id_absent (0.00s)
+    ```
+  - This closes the drift finding recorded in [design.md](design.md) § 2 by removing the forbidden shape outright, rather than relying on the SST guard's `_test.go` / `tests/` exclusion. It does **not** resolve whether that exclusion is itself correct — see the unchecked owner-decision item below.
+- [x] No product source file changed (test + SST config only)
+  - **Claim Source:** executed · **Tree:** WORKING TREE, HEAD=3af96a02
+  - **Command:** `git diff --stat HEAD` and `git status --porcelain`, **scoped to this bug's paths** — the shared working tree also carries several concurrent agents' unrelated changes (for example `internal/auth/scopes.go`, `specs/108-corpus-grant-enforcement/**`, `config/release-trains.yaml`), which are not this bug's and are excluded from the claim.
+  - Raw output evidence (inline, ≥10 lines, no references or summaries):
+    ```
+    ### V1 - modified files in this bug's change surface
+    $ git diff --stat HEAD -- tests/integration/agent/openknowledge_routing_test.go config/smackerel.yaml
+     config/smackerel.yaml                              | 32 ++++++++
+     .../agent/openknowledge_routing_test.go            | 86 +++++++++++-----------
+     2 files changed, 76 insertions(+), 42 deletions(-)
+
+    ### V2 - new files added by this bug
+    $ git status --porcelain -- internal/agent/bug064003_router_warmup_contract_test.go tests/integration/agent/routerwarmup/
+    ?? internal/agent/bug064003_router_warmup_contract_test.go
+    ?? tests/integration/agent/routerwarmup/
+
+    ### V3 - classification of all four
+    tests/integration/agent/openknowledge_routing_test.go     test           (modified)
+    internal/agent/bug064003_router_warmup_contract_test.go   test           (new, _test.go — excluded from the binary)
+    tests/integration/agent/routerwarmup/routerwarmup.go      test-support   (new, under tests/)
+    config/smackerel.yaml                                     SST config     (modified: 3 new keys, V2 of the budget item)
+    ```
+  - No file under `internal/` other than a `_test.go`, and no file under `cmd/` or `ml/`, is in this bug's surface. `routerwarmup.go` is a non-`_test.go` file, so it is called out explicitly rather than absorbed: it lives under `tests/` and is imported only by the integration test.
+
+#### Build Quality Gate (grouped)
+
+- [ ] `./smackerel.sh check`, `lint`, and `format --check` clean; zero warnings; zero deferrals; artifact lint clean; docs aligned
+  - **Claim Source:** not-run · **Uncertainty Declaration.** Left unchecked deliberately.
+  - None of `check`, `lint`, `format --check`, or `artifact-lint.sh` was executed against this tree state, and no preserved log for them exists for this bug. `ls ~/*.log` this session shows `bug011-lint.log` and `bug011-format.log`, but those were captured for BUG-061-011 at an earlier tree state that predates `routerwarmup/` and `bug064003_router_warmup_contract_test.go` entirely; citing them here would be evidence laundering.
+  - "Docs aligned" is additionally **not** satisfied: [report.md](report.md) still states "No fix was implemented" and "every Definition-of-Done checkbox in scopes.md is unchecked", both of which this file now contradicts. `report.md` was outside this pass's permitted edit set.
+- [ ] Owner decision recorded for design.md § "Open questions" item 1 (does the no-defaults policy bind test code?)
+  - **Claim Source:** not-run · **Uncertainty Declaration.** Left unchecked deliberately.
+  - [design.md](design.md) § 5 question 1 is still stated as an open question with no recorded answer: *"Does the no-defaults policy bind test code? ... This bug does not presume the answer."* No owner decision has been recorded anywhere in this packet.
+  - The fix made the question **non-blocking** but did not answer it: the forbidden helper shape was deleted outright, so this bug no longer depends on the ruling. The ruling still matters beyond this bug — if the answer is "yes", the SST guard's own `_test.go` / `tests/` exclusions (`internal/config/sst_grep_guard_test.go:75,82`) are a gap warranting a separate bug against spec 020. That is an owner call, not an agent call.

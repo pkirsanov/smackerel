@@ -9,6 +9,7 @@
 package telegram
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"testing"
@@ -48,7 +49,7 @@ func TestBot_bearerForChat_NilMinter_FallsBackToSharedToken(t *testing.T) {
 	bot := NewBotForTest("dev", map[int64]string{12345: "tg-user-alice"})
 	bot.authToken = "legacy-shared-bearer-xyz"
 
-	got, err := bot.bearerForChat(12345)
+	got, err := bot.bearerForChat(context.Background(), 12345)
 	if err != nil {
 		t.Fatalf("bearerForChat: unexpected err=%v", err)
 	}
@@ -65,7 +66,7 @@ func TestBot_bearerForChat_NilMinter_EmptyAuthToken_ReturnsEmpty(t *testing.T) {
 	bot := NewBotForTest("dev", nil)
 	// authToken intentionally left at zero value.
 
-	got, err := bot.bearerForChat(99)
+	got, err := bot.bearerForChat(context.Background(), 99)
 	if err != nil {
 		t.Fatalf("bearerForChat: unexpected err=%v", err)
 	}
@@ -93,19 +94,20 @@ func TestBot_bearerForChat_WithMinter_MappedChat_ReturnsPerUserPASETO(t *testing
 
 	priv, _ := generateTestSigningKeypair(t)
 	minter, err := NewPerUserTokenMinter(PerUserTokenMinterOptions{
-		Bot:        bot,
-		SigningKey: priv,
-		KeyID:      "test-kid-bearerForChat",
-		Issuer:     "smackerel",
-		TTL:        5 * time.Minute,
-		Now:        time.Now,
+		Bot:             bot,
+		PrincipalGrants: newFullyGrantedPrincipalReader(),
+		SigningKey:      priv,
+		KeyID:           "test-kid-bearerForChat",
+		Issuer:          "smackerel",
+		TTL:             5 * time.Minute,
+		Now:             time.Now,
 	})
 	if err != nil {
 		t.Fatalf("NewPerUserTokenMinter: %v", err)
 	}
 	bot.SetPerUserTokenMinter(minter)
 
-	got, err := bot.bearerForChat(12345)
+	got, err := bot.bearerForChat(context.Background(), 12345)
 	if err != nil {
 		t.Fatalf("bearerForChat: unexpected err=%v", err)
 	}
@@ -135,19 +137,20 @@ func TestBot_bearerForChat_WithMinter_DevUnmappedChat_FallsBackToShared(t *testi
 
 	priv, _ := generateTestSigningKeypair(t)
 	minter, err := NewPerUserTokenMinter(PerUserTokenMinterOptions{
-		Bot:        bot,
-		SigningKey: priv,
-		KeyID:      "test-kid-dev-unmapped",
-		Issuer:     "smackerel",
-		TTL:        5 * time.Minute,
-		Now:        time.Now,
+		Bot:             bot,
+		PrincipalGrants: newFullyGrantedPrincipalReader(),
+		SigningKey:      priv,
+		KeyID:           "test-kid-dev-unmapped",
+		Issuer:          "smackerel",
+		TTL:             5 * time.Minute,
+		Now:             time.Now,
 	})
 	if err != nil {
 		t.Fatalf("NewPerUserTokenMinter: %v", err)
 	}
 	bot.SetPerUserTokenMinter(minter)
 
-	got, err := bot.bearerForChat(99999) // unmapped
+	got, err := bot.bearerForChat(context.Background(), 99999) // unmapped
 	if err != nil {
 		t.Fatalf("bearerForChat: unexpected err=%v", err)
 	}
@@ -173,19 +176,20 @@ func TestBot_bearerForChat_WithMinter_ProdUnmappedChat_PropagatesError(t *testin
 
 	priv, _ := generateTestSigningKeypair(t)
 	minter, err := NewPerUserTokenMinter(PerUserTokenMinterOptions{
-		Bot:        bot,
-		SigningKey: priv,
-		KeyID:      "test-kid-prod-unmapped",
-		Issuer:     "smackerel",
-		TTL:        5 * time.Minute,
-		Now:        time.Now,
+		Bot:             bot,
+		PrincipalGrants: newFullyGrantedPrincipalReader(),
+		SigningKey:      priv,
+		KeyID:           "test-kid-prod-unmapped",
+		Issuer:          "smackerel",
+		TTL:             5 * time.Minute,
+		Now:             time.Now,
 	})
 	if err != nil {
 		t.Fatalf("NewPerUserTokenMinter: %v", err)
 	}
 	bot.SetPerUserTokenMinter(minter)
 
-	got, err := bot.bearerForChat(99999) // unmapped
+	got, err := bot.bearerForChat(context.Background(), 99999) // unmapped
 	if err == nil {
 		t.Fatalf("bearerForChat returned bearer=%q for unmapped prod chat; want error", got)
 	}
@@ -241,12 +245,13 @@ func TestBot_setBearerHeader_ProdUnmappedChat_PropagatesError(t *testing.T) {
 	})
 	priv, _ := generateTestSigningKeypair(t)
 	minter, err := NewPerUserTokenMinter(PerUserTokenMinterOptions{
-		Bot:        bot,
-		SigningKey: priv,
-		KeyID:      "test-kid-setBearerHeader-err",
-		Issuer:     "smackerel",
-		TTL:        5 * time.Minute,
-		Now:        time.Now,
+		Bot:             bot,
+		PrincipalGrants: newFullyGrantedPrincipalReader(),
+		SigningKey:      priv,
+		KeyID:           "test-kid-setBearerHeader-err",
+		Issuer:          "smackerel",
+		TTL:             5 * time.Minute,
+		Now:             time.Now,
 	})
 	if err != nil {
 		t.Fatalf("NewPerUserTokenMinter: %v", err)

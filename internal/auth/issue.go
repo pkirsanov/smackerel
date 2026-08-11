@@ -268,6 +268,11 @@ func IssueAndPersistToken(ctx context.Context, store *BearerStore, opts IssueAnd
 		IssuedBy:           opts.IssuedBy,
 		IssuedSource:       opts.IssuedSource,
 		RotatedFromTokenID: opts.RotatedFromTokenID,
+		// Same opts.Scopes that IssueToken just wrote into the `scope`
+		// claim above, so the row and the token cannot disagree (spec
+		// 108 design.md §10.4). Callers that supply no scopes mint a
+		// token with no claim and record '{}' — never SQL NULL.
+		GrantedScopes: opts.Scopes,
 	}); err != nil {
 		return IssueAndPersistResult{}, fmt.Errorf("persist token: %w", err)
 	}

@@ -175,6 +175,20 @@ type Dependencies struct {
 	RevocationCache   *revocation.Cache
 	AuthAdminHandlers *AuthAdminHandlers
 
+	// Spec 108 Scope 03 — the resolved corpus-grant enforcement stage:
+	// false = OBSERVE, true = ENFORCE. It is carried as an already-resolved
+	// boolean rather than as config, because the ONLY place the stage is
+	// derived is cmd/core/wiring_corpus_grant.go, where an absent, empty, or
+	// malformed value is REFUSED-BOOT (R-108-FL5). NewRouter never resolves
+	// it and has no per-route override (R-108-FL6).
+	//
+	// NewRouter builds the CorpusGrantGate from this field unconditionally,
+	// so the OBSERVE half is mounted on all sixteen corpus route groups in
+	// BOTH stages and there is no construction in which a corpus route is
+	// reachable without it. This field selects ONLY whether the ENFORCE half
+	// (auth.RequireScope) is additionally mounted.
+	CorpusGrantEnforce bool
+
 	// Spec 070 — web operator credential layer (username/password login).
 	// nil when the deployment has no Postgres pool (config-validate mode,
 	// some tests). HandleWebLogin falls back to the existing token-form

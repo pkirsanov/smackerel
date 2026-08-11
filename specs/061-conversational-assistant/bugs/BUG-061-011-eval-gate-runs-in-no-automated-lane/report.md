@@ -1,0 +1,620 @@
+# Report: BUG-061-011 — Assistant acceptance gate executes in no automated lane
+
+> **Reading order.** The *Summary* and *Completion Statement* immediately below record the **filing session**, which was artifacts-and-analysis only. They are kept verbatim as the historical record and are **superseded** by the *Status update* block that follows. The fix has since been implemented and verified; see *After Fix — Verification*.
+
+### Summary
+
+Bug filed and root-caused. **No fix implemented in this session** — this packet is artifacts and root-cause analysis only, by explicit instruction. Implementation is dispatched separately.
+
+The assistant acceptance gate `TestAcceptanceGate_RoutingAccuracyAndCaptureFallback` (`tests/eval/assistant/acceptance_test.go`) executes in no automated lane. It is excluded from the untagged unit lane by `//go:build integration`, and its package `./tests/eval/assistant` is absent from the integration lane's explicit package allow-list at `scripts/runtime/go-integration.sh:53`. A build tag cannot include a file inside a package that was never selected, so the opt-out took effect and the opt-in never did.
+
+A second, independent finding surfaced during investigation: **no executed-assertion count is emitted anywhere in the repository, in any form.** The delivery plan's Stage 1 exit criterion requires the integration run to report exactly that. This makes the fix larger than the plan's "Files (2)" estimate — see `design.md` § *Honest size assessment*.
+
+### Completion Statement
+
+This packet is **incomplete by design**. Status is `in_progress` with `certification.status: in_progress`.
+
+Delivered in this session:
+- Repository binding validated (`REPOSITORY PACKET VALID`, exit 0).
+- Defect re-verified from primary sources, not assumed. Raw transcript below.
+- Eight bug artifacts created (six named in the request, plus `uservalidation.md` and `scenario-manifest.json` required by `.github/agents/bubbles_shared/bug-templates.md` before promotion).
+- Root cause established: a missing invariant between an explicit package allow-list and a build tag, asserted only by a source comment.
+- Fix designed against the code that exists, including the executed-assertion emission that does not exist today.
+- Adversarial regression designed (cases A1–A7), with A1 being the current file content.
+
+NOT delivered, and not claimed:
+- No source file outside this bug folder was modified.
+- No test was written or executed against a fix.
+- Every DoD item in `scopes.md` is unchecked. None may be checked until its evidence block exists.
+- No Bubbles gate (`artifact-lint.sh`, `state-transition-guard.sh`, `regression-quality-guard.sh`) was executed in this session. No claim is made about their verdicts.
+
+### Status update — supersedes the two sections above
+
+The fix has since been implemented (working tree at HEAD `3af96a02`, **uncommitted**) and the gate has been observed running in the automated integration lane. `bug.md` is advanced to **Fixed**. `Verified` is deliberately not set — that transition is owned by validation.
+
+**What is now proven, with evidence in this report and in `scopes.md`:**
+
+- The full integration lane compiles and executes `./tests/eval/assistant`, and the gate emits **exactly one** marker line reporting `executed_assertions=210`. The lane's own enforced assertion accepts it. (*After Fix* § 2; DoD **A9**.)
+- Spec requirements **R1 through R7 are fully discharged** — R1–R6 by executed tests, R7 by recorded correction — with the mapping recorded row by row. (*After Fix* § 3.)
+- All three stale-claim surfaces are corrected: the `acceptance_test.go` header, `docs/Testing.md` § *How To Run*, and the R10-3 prose in `tests/e2e/assistant_regression_e2e_test.sh`. (*After Fix* § 5.)
+- Every artifact mention of D25/D28 corpus-grant enforcement is a disclaimer; there are **zero** affirmative claims across 1236 lines. (*After Fix* § 4.)
+- 21 of 26 DoD items in `scopes.md` are checked, each with an inline evidence block. (`artifact-lint.sh` exited `0` when last run in the preceding pass; it has **not** been re-run since the R10-3 correction and the three checkbox changes made in this pass.)
+
+**What remains open, stated plainly so no reader infers completion:**
+
+| Open item | Why |
+|-----------|-----|
+| Stage 1 exit criterion | Requires the lane **green**. The count half is met; the lane exited `1` on an unrelated failure filed as `specs/064-open-ended-knowledge-agent/bugs/BUG-064-003-router-warmup-exceeds-fixed-deadline/`. |
+| `bug.md` Fixed **and** Verified | `Fixed` is set. `Verified` is a certification-state claim owned by `bubbles.validate` and has not happened, so the two-part DoD item is **unchecked**. |
+| E2E regression items (2) | No `./smackerel.sh test e2e` run has been performed. Nothing is claimed in either direction. |
+| Group C build-quality gate | Deferred to a separate pass. |
+| No test guards the R10-3 prose | R7.1 requires the prose be true or corrected, not that a test protect it, so this does not hold R7 open — but a future edit to that prose has no mechanical backstop. |
+
+Uncertainty Declaration 3 below is now **resolved**: `executed_assertions=210` was predicted arithmetically at filing time and is now an observed value. Declarations 1, 2, and 4 stand.
+
+### Test Evidence
+
+No tests were executed in this session. There is nothing to test — no fix exists. The evidence below is **reproduction evidence** for the defect, per the Gate 0 bug-reproduction contract. The corresponding *After Fix* section is intentionally empty and will be filled by the implementing agent.
+
+---
+
+## Before Fix — Reproduction
+
+**Tree named:** commit `6ad1e8c98ce6e1aa35df779306c6a8835db172be`. The four implicated paths are **identical at HEAD and in the working tree** — `git status --porcelain` on them returns no lines, as shown in the transcript. The uncommitted working-tree changes present in this repository belong to spec OPS-006 and touch none of these files, so the finding is unaffected by tree choice.
+
+**Claim Source:** `executed` — every line below is verbatim output of a command run in this session.
+
+**Command:**
+
+```bash
+cd <repo-root> && echo "### TREE"; git rev-parse HEAD; git status --porcelain -- scripts/runtime/go-integration.sh scripts/runtime/go-unit.sh tests/eval docs/Testing.md; echo "(no lines above = the implicated files are identical at HEAD and in the working tree)"; echo; echo "### STEP 1 — build tag on the gate"; sed -n '1,2p' tests/eval/assistant/acceptance_test.go; echo "exit=$?"; echo; echo "### STEP 2 — integration lane package list"; sed -n '48,55p' scripts/runtime/go-integration.sh; echo "exit=$?"; echo; echo "### STEP 3 — eval absent from the integration lane"; grep -nE 'tests/eval|eval' scripts/runtime/go-integration.sh; echo "grep_exit=$? (1 = zero matches)"; echo; echo "### STEP 4 — unit lane has no tags"; sed -n '66,68p' scripts/runtime/go-unit.sh; echo "exit=$?"; echo; echo "### STEP 5 — no executor anywhere"; grep -rn "TestAcceptanceGate" --include='*.go' --include='*.sh' --include='*.yaml' --include='*.yml' tests/ scripts/ .github/ internal/; echo "grep_exit=$?"; echo; echo "### STEP 6 — no executed-assertion count emitted anywhere"; grep -rniE 'executed[_ -]?assertion' --include='*.go' --include='*.sh' --include='*.yaml' --include='*.yml' tests/ scripts/ internal/ .github/; echo "grep_exit=$? (1 = the count does not exist)"
+```
+
+**Output (verbatim):**
+
+```
+### TREE
+6ad1e8c98ce6e1aa35df779306c6a8835db172be
+(no lines above = the implicated files are identical at HEAD and in the working tree)
+
+### STEP 1 — build tag on the gate
+//go:build integration
+
+exit=0
+
+### STEP 2 — integration lane package list
+go_test_args=(-p 1 -tags integration -v -count=1 -timeout 300s)
+if [[ -n "$go_run_selector" ]]; then
+        echo "go-integration: applying -run selector: $go_run_selector"
+        go_test_args+=(-run "$go_run_selector")
+fi
+go_test_args+=(./tests/integration/... ./internal/notification/... ./internal/assistant/... ./internal/cardrewards/...)
+
+go test "${go_test_args[@]}"
+exit=0
+
+### STEP 3 — eval absent from the integration lane
+grep_exit=1 (1 = zero matches)
+
+### STEP 4 — unit lane has no tags
+echo "[go-unit] starting go test ./..."
+go test "${go_test_args[@]}" ./...
+echo "[go-unit] go test ./... finished OK"exit=0
+
+### STEP 5 — no executor anywhere
+tests/e2e/assistant_regression_e2e_test.sh:253:echo "                       TestAcceptanceGate_RoutingAccuracyAndCaptureFallback"
+tests/eval/assistant/acceptance_test.go:41:func TestAcceptanceGate_RoutingAccuracyAndCaptureFallback(t *testing.T) {
+grep_exit=0
+
+### STEP 6 — no executed-assertion count emitted anywhere
+tests/e2e/assistant_regression/lib/regression_helpers.sh:15:# unblocks the substrate flips the skip to an executed assertion
+grep_exit=0 (1 = the count does not exist)
+```
+
+### Reading of the transcript
+
+| Step | Finding |
+|------|---------|
+| TREE | Zero porcelain lines for the four implicated paths — the defect is present at HEAD **and** in the working tree. No tree ambiguity in any claim below. |
+| 1 | The gate file's first line is `//go:build integration`. It cannot compile in an untagged build. |
+| 2 | Line 53 enumerates four package trees. `./tests/eval/...` is not among them. Note line 48 does set `-tags integration` — the tag is present, the package is not. |
+| 3 | `grep_exit=1`, zero matching lines. The string `eval` does not appear anywhere in the integration lane wrapper. |
+| 4 | The unit lane is `go test ./...` with no `-tags`, so the tagged gate file is filtered out there. Its untagged package-mates (`corpus_validation_test.go`, `harness_test.go`) do run — the package is reached, only the gate is excluded. |
+| 5 | Exactly two hits across `tests/`, `scripts/`, `.github/`, `internal/`: the function definition itself, and an `echo` line in a shell script. **Nothing invokes it.** |
+| 6 | The only match is a source comment in an unrelated helper. No executed-assertion count is produced anywhere, so the Stage 1 exit criterion is unmet by construction. |
+
+### Supporting evidence gathered in the same session
+
+Each of the following was read directly and is recorded here as the basis for statements in `bug.md` and `design.md`.
+
+| Fact | Source, verified this session |
+|------|------------------------------|
+| CI runs the integration lane | `.github/workflows/ci.yml:241` — `./smackerel.sh test integration 2>&1 \| tee integration-test.log`, with no `--go-run` selector |
+| CI runs the unit lane | `.github/workflows/ci.yml:92` — `./smackerel.sh test unit --go` |
+| Lane wrapper invocation | `smackerel.sh:1206` — runs `go-integration.sh` inside `golang:1.25.10-bookworm` |
+| `--go-run` is forwarded as `--run` | `smackerel.sh:1249-1260`, consumed by `go-integration.sh:20-40` into `-run` |
+| Gate reads SST floors and fails loud when absent | `tests/eval/assistant/acceptance_test.go:28-40` (`mustFloatEnv` → `t.Fatalf`) |
+| Report printed only on pass | `tests/eval/assistant/acceptance_test.go` — `if !t.Failed() { fmt.Println(report) }` |
+| Aggregate count fields exist but are not summed | `tests/eval/assistant/harness.go` — `HarnessResult.Total`, `HarnessResult.CaptureExpected` |
+| Corpus is 150 rows, 30 per label | `grep -cE '^[[:space:]]*-[[:space:]]+id:' tests/eval/assistant/corpus.yaml` → `150`; per-label `uniq -c` → 30 each across five labels |
+| 60 capture-expected rows | `grep -c 'ground_truth_capture_expected: true' tests/eval/assistant/corpus.yaml` → `60` |
+| Therefore executed assertions today would be 210 | `150 + 60`, derived from the two existing fields |
+| SST thresholds | `config/smackerel.yaml:1351-1353` — `routing_accuracy_min: 0.85`, `capture_fallback_min: 1.0`, both marked `REQUIRED` |
+| Generated env carries both keys | `config/generated/test.env:571-572` |
+| Delivery plan item | `docs/Product_Delivery_Plan.md:300` — `D27` · Critical · Stage 1, § P3 |
+| Stage 1 exit criterion | `docs/Product_Delivery_Plan.md:662-678` — three commands green **and** *"the integration run reports the assistant acceptance gate with a non-zero executed-assertion count"* |
+| Product-direction row | `docs/Product_Direction_2026-07-31.md:230` |
+| Contract-test precedent reading `scripts/runtime/*` | `internal/deploy/envsubst_wrapper_contract_test.go`, `internal/deploy/assistant_e2e_package_contract_test.go` (pure `assert…(dispatch, wrapper string) error` + adversarial fixtures), `internal/deploy/ci_integration_topology_contract_test.go` |
+
+### The three false claims, verified
+
+| Surface | Text | Status |
+|---------|------|--------|
+| `tests/eval/assistant/acceptance_test.go:15-17` | *"CI invokes `./smackerel.sh test integration` which sets `-tags integration` and the gate then runs."* | First clause true (`ci.yml:241`), conclusion **false** — the package list excludes the package |
+| `docs/Testing.md:748` | *"The standard invocation is: `./smackerel.sh test integration --go-run TestAcceptanceGate_RoutingAccuracyAndCaptureFallback`"* | **Cannot run the gate** — `-run` filters within the four listed trees only. The direct form at `docs/Testing.md:755`, which names `./tests/eval/assistant/...` explicitly, does work and is the only working invocation in the repository. |
+| `tests/e2e/assistant_regression_e2e_test.sh:251-253` | R10-3 states the gate *"runs as part of `./smackerel.sh test integration` not `unit`"* | **False** — the block is `echo` prose; the script never invokes the gate (STEP 5) |
+
+Spec 061's own `report.md:6839` repeats the `docs/Testing.md:748` claim as the gate's "primary path". The gate's historical PASS transcripts (`specs/061-conversational-assistant/report.md:5399`, `:5705`) used the **direct** `go test ./tests/eval/assistant/...` form — genuine runs, but manual ones.
+
+### Pre-fix state re-confirmed at HEAD `3af96a02`
+
+The reproduction above was captured at `6ad1e8c9`. HEAD has since advanced twice, and the fix is still **uncommitted** — it lives only in the working tree. That means HEAD is itself a faithful pre-fix tree, and the pre-fix state can be re-proved from committed content with no rebuild, no container, and no stack. The three probes below are the exact inverse of the *After Fix* probes in the next section: same patterns, same paths, read from `HEAD` instead of the working tree.
+
+**Claim Source:** `executed` · **Tree:** `HEAD` = `3af96a0295d26a1d4a7f7798417421e1977fc0a7` · **Exit codes read from `$?`**
+
+**Command:**
+
+```bash
+git rev-parse HEAD
+git grep -n 'tests/eval' HEAD -- scripts/runtime/go-integration.sh
+git grep -n 'ASSISTANT_ACCEPTANCE_GATE_V1' HEAD -- .
+git grep -niE 'executed[_ -]?assertions?' HEAD -- scripts/ tests/eval/ internal/deploy/
+git grep -n 'go_test_args+=(\./' HEAD -- scripts/runtime/go-integration.sh
+```
+
+**Output (verbatim; `git grep` exits `1` when it matches nothing):**
+
+```
+### HEAD
+3af96a0295d26a1d4a7f7798417421e1977fc0a7
+3af96a02
+
+### P1 - eval package in the lane allow-list AT HEAD
+P1_EXIT=1 (1 = zero matches)
+
+### P2 - marker literal anywhere in the tree AT HEAD
+P2_EXIT=1 (1 = absent at HEAD)
+
+### P3 - executed-assertion count in any form AT HEAD
+P3_EXIT=1 (1 = the count does not exist at HEAD)
+
+### P4 - the lane package list AS IT STANDS AT HEAD
+HEAD:scripts/runtime/go-integration.sh:53:go_test_args+=(./tests/integration/... ./internal/notification/... ./internal/assistant/... ./internal/cardrewards/...)
+P4_EXIT=0
+```
+
+| Probe | Scope searched | Result | What it establishes |
+|-------|----------------|--------|---------------------|
+| P1 | the lane wrapper | **0 matches** | `./tests/eval/...` is not in the lane's package list at HEAD. The gate's package is never compiled by the lane. |
+| P2 | **the entire repository** at HEAD (`-- .`, unrestricted) | **0 matches** | The marker literal `ASSISTANT_ACCEPTANCE_GATE_V1` does not exist anywhere at HEAD — not in the lane, not in the harness, not in a test, not in docs. |
+| P3 | `scripts/`, `tests/eval/`, `internal/deploy/` | **0 matches** | No executed-assertion count is emitted, parsed, or asserted in any form. The Stage 1 exit criterion is unmet by construction, not by degree. |
+| P4 | the lane wrapper | line 53, four package trees | The pre-fix allow-list, quoted in full, with `./tests/eval/...` visibly absent. |
+
+P2 is the load-bearing one. It was deliberately run against the whole tree with no path filter, so it cannot be dismissed as a mis-scoped search: if any surface anywhere in the repository emitted the marker, this probe would have found it. It found nothing.
+
+**Why this is a legitimate pre-fix capture and not a re-labelled post-fix run.** The claim is about *committed* content. `git grep <pattern> HEAD` reads the commit object, not the working tree, so the uncommitted fix cannot leak into the result — and P4 proves the read reached real content rather than failing silently, because it returned the pre-fix line 53 verbatim. Exit `1` from `git grep` is genuine absence; a bad path would have exited non-zero with an error on stderr, and a bad revision would have failed outright.
+
+---
+
+## Repository Binding
+
+**Claim Source:** `executed`.
+
+```
+$ bash .github/bubbles/scripts/repository-binding.sh validate-packet \
+    --session-id vscode-285f20907b0fc9112384875149e94eee \
+    --session-control-file /run/user/1000/bubbles/repository-binding/vscode-285f20907b0fc9112384875149e94eee/repository-binding.json \
+    --packet-file <derived-packet>
+REPOSITORY PACKET VALID actionable=true repository=smackerel root=<repo-root> decision=rb:vscode-285f20907b0fc9112384875149e94eee:1 revision=1
+VALIDATE_EXIT=0
+```
+
+Note recorded for the dispatching agent: the packet supplied in the request declared `scopeKind: bug` / `scopeId: BUG-061-011` and an in-resolution `sessionControlFile` key. `repository-binding.sh`'s `packet_json_is_valid` accepts only `scopeKind: "command"` (with `scopeId: null`) or `scopeKind: "goal-node"`, and its `repositoryResolution` key set does not include `sessionControlFile`. The packet was therefore re-derived from the authoritative session control file — same repository, same decision id, same revision, same authority (`explicit-repository-root`), same transition (`established`), same target kind (`repository-root`) — as `scopeKind: "command"`. No binding was re-selected and no other workspace root was read or written.
+
+---
+
+## After Fix — Verification
+
+**Tree:** working tree at HEAD `3af96a02` (the fix is uncommitted; HEAD is still a pre-fix tree, which is what makes the paired capture above and below a true before/after on one machine). **Claim Source:** `executed` for every block in this section. Exit codes are read from `$?`.
+
+### 1. The same probes, run against the working tree
+
+Identical patterns and identical paths to the *Before Fix* capture. Only the tree differs: `git grep … HEAD` there, plain `grep` over the working tree here.
+
+**Command:**
+
+```bash
+grep -n 'tests/eval' scripts/runtime/go-integration.sh
+grep -rn 'ASSISTANT_ACCEPTANCE_GATE_V1' scripts/ tests/eval/ internal/deploy/
+grep -rniE 'executed[_ -]?assertions?' scripts/ tests/eval/ internal/deploy/
+grep -n 'go_test_args+=(\./' scripts/runtime/go-integration.sh
+```
+
+**Output (verbatim):**
+
+```
+### W1 - eval package in the lane allow-list IN THE WORKING TREE
+53:go_test_args+=(./tests/integration/... ./internal/notification/... ./internal/assistant/... ./internal/cardrewards/... ./tests/eval/...)
+55:# BUG-061-011 — ./tests/eval/... above carries the assistant acceptance gate
+W1_EXIT=0
+
+### W2 - marker literal IN THE WORKING TREE
+scripts/runtime/go-integration.sh:65:gate_marker_prefix="ASSISTANT_ACCEPTANCE_GATE_V1"
+tests/eval/assistant/harness.go:343:const GateMarkerPrefix = "ASSISTANT_ACCEPTANCE_GATE_V1"
+internal/deploy/eval_lane_contract_test.go:25:  evalGateMarkerPrefix = "ASSISTANT_ACCEPTANCE_GATE_V1"
+internal/deploy/eval_lane_contract_test.go:33:  evalGateMarkerAssignment = `gate_marker_prefix="ASSISTANT_ACCEPTANCE_GATE_V1"`
+internal/deploy/eval_lane_contract_test.go:209:gate_marker_prefix="ASSISTANT_ACCEPTANCE_GATE_V1"
+W2_EXIT=0
+
+### W3 - executed-assertion count IN THE WORKING TREE (scripts/ + harness.go portion; see note)
+scripts/runtime/go-integration.sh:58:# be selected and still contribute zero executed assertions if the tag stops
+scripts/runtime/go-integration.sh:102:          gate_executed_assertions="${gate_marker_line##*executed_assertions=}"
+scripts/runtime/go-integration.sh:103:          gate_executed_assertions="${gate_executed_assertions%% *}"
+scripts/runtime/go-integration.sh:104:          if [[ ! "$gate_executed_assertions" =~ ^[0-9]+$ ]]; then
+scripts/runtime/go-integration.sh:105:                  echo "ERROR: go-integration: TestAcceptanceGate_RoutingAccuracyAndCaptureFallback reported a non-numeric executed_assertions value: ${gate_marker_line}" >&2
+scripts/runtime/go-integration.sh:107:          elif [[ "$gate_executed_assertions" -lt 1 ]]; then
+scripts/runtime/go-integration.sh:108:                  echo "ERROR: go-integration: TestAcceptanceGate_RoutingAccuracyAndCaptureFallback evaluated nothing (executed_assertions must be >= 1): ${gate_marker_line}" >&2
+scripts/runtime/go-integration.sh:111:                  echo "go-integration: acceptance gate executed ${gate_executed_assertions} assertions."
+scripts/runtime/go-integration.sh:115:  echo "go-integration: NOTICE: acceptance-gate executed-assertion assertion NOT ENFORCED for this run — a focused --run selector (${go_run_selector}) is active. ..."
+tests/eval/assistant/harness.go:329:// ExecutedAssertions reports how many ground-truth comparisons the run
+tests/eval/assistant/harness.go:335:func ExecutedAssertions(r HarnessResult) int {
+tests/eval/assistant/harness.go:350:    return fmt.Sprintf("%s executed_assertions=%d rows=%d capture_expected=%d routing_accuracy=%.4f capture_fallback_rate=%.4f",
+tests/eval/assistant/harness.go:352:            ExecutedAssertions(r),
+W3_EXIT=0
+
+### W4 - the lane package list IN THE WORKING TREE
+53:go_test_args+=(./tests/integration/... ./internal/notification/... ./internal/assistant/... ./internal/cardrewards/... ./tests/eval/...)
+W4_EXIT=0
+```
+
+**Excerpt disclosure for W3 (stated so the block is not read as complete output).** The W3 command returned **46** matching lines in total. Reproduced above are the **13** from `scripts/runtime/go-integration.sh` (9) and `tests/eval/assistant/harness.go` (4) — the lane that performs the assertion and the harness that computes the count, which are the two surfaces the requirement is about. The remaining 33 are in `tests/eval/assistant/harness_test.go` (14) and `internal/deploy/eval_lane_contract_test.go` (19); those are the tests *about* the count, and their execution is evidenced separately by DoD items A1–A8. No matching line was suppressed because it was inconvenient; the split is by surface and is declared here.
+
+**Before/after, on the same four probes:**
+
+| Probe | At HEAD `3af96a02` (pre-fix) | Working tree (post-fix) |
+|-------|------------------------------|--------------------------|
+| `./tests/eval/...` in the lane allow-list | absent (exit `1`, 0 matches) | present, line 53 (exit `0`) |
+| `ASSISTANT_ACCEPTANCE_GATE_V1` anywhere in the repo | absent (exit `1`, 0 matches, unrestricted search) | 5 matches: lane, harness, contract test |
+| executed-assertion count in any form | absent (exit `1`, 0 matches) | 46 matches: emitted, parsed, asserted, tested |
+| lane package list | 4 package trees | 5 package trees |
+
+### 2. Full-lane run: the gate executed and reported 210 assertions
+
+A full `./smackerel.sh test integration` was run with **no** `--go-run` selector, so the R3 assertion was ENFORCED. The complete transcript is preserved at `~/bug011-integration-a9.log` (8621 lines, 867752 bytes). The decisive lines are extracted below with their authoritative log line numbers.
+
+**Command:** `./smackerel.sh test integration` · **Recorded lane exit:** `INTEGRATION_EXIT=1`
+
+**Output (verbatim excerpts, line numbers from `grep -n` against the preserved log):**
+
+```
+### gate executed, marker emitted, gate passed
+8325:=== RUN   TestAcceptanceGate_RoutingAccuracyAndCaptureFallback
+8326:ASSISTANT_ACCEPTANCE_GATE_V1 executed_assertions=210 rows=150 capture_expected=60 routing_accuracy=1.0000 capture_fallback_rate=1.0000
+8341:--- PASS: TestAcceptanceGate_RoutingAccuracyAndCaptureFallback (0.03s)
+8429:ok      github.com/smackerel/smackerel/tests/eval/assistant     0.142s
+
+### marker occurrence count across the whole 8621-line log
+1
+
+### the lane's OWN assertion, in its ENFORCED branch
+8431:go-integration: acceptance gate executed 210 assertions.
+
+### the single failure in the entire lane, and the lane verdict
+3964:=== RUN   TestOpenKnowledgeRouting_FallbackToOpenKnowledge
+3965:    openknowledge_routing_test.go:128: build router: agent: NewRouter: embed scenario "recipe_search" intent_examples[4]: sidecar.Embed: POST /embed: Post "http://smackerel-ml:8081/embed": context deadline exceeded
+3966:--- FAIL: TestOpenKnowledgeRouting_FallbackToOpenKnowledge (32.14s)
+3996:FAIL    github.com/smackerel/smackerel/tests/integration/agent  39.561s
+8433:FAIL: go-integration (exit=1)
+8621:INTEGRATION_EXIT=1
+
+### count of '--- FAIL' lines in the entire lane
+1
+```
+
+**What the run proves, stated exactly.**
+
+- The gate **compiled and executed** inside the full lane (`=== RUN` at 8325, package verdict `ok` at 8429). Pre-fix this package was never compiled by the lane at all.
+- The marker was emitted **exactly once** — `grep -c` over all 8621 lines returns `1`. That satisfies the lane's own "exactly one is required" branch and rules out double-emission.
+- It reported `executed_assertions=210`, matching `150 + 60` from the shipped corpus. This was a **predicted** value in the filing session (recorded there as *Uncertainty Declaration 3*, `Claim Source: interpreted`); it is now an **observed** value and the prediction is confirmed. No reconciliation was needed.
+- The lane's assertion ran in its **ENFORCED** branch: line 8431 is the success message from the `[[ -z "$go_run_selector" ]]` path. The log contains **no** `applying -run selector` line and **no** `NOT ENFORCED` notice, which is the positive confirmation that this was a full-lane run and not a focused one.
+- R3.3 is demonstrated by accident and therefore strongly: `go test` exited non-zero **while** the gate assertion passed. The two verdicts were produced independently in one real run, which is exactly the independence R3.3 requires.
+
+**⚠️ The lane was NOT green, and this evidence does not claim it was.**
+
+`INTEGRATION_EXIT=1`. The lane exited `1` because of **one** test, in a package unrelated to this bug:
+
+| Fact | Value |
+|------|-------|
+| Failing test | `TestOpenKnowledgeRouting_FallbackToOpenKnowledge` |
+| Package | `github.com/smackerel/smackerel/tests/integration/agent` |
+| Cause | `sidecar.Embed: POST /embed … context deadline exceeded` during router warm-up |
+| Total `--- FAIL` lines in the lane | **1** — this one |
+| Relation to the acceptance gate | none; different package, different subsystem, and the gate's own assertion passed |
+| Filed as | `specs/064-open-ended-knowledge-agent/bugs/BUG-064-003-router-warmup-exceeds-fixed-deadline/` |
+
+It is **not a flake**. A focused re-run (`~/bug011-flake-check.log`) reproduced the identical failure at the identical source line:
+
+```
+294:    openknowledge_routing_test.go:128: build router: agent: NewRouter: embed scenario "hospitality_concern_evaluate" intent_examples[1]: sidecar.Embed: POST /embed: Post "http://smackerel-ml:8081/embed": context deadline exceeded
+295:--- FAIL: TestOpenKnowledgeRouting_FallbackToOpenKnowledge (33.40s)
+307:FAIL        github.com/smackerel/smackerel/tests/integration/agent  33.930s
+```
+
+Deterministic, same call site, different scenario name on the second run — consistent with a fixed deadline being exceeded during warm-up rather than one unlucky embedding call.
+
+**Consequence, recorded rather than glossed:** DoD item **A9** asserts only that the full lane *executes the gate and reports exactly one marker line with `executed_assertions=210`*. That is satisfied in full. The separate **Stage 1 exit criterion** item requires the lane to be **green** as well as reporting a non-zero count. The count half is met; the green half is blocked by BUG-064-003 and is therefore **left unchecked**. Ticking A9 does not mean the lane passed.
+
+### 3. Spec requirement coverage — R1 through R7
+
+Built by reading `spec.md` and mapping each requirement to the executed test or the recorded correction that discharges it. "Item" refers to the DoD item in `scopes.md` carrying that test's execution evidence.
+
+| Req | Requirement (abbreviated) | Discharged by | Item | Status |
+|-----|---------------------------|---------------|------|--------|
+| R1.1 | Full-lane run compiles and executes `./tests/eval/assistant` | Full-lane run: `=== RUN` @8325, `ok …/tests/eval/assistant` @8429 | A9 | ✅ |
+| R1.2 | Runs with `-tags integration` and both SST floors present | `go_test_args=(-p 1 -tags integration …)` @`go-integration.sh:48`; gate **passed**, and it `t.Fatalf`s on an empty floor, so a pass proves both keys were present | A9 | ✅ |
+| R1.3 | Gate's existing behaviour unchanged | Both threshold comparisons intact at `acceptance_test.go:70,74`; the marker was inserted **before** them at :65 without altering them | A9 + read | ✅ |
+| R2.1 | Single-line machine-parseable emission | `TestFormatGateMarker_SingleLineParseableWithPrefix` | A3 | ✅ |
+| R2.2 | Emission unconditional w.r.t. the verdict | Structural: emission at `:65`, the `if !t.Failed()` guard opens at `:80` — emission is outside it. Enforced by contract case **A4** (`A4_marker_conditional_on_passing`) | A7 | ✅ |
+| R2.3 | Carries count, rows, capture-expected, both rates, fixed prefix | `harness.go:350` format string; observed live @8326 with all five fields | A3 + A9 | ✅ |
+| R2.4 | Count derived from the run's harness result | `harness.go:335` `ExecutedAssertions(r)`; `TestExecutedAssertions_CountsRoutingPlusCaptureRows` | A1 | ✅ |
+| R3.1 | Absent emission fails the lane | `go-integration.sh:97-99`; contract case **A5** (`A5_marker_never_emitted`) | A7 | ✅ |
+| R3.2 | Zero count fails the lane | `go-integration.sh:107-109`; contract cases **A2/A3** | A6 | ✅ |
+| R3.3 | Independent of the `go test` verdict | **Observed in one real run**: `go test` failed while the gate assertion passed (@8431 vs @8433) | A9 | ✅ |
+| R3.4 | Failure message names the gate and the count | All three ERROR strings (`:105`, `:108`, and `:98`) name `TestAcceptanceGate_RoutingAccuracyAndCaptureFallback` | read | ✅ |
+| R3.5 | Both failures reported; neither masks the other | `go-integration.sh:118-127` — both errors echoed, then non-zero exit on either | read | ✅ |
+| R4.1 | Count provably able to be `0` | `TestExecutedAssertions_ZeroOnEmptyCorpus` asserts exactly `0` | A2 | ✅ |
+| R4.2 | R4.1 shown by an executable test, not prose | Same test; it is executed, not asserted | A2 | ✅ |
+| R5.1 | Focused runs still usable | Focused run completed without the marker assertion failing it | A10 | ✅ |
+| R5.2 | Focused runs print an explicit not-enforced notice | `NOTICE: … NOT ENFORCED …` observed in the focused run | A10 | ✅ |
+| R5.3 | No bypass exists | Bypass grep across the 3 real surfaces: 0 matches; contract case **A6** rejects an introduced `SKIP_EVAL_GATE` | A8 + "No bypass exists" | ✅ |
+| R5.4 | CI's invocation is full-lane and always subject to R3 | `ci.yml:241` = `./smackerel.sh test integration 2>&1 \| tee integration-test.log`, no `--go-run`; the A9 run took the ENFORCED branch with no selector notice | A9 | ✅ |
+| R6.1 | Removing the eval package is detected | `TestEvalLaneContract_AdversarialRejectsMissingEvalPackage` | A5 | ✅ |
+| R6.2 | Removing/weakening the assertion is detected | `TestEvalLaneContract_AdversarialRejectsMissingOrZeroAssertion` | A6 | ✅ |
+| R6.3 | Conditional emission is detected | `TestEvalLaneContract_AdversarialRejectsConditionalOrAbsentMarker` | A7 | ✅ |
+| R6.4 | R6 tests run in an automated lane independent of the one they protect | `internal/deploy/eval_lane_contract_test.go:1` is `package deploy` with **no** `//go:build` tag, so it runs in the untagged unit lane (`go-unit.sh:67` `go test … ./...`) — a lane that cannot be disabled by breaking the integration lane | A4–A8 | ✅ |
+| R6.5 | R6 tests are adversarial, not tautological | `requireEvalBaselinePasses` + mutation-no-op guard in every case; `regression-quality-guard.sh --bugfix` reports an adversarial signal, 0 violations | A5–A8 + guard item | ✅ |
+| **R7.1** | **`acceptance_test.go` header AND the R10-3 prose in `tests/e2e/assistant_regression_e2e_test.sh` must be true or corrected** | Header **corrected** (`:14-22`); R10-3 prose **corrected** (`:247-258`) — both now state that the build tag is necessary and not sufficient and name the `go-integration.sh` allow-list as the second half. R1 holds, so "runs automatically" is a true assertion — see §5 | — | ✅ |
+| R7.2 | `docs/Testing.md` documents the R3 assertion and R5 behaviour | `docs/Testing.md` § *How To Run* (:740) now carries the marker (:763), the `>= 1` rule (:771), and the NOT-ENFORCED notice (:779) | — | ✅ |
+
+**Verdict on this table: R1–R7 are fully discharged.** R1–R6 are discharged by executed tests, each row naming the test and the DoD item holding its evidence. R7.1 was the sole outstanding row: it names two surfaces and requires each to be *true after the fix **or** corrected*. Both are now corrected — the `acceptance_test.go` header earlier in this bug, the R10-3 prose in this pass (§5(c)) — and its general clause (*no surface may assert the gate runs automatically unless R1 holds*) is satisfied because R1 **does** hold. The DoD item *"Spec requirements R1–R7 each map to at least one passing test or a recorded correction"* is therefore now **checked**. R7 closes by correction rather than by test; no automated surface guards the R10-3 prose from drifting again, and none is claimed.
+
+### 4. Scope-of-claim audit — the gate is not claimed to cover D25/D28
+
+**Command:**
+
+```bash
+grep -nE 'D25|D28|corpus[- ]grant|grant[- ]enforcement|spec 108' bug.md spec.md design.md report.md scopes.md uservalidation.md \
+  | grep -vE 'not|no claim|unaffected|separate axis|Out of scope'
+grep -cE 'D25|D28|corpus[- ]grant|grant[- ]enforcement|spec 108' <same files>
+wc -l <same files>
+```
+
+**Output (verbatim):**
+
+```
+### S4 - DECISIVE: any D25/D28/grant line that does NOT carry a negation token
+S4_EXIT=1 (1 = every mention is a disclaimer; zero affirmative claims)
+
+### S5 - total mentions vs disclaiming mentions
+total mentions: bug.md:1
+spec.md:2
+design.md:1
+report.md:0
+scopes.md:1
+uservalidation.md:1
+
+### S6 - files scanned
+   106 bug.md
+   119 spec.md
+   268 design.md
+   168 report.md
+   543 scopes.md
+    32 uservalidation.md
+  1236 total
+```
+
+The decisive scan finds every line in all six artifacts mentioning `D25`, `D28`, corpus-grant, grant-enforcement, or spec 108, then **subtracts** every line carrying a disclaiming token. It returns **nothing** (exit `1`). Across 1236 lines there are **6** mentions of the topic and **all 6 are disclaimers**. Read individually they are: `bug.md:99` *"does **not** measure corpus-grant enforcement … fixing this bug does not make those measurable and must not be reported as doing so"*; `spec.md:7` *"makes no claim about corpus-grant enforcement"*; `spec.md:108` *"Out of scope and not made measurable by this work"*; `design.md:49` *"must not be described as becoming measurable through this fix"*; plus the DoD item itself and its `uservalidation.md` counterpart, which restate the prohibition.
+
+**Exit-code reading.** `1` is the passing outcome here, because the asserted property is *absence of an affirmative claim*. Exit `0` would have printed the offending lines.
+
+### 5. Stale-claim audit — three surfaces, all now correct
+
+| # | Surface | Required by | State | Verdict |
+|---|---------|-------------|-------|---------|
+| a | `tests/eval/assistant/acceptance_test.go` header | R7.1 | **Corrected** | ✅ |
+| b | `docs/Testing.md` § *How To Run* | R7.2 | **Updated** | ✅ |
+| c | `tests/e2e/assistant_regression_e2e_test.sh` R10-3 prose | R7.1 | **Corrected — causal clause rewritten, outcome clause preserved** | ✅ |
+
+**(a) Corrected.** The header no longer asserts that the tag alone makes the gate run, and it names the second half of the contract and the test that enforces it:
+
+```
+14:// Build tag `integration` keeps it out of the default `go test ./...`
+15:// pass so corpus development doesn't fight the gate. The tag alone does
+16:// NOT make the gate run anywhere: scripts/runtime/go-integration.sh
+17:// selects packages by an explicit allow-list, not `./...`, so the gate
+18:// runs only because `./tests/eval/...` is in that list. Both halves are
+19:// required, and internal/deploy/eval_lane_contract_test.go asserts the
+20:// pair — see BUG-061-011, where the tag was present, the package was
+21:// not, and the gate executed in no lane for months without a surface
+22:// turning red.
+```
+
+**(b) Updated.** `git status --porcelain -- docs/Testing.md` returns ` M docs/Testing.md`, and § *How To Run* (:740) now documents all three things an operator needs:
+
+```
+751:executes `TestAcceptanceGate_RoutingAccuracyAndCaptureFallback` with no
+763:ASSISTANT_ACCEPTANCE_GATE_V1 executed_assertions=210 rows=150 capture_expected=60 routing_accuracy=1.0000 capture_fallback_rate=1.0000
+771:`executed_assertions` value is `>= 1`. A gate that is skipped, evaluates
+779:go-integration: NOTICE: acceptance-gate executed-assertion assertion NOT ENFORCED for this run — a focused --run selector (TestAcceptanceGate) is active.
+```
+
+**(c) Corrected.** Previously reported here as still stale; the causal clause has now been rewritten. At HEAD `3af96a02` the prose read:
+
+```
+247:echo "  R10-3  Acceptance gate enforces ASSISTANT_EVAL_ROUTING_ACCURACY_MIN +"
+248:echo "         ASSISTANT_EVAL_CAPTURE_FALLBACK_MIN via SST. Build tag"
+249:echo "         'integration' so it runs as part of './smackerel.sh test"
+250:echo "         integration' not 'unit'. Reads env directly — fails loudly when"
+251:echo "         either key is missing."
+```
+
+In the working tree it now reads:
+
+```
+247:echo "  R10-3  Acceptance gate enforces ASSISTANT_EVAL_ROUTING_ACCURACY_MIN +"
+248:echo "         ASSISTANT_EVAL_CAPTURE_FALLBACK_MIN via SST. It runs as part of"
+249:echo "         './smackerel.sh test integration', not 'unit'. That takes two"
+250:echo "         halves. Build tag 'integration' keeps it out of the default"
+251:echo "         'go test ./...' pass, but the tag alone does NOT make the gate"
+252:echo "         run anywhere: scripts/runtime/go-integration.sh selects packages"
+253:echo "         by an explicit allow-list, not './...', so the gate runs only"
+254:echo "         because './tests/eval/...' is in that list. Both halves are"
+255:echo "         required, and internal/deploy/eval_lane_contract_test.go asserts"
+256:echo "         the pair — see BUG-061-011, where the tag was present, the"
+257:echo "         package was not, and the gate executed in no lane."
+258:echo "         Reads env directly — fails loudly when either key is missing."
+```
+
+Split into its two claims, because only one needed changing:
+
+| Clause | Pre-fix | Post-fix | |
+|--------|---------|----------|---|
+| *"it runs as part of `./smackerel.sh test integration`, not `unit`"* — the **outcome** | false | **true** | became true when the fix landed; **preserved** |
+| *"Build tag 'integration' **so** it runs as part of …"* — the **cause** | false | **rewritten** | replaced with the two-half statement |
+
+The outcome clause was made true by the fix and is kept. The causal clause was false on the merits — the build tag is necessary and **not** sufficient — and could not be made true by any subsequent change, so it was rewritten rather than left to age. It now states both halves and names `internal/deploy/eval_lane_contract_test.go` as the guard asserting the pair, mirroring the phrasing of surface (a) so the two cannot drift apart in wording. `bash -n tests/e2e/assistant_regression_e2e_test.sh` exits `0` after the edit, and the file's `git diff` is confined to this one clause.
+
+**Residual, stated rather than hidden.** Nothing automated protects this file: the contract test reads `go-integration.sh` and `acceptance_test.go` only, so no surface would catch R10-3 drifting again. R7.1 requires the prose be true or corrected, not that a test guard it, so this does not hold the requirement open — but a future edit to R10-3 has no mechanical backstop.
+
+**Consequence.** All three surfaces the DoD item *"Stale claims corrected or made true"* names are now accurate, and that item is **checked**. Because the R10-3 half of R7.1 was the sole reason the R1–R7 mapping item was held open, that item is **checked** as well (§3).
+
+---
+
+## Uncertainty Declarations
+
+Recorded so the implementing agent does not inherit them as settled fact.
+
+1. **`go test -run <regex>` exit code when the regex matches nothing.** Not executed in this session — running `go test` directly is outside the repository's terminal-discipline command surface, and running the full integration lane was out of scope for an artifacts-only task. The claim that `docs/Testing.md:748` "silently passes" rests on documented Go behaviour, not on an observed exit code here. **The structural claim does not depend on it:** the gate's package is not in the lane's package list, so that invocation cannot execute the gate regardless of what it exits with. **Claim Source: `interpreted`.**
+
+2. **That `go test ./...` in the unit lane reaches `./tests/eval/assistant`.** Inferred structurally — one root `go.mod` (`module github.com/smackerel/smackerel`, `find . -name go.mod` returns only `./go.mod`), and `tests/eval/assistant/*.go` declare `package assistanteval`. Not confirmed by an executed `go list`. **Claim Source: `interpreted`.**
+
+3. **The precise marker line count on a real post-fix run.** `executed_assertions=210` is arithmetic on the two verified corpus counts (150 rows, 60 capture-expected), not an observed emission — the emission does not exist yet. The implementing agent must record the observed value, and if it differs from 210 must reconcile the difference rather than adjusting the expectation silently.
+
+4. **Bubbles gate verdicts.** No gate was run in this session. In particular the release-train guard `G110` behaves differently at HEAD versus the working tree because spec OPS-006's fix is uncommitted; that difference is unrelated to this bug and no verdict from either tree is claimed here.
+
+---
+
+## E2E Suite Result — full-suite run, and why both E2E DoD items stay unchecked
+
+The status table above listed the two E2E regression items as *"No `./smackerel.sh test e2e` run has been performed. Nothing is claimed in either direction."* That run has since been performed. This section records its result. Both items still stay unchecked, and the reason is recorded here rather than argued away.
+
+**Claim Source:** `executed`. Every figure below is a `grep`/read against the preserved 4151-line transcript at `~/bug011-e2e.log`. The suite itself was run in the preceding pass; it was **not** re-run in this recording pass, and no Docker or stack command was issued here.
+
+### 1. Verdict
+
+| | |
+|---|---|
+| Command | `./smackerel.sh test e2e` |
+| Tree | working tree at HEAD `3af96a02` (health payload in-log reports `commit_hash=3af96a0295d2-dirty`) |
+| Transcript | `~/bug011-e2e.log`, 4151 lines |
+| **Result** | **`E2E_EXIT=1`** (log:4151), preceded by `FAIL: go-e2e (exit=1)` (log:3659) |
+| Failures | **6**, across **4** suites |
+
+**On the "141 PASS lines" figure — it is real, and it is not a test count.** `grep -cE '^[[:space:]]*PASS' ~/bug011-e2e.log` returns `141`, which decomposes exactly as `81 + 35 + 25`:
+
+| Form | Count | What it is |
+|------|-------|-----------|
+| `^PASS:` | 81 | one per shell E2E **scenario** |
+| `^  PASS:` | 35 | the shell suite's own per-**script** summary roll-up |
+| `^PASS` (bare) | 25 | Go **package**-level result markers |
+
+It deliberately excludes the 395 Go per-test `--- PASS:` lines. So 141 is a count of *mixed-granularity markers*, not of passing tests, and quoting it as "141 tests passed" would be wrong. Recorded here so the next reader does not have to re-derive it.
+
+Go package results: 3 packages `FAIL`, and 25 `ok` lines — of which 13 are second-pass `[no tests to run]` entries (log:4062-4101), so the `ok` count is likewise not a package count.
+
+### 2. The six failures
+
+| # | Failure | Suite | Log | Attribution |
+|---|---------|-------|-----|-------------|
+| 1 | `BUG-031-004-SCN-001: E2E interruption terminates child processes` — `FAIL: nested E2E runner failed to exit after interruption` | shell E2E (`test_timeout_process_cleanup.sh`) | :17, rolled up at :1863 | `specs/031-live-stack-testing/bugs/BUG-031-004-e2e-timeout-process-cleanup/` |
+| 2 | `TestExperienceAssetsExposeImmutableHeadersExactDigestsAndNetworkOnlyProtectedRoutes` | `tests/e2e` | :2348, pkg FAIL :2991 | `specs/106-coherent-product-experience/scopes/01-source-locked-visual-foundation/report.md`; spec 106 `status: in_progress` |
+| 3 | `TestAssistantTransportHintParity_WebAndMobileShareResponseShape` | `tests/e2e/assistant` | :3285, pkg FAIL :3334 | spec 073 / `BUG-069-004` |
+| 4 | `TestAssistantWebPWARetryE2E_SameTransportMessageIDDedupes_TP_073_10` | `tests/e2e/assistant` | :3296 | `specs/069-assistant-http-transport/bugs/BUG-069-004-http-turn-dedup/`, `status: in_progress` |
+| 5 | `TestAssistantWebPWARetryE2E_DifferentTransportMessageIDsAreDistinct_TP_073_10_Adversarial` | `tests/e2e/assistant` | :3301 | same as #4 |
+| 6 | `TestDriveFoundationE2E_MissingRequiredConfigFailsLoudly` | `tests/e2e/drive` | :3433, pkg FAIL :3496 | **local environment gap, not a product defect** — §4 |
+
+**Two attribution statuses are stated precisely, because the packet name alone would mislead:**
+
+- **#1** maps by scenario ID to `BUG-031-004`, whose `state.json` reads `status: done`, `certification.status: done`. The packet is closed, and its `SCN-001` scenario failed in this run anyway. That is worth someone's attention; it is not this bug's to resolve, and this packet does not claim it is fixed.
+- **#3** — the test name appears in both `specs/073-web-mobile-assistant-frontend/` (`status: done`) and `BUG-069-004` (`status: in_progress`). The open packet is `BUG-069-004`.
+
+Failure #2's assertion detail, for the record: twelve locked `/pwa/*` assets each returned `Cache-Control: no-store` where the test requires an immutable long-lived value (log:2336-2347, all at `experience_assets_e2e_test.go:76`) — e.g. `locked asset /pwa/app.js must advertise an immutable long-lived Cache-Control; got "no-store"`.
+
+### 3. Two ways to misread this log — both corrected here
+
+**(a) The shell-suite summary covers only the shell suite.** Log lines 1900-1902 read:
+
+```
+  Total:  36
+  Passed: 35
+  Failed: 1
+```
+
+That block is the **shell** E2E suite's roll-up. It does **not** include the three Go packages (`tests/e2e`, `tests/e2e/assistant`, `tests/e2e/drive`), which contribute the other five failures. Quoting `Failed: 1` on its own understates the run by a factor of six. **This mistake was made once during this session and is written down so it is not repeated.**
+
+**(b) `FAIL: Services did not become healthy within 8s` (log:1143) is not a failure.** It is expected output inside `SCN-002-BUG-002-001: Readiness gate rejects stopped postgres` (starts log:883), which deliberately stops postgres to prove the readiness gate rejects it. The scenario **passes** three lines later:
+
+```
+1143:FAIL: Services did not become healthy within 8s
+1146:PASS: SCN-002-BUG-002-001 (stopped postgres rejected, exit=1)
+```
+
+A naive `grep '^FAIL'` counts line 1143 as a seventh failure. It is not one. The failure count of 6 in §2 excludes it.
+
+### 4. Failure #6 in detail — a local environment gap, and the exact mechanism
+
+`config.sh` aborts before the test's own assertion can run (log:3431):
+
+```
+drive_foundation_e2e_test.go:125: config.sh exit=1 stripped=1 output=[F-OLLAMA-URL-MISSING] No Ollama daemon URL resolved. Set SMACKEREL_OLLAMA_URL in .smackerel.local.env at repo root (copy .smackerel.local.env.example to start), or have the deploy adapter inject it into app.env. The address is operator deployment topology and is deliberately NOT committed to this repo (product-deployment-boundary); there is no default.
+```
+
+The assertion the test exists to make is the next line (log:3432) — that stderr mentions `drive.classification.confidence_threshold`. It never gets a fair evaluation, because stderr is occupied by an unrelated earlier guard.
+
+**The mechanism is more specific than "the variable is unset," and the specific version is the one that holds.** `SMACKEREL_OLLAMA_URL` **is** defined in `.smackerel.local.env` at the repo root, with a 28-character value. It still does not reach `config.sh`, because:
+
+- `.smackerel.local.env` is sourced by `smackerel.sh`, the CLI wrapper (`scripts/commands/config.sh:1025` documents it as *"sourced with `set -a` by"* the wrapper);
+- the drive test bypasses the wrapper — it invokes `bash scripts/commands/config.sh` directly (`drive_foundation_e2e_test.go:109-110`) and builds the child environment as `cmd.Env = append(os.Environ(), "TARGET_ENV_GUARD=e2e-038-001")` (`:114`);
+- `SMACKEREL_OLLAMA_URL` is not exported in the test-runner process environment, so `os.Environ()` does not carry it and the guard at `config.sh:1036` fires correctly.
+
+So the guard is behaving as designed and the product is not defective here. The gap is between the test harness's direct `config.sh` invocation and the operator-local file that only the wrapper sources. That is a defect in the **test**, or in this machine's exported environment — either way it is outside this bug's edit set, and this packet does not claim to fix it.
+
+### 5. Non-causation — the evidence, and its limit
+
+Four checks support the claim that this bug's change caused none of the six:
+
+1. **No import path.** `grep -rn 'tests/eval/assistant\|internal/deploy' tests/e2e/ --include='*.go'` returns **nothing** (exit `1`). No `.go` file under `tests/e2e/` references either package this bug changed.
+2. **One changed file under `tests/e2e/`, prose-only.** `git status --porcelain -- tests/e2e/` returns exactly ` M tests/e2e/assistant_regression_e2e_test.sh` — the R10-3 comment correction from §5(c), `11 insertions(+), 4 deletions(-)`, all inside `echo` strings. `bash -n` on it exits `0`, and that script is not among the failing scenarios.
+3. **Wrong lane.** `scripts/runtime/go-integration.sh` — the file this bug's fix edits — governs the **integration** lane. It is not the e2e runner and is not consulted by `./smackerel.sh test e2e`.
+4. **Every failure has a prior home.** Each of the six maps to a pre-existing spec or open bug, listed in §2.
+
+**The limit, stated plainly and not softened: no pre-change baseline e2e run was captured in this session.** Non-causation therefore rests on the import-path and attribution argument above, **not on an observed before/after**. Anyone who needs a stronger claim must capture a baseline run at the pre-fix tree and compare. This packet does not have that, and does not pretend to.
+
+### 6. Consequence for the DoD — both E2E items stay unchecked
+
+| DoD item (`scopes.md`) | State | Why |
+|---|---|---|
+| *"Broader E2E regression suite passes"* (`scopes.md:771`) | **unchecked** | The suite does not pass. `E2E_EXIT=1`. Attributing every failure elsewhere does not turn a red suite green, and the item says *passes*, not *passes except for known failures*. |
+| *"Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior"* (`scopes.md:767`) | **unchecked** | This bug's regression protection is the untagged contract test `internal/deploy/eval_lane_contract_test.go` (cases A0–A7) plus the integration lane's own executed-assertion marker check. Both are real and both are recorded above — but neither is an **e2e-tier** test, which is what this item asks for. Recorded as an honest gap. |
+
+No checkbox was changed in this pass. The count in `scopes.md` remains 22 checked and 4 unchecked, as it was before this section was written.

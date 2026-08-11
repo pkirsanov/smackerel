@@ -80,6 +80,24 @@ func TestRegisteredScopeSurfaces_ContainsKnowledgeGraph(t *testing.T) {
 	}
 }
 
+// Spec 108 SCOPE-01 — the `corpus` scope surface must be registered so the
+// spec 060 CLI accepts `--scope corpus:read` without the
+// `--allow-unknown-surface` escape hatch, and so RequireScope can gate on the
+// already-defined GrantGlobalCorpusRead constant (SCN-108-P01,
+// F-108-SURFACE-01). Registration makes the grant GRANTABLE only; the
+// default-grant boundary is asserted in browser_session_policy_test.go.
+func TestRegisteredScopeSurfaces_ContainsCorpus(t *testing.T) {
+	if !slices.Contains(RegisteredScopeSurfaces, "corpus") {
+		t.Fatalf("RegisteredScopeSurfaces missing 'corpus' (spec 108 SCOPE-01): %v", RegisteredScopeSurfaces)
+	}
+	if !IsRegisteredScopeSurface("corpus") {
+		t.Errorf("IsRegisteredScopeSurface('corpus') = false; expected true")
+	}
+	if err := ValidateScopeName("corpus:read"); err != nil {
+		t.Errorf("ValidateScopeName(%q) unexpected err: %v", "corpus:read", err)
+	}
+}
+
 func TestExtractScopeSurface(t *testing.T) {
 	cases := map[string]string{
 		"extension:bookmarks,history": "extension",

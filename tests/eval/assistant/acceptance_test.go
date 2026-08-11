@@ -12,9 +12,14 @@
 // OR wire in a real LLM router until the gate passes again.
 //
 // Build tag `integration` keeps it out of the default `go test ./...`
-// pass so corpus development doesn't fight the gate; CI invokes
-// `./smackerel.sh test integration` which sets `-tags integration`
-// and the gate then runs.
+// pass so corpus development doesn't fight the gate. The tag alone does
+// NOT make the gate run anywhere: scripts/runtime/go-integration.sh
+// selects packages by an explicit allow-list, not `./...`, so the gate
+// runs only because `./tests/eval/...` is in that list. Both halves are
+// required, and internal/deploy/eval_lane_contract_test.go asserts the
+// pair — see BUG-061-011, where the tag was present, the package was
+// not, and the gate executed in no lane for months without a surface
+// turning red.
 
 package assistanteval
 
@@ -51,6 +56,14 @@ func TestAcceptanceGate_RoutingAccuracyAndCaptureFallback(t *testing.T) {
 	}
 
 	r := Run(c)
+
+	// BUG-061-011 — emit the machine-readable marker UNCONDITIONALLY and
+	// BEFORE the threshold comparisons below, so the integration lane can
+	// prove the gate ran whether it passed or failed. A marker printed
+	// only on success cannot distinguish "failed" from "never ran", which
+	// is precisely the discrimination the lane needs.
+	fmt.Println(FormatGateMarker(r))
+
 	report := FormatReport(r)
 
 	if r.RoutingAccuracy < routingMin {

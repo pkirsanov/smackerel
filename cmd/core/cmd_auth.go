@@ -3,10 +3,12 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"log/slog"
 	"os"
+	"strings"
 	"text/tabwriter"
 	"time"
 
@@ -112,6 +114,61 @@ func buildAuthVerifyOptions(cfg *config.Config) (auth.VerifyOptions, error) {
 		ClockSkewTolerance: time.Duration(cfg.Auth.ClockSkewToleranceSeconds) * time.Second,
 		Now:                time.Now,
 	}, nil
+}
+
+// principalGrantReader is the consumer-side seam for the spec 108
+// design.md §10 reader primitive, satisfied by *auth.BearerStore. It
+// exists so the rotation preserve path is unit-testable without a
+// database, and so a nil reader is a representable, refusable state
+// rather than a panic.
+type principalGrantReader interface {
+	GrantsForPrincipal(ctx context.Context, userID string) (auth.RecordedGrants, error)
+}
+
+// rotationScopeInput is the input to resolveRotationScopes. A struct
+// rather than a positional list because spec 108 added the principal
+// identity and the grant reader to what spec 060 could answer from
+// flags alone, and six positional parameters would invite silent
+// argument transposition.
+type rotationScopeInput struct {
+	// Scopes is the repeated `--scope` flag, in order.
+	Scopes []string
+
+	// PriorToken is `--prior-token`, the wire form. Optional as of
+	// spec 108 §10.9.
+	PriorToken string
+
+	// UserID is the principal being rotated. Required by the
+	// record-preserve path.
+	UserID string
+
+	// AllowUnknown is `--allow-unknown-surface`.
+	AllowUnknown bool
+
+	// VerifyOpts verifies PriorToken when supplied.
+	VerifyOpts auth.VerifyOptions
+
+	// Reader supplies the recorded grant set. Consulted ONLY by the
+	// record-preserve path, so every other mode resolves without a
+	// database connection.
+	Reader principalGrantReader
+}
+
+// openAuthStore opens a pool and wraps it in a BearerStore, returning
+// a close func the caller defers. Extracted so `runAuthRotate` can
+// construct the store from either of two points without duplicating
+// the error handling.
+func openAuthStore(ctx context.Context, cfg *config.Config) (*auth.BearerStore, func(), error) {
+	pool, err := openReplayPool(ctx, cfg.DatabaseURL)
+	if err != nil {
+		return nil, nil, fmt.Errorf("connect db: %w", err)
+	}
+	store, err := auth.NewBearerStore(pool)
+	if err != nil {
+		pool.Close()
+		return nil, nil, err
+	}
+	return store, pool.Close, nil
 }
 
 // issueAndPersist delegates to auth.IssueAndPersistToken. The cmd
@@ -241,10 +298,16 @@ func runAuthEnroll(ctx context.Context, args []string) int {
 // --prior-token-id <id> [--prior-token <wire>] [--scope <name>...]
 // [--allow-unknown-surface]`.
 //
-// Spec 060 Scope 3 — rotation scope semantics (BS-008, BS-009):
+// Spec 060 Scope 3 — rotation scope semantics (BS-008, BS-009), as
+// amended by spec 108 design.md §10.9:
 //
-//   - no `--scope`, no `--prior-token`     → exit 2 (refuse to preserve
-//     at-source; the operator MUST opt in to one of the three modes).
+//   - no `--scope`, no `--prior-token`     → preserve from the
+//     principal's RECORDED grant set (spec 108). Refuses, naming the
+//     principal, when that set is unknown (granted_scopes IS NULL),
+//     when the principal has no standing token, or when the read
+//     fails. Previously this combination was an unconditional exit 2,
+//     because preserving required a wire token the operator was told
+//     to discard at mint time.
 //   - no `--scope`, `--prior-token <wire>` → preserve: parse the prior
 //     token, mint a new token with the same `scope` claim.
 //   - `--scope ""` exactly                  → demote: mint a legacy
@@ -255,7 +318,7 @@ func runAuthEnroll(ctx context.Context, args []string) int {
 func runAuthRotate(ctx context.Context, args []string) int {
 	fs := flag.NewFlagSet("auth rotate", flag.ContinueOnError)
 	priorTokenID := fs.String("prior-token-id", "", "the token id being rotated (marked status='rotated')")
-	priorToken := fs.String("prior-token", "", "spec 060 — the wire form of the prior token; required to preserve scopes when --scope is omitted")
+	priorToken := fs.String("prior-token", "", "spec 060 — the wire form of the prior token; OPTIONAL as of spec 108 (preserve now reads the recorded grant set), still accepted for tokens issued before grant recording")
 	var scopes []string
 	fs.Func("scope", "PASETO `scope` claim entry (spec 060); repeat to add more; use --scope \"\" alone to demote to legacy unscoped token", func(v string) error {
 		scopes = append(scopes, v)
@@ -283,27 +346,51 @@ func runAuthRotate(ctx context.Context, args []string) int {
 		return 1
 	}
 
-	// Spec 060 BS-008 / BS-009 — resolve rotation scope mode BEFORE
-	// any DB connect so invalid invocations exit 2 without touching
-	// the store. resolveRotationScopes encapsulates the preserve /
-	// demote / explicit-replace semantics in one tested helper.
-	resolvedScopes, exit, msg := resolveRotationScopes(scopes, *priorToken, *allowUnknown, verifyOpts)
+	// Spec 060 BS-008 / BS-009 + spec 108 §10.9 — resolve the rotation
+	// scope mode. Only the record-preserve mode (no --scope AND no
+	// --prior-token) needs a database read, so the store is opened
+	// ahead of resolution for that mode alone; every other mode stays
+	// pure and still exits 2 without touching a pool, which is the
+	// structural property spec 060's unit tests depend on.
+	var (
+		store  *auth.BearerStore
+		reader principalGrantReader
+	)
+	if len(scopes) == 0 && *priorToken == "" {
+		s, closeStore, oerr := openAuthStore(ctx, cfg)
+		if oerr != nil {
+			fmt.Fprintf(os.Stderr, "smackerel auth rotate: %v\n", oerr)
+			return 1
+		}
+		defer closeStore()
+		store = s
+		// Assigned only when non-nil so the interface never carries a
+		// nil *BearerStore, which would defeat the nil check inside
+		// resolveRotationScopesFromRecord.
+		reader = s
+	}
+
+	resolvedScopes, exit, msg := resolveRotationScopes(ctx, rotationScopeInput{
+		Scopes:       scopes,
+		PriorToken:   *priorToken,
+		UserID:       userID,
+		AllowUnknown: *allowUnknown,
+		VerifyOpts:   verifyOpts,
+		Reader:       reader,
+	})
 	if exit != 0 {
 		fmt.Fprintln(os.Stderr, msg)
 		return exit
 	}
 
-	pool, err := openReplayPool(ctx, cfg.DatabaseURL)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "smackerel auth rotate: connect db: %v\n", err)
-		return 1
-	}
-	defer pool.Close()
-
-	store, err := auth.NewBearerStore(pool)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "smackerel auth rotate: %v\n", err)
-		return 1
+	if store == nil {
+		s, closeStore, oerr := openAuthStore(ctx, cfg)
+		if oerr != nil {
+			fmt.Fprintf(os.Stderr, "smackerel auth rotate: %v\n", oerr)
+			return 1
+		}
+		defer closeStore()
+		store = s
 	}
 
 	wire, newTokenID, err := issueAndPersistWithScopes(ctx, cfg, store, userID, operator, "cli", *priorTokenID, resolvedScopes)
@@ -381,7 +468,52 @@ func runAuthRevoke(ctx context.Context, args []string) int {
 	return 0
 }
 
+// Grant-column literals for `auth list-users`. Every state renders a
+// non-empty, unambiguous token — spec 108 design.md §10.9 and spec.md
+// S7 both forbid rendering a guess, a default, or a bare empty cell,
+// because an empty cell in a GRANTS column reads as "no grants" and
+// would silently fabricate an authority claim for a principal whose
+// grants are merely unknown.
+//
+// None of these can collide with a real scope name: ValidateScopeName
+// requires a `surface:capability` colon form, which all three lack.
+const (
+	// grantsColumnUnknown renders granted_scopes IS NULL — the token
+	// predates grant recording, so nobody recorded what it grants.
+	grantsColumnUnknown = "unknown"
+
+	// grantsColumnRecordedNone renders granted_scopes = '{}' — the
+	// token was deliberately issued with no scope claim. Determinate,
+	// and a different fact from "unknown".
+	grantsColumnRecordedNone = "(none)"
+
+	// grantsColumnNoStandingToken renders a principal with no active
+	// unexpired token. Also determinate: they hold nothing right now.
+	// Reporting this as "unknown" would misstate a known answer.
+	grantsColumnNoStandingToken = "(no active token)"
+)
+
+// formatGrantsColumn renders one principal's GRANTS cell. Pure, so the
+// four states are unit-testable without a database.
+func formatGrantsColumn(u auth.EnrolledUserGrants) string {
+	if !u.HasStandingToken {
+		return grantsColumnNoStandingToken
+	}
+	if !u.Grants.Recorded {
+		return grantsColumnUnknown
+	}
+	if len(u.Grants.Scopes) == 0 {
+		return grantsColumnRecordedNone
+	}
+	return strings.Join(u.Grants.Scopes, ",")
+}
+
 // runAuthListUsers implements `smackerel auth list-users`.
+//
+// Spec 108 design.md §10.9 — the GRANTS column is the finding's literal
+// requirement: read a principal's recorded grant set WITHOUT holding
+// the wire token, which `auth inspect` cannot do because the token is
+// displayed once and auth_tokens stores only an HMAC.
 func runAuthListUsers(ctx context.Context, args []string) int {
 	if len(args) > 0 {
 		fmt.Fprintln(os.Stderr, "usage: smackerel auth list-users")
@@ -406,21 +538,22 @@ func runAuthListUsers(ctx context.Context, args []string) int {
 		return 1
 	}
 
-	users, err := store.ListUsers(ctx)
+	users, err := store.ListUsersWithGrants(ctx)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "smackerel auth list-users: %v\n", err)
 		return 1
 	}
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "USER_ID\tENROLLED_AT\tENROLLED_BY\tSTATUS\tNOTES")
+	fmt.Fprintln(w, "USER_ID\tENROLLED_AT\tENROLLED_BY\tSTATUS\tGRANTS\tNOTES")
 	for _, u := range users {
 		notes := u.Notes
 		if notes == "" {
 			notes = "-"
 		}
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n",
-			u.UserID, u.EnrolledAt.UTC().Format(time.RFC3339), u.EnrolledBy, u.Status, notes)
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n",
+			u.UserID, u.EnrolledAt.UTC().Format(time.RFC3339), u.EnrolledBy, u.Status,
+			formatGrantsColumn(u), notes)
 	}
 	if err := w.Flush(); err != nil {
 		fmt.Fprintf(os.Stderr, "smackerel auth list-users: flush output: %v\n", err)
@@ -581,10 +714,12 @@ func validateScopeFlags(scopes []string, allowUnknown bool) ([]string, int, stri
 }
 
 // resolveRotationScopes encodes the spec 060 BS-008 / BS-009 rotation
-// scope semantics. Returns `(resolvedScopes, exit, message)`.
+// scope semantics, as amended by spec 108 design.md §10.9. Returns
+// `(resolvedScopes, exit, message)`.
 //
-//   - len(scopes) == 0 && priorToken == ""  → exit 2 (refuse to
-//     preserve at-source per design §7.2 diagnostic).
+//   - len(scopes) == 0 && priorToken == ""  → preserve from the
+//     principal's RECORDED grant set (spec 108 §10.9). Refuses, naming
+//     the principal, when that set is unknown or unreadable.
 //   - len(scopes) == 0 && priorToken != ""  → preserve: parse the
 //     prior wire token via `auth.VerifyAndParse(...)` and return its
 //     parsed `Scopes`.
@@ -593,20 +728,33 @@ func validateScopeFlags(scopes []string, allowUnknown bool) ([]string, int, stri
 //   - any `""` mixed with non-empty entries → exit 2.
 //   - all entries non-empty                  → explicit replace; thread
 //     through `validateScopeFlags` for regex + registry checks.
-func resolveRotationScopes(scopes []string, priorToken string, allowUnknown bool, verifyOpts auth.VerifyOptions) ([]string, int, string) {
-	if len(scopes) == 0 {
-		if priorToken == "" {
-			return nil, 2, "smackerel auth rotate: rotation requires --prior-token <wire> to preserve scopes, or --scope to set them explicitly"
+//
+// Why `--prior-token` still wins when supplied: it names a SPECIFIC
+// token the operator holds, and reading its claim is not a guess. The
+// two sources cannot disagree for any token issued after migration 063
+// — `IssueAndPersistToken` writes the row from the same variable that
+// becomes the claim — and for a pre-063 token only the wire form has an
+// answer at all, so the flag remains the operator's escape hatch for
+// exactly the case the record cannot serve. What spec 108 removes is
+// the REQUIREMENT to supply it.
+//
+// Only the record-preserve branch consults Reader; every other mode is
+// pure, which is what lets `runAuthRotate` keep rejecting malformed
+// invocations before it opens a pool.
+func resolveRotationScopes(ctx context.Context, in rotationScopeInput) ([]string, int, string) {
+	if len(in.Scopes) == 0 {
+		if in.PriorToken != "" {
+			parsed, err := auth.VerifyAndParse(in.PriorToken, in.VerifyOpts)
+			if err != nil {
+				return nil, 1, fmt.Sprintf("smackerel auth rotate: verify prior token: %v", err)
+			}
+			return parsed.Scopes, 0, ""
 		}
-		parsed, err := auth.VerifyAndParse(priorToken, verifyOpts)
-		if err != nil {
-			return nil, 1, fmt.Sprintf("smackerel auth rotate: verify prior token: %v", err)
-		}
-		return parsed.Scopes, 0, ""
+		return resolveRotationScopesFromRecord(ctx, in)
 	}
 	hasEmpty := false
 	hasNonEmpty := false
-	for _, s := range scopes {
+	for _, s := range in.Scopes {
 		if s == "" {
 			hasEmpty = true
 		} else {
@@ -620,7 +768,49 @@ func resolveRotationScopes(scopes []string, priorToken string, allowUnknown bool
 		// Demote sentinel: caller intends a legacy unscoped token.
 		return nil, 0, ""
 	}
-	return validateScopeFlags(scopes, allowUnknown)
+	return validateScopeFlags(in.Scopes, in.AllowUnknown)
+}
+
+// resolveRotationScopesFromRecord is the spec 108 §10.9 preserve path:
+// preserve from what the principal's standing token RECORDS, so the
+// operator no longer needs a wire token they were told to discard.
+//
+// Every failure refuses and names the principal. None guesses. The
+// three refusal shapes are kept distinct because they demand different
+// operator remedies — rotate with explicit scopes, provision the
+// principal, or fix the database — and collapsing them into one
+// message would make the diagnostic unactionable.
+func resolveRotationScopesFromRecord(ctx context.Context, in rotationScopeInput) ([]string, int, string) {
+	if in.UserID == "" {
+		return nil, 2, "smackerel auth rotate: preserve mode requires <user-id>"
+	}
+	if in.Reader == nil {
+		return nil, 1, fmt.Sprintf("smackerel auth rotate: cannot preserve scopes for %q: no grant reader was constructed", in.UserID)
+	}
+
+	recorded, err := in.Reader.GrantsForPrincipal(ctx, in.UserID)
+	if err != nil {
+		if errors.Is(err, auth.ErrPrincipalNotProvisioned) {
+			return nil, 1, fmt.Sprintf(
+				"smackerel auth rotate: cannot preserve scopes for %q: the principal has no active unexpired token to preserve from; pass --scope explicitly to set the new token's grants",
+				in.UserID)
+		}
+		return nil, 1, fmt.Sprintf("smackerel auth rotate: cannot preserve scopes for %q: %v", in.UserID, err)
+	}
+
+	if !recorded.Recorded {
+		// granted_scopes IS NULL — the token predates grant recording.
+		// Refuse. Inventing a set here would be exactly the fabricated
+		// authority state spec 108 §10.5 and spec.md S7 forbid.
+		return nil, 1, fmt.Sprintf(
+			"smackerel auth rotate: cannot preserve scopes for %q: token %s predates grant recording (granted_scopes IS NULL), so its grants are unknown and MUST NOT be guessed; pass --scope explicitly, or --prior-token <wire> if you still hold it",
+			in.UserID, recorded.TokenID)
+	}
+
+	// Recorded, possibly as none. An empty recorded set is a faithful
+	// preserve of a deliberately unscoped token, not a missing answer —
+	// that distinction is why RecordedGrants is three-valued.
+	return recorded.Scopes, 0, ""
 }
 
 // runAuthInspect implements `smackerel auth inspect <wire-token>`.

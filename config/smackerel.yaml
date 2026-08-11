@@ -1124,6 +1124,24 @@ auth:
   # HandleWebRegister; compared in constant time; never logged.
   web_registration_invite_token: ""
 
+  # Spec 108 R-108-CFG3 / R-108-FL5 — corpus-grant enforcement stage.
+  # REQUIRED, NO DEFAULT anywhere in the resolution path: the generator
+  # reads it via required_value (a missing key aborts `config generate`),
+  # emits SMACKEREL_AUTH_CORPUS_GRANT_ENFORCEMENT with the fail-loud
+  # ${VAR:?...} form, and cmd/core resolves it exactly once at startup
+  # before any listener binds (resolveCorpusGrantEnforcement).
+  #
+  # Closed two-value vocabulary (spec.md §Register 4). There is no third
+  # mode and no per-route override (R-108-FL6):
+  #   false → OBSERVE  — gate evaluates the grant and counts, never denies
+  #   true  → ENFORCE  — gate denies ungranted corpus reads with 403
+  # Absent, empty, or any other value (including "1"/"0"/"yes"/"TRUE") is
+  # REFUSED-BOOT: a fail-loud startup abort, deliberately NOT a mode.
+  #
+  # Stays false here — R-108-FL3 keeps corpusGrantEnforcement default-OFF
+  # in every train; spec 108 Scope 03 owns the flip to ENFORCE.
+  corpus_grant_enforcement: false
+
 # Spec 061 SCOPE-06c (Round 71d) — Hardware-tier × model-role matrix.
 # Switch key: SMACKEREL_HARDWARE_TIER={cpu,accel}. REQUIRED at
 # `./smackerel.sh config generate` time, fail-loud per smackerel-no-defaults
@@ -1626,6 +1644,38 @@ agent:
     # tie-break and is rejected by the validator outside dev/test envs).
     embedder_mode: "sidecar" # REQUIRED: "sidecar" | "noop"
     embed_timeout_ms: 30000 # REQUIRED: per-call timeout for the sidecar /embed roundtrip. Spec 064 SCOPE-17 raised from 500ms to accommodate cold sentence-transformer load on first startup; subsequent calls return in <50ms.
+    # BUG-064-003 — router-construction warm-up contract.
+    #
+    # agent.NewRouter issues ONE sequential POST /embed per intent_examples
+    # entry across every registered scenario (79 calls at the time of writing).
+    # embed_timeout_ms above budgets 30s for ONE cold call, so no single
+    # wall-clock constant can honestly bound the aggregate: at the SST-legal
+    # per-call ceiling the set would need ~40 minutes. The three values below
+    # replace that impossible sum with a two-phase contract — pay the cold
+    # sentence-transformer load OUTSIDE the measured region, then size the
+    # measured region from the work count.
+    #
+    #   warmup_target_latency_ms — a probe /embed at or under this latency
+    #     proves the sentence-transformer is loaded and serving. Above it the
+    #     embedder is still cold (or the host is too contended to serve this
+    #     workload) and the caller reports an embedder-readiness failure, which
+    #     is a true and diagnosable statement, rather than a routing failure,
+    #     which is a false one.
+    #   warmup_budget_ms — ceiling on the readiness wait itself. Sized to admit
+    #     two full cold calls at the embed_timeout_ms ceiling; matches
+    #     services.ml.readiness_timeout_s (60s), which bounds the same subsystem
+    #     becoming ready on the production boot path.
+    #   build_per_call_budget_ms — per-call unit the router-construction budget
+    #     is derived FROM: budget = (number of intent_examples) ×
+    #     build_per_call_budget_ms. It MUST be >= warmup_target_latency_ms (the
+    #     proven-warm latency) and <= embed_timeout_ms (the SST-legal per-call
+    #     ceiling). The 2× headroom over the warm target is what a run may drift
+    #     before the sidecar is declared unfit for this workload; the resulting
+    #     aggregate (79 × 2000ms = 158s) stays inside the integration lane's own
+    #     `go test -timeout 300s`.
+    warmup_target_latency_ms: 1000 # REQUIRED: > 0; probe latency at/below which the embedder counts as warm
+    warmup_budget_ms: 60000 # REQUIRED: > 0; ceiling on the readiness wait before an embedder-not-ready failure
+    build_per_call_budget_ms: 2000 # REQUIRED: > 0; per-embed unit the router-construction budget is derived from
   trace:
     retention_days: 30 # REQUIRED: days to retain agent_traces rows
     record_llm_messages: false # REQUIRED: capture full LLM transcript (true in dev/test only)

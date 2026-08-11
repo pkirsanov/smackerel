@@ -2311,7 +2311,7 @@ Available subcommands (per `cmd/core/cmd_auth.go`):
 | `enroll [--notes "..."] <user-id>` | Enroll a new user. Mints the user's first token and prints it to stdout exactly once. |
 | `rotate --prior-token-id <id> <user-id>` | Mint a fresh token for an enrolled user. Marks the prior token `rotated`; the prior token remains valid until its natural expiry, bounded by `auth.rotation_grace_window_hours`. |
 | `revoke [--reason "..."] <token-id>` | Revoke a token immediately. The cache is updated locally and a NATS event is broadcast on `auth.revocations` so peer instances drop the token within the propagation budget (NFR-AUTH-006 ≤ 60s). |
-| `list-users` | Print enrolled users (`user_id`, `enrolled_at`, `enrolled_by`, `status`, `notes`) as a tab-separated table. |
+| `list-users` | Print enrolled users (`user_id`, `enrolled_at`, `enrolled_by`, `status`, `grants`, `notes`) as a tab-separated table. The `GRANTS` column reads each principal's recorded grant set server-side, without the wire token (spec 108 §10.9). |
 
 Exit codes: `0` success; `1` command-level failure (DB error, validation error,
 missing material); `2` invocation error (missing args, unknown subcommand).
@@ -2387,6 +2387,25 @@ is no recovery path for a lost token — operators MUST capture the value from
 stdout into the user's secret store at mint time. The `auth_tokens` row only
 stores the HMAC-SHA-256 hash of the wire token under `hashed_token`.
 
+The wire token is unrecoverable, but a principal's **grants** are not:
+`list-users` reads them server-side from `auth_tokens.granted_scopes`
+(spec 108 §10). The `GRANTS` column reports the recorded set of each
+principal's current standing token — the row that is both `status='active'`
+and unexpired, newest first — and renders four distinct states, never a
+blank cell:
+
+| Rendered | Column value | Meaning |
+|---|---|---|
+| `corpus:read,annotation:edit` | non-empty `text[]` | The exact claim carried in the token. |
+| `(none)` | `'{}'` | Recorded as none. Deliberately issued with no scope claim — including every admin-API mint, since that endpoint has no scope parameter. |
+| `unknown` | `NULL` | Issued before grant recording existed (migration 063). Nobody recorded what it grants. Rotate with an explicit `--scope` to make it knowable. |
+| `(no active token)` | no matching row | The principal holds nothing right now. Determinate, not unknown. |
+
+`unknown` and `(none)` are deliberately different words. `NULL` means nobody
+recorded an answer; `'{}'` means somebody recorded the answer "no grants".
+Printing either as an empty cell would read as "this principal has no grants"
+and fabricate an authority claim, which `spec.md` S7 forbids.
+
 ### Scoped Token Enrollment (Spec 060)
 
 Spec 060 amends spec 044 with a PASETO `scope` claim and an
@@ -2431,10 +2450,16 @@ escape hatch. The mint emits a structured WARN log naming the unknown
 surface; operators MUST land the surface in the allowlist in the same change
 set as the spec that introduces it.
 
-Rotation has three modes — pick exactly one:
+Rotation has four modes — pick exactly one:
 
 ```bash
-# Preserve: parse the prior wire token and re-mint with the SAME scope claim.
+# Preserve from the RECORDED set (spec 108 §10.9). No wire token needed:
+# the grants are read from the principal's current standing token row.
+./smackerel.sh auth rotate --prior-token-id <old-id> <user-id>
+
+# Preserve from a wire token you still hold. Still supported, and the only
+# way to preserve a token issued BEFORE grant recording existed (migration
+# 063), whose recorded set is NULL.
 ./smackerel.sh auth rotate --prior-token-id <old-id> \
   --prior-token <old-wire-token> <user-id>
 
@@ -2451,12 +2476,22 @@ Rotation has three modes — pick exactly one:
 ./smackerel.sh auth rotate --prior-token-id <old-id> --scope "" <user-id>
 ```
 
-Rotation refuses to run when neither `--scope` nor `--prior-token` is
-supplied (exit 2 with `rotation requires --prior-token <wire> to preserve
-scopes, or --scope to set them explicitly`). Per design §7.2, this is an
-at-source refusal — the CLI does NOT silently preserve scopes from the
-prior-token-id alone, because the on-disk hashed token cannot be parsed back
-into a `scope` claim.
+The record-preserve mode refuses rather than guessing. Each refusal names the
+principal, and the three are kept distinct because they demand different
+remedies:
+
+| Condition | Remedy |
+|---|---|
+| `granted_scopes IS NULL` — the standing token predates grant recording, so its grants are unknown | Re-issue deliberately with `--scope`, or pass `--prior-token <wire>` if you still hold it |
+| No active unexpired token for the principal | Enroll or re-issue; there is nothing to preserve from |
+| The grant read failed | Fix the database; nothing is minted |
+
+Spec 060 originally made the no-`--scope` / no-`--prior-token` combination an
+unconditional exit 2, because preserving required parsing a wire token the
+operator was told at mint time they would never see again. Spec 108 §10.9
+supersedes that: `auth_tokens.granted_scopes` records the issued set, so the
+CLI can preserve from the record. What is unchanged is that this mode never
+invents a scope set — an unknown set refuses.
 
 Inspect a wire token's parsed claims (`issuer`, `subject`, `jti`, `kid`,
 `iat`, `exp`, `scopes`) as JSON. Pure verification path — no DB connect, no

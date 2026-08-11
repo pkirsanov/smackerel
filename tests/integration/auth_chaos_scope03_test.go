@@ -605,6 +605,32 @@ func TestAuthChaos_S03_ExtensionTokenRotationRace_GraceWindowSurvives(t *testing
 
 // --- C3-B03 ---------------------------------------------------------
 
+// chaosFullyGrantedPrincipalReader is a read-only stand-in for
+// *auth.BearerStore used by C3-B03 ONLY. That test deliberately wires
+// no database — its chaos surface is concurrent reads of the in-memory
+// chat→user map — so there is no store to read through, and adding one
+// would replace the contention it measures with pool contention.
+//
+// It records the full delegation ceiling (from
+// auth.TelegramBridgeDelegableGrants, never literals) so derivation
+// never becomes the reason a mint fails. That is the SHARPER choice for
+// this test's negative half, not a weaker one: MintForChat resolves the
+// mapping BEFORE reading grants, so an unmapped chat still refuses with
+// ErrNoUserMappingForChat, and a fully-granted principal proves the
+// refusal came from the mapping rather than from an absent grant.
+//
+// It holds no mutable state, so the 200 concurrent callers below race
+// on nothing.
+type chaosFullyGrantedPrincipalReader struct{}
+
+func (chaosFullyGrantedPrincipalReader) GrantsForPrincipal(_ context.Context, _ string) (auth.RecordedGrants, error) {
+	return auth.RecordedGrants{
+		TokenID:  "chaos-s03-mapping-principal",
+		Scopes:   append([]string(nil), auth.TelegramBridgeDelegableGrants...),
+		Recorded: true,
+	}, nil
+}
+
 // TestAuthChaos_S03_TelegramMappingConcurrentReads_NoRaceNoLeak fires
 // N=200 concurrent resolveActorUserID calls against a *Bot whose
 // userMapping holds 50 distinct chat→user entries. Half the goroutines
@@ -640,12 +666,13 @@ func TestAuthChaos_S03_TelegramMappingConcurrentReads_NoRaceNoLeak(t *testing.T)
 	priv, _ := auth.GenerateSigningKeypair()
 	const kid = "scope03-chaos-mapping-key"
 	minter, err := telegram.NewPerUserTokenMinter(telegram.PerUserTokenMinterOptions{
-		Bot:        bot,
-		SigningKey: priv,
-		KeyID:      kid,
-		Issuer:     "smackerel",
-		TTL:        time.Minute,
-		Now:        time.Now,
+		Bot:             bot,
+		PrincipalGrants: chaosFullyGrantedPrincipalReader{},
+		SigningKey:      priv,
+		KeyID:           kid,
+		Issuer:          "smackerel",
+		TTL:             time.Minute,
+		Now:             time.Now,
 	})
 	if err != nil {
 		t.Fatalf("NewPerUserTokenMinter: %v", err)
@@ -674,7 +701,7 @@ func TestAuthChaos_S03_TelegramMappingConcurrentReads_NoRaceNoLeak(t *testing.T)
 			<-gate
 			chatID := int64(1000 + (i % mappingSize))
 			expectedUser := mapping[chatID]
-			tok, err := minter.MintForChat(chatID)
+			tok, err := minter.MintForChat(context.Background(), chatID)
 			if err != nil {
 				mappedWrong.Add(1)
 				failuresMu.Lock()
@@ -704,7 +731,7 @@ func TestAuthChaos_S03_TelegramMappingConcurrentReads_NoRaceNoLeak(t *testing.T)
 			defer wg.Done()
 			<-gate
 			chatID := int64(900_000 + i) // guaranteed unmapped
-			_, err := minter.MintForChat(chatID)
+			_, err := minter.MintForChat(context.Background(), chatID)
 			if err == nil {
 				unmappedAccepted.Add(1)
 				failuresMu.Lock()
@@ -944,21 +971,31 @@ func TestAuthChaos_S03_AdminUIUnderRevocationRace_HTMLOrCleanReject(t *testing.T
 // --- C3-B05 ---------------------------------------------------------
 
 // TestAuthChaos_S03_TelegramMintUnderDBPressure_AllSucceed proves the
-// Telegram per-user PASETO mint path is decoupled from the DB pool
-// — by design, MintForChat performs ONLY in-memory crypto + an
-// in-memory map lookup; it never opens a pgx connection. The chaos
-// scenario:
+// Telegram per-user PASETO mint path stays available while the DB pool
+// is saturated.
+//
+// Spec 108 changed what this test can claim. The mint used to be pure
+// in-memory crypto + a map lookup, so the original contract here was
+// "it never opens a pgx connection". It does now, deliberately: the
+// scope claim is DERIVED from the mapped principal's persisted grants,
+// which is one BearerStore read per mint. Asserting DB-independence
+// today would assert something the design has since made false, so the
+// chaos property asserted is the one that still matters — the mint
+// survives pool contention rather than avoiding the pool.
+//
+// The chaos scenario:
 //
 //  1. Saturate the BearerStore-side DB pool with a long-lived burst
 //     of CountUsers / ListUsers calls (real database round-trips).
-//  2. Concurrently fire N=50 MintForChat calls.
+//  2. Concurrently fire N=50 MintForChat calls, each of which performs
+//     a real grant read through the SAME contended pool.
 //  3. Assert every mint succeeded, produced a unique TokenID, and
 //     produces a token that round-trips through auth.VerifyAndParse
 //     to the expected user_id.
 //
-// A regression that accidentally introduced a DB query into the mint
-// path would surface either as a mint timeout (DB pool exhausted) or
-// as an inconsistent UserID claim under contention.
+// A regression that made the grant read fail-open, starve under
+// contention, or bind the wrong principal surfaces here as a mint
+// failure or an inconsistent UserID claim.
 func TestAuthChaos_S03_TelegramMintUnderDBPressure_AllSucceed(t *testing.T) {
 	pool := authTestPool(t)
 	t.Cleanup(func() { pool.Close() })
@@ -981,13 +1018,22 @@ func TestAuthChaos_S03_TelegramMintUnderDBPressure_AllSucceed(t *testing.T) {
 
 	priv, pub := auth.GenerateSigningKeypair()
 	const kid = "scope03-chaos-mint-key"
+
+	// Every mapped principal needs a standing token recording delegable
+	// grants, otherwise the mint refuses before it reaches the crypto
+	// this test is stressing. Reads go through the REAL BearerStore —
+	// substituting a fake would remove the very DB round-trip the
+	// scenario is contending against.
+	seedTelegramBridgePrincipals(t, store, mapping, priv, kid, priv+"-chaos-s03-mint-hash-suffix")
+
 	minter, err := telegram.NewPerUserTokenMinter(telegram.PerUserTokenMinterOptions{
-		Bot:        bot,
-		SigningKey: priv,
-		KeyID:      kid,
-		Issuer:     "smackerel",
-		TTL:        5 * time.Minute,
-		Now:        time.Now,
+		Bot:             bot,
+		PrincipalGrants: store,
+		SigningKey:      priv,
+		KeyID:           kid,
+		Issuer:          "smackerel",
+		TTL:             5 * time.Minute,
+		Now:             time.Now,
 	})
 	if err != nil {
 		t.Fatalf("NewPerUserTokenMinter: %v", err)
@@ -1065,7 +1111,7 @@ func TestAuthChaos_S03_TelegramMintUnderDBPressure_AllSucceed(t *testing.T) {
 			<-gate
 			chatID := int64(2000 + (i % mappingSize))
 			expectedUser := mapping[chatID]
-			tok, err := minter.MintForChat(chatID)
+			tok, err := minter.MintForChat(context.Background(), chatID)
 			if err != nil {
 				mintFail.Add(1)
 				failuresMu.Lock()

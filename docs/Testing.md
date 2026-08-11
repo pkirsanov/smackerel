@@ -739,10 +739,52 @@ violation: <KEY> is empty"` if either is missing — fail-loud per
 
 ### How To Run
 
+The gate runs automatically. `./tests/eval/...` is in the integration
+lane's package list in
+[`scripts/runtime/go-integration.sh`](../scripts/runtime/go-integration.sh),
+so a plain
+
+```bash
+./smackerel.sh test integration
+```
+
+executes `TestAcceptanceGate_RoutingAccuracyAndCaptureFallback` with no
+extra flags. Before BUG-061-011 that package was absent from the
+allow-list, so the tagged test ran in no automated lane at all and the
+manual command below was the only way it ever executed.
+
+Listing the package is only half the contract: a package can be selected
+and still contribute zero assertions if the build tag stops matching, the
+corpus fails to load, or every case is skipped. The gate therefore prints
+one machine-readable marker line unconditionally, before the threshold
+comparisons, so a failing run and a never-ran run stay distinguishable:
+
+```text
+ASSISTANT_ACCEPTANCE_GATE_V1 executed_assertions=210 rows=150 capture_expected=60 routing_accuracy=1.0000 capture_fallback_rate=1.0000
+```
+
+That is an example line from a real run of the shipped 150-row corpus.
+The row counts are structural, but the two accuracy figures are
+point-in-time observations, not guaranteed values.
+
+The lane asserts that exactly one such line is present and that its
+`executed_assertions` value is `>= 1`. A gate that is skipped, evaluates
+nothing, or passes vacuously now fails the lane instead of going green.
+
+That assertion is enforced only on a full-lane run. When a focused
+`--run` selector is active the lane skips it and prints a loud notice
+naming what was not enforced:
+
+```text
+go-integration: NOTICE: acceptance-gate executed-assertion assertion NOT ENFORCED for this run — a focused --run selector (TestAcceptanceGate) is active.
+```
+
+CI passes no selector, so CI is always covered.
+
 The env vars are emitted into `config/generated/<env>.env` by
 [`scripts/commands/config.sh`](../scripts/commands/config.sh) from the
-`assistant.eval:` block in `config/smackerel.yaml`. The standard
-invocation is:
+`assistant.eval:` block in `config/smackerel.yaml`. To run the gate on
+its own during corpus development:
 
 ```bash
 ./smackerel.sh test integration --go-run TestAcceptanceGate_RoutingAccuracyAndCaptureFallback
@@ -755,9 +797,21 @@ is:
 go test -count=1 -tags integration -run TestAcceptanceGate_RoutingAccuracyAndCaptureFallback ./tests/eval/assistant/...
 ```
 
+Both of those are focused runs, so neither enforces the marker
+assertion — they are corpus-development conveniences, not the gate.
+
 The acceptance test logs the full per-row report on pass (useful as
 SCOPE-10 evidence) and on failure includes the full report in the
 failure message so an operator can see which rows drifted.
+
+The wiring itself is guarded by
+[`internal/deploy/eval_lane_contract_test.go`](../internal/deploy/eval_lane_contract_test.go),
+which asserts the package/marker pairing with adversarial cases.
+It is untagged and runs in the unit lane on purpose: a guard hosted
+inside the integration lane would be disabled by the very edit that
+disables the gate. Dropping `./tests/eval/...` from the package list or
+weakening the marker assertion turns that test red. Full derivation:
+[`specs/061-conversational-assistant/bugs/BUG-061-011-eval-gate-runs-in-no-automated-lane/`](../specs/061-conversational-assistant/bugs/BUG-061-011-eval-gate-runs-in-no-automated-lane/).
 
 ### How To Add A Scenario
 

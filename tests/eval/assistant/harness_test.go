@@ -12,6 +12,7 @@
 package assistanteval
 
 import (
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -182,5 +183,85 @@ func TestFormatReport_IncludesAllLabels(t *testing.T) {
 		if !strings.Contains(rep, l) {
 			t.Errorf("report missing label %q", l)
 		}
+	}
+}
+
+// BUG-061-011 — the integration lane asserts that the gate reported a
+// non-zero executed-assertion count. These three tests are untagged so the
+// quantity the lane asserts on is proven in the default unit lane, not only
+// by the lane whose wiring is in question.
+
+func TestExecutedAssertions_CountsRoutingPlusCaptureRows(t *testing.T) {
+	// 4 rows, 2 of them capture-expected → one routing assertion per row
+	// plus one capture assertion per capture-expected row = 6.
+	c := &Corpus{Rows: []CorpusRow{
+		{ID: "a", Text: "weather in Tokyo today?", GroundTruthIntent: LabelWeather, GroundTruthCaptureExpected: false},
+		{ID: "b", Text: "remind me to email tomorrow.", GroundTruthIntent: LabelNotifications, GroundTruthCaptureExpected: false},
+		{ID: "c", Text: "Idea: ship it.", GroundTruthIntent: LabelCapture, GroundTruthCaptureExpected: true},
+		{ID: "d", Text: "Note: cosign needs an OIDC token.", GroundTruthIntent: LabelCapture, GroundTruthCaptureExpected: true},
+	}}
+	r := Run(c)
+
+	if r.Total != 4 {
+		t.Fatalf("fixture precondition: Total = %d, want 4", r.Total)
+	}
+	if r.CaptureExpected != 2 {
+		t.Fatalf("fixture precondition: CaptureExpected = %d, want 2", r.CaptureExpected)
+	}
+	if got := ExecutedAssertions(r); got != 6 {
+		t.Errorf("ExecutedAssertions = %d, want 6 (Total %d + CaptureExpected %d)", got, r.Total, r.CaptureExpected)
+	}
+}
+
+func TestExecutedAssertions_ZeroOnEmptyCorpus(t *testing.T) {
+	// Anti-tautology proof for the lane's `>= 1` check. If the count were
+	// positive by construction, that check would be decorative: a gate that
+	// evaluated nothing would still satisfy it. An empty corpus MUST yield
+	// exactly 0, so the lane's comparison is a real discrimination.
+	r := Run(&Corpus{Rows: nil})
+
+	if got := ExecutedAssertions(r); got != 0 {
+		t.Errorf("ExecutedAssertions on an empty corpus = %d, want exactly 0; the integration lane's non-zero check would be vacuous", got)
+	}
+	if !strings.Contains(FormatGateMarker(r), "executed_assertions=0") {
+		t.Errorf("marker for an empty corpus must report executed_assertions=0, got %q", FormatGateMarker(r))
+	}
+}
+
+func TestFormatGateMarker_SingleLineParseableWithPrefix(t *testing.T) {
+	c := &Corpus{Rows: []CorpusRow{
+		{ID: "a", Text: "weather in Tokyo today?", GroundTruthIntent: LabelWeather, GroundTruthCaptureExpected: false},
+		{ID: "b", Text: "Idea: ship it.", GroundTruthIntent: LabelCapture, GroundTruthCaptureExpected: true},
+	}}
+	r := Run(c)
+	marker := FormatGateMarker(r)
+
+	if strings.Contains(marker, "\n") {
+		t.Fatalf("marker must be exactly one line so the lane can anchor its grep to ^, got %q", marker)
+	}
+	if !strings.HasPrefix(marker, GateMarkerPrefix+" ") {
+		t.Fatalf("marker must start with %q at column zero, got %q", GateMarkerPrefix+" ", marker)
+	}
+
+	// The count must round-trip through the same textual form the lane
+	// parses: everything after "executed_assertions=" up to the next space.
+	const key = "executed_assertions="
+	idx := strings.Index(marker, key)
+	if idx < 0 {
+		t.Fatalf("marker missing %q, got %q", key, marker)
+	}
+	field := marker[idx+len(key):]
+	if space := strings.Index(field, " "); space >= 0 {
+		field = field[:space]
+	}
+	parsed, err := strconv.Atoi(field)
+	if err != nil {
+		t.Fatalf("executed_assertions field %q is not an integer: %v (marker %q)", field, err, marker)
+	}
+	if parsed != ExecutedAssertions(r) {
+		t.Errorf("parsed executed_assertions = %d, want %d (marker %q)", parsed, ExecutedAssertions(r), marker)
+	}
+	if parsed < 1 {
+		t.Errorf("fixture precondition: a non-empty corpus must yield a positive count, got %d", parsed)
 	}
 }

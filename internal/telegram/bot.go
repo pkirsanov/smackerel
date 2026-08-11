@@ -295,17 +295,27 @@ func (b *Bot) SetAnnotationShadowComparator(c *annotation.ShadowComparator) {
 // PerUserTokenMinterOptions; production target is 5 minutes per
 // design.md §13). Callers MUST mint per-call rather than caching
 // the wire token across requests.
-func (b *Bot) bearerForChat(chatID int64) (string, error) {
+//
+// Spec 108 §18 decision 3: the mint now reads the mapped principal's
+// persisted grants, so it takes a context and can fail for reasons
+// other than an unmapped chat. Every such failure is propagated as an
+// error. It MUST NOT be routed into the nil-minter branch below —
+// that branch is a construction-time condition (no minter wired at
+// all), never an error-handling path, and substituting the shared
+// bearer at the moment authority could not be determined would be a
+// fail-open bug wearing the costume of resilience (design.md §10.8).
+func (b *Bot) bearerForChat(ctx context.Context, chatID int64) (string, error) {
 	if b.tokenMinter == nil {
 		return b.authToken, nil
 	}
-	minted, err := b.tokenMinter.MintForChat(chatID)
+	minted, err := b.tokenMinter.MintForChat(ctx, chatID)
 	if err != nil {
 		return "", err
 	}
 	if minted.WireToken == "" {
 		// Dev/test unmapped chat — minter signaled a clean miss;
-		// honor the legacy shared bearer.
+		// honor the legacy shared bearer. Reached only on (zero, nil),
+		// which the minter returns before any grant read.
 		return b.authToken, nil
 	}
 	return minted.WireToken, nil
@@ -315,10 +325,15 @@ func (b *Bot) bearerForChat(chatID int64) (string, error) {
 // Scope 04 Authorization-header policy uniformly across every
 // internal-API caller in this package. When `bearerForChat` returns
 // an error, the caller bubbles the error up (production unmapped
-// chat → request refused). When the bearer is empty, no
-// Authorization header is set (dev empty-token bypass).
+// chat, or an undeterminable grant set → request refused). When the
+// bearer is empty, no Authorization header is set (dev empty-token
+// bypass).
+//
+// The outbound request's own context bounds the grant read, so a
+// stalled database cancels with the request rather than wedging the
+// message handler.
 func (b *Bot) setBearerHeader(req *http.Request, chatID int64) error {
-	bearer, err := b.bearerForChat(chatID)
+	bearer, err := b.bearerForChat(req.Context(), chatID)
 	if err != nil {
 		return err
 	}

@@ -26,22 +26,29 @@
 // directory) and ML_SIDECAR_URL (for the production embedder). Skips
 // cleanly when either is absent so the test binary still builds
 // outside the integration runner.
+//
+// BUG-064-003 — router construction is set-up, not the thing under test, and
+// its cost must not decide the verdict. Every timing value below comes from
+// SST via tests/integration/agent/routerwarmup; the embedder is warmed to a
+// proven latency BEFORE the measured region begins; and the router build runs
+// under a budget derived from the number of intent_examples rather than a
+// wall-clock literal. See that package's doc comment for the full contract.
 
 package agent_integration
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
-	"strconv"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/smackerel/smackerel/internal/agent"
 	"github.com/smackerel/smackerel/internal/agent/embedder/sidecar"
+	"github.com/smackerel/smackerel/tests/integration/agent/routerwarmup"
 )
 
 // resolveScenarioDir is the BUG-CHAOS-20260605-001 fail-loud resolver.
@@ -82,20 +89,42 @@ func TestOpenKnowledgeRouting_FallbackToOpenKnowledge(t *testing.T) {
 	if sidecarURL == "" {
 		t.Skip("integration: ML_SIDECAR_URL not set — live ML sidecar not available")
 	}
-	fallback := os.Getenv("AGENT_ROUTING_FALLBACK_SCENARIO_ID")
-	if fallback != "open_knowledge" {
-		t.Fatalf("AGENT_ROUTING_FALLBACK_SCENARIO_ID=%q; expected %q (SCOPE-12 SST contract)", fallback, "open_knowledge")
+
+	// SST first. A missing or unparseable value is fatal here; the deleted
+	// parseFloatEnv/parseIntEnv helpers used to swallow exactly that and keep
+	// asserting against a stale 0.65 / 5.
+	timings, err := routerwarmup.LoadTimings(os.LookupEnv)
+	if err != nil {
+		t.Fatalf("integration: %v", err)
+	}
+	cfg, err := routerwarmup.LoadRoutingConfig(os.LookupEnv)
+	if err != nil {
+		t.Fatalf("integration: %v", err)
+	}
+	if cfg.FallbackScenarioID != "open_knowledge" {
+		t.Fatalf("%s=%q; expected %q (SCOPE-12 SST contract)",
+			routerwarmup.EnvFallbackScenarioID, cfg.FallbackScenarioID, "open_knowledge")
 	}
 
-	embedder, err := sidecar.New(sidecarURL, os.Getenv("SMACKEREL_AUTH_TOKEN"), 5*time.Second)
+	// The per-call ceiling is the SST value production uses, not a stricter
+	// literal: agent.routing.embed_timeout_ms is sized for exactly the cold
+	// sentence-transformer load this test triggers (spec.md EB-4 / AC-4).
+	embedder, err := sidecar.New(sidecarURL, os.Getenv("SMACKEREL_AUTH_TOKEN"), timings.EmbedCallTimeout)
 	if err != nil {
 		t.Fatalf("sidecar embedder: %v", err)
 	}
-	probeCtx, probeCancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer probeCancel()
-	if _, err := embedder.Embed(probeCtx, "probe"); err != nil {
+
+	// Phase 1 — pay the cold start OUTSIDE the measured region. This must
+	// precede router construction; routerwarmup.BuildRouter refuses a
+	// WarmResult that did not come from here.
+	warm, err := routerwarmup.WaitForWarmEmbedder(context.Background(), embedder, timings, "probe")
+	switch {
+	case errors.Is(err, routerwarmup.ErrEmbedderUnreachable):
 		t.Skipf("integration: ML sidecar /embed unreachable: %v", err)
+	case err != nil:
+		t.Fatalf("integration: embedder readiness gate failed (this is an ML sidecar readiness verdict, NOT a routing failure): %v", err)
 	}
+	t.Logf("embedder warm-up gate passed: %s", warm.Summary())
 
 	registered, rejected, fatal := agent.DefaultLoader().Load(scenarioDir, "*.yaml")
 	if fatal != nil {
@@ -115,18 +144,15 @@ func TestOpenKnowledgeRouting_FallbackToOpenKnowledge(t *testing.T) {
 		t.Fatalf("open_knowledge scenario not loaded from %s (SCOPE-12 prerequisite)", scenarioDir)
 	}
 
-	cfg := agent.RoutingConfig{
-		ConfidenceFloor:    parseFloatEnv("AGENT_ROUTING_CONFIDENCE_FLOOR", 0.65),
-		ConsiderTopN:       parseIntEnv("AGENT_ROUTING_CONSIDER_TOP_N", 5),
-		FallbackScenarioID: fallback,
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	router, err := agent.NewRouter(ctx, cfg, registered, embedder)
+	// Phase 2 — measure only router construction, under a budget derived from
+	// the work (one SST per-call unit per intent_example).
+	t.Logf("router construction budget: %s", routerwarmup.BuildReport(registered, timings))
+	router, err := routerwarmup.BuildRouter(context.Background(), warm, cfg, registered, embedder, timings)
 	if err != nil {
 		t.Fatalf("build router: %v", err)
 	}
+
+	ctx := context.Background()
 
 	cases := []struct {
 		name        string
@@ -212,30 +238,6 @@ func TestOpenKnowledgeRouting_ScenarioHealthProbe(t *testing.T) {
 	if !strings.Contains(sc.SystemPrompt, "open_knowledge_invoke") {
 		t.Fatalf("substrate system_prompt does not reference the bridge tool")
 	}
-}
-
-func parseFloatEnv(key string, fallback float64) float64 {
-	v := os.Getenv(key)
-	if v == "" {
-		return fallback
-	}
-	f, err := strconv.ParseFloat(v, 64)
-	if err != nil {
-		return fallback
-	}
-	return f
-}
-
-func parseIntEnv(key string, fallback int) int {
-	v := os.Getenv(key)
-	if v == "" {
-		return fallback
-	}
-	n, err := strconv.Atoi(v)
-	if err != nil {
-		return fallback
-	}
-	return n
 }
 
 // TestOpenKnowledgeRouting_RelativeAGENT_SCENARIO_DIRResolvesAgainstRepoRoot

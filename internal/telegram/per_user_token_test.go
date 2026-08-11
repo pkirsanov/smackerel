@@ -2,6 +2,7 @@
 package telegram
 
 import (
+	"context"
 	"errors"
 	"strings"
 	"testing"
@@ -21,17 +22,46 @@ func minterTestKeypair(t *testing.T) (priv, pub string) {
 	return priv, pub
 }
 
+// fakePrincipalGrantReader is the in-package test double for
+// PrincipalGrantReader. It stands in for *auth.BearerStore so the mint
+// path (spec 108 §18 decision 3) is exercisable without a database.
+type fakePrincipalGrantReader struct {
+	grants auth.RecordedGrants
+}
+
+func (f *fakePrincipalGrantReader) GrantsForPrincipal(_ context.Context, _ string) (auth.RecordedGrants, error) {
+	return f.grants, nil
+}
+
+// newFullyGrantedPrincipalReader records the full delegation ceiling for
+// every principal, so derivation returns a non-empty set and the mint
+// proceeds. That keeps the tests below asserting what they asserted
+// before the grant read existed — bearer selection and claim binding —
+// rather than incidentally re-testing derivation refusal.
+//
+// Scopes come from auth.TelegramBridgeDelegableGrants rather than string
+// literals so this package keeps holding no scope literal of its own
+// (per_user_token.go package doc).
+func newFullyGrantedPrincipalReader() *fakePrincipalGrantReader {
+	return &fakePrincipalGrantReader{grants: auth.RecordedGrants{
+		TokenID:  "tok-test-principal",
+		Scopes:   append([]string(nil), auth.TelegramBridgeDelegableGrants...),
+		Recorded: true,
+	}}
+}
+
 func newProductionMinter(t *testing.T, mapping map[int64]string) (*PerUserTokenMinter, string) {
 	t.Helper()
 	priv, pub := minterTestKeypair(t)
 	bot := &Bot{environment: "production", userMapping: mapping}
 	m, err := NewPerUserTokenMinter(PerUserTokenMinterOptions{
-		Bot:        bot,
-		SigningKey: priv,
-		KeyID:      "scope03-mint-key",
-		Issuer:     "smackerel",
-		TTL:        2 * time.Minute,
-		Now:        func() time.Time { return time.Unix(1_700_000_000, 0).UTC() },
+		Bot:             bot,
+		PrincipalGrants: newFullyGrantedPrincipalReader(),
+		SigningKey:      priv,
+		KeyID:           "scope03-mint-key",
+		Issuer:          "smackerel",
+		TTL:             2 * time.Minute,
+		Now:             func() time.Time { return time.Unix(1_700_000_000, 0).UTC() },
 	})
 	if err != nil {
 		t.Fatalf("NewPerUserTokenMinter: %v", err)
@@ -46,10 +76,13 @@ func TestNewPerUserTokenMinter_Validates(t *testing.T) {
 		opts    PerUserTokenMinterOptions
 		wantErr string
 	}{
-		{"missing bot", PerUserTokenMinterOptions{SigningKey: priv, KeyID: "k1"}, "non-nil Bot"},
-		{"missing signing key", PerUserTokenMinterOptions{Bot: &Bot{}, SigningKey: "", KeyID: "k1"}, "non-empty SigningKey"},
-		{"missing key id", PerUserTokenMinterOptions{Bot: &Bot{}, SigningKey: priv, KeyID: ""}, "non-empty KeyID"},
-		{"whitespace key id", PerUserTokenMinterOptions{Bot: &Bot{}, SigningKey: priv, KeyID: "   "}, "non-empty KeyID"},
+		{"missing bot", PerUserTokenMinterOptions{PrincipalGrants: newFullyGrantedPrincipalReader(), SigningKey: priv, KeyID: "k1"}, "non-nil Bot"},
+		// A nil reader must refuse rather than fall back to a hardcoded scope set;
+		// valid SigningKey/KeyID keep this row failing on PrincipalGrants alone.
+		{"missing principal grants", PerUserTokenMinterOptions{Bot: &Bot{}, PrincipalGrants: nil, SigningKey: priv, KeyID: "k1"}, "non-nil PrincipalGrants"},
+		{"missing signing key", PerUserTokenMinterOptions{Bot: &Bot{}, PrincipalGrants: newFullyGrantedPrincipalReader(), SigningKey: "", KeyID: "k1"}, "non-empty SigningKey"},
+		{"missing key id", PerUserTokenMinterOptions{Bot: &Bot{}, PrincipalGrants: newFullyGrantedPrincipalReader(), SigningKey: priv, KeyID: ""}, "non-empty KeyID"},
+		{"whitespace key id", PerUserTokenMinterOptions{Bot: &Bot{}, PrincipalGrants: newFullyGrantedPrincipalReader(), SigningKey: priv, KeyID: "   "}, "non-empty KeyID"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -67,9 +100,10 @@ func TestNewPerUserTokenMinter_Validates(t *testing.T) {
 func TestNewPerUserTokenMinter_DefaultsAppliedWhenZero(t *testing.T) {
 	priv, _ := auth.GenerateSigningKeypair()
 	m, err := NewPerUserTokenMinter(PerUserTokenMinterOptions{
-		Bot:        &Bot{environment: "production", userMapping: map[int64]string{1: "u"}},
-		SigningKey: priv,
-		KeyID:      "k1",
+		Bot:             &Bot{environment: "production", userMapping: map[int64]string{1: "u"}},
+		PrincipalGrants: newFullyGrantedPrincipalReader(),
+		SigningKey:      priv,
+		KeyID:           "k1",
 	})
 	if err != nil {
 		t.Fatalf("NewPerUserTokenMinter: %v", err)
@@ -89,7 +123,7 @@ func TestMintForChat_Production_MappedChat_ProducesVerifiableToken(t *testing.T)
 	mapping := map[int64]string{12345: "alice"}
 	m, pub := newProductionMinter(t, mapping)
 
-	tok, err := m.MintForChat(12345)
+	tok, err := m.MintForChat(context.Background(), 12345)
 	if err != nil {
 		t.Fatalf("MintForChat: %v", err)
 	}
@@ -126,7 +160,7 @@ func TestMintForChat_Production_MappedChat_ProducesVerifiableToken(t *testing.T)
 
 func TestMintForChat_Production_UnmappedChat_ReturnsError(t *testing.T) {
 	m, _ := newProductionMinter(t, map[int64]string{12345: "alice"})
-	tok, err := m.MintForChat(99999)
+	tok, err := m.MintForChat(context.Background(), 99999)
 	if !errors.Is(err, ErrNoUserMappingForChat) {
 		t.Fatalf("err=%v want %v", err, ErrNoUserMappingForChat)
 	}
@@ -137,7 +171,7 @@ func TestMintForChat_Production_UnmappedChat_ReturnsError(t *testing.T) {
 
 func TestMintForChat_Production_EmptyMapping_RejectsAll(t *testing.T) {
 	m, _ := newProductionMinter(t, nil)
-	_, err := m.MintForChat(12345)
+	_, err := m.MintForChat(context.Background(), 12345)
 	if !errors.Is(err, ErrNoUserMappingForChat) {
 		t.Fatalf("err=%v want %v (production with empty mapping MUST reject every chat)", err, ErrNoUserMappingForChat)
 	}
@@ -147,14 +181,15 @@ func TestMintForChat_Dev_UnmappedChat_ReturnsZeroAndNil(t *testing.T) {
 	priv, _ := auth.GenerateSigningKeypair()
 	bot := &Bot{environment: "development", userMapping: map[int64]string{12345: "alice"}}
 	m, err := NewPerUserTokenMinter(PerUserTokenMinterOptions{
-		Bot:        bot,
-		SigningKey: priv,
-		KeyID:      "k1",
+		Bot:             bot,
+		PrincipalGrants: newFullyGrantedPrincipalReader(),
+		SigningKey:      priv,
+		KeyID:           "k1",
 	})
 	if err != nil {
 		t.Fatalf("NewPerUserTokenMinter: %v", err)
 	}
-	tok, err := m.MintForChat(99999)
+	tok, err := m.MintForChat(context.Background(), 99999)
 	if err != nil {
 		t.Fatalf("dev unmapped MUST NOT error; err=%v", err)
 	}
@@ -170,15 +205,16 @@ func TestMintForChat_Dev_MappedChat_StillMintsForCorrectness(t *testing.T) {
 	priv, pub := auth.GenerateSigningKeypair()
 	bot := &Bot{environment: "test", userMapping: map[int64]string{42: "carol"}}
 	m, err := NewPerUserTokenMinter(PerUserTokenMinterOptions{
-		Bot:        bot,
-		SigningKey: priv,
-		KeyID:      "kdev",
-		Now:        func() time.Time { return time.Unix(1_700_000_000, 0).UTC() },
+		Bot:             bot,
+		PrincipalGrants: newFullyGrantedPrincipalReader(),
+		SigningKey:      priv,
+		KeyID:           "kdev",
+		Now:             func() time.Time { return time.Unix(1_700_000_000, 0).UTC() },
 	})
 	if err != nil {
 		t.Fatalf("NewPerUserTokenMinter: %v", err)
 	}
-	tok, err := m.MintForChat(42)
+	tok, err := m.MintForChat(context.Background(), 42)
 	if err != nil {
 		t.Fatalf("dev mapped err=%v want nil", err)
 	}
@@ -203,7 +239,7 @@ func TestMintForChat_Dev_MappedChat_StillMintsForCorrectness(t *testing.T) {
 func TestMintForUser_RejectsEmptyUserID(t *testing.T) {
 	m, _ := newProductionMinter(t, map[int64]string{12345: "alice"})
 	for _, name := range []string{"", "   "} {
-		_, err := m.MintForUser(12345, name)
+		_, err := m.MintForUser(context.Background(), 12345, name)
 		if err == nil || !strings.Contains(err.Error(), "non-empty user_id") {
 			t.Errorf("name=%q err=%v want non-empty user_id", name, err)
 		}
@@ -212,7 +248,7 @@ func TestMintForUser_RejectsEmptyUserID(t *testing.T) {
 
 // TestMintForChat_AdversarialNoBodyTrust proves that no Telegram
 // message field other than chat_id can influence the minted UserID.
-// The minter API surface only takes (chatID) — there is no field to
+// The minter API surface only takes (ctx, chatID) — there is no field to
 // pass message text, sender id, or any other client-controlled value.
 // This test pins that contract: even if the test harness wanted to
 // inject an attacker-claimed user_id alongside the chat id, the
@@ -220,7 +256,7 @@ func TestMintForUser_RejectsEmptyUserID(t *testing.T) {
 func TestMintForChat_AdversarialNoBodyTrust(t *testing.T) {
 	mapping := map[int64]string{12345: "alice"}
 	m, pub := newProductionMinter(t, mapping)
-	tok, err := m.MintForChat(12345)
+	tok, err := m.MintForChat(context.Background(), 12345)
 	if err != nil {
 		t.Fatalf("MintForChat: %v", err)
 	}
@@ -244,7 +280,7 @@ func TestMintForChat_FreshTokenIDPerCall(t *testing.T) {
 	m, _ := newProductionMinter(t, mapping)
 	seen := make(map[string]struct{}, 10)
 	for i := 0; i < 10; i++ {
-		tok, err := m.MintForChat(12345)
+		tok, err := m.MintForChat(context.Background(), 12345)
 		if err != nil {
 			t.Fatalf("call %d: %v", i, err)
 		}

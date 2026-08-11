@@ -113,6 +113,18 @@ func run() error {
 	}
 	slog.Info("starting smackerel-core", "port", cfg.Port, "version", version, "commit", commitHash, "build_time", buildTime)
 
+	// Spec 108 Scope 02 — resolve the corpus-grant enforcement stage exactly
+	// once, here, before any service is built and long before the listener
+	// binds. Absent, empty, or malformed is REFUSED-BOOT (R-108-FL5).
+	corpusGrantEnforce, err := resolveCorpusGrantEnforcement(corpusGrantEnforcementEnv())
+	if err != nil {
+		return fmt.Errorf("corpus grant enforcement configuration: %w", err)
+	}
+	slog.Info("corpus grant enforcement stage resolved",
+		"env_var", corpusGrantEnforcementEnvVar,
+		"stage", corpusGrantEnforcementStage(corpusGrantEnforce),
+		"enforce", corpusGrantEnforce)
+
 	// Build core services (DB, NATS, pipeline, knowledge, etc.)
 	svc, err := buildCoreServices(ctx, cfg)
 	if err != nil {
@@ -125,7 +137,7 @@ func run() error {
 	}
 
 	// Build API dependencies (annotations, lists, etc.)
-	deps, listResolver, listStore, err := buildAPIDeps(ctx, cfg, svc)
+	deps, listResolver, listStore, err := buildAPIDeps(ctx, cfg, svc, corpusGrantEnforce)
 	if err != nil {
 		return fmt.Errorf("buildAPIDeps: %w", err)
 	}

@@ -313,10 +313,33 @@ routing-accuracy and capture-fallback thresholds drift silently between manual r
 assert in CI that the gate reported a **non-zero executed-assertion count** — so a
 silently skipped gate fails loudly instead of passing vacuously.
 
-**Files (2).** `scripts/runtime/go-integration.sh` ·
-`tests/eval/assistant/acceptance_test.go`
+**Files (5, one new).** `scripts/runtime/go-integration.sh` ·
+`tests/eval/assistant/acceptance_test.go` · `tests/eval/assistant/harness.go` ·
+`tests/eval/assistant/harness_test.go` ·
+`internal/deploy/eval_lane_contract_test.go` *(new)*.
 
-**Size.** The smallest high-value fix on this list.
+> **Corrected 2026-08-10 — file count only.** This entry previously read
+> *"Files (2)"*, naming only the first two. That estimate covers the *wiring*
+> half and omits the *enforcement* half — the second requirement in the "Exact
+> change" sentence directly above. Investigation established why it was missed:
+> **no executed-assertion count existed anywhere in the repository, in any
+> form.** `FormatReport` emits a human-readable block, it prints only inside
+> `if !t.Failed()` so it cannot distinguish "ran and failed" from "never ran",
+> and there is no aggregate quantity. The count had to be created. That is what
+> the three additional files are: `ExecutedAssertions` / `FormatGateMarker` in
+> the **untagged** `harness.go`, so the marker is unit-testable outside the lane
+> whose correctness is under question; a `harness_test.go` proof that the count
+> can be `0`, so the lane's `>= 1` check is not vacuous; and the adversarial
+> regression in `internal/deploy/`, the only thing preventing recurrence.
+
+**Size.** Still the smallest high-value fix on this list — small, low blast
+radius, no runtime, schema or user-visible surface. Only the file *count* was
+wrong.
+
+**Home.** Bug **BUG-061-011** under existing spec
+**061-conversational-assistant**. Full derivation in
+`specs/061-conversational-assistant/bugs/BUG-061-011-eval-gate-runs-in-no-automated-lane/design.md`
+§ *What the harness actually reports today* and § *Honest size assessment*.
 
 ---
 
@@ -1033,6 +1056,20 @@ browser journey, no database query, no exploit, no deployment probe, no network
 call to any provider. Every defect in §3 is established by reading source and
 configuration.
 
+**Correction, 2026-08-10 — §P3 file count.** One execution-backed exception to
+the paragraph above. §P3 recorded *"Files (2)"*. Tested against the code during
+the BUG-061-011 investigation, that estimate is understated: it covers the
+wiring half and omits the enforcement half, because no executed-assertion count
+existed in the repository in any form and had to be created. Corrected to
+**5 files, 1 new**. The qualitative *"smallest high-value fix on this list"*
+claim is unchanged and still holds — only the number was wrong. Verified against
+the **working tree** at `6ad1e8c9`: all five files present, and
+`./smackerel.sh test unit --go --go-run 'TestEvalLaneContract|TestExecutedAssertions|TestFormatGateMarker' --verbose`
+passes with zero failures (9 top-level tests, 6 adversarial sub-tests,
+`ok internal/deploy`, `ok tests/eval/assistant`). Derivation:
+`specs/061-conversational-assistant/bugs/BUG-061-011-eval-gate-runs-in-no-automated-lane/design.md`.
+No other figure in this document was re-measured, and none was changed.
+
 **Re-verified today.** Every line reference in §3 was checked against current
 source on 2026-08-02. All hold:
 
@@ -1079,7 +1116,9 @@ claims:
 **Scope statement.** The 2026-08-02 authoring changed no spec, design, scope,
 report, state, source, test or config artifact. The 2026-08-10 revision added §5
 and folded in re-measured figures; it likewise changed no source, test or config
-file. Specs 110, 111 and 112 were authored separately through the normal Bubbles
+file. The 2026-08-10 §P3 file-count correction is documentation-only: it changed
+this file alone and touched no source, test, config or spec artifact. Specs 110,
+111 and 112 were authored separately through the normal Bubbles
 planning workflow and name this document as their plan of record. Routing any
 stage into implementation still requires that workflow — a plan is not an
 implementation bypass.

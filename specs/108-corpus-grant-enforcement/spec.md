@@ -1,9 +1,9 @@
 # Feature: 108 Corpus Grant Enforcement
 
-**Status:** in_progress (analyst-owned authoring; ceiling = `specs_hardened`)
-**Workflow Mode:** `product-to-planning`
+**Status:** in_progress (delivery; ceiling = `done`)
+**Workflow Mode:** `full-delivery`
 **Release Train:** `next` (security-posture change; MUST NOT ship on `mvp`)
-**Planning Only:** true — `allowImplementationForFindings: false`. No source code is edited by this spec. `bubbles.ux`, `bubbles.design`, `bubbles.plan` follow in the canonical chain.
+**Planning Only:** false — superseded 2026-08-11. This packet was authored under `product-to-planning` (ceiling `specs_hardened`, Gate G073 source-edit lockout ACTIVE) and reached that ceiling with zero source edits. It has since entered delivery under `full-delivery`, so source code IS now edited by this spec beginning with Scope 01 (`internal/auth`). The authoring chain `bubbles.analyst` → `bubbles.ux` → `bubbles.design` → `bubbles.plan` completed before the transition.
 
 **Owner Directive (2026-07-28):**
 > Enforce the grant AS DESIGNED. Do NOT widen the daily default set. Roll out observe-then-enforce.
@@ -1409,6 +1409,8 @@ Final metric names are owned by `bubbles.design` under R-108-O1/O2; the **shape*
 
 Consequence: the operator cannot see who holds `corpus:read`, cannot set it from the admin UI, and — because rotation **replaces** rather than adds (below) — cannot safely construct the full scope list for a rotation. This is **F-108-UX-ROSTER-01**, BLOCKING.
 
+> **Update 2026-08-11 — the read half is DECIDED, not the editor.** `design.md` §10 resolves the readability half of this finding: the issued scope set is recorded on `auth_tokens`, `list-users` gains a `GRANTS` column, and `rotate` preserves from the record rather than from a wire token the operator no longer holds. The verified current state above is unchanged until that work ships. **F-108-UX-ADMINUI-01 remains open** — §10 supplies the read the P4 grant chip needs and the exact `unknown` semantics required below, but it does not build the grant editor.
+
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
 │  Smackerel — Per-User Bearer Tokens                                    │
@@ -1533,7 +1535,7 @@ Recorded here rather than edited into §16, which is analyst-owned. Each was ver
 | ID | Severity | Finding | Owner |
 |---|---|---|---|
 | **F-108-UX-COVERAGE-01** | **BLOCKING** | The observe counter is a **numerator with no denominator**. It cannot distinguish "nobody was denied" from "nobody called". **Eleven of the sixteen** route groups have **no first-party in-repo caller** — Tier A `artifact_domain`, `export`, `context_for` (§4.2 Tier A rows 5, 6, 7) plus **all eight** Tier B Phase-5 groups added by §18 decision 5 — so a window in which the external GuestHost connector simply did not call `/api/context-for` yields a **falsely clean** counter and UC-108-001 authorises a flip that then breaks the highest-severity external dependency (SCN-108-E02). Requires a per-route-group **request** counter alongside the denial counter, with the same closed `route_group` label. Does not conflict with R-108-O2 (which governs numerator disambiguation only); it is additive. **Extended by F-108-COVERAGE-LABEL-01 (§16):** §18 decision 1(b) additionally requires that signal carry `user_id`, because coverage is ratified per-principal, not merely per-group. | `bubbles.design` → `bubbles.plan` |
-| **F-108-UX-ROSTER-01** | **BLOCKING** | **There is no server-side way to read a principal's current grants.** `auth_tokens` has no scopes column (`033_auth_per_user_bearer.sql:37-53`); `list-users` omits them (`cmd_auth.go:418`); the admin UI and its REST endpoints have no scope field. The only read path is `smackerel auth inspect <wire-token>` (`cmd_auth.go:637`), which requires possessing a wire token that `tokens.html:63-64` states is shown **once and never again**. Combined with the rotation semantics below, SCN-108-F02 ("rotation does not silently drop existing grants") is **operationally unachievable today**: the operator cannot construct the full scope list because they cannot read the current one. UX requirement: the operator MUST be able to read a principal's current grants **without possessing the wire token**. Mechanism is design's call. | `bubbles.design` → `bubbles.plan` |
+| **F-108-UX-ROSTER-01** | **DECIDED 2026-08-11** (was BLOCKING) | **There is no server-side way to read a principal's current grants.** `auth_tokens` has no scopes column (`033_auth_per_user_bearer.sql:37-53`); `list-users` omits them (`cmd_auth.go:418`); the admin UI and its REST endpoints have no scope field. The only read path is `smackerel auth inspect <wire-token>` (`cmd_auth.go:637`), which requires possessing a wire token that `tokens.html:63-64` states is shown **once and never again**. Combined with the rotation semantics below, SCN-108-F02 ("rotation does not silently drop existing grants") is **operationally unachievable today**: the operator cannot construct the full scope list because they cannot read the current one. UX requirement: the operator MUST be able to read a principal's current grants **without possessing the wire token**. Mechanism is design's call. **RESOLVED BY DESIGN — see `design.md` §10.** Chosen mechanism: record the issued scope set on `auth_tokens` (`granted_scopes text[]`, nullable, no default), written inside `IssueAndPersistToken` from the same value that becomes the PASETO claim, and read back as "the recorded grant set of the principal's current standing token". Persisting a `role` on `auth_users` and deriving through `GrantsForRole` was evaluated and **rejected**: `GrantsForRole` has zero production callers, and no role's grant set contains `annotation:edit`. `list-users` gains a `GRANTS` column and `rotate` preserves from the record instead of requiring `--prior-token`, which is what makes SCN-108-F02 achievable. **DECIDED is not SHIPPED** — the mechanism needs its own scope, ordered before Scope 04 by the record-before-derive constraint in `design.md` §10.5; `SCN-108-F02` stays `blockedBy` this finding in `scenario-manifest.json` until that work lands. | `bubbles.design` **(decided)** → `bubbles.plan` (scoping + ordering) |
 | **F-108-UX-ROTATE-ADD-01** | HIGH | `resolveRotationScopes` (`cmd_auth.go:583-617`) offers **preserve** (`--prior-token`, no `--scope`), **explicit replace** (`--scope …`), and **demote** (`--scope ""`). There is **no additive form**: supplying `--prior-token` *and* `--scope corpus:read` takes the `len(scopes) != 0` branch and **replaces**, silently discarding `annotation:edit`. The single most common operation this spec creates — "add one grant, keep the rest" — has no safe primitive. A documentation-only mitigation (R-108-DOC2 "full list" rule) does not close it while F-108-UX-ROSTER-01 stands, because the operator cannot obtain the full list to type. | `bubbles.design` → `docs/Operations.md` |
 | **F-108-UX-ADMINUI-01** | HIGH | `/admin/auth/tokens` (spec 044 Scope 03) can neither **set** nor **display** grants, and neither can its REST endpoints. UC-108-002 is therefore CLI-only while the admin surface presents itself as the token-management surface. Either the grant editor lands, or the page MUST carry the explicit grant-issuance notice from S7. Silent omission is not an acceptable option on a security surface. | `bubbles.design` |
 | **F-108-UX-TELEGRAM-COPY-01** | HIGH | `handleFind` renders **every** `callSearch` error — including a 403 — as `? Search failed. Try again in a moment.` (`bot.go:852`), and `doAPIRequest` collapses non-200 into an untyped string (`recipe_commands.go:531-533`). Under enforcement this tells a permanently-ungranted user to retry forever: a transient framing of a permanent refusal, which is the dishonesty class BUG-061-008/009 ratified against. **The 403 must survive as a typed condition to the reply site** on both the T1 slash-command and T2 assistant-turn paths, or S5 cannot be implemented. | `bubbles.design` |
@@ -1646,6 +1648,14 @@ stateDiagram-v2
         before phase 2.
     end note
 ```
+
+**Update 2026-08-11 — the `Blocked → InspectWire → WireLost → RotateBlind` branch is designed out.**
+`design.md` §10 makes `ReadCurrent → HaveList` the only path once the mechanism ships: the recorded
+grant set is read from `auth_tokens`, so the operator never needs the wire token, and `rotate`
+preserves from the record. The diagram above still depicts today's behaviour and stays accurate
+until that work lands. `F-108-UX-ROTATE-ADD-01` is **not** closed by this — §10.9 removes its
+documented blocker (the full list becomes readable), but whether an additive `--add-scope`
+primitive lands remains that finding's call.
 
 ### User Flow: Rollout and rollback (UC-108-003)
 

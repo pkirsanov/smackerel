@@ -326,6 +326,36 @@ func Run(c *Corpus) HarnessResult {
 	return res
 }
 
+// ExecutedAssertions reports how many ground-truth comparisons the run
+// performed: one routing assertion per corpus row (Total) plus one
+// capture assertion per capture-expected row (CaptureExpected). Zero
+// means the gate evaluated nothing — the condition the integration lane
+// refuses. Untagged on purpose so the count is provable in the default
+// unit lane rather than only by the lane whose wiring it guards.
+func ExecutedAssertions(r HarnessResult) int {
+	return r.Total + r.CaptureExpected
+}
+
+// GateMarkerPrefix is the fixed literal that
+// scripts/runtime/go-integration.sh matches at column zero to prove the
+// acceptance gate actually ran. Changing it requires changing that lane
+// and internal/deploy/eval_lane_contract_test.go in the same commit.
+const GateMarkerPrefix = "ASSISTANT_ACCEPTANCE_GATE_V1"
+
+// FormatGateMarker renders the single-line machine record the
+// integration lane asserts on: one line, fixed prefix, key=value pairs.
+// It is deliberately separate from FormatReport, which is human prose
+// with no stability contract and is printed only when the gate passes.
+func FormatGateMarker(r HarnessResult) string {
+	return fmt.Sprintf("%s executed_assertions=%d rows=%d capture_expected=%d routing_accuracy=%.4f capture_fallback_rate=%.4f",
+		GateMarkerPrefix,
+		ExecutedAssertions(r),
+		r.Total,
+		r.CaptureExpected,
+		r.RoutingAccuracy,
+		r.CaptureFallbackRate)
+}
+
 // FormatReport returns a multi-line human-readable summary. Stable
 // ordering: labels in AllLabels order; failures by id.
 func FormatReport(r HarnessResult) string {

@@ -168,7 +168,12 @@ func initAssistantTracing(ctx context.Context, cfg *config.Config) (*assistanttr
 // subsystem (BearerStore + RevocationCache + Broadcaster) has fail-fast
 // validation paths (e.g. nil pool, malformed PASETO key material) that
 // MUST surface to the caller rather than be silently swallowed.
-func buildAPIDeps(ctx context.Context, cfg *config.Config, svc *coreServices) (*api.Dependencies, list.ArtifactResolver, *list.Store, error) {
+//
+// Spec 108 Scope 03 added corpusGrantEnforce — the stage already resolved
+// fail-loud by resolveCorpusGrantEnforcement in run(). It is a REQUIRED
+// parameter rather than an optional field assignment so that omitting it is a
+// compile error here, not a silent ENFORCE→OBSERVE downgrade at runtime.
+func buildAPIDeps(ctx context.Context, cfg *config.Config, svc *coreServices, corpusGrantEnforce bool) (*api.Dependencies, list.ArtifactResolver, *list.Store, error) {
 	notificationSeverity := notification.ParseSeverity(cfg.Notification.EscalationSeverity)
 	notificationEngine, err := notification.NewDecisionEngine(notification.DecisionPolicy{
 		PersistenceThreshold:   cfg.Notification.PersistenceThreshold,
@@ -236,6 +241,9 @@ func buildAPIDeps(ctx context.Context, cfg *config.Config, svc *coreServices) (*
 		AssistantTurnHandler:            svc.assistantHTTPHandler,
 		CapturePolicyRecorder:           capturefallback.NewPostgresStore(svc.pg.Pool),
 		CaptureFallbackHashKey:          cfg.CaptureFallback.DedupHashKey,
+		// Spec 108 Scope 03 — the stage resolved fail-loud in run(); the
+		// router mounts the ENFORCE half of the corpus gate from it.
+		CorpusGrantEnforce: corpusGrantEnforce,
 	}
 
 	// Spec 096 SCOPE-06 — operator-gated model-connections admin surface +
@@ -762,14 +770,27 @@ func startTelegramBotIfConfigured(ctx context.Context, cfg *config.Config, deps 
 	// In dev/test (or when signing material is absent), the minter
 	// stays nil and bearerForChat falls back to b.authToken — the
 	// existing single-user development workflow keeps functioning.
+	//
+	// Spec 108 §18 decision 3 — the minter derives its scope claim from
+	// the mapped principal's persisted grants, so it requires the
+	// BearerStore as a grant reader. bearerStore is constructed
+	// unconditionally above with a hard error on failure, so the nil
+	// guard here is defense in depth: assigning a nil *BearerStore into
+	// the interface field would yield a non-nil interface holding a nil
+	// pointer, which the minter's own nil check could not see.
 	if cfg.Environment == "production" && cfg.Auth.Enabled &&
 		cfg.Auth.SigningActivePrivateKey != "" && cfg.Auth.SigningActiveKeyID != "" {
+		if deps.BearerStore == nil {
+			slog.Error("telegram per-user token minter requires a bearer store to read principal grants; exiting rather than running the bridge on the shared bearer")
+			os.Exit(1)
+		}
 		minter, err := telegram.NewPerUserTokenMinter(telegram.PerUserTokenMinterOptions{
-			Bot:        tgBot,
-			SigningKey: cfg.Auth.SigningActivePrivateKey,
-			KeyID:      cfg.Auth.SigningActiveKeyID,
-			Issuer:     "smackerel",
-			TTL:        5 * time.Minute,
+			Bot:             tgBot,
+			PrincipalGrants: deps.BearerStore,
+			SigningKey:      cfg.Auth.SigningActivePrivateKey,
+			KeyID:           cfg.Auth.SigningActiveKeyID,
+			Issuer:          "smackerel",
+			TTL:             5 * time.Minute,
 		})
 		if err != nil {
 			// A nil minter means production telegram traffic falls
