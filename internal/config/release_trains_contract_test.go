@@ -78,11 +78,13 @@ var validPhases = map[string]bool{
 	"retired":    true,
 }
 
+// Must match release-train-guard.sh exactly. "self-hosted" is this repo's
+// ENVIRONMENT name, not a release-train slot; the guard rejects it.
 var validTargetSlots = map[string]bool{
-	"prod":        true,
-	"staging":     true,
-	"self-hosted": true,
-	"none":        true,
+	"prod":     true,
+	"staging":  true,
+	"home-lab": true,
+	"none":     true,
 }
 
 func releaseTrainsRepoRoot(t *testing.T) string {
@@ -130,7 +132,7 @@ func assertTrainsContract(yamlBytes []byte) error {
 			return fmt.Errorf("contract violation: %s.phase=%q (expected one of active|maintained|frozen|retired)", where, tr.Phase)
 		}
 		if !validTargetSlots[tr.TargetSlot] {
-			return fmt.Errorf("contract violation: %s.target_slot=%q (expected one of prod|staging|self-hosted|none)", where, tr.TargetSlot)
+			return fmt.Errorf("contract violation: %s.target_slot=%q (expected one of prod|staging|home-lab|none)", where, tr.TargetSlot)
 		}
 		if strings.TrimSpace(tr.FlagsBundle) == "" {
 			return fmt.Errorf("contract violation: %s.flags_bundle is empty", where)
@@ -212,7 +214,7 @@ defaults:
 trains:
 - id: mvp
   phase: active
-  target_slot: self-hosted
+  target_slot: home-lab
   description: "no flags_bundle"
 `)
 	err := assertTrainsContract(bad)
@@ -258,7 +260,7 @@ defaults:
 trains:
 - id: mvp
   phase: stable
-  target_slot: self-hosted
+  target_slot: home-lab
   flags_bundle: config/feature-flags.mvp.yaml
 `)
 	err := assertTrainsContract(bad)
@@ -281,7 +283,7 @@ defaults:
 trains:
 - id: mvp
   phase: active
-  target_slot: self-hosted
+  target_slot: home-lab
   flags_bundle: config/feature-flags.mvp.yaml
 - id: mvp
   phase: maintained
@@ -307,7 +309,7 @@ defaults:
 trains:
 - id: mvp
   phase: active
-  target_slot: self-hosted
+  target_slot: home-lab
   flags_bundle: config/feature-flags.mvp.yaml
 `)
 	err := assertTrainsContract(bad)
@@ -344,7 +346,7 @@ defaults:
 trains:
 - id: mvp
   phase: active
-  target_slot: self-hosted
+  target_slot: home-lab
   flags_bundle: config/feature-flags.mvp.yaml
 `)
 	err := assertBundleResolution(root, trains)
@@ -368,7 +370,7 @@ defaults:
 trains:
 - id: mvp
   phase: active
-  target_slot: self-hosted
+  target_slot: home-lab
   flags_bundle: config/feature-flags.does-not-exist.yaml
 `)
 	err := assertBundleResolution(root, trains)

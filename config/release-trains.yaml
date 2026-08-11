@@ -13,7 +13,13 @@ defaults:
 trains:
 - id: mvp
   phase: active
-  target_slot: self-hosted
+  # Abstract slot from the guard's accepted vocabulary (prod|staging|home-lab|none).
+  # "self-hosted" is this repo's ENVIRONMENT name (./smackerel.sh --env=self-hosted,
+  # config bundles), not a release-train slot; the two axes are distinct. This train
+  # deploys to the operator's home-lab host, and the concrete binding for that host
+  # (hostname, IP, tailnet identity, Caddy/systemd fragments, per-target manifest)
+  # lives ONLY in the knb deploy-adapter overlay under <product>/home-lab/ — never here.
+  target_slot: home-lab
   flags_bundle: config/feature-flags.mvp.yaml
   description: "Current self-hosted train (ingest + digest + delivery foundation)"
 
