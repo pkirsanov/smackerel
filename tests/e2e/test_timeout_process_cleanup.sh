@@ -228,7 +228,9 @@ run_timeout_cleanup_check() {
   echo "Interrupting nested E2E runner pid $RUNNER_PID"
   kill -TERM "$RUNNER_PID"
 
-  runner_status="$(wait_for_runner_exit "$RUNNER_PID")" || e2e_fail "nested E2E runner failed to exit after interruption"
+  # TERM performs the production stack teardown, whose bound is 180 seconds.
+  # Observe beyond that contract instead of declaring a live cleanup hung at 30s.
+  runner_status="$(wait_for_runner_exit "$RUNNER_PID" 800)" || e2e_fail "nested E2E runner failed to exit after interruption"
   RUNNER_PID=""
 
   if [[ "$runner_status" -eq 0 ]]; then
