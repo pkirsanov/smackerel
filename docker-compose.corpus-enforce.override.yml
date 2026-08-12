@@ -1,0 +1,121 @@
+# docker-compose.corpus-enforce.override.yml
+#
+# Spec 108 SCOPE-03 — TEST-ONLY overlay that boots `smackerel-core` in the
+# corpus-grant **ENFORCE** stage so the e2e-api tier can prove the denial
+# contract against a REAL container over REAL HTTP.
+#
+# WHY THIS EXISTS
+# ---------------
+# The stage is resolved ONCE at process start from
+# SMACKEREL_AUTH_CORPUS_GRANT_ENFORCEMENT and is deliberately NOT hot-reloadable:
+# a reload path would have to answer "what do I do when the reloaded value is
+# absent or malformed?", and every answer is a silent default, which
+# smackerel-no-defaults forbids (design.md §6).
+#
+# The shared SST test env (config/generated/test.env) emits
+# SMACKEREL_AUTH_CORPUS_GRANT_ENFORCEMENT=false, and that is CORRECT: R-108-FL3
+# ships the flag default-OFF on every train so the OBSERVE window can actually
+# run before anyone is denied. So the default `./smackerel.sh test e2e` stack can
+# only ever boot an OBSERVE core, where the gate never denies — and these rows
+# have no live-container proof:
+#
+#   TP-03-06  granted reads succeed, ungranted are refused, body leaks nothing
+#   TP-03-07  denial parity between a real id and a random id (no existence oracle)
+#   TP-03-10  the persistent ENFORCE regression
+#
+# Those are not provable by relaxing the assertion; they need a container that is
+# actually in ENFORCE.
+#
+# WHAT THIS DOES
+# --------------
+# Overrides EXACTLY ONE key on EXACTLY ONE service: it sets
+# SMACKEREL_AUTH_CORPUS_GRANT_ENFORCEMENT to the EXPLICIT literal "true" on
+# `smackerel-core`. Compose merges `environment:` as a mapping (base keys are
+# preserved) and `environment:` wins over `env_file:`, so the container boots in
+# ENFORCE while every other value still comes from the generated test env.
+#
+# No new service, no new port, no new volume, no new network — a pure in-place
+# mutation of the existing core, which keeps teardown perfectly symmetric with
+# the existing project-scoped `./smackerel.sh --env test down --volumes`.
+#
+# FAIL-LOUD / NO-DEFAULTS (smackerel-no-defaults / Gate G028)
+# -----------------------------------------------------------
+# "true" below is an EXPLICIT literal STATED by the harness, not a
+# `${VAR:-default}` substitution fallback. That distinction is the point: the
+# ENFORCE stage must be something the harness declares, never something a
+# missing value silently produces. This file introduces no `${VAR:-...}` form,
+# no new env var, and no SST key. The SST source (config/smackerel.yaml) and the
+# generated env files are UNTOUCHED — the generated test.env still carries
+# `false` for the default lane, which is what keeps the OBSERVE-stage rows
+# (TP-02-04, TP-02-05, TP-02-06) honest.
+#
+# TEST ISOLATION (G115)
+# ---------------------
+# Consumed ONLY by the `./smackerel.sh test e2e` corpus-enforce phase, which runs
+# INSIDE the same E2E suite lock and boots this overlay onto a FRESH,
+# project-scoped, ephemeral `test` stack (`down --volumes` -> `up`) AFTER the
+# default Go-e2e block has finished. Exactly one core is live at any moment, so
+# there is zero NATS/Postgres contention with the default stack (the pipeline
+# subscribers in cmd/core/services.go use no queue groups, so two concurrent
+# cores would double-consume and pollute shared state). It touches no prod,
+# monitoring, or backup surface.
+#
+# SCOPE (every other lane UNTOUCHED)
+# ----------------------------------
+# Loaded ONLY when SMACKEREL_COMPOSE_OVERRIDE_FILE points here
+# (scripts/lib/runtime.sh::smackerel_compose). The dev/integration/stress lanes,
+# the e2e-ui lane, the graph-disabled lane, and the PRODUCTION stack
+# (deploy/compose.deploy.yml) never load this file. docker-compose.yml itself is
+# unchanged, so the dev-compose contract tests stay green.
+
+services:
+  smackerel-core:
+    environment:
+      # EXPLICIT literal — the ENFORCE stage under test. Mapping form `KEY: "v"`
+      # sets the variable outright, overriding the `false` the base service
+      # inherits from `env_file:`.
+      SMACKEREL_AUTH_CORPUS_GRANT_ENFORCEMENT: "true"
+
+      # Per-user AUTHORIZATION cannot be tested without per-user AUTHENTICATION.
+      # cmd/core/wiring.go:564 derives the verification key only when
+      # `cfg.Auth.Enabled && SigningActivePrivateKey != ""`. The shared test env
+      # ships AUTH_ENABLED=false, so a per-user PASETO is rejected at the bearer
+      # middleware with 401 and never reaches the corpus gate at all — which is
+      # what the first working run of this lane observed.
+      AUTH_ENABLED: "true"
+
+      # A PER-USER PRINCIPAL MUST EXIST, OR THIS LANE PROVES NOTHING.
+      #
+      # config/smackerel.yaml auth.signing (~L1071) ships an EMPTY keypair and
+      # documents the consequence: "Empty in dev/test (falls back to
+      # shared-token mode)". In shared-token mode the ONLY usable credential is
+      # the shared token — and `auth.RequireScope` BYPASSES
+      # SessionSourceSharedToken by design. So on the standard test stack the
+      # corpus gate cannot deny anyone no matter which stage it is in, and a
+      # "granted vs ungranted" test degenerates into two identical bypasses.
+      #
+      # This is not a bug in the shared stack; shared-token mode is the ratified
+      # dev/test posture and is NOT changed here. This overlay gives THIS
+      # disposable stack a freshly generated, run-scoped keypair so per-user
+      # principals are verifiable and the gate has something real to refuse.
+      #
+      # Fail-loud `${VAR:?}` per smackerel-no-defaults: an unset value aborts at
+      # substitution time rather than silently booting a core that rejects every
+      # per-user token — which would look exactly like a working denial.
+      AUTH_SIGNING_ACTIVE_PRIVATE_KEY: "${SMACKEREL_ENFORCE_SIGNING_PRIVATE_KEY:?SMACKEREL_ENFORCE_SIGNING_PRIVATE_KEY must be set by the corpus-enforce e2e phase}"
+      AUTH_SIGNING_ACTIVE_KEY_ID: "${SMACKEREL_ENFORCE_SIGNING_KEY_ID:?SMACKEREL_ENFORCE_SIGNING_KEY_ID must be set by the corpus-enforce e2e phase}"
+
+      # Minting a token is not enough — the core verifies it against a PERSISTED
+      # row, so `auth enroll` refuses without this key
+      # (internal/auth/issue.go:234). internal/auth/startup.go additionally
+      # requires it to DIFFER from the signing key, so the phase generates two
+      # independent values rather than reusing one.
+      AUTH_AT_REST_HASHING_KEY: "${SMACKEREL_ENFORCE_AT_REST_KEY:?SMACKEREL_ENFORCE_AT_REST_KEY must be set by the corpus-enforce e2e phase}"
+
+      # Once per-user verification is active, the shared token is only accepted
+      # via this explicit opt-in (router.go branch 2) — the dev/test compare in
+      # branch 3 becomes unreachable. Spec 108 documents the shared-token
+      # RequireScope bypass as a SUPPORTED path (SCN-108-G02), so the lane has
+      # to keep it working; without this the stack would 401 the shared token
+      # and the bypass row could not be exercised at all.
+      AUTH_PRODUCTION_SHARED_TOKEN_FALLBACK_ENABLED: "true"

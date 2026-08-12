@@ -2363,6 +2363,160 @@ case "$COMMAND" in
           fi
         fi
 
+        # --- Spec 108 SCOPE-03 — corpus-grant ENFORCE e2e phase -------------
+        #
+        # The stage is resolved once at process start and is deliberately not
+        # hot-reloadable, and the shared test env ships
+        # SMACKEREL_AUTH_CORPUS_GRANT_ENFORCEMENT=false (R-108-FL3 keeps the
+        # flag default-OFF so the OBSERVE window can run). So the default lane
+        # can only boot an OBSERVE core, where the gate never denies, and the
+        # ENFORCE denial rows have no live-container proof. This phase boots a
+        # fresh stack with the one-key overlay to supply it.
+        e2e_corpus_enforce_override="$SCRIPT_DIR/docker-compose.corpus-enforce.override.yml"
+        e2e_corpus_enforce_run_selector="TestE2E_Spec108_CorpusEnforce"
+
+        e2e_corpus_enforce_phase_applies() {
+          if [[ -n "$GO_E2E_PACKAGE_SELECTOR" ]]; then
+            return 1
+          fi
+          if [[ -z "$GO_E2E_RUN_SELECTOR" ]]; then
+            return 0
+          fi
+          [[ "$GO_E2E_RUN_SELECTOR" == *CorpusEnforce* ]]
+        }
+
+        if e2e_corpus_enforce_phase_applies; then
+          echo ""
+          echo "Running corpus-grant ENFORCE e2e phase (spec 108 SCOPE-03: TP-03-06, TP-03-07, TP-03-10)..."
+          e2e_corpus_enforce_status=0
+
+          # A PER-USER PRINCIPAL MUST EXIST OR THIS PHASE PROVES NOTHING.
+          #
+          # config/smackerel.yaml auth.signing ships an EMPTY keypair and
+          # documents the effect: "Empty in dev/test (falls back to shared-token
+          # mode)". The shared token is the one principal RequireScope BYPASSES,
+          # so on the standard stack the corpus gate cannot refuse anybody and
+          # "granted vs ungranted" collapses into two identical bypasses.
+          #
+          # Generate a fresh, RUN-SCOPED keypair for this disposable stack only.
+          # Nothing is committed and the ratified dev/test shared-token posture
+          # is untouched — the key lives for the lifetime of this phase.
+          e2e_corpus_enforce_keygen="$(e2e_run_child docker run --rm \
+            -v "$SCRIPT_DIR:/workspace" \
+            -v smackerel-gomod-cache:/go/pkg/mod \
+            -v smackerel-gobuild-cache:/root/.cache/go-build \
+            -w /workspace \
+            golang:1.25.10-bookworm go run ./cmd/core auth keygen)" || e2e_corpus_enforce_status=$?
+
+          if [[ "$e2e_corpus_enforce_status" -eq 0 ]]; then
+            SMACKEREL_ENFORCE_SIGNING_PRIVATE_KEY="$(printf '%s\n' "$e2e_corpus_enforce_keygen" | sed -n 's/^active_private_key: "\(.*\)"$/\1/p')"
+            SMACKEREL_ENFORCE_SIGNING_KEY_ID="$(printf '%s\n' "$e2e_corpus_enforce_keygen" | sed -n 's/^active_key_id: *"\([^"]*\)".*$/\1/p')"
+            # A SECOND, independent key: internal/auth/startup.go requires the
+            # at-rest hashing key to differ from the signing key, and
+            # internal/auth/issue.go:234 refuses to persist a token without it.
+            SMACKEREL_ENFORCE_AT_REST_KEY="$(printf '%s\n' "$e2e_corpus_enforce_keygen" | sed -n 's/^active_public_key: *"\([^"]*\)".*$/\1/p')"
+            # Fail loudly rather than exporting an empty value: an empty key
+            # boots a core that cannot verify per-user tokens, which is
+            # indistinguishable from a working denial and would make the whole
+            # phase a false positive.
+            if [[ -z "$SMACKEREL_ENFORCE_SIGNING_PRIVATE_KEY" || -z "$SMACKEREL_ENFORCE_SIGNING_KEY_ID" || -z "$SMACKEREL_ENFORCE_AT_REST_KEY" ]]; then
+              echo "ERROR: could not parse a signing keypair out of 'auth keygen' (private set=$([[ -n "$SMACKEREL_ENFORCE_SIGNING_PRIVATE_KEY" ]] && echo yes || echo no), key id set=$([[ -n "$SMACKEREL_ENFORCE_SIGNING_KEY_ID" ]] && echo yes || echo no), at-rest set=$([[ -n "$SMACKEREL_ENFORCE_AT_REST_KEY" ]] && echo yes || echo no)); refusing to boot a core that cannot verify per-user tokens" >&2
+              e2e_corpus_enforce_status=1
+            elif [[ "$SMACKEREL_ENFORCE_AT_REST_KEY" == "$SMACKEREL_ENFORCE_SIGNING_PRIVATE_KEY" ]]; then
+              echo "ERROR: at-rest hashing key equals the signing key; internal/auth/startup.go refuses this and the core would not boot" >&2
+              e2e_corpus_enforce_status=1
+            else
+              export SMACKEREL_ENFORCE_SIGNING_PRIVATE_KEY SMACKEREL_ENFORCE_SIGNING_KEY_ID SMACKEREL_ENFORCE_AT_REST_KEY
+            fi
+          fi
+
+          if [[ "$e2e_corpus_enforce_status" -eq 0 ]]; then
+            e2e_down_test_stack "before corpus-enforce e2e phase" || e2e_corpus_enforce_status=$?
+          fi
+
+          if [[ "$e2e_corpus_enforce_status" -eq 0 ]]; then
+            export SMACKEREL_COMPOSE_OVERRIDE_FILE="$e2e_corpus_enforce_override"
+            set +e
+            e2e_run_child "$SCRIPT_DIR/scripts/lib/run-with-timeout.sh" --kill-after=30s 600 "$SCRIPT_DIR/smackerel.sh" --env test up
+            e2e_corpus_enforce_status=$?
+            set -e
+            if [[ "$e2e_corpus_enforce_status" -ne 0 ]]; then
+              echo "ERROR: corpus-enforce test stack failed to start (exit ${e2e_corpus_enforce_status})" >&2
+            fi
+          fi
+
+          if [[ "$e2e_corpus_enforce_status" -eq 0 ]]; then
+            # Issue the two principals through the REAL operator path
+            # (`smackerel auth enroll`), not a test-only backdoor. The core
+            # verifies a bearer against a PERSISTED token row, so a locally
+            # minted token is rejected as "invalid token" no matter how it is
+            # signed — enrolment is what makes a per-user principal exist.
+            #
+            # Scope surfaces come from the closed allowlist in
+            # internal/auth/scopes.go. `knowledge-graph:read` is the ungranted
+            # principal's grant: a REAL grant that is simply not corpus, so a
+            # refusal is attributable to the missing corpus grant rather than to
+            # holding no grants at all.
+            e2e_corpus_enforce_core_container="$(docker compose -p "$(smackerel_compose_project test)" ps -q smackerel-core 2>/dev/null | tail -n 1)"
+            if [[ -z "$e2e_corpus_enforce_core_container" ]]; then
+              echo "ERROR: could not resolve the smackerel-core container for corpus-enforce enrolment" >&2
+              e2e_corpus_enforce_status=1
+            else
+              e2e_corpus_enforce_granted_token="$(docker exec "$e2e_corpus_enforce_core_container" /usr/local/bin/smackerel-core auth enroll --scope corpus:read spec108-enforce-granted 2>/dev/null | sed -n 's/^  \([A-Za-z0-9._-]\{20,\}\)$/\1/p' | tail -n 1)"
+              e2e_corpus_enforce_ungranted_token="$(docker exec "$e2e_corpus_enforce_core_container" /usr/local/bin/smackerel-core auth enroll --scope knowledge-graph:read spec108-enforce-ungranted 2>/dev/null | sed -n 's/^  \([A-Za-z0-9._-]\{20,\}\)$/\1/p' | tail -n 1)"
+              if [[ -z "$e2e_corpus_enforce_granted_token" || -z "$e2e_corpus_enforce_ungranted_token" ]]; then
+                echo "ERROR: corpus-enforce enrolment produced no wire token (granted set=$([[ -n "$e2e_corpus_enforce_granted_token" ]] && echo yes || echo no), ungranted set=$([[ -n "$e2e_corpus_enforce_ungranted_token" ]] && echo yes || echo no)); without both principals the denial contract cannot be exercised" >&2
+                e2e_corpus_enforce_status=1
+              fi
+            fi
+          fi
+
+          if [[ "$e2e_corpus_enforce_status" -eq 0 ]]; then
+            set +e
+            e2e_run_child docker run --rm \
+              --network "$compose_network" \
+              -v "$SCRIPT_DIR:/workspace" \
+              -v smackerel-gomod-cache:/go/pkg/mod \
+              -v smackerel-gobuild-cache:/root/.cache/go-build \
+              -w /workspace \
+              --env-file "$env_file" \
+              -e "CORE_EXTERNAL_URL=http://smackerel-core:${core_container_port}" \
+              -e "DATABASE_URL=postgres://${pg_user}:${pg_pass}@postgres:${pg_container_port}/${pg_db}?sslmode=disable" \
+              -e "POSTGRES_URL=postgres://${pg_user}:${pg_pass}@postgres:${pg_container_port}/${pg_db}?sslmode=disable" \
+              -e "NATS_URL=nats://${auth_token}@nats:${nats_container_port}" \
+              -e "SMACKEREL_AUTH_TOKEN=${auth_token}" \
+              -e "QF_DECISIONS_BASE_URL=${qf_decisions_base_url}" \
+              -e "SMACKEREL_TEST_ENV_FILE=/workspace/${env_file#$SCRIPT_DIR/}" \
+              -e "SMACKEREL_E2E_CORPUS_ENFORCE=1" \
+              -e "SMACKEREL_E2E_CORPUS_GRANTED_TOKEN=${e2e_corpus_enforce_granted_token}" \
+              -e "SMACKEREL_E2E_CORPUS_UNGRANTED_TOKEN=${e2e_corpus_enforce_ungranted_token}" \
+              golang:1.25.10-bookworm bash /workspace/scripts/runtime/go-e2e.sh --run "$e2e_corpus_enforce_run_selector"
+            e2e_corpus_enforce_status=$?
+            set -e
+          fi
+
+          e2e_corpus_enforce_teardown_status=0
+          e2e_down_test_stack "after corpus-enforce e2e phase" || e2e_corpus_enforce_teardown_status=$?
+          unset SMACKEREL_COMPOSE_OVERRIDE_FILE
+          # The run-scoped keypair dies with the phase — it must not leak into a
+          # later phase, where a stray signing key would silently change the auth
+          # posture of a stack that is supposed to be in shared-token mode.
+          unset SMACKEREL_ENFORCE_SIGNING_PRIVATE_KEY SMACKEREL_ENFORCE_SIGNING_KEY_ID SMACKEREL_ENFORCE_AT_REST_KEY
+          unset e2e_corpus_enforce_granted_token e2e_corpus_enforce_ungranted_token
+          if [[ "$e2e_corpus_enforce_status" -eq 0 && "$e2e_corpus_enforce_teardown_status" -ne 0 ]]; then
+            e2e_corpus_enforce_status="$e2e_corpus_enforce_teardown_status"
+          fi
+
+          if [[ "$e2e_corpus_enforce_status" -eq 0 ]]; then
+            echo "PASS: go-e2e-corpus-enforce"
+          else
+            echo "FAIL: go-e2e-corpus-enforce (exit=${e2e_corpus_enforce_status})"
+            if [[ "$e2e_overall_status" -eq 0 ]]; then
+              e2e_overall_status="$e2e_corpus_enforce_status"
+            fi
+          fi
+        fi
+
         if [[ "$e2e_overall_status" -ne 0 ]]; then
           exit "$e2e_overall_status"
         fi
