@@ -909,7 +909,7 @@ And smackerel_auth_corpus_grant_enforcement_mode reports 0
   TODO/stub scan over the three non-test files this scope adds or modifies returned exit 1
   (no match). The "no default" half is carried by the first DoD item above.
 
-- [ ] **Inbound reassignment from Scope 03 (F-108-S03-01, 2026-08-12):** the startup publication
+- [x] **Inbound reassignment from Scope 03 (F-108-S03-01, 2026-08-12):** the startup publication
   of `smackerel_auth_corpus_grant_enforcement_mode` and the stage-carrier plumbing are evidenced
   **here**, under their owning scope
 
@@ -920,24 +920,63 @@ And smackerel_auth_corpus_grant_enforcement_mode reports 0
 
   | Surface | Why it is Scope 02's, not Scope 03's |
   |---|---|
-  | `cmd/core/main.go` \u2014 `metrics.SetCorpusGrantEnforcementMode(...)` (commit `15394e84`) | `SCN-108-O02` already asserts the mode gauge "reports 0", and this scope's Implementation Plan owns all three `smackerel_auth_corpus_grant_*` metrics. Publishing the resolved stage *is* the delivery of a metric this scope declares |
+  | `cmd/core/main.go` — `metrics.SetCorpusGrantEnforcementMode(...)` (commit `15394e84`) | `SCN-108-O02` already asserts the mode gauge "reports 0", and this scope's Implementation Plan owns all three `smackerel_auth_corpus_grant_*` metrics. Publishing the resolved stage *is* the delivery of a metric this scope declares |
   | `cmd/core/corpus_grant_gauge_contract_test.go` | The regression guard for the row above; a guard follows its subject |
-  | `cmd/core/wiring.go` \u2014 `buildAPIDeps(..., corpusGrantEnforce bool)` | This scope's Implementation Plan puts the single resolution point in `cmd/core` wiring; carrying that resolved value to the API layer is that same plumbing, and this scope is named "Observe-Stage **Plumbing**" |
-  | `internal/api/health.go` \u2014 `Dependencies.CorpusGrantEnforce` (L190) | The field exists to construct the OBSERVE middleware \u2014 `NewCorpusGrantGate(deps.CorpusGrantEnforce)` at `internal/api/router.go:132` \u2014 which this scope's Implementation Plan owns ("Mounted in **both** stages") |
+  | `cmd/core/wiring.go` — `buildAPIDeps(..., corpusGrantEnforce bool)` | This scope's Implementation Plan puts the single resolution point in `cmd/core` wiring; carrying that resolved value to the API layer is that same plumbing, and this scope is named "Observe-Stage **Plumbing**" |
+  | `internal/api/health.go` — `Dependencies.CorpusGrantEnforce` (L190) | The field exists to construct the OBSERVE middleware — `NewCorpusGrantGate(deps.CorpusGrantEnforce)` at `internal/api/router.go:132` \u2014 which this scope's Implementation Plan owns ("Mounted in **both** stages") |
 
   **This is not new work discovered elsewhere; it is a gap this scope already recorded against
   itself.** The `TP-02-05` item above states in its own words that its gauge assertion "does
   **not** prove `cmd/core` publishes the stage at startup." That sentence is the gap, and it
   stayed open until Scope 03 hit it from the other side: the gauge was never published, so it
-  read `0` permanently and a stack genuinely in ENFORCE would have reported "already OBSERVE" \u2014
+  read `0` permanently and a stack genuinely in ENFORCE would have reported "already OBSERVE" —
   meaning `SCN-108-C04`'s rollback confirmation was reading a constant, not a stage.
 
   **Unchecked deliberately.** The code has landed and is green, but its only evidence today sits
-  under Scope 03's DoD, and evidence recorded under another scope does not discharge this one \u2014
+  under Scope 03's DoD, and evidence recorded under another scope does not discharge this one —
   accepting it would be the attribution laundering this reassignment exists to prevent. Closing
   this row needs an execution pass that re-runs both assertions **as Scope 02 rows** and records
   their raw output here: that `cmd/core` publishes the gauge from the resolved stage at startup,
   and that the contract test fails when the publish call is removed. Owner: `bubbles.implement`.
+
+  ---
+
+  **CLOSED 2026-08-12 — both assertions re-executed AS SCOPE 02 ROWS.**
+  - **Command:** `./smackerel.sh --env test up` (both stages) + `./smackerel.sh test unit --go --go-run 'TestCorpusGrantEnforcementStageIsPublishedToTheGauge'`
+  - **Exit Code:** 0
+  - **Evidence:**
+    ```
+    # (1) cmd/core publishes the gauge FROM THE RESOLVED STAGE at startup.
+    #     ENFORCE stack (corpus-enforce overlay):
+    {"msg":"corpus grant enforcement stage resolved","stage":"ENFORCE","enforce":true}
+    smackerel_auth_corpus_grant_enforcement_mode 1
+
+    #     OBSERVE stack (default test env) — the control:
+    {"msg":"corpus grant enforcement stage resolved","stage":"OBSERVE","enforce":false}
+    smackerel_auth_corpus_grant_enforcement_mode 0
+
+    # (2) The contract test FAILS when the publish call is removed:
+    --- FAIL: TestCorpusGrantEnforcementStageIsPublishedToTheGauge (0.00s)
+        corpus_grant_gauge_contract_test.go:34: cmd/core/main.go does not publish
+        the resolved corpus-grant stage to the gauge.
+    FAIL github.com/smackerel/smackerel/cmd/core 0.308s
+    PROBE_EXIT=1
+
+    # restored byte-identically (git diff --stat cmd/core/main.go empty), guard green:
+    ok  github.com/smackerel/smackerel/cmd/core 0.440s
+    RESTORE_EXIT=0
+    ```
+
+  **Both stages were exercised, and that is the point.** A gauge reading 1 on an
+  ENFORCE stack proves nothing alone — a hardcoded `Set(1)` produces exactly
+  that. The OBSERVE control shows it reads 0 when the resolved stage is OBSERVE,
+  so the metric tracks the stage rather than a constant. In both runs the startup
+  log line and the gauge AGREE, which is the property `SCN-108-C04` depends on:
+  an operator confirming a rollback reads the gauge, not the log.
+
+  This closes the gap `TP-02-05` recorded against itself. Its evidence stated the
+  assertion "does **not** prove `cmd/core` publishes the stage at startup" — and
+  it did not, because nothing published it at all.
 
 ---
 
