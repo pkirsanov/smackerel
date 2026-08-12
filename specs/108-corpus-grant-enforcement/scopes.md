@@ -193,7 +193,7 @@ this ratification pass is explicitly additive-only to `state.json`.
 |---|---|---|---|---|---|
 | 01 | Scope Registration Prerequisite | `internal/auth` | — | 4 (2 unit, 1 integration, 1 e2e-api) | Not Started |
 | 02 | Observe-Stage Plumbing | `cmd/core`, `internal/api`, `internal/metrics`, `config/` | 01 | 6 (3 unit, 2 integration, 1 e2e-api) | Not Started |
-| 03 | Gate Mount (Tier A + Tier B, 16 route groups) | `internal/api` (router + contract test) | 02 | 12 (1 unit, 7 integration, 3 e2e-api, 1 stress) | Not Started |
+| 03 | Gate Mount (Tier A + Tier B, 16 route groups) | `internal/api` (router + contract test), `tests/` live rows + the `go-e2e-corpus-enforce` lane | 02 | 12 (1 unit, 7 integration, 3 e2e-api, 1 stress) | Not Started |
 | 04 | Caller Remediation (incl. Telegram grant derivation) | Telegram bridge, PWA, extension, shared-token/bootstrap | 03 | 10 (3 unit, 5 integration, 2 e2e-api) | Not Started |
 | 05 | Docs, Release Train, Flag Bundles | `docs/`, `docs/releases/`, `config/` | 04 | 7 (4 unit, 1 integration, 2 e2e-api) | Not Started |
 
@@ -909,6 +909,36 @@ And smackerel_auth_corpus_grant_enforcement_mode reports 0
   TODO/stub scan over the three non-test files this scope adds or modifies returned exit 1
   (no match). The "no default" half is carried by the first DoD item above.
 
+- [ ] **Inbound reassignment from Scope 03 (F-108-S03-01, 2026-08-12):** the startup publication
+  of `smackerel_auth_corpus_grant_enforcement_mode` and the stage-carrier plumbing are evidenced
+  **here**, under their owning scope
+
+  **Added by `bubbles.plan`, not by an executing agent.** Resolving F-108-S03-01 assigned four
+  production surfaces to this scope, because this scope's `Surfaces` line already claims
+  `cmd/core` and `internal/api`, and because the deliverables those surfaces serve are this
+  scope's:
+
+  | Surface | Why it is Scope 02's, not Scope 03's |
+  |---|---|
+  | `cmd/core/main.go` \u2014 `metrics.SetCorpusGrantEnforcementMode(...)` (commit `15394e84`) | `SCN-108-O02` already asserts the mode gauge "reports 0", and this scope's Implementation Plan owns all three `smackerel_auth_corpus_grant_*` metrics. Publishing the resolved stage *is* the delivery of a metric this scope declares |
+  | `cmd/core/corpus_grant_gauge_contract_test.go` | The regression guard for the row above; a guard follows its subject |
+  | `cmd/core/wiring.go` \u2014 `buildAPIDeps(..., corpusGrantEnforce bool)` | This scope's Implementation Plan puts the single resolution point in `cmd/core` wiring; carrying that resolved value to the API layer is that same plumbing, and this scope is named "Observe-Stage **Plumbing**" |
+  | `internal/api/health.go` \u2014 `Dependencies.CorpusGrantEnforce` (L190) | The field exists to construct the OBSERVE middleware \u2014 `NewCorpusGrantGate(deps.CorpusGrantEnforce)` at `internal/api/router.go:132` \u2014 which this scope's Implementation Plan owns ("Mounted in **both** stages") |
+
+  **This is not new work discovered elsewhere; it is a gap this scope already recorded against
+  itself.** The `TP-02-05` item above states in its own words that its gauge assertion "does
+  **not** prove `cmd/core` publishes the stage at startup." That sentence is the gap, and it
+  stayed open until Scope 03 hit it from the other side: the gauge was never published, so it
+  read `0` permanently and a stack genuinely in ENFORCE would have reported "already OBSERVE" \u2014
+  meaning `SCN-108-C04`'s rollback confirmation was reading a constant, not a stage.
+
+  **Unchecked deliberately.** The code has landed and is green, but its only evidence today sits
+  under Scope 03's DoD, and evidence recorded under another scope does not discharge this one \u2014
+  accepting it would be the attribution laundering this reassignment exists to prevent. Closing
+  this row needs an execution pass that re-runs both assertions **as Scope 02 rows** and records
+  their raw output here: that `cmd/core` publishes the gauge from the resolved stage at startup,
+  and that the contract test fails when the publish call is removed. Owner: `bubbles.implement`.
+
 ---
 
 ## Scope 03: Gate Mount
@@ -916,7 +946,9 @@ And smackerel_auth_corpus_grant_enforcement_mode reports 0
 **Status:** Not Started
 **Depends On:** Scope 02
 **Resolves:** F-108-ADJ-01 (scope call ratified IN SCOPE by `spec.md` §18 decision 5)
-**Surfaces:** `internal/api/router.go`, `internal/api/auth_surface_contract_test.go`
+**Surfaces:** `internal/api/router.go`, `internal/api/auth_surface_contract_test.go`, the
+`tests/e2e` + `tests/integration` files discharging this scope's live rows, and the isolated
+`go-e2e-corpus-enforce` lane (last three added 2026-08-12 by the F-108-S03-01 ruling)
 
 > **Scope increase recorded, not absorbed (§18 decision 5, 2026-07-29).** This scope was planned
 > against **eight** route groups. Ratification brings the eight corpus-*derived* Phase-5
@@ -1110,12 +1142,58 @@ against a known-bad harness.
 This scope is a **contract repair** on shared routing infrastructure, so its blast radius is
 contained by an explicit boundary. Collateral cleanup is opt-in and out of scope here.
 
+> **BOUNDARY RESOLUTION — recorded 2026-08-12 by `bubbles.plan`, resolving F-108-S03-01.**
+> The deviation recorded under the Change-Boundary DoD item below is resolved by a **mixed**
+> ruling: the verification harness is **widened into** this scope, and the production wiring is
+> **reassigned to Scope 02**. Neither half is discretionary, because both follow from one rule.
+>
+> **The deciding principle — ownership decides production code; the repository's lane layout
+> decides test code.**
+>
+> 1. **Production code belongs to the scope whose `Surfaces` line already claims it.** A second
+>    scope does not acquire a production surface by touching it; the surface's owner acquires
+>    the obligation. Scope 02's `Surfaces` line reads `cmd/core`, `internal/api`,
+>    `internal/metrics`, `config/smackerel.yaml` — so `cmd/core` stays **excluded** here and the
+>    work is handed to its owner rather than absorbed.
+> 2. **A scope's Allowed families must be able to hold the Test Plan rows that same scope
+>    declares.** Where the repository's test-lane layout — not this plan — dictates a file's
+>    location, the Allowed list follows the layout. A boundary that forbids the only place a
+>    declared test row can live is a plan defect, not an implementation deviation.
+>
+> Limb 2 applies literally here. `scripts/runtime/go-integration.sh:53` selects
+> `./tests/integration/... ./internal/notification/... ./internal/assistant/...
+> ./internal/cardrewards/... ./tests/eval/...` — **`internal/api` is not in the integration
+> lane** — and Go e2e tests run out of `tests/e2e/`. This scope declares three `e2e-api` rows,
+> five live `integration` rows, and one `stress` row; none of them could ever have lived under
+> `internal/api` or `internal/auth`. The original Allowed list was therefore unsatisfiable
+> against its own Test Plan from the day it was written. The same lane fact is already
+> acknowledged one section down, where TP-03-04 and TP-03-12 were re-tiered `integration` →
+> `unit` for exactly this reason; this ruling applies it consistently instead of once.
+
 **Allowed file families:**
 
 - `internal/api/router.go` — the new gated `r.Group(...)`, its two `r.Use(...)` lines, and the
-  relocation of the Tier A and Tier B route registrations into it
+  relocation of the Tier A and Tier B route registrations into it. **Blast-radius clause (added
+  2026-08-12):** this entry permits changes whose effect is confined to the sixteen corpus route
+  groups. A change in this file that alters a contract governing routes *beyond* those sixteen —
+  the per-user activation predicate being the live example — is outside this scope's blast
+  radius even though the file is allowed, and must be recorded as a finding rather than passed
+  through on file-path grounds (see F-108-S03-02)
 - `internal/api/auth_surface_contract_test.go` — the T8 route-manifest contract test
 - New/extended test files under `internal/api` and `internal/auth` named in the Test Plan
+- **New/extended test files under `tests/` that discharge a Test Plan row of this scope** —
+  `tests/e2e/` for the `e2e-api` rows, `tests/integration/` for the live `integration`, canary,
+  and `stress` rows. Added 2026-08-12 under limb 2: the lane layout puts these files there, so
+  the boundary follows the layout rather than forbidding it
+- **The e2e lane plumbing that runs those rows** — an isolated `go-e2e-corpus-enforce` phase in
+  `smackerel.sh` plus its `docker-compose.corpus-enforce.override.yml` overlay. Added
+  2026-08-12: TP-03-06/07/10 assert an ENFORCE **denial**, which needs a per-user principal that
+  lacks `corpus:read`; the default dev/test stack ships an empty signing keypair and so offers
+  only the shared token, which `RequireScope` bypasses by design. Without a dedicated phase
+  those three rows are not merely awkward, they are **unexecutable** — and a scope may own the
+  lane that is the sole means of executing its own declared rows. Deliberately narrow: this
+  permits **adding** an isolated phase and its own overlay file, not editing pre-existing phases
+  or the shared compose files
 
 **Excluded surfaces (must remain byte-unchanged by this scope):**
 
@@ -1130,7 +1208,16 @@ contained by an explicit boundary. Collateral cleanup is opt-in and out of scope
   decision 5 moved to Tier B
 - `design.md` itself — the §2 route-inventory reconciliation is routed to `bubbles.design`
   (DoD-03-TIERB-DESIGN), never silently overwritten from this packet
-- `internal/metrics`, `cmd/core`, `config/`, `docs/` — owned by Scopes 02 and 05
+- `internal/metrics`, `cmd/core`, `config/`, `docs/` — owned by Scopes 02 and 05. **This
+  exclusion is UPHELD, not relaxed (2026-08-12).** The three `cmd/core` files that changed under
+  it — `wiring.go`, `main.go`, and `corpus_grant_gauge_contract_test.go` — are **reassigned to
+  Scope 02** under limb 1 above, not admitted here
+- `internal/api/health.go` — the `Dependencies` struct. `internal/api` is not an excluded
+  family, but this file was never in the Allowed list, and "unlisted" is the ambiguity the field
+  drifted through. Named explicitly as of 2026-08-12: the `CorpusGrantEnforce` field exists to
+  construct the **OBSERVE** middleware (`NewCorpusGrantGate(deps.CorpusGrantEnforce)`,
+  `internal/api/router.go:132`), which is Scope 02's deliverable, so it is **reassigned to
+  Scope 02** with the three `cmd/core` files
 - The Telegram bridge, PWA, and extension caller code — owned by Scope 04
 
 ### Test Plan
@@ -1875,6 +1962,80 @@ contained by an explicit boundary. Collateral cleanup is opt-in and out of scope
   stays active; dev/test ship none and stay inactive), and it is what made the
   corpus surface testable outside production at all. Flagged here because
   "in an allowed file" is not the same as "within the scope's blast radius".
+
+  ---
+
+  **RESOLUTION — decided 2026-08-12 by `bubbles.plan`. Everything above is preserved verbatim;
+  no part of the F-108-S03-01 record is withdrawn.**
+
+  **Ruling: mixed, on a single principle — ownership decides production code; the repository's
+  lane layout decides test code.** The principle's two limbs and the lane evidence behind them
+  are stated in this scope's **Change Boundary**, edited in the same pass. Disposition of all
+  six surfaces:
+
+  | # | Surface | Disposition | Basis |
+  |---|---|---|---|
+  | 1 | `cmd/core/wiring.go` (`buildAPIDeps` param) | **Reassigned → Scope 02** | Limb 1 — Scope 02's `Surfaces` line claims `cmd/core`, and its plan puts the single resolution point in `cmd/core` wiring |
+  | 2 | `internal/api/health.go` (`Dependencies` field) | **Reassigned → Scope 02** | Limb 1 — the field feeds `NewCorpusGrantGate(deps.CorpusGrantEnforce)` (`router.go:132`), the OBSERVE middleware Scope 02 owns |
+  | 3 | `cmd/core/main.go` (gauge publish, `15394e84`) | **Reassigned → Scope 02** | Limb 1 — `SCN-108-O02` asserts the gauge reports 0, so publishing it delivers a Scope 02 metric |
+  | 4 | `cmd/core/corpus_grant_gauge_contract_test.go` | **Reassigned → Scope 02** | Regression guard for row 3; a guard follows its subject |
+  | 5 | `smackerel.sh` phase + `docker-compose.corpus-enforce.override.yml` | **Widened into Scope 03** | Limb 2 — the sole executable path for TP-03-06/07/10 |
+  | 6 | `tests/e2e/corpus_enforce_e2e_test.go`, `tests/integration/graphapi/corpus_canary_stress_test.go` | **Widened into Scope 03** | Limb 2 — `internal/api` is absent from `scripts/runtime/go-integration.sh:53`, so these rows cannot live where the old Allowed list confined them |
+
+  **Why not widen all six.** `cmd/core` is claimed by Scope 02's `Surfaces` line and named
+  excluded by **both** Scope 03's and Scope 04's Change Boundaries ("owned by Scopes 02 and 05").
+  Widening into it would hand one production surface two owners with no ordering rule between
+  them — the ad-hoc boundary this ruling exists to prevent — and would contradict a sibling
+  scope's boundary instead of reconciling with it.
+
+  **Why not reassign all six.** Rows 5 and 6 prove ENFORCE **denial**, which is this scope's
+  behaviour and no other scope's. Scope 02 ships nothing capable of denying, so it cannot own
+  the proof that denial works.
+
+  **The principle is general, but this ruling is not.** Scope 04's Change-Boundary DoD item
+  records a deviation of the same class — `cmd/core/cmd_auth.go` and `cmd/core/wiring.go` changed
+  under an exclusion that names `cmd/core` — and is routed to the same owner. The two limbs above
+  are written to decide that case too, and are stated in general terms for that reason. This
+  ruling nonetheless decides **only** Scope 03, because the facts differ in a way that may change
+  the answer: the operator-CLI grant path is Scope 04's own subject matter, where limb 1 could
+  point to *widening* rather than reassignment, whereas the gauge here was unambiguously a
+  Scope 02 deliverable. Deciding both from one packet on the strength of a shared file path is
+  precisely the ad-hoc reasoning this principle replaces.
+
+  **STILL UNCHECKED — and this ruling cannot make it checkable.** Widening settles rows 5 and 6,
+  which are now in-boundary. Reassignment does **not** retroactively make "zero excluded file
+  families were changed" true: `cmd/core` remains excluded here, and files under it did change
+  in this pass. Checking the row on the strength of a relabelling would launder the deviation
+  rather than resolve it.
+
+  **Exact closure condition** — check this row when both hold:
+
+  1. Rows 5 and 6 sit inside this scope's Allowed families. **True as of this edit.**
+  2. Rows 1–4 are evidenced under **Scope 02's** DoD, via the inbound-reassignment row added to
+     Scope 02 in this same pass. **Not yet true** — the code has landed and is green, but its
+     only evidence today is recorded here, under Scope 03. Owner: `bubbles.implement`, executing
+     that Scope 02 row.
+
+  What remains is therefore a bounded execution task with a named owner, not an open planning
+  question. The planning decision itself is closed.
+
+  **F-108-S03-02 (blast radius inside an allowed file) — NEW, split out here.** The
+  `perUserActive` note above is promoted from an aside to a finding of its own, because it is a
+  different defect class from F-108-S03-01: not "a file outside the list changed" but "an allowed
+  file changed in a way that reaches past the scope's blast radius". The predicate governs every
+  per-user authenticated route, yet this scope's Shared Infrastructure Impact Sweep enumerates
+  only the middleware-ordering, session, role/grant, stage/timing, conditional-registration, and
+  storage contracts — per-user **activation** is not among them, so the change landed outside the
+  very sweep meant to bound it. The Change Boundary above now carries a blast-radius clause on
+  the `internal/api/router.go` entry, so the next such change is refused on entry instead of
+  being re-litigated after the fact.
+
+  **Severity: non-blocking — an evidenced claim, not a concession.** The default `go-e2e` lane is
+  green (recorded two rows below), and that lane runs the standard stack, which ships no signing
+  key and so exercises precisely the configuration the predicate change could have altered.
+  **Routed to `bubbles.design`** to record per-user activation as a named contract in design.md's
+  shared-surface inventory. It is not this scope's to close, and it does not gate this row —
+  closure of this row turns solely on the two conditions above.
 
 - [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior — **Phase:** regression (`TP-03-10`, `./smackerel.sh test e2e`)
   - **Command:** `./smackerel.sh test e2e`
