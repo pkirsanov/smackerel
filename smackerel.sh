@@ -713,14 +713,23 @@ smackerel_run_down() {
 #   - OOM-kill (exit 137) when the shared WSL host is out of RAM
 #   - disk-full wedge when C: (which backs the WSL vhdx) has no room left
 # Opt out with SMACKEREL_SKIP_HOST_PREFLIGHT=1. Thresholds live in the guards.
+#
+# Both guards emit their banner on STDERR (`>&2`), never stdout. They are
+# diagnostics, and stdout is a machine-readable channel: accessors such as
+# `test e2e-ui --print-compose-project` must emit their value and nothing else.
+# Without this redirect the guards' OK banner is captured by any caller reading
+# stdout, which is a host-dependent failure — the guards are optional and
+# host-local, so a machine without them on PATH sees a clean value and a machine
+# with them sees a polluted one. Exit status is unaffected: `>&2` redirects the
+# stream, not the return code, so a refusing guard still fails the command.
 host_resource_preflight() {
   [[ "${SMACKEREL_SKIP_HOST_PREFLIGHT:-}" == "1" ]] && return 0
 
   if command -v oom-preflight.sh >/dev/null 2>&1; then
-    oom-preflight.sh || return 1
+    oom-preflight.sh >&2 || return 1
   fi
   if command -v disk-preflight.sh >/dev/null 2>&1; then
-    disk-preflight.sh || return 1
+    disk-preflight.sh >&2 || return 1
   fi
   return 0
 }
