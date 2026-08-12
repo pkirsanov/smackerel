@@ -84,9 +84,9 @@ func TestHTTPAssistantTurnGoldenContractV1(t *testing.T) {
 		}
 		out := RenderJSON(resp, "test-turn-001", "req-001", true)
 		// Force the trace ids the golden pins (real wiring sets
-		// AssistantTurnID/AgentTraceID from the audit substrate;
-		// for this contract test we surface fixed values to keep
-		// the golden deterministic).
+		// AssistantTurnID/AgentTraceID from the facade turn-identity
+		// chokepoint; for this contract test we surface fixed values
+		// to keep the golden deterministic).
 		out.Trace.AssistantTurnID = "trace-001"
 		out.Trace.AgentTraceID = "trace-001"
 

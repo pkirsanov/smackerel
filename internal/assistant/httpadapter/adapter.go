@@ -233,12 +233,15 @@ func RenderJSON(resp contracts.AssistantResponse, transportMessageID, requestID 
 			RequestID: requestID,
 		},
 	}
-	if resp.Invocation != nil {
-		out.Trace.AgentTraceID = resp.Invocation.TraceID
-		// AssistantTurnID is populated by the audit substrate (SCOPE-08+);
-		// surface the agent trace id as the stable correlator until then.
-		out.Trace.AssistantTurnID = resp.Invocation.TraceID
-	}
+	// BUG-069-004 — turn identity comes from the facade, which stamps it
+	// on EVERY response including the short-circuit paths where
+	// Invocation is legitimately nil (contracts/response.go). Reading it
+	// from Invocation shipped empty ids on every /weather turn; minting
+	// one here instead would produce an id that disagrees with the
+	// facade log line and the audit row, which is worse than an absent
+	// one because it looks correct.
+	out.Trace.AssistantTurnID = resp.AssistantTurnID
+	out.Trace.AgentTraceID = resp.AgentTraceID
 	// Spec 075 SCOPE-075-06.2b — copy structured legacy-retirement
 	// notice into the optional wire field. Nil-safe: when absent,
 	// `omitempty` drops the key from the JSON body entirely so

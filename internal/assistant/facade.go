@@ -566,6 +566,30 @@ func (f *Facade) Handle(ctx context.Context, msg contracts.AssistantMessage) (re
 
 	emittedAt := f.cfg.Now()
 
+	// BUG-069-004 — turn-identity chokepoint. Every response Handle
+	// returns carries the turn id (and its paired agent trace id),
+	// including the short-circuit paths that never reach the executor
+	// and therefore have a nil Invocation: the deterministic /weather
+	// shortcut, /reset, low-band capture, borderline disambiguation
+	// and the confirm-card propose phase. Identity belongs to the
+	// turn, not to whether an LLM invocation happened — deriving it
+	// from Invocation shipped empty ids on every weather turn.
+	//
+	// Registered AFTER the span/metrics/log closures above so LIFO
+	// unwind runs this one FIRST; the log line and the span attribute
+	// then read a populated turnAssistantTurnID on short-circuit
+	// paths too. Skipped when err != nil because the transport builds
+	// its own error envelope and never renders this response.
+	defer func() {
+		if err != nil {
+			return
+		}
+		if turnAssistantTurnID == "" {
+			turnAssistantTurnID = facadeTurnIDFromTime(emittedAt)
+		}
+		stampTurnIdentity(&resp, emittedAt)
+	}()
+
 	// --- Spec 074 SCOPE-074-04C — clarify-abandon reply path ---
 	//
 	// Any inbound turn after a prior clarify-emit clears the
@@ -1649,6 +1673,13 @@ func (f *Facade) writeAudit(
 	invocation *agent.InvocationResult,
 	resp contracts.AssistantResponse,
 ) {
+	// BUG-069-004 — `resp` arrives BY VALUE, copied before Handle's
+	// deferred identity stamp runs on the named return value. Without
+	// this the recorded row carried an empty turn id while the wire
+	// carried a populated one, so a reader following the wire id landed
+	// on a row that did not name that turn. Same derivation, same
+	// emittedAt, so the two cannot disagree.
+	stampTurnIdentity(&resp, resp.EmittedAt)
 	turn := AuditTurn{
 		UserID:             msg.UserID,
 		Transport:          msg.Transport,
@@ -1898,6 +1929,22 @@ func normalizeSkillOutcome(r *agent.InvocationResult) string {
 		return assistantmetrics.SkillOutcomeUnknownIntent
 	default:
 		return assistantmetrics.SkillOutcomeUnknownIntent
+	}
+}
+
+// stampTurnIdentity fills in the turn id and its paired agent trace id on
+// a response that does not yet carry them, deriving both from the turn's
+// emittedAt. It is the SINGLE derivation used by every consumer (the
+// Handle return value and the audit row), which is what makes it
+// impossible for the wire id and the recorded row to name different turns.
+// Existing non-empty values are preserved so a path that already assigned
+// identity keeps it.
+func stampTurnIdentity(resp *contracts.AssistantResponse, emittedAt time.Time) {
+	if resp.AssistantTurnID == "" {
+		resp.AssistantTurnID = facadeTurnIDFromTime(emittedAt)
+	}
+	if resp.AgentTraceID == "" {
+		resp.AgentTraceID = agentTraceID(resp.AssistantTurnID)
 	}
 }
 

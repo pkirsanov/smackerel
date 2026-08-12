@@ -47,12 +47,18 @@ func (f *dedupTestFacade) Handle(ctx context.Context, msg contracts.AssistantMes
 		return contracts.AssistantResponse{}, f.fail
 	}
 	now := time.Date(2026, 7, 19, 12, 0, call, 0, time.UTC)
+	// BUG-069-004 — the real facade stamps turn identity on every
+	// response it returns, so this double must too; the adapter reads
+	// those fields rather than deriving identity from Invocation.
+	turnID := fmt.Sprintf("asst-%s-%d", msg.UserID, call)
 	return contracts.AssistantResponse{
-		Invocation:   &agent.InvocationResult{TraceID: fmt.Sprintf("trace-%s-%d", msg.UserID, call)},
-		Status:       contracts.StatusAnswered,
-		Body:         fmt.Sprintf("response-%s-%d", msg.UserID, call),
-		CaptureRoute: f.captureRoute,
-		EmittedAt:    now,
+		Invocation:      &agent.InvocationResult{TraceID: fmt.Sprintf("trace-%s-%d", msg.UserID, call)},
+		Status:          contracts.StatusAnswered,
+		Body:            fmt.Sprintf("response-%s-%d", msg.UserID, call),
+		CaptureRoute:    f.captureRoute,
+		AssistantTurnID: turnID,
+		AgentTraceID:    "trace-" + turnID,
+		EmittedAt:       now,
 	}, nil
 }
 

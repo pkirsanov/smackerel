@@ -79,7 +79,31 @@ type AssistantResponse struct {
 	// path (agenttool.outputEnvelope.Model), so this field is the
 	// Telegram-surface attribution carrier only.
 	ModelAttribution *ModelAttribution
+	// --- Turn identity (BUG-069-004) ---
 
+	// AssistantTurnID is the facade-assigned identifier for THIS turn,
+	// stamped on every response the facade returns — including the
+	// short-circuit paths where Invocation is legitimately nil (the
+	// deterministic /weather shortcut, /reset, low-band capture,
+	// borderline disambiguation, confirm-card propose). Identity
+	// belongs to the turn, never to whether an LLM invocation
+	// happened: coupling it to Invocation shipped empty trace ids on
+	// every weather turn and made them untraceable end to end.
+	//
+	// The value is the same one the facade stamps on its span
+	// attributes, its per-turn `assistant_turn` log line, and the
+	// audit/persist spans, so a single turn joins across
+	// /metrics → log line → conversation row. Adapters MUST render
+	// this rather than deriving identity from Invocation, and MUST
+	// NOT mint their own — a locally minted id would disagree with
+	// those three signals, which is worse than an absent one.
+	AssistantTurnID string
+
+	// AgentTraceID is the spec 037 agent trace id paired with
+	// AssistantTurnID, derived from it so dashboards can join the
+	// two. Stamped by the same facade chokepoint, so it is present
+	// on exactly the same set of responses.
+	AgentTraceID string
 	// --- Convenience derivatives ---
 
 	// Body is the rendered text body, derived from Invocation.Final
