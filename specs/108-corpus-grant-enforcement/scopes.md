@@ -1091,8 +1091,10 @@ contained by an explicit boundary. Collateral cleanup is opt-in and out of scope
   via `r.With(...)` in both stages, which is why the two halves are not interchangeable.
 
   **What this does NOT establish:** this is a *static structural* proof of the mount. It does not
-  prove a live 403 against a running stack — that is TP-03-02/-03/-06/-07, which are not executed
-  in this packet.
+  prove a live 403 against a running stack. That live proof now exists for TP-03-02, TP-03-05, and
+  TP-03-11 via `tests/integration/graphapi/corpus_enforce_test.go`. TP-03-03, TP-03-06, and
+  TP-03-07 remain unexecuted — TP-03-03 has no test yet, and the two e2e rows are blocked on the
+  pre-existing e2e-red baseline described under TP-03-06.
 
 - [x] All **sixteen** route groups from `spec.md` §4.2 (Tier A 1–8 + Tier B 9–16) sit inside the gated group; every still-ungated route from design.md §2 remains ungated and unchanged
 
@@ -1241,10 +1243,60 @@ contained by an explicit boundary. Collateral cleanup is opt-in and out of scope
   **Selector note (honest):** the earlier `--go-run 'CorpusGate|CorpusGrant'` pass did **not**
   match these test names, so TP-03-01 was re-run under the broader `Corpus` selector specifically
   to evidence this item rather than inferred from the narrower run.
-- [ ] `TP-03-02` integration test passes — ENFORCE returns 403 on all sixteen groups
+- [x] `TP-03-02` integration test passes — ENFORCE returns 403 on all sixteen groups
 
-  **Not executed in this packet.** An integration run was already in flight in a separate terminal;
-  running a second would have contended with it and corrupted its evidence. Status: written-or-pending, unclaimed.
+  Closed by `tests/integration/graphapi/corpus_enforce_test.go`
+  (`TestIntegration_CorpusGrantEnforce_RefusesUngrantedAndServesGrantedOnAllSixteenGroups`).
+
+  Command: `./smackerel.sh test integration --go-run 'CorpusGrantEnforce'`
+  Exit Code: 0
+  Executed: yes — 2026-08-12, tree at `31c3c09a` plus this untracked test file
+
+  ```text
+  WARN auth: scope_rejected required_scope=corpus:read user_id=tp0302-ungranted token_scopes=[annotation:edit] endpoint=/api/search
+  INFO request method=POST path=/api/search status=403 request_id=6cdcf4fba375/Mxs9XStFns-000001
+  WARN auth: scope_rejected required_scope=corpus:read user_id=tp0302-ungranted token_scopes=[annotation:edit] endpoint=/api/digest
+  INFO request method=GET path=/api/digest status=403 request_id=6cdcf4fba375/Mxs9XStFns-000004
+  WARN auth: scope_rejected required_scope=corpus:read user_id=tp0302-ungranted token_scopes=[annotation:edit] endpoint=/api/recent
+  INFO request method=GET path=/api/recent status=403 request_id=6cdcf4fba375/Mxs9XStFns-000007
+  WARN auth: scope_rejected required_scope=corpus:read user_id=tp0302-ungranted endpoint=/api/artifact/tp0302-canary-artifact-identifier
+  INFO request method=GET path=/api/artifact/tp0302-canary-artifact-identifier status=403 request_id=6cdcf4fba375/Mxs9XStFns-000010
+  WARN auth: scope_rejected required_scope=corpus:read user_id=tp0302-ungranted endpoint=/api/export
+  INFO request method=GET path=/api/export status=403 request_id=6cdcf4fba375/Mxs9XStFns-000016
+  WARN auth: scope_rejected required_scope=corpus:read user_id=tp0302-ungranted endpoint=/api/context-for
+  INFO request method=POST path=/api/context-for status=403 request_id=6cdcf4fba375/Mxs9XStFns-000019
+  WARN auth: scope_rejected required_scope=corpus:read user_id=tp0302-ungranted endpoint=/api/knowledge/concepts
+  INFO request method=GET path=/api/knowledge/concepts status=403 request_id=6cdcf4fba375/Mxs9XStFns-000022
+  WARN auth: scope_rejected required_scope=corpus:read user_id=tp0302-ungranted endpoint=/api/knowledge/entities
+  INFO request method=GET path=/api/knowledge/entities status=403 request_id=6cdcf4fba375/Mxs9XStFns-000028
+  WARN auth: scope_rejected required_scope=corpus:read user_id=tp0302-ungranted endpoint=/api/knowledge/lint
+  INFO request method=GET path=/api/knowledge/lint status=403 request_id=6cdcf4fba375/Mxs9XStFns-000034
+  WARN auth: scope_rejected required_scope=corpus:read user_id=tp0302-ungranted endpoint=/api/knowledge/stats
+  INFO request method=GET path=/api/knowledge/stats status=403 request_id=6cdcf4fba375/Mxs9XStFns-000037
+  --- PASS: TestIntegration_CorpusGrantEnforce_RefusesUngrantedAndServesGrantedOnAllSixteenGroups (0.08s)
+  ok      github.com/smackerel/smackerel/tests/integration/graphapi       0.328s
+  ```
+
+  **Why this row needed a new test.** The pre-existing unit test
+  `TestCorpusGate_AllSixteenRouteGroupsGated` asserts the route *manifest* — that the middleware is
+  mounted — which is not the same statement as "a request is refused". Every line above is a real
+  request through the real `api.NewRouter` with `CorpusGrantEnforce: true`, and the distinct
+  `request_id` values show sixteen separate requests rather than one assertion repeated.
+
+  **Non-vacuity.** Both arms are asserted on every group in one sweep — ungranted refused **and** a
+  `corpus:read` holder served. A negative-only test passes when the whole stack is broken; a
+  positive-only test passes when the gate is absent. Only the pair distinguishes those.
+  `exercisedGroups != 16` (source line 539) plus two list cross-checks against `corpusGroupRoutes`
+  (lines 245, 267) stop the loop silently shrinking.
+
+  **Scope note (honest).** This row covers the sixteen-group 403/200 matrix. The
+  `smackerel_auth_scope_rejected_total` increment and the mode-gauge `1` reading named in the same
+  TP-03-02 test-plan cell are covered by the Scope 02 metric rows, not re-asserted here.
+
+  A companion test in the same file,
+  `TestIntegration_CorpusGrantEnforce_DoesNotOverReachIntoUngatedRoutes`, asserts the deliberately
+  ungated routes stay reachable under ENFORCE. Gate over-reach is as much a defect as gate absence,
+  and a test that only proves denial cannot tell the two apart.
 
 - [ ] `TP-03-03` integration test passes — shared-token and bootstrap bypass asserted under ENFORCE
 
@@ -1257,9 +1309,36 @@ contained by an explicit boundary. Collateral cleanup is opt-in and out of scope
   pre-fix red run — that was not performed here. The unit-tier `TestCorpusGate_AllSixteenRouteGroupsGated`
   proves set-equality on the manifest but is not that demonstration and must not be substituted for it.
 
-- [ ] `TP-03-05` integration test passes — ENFORCE→OBSERVE rollback restores access with no rebuild
+- [x] `TP-03-05` integration test passes — ENFORCE→OBSERVE rollback restores access with no rebuild
 
-  **Not executed in this packet** — same in-flight-integration-run reason as TP-03-02. Unclaimed.
+  Closed by `TestIntegration_CorpusGrantEnforce_RollbackToObserveRestoresAccess` in the same file.
+  Both stages are constructed in **one** test process, which is what makes "no rebuild" an
+  observation rather than an assertion — the binary is never re-linked between the two halves.
+
+  The log below is the load-bearing part. The same principal `tp0305-rollback-ungranted` is refused
+  under ENFORCE, then under OBSERVE the `corpus_grant_would_deny` counter fires with
+  `enforcement_mode=observe` while the request proceeds. That pair is the stage flip: the gate still
+  *evaluates* and still *counts*, it just stops refusing. A rollback that silently stopped counting
+  would look identical from the response alone, so the counter line is the distinguishing evidence.
+
+  Command: `./smackerel.sh test integration --go-run 'CorpusGrantEnforce'`
+  Exit Code: 0
+  Executed: yes — 2026-08-12, tree at `31c3c09a` plus this untracked test file
+
+  ```text
+  WARN auth: scope_rejected required_scope=corpus:read user_id=tp0305-rollback-ungranted token_scopes=[annotation:edit] endpoint=/api/search
+  WARN auth: corpus_grant_would_deny route_group=search user_id=tp0305-rollback-ungranted session_source=per_user_token required_grant=corpus:read enforcement_mode=observe
+  WARN auth: scope_rejected required_scope=corpus:read user_id=tp0305-rollback-ungranted token_scopes=[annotation:edit] endpoint=/api/digest
+  WARN auth: corpus_grant_would_deny route_group=digest user_id=tp0305-rollback-ungranted session_source=per_user_token required_grant=corpus:read enforcement_mode=observe
+  WARN auth: scope_rejected required_scope=corpus:read user_id=tp0305-rollback-ungranted token_scopes=[annotation:edit] endpoint=/api/recent
+  WARN auth: corpus_grant_would_deny route_group=recent user_id=tp0305-rollback-ungranted session_source=per_user_token required_grant=corpus:read enforcement_mode=observe
+  --- PASS: TestIntegration_CorpusGrantEnforce_RollbackToObserveRestoresAccess (0.05s)
+  ok      github.com/smackerel/smackerel/tests/integration/graphapi       0.328s
+  ```
+
+  Non-vacuity: the test counts all three quantities and requires each to be sixteen —
+  `refusedUnderEnforce != 16 || servedUnderObserve != 16 || countingResumed != 16` (source line 769).
+  Counting only the served side would pass against a build where ENFORCE never denied anything.
 
 - [ ] `TP-03-06` e2e-api test passes — granted reads succeed, ungranted refused, body carries no id/title/count
 
@@ -1284,11 +1363,38 @@ contained by an explicit boundary. Collateral cleanup is opt-in and out of scope
 
   **Not executed in this packet** — same pre-existing e2e-red reason as TP-03-06. Unclaimed.
 
-- [ ] `TP-03-11` integration test passes — all eight Tier B Phase-5 route groups deny an ungranted principal with 403 and the Tier A denial shape, and allow a `corpus:read` holder (§18 decision 5)
+- [x] `TP-03-11` integration test passes — all eight Tier B Phase-5 route groups deny an ungranted principal with 403 and the Tier A denial shape, and allow a `corpus:read` holder (§18 decision 5)
 
-  **Not executed in this packet** — same in-flight-integration-run reason as TP-03-02. The
-  unit-tier gate tests prove the eight Tier B groups are *mounted inside* the gate; they do not
-  prove a live 403 or the live denial-body shape.
+  Closed by `TestIntegration_CorpusGrantEnforce_TierBDeniesWithTheTierADenialShape`. The router for
+  this test is built with a **non-nil** `deps.IntelligenceEngine`. Without it the eight Phase-5
+  routes never register, every Tier B assertion passes against a router that only has eight groups,
+  and the row would be vacuously green — the precise hazard
+  `TestCorpusGate_NilIntelligenceEngineIsAVacuityTrap` names at the unit tier. The failure message
+  at source line 650 spells this out so a future regression reports the real cause.
+
+  Denial-shape parity matters beyond tidiness: if Tier B denied with a different body or status than
+  Tier A, the difference would itself disclose which tier a route belongs to, leaking corpus
+  structure to an unauthorized caller. The test asserts the shapes are identical rather than merely
+  that both are 403.
+
+  Command: `./smackerel.sh test integration --go-run 'CorpusGrantEnforce'`
+  Exit Code: 0
+  Executed: yes — 2026-08-12, tree at `31c3c09a` plus this untracked test file
+
+  ```text
+  WARN auth: scope_rejected required_scope=corpus:read user_id=tp0311-ungranted token_scopes=[annotation:edit] endpoint=/api/recent
+  WARN auth: scope_rejected required_scope=corpus:read user_id=tp0311-ungranted token_scopes=[annotation:edit] endpoint=/api/search
+  WARN auth: scope_rejected required_scope=corpus:read user_id=tp0311-ungranted token_scopes=[annotation:edit] endpoint=/api/expertise
+  WARN auth: scope_rejected required_scope=corpus:read user_id=tp0311-ungranted token_scopes=[annotation:edit] endpoint=/api/learning-paths
+  WARN auth: scope_rejected required_scope=corpus:read user_id=tp0311-ungranted token_scopes=[annotation:edit] endpoint=/api/subscriptions
+  WARN auth: scope_rejected required_scope=corpus:read user_id=tp0311-ungranted token_scopes=[annotation:edit] endpoint=/api/serendipity
+  --- PASS: TestIntegration_CorpusGrantEnforce_TierBDeniesWithTheTierADenialShape (0.03s)
+  ok      github.com/smackerel/smackerel/tests/integration/graphapi       0.328s
+  ```
+
+  `/api/expertise`, `/api/learning-paths`, `/api/subscriptions`, and `/api/serendipity` above are
+  Phase-5 intelligence routes, so their presence in the log is direct evidence the engine was
+  non-nil and the Tier B block was genuinely registered and genuinely refused.
 
 - [ ] `TP-03-12` adversarial integration test passes — set-equality is evaluated against a non-nil intelligence engine and fails on the nil-engine vacuous-pass path and on Tier B registered outside the gate
 
