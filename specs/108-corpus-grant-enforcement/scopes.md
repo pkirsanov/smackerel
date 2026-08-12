@@ -1472,15 +1472,62 @@ contained by an explicit boundary. Collateral cleanup is opt-in and out of scope
   `refusedUnderEnforce != 16 || servedUnderObserve != 16 || countingResumed != 16` (source line 769).
   Counting only the served side would pass against a build where ENFORCE never denied anything.
 
-- [ ] `TP-03-06` e2e-api test passes — granted reads succeed, ungranted refused, body carries no id/title/count
+- [x] `TP-03-06` e2e-api test passes — granted reads succeed, ungranted refused, body carries no id/title/count
+  - **Command:** `./smackerel.sh test e2e` (phase `go-e2e-corpus-enforce`)
+  - **Exit Code:** 0
+  - **Evidence:**
+    ```
+    go-e2e: applying -run selector: TestE2E_Spec108_CorpusEnforce
+    --- PASS: TestE2E_Spec108_CorpusEnforce_GrantedReadsUngrantedRefused_TP_03_06 (0.04s)
+        --- PASS: TestE2E_Spec108_CorpusEnforce_GrantedReadsUngrantedRefused_TP_03_06/recent (0.01s)
+        --- PASS: TestE2E_Spec108_CorpusEnforce_GrantedReadsUngrantedRefused_TP_03_06/export (0.00s)
+    --- PASS: TestE2E_Spec108_CorpusEnforce_DenialParity_TP_03_07 (0.04s)
+    --- PASS: TestE2E_Spec108_CorpusEnforce_Regression_TP_03_10 (0.04s)
+    ok  github.com/smackerel/smackerel/tests/e2e  0.281s
+    PASS: go-e2e-corpus-enforce
+    EXIT=0
+    ```
+    Live-container probe on the same ENFORCE stack:
+    `granted /api/recent?limit=1 -> 200`, `ungranted /api/recent?limit=1 -> 403`,
+    `ungranted /api/expertise -> 403`.
 
-  **Not executed in this packet.** `./smackerel.sh test e2e` is currently red on five unrelated
-  pre-existing defects (spec 106 asset headers; three BUG-069-004 assistant-dedup failures; the
-  drive-harness env-propagation defect; BUG-031-004). Unclaimed.
+  This row was previously unprovable, and the reason was structural rather than a
+  weak assertion. The default e2e stack boots OBSERVE (stage resolves once at
+  start; R-108-FL3 ships the flag OFF), AND dev/test ship an empty signing
+  keypair so no per-user principal can exist at all — the only credential is the
+  shared token, which `RequireScope` bypasses by design. A dedicated
+  `go-e2e-corpus-enforce` phase now boots its own ENFORCE stack with a run-scoped
+  keypair and enrols both principals through the real `smackerel auth enroll`
+  operator path (the core verifies bearers against PERSISTED rows, so a
+  locally-minted token is rejected however correctly it is signed).
 
-- [ ] `TP-03-07` e2e-api test passes — denial byte-parity between real and random id
+  Non-vacuity: the ungranted arm is also the lane check. A 200 there means the
+  overlay did not apply and the stack is in OBSERVE, so the test fails loudly
+  instead of proving nothing. The first version of this lane reported
+  `PASS: go-e2e-corpus-enforce` while all three tests SKIPPED; a missing keypair
+  or token is now `t.Fatalf`, never `t.Skip`.
 
-  **Not executed in this packet** — same pre-existing e2e-red reason as TP-03-06. Unclaimed.
+- [x] `TP-03-07` e2e-api test passes — denial byte-parity between real and random id
+  - **Command:** `./smackerel.sh test e2e` (phase `go-e2e-corpus-enforce`)
+  - **Exit Code:** 0
+  - **Evidence:**
+    ```
+    --- PASS: TestE2E_Spec108_CorpusEnforce_DenialParity_TP_03_07 (0.04s)
+    ok  github.com/smackerel/smackerel/tests/e2e  0.281s
+    PASS: go-e2e-corpus-enforce
+    EXIT=0
+    ```
+
+  Asserts a refused `/api/artifact/{id}` for a REAL id and for a random id are
+  byte-identical in body AND Content-Type, so the refusal is not an existence
+  oracle.
+
+  Non-vacuity: the test SEEDS an artifact when the corpus is empty rather than
+  skipping — a parity assertion over two absent ids compares two misses. The id
+  comes from the capture RESPONSE rather than polling `/api/recent`, because
+  capture is asynchronous and polling made the test hostage to pipeline latency
+  for an id the server had already returned (an earlier revision failed exactly
+  that way after a 20s wait).
 
 - [ ] `TP-03-08` canary integration test passes — shared router-bootstrap ordering, session, and ungated-route contracts intact
 
@@ -1491,9 +1538,41 @@ contained by an explicit boundary. Collateral cleanup is opt-in and out of scope
   **Not executed in this packet.** No stress run was performed, so no latency claim is made in
   either direction. Unclaimed.
 
-- [ ] `TP-03-10` regression e2e-api test passes — enforcement across both tiers, denial parity, documented bypasses, and rollback are permanently protected
+- [x] `TP-03-10` regression e2e-api test passes — enforcement across both tiers, denial parity, documented bypasses, and rollback are permanently protected
+  - **Command:** `./smackerel.sh test e2e` (phase `go-e2e-corpus-enforce`)
+  - **Exit Code:** 0
+  - **Evidence:**
+    ```
+    --- PASS: TestE2E_Spec108_CorpusEnforce_Regression_TP_03_10 (0.04s)
+    ok  github.com/smackerel/smackerel/tests/e2e  0.281s
+    PASS: go-e2e
+    PASS: go-e2e-graph-disabled
+    PASS: go-e2e-corpus-enforce
+    EXIT=0
+    ```
 
-  **Not executed in this packet** — same pre-existing e2e-red reason as TP-03-06. Unclaimed.
+  Covers SCN-108-G01/G03 (both tiers refuse), G02 (shared-token bypass still
+  admits), G04 (granted principal admitted, so refusals are attributable to the
+  missing grant rather than a broken route), and C04 (the enforcement-mode gauge
+  reports the live stage, which is how an operator verifies a rollback).
+
+  Non-vacuity — three silent-pass paths were found and removed:
+  - Tier A and Tier B are counted SEPARATELY and both are required. A single
+    combined counter was satisfied by Tier A alone, so half the ratified
+    sixteen-group surface could go unexercised while the test passed.
+  - The Tier B 404-tolerating branch ("not mounted, not counted") is gone;
+    `cmd/core/services.go:315` constructs the engine unconditionally, so a 404
+    is a finding rather than a condition to tolerate.
+  - The shared-token check asserted `!= 403`, which a 401 satisfies. When the
+    `perUserActive` capability change genuinely broke that path, the assertion
+    passed anyway. It now requires a real 2xx admission — and immediately caught
+    the breakage.
+
+  This row also FOUND A PRODUCT DEFECT: `SetCorpusGrantEnforcementMode` was
+  defined and never called anywhere in production, so the gauge read 0 for the
+  life of every process while the core logged `stage=ENFORCE` and denied
+  ungranted principals. Fixed in `cmd/core/main.go` with its own probed
+  regression guard (commit `15394e84`).
 
 - [x] `TP-03-11` integration test passes — all eight Tier B Phase-5 route groups deny an ungranted principal with 403 and the Tier A denial shape, and allow a `corpus:read` holder (§18 decision 5)
 
@@ -1542,12 +1621,35 @@ contained by an explicit boundary. Collateral cleanup is opt-in and out of scope
 
   **Tier corrected** from `integration` to `unit` for the same execution-reality reason as
   TP-03-04: this is an in-process router assertion, not a live-stack one.
-- [ ] **DoD-03-TIERB-DESIGN:** `design.md` §2's route-inventory table and §8 T2/T4/T8 count language reconciled to the ratified sixteen-group surface by `bubbles.design` before this scope closes — not silently overwritten from this planning packet (routed per the `spec.md` §18 decision 5 planning note)
+- [x] **DoD-03-TIERB-DESIGN:** `design.md` §2's route-inventory table and §8 T2/T4/T8 count language reconciled to the ratified sixteen-group surface by `bubbles.design` before this scope closes — not silently overwritten from this planning packet (routed per the `spec.md` §18 decision 5 planning note)
+  - **Command:** `git show --stat aeb36a2b -- specs/108-corpus-grant-enforcement/design.md`
+  - **Exit Code:** 0
+  - **Evidence:**
+    ```
+    specs/108-corpus-grant-enforcement/design.md | 102 ++++++++++++++++-------
+    1 file changed, 77 insertions(+), 25 deletions(-)
+    internal/metrics/auth.go:210:// The closed SIXTEEN-value `route_group` set
+    internal/metrics/corpus_grant_test.go:163:  if len(got) != 16 {
+    ```
 
-  **Not satisfied.** `design.md` is unmodified in this working tree (`git status --porcelain
-  specs/108-corpus-grant-enforcement/design.md` → empty), its §2 row still defers the sixteen-row
-  extension to `bubbles.design` (L149), and §8 T4 still reads "all eight route groups" (L311). This
-  is a foreign artifact owned by `bubbles.design`; it is routed, not edited from here.
+  Routed to `bubbles.design`, which owns the file — not edited from this packet.
+  §2 now carries Tier A rows 1–8 plus a new Tier B table for rows 9–16, and the
+  "eight" count language at §8 T2/T4/T8 (and L101/L111/L133) is reconciled.
+
+  Counts were RE-DERIVED from source rather than harmonised by symmetry, because
+  "the routes went to 16, so the label set must be 16" is exactly the assumption
+  that would hide a metrics family that never widened. It genuinely is sixteen,
+  confirmed against `internal/metrics/auth.go` and a test that checks the count
+  against an INDEPENDENT literal list rather than deriving it from
+  `CorpusRouteGroups()`.
+
+  Three latent divergences surfaced while verifying and are recorded rather than
+  silently corrected: §2 numbered `knowledge`=7/`context_for`=8 (matching neither
+  the ratified §4.2 order nor the metrics slice); `spec.md` §4.2 cites
+  pre-implementation line numbers; and Tier B registers only when
+  `IntelligenceEngine != nil`, so a nil-engine fixture would satisfy set-equality
+  over the routes that exist while eight groups went unexercised. That last one
+  directly shaped the TP-03-10 Tier A/Tier B split above.
 
 - [ ] Consumer Impact Sweep completed for the corpus route-group contract change across the PWA, Chrome extension bridge, Telegram bridge, Tier B consumers, external API clients, and docs: zero stale first-party references remain, and the Tier B "zero first-party in-repo callers" negative result is re-verified rather than inherited
 
