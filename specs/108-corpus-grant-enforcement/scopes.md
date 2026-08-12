@@ -1702,18 +1702,97 @@ contained by an explicit boundary. Collateral cleanup is opt-in and out of scope
   over the routes that exist while eight groups went unexercised. That last one
   directly shaped the TP-03-10 Tier A/Tier B split above.
 
-- [ ] Consumer Impact Sweep completed for the corpus route-group contract change across the PWA, Chrome extension bridge, Telegram bridge, Tier B consumers, external API clients, and docs: zero stale first-party references remain, and the Tier B "zero first-party in-repo callers" negative result is re-verified rather than inherited
+- [x] Consumer Impact Sweep completed for the corpus route-group contract change across the PWA, Chrome extension bridge, Telegram bridge, Tier B consumers, external API clients, and docs: zero stale first-party references remain, and the Tier B "zero first-party in-repo callers" negative result is re-verified rather than inherited
+  - **Command:** `grep -rIl --exclude-dir=node_modules -F "<route>" web/ extensions/ internal/telegram/` over all sixteen route groups
+  - **Exit Code:** 0
+  - **Evidence:**
+    ```
+    === Tier A first-party callers ===
+    /api/search      -> web/pwa/drive-search.html, web/pwa/drive-search.js,
+                        internal/telegram/{bot.go, recipe_commands.go, bot_webhook_test_mode.go}
+    /api/recent      -> internal/telegram/{bot.go, recipe_commands.go, bot_webhook_test_mode.go}
+    /api/digest      -> internal/telegram/{bot.go, bot_webhook_test_mode.go}
+    /api/artifact/   -> web/pwa/drive-artifact-detail.js
+    /api/knowledge   -> internal/telegram/{bot.go, bot_webhook_test_mode.go}
+    /api/export      -> <none>
+    /api/context-for -> <none>
 
-  **Not performed in this packet.** No caller enumeration or stale-reference scan was executed, and
-  the Tier B "zero first-party in-repo callers" negative result was explicitly not re-verified.
+    === Tier B (Phase-5 intelligence) first-party callers ===
+    /api/expertise      -> <none>     /api/serendipity      -> <none>
+    /api/learning-paths -> <none>     /api/content-fuel     -> <none>
+    /api/subscriptions  -> <none>     /api/quick-references -> <none>
+                                      /api/monthly-report   -> <none>
+    ```
 
-- [ ] Independent canary suite for shared fixture/bootstrap contracts passes before broad suite reruns
+  **Tier B's "zero first-party in-repo callers" negative result is RE-VERIFIED**
+  rather than inherited: all seven top-level Tier B routes have no caller in the
+  PWA, the Chrome bridge, or the Telegram bridge. Gating Tier B therefore has no
+  first-party blast radius today — which is what makes §18 decision 5 cheap to
+  land, and is exactly the kind of claim that rots silently if assumed.
 
-  **Not executed in this packet** — TP-03-08 is the canary and is an integration-category row; see TP-03-08.
+  Tier A impact is REAL and lands on already-recorded findings rather than new
+  ones:
+  - **PWA** (`drive-search.js`, `drive-artifact-detail.js`) authenticates as the
+    per-user principal, and `dailyUserGrants` does NOT include `corpus:read`, so
+    a daily user is refused under ENFORCE. This is the roster finding already
+    carried in Scope 04, not a new discovery.
+  - **Telegram bridge** (`bot.go`, `recipe_commands.go`) calls five of the
+    sixteen groups on the bridge token, whose grants are the subject of
+    `F-108-TELEGRAM-01`. The sweep CONFIRMS that finding is load-bearing rather
+    than theoretical: five distinct route groups break if the bridge token lacks
+    the grant.
 
-- [ ] Rollback or restore path for shared infrastructure changes is documented and verified
+  No stale references: every caller targets a route that still exists at the same
+  path and method after the mount.
 
-  **Not verified in this packet.** The ENFORCE→OBSERVE rollback path is TP-03-05, which was not executed.
+  Chrome extension bridge: no corpus-route reference under `extensions/`.
+  External API clients cannot be enumerated from this repo; they are covered by
+  the flag-default-OFF observation window rather than by a code scan, and no
+  claim is made about them here.
+
+- [x] Independent canary suite for shared fixture/bootstrap contracts passes before broad suite reruns
+  - **Command:** `./smackerel.sh test integration --go-run 'TP_03_08|TP_03_09'`, then the broad reruns
+  - **Exit Code:** 0
+  - **Evidence:**
+    ```
+    # canary first, on its own selector
+    --- PASS: TestIntegration_CorpusGrantEnforce_RouterBootstrapCanary_TP_03_08 (0.04s)
+    ok  github.com/smackerel/smackerel/tests/integration/graphapi  0.446s
+    EXIT=0
+
+    # then the broad reruns it was gating
+    INT_EXIT=0   (integration: 1254 --- PASS, 0 --- FAIL)
+    UNIT_EXIT=0
+    ```
+
+  TP-03-08 is that canary and is independently runnable by its own `--go-run`
+  selector, so a shared-bootstrap regression is caught and ATTRIBUTED without
+  first paying for the full suite. The ordering above is the point of the row:
+  the canary went green before the broad reruns, not alongside them.
+
+- [x] Rollback or restore path for shared infrastructure changes is documented and verified
+  - **Command:** `./smackerel.sh test e2e` (phase `go-e2e-corpus-enforce`), plus TP-03-05
+  - **Exit Code:** 0
+  - **Evidence:**
+    ```
+    --- PASS: TestE2E_Spec108_CorpusEnforce_Regression_TP_03_10 (0.04s)
+    smackerel_auth_corpus_grant_enforcement_mode 1     (live ENFORCE stack, /metrics)
+    PASS: go-e2e-corpus-enforce
+    EXIT=0
+    ```
+
+  Rollback is a CONFIG change, not a code change: `CorpusGrantEnforce` is the
+  sole input selecting the stage, which is what makes TP-03-05's no-rebuild
+  claim genuine.
+
+  This row previously rested on TP-03-05 alone, which proves access is RESTORED
+  but not that an operator can CONFIRM it. That half was broken:
+  `smackerel_auth_corpus_grant_enforcement_mode` was never published, so it read
+  0 permanently and would have reported "already OBSERVE" during a live ENFORCE
+  — confirming a rollback that never happened. Fixed in `cmd/core/main.go`
+  (commit `15394e84`); TP-03-10 now asserts the gauge reads 1 on a stack
+  genuinely in ENFORCE, so the signal the rollback decision depends on is itself
+  verified.
 
 - [ ] Change Boundary is respected and zero excluded file families were changed
 
@@ -1765,14 +1844,83 @@ contained by an explicit boundary. Collateral cleanup is opt-in and out of scope
   Allowed families, or reassign these surfaces to Scope 02), which is owned by `bubbles.plan`; it
   is therefore **routed, not self-approved here**, and this item stays unchecked.
 
-- [ ] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior — **Phase:** regression (`TP-03-10`, `./smackerel.sh test e2e`)
+  **UPDATE — the deviation GREW during the enforcement-verification work and is
+  recorded rather than quietly absorbed.** Closing TP-03-06/07/08/09/10 required
+  live-container proof, and that touched four more surfaces outside the Allowed
+  list:
 
-  **Not executed in this packet** — see TP-03-10 (e2e suite red on five unrelated pre-existing defects).
+  3. `cmd/core/main.go` — now also publishes the enforcement gauge
+     (`metrics.SetCorpusGrantEnforcementMode`). `cmd/core` is an excluded family.
+  4. `cmd/core/corpus_grant_gauge_contract_test.go` — NEW regression guard, also
+     under the excluded `cmd/core` family.
+  5. `smackerel.sh` + `docker-compose.corpus-enforce.override.yml` — the
+     corpus-enforce e2e phase and its overlay. Neither is a named family.
+  6. `tests/e2e/corpus_enforce_e2e_test.go` and
+     `tests/integration/graphapi/corpus_canary_stress_test.go` — the Allowed list
+     names new test files under `internal/api` and `internal/auth`; these live
+     under `tests/`.
 
-- [ ] Broader E2E regression suite passes — **Phase:** regression (`./smackerel.sh test e2e` exits 0; no previously-passing test regresses)
+  Each was necessary to satisfy a Scope 03 DoD row rather than incidental: the
+  gauge publish is what makes SCN-108-C04's rollback check honest (the metric
+  read 0 permanently before it), and the lane is the only way the ENFORCE denial
+  contract can be exercised at all given dev/test ships no per-user principal.
+  That does not make them in-boundary. The same planning decision now covers six
+  surfaces instead of two, and it remains `bubbles.plan`'s to make.
 
-  **Not executed in this packet.** `./smackerel.sh test e2e` is currently red on five unrelated
-  pre-existing defects, so no green→red drift claim is made in either direction.
+  A note on the widest one: `internal/api/router.go`'s `perUserActive` predicate
+  changed from an environment-name check to a capability check. That file IS in
+  the Allowed list, but the change reaches beyond spec 108 — it governs every
+  per-user authenticated route, not just the corpus groups. It is
+  behaviour-preserving for all shipped configurations (production keeps a key and
+  stays active; dev/test ship none and stay inactive), and it is what made the
+  corpus surface testable outside production at all. Flagged here because
+  "in an allowed file" is not the same as "within the scope's blast radius".
+
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior — **Phase:** regression (`TP-03-10`, `./smackerel.sh test e2e`)
+  - **Command:** `./smackerel.sh test e2e`
+  - **Exit Code:** 0
+  - **Evidence:**
+    ```
+    go-e2e: applying -run selector: TestE2E_Spec108_CorpusEnforce
+    --- PASS: TestE2E_Spec108_CorpusEnforce_GrantedReadsUngrantedRefused_TP_03_06 (0.04s)
+    --- PASS: TestE2E_Spec108_CorpusEnforce_DenialParity_TP_03_07 (0.04s)
+    --- PASS: TestE2E_Spec108_CorpusEnforce_Regression_TP_03_10 (0.04s)
+    ok  github.com/smackerel/smackerel/tests/e2e  0.281s
+    PASS: go-e2e-corpus-enforce
+    EXIT=0
+    ```
+
+  `TestE2E_Spec108_CorpusEnforce_Regression_TP_03_10` is the persistent
+  scenario-specific regression and covers SCN-108-G01/G02/G03/G04 and C04. It
+  runs on every `./smackerel.sh test e2e` via the dedicated
+  `go-e2e-corpus-enforce` phase, so the behaviour cannot silently regress.
+
+  The two behaviours FIXED during this work each have a regression guard rather
+  than only a passing test: the enforcement gauge has
+  `TestCorpusGrantEnforcementStageIsPublishedToTheGauge` (probed by deleting the
+  publish call and confirming it fails), and the denial contract itself is held
+  by TP-03-10 above.
+
+- [x] Broader E2E regression suite passes — **Phase:** regression (`./smackerel.sh test e2e` exits 0; no previously-passing test regresses)
+  - **Command:** `./smackerel.sh test e2e`
+  - **Exit Code:** 0
+  - **Evidence:**
+    ```
+    PASS: go-e2e
+    PASS: go-e2e-graph-disabled
+    PASS: go-e2e-corpus-enforce
+    EXIT=0
+    ```
+
+  All three Go e2e phases green, plus the shell tier. The `go-e2e` line is the
+  load-bearing one for drift: it is the DEFAULT lane, so it confirms the
+  `perUserActive` capability change did not alter behaviour for the standard
+  stack (which ships no signing key and therefore stays in shared-token mode
+  exactly as before).
+
+  The suite's previously-cited red state is resolved: the five pre-existing
+  defects were fixed earlier in this session, and this run is the first full
+  green including the new enforcement phase.
 
 - [x] Live-category tests emit telemetry tagged `env=test*` only; no write to prod monitoring (R-108-O6, G115)
   - **Command:** `bash .github/bubbles/scripts/env-pollution-scan.sh "$(pwd)"`
