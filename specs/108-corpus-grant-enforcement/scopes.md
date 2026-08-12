@@ -1396,9 +1396,30 @@ contained by an explicit boundary. Collateral cleanup is opt-in and out of scope
   ungated routes stay reachable under ENFORCE. Gate over-reach is as much a defect as gate absence,
   and a test that only proves denial cannot tell the two apart.
 
-- [ ] `TP-03-03` integration test passes — shared-token and bootstrap bypass asserted under ENFORCE
+- [x] `TP-03-03` integration test passes — shared-token and bootstrap bypass asserted under ENFORCE
+  - **Command:** `./smackerel.sh test integration --go-run 'TP_03_03'`
+  - **Exit Code:** 0
+  - **Evidence:** `--- PASS: TestIntegration_CorpusGrantEnforce_SharedTokenBypassIsAsserted_TP_03_03 (0.11s)`,
+    `--- PASS: TestIntegration_CorpusGrantEnforce_UngrantedDoesNotIncrementBypass_TP_03_03 (0.04s)`,
+    `--- PASS: TestIntegration_CorpusGrantEnforce_BootstrapBypassIsAsserted_TP_03_03 (0.00s)`
+    in `tests/integration/graphapi/corpus_bypass_test.go`. The row's word is
+    **asserted**, not assumed, so "the request was not 403" is deliberately not accepted as
+    proof — an ungated route, a stage that fell back to OBSERVE, or a gate on the wrong
+    group would all produce a non-403. Each bypass arm therefore also asserts
+    `smackerel_auth_scope_check_bypassed_total` rose on the MATCHING `source` label; that
+    counter is written on exactly one line inside the `RequireScope` source switch, so an
+    increment proves the request travelled the documented branch.
 
-  **Not executed in this packet** — same in-flight-integration-run reason as TP-03-02. Unclaimed.
+  Two controls keep it non-vacuous: every shared-token arm is paired with an ungranted
+  per-user request on the SAME route that MUST be refused (otherwise the route is not gated
+  and the bypass arm proves nothing), and a refused-only run asserts the bypass counters do
+  NOT move — so the counter tracks the branch rather than counting requests.
+
+  **Bootstrap tier recorded honestly.** The bootstrap arm exercises `auth.RequireScope`
+  directly rather than over HTTP because NO production code path constructs a
+  `SessionSourceBootstrap` session for an HTTP request — every non-test reference
+  (`scope_middleware.go`, `corpus_grant_gate.go`, `cmd/core/wiring.go`) is a consumer.
+  Driving it through the router would require inventing a path that does not exist.
 
 - [x] `TP-03-04` adversarial route-manifest test passes AND is demonstrated to **fail against current `main`** (empty-scope principal is allowed today); set-equality catches a seventeenth ungated corpus route
   - **Command:** `./smackerel.sh test unit --go --go-run 'TestCorpusGate_AllSixteenRouteGroupsGated'`
