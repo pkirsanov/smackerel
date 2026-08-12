@@ -25,11 +25,20 @@ func minterTestKeypair(t *testing.T) (priv, pub string) {
 // fakePrincipalGrantReader is the in-package test double for
 // PrincipalGrantReader. It stands in for *auth.BearerStore so the mint
 // path (spec 108 §18 decision 3) is exercisable without a database.
+//
+// err models the reader FAILING (no active token, pool down). It is
+// returned alongside the zero RecordedGrants, matching
+// BearerStore.GrantsForPrincipal's fail-closed contract, so the
+// derivation-failure tests (design.md §10.10 T3) can drive that arm.
 type fakePrincipalGrantReader struct {
 	grants auth.RecordedGrants
+	err    error
 }
 
 func (f *fakePrincipalGrantReader) GrantsForPrincipal(_ context.Context, _ string) (auth.RecordedGrants, error) {
+	if f.err != nil {
+		return auth.RecordedGrants{}, f.err
+	}
 	return f.grants, nil
 }
 

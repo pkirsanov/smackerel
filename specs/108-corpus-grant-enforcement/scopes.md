@@ -1913,8 +1913,43 @@ ok      github.com/smackerel/smackerel/internal/auth    0.030s
 ```
 
 **Claim Source:** executed. `dailyUserGrants` is still exactly `{assistant:turn, knowledge-graph:read}`, its defining file is byte-unchanged, and the registration guard that would fail on a widened default passes.
-- [ ] `TP-04-01` unit test passes — bridge scope claim derived from the principal with no silent default
-  - **UNCHECKED:** the "no silent default" half is design.md §10.10 **T3**, and T3 does not exist — `grep -rn 'ErrPrincipalGrantsUnrecorded\|ErrNoDelegableGrant' --include='*_test.go' .` returns zero hits, so no test exercises a derivation-failure mint.
+- [x] `TP-04-01` unit test passes — bridge scope claim derived from the principal with no silent default
+
+  Command: `./smackerel.sh test unit --go --go-run 'DerivationFailure|ScopeClaim|MintFor' --verbose`
+  Exit Code: 0
+  Executed: yes — 2026-08-12, tree at `96173b44` plus untracked test files
+
+  ```text
+  --- PASS: TestMintForUser_DerivationFailure_ReturnsSentinelAndZeroToken (0.00s)
+  --- PASS: TestMintForChat_DerivationFailure_RefusesWithoutFallbackBearer (0.00s)
+  --- PASS: TestMintForUser_ScopeClaimEqualsDerivedGrantSet (0.00s)
+  --- PASS: TestMintForChat_ScopeClaimEqualsDerivedGrantSet (0.00s)
+  --- PASS: TestMintedScopeClaim_TableIsNotVacuous (0.00s)
+  --- PASS: TestMintForChat_Production_MappedChat_ProducesVerifiableToken (0.00s)
+  --- PASS: TestMintForChat_Production_UnmappedChat_ReturnsError (0.00s)
+  --- PASS: TestMintForUser_RejectsEmptyUserID (0.00s)
+  --- PASS: TestMintForChat_AdversarialNoBodyTrust (0.00s)
+  --- PASS: TestMintForChat_FreshTokenIDPerCall (0.00s)
+  ```
+
+  **Both halves are now closed.** *Derived from the principal* was already proven by
+  `TestDeriveTelegramBridgeGrants_SubsetProperty` in `internal/auth/bridge_delegation_test.go`.
+  *No silent default* was the outstanding gap and is closed by the new
+  `internal/telegram/per_user_token_derivation_failure_test.go` (design.md §10.10 **T3**).
+
+  The gap was real rather than cosmetic. `ErrPrincipalGrantsUnrecorded` and `ErrNoDelegableGrant`
+  were DEFINED and RETURNED in production yet asserted nowhere — the earlier
+  `grep -rn 'ErrPrincipalGrantsUnrecorded\|ErrNoDelegableGrant' --include='*_test.go' .`
+  returned zero hits. An error path with no test can be softened into a silent empty mint while
+  every other test in the tree still passes, which is precisely the silent default this spec forbids.
+
+  Two properties make the new test non-vacuous. It matches by `errors.Is` rather than message
+  substring, and each case carries a `mustNotMatch` list (source lines 138-163) asserting the other
+  sentinels do **not** match — so unrecorded (`granted_scopes IS NULL`), recorded-as-none (`'{}'`),
+  and `auth.ErrPrincipalNotProvisioned` are proven to be three DISTINCT states rather than three
+  labels for one collapsed path. Conflating `NULL` with `'{}'` is the specific defect migration 063
+  avoids by carrying no DB default. Every failure case also asserts `tok.WireToken == ""`
+  (line 108), so a partial mint cannot slip through alongside an error.
 - [ ] `TP-04-02` integration test passes — Telegram corpus command under ENFORCE has an operator-actionable outcome
   - **UNCHECKED:** integration tier not run by this pass; the concurrent run that did execute ended `INTEGRATION_EXIT=1` with `tests/integration [build failed]` (see the Consumer Impact Sweep item).
 - [ ] `TP-04-03` integration test passes — token rotation (not a flag flip) grants a daily user access
@@ -1923,8 +1958,37 @@ ok      github.com/smackerel/smackerel/internal/auth    0.030s
   - **UNCHECKED:** integration tier not run by this pass; same build failure blocks the package.
 - [ ] `TP-04-05` e2e-api test passes — all six design.md §5 compatibility rows exercised with their recorded outcome
   - **UNCHECKED:** `./smackerel.sh test e2e` deliberately not run — red on 5 unrelated pre-existing defects.
-- [ ] `TP-04-08` unit test passes — the minter's hardcoded scope list is gone and the minted claim equals the mapped principal's persisted grants
-  - **UNCHECKED:** only the first half is proven (literal scan, above). No test asserts the minted **claim** — `internal/telegram/per_user_token_test.go` never parses `scope` out of the PASETO, so the Consumer Impact Sweep's own recorded negative result ("no test asserts the minted scope claim today") still holds.
+- [x] `TP-04-08` unit test passes — the minter's hardcoded scope list is gone and the minted claim equals the mapped principal's persisted grants
+
+  Command: `./smackerel.sh test unit --go --go-run 'DerivationFailure|ScopeClaim|MintFor' --verbose`
+  Exit Code: 0
+  Executed: yes — 2026-08-12, tree at `96173b44` plus untracked test files
+
+  ```text
+  --- PASS: TestMintForUser_ScopeClaimEqualsDerivedGrantSet (0.00s)
+  --- PASS: TestMintForChat_ScopeClaimEqualsDerivedGrantSet (0.00s)
+  --- PASS: TestMintedScopeClaim_TableIsNotVacuous (0.00s)
+  --- PASS: TestIssueToken_SetsScopeClaim (0.00s)
+  --- PASS: TestCorpusReadScopeClaimValidatesAndAuthorizes (0.00s)
+  --- PASS: TestVerifyAndParse_MalformedScopeClaimFallsBackToNil (0.00s)
+  --- PASS: TestGetScopeClaim_AbsentReturnsNilNil (0.00s)
+  --- PASS: TestScopeLiteralGuard_NoScopeLiteralsInTelegramPackage (0.37s)
+  --- PASS: TestMintForUser_DerivationFailure_ReturnsSentinelAndZeroToken (0.00s)
+  --- PASS: TestMintForChat_Production_MappedChat_ProducesVerifiableToken (0.00s)
+  ```
+
+  **Both halves are now closed.** The first half — the hardcoded list is gone — was already proven
+  by `TestScopeLiteralGuard_NoScopeLiteralsInTelegramPackage`. The second half was the outstanding
+  gap: nothing parsed `scope` out of the minted PASETO, so removing the literal and then minting the
+  *wrong* claim would have passed every test in the tree. Closed by
+  `internal/telegram/per_user_token_scope_claim_test.go`.
+
+  The new test asserts set **equality** against `recorded ∩ ceiling` (source line 62), not
+  `contains`. That distinction is the point: a `contains` assertion cannot detect over-granting, and
+  over-granting is the failure that matters for a delegation ceiling. It is driven from five
+  different recorded grant sets (lines 72-96) so no single hardcoded expectation can satisfy them
+  all, and `TestMintedScopeClaim_TableIsNotVacuous` guards the table itself against collapsing into
+  a shape where every case shares one answer.
 - [ ] `TP-04-09` adversarial integration test passes — a principal **without** `corpus:read` gains **no** corpus access through Telegram, and the test fails if a minter-side list is reintroduced
   - **UNCHECKED:** this is design.md §10.10 **T4**, the decisive layer. No such test exists in the tree (`tests/integration/corpus_grant_observe_test.go` carries no Telegram/annotation differential), and §10.10 additionally requires an adversarial **RED** demonstration against a tree patched back to the literal — which has not been produced.
 - [x] `TP-04-10` unit test passes — rotating a principal holding `annotation:edit` to add `corpus:read` yields a token carrying **both**, so the `resolveRotationScopes` replace-not-merge semantic cannot silently revoke Telegram annotation capability once derivation is live (SCN-108-F02)
