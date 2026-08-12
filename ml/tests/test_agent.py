@@ -348,7 +348,7 @@ def test_handle_invoke_applies_ollama_profile_spec102(monkeypatch: pytest.Monkey
 
     assert "error" not in result
     assert captured["model"] == "ollama_chat/qwen2.5:0.5b-instruct"
-    assert captured["options"]["num_ctx"] == 4096
+    assert captured["num_ctx"] == 4096
     assert captured["keep_alive"] == "30m"
     assert captured["top_k"] == 1
     assert captured["seed"] == 42

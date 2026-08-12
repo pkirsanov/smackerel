@@ -225,7 +225,7 @@ def test_litellm_dispatch_rejects_payload_profile_model_mismatch_before_network_
     assert calls["count"] == 0
 
 
-def test_litellm_adapter_merges_options_and_keep_alive_spec102(monkeypatch):
+def test_litellm_adapter_places_num_ctx_top_level_spec102(monkeypatch):
     monkeypatch.setenv(
         "ML_MODEL_MEMORY_PROFILES_JSON",
         '[{"model":"qwen3:30b-a3b","weights_mib":18432,"kv_mib_per_1k_ctx":102,"num_ctx":32768}]',
@@ -241,18 +241,84 @@ def test_litellm_adapter_merges_options_and_keep_alive_spec102(monkeypatch):
         "response_format": {"type": "json_object"},
         "max_tokens": 1234,
         "temperature": 0.1,
-        "options": {"seed": 7, "top_k": 20},
+        "seed": 7,
+        "top_k": 20,
     }
 
     result = apply_ollama_profile_to_litellm(kwargs, provider="ollama", model="qwen3:30b-a3b")
 
-    assert result["options"] == {"seed": 7, "top_k": 20, "num_ctx": 32768}
+    # litellm builds the Ollama `options` object out of the kwargs it does not
+    # recognize; a caller-built one would arrive as options.options.
+    assert "options" not in result
+    assert result["num_ctx"] == 32768
     assert result["keep_alive"] == "45m"
+    assert result["seed"] == 7
+    assert result["top_k"] == 20
     assert result["think"] is False
     assert result["tools"] == [{"type": "function"}]
     assert result["response_format"] == {"type": "json_object"}
     assert result["max_tokens"] == 1234
     assert result["temperature"] == 0.1
+
+
+def test_litellm_adapter_rejects_caller_options_kwarg_spec102(monkeypatch):
+    monkeypatch.setenv(
+        "ML_MODEL_MEMORY_PROFILES_JSON",
+        '[{"model":"qwen3:30b-a3b","weights_mib":18432,"kv_mib_per_1k_ctx":102,"num_ctx":32768}]',
+    )
+    monkeypatch.setenv("ML_OLLAMA_KEEP_ALIVE", "45m")
+    from app.ollama_keepalive import apply_ollama_profile_to_litellm
+
+    with pytest.raises(RuntimeError, match="unsupported_options_kwarg"):
+        apply_ollama_profile_to_litellm(
+            {"model": "ollama_chat/qwen3:30b-a3b", "options": {"seed": 7}},
+            provider="ollama",
+            model="qwen3:30b-a3b",
+        )
+
+
+def test_litellm_wire_body_carries_num_ctx_to_ollama_spec102(monkeypatch):
+    """Assert the body litellm actually POSTs, not just the kwargs we hand it.
+
+    The kwargs-level assertions stayed green for weeks while production shipped
+    a nested ``options.options`` that Ollama discarded, so the request ran at the
+    model's default context window instead of the SST value.
+
+    litellm ships in the ``runtime`` extra, not ``dev``, so both test lanes skip
+    this; it is load-bearing wherever the runtime deps are installed (the ml
+    image), where it can be run directly against the pinned litellm.
+    """
+    monkeypatch.setenv(
+        "ML_MODEL_MEMORY_PROFILES_JSON",
+        '[{"model":"qwen3:30b-a3b","weights_mib":18432,"kv_mib_per_1k_ctx":102,"num_ctx":32768}]',
+    )
+    monkeypatch.setenv("ML_OLLAMA_KEEP_ALIVE", "45m")
+    transformation = pytest.importorskip(
+        "litellm.llms.ollama.chat.transformation",
+        reason="litellm is a runtime-extra dependency; absent from the dev test env",
+    )
+    litellm_utils = pytest.importorskip("litellm.utils")
+
+    from app.ollama_keepalive import apply_ollama_profile_to_litellm
+
+    messages = [{"role": "user", "content": "hello"}]
+    kwargs = apply_ollama_profile_to_litellm(
+        {"model": "ollama_chat/qwen3:30b-a3b", "messages": messages, "temperature": 0.1},
+        provider="ollama",
+        model="qwen3:30b-a3b",
+    )
+    optional_params = litellm_utils.get_optional_params(
+        model="qwen3:30b-a3b",
+        custom_llm_provider="ollama_chat",
+        **{key: value for key, value in kwargs.items() if key not in ("model", "messages")},
+    )
+    body = transformation.OllamaChatConfig().transform_request(
+        "qwen3:30b-a3b", messages, dict(optional_params), {}, {}
+    )
+
+    assert body["options"]["num_ctx"] == 32768
+    assert "options" not in body["options"]
+    assert body["keep_alive"] == "45m"
 
 
 def test_native_json_adapter_merges_options_and_keep_alive_spec102(monkeypatch):

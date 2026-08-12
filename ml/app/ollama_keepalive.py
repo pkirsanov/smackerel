@@ -200,40 +200,70 @@ def resolve_ollama_request_profile(model: str) -> OllamaRequestProfile:
     )
 
 
-def _apply_ollama_profile(payload: dict[str, Any], *, provider: str, model: str) -> dict[str, Any]:
+_LITELLM_TRANSPORT = "litellm"
+_NATIVE_JSON_TRANSPORT = "native-json"
+
+
+def _place_ollama_profile(
+    result: dict[str, Any], *, profile: OllamaRequestProfile, transport: str
+) -> dict[str, Any]:
+    """Write the resolved profile where the selected transport actually reads it.
+
+    litellm builds the Ollama ``options`` object itself out of every kwarg it
+    does not recognize, so an ``options`` dict handed to litellm arrives as
+    ``options.options``; the daemon then logs ``invalid option provided
+    option=options`` and silently falls back to the model's default context
+    window. Native JSON posts straight to the daemon, which reads
+    ``options.num_ctx``.
+    """
+    if transport == _LITELLM_TRANSPORT:
+        if "options" in result:
+            raise OllamaProfileConfigError(
+                "unsupported_options_kwarg",
+                "Ollama litellm dispatch key=options expected=absent; "
+                "pass Ollama parameters as top-level kwargs so litellm nests them",
+            )
+        result["num_ctx"] = profile.num_ctx
+    else:
+        existing_options = result.get("options")
+        if existing_options is None:
+            options: dict[str, Any] = {}
+        elif isinstance(existing_options, dict):
+            options = dict(existing_options)
+        else:
+            raise OllamaProfileConfigError(
+                "invalid_options",
+                "Ollama request profile key=options expected=object",
+            )
+        options["num_ctx"] = profile.num_ctx
+        result["options"] = options
+    result["keep_alive"] = profile.keep_alive
+    return result
+
+
+def _apply_ollama_profile(
+    payload: dict[str, Any], *, provider: str, model: str, transport: str
+) -> dict[str, Any]:
     result = dict(payload)
     if provider.strip().casefold() != "ollama":
         return result
 
     profile = resolve_ollama_request_profile(model)
-    existing_options = result.get("options")
-    if existing_options is None:
-        options: dict[str, Any] = {}
-    elif isinstance(existing_options, dict):
-        options = dict(existing_options)
-    else:
-        raise OllamaProfileConfigError(
-            "invalid_options",
-            "Ollama request profile key=options expected=object",
-        )
-    options["num_ctx"] = profile.num_ctx
-    result["options"] = options
-    result["keep_alive"] = profile.keep_alive
-    return result
+    return _place_ollama_profile(result, profile=profile, transport=transport)
 
 
 def apply_ollama_profile_to_litellm(kwargs: dict[str, Any], *, provider: str, model: str) -> dict[str, Any]:
     """Copy and profile LiteLLM kwargs without clobbering caller-owned fields."""
-    return _apply_ollama_profile(kwargs, provider=provider, model=model)
+    return _apply_ollama_profile(kwargs, provider=provider, model=model, transport=_LITELLM_TRANSPORT)
 
 
 def apply_ollama_profile_to_native_json(payload: dict[str, Any], *, provider: str, model: str) -> dict[str, Any]:
     """Copy and profile native Ollama JSON without clobbering caller options."""
-    return _apply_ollama_profile(payload, provider=provider, model=model)
+    return _apply_ollama_profile(payload, provider=provider, model=model, transport=_NATIVE_JSON_TRANSPORT)
 
 
 def _apply_resolved_ollama_profile(
-    payload: dict[str, Any], *, profile: OllamaRequestProfile, model: str
+    payload: dict[str, Any], *, profile: OllamaRequestProfile, model: str, transport: str
 ) -> dict[str, Any]:
     if not isinstance(profile, OllamaRequestProfile):
         raise OllamaProfileConfigError(
@@ -258,20 +288,7 @@ def _apply_resolved_ollama_profile(
             "profile_model_mismatch",
             "Ollama network dispatch key=model model=<redacted> expected=resolved profile model match",
         )
-    existing_options = result.get("options")
-    if existing_options is None:
-        options: dict[str, Any] = {}
-    elif isinstance(existing_options, dict):
-        options = dict(existing_options)
-    else:
-        raise OllamaProfileConfigError(
-            "invalid_options",
-            "Ollama request profile key=options expected=object",
-        )
-    options["num_ctx"] = profile.num_ctx
-    result["options"] = options
-    result["keep_alive"] = profile.keep_alive
-    return result
+    return _place_ollama_profile(result, profile=profile, transport=transport)
 
 
 async def dispatch_litellm(
@@ -297,7 +314,9 @@ async def dispatch_litellm(
                 "missing_resolved_profile",
                 "Ollama network dispatch key=profile model=<redacted> expected=resolved OllamaRequestProfile",
             )
-        dispatch_kwargs = _apply_resolved_ollama_profile(kwargs, profile=profile, model=model)
+        dispatch_kwargs = _apply_resolved_ollama_profile(
+            kwargs, profile=profile, model=model, transport=_LITELLM_TRANSPORT
+        )
     else:
         if profile is not None:
             raise OllamaProfileConfigError(
@@ -324,7 +343,9 @@ async def dispatch_ollama_native_json_async(
     client_factory: Any | None = None,
 ) -> Any:
     """Own async native ``/api/generate`` dispatch with mandatory profiling."""
-    dispatch_payload = _apply_resolved_ollama_profile(payload, profile=profile, model=model)
+    dispatch_payload = _apply_resolved_ollama_profile(
+        payload, profile=profile, model=model, transport=_NATIVE_JSON_TRANSPORT
+    )
     if client_factory is None:
         import httpx
 
@@ -343,7 +364,9 @@ def dispatch_ollama_native_json(
     post_fn: Any | None = None,
 ) -> Any:
     """Own synchronous native ``/api/generate`` dispatch with mandatory profiling."""
-    dispatch_payload = _apply_resolved_ollama_profile(payload, profile=profile, model=model)
+    dispatch_payload = _apply_resolved_ollama_profile(
+        payload, profile=profile, model=model, transport=_NATIVE_JSON_TRANSPORT
+    )
     if post_fn is None:
         import requests
 

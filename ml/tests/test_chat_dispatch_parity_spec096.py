@@ -105,7 +105,7 @@ def _expected_ollama_kwargs(req: ChatRequest) -> dict:
         "temperature": 0.0,
         "tools": _translate_tools(req.tools),
         "max_tokens": 256,
-        "options": {"num_ctx": 8192},
+        "num_ctx": 8192,
         "keep_alive": "30m",
     }
 
