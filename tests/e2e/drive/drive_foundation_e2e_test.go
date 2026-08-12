@@ -111,7 +111,26 @@ func TestDriveFoundationE2E_MissingRequiredConfigFailsLoudly(t *testing.T) {
 		"--config", dstYAML,
 		"--env", "dev",
 	)
-	cmd.Env = append(os.Environ(), "TARGET_ENV_GUARD=e2e-038-001")
+	// SMACKEREL_OLLAMA_URL is a PREREQUISITE of this assertion, not part of it.
+	// config.sh validates the Ollama seam before it reaches the drive keys, so
+	// without this the run dies at [F-OLLAMA-URL-MISSING] and the failure this
+	// test exists to observe — the fail-loud on a missing
+	// drive.classification.confidence_threshold — is never reached. The test
+	// would then pass its exit!=0 check for entirely the wrong reason.
+	//
+	// Supplying it explicitly also makes the run hermetic. Inheriting it from
+	// the ambient environment would make the test pass or fail depending on
+	// whether the operator happens to have a .smackerel.local.env, which is the
+	// same host-dependence that already bit the CLI preflight banner.
+	//
+	// The loopback literal matches the established pattern in
+	// tests/integration/drive/drive_config_contract_test.go and
+	// tests/integration/config_validate_test.go, and is policy-clean: loopback
+	// is not operator deployment topology.
+	cmd.Env = append(os.Environ(),
+		"TARGET_ENV_GUARD=e2e-038-001",
+		"SMACKEREL_OLLAMA_URL=http://127.0.0.1:11434",
+	)
 	combined, err := cmd.CombinedOutput()
 	exitCode := 0
 	if err != nil {

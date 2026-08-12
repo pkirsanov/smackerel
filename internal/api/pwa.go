@@ -20,6 +20,62 @@ import (
 // service worker cache invalidates whenever any asset changes.
 var pwaContentHash string
 
+// pwaImmutableCacheControl is the Cache-Control served for byte-locked
+// experience assets, overriding the blanket `no-store` that
+// securityHeadersMiddleware applies to every response.
+//
+// `no-store` is right for HTML and API responses, which carry personal
+// knowledge. It is wrong for these assets: they are build artifacts containing
+// no user data, and re-downloading every one of them on every page load is pure
+// waste.
+//
+// WHY max-age IS BOUNDED RATHER THAN A YEAR. The conventional pairing for
+// immutable assets is `max-age=31536000`, and it is only safe when the URL is
+// content-addressed. These URLs are NOT: the manifest serves stable paths
+// (`/pwa/app.js`, never `/pwa/app.<hash>.js`), so a year-long entry could not be
+// busted by changing the bytes.
+//
+// That would break the service worker's own invalidation. sw.js precaches via
+// `cache.addAll(STATIC_ASSETS)`, which uses the default fetch cache mode and so
+// CONSULTS the HTTP cache rather than bypassing it. With a year-long entry, a
+// newly-activated worker carrying a fresh content-hash CACHE_NAME would refill
+// that new cache from year-old HTTP-cached bytes — the content-hash busting
+// would look correct and do nothing. A bounded max-age keeps the worst case at
+// one hour and preserves the busting mechanism.
+//
+// `immutable` still earns its place: it suppresses revalidation on an explicit
+// user reload within the window, which is the common case this exists to make
+// fast.
+const pwaImmutableCacheControl = "public, max-age=3600, immutable"
+
+// pwaImmutableSuffixes are the file extensions under web/pwa that name an
+// immutable build artifact rather than a document.
+//
+// This is the same distinction the spec-106 experience asset manifest encodes
+// when it locks JS, CSS, SVG, and woff2 while deliberately excluding the HTML
+// entry points (`assistant.html`, `connectors.html`, and the rest). Serving an
+// HTML bootstrap as immutable would pin the document that references every
+// other asset, so a deployment could strand a client on the old page.
+//
+// The manifest is not consulted directly because `internal/web` imports
+// `internal/api` (via handler.go), so reading it from here is an import cycle.
+// Classifying by extension reaches the same set for every locked asset and,
+// unlike a list copied into this file, cannot drift out of step with the
+// contents of the embed FS.
+var pwaImmutableSuffixes = []string{".js", ".css", ".svg", ".woff2"}
+
+// pwaIsImmutableAsset reports whether a post-StripPrefix request path names an
+// immutable build artifact. sw.js is excluded by its caller, which must always
+// revalidate: it is the thing that decides when everything else is stale.
+func pwaIsImmutableAsset(path string) bool {
+	for _, suffix := range pwaImmutableSuffixes {
+		if strings.HasSuffix(path, suffix) {
+			return true
+		}
+	}
+	return false
+}
+
 func init() {
 	h := sha256.New()
 	_ = fs.WalkDir(pwa.StaticFiles, ".", func(path string, d fs.DirEntry, err error) error {
@@ -63,6 +119,11 @@ func pwaFileServer() http.Handler {
 			w.Header().Set("Cache-Control", "no-cache")
 			w.Write(swBytes)
 			return
+		}
+		// The worker itself stays `no-cache` above: it is the thing that decides
+		// when everything else is stale, so it must always be revalidated.
+		if pwaIsImmutableAsset(r.URL.Path) {
+			w.Header().Set("Cache-Control", pwaImmutableCacheControl)
 		}
 		base.ServeHTTP(w, r)
 	})
