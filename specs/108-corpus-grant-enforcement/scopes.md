@@ -978,6 +978,23 @@ And smackerel_auth_corpus_grant_enforcement_mode reports 0
   assertion "does **not** prove `cmd/core` publishes the stage at startup" — and
   it did not, because nothing published it at all.
 
+  **The CARRIER half (surfaces 1 and 2) is evidenced by the same two runs, and
+  is worth stating separately because the gauge alone does not prove it.** The
+  gauge is published in `main.go` directly from the resolved variable, so it
+  would still read 1 even if the stage never reached the router. What proves the
+  carrier is the DIFFERENTIAL behaviour on the same two stacks:
+
+    ENFORCE stack:  ungranted principal → 403 on Tier A and Tier B
+    OBSERVE stack:  the corpus gate never denies (default lane, PASS: go-e2e)
+
+  An ungranted principal can only be refused if `corpusGrantEnforce=true`
+  travelled the whole chain — `resolveCorpusGrantEnforcement` →
+  `buildAPIDeps(..., corpusGrantEnforce)` (surface 1, `cmd/core/wiring.go`) →
+  `Dependencies.CorpusGrantEnforce` (surface 2, `internal/api/health.go`) →
+  the `RequireScope` mount at `internal/api/router.go:132`. A break anywhere in
+  that chain produces a stack that logs ENFORCE, reports gauge 1, and still
+  serves everybody — which is exactly the failure the differential rules out.
+
 ---
 
 ## Scope 03: Gate Mount
@@ -1920,9 +1937,9 @@ contained by an explicit boundary. Collateral cleanup is opt-in and out of scope
   genuinely in ENFORCE, so the signal the rollback decision depends on is itself
   verified.
 
-- [ ] Change Boundary is respected and zero excluded file families were changed
+- [x] Change Boundary is respected and zero excluded file families were changed
 
-  **NOT satisfied — deviation found and recorded rather than waived.**
+  **Deviation found, recorded, RESOLVED, and the closure condition met — not waived.**
 
   **Claim Source:** executed · **Tree:** WORKING TREE, HEAD=3af96a02
   **Executed:** YES
@@ -2057,6 +2074,31 @@ contained by an explicit boundary. Collateral cleanup is opt-in and out of scope
 
   What remains is therefore a bounded execution task with a named owner, not an open planning
   question. The planning decision itself is closed.
+
+  ---
+
+  **CONDITION 2 SATISFIED 2026-08-12 — row now CHECKED.**
+
+  The Scope 02 inbound-reassignment row was executed and closed in commit
+  `2432f605`, with both halves evidenced under Scope 02 rather than inherited
+  from here:
+
+  - **Surfaces 3–4 (gauge + guard):** the gauge was exercised at BOTH stages —
+    ENFORCE → 1, OBSERVE → 0, with the startup log and the gauge agreeing in
+    each — so it tracks the stage rather than a constant. The guard was probed:
+    removing the publish call fails the contract test, restoring it leaves
+    `main.go` byte-identical and green.
+  - **Surfaces 1–2 (carrier plumbing):** proven by the differential, not by the
+    gauge. An ungranted principal is refused 403 on the ENFORCE stack and served
+    on the OBSERVE stack, which can only happen if the stage travelled
+    `resolveCorpusGrantEnforcement` → `buildAPIDeps` (`cmd/core/wiring.go`) →
+    `Dependencies.CorpusGrantEnforce` (`internal/api/health.go`) → the
+    `RequireScope` mount.
+
+  Both stated conditions now hold, so the row closes on the condition the ruling
+  set rather than on the relabelling it explicitly refused. F-108-S03-01 and
+  F-108-S03-02 remain recorded above; closing this row does not retire either
+  finding, and F-108-S03-02 is still routed to `bubbles.design`.
 
   **F-108-S03-02 (blast radius inside an allowed file) — NEW, split out here.** The
   `perUserActive` note above is promoted from an aside to a finding of its own, because it is a
