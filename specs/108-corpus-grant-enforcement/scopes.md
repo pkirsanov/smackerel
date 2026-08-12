@@ -1529,14 +1529,65 @@ contained by an explicit boundary. Collateral cleanup is opt-in and out of scope
   for an id the server had already returned (an earlier revision failed exactly
   that way after a 20s wait).
 
-- [ ] `TP-03-08` canary integration test passes — shared router-bootstrap ordering, session, and ungated-route contracts intact
+- [x] `TP-03-08` canary integration test passes — shared router-bootstrap ordering, session, and ungated-route contracts intact
+  - **Command:** `./smackerel.sh test integration --go-run 'TP_03_08|TP_03_09'`
+  - **Exit Code:** 0
+  - **Evidence:**
+    ```
+    corpus_canary_stress_test.go:91: TP-03-08 canary: ordering + session + 13 ungated routes intact under ENFORCE
+    --- PASS: TestIntegration_CorpusGrantEnforce_RouterBootstrapCanary_TP_03_08 (0.04s)
+    ok  github.com/smackerel/smackerel/tests/integration/graphapi  0.446s
+    ```
 
-  **Not executed in this packet** — same in-flight-integration-run reason as TP-03-02. Unclaimed.
+  Three contracts a shared-group mount can break silently, each asserted
+  separately so a bootstrap regression is attributable without the full sweep:
+  - **Ordering** — an invalid bearer must return 401, not 403. A 403 would mean
+    the gate evaluated a request whose identity was never established.
+  - **Session** — a granted principal still resolves through the shared
+    bootstrap, so the gate did not consume or replace the session.
+  - **Ungated** — all 13 routes design.md §2 deliberately left ungated remain
+    reachable, including the write path and the unauthenticated probes.
 
-- [ ] `TP-03-09` stress test passes — gate adds no p99 latency regression on the corpus route groups under sustained load
+  Non-vacuity: a CONTROL asserts the gate is actually mounted (an ungranted
+  principal IS refused) before any of the three run. Without it all three would
+  pass against an unguarded router.
 
-  **Not executed in this packet.** No stress run was performed, so no latency claim is made in
-  either direction. Unclaimed.
+- [x] `TP-03-09` stress test passes — gate adds no p99 latency regression on the corpus route groups under sustained load
+  - **Command:** `./smackerel.sh test integration --go-run 'TP_03_08|TP_03_09'`
+  - **Exit Code:** 0
+  - **Evidence:**
+    ```
+    TP-03-09 /api/recent?limit=1: OBSERVE p50=903.106µs p95=4.072927ms p99=5.484536ms
+                                | ENFORCE p50=732.405µs p95=2.360715ms p99=5.471536ms | n=320 each
+    TP-03-09 /api/artifact/{id}: OBSERVE p50=770.605µs p95=4.369529ms p99=7.910352ms
+                                | ENFORCE p50=600.204µs p95=2.246515ms p99=6.26794ms | n=320 each
+    --- PASS: TestIntegration_CorpusGrantEnforce_GateAddsNoP99Regression_TP_03_09 (0.25s)
+        --- PASS: .../api/recent?limit=1 (0.13s)
+        --- PASS: .../api/artifact/tp0302-canary-artifact-identifier (0.11s)
+    ok  github.com/smackerel/smackerel/tests/integration/graphapi  0.446s
+    ```
+
+  Same router, same load, same principal, with the STAGE as the only difference,
+  so any delta is attributable to `RequireScope` + `Observe` rather than to
+  environment differences between two separately-built stacks.
+
+  Two budgets, because they answer different questions. p50 is the attributable
+  one — at the median, scheduler and GC noise cancel, so the median delta IS the
+  gate's per-request cost (budget 5ms). p99 in a containerised runner at n=320
+  is dominated by tail noise and is kept as a loose REGRESSION guard (budget
+  25ms), not as a measurement. An earlier revision asserted p99 ONLY and
+  recorded a 13.9ms delta on one run and ~0ms on the next against the same code
+  — evidence that a p99-only claim here would be both weaker and flakier.
+
+  Measured result: ENFORCE p50 is BELOW OBSERVE on both routes and p99 is
+  effectively identical, i.e. the gate's cost is under the measurement floor.
+  The honest claim is "no detectable regression", not "exactly zero cost".
+
+  Non-vacuity: a CONTROL asserts the ENFORCE arm genuinely refuses an ungranted
+  principal before any timing is taken. Without it the test could compare two
+  identical OBSERVE routers and "prove" zero overhead for a gate that was never
+  mounted. Refused requests are counted as failures and fail the run, so the
+  allow-path latency is never contaminated by denial latency.
 
 - [x] `TP-03-10` regression e2e-api test passes — enforcement across both tiers, denial parity, documented bypasses, and rollback are permanently protected
   - **Command:** `./smackerel.sh test e2e` (phase `go-e2e-corpus-enforce`)
