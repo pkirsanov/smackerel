@@ -2644,10 +2644,55 @@ ok      github.com/smackerel/smackerel/internal/auth    0.030s
   (line 108), so a partial mint cannot slip through alongside an error.
 - [ ] `TP-04-02` integration test passes — Telegram corpus command under ENFORCE has an operator-actionable outcome
   - **UNCHECKED:** integration tier not run by this pass; the concurrent run that did execute ended `INTEGRATION_EXIT=1` with `tests/integration [build failed]` (see the Consumer Impact Sweep item).
-- [ ] `TP-04-03` integration test passes — token rotation (not a flag flip) grants a daily user access
-  - **UNCHECKED:** integration tier not run by this pass; same build failure blocks the package.
-- [ ] `TP-04-04` integration test passes — extension outcome tracks its principal; no extension-specific grant
-  - **UNCHECKED:** integration tier not run by this pass; same build failure blocks the package.
+- [x] `TP-04-03` integration test passes — token rotation (not a flag flip) grants a daily user access
+  - **Command:** `./smackerel.sh test integration --go-run 'TP_04_03|TP_04_04|TP_04_06'`
+  - **Exit Code:** 0
+  - **Evidence:**
+    ```
+    --- PASS: TestIntegration_CorpusGrant_RotationGrantsDailyUserAccess_TP_04_03 (0.03s)
+    ok  github.com/smackerel/smackerel/tests/integration/graphapi  0.255s
+    ```
+
+  ONE router, built once at ENFORCE and never rebuilt, so "no feature-flag
+  change" is a property of the test's construction rather than a claim in prose.
+  The daily user is refused, the SAME principal id is rotated to carry
+  `corpus:read` ALONGSIDE its existing `annotation:edit`, and the same route then
+  admits it.
+
+  Two non-vacuity controls: the before-token carries a REAL product scope rather
+  than an empty list (an empty list would prove only that an unscoped token is
+  refused), and the rotation ADDS to the grant set rather than replacing it — a
+  rotation that silently dropped the original scope would "fix" corpus access by
+  breaking the annotation surface.
+
+  The sharpest assertion is the third: the PRE-rotation token must STILL be
+  refused afterwards. If the router keyed access off the user id rather than the
+  presented token's claims, the old bearer would start working the moment any
+  token for that principal carried the grant — a privilege leak the happy path
+  cannot see.
+- [x] `TP-04-04` integration test passes — extension outcome tracks its principal; no extension-specific grant
+  - **Command:** `./smackerel.sh test integration --go-run 'TP_04_03|TP_04_04|TP_04_06'`
+  - **Exit Code:** 0
+  - **Evidence:**
+    ```
+    --- PASS: TestIntegration_CorpusGrant_ExtensionTracksItsPrincipal_TP_04_04 (0.01s)
+    ok  github.com/smackerel/smackerel/tests/integration/graphapi  0.255s
+    ```
+
+  The risk is an extension carve-out — a special scope, or a header the
+  middleware treats as privileged — letting the extension read the corpus for a
+  user who cannot. The assertion is therefore INDISTINGUISHABILITY: for the same
+  ungranted principal, the extension request and the PWA request must match in
+  status AND body, byte for byte. Comparing bodies rather than status alone is
+  what would catch a branch that refuses with a different envelope.
+
+  The guard cuts both ways: a granted principal must also be ADMITTED through the
+  extension path, since an extension blanket-denied regardless of its principal
+  would equally "track" nothing.
+
+  The scope registry is asserted directly as well, because a behavioural match
+  today can be undone tomorrow by registering an extension-specific corpus
+  surface.
 - [ ] `TP-04-05` e2e-api test passes — all six design.md §5 compatibility rows exercised with their recorded outcome
   - **UNCHECKED:** `./smackerel.sh test e2e` deliberately not run — red on 5 unrelated pre-existing defects.
 - [x] `TP-04-08` unit test passes — the minter's hardcoded scope list is gone and the minted claim equals the mapped principal's persisted grants
@@ -2783,8 +2828,26 @@ INTEGRATION_EXIT=1
   - **UNCHECKED:** the ≥14-day window has not been run, and criterion (b) is presently satisfiable only by operator attestation (`F-108-COVERAGE-LABEL-01` unresolved). Neither exists yet.
 - [ ] **Ratified proactive rotation (item 9)** complete: every principal whose grants are unknowable has been rotated with a deliberately-issued grant set **before** Scope 05 flips the owning-train flag, so no `unknown` grant remains in the pre-flip roster. Recorded as an operator action, not inferred from telemetry
   - **UNCHECKED:** operator action against a live deployment; no rotation was performed or recorded by this pass.
-- [ ] `TP-04-06` canary integration test passes — shared session/token bootstrap fixtures keep the ungranted daily-user negative case intact
-  - **UNCHECKED:** integration tier not run by this pass; the `tests/integration` package does not currently build.
+- [x] `TP-04-06` canary integration test passes — shared session/token bootstrap fixtures keep the ungranted daily-user negative case intact
+  - **Command:** `./smackerel.sh test integration --go-run 'TP_04_03|TP_04_04|TP_04_06'`
+  - **Exit Code:** 0
+  - **Evidence:**
+    ```
+    --- PASS: TestIntegration_CorpusGrant_BootstrapFixtureCanary_TP_04_06 (0.01s)
+    ok  github.com/smackerel/smackerel/tests/integration/graphapi  0.255s
+    ```
+
+  TP-04-03's negative case depends on a daily-user fixture that genuinely lacks
+  `corpus:read`. If a future change widened that fixture's grant set, the
+  negative case would silently stop testing anything while still passing — the
+  precise failure mode a canary exists to catch.
+
+  Three assertions: the daily-user fixture is still refused; `dailyUserGrants`
+  itself still does not contain `corpus:read` (asserted against the roster
+  directly, so a failure names the CAUSE rather than the symptom, and because
+  §18 decision 2 makes widening it permanently forbidden); and the operator
+  fixture is still ADMITTED, so the canary cannot pass merely because everything
+  is being refused.
 - [ ] `TP-04-07` regression e2e-api test passes — grant derivation, the adversarial negative case, the token-rotation grant path, and extension grant inheritance are permanently protected
   - **UNCHECKED:** `./smackerel.sh test e2e` deliberately not run (red on 5 unrelated pre-existing defects), and no such regression test exists in the tree yet.
 - [ ] Independent canary suite for shared fixture/bootstrap contracts passes before broad suite reruns
