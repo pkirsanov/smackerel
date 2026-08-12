@@ -963,7 +963,22 @@ func (d *Dependencies) bearerAuthMiddleware(next http.Handler) http.Handler {
 		// Branch 5 first — empty AuthToken AND no per-user surface is
 		// the dev-bypass lever; production-mode is the defense-in-depth
 		// 401 (the loader already failed earlier; we belt-and-brace).
-		perUserActive := d.Environment == "production" && d.AuthConfig.Enabled
+		//
+		// Activation is a CAPABILITY question, not an environment-name
+		// question: per-user PASETO can be verified exactly when auth is on
+		// AND a verification key is actually configured. Keying it on
+		// `Environment == "production"` made the entire per-user auth and
+		// scope-gating surface unreachable anywhere else, so it could only be
+		// exercised in production — the one place you least want first
+		// contact. It also created the untested code path that
+		// no-runtime-env-detection exists to prevent.
+		//
+		// This is behaviour-preserving for every shipped configuration:
+		// production requires a signing key at startup (so it stays active),
+		// and dev/test ship an empty keypair (so they stay inactive). Only a
+		// deployment that has BOTH auth enabled and a real key changes — and
+		// that is precisely the configuration that can verify.
+		perUserActive := d.AuthConfig.Enabled && d.AuthVerifyOptions.ActivePublicKey != ""
 
 		if d.AuthToken == "" && !perUserActive {
 			if d.Environment == "production" {
