@@ -319,7 +319,7 @@ def test_do_domain_extract_applies_ollama_profile_spec102(monkeypatch):
         )
 
     assert result["success"] is True
-    assert captured["options"]["num_ctx"] == 8192
+    assert captured["num_ctx"] == 8192
     assert captured["keep_alive"] == "30m"
     assert captured["model"] == "ollama_chat/gemma4:26b"
 

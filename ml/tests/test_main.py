@@ -182,7 +182,7 @@ def test_warmup_domain_model_applies_ollama_profile_spec102(monkeypatch):
     )
 
     assert captured["model"] == "ollama_chat/gemma4:26b"
-    assert captured["options"]["num_ctx"] == 8192
+    assert captured["num_ctx"] == 8192
     assert captured["keep_alive"] == "30m"
     assert captured["max_tokens"] == 1
 

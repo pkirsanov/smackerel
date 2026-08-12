@@ -955,7 +955,7 @@ def test_process_content_applies_ollama_profile_spec102(monkeypatch):
 
     assert result["success"] is True
     assert result["result"]["artifact_type"] == "note"
-    assert captured["options"]["num_ctx"] == 32768
+    assert captured["num_ctx"] == 32768
     assert captured["keep_alive"] == "30m"
     assert captured["think"] is False
     assert captured["max_tokens"] == 1234

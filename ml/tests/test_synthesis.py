@@ -359,7 +359,7 @@ def test_handle_extract_schema_repair_retains_profile_and_sums_tokens(monkeypatc
         assert request["response_format"] == {"type": "json_object"}
         assert request["think"] is False
         assert request["keep_alive"] == "30m"
-        assert request["options"]["num_ctx"] == 32768
+        assert request["num_ctx"] == 32768
 
     assert repair["messages"][: len(first["messages"])] == first["messages"]
     assert SYNTHESIS_ARTIFACT_CONTENT in first["messages"][1]["content"]
@@ -802,9 +802,11 @@ def test_handle_extract_threads_sst_num_ctx_spec102(monkeypatch):
                 )
             )
 
-    assert "options" in captured, f"completion_kwargs must carry options: {captured}"
-    assert captured["options"].get("num_ctx") == 8192, (
-        f"SCN-102-C3-01: options.num_ctx must be the SST per-model value 8192, got: {captured.get('options')}"
+    assert "options" not in captured, (
+        f"litellm builds the Ollama options object itself; a caller-sent one is discarded: {captured}"
+    )
+    assert captured.get("num_ctx") == 8192, (
+        f"SCN-102-C3-01: num_ctx must be the SST per-model value 8192, got: {captured.get('num_ctx')}"
     )
     # The keep_alive threading (F2) coexists — num_ctx is additive, not a clobber.
     assert captured.get("keep_alive")
@@ -861,6 +863,6 @@ def test_handle_crosssource_applies_ollama_profile_spec102(tmp_path, monkeypatch
 
     assert result["has_genuine_connection"] is True
     assert captured["model"] == "ollama_chat/qwen3:30b-a3b"
-    assert captured["options"]["num_ctx"] == 32768
+    assert captured["num_ctx"] == 32768
     assert captured["keep_alive"] == "30m"
     assert captured["think"] is False

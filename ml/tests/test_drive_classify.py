@@ -127,6 +127,6 @@ def test_classify_drive_file_applies_ollama_profile_spec102():
 
     assert result["success"] is True
     assert captured["model"] == "ollama_chat/qwen3:30b-a3b"
-    assert captured["options"]["num_ctx"] == 32768
+    assert captured["num_ctx"] == 32768
     assert captured["keep_alive"] == "30m"
     assert captured["think"] is False

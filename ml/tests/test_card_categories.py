@@ -136,7 +136,7 @@ def test_extract_card_categories_applies_ollama_profile_spec102(monkeypatch) -> 
         result = asyncio.run(extract_card_categories(request))
 
     assert result["card_id"] == "discover-it"
-    assert captured["options"]["num_ctx"] == 32768
+    assert captured["num_ctx"] == 32768
     assert captured["keep_alive"] == "30m"
     assert captured["think"] is False
     assert captured["response_format"] == {"type": "json_object"}
