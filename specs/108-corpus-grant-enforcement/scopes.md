@@ -923,7 +923,7 @@ And smackerel_auth_corpus_grant_enforcement_mode reports 0
   | `cmd/core/main.go` — `metrics.SetCorpusGrantEnforcementMode(...)` (commit `15394e84`) | `SCN-108-O02` already asserts the mode gauge "reports 0", and this scope's Implementation Plan owns all three `smackerel_auth_corpus_grant_*` metrics. Publishing the resolved stage *is* the delivery of a metric this scope declares |
   | `cmd/core/corpus_grant_gauge_contract_test.go` | The regression guard for the row above; a guard follows its subject |
   | `cmd/core/wiring.go` — `buildAPIDeps(..., corpusGrantEnforce bool)` | This scope's Implementation Plan puts the single resolution point in `cmd/core` wiring; carrying that resolved value to the API layer is that same plumbing, and this scope is named "Observe-Stage **Plumbing**" |
-  | `internal/api/health.go` — `Dependencies.CorpusGrantEnforce` (L190) | The field exists to construct the OBSERVE middleware — `NewCorpusGrantGate(deps.CorpusGrantEnforce)` at `internal/api/router.go:132` \u2014 which this scope's Implementation Plan owns ("Mounted in **both** stages") |
+  | `internal/api/health.go` — `Dependencies.CorpusGrantEnforce` (L190) | The field exists to construct the OBSERVE middleware — `NewCorpusGrantGate(deps.CorpusGrantEnforce)` at `internal/api/router.go:132` — which this scope's Implementation Plan owns ("Mounted in **both** stages") |
 
   **This is not new work discovered elsewhere; it is a gap this scope already recorded against
   itself.** The `TP-02-05` item above states in its own words that its gauge assertion "does
