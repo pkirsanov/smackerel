@@ -344,8 +344,20 @@ And auth.AuthorizeGrant for that session with required "corpus:read" returns aut
   `corpus:read` validates without an unknown-surface error and `AuthorizeGrant` returns
   authorized. The run exited 0 with zero `FAIL` lines across every package.
 
-- [ ] `TP-01-03` integration test passes — minted `corpus:read` token round-trips to a granted session
-  <!-- UNPROVEN: the TP-01-03 integration test has not been written or run; no ./smackerel.sh test integration evidence exists for this scope. -->
+- [x] `TP-01-03` integration test passes — minted `corpus:read` token round-trips to a granted session
+  - **Command:** `./smackerel.sh test integration --go-run 'TP_01_03'`
+  - **Exit Code:** 0
+  - **Evidence:** `--- PASS: TestCorpusGrant_TokenRoundTripsToAGrantedSession_TP_01_03 (0.02s)`
+    and `--- PASS: TestCorpusGrant_UngrantedPrincipalIsDeniedAndRecordedAsNone_TP_01_03 (0.01s)`
+    in `tests/integration/corpus_grant_roundtrip_test.go`. The test drives the real path
+    against the ephemeral stack's PostgreSQL: `IssueToken` → `VerifyAndParse` (the step
+    `bearerAuthMiddleware` performs) → `Session` → `GateGlobalCorpusRead`, then reads back
+    `GrantsForPrincipal` so the server's RECORDED grant must agree with the token's claim.
+    The ungranted principal is the anti-tautology control: it is persisted with a non-nil
+    EMPTY scope set and must be BOTH denied at the gate AND reported `Recorded=true` with
+    no corpus grant, which pins the NULL-vs-`'{}'` distinction spec.md §7 forbids
+    conflating. If the gate ever authorized unconditionally, the positive case would still
+    pass and only this one would fail.
 
 - [x] `internal/api/auth_surface_contract_test.go` surface list updated in the same change (no stale contract)
 
@@ -379,17 +391,47 @@ And auth.AuthorizeGrant for that session with required "corpus:read" returns aut
   The contract test was updated in the same working-tree change as `scopes.go`, so the surface
   inventory it asserts is not stale.
 
-- [ ] `TP-01-04` regression e2e-api test passes — `corpus` surface registration and `corpus:read` minting are permanently protected against silent removal
-  <!-- UNPROVEN: not run; the e2e suite currently exits 1 for reasons unrelated to this scope (spec 106 asset headers, BUG-069-004 assistant dedup, a drive-harness env-propagation gap, BUG-031-004), and a red baseline means this item cannot be honestly closed yet. -->
+- [x] `TP-01-04` regression e2e-api test passes — `corpus` surface registration and `corpus:read` minting are permanently protected against silent removal
+  - **Command:** `./smackerel.sh test e2e --go-run 'TP_01_04'`
+  - **Exit Code:** 0
+  - **Evidence:** `--- PASS: TestE2E_Spec108_CorpusSurfaceStaysRegistered_TP_01_04 (0.03s)`,
+    `--- PASS: TestE2E_Spec108_CorpusGrantIsNotInTheDailyDefaultSet_TP_01_04 (0.00s)`,
+    `--- PASS: TestE2E_Spec108_CorpusTokenStillMintsAndAuthorizes_TP_01_04 (0.00s)` in
+    `tests/e2e/auth/spec108_corpus_surface_regression_test.go`. The prior UNPROVEN note
+    blamed five pre-existing e2e defects; all five were fixed earlier in this session
+    (commits `49dc5b29`, `7e6b4d72`), so the baseline is green and the row is now
+    honestly closeable. The suite probes live-stack health first, so the remaining
+    assertions cannot pass against a dead stack.
 
-- [ ] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior — **Phase:** regression (`TP-01-04`, `./smackerel.sh test e2e`)
-  <!-- UNPROVEN: depends on TP-01-04, which has not been written or run. -->
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior — **Phase:** regression (`TP-01-04`, `./smackerel.sh test e2e`)
+  - **Command:** `./smackerel.sh test e2e --go-run 'TP_01_04'`
+  - **Exit Code:** 0
+  - **Evidence:** the three PASS lines above cover SCN-108-P01 (surface stays registered,
+    `GrantGlobalCorpusRead == "corpus:read"`, validates against the closed registry) and
+    SCN-108-P02 (mint → verify → gate authorizes). Each carries its adversarial control:
+    an unscoped token MUST be denied and a wildcard MUST NEVER be honored, so a gate that
+    authorized unconditionally fails rather than passing quietly. The daily-vs-operator
+    invariant is asserted in both directions — `corpus:read` absent from the daily default
+    set (else the Scope 03 gate is a no-op) and present for the operator.
 
-- [ ] Broader E2E regression suite passes — **Phase:** regression (`./smackerel.sh test e2e` exits 0; no previously-passing test regresses)
-  <!-- UNPROVEN: the broader e2e suite currently exits 1 on pre-existing unrelated failures, so no green→red delta can be attributed or cleared yet. -->
+- [x] Broader E2E regression suite passes — **Phase:** regression (`./smackerel.sh test e2e` exits 0; no previously-passing test regresses)
+  - **Command:** `./smackerel.sh test e2e`
+  - **Exit Code:** 0
+  - **Evidence:** `E2E_EXIT=0` with `--- FAIL` count `0` and 417 `--- PASS`; shell tier
+    `Total: 36 / Passed: 36 / Failed: 0`. The prior UNPROVEN note said the suite exited 1
+    on pre-existing unrelated failures — those five defects were fixed earlier in this
+    session (`49dc5b29` PWA immutable-asset headers + drive fail-loud harness, `7e6b4d72`
+    assistant short-circuit turn identity), so the baseline is green and a green→red delta
+    can now actually be attributed. No previously-passing test regressed.
 
-- [ ] Build Quality Gate: `./smackerel.sh check`, `./smackerel.sh lint`, `./smackerel.sh format --check` clean with zero warnings; no TODO/stub/default introduced
-  <!-- UNPROVEN: check/lint/format were not run in this recording pass; only the scoped unit command was executed. -->
+- [x] Build Quality Gate: `./smackerel.sh check`, `./smackerel.sh lint`, `./smackerel.sh format --check` clean with zero warnings; no TODO/stub/default introduced
+  - **Command:** `./smackerel.sh check && ./smackerel.sh format --check && ./smackerel.sh lint`
+  - **Exit Code:** 0, 0, 0
+  - **Evidence:** `CHECK=0`, `FMT=0` with `78 files already formatted`, `LINT=0`. The two
+    new test files introduce no TODO, stub, default or fallback; the fail-loud
+    `PersistToken` contract (`requires TokenID, UserID, KeyID, HashedToken, IssuedBy,
+    IssuedSource`) rejected the first fixture draft, which is the NO-DEFAULTS policy
+    working as intended rather than an obstacle to route around.
 
 ---
 
@@ -754,17 +796,45 @@ And smackerel_auth_corpus_grant_enforcement_mode reports 0
   <!-- Also note the tier: the mount is proven by a route-manifest assertion over an in-process router, not by a live end-to-end request. -->
 
 
-- [ ] `TP-02-06` regression e2e-api test passes — fail-loud config resolution and OBSERVE-stage counting are permanently protected
-  <!-- UNPROVEN: `./smackerel.sh test e2e` was not executed in this pass. Additionally the e2e lane is currently red on 5 unrelated pre-existing defects (spec 106 asset headers; 3 assistant transport/dedup failures under BUG-069-004; a drive-harness env-propagation gap, BUG-031-004), so a green claim here is not available even on re-run until those are resolved. -->
+- [x] `TP-02-06` regression e2e-api test passes — fail-loud config resolution and OBSERVE-stage counting are permanently protected
+  - **Command:** `./smackerel.sh test e2e`
+  - **Exit Code:** 0
+  - **Evidence:** `E2E_EXIT=0`, `--- FAIL` count `0`, 417 `--- PASS`, shell `Passed: 36 / Failed: 0`.
+    The prior note gave two blockers: the suite was not executed, and the lane was red on
+    five unrelated pre-existing defects. Both are cleared — the five were fixed in this
+    session (`49dc5b29`, `7e6b4d72`) and the suite has now been executed green, so the
+    TP-02-06 regression ran inside a genuinely green lane rather than being excused by it.
 
-- [ ] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior — **Phase:** regression (`TP-02-06`, `./smackerel.sh test e2e`)
-  <!-- UNPROVEN: depends on TP-02-06, which was not executed in this pass. (The former "gated behind the unmounted gate" blocker no longer applies — Scope 03 has since mounted the middleware at `router.go:132`.) -->
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior — **Phase:** regression (`TP-02-06`, `./smackerel.sh test e2e`)
+  - **Command:** `./smackerel.sh test e2e`
+  - **Exit Code:** 0
+  - **Evidence:** `E2E_EXIT=0`, `--- FAIL` count `0`, 417 `--- PASS`. The dependency this
+    row named (TP-02-06) is now executed green, and the earlier "gated behind the unmounted
+    gate" blocker had already lapsed once Scope 03 mounted the middleware at
+    `internal/api/router.go:132`.
 
-- [ ] Broader E2E regression suite passes — **Phase:** regression (`./smackerel.sh test e2e` exits 0; no previously-passing test regresses)
-  <!-- UNPROVEN: not executed in this pass; the suite is known-red on the 5 pre-existing defects listed above, so it cannot currently exit 0. -->
+- [x] Broader E2E regression suite passes — **Phase:** regression (`./smackerel.sh test e2e` exits 0; no previously-passing test regresses)
+  - **Command:** `./smackerel.sh test e2e`
+  - **Exit Code:** 0
+  - **Evidence:** `E2E_EXIT=0`, `--- FAIL` count `0`, 417 `--- PASS`, shell tier
+    `Total: 36 / Passed: 36 / Failed: 0`. The five pre-existing defects that made this
+    unattainable were fixed in this session, so the suite exits 0 on its own merits.
 
-- [ ] Live-category tests emit telemetry tagged `env=test*` only; no write to prod monitoring (R-108-O6, G115)
-  <!-- UNPROVEN, with the blocker restated accurately: a live-category run DID execute in this pass (`~/i5.log`, INTEGRATION_EXIT=0) entirely against the ephemeral `smackerel-test` compose project, whose volumes (`smackerel-test-postgres-data`, `-nats-data`, `-ollama-data`) are Removed at teardown — so no prod container participated. That is evidence for the "no write to prod monitoring" half only. The `env=test*` half remains UNPROVEN: this lane's corpus-grant telemetry lives in an in-process Prometheus registry read via `testutil`/`DefaultGatherer` and is never exported, so there is no emitted `env`-labelled series to inspect, and the G115 `env-pollution-scan.sh` was not run in this recording pass. -->
+- [x] Live-category tests emit telemetry tagged `env=test*` only; no write to prod monitoring (R-108-O6, G115)
+  - **Command:** `bash .github/bubbles/scripts/env-pollution-scan.sh "$(pwd)"`
+  - **Exit Code:** 0
+  - **Evidence:** `[env-pollution-scan] env-pollution-scan PASSED (no test-to-prod-surface
+    writes detected)`. Stated precisely, because the two halves are proven differently.
+    "No write to prod monitoring" is proven structurally, not merely unobserved: the
+    corpus-grant metrics register on the pull-based default registry
+    (`internal/metrics/auth.go:423` `prometheus.MustRegister`), and a repo-wide scan for
+    `pushgateway|push.New|remote_write` across `tests/` and `internal/` returns EMPTY —
+    so a test run has no outbound path to any monitoring system, and the live-category run
+    executed entirely against the ephemeral `smackerel-test` compose project whose volumes
+    are removed at teardown. The `env=test*` half is discharged by that same absence
+    rather than by inspecting a label: nothing is exported, so there is no `env`-labelled
+    series that could carry a prod tag. This is NOT a claim that `env=test*` labels were
+    observed — none exist to observe.
 
 - [x] Build Quality Gate: `./smackerel.sh check`, `./smackerel.sh lint`, `./smackerel.sh format --check` clean with zero warnings; no TODO/stub/default introduced
 
@@ -1481,10 +1551,19 @@ contained by an explicit boundary. Collateral cleanup is opt-in and out of scope
   **Not executed in this packet.** `./smackerel.sh test e2e` is currently red on five unrelated
   pre-existing defects, so no green→red drift claim is made in either direction.
 
-- [ ] Live-category tests emit telemetry tagged `env=test*` only; no write to prod monitoring (R-108-O6, G115)
-
-  **Not evidenced in this packet.** No live-category run (integration / e2e / stress) was executed
-  here, so there is no telemetry emission to inspect.
+- [x] Live-category tests emit telemetry tagged `env=test*` only; no write to prod monitoring (R-108-O6, G115)
+  - **Command:** `bash .github/bubbles/scripts/env-pollution-scan.sh "$(pwd)"`
+  - **Exit Code:** 0
+  - **Evidence:** `[env-pollution-scan] env-pollution-scan PASSED (no test-to-prod-surface
+    writes detected)`. A live-category run WAS executed for this scope in this pass
+    (`./smackerel.sh test integration`, exit 0, 1971 PASS / 0 FAIL) against the ephemeral
+    `smackerel-test` compose project. "No write to prod monitoring" is structural: the
+    corpus-grant metrics register on the pull-based default registry
+    (`internal/metrics/auth.go:423`), and a repo-wide scan for
+    `pushgateway|push.New|remote_write` across `tests/` and `internal/` returns EMPTY, so
+    no outbound path exists. The `env=test*` half is discharged by that same absence, not
+    by observing a label — nothing is exported, so no `env`-labelled series exists that
+    could carry a prod tag.
 
 - [x] Build Quality Gate: `./smackerel.sh check`, `./smackerel.sh lint`, `./smackerel.sh format --check` clean with zero warnings; no TODO/stub/default introduced
 
@@ -2105,8 +2184,17 @@ INTEGRATION_EXIT=1
   - **UNCHECKED:** e2e deliberately not run, and no scenario-specific regression test for SCN-108-E01/E02/E03/E04 exists in the tree.
 - [ ] Broader E2E regression suite passes — **Phase:** regression (`./smackerel.sh test e2e` exits 0; no previously-passing test regresses)
   - **UNCHECKED:** e2e deliberately not run — red on 5 unrelated pre-existing defects.
-- [ ] Live-category tests emit telemetry tagged `env=test*` only; no write to prod monitoring (R-108-O6, G115)
-  - **UNCHECKED:** no live-category run was performed by this pass, so there is nothing to inspect for telemetry tagging.
+- [x] Live-category tests emit telemetry tagged `env=test*` only; no write to prod monitoring (R-108-O6, G115)
+  - **Command:** `bash .github/bubbles/scripts/env-pollution-scan.sh "$(pwd)"`
+  - **Exit Code:** 0
+  - **Evidence:** `[env-pollution-scan] env-pollution-scan PASSED (no test-to-prod-surface
+    writes detected)`. A live-category run WAS executed in this pass
+    (`./smackerel.sh test integration`, exit 0) against the ephemeral `smackerel-test`
+    compose project. "No write to prod monitoring" is structural: the corpus-grant metrics
+    register on the pull-based default registry (`internal/metrics/auth.go:423`), and a
+    repo-wide scan for `pushgateway|push.New|remote_write` across `tests/` and `internal/`
+    returns EMPTY. The `env=test*` half is discharged by that absence rather than by
+    observing a label — nothing is exported, so no `env`-labelled series exists to mis-tag.
 - [x] Build Quality Gate: `./smackerel.sh check`, `./smackerel.sh lint`, `./smackerel.sh format --check` clean with zero warnings; no TODO/stub/default introduced
 
 **Executed:** YES (2026-08-11, tree `<repo-root>`)
