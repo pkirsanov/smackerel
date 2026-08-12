@@ -1140,7 +1140,7 @@ contained by an explicit boundary. Collateral cleanup is opt-in and out of scope
 | TP-03-01 | unit | `internal/auth/browser_session_policy_test.go` | `GateGlobalCorpusRead` denies an empty scope claim, denies a `*` wildcard claim, allows an explicit `corpus:read` claim, and returns a `CorpusDecision` carrying no content/count/label (design T1) | `./smackerel.sh test unit` |
 | TP-03-02 | integration | `internal/api` against the ephemeral test stack | ENFORCE: an ungranted principal receives **403** on all sixteen route groups; `smackerel_auth_scope_rejected_total` increments; mode gauge reports `1` (SCN-108-G01, design T4 enforce half) | `./smackerel.sh test integration` |
 | TP-03-03 | integration | same | Shared-token and bootstrap sessions pass under ENFORCE via the documented `RequireScope` source switch — the bypass is asserted, not assumed (SCN-108-G02, design T5) | `./smackerel.sh test integration` |
-| TP-03-04 | integration | `internal/api/auth_surface_contract_test.go` | **ADVERSARIAL (design T8):** real router + ENFORCE + empty-scope fixture principal → 403 on all **sixteen** groups, AND set-equality of the canonical sixteen against the router's mounted corpus group. Fails against current `main`; fails if the `RequireScope` mount is deleted, a route leaves the group, the stage defaults to OBSERVE, or a seventeenth corpus route is registered ungated (SCN-108-G03) | `./smackerel.sh test integration` |
+| TP-03-04 | unit | `internal/api/router_corpus_gate_test.go` | **ADVERSARIAL (design T8):** real router + ENFORCE + empty-scope fixture principal → 403 on all **sixteen** groups, AND set-equality of the canonical sixteen against the router's mounted corpus group. Fails against current `main`; fails if the `RequireScope` mount is deleted, a route leaves the group, the stage defaults to OBSERVE, or a seventeenth corpus route is registered ungated (SCN-108-G03). **Tier corrected from `integration` to `unit`:** the assertion runs an in-process `httptest` router with no live stack, and `internal/api` is not in the integration lane (`go-integration.sh` covers `./tests/integration/...`, `./internal/notification/...`, `./internal/assistant/...`, `./internal/cardrewards/...`, `./tests/eval/...`). Labelling an in-process test `integration` is a Test Type Integrity violation; the live-stack half of this behaviour is covered by TP-03-06/TP-03-07 | `./smackerel.sh test unit` |
 | TP-03-05 | integration | `internal/api` + `cmd/core` restart harness | Stage flip is symmetric and idempotent: ENFORCE → OBSERVE restores 200 for previously denied principals and resumes counting, with no rebuild invoked (SCN-108-C04) | `./smackerel.sh test integration` |
 | TP-03-06 | e2e-api | `./smackerel.sh test e2e` | Full stack, real Postgres: a granted operator token reads `/api/search` and `/api/export`; an ungranted daily-user token is refused on both; the refusal body contains no artifact id, title, or count (SCN-108-G01, design T6) | `./smackerel.sh test e2e` |
 | TP-03-07 | e2e-api | same | Denial parity: a denied `/api/artifact/{id}` for a real id and for a random id produce byte-identical responses — no existence oracle (SCN-108-D01, design T7) | `./smackerel.sh test e2e` |
@@ -1148,7 +1148,7 @@ contained by an explicit boundary. Collateral cleanup is opt-in and out of scope
 | TP-03-09 | stress | `internal/api` gated-route stress harness | The gate sits on the hot read path of all sixteen corpus route groups, so it is SLA-sensitive. Under sustained concurrent load on `/api/search` and `/api/artifact/{id}`: added per-request latency from `RequireScope` + `Observe` stays within the documented budget, p99 does not regress against the ungated baseline, and no allocation or lock-contention regression appears in the middleware chain | `./smackerel.sh test stress` |
 | TP-03-10 | e2e-api | `./smackerel.sh test e2e` | **Regression E2E** — persistent scenario-specific regression for SCN-108-G01, SCN-108-D01, SCN-108-G02, SCN-108-G03, SCN-108-G04, SCN-108-G05 and SCN-108-C04 against the live stack: ENFORCE still denies ungranted principals on all **sixteen** groups, denials stay byte-identical, documented bypasses still pass, Tier B stays gated, and ENFORCE→OBSERVE rollback still restores access. Fails if the gate is unmounted, a corpus route escapes the gated group, or the stage machine regains a silent default; also proves the broader e2e suite shows no green→red drift | `./smackerel.sh test e2e` |
 | TP-03-11 | integration | `internal/api` against the ephemeral test stack | **Tier B (§18 decision 5):** with a non-nil intelligence engine and ENFORCE, an ungranted principal receives **403** on each of the eight Phase-5 route groups and no derived corpus signal is returned; a principal holding `corpus:read` receives 200 from the same eight; the Tier B denial body is the same shape as a Tier A denial (SCN-108-G04) | `./smackerel.sh test integration` |
-| TP-03-12 | integration | `internal/api/auth_surface_contract_test.go` | **ADVERSARIAL (conditional-registration hazard):** the T8 set-equality assertion is evaluated against a router built with a **non-nil** `deps.IntelligenceEngine`, so all sixteen groups are actually registered. Fails if the Tier B block is registered outside the gated group, and fails if a nil engine is substituted to make the sixteen-value set-equality trivially satisfiable — the vacuous-pass path that would let eight corpus-derived routes ship ungated (SCN-108-G05) | `./smackerel.sh test integration` |
+| TP-03-12 | unit | `internal/api/router_corpus_gate_test.go` | **ADVERSARIAL (conditional-registration hazard):** the T8 set-equality assertion is evaluated against a router built with a **non-nil** `deps.IntelligenceEngine`, so all sixteen groups are actually registered. Fails if the Tier B block is registered outside the gated group, and fails if a nil engine is substituted to make the sixteen-value set-equality trivially satisfiable — the vacuous-pass path that would let eight corpus-derived routes ship ungated (SCN-108-G05). **Tier corrected from `integration` to `unit`** for the same execution-reality reason as TP-03-04 | `./smackerel.sh test unit` |
 
 ### Definition of Done
 
@@ -1400,12 +1400,25 @@ contained by an explicit boundary. Collateral cleanup is opt-in and out of scope
 
   **Not executed in this packet** — same in-flight-integration-run reason as TP-03-02. Unclaimed.
 
-- [ ] `TP-03-04` adversarial route-manifest test passes AND is demonstrated to **fail against current `main`** (empty-scope principal is allowed today); set-equality catches a seventeenth ungated corpus route
+- [x] `TP-03-04` adversarial route-manifest test passes AND is demonstrated to **fail against current `main`** (empty-scope principal is allowed today); set-equality catches a seventeenth ungated corpus route
+  - **Command:** `./smackerel.sh test unit --go --go-run 'TestCorpusGate_AllSixteenRouteGroupsGated'`
+  - **Exit Code:** 1 with the mount removed (RED), 0 with it restored (GREEN)
+  - **Evidence:** the two halves were executed SEPARATELY, because the passing run alone is
+    not the demonstration this row asks for. RED probe — the `RequireScope` mount was
+    temporarily disabled in `internal/api/router.go` and the test reported
+    `RED_PROBE_EXIT=1`, `--- FAIL: TestCorpusGate_AllSixteenRouteGroupsGated`, with
+    subtests `every_expected_corpus_route_is_gated` and `gated_group_count_is_exactly_sixteen`
+    FAILING and **21** `UNGATED corpus route` lines (e.g. `GET /api/knowledge/stats`,
+    `POST /api/search`) proving an empty-scope principal reaches the corpus without the
+    gate. The probe was then reverted (`git diff --stat internal/api/router.go` empty) and
+    the same test returned `GREEN_EXIT=0` with all four subtests PASS.
 
-  **Not executed in this packet.** Two independent gaps: the integration run was not executed
-  (see TP-03-02), and the "fails against current `main`" half is a *separate demonstration* — a
-  pre-fix red run — that was not performed here. The unit-tier `TestCorpusGate_AllSixteenRouteGroupsGated`
-  proves set-equality on the manifest but is not that demonstration and must not be substituted for it.
+  **Tier corrected.** This row was planned as `integration` in
+  `auth_surface_contract_test.go`; it is recorded as `unit` in
+  `router_corpus_gate_test.go` because that is where it executes — an in-process `httptest`
+  router, no live stack, and `internal/api` is not in the integration lane. Claiming
+  `integration` for an in-process test is a Test Type Integrity violation. The live-stack
+  half of this behaviour is TP-03-06/TP-03-07's job, and those remain open.
 
 - [x] `TP-03-05` integration test passes — ENFORCE→OBSERVE rollback restores access with no rebuild
 
@@ -1494,12 +1507,20 @@ contained by an explicit boundary. Collateral cleanup is opt-in and out of scope
   Phase-5 intelligence routes, so their presence in the log is direct evidence the engine was
   non-nil and the Tier B block was genuinely registered and genuinely refused.
 
-- [ ] `TP-03-12` adversarial integration test passes — set-equality is evaluated against a non-nil intelligence engine and fails on the nil-engine vacuous-pass path and on Tier B registered outside the gate
+- [x] `TP-03-12` adversarial integration test passes — set-equality is evaluated against a non-nil intelligence engine and fails on the nil-engine vacuous-pass path and on Tier B registered outside the gate
+  - **Command:** `./smackerel.sh test unit --go --go-run 'TestCorpusGate_AllSixteenRouteGroupsGated|TestCorpusGate_NilIntelligenceEngineIsAVacuityTrap'`
+  - **Exit Code:** 0
+  - **Evidence:** `--- PASS: TestCorpusGate_NilIntelligenceEngineIsAVacuityTrap (0.01s)` and
+    `--- PASS: TestCorpusGate_AllSixteenRouteGroupsGated (0.03s)` with subtest
+    `expectation_covers_the_closed_sixteen_value_label_set` PASS. The set-equality run uses
+    `corpusGateDeps(t, true, true)` — the second flag builds a NON-NIL
+    `deps.IntelligenceEngine`, so all sixteen groups genuinely register and the assertion
+    cannot pass vacuously over a Tier-A-only router. The vacuity trap is asserted to be
+    REAL by its own test: with a nil engine, fewer than sixteen groups are gated and
+    precisely the Tier B eight go missing.
 
-  **Not executed in this packet** — same in-flight-integration-run reason as TP-03-02. The
-  unit-tier `TestCorpusGate_NilIntelligenceEngineIsAVacuityTrap` covers the same hazard at the
-  manifest tier, but TP-03-12 is planned as an `integration`-category row in
-  `auth_surface_contract_test.go` and is not claimed from the unit run.
+  **Tier corrected** from `integration` to `unit` for the same execution-reality reason as
+  TP-03-04: this is an in-process router assertion, not a live-stack one.
 - [ ] **DoD-03-TIERB-DESIGN:** `design.md` §2's route-inventory table and §8 T2/T4/T8 count language reconciled to the ratified sixteen-group surface by `bubbles.design` before this scope closes — not silently overwritten from this planning packet (routed per the `spec.md` §18 decision 5 planning note)
 
   **Not satisfied.** `design.md` is unmodified in this working tree (`git status --porcelain
