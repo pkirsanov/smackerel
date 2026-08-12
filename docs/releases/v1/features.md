@@ -96,6 +96,42 @@ See [`../mvp/features.md`](../mvp/features.md) for the full carry-forward table 
 
 **Single-graph invariant (Principle 5 — "One Graph, Many Views"):** all V7 routing + evergreen behavior operates over the ONE existing pgvector + knowledge-graph + structured store — no parallel index / store / graph (enforced by the planned `TestNoParallelStore` architecture test). Recorded so the v1 packet's One-Graph principle is not silently violated by a new retrieval surface.
 
+### V8 — Corpus grant enforcement (`corpus:read` on the sixteen corpus route groups)
+
+> **Status: IN DELIVERY — OBSERVE stage implemented, ENFORCE stage NOT activated.** Owning spec
+> [`specs/108-corpus-grant-enforcement`](../../../specs/108-corpus-grant-enforcement/) is
+> `in_progress`, not terminal. The gate, the three `smackerel_auth_corpus_grant_*` metrics, the
+> sixteen-group route manifest, and the Telegram bridge grant derivation are implemented and
+> covered by unit and integration tests; the stage flip to ENFORCE has not been authorised. This
+> row traces to a **real owning spec still in delivery**, NOT to certified code.
+>
+> Recorded here so the v1 packet does not silently omit a capability that is already shipping code
+> behind a default-OFF flag.
+
+<!-- bubbles:feature id=corpus-grant-enforcement spec=specs/108-corpus-grant-enforcement delivery=optional -->
+<!-- machine-binding note (Gate G101 / release-delivery-reconciliation-guard.sh): delivery=optional
+is deliberate, NOT required. The guard requires every delivery=required feature to bind a TERMINAL
++ validate-certified spec; spec 108 is `in_progress`, so binding it as required would refuse the
+packet. It flips to required when 108 reaches a terminal validate-certified state. -->
+
+| ID | Capability | Owning spec | Owning train | Flag | Status |
+|----|-----------|-------------|--------------|------|--------|
+| V8-A | **Corpus grant enforcement**: `corpus:read` required on all **sixteen** corpus route groups (Tier A 1–8 + Tier B Phase-5 intelligence 9–16), enforced by a single group-level middleware rather than per-handler checks | [`specs/108-corpus-grant-enforcement`](../../../specs/108-corpus-grant-enforcement/) | `next` | `corpusGrantEnforcement` | IN DELIVERY — OBSERVE implemented, ENFORCE not activated |
+| V8-B | **OBSERVE-stage counterfactual telemetry**: `smackerel_auth_corpus_grant_would_deny_total` / `_allowed_total` / `_enforcement_mode`, closed sixteen-value `route_group` label set, sized so the flip can be justified from measured data instead of assumption | (same spec 108) | `next` | (same flag) | IMPLEMENTED |
+| V8-C | **Telegram bridge grant derivation**: the bridge delegates a subset of the *principal's* recorded grants instead of a hardcoded scope list; granting is a token rotation, not a flag flip | (same spec 108) | `next` | (same flag) | IMPLEMENTED |
+
+**Flag default (R-108-FL3):** `corpusGrantEnforcement` is declared `false` in **every** train
+bundle — both `config/feature-flags.mvp.yaml` and `config/feature-flags.next.yaml` — with
+`introduced_in_train: next`. A capability that changes who can read the corpus does not ship
+default-ON in any train, including the train that owns it. The flip is a separate, evidenced
+operator decision taken after the OBSERVE window, not a consequence of the feature landing.
+
+**Why two stages:** OBSERVE serves every request and counts the ones that *would* have been
+refused, so the blast radius of enforcement is measured before it is imposed. Flipping straight to
+ENFORCE would refuse an unknown population of legitimate principals whose grants were never
+recorded — which is exactly what the OBSERVE window and the proactive token rotation exist to
+prevent.
+
 ## Plan-to-Release Traceability
 
 | v1 item | Target dispatch | Dispatch mode |

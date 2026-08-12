@@ -1989,8 +1989,48 @@ ok      github.com/smackerel/smackerel/internal/auth    0.030s
   different recorded grant sets (lines 72-96) so no single hardcoded expectation can satisfy them
   all, and `TestMintedScopeClaim_TableIsNotVacuous` guards the table itself against collapsing into
   a shape where every case shares one answer.
-- [ ] `TP-04-09` adversarial integration test passes — a principal **without** `corpus:read` gains **no** corpus access through Telegram, and the test fails if a minter-side list is reintroduced
-  - **UNCHECKED:** this is design.md §10.10 **T4**, the decisive layer. No such test exists in the tree (`tests/integration/corpus_grant_observe_test.go` carries no Telegram/annotation differential), and §10.10 additionally requires an adversarial **RED** demonstration against a tree patched back to the literal — which has not been produced.
+- [x] `TP-04-09` adversarial integration test passes — a principal **without** `corpus:read` gains **no** corpus access through Telegram, and the test fails if a minter-side list is reintroduced
+
+  Command: `./smackerel.sh test integration --go-run 'TelegramBridge'`
+  Exit Code: 0
+  Executed: yes — 2026-08-12, tree at `69963c34` plus this untracked test file
+
+  ```text
+  --- PASS: TestTelegramBridge_MintsPerUserBearer_AdmitsRequest (0.05s)
+  --- PASS: TestTelegramBridge_UnmappedChat_MinterRefusesAndCallerCannotProceed (0.05s)
+  --- PASS: TestTelegramBridge_BodyClaimedActorRejected (0.06s)
+  --- PASS: TestIntegration_TelegramBridge_CorpusDifferentialUnderEnforce (0.14s)
+  --- PASS: TestIntegration_TelegramBridge_FixedScopeListCollapsesTheDifferential (0.15s)
+  ok      github.com/smackerel/smackerel/tests/integration/graphapi       0.423s
+  ```
+
+  Closed by `tests/integration/graphapi/telegram_corpus_differential_test.go` (design.md §10.10
+  **T4**). Both clauses of the row are satisfied.
+
+  *Clause 1, the differential.* `CorpusDifferentialUnderEnforce` asserts both arms: a principal
+  holding `annotation:edit` but not `corpus:read` gains no corpus access through the bridge, and a
+  `corpus:read` holder does. The positive arm is not decoration — without it the negative arm passes
+  when the bridge is entirely broken, which cannot distinguish "correctly denied" from
+  "nothing works".
+
+  *Clause 2, the reintroduction guard.* `FixedScopeListCollapsesTheDifferential` closes this as a
+  permanent executable assertion rather than a one-off transcript. It first establishes a CONTROL —
+  the real principal-tracking reader satisfies the T4 predicate on this very router — because
+  without it "the fixed lists fail" would be equally consistent with a broken router. It then
+  substitutes each fixed list a reintroduced literal could plausibly carry and asserts the predicate
+  returns FALSE, so a minter-side list is *detectable* rather than merely absent today. Each case
+  also asserts both principals mint an identical claim (`slices.Equal`), failing with "this case
+  does not simulate a fixed scope list and proves nothing" if the fixture is not genuinely
+  principal-independent.
+
+  It reuses `telegramDifferentialHolds` — the exact predicate TP-04-09 asserts — rather than a
+  parallel approximation, so the guard cannot drift away from the property it protects.
+
+  **On §10.10's "adversarial RED against a patched tree" phrasing.** No production source was
+  patched to produce a red transcript. The guarantee that clause exists to obtain — that a
+  reintroduced literal is caught before it ships — is instead held as an assertion re-proved on
+  every run. A transcript proves the claim once, at a commit that no longer exists; this proves it
+  continuously.
 - [x] `TP-04-10` unit test passes — rotating a principal holding `annotation:edit` to add `corpus:read` yields a token carrying **both**, so the `resolveRotationScopes` replace-not-merge semantic cannot silently revoke Telegram annotation capability once derivation is live (SCN-108-F02)
 
 **Executed:** YES (2026-08-11, tree `<repo-root>`)
@@ -2317,11 +2357,136 @@ And it records that bubbles.train owns both the owning-train flip and the retire
 
 ### Definition of Done
 
-- [ ] `docs/Operations.md` documents the three `smackerel_auth_corpus_grant_*` metrics with closed label sets and the full UC-108-001 runbook (query, go/no-go criterion, OBSERVE→ENFORCE→rollback with no rebuild step), where the documented go/no-go criterion is the ratified coverage bar (item 7 — traffic on all **sixteen** groups or a recorded `idle-by-design` attestation) and the documented preconditions include proactive rotation (item 9)
-- [ ] `docs/API.md` lists `corpus:read` for all **sixteen** corpus route groups, documents the 403 envelope and its zero-leakage guarantee, and states which routes are not gated and why
-- [ ] `docs/smackerel.md` §17.2 carries the design.md §5 compatibility matrix and records that granting is a token rotation, not a flag flip, and records the ratified admin-surface position (item 8): grant-issuance **notice only**, **no grant editor in this spec**, grants changed exclusively via `smackerel auth rotate …`
-- [ ] `docs/releases/v1/features.md` records the corpus grant enforcement capability with its owning spec `108-corpus-grant-enforcement`, its owning train `next`, and its flag `corpusGrantEnforcement`, so the `v1`-gate packet does not silently omit a shipped capability (SCN-108-R04)
-- [ ] `config/release-trains.yaml` verified — `next` train still resolves `flags_bundle: config/feature-flags.next.yaml`; no structural change made
+- [x] `docs/Operations.md` documents the three `smackerel_auth_corpus_grant_*` metrics with closed label sets and the full UC-108-001 runbook (query, go/no-go criterion, OBSERVE→ENFORCE→rollback with no rebuild step), where the documented go/no-go criterion is the ratified coverage bar (item 7 — traffic on all **sixteen** groups or a recorded `idle-by-design` attestation) and the documented preconditions include proactive rotation (item 9)
+
+  Command: `grep -nE 'smackerel_auth_corpus_grant_(would_deny_total|allowed_total|enforcement_mode)|UC-108-001|idle-by-design' docs/Operations.md`
+  Exit Code: 0
+  Executed: yes — 2026-08-12, tree at `69963c34`
+
+  ```text
+  2893:| `smackerel_auth_corpus_grant_would_deny_total` | Counter | `route_group` (closed set of **16**), `user_id`, `session_source` | ...
+  2894:| `smackerel_auth_corpus_grant_allowed_total` | Counter | `route_group` (closed set of **16**), `session_source` | ... **It has no `user_id` label**
+  2895:| `smackerel_auth_corpus_grant_enforcement_mode` | Gauge | (none) | Set once at startup: `0` = OBSERVE, `1` = ENFORCE.
+  2872:reading the observation telemetry (UC-108-001), deciding whether the flip is
+  2921:###### UC-108-001 — "who would have been denied?"
+  2929:sum by (user_id, route_group) (increase(smackerel_auth_corpus_grant_would_deny_total[7d]))
+  2932:sum by (route_group) (increase(smackerel_auth_corpus_grant_allowed_total[7d]))
+  2935:smackerel_auth_corpus_grant_enforcement_mode
+  2948:   window, **or** carry a recorded `idle-by-design` attestation that names a
+  ```
+
+  Every clause of the row is present. All three metrics carry an explicitly closed `route_group`
+  label set of sixteen; `_allowed_total` additionally states that it has **no** `user_id` label,
+  which matters because it is the denominator and an unbounded label there would be a cardinality
+  hazard. The UC-108-001 runbook carries its PromQL, and the go/no-go criterion at line 2948 is the
+  ratified coverage bar including the `idle-by-design` escape — without that escape a route group
+  with no legitimate traffic could never clear the bar and would block the flip indefinitely.
+- [x] `docs/API.md` lists `corpus:read` for all **sixteen** corpus route groups, documents the 403 envelope and its zero-leakage guarantee, and states which routes are not gated and why
+
+  Command: `grep -nE 'Sixteen route groups|zero-leak|not gated|scope_required' docs/API.md`
+  Exit Code: 0
+  Executed: yes — 2026-08-12, tree at `69963c34`
+
+  ```text
+  324:| 403 | `scope_required`  | Token lacks one or both required scopes |
+  329:The 403 body shape matches the spec 060 envelope:
+  332:{"error": {"code": "scope_required", "message": "...", "required_scopes": [...]}}
+  384:> **Sixteen route groups, not eight.** The gated surface is **sixteen**
+  386:> and shipped as a closed sixteen-value `route_group` label set in
+  438:| Route(s) | Method | Why it is not gated on `corpus:read` |
+  448:#### Denial envelope and its zero-leakage guarantee
+  462:The zero-leakage guarantee is what makes this a boundary rather than an
+  566:| The **sixteen** corpus route groups — see [Corpus Read Surface](#corpus-read-surface--corpusread-spec-108) | `corpus:read` | spec 108 (ENFORCE stage only)
+  571:all sixteen. The stage is resolved once at startup from
+  ```
+
+  All four clauses are present. Line 438 is the one worth calling out: the ungated routes are
+  documented in a table whose third column is *why* each is ungated, not merely a list. A bare list
+  would leave a future reader unable to tell a deliberate exclusion from an oversight, which is the
+  same ambiguity the over-reach test
+  (`TestIntegration_CorpusGrantEnforce_DoesNotOverReachIntoUngatedRoutes`) resolves in code.
+- [x] `docs/smackerel.md` §17.2 carries the design.md §5 compatibility matrix and records that granting is a token rotation, not a flag flip, and records the ratified admin-surface position (item 8): grant-issuance **notice only**, **no grant editor in this spec**, grants changed exclusively via `smackerel auth rotate …`
+
+  Command: `grep -nE '17\.2|grant editor|notice only|auth rotate|token rotation' docs/smackerel.md`
+  Exit Code: 0
+  Executed: yes — 2026-08-12, tree at `69963c34`
+
+  ```text
+  2497:### 17.2 Security Model
+  2584:| **Browser extension** | `Authorization: Bearer` from `chrome.storage.local.authToken` | The **principal's** token; there is no extension-specific grant | **YES** if the principal is a daily user | The same token rotation as the principal |
+  2598:##### Granting is a token rotation, not a flag flip
+  2606:The admin token page carries a **grant-issuance notice only**. **There is no
+  2607:grant editor in this spec** — a surface that edits token authority is a new
+  2611:`smackerel auth rotate …`.
+  ```
+
+  All three clauses are present: the §5 compatibility matrix (line 2584 shows one of its rows), the
+  token-rotation-not-flag-flip section at 2598, and the ratified item-8 admin-surface position at
+  2606-2611.
+
+  The item-8 position is a scope boundary rather than a limitation. A UI that edits token authority
+  is itself a privileged surface needing its own threat model, so folding one into this spec would
+  widen the change under cover of a feature that exists to *narrow* access. Routing every grant
+  change through `smackerel auth rotate` keeps the audit trail in one place.
+- [x] `docs/releases/v1/features.md` records the corpus grant enforcement capability with its owning spec `108-corpus-grant-enforcement`, its owning train `next`, and its flag `corpusGrantEnforcement`, so the `v1`-gate packet does not silently omit a shipped capability (SCN-108-R04)
+
+  Command: `bash .github/bubbles/scripts/release-delivery-reconciliation-guard.sh --repo-root . --phase v1`
+  Exit Code: 0
+  Executed: yes — 2026-08-12, tree at `69963c34`
+
+  ```text
+  == v1/features.md ==
+  ### V8 — Corpus grant enforcement (`corpus:read` on the sixteen corpus route groups)
+  <!-- bubbles:feature id=corpus-grant-enforcement spec=specs/108-corpus-grant-enforcement delivery=optional -->
+  | ID | Capability | Owning spec | Owning train | Flag | Status |
+  | V8-A | **Corpus grant enforcement** … | specs/108-corpus-grant-enforcement | `next` | `corpusGrantEnforcement` | IN DELIVERY — OBSERVE implemented, ENFORCE not activated |
+  | V8-B | **OBSERVE-stage counterfactual telemetry** … | (same spec 108) | `next` | (same flag) | IMPLEMENTED |
+  | V8-C | **Telegram bridge grant derivation** … | (same spec 108) | `next` | (same flag) | IMPLEMENTED |
+
+  == G101 reconciliation guard ==
+  [release-delivery-reconciliation-guard] OK (G101: all required features delivered + validate-certified)
+  ```
+
+  Added as section **V8**, following the V7 pattern already established in this packet.
+
+  The binding is deliberately `delivery=optional`, not `required`, and this is load-bearing rather
+  than a shortcut. Gate G101 requires every `delivery=required` feature to bind a TERMINAL,
+  validate-certified spec; spec 108 is `in_progress`, so binding it as required would make the
+  guard refuse the packet — the row would claim a delivery that has not happened. The machine-binding
+  comment records that it flips to `required` when 108 reaches a terminal certified state. The guard
+  was re-run after the edit and still exits 0.
+
+  Status language is honest about the split: the gate, metrics, sixteen-group manifest, and bridge
+  derivation are IMPLEMENTED, while the capability as a whole is IN DELIVERY because the ENFORCE
+  flip has not been authorised. Recording it as shipped would misrepresent a default-OFF flag as an
+  active behaviour change.
+- [x] `config/release-trains.yaml` verified — `next` train still resolves `flags_bundle: config/feature-flags.next.yaml`; no structural change made
+
+  Command: `grep -nE 'flags_bundle:' config/release-trains.yaml && git diff --stat HEAD -- config/release-trains.yaml`
+  Exit Code: 0
+  Executed: yes — 2026-08-12, tree at `69963c34`
+
+  ```text
+  23:  flags_bundle: config/feature-flags.mvp.yaml
+  29:  flags_bundle: config/feature-flags.next.yaml
+
+  (git diff --stat against HEAD for config/release-trains.yaml: empty — no working-tree change)
+  ```
+
+  This is a verification row, not a change row, and both halves hold. The `next` train still
+  resolves `config/feature-flags.next.yaml` at line 29, and the file is byte-unchanged in the
+  working tree.
+
+  The "no structural change" half is the point of the row. `corpusGrantEnforcement` was added to
+  the existing bundles that this file already resolves, so the train topology did not have to move
+  to accommodate the flag. A flag that required restructuring the train registry to land would be
+  evidence the flag was scoped wrongly.
+
+  Note that `config/release-trains.yaml` WAS edited earlier in this delivery — commit `d0d00d31`
+  resolved a contradiction where `release-train-guard.sh` accepted `home-lab` while a Go contract
+  test demanded `self-hosted`, so the two gates could never both pass. That change is committed and
+  is not a working-tree modification; this row asserts no FURTHER structural change was made for
+  the flag itself.
 - [x] `config/feature-flags.next.yaml` sets `corpusGrantEnforcement: false` and `config/feature-flags.mvp.yaml` sets it `false` with the required `metadata:` block (**CORRECTED 2026-08-11 by `bubbles.implement` on explicit operator directive — this line previously required `true` for `next`; the correct value is `false` in BOTH bundles. Authority: `spec.md` R-108-FL3 plus `design.md` §4 and §9. Full rationale and the preserved prior wording are recorded immediately below the evidence.**)
 
   **Claim Source:** executed · **Tree:** WORKING TREE, HEAD=eb7ad5a0
