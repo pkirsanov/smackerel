@@ -124,6 +124,11 @@ func run() error {
 		"env_var", corpusGrantEnforcementEnvVar,
 		"stage", corpusGrantEnforcementStage(corpusGrantEnforce),
 		"enforce", corpusGrantEnforce)
+	// The log line alone is not an operator-checkable signal: confirming a
+	// rollback out of ENFORCE (SCN-108-C04) means reading the CURRENT stage,
+	// not scrolling for a boot line. Publish the gauge from the same resolved
+	// value so the two can never disagree.
+	metrics.SetCorpusGrantEnforcementMode(corpusGrantEnforce)
 
 	// Build core services (DB, NATS, pipeline, knowledge, etc.)
 	svc, err := buildCoreServices(ctx, cfg)
