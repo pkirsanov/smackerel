@@ -191,9 +191,9 @@ this ratification pass is explicitly additive-only to `state.json`.
 
 | # | Scope | Surfaces | Depends On | Tests | Status |
 |---|---|---|---|---|---|
-| 01 | Scope Registration Prerequisite | `internal/auth` | — | 4 (2 unit, 1 integration, 1 e2e-api) | Not Started |
-| 02 | Observe-Stage Plumbing | `cmd/core`, `internal/api`, `internal/metrics`, `config/` | 01 | 6 (3 unit, 2 integration, 1 e2e-api) | Not Started |
-| 03 | Gate Mount (Tier A + Tier B, 16 route groups) | `internal/api` (router + contract test), `tests/` live rows + the `go-e2e-corpus-enforce` lane | 02 | 12 (1 unit, 7 integration, 3 e2e-api, 1 stress) | Not Started |
+| 01 | Scope Registration Prerequisite | `internal/auth` | — | 4 (2 unit, 1 integration, 1 e2e-api) | Done |
+| 02 | Observe-Stage Plumbing | `cmd/core`, `internal/api`, `internal/metrics`, `config/` | 01 | 6 (3 unit, 2 integration, 1 e2e-api) | Done |
+| 03 | Gate Mount (Tier A + Tier B, 16 route groups) | `internal/api` (router + contract test), `tests/` live rows + the `go-e2e-corpus-enforce` lane | 02 | 12 (1 unit, 7 integration, 3 e2e-api, 1 stress) | Done |
 | 04 | Caller Remediation (incl. Telegram grant derivation) | Telegram bridge, PWA, extension, shared-token/bootstrap | 03 | 10 (3 unit, 5 integration, 2 e2e-api) | Not Started |
 | 05 | Docs, Release Train, Flag Bundles | `docs/`, `docs/releases/`, `config/` | 04 | 7 (4 unit, 1 integration, 2 e2e-api) | Not Started |
 
@@ -208,7 +208,7 @@ Infrastructure Impact Sweep, a Change Boundary, and explicit canary coverage.
 
 ## Scope 01: Scope Registration Prerequisite
 
-**Status:** Not Started
+**Status:** Done
 **Depends On:** — (root scope; blocks 02, 03, 04, 05)
 **Resolves:** F-108-SURFACE-01 / R-108-PRE1
 **Surfaces:** `internal/auth`
@@ -437,7 +437,7 @@ And auth.AuthorizeGrant for that session with required "corpus:read" returns aut
 
 ## Scope 02: Observe-Stage Plumbing
 
-**Status:** Not Started
+**Status:** Done
 **Depends On:** Scope 01
 **Surfaces:** `cmd/core`, `internal/api`, `internal/metrics`, `config/smackerel.yaml`
 
@@ -999,7 +999,7 @@ And smackerel_auth_corpus_grant_enforcement_mode reports 0
 
 ## Scope 03: Gate Mount
 
-**Status:** Not Started
+**Status:** Done
 **Depends On:** Scope 02
 **Resolves:** F-108-ADJ-01 (scope call ratified IN SCOPE by `spec.md` §18 decision 5)
 **Surfaces:** `internal/api/router.go`, `internal/api/auth_surface_contract_test.go`, the
