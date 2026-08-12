@@ -1,0 +1,74 @@
+{
+  "version": 3,
+  "specId": "104-universal-ask-self-knowledge",
+  "bugId": "BUG-104-001-selfknowledge-namespace-test-race",
+  "featureDir": "specs/104-universal-ask-self-knowledge/bugs/BUG-104-001-selfknowledge-namespace-test-race",
+  "featureName": "BUG-104-001: smackerel_self namespace race between integration test packages",
+  "workflowMode": "bugfix-fastlane",
+  "executionRuntime": "direct",
+  "releaseTrain": "mvp",
+  "status": "in_progress",
+  "execution": {
+    "activeAgent": "bubbles.goal",
+    "currentPhase": "diagnosis-open",
+    "executionModel": "direct-authorized-runner",
+    "runStartedAt": "2026-08-12T08:40:00Z",
+    "completedPhaseClaims": ["implement", "test", "validate", "audit"],
+    "executionHistory": [
+      {
+        "at": "2026-08-12",
+        "agent": "bubbles.goal",
+        "phasesExecuted": ["implement", "test"],
+        "provenanceMode": "direct",
+        "outcome": "completed",
+        "note": "Added tests/integration/nslock session-level advisory lock plus exclusion and key-derivation guards. Full integration suite exits 0 (1969 PASS, 0 FAIL)."
+      },
+      {
+        "at": "2026-08-12",
+        "agent": "bubbles.validate",
+        "phasesExecuted": ["validate"],
+        "provenanceMode": "specialist",
+        "outcome": "completed_with_findings",
+        "note": "7 findings. F2 (unlocked TRUNCATE artifacts in a THIRD package), F3 (unlocked e2e inserts), F5 (guards proved the mechanism, not the call sites) and F6 (two comments stating incorrect release/scope semantics) remediated. F4 (production stale sweeper wipes test rows on core restart) recorded as unresolved. Independently re-ran the suite: INTEGRATION_EXIT=0."
+      },
+      {
+        "at": "2026-08-12",
+        "agent": "bubbles.audit",
+        "phasesExecuted": ["audit"],
+        "provenanceMode": "specialist",
+        "outcome": "completed_with_findings",
+        "note": "A1 CRITICAL overturned the root-cause diagnosis: go-integration.sh passes -p 1, so the two packages never run concurrently and the documented interleaving is unreachable. A2/A3/A4 showed the call-site guard missed 2 of the 3 originally-failing tests (helper-built SQL) and was held for two others only by comment text. Guard rewritten with a named floor plus discovery; both probes verified. Artifacts corrected to state the lock is defence-in-depth and F4 is the primary hypothesis."
+      }
+    ]
+  },
+  "policySnapshot": {
+    "grill": {"value": "off", "source": "repo-default"},
+    "tdd": {"value": "scenario-first", "source": "workflow-forced"},
+    "autoCommit": {"value": "on", "source": "user-approved"},
+    "lockdown": {"value": "off", "source": "repo-default"},
+    "regression": {"value": "standard", "source": "repo-default"},
+    "validation": {"value": "required", "source": "repo-default"},
+    "regressionStrictness": {"value": "standard", "source": "repo-default"},
+    "validateCertificationRequired": {"value": true, "source": "repo-default"}
+  },
+  "completedScopes": ["SCOPE-01"],
+  "scopes": {
+    "SCOPE-01": {
+      "name": "Mutual exclusion for the shared smackerel_self namespace",
+      "status": "Done"
+    }
+  },
+  "certification": {
+    "status": "in_progress",
+    "certifiedBy": null,
+    "certifiedAt": null,
+    "basis": "NOT certified. The hardening is complete, guarded and green (three consecutive full integration runs at exit 0), but audit finding A1 established that the documented root-cause mechanism is unreachable under `-p 1`, so the original failure is NOT root-caused. Closing this as done would record a fix for a mechanism that cannot fire while the one that can (F4, the production boot-time stale sweeper) is unaddressed."
+  },
+  "notes": [
+    "Pre-existing defect, not introduced by this session's commits.",
+    "A1 (audit): scripts/runtime/go-integration.sh passes `-p 1`; no contending file calls t.Parallel(); the go/python lanes are sequential docker runs. The two packages never run concurrently, so the documented interleaving was unreachable during the original red.",
+    "The landed lock is DEFENCE-IN-DEPTH: it makes exclusion a property of the namespace rather than of a flag in a shell script, and covers a future `-p >1` or a shared-DB cross-lane run.",
+    "F4 is the primary remaining hypothesis: internal/assistant/selfknowledge/ingestor.go deletes every smackerel_self row whose content_hash is absent from the corpus, which is every row these tests insert. It runs at core boot, and the core container is not serialised by -p 1.",
+    "The production stale sweep itself is designed behaviour and is unchanged."
+  ]
+}

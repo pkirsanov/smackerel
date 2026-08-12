@@ -19,10 +19,14 @@ import (
 
 	ok "github.com/smackerel/smackerel/internal/assistant/openknowledge"
 	"github.com/smackerel/smackerel/internal/assistant/openknowledge/tools"
+	"github.com/smackerel/smackerel/tests/integration/nslock"
 )
 
 func TestSelfKnowledgeTool_CitesOnlySmackerelSelf(t *testing.T) {
 	pool := openSemanticPool(t)
+	// Serialise against tests/integration/selfknowledge, which wipes this
+	// whole namespace to assert ingestion counts. See tests/integration/nslock.
+	nslock.AcquireSelfKnowledge(t, pool)
 	pfx := "sk-tool-" + time.Now().Format("150405.000000")
 	userNS := "user:" + pfx
 

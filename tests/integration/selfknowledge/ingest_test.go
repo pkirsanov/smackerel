@@ -29,6 +29,7 @@ import (
 	"github.com/smackerel/smackerel/internal/assistant/selfknowledge"
 	"github.com/smackerel/smackerel/internal/connector"
 	"github.com/smackerel/smackerel/internal/extract"
+	"github.com/smackerel/smackerel/tests/integration/nslock"
 )
 
 // fakePublisher mirrors RawArtifactPublisher.PublishRawArtifact's DB behaviour
@@ -113,6 +114,15 @@ func insertRawSelfKnowledge(t *testing.T, pool *pgxpool.Pool, title, body string
 
 func TestIngestor_IdempotentWithStaleSweep(t *testing.T) {
 	pool := openSelfKnowledgePool(t)
+
+	// This test owns the `smackerel_self` namespace for its duration: it
+	// wipes the namespace to establish a baseline and then asserts
+	// namespace-wide counts. tests/integration/openknowledge inserts into
+	// the same namespace, and `go test` runs the two packages in parallel,
+	// so without this lock the wipe lands between that package's INSERT and
+	// its SEARCH and the search returns zero rows. See tests/integration/nslock.
+	nslock.AcquireSelfKnowledge(t, pool)
+
 	cleanupSelfKnowledge(t, pool)
 	t.Cleanup(func() { cleanupSelfKnowledge(t, pool) })
 

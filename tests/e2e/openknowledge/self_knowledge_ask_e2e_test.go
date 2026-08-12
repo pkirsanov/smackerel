@@ -35,6 +35,7 @@ import (
 	"github.com/smackerel/smackerel/internal/assistant/openknowledge/tools"
 	"github.com/smackerel/smackerel/internal/assistant/openknowledge/tracewriter"
 	"github.com/smackerel/smackerel/internal/db"
+	"github.com/smackerel/smackerel/tests/integration/nslock"
 )
 
 type fixedEmbedderE2E struct{ vec []float32 }
@@ -69,6 +70,13 @@ func seedSelfKnowledgeArtifact(t *testing.T, pool *pgxpool.Pool, id, title strin
 
 func TestSelfKnowledge_AskMetaQuestion_GroundedCitedAnswer_E2E(t *testing.T) {
 	pool := newTestPool(t)
+	// BUG-104-001 — this test INSERTs into the shared `smackerel_self`
+	// namespace that tests/integration/{selfknowledge,knowledge_stats} wipe.
+	// The e2e lane runs under `-p 1` and is invoked by a separate command, so
+	// today this only bites when an operator runs `test integration` and
+	// `test e2e` against one database concurrently. Locked for symmetry so the
+	// exclusion is a property of the namespace, not of the current lane layout.
+	nslock.AcquireSelfKnowledge(t, pool)
 	writer := tracewriter.New(pool)
 	pfx := fmt.Sprintf("sk-ask-e2e-%d", time.Now().UnixNano())
 
@@ -118,6 +126,8 @@ func TestSelfKnowledge_AskMetaQuestion_GroundedCitedAnswer_E2E(t *testing.T) {
 
 func TestSelfKnowledge_AskUngroundable_RefusesHonestly_E2E(t *testing.T) {
 	pool := newTestPool(t)
+	// BUG-104-001 — see the sibling test above; same shared namespace.
+	nslock.AcquireSelfKnowledge(t, pool)
 	writer := tracewriter.New(pool)
 	pfx := fmt.Sprintf("sk-ask-ung-e2e-%d", time.Now().UnixNano())
 

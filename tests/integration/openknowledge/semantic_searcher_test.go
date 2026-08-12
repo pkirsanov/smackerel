@@ -23,6 +23,7 @@ import (
 
 	"github.com/smackerel/smackerel/internal/assistant/openknowledge/tools"
 	"github.com/smackerel/smackerel/internal/db"
+	"github.com/smackerel/smackerel/tests/integration/nslock"
 )
 
 type fixedEmbedder struct{ vec []float32 }
@@ -75,6 +76,9 @@ func insertEmbeddedArtifact(t *testing.T, pool *pgxpool.Pool, id, sourceID, titl
 
 func TestPgxSemanticSearcher_NamespaceScopedCosine(t *testing.T) {
 	pool := openSemanticPool(t)
+	// Serialise against tests/integration/selfknowledge, which wipes this
+	// whole namespace to assert ingestion counts. See tests/integration/nslock.
+	nslock.AcquireSelfKnowledge(t, pool)
 	pfx := "sk-sem-" + time.Now().Format("150405.000000")
 	userNS := "user:" + pfx
 

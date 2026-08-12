@@ -9,6 +9,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/smackerel/smackerel/internal/knowledge"
+	"github.com/smackerel/smackerel/tests/integration/nslock"
 )
 
 func TestKnowledgeStats_EmptyStoreReturnsZeroValues(t *testing.T) {
@@ -58,6 +59,14 @@ func TestKnowledgeStats_EmptyStoreReturnsZeroValues(t *testing.T) {
 
 func resetKnowledgeStatsTables(t *testing.T, ctx context.Context, pool *pgxpool.Pool) {
 	t.Helper()
+
+	// BUG-104-001 — this TRUNCATE is STRICTLY BROADER than the namespace-wide
+	// DELETE the nslock helper was introduced for: it removes every row in
+	// `artifacts`, `smackerel_self` included, from a THIRD package that runs
+	// in parallel with both tests/integration/selfknowledge and
+	// tests/integration/openknowledge. Without this lock the mutual exclusion
+	// is only partial and the race survives. See tests/integration/nslock.
+	nslock.AcquireSelfKnowledge(t, pool)
 
 	_, err := pool.Exec(ctx, `
 		TRUNCATE TABLE
