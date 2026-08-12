@@ -669,26 +669,102 @@ And smackerel_auth_corpus_grant_enforcement_mode reports 0
   search path, a raw path carrying a private query string, and an artifact UUID are all refused
   as label values — which is R-108-O3/O4 (no path, no query text, no artifact id in a label).
 
-- [ ] `TP-02-04` integration test passes — OBSERVE returns 200 on all sixteen groups and counts would-be denials
-  <!-- UNPROVEN: `tests/integration/corpus_grant_observe_test.go` is written but was NOT executed in this recording pass; `./smackerel.sh test integration` (~25 min) was explicitly out of scope. The lane was green at the last full run BEFORE these files were added, so that result does not cover this code — a re-run is required before this row can be claimed. -->
+- [x] `TP-02-04` integration test passes — OBSERVE returns 200 on all sixteen groups and counts would-be denials
 
-- [ ] `TP-02-05` integration test passes — granted requests count as allowed, would-deny stays flat, mode gauge reports 0
-  <!-- UNPROVEN: same as TP-02-04 — written but not executed in this pass; no `./smackerel.sh test integration` evidence exists for this code. -->
+  **Claim Source:** executed · **Tree:** WORKING TREE, HEAD=9243ebdb
+  **Executed:** YES (`~/i5.log`, 2026-08-11 20:16, preserved full-lane capture)
+  **Command:** `./smackerel.sh test integration`
+  **Exit Code:** 0
+
+  ```text
+  --- PASS: TestConfigValidate_AC5c_WrapperPropagatesRejection (5.49s)
+  === RUN   TestIntegration_CorpusGrantObserve_UngrantedPrincipalIsCountedOnAllSixteenGroups
+  --- PASS: TestIntegration_CorpusGrantObserve_UngrantedPrincipalIsCountedOnAllSixteenGroups (0.00s)
+  === RUN   TestIntegration_CorpusGrantObserve_GrantedPrincipalCountsAllowedAndModeGaugeReportsObserve
+  --- PASS: TestIntegration_CorpusGrantObserve_GrantedPrincipalCountsAllowedAndModeGaugeReportsObserve (0.00s)
+  === RUN   TestIntegration_CorpusGrantObserve_ScopeRejectedCounterIsNotReused
+  --- PASS: TestIntegration_CorpusGrantObserve_ScopeRejectedCounterIsNotReused (0.00s)
+  === RUN   TestMigrations_AllTablesExist
+  --- PASS: TestMigrations_AllTablesExist (0.02s)
+  === RUN   TestMigrations_ArtifactsColumns
+  --- PASS: TestMigrations_ArtifactsColumns (0.03s)
+  ...
+  PASS
+  ok  	github.com/smackerel/smackerel/tests/integration	58.921s
+  ...
+  INTEGRATION_EXIT=0
+  ```
+
+  The test executed in the `tests/integration` package of the live lane (`ok … 58.921s`,
+  `INTEGRATION_EXIT=0`; `grep -cE '^--- FAIL|^FAIL[[:space:]]+github' ~/i5.log` → 0). It drives
+  the real `api.CorpusGrantGate`, the real `auth.GateGlobalCorpusRead` decision, and the real
+  Prometheus collectors across `metrics.CorpusRouteGroups()` asserted to be exactly 16, and it
+  fails on any of: a 403, a non-200, a mutated downstream body, a per-group `would_deny` delta
+  ≠ 1, an `allowed` delta ≠ 0, a downstream that ran fewer than 16 times, a leaked query string /
+  artifact id / title in the warn line, or fewer than 16 `corpus_grant_would_deny` events.
+
+  **What this does NOT establish:** the request is driven through `httptest` against the gate
+  middleware directly, not through a route on the running core service — Scope 02 does not mount
+  the gate (`corpus_grant_observe_test.go:12-20` says so explicitly). The live-route half of
+  SCN-108-O01 belongs to TP-02-06.
+
+- [x] `TP-02-05` integration test passes — granted requests count as allowed, would-deny stays flat, mode gauge reports 0
+
+  **Claim Source:** executed · **Tree:** WORKING TREE, HEAD=9243ebdb
+  **Executed:** YES (`~/i5.log`, 2026-08-11 20:16, preserved full-lane capture)
+  **Command:** `./smackerel.sh test integration`
+  **Exit Code:** 0
+
+  ```text
+  === RUN   TestIntegration_CorpusGrantObserve_GrantedPrincipalCountsAllowedAndModeGaugeReportsObserve
+  --- PASS: TestIntegration_CorpusGrantObserve_GrantedPrincipalCountsAllowedAndModeGaugeReportsObserve (0.00s)
+  === RUN   TestIntegration_CorpusGrantObserve_ScopeRejectedCounterIsNotReused
+  --- PASS: TestIntegration_CorpusGrantObserve_ScopeRejectedCounterIsNotReused (0.00s)
+  === RUN   TestMigrations_AllTablesExist
+  --- PASS: TestMigrations_AllTablesExist (0.02s)
+  === RUN   TestMigrations_SchemaVersionCount
+      db_migration_test.go:150: schema_migrations count: 46
+  --- PASS: TestMigrations_SchemaVersionCount (0.02s)
+  === RUN   TestMigrations_TableDropAndRecreate
+      db_migration_test.go:266: table drop and recreate verified
+  --- PASS: TestMigrations_TableDropAndRecreate (0.09s)
+  ...
+  PASS
+  ok  	github.com/smackerel/smackerel/tests/integration	58.921s
+  ...
+  INTEGRATION_EXIT=0
+  ```
+
+  A principal holding `corpus:read` is admitted on every one of the sixteen groups with
+  `allowed` delta = 1 and `would_deny` delta = 0 per group, and no `corpus_grant_would_deny`
+  warn line is emitted for them — the assertion that stops a gate from recording granted
+  principals as counterfactual denials. `_ScopeRejectedCounterIsNotReused` is the paired
+  R-108-O2 assertion in the same lane: `smackerel_auth_scope_rejected_total` stays flat across
+  a full sixteen-group OBSERVE sweep.
+
+  **What this does NOT establish:** the mode gauge is asserted by writing ENFORCE (expect 1)
+  then OBSERVE (expect 0) through `metrics.SetCorpusGrantEnforcementMode` and reading back
+  from `prometheus.DefaultGatherer`. That proves the metric's contract and that the 0 came
+  from an explicit write rather than an unset zero value; it does **not** prove `cmd/core`
+  publishes the stage at startup.
 
 - [ ] Observe middleware is mounted in both stages; no request path can return 403 from this scope
-  <!-- UNPROVEN — and the first half is currently FALSE, not merely unverified. `grep -rn 'CorpusGrantGate' --include='*.go' .` returns non-test hits ONLY in `internal/api/corpus_grant_gate.go` (its own definition) and a doc comment in `internal/metrics/auth.go`: the gate has NO production caller and is NOT referenced by `internal/api/router.go` or `cmd/core/*.go`. `tests/integration/corpus_grant_observe_test.go:15-17` states this deliberately: "Scope 02 does not mount the gate: as of this scope `api.NewCorpusGrantGate` has no production caller, and mounting it on `router.go` is Scope 03." The second half IS proven (`TestCorpusGrantGate_Observe_NeverDeniesInEitherStage` PASS), but this DoD item asserts both. FINDING for bubbles.plan/bubbles.design: this item contradicts the implementation boundary between Scope 02 and Scope 03 and should move to Scope 03 or be split. -->
+  <!-- UNPROVEN — not because the property is false, but because ticking it here would absorb an open boundary finding. Both halves now hold in the tree: the gate IS mounted (`internal/api/router.go:132` `corpusGate := NewCorpusGrantGate(...)` with per-route `r.With(corpusGate.Observe(...))` in both stages, only `RequireScope` behind `if deps.CorpusGrantEnforce`), and `TestCorpusGrantGate_Observe_NeverDeniesInEitherStage` PASSES with both `observe_stage` and `enforce_stage` subtests. But the mount was delivered by **Scope 03** ("Gate Mount"), and `corpus_grant_observe_test.go:12-20` still records that Scope 02 does not mount it. The unresolved FINDING for bubbles.plan/bubbles.design stands: this item contradicts the Scope 02/03 boundary and should move to Scope 03 or be split. Ticking it under Scope 02 would silently self-approve that reassignment. -->
+
+  <!-- Also note the tier: the mount is proven by a route-manifest assertion over an in-process router, not by a live end-to-end request. -->
+
 
 - [ ] `TP-02-06` regression e2e-api test passes — fail-loud config resolution and OBSERVE-stage counting are permanently protected
   <!-- UNPROVEN: `./smackerel.sh test e2e` was not executed in this pass. Additionally the e2e lane is currently red on 5 unrelated pre-existing defects (spec 106 asset headers; 3 assistant transport/dedup failures under BUG-069-004; a drive-harness env-propagation gap, BUG-031-004), so a green claim here is not available even on re-run until those are resolved. -->
 
 - [ ] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior — **Phase:** regression (`TP-02-06`, `./smackerel.sh test e2e`)
-  <!-- UNPROVEN: depends on TP-02-06, which was not executed. Also gated behind the unmounted gate — the live-route half of SCN-108-O01/O02 cannot be exercised until Scope 03 mounts the middleware. -->
+  <!-- UNPROVEN: depends on TP-02-06, which was not executed in this pass. (The former "gated behind the unmounted gate" blocker no longer applies — Scope 03 has since mounted the middleware at `router.go:132`.) -->
 
 - [ ] Broader E2E regression suite passes — **Phase:** regression (`./smackerel.sh test e2e` exits 0; no previously-passing test regresses)
   <!-- UNPROVEN: not executed in this pass; the suite is known-red on the 5 pre-existing defects listed above, so it cannot currently exit 0. -->
 
 - [ ] Live-category tests emit telemetry tagged `env=test*` only; no write to prod monitoring (R-108-O6, G115)
-  <!-- UNPROVEN: no live-category test (integration/e2e/stress) was executed in this pass, so no telemetry was emitted and there is nothing to inspect for env labelling. -->
+  <!-- UNPROVEN, with the blocker restated accurately: a live-category run DID execute in this pass (`~/i5.log`, INTEGRATION_EXIT=0) entirely against the ephemeral `smackerel-test` compose project, whose volumes (`smackerel-test-postgres-data`, `-nats-data`, `-ollama-data`) are Removed at teardown — so no prod container participated. That is evidence for the "no write to prod monitoring" half only. The `env=test*` half remains UNPROVEN: this lane's corpus-grant telemetry lives in an in-process Prometheus registry read via `testutil`/`DefaultGatherer` and is never exported, so there is no emitted `env`-labelled series to inspect, and the G115 `env-pollution-scan.sh` was not run in this recording pass. -->
 
 - [x] Build Quality Gate: `./smackerel.sh check`, `./smackerel.sh lint`, `./smackerel.sh format --check` clean with zero warnings; no TODO/stub/default introduced
 
