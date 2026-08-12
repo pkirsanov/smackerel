@@ -72,15 +72,15 @@ up a second authority vocabulary *and* silently revoke the bridge's only current
 Decided is not shipped: §10.11 routes the scoping and the record-before-derive ordering to
 `bubbles.plan`, and `SCN-108-F02` stays blocked until the work lands.
 
-**Ratification impact on this design — routed to `bubbles.design`, NOT silently applied here.**
+**Ratification impact on this design — RECONCILED 2026-08-12 by `bubbles.design`.**
 §18 decision 5 brings the eight Phase-5 corpus-derived intelligence endpoints in scope, taking
-the gated surface from **8 to 16** route groups (`spec.md` §4.2 Tier B). Two design-owned
-surfaces below are therefore stale and are corrected only where they assert the *opposite
-direction*; the remaining reconciliation — extending the §2 route-inventory table to sixteen
-rows, and the §8 T2/T4/T8 count language — belongs to `bubbles.design`, which owns this file.
-`scopes.md` plans to the ratified sixteen-group surface and carries a blocking DoD item for this
-reconciliation, exactly as it already does for the flag-default divergence. This planning packet
-does not rewrite settled design content.
+the gated surface from **8 to 16** route groups (`spec.md` §4.2 Tier B). The planning packet that
+recorded the supersession deliberately left the design-owned surfaces alone rather than rewriting
+settled design content. Those surfaces are now corrected here, against source rather than against
+the spec prose: §2 lists all sixteen route groups, and the §8 T2/T4/T8 count language reads
+sixteen. Every count in this file was re-derived from `internal/metrics/auth.go`,
+`internal/api/router.go`, and their tests; see §2 for the citations. Nothing was harmonised by
+symmetry.
 
 ---
 
@@ -98,7 +98,7 @@ r.Group(func(r chi.Router) {
 ```
 
 **Where exactly.** Inside the block opened at `internal/api/router.go` by
-`r.Group(func(r chi.Router) { r.Use(deps.bearerAuthMiddleware) ... })`, wrapping the eight
+`r.Group(func(r chi.Router) { r.Use(deps.bearerAuthMiddleware) ... })`, wrapping the sixteen
 corpus route registrations listed in §2. The outer `bearerAuthMiddleware` must run first —
 it is what populates the session that `AuthorizeGrant` reads. The gate is mounted *inside*
 that group and *outside* the individual `r.Get` / `r.Post` / `r.Route` calls.
@@ -108,7 +108,7 @@ Two live precedents already prove the pattern in the same function: `annotation:
 `knowledge-graph:read`. Mounting on the group means (a) a new corpus route added inside the
 group is gated by construction, (b) the contract test in §8 can assert the manifest
 statically, and (c) `RequireScope`'s existing source switch — which lets shared-token and
-bootstrap sessions through — applies uniformly instead of being re-implemented eight times.
+bootstrap sessions through — applies uniformly instead of being re-implemented sixteen times.
 
 **Why not elsewhere.**
 - *Not in `bearerAuthMiddleware`.* That middleware serves every authenticated route
@@ -130,7 +130,18 @@ calls, finally giving it a production caller.
 
 ## 2. Route Inventory
 
-Route-group labels are a **closed set of eight** values (R-108-O3) — never the raw path.
+Route-group labels are a **closed set of sixteen** values (R-108-O3, widened by `spec.md` §18
+decision 5) — never the raw path. The label set is not merely documented as sixteen, it is
+sixteen in code: `internal/metrics/auth.go:219-236` declares the sixteen `CorpusRouteGroup`
+constants, `:240-257` fixes their canonical Tier A → Tier B order, and
+`internal/metrics/corpus_grant_test.go:162-166` fails the build if `CorpusRouteGroups()` returns
+any other count. **The label set was widened with the route surface; the two do not diverge.**
+
+The numbering below is the canonical order of `spec.md` §4.2 and `metrics.CorpusRouteGroups()`.
+An earlier revision of this table swapped groups 7 and 8 (`knowledge` before `context_for`); that
+ordering never matched the ratified spec or the metrics slice and is corrected here.
+
+### Tier A — raw corpus retrieval (groups 1–8)
 
 | # | Route(s) | Method | Handler | `route_group` label | Gated |
 |---|---|---|---|---|---|
@@ -140,11 +151,45 @@ Route-group labels are a **closed set of eight** values (R-108-O3) — never the
 | 4 | `/api/artifact/{id}` | GET | `deps.ArtifactDetailHandler` | `artifact_detail` | YES |
 | 5 | `/api/artifacts/{id}/domain` | GET | `deps.DomainDataHandler` | `artifact_domain` | YES |
 | 6 | `/api/export` | GET | `deps.ExportHandler` | `export` | YES |
-| 7 | `/api/knowledge/concepts`, `/concepts/{id}`, `/entities`, `/entities/{id}`, `/lint`, `/stats` | GET | `deps.Knowledge*Handler` | `knowledge` | YES |
-| 8 | `/api/context-for` | POST | `deps.ContextHandler.HandleContextFor` | `context_for` | YES |
+| 7 | `/api/context-for` | POST | `deps.ContextHandler.HandleContextFor` | `context_for` | YES |
+| 8 | `/api/knowledge/concepts`, `/concepts/{id}`, `/entities`, `/entities/{id}`, `/lint`, `/stats` | GET | `deps.Knowledge*Handler` | `knowledge` | YES |
 
-Group 7 is registered via `r.Route("/knowledge", ...)`; the gate attaches to the enclosing
-group so all six knowledge endpoints inherit it as one unit.
+### Tier B — corpus-derived Phase-5 intelligence (groups 9–16, §18 decision 5)
+
+| # | Route(s) | Method | Handler | `route_group` label | Gated |
+|---|---|---|---|---|---|
+| 9 | `/api/expertise` | GET | `ExpertiseHandler(deps.IntelligenceEngine)` | `expertise` | YES |
+| 10 | `/api/learning-paths` | GET | `LearningPathsHandler(deps.IntelligenceEngine)` | `learning_paths` | YES |
+| 11 | `/api/subscriptions` | GET | `SubscriptionsHandler(deps.IntelligenceEngine)` | `subscriptions` | YES |
+| 12 | `/api/serendipity` | GET | `SerendipityHandler(deps.IntelligenceEngine)` | `serendipity` | YES |
+| 13 | `/api/content-fuel` | GET | `ContentFuelHandler(deps.IntelligenceEngine)` | `content_fuel` | YES |
+| 14 | `/api/quick-references` | GET | `QuickReferencesHandler(deps.IntelligenceEngine)` | `quick_references` | YES |
+| 15 | `/api/monthly-report` | GET | `MonthlyReportHandler(deps.IntelligenceEngine)` | `monthly_report` | YES |
+| 16 | `/api/seasonal-patterns` | GET | `SeasonalPatternsHandler(deps.IntelligenceEngine)` | `seasonal_patterns` | YES |
+
+Tier B carries the same grant and the same denial shape as Tier A. The split is documentation,
+not a difference in authority: all sixteen groups compute over the one global corpus, so a
+bearer-only Tier B would have left a partial boundary.
+
+**Two registrations are conditional, and both conditionals sit INSIDE the gated group.** Group 7
+is registered only when `deps.ContextHandler != nil`, and the whole of Tier B only when
+`deps.IntelligenceEngine != nil`. Enclosing the gate in the conditional instead would register
+those routes ungated exactly when the dependency is wired — that is, precisely when they serve
+corpus content. It is also an assertion hazard: a route-manifest test built with a nil engine
+would observe eight gated groups and call the surface complete. See `spec.md` §18 decision 5 and
+SCN-108-G05.
+
+Group 8 is registered via `r.Route("/knowledge", ...)`; the gate attaches to the enclosing group
+so all six knowledge endpoints inherit it as one unit and a seventh cannot be added ungated.
+
+**Verified against source 2026-08-12.** `internal/api/router.go:131-203` mounts one
+`r.Group(...)` carrying `auth.RequireScope(auth.GrantGlobalCorpusRead)` (`:134`, ENFORCE only)
+over exactly these sixteen registrations, each with its own
+`corpusGate.Observe(metrics.CorpusRouteGroup*)`. The route paths and methods above match the
+expected mount manifest in `internal/api/router_corpus_gate_test.go:82-106` row for row. Note
+that `spec.md` §4.2 cites pre-implementation `router.go` line numbers (`:89`, `:238-250`) that
+the landed code has since moved; the route names, methods, and labels agree exactly, only those
+stale line citations do not.
 
 ### Routes deliberately NOT gated
 
@@ -156,7 +201,7 @@ group so all six knowledge endpoints inherit it as one unit.
 | `/api/topics`, `/api/people`, `/api/places`, `/api/time`, `/api/graph/edges` | GET | Already gated by `auth.RequireScope("knowledge-graph:read")`, which IS in `dailyUserGrants`. Adding `corpus:read` here would revoke a grant daily users legitimately hold. |
 | `/api/bookmarks/import` | POST | Write path. |
 | `/api/internal/telegram-message-artifact` | POST/GET | Internal id↔id mapping; returns no corpus content. |
-| `/api/expertise` and the other Phase-5 intelligence endpoints | GET | ~~Out of scope per spec §12 Non-Goals~~ — **SUPERSEDED 2026-07-29 by `spec.md` §18 decision 5 (F-108-ADJ-01): these eight endpoints are now IN SCOPE and gated as Tier B.** They compute over the same global corpus, so leaving them bearer-only would have left a partial boundary. See `spec.md` §4.2 Tier B for the canonical inventory and `scopes.md` Scope 03 (SCN-108-G04, SCN-108-G05) for the plan. Extending the §2 table above to sixteen rows is routed to `bubbles.design`. |
+| `/api/expertise` and the other Phase-5 intelligence endpoints | GET | ~~Out of scope per spec §12 Non-Goals~~ — **SUPERSEDED 2026-07-29 by `spec.md` §18 decision 5 (F-108-ADJ-01): these eight endpoints are now IN SCOPE and gated as Tier B.** They compute over the same global corpus, so leaving them bearer-only would have left a partial boundary. They are listed as groups 9–16 in the §2 table above (reconciled 2026-08-12); see `spec.md` §4.2 Tier B for the canonical inventory and `scopes.md` Scope 03 (SCN-108-G04, SCN-108-G05) for the plan. |
 | `/api/health`, `/metrics`, `/readyz` | GET | Unauthenticated by design; carry no corpus data. |
 
 ---
@@ -222,7 +267,7 @@ The observe middleware is mounted in **both** stages — otherwise OBSERVE emits
 
 | Metric | Type | Labels | Meaning |
 |---|---|---|---|
-| `smackerel_auth_corpus_grant_would_deny_total` | Counter | `route_group` (closed set of 8), `user_id`, `session_source` | A request that WOULD be denied under ENFORCE but was allowed under OBSERVE. |
+| `smackerel_auth_corpus_grant_would_deny_total` | Counter | `route_group` (closed set of 16), `user_id`, `session_source` | A request that WOULD be denied under ENFORCE but was allowed under OBSERVE. |
 | `smackerel_auth_corpus_grant_allowed_total` | Counter | `route_group`, `session_source` | A request that carried the grant. Gives the denominator. |
 | `smackerel_auth_corpus_grant_enforcement_mode` | Gauge | none | `0` = OBSERVE, `1` = ENFORCE. Lets a dashboard state the stage without reading config. |
 | `smackerel_auth_scope_rejected_total` | Counter (existing) | existing labels | Real 403s in ENFORCE. Unchanged — deliberately NOT reused for the observe signal (R-108-O2). |
@@ -316,24 +361,31 @@ audience scope, that is 109's decision and requires no change here.
 | # | Category | Location | What it proves |
 |---|---|---|---|
 | T1 | `unit` | `internal/auth/browser_session_policy_test.go` | `GateGlobalCorpusRead` denies an empty scope claim, denies a `*` wildcard claim, allows an explicit `corpus:read` claim, and returns a `CorpusDecision` carrying no content/count/label. |
-| T2 | `unit` | `internal/metrics/auth_test.go` | The three new metrics register in the `smackerel_auth_*` family with the closed 8-value `route_group` label set; an unknown label value is rejected. |
+| T2 | `unit` | `internal/metrics/corpus_grant_test.go` | The three new metrics register in the `smackerel_auth_*` family with the closed **sixteen-value** `route_group` label set; an unknown label value is rejected. The set is asserted against an independent in-test literal, not derived from `CorpusRouteGroups()`, so adding a seventeenth constant cannot silently update the expectation. |
 | T3 | `unit` | `cmd/core` config resolution test | Absent `SMACKEREL_AUTH_CORPUS_GRANT_ENFORCEMENT` aborts startup naming the variable; a malformed value aborts naming the value; neither silently selects a stage (SCN-108-C03). |
-| T4 | `integration` | `internal/api` against the ephemeral test stack | OBSERVE: ungranted principal gets **200** on all eight route groups AND `..._corpus_grant_would_deny_total` increments with the right `route_group`. ENFORCE: same principal gets **403** on all eight. |
+| T4 | `integration` | `internal/api` against the ephemeral test stack | OBSERVE: ungranted principal gets **200** on all sixteen route groups AND `..._corpus_grant_would_deny_total` increments with the right `route_group`. ENFORCE: same principal gets **403** on all sixteen. The fixture MUST wire a non-nil `IntelligenceEngine`, or Tier B is simply absent and the run reports eight-of-eight as a pass. |
 | T5 | `integration` | same | Shared-token and bootstrap sessions pass under ENFORCE (documented `RequireScope` source-switch bypass), so the bypass is asserted, not assumed. |
 | T6 | `e2e-api` | `./smackerel.sh test e2e` | Full stack, real Postgres: granted operator token reads `/api/search` and `/api/export`; ungranted daily-user token is refused on both; the refusal body contains no artifact id, title, or count. |
 | T7 | `e2e-api` | same | Route-group parity: a denied `/api/artifact/{id}` for a real id and for a random id produce byte-identical responses (no existence oracle). |
 
 ### T8 — Adversarial: the gate cannot be silently removed (REQUIRED)
 
-Extend `internal/api/auth_surface_contract_test.go` — today the only referent of
-`GateGlobalCorpusRead` — with a **route-manifest contract test**:
+Add a **route-manifest contract test** covering the full gated surface. The planned home was
+`internal/api/auth_surface_contract_test.go` — the only referent of `GateGlobalCorpusRead` when
+this design was written. The landed test is `internal/api/router_corpus_gate_test.go`: the
+manifest assertions need the real router and the mount-walking helpers, and the surface-contract
+file stays focused on the decision function and the scope-surface registration. Both files exist;
+neither duplicates the other.
 
 - Build the real router via the same constructor production uses, with ENFORCE selected.
-- Enumerate the eight corpus routes from a canonical in-test list (the same eight
-  `route_group` values as §2).
+- Enumerate the sixteen corpus routes from a canonical in-test list (the same sixteen
+  `route_group` values as §2, Tier A then Tier B).
 - For each, issue a request with a session whose scope claim is empty and assert **403**.
 - Assert the **set equality** of "routes the test knows about" against the router's mounted
-  corpus group, so adding a ninth corpus route without adding it to the list fails the test.
+  corpus group, so adding a seventeenth corpus route without adding it to the list fails the test.
+- Construct the router with a **non-nil** `IntelligenceEngine`. With a nil engine, Tier B is
+  never registered, so the walk finds eight gated groups and set equality still holds over the
+  routes that exist. The test would pass while eight groups went unexercised.
 
 This test fails if any of the following happens: `r.Use(auth.RequireScope(...))` is deleted
 from the group, a corpus route is moved out of the gated group, the stage machine defaults to
@@ -352,7 +404,7 @@ telemetry tagged `env=test*` only (R-108-O6, G115). No test writes to prod monit
 | File | Required change |
 |---|---|
 | `docs/Operations.md` | Under the existing **"Authentication Metrics"** heading: document the three new `smackerel_auth_corpus_grant_*` metrics with their closed label sets, plus the UC-108-001 observation runbook (the `sum by (user_id, route_group)` query, the go/no-go criterion, and the OBSERVE→ENFORCE→rollback procedure from §6). |
-| `docs/API.md` | Add `corpus:read` to the per-endpoint scope column for the eight corpus route groups in §2; document the 403 denial envelope and its zero-leakage guarantee; state explicitly which routes are NOT gated and why. |
+| `docs/API.md` | Add `corpus:read` to the per-endpoint scope column for the sixteen corpus route groups in §2; document the 403 denial envelope and its zero-leakage guarantee; state explicitly which routes are NOT gated and why. |
 | `docs/smackerel.md` §17.2 | Update the caller-surface table with the §5 compatibility matrix: which surfaces break at ENFORCE and what the operator must issue. Record that granting is a token rotation, not a flag flip. |
 | `config/release-trains.yaml` | No structural change — this spec targets the existing `next` train (`phase: active`, `target_slot: staging`). Confirm `flags_bundle: config/feature-flags.next.yaml` still resolves. |
 | `config/feature-flags.next.yaml` | Add `corpusGrantEnforcement: false` with an owning-spec comment (R-108-CFG1). `bubbles.train` flips it to `true` only after a clean observation window. |
