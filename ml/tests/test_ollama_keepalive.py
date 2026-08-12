@@ -312,9 +312,7 @@ def test_litellm_wire_body_carries_num_ctx_to_ollama_spec102(monkeypatch):
         custom_llm_provider="ollama_chat",
         **{key: value for key, value in kwargs.items() if key not in ("model", "messages")},
     )
-    body = transformation.OllamaChatConfig().transform_request(
-        "qwen3:30b-a3b", messages, dict(optional_params), {}, {}
-    )
+    body = transformation.OllamaChatConfig().transform_request("qwen3:30b-a3b", messages, dict(optional_params), {}, {})
 
     assert body["options"]["num_ctx"] == 32768
     assert "options" not in body["options"]

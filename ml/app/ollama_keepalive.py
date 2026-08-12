@@ -204,9 +204,7 @@ _LITELLM_TRANSPORT = "litellm"
 _NATIVE_JSON_TRANSPORT = "native-json"
 
 
-def _place_ollama_profile(
-    result: dict[str, Any], *, profile: OllamaRequestProfile, transport: str
-) -> dict[str, Any]:
+def _place_ollama_profile(result: dict[str, Any], *, profile: OllamaRequestProfile, transport: str) -> dict[str, Any]:
     """Write the resolved profile where the selected transport actually reads it.
 
     litellm builds the Ollama ``options`` object itself out of every kwarg it
@@ -241,9 +239,7 @@ def _place_ollama_profile(
     return result
 
 
-def _apply_ollama_profile(
-    payload: dict[str, Any], *, provider: str, model: str, transport: str
-) -> dict[str, Any]:
+def _apply_ollama_profile(payload: dict[str, Any], *, provider: str, model: str, transport: str) -> dict[str, Any]:
     result = dict(payload)
     if provider.strip().casefold() != "ollama":
         return result
