@@ -529,6 +529,7 @@ And smackerel_auth_corpus_grant_enforcement_mode reports 0
 | TP-02-04 | integration | `internal/api` against the ephemeral test stack | OBSERVE: an ungranted principal receives **200** on all sixteen route groups AND `..._corpus_grant_would_deny_total` increments with the correct `route_group`; the warn log carries no query text or artifact id (SCN-108-O01, design T4 observe half) | `./smackerel.sh test integration` |
 | TP-02-05 | integration | same | A granted principal receives 200, increments `..._corpus_grant_allowed_total`, does **not** increment the would-deny counter, and `..._enforcement_mode` reports `0` (SCN-108-O02) | `./smackerel.sh test integration` |
 | TP-02-06 | e2e-api | `./smackerel.sh test e2e` | **Regression E2E** — persistent scenario-specific regression for SCN-108-C03, SCN-108-C05, SCN-108-O01 and SCN-108-O02 against the live stack: absent/malformed config still aborts startup, and in OBSERVE an ungranted principal still receives 200 while `..._would_deny_total` still increments. Fails if a silent default is reintroduced or the observe counter is unwired; also proves the broader e2e suite shows no green→red drift | `./smackerel.sh test e2e` |
+| TP-02-07 | unit | `internal/api/corpus_grant_gate_test.go` | This scope's observe middleware NEVER denies, in **either** stage — no 403 originates from `corpusGate.Observe`. Asserted by `TestCorpusGrantGate_Observe_NeverDeniesInEitherStage` with an `observe_stage` and an `enforce_stage` subtest, so the enforce-stage half is proven rather than assumed: under ENFORCE only `RequireScope` may deny. Added when the Scope 02/03 boundary was split (see the DoD note) so the retained half is covered by a Test Plan row rather than by a DoD item alone | `./smackerel.sh test unit` |
 
 ### Definition of Done
 
@@ -790,10 +791,37 @@ And smackerel_auth_corpus_grant_enforcement_mode reports 0
   from an explicit write rather than an unset zero value; it does **not** prove `cmd/core`
   publishes the stage at startup.
 
-- [ ] Observe middleware is mounted in both stages; no request path can return 403 from this scope
-  <!-- UNPROVEN — not because the property is false, but because ticking it here would absorb an open boundary finding. Both halves now hold in the tree: the gate IS mounted (`internal/api/router.go:132` `corpusGate := NewCorpusGrantGate(...)` with per-route `r.With(corpusGate.Observe(...))` in both stages, only `RequireScope` behind `if deps.CorpusGrantEnforce`), and `TestCorpusGrantGate_Observe_NeverDeniesInEitherStage` PASSES with both `observe_stage` and `enforce_stage` subtests. But the mount was delivered by **Scope 03** ("Gate Mount"), and `corpus_grant_observe_test.go:12-20` still records that Scope 02 does not mount it. The unresolved FINDING for bubbles.plan/bubbles.design stands: this item contradicts the Scope 02/03 boundary and should move to Scope 03 or be split. Ticking it under Scope 02 would silently self-approve that reassignment. -->
+- [x] `TP-02-07` — this scope's observe middleware never denies in **either** stage; no 403 originates from `corpusGate.Observe`
+  - **Command:** `./smackerel.sh test unit --go --go-run 'TestCorpusGrantGate_Observe_NeverDeniesInEitherStage'`
+  - **Exit Code:** 0
+  - **Evidence:** `--- PASS: TestCorpusGrantGate_Observe_NeverDeniesInEitherStage (0.00s)`
+    with `--- PASS: .../observe_stage` and `--- PASS: .../enforce_stage`. The enforce-stage
+    subtest is the load-bearing one: under ENFORCE only `RequireScope` may deny, so a
+    regression that made the observe middleware itself return 403 would be caught here.
 
-  <!-- Also note the tier: the mount is proven by a route-manifest assertion over an in-process router, not by a live end-to-end request. -->
+  **BOUNDARY SPLIT (resolves the open Scope 02/03 finding).** The former wording of this
+  item was "Observe middleware is mounted in both stages; no request path can return 403
+  from this scope" — two properties owned by two different scopes. It is now SPLIT along
+  the real boundary rather than moved wholesale, because each half is genuinely the
+  deliverable of a different scope:
+
+  - **Scope 02 ("Observe-Stage Plumbing") retains the never-denies half**, above. Building
+    a middleware that never denies IS this scope's deliverable, and it is asserted by a
+    test living in this scope's own gate file.
+  - **Scope 03 ("Gate Mount") owns the mounted-on-all-sixteen half**, which it already
+    asserts and has already evidenced: `r.Use(auth.RequireScope(...)) mounted on the corpus
+    route group` and `All sixteen route groups from spec.md §4.2 ... sit inside the gated
+    group` are both checked there, backed by TP-03-02 and the route-manifest test.
+
+  Splitting creates no orphan: the half leaving Scope 02 lands in a scope that already
+  carries both a Test Plan row and checked DoD items for it, and the half staying gains
+  TP-02-07 so it is no longer a DoD item without Test Plan coverage. Neither assertion is
+  weakened — this was a question of WHICH SCOPE OWNS the property, not whether it holds.
+
+  Tier recorded honestly: TP-02-07 is **unit**, not integration. `internal/api` is not in
+  the integration lane (`scripts/runtime/go-integration.sh` runs `./tests/integration/...`,
+  `./internal/notification/...`, `./internal/assistant/...`, `./internal/cardrewards/...`,
+  `./tests/eval/...`), so labelling it integration would misstate where it executes.
 
 
 - [x] `TP-02-06` regression e2e-api test passes — fail-loud config resolution and OBSERVE-stage counting are permanently protected
