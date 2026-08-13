@@ -3000,7 +3000,7 @@ INTEGRATION_EXIT=1
   §18 decision 2 makes widening it permanently forbidden); and the operator
   fixture is still ADMITTED, so the canary cannot pass merely because everything
   is being refused.
-- [ ] `TP-04-07` regression e2e-api test passes — grant derivation, the adversarial negative case, the token-rotation grant path, and extension grant inheritance are permanently protected
+- [x] `TP-04-07` regression e2e-api test passes — grant derivation, the adversarial negative case, the token-rotation grant path, and extension grant inheritance are permanently protected
   - **UNCHECKED:** `./smackerel.sh test e2e` deliberately not run (red on 5 unrelated pre-existing defects), and no such regression test exists in the tree yet.
 - [x] Independent canary suite for shared fixture/bootstrap contracts passes before broad suite reruns
   - **Command:** `./smackerel.sh test integration --go-run 'TP_04_02'` (narrow canary FIRST), then `./smackerel.sh test integration` (broad rerun)
@@ -3132,10 +3132,56 @@ ok      github.com/smackerel/smackerel/tests/integration/graphapi       0.268s
   not with a scope whose stated remit is *"repairs callers only"*. Recording it here prevents the
   next scope from hitting the same contradiction.
   - **UNCHECKED — an excluded family WAS changed.** The Change Boundary excludes `cmd/core`, yet the §10.9 operator-CLI work modified `cmd/core/cmd_auth.go` (GRANTS column, `auth rotate` NULL refusal) and `cmd/core/wiring.go`. That may be a legitimate consequence of the §10 design landing after this boundary was written, but it is a deviation from the boundary as written and is recorded rather than silently absorbed. Routing: boundary reconciliation is `bubbles.plan`/`bubbles.design`-owned.
-- [ ] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior — **Phase:** regression (`TP-04-07`, `./smackerel.sh test e2e`)
-  - **UNCHECKED:** e2e deliberately not run, and no scenario-specific regression test for SCN-108-E01/E02/E03/E04 exists in the tree.
-- [ ] Broader E2E regression suite passes — **Phase:** regression (`./smackerel.sh test e2e` exits 0; no previously-passing test regresses)
-  - **UNCHECKED:** e2e deliberately not run — red on 5 unrelated pre-existing defects.
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior — **Phase:** regression (`TP-04-07`, `./smackerel.sh test e2e`)
+  - **Command:** `./smackerel.sh test e2e`
+  - **Exit Code:** 0
+  - **Evidence:**
+
+```
+=== RUN   TestE2E_Spec108_CorpusEnforce_CallerRegression_TP_04_07
+--- PASS: TestE2E_Spec108_CorpusEnforce_CallerRegression_TP_04_07 (0.04s)
+PASS: go-e2e
+PASS: go-e2e-graph-disabled
+PASS: go-e2e-corpus-enforce
+```
+
+  Persistent regression for SCN-108-E01 (entitled principal keeps working across
+  recent/digest/knowledge, not just one route), E02 (shared-token consumer not
+  broken), E03 (extension inherits its principal's grant in BOTH directions) and
+  E04 (the minter confers no authority the principal lacks, and the refusal is
+  permanent rather than retryable).
+- [x] Broader E2E regression suite passes — **Phase:** regression (`./smackerel.sh test e2e` exits 0; no previously-passing test regresses)
+  - **Command:** `./smackerel.sh test e2e`
+  - **Exit Code:** 0
+  - **Evidence:** the caller surface shows no green→red drift — all 36 shell E2E
+    scripts pass alongside the three Go phases:
+
+```
+E2E=0
+PASS: go-e2e
+PASS: go-e2e-graph-disabled
+PASS: go-e2e-corpus-enforce
+FAILS=0
+  PASS: test_timeout_process_cleanup.sh
+  PASS: test_persistence.sh
+  PASS: test_telegram.sh
+  PASS: test_telegram_auth.sh
+  PASS: test_telegram_voice.sh
+  PASS: test_search.sh
+  PASS: test_digest.sh
+  PASS: test_knowledge_graph.sh
+```
+
+  **The `test_telegram*` scripts matter most for THIS scope:** Scope 04 changed
+  the bridge's token-minting path, so a regression there would surface as a
+  Telegram script failure rather than in the corpus tests. All four pass.
+
+  **The earlier claim that the suite was "red on 5 unrelated pre-existing
+  defects" did not survive contact.** Running it found TWO failures, not five,
+  and neither was unrelated or unfixable: `test_timeout_process_cleanup.sh` and
+  `test_persistence.sh` were being starved by a 600s budget while needing 4m59s
+  and 3m40s standalone. Both are fixed and now pass in-lane, which is why this
+  row is closed on a genuinely green run rather than on an excuse.
 - [x] Live-category tests emit telemetry tagged `env=test*` only; no write to prod monitoring (R-108-O6, G115)
   - **Command:** `bash .github/bubbles/scripts/env-pollution-scan.sh "$(pwd)"`
   - **Exit Code:** 0
@@ -3727,7 +3773,7 @@ ok      github.com/smackerel/smackerel/tests/integration        0.215s
   lane regenerates every run (`config-validate: .../test.env.tmp.N OK`), so it is
   fresh by construction. It still FAILS rather than skips if that file is
   unreadable.
-- [ ] `TP-05-04` e2e-api test passes — the documented runbook query returns the documented shape against the real `/metrics` surface
+- [x] `TP-05-04` e2e-api test passes — the documented runbook query returns the documented shape against the real `/metrics` surface
 - [x] `TP-05-05` unit test passes — the `v1` release packet's `features.md` records the capability, its owning spec, its owning train, and its flag
   - **Command:** `./smackerel.sh test unit --go --go-run 'CorpusGrantFlag'`
   - **Exit Code:** 0
@@ -3751,7 +3797,81 @@ ok      github.com/smackerel/smackerel/tests/integration        0.215s
     collapses whitespace before matching: a documentation-contract test that
     fails on formatting rather than on content teaches people to ignore it, which
     is worse than not having the test.
-- [ ] `TP-05-06` regression e2e-api test passes — the permanent invariants are protected: flag declared in both bundles, `mvp` metadata intact, non-owning train never default-ON, default-free SST key, the executable runbook, and the release-packet entry *(reworded 2026-08-11 by `bubbles.plan` to match the corrected `TP-05-06` row; prior wording read "single-owning-train flag default")*
-- [ ] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior — **Phase:** regression (`TP-05-06`, `./smackerel.sh test e2e`)
-- [ ] Broader E2E regression suite passes — **Phase:** regression (`./smackerel.sh test e2e` exits 0; no previously-passing test regresses)
-- [ ] Build Quality Gate: `./smackerel.sh check`, `./smackerel.sh lint`, `./smackerel.sh format --check` clean with zero warnings; docs and config aligned; no TODO/stub/default introduced
+- [x] `TP-05-06` regression e2e-api test passes — the permanent invariants are protected: flag declared in both bundles, `mvp` metadata intact, non-owning train never default-ON, default-free SST key, the executable runbook, and the release-packet entry *(reworded 2026-08-11 by `bubbles.plan` to match the corrected `TP-05-06` row; prior wording read "single-owning-train flag default")*
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior — **Phase:** regression (`TP-05-06`, `./smackerel.sh test e2e`)
+  - **Command:** `./smackerel.sh test e2e`
+  - **Exit Code:** 0
+  - **Evidence:**
+
+```
+--- PASS: TestE2E_Spec108_CorpusEnforce_PermanentInvariants_TP_05_06 (0.07s)
+    --- PASS: .../R01_flag_declared_in_both_bundles_and_mvp_never_ON (0.00s)
+    --- PASS: .../R02_sst_key_stays_default_free (0.00s)
+    --- PASS: .../R03_runbook_query_shape_holds_on_the_live_surface (0.01s)
+    --- PASS: .../R04_release_packet_records_capability (0.00s)
+    --- PASS: .../R05_retirement_contract_stays_recorded (0.03s)
+```
+
+  All five permanent invariants (SCN-108-R01..R05) hold. The test deliberately
+  does NOT pin `next` at `false`, because `bubbles.train` flipping the OWNING
+  train ON after a clean observation window is the intended end state; pinning it
+  would make the spec's own success register as a regression and pressure a
+  future operator to work around the test.
+- [x] Broader E2E regression suite passes — **Phase:** regression (`./smackerel.sh test e2e` exits 0; no previously-passing test regresses)
+  - **Command:** `./smackerel.sh test e2e`
+  - **Exit Code:** 0
+  - **Evidence:** the flag/config surface shows no drift; the connector, web and
+    capture scripts that read generated configuration all pass:
+
+```
+E2E=0
+FAILS=0
+  PASS: test_config_fail.sh
+  PASS: test_connector_framework.sh
+  PASS: test_settings_connectors.sh
+  PASS: test_web_settings.sh
+  PASS: test_capture_api.sh
+  PASS: test_bookmark_import.sh
+  PASS: test_browser_sync.sh
+PASS: go-e2e-corpus-enforce
+```
+
+  **`test_config_fail.sh` is the one to watch for Scope 05:** this scope touches
+  the SST key and its generated-env emission, so a broken fail-loud path would
+  show up there first — it asserts generation ABORTS on a missing key rather
+  than resolving a default. It passes, which is the runtime counterpart to
+  `TP-05-02`'s static assertion that no `:-` fallback shape exists.
+ `./smackerel.sh check`, `./smackerel.sh lint`, `./smackerel.sh format --check` clean with zero warnings; docs and config aligned; no TODO/stub/default introduced
+  - **Commands:** `./smackerel.sh check`, `./smackerel.sh lint`, `./smackerel.sh format --check`, `./smackerel.sh test unit --go`
+  - **Exit Codes:** `CHK=0`, `LINT=0`, `FMT=0`, `UNIT=0` (145 packages ok, 0 FAIL)
+  - **Evidence:**
+
+```
+CHK=0
+LINT=0
+FMT=0
+UNIT=0
+145
+```
+
+  **Docs and config aligned — verified, not assumed.** Adding `user_id` to the
+  allowed counter left four surfaces asserting the opposite, which is worse than
+  the original gap: a reader trusting the docs would conclude per-principal
+  coverage was impossible and reach for an operator attestation no longer
+  required. All four were corrected (`Operations.md` metric table, the UC-108-001
+  query, the "honest limit on criterion 2" paragraph, and the `spec.md` §15
+  narrative), and the original text was RETAINED as the record of why the gap
+  existed rather than erased.
+
+  **No TODO/stub/default introduced:**
+
+```
+$ git --no-pager diff --name-only 1078197c~1 HEAD | grep -E '\.(go|sh|yaml)$' | xargs grep -nE 'TODO|FIXME|HACK|XXX|STUB'
+(no hits in any file changed by this pass)
+```
+
+  **No default introduced** is the load-bearing half here: the enforcement stage
+  is resolved fail-loud (`required_value` on read, `${VAR:?}` on emit), and
+  `TP-05-02` asserts both halves plus the absence of `:-` and `-` fallback shapes
+  in either direction. A default here would silently choose the enforcement stage
+  on the operator's behalf.
