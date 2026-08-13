@@ -150,7 +150,7 @@ Corroborating (grep-derived, advisory) numbers:
 | G131 | domain_model_consistency_gate | `script:bubbles/scripts/claim-source-lint.sh`, `script:bubbles/scripts/domain-model-consistency-selftest.sh`, `script:bubbles/scripts/domain-model-consistency.sh` | 0 | Check 42 | 5 | guard |
 | G132 | reference_existence_gate | `script:bubbles/scripts/reference-existence-lint-selftest.sh`, `script:bubbles/scripts/reference-existence-lint.sh` | 0 | — | 3 | — |
 | G133 | collected_test_count_gate | `script:bubbles/scripts/collected-test-count-guard.sh`, `script:bubbles/scripts/collected-test-count-guard-selftest.sh` | 0 | — | 1 | — |
-| G134 | goal_fidelity_gate | `script:bubbles/scripts/goal-fidelity-guard.sh`, `script:bubbles/scripts/goal-fidelity-guard-selftest.sh` | 0 | — | 2 | — |
+| G134 | goal_fidelity_gate | `script:bubbles/scripts/goal-fidelity-guard.sh`, `script:bubbles/scripts/goal-fidelity-guard-selftest.sh` | 0 | — | 4 | — |
 | G135 | autonomy_posture_gate | `script:bubbles/scripts/autonomy-posture-guard.sh`, `script:bubbles/scripts/autonomy-posture-guard-selftest.sh` | 0 | — | 3 | — |
 | G136 | human_acceptance_terminal_gate | `script:bubbles/scripts/guards/tail-delegated-gates.sh`, `script:bubbles/scripts/state-transition-guard-selftest.sh`, `script:tests/regression/test_35_human_acceptance_terminal.sh` | 0 | Check 43 | 2 | guard |
 
@@ -209,7 +209,7 @@ These gates are intentionally enforced OUTSIDE the mode `requiredGates` lists. E
 | G131 | domain_model_consistency_gate | Check 42 | 5 | guard | domain-model-consistency-selftest.sh, domain-model-consistency.sh, framework-validate.sh, gate-bands-selftest.sh, gate-bands.sh |
 | G132 | reference_existence_gate | — | 3 | — | framework-validate.sh, reference-existence-lint-selftest.sh, reference-existence-lint.sh |
 | G133 | collected_test_count_gate | — | 1 | — | gate-vintage-guard.sh |
-| G134 | goal_fidelity_gate | — | 2 | — | framework-validate.sh, goal-fidelity-guard.sh |
+| G134 | goal_fidelity_gate | — | 4 | — | framework-validate.sh, goal-boundary-receipt-selftest.sh, goal-boundary-receipt.sh, goal-fidelity-guard.sh |
 | G135 | autonomy_posture_gate | — | 3 | — | autonomy-posture-guard-selftest.sh, autonomy-posture-guard.sh, framework-validate.sh |
 | G136 | human_acceptance_terminal_gate | Check 43 | 2 | guard | framework-validate.sh, state-transition-guard-selftest.sh |
 

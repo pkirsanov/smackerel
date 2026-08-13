@@ -337,6 +337,8 @@ bubbles/scripts/retro-framework-health-selftest.sh
 bubbles/scripts/retro-framework-health.sh
 bubbles/scripts/risk-tier-resolve-selftest.sh
 bubbles/scripts/risk-tier-resolve.sh
+bubbles/scripts/run-state-reaper-selftest.sh
+bubbles/scripts/run-state-registry-selftest.sh
 bubbles/scripts/runtime-concurrency-selftest.sh
 bubbles/scripts/runtime-lease-selftest.sh
 bubbles/scripts/runtime-leases.sh
