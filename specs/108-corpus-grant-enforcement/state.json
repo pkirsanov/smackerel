@@ -40,7 +40,8 @@
       "security",
       "regression",
       "simplify",
-      "docs"
+      "docs",
+      "audit"
     ],
     "completedPhaseClaimsNote": "Claims ONLY the phases whose provenance Check 6B can actually verify: each has an executionHistory entry whose agent is bubbles.<phase> and whose phasesExecuted contains that phase. 'implement' is deliberately NOT claimed even though the work was done and is green — it was executed by bubbles.goal as the authorized top-level runner, not by a bubbles.implement dispatch, so claiming it would assert a provenance that does not exist. The bubbles.goal executionHistory entry is the truthful record of who did that work.",
     "completedScopes": [
@@ -691,6 +692,29 @@
         "report.md"
       ],
       "summary": "Docs alignment pass that found a PRE-EXISTING defect larger than the change that prompted it: docs/Operations.md documented five bearer-auth metrics with a _token_ segment (smackerel_auth_token_issuance_total and four siblings) that internal/metrics/auth.go does not emit. Every PromQL example built on them returns empty, so an operator following the runbook would read silence as 'no token activity' rather than 'wrong metric name' — a failure mode that looks like data. Verified against the Name: literals in auth.go and corrected. Also documented the new bypassed counter for integrators in API.md, marked the spec-044 table as a subset of the smackerel_auth_* family rather than the whole of it, and refreshed Product_Delivery_Plan 5.8: both blockers it recorded are cleared, verified independently via git ls-tree (specs 110/111/112 are in HEAD) and git status (config/release-trains.yaml clean, F1/G110 fix landed in d0d00d31)."
+    },
+    {
+      "agent": "bubbles.audit",
+      "mode": "full-delivery",
+      "phasesExecuted": [
+        "audit"
+      ],
+      "startedAt": "2026-08-13T00:00:00Z",
+      "finishedAt": "2026-08-13T00:00:00Z",
+      "durationUnmeasured": true,
+      "durationUnmeasuredReason": "Audit dispatch recorded at DATE granularity; no clock span was captured and none is invented.",
+      "statusBefore": "blocked",
+      "statusAfter": "blocked",
+      "outcome": "completed_owned",
+      "artifactsWritten": [],
+      "artifactsNotTouched": [
+        "scopes.md",
+        "state.json",
+        "spec.md",
+        "design.md",
+        "report.md"
+      ],
+      "summary": "Adversarial audit executed in an isolated worktree (/tmp/smackerel-spec108-traceability-merge-20260813) so its mutations could not perturb the main tree. It did not take the packet's non-vacuity claims on trust; it BROKE each mechanism and confirmed the guard fired. (1) Removing the gate's bypass emit failed TestCorpusGrantGate_Observe_BypassedSessionSourcesAreCountedButNotPredicted on BOTH shared_token and bootstrap. (2) Collapsing per-principal attribution failed TestCorpusGrantMetrics_CoverageCellIsClosableByEitherOutcome with 'the denied principal has a non-zero ALLOWED count (1)'. (3) Breaking the non-owning-train check failed TestCorpusGrantFlag_BundleParity_TP_05_01/adversarial_non_owning_train_ON_is_rejected with 'this is exactly the G111 violation condition'. Each revert was verified byte-clean (git diff --stat empty) and each test re-passes on the clean tree. It also re-ran release-train-guard at HEAD: exit 0, 2 trains, warnings only. No discrepancy raised. RECORDED FROM THE OBSERVED TRANSCRIPT: the dispatch returned no closing report, so this entry cites the commands and outputs seen directly rather than a summary the agent authored."
     }
   ],
   "nextRequiredOwner": "bubbles.plan"
