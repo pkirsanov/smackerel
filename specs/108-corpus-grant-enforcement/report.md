@@ -415,35 +415,52 @@ WHERE source_id = $1 AND content_hash <> ALL($2::text[])
 and `cmd/core/wiring_selfknowledge.go:64` — a file whose own header says "spec 104 SCOPE-03 **boot
 lifecycle**" — invokes `ingestor.Ingest(ctx)` once at core startup, which performs that sweep.
 
-**What is proven, and what is inferred — the distinction matters for whoever picks this up.**
+**What is proven.** The mechanism was not left as an inference — it was executed against a live
+test stack:
 
-*Proven by reading the code:* every row these three tests insert carries a synthetic
-`content_hash` of the form `"h-"+id`, which is by construction absent from the real corpus
-keep-set, so a stale sweep running while those rows exist deletes exactly them. The sweep executes
-in the core container, a different process from the test binary, and never calls `nslock` — it is
-production code, so the regex-over-test-sources contract in `nslock/callsite_contract_test.go`
-cannot reach it even in principle. Adding another allowlist entry would not have caught this.
+```text
+# 1. Core boots and runs the sweep (nothing stale yet):
+{"msg":"self-knowledge corpus ingested","namespace":"smackerel_self","entries":13,"published":13,"swept":0}
 
-*Inferred, not directly observed:* that the boot sweep temporally overlaps the failing tests. The
-lane log does not capture core stdout, so the `"self-knowledge corpus ingested"` line with its
-`swept` count is not in `/tmp/i10.log` and the overlap could not be timed from it. The inference
-rests on the four behavioural observations below rather than on a captured timestamp.
+# 2. Insert one smackerel_self row with a SYNTHETIC content_hash — the exact
+#    shape every one of these tests inserts ("h-"+id):
+$ psql -c "INSERT INTO artifacts (id,artifact_type,title,content_hash,source_id)
+           VALUES ('probe-sweep-108','capability','sweep probe','h-probe-sweep-108','smackerel_self');"
+INSERT 0 1
+$ psql -tAc "SELECT count(*) FROM artifacts WHERE id='probe-sweep-108';"
+1
 
-**The four observations any correct explanation has to fit:** zero in-run rows (their own inserts
-gone, not merely unmatched); green in isolation; green when run alongside *both* known test-side
-contenders; red in the full lane; and a health snapshot reporting `artifact_count: 0`.
+# 3. Restart the core. Its boot lifecycle runs Ingest -> sweepStale:
+$ docker restart smackerel-test-smackerel-core-1
+{"msg":"self-knowledge corpus ingested","namespace":"smackerel_self","entries":13,"published":13,"swept":1}
+                                                                                              ^^^^^^^^^
+# 4. The row is gone:
+$ psql -tAc "SELECT count(*) FROM artifacts WHERE id='probe-sweep-108';"
+0
+```
 
-**The experiment that would settle it** — cheap, and worth doing before fixing anything: insert a
-`smackerel_self` row with a synthetic `content_hash`, restart the core, and check whether the row
-survives. If it does not, the boot sweep is confirmed as the deleter and the fix is to make the
-production sweep participate in the same advisory lock (it can — `pg_advisory_lock` is
-database-scoped, not test-scoped) or to make the test rows use corpus-consistent hashes.
+`swept` moved 0 → 1 and the probe row count moved 1 → 0 on a core restart. The core's boot-time
+sweep deletes precisely the rows these tests depend on, and it holds no `nslock` because it runs
+in a different process as production code — which is why the regex-over-test-sources contract in
+`nslock/callsite_contract_test.go` cannot reach it even in principle. No allowlist entry would
+have caught this.
 
-**Routing.** This belongs to spec 104 / `BUG-104-001`, whose fix is incomplete rather than wrong:
-it established mutual exclusion across test callsites but not against the production sweep the
-lane itself starts. It is recorded here because this session observed and diagnosed it, not
-because this spec owns it. It does not gate spec 108 — no corpus-grant test is affected, and every
-corpus-grant suite passes in every run.
+This also explains why the failure looked intermittent at first: it depends on whether a core
+boot or restart lands while those rows exist, not on which tests run together. Every earlier
+observation fits — zero in-run rows, green in isolation, green alongside both known test-side
+contenders, red in the full lane, and `artifact_count: 0` in the health snapshot.
+
+**The fix belongs to spec 104, and there are two candidate shapes.** Either make the production
+sweep take the same advisory lock — it can, `pg_advisory_lock` is database-scoped, not
+test-scoped — or give the test rows corpus-consistent hashes so the sweep does not consider them
+stale. The first is the honest one: the lock's stated purpose is mutual exclusion over the
+namespace, and a deleter that ignores it makes the guarantee partial.
+
+**Routing.** Spec 104 / `BUG-104-001`. That fix is incomplete rather than wrong: it established
+mutual exclusion across test callsites but not against the production sweep the lane itself
+starts. Recorded here because this session observed, diagnosed and proved it — not because this
+spec owns it. It does not gate spec 108: no corpus-grant test is affected, and every corpus-grant
+suite passes in every run.
 
 ### What was planned, and what was captured
 
