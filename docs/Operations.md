@@ -3329,6 +3329,40 @@ surface appears. Record each daily review outcome in the upkeep ledger; the flip
 authorised only when 14 consecutive reviews have been clean under an unchanged
 roster.
 
+**Window start precondition — a metric-schema change is a reset trigger.**
+`smackerel_auth_corpus_grant_allowed_total` gained a `user_id` label. Adding a label
+to a counter starts NEW Prometheus series and stops incrementing the old ones, so
+`increase(...[14d])` over a window that spans that deploy sees the new series begin
+at zero. Start the 14-day window only from the first full day AFTER the release
+carrying that label reaches the deployment.
+
+This fails in the safe direction — coverage reads as INCOMPLETE and blocks the flip,
+rather than reading as complete when it is not — but a window started too early
+still wastes up to 14 days before that becomes visible. Confirm the label is live
+before starting the count:
+
+```bash
+curl -fsS http://127.0.0.1:${CORE_HOST_PORT}/metrics \
+  | grep smackerel_auth_corpus_grant_allowed_total | head -1
+```
+
+The sample must show a `user_id="..."` label. If it does not, the running binary
+predates the change and the window has not started.
+
+### 6. Rolling back the coverage-label change
+
+The label addition is additive and carries no migration, so rollback is a plain
+revert plus redeploy of the prior signed image — the same pointer-swap the deploy
+adapter already performs. Nothing is dropped and no historical data is lost: series
+written under the old label set stay queryable for their retention period; they
+simply stop receiving new samples.
+
+The cost of rolling back is analytical, not operational: per-principal coverage
+becomes uncomputable again, so criterion (b) of the ratified bar reverts to
+requiring a per-cell operator attestation. The gate itself, the denial behaviour,
+and the enforcement stage are untouched by this metric — rolling it back changes
+what you can MEASURE, never what the system DOES.
+
 ## Expense Tracking Configuration
 
 Expense tracking captures receipts from email, photos, and PDFs, classifies them using a 7-level rule chain, and supports CSV export.
