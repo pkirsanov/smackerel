@@ -29,8 +29,17 @@
       "design",
       "plan",
       "implement",
-      "test"
+      "test",
+      "validate",
+      "security"
     ],
+    "completedPhasesNote": "Lists ONLY phases with real provenance. 'validate' and 'security' were separately-provenanced bubbles.validate and bubbles.security dispatches recorded in executionHistory below; 'plan' additionally re-ran to remediate F-108-VAL-01/02. DELIBERATELY ABSENT, and absent by omission rather than oversight: regression, simplify, gaps, harden, stabilize, audit, chaos, docs. Those have not been executed as separately-provenanced specialist dispatches, so listing them would be exactly the fabrication Gate G022 exists to catch. Under-claiming is correct here; the guard's G022 failure against a targetStatus of 'done' is therefore an accurate report of reality, not a defect to be edited away.",
+    "completedPhaseClaims": [
+      "test",
+      "validate",
+      "security"
+    ],
+    "completedPhaseClaimsNote": "Claims ONLY the phases whose provenance Check 6B can actually verify: each has an executionHistory entry whose agent is bubbles.<phase> and whose phasesExecuted contains that phase. 'implement' is deliberately NOT claimed even though the work was done and is green — it was executed by bubbles.goal as the authorized top-level runner, not by a bubbles.implement dispatch, so claiming it would assert a provenance that does not exist. The bubbles.goal executionHistory entry is the truthful record of who did that work.",
     "completedScopes": [
       "SCOPE-01",
       "SCOPE-02",
@@ -39,7 +48,7 @@
     ],
     "totalScopes": 5,
     "scopeLayout": "single-file",
-    "blockedReason": "SCOPE-04 holds three operator-owned, time-bound DoD items that no code can satisfy: (1) >= 14 consecutive OBSERVE days with the stage resolved from SST at process start; (2) proactive rotation of every principal whose grants are unknowable, recorded as an operator action rather than inferred from telemetry; (3) the OBSERVE-window go/no-go query returning an empty or explicitly-accepted denial set. All engineering obligations are complete and green (unit 145 pkgs, integration 1992 pass / 0 fail, e2e all three phases pass / 0 fail, artifact-lint PASSED). OPERATOR NEXT STEP: start the OBSERVE window on the first full day AFTER the release carrying the user_id coverage label reaches the deployment (docs/Operations.md -> 'Window start precondition'), then run the daily corpus-grant-observe-review procedure; it carries blocks_on_failure: [release-train-promote] so it gates the flip.",
+    "blockedReason": "SCOPE-04 holds three operator-owned, time-bound DoD items that no code can satisfy: (1) >= 14 consecutive OBSERVE days with the stage resolved from SST at process start; (2) proactive rotation of every principal whose grants are unknowable, recorded as an operator action rather than inferred from telemetry; (3) the OBSERVE-window go/no-go query returning an empty or explicitly-accepted denial set. All engineering obligations are complete and green (check/lint/format 0; unit 145 pkgs 0 fail; integration 1974 pass / 0 fail; e2e exit 0 with go-e2e, go-e2e-graph-disabled and go-e2e-corpus-enforce all PASS and 36/36 shell scripts; artifact-lint 0). OPERATOR NEXT STEP: start the OBSERVE window on the first full day AFTER the release carrying the user_id coverage label reaches the deployment (docs/Operations.md -> 'Window start precondition'), then run the daily corpus-grant-observe-review procedure; it carries blocks_on_failure: [release-train-promote] so it gates the flip. Read runbook step 2b alongside step 2: the coverage table covers scoped principals only, and the bypass band is reported separately (SEC-108-03).",
     "loopCount": 0,
     "runStartedAt": "2026-08-11T00:00:00Z",
     "statusBefore": "specs_hardened",
@@ -505,6 +514,100 @@
           "summary": "Pre-existing artifact-lint failure unrelated to this pass: top-level status 'in_progress' does not match certification.status 'specs_hardened'. Present in the baseline run before any edit in this pass. Not corrected here because certification.* is validate-owned."
         }
       ]
+    },
+    {
+      "agent": "bubbles.goal",
+      "mode": "full-delivery",
+      "phasesExecuted": [
+        "implement",
+        "test"
+      ],
+      "startedAt": "2026-08-13T00:00:00Z",
+      "finishedAt": "2026-08-13T00:00:00Z",
+      "durationUnmeasured": true,
+      "durationUnmeasuredReason": "Delivery pass recorded at DATE granularity; no clock span was captured for the run as a whole, and the individual lane durations that WERE measured (unit, integration, e2e) are recorded with their raw output in report.md rather than aggregated into an invented total here.",
+      "statusBefore": "in_progress",
+      "statusAfter": "blocked",
+      "outcome": "completed_owned",
+      "artifactsWritten": [
+        "scopes.md",
+        "report.md",
+        "design.md",
+        "spec.md",
+        "state.json"
+      ],
+      "summary": "Drove the five scopes to completion and closed 87 of 90 DoD items with executed evidence. Fixed F-108-COVERAGE-LABEL-01 (the allowed counter carried no user_id, so only DENIED principals were attributable and the ratified coverage bar was satisfiable only by per-cell attestation) and SEC-108-03 (the OBSERVE counters could not see the bypass band at all, so the coverage table gating the flip excluded the ordinary browser population). Repaired two e2e lifecycle tests that were reporting resource starvation as failure. Set status to blocked, not done: three SCOPE-04 DoD items are operator-owned and time-bound. Lanes: check/lint/format 0; unit 145 pkgs 0 fail; integration 1974 pass 0 fail; e2e exit 0, three Go phases PASS, 36/36 shell; artifact-lint 0."
+    },
+    {
+      "agent": "bubbles.validate",
+      "mode": "full-delivery",
+      "phasesExecuted": [
+        "validate"
+      ],
+      "startedAt": "2026-08-13T16:45:13Z",
+      "finishedAt": "2026-08-13T16:45:13Z",
+      "durationUnmeasured": true,
+      "durationUnmeasuredReason": "Only the certification instant was captured (certifiedAt). The dispatch measured no span of its own, and reconstructing one from surrounding timestamps would present an inference as a measurement.",
+      "statusBefore": "blocked",
+      "statusAfter": "blocked",
+      "outcome": "completed_owned",
+      "artifactsWritten": [
+        "state.json"
+      ],
+      "artifactsNotTouched": [
+        "scopes.md",
+        "spec.md",
+        "design.md",
+        "report.md"
+      ],
+      "summary": "Certification pass. Reconciled the status mirror to 'blocked' and raised two findings, both routed to bubbles.plan because scopes.md is foreign-owned: F-108-VAL-01 (three DoD items checked [x] while their own evidence bodies contradicted the checked claim) and F-108-VAL-02 (stale UNCHECKED residue superseded by later passing evidence in the SAME body, so a reader reaching the last line of a body would read a stale conclusion). Deliberately did NOT edit scopes.md."
+    },
+    {
+      "agent": "bubbles.security",
+      "mode": "full-delivery",
+      "phasesExecuted": [
+        "security"
+      ],
+      "startedAt": "2026-08-13T00:00:00Z",
+      "finishedAt": "2026-08-13T00:00:00Z",
+      "durationUnmeasured": true,
+      "durationUnmeasuredReason": "Static review dispatch recorded at DATE granularity; no clock span was captured and none is invented.",
+      "statusBefore": "blocked",
+      "statusAfter": "blocked",
+      "outcome": "completed_owned",
+      "artifactsWritten": [],
+      "artifactsNotTouched": [
+        "scopes.md",
+        "spec.md",
+        "design.md",
+        "report.md",
+        "state.json"
+      ],
+      "summary": "Static security review of the corpus gate. Raised SEC-108-01..06 and confirmed six surfaces CLEAN with named evidence: Observe is structurally incapable of denying (record takes no http.ResponseWriter), telemetry is strictly downstream of the authorization decision, middleware ordering verified against chi v5.2.2's actual With/Group semantics, no wildcard or empty claim escalates, bridge delegation cannot confer a grant the principal lacks, and TP-03-07 denial byte-identity generalises to all sixteen groups by construction because there is exactly one denial site. Also corrected a premise carried in this packet: a malformed scope claim does NOT drop the bad element and keep the good half - verify.go fails the WHOLE set closed. Reported findings only; edited nothing."
+    },
+    {
+      "agent": "bubbles.plan",
+      "mode": "full-delivery",
+      "phasesExecuted": [
+        "plan"
+      ],
+      "startedAt": "2026-08-13T00:00:00Z",
+      "finishedAt": "2026-08-13T00:00:00Z",
+      "durationUnmeasured": true,
+      "durationUnmeasuredReason": "Remediation dispatch recorded at DATE granularity; no clock span was captured and none is invented.",
+      "statusBefore": "blocked",
+      "statusAfter": "blocked",
+      "outcome": "completed_owned",
+      "artifactsWritten": [
+        "scopes.md"
+      ],
+      "artifactsNotTouched": [
+        "state.json",
+        "spec.md",
+        "design.md",
+        "report.md"
+      ],
+      "summary": "Remediated F-108-VAL-01 and F-108-VAL-02 in the artifact it owns. Evidenced TP-04-07 with its executed result and RETAINED the check, because the note was stale rather than the test phantom; narrowed the migration-063 rollback claim so it no longer asserts a database-verified rollback that was never run; narrowed the Change Boundary claim so it states the adjudicated deviation instead of asserting zero excluded families changed. Date-stamped both superseded UNCHECKED residues so the newest state reads last. Flagged that one figure it was given could not be corroborated from an artifact, rather than restating it as verified."
     }
   ],
   "nextRequiredOwner": "bubbles.plan"
