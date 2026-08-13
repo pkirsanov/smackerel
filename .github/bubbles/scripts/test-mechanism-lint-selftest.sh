@@ -259,6 +259,25 @@ else
   bad "P8 shared consumer ok" "rc=$RC out=$(printf '%s' "$OUT" | tr '\n' '|')"
 fi
 
+# --- P9/A15. BARE-LIST envelope --------------------------------------------
+# Real downstream manifests ship a top-level list. Reading only the object form
+# raised AttributeError, which reads as a broken tool rather than a finding.
+R="$(make_case p9 '[{"id":"SCN-001-001","title":"t","requiredTestType":"e2e-ui"}]')"
+run_lint "$R"
+if [[ "$RC" -eq 0 ]]; then
+  ok "P9 a bare-list manifest envelope is accepted"
+else
+  bad "P9 bare-list envelope" "rc=$RC out=$(printf '%s' "$OUT" | tr '\n' '|')"
+fi
+
+R="$(make_case a15 '[{"id":"SCN-001-001","title":"t","requiredTestType":"e2e-ui","behaviorTraits":["user-visible-ui"],"testMechanism":{"entrypoint":"production-route","inputOrigin":"seeded-store","assertionSurface":"hidden-dom","dependencyPath":"cache-only","productionOwners":["a.ts"],"negativeControl":"x"}}]')"
+run_lint "$R"
+if [[ "$RC" -eq 1 ]] && printf '%s' "$OUT" | grep -q 'COHERENCE'; then
+  ok "A15 a bare-list manifest is still linted, not skipped"
+else
+  bad "A15 bare-list still validated" "rc=$RC out=$(printf '%s' "$OUT" | tr '\n' '|')"
+fi
+
 # --- U1. usage -------------------------------------------------------------
 set +e
 bash "$TARGET" >/dev/null 2>&1; u1=$?

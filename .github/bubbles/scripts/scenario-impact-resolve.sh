@@ -144,7 +144,11 @@ def is_certified(scenario):
     refs = scenario.get("evidenceRefs")
     return isinstance(refs, list) and len(refs) > 0
 
-scenarios = manifest.get("scenarios")
+# Two manifest envelopes exist in the wild: {"scenarios": [...]} and a BARE
+# top-level list of the same scenario objects. Reading only the object form
+# crashes on the bare list; refusing it would silently stop marking impacted
+# scenarios in those specs, which is the failure this resolver exists to remove.
+scenarios = manifest.get("scenarios") if isinstance(manifest, dict) else manifest
 if not isinstance(scenarios, list):
     scenarios = []
 

@@ -139,7 +139,13 @@ SHARED_CONSUMER_PROOFS = {
 findings = []
 declared = 0
 
-scenarios = manifest.get("scenarios")
+# Two manifest envelopes exist in the wild: {"scenarios": [...]} and a BARE
+# top-level list of the same scenario objects. The grep-based counter this
+# replaced could not tell them apart, so both shipped. Reading only the object
+# form crashes on the bare list; refusing the bare list would false-reject real
+# specs that were certified with it. The scenario objects are identical — only
+# the wrapper differs — so normalise and validate both.
+scenarios = manifest.get("scenarios") if isinstance(manifest, dict) else manifest
 if not isinstance(scenarios, list):
     scenarios = []
 

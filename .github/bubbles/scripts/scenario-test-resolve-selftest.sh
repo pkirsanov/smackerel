@@ -232,6 +232,33 @@ else
   bad "A7 inventory failure fallback" "rc=$RC out=$(printf '%s' "$OUT" | tr '\n' '|')"
 fi
 
+# --- P9. the legacy bare-list manifest envelope -----------------------------
+# Real downstream corpora carry manifests whose top level is the scenario ARRAY
+# itself rather than {"scenarios": [...]}. Reading .get() straight off that list
+# raised AttributeError and took the whole resolver down, which reads to an
+# operator as "the guard is broken", not "your packet is old".
+R="$(make_case p8 '[{"id":"SCN-001-020","requiredTestType":"e2e-ui","linkedTests":["tests/demo.spec.ts#visible outcome renders"]}]')"
+run_resolve "$R"
+if [[ "$RC" -eq 0 ]] && ! printf '%s' "$OUT" | grep -q 'Traceback'; then
+  ok "P9 a bare-list manifest envelope is read, not crashed on"
+else
+  bad "P9 bare-list envelope" "rc=$RC out=$(printf '%s' "$OUT" | tr '\n' '|')"
+fi
+
+# --- A8. ADVERSARIAL: the bare-list envelope is still RESOLVED --------------
+# Non-vacuity guard for P9. Swallowing the list into an empty scenario set would
+# also make P8 pass, and would silently exempt every legacy packet from the very
+# check this script exists to perform. A8 fails unless the references inside a
+# bare-list manifest are actually resolved.
+R="$(make_case a8 '[{"id":"SCN-001-021","requiredTestType":"e2e-ui","linkedTests":["tests/absent.spec.ts"]}]')"
+run_resolve "$R"
+if [[ "$RC" -eq 1 ]] && printf '%s' "$OUT" | grep -q 'MISSING-FILE' &&
+  printf '%s' "$OUT" | grep -q 'SCN-001-021'; then
+  ok "A8 a bare-list manifest is still resolved, not silently skipped"
+else
+  bad "A8 bare-list still resolved" "rc=$RC out=$(printf '%s' "$OUT" | tr '\n' '|')"
+fi
+
 # --- U1. usage errors -------------------------------------------------------
 set +e
 bash "$TARGET" >/dev/null 2>&1; u1=$?

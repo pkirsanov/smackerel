@@ -101,7 +101,11 @@ LIVE_PATHS = {"external-live", "live-provider"}
 findings = []
 declared = 0
 
-scenarios = manifest.get("scenarios")
+# Two manifest envelopes exist in the wild: {"scenarios": [...]} and a BARE
+# top-level list of the same scenario objects. Reading only the object form
+# crashes on the bare list; refusing it would false-reject real certified specs.
+# Normalise and validate both.
+scenarios = manifest.get("scenarios") if isinstance(manifest, dict) else manifest
 if not isinstance(scenarios, list):
     scenarios = []
 

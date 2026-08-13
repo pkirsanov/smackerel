@@ -250,6 +250,29 @@ else
   bad "P8 both halves" "rc=$RC out=$(printf '%s' "$OUT" | tr '\n' '|')"
 fi
 
+# --- P9. BARE-LIST envelope is accepted, not a crash --------------------------
+# 5 real downstream manifests ship a top-level list instead of
+# {"scenarios":[...]}. Reading only the object form raised
+# AttributeError: 'list' object has no attribute 'get' — a traceback, which is
+# worse than either verdict because it reads as a broken tool rather than a
+# finding. Both envelopes carry identical scenario objects.
+R="$(make_case p9 '[{"id":"SCN-001-001","title":"t","requiredTestType":"unit","behaviorTraits":["pure-calculation"],"obligations":[{"trait":"pure-calculation","requiredProof":"unit assertion"}]}]')"
+run_lint "$R"
+if [[ "$RC" -eq 0 ]]; then
+  ok "P9 a bare-list manifest envelope is accepted"
+else
+  bad "P9 bare-list envelope" "rc=$RC out=$(printf '%s' "$OUT" | tr '\n' '|')"
+fi
+
+# --- A13. the bare-list envelope is still VALIDATED, not waved through -------
+R="$(make_case a13 '[{"id":"SCN-001-001","title":"t","requiredTestType":"unit","behaviorTraits":["pure-calculation"]}]')"
+run_lint "$R"
+if [[ "$RC" -eq 1 ]] && printf '%s' "$OUT" | grep -q 'TRAIT-COVERED'; then
+  ok "A13 a bare-list manifest is still linted, not skipped"
+else
+  bad "A13 bare-list still validated" "rc=$RC out=$(printf '%s' "$OUT" | tr '\n' '|')"
+fi
+
 # --- U1. usage -------------------------------------------------------------
 set +e
 bash "$TARGET" >/dev/null 2>&1; u1=$?

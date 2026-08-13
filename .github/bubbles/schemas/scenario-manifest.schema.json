@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://github.com/pkirsanov/bubbles/schemas/scenario-manifest.schema.json",
   "title": "Bubbles scenario-manifest.json (v5.1 / M9)",
-  "description": "Per-spec scenario-contract manifest. Lives at specs/<feature>/scenario-manifest.json. Records every Gherkin scenario with required-test-type, linked tests, evidence references, and lockdown status. Read by state-transition-guard.sh Check 3C (Gate G057).",
+  "description": "Per-spec scenario-contract manifest. Lives at specs/<feature>/scenario-manifest.json. Records every Gherkin scenario with required-test-type, linked tests, evidence references, and lockdown status. Read by state-transition-guard.sh Check 3C (Gate G057). CANONICAL SHAPE IS THIS OBJECT. A legacy BARE TOP-LEVEL ARRAY of the same scenario objects also exists in the wild (5 manifests across downstream repos as of 2026-08-13) because the grep-based counter that predated the IMP-040 lints could not distinguish the two envelopes. Readers (scenario-obligation-lint.sh, test-mechanism-lint.sh, scenario-impact-resolve.sh) TOLERATE the bare array so those certified specs are not retroactively rejected, but it is NOT canonical and MUST NOT be produced by new work: a bare array carries no schemaVersion, so a future migration cannot detect which version it conforms to.",
   "type": "object",
   "required": ["schemaVersion", "scenarios"],
   "additionalProperties": true,

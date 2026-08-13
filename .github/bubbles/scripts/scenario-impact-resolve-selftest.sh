@@ -164,6 +164,18 @@ else
   bad "P7 stdin" "rc=$RC out=$(printf '%s' "$OUT" | tr '\n' '|')"
 fi
 
+# --- A6. BARE-LIST envelope still marks impacted scenarios ------------------
+# Real downstream manifests ship a top-level list. Reading only the object form
+# raised AttributeError; silently skipping them would stop marking impacted
+# scenarios in those specs, which is the failure this resolver exists to remove.
+R="$(make_case a6 "[{\"id\":\"SCN-001-001\",\"title\":\"t\",\"requiredTestType\":\"e2e-ui\",$CERT,\"implementationRefs\":[\"src/pricing/total.ts\"]}]")"
+run_impact "$R" --changed src/pricing/total.ts
+if [[ "$RC" -eq 1 ]] && printf '%s' "$OUT" | grep -q 'REVALIDATE: SCN-001-001'; then
+  ok "A6 a bare-list manifest still marks the impacted scenario"
+else
+  bad "A6 bare-list envelope" "rc=$RC out=$(printf '%s' "$OUT" | tr '\n' '|')"
+fi
+
 # --- U1. usage ---------------------------------------------------------------
 set +e
 bash "$TARGET" >/dev/null 2>&1; u1=$?

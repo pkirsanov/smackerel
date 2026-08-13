@@ -181,7 +181,7 @@ checked = 0
 scanned_titles = 0
 skipped_category = 0
 
-scenarios = manifest.get("scenarios")
+scenarios = manifest.get("scenarios") if isinstance(manifest, dict) else manifest
 if not isinstance(scenarios, list):
     scenarios = []
 
