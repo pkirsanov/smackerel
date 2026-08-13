@@ -93,8 +93,8 @@ MCP tool list — generated from one registry, not four hand-maintained ones.
 | Specs total | **112** |
 | — `done` | 99 |
 | — `in_progress` | 2 (105, 106) |
-| — `blocked` | 4 (058, 096, 104, 107) |
-| — planning-only (`specs_hardened`) | 4 (063, 079, 108, 109) |
+| — `blocked` | 5 (058, 096, 104, 107, 108) |
+| — planning-only (`specs_hardened`) | 3 (063, 079, 109) |
 | — `not_started`, fully planned | **3** (110, 111, 112) |
 | Bug artifacts total | 241 |
 | — non-terminal | 20 |
@@ -105,7 +105,21 @@ MCP tool list — generated from one registry, not four hand-maintained ones.
 | PWA pages loading the shared nav | **2** |
 | Catalog surfaces declared | 20 |
 | Release trains | 2 (`mvp` → self-hosted, `next` → staging) |
-| Release-train gate (G110) | **fails at HEAD** (exit 1, 8 errors); fix uncommitted |
+| Release-train gate (G110) | **passes at HEAD** (exit 0, 2 trains; grandfathered-spec warnings only) |
+
+> **Baseline refreshed 2026-08-13.** Three rows moved and one was simply stale.
+> Spec **108** left `specs_hardened` for `blocked`: all five of its scopes are
+> implemented and green, and what remains is operator-owned and time-bound — a
+> ≥14-day OBSERVE window, a principal rotation, and the go/no-go query over that
+> window. It is counted under `blocked` rather than `done` because no execution
+> can compress elapsed production time, and rather than `done_with_concerns`,
+> which this repo forbids.
+>
+> The **G110** row previously read "fails at HEAD (exit 1, 8 errors); fix
+> uncommitted". That fix has since landed: the guard now exits 0 across both
+> trains, emitting only `grandfathered; backfill recommended` warnings for
+> historical specs with no `releaseTrain` field. A stale blocker in a plan of
+> record is worse than no entry, because it invites work that is already done.
 
 The headline: **ingestion and capability foundations are essentially finished — 99
 of 112 specs done. What is unfinished is everything the user actually touches.**

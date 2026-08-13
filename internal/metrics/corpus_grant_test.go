@@ -40,6 +40,7 @@ import (
 const (
 	metricNameCorpusGrantWouldDeny = "smackerel_auth_corpus_grant_would_deny_total"
 	metricNameCorpusGrantAllowed   = "smackerel_auth_corpus_grant_allowed_total"
+	metricNameCorpusGrantBypassed  = "smackerel_auth_corpus_grant_bypassed_total"
 	metricNameCorpusGrantMode      = "smackerel_auth_corpus_grant_enforcement_mode"
 	metricNameAuthScopeRejected    = "smackerel_auth_scope_rejected_total"
 )
@@ -166,7 +167,91 @@ func TestCorpusGrantMetrics_CoverageCellIsClosableByEitherOutcome(t *testing.T) 
 	}
 }
 
-// TestCorpusGrantMetrics_RegisteredInAuthFamily proves the three additions are
+// TestCorpusGrantMetrics_BypassedBandIsObservableButNotPredictive is the
+// SEC-108-03 regression.
+//
+// The bypass band (shared-token, bootstrap) is exempt from `RequireScope`, so
+// counting it as a would-be denial would make the would-deny counter a false
+// predictor of the ENFORCE outcome. The original code therefore returned
+// silently — and that traded one defect for a worse one: under OBSERVE
+// `RequireScope` is not mounted at all, so this band appeared in NO spec-108
+// series whatsoever. An operator reading the coverage table before authorising
+// the flip could not distinguish "no bypassing principal used this route
+// group" from "we had no way to see whether one did".
+//
+// Both properties are asserted together because either alone is satisfiable by
+// the wrong implementation: emitting into would-deny would restore visibility
+// while corrupting the prediction, and emitting nothing keeps the prediction
+// clean while restoring the blind spot.
+func TestCorpusGrantMetrics_BypassedBandIsObservableButNotPredictive(t *testing.T) {
+	group := CorpusRouteGroupSearch
+
+	for _, source := range []string{"shared_token", "bootstrap"} {
+		t.Run(source, func(t *testing.T) {
+			bypassChild := AuthCorpusGrantBypassed.WithLabelValues(string(group), source)
+			denyChild := AuthCorpusGrantWouldDeny.WithLabelValues(string(group), "", source)
+			allowChild := AuthCorpusGrantAllowed.WithLabelValues(string(group), "", source)
+
+			bypassBefore := testutil.ToFloat64(bypassChild)
+			denyBefore := testutil.ToFloat64(denyChild)
+			allowBefore := testutil.ToFloat64(allowChild)
+
+			if err := RecordCorpusGrantBypassed(group, source); err != nil {
+				t.Fatalf("RecordCorpusGrantBypassed(%q): %v", source, err)
+			}
+
+			// (1) The band is now VISIBLE.
+			if got := testutil.ToFloat64(bypassChild) - bypassBefore; got != 1 {
+				t.Fatalf("bypassed delta for (group=%s, source=%s) = %v, want 1; without this series the OBSERVE window cannot tell silence from zero", group, source, got)
+			}
+
+			// (2) The would-deny PREDICTION is untouched. A bypassing session
+			// is never denied under ENFORCE, so crediting it here would inflate
+			// the UC-108-001 grant list with principals that will never be
+			// refused.
+			if got := testutil.ToFloat64(denyChild) - denyBefore; got != 0 {
+				t.Errorf("would-deny moved by %v for a BYPASSED %s session; the counter would then mispredict the ENFORCE outcome", got, source)
+			}
+			if got := testutil.ToFloat64(allowChild) - allowBefore; got != 0 {
+				t.Errorf("allowed moved by %v for a BYPASSED %s session; a bypass is not a grant and must not close a coverage cell", got, source)
+			}
+		})
+	}
+}
+
+// TestCorpusGrantMetrics_BypassedRejectsUnknownRouteGroup proves the new
+// recorder inherits the closed-set guarantee rather than opting out of it. A
+// third recorder that accepted a raw path would reintroduce exactly the
+// unbounded-cardinality defect the other two are built to prevent.
+func TestCorpusGrantMetrics_BypassedRejectsUnknownRouteGroup(t *testing.T) {
+	forged := CorpusRouteGroup("/api/artifact/01JQFORGEDBYPASSXXXXXXXXXX")
+
+	if err := RecordCorpusGrantBypassed(forged, "shared_token"); !errors.Is(err, ErrUnknownCorpusRouteGroup) {
+		t.Fatalf("RecordCorpusGrantBypassed(%q) = %v, want ErrUnknownCorpusRouteGroup", forged, err)
+	}
+
+	// Returning an error is not enough: a recorder that incremented BEFORE
+	// validating would pass a return-value-only check and still create the
+	// series. Walk the real gatherer and prove no such series exists.
+	families, err := prometheus.DefaultGatherer.Gather()
+	if err != nil {
+		t.Fatalf("Gather: %v", err)
+	}
+	for _, fam := range families {
+		if fam.GetName() != "smackerel_auth_corpus_grant_bypassed_total" {
+			continue
+		}
+		for _, m := range fam.GetMetric() {
+			for _, lp := range m.GetLabel() {
+				if lp.GetValue() == string(forged) {
+					t.Fatalf("a series carrying the forged route group %q was created; the closed-set guard ran too late", forged)
+				}
+			}
+		}
+	}
+}
+
+// TestCorpusGrantMetrics_RegisteredInAuthFamily proves the four additions are
 // registered with the default registry under the existing `smackerel_auth_*`
 // name family — they extend that family rather than forking a parallel one.
 func TestCorpusGrantMetrics_RegisteredInAuthFamily(t *testing.T) {
@@ -178,6 +263,9 @@ func TestCorpusGrantMetrics_RegisteredInAuthFamily(t *testing.T) {
 	}
 	if err := RecordCorpusGrantAllowed(CorpusRouteGroupSearch, "tp0203-seed", "per_user_token"); err != nil {
 		t.Fatalf("RecordCorpusGrantAllowed(search): unexpected error %v", err)
+	}
+	if err := RecordCorpusGrantBypassed(CorpusRouteGroupSearch, "shared_token"); err != nil {
+		t.Fatalf("RecordCorpusGrantBypassed(search): unexpected error %v", err)
 	}
 
 	gathered, err := prometheus.DefaultGatherer.Gather()
@@ -192,6 +280,7 @@ func TestCorpusGrantMetrics_RegisteredInAuthFamily(t *testing.T) {
 	for _, name := range []string{
 		metricNameCorpusGrantWouldDeny,
 		metricNameCorpusGrantAllowed,
+		metricNameCorpusGrantBypassed,
 		metricNameCorpusGrantMode,
 	} {
 		if !present[name] {

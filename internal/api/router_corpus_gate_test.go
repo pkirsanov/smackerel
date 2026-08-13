@@ -159,6 +159,26 @@ var ungatedRoutes = []struct {
 	{http.MethodGet, "/metrics", "unauthenticated by design; carries no corpus data"},
 }
 
+// NOT LISTED ABOVE, and deliberately so: the server-rendered HTMX routes
+// `POST /search`, `GET /artifact/{id}`, `GET /digest`, `GET /knowledge/concepts/{id}`
+// (SEC-108-01). They READ THE CORPUS server-side — `SearchResults` calls the
+// executor and `ArtifactDetail` queries `artifacts` directly — so they are not
+// API clients of the gated group and the gate never sees them in either stage.
+//
+// They belong in this fixture on the merits, and adding them was ATTEMPTED. The
+// non-vacuity guard below correctly rejected it: `corpusGateDeps` leaves
+// `Dependencies.WebHandler` nil, so the whole `if deps.WebHandler != nil` group
+// is unmounted here and every assertion about those four paths would have been
+// vacuous. Listing them anyway — or relaxing the mounted-check to let them
+// through — would have produced four lines that look like coverage and prove
+// nothing, which is worse than the honest gap.
+//
+// Pinning them for real requires wiring a REAL web handler into this fixture,
+// and that handler needs a live pool (`h.Pool`), which makes it an integration-
+// tier assertion rather than a unit one. Recorded as SEC-108-01 and routed
+// rather than faked here. Their disposition is documented in design.md §2.
+
+
 // corpusGateDeps builds a router-ready Dependencies for the gate contract.
 //
 // withIntelligence controls the vacuity trap: false leaves

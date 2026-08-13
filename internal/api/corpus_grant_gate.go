@@ -104,9 +104,22 @@ func (g *CorpusGrantGate) record(r *http.Request, routeGroup metrics.CorpusRoute
 	// make this counter a false predictor of the ENFORCE outcome and inflate
 	// the UC-108-001 grant list with principals that will never be denied.
 	// They are not double-counted into AuthScopeCheckBypassed either — that
-	// counter belongs to the RequireScope mount point.
+	// counter belongs to the RequireScope mount point, which is not even
+	// mounted under OBSERVE.
+	//
+	// They ARE counted here, on their own series (SEC-108-03). Returning
+	// silently left this band invisible in every spec-108 series for the whole
+	// observation window, so the coverage table the operator reads before
+	// authorising the flip excluded them structurally — and per SEC-108-02
+	// that band includes every username/password web principal. A dedicated
+	// counter keeps them out of the would-deny prediction while still making
+	// their traffic observable, which is what separates "nobody bypassed this
+	// route group" from "we could not see whether anybody did".
 	switch sess.Source {
 	case auth.SessionSourceSharedToken, auth.SessionSourceBootstrap:
+		if err := metrics.RecordCorpusGrantBypassed(routeGroup, string(sess.Source)); err != nil {
+			slog.Error("api: corpus grant bypassed counter not emitted", "error", err)
+		}
 		return
 	}
 

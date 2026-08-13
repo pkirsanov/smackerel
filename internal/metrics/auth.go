@@ -334,6 +334,34 @@ var AuthCorpusGrantAllowed = prometheus.NewCounterVec(
 	[]string{"route_group", "user_id", "session_source"},
 )
 
+// AuthCorpusGrantBypassed counts corpus reads served to a session that
+// `auth.RequireScope` bypasses by design — shared-token and bootstrap sources,
+// which carry no scope claim.
+//
+// It exists because without it the OBSERVE window is measured over a partial
+// population (SEC-108-03). Under OBSERVE `RequireScope` is not mounted, so
+// `AuthScopeCheckBypassed` never fires for corpus routes; and the gate returns
+// before emitting either corpus counter. Bypassing traffic was therefore
+// invisible in ALL THREE spec-108 series for the entire observation window.
+// The operator would read a clean coverage table and flip to ENFORCE without
+// ever seeing that an entire band had been using the corpus — a band that, per
+// SEC-108-02, includes every principal who authenticates by username/password.
+//
+// The point of the counter is to make SILENCE and ZERO distinguishable. A zero
+// here means "no bypassing principal touched this route group"; the absence of
+// the series previously meant nothing at all could be concluded.
+//
+// There is deliberately NO `user_id` label: these sessions carry `UserID == ""`,
+// so the label would be a constant empty string that adds a dimension without
+// adding information.
+var AuthCorpusGrantBypassed = prometheus.NewCounterVec(
+	prometheus.CounterOpts{
+		Name: "smackerel_auth_corpus_grant_bypassed_total",
+		Help: "Corpus reads served to a session that RequireScope bypasses by design, by route group and session source",
+	},
+	[]string{"route_group", "session_source"},
+)
+
 // AuthCorpusGrantEnforcementMode reports the resolved stage: 0 = OBSERVE,
 // 1 = ENFORCE. A dashboard reads the stage from here instead of reading config.
 //
@@ -367,6 +395,17 @@ func RecordCorpusGrantAllowed(group CorpusRouteGroup, userID, sessionSource stri
 		return err
 	}
 	AuthCorpusGrantAllowed.WithLabelValues(string(group), userID, sessionSource).Inc()
+	return nil
+}
+
+// RecordCorpusGrantBypassed increments the bypass counter under the same
+// closed-set guarantee as the other two corpus recorders. It takes no userID
+// because a bypassing session has none.
+func RecordCorpusGrantBypassed(group CorpusRouteGroup, sessionSource string) error {
+	if err := ValidateCorpusRouteGroup(group); err != nil {
+		return err
+	}
+	AuthCorpusGrantBypassed.WithLabelValues(string(group), sessionSource).Inc()
 	return nil
 }
 
@@ -444,6 +483,7 @@ func init() {
 		AuthScopeCheckBypassed,
 		AuthCorpusGrantWouldDeny,
 		AuthCorpusGrantAllowed,
+		AuthCorpusGrantBypassed,
 		AuthCorpusGrantEnforcementMode,
 	)
 }

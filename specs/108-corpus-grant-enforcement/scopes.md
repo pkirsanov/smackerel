@@ -701,7 +701,7 @@ looking early, so each class below was checked and found clear:
 
 
 | TP-02-02 | unit | `cmd/core` config resolution test | A malformed value aborts startup naming the offending value; no silent fallback to OBSERVE (SCN-108-C05, design T3) | `./smackerel.sh test unit` |
-| TP-02-03 | unit | `internal/metrics/auth_test.go` | The three new metrics register in the `smackerel_auth_*` family with the closed **16**-value `route_group` label set (Tier A + Tier B, `spec.md` §4.2); an unknown label value is rejected (design T2, §18 decision 5) | `./smackerel.sh test unit` |
+| TP-02-03 | unit | `internal/metrics/auth_test.go` | The corpus-grant metrics register in the `smackerel_auth_*` family with the closed **16**-value `route_group` label set (Tier A + Tier B, `spec.md` §4.2); an unknown label value is rejected (design T2, §18 decision 5). Four series as of 2026-08-13 — would-deny, allowed, **bypassed** (added resolving SEC-108-03) and the mode gauge | `./smackerel.sh test unit` |
 | TP-02-04 | integration | `internal/api` against the ephemeral test stack | OBSERVE: an ungranted principal receives **200** on all sixteen route groups AND `..._corpus_grant_would_deny_total` increments with the correct `route_group`; the warn log carries no query text or artifact id (SCN-108-O01, design T4 observe half) | `./smackerel.sh test integration` |
 | TP-02-05 | integration | same | A granted principal receives 200, increments `..._corpus_grant_allowed_total`, does **not** increment the would-deny counter, and `..._enforcement_mode` reports `0` (SCN-108-O02) | `./smackerel.sh test integration` |
 | TP-02-06 | e2e-api | `./smackerel.sh test e2e` | **Regression E2E** — persistent scenario-specific regression for SCN-108-C03, SCN-108-C05, SCN-108-O01 and SCN-108-O02 against the live stack: absent/malformed config still aborts startup, and in OBSERVE an ungranted principal still receives 200 while `..._would_deny_total` still increments. Fails if a silent default is reintroduced or the observe counter is unwired; also proves the broader e2e suite shows no green→red drift | `./smackerel.sh test e2e` |
@@ -1108,7 +1108,7 @@ looking early, so each class below was checked and found clear:
 
   | Surface | Why it is Scope 02's, not Scope 03's |
   |---|---|
-  | `cmd/core/main.go` — `metrics.SetCorpusGrantEnforcementMode(...)` (commit `15394e84`) | `SCN-108-O02` already asserts the mode gauge "reports 0", and this scope's Implementation Plan owns all three `smackerel_auth_corpus_grant_*` metrics. Publishing the resolved stage *is* the delivery of a metric this scope declares |
+  | `cmd/core/main.go` — `metrics.SetCorpusGrantEnforcementMode(...)` (commit `15394e84`) | `SCN-108-O02` already asserts the mode gauge "reports 0", and this scope's Implementation Plan owns every `smackerel_auth_corpus_grant_*` metric. Publishing the resolved stage *is* the delivery of a metric this scope declares |
   | `cmd/core/corpus_grant_gauge_contract_test.go` | The regression guard for the row above; a guard follows its subject |
   | `cmd/core/wiring.go` — `buildAPIDeps(..., corpusGrantEnforce bool)` | This scope's Implementation Plan puts the single resolution point in `cmd/core` wiring; carrying that resolved value to the API layer is that same plumbing, and this scope is named "Observe-Stage **Plumbing**" |
   | `internal/api/health.go` — `Dependencies.CorpusGrantEnforce` (L190) | The field exists to construct the OBSERVE middleware — `NewCorpusGrantGate(deps.CorpusGrantEnforce)` at `internal/api/router.go:132` — which this scope's Implementation Plan owns ("Mounted in **both** stages") |
@@ -3838,7 +3838,7 @@ And it records that bubbles.train owns both the owning-train flip and the retire
   2948:   window, **or** carry a recorded `idle-by-design` attestation that names a
   ```
 
-  Every clause of the row is present. All three metrics carry an explicitly closed `route_group`
+  Every clause of the row is present. Every corpus-grant counter carries an explicitly closed `route_group`
   label set of sixteen; `_allowed_total` additionally states that it has **no** `user_id` label,
   which matters because it is the denominator and an unbounded label there would be a cardinality
   hazard. The UC-108-001 runbook carries its PromQL, and the go/no-go criterion at line 2948 is the

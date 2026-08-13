@@ -219,6 +219,23 @@ $ grep -cE '^--- FAIL|^    --- FAIL|^FAIL' /tmp/int.log
 # Ephemeral stack torn down — no residue in the persistent dev store (R-108-O6, G115).
 ```
 
+```text
+$ ./smackerel.sh test e2e
+E2E=0
+--- go phases ---
+PASS: go-e2e
+PASS: go-e2e-graph-disabled
+PASS: go-e2e-corpus-enforce
+--- shell totals ---
+  Passed: 36
+  Failed: 0
+--- go FAILs ---
+                        # empty — zero Go test failures
+# Re-run AFTER the SEC-108-03 change (new bypass counter emitted from the gate's
+# early return), so all three Go phases and all 36 shell scripts are green against
+# the final code state rather than against the state before the fix.
+```
+
 ### Shared-infrastructure canary, proven non-vacuous
 
 A green canary only means something if a broken registry would turn it red. That was tested
@@ -309,6 +326,53 @@ $ git diff --stat HEAD~13 -- internal/ cmd/ tests/ config/ smackerel.sh
  tests/integration/corpus_grant_env_emission_test.go|  113 +++++++++
  tests/integration/graphapi/telegram_corpus_differential_test.go | 10 +-
 ```
+
+### Security review and the SEC-108-03 fix
+
+A static security review of the gate (routed findings `SEC-108-01`..`06`) confirmed the core
+authorization surfaces CLEAN — `Observe` is structurally incapable of denying (`record` takes no
+`http.ResponseWriter` at all), telemetry is strictly downstream of the decision, middleware
+ordering resolves correctly through chi, no wildcard or empty claim escalates, and bridge
+delegation cannot confer a grant the principal does not hold. It also corrected a premise carried
+in this packet: a malformed scope claim does **not** drop the bad element and keep the good half —
+`verify.go` fails the WHOLE set closed, which is the safer shape.
+
+One finding was fixed rather than only recorded, because it degraded the decision this spec
+exists to inform. **SEC-108-03:** under OBSERVE, `RequireScope` is not mounted, so
+`smackerel_auth_scope_check_bypassed_total` never fires for corpus routes, and the gate returned
+before touching either corpus counter. Bypass-band traffic was therefore invisible in every
+spec-108 series for the entire observation window — so the coverage table the operator reads
+before authorising the flip excluded that band structurally. Per `SEC-108-02` the band is not
+exotic: username/password web login mints the shared token as the session cookie, so it is the
+ordinary browser population.
+
+```text
+$ ./smackerel.sh test unit --go --go-run 'TestCorpusGrantGate|TestCorpusGrantMetrics'
+ok  github.com/smackerel/smackerel/internal/api      1.031s
+ok  github.com/smackerel/smackerel/internal/metrics  0.058s
+RESTORE_EXIT=0
+```
+
+The regression is bound to the CALL SITE, not just the recorder — a recorder-level test would
+prove the counter works while leaving the emit deletable. Proven by removing the emit:
+
+```text
+--- FAIL: TestCorpusGrantGate_Observe_BypassedSessionSourcesAreCountedButNotPredicted/shared_token
+    corpus_grant_gate_test.go:574: source "shared_token": bypassed delta = 0, want 1 —
+    the gate must emit this band onto its own series, otherwise the OBSERVE window
+    cannot tell 'nobody bypassed' from 'we could not see'
+--- FAIL: .../bootstrap
+    corpus_grant_gate_test.go:574: source "bootstrap": bypassed delta = 0, want 1
+FAIL  github.com/smackerel/smackerel/internal/api  0.407s
+PROBE_EXIT=1
+```
+
+The counter stays OUT of the would-deny prediction — a bypassing session is never refused under
+ENFORCE, so crediting it there would inflate the UC-108-001 grant list with principals that can
+never be denied. Both properties are asserted together because either alone is satisfiable by the
+wrong implementation. `docs/Operations.md` gained step 2b so the operator actually reads the
+series, and the metric tables in `design.md` §4 and the runbook were corrected from three series
+to four.
 
 ### What was planned, and what was captured
 

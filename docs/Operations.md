@@ -2882,7 +2882,7 @@ safe, performing the flip, and rolling back.
 > intelligence endpoints) was brought in scope precisely because leaving it
 > bearer-only would have shipped a boundary with a documented hole.
 
-###### The three metrics and their closed label sets
+###### The four metrics and their closed label sets
 
 All three live in [`internal/metrics/auth.go`](../internal/metrics/auth.go)
 under the existing `smackerel_auth_*` prefix. No parallel metric family is
@@ -2892,7 +2892,25 @@ introduced.
 |---|---|---|---|
 | `smackerel_auth_corpus_grant_would_deny_total` | Counter | `route_group` (closed set of **16**), `user_id`, `session_source` | A request reached a gated corpus route group **without** `corpus:read`. Under OBSERVE it was served anyway; the counter is the counterfactual "this would have been a 403". |
 | `smackerel_auth_corpus_grant_allowed_total` | Counter | `route_group` (closed set of **16**), `user_id`, `session_source` | A request reached a gated corpus route group **carrying** `corpus:read`. This is the denominator, and `user_id` makes a GRANTED principal's traffic attributable — which is what lets a coverage cell close on observed traffic instead of operator attestation. |
+| `smackerel_auth_corpus_grant_bypassed_total` | Counter | `route_group` (closed set of **16**), `session_source` | A request reached a gated corpus route group on a session `auth.RequireScope` **bypasses by design** (`shared_token`, `bootstrap`). No `user_id` label: these sessions carry an empty user id, so the label would be a constant. |
 | `smackerel_auth_corpus_grant_enforcement_mode` | Gauge | (none) | Set once at startup: `0` = OBSERVE, `1` = ENFORCE. Lets a dashboard state the stage without reading config. |
+
+> **Why the bypass counter exists (SEC-108-03).** Under OBSERVE, `RequireScope`
+> is not mounted at all, so `smackerel_auth_scope_check_bypassed_total` never
+> fires for corpus routes; and the gate returns before touching either corpus
+> counter. Bypassing traffic was therefore invisible in **every** corpus series
+> for the whole observation window. An operator would read a clean coverage
+> table and authorise the flip without ever seeing that a band of principals had
+> been reading the corpus — and per SEC-108-02 that band includes every
+> principal who signs in with a username and password, because web-credential
+> login mints the shared token as the session cookie.
+>
+> The counter does **not** enter the would-deny prediction: a bypassing session
+> is never refused under ENFORCE, so crediting it there would inflate the
+> UC-108-001 grant list with principals that will never be denied. Its purpose
+> is narrower and specific — to make **silence and zero distinguishable**. A
+> zero now means "no bypassing principal touched this route group"; previously
+> the absence of the series supported no conclusion at all.
 
 `route_group` label values — Tier A (raw corpus retrieval) then Tier B
 (corpus-derived Phase-5 intelligence):
@@ -3288,6 +3306,36 @@ Every enrolled principal × all sixteen route groups must appear. Cells that do 
 appear received no traffic and require an explicit operator `idle-by-design`
 attestation naming the reason and the principal — the eight silent Tier B groups
 usually land here. Silence is never read as coverage.
+
+**This query covers scoped principals only, and that is not the whole population.**
+Sessions on the bypass band (`shared_token`, `bootstrap`) carry no `user_id` and are
+absent from both series above by construction, so a clean result here is not by
+itself evidence that the corpus is unused by anyone else. Run step 2b before
+reading step 2 as complete.
+
+### 2b. Bypass band — corpus traffic this coverage table cannot see
+
+```promql
+sum by (route_group, session_source) (
+  increase(smackerel_auth_corpus_grant_bypassed_total[14d])
+)
+```
+
+A **non-zero** result means principals are reading the corpus over a session that
+`RequireScope` waves through, so flipping to ENFORCE will not refuse them and the
+coverage table above never described them. That is not automatically a blocker —
+the bypass is documented and intentional (`spec.md` §4.1) — but it must be an
+explicit, recorded decision rather than an unnoticed omission.
+
+Note especially that username/password web login mints the shared token as the
+session cookie (SEC-108-02), so this band is not exotic: it is the ordinary
+browser population. If this query is non-zero while step 2 looks complete, the
+right conclusion is that the coverage table is measuring a subset, not that
+coverage is finished.
+
+A **zero** result is now meaningful in a way it was not before this counter
+existed: it means no bypassing session touched that route group, rather than
+that nothing was measured.
 
 ### 3. Would-deny set — who breaks if the flag flips today
 

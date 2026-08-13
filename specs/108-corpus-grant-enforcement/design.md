@@ -203,6 +203,34 @@ stale line citations do not.
 | `/api/internal/telegram-message-artifact` | POST/GET | Internal id↔id mapping; returns no corpus content. |
 | `/api/expertise` and the other Phase-5 intelligence endpoints | GET | ~~Out of scope per spec §12 Non-Goals~~ — **SUPERSEDED 2026-07-29 by `spec.md` §18 decision 5 (F-108-ADJ-01): these eight endpoints are now IN SCOPE and gated as Tier B.** They compute over the same global corpus, so leaving them bearer-only would have left a partial boundary. They are listed as groups 9–16 in the §2 table above (reconciled 2026-08-12); see `spec.md` §4.2 Tier B for the canonical inventory and `scopes.md` Scope 03 (SCN-108-G04, SCN-108-G05) for the plan. |
 | `/api/health`, `/metrics`, `/readyz` | GET | Unauthenticated by design; carry no corpus data. |
+| `POST /search`, `GET /artifact/{id}`, `GET /digest`, `GET /knowledge/concepts/{id}` (server-rendered HTMX, mounted at root under `webAuthMiddleware`) | POST/GET | **Added 2026-08-13 resolving SEC-108-01.** These READ THE CORPUS server-side — `SearchResults` calls `h.executor().Search(...)`, `ArtifactDetail` issues `SELECT … FROM artifacts WHERE id = $1` against `h.Pool` — so they are **not** API clients of the gated group and the gate never observes them in either stage. Exposure is bounded to the **shared-token band**: `webAuthMiddleware` admits only a value byte-equal to the configured `AuthToken`, and that band is already exempt from `RequireScope` by documented design (`spec.md` §4.1), so this is **not** an escalation beyond the recorded bypass. |
+
+> **Why the HTMX row matters even though it changes nothing today (SEC-108-01).**
+> Before this row, these four families were ungated *by omission* — they appeared
+> in neither this table nor the `ungatedRoutes` fixture, so
+> `TestCorpusGate_DoesNotOverReachUngatedRoutes` could not see them and nothing
+> in the repo recorded a decision about them.
+>
+> That is a latent HIGH rather than a present one. `spec.md` §12 non-goal 5 and
+> `F-108-BYPASS-01` both contemplate removing the shared-token bypass. Remove it,
+> and the corpus boundary would **look** complete — every `/api/*` group gated,
+> every test green — while these four families kept serving corpus content
+> unguarded, because nothing ever asserted they were outside the boundary.
+>
+> It also corrects a mis-identification: `scopes.md` Scope 03's Consumer Impact
+> Sweep records `internal/web` as the **PWA**, i.e. as a *client* calling
+> `/api/search`. It is not a client here; it reads the corpus in-process. Scope 04
+> was therefore being asked to render an operator-actionable 403 on a surface that
+> will never emit one.
+>
+> **Pinning status — honest.** These rows are documented but NOT yet pinned by the
+> `ungatedRoutes` fixture. Adding them there was attempted and correctly rejected
+> by that test's own non-vacuity guard: `corpusGateDeps` leaves
+> `Dependencies.WebHandler` nil, so the entire web group is unmounted in that unit
+> fixture and all four assertions would have been vacuous. Pinning them for real
+> needs a web handler backed by a live pool, which makes it an integration-tier
+> assertion. Recorded as SEC-108-01 rather than faked with four lines that look
+> like coverage and prove nothing.
 
 ---
 
@@ -269,6 +297,7 @@ The observe middleware is mounted in **both** stages — otherwise OBSERVE emits
 |---|---|---|---|
 | `smackerel_auth_corpus_grant_would_deny_total` | Counter | `route_group` (closed set of 16), `user_id`, `session_source` | A request that WOULD be denied under ENFORCE but was allowed under OBSERVE. |
 | `smackerel_auth_corpus_grant_allowed_total` | Counter | `route_group`, `user_id`, `session_source` | A request that carried the grant. Gives the denominator, and — with `user_id` — makes a GRANTED principal's traffic attributable, which is what closes the §18 decision 1(b) coverage bar without operator attestation (F-108-COVERAGE-LABEL-01, resolved). |
+| `smackerel_auth_corpus_grant_bypassed_total` | Counter | `route_group`, `session_source` | A request on a session `RequireScope` bypasses by design (`shared_token`, `bootstrap`). No `user_id` — those sessions carry an empty one. Added resolving SEC-108-03: under OBSERVE `RequireScope` is not mounted, so this band appeared in NO corpus series and the coverage table excluded it structurally. It stays OUT of the would-deny prediction (a bypassing session is never refused, so counting it there would inflate the UC-108-001 grant list) and exists solely to make silence and zero distinguishable. |
 | `smackerel_auth_corpus_grant_enforcement_mode` | Gauge | none | `0` = OBSERVE, `1` = ENFORCE. Lets a dashboard state the stage without reading config. |
 | `smackerel_auth_scope_rejected_total` | Counter (existing) | existing labels | Real 403s in ENFORCE. Unchanged — deliberately NOT reused for the observe signal (R-108-O2). |
 
@@ -389,7 +418,7 @@ audience scope, that is 109's decision and requires no change here.
 | # | Category | Location | What it proves |
 |---|---|---|---|
 | T1 | `unit` | `internal/auth/browser_session_policy_test.go` | `GateGlobalCorpusRead` denies an empty scope claim, denies a `*` wildcard claim, allows an explicit `corpus:read` claim, and returns a `CorpusDecision` carrying no content/count/label. |
-| T2 | `unit` | `internal/metrics/corpus_grant_test.go` | The three new metrics register in the `smackerel_auth_*` family with the closed **sixteen-value** `route_group` label set; an unknown label value is rejected. The set is asserted against an independent in-test literal, not derived from `CorpusRouteGroups()`, so adding a seventeenth constant cannot silently update the expectation. |
+| T2 | `unit` | `internal/metrics/corpus_grant_test.go` | The corpus-grant metrics register in the `smackerel_auth_*` family with the closed **sixteen-value** `route_group` label set; an unknown label value is rejected. The set is asserted against an independent in-test literal, not derived from `CorpusRouteGroups()`, so adding a seventeenth constant cannot silently update the expectation. Four series as of 2026-08-13 — the third counter, `..._bypassed_total`, was added resolving SEC-108-03 and is asserted as registered alongside the others. |
 | T3 | `unit` | `cmd/core` config resolution test | Absent `SMACKEREL_AUTH_CORPUS_GRANT_ENFORCEMENT` aborts startup naming the variable; a malformed value aborts naming the value; neither silently selects a stage (SCN-108-C03). |
 | T4 | `integration` | `internal/api` against the ephemeral test stack | OBSERVE: ungranted principal gets **200** on all sixteen route groups AND `..._corpus_grant_would_deny_total` increments with the right `route_group`. ENFORCE: same principal gets **403** on all sixteen. The fixture MUST wire a non-nil `IntelligenceEngine`, or Tier B is simply absent and the run reports eight-of-eight as a pass. |
 | T5 | `integration` | same | Shared-token and bootstrap sessions pass under ENFORCE (documented `RequireScope` source-switch bypass), so the bypass is asserted, not assumed. |

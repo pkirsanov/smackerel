@@ -753,6 +753,26 @@ still require an `idle-by-design` attestation — the fix makes traffic-bearing 
 self-closing, it does not manufacture traffic. The paragraph above is retained as the
 record of why the gap existed.
 
+**UPDATE 2026-08-13 — a SECOND coverage gap, found by security review (SEC-108-03).**
+Closing the label gap made traffic-bearing cells self-closing for **scoped** principals.
+It did not make the coverage table complete, because a whole band of principals never
+reaches those counters at all. Under OBSERVE `auth.RequireScope` is not mounted, so
+`smackerel_auth_scope_check_bypassed_total` never fires for corpus routes; and the gate
+returned before emitting either corpus counter for `shared_token` and `bootstrap`
+sessions. That band was therefore invisible in **every** spec-108 series for the whole
+observation window, and per SEC-108-02 it is the ordinary browser population, because
+username/password web login mints the shared token as the session cookie.
+
+The consequence for this criterion is specific: a clean coverage table was evidence
+about scoped principals only, and silence from the bypass band was indistinguishable
+from absence of traffic. `smackerel_auth_corpus_grant_bypassed_total{route_group,
+session_source}` now makes that band observable. It is deliberately kept OUT of the
+would-deny prediction — a bypassing session is never refused under ENFORCE, so counting
+it there would inflate the UC-108-001 grant list with principals that can never be
+denied. Criterion (b) is read together with step 2b of the runbook: a non-zero bypass
+result is not automatically a blocker, since the bypass is documented and intentional,
+but it must be an explicit recorded decision rather than an unnoticed omission.
+
 **Permanence.** Trigger-conditioned. The bar governs the phase-1 → phase-2 flip and each
 subsequent re-entry into OBSERVE; it expires with the observe branch at flag retirement
 (decision 6).

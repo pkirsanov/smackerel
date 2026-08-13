@@ -43,6 +43,7 @@ type corpusGrantCounters struct {
 	wouldDeny     float64
 	allowed       float64
 	scopeRejected float64
+	bypassed      float64
 }
 
 func corpusGrantSnapshot(group metrics.CorpusRouteGroup, userID, sessionSource string) corpusGrantCounters {
@@ -50,6 +51,7 @@ func corpusGrantSnapshot(group metrics.CorpusRouteGroup, userID, sessionSource s
 		wouldDeny:     testutil.ToFloat64(metrics.AuthCorpusGrantWouldDeny.WithLabelValues(string(group), userID, sessionSource)),
 		allowed:       testutil.ToFloat64(metrics.AuthCorpusGrantAllowed.WithLabelValues(string(group), userID, sessionSource)),
 		scopeRejected: testutil.ToFloat64(metrics.AuthScopeRejected.WithLabelValues(auth.GrantGlobalCorpusRead, userID)),
+		bypassed:      testutil.ToFloat64(metrics.AuthCorpusGrantBypassed.WithLabelValues(string(group), sessionSource)),
 	}
 }
 
@@ -534,13 +536,21 @@ func TestCorpusGrantGate_Observe_RequestPathNeverBecomesALabelValue(t *testing.T
 	}
 }
 
-// TestCorpusGrantGate_Observe_BypassedSessionSourcesEmitNothing mirrors the
-// documented auth.RequireScope source switch. Shared-token and bootstrap
-// sessions carry no scope claim and are BYPASSED under ENFORCE, so counting
-// them as would-be denials would make the counter a false predictor of the
-// ENFORCE outcome and inflate the UC-108-001 grant list with principals that
-// will never be denied.
-func TestCorpusGrantGate_Observe_BypassedSessionSourcesEmitNothing(t *testing.T) {
+// TestCorpusGrantGate_Observe_BypassedSessionSourcesAreCountedButNotPredicted
+// mirrors the documented auth.RequireScope source switch. Shared-token and
+// bootstrap sessions carry no scope claim and are BYPASSED under ENFORCE, so
+// counting them as would-be denials would make that counter a false predictor
+// of the ENFORCE outcome and inflate the UC-108-001 grant list with principals
+// that will never be denied.
+//
+// They are still COUNTED, on their own series (SEC-108-03). This assertion sits
+// at the GATE rather than at the recorder on purpose: a recorder-level test
+// proves the counter works, not that the gate ever calls it, so deleting the
+// emit would leave a recorder-only test green while restoring the exact blind
+// spot — bypass traffic invisible in every spec-108 series for the whole
+// OBSERVE window, and an operator authorising the flip from a coverage table
+// that structurally excluded a whole band of principals.
+func TestCorpusGrantGate_Observe_BypassedSessionSourcesAreCountedButNotPredicted(t *testing.T) {
 	gate := NewCorpusGrantGate(false)
 	group := metrics.CorpusRouteGroupExport
 
@@ -559,6 +569,9 @@ func TestCorpusGrantGate_Observe_BypassedSessionSourcesEmitNothing(t *testing.T)
 			}
 			if delta := after.allowed - before.allowed; delta != 0 {
 				t.Errorf("source %q: allowed delta = %v, want 0", source, delta)
+			}
+			if delta := after.bypassed - before.bypassed; delta != 1 {
+				t.Errorf("source %q: bypassed delta = %v, want 1 — the gate must emit this band onto its own series, otherwise the OBSERVE window cannot tell 'nobody bypassed' from 'we could not see'", source, delta)
 			}
 		})
 	}
