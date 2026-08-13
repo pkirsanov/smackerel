@@ -153,7 +153,20 @@ wait_for_go_runner_container() {
   local runner_ids=()
   local attempt
 
-  for attempt in {1..480}; do
+  # The nested run must clear preflight, config-validate, a compose BUILD
+  # (the repo-wide freshness convention at smackerel.sh:638 — deliberately not
+  # skippable, since a stale image would mask an unbuilt change) and a health
+  # wait before any Go runner container exists. A cached build still costs
+  # real time, and this runs while the OUTER e2e lane is loading the same box,
+  # so the previous 120s budget could not cover it and this test failed on a
+  # nested run that was still building. 20 minutes covers build + boot under
+  # load while still bounding a genuine hang.
+  #
+  # The >1 check below is unchanged and still returns immediately, so widening
+  # the budget does not weaken what this asserts.
+  local -r max_attempts=4800 # 4800 * 0.25s = 20 minutes
+
+  for attempt in $(seq 1 "$max_attempts"); do
     mapfile -t runner_ids < <(docker ps -q \
       --filter "ancestor=golang:1.25.10-bookworm" \
       --filter "network=smackerel-test_default")
@@ -166,9 +179,18 @@ wait_for_go_runner_container() {
       echo "Expected one Go E2E runner container, found ${#runner_ids[@]}: ${runner_ids[*]}" >&2
       return 1
     fi
+    # Fail FAST when the nested runner has already exited. Without this the
+    # loop burns the full budget waiting for a container that can never
+    # appear, and reports a timeout for what is actually a dead runner —
+    # hiding the real cause behind a 20-minute wait.
+    if [[ -n "${RUNNER_PID:-}" ]] && ! kill -0 "$RUNNER_PID" 2>/dev/null; then
+      echo "Nested E2E runner (pid $RUNNER_PID) exited before starting a Go runner container" >&2
+      return 1
+    fi
     sleep 0.25
   done
 
+  echo "No Go runner container appeared within $((max_attempts / 4))s" >&2
   return 1
 }
 

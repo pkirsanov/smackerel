@@ -1520,7 +1520,18 @@ case "$COMMAND" in
         # keep the wrapper bounded while allowing slow successful teardown.
         E2E_STACK_DOWN_TIMEOUT_S=180
         E2E_STACK_DOWN_SLOW_WARN_S=60
-        E2E_LIFECYCLE_SHELL_TIMEOUT_S=600
+        # Lifecycle scripts each boot (and, per the freshness convention at
+        # smackerel.sh:638, BUILD) their own full stack, and they run while the
+        # rest of the e2e lane loads the same host. Measured 2026-08-13:
+        # test_persistence.sh completes in 3m40s standalone but exceeded the
+        # previous 600s budget under lane contention — a ~3x slowdown against
+        # only ~2.7x headroom, so the budget was reporting resource starvation
+        # as a test failure.
+        #
+        # This bound exists to catch a HANG, not to enforce a performance SLA.
+        # 1800s keeps a hang detectable (~8x the standalone baseline) while
+        # tolerating the contention the lane's own design creates.
+        E2E_LIFECYCLE_SHELL_TIMEOUT_S=1800
         E2E_SHARED_SHELL_TIMEOUT_S=300
         E2E_CHILD_RUN_LABEL="com.smackerel.e2e-child-run-id"
 
