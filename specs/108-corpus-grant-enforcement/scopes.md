@@ -3670,13 +3670,87 @@ And it records that bubbles.train owns both the owning-train flip and the retire
   ratified the enforced-policy value as `false` in both trains, and the correction was applied to
   the one artifact that was actually wrong — the preceding DoD line.
 
-- [ ] `TP-05-01` unit test passes — flag declared in **both** bundles and default-OFF in **every** train, `mvp` metadata block present, and all three adversarial cases hold: absent-flag fixture REJECTED, non-owning-train (`mvp: true`) fixture REJECTED, shipped all-OFF shape ACCEPTED *(reworded 2026-08-11 by `bubbles.plan` to match the corrected `TP-05-01` row; prior wording read "flag default-ON in exactly one train, default-OFF elsewhere, metadata present")*
-- [ ] `TP-05-02` unit test passes — SST key declared with no default; no fallback shape in the resolution path
-- [ ] `TP-05-03` integration test passes — generated env carries the variable for every environment
+- [x] `TP-05-01` unit test passes — flag declared in **both** bundles and default-OFF in **every** train, `mvp` metadata block present, and all three adversarial cases hold: absent-flag fixture REJECTED, non-owning-train (`mvp: true`) fixture REJECTED, shipped all-OFF shape ACCEPTED *(reworded 2026-08-11 by `bubbles.plan` to match the corrected `TP-05-01` row; prior wording read "flag default-ON in exactly one train, default-OFF elsewhere, metadata present")*
+  - **Command:** `./smackerel.sh test unit --go --go-run 'CorpusGrantFlag'`
+  - **Exit Code:** 0
+  - **Evidence:** `ok github.com/smackerel/smackerel/internal/config 0.192s`
+  - All three adversarial fixtures drive the **same** `assertCorpusFlagBundles`
+    validator that judges the live bundles, so they prove the real assertion is
+    falsifiable rather than exercising a parallel copy of the logic:
+    (a) a bundle with the flag ABSENT is rejected — a silently dropped
+    declaration cannot pass; (b) a fixture with `mvp: true` is rejected — the
+    exact G111 condition; (c) the shipped all-OFF shape is ACCEPTED. Case (c)
+    carries the most weight: any rule demanding the flag be ON somewhere would
+    break the OBSERVE window, and it is what pins the corrected SCN-108-R01
+    premise.
+
+- [x] `TP-05-02` unit test passes — SST key declared with no default; no fallback shape in the resolution path
+  - **Command:** `./smackerel.sh test unit --go --go-run 'CorpusGrantFlag'`
+  - **Exit Code:** 0
+  - **Evidence:** `ok github.com/smackerel/smackerel/internal/config 0.192s`
+  - Asserts BOTH halves of the resolution path, since either alone leaves a hole:
+    the generator READS via `required_value auth.corpus_grant_enforcement`
+    (`config.sh:1861`) so a missing key aborts generation, and EMITS via
+    `${SMACKEREL_AUTH_CORPUS_GRANT_ENFORCEMENT:?...}` (`config.sh:2788`) so an
+    empty value aborts substitution. Also greps for the `:-` and `-` fallback
+    shapes in both directions — a default here would silently choose the
+    enforcement stage on the operator's behalf.
+- [x] `TP-05-03` integration test passes — generated env carries the variable for every environment
+  - **Command:** `./smackerel.sh test integration --go-run 'TP_05_03'`
+  - **Exit Code:** 0
+  - **Evidence:**
+
+```
+=== RUN   TestIntegration_CorpusGrantEnv_EmittedForEveryEnvironment_TP_05_03
+=== RUN   .../emission_is_unconditional_so_every_environment_gets_it
+=== RUN   .../sst_key_exists_so_generation_can_resolve_it
+=== RUN   .../a_freshly_generated_env_carries_the_variable
+--- PASS: TestIntegration_CorpusGrantEnv_EmittedForEveryEnvironment_TP_05_03 (0.00s)
+    --- PASS: .../emission_is_unconditional_so_every_environment_gets_it (0.00s)
+    --- PASS: .../sst_key_exists_so_generation_can_resolve_it (0.00s)
+    --- PASS: .../a_freshly_generated_env_carries_the_variable (0.00s)
+ok      github.com/smackerel/smackerel/tests/integration        0.215s
+```
+
+  **"Every environment" is proven from the GENERATOR, not from disk.** The
+  emission is asserted to appear EXACTLY once and unconditionally — more than
+  once would imply per-environment branching, which is precisely how one
+  environment ends up without the variable. That claim also covers environments
+  nobody has generated yet, which a file scan cannot.
+
+  **An earlier version of this test iterated every `.env` on disk and FAILED on
+  `home-lab.env`.** That artifact was generated 2026-06-14, two months before the
+  flag existed — stale local state, not a product defect. Scanning gitignored
+  local artifacts makes the result depend on when a developer last generated an
+  environment they may not even use; that is how a test earns a reputation for
+  crying wolf and gets muted. The check is now scoped to `test.env`, which this
+  lane regenerates every run (`config-validate: .../test.env.tmp.N OK`), so it is
+  fresh by construction. It still FAILS rather than skips if that file is
+  unreadable.
 - [ ] `TP-05-04` e2e-api test passes — the documented runbook query returns the documented shape against the real `/metrics` surface
-- [ ] `TP-05-05` unit test passes — the `v1` release packet's `features.md` records the capability, its owning spec, its owning train, and its flag
-- [ ] Flag lifecycle recorded (R-108-FL7): flag + observe branch + would-deny counters retire together, train + one cycle
-- [ ] `TP-05-07` unit test passes — the flag-lifecycle documentation carries all four retirement clauses (train + one cycle; flag/observe-branch/counters deleted together; enforcement unconditional afterwards; `bubbles.train` owns the flip and the retirement), so `spec.md` §18 decision 6 is a testable obligation rather than an implied one (SCN-108-R05)
+- [x] `TP-05-05` unit test passes — the `v1` release packet's `features.md` records the capability, its owning spec, its owning train, and its flag
+  - **Command:** `./smackerel.sh test unit --go --go-run 'CorpusGrantFlag'`
+  - **Exit Code:** 0
+  - **Evidence:** `ok github.com/smackerel/smackerel/internal/config 0.192s`
+  - Read-only by design: `docs/releases/**` is `bubbles.releases`-owned, so this
+    test REPORTS drift and never edits the packet. Verified the live entry at
+    `docs/releases/v1/features.md:120` (V8-B) names the capability, the owning
+    spec, the train and the flag.
+- [x] Flag lifecycle recorded (R-108-FL7): flag + observe branch + would-deny counters retire together, train + one cycle
+- [x] `TP-05-07` unit test passes — the flag-lifecycle documentation carries all four retirement clauses (train + one cycle; flag/observe-branch/counters deleted together; enforcement unconditional afterwards; `bubbles.train` owns the flip and the retirement), so `spec.md` §18 decision 6 is a testable obligation rather than an implied one (SCN-108-R05)
+  - **Command:** `./smackerel.sh test unit --go --go-run 'CorpusGrantFlag'`
+  - **Exit Code:** 0
+  - **Evidence:** `ok github.com/smackerel/smackerel/internal/config 0.192s`
+  - All four clauses are asserted SEPARATELY against the live
+    `Operations.md` / `design.md` / `spec.md` text, so deleting any one of them
+    fails rather than being absorbed by the other three. The contract is recorded
+    at `docs/Operations.md` → "Retirement contract".
+  - **This test FAILED on its first run, and was right to.** The docs read
+    `deleted **together**`, so markdown emphasis sits between the two words and a
+    naive `deleted\s+together` pattern missed it. The fix strips emphasis and
+    collapses whitespace before matching: a documentation-contract test that
+    fails on formatting rather than on content teaches people to ignore it, which
+    is worse than not having the test.
 - [ ] `TP-05-06` regression e2e-api test passes — the permanent invariants are protected: flag declared in both bundles, `mvp` metadata intact, non-owning train never default-ON, default-free SST key, the executable runbook, and the release-packet entry *(reworded 2026-08-11 by `bubbles.plan` to match the corrected `TP-05-06` row; prior wording read "single-owning-train flag default")*
 - [ ] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior — **Phase:** regression (`TP-05-06`, `./smackerel.sh test e2e`)
 - [ ] Broader E2E regression suite passes — **Phase:** regression (`./smackerel.sh test e2e` exits 0; no previously-passing test regresses)
