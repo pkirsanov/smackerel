@@ -38,6 +38,9 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
+	"regexp"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -528,4 +531,161 @@ func corpusGetAs(t *testing.T, cfg e2eConfig, bearer, path, client string) (int,
 		t.Fatalf("read body %s: %v", path, err)
 	}
 	return resp.StatusCode, body, resp.Header
+}
+
+// corpusRepoRoot locates the repo from this test's own source path.
+func corpusRepoRoot(t *testing.T) string {
+	t.Helper()
+	_, thisFile, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller(0) failed — cannot locate the repo root")
+	}
+	return filepath.Clean(filepath.Join(filepath.Dir(thisFile), "..", ".."))
+}
+
+// corpusMetricSamples returns the raw /metrics lines for one metric family.
+func corpusMetricSamples(t *testing.T, cfg e2eConfig, metricName string) []string {
+	t.Helper()
+	status, body, _ := corpusGetAs(t, cfg, "", "/metrics", "")
+	if status != http.StatusOK {
+		t.Fatalf("GET /metrics returned %d, want 200", status)
+	}
+	var out []string
+	for _, line := range strings.Split(string(body), "\n") {
+		if strings.HasPrefix(line, metricName+"{") {
+			out = append(out, line)
+		}
+	}
+	return out
+}
+
+// TestE2E_Spec108_CorpusEnforce_RunbookQueryShape_TP_05_04 proves the
+// UC-108-001 runbook in docs/Operations.md is EXECUTABLE, not aspirational:
+// the series it names really exist on the live /metrics surface and really
+// carry the labels the documented query groups by.
+//
+// A runbook that names a label the metric does not emit fails at the worst
+// possible moment — during the pre-flip go/no-go review, when the operator is
+// deciding whether anyone gets locked out.
+func TestE2E_Spec108_CorpusEnforce_RunbookQueryShape_TP_05_04(t *testing.T) {
+	cfg := corpusEnforceLane(t)
+	waitForHealth(t, cfg, 60*time.Second)
+
+	granted := corpusEnforceToken(t, "granted")
+	ungranted := corpusEnforceToken(t, "ungranted")
+
+	// One sample on each side. The gate is mounted in BOTH stages
+	// (router.go:116), so the would-deny counter still fires under ENFORCE.
+	corpusGet(t, cfg, granted, "/api/recent?limit=1")
+	corpusGet(t, cfg, ungranted, "/api/recent?limit=1")
+
+	for _, family := range []string{
+		"smackerel_auth_corpus_grant_allowed_total",
+		"smackerel_auth_corpus_grant_would_deny_total",
+	} {
+		samples := corpusMetricSamples(t, cfg, family)
+		if len(samples) == 0 {
+			t.Errorf("%s exposes no samples on the live /metrics surface; the documented runbook query would return empty and an operator would read that as 'no traffic'", family)
+			continue
+		}
+		// The documented query groups by (user_id, route_group). Both labels
+		// must exist on the real series or that grouping is fiction.
+		for _, label := range []string{"user_id=", "route_group=", "session_source="} {
+			if !strings.Contains(samples[0], label) {
+				t.Errorf("%s samples do not carry %q — the documented UC-108-001 query groups by it, so the runbook is not executable. sample=%s", family, strings.TrimSuffix(label, "="), samples[0])
+			}
+		}
+	}
+
+	status, body, _ := corpusGetAs(t, cfg, "", "/metrics", "")
+	if status != http.StatusOK || !strings.Contains(string(body), "smackerel_auth_corpus_grant_enforcement_mode") {
+		t.Error("the enforcement_mode gauge is absent from /metrics; the runbook's 'confirm the stage' step cannot be performed")
+	}
+}
+
+// TestE2E_Spec108_CorpusEnforce_PermanentInvariants_TP_05_06 is the persistent
+// regression for SCN-108-R01..R05, asserting only the PERMANENT invariants.
+//
+// It deliberately does NOT pin `next` at false: bubbles.train flipping the
+// OWNING train ON after a clean observation window is the intended end state,
+// not a regression. Pinning it would make the spec's own success look like a
+// failure and pressure a future operator to work around this test.
+func TestE2E_Spec108_CorpusEnforce_PermanentInvariants_TP_05_06(t *testing.T) {
+	cfg := corpusEnforceLane(t)
+	waitForHealth(t, cfg, 60*time.Second)
+	root := corpusRepoRoot(t)
+
+	read := func(rel string) string {
+		t.Helper()
+		raw, err := os.ReadFile(filepath.Join(root, rel))
+		if err != nil {
+			t.Fatalf("read %s: %v", rel, err)
+		}
+		return string(raw)
+	}
+
+	t.Run("R01_flag_declared_in_both_bundles_and_mvp_never_ON", func(t *testing.T) {
+		mvp := read("config/feature-flags.mvp.yaml")
+		for name, body := range map[string]string{
+			"next": read("config/feature-flags.next.yaml"),
+			"mvp":  mvp,
+		} {
+			if !strings.Contains(body, "corpusGrantEnforcement:") {
+				t.Errorf("%s bundle no longer declares corpusGrantEnforcement; an undeclared flag is undefined, and the resolution path is fail-loud", name)
+			}
+		}
+		if regexp.MustCompile(`corpusGrantEnforcement:\s*true`).MatchString(mvp) {
+			t.Error("the NON-OWNING train mvp has corpusGrantEnforcement default-ON — this is the G111 violation condition")
+		}
+		if !strings.Contains(mvp, "owning_spec: specs/108-corpus-grant-enforcement/") {
+			t.Error("the mvp metadata block no longer names the owning spec; flag provenance would be unrecoverable")
+		}
+	})
+
+	t.Run("R02_sst_key_stays_default_free", func(t *testing.T) {
+		gen := read("scripts/commands/config.sh")
+		if !strings.Contains(gen, "required_value auth.corpus_grant_enforcement") {
+			t.Error("config.sh no longer resolves auth.corpus_grant_enforcement fail-loud via required_value")
+		}
+		if strings.Contains(gen, "SMACKEREL_AUTH_CORPUS_GRANT_ENFORCEMENT:-") {
+			t.Error("a ${VAR:-default} fallback was reintroduced; a default silently decides the enforcement stage for the operator")
+		}
+	})
+
+	t.Run("R03_runbook_query_shape_holds_on_the_live_surface", func(t *testing.T) {
+		corpusGet(t, cfg, corpusEnforceToken(t, "granted"), "/api/recent?limit=1")
+		samples := corpusMetricSamples(t, cfg, "smackerel_auth_corpus_grant_allowed_total")
+		if len(samples) == 0 {
+			t.Fatal("the allowed counter exposes no samples; the documented query cannot return its documented shape")
+		}
+		if !strings.Contains(samples[0], "user_id=") {
+			t.Errorf("the allowed counter lost its user_id label; per-principal coverage becomes uncomputable and criterion 1(b) silently reverts to operator attestation. sample=%s", samples[0])
+		}
+	})
+
+	t.Run("R04_release_packet_records_capability", func(t *testing.T) {
+		packet := read("docs/releases/v1/features.md")
+		for _, token := range []string{"108-corpus-grant-enforcement", "corpusGrantEnforcement"} {
+			if !strings.Contains(packet, token) {
+				t.Errorf("docs/releases/v1/features.md no longer records %q; the shipped capability would vanish from the release record", token)
+			}
+		}
+	})
+
+	t.Run("R05_retirement_contract_stays_recorded", func(t *testing.T) {
+		// Markdown emphasis sits between words ("deleted **together**"), so
+		// strip it before matching or the assertion fails on formatting.
+		flat := regexp.MustCompile(`\s+`).ReplaceAllString(
+			strings.NewReplacer("*", "", "_", "", "`", "").Replace(strings.ToLower(read("docs/Operations.md"))), " ")
+		for _, clause := range []struct{ pattern, why string }{
+			{`train plus one cycle|train \+ one cycle`, "without a stated lifetime the flag becomes permanent"},
+			{`deleted together|retire together`, "retiring the flag but keeping the observe branch leaves a permanent bypass surface"},
+			{`unconditional`, "the end state must be stated or removing the flag looks like removing the protection"},
+			{`bubbles\.train`, "an unowned retirement is nobody's job"},
+		} {
+			if !regexp.MustCompile(clause.pattern).MatchString(flat) {
+				t.Errorf("the retirement contract lost a clause (/%s/) — %s", clause.pattern, clause.why)
+			}
+		}
+	})
 }
