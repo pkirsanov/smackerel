@@ -178,7 +178,6 @@ var ungatedRoutes = []struct {
 // tier assertion rather than a unit one. Recorded as SEC-108-01 and routed
 // rather than faked here. Their disposition is documented in design.md §2.
 
-
 // corpusGateDeps builds a router-ready Dependencies for the gate contract.
 //
 // withIntelligence controls the vacuity trap: false leaves
