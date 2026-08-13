@@ -11,14 +11,12 @@
 # faithfully published "    {," for each one. The next read-modify-write made it
 # permanent.
 #
-# This was not theoretical. It is the observed state of two downstream consumer
-# registries found in the field:
-#
-#   one repository       25 records reduced to a bare  {,
-#   another repository   a half record spliced onto a whole one
-#
-# Both are unparseable, so every consumer of those ledgers — including the
-# abandoned-run reaper — is blind on those repositories.
+# This was not theoretical. A downstream registry was found with 25 consecutive
+# records reduced to a bare "{,". Uniform repeated damage is the tell: a
+# deterministic transform applied N times, NOT torn writes (those leave ragged
+# one-off splices, which is a separate staging-path defect). The file is
+# unparseable either way, so every consumer of that ledger — including the
+# abandoned-run reaper — is blind on that repository.
 #
 # The reader now parses structurally (string state + brace depth), so a record
 # is recovered regardless of how the source happened to be formatted.

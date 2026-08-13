@@ -446,11 +446,12 @@ EOF
 # published "    {," for each. The read-modify-write cycle then made it
 # permanent.
 #
-# That is not hypothetical: it is the observed state of two downstream consumer
-# registries found in the field — one with every record reduced to a bare "{,"
-# and one with a half record spliced onto a whole one. Both are unparseable, so
-# every consumer of those ledgers — including the abandoned-run reaper — is
-# blind on those repositories.
+# That is not hypothetical: a downstream registry was found with 25 consecutive
+# records reduced to a bare "{,". Uniform, repeated damage like that is the
+# tell — it is a deterministic transform applied N times, NOT torn writes,
+# which leave ragged one-off splices (that is the separate staging-path defect
+# fixed in write_run_state_registry). Either way the file is unparseable, so
+# every consumer of that ledger — including the abandoned-run reaper — is blind.
 #
 # This parses structurally instead: it tracks string state and brace depth, so
 # a record is emitted when its braces balance regardless of how the source was
@@ -508,12 +509,17 @@ write_run_state_registry() {
   # whichever renames last publishes the interleaved result. The rename below
   # is atomic; the staging file was not, so atomicity bought nothing.
   #
-  # Honest scope: this is hardening against a real race, NOT the explanation
-  # for the corrupted registries found in the field. That signature was traced
-  # to formatting fragility in the reader (see run_state_lines) and reproduces
-  # deterministically from a single-threaded read-modify-write. A shared
-  # staging path could not be made to reproduce it under deliberate contention.
-  # Both defects are real; only one of them was firing.
+  # This one is confirmed in the field, not theoretical. A registry was found
+  # holding a record cut off mid-value at `"posture":"f` with a DIFFERENT
+  # record's bytes continuing from that exact offset, the two runs started two
+  # seconds apart. That is an interleave, and only a shared staging path can
+  # produce it.
+  #
+  # It is NOT the only corruption mode, and the two are easy to confuse. A
+  # second registry was destroyed by formatting fragility in the reader (see
+  # run_state_lines) and shows a completely different signature: uniform,
+  # repeated, single-threaded. Read both notes before blaming concurrency for
+  # a damaged ledger — the shapes tell you which defect fired.
   #
   # This uses mktemp rather than "$$.$RANDOM". Both of those are unreliable
   # here: inside a subshell `$$` is the PARENT's pid, and subshells forked
