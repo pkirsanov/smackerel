@@ -374,56 +374,56 @@ wrong implementation. `docs/Operations.md` gained step 2b so the operator actual
 series, and the metric tables in `design.md` §4 and the runbook were corrected from three series
 to four.
 
-### Observed integration flake — NOT caused by this spec, recorded rather than ignored
+### Reproducible in-lane integration failure — NOT caused by this spec, diagnosed and routed
 
-A late full-lane integration run (`/tmp/i8.log`) exited 1 with **1971 pass / 7 fail**, against a
-1974 / 0 baseline. Three tests failed, all in `tests/integration/openknowledge`, all with the same
-symptom — a `smackerel_self` namespace search returning zero of the rows the test had just
-inserted:
+> **CORRECTION.** This section first called the failure a transient flake caused by concurrent
+> agent activity. That was wrong, and the correction matters more than the original note: a
+> second full-lane run with **no** concurrent activity reproduced it identically. It is
+> deterministic in the full lane, not intermittent.
+
+Two full-lane integration runs exited 1 with **1971 pass / 7 fail** against a 1974 / 0 baseline.
+The same three tests failed both times, all in `tests/integration/openknowledge`, all with one
+symptom — a `smackerel_self` search returning zero of the rows the test had itself just inserted:
 
 ```text
---- FAIL: TestSelfKnowledge_TrustPerimeter (0.04s)
-    self_knowledge_provenance_test.go:80: self artifact "sk-prov-224453.441410-self" not returned by the tool
---- FAIL: TestSelfKnowledgeTool_CitesOnlySmackerelSelf (0.05s)
+--- FAIL: TestSelfKnowledge_TrustPerimeter (0.18s)
+    self_knowledge_provenance_test.go:80: self artifact "sk-prov-230108.925520-self" not returned by the tool
+--- FAIL: TestSelfKnowledgeTool_CitesOnlySmackerelSelf (0.12s)
     self_knowledge_tool_test.go:71: got 0 in-run cited self rows, want 2 (ids=[])
 --- FAIL: TestPgxSemanticSearcher_NamespaceScopedCosine (0.06s)
     semantic_searcher_test.go:116: got 0 in-run smackerel_self rows, want 2 (ids=[])
-FAIL  github.com/smackerel/smackerel/tests/integration/openknowledge  0.385s
 ```
 
-**It is not a regression from this spec, and that was established rather than assumed:**
+**Not a regression from this spec.** The corpus-grant change reads a session's scope claim and
+increments counters; it touches no artifact storage, no embeddings, and not this namespace. The
+same three tests pass in isolation, and pass when run alongside both other known contenders.
 
-1. The same three tests PASSED in the immediately preceding full run (`/tmp/i5.log`), which
-   already contained every code change this session made.
-2. The only commits between that passing run and this failing one touched markdown and
-   `state.json`. **No Go code changed.**
-3. Re-run in isolation, all three PASS:
+**Diagnosis — the guard has a blind spot it cannot see by construction.** `BUG-104-001` added
+`tests/integration/nslock` to serialise access to the shared `smackerel_self` namespace, and all
+three known test-side contenders correctly take it: the openknowledge victims, the selfknowledge
+ingestor test, and `knowledge_stats_test.go`'s `TRUNCATE`. Callsite coverage is complete, and
+`nslock/callsite_contract_test.go` enforces it with a regex over test source.
 
-```text
-$ ./smackerel.sh test integration --go-run 'TestSelfKnowledge_TrustPerimeter|TestSelfKnowledgeTool_CitesOnlySmackerelSelf|TestPgxSemanticSearcher_NamespaceScopedCosine'
---- PASS: TestSelfKnowledge_TrustPerimeter (0.04s)
---- PASS: TestSelfKnowledgeTool_CitesOnlySmackerelSelf (0.04s)
---- PASS: TestPgxSemanticSearcher_NamespaceScopedCosine (0.09s)
-ok  github.com/smackerel/smackerel/tests/integration/openknowledge  0.232s
-RERUN_EXIT=0
+The row-deleter that is actually firing is not test code. `internal/assistant/selfknowledge/ingestor.go:137`
+`sweepStale` runs in the **production** ingestor:
+
+```sql
+DELETE FROM artifacts
+WHERE source_id = $1 AND content_hash <> ALL($2::text[])
 ```
 
-4. Nothing in the corpus-grant change touches artifact storage, embeddings, or the
-   `smackerel_self` namespace. The gate reads a session's scope claim and increments counters.
+Every test row these three tests insert carries a synthetic `content_hash` (`"h-"+id`) that is by
+definition absent from the real corpus keep-set, so any stale sweep that runs while those rows
+exist deletes exactly them. The ingestor holds no `nslock` — it is not a test, so the
+callsite-regex contract cannot reach it, and adding a lock acquisition to a regex allowlist would
+not have caught this either. That is consistent with every observation: zero in-run rows, green in
+isolation, red in the full lane, and a health snapshot reporting `artifact_count: 0`.
 
-**What I could NOT determine.** Why it failed. The health snapshot captured during the failing run
-reports `postgres: up, artifact_count: 0`, which is consistent with rows being removed while those
-tests ran — a shared-fixture contention rather than a logic error. Two plausible causes, and the
-evidence does not separate them: another package in the same lane truncating shared tables, or
-interference from a concurrent agent that was running its own stack and a
-`--env test down --volumes` teardown in a separate worktree during this window.
-
-**Why it is recorded here rather than silently re-run until green.** A live-system test that fails
-once in a full lane and passes in isolation is the failure mode that trains people to re-run
-until green, and that habit is how a real intermittent defect gets classified as noise. The
-observation belongs in the record even though this spec did not cause it and cannot close it. It
-needs an owner: the isolation contract for `tests/integration/openknowledge` against the shared
-test database.
+**Routing.** This belongs to spec 104 / `BUG-104-001`, whose fix is incomplete rather than wrong:
+it established mutual exclusion across test callsites but not against the production sweep the
+lane itself exercises. It is recorded here because this session observed and diagnosed it, not
+because this spec owns it. It does not gate spec 108 — no corpus-grant test is affected, and the
+corpus-grant suites pass in every run.
 
 ### What was planned, and what was captured
 
