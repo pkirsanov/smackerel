@@ -317,7 +317,7 @@
       "requirements": ["AC-055-001", "AC-055-012"],
       "requiredTestTypes": ["e2e-ui", "artifact", "traceability", "static"],
       "requiredTestType": "e2e-ui",
-      "evidenceRefs": ["report.md#docs-publication-evidence-2026-05-24", "report.md#docs-artifact-lint-evidence", "report.md#docs-traceability-guard-evidence"]
+      "evidenceRefs": ["report.md#docs-publication-evidence-2026-05-24", "report.md#docs-artifact-lint-evidence", "report.md#docs-traceability-guard-evidence"],
       "linkedTests": [
         {"testType": "e2e-ui", "path": "tests/e2e/notification_ntfy_source_ui_test.go", "title": "TestNtfyOperatorWorkflowSourceListDetailDLQReplayTroubleshooting", "command": "./smackerel.sh test e2e", "liveSystem": true, "status": "planned"},
         {"testType": "static", "path": "tests/e2e/notification_ntfy_source_api_test.go tests/e2e/notification_ntfy_source_ui_test.go", "title": "RegressionQualityGuardForNtfyE2E", "command": "timeout 600 bash .github/bubbles/scripts/regression-quality-guard.sh tests/e2e/notification_ntfy_source_api_test.go tests/e2e/notification_ntfy_source_ui_test.go", "liveSystem": false, "status": "planned"},
