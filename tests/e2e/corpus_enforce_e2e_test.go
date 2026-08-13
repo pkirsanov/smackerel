@@ -1,7 +1,9 @@
 //go:build e2e
 
-// Spec 108 SCOPE-03 — corpus-grant ENFORCE rows against the LIVE stack
-// (TP-03-06, TP-03-07, TP-03-10).
+// Spec 108 — corpus-grant ENFORCE rows against the LIVE stack.
+// SCOPE-03: TP-03-06, TP-03-07, TP-03-10.
+// SCOPE-04: TP-04-05 (design.md §5 caller-compatibility matrix),
+//           TP-04-07 (SCN-108-E01..E04 caller regression).
 //
 // These drive the real smackerel-core container over real HTTP. There is no
 // request interception, no mock, no stub.
@@ -337,4 +339,193 @@ func TestE2E_Spec108_CorpusEnforce_Regression_TP_03_10(t *testing.T) {
 	if !strings.Contains(string(body), fmt.Sprintf("%s 1", "smackerel_auth_corpus_grant_enforcement_mode")) {
 		t.Errorf("enforcement_mode gauge does not report 1 (enforce) on a stack booted with the ENFORCE overlay; the gauge and the actual stage disagree, so it cannot be trusted for rollback verification")
 	}
+}
+
+// TestE2E_Spec108_CorpusEnforce_CompatibilityMatrix_TP_04_05 walks every row of
+// the design.md §5 caller-compatibility matrix against the live ENFORCE stack
+// and asserts the RECORDED break/no-break outcome for each.
+//
+// The matrix is a promise about who keeps working when the flag flips. Until
+// each row is exercised, the "breaks / does not break" column is an intention.
+// Getting a row WRONG in either direction is a real defect: a surface recorded
+// as no-break that actually 403s is an unannounced outage, and one recorded as
+// breaking that silently still works means the gate is not covering it.
+func TestE2E_Spec108_CorpusEnforce_CompatibilityMatrix_TP_04_05(t *testing.T) {
+	cfg := corpusEnforceLane(t)
+	waitForHealth(t, cfg, 60*time.Second)
+
+	granted := corpusEnforceToken(t, "granted")
+	ungranted := corpusEnforceToken(t, "ungranted")
+	corpusRoute := "/api/recent?limit=1"
+
+	// Row 1 — PWA daily user. dailyUserGrants excludes corpus:read, so this
+	// row is recorded as BREAKING. That is the whole reason the OBSERVE window
+	// and the rotation path exist.
+	t.Run("row1_pwa_daily_user_BREAKS", func(t *testing.T) {
+		status, body, _ := corpusGet(t, cfg, ungranted, corpusRoute)
+		if status != http.StatusForbidden {
+			t.Errorf("daily user got %d, want 403. §5 records this row as BREAKING at ENFORCE; if it does not break, the gate is not covering the PWA read path. body=%s", status, string(body))
+		}
+	})
+
+	// Row 2 — PWA operator. operatorGrants includes corpus:read, so this row is
+	// recorded as NO break. It is the control that keeps row 1 meaningful:
+	// without it, "everything 403s" would satisfy row 1 too.
+	t.Run("row2_pwa_operator_no_break", func(t *testing.T) {
+		status, body, _ := corpusGet(t, cfg, granted, corpusRoute)
+		if status < 200 || status > 299 {
+			t.Errorf("operator got %d, want 2xx. §5 records this row as NOT breaking; an operator refused under ENFORCE is an unannounced outage. body=%s", status, string(body))
+		}
+	})
+
+	// Row 3 — Browser extension. No extension-specific grant exists; the
+	// extension consumes its principal's token, so its outcome must equal the
+	// principal's on BOTH sides of the grant.
+	t.Run("row3_extension_tracks_principal", func(t *testing.T) {
+		if status, body, _ := corpusGetAs(t, cfg, ungranted, corpusRoute, "smackerel-extension"); status != http.StatusForbidden {
+			t.Errorf("extension with an ungranted principal got %d, want 403 (same as the PWA). body=%s", status, string(body))
+		}
+		if status, body, _ := corpusGetAs(t, cfg, granted, corpusRoute, "smackerel-extension"); status < 200 || status > 299 {
+			t.Errorf("extension with a granted principal got %d, want 2xx; the extension must inherit its principal's grant, not be blanket-denied. body=%s", status, string(body))
+		}
+	})
+
+	// Row 4 — Telegram bridge. §18 decision 3 makes the bridge's minted token
+	// derive its scope claim from the mapped principal, so at the wire level a
+	// bridge request IS a per-user token carrying exactly the principal's
+	// grants. That is what is exercised here.
+	//
+	// Honest boundary: this covers the TOKEN the bridge mints, not the bridge's
+	// chat-mapping plumbing. The chat→principal mapping and the operator-facing
+	// reply text are covered by TP-04-09 / TP-04-01 at unit and integration
+	// level, where the minter can be driven directly.
+	t.Run("row4_telegram_bridge_tracks_principal", func(t *testing.T) {
+		if status, body, _ := corpusGet(t, cfg, ungranted, corpusRoute); status != http.StatusForbidden {
+			t.Errorf("a bridge token derived from an UNENTITLED principal got %d, want 403 — the minter must not confer authority the principal lacks. body=%s", status, string(body))
+		}
+		if status, body, _ := corpusGet(t, cfg, granted, corpusRoute); status < 200 || status > 299 {
+			t.Errorf("a bridge token derived from an ENTITLED principal got %d, want 2xx (SCN-108-E01). body=%s", status, string(body))
+		}
+	})
+
+	// Row 5 — Internal service-to-service on the shared token. RequireScope's
+	// source switch bypasses the scope check, so §5 records NO break. §5 also
+	// requires this bypass be asserted by test so it stays a documented
+	// decision rather than an accident.
+	t.Run("row5_shared_token_no_break", func(t *testing.T) {
+		status, body, _ := corpusGet(t, cfg, cfg.AuthToken, corpusRoute)
+		if status < 200 || status > 299 {
+			t.Errorf("the shared token got %d, want 2xx. §5 records the service-to-service row as NOT breaking; internal enrichment reads would go down. body=%s", status, string(body))
+		}
+	})
+
+	// Row 6 — Bootstrap session. Recorded as NO break because RequireScope
+	// bypasses SessionSourceBootstrap.
+	//
+	// NOT constructible over HTTP, and saying so is more honest than
+	// manufacturing a request that resembles one. Every non-test reference to
+	// SessionSourceBootstrap is a CONSUMER (scope_middleware.go,
+	// corpus_grant_gate.go, cmd/core/wiring.go); no production path builds such
+	// a session for an inbound request, so there is no bearer an e2e client
+	// could present to reach that branch. The bypass is asserted directly
+	// against auth.RequireScope by TP-03-03, where the session can be
+	// constructed. Recorded here so the matrix row is accounted for rather than
+	// silently skipped.
+	t.Run("row6_bootstrap_covered_at_integration", func(t *testing.T) {
+		t.Log("row 6 (bootstrap) is not constructible over HTTP — no production path builds a bootstrap session for an inbound request; the bypass is asserted directly in TP-03-03")
+	})
+
+	// Row 7 — Unauthenticated probes. §5 records these as ungated, and an
+	// over-broad mount that swept them in would take down scraping and
+	// orchestrator health checks.
+	t.Run("row7_unauthenticated_probes_no_break", func(t *testing.T) {
+		// corpusGetAs with an empty bearer omits the Authorization header
+		// entirely. corpusGet would send a literal "Bearer ", which is a
+		// malformed credential rather than the absent one a Prometheus scrape
+		// actually presents.
+		for _, path := range []string{"/metrics", "/readyz", "/api/health"} {
+			status, _, _ := corpusGetAs(t, cfg, "", path, "")
+			if status == http.StatusForbidden {
+				t.Errorf("%s returned 403 under ENFORCE; §5 records the probe row as ungated, and gating it breaks Prometheus scraping and orchestrator health checks", path)
+			}
+		}
+	})
+}
+
+// TestE2E_Spec108_CorpusEnforce_CallerRegression_TP_04_07 is the persistent
+// scenario-specific regression for SCN-108-E01 through E04 against the live
+// stack.
+func TestE2E_Spec108_CorpusEnforce_CallerRegression_TP_04_07(t *testing.T) {
+	cfg := corpusEnforceLane(t)
+	waitForHealth(t, cfg, 60*time.Second)
+
+	granted := corpusEnforceToken(t, "granted")
+	ungranted := corpusEnforceToken(t, "ungranted")
+
+	// SCN-108-E01 — a bridge token for an ENTITLED principal keeps working
+	// across the corpus command surface, not just one route. The Telegram
+	// commands map onto search/digest/recent/knowledge, so a regression that
+	// broke only one of them would slip past a single-route check.
+	for _, path := range []string{"/api/recent?limit=1", "/api/digest", "/api/knowledge/stats"} {
+		if status, body, _ := corpusGet(t, cfg, granted, path); status == http.StatusForbidden {
+			t.Errorf("SCN-108-E01: an entitled principal was refused on %s (403); Telegram corpus commands must keep working. body=%s", path, string(body))
+		}
+	}
+
+	// SCN-108-E04 (adversarial) — the minter must not confer authority the
+	// principal lacks. This is the case a naive "Telegram works" test passes
+	// while the real defect ships.
+	status, body, _ := corpusGet(t, cfg, ungranted, "/api/recent?limit=1")
+	if status != http.StatusForbidden {
+		t.Errorf("SCN-108-E04: a principal WITHOUT corpus:read reached the corpus (status=%d); authority must come from the principal, never from the minter. body=%s", status, string(body))
+	}
+
+	// The refusal must read as a PERMANENT, operator-actionable condition, not
+	// a transient one. 403 says "you may not"; 429/503 say "try again", which
+	// would send a bridge into a retry loop that can never succeed.
+	if status == http.StatusTooManyRequests || status == http.StatusServiceUnavailable || status == http.StatusRequestTimeout {
+		t.Errorf("SCN-108-E04: the refusal used a TRANSIENT status (%d); a missing grant is permanent until an operator rotates the token, and a retryable code would drive an endless retry loop", status)
+	}
+
+	// SCN-108-E03 — extension inherits its principal's grant, both directions.
+	if s, b, _ := corpusGetAs(t, cfg, ungranted, "/api/recent?limit=1", "smackerel-extension"); s != http.StatusForbidden {
+		t.Errorf("SCN-108-E03: extension with an ungranted principal got %d, want the same 403 as the PWA. body=%s", s, string(b))
+	}
+	if s, b, _ := corpusGetAs(t, cfg, granted, "/api/recent?limit=1", "smackerel-extension"); s == http.StatusForbidden {
+		t.Errorf("SCN-108-E03: extension with a GRANTED principal was refused; it must inherit the grant. body=%s", string(b))
+	}
+
+	// SCN-108-E02 — the external guest-context consumer is not silently broken.
+	// It authenticates on the shared token, which RequireScope bypasses.
+	if s, b, _ := corpusGet(t, cfg, cfg.AuthToken, "/api/recent?limit=1"); s < 200 || s > 299 {
+		t.Errorf("SCN-108-E02: the shared-token consumer got %d, want 2xx; the external guest-context path must not break at ENFORCE. body=%s", s, string(b))
+	}
+}
+
+// corpusGetAs issues a request with a client-identifying header so the
+// extension surface can be driven as the extension. An empty bearer sends no
+// Authorization header at all, which is what the unauthenticated probe row
+// needs.
+func corpusGetAs(t *testing.T, cfg e2eConfig, bearer, path, client string) (int, []byte, http.Header) {
+	t.Helper()
+	req, err := http.NewRequest(http.MethodGet, cfg.CoreURL+path, nil)
+	if err != nil {
+		t.Fatalf("build request %s: %v", path, err)
+	}
+	if bearer != "" {
+		req.Header.Set("Authorization", "Bearer "+bearer)
+	}
+	if client != "" {
+		req.Header.Set("X-Smackerel-Client", client)
+	}
+	resp, err := (&http.Client{Timeout: 20 * time.Second}).Do(req)
+	if err != nil {
+		t.Fatalf("GET %s: %v", path, err)
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("read body %s: %v", path, err)
+	}
+	return resp.StatusCode, body, resp.Header
 }
