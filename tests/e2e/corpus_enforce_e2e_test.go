@@ -260,6 +260,15 @@ func TestE2E_Spec108_CorpusEnforce_DenialParity_TP_03_07(t *testing.T) {
 	if got, want := realHdr.Get("Content-Type"), randHdr.Get("Content-Type"); got != want {
 		t.Errorf("denial Content-Type differs (real=%q random=%q); the refusal must be indistinguishable", got, want)
 	}
+
+	// Report WHAT was compared, not merely that the comparison passed. A bare
+	// PASS line is indistinguishable from every other PASS line in the phase
+	// summary, so it cannot serve as evidence that THIS property held: it
+	// proves a test ran, not that a real id and an absent id were refused
+	// identically. Logging the compared pair makes the assertion auditable
+	// from the transcript alone.
+	t.Logf("denial parity holds: real id %q and absent id %q both refused %d with byte-identical bodies (%d bytes: %s) and Content-Type %q",
+		realID, randomID, realStatus, len(realBody), strings.TrimSpace(string(realBody)), realHdr.Get("Content-Type"))
 }
 
 // TestE2E_Spec108_CorpusEnforce_Regression_TP_03_10 is the persistent

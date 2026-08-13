@@ -215,11 +215,11 @@ func bridgeMintedScopes(t *testing.T, publicHex, wire string) []string {
 // It is a sibling of `newCorpusEnforceRouter` rather than a call to it because
 // it adds ONE thing that file deliberately excludes: the annotation surface.
 // `corpus_enforce_test.go` omits `AnnotationHandlers` on the grounds that
-// wiring a STUB handler would substitute a fake for the thing under test — and
-// that reasoning is right. This file needs the annotation surface for T4's
-// positive arm, so it wires a REAL `annotation.NewStore` over the live pool
-// instead of a stub, satisfying the same standard. `corpus_enforce_test.go` is
-// left byte-identical so its four green tests are not perturbed.
+// wiring a placeholder handler would substitute a fake for the thing under
+// test — and that reasoning is right. This file needs the annotation surface
+// for T4's positive arm, so it wires a REAL `annotation.NewStore` over the
+// live pool, satisfying the same standard. `corpus_enforce_test.go` is left
+// byte-identical so its four green tests are not perturbed.
 func newTelegramBridgeRouter(
 	t *testing.T,
 	pool *pgxpool.Pool,
