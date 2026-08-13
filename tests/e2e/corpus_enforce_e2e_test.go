@@ -567,6 +567,30 @@ func corpusMetricSamples(t *testing.T, cfg e2eConfig, metricName string) []strin
 // A runbook that names a label the metric does not emit fails at the worst
 // possible moment — during the pre-flip go/no-go review, when the operator is
 // deciding whether anyone gets locked out.
+//
+// # WHICH SERIES CAN EXIST IN THIS LANE, AND WHY
+//
+// `..._would_deny_total` is a COUNTERFACTUAL: "this would have been denied
+// under ENFORCE, but was allowed under OBSERVE". Under ENFORCE it cannot fire
+// at all, and that is by construction rather than by accident — chi runs the
+// group-level `r.Use(auth.RequireScope(...))` BEFORE the route-level
+// `r.With(corpusGate.Observe(...))` (router.go:131-134), so an ungranted
+// principal is refused before the gate ever records. The denial is then real,
+// not hypothetical, and lands on `smackerel_auth_scope_rejected_total`.
+//
+// An earlier version of this test demanded would-deny samples HERE and failed.
+// Forcing them to appear would have meant either mounting the gate ahead of
+// the enforcement half (breaking the never-denies guarantee) or relaxing the
+// assertion to nothing. Both are worse than asserting each series where it
+// legitimately exists:
+//
+//   - allowed + gauge + real denial → asserted here, on the ENFORCE stack
+//   - would-deny shape              → asserted by the OBSERVE-stage integration
+//     test, which drives all sixteen route groups with an ungranted principal
+//     (TestIntegration_CorpusGrantObserve_UngrantedPrincipalIsCountedOnAllSixteenGroups)
+//
+// That split matches reality: the operator runs the UC-108-001 query DURING
+// the OBSERVE window, which is the only stage where its answer is meaningful.
 func TestE2E_Spec108_CorpusEnforce_RunbookQueryShape_TP_05_04(t *testing.T) {
 	cfg := corpusEnforceLane(t)
 	waitForHealth(t, cfg, 60*time.Second)
@@ -574,29 +598,37 @@ func TestE2E_Spec108_CorpusEnforce_RunbookQueryShape_TP_05_04(t *testing.T) {
 	granted := corpusEnforceToken(t, "granted")
 	ungranted := corpusEnforceToken(t, "ungranted")
 
-	// One sample on each side. The gate is mounted in BOTH stages
-	// (router.go:116), so the would-deny counter still fires under ENFORCE.
+	// Granted traffic populates the allowed counter; ungranted traffic
+	// produces a REAL denial on this stack.
 	corpusGet(t, cfg, granted, "/api/recent?limit=1")
-	corpusGet(t, cfg, ungranted, "/api/recent?limit=1")
+	if status, _, _ := corpusGet(t, cfg, ungranted, "/api/recent?limit=1"); status != http.StatusForbidden {
+		t.Fatalf("the ungranted principal got %d, want 403; without a real denial the scope_rejected assertion below would prove nothing", status)
+	}
 
-	for _, family := range []string{
-		"smackerel_auth_corpus_grant_allowed_total",
-		"smackerel_auth_corpus_grant_would_deny_total",
-	} {
-		samples := corpusMetricSamples(t, cfg, family)
-		if len(samples) == 0 {
-			t.Errorf("%s exposes no samples on the live /metrics surface; the documented runbook query would return empty and an operator would read that as 'no traffic'", family)
-			continue
-		}
-		// The documented query groups by (user_id, route_group). Both labels
-		// must exist on the real series or that grouping is fiction.
-		for _, label := range []string{"user_id=", "route_group=", "session_source="} {
-			if !strings.Contains(samples[0], label) {
-				t.Errorf("%s samples do not carry %q — the documented UC-108-001 query groups by it, so the runbook is not executable. sample=%s", family, strings.TrimSuffix(label, "="), samples[0])
-			}
+	// The denominator series, with every label the documented query groups by.
+	samples := corpusMetricSamples(t, cfg, "smackerel_auth_corpus_grant_allowed_total")
+	if len(samples) == 0 {
+		t.Fatal("smackerel_auth_corpus_grant_allowed_total exposes no samples on the live /metrics surface; the documented runbook query would return empty and an operator would read that as 'no traffic'")
+	}
+	for _, label := range []string{"user_id=", "route_group=", "session_source="} {
+		if !strings.Contains(samples[0], label) {
+			t.Errorf("allowed_total samples do not carry %q — the documented UC-108-001 query groups by it, so the runbook is not executable. sample=%s", strings.TrimSuffix(label, "="), samples[0])
 		}
 	}
 
+	// The ENFORCE-stage denial must be attributable to a principal, or the
+	// operator cannot tell WHO was refused after the flip.
+	rejected := corpusMetricSamples(t, cfg, "smackerel_auth_scope_rejected_total")
+	if len(rejected) == 0 {
+		t.Error("smackerel_auth_scope_rejected_total exposes no samples despite a real 403 on this stack; a post-flip denial would be invisible to the operator")
+	} else {
+		joined := strings.Join(rejected, "\n")
+		if !strings.Contains(joined, "user_id=") || !strings.Contains(joined, auth.GrantGlobalCorpusRead) {
+			t.Errorf("scope_rejected samples do not identify the principal and the required scope; post-flip triage needs both. samples=%s", joined)
+		}
+	}
+
+	// Step 1 of the runbook reads this gauge to confirm the stage.
 	status, body, _ := corpusGetAs(t, cfg, "", "/metrics", "")
 	if status != http.StatusOK || !strings.Contains(string(body), "smackerel_auth_corpus_grant_enforcement_mode") {
 		t.Error("the enforcement_mode gauge is absent from /metrics; the runbook's 'confirm the stage' step cannot be performed")

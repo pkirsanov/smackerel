@@ -3302,6 +3302,23 @@ rotate a grant in (step 4) or record it as intentionally-denied **before** the f
 An empty result — or one containing only explicitly-accepted principals — is the
 go signal.
 
+**This query is meaningful ONLY during OBSERVE, and an empty result after the flip
+does not mean "nobody was denied".** The counter is a counterfactual: "would have
+been denied, but was allowed". Under ENFORCE the refusal is real, so
+`auth.RequireScope` rejects the request *before* the gate records anything
+(group-level middleware runs first), and this series stops receiving samples
+entirely. Post-flip, denials are visible on `smackerel_auth_scope_rejected_total`
+instead:
+
+```promql
+sum by (user_id, required_scope) (
+  increase(smackerel_auth_scope_rejected_total{required_scope="corpus:read"}[1d])
+)
+```
+
+Reading the would-deny query after the flip and seeing zero is the trap this note
+exists to prevent — it looks identical to a clean window.
+
 ### 4. Principals whose grants are unknowable
 
 ```bash
