@@ -2827,15 +2827,18 @@ sequence.
 The runtime exposes seven Prometheus series under the
 `smackerel_auth_*` prefix from
 [`internal/metrics/auth.go`](../internal/metrics/auth.go) for
-operator visibility into the per-user bearer-auth subsystem:
+operator visibility into the per-user bearer-auth subsystem. Later specs add
+more series under the same prefix — spec 060's `..._scope_rejected_total` /
+`..._scope_check_bypassed_total` and spec 108's four corpus-grant series — so
+this table is the spec-044 subset, not the whole family:
 
 | Metric name | Type | Labels | Surface emitted from |
 |---|---|---|---|
-| `smackerel_auth_token_issuance_total` | Counter | `source` (`admin_api`, `bootstrap_cli`, `telegram_bridge`) | `internal/api/auth_handlers.go` (HandleEnroll, HandleRotate); `cmd/core/cmd_auth.go` (runAuthEnroll, runAuthRotate, runAuthBootstrap); `internal/telegram/per_user_token.go` (MintForUser) |
-| `smackerel_auth_token_rotation_total` | Counter | (none) | `HandleRotate`, `runAuthRotate` |
-| `smackerel_auth_token_revocation_total` | Counter | `reason` (closed set: `unspecified`, `compromise`, `rotation`, `offboarding`, `test`, `other`; raw input is bucketed via `NormalizeRevocationReason`) | `HandleRevoke`, `runAuthRevoke` |
-| `smackerel_auth_token_validation_latency_seconds` | Histogram | (none); buckets `0.0001..0.1` | `bearerAuthMiddleware` (per-request, includes verify + revocation lookup) |
-| `smackerel_auth_token_validation_outcome_total` | Counter | `result` (`accepted`, `rejected_expired`, `rejected_unknown_key`, `rejected_malformed`, `rejected_revoked`), `source` (`header`, `pwa_cookie`, `""`) | `bearerAuthMiddleware` per validation branch |
+| `smackerel_auth_issuance_total` | Counter | `source` (`admin_api`, `bootstrap_cli`, `telegram_bridge`) | `internal/api/auth_handlers.go` (HandleEnroll, HandleRotate); `cmd/core/cmd_auth.go` (runAuthEnroll, runAuthRotate, runAuthBootstrap); `internal/telegram/per_user_token.go` (MintForUser) |
+| `smackerel_auth_rotation_total` | Counter | (none) | `HandleRotate`, `runAuthRotate` |
+| `smackerel_auth_revocation_total` | Counter | `reason` (closed set: `unspecified`, `compromise`, `rotation`, `offboarding`, `test`, `other`; raw input is bucketed via `NormalizeRevocationReason`) | `HandleRevoke`, `runAuthRevoke` |
+| `smackerel_auth_validation_latency_seconds` | Histogram | (none); buckets `0.0001..0.1` | `bearerAuthMiddleware` (per-request, includes verify + revocation lookup) |
+| `smackerel_auth_validation_outcome_total` | Counter | `result` (`accepted`, `rejected_expired`, `rejected_unknown_key`, `rejected_malformed`, `rejected_revoked`), `source` (`header`, `pwa_cookie`, `""`) | `bearerAuthMiddleware` per validation branch |
 | `smackerel_auth_legacy_fallback_used_total` | Counter | `environment` (`production`, …) | `bearerAuthMiddleware` Branch 2 (shared-token fallback path) |
 | `smackerel_auth_failure_total` | Counter | `reason` (closed set: `missing_token`, `invalid_format`, `paseto_verify_failed`, `revoked`, `shared_token_mismatch`, `auth_not_configured`) | `bearerAuthMiddleware` per 401 branch |
 
@@ -2849,19 +2852,19 @@ Recommended scrape examples:
 
 ```promql
 # Telegram-bridge mint rate (per-second, 5m window)
-rate(smackerel_auth_token_issuance_total{source="telegram_bridge"}[5m])
+rate(smackerel_auth_issuance_total{source="telegram_bridge"}[5m])
 
 # Production legacy-fallback usage (alert if > 0 after deprecation flip)
 sum(rate(smackerel_auth_legacy_fallback_used_total{environment="production"}[5m]))
 
 # Validation latency p95 over 5m
 histogram_quantile(0.95,
-  sum(rate(smackerel_auth_token_validation_latency_seconds_bucket[5m]))
+  sum(rate(smackerel_auth_validation_latency_seconds_bucket[5m]))
   by (le))
 
 # Token revocations bucketed by reason (compromise spikes warrant
 # immediate operator review)
-sum(increase(smackerel_auth_token_revocation_total[1h])) by (reason)
+sum(increase(smackerel_auth_revocation_total[1h])) by (reason)
 ```
 
 ##### Corpus Grant Metrics And The OBSERVE → ENFORCE Rollout (Spec 108)
@@ -2884,7 +2887,7 @@ safe, performing the flip, and rolling back.
 
 ###### The four metrics and their closed label sets
 
-All three live in [`internal/metrics/auth.go`](../internal/metrics/auth.go)
+All four live in [`internal/metrics/auth.go`](../internal/metrics/auth.go)
 under the existing `smackerel_auth_*` prefix. No parallel metric family is
 introduced.
 
@@ -2925,11 +2928,14 @@ route group **at wiring time** and panics on an unknown value, so a raw request
 path can never become a label value and `/api/artifact/{id}` can never explode
 into a per-artifact series.
 
-`session_source` is the existing closed session-source enum. Only
-`per_user_token` ever appears on these two counters: `shared_token` and
-`bootstrap` sessions bypass `RequireScope` under ENFORCE, so counting them
-would make the would-deny counter a false predictor of the ENFORCE outcome and
-would pad the grant list with principals that will never be denied.
+`session_source` is the existing closed session-source enum, and the three
+counters **partition** it. Only `per_user_token` ever appears on
+`..._would_deny_total` and `..._allowed_total`: `shared_token` and `bootstrap`
+sessions bypass `RequireScope` under ENFORCE, so counting them *there* would
+make the would-deny counter a false predictor of the ENFORCE outcome and would
+pad the grant list with principals that will never be denied. Those two values
+appear on `..._bypassed_total` instead — which is the whole point of that
+counter: the bypass band is now counted somewhere rather than dropped.
 
 Each would-be denial also emits one structured `warn` log:
 `event=corpus_grant_would_deny`, `route_group`, `user_id`, `session_source`,
@@ -3007,6 +3013,19 @@ Cells absent from that result received no traffic and still require an
 `idle-by-design` attestation naming the reason and the principal — the label fix
 makes traffic-bearing cells self-closing, it does not invent traffic that never
 happened. Silence is still never read as coverage.
+
+**That union describes scoped principals only.** Bypass-band sessions carry no
+`user_id` and appear in neither series, so a fully closed coverage table is not
+by itself evidence that nothing *else* is reading the corpus. Read
+`..._bypassed_total` alongside it before treating criterion 2 as met — see
+[Corpus-grant OBSERVE window review](#corpus-grant-observe-window-review)
+step 2b:
+
+```promql
+sum by (route_group, session_source) (
+  increase(smackerel_auth_corpus_grant_bypassed_total[14d])
+)
+```
 
 ###### Granting `corpus:read` is a token rotation, not a flag flip
 
@@ -3108,7 +3127,8 @@ is symmetric and idempotent: worst case for a bad flip is a corpus-wide `403` fo
 daily users. Nothing is mutated and nothing is destroyed.
 
 **Retirement contract.** The flag dies with its train plus one cycle. At
-retirement the flag, the OBSERVE branch, and the two would-deny counters are
+retirement the flag, the OBSERVE branch, and the corpus-grant counters that
+branch feeds are
 deleted **together**, and enforcement becomes unconditional. A permanently
 flagged security control is a permanent bypass surface: while the OBSERVE branch
 exists, a config change can disable the boundary without a code review.
@@ -3143,7 +3163,7 @@ currently runs with the flag set to `true`:
 4. **Verify** `smackerel_auth_legacy_fallback_used_total{environment="production"}`
    stays at zero post-flip and that admin/PWA/extension/Telegram
    surfaces all continue to authenticate (look for
-   `smackerel_auth_token_validation_outcome_total{result="accepted"}`
+   `smackerel_auth_validation_outcome_total{result="accepted"}`
    ticking on each surface). The
    `smackerel_auth_failure_total{reason="shared_token_mismatch"}`
    counter MAY tick if a caller still presents the legacy token; the
@@ -3169,9 +3189,9 @@ shared-token surface until the operator explicitly flips
 | Step | Scope | What lands | Cutover gate (operator-observable) |
 |---|---|---|---|
 | 1 | Scope 01 | PASETO v4.public foundation, signing/at-rest keys (3 required env vars), DB migration 033, CLI subcommands, admin HTTP handlers, in-memory revocation cache + NATS broadcaster, startup fail-loud guard. Deploy with `auth.enabled=false` first to run the migration safely; flip to `true` once secrets are confirmed in the deploy overlay. | `./smackerel.sh status` reports healthy; `curl http://<host>:<port>/healthz` returns `200`; no unexpected `auth_not_configured` failures in logs. |
-| 2 | Scope 02 | Hot-path `bearerAuthMiddleware` on every API route; admin REST endpoints (`POST /v1/auth/users`, `POST /v1/auth/users/{id}/rotate`, `POST /v1/auth/tokens/{id}/revoke`, `GET /v1/auth/users`); production-mode body / header actor-identity rejection at photos `MintReveal`, drive `Connect`, and annotation create handlers (closes MIT-040-S-008, MIT-038-S-003, MIT-027-TRACE-001 actor-source segment). Flip `auth.enabled=true` AND `auth.production_shared_token_fallback_enabled=true` (the transition setting) in this step. | `smackerel_auth_token_validation_outcome_total{result="accepted"}` ticks for every authenticated route; `smackerel_auth_failure_total{reason="paseto_verify_failed"}` stays low (it ticks on a real misuse); no `actor_id_in_body_forbidden` / `owner_user_id_in_body_forbidden` 400s from a legitimate client (any API consumer presenting body-supplied actor identifiers MUST be migrated to omit those fields per the spec 044 Scope 02 contract). |
-| 3 | Scope 03 | PWA `POST /v1/web/login` cookie-derived sessions; browser extension reads `chrome.storage.local.authToken`; Telegram `chat_id → user_id` mapping with production unmapped-chat drop; admin token-management UI at `/admin/auth/tokens` (mint / list / rotate / revoke). | `smackerel_auth_token_issuance_total{source="admin_api"}` ticks on user enrollment; PWA users authenticate via `/v1/web/login` and request the `auth_token` cookie attaches; Telegram bot logs `telegram: drop message from unmapped chat` for any chat not present in `telegram.user_mapping`. |
-| 4 | Scope 04 | F02 closure: Telegram bot wires `PerUserTokenMinter.MintForChat` into every outbound HTTP call (production mapped chats mint per-user PASETO; production unmapped chats are refused via `ErrNoUserMappingForChat`); seven-series `smackerel_auth_*` metrics surface; `auth.production_shared_token_fallback_enabled` defaults to `false`. | `smackerel_auth_token_issuance_total{source="telegram_bridge"}` ticks per Telegram-originated capture against a mapped chat; `smackerel_auth_legacy_fallback_used_total{environment="production"}` MAY still tick if any legacy caller is still presenting the shared token (this is the signal that step 5 is not yet safe). |
+| 2 | Scope 02 | Hot-path `bearerAuthMiddleware` on every API route; admin REST endpoints (`POST /v1/auth/users`, `POST /v1/auth/users/{id}/rotate`, `POST /v1/auth/tokens/{id}/revoke`, `GET /v1/auth/users`); production-mode body / header actor-identity rejection at photos `MintReveal`, drive `Connect`, and annotation create handlers (closes MIT-040-S-008, MIT-038-S-003, MIT-027-TRACE-001 actor-source segment). Flip `auth.enabled=true` AND `auth.production_shared_token_fallback_enabled=true` (the transition setting) in this step. | `smackerel_auth_validation_outcome_total{result="accepted"}` ticks for every authenticated route; `smackerel_auth_failure_total{reason="paseto_verify_failed"}` stays low (it ticks on a real misuse); no `actor_id_in_body_forbidden` / `owner_user_id_in_body_forbidden` 400s from a legitimate client (any API consumer presenting body-supplied actor identifiers MUST be migrated to omit those fields per the spec 044 Scope 02 contract). |
+| 3 | Scope 03 | PWA `POST /v1/web/login` cookie-derived sessions; browser extension reads `chrome.storage.local.authToken`; Telegram `chat_id → user_id` mapping with production unmapped-chat drop; admin token-management UI at `/admin/auth/tokens` (mint / list / rotate / revoke). | `smackerel_auth_issuance_total{source="admin_api"}` ticks on user enrollment; PWA users authenticate via `/v1/web/login` and request the `auth_token` cookie attaches; Telegram bot logs `telegram: drop message from unmapped chat` for any chat not present in `telegram.user_mapping`. |
+| 4 | Scope 04 | F02 closure: Telegram bot wires `PerUserTokenMinter.MintForChat` into every outbound HTTP call (production mapped chats mint per-user PASETO; production unmapped chats are refused via `ErrNoUserMappingForChat`); seven-series `smackerel_auth_*` metrics surface; `auth.production_shared_token_fallback_enabled` defaults to `false`. | `smackerel_auth_issuance_total{source="telegram_bridge"}` ticks per Telegram-originated capture against a mapped chat; `smackerel_auth_legacy_fallback_used_total{environment="production"}` MAY still tick if any legacy caller is still presenting the shared token (this is the signal that step 5 is not yet safe). |
 | 5 | Flag flip | Operator flips `auth.production_shared_token_fallback_enabled=false` in `config/smackerel.yaml`, runs `./smackerel.sh config generate`, then `./smackerel.sh down && ./smackerel.sh up`. | `smackerel_auth_legacy_fallback_used_total{environment="production"}` stays at zero post-flip; `smackerel_auth_failure_total{reason="shared_token_mismatch"}` MAY tick on residual legacy callers (the 401 response is the contract). |
 
 **Metric-based cutover criteria (the gate to flip the flag in step 5).**
@@ -3181,8 +3201,8 @@ following three criteria over a representative observation window
 (at least one full operator workday after the Scope 04 deploy):
 
 1. `sum(rate(smackerel_auth_legacy_fallback_used_total{environment="production"}[5m]))` is `0` for every 5-minute bucket across the window. A non-zero rate identifies a caller still presenting the legacy `runtime.auth_token`; the access log surfaces the request path, and the caller MUST be migrated to a per-user token via the admin UI before the flag flip.
-2. Every active caller surface has at least one `smackerel_auth_token_validation_outcome_total{result="accepted"}` increment per session: PWA users (`source="pwa_cookie"`), browser extension users (`source="header"`), Telegram users (`source="header"` via `telegram_bridge` mints), and admin operators (`source="header"` via the bootstrap or per-user admin token).
-3. `histogram_quantile(0.95, sum(rate(smackerel_auth_token_validation_latency_seconds_bucket[5m])) by (le))` is below the NFR-AUTH-001 5 ms p99 hot-path budget (chaos-phase benchmark `BenchmarkAuthChaos_S03_PWACookieDerivedSession_HotPath` recorded ≈1.5 ms/op against a live test stack — the production-class deployment SHOULD see comparable or better numbers given the at-rest hashing and NATS subjects are already warm).
+2. Every active caller surface has at least one `smackerel_auth_validation_outcome_total{result="accepted"}` increment per session: PWA users (`source="pwa_cookie"`), browser extension users (`source="header"`), Telegram users (`source="header"` via `telegram_bridge` mints), and admin operators (`source="header"` via the bootstrap or per-user admin token).
+3. `histogram_quantile(0.95, sum(rate(smackerel_auth_validation_latency_seconds_bucket[5m])) by (le))` is below the NFR-AUTH-001 5 ms p99 hot-path budget (chaos-phase benchmark `BenchmarkAuthChaos_S03_PWACookieDerivedSession_HotPath` recorded ≈1.5 ms/op against a live test stack — the production-class deployment SHOULD see comparable or better numbers given the at-rest hashing and NATS subjects are already warm).
 
 **Rollback path (any step).** Every step before the flag flip is
 reversible via the corresponding compose-level revert + restart;

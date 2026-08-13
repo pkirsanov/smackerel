@@ -983,23 +983,22 @@ Three user-visible sentences, each currently false, each true at completion:
 
 ### 5.8 Working-tree state — read before starting
 
-As of 2026-08-10 the repository has uncommitted work that a fresh session must not
+As of 2026-08-13 the repository has uncommitted work that a fresh session must not
 destroy or double-do. **Check `git status` first; do not `git clean`.**
 
 | Path | State | Owner | Action |
 |---|---|---|---|
-| `specs/110-*`, `specs/111-*`, `specs/112-*` | **untracked** | this planning track | Commit before any breakout work — currently unprotected |
-| `config/release-trains.yaml` + 6 `state.json` | modified | `OPS-006-local-git-reconciliation` (`in_progress`) | The F1/G110 fix. Commit closes F1 |
 | `docs/releases/next/`, `docs/releases/README.md` | untracked | release-packet work | Review before committing |
+| `docs/releases/mvp/actions.md`, `docs/releases/mvp/features.md` | modified | release-packet work | Same owner as the untracked release files — commit together |
+| 6 × `state.json` (003 bug, 061 bugs ×3, 069 bug, `OPS-006`) | modified | `OPS-006-local-git-reconciliation` (`in_progress`) | Commit to close the remaining reconciliation |
 
-Two consequences worth stating plainly:
-
-1. **The three enabling specs exist only on disk.** They are not in any commit. Any
-   clone of this repository does not have them. This is the highest-priority
-   housekeeping item in the plan.
-2. **G110 passes only against the working tree.** Run it against `HEAD` and it
-   exits 1 with 8 errors. A gate result is only meaningful once you know which
-   tree produced it.
+**Both blockers this section previously carried are cleared.** `specs/110-*`,
+`specs/111-*`, and `specs/112-*` are committed and present in `HEAD` — they are no
+longer untracked and no longer unprotected. `config/release-trains.yaml` is clean:
+the F1/G110 fix landed in `d0d00d31`, so G110 now passes against `HEAD` itself
+(exit 0, 2 trains), not merely against a dirty working tree. The earlier warning
+that "G110 passes only against the working tree" no longer describes this
+repository and has been removed rather than left to invite work already done.
 
 ---
 

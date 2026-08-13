@@ -482,10 +482,12 @@ Consequences that clients and integrators can rely on:
 - **`shared_token` and `bootstrap` sessions bypass the check**, per the
   documented `RequireScope` source switch. They never receive this `403`.
 
-Under OBSERVE the gate denies **nothing**. Requests without `corpus:read` are
-served normally and only increment
-`smackerel_auth_corpus_grant_would_deny_total`. Client behavior is therefore
-unchanged until the stage flips.
+Under OBSERVE the gate denies **nothing**. A request without `corpus:read` is
+served normally and increments `smackerel_auth_corpus_grant_would_deny_total`;
+a request on a bypassing session (`shared_token`, `bootstrap`) increments
+`smackerel_auth_corpus_grant_bypassed_total` instead, because it would not be
+refused under ENFORCE either. Client behavior is unchanged until the stage
+flips.
 
 ## Error Behavior
 
