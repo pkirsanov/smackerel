@@ -374,6 +374,57 @@ wrong implementation. `docs/Operations.md` gained step 2b so the operator actual
 series, and the metric tables in `design.md` §4 and the runbook were corrected from three series
 to four.
 
+### Observed integration flake — NOT caused by this spec, recorded rather than ignored
+
+A late full-lane integration run (`/tmp/i8.log`) exited 1 with **1971 pass / 7 fail**, against a
+1974 / 0 baseline. Three tests failed, all in `tests/integration/openknowledge`, all with the same
+symptom — a `smackerel_self` namespace search returning zero of the rows the test had just
+inserted:
+
+```text
+--- FAIL: TestSelfKnowledge_TrustPerimeter (0.04s)
+    self_knowledge_provenance_test.go:80: self artifact "sk-prov-224453.441410-self" not returned by the tool
+--- FAIL: TestSelfKnowledgeTool_CitesOnlySmackerelSelf (0.05s)
+    self_knowledge_tool_test.go:71: got 0 in-run cited self rows, want 2 (ids=[])
+--- FAIL: TestPgxSemanticSearcher_NamespaceScopedCosine (0.06s)
+    semantic_searcher_test.go:116: got 0 in-run smackerel_self rows, want 2 (ids=[])
+FAIL  github.com/smackerel/smackerel/tests/integration/openknowledge  0.385s
+```
+
+**It is not a regression from this spec, and that was established rather than assumed:**
+
+1. The same three tests PASSED in the immediately preceding full run (`/tmp/i5.log`), which
+   already contained every code change this session made.
+2. The only commits between that passing run and this failing one touched markdown and
+   `state.json`. **No Go code changed.**
+3. Re-run in isolation, all three PASS:
+
+```text
+$ ./smackerel.sh test integration --go-run 'TestSelfKnowledge_TrustPerimeter|TestSelfKnowledgeTool_CitesOnlySmackerelSelf|TestPgxSemanticSearcher_NamespaceScopedCosine'
+--- PASS: TestSelfKnowledge_TrustPerimeter (0.04s)
+--- PASS: TestSelfKnowledgeTool_CitesOnlySmackerelSelf (0.04s)
+--- PASS: TestPgxSemanticSearcher_NamespaceScopedCosine (0.09s)
+ok  github.com/smackerel/smackerel/tests/integration/openknowledge  0.232s
+RERUN_EXIT=0
+```
+
+4. Nothing in the corpus-grant change touches artifact storage, embeddings, or the
+   `smackerel_self` namespace. The gate reads a session's scope claim and increments counters.
+
+**What I could NOT determine.** Why it failed. The health snapshot captured during the failing run
+reports `postgres: up, artifact_count: 0`, which is consistent with rows being removed while those
+tests ran — a shared-fixture contention rather than a logic error. Two plausible causes, and the
+evidence does not separate them: another package in the same lane truncating shared tables, or
+interference from a concurrent agent that was running its own stack and a
+`--env test down --volumes` teardown in a separate worktree during this window.
+
+**Why it is recorded here rather than silently re-run until green.** A live-system test that fails
+once in a full lane and passes in isolation is the failure mode that trains people to re-run
+until green, and that habit is how a real intermittent defect gets classified as noise. The
+observation belongs in the record even though this spec did not cause it and cannot close it. It
+needs an owner: the isolation contract for `tests/integration/openknowledge` against the shared
+test database.
+
 ### What was planned, and what was captured
 
 ### What will be captured, and by which scope
