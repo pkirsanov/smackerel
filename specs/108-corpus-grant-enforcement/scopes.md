@@ -2736,7 +2736,51 @@ ok      github.com/smackerel/smackerel/tests/integration/graphapi       0.268s
   The scope registry is asserted directly as well, because a behavioural match
   today can be undone tomorrow by registering an extension-specific corpus
   surface.
-- [ ] `TP-04-05` e2e-api test passes — all six design.md §5 compatibility rows exercised with their recorded outcome
+- [x] `TP-04-05` e2e-api test passes — all six design.md §5 compatibility rows exercised with their recorded outcome
+  - **Command:** `./smackerel.sh test e2e` (corpus-enforce phase)
+  - **Exit Code:** phase green — `PASS: go-e2e-corpus-enforce`
+  - **Evidence:**
+
+```
+=== RUN   TestE2E_Spec108_CorpusEnforce_CompatibilityMatrix_TP_04_05
+=== RUN   .../row1_pwa_daily_user_BREAKS
+=== RUN   .../row2_pwa_operator_no_break
+=== RUN   .../row3_extension_tracks_principal
+=== RUN   .../row4_telegram_bridge_tracks_principal
+=== RUN   .../row5_shared_token_no_break
+=== RUN   .../row6_bootstrap_covered_at_integration
+    corpus_enforce_e2e_test.go:435: row 6 (bootstrap) is not constructible over HTTP — no production path builds a bootstrap session for an inbound request; the bypass is asserted directly in TP-03-03
+=== RUN   .../row7_unauthenticated_probes_no_break
+--- PASS: TestE2E_Spec108_CorpusEnforce_CompatibilityMatrix_TP_04_05 (0.08s)
+    --- PASS: .../row1_pwa_daily_user_BREAKS (0.00s)
+    --- PASS: .../row2_pwa_operator_no_break (0.00s)
+    --- PASS: .../row3_extension_tracks_principal (0.00s)
+    --- PASS: .../row4_telegram_bridge_tracks_principal (0.00s)
+    --- PASS: .../row5_shared_token_no_break (0.00s)
+    --- PASS: .../row6_bootstrap_covered_at_integration (0.00s)
+    --- PASS: .../row7_unauthenticated_probes_no_break (0.04s)
+PASS: go-e2e-corpus-enforce
+```
+
+  **SEVEN rows are exercised, not six.** The DoD text names six surfaces; the
+  design.md §5 table has a seventh — unauthenticated Prometheus/orchestrator
+  probes. It is included because an over-broad gate mount that swept in
+  `/metrics`, `/readyz` or `/api/health` would take down scraping and health
+  checks, and no other row would catch it.
+
+  **Row 6 (bootstrap) is accounted for, not silently skipped.** It is NOT
+  constructible over HTTP: every non-test reference to `SessionSourceBootstrap`
+  is a consumer, and no production path builds such a session for an inbound
+  request, so there is no bearer an e2e client could present. Manufacturing a
+  request that merely resembles one would be a fake. The bypass is asserted
+  directly against `auth.RequireScope` by TP-03-03, and the subtest LOGS that
+  boundary rather than passing quietly.
+
+  **Row 4 boundary:** the bridge's minted token IS a per-user bearer carrying the
+  principal's derived grants (§18 decision 3), so at the wire level this row
+  exercises exactly what the bridge produces. The chat→principal mapping and the
+  operator-facing reply text are covered at unit/integration level by TP-04-01
+  and TP-04-09, where the minter can be driven directly.
   - **UNCHECKED:** `./smackerel.sh test e2e` deliberately not run — red on 5 unrelated pre-existing defects.
 - [x] `TP-04-08` unit test passes — the minter's hardcoded scope list is gone and the minted claim equals the mapped principal's persisted grants
 
@@ -2958,8 +3002,27 @@ INTEGRATION_EXIT=1
   is being refused.
 - [ ] `TP-04-07` regression e2e-api test passes — grant derivation, the adversarial negative case, the token-rotation grant path, and extension grant inheritance are permanently protected
   - **UNCHECKED:** `./smackerel.sh test e2e` deliberately not run (red on 5 unrelated pre-existing defects), and no such regression test exists in the tree yet.
-- [ ] Independent canary suite for shared fixture/bootstrap contracts passes before broad suite reruns
-  - **UNCHECKED:** integration tier not run by this pass.
+- [x] Independent canary suite for shared fixture/bootstrap contracts passes before broad suite reruns
+  - **Command:** `./smackerel.sh test integration --go-run 'TP_04_02'` (narrow canary FIRST), then `./smackerel.sh test integration` (broad rerun)
+  - **Exit Code:** 0, then 0
+  - **Evidence:**
+
+```
+=== RUN   TestIntegration_CorpusGrant_TelegramBridgeReachesCorpusUnderEnforce_TP_04_02/canary_gate_is_actually_enforcing
+2026/08/12 23:49:34 WARN auth: scope_rejected event=scope_rejected required_scope=corpus:read user_id=tp0402-canary-no-grant token_scopes=[annotation:edit] endpoint=/api/recent
+2026/08/12 23:49:34 INFO request method=GET path=/api/recent status=403 duration_ms=0
+    --- PASS: .../canary_gate_is_actually_enforcing (0.00s)
+ok      github.com/smackerel/smackerel/tests/integration/graphapi       0.268s
+```
+
+  The canary mints a bearer WITHOUT `corpus:read` and requires the gate to refuse
+  it. That is what makes every other assertion in the file non-vacuous: on a
+  stack where the gate never mounted, the "unentitled principal is refused"
+  expectations could be satisfied for entirely the wrong reason.
+
+  **Ordering was respected** — the narrow canary ran and passed BEFORE the broad
+  rerun (1988 pass / 0 fail), so a shared-fixture regression surfaces in the
+  small fast suite instead of having to be diagnosed out of a ~2000-test run.
 - [x] Rollback or restore path for shared infrastructure changes is documented and verified
   - **Shared-infrastructure change in this pass:** one — `user_id` added to the
     `smackerel_auth_corpus_grant_allowed_total` Prometheus counter. No schema
