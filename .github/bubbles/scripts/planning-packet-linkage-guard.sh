@@ -5,10 +5,29 @@ set -euo pipefail
 #
 # Gate G087 - planning_packet_implementation_linkage_gate.
 #
-# Hardened planning packets must either link to the implementation spec
-# that consumes them or explicitly declare themselves planning-only with
-# a non-empty justification. Done implementation specs must point back
-# to the hardened planning packet that fed them.
+# A hardened planning packet must resolve to exactly ONE of three truthful
+# dispositions:
+#
+#   1. linkedImplementationSpec  - a separate spec consumes this planning.
+#   2. planningOnly:true          - no implementation will follow (needs
+#                                   planningOnlyJustification).
+#   3. deliveryTopology:in-place  - this packet plans AND implements in the
+#                                   same directory, so there is no separate
+#                                   spec to name (needs
+#                                   deliveryTopologyJustification, >=20 chars).
+#
+# Disposition 3 exists because packets with that topology could satisfy
+# neither of the original two without asserting something false. A gate whose
+# only exits are lies is not enforcing an invariant; it is selecting which lie
+# gets told. An ABSENT deliveryTopology resolves to "two-spec", so this is
+# strictly additive and cannot newly fail a packet that passes today.
+#
+# The three are mutually exclusive and each is checked for coherence: a packet
+# may not claim both planningOnly and in-place, and an in-place packet may not
+# also name a linkedImplementationSpec.
+#
+# Done implementation specs must point back to the hardened planning packet
+# that fed them.
 #
 # Usage:
 #   bash bubbles/scripts/planning-packet-linkage-guard.sh <specDir> [--quiet]
@@ -173,12 +192,51 @@ planning_only="$(state_string_or_empty 'if .planningOnly == true then "true" els
 planning_only_justification="$(state_string_or_empty '.planningOnlyJustification // ""' "$STATE_FILE")"
 link_type="$(state_string_or_empty '(.linkedImplementationSpec | type) // "null"' "$STATE_FILE")"
 linked_implementation="$(state_string_or_empty '.linkedImplementationSpec // ""' "$STATE_FILE")"
+# Third truthful disposition: a packet that plans AND implements in the SAME
+# directory has no separate implementation spec to name, and is not
+# planning-only either. Before this field existed, both of the original exits
+# were false statements for that topology, so the gate was choosing which lie
+# got told rather than enforcing an invariant. Absent field resolves to
+# "two-spec", which is the pre-existing behavior — this cannot newly fail any
+# packet that passes today.
+delivery_topology="$(state_string_or_empty '.deliveryTopology // ""' "$STATE_FILE")"
+delivery_topology_justification="$(state_string_or_empty '.deliveryTopologyJustification // ""' "$STATE_FILE")"
+
+case "$delivery_topology" in
+  "" | two-spec | in-place) ;;
+  *)
+    violation "$spec_rel declares deliveryTopology='$delivery_topology'; the only recognised values are 'in-place' and 'two-spec'"
+    delivery_topology=""
+    ;;
+esac
 
 if [[ "$planning_only" == "true" && "$planning_only_justification" =~ ^[[:space:]]*$ ]]; then
   violation "$spec_rel sets planningOnly:true but planningOnlyJustification is empty or null"
 fi
 
-if [[ "$status" == "specs_hardened" && "$planning_only" != "true" ]]; then
+# Mutual exclusion. planningOnly:true asserts no implementation will follow;
+# deliveryTopology:in-place asserts the implementation lands in this very
+# packet. A state.json claiming both is incoherent, and silently honouring one
+# would let the contradiction survive unexamined.
+if [[ "$planning_only" == "true" && "$delivery_topology" == "in-place" ]]; then
+  violation "$spec_rel sets planningOnly:true AND deliveryTopology:in-place; these are mutually exclusive claims (no implementation will follow vs implementation lands in this packet)"
+fi
+
+# in-place delivery does not pair with a separate implementation spec either.
+if [[ "$delivery_topology" == "in-place" && "$link_type" == "string" && ! "$linked_implementation" =~ ^[[:space:]]*$ ]]; then
+  violation "$spec_rel sets deliveryTopology:in-place but also names linkedImplementationSpec='$linked_implementation'; in-place delivery means there is no separate implementation spec"
+fi
+
+# The declaration has to cost something, exactly as planningOnlyJustification
+# does, or it is a bypass with extra steps.
+if [[ "$delivery_topology" == "in-place" && "$status" == "specs_hardened" ]]; then
+  justification_length="${#delivery_topology_justification}"
+  if [[ "$justification_length" -lt 20 ]]; then
+    violation "$spec_rel sets deliveryTopology:in-place but deliveryTopologyJustification is empty or perfunctory (needs >=20 characters naming what this packet implements in place)"
+  fi
+fi
+
+if [[ "$status" == "specs_hardened" && "$planning_only" != "true" && "$delivery_topology" != "in-place" ]]; then
   if [[ "$link_type" != "string" || "$linked_implementation" =~ ^[[:space:]]*$ ]]; then
     violation "$spec_rel has status specs_hardened and planningOnly is not true, but linkedImplementationSpec is missing or empty"
   else
@@ -220,7 +278,7 @@ if [[ "$finding_count" -gt 0 ]]; then
 fi
 
 if [[ "$QUIET" != "true" ]]; then
-  echo "planning-packet-linkage-guard: PASS Gate G087 (planning_packet_implementation_linkage_gate) - spec=$spec_rel status=${status:-<empty>} planningOnly=$planning_only"
+  echo "planning-packet-linkage-guard: PASS Gate G087 (planning_packet_implementation_linkage_gate) - spec=$spec_rel status=${status:-<empty>} planningOnly=$planning_only deliveryTopology=${delivery_topology:-two-spec}"
 fi
 
 exit 0

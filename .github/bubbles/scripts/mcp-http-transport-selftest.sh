@@ -46,6 +46,123 @@ else:
 PY
 }
 
+# OS-level view of a child that is ALIVE but never accepted a connection. Runs
+# ONLY on that failure path and ONLY before the child is signalled: once it is
+# reaped the pid is gone and "blocked before it ever bound" can no longer be
+# told apart from "listening somewhere we never probed", which stdout/stderr/rc
+# alone cannot distinguish. Strictly best-effort — every call is bounded and
+# guarded, and stderr is discarded so a diagnostic traceback can never be
+# mistaken for the failure under investigation.
+timeout_diagnostics() {
+  python3 - "$1" "$2" 2>/dev/null <<'PY' || true
+import errno
+import socket
+import subprocess
+import sys
+
+pid = sys.argv[1]
+port = int(sys.argv[2])
+CAP = 800
+CMD_TIMEOUT = 2.0
+CONNECT_TIMEOUT = 1.0
+
+
+def cap1(text):
+    """Flatten to ONE line (annotation detail is line-based) and cap it."""
+    flat = " | ".join(s.strip() for s in (text or "").splitlines() if s.strip())
+    if not flat:
+        return "<empty>"
+    if len(flat) <= CAP:
+        return flat
+    return f"{flat[:CAP]} <TRUNCATED from {len(flat)} chars>"
+
+
+def run(argv):
+    try:
+        r = subprocess.run(argv, capture_output=True, text=True, timeout=CMD_TIMEOUT)
+    except FileNotFoundError:
+        return False, "", ""
+    except Exception as exc:
+        return True, "", f"<{type(exc).__name__}>"
+    return True, r.stdout or "", r.stderr or ""
+
+
+def listen():
+    # stdout carries the answer, stderr only noise (lsof warns loudly about
+    # unstattable mounts) -- kept apart so a warning cannot push the one line
+    # we came for past the cap.
+    for name, argv, keep in (
+        ("lsof", ["lsof", "-w", "-nP", "-p", pid, "-a", "-iTCP", "-sTCP:LISTEN"], None),
+        ("ss", ["ss", "-ltnp"], f"pid={pid}"),
+        ("netstat-ltnp", ["netstat", "-ltnp"], f"{pid}/"),
+        ("netstat-anv:port-filtered", ["netstat", "-anv"], f".{port}"),
+    ):
+        present, out, err = run(argv)
+        if not present:
+            continue
+        if keep is not None:
+            out = "\n".join(ln for ln in out.splitlines() if keep in ln)
+        if out.strip():
+            return f"listen({name})={cap1(out)}"
+        return f"listen({name})=<NO LISTENING SOCKET> stderr={cap1(err)}"
+    return "listen(<no tool available: lsof, ss and netstat all absent>)=<unknown>"
+
+
+def connect(host):
+    try:
+        infos = socket.getaddrinfo(host, port, 0, socket.SOCK_STREAM)
+    except Exception as exc:
+        return f"<resolve-failed:{type(exc).__name__}>"
+    if not infos:
+        return "<no-address>"
+    fam, stype, proto, _canon, sa = infos[0]
+    addr = sa[0]
+    s = None
+    try:
+        s = socket.socket(fam, stype, proto)
+        s.settimeout(CONNECT_TIMEOUT)
+        rc = s.connect_ex(sa)
+    except Exception as exc:
+        return f"[{addr}]<{type(exc).__name__}>"
+    finally:
+        if s is not None:
+            try:
+                s.close()
+            except Exception:
+                pass
+    if rc == 0:
+        return f"[{addr}]OPEN"
+    return f"[{addr}]{errno.errorcode.get(rc, 'rc')}={rc}"
+
+
+def psline():
+    for argv in (
+        ["ps", "-o", "pid,stat,wchan,command", "-p", pid],
+        ["ps", "-o", "pid,stat,command", "-p", pid],
+        ["ps", "-p", pid],
+    ):
+        present, out, _err = run(argv)
+        if not present:
+            return "ps=<ps not found>"
+        rows = [ln for ln in out.splitlines() if ln.strip()][1:]
+        if rows:
+            return f"ps={cap1(chr(10).join(rows))}"
+    return "ps=<no output>"
+
+
+out = []
+try:
+    out.append(f"  FAIL-DIAG: pid={pid} port={port}")
+    out.append(f"  FAIL-DIAG: {listen()}")
+    fams = " ".join(f"{h}={connect(h)}" for h in ("127.0.0.1", "::1", "localhost"))
+    out.append(f"  FAIL-DIAG: connect {fams}")
+    out.append(f"  FAIL-DIAG: {psline()}")
+except Exception as exc:
+    out.append(f"  FAIL-DIAG: <diagnostic failed: {type(exc).__name__}: {exc}>")
+print("\n".join(out))
+PY
+}
+
 # Pick a free ephemeral port via python.
 PORT="$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); print(s.getsockname()[1]); s.close()')"
 TOKEN="selftest-token-123"
@@ -84,6 +201,12 @@ done
 if [[ "$ready" -eq 1 ]]; then
   pass "HTTP transport accepts connections on :$PORT"
 else
+  # Ask the OS about the child BEFORE signalling it; after the reap the pid is
+  # gone and the question can no longer be asked.
+  _diag=""
+  if kill -0 "$SERVER_PID" 2>/dev/null; then
+    _diag="$(timeout_diagnostics "$SERVER_PID" "$PORT")"
+  fi
   # Graceful stop first so buffered output flushes; SIGKILL only as a fallback.
   if kill -0 "$SERVER_PID" 2>/dev/null; then
     kill -TERM "$SERVER_PID" 2>/dev/null || true
@@ -96,6 +219,9 @@ else
   wait "$SERVER_PID" 2>/dev/null
   server_rc=$?
   fail "server never came up on :$PORT — outcome=$outcome probe=127.0.0.1:$PORT rc=$server_rc"
+  if [[ -n "$_diag" ]]; then
+    printf '%s\n' "$_diag"
+  fi
   dump_capped "server stdout" "$OUT_LOG"
   dump_capped "server stderr" "$ERR_LOG"
   dump_capped "server log file" "$LOG"

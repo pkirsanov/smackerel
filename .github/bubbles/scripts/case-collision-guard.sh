@@ -77,7 +77,7 @@ done
 if [[ -z "$REPO_ROOT" ]]; then
   SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
   if [[ "$(basename "$(dirname "$SCRIPT_DIR")")" == "bubbles" &&
-    "$(basename "$(dirname "$(dirname "$SCRIPT_DIR")")")" == ".github" ]]; then
+  "$(basename "$(dirname "$(dirname "$SCRIPT_DIR")")")" == ".github" ]]; then
     # downstream install tree: .github/bubbles/scripts/ -> repo root
     REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
   elif [[ "$(basename "$(dirname "$SCRIPT_DIR")")" == "bubbles" ]]; then
@@ -104,19 +104,21 @@ if ! git -C "$REPO_ROOT" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
 fi
 
 # Scan tracked paths for case-insensitive duplicates. Deterministic:
-#   1. emit "lowercasekey<TAB>path" for every tracked path (POSIX awk tolower())
-#   2. LC_ALL=C sort so rows sharing a key are adjacent + ordering is stable
-#   3. adjacent-group scan; any key mapping to >1 tracked path is a collision.
+#   1. de-duplicate exact path spellings emitted for multiple index stages
+#   2. emit "lowercasekey<TAB>path" for every distinct path (POSIX awk tolower())
+#   3. LC_ALL=C sort so rows sharing a key are adjacent + ordering is stable
+#   4. adjacent-group scan; any key mapping to >1 tracked path is a collision.
 # The final awk exits 3 (sentinel) when at least one collision group is printed,
 # so a real awk/pipeline error (exit 1/2) is never confused with "collision
 # found" (3).
 collision_report=""
 scan_rc=0
 collision_report="$(
-  git -C "$REPO_ROOT" ls-files |
-    LC_ALL=C awk '{ key = tolower($0); print key "\t" $0 }' |
-    LC_ALL=C sort |
-    LC_ALL=C awk '
+  git -C "$REPO_ROOT" ls-files \
+    | LC_ALL=C sort -u \
+    | LC_ALL=C awk '{ key = tolower($0); print key "\t" $0 }' \
+    | LC_ALL=C sort \
+    | LC_ALL=C awk '
       BEGIN { FS = "\t" }
       function flush(   i) {
         if (count > 1) {
@@ -135,7 +137,7 @@ collision_report="$(
 )" || scan_rc=$?
 
 if [[ "$scan_rc" -eq 0 ]]; then
-  tracked_count="$(git -C "$REPO_ROOT" ls-files | wc -l | tr -d '[:space:]')"
+  tracked_count="$(git -C "$REPO_ROOT" ls-files | LC_ALL=C sort -u | wc -l | tr -d '[:space:]')"
   echo "[case-collision-guard] OK — no case-insensitive duplicate paths among ${tracked_count} tracked file(s)."
   exit 0
 elif [[ "$scan_rc" -eq 3 ]]; then

@@ -708,6 +708,32 @@ run_check "Agent-id enum lint selftest (IMP-036)" bash "$SCRIPT_DIR/agent-id-enu
 run_check "Collected-test-count guard selftest (IMP-036)" bash "$SCRIPT_DIR/collected-test-count-guard-selftest.sh"
 run_check "Gate-vintage selftest (IMP-036)" bash "$SCRIPT_DIR/gate-vintage-selftest.sh"
 run_check "Evidence-capture selftest (IMP-036)" bash "$SCRIPT_DIR/evidence-capture-selftest.sh"
+# The gap ID is carried alongside because the identifier IMP-039 is ALSO held by
+# the delivered autonomy-posture work (gate G135), which has its own SCOPE-1 and
+# SCOPE-7. COST-*/EV-* disambiguate; the bare scope number does not.
+run_check "Output-policy coherence selftest (IMP-039 / EV-7)" bash "$SCRIPT_DIR/output-policy-coherence-guard-selftest.sh"
+run_check "Usage-adapter contract selftest (IMP-039 / COST-4)" bash "$SCRIPT_DIR/usage-adapter-contract-selftest.sh"
+run_check "Test-inventory adapter contract selftest (IMP-040 / COV-8)" bash "$SCRIPT_DIR/test-inventory-adapter-contract-selftest.sh"
+run_check "Scenario linked-test resolution selftest (IMP-040 / COV-8)" bash "$SCRIPT_DIR/scenario-test-resolve-selftest.sh"
+run_check "Scenario obligation matrix selftest (IMP-040 / COV-9)" bash "$SCRIPT_DIR/scenario-obligation-lint-selftest.sh"
+run_check "Test-mechanism declaration selftest (IMP-040 / COV-10)" bash "$SCRIPT_DIR/test-mechanism-lint-selftest.sh"
+run_check "Mutation adapter contract selftest (IMP-040 / COV-11)" bash "$SCRIPT_DIR/mutation-adapter-contract-selftest.sh"
+run_check "Scenario impact resolution selftest (IMP-040 / REG-8)" bash "$SCRIPT_DIR/scenario-impact-resolve-selftest.sh"
+run_check "Changed-spec verification selftest (IMP-040 / COV-12)" bash "$SCRIPT_DIR/verify-changed-specs-selftest.sh"
+run_check "IMP-040 evaluation corpus (8 repository shapes)" bash "$SCRIPT_DIR/imp040-evaluation-corpus.sh"
+run_check "Tool-grant lint selftest (IMP-039 / COST-6)" bash "$SCRIPT_DIR/tool-grant-lint-selftest.sh"
+run_check "Always-on instruction budget selftest (IMP-039 / COST-6)" bash "$SCRIPT_DIR/always-on-instruction-budget-selftest.sh"
+# Advisory by design: the grant frontmatter is runtime-enforced, so an
+# over-narrow grant breaks dispatch silently. Report the delta, narrow one agent
+# at a time, and only then flip a repo to --strict.
+run_check_self_only "Tool-grant lint (IMP-039 / COST-6, advisory)" bash "$SCRIPT_DIR/tool-grant-lint.sh" --quiet
+# Self-only: it reads this repo's own instruction surfaces. A downstream repo
+# gets the coherent text from the template on upgrade, so running it there would
+# report the framework's own upgrade lag as a consumer defect.
+run_check_self_only "Output-policy coherence (IMP-039 / EV-7)" bash "$SCRIPT_DIR/output-policy-coherence-guard.sh" --quiet
+# Self-only for the same reason: a downstream repo's own always-on instructions
+# are its governance call, not the framework's.
+run_check_self_only "Always-on instruction budget (IMP-039 / COST-6)" bash "$SCRIPT_DIR/always-on-instruction-budget.sh" --quiet
 run_check_self_only "Gate-vintage annotation freshness (IMP-036)" bash "$SCRIPT_DIR/gate-vintage-annotate.sh" --check
 run_check_self_only "Gate scaffolder selftest (IMP-011)" bash "$SCRIPT_DIR/scaffold-gate-selftest.sh"
 run_check_self_only "Framework drift-check selftest (IMP-013)" bash "$SCRIPT_DIR/bubbles-drift-check-selftest.sh"
@@ -747,6 +773,7 @@ run_check_self_only "BUG-013 sensitive client storage regression" bash "$REPO_RO
 run_check_self_only "BUG-018 traceability Test Plan heading-depth regression" bash "$REPO_ROOT/tests/regression/test_25_traceability_test_plan_heading_depth.sh"
 run_check_self_only "BUG-019 state-transition compound MJS test-path regression" bash "$REPO_ROOT/tests/regression/test_26_state_transition_spec_mjs_path.sh"
 run_check_self_only "BUG-021 portable framework deadline regression" bash "$REPO_ROOT/tests/regression/test_28_framework_validate_portable_timeout.sh"
+run_check_self_only "BUG-029 human acceptance terminal regression (G136)" bash "$REPO_ROOT/tests/regression/test_35_human_acceptance_terminal.sh"
 run_check "Convergence cap guard selftest" bash "$SCRIPT_DIR/convergence-cap-guard-selftest.sh"
 run_check "Session cap guard selftest (G128)" bash "$SCRIPT_DIR/session-cap-guard-selftest.sh"
 run_check "Session cap guard (live, G128)" env BUBBLES_REPO_ROOT="$REPO_ROOT" bash "$SCRIPT_DIR/session-cap-guard.sh" --quiet
@@ -777,6 +804,7 @@ run_check "Design-experiment guard selftest (IMP-100 Phase 4 / IMP-026 SCOPE-8)"
 run_check "Worktree hygiene guard selftest (IMP-107 / SCOPE-1; IMP-033 / SCOPE-1)" bash "$SCRIPT_DIR/worktree-hygiene-guard-selftest.sh"
 run_check "Doctor hygiene surface selftest (IMP-033 / SCOPE-2 — EV-5)" bash "$SCRIPT_DIR/doctor-hygiene-surface-selftest.sh"
 run_check "Open-work register selftest (IMP-033 / SCOPE-3 — WIP-1, WIP-2)" bash "$SCRIPT_DIR/open-work-report-selftest.sh"
+run_check_self_only "Open-work register lint (live)" bash "$SCRIPT_DIR/open-work-report.sh" --repo-root "$REPO_ROOT" --lint
 run_check "Closeout safety-contract selftest (IMP-033 / SCOPE-4 — WIP-3)" bash "$SCRIPT_DIR/closeout-report-selftest.sh"
 run_check "Open-work surface selftest (IMP-033 / SCOPE-6 — WIP-1)" bash "$SCRIPT_DIR/open-work-surface-selftest.sh"
 run_check "Multi-root honesty selftest (IMP-033 / SCOPE-7 — WIP-3)" bash "$SCRIPT_DIR/multi-root-honesty-selftest.sh"

@@ -57,8 +57,36 @@ write_planning_state() {
 EOF
 }
 
-write_implementation_state() {
+write_planning_state_topology() {
   local repo="$1"
+  local status="$2"
+  local planning_only="$3"
+  local justification="$4"
+  local linked_implementation="$5"
+  local delivery_topology="$6"
+  local delivery_topology_justification="$7"
+  cat > "$repo/specs/100-planning-packet/state.json" <<EOF
+{
+  "version": 3,
+  "featureDir": "specs/100-planning-packet",
+  "featureName": "Planning Packet Fixture",
+  "status": "$status",
+  "workflowMode": "spec-scope-hardening",
+  "linkedImplementationSpec": $linked_implementation,
+  "linkedPlanningPacket": null,
+  "planningOnly": $planning_only,
+  "planningOnlyJustification": $justification,
+  "deliveryTopology": $delivery_topology,
+  "deliveryTopologyJustification": $delivery_topology_justification,
+  "specDependsOn": [],
+  "certifiedAt": null,
+  "requiresRevalidation": false,
+  "executionHistory": []
+}
+EOF
+}
+
+write_implementation_state() {
   local status="$2"
   local linked_planning_packet="$3"
   cat > "$repo/specs/200-implementation/state.json" <<EOF
@@ -200,6 +228,77 @@ assert_stderr_contains "S6" "G087"
 assert_stderr_contains "S6" "archived implementation target"
 assert_stderr_contains "S6" "relink to an active implementation spec"
 assert_stderr_contains "S6" "planningOnly:true"
+
+# ---------------------------------------------------------------------------
+# deliveryTopology — the third truthful disposition.
+# ---------------------------------------------------------------------------
+
+# S7: in-place with a real justification and no separate spec. This is the
+# case that had NO truthful exit before the field existed.
+repo="$(stage_repo s7-in-place-valid)"
+write_planning_state_topology "$repo" "specs_hardened" "false" "null" "null" \
+  '"in-place"' '"This packet plans and implements the outcome ledger in the same directory; there is no separate implementation spec."'
+run_guard "$repo"
+assert_exit "S7 in-place with justification" 0
+assert_stdout_contains "S7" "PASS Gate G087"
+assert_stdout_contains "S7" "deliveryTopology=in-place"
+
+# S8: the declaration has to cost something, exactly as planningOnly does.
+repo="$(stage_repo s8-in-place-perfunctory)"
+write_planning_state_topology "$repo" "specs_hardened" "false" "null" "null" \
+  '"in-place"' '"too short"'
+run_guard "$repo"
+assert_exit "S8 in-place perfunctory justification" 1
+assert_stderr_contains "S8" "G087"
+assert_stderr_contains "S8" "deliveryTopologyJustification"
+
+# S9: mutually exclusive claims must not both be honoured silently.
+repo="$(stage_repo s9-planning-only-and-in-place)"
+write_planning_state_topology "$repo" "specs_hardened" "true" '"No implementation follows this packet at all."' "null" \
+  '"in-place"' '"This packet plans and implements in the same directory."'
+run_guard "$repo"
+assert_exit "S9 planningOnly and in-place together" 1
+assert_stderr_contains "S9" "G087"
+assert_stderr_contains "S9" "mutually exclusive"
+
+# S10: in-place means there is no separate spec, so naming one contradicts it.
+repo="$(stage_repo s10-in-place-with-link)"
+write_planning_state_topology "$repo" "specs_hardened" "false" "null" '"specs/200-implementation"' \
+  '"in-place"' '"This packet plans and implements in the same directory."'
+write_implementation_state "$repo" "in_progress" "null"
+run_guard "$repo"
+assert_exit "S10 in-place with linkedImplementationSpec" 1
+assert_stderr_contains "S10" "G087"
+assert_stderr_contains "S10" "no separate implementation spec"
+
+# S11: an unrecognised value must not be treated as a satisfier.
+repo="$(stage_repo s11-unrecognised-topology)"
+write_planning_state_topology "$repo" "specs_hardened" "false" "null" "null" \
+  '"whatever"' '"Some justification long enough to clear the length floor."'
+run_guard "$repo"
+assert_exit "S11 unrecognised deliveryTopology" 1
+assert_stderr_contains "S11" "G087"
+assert_stderr_contains "S11" "only recognised values"
+
+# S12 — NON-VACUITY. The whole risk of adding a third exit is that it quietly
+# becomes a universal one. An EXPLICIT two-spec packet with no link must still
+# fail, or the new field disabled the gate instead of extending it.
+repo="$(stage_repo s12-explicit-two-spec)"
+write_planning_state_topology "$repo" "specs_hardened" "false" "null" "null" \
+  '"two-spec"' "null"
+run_guard "$repo"
+assert_exit "S12 explicit two-spec still enforces linkage" 1
+assert_stderr_contains "S12" "G087"
+assert_stderr_contains "S12" "linkedImplementationSpec is missing or empty"
+
+# S13 — an ABSENT field must behave exactly as two-spec did before the change,
+# so no packet that passes today can newly fail.
+repo="$(stage_repo s13-absent-topology)"
+write_planning_state "$repo" "specs_hardened" "false" "null" '"specs/200-implementation"'
+write_implementation_state "$repo" "in_progress" "null"
+run_guard "$repo"
+assert_exit "S13 absent deliveryTopology defaults to two-spec" 0
+assert_stdout_contains "S13" "deliveryTopology=two-spec"
 
 echo ""
 echo "=== Selftest verdict ==="

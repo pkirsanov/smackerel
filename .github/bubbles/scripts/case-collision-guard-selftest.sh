@@ -4,9 +4,10 @@
 # Hermetic selftest for case-collision-guard.sh. Stages throwaway git repos
 # under a temp dir and asserts the guard's contract:
 #
-#   - clean fixture    -> exit 0, "no case-insensitive duplicate" reported
-#   - collision fixture-> exit 1, both colliding paths listed
-#   - non-git fixture  -> exit 0, "not a git work tree" reported
+#   - clean fixture      -> exit 0, "no case-insensitive duplicate" reported
+#   - multi-stage fixture-> exit 0, repeated identical path rows de-duplicated
+#   - collision fixture  -> exit 1, both colliding paths listed
+#   - non-git fixture    -> exit 0, "not a git work tree" reported
 #
 # The collision fixture injects a SECOND index entry that differs only by case
 # (Foo.md alongside foo.md) via `git update-index --cacheinfo`. That is the only
@@ -90,6 +91,53 @@ else
   sed -n '1,40p' "$clean_log"
 fi
 
+# --- Same-spelling multi-stage fixture -----------------------------------
+
+multistage_root="$TMPDIR/repo-multistage"
+seed_git_repo "$multistage_root"
+printf 'base\n' >"$multistage_root/base.txt"
+printf 'ours\n' >"$multistage_root/ours.txt"
+printf 'theirs\n' >"$multistage_root/theirs.txt"
+base_blob="$(git -C "$multistage_root" hash-object -w base.txt)"
+ours_blob="$(git -C "$multistage_root" hash-object -w ours.txt)"
+theirs_blob="$(git -C "$multistage_root" hash-object -w theirs.txt)"
+{
+  printf '100644 %s 1\tconflict.md\n' "$base_blob"
+  printf '100644 %s 2\tconflict.md\n' "$ours_blob"
+  printf '100644 %s 3\tconflict.md\n' "$theirs_blob"
+} | git -C "$multistage_root" update-index --index-info
+
+multistage_paths="$TMPDIR/multistage-paths.log"
+git -C "$multistage_root" ls-files >"$multistage_paths"
+multistage_rows="$(wc -l <"$multistage_paths" | tr -d '[:space:]')"
+multistage_matching_rows="$(grep -Fxc 'conflict.md' "$multistage_paths" || true)"
+if [[ "$multistage_rows" -eq 3 && "$multistage_matching_rows" -eq 3 ]]; then
+  pass "multi-stage fixture emits three identical conflict.md rows"
+else
+  fail "multi-stage fixture expected three identical conflict.md rows"
+  sed -n '1,40p' "$multistage_paths"
+fi
+
+set +e
+multistage_log="$TMPDIR/multistage.log"
+bash "$TARGET" --repo-root "$multistage_root" >"$multistage_log" 2>&1
+multistage_rc=$?
+set -e
+
+if [[ "$multistage_rc" -eq 0 ]]; then
+  pass "multi-stage fixture exits 0"
+else
+  fail "multi-stage fixture expected exit 0, got $multistage_rc"
+  sed -n '1,40p' "$multistage_log"
+fi
+
+if grep -Fq "no case-insensitive duplicate paths among 1 tracked file(s)" "$multistage_log"; then
+  pass "multi-stage fixture reports one distinct tracked path and no collision"
+else
+  fail "multi-stage fixture did not report one distinct tracked path and no collision"
+  sed -n '1,40p' "$multistage_log"
+fi
+
 # --- Collision fixture ----------------------------------------------------
 
 dup_root="$TMPDIR/repo-dup"
@@ -115,8 +163,8 @@ else
   sed -n '1,40p' "$dup_log"
 fi
 
-if grep -Fq "case-insensitive duplicate (2 tracked paths" "$dup_log" &&
-  grep -Fq "foo.md" "$dup_log" && grep -Fq "Foo.md" "$dup_log"; then
+if grep -Fq "case-insensitive duplicate (2 tracked paths" "$dup_log" \
+  && grep -Fq "foo.md" "$dup_log" && grep -Fq "Foo.md" "$dup_log"; then
   pass "collision fixture lists both colliding paths"
 else
   fail "collision fixture missing the Foo.md/foo.md collision group"

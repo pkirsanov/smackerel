@@ -55,7 +55,8 @@ EOF
 mirror_usage() {
   cat <<'EOF'
 Usage: repository-binding.sh mirror-session \
-  --session-id <id> --session-control-file <path> --packet-file <path>
+  --session-id <id> --session-control-file <path> --packet-file <path> \
+  [--scenario-file <compiled-scenario.json> --node-id <node-id>]
 EOF
 }
 
@@ -1402,11 +1403,25 @@ parse_packet_command_args() {
   PARSED_CONTROL_FILE=""
   PARSED_PACKET_FILE=""
   PARSED_MODE=""
+  PARSED_SCENARIO_FILE=""
+  PARSED_NODE_ID=""
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --session-id) shift; [[ $# -gt 0 ]] || return 2; PARSED_SESSION_ID="$1" ;;
       --session-control-file) shift; [[ $# -gt 0 ]] || return 2; PARSED_CONTROL_FILE="$1" ;;
       --packet-file) shift; [[ $# -gt 0 ]] || return 2; PARSED_PACKET_FILE="$1" ;;
+      --scenario-file)
+        [[ "$command_kind" == "mirror-session" ]] || return 2
+        shift
+        [[ $# -gt 0 ]] || return 2
+        PARSED_SCENARIO_FILE="$1"
+        ;;
+      --node-id)
+        [[ "$command_kind" == "mirror-session" ]] || return 2
+        shift
+        [[ $# -gt 0 ]] || return 2
+        PARSED_NODE_ID="$1"
+        ;;
       --mode)
         [[ "$command_kind" == "discover-specs" ]] || return 2
         shift
@@ -1459,13 +1474,31 @@ discover_specs() {
 }
 
 mirror_session() {
+  local goal_node_declaration=""
+
   if [[ $# -eq 1 && ( "$1" == "-h" || "$1" == "--help" ) ]]; then
     mirror_usage
     return 0
   fi
   parse_packet_command_args mirror-session "$@" || { mirror_usage >&2; return 2; }
   valid_session_id "$PARSED_SESSION_ID" || { mirror_usage >&2; return 2; }
-  validate_packet_internal "$PARSED_SESSION_ID" "$PARSED_CONTROL_FILE" "$PARSED_PACKET_FILE" visible || return 1
+  if [[ -n "$PARSED_SCENARIO_FILE" && -z "$PARSED_NODE_ID" ]] || \
+     [[ -z "$PARSED_SCENARIO_FILE" && -n "$PARSED_NODE_ID" ]]; then
+    fail_usage 'goal-node mirror requires both --scenario-file and --node-id'
+    mirror_usage >&2
+    return 2
+  fi
+  if [[ -n "$PARSED_SCENARIO_FILE" ]]; then
+    goal_node_declaration="$(goal_node_declaration_json \
+      "$PARSED_SCENARIO_FILE" "$PARSED_NODE_ID" 2>/dev/null || true)"
+    if [[ -z "$goal_node_declaration" ]]; then
+      printf 'REPOSITORY PACKET REFUSED reason=GOAL_NODE_DECLARATION_INVALID actionable=false scopeId=%s\n' \
+        "$PARSED_NODE_ID"
+      return 1
+    fi
+  fi
+  validate_packet_internal "$PARSED_SESSION_ID" "$PARSED_CONTROL_FILE" \
+    "$PARSED_PACKET_FILE" visible "$goal_node_declaration" || return 1
   local root
   local session_dir
   local session_file

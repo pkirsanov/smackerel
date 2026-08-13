@@ -247,25 +247,28 @@ Required output schema in the retrospective data model:
 
 Allowed `slo` values are `pass`, `degraded`, and `failed`. A retrospective may include the legacy R7 metric keys (`avgLoopIterations`, `maxConvergenceIterations`, `compactionFrequency`, `preExistingDeferralCount`, `snapshotCompleteness`) as supporting context, but the `convergenceHealth` object is the required handoff schema.
 
-### Step 5c: Context-Cost Proxy
+### Step 5c: Reference-Closure Proxy
 
-Every retrospective MUST include a `## Context Cost` section populated by:
+Every retrospective MUST include a `## Reference Closure` section populated by:
 
 ```bash
 bash bubbles/scripts/bundle-cost-report.sh --json
 ```
 
 Report, per agent: `bytes`, `targetBytes`, `overBy`, `dispatches`, and
-`costProxy` (`bytes × dispatches`). Rank by `costProxy`, not by `bytes` — the
-orchestrator is dispatched far more often than any specialist, so the largest
-bundle and the largest actual cost are not the same agent.
+`referenceClosureProxy` (`bytes × dispatches`). Rank by `referenceClosureProxy`,
+not by `bytes` — the orchestrator is dispatched far more often than any
+specialist, so the largest bundle and the largest closure are not the same agent.
 
-**Report only what the script measured.** `costProxy` is a byte count multiplied
-by a counted dispatch. It is NOT a token count and NOT a dollar figure; both are
-unmeasurable here and inventing either is fabrication (see the excluded
-dimensions in `activityTracking.measuredDimensions`). If `dispatchesObserved` is
-`false`, say the weighting is absent rather than implying traffic that was never
-recorded.
+**Report only what the script measured.** `referenceClosureProxy` is a
+documentation-linkage byte count multiplied by a counted dispatch. It is NOT a
+token count, NOT loaded context, and NOT a dollar figure. The section is named
+for reachability rather than cost because reading a closure figure as spend is
+precisely how IMP-028 came to optimize a proxy. Real prompt cost is reported
+only when a usage adapter is configured (`bubbles/adapters/usage/`, default
+`none`); with no adapter, say `unmeasured` rather than implying a figure. If
+`dispatchesObserved` is `false`, say the weighting is absent rather than
+implying traffic that was never recorded.
 
 Flag any agent over its role target as an observation. Do NOT recommend moving
 authoring modules out of an orchestrator's closure to close the gap: that
@@ -296,15 +299,23 @@ Write to `.specify/memory/retros/YYYY-MM-DD.md`:
 - **Most-failed gate:** {gate} — {count} failures ({pattern description})
 - **Most-retried phase:** {phase} — {avg_retries} retries avg
 
-## Context Cost
-| Agent | Role | Bytes | Target | Over By | Dispatches | Cost Proxy |
-|-------|------|-------|--------|---------|------------|------------|
-| {agent} | {role} | {bytes} | {targetBytes} | {overBy} | {dispatches} | {costProxy} |
+## Reference Closure
+| Agent | Role | Bytes | Target | Over By | Dispatches | Reference Closure |
+|-------|------|-------|--------|---------|------------|-------------------|
+| {agent} | {role} | {bytes} | {targetBytes} | {overBy} | {dispatches} | {referenceClosureProxy} |
 
-*Cost proxy = bundle bytes × dispatches. Measured, not estimated — it is neither
-a token count nor a dollar figure. Ranked by cost proxy, since the most-dispatched
-agent, not the largest one, is the real expense. `{dispatchesObserved: false}`
-means no dispatch data was recorded and every agent is weighted equally.*
+*Reference closure = bundle bytes × dispatches. Measured, not estimated — it is
+documentation linkage, neither a token count nor a dollar figure nor loaded
+context. Ranked by closure, since the most-dispatched agent, not the largest
+one, dominates. `{dispatchesObserved: false}` means no dispatch data was
+recorded and every agent is weighted equally.*
+
+## Prompt Cost
+{usage adapter status. With `adapter: none` — the default — write exactly
+`unmeasured (no usage adapter configured)` and give NO token or credit figure.
+With an adapter configured, report the measured `promptTokens`,
+`completionTokens`, `credits`, `maxPromptTokens`, and models from
+`bubbles/scripts/usage-resolve.sh` -> `<adapter> session`.}*
 
 ## Hotspots — File Churn
 | File | Changes | Specs Touching It |

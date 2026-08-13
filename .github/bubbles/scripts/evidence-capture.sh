@@ -26,7 +26,14 @@
 #
 # Usage:
 #   bash bubbles/scripts/evidence-capture.sh [--label TEXT] [--lines N] -- <command...>
+#   bash bubbles/scripts/evidence-capture.sh --diagnostic -- <command...>
 #   bash bubbles/scripts/evidence-capture.sh --verify <sha256> -- <command...>
+#
+# --diagnostic is the escalation for the case where a human genuinely needs the
+# whole transcript. It is deliberately NOT a second verbosity mode: it is
+# per-invocation, it is still bounded by a hard ceiling, and it stamps the block
+# so the escalation is visible to a reviewer rather than silent. See
+# agents/bubbles_shared/operating-baseline.md -> "Verbosity Posture".
 #
 # Exit codes:
 #   0 = command succeeded (or --verify matched)
@@ -36,9 +43,21 @@
 
 set -uo pipefail
 
+# Optional. Only used to lift failure-shaped lines out of the omitted region, so
+# a bounded block never hides the line that explains the exit code. Absence
+# degrades the block (no failure section), it does not break capture.
+if [[ -r "${BASH_SOURCE[0]%/*}/guard-lib.sh" ]]; then
+  # shellcheck source=/dev/null
+  source "${BASH_SOURCE[0]%/*}/guard-lib.sh"
+fi
+
 LABEL=""
 KEEP=20
 VERIFY=""
+DIAGNOSTIC=0
+# Even the escalation has a ceiling. "Unbounded on request" is how a bounded
+# default erodes back into a transcript paste.
+DIAGNOSTIC_MAX_LINES=2000
 die_usage() { printf 'evidence-capture: %s\n' "$1" >&2; sed -n '27,31p' "${BASH_SOURCE[0]}" >&2; exit 2; }
 
 while [[ $# -gt 0 ]]; do
@@ -46,7 +65,8 @@ while [[ $# -gt 0 ]]; do
     --label) shift; LABEL="${1:-}" ;;
     --lines) shift; KEEP="${1:-20}" ;;
     --verify) shift; VERIFY="${1:-}" ;;
-    -h|--help) sed -n '2,32p' "${BASH_SOURCE[0]}"; exit 0 ;;
+    --diagnostic) DIAGNOSTIC=1 ;;
+    -h|--help) sed -n '2,40p' "${BASH_SOURCE[0]}"; exit 0 ;;
     --skip*|--force*|--ignore*|--fake*)
       die_usage "bypass-shaped flag '$1' is not supported; evidence is produced by running the command" ;;
     --) shift; break ;;
@@ -96,12 +116,40 @@ printf '$ %s\n' "$*"
 printf 'exit: %s\n' "$rc"
 printf 'lines: %s\n' "$total"
 printf 'sha256: %s\n' "$digest"
-if [[ "$total" -le $((KEEP * 2)) ]]; then
+if [[ "$DIAGNOSTIC" -eq 1 ]]; then
+  # Stamped, not silent: a reviewer can see that bounded retention was waived
+  # here and ask whether it needed to be.
+  printf 'escalation: diagnostic (bounded retention waived for this invocation)\n'
+  if [[ "$total" -gt "$DIAGNOSTIC_MAX_LINES" ]]; then
+    printf -- '--- first %s of %s (diagnostic ceiling) ---\n' "$DIAGNOSTIC_MAX_LINES" "$total"
+    head -n "$DIAGNOSTIC_MAX_LINES" "$tmp"
+    printf -- '--- omitted %s line(s) beyond the diagnostic ceiling; sha256 above covers the full output ---\n' \
+      "$((total - DIAGNOSTIC_MAX_LINES))"
+  else
+    printf -- '--- output ---\n'
+    cat "$tmp"
+  fi
+elif [[ "$total" -le $((KEEP * 2)) ]]; then
   printf -- '--- output ---\n'
   cat "$tmp"
 else
   printf -- '--- first %s ---\n' "$KEEP"
   head -n "$KEEP" "$tmp"
+  # The omitted region is where a failure line hides. Lifting those lines out is
+  # what makes the bounded block safe to prefer over the transcript: the reader
+  # still sees why the exit code is what it is.
+  if declare -F bubbles_ci_failure_detail >/dev/null 2>&1; then
+    mid="$(mktemp)" || mid=""
+    if [[ -n "$mid" ]]; then
+      awk -v a="$((KEEP + 1))" -v b="$((total - KEEP))" 'NR>=a && NR<=b' <"$tmp" >"$mid"
+      fail_lines="$(bubbles_ci_failure_detail "$mid")"
+      rm -f "$mid"
+      if [[ -n "$fail_lines" ]]; then
+        printf -- '--- failure-shaped lines from the omitted region ---\n'
+        printf '%s\n' "$fail_lines"
+      fi
+    fi
+  fi
   printf -- '--- omitted %s line(s); sha256 above covers the full output ---\n' "$((total - KEEP * 2))"
   printf -- '--- last %s ---\n' "$KEEP"
   tail -n "$KEEP" "$tmp"

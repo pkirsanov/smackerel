@@ -119,6 +119,12 @@ Rules:
 
 A claim does not become grounded by passing through another agent.
 
+**A subagent summary is a LEAD, not evidence.** It stays a lead until this agent
+has read the cited artifact or executed the cited command itself. A summary is a
+report that proof exists; it is not the proof. Adopting one as evidence is how a
+single unverified assertion propagates through a chain of agents and arrives at
+certification looking established.
+
 - When a subagent, specialist, or tool returns a factual assertion the caller intends to ACT on, the caller MUST either receive the source with it, or re-verify it before use.
 - The obligation scales with consequence. A subagent's descriptive summary can be relayed as a summary. A subagent's claim that a file, gate, or capability exists MUST be confirmed before it is written into an artifact or used to justify an edit.
 - A returned claim that is ungrounded and load-bearing is a finding. Route it back under [workflow-fix-cycle-protocol.md](workflow-fix-cycle-protocol.md) rather than adopting it.

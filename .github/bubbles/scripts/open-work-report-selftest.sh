@@ -251,6 +251,41 @@ else
   fail "d6 a duplicate residue id is a defect"
 fi
 
+# An unescaped `|` inside a cell is invisible to every other check here: the row
+# still parses, it just parses into the wrong columns. Only the column count
+# catches it.
+D6="$TMP_ROOT/d6"
+mk_repo "$D6"
+cat >> "$D6/.specify/memory/open-work.md" <<'EOF'
+| RES-7 | unescaped pipe in a quoted command | residue | src/x.rs | open | bubbles.implement | rerun `ls | head -5` and compare the output | 2026-02-01 | 2026-02-01 |
+EOF
+lint_rc "$D6"
+rc=$?
+if [[ "$rc" -eq 1 ]]; then
+  pass "d7 an unescaped '|' inside a cell fails the lint (exit 1)"
+else
+  fail "d7 an unescaped '|' inside a cell fails the lint — got exit $rc"
+fi
+if report_has "$D6" "has 11 column delimiters but the table header declares 10"; then
+  pass "d8 the column-count defect names the row and both counts"
+else
+  fail "d8 the column-count defect names the row and both counts"
+fi
+
+# The counterpart case. Without it the check could pass d7 by banning pipes
+# outright, which would make the register unable to quote a shell pipeline at
+# all — a cure worse than the defect.
+D7="$TMP_ROOT/d7"
+mk_repo "$D7"
+cat >> "$D7/.specify/memory/open-work.md" <<'EOF'
+| RES-8 | escaped pipe in a quoted command | residue | src/x.rs | open | bubbles.implement | rerun `ls \| head -5` and compare the output | 2026-02-01 | 2026-02-01 |
+EOF
+if lint_rc "$D7"; then
+  pass "d9 a pipe escaped as '\\|' is content, not a column break, and passes the lint"
+else
+  fail "d9 a pipe escaped as '\\|' passes the lint"
+fi
+
 # --- (e) the register has to travel -------------------------------------------
 E="$TMP_ROOT/e"
 mk_repo "$E"

@@ -322,6 +322,44 @@ Long-running orchestrator agents (`bubbles.workflow`, `bubbles.sprint`, `bubbles
 
 Compact eagerly, before the next dispatch. Do not wait for the model to start truncating its own output.
 
+### Reach A Context Boundary At Every Phase Transition (IMP-039 SCOPE-4 / COST-7)
+
+Compacting the ledger is not the same as bounding the transcript. `compactedHistory[]` is a repository artifact; the model's conversation is not, and one can shrink while the other grows monotonically. In the measured session behind IMP-039 it did exactly that: request 1 carried 162,455 prompt tokens, request 13 carried 513,145, with zero host compaction checkpoints, while every ledger record was well formed.
+
+At EVERY phase transition the orchestrator MUST therefore reach an actual context boundary and record which kind it reached:
+
+| `kind` | Meaning | Requires |
+|---|---|---|
+| `host-checkpoint` | A real host compaction checkpoint was taken. | `checkpointId` — a claim with no id cannot be checked against anything |
+| `fresh-context` | The next specialist runs in a NEW context carrying only the persisted envelope. | — |
+| `unavailable` | The host exposes no compaction primitive. Start a fresh specialist context instead. | — |
+
+Record it through the canonical session writer. Keep the whole invocation on ONE line: G129 reads this file line-by-line, so a continuation that carries the binding triplet onto a second line documents a call a reader can copy unbound.
+
+```bash
+bash bubbles/scripts/state-snapshot.sh --phase phase_3_execute --context-boundary fresh-context --session-id <session-id> --session-control-file <control-file> --binding-packet-file <packet-file>
+```
+
+`unavailable` is always declarable, so no host can block remediation. Declaring unavailability is honest; passing a gate while the transcript grows is not. Gate G083 refuses a malformed boundary always, and refuses an absent one once the session has compacted at least one envelope.
+
+### Verbosity Posture: One Default, No Second Mode (IMP-039 SCOPE-7 / COST-4, EV-7)
+
+A recurring proposal is to add a quieter narrative mode so agents "say less". The measurement settles it against that.
+
+Across the audited session, completion tokens were **8,931 of 2,615,361 total tokens — 0.34%**. Prompt tokens were 2,606,430, of which tool results alone were 1,295,690 (49.7%). A verbosity mode optimizes the 0.34% and leaves the 99.66% untouched.
+
+**Decision: Bubbles ships ONE bounded default. There is no chatty/not-chatty mode, and none may be introduced.** The cost is in what RE-ENTERS context, not in what the model narrates, so the levers that matter are the bounded-capture default (SCOPE-1), the context-volume caps in `sessionBudget` (SCOPE-3), the transcript boundary above (SCOPE-4), and the narrowed always-on surface (SCOPE-6).
+
+Where a human genuinely needs the whole transcript, the escalation is per-invocation, explicit, and stamped rather than a global mode:
+
+```bash
+bash bubbles/scripts/evidence-capture.sh --diagnostic -- <command...>
+```
+
+The block records `escalation: diagnostic (bounded retention waived for this invocation)` so a reviewer can see the waiver, and it remains bounded by a stated ceiling — an escalation that could emit anything is how a bounded default erodes back into the paste it replaced.
+
+Where an attended/unattended difference genuinely matters, bind it to the **autonomy posture that already exists** in `workflows.yaml`. Do not add a second orthogonal axis: every gate, selftest, and agent would then have to be correct under both, doubling the surface for a measured 0.34% of spend.
+
 ### How To Compact
 
 1. For each raw RESULT-ENVELOPE older than the latest 2 (which stay in working memory verbatim):
@@ -378,7 +416,7 @@ Compacted records still satisfy the framework's anti-fabrication contract:
 
 - **Gate G021 (Anti-Fabrication):** The `evidenceRefs` array in each compact record IS the cited evidence. Each `rawPointer` MUST resolve to a real file on disk; orchestrators MUST NOT invent compact records.
 - **Gate G023 (State Transition Guard):** When a compact record claims an `outcome` of `completed_owned` for a scope's specialist, the underlying raw envelope at `rawPointer` MUST itself satisfy G023 (real DoD evidence, real scope status). Compaction never bypasses this — it only relocates the proof.
-- **Gate G083 (Context Compaction Discipline):** The compaction thresholds above (`count > 3` OR `cumulative rawSizeBytes > 8192` for the eligible slice, keeping the latest 2 raw) are enforced mechanically by `bubbles/scripts/compaction-discipline-guard.sh` against `.specify/memory/bubbles.session.json` `envelopesReceived[]`. Eligible envelopes that breach either threshold without a `compactedAt` timestamp fail Gate G083 (exit 1). Orchestrators receiving a Gate G083 violation MUST emit a `blocked` RESULT-ENVELOPE with finding `G083` and remediate by running `bubbles/scripts/context-compactor.sh` on the over-budget envelopes — the compactor additively stamps `compactedAt` so the guard reads the next run as clean. `state-transition-guard.sh` invokes the guard as Check 24; `framework-validate.sh` runs the hermetic selftest on every framework validation pass.
+- **Gate G083 (Context Compaction Discipline):** The compaction thresholds above (`count > 3` OR `cumulative rawSizeBytes > 8192` for the eligible slice, keeping the latest 2 raw) are enforced mechanically by `bubbles/scripts/compaction-discipline-guard.sh` against `.specify/memory/bubbles.session.json` `envelopesReceived[]`. Eligible envelopes that breach either threshold without a `compactedAt` timestamp fail Gate G083 (exit 1). Orchestrators receiving a Gate G083 violation MUST emit a `blocked` RESULT-ENVELOPE with finding `G083` and remediate by running `bubbles/scripts/context-compactor.sh` on the over-budget envelopes — the compactor additively stamps `compactedAt` so the guard reads the next run as clean. `state-transition-guard.sh` invokes the guard as Check 24; `framework-validate.sh` runs the hermetic selftest on every framework validation pass. Since IMP-039 SCOPE-4 the same guard also refuses a missing or malformed `contextBoundary` — see "Reach A Context Boundary At Every Phase Transition" above. A malformed boundary always fails; an absent one fails once the session has compacted at least one envelope, so an upgrade cannot retroactively block a session that never compacted.
 
 If `rawPointer` ever points to a file that does not exist, the compact record is invalid and MUST be discarded; the orchestrator MUST re-dispatch the specialist to obtain a fresh envelope.
 
@@ -485,7 +523,7 @@ Hard dependency: `jq` is required (already used elsewhere in the framework). If 
 
 ### What
 
-- Each orchestrator agent calls `bash bubbles/scripts/state-snapshot.sh --mode start --phase <p> --session-id <session-id> --session-control-file <control-file> --binding-packet-file <packet-file>` at the beginning of every turn, and repeats the complete binding triplet with `--mode end` at the close, before yielding control back to the operator.
+- Orchestrators snapshot each turn boundary with `bash bubbles/scripts/state-snapshot.sh --mode <start|end> --phase <p> --session-id <session-id> --session-control-file <control-file> --binding-packet-file <packet-file>`. Goal-node calls add the required pair `--scenario-file <compiled-scenario.json> --node-id <node-id>`.
 - Each invocation appends a single record to `.specify/memory/bubbles.session.json` `turnSnapshots[]` carrying: `turnNumber` (auto-incremented), `timestamp` (UTC ISO8601), `phase`, `scopeId` (or null), `mode` (`start` | `end`), `note` (or null), and `agent` (from `$BUBBLES_AGENT_NAME`, defaulting to `unknown`).
 
 ### Why

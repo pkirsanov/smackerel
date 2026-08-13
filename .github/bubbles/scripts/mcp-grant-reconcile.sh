@@ -36,12 +36,17 @@
 
 # --- Framework constants (trusted; checksum-pinned) -----------------------
 
-# Canonical core allowlist shared by all five restricted orchestrators. Verified
-# byte-identical across bubbles.{goal,sprint,iterate,bug,workflow}.agent.md:
+# DEFAULT core allowlist for the restricted orchestrators:
 #   tools: [read, search, edit, agent, todo, web, execute, bubbles, playwright]
 # `bubbles` (the framework's own MCP server) and `playwright` ship as framework
 # defaults so the autonomous orchestrators can drive framework + browser MCP
 # tools out of the box. Per-downstream additions layer on via mcp.grants.
+#
+# It is a DEFAULT, not a uniform: see bubbles_mcp_core_tools_for. It was
+# uniform until IMP-039 SCOPE-5, and that uniformity was silently authoritative
+# — this list is written INTO the agent file at install, so narrowing an
+# agent's own `tools:` line was reverted on the next install and showed up only
+# as manifest drift.
 #
 # `bubbles` is the CANONICAL placeholder for the framework MCP server token. On
 # a downstream install the server registers in .vscode/mcp.json under a UNIQUE
@@ -53,6 +58,32 @@
 # materialized token back to `bubbles` before hashing, exactly like a stripped
 # grant. In the Bubbles SOURCE repo the token stays canonical `bubbles`.
 BUBBLES_MCP_CORE_TOOLS=(read search edit agent todo web execute bubbles playwright)
+
+# Per-agent core allowlist (IMP-039 SCOPE-5 / COST-6).
+#
+# A tool family's definition is re-sent on EVERY dispatch of an agent that
+# grants it — measured at ~40,985 tokens of tool definitions per request. An
+# agent should therefore grant only the families the phases it OWNS require.
+# tool-grant-lint.sh reports the per-agent delta; this function is where a
+# reviewed narrowing is recorded so the installer stops reverting it.
+#
+# Narrow ONE agent at a time and verify dispatch still resolves: the frontmatter
+# is runtime-enforced, so an over-narrow grant breaks routing SILENTLY.
+#
+# A `case` rather than an associative array — macOS ships bash 3.2.
+bubbles_mcp_core_tools_for() {
+  case "${1-}" in
+    # Pure router. It dispatches browser/web work to specialists, and a
+    # specialist declares no `tools:` so it inherits the full set. Verified by
+    # tool-grant-lint: bubbles.workflow owns no phase requiring either family.
+    bubbles.workflow)
+      printf '%s\n' read search edit agent todo execute bubbles
+      ;;
+    *)
+      printf '%s\n' "${BUBBLES_MCP_CORE_TOOLS[@]}"
+      ;;
+  esac
+}
 
 # The canonical placeholder token that names the framework MCP server in the
 # core allowlist. Materialized per-repo on downstream installs.
@@ -176,16 +207,19 @@ bubbles_mcp_effective_grants() {
   done | LC_ALL=C sort -u
 }
 
-# Join the canonical core tools with ", " (the exact canonical separator),
+# Join <agent>'s core tools with ", " (the exact canonical separator),
 # materializing the `bubbles` placeholder to the per-repo MCP server token.
+# Omitting the agent yields the default list.
 bubbles_mcp_join_core() {
+  local agent="${1-}"
   local out='' token emit server_token
   server_token="$(bubbles_mcp_server_token)"
-  for token in "${BUBBLES_MCP_CORE_TOOLS[@]}"; do
+  while IFS= read -r token; do
+    [[ -n "$token" ]] || continue
     emit="$token"
     [[ "$token" == "$BUBBLES_MCP_SERVER_PLACEHOLDER" ]] && emit="$server_token"
     out="${out:+$out, }$emit"
-  done
+  done < <(bubbles_mcp_core_tools_for "$agent")
   printf '%s' "$out"
 }
 
@@ -256,7 +290,7 @@ bubbles_mcp_inject_to_stdout() {
   grants="$(bubbles_mcp_effective_grants "$config" "$agent")"
 
   local core_joined
-  core_joined="$(bubbles_mcp_join_core)"
+  core_joined="$(bubbles_mcp_join_core "$agent")"
 
   local repl
   if [[ -n "$grants" ]]; then

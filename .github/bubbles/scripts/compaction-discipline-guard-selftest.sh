@@ -310,7 +310,12 @@ write_session_json "$S3_ROOT" '{
       "compactedAt": null,
       "rawPointer": null
     }
-  ]
+  ],
+  "contextBoundary": {
+    "kind": "host-checkpoint",
+    "checkpointId": "ckpt-7",
+    "at": "2026-06-01T10:01:35Z"
+  }
 }'
 
 run_guard "$S3_ROOT" "specs/900-convergence-fixture"
@@ -319,6 +324,7 @@ assert_exit 0 "S3 exit code (compliant compaction)"
 assert_stdout_contains "PASS Gate G083" "S3 PASS marker on stdout"
 assert_stdout_contains "eligible=2" "S3 reports eligible=2"
 assert_stdout_contains "uncompacted=0" "S3 reports uncompacted=0"
+assert_stdout_contains "contextBoundary=host-checkpoint" "S3 reports the recorded boundary kind"
 
 # =============================================================================
 # Scenario S4: malformed session.json -> exit 2
@@ -410,7 +416,12 @@ write_session_json "$S6_ROOT" '{
       "compactedAt": null,
       "rawPointer": null
     }
-  ]
+  ],
+  "contextBoundary": {
+    "kind": "fresh-context",
+    "checkpointId": null,
+    "at": "2026-06-01T10:00:20Z"
+  }
 }'
 
 run_guard "$S6_ROOT" "specs/900-convergence-fixture"
@@ -419,6 +430,132 @@ assert_exit 0 "S6 exit code (3 envelopes, eligible slice fully compacted)"
 assert_stdout_contains "PASS Gate G083" "S6 PASS marker on stdout"
 assert_stdout_contains "eligible=1" "S6 reports eligible=1"
 assert_stdout_contains "uncompacted=0" "S6 reports uncompacted=0"
+
+# =============================================================================
+# IMP-039 SCOPE-4: live-transcript boundary
+#
+# The threshold scenarios above only prove the LEDGER was compacted. S7 is the
+# adversarial case that motivated the scope: a session that compacts every
+# envelope, passes every threshold, and never bounds the live transcript.
+# =============================================================================
+
+# Emits a session whose ledger is fully compliant, with $1 spliced in as the
+# contextBoundary value (use the literal `null` to omit it).
+boundary_session() {
+  cat <<EOF
+{
+  "envelopesReceived": [
+    {
+      "specDir": "specs/900-convergence-fixture",
+      "agent": "bubbles.workflow",
+      "receivedAt": "2026-06-01T10:00:00Z",
+      "rawSizeBytes": 200,
+      "incomingMessage": "old-1",
+      "compactedAt": "2026-06-01T10:00:30Z",
+      "rawPointer": null
+    },
+    {
+      "specDir": "specs/900-convergence-fixture",
+      "agent": "bubbles.workflow",
+      "receivedAt": "2026-06-01T10:02:00Z",
+      "rawSizeBytes": 200,
+      "incomingMessage": "latest-1-raw",
+      "compactedAt": null,
+      "rawPointer": null
+    },
+    {
+      "specDir": "specs/900-convergence-fixture",
+      "agent": "bubbles.workflow",
+      "receivedAt": "2026-06-01T10:03:00Z",
+      "rawSizeBytes": 200,
+      "incomingMessage": "latest-2-raw",
+      "compactedAt": null,
+      "rawPointer": null
+    }
+  ],
+  "contextBoundary": $1
+}
+EOF
+}
+
+note "Scenario S7: compacted ledger with NO live-transcript boundary should exit 1"
+
+S7_ROOT="$WORKSPACE/s7"
+stage_repo_root "$S7_ROOT"
+write_session_json "$S7_ROOT" "$(boundary_session 'null')"
+
+run_guard "$S7_ROOT" "specs/900-convergence-fixture"
+
+assert_exit 1 "S7 exit code (ledger compacted, transcript unbounded)"
+assert_stderr_contains "live-transcript boundary" "S7 stderr names the boundary check"
+assert_stderr_contains "recorded no live-transcript boundary" "S7 stderr states the absence"
+
+note "Scenario S8: an unknown boundary kind should exit 1"
+
+S8_ROOT="$WORKSPACE/s8"
+stage_repo_root "$S8_ROOT"
+write_session_json "$S8_ROOT" "$(boundary_session '{"kind":"handled","at":"2026-06-01T10:01:35Z"}')"
+
+run_guard "$S8_ROOT" "specs/900-convergence-fixture"
+
+assert_exit 1 "S8 exit code (unknown kind)"
+assert_stderr_contains "host-checkpoint, fresh-context or unavailable" "S8 stderr names the allowed kinds"
+
+note "Scenario S9: a host-checkpoint claim without a checkpointId should exit 1"
+
+S9_ROOT="$WORKSPACE/s9"
+stage_repo_root "$S9_ROOT"
+write_session_json "$S9_ROOT" "$(boundary_session '{"kind":"host-checkpoint","at":"2026-06-01T10:01:35Z"}')"
+
+run_guard "$S9_ROOT" "specs/900-convergence-fixture"
+
+assert_exit 1 "S9 exit code (checkpoint claim with no id)"
+assert_stderr_contains "requires a non-empty checkpointId" "S9 stderr names the missing id"
+
+note "Scenario S10: a boundary with a non-RFC3339 timestamp should exit 1"
+
+S10_ROOT="$WORKSPACE/s10"
+stage_repo_root "$S10_ROOT"
+write_session_json "$S10_ROOT" "$(boundary_session '{"kind":"fresh-context","at":"yesterday"}')"
+
+run_guard "$S10_ROOT" "specs/900-convergence-fixture"
+
+assert_exit 1 "S10 exit code (unparseable timestamp)"
+assert_stderr_contains "RFC3339" "S10 stderr names the timestamp requirement"
+
+note "Scenario S11: 'unavailable' is an honest, accepted declaration"
+
+S11_ROOT="$WORKSPACE/s11"
+stage_repo_root "$S11_ROOT"
+write_session_json "$S11_ROOT" "$(boundary_session '{"kind":"unavailable","at":"2026-06-01T10:01:35Z"}')"
+
+run_guard "$S11_ROOT" "specs/900-convergence-fixture"
+
+assert_exit 0 "S11 exit code (host exposes no compaction primitive)"
+assert_stdout_contains "contextBoundary=unavailable" "S11 reports the declared kind"
+
+note "Scenario S12: a session that never compacted is untouched by the boundary check"
+
+S12_ROOT="$WORKSPACE/s12"
+stage_repo_root "$S12_ROOT"
+write_session_json "$S12_ROOT" '{
+  "envelopesReceived": [
+    {
+      "specDir": "specs/900-convergence-fixture",
+      "agent": "bubbles.workflow",
+      "receivedAt": "2026-06-01T10:02:00Z",
+      "rawSizeBytes": 200,
+      "incomingMessage": "latest-1-raw",
+      "compactedAt": null,
+      "rawPointer": null
+    }
+  ]
+}'
+
+run_guard "$S12_ROOT" "specs/900-convergence-fixture"
+
+assert_exit 0 "S12 exit code (no compaction exercised -> no boundary required)"
+assert_stdout_contains "contextBoundary=none" "S12 reports no boundary without failing"
 
 # =============================================================================
 # Final verdict

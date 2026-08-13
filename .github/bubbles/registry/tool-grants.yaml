@@ -1,0 +1,54 @@
+version: 1
+
+# Tool-grant registry (IMP-039 SCOPE-5 / COST-6)
+#
+# WHY THIS EXISTS
+# Tool DEFINITIONS are re-sent on every request. In the measured session behind
+# IMP-039 they averaged roughly 40,985 tokens per metered request, 12.6% of a
+# 2,606,430-token prompt total. A family granted to an agent that never uses it
+# is paid on every single dispatch of that agent and buys nothing.
+#
+# `instruction-budget-lint.sh` already counts directive density per agent file.
+# Nothing bounded the granted TOOL surface until this registry.
+#
+# MODEL: RESTRICTED FAMILIES ONLY.
+# This is deliberately not a full phase-by-phase requirements matrix. Such a
+# matrix would have to assert a requirement for every phase/family pair, and
+# most of those assertions would be guesses. Instead only families that are
+# EXPENSIVE and NARROWLY justified are restricted; every other family is
+# unrestricted and never flagged. New families move into `restricted` as
+# evidence accumulates — that is the ratchet, and it is why the lint ships
+# advisory.
+
+# Every tool family the framework grants in *.agent.md frontmatter.
+families: [ read, search, edit, agent, todo, web, execute, bubbles, playwright ]
+
+restricted:
+
+  playwright:
+    reason: >-
+      Live browser automation. Only an agent that itself drives a browser needs it. An orchestrator that HANDS OFF browser work names the browser in a handoff prompt, but the specialist drives it in its own context under its own grant, so the orchestrator's grant is dead weight on every dispatch.
+    justifiedByPhases: [ chaos, journey ]
+    justifiedByAgents: [ bubbles.chaos, bubbles.journey, bubbles.redteam ]
+
+  web:
+    reason: >-
+      Outbound fetch of external sources. Justified for agents that read upstream repositories, competitor material, or vendor documentation. Routing and execution phases resolve everything from the repository.
+    justifiedByPhases: [ analyze, releases ]
+    justifiedByAgents: [ bubbles.analyst, bubbles.setup, bubbles.releases, bubbles.grill ]
+
+# Families that are never flagged. `read`/`search`/`todo`/`bubbles` are needed to
+# locate artifacts, read them, track steps, and run framework guards. `edit`,
+# `execute`, and `agent` are load-bearing for most roles and are candidates for a
+# future ratchet, not for this pass.
+unrestricted: [ read, search, edit, agent, todo, execute, bubbles ]
+
+# SCOPE NOTE, recorded so the next reader does not mistake reach for coverage.
+# Only the top-level runners (bubbles.workflow, goal, sprint, iterate, and
+# bubbles.bug) declare an explicit `tools:` list today. Every other agent omits
+# the key and inherits the host default, so it grants nothing explicitly and the
+# lint has nothing to compare. The `justifiedByAgents` entries above are
+# therefore PRE-AUTHORIZATION for the day a specialist declares a list, not a
+# description of current frontmatter. They are not dead: without them, narrowing
+# bubbles.chaos or bubbles.journey later would be flagged the moment it declared
+# the grant it genuinely needs.

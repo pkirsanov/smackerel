@@ -1,8 +1,16 @@
 ---
-applyTo: "**"
+applyTo: "**/*.agent.md,**/*.prompt.md,**/*.instructions.md,**/skills/**"
 ---
 
 # Agent File Guidelines
+
+> **Scope (IMP-039 SCOPE-6).** This file is authoring guidance for agent,
+> prompt, instruction, and skill files, and it loads only on those surfaces. It
+> was previously `applyTo: "**"`, so its 15,754 bytes were re-sent on every
+> unrelated request. The invariants that must hold everywhere — repository
+> authority, anti-fabrication, evidence integrity, and the timeout rule — moved
+> to `bubbles-kernel.instructions.md`, which stays always-on. Nothing was
+> dropped; the always-on subset was made smaller and the rest conditional.
 
 > Adapted from [github/awesome-copilot](https://github.com/github/awesome-copilot) (MIT License).
 > Adapted for repo-local conventions. Keep this document project-agnostic.

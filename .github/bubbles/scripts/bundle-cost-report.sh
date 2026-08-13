@@ -148,12 +148,15 @@ for agent_file in sorted(agents_dir.glob("bubbles.*.agent.md")):
             "overBy": max(0, size - target),
             "withinTarget": size <= target,
             "dispatches": count,
-            "costProxy": size * (count if count else 1),
+            # Reachability closure weighted by dispatch. NOT spend: renamed from
+            # costProxy because being read as a cost is exactly how IMP-028
+            # ended up optimizing a proxy (IMP-039 SCOPE-2).
+            "referenceClosureProxy": size * (count if count else 1),
             "dispatchesObserved": count > 0,
         }
     )
 
-rows.sort(key=lambda r: -r["costProxy"])
+rows.sort(key=lambda r: -r["referenceClosureProxy"])
 
 if fmt == "json":
     print(json.dumps({"agents": rows}, indent=2, sort_keys=True))

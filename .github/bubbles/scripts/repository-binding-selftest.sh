@@ -56,6 +56,7 @@ for arg in "$@"; do
     --suite=state-propagation) suite="state-propagation" ;;
     --suite=classification-discovery) suite="classification-discovery" ;;
     --suite=front-doors-goal-nodes) suite="front-doors-goal-nodes" ;;
+    --suite=bug-015) suite="bug-015" ;;
     --suite=shared-infrastructure-canary) suite="shared-infrastructure-canary" ;;
     --suite=conformance) suite="conformance" ;;
     --suite=all) suite="all" ;;
@@ -68,6 +69,7 @@ Suites:
   state-propagation             IMP-103 S2 mirror and provenance propagation
   classification-discovery      IMP-103 S3 classification and scoped discovery
   front-doors-goal-nodes        IMP-103 S4 front doors, packets, and scoped goal nodes
+  bug-015                       Goal-node mirror declaration transport regression
   shared-infrastructure-canary  Legacy state/compactor/result contracts
   conformance                   IMP-103 S3-S4 source conformance fixtures
   all                           All suites in deterministic dependency order
@@ -84,6 +86,7 @@ done
 if [[ "$suite" != "foundation" && "$suite" != "state-propagation" && \
   "$suite" != "classification-discovery" && \
   "$suite" != "front-doors-goal-nodes" && \
+  "$suite" != "bug-015" && \
   "$suite" != "shared-infrastructure-canary" && "$suite" != "conformance" && \
   "$suite" != "all" ]]; then
   printf 'repository-binding-selftest: unsupported suite: %s\n' "$suite" >&2
@@ -3140,12 +3143,22 @@ run_front_doors_goal_nodes_suite() {
   finish_named_suite "front-doors-goal-nodes"
 }
 
+run_bug_015_suite() {
+  echo "=== BUG-015 goal-node mirror declaration transport selftest ==="
+  echo "SUITE bug-015"
+  run_front_doors_goal_nodes_goal_cases bug-015
+  finish_named_suite "bug-015"
+}
+
 run_front_doors_goal_nodes_goal_cases() {
   local selected_case="${1:-all}"
   local case_id=""
   local scenario_schema=""
   local goal_scenario=""
   local sprint_scenario=""
+  local goal_convergence=""
+  local sprint_convergence=""
+  local snapshot_baseline=""
   local cross_repo_section=""
   local source_root=""
   local repo_a=""
@@ -3166,9 +3179,15 @@ run_front_doors_goal_nodes_goal_cases() {
   local packet_b=""
   local packet_c=""
   local packet_forged_alias=""
+  local packet_forged_resolution=""
   local unresolved_packet=""
   local declared_root=""
   local declared_alias=""
+  local expected_resolution=""
+  local goal_mirror_file=""
+  local goal_mirror_baseline=""
+  local ordinary_packet=""
+  local ordinary_mirror_file=""
   local order=""
   local node_id=""
   local node_packet=""
@@ -3177,7 +3196,7 @@ run_front_doors_goal_nodes_goal_cases() {
   source_root="$(cd "$SCRIPT_DIR/../.." && pwd -P)"
 
   case "$selected_case" in
-    all|ownership) ;;
+    all|ownership|bug-015) ;;
     *)
       printf 'repository-binding-selftest: unsupported goal-node case selector: %s\n' \
         "$selected_case" >&2
@@ -3185,7 +3204,7 @@ run_front_doors_goal_nodes_goal_cases() {
       ;;
   esac
 
-  if [[ "$selected_case" == "all" ]]; then
+  if [[ "$selected_case" == "all" || "$selected_case" == "bug-015" ]]; then
   case_id="RB-GOAL-SCENARIO-REPOSITORY-ROOTS"
   begin_case "$case_id" "Goal and sprint plans require a canonical repositoryRoot per repos entry and scoped decision/result metadata per node."
   scenario_schema="$(markdown_subtree "$SCENARIO_CONTRACT" "## Scenario DAG Schema")"
@@ -3209,6 +3228,19 @@ run_front_doors_goal_nodes_goal_cases() {
     "$sprint_scenario" '--scenario-file'
   assert_text_contains "$case_id" "sprint executor verifies command root and revision after every node" \
     "$sprint_scenario" 'byte-identical'
+  goal_convergence="$(markdown_subtree "$GOAL_AGENT" "## Convergence Loop")"
+  sprint_convergence="$(markdown_subtree "$SPRINT_AGENT" "## Convergence Cap (Gate G""082 — MANDATORY)")"
+  snapshot_baseline="$(markdown_subtree "$OPERATING_BASELINE" "## Per-Turn State Snapshot")"
+  assert_text_contains "$case_id" "goal-node convergence snapshots carry the compiled scenario" \
+    "$goal_convergence" '--scenario-file <compiled-scenario.json>'
+  assert_text_contains "$case_id" "goal-node convergence snapshots carry the exact node id" \
+    "$goal_convergence" '--node-id <node-id>'
+  assert_text_contains "$case_id" "sprint scenario-node snapshots carry the compiled scenario" \
+    "$sprint_convergence" '--scenario-file <compiled-scenario.json>'
+  assert_text_contains "$case_id" "sprint scenario-node snapshots carry the exact node id" \
+    "$sprint_convergence" '--node-id <node-id>'
+  assert_text_contains "$case_id" "shared snapshot baseline requires the complete scenario/node pair" \
+    "$snapshot_baseline" '--scenario-file <compiled-scenario.json> --node-id <node-id>'
 
   repo_a="$(create_eligible_repo "$case_id" "$WORKSPACE_DIR/control-repo")"
   repo_b="$(create_eligible_repo "$case_id" "$WORKSPACE_DIR/node-b-repo")"
@@ -3361,6 +3393,7 @@ run_front_doors_goal_nodes_goal_cases() {
   packet_b="$CASE_DIR/declared-node-b-packet.json"
   packet_c="$CASE_DIR/substituted-node-c-packet.json"
   packet_forged_alias="$CASE_DIR/forged-node-b-alias-packet.json"
+  packet_forged_resolution="$CASE_DIR/forged-node-b-resolution-packet.json"
   write_goal_node_packet "$packet_b" "$SESSION_ID" 1 "$repo_b" "node-b-repo" "deliver-b" || \
     fatal_fixture "$case_id" "cannot write declared B packet"
   write_goal_node_packet "$packet_c" "$SESSION_ID" 1 "$repo_c" "node-c-repo" "deliver-b" || \
@@ -3368,6 +3401,11 @@ run_front_doors_goal_nodes_goal_cases() {
   write_goal_node_packet "$packet_forged_alias" "$SESSION_ID" 1 \
     "$repo_b" "forged-node-b" "deliver-b" || \
     fatal_fixture "$case_id" "cannot write forged-alias B packet"
+  jq '
+    .repositoryResolution.controlRevision = 2
+    | .repositoryResolution.decisionId |= sub(":1:node:"; ":2:node:")
+  ' "$packet_b" > "$packet_forged_resolution" || \
+    fatal_fixture "$case_id" "cannot write forged-resolution B packet"
 
   invoke_binding "$case_id" "goal-node validation cannot omit the compiled declaration" \
     "$repo_a" validate-packet --session-id "$SESSION_ID" \
@@ -3386,6 +3424,63 @@ run_front_doors_goal_nodes_goal_cases() {
   assert_files_equal "$case_id" "valid scoped B packet leaves command control byte-identical" \
     "$control_baseline" "$CONTROL_FILE"
 
+  goal_mirror_file="$repo_b/.specify/memory/bubbles.session.json"
+  expected_resolution="$(jq -c '.repositoryResolution' "$packet_b")"
+  invoke_binding "$case_id" "declared repository B packet mirrors against the compiled scenario" \
+    "$repo_a" mirror-session --session-id "$SESSION_ID" \
+    --session-control-file "$CONTROL_FILE" --packet-file "$packet_b" \
+    --scenario-file "$mismatch_plan" --node-id deliver-b
+  assert_rc_zero "$case_id" "repository B packet mirrors for the B-declared node"
+  assert_file_exists "$case_id" "goal-node mirror writes the declared repository session" \
+    "$goal_mirror_file"
+  assert_json_scalar "$case_id" "goal-node mirror preserves the declared canonical root" \
+    "$goal_mirror_file" '.repositoryBindingMirror.repositoryRoot' "$repo_b"
+  assert_json_scalar "$case_id" "goal-node mirror preserves the declared repository alias" \
+    "$goal_mirror_file" '.repositoryBindingMirror.repositoryAlias' 'node-b-repo'
+  assert_json_compact "$case_id" "goal-node mirror preserves the exact scoped resolution" \
+    "$goal_mirror_file" '.repositoryBindingMirror.repositoryResolution' "$expected_resolution"
+  assert_files_equal "$case_id" "goal-node mirror leaves command control byte-identical" \
+    "$control_baseline" "$CONTROL_FILE"
+  goal_mirror_baseline="$CASE_DIR/goal-mirror-before-refusals.json"
+  cp "$goal_mirror_file" "$goal_mirror_baseline" || \
+    fatal_fixture "$case_id" "cannot capture goal-node mirror baseline"
+
+  invoke_binding "$case_id" "a missing scenario node cannot authorize a goal-node mirror" \
+    "$repo_a" mirror-session --session-id "$SESSION_ID" \
+    --session-control-file "$CONTROL_FILE" --packet-file "$packet_b" \
+    --scenario-file "$mismatch_plan" --node-id absent-node
+  assert_rc_nonzero "$case_id" "goal-node mirror refuses a node absent from the compiled scenario"
+  assert_contains "$case_id" "wrong-node mirror uses the stable declaration-invalid reason" \
+    'GOAL_NODE_DECLARATION_INVALID'
+  assert_files_equal "$case_id" "wrong-node refusal leaves the existing mirror byte-identical" \
+    "$goal_mirror_baseline" "$goal_mirror_file"
+
+  invoke_binding "$case_id" "scenario-only mirror invocation is structurally incomplete" \
+    "$repo_a" mirror-session --session-id "$SESSION_ID" \
+    --session-control-file "$CONTROL_FILE" --packet-file "$packet_b" \
+    --scenario-file "$mismatch_plan"
+  if [[ "$LAST_RC" -eq 2 ]]; then
+    pass_assertion "$case_id" "scenario-only mirror invocation returns usage status 2"
+  else
+    fail_assertion "$case_id" "scenario-only mirror invocation returns usage status 2" \
+      "expectedExit=2 actualExit=$LAST_RC"
+  fi
+  assert_files_equal "$case_id" "scenario-only refusal leaves the existing mirror byte-identical" \
+    "$goal_mirror_baseline" "$goal_mirror_file"
+
+  invoke_binding "$case_id" "node-only mirror invocation is structurally incomplete" \
+    "$repo_a" mirror-session --session-id "$SESSION_ID" \
+    --session-control-file "$CONTROL_FILE" --packet-file "$packet_b" \
+    --node-id deliver-b
+  if [[ "$LAST_RC" -eq 2 ]]; then
+    pass_assertion "$case_id" "node-only mirror invocation returns usage status 2"
+  else
+    fail_assertion "$case_id" "node-only mirror invocation returns usage status 2" \
+      "expectedExit=2 actualExit=$LAST_RC"
+  fi
+  assert_files_equal "$case_id" "node-only refusal leaves the existing mirror byte-identical" \
+    "$goal_mirror_baseline" "$goal_mirror_file"
+
   invoke_binding "$case_id" "caller-forged alias cannot substitute for the declaration alias" \
     "$repo_a" validate-packet --session-id "$SESSION_ID" \
     --session-control-file "$CONTROL_FILE" --packet-file "$packet_forged_alias" \
@@ -3393,6 +3488,15 @@ run_front_doors_goal_nodes_goal_cases() {
   assert_rc_nonzero "$case_id" "same-root packet with a forged alias refuses"
   assert_contains "$case_id" "forged alias uses the stable declaration mismatch reason" \
     "GOAL_NODE_REPOSITORY_MISMATCH"
+  invoke_binding "$case_id" "caller-forged alias cannot mirror into the declared repository" \
+    "$repo_a" mirror-session --session-id "$SESSION_ID" \
+    --session-control-file "$CONTROL_FILE" --packet-file "$packet_forged_alias" \
+    --scenario-file "$mismatch_plan" --node-id deliver-b
+  assert_rc_nonzero "$case_id" "same-root forged-alias mirror refuses"
+  assert_contains "$case_id" "forged-alias mirror uses the declaration mismatch reason" \
+    "GOAL_NODE_REPOSITORY_MISMATCH"
+  assert_files_equal "$case_id" "forged-alias mirror refusal leaves repository state byte-identical" \
+    "$goal_mirror_baseline" "$goal_mirror_file"
   assert_files_equal "$case_id" "forged alias leaves command control byte-identical" \
     "$control_baseline" "$CONTROL_FILE"
 
@@ -3405,9 +3509,49 @@ run_front_doors_goal_nodes_goal_cases() {
     "GOAL_NODE_REPOSITORY_MISMATCH"
   assert_excludes "$case_id" "cross-repository refusal reaches packet provenance validation" \
     "unknown validate-packet option"
+  invoke_binding "$case_id" "eligible repository C packet cannot mirror for declared repository B" \
+    "$repo_a" mirror-session --session-id "$SESSION_ID" \
+    --session-control-file "$CONTROL_FILE" --packet-file "$packet_c" \
+    --scenario-file "$mismatch_plan" --node-id deliver-b
+  assert_rc_nonzero "$case_id" "cross-repository goal-node mirror refuses"
+  assert_contains "$case_id" "cross-repository mirror uses the declaration mismatch reason" \
+    "GOAL_NODE_REPOSITORY_MISMATCH"
+  assert_file_absent "$case_id" "cross-repository mirror creates no substituted repository state" \
+    "$repo_c/.specify/memory/bubbles.session.json"
+  assert_files_equal "$case_id" "cross-repository mirror refusal leaves declared repository state byte-identical" \
+    "$goal_mirror_baseline" "$goal_mirror_file"
   assert_files_equal "$case_id" "substituted C packet leaves command control byte-identical" \
     "$control_baseline" "$CONTROL_FILE"
+
+  invoke_binding "$case_id" "mutated repositoryResolution cannot mirror for the declared goal node" \
+    "$repo_a" mirror-session --session-id "$SESSION_ID" \
+    --session-control-file "$CONTROL_FILE" --packet-file "$packet_forged_resolution" \
+    --scenario-file "$mismatch_plan" --node-id deliver-b
+  assert_rc_nonzero "$case_id" "mutated repositoryResolution mirror refuses"
+  assert_contains "$case_id" "mutated repositoryResolution mirror uses the declaration mismatch reason" \
+    "GOAL_NODE_REPOSITORY_MISMATCH"
+  assert_files_equal "$case_id" "mutated resolution leaves repository state byte-identical" \
+    "$goal_mirror_baseline" "$goal_mirror_file"
+  assert_files_equal "$case_id" "all mirror refusals leave command control byte-identical" \
+    "$control_baseline" "$CONTROL_FILE"
+
+  ordinary_packet="$CASE_DIR/ordinary-command-packet.json"
+  ordinary_mirror_file="$repo_a/.specify/memory/bubbles.session.json"
+  write_actionable_packet "$ordinary_packet" "$SESSION_ID" 1 "$repo_a" "control-repo" || \
+    fatal_fixture "$case_id" "cannot write ordinary command packet"
+  invoke_binding "$case_id" "ordinary non-goal packet mirrors without a scenario declaration" \
+    "$repo_a" mirror-session --session-id "$SESSION_ID" \
+    --session-control-file "$CONTROL_FILE" --packet-file "$ordinary_packet"
+  assert_rc_zero "$case_id" "ordinary non-goal mirror remains compatible without scenario/node arguments"
+  assert_json_scalar "$case_id" "ordinary mirror retains command scope" \
+    "$ordinary_mirror_file" '.repositoryBindingMirror.repositoryResolution.scopeKind' 'command'
+  assert_files_equal "$case_id" "ordinary mirror leaves command control byte-identical" \
+    "$control_baseline" "$CONTROL_FILE"
   end_case "$case_id"
+
+  if [[ "$selected_case" == "bug-015" ]]; then
+    return 0
+  fi
 
   case_id="RB-GOAL-NODE-SCOPED-ORDER-INVARIANCE"
   begin_case "$case_id" "B and C goal nodes validate in both scheduler orders with scoped results while command-level A control bytes never change."
@@ -3785,6 +3929,10 @@ case "$suite" in
     ;;
   front-doors-goal-nodes)
     run_front_doors_goal_nodes_suite
+    exit $?
+    ;;
+  bug-015)
+    run_bug_015_suite
     exit $?
     ;;
   conformance)

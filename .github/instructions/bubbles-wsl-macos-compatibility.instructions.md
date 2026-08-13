@@ -1,5 +1,5 @@
 ---
-applyTo: "**"
+applyTo: "**/*.sh,**/*.bash,**/*.zsh,**/hooks/*,**/.github/workflows/*.yml,**/.github/workflows/*.yaml,**/Makefile,**/*.mk"
 ---
 
 # WSL + macOS Compatibility Policy (NON-NEGOTIABLE)
@@ -7,6 +7,12 @@ applyTo: "**"
 > **Portability:** This file is **project-agnostic**. Copy unchanged across projects.
 > It is the binding counterpart to the [`bubbles-cross-platform-shell`](../skills/bubbles-cross-platform-shell/SKILL.md)
 > skill (the how-to + full pitfall table + `guard-lib.sh` helper reference).
+>
+> **Scope (IMP-039 SCOPE-6 / COST-6):** every rule below is about authoring
+> shell — `timeout`, `sed -i`, `date -d`, `awk`, `stat`, `paste`, `mktemp`,
+> `readlink -f`. It was previously `applyTo: "**"` and so was re-sent on every
+> request that touched no shell at all. It now loads on shell, hook, workflow,
+> and make surfaces, which is where its rules bite.
 
 The framework and its downstream repos are developed and operated on both WSL2 /
 Linux (GNU coreutils) and macOS (BSD userland). Any command, script, selftest,

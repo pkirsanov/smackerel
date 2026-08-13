@@ -50,6 +50,100 @@
             }
           },
           "tags": { "type": "array", "items": { "type": "string" } },
+          "riskTier": {
+            "type": "string",
+            "enum": ["low", "medium", "high"],
+            "description": "OPTIONAL (IMP-040 SCOPE-7, COV-11). How much a wrong answer costs, which determines the strength of negative control the scenario owes. A uniform tier across every scenario carries no information; tier the ones that would actually hurt."
+          },
+          "behaviorTraits": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "pure-calculation",
+                "user-visible-ui",
+                "api-contract",
+                "mutable-state",
+                "degraded-state",
+                "shared-consumer",
+                "dependency-path",
+                "responsive-accessible",
+                "sla-sensitive"
+              ]
+            },
+            "description": "OPTIONAL (IMP-040 SCOPE-3, COV-9). The behavior traits this scenario actually has. bubbles.plan DERIVES the obligation set from these — see test-core.md 'Scenario Obligation Matrix'. Attaching every trait to every scenario is the failure mode this replaces, not a safe default: an always-identical set carries no information. Advisory and no-op unless declared; NOT part of required."
+          },
+          "obligations": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["trait", "requiredProof"],
+              "additionalProperties": true,
+              "properties": {
+                "trait": { "type": "string" },
+                "requiredProof": { "type": "string", "minLength": 1 },
+                "satisfiedBy": {
+                  "type": "array",
+                  "items": { "type": "string" },
+                  "description": "linkedTests references that discharge this obligation."
+                }
+              }
+            },
+            "description": "OPTIONAL (IMP-040 SCOPE-3, COV-9). The proof each declared behaviorTrait owes. One trait can imply several obligations, and a visible-UI assertion does not discharge a dependency-path one."
+          },
+          "implementationRefs": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "OPTIONAL (IMP-040 SCOPE-9, REG-8). Repository-relative paths of the code path this scenario governs, plus the consumer surfaces it is observed through. Changed-spec validation intersects these with the diff so a change to a shared consumer marks every affected certified scenario for revalidation. Never inferred from filenames alone."
+          },
+          "testMechanism": {
+            "type": "object",
+            "additionalProperties": true,
+            "required": ["entrypoint", "inputOrigin", "assertionSurface", "dependencyPath"],
+            "description": "OPTIONAL (IMP-040 SCOPE-4, COV-10). HOW the linked test reaches and observes the behavior. The category label alone cannot prove path fidelity: an e2e-ui test can assert against hidden legacy DOM or invoke a renderer directly and still carry the label. The first four fields use CLOSED vocabularies so a claim is checkable rather than prose.",
+            "properties": {
+              "entrypoint": {
+                "type": "string",
+                "enum": ["production-route", "production-api", "production-cli", "public-function", "detached-renderer", "internal-helper"],
+                "description": "Where the test enters the system. `detached-renderer` proves a renderer unit, NOT route integration."
+              },
+              "inputOrigin": {
+                "type": "string",
+                "enum": ["live-provider", "ephemeral-real", "seeded-store", "synthetic-cache", "synthetic-fixture", "recorded-fixture"],
+                "description": "Where the input comes from. Synthetic input may prove deterministic business logic; it cannot prove live acquisition."
+              },
+              "assertionSurface": {
+                "type": "string",
+                "enum": ["visible-ui", "accessibility-tree", "http-response", "persisted-state", "returned-value", "hidden-dom", "internal-state"],
+                "description": "What the test asserts against. `hidden-dom` and `internal-state` may prove an internal projection, NOT a visible outcome."
+              },
+              "dependencyPath": {
+                "type": "string",
+                "enum": ["not-applicable", "ephemeral-real", "same-origin-real", "external-live", "synthetic-boundary", "cache-only"],
+                "description": "Which dependency state the test exercises. Shared vocabulary with the SCOPE-6 dependency-path coverage rules."
+              },
+              "productionOwners": {
+                "type": "array",
+                "items": { "type": "string" },
+                "description": "Repository-relative paths (and optional symbols when a code-index adapter is configured) of the production code that computes the asserted result."
+              },
+              "negativeControl": {
+                "type": "string",
+                "minLength": 1,
+                "description": "The specific perturbation that makes this test fail. A test with no stated negative control has not been shown to be sensitive to the behavior it claims to prove."
+              },
+              "negativeControlMechanism": {
+                "type": "string",
+                "enum": ["adversarial-input", "perturbed-input", "mutation"],
+                "description": "OPTIONAL (IMP-040 SCOPE-7, COV-11). HOW the negative control is executed, ranked weakest to strongest. The scenario's riskTier sets the minimum: low accepts adversarial-input, medium requires at least perturbed-input, high requires mutation. The negative control must run through the production path."
+              },
+              "negativeControlFallbackReason": {
+                "type": "string",
+                "minLength": 1,
+                "description": "OPTIONAL (IMP-040 SCOPE-7). Names why a weaker mechanism than the riskTier requires is being used, e.g. no mutation adapter is configured. Projects without mutation tooling use a weaker control until they opt in, but they state so explicitly rather than downgrading silently."
+              }
+            }
+          },
           "invariantRefs": {
             "type": "array",
             "items": {

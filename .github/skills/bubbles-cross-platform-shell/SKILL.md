@@ -126,7 +126,7 @@ is **not** a violation.
 
 ## See Also
 
-- Instruction: [`wsl-macos-compatibility.instructions.md`](../../instructions/wsl-macos-compatibility.instructions.md) — the binding policy (loaded `applyTo: "**"` in every repo).
+- Instruction: [`bubbles-wsl-macos-compatibility.instructions.md`](../../instructions/bubbles-wsl-macos-compatibility.instructions.md) — the binding policy (loaded on shell, hook, workflow, and make surfaces).
 - Source: [`bubbles/scripts/guard-lib.sh`](../../bubbles/scripts/guard-lib.sh) — the portable helpers.
 - Source: [`bubbles/scripts/macos-portability-guard.sh`](../../bubbles/scripts/macos-portability-guard.sh) — the mechanical portability lint (+ its `-selftest.sh`, wired into `framework-validate`).
 - Skill: [`bubbles-long-running-commands`](../bubbles-long-running-commands/SKILL.md) — the timeout/background discipline these helpers support.

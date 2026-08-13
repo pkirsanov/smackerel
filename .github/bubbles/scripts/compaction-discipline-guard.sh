@@ -40,7 +40,8 @@ set -euo pipefail
 #   0  compaction respected (or insufficient envelopes to trigger)
 #   1  compaction skipped — orchestrator violated the discipline;
 #      stderr names Gate G083 and the specific threshold breached
-#      (envelope count threshold OR size threshold)
+#      (envelope count threshold OR size threshold), OR the live-transcript
+#      boundary is missing/malformed (IMP-039 SCOPE-4)
 #   2  malformed / missing inputs (workflows.yaml lookup is OPTIONAL
 #      here — the thresholds are framework constants, not configurable
 #      via workflows.yaml), missing/required arguments, or unparseable
@@ -301,6 +302,79 @@ if [[ "$UNCOMPACTED_BYTES" -gt "$SIZE_THRESHOLD" ]]; then
   exit 1
 fi
 
-info "specDir=$NORMALIZED_SPEC totalEnvelopes=$TOTAL_FOR_SPEC eligible=$ELIGIBLE_COUNT uncompacted=$UNCOMPACTED_COUNT bytes=$UNCOMPACTED_BYTES (thresholds: count>$COUNT_THRESHOLD, bytes>$SIZE_THRESHOLD, keep-raw-latest=$KEEP_RAW_LATEST)"
-echo "PASS Gate G083 (context_compaction_discipline_gate) — total=$TOTAL_FOR_SPEC eligible=$ELIGIBLE_COUNT uncompacted=$UNCOMPACTED_COUNT bytes=$UNCOMPACTED_BYTES, specDir=$NORMALIZED_SPEC"
+# --- Live-transcript boundary (IMP-039 SCOPE-4) --------------------------
+#
+# Everything above governs the repository LEDGER: it proves an envelope was
+# compacted into session.json. It says nothing about the model transcript, so
+# the gate could pass on every envelope while the live prompt grew monotonically
+# — measured at 162,455 prompt tokens on request 1 and 513,145 on request 13,
+# with zero host compaction checkpoints. This check makes G083 measure the thing
+# it is named for.
+#
+# `contextBoundary: { kind, checkpointId, at }` where kind is one of:
+#   host-checkpoint  a real host compaction checkpoint; checkpointId REQUIRED
+#   fresh-context    a new specialist context carrying only the persisted envelope
+#   unavailable      the host exposes no compaction primitive
+#
+# `unavailable` is always declarable, so remediation is never blocked by the
+# host. Declaring unavailability is honest; passing while the transcript grows
+# is not.
+
+BOUNDARY_JSON="$(jq -c '.contextBoundary // null' "$SESSION_FILE" 2>/dev/null || printf 'null')"
+COMPACTED_COUNT="$(echo "$PROJECTED_JSON" | jq '[.[] | select(.compactedAt != null)] | length')"
+
+emit_boundary_violation() {
+  {
+    echo "G083 context_compaction_discipline_gate violation (live-transcript boundary)"
+    echo "  specDir:                          $NORMALIZED_SPEC"
+    echo "  session.json:                     $SESSION_FILE"
+    echo "  compacted envelopes (this spec):  $COMPACTED_COUNT"
+    echo "  contextBoundary:                  ${1}"
+    echo "  detail:                           ${2}"
+    echo "  remediation:                      record contextBoundary on the session as"
+    echo "                                    { \"kind\": \"host-checkpoint\", \"checkpointId\": \"<id>\", \"at\": \"<RFC3339>\" }"
+    echo "                                    or \"fresh-context\", or \"unavailable\" when the host exposes"
+    echo "                                    no compaction primitive. Compacting the ledger while the live"
+    echo "                                    transcript keeps growing is the failure this check exists for."
+  } >&2
+}
+
+if [[ "$BOUNDARY_JSON" == "null" ]]; then
+  # Absence is a finding ONLY when this session actually exercised compaction.
+  # A session that never compacted anything is untouched by this check, so an
+  # upgrade cannot retroactively block work that predates the field.
+  if [[ "$COMPACTED_COUNT" -gt 0 ]]; then
+    emit_boundary_violation "absent" "this session compacted $COMPACTED_COUNT envelope(s) into the ledger but recorded no live-transcript boundary"
+    exit 1
+  fi
+else
+  B_KIND="$(echo "$BOUNDARY_JSON" | jq -r '.kind // ""')"
+  B_AT="$(echo "$BOUNDARY_JSON" | jq -r '.at // ""')"
+  B_ID="$(echo "$BOUNDARY_JSON" | jq -r '.checkpointId // ""')"
+
+  case "$B_KIND" in
+    host-checkpoint | fresh-context | unavailable) ;;
+    *)
+      emit_boundary_violation "$BOUNDARY_JSON" "kind must be host-checkpoint, fresh-context or unavailable (got: '${B_KIND}')"
+      exit 1
+      ;;
+  esac
+
+  if [[ -z "$B_AT" ]] || ! echo "$BOUNDARY_JSON" | jq -e '(.at | try fromdateiso8601) != null' >/dev/null 2>&1; then
+    emit_boundary_violation "$BOUNDARY_JSON" "at must be an RFC3339 timestamp (got: '${B_AT}')"
+    exit 1
+  fi
+
+  # A checkpoint claim with no id cannot be checked against anything, which is
+  # precisely the shape a fabricated boundary takes.
+  if [[ "$B_KIND" == "host-checkpoint" && -z "$B_ID" ]]; then
+    emit_boundary_violation "$BOUNDARY_JSON" "kind host-checkpoint requires a non-empty checkpointId"
+    exit 1
+  fi
+fi
+
+BOUNDARY_REPORT="$(echo "$BOUNDARY_JSON" | jq -r 'if . == null then "none" else (.kind // "?") end')"
+
+info "specDir=$NORMALIZED_SPEC totalEnvelopes=$TOTAL_FOR_SPEC eligible=$ELIGIBLE_COUNT uncompacted=$UNCOMPACTED_COUNT bytes=$UNCOMPACTED_BYTES contextBoundary=$BOUNDARY_REPORT (thresholds: count>$COUNT_THRESHOLD, bytes>$SIZE_THRESHOLD, keep-raw-latest=$KEEP_RAW_LATEST)"
+echo "PASS Gate G083 (context_compaction_discipline_gate) — total=$TOTAL_FOR_SPEC eligible=$ELIGIBLE_COUNT uncompacted=$UNCOMPACTED_COUNT bytes=$UNCOMPACTED_BYTES contextBoundary=$BOUNDARY_REPORT, specDir=$NORMALIZED_SPEC"
 exit 0

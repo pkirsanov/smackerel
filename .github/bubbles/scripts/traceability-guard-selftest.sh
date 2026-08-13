@@ -715,6 +715,185 @@ for probe in authentication websocket participant; do
   fi
 done
 
+# ---------------------------------------------------------------------------
+# Declared trace-id mapping.
+#
+# A DoD item or Test Plan row that names the scenario's own SCN- id is the
+# strongest available evidence of an intended mapping, but the id previously
+# never reached the comparison: extract_scenarios strips everything before
+# "Scenario:", while the id lives on the heading above it. The guard therefore
+# reported declared=0 on every packet and failed DoD items that cited their
+# scenario outright. Titles here share almost no words with their DoD item, so
+# only the id can carry the match — word overlap cannot rescue these cases.
+# ---------------------------------------------------------------------------
+write_declared_id_scope() {
+  local feature_dir="$1"
+  local dod_id="$2"
+  local row_id="$3"
+
+  build_clean_feature "$feature_dir"
+
+  cat > "$feature_dir/scopes.md" <<EOF
+# Scope 01: Widget Render
+
+**Status:** In Progress
+
+### Gherkin
+
+#### SCN-77-alpha - governing heading carries the identifier
+
+  Scenario: Zebra telemetry quiesces beneath a lunar eclipse
+    Given an orbital sensor
+    When the umbra passes
+    Then the telemetry quiesces
+
+### Test Plan
+
+| Test Type | Category | File/Location | Description | Command | Live System |
+| --------- | -------- | ------------- | ----------- | ------- | ----------- |
+| E2E       | e2e-ui   | tests/widget-render.e2e.spec.ts | ${row_id} orbital regression | selftest:widget-render | Yes |
+
+### Definition of Done
+
+- [x] ${dod_id} evidence proves the orbital regression holds -> Evidence: report.md#test-evidence
+EOF
+
+  cat > "$feature_dir/scenario-manifest.json" <<'EOF'
+{
+  "scenarios": [
+    {
+      "scenarioId": "SCN-77-alpha",
+      "scope": "01-widget-render",
+      "title": "Zebra telemetry quiesces beneath a lunar eclipse",
+      "linkedTests": [
+        { "file": "tests/widget-render.e2e.spec.ts" }
+      ],
+      "evidenceRefs": ["report.md#test-evidence"]
+    }
+  ]
+}
+EOF
+}
+
+declared_dir="$TMPDIR/declared-id"
+write_declared_id_scope "$declared_dir" "SCN-77-alpha" "SCN-77-alpha"
+run_trace_case "$declared_dir" "declared trace id establishes the mapping"
+assert_case_status 0 "Declared id: a DoD item citing the scenario id maps it despite near-zero word overlap"
+assert_case_not_contains "no faithful DoD item preserving its behavioral claim" \
+  "Declared id: the cited scenario is not reported as an unfaithful DoD item"
+assert_case_not_contains "has no traceable Test Plan row" \
+  "Declared id: the cited scenario is not reported as row-less"
+assert_case_contains "declared" "Declared id: the match is counted as declared, not inferred"
+
+# Adversarial twin: if any id satisfied the check, the fix would be a blanket
+# pass rather than a mapping. A DoD item naming a DIFFERENT scenario must still
+# fail, otherwise every scenario in a packet would match every DoD item.
+mismatch_dir="$TMPDIR/declared-id-mismatch"
+write_declared_id_scope "$mismatch_dir" "SCN-77-omega" "SCN-77-alpha"
+run_trace_case "$mismatch_dir" "a different trace id does not establish the mapping"
+assert_case_status 1 "Declared id adversarial: a DoD item citing a DIFFERENT scenario id does not map it"
+assert_case_contains "no faithful DoD item preserving its behavioral claim" \
+  "Declared id adversarial: the mismatched id is still reported unmapped"
+
+# An id-less heading must not blanket-match either, or a packet that simply omits
+# identifiers would silently pass the fidelity check it is meant to fail.
+idless_dir="$TMPDIR/declared-id-absent"
+write_declared_id_scope "$idless_dir" "SCN-77-alpha" "SCN-77-alpha"
+sed -i.bak 's/^#### SCN-77-alpha - governing heading carries the identifier$/#### governing heading carries no identifier/' "$idless_dir/scopes.md"
+rm -f "$idless_dir/scopes.md.bak"
+run_trace_case "$idless_dir" "an id-less heading cannot blanket-match"
+assert_case_status 1 "Declared id adversarial: with no id on the heading the unrelated DoD item is still unmapped"
+
+# One scenario is legitimately covered by more than one row: a page-integrity row
+# naming the page under test, plus the e2e row naming the spec that exercises it.
+# Row order is arbitrary, so matching the first row and stopping made the
+# concrete-path check depend on authoring order. Here the path-less row is listed
+# FIRST, so a first-match-wins implementation fails this fixture.
+multirow_dir="$TMPDIR/multirow-path"
+build_clean_feature "$multirow_dir"
+cat > "$multirow_dir/scopes.md" <<'EOF'
+# Scope 01: Widget Render
+
+**Status:** In Progress
+
+### Gherkin
+
+#### SCN-88-multi - governing heading carries the identifier
+
+  Scenario: Widget renders with provided label
+    Given a label "Hello"
+    When the widget mounts
+    Then the rendered output displays "Hello"
+
+### Test Plan
+
+| Test Type | Category | File/Location | Description | Command | Live System |
+| --------- | -------- | ------------- | ----------- | ------- | ----------- |
+| Page integrity | functional | widget.html | SCN-88-multi page parse with no directory prefix | selftest:page | No |
+| E2E       | e2e-ui   | tests/widget-render.e2e.spec.ts | SCN-88-multi widget renders with provided label and displays it | selftest:widget-render | Yes |
+
+### Definition of Done
+
+- [x] SCN-88-multi widget renders with provided label and displays the rendered output -> Evidence: report.md#test-evidence
+EOF
+cat > "$multirow_dir/scenario-manifest.json" <<'EOF'
+{
+  "scenarios": [
+    {
+      "scenarioId": "SCN-88-multi",
+      "scope": "01-widget-render",
+      "title": "Widget renders with provided label",
+      "linkedTests": [
+        { "file": "tests/widget-render.e2e.spec.ts" }
+      ],
+      "evidenceRefs": ["report.md#test-evidence"]
+    }
+  ]
+}
+EOF
+run_trace_case "$multirow_dir" "multi-row scenario prefers the row carrying a test path"
+assert_case_status 0 "Multi-row: a path-bearing row is chosen even when a path-less row matches first"
+assert_case_not_contains "mapped row has no concrete test file path" \
+  "Multi-row: the path-less first row does not decide the concrete-path check"
+
+# --- Not Started scopes defer report evidence, started scopes do not ----------
+# A scope that has not run cannot have produced evidence. Reporting that as a
+# defect describes the framework's own sequential execution model as a failure
+# and buries the findings belonging to scopes actually under way. The twin below
+# is what keeps this from degrading into a blanket exemption.
+build_evidenceless_feature() {
+  local feature_dir="$1"
+  local scope_status="$2"
+  build_clean_feature "$feature_dir"
+  cat > "$feature_dir/report.md" <<'EOF'
+# Report
+
+### Test Evidence
+
+```
+$ no run has happened yet
+```
+EOF
+  sed -i.bak "s/^\*\*Status:\*\* In Progress\$/**Status:** $scope_status/" "$feature_dir/scopes.md"
+  rm -f "$feature_dir/scopes.md.bak"
+}
+
+notstarted_feature="$TMPDIR/specs/810-notstarted-evidence"
+build_evidenceless_feature "$notstarted_feature" "Not Started"
+run_trace_case "$notstarted_feature" "Not Started scope defers report evidence"
+assert_case_contains 'report evidence DEFERRED (scope is Not Started' "Not Started: the deferral is reported, never silent"
+assert_case_not_contains 'report is missing evidence reference' "Not Started: no missing-evidence failure is raised"
+assert_case_contains 'Report evidence DEFERRED to their own execution (Not Started scopes): 1' "Not Started: the deferral is counted in the summary"
+
+# Adversarial twin: the identical fixture with a started status MUST still fail,
+# or the deferral is a blanket exemption rather than a status-scoped one.
+started_feature="$TMPDIR/specs/811-started-evidence"
+build_evidenceless_feature "$started_feature" "In Progress"
+run_trace_case "$started_feature" "In Progress scope still requires report evidence"
+assert_case_status 1 "Adversarial twin: an In Progress scope exits 1 on missing evidence"
+assert_case_contains 'report is missing evidence reference' "Adversarial twin: a started scope still fails on missing evidence"
+assert_case_not_contains 'report evidence DEFERRED' "Adversarial twin: a started scope is never deferred"
+
 if [[ "$failures" -eq 0 ]]; then
   echo "[selftest traceability-guard] PASS"
   exit 0

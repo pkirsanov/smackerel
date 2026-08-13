@@ -870,6 +870,215 @@ else
   fail "state-snapshot must reject --goal-ref (got exit=$case12_flag_exit)"
 fi
 
+# ---- Case 13: goal-node snapshot carries its compiled declaration ----------
+
+cases=$((cases + 1))
+case13_root="$TMP_ROOT/case13"
+case13_session_id="snapshot-case13"
+case13_node_id="fix-goal-node-state-snapshot-binding"
+case13_spec_dir="specs/bug-015"
+prepare_bound_repo "$case13_root" "$case13_session_id"
+case13_control="$BOUND_CONTROL"
+case13_packet="$BOUND_PACKET"
+case13_goal_packet="$TMP_ROOT/case13-goal.packet.json"
+case13_scenario="$TMP_ROOT/case13-scenario.json"
+case13_session="$case13_root/.specify/memory/bubbles.session.json"
+case13_control_baseline="$TMP_ROOT/case13-control-baseline.json"
+
+jq --arg session "$case13_session_id" --arg scope "$case13_node_id" '
+  .repositoryResolution.authority = "scoped-scenario-node"
+  | .repositoryResolution.transition = "scoped-override"
+  | .repositoryResolution.scopeKind = "goal-node"
+  | .repositoryResolution.scopeId = $scope
+  | .repositoryResolution.targetKind = "goal-node"
+  | .repositoryResolution.decisionId = (
+      "rb:" + $session + ":" + (.repositoryResolution.controlRevision | tostring)
+      + ":node:" + $scope
+    )
+' "$case13_packet" > "$case13_goal_packet"
+
+case13_alias="$(jq -r '.repositoryAlias' "$case13_goal_packet")"
+jq -n \
+  --arg root "$case13_root" \
+  --arg alias "$case13_alias" \
+  --arg node "$case13_node_id" \
+  --slurpfile packet "$case13_goal_packet" \
+  '{
+    version: 1,
+    scenarioId: "bug-015-goal-node-snapshot",
+    repos: [{
+      id: "bubbles-source",
+      role: "framework",
+      repositoryRoot: $root,
+      repositoryAlias: $alias
+    }],
+    nodes: [{
+      id: $node,
+      type: "delivery",
+      repo: "bubbles-source",
+      mode: "bugfix-fastlane",
+      dependsOn: [],
+      repositoryResolution: $packet[0].repositoryResolution
+    }]
+  }' > "$case13_scenario"
+
+jq -n \
+  --arg spec "$case13_spec_dir" \
+  '{
+    turnSnapshots: [{
+      turnNumber: 1,
+      timestamp: "2026-08-10T00:00:00Z",
+      phase: "phase_before_bug_015",
+      scopeId: "prior-scope",
+      mode: "start",
+      note: "preserve this snapshot",
+      agent: "bubbles.goal",
+      goalRef: null
+    }],
+    convergenceLoops: [
+      {
+        specDir: $spec,
+        agent: "bubbles.goal",
+        iterationCount: 1,
+        goalRef: null
+      },
+      {
+        specDir: "specs/unrelated",
+        agent: "bubbles.workflow",
+        iterationCount: 9,
+        goalRef: {goalId: "unrelated", revision: 3},
+        marker: "preserve-byte-equivalent"
+      }
+    ]
+  }' > "$case13_session"
+
+case13_prior_snapshot="$(jq -c '.turnSnapshots[0]' "$case13_session")"
+case13_unrelated_loop="$(jq -c '.convergenceLoops[] | select(.specDir == "specs/unrelated")' "$case13_session")"
+cp "$case13_control" "$case13_control_baseline"
+
+set +e
+case13_out="$(BUBBLES_AGENT_NAME="bubbles.goal" bash "$SNAPSHOT" \
+  --session-id "$case13_session_id" --session-control-file "$case13_control" \
+  --binding-packet-file "$case13_goal_packet" \
+  --scenario-file "$case13_scenario" --node-id "$case13_node_id" \
+  --phase phase_5_remediate --scope-id bug-015 --mode start \
+  --convergence-iteration 4 --spec-dir "$case13_spec_dir" 2>&1)"
+case13_exit=$?
+set -e
+
+if [[ "$case13_exit" -eq 0 ]]; then
+  pass "Goal-node snapshot accepts and forwards the matching scenario/node pair"
+else
+  fail "Goal-node snapshot should accept the matching scenario/node pair (exit=$case13_exit)"
+  echo "  output: $case13_out"
+fi
+
+if jq -e --argjson prior "$case13_prior_snapshot" '
+  (.turnSnapshots | length) == 2
+  and .turnSnapshots[0] == $prior
+  and .turnSnapshots[1].turnNumber == 2
+  and .turnSnapshots[1].phase == "phase_5_remediate"
+  and .turnSnapshots[1].scopeId == "bug-015"
+  and .turnSnapshots[1].agent == "bubbles.goal"
+' "$case13_session" >/dev/null 2>&1; then
+  pass "Goal-node snapshot preserves existing turns and appends exactly one record"
+else
+  fail "Goal-node snapshot must preserve existing turns and append exactly one record"
+fi
+
+if jq -e \
+  --arg spec "$case13_spec_dir" \
+  --argjson unrelated "$case13_unrelated_loop" '
+  (.convergenceLoops | length) == 2
+  and ([.convergenceLoops[] | select(.specDir == $spec and .agent == "bubbles.goal")] | length) == 1
+  and (.convergenceLoops[] | select(.specDir == $spec and .agent == "bubbles.goal") | .iterationCount) == 4
+  and (.convergenceLoops[] | select(.specDir == "specs/unrelated")) == $unrelated
+' "$case13_session" >/dev/null 2>&1; then
+  pass "Goal-node convergence updates only the matching entry and preserves unrelated entries"
+else
+  fail "Goal-node convergence must update only the matching entry and preserve unrelated entries"
+fi
+
+if cmp -s "$case13_control_baseline" "$case13_control"; then
+  pass "Goal-node snapshot leaves command-level external control byte-identical"
+else
+  fail "Goal-node snapshot must leave command-level external control byte-identical"
+fi
+
+case13_session_baseline="$TMP_ROOT/case13-session-baseline.json"
+cp "$case13_session" "$case13_session_baseline"
+case13_entry_count="$(directory_entry_count "$(dirname "$case13_session")")"
+
+set +e
+case13_wrong_node_out="$(BUBBLES_AGENT_NAME="bubbles.goal" bash "$SNAPSHOT" \
+  --session-id "$case13_session_id" --session-control-file "$case13_control" \
+  --binding-packet-file "$case13_goal_packet" \
+  --scenario-file "$case13_scenario" --node-id absent-node \
+  --phase phase_5_remediate --scope-id bug-015 --mode start \
+  --convergence-iteration 5 --spec-dir "$case13_spec_dir" 2>&1)"
+case13_wrong_node_exit=$?
+set -e
+if [[ "$case13_wrong_node_exit" -eq 1 ]] && \
+   printf '%s' "$case13_wrong_node_out" | grep -q 'GOAL_NODE_DECLARATION_INVALID'; then
+  pass "Goal-node snapshot refuses a node absent from the compiled scenario"
+else
+  fail "Goal-node snapshot should refuse an absent node with GOAL_NODE_DECLARATION_INVALID"
+  echo "  exit=$case13_wrong_node_exit output: $case13_wrong_node_out"
+fi
+if cmp -s "$case13_session_baseline" "$case13_session"; then
+  pass "Wrong-node snapshot refusal writes no mirror, turn snapshot, or convergence entry"
+else
+  fail "Wrong-node snapshot refusal must leave repository session state byte-identical"
+fi
+
+set +e
+case13_scenario_only_out="$(BUBBLES_AGENT_NAME="bubbles.goal" bash "$SNAPSHOT" \
+  --session-id "$case13_session_id" --session-control-file "$case13_control" \
+  --binding-packet-file "$case13_goal_packet" \
+  --scenario-file "$case13_scenario" \
+  --phase phase_5_remediate --scope-id bug-015 --mode start 2>&1)"
+case13_scenario_only_exit=$?
+set -e
+if [[ "$case13_scenario_only_exit" -eq 2 ]] && \
+   printf '%s' "$case13_scenario_only_out" | grep -q -- '--scenario-file requires --node-id'; then
+  pass "Scenario-only snapshot returns usage status 2 before repository writes"
+else
+  fail "Scenario-only snapshot should return usage status 2 with a paired-argument error"
+fi
+if cmp -s "$case13_session_baseline" "$case13_session" && \
+   [[ "$(directory_entry_count "$(dirname "$case13_session")")" == "$case13_entry_count" ]]; then
+  pass "Scenario-only snapshot leaves repository session files byte-identical"
+else
+  fail "Scenario-only snapshot must not create or modify repository session files"
+fi
+
+set +e
+case13_node_only_out="$(BUBBLES_AGENT_NAME="bubbles.goal" bash "$SNAPSHOT" \
+  --session-id "$case13_session_id" --session-control-file "$case13_control" \
+  --binding-packet-file "$case13_goal_packet" \
+  --node-id "$case13_node_id" \
+  --phase phase_5_remediate --scope-id bug-015 --mode start 2>&1)"
+case13_node_only_exit=$?
+set -e
+if [[ "$case13_node_only_exit" -eq 2 ]] && \
+   printf '%s' "$case13_node_only_out" | grep -q -- '--node-id requires --scenario-file'; then
+  pass "Node-only snapshot returns usage status 2 before repository writes"
+else
+  fail "Node-only snapshot should return usage status 2 with a paired-argument error"
+fi
+if cmp -s "$case13_session_baseline" "$case13_session" && \
+   [[ "$(directory_entry_count "$(dirname "$case13_session")")" == "$case13_entry_count" ]]; then
+  pass "Node-only snapshot leaves repository session files byte-identical"
+else
+  fail "Node-only snapshot must not create or modify repository session files"
+fi
+
+if cmp -s "$case13_control_baseline" "$case13_control"; then
+  pass "All goal-node snapshot refusals leave external control byte-identical"
+else
+  fail "Goal-node snapshot refusals must leave external control byte-identical"
+fi
+
 # ---- Case 11: --help contract ----------------------------------------------
 
 if "$SNAPSHOT" --help >/dev/null 2>&1; then
@@ -882,6 +1091,41 @@ if "$SNAPSHOT" --help 2>/dev/null | grep -q '^Usage:'; then
   pass "--help prints a Usage banner"
 else
   fail "--help should print a Usage banner"
+fi
+
+# ---- Case 12: --context-boundary argument contract (IMP-039 SCOPE-4) --------
+#
+# Argument validation runs before any repository binding, so these cases need no
+# fixture. They are the adversarial half: an unrecognized kind and a checkpoint
+# claim with no id are precisely the two shapes a fabricated boundary takes, and
+# Gate G083 would otherwise be the only thing standing between them and the
+# session file.
+cases=$((cases + 1))
+
+set +e
+cb_missing_out="$("$SNAPSHOT" --context-boundary 2>&1)"; cb_missing_rc=$?
+cb_badkind_out="$("$SNAPSHOT" --context-boundary handled --phase p 2>&1)"; cb_badkind_rc=$?
+cb_noid_out="$("$SNAPSHOT" --context-boundary host-checkpoint --phase p 2>&1)"; cb_noid_rc=$?
+set -e
+
+if [[ "$cb_missing_rc" -eq 2 ]] && printf '%s' "$cb_missing_out" | grep -q 'requires a value'; then
+  pass "--context-boundary without a value is a usage error"
+else
+  fail "--context-boundary without a value should exit 2 (got $cb_missing_rc)"
+fi
+
+if [[ "$cb_badkind_rc" -eq 2 ]] &&
+  printf '%s' "$cb_badkind_out" | grep -q 'host-checkpoint, fresh-context or unavailable'; then
+  pass "an unrecognized boundary kind is rejected with the allowed set"
+else
+  fail "an unrecognized boundary kind should exit 2 naming the allowed kinds (got $cb_badkind_rc)"
+fi
+
+if [[ "$cb_noid_rc" -eq 2 ]] &&
+  printf '%s' "$cb_noid_out" | grep -q 'requires a checkpoint id'; then
+  pass "host-checkpoint without a checkpoint id is rejected"
+else
+  fail "host-checkpoint without an id should exit 2 (got $cb_noid_rc)"
 fi
 
 if [[ "$failures" -gt 0 ]]; then

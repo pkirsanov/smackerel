@@ -136,7 +136,10 @@ while IFS= read -r state_file; do
   [[ -z "$blocked_reason" ]] || continue
 
   # `grep` exits 1 on no-match, which `pipefail` would turn into a scan abort.
-  done_scopes="$({ find "$feature_dir" -maxdepth 3 \( -name 'scopes.md' -o -name 'scope.md' \) -type f -exec grep -hE '^\*\*Status:\*\*.*Done' {} + 2>/dev/null || true; } | wc -l | tr -d ' ')"
+  # Done must be SELECTED, not merely present: the scaffold renders every option
+  # unchecked (`[ ] Not started | [ ] In progress | [ ] Done`), so matching the bare
+  # word counted an untouched template as finished work.
+  done_scopes="$({ find "$feature_dir" -maxdepth 3 \( -name 'scopes.md' -o -name 'scope.md' \) -type f -exec grep -hE '^\*\*Status:\*\*([[:space:]]*Done|.*\[[xX]\][[:space:]]*Done)' {} + 2>/dev/null || true; } | wc -l | tr -d ' ')"
   done_scopes="${done_scopes:-0}"
   phase_claims="$(jq -r '((.execution // {}) .completedPhaseClaims // []) | length' "$state_file" 2>/dev/null || echo 0)"
   phase_claims="${phase_claims:-0}"

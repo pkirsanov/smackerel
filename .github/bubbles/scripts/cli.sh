@@ -1646,6 +1646,11 @@ cmd_regression_quality() {
   bash "$SCRIPT_DIR/regression-quality-guard.sh" "$@"
 }
 
+cmd_verify_changed_specs() {
+  [[ $# -lt 1 ]] && die "Usage: bubbles verify-changed-specs --base-ref <ref> [--head-ref <ref>] [--list-only]"
+  bash "$SCRIPT_DIR/verify-changed-specs.sh" "$@"
+}
+
 cmd_docs_registry() {
   local mode="effective"
   local passthrough=()
@@ -4103,6 +4108,7 @@ main() {
     workflow-selftest)  cmd_workflow_selftest "$@" ;;
     scan)               cmd_scan "$@" ;;
     regression-quality) cmd_regression_quality "$@" ;;
+    verify-changed-specs) cmd_verify_changed_specs "$@" ;;
     docs-registry)      cmd_docs_registry "$@" ;;
     release-train-backfill) cmd_release_train_backfill "$@" ;;
     work-tracker-project) cmd_work_tracker_project "$@" ;;

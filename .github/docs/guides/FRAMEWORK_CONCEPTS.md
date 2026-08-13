@@ -238,7 +238,7 @@ Gates are not just documentation — they are enforced by scripts:
 | Script | Purpose |
 |--------|---------|
 <!-- GENERATED:FRAMEWORK_STATS_CONCEPTS_GUARDROW_START -->
-| **State transition guard** | Runs 44 checks before any status transition to "done" |
+| **State transition guard** | Runs 45 checks before any status transition to "done" |
 <!-- GENERATED:FRAMEWORK_STATS_CONCEPTS_GUARDROW_END -->
 | **Artifact lint** | Validates artifact structure, template compliance, deferral language |
 | **Implementation reality scan** | Detects stubs, fake data, hardcoded responses, default values |
@@ -511,7 +511,7 @@ Explicitly not tracked: token counts, dollar costs, thinking time, agent efficie
 ### 18.1 Mechanical Enforcement Over Prose Rules
 
 <!-- GENERATED:FRAMEWORK_STATS_CONCEPTS_GUARDPROSE_START -->
-Prose governance documents are necessary for context but insufficient for enforcement. AI agents routinely ignore or reinterpret written rules. The breakthrough came from **scripts that mechanically block state transitions** when conditions aren't met. The state transition guard alone runs 44 automated checks. When an agent can't advance without passing a script, compliance stops being optional.
+Prose governance documents are necessary for context but insufficient for enforcement. AI agents routinely ignore or reinterpret written rules. The breakthrough came from **scripts that mechanically block state transitions** when conditions aren't met. The state transition guard alone runs 45 automated checks. When an agent can't advance without passing a script, compliance stops being optional.
 <!-- GENERATED:FRAMEWORK_STATS_CONCEPTS_GUARDPROSE_END -->
 
 ### 18.2 Artifact Ownership Boundaries

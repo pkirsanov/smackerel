@@ -20,7 +20,11 @@ command > output.txt 2>&1
 
 ---
 
-## 2. No Truncating Command Output (ABSOLUTE)
+## 2. Never Discard Output; Bound What Re-Enters Context (ABSOLUTE)
+
+Two separate obligations live here. Keep them apart.
+
+### 2a. Produce every line — never filter a command through a discarding pipe
 
 **FORBIDDEN:** Filtering, truncating, or limiting command output with pipes.
 
@@ -31,7 +35,28 @@ command | tail -50
 command | grep "pattern" | head
 ```
 
-**REQUIRED:** Always capture and display the FULL unfiltered output.
+The target of this rule is an agent quietly dropping a failure line it did not
+want to see. That target is unchanged: the command must run unfiltered and every
+line must be captured.
+
+### 2b. Above 40 lines, capture instead of paste
+
+Capturing every line does NOT mean replaying the whole transcript into the model
+context on this request and every later one. Above 40 lines, route the command
+through the capture tool:
+
+```bash
+# ✅ REQUIRED when output exceeds 40 lines
+bash .github/bubbles/scripts/evidence-capture.sh --label "test suite" -- {{CLI_ENTRYPOINT}} test
+```
+
+The emitted block carries the command, the exit code, the line count, a sha256
+over every line produced, the failure-shaped lines, and the first and last 20
+lines. That is STRONGER than a pasted transcript, not weaker: the hash is
+re-derivable with `--verify`, and a paste could never be checked at all.
+
+At or below 40 lines, show the output as it came back — capture buys nothing
+there.
 
 ---
 
@@ -97,7 +122,7 @@ Evidence collection: ALWAYS pair empty output with explicit `$?` capture. Exampl
 | Category | FORBIDDEN | REQUIRED |
 |----------|-----------|----------|
 | **File writes** | `>`, `>>`, `tee`, heredoc-to-file, pipe-to-file | IDE file tools (create_file, replace_string_in_file) |
-| **Output filtering** | `head`, `tail`, `awk 'NR<=N'`, `sed -n`, pipe-to-grep on commands | Full unfiltered output from every command |
+| **Output filtering** | `head`, `tail`, `awk 'NR<=N'`, `sed -n`, pipe-to-grep on commands | Run unfiltered; above 40 lines record via `evidence-capture.sh` |
 | **Build/test/lint** | Direct tool invocation | `{{CLI_ENTRYPOINT}} <command>` exclusively |
 
 **Violations of this policy are blocking issues.**

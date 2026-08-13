@@ -1250,6 +1250,7 @@ def serve_http(server: "Server", host: str, port: int,
     (defect #4). Returns a nonzero exit on refusal.
     """
     import http.server
+    import socketserver
 
     auth_token = os.environ.get("BUBBLES_MCP_HTTP_TOKEN", "").strip()
     max_body_bytes = _http_max_body_bytes()
@@ -1324,7 +1325,18 @@ def serve_http(server: "Server", host: str, port: int,
                 return
             self._send_json(200, response)
 
-    httpd = http.server.ThreadingHTTPServer((host, port), _Handler)
+    class _NoReverseDnsHTTPServer(http.server.ThreadingHTTPServer):
+        # Skips the socket.getfqdn() that stdlib HTTPServer.server_bind runs:
+        # that reverse-DNS lookup can block past the start budget on hosts with
+        # no PTR record, leaving the socket bound but never listening because
+        # TCPServer.__init__ calls server_activate() only after server_bind().
+        def server_bind(self) -> None:
+            socketserver.TCPServer.server_bind(self)
+            host, port = self.server_address[:2]
+            self.server_name = host
+            self.server_port = port
+
+    httpd = _NoReverseDnsHTTPServer((host, port), _Handler)
     logger.info("bubbles-mcp HTTP transport listening on %s:%d (auth=%s)",
                 host, port, "on" if auth_token else "off")
     try:

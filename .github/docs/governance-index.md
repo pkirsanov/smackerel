@@ -117,10 +117,11 @@ Project-installable instruction modules consumed by IDE agents via
 - [bubbles-deployment-target.instructions.md](../instructions/bubbles-deployment-target.instructions.md)
 - [bubbles-docker-lifecycle-governance.instructions.md](../instructions/bubbles-docker-lifecycle-governance.instructions.md)
 - [bubbles-env-pollution-isolation.instructions.md](../instructions/bubbles-env-pollution-isolation.instructions.md)
+- [bubbles-kernel.instructions.md](../instructions/bubbles-kernel.instructions.md) — the ONLY always-on instruction; carries repository authority, anti-fabrication, evidence integrity, and timeout invariants
 - [bubbles-skills.instructions.md](../instructions/bubbles-skills.instructions.md)
 - [bubbles-supply-chain-source-locking.instructions.md](../instructions/bubbles-supply-chain-source-locking.instructions.md)
 - [bubbles-test-environment-isolation.instructions.md](../instructions/bubbles-test-environment-isolation.instructions.md)
-- [wsl-macos-compatibility.instructions.md](../instructions/wsl-macos-compatibility.instructions.md)
+- [bubbles-wsl-macos-compatibility.instructions.md](../instructions/bubbles-wsl-macos-compatibility.instructions.md)
 
 ---
 

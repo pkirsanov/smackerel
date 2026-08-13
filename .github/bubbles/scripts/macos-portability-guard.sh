@@ -4,7 +4,7 @@
 # Fails (exit 1) if any GNU-coreutils / bash-4.x-only shell construct that breaks
 # on macOS (bash 3.2 + BSD userland) appears in the CALLER-SUPPLIED script
 # surface. This is the canonical mechanical enforcement of
-#   instructions/wsl-macos-compatibility.instructions.md
+#   instructions/bubbles-wsl-macos-compatibility.instructions.md
 # and the "Pitfall -> Portable Form" table in
 #   skills/bubbles-cross-platform-shell/SKILL.md
 #
@@ -311,7 +311,7 @@ report "class-16 awk-3arg-match" \
 echo
 if [[ "$violations" -gt 0 ]]; then
   echo "FAIL: $violations macOS-portability construct class(es) found in the scanned surface."
-  echo "See instructions/wsl-macos-compatibility.instructions.md (and skill bubbles-cross-platform-shell)."
+  echo "See instructions/bubbles-wsl-macos-compatibility.instructions.md (and skill bubbles-cross-platform-shell)."
   exit 1
 fi
 echo "PASS: the scanned surface is WSL+macOS portable."

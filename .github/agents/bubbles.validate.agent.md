@@ -97,6 +97,7 @@ Unless the user explicitly asks for a narrower mode, `bubbles.validate` MUST run
 - validate artifact compliance, not just command pass/fail status
 - validate implementation matches claimed completion and evidence
 - validate every planned scenario maps to real tests and executed evidence
+- **replay the CURRENT externally observable scenario** — re-run the user-visible outcome as it exists now, rather than re-reading the evidence recorded when it was certified. Recorded evidence proves the behavior worked once; a replay proves it works now, and the gap between those two is where regressions live.
 - validate live-stack categories use actual code paths rather than mocks or intercepts
 - route missing planning, test, design, doc, or implementation work to the owning specialist and re-run impacted checks before reporting success
 

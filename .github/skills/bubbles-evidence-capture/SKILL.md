@@ -36,18 +36,19 @@ Rules:
 - Do not paste expected output. Paste observed output.
 - Do not invent line counts, durations, or row counts.
 
-## Large output: use the compact verifiable form
+## Large output: the compact verifiable form is the DEFAULT
 
-Above roughly 40 lines, paste the compact form instead of the whole transcript.
-Generate it by running the command THROUGH the capture tool, which is what makes
-the exit code and hash impossible to author by hand:
+Above 40 lines, the compact form is the required default, not an option. Generate
+it by running the command THROUGH the capture tool, which is what makes the exit
+code and hash impossible to author by hand:
 
 ```
 bash bubbles/scripts/evidence-capture.sh --label "unit tests" -- <command...>
 ```
 
 It emits the command, the exit code, the line count, a sha256 of the FULL output,
-the first and last 20 lines, and a re-runnable verify hint. A reviewer checks it
+the failure-shaped lines, the first and last 20 lines, and a re-runnable verify
+hint. A reviewer checks it
 with:
 
 ```

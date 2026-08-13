@@ -49,7 +49,25 @@ When a workflow mode has `statusCeiling` other than `done` (e.g., `validate-to-d
 ```
 bash bubbles/scripts/state-transition-guard.sh specs/<NNN-feature>
 ```
-Returns exit 0 only when every relevant check passes. The guard runs in the pre-push hook and in CI; it cannot be bypassed.
+Returns exit 0 only when every relevant check passes.
+
+**The guard does not run itself.** It runs where a repository wires it. Measured
+across the six consumer repos on 2026-08-12: five carry a pre-push hook, exactly
+ONE of those invokes any Bubbles guard, and one carries no hook at all. So on
+five of six repos the guard was reachable only when someone remembered to type
+it — which, from the outside, is indistinguishable from having no gate.
+
+Wire it, or it is not enforcing anything:
+
+```bash
+# in .git/hooks/pre-push, or the repo's own pre-push runner
+bash .github/bubbles/scripts/verify-changed-specs.sh --base-ref origin/main
+```
+
+`verify-changed-specs` is the generic entry point: it discovers the specs a diff
+touched AND the certified scenarios a SOURCE-only diff invalidated, then runs the
+gates on each. The guard itself has no bypass flag; what varies between repos is
+whether it is invoked at all.
 
 ## Grandfather clause for historical done specs (PRESERVED)
 This is the most important rule for framework upgrades:

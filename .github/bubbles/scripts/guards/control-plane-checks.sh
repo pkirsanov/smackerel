@@ -23,6 +23,12 @@
 # in guard-lib.sh). Mirrors the G094 grandfather pattern.
 control_plane_policy_cutoff="2026-06-18"
 
+# IMP-040 SCOPE-2 / COV-8. Exact linked-test resolution activates for scenario
+# packets created on or after this date. A legacy untouched spec keeps the old
+# field-count behaviour so a framework upgrade never retro-breaks a closed
+# packet; a changed or recertified spec adopts the current contract.
+scenario_resolution_cutoff="2026-08-12"
+
 # =============================================================================
 # CHECK 3A: Policy Snapshot Provenance (Gate G055)
 # =============================================================================
@@ -144,6 +150,79 @@ if [[ "$gherkin_scenario_count" -gt 0 ]]; then
       fail "scenario-manifest.json is missing linkedTests entries (Gate G057)"
     else
       pass "scenario-manifest.json records linkedTests"
+    fi
+
+    # The count above is a DIAGNOSTIC, never the satisfier. It only proves the
+    # string appears; BUG-030 certified three titles that existed in no file.
+    # Resolution is what satisfies G057.
+    #
+    # ADVISORY BY DEFAULT, per the IMP-040 rollout: run resolution on existing
+    # packets and report, fix the stale links that surfaces, and only then turn
+    # on blocking. A repo opts in with `scenarioResolution: block` in
+    # .github/bubbles-project.yaml. This mirrors effective-bundle-budget.sh,
+    # which uses the same advisory/opt-in-block shape for the same reason:
+    # activating a new gate as blocking against a corpus it has never run on
+    # converts every pre-existing stale link into a build break.
+    scenario_resolver="$SCRIPT_DIR/scenario-test-resolve.sh"
+    if [[ -x "$scenario_resolver" ]]; then
+      # Date-only grandfather, deliberately NOT policy_spec_grandfathered: that
+      # helper enforces whenever a policySnapshot exists, which couples this
+      # activation to an unrelated field. Age is the only relevant question.
+      scenario_created_at="$(grep -Eo '"createdAt"[[:space:]]*:[[:space:]]*"[^"]+"' "$state_file" 2>/dev/null \
+        | head -n1 | sed -E 's/.*"createdAt"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/' || true)"
+      scenario_created_date="${scenario_created_at:0:10}"
+      if [[ -n "$scenario_created_date" && "$scenario_created_date" < "$scenario_resolution_cutoff" ]]; then
+        pass "linked-test resolution skipped — packet created $scenario_created_date, before the $scenario_resolution_cutoff activation (grandfathered)"
+      else
+        scenario_resolution_mode="advisory"
+        # Relative, matching the PROJECT_CONFIG convention the rest of the guard
+        # uses: the guard runs with CWD at the repository root.
+        for scenario_cfg in ".github/bubbles-project.yaml" "bubbles-project.yaml"; do
+          [[ -f "$scenario_cfg" ]] || continue
+          if grep -qE '^[[:space:]]*scenarioResolution:[[:space:]]*block[[:space:]]*$' "$scenario_cfg"; then
+            scenario_resolution_mode="block"
+          fi
+          break
+        done
+        scenario_resolve_output=""
+        if scenario_resolve_output="$(bash "$scenario_resolver" "$feature_dir" --quiet 2>&1)"; then
+          pass "every linked test resolves to a real file and title (Gate G057)"
+        elif [[ "$scenario_resolution_mode" == "block" ]]; then
+          fail "linked tests do not resolve (Gate G057)"
+          [[ -n "$scenario_resolve_output" ]] && printf '%s\n' "$scenario_resolve_output"
+        else
+          warn "linked tests do not resolve — ADVISORY until scenarioResolution: block is set (Gate G057)"
+          [[ -n "$scenario_resolve_output" ]] && printf '%s\n' "$scenario_resolve_output"
+        fi
+      fi
+    fi
+
+    # Obligation-matrix coherence (IMP-040 SCOPE-3 / COV-9). Safe to BLOCK on
+    # day one, unlike the resolver above: behaviorTraits/obligations are new
+    # optional fields, so this is inert on every packet that does not declare
+    # them and cannot retro-break an existing manifest.
+    scenario_obligation_lint="$SCRIPT_DIR/scenario-obligation-lint.sh"
+    if [[ -x "$scenario_obligation_lint" ]]; then
+      scenario_obligation_output=""
+      if scenario_obligation_output="$(bash "$scenario_obligation_lint" "$feature_dir" --quiet 2>&1)"; then
+        pass "scenario obligation matrix is coherent (Gate G057)"
+      else
+        fail "scenario obligation matrix is not coherent (Gate G057)"
+        [[ -n "$scenario_obligation_output" ]] && printf '%s\n' "$scenario_obligation_output"
+      fi
+    fi
+
+    # Mechanism coherence (IMP-040 SCOPE-4 / COV-10). Inert until a scenario
+    # declares testMechanism, so blocking cannot retro-break a packet.
+    test_mechanism_lint="$SCRIPT_DIR/test-mechanism-lint.sh"
+    if [[ -x "$test_mechanism_lint" ]]; then
+      test_mechanism_output=""
+      if test_mechanism_output="$(bash "$test_mechanism_lint" "$feature_dir" --quiet 2>&1)"; then
+        pass "declared test mechanisms support their claims (Gate G057)"
+      else
+        fail "a declared test mechanism does not support its claim (Gate G057)"
+        [[ -n "$test_mechanism_output" ]] && printf '%s\n' "$test_mechanism_output"
+      fi
     fi
 
     if [[ "$manifest_evidence_count" -eq 0 ]]; then
@@ -494,7 +573,20 @@ try:
     with open(sys.argv[1]) as f:
         data = json.load(f)
     rq = data.get("reworkQueue", []) or []
-    print("true" if isinstance(rq, list) and len(rq) > 0 else "false")
+    if not isinstance(rq, list):
+        rq = []
+    # Count only UNRESOLVED rework. Counting every entry meant the only way to
+    # satisfy this gate was to DELETE findings, destroying the record of what was
+    # found and how it was closed — a gate that rewards erasing evidence. A
+    # resolved item carries its resolution and should stay. This matches the
+    # predicate trajectory-inspector.sh already uses on the same field.
+    def _open(item):
+        if not isinstance(item, dict):
+            return True
+        if item.get("resolved") is True:
+            return False
+        return str(item.get("status", "")).strip().lower() != "resolved"
+    print("true" if any(_open(i) for i in rq) else "false")
 except Exception:
     print("false")
 ' "$state_file"
@@ -503,7 +595,7 @@ if [[ "$rework_nonempty" == "true" ]]; then
   fail "state.json still contains non-empty reworkQueue entries — open rework remains (Gate G061)"
   pending_transition_failures=$((pending_transition_failures + 1))
 else
-  pass "state.json reworkQueue is empty"
+  pass "state.json reworkQueue has no unresolved entries"
 fi
 
 if [[ -f "$transition_requests_file" ]]; then

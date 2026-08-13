@@ -322,6 +322,102 @@ wait "$live_pid2" 2>/dev/null || true
 rm -rf "$RT_LOCK" 2>/dev/null || true
 
 # ===========================================================================
+# Case 3: state-snapshot mkdir-fallback lock hygiene (the no-flock path)
+# ===========================================================================
+#
+# Case 1 exercises whichever lock strategy the host happens to provide, which on
+# Linux and CI is always flock. The mkdir mutex is the strategy stock macOS
+# actually runs (no flock in the base install, so GitHub's macOS runners take
+# it), and its stale-break is the step that can lose an update — so it needs
+# direct coverage on every host, not only on macOS. A PATH sandbox mirroring the
+# real PATH minus `flock` reproduces the macOS condition here.
+
+NOFLOCK_BIN="$TMP_ROOT/noflock-bin"
+mkdir -p "$NOFLOCK_BIN"
+while IFS= read -r path_dir; do
+  [[ -n "$path_dir" && -d "$path_dir" ]] || continue
+  for path_exe in "$path_dir"/*; do
+    [[ -e "$path_exe" ]] || continue
+    exe_name="${path_exe##*/}"
+    [[ "$exe_name" != "flock" ]] || continue
+    [[ -e "$NOFLOCK_BIN/$exe_name" ]] || ln -s "$path_exe" "$NOFLOCK_BIN/$exe_name" 2>/dev/null || true
+  done
+done < <(printf '%s\n' "$PATH" | tr ':' '\n')
+
+noflock_usable=true
+( PATH="$NOFLOCK_BIN"; command -v flock >/dev/null 2>&1 ) && noflock_usable=false
+( PATH="$NOFLOCK_BIN"; command -v jq >/dev/null 2>&1 ) || noflock_usable=false
+
+SNAP_TRACE="$TMP_ROOT/snapshot-lock-trace.txt"
+
+if [[ "$prepared" != true || "$noflock_usable" != true ]]; then
+  echo "SKIP: state-snapshot mkdir-fallback sub-cases (no-flock PATH sandbox unavailable)"
+else
+  # --- Sub-case D: dead holder -> stale -> broken -> the write completes ----
+  bash -c 'exit 0' & snap_dead_pid=$!
+  wait "$snap_dead_pid" 2>/dev/null || true
+  if kill -0 "$snap_dead_pid" 2>/dev/null; then
+    echo "SKIP: state-snapshot dead-holder break sub-case (reaped pid $snap_dead_pid still alive — pid reuse)"
+  else
+    reset_session
+    rm -f "$SNAP_TRACE" 2>/dev/null || true
+    mkdir -p "$SESSION_FILE.lock"
+    printf '%s\n' "$snap_dead_pid" > "$SESSION_FILE.lock/holder.pid"
+    PATH="$NOFLOCK_BIN" BUBBLES_LOCK_TRACE="$SNAP_TRACE" BUBBLES_AGENT_NAME="conc-agent-0" \
+      bash "$SNAPSHOT" --phase phase-dead-holder --mode start \
+      --session-id "conc-0" \
+      --session-control-file "${CTRLS[0]}" \
+      --binding-packet-file "${PKTS[0]}" \
+      >/dev/null 2>&1
+    snap_dead_rc=$?
+    snap_dead_turns="$(session_turn_count)"
+    if [[ "$snap_dead_rc" -eq 0 && "$snap_dead_turns" == "1" ]] \
+      && grep -q 'BREAK-STALE' "$SNAP_TRACE" 2>/dev/null; then
+      pass "state-snapshot mkdir fallback BREAKS a lock whose holder pid is dead and completes its write (no deadlock)"
+    else
+      fail "state-snapshot mkdir fallback should break a DEAD-holder lock (exit=$snap_dead_rc turnSnapshots=$snap_dead_turns/1 broke=$(grep -c 'BREAK-STALE' "$SNAP_TRACE" 2>/dev/null || echo 0))"
+    fi
+    rm -rf "$SESSION_FILE.lock" 2>/dev/null || true
+  fi
+
+  # --- Sub-case E: live, fresh holder -> respected (lock is NOT stolen) -----
+  # This is the property the lost-update defect violated: a waiter must never
+  # destroy a lock that a live holder currently owns. Case 1 proves it
+  # statistically across parallel rounds; this proves it deterministically.
+  reset_session
+  rm -f "$SNAP_TRACE" 2>/dev/null || true
+  sleep 30 & snap_live_pid=$!
+  BG_PIDS+=("$snap_live_pid")
+  mkdir -p "$SESSION_FILE.lock"
+  printf '%s\n' "$snap_live_pid" > "$SESSION_FILE.lock/holder.pid"
+  # Backgrounded WITHOUT a wrapper function on purpose: backgrounding a function
+  # forks a subshell, so $! would name the subshell and the kill below would
+  # leave the real snapshot alive to write into TMP_ROOT during teardown.
+  PATH="$NOFLOCK_BIN" BUBBLES_LOCK_TRACE="$SNAP_TRACE" BUBBLES_AGENT_NAME="conc-agent-0" \
+    bash "$SNAPSHOT" --phase phase-live-holder --mode start \
+    --session-id "conc-0" \
+    --session-control-file "${CTRLS[0]}" \
+    --binding-packet-file "${PKTS[0]}" \
+    >/dev/null 2>&1 &
+  snap_waiter_pid=$!
+  BG_PIDS+=("$snap_waiter_pid")
+  sleep 3
+  snap_live_turns="$(session_turn_count)"
+  if [[ -d "$SESSION_FILE.lock" && "$snap_live_turns" == "0" ]] \
+    && ! grep -q 'BREAK' "$SNAP_TRACE" 2>/dev/null; then
+    pass "state-snapshot mkdir fallback does NOT steal a live, fresh holder's lock (it waits)"
+  else
+    fail "state-snapshot mkdir fallback stole a live holder's lock (lockDirPresent=$([[ -d "$SESSION_FILE.lock" ]] && echo yes || echo no) turnSnapshots=$snap_live_turns/0 breaks=$(grep -c 'BREAK' "$SNAP_TRACE" 2>/dev/null || echo 0))"
+  fi
+  kill "$snap_waiter_pid" 2>/dev/null || true
+  wait "$snap_waiter_pid" 2>/dev/null || true
+  kill "$snap_live_pid" 2>/dev/null || true
+  wait "$snap_live_pid" 2>/dev/null || true
+  rm -rf "$SESSION_FILE.lock" 2>/dev/null || true
+  reset_session
+fi
+
+# ===========================================================================
 
 echo
 echo "runtime concurrency selftest: $pass_count passed / $fail_count failed"
