@@ -21,10 +21,12 @@ set -euo pipefail
 INTRODUCTION_DATE="2026-05-25"
 QUIET="false"
 SPEC_DIR=""
+SESSION_FILE=""
 
 usage() {
   cat <<'EOF'
 Usage: bash bubbles/scripts/capability-foundation-guard.sh <specDir> [--quiet]
+                                                          [--session-file <path>]
 
 Required:
   <specDir>   Feature or bug spec directory containing state.json.
@@ -49,6 +51,11 @@ while [[ $# -gt 0 ]]; do
     --quiet)
       QUIET="true"
       shift
+      ;;
+    --session-file)
+      SESSION_FILE="${2:-}"
+      [[ -n "$SESSION_FILE" ]] || { echo "capability-foundation-guard: --session-file requires a value" >&2; exit 2; }
+      shift 2
       ;;
     --*)
       echo "capability-foundation-guard: unknown flag: $1" >&2
@@ -206,8 +213,85 @@ variation_axes_count() {
 }
 
 concrete_entries="$(concrete_entries_count "$DESIGN_FILE")"
+
+# --- IMP-041 SCOPE-5: bidirectional proportionality (GF-11) -----------------
+# Until now this gate enforced proportionality in ONE direction: it caught
+# missing abstraction (two concrete implementations with no foundation) but had
+# nothing to say about PREMATURE abstraction. A one-off evaluation could build a
+# reusable foundation and every check here would applaud it.
+#
+# The frozen executionShape is the primary applicability signal when a v2
+# contract is available; trigger words stay as a legacy fallback and, under an
+# explicit shape, become a mismatch note rather than a promotion. A planner
+# cannot change the shape — only a Goal Contract revision can — which is what
+# stops "this clearly needs a framework" from being self-granted.
+EXECUTION_SHAPE=""
+if [[ -n "$SESSION_FILE" && -f "$SESSION_FILE" ]] && command -v jq >/dev/null 2>&1; then
+  EXECUTION_SHAPE="$(jq -r '.goalContract.semanticBoundary.executionShape // ""' "$SESSION_FILE" 2>/dev/null || true)"
+fi
+
+foundation_scope_hits() {
+  local total=0 f
+  local files=()
+  [[ -f "$SPEC_DIR/scopes.md" ]] && files+=("$SPEC_DIR/scopes.md")
+  if [[ -d "$SPEC_DIR/scopes" ]]; then
+    while IFS= read -r -d '' f; do files+=("$f"); done \
+      < <(find "$SPEC_DIR/scopes" -type f -name 'scope.md' -print0 | sort -z)
+  fi
+  for f in ${files[@]+"${files[@]}"}; do
+    total=$((total + $(grep -Eic 'foundation[[:space:]]*:[[:space:]]*true' "$f" 2>/dev/null || true)))
+  done
+  printf '%s' "$total"
+}
+
+if [[ -n "$EXECUTION_SHAPE" ]]; then
+  info "Gate G094 execution shape (frozen): $EXECUTION_SHAPE"
+  case "$EXECUTION_SHAPE" in
+    one-off)
+      # PREMATURE ABSTRACTION: a bounded piece of work must not grow a reusable
+      # foundation. Widening requires a Goal Contract revision, not a planner
+      # deciding the work was bigger than the operator framed it.
+      if [[ "$(foundation_scope_hits)" -gt 0 ]]; then
+        finding "executionShape is 'one-off' but a scope is tagged foundation:true — a bounded goal cannot create a reusable foundation. Narrow the plan, or widen the contract with 'goal-contract.sh revise --approval-note' to an approved execution shape."
+      fi
+      if section_exists "$DESIGN_FILE" '^##[[:space:]]+Capability Foundation[[:space:]]*$'; then
+        finding "executionShape is 'one-off' but design.md declares a Capability Foundation — that is a reusable-capability artefact and requires an approved shape change first"
+      fi
+      if [[ "$trigger_hits" -gt 0 ]]; then
+        info "note: proportionality trigger words appear under a one-off shape (triggerHits=$trigger_hits); keywords do not promote the shape"
+        if [[ -f "$SPEC_FILE" ]] &&
+          ! non_empty_section "$SPEC_FILE" '^###[[:space:]]+Single-Capability Justification[[:space:]]*$' &&
+          ! non_empty_section "$DESIGN_FILE" '^###[[:space:]]+Single-Implementation Justification[[:space:]]*$'; then
+          finding "executionShape is 'one-off' and proportionality trigger words appear, so a non-empty Single-Capability Justification (spec.md) or Single-Implementation Justification (design.md) is required to record why one concrete implementation is correct"
+        fi
+      fi
+      ;;
+    existing-capability-change)
+      # Extending the NAMED foundation is the point of this shape. Standing up a
+      # second one beside it is the expansion.
+      if [[ "$(foundation_scope_hits)" -gt 1 ]]; then
+        finding "executionShape is 'existing-capability-change' but more than one scope is tagged foundation:true — this shape may extend the established foundation, not create a parallel one"
+      fi
+      ;;
+    reusable-capability)
+      info "executionShape 'reusable-capability': the full capability-foundation requirements below are in force"
+      ;;
+  esac
+fi
+
 applicable="false"
-if [[ "$trigger_hits" -gt 0 ]] || [[ "$concrete_entries" -ge 2 ]]; then
+if [[ "$EXECUTION_SHAPE" == "reusable-capability" ]]; then
+  applicable="true"
+elif [[ "$EXECUTION_SHAPE" == "one-off" ]]; then
+  # The one-off rules above are the whole applicable set; the foundation-shaped
+  # requirements below would demand exactly the artefacts this shape forbids.
+  if [[ "$finding_count" -gt 0 ]]; then
+    echo "G094 capability_foundation_gate: FAILED with $finding_count finding(s)" >&2
+    exit 1
+  fi
+  info "PASS Gate G094 - one-off shape: no premature foundation detected"
+  exit 0
+elif [[ "$trigger_hits" -gt 0 ]] || [[ "$concrete_entries" -ge 2 ]]; then
   applicable="true"
 fi
 

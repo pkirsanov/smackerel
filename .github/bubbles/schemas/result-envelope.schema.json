@@ -210,6 +210,11 @@
     "goalRef": {
       "$ref": "goal-contract.schema.json#/$defs/goalRef",
       "description": "Goal identity echoed by a specialist result (IMP-038 SCOPE-3 / GF-1, GF-5). Present whenever the run froze a Goal Contract. Verified with `goal-contract.sh verify-ref`, which refuses an omitted field, a substituted goalId/revision/digest, and a workBoundary wider than the frozen contract's."
+    },
+    "boundaryReceiptDigest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "description": "The receiptDigest of the G134 boundary receipt that authorised this transition (IMP-041 SCOPE-3 / GF-7). Minted only by `goal-boundary-receipt.sh emit`, which prints nothing when the boundary fails — so carrying a valid digest is evidence the check RAN, not merely that a runner claimed it did. A parent verifies it with `goal-boundary-receipt.sh verify --expect-boundary <name>`, which refuses a receipt that is stale, edited, or minted for a different boundary."
     }
   },
   "allOf": [

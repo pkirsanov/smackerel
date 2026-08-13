@@ -710,6 +710,148 @@ else
   skip "T30 cross-script matching agreement (work-boundary-resolve.sh not found)"
 fi
 
+# --- IMP-041 SCOPE-1: v2 semantic boundary ----------------------------------
+# The v1 boundary is path-shaped, so a goal could grow from a bounded test into
+# a platform with every path still in-boundary. These cases exist to prove the
+# second, shape-shaped layer refuses that — and that adding it did not disturb
+# v1, which every existing frozen contract still uses.
+
+# freeze_semantic <dir> <session-id> [extra args...]
+freeze_semantic() {
+  local d="$1" sid="$2"; shift 2
+  bash "$GC" freeze \
+    --session-file "$d/session.json" \
+    --source-request-file "$d/request.txt" \
+    --intent "evaluate the installed model through existing settings" \
+    --success-signal "the existing suite reports a score" \
+    --target "spec=specs/041-x" \
+    --repository-root bubbles \
+    --runner bubbles.goal \
+    --session-id "$sid" \
+    --repository-alias bubbles \
+    ${1+"$@"}
+}
+
+# T31 — every execution shape freezes and verifies.
+t31_ok="true"
+for shape in one-off existing-capability-change reusable-capability; do
+  d31="$(new_case "t31-$shape")"
+  if ! freeze_semantic "$d31" "sess31" --execution-shape "$shape" >/dev/null 2>&1; then
+    t31_ok="false"; fail "T31 freeze rejected execution shape '$shape'"
+  elif ! bash "$GC" verify --session-file "$d31/session.json" >/dev/null 2>&1; then
+    t31_ok="false"; fail "T31 verify rejected execution shape '$shape'"
+  elif [[ "$(jq -r '.goalContract.schemaVersion' "$d31/session.json")" != "goal-contract/v2" ]]; then
+    t31_ok="false"; fail "T31 a semantic freeze must write goal-contract/v2 (shape '$shape')"
+  fi
+done
+[[ "$t31_ok" == "true" ]] && pass "T31 every execution shape freezes, verifies, and writes v2"
+
+# T32..T35 — caller errors are exit 2 at the flag, not invalid contracts later.
+d32="$(new_case t32)"
+expect_rc "T32 an unknown change class is refused at the flag" 2 \
+  freeze_semantic "$d32" sess32 --execution-shape one-off --allow-change-class new-quantum-thing
+d33="$(new_case t33)"
+expect_rc "T33 a negative delta budget is refused" 2 \
+  freeze_semantic "$d33" sess33 --execution-shape one-off --delta-budget maxNewFiles=-1
+d34="$(new_case t34)"
+expect_rc "T34 an unknown execution shape is refused" 2 \
+  freeze_semantic "$d34" sess34 --execution-shape platform
+d35="$(new_case t35)"
+expect_rc "T35 semantic detail with no --execution-shape is refused, not dropped" 2 \
+  freeze_semantic "$d35" sess35 --allow-change-class existing-test
+
+# T36 — ADVERSARIAL: a class cannot be both pre-approved and approval-gated.
+# Without this check the approval requirement is decorative: a planner could
+# read the class off allowedChangeClasses and never reach the approval gate.
+d36="$(new_case t36)"
+expect_rc "T36 overlapping allowed/approval-required classes are refused" 1 \
+  freeze_semantic "$d36" sess36 --execution-shape one-off \
+  --allow-change-class new-runner --approval-change-class new-runner
+
+# T37 — ADVERSARIAL: a semanticBoundary smuggled into a v1 contract is refused.
+# A v1 reader would ignore the field entirely, so accepting it would create a
+# contract whose declared boundary no consumer enforces.
+d37="$(new_case t37)"
+freeze_default "$d37" >/dev/null 2>&1
+jq '.goalContract.semanticBoundary = {executionShape:"one-off",allowedChangeClasses:[],approvalRequiredChangeClasses:[],deltaBudget:{}}' \
+  "$d37/session.json" > "$d37/tampered.json" && mv "$d37/tampered.json" "$d37/session.json"
+expect_rc "T37 a semanticBoundary inside a v1 contract is refused" 1 \
+  bash "$GC" verify --session-file "$d37/session.json"
+
+# T38 — revise carries the boundary forward and names the direction it moved.
+d38="$(new_case t38)"
+freeze_semantic "$d38" sess38 --execution-shape one-off \
+  --allow-change-class existing-test --delta-budget maxNewFiles=2 >/dev/null 2>&1
+bash "$GC" revise --session-file "$d38/session.json" --approval-note "reword" --intent "i2" >/dev/null 2>&1
+t38_shape="$(jq -r '.goalContract.semanticBoundary.executionShape' "$d38/session.json")"
+t38_note="$(jq -r '.goalContract.approval.approvalNote' "$d38/session.json")"
+if [[ "$t38_shape" == "one-off" && "$t38_note" == *"semantic-unchanged"* ]]; then
+  pass "T38 a revise with no semantic flag carries the boundary forward unchanged"
+else
+  fail "T38 semantic carry-forward (shape='$t38_shape', note='$t38_note')"
+fi
+
+# T38b/T38c — the direction classifier is the audit record of what was approved.
+bash "$GC" revise --session-file "$d38/session.json" --approval-note "approved a foundation" \
+  --execution-shape reusable-capability --allow-change-class existing-test \
+  --allow-change-class new-shared-library --delta-budget maxNewFiles=2 >/dev/null 2>&1
+t38b_note="$(jq -r '.goalContract.approval.approvalNote' "$d38/session.json")"
+if [[ "$t38b_note" == *"semantic-widened"* ]]; then
+  pass "T38b promoting the shape and adding a class records semantic-widened"
+else
+  fail "T38b widening classification (note='$t38b_note')"
+fi
+
+bash "$GC" revise --session-file "$d38/session.json" --approval-note "scope back down" \
+  --execution-shape reusable-capability --allow-change-class existing-test \
+  --delta-budget maxNewFiles=2 >/dev/null 2>&1
+t38c_note="$(jq -r '.goalContract.approval.approvalNote' "$d38/session.json")"
+if [[ "$t38c_note" == *"semantic-narrowed"* ]]; then
+  pass "T38c dropping a class records semantic-narrowed"
+else
+  fail "T38c narrowing classification (note='$t38c_note')"
+fi
+
+# T39 — an unapproved semantic revision is still refused (exit 3), so widening
+# cannot happen without a recorded operator note.
+expect_rc "T39 a semantic revision with no approval note is refused" 3 \
+  bash "$GC" revise --session-file "$d38/session.json" --execution-shape one-off
+
+# T40 — a ref minted before an approved semantic revision no longer verifies.
+d40="$(new_case t40)"
+freeze_semantic "$d40" sess40 --execution-shape one-off --allow-change-class existing-test >/dev/null 2>&1
+bash "$GC" ref --session-file "$d40/session.json" > "$d40/ref.json" 2>/dev/null
+if [[ "$(jq -r 'has("semanticBoundary")' "$d40/ref.json")" == "true" ]]; then
+  pass "T40 the emitted ref carries the semantic boundary"
+else
+  fail "T40 ref omits semanticBoundary (a consumer could not check it)"
+fi
+if bash "$GC" verify-ref --session-file "$d40/session.json" --ref-file "$d40/ref.json" >/dev/null 2>&1; then
+  pass "T40b a fresh ref verifies"
+else
+  fail "T40b a fresh ref should verify"
+fi
+bash "$GC" revise --session-file "$d40/session.json" --approval-note "widen" \
+  --execution-shape reusable-capability --allow-change-class existing-test \
+  --allow-change-class new-shared-library >/dev/null 2>&1
+expect_rc "T40c a ref minted before an approved semantic revision is invalidated" 1 \
+  bash "$GC" verify-ref --session-file "$d40/session.json" --ref-file "$d40/ref.json"
+
+# T41 — ADVERSARIAL non-vacuity for the whole scope: v1 must be untouched.
+# Every case above could pass while v1 silently became v2, which would break
+# every already-frozen contract in the field.
+d41="$(new_case t41)"
+freeze_default "$d41" >/dev/null 2>&1
+t41_ver="$(jq -r '.goalContract.schemaVersion' "$d41/session.json")"
+t41_has="$(jq -r '.goalContract | has("semanticBoundary")' "$d41/session.json")"
+bash "$GC" revise --session-file "$d41/session.json" --approval-note "reword only" --intent "x" >/dev/null 2>&1
+t41_note="$(jq -r '.goalContract.approval.approvalNote' "$d41/session.json")"
+if [[ "$t41_ver" == "goal-contract/v1" && "$t41_has" == "false" && "$t41_note" == "unchanged: reword only" ]]; then
+  pass "T41 a freeze with no semantic flag stays v1 and keeps the exact v1 note format"
+else
+  fail "T41 v1 compatibility (version='$t41_ver', hasSemantic='$t41_has', note='$t41_note')"
+fi
+
 echo
 if [[ "$FAILURES" -gt 0 ]]; then
   echo "goal-contract-selftest FAILED with $FAILURES issue(s)."

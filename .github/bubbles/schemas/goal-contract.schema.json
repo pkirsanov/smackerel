@@ -140,6 +140,67 @@
         }
       }
     },
+    "semanticBoundary": {
+      "type": "object",
+      "description": "The v2 shape-shaped second boundary layer (IMP-041 SCOPE-1). workBoundary answers 'may this goal touch that path?'; this answers 'may this goal build that KIND of thing?'. Both enums are closed, so an undeclared expansion is a refusal rather than an unrecognised free string. allowedChangeClasses and approvalRequiredChangeClasses must not overlap — a class cannot be both pre-approved and approval-gated.",
+      "additionalProperties": false,
+      "required": [
+        "executionShape",
+        "allowedChangeClasses",
+        "approvalRequiredChangeClasses",
+        "deltaBudget"
+      ],
+      "properties": {
+        "executionShape": {
+          "enum": [
+            "one-off",
+            "existing-capability-change",
+            "reusable-capability"
+          ]
+        },
+        "allowedChangeClasses": {
+          "$ref": "#/$defs/changeClassArray"
+        },
+        "approvalRequiredChangeClasses": {
+          "$ref": "#/$defs/changeClassArray"
+        },
+        "deltaBudget": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Non-negative maxima. An absent key is not a licence for unlimited growth; it means the dimension was never declared and a consumer must treat growth in it as undeclared.",
+          "properties": {
+            "maxNewScopes": { "type": "integer", "minimum": 0 },
+            "maxNewFiles": { "type": "integer", "minimum": 0 },
+            "maxNewWorkflows": { "type": "integer", "minimum": 0 },
+            "maxNewServices": { "type": "integer", "minimum": 0 },
+            "maxNewRunners": { "type": "integer", "minimum": 0 },
+            "maxNewVirtualMachines": { "type": "integer", "minimum": 0 }
+          }
+        }
+      }
+    },
+    "changeClassArray": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "existing-config",
+          "existing-test",
+          "new-product-code",
+          "new-shared-library",
+          "new-workflow",
+          "new-runner",
+          "new-virtual-machine",
+          "new-daemon",
+          "new-init-unit",
+          "new-datastore",
+          "new-cache",
+          "new-approval-authority",
+          "new-network-topology",
+          "new-deployment-target"
+        ]
+      }
+    },
     "provenance": {
       "type": "object",
       "additionalProperties": false,
@@ -220,7 +281,8 @@
       ],
       "properties": {
         "schemaVersion": {
-          "const": "goal-contract/v1"
+          "description": "v1 is the original path-only contract. v2 adds the required semanticBoundary. Both remain readable so a legacy contract keeps validating until its owning goal is revised.",
+          "enum": ["goal-contract/v1", "goal-contract/v2"]
         },
         "goalId": {
           "$ref": "#/$defs/goalId"
@@ -256,6 +318,9 @@
         },
         "workBoundary": {
           "$ref": "#/$defs/workBoundary"
+        },
+        "semanticBoundary": {
+          "$ref": "#/$defs/semanticBoundary"
         },
         "createdAt": {
           "type": "string",

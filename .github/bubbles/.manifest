@@ -77,6 +77,8 @@ bubbles/scripts/control-plane-policy-activation-selftest.sh
 bubbles/scripts/control-plane-rce-selftest.sh
 bubbles/scripts/convergence-cap-guard-selftest.sh
 bubbles/scripts/convergence-cap-guard.sh
+bubbles/scripts/convergence-materiality-selftest.sh
+bubbles/scripts/convergence-materiality.sh
 bubbles/scripts/delivery-implementation-delta-guard-selftest.sh
 bubbles/scripts/delivery-implementation-delta-guard.sh
 bubbles/scripts/dependency-posture.sh
@@ -124,6 +126,8 @@ bubbles/scripts/execution-substate-guard-selftest.sh
 bubbles/scripts/execution-substate-guard.sh
 bubbles/scripts/expand-migrate-contract-guard-selftest.sh
 bubbles/scripts/expand-migrate-contract-guard.sh
+bubbles/scripts/expansion-approval-selftest.sh
+bubbles/scripts/expansion-approval.sh
 bubbles/scripts/experience-recall-adapter-contract-selftest.sh
 bubbles/scripts/experience-recall-authority-selftest.sh
 bubbles/scripts/experience-recall-cli-selftest.sh
@@ -178,6 +182,8 @@ bubbles/scripts/generate-installer-selftest.sh
 bubbles/scripts/generate-installer.sh
 bubbles/scripts/generate-modes-block.sh
 bubbles/scripts/generate-release-manifest.sh
+bubbles/scripts/goal-boundary-receipt-selftest.sh
+bubbles/scripts/goal-boundary-receipt.sh
 bubbles/scripts/goal-contract-selftest.sh
 bubbles/scripts/goal-contract.sh
 bubbles/scripts/goal-fidelity-guard-selftest.sh
@@ -191,6 +197,7 @@ bubbles/scripts/guard-lib.sh
 bubbles/scripts/handoff-cycle-check.sh
 bubbles/scripts/imp021-interaction-contracts-selftest.sh
 bubbles/scripts/imp040-evaluation-corpus.sh
+bubbles/scripts/imp041-evaluation-corpus.sh
 bubbles/scripts/implementation-reality-scan-selftest.sh
 bubbles/scripts/implementation-reality-scan.sh
 bubbles/scripts/install-bubbles-hooks.sh
