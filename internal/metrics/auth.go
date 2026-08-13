@@ -309,17 +309,29 @@ var AuthCorpusGrantWouldDeny = prometheus.NewCounterVec(
 )
 
 // AuthCorpusGrantAllowed counts requests that carried `corpus:read`. It is the
-// denominator for the would-deny numerator. It carries no `user_id` — that is
-// a deliberate design.md §4 choice and is exactly why the per-principal
-// coverage bar of §18 decision 1(b) cannot be expressed by these three series
-// (F-108-COVERAGE-LABEL-01, routed to bubbles.design). No fourth metric is
-// invented here to paper over it.
+// denominator for the would-deny numerator, and it carries `user_id` so that a
+// GRANTED principal's traffic is visible too.
+//
+// Without `user_id` here, only denied principals were observable, so a
+// principal that holds the grant and uses it looked identical to one that never
+// called at all — which is precisely why the §18 decision 1(b) coverage bar was
+// not computable and fell back to per-cell operator attestation
+// (F-108-COVERAGE-LABEL-01). With this label, a cell is closed by observed
+// traffic of EITHER outcome:
+//
+//	sum by (user_id, route_group) (
+//	  increase(smackerel_auth_corpus_grant_allowed_total[14d])
+//	  or increase(smackerel_auth_corpus_grant_would_deny_total[14d])
+//	)
+//
+// Cardinality is unchanged in kind: `route_group` is the closed sixteen-value
+// set and `user_id` follows the `AuthScopeRejected` precedent above.
 var AuthCorpusGrantAllowed = prometheus.NewCounterVec(
 	prometheus.CounterOpts{
 		Name: "smackerel_auth_corpus_grant_allowed_total",
-		Help: "Corpus reads that carried the corpus:read grant, by route group and session source",
+		Help: "Corpus reads that carried the corpus:read grant, by route group, principal, and session source",
 	},
-	[]string{"route_group", "session_source"},
+	[]string{"route_group", "user_id", "session_source"},
 )
 
 // AuthCorpusGrantEnforcementMode reports the resolved stage: 0 = OBSERVE,
@@ -350,11 +362,11 @@ func RecordCorpusGrantWouldDeny(group CorpusRouteGroup, userID, sessionSource st
 
 // RecordCorpusGrantAllowed increments the allowed counter under the same
 // closed-set guarantee as RecordCorpusGrantWouldDeny.
-func RecordCorpusGrantAllowed(group CorpusRouteGroup, sessionSource string) error {
+func RecordCorpusGrantAllowed(group CorpusRouteGroup, userID, sessionSource string) error {
 	if err := ValidateCorpusRouteGroup(group); err != nil {
 		return err
 	}
-	AuthCorpusGrantAllowed.WithLabelValues(string(group), sessionSource).Inc()
+	AuthCorpusGrantAllowed.WithLabelValues(string(group), userID, sessionSource).Inc()
 	return nil
 }
 

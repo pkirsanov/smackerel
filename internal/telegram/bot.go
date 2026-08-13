@@ -70,7 +70,7 @@ type Bot struct {
 	// is production with auth.enabled, every internal-API call
 	// (capture, search, annotation, knowledge, list, mapping, photo
 	// upload, recipe commands, digest, recent, expense query/export)
-	// mints a per-user PASETO via tokenMinter.MintForChat(chatID) and
+	// mints a per-user PASETO via tokenMinter.MintForChat(ctx, chatID) and
 	// attaches that token as the Authorization bearer instead of the
 	// legacy shared b.authToken. In dev/test (or when tokenMinter is
 	// nil), the legacy shared token path is preserved verbatim.
@@ -278,7 +278,7 @@ func (b *Bot) SetAnnotationShadowComparator(c *annotation.ShadowComparator) {
 // Spec 044 Scope 04 — F02 closure. The decision matrix:
 //
 //   - tokenMinter is non-nil (production with auth.enabled): mint a
-//     fresh per-user PASETO via tokenMinter.MintForChat(chatID).
+//     fresh per-user PASETO via tokenMinter.MintForChat(ctx, chatID).
 //     A successful mint returns the wire token bound to the mapped
 //     user. A return of (zero MintedTelegramToken, nil) means the
 //     chat is unmapped in dev/test — fall back to the shared bearer.

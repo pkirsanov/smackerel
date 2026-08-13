@@ -2642,8 +2642,51 @@ ok      github.com/smackerel/smackerel/internal/auth    0.030s
   labels for one collapsed path. Conflating `NULL` with `'{}'` is the specific defect migration 063
   avoids by carrying no DB default. Every failure case also asserts `tok.WireToken == ""`
   (line 108), so a partial mint cannot slip through alongside an error.
-- [ ] `TP-04-02` integration test passes — Telegram corpus command under ENFORCE has an operator-actionable outcome
-  - **UNCHECKED:** integration tier not run by this pass; the concurrent run that did execute ended `INTEGRATION_EXIT=1` with `tests/integration [build failed]` (see the Consumer Impact Sweep item).
+- [x] `TP-04-02` integration test passes — Telegram corpus command under ENFORCE has an operator-actionable outcome
+  - **Command:** `./smackerel.sh test integration --go-run 'TP_04_02'`
+  - **Exit Code:** 0
+  - **Evidence:**
+
+```
+=== RUN   TestIntegration_CorpusGrant_TelegramBridgeReachesCorpusUnderEnforce_TP_04_02
+=== RUN   TestIntegration_CorpusGrant_TelegramBridgeReachesCorpusUnderEnforce_TP_04_02/entitled_principal_completes_corpus_commands
+=== RUN   TestIntegration_CorpusGrant_TelegramBridgeReachesCorpusUnderEnforce_TP_04_02/unentitled_principal_gets_a_valid_token_that_cannot_reach_the_corpus
+=== RUN   TestIntegration_CorpusGrant_TelegramBridgeReachesCorpusUnderEnforce_TP_04_02/undelegable_principal_aborts_at_mint_with_a_named_condition
+=== RUN   TestIntegration_CorpusGrant_TelegramBridgeReachesCorpusUnderEnforce_TP_04_02/canary_gate_is_actually_enforcing
+--- PASS: TestIntegration_CorpusGrant_TelegramBridgeReachesCorpusUnderEnforce_TP_04_02 (0.04s)
+    --- PASS: TestIntegration_CorpusGrant_TelegramBridgeReachesCorpusUnderEnforce_TP_04_02/entitled_principal_completes_corpus_commands (0.01s)
+    --- PASS: TestIntegration_CorpusGrant_TelegramBridgeReachesCorpusUnderEnforce_TP_04_02/unentitled_principal_gets_a_valid_token_that_cannot_reach_the_corpus (0.00s)
+    --- PASS: TestIntegration_CorpusGrant_TelegramBridgeReachesCorpusUnderEnforce_TP_04_02/undelegable_principal_aborts_at_mint_with_a_named_condition (0.00s)
+    --- PASS: TestIntegration_CorpusGrant_TelegramBridgeReachesCorpusUnderEnforce_TP_04_02/canary_gate_is_actually_enforcing (0.00s)
+ok      github.com/smackerel/smackerel/tests/integration/graphapi       0.268s
+```
+
+  The test drives the REAL `telegram.PerUserTokenMinter` against the real router
+  (`tests/integration/graphapi/corpus_telegram_bridge_test.go`), not a hand-minted
+  bearer, so the derivation step is genuinely exercised rather than skipped.
+
+  **Both operator-actionable outcomes are covered, because they are different.**
+  For a principal holding a delegable non-corpus grant (`annotation:edit`) the mint
+  SUCCEEDS and the corpus route returns a 403 gate denial — that is what SCN-108-E04
+  specifies, and an earlier draft of this test asserted a mint abort instead and was
+  wrong. For a principal with no recorded grants at all the mint ABORTS with a named
+  condition (`ErrNoDelegableGrant` / `ErrPrincipalGrantsUnrecorded` /
+  `auth.ErrPrincipalNotProvisioned`) and the error names the principal, so the
+  operator knows whose token to rotate. Neither path produces an unexplained 403.
+
+  **Three anti-false-positive guards, each added after it caught something:**
+  the `canary_gate_is_actually_enforcing` subtest proves the gate is live on this
+  stack (otherwise every other assertion here would be vacuous); the unentitled
+  subtest first probes an UNGATED route so a 403 cannot be credited to the gate when
+  the real cause is a broken credential; and the entitled subtest requires the
+  response to be neither 401 nor a gate denial. That last check matters — with the
+  weaker "not a gate denial" form alone this test reported PASS while all four routes
+  returned 401 `paseto verify failed`, i.e. green for a completely dead bridge.
+
+  **Scope boundary stated honestly:** this harness wires the auth gate, not the full
+  service graph, so downstream 503s (`DB_UNAVAILABLE`, `ML_UNAVAILABLE`) are expected
+  and are not gate failures. The 2xx-completion proof for the same principals is
+  `TP-04-05` / `TP-04-07` on the live stack.
 - [x] `TP-04-03` integration test passes — token rotation (not a flag flip) grants a daily user access
   - **Command:** `./smackerel.sh test integration --go-run 'TP_04_03|TP_04_04|TP_04_06'`
   - **Exit Code:** 0

@@ -6,7 +6,7 @@
 // against a REAL router backed by a REAL database. No mock minter, no stubbed
 // grant reader, no hand-written bearer.
 //
-// WHY THIS ROW NEEDS THE REAL MINTER
+// # WHY THIS ROW NEEDS THE REAL MINTER
 //
 // The interesting behaviour is not "does a corpus route accept a token that
 // carries corpus:read" — TP-03-* already proves that. It is whether the token
@@ -18,7 +18,7 @@
 // skipped the one step under test. So these drive
 // PerUserTokenMinter.MintForUser and use whatever it returns.
 //
-// THE FAILURE MODE IS THE POINT
+// # THE FAILURE MODE IS THE POINT
 //
 // For an unentitled principal, the mint ABORTS with a typed error. The user
 // never receives an unexplained 403 from a corpus route, because no request is

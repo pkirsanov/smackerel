@@ -25,7 +25,7 @@ import "net/http"
 // userMapping fields are set so callers can exercise:
 //
 //   - Bot.resolveActorUserID(chatID) — the chat → user resolver
-//   - PerUserTokenMinter.MintForChat(chatID) — the helper that calls
+//   - PerUserTokenMinter.MintForChat(ctx, chatID) — the helper that calls
 //     resolveActorUserID then mints a per-user PASETO
 //
 // All other fields stay at their zero values; callers MUST NOT invoke

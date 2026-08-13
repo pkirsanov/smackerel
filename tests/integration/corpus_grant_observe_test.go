@@ -89,8 +89,8 @@ func corpusGrantObserveWouldDeny(group metrics.CorpusRouteGroup, userID, source 
 	return testutil.ToFloat64(metrics.AuthCorpusGrantWouldDeny.WithLabelValues(string(group), userID, source))
 }
 
-func corpusGrantObserveAllowed(group metrics.CorpusRouteGroup, source string) float64 {
-	return testutil.ToFloat64(metrics.AuthCorpusGrantAllowed.WithLabelValues(string(group), source))
+func corpusGrantObserveAllowed(group metrics.CorpusRouteGroup, userID, source string) float64 {
+	return testutil.ToFloat64(metrics.AuthCorpusGrantAllowed.WithLabelValues(string(group), userID, source))
 }
 
 // TestIntegration_CorpusGrantObserve_UngrantedPrincipalIsCountedOnAllSixteenGroups
@@ -124,7 +124,7 @@ func TestIntegration_CorpusGrantObserve_UngrantedPrincipalIsCountedOnAllSixteenG
 	downstream := &corpusGrantObserveDownstream{}
 	for _, group := range groups {
 		before := corpusGrantObserveWouldDeny(group, sess.UserID, source)
-		allowedBefore := corpusGrantObserveAllowed(group, source)
+		allowedBefore := corpusGrantObserveAllowed(group, sess.UserID, source)
 
 		req := httptest.NewRequest(http.MethodGet, corpusGrantObserveSensitiveTarget(group), nil)
 		req = req.WithContext(auth.WithSession(req.Context(), sess))
@@ -143,7 +143,7 @@ func TestIntegration_CorpusGrantObserve_UngrantedPrincipalIsCountedOnAllSixteenG
 		if delta := corpusGrantObserveWouldDeny(group, sess.UserID, source) - before; delta != 1 {
 			t.Fatalf("route_group=%q: would_deny delta = %v, want 1 — an ungranted request was admitted without being counted", group, delta)
 		}
-		if delta := corpusGrantObserveAllowed(group, source) - allowedBefore; delta != 0 {
+		if delta := corpusGrantObserveAllowed(group, sess.UserID, source) - allowedBefore; delta != 0 {
 			t.Fatalf("route_group=%q: allowed delta = %v, want 0", group, delta)
 		}
 	}
@@ -235,7 +235,7 @@ func TestIntegration_CorpusGrantObserve_GrantedPrincipalCountsAllowedAndModeGaug
 	groups := metrics.CorpusRouteGroups()
 	downstream := &corpusGrantObserveDownstream{}
 	for _, group := range groups {
-		allowedBefore := corpusGrantObserveAllowed(group, source)
+		allowedBefore := corpusGrantObserveAllowed(group, sess.UserID, source)
 		denyBefore := corpusGrantObserveWouldDeny(group, sess.UserID, source)
 
 		req := httptest.NewRequest(http.MethodGet, corpusGrantObserveSensitiveTarget(group), nil)
@@ -246,7 +246,7 @@ func TestIntegration_CorpusGrantObserve_GrantedPrincipalCountsAllowedAndModeGaug
 		if rec.Code != http.StatusOK {
 			t.Fatalf("route_group=%q: status = %d, want 200", group, rec.Code)
 		}
-		if delta := corpusGrantObserveAllowed(group, source) - allowedBefore; delta != 1 {
+		if delta := corpusGrantObserveAllowed(group, sess.UserID, source) - allowedBefore; delta != 1 {
 			t.Fatalf("route_group=%q: allowed delta = %v, want 1", group, delta)
 		}
 		if delta := corpusGrantObserveWouldDeny(group, sess.UserID, source) - denyBefore; delta != 0 {

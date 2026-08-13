@@ -268,13 +268,30 @@ The observe middleware is mounted in **both** stages — otherwise OBSERVE emits
 | Metric | Type | Labels | Meaning |
 |---|---|---|---|
 | `smackerel_auth_corpus_grant_would_deny_total` | Counter | `route_group` (closed set of 16), `user_id`, `session_source` | A request that WOULD be denied under ENFORCE but was allowed under OBSERVE. |
-| `smackerel_auth_corpus_grant_allowed_total` | Counter | `route_group`, `session_source` | A request that carried the grant. Gives the denominator. |
+| `smackerel_auth_corpus_grant_allowed_total` | Counter | `route_group`, `user_id`, `session_source` | A request that carried the grant. Gives the denominator, and — with `user_id` — makes a GRANTED principal's traffic attributable, which is what closes the §18 decision 1(b) coverage bar without operator attestation (F-108-COVERAGE-LABEL-01, resolved). |
 | `smackerel_auth_corpus_grant_enforcement_mode` | Gauge | none | `0` = OBSERVE, `1` = ENFORCE. Lets a dashboard state the stage without reading config. |
 | `smackerel_auth_scope_rejected_total` | Counter (existing) | existing labels | Real 403s in ENFORCE. Unchanged — deliberately NOT reused for the observe signal (R-108-O2). |
 
 Cardinality: `route_group` is closed; `user_id` follows the existing precedent in
 `internal/metrics/auth.go` and is bounded by the operator-controlled principal count;
 `session_source` is the existing closed session-source enum. No raw path, ever (R-108-O3/O4).
+
+**Coverage query (§18 decision 1(b)).** A `(user_id, route_group)` cell is closed by
+observed traffic of EITHER outcome, so the coverage set is the union of the two counters:
+
+```promql
+sum by (user_id, route_group) (
+    increase(smackerel_auth_corpus_grant_allowed_total[14d])
+  or
+    increase(smackerel_auth_corpus_grant_would_deny_total[14d])
+)
+```
+
+Cells absent from that result are the ones still needing an operator `idle-by-design`
+attestation. Before `allowed_total` carried `user_id` this query was not expressible —
+a granted principal that used a route group produced no per-principal series, so it was
+indistinguishable from a principal that never called, and every cell for every granted
+principal fell to attestation. That was F-108-COVERAGE-LABEL-01.
 
 ### Structured log fields
 
@@ -300,13 +317,24 @@ runbook (R-108-O5).
 | PWA / web browser session (daily user) | per-user bearer | NO — `dailyUserGrants` excludes it | **YES** — search, recent, digest, artifact detail, export, knowledge all 403 | Rotate the principal's token with `corpus:read` added to the scope claim (F-108-GRANT-MECHANISM-01: granting is a token rotation, not a flag flip). Requires R-108-PRE1 first. |
 | PWA / web browser session (operator) | per-user bearer | YES — `operatorGrants` includes it | NO | None. |
 | Browser extension | per-user bearer, same grant set as its principal | Same as the principal | **YES** if the principal is a daily user | Same token rotation. The extension consumes the principal's token; there is no extension-specific grant. |
-| Telegram bridge | bridge token | **Unknown / provably insufficient** — F-108-TELEGRAM-01 | **YES, blocking** | **RATIFIED 2026-07-29 (`spec.md` §18 decision 3): derive the minted token's scope claim from the mapped principal's persisted grant set.** The earlier two-option framing ("receive a token carrying `corpus:read`" **or** "re-route through `/api/assistant/turn`") is **closed** — both were minter-side or routing-side workarounds that leave authority defined somewhere other than the principal. Derivation is the larger change and the only one consistent with spec 044 Scope 02 and the persisted-grant doctrine. ~~Depends on F-108-UX-ROSTER-01 (grants are not readable server-side today).~~ **The readability dependency is DECIDED 2026-08-11 — see §10: the issued scope set is recorded on `auth_tokens` and read back per principal. The mechanism is settled; it has not shipped, so this stays a stage-2 prerequisite.** |
+| Telegram bridge | per-user bearer whose scope claim is DERIVED from the mapped principal's persisted grants | **MEASURED 2026-08-13** — same as the principal. The hardcoded `["annotation:edit"]` list is gone (`deriveGrants`, `per_user_token.go`), so the bridge can only narrow the principal's recorded set, never widen it. | **YES** if the principal is a daily user — the same condition as the extension row, no longer a bridge-specific unknown | **RATIFIED 2026-07-29 (`spec.md` §18 decision 3): derive the minted token's scope claim from the mapped principal's persisted grant set.** The earlier two-option framing ("receive a token carrying `corpus:read`" **or** "re-route through `/api/assistant/turn`") is **closed** — both were minter-side or routing-side workarounds that leave authority defined somewhere other than the principal. Derivation is the larger change and the only one consistent with spec 044 Scope 02 and the persisted-grant doctrine. ~~Depends on F-108-UX-ROSTER-01 (grants are not readable server-side today).~~ **The readability dependency is DECIDED 2026-08-11 — see §10: the issued scope set is recorded on `auth_tokens` and read back per principal.** **SHIPPED 2026-08-13:** derivation is implemented and proven by `TP-04-01` (unit), `TP-04-02` (bridge→API integration), `TP-04-08` (hardcoded list gone) and `TP-04-09` (adversarial). Two failure modes are distinguished and both are operator-actionable: a principal holding a delegable non-corpus grant mints successfully and is refused at the corpus route (403, permanent); a principal with no delegable grant aborts at mint with a NAMED condition that identifies the principal to rotate. |
 | Internal service-to-service (`/api/context-for`, GuestHost connector) | shared token | Bypasses the scope check per `RequireScope`'s source switch | NO | None — but the bypass MUST be asserted by test (§8) so it is a documented decision, not an accident. **`spec.md` §18 decision 4 (2026-07-29): the GuestHost connector credential does NOT receive `corpus:read`.** Its guest-context reads move to the spec-109 MCP `hospitality-read` path under its own audience-bound credential (spec 109 D3), which is itself blocked on BUG-019-003. Coordination owner: `bubbles.design` on spec 109. |
 | Bootstrap session | bootstrap | Bypasses the scope check per `RequireScope`'s source switch | NO | None. |
 | Prometheus scrape / orchestrator probes | unauthenticated | n/a | NO | None — `/metrics`, `/readyz`, `/api/health` are ungated. |
 
 The OBSERVE window exists precisely to convert the "unknown" rows above into measured rows
 before anyone is denied.
+
+**Status 2026-08-13 — no `unknown` rows remain in this table.** The Telegram bridge was the
+only one, and it was unknown for a structural reason rather than a lack of observation: the
+minter held a hardcoded scope list, so the bridge's authority was not derivable from any
+principal and no amount of watching traffic would have settled it. Decision 3 removed the
+list, so the row is now determined by construction and measured by test.
+
+What the OBSERVE window still owes is a different question — not "what authority does this
+surface carry" (settled) but "which real principals actually exercise which route groups"
+(§18 decision 1(b) coverage). That is answered by the union query in §4, which became
+expressible once `allowed_total` gained `user_id` (F-108-COVERAGE-LABEL-01, resolved).
 
 ---
 

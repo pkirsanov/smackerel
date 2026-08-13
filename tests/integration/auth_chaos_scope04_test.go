@@ -823,9 +823,9 @@ func TestAuthChaos_S04_LegacyFallbackProductionFlagFalse_AllRejected(t *testing.
 // path that runs on every inbound Telegram message in production:
 //
 //	bot.bearerForChat(chatID)
-//	  ↓ tokenMinter.MintForChat(chatID)
+//	  ↓ tokenMinter.MintForChat(ctx, chatID)
 //	  ↓ bot.resolveActorUserID(chatID)        — in-memory map lookup
-//	  ↓ MintForUser(chatID, userID)
+//	  ↓ MintForUser(ctx, chatID, userID)
 //	  ↓ newTelegramTokenID                     — crypto/rand 12 bytes + hex
 //	  ↓ auth.IssueToken                         — Ed25519 sign
 //	  ↓ metrics.AuthIssuance{telegram_bridge}.Inc

@@ -116,6 +116,56 @@ func corpusGrantGaugeValue(t *testing.T, metricName string) (float64, bool) {
 	return 0, false
 }
 
+// TestCorpusGrantMetrics_CoverageCellIsClosableByEitherOutcome is the
+// capability F-108-COVERAGE-LABEL-01 said was missing: for a given
+// (user_id, route_group) cell, coverage must be establishable from observed
+// traffic alone, whichever way the gate went.
+//
+// Before the allowed counter carried `user_id`, only the DENIED half of the
+// population was attributable, so an operator could never distinguish "this
+// principal exercised this route group and was allowed" from "this principal
+// never touched it" — and decision 1(b) fell back to per-cell attestation.
+// The two sub-cases below are exactly the two ways a real cell gets closed.
+func TestCorpusGrantMetrics_CoverageCellIsClosableByEitherOutcome(t *testing.T) {
+	const source = "per_user_token"
+	group := CorpusRouteGroupExpertise // a silent Tier B group
+
+	// Cell closed by an ALLOWED observation.
+	grantedUser := "tp0203-coverage-granted"
+	allowChild := AuthCorpusGrantAllowed.WithLabelValues(string(group), grantedUser, source)
+	before := testutil.ToFloat64(allowChild)
+	if err := RecordCorpusGrantAllowed(group, grantedUser, source); err != nil {
+		t.Fatalf("RecordCorpusGrantAllowed: %v", err)
+	}
+	if got := testutil.ToFloat64(allowChild) - before; got != 1 {
+		t.Fatalf("allowed delta for (user=%s, group=%s) = %v, want 1; a granted principal's traffic must be attributable to its own cell", grantedUser, group, got)
+	}
+
+	// Cell closed by a WOULD-DENY observation, for a DIFFERENT principal on
+	// the same route group. The two must not collide into one series.
+	deniedUser := "tp0203-coverage-denied"
+	denyChild := AuthCorpusGrantWouldDeny.WithLabelValues(string(group), deniedUser, source)
+	before = testutil.ToFloat64(denyChild)
+	if err := RecordCorpusGrantWouldDeny(group, deniedUser, source); err != nil {
+		t.Fatalf("RecordCorpusGrantWouldDeny: %v", err)
+	}
+	if got := testutil.ToFloat64(denyChild) - before; got != 1 {
+		t.Fatalf("would-deny delta for (user=%s, group=%s) = %v, want 1", deniedUser, group, got)
+	}
+
+	// The granted principal's cell must not have moved when the other
+	// principal was observed. Per-principal attribution is the whole point;
+	// if one principal's traffic bled into another's cell, coverage would be
+	// claimed for a principal that never called.
+	if got := testutil.ToFloat64(allowChild) - 0; got == 0 {
+		t.Fatalf("the granted principal's allowed series vanished")
+	}
+	crossTalk := AuthCorpusGrantAllowed.WithLabelValues(string(group), deniedUser, source)
+	if got := testutil.ToFloat64(crossTalk); got != 0 {
+		t.Errorf("the denied principal has a non-zero ALLOWED count (%v) on the same route group; coverage would be credited to a principal that was never allowed", got)
+	}
+}
+
 // TestCorpusGrantMetrics_RegisteredInAuthFamily proves the three additions are
 // registered with the default registry under the existing `smackerel_auth_*`
 // name family — they extend that family rather than forking a parallel one.
@@ -126,7 +176,7 @@ func TestCorpusGrantMetrics_RegisteredInAuthFamily(t *testing.T) {
 	if err := RecordCorpusGrantWouldDeny(CorpusRouteGroupSearch, "tp0203-seed", "per_user_token"); err != nil {
 		t.Fatalf("RecordCorpusGrantWouldDeny(search): unexpected error %v", err)
 	}
-	if err := RecordCorpusGrantAllowed(CorpusRouteGroupSearch, "per_user_token"); err != nil {
+	if err := RecordCorpusGrantAllowed(CorpusRouteGroupSearch, "tp0203-seed", "per_user_token"); err != nil {
 		t.Fatalf("RecordCorpusGrantAllowed(search): unexpected error %v", err)
 	}
 
@@ -230,7 +280,7 @@ func TestCorpusGrantRouteGroup_RejectsOutOfSetValues(t *testing.T) {
 			if err := RecordCorpusGrantWouldDeny(group, "tp0203-user", "per_user_token"); !errors.Is(err, ErrUnknownCorpusRouteGroup) {
 				t.Fatalf("RecordCorpusGrantWouldDeny(%q) = %v, want ErrUnknownCorpusRouteGroup", group, err)
 			}
-			if err := RecordCorpusGrantAllowed(group, "per_user_token"); !errors.Is(err, ErrUnknownCorpusRouteGroup) {
+			if err := RecordCorpusGrantAllowed(group, "tp0203-user", "per_user_token"); !errors.Is(err, ErrUnknownCorpusRouteGroup) {
 				t.Fatalf("RecordCorpusGrantAllowed(%q) = %v, want ErrUnknownCorpusRouteGroup", group, err)
 			}
 
@@ -263,7 +313,7 @@ func TestCorpusGrantMetrics_AllEmittedLabelValuesStayInClosedSet(t *testing.T) {
 		if err := RecordCorpusGrantWouldDeny(group, "tp0203-closed-set", "per_user_token"); err != nil {
 			t.Fatalf("RecordCorpusGrantWouldDeny(%q): unexpected error %v", group, err)
 		}
-		if err := RecordCorpusGrantAllowed(group, "per_user_token"); err != nil {
+		if err := RecordCorpusGrantAllowed(group, "tp0203-closed-set", "per_user_token"); err != nil {
 			t.Fatalf("RecordCorpusGrantAllowed(%q): unexpected error %v", group, err)
 		}
 	}
@@ -298,7 +348,7 @@ func TestCorpusGrantMetrics_DoNotReuseScopeRejectedCounter(t *testing.T) {
 	if err := RecordCorpusGrantWouldDeny(CorpusRouteGroupDigest, "tp0203-o2", "per_user_token"); err != nil {
 		t.Fatalf("RecordCorpusGrantWouldDeny: %v", err)
 	}
-	if err := RecordCorpusGrantAllowed(CorpusRouteGroupDigest, "per_user_token"); err != nil {
+	if err := RecordCorpusGrantAllowed(CorpusRouteGroupDigest, "tp0203-o2", "per_user_token"); err != nil {
 		t.Fatalf("RecordCorpusGrantAllowed: %v", err)
 	}
 
@@ -331,7 +381,7 @@ func TestCorpusGrantMetrics_WouldDenyAndAllowedIncrementIndependently(t *testing
 	group := CorpusRouteGroupExpertise // a Tier B group, to keep Tier B live in the assertions
 
 	denyChild := AuthCorpusGrantWouldDeny.WithLabelValues(string(group), userID, source)
-	allowChild := AuthCorpusGrantAllowed.WithLabelValues(string(group), source)
+	allowChild := AuthCorpusGrantAllowed.WithLabelValues(string(group), userID, source)
 
 	denyBefore := testutil.ToFloat64(denyChild)
 	allowBefore := testutil.ToFloat64(allowChild)
@@ -348,7 +398,7 @@ func TestCorpusGrantMetrics_WouldDenyAndAllowedIncrementIndependently(t *testing
 
 	allowBefore = testutil.ToFloat64(allowChild)
 	denyBefore = testutil.ToFloat64(denyChild)
-	if err := RecordCorpusGrantAllowed(group, source); err != nil {
+	if err := RecordCorpusGrantAllowed(group, userID, source); err != nil {
 		t.Fatalf("RecordCorpusGrantAllowed: %v", err)
 	}
 	if got := testutil.ToFloat64(allowChild) - allowBefore; got != 1 {
@@ -359,17 +409,24 @@ func TestCorpusGrantMetrics_WouldDenyAndAllowedIncrementIndependently(t *testing
 	}
 }
 
-// TestCorpusGrantMetrics_WouldDenyCarriesUserIDAndAllowedDoesNot pins the
-// documented label sets. The `user_id` label on the would-deny counter is what
-// makes UC-108-001 ("who would be denied") answerable at all, and its ABSENCE
-// on the allowed counter is the deliberate design.md §4 choice recorded as
-// F-108-COVERAGE-LABEL-01. Asserting both directions keeps that recorded gap
-// honest instead of letting a fourth label appear without a design decision.
-func TestCorpusGrantMetrics_WouldDenyCarriesUserIDAndAllowedDoesNot(t *testing.T) {
+// TestCorpusGrantMetrics_BothCountersCarryUserIDSoCoverageIsComputable pins
+// the label sets that make the §18 decision 1(b) coverage bar computable.
+//
+// `user_id` on the would-deny counter answers UC-108-001 ("who would be
+// denied"). `user_id` on the ALLOWED counter is what closes
+// F-108-COVERAGE-LABEL-01: without it a principal that holds the grant and
+// uses it is indistinguishable from one that never called, so a coverage cell
+// could only be closed by operator attestation. With both labelled, a cell is
+// closed by observed traffic of either outcome.
+//
+// This test previously asserted the OPPOSITE for the allowed counter, pinning
+// the gap while it was still open. Inverting it is the point: the assertion
+// now fails if the label is ever dropped again.
+func TestCorpusGrantMetrics_BothCountersCarryUserIDSoCoverageIsComputable(t *testing.T) {
 	if err := RecordCorpusGrantWouldDeny(CorpusRouteGroupRecent, "tp0203-labels", "per_user_token"); err != nil {
 		t.Fatalf("RecordCorpusGrantWouldDeny: %v", err)
 	}
-	if err := RecordCorpusGrantAllowed(CorpusRouteGroupRecent, "per_user_token"); err != nil {
+	if err := RecordCorpusGrantAllowed(CorpusRouteGroupRecent, "tp0203-labels", "per_user_token"); err != nil {
 		t.Fatalf("RecordCorpusGrantAllowed: %v", err)
 	}
 
@@ -400,13 +457,10 @@ func TestCorpusGrantMetrics_WouldDenyCarriesUserIDAndAllowedDoesNot(t *testing.T
 	}
 
 	allowLabels := labelNames(metricNameCorpusGrantAllowed)
-	for _, want := range []string{"route_group", "session_source"} {
+	for _, want := range []string{"route_group", "user_id", "session_source"} {
 		if !allowLabels[want] {
-			t.Errorf("%s is missing the %q label", metricNameCorpusGrantAllowed, want)
+			t.Errorf("%s is missing the %q label; without user_id a granted principal's traffic is invisible and the decision 1(b) coverage bar collapses back to per-cell operator attestation (F-108-COVERAGE-LABEL-01)", metricNameCorpusGrantAllowed, want)
 		}
-	}
-	if allowLabels["user_id"] {
-		t.Errorf("%s gained a user_id label; design.md §4 deliberately omits it (F-108-COVERAGE-LABEL-01 is the recorded consequence, not something to silently close here)", metricNameCorpusGrantAllowed)
 	}
 }
 

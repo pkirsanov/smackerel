@@ -112,7 +112,7 @@ func (g *CorpusGrantGate) record(r *http.Request, routeGroup metrics.CorpusRoute
 
 	sessionSource := string(sess.Source)
 	if auth.GateGlobalCorpusRead(sess).Allowed {
-		if err := metrics.RecordCorpusGrantAllowed(routeGroup, sessionSource); err != nil {
+		if err := metrics.RecordCorpusGrantAllowed(routeGroup, sess.UserID, sessionSource); err != nil {
 			slog.Error("api: corpus grant allowed counter not emitted", "error", err)
 		}
 		return

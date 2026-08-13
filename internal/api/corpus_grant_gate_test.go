@@ -48,7 +48,7 @@ type corpusGrantCounters struct {
 func corpusGrantSnapshot(group metrics.CorpusRouteGroup, userID, sessionSource string) corpusGrantCounters {
 	return corpusGrantCounters{
 		wouldDeny:     testutil.ToFloat64(metrics.AuthCorpusGrantWouldDeny.WithLabelValues(string(group), userID, sessionSource)),
-		allowed:       testutil.ToFloat64(metrics.AuthCorpusGrantAllowed.WithLabelValues(string(group), sessionSource)),
+		allowed:       testutil.ToFloat64(metrics.AuthCorpusGrantAllowed.WithLabelValues(string(group), userID, sessionSource)),
 		scopeRejected: testutil.ToFloat64(metrics.AuthScopeRejected.WithLabelValues(auth.GrantGlobalCorpusRead, userID)),
 	}
 }
