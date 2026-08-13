@@ -141,6 +141,7 @@ func TestCorpusGrantMetrics_CoverageCellIsClosableByEitherOutcome(t *testing.T) 
 	if got := testutil.ToFloat64(allowChild) - before; got != 1 {
 		t.Fatalf("allowed delta for (user=%s, group=%s) = %v, want 1; a granted principal's traffic must be attributable to its own cell", grantedUser, group, got)
 	}
+	grantedAllowed := testutil.ToFloat64(allowChild)
 
 	// Cell closed by a WOULD-DENY observation, for a DIFFERENT principal on
 	// the same route group. The two must not collide into one series.
@@ -158,8 +159,8 @@ func TestCorpusGrantMetrics_CoverageCellIsClosableByEitherOutcome(t *testing.T) 
 	// principal was observed. Per-principal attribution is the whole point;
 	// if one principal's traffic bled into another's cell, coverage would be
 	// claimed for a principal that never called.
-	if got := testutil.ToFloat64(allowChild) - 0; got == 0 {
-		t.Fatalf("the granted principal's allowed series vanished")
+	if got := testutil.ToFloat64(allowChild); got != grantedAllowed {
+		t.Errorf("the granted principal's allowed series moved from %v to %v while a DIFFERENT principal's would-deny was recorded; per-principal attribution has collapsed", grantedAllowed, got)
 	}
 	crossTalk := AuthCorpusGrantAllowed.WithLabelValues(string(group), deniedUser, source)
 	if got := testutil.ToFloat64(crossTalk); got != 0 {
@@ -233,20 +234,9 @@ func TestCorpusGrantMetrics_BypassedRejectsUnknownRouteGroup(t *testing.T) {
 	// Returning an error is not enough: a recorder that incremented BEFORE
 	// validating would pass a return-value-only check and still create the
 	// series. Walk the real gatherer and prove no such series exists.
-	families, err := prometheus.DefaultGatherer.Gather()
-	if err != nil {
-		t.Fatalf("Gather: %v", err)
-	}
-	for _, fam := range families {
-		if fam.GetName() != "smackerel_auth_corpus_grant_bypassed_total" {
-			continue
-		}
-		for _, m := range fam.GetMetric() {
-			for _, lp := range m.GetLabel() {
-				if lp.GetValue() == string(forged) {
-					t.Fatalf("a series carrying the forged route group %q was created; the closed-set guard ran too late", forged)
-				}
-			}
+	for _, seen := range corpusGrantRouteGroupLabelValues(t, metricNameCorpusGrantBypassed) {
+		if seen == string(forged) {
+			t.Fatalf("a series carrying the forged route group %q was created; the closed-set guard ran too late", forged)
 		}
 	}
 }

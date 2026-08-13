@@ -98,23 +98,17 @@ func (g *CorpusGrantGate) record(r *http.Request, routeGroup metrics.CorpusRoute
 		return
 	}
 
-	// Mirror the documented `auth.RequireScope` source switch. Shared-token
-	// and bootstrap sessions carry no scope claim and are BYPASSED by
-	// RequireScope under ENFORCE, so counting them as would-be denials would
-	// make this counter a false predictor of the ENFORCE outcome and inflate
-	// the UC-108-001 grant list with principals that will never be denied.
-	// They are not double-counted into AuthScopeCheckBypassed either — that
-	// counter belongs to the RequireScope mount point, which is not even
-	// mounted under OBSERVE.
+	// Mirror the documented `auth.RequireScope` source switch, and do it
+	// BEFORE evaluating the grant. Shared-token and bootstrap sessions carry
+	// no scope claim and are BYPASSED by RequireScope under ENFORCE, so
+	// counting them as would-be denials would make that counter a false
+	// predictor of the ENFORCE outcome and inflate the UC-108-001 grant list
+	// with principals that will never be denied. They are not double-counted
+	// into AuthScopeCheckBypassed either — that counter belongs to the
+	// RequireScope mount point, which is not even mounted under OBSERVE.
 	//
-	// They ARE counted here, on their own series (SEC-108-03). Returning
-	// silently left this band invisible in every spec-108 series for the whole
-	// observation window, so the coverage table the operator reads before
-	// authorising the flip excluded them structurally — and per SEC-108-02
-	// that band includes every username/password web principal. A dedicated
-	// counter keeps them out of the would-deny prediction while still making
-	// their traffic observable, which is what separates "nobody bypassed this
-	// route group" from "we could not see whether anybody did".
+	// They still get their own series rather than silence (SEC-108-03); see
+	// metrics.AuthCorpusGrantBypassed for why that distinction matters.
 	switch sess.Source {
 	case auth.SessionSourceSharedToken, auth.SessionSourceBootstrap:
 		if err := metrics.RecordCorpusGrantBypassed(routeGroup, string(sess.Source)); err != nil {

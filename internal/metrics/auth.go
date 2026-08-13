@@ -25,9 +25,10 @@
 //     deprecation pathway
 //   - `AuthFailure` — incremented alongside every middleware 401
 //     response
-//   - `AuthCorpusGrantWouldDeny` + `AuthCorpusGrantAllowed` —
-//     recorded from `internal/api::CorpusGrantGate.Observe`
-//     (spec 108 Scope 02) on every corpus route group
+//   - `AuthCorpusGrantWouldDeny` + `AuthCorpusGrantAllowed` +
+//     `AuthCorpusGrantBypassed` — recorded from
+//     `internal/api::CorpusGrantGate.Observe` (spec 108
+//     Scope 02) on every corpus route group
 //   - `AuthCorpusGrantEnforcementMode` — set once from the
 //     `cmd/core` startup resolution point
 package metrics
@@ -194,7 +195,7 @@ var AuthScopeCheckBypassed = prometheus.NewCounterVec(
 
 // ── Spec 108 Scope 02 — corpus-grant observe-stage telemetry ────────────────
 //
-// These three series extend the `smackerel_auth_*` family declared above; they
+// These four series extend the `smackerel_auth_*` family declared above; they
 // are deliberately NOT a parallel family and they deliberately do NOT reuse
 // `AuthScopeRejected` for the observe signal (R-108-O2). `AuthScopeRejected`
 // keeps its spec-060 meaning — a real 403 emitted under ENFORCE — so an
