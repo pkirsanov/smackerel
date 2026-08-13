@@ -87,12 +87,20 @@ hash_of() {
 }
 
 tmp="$(mktemp)" || exit 2
-trap 'rm -f "$tmp"' EXIT INT TERM
+interrupted_rc=""
+cleanup() { rm -f "$tmp"; }
+record_signal() { interrupted_rc="$1"; }
+trap cleanup EXIT
+trap 'record_signal 130' INT
+trap 'record_signal 143' TERM
 
 # Interleave stdout and stderr: a runner's failure detail usually arrives on
 # stderr, and evidence that drops it is evidence of the wrong thing.
 "$@" >"$tmp" 2>&1
 rc=$?
+if [[ -n "$interrupted_rc" ]]; then
+  rc="$interrupted_rc"
+fi
 
 total="$(grep -c '' <"$tmp" 2>/dev/null || printf '0')"
 digest="$(hash_of <"$tmp")"

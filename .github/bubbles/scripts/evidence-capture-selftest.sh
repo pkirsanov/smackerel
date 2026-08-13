@@ -167,6 +167,24 @@ else
   bad "--diagnostic bounded by ceiling" "emitted $big_lines line(s)"
 fi
 
+# --- 14. ADVERSARIAL: TERM preserves partial evidence and records interruption -
+# A timeout signals the wrapper while its child is running. The signal handler
+# must not delete the capture before line count, hash, and bounded output are
+# emitted; that produced a misleading empty block plus missing-file errors.
+set +e
+term_out="$(bash "$TARGET" -- sh -c 'printf "before-signal\n"; kill -TERM "$PPID"; printf "after-signal\n"' 2>&1)"
+term_rc=$?
+set -e
+if [[ "$term_rc" -eq 143 ]] &&
+  printf '%s' "$term_out" | grep -q '^exit: 143$' &&
+  printf '%s' "$term_out" | grep -qE '^sha256: [0-9a-f]{64}$' &&
+  printf '%s' "$term_out" | grep -qx 'before-signal' &&
+  ! printf '%s' "$term_out" | grep -q 'No such file or directory'; then
+  ok "TERM preserves captured output and emits an interrupted evidence block"
+else
+  bad "TERM preserves interrupted evidence" "rc=$term_rc $(printf '%s' "$term_out" | tr '\n' '|')"
+fi
+
 printf '\n%s: %d/%d checks passed\n' "$NAME" "$((checks - failures))" "$checks"
 if [[ "$failures" -gt 0 ]]; then
   printf '%s: FAILED\n' "$NAME"
