@@ -2837,7 +2837,68 @@ ok      github.com/smackerel/smackerel/cmd/core 0.652s
 `TestResolveRotationScopes_PreservesFromRecordedSet` seeds the recorded set `{corpus:read, annotation:edit}` and asserts preserve-mode returns it **verbatim** — the SCN-108-F02 hazard (silently dropping `annotation:edit`) fails that assertion. `RefusesWhenRecordedGrantsAreUnknown` and `PreservesRecordedAsNone` are a deliberate adversarial pair: both inputs carry zero scopes, so an implementation branching on `len(Scopes)==0` instead of on `Recorded` fails one of the two whichever way it guesses.
 
 **Claim Source:** executed. Note the mechanism is the §10.9 **recorded-set** preserve path, not an `--add-scope` primitive; F-108-UX-ROTATE-ADD-01 remains open by design.
-- [ ] Consumer Impact Sweep completed for the Telegram minter interface change across the minter, `bearerForChat`/`setBearerHeader`, the 13 bridge **API client** call sites, the exported test seam, the production wiring and dev/test Bot constructors, the 9 minter-construction fixtures, the operator CLI grant path, the scope registry, and the docs: zero stale first-party references remain, and each recorded negative result — no test asserts the minted scope claim today, `auth_tokens` has no scopes column, and no redirect/breadcrumb/navigation/deep link/generated client is affected — is **re-verified against the code rather than inherited from this plan**
+- [x] Consumer Impact Sweep completed for the Telegram minter interface change across the minter, `bearerForChat`/`setBearerHeader`, the 13 bridge **API client** call sites, the exported test seam, the production wiring and dev/test Bot constructors, the 9 minter-construction fixtures, the operator CLI grant path, the scope registry, and the docs: zero stale first-party references remain, and each recorded negative result — no test asserts the minted scope claim today, `auth_tokens` has no scopes column, and no redirect/breadcrumb/navigation/deep link/generated client is affected — is **re-verified against the code rather than inherited from this plan**
+  - **Command:** `./smackerel.sh test unit --go` then `./smackerel.sh test integration`, plus the per-surface greps below
+  - **Exit Code:** 0 (UNIT), 0 (INTEGRATION)
+  - **Evidence:**
+
+```
+CHK=0
+LINT=0
+FMT=0
+UNIT=0
+145            <- packages ok, 0 FAIL
+INT=0
+1988           <- --- PASS count
+FAILS:
+0
+```
+
+  **The stale-consumer breakage recorded above is RESOLVED.** Every `MintForChat`
+  call site now passes `ctx`; the compile proof is the integration tier building
+  and running at all (1988 pass / 0 fail), since `./smackerel.sh check` does not
+  compile test packages and therefore could never have caught it. That gap in
+  `check` is itself the reason this went unnoticed, and it is why the sweep is
+  closed on a test-tier run rather than on `check`.
+
+  **`setBearerHeader` needed no signature change** — it derives the context from
+  `req.Context()` (`bot.go:336`), so `ctx` reaches `bearerForChat` without
+  widening the 13 bridge API-client call sites. Verified rather than assumed:
+  `bearerForChat(ctx, chatID)` at `bot.go:307`.
+
+  **Both recorded negatives are SUPERSEDED, not merely re-verified — and they were
+  re-checked against the tree, not inherited:**
+
+  - *"no test asserts the minted scope claim today"* — now FALSE, correctly.
+    `internal/telegram/per_user_token_scope_claim_test.go` exists and carries 7
+    `Scopes` assertions. This is the shipped §18 decision 3 work.
+  - *"`auth_tokens` has no scopes column"* — now FALSE, correctly. Migration
+    `internal/db/migrations/063_auth_token_granted_scopes.sql:43` adds
+    `granted_scopes text[]`. This is the §10 readability decision, shipped.
+
+  Leaving these as inherited "no" answers would have understated the delivered
+  state and left the sweep asserting facts the tree contradicts.
+
+  **Negative that still holds:** no redirect/breadcrumb/navigation/deep-link or
+  generated client is affected — `grep -rn 'MintForChat\|MintForUser\|PerUserTokenMinter' web/`
+  returns nothing. The change is server-side auth only.
+
+  **Scope registry:** `corpus` is present in `auth.RegisteredScopeSurfaces`
+  (`internal/auth/scopes.go:46`), so `auth enroll --scope corpus:read` is a real
+  operator path.
+
+  **Docs:** 5 comments still documenting the removed 1-arg signatures were
+  corrected (`bot.go` ×2, `test_helpers.go`, and the `auth_chaos_scope04_test.go`
+  call-chain diagram, which also carried a stale `MintForUser(chatID, userID)`).
+  A sweep that leaves documentation describing a signature that no longer exists
+  is not complete.
+
+  **Remaining 1-arg strings in the tree are historical evidence, deliberately not
+  rewritten:** this row's own captured output above, and spec 044's completed
+  scenario text. Both are records of a past state; editing captured evidence to
+  match the present would destroy the audit trail, and spec 044 is outside this
+  scope's Change Boundary. Zero stale references remain in CODE, which is what
+  "first-party references" means here.
   - **UNCHECKED — the sweep is INCOMPLETE, and a stale consumer is currently breaking the build.** `MintForChat` gained a leading `ctx context.Context` parameter, but **6 call sites** in `tests/integration/` were never updated. `./smackerel.sh check` does **not** catch this (it does not compile test packages), which is why it went unnoticed.
 
 **Executed:** YES (2026-08-11, tree `<repo-root>`)
@@ -2868,13 +2929,13 @@ INTEGRATION_EXIT=1
 - [ ] Every "unknown" row in the design.md §5 matrix is now a measured row; the OBSERVE-window go/no-go query returns an empty (or explicitly-accepted) denial set
   - **CLAUSE 1 SATISFIED 2026-08-13. CLAUSE 2 still requires a real window — the item stays unchecked on clause 2 alone.**
   - **Clause 1 — no `unknown` rows remain in §5.** The Telegram bridge was the only one. It was unknown for a STRUCTURAL reason, not for lack of observation: the minter held a hardcoded `["annotation:edit"]` scope list, so the bridge's authority was not derivable from any principal and no quantity of observed traffic could ever have settled it. §18 decision 3 removed the list; `deriveGrants` now narrows the principal's persisted set and can never widen it. Proven by `TP-04-01` (unit), `TP-04-02` (bridge→API integration, 4/4 subtests), `TP-04-08` (hardcoded list gone) and `TP-04-09` (adversarial). The §5 row and the paragraph beneath the table were updated to record the measured outcome.
-  - **Clause 2 — genuinely operator-owned.** The go/no-go query needs real principals generating real traffic over a real window. It is now EXPRESSIBLE (see the coverage-bar item below); running it is not something this pass can manufacture.
+  - **Clause 2 — genuinely operator-owned, and now SCHEDULED rather than open-ended.** The go/no-go query needs real principals generating real traffic over a real window. It is now EXPRESSIBLE (see the coverage-bar item below) and it is on a schedule: `corpus-grant-observe-review`, cadence `daily`, in `config/upkeep-calendar.yaml`, with the procedure in `docs/Operations.md` → "Corpus-grant OBSERVE window review". It carries `blocks_on_failure: [release-train-promote]`, so a non-clean review blocks the Scope 05 flip instead of merely noting it.
 - [ ] **Ratified coverage bar (§18 decision 1, strengthening item 7)** satisfied before the flip is authorised: (a) ≥ 14 consecutive OBSERVE days with the stage resolved from SST at process start; (b) per-principal × per-route-group coverage across all **sixteen** groups, each cell closed by observed traffic **or** a recorded operator `idle-by-design` attestation naming a reason and the principal — including all eight silent Tier B groups; (c) zero would-deny for any principal the operator intends to keep, with intentionally-denied principals recorded **before** the flip; (d) the window reset to day zero on any new principal enrollment or new client surface. No cell is silently unobserved; `OBSERVE-CLEAN` is not asserted otherwise
   - **CRITERION (b) UNBLOCKED 2026-08-13 — it was a CODE gap, not a production-window gap. Criteria (a), (c), (d) remain operator-owned, so the item stays unchecked.**
   - **(b) is now computable.** `F-108-COVERAGE-LABEL-01` (BLOCKING) recorded that the ratified per-principal × per-route-group bar could not be expressed by the planned metrics: `would_deny_total` carries `user_id` but counts only denials, while `allowed_total` carried NO `user_id`, so a granted principal that used a route group was indistinguishable from one that never called it. Every cell for every granted principal therefore fell back to operator attestation. `user_id` has been added to `smackerel_auth_corpus_grant_allowed_total` (`internal/metrics/auth.go`; call site `internal/api/corpus_grant_gate.go:115`) — precisely the fix the finding prescribed, with the bounded cardinality it anticipated. A cell is now closed by observed traffic of EITHER outcome via the union query recorded in `design.md` §4. Pinned by `TestCorpusGrantMetrics_CoverageCellIsClosableByEitherOutcome` and `TestCorpusGrantMetrics_BothCountersCarryUserIDSoCoverageIsComputable`; the latter REPLACED a test that asserted the label's absence, so dropping it now fails rather than silently reopening the gap. Finding marked RESOLVED in `spec.md` §16.
-  - **Still operator-owned:** (a) the ≥ 14 consecutive OBSERVE days is irreducibly wall-clock; (c) and (d) depend on the real pre-flip principal roster. An `idle-by-design` attestation is still required for cells that genuinely receive no traffic — the fix makes traffic-bearing cells self-closing, it does not invent traffic that does not exist.
+  - **Still operator-owned, and SCHEDULED:** (a) the ≥ 14 consecutive OBSERVE days is irreducibly wall-clock; (c) and (d) depend on the real pre-flip principal roster. All three are carried by the `corpus-grant-observe-review` daily upkeep task (`config/upkeep-calendar.yaml`), whose procedure in `docs/Operations.md` runs the coverage query, the would-deny query, and the `auth list-users` roster check on every review. **Daily, not weekly, is load-bearing:** criterion (d) resets the window to day zero on any new principal enrollment or new client surface, so a weekly cadence could miss a reset for six days and then report a window that was never consecutive. An `idle-by-design` attestation is still required for cells that genuinely receive no traffic — the metric fix makes traffic-bearing cells self-closing, it does not invent traffic that does not exist.
 - [ ] **Ratified proactive rotation (item 9)** complete: every principal whose grants are unknowable has been rotated with a deliberately-issued grant set **before** Scope 05 flips the owning-train flag, so no `unknown` grant remains in the pre-flip roster. Recorded as an operator action, not inferred from telemetry
-  - **UNCHECKED:** operator action against a live deployment; no rotation was performed or recorded by this pass. **The enabling capability EXISTS and was verified 2026-08-13:** `smackerel auth list-users` renders a `GRANTS` column that distinguishes `unknown` (standing token predates grant recording — `granted_scopes IS NULL`), `none`, and the explicit scope list (`cmd/core/cmd_auth.go:498-509`, backed by `BearerStore.ListUsersWithGrants`, rendering pinned by `cmd_auth_test.go:610`). So the operator can enumerate exactly which principals need rotating without holding any wire token. What remains is executing the rotations against principals that exist only in the operator's deployment.
+  - **UNCHECKED:** operator action against a live deployment; no rotation was performed or recorded by this pass. **SCHEDULED:** step 4 of the `corpus-grant-observe-review` daily task (`docs/Operations.md`) enumerates `unknown` grant rows on every review, so a principal needing rotation surfaces the day it appears rather than at flip time. **The enabling capability EXISTS and was verified 2026-08-13:** `smackerel auth list-users` renders a `GRANTS` column that distinguishes `unknown` (standing token predates grant recording — `granted_scopes IS NULL`), `none`, and the explicit scope list (`cmd/core/cmd_auth.go:498-509`, backed by `BearerStore.ListUsersWithGrants`, rendering pinned by `cmd_auth_test.go:610`). So the operator can enumerate exactly which principals need rotating without holding any wire token. What remains is executing the rotations against principals that exist only in the operator's deployment.
 - [x] `TP-04-06` canary integration test passes — shared session/token bootstrap fixtures keep the ungranted daily-user negative case intact
   - **Command:** `./smackerel.sh test integration --go-run 'TP_04_03|TP_04_04|TP_04_06'`
   - **Exit Code:** 0

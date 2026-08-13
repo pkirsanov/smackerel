@@ -743,6 +743,16 @@ ratified is therefore **not computable from the currently-planned metric set**. 
 recorded as **F-108-COVERAGE-LABEL-01** in §16 and routed to `bubbles.design`; it is not
 assumed away, and until it lands criterion (b) is satisfiable only by per-cell attestation.
 
+**UPDATE 2026-08-13 — the label gap is CLOSED.** `user_id` was added to
+`smackerel_auth_corpus_grant_allowed_total`, so its label set is now
+`{route_group, user_id, session_source}`, matching the would-deny counter. A
+`(user_id, route_group)` cell closes on observed traffic of either outcome via the
+union query in `design.md` §4, so criterion (b) no longer requires per-cell
+attestation for principals that generate traffic. Cells with genuinely zero traffic
+still require an `idle-by-design` attestation — the fix makes traffic-bearing cells
+self-closing, it does not manufacture traffic. The paragraph above is retained as the
+record of why the gap existed.
+
 **Permanence.** Trigger-conditioned. The bar governs the phase-1 → phase-2 flip and each
 subsequent re-entry into OBSERVE; it expires with the observe branch at flag retirement
 (decision 6).

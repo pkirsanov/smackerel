@@ -2891,7 +2891,7 @@ introduced.
 | Metric name | Type | Labels | Increments / set when |
 |---|---|---|---|
 | `smackerel_auth_corpus_grant_would_deny_total` | Counter | `route_group` (closed set of **16**), `user_id`, `session_source` | A request reached a gated corpus route group **without** `corpus:read`. Under OBSERVE it was served anyway; the counter is the counterfactual "this would have been a 403". |
-| `smackerel_auth_corpus_grant_allowed_total` | Counter | `route_group` (closed set of **16**), `session_source` | A request reached a gated corpus route group **carrying** `corpus:read`. This is the denominator. **It has no `user_id` label** — see the coverage caveat below. |
+| `smackerel_auth_corpus_grant_allowed_total` | Counter | `route_group` (closed set of **16**), `user_id`, `session_source` | A request reached a gated corpus route group **carrying** `corpus:read`. This is the denominator, and `user_id` makes a GRANTED principal's traffic attributable — which is what lets a coverage cell close on observed traffic instead of operator attestation. |
 | `smackerel_auth_corpus_grant_enforcement_mode` | Gauge | (none) | Set once at startup: `0` = OBSERVE, `1` = ENFORCE. Lets a dashboard state the stage without reading config. |
 
 `route_group` label values — Tier A (raw corpus retrieval) then Tier B
@@ -2928,8 +2928,8 @@ intentionally denied:
 # The grant list: principals × route groups that would 403 under ENFORCE.
 sum by (user_id, route_group) (increase(smackerel_auth_corpus_grant_would_deny_total[7d]))
 
-# The denominator: granted traffic per group. NOTE: no user_id label.
-sum by (route_group) (increase(smackerel_auth_corpus_grant_allowed_total[7d]))
+# The denominator: granted traffic per principal AND group.
+sum by (user_id, route_group) (increase(smackerel_auth_corpus_grant_allowed_total[7d]))
 
 # Which stage is this process actually running? 0 = OBSERVE, 1 = ENFORCE.
 smackerel_auth_corpus_grant_enforcement_mode
@@ -2966,15 +2966,29 @@ hold, conjunctively (`spec.md` §18 decision 1):
    the flip, issuing a deliberate scope set for each. That makes the roster
    determinate by construction rather than by recovery.
 
-**Honest limit on criterion 2 (F-108-COVERAGE-LABEL-01, still open).** The
-ratified bar is a **per-principal × per-route-group** matrix. The shipped metric
-set cannot compute it: `..._would_deny_total` carries `user_id` but only counts
-*denials*, so a **granted** principal's traffic is invisible to it, and
-`..._allowed_total` carries **no `user_id`**, so per-principal coverage cannot be
-reconstructed from it either. Until that label gap is closed, each matrix cell is
-satisfiable only by observed traffic at the group level **plus explicit per-cell
-operator attestation**. Do not claim per-principal coverage from these two
-counters — they cannot support the claim.
+**Criterion 2 coverage (F-108-COVERAGE-LABEL-01, RESOLVED 2026-08-13).** The
+ratified bar is a **per-principal × per-route-group** matrix. It was previously
+NOT computable: `..._would_deny_total` carries `user_id` but only counts
+*denials*, so a **granted** principal's traffic was invisible to it, and
+`..._allowed_total` carried **no `user_id`**, so per-principal coverage could not
+be reconstructed from it either. Each cell was then satisfiable only by
+group-level traffic **plus explicit per-cell operator attestation**.
+
+`user_id` has since been added to `..._allowed_total`, so a cell now closes on
+observed traffic of **either** outcome:
+
+```promql
+sum by (user_id, route_group) (
+    increase(smackerel_auth_corpus_grant_allowed_total[14d])
+  or
+    increase(smackerel_auth_corpus_grant_would_deny_total[14d])
+)
+```
+
+Cells absent from that result received no traffic and still require an
+`idle-by-design` attestation naming the reason and the principal — the label fix
+makes traffic-bearing cells self-closing, it does not invent traffic that never
+happened. Silence is still never read as coverage.
 
 ###### Granting `corpus:read` is a token rotation, not a flag flip
 
