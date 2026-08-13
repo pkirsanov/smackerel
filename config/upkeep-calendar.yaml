@@ -28,6 +28,23 @@ tasks:
 - id: flag-cleanup-audit
   cadence: monthly
   retention: "1y"
+- id: corpus-grant-observe-review
+  # Spec 108 §18 decision 1(b): the corpus-grant ENFORCE flip is authorised only
+  # after >= 14 CONSECUTIVE OBSERVE days with per-principal x per-route-group
+  # coverage across all sixteen route groups.
+  #
+  # DAILY, not weekly, for two reasons: the window is measured in days, and it
+  # RESETS TO DAY ZERO on any new principal enrollment or new client surface. A
+  # weekly cadence could miss a reset for six days and then miscount the window
+  # as satisfied — the exact failure the ratified bar exists to prevent.
+  #
+  # Procedure: docs/Operations.md -> "Corpus-grant OBSERVE window review".
+  # Only meaningful while corpusGrantEnforcement is OFF; once the flag flips the
+  # window is moot and this task retires with the flag.
+  cadence: daily
+  at: "06:30"
+  retention: "1y"
+  blocks_on_failure: [ release-train-promote ]
 - id: compliance-sweep
   cadence: quarterly
   retention: "7y"

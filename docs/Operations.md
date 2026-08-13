@@ -3232,6 +3232,89 @@ on production-class deployments use either the bootstrap session or — when
 exercise the admin UI's mutation panels. The page itself loads under any
 authenticated session.
 
+## Corpus-grant OBSERVE window review
+
+Runs **daily** from `config/upkeep-calendar.yaml` (`corpus-grant-observe-review`)
+while `corpusGrantEnforcement` is OFF. Its job is to answer one question: **may the
+ENFORCE flip be authorised yet?** Spec 108 §18 decision 1(b) says yes only after
+**≥ 14 consecutive OBSERVE days** with per-principal × per-route-group coverage
+across all **sixteen** route groups.
+
+The review is scheduled daily rather than weekly because the window **resets to day
+zero** on any new principal enrollment or new client surface. A weekly cadence could
+miss a reset for six days and then report a window that was never actually
+consecutive.
+
+### 1. Confirm the stage is still OBSERVE
+
+```bash
+curl -fsS http://127.0.0.1:${CORE_HOST_PORT}/metrics \
+  | grep smackerel_auth_corpus_grant_enforcement_mode
+```
+
+`0` = OBSERVE (keep counting). `1` = ENFORCE (the flip already happened; this review
+is moot and the task retires with the flag). The gauge is set explicitly at startup
+from the SST-resolved stage, so a serving process has always published it — an unset
+gauge would read `0` and be indistinguishable from OBSERVE, which is why the value is
+trustworthy only because the resolution point writes it.
+
+### 2. Coverage — which (principal, route group) cells are closed
+
+A cell is closed by observed traffic of **either** outcome:
+
+```promql
+sum by (user_id, route_group) (
+    increase(smackerel_auth_corpus_grant_allowed_total[14d])
+  or
+    increase(smackerel_auth_corpus_grant_would_deny_total[14d])
+)
+```
+
+Every enrolled principal × all sixteen route groups must appear. Cells that do **not**
+appear received no traffic and require an explicit operator `idle-by-design`
+attestation naming the reason and the principal — the eight silent Tier B groups
+usually land here. Silence is never read as coverage.
+
+### 3. Would-deny set — who breaks if the flag flips today
+
+```promql
+sum by (user_id, route_group) (
+  increase(smackerel_auth_corpus_grant_would_deny_total[14d])
+)
+```
+
+Every principal in this result WILL be denied at ENFORCE. For each one, either
+rotate a grant in (step 4) or record it as intentionally-denied **before** the flip.
+An empty result — or one containing only explicitly-accepted principals — is the
+go signal.
+
+### 4. Principals whose grants are unknowable
+
+```bash
+docker exec -it "$(smackerel_compose_project)-smackerel-core-1" \
+  /usr/local/bin/smackerel-core auth list-users
+```
+
+The `GRANTS` column distinguishes:
+
+| Value | Meaning | Action |
+|---|---|---|
+| explicit list | grants recorded on the standing token | none |
+| `none` | recorded, deliberately empty | none — this is a decision, not a gap |
+| `unknown` | `granted_scopes IS NULL`; token predates grant recording | **rotate before the flip** |
+| `no-standing-token` | principal has no current token | enroll or retire |
+
+§18 decision 9 requires **zero `unknown` rows** in the pre-flip roster. Rotate with
+`auth rotate --scope ...`; rotation REPLACES the scope set, so pass every scope the
+principal must keep, not just the new one.
+
+### 5. Window bookkeeping
+
+Reset the day counter to zero whenever a principal is enrolled or a new client
+surface appears. Record each daily review outcome in the upkeep ledger; the flip is
+authorised only when 14 consecutive reviews have been clean under an unchanged
+roster.
+
 ## Expense Tracking Configuration
 
 Expense tracking captures receipts from email, photos, and PDFs, classifies them using a 7-level rule chain, and supports CSV export.
