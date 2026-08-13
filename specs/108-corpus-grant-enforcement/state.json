@@ -37,7 +37,9 @@
     "completedPhaseClaims": [
       "test",
       "validate",
-      "security"
+      "security",
+      "regression",
+      "simplify"
     ],
     "completedPhaseClaimsNote": "Claims ONLY the phases whose provenance Check 6B can actually verify: each has an executionHistory entry whose agent is bubbles.<phase> and whose phasesExecuted contains that phase. 'implement' is deliberately NOT claimed even though the work was done and is green — it was executed by bubbles.goal as the authorized top-level runner, not by a bubbles.implement dispatch, so claiming it would assert a provenance that does not exist. The bubbles.goal executionHistory entry is the truthful record of who did that work.",
     "completedScopes": [
@@ -608,6 +610,59 @@
         "report.md"
       ],
       "summary": "Remediated F-108-VAL-01 and F-108-VAL-02 in the artifact it owns. Evidenced TP-04-07 with its executed result and RETAINED the check, because the note was stale rather than the test phantom; narrowed the migration-063 rollback claim so it no longer asserts a database-verified rollback that was never run; narrowed the Change Boundary claim so it states the adjudicated deviation instead of asserting zero excluded families changed. Date-stamped both superseded UNCHECKED residues so the newest state reads last. Flagged that one figure it was given could not be corroborated from an artifact, rather than restating it as verified."
+    },
+    {
+      "agent": "bubbles.regression",
+      "mode": "full-delivery",
+      "phasesExecuted": [
+        "regression"
+      ],
+      "startedAt": "2026-08-13T00:00:00Z",
+      "finishedAt": "2026-08-13T00:00:00Z",
+      "durationUnmeasured": true,
+      "durationUnmeasuredReason": "Regression dispatch recorded at DATE granularity; no clock span was captured and none is invented.",
+      "statusBefore": "blocked",
+      "statusAfter": "blocked",
+      "outcome": "completed_owned",
+      "artifactsWritten": [
+        "internal/api/router_corpus_gate_test.go"
+      ],
+      "artifactsNotTouched": [
+        "scopes.md",
+        "state.json",
+        "spec.md",
+        "design.md",
+        "report.md"
+      ],
+      "summary": "Regression sweep over the shared contracts this session changed: the user_id label added to smackerel_auth_corpus_grant_allowed_total, the new bypassed counter, the renamed gate test, and the raised e2e lifecycle timeout. Found a real defect the targeted runs had hidden — the SEC-108-01 comment block left two consecutive blank lines, which gofmt collapses, so './smackerel.sh format --check' was failing while check, lint, unit, integration and a corpus-selector run all exited 0. Fixed it. Re-ran the lanes against the recorded baseline with no drift: unit 145 packages / 0 failures, integration 1974 pass / 0 fail, matching exactly. This is the argument for running the phase rather than recording it: a lane-selector run is not a substitute for the full lane."
+    },
+    {
+      "agent": "bubbles.simplify",
+      "mode": "full-delivery",
+      "phasesExecuted": [
+        "simplify"
+      ],
+      "startedAt": "2026-08-13T00:00:00Z",
+      "finishedAt": "2026-08-13T00:00:00Z",
+      "durationUnmeasured": true,
+      "durationUnmeasuredReason": "Simplify dispatch recorded at DATE granularity; no clock span was captured and none is invented.",
+      "statusBefore": "blocked",
+      "statusAfter": "blocked",
+      "outcome": "completed_owned",
+      "artifactsWritten": [
+        "internal/api/corpus_grant_gate.go",
+        "internal/metrics/auth.go",
+        "internal/metrics/corpus_grant_test.go",
+        "tests/e2e/corpus_enforce_e2e_test.go"
+      ],
+      "artifactsNotTouched": [
+        "scopes.md",
+        "state.json",
+        "spec.md",
+        "design.md",
+        "report.md"
+      ],
+      "summary": "Simplify pass over the changed surface. It STRENGTHENED a test rather than only shortening code: TestCorpusGrantMetrics_CoverageCellIsClosableByEitherOutcome asserted only that the granted principal's series was non-zero, which is nearly always true and did not test the per-principal attribution its own comment promised; it now captures the value and asserts it is UNCHANGED while a different principal is recorded. Also replaced a hand-rolled Prometheus gatherer walk with the existing corpusGrantRouteGroupLabelValues helper, corrected two stale three-series counts to four, and moved the bypass-counter rationale to a single authority at the metric declaration instead of restating it at the call site. Non-vacuity of the bypass regression was re-verified AFTER the refactor by removing the gate emit and observing both subtests fail. check/format/lint 0, unit 145 packages / 0 failures."
     }
   ],
   "nextRequiredOwner": "bubbles.plan"
