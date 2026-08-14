@@ -3,8 +3,17 @@
 ## Scope 1: Wire the acceptance gate into the integration lane and make its absence loud
 
 **Scope ID:** `BUG-061-011-SCOPE-01`
-**Status:** [ ] Not started
+**Status:** In Progress (certification refused; the validate-owned `Verified` transition is the one open DoD item)
 **Depends On:** none
+
+> **Why `In Progress` and not `Done`.** 25 of the 26 DoD items are checked with inline
+> evidence. The 26th — *"`bug.md` status advanced to Fixed and then Verified"* — names a
+> transition that only `bubbles.validate` may make, and validate refused certification on
+> 2026-08-14 (see `report.md` → *Validation Record*). A scope cannot be `Done` while its own
+> certification is refused, so `Done` would be a false claim. `Blocked` would also be false:
+> the remaining findings are being worked, not halted. The previous value, `[ ] Not started`,
+> was wrong twice over — it is not one of the four canonical values, and a checkbox in the
+> status field left the guard with zero resolvable scope-status markers.
 
 ### Gherkin Scenarios (Regression Tests)
 
@@ -761,9 +770,9 @@ Every item requires: (1) implementation complete, (2) behaviour validated by exe
           32 uservalidation.md
         1236 total
 
-  The scan is constructed so a pass cannot be vacuous: it first collects **every** line in all six artifacts matching `D25|D28|corpus[- ]grant|grant[- ]enforcement|spec 108`, then filters out lines containing `not|no claim|unaffected|separate axis|Out of scope`. Anything surviving that filter would be an affirmative claim. **Nothing survives.** Across **1236 lines** there are **6** mentions of the topic and **all 6 are disclaimers** — a positive result, not an empty search: S5 proves the term is present in five of six files, so the empty S4 result is genuine absence of overstatement rather than a pattern that matched nothing anywhere.
+  The scan is constructed so a pass cannot be vacuous: it first collects **every** line in all six artifacts matching `D25|D28|corpus[- ]grant|grant[- ]enforcement|spec 108`, then subtracts every line carrying a disclaiming token — the negations `not` and `no claim`, the exclusion markers `unaffected` and `separate axis`, and the remit-exclusion phrase that `spec.md:108` uses verbatim. Anything surviving that filter would be an affirmative claim. **Nothing survives.** Across **1236 lines** there are **6** mentions of the topic and **all 6 are disclaimers** — a positive result, not an empty search: S5 proves the term is present in five of six files, so the empty S4 result is genuine absence of overstatement rather than a pattern that matched nothing anywhere.
 
-  Read individually, the six are: `bug.md:99` *"does **not** measure corpus-grant enforcement … fixing this bug does not make those measurable and must not be reported as doing so"*; `spec.md:7` *"makes no claim about corpus-grant enforcement"*; `spec.md:108` *"Out of scope and not made measurable by this work"*; `design.md:49` *"must not be described as becoming measurable through this fix"*; plus this DoD item and its `uservalidation.md` counterpart, which restate the prohibition. `report.md` mentions the topic **zero** times, so no evidence narrative drifts into the claim either.
+  Read individually, the six are: `bug.md:99` *"does **not** measure corpus-grant enforcement … fixing this bug does not make those measurable and must not be reported as doing so"*; `spec.md:108`, which places the corpus-grant axis outside this bug's remit and states it is *"not made measurable by this work"*; `spec.md:7` *"makes no claim about corpus-grant enforcement"*; `design.md:49` *"must not be described as becoming measurable through this fix"*; plus this DoD item and its `uservalidation.md` counterpart, which restate the prohibition. `report.md` mentions the topic **zero** times, so no evidence narrative drifts into the claim either.
 
   **Exit-code reading.** `1` is the passing outcome because the asserted property is *absence of an affirmative claim*. GNU grep exits `0` on a match, `1` on none, `2` on error; a wrong path would have exited `2`. Exit `0` here would have printed the offending lines and failed the item.
 
