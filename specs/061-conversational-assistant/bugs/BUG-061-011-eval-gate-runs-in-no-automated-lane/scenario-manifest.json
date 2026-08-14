@@ -6,6 +6,12 @@
     {
       "scopeId": "BUG-061-011-SCOPE-01",
       "scenarioId": "BUG-061-011-S01-full-lane-executes-gate-and-reports-count",
+      "requiredTestType": ["integration"],
+      "linkedTests": [
+        { "file": "tests/eval/assistant/acceptance_test.go", "function": "TestAcceptanceGate_RoutingAccuracyAndCaptureFallback" },
+        { "file": "scripts/runtime/go-integration.sh" }
+      ],
+      "evidenceRefs": ["scopes.md", "report.md"],
       "label": "Full integration lane executes the gate and reports executed_assertions=210",
       "type": "regression-e2e",
       "source": "specs/061-conversational-assistant/bugs/BUG-061-011-eval-gate-runs-in-no-automated-lane/scopes.md",
@@ -15,6 +21,11 @@
     {
       "scopeId": "BUG-061-011-SCOPE-01",
       "scenarioId": "BUG-061-011-S02-absent-marker-fails-lane",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        { "file": "internal/deploy/eval_lane_contract_test.go", "function": "TestEvalLaneContract_AdversarialRejectsMissingOrZeroAssertion" }
+      ],
+      "evidenceRefs": ["scopes.md", "report.md"],
       "label": "A lane run whose output lacks the marker exits non-zero and names the gate",
       "type": "adversarial-regression-e2e",
       "source": "specs/061-conversational-assistant/bugs/BUG-061-011-eval-gate-runs-in-no-automated-lane/scopes.md",
@@ -24,6 +35,11 @@
     {
       "scopeId": "BUG-061-011-SCOPE-01",
       "scenarioId": "BUG-061-011-S03-zero-count-fails-lane",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        { "file": "internal/deploy/eval_lane_contract_test.go", "function": "TestEvalLaneContract_AdversarialRejectsMissingOrZeroAssertion" }
+      ],
+      "evidenceRefs": ["scopes.md", "report.md"],
       "label": "A lane run reporting executed_assertions=0 exits non-zero and quotes the marker line",
       "type": "adversarial-regression-e2e",
       "source": "specs/061-conversational-assistant/bugs/BUG-061-011-eval-gate-runs-in-no-automated-lane/scopes.md",
@@ -33,6 +49,11 @@
     {
       "scopeId": "BUG-061-011-SCOPE-01",
       "scenarioId": "BUG-061-011-S04-marker-emitted-on-threshold-failure",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        { "file": "internal/deploy/eval_lane_contract_test.go", "function": "TestEvalLaneContract_AdversarialRejectsConditionalOrAbsentMarker" }
+      ],
+      "evidenceRefs": ["scopes.md", "report.md"],
       "label": "The gate emits its count before the threshold comparison, so a failing gate is distinguishable from a gate that never ran",
       "type": "adversarial-regression-e2e",
       "source": "specs/061-conversational-assistant/bugs/BUG-061-011-eval-gate-runs-in-no-automated-lane/scopes.md",
@@ -42,6 +63,11 @@
     {
       "scopeId": "BUG-061-011-SCOPE-01",
       "scenarioId": "BUG-061-011-S05-failing-go-test-and-missing-marker-do-not-mask",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        { "file": "internal/deploy/eval_lane_contract_test.go", "function": "TestEvalLaneContract_LaneRunsGateAndAssertsExecutedAssertions" }
+      ],
+      "evidenceRefs": ["scopes.md", "report.md"],
       "label": "A failing go test and a missing marker both surface; neither masks the other into a pass",
       "type": "regression-e2e",
       "source": "specs/061-conversational-assistant/bugs/BUG-061-011-eval-gate-runs-in-no-automated-lane/scopes.md",
@@ -51,6 +77,12 @@
     {
       "scopeId": "BUG-061-011-SCOPE-01",
       "scenarioId": "BUG-061-011-S06-focused-run-usable-and-announced",
+      "requiredTestType": ["integration"],
+      "linkedTests": [
+        { "file": "tests/eval/assistant/acceptance_test.go", "function": "TestAcceptanceGate_RoutingAccuracyAndCaptureFallback" },
+        { "file": "scripts/runtime/go-integration.sh" }
+      ],
+      "evidenceRefs": ["scopes.md", "report.md"],
       "label": "A focused run does not fail on the missing marker and prints an explicit not-enforced notice",
       "type": "regression-e2e",
       "source": "specs/061-conversational-assistant/bugs/BUG-061-011-eval-gate-runs-in-no-automated-lane/scopes.md",
@@ -60,6 +92,12 @@
     {
       "scopeId": "BUG-061-011-SCOPE-01",
       "scenarioId": "BUG-061-011-S07-documented-invocation-now-runs-the-gate",
+      "requiredTestType": ["integration"],
+      "linkedTests": [
+        { "file": "tests/eval/assistant/acceptance_test.go", "function": "TestAcceptanceGate_RoutingAccuracyAndCaptureFallback" },
+        { "file": "docs/Testing.md" }
+      ],
+      "evidenceRefs": ["scopes.md", "report.md"],
       "label": "The previously-vacuous invocation documented at docs/Testing.md:748 demonstrably runs the gate and emits the marker",
       "type": "adversarial-regression-e2e",
       "source": "specs/061-conversational-assistant/bugs/BUG-061-011-eval-gate-runs-in-no-automated-lane/scopes.md",
@@ -69,6 +107,11 @@
     {
       "scopeId": "BUG-061-011-SCOPE-01",
       "scenarioId": "BUG-061-011-S08-package-removal-detected-outside-that-lane",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        { "file": "internal/deploy/eval_lane_contract_test.go", "function": "TestEvalLaneContract_AdversarialRejectsMissingEvalPackage" }
+      ],
+      "evidenceRefs": ["scopes.md", "report.md"],
       "label": "Removing ./tests/eval/... from the integration lane fails a unit-lane contract test (case A1 — the exact current defect)",
       "type": "adversarial-regression-e2e",
       "source": "specs/061-conversational-assistant/bugs/BUG-061-011-eval-gate-runs-in-no-automated-lane/scopes.md",
@@ -78,6 +121,11 @@
     {
       "scopeId": "BUG-061-011-SCOPE-01",
       "scenarioId": "BUG-061-011-S09-weakened-assertion-detected",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        { "file": "internal/deploy/eval_lane_contract_test.go", "function": "TestEvalLaneContract_AdversarialRejectsMissingOrZeroAssertion" }
+      ],
+      "evidenceRefs": ["scopes.md", "report.md"],
       "label": "A lane that runs the eval package but no longer requires a non-zero count fails the contract test",
       "type": "adversarial-regression-e2e",
       "source": "specs/061-conversational-assistant/bugs/BUG-061-011-eval-gate-runs-in-no-automated-lane/scopes.md",
@@ -87,6 +135,11 @@
     {
       "scopeId": "BUG-061-011-SCOPE-01",
       "scenarioId": "BUG-061-011-S10-conditional-emission-detected",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        { "file": "internal/deploy/eval_lane_contract_test.go", "function": "TestEvalLaneContract_AdversarialRejectsConditionalOrAbsentMarker" }
+      ],
+      "evidenceRefs": ["scopes.md", "report.md"],
       "label": "A gate that emits its marker only inside if !t.Failed() fails the contract test",
       "type": "adversarial-regression-e2e",
       "source": "specs/061-conversational-assistant/bugs/BUG-061-011-eval-gate-runs-in-no-automated-lane/scopes.md",
@@ -96,6 +149,11 @@
     {
       "scopeId": "BUG-061-011-SCOPE-01",
       "scenarioId": "BUG-061-011-S11-bypass-detected",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        { "file": "internal/deploy/eval_lane_contract_test.go", "function": "TestEvalLaneContract_AdversarialRejectsBypassOrBroadenedSkip" }
+      ],
+      "evidenceRefs": ["scopes.md", "report.md"],
       "label": "A lane guarding its assertion behind a skip variable, or broadening the skip condition beyond the empty run-selector, fails the contract test",
       "type": "adversarial-regression-e2e",
       "source": "specs/061-conversational-assistant/bugs/BUG-061-011-eval-gate-runs-in-no-automated-lane/scopes.md",
@@ -105,6 +163,11 @@
     {
       "scopeId": "BUG-061-011-SCOPE-01",
       "scenarioId": "BUG-061-011-S12-executed-assertion-count-can-be-zero",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        { "file": "tests/eval/assistant/harness_test.go", "function": "TestExecutedAssertions_ZeroOnEmptyCorpus" }
+      ],
+      "evidenceRefs": ["scopes.md", "report.md"],
       "label": "The executed-assertion count is a real measurement: an empty corpus yields exactly 0, proving the lane's non-zero check is not vacuous",
       "type": "adversarial-unit",
       "source": "specs/061-conversational-assistant/bugs/BUG-061-011-eval-gate-runs-in-no-automated-lane/scopes.md",
