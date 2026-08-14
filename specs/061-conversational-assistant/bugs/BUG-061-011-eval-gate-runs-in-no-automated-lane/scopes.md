@@ -15,6 +15,33 @@
 > was wrong twice over — it is not one of the four canonical values, and a checkbox in the
 > status field left the guard with zero resolvable scope-status markers.
 
+### Change Boundary
+
+**Allowed surfaces:** `scripts/runtime/go-integration.sh` (add `./tests/eval/...` to the lane argv;
+add the marker assertion and the focused-run notice), `tests/eval/assistant/harness.go` (untagged
+`ExecutedAssertions` + `FormatGateMarker`, `GateMarkerPrefix`),
+`tests/eval/assistant/acceptance_test.go` (emit the marker unconditionally, before the threshold
+comparison), `tests/eval/assistant/harness_test.go` (the empty-corpus measurement test),
+`internal/deploy/eval_lane_contract_test.go` (new, untagged, deliberately outside the lane it
+guards), `docs/Testing.md` (correct the invocation that was documented as running the gate).
+
+**Excluded surfaces:** No product runtime code. No `internal/api/`, `internal/assistant/`,
+`internal/agent/`, `internal/connector/`, `internal/telegram/`, `cmd/`. No database migrations, no
+protobuf or config schema, no `config/smackerel.yaml`. No other lane wrapper under
+`scripts/runtime/`. This bug changes what the CI lane *executes and asserts*; it changes no
+behaviour the product exhibits to a user.
+
+**Consumer Impact Sweep:** The one interface this bug introduces is the acceptance-gate marker
+contract — the line prefix `ASSISTANT_ACCEPTANCE_GATE_V1` plus its `executed_assertions=` field.
+Its full first-party reference set is four files, all inside the Allowed surfaces above:
+`tests/eval/assistant/harness.go:343` declares `GateMarkerPrefix` (the sole producer),
+`scripts/runtime/go-integration.sh:65` binds `gate_marker_prefix` (the sole enforcing consumer),
+`internal/deploy/eval_lane_contract_test.go:25,33,209` pins both halves as a contract, and
+`docs/Testing.md:763` shows a sample line. Nothing was renamed or removed — the marker did not
+exist before this bug — so no reference can have gone stale. No navigation, breadcrumb, redirect,
+deep link, API client, or generated client is involved; this contract is not reachable from any
+product surface.
+
 ### Gherkin Scenarios (Regression Tests)
 
 ```gherkin
@@ -887,6 +914,44 @@ Every item requires: (1) implementation complete, (2) behaviour validated by exe
   inside `SCN-002-BUG-002-001`, which stops postgres on purpose to prove readiness is rejected, and
   the scenario then reports `PASS: SCN-002-BUG-002-001 (stopped postgres rejected, exit=1)`. It is
   called out here so a future reader grepping for `FAIL:` does not mistake it for a real failure.
+
+- [x] Change Boundary is respected and zero excluded file families were changed
+
+  **Claim Source:** executed · **Tree:** HEAD=0bcb9d1e · **Exit Code:** `0`
+  **Command:** `git show --stat --name-only c7667d99` filtered to this bug's surfaces
+
+      docs/Testing.md
+      internal/deploy/eval_lane_contract_test.go
+      scripts/runtime/go-integration.sh
+      tests/eval/assistant/acceptance_test.go
+      tests/eval/assistant/harness.go
+      tests/eval/assistant/harness_test.go
+
+  Six files, every one named in the Allowed surfaces list. The commit `c7667d99` also carries two
+  unrelated Stage-1 workstreams (router warm-up, corpus-grant scopes 01–04); the filter above
+  isolates this bug's share. No path under `internal/api/`, `internal/assistant/`, `internal/agent/`,
+  `internal/connector/`, `internal/telegram/`, `cmd/`, `config/`, or `internal/db/migrations/`
+  appears in this bug's share, so no excluded family was touched.
+
+- [x] Consumer impact sweep completed — zero stale first-party references remain after the acceptance-gate marker contract was introduced
+
+  **Claim Source:** executed · **Tree:** HEAD=0bcb9d1e · **Exit Code:** `0`
+  **Command:** `grep -rn 'ASSISTANT_ACCEPTANCE_GATE_V1' --include='*.go' --include='*.sh' --include='*.md' .` (excluding `.git/` and `specs/`)
+
+      ./docs/Testing.md:763:ASSISTANT_ACCEPTANCE_GATE_V1 executed_assertions=210 rows=150 capture_expected=60 routing_accuracy=1.0000 capture_fallback_rate=1.0000
+      ./scripts/runtime/go-integration.sh:65:gate_marker_prefix="ASSISTANT_ACCEPTANCE_GATE_V1"
+      ./internal/deploy/eval_lane_contract_test.go:25:        evalGateMarkerPrefix = "ASSISTANT_ACCEPTANCE_GATE_V1"
+      ./internal/deploy/eval_lane_contract_test.go:33:        evalGateMarkerAssignment = `gate_marker_prefix="ASSISTANT_ACCEPTANCE_GATE_V1"`
+      ./internal/deploy/eval_lane_contract_test.go:209:gate_marker_prefix="ASSISTANT_ACCEPTANCE_GATE_V1"
+      ./tests/eval/assistant/harness.go:343:const GateMarkerPrefix = "ASSISTANT_ACCEPTANCE_GATE_V1"
+
+  Four distinct files, all inside the Allowed surfaces: one producer (`harness.go`), one enforcing
+  consumer (`go-integration.sh`), one contract that pins both halves (`eval_lane_contract_test.go`),
+  and one documentation sample (`docs/Testing.md`). The sweep can be closed on a stronger ground
+  than enumeration: the marker **did not exist before this bug**, so there is no earlier spelling
+  for a reference to have been left pointing at. Nothing was renamed and nothing was removed. No
+  navigation, breadcrumb, redirect, deep link, API client, or generated client participates — the
+  contract is not reachable from any product surface.
 
 #### Group C — Build Quality Gate (grouped block)
 
