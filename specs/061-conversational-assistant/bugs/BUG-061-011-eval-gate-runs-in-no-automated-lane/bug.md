@@ -19,7 +19,17 @@
 - [ ] Verified
 - [ ] Closed
 
-**Fixed as of the working tree at HEAD `3af96a02`** (the fix is implemented but uncommitted). The gate now executes in the automated integration lane: a full `./smackerel.sh test integration` run compiled and executed `./tests/eval/assistant`, the gate emitted exactly one `ASSISTANT_ACCEPTANCE_GATE_V1` line reporting `executed_assertions=210`, and the lane's own enforced assertion accepted it. Raw evidence is in [`scopes.md`](scopes.md) DoD item **A9** and [`report.md`](report.md) → *After Fix — Verification*.
+**Fixed in commit `c7667d99`** ("feat(stage-1): eval-gate lane wiring, router warm-up contract,
+corpus grant scopes 01-04"), which carries both halves of the fix: the `./tests/eval/...` package
+in `scripts/runtime/go-integration.sh` and the `internal/deploy/eval_lane_contract_test.go`
+contract suite that fails if either half is removed. An earlier revision of this line described the
+fix as "implemented but uncommitted" at working-tree HEAD `3af96a02`; that was true when written
+and is now stale, so it is corrected rather than left to mislead a reader checking whether the work
+survived. The gate now executes in the automated integration lane: a full
+`./smackerel.sh test integration` run compiled and executed `./tests/eval/assistant`, the gate
+emitted exactly one `ASSISTANT_ACCEPTANCE_GATE_V1` line reporting `executed_assertions=210`, and
+the lane's own enforced assertion accepted it. Raw evidence is in [`scopes.md`](scopes.md) DoD item
+**A9** and [`report.md`](report.md) → *After Fix — Verification*.
 
 **Two things `Fixed` deliberately does not assert.** First, the integration lane is **not green** — it exited `1` on a single unrelated failure, `TestOpenKnowledgeRouting_FallbackToOpenKnowledge`, filed separately as `specs/064-open-ended-knowledge-agent/bugs/BUG-064-003-router-warmup-exceeds-fixed-deadline/`. The Stage 1 exit criterion therefore remains blocked on that bug, not on this one. Second, the R10-3 prose in `tests/e2e/assistant_regression_e2e_test.sh` (false claim 3 below) is still uncorrected; its outcome clause became true when the fix landed, but its causal clause — that the build tag is what makes the gate run — remains false.
 
