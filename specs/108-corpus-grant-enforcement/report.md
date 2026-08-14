@@ -415,8 +415,8 @@ WHERE source_id = $1 AND content_hash <> ALL($2::text[])
 and `cmd/core/wiring_selfknowledge.go:64` — a file whose own header says "spec 104 SCOPE-03 **boot
 lifecycle**" — invokes `ingestor.Ingest(ctx)` once at core startup, which performs that sweep.
 
-**What is proven.** The mechanism was not left as an inference — it was executed against a live
-test stack:
+**What is proven — the sweep's capability, not its timing.** The mechanism was not left as an
+inference; it was executed against a live test stack:
 
 ```text
 # 1. Core boots and runs the sweep (nothing stale yet):
@@ -439,22 +439,47 @@ $ psql -tAc "SELECT count(*) FROM artifacts WHERE id='probe-sweep-108';"
 0
 ```
 
-`swept` moved 0 → 1 and the probe row count moved 1 → 0 on a core restart. The core's boot-time
-sweep deletes precisely the rows these tests depend on, and it holds no `nslock` because it runs
-in a different process as production code — which is why the regex-over-test-sources contract in
-`nslock/callsite_contract_test.go` cannot reach it even in principle. No allowlist entry would
-have caught this.
+`swept` moved 0 → 1 and the probe row count moved 1 → 0 on a core restart. So the sweep **is
+capable** of deleting exactly the rows these tests depend on, and it holds no `nslock` because it
+runs in a different process as production code — which is why the regex-over-test-sources contract
+in `nslock/callsite_contract_test.go` cannot reach it even in principle. No allowlist entry would
+have caught it.
 
-This also explains why the failure looked intermittent at first: it depends on whether a core
-boot or restart lands while those rows exist, not on which tests run together. Every earlier
-observation fits — zero in-run rows, green in isolation, green alongside both known test-side
-contenders, red in the full lane, and `artifact_count: 0` in the health snapshot.
+**What is NOT proven — a correction to an earlier revision of this section.** That revision went
+on to claim this sweep is the deleter actually firing in the failing lane. Re-reading the lane log
+does not support it, so the claim is withdrawn rather than left standing:
 
-**The fix belongs to spec 104, and there are two candidate shapes.** Either make the production
-sweep take the same advisory lock — it can, `pg_advisory_lock` is database-scoped, not
-test-scoped — or give the test rows corpus-consistent hashes so the sweep does not consider them
-stale. The first is the honest one: the lock's stated purpose is mutual exclusion over the
-namespace, and a deleter that ignores it makes the guarantee partial.
+```text
+$ grep -cE 'smackerel-core.*(Started|Restarting|Recreated)' /tmp/i10.log
+1
+$ grep -nE 'smackerel-core.*(Restarting|Recreated|unhealthy|exited)' /tmp/i10.log
+$ echo "exit=$?"
+exit=1
+```
+
+The core starts exactly once, when the stack comes up, and never restarts. That moment is strictly
+before `go test` runs and therefore strictly before any test row exists, so a sweep there has
+nothing of the tests' to delete. The capability is established; the trigger is not. Withdrawing
+this matters more than the tidier story it replaces — "root cause proven" is the label that stops
+the next person looking, and it would have sent them to patch a sweep that may never have run.
+
+The obvious alternative does not explain it either. `PgxSemanticSearcher.Search` filters only on
+`source_id` and `embedding IS NOT NULL`, then applies `LIMIT k`, so zero in-run rows would also
+result if at least k=25 other `smackerel_self` rows outranked both test rows. The same probe
+measured the namespace at 13 rows after boot, and 13 + 2 test rows is under 25, so the limit does
+not push them out.
+
+What remains is an open question stated honestly rather than a settled one: either some trigger
+re-runs the sweep, or a third deleter exists, and neither is visible in a lane log that does not
+capture the core's stdout. The instrument that settles it is a lane run with the core container's
+logs captured while the stack is still up — the lane tears it down at the end, which is why every
+capture so far has been post-mortem and empty.
+
+**The fix still belongs to spec 104, and one candidate shape survives either answer.** Making the
+production sweep take the same advisory lock closes the capability no matter which trigger turns
+out to fire it — it can, `pg_advisory_lock` is database-scoped, not test-scoped. The alternative,
+giving test rows corpus-consistent hashes, only hides this one symptom and leaves the lock's stated
+guarantee partial, so it is the weaker of the two.
 
 **Routing.** Spec 104 / `BUG-104-001`. That fix is incomplete rather than wrong: it established
 mutual exclusion across test callsites but not against the production sweep the lane itself
