@@ -8,12 +8,99 @@ required, model-filled tool argument and validates only that it is non-empty.
 
 ### Completion Statement
 
-**NO FIX IMPLEMENTED.** This packet is artifacts and root-cause analysis only. Every DoD item in
-`scopes.md` is unchecked and no source file has been modified.
+**PARTIALLY IMPLEMENTED.** The contract is in place and the two tools where the argument was
+decorative are fixed. The two where it is load-bearing are held by a shrinking ratchet and still
+need surface wiring. Details and evidence below; no DoD item is checked beyond what was executed.
 
 ### Test Evidence
 
-None. No test has been written or executed for this bug. Nothing is claimed in either direction.
+`./smackerel.sh lint` exit `0`, `./smackerel.sh format --check` exit `0`,
+`./smackerel.sh test unit --go` exit `0` across **146** packages with zero failures.
+
+---
+
+## After Fix — What landed, and what did not
+
+### The set was wrong in the delivery plan, and wrong in this packet's first filing
+
+The plan named `retrieval`, `notification/propose`, `notification/execute`. The actual set is four
+tools, and `notification/execute` is not among them:
+
+```text
+$ grep -rn '"user_id"' --include='*.go' internal/agent/tools/ | grep -v _test
+internal/agent/tools/microtools/entity_resolve.go:153:  "required": ["input", "user_id"],
+internal/agent/tools/recipesearch/tool.go:76:  "required": ["query", "user_id"],
+internal/agent/tools/retrieval/tool.go:107:  "required": ["query", "user_id"],
+internal/agent/tools/notification/propose.go:18:  "required": ["user_id", "what"],
+```
+
+They divide on whether the value is *used*, and that division decides the fix:
+
+| Tool | `user_id` | Consequence |
+|---|---|---|
+| `retrieval` | validated, then discarded | Decorative. Removal changes no behaviour. |
+| `recipesearch` | validated, then discarded | Decorative. Removal changes no behaviour. |
+| `microtools/entity_resolve` | `Resolver.Resolve(callCtx, in.UserID, ...)` | Load-bearing — the model chooses whose entities resolve. |
+| `notification/propose` | `UserID: in.UserID` on the proposal | Load-bearing — the model chooses who is notified. |
+
+So the "model supplies the identity" framing is correct — for the two tools **neither** the plan
+nor this packet's first filing identified.
+
+### The contract, proven twice
+
+Non-vacuous BEFORE the fix — it named all four:
+
+```text
+$ ./smackerel.sh test unit --go --go-run 'TestToolSchemas_DeclareNoCallerIdentity' --verbose
+EXIT=1
+    schema_contract_test.go:79: agent tool input schemas declare a caller identity (4):
+          ../microtools/entity_resolve.go: user_id
+          ../notification/propose.go: user_id
+          ../recipesearch/tool.go: user_id
+          ../retrieval/tool.go: user_id
+--- FAIL: TestToolSchemas_DeclareNoCallerIdentity (0.01s)
+```
+
+Teeth AFTER the fix — a new offender was introduced deliberately and caught:
+
+```text
+# temporarily added "user_id" to internal/agent/tools/weather/tool.go
+$ ./smackerel.sh test unit --go --go-run 'TestToolSchemas_DeclareNoCallerIdentity' --verbose
+EXIT=1
+    schema_contract_test.go:119: agent tool input schemas declare a caller identity (1):
+          ../weather/tool.go: user_id
+$ git diff --stat internal/agent/tools/weather/tool.go
+(empty — mutation reverted)
+```
+
+A guard that only fails on the state it was written against proves nothing about the state it will
+face. Both directions are recorded because either alone would be weak evidence.
+
+### Lane state
+
+```text
+$ ./smackerel.sh test unit --go
+UNIT_EXIT=0
+ok packages: 146
+FAIL lines: (none)
+```
+
+### What did NOT land, and why it was not forced
+
+`entity_resolve` and `propose` still declare `user_id`. Removing it there requires the caller's
+session to reach the tool through the request context, which is surface wiring across four `Invoke`
+call sites — and on Telegram there is no principal to wire yet, because
+`internal/telegram/agent_bridge.go:84` invokes the agent with only `chatID`.
+
+Landing the removal without that wiring would make those tools fail closed on every non-HTTP
+surface. The design (§ Risk and rollout) already rejected a flag for this: a flag leaves the
+insecure path live and reachable, which is the thing being fixed. So the ratchet holds the two
+files, fails on any new offender, and additionally fails if an allowlisted file is fixed but left
+listed — so it cannot quietly stop ratcheting.
+
+The grant requirement (R2) is also not yet enforced. It has the same dependency: refusing a caller
+without `corpus:read` requires knowing who the caller is.
+
 
 ---
 
