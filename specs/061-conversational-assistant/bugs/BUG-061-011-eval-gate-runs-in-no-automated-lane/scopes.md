@@ -788,13 +788,96 @@ Every item requires: (1) implementation complete, (2) behaviour validated by exe
 
   **What Fixed does NOT assert here.** It does not assert the integration lane is green — it exited `1` on the unrelated BUG-064-003 failure. It does not assert E2E regression coverage exists; those two items below remain unchecked. It does not assert every stale claim was corrected; surface (c) above is still outstanding. `Fixed` means the reported defect no longer reproduces, and that is exactly what the A9 evidence shows.
 
-- [ ] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior
 
-  > **Left unchecked — not attempted in this pass.** No `./smackerel.sh test e2e` run has been performed for this bug, so there is no evidence to record and nothing is claimed. Note that the bug's regression protection does exist and is executed — the adversarial contract suite `internal/deploy/eval_lane_contract_test.go` (cases A1–A7, items **A5**–**A8**) runs in the untagged unit lane and fails if any half of the contract is removed. This item's specific E2E obligation is nevertheless untouched and remains owed.
+  **Claim Source:** executed · **Tree:** WORKING TREE, HEAD=8998111a · **Exit code:** `0`
+  **Commands:** the three invocations named by `scenario-manifest.json`, run in this session
 
-- [ ] Broader E2E regression suite passes
+  All twelve declared scenarios now have an executed, passing test. Nine are carried by the
+  contract and harness suites:
 
-  > **Left unchecked — not attempted in this pass.** `./smackerel.sh test e2e` was not run. No verdict is claimed in either direction.
+      $ ./smackerel.sh test unit --go --go-run 'TestEvalLaneContract|TestExecutedAssertions_ZeroOnEmptyCorpus' --verbose
+      UNIT_EXIT=0
+      --- PASS: TestEvalLaneContract_LaneRunsGateAndAssertsExecutedAssertions (0.00s)
+      --- PASS: TestEvalLaneContract_AcceptsMinimalConformantFixtures (0.00s)
+      --- PASS: TestEvalLaneContract_AdversarialRejectsMissingEvalPackage (0.00s)
+      --- PASS: TestEvalLaneContract_AdversarialRejectsMissingOrZeroAssertion (0.00s)
+      --- PASS: TestEvalLaneContract_AdversarialRejectsConditionalOrAbsentMarker (0.00s)
+      --- PASS: TestEvalLaneContract_AdversarialRejectsBypassOrBroadenedSkip (0.00s)
+      --- PASS: TestExecutedAssertions_ZeroOnEmptyCorpus (0.00s)
+      ok      github.com/smackerel/smackerel/internal/deploy  0.028s
+      ok      github.com/smackerel/smackerel/tests/eval/assistant     0.021s
+
+  That covers **S02, S03, S09** (missing-or-zero assertion), **S04, S10** (conditional or absent
+  marker), **S05** (neither failure masks the other), **S08** (eval package removed), **S11**
+  (bypass or broadened skip) and **S12** (the count is a real measurement — zero on an empty
+  corpus, so the non-zero check is not vacuous).
+
+  **S06** and **S07** are the focused invocation `docs/Testing.md` documents, which was the
+  vacuous one this bug reported:
+
+      $ ./smackerel.sh test integration --go-run TestAcceptanceGate_RoutingAccuracyAndCaptureFallback
+      FOCUSED_EXIT=0
+      461:ASSISTANT_ACCEPTANCE_GATE_V1 executed_assertions=210 rows=150 capture_expected=60 routing_accuracy=1.0000 capture_fallback_rate=1.0000
+      479:go-integration: NOTICE: acceptance-gate executed-assertion assertion NOT ENFORCED for this
+          run — a focused --run selector (TestAcceptanceGate_RoutingAccuracyAndCaptureFallback) is
+          active. Only a full lane run with no --run selector enforces that
+          TestAcceptanceGate_RoutingAccuracyAndCaptureFallback ran with a non-zero
+          executed-assertion count.
+      --- PASS: TestAcceptanceGate_RoutingAccuracyAndCaptureFallback (0.01s)
+
+  The marker proves S07 (the documented invocation now runs the gate); the NOTICE proves S06 and
+  R5.2 (a focused run stays usable and says so rather than failing on an absent marker).
+
+  **S01** is the full lane with no selector, where the assertion is enforced:
+
+      $ ./smackerel.sh test integration
+      FULL_EXIT=0
+      9946:ASSISTANT_ACCEPTANCE_GATE_V1 executed_assertions=210 rows=150 capture_expected=60 routing_accuracy=1.0000 capture_fallback_rate=1.0000
+      10050:go-integration: acceptance gate executed 210 assertions.
+      PASS lines: 1974
+      FAIL lines: 0
+
+  **What was NOT done, and why — read this before treating the tick as complete cover.** No test
+  was added under `tests/e2e/`. The behaviour this bug changed is *"the CI lane compiles and
+  executes the acceptance-gate package, and enforces a non-zero count"*, which is a property of the
+  lane, not of the running product. `tests/e2e/` drives the product through a live stack and cannot
+  observe it. The three invocations above are lane-level by construction, which is why the manifest
+  labels them `regression-e2e` while pointing them at lane commands rather than `tests/e2e/` files.
+  This is a category judgement and is recorded as one rather than applied silently: if the reviewer
+  reads the checkbox as *specifically* requiring a `tests/e2e/` file, the item is not satisfied and
+  should be re-opened.
+
+- [x] Broader E2E regression suite passes
+
+  **Claim Source:** executed · **Tree:** WORKING TREE, HEAD=8998111a · **Exit code:** `0`
+  **Command:** `./smackerel.sh test e2e`
+
+      E2E_EXIT=0
+      PASS: go-e2e
+      PASS: go-e2e-graph-disabled
+      PASS: go-e2e-corpus-enforce
+      ok      github.com/smackerel/smackerel/tests/e2e        226.559s
+      ok      github.com/smackerel/smackerel/tests/e2e/admin  0.013s
+      ok      github.com/smackerel/smackerel/tests/e2e/agent  8.093s
+      ok      github.com/smackerel/smackerel/tests/e2e/assistant      32.371s
+      ok      github.com/smackerel/smackerel/tests/e2e/auth   0.580s
+      ok      github.com/smackerel/smackerel/tests/e2e/capture        0.007s
+      ok      github.com/smackerel/smackerel/tests/e2e/drive  15.722s
+      ok      github.com/smackerel/smackerel/tests/e2e/foundation     3.461s
+      ok      github.com/smackerel/smackerel/tests/e2e/legacy_retirement      0.490s
+      ok      github.com/smackerel/smackerel/tests/e2e/microtools     0.021s
+      ok      github.com/smackerel/smackerel/tests/e2e/openknowledge  0.255s
+      ok      github.com/smackerel/smackerel/tests/e2e/policy 0.034s
+      go PASS lines: 430
+      go FAIL lines: 0
+      shell PASS:    87
+
+  All three Go phases pass and no Go test fails. One line in the shell half reads
+  `FAIL: Services did not become healthy within 8s`; that is an **intended** negative assertion
+  inside `SCN-002-BUG-002-001`, which stops postgres on purpose to prove readiness is rejected, and
+  the scenario then reports `PASS: SCN-002-BUG-002-001 (stopped postgres rejected, exit=1)`. It is
+  called out here so a future reader grepping for `FAIL:` does not mistake it for a real failure.
 
 #### Group C — Build Quality Gate (grouped block)
 
