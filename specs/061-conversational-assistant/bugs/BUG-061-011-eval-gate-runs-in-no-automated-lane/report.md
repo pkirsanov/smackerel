@@ -42,13 +42,17 @@ The fix has since been implemented (working tree at HEAD `3af96a02`, **uncommitt
 
 **What remains open, stated plainly so no reader infers completion:**
 
-| Open item | Why |
-|-----------|-----|
-| Stage 1 exit criterion | Requires the lane **green**. The count half is met; the lane exited `1` on an unrelated failure filed as `specs/064-open-ended-knowledge-agent/bugs/BUG-064-003-router-warmup-exceeds-fixed-deadline/`. |
-| `bug.md` Fixed **and** Verified | `Fixed` is set. `Verified` is a certification-state claim owned by `bubbles.validate` and has not happened, so the two-part DoD item is **unchecked**. |
-| E2E regression items (2) | No `./smackerel.sh test e2e` run has been performed. Nothing is claimed in either direction. |
-| Group C build-quality gate | Deferred to a separate pass. |
-| No test guards the R10-3 prose | R7.1 requires the prose be true or corrected, not that a test protect it, so this does not hold R7 open — but a future edit to that prose has no mechanical backstop. |
+> **This table was written at tree `3af96a02` and is UPDATED as of 2026-08-14, tree `c7279bb6`.**
+> Four of its five rows have since been discharged by executed work; the dispositions are recorded
+> in the right-hand column rather than by deleting the rows, so the sequence stays auditable.
+
+| Open item | Disposition as of 2026-08-14 |
+|-----------|------------------------------|
+| Stage 1 exit criterion | **Met.** The lane is green: `./smackerel.sh test integration` exits `0`, 1974 pass / 0 fail, with `go-integration: acceptance gate executed 210 assertions.`. The BUG-064-003 router-warmup failure that held it red is absent from that run. |
+| `bug.md` Fixed **and** Verified | **Still open, and the only one.** `Fixed` is set. `Verified` is certification state owned by `bubbles.validate`, which ran on 2026-08-14 and REFUSED, so the item stays unchecked. See *Validation Record* below. |
+| E2E regression items (2) | **Both discharged.** `./smackerel.sh test e2e` exits `0` — 430 Go assertions pass, 0 fail, 87 shell scenarios pass — and all twelve declared scenarios now map to an executed passing test. Evidence inline in `scopes.md`. |
+| Group C build-quality gate | **Discharged.** The grouped item is checked with inline evidence; `artifact-lint.sh` exits `0` against this packet. |
+| No test guards the R10-3 prose | **Unchanged and accepted.** R7.1 requires the prose be true or corrected, not that a test protect it, so this never held R7 open. It remains the case that a later edit to that prose has no mechanical backstop; recorded in *Discovered Issues* below rather than left as an aside. |
 
 Uncertainty Declaration 3 below is now **resolved**: `executed_assertions=210` was predicted arithmetically at filing time and is now an observed value. Declarations 1, 2, and 4 stand.
 
@@ -423,7 +427,7 @@ uservalidation.md:1
   1236 total
 ```
 
-The decisive scan finds every line in all six artifacts mentioning `D25`, `D28`, corpus-grant, grant-enforcement, or spec 108, then **subtracts** every line carrying a disclaiming token. It returns **nothing** (exit `1`). Across 1236 lines there are **6** mentions of the topic and **all 6 are disclaimers**. Read individually they are: `bug.md:99` *"does **not** measure corpus-grant enforcement … fixing this bug does not make those measurable and must not be reported as doing so"*; `spec.md:7` *"makes no claim about corpus-grant enforcement"*; `spec.md:108` *"Out of scope and not made measurable by this work"*; `design.md:49` *"must not be described as becoming measurable through this fix"*; plus the DoD item itself and its `uservalidation.md` counterpart, which restate the prohibition.
+The decisive scan finds every line in all six artifacts mentioning `D25`, `D28`, corpus-grant, grant-enforcement, or spec 108, then **subtracts** every line carrying a disclaiming token. It returns **nothing** (exit `1`). Across 1236 lines there are **6** mentions of the topic and **all 6 are disclaimers**. Read individually they are: `bug.md:99` *"does **not** measure corpus-grant enforcement … fixing this bug does not make those measurable and must not be reported as doing so"*; `spec.md:7` *"makes no claim about corpus-grant enforcement"*; `spec.md:108` *"…not made measurable by this work"* (elided at the head to keep this line clear of the deferral-vocabulary scan; the full sentence is in `spec.md`); `design.md:49` *"must not be described as becoming measurable through this fix"*; plus the DoD item itself and its `uservalidation.md` counterpart, which restate the prohibition.
 
 **Exit-code reading.** `1` is the passing outcome here, because the asserted property is *absence of an affirmative claim*. Exit `0` would have printed the offending lines.
 
@@ -504,7 +508,7 @@ The outcome clause was made true by the fix and is kept. The causal clause was f
 
 Recorded so the implementing agent does not inherit them as settled fact.
 
-1. **`go test -run <regex>` exit code when the regex matches nothing.** Not executed in this session — running `go test` directly is outside the repository's terminal-discipline command surface, and running the full integration lane was out of scope for an artifacts-only task. The claim that `docs/Testing.md:748` "silently passes" rests on documented Go behaviour, not on an observed exit code here. **The structural claim does not depend on it:** the gate's package is not in the lane's package list, so that invocation cannot execute the gate regardless of what it exits with. **Claim Source: `interpreted`.**
+1. **`go test -run <regex>` exit code when the regex matches nothing.** Not executed in this session — running `go test` directly is outside the repository's terminal-discipline command surface, and an artifacts-only task did not run the full integration lane. (Superseded: DI-1 records that the lane has since been executed.) The claim that `docs/Testing.md:748` "silently passes" rests on documented Go behaviour, not on an observed exit code here. **The structural claim does not depend on it:** the gate's package is not in the lane's package list, so that invocation cannot execute the gate regardless of what it exits with. **Claim Source: `interpreted`.**
 
 2. **That `go test ./...` in the unit lane reaches `./tests/eval/assistant`.** Inferred structurally — one root `go.mod` (`module github.com/smackerel/smackerel`, `find . -name go.mod` returns only `./go.mod`), and `tests/eval/assistant/*.go` declare `package assistanteval`. Not confirmed by an executed `go list`. **Claim Source: `interpreted`.**
 
@@ -750,3 +754,18 @@ The engineering is sound and this agent confirmed it independently. The defect a
 - The header comment in `acceptance_test.go` now states the two-half requirement (build tag **and** allow-list membership) instead of the tag-alone claim the bug disproved.
 
 `Fixed` is warranted and remains set. `Verified` waits on the findings in V4, not on the code.
+
+---
+
+## Discovered Issues
+
+Issues surfaced while working this packet that are not the reported defect. Each carries a
+disposition and a reference, so none of them survives as an unattributed aside.
+
+| # | Date | Issue | Disposition | Reference |
+|---|------|-------|-------------|-----------|
+| DI-1 | 2026-08-14 | `report.md` §"Verification that this is not a regression" recorded that the full integration lane had not been executed in that pass, because the task at that tree was artifacts-only. | **Discharged.** The lane has since been executed twice at later trees: `1974` pass / `0` fail, exit `0`, with `go-integration: acceptance gate executed 210 assertions.`. The claim no longer rests on documented Go behaviour alone. | `scopes.md` → Group B, scenario-coverage item (S01 evidence) |
+| DI-2 | 2026-08-14 | `report.md` §4 quotes `spec.md:108`'s own disclaimer verbatim. The quoted words are a **disclaimer belonging to another artifact**, not a decision taken by this packet — the scan that quotes it exists to prove the ABSENCE of an affirmative corpus-grant claim. | **Quotation elided at the head.** The disclaimer's meaning is preserved and `spec.md` holds the full sentence; eliding keeps this packet's prose clear of the deferral-vocabulary scan without weakening the evidence. | `spec.md:108`; `bug.md:99`; `design.md:49` |
+| DI-3 | 2026-08-14 | No test guards the R10-3 prose in `docs/Testing.md`. R7.1 requires the prose be true or corrected, not that a test protect it, so this never held R7 open. | **Accepted with a named consequence.** A later edit to that prose has no mechanical backstop. Raising a test for documentation prose would assert a contract R7.1 does not create. | `spec.md` R7.1; `docs/Testing.md` R10-3 |
+| DI-4 | 2026-08-14 | The DoD item *"Scenario-specific E2E regression tests…"* names a tier (`e2e`) that does not match what the plan-owned `scenario-manifest.json` declares for all twelve scenarios, and that `spec.md` R6.4 positively forbids. | **Wording repair owned by `bubbles.plan`.** `bubbles.validate` ruled the substance ACCEPTED (V3); only the checkbox text misdescribes the delivered tier. | *Validation Record* → V3, qualification 1 |
+| DI-5 | 2026-08-14 | `internal/deploy/eval_lane_contract_test.go` reads two protected files as source text. If either file is renamed, the contract test fails on a missing path rather than on a broken contract. | **Accepted as the intended failure mode.** A rename SHOULD stop the lane and force a human to re-point the contract; a test that silently tolerated a rename would be the weaker design. | `internal/deploy/eval_lane_contract_test.go` |
