@@ -73,10 +73,9 @@ func loadServices() (*Services, error) {
 var inputSchema = json.RawMessage(`{
   "type": "object",
   "additionalProperties": false,
-  "required": ["query", "user_id"],
+  "required": ["query"],
   "properties": {
     "query":   {"type": "string", "minLength": 1},
-    "user_id": {"type": "string", "minLength": 1},
     "top_k":   {"type": "integer", "minimum": 1, "maximum": 50}
   }
 }`)
@@ -121,9 +120,8 @@ func init() {
 }
 
 type recipeSearchInput struct {
-	Query  string `json:"query"`
-	UserID string `json:"user_id"`
-	TopK   int    `json:"top_k,omitempty"`
+	Query string `json:"query"`
+	TopK  int    `json:"top_k,omitempty"`
 }
 
 type recipeSearchHit struct {
@@ -144,9 +142,6 @@ func handleRecipeSearch(ctx context.Context, raw json.RawMessage) (json.RawMessa
 	var in recipeSearchInput
 	if err := json.Unmarshal(raw, &in); err != nil {
 		return nil, fmt.Errorf("recipe_search_bad_input: %w", err)
-	}
-	if in.UserID == "" {
-		return nil, errors.New("recipe_search_missing_user_id")
 	}
 	if in.Query == "" {
 		return nil, errors.New("recipe_search_empty_query")

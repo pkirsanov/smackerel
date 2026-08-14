@@ -133,9 +133,8 @@ func TestRetrievalSearch_BadInput(t *testing.T) {
 		args string
 		want string
 	}{
-		{"empty body", `{}`, "missing_user_id"},
-		{"empty query", `{"query":"","user_id":"u"}`, "empty_query"},
-		{"empty user", `{"query":"x","user_id":""}`, "missing_user_id"},
+		{"empty body", `{}`, "empty_query"},
+		{"empty query", `{"query":""}`, "empty_query"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -144,6 +143,30 @@ func TestRetrievalSearch_BadInput(t *testing.T) {
 				t.Errorf("got %v, want substring %q", err, tc.want)
 			}
 		})
+	}
+}
+
+// BUG-061-012. The tool used to require a `user_id` argument, validate it, and
+// then never use it — `api.SearchRequest` has no user field and the corpus is a
+// single global one. The argument is gone. This asserts the removal is real
+// rather than cosmetic: a caller that still sends it must be rejected, which is
+// what stops the old shape from quietly continuing to work.
+func TestRetrievalSearch_RejectsCallerSuppliedIdentity(t *testing.T) {
+	SetServices(&Services{Engine: &fakeSearcher{}, MaxTopK: 5})
+	t.Cleanup(ResetForTest)
+
+	tool, _ := agent.ByName(ToolName)
+	schema, err := agent.CompileSchema(tool.InputSchema)
+	if err != nil {
+		t.Fatalf("CompileSchema: %v", err)
+	}
+	if err := schema.ValidateBytes(json.RawMessage(`{"query":"x","user_id":"someone-else"}`)); err == nil {
+		t.Fatal("input schema accepted a user_id argument; additionalProperties:false must reject it, or the model can still name the principal")
+	}
+	// Positive control: the same schema must still accept a well-formed call,
+	// or the assertion above would pass for the wrong reason.
+	if err := schema.ValidateBytes(json.RawMessage(`{"query":"x"}`)); err != nil {
+		t.Fatalf("input schema rejected a valid call: %v", err)
 	}
 }
 

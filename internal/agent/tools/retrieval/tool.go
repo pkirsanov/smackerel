@@ -104,10 +104,9 @@ func loadServices() (*Services, error) {
 var inputSchema = json.RawMessage(`{
   "type": "object",
   "additionalProperties": false,
-  "required": ["query", "user_id"],
+  "required": ["query"],
   "properties": {
     "query":   {"type": "string", "minLength": 1},
-    "user_id": {"type": "string", "minLength": 1},
     "top_k":   {"type": "integer", "minimum": 1, "maximum": 50}
   }
 }`)
@@ -152,9 +151,8 @@ func init() {
 // -------------------- handler --------------------
 
 type retrievalInput struct {
-	Query  string `json:"query"`
-	UserID string `json:"user_id"`
-	TopK   int    `json:"top_k,omitempty"`
+	Query string `json:"query"`
+	TopK  int    `json:"top_k,omitempty"`
 }
 
 type retrievalHit struct {
@@ -176,9 +174,6 @@ func handleRetrievalSearch(ctx context.Context, raw json.RawMessage) (json.RawMe
 	var in retrievalInput
 	if err := json.Unmarshal(raw, &in); err != nil {
 		return nil, fmt.Errorf("retrieval_search_bad_input: %w", err)
-	}
-	if in.UserID == "" {
-		return nil, errors.New("retrieval_search_missing_user_id")
 	}
 	if in.Query == "" {
 		return nil, errors.New("retrieval_search_empty_query")
