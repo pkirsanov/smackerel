@@ -41,12 +41,25 @@ import (
 
 	"github.com/smackerel/smackerel/internal/agent"
 	"github.com/smackerel/smackerel/internal/agent/tools/microtools"
+	"github.com/smackerel/smackerel/internal/auth"
 )
 
-// callTool invokes the registered handler for the given tool name
-// with the supplied JSON args, validates the returned envelope
-// against the shared invariants, and returns the decoded shape.
+// callTool invokes a tool that needs no authenticated principal, under a bare
+// context. Tools that resolve a caller identity must use callToolAs.
 func callTool(t *testing.T, name string, args any) microtools.Envelope {
+	t.Helper()
+	return callToolAs(t, context.Background(), name, args)
+}
+
+// callToolAs invokes the registered handler for the given tool name under ctx
+// with the supplied JSON args, validates the returned envelope against the
+// shared invariants, and returns the decoded shape.
+//
+// BUG-061-012: ctx is the only channel through which a caller identity can
+// reach a tool. entity_resolve reads auth.SessionFromContext; its input schema
+// declares no identity property and is additionalProperties:false, so no value
+// in args could substitute for the session.
+func callToolAs(t *testing.T, ctx context.Context, name string, args any) microtools.Envelope {
 	t.Helper()
 	tool, ok := agent.ByName(name)
 	if !ok {
@@ -59,7 +72,7 @@ func callTool(t *testing.T, name string, args any) microtools.Envelope {
 	if err != nil {
 		t.Fatalf("marshal args for %q: %v", name, err)
 	}
-	out, err := tool.Handler(context.Background(), raw)
+	out, err := tool.Handler(ctx, raw)
 	if err != nil {
 		t.Fatalf("handler %q returned error: %v", name, err)
 	}
@@ -71,6 +84,15 @@ func callTool(t *testing.T, name string, args any) microtools.Envelope {
 		t.Fatalf("decode envelope for %q: %v\nraw=%s", name, err, string(out))
 	}
 	return env
+}
+
+// sessionCtx builds the authenticated principal entity_resolve resolves under.
+// A daily-user grant snapshot is deliberate: entity_resolve requires only an
+// identified caller, not corpus:read, so granting more would overstate what the
+// tool actually demands.
+func sessionCtx(userID string) context.Context {
+	return auth.WithSession(context.Background(),
+		auth.SessionWithRole(userID, "tok-"+userID, auth.RoleDailyUser))
 }
 
 // stubLocationProvider records the exact normalized query forwarded
@@ -94,7 +116,10 @@ func (s *stubLocationProvider) Geocode(_ context.Context, query string) ([]micro
 
 // stubEntityResolver supplies deterministic ranked candidates for
 // the entity_resolve handler and records the user_id it received so
-// the matrix can assert user-scoping is honored end-to-end.
+// the matrix can assert user-scoping is honored end-to-end. Since
+// BUG-061-012 that user_id originates in the authenticated session on
+// the context, never in a tool argument, so lastUser is the proof the
+// server derived the identity itself.
 type stubEntityResolver struct {
 	candidates []microtools.EntityCandidate
 	lastUser   string
@@ -260,8 +285,8 @@ func TestMicroToolOverlays_FullMatrix(t *testing.T) {
 			{ArtifactID: "art-1", Label: "Apartment lease 2024", Score: 0.92, ArtifactType: "document", Snippet: "signed 2024-06"},
 			{ArtifactID: "art-2", Label: "Car lease 2023", Score: 0.55, ArtifactType: "document"},
 		}
-		env := callTool(t, microtools.EntityResolveToolName, map[string]any{
-			"input": "the lease", "user_id": "u-076-3", "scope": "documents", "top_k": 5,
+		env := callToolAs(t, sessionCtx("u-076-3"), microtools.EntityResolveToolName, map[string]any{
+			"input": "the lease", "scope": "documents", "top_k": 5,
 		})
 		if env.Status != microtools.StatusResolved {
 			t.Fatalf("status=%q, want resolved (env=%+v)", env.Status, env)
@@ -279,8 +304,8 @@ func TestMicroToolOverlays_FullMatrix(t *testing.T) {
 			{ArtifactID: "art-3", Label: "Lease A", Score: 0.55, ArtifactType: "document"},
 			{ArtifactID: "art-4", Label: "Lease B", Score: 0.50, ArtifactType: "document"},
 		}
-		env := callTool(t, microtools.EntityResolveToolName, map[string]any{
-			"input": "lease", "user_id": "u-076-3", "scope": "documents", "top_k": 5,
+		env := callToolAs(t, sessionCtx("u-076-3"), microtools.EntityResolveToolName, map[string]any{
+			"input": "lease", "scope": "documents", "top_k": 5,
 		})
 		if env.Status != microtools.StatusAmbiguous {
 			t.Fatalf("status=%q, want ambiguous (env=%+v)", env.Status, env)

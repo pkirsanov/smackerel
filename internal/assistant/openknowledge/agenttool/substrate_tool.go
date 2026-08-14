@@ -62,17 +62,24 @@ const ToolName = "open_knowledge_invoke"
 // substrate registry; surfaced in traces and ops dashboards.
 const owningPackage = "internal/assistant/openknowledge/agenttool"
 
-// inputSchema validates the substrate-side tool arguments. The
-// open-knowledge scenario receives {raw_query, user_id} from the
-// facade's structured-context shim; the substrate tool only needs the
-// prompt text plus the user id (already validated upstream).
+// inputSchema validates the substrate-side tool arguments. The model
+// supplies only the prompt text.
+//
+// BUG-061-012: a `user_id` property was declared here and parsed into
+// invokeInput.UserID, but the Handler never read it — the decorative
+// form of the defect. It is removed so no registered tool schema lets
+// the model name a principal. The caller identity the open-knowledge
+// path needs already rides the context (auth.UserIDFromContext, see
+// model_catalog_source.go); the SCENARIO input schema in
+// config/prompt_contracts/open_knowledge.yaml keeps its `user_id`
+// because the facade fills that one server-side from msg.UserID, which
+// is a different layer and not a model argument.
 var inputSchema = json.RawMessage(`{
   "type": "object",
   "required": ["prompt"],
   "additionalProperties": false,
   "properties": {
-    "prompt":  {"type": "string", "minLength": 1},
-    "user_id": {"type": "string"}
+    "prompt":  {"type": "string", "minLength": 1}
   }
 }`)
 
@@ -191,7 +198,6 @@ func OutputSchema() json.RawMessage {
 // invokeInput is the parsed Handler argument envelope.
 type invokeInput struct {
 	Prompt string `json:"prompt"`
-	UserID string `json:"user_id,omitempty"`
 }
 
 // outputEnvelope is the JSON shape the Handler emits.

@@ -15,6 +15,14 @@
 // holds when the world is wired is not a contract. Reading source also means a
 // tool added by a future author is covered the moment it lands, which an
 // enumerated list of today's tools would not be.
+//
+// The file set is derived the same way: every non-test Go file in the module
+// that CALLS a registration function is a candidate, wherever it lives. An
+// earlier revision walked only internal/agent/tools/, which covered 8 of the
+// 22 registration sites and let internal/assistant/openknowledge/agenttool
+// declare a caller identity while this test stayed green. Deriving the set
+// from the registration call removes the assumption that tools live in one
+// directory.
 package toolscontract
 
 import (
@@ -25,8 +33,24 @@ import (
 	"testing"
 )
 
-// toolsRoot is the tree every agent tool lives under, relative to this package.
-const toolsRoot = "../"
+// moduleRoot is the repository root relative to this package. The walk is
+// restricted to .go files, so non-Go trees (specs/, docs/, config/) that quote
+// schema fragments in prose cannot produce a finding.
+const moduleRoot = "../../../../"
+
+// skipDirs are trees that hold no first-party registered tool. Excluded to keep
+// the walk fast and to avoid asserting a contract over vendored third-party
+// source we do not own.
+var skipDirs = map[string]bool{
+	".git": true, "vendor": true, "node_modules": true,
+	"specs": true, "docs": true, "web": true, "ml": true,
+}
+
+// registersATool matches a call that puts a tool into an agent registry. A file
+// that does not register anything cannot contribute a tool schema, so it is not
+// examined — that is what keeps this a tool contract rather than a repo-wide
+// grep for the string "user_id".
+var registersATool = regexp.MustCompile(`agent\.RegisterTool\(|agent\.Register\(|RegisterTool\(agent\.Tool\{`)
 
 // callerIdentityProperty matches a JSON-schema property naming the caller.
 // Spelling variants are included because the defect is the CONCEPT, not the
@@ -50,12 +74,19 @@ var schemaDeclaration = regexp.MustCompile(`(?s)json\.RawMessage\(` + "`" + `\{.
 func TestToolSchemas_DeclareNoCallerIdentity(t *testing.T) {
 	var offenders []string
 	var schemasSeen int
+	var registrarsSeen int
 
-	err := filepath.Walk(toolsRoot, func(path string, info os.FileInfo, err error) error {
+	err := filepath.Walk(moduleRoot, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
-		if info.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+		if info.IsDir() {
+			if skipDirs[info.Name()] {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
 			return nil
 		}
 		b, rerr := os.ReadFile(path) //nolint:gosec // walking a fixed in-repo tree
@@ -63,24 +94,34 @@ func TestToolSchemas_DeclareNoCallerIdentity(t *testing.T) {
 			return rerr
 		}
 		src := string(b)
+		if !registersATool.MatchString(src) {
+			return nil
+		}
+		registrarsSeen++
 
 		schemasSeen += len(schemaDeclaration.FindAllString(src, -1))
 
-		rel := filepath.ToSlash(path)
+		rel := filepath.ToSlash(strings.TrimPrefix(path, moduleRoot))
 		for _, m := range callerIdentityProperty.FindAllStringSubmatch(src, -1) {
 			offenders = append(offenders, rel+": "+m[1])
 		}
 		return nil
 	})
 	if err != nil {
-		t.Fatalf("walk %s: %v", toolsRoot, err)
+		t.Fatalf("walk %s: %v", moduleRoot, err)
 	}
 
-	// Stale-fixture guard. If the walk stops finding schemas at all — a moved
-	// tree, a renamed extension — the offender list goes empty and this test
-	// would pass without asserting anything.
+	// Stale-fixture guard. If the walk stops finding registrars or schemas at
+	// all — a moved tree, a renamed extension, a renamed registration function
+	// — the offender list goes empty and this test would pass without
+	// asserting anything. The registrar floor is deliberately well below the 22
+	// sites present when this was written, so the guard trips on a broken walk
+	// rather than on ordinary tool churn.
+	if registrarsSeen < 10 {
+		t.Fatalf("found only %d files calling a tool registrar under %s; the walk is broken, so a pass here would be vacuous", registrarsSeen, moduleRoot)
+	}
 	if schemasSeen == 0 {
-		t.Fatalf("found no tool input schemas under %s; the walk is broken, so a pass here would be vacuous", toolsRoot)
+		t.Fatalf("found no tool input schemas under %s; the walk is broken, so a pass here would be vacuous", moduleRoot)
 	}
 
 	if len(offenders) > 0 {

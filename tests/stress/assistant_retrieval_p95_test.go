@@ -50,6 +50,7 @@ import (
 	"github.com/smackerel/smackerel/internal/agent"
 	"github.com/smackerel/smackerel/internal/agent/tools/retrieval"
 	"github.com/smackerel/smackerel/internal/api"
+	"github.com/smackerel/smackerel/internal/auth"
 )
 
 const (
@@ -137,7 +138,16 @@ func TestAssistantRetrievalStressP95(t *testing.T) {
 		t.Fatalf("retrieval_search tool has nil Handler")
 	}
 
-	input := json.RawMessage(`{"query":"what about Tailscale ACLs","user_id":"stress-u-1","top_k":5}`)
+	input := json.RawMessage(`{"query":"what about Tailscale ACLs","top_k":5}`)
+
+	// BUG-061-012: the principal is server-derived, so the burst must carry an
+	// authenticated session holding corpus:read or every call fails closed on
+	// retrieval_search_grant_required. Built ONCE, before the workers start, so
+	// session construction can never land inside the measured region and skew
+	// the percentile — the context is immutable and safe to share across
+	// goroutines.
+	burstCtx := auth.WithSession(context.Background(),
+		auth.SessionWithRole("stress-u-1", "tok-stress-u-1", auth.RoleDailyUser, auth.GrantGlobalCorpusRead))
 
 	latencies := make([]time.Duration, turns)
 	work := make(chan int, turns)
@@ -152,7 +162,7 @@ func TestAssistantRetrievalStressP95(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			ctx := context.Background()
+			ctx := burstCtx
 			for i := range work {
 				start := time.Now()
 				_, err := tool.Handler(ctx, input)

@@ -167,4 +167,3 @@ func TestSystemSurfaces_InjectPrincipalWithoutCorpusGrant(t *testing.T) {
 		t.Errorf("judgment inherited corpus:read from the inbound caller (scopes=%v)", got.Scopes)
 	}
 }
-
