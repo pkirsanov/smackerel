@@ -1,0 +1,106 @@
+{
+  "specId": "061-conversational-assistant",
+  "bugId": "BUG-061-012",
+  "version": 1,
+  "scenarios": [
+    {
+      "scopeId": "BUG-061-012-SCOPE-01",
+      "scenarioId": "BUG-061-012-SCN-01-no-tool-schema-names-the-caller",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        { "file": "internal/agent/tools/schema_contract_test.go", "function": "TestToolSchemas_DeclareNoCallerIdentity" }
+      ],
+      "evidenceRefs": ["scopes.md", "report.md"],
+      "label": "No registered tool input schema declares a caller-identity property",
+      "type": "adversarial-regression-unit",
+      "source": "specs/061-conversational-assistant/bugs/BUG-061-012-model-supplied-identity-in-agent-tools/scopes.md",
+      "test": "internal/agent/tools/schema_contract_test.go::TestToolSchemas_DeclareNoCallerIdentity",
+      "adversarial": true
+    },
+    {
+      "scopeId": "BUG-061-012-SCOPE-01",
+      "scenarioId": "BUG-061-012-SCN-02-retrieval-fails-closed-with-no-principal",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        { "file": "internal/agent/tools/retrieval/tool_test.go", "function": "TestRetrieval_NoPrincipalFailsClosed" }
+      ],
+      "evidenceRefs": ["scopes.md", "report.md"],
+      "label": "A context with no auth session yields retrieval_search_no_principal and no search",
+      "type": "adversarial-regression-unit",
+      "source": "specs/061-conversational-assistant/bugs/BUG-061-012-model-supplied-identity-in-agent-tools/scopes.md",
+      "test": "internal/agent/tools/retrieval/tool_test.go::TestRetrieval_NoPrincipalFailsClosed",
+      "adversarial": true
+    },
+    {
+      "scopeId": "BUG-061-012-SCOPE-01",
+      "scenarioId": "BUG-061-012-SCN-03-retrieval-refuses-principal-without-grant",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        { "file": "internal/agent/tools/retrieval/tool_test.go", "function": "TestRetrieval_GrantRequired" }
+      ],
+      "evidenceRefs": ["scopes.md", "report.md"],
+      "label": "A session lacking corpus:read yields retrieval_search_grant_required, distinguishable from the no-principal case",
+      "type": "adversarial-regression-unit",
+      "source": "specs/061-conversational-assistant/bugs/BUG-061-012-model-supplied-identity-in-agent-tools/scopes.md",
+      "test": "internal/agent/tools/retrieval/tool_test.go::TestRetrieval_GrantRequired",
+      "adversarial": true
+    },
+    {
+      "scopeId": "BUG-061-012-SCOPE-01",
+      "scenarioId": "BUG-061-012-SCN-04-retrieval-scopes-to-authenticated-principal",
+      "requiredTestType": ["unit", "integration"],
+      "linkedTests": [
+        { "file": "internal/agent/tools/retrieval/tool_test.go", "function": "TestRetrieval_ScopesToAuthenticatedPrincipal" },
+        { "file": "tests/integration/agent/retrieval_principal_test.go" }
+      ],
+      "evidenceRefs": ["scopes.md", "report.md"],
+      "label": "Search is scoped to the session user and no argument can change that",
+      "type": "regression-unit",
+      "source": "specs/061-conversational-assistant/bugs/BUG-061-012-model-supplied-identity-in-agent-tools/scopes.md",
+      "test": "internal/agent/tools/retrieval/tool_test.go::TestRetrieval_ScopesToAuthenticatedPrincipal",
+      "adversarial": false
+    },
+    {
+      "scopeId": "BUG-061-012-SCOPE-01",
+      "scenarioId": "BUG-061-012-SCN-05-mapped-telegram-chat-still-retrieves",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        { "file": "internal/telegram/agent_bridge_test.go", "function": "TestTelegramBridge_MappedChatInjectsPrincipal" }
+      ],
+      "evidenceRefs": ["scopes.md", "report.md"],
+      "label": "A mapped chat injects a principal before Invoke and retrieval succeeds",
+      "type": "regression-unit",
+      "source": "specs/061-conversational-assistant/bugs/BUG-061-012-model-supplied-identity-in-agent-tools/scopes.md",
+      "test": "internal/telegram/agent_bridge_test.go::TestTelegramBridge_MappedChatInjectsPrincipal",
+      "adversarial": false
+    },
+    {
+      "scopeId": "BUG-061-012-SCOPE-01",
+      "scenarioId": "BUG-061-012-SCN-06-unmapped-telegram-chat-cannot-read",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        { "file": "internal/telegram/agent_bridge_test.go", "function": "TestTelegramBridge_UnmappedChatInjectsNone" }
+      ],
+      "evidenceRefs": ["scopes.md", "report.md"],
+      "label": "An unmapped chat injects no principal and the corpus tool fails closed",
+      "type": "adversarial-regression-unit",
+      "source": "specs/061-conversational-assistant/bugs/BUG-061-012-model-supplied-identity-in-agent-tools/scopes.md",
+      "test": "internal/telegram/agent_bridge_test.go::TestTelegramBridge_UnmappedChatInjectsNone",
+      "adversarial": true
+    },
+    {
+      "scopeId": "BUG-061-012-SCOPE-01",
+      "scenarioId": "BUG-061-012-SCN-07-system-triggers-cannot-read-a-user-corpus",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        { "file": "internal/agent/judgment_test.go", "function": "TestSystemSurfaces_InjectPrincipalWithoutCorpusGrant" }
+      ],
+      "evidenceRefs": ["scopes.md", "report.md"],
+      "label": "Scheduler, pipeline and judgment inject a system principal that does not carry corpus:read",
+      "type": "adversarial-regression-unit",
+      "source": "specs/061-conversational-assistant/bugs/BUG-061-012-model-supplied-identity-in-agent-tools/scopes.md",
+      "test": "internal/agent/judgment_test.go::TestSystemSurfaces_InjectPrincipalWithoutCorpusGrant",
+      "adversarial": true
+    }
+  ]
+}

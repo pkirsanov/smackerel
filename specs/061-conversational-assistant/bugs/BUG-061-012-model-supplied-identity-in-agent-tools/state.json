@@ -1,0 +1,84 @@
+{
+  "stateVersion": 3,
+  "specId": "061-conversational-assistant",
+  "bugId": "BUG-061-012",
+  "title": "The language model supplies the identity the corpus is read under",
+  "workflowMode": "bugfix-fastlane",
+  "releaseTrain": "mvp",
+  "status": "in_progress",
+  "severity": "S1",
+  "createdAt": "2026-08-14T04:35:00Z",
+  "lastUpdatedAt": "2026-08-14T04:35:00Z",
+  "discoveredBy": "delivery-plan audit (docs/Product_Delivery_Plan.md § P1 hole 2, Stage 1)",
+  "discoveredAt": "2026-08-14",
+  "completedPhases": ["discovery", "documentation", "analysis"],
+  "completedScopes": [],
+  "execution": {
+    "activeAgent": "bubbles.bug",
+    "currentPhase": "analysis",
+    "currentScope": "BUG-061-012-SCOPE-01",
+    "completedScopes": [],
+    "completedPhaseClaims": ["discovery", "documentation", "analysis"],
+    "lastUpdatedAt": "2026-08-14T04:35:00Z",
+    "nextRequiredOwner": "bubbles.implement",
+    "executionHistory": [
+      {
+        "agent": "bubbles.bug",
+        "runStartedAt": "2026-08-14T04:30:00Z",
+        "runCompletedAt": "2026-08-14T04:35:00Z",
+        "phasesExecuted": ["discovery", "documentation", "analysis"],
+        "statusBefore": "not_started",
+        "statusAfter": "in_progress",
+        "summary": "Filed BUG-061-012 at HEAD 0f4b4826, verified from source rather than taken from the delivery plan's description. Four confirmations: retrieval_search declares user_id in required so the model MUST produce it; the handler validates only non-emptiness with no comparison to an authenticated principal and no grant check; a repository-wide grep for AuthenticatedPrincipal/PrincipalFromContext/WithPrincipal exits 1, so no principal mechanism existed for the tool to consult; and internal/telegram/agent_bridge.go:84 invokes the agent with only chatID, never resolved to a user, while IntentEnvelope carries no identity field — making the model's user_id the SOLE identity on that surface, which is why this is S1. Designed the fix around the existing seam: ToolHandler already takes a context, the executor derives toolCtx from the caller's context, and auth.WithSession/SessionFromContext already exist, so no agent-package signature changes. Chose a context principal over an IntentEnvelope field deliberately — an envelope field is data the model's own plumbing carries, the same class of mistake as a tool argument. NO FIX IMPLEMENTED; every DoD item unchecked."
+      }
+    ]
+  },
+  "certification": {
+    "status": "in_progress",
+    "completedScopes": [],
+    "certifiedCompletedPhases": ["discovery", "documentation", "analysis"],
+    "scopeProgress": {
+      "total": 1,
+      "done": 0,
+      "inProgress": 0,
+      "notStarted": 1
+    },
+    "lockdownState": "open",
+    "pendingGates": [
+      "implementation (bubbles.implement) — seven files per design.md Change Boundary",
+      "test execution (bubbles.test) — 8 Test Plan rows, none executed",
+      "adversarial proof that T-01..T-04 fail against pre-fix code (R4.3)",
+      "validate-owned certification (bubbles.validate)"
+    ]
+  },
+  "policySnapshot": {
+    "source": ".specify/memory/bubbles.config.json",
+    "capturedAt": "2026-08-14T04:35:00Z",
+    "workflowMode": "bugfix-fastlane",
+    "workflowModeSource": "packet-classification",
+    "statusCeiling": "done",
+    "grill": { "mode": "off", "source": "repo-default" },
+    "tdd": { "mode": "scenario-first", "source": "packet-declared" },
+    "autoCommit": { "mode": "off", "source": "repo-default" },
+    "lockdown": { "mode": "fastlane", "source": "packet-declared" },
+    "regression": { "mode": "adversarial-required", "source": "packet-declared" },
+    "validation": { "mode": "certification-required", "source": "repo-default" },
+    "evidenceRequired": true,
+    "canonicalCommands": {
+      "unit": "./smackerel.sh test unit",
+      "integration": "./smackerel.sh test integration",
+      "e2e-api": "./smackerel.sh test e2e",
+      "lint": "./smackerel.sh lint",
+      "format": "./smackerel.sh format --check"
+    }
+  },
+  "affectedSurface": [
+    "internal/agent/tools/retrieval/tool.go",
+    "internal/agent/tools/notification/propose.go",
+    "internal/agent/tools/notification/execute.go",
+    "internal/telegram/agent_bridge.go",
+    "internal/scheduler/agent_bridge.go",
+    "internal/pipeline/agent_bridge.go",
+    "internal/agent/judgment.go"
+  ]
+}
