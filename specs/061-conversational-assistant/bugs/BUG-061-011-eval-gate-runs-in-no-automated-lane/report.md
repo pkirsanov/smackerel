@@ -757,6 +757,47 @@ The engineering is sound and this agent confirmed it independently. The defect a
 
 ---
 
+### Code Diff Evidence
+
+The defect was that the lane's package allow-list omitted the package carrying the gate. The
+one-line half of the fix:
+
+```diff
+$ git show c7667d99 -- scripts/runtime/go-integration.sh
+-go_test_args+=(./tests/integration/... ./internal/notification/... ./internal/assistant/... ./internal/cardrewards/...)
++go_test_args+=(./tests/integration/... ./internal/notification/... ./internal/assistant/... ./internal/cardrewards/... ./tests/eval/...)
+```
+
+Listing the package is only half the contract, which is why the fix is not one line. A package can
+be selected and still contribute zero executed assertions — if the build tag stops matching, the
+corpus fails to load, or every case skips. So the lane also asserts on a marker the gate emits:
+
+```diff
+$ git show c7667d99 -- scripts/runtime/go-integration.sh
++gate_marker_prefix="ASSISTANT_ACCEPTANCE_GATE_V1"
++gate_output_file="$(mktemp)"
++cleanup_gate_output() {
++       rm -f "$gate_output_file"
++}
++trap cleanup_gate_output EXIT
+```
+
+Two details in that hunk are deliberate and worth keeping when this code is next touched. The
+output is tee'd to a temp file **outside** the workspace so the console keeps streaming live while
+the assertion reads the same bytes, and so no untracked artifact appears in the repository tree.
+And the pipeline status is captured in **one** assignment, because a second assignment would read a
+`PIPESTATUS` the first had already reset.
+
+The producing side declares the marker prefix as an untagged constant so both the gate and the
+contract test bind the same literal:
+
+```text
+$ grep -n 'GateMarkerPrefix' tests/eval/assistant/harness.go
+343:const GateMarkerPrefix = "ASSISTANT_ACCEPTANCE_GATE_V1"
+```
+
+---
+
 ## Discovered Issues
 
 Issues surfaced while working this packet that are not the reported defect. Each carries a
