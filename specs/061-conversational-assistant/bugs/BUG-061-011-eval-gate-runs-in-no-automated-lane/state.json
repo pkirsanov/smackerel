@@ -52,12 +52,43 @@
     ]
   },
   "policySnapshot": {
-    "grillEnabled": false,
-    "tddEnforced": true,
-    "autoCommit": false,
-    "lockdownPolicy": "fastlane",
-    "regressionPolicy": "adversarial-required",
-    "validationProvenance": "bubbles.bug-filed-pending-implement-test-validate"
+    "source": ".specify/memory/bubbles.config.json",
+    "capturedAt": "2026-08-14T04:12:00Z",
+    "workflowMode": "bugfix-fastlane",
+    "workflowModeSource": "packet-classification",
+    "statusCeiling": "done",
+    "grill": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "tdd": {
+      "mode": "scenario-first",
+      "source": "packet-declared"
+    },
+    "autoCommit": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "lockdown": {
+      "mode": "fastlane",
+      "source": "packet-declared"
+    },
+    "regression": {
+      "mode": "adversarial-required",
+      "source": "packet-declared"
+    },
+    "validation": {
+      "mode": "certification-required",
+      "source": "repo-default"
+    },
+    "evidenceRequired": true,
+    "canonicalCommands": {
+      "unit": "./smackerel.sh test unit",
+      "integration": "./smackerel.sh test integration",
+      "e2e-api": "./smackerel.sh test e2e",
+      "lint": "./smackerel.sh lint",
+      "format": "./smackerel.sh format --check"
+    }
   },
   "affectedSurface": [
     "scripts/runtime/go-integration.sh",
