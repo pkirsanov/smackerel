@@ -8,13 +8,13 @@
       "scenarioId": "BUG-061-012-SCN-01-no-tool-schema-names-the-caller",
       "requiredTestType": ["unit"],
       "linkedTests": [
-        { "file": "internal/agent/tools/schema_contract_test.go", "function": "TestToolSchemas_DeclareNoCallerIdentity" }
+        { "file": "internal/agent/tools/toolscontract/schema_contract_test.go", "function": "TestToolSchemas_DeclareNoCallerIdentity" }
       ],
       "evidenceRefs": ["scopes.md", "report.md"],
       "label": "No registered tool input schema declares a caller-identity property",
       "type": "adversarial-regression-unit",
       "source": "specs/061-conversational-assistant/bugs/BUG-061-012-model-supplied-identity-in-agent-tools/scopes.md",
-      "test": "internal/agent/tools/schema_contract_test.go::TestToolSchemas_DeclareNoCallerIdentity",
+      "test": "internal/agent/tools/toolscontract/schema_contract_test.go::TestToolSchemas_DeclareNoCallerIdentity",
       "adversarial": true
     },
     {
