@@ -469,17 +469,79 @@ result if at least k=25 other `smackerel_self` rows outranked both test rows. Th
 measured the namespace at 13 rows after boot, and 13 + 2 test rows is under 25, so the limit does
 not push them out.
 
-What remains is an open question stated honestly rather than a settled one: either some trigger
-re-runs the sweep, or a third deleter exists, and neither is visible in a lane log that does not
-capture the core's stdout. The instrument that settles it is a lane run with the core container's
-logs captured while the stack is still up — the lane tears it down at the end, which is why every
-capture so far has been post-mortem and empty.
+**What the evidence actually points to: approximate-index recall, not deletion.** The same lane
+that fails those three contains a fourth test over the same namespace that does *not* go through
+vector search — it counts rows by `source_id` — and it passes:
 
-**The fix still belongs to spec 104, and one candidate shape survives either answer.** Making the
-production sweep take the same advisory lock closes the capability no matter which trigger turns
-out to fire it — it can, `pg_advisory_lock` is database-scoped, not test-scoped. The alternative,
-giving test rows corpus-consistent hashes, only hides this one symptom and leaves the lock's stated
-guarantee partial, so it is the weaker of the two.
+```text
+$ grep -nE 'TestIngestor_IdempotentWithStaleSweep' /tmp/i10.log
+6681:=== RUN   TestIngestor_IdempotentWithStaleSweep
+6682:--- PASS: TestIngestor_IdempotentWithStaleSweep (0.09s)
+$ grep -nE '^(ok|FAIL).*tests/integration/selfknowledge' /tmp/i10.log
+6684:ok      github.com/smackerel/smackerel/tests/integration/selfknowledge 0.158s
+```
+
+That splits the two theories cleanly. A deleter would take the row-counting test with it; instead
+the failures partition exactly along one boundary — every test that reaches rows through the
+vector search fails, and the one that reaches them by direct SQL passes. The rows are present.
+They are not being returned.
+
+Two facts about the retrieval path, both read from source, explain why:
+
+```text
+$ sed -n '72p' internal/db/migrations/001_initial_schema.sql
+CREATE INDEX IF NOT EXISTS idx_artifacts_embedding ON artifacts USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);
+
+$ grep -rniE 'ivfflat\.probes|hnsw\.ef_search' --include='*.go' --include='*.sql' --include='*.yaml' .
+$ echo "exit=$?"
+exit=1
+```
+
+IVFFlat is an *approximate* index, and `ivfflat.probes` is never set anywhere in the repository, so
+it runs at the default of `1` — one of a hundred lists, roughly one percent of the table. The index
+is also created in the same migration that creates the table, so its centroids are trained on zero
+rows. `PgxSemanticSearcher.Search` then orders by `embedding <=> $2` and applies `LIMIT 25`, with
+`source_id` as an ordinary filter rather than part of the index. When the planner prefers that
+index, the twenty-five candidates it returns are drawn from a sliver of the table chosen by vector
+proximity alone, and a namespace holding fifteen rows out of many thousands can contribute none of
+them. Zero rows, empty id list, no deletion required.
+
+This also accounts for the isolation/lane split that made it look intermittent. In isolation the
+table is small enough that a sequential scan wins and the search is exact, so the tests pass. In
+the full lane roughly sixty other test files populate `artifacts`, the planner switches to the
+approximate index, and recall collapses. It is deterministic on both sides of that threshold, which
+is why two full lanes reproduced 1971/7 identically.
+
+**What is still unexecuted.** The plan choice has not been observed directly. `EXPLAIN (ANALYZE,
+BUFFERS)` on that exact query against a lane-sized `artifacts` table, showing an
+`Index Scan using idx_artifacts_embedding`, is what converts this from a well-supported reading
+into a demonstrated one. That needs the Docker lane, and this machine's `disk-preflight.sh` is
+refusing every stack start — C: has 38 GB against a 40 GB floor — while a thirty-package cargo
+build in another repository holds the disk. Starting a second heavy stack against a refusing disk
+guard risks wedging the daemon for both, so the measurement is stated here rather than faked.
+
+**This reclassifies the defect, and that matters more than the test failure.** It is not a test
+isolation problem. A namespace-scoped semantic search returning nothing once the corpus grows is a
+product behaviour: the assistant would answer "what can you do?" with no self-knowledge while the
+corpus sits intact in the table. The tests are the messenger.
+
+**Fix shape.** Make the namespace filter run before the ordering instead of after it, so retrieval
+inside a namespace is exact:
+
+```sql
+WITH ns AS MATERIALIZED (
+    SELECT id, title, COALESCE(summary, '') AS summary, embedding
+    FROM artifacts
+    WHERE source_id = $1 AND embedding IS NOT NULL
+)
+SELECT id, title, summary FROM ns ORDER BY embedding <=> $2::vector LIMIT $3
+```
+
+`MATERIALIZED` forces the `source_id` predicate — already served by `idx_artifacts_source` — to be
+evaluated first, leaving an exact distance sort over one namespace rather than an approximate scan
+over the whole table. Correctness stops depending on table size, which is the property the earlier
+lock-based reading never would have delivered: locking the sweep would have left this query just as
+capable of returning nothing in production.
 
 **Routing.** Spec 104 / `BUG-104-001`. That fix is incomplete rather than wrong: it established
 mutual exclusion across test callsites but not against the production sweep the lane itself
