@@ -4,11 +4,13 @@
 
 Two independent omissions combine:
 
-1. `retrieval_search` declares `user_id` in its input schema, so the model is *asked* for an
-   identity, and the handler validates only non-emptiness.
-2. No surface except HTTP puts a principal into the context the executor already propagates.
+1. `retrieval_search` declares `user_id` in its input schema and validates it, but never uses it —
+   `api.SearchRequest` has no user field and the corpus is a single global one. The argument is
+   decorative, and it makes the tool *look* access-controlled.
+2. The tool consults no grant. `auth.GrantGlobalCorpusRead` gates the equivalent HTTP routes;
+   nothing gates the tool, so the agent is a path around that gate.
 
-Neither alone would be sufficient to read the corpus as an arbitrary user. Together they are.
+The second is what actually grants access. The first is why the gap was easy to miss on review.
 
 ## The seam already exists — this is wiring, not new architecture
 
@@ -31,17 +33,20 @@ the surface is not reachable from the model's output at all.
 
 ## Change plan
 
-### C1 — Tools resolve identity from context, and fail closed
+### C1 — Tools resolve the session from context, require the grant, and fail closed
 
 `internal/agent/tools/retrieval/tool.go`:
-- Delete `user_id` from `inputSchema` and from `required`.
-- Delete `UserID` from `retrievalInput`.
+- Delete `user_id` from `inputSchema` and from `required`, delete `UserID` from `retrievalInput`,
+  and delete the emptiness check and its error. The removal is complete, not cosmetic (R1.2).
 - Resolve `sess, ok := auth.SessionFromContext(ctx)`; on `!ok` return
-  `retrieval_search_no_principal` — a distinct error, not the existing
-  `retrieval_search_missing_user_id`, so the two failure modes stay separable in logs.
-- Require the grant: if the session lacks `corpus:read`, return `retrieval_search_grant_required`.
+  `retrieval_search_no_principal`.
+- Gate on `auth.GateGlobalCorpusRead(sess).Allowed`; on false return
+  `retrieval_search_grant_required`. Reusing that helper rather than re-deriving the grant test is
+  what keeps the agent boundary and the HTTP boundary from drifting (R2.4).
 
-Same treatment for `internal/agent/tools/notification/propose.go` and `execute.go`.
+The two errors are distinct on purpose: "nobody is here" and "this caller may not" are different
+operational conditions, and collapsing them would hide a misconfigured surface behind what looks
+like a permissions problem.
 
 ### C2 — Surfaces inject a principal
 

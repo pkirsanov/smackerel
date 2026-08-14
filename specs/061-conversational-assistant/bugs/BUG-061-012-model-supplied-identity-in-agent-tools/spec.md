@@ -6,24 +6,28 @@
 
 ## Problem statement
 
-The identity under which the knowledge corpus is read is chosen by the language model, not derived
-by the server. See `bug.md` for the verified evidence.
+The agent's retrieval tool reads the single operator-owned global corpus with no grant check, and
+demands a caller identity it never uses. See `bug.md` for the verified evidence, including the
+correction to this packet's first framing.
 
 ## Requirements
 
-**R1 — Identity is server-derived.**
-**R1.1** No agent tool MAY accept a caller identity as a tool argument. `user_id` MUST be absent
-from every agent tool input schema.
-**R1.2** A tool that acts on behalf of a user MUST obtain that identity from the request context,
-placed there by the surface that authenticated or resolved it.
-**R1.3** A tool that finds no principal in context MUST fail closed with a distinct, greppable
-error. It MUST NOT fall back to an argument, a default, an empty string, or a system identity.
+**R1 — No tool argument may name the caller.**
+**R1.1** `user_id` MUST be absent from every agent tool input schema. No agent tool MAY accept a
+caller identity as an argument.
+**R1.2** The removal MUST be complete rather than cosmetic: the field, its emptiness check, and its
+error path all go. A retained-but-unused field is what produced the misleading appearance of access
+control that this bug reports.
 
-**R2 — The retrieval boundary requires a grant.**
-**R2.1** `retrieval_search` MUST require the `corpus:read` grant on the resolved principal before
-it searches.
-**R2.2** A principal without that grant MUST be refused with a distinct error, and the refusal MUST
-be distinguishable in logs from "no principal present".
+**R2 — The retrieval boundary requires a grant (the substantive fix).**
+**R2.1** `retrieval_search` MUST resolve the caller's session from the request context and MUST
+require `auth.GrantGlobalCorpusRead` before it searches.
+**R2.2** A context carrying no session MUST fail closed with `retrieval_search_no_principal`. It
+MUST NOT fall back to an argument, a default, an empty identity, or a system identity.
+**R2.3** A session lacking the grant MUST be refused with `retrieval_search_grant_required`, an
+error distinguishable in logs from the no-principal case.
+**R2.4** The grant decision MUST reuse `auth.GateGlobalCorpusRead` rather than re-deriving grant
+logic, so the agent boundary and the HTTP boundary cannot drift apart.
 
 **R3 — Every surface supplies a principal or is refused.**
 **R3.1** The HTTP surface MUST pass the authenticated session through unchanged. It already does;

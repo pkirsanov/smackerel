@@ -16,13 +16,23 @@
 
 ## Summary
 
-`retrieval_search` takes `user_id` as a **required tool argument the model fills in**. The handler
-checks only that the string is non-empty and then searches. Nothing server-side establishes that the
-value corresponds to the caller. The language model is, in effect, supplying the identity that the
-knowledge corpus is read under.
+`retrieval_search` takes `user_id` as a **required tool argument the model fills in**, checks only
+that it is non-empty, and then **never uses it**. The corpus it searches is the single
+operator-owned global corpus, and the tool requires **no grant** to read it.
 
-On the Telegram surface this is not merely weak — it is the *only* identity present, because that
-bridge invokes the agent with no principal at all.
+The defect has two parts, and the second is the substantive one:
+
+1. The tool demands a caller identity it does not enforce. It reads as an access control and is not
+   one.
+2. Any scenario the model can route to `retrieval_search` reads the global corpus, whatever the
+   caller's grants are. `auth.GrantGlobalCorpusRead` exists and gates the HTTP routes; the agent
+   tool consults nothing.
+
+**Correction to the first filing of this packet.** It described the bug as "the model supplies the
+identity the corpus is read under". That overstates the scoping and understates the exposure.
+`api.SearchRequest` has no user or owner field (`internal/api/search.go:26-30`), and `in.UserID` is
+referenced exactly twice in the tool — the struct field and the emptiness check. The corpus is not
+per-user, so no argument can redirect it. The real hole is that reading it requires no grant.
 
 ## Evidence — verified from source at HEAD `0f4b4826`
 
@@ -42,17 +52,29 @@ var inputSchema = json.RawMessage(`{
 }`)
 ```
 
-**2. The only server-side check is non-emptiness.**
+**2. The only server-side check is non-emptiness, and the value is then discarded.**
 
 ```text
-$ sed -n '178,184p' internal/agent/tools/retrieval/tool.go
-        if in.UserID == "" {
-                return nil, errors.New("retrieval_search_missing_user_id")
-        }
+$ grep -n 'UserID' internal/agent/tools/retrieval/tool.go
+156:	UserID string `json:"user_id"`
+180:	if in.UserID == "" {
 ```
 
-There is no comparison against an authenticated principal, and no grant is required at the
-retrieval boundary.
+Two references: the struct field and the emptiness check. The search call that follows is
+`api.SearchRequest{Query: in.Query, Limit: limit}` — `in.UserID` is never passed to it, and
+`SearchRequest` has no field it could be passed as:
+
+```text
+$ sed -n '26,30p' internal/api/search.go
+type SearchRequest struct {
+        Query   string        `json:"query"`
+        Limit   int           `json:"limit,omitempty"`
+        Filters SearchFilters `json:"filters,omitempty"`
+}
+```
+
+No comparison against an authenticated principal, and **no grant required at the retrieval
+boundary** — which is the part that actually controls access.
 
 **3. No principal reaches the tool today.**
 
@@ -79,9 +101,13 @@ func (b *AgentBridge) Handle(ctx context.Context, chatID int64, text string) (*a
 
 ## Impact
 
-The corpus can be read under an identity the model chose. Any prompt path that can influence the
-`user_id` argument can influence whose knowledge is retrieved. This is the read-side counterpart to
-the corpus-grant work in spec 108 — that spec gates *routes*; nothing gates the *tool*.
+The global corpus is readable through the agent by any caller whose scenario reaches
+`retrieval_search`, with no grant consulted. This is the read-side counterpart to spec 108 — that
+spec gates *routes* on `corpus:read`; nothing gates the *tool*, so the agent is a path around the
+very gate spec 108 is mid-rollout on.
+
+The decorative `user_id` compounds it: a reviewer scanning the schema sees a caller identity and may
+reasonably conclude the tool is scoped when it is not.
 
 ## Why the existing seam makes this tractable
 
