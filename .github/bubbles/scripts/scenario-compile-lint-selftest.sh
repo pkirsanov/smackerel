@@ -28,7 +28,19 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+
+# The lint validates that every fixture's repositoryRoot IS the canonical Git
+# root, so this must resolve to one. A fixed "../.." hop only satisfies that in
+# the framework source layout (bubbles/scripts/../.. -> repo root); in a
+# downstream install (.github/bubbles/scripts/../.. -> <repo>/.github) it lands
+# on a directory that is not a Git root, and every fixture is rejected. Resolve
+# it the same way the lint does, keeping the hop as a fallback for a non-Git
+# (tarball) install.
+if REPO_ROOT="$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel 2>/dev/null)" && [[ -n "$REPO_ROOT" ]]; then
+  REPO_ROOT="$(cd -P -- "$REPO_ROOT" && pwd -P)"
+else
+  REPO_ROOT="$(cd -P -- "$SCRIPT_DIR/../.." && pwd -P)"
+fi
 LINT="$SCRIPT_DIR/scenario-compile-lint.sh"
 
 [[ -x "$LINT" ]] || { echo "FAIL: $LINT not executable" >&2; exit 1; }

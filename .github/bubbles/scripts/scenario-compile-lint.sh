@@ -45,9 +45,27 @@ resolve_repo_root() {
   ( cd "$sd/../.." && pwd )
 }
 
+# Where the FRAMEWORK's own registries live, which is not the same place as the
+# repo being linted. This script sits in <framework>/scripts, so <framework> is
+# one level up: `bubbles/` in the source repo, `.github/bubbles/` in an install.
+# Deriving these from the linted repo's root instead made every registry lookup
+# miss downstream, and because the mode/agent checks skip themselves when the
+# list comes back empty, they degraded to silently inert rather than failing.
+framework_dir() {
+  local sd
+  sd="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  ( cd "$sd/.." && pwd )
+}
+
 modes_file() {
   local root="$1"
-  if [[ -f "$root/bubbles/workflows/modes.yaml" ]]; then
+  local fw
+  fw="$(framework_dir)"
+  if [[ -f "$fw/workflows/modes.yaml" ]]; then
+    echo "$fw/workflows/modes.yaml"
+  elif [[ -f "$fw/workflows.yaml" ]]; then
+    echo "$fw/workflows.yaml"
+  elif [[ -f "$root/bubbles/workflows/modes.yaml" ]]; then
     echo "$root/bubbles/workflows/modes.yaml"
   else
     echo "$root/bubbles/workflows.yaml"
@@ -83,7 +101,9 @@ known_modes() {
 
 known_agents() {
   local root="$1"
-  local cf="$root/bubbles/agent-capabilities.yaml"
+  local cf
+  cf="$(framework_dir)/agent-capabilities.yaml"
+  [[ -f "$cf" ]] || cf="$root/bubbles/agent-capabilities.yaml"
   command -v yq >/dev/null 2>&1 && [[ -f "$cf" ]] || return 0
   yq -r '.agents | keys | .[]' "$cf" 2>/dev/null || true
 }
