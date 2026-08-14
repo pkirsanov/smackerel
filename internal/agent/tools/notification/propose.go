@@ -10,14 +10,14 @@ import (
 	"strings"
 
 	"github.com/smackerel/smackerel/internal/agent"
+	"github.com/smackerel/smackerel/internal/auth"
 )
 
 var proposeInputSchema = json.RawMessage(`{
   "type": "object",
   "additionalProperties": false,
-  "required": ["user_id", "what"],
+  "required": ["what"],
   "properties": {
-    "user_id":       {"type": "string", "minLength": 1},
     "what":          {"type": "string", "minLength": 1},
     "when_iso":      {"type": "string"},
     "when_relative": {"type": "string"},
@@ -52,7 +52,6 @@ func init() {
 }
 
 type proposeInput struct {
-	UserID       string `json:"user_id"`
 	What         string `json:"what"`
 	WhenISO      string `json:"when_iso,omitempty"`
 	WhenRelative string `json:"when_relative,omitempty"`
@@ -72,15 +71,26 @@ func handleNotificationPropose(ctx context.Context, raw json.RawMessage) (json.R
 	if err != nil {
 		return nil, err
 	}
+
+	// BUG-061-012. Who gets notified is the authenticated caller, resolved
+	// server-side. It used to be whatever the model wrote into `user_id`,
+	// which the handler checked for non-emptiness and then stamped onto the
+	// persisted envelope — the envelope notification_execute later schedules
+	// against, so a model-chosen value reached the scheduler intact.
+	sess, ok := auth.SessionFromContext(ctx)
+	if !ok {
+		return nil, errors.New("notification_propose_no_principal")
+	}
+	userID := strings.TrimSpace(sess.UserID)
+	if userID == "" {
+		return nil, errors.New("notification_propose_principal_without_user")
+	}
+
 	var in proposeInput
 	if err := json.Unmarshal(raw, &in); err != nil {
 		return nil, fmt.Errorf("notification_propose_bad_input: %w", err)
 	}
 	in.What = strings.TrimSpace(in.What)
-	in.UserID = strings.TrimSpace(in.UserID)
-	if in.UserID == "" {
-		return nil, errors.New("notification_propose_missing_user_id")
-	}
 	if in.What == "" {
 		return nil, errors.New("notification_propose_missing_what")
 	}
@@ -99,7 +109,7 @@ func handleNotificationPropose(ctx context.Context, raw json.RawMessage) (json.R
 	envelope := payloadEnvelope{
 		What:      in.What,
 		WhenUTC:   whenUTC,
-		UserID:    in.UserID,
+		UserID:    userID,
 		Transport: strings.TrimSpace(in.Transport),
 	}
 	payloadBytes, err := json.Marshal(envelope)

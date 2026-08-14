@@ -12,6 +12,7 @@ import (
 	"fmt"
 
 	"github.com/smackerel/smackerel/internal/agent"
+	"github.com/smackerel/smackerel/internal/auth"
 )
 
 // BridgeRunner is the minimal subset of *agent.Bridge that
@@ -67,7 +68,16 @@ func (b *BridgeClassifier) Classify(ctx context.Context, text string, channel So
 		StructuredContext: structured,
 		ScenarioID:        "annotation_classify",
 	}
-	res, _ := b.Runner.Invoke(ctx, env)
+	// BUG-061-012 R3.3. Classification is a server-side decision about an
+	// artifact, not a user asking for their own data, so it invokes as an
+	// explicit system principal holding no grants — same treatment as
+	// scheduler, pipeline, and judgment. `Source` still carries the channel the
+	// text arrived on, which is provenance, not authority.
+	//
+	// Safe to override any inbound session: annotation-classify-v1.yaml
+	// declares exactly one `noop_annotation_classify` tool, so this scenario
+	// can reach no grant-gated tool.
+	res, _ := b.Runner.Invoke(auth.WithSession(ctx, auth.SystemSession("annotation")), env)
 	if res == nil {
 		return "", 0.0, ErrClassifierUnavailable
 	}

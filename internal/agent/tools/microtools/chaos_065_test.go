@@ -21,6 +21,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/smackerel/smackerel/internal/auth"
 )
 
 const chaosProbesPerTool = 150
@@ -294,18 +296,27 @@ func TestChaos065_EntityResolveRandomEntities(t *testing.T) {
 		if input == "" {
 			continue
 		}
+		// BUG-061-012: the caller is server-derived, so the fuzzed identity
+		// moves from the arguments to the context. Keeping it randomised
+		// preserves what this probe was actually exercising — many distinct
+		// callers — while proving the tool still reads identity only from the
+		// session.
 		userID := fmt.Sprintf("u-%d", r.Intn(50))
-		args, err := json.Marshal(entityResolveInput{
-			Input:  input,
+		ctx := auth.WithSession(context.Background(), auth.Session{
 			UserID: userID,
-			Scope:  []string{"", "documents", "recipes"}[r.Intn(3)],
-			TopK:   r.Intn(8),
+			Source: auth.SessionSourcePerUserToken,
+			Scopes: []string{},
+		})
+		args, err := json.Marshal(entityResolveInput{
+			Input: input,
+			Scope: []string{"", "documents", "recipes"}[r.Intn(3)],
+			TopK:  r.Intn(8),
 		})
 		if err != nil {
 			t.Fatalf("marshal: %v", err)
 		}
 		chaosCall(t, "entity_resolve", i, input, func() (json.RawMessage, error) {
-			return handleEntityResolve(context.Background(), args)
+			return handleEntityResolve(ctx, args)
 		})
 	}
 }

@@ -27,10 +27,26 @@ package telegram
 import (
 	"context"
 	"errors"
+	"log/slog"
 
 	"github.com/smackerel/smackerel/internal/agent"
 	"github.com/smackerel/smackerel/internal/agent/userreply"
+	"github.com/smackerel/smackerel/internal/auth"
 )
+
+// PrincipalResolver maps an inbound chat_id to the authenticated session the
+// agent invocation runs under (BUG-061-012 R3.2).
+//
+// It MUST return a non-error result ONLY for a chat that resolves to a real
+// mapped user holding real recorded grants. Every refusal — unmapped chat,
+// unreadable grants, empty user_id — returns an error, and the bridge then
+// invokes with NO principal so corpus tools fail closed.
+//
+// The empty-user_id case is called out because Bot.resolveActorUserID returns
+// ("", nil) for an unmapped chat outside production. A resolver that forwarded
+// that would hand the agent a principal whose UserID is empty, which reads as
+// authenticated while identifying nobody.
+type PrincipalResolver func(ctx context.Context, chatID int64) (auth.Session, error)
 
 // AgentRunner is the bridge's only dependency on the agent runtime.
 // The production wiring constructs one backed by the real router +
@@ -55,6 +71,13 @@ type AgentSender interface {
 type AgentBridge struct {
 	Runner AgentRunner
 	Sender AgentSender
+
+	// Principal resolves the inbound chat to the session the invocation runs
+	// under. Optional: a nil resolver means no principal is ever injected, so
+	// every grant-gated tool fails closed on this surface. That is the safe
+	// default — a bridge wired without a resolver loses corpus retrieval
+	// rather than serving it to an unidentified caller.
+	Principal PrincipalResolver
 }
 
 // NewAgentBridge constructs the bridge. Both arguments are required;
@@ -82,6 +105,17 @@ func (b *AgentBridge) Handle(ctx context.Context, chatID int64, text string) (*a
 	if b == nil || b.Runner == nil || b.Sender == nil {
 		return nil, errors.New("telegram.AgentBridge: not initialised")
 	}
+
+	// BUG-061-012 R3.2. Resolve the caller BEFORE Invoke, so the session is
+	// already on the context every tool receives. Injecting it later, or
+	// letting a tool read an identity out of the model's arguments, is the
+	// defect this closes.
+	//
+	// A refusal is not fatal to the turn: the invocation proceeds WITHOUT a
+	// principal and grant-gated tools refuse themselves (SCN-06). Dropping the
+	// message instead would take out the ungated capabilities too, for a chat
+	// that may simply not need them.
+	ctx = b.withPrincipal(ctx, chatID)
 
 	env := agent.IntentEnvelope{
 		Source:   "telegram",
@@ -115,4 +149,29 @@ func (b *AgentBridge) Handle(ctx context.Context, chatID int64, text string) (*a
 		return result, err
 	}
 	return result, nil
+}
+
+// withPrincipal returns ctx carrying the resolved session, or ctx unchanged
+// when the chat cannot be resolved to one.
+//
+// The empty-UserID re-check is deliberate belt-and-braces on top of the
+// resolver's own contract. auth.WithSession would happily store a session
+// identifying nobody, and a downstream tool testing only `ok` would then treat
+// it as authenticated.
+func (b *AgentBridge) withPrincipal(ctx context.Context, chatID int64) context.Context {
+	if b.Principal == nil {
+		return ctx
+	}
+	sess, err := b.Principal(ctx, chatID)
+	if err != nil {
+		slog.Warn("telegram agent bridge: no principal for chat; grant-gated tools will refuse",
+			"chat_id", chatID, "error", err)
+		return ctx
+	}
+	if sess.UserID == "" || sess.Source == "" {
+		slog.Warn("telegram agent bridge: resolver returned an unusable principal; treating the chat as unidentified",
+			"chat_id", chatID, "source", string(sess.Source))
+		return ctx
+	}
+	return auth.WithSession(ctx, sess)
 }

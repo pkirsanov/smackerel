@@ -25,6 +25,7 @@ import (
 	"context"
 
 	"github.com/smackerel/smackerel/internal/agent"
+	"github.com/smackerel/smackerel/internal/auth"
 )
 
 // AgentRunner is the bridge contract the scheduler call site needs.
@@ -60,5 +61,11 @@ func FireScenario(ctx context.Context, runner AgentRunner, scenarioID string, st
 		ScenarioID:        scenarioID,
 		StructuredContext: structuredCtx,
 	}
-	return runner.Invoke(ctx, env)
+	// BUG-061-012 R3.3. A scheduler tick has no human caller, so it invokes as
+	// an explicit system principal holding no grants. Passing the caller's
+	// context unchanged also failed closed, but only by accident — the day a
+	// default session appears upstream, these invocations would silently
+	// inherit whatever it grants. A declared empty grant set is also assertable
+	// (SCN-07); an absent one cannot be told apart from an oversight.
+	return runner.Invoke(auth.WithSession(ctx, auth.SystemSession("scheduler")), env)
 }

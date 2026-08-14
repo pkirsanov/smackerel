@@ -7,7 +7,21 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/smackerel/smackerel/internal/auth"
 )
+
+// entityResolveCtx carries the authenticated caller the way production does
+// (BUG-061-012): on the context, put there by the surface. These tests used to
+// pass "user_id" as a tool argument, which is exactly the defect — an argument
+// the model writes cannot be identity.
+func entityResolveCtx(userID string) context.Context {
+	return auth.WithSession(context.Background(), auth.Session{
+		UserID: userID,
+		Source: auth.SessionSourcePerUserToken,
+		Scopes: []string{},
+	})
+}
 
 type fakeEntityResolver struct {
 	candidates []EntityCandidate
@@ -65,8 +79,8 @@ func TestEntityResolveRanksExactRecentRelationThenVectorCandidates(t *testing.T)
 		Timeout:         500 * time.Millisecond,
 	})
 
-	args := json.RawMessage(`{"input":"the lease","user_id":"u1","scope":"documents","top_k":5}`)
-	raw, err := handleEntityResolve(context.Background(), args)
+	args := json.RawMessage(`{"input":"the lease","scope":"documents","top_k":5}`)
+	raw, err := handleEntityResolve(entityResolveCtx("u1"), args)
 	env := mustResolveEnvelopeRE(t, raw, err)
 
 	if env.Status != StatusResolved {
@@ -78,9 +92,34 @@ func TestEntityResolveRanksExactRecentRelationThenVectorCandidates(t *testing.T)
 	if env.Confidence != 0.92 {
 		t.Fatalf("confidence = %v, want 0.92", env.Confidence)
 	}
+	// lastUser proves the resolver was scoped to the SESSION user. Nothing in
+	// args could have set it.
 	if resolver.lastUser != "u1" || resolver.lastInput != "the lease" || resolver.lastScope != "documents" || resolver.lastLimit != 5 {
 		t.Fatalf("resolver call args wrong: user=%q input=%q scope=%q limit=%d",
 			resolver.lastUser, resolver.lastInput, resolver.lastScope, resolver.lastLimit)
+	}
+}
+
+func TestEntityResolveIgnoresModelSuppliedUserID(t *testing.T) {
+	// BUG-061-012 SCN-04 adversarial: a model that still writes "user_id" must
+	// not be able to steer the scope. The session user wins, and the smuggled
+	// value reaches nothing.
+	resolver := &fakeEntityResolver{
+		candidates: []EntityCandidate{{ArtifactID: "art-1", Label: "Lease", Score: 0.95}},
+	}
+	withEntityResolveServices(t, &EntityResolveServices{
+		Resolver:        resolver,
+		ConfidenceFloor: 0.7,
+		MaxCandidates:   5,
+		Timeout:         500 * time.Millisecond,
+	})
+
+	args := json.RawMessage(`{"input":"the lease","user_id":"victim"}`)
+	if _, err := handleEntityResolve(entityResolveCtx("caller"), args); err != nil {
+		t.Fatalf("handler err: %v", err)
+	}
+	if resolver.lastUser != "caller" {
+		t.Fatalf("resolver scoped to %q, want the session user \"caller\" — a model argument steered identity", resolver.lastUser)
 	}
 }
 
@@ -100,8 +139,8 @@ func TestEntityResolveLowConfidenceReturnsAmbiguous(t *testing.T) {
 		Timeout:         500 * time.Millisecond,
 	})
 
-	args := json.RawMessage(`{"input":"the lease","user_id":"u1"}`)
-	raw, err := handleEntityResolve(context.Background(), args)
+	args := json.RawMessage(`{"input":"the lease"}`)
+	raw, err := handleEntityResolve(entityResolveCtx("u1"), args)
 	env := mustResolveEnvelopeRE(t, raw, err)
 
 	if env.Status != StatusAmbiguous {
@@ -126,8 +165,8 @@ func TestEntityResolveZeroCandidatesFailsLoud(t *testing.T) {
 		Timeout:         500 * time.Millisecond,
 	})
 
-	args := json.RawMessage(`{"input":"nothing matches","user_id":"u1"}`)
-	raw, err := handleEntityResolve(context.Background(), args)
+	args := json.RawMessage(`{"input":"nothing matches"}`)
+	raw, err := handleEntityResolve(entityResolveCtx("u1"), args)
 	env := mustResolveEnvelopeRE(t, raw, err)
 
 	if env.Status != StatusFailed {
@@ -147,8 +186,8 @@ func TestEntityResolveResolverErrorBecomesFailedEnvelope(t *testing.T) {
 		Timeout:         200 * time.Millisecond,
 	})
 
-	args := json.RawMessage(`{"input":"x","user_id":"u1"}`)
-	raw, err := handleEntityResolve(context.Background(), args)
+	args := json.RawMessage(`{"input":"x"}`)
+	raw, err := handleEntityResolve(entityResolveCtx("u1"), args)
 	env := mustResolveEnvelopeRE(t, raw, err)
 
 	if env.Status != StatusFailed {
@@ -159,7 +198,16 @@ func TestEntityResolveResolverErrorBecomesFailedEnvelope(t *testing.T) {
 	}
 }
 
-func TestEntityResolveRejectsMissingUserID(t *testing.T) {
+func TestEntityResolveRejectsUnidentifiedCaller(t *testing.T) {
+	// BUG-061-012 SCN-02. This replaces the old "missing user_id argument"
+	// case: identity is no longer an argument, so the equivalent refusal is
+	// "no principal on the context". Keeping the assertion (rather than
+	// deleting the test with its argument) is what preserves the only proof
+	// that the tool refuses an unnamed caller instead of resolving globally.
+	//
+	// The two identity refusals stay distinct: a surface that injected nothing
+	// and a surface that injected a principal identifying nobody are different
+	// wiring bugs with different fixes.
 	withEntityResolveServices(t, &EntityResolveServices{
 		Resolver:        &fakeEntityResolver{},
 		ConfidenceFloor: 0.5,
@@ -169,16 +217,17 @@ func TestEntityResolveRejectsMissingUserID(t *testing.T) {
 
 	cases := []struct {
 		name string
+		ctx  context.Context
 		args string
 		want string
 	}{
-		{"empty user", `{"input":"x","user_id":""}`, "entity_resolve_missing_user_id"},
-		{"missing user", `{"input":"x"}`, "entity_resolve_missing_user_id"},
-		{"empty input", `{"input":"","user_id":"u"}`, "entity_resolve_empty_input"},
+		{"no principal", context.Background(), `{"input":"x"}`, "entity_resolve_no_principal"},
+		{"principal identifies nobody", entityResolveCtx(""), `{"input":"x"}`, "entity_resolve_principal_without_user"},
+		{"empty input", entityResolveCtx("u"), `{"input":""}`, "entity_resolve_empty_input"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			_, err := handleEntityResolve(context.Background(), json.RawMessage(tc.args))
+			_, err := handleEntityResolve(tc.ctx, json.RawMessage(tc.args))
 			if err == nil || !strings.Contains(err.Error(), tc.want) {
 				t.Fatalf("err = %v, want substring %q", err, tc.want)
 			}
@@ -188,7 +237,7 @@ func TestEntityResolveRejectsMissingUserID(t *testing.T) {
 
 func TestEntityResolveNotConfiguredFailsLoud(t *testing.T) {
 	ResetEntityResolveServicesForTest()
-	_, err := handleEntityResolve(context.Background(), json.RawMessage(`{"input":"x","user_id":"u"}`))
+	_, err := handleEntityResolve(entityResolveCtx("u"), json.RawMessage(`{"input":"x"}`))
 	if err == nil || !strings.Contains(err.Error(), "entity_resolve_not_configured") {
 		t.Fatalf("err = %v, want entity_resolve_not_configured", err)
 	}
@@ -205,8 +254,8 @@ func TestEntityResolveClampsTopKToMaxCandidates(t *testing.T) {
 		Timeout:         100 * time.Millisecond,
 	})
 
-	args := json.RawMessage(`{"input":"x","user_id":"u","top_k":100}`)
-	_, err := handleEntityResolve(context.Background(), args)
+	args := json.RawMessage(`{"input":"x","top_k":100}`)
+	_, err := handleEntityResolve(entityResolveCtx("u"), args)
 	if err != nil {
 		t.Fatalf("handler err: %v", err)
 	}

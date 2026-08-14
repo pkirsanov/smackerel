@@ -12,7 +12,20 @@ import (
 	"time"
 
 	"github.com/smackerel/smackerel/internal/agent"
+	"github.com/smackerel/smackerel/internal/auth"
 )
+
+// notifyCtx carries the authenticated caller the way production does
+// (BUG-061-012): on the context, put there by the surface. These tests used to
+// pass "user_id" as a tool argument — a value the model writes, which then
+// reached the persisted envelope and the scheduler intact.
+func notifyCtx(userID string) context.Context {
+	return auth.WithSession(context.Background(), auth.Session{
+		UserID: userID,
+		Source: auth.SessionSourcePerUserToken,
+		Scopes: []string{},
+	})
+}
 
 type memConfirmStore struct {
 	mu      sync.Mutex
@@ -75,8 +88,8 @@ func TestNotification_BothToolsRegistered(t *testing.T) {
 func TestPropose_Happy_StagesPayloadAndIssuesRef(t *testing.T) {
 	store, _ := wireFakes(t)
 
-	raw, err := handleNotificationPropose(context.Background(),
-		[]byte(`{"user_id":"u1","what":"take out trash","when_relative":"2h"}`))
+	raw, err := handleNotificationPropose(notifyCtx("u1"),
+		[]byte(`{"what":"take out trash","when_relative":"2h"}`))
 	if err != nil {
 		t.Fatalf("propose: %v", err)
 	}
@@ -97,8 +110,8 @@ func TestPropose_Happy_StagesPayloadAndIssuesRef(t *testing.T) {
 
 func TestPropose_MissingWhen_SlotMissing(t *testing.T) {
 	wireFakes(t)
-	raw, err := handleNotificationPropose(context.Background(),
-		[]byte(`{"user_id":"u1","what":"do it"}`))
+	raw, err := handleNotificationPropose(notifyCtx("u1"),
+		[]byte(`{"what":"do it"}`))
 	if err != nil {
 		t.Fatalf("propose: %v", err)
 	}
@@ -115,20 +128,65 @@ func TestPropose_MissingWhen_SlotMissing(t *testing.T) {
 	}
 }
 
-func TestPropose_MissingUserID_Errors(t *testing.T) {
+func TestPropose_UnidentifiedCaller_Errors(t *testing.T) {
+	// BUG-061-012 SCN-02. Successor to TestPropose_MissingUserID_Errors:
+	// identity is no longer an argument, so the equivalent refusal is "no
+	// principal on the context". This is the only assertion that propose
+	// refuses an unnamed caller rather than staging a payload for nobody, so
+	// it is converted rather than deleted.
 	wireFakes(t)
-	_, err := handleNotificationPropose(context.Background(),
-		[]byte(`{"user_id":"","what":"x","when_relative":"1h"}`))
-	if err == nil || !strings.Contains(err.Error(), "missing_user_id") {
-		t.Fatalf("err = %v, want missing_user_id", err)
+
+	cases := []struct {
+		name string
+		ctx  context.Context
+		want string
+	}{
+		{"no principal", context.Background(), "notification_propose_no_principal"},
+		{"principal identifies nobody", notifyCtx("  "), "notification_propose_principal_without_user"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := handleNotificationPropose(tc.ctx, []byte(`{"what":"x","when_relative":"1h"}`))
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("err = %v, want substring %q", err, tc.want)
+			}
+		})
+	}
+}
+
+func TestPropose_IgnoresModelSuppliedUserID(t *testing.T) {
+	// Adversarial: a model that still writes "user_id" must not be able to
+	// pick whose reminder is staged. The session user is what lands in the
+	// persisted envelope, which is what notification_execute schedules against.
+	store, _ := wireFakes(t)
+
+	raw, err := handleNotificationPropose(notifyCtx("caller"),
+		[]byte(`{"user_id":"victim","what":"x","when_relative":"1h"}`))
+	if err != nil {
+		t.Fatalf("propose: %v", err)
+	}
+	var out proposeOutput
+	if err := json.Unmarshal(raw, &out); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	staged, ok, _ := store.Get(context.Background(), out.ConfirmRef)
+	if !ok {
+		t.Fatalf("payload not staged under ref %q", out.ConfirmRef)
+	}
+	var env payloadEnvelope
+	if err := json.Unmarshal([]byte(staged), &env); err != nil {
+		t.Fatalf("unmarshal staged envelope: %v", err)
+	}
+	if env.UserID != "caller" {
+		t.Fatalf("staged envelope user_id = %q, want the session user \"caller\" — a model argument steered the recipient", env.UserID)
 	}
 }
 
 func TestExecute_RoundTrip_CallsScheduler(t *testing.T) {
 	store, sched := wireFakes(t)
 
-	rawP, err := handleNotificationPropose(context.Background(),
-		[]byte(`{"user_id":"u42","what":"call mom","when_relative":"1h","transport":"telegram"}`))
+	rawP, err := handleNotificationPropose(notifyCtx("u42"),
+		[]byte(`{"what":"call mom","when_relative":"1h","transport":"telegram"}`))
 	if err != nil {
 		t.Fatalf("propose: %v", err)
 	}
@@ -167,7 +225,7 @@ func TestExecute_UnknownConfirmRef_Errors(t *testing.T) {
 
 func TestNotification_NotConfigured_FailsLoud(t *testing.T) {
 	ResetForTest()
-	if _, err := handleNotificationPropose(context.Background(), []byte(`{"user_id":"u","what":"x","when_relative":"1h"}`)); err == nil || !strings.Contains(err.Error(), "not_configured") {
+	if _, err := handleNotificationPropose(notifyCtx("u"), []byte(`{"what":"x","when_relative":"1h"}`)); err == nil || !strings.Contains(err.Error(), "not_configured") {
 		t.Fatalf("propose err = %v", err)
 	}
 	if _, err := handleNotificationExecute(context.Background(), []byte(`{"confirm_ref":"abc"}`)); err == nil || !strings.Contains(err.Error(), "not_configured") {

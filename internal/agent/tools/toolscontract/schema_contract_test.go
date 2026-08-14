@@ -38,30 +38,17 @@ var callerIdentityProperty = regexp.MustCompile(`"(user_id|userId|user|principal
 // Used only by the stale-fixture guard below.
 var schemaDeclaration = regexp.MustCompile(`(?s)json\.RawMessage\(` + "`" + `\{.*?"type"\s*:\s*"object"`)
 
-// knownRemaining is the ratchet. These two tools ACTUALLY USE the supplied
-// identity — entity_resolve passes it to Resolver.Resolve, propose addresses a
-// notification with it — so removing the argument requires the caller's session
-// to reach the tool through the request context first, which is surface wiring
-// across four Invoke call sites (BUG-061-012 design.md § C2).
-//
-// The two already removed (retrieval, recipesearch) validated the value and
-// then discarded it, so their removal changed no behaviour and needed no
-// wiring. That is why the fix splits here rather than at a file count.
-//
-// THIS LIST MUST ONLY SHRINK. A new entry means a tool was added that asks the
-// model to name the principal, which is the defect this contract exists to
-// stop. Delete entries as the wiring lands; when it is empty, delete the
-// allowlist and let the bare check stand.
-var knownRemaining = map[string]bool{
-	"../microtools/entity_resolve.go": true,
-	"../notification/propose.go":      true,
-}
+// The ratchet that formerly carried microtools/entity_resolve and
+// notification/propose is GONE. Both now resolve the principal from the request
+// context (auth.SessionFromContext), so the check below stands bare: ANY agent
+// tool schema naming the caller fails it, with no allowlist to add to. That is
+// the terminal state BUG-061-012 was ratcheting toward — an allowlist that
+// still exists is an allowlist someone can append to.
 
 // TestToolSchemas_DeclareNoCallerIdentity is the contract. It fails when any
-// agent tool schema names the caller, except the two the ratchet still carries.
+// agent tool schema names the caller.
 func TestToolSchemas_DeclareNoCallerIdentity(t *testing.T) {
 	var offenders []string
-	var stillRemaining []string
 	var schemasSeen int
 
 	err := filepath.Walk(toolsRoot, func(path string, info os.FileInfo, err error) error {
@@ -81,10 +68,6 @@ func TestToolSchemas_DeclareNoCallerIdentity(t *testing.T) {
 
 		rel := filepath.ToSlash(path)
 		for _, m := range callerIdentityProperty.FindAllStringSubmatch(src, -1) {
-			if knownRemaining[rel] {
-				stillRemaining = append(stillRemaining, rel+": "+m[1])
-				continue
-			}
 			offenders = append(offenders, rel+": "+m[1])
 		}
 		return nil
@@ -98,21 +81,6 @@ func TestToolSchemas_DeclareNoCallerIdentity(t *testing.T) {
 	// would pass without asserting anything.
 	if schemasSeen == 0 {
 		t.Fatalf("found no tool input schemas under %s; the walk is broken, so a pass here would be vacuous", toolsRoot)
-	}
-
-	// A ratchet that silently tolerates a fixed entry stops ratcheting. If an
-	// allowlisted file no longer offends, the entry must go.
-	for rel := range knownRemaining {
-		found := false
-		for _, s := range stillRemaining {
-			if strings.HasPrefix(s, rel+":") {
-				found = true
-				break
-			}
-		}
-		if !found {
-			t.Errorf("%s is in knownRemaining but declares no caller identity; remove the entry — the list must only shrink", rel)
-		}
 	}
 
 	if len(offenders) > 0 {

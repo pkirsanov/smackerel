@@ -15,10 +15,13 @@
 //   - failed    → resolver returned zero candidates or an error;
 //                 the trace records the error code.
 //
-// User-scope isolation: the input REQUIRES a non-empty `user_id` and
-// the Resolver implementation is responsible for restricting reads to
-// that user's artifacts. The handler refuses requests without
-// user_id; cross-user reads are a Resolver-side concern enforced by
+// User-scope isolation: the caller's identity is resolved SERVER-SIDE
+// from the request context (auth.SessionFromContext), never from a tool
+// argument. Before BUG-061-012 the input required a `user_id` that the
+// language model filled in and the handler passed straight to
+// Resolver.Resolve — so the model chose whose artifacts were read. The
+// handler now refuses any invocation whose context carries no principal;
+// cross-user reads remain a Resolver-side concern enforced by
 // integration tests against the live store.
 //
 // Wiring contract: production code in cmd/core constructs a
@@ -38,6 +41,7 @@ import (
 	"time"
 
 	"github.com/smackerel/smackerel/internal/agent"
+	"github.com/smackerel/smackerel/internal/auth"
 )
 
 // EntityResolveToolName is the canonical tool name registered through
@@ -150,10 +154,9 @@ func loadEntityResolveServices() (*EntityResolveServices, error) {
 var entityResolveInputSchema = json.RawMessage(`{
   "type": "object",
   "additionalProperties": false,
-  "required": ["input", "user_id"],
+  "required": ["input"],
   "properties": {
     "input":   {"type": "string", "minLength": 1},
-    "user_id": {"type": "string", "minLength": 1},
     "scope":   {"type": "string"},
     "top_k":   {"type": "integer", "minimum": 1, "maximum": 50}
   }
@@ -198,10 +201,9 @@ func registerEntityResolve() {
 // -------------------- handler --------------------
 
 type entityResolveInput struct {
-	Input  string `json:"input"`
-	UserID string `json:"user_id"`
-	Scope  string `json:"scope,omitempty"`
-	TopK   int    `json:"top_k,omitempty"`
+	Input string `json:"input"`
+	Scope string `json:"scope,omitempty"`
+	TopK  int    `json:"top_k,omitempty"`
 }
 
 func handleEntityResolve(ctx context.Context, raw json.RawMessage) (json.RawMessage, error) {
@@ -209,12 +211,23 @@ func handleEntityResolve(ctx context.Context, raw json.RawMessage) (json.RawMess
 	if err != nil {
 		return nil, err
 	}
+
+	// BUG-061-012. Whose artifacts get resolved is decided by the
+	// authenticated session, not by an argument the model wrote. An absent
+	// principal is refused outright rather than defaulted: resolving under an
+	// empty user_id would read as "scoped" while scoping to nothing in
+	// particular, which is the failure mode this tool previously had.
+	sess, ok := auth.SessionFromContext(ctx)
+	if !ok {
+		return nil, errors.New("entity_resolve_no_principal")
+	}
+	if sess.UserID == "" {
+		return nil, errors.New("entity_resolve_principal_without_user")
+	}
+
 	var in entityResolveInput
 	if err := json.Unmarshal(raw, &in); err != nil {
 		return nil, fmt.Errorf("entity_resolve_bad_input: %w", err)
-	}
-	if in.UserID == "" {
-		return nil, errors.New("entity_resolve_missing_user_id")
 	}
 	if in.Input == "" {
 		return nil, errors.New("entity_resolve_empty_input")
@@ -228,7 +241,7 @@ func handleEntityResolve(ctx context.Context, raw json.RawMessage) (json.RawMess
 	callCtx, cancel := context.WithTimeout(ctx, svc.Timeout)
 	defer cancel()
 
-	cands, rerr := svc.Resolver.Resolve(callCtx, in.UserID, in.Input, in.Scope, limit)
+	cands, rerr := svc.Resolver.Resolve(callCtx, sess.UserID, in.Input, in.Scope, limit)
 	if rerr != nil {
 		return marshalEntityEnvelope(entityFailed("resolver_error", rerr.Error()))
 	}

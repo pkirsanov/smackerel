@@ -29,6 +29,7 @@ import (
 
 	"github.com/smackerel/smackerel/internal/agent"
 	"github.com/smackerel/smackerel/internal/api"
+	"github.com/smackerel/smackerel/internal/auth"
 )
 
 // ToolName is the single tool registered by this package. Wiring and
@@ -171,6 +172,27 @@ func handleRetrievalSearch(ctx context.Context, raw json.RawMessage) (json.RawMe
 	if err != nil {
 		return nil, err
 	}
+
+	// BUG-061-012 R2. Authorize BEFORE reading. The corpus is one
+	// operator-owned global store, so the only thing standing between a caller
+	// and all of it is this grant; running the search first and refusing after
+	// would not be a gate.
+	//
+	// The two refusals are deliberately distinct. "Nobody is here" means a
+	// surface failed to inject a principal — an operational defect. "This
+	// caller may not" means the gate worked. Collapsing them would hide the
+	// first behind the second.
+	sess, ok := auth.SessionFromContext(ctx)
+	if !ok {
+		return nil, errors.New("retrieval_search_no_principal")
+	}
+	// Reuses the same helper the HTTP corpus routes call, rather than
+	// re-deriving the grant test here (R2.4) — a second derivation is how the
+	// agent boundary and the HTTP boundary drift apart.
+	if !auth.GateGlobalCorpusRead(sess).Allowed {
+		return nil, errors.New("retrieval_search_grant_required")
+	}
+
 	var in retrievalInput
 	if err := json.Unmarshal(raw, &in); err != nil {
 		return nil, fmt.Errorf("retrieval_search_bad_input: %w", err)

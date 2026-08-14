@@ -19,6 +19,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+
+	"github.com/smackerel/smackerel/internal/auth"
 )
 
 // JudgmentRunner is the minimal Invoke surface InvokeJudgment needs.
@@ -60,7 +62,16 @@ func InvokeJudgment[T any](ctx context.Context, runner JudgmentRunner, source, s
 		return zero, fmt.Errorf("agent judgment %q: marshal signals: %w", scenarioID, err)
 	}
 
-	res, _ := runner.Invoke(ctx, IntentEnvelope{
+	// BUG-061-012 R3.3. A judgment is a server-initiated evaluation with no
+	// human caller, so it runs as an explicit system principal holding no
+	// grants. This deliberately REPLACES any inbound session rather than
+	// passing one through: `source` is already "scheduler"/"pipeline"/"api"
+	// depending on what triggered the evaluation, and a judgment invoked while
+	// serving an HTTP request is still the server deciding, not the user
+	// asking. Verified safe to override: every judgment scenario
+	// (config/prompt_contracts/*-v1.yaml) declares exactly one `noop_*` tool,
+	// so none can reach a grant-gated tool whose access this could withdraw.
+	res, _ := runner.Invoke(auth.WithSession(ctx, auth.SystemSession("judgment")), IntentEnvelope{
 		Source:            source,
 		StructuredContext: structured,
 		ScenarioID:        scenarioID,

@@ -16,6 +16,7 @@ import (
 	"context"
 
 	"github.com/smackerel/smackerel/internal/agent"
+	"github.com/smackerel/smackerel/internal/auth"
 )
 
 // AgentRunner mirrors scheduler.AgentRunner; agent.Bridge satisfies it
@@ -44,5 +45,7 @@ func FireScenario(ctx context.Context, runner AgentRunner, scenarioID string, st
 		ScenarioID:        scenarioID,
 		StructuredContext: structuredCtx,
 	}
-	return runner.Invoke(ctx, env)
+	// BUG-061-012 R3.3 — see scheduler.FireScenario. A pipeline stage acts on
+	// its own behalf, not a user's, so it carries no corpus authority.
+	return runner.Invoke(auth.WithSession(ctx, auth.SystemSession("pipeline")), env)
 }
