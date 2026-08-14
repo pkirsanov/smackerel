@@ -618,3 +618,117 @@ Four checks support the claim that this bug's change caused none of the six:
 | *"Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior"* (`scopes.md:767`) | **unchecked** | This bug's regression protection is the untagged contract test `internal/deploy/eval_lane_contract_test.go` (cases A0–A7) plus the integration lane's own executed-assertion marker check. Both are real and both are recorded above — but neither is an **e2e-tier** test, which is what this item asks for. Recorded as an honest gap. |
 
 No checkbox was changed in this pass. The count in `scopes.md` remains 22 checked and 4 unchecked, as it was before this section was written.
+
+---
+
+## Validation Record — `bubbles.validate`, 2026-08-14
+
+**Agent:** `bubbles.validate` · **Mode:** deep · **Tree:** HEAD `689bc400`, clean on every packet and fix path (`git status --porcelain` over the packet dir, `scripts/runtime/go-integration.sh`, `internal/deploy/eval_lane_contract_test.go`, `tests/eval/assistant/`, `docs/Testing.md`, `tests/e2e/assistant_regression_e2e_test.sh` returns empty).
+
+**Verdict: certification REFUSED. `Verified` was NOT set in `bug.md`. The DoD item *"`bug.md` status advanced to Fixed and then Verified"* was NOT ticked.**
+
+The refusal is about the packet's certifiability, not about the fix. Those two findings are separated below on purpose, because collapsing them would misreport either the engineering or the artifact state.
+
+### V1. What this agent re-executed
+
+| # | Check | Command | Exit | Result |
+|---|-------|---------|------|--------|
+| V1.1 | Contract + adversarial unit tests | `./smackerel.sh test unit --go --go-run 'TestEvalLaneContract\|TestExecutedAssertions_ZeroOnEmptyCorpus' --verbose` | `0` | 7 top-level tests PASS, 6 sub-tests PASS, `--- FAIL` count **0**, `^FAIL` count **0** over the 529-line lane transcript |
+| V1.2 | Lane carries the eval package | `grep -nE 'tests/eval' scripts/runtime/go-integration.sh` | `0` | line 53 argv contains `./tests/eval/...` |
+| V1.3 | Fix files tracked in HEAD | `git ls-tree -r HEAD --name-only -- internal/deploy/eval_lane_contract_test.go tests/eval/assistant/harness.go tests/eval/assistant/acceptance_test.go` | `0` | all three present |
+| V1.4 | Artifact lint | `bash .github/bubbles/scripts/artifact-lint.sh <packet>` | **`0`** | PASSED |
+| V1.5 | State transition guard | `bash .github/bubbles/scripts/state-transition-guard.sh <packet>` | **`1`** | `verdict: FAIL`, `failureCount: 52`, `blockingCode: DELIVERY_COMPLETION_FAILED` |
+| V1.6 | Capability foundation guard (G094) | `bash .github/bubbles/scripts/capability-foundation-guard.sh <packet>` | `1` | 4 findings |
+| V1.7 | Discovered-issue disposition guard (G095) | `bash .github/bubbles/scripts/discovered-issue-disposition-guard.sh <packet>` | `1` | 2 findings, `report.md:426`, `report.md:507` |
+
+V1.1 raw output, verbatim from the run in this session:
+
+    === RUN   TestEvalLaneContract_LaneRunsGateAndAssertsExecutedAssertions
+    --- PASS: TestEvalLaneContract_LaneRunsGateAndAssertsExecutedAssertions (0.00s)
+    === RUN   TestEvalLaneContract_AcceptsMinimalConformantFixtures
+    --- PASS: TestEvalLaneContract_AcceptsMinimalConformantFixtures (0.00s)
+    === RUN   TestEvalLaneContract_AdversarialRejectsMissingEvalPackage
+    --- PASS: TestEvalLaneContract_AdversarialRejectsMissingEvalPackage (0.00s)
+    --- PASS: TestEvalLaneContract_AdversarialRejectsMissingOrZeroAssertion (0.00s)
+        --- PASS: TestEvalLaneContract_AdversarialRejectsMissingOrZeroAssertion/A2_assertion_removed (0.00s)
+        --- PASS: TestEvalLaneContract_AdversarialRejectsMissingOrZeroAssertion/A3_assertion_accepts_zero (0.00s)
+    --- PASS: TestEvalLaneContract_AdversarialRejectsConditionalOrAbsentMarker (0.00s)
+        --- PASS: TestEvalLaneContract_AdversarialRejectsConditionalOrAbsentMarker/A4_marker_conditional_on_passing (0.00s)
+        --- PASS: TestEvalLaneContract_AdversarialRejectsConditionalOrAbsentMarker/A5_marker_never_emitted (0.00s)
+    --- PASS: TestEvalLaneContract_AdversarialRejectsBypassOrBroadenedSkip (0.00s)
+        --- PASS: TestEvalLaneContract_AdversarialRejectsBypassOrBroadenedSkip/A6_bypass_env_var_introduced (0.00s)
+        --- PASS: TestEvalLaneContract_AdversarialRejectsBypassOrBroadenedSkip/A7_skip_condition_broadened (0.00s)
+    ok      github.com/smackerel/smackerel/internal/deploy  0.039s
+    ok      github.com/smackerel/smackerel/tests/eval/assistant     0.021s
+    [go-unit] go test ./... finished OK
+    UNIT_EXIT=0
+
+V1.5 result contract, verbatim:
+
+    BEGIN TRANSITION_GUARD_RESULT_V1
+    workflowMode: bugfix-fastlane
+    auditProfile: delivery-completion-v1
+    targetStatus: done
+    failedGateIds: [G055,G057,G041,G022,G053,G040,G068,G094,G095,G136]
+    failedChecks: [Check-4-completion,Check-5-structure,Check-9-evidence]
+    blockingCode: DELIVERY_COMPLETION_FAILED
+    failureCount: 52
+    exitStatus: 1
+    verdict: FAIL
+    END TRANSITION_GUARD_RESULT_V1
+
+### V2. What this agent did NOT execute, stated plainly
+
+- **`./smackerel.sh test integration` was NOT re-run.** The recorded lane evidence (marker line `ASSISTANT_ACCEPTANCE_GATE_V1 executed_assertions=210`, lane line `go-integration: acceptance gate executed 210 assertions.`, `1974` pass / `0` fail) comes from the preceding session at HEAD `8998111a`, not from this one.
+- **`./smackerel.sh test e2e` was NOT re-run.** The two conflicting recorded results (§6 above: `E2E_EXIT=1`, 6 failures, HEAD `3af96a02`; `scopes.md`: `E2E_EXIT=0`, 430 Go pass / 0 fail, HEAD `8998111a`) were **not** adjudicated by this agent. See finding F1.
+- No lint, format, build, or stress lane was run in this pass.
+
+Consequently, the runtime claim *"the gate actually executes inside the lane and reports 210"* rests on prior-session evidence. What this agent proved in this session is the **static and contractual** half: the package is in the lane argv at HEAD, the marker is emitted unconditionally before the threshold comparison, the lane requires exactly one marker and a count `>= 1` with no bypass path, and the contract test that binds all of those together passes adversarially.
+
+### V3. Ruling on the `tests/e2e/` category judgement — **ACCEPTED on substance**
+
+The DoD item *"Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior"* was ticked without any file being added under `tests/e2e/`. This agent was asked to rule on that. The ruling is **accept**, on four grounds:
+
+1. **The plan never asked for a `tests/e2e/` file.** `scenario-manifest.json` is plan-owned and predates implementation. It declares all 12 scenarios and assigns every one a `test` value that is either a lane command (`./smackerel.sh test integration`, with and without a `--go-run` selector) or a Go function in `internal/deploy/` / `tests/eval/assistant/`. Not one of the 12 names a path under `tests/e2e/`. A DoD item is read against the plan that defines it.
+2. **The specification forbids the naive placement.** `spec.md` R6.4 requires that the tests satisfying R6.1–R6.3 *"MUST run in a lane that is itself automated, and MUST NOT depend on the integration lane they are protecting."* `internal/deploy/eval_lane_contract_test.go` is untagged, runs in the unit lane, and reads the two protected files as text — it satisfies R6.4 directly.
+3. **The assertion is stronger where it sits.** The contract test mutates the real file content and requires rejection, with a stale-fixture guard (`t.Fatalf` when the pattern under mutation is absent), a no-op-mutation guard, and `requireEvalBaselinePasses` as a positive control. The alternative — a grep inside a shell script under `tests/e2e/` — is precisely the shape that produced false claim 3 in `bug.md`: `tests/e2e/assistant_regression_e2e_test.sh` R10-3 asserted the gate ran and was `echo` prose end to end. Recreating that shape would reproduce this bug's own camouflage.
+4. **The substitute was re-executed here.** V1.1 above, 7/7 top-level PASS, exit `0`.
+
+**Two qualifications, and they are not cosmetic.**
+
+- The item's **wording** does not describe what was delivered. It says *"E2E regression tests"*; what exists is unit-lane contract tests plus two lane invocations. The correct repair is a wording change owned by `bubbles.plan` so the checkbox names the tier the manifest actually declares. It is not a re-opening of the engineering work.
+- Guard **Check 9 does not detect this item's evidence block at all**, and reports it as a checked DoD item with no evidence. The cause is formatting: the block opens `**Commands:**` (plural) and `**Exit code:**` (lowercase `c`), and uses indented rather than fenced output, so none of Check 9's markers (`Executed:`, `Command:`, `Evidence`, a fence, `Exit Code:`, `Raw Output`) match inside its 15-line window. Every other Group A item uses the singular `**Command:**` and is detected. This is a real mechanical failure, owned by `bubbles.plan`.
+
+### V4. Why `Verified` was not set
+
+`Verified` is the validate-owned rung of the `bug.md` ladder. Setting it asserts that validation confirmed this packet. Validation's own guard refuses it, so the assertion would be false. The blocking findings:
+
+| ID | Finding | Gate / check | Owner |
+|----|---------|--------------|-------|
+| F1 | `report.md` §6 and `scopes.md` state **opposite** conclusions on both E2E DoD items. §6 says both stay unchecked and the e2e suite fails (`E2E_EXIT=1`, 6 failures); `scopes.md` checks both and records `E2E_EXIT=0`. The runs are at different trees (`3af96a02` vs `8998111a`) so both may have been true when written, but the packet's own record is now self-contradicting and no artifact says which reading governs. | internal coherence | `bubbles.plan` (reconcile `scopes.md`); `bubbles.test` (re-run and re-record if the newer result is the governing one) |
+| F2 | Scope 1 status is `[ ] Not started` while 25 of 26 DoD items are checked. Non-canonical value; also leaves Check 5 with zero resolvable scope status markers. | G041, Check 5 | `bubbles.plan` |
+| F3 | 8 of the 12 Gherkin scenarios have no faithful DoD item. The guard reads this as a DoD rewritten to match delivery rather than spec. | G068 | `bubbles.plan` |
+| F4 | The checked item *"Scenario-specific E2E regression tests…"* has no Check-9-detectable evidence block (V3 qualification 2). | Check 9 | `bubbles.plan` |
+| F5 | `scopes.md` has no `## Change Boundary` section and no `## Consumer Impact Sweep` section, and no DoD item for either, while the guard classifies the scope as a repair that changes an interface. | Checks 8B, 8D | `bubbles.plan` |
+| F6 | Deferral vocabulary in `scopes.md` (2 hits) and `report.md` (3 hits), and 2 undispositioned phrases at `report.md:426` and `report.md:507`. | G040, G095 | `bubbles.plan` (scopes.md); `bubbles.implement` (report.md) |
+| F7 | `state.json` is stale at the `analysis` phase. `implement`, `test`, `regression`, `simplify`, `stabilize`, `security`, `validate`, `audit` are absent from the phase records, `completedScopes` is empty, and `nextRequiredOwner` still reads `bubbles.implement` although the implementation landed in `c7667d99`. 3 recorded phase claims also lack agent provenance. | G022 | `bubbles.implement`, `bubbles.test`, then `bubbles.validate` |
+| F8 | `policySnapshot` uses the key names `grillEnabled` / `tddEnforced` / `lockdownPolicy` / `regressionPolicy` / `validationProvenance`; the gate requires `grill` / `tdd` / `autoCommit` / `lockdown` / `regression` / `validation` entries carrying provenance. | G055 | `bubbles.plan` |
+| F9 | `scenario-manifest.json` carries no `requiredTestType`, `linkedTests`, or `evidenceRefs` on any of its 12 scenarios. This agent owns `evidenceRefs` only; a partial edit would leave the gate failing and would split one coherent change across two owners, so none was made. | G057 | `bubbles.plan` |
+| F10 | `report.md` has no `### Code Diff Evidence` section, which an implementation-bearing workflow requires. | G053 | `bubbles.implement` |
+| F11 | `spec.md` has no `## Domain Capability Model` / `### Single-Capability Justification`; `design.md` has no `## Capability Foundation`, `## Concrete Implementations`, or `### Variation Axes`. The guard reports `triggerHits=2`. | G094 | `bubbles.analyst` (spec.md), `bubbles.design` (design.md) |
+| F12 | `uservalidation.md:24` is unchecked. A terminal transition claims human acceptance of every acceptance item. **No agent may check this box** — the guard states that checking it on the author's behalf fabricates the acceptance the gate exists to obtain. | G136 | **operator** |
+| F13 | Check 44 emits `jq: error (at <stdin>:0): Cannot index number with string "dependsOn"` and then blocks on plan dependency depth for a single-scope packet, while Check 46 independently reports `first usable increment is early (scope 1 of 1); no horizontal chain`. The two disagree, and the `jq` error suggests the depth check misparses this packet's shape rather than measuring it. Recorded as a suspected guard defect, not as a packet defect. | Check 44 | framework maintainer |
+
+**F12 is the one blocker no agent can clear.** Every other finding is agent-actionable.
+
+### V5. What the fix itself is worth — recorded separately so it is not lost in the refusal
+
+The engineering is sound and this agent confirmed it independently. The defect as filed — *the gate executes in no automated lane* — does not reproduce at HEAD `689bc400`:
+
+- `scripts/runtime/go-integration.sh:53` passes `./tests/eval/...` to `go test`, so the gate's package is compiled with `-tags integration`.
+- `tests/eval/assistant/acceptance_test.go` calls `FormatGateMarker(r)` immediately after `Run(c)` and **before** both threshold comparisons, outside any `t.Failed()` guard, so a failing gate is distinguishable from a gate that never ran.
+- The lane requires exactly one marker line and a numeric `executed_assertions >= 1`, names `TestAcceptanceGate_RoutingAccuracyAndCaptureFallback` in every diagnostic, prints an explicit not-enforced notice for a focused run, and exits non-zero on either a `go test` failure or a marker failure without one masking the other.
+- No `SKIP_*`, `--force`, `--no-verify`, or `--insecure` path exists around the assertion; the contract test's cases A6 and A7 reject a bypass variable and a broadened skip condition, and both passed here.
+- The header comment in `acceptance_test.go` now states the two-half requirement (build tag **and** allow-list membership) instead of the tag-alone claim the bug disproved.
+
+`Fixed` is warranted and remains set. `Verified` waits on the findings in V4, not on the code.

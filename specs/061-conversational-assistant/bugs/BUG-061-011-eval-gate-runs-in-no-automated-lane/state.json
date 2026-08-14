@@ -8,17 +8,17 @@
   "status": "in_progress",
   "severity": "S1",
   "createdAt": "2026-08-10T20:45:00Z",
-  "lastUpdatedAt": "2026-08-10T20:45:00Z",
+  "lastUpdatedAt": "2026-08-14T03:43:50Z",
   "discoveredBy": "delivery-plan audit (docs/Product_Delivery_Plan.md § P3, D27)",
   "discoveredAt": "2026-08-10",
   "completedPhases": ["discovery", "documentation", "analysis"],
   "completedScopes": [],
   "execution": {
-    "activeAgent": "bubbles.bug",
-    "currentPhase": "analysis",
+    "activeAgent": "bubbles.validate",
+    "currentPhase": "validate",
     "currentScope": "BUG-061-011-SCOPE-01",
     "completedScopes": [],
-    "lastUpdatedAt": "2026-08-10T20:45:00Z",
+    "lastUpdatedAt": "2026-08-14T03:43:50Z",
     "executionHistory": [
       {
         "agent": "bubbles.bug",
@@ -27,6 +27,7 @@
         "phasesExecuted": ["discovery", "documentation", "analysis"],
         "statusBefore": "not_started",
         "statusAfter": "in_progress",
+        "summaryPlaceholderGuard": "filed",
         "summary": "Filed BUG-061-011 against commit 6ad1e8c98ce6e1aa35df779306c6a8835db172be. Re-verified the defect from primary sources rather than assuming it: acceptance_test.go:1 is //go:build integration; go-integration.sh:53 enumerates four package trees with ./tests/eval/... absent; grep for 'eval' in that wrapper exits 1 with zero matches; a repository-wide grep for TestAcceptanceGate across tests/, scripts/, .github/, internal/ returns only the function definition and one echo line, so nothing invokes it. The four implicated paths are identical at HEAD and in the working tree. Root cause: a missing invariant between an explicit package allow-list and a build tag, asserted only by a source comment that cannot fail. Second, independent finding: no executed-assertion count is emitted anywhere in the repository in any form, so the Stage 1 exit criterion is unmet by construction and the fix is larger than the delivery plan's two-file estimate — realistic size is 5 files, 1 new. Designed the fix (untagged ExecutedAssertions + FormatGateMarker in harness.go, unconditional marker emission in acceptance_test.go, package + non-zero-count assertion + focused-run rule in go-integration.sh) and the adversarial regression (internal/deploy/eval_lane_contract_test.go, cases A1-A7, where A1 is the current file content and must be rejected). NO FIX IMPLEMENTED — artifacts and RCA only, by instruction. Every DoD item left unchecked."
       }
     ]
