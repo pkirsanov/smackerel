@@ -619,6 +619,24 @@ Four checks support the claim that this bug's change caused none of the six:
 
 No checkbox was changed in this pass. The count in `scopes.md` remains 22 checked and 4 unchecked, as it was before this section was written.
 
+> **SUPERSEDED for both rows — 2026-08-14, finding F1.** The two rows above were accurate at tree
+> `3af96a02` and are kept for that reason; they are not deleted, because the e2e suite genuinely was
+> red there. They no longer describe the packet. At tree `8998111a` the suite was re-run and passed:
+> `E2E_EXIT=0`, all three Go phases (`go-e2e`, `go-e2e-graph-disabled`, `go-e2e-corpus-enforce`)
+> PASS, 430 Go assertions pass, **0** fail, 87 shell scenarios pass. The six failures described
+> above are absent from that run. **The `8998111a` result governs**, and both items are now checked
+> in `scopes.md` with inline raw evidence.
+>
+> The second row's reasoning is superseded on a different ground, and `bubbles.validate` ruled on it
+> in the Validation Record below: the item does **not** require an `tests/e2e/`-tier file.
+> `scenario-manifest.json` is plan-owned, predates implementation, and assigns none of its twelve
+> scenarios a path under `tests/e2e/`; and `spec.md` R6.4 positively **forbids** that placement,
+> requiring the protecting tests not depend on the integration lane they protect. What the row
+> called "an honest gap" was in fact the specification's required shape.
+>
+> Recorded as a supersession rather than an edit-in-place so the packet shows which reading governs
+> and why — F1 was raised precisely because no artifact said that.
+
 ---
 
 ## Validation Record — `bubbles.validate`, 2026-08-14

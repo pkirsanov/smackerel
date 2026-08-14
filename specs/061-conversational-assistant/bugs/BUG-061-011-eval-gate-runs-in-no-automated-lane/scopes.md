@@ -791,7 +791,7 @@ Every item requires: (1) implementation complete, (2) behaviour validated by exe
 - [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior
 
   **Claim Source:** executed · **Tree:** WORKING TREE, HEAD=8998111a · **Exit code:** `0`
-  **Commands:** the three invocations named by `scenario-manifest.json`, run in this session
+  **Command:** the three invocations named by `scenario-manifest.json`, run in this session
 
   All twelve declared scenarios now have an executed, passing test. Nine are carried by the
   contract and harness suites:
