@@ -469,85 +469,55 @@ result if at least k=25 other `smackerel_self` rows outranked both test rows. Th
 measured the namespace at 13 rows after boot, and 13 + 2 test rows is under 25, so the limit does
 not push them out.
 
-**What the evidence actually points to: approximate-index recall, not deletion.** The same lane
-that fails those three contains a fourth test over the same namespace that does *not* go through
-vector search — it counts rows by `source_id` — and it passes:
+**What instrumenting the lane actually showed.** Rather than argue between theories, the lane was
+re-run with a sampler polling the namespace every three seconds. Two things came back, and the
+second one overturned the theory this section previously advanced:
 
 ```text
-$ grep -nE 'TestIngestor_IdempotentWithStaleSweep' /tmp/i10.log
-6681:=== RUN   TestIngestor_IdempotentWithStaleSweep
-6682:--- PASS: TestIngestor_IdempotentWithStaleSweep (0.09s)
-$ grep -nE '^(ok|FAIL).*tests/integration/selfknowledge' /tmp/i10.log
-6684:ok      github.com/smackerel/smackerel/tests/integration/selfknowledge 0.158s
+$ tail -n +24 /tmp/probe16.txt | head -4
+01:55:40 self/embedded/total=13/13/38
+01:55:43 self/embedded/total=13/13/38
+01:55:46 self/embedded/total=13/13/38
+01:55:50 self/embedded/total=0/0/0
+$ grep -cE '^--- PASS|^    --- PASS' /tmp/i16.log ; grep -cE '^--- FAIL|^    --- FAIL' /tmp/i16.log
+1974
+0
 ```
 
-That splits the two theories cleanly. A deleter would take the row-counting test with it; instead
-the failures partition exactly along one boundary — every test that reaches rows through the
-vector search fails, and the one that reaches them by direct SQL passes. The rows are present.
-They are not being returned.
+First, the whole `artifacts` table drops to zero mid-lane — `total=0`, not merely the namespace —
+and the self corpus never returns, because the core ingests only at boot. That is the
+`TRUNCATE TABLE … artifacts CASCADE` in `knowledge_stats_test.go`. So rows *are* destroyed during a
+lane, which refutes the approximate-recall reading this section previously gave: the earlier
+`EXPLAIN` had already shown the planner choosing `Index Scan using idx_artifacts_source` and
+sorting exactly, never touching the IVFFlat index, because a fifteen-row namespace is far too
+selective for it.
 
-Two facts about the retrieval path, both read from source, explain why:
+Second, and just as important, **this lane passed 1974/0**. The failure did not reproduce. So the
+earlier claim that it is deterministic — resting on two runs that both returned 1971/7 — was also
+wrong. It is a timing-dependent race, and a sampler opening a connection every three seconds
+perturbs the schedule enough to hide it.
 
-```text
-$ sed -n '72p' internal/db/migrations/001_initial_schema.sql
-CREATE INDEX IF NOT EXISTS idx_artifacts_embedding ON artifacts USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);
+**What is established, stated at the strength the evidence supports.** A full-table truncation
+happens mid-lane and is never undone. All five namespace contenders were read line by line and
+every one acquires `nslock` *before* it mutates, with `t.Cleanup` LIFO keeping each wipe inside the
+lock — so the lock ordering is right, and the regex contract's blind spot (it proves the call
+exists, not that it precedes the mutation) is not being exercised. The three failures are exactly
+the tests that read back through retrieval, and they fail together or not at all.
 
-$ grep -rniE 'ivfflat\.probes|hnsw\.ef_search' --include='*.go' --include='*.sql' --include='*.yaml' .
-$ echo "exit=$?"
-exit=1
-```
+What has not been isolated is the interleaving that lets a wipe land between a victim's INSERT and
+its SEARCH while that victim holds the lock. `ingest_test.go` documents that precise failure mode
+in its own comment as the thing `nslock` was added to prevent, which says the shape was understood;
+the lock evidently does not close it in every ordering.
 
-IVFFlat is an *approximate* index, and `ivfflat.probes` is never set anywhere in the repository, so
-it runs at the default of `1` — one of a hundred lists, roughly one percent of the table. The index
-is also created in the same migration that creates the table, so its centroids are trained on zero
-rows. `PgxSemanticSearcher.Search` then orders by `embedding <=> $2` and applies `LIMIT 25`, with
-`source_id` as an ordinary filter rather than part of the index. When the planner prefers that
-index, the twenty-five candidates it returns are drawn from a sliver of the table chosen by vector
-proximity alone, and a namespace holding fifteen rows out of many thousands can contribute none of
-them. Zero rows, empty id list, no deletion required.
+**Routing, and why it is not this spec's.** Spec 104 / `BUG-104-001`, as an incompletely-closed
+race in the shared-namespace guard. Three readings were tried here and two were withdrawn against
+evidence — a boot-time sweep, refuted by the core starting exactly once; approximate-index recall,
+refuted by the plan and then by the truncation trace. Recording the two dead ends alongside the
+live one is deliberate: they are the cheap experiments the next person would otherwise repeat.
 
-This also accounts for the isolation/lane split that made it look intermittent. In isolation the
-table is small enough that a sequential scan wins and the search is exact, so the tests pass. In
-the full lane roughly sixty other test files populate `artifacts`, the planner switches to the
-approximate index, and recall collapses. It is deterministic on both sides of that threshold, which
-is why two full lanes reproduced 1971/7 identically.
-
-**What is still unexecuted.** The plan choice has not been observed directly. `EXPLAIN (ANALYZE,
-BUFFERS)` on that exact query against a lane-sized `artifacts` table, showing an
-`Index Scan using idx_artifacts_embedding`, is what converts this from a well-supported reading
-into a demonstrated one. That needs the Docker lane, and this machine's `disk-preflight.sh` is
-refusing every stack start — C: has 38 GB against a 40 GB floor — while a thirty-package cargo
-build in another repository holds the disk. Starting a second heavy stack against a refusing disk
-guard risks wedging the daemon for both, so the measurement is stated here rather than faked.
-
-**This reclassifies the defect, and that matters more than the test failure.** It is not a test
-isolation problem. A namespace-scoped semantic search returning nothing once the corpus grows is a
-product behaviour: the assistant would answer "what can you do?" with no self-knowledge while the
-corpus sits intact in the table. The tests are the messenger.
-
-**Fix shape.** Make the namespace filter run before the ordering instead of after it, so retrieval
-inside a namespace is exact:
-
-```sql
-WITH ns AS MATERIALIZED (
-    SELECT id, title, COALESCE(summary, '') AS summary, embedding
-    FROM artifacts
-    WHERE source_id = $1 AND embedding IS NOT NULL
-)
-SELECT id, title, summary FROM ns ORDER BY embedding <=> $2::vector LIMIT $3
-```
-
-`MATERIALIZED` forces the `source_id` predicate — already served by `idx_artifacts_source` — to be
-evaluated first, leaving an exact distance sort over one namespace rather than an approximate scan
-over the whole table. Correctness stops depending on table size, which is the property the earlier
-lock-based reading never would have delivered: locking the sweep would have left this query just as
-capable of returning nothing in production.
-
-**Routing.** Spec 104 / `BUG-104-001`. That fix is incomplete rather than wrong: it established
-mutual exclusion across test callsites but not against the production sweep the lane itself
-starts. Recorded here because this session observed, diagnosed and proved it — not because this
-spec owns it. It does not gate spec 108: no corpus-grant test is affected, and every corpus-grant
-suite passes in every run.
+It does not gate spec 108: no corpus-grant test is affected, and every corpus-grant suite passes in
+every run, including the 1974/0 lane above. Recorded here because this session observed and
+instrumented it, not because this spec owns it.
 
 ### What was planned, and what was captured
 
