@@ -9,10 +9,27 @@
 
 - [x] Reported
 - [x] Confirmed (reproduced)
-- [ ] In Progress
-- [ ] Fixed
-- [ ] Verified
+- [x] In Progress
+- [x] Fixed
+- [x] Verified
 - [ ] Closed
+
+**Fixed** at commits `20b0376a` (server-derived principal across the tool and `Invoke` surfaces) and
+`0dcb9d1f` (repair of the three consumers the narrowed schemas broke).
+
+**Verified** by the eight Test Plan rows in `scopes.md`, each with its own inline evidence, plus five
+green lanes on the current tree — `lint`, `format`, `unit` (146 packages), `integration`, and `e2e`
+all exit `0`. The `stress` lane exits `1` for a reason proven pre-existing by a clean-room worktree
+at `0f4b4826`; it is routed to a separate `bubbles.test`-owned packet and does not gate this bug.
+See `report.md` § Discovered issues 5.
+
+**Not closed.** Three things are deliberately left open rather than folded into this checkbox. The
+Telegram principal resolver is correct and tested but has **no production caller**, so P1 hole #3
+remains open pending the scope-10 router wiring (`report.md` § Discovered issues 3). The
+`bugfix-fastlane` specialist pipeline is incomplete — `regression`, `simplify`, `stabilize`,
+`security`, `validate`, and `audit` have not run — so the packet `state.json` stays `in_progress`
+rather than `done`. And `Closed` is a human acceptance step, with `uservalidation.md` human-only
+under Gate G136.
 
 ## Summary
 

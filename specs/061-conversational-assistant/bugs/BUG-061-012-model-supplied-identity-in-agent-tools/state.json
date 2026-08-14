@@ -8,19 +8,20 @@
   "status": "in_progress",
   "severity": "S1",
   "createdAt": "2026-08-14T04:35:00Z",
-  "lastUpdatedAt": "2026-08-14T04:35:00Z",
+  "lastUpdatedAt": "2026-08-15T00:20:00Z",
   "discoveredBy": "delivery-plan audit (docs/Product_Delivery_Plan.md § P1 hole 2, Stage 1)",
   "discoveredAt": "2026-08-14",
-  "completedPhases": ["discovery", "documentation", "analysis"],
-  "completedScopes": [],
+  "completedPhases": ["implement"],
+  "completedScopes": ["BUG-061-012-SCOPE-01"],
   "execution": {
-    "activeAgent": "bubbles.bug",
-    "currentPhase": "analysis",
+    "activeAgent": "bubbles.implement",
+    "currentPhase": "implement",
     "currentScope": "BUG-061-012-SCOPE-01",
-    "completedScopes": [],
-    "completedPhaseClaims": ["discovery", "documentation", "analysis"],
-    "lastUpdatedAt": "2026-08-14T04:35:00Z",
-    "nextRequiredOwner": "bubbles.implement",
+    "substate": "implemented",
+    "completedScopes": ["BUG-061-012-SCOPE-01"],
+    "completedPhaseClaims": ["implement"],
+    "lastUpdatedAt": "2026-08-15T00:20:00Z",
+    "nextRequiredOwner": "bubbles.validate",
     "executionHistory": [
       {
         "agent": "bubbles.bug",
@@ -30,25 +31,49 @@
         "statusBefore": "not_started",
         "statusAfter": "in_progress",
         "summary": "Filed BUG-061-012 at HEAD 0f4b4826, verified from source rather than taken from the delivery plan's description. Four confirmations: retrieval_search declares user_id in required so the model MUST produce it; the handler validates only non-emptiness with no comparison to an authenticated principal and no grant check; a repository-wide grep for AuthenticatedPrincipal/PrincipalFromContext/WithPrincipal exits 1, so no principal mechanism existed for the tool to consult; and internal/telegram/agent_bridge.go:84 invokes the agent with only chatID, never resolved to a user, while IntentEnvelope carries no identity field — making the model's user_id the SOLE identity on that surface, which is why this is S1. Designed the fix around the existing seam: ToolHandler already takes a context, the executor derives toolCtx from the caller's context, and auth.WithSession/SessionFromContext already exist, so no agent-package signature changes. Chose a context principal over an IntentEnvelope field deliberately — an envelope field is data the model's own plumbing carries, the same class of mistake as a tool argument. NO FIX IMPLEMENTED; every DoD item unchecked."
+      },
+      {
+        "agent": "bubbles.implement",
+        "runStartedAt": "2026-08-14T22:50:00Z",
+        "runCompletedAt": "2026-08-14T23:10:00Z",
+        "phasesExecuted": ["implement", "documentation"],
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "summary": "Documentation pass at code commit 0dcb9d1f. Corrected a FALSE Blocked scope status: scopes.md justified it as 'the stress and e2e lanes exit 1', and both halves are disproven. e2e now exits 0 (sha256 de7f6cd5) because the three consumers the narrowed schemas broke were repaired at 0dcb9d1f — tests/stress/assistant_retrieval_p95_test.go, tests/e2e/microtools/overlays_e2e_test.go, and the one production consumer internal/assistant/openknowledge/agenttool/substrate_tool.go. stress still exits 1 but is present at baseline 0f4b4826 (the commit before any BUG-061-012 work), which fails the same package the same way: baseline FAIL tests/stress 380.987s exit 1, current FAIL tests/stress 366.733s exit 1. Scope status set to Done; all 16 DoD items closed, each with its own inline transcript-shaped evidence block naming its own command and exit code, no block reused across items. Group A pairs the seven-test scoped run (exit 0) with a per-test source-existence grep run this session, because an anchored --go-run alternation naming a nonexistent test would still exit 0 — exit code alone does not prove a test ran; only T-05/T-06 had a literal '--- PASS:' line available and the other five rows say so rather than implying one. Verified this session: no excluded file family was touched (registry.go/executor.go/router.go/migrations/proto/config diffs all empty across 0f4b4826..0dcb9d1f); the only surviving non-test user_id in the tool tree is a payloadEnvelope struct tag on server-held ConfirmStore state; every user_id left in the three repaired consumers is a comment, not a live argument. Recorded six Discovered issues, TWO OPEN: (3) the Telegram fix is DORMANT — telegram.NewAgentBridge has no production caller, the live path is assistant_adapter -> facade via telegram.NewBotChatResolver at cmd/core/wiring_assistant_facade.go:328 which never calls auth.WithSession, so P1 hole #3 REMAINS OPEN; and (5) the stress lane, whose specific failing test is NOT identified — ruled out: every stress test passes in isolation (two scoped batches, both exit 0), no TestMain in tests/stress (grep exit 1), no '--- FAIL:' line in the untruncated tail. (6) records why the name could not be recovered: bubbles_ci_failure_detail in .github/bubbles/scripts/guard-lib.sh:386 anchors on ^[[:space:]]*(FAIL|...) and Go's per-test '--- FAIL:' starts with hyphens, so a captured Go block can name the failing PACKAGE but never the failing TEST; framework-owned, noted and deliberately not edited. DECLINED to cite an 'R-001 residue class' for the stress shape: a search of specs/, docs/ and .github/bubbles/ found no such register in this repository, so the pattern is characterised on its own evidence rather than cited to something unverified. Corrected the T-01 Test Plan Location cell only, from internal/agent/tools/schema_contract_test.go (does not exist) to internal/agent/tools/toolscontract/schema_contract_test.go (exists, line 74); test identity, assertion and mapped scenario untouched. Added the G060 RED-before-GREEN ordering section and the G053 Code Diff Evidence section to report.md. STATUS DELIBERATELY NOT SET TO done. The orchestrator directed done, but state-transition-guard.sh refuses it and the refusal is substantive, not cosmetic: bugfix-fastlane carries transitionAudit profile delivery-completion-v1 and blockOnMissingSpecialistExecution:true, and six required specialist phases (regression, simplify, stabilize, security, validate, audit) have never been executed — Gate G022 labels claiming them FABRICATION; report.md still owes '### Validation Evidence' and '### Audit Evidence', both foreign-owned; and Gate G136 blocks any terminal transition while uservalidation.md carries 2 unchecked human-acceptance items, which the orchestrator correctly forbade this agent from checking. bubbles.implement is also forbidden by its own contract from writing certification.*. Setting done would have been exactly the fabrication the guard exists to catch, so status stays in_progress with substate implemented and nextRequiredOwner bubbles.validate. 'blocked' was also rejected: bugfix-fastlane sets blockedOnlyWhenValidateBlocked:true, so only bubbles.validate may declare it. uservalidation.md untouched (G136 human-only); bug.md Closed left unchecked for the same reason."
+      },
+      {
+        "agent": "bubbles.implement",
+        "runStartedAt": "2026-08-15T00:05:00Z",
+        "runCompletedAt": "2026-08-15T00:20:00Z",
+        "phasesExecuted": ["implement"],
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "summary": "Artifact-only repair of three guard clusters; NO source or test file was touched, and no lane was re-run. Guard failures 26 -> 10. (1) G068 DoD-Gherkin fidelity, 8 blocks: read the checker first rather than guessing at its threshold, and found that stg_scenario_matches_dod short-circuits on a stable SCN-* id \u2014 when a scenario carries one, word overlap is not consulted at all and the DoD item must cite that exact id. The eight Group A items named only a test ID ('T-01 executed and passing'), so every one of SCN-01..SCN-07 was unmatched. Each item now states the scenario it discharges AND restates that scenario's own behavioural claim, so it reads as a behavioural commitment rather than a token the checker happens to accept. No inline evidence block was deleted, weakened, or reused. (2) Check-8A regression-E2E planning, 4 blocks: added the two required DoD items and two Test Plan rows (T-09, T-10), bound to coverage that ALREADY EXISTS AND ALREADY PASSED rather than to a newly invented test. T-09 is TestMicroToolOverlays_FullMatrix/SCN-065-A06_entity_resolve_resolved at tests/e2e/microtools/overlays_e2e_test.go:283, which calls entity_resolve through the agent registry with the identity supplied only by auth.WithSession (sessionCtx, line 93) and asserts at line 297 that the resolver saw u-076-3; since the input schema declares no identity property and is additionalProperties:false, no argument could have produced that user, so the assertion is non-vacuous. It is further non-vacuous by history: the schema narrowing BROKE this test and it was repaired at 0dcb9d1f, which is direct evidence it exercises the narrowed path. T-10 is the full e2e lane, exit 0, sha256 de7f6cd5d993beb8a8a4e6438fbf2bba37e61e2d0f92297abe188384d5861498. Both items are checked on that executed evidence; Test Plan rows and DoD test items both move 8 -> 10, preserving parity. Recorded plainly that no per-test '--- PASS:' line was observed for T-09, matching how the existing Group A rows handle the same limit. (3) G022 phase provenance, 4 blocks: 'discovery', 'documentation' and 'analysis' were claimed with no runner the gate accepts. They were genuinely performed \u2014 by bubbles.bug, which is recorded in executionHistory \u2014 but G022 Pass 1 requires an agent literally named bubbles.<phase>, and its delegation shortcut covers only implement and test. Verified against .github/agents/: the agents are bubbles.analyst, bubbles.docs and bubbles.bug; bubbles.discovery, bubbles.documentation and bubbles.analysis DO NOT EXIST, so these claims can never be provenanced. DELETED the three claims from completedPhases, execution.completedPhaseClaims and certification.certifiedCompletedPhases rather than manufacture a runner \u2014 an invented bubbles.discovery entry is precisely the impersonation this gate exists to catch. The bubbles.bug executionHistory entry is left intact: the work is a fact, only the claim was unprovable. 'implement' is retained; it carries real bubbles.implement provenance. OWNERSHIP DEVIATION, DECLARED: bubbles.implement's contract forbids writing certification.* and assigns new DoD items and Test Plan rows to bubbles.plan. Both were crossed under explicit operator direction. The certification write was unavoidable for the stated goal because the guard reads claimed_phases as the UNION of execution.completedPhaseClaims and certification.certifiedCompletedPhases, so removing the impersonation from execution alone would not have cleared it. Retired the G068 and Check-8A pendingGates entries because this session cleared them; left G022, G084/stress, G136 and the artifact-lint entry untouched because they are still open. uservalidation.md NOT touched \u2014 its unchecked items are Gate G136, human-only, and they correctly remain blocking. Status stays in_progress; no terminal transition attempted."
       }
     ]
   },
   "certification": {
     "status": "in_progress",
-    "completedScopes": [],
-    "certifiedCompletedPhases": ["discovery", "documentation", "analysis"],
+    "completedScopes": ["BUG-061-012-SCOPE-01"],
+    "certifiedCompletedPhases": ["implement"],
     "scopeProgress": {
       "total": 1,
-      "done": 0,
+      "done": 1,
       "inProgress": 0,
-      "notStarted": 1
+      "notStarted": 0
     },
     "lockdownState": "open",
     "pendingGates": [
-      "implementation (bubbles.implement) — seven files per design.md Change Boundary",
-      "test execution (bubbles.test) — 8 Test Plan rows, none executed",
-      "adversarial proof that T-01..T-04 fail against pre-fix code (R4.3)",
-      "validate-owned certification (bubbles.validate)"
+      "G022 — specialist phases 'test', 'regression', 'simplify', 'stabilize', 'security', 'validate', 'audit' have NOT been executed by their owning agents. bugfix-fastlane sets blockOnMissingSpecialistExecution:true and transitionAudit profile delivery-completion-v1, so a terminal status requires them. NOTE on 'test': the eight Test Plan rows and five lanes were genuinely executed and are evidenced with re-derivable sha256 receipts, but the run was made by the orchestrator and bubbles.implement, NOT by bubbles.test; claiming the phase without its owning specialist is what G022 calls impersonation, so it is left unclaimed. bubbles.implement MUST NOT self-certify foreign-owned phases.",
+      "report.md sections '### Validation Evidence' and '### Audit Evidence' are required by workflowMode bugfix-fastlane and are owned by bubbles.validate / bubbles.audit respectively.",
+      "G136 — uservalidation.md carries 2 unchecked human-acceptance items (lines 24 and 37). Human-only; an agent checking them would fabricate the acceptance the gate exists to require.",
+      "G084 / requireNoPreexistingFailingTests — the tests/stress lane exits 1. Proven present at baseline 0f4b4826, but this mode requires such failures be fixed inline rather than owned elsewhere. Needs an explicit owner decision.",
+      "Artifact lint — 11 evidence blocks in report.md predate this session and fail the done-strict length/terminal-signal contract. Not blocking at in_progress; must be repaired before any terminal transition."
+    ],
+    "openFindingsRoutedElsewhere": [
+      "P1 hole #3 — telegram.NewAgentBridge and NewBotPrincipalResolver have no production caller; the live path (cmd/core/wiring_assistant_facade.go:328) never calls auth.WithSession. Needs the scope-10 router wiring. See report.md § Discovered issues 3.",
+      "tests/stress full-run failure — present at baseline 0f4b4826 (both baseline and current FAIL tests/stress, exit 1). Failing test NOT identified. Proposed owner: bubbles.test. See report.md § Discovered issues 5.",
+      "Framework-owned: bubbles_ci_failure_detail (.github/bubbles/scripts/guard-lib.sh:386) drops Go's '--- FAIL: TestName' lines, so captured evidence can name a failing package but never a failing test. Noted, not edited. See report.md § Discovered issues 6."
     ]
   },
   "policySnapshot": {
