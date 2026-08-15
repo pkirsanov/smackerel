@@ -2455,3 +2455,189 @@ SCOPE-03 Test-Evidence row checked, claim text unchanged). No product source
 file was modified. `smackerel.sh` and `.github/**` were **not** modified — both
 belong to a concurrent session.
 
+---
+
+## SCOPE-03 Test Evidence — T080-03-STRESS
+
+Closes the sixth and final SCOPE-03 Test-Evidence row — `T080-03-STRESS` — and,
+on the strength of the now-complete test-evidence set, six SCOPE-03 Core-Outcome
+rows. The Build Quality Gate row remains `[ ]` (its integration, E2E, and broad
+regression evidence is being produced separately), so **SCOPE-03 does NOT reach
+`Done`, and the bug top-level `status` and `certification.status` remain
+`blocked`** — SCOPE-04 is untouched and still open.
+
+Evidence below is raw, unedited output captured in THIS session from the
+repo-standard CLI. No secret value, bearer token, row id, artifact label, or
+absolute host path appears in any block.
+
+<a id="t080-03-stress"></a>
+
+### T080-03-STRESS
+
+**Command:** `./smackerel.sh test stress --go-run 'TestGraphReadSyntheticStress_BoundedAndTruthfulUnderConcurrentValidationReads'`
+**Exit code:** `0` (`=== T080_03_STRESS_EXIT=0 ===`)
+**File:** `tests/stress/graph_read_synthetic_stress_test.go`
+
+```
+=== RUN   TestStressReadinessCanary_Live
+--- PASS: TestStressReadinessCanary_Live (0.12s)
+PASS
+ok      github.com/smackerel/smackerel/tests/stress/readiness   0.136s
+go-stress: applying -run selector: TestGraphReadSyntheticStress_BoundedAndTruthfulUnderConcurrentValidationReads
+=== RUN   TestGraphReadSyntheticStress_BoundedAndTruthfulUnderConcurrentValidationReads
+    graph_read_synthetic_stress_test.go:443: T080-03-STRESS graph read synthetic — workers=8 iterationsPerWorker=20 totalRuns=160 recordedRuns=160 familiesPerRun=8 totalFamilyReads=1280 burstWallClock=2.274280694s
+    graph_read_synthetic_stress_test.go:446: T080-03-STRESS latency — p50=107.163685ms p95=189.673974ms p99=257.992765ms max=297.86766ms (p95Budget=15s hardCeiling=2m0s = RequestTimeout 15s x 8 canonical families)
+    graph_read_synthetic_stress_test.go:449: T080-03-STRESS verdict — every run agreed: available=true state="available" code="OK" activation="enabled"; families: topics=populated/OK topic_detail=populated/OK people=populated/OK person_detail=populated/OK places=true_empty/F080-SYNTH-EMPTY-PERMITTED place_detail=true_empty/F080-SYNTH-EMPTY-PERMITTED time=populated/OK edges=populated/OK
+--- PASS: TestGraphReadSyntheticStress_BoundedAndTruthfulUnderConcurrentValidationReads (2.56s)
+PASS
+ok      github.com/smackerel/smackerel/tests/stress     2.979s
+=== T080_03_STRESS_EXIT=0 ===
+```
+
+#### What this proves
+
+- **The run is not vacuous, and the guard that says so is the test's own.**
+  `recordedRuns=160` of `totalRuns=160` is asserted, not merely logged:
+  `graph_read_synthetic_stress_test.go:353` fails with
+  `anti-vacuity: %d of %d concurrent runs were recorded; a worker exited without
+  completing its iterations` if any worker returns early. Two sibling guards
+  fail on zero allocated result slots (`:341`), zero recorded runs (`:350`), an
+  empty canonical family manifest (`:359`), and an empty latency sample
+  (`:429`). A silently-degraded burst therefore cannot pass as a green one.
+- **It reads the LIVE stack with a REAL credential.** The test fatals before
+  asserting anything if `CORE_EXTERNAL_URL` (`:123`), `SMACKEREL_AUTH_TOKEN`
+  (`:127`), or `DATABASE_URL` (`:131`) is empty — the last so the burst
+  genuinely exercises the POPULATED read path against seeded disposable rows
+  rather than an empty store. There is no unauthenticated fallback.
+- **Boundedness is not marginal.** `p95=189.673974ms` against a declared
+  `p95Budget=15s` is roughly **79x headroom**, with `max=297.86766ms` against a
+  structural `hardCeiling=2m0s` (`RequestTimeout 15s × 8 canonical families`).
+  A result that close to zero on a 15s budget is not sensitive to incidental
+  host load, so the pass is a property of the code path rather than of a quiet
+  machine.
+- **The contract holds per run, not just in aggregate.** Each of the 160 runs
+  is required to carry **exactly one** row per canonical family — absence
+  (`:389`), duplication (`:392`), a wrong distinct-family count (`:397`), and a
+  wrong row count (`:401`) each fail by name — for `1280` total family reads.
+  Because `Aggregate.Validate()` enforces the canonical ORDER
+  (`internal/graphsynthetic/result.go:281`: `aggregate family row %d is %q; the
+  canonical order requires %q`), and `:370` asserts `Validate()` on every run,
+  the fixed-order contract is proven 160 times under 8-way concurrency.
+- **Concurrency does not change the verdict.** `:412` and `:417` fail if any two
+  runs disagree on `Available()` or on aggregate state, naming both workers and
+  iterations. Every run agreed: `available=true state="available" code="OK"
+  activation="enabled"`, and `:374` separately refuses an aggregate whose
+  reported activation differs from the explicit policy the observation ran
+  under.
+- **The only two empty families are the two the harness structurally cannot
+  seed, and they are empty *honestly*.** `places` and `place_detail` report
+  `true_empty` under the explicitly permitted code
+  `F080-SYNTH-EMPTY-PERMITTED`; they draw from `location_clusters` /
+  `maps_places` / `artifact_places`. The other six families are `populated/OK`.
+  A family that was allowed to be empty *without* being permitted would carry
+  `F080-SYNTH-EMPTY-NOT-PERMITTED` and fail the aggregate contract, so
+  "allow-empty" here is a declared exception rather than a silent tolerance.
+
+#### Core-Outcome row assessment (what this closes, and what it does not)
+
+With the six-row test-evidence set now complete, the SCOPE-03 Core Outcomes were
+re-assessed against evidence already recorded in this file. Six close; **one does
+not**, and the unproven clause is named rather than reworded.
+
+| Core Outcome | Verdict | Grounds |
+|---|---|---|
+| `SCN-080-001-03` — fixed family sequence, one value-safe row per family plus one aggregate, **failing acceptance for any 401, 403, 404, 5xx, schema, cursor, or missing-row outcome** | `[ ]` **NOT closed** | See "Unproven clause" below. |
+| `SCN-080-001-04` — disabled Graph is truthful across authenticated health, strict readiness, and capability status; static assets and general liveness cannot claim ready | `[x]` | report.md#t080-04-ready + report.md#t080-04-static |
+| `SCN-080-001-07` — populated/empty/failed/disabled outcomes disclose only closed safe fields across artifacts, metrics, logs, traces, health | `[x]` | report.md#t080-03-trace + report.md#t080-07-telemetry + report.md#t080-04-static |
+| One product-owned synthetic performs real authenticated, read-only, fixed-order family reads and publishes a closed value-safe aggregate | `[x]` | report.md#t080-03-synth + report.md#t080-03-readonly + this section |
+| Authenticated health, strict readiness, synthetic output, and activation policy agree; static assets and general liveness cannot create a ready claim | `[x]` | report.md#t080-04-ready + report.md#t080-04-static |
+| Validate-plane observability distinguishes empty, disabled, auth, route, store, schema, and success outcomes without personal or secret content | `[x]` | report.md#t080-03-trace + report.md#t080-07-telemetry |
+| Product/operator ownership is explicit and no concrete deploy-adapter artifact is changed | `[x]` | design.md ownership seam + the git verification below |
+
+##### Unproven clause — why `SCN-080-001-03` stays `[ ]`
+
+Its **first** half is proven: the synthetic executes the fixed family sequence
+and emits exactly one value-safe row per required family plus one aggregate
+(160/160 runs, 1280 family reads, canonical order enforced by `Validate()`).
+
+Its **second** half is not. The row claims acceptance fails for **any** of
+`401, 403, 404, 5xx, schema, cursor, or missing-row`. The only acceptance-failure
+outcome with executed evidence in this file is the **auth** pair: the
+`T080-03-SYNTH` rejection arm reuses an identical configuration, changes **only**
+the credential, and asserts the aggregate reports `unavailable` with a real
+401/403 family row. That covers `401` and `403`.
+
+`404` (route absent), `5xx` (server error), `schema`, `cursor`, and `missing-row`
+have **no** recorded evidence that the synthetic *fails acceptance* on them.
+`report.md#t080-03-trace` does exercise `CodeRouteAbsent`, `CodeServerError`,
+`CodeSchemaInvalid`, `CodeCursorInvalid`, and `CodeRowMissing` — but it feeds
+those codes to the telemetry observer to prove the **observability vocabulary**
+is closed and content-free. That is a different claim: it proves the codes are
+*reportable*, not that an aggregate carrying one is *refused*. Treating the
+telemetry proof as an acceptance proof would be exactly the substitution this
+packet forbids.
+
+The row therefore stays `[ ]`. Its claim text is **unchanged** — narrowing the
+wording to fit the evidence would be the anti-pattern, not the fix. Closing it
+requires executed evidence that `Aggregate.Available()` is false for each of the
+five remaining outcome classes.
+
+#### Deploy-adapter non-modification — verified, not assumed
+
+The "no concrete deploy-adapter artifact is changed" clause is a claim about the
+tree, so it was checked against git rather than inferred from the change-surface
+notes. The packet was created by commit `321c7c7b` (the commit that added
+`bug.md`). Commands run from `<repo-root>` this session:
+
+```
+$ git log --oneline 321c7c7b..HEAD -- deploy/
+DEPLOY_COMMITS_EXIT=0
+(no lines above = zero deploy commits since packet start)
+
+$ git log --name-only --oneline 321c7c7b..HEAD | grep -c '^deploy/'
+0
+
+$ git status --porcelain        # deploy/ entries only
+(none)
+```
+
+Zero commits since the packet was created touched `deploy/`, and the working
+tree carries no `deploy/` modification. The smackerel deploy surface is
+`deploy/{README.md,_example,compose.deploy.yml,contract.yaml,observability}`.
+
+The paired "product/operator ownership is explicit" clause is satisfied by
+`design.md`, which declares the seam rather than leaving it implicit: the
+operator deploy adapter owns encrypted value injection and consumes the product
+result "without reimplementing family assertions", and the owner table names
+`bubbles.devops` for the encrypted adapter key behind
+`KNOWLEDGE_GRAPH_API_CURSOR_SECRET_ENV` and for strict acceptance invocation.
+
+#### Cross-surface derivation check (supports `SCN-080-001-04`)
+
+`SCN-080-001-04` names three surfaces. They are one derivation, verified in
+source this session rather than assumed: authenticated `/api/health` reads
+`d.GraphReadiness.Snapshot()` at `internal/api/health.go:606`, and strict
+`/readyz` reads the same snapshot at `internal/api/graph_readiness.go:299`.
+That is what lets the integration-tier disabled proof transfer to both
+surfaces — `T080-04-READY`'s `disabled_policy_is_truthful_non_ready_and_not_a_fault`
+pins the disabled projection to `policy_disabled` with a non-fault code and
+`Ready=false` (`readiness_test.go:342`, `:368`), and refuses policy/observation
+disagreement in **both** directions. `T080-04-STATIC` then proves the two live
+surfaces agree, and it ran on the graph-DISABLED stack as well as the enabled
+one (`PASS: go-e2e` **and** `PASS: go-e2e-graph-disabled`).
+
+Stated honestly: the e2e disabled arm asserts activation against the **closed
+set** rather than pinning `disabled`, so the "as declared" guarantee rests on the
+integration tier, where the activation policy is the controlled variable. The
+two tiers together cover the claim; neither does alone.
+
+### Change surface for this closure
+
+`report.md` (this section) and `scopes.md` (one Test-Evidence row and six
+Core-Outcome rows checked; the Build Quality Gate row left `[ ]`; SCOPE-03
+`Status` corrected from the stale `Blocked` to `In Progress`, since its only
+dependency SCOPE-02 is `Done`). **No claim text was reworded.** No test file, no
+product source file, and no `state.json` was modified in this invocation. The
+bug top-level `status` and `certification.status` remain `blocked` — SCOPE-04 is
+open.
+
