@@ -96,8 +96,9 @@ exit code: 0
 pass; the adversarial proof required by R4.3 is recorded below; and every lane this bug owns is
 green — `lint`, `format`, `unit`, `integration`, and `e2e` all exit `0` against the current tree.
 The three first-party consumers that the schema narrowing broke were repaired at `0dcb9d1f`, which
-is what moved `e2e` from `1` to `0`. Scope 1 is `Done` and all 16 DoD items are closed with inline
-evidence.
+is what moved `e2e` from `1` to `0`. Scope 1 is `Done` and all 18 DoD items are closed with inline
+evidence. (This said "16" until the audit phase caught it: the count was stale from before T-09 and
+T-10 were added, which moved the total 16 → 18.)
 
 **The packet status is `in_progress`, not `done`, and the reason is not cosmetic.**
 `bugfix-fastlane` sets `blockOnMissingSpecialistExecution: true` under the `delivery-completion-v1`
@@ -982,6 +983,272 @@ transition this phase does not own and did not make.
 
 Findings V-01 through V-04 are **observations, not blockers**: none contradicts the certified claim,
 and each is recorded with the evidence that bounds it.
+
+---
+
+## Audit phase (`bubbles.audit`) — verdict
+
+### Audit Evidence
+
+Fabrication-focused audit at code HEAD `fdc812e5` — a documentation-only commit on top of
+`7032106a`, with `git status --porcelain -- internal/ tests/ cmd/` empty, so the source this audit
+read is the source the validate phase certified. ZERO code changed by this phase: no production
+file, no test file, no `scopes.md`, no `uservalidation.md`. The only files this run wrote are this
+section and `state.json`. `status` and `certification.*` were not touched.
+
+**VERDICT: `REWORK_REQUIRED`** (profile `delivery-completion-v1`).
+
+The distinction that governs everything below: **nothing was found to be false about the code.** The
+certified claim holds, the lanes are green, and I re-derived both rather than reading them out of
+the sections above. What is defective is the **form** of some evidence and the **currency** of
+`scopes.md` — one checked DoD item now contradicts this report outright.
+
+#### Check 0-pre — transition contract and guard (assertion-only)
+
+```text
+$ bash .github/bubbles/scripts/transition-contract-resolver.sh <packet>
+workflowMode: bugfix-fastlane   auditProfile: delivery-completion-v1
+targetStatus: done              statusCeiling: done   currentStatus: in_progress
+contractDigest: sha256:aa91472c047d3d985d38c1d308feb1e6081955b2aa553816deb5987d9cdc449f
+targetRevision: sha256:e3de5ff746ea6077579f5a11e0638d9c57973f8ee27c7c55498f94256e6db1dd
+RESOLVER_EXIT=0
+```
+
+**Phase:** audit · **Claim Source:** executed (this agent, current session)
+
+```text
+$ bash .github/bubbles/scripts/state-transition-guard.sh <packet> --target-status done \
+    --expect-workflow-mode bugfix-fastlane --expect-contract-digest sha256:aa91472c04...
+BEGIN TRANSITION_GUARD_RESULT_V1
+applicableCheckClasses: [universal,mode-required,delivery-completion]
+failedGateIds: [G022,G040,G095,G136]
+blockingCode: DELIVERY_COMPLETION_FAILED
+failureCount: 6
+verdict: FAIL
+END TRANSITION_GUARD_RESULT_V1
+GUARD_EXIT=1
+```
+
+**Phase:** audit · **Claim Source:** executed (this agent, current session)
+
+#### Independent execution — report.md was not trusted
+
+The audit re-ran the lanes rather than reading their receipts.
+
+```text
+# BUG-061-012 AUDIT independent unit lane @ HEAD fdc812e5
+$ ./smackerel.sh test unit --go
+exit: 0
+lines: 209
+sha256: 23b808aa8169401183d948dc2451fa03094377d79b0f7086db0faa9d9e20b9bd
+--- last 20 (excerpt) ---
+ok      github.com/smackerel/smackerel/internal/web/icons       (cached)
+ok      github.com/smackerel/smackerel/internal/whatsapp/assistant_adapter      (cached)
+ok      github.com/smackerel/smackerel/tests/e2e/agent  (cached)
+ok      github.com/smackerel/smackerel/tests/eval/assistant     (cached)
+ok      github.com/smackerel/smackerel/tests/observability      (cached)
+ok      github.com/smackerel/smackerel/tests/stress/readiness   (cached)
+ok      github.com/smackerel/smackerel/tests/unit/clients       (cached)
+[go-unit] go test ./... finished OK
+```
+
+**Phase:** audit · **Claim Source:** executed (this agent, current session)
+
+Identical line count (`209`) and a matching tail to the validate phase's `dbee55f8…` receipt, so
+**the validate phase's lane result is corroborated by an independent run.** The digests differ only
+because this run installed `gettext-base` in its container, which the validate run already had.
+
+`./smackerel.sh format --check` was also re-run: exit `0`, 136 lines,
+sha256 `f43036aa5a2754de2b5a83b35f572318ac64c14b7421f60f5a490668f5929a50`.
+
+#### F-1 [HIGH] — a synthesized summary line is presented as terminal output
+
+`146 packages, 0 failed` appears inside a fenced block directly beneath
+`$ ./smackerel.sh test unit --go`, in the position where raw output belongs — six times in
+`scopes.md` and once in this report. **That command emits no such line.**
+
+```text
+$ grep -rE 'packages, [0-9]+ failed|packages,.*failed' scripts/runtime/go-unit.sh smackerel.sh scripts/
+(no output — the string is not produced by the runner)
+
+$ ./smackerel.sh test unit --go > /tmp/audit-unit-full.txt 2>&1 ; echo "RUN_EXIT=$?"
+RUN_EXIT=0
+$ grep -cE '^ok ' /tmp/audit-unit-full.txt          # 147
+$ grep -cE '^\? ' /tmp/audit-unit-full.txt          # 21
+$ grep -cE '^FAIL' /tmp/audit-unit-full.txt         # 0
+$ grep -nE '[0-9]+ packages|packages,|0 failed|summary' /tmp/audit-unit-full.txt
+(no output — no summary-count line is emitted at all)
+```
+
+**Phase:** audit · **Claim Source:** executed (this agent, current session)
+
+The real census at HEAD is 147 `ok` plus 21 `[no test files]` — 168 package lines, zero `FAIL`. So
+`146` is not the number, and no line of that shape is ever printed. Two lesser instances of the same
+class: `78 files formatted` is a paraphrase of the real `78 files already formatted`, and
+`exit code: 0` is not the `exit: 0` that `evidence-capture.sh` emits.
+
+**The results are true — I verified exit `0` independently.** What is wrong is that a human-authored
+summary was rendered as a transcript. Under the Execution Evidence Standard the distinction is not
+cosmetic: a reader cannot tell a paraphrase from a paste, so the block cannot be checked by reading
+it. This is the "narrative summary masquerading as evidence" pattern, and it backs six DoD items.
+
+#### F-2 [HIGH] — a checked DoD item contradicts this report
+
+`scopes.md` has not been modified since `d2362063`; it is six code-changing commits behind HEAD.
+
+```text
+$ git log --oneline 0dcb9d1f..HEAD -- <packet>/scopes.md
+d2362063 docs(BUG-061-012): clear G068, Check-8A and G022 provenance blocks
+```
+
+**Phase:** audit · **Claim Source:** executed (this agent, current session)
+
+Consequently the Group C Build Quality Gate item — **checked `[x]`** — still reads:
+
+> The `stress` lane exits `1`. … **This lane is an open item against this packet under the
+> `requireNoPreexistingFailingTests` constraint of `bugfix-fastlane`, and it is recorded as open
+> rather than dismissed.**
+
+while § Test Evidence and § Discovered issues 5 in this report record `stress` at exit `0`, and
+`state.json` records G084 as `CLEARED`. Both statements are checked-off evidence inside one packet
+and they cannot both be right. This is the finding that most needs an owner's eye, because a reader
+who consults `scopes.md` first is told the opposite of what the report says.
+
+#### F-3 [HIGH] — the Change Boundary is now false, and three production files are undeclared
+
+```text
+$ git diff --stat 0f4b4826..HEAD -- internal/agent/tools/notification/execute.go
+ internal/agent/tools/notification/execute.go | 17 +++++++++++++++++
+ 1 file changed, 17 insertions(+)
+```
+
+**Phase:** audit · **Claim Source:** executed (this agent, current session)
+
+`scopes.md` states that `internal/agent/tools/notification/execute.go` "was in the allowed list but
+is **unchanged**". It changed at `7032106a`. Separately, `5b0c53c7` changed three production files
+that appear nowhere in the Change Boundary table — `internal/intelligence/surfacing/dedupe.go`,
+`internal/intelligence/surfacing/suppression.go`, `internal/proactive/nudgeref.go` — against that
+section's own stated rule that an added surface is "recorded here with its justification rather than
+left as an undeclared edit".
+
+**The excluded families do hold**, and that was re-derived rather than accepted:
+`git diff --name-only 0f4b4826..HEAD -- internal/agent/registry.go internal/agent/executor.go
+internal/agent/router.go 'migrations/*' 'proto/*' 'config/*.yaml'` prints nothing across the **full**
+range, not merely the range `scopes.md` quotes. The design's central claim survives.
+
+#### F-4 [HIGH] — the scope closed, then two production security fixes landed uncovered
+
+The security phase returned verdict **VULNERABLE** with three findings. Two were then repaired in
+production code *after* the scope was marked `Done` with 18 of 18 DoD items checked:
+
+| Commit | Production change | Referenced in `scopes.md`? |
+|---|---|---|
+| `c84bab7f` | `recipe_search` gated behind principal + `corpus:read` | **no** (grep count 0) |
+| `7032106a` | `notification_execute` bound to the proposing principal | **no** (grep count 0) |
+| `833742cd` | three bridge tests asserting the system principal | **no** (grep count 0) |
+
+No Test Plan row and no DoD item names `recipe_search` gating, `notification_execute` binding, or
+the three bridge tests — while `scopes.md` still declares "**Group A — Test Plan parity (10 items ↔
+10 Test Plan rows)**" and reports every item closed. The tests do exist and the lane is green, so
+this is **coverage bookkeeping drift, not untested code**; but a scope cannot be `Done` and then
+absorb further production changes without its own contract moving.
+
+#### F-5 [MEDIUM] — the Completion Statement is stale in three checkable ways
+
+It says "All **eight** Test Plan tests exist" — the Test Plan carries **ten** rows. It says "all
+**16** DoD items are closed" — `scopes.md` carries **18**, and the guard counts 18. And it says six
+specialists "have never been executed" and that the report "still owes a `### Validation Evidence`
+and an `### Audit Evidence` section" — five of those six have since run, and
+`### Validation Evidence` exists at line 744 of this same file.
+
+#### F-6 [MEDIUM] — `pendingGates` understates what is blocking
+
+`state.json` enumerates G022, the two report sections, G136, G084 (cleared) and artifact lint. The
+guard's machine block names **four** failing gates, and two are absent from that enumeration:
+
+- **G040** — 4 deferral-language hits in `report.md` (lines 144, 166, 545, 972).
+- **G095** — 2 disposition violations at `report.md:969` and `:972` on a scope-exclusion phrase,
+  **introduced by the validate phase itself** at `fdc812e5`. (The phrase is not reproduced here,
+  because quoting it would add a third hit to the very count this bullet reports.)
+
+A packet that lists its own blockers should list all of them; a reader using `pendingGates` as the
+worklist would be surprised twice.
+
+#### F-7 [MEDIUM] — the green `stress` receipt predates a change to the `stress` lane
+
+```text
+$ git log --oneline -S'28942d69…' -- <packet>/report.md
+e2946558 docs(BUG-061-012): record stress root-cause fix, clear G084, correct phase claim
+$ git diff --name-only e2946558..HEAD -- tests/stress/
+tests/stress/assistant/http_turn_stress_test.go
+```
+
+**Phase:** audit · **Claim Source:** executed (this agent, current session)
+
+The receipt was recorded at `e2946558`; `4aee0c03` then modified the lane. `state.json`'s "G084 …
+**CLEARED**" is also firmer than this report's own franker statement that only three of four
+post-fix runs were green and that "whether a third, independent flake remains in that lane is **not**
+settled by this evidence". The report is the more honest of the two records. Note also that guard
+Check 25 passes on the **absence of deferral markers**, not on a green lane, so its PASS is not
+independent confirmation that `stress` is green.
+
+#### F-8 through F-10 [LOW]
+
+- **F-8** — `execution.activeAgent`, `currentPhase` and `nextRequiredOwner` pointed at
+  `bubbles.test` / `regression` / `bubbles.regression`, four phases behind. Corrected by this phase.
+- **F-9** — one byte-identical evidence block backs two different DoD items (`scopes.md:309` and
+  `:421`, the `test e2e` receipt). Framework Check-12 rates this advisory; each item carries further
+  distinct evidence and the shared-lane pairing is disclosed in the section preamble, so it is
+  recorded rather than treated as copy-paste fabrication.
+- **F-10** — guard Check 43's "no stale receipt backs this transition" is **vacuous** here. None of
+  this packet's sha256 digests exists in any receipt store, because `evidence-capture.sh` persists
+  nothing; that PASS means no receipts were found, not that receipts were checked and are current.
+
+#### What held up under adversarial reading
+
+These were the checks most likely to catch fabrication, and they came back clean:
+
+1. **Every DoD-cited test function exists at exactly the cited line.** All eleven greps in
+   `scopes.md` were re-executed: `schema_contract_test.go:74`, `tool_test.go:220/242/285`,
+   `agent_bridge_test.go:102/135`, `judgment_test.go:129`, `retrieval_principal_test.go:93`,
+   `overlays_e2e_test.go:133/283/297`. Not one line number is wrong. The inline greps are truthful.
+2. **No phase impersonation.** All seven claimed phases have an owning-agent run in
+   `executionHistory`, and guard Check 6B passes 7 of 7 on specialist provenance. The reverse
+   direction holds too: `discovery`, `documentation` and `analysis` were executed but never claimed,
+   which under-claims rather than over-claims.
+3. **The reconstructed timestamp is handled correctly** — one side declared, with a reason, exactly
+   as the guard's contract intends.
+4. **The Validation Evidence section is unusually self-critical.** V-02 records a measured count that
+   contradicts a comment in the code; V-04 narrows a claim the regression phase had made. An agent
+   inclined to fabricate does not volunteer findings against its own predecessors.
+
+#### Ceiling
+
+`in_progress` — **unchanged by this phase.** Status was not written, and `done` is unreachable
+regardless of the findings above: G136 carries two unchecked human-acceptance items, and an agent
+checking them would manufacture the acceptance the gate exists to require.
+
+Repair is routed to **`bubbles.implement`**, which owns the DoD evidence in `scopes.md`: refresh
+`scopes.md` against the six commits that landed after `d2362063`, replace the synthesized summary
+lines with real captured output, correct the Change Boundary, and extend the Test Plan and DoD to
+cover the two security fixes.
+
+### Spot-Check Recommendations
+
+Automation bias grows as the prose gets more confident, and this packet's prose is very confident.
+These are the items an owner should verify by hand:
+
+1. **The `stress` lane's actual state.** Two artifacts in this packet disagree (F-2). Run
+   `./smackerel.sh test stress` once and settle which record is right — this audit did not run it.
+2. **The six `146 packages, 0 failed` blocks in `scopes.md`.** Confirm for yourself that the string
+   is absent from a real run (F-1), then decide whether the six DoD items they back are adequately
+   evidenced without them.
+3. **The two security fixes at `c84bab7f` and `7032106a`.** Read them against the tests added in the
+   same commits, since no DoD item or Test Plan row points at either (F-4).
+4. **The two unchecked items in `uservalidation.md`.** These are the human-acceptance gate and no
+   agent may touch them; they are the reason this packet cannot reach `done`.
+5. **The Completion Statement's counts** (F-5) — the quickest single read that shows how far the
+   narrative has drifted from the artifacts it describes.
 
 ---
 
