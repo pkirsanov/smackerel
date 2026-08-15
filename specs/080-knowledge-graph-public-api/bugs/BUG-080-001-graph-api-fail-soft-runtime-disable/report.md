@@ -3377,3 +3377,78 @@ instead of being carried as tribal knowledge.
 `Status` was changed, and `scopes.md`, `state.json`, every other spec, all product
 source, all tests, and everything under `docs/` were left untouched.
 
+#### Addendum — the truthful graph state is ALREADY served; which surface the UI slice should consume
+
+**Status: OPEN design decision. Closes no DoD row.** Recorded 2026-08-15 while
+looking for the wiring point §1 asks for. It sharpens the choice in §3(b); it does
+not resolve it, and it does not weaken §4.
+
+**Independently re-verified on disk this session** — all three anchors read
+directly, not restated from an earlier invocation:
+
+- `internal/api/graph_readiness.go:232` — `func (g *GraphReadiness) Snapshot() GraphHealthSection`.
+  It returns the closed projection carrying `Ready`, `Activation`, `State`, `Code`,
+  `EvidenceRef` (struct declared at `internal/api/graph_readiness.go:87`), and it
+  **fails closed**: on `g == nil || g.capability == nil` it returns `ready=false`,
+  `activation=disabled`, `state=unavailable`, `code=GraphReadinessCodeConfigInvalid`.
+- `internal/api/health.go:606` — `graph := d.GraphReadiness.Snapshot()`, inside the
+  `if authenticated` branch, assigned to `resp.Graph`. Authenticated
+  `GET /api/health` therefore already serves the section on the wire.
+- `internal/api/graph_readiness.go:299` — `return d.GraphReadiness.Snapshot().Ready`,
+  the body of `graphJourneyReady()`, which strict readiness calls at
+  `internal/api/health.go:671` (`if healthStrictRequested(r) && !d.graphJourneyReady()`).
+
+This makes §1's "readiness already satisfied" concrete and extends it: the closed
+exclusive state is not merely computed, it is **already exposed by two production
+surfaces**. That cuts both ways, so both readings are recorded and neither is
+silently adopted.
+
+**Reading A — `graphreadstate.Project` is redundant.** The safest structural
+guarantee that three surfaces never disagree is ONE synthetic performing the reads,
+publishing ONE aggregate, and every surface reading that single published
+observation. That architecture already exists, per the three anchors above. Under
+it, the PWA graph-activation view should read the `graph` section of authenticated
+`/api/health` (or strict `/readyz`), and `Project` reduces raw per-family
+observations that no surface actually collects — making it redundant. The correct
+disposition under Reading A is therefore **REMOVE, not wire**: wiring redundant code
+purely to satisfy an integration-completeness gate would be exactly the shortcut
+this packet forbids.
+
+**Reading B — `Project` has a real, distinct role.** `Snapshot()` reports from an
+observation published by the synthetic on ITS cadence, and returns `unavailable`
+when that observation is absent (`GraphReadinessCodeNotObserved`) or older than
+`maxAge` (`GraphReadinessCodeStale`) — both branches sit in the same `Snapshot()`
+body re-read above. A surface that must perform its OWN on-demand read — a user
+opening Knowledge and expecting a fresh answer rather than the last scheduled sweep
+— holds RAW per-family observations and needs exactly the reduction `Project`
+provides. Under this reading `Project` is not redundant; it is the on-demand path,
+and it correctly shares the SAME reducer as the synthetic through the
+`internal/graphsynthetic/projection.go` seam (`NewFamilyRow`, `ClassifyHTTPOutcome`,
+`Aggregate` — thin wrappers over the same unexported row builder, classifier, and
+aggregate reducer the SCOPE-03 synthetic runs), so the two paths cannot diverge.
+
+**This is a genuine DESIGN DECISION belonging to the UI slice.** It is NOT
+resolvable from the packet text alone, and it must be decided **explicitly** rather
+than settled by accident by whoever next wires the surface nearest to hand.
+
+**Which way the scope text leans — stated without overstating.**
+Implementation-plan item 1 (`scopes.md:394`) names the decoder as *"consumed by Wiki
+Browse, Graph availability, and readiness"*. Readiness is named as a consumer, and
+under Reading A it already effectively is one — by a different route, through
+`AggregateResult` and `Snapshot()` rather than through `Project`. That is a lean
+toward A, **not** a settlement of it: item 1 also names Wiki Browse and Graph
+availability, neither of which exists yet, so the sentence cannot tell us whether
+those surfaces would hold raw observations (B) or read the already-published
+section (A).
+
+**Disposition rule, unchanged from §4:** `internal/graphreadstate` must either gain
+a real consumer in the UI slice, or be **REMOVED**. It must not remain indefinitely
+as a tested library with no caller. This addendum only narrows the choice to two
+named options and records that choosing between them is the UI slice's explicit
+responsibility.
+
+**Change surface for this addendum:** `report.md` (this subsection) **only**. No DoD
+row was checked or unchecked, no scope `Status` was changed, and `scopes.md`,
+`state.json`, every other spec, all product source, all tests, and everything under
+`docs/` were left untouched.
+
