@@ -24,16 +24,21 @@ import (
 	"testing"
 
 	"github.com/smackerel/smackerel/internal/agent"
+	"github.com/smackerel/smackerel/internal/auth"
 )
 
 // fakeRunner is the scripted BridgeRunner stand-in. Each invocation
-// records the envelope it received and returns the scripted result.
+// records the envelope AND the context it received, then returns the
+// scripted result. The context is recorded because the principal the
+// classifier invokes as is observable nowhere else.
 type fakeRunner struct {
+	gotCtx context.Context
 	gotEnv agent.IntentEnvelope
 	result *agent.InvocationResult
 }
 
-func (f *fakeRunner) Invoke(_ context.Context, env agent.IntentEnvelope) (*agent.InvocationResult, *agent.RoutingDecision) {
+func (f *fakeRunner) Invoke(ctx context.Context, env agent.IntentEnvelope) (*agent.InvocationResult, *agent.RoutingDecision) {
+	f.gotCtx = ctx
 	f.gotEnv = env
 	return f.result, &agent.RoutingDecision{Reason: agent.ReasonExplicitScenarioID, Chosen: env.ScenarioID}
 }
@@ -149,6 +154,62 @@ func TestClassifierInterface_ImplementedByClassifyV1(t *testing.T) {
 	}
 	if innerCalled != 1 {
 		t.Fatalf("disabled warm-cache must always delegate; got %d", innerCalled)
+	}
+}
+
+// BUG-061-012 R3.3 / SCN-07 — BridgeClassifier invokes as an explicit system
+// principal holding no grants.
+//
+// Until this test existed the injection was unasserted: deleting
+// auth.WithSession from classifier_bridge.go left the suite green, because an
+// invocation with no session also happens to fail closed today. That equivalence
+// is the whole risk — the day a default session appears upstream, an unasserted
+// call site silently inherits whatever it grants. Note the envelope Source stays
+// the inbound channel: that is provenance, and this asserts authority.
+//
+// Scopes is checked non-nil AND empty deliberately. nil is Session.Scopes'
+// "legacy non-scoped session" sentinel; an empty slice is the opposite claim.
+func TestBridgeClassifier_InvokesAsSystemPrincipalWithNoGrants(t *testing.T) {
+	finalBytes, err := json.Marshal(map[string]any{"interaction_type": "made_it", "confidence": 0.9})
+	if err != nil {
+		t.Fatalf("marshal final: %v", err)
+	}
+	runner := &fakeRunner{result: &agent.InvocationResult{Outcome: agent.OutcomeOK, Final: finalBytes}}
+	bc := &BridgeClassifier{Runner: runner, ConfidenceFloor: 0.6}
+
+	// A caller session that DOES hold a grant, to prove the bridge replaces it
+	// rather than merely passing an empty context through.
+	callerCtx := auth.WithSession(context.Background(), auth.Session{
+		UserID: "user-with-corpus-grant",
+		Source: auth.SessionSourcePerUserToken,
+		Scopes: []string{"corpus:read"},
+	})
+
+	if _, _, err := bc.Classify(callerCtx, "made it", ChannelAPI); err != nil {
+		t.Fatalf("Classify returned err: %v", err)
+	}
+
+	if runner.gotCtx == nil {
+		t.Fatal("Classify never invoked the runner")
+	}
+	sess, ok := auth.SessionFromContext(runner.gotCtx)
+	if !ok {
+		t.Fatal(`invoked context carries no session; BridgeClassifier must inject auth.SystemSession("annotation")`)
+	}
+	if sess.Source != auth.SessionSourceSystem {
+		t.Errorf("session Source = %q, want %q (caller session must not survive)", sess.Source, auth.SessionSourceSystem)
+	}
+	if sess.UserID != "system:annotation" {
+		t.Errorf("session UserID = %q, want %q", sess.UserID, "system:annotation")
+	}
+	if sess.Scopes == nil {
+		t.Error("session Scopes is nil (the legacy non-scoped sentinel); the system principal must declare an explicitly empty grant set")
+	}
+	if len(sess.Scopes) != 0 {
+		t.Errorf("session Scopes = %v, want empty; classification holds no corpus grant", sess.Scopes)
+	}
+	if string(runner.gotEnv.Source) != "api" {
+		t.Errorf("envelope Source = %q, want %q; channel provenance must survive the authority override", runner.gotEnv.Source, "api")
 	}
 }
 

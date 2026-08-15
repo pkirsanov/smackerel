@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/smackerel/smackerel/internal/agent"
+	"github.com/smackerel/smackerel/internal/auth"
 	"github.com/smackerel/smackerel/internal/intelligence"
 )
 
@@ -680,4 +682,57 @@ func TestStop_WgWaitBounded(t *testing.T) {
 
 	// Clean up the orphaned wg counter so the test doesn't leak
 	s.wg.Done()
+}
+
+// ctxCapturingAgentRunner records the context FireScenario actually built. That
+// context is the only place the injected principal is observable, and reading it
+// here avoids adding production code purely to expose it.
+type ctxCapturingAgentRunner struct {
+	gotCtx context.Context
+	gotEnv agent.IntentEnvelope
+}
+
+func (r *ctxCapturingAgentRunner) Invoke(ctx context.Context, env agent.IntentEnvelope) (*agent.InvocationResult, *agent.RoutingDecision) {
+	r.gotCtx = ctx
+	r.gotEnv = env
+	return &agent.InvocationResult{Outcome: agent.OutcomeOK}, &agent.RoutingDecision{}
+}
+
+func (r *ctxCapturingAgentRunner) KnownIntents() []string { return nil }
+
+// BUG-061-012 R3.3 / SCN-07 — scheduler.FireScenario invokes as an explicit
+// system principal holding no grants.
+//
+// Until this test existed the injection was unasserted: deleting
+// auth.WithSession from agent_bridge.go left the suite green, because an
+// invocation with no session also happens to fail closed today. That equivalence
+// is the whole risk — the day a default session appears upstream, an unasserted
+// call site silently inherits whatever it grants.
+//
+// Scopes is checked non-nil AND empty deliberately. nil is Session.Scopes'
+// "legacy non-scoped session" sentinel; an empty slice is the opposite claim.
+func TestSchedulerFireScenario_InvokesAsSystemPrincipalWithNoGrants(t *testing.T) {
+	runner := &ctxCapturingAgentRunner{}
+
+	FireScenario(context.Background(), runner, "any_scenario", nil)
+
+	if runner.gotCtx == nil {
+		t.Fatal("FireScenario never invoked the runner")
+	}
+	sess, ok := auth.SessionFromContext(runner.gotCtx)
+	if !ok {
+		t.Fatal(`invoked context carries no session; scheduler.FireScenario must inject auth.SystemSession("scheduler")`)
+	}
+	if sess.Source != auth.SessionSourceSystem {
+		t.Errorf("session Source = %q, want %q", sess.Source, auth.SessionSourceSystem)
+	}
+	if sess.UserID != "system:scheduler" {
+		t.Errorf("session UserID = %q, want %q", sess.UserID, "system:scheduler")
+	}
+	if sess.Scopes == nil {
+		t.Error("session Scopes is nil (the legacy non-scoped sentinel); the system principal must declare an explicitly empty grant set")
+	}
+	if len(sess.Scopes) != 0 {
+		t.Errorf("session Scopes = %v, want empty; a scheduler tick holds no corpus grant", sess.Scopes)
+	}
 }
