@@ -174,6 +174,58 @@ mkdir -p "$d"
 printf '%s\n' '{ bad json' > "$d/state.json"
 run "T11 malformed state.json → exit 2" 2 "$d"
 
+# T12: counts-summary OBJECT scopeProgress → no-op, NOT a crash.
+# Regression case. Single-file scopes.md plans carry scopeProgress as
+# {total,done,inProgress,notStarted} rather than the per-scope array. Before the
+# type check this fell through the length test (jq `length` on an object returns
+# its KEY COUNT — 4 — not 0), then `.[] | .dependsOn` iterated the counts VALUES
+# and died with "Cannot index number with string \"dependsOn\"" (jq exit 5).
+# Under `block` that non-zero exit was reported as a substantive verdict: a
+# one-scope plan was told every consumer-visible scope sat behind >=3 foundation
+# scopes. A crash rendered as a confident false BLOCK is worse than a crash,
+# which is why this asserts exit 0 under the BLOCK posture specifically.
+d="$TMP_ROOT/t12"
+mkdir -p "$d"
+printf '%s\n' '{"scopeProgress":{"total":1,"done":1,"inProgress":0,"notStarted":0}}' > "$d/state.json"
+mk_block "$d"
+run "T12 counts-summary object scopeProgress, block → no-op (exit 0)" 0 "$d"
+
+# T13: same shape nested under certification (the completed-spec read path).
+# The guard resolves `.scopeProgress // .certification.scopeProgress`, so the
+# fallback branch needs its own case; a fix applied to only one branch would
+# still crash every certified spec.
+d="$TMP_ROOT/t13"
+mkdir -p "$d"
+printf '%s\n' '{"certification":{"scopeProgress":{"total":2,"done":2,"inProgress":0,"notStarted":0}}}' > "$d/state.json"
+mk_block "$d"
+run "T13 counts-summary under certification, block → no-op (exit 0)" 0 "$d"
+
+# T14: array whose entries are not objects → no-op, not a crash.
+d="$TMP_ROOT/t14"
+mkdir -p "$d"
+printf '%s\n' '{"scopeProgress":[1,2,3]}' > "$d/state.json"
+mk_block "$d"
+run "T14 non-object scopeProgress entries, block → no-op (exit 0)" 0 "$d"
+
+# T15: ADVERSARIAL PARTNER — the type check must not blunt real detection.
+# Identical block posture to T12-T14, but the genuine horizontal-plan shape in
+# the per-scope ARRAY form. If a future edit made the guard no-op too eagerly
+# (say by widening the type test), T12 would still pass while the guard stopped
+# working entirely. This case is what makes the no-op cases meaningful.
+d="$TMP_ROOT/t15"
+mk_scope "$d" 01-a foundation
+mk_scope "$d" 02-b foundation
+mk_scope "$d" 03-c foundation
+mk_scope "$d" 04-d consumer
+printf '%s\n' '{"scopeProgress":[
+  {"scope":1,"scopeDir":"scopes/01-a","dependsOn":[]},
+  {"scope":2,"scopeDir":"scopes/02-b","dependsOn":[1]},
+  {"scope":3,"scopeDir":"scopes/03-c","dependsOn":[2]},
+  {"scope":4,"scopeDir":"scopes/04-d","dependsOn":[3]}
+]}' > "$d/state.json"
+mk_block "$d"
+run "T15 real horizontal chain still BLOCKS under block posture (exit 1)" 1 "$d"
+
 echo
 if [[ "$FAILURES" -gt 0 ]]; then
   echo "plan-dependency-depth-guard-selftest FAILED with $FAILURES issue(s)."

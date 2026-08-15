@@ -73,9 +73,38 @@ fi
 
 # scopeProgress (top-level canonical, or under certification for completed specs).
 sp="$(jq -c '(.scopeProgress // .certification.scopeProgress // [])' "$state_file")"
+
+# scopeProgress has two legitimate shapes in the wild: the per-scope ARRAY
+# ([{scope,scopeDir,dependsOn}, ...]) this DAG analysis is written for, and the
+# counts-summary OBJECT ({total,done,inProgress,notStarted}) that single-file
+# scopes.md plans carry. Only the array form carries a DAG signal.
+#
+# The object form MUST be treated as "DAG signal absent" BEFORE any length or
+# iteration, and the check has to be an explicit type test rather than a length
+# test: `jq length` on an object returns its KEY COUNT (4 for the counts form),
+# so a length-only guard reads a signal that is not there, falls through, and
+# then `.[] | .dependsOn` iterates the counts VALUES and dies with
+# "Cannot index number with string \"dependsOn\"" (jq exit 5). Under a block
+# posture that crash surfaced as a substantive verdict — a single-scope plan was
+# told every consumer-visible scope sat behind >=3 foundation scopes, which is
+# arithmetically impossible — so the failure mode was not a loud crash but a
+# false, confidently-worded BLOCK. Type-check first; the documented contract
+# above already says a single-file scopes.md plan is a NO-OP here.
+sp_type="$(printf '%s' "$sp" | jq -r 'type')"
+if [[ "$sp_type" != "array" ]]; then
+  echo "[plan-dependency-depth-guard] scopeProgress is '$sp_type', not the per-scope array — no-op (position guard covers this)"
+  exit 0
+fi
+
 sp_len="$(printf '%s' "$sp" | jq 'length')"
 if [[ "$sp_len" -eq 0 ]]; then
   echo "[plan-dependency-depth-guard] no scopeProgress in $feature_dir — no-op (position guard covers this)"
+  exit 0
+fi
+
+# Every element must be an object; a malformed array cannot be indexed either.
+if ! printf '%s' "$sp" | jq -e 'all(type == "object")' >/dev/null 2>&1; then
+  echo "[plan-dependency-depth-guard] scopeProgress entries are not all objects — no-op (conservative)"
   exit 0
 fi
 
