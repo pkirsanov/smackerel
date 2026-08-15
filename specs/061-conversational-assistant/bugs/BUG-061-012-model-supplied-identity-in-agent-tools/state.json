@@ -5,7 +5,8 @@
   "title": "The language model supplies the identity the corpus is read under",
   "workflowMode": "bugfix-fastlane",
   "releaseTrain": "mvp",
-  "status": "in_progress",
+  "status": "blocked",
+  "blockedReason": "All eight bugfix-fastlane phases are executed and provenanced, all six lanes are green (unit 0, integration 0, e2e 0, lint 0, format 0, stress 0 / receipt 28942d69), and the state-transition guard is down from 12 blocking failures to 2. Both remaining blockers are OUTSIDE agent authority, so 'done' is not honestly reachable and this is the terminal status. (1) Gate G136 — uservalidation.md carries 2 unchecked human-acceptance items. Only the operator can check them; an agent doing so would fabricate the acceptance the gate exists to require. OPERATOR ACTION: exercise the fix and check those two items if the behaviour is acceptable. This is the same ceiling BUG-061-011 sits at. (2) Check 44 'Plan dependency depth' — a FRAMEWORK DEFECT, not a plan-shape finding, proven this session: plan-dependency-depth-guard.sh resolves `(.scopeProgress // .certification.scopeProgress // [])` to the counts OBJECT {total,done,inProgress,notStarted}, takes `jq length` of it (= 4 KEYS, not 4 scopes), then indexes elements that are numbers; jq raises 'Cannot index number with string \"dependsOn\"', the script exits 5, and Check 44 converts that crash into a BLOCK. Check 46 independently PASSES with 'first usable increment is early (scope 1 of 1); no horizontal chain' — and with one scope there cannot be three foundation scopes behind it. The guard's own header says a single-file scopes.md plan should be a NO-OP. OPERATOR ACTION: fix in the bubbles SOURCE repo (no-op unless the resolved scopeProgress has jq type == 'array'), then reinstall. NOT patched locally because .github/bubbles/ is an installed framework artifact that an upgrade would revert, and the packet's data was deliberately NOT reshaped to satisfy the crash — the counts-object form is correct for a single-scope packet and artifact-lint accepts it, so changing it would be gaming a broken gate. ALSO STILL OPEN, routed not deferred: P1 hole #3 (SEC-03) — the live Telegram path at cmd/core/wiring_assistant_facade.go:328 folds the resolved user into a contracts.TransportIdentity DATA field and never calls auth.WithSession, so telegram.NewAgentBridge stays dormant and a Telegram turn reaches the tools with no session. Corpus tools now fail closed on that path (retrieval, recipe_search after SEC-01, entity_resolve, notification propose+execute after SEC-02), so it is a capability gap rather than an authorization bypass. It needs the scope-10 router wiring, which is outside this packet's Change Boundary.",
   "severity": "S1",
   "createdAt": "2026-08-14T04:35:00Z",
   "lastUpdatedAt": "2026-08-15T04:37:15Z",
@@ -137,7 +138,7 @@
     ]
   },
   "certification": {
-    "status": "in_progress",
+    "status": "blocked",
     "completedScopes": ["BUG-061-012-SCOPE-01"],
     "certifiedCompletedPhases": ["implement"],
     "scopeProgress": {
