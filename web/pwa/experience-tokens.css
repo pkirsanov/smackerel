@@ -210,3 +210,64 @@
   outline: var(--focus-ring-width) solid var(--color-focus);
   outline-offset: var(--focus-ring-offset);
 }
+
+/* ---- Control + icon-only control geometry -----------------------------------
+ * Controls keep a stable px height so a longer label or a larger root font size
+ * cannot re-flow the shell. An icon-only control is square at the control height
+ * and always reserves the coarse-pointer minimum, so it can never become a
+ * sub-target hit area.
+ */
+:where(button, [role="button"], input, select) {
+  min-height: var(--density-control-height);
+  font-family: var(--font-sans);
+  letter-spacing: var(--letter-spacing);
+}
+
+.icon-only {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--touch-target-min);
+  min-height: var(--touch-target-min);
+  border-radius: var(--radius-md);
+}
+
+/* ---- No nested cards / no card-styled page sections -------------------------
+ * A card is a leaf container. Nesting one card inside another, or styling a
+ * page-level landmark as a card, produces the doubled border-and-shadow frame
+ * the design forbids. The rule is enforced mechanically over markup by
+ * CheckNoNestedCardContract; these declarations make an accidental nesting
+ * visually inert rather than merely disallowed on paper.
+ */
+.card .card {
+  border: 0;
+  box-shadow: none;
+  background: none;
+  padding: 0;
+}
+
+:where(main, nav, header, footer) > .card-surface {
+  border: 0;
+  box-shadow: none;
+  background: none;
+}
+
+/* ---- Forced colors: platform-controlled -------------------------------------
+ * Under a forced-colors mode the operating system owns every color. This block
+ * therefore sets NO literal color value and never uses `forced-color-adjust:
+ * none`; it only restates boundaries and focus in CSS *system color keywords*,
+ * which the platform substitutes. That satisfies the design contract "Forced
+ * colors preserves boundaries and focus" without taking control away from the
+ * user. Enforced by CheckForcedColorsContract.
+ */
+@media (forced-colors: active) {
+  :where(a, button, input, select, textarea, [tabindex]):focus-visible {
+    outline: var(--focus-ring-width) solid Highlight;
+    outline-offset: var(--focus-ring-offset);
+  }
+
+  .card,
+  :where(button, [role="button"], input, select, textarea) {
+    border: 1px solid ButtonBorder;
+  }
+}
