@@ -58,6 +58,53 @@ test("canary: native Search HTMX read still renders after the asset foundation",
   expect([200, 303, 401]).toContain(response!.status());
 });
 
+test("canary: HTMX mutation still round-trips against the live core after the asset foundation", async ({
+  request,
+}) => {
+  // The four canaries around this one cover READ surfaces. A read-only canary
+  // set cannot see a mutation-transport break, so this closes the one journey
+  // this spec's own contract header names but did not previously exercise.
+  //
+  // `POST /settings/connectors/{id}/sync` (internal/api/router.go:490) is a real
+  // registered HTMX mutation route. It is driven with NO interception and NO
+  // auth injection, so an auth gate is an honest outcome — the contract asserted
+  // is that the mutation TRANSPORT still round-trips, never that it mutates.
+
+  // GET on the POST-only route is a clean method rejection: deterministic, no
+  // handler side effect, and it cannot 5xx.
+  const wrongMethod = await request.get(
+    "/settings/connectors/xp106-01-c-canary/sync",
+    { maxRedirects: 0 },
+  );
+  expect(
+    wrongMethod.status(),
+    `GET on the POST-only sync route -> ${wrongMethod.status()} (method contract preserved)`,
+  ).toBe(405);
+
+  // POST reaches the REAL registered mutation transport and answers honestly
+  // (handled, redirected, or auth-gated) — never a transport-break 5xx.
+  const mutation = await request.post(
+    "/settings/connectors/xp106-01-c-canary/sync",
+    { maxRedirects: 0 },
+  );
+  expect(
+    mutation.status(),
+    `POST sync -> ${mutation.status()} (must not be a transport-break 5xx)`,
+  ).toBeLessThan(500);
+
+  // Non-tautological control: an unregistered mutation path must be a genuine
+  // 404. Without this, a router that had lost the sync route entirely would
+  // still satisfy the assertions above via a catch-all.
+  const control = await request.post(
+    "/settings/connectors/xp106-01-c-canary/definitely-not-a-mutation",
+    { maxRedirects: 0 },
+  );
+  expect(
+    control.status(),
+    "unregistered mutation control must be a genuine 404",
+  ).toBe(404);
+});
+
 test("canary: Card PRG shell still redirects and renders after the asset foundation", async ({
   page,
 }) => {
