@@ -163,8 +163,8 @@ that one command and is re-derivable with `--verify`.
 | T-01..T-07 (scoped) | `./smackerel.sh test unit --go --go-run '^(TestToolSchemas_…\|…\|TestSystemSurfaces_InjectPrincipalWithoutCorpusGrant)$' --verbose` | `0` | recorded inline in `scopes.md` |
 | T-08 (scoped) | `./smackerel.sh test integration --go-run '^TestRetrieval_EndToEndUnderHTTPSession$'` | `0` | recorded inline in `scopes.md` |
 
-The `stress` row was the only red lane; it is now green, fixed inline at `5b0c53c7` rather than
-deferred. The root causes and the measured before/after are in § Discovered issues 5.
+The `stress` row was the only red lane; it is now green, repaired inline at `5b0c53c7` rather than
+routed to another packet. The root causes and the measured before/after are in § Discovered issues 5.
 
 **Run record, stated precisely.** Four full-lane runs were executed after the fix: three exited `0`
 (two direct, one under `evidence-capture.sh` — receipt above) and **one exited `1`**. That one red
@@ -543,7 +543,7 @@ narrowed adversarial run below.
 | stress | `1` (380.987s) | `0` | red → green | 🟢 **fixed inline at `5b0c53c7`** |
 
 The stress lane was red at the pre-fix baseline, so it carried no delta this bug caused — but it is
-no longer owned elsewhere or deferred. It was **fixed**, and the fix is measured rather than
+no longer owned elsewhere. It was **fixed**, and the fix is measured rather than
 asserted:
 
 | Measurement | Before | After | Factor |
@@ -967,10 +967,12 @@ context **unchanged** when a chat cannot be resolved, so a Telegram turn with no
 the tools with no session and the grant-gated tools refuse themselves. The open hole is a
 **capability** gap on that surface, not an authorization bypass.
 
-The same holds for the shared-token HTTP branch (`router.go:1101`), which is explicitly out of scope
-per `spec.md`: it injects `auth.Session{Source: SessionSourceSharedToken}` with `nil` scopes and an
-empty `UserID`, so corpus tools refuse it (`GateGlobalCorpusRead` false) and the identity-bearing
-tools refuse it on the empty-`UserID` check. Out of scope and still fail-closed.
+The same holds for the shared-token HTTP branch (`router.go:1101`), whose exclusion is declared in
+`specs/061-conversational-assistant/bugs/BUG-061-012-model-supplied-identity-in-agent-tools/spec.md`
+(§ Change Boundary): it injects `auth.Session{Source: SessionSourceSharedToken}` with `nil` scopes
+and an empty `UserID`, so corpus tools refuse it (`GateGlobalCorpusRead` false) and the
+identity-bearing tools refuse it on the empty-`UserID` check. Excluded by that declared boundary,
+and still fail-closed — see the `## Discovered Issues` row dated 2026-08-15 for its disposition.
 
 #### Ceiling
 
