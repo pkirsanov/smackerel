@@ -3104,3 +3104,145 @@ reworded.** No product source file, no test file, no `state.json`, no other spec
 and nothing under `docs/` was modified. SCOPE-04 `Status` was deliberately left
 unchanged.
 
+---
+
+## SCOPE-04 Projection Foundation — `T080-08-UNIT` (2026-08-15)
+
+Closes exactly ONE row — the `ui-unit` Test-Evidence row `T080-08-UNIT` — on the
+foundation slice landed by commit `a1824d63`, and corrects SCOPE-04's stale
+`Status`. Nothing else is claimed. The four `e2e-ui` rows (`T080-04-UI`,
+`T080-05-UI`, `T080-06-UI`, `T080-08-A11Y`), the Build Quality Gate row, and
+every Core Outcome remain `[ ]`, because they require real-stack Playwright
+fixtures across ten backend states **without request interception** — explicitly
+out of scope for this slice and not built. **SCOPE-04 is 1/15 and stays
+`In Progress`, not `Done`**, and the bug top-level `status` and
+`certification.status` remain `blocked`. `state.json` was **not** modified.
+
+### Status correction — the stale `Blocked` shape, again
+
+SCOPE-04 declared `**Status:** Blocked` with `**Depends On:** SCOPE-03`. SCOPE-03
+is now **Done (14/14)**, so the dependency is satisfied and `Blocked` no longer
+describes reality — the scope is simply in progress. This is the identical stale
+shape a previous invocation corrected for SCOPE-03 once SCOPE-02 closed, and the
+one the SCOPE-03 Build-Quality-Gate closure surfaced but deliberately left for
+the owner. It is corrected here in both places it appears: the Scope Inventory
+table and the scope's own header. `Blocked` → `In Progress`.
+
+This matters beyond bookkeeping: a scope left `Blocked` after its blocker clears
+misreports the packet's real frontier, and an orchestrator scanning for pickup
+work would skip the one scope that is actually available.
+
+<a id="t080-08-unit"></a>
+
+### T080-08-UNIT — one closed projection, adversarially proven
+
+**What implementation-plan item 1 required, and why.** Item 1 reads: *"Add one
+typed response decoder and activation/read model consumed by Wiki Browse, Graph
+availability, and readiness; projections must not infer state from HTTP code or
+`items.length` independently."* That final clause is the whole point. If a surface
+may read either signal on its own, a route-missing `404` carrying zero rows gets
+rendered as a true-empty result — which is precisely the silent-absence bug this
+packet exists to kill — and a capability that is explicitly disabled can be
+advertised as ready because a concurrent or stale read happened to look healthy.
+Two surfaces reaching independently for the same two signals will eventually
+disagree about what one read meant.
+
+**What landed.**
+
+- `internal/graphreadstate/state.go` — `Project()` reduces an explicit activation
+  plus raw per-family observations and an opt-in policy to EXACTLY ONE closed
+  `graphsynthetic.AggregateResult`. The **gate order is the contract**: transport,
+  then HTTP status, then row count, so a non-200 never reaches the emptiness
+  branch; and an explicit disabled activation short-circuits before any
+  observation is consulted. It declares **no** read-state vocabulary of its own
+  and derives the family list from `graphapi.RequiredGraphFamilies()` on every
+  path. Projected rows carry no HTTP status and no row count, so consumers have
+  nothing left to re-infer state from.
+- `internal/graphsynthetic/projection.go` — a thin exported seam (`NewFamilyRow`,
+  `ClassifyHTTPOutcome`, `Aggregate`) over the **same** unexported reducer the
+  SCOPE-03 synthetic runs. No new state name, no second reduction rule.
+- `web/pwa/tests/graph_activation_state_test.go` —
+  `TestGraphActivationProjectionUsesClosedExclusiveStates`, 11 anti-vacuity
+  guards, derived family list.
+- `docs/Development.md` — the required `internal/graphreadstate/` row.
+
+**Test Plan row verified against disk before checking.** The row names
+`web/pwa/tests/graph_activation_state_test.go` -
+`TestGraphActivationProjectionUsesClosedExclusiveStates`. Both match exactly:
+the file exists and the function is declared at `graph_activation_state_test.go:298`.
+
+**Executed results.**
+
+```
+./smackerel.sh test unit --go --go-run 'TestGraphActivationProjection'
+ok      github.com/smackerel/smackerel/web/pwa/tests    0.015s
+EXIT=0
+
+./smackerel.sh test unit      (full lane)
+[go-unit] go test ./... finished OK
+[py-unit] pytest ml/tests finished OK
+[test unit] shell unit tests in tests/unit/cli/ finished OK
+UNIT_EXIT=0        (zero FAIL lines)
+
+./smackerel.sh lint            -> LINT=0  ("Web validation passed")
+./smackerel.sh format --check  -> FMT=0   ("78 files already formatted")
+```
+
+### ADVERSARIAL PROOF
+
+Two independent mutations of `internal/graphreadstate/state.go`, each reverted
+and sha256-verified. The files were **untracked** at the time, so
+`git checkout --` would **not** have restored them; backups were taken outside
+the repo tree.
+
+```
+A) collapse route-missing into true-empty:
+--- FAIL: TestGraphActivationProjectionUsesClosedExclusiveStates/route_missing_404_with_zero_rows_is_not_true_empty
+    graph_activation_state_test.go:355: projected state "available"; want "unavailable" — the route is absent AND the row count is zero AND policy permits empty; reading either signal on its own yields the original silent-absence bug
+    graph_activation_state_test.go:401: anti-vacuity: 9 of 10 cases produced a projection; a skipped case cannot prove exclusivity
+MUTATION_A_EXIT=1
+
+B) let an explicitly disabled capability report available:
+--- FAIL: TestGraphActivationProjectionUsesClosedExclusiveStates/explicit_disabled_is_not_available_even_when_reads_look_populated
+    graph_activation_state_test.go:355: projected state "available"; want "policy_disabled" — an explicitly disabled capability must never be advertised as ready, no matter how healthy a concurrent or stale read looked
+    graph_activation_state_test.go:401: anti-vacuity: 9 of 10 cases produced a projection; a skipped case cannot prove exclusivity
+MUTATION_B_EXIT=1
+```
+
+Both were genuine **assertion** failures, not compile errors: the package built
+and ran (Go reported durations and named subtests), and each mutation failed
+exactly ONE targeted subtest while the other nine still projected correctly.
+That one-of-ten selectivity is what distinguishes a real guard from a test that
+would fail on any edit. The `9 of 10` line is the test's own anti-vacuity guard
+firing as designed — a case that fails before projecting cannot count toward
+exclusivity, so a mutation cannot pass by making a case disappear.
+
+### The docfreshness gate is load-bearing
+
+Worth recording because it demonstrates the meta-guard is not decorative: adding
+`internal/graphreadstate/` made `TestDocFreshness_AllInternalPackagesDocumented`
+**FAIL** — `"44 packages on disk, 1 undocumented: graphreadstate"`. That is the
+same docfreshness contract cited as SCOPE-03's documentation evidence, and it
+caught a real regression within minutes of the package landing. It was fixed by
+adding the required `docs/Development.md` row, and the full unit lane is green
+again.
+
+### What this does NOT close
+
+The four `e2e-ui` rows and every Core Outcome that depends on rendered UI remain
+open and unchecked. This slice built the projection **model** and proved its
+exclusivity at the `ui-unit` tier; it did not build the real-stack Playwright
+fixtures for the ten backend states, and no claim about rendered Knowledge, Wiki,
+or readiness surfaces is made here. The Build Quality Gate row is also left `[ ]`
+for the same reason. No DoD claim text was reworded — where a row's claim is
+broader than this slice, the row was left unchecked rather than narrowed.
+
+### Change surface for this closure
+
+`report.md` (this section) and `scopes.md` (the single `T080-08-UNIT`
+Test-Evidence row checked with an `→ Evidence:` citation to
+report.md#t080-08-unit; SCOPE-04 `Status` corrected from the stale `Blocked` to
+`In Progress` in both the Scope Inventory table and the scope header). **No DoD
+claim text was reworded.** No product source file, no test file, no `state.json`,
+no other spec, and nothing under `docs/` was modified in this invocation.
+

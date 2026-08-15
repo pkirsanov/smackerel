@@ -46,7 +46,7 @@ flowchart LR
 | SCOPE-01 | Empty/missing enabler fails soft to a typed disabled capability; routes activate atomically when enabled | config, core wiring, router, route manifest | - | Done |
 | SCOPE-02 | Authorized Graph reads report truthful data and failure states | PostgreSQL readers, HTTP contracts, auth, cursors | SCOPE-01 | Done |
 | SCOPE-03 | Read-only synthetic and readiness prove actual Graph behavior | validate synthetic, health, metrics, traces, alerts | SCOPE-02 | Done |
-| SCOPE-04 | Knowledge surfaces render the same honest state accessibly | PWA Knowledge/Wiki, status, responsive UI, Playwright | SCOPE-03 | Blocked |
+| SCOPE-04 | Knowledge surfaces render the same honest state accessibly | PWA Knowledge/Wiki, status, responsive UI, Playwright | SCOPE-03 | In Progress |
 
 ---
 
@@ -354,7 +354,7 @@ Scenario: SCN-080-001-07 Synthetic and telemetry disclose no content
 ## Scope 4: Wiki And Graph State Integration
 
 **Scope ID:** SCOPE-04  
-**Status:** Blocked  
+**Status:** In Progress  
 **Scope-Kind:** runtime-behavior  
 **Depends On:** SCOPE-03
 
@@ -449,7 +449,7 @@ Scenario: SCN-080-001-08 Wiki availability is responsive and accessible
 - [ ] T080-05-UI passes with current-session raw evidence and screenshot references in `report.md#t080-05-ui`.
 - [ ] T080-06-UI passes with current-session raw evidence, DOM/accessibility/pixel privacy checks, and screenshots in `report.md#t080-06-ui`.
 - [ ] T080-08-A11Y passes on desktop and narrow viewport with current-session evidence in `report.md#t080-08-a11y`.
-- [ ] T080-08-UNIT passes with current-session raw evidence in `report.md#t080-08-unit`.
+- [x] T080-08-UNIT passes with current-session raw evidence in `report.md#t080-08-unit`. → Evidence: report.md#t080-08-unit (`ok github.com/smackerel/smackerel/web/pwa/tests 0.015s`, `EXIT=0`; full lane `UNIT_EXIT=0` with zero `FAIL` lines; `LINT=0`, `FMT=0`). Non-vacuous by the test's own guard at `graph_activation_state_test.go:401` — all 10 of 10 cases must project or the test fails. Adversarially proven: two independent mutations of `internal/graphreadstate/state.go` (collapse route-missing into true-empty; let an explicitly disabled capability report available) each produced a genuine assertion failure at `graph_activation_state_test.go:355` in exactly ONE targeted subtest while the other nine still projected correctly (`MUTATION_A_EXIT=1`, `MUTATION_B_EXIT=1`), and both were reverted and sha256-verified.
 - [ ] T080-REGRESSION passes with current-session raw evidence in `report.md#t080-regression`.
 
 #### Build Quality Gate
