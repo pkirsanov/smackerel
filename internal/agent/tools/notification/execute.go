@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/smackerel/smackerel/internal/agent"
+	"github.com/smackerel/smackerel/internal/auth"
 )
 
 var executeInputSchema = json.RawMessage(`{
@@ -54,6 +55,15 @@ type executeOutput struct {
 }
 
 func handleNotificationExecute(ctx context.Context, raw json.RawMessage) (json.RawMessage, error) {
+	// SEC-02. confirm_ref is handed back to the model by notification_propose,
+	// so it is a bearer capability that names a user. Resolve the caller
+	// server-side before touching the store; without this the model confirms
+	// another user's pending action just by naming its ref.
+	sess, ok := auth.SessionFromContext(ctx)
+	if !ok {
+		return nil, errors.New("notification_execute_no_principal")
+	}
+
 	svc, err := loadServices()
 	if err != nil {
 		return nil, err
@@ -78,6 +88,13 @@ func handleNotificationExecute(ctx context.Context, raw json.RawMessage) (json.R
 	var envelope payloadEnvelope
 	if err := json.Unmarshal([]byte(payload), &envelope); err != nil {
 		return nil, fmt.Errorf("notification_execute_payload_decode: %w", err)
+	}
+
+	// Only the principal who proposed may confirm. propose stamps
+	// envelope.UserID from the session, so this compares two server-derived
+	// values; the model supplies only the ref that selects the envelope.
+	if strings.TrimSpace(sess.UserID) != strings.TrimSpace(envelope.UserID) {
+		return nil, errors.New("notification_execute_principal_mismatch")
 	}
 
 	jobID, err := svc.Scheduler.Schedule(

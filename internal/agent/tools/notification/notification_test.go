@@ -193,7 +193,7 @@ func TestExecute_RoundTrip_CallsScheduler(t *testing.T) {
 	var pout proposeOutput
 	_ = json.Unmarshal(rawP, &pout)
 
-	rawE, err := handleNotificationExecute(context.Background(),
+	rawE, err := handleNotificationExecute(notifyCtx("u42"),
 		[]byte(`{"confirm_ref":"`+pout.ConfirmRef+`"}`))
 	if err != nil {
 		t.Fatalf("execute: %v", err)
@@ -216,11 +216,81 @@ func TestExecute_RoundTrip_CallsScheduler(t *testing.T) {
 
 func TestExecute_UnknownConfirmRef_Errors(t *testing.T) {
 	wireFakes(t)
-	_, err := handleNotificationExecute(context.Background(),
+	_, err := handleNotificationExecute(notifyCtx("u1"),
 		[]byte(`{"confirm_ref":"deadbeef"}`))
 	if err == nil || !strings.Contains(err.Error(), "confirm_ref_unknown") {
 		t.Fatalf("err = %v", err)
 	}
+}
+
+func TestExecute_PrincipalMustMatchEnvelope(t *testing.T) {
+	// SEC-02. notification_propose returns confirm_ref TO THE MODEL, so the ref
+	// is a bearer capability naming a user. execute used to schedule as
+	// "user:"+envelope.UserID with no principal check, so naming another user's
+	// ref confirmed their pending action.
+	stage := func(t *testing.T, owner string) (*fakeScheduler, string) {
+		t.Helper()
+		_, sched := wireFakes(t)
+		raw, err := handleNotificationPropose(notifyCtx(owner),
+			[]byte(`{"what":"call mom","when_relative":"1h"}`))
+		if err != nil {
+			t.Fatalf("propose: %v", err)
+		}
+		var out proposeOutput
+		if err := json.Unmarshal(raw, &out); err != nil {
+			t.Fatalf("unmarshal propose: %v", err)
+		}
+		if out.ConfirmRef == "" {
+			t.Fatalf("propose issued no confirm_ref")
+		}
+		return sched, out.ConfirmRef
+	}
+
+	t.Run("no principal", func(t *testing.T) {
+		sched, ref := stage(t, "owner")
+		_, err := handleNotificationExecute(context.Background(),
+			[]byte(`{"confirm_ref":"`+ref+`"}`))
+		if err == nil || !strings.Contains(err.Error(), "notification_execute_no_principal") {
+			t.Fatalf("err = %v, want notification_execute_no_principal", err)
+		}
+		if sched.lastOriginator != "" {
+			t.Fatalf("scheduler ran for an unauthenticated caller: originator = %q", sched.lastOriginator)
+		}
+	})
+
+	t.Run("foreign principal", func(t *testing.T) {
+		// Adversarial: with the mismatch check removed this call succeeds and
+		// schedules "user:owner" at the request of "attacker", so BOTH the
+		// error assertion and the scheduler assertion flip to failing.
+		sched, ref := stage(t, "owner")
+		_, err := handleNotificationExecute(notifyCtx("attacker"),
+			[]byte(`{"confirm_ref":"`+ref+`"}`))
+		if err == nil || !strings.Contains(err.Error(), "notification_execute_principal_mismatch") {
+			t.Fatalf("err = %v, want notification_execute_principal_mismatch", err)
+		}
+		if sched.lastOriginator != "" {
+			t.Fatalf("a foreign principal confirmed the owner's pending action: originator = %q", sched.lastOriginator)
+		}
+	})
+
+	t.Run("owning principal proceeds", func(t *testing.T) {
+		sched, ref := stage(t, "owner")
+		raw, err := handleNotificationExecute(notifyCtx("owner"),
+			[]byte(`{"confirm_ref":"`+ref+`"}`))
+		if err != nil {
+			t.Fatalf("execute: %v", err)
+		}
+		var out executeOutput
+		if err := json.Unmarshal(raw, &out); err != nil {
+			t.Fatalf("unmarshal execute: %v", err)
+		}
+		if out.Phase != "confirmed" {
+			t.Fatalf("phase = %q, want confirmed", out.Phase)
+		}
+		if sched.lastOriginator != "user:owner" {
+			t.Fatalf("originator = %q, want user:owner", sched.lastOriginator)
+		}
+	})
 }
 
 func TestNotification_NotConfigured_FailsLoud(t *testing.T) {
@@ -228,7 +298,7 @@ func TestNotification_NotConfigured_FailsLoud(t *testing.T) {
 	if _, err := handleNotificationPropose(notifyCtx("u"), []byte(`{"what":"x","when_relative":"1h"}`)); err == nil || !strings.Contains(err.Error(), "not_configured") {
 		t.Fatalf("propose err = %v", err)
 	}
-	if _, err := handleNotificationExecute(context.Background(), []byte(`{"confirm_ref":"abc"}`)); err == nil || !strings.Contains(err.Error(), "not_configured") {
+	if _, err := handleNotificationExecute(notifyCtx("u"), []byte(`{"confirm_ref":"abc"}`)); err == nil || !strings.Contains(err.Error(), "not_configured") {
 		t.Fatalf("execute err = %v", err)
 	}
 }
