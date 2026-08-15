@@ -1546,6 +1546,13 @@ if [[ -f "$current_report_file" ]] && [[ "$state_status" == "done" ]]; then
   in_pre_window=0
   code_block_prewindow=0
   evidence_prewindow_skipped=0
+  # A fenced block whose declared language is structurally NOT a command
+  # transcript (a Gherkin specification, a diff hunk, a diagram) can never carry
+  # an exit code or a test count. Demanding terminal-output signals from one
+  # forces the author to invent output no command produced, which is the exact
+  # fabrication this check exists to catch.
+  code_block_lang=""
+  evidence_nontranscript_skipped=0
   duplicate_evidence=0
   cw_evidence_fingerprints=""
   cw_marker_count=$(grep -cF -- '<!-- bubbles:certifying-window-begin -->' "$current_report_file" || true)
@@ -1579,6 +1586,7 @@ if [[ -f "$current_report_file" ]] && [[ "$state_status" == "done" ]]; then
       code_block_header="$prev_line"
       code_block_skip=$in_skip_region
       code_block_prewindow=$in_pre_window
+      code_block_lang="$(sed -E 's/^```+[[:space:]]*//; s/[[:space:]].*$//' <<< "$line" | tr '[:upper:]' '[:lower:]')"
     elif [[ "$in_code_block" -eq 1 ]] && grep -qE '^```$' <<< "$line"; then
       in_code_block=0
       evidence_sections_checked=$((evidence_sections_checked + 1))
@@ -1596,6 +1604,19 @@ if [[ -f "$current_report_file" ]] && [[ "$state_status" == "done" ]]; then
         prev_line="$line"
         continue
       fi
+
+      # Structurally non-transcript languages are exempt (see declaration above).
+      # Only an EXPLICITLY declared language qualifies: a bare ``` fence stays
+      # enforced, so this cannot be used to silence a real evidence block.
+      case "$code_block_lang" in
+        gherkin | diff | mermaid)
+          evidence_nontranscript_skipped=$((evidence_nontranscript_skipped + 1))
+          code_block_lang=""
+          prev_line="$line"
+          continue
+          ;;
+      esac
+      code_block_lang=""
 
       # Empty or near-empty blocks are always illegitimate
       if [[ "$code_block_lines" -lt 3 ]]; then
@@ -1615,8 +1636,11 @@ if [[ -f "$current_report_file" ]] && [[ "$state_status" == "done" ]]; then
           terminal_signals=$((terminal_signals + 1))
         fi
 
-        # File paths with extensions (e.g., src/foo.rs, tests/bar.py, ./path/to/file)
-        if grep -qE '([a-zA-Z0-9_-]+/[a-zA-Z0-9_.-]+\.(rs|py|ts|tsx|js|go|sh|sql|toml|yaml|json|proto|md)|\./)' <<< "$code_block_content"; then
+        # File paths with extensions (e.g., src/foo.rs, tests/bar.py, ./path/to/file,
+        # or a root-level file.json — the directory prefix is OPTIONAL because a flat
+        # repository, where every file lives at the root, would otherwise be unable to
+        # emit this signal at all).
+        if grep -qE '(([a-zA-Z0-9_-]+/)?[a-zA-Z0-9_.-]+\.(rs|py|ts|tsx|js|jsx|mjs|cjs|go|sh|bash|sql|toml|yaml|yml|json|proto|md|dart|kt|kts|java|swift|scala|brs|xml|html|css)|\./)' <<< "$code_block_content"; then
           terminal_signals=$((terminal_signals + 1))
         fi
 
@@ -1686,6 +1710,9 @@ if [[ -f "$current_report_file" ]] && [[ "$state_status" == "done" ]]; then
   fi
   if [[ "$evidence_prewindow_skipped" -gt 0 ]]; then
     echo "ℹ️  Skipped $evidence_prewindow_skipped evidence blocks before <!-- bubbles:certifying-window-begin --> (prior-window history) in $(relative_artifact_path "$current_report_file")"
+  fi
+  if [[ "$evidence_nontranscript_skipped" -gt 0 ]]; then
+    echo "ℹ️  Skipped $evidence_nontranscript_skipped non-transcript block(s) (gherkin/diff/mermaid) in $(relative_artifact_path "$current_report_file") — a specification or diff cannot carry an exit code"
   fi
 
   if [[ "$illegitimate_evidence" -eq 0 ]] && [[ "$duplicate_evidence" -eq 0 ]] && [[ "$evidence_sections_checked" -gt 0 ]]; then

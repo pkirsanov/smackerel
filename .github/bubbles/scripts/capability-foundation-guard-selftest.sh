@@ -309,6 +309,58 @@ echo ""
 echo "=== Selftest verdict ==="
 printf '  Total assertions: %d\n' "$((PASS_COUNT + FAIL_COUNT))"
 printf '  Passed:           %d\n' "$PASS_COUNT"
+# --- IMP-041 SCOPE-5: bidirectional proportionality (GF-11) -----------------
+# Until now this gate only caught MISSING abstraction. A one-off evaluation
+# could build a reusable foundation and every check applauded it. These cases
+# cover the other direction, driven by the frozen executionShape rather than by
+# keywords a planner can supply for itself.
+
+write_session_shape() {
+  printf '{"goalContract":{"semanticBoundary":{"executionShape":"%s"}}}\n' "$2" > "$1"
+}
+
+# S10 — a one-off goal must not stand up a reusable foundation.
+S10_DIR="$(stage_spec s10-oneoff 2026-05-25T12:00:00Z)"
+write_full_capability_docs "$S10_DIR"
+write_session_shape "$WORKSPACE/s10-session.json" one-off
+run_guard_raw "$S10_DIR" --session-file "$WORKSPACE/s10-session.json"
+assert_exit "S10 one-off with a foundation scope" 1
+assert_stderr_contains "S10" "cannot create a reusable foundation"
+
+# S11 — the same shape with no foundation artefacts is fine, and is NOT dragged
+# into the foundation-shaped requirements that this shape forbids.
+S11_DIR="$(stage_spec s11-oneoff-clean 2026-05-25T12:00:00Z)"
+write_minimal_triggering_docs "$S11_DIR"
+write_session_shape "$WORKSPACE/s11-session.json" one-off
+run_guard_raw "$S11_DIR" --session-file "$WORKSPACE/s11-session.json"
+assert_stdout_contains "S11" "one-off shape"
+
+# S12 — an existing-capability change may extend the established foundation,
+# but standing a second one beside it is the expansion.
+S12_DIR="$(stage_spec s12-parallel 2026-05-25T12:00:00Z)"
+write_full_capability_docs "$S12_DIR"
+printf '\n## Scope 4: Second Foundation\n**Status:** Not Started\n**Tags:** foundation:true\n' >> "$S12_DIR/scopes.md"
+write_session_shape "$WORKSPACE/s12-session.json" existing-capability-change
+run_guard_raw "$S12_DIR" --session-file "$WORKSPACE/s12-session.json"
+assert_exit "S12 parallel foundation under existing-capability-change" 1
+assert_stderr_contains "S12" "parallel one"
+
+# S13 — the approved reusable-capability shape keeps the full strict path.
+S13_DIR="$(stage_spec s13-reusable 2026-05-25T12:00:00Z)"
+write_full_capability_docs "$S13_DIR"
+write_session_shape "$WORKSPACE/s13-session.json" reusable-capability
+run_guard_raw "$S13_DIR" --session-file "$WORKSPACE/s13-session.json"
+assert_exit "S13 reusable-capability with a complete foundation" 0
+
+# S14 — ADVERSARIAL non-vacuity for the whole scope: with NO session file the
+# guard must behave exactly as before. Every case above could pass while the
+# legacy keyword path silently changed for every spec already in the field.
+S14_DIR="$(stage_spec s14-legacy 2026-05-25T12:00:00Z)"
+write_full_capability_docs "$S14_DIR"
+run_guard "$S14_DIR"
+assert_exit "S14 no session file keeps the legacy path" 0
+assert_stdout_contains "S14" "PASS Gate G094"
+
 printf '  Failed:           %d\n' "$FAIL_COUNT"
 
 if [[ "$FAIL_COUNT" -gt 0 ]]; then

@@ -567,6 +567,33 @@ _emit_clone_fixture "$clone_diffcmd_dir" 'npm run lint'
 clone_samecmd_dir="$tmp_root/specs/962-c43-clone-same-command-rerun"
 _emit_clone_fixture "$clone_samecmd_dir" 'cargo test'
 
+# The same command is routinely SPELLED two ways across a session: one directory
+# named relatively then absolutely, and an optional trailing filter argument
+# that narrows a run without making it a different claim. Both re-runs produce
+# identical stdout because they ARE the same command, so neither may be
+# reported as a clone. Comparing raw argv strings accused both.
+_emit_clone_fixture_pair() {
+  local dir="$1" first_cmd="$2" second_cmd="$3"
+  emit_pass_fixture "$dir"
+  mkdir -p "$dir/.specify/runtime"
+  git -C "$dir" init --quiet >/dev/null 2>&1 || return 1
+  {
+    printf '{"ts":"2026-07-28T00:00:00Z","cmd":"%s","spec":"001-x","exitCode":0,"stdoutHash":"deadbeefcafe1234deadbeefcafe1234deadbeefcafe1234deadbeefcafe1234"}\n' "$first_cmd"
+    printf '{"ts":"2026-07-28T00:05:00Z","cmd":"%s","spec":"001-x","exitCode":0,"stdoutHash":"deadbeefcafe1234deadbeefcafe1234deadbeefcafe1234deadbeefcafe1234"}\n' "$second_cmd"
+  } >"$dir/.specify/runtime/tool-calls.jsonl"
+  return 0
+}
+
+clone_respelled_dir="$tmp_root/specs/963-c43-clone-same-command-respelled"
+_emit_clone_fixture_pair "$clone_respelled_dir" \
+  'bash bubbles/scripts/some-guard.sh --repo-root . --phase mvp' \
+  'bash bubbles/scripts/some-guard.sh --repo-root /abs/path --phase mvp'
+
+clone_optarg_dir="$tmp_root/specs/964-c43-clone-same-command-optional-arg"
+_emit_clone_fixture_pair "$clone_optarg_dir" \
+  'bash bubbles/scripts/artifact-lint.sh specs/095-x' \
+  'bash bubbles/scripts/artifact-lint.sh specs/095-x SCN-095-CI01'
+
 # ---- BLOCKING (#1): truly-bare `-> Evidence: done` marker ----
 bare_marker_dir="$tmp_root/specs/953-c9-bare-marker"
 emit_pass_fixture "$bare_marker_dir"
@@ -681,6 +708,10 @@ assert_blocks_with "$clone_diffcmd_dir" \
   "CHECK 43 (clone): one stdout hash cited by TWO DIFFERENT commands BLOCKS"
 assert_passes "$clone_samecmd_dir" any \
   "CHECK 43 (re-run): same stdout hash from the SAME command is honest, passes"
+assert_passes "$clone_respelled_dir" any \
+  "CHECK 43 (re-spelled): same command with an equivalent --repo-root value passes"
+assert_passes "$clone_optarg_dir" any \
+  "CHECK 43 (optional arg): same command and subject with an extra filter argument passes"
 
 echo ""
 echo "=== BLOCKING FAIL cases ==="

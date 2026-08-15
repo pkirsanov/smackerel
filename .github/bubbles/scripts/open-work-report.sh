@@ -161,6 +161,15 @@ trim() {
   printf '%s' "$1" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//'
 }
 
+# Count the COLUMN DELIMITERS in a markdown table row. A pipe written as `\|` is
+# cell content, not a column break, so it is removed before counting — that is
+# what lets the check reject an unescaped pipe without banning pipes outright.
+count_delimiters() {
+  local stripped="${1//\\|/}"
+  local pipes="${stripped//[!|]/}"
+  printf '%s' "${#pipes}"
+}
+
 # --- DERIVED: spec and bug rows, via the existing per-feature projection ------
 # work-tracker-project.sh is CONSUMED unchanged. Its header states the
 # projection is a pure function of state.json with byte-identical output for
@@ -257,6 +266,7 @@ read_register_rows() {
   fi
 
   local line id title kind ref state owner action opened lastseen seen_ids=""
+  local header_cols="" row_cols=""
   while IFS= read -r line; do
     case "$line" in
       \|*) ;;
@@ -268,7 +278,22 @@ read_register_rows() {
     esac
     id="$(trim "$(printf '%s' "$line" | awk -F'|' '{print $2}')")"
     [[ -n "$id" ]] || continue
-    [[ "$id" == "id" ]] && continue
+    if [[ "$id" == "id" ]]; then
+      # The header defines the shape every data row must match.
+      header_cols="$(count_delimiters "$line")"
+      continue
+    fi
+
+    # An unescaped `|` inside a cell silently splits that cell, so every value
+    # after it shifts one column left and the row renders with the wrong text
+    # under the wrong heading. Nothing else here would notice: the fields still
+    # parse, they are just the wrong fields.
+    if [[ -n "$header_cols" ]]; then
+      row_cols="$(count_delimiters "$line")"
+      if [[ "$row_cols" != "$header_cols" ]]; then
+        add_defect "row '$id' has $row_cols column delimiters but the table header declares $header_cols; an unescaped '|' inside a cell splits that cell and shifts every column after it. Escape each literal pipe in the row as '\\|'."
+      fi
+    fi
 
     title="$(trim "$(printf '%s' "$line" | awk -F'|' '{print $3}')")"
     kind="$(trim "$(printf '%s' "$line" | awk -F'|' '{print $4}')")"

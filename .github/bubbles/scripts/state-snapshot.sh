@@ -24,9 +24,11 @@ usage() {
 Usage: bash bubbles/scripts/state-snapshot.sh \
          --phase <name> [--scope-id <id>] [--note <string>] [--mode <start|end>] \
          [--posture <autonomy>] \
+         [--context-boundary <kind>[:<checkpointId>]] \
          [--decision <text> [--decision-principle <name>] [--decision-chose <option>] \
           [--decision-considered <csv>]] \
          [--convergence-iteration <N> --spec-dir <path>] \
+         [--scenario-file <compiled-scenario.json> --node-id <node-id>] \
          --session-id <id> --session-control-file <path> --binding-packet-file <path>
 
 Required:
@@ -39,6 +41,12 @@ Required repository binding:
                        Host-private authoritative session control record.
   --binding-packet-file <path>
                        Current local actionable repository binding packet.
+
+Optional goal-node binding:
+  --scenario-file <path>
+                       Compiled scenario that declares the goal node.
+  --node-id <id>       Goal-node ID declared by --scenario-file. Both
+                       --scenario-file and --node-id MUST be supplied together.
 
 Optional:
   --scope-id <id>      Scope being worked, when applicable.
@@ -89,6 +97,8 @@ SCOPE_ID=""
 NOTE=""
 MODE="start"
 POSTURE=""
+CONTEXT_BOUNDARY_KIND=""
+CONTEXT_BOUNDARY_ID=""
 DECISION=""
 DECISION_PRINCIPLE=""
 DECISION_CHOSE=""
@@ -98,6 +108,8 @@ SPEC_DIR=""
 SESSION_ID=""
 SESSION_CONTROL_FILE=""
 BINDING_PACKET_FILE=""
+SCENARIO_FILE=""
+NODE_ID=""
 
 if [[ $# -eq 0 ]]; then
   usage >&2
@@ -133,6 +145,28 @@ while [[ $# -gt 0 ]]; do
     --posture)
       [[ $# -ge 2 ]] || { echo "state-snapshot: --posture requires a value" >&2; exit 2; }
       POSTURE="$2"
+      shift 2
+      ;;
+    --context-boundary)
+      # <kind>[:<checkpointId>]. Gate G083 validates the recorded value; this
+      # only splits it. Declaring `unavailable` is always legal and is the
+      # honest answer when the host exposes no compaction primitive.
+      [[ $# -ge 2 ]] || { echo "state-snapshot: --context-boundary requires a value" >&2; exit 2; }
+      CONTEXT_BOUNDARY_KIND="${2%%:*}"
+      if [[ "$2" == *:* ]]; then
+        CONTEXT_BOUNDARY_ID="${2#*:}"
+      fi
+      case "$CONTEXT_BOUNDARY_KIND" in
+        host-checkpoint | fresh-context | unavailable) ;;
+        *)
+          echo "state-snapshot: --context-boundary kind must be host-checkpoint, fresh-context or unavailable (got: '$CONTEXT_BOUNDARY_KIND')" >&2
+          exit 2
+          ;;
+      esac
+      if [[ "$CONTEXT_BOUNDARY_KIND" == "host-checkpoint" && -z "$CONTEXT_BOUNDARY_ID" ]]; then
+        echo "state-snapshot: --context-boundary host-checkpoint requires a checkpoint id (host-checkpoint:<id>)" >&2
+        exit 2
+      fi
       shift 2
       ;;
     --decision)
@@ -180,6 +214,16 @@ while [[ $# -gt 0 ]]; do
       BINDING_PACKET_FILE="$2"
       shift 2
       ;;
+    --scenario-file)
+      [[ $# -ge 2 ]] || { echo "state-snapshot: --scenario-file requires a value" >&2; exit 2; }
+      SCENARIO_FILE="$2"
+      shift 2
+      ;;
+    --node-id)
+      [[ $# -ge 2 ]] || { echo "state-snapshot: --node-id requires a value" >&2; exit 2; }
+      NODE_ID="$2"
+      shift 2
+      ;;
     *)
       echo "state-snapshot: unknown argument: $1" >&2
       usage >&2
@@ -187,6 +231,15 @@ while [[ $# -gt 0 ]]; do
       ;;
   esac
 done
+
+if [[ -n "$SCENARIO_FILE" && -z "$NODE_ID" ]]; then
+  echo "state-snapshot: --scenario-file requires --node-id" >&2
+  exit 2
+fi
+if [[ -n "$NODE_ID" && -z "$SCENARIO_FILE" ]]; then
+  echo "state-snapshot: --node-id requires --scenario-file" >&2
+  exit 2
+fi
 
 # Pair check: --convergence-iteration and --spec-dir must be supplied together.
 if [[ -n "$CONV_ITER" && -z "$SPEC_DIR" ]]; then
@@ -271,16 +324,31 @@ CONV_TMP=""
 # race-free advisory lock: the kernel serializes concurrent acquirers, so there
 # is NO stale-detect/break window in which two runs could both enter the critical
 # section. It is the PRIMARY path (Linux/CI/selftest). `flock` is absent only on
-# stock macOS; there we fall back to a mkdir mutex whose stale/defensive break is
-# made ATOMIC via a rename-claim (renaming a directory is atomic, so exactly one
-# breaker wins and no live/fresh lock is ever destroyed), still using the holder
-# pid + lock-dir mtime to DECIDE staleness and recover a lock left behind by a
+# stock macOS; there we fall back to a mkdir mutex that still uses the holder pid
+# + lock-dir mtime to DECIDE staleness and recover a lock left behind by a
 # SIGKILLed holder instead of spinning forever.
+#
+# The mkdir fallback breaks a stale lock in two separate steps — DECIDE
+# (session_lock_is_stale) then ACT (rename-claim) — and the pair is NOT atomic.
+# The rename is atomic only in the sense that exactly one concurrent breaker wins
+# it; on its own it does not prove the directory being renamed is still the
+# instance that was judged stale. Two guards close that window:
+#   1. An ABSENT lock dir is never reported as stale. There is nothing to break,
+#      so the waiter just races for mkdir again. Reporting absent as stale is what
+#      let a waiter run the destructive break after the lock had merely been
+#      released — by then a third process had legitimately won a FRESH lock, and
+#      the rename destroyed that live lock, putting two runs in the critical
+#      section and losing an update.
+#   2. The judged instance's identity (lock-dir inode + recorded holder pid) is
+#      re-verified immediately before the rename, so a lock released and re-taken
+#      between decide and act is left alone.
 SESSION_LOCK_DIR=""
 SESSION_LOCK_PID_FILE=""
 SESSION_LOCK_FILE=""
 SESSION_LOCK_MODE=""
 SESSION_LOCK_HELD=false
+# Identity of the lock instance the most recent session_lock_is_stale call judged.
+SESSION_LOCK_JUDGED_IDENTITY=""
 
 # Detect flock once at acquire time; release routes on SESSION_LOCK_MODE (the
 # strategy actually used), never on a re-probe.
@@ -294,10 +362,51 @@ session_lock_mtime_epoch() {
   stat -c %Y "$1" 2>/dev/null || stat -f %m "$1" 2>/dev/null || printf '%s' '0'
 }
 
-# Returns 0 = stale (safe to break), 1 = held by a live, non-stale holder.
+# Identity token for the lock-dir instance that exists right now: inode plus the
+# recorded holder pid. A release followed by a re-acquire yields a different
+# token, which is what lets a breaker distinguish "the instance I judged" from
+# "an instance created since I judged". `ls -di` is used because it is POSIX on
+# both userlands (field 1 is the inode); `stat` needs different flags per
+# userland, which is why session_lock_mtime_epoch has to try -c then -f. Prints
+# nothing when the lock dir is absent.
+session_lock_identity() {
+  local ino='' pid=''
+  [[ -d "$SESSION_LOCK_DIR" ]] || return 0
+  # shellcheck disable=SC2012  # one known path in, only field 1 (the inode number) out — no filename is parsed
+  ino="$(ls -di "$SESSION_LOCK_DIR" 2>/dev/null | awk 'NR == 1 { print $1 }' || true)"
+  if [[ -f "$SESSION_LOCK_PID_FILE" ]]; then
+    pid="$(cat "$SESSION_LOCK_PID_FILE" 2>/dev/null || true)"
+  fi
+  pid="${pid//[[:space:]]/}"
+  printf '%s:%s' "${ino:-?}" "${pid:-?}"
+}
+
+# True only while the lock dir is still the instance session_lock_is_stale
+# judged. Re-read immediately before the destructive rename, because decide and
+# act are separate steps and the judged lock can be released and legitimately
+# re-created between them.
+session_lock_identity_unchanged() {
+  [[ -n "$SESSION_LOCK_JUDGED_IDENTITY" ]] || return 1
+  [[ "$(session_lock_identity)" == "$SESSION_LOCK_JUDGED_IDENTITY" ]]
+}
+
+# Tri-state contract, read by the caller from the explicit exit code:
+#   0 = a lock instance EXISTS and is stale (safe to break)
+#   1 = a lock instance EXISTS and is held by a live, non-stale holder
+#   2 = NO lock instance exists — nothing to judge, and nothing to break
+# 2 is deliberately NOT folded into 0: an absent directory is not a stale lock.
+# On 0 and 1 the judged instance's identity is published in
+# SESSION_LOCK_JUDGED_IDENTITY for the caller to re-verify before acting on it.
 session_lock_is_stale() {
   local pid='' mtime now age max
-  [[ -d "$SESSION_LOCK_DIR" ]] || return 0
+  SESSION_LOCK_JUDGED_IDENTITY=''
+  [[ -d "$SESSION_LOCK_DIR" ]] || return 2
+  SESSION_LOCK_JUDGED_IDENTITY="$(session_lock_identity)"
+  # The dir can be released between the test above and this line. An instance
+  # that no longer exists is absent, not stale. Without this check the mtime
+  # lookup below falls back to epoch 0, the lock reads as ~infinitely old, and it
+  # is judged "stale by age" — absent-is-not-stale leaking in a second disguise.
+  [[ -n "$SESSION_LOCK_JUDGED_IDENTITY" ]] || return 2
 
   if [[ -f "$SESSION_LOCK_PID_FILE" ]]; then
     pid="$(cat "$SESSION_LOCK_PID_FILE" 2>/dev/null || true)"
@@ -306,6 +415,11 @@ session_lock_is_stale() {
 
   max=600
   mtime="$(session_lock_mtime_epoch "$SESSION_LOCK_DIR")"
+  # '0' is that helper's failure sentinel: both stat forms failed because the dir
+  # was released while we were judging it. Unknown mtime must read as ABSENT, not
+  # as "aged past the cap" — a 1970 mtime makes every vanished lock look stale,
+  # which is absent-is-not-stale leaking in through the age test.
+  [[ "$mtime" != "0" ]] || return 2
   now="$(date -u +%s 2>/dev/null || printf '%s' '0')"
   age=-1
   if [[ "$mtime" =~ ^[0-9]+$ && "$now" =~ ^[0-9]+$ ]]; then
@@ -377,20 +491,39 @@ acquire_session_lock_flock() {
   _lock_trace ACQUIRE # LOCKTRACE-DEBUG
 }
 
+# Destroy the lock instance session_lock_is_stale just judged, via an ATOMIC
+# rename-claim: renaming a directory is atomic, so exactly ONE concurrent breaker
+# wins the `mv` and only that winner removes the claimed (renamed) dir. The
+# rename alone does not establish that the dir is still the judged instance, so
+# the identity is re-verified first. Returns 1 (break refused) when the instance
+# changed under us, so the caller re-races mkdir instead of destroying a lock
+# that now belongs to somebody else.
+session_lock_break_judged_instance() {
+  local reason="$1" claim
+  if ! session_lock_identity_unchanged; then
+    _lock_trace RETRY-IDENTITY # LOCKTRACE-DEBUG
+    return 1
+  fi
+  _lock_trace "$reason" # LOCKTRACE-DEBUG
+  claim="$SESSION_LOCK_DIR.stale.$$.${RANDOM}"
+  if mv "$SESSION_LOCK_DIR" "$claim" 2>/dev/null; then
+    rm -rf "$claim" 2>/dev/null || true
+  fi
+  return 0
+}
+
 # FALLBACK path (stock macOS, no flock): mkdir mutex. Staleness is DECIDED by
-# session_lock_is_stale (holder pid liveness + lock-dir mtime) exactly as before;
-# only the BREAK mechanism is hardened. A bare `rm -rf "$SESSION_LOCK_DIR"` can
-# delete a lock another process is concurrently (re)acquiring — a transient
-# DOUBLE-ACQUIRE that lets two runs enter the critical section and lose one `mv`.
-# Instead we ATOMICALLY CLAIM the stale lock by renaming it to a unique path:
-# renaming a directory is atomic, so exactly ONE concurrent breaker's `mv`
-# succeeds; every loser's `mv` fails and it simply loops to re-check. Only the
-# winner removes the CLAIMED (renamed) dir, so a live/fresh lock is never
-# destroyed out from under its holder.
+# session_lock_is_stale (holder pid liveness + lock-dir mtime); breaking is done
+# by session_lock_break_judged_instance, which acts only on the instance that was
+# judged. The absent case (exit 2) never reaches a break at all: a lock dir that
+# is gone is not a stale lock, it is an uncontended one, and the only correct
+# response is to race for mkdir again.
 acquire_session_lock_mkdir() {
   local waited=0
   local max_wait=600
-  local claim
+  local absent_spins=0
+  local absent_max=2000
+  local stale_rc
   while true; do
     if mkdir "$SESSION_LOCK_DIR" 2>/dev/null; then
       printf '%s\n' "$$" > "$SESSION_LOCK_PID_FILE" 2>/dev/null || true
@@ -399,24 +532,37 @@ acquire_session_lock_mkdir() {
       _lock_trace ACQUIRE # LOCKTRACE-DEBUG
       return 0
     fi
-    if session_lock_is_stale; then
-      _lock_trace BREAK-STALE # LOCKTRACE-DEBUG
-      claim="$SESSION_LOCK_DIR.stale.$$.${RANDOM}"
-      if mv "$SESSION_LOCK_DIR" "$claim" 2>/dev/null; then
-        rm -rf "$claim" 2>/dev/null || true
+
+    stale_rc=0
+    session_lock_is_stale || stale_rc=$?
+
+    if (( stale_rc == 2 )); then
+      # Our mkdir lost to a holder that has since released. Nothing to break.
+      _lock_trace RETRY-ABSENT # LOCKTRACE-DEBUG
+      absent_spins=$(( absent_spins + 1 ))
+      if (( absent_spins > absent_max )); then
+        # mkdir kept failing while the dir kept reading as absent, so the failure
+        # is structural (permissions, full filesystem) rather than contention.
+        # Bail loudly instead of spinning, and never proceed unlocked.
+        echo "state-snapshot: unable to create the session lock directory after ${absent_max} consecutive attempts." >&2
+        echo "  Lock dir: $SESSION_LOCK_DIR" >&2
+        echo "  mkdir kept failing while the directory read as ABSENT, which is a filesystem or permission" >&2
+        echo "  failure rather than lock contention; refusing to proceed unlocked." >&2
+        exit 3
       fi
       continue
     fi
+    absent_spins=0
+
+    if (( stale_rc == 0 )); then
+      session_lock_break_judged_instance BREAK-STALE || sleep 0.1
+      continue
+    fi
+
     waited=$(( waited + 1 ))
     if (( waited > max_wait )); then
-      # A live holder has exceeded the wait budget; break it defensively — but
-      # STILL atomically (rename-claim), so a concurrent fresh acquirer's lock is
-      # never destroyed out from under it.
-      _lock_trace BREAK-DEFENSIVE # LOCKTRACE-DEBUG
-      claim="$SESSION_LOCK_DIR.stale.$$.${RANDOM}"
-      if mv "$SESSION_LOCK_DIR" "$claim" 2>/dev/null; then
-        rm -rf "$claim" 2>/dev/null || true
-      fi
+      # A live holder has exceeded the wait budget; break it defensively.
+      session_lock_break_judged_instance BREAK-DEFENSIVE || sleep 0.1
       continue
     fi
     sleep 0.1
@@ -477,11 +623,17 @@ if [[ -n "$REPO_ROOT" && "$REPO_ROOT" == /* ]]; then
   acquire_session_lock
 fi
 
+MIRROR_GOAL_NODE_ARGS=()
+if [[ -n "$SCENARIO_FILE" ]]; then
+  MIRROR_GOAL_NODE_ARGS=(--scenario-file "$SCENARIO_FILE" --node-id "$NODE_ID")
+fi
+
 set +e
 BINDING_OUTPUT="$(bash "$REPOSITORY_BINDING" mirror-session \
   --session-id "$SESSION_ID" \
   --session-control-file "$SESSION_CONTROL_FILE" \
-  --packet-file "$NORMALIZED_PACKET_FILE" 2>&1)"
+  --packet-file "$NORMALIZED_PACKET_FILE" \
+  "${MIRROR_GOAL_NODE_ARGS[@]}" 2>&1)"
 BINDING_RC=$?
 set -e
 if [[ "$BINDING_RC" -ne 0 ]]; then
@@ -524,6 +676,8 @@ jq \
   --arg note "$NOTE" \
   --arg mode "$MODE" \
   --arg posture "$POSTURE" \
+  --arg cbKind "$CONTEXT_BOUNDARY_KIND" \
+  --arg cbId "$CONTEXT_BOUNDARY_ID" \
   --arg decision "$DECISION" \
   --arg dprinciple "$DECISION_PRINCIPLE" \
   --arg dchose "$DECISION_CHOSE" \
@@ -554,6 +708,13 @@ jq \
         }
       ])),
       autonomyPosture: (if $posture == "" then ($root.autonomyPosture // null) else $posture end),
+      contextBoundary: (
+        if $cbKind == "" then ($root.contextBoundary // null)
+        else { kind: $cbKind,
+               checkpointId: (if $cbId == "" then null else $cbId end),
+               at: $timestamp }
+        end
+      ),
       autonomyDecisions: (
         if $decision == "" then ($root.autonomyDecisions // [])
         else (($root.autonomyDecisions // []) + [{

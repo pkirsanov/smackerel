@@ -33,6 +33,71 @@
       ],
       "description": "One of the four canonical outcomes from Gate G063 (concrete_result_gate)."
     },
+    "learning": {
+      "type": "object",
+      "description": "IMP-043 SCOPE-1. Records the lesson decision made at result-envelope close. The object is OPTIONAL, so no existing envelope becomes invalid; when present it must be a decision rather than a gesture. This is deliberately NOT a per-run lesson quota: execution-ops.md argues that forcing one lesson per run manufactures filler and degrades clustering, and that reasoning is preserved. What is recorded is that the decision was MADE.",
+      "required": [
+        "disposition"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "disposition": {
+          "type": "string",
+          "enum": [
+            "captured",
+            "not-applicable",
+            "deferred"
+          ],
+          "description": "captured = a lesson was written and lessonId names it. not-applicable = the run produced nothing generalizable. deferred = a lesson is owed and reason says why it was not written now."
+        },
+        "lessonId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Identifier of the written lesson. Required when disposition is `captured`."
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 20,
+          "description": "Why capture was deferred. Required when disposition is `deferred`. The length floor exists because 'later' is not a reason."
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "disposition": {
+                "const": "captured"
+              }
+            },
+            "required": [
+              "disposition"
+            ]
+          },
+          "then": {
+            "required": [
+              "lessonId"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "disposition": {
+                "const": "deferred"
+              }
+            },
+            "required": [
+              "disposition"
+            ]
+          },
+          "then": {
+            "required": [
+              "reason"
+            ]
+          }
+        }
+      ]
+    },
     "summary": {
       "type": "string",
       "minLength": 1,
@@ -210,6 +275,11 @@
     "goalRef": {
       "$ref": "goal-contract.schema.json#/$defs/goalRef",
       "description": "Goal identity echoed by a specialist result (IMP-038 SCOPE-3 / GF-1, GF-5). Present whenever the run froze a Goal Contract. Verified with `goal-contract.sh verify-ref`, which refuses an omitted field, a substituted goalId/revision/digest, and a workBoundary wider than the frozen contract's."
+    },
+    "boundaryReceiptDigest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "description": "The receiptDigest of the G134 boundary receipt that authorised this transition (IMP-041 SCOPE-3 / GF-7). Minted only by `goal-boundary-receipt.sh emit`, which prints nothing when the boundary fails — so carrying a valid digest is evidence the check RAN, not merely that a runner claimed it did. A parent verifies it with `goal-boundary-receipt.sh verify --expect-boundary <name>`, which refuses a receipt that is stale, edited, or minted for a different boundary."
     }
   },
   "allOf": [

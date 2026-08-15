@@ -1,8 +1,16 @@
 ---
-applyTo: "**"
+applyTo: "**/*.agent.md,**/*.prompt.md,**/*.instructions.md,**/skills/**"
 ---
 
 # Agent File Guidelines
+
+> **Scope (IMP-039 SCOPE-6).** This file is authoring guidance for agent,
+> prompt, instruction, and skill files, and it loads only on those surfaces. It
+> was previously `applyTo: "**"`, so its 15,754 bytes were re-sent on every
+> unrelated request. The invariants that must hold everywhere — repository
+> authority, anti-fabrication, evidence integrity, and the timeout rule — moved
+> to `bubbles-kernel.instructions.md`, which stays always-on. Nothing was
+> dropped; the always-on subset was made smaller and the rest conditional.
 
 > Adapted from [github/awesome-copilot](https://github.com/github/awesome-copilot) (MIT License).
 > Adapted for repo-local conventions. Keep this document project-agnostic.
@@ -299,12 +307,15 @@ For artifact templates, use:
 
 ### DoD Evidence Format (MANDATORY)
 
-For all `bubbles.*` agents, DoD completion evidence MUST be embedded directly under each DoD checkbox item in `scopes.md` (or bug `scopes.md`) as raw execution output.
+For all `bubbles.*` agents, DoD completion evidence is raw execution output. It lives EITHER inline under each DoD checkbox item in `scopes.md` (or bug `scopes.md`) OR behind one of the two reference forms the transition guard resolves. [evidence-rules.md](../agents/bubbles_shared/evidence-rules.md) is the canonical location contract.
 
 Rules:
-- Do NOT use `→ Evidence: [report.md#...]` links for DoD completion.
+- Inline placement remains fully valid and stays the default.
+- A reference is permitted ONLY as a `report.md#anchor` link or a structured tool-log record. Check 9 resolves both, requires ≥10 non-blank lines at the target, and FAILS the item when the reference does not resolve.
+- Never carry the same raw output twice, once inline and once in `report.md`.
 - Do NOT use summaries or paraphrases as DoD evidence.
 - Use verbatim command output with exit code context (≥10 lines for test/run evidence).
+- Keep the `**Claim Source:**` tag on referenced evidence. A reference changes WHERE the output lives, never WHETHER it must be real executed output.
 
 ### ⚠️ ABSOLUTE: Operation Timeout Policy (NEVER WAIT FOREVER)
 

@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Capability: observability-posture-and-slo-gates,
+# Capability: session-aware-runtime-coordination, supported-interop-apply
 # ────────────────────────────────────────────────────────────────────
 # bubbles — Lightweight CLI for Bubbles governance queries and script dispatch
 # ────────────────────────────────────────────────────────────────────
@@ -147,26 +149,14 @@ fi
 die() { echo -e "${RED}Error:${NC} $*" >&2; exit 1; }
 
 source "$SCRIPT_DIR/trust-metadata.sh"
+source "$SCRIPT_DIR/adoption-profile-lib.sh"
 
 active_adoption_profile() {
-  if [[ -f "$CONTROL_PLANE_CONFIG" ]]; then
-    grep -oE '"adoptionProfile"[[:space:]]*:[[:space:]]*"[^"]+"' "$CONTROL_PLANE_CONFIG" 2>/dev/null \
-      | head -1 \
-      | sed -E 's/.*"([^"]+)"$/\1/'
-  fi
+  bubbles_active_adoption_profile "$CONTROL_PLANE_CONFIG"
 }
 
 adoption_profile_ids() {
-  [[ -f "$ADOPTION_PROFILES_FILE" ]] || return 0
-
-  awk '
-    /^profiles:/ { in_profiles=1; next }
-    in_profiles && /^  [A-Za-z0-9_-]+:$/ {
-      profile=$1
-      sub(":$", "", profile)
-      print profile
-    }
-  ' "$ADOPTION_PROFILES_FILE"
+  bubbles_adoption_profile_ids "$ADOPTION_PROFILES_FILE"
 }
 
 adoption_profile_value() {
@@ -220,16 +210,17 @@ effective_adoption_profile() {
     profile='delivery'
   fi
 
-  local known_profile
-  while IFS= read -r known_profile; do
-    [[ -n "$known_profile" ]] || continue
-    if [[ "$known_profile" == "$profile" ]]; then
-      printf '%s' "$profile"
-      return 0
-    fi
-  done < <(adoption_profile_ids)
+  # An unrecognised profile used to resolve to 'delivery' here while
+  # developer-profile.sh and repo-readiness.sh both exited 1 on the same input,
+  # so a typo in bubbles.config.json made the CLI quietly behave as a different
+  # profile than the tools that read the same file.
+  if bubbles_adoption_profile_is_known "$profile" "$ADOPTION_PROFILES_FILE"; then
+    printf '%s' "$profile"
+    return 0
+  fi
 
-  printf '%s' 'delivery'
+  echo "Unknown adoption profile: $profile" >&2
+  exit 1
 }
 
 is_framework_repo() {
@@ -436,18 +427,66 @@ EOF
   fi
 }
 
+# Reads one section of the run registry as ONE COMPACT RECORD PER LINE.
+#
+# The previous implementation printed any line inside the section containing a
+# "{". That silently assumed the file was always written one-record-per-line —
+# an assumption nothing enforced. The moment a registry was pretty-printed (by
+# jq, an editor, a formatter, or any other writer), every record's first line
+# was a bare "{", the reader returned "{" per record, and the writer faithfully
+# published "    {," for each. The read-modify-write cycle then made it
+# permanent.
+#
+# That is not hypothetical: a downstream registry was found with 25 consecutive
+# records reduced to a bare "{,". Uniform, repeated damage like that is the
+# tell — it is a deterministic transform applied N times, NOT torn writes,
+# which leave ragged one-off splices (that is the separate staging-path defect
+# fixed in write_run_state_registry). Either way the file is unparseable, so
+# every consumer of that ledger — including the abandoned-run reaper — is blind.
+#
+# This parses structurally instead: it tracks string state and brace depth, so
+# a record is emitted when its braces balance regardless of how the source was
+# formatted. Whitespace between tokens is dropped, whitespace inside strings is
+# preserved. Deliberately still no jq dependency (see field_from_json_line).
 run_state_lines() {
   local section="$1"
 
   ensure_run_state_registry
 
   awk -v target="$section" '
-    $0 ~ "\"" target "\"[[:space:]]*:[[:space:]]*\\[" { in_target = 1; next }
-    in_target && /^[[:space:]]*\]/ { exit }
-    in_target && /\{/ {
-      gsub(/^[[:space:]]+/, "", $0)
-      sub(/,[[:space:]]*$/, "", $0)
-      print $0
+    BEGIN { started = 0; instr = 0; esc = 0; depth = 0; rec = "" }
+    {
+      line = $0
+      start = 1
+      if (!started) {
+        if (match(line, "\"" target "\"[ \t]*:[ \t]*\\[") == 0) next
+        started = 1
+        start = RSTART + RLENGTH
+      }
+      for (i = start; i <= length(line); i++) {
+        c = substr(line, i, 1)
+        if (instr) {
+          rec = rec c
+          if (esc) { esc = 0 }
+          else if (c == "\\") { esc = 1 }
+          else if (c == "\"") { instr = 0 }
+          continue
+        }
+        if (c == "\"") { instr = 1; rec = rec c; continue }
+        if (c == "{") { depth++; rec = rec c; continue }
+        if (c == "}") {
+          depth--
+          rec = rec c
+          if (depth == 0) { print rec; rec = "" }
+          continue
+        }
+        if (depth > 0) {
+          if (c == " " || c == "\t") continue
+          rec = rec c
+          continue
+        }
+        if (c == "]") { exit }
+      }
     }
   ' "$CONTROL_PLANE_RUN_STATE_FILE"
 }
@@ -455,7 +494,31 @@ run_state_lines() {
 write_run_state_registry() {
   local active_lines="$1"
   local recent_lines="$2"
-  local tmp_file="$CONTROL_PLANE_RUN_STATE_FILE.tmp"
+  # The staging path MUST be unique per writer. A shared ".tmp" is not a
+  # staging file, it is a shared mutable buffer: two concurrent writers open
+  # the same path, the second truncates what the first is still writing, and
+  # whichever renames last publishes the interleaved result. The rename below
+  # is atomic; the staging file was not, so atomicity bought nothing.
+  #
+  # This one is confirmed in the field, not theoretical. A registry was found
+  # holding a record cut off mid-value at `"posture":"f` with a DIFFERENT
+  # record's bytes continuing from that exact offset, the two runs started two
+  # seconds apart. That is an interleave, and only a shared staging path can
+  # produce it.
+  #
+  # It is NOT the only corruption mode, and the two are easy to confuse. A
+  # second registry was destroyed by formatting fragility in the reader (see
+  # run_state_lines) and shows a completely different signature: uniform,
+  # repeated, single-threaded. Read both notes before blaming concurrency for
+  # a damaged ledger — the shapes tell you which defect fired.
+  #
+  # This uses mktemp rather than "$$.$RANDOM". Both of those are unreliable
+  # here: inside a subshell `$$` is the PARENT's pid, and subshells forked
+  # from one shell replay the SAME $RANDOM sequence, so the "unique" path
+  # collides exactly when contention is highest. mktemp asks the kernel for
+  # an exclusively-created name and cannot collide.
+  local tmp_file
+  tmp_file="$(mktemp "${CONTROL_PLANE_RUN_STATE_FILE}.tmp.XXXXXX")" || return 1
   local active_count=0 recent_count=0 active_index=0 recent_index=0 line
 
   active_count=$(printf '%s\n' "$active_lines" | sed '/^$/d' | wc -l | tr -d ' ')
@@ -487,9 +550,18 @@ write_run_state_registry() {
     done <<< "$recent_lines"
     echo '  ]'
     echo '}'
-  } > "$tmp_file"
+  } > "$tmp_file" || {
+    rm -f "$tmp_file"
+    return 1
+  }
 
-  mv "$tmp_file" "$CONTROL_PLANE_RUN_STATE_FILE"
+  # Publish atomically. A failed rename must not leave the staging file behind,
+  # because a leaked temp is indistinguishable from a live one to the next
+  # writer that tries to clean up.
+  mv "$tmp_file" "$CONTROL_PLANE_RUN_STATE_FILE" || {
+    rm -f "$tmp_file"
+    return 1
+  }
 }
 
 field_from_json_line() {
@@ -701,6 +773,7 @@ begin_cli_run_state() {
   CURRENT_RUN_STATE_TRACKED=true
 
   ensure_run_state_registry
+  reap_abandoned_active_runs
   active_lines="$(run_state_lines activeRuns)"
   new_line="$(build_run_record_line "$CURRENT_RUN_ID" 'active' "$CURRENT_RUN_STARTED_AT" "$CURRENT_RUN_STARTED_AT" '' 'pending' 0 "$(first_tracking_target "${CURRENT_BUBBLES_ARGS:-}")" "$(runtime_attachment_for_session "$CURRENT_SESSION_ID")" "$CURRENT_RUN_POSTURE" "$CURRENT_RISK_CLASS")"
   if [[ -n "$active_lines" ]]; then
@@ -716,6 +789,79 @@ $new_line"
 trim_recent_run_lines() {
   local recent_lines="$1"
   printf '%s\n' "$recent_lines" | sed '/^$/d' | tail -n 25
+}
+
+# Portable ISO-8601 -> epoch. cli.sh does not source guard-lib.sh, so this
+# mirrors bubbles_iso_to_epoch's GNU-then-BSD fallback rather than importing it.
+run_state_iso_to_epoch() {
+  local ts="$1" epoch
+  if epoch="$(date -d "$ts" +%s 2>/dev/null)" && [[ -n "$epoch" ]]; then
+    printf '%s' "$epoch"; return 0
+  fi
+  if epoch="$(date -u -j -f "%Y-%m-%dT%H:%M:%SZ" "$ts" +%s 2>/dev/null)" && [[ -n "$epoch" ]]; then
+    printf '%s' "$epoch"; return 0
+  fi
+  return 1
+}
+
+# recentRuns is capped at 25; activeRuns had no cap and no reaper, so every run
+# whose process died before finish_run_state could fire — an interrupted
+# framework-validate, a killed release-check, a crashed doctor — leaked an entry
+# that stayed "active" forever. The observed result was 25 entries, the oldest
+# four months old, which makes the ledger useless for its one question: what is
+# running right now?
+#
+# Liveness cannot be tested directly because a record carries no pid, so age is
+# the signal. An entry older than the threshold is reclassified as abandoned and
+# moved to recentRuns, preserving the audit trail rather than deleting it.
+#
+# FAIL-SAFE: an entry whose startedAt cannot be parsed is KEPT. Discarding a
+# record we could not evaluate would be the same class of bug as the leak.
+reap_abandoned_active_runs() {
+  local threshold_hours="${BUBBLES_RUN_STATE_ABANDON_HOURS:-24}"
+  case "$threshold_hours" in
+    ''|*[!0-9]*) threshold_hours=24 ;;
+  esac
+  [[ "$threshold_hours" -gt 0 ]] || return 0
+
+  local active_lines cutoff now kept="" reaped="" line started epoch
+  active_lines="$(run_state_lines activeRuns)"
+  [[ -n "$active_lines" ]] || return 0
+
+  now="$(date -u +%s)"
+  cutoff=$((now - threshold_hours * 3600))
+
+  while IFS= read -r line; do
+    [[ -n "$line" ]] || continue
+    started="$(field_from_json_line "$line" 'startedAt')"
+    if epoch="$(run_state_iso_to_epoch "$started")" && [[ -n "$epoch" ]] && [[ "$epoch" -lt "$cutoff" ]]; then
+      reaped="${reaped}$(build_run_record_line \
+        "$(field_from_json_line "$line" 'runId')" \
+        'completed' \
+        "$started" \
+        "$(current_timestamp)" \
+        "$(current_timestamp)" \
+        'abandoned' \
+        0 \
+        "$(field_from_json_line "$line" 'target')" \
+        "$(field_from_json_line "$line" 'runtimeAttachment')" \
+        "$(field_from_json_line "$line" 'posture')" \
+        "$(field_from_json_line "$line" 'riskClass')")
+"
+    else
+      kept="${kept}${line}
+"
+    fi
+  done <<< "$active_lines"
+
+  [[ -n "$reaped" ]] || return 0
+
+  local recent_lines
+  recent_lines="$(run_state_lines recentRuns)"
+  write_run_state_registry \
+    "$(printf '%s' "$kept" | sed '/^$/d')" \
+    "$(trim_recent_run_lines "$(printf '%s%s' "${recent_lines:+$recent_lines
+}" "$reaped")")"
 }
 
 complete_cli_run_state() {
@@ -1056,7 +1202,69 @@ save_control_plane_config() {
   }
 }
 EOF
+  # Fold the CLI-owned keys into the existing document so operator and framework
+  # keys this template does not name survive the write (IMP-044 SCOPE-3).
+  if [[ -f "$CONTROL_PLANE_CONFIG" ]]; then
+    local merge_rc=0
+    bubbles_merge_control_plane_config "$tmp_file" "$CONTROL_PLANE_CONFIG" || merge_rc=$?
+    if [[ "$merge_rc" -ne 0 ]]; then
+      rm -f "$tmp_file"
+      return "$merge_rc"
+    fi
+  fi
   mv "$tmp_file" "$CONTROL_PLANE_CONFIG"
+}
+
+# IMP-044 SCOPE-3 (REG-15). The writer above renders a FIXED template, so any key
+# it does not know about is destroyed the next time any `config` subcommand runs.
+# That silently deletes operator settings and framework blocks alike -- including
+# `experienceRecall`, which IMP-043 SCOPE-5 asks operators to add.
+#
+# A policy writer must preserve what it does not understand. This merges the
+# CLI-owned keys into the EXISTING document instead of replacing it.
+#
+# python3 rather than jq: cli.sh records at two places that its JSON handling is
+# deliberately jq-free, and `lessons add` already requires python3 on a mutating
+# path, so this adds no new dependency. Absence is a loud refusal, never a silent
+# template rewrite -- overwriting an operator's config because a dependency is
+# missing is the exact failure this function exists to prevent.
+bubbles_merge_control_plane_config() {
+  local rendered="$1" target="$2"
+  [[ -f "$target" ]] || return 1
+  if ! command -v python3 >/dev/null 2>&1; then
+    echo "cli: python3 is required to update $target without discarding unknown keys." >&2
+    echo "cli: refusing to rewrite the file from a template. Install python3 and retry." >&2
+    return 2
+  fi
+  RENDERED="$rendered" TARGET="$target" python3 - <<'PY'
+import json, os, sys
+
+rendered_path = os.environ['RENDERED']
+target_path = os.environ['TARGET']
+
+with open(rendered_path) as fh:
+    owned = json.load(fh)
+try:
+    with open(target_path) as fh:
+        existing = json.load(fh)
+except (OSError, json.JSONDecodeError):
+    # An unreadable or malformed existing file has no keys worth preserving;
+    # the rendered document is then the whole truth.
+    existing = {}
+
+def merge(base, overlay):
+    for key, value in overlay.items():
+        if isinstance(value, dict) and isinstance(base.get(key), dict):
+            merge(base[key], value)
+        else:
+            base[key] = value
+    return base
+
+merged = merge(existing, owned)
+with open(rendered_path, 'w') as fh:
+    json.dump(merged, fh, indent=2)
+    fh.write('\n')
+PY
 }
 
 default_value_for_policy_path() {
@@ -1646,6 +1854,11 @@ cmd_regression_quality() {
   bash "$SCRIPT_DIR/regression-quality-guard.sh" "$@"
 }
 
+cmd_verify_changed_specs() {
+  [[ $# -lt 1 ]] && die "Usage: bubbles verify-changed-specs --base-ref <ref> [--head-ref <ref>] [--list-only]"
+  bash "$SCRIPT_DIR/verify-changed-specs.sh" "$@"
+}
+
 cmd_docs_registry() {
   local mode="effective"
   local passthrough=()
@@ -1702,6 +1915,21 @@ cmd_eval() {
   local sub="${1:-run}"
   [[ $# -gt 0 ]] && shift
 
+  # The eval subsystem is source-only: eval-harness.sh, its selftests, and the
+  # labeled corpus under bubbles/eval/ are maintainer measurement surfaces and
+  # are not shipped. cli.sh itself IS shipped, so downstream this subcommand
+  # used to die on a missing file. Say so instead.
+  case "$sub" in
+    run | score | selftest)
+      if [[ ! -f "$SCRIPT_DIR/eval-harness.sh" ]]; then
+        printf '%s\n' "bubbles eval: unavailable in a downstream install." >&2
+        printf '%s\n' "The golden-task eval subsystem is source-only; it measures the framework itself." >&2
+        printf '%s\n' "Run it from a Bubbles source checkout." >&2
+        return 2
+      fi
+      ;;
+  esac
+
   case "$sub" in
     run)
       local suite="$REPO_ROOT/bubbles/eval/tasks"
@@ -1752,6 +1980,14 @@ EOF
 }
 
 cmd_release_check() {
+  # release-check is the framework's own source-repo release gate -- this CLI's
+  # help has always described it as "source-repo release hygiene checks" -- and
+  # it requires install.sh, which downstream installs never carry.
+  if [[ ! -f "$SCRIPT_DIR/release-check.sh" ]]; then
+    printf '%s\n' "bubbles release-check: unavailable in a downstream install." >&2
+    printf '%s\n' "It gates a Bubbles release from a source checkout. Use 'bubbles validate' here." >&2
+    return 2
+  fi
   bash "$SCRIPT_DIR/release-check.sh" "$@"
 }
 
@@ -2739,6 +2975,42 @@ except Exception:
     fi
   fi
 
+  # Check 17: learning-loop reachability (IMP-043 SCOPE-4 / LRN-6).
+  # lessons.md is empty in every repo that has one and absent in the rest, and
+  # nothing ever said so. Advisory only: an empty learning loop is a gap to
+  # surface, never a reason to refuse a command.
+  if ! is_framework_repo; then
+    if [[ ! -f "$proj_root/.specify/memory/lessons.md" ]]; then
+      echo -e "  ${YELLOW}⚠️${NC}  .specify/memory/lessons.md is missing — the learning loop has nowhere to write. Re-run install.sh to backfill it."
+      advisory_count=$((advisory_count + 1))
+    else
+      local lesson_entry_count
+      lesson_entry_count="$(grep -c 'bubbles-lesson-meta:' "$proj_root/.specify/memory/lessons.md" 2>/dev/null || true)"
+      [[ "$lesson_entry_count" =~ ^[0-9]+$ ]] || lesson_entry_count=0
+      if [[ "$lesson_entry_count" -eq 0 ]]; then
+        echo -e "  ${YELLOW}⚠️${NC}  lessons.md holds 0 lessons — nothing has been captured, so clustering and recall have no input"
+        advisory_count=$((advisory_count + 1))
+      else
+        echo -e "  ${GREEN}✅${NC} Learning loop has $lesson_entry_count captured lesson(s)"
+        passed=$((passed + 1))
+      fi
+    fi
+    local recall_resolver="$SCRIPT_DIR/experience-recall-resolve.sh"
+    if [[ -x "$recall_resolver" ]]; then
+      local recall_adapter_line
+      recall_adapter_line="$(bash "$recall_resolver" --names-only 2>/dev/null || true)"
+      case "$recall_adapter_line" in
+        *adapter=none* | '')
+          echo -e "  ${DIM}ℹ️  experienceRecall.adapter is 'none' (the shipped default); recall is off by design${NC}"
+          ;;
+        *)
+          echo -e "  ${GREEN}✅${NC} experienceRecall adapter configured (${recall_adapter_line#adapter=})"
+          passed=$((passed + 1))
+          ;;
+      esac
+    fi
+  fi
+
   echo ""
   echo -e "${BOLD}Dependency Posture${NC}"
   echo -e "${DIM}IMP-027 SCOPE-4 / SEC-2. Ten guards used to exit 0 on a missing dependency, so a run could go green having checked nothing. They now fail closed. A missing dependency here means those guards will refuse to run.${NC}"
@@ -3542,34 +3814,79 @@ cmd_metrics() {
       fi
       echo "Metrics Summary:"
       echo "  Total events: $(wc -l < "$CONTROL_PLANE_METRICS_FILE")"
+      # IMP-044 SCOPE-1. These two counters look for event types nothing emits.
+      # They are kept and labelled honestly rather than deleted, so a reader can
+      # see the plane is empty instead of assuming it was never consulted.
       local gate_checks phase_completions
       gate_checks="$(grep -c '"type":"gate_check"' "$CONTROL_PLANE_METRICS_FILE" 2>/dev/null || true)"
       phase_completions="$(grep -c '"type":"phase_complete"' "$CONTROL_PLANE_METRICS_FILE" 2>/dev/null || true)"
       gate_checks="${gate_checks:-0}"
       phase_completions="${phase_completions:-0}"
-      echo "  Gate checks: $gate_checks"
-      echo "  Phase completions: $phase_completions"
+      echo "  gate_check events in this plane: $gate_checks (gate history lives in the gate-hit store; see: metrics gates)"
+      echo "  phase_complete events in this plane: $phase_completions (agent history lives in state.json executionHistory; see: metrics agents)"
       if [[ -f "$CONTROL_PLANE_ACTIVITY_FILE" ]]; then
         local activity_total command_invocations avg_duration
         activity_total="$(wc -l < "$CONTROL_PLANE_ACTIVITY_FILE")"
         command_invocations="$(grep -c '"command":' "$CONTROL_PLANE_ACTIVITY_FILE" 2>/dev/null || true)"
         avg_duration="$(awk -F'"durationMs":' 'NF > 1 { split($2, rest, ","); sum += rest[1]; count += 1 } END { if (count == 0) { print 0 } else { printf "%d", sum / count } }' "$CONTROL_PLANE_ACTIVITY_FILE")"
-        echo "  Activity records: $activity_total"
-        echo "  Command invocations tracked: ${command_invocations:-0}"
-        echo "  Avg command duration: ${avg_duration}ms"
+        echo "  CLI activity records: $activity_total"
+        echo "  CLI invocations tracked: ${command_invocations:-0}"
+        echo "  Avg CLI invocation duration: ${avg_duration}ms"
       fi
       ;;
     gates)
-      if [[ ! -f "$CONTROL_PLANE_METRICS_FILE" ]]; then echo "No data."; return; fi
-      echo "Gate failure frequency:"
-      grep '"type":"gate_check".*"result":"fail"' "$CONTROL_PLANE_METRICS_FILE" 2>/dev/null \
-        | grep -oE '"gate":"[^"]*"' | sort | uniq -c | sort -rn || echo "  No failures recorded"
+      # IMP-044 SCOPE-1 (REG-13). This used to grep events.jsonl for
+      # `"type":"gate_check"` records, which nothing has ever written, so it
+      # reported "No data." forever while .specify/runtime/gate-hits.jsonl was
+      # full of per-gate outcomes. Read the populated store instead of
+      # backfilling the empty one.
+      local gate_hit_log="$SCRIPT_DIR/gate-hit-log.sh"
+      if [[ ! -x "$gate_hit_log" ]]; then
+        echo "gate-hit-log.sh unavailable — gate telemetry cannot be read."
+        return 1
+      fi
+      # Drop the `gates` subcommand itself before forwarding the remaining
+      # flags, so `metrics gates --all-classes` reaches the report intact.
+      shift || true
+      bash "$gate_hit_log" report --repo-root "$REPO_ROOT" "$@"
       ;;
     agents)
-      if [[ ! -f "$CONTROL_PLANE_METRICS_FILE" ]]; then echo "No data."; return; fi
-      echo "Agent invocations:"
-      grep '"type":"phase_complete"' "$CONTROL_PLANE_METRICS_FILE" 2>/dev/null \
-        | grep -oE '"agent":"[^"]*"' | sort | uniq -c | sort -rn || echo "  No invocations recorded"
+      # IMP-044 SCOPE-1 (REG-13). `"type":"phase_complete"` is likewise never
+      # written. state.json executionHistory is the only place agent identity
+      # per phase actually exists, and bubbles.retro already reads it this way.
+      if ! command -v python3 >/dev/null 2>&1; then
+        echo "python3 is required to read agent history from state.json executionHistory."
+        return 2
+      fi
+      echo "Agent invocations (from state.json executionHistory):"
+      BUBBLES_SPECS_ROOT="$REPO_ROOT/specs" python3 - <<'PY'
+import json, os, pathlib, collections
+
+specs_root = pathlib.Path(os.environ['BUBBLES_SPECS_ROOT'])
+counts = collections.Counter()
+scanned = 0
+if specs_root.is_dir():
+    for state_path in sorted(specs_root.glob('*/state.json')):
+        try:
+            with state_path.open() as fh:
+                doc = json.load(fh)
+        except (OSError, json.JSONDecodeError):
+            continue
+        scanned += 1
+        history = doc.get('executionHistory')
+        if not isinstance(history, list):
+            continue
+        for entry in history:
+            if isinstance(entry, dict) and isinstance(entry.get('agent'), str):
+                counts[entry['agent']] += 1
+
+if not counts:
+    print(f"  No agent invocations recorded across {scanned} spec state file(s).")
+else:
+    for agent, count in counts.most_common():
+        print(f"  {count:>6}  {agent}")
+    print(f"  --- {scanned} spec state file(s) scanned")
+PY
       ;;
     *) die "Unknown metrics subcommand: $subcmd. Try: enable, disable, activity-enable, activity-disable, status, summary, gates, agents" ;;
   esac
@@ -3627,6 +3944,73 @@ metadata = {
 print(json.dumps(metadata, ensure_ascii=True, separators=(",", ":"), sort_keys=True))
 ' "$lesson_id" "$captured_at" "$repository_alias" "$review_state" \
     "$source_path" "$source_selector" "$source_digest"
+}
+
+# IMP-043 SCOPE-3. `workflows.yaml` declared `lessonsMemory.maxLines` and nothing
+# read it, while this file hardcoded 150 twice. A declared limit no code consults
+# is a claim, not a setting. Reads the registry, falls back to 150 only when the
+# key is genuinely absent.
+bubbles_lessons_max_lines() {
+  local workflows="$REPO_ROOT/bubbles/workflows.yaml"
+  [[ -f "$workflows" ]] || workflows="$REPO_ROOT/.github/bubbles/workflows.yaml"
+  local declared=""
+  if [[ -f "$workflows" ]]; then
+    declared="$(awk '
+      /^lessonsMemory:/ { inside = 1; next }
+      inside && /^[a-zA-Z]/ { inside = 0 }
+      inside && /^[[:space:]]+maxLines:[[:space:]]*[0-9]+/ {
+        gsub(/[^0-9]/, "", $0); print; exit
+      }
+    ' "$workflows" 2>/dev/null)"
+  fi
+  if [[ "$declared" =~ ^[0-9]+$ ]] && [[ "$declared" -gt 0 ]]; then
+    printf '%s' "$declared"
+  else
+    printf '150'
+  fi
+}
+
+bubbles_lessons_compact() {
+  local lessons_file="$1" verbosity="${2:-verbose}" keep
+  keep="$(bubbles_lessons_max_lines)"
+  if [[ ! -f "$lessons_file" ]]; then
+    [[ "$verbosity" == "verbose" ]] && echo "No lessons file found."
+    return 0
+  fi
+  local line_count
+  line_count=$(wc -l < "$lessons_file" | tr -d ' ')
+  if [[ "$line_count" -gt "$keep" ]]; then
+    local archive_file="$REPO_ROOT/.specify/memory/lessons-archive.md"
+    local cut_at=$((line_count - keep))
+    head -n "$cut_at" "$lessons_file" >> "$archive_file"
+    tail -n "$keep" "$lessons_file" > "$lessons_file.tmp"
+    mv "$lessons_file.tmp" "$lessons_file"
+    echo "✅ Archived $cut_at line(s) to lessons-archive.md. Kept $keep."
+  elif [[ "$verbosity" == "verbose" ]]; then
+    echo "✅ File is under $keep lines, no compaction needed."
+  fi
+  return 0
+}
+
+# IMP-043 SCOPE-5. The recall index was never synchronized by anything, so no
+# repository could reach the opt-in state even after enabling the adapter.
+# Capture is the exact moment new recallable content appears, and `lessons add`
+# is already classified an owned mutation, so syncing here keeps `recall search`
+# read-only rather than turning a read into a write.
+#
+# Silent and best-effort: `none` is the shipped default and stays correct, and a
+# sync failure must never fail the lesson that was already written.
+bubbles_lessons_sync_recall() {
+  local recall="$SCRIPT_DIR/experience-recall.sh"
+  local resolver="$SCRIPT_DIR/experience-recall-resolve.sh"
+  [[ -x "$recall" && -x "$resolver" ]] || return 0
+  local adapter_line
+  adapter_line="$(bash "$resolver" --names-only 2>/dev/null || true)"
+  case "$adapter_line" in
+    *adapter=none* | '') return 0 ;;
+  esac
+  bash "$recall" sync >/dev/null 2>&1 || true
+  return 0
 }
 
 cmd_lessons() {
@@ -3725,26 +4109,15 @@ cmd_lessons() {
       fi
       printf '%s\n' "$entry" >> "$lessons_file"
       echo "✅ Recorded 1 lesson in .specify/memory/lessons.md"
+      # IMP-043 SCOPE-3. Compaction used to hang off `autoCompactTrigger:
+      # workflow_start`, an event the framework cannot fire, so it never ran
+      # unless a human typed the subcommand. Capture is the moment the file
+      # grows, so it is the moment to bound it.
+      bubbles_lessons_compact "$lessons_file" quiet
+      bubbles_lessons_sync_recall
       ;;
     compact)
-      if [[ ! -f "$lessons_file" ]]; then
-        echo "No lessons file found."
-        return
-      fi
-      local line_count
-      line_count=$(wc -l < "$lessons_file")
-      echo "Compacting lessons.md ($line_count lines)..."
-      # Simple compaction: keep last 150 lines
-      if [[ "$line_count" -gt 150 ]]; then
-        local archive_file="$REPO_ROOT/.specify/memory/lessons-archive.md"
-        local cut_at=$((line_count - 150))
-        head -n "$cut_at" "$lessons_file" >> "$archive_file"
-        tail -n 150 "$lessons_file" > "$lessons_file.tmp"
-        mv "$lessons_file.tmp" "$lessons_file"
-        echo "✅ Archived $cut_at lines to lessons-archive.md. Kept 150 lines."
-      else
-        echo "✅ File is under 150 lines, no compaction needed."
-      fi
+      bubbles_lessons_compact "$lessons_file" verbose
       ;;
     --all)
       if [[ -f "$lessons_file" ]]; then
@@ -4000,6 +4373,10 @@ cmd_upgrade() {
   # exactly the read that lands in the rewritten bytes.
   proj_root="$(project_root)"
   local install_rc=0
+  # payload-closure-allow: every install.sh below resolves against an
+  # operator-supplied source checkout, a source override directory, or a fetched
+  # release tarball. None of them is the installed payload, so the payload
+  # closure guard cannot infer reachability here.
   if [[ -n "$local_source" ]]; then
     bash "$local_source/install.sh" --local-source "$local_source" || install_rc=$?
   elif [[ -n "${BUBBLES_SOURCE_OVERRIDE_DIR:-}" ]]; then
@@ -4103,6 +4480,7 @@ main() {
     workflow-selftest)  cmd_workflow_selftest "$@" ;;
     scan)               cmd_scan "$@" ;;
     regression-quality) cmd_regression_quality "$@" ;;
+    verify-changed-specs) cmd_verify_changed_specs "$@" ;;
     docs-registry)      cmd_docs_registry "$@" ;;
     release-train-backfill) cmd_release_train_backfill "$@" ;;
     work-tracker-project) cmd_work_tracker_project "$@" ;;

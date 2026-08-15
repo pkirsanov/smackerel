@@ -326,7 +326,7 @@ Use [scope-templates.md](scope-templates.md) as the single source of truth for a
 - `specs_hardened` — Spec/design/scopes improved. No implementation work done. Set by `spec-scope-hardening` mode.
 - `docs_updated` — Documentation updated. No implementation work done. Set by `docs-only` mode.
 - `validated` — Validation/audit completed. No implementation work done. Set by `validate-only`/`audit-only` modes.
-- `in_progress` — Work started but not finished. Used during active execution or by `resume-only`.
+- `in_progress` — Work started but not finished. A transient `resume-only` request may recover it but does not own or redefine the status.
 - `blocked` — Cannot proceed due to unresolved failures or missing inputs.
 
 ---
@@ -547,7 +547,7 @@ Step 7: bubbles.validate independently re-resolves and performs the only certifi
 | `docs-only` | `docs_updated` | Documentation updated — NO implementation done |
 | `validate-only` | `validated` | Validation completed — NO implementation done |
 | `audit-only` | `validated` | Audit completed — NO implementation done |
-| `resume-only` | `in_progress` | Partial work resumed |
+| `resume-only` | recovered mode | Transient routing intent; preserves the original workflow mode and status ceiling |
 
 **Rules:**
 - If the mode's `statusCeiling` is NOT `done`, the finalize phase MUST NOT set `status: "done"` in `state.json` or mark scopes as `Done` in `scopes.md`

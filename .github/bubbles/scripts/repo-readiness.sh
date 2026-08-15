@@ -2,6 +2,8 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=bubbles/scripts/adoption-profile-lib.sh
+. "$SCRIPT_DIR/adoption-profile-lib.sh"
 DEFAULT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 TARGET_ROOT="$DEFAULT_ROOT"
 DEEP=false
@@ -74,33 +76,15 @@ json_escape() {
 }
 
 active_adoption_profile() {
-  local config_file="$TARGET_ROOT/.specify/memory/bubbles.config.json"
-
-  if [[ -f "$config_file" ]]; then
-    grep -oE '"adoptionProfile"[[:space:]]*:[[:space:]]*"[^"]+"' "$config_file" 2>/dev/null \
-      | sed -E 's/.*"([^"]+)"$/\1/'
-  fi
+  bubbles_active_adoption_profile "$TARGET_ROOT/.specify/memory/bubbles.config.json"
 }
 
 adoption_profile_is_explicit() {
-  local config_file="$TARGET_ROOT/.specify/memory/bubbles.config.json"
-
-  [[ -f "$config_file" ]] && grep -q '"adoptionProfile"' "$config_file"
+  bubbles_adoption_profile_is_explicit "$TARGET_ROOT/.specify/memory/bubbles.config.json"
 }
 
 adoption_profile_ids() {
-  local registry_file="$1"
-
-  [[ -f "$registry_file" ]] || return 0
-
-  awk '
-    /^profiles:/ { in_profiles=1; next }
-    in_profiles && /^  [A-Za-z0-9_-]+:$/ {
-      profile=$1
-      sub(":$", "", profile)
-      print profile
-    }
-  ' "$registry_file"
+  bubbles_adoption_profile_ids "$1"
 }
 
 adoption_profile_value() {
@@ -179,14 +163,10 @@ effective_adoption_profile() {
     profile='delivery'
   fi
 
-  local known_profile
-  while IFS= read -r known_profile; do
-    [[ -n "$known_profile" ]] || continue
-    if [[ "$known_profile" == "$profile" ]]; then
-      printf '%s' "$profile"
-      return 0
-    fi
-  done < <(adoption_profile_ids "$registry_file")
+  if bubbles_adoption_profile_is_known "$profile" "$registry_file"; then
+    printf '%s' "$profile"
+    return 0
+  fi
 
   echo "Unknown adoption profile: $profile" >&2
   exit 1

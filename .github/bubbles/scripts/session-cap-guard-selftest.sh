@@ -361,6 +361,127 @@ assert_exit 2 "Sj exit code (positional rejected)"
 assert_stderr_contains "unexpected positional argument" "Sj stderr rejects positional"
 
 # =============================================================================
+# IMP-039 SCOPE-3: context-volume dimensions
+#
+# The three original dimensions cannot see how much text a session carries, so
+# these scenarios are the ones that prove the new caps actually bite. Sk is the
+# adversarial case: the session holds every legacy dimension and is still
+# refused on retained bytes.
+# =============================================================================
+
+write_tool_log() {
+  local root="$1"
+  shift
+  mkdir -p "$root/.specify/runtime"
+  printf '%s\n' "$@" > "$root/.specify/runtime/tool-calls.jsonl"
+}
+
+note "Scenario Sk: a single oversized tool result should exit 1"
+
+SK_ROOT="$WORKSPACE/sk"
+stage_repo_root "$SK_ROOT"
+write_session_json "$SK_ROOT" '{
+  "sessionBudget": { "maxSingleToolResultBytes": 50000 }
+}'
+write_tool_log "$SK_ROOT" \
+  '{"cmd":"a","stdoutBytes":1200,"stderrBytes":0}' \
+  '{"cmd":"b","stdoutBytes":80000,"stderrBytes":112}'
+
+run_guard "$SK_ROOT"
+
+assert_exit 1 "Sk exit code (80112 > cap 50000)"
+assert_stderr_contains "singleToolResultBytes" "Sk stderr names the single-result dimension"
+assert_stderr_contains "maxSingleToolResultBytes=50000" "Sk stderr names the cap"
+
+note "Scenario Sl: cumulative tool-result bytes over cap should exit 1"
+
+SL_ROOT="$WORKSPACE/sl"
+stage_repo_root "$SL_ROOT"
+write_session_json "$SL_ROOT" '{
+  "sessionBudget": { "maxCumulativeToolResultBytes": 250000 }
+}'
+write_tool_log "$SL_ROOT" \
+  '{"cmd":"a","stdoutBytes":150000,"stderrBytes":0}' \
+  '{"cmd":"b","stdoutBytes":150000,"stderrBytes":0}'
+
+run_guard "$SL_ROOT"
+
+assert_exit 1 "Sl exit code (300000 > cap 250000)"
+assert_stderr_contains "cumulativeToolResultBytes" "Sl stderr names the cumulative dimension"
+
+note "Scenario Sm: byte usage under cap should pass"
+
+SM_ROOT="$WORKSPACE/sm"
+stage_repo_root "$SM_ROOT"
+write_session_json "$SM_ROOT" '{
+  "sessionBudget": { "maxSingleToolResultBytes": 50000, "maxCumulativeToolResultBytes": 250000 }
+}'
+write_tool_log "$SM_ROOT" \
+  '{"cmd":"a","stdoutBytes":10,"stderrBytes":5}'
+
+run_guard "$SM_ROOT"
+
+assert_exit 0 "Sm exit code (under both byte caps)"
+assert_stdout_contains "PASS Gate G128" "Sm PASS marker on stdout"
+
+note "Scenario Sn: byte caps set but no tool-call log should pass (unmeasurable skipped)"
+
+SN_ROOT="$WORKSPACE/sn"
+stage_repo_root "$SN_ROOT"
+write_session_json "$SN_ROOT" '{
+  "sessionBudget": { "maxSingleToolResultBytes": 1, "maxCumulativeToolResultBytes": 1 }
+}'
+
+run_guard "$SN_ROOT"
+
+assert_exit 0 "Sn exit code (no tool-call log -> unmeasurable, skipped)"
+assert_stdout_contains "unmeasured" "Sn reports the dimension as unmeasured, not zero"
+
+note "Scenario So: token caps with the default 'none' usage adapter are skipped"
+
+SO_ROOT="$WORKSPACE/so"
+stage_repo_root "$SO_ROOT"
+write_session_json "$SO_ROOT" '{
+  "sessionBudget": { "maxPromptTokensPerRequest": 1, "maxCumulativePromptTokens": 1 }
+}'
+
+run_guard "$SO_ROOT"
+
+assert_exit 0 "So exit code (no usage adapter -> token dimensions skipped)"
+assert_stdout_contains "PASS Gate G128" "So PASS marker on stdout"
+
+note "Scenario Sp: a non-integer context cap must be rejected with exit 2"
+
+SP_ROOT="$WORKSPACE/sp"
+stage_repo_root "$SP_ROOT"
+write_session_json "$SP_ROOT" '{
+  "sessionBudget": { "maxSingleToolResultBytes": "50kb" }
+}'
+
+run_guard "$SP_ROOT"
+
+assert_exit 2 "Sp exit code (non-integer cap rejected)"
+assert_stderr_contains "maxSingleToolResultBytes" "Sp stderr names the malformed cap"
+
+note "Scenario Sq: an all-null budget including the new caps stays a no-op"
+
+SQ_ROOT="$WORKSPACE/sq"
+stage_repo_root "$SQ_ROOT"
+write_session_json "$SQ_ROOT" '{
+  "sessionBudget": {
+    "maxTotalConvergenceIterations": null, "maxWallClockMinutes": null, "maxToolCalls": null,
+    "maxSingleToolResultBytes": null, "maxCumulativeToolResultBytes": null,
+    "maxPromptTokensPerRequest": null, "maxCumulativePromptTokens": null
+  }
+}'
+write_tool_log "$SQ_ROOT" '{"cmd":"a","stdoutBytes":999999,"stderrBytes":999999}'
+
+run_guard "$SQ_ROOT"
+
+assert_exit 0 "Sq exit code (every cap null -> no-op even with huge retained bytes)"
+assert_stdout_contains "no non-null cap" "Sq reports the default-off posture"
+
+# =============================================================================
 # Final verdict
 # =============================================================================
 

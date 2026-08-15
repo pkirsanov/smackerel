@@ -128,12 +128,13 @@ else
   bad "json shape" "$out"
 fi
 
-# --- 9. annotator is idempotent against the real registry --------------------
-if bash "$SCRIPT_DIR/gate-vintage-annotate.sh" --check >/dev/null 2>&1; then
-  ok "gate-vintage-annotate --check reports the registry is fresh"
-else
-  bad "annotate --check fresh" "registry is stale; run gate-vintage-annotate.sh"
-fi
+# There is deliberately no live-registry case here. `gate-vintage-annotate.sh
+# --check` derives each gate's vintage from git history, so downstream it reads
+# the CONSUMING repo's history, where the gates arrived in one install commit,
+# and correctly reports stale. Asserting it from this portable selftest failed
+# every downstream install for being right. framework-validate already runs that
+# exact command as `run_check_self_only "Gate-vintage annotation freshness"`,
+# which is the only context where the answer is meaningful. (IMP-042 SCOPE-12.)
 
 printf '\n%s: %d/%d checks passed\n' "$NAME" "$((checks - failures))" "$checks"
 if [[ "$failures" -gt 0 ]]; then

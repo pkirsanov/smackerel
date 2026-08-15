@@ -2,6 +2,8 @@
 # Files listed here are framework-owned and overwritten on upgrade.
 # DO NOT add project-specific files to these directories.
 bubbles/scripts/action-risk-registry-lint.sh
+bubbles/scripts/adoption-profile-lib-selftest.sh
+bubbles/scripts/adoption-profile-lib.sh
 bubbles/scripts/adversarial-aggregate-selftest.sh
 bubbles/scripts/adversarial-aggregate.sh
 bubbles/scripts/adversarial-resolve-selftest.sh
@@ -17,6 +19,8 @@ bubbles/scripts/agent-roster-coverage.sh
 bubbles/scripts/agnosticity-lint-selftest.sh
 bubbles/scripts/agnosticity-lint.sh
 bubbles/scripts/aliases.sh
+bubbles/scripts/always-on-instruction-budget-selftest.sh
+bubbles/scripts/always-on-instruction-budget.sh
 bubbles/scripts/artifact-freshness-guard-selftest.sh
 bubbles/scripts/artifact-freshness-guard.sh
 bubbles/scripts/artifact-lint-selftest.sh
@@ -47,6 +51,8 @@ bubbles/scripts/bundle-cost-report-selftest.sh
 bubbles/scripts/bundle-cost-report.sh
 bubbles/scripts/capability-consumer-freshness-selftest.sh
 bubbles/scripts/capability-consumer-freshness.sh
+bubbles/scripts/capability-consumer-naming-selftest.sh
+bubbles/scripts/capability-consumer-naming.sh
 bubbles/scripts/capability-foundation-guard-selftest.sh
 bubbles/scripts/capability-foundation-guard.sh
 bubbles/scripts/capability-freshness-selftest.sh
@@ -70,11 +76,18 @@ bubbles/scripts/compaction-discipline-guard.sh
 bubbles/scripts/competitive-docs-selftest.sh
 bubbles/scripts/context-compactor-selftest.sh
 bubbles/scripts/context-compactor.sh
+bubbles/scripts/continuation-intent-resolve-selftest.sh
+bubbles/scripts/continuation-intent-resolve.sh
 bubbles/scripts/continuation-routing-selftest.sh
+bubbles/scripts/control-plane-config-merge-selftest.sh
 bubbles/scripts/control-plane-policy-activation-selftest.sh
 bubbles/scripts/control-plane-rce-selftest.sh
 bubbles/scripts/convergence-cap-guard-selftest.sh
 bubbles/scripts/convergence-cap-guard.sh
+bubbles/scripts/convergence-materiality-selftest.sh
+bubbles/scripts/convergence-materiality.sh
+bubbles/scripts/core-tier-pattern-lint-selftest.sh
+bubbles/scripts/core-tier-pattern-lint.sh
 bubbles/scripts/delivery-implementation-delta-guard-selftest.sh
 bubbles/scripts/delivery-implementation-delta-guard.sh
 bubbles/scripts/dependency-posture.sh
@@ -122,6 +135,8 @@ bubbles/scripts/execution-substate-guard-selftest.sh
 bubbles/scripts/execution-substate-guard.sh
 bubbles/scripts/expand-migrate-contract-guard-selftest.sh
 bubbles/scripts/expand-migrate-contract-guard.sh
+bubbles/scripts/expansion-approval-selftest.sh
+bubbles/scripts/expansion-approval.sh
 bubbles/scripts/experience-recall-adapter-contract-selftest.sh
 bubbles/scripts/experience-recall-authority-selftest.sh
 bubbles/scripts/experience-recall-cli-selftest.sh
@@ -164,6 +179,8 @@ bubbles/scripts/gate-strength-lint.sh
 bubbles/scripts/gate-vintage-annotate.sh
 bubbles/scripts/gate-vintage-guard.sh
 bubbles/scripts/gate-vintage-selftest.sh
+bubbles/scripts/gates-block-reader-lint-selftest.sh
+bubbles/scripts/gates-block-reader-lint.sh
 bubbles/scripts/gates-registry-selftest.sh
 bubbles/scripts/generate-capability-ledger-docs.sh
 bubbles/scripts/generate-cheatsheet-selftest.sh
@@ -176,6 +193,8 @@ bubbles/scripts/generate-installer-selftest.sh
 bubbles/scripts/generate-installer.sh
 bubbles/scripts/generate-modes-block.sh
 bubbles/scripts/generate-release-manifest.sh
+bubbles/scripts/goal-boundary-receipt-selftest.sh
+bubbles/scripts/goal-boundary-receipt.sh
 bubbles/scripts/goal-contract-selftest.sh
 bubbles/scripts/goal-contract.sh
 bubbles/scripts/goal-fidelity-guard-selftest.sh
@@ -188,6 +207,8 @@ bubbles/scripts/guard-lib-timeout-selftest.sh
 bubbles/scripts/guard-lib.sh
 bubbles/scripts/handoff-cycle-check.sh
 bubbles/scripts/imp021-interaction-contracts-selftest.sh
+bubbles/scripts/imp040-evaluation-corpus.sh
+bubbles/scripts/imp041-evaluation-corpus.sh
 bubbles/scripts/implementation-reality-scan-selftest.sh
 bubbles/scripts/implementation-reality-scan.sh
 bubbles/scripts/install-bubbles-hooks.sh
@@ -208,8 +229,11 @@ bubbles/scripts/inventory-parity-check-selftest.sh
 bubbles/scripts/inventory-parity-check.sh
 bubbles/scripts/is-terminal-for-mode.sh
 bubbles/scripts/judge-adapter-contract-selftest.sh
+bubbles/scripts/learning-loop-selftest.sh
 bubbles/scripts/macos-portability-guard-selftest.sh
 bubbles/scripts/macos-portability-guard.sh
+bubbles/scripts/managed-docs-existence-lint-selftest.sh
+bubbles/scripts/managed-docs-existence-lint.sh
 bubbles/scripts/management-truth-lint-selftest.sh
 bubbles/scripts/management-truth-lint.sh
 bubbles/scripts/mcp-grant-reconcile.sh
@@ -218,6 +242,8 @@ bubbles/scripts/mcp-grant-sync.sh
 bubbles/scripts/mcp-http-transport-selftest.sh
 bubbles/scripts/mcp-server-selftest.sh
 bubbles/scripts/mcp-trust-boundary-selftest.sh
+bubbles/scripts/micro-fix-admission-selftest.sh
+bubbles/scripts/micro-fix-admission.sh
 bubbles/scripts/migrate-modes-v5-to-v6-selftest.sh
 bubbles/scripts/migrate-modes-v5-to-v6.sh
 bubbles/scripts/mode-alias-selftest.sh
@@ -229,6 +255,8 @@ bubbles/scripts/mode-resolver.sh
 bubbles/scripts/model-tier-advisory-selftest.sh
 bubbles/scripts/model-tier-advisory.sh
 bubbles/scripts/multi-root-honesty-selftest.sh
+bubbles/scripts/mutation-adapter-contract-selftest.sh
+bubbles/scripts/mutation-resolve.sh
 bubbles/scripts/observability-adapter-lint-selftest.sh
 bubbles/scripts/observability-adapter-lint.sh
 bubbles/scripts/observability-check-selftest.sh
@@ -248,8 +276,12 @@ bubbles/scripts/orchestrator-persistence-lint-selftest.sh
 bubbles/scripts/orchestrator-persistence-lint.sh
 bubbles/scripts/orchestrator-tool-frontmatter-lint-selftest.sh
 bubbles/scripts/orchestrator-tool-frontmatter-lint.sh
+bubbles/scripts/output-policy-coherence-guard-selftest.sh
+bubbles/scripts/output-policy-coherence-guard.sh
 bubbles/scripts/parallel-fanout-determinism-selftest.sh
 bubbles/scripts/parallel-fanout.sh
+bubbles/scripts/payload-closure-guard-selftest.sh
+bubbles/scripts/payload-closure-guard.sh
 bubbles/scripts/phase-relevance-resolve-selftest.sh
 bubbles/scripts/phase-relevance-resolve.sh
 bubbles/scripts/pii-scan.sh
@@ -311,8 +343,7 @@ bubbles/scripts/repository-binding-host-context-selftest.sh
 bubbles/scripts/repository-binding-host-context.sh
 bubbles/scripts/repository-binding-selftest.sh
 bubbles/scripts/repository-binding.sh
-bubbles/scripts/required-specialists-consistency-selftest.sh
-bubbles/scripts/required-specialists-consistency.sh
+bubbles/scripts/required-specialists-registry-selftest.sh
 bubbles/scripts/requirement-mechanism-guard-selftest.sh
 bubbles/scripts/requirement-mechanism-guard.sh
 bubbles/scripts/result-envelope-validate-selftest.sh
@@ -323,6 +354,8 @@ bubbles/scripts/retro-framework-health-selftest.sh
 bubbles/scripts/retro-framework-health.sh
 bubbles/scripts/risk-tier-resolve-selftest.sh
 bubbles/scripts/risk-tier-resolve.sh
+bubbles/scripts/run-state-reaper-selftest.sh
+bubbles/scripts/run-state-registry-selftest.sh
 bubbles/scripts/runtime-concurrency-selftest.sh
 bubbles/scripts/runtime-lease-selftest.sh
 bubbles/scripts/runtime-leases.sh
@@ -332,6 +365,12 @@ bubbles/scripts/scan-lib-selftest.sh
 bubbles/scripts/scan-lib.sh
 bubbles/scripts/scenario-compile-lint-selftest.sh
 bubbles/scripts/scenario-compile-lint.sh
+bubbles/scripts/scenario-impact-resolve-selftest.sh
+bubbles/scripts/scenario-impact-resolve.sh
+bubbles/scripts/scenario-obligation-lint-selftest.sh
+bubbles/scripts/scenario-obligation-lint.sh
+bubbles/scripts/scenario-test-resolve-selftest.sh
+bubbles/scripts/scenario-test-resolve.sh
 bubbles/scripts/scope-context-fit-lint-selftest.sh
 bubbles/scripts/scope-context-fit-lint.sh
 bubbles/scripts/scope-universe-resolver-selftest.sh
@@ -375,8 +414,14 @@ bubbles/scripts/test-impact-plan-selftest.sh
 bubbles/scripts/test-impact-plan.sh
 bubbles/scripts/test-impact-shadow-selftest.sh
 bubbles/scripts/test-impact-shadow.sh
+bubbles/scripts/test-inventory-adapter-contract-selftest.sh
+bubbles/scripts/test-inventory-resolve.sh
+bubbles/scripts/test-mechanism-lint-selftest.sh
+bubbles/scripts/test-mechanism-lint.sh
 bubbles/scripts/tool-capture-shim-selftest.sh
 bubbles/scripts/tool-capture-shim.sh
+bubbles/scripts/tool-grant-lint-selftest.sh
+bubbles/scripts/tool-grant-lint.sh
 bubbles/scripts/tool-log-selftest.sh
 bubbles/scripts/tool-log.sh
 bubbles/scripts/top-level-runtime-routing-selftest.sh
@@ -393,6 +438,8 @@ bubbles/scripts/trust-metadata.sh
 bubbles/scripts/upgrade-transactionality-selftest.sh
 bubbles/scripts/upkeep-calendar-selftest.sh
 bubbles/scripts/upkeep-calendar.sh
+bubbles/scripts/usage-adapter-contract-selftest.sh
+bubbles/scripts/usage-resolve.sh
 bubbles/scripts/v4.1.0-selftest.sh
 bubbles/scripts/v5.2-selftest.sh
 bubbles/scripts/v5.3-selftest.sh
@@ -403,6 +450,8 @@ bubbles/scripts/validation-latency-report-selftest.sh
 bubbles/scripts/validation-latency-report.sh
 bubbles/scripts/value-selection-lint-selftest.sh
 bubbles/scripts/value-selection-lint.sh
+bubbles/scripts/verify-changed-specs-selftest.sh
+bubbles/scripts/verify-changed-specs.sh
 bubbles/scripts/verify-payload-integrity-selftest.sh
 bubbles/scripts/verify-payload-integrity.sh
 bubbles/scripts/vertical-delivery-plan-guard-selftest.sh
@@ -439,8 +488,12 @@ bubbles/adapters/codeindex/none.sh
 bubbles/adapters/experience-recall/local-lexical.sh
 bubbles/adapters/experience-recall/none.sh
 bubbles/adapters/judge/ollama.sh
+bubbles/adapters/mutation/none.sh
 bubbles/adapters/observability/none.sh
 bubbles/adapters/observability/prometheus.sh
+bubbles/adapters/test-inventory/none.sh
+bubbles/adapters/usage/none.sh
+bubbles/adapters/usage/vscode-copilot.sh
 bubbles/schemas/adoption-profiles.schema.json
 bubbles/schemas/capability-ledger.schema.json
 bubbles/schemas/experience-recall.schema.json
@@ -453,10 +506,13 @@ bubbles/schemas/tool-call.schema.json
 bubbles/schemas/tool-trust-registry.schema.json
 bubbles/schemas/workflows.schema.json
 bubbles/eval/schemas/adversarial-sample.schema.json
+bubbles/registry/gates-block-readers.txt
 bubbles/registry/gates.yaml
+bubbles/registry/micro-fix-packet.yaml
 bubbles/registry/optional-skills.txt
 bubbles/registry/required-specialists.yaml
 bubbles/registry/selftest-denylist.txt
+bubbles/registry/tool-grants.yaml
 bubbles/mcp/clients/claude.json
 bubbles/mcp/clients/cline.json
 bubbles/mcp/clients/cursor.json
@@ -496,6 +552,7 @@ bubbles/scripts/hooks/git-env-sanitize.sh
 bubbles/scripts/hooks/pre-push.sh
 templates/DomainModel.md.tmpl
 templates/agents.md.tmpl
+templates/bubbles-verify-changed-specs.yml.tmpl
 templates/constitution.md.tmpl
 templates/copilot-instructions.md.tmpl
 templates/observability.yaml.tmpl
@@ -777,12 +834,14 @@ instructions/bubbles-config-sst.instructions.md
 instructions/bubbles-deployment-target.instructions.md
 instructions/bubbles-docker-lifecycle-governance.instructions.md
 instructions/bubbles-env-pollution-isolation.instructions.md
+instructions/bubbles-kernel.instructions.md
 instructions/bubbles-propagation.instructions.md
 instructions/bubbles-release-trains.instructions.md
 instructions/bubbles-skills.instructions.md
 instructions/bubbles-supply-chain-source-locking.instructions.md
 instructions/bubbles-test-environment-isolation.instructions.md
 instructions/bubbles-upkeep-operations.instructions.md
+instructions/bubbles-wsl-macos-compatibility.instructions.md
 skills/bubbles-anti-fabrication/SKILL.md
 skills/bubbles-artifact-ownership-routing/SKILL.md
 skills/bubbles-backup-bcdr-doctrine/SKILL.md

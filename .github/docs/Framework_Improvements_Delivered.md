@@ -77,7 +77,7 @@
   selftest.
 - **Durable home:** skill [`bubbles-cross-platform-shell`](../skills/bubbles-cross-platform-shell/SKILL.md)
   (§ *Mechanical Enforcement*) + instruction
-  [`wsl-macos-compatibility.instructions.md`](../instructions/wsl-macos-compatibility.instructions.md)
+  [`bubbles-wsl-macos-compatibility.instructions.md`](../instructions/bubbles-wsl-macos-compatibility.instructions.md)
   + this entry.
 - **Status:** delivered, green.
 

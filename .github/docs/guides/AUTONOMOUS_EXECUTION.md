@@ -247,7 +247,7 @@ If the active top-level runtime lacks the subagent tool, return a blocked envelo
 | `sunnyvale i-handle-things` | `bubbles.goal` | *"I handle things, that's what I do."* |
 | `sunnyvale tyrone-got-this` | `bubbles.goal` | *"Peace. Tyrone got this."* |
 | `sunnyvale on-the-clock` | `bubbles.sprint` | *"Inside and outside, both at once. Don't fall behind."* |
-| `sunnyvale next-on-the-board` | `bubbles.sprint` | *"That one's done — keep both flows moving."* |
+| `sunnyvale next-on-the-board` | `bubbles.iterate` | *"Pick the next job on the board."* |
 
 ---
 

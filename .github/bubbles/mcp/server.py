@@ -784,6 +784,14 @@ def _render_args(template: list[str], arguments: dict[str, Any]) -> list[str]:
                    "${args*}"]` so the wrapped command's own arguments survive
                    (IMP-102 / SCOPE-7 defect #3). A non-list value raises
                    ValueError.
+      ${var!}    — boolean flag; the argv element carries the flag literal and
+                   the placeholder contributes no text. A truthy `var` keeps the
+                   element, a falsy or missing one DROPS it, so
+                   `"--no-cap${no_cap!}"` yields either `["--no-cap"]` or
+                   nothing. Without this, a declared boolean input had no way to
+                   reach argv at all: `${var}` renders the literal "False" and
+                   `${var?}` only drops on None/"" -- which is why every boolean
+                   in the catalog was silently ignored (IMP-042 / SCOPE-8).
 
     Unknown placeholders (not `?`-suffixed) raise ValueError so the caller
     gets ERR_INVALID_PARAMS rather than passing the literal text down.
@@ -818,7 +826,15 @@ def _render_args(template: list[str], arguments: dict[str, Any]) -> list[str]:
                 break
             raw = out[start + 2 : end]
             optional = raw.endswith("?")
-            var = raw[:-1] if optional else raw
+            boolean_flag = raw.endswith("!")
+            var = raw[:-1] if (optional or boolean_flag) else raw
+            if boolean_flag:
+                if not arguments.get(var):
+                    drop_this_arg = True
+                    break
+                out = out[:start] + out[end + 1 :]
+                i = start
+                continue
             if var not in arguments or arguments[var] is None or arguments[var] == "":
                 if optional:
                     drop_this_arg = True
@@ -1250,6 +1266,7 @@ def serve_http(server: "Server", host: str, port: int,
     (defect #4). Returns a nonzero exit on refusal.
     """
     import http.server
+    import socketserver
 
     auth_token = os.environ.get("BUBBLES_MCP_HTTP_TOKEN", "").strip()
     max_body_bytes = _http_max_body_bytes()
@@ -1324,7 +1341,18 @@ def serve_http(server: "Server", host: str, port: int,
                 return
             self._send_json(200, response)
 
-    httpd = http.server.ThreadingHTTPServer((host, port), _Handler)
+    class _NoReverseDnsHTTPServer(http.server.ThreadingHTTPServer):
+        # Skips the socket.getfqdn() that stdlib HTTPServer.server_bind runs:
+        # that reverse-DNS lookup can block past the start budget on hosts with
+        # no PTR record, leaving the socket bound but never listening because
+        # TCPServer.__init__ calls server_activate() only after server_bind().
+        def server_bind(self) -> None:
+            socketserver.TCPServer.server_bind(self)
+            host, port = self.server_address[:2]
+            self.server_name = host
+            self.server_port = port
+
+    httpd = _NoReverseDnsHTTPServer((host, port), _Handler)
     logger.info("bubbles-mcp HTTP transport listening on %s:%d (auth=%s)",
                 host, port, "on" if auth_token else "off")
     try:

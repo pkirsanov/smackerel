@@ -101,7 +101,10 @@ else
 fi
 
 # --- 7. report aggregates hits, passes and fails -----------------------------
-out="$(bash "$TARGET" report --repo-root "$r1" 2>&1)"
+# These fixtures live under a temp root, which IMP-042 SCOPE-17 classes as
+# `fixture`. This case is about aggregation arithmetic, so it reads every class;
+# the filtering behaviour itself is cases 17-22.
+out="$(bash "$TARGET" report --repo-root "$r1" --all-classes 2>&1)"
 if printf '%s' "$out" | grep -qE '^\s+G024\s+2\s+1\s+1' &&
   printf '%s' "$out" | grep -q 'NEVER rejected anything'; then
   ok "report aggregates per gate and names never-rejecting gates"
@@ -123,7 +126,7 @@ else
 fi
 
 # --- 9. json report shape -----------------------------------------------------
-out="$(bash "$TARGET" report --repo-root "$r1" --json 2>&1)"
+out="$(bash "$TARGET" report --repo-root "$r1" --json --all-classes 2>&1)"
 if printf '%s' "$out" | grep -q '"schemaVersion":"gate-hit/v1"' &&
   printf '%s' "$out" | grep -q '"logPresent":true'; then
   ok "json report carries schemaVersion and logPresent"
@@ -215,12 +218,90 @@ else
 fi
 
 # --- 16. report surfaces the expansion rate ----------------------------------
-out="$(bash "$TARGET" report --repo-root "$r14" 2>&1)"
+out="$(bash "$TARGET" report --repo-root "$r14" --all-classes 2>&1)"
 if printf '%s' "$out" | grep -q 'runs using parent-expansion' &&
   printf '%s' "$out" | grep -q 'phases parent-expanded in total: 3'; then
   ok "report surfaces parent-expansion rate"
 else
   bad "report surfaces expansion rate" "$(printf '%s' "$out" | tr '\n' '|')"
+fi
+
+# =============================================================================
+# IMP-042 SCOPE-17 - source classing.
+#
+# The gate-hit log is the ONLY evidence base for retiring a gate. Before source
+# classing, a selftest driving the guard through a fixture repo wrote records
+# indistinguishable from production ones, so "G0xx rejected something 40 times"
+# could be describing this very file. Case 18 is the one that matters: the
+# report must DROP fixture records, not merely label them.
+# =============================================================================
+
+# --- 17. a temp-dir root is classed as a fixture WITHOUT being asked ----------
+# A fixture that forgets to declare itself is exactly the record that pollutes
+# the report, so the class is derived rather than requested.
+if grep -q '"sourceClass":"fixture"' "$(log_of "$r1")" 2>/dev/null &&
+  ! grep -q '"sourceClass":"product"' "$(log_of "$r1")" 2>/dev/null; then
+  ok "a temp-dir repo root is auto-classed fixture with no declaration"
+else
+  bad "a temp-dir repo root is auto-classed fixture" \
+    "$(grep -o '"sourceClass":"[^"]*"' "$(log_of "$r1")" 2>/dev/null | sort -u | tr '\n' ' ')"
+fi
+
+# --- 18. ADVERSARIAL: a fixture-only log must report ZERO gates ---------------
+# If this ever passes fixture data through, every retirement decision built on
+# this log is fiction.
+out="$(bash "$TARGET" report --repo-root "$r1" --json 2>&1)"
+if printf '%s' "$out" | grep -q '"gates":\[\]'; then
+  ok "a fixture-only log reports zero gates under the default product filter"
+else
+  bad "fixture records are excluded by default" "$out"
+fi
+
+# --- 19. the exclusion is stated, so a filtered view is never silent ----------
+if printf '%s' "$out" | grep -q '"excludedRecords":[1-9]' &&
+  printf '%s' "$out" | grep -q '"sourceClass":"product"'; then
+  ok "the report names its filter and counts what it excluded"
+else
+  bad "report states filter and exclusion count" "$out"
+fi
+
+# --- 20. run records carry the class too -------------------------------------
+# Without this the parent-expansion rate would stay contaminated while the gate
+# counts looked clean.
+if grep '"kind":"run"' "$(log_of "$r14")" 2>/dev/null | grep -q '"sourceClass":'; then
+  ok "run records carry the source class, not just gate records"
+else
+  bad "run records carry the source class"
+fi
+
+# --- 21. a typo'd class is demoted, never trusted as product -----------------
+# Failing open here would let one misspelling promote test records into
+# retirement evidence.
+r21="$WORK/r21"
+mkdir -p "$r21"
+BUBBLES_GATE_HIT_SOURCE_CLASS=prodcut bash "$TARGET" append --repo-root "$r21" \
+  --spec "specs/001-x" --mode full-delivery --target-status "done" \
+  --verdict PASS --exit-status 0 --passed "G011" >/dev/null 2>&1
+if grep -q '"sourceClass":"fixture"' "$(log_of "$r21")" 2>/dev/null &&
+  ! grep -q 'prodcut' "$(log_of "$r21")" 2>/dev/null; then
+  ok "an unrecognised declared class is demoted to fixture, not trusted"
+else
+  bad "unrecognised class is demoted to fixture" \
+    "$(grep -o '"sourceClass":"[^"]*"' "$(log_of "$r21")" 2>/dev/null | tr '\n' ' ')"
+fi
+
+# --- 22. pre-classing history still counts as product ------------------------
+# Dropping unlabelled records would silently discard every observation gathered
+# before this change shipped.
+r22="$WORK/r22"
+mkdir -p "$r22/.specify/runtime"
+printf '%s\n' '{"schemaVersion":"gate-hit/v1","kind":"gate","ts":"2026-01-01T00:00:00Z","gate":"G099","outcome":"fail","spec":"specs/001-x","mode":"full-delivery","targetStatus":"done","guardVerdict":"FAIL","exitStatus":"1"}' \
+  >"$(log_of "$r22")"
+out="$(bash "$TARGET" report --repo-root "$r22" --json 2>&1)"
+if printf '%s' "$out" | grep -q '"gate":"G099"'; then
+  ok "records written before source classing still count as product"
+else
+  bad "legacy unlabelled records still count as product" "$out"
 fi
 
 printf '\n%s: %d/%d checks passed\n' "$NAME" "$((checks - failures))" "$checks"

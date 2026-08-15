@@ -3,10 +3,14 @@
   "$id": "https://github.com/pkirsanov/bubbles/schemas/workflows.schema.json",
   "title": "Bubbles workflow registry",
   "type": "object",
-  "required": ["defaultMode", "gates"],
+  "required": ["defaultMode"],
   "additionalProperties": true,
   "properties": {
     "defaultMode": { "type": "string" },
+    "_gatesNote": {
+      "type": "string",
+      "description": "Gates are NOT defined in workflows.yaml. bubbles/registry/gates.yaml is the sole definition surface (IMP-042 SCOPE-13); the generated copy that used to live here was deleted, so `gates` is no longer required. The `gates` shape below is retained so a downstream tree still carrying the pre-removal copy validates rather than erroring during upgrade."
+    },
     "gates": {
       "type": "object",
       "patternProperties": {

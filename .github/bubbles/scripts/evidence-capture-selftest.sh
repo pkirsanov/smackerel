@@ -114,6 +114,77 @@ else
   bad "verify hint emitted" "$(printf '%s' "$out" | tr '\n' '|')"
 fi
 
+# --- 10. ADVERSARIAL: a failure line inside the omitted region survives -------
+# The whole case for preferring the bounded block over a transcript collapses if
+# trimming can swallow the line that explains the exit code. Line 4 of 7 falls
+# strictly inside the omitted middle at --lines 2.
+mid_fail="$(bash "$TARGET" --lines 2 -- sh -c 'echo a; echo b; echo c; echo "FAIL: buried signal"; echo d; echo e; echo f' 2>&1)"
+if printf '%s' "$mid_fail" | grep -q -- '--- failure-shaped lines from the omitted region ---' &&
+  printf '%s' "$mid_fail" | grep -q 'FAIL: buried signal'; then
+  ok "a failure line in the omitted region is lifted out, not swallowed"
+else
+  bad "omitted-region failure line surfaced" "$(printf '%s' "$mid_fail" | tr '\n' '|')"
+fi
+
+# --- 11. clean long output gains no failure section --------------------------
+# Guards case 10 against the opposite defect: a section that always appears
+# proves nothing about detection.
+clean_long="$(bash "$TARGET" --lines 2 -- seq 1 20 2>&1)"
+if ! printf '%s' "$clean_long" | grep -q -- 'failure-shaped lines'; then
+  ok "clean output emits no failure section"
+else
+  bad "clean output emits no failure section" "$(printf '%s' "$clean_long" | tr '\n' '|')"
+fi
+
+# --- 12. the diagnostic escalation is explicit, stamped, and still bounded ----
+# SCOPE-7's decision was one default plus a per-invocation escalation, NOT a
+# second verbosity mode. These cases hold that line: opting in must be visible
+# in the block, and it must not become an unbounded transcript paste.
+diag="$(bash "$TARGET" --diagnostic -- seq 1 6 2>&1)"
+if printf '%s' "$diag" | grep -q '^escalation: diagnostic' &&
+  printf '%s' "$diag" | grep -qx '4'; then
+  ok "--diagnostic emits the full output and stamps the escalation"
+else
+  bad "--diagnostic stamps and emits" "$(printf '%s' "$diag" | tr '\n' '|')"
+fi
+
+if ! printf '%s' "$out" | grep -q '^escalation:'; then
+  ok "a normal capture carries no escalation stamp"
+else
+  bad "normal capture is unstamped" "$(printf '%s' "$out" | tr '\n' '|')"
+fi
+
+# --- 13. ADVERSARIAL: the escalation still has a ceiling ---------------------
+# "Unbounded on request" is exactly how a bounded default erodes back into the
+# paste it replaced.
+big="$(bash "$TARGET" --diagnostic -- seq 1 2500 2>&1)"
+big_lines="$(printf '%s' "$big" | grep -c '')"
+if printf '%s' "$big" | grep -q 'diagnostic ceiling' &&
+  printf '%s' "$big" | grep -q 'omitted 500 line(s) beyond the diagnostic ceiling' &&
+  [[ "$big_lines" -lt 2500 ]]; then
+  ok "--diagnostic remains bounded by a stated ceiling"
+else
+  bad "--diagnostic bounded by ceiling" "emitted $big_lines line(s)"
+fi
+
+# --- 14. ADVERSARIAL: TERM preserves partial evidence and records interruption -
+# A timeout signals the wrapper while its child is running. The signal handler
+# must not delete the capture before line count, hash, and bounded output are
+# emitted; that produced a misleading empty block plus missing-file errors.
+set +e
+term_out="$(bash "$TARGET" -- sh -c 'printf "before-signal\n"; kill -TERM "$PPID"; printf "after-signal\n"' 2>&1)"
+term_rc=$?
+set -e
+if [[ "$term_rc" -eq 143 ]] &&
+  printf '%s' "$term_out" | grep -q '^exit: 143$' &&
+  printf '%s' "$term_out" | grep -qE '^sha256: [0-9a-f]{64}$' &&
+  printf '%s' "$term_out" | grep -qx 'before-signal' &&
+  ! printf '%s' "$term_out" | grep -q 'No such file or directory'; then
+  ok "TERM preserves captured output and emits an interrupted evidence block"
+else
+  bad "TERM preserves interrupted evidence" "rc=$term_rc $(printf '%s' "$term_out" | tr '\n' '|')"
+fi
+
 printf '\n%s: %d/%d checks passed\n' "$NAME" "$((checks - failures))" "$checks"
 if [[ "$failures" -gt 0 ]]; then
   printf '%s: FAILED\n' "$NAME"

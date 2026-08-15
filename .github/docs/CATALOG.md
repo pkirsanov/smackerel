@@ -75,6 +75,20 @@ Every recipe solves a specific problem. Find yours, follow the steps.
 | 59 | [Parallel Worktrees](recipes/parallel-worktrees.md) | `worktree-spawn` | Spawn→work→reap isolated worktrees safely |
 | 60 | [Use A Code Index](recipes/use-a-code-index.md) | `codeIndex.adapter` | Derive structural facts (routes, blast radius, affected tests) through swappable code-index adapters |
 | 61 | [Evidence-Backed Experience Recall](recipes/evidence-backed-experience-recall.md) | `experienceRecall.adapter` | Retrieve prior structured experience by relevance as tier-4 advisory context that can never become evidence |
+| 62 | [Add A Deployment Target](recipes/add-deployment-target.md) | `bubbles.devops` | Stand up a new per-target deployment adapter |
+| 63 | [Bookend Phases](recipes/bookend-phases.md) | `bubbles.setup` | Wrap long workflows with opening and closing phases |
+| 64 | [Build-Once Deploy-Many](recipes/build-once-deploy-many.md) | `bubbles.devops` | Build one artifact and promote it across environments |
+| 65 | [Declare Reachable Surfaces](recipes/declare-reachable-surfaces.md) | `bubbles-project.yaml` | Give reachability checks a real denominator |
+| 66 | [Design A Capability](recipes/design-a-capability.md) | `bubbles.design` | Shape a reusable capability before building providers |
+| 67 | [DevOps + Release Coordination](recipes/devops-release-coordination.md) | `bubbles.devops` | Coordinate a release across CI, deploy, and monitoring |
+| 68 | [Impact-Aware Validation](recipes/impact-aware-validation.md) | `bubbles-project.yaml` | Map changed paths to impacted tests and trace contracts |
+| 69 | [Readiness Review](recipes/readiness-review.md) | `readiness-review` | Produce one consolidated release-readiness verdict |
+| 70 | [Release Train Lifecycle](recipes/release-train-lifecycle.md) | `bubbles.train` | Cut, promote, roll back, and retire a release train |
+| 71 | [Tool Trust & Untrusted Content](recipes/tool-trust-and-untrusted-content.md) | `cli.sh mcp` | Classify tool output and contain untrusted content |
+| 72 | [Upgrade To v6](recipes/upgrade-to-v6.md) | `install.sh` | Move an installed repository to Bubbles v6 |
+| 73 | [Upgrade To v7](recipes/upgrade-to-v7.md) | `install.sh` | Move an installed repository to Bubbles v7 |
+| 74 | [Upkeep Monthly](recipes/upkeep-monthly.md) | `bubbles.upkeep` | Run the monthly operator upkeep checklist |
+| 75 | [UX Single-File Sweep](recipes/ux-single-file-sweep.md) | `bubbles.simplify` | Sweep a single-file UI surface for UX defects |
 
 ---
 

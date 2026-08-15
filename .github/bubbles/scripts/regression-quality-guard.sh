@@ -207,9 +207,53 @@ ADVERSARIAL_SIGNAL_PATTERNS=(
   "\\binvalid\\b"
 )
 
+# --- IMP-040 SCOPE-5: production-path fidelity (COV-10) ---------------------
+#
+# A test can carry the e2e-ui label and still not traverse the user path. These
+# are the substitution shapes: reaching the behavior through an internal door,
+# or observing it on an internal surface, while reporting as end-to-end.
+#
+# NOT covered here, deliberately: "a seeded value asserted unchanged after a
+# pass-through". That tautology cannot be recognised from syntax — it needs a
+# dataflow judgement about whether production code transformed the value. A
+# pattern that guessed at it would fire on every legitimate round-trip
+# assertion. It belongs to SCOPE-7, where a mutation experiment answers it by
+# perturbing the input rather than by matching text.
+PATH_SUBSTITUTION_PATTERNS=(
+  # Reached through an internal door rather than the route.
+  "(ReactDOM\\.render|createRoot|renderToString|renderToStaticMarkup)\\("
+  "^[[:space:]]*(const|let|var)?[[:space:]]*\\{?[^=]*\\}?[[:space:]]*=?[[:space:]]*(shallow|mount)\\("
+  # Observed on an internal surface rather than the visible one.
+  "document\\.querySelector"
+  "\\.innerHTML"
+  "toHaveAttribute\\([[:space:]]*['\"]hidden"
+  "display[[:space:]]*:[[:space:]]*none"
+  # The dependency answered instead of the system.
+  "(page|context)\\.route\\("
+  "cy\\.intercept\\("
+  "\\b(msw|nock|wiremock|fetchMock)\\b"
+)
+
+# The other side of the rule. A test that ALSO asserts the current visible
+# surface has not substituted the path — it inspected internals in addition to
+# proving the outcome, which the proposal explicitly accepts. Without this the
+# check would reject every mixed test and get switched off.
+CURRENT_SURFACE_PATTERNS=(
+  "toBeVisible\\("
+  "toBeInTheDocument\\("
+  "toBeHidden\\("
+  "(get|find|query)By(Role|Text|LabelText|Placeholder|Title|TestId)\\("
+  "page\\.(getBy|locator|waitForSelector)"
+  "toHave(Text|Value|ContainText|Count|Screenshot)\\("
+  "toContainText\\("
+  "accessibilitySnapshot|ariaSnapshot|toMatchAriaSnapshot"
+)
+
 load_yaml_list_override "regressionQuality" "bailoutPatterns" "BAILOUT_PATTERNS"
 load_yaml_list_override "regressionQuality" "optionalAssertionPatterns" "OPTIONAL_ASSERTION_PATTERNS"
 load_yaml_list_override "regressionQuality" "adversarialSignals" "ADVERSARIAL_SIGNAL_PATTERNS"
+load_yaml_list_override "regressionQuality" "pathSubstitutionPatterns" "PATH_SUBSTITUTION_PATTERNS"
+load_yaml_list_override "regressionQuality" "currentSurfacePatterns" "CURRENT_SURFACE_PATTERNS"
 
 for input in "${inputs[@]}"; do
   collect_files_from_input "$input"
@@ -246,6 +290,27 @@ for file in "${resolved_files[@]}"; do
       violation "OPTIONAL_REQUIRED_ASSERTION" "$file" "$line_num" "$match"
     done < <(grep -En "$pattern" "$file" 2>/dev/null || true)
   done
+
+  # IMP-040 SCOPE-5. TWO-SIDED: a substitution shape is only a finding when the
+  # file offers it as the SOLE proof. Establish the second side first.
+  file_asserts_current_surface=false
+  for pattern in "${CURRENT_SURFACE_PATTERNS[@]}"; do
+    if grep -Eq "$pattern" "$file" 2>/dev/null; then
+      file_asserts_current_surface=true
+      break
+    fi
+  done
+
+  if [[ "$file_asserts_current_surface" == "true" ]]; then
+    pass "Asserts the current surface in $file (mixed inspection accepted)"
+  else
+    for pattern in "${PATH_SUBSTITUTION_PATTERNS[@]}"; do
+      while IFS=: read -r line_num match; do
+        [[ -n "$line_num" ]] || continue
+        violation "PRODUCTION_PATH_SUBSTITUTION" "$file" "$line_num" "$match"
+      done < <(grep -En "$pattern" "$file" 2>/dev/null || true)
+    done
+  fi
 
   if [[ "$bugfix_mode" == "true" ]]; then
     for pattern in "${ADVERSARIAL_SIGNAL_PATTERNS[@]}"; do

@@ -400,7 +400,7 @@ check_pattern "$ROOT_DIR/docs/generated/competitive-capabilities.md" '\| Session
 check_pattern "$ROOT_DIR/docs/generated/competitive-capabilities.md" '\| Orchestrator context compaction \| shipped \|' "Generated capability guide includes shipped orchestrator context compaction row"
 check_pattern "$ROOT_DIR/docs/generated/competitive-capabilities.md" '\| Per-turn state snapshot \| shipped \|' "Generated capability guide includes shipped per-turn state snapshot row"
 check_pattern "$ROOT_DIR/docs/generated/competitive-capabilities.md" '\| Linter-on-edit gate \| shipped \|' "Generated capability guide includes shipped linter-on-edit gate row"
-check_pattern "$ROOT_DIR/docs/generated/issue-status.md" '^Tracked gaps: 2 issue-backed capabilities\.$' "Generated issue status guide counts tracked gaps from the ledger"
+check_pattern "$ROOT_DIR/docs/generated/issue-status.md" '^Issue-linked capabilities: 2\.$' "Generated issue status guide counts issue-linked capabilities from the ledger"
 check_pattern "$ROOT_DIR/docs/generated/interop-migration-matrix.md" '\| Claude Code \| markdown \|' "Generated migration matrix is refreshed from the interop registry"
 
 check_consumers_exist "observability-adapter-contract" "Observability adapter contract"

@@ -4,28 +4,22 @@
 #
 # SINGLE SOURCE OF TRUTH for the mode->required-specialists mapping that
 # state-transition-guard.sh Check 6 ("Specialist Phase Completion", Gate G022)
-# enforces. The guard still carries that mapping as a hardcoded
-# `case "$state_workflow_mode" in ... esac`, because its arms carry load-bearing
-# inline documentation (e.g. the rapid-tool-delivery rationale) that a data-only
-# generator cannot reproduce byte-identically, and rewriting the critical guard
-# is high-risk. This registry MIRRORS that case exactly.
+# enforces. The guard READS this file directly (yq, with a bounded awk parser
+# for the flow-style lists so Check 6 still resolves under a minimal PATH).
 #
-# ENFORCEMENT: bubbles/scripts/required-specialists-consistency.sh compares the
-# guard's Check 6 case against this registry (same mode keys, same ORDERED
-# specialist lists) and fails on any drift — a missing mode, an extra mode, or a
-# reordered/changed list. It is wired into framework-validate.sh as a continuous
-# shadow-compare, so the guard's hardcoded case and this registry can never
-# silently diverge. This is the continuous shadow-compare that resolves the
-# "full table replacement" IMP-105 SCOPE-3 explicitly deferred to SCOPE-7.
+# It used to be duplicated as a hardcoded `case` in the guard that this file
+# mirrored, with required-specialists-consistency.sh holding the two in step.
+# The duplication and its comparator are gone: there is one copy, so there is
+# nothing to diverge.
 #
-# TO CHANGE a mode's required specialists: edit BOTH the guard's Check 6 case AND
-# this registry in the SAME change; the consistency guard proves they match.
+# TO CHANGE a mode's required specialists: edit the list here. A mode absent
+# from this file is not fail-open -- the guard derives a requirement from the
+# mode's declared phaseOrder (IMP-105 SCOPE-3 fallback).
 #
-# ORDERING IS SIGNIFICANT: each list is byte-faithful to its guard case arm,
-# including element order. Legacy / currently-unrouted arms (feature-bootstrap,
-# batch-*, redesign-existing, product-discovery, ...) are preserved verbatim so
-# the shadow-compare stays exact — do NOT drop or "clean up" any arm; that would
-# silently change Gate G022 enforcement.
+# ORDERING IS SIGNIFICANT. Legacy / currently-unrouted modes (feature-bootstrap,
+# batch-*, redesign-existing, product-discovery, ...) are preserved verbatim --
+# do NOT drop or "clean up" any entry; that would silently change Gate G022
+# enforcement.
 #
 # The broader 12-primitive unified delivery-policy model (Intent, DeliveryStrategy,
 # WorkflowMode, RiskClass, Phase, Gate, Artifact, AgentOwner, EvidenceClaim,
@@ -38,6 +32,14 @@ modes:
   full-delivery: [ implement, test, regression, simplify, gaps, harden, stabilize, security, validate, audit, chaos, docs ]
   feature-bootstrap: [ implement, test, regression, simplify, stabilize, security, docs, validate, audit ]
   bugfix-fastlane: [ implement, test, regression, simplify, stabilize, security, validate, audit ]
+  # IMP-101 SCOPE-5 (FLOW-101): this delivery mode was absent from the table, so
+  # Check 6 imposed no specialist-completion requirement on it. Its required
+  # specialists are its own declared phaseOrder in modes.yaml ([select,
+  # implement, test, validate, docs, finalize]) minus the select/finalize
+  # bookends. The read-only modes readiness-review and journey-refinement are
+  # intentionally NOT listed: they set allowImplementationForFindings:false and
+  # run review/journey phases, so a delivery-specialist requirement would be
+  # incorrect for them.
   rapid-tool-delivery: [ implement, test, validate, docs ]
   chaos-hardening: [ chaos, implement, test, regression, simplify, stabilize, security, validate, audit, docs ]
   harden-to-doc: [ harden, implement, test, regression, simplify, stabilize, security, chaos, validate, audit, docs ]

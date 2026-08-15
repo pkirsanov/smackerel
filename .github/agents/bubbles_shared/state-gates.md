@@ -114,7 +114,7 @@ Enforced by: `state-transition-guard.sh` (Check 3B), agent-common.md (Mode Ceili
 
 ## State-Snapshot Fabrication Gates (G075–G078)
 
-These four gates harden `state.json` against the most common fabrication patterns observed in downstream product repos. They are mechanically enforced by `state-transition-guard.sh` (Checks 2B, 5B, 5C, 7A/7B) and `bubbles/scripts/batch-promotion-lint.sh` and are listed in `bubbles/workflows.yaml` `gates:` for canonical reference.
+These four gates harden `state.json` against the most common fabrication patterns observed in downstream product repos. They are mechanically enforced by `state-transition-guard.sh` (Checks 2B, 5B, 5C, 7A/7B) and `bubbles/scripts/batch-promotion-lint.sh`, are defined in `bubbles/registry/gates.yaml`, and are listed in `bubbles/workflows.yaml` `gates:` for canonical reference.
 
 | Gate | Name | Purpose | Enforced by |
 |------|------|---------|-------------|

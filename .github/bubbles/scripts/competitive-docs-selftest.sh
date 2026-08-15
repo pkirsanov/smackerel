@@ -121,8 +121,8 @@ if build_count_fixture; then
     "State summary: ${rb_summary}." \
     "Generated competitive guide summary matches exact ledger counts (${rb_summary})"
   check_contains "$count_fixture/docs/generated/issue-status.md" \
-    "Tracked gaps: ${rb_gaps} issue-backed capabilities." \
-    "Generated issue-status guide matches the exact tracked-gap count (${rb_gaps})"
+    "Issue-linked capabilities: ${rb_gaps}." \
+    "Generated issue-status guide matches the exact issue-linked count (${rb_gaps})"
   check_contains "$count_fixture/docs/generated/interop-migration-matrix.md" \
     "Capability context: ${rb_summary}." \
     "Generated interop migration matrix matches exact ledger counts (${rb_summary})"

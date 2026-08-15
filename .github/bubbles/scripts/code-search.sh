@@ -27,6 +27,7 @@ Usage:
   code-search.sh <pattern> [path...]
   code-search.sh --files <glob> [path]
   code-search.sh --kind <lang> <pattern> [path...]
+  code-search.sh --kind=<lang> <pattern> [path...]
   code-search.sh --no-cap <pattern> [path...]    # don't limit lines
 USAGE
 }
@@ -40,6 +41,10 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --files) MODE="files"; shift;;
     --kind) KIND="$2"; shift 2;;
+    # Single-element form. An argument template can only drop the argv element
+    # that CONTAINS the placeholder, so a space-separated `--kind <lang>` pair
+    # would leave a bare `--kind` behind when no kind was requested.
+    --kind=*) KIND="${1#*=}"; shift;;
     --no-cap) CAP=0; shift;;
     -h|--help) usage; exit 0;;
     *) break;;

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Capability: dod-gherkin-fidelity-threshold
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -2306,6 +2307,88 @@ assert_log_contains "$g053_artifact_log" \
   "Code Diff Evidence does not show any non-artifact runtime/source/config file paths" \
   "G053 Check 13B still rejects an artifact-only Code Diff Evidence (non-vacuous)"
 
+# --- Check 13: a lint TIMEOUT must not be reported as a lint FAILURE ---
+# Check 13 is fail-closed, so both outcomes block; the defect being guarded is
+# the DIAGNOSIS, not the exit code. The cap was a flat 60s while a large spec's
+# lint is load-sensitive (32s idle, 73-90s under concurrent load), so the same
+# packet was reported as having lint failures on a busy machine and passing on
+# an idle one. A reader told "Artifact lint FAILED" hunts for findings that do
+# not exist.
+#
+# The timeout is forced by making the LINT slow, never by making the cap tight.
+# An earlier form set BUBBLES_ARTIFACT_LINT_TIMEOUT=1 and bet that the real lint
+# would lose that race; measured, this fixture's lint runs in ~0.6s, so on an
+# idle machine it COMPLETED and Check 13 printed "Artifact lint passes (exit 0)".
+# The case passed only on loaded hosts and failed on healthy ones -- it
+# reproduced the exact timing defect it exists to catch. A sub-second cap does
+# not repair that either: guard-lib's fallback watchdog (hosts with neither
+# `timeout` nor `gtimeout`, e.g. a stock macOS PATH) gates its poll loop on
+# `[ "$waited" -lt "$secs" ]`, an INTEGER test that errors on "0.1" and skips the
+# loop entirely, so no SIGTERM is sent and 124 never comes back.
+#
+# So the guard is run from a staged framework clone whose artifact-lint.sh is a
+# stub that sleeps 10x the cap. The timed command's duration is a guaranteed
+# lower bound rather than an estimate of real lint speed, so the exit-124 path
+# fires on every host, at any load, through all three bubbles_run_with_timeout
+# paths (the cap stays an integer the fallback watchdog can compare).
+c13_lint_cap_seconds=2
+c13_stub_root="$tmp_root/framework-c13-lint-timeout"
+clone_framework_surface "$c13_stub_root"
+c13_stub_guard="$c13_stub_root/bubbles/scripts/state-transition-guard.sh"
+c13_stub_lint="$c13_stub_root/bubbles/scripts/artifact-lint.sh"
+c13_stub_feature_dir="$c13_stub_root/specs/944-check13-lint-timeout"
+mkdir -p "$c13_stub_root/specs"
+cp -R "$positive_feature_dir" "$c13_stub_feature_dir"
+
+cat <<'EOF' > "$c13_stub_lint"
+#!/usr/bin/env bash
+# Selftest stub: a lint that CANNOT complete inside the cap, by construction.
+sleep 20
+EOF
+
+c13_timeout_log="$tmp_root/check13-timeout.log"
+run_capture "$c13_timeout_log" env \
+  BUBBLES_REPO_ROOT="$c13_stub_root" \
+  BUBBLES_ARTIFACT_LINT_TIMEOUT="$c13_lint_cap_seconds" \
+  bash "$c13_stub_guard" "$c13_stub_feature_dir" >/dev/null
+assert_log_contains "$c13_timeout_log" \
+  "this is a TIMEOUT, not a lint failure" \
+  "Check 13 reports a lint that did not COMPLETE as a timeout, naming the cap"
+
+# Adversarial twin: the timeout path must NOT borrow the failure wording, or the
+# distinction is cosmetic and a reader still cannot tell the two apart.
+assert_log_not_contains "$c13_timeout_log" \
+  "Artifact lint FAILED (exit" \
+  "Check 13 timeout path is distinct from the completed-and-rejected wording"
+
+# Second twin, controlled pair: same staged clone, same fixture, same cap -- the
+# ONLY difference is that the stub now returns immediately. Isolating the lint's
+# duration is what proves the case above fires on the cap being exceeded and not
+# on anything about the staged clone. (Varying only the cap, as the earlier form
+# did, no longer isolates the cause now that the lint itself is injected.)
+cat <<'EOF' > "$c13_stub_lint"
+#!/usr/bin/env bash
+# Selftest stub: a lint that completes instantly, so Check 13 must NOT time out.
+exit 0
+EOF
+c13_completes_log="$tmp_root/check13-completes.log"
+run_capture "$c13_completes_log" env \
+  BUBBLES_REPO_ROOT="$c13_stub_root" \
+  BUBBLES_ARTIFACT_LINT_TIMEOUT="$c13_lint_cap_seconds" \
+  bash "$c13_stub_guard" "$c13_stub_feature_dir" >/dev/null
+assert_log_not_contains "$c13_completes_log" \
+  "this is a TIMEOUT, not a lint failure" \
+  "Check 13 does not take the timeout path when the same staged lint completes (timeout case is non-tautological)"
+
+# Third twin: the REAL guard running the REAL lint at the DEFAULT cap must not
+# report a timeout either, so the staged pair above cannot mask a regression that
+# makes the shipped configuration time out spuriously.
+c13_default_log="$tmp_root/check13-default.log"
+run_capture "$c13_default_log" bash "$GUARD_SCRIPT" "$positive_feature_dir" >/dev/null
+assert_log_not_contains "$c13_default_log" \
+  "this is a TIMEOUT, not a lint failure" \
+  "Check 13 does not take the timeout path with the real lint at the default cap"
+
 # --- Check 8: shell (.sh) test-path recognition (Test File Existence) ---
 # Regression guard for the Check 8 extension-alternation parity fix. Check 8's
 # test-path extraction regex historically recognized only
@@ -3827,6 +3910,93 @@ else
 fi
 
 # ----------------------------------------------------------------------------
+# Check 7A — declared-reconstructed overlap contract
+#
+# A historical overlap could previously be cleared only by inventing
+# replacement timestamps — the exact fabrication this check exists to catch —
+# so a packet whose real times were unrecoverable stayed permanently
+# uncertifiable. The declaration gives that packet an honest exit. These cases
+# drive the REAL analyzer extracted from guard source, so the test cannot pass
+# while the guard's own logic drifts away from it.
+# ----------------------------------------------------------------------------
+echo "Running Check 7A declared-reconstructed overlap contract..."
+
+c7a_an_start="$(grep -n 'exec_history_analysis="\$(python3' "$GUARD_SCRIPT" | head -n 1 | cut -d: -f1 || true)"
+if [[ -z "$c7a_an_start" ]]; then
+  fail "Check 7A: analyzer block absent from guard source — the check was removed or renamed"
+else
+  pass "Check 7A: analyzer block located in guard source (no test/source drift)"
+
+  c7a_dir="$(mktemp -d)"
+  c7a_an_end="$(awk -v s="$c7a_an_start" 'NR>s && $0=="PY"{print NR; exit}' "$GUARD_SCRIPT")"
+  sed -n "$((c7a_an_start + 1)),$((c7a_an_end - 1))p" "$GUARD_SCRIPT" >"$c7a_dir/analyzer.py"
+
+  # Entry b starts before entry a ends. Start intervals are deliberately uneven
+  # and every span is non-zero, so only the overlap signal can fire.
+  # A: nobody declares anything — the overlap must still block.
+  cat >"$c7a_dir/undeclared.json" <<'JSON'
+{"executionHistory":[
+ {"agent":"bubbles.stabilize","phasesExecuted":["stabilize"],"startedAt":"2026-07-17T10:00:00Z","finishedAt":"2026-07-17T10:20:00Z"},
+ {"agent":"bubbles.audit","phasesExecuted":["audit"],"startedAt":"2026-07-17T10:10:00Z","finishedAt":"2026-07-17T10:30:00Z"},
+ {"agent":"bubbles.docs","phasesExecuted":["docs"],"startedAt":"2026-07-17T10:45:00Z","finishedAt":"2026-07-17T10:52:00Z"}]}
+JSON
+
+  # B: one side declares its span reconstructed, with a substantive reason.
+  cat >"$c7a_dir/declared.json" <<'JSON'
+{"executionHistory":[
+ {"agent":"bubbles.stabilize","phasesExecuted":["stabilize"],"startedAt":"2026-07-17T10:00:00Z","finishedAt":"2026-07-17T10:20:00Z"},
+ {"agent":"bubbles.audit","phasesExecuted":["audit"],"startedAt":"2026-07-17T10:10:00Z","finishedAt":"2026-07-17T10:30:00Z","timestampReconstructed":true,"timestampReconstructedReason":"Recovered from the audit runId after the fast-delivery pass recorded no wall-clock span; no source-backed replacement exists."},
+ {"agent":"bubbles.docs","phasesExecuted":["docs"],"startedAt":"2026-07-17T10:45:00Z","finishedAt":"2026-07-17T10:52:00Z"}]}
+JSON
+
+  # C: the declaration is present but the reason is perfunctory.
+  cat >"$c7a_dir/perfunctory.json" <<'JSON'
+{"executionHistory":[
+ {"agent":"bubbles.stabilize","phasesExecuted":["stabilize"],"startedAt":"2026-07-17T10:00:00Z","finishedAt":"2026-07-17T10:20:00Z"},
+ {"agent":"bubbles.audit","phasesExecuted":["audit"],"startedAt":"2026-07-17T10:10:00Z","finishedAt":"2026-07-17T10:30:00Z","timestampReconstructed":true,"timestampReconstructedReason":"historical"},
+ {"agent":"bubbles.docs","phasesExecuted":["docs"],"startedAt":"2026-07-17T10:45:00Z","finishedAt":"2026-07-17T10:52:00Z"}]}
+JSON
+
+  c7a_undeclared="$(python3 "$c7a_dir/analyzer.py" "$c7a_dir/undeclared.json" 2>&1 || true)"
+  c7a_declared="$(python3 "$c7a_dir/analyzer.py" "$c7a_dir/declared.json" 2>&1 || true)"
+  c7a_perfunctory="$(python3 "$c7a_dir/analyzer.py" "$c7a_dir/perfunctory.json" 2>&1 || true)"
+
+  if echo "$c7a_undeclared" | grep -q '^OVERLAPS=1$'; then
+    pass "Check 7A: an undeclared overlap is still reported as a blocking OVERLAP"
+  else
+    fail "Check 7A: an undeclared overlap went undetected — the declaration weakened the check (observed: $(echo "$c7a_undeclared" | tr '\n' ' '))"
+  fi
+
+  if echo "$c7a_declared" | grep -q '^RECONSTRUCTED_OVERLAPS=1$'; then
+    pass "Check 7A: a substantively declared overlap is surfaced as reconstructed"
+  else
+    fail "Check 7A: a declared reconstructed overlap was not surfaced (observed: $(echo "$c7a_declared" | tr '\n' ' '))"
+  fi
+
+  # The declaration has to actually move the verdict, or it is decoration.
+  if echo "$c7a_declared" | grep -q '^OVERLAPS='; then
+    fail "Check 7A: a declared overlap still counts as blocking — the declaration does nothing"
+  else
+    pass "Check 7A: a declared overlap no longer counts as a blocking OVERLAP"
+  fi
+
+  # And it has to cost something, or it is a silent bypass with extra steps.
+  if echo "$c7a_perfunctory" | grep -q '^OVERLAPS=1$'; then
+    pass "Check 7A adversarial: a perfunctory reason does NOT buy the exemption"
+  else
+    fail "Check 7A adversarial: a one-word reason cleared the overlap — the declaration is a free bypass (observed: $(echo "$c7a_perfunctory" | tr '\n' ' '))"
+  fi
+
+  if echo "$c7a_declared" | grep -q '^RECONSTRUCTED_OVERLAP_DETAIL=.*reconstructed: bubbles.audit'; then
+    pass "Check 7A: the surfaced detail names which span was reconstructed (never silent)"
+  else
+    fail "Check 7A: the reconstructed overlap is not attributed to a named agent (observed: $(echo "$c7a_declared" | tr '\n' ' '))"
+  fi
+
+  rm -rf "$c7a_dir"
+fi
+
+# ----------------------------------------------------------------------------
 # Check 7C — phase-claim execution backing (audit finding A-017-08)
 #
 # Check 7A reads executionHistory only, so a completedPhaseClaims entry with NO
@@ -3872,6 +4042,31 @@ JSON
  "executionHistory":[{"agent":"bubbles.docs","phasesExecuted":["docs"]}]}
 JSON
 
+  # E/F: the PLAIN-STRING claim shape. Cases A-D above all use the dict form
+  # {"phase":"test"}, but real packets — including this selftest's own
+  # emit_base_fixture — write completedPhaseClaims as bare strings. The analyzer
+  # used to `continue` past every non-dict element, so `claimed` stayed empty and
+  # the gate reported NO_CLAIMS and passed on precisely the shape production
+  # emits. The dict-only fixtures could never see it. E is the regression case;
+  # F is its adversarial twin.
+  cat >"$c7c_dir/str_unbacked.json" <<'JSON'
+{"execution":{"completedPhaseClaims":["test","audit"],
+ "executionHistory":[{"agent":"bubbles.test","phasesExecuted":["test"]}]}}
+JSON
+
+  cat >"$c7c_dir/str_backed.json" <<'JSON'
+{"execution":{"completedPhaseClaims":["test"],
+ "executionHistory":[{"agent":"bubbles.test","phasesExecuted":["test"]}]}}
+JSON
+
+  # G: claims but NO executionHistory at all. Planning-only and legacy packets
+  # routinely omit the array. An absent record is not evidence of an unbacked
+  # claim, so the check must ABSTAIN here — otherwise widening claim parsing
+  # (cases E/F) turns every history-less planning packet into a false block.
+  cat >"$c7c_dir/no_history.json" <<'JSON'
+{"execution":{"completedPhaseClaims":["analyze","ux","design","plan"]}}
+JSON
+
   c7c_backed="$(python3 "$c7c_dir/analyzer.py" "$c7c_dir/backed.json" 2>&1 || true)"
   c7c_unbacked="$(python3 "$c7c_dir/analyzer.py" "$c7c_dir/unbacked.json" 2>&1 || true)"
   c7c_excess="$(python3 "$c7c_dir/analyzer.py" "$c7c_dir/excess.json" 2>&1 || true)"
@@ -3909,8 +4104,106 @@ JSON
     pass "Check 7C: reads a TOP-level executionHistory (BUG-012 container fallback honored)"
   fi
 
+  c7c_str_unbacked="$(python3 "$c7c_dir/analyzer.py" "$c7c_dir/str_unbacked.json" 2>&1 || true)"
+  c7c_str_backed="$(python3 "$c7c_dir/analyzer.py" "$c7c_dir/str_backed.json" 2>&1 || true)"
+
+  if echo "$c7c_str_unbacked" | grep -q '^UNBACKED=audit$'; then
+    pass "Check 7C: an unbacked PLAIN-STRING claim is reported (the shape real packets write)"
+  else
+    fail "Check 7C: a plain-string claim shape left the gate INERT — every element skipped, claimed empty, NO_CLAIMS reported while an unbacked phase passed (observed: $(echo "$c7c_str_unbacked" | tr '\n' ' '))"
+  fi
+
+  if echo "$c7c_str_unbacked" | grep -q '^NO_CLAIMS=1$'; then
+    fail "Check 7C: string-shape claims produced NO_CLAIMS — the analyzer is not normalising them and the gate is looking at nothing"
+  else
+    pass "Check 7C: string-shape claims are normalised, not discarded as NO_CLAIMS"
+  fi
+
+  if echo "$c7c_str_backed" | grep -q '^UNBACKED='; then
+    fail "Check 7C adversarial: a backed plain-string claim was reported UNBACKED — string normalisation over-fires"
+  else
+    pass "Check 7C adversarial: a backed plain-string claim is NOT reported (string path discriminates)"
+  fi
+
+  c7c_no_history="$(python3 "$c7c_dir/analyzer.py" "$c7c_dir/no_history.json" 2>&1 || true)"
+
+  if echo "$c7c_no_history" | grep -q '^NO_HISTORY=1$'; then
+    pass "Check 7C: abstains when executionHistory is absent entirely (planning-only packets are not false-blocked)"
+  else
+    fail "Check 7C: a packet with NO executionHistory was adjudicated instead of abstaining — every history-less planning packet would false-block (observed: $(echo "$c7c_no_history" | tr '\n' ' '))"
+  fi
+
+  if echo "$c7c_no_history" | grep -q '^UNBACKED='; then
+    fail "Check 7C: an absent executionHistory was reported as unbacked claims — absence of a record is not evidence of fabrication"
+  else
+    pass "Check 7C adversarial: an absent executionHistory yields no UNBACKED finding"
+  fi
+
   rm -rf "$c7c_dir"
 fi
+
+# =============================================================================
+# Check 43: Human Acceptance Terminal Gate (Gate G136)  [IMP-040 SCOPE-10]
+# =============================================================================
+# BUG-029's exact shape. artifact-lint.sh requires at least ONE `[x]` and never
+# rejects a `[ ]`, so a checklist of one checked item and one unchecked passes
+# lint. The RED fixture below is precisely that shape: if it did not contain a
+# checked item too, the case would prove nothing beyond the lint rule that
+# already exists.
+c43_dir="$tmp_root/c43-human-acceptance"
+mkdir -p "$c43_dir"
+
+cat <<'EOF' > "$c43_dir/mixed.md"
+# User Validation
+
+## Checklist
+
+- [x] The list renders on the dashboard route.
+- [ ] Deleting an item removes it from the list.
+
+## Notes
+
+- [ ] This bullet is outside the Checklist section and must be ignored.
+EOF
+
+cat <<'EOF' > "$c43_dir/all_checked.md"
+# User Validation
+
+## Checklist
+
+- [x] The list renders on the dashboard route.
+- [x] Deleting an item removes it from the list.
+
+## Notes
+
+- [ ] This bullet is outside the Checklist section and must be ignored.
+EOF
+
+# Same parser the guard and artifact-lint both use.
+c43_unchecked() {
+  awk '
+    /^## Checklist/ {in_checklist=1; next}
+    /^## / {if (in_checklist) exit}
+    in_checklist {print}
+  ' "$1" | grep -cE '^- \[ \] ' || true
+}
+
+c43_mixed_count="$(c43_unchecked "$c43_dir/mixed.md")"
+c43_clean_count="$(c43_unchecked "$c43_dir/all_checked.md")"
+
+if [[ "$c43_mixed_count" -eq 1 ]]; then
+  pass "Check 43: one checked plus one unchecked item is detected as unaccepted (BUG-029 shape)"
+else
+  fail "Check 43: the BUG-029 mixed checklist yielded $c43_mixed_count unchecked item(s), expected 1"
+fi
+
+if [[ "$c43_clean_count" -eq 0 ]]; then
+  pass "Check 43 adversarial: a fully checked checklist reports nothing, and a '[ ]' outside the Checklist section is ignored"
+else
+  fail "Check 43: a fully accepted checklist reported $c43_clean_count unchecked item(s) — the section parser is over-reaching beyond '## Checklist'"
+fi
+
+rm -rf "$c43_dir"
 
 echo "----------------------------------------"
 if [[ "$failures" -gt 0 ]]; then

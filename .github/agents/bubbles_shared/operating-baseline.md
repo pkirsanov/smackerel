@@ -72,8 +72,8 @@ The `agnosticity-lint.sh --staged` pre-commit check detects project-specific con
 ## Context Loading Profiles
 
 - `planner`: `plan-bootstrap.md`
-- `implementer`: `implement-bootstrap.md`
-- `tester`: `test-bootstrap.md`
+- `implementer`: `implement-bootstrap.md`, `execution-ops.md`
+- `tester`: `test-bootstrap.md`, `execution-ops.md`
 - `analyst`: `analysis-bootstrap.md`
 - `designer`: `design-bootstrap.md`
 - `docs`: `docs-bootstrap.md`
@@ -81,9 +81,15 @@ The `agnosticity-lint.sh --staged` pre-commit check detects project-specific con
 - `ux`: `ux-bootstrap.md`
 - `validator`: `audit-bootstrap.md` plus project command sources as needed
 - `auditor`: `audit-bootstrap.md`
-- `orchestrator`: `bubbles/workflows.yaml`, `state.json`, the scope entrypoint, and only the dispatch metadata required for the active step
+- `orchestrator`: `bubbles/workflows.yaml`, `state.json`, the scope entrypoint, `execution-ops.md`, and only the dispatch metadata required for the active step
 - `simplifier`: `implement-bootstrap.md`
 - `chaos`: `test-bootstrap.md`
+
+`execution-ops.md` is named by the three roles that CLOSE runs (IMP-043 SCOPE-2).
+It holds the lesson-capture rule, and no profile previously loaded it, so the
+only statement of that rule sat two optional hops from every agent that finishes
+work. The short form lives in the `bubbles-result-envelope` skill; this profile
+entry makes the long form reachable by the roles that need it.
 
 ### Phase-Local Authoring Reference (opt-in bundle reduction) — SUPERSEDED 2026-07-29
 
@@ -322,6 +328,44 @@ Long-running orchestrator agents (`bubbles.workflow`, `bubbles.sprint`, `bubbles
 
 Compact eagerly, before the next dispatch. Do not wait for the model to start truncating its own output.
 
+### Reach A Context Boundary At Every Phase Transition (IMP-039 SCOPE-4 / COST-7)
+
+Compacting the ledger is not the same as bounding the transcript. `compactedHistory[]` is a repository artifact; the model's conversation is not, and one can shrink while the other grows monotonically. In the measured session behind IMP-039 it did exactly that: request 1 carried 162,455 prompt tokens, request 13 carried 513,145, with zero host compaction checkpoints, while every ledger record was well formed.
+
+At EVERY phase transition the orchestrator MUST therefore reach an actual context boundary and record which kind it reached:
+
+| `kind` | Meaning | Requires |
+|---|---|---|
+| `host-checkpoint` | A real host compaction checkpoint was taken. | `checkpointId` — a claim with no id cannot be checked against anything |
+| `fresh-context` | The next specialist runs in a NEW context carrying only the persisted envelope. | — |
+| `unavailable` | The host exposes no compaction primitive. Start a fresh specialist context instead. | — |
+
+Record it through the canonical session writer. Keep the whole invocation on ONE line: G129 reads this file line-by-line, so a continuation that carries the binding triplet onto a second line documents a call a reader can copy unbound.
+
+```bash
+bash bubbles/scripts/state-snapshot.sh --phase phase_3_execute --context-boundary fresh-context --session-id <session-id> --session-control-file <control-file> --binding-packet-file <packet-file>
+```
+
+`unavailable` is always declarable, so no host can block remediation. Declaring unavailability is honest; passing a gate while the transcript grows is not. Gate G083 refuses a malformed boundary always, and refuses an absent one once the session has compacted at least one envelope.
+
+### Verbosity Posture: One Default, No Second Mode (IMP-039 SCOPE-7 / COST-4, EV-7)
+
+A recurring proposal is to add a quieter narrative mode so agents "say less". The measurement settles it against that.
+
+Across the audited session, completion tokens were **8,931 of 2,615,361 total tokens — 0.34%**. Prompt tokens were 2,606,430, of which tool results alone were 1,295,690 (49.7%). A verbosity mode optimizes the 0.34% and leaves the 99.66% untouched.
+
+**Decision: Bubbles ships ONE bounded default. There is no chatty/not-chatty mode, and none may be introduced.** The cost is in what RE-ENTERS context, not in what the model narrates, so the levers that matter are the bounded-capture default (SCOPE-1), the context-volume caps in `sessionBudget` (SCOPE-3), the transcript boundary above (SCOPE-4), and the narrowed always-on surface (SCOPE-6).
+
+Where a human genuinely needs the whole transcript, the escalation is per-invocation, explicit, and stamped rather than a global mode:
+
+```bash
+bash bubbles/scripts/evidence-capture.sh --diagnostic -- <command...>
+```
+
+The block records `escalation: diagnostic (bounded retention waived for this invocation)` so a reviewer can see the waiver, and it remains bounded by a stated ceiling — an escalation that could emit anything is how a bounded default erodes back into the paste it replaced.
+
+Where an attended/unattended difference genuinely matters, bind it to the **autonomy posture that already exists** in `workflows.yaml`. Do not add a second orthogonal axis: every gate, selftest, and agent would then have to be correct under both, doubling the surface for a measured 0.34% of spend.
+
 ### How To Compact
 
 1. For each raw RESULT-ENVELOPE older than the latest 2 (which stay in working memory verbatim):
@@ -378,11 +422,35 @@ Compacted records still satisfy the framework's anti-fabrication contract:
 
 - **Gate G021 (Anti-Fabrication):** The `evidenceRefs` array in each compact record IS the cited evidence. Each `rawPointer` MUST resolve to a real file on disk; orchestrators MUST NOT invent compact records.
 - **Gate G023 (State Transition Guard):** When a compact record claims an `outcome` of `completed_owned` for a scope's specialist, the underlying raw envelope at `rawPointer` MUST itself satisfy G023 (real DoD evidence, real scope status). Compaction never bypasses this — it only relocates the proof.
-- **Gate G083 (Context Compaction Discipline):** The compaction thresholds above (`count > 3` OR `cumulative rawSizeBytes > 8192` for the eligible slice, keeping the latest 2 raw) are enforced mechanically by `bubbles/scripts/compaction-discipline-guard.sh` against `.specify/memory/bubbles.session.json` `envelopesReceived[]`. Eligible envelopes that breach either threshold without a `compactedAt` timestamp fail Gate G083 (exit 1). Orchestrators receiving a Gate G083 violation MUST emit a `blocked` RESULT-ENVELOPE with finding `G083` and remediate by running `bubbles/scripts/context-compactor.sh` on the over-budget envelopes — the compactor additively stamps `compactedAt` so the guard reads the next run as clean. `state-transition-guard.sh` invokes the guard as Check 24; `framework-validate.sh` runs the hermetic selftest on every framework validation pass.
+- **Gate G083 (Context Compaction Discipline):** The compaction thresholds above (`count > 3` OR `cumulative rawSizeBytes > 8192` for the eligible slice, keeping the latest 2 raw) are enforced mechanically by `bubbles/scripts/compaction-discipline-guard.sh` against `.specify/memory/bubbles.session.json` `envelopesReceived[]`. Eligible envelopes that breach either threshold without a `compactedAt` timestamp fail Gate G083 (exit 1). Orchestrators receiving a Gate G083 violation MUST emit a `blocked` RESULT-ENVELOPE with finding `G083` and remediate by running `bubbles/scripts/context-compactor.sh` on the over-budget envelopes — the compactor additively stamps `compactedAt` so the guard reads the next run as clean. `state-transition-guard.sh` invokes the guard as Check 24; `framework-validate.sh` runs the hermetic selftest on every framework validation pass. Since IMP-039 SCOPE-4 the same guard also refuses a missing or malformed `contextBoundary` — see "Reach A Context Boundary At Every Phase Transition" above. A malformed boundary always fails; an absent one fails once the session has compacted at least one envelope, so an upgrade cannot retroactively block a session that never compacted.
 
 If `rawPointer` ever points to a file that does not exist, the compact record is invalid and MUST be discarded; the orchestrator MUST re-dispatch the specialist to obtain a fresh envelope.
 
 Operator-supplied context — pasted screenshots, terminal scrollback, another repository's logs, or another session's state — is DIAGNOSTIC INPUT ONLY. It MUST NOT be restated as the agent's own execution evidence, and MUST NOT be used to infer an active work mandate. Work is authorized only by the operator's explicit request in the current conversation (and, for repository selection, by IMP-103 repository-binding preflight).
+
+### Goal-Boundary Receipts (IMP-041 SCOPE-3 / GF-7 — Orchestrator Agents)
+
+G134 is registered as a universal gate, but registry membership is not execution: the only direct call was `bubbles.validate`'s pre-certification check, so a goal could reach planning and dispatch having passed no boundary. A prose instruction to "check the boundary" is not execution either — nothing downstream can tell whether it happened.
+
+Authorized runners therefore obtain a RECEIPT, which the producer prints **only** after the guard exits 0 (otherwise nothing is printed and the guard's exit code propagates):
+
+```
+bubbles/scripts/goal-boundary-receipt.sh emit --boundary <name> \
+    --session-file <session> [guard inputs...] \
+    [--scenario-file <compiled-scenario.json>] [--planned-delta <json>]
+```
+
+Obtain one before: scenario compilation or planning dispatch (`pre-planning`); a delivery node becoming eligible (`post-planning`); every mutable specialist dispatch (`pre-dispatch`); accepting changed paths or a DAG amendment (`post-finding`); resuming after compaction (`post-compaction`); certifying completion (`pre-certification`).
+
+The receipt binds goal id + revision, source-request digest, semantic-boundary digest, scenario digest, boundary name, and planned-delta digest, covering all of them with a `receiptDigest`. Carry that digest in the scenario ledger and the RESULT-ENVELOPE `boundaryReceiptDigest`; a parent checks it with `goal-boundary-receipt.sh verify --receipt-file <path> --session-file <session> --expect-boundary <name>`.
+
+Verification refuses an edited body, a revision superseded by an approved revision, a semantic boundary changed underneath the receipt, and a receipt minted for a **different** boundary — a `pre-planning` receipt proves nothing about `pre-dispatch`. Digests use canonically sorted JSON, so key re-ordering never manufactures false staleness. There is no `--force` / `--skip` / `--assume-passed`.
+
+### Convergence Materiality (IMP-041 SCOPE-7 / GF-13)
+
+Before every autonomous convergence iteration, run `bubbles/scripts/convergence-materiality.sh check --session-file <session> --iteration <n> --planned-delta <json> [--scenario-file <path>]`. It compares the iteration against the baseline recorded at the first one and refuses when the plan GREW, naming exactly what grew.
+
+**`neverStopForFixableObstacles` does not apply to goal expansion.** Persistence exists to push through difficulty, not through size; neither that rule nor solution search distinguishes "this is hard" from "this is bigger", which is how persistence amplifies expansion. Solution search may find a narrower implementation inside the boundary; it may not add a change class or a target. A generic continuation resumes the approved graph and nothing more, and a session budget limits runtime cost without ever granting scope. Only an approved contract revision re-baselines the brake — re-baselining at the same revision is refused, because that is how a runner would release the brake from inside the loop.
 
 ## Phase Relevance Resolution (Orchestrator Agents — IMP-038 SCOPE-5 / GF-4)
 
@@ -485,7 +553,7 @@ Hard dependency: `jq` is required (already used elsewhere in the framework). If 
 
 ### What
 
-- Each orchestrator agent calls `bash bubbles/scripts/state-snapshot.sh --mode start --phase <p> --session-id <session-id> --session-control-file <control-file> --binding-packet-file <packet-file>` at the beginning of every turn, and repeats the complete binding triplet with `--mode end` at the close, before yielding control back to the operator.
+- Orchestrators snapshot each turn boundary with `bash bubbles/scripts/state-snapshot.sh --mode <start|end> --phase <p> --session-id <session-id> --session-control-file <control-file> --binding-packet-file <packet-file>`. Goal-node calls add the required pair `--scenario-file <compiled-scenario.json> --node-id <node-id>`.
 - Each invocation appends a single record to `.specify/memory/bubbles.session.json` `turnSnapshots[]` carrying: `turnNumber` (auto-incremented), `timestamp` (UTC ISO8601), `phase`, `scopeId` (or null), `mode` (`start` | `end`), `note` (or null), and `agent` (from `$BUBBLES_AGENT_NAME`, defaulting to `unknown`).
 
 ### Why

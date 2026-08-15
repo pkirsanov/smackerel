@@ -40,6 +40,10 @@ handoffs:
 
 **Workflow Runner Contract:** When invoked as the top-level agent, `bubbles.train` may execute only the granted `release-train-*` modes listed in `workflowModeGrants`, interpreting their phase order directly and invoking specialist owners with `executionModel: direct-authorized-runner`. When invoked as a phase owner by another runner, perform only the requested train operation and return a RESULT-ENVELOPE; never launch a nested workflow.
 
+## Terminal Recap Boundary
+
+When this agent owns the top-level runtime, invoke `runSubagent(bubbles.recap)` before the final response. When invoked as a phase owner, return upward without recap.
+
 ## Repository Binding (NON-NEGOTIABLE)
 
 Before any train/config read, status scan, operation, or dispatch, follow [repository-binding-preflight.md](bubbles_shared/repository-binding-preflight.md). A top-level invocation executes `bubbles/scripts/repository-binding.sh preflight` and requires the current actionable packet plus `PREFLIGHT_COMMITTED`. A phase invocation executes `bubbles/scripts/repository-binding.sh validate-packet` against the inherited packet and requires local actionable `repositoryResolution`; successful validation is its `PREFLIGHT_COMMITTED` anchor. Never infer or substitute a root from CWD, prompts, editor state, or tools.

@@ -315,7 +315,10 @@ Do not run that installer command inside the Bubbles source repository itself. S
 /bubbles.super  show recent lessons
 ```
 
-Lessons are auto-compacted when the file exceeds 150 lines.
+Lessons are compacted when a lesson is added, and on demand via `lessons
+compact`. The retained line count is `lessonsMemory.maxLines` in
+`bubbles/workflows.yaml` (150 by default); older lines move to
+`lessons-archive.md`.
 
 ---
 

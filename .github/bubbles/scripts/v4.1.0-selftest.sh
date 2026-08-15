@@ -61,6 +61,37 @@ note() { printf '[v4.1.0-selftest] %s\n' "$*"; }
 ok()   { note "PASS  test-$1: $2"; pass=$((pass+1)); }
 ko()   { note "FAIL  test-$1: $2"; fail=$((fail+1)); }
 
+# A registry read that returns '' because the interpreter failed is
+# indistinguishable from a registry that genuinely declares nothing, and the
+# assertion below then reports a "mismatch" naming the wrong defect entirely.
+# Sending stderr to /dev/null is what made this an unexplainable intermittent
+# failure: it passes standalone and fails late in a long suite run, and the
+# reason was discarded every time. Capture stderr and print it.
+py_read() { # py_read <label> <python-source>
+  local label="$1"
+  local source="$2"
+  local stderr_file
+  local output
+  local status=0
+  stderr_file="$(mktemp)"
+  # stdin from /dev/null: this reader never uses it, but a dangling descriptor
+  # inherited from the caller aborts CPython during startup with
+  # "init_sys_streams ... Bad file descriptor", which would show up here as an
+  # empty value and be reported as a registry mismatch.
+  output="$(python3 -c "$source" </dev/null 2>"$stderr_file")" || status=$?
+  if [[ "$status" -ne 0 || -z "$output" ]]; then
+    # stderr, not stdout: this function's stdout IS the captured value, so a
+    # diagnostic written there would end up inside the value it explains.
+    printf '[v4.1.0-selftest] NOTE  %s: python3 read produced no value (exit=%s)\n' "$label" "$status" >&2
+    while IFS= read -r stderr_line; do
+      [[ -z "$stderr_line" ]] && continue
+      printf '[v4.1.0-selftest] NOTE  %s: python3 stderr: %s\n' "$label" "$stderr_line" >&2
+    done <"$stderr_file"
+  fi
+  rm -f "$stderr_file"
+  printf '%s' "$output"
+}
+
 # ---- Test 1: ceiling string present in the modes registry ----------------
 if grep -qE '(^|[^_-])delivered_pending_activation' "$MODES"; then
   ok 1 "delivered_pending_activation ceiling string present in modes registry"
@@ -69,11 +100,11 @@ else
 fi
 
 # ---- Test 2: scopeKinds taxonomy declares 6 kinds -------------------------
-sk_kinds="$(python3 -c "
+sk_kinds="$(py_read test-2 "
 import yaml
 d=yaml.safe_load(open('$WORKFLOWS'))
 print(','.join(sorted((d.get('scopeKinds') or {}).keys())))
-" 2>/dev/null || true)"
+")"
 expected_kinds="bootstrap,ci-config,contract-only,deploy-pointer,docs-only,runtime-behavior"
 if [[ "$sk_kinds" == "$expected_kinds" ]]; then
   ok 2 "scopeKinds has all 6 expected kinds ($sk_kinds)"
@@ -82,11 +113,12 @@ else
 fi
 
 # ---- Test 3: lockdownContract has 6 patterns + requiredFields -------------
-lc_count="$(python3 -c "
+lc_count="$(py_read test-3 "
 import yaml
 d=yaml.safe_load(open('$WORKFLOWS'))
 print(len((d.get('lockdownContract') or {}).get('patterns') or []))
-" 2>/dev/null || echo 0)"
+")"
+[[ -n "$lc_count" ]] || lc_count=0
 if [[ "$lc_count" == "6" ]]; then
   ok 3 "lockdownContract declares 6 patterns"
 else
@@ -94,13 +126,13 @@ else
 fi
 
 # ---- Test 4: 3 new modes present ------------------------------------------
-new_modes="$(python3 -c "
+new_modes="$(py_read test-4 "
 import yaml
 d=yaml.safe_load(open('$MODES'))
 m=d.get('modes') or {}
 present=[k for k in ('adapter-readiness-to-packet','dark-launch-shipped','migration-shipped-pending-cutover') if k in m and m[k].get('statusCeiling')=='delivered_pending_activation']
 print(','.join(sorted(present)))
-" 2>/dev/null || true)"
+")"
 expected_modes="adapter-readiness-to-packet,dark-launch-shipped,migration-shipped-pending-cutover"
 if [[ "$new_modes" == "$expected_modes" ]]; then
   ok 4 "3 new modes declared with delivered_pending_activation ceiling"

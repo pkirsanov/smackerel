@@ -147,8 +147,8 @@ else
   bad "adversarial: small agent wrongly flagged (check flags everything)"
 fi
 
-# ---- Case 7: cost proxy weights by observed dispatches -------------------
-BASE="$(field bubbles.docs costProxy)"
+# ---- Case 7: reference closure weights by observed dispatches -------------
+BASE="$(field bubbles.docs referenceClosureProxy)"
 mkdir -p "$REPO/.specify/runtime"
 {
   echo '{"agent":"bubbles.docs"}'
@@ -156,11 +156,11 @@ mkdir -p "$REPO/.specify/runtime"
   echo '{"agent":"bubbles.docs"}'
 } >"$REPO/.specify/runtime/framework-events.jsonl"
 OUT="$(run_json)"
-WEIGHTED="$(field bubbles.docs costProxy)"
+WEIGHTED="$(field bubbles.docs referenceClosureProxy)"
 if [[ "$WEIGHTED" -gt "$BASE" ]]; then
-  ok "cost proxy rises with observed dispatches ($BASE -> $WEIGHTED)"
+  ok "reference closure rises with observed dispatches ($BASE -> $WEIGHTED)"
 else
-  bad "cost proxy ignored dispatch counts ($BASE -> $WEIGHTED)"
+  bad "reference closure ignored dispatch counts ($BASE -> $WEIGHTED)"
 fi
 if [[ "$(field bubbles.docs dispatches)" == "3" ]]; then
   ok "dispatch count read from the runtime event log"

@@ -22,8 +22,15 @@ workflowExecutionPolicy:
 # registry is caught by bubbles/scripts/gates-registry-selftest.sh (which runs
 # `generate-gates-block.sh --check`) inside framework-validate.
 #
+# This copy was deleted under IMP-042 SCOPE-13 and RESTORED, because that
+# scope's own precondition — byte-equivalent queries for EVERY remaining
+# reader — had not actually been met. Six readers were fingerprinted; the
+# readers that grep this file for gate NAMES rather than definitions were
+# missed, and `agent-ownership-lint.sh` fails without the block. Deleting the
+# copy is still the right destination; it needs the full reader inventory first.
+#
 # GENERATED:GATE_BANDS_START — do not edit by hand; run bubbles/scripts/gate-bands.sh
-# Gate-ID bands: the framework RESERVES G001-G199 (currently G001-G016 plus G018-G029 plus G031-G038 plus G040-G044 plus G047-G048 plus G051-G053 plus G055-G061 plus G063-G064 plus G066-G095 plus G097-G101 plus G110-G134).
+# Gate-ID bands: the framework RESERVES G001-G199 (currently G001-G016 plus G018-G029 plus G031-G038 plus G040-G044 plus G047-G048 plus G051-G053 plus G055-G061 plus G063-G064 plus G066-G095 plus G097-G101 plus G110-G136).
 # GENERATED:GATE_BANDS_END
 # Project-local custom gates declared in .github/bubbles-project.yaml
 # use G900+ and are kept clear of the framework band (G200-G899 is a reserved
@@ -201,7 +208,7 @@ gates:
     classification: modelCompensation
     retireWhen: { minTier: opus-class, metric: fabricated-evidence-rate, threshold: 0.005, window: 50 }
     enforcedBy: [ script:bubbles/scripts/release-delivery-reconciliation-guard.sh ]
-    description: ABSOLUTE BLOCKING gate. EVERY DoD item marked [x] MUST have raw terminal output evidence (≥10 lines) recorded INLINE directly beneath it in scopes.md. Items without evidence are INVALID even if checked. Each item MUST be individually validated — batch-checking is forbidden. Test-related DoD items MUST show real test execution covering ALL scenarios (Gherkin, error paths, boundary conditions, parameter permutations) with 100% business logic coverage. Tests MUST be real (no internal mocks, real test DBs, real assertions that fail if feature is broken). Agents MUST verify each [x] item has evidence before marking scope Done.
+    description: ABSOLUTE BLOCKING gate. EVERY DoD item marked [x] MUST have raw terminal output evidence (≥10 lines) recorded INLINE directly beneath it in scopes.md, OR behind one of the two reference forms that state-transition-guard.sh Check 9 resolves (a report.md#anchor link, or a structured tool-log record). A resolved reference is equivalent to an inline block; an unresolvable one FAILS the item and is never a silent pass. See agents/bubbles_shared/evidence-rules.md for the canonical location contract. Items without evidence are INVALID even if checked. Each item MUST be individually validated — batch-checking is forbidden. Test-related DoD items MUST show real test execution covering ALL scenarios (Gherkin, error paths, boundary conditions, parameter permutations) with 100% business logic coverage. Tests MUST be real (no internal mocks, real test DBs, real assertions that fail if feature is broken). Agents MUST verify each [x] item has evidence before marking scope Done.
   G026:
     since: "5.2.0"
     sinceDate: "2026-06-04"
@@ -610,9 +617,9 @@ gates:
     sinceDate: "2026-06-04"
     name: context_compaction_discipline_gate
     classification: businessInvariant
-    enforcedBy: [ script:bubbles/scripts/compaction-discipline-guard-selftest.sh, script:bubbles/scripts/compaction-discipline-guard.sh, script:bubbles/scripts/context-compactor.sh ]
+    enforcedBy: [ script:bubbles/scripts/compaction-discipline-guard-selftest.sh, script:bubbles/scripts/compaction-discipline-guard.sh, script:bubbles/scripts/context-compactor.sh, script:bubbles/scripts/state-snapshot.sh ]
     description: >-
-      BLOCKING gate. Enforces the in-loop compaction rule from `agents/bubbles_shared/operating-baseline.md` → "Context Compaction Discipline": orchestrator agents (bubbles.workflow, bubbles.goal, bubbles.iterate, bubbles.sprint) MUST keep the trailing transition-packet log inside per-spec budgets. The eligible slice — all envelopes for a spec EXCEPT the latest 2 (kept raw on purpose) — MUST satisfy BOTH `count <= 3` AND `cumulative rawSizeBytes <= 8192` UNLESS each over-budget envelope carries a `compactedAt` timestamp. Thresholds are framework constants (NOT workflows.yaml-configurable). Enforced mechanically by `bubbles/scripts/compaction-discipline-guard.sh`, which reads `.specify/memory/bubbles.session.json` `envelopesReceived[]` (schema `{specDir, agent, receivedAt, rawSizeBytes, incomingMessage, compactedAt, rawPointer}`). The guard exits 0 (pass), 1 (violation — count or size breach with uncompacted eligible entries), or 2 (malformed/missing structured fields). State-transition-guard.sh invokes this guard as Check 24. Exceeding either threshold without compaction MUST emit a `blocked` RESULT-ENVELOPE with finding `G083`; remediate by running `bubbles/scripts/context-compactor.sh` against the over-budget envelopes (it stamps `compactedAt` additively). Hermetic selftest: `bubbles/scripts/compaction-discipline-guard-selftest.sh`. Wired into `bubbles/scripts/framework-validate.sh`.
+      BLOCKING gate. Enforces the in-loop compaction rule from `agents/bubbles_shared/operating-baseline.md` → "Context Compaction Discipline": orchestrator agents (bubbles.workflow, bubbles.goal, bubbles.iterate, bubbles.sprint) MUST keep the trailing transition-packet log inside per-spec budgets. The eligible slice — all envelopes for a spec EXCEPT the latest 2 (kept raw on purpose) — MUST satisfy BOTH `count <= 3` AND `cumulative rawSizeBytes <= 8192` UNLESS each over-budget envelope carries a `compactedAt` timestamp. Thresholds are framework constants (NOT workflows.yaml-configurable). Enforced mechanically by `bubbles/scripts/compaction-discipline-guard.sh`, which reads `.specify/memory/bubbles.session.json` `envelopesReceived[]` (schema `{specDir, agent, receivedAt, rawSizeBytes, incomingMessage, compactedAt, rawPointer}`). SECOND OBLIGATION (IMP-039 SCOPE-4): the rules above govern the repository LEDGER only, so the gate could pass on every envelope while the live model transcript grew monotonically. The guard therefore ALSO checks the session's `contextBoundary` object `{kind, checkpointId, at}`, where `kind` is `host-checkpoint` (a real host compaction checkpoint; `checkpointId` REQUIRED, because a checkpoint claim with no id cannot be checked against anything), `fresh-context` (a new specialist context carrying only the persisted envelope), or `unavailable` (the host exposes no compaction primitive). A malformed boundary is ALWAYS a finding. An ABSENT boundary is a finding only when the session actually compacted at least one envelope, so an upgrade never retroactively blocks a session that never exercised compaction. `unavailable` is always declarable, so remediation is never blocked by the host: declaring unavailability is honest, passing while the transcript grows is not. The boundary is recorded at a phase transition via `bubbles/scripts/state-snapshot.sh --context-boundary <kind>[:<checkpointId>]`. The guard exits 0 (pass), 1 (violation — count or size breach with uncompacted eligible entries, OR a missing/malformed live-transcript boundary), or 2 (malformed/missing structured fields). State-transition-guard.sh invokes this guard as Check 24. Exceeding either threshold without compaction MUST emit a `blocked` RESULT-ENVELOPE with finding `G083`; remediate by running `bubbles/scripts/context-compactor.sh` against the over-budget envelopes (it stamps `compactedAt` additively).       THIRD OBLIGATION (IMP-042 SCOPE-7). A `compactedAt` stamp asserts the raw envelope was replaced by a durable summary, so that summary MUST exist. When the session carries a `compactedHistory` key, every stamped envelope MUST have a matching entry whose `rawPointer` equals the envelope's own. Checking the stamp alone allowed an envelope to be marked compacted while its record was lost, discarding the raw content and the justification for discarding it together, with the gate still green. `context-compactor.sh` now writes the stamp and the record in ONE rewrite of the session file and refuses a half-written compaction instead of reporting success. A session with no `compactedHistory` key predates this contract and is not retroactively blocked. Hermetic selftest: `bubbles/scripts/compaction-discipline-guard-selftest.sh`. Wired into `bubbles/scripts/framework-validate.sh`.
   G084:
     since: "5.2.0"
     sinceDate: "2026-06-04"
@@ -638,7 +645,7 @@ gates:
     classification: businessInvariant
     enforcedBy: [ script:bubbles/scripts/orchestrator-persistence-lint-selftest.sh, script:bubbles/scripts/orchestrator-persistence-lint.sh ]
     description: >-
-      BLOCKING gate. Orchestrator prompt files MUST make autonomous persistence the default operating mode: after any non-terminal phase, automatically continue to the next phase, stopping only for convergence achieved, max iterations reached, user requests stop, or fundamental impossibility. Enforced mechanically by `bubbles/scripts/orchestrator-persistence-lint.sh`, which scans exactly `agents/bubbles.goal.agent.md`, `agents/bubbles.workflow.agent.md`, `agents/bubbles.iterate.agent.md`, and `agents/bubbles.sprint.agent.md` for forbidden continuation-prompt phrases outside explicit FORBIDDEN examples and for the required persistence-default language. The guard exits 0 (clean), 1 (findings), or 2 (missing/unreadable target files or invalid invocation). State-transition-guard.sh invokes this guard as Check 27. Hermetic selftest: `bubbles/scripts/orchestrator-persistence-lint-selftest.sh`. Persistent regression: `tests/regression/test_05_orchestrator_persistence.sh`. Wired into `bubbles/scripts/framework-validate.sh`.
+      BLOCKING gate. The four generic orchestrators MUST classify continuation before target/work parsing and auto-continue every non-terminal phase. A closed independent 15-agent minimum roster MUST match workflow grants plus `terminalRecapPolicy.additionalAgents`; every roster agent invokes non-recursive `bubbles.recap` at terminal stops and returns control instead of selecting unrelated work. Enforced mechanically by `bubbles/scripts/orchestrator-persistence-lint.sh`, including classifier ordering, targeted-continuation contradiction, phase-owner upward-return, and recap non-recursion checks. The guard exits 0 (clean), 1 (findings), or 2 (missing/unreadable targets, an empty policy, or invalid invocation). State-transition-guard.sh invokes this guard as Check 27. Hermetic selftest: `bubbles/scripts/orchestrator-persistence-lint-selftest.sh`. Persistent regression: `tests/regression/test_05_orchestrator_persistence.sh`. Wired into `bubbles/scripts/framework-validate.sh`.
   G087:
     since: "5.2.0"
     sinceDate: "2026-06-04"
@@ -646,7 +653,7 @@ gates:
     classification: businessInvariant
     enforcedBy: [ script:bubbles/scripts/planning-packet-linkage-guard-selftest.sh, script:bubbles/scripts/planning-packet-linkage-guard.sh ]
     description: >-
-      BLOCKING gate. Hardened planning packets MUST NOT remain orphaned from implementation. For any `state.json` with top-level `status == "specs_hardened"` and `planningOnly != true`, `linkedImplementationSpec` MUST point to a real spec directory containing `state.json`. If the linked implementation spec is `status == "done"`, its `linkedPlanningPacket` MUST point back to the hardened planning packet. `planningOnly:true` is allowed only with a non-empty `planningOnlyJustification`. Dangling implementation pointers fail, and implementation targets with `status == "archived"` are invalid active targets; the owner must relink to a non-archived implementation spec or classify the packet as planning-only with justification. Enforced mechanically by `bubbles/scripts/planning-packet-linkage-guard.sh`, which exits 0 (clean), 1 (G087 findings), or 2 (runtime error / malformed input). State-transition-guard.sh invokes this guard as Check 29. Hermetic selftest: `bubbles/scripts/planning-packet-linkage-guard-selftest.sh`. Persistent regression: `tests/regression/test_10_planning_packet_linkage.sh`. Wired into `bubbles/scripts/framework-validate.sh`.
+      BLOCKING gate. Hardened planning packets MUST NOT remain orphaned from implementation. A `state.json` with top-level `status == "specs_hardened"` MUST resolve to exactly ONE of three truthful dispositions: (1) `linkedImplementationSpec` points to a real spec directory containing `state.json`; (2) `planningOnly: true` with a non-empty `planningOnlyJustification`, asserting no implementation will follow; (3) `deliveryTopology: "in-place"` with a `deliveryTopologyJustification` of at least 20 characters, asserting the packet plans AND implements in the same directory so there is no separate spec to name. Disposition (3) exists because a packet with that topology could satisfy neither original exit without asserting something false — a gate whose only exits are lies selects which lie gets told rather than enforcing an invariant. An ABSENT `deliveryTopology` resolves to `two-spec`, so the field is strictly additive and cannot newly fail a packet that passed before it existed. The three are mutually exclusive: `planningOnly:true` together with `deliveryTopology:in-place` fails, as does `in-place` combined with a `linkedImplementationSpec`; an unrecognised `deliveryTopology` value fails rather than being treated as a satisfier. If the linked implementation spec is `status == "done"`, its `linkedPlanningPacket` MUST point back to the hardened planning packet. Dangling implementation pointers fail, and implementation targets with `status == "archived"` are invalid active targets; the owner must relink to a non-archived implementation spec or classify the packet under one of the other two dispositions. Enforced mechanically by `bubbles/scripts/planning-packet-linkage-guard.sh`, which exits 0 (clean), 1 (G087 findings), or 2 (runtime error / malformed input). WIRING: `state-transition-guard.sh` does NOT invoke this guard directly — grepping that file for the guard returns zero, which reads as an unwired gate. The invocation is delegated to `bubbles/scripts/guards/tail-delegated-gates.sh`, which the state-transition guard sources. Hermetic selftest: `bubbles/scripts/planning-packet-linkage-guard-selftest.sh` (45 assertions, including a non-vacuity case proving an explicit `two-spec` packet still fails without linkage). Persistent regression: `tests/regression/test_10_planning_packet_linkage.sh`. Wired into `bubbles/scripts/framework-validate.sh`.
   G088:
     since: "5.2.0"
     sinceDate: "2026-06-04"
@@ -973,7 +980,7 @@ gates:
     retireWhen: { minTier: sonnet-class, metric: process-violation-rate, threshold: 0.02, window: 20 }
     enforcedBy: [ script:bubbles/scripts/session-cap-guard-selftest.sh, script:bubbles/scripts/session-cap-guard.sh ]
     description: >-
-      BLOCKING gate. Mechanically enforces the IMP-003 `sessionBudget` aggregate safety caps for a whole goal/sprint session — the AGGREGATE sibling of Gate G082. Where G082 caps convergence iterations PER (specDir, agent) using `maxConvergenceIterations` from `bubbles/workflows.yaml`, G128 caps the AGGREGATE usage across the WHOLE session (every spec, every agent) using a `sessionBudget` object recorded in `.specify/memory/bubbles.session.json` with three dimensions: `maxTotalConvergenceIterations` (aggregate sum of `convergenceLoops[].iterationCount`), `maxWallClockMinutes` (earliest → latest `turnSnapshots[].timestamp`, in minutes), and `maxToolCalls` (aggregate `toolCallCount` counter). DEFAULT-OFF for every existing repo: if the session file has no `sessionBudget`, or ALL THREE caps are null/absent, the guard exits 0 and nothing is enforced. A dimension whose cap is null is not enforced; a dimension whose cap is set but whose usage data is absent (no `turnSnapshots[]`, no `toolCallCount`) is skipped — you cannot breach what you cannot measure. Only when a non-null cap is present AND its aggregate is measurable does the guard compare them. RFC3339 timestamps are parsed with jq's `fromdateiso8601` (not the system `date`), so wall-clock math is identical on GNU (WSL/Linux) and BSD (macOS) userland. Enforced mechanically by `bubbles/scripts/session-cap-guard.sh` (exit 0 = no active budget / no cap exceeded; exit 1 = an active aggregate cap exceeded — stderr names the breached dimension(s) and observed-vs-cap; exit 2 = unparseable session.json / non-integer cap or counter / bad usage). State-transition-guard.sh invokes this guard as Check 40 (a NO-OP when no budget is recorded). Exceeding a cap MUST emit a `blocked` RESULT-ENVELOPE with finding `G128` and STOP the session (no further specs/scopes). There is NO `--skip`/`--force`/`--ignore` bypass (matches G082). Hermetic selftest: `bubbles/scripts/session-cap-guard-selftest.sh`. Persistent regression: `tests/regression/test_22_session_cap_enforcement.sh`. Wired into `bubbles/scripts/framework-validate.sh` (selftest + live guard). Cross-reference: G082 (per-spec convergence cap) — G082 keeps a single spec's loop honest; G128 keeps the whole session's aggregate honest. Reference: improvements/IMP-003-autonomy-dial-and-safety-caps.md (SCOPE-2).
+      BLOCKING gate. Mechanically enforces the IMP-003 `sessionBudget` aggregate safety caps for a whole goal/sprint session — the AGGREGATE sibling of Gate G082. Where G082 caps convergence iterations PER (specDir, agent) using `maxConvergenceIterations` from `bubbles/workflows.yaml`, G128 caps the AGGREGATE usage across the WHOLE session (every spec, every agent) using a `sessionBudget` object recorded in `.specify/memory/bubbles.session.json` with seven dimensions: `maxTotalConvergenceIterations` (aggregate sum of `convergenceLoops[].iterationCount`), `maxWallClockMinutes` (earliest → latest `turnSnapshots[].timestamp`, in minutes), `maxToolCalls` (aggregate `toolCallCount` counter), and the four context-volume dimensions added by IMP-039 SCOPE-3: `maxSingleToolResultBytes` and `maxCumulativeToolResultBytes` (largest and total retained tool result, measured from `stdoutBytes` + `stderrBytes` in `.specify/runtime/tool-calls.jsonl`, no adapter required), plus `maxPromptTokensPerRequest` and `maxCumulativePromptTokens` (measurable ONLY through a configured usage adapter under `bubbles/adapters/usage/`, default `none`). The first three count EVENTS; the last four bound the VOLUME of text a session carries forward, which is the blind spot that let a session hold every event cap while replaying megabytes of retained output into each later request. DEFAULT-OFF for every existing repo: if the session file has no `sessionBudget`, or EVERY cap is null/absent, the guard exits 0 and nothing is enforced. A dimension whose cap is null is not enforced; a dimension whose cap is set but whose usage data is absent (no `turnSnapshots[]`, no `toolCallCount`, no tool-call log, no usage adapter) is skipped — you cannot breach what you cannot measure, and a token dimension is never estimated. Only when a non-null cap is present AND its aggregate is measurable does the guard compare them. RFC3339 timestamps are parsed with jq's `fromdateiso8601` (not the system `date`), so wall-clock math is identical on GNU (WSL/Linux) and BSD (macOS) userland. Enforced mechanically by `bubbles/scripts/session-cap-guard.sh` (exit 0 = no active budget / no cap exceeded; exit 1 = an active aggregate cap exceeded — stderr names the breached dimension(s) and observed-vs-cap; exit 2 = unparseable session.json / non-integer cap or counter / bad usage). State-transition-guard.sh invokes this guard as Check 40 (a NO-OP when no budget is recorded). Exceeding a cap MUST emit a `blocked` RESULT-ENVELOPE with finding `G128` and STOP the session (no further specs/scopes). There is NO `--skip`/`--force`/`--ignore` bypass (matches G082). Hermetic selftest: `bubbles/scripts/session-cap-guard-selftest.sh`. Persistent regression: `tests/regression/test_22_session_cap_enforcement.sh`. Wired into `bubbles/scripts/framework-validate.sh` (selftest + live guard). Cross-reference: G082 (per-spec convergence cap) — G082 keeps a single spec's loop honest; G128 keeps the whole session's aggregate honest. Reference: improvements/IMP-003-autonomy-dial-and-safety-caps.md (SCOPE-2), IMP-039 SCOPE-3 (context-volume dimensions).
 
   # ──────────────────────────────────────────────────────────────────────────
   # DOMAIN-INVARIANT CORRESPONDENCE GATE (G130)
@@ -1048,6 +1055,14 @@ gates:
     enforcedBy: [ script:bubbles/scripts/autonomy-posture-guard.sh, script:bubbles/scripts/autonomy-posture-guard-selftest.sh ]
     description: >-
       Keeps the IMP-039 autonomy posture surface internally consistent. That spec shipped a resolvable dial (SCOPE-1), a corrected enum (SCOPE-2), an opt-in `unattended` (SCOPE-3), a never-suppressible floor (SCOPE-4), a decision ledger (SCOPE-5) and posture persistence (SCOPE-6) — but each is only as good as its NEXT edit, and AUT-2 was precisely a declaration describing behavior the implementation did not have. Nothing stopped that recurring. This gate checks the four places drift actually enters. (1) The never-suppressible floor still exists AND still enumerates its six items, so the section cannot be hollowed out while its heading survives — the subtler regression, because a present heading reads as an intact policy. (2) The `executionOptions.optionalWorkflowTags.autonomy` enum and the resolver's VALID_AUTONOMY agree exactly, in BOTH directions: a posture declared but not implemented is the AUT-2 shape, and a posture implemented but not declared is undocumented behavior. (3) `unattended` with an unbounded session budget is still refused with exit 3 AND still names E039-UNATTENDED-UNBOUNDED, because an unnamed refusal is not actionable; and `unattended` with a bounded budget still resolves, so the rule cannot be satisfied by refusing everything. (4) The resolver still refuses every bypass flag, so the posture can never begin waiving verification. Exits 0 (consistent), 1 (findings, one per line), or 2 (usage). There is NO --force/--skip/--ignore: a posture that cannot satisfy the floor is changed, never exempted. Hermetic selftest: `bubbles/scripts/autonomy-posture-guard-selftest.sh` (15 cases, each pairing the green fixture with a drifted variant, including a resolver that silently accepts a bypass flag and a floor hollowed out behind an intact heading). Reference: improvements/IMP-039 (SCOPE-7).
+  G136:
+    since: "7.26.0"
+    sinceDate: "2026-08-13"
+    name: human_acceptance_terminal_gate
+    classification: businessInvariant
+    enforcedBy: [ script:bubbles/scripts/guards/tail-delegated-gates.sh, script:bubbles/scripts/state-transition-guard-selftest.sh, script:tests/regression/test_35_human_acceptance_terminal.sh ]
+    description: >-
+      Refuses a terminal transition while any acceptance item in `uservalidation.md` is still unchecked. The hole this closes is narrow and was load-bearing: `artifact-lint.sh` requires the checklist to carry at least ONE checked `[x]` entry and never rejects an unchecked one, so a checklist of one checked item and five unchecked passes lint and the spec reaches a terminal status with five behaviors no human ever accepted. Lint is the WRONG place to repair that, which is why the repair lives here instead. Lint also runs during planning, where a checked-by-default template is legitimate — the template records what WILL be accepted, it does not claim a human already ran it — so tightening lint would either break planning or force planning to fabricate acceptance up front. The terminal transition is the moment the claim stops being provisional, so that is where it is checked. SCOPE. Runs only when the resolved target status is `done`; a ceiling-bound mode (validate-only, docs-only, spec-scope-hardening and the rest) is not claiming human acceptance of delivered behavior, and an open checklist is the correct state for it rather than a violation. Parses ONLY the `## Checklist` section, using the same awk section reader `artifact-lint.sh` uses, so the two agree on what the checklist IS and a later edit to one cannot silently desync the other; a `[ ]` bullet under `## Notes` is ignored on purpose. THE GUARD NEVER EDITS THE FILE. It prints each unaccepted item and stops. Checking a box on the author's behalf would fabricate exactly the human acceptance the gate exists to require, which is the one failure mode that would make the gate worse than not having it. Either a human accepts the behavior and checks it, or the item is a real regression and the spec is not done. Exits are the guard's own: the check fails the transition, it has no separate exit code and no `--force`/`--skip`/`--ignore`. Selftest: two cases in `bubbles/scripts/state-transition-guard-selftest.sh` — the BUG-029 shape itself (one checked plus one unchecked, which must be detected) and its adversarial partner (a fully checked list reports nothing, and a `[ ]` outside the Checklist section is ignored, proving the section parser does not over-reach). Reference: improvements/IMP-040 (SCOPE-10), BUG-029.
 
 # Outcome contract (applies to all workflow modes that allow `done` as a
 # terminal status — i.e., every mode whose `statusCeiling` is `done`).
@@ -1260,8 +1275,11 @@ customGatesDiscovery:
 lessonsMemory:
   file: .specify/memory/lessons.md
   archiveFile: .specify/memory/lessons-archive.md
+  # Read by bubbles_lessons_max_lines() in cli.sh, which compacts at capture.
+  # There is deliberately no trigger key here: `autoCompactTrigger: workflow_start`
+  # named an event the framework cannot fire, so compaction never ran unless a
+  # human typed the subcommand (IMP-043 SCOPE-3).
   maxLines: 150
-  autoCompactTrigger: workflow_start
   recencyTiers:
     recent: 30d # Full detail
     aging: 90d # Problem + fix only
@@ -1301,7 +1319,9 @@ skillEvolution:
   autoCreate: false # Propose only, user approves
   autoUpdate: false # Propose only, user approves
   reviewAgent: bubbles.super
-  reviewTrigger: workflow_start # Surface proposals at start of workflow
+  # No reviewTrigger key: `workflow_start` was an event nothing fires. Proposals
+  # are regenerated on every `skill-proposals` call, so the surface is already
+  # self-refreshing (IMP-043 SCOPE-3).
   proposalFormat: |
     ## Skill Proposal: {skill_name}
     - Pattern: {pattern_description}
@@ -1344,7 +1364,8 @@ developerProfile:
     agingDays: 180 # Entries older than this only suggest, don't auto-resolve
     staleAction: surface_for_review # Surfaced for user review
     reviewAgent: bubbles.super
-    reviewTrigger: workflow_start
+    # No reviewTrigger key: `workflow_start` names an event no host fires
+    # (IMP-043 SCOPE-3). Staleness surfaces when the profile is read.
     reviewMessage: |
       Your developer profile has {N} stale preferences (>180 days).
       Review and confirm/remove? [Show / Skip / Clear all stale]
@@ -1392,23 +1413,65 @@ metrics:
     perAgentTracking: true
     perSpecTracking: true
     perScopeTracking: true
+    # IMP-044 SCOPE-2 (REG-14). This list previously declared eight dimensions
+    # against a store whose records carry timestamp, command, subcommand,
+    # result, durationMs, target and args. Six of the eight named no producer
+    # anywhere, so the registry described a measurement nobody took. A declared
+    # dimension the record shape cannot carry is a claim, not a setting.
+    #
+    # What remains is what THIS plane actually produces.
     measuredDimensions:
-    - invocationCount # How many times each agent was called
-    - phaseDuration # Wall-clock seconds per phase (from terminal timestamps)
+    - invocationCount # Counted from one activity record per CLI invocation
+    - durationMs # Wall-clock milliseconds, written on the same record
+    # The dimensions removed from this list were not deleted from the framework;
+    # they moved to the block that names their real producer, below.
+
+  # Produced by bubbles/scripts/gate-hit-log.sh into an ALWAYS-ON runtime store,
+  # independent of the `metrics.enabled` toggle above. Records carry per-gate
+  # outcomes, which is why gate history survives even when event metrics are off.
+  gateTelemetry:
+    storageFile: .specify/runtime/gate-hits.jsonl
+    producer: bubbles/scripts/gate-hit-log.sh
+    reportCommand: "bubbles/scripts/gate-hit-log.sh report"
+    measuredDimensions:
+    - gatePassFailRate # Per gate ID pass/fail ratio, from kind:"gate" records
+    - parentExpansionRate # Runs using parent-expansion, from kind:"run" records
+    # Retirement evidence counts sourceClass=product only; fixture and selftest
+    # runs are excluded by default (IMP-042 SCOPE-17).
+
+  # Derived from state.json executionHistory, which is the only place agent
+  # identity per phase actually exists. bubbles.retro already computes these the
+  # same way; naming the source here stops the registry implying the activity
+  # store holds them.
+  derivedFromState:
+    source: state.json executionHistory
+    measuredDimensions:
+    - phaseDuration # Wall-clock seconds per phase
     - retryCount # Self-healing retries consumed vs budget
-    - gatePassFailRate # Per gate ID pass/fail ratio
     - scopeCompletionTime # First implement invocation to Done status
-    - linesChanged # git diff --stat per scope
     - phaseSkipRate # Skipped vs executed phases
-    # bundleCostProxy = effective bundle bytes x dispatch count, from
-    # bundle-cost-report.sh. NOT a token count and NOT a dollar figure: it is a
-    # measured byte size multiplied by a counted dispatch, so it is comparable
-    # over time without inventing either of the two numbers below. Bundle size
-    # alone under-states the orchestrator, which is dispatched far more often
-    # than any specialist. (IMP-027 SCOPE-6 / COST-1.)
-    - bundleCostProxy
+
+  # Produced by bubbles/scripts/bundle-cost-report.sh, not by any store above.
+  referenceClosure:
+    producer: bubbles/scripts/bundle-cost-report.sh
+    measuredDimensions:
+    # referenceClosureProxy = effective bundle bytes x dispatch count. NOT a
+    # token count and NOT a dollar figure: it is a measured byte size multiplied
+    # by a counted dispatch, so it is comparable over time without inventing
+    # either of the two numbers below. Bundle size alone under-states the
+    # orchestrator, which is dispatched far more often than any specialist.
+    # Named for reachability rather than spend, because a reference closure is
+    # not a cost. (IMP-027 SCOPE-6 / COST-1; renamed IMP-039, registry aligned
+    # IMP-044 REG-14 after the declared name outlived the emitted one.)
+    - referenceClosureProxy
+    # linesChanged is git-derived, not stored: `git diff --stat` per scope.
+    - linesChanged
     # Dimensions explicitly NOT tracked (not measurable):
-    # - tokenCount            # Not exposed by VS Code Copilot API
+    # - tokenCount            # Not exposed by the VS Code Copilot API; readable
+    #                         # ONLY through a configured usage adapter
+    #                         # (bubbles/adapters/usage/, default none). With no
+    #                         # adapter every surface reports `unmeasured`;
+    #                         # deriving a count any other way is fabrication.
     # - dollarCost            # Derived from unknown tokens = fabricated
     # - thinkingTime          # No visibility into model inference
     # - agentEfficiency       # No meaningful denominator
@@ -1714,7 +1777,7 @@ phases:
 #   specs_hardened   - Planning artifacts improved, no implementation done
 #   docs_updated     - Documentation updated, no implementation done
 #   validated        - Validation/audit completed, no implementation done
-#   in_progress      - Partial work, used for resume-only
+#   in_progress      - Partial work; transient resume requests recover the original mode
 
 # Mode Defaults (applied to ALL modes with statusCeiling: done)
 #
@@ -1818,7 +1881,7 @@ executionOptions:
         full: grillMode off, socratic false; mechanical decisions auto-resolve via decisionPolicy.mechanicalPrinciples, but taste decisions still batch to each phase boundary and security decisions always escalate (today's default)
         guarded: grillMode required-on-ambiguity plus a conditional clarify consistency gate — stop only on genuine ambiguity
         interactive: grillMode on-demand plus socratic true — human-in-the-loop; taste decisions surfaced
-        unattended: opt-in posture above `full`, never the default — interactive questions forbidden, taste-decision overflow auto-resolves and is logged, autoCommit scope, and a `blocked` on an agent-solvable cause requires a recorded remediation attempt first (an operator-only blocker stays a truthful terminal state). REQUIRES a non-null sessionBudget, because a run that will not stop on its own forfeits the right to be unbounded. Mechanically enforced TODAY only for the budget rule — autonomy-resolve.sh exits 3 with E039-UNATTENDED-UNBOUNDED when every cap is null; the remaining deltas are declared contract awaiting the decision ledger and posture guard.
+        unattended: opt-in posture above `full`, never the default — interactive questions forbidden, taste-decision overflow auto-resolves and is logged, autoCommit scope, and a `blocked` on an agent-solvable cause requires a recorded remediation attempt first (an operator-only blocker stays a truthful terminal state). REQUIRES a non-null sessionBudget, because a run that will not stop on its own forfeits the right to be unbounded. Mechanically enforced TODAY only for the budget rule — autonomy-resolve.sh exits 3 with E039-UNATTENDED-UNBOUNDED when every cap is null. The decision ledger (state-snapshot.sh) and the posture guard (G135) have since shipped, so the remaining deltas are no longer awaiting them — they are unimplemented in the four runner agents, which still document only full/guarded/interactive. Requesting this value today therefore changes budget enforcement only.
       meaning: Convenience alias that sets grillMode/socratic/clarify together. Explicit flags override this alias. Default `full` preserves current behavior. Resolved by bubbles/scripts/autonomy-resolve.sh; precedence is per-run directive -> BUBBLES_AUTONOMY env -> .github/bubbles-project.yaml `autonomy:` -> this default. The env and project-config layers are what let a posture survive a session restart without re-asserting it in the prompt. The posture governs interaction only and never waives a gate (see agents/bubbles_shared/critical-requirements.md -> Autonomy Floor).
     socratic:
       type: boolean
@@ -1968,6 +2031,52 @@ executionOptions:
       type: integer
       default: null
       meaning: Aggregate tool-call budget for the whole session. null = unbounded (default, opt-in). When non-null, mechanically enforced by Gate G128 (session-cap-guard.sh).
+    # ── Context-volume dimensions (IMP-039 SCOPE-3) ──
+    # The three caps above count events, not text. A session can hold all of
+    # them and still replay megabytes of retained tool output into every later
+    # request. These four cap the volume itself. All default null, so every
+    # existing repository keeps the current no-op posture.
+    # Suggested opt-in starting values, derived from the measured session behind
+    # IMP-039 rather than chosen for roundness: 50000 / 250000 / 220000 / 1000000.
+    # That session exceeded three of the four.
+    maxSingleToolResultBytes:
+      type: integer
+      default: null
+      meaning: Cap on the largest SINGLE retained tool result, in bytes. Measured from .specify/runtime/tool-calls.jsonl (stdoutBytes + stderrBytes per record); needs no usage adapter. null = unbounded (default, opt-in). Enforced by Gate G128.
+    maxCumulativeToolResultBytes:
+      type: integer
+      default: null
+      meaning: Cap on the SUM of all retained tool results for the session, in bytes. Same measurement source as maxSingleToolResultBytes. null = unbounded (default, opt-in). Enforced by Gate G128.
+    maxPromptTokensPerRequest:
+      type: integer
+      default: null
+      meaning: Cap on the largest single request's prompt tokens. Measurable ONLY through a configured usage adapter (bubbles/adapters/usage/, default none); with no adapter the dimension is skipped rather than estimated. null = unbounded (default, opt-in). Enforced by Gate G128.
+    maxCumulativePromptTokens:
+      type: integer
+      default: null
+      meaning: Cap on total prompt tokens across the session. Same adapter requirement as maxPromptTokensPerRequest — skipped when unmeasurable, never guessed. null = unbounded (default, opt-in). Enforced by Gate G128.
+
+  # ── Live-transcript boundary (IMP-039 SCOPE-4) ──
+  # Recorded on .specify/memory/bubbles.session.json by
+  # `state-snapshot.sh --context-boundary <kind>[:<checkpointId>]` at each phase
+  # transition, and checked by Gate G083. sessionBudget bounds how much a session
+  # may carry; this records that the orchestrator actually reached a boundary.
+  # Compacting the ledger while the model transcript keeps growing is the exact
+  # failure it exists to catch.
+  contextBoundary:
+    kind:
+      type: enum
+      values: [ host-checkpoint, fresh-context, unavailable ]
+      default: null
+      meaning: host-checkpoint = a real host compaction checkpoint was taken (checkpointId REQUIRED). fresh-context = the next specialist runs in a new context carrying only the persisted envelope. unavailable = the host exposes no compaction primitive; declare it and start a fresh specialist context. Declaring unavailability is honest; passing while the transcript grows is not.
+    checkpointId:
+      type: string
+      default: null
+      meaning: Host checkpoint identifier. REQUIRED when kind is host-checkpoint — a checkpoint claim with no id cannot be checked against anything, which is the shape a fabricated boundary takes. null for the other kinds.
+    at:
+      type: string
+      default: null
+      meaning: RFC3339 timestamp at which the boundary was reached. Written by state-snapshot.sh from the turn timestamp.
 
   defaultPolicyBehavior:
     scenarioTddDefault: scenario-first

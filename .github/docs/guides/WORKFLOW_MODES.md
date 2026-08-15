@@ -32,6 +32,8 @@ Workflow execution is default-deny. Gate G064 requires an authorized top-level r
 
 Continuation-shaped input includes plain `continue`/`next`, but also phrases like `fix all found`, `fix the rest`, and `address the rest` after a workflow run. Those should preserve the active workflow mode whenever workflow packets, run-state, or active spec state make that mode recoverable.
 
+If no non-terminal workflow remains, continuation invokes recap and stops. It may show a next-priority candidate, but it never starts that candidate. Use `/bubbles.iterate` or explicitly ask to pick the next priority when new work should begin.
+
 ## Repository Binding Before Modes And Discovery
 
 Every repository-sensitive front door runs `bubbles/scripts/repository-binding.sh preflight` before reading repository state, expanding relative targets, scanning `specs/`, selecting work, invoking a repository command, or dispatching a specialist. An explicit `repositoryRoot` is normalized to the physical Git top-level and committed as the work boundary before local discovery.
@@ -117,7 +119,7 @@ Two short, human-reviewable alignment artifacts are now mandatory:
 
 ### Brownfield Research (Phase 0.55)
 
-For brownfield modes (`improve-existing`, `redesign-existing`, `full-delivery`, `bugfix-fastlane`, `reconcile-to-doc`), the workflow now runs an **Objective Research Pass** before design:
+For brownfield modes (`improve-existing`, `full-delivery`, `bugfix-fastlane`, `reconcile-to-doc`), the workflow now runs an **Objective Research Pass** before design:
 1. Questions are generated while knowing the solution intent
 2. Codebase research is done in a **fresh, solution-blind context** — it never sees the spec or ticket
 3. Results are recorded as a `## Current Truth` section in design.md
@@ -137,8 +139,22 @@ This prevents confirmation bias where the model finds patterns that support its 
 ## Choosing a Mode
 
 ```
-/bubbles.workflow  <mode-name> for <feature/bug>
+/bubbles.workflow  <feature/bug> mode: <registered-key>
 ```
+
+The `mode:` keyword is required. A bare leading mode name is not operator input
+in v7 — it reads as part of the request text and routes through `super` instead
+of selecting the mode you named.
+
+Resolving a mode directly on the CLI uses the v7 primitive-plus-tag form, with
+each tag as its own argument:
+
+```
+bash bubbles/scripts/mode-resolver.sh review action:readiness-synthesis target:system
+```
+
+A removed v5 name is rejected there and the error names its v6 form. Persisted
+v5 keys already stored in a `state.json` still resolve, via `--grandfather`.
 
 If you don't specify a mode, `full-delivery` is the default.
 
@@ -239,26 +255,6 @@ analyze → select → bootstrap → implement → test → regression → simpl
 
 ---
 
-## Brainstorm & Exploration Modes
-
-Explore and refine ideas without writing code.
-
-### <img src="../../icons/ray-lawnchair.svg" width="20"> brainstorm
-
-Like YC office hours for your feature. Explore the idea, analyze competitors, harden scenarios — zero code.
-
-```
-analyze → bootstrap → harden → finalize
-```
-
-**Use when:** "I have an idea but want to think it through before building." Outputs spec.md + design.md + scopes.md with `statusCeiling: specs_hardened`. Socratic mode is on by default (5 questions).
-
-```
-/bubbles.workflow  brainstorm for "property search engine with competitive edge"
-```
-
----
-
 ## Fast-Track Modes
 
 Skip phases you do not need without dropping the governance chain.
@@ -272,16 +268,6 @@ select → implement → test → regression → simplify → stabilize → devo
 ```
 
 **Use when:** Bug fixes.
-
-### <img src="../../icons/cory-trevor-smokes.svg" width="20"> feature-bootstrap
-
-Bootstrap missing planning artifacts, then continue through implementation and the full verification chain for that feature.
-
-```
-select → bootstrap → implement → test → regression → simplify → stabilize → devops → security → docs → validate → audit → finalize
-```
-
-**Use when:** A feature is missing spec/design/scope readiness and you want the workflow to repair that planning debt before continuing delivery.
 
 ### <img src="../../icons/bill-wrench.svg" width="20"> rapid-tool-delivery
 
@@ -509,14 +495,6 @@ analyze → select → validate → harden → gaps → implement → test → r
 
 **Use when:** An existing feature needs a full improvement pass.
 
-### <img src="../../icons/lucy-mirror.svg" width="20"> redesign-existing
-
-```
-analyze → select → bootstrap → implement → test → regression → simplify → stabilize → devops → security → docs → validate → audit → chaos → finalize
-```
-
-**Use when:** An existing feature needs major artifact reconciliation and redesign before implementation can safely proceed.
-
 ### <img src="../../icons/donny-ducttape.svg" width="20"> simplify-to-doc
 
 ```
@@ -582,24 +560,31 @@ validate → audit → docs
 Resume from where the last session stopped.
 
 ```
-(reads state.json and continues from last known position)
+(reads state.json, preserves the original workflow mode, and continues only a non-terminal item)
 ```
 
-**Use when:** Picking up interrupted work.
+**Use when:** Picking up interrupted work. `resume-only` is transient: it is never persisted as `state.json.workflowMode`, never mutates lifecycle status, and evaluates completion against the recovered mode. If that work is terminal, recap returns control without selecting another item.
 
 ```
 /bubbles.workflow  resume
 ```
 
-### <img src="../../icons/ray-lawnchair.svg" width="20"> product-discovery
+## Retired Modes
 
-Business analysis and requirements only. No design or implementation.
+These four keys are NOT in `bubbles/workflows/modes.yaml`, have no v6 alias, and
+cannot be selected. They were documented above as if they were available, which
+meant an operator could read a mode name here, invoke it, and get routed
+somewhere else entirely. `bubbles/registry/required-specialists.yaml` keeps their
+phase arms verbatim as legacy, currently-unrouted entries.
 
-```
-analyze → ux
-```
+| Retired key | Phase arm still recorded in the specialists registry |
+|---|---|
+| `brainstorm` | none — the key appears in no registry |
+| `feature-bootstrap` | implement, test, regression, simplify, stabilize, security, docs, validate, audit |
+| `redesign-existing` | implement, test, regression, simplify, stabilize, security, docs, validate, audit, chaos |
+| `product-discovery` | harden, docs, validate, audit |
 
-**Use when:** Early product exploration.
+Run `bash bubbles/scripts/mode-resolver.sh --list-modes` for the selectable set.
 
 ---
 

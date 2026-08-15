@@ -37,11 +37,15 @@
   {
     "alias": "by-the-book",
     "maps_to": "bubbles.audit --strict",
+    "target_agent": "bubbles.audit",
+    "arguments": ["--strict"],
     "quote": "This is by the book now."
   },
   {
     "alias": "get-two-birds-stoned",
     "maps_to": "bubbles.implement + bubbles.test",
+    "target_agent": "bubbles.implement",
+    "follow_up_agent": "bubbles.test",
     "quote": "Get two birds stoned at once"
   },
   {
@@ -196,8 +200,8 @@
   },
   {
     "alias": "next-on-the-board",
-    "maps_to": "bubbles.sprint",
-    "quote": "That one's done — keep both flows moving."
+    "maps_to": "bubbles.iterate",
+    "quote": "Pick the next job on the board."
   },
   {
     "alias": "just-fixes",
@@ -237,36 +241,46 @@
   {
     "alias": "wheres-the-bodies",
     "maps_to": "bubbles.retro hotspots",
+    "target_agent": "bubbles.retro",
+    "arguments": ["hotspots"],
     "quote": "The liquor knows where the bodies are buried, Randy."
   },
   {
     "alias": "whos-driving",
     "maps_to": "bubbles.retro busfactor",
+    "target_agent": "bubbles.retro",
+    "arguments": ["busfactor"],
     "quote": "Somebody's gotta know how to drive this thing."
   },
   {
     "alias": "tangled-up",
     "maps_to": "bubbles.retro coupling",
+    "target_agent": "bubbles.retro",
+    "arguments": ["coupling"],
     "quote": "It's all tangled up like Christmas lights, Randy."
   },
   {
     "alias": "liquor-then-tape",
     "maps_to": "retro-to-simplify",
+    "target_mode": "retro-to-simplify",
     "quote": "The liquor shows me the problems. Donny tapes them up."
   },
   {
     "alias": "liquor-then-harden",
     "maps_to": "retro-to-harden",
+    "target_mode": "retro-to-harden",
     "quote": "The liquor shows me the weak spots. Harden up, boys."
   },
   {
     "alias": "liquor-then-sweep",
     "maps_to": "retro-quality-sweep",
+    "target_mode": "retro-quality-sweep",
     "quote": "The liquor finds the mess. Then the whole crew sweeps it clean."
   },
   {
     "alias": "liquor-then-look",
     "maps_to": "retro-to-review",
+    "target_mode": "retro-to-review",
     "quote": "The liquor shows me where to look. Green Bastard tells me what's broken."
   },
   {
@@ -277,6 +291,7 @@
   {
     "alias": "same-lot-new-trailer",
     "maps_to": "product-to-delivery (with existing impl)",
+    "target_mode": "product-to-delivery",
     "quote": "Same lot, boys. New trailer."
   },
   {

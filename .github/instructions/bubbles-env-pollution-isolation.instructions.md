@@ -1,8 +1,15 @@
 ---
-applyTo: "**"
+applyTo: "**/tests/**,**/test/**,**/*test*.{sh,py,ts,tsx,js,go,rs,rb,java,kt},**/docker-compose*.y*ml,**/compose*.y*ml,**/monitoring/**,**/prometheus*.y*ml,**/loki*.y*ml,**/alertmanager*.y*ml,**/*backup*.sh,**/*restore*.sh,**/manifest.yaml,config/release-trains.yaml,config/feature-flags.*.yaml"
 ---
 
 # Environment Pollution Isolation Policy (NON-NEGOTIABLE)
+
+> **Scope (IMP-039 SCOPE-6).** This policy binds on test, compose, monitoring,
+> and backup surfaces, which is where its rules actually apply. It was
+> previously `applyTo: "**"`. The prohibition itself is unchanged and remains
+> mechanically enforced by `env-pollution-scan.sh` regardless of which
+> instructions a given request loaded — the scan reads the repository, not the
+> prompt, so narrowing the glob cannot weaken enforcement.
 
 > This instructions file extends the existing
 > [`bubbles-test-environment-isolation`](bubbles-test-environment-isolation.instructions.md)

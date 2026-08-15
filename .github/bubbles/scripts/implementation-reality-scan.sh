@@ -694,6 +694,14 @@ done
 
 if [[ ${#sensitive_storage_files[@]} -gt 0 ]]; then
   if ! command -v python3 >/dev/null 2>&1 || [[ ! -f "$SENSITIVE_STORAGE_HELPER" ]]; then
+    # Say WHICH precondition failed. Both degradation paths below emit the same
+    # reason strings, which are contracted, so the distinction has to live in a
+    # diagnostic line rather than in the violation itself.
+    if ! command -v python3 >/dev/null 2>&1; then
+      echo "   sensitive-storage classifier unavailable: python3 not on PATH"
+    else
+      echo "   sensitive-storage classifier unavailable: helper missing at $SENSITIVE_STORAGE_HELPER"
+    fi
     if [[ -f "$PROJECT_CONFIG" ]] && grep -qE '^[[:space:]]*sensitiveClientStorage[[:space:]]*:' "$PROJECT_CONFIG" 2>/dev/null; then
       violation "$PROJECT_CONFIG_DISPLAY" "0" "SENSITIVE_CLIENT_STORAGE" "reason=SENSITIVE_STORAGE_CONFIG_INVALID storage=configuration operation=parse key=unresolved provider=unresolved configMatch=invalid"
     fi
@@ -707,11 +715,37 @@ if [[ ${#sensitive_storage_files[@]} -gt 0 ]]; then
     sensitive_storage_output=""
     sensitive_storage_status=0
     # stdout is a tab-delimited record stream parsed below; merging stderr into it would corrupt a record.
-    if sensitive_storage_output="$(python3 "$SENSITIVE_STORAGE_HELPER" --repo-root "$REPO_ROOT" --config "$PROJECT_CONFIG" "${sensitive_storage_files[@]}" 2>/dev/null)"; then
+    #
+    # stderr used to go to /dev/null, which made a helper failure
+    # indistinguishable from a malformed config: the scan degraded to one
+    # CLASSIFICATION_UNRESOLVED violation per candidate line, reported them as
+    # findings about the code under scan, and discarded the only evidence of
+    # why. That is what made this check an unexplainable intermittent failure.
+    # Keep the streams separate, and print stderr when the helper fails.
+    # stdin comes from /dev/null. The helper takes every input from argv and
+    # never reads stdin, but it INHERITS whatever descriptor the caller left on
+    # fd 0 -- and a dangling one aborts CPython before it runs a line of code:
+    # "Fatal Python error: init_sys_streams: can't initialize sys standard
+    # streams / OSError: [Errno 9] Bad file descriptor". The scan then degraded
+    # to CLASSIFICATION_UNRESOLVED for every candidate line and reported it as a
+    # finding about the code under scan. That is the intermittent failure this
+    # check has carried for a long time: it depends on the caller's descriptors,
+    # not on the code being scanned, which is why it passes standalone.
+    sensitive_storage_stderr="$(mktemp)"
+    if sensitive_storage_output="$(python3 "$SENSITIVE_STORAGE_HELPER" --repo-root "$REPO_ROOT" --config "$PROJECT_CONFIG" "${sensitive_storage_files[@]}" </dev/null 2>"$sensitive_storage_stderr")"; then
       sensitive_storage_status=0
     else
       sensitive_storage_status=$?
     fi
+    if [[ "$sensitive_storage_status" -ne 0 ]]; then
+      echo "   sensitive-storage classifier failed: exit=$sensitive_storage_status helper=$SENSITIVE_STORAGE_HELPER"
+      echo "   sensitive-storage classifier inputs: config=$PROJECT_CONFIG files=${#sensitive_storage_files[@]} python3=$(command -v python3 2>/dev/null || echo none)"
+      while IFS= read -r sensitive_storage_stderr_line; do
+        [[ -z "$sensitive_storage_stderr_line" ]] && continue
+        echo "   sensitive-storage classifier stderr: $sensitive_storage_stderr_line"
+      done <"$sensitive_storage_stderr"
+    fi
+    rm -f "$sensitive_storage_stderr"
     if [[ "$sensitive_storage_status" -ne 0 ]]; then
       if [[ -f "$PROJECT_CONFIG" ]] && grep -qE '^[[:space:]]*sensitiveClientStorage[[:space:]]*:' "$PROJECT_CONFIG" 2>/dev/null; then
         violation "$PROJECT_CONFIG_DISPLAY" "0" "SENSITIVE_CLIENT_STORAGE" "reason=SENSITIVE_STORAGE_CONFIG_INVALID storage=configuration operation=parse key=unresolved provider=unresolved configMatch=invalid"

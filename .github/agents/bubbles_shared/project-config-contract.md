@@ -438,6 +438,93 @@ experienceRecall:
 The value is an adapter name only. It must not contain a path, URL, executable
 name, shell fragment, host, credential, or provider setting.
 
+### `testDiscovery` Contract
+
+`testDiscovery` is an optional top-level block in project-owned
+`.github/bubbles-project.yaml`. It tells Bubbles how to enumerate the tests that
+actually exist in this repository, so a scenario's linked test can be resolved
+to a real target instead of merely counted (IMP-040 SCOPE-1):
+
+```yaml
+# Default: no inventory. Title-based linked references cannot be certified.
+testDiscovery:
+  adapter: none
+```
+
+To opt in, point at a project-owned executable that prints the contract
+document:
+
+```yaml
+testDiscovery:
+  adapter: command
+  command: scripts/bubbles-test-inventory
+  timeoutSeconds: 120
+```
+
+| Key | Meaning |
+|---|---|
+| `adapter` | `none` (default) or `command`. No other value is accepted. |
+| `command` | REQUIRED when `adapter: command`. A repo-relative path to an executable. Absolute paths and `..` are refused so a config file cannot point the framework outside the repository. |
+| `timeoutSeconds` | Positive integer; defaults to `120`. |
+
+The command emits ONE versioned JSON document on stdout:
+
+```json
+{
+  "contractVersion": "bubbles-test-inventory/v1",
+  "tests": [
+    {
+      "id": "runner-stable-id",
+      "file": "tests/example",
+      "title": "exact test title",
+      "category": "e2e-ui",
+      "runner": "project-runner",
+      "tags": ["SCN-001-001"]
+    }
+  ]
+}
+```
+
+Projects may implement the adapter in any language with any runner. Bubbles
+validates only this output contract — that is what keeps the framework
+language-agnostic while still resolving exact targets.
+
+**A broken configuration fails loud; it never degrades to `none`.** A missing
+`command`, a non-executable file, or a malformed timeout is an error, because a
+silent degrade would make a typo indistinguishable from a deliberate opt-out —
+and since `none` disables title-based certification, that would quietly weaken
+the gate instead of reporting a misconfiguration.
+
+**`adapter: none` remains valid** for projects without titled tests, but it
+cannot certify title-based linked references. With `none`, the scenario
+resolver falls back to a conservative literal scan of the referenced file: that
+still catches a title that exists nowhere, while the runner-category comparison
+is SKIPPED rather than guessed. An unmeasurable dimension is skipped, never
+inferred.
+
+### `scenarioResolution` Contract
+
+`scenarioResolution` is an optional top-level key controlling whether Gate G057
+BLOCKS on a linked test that does not resolve:
+
+```yaml
+# Report unresolved linked tests without failing the transition (DEFAULT)
+scenarioResolution: advisory
+
+# Fail the transition when a linked test does not resolve
+scenarioResolution: block
+```
+
+**Advisory is the default deliberately.** Resolution is a new check running
+against manifests written before it existed, so a repository will normally have
+pre-existing stale links. Turning it on as blocking everywhere would convert
+every one of them into a build break, which is why the rollout is: run it
+advisory, fix what it reports, then set `block`.
+
+Independently of this setting, packets whose `state.json` `createdAt` predates
+the activation date are grandfathered entirely, so an upgrade never retro-breaks
+a closed packet.
+
 The resolver accepts tokens matching `^[a-z0-9][a-z0-9-]*$`. Shipped adapter
 names also stay within the provider schema's 64-character limit. Adapter
 selection resolves to

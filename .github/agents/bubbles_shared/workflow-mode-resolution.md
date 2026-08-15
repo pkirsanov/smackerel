@@ -27,9 +27,9 @@ Use this table to select the correct mode based on the execution goal.
 | Validate only | `validate-only` | `validated` | select -> validate -> finalize |
 | Audit only | `audit-only` | `validated` | select -> audit -> finalize |
 | Final validation + audit + docs | `validate-to-doc` | `validated` | select -> validate -> audit -> docs -> finalize |
-| Resume from saved state | `resume-only` | `in_progress` | select -> finalize |
+| Resume from saved state | `resume-only` | recovered mode (transient) | select -> finalize |
 
-**`resume-only` carries `requireOpenWorkReview: true`.** Before the `select` phase picks any work, run `bash bubbles/scripts/cli.sh open-work` and NAME the carried-over items in the response. A resumed session is the last cheap moment to recover something the previous session left open; after it, the loose end is indistinguishable from work that was never started. This is surfacing, not gating — an open item never blocks resumption, and the operator decides whether to pick it up.
+**`resume-only` is a transient routing intent and carries `requireOpenWorkReview: true`.** Before `select`, run `bash bubbles/scripts/cli.sh open-work` and name carried-over items. Recover and preserve the original workflow mode; never write `resume-only` into `state.json.workflowMode`, never mutate status through this mode, and evaluate terminality against the recovered mode. Resume one recoverable non-terminal item only. If none remains, invoke recap and stop. Show possible next work as an unstarted candidate. The operator must explicitly request new work.
 
 | Discover requirements, design UX, then deliver | `product-to-delivery` | `done` | analyze -> select -> bootstrap -> implement -> test -> regression -> simplify -> stabilize -> devops -> security -> docs -> validate -> audit -> chaos -> releases -> finalize |
 | Idea -> release packet bootstrap -> spec/design/scopes -> ship -> release packet refresh that flips the capability to delivered | `idea-to-release-completion` | `done` | analyze -> releases (bootstrap-or-refresh) -> select -> bootstrap -> implement -> test -> regression -> simplify -> stabilize -> devops -> security -> docs -> validate -> audit -> chaos -> releases (refresh) -> finalize |
@@ -123,7 +123,7 @@ When the user's request implies planning-only intent (contains "plan", "planning
 When resolving mode in Phase 0, the active authorized runner MUST check whether the user's requested outcome conflicts with the selected mode's `statusCeiling`.
 
 - If the user's prompt contains words like `complete`, `implement`, `fix`, `test`, or `done` and the selected mode has `statusCeiling` below `done`, warn before starting and suggest a delivery-capable mode instead of silently proceeding.
-- Modes that cannot reach `done`: `spec-scope-hardening` (`specs_hardened`), `product-to-planning` (`specs_hardened`), `docs-only` (`docs_updated`), `validate-only` (`validated`), `audit-only` (`validated`), `validate-to-doc` (`validated`), `resume-only` (`in_progress`).
+- Modes that cannot reach `done`: `spec-scope-hardening` (`specs_hardened`), `product-to-planning` (`specs_hardened`), `docs-only` (`docs_updated`), `validate-only` (`validated`), `audit-only` (`validated`), and `validate-to-doc` (`validated`). `resume-only` is transient and inherits the recovered mode's ceiling rather than defining a lifecycle ceiling.
 - Modes that can reach `done`: all delivery modes, including `full-delivery`, `bugfix-fastlane`, `product-to-delivery`, `idea-to-release-completion`, `stochastic-quality-sweep`, and `iterate`.
 
 ## Mode Template Inheritance

@@ -73,39 +73,38 @@ validate_registry() {
   # Every mode in modes.json must exist in workflows.yaml. Mode names may carry
   # parenthetical variant suffixes like "(with analyze)" — strip them before
   # the lookup.
-  while IFS= read -r mode_name; do
+  while IFS=$'\t' read -r mode_name canonical_name; do
     [[ -n "$mode_name" ]] || continue
-    local stripped
-    stripped="$(echo "$mode_name" | sed -E 's/[[:space:]]*\(.*$//')"
-    if ! awk -v target="  ${stripped}:" '
+    if ! awk -v target="  ${canonical_name}:" '
       /^[A-Za-z][A-Za-z0-9_-]*:/ { in_modes = ($0 ~ /^modes:/) ? 1 : 0; next }
       in_modes && $0 == target { found = 1 }
       END { exit found ? 0 : 1 }
     ' "$MODES_YAML"; then
-      echo "generate-cheatsheet: modes.json references unknown workflow mode: $mode_name (stripped: $stripped)" >&2
+      echo "generate-cheatsheet: modes.json references unknown canonical workflow mode: $mode_name -> $canonical_name" >&2
       missing=$((missing + 1))
     fi
-  done < <(jq -r '.[].name' "$MODES_JSON" | sort -u)
+  done < <(jq -r '.[] | [.name, (.canonical_name // .name)] | @tsv' "$MODES_JSON" | LC_ALL=C sort -u)
 
   # Every aliases.json maps_to should be a bubbles.<agent> token (optionally
   # with trailing args) OR a known workflow-mode name. Reject anything else.
   local known_modes
   known_modes="$(jq -r '.[].name' "$MODES_JSON" | sed -E 's/[[:space:]]*\(.*$//' | sort -u)"
-  while IFS= read -r maps_to; do
-    [[ -n "$maps_to" ]] || continue
-    case "$maps_to" in
-      bubbles.*) continue ;;
-      *' + bubbles.'*) continue ;;
-    esac
-    # Strip compound parts (e.g. "product-to-delivery (with existing impl)")
-    local first
-    first="$(echo "$maps_to" | sed -E 's/[[:space:]]*\(.*$//' | awk '{print $1}')"
-    if grep -qxF "$first" <<<"$known_modes"; then
+  while IFS=$'\t' read -r alias_name target_kind canonical_target; do
+    [[ -n "$canonical_target" ]] || {
+      echo "generate-cheatsheet: alias '$alias_name' has no canonical runtime target" >&2
+      missing=$((missing + 1))
       continue
+    }
+    if [[ "$target_kind" == "agent" ]]; then
+      if [[ ! "$canonical_target" =~ ^bubbles\.[a-z0-9-]+$ || ! -f "$REPO_ROOT/agents/${canonical_target}.agent.md" ]]; then
+        echo "generate-cheatsheet: alias '$alias_name' references unknown canonical agent: $canonical_target" >&2
+        missing=$((missing + 1))
+      fi
+    elif ! grep -qxF "$canonical_target" <<<"$known_modes"; then
+      echo "generate-cheatsheet: alias '$alias_name' references unknown canonical mode: $canonical_target" >&2
+      missing=$((missing + 1))
     fi
-    echo "generate-cheatsheet: aliases.json maps_to '$maps_to' resolves to neither bubbles.<agent> nor a known mode" >&2
-    missing=$((missing + 1))
-  done < <(jq -r '.[].maps_to' "$ALIASES_JSON")
+  done < <(jq -r '.[] | if (.target_agent // "") != "" then [.alias, "agent", .target_agent] elif (.target_mode // "") != "" then [.alias, "mode", .target_mode] elif (.maps_to | test("^bubbles\\.[a-z0-9-]+$")) then [.alias, "agent", .maps_to] else [.alias, "mode", .maps_to] end | @tsv' "$ALIASES_JSON")
 
   # Duplicate alias detection (sunnyvale aliases must be unique).
   local dups

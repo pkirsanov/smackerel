@@ -37,6 +37,17 @@
 set -euo pipefail
 
 SCHEMA_VERSION="goal-contract/v1"
+SCHEMA_VERSION_V2="goal-contract/v2"
+
+# --- v2 semantic boundary (IMP-041 SCOPE-1) ---------------------------------
+# The v1 boundary is PATH-shaped: it answers "may this goal touch that file?".
+# It cannot answer "may this goal build a new runner?", so a goal could expand
+# from a bounded test into a platform while every path stayed in-boundary. The
+# semantic boundary is the second, shape-shaped layer. Both are closed enums so
+# an undeclared expansion is a refusal rather than an unrecognised free string.
+EXECUTION_SHAPES="one-off existing-capability-change reusable-capability"
+CHANGE_CLASSES="existing-config existing-test new-product-code new-shared-library new-workflow new-runner new-virtual-machine new-daemon new-init-unit new-datastore new-cache new-approval-authority new-network-topology new-deployment-target"
+DELTA_BUDGET_KEYS="maxNewScopes maxNewFiles maxNewWorkflows maxNewServices maxNewRunners maxNewVirtualMachines"
 
 usage() {
   cat <<'EOF'
@@ -174,7 +185,13 @@ get_contract() {
 # Emits one line per violation on stdout; empty output means valid.
 contract_violations() {
   local contract="$1"
-  jq -n -r --argjson c "$contract" --arg sv "$SCHEMA_VERSION" '
+  # The three enum expansions below are deliberately unquoted: json_array takes
+  # one argument per member, and these constants are fixed literals in this file.
+  # shellcheck disable=SC2086
+  jq -n -r --argjson c "$contract" --arg sv "$SCHEMA_VERSION" --arg sv2 "$SCHEMA_VERSION_V2" \
+    --argjson shapes "$(json_array $EXECUTION_SHAPES)" \
+    --argjson classes "$(json_array $CHANGE_CLASSES)" \
+    --argjson budgetkeys "$(json_array $DELTA_BUDGET_KEYS)" '
     def nes: type == "string" and length > 0;
     def nesarr: type == "array" and all(.[]; nes);
     def show: if . == null then "null" else tostring end;
@@ -182,8 +199,8 @@ contract_violations() {
     [
       (if ($c | type) != "object" then "contract must be an object" else empty end),
 
-      (if $c.schemaVersion != $sv
-       then "schemaVersion must be \"\($sv)\" (observed: \($c.schemaVersion | show))"
+      (if ($c.schemaVersion != $sv) and ($c.schemaVersion != $sv2)
+       then "schemaVersion must be \"\($sv)\" or \"\($sv2)\" (observed: \($c.schemaVersion | show))"
        else empty end),
 
       (if ($c.goalId | nes | not) or (($c.goalId // "") | test("^gc:[A-Za-z0-9._-]+:[0-9]+$") | not)
@@ -247,6 +264,48 @@ contract_violations() {
            | "workBoundary has an unknown key: \(.)"))
        ) end),
 
+      (if $c.schemaVersion == $sv2
+       then (
+         if ($c.semanticBoundary | type) != "object"
+         then "semanticBoundary must be an object in \($sv2)"
+         else (
+           (if ($c.semanticBoundary.executionShape // "") | IN($shapes[]) | not
+            then "semanticBoundary.executionShape must be one of \($shapes | join(", ")) (observed: \($c.semanticBoundary.executionShape | show))"
+            else empty end),
+           (if ($c.semanticBoundary.allowedChangeClasses | type) != "array"
+            then "semanticBoundary.allowedChangeClasses must be an array"
+            else ($c.semanticBoundary.allowedChangeClasses[]
+                  | select(IN($classes[]) | not)
+                  | "semanticBoundary.allowedChangeClasses has an unknown change class: \(. | show)") end),
+           (if ($c.semanticBoundary.approvalRequiredChangeClasses | type) != "array"
+            then "semanticBoundary.approvalRequiredChangeClasses must be an array"
+            else ($c.semanticBoundary.approvalRequiredChangeClasses[]
+                  | select(IN($classes[]) | not)
+                  | "semanticBoundary.approvalRequiredChangeClasses has an unknown change class: \(. | show)") end),
+           ( (($c.semanticBoundary.allowedChangeClasses // []) as $a
+              | ($c.semanticBoundary.approvalRequiredChangeClasses // []) as $r
+              | ($a - ($a - $r))) as $overlap
+             | if ($overlap | type) == "array" and ($overlap | length) > 0
+               then "semanticBoundary.allowedChangeClasses and approvalRequiredChangeClasses must not overlap (both: \($overlap | join(", ")))"
+               else empty end),
+           (if ($c.semanticBoundary.deltaBudget | type) != "object"
+            then "semanticBoundary.deltaBudget must be an object"
+            else (
+              ($c.semanticBoundary.deltaBudget | to_entries[]
+               | select(.key | IN($budgetkeys[]) | not)
+               | "semanticBoundary.deltaBudget has an unknown key: \(.key)"),
+              ($c.semanticBoundary.deltaBudget | to_entries[]
+               | select(((.value | type) != "number") or (.value != (.value | floor)) or (.value < 0))
+               | "semanticBoundary.deltaBudget.\(.key) must be a non-negative integer (observed: \(.value | show))")
+            ) end),
+           (($c.semanticBoundary | keys_unsorted[]
+             | select(IN("executionShape","allowedChangeClasses","approvalRequiredChangeClasses","deltaBudget") | not)
+             | "semanticBoundary has an unknown key: \(.)"))
+         ) end )
+       elif ($c | has("semanticBoundary"))
+       then "semanticBoundary requires schemaVersion \"\($sv2)\" (observed: \($c.schemaVersion | show))"
+       else empty end),
+
       (if ($c.createdAt // "") | test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$") | not
        then "createdAt must be RFC3339 UTC (YYYY-MM-DDThh:mm:ssZ) (observed: \($c.createdAt | show))"
        else empty end),
@@ -288,6 +347,7 @@ contract_violations() {
 
       ( ["schemaVersion","goalId","revision","sourceRequestDigest","intent","successSignal",
          "hardConstraints","failureCondition","nonGoals","targetReferences","workBoundary",
+         "semanticBoundary",
          "createdAt","provenance","approval","supersedes"] as $known
         | $c | keys_unsorted[] | select(. as $k | $known | index($k) | not)
         | "contract has an unknown key: \(.)" )
@@ -342,12 +402,66 @@ reset_content_flags() {
   repository_roots=()
   spec_targets=()
   allowed_paths=()
+  execution_shape=""
+  allowed_change_classes=()
+  approval_change_classes=()
+  delta_budget_keys=()
+  delta_budget_values=()
 }
 
 # A list entry that is empty, or a target kind outside the enum, is a caller
 # error (exit 2) — catch it at the flag rather than as an invalid contract.
 require_nonempty() {
   [[ -n "${2:-}" ]] || fail_usage "$1 requires a non-empty value"
+}
+
+# Word-boundary membership against a space-separated enum. Written with a case
+# glob rather than an array scan so it stays bash-3.2 clean on macOS.
+in_enum() {
+  case " $2 " in
+    *" $1 "*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+# Emits the v2 semanticBoundary object, or nothing when no semantic flag was
+# supplied (which is what keeps a v1 freeze byte-identical to today's).
+build_semantic_json() {
+  [[ -n "$execution_shape" ]] || return 0
+  local allowed approval budget i
+  allowed="$(json_array ${allowed_change_classes[@]+"${allowed_change_classes[@]}"})"
+  approval="$(json_array ${approval_change_classes[@]+"${approval_change_classes[@]}"})"
+  budget='{}'
+  i=0
+  while [[ "$i" -lt "${#delta_budget_keys[@]}" ]]; do
+    budget="$(jq -c --arg k "${delta_budget_keys[$i]}" --argjson v "${delta_budget_values[$i]}" \
+      '. + {($k): $v}' <<< "$budget")"
+    i=$((i + 1))
+  done
+  jq -n --arg shape "$execution_shape" --argjson a "$allowed" --argjson r "$approval" --argjson b "$budget" \
+    '{ executionShape: $shape, allowedChangeClasses: ($a | unique), approvalRequiredChangeClasses: ($r | unique), deltaBudget: $b }'
+}
+
+# Classifies a semantic boundary transition the way classify_boundary_change
+# classifies a path one, so the stored approval note records WHICH direction the
+# operator approved. Shape rank is ordered because promoting one-off work to a
+# reusable capability is the exact expansion IMP-041 exists to surface.
+classify_semantic_change() {
+  local prior="$1" new="$2"
+  jq -n -r --argjson o "${prior:-null}" --argjson n "${new:-null}" '
+    def rank: { "one-off": 0, "existing-capability-change": 1, "reusable-capability": 2 }[.] // -1;
+    def budget_grew($a; $b): [ $b | to_entries[] | select(.value > (($a[.key]) // 0)) ] | length > 0;
+    if $o == null and $n == null then "semantic-absent"
+    elif $o == null then "semantic-added"
+    elif $n == null then "semantic-removed"
+    elif $o == $n then "semantic-unchanged"
+    else
+      ((($n.allowedChangeClasses // []) - ($o.allowedChangeClasses // [])) | length > 0) as $classes_added
+      | (($n.executionShape | rank) > ($o.executionShape | rank)) as $shape_promoted
+      | (budget_grew(($o.deltaBudget // {}); ($n.deltaBudget // {}))) as $budget_up
+      | if $classes_added or $shape_promoted or $budget_up then "semantic-widened"
+        else "semantic-narrowed" end
+    end'
 }
 
 parse_flags() {
@@ -375,6 +489,32 @@ parse_flags() {
       --spec-target) require_nonempty "$1" "${2:-}"; spec_targets+=("$2"); shift 2 ;;
       --allowed-path) require_nonempty "$1" "${2:-}"; allowed_paths+=("$2"); shift 2 ;;
       --cross-repo-policy) cross_repo_policy="${2:-}"; shift 2 ;;
+      --execution-shape)
+        require_nonempty "$1" "${2:-}"
+        in_enum "$2" "$EXECUTION_SHAPES" ||
+          fail_usage "--execution-shape must be one of: $EXECUTION_SHAPES (observed: $2)"
+        execution_shape="$2"; shift 2 ;;
+      --allow-change-class)
+        require_nonempty "$1" "${2:-}"
+        in_enum "$2" "$CHANGE_CLASSES" ||
+          fail_usage "--allow-change-class must be one of: $CHANGE_CLASSES (observed: $2)"
+        allowed_change_classes+=("$2"); shift 2 ;;
+      --approval-change-class)
+        require_nonempty "$1" "${2:-}"
+        in_enum "$2" "$CHANGE_CLASSES" ||
+          fail_usage "--approval-change-class must be one of: $CHANGE_CLASSES (observed: $2)"
+        approval_change_classes+=("$2"); shift 2 ;;
+      --delta-budget)
+        local budget="${2:-}"
+        [[ "$budget" == *"="* ]] || fail_usage "--delta-budget must be <key>=<count> (observed: $budget)"
+        in_enum "${budget%%=*}" "$DELTA_BUDGET_KEYS" ||
+          fail_usage "--delta-budget key must be one of: $DELTA_BUDGET_KEYS (observed: ${budget%%=*})"
+        case "${budget#*=}" in
+          ''|*[!0-9]*) fail_usage "--delta-budget count must be a non-negative integer (observed: ${budget#*=})" ;;
+        esac
+        delta_budget_keys+=("${budget%%=*}")
+        delta_budget_values+=("${budget#*=}")
+        shift 2 ;;
       --runner) runner="${2:-}"; shift 2 ;;
       --session-id) session_id="${2:-}"; shift 2 ;;
       --repository-alias) repository_alias="${2:-}"; shift 2 ;;
@@ -526,14 +666,26 @@ cmd_freeze() {
     fail_refuse "a Goal Contract is already frozen at .goalContract in $session_file ($(jq -r '.goalContract.goalId // "unknown"' "$session_file")). Re-freezing would silently replace the operator's outcome — use 'revise --approval-note' instead."
   fi
 
-  local digest targets boundary contract created_at
+  local digest targets boundary contract created_at semantic schema
   digest="sha256:$(sha256_file "$source_request_file")"
   targets="$(build_targets_json)"
   boundary="$(build_boundary_json "$policy")"
+  semantic="$(build_semantic_json)"
   created_at="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
 
+  # A semantic detail with no --execution-shape would be silently dropped, which
+  # is the failure mode this scope exists to remove. Refuse instead.
+  if [[ -z "$semantic" ]] &&
+    { [[ "${#allowed_change_classes[@]}" -gt 0 ]] ||
+      [[ "${#approval_change_classes[@]}" -gt 0 ]] ||
+      [[ "${#delta_budget_keys[@]}" -gt 0 ]]; }; then
+    fail_usage "--allow-change-class, --approval-change-class and --delta-budget require --execution-shape (they describe a semantic boundary that would otherwise be dropped)"
+  fi
+
+  if [[ -n "$semantic" ]]; then schema="$SCHEMA_VERSION_V2"; else schema="$SCHEMA_VERSION"; fi
+
   contract="$(jq -n \
-    --arg sv "$SCHEMA_VERSION" \
+    --arg sv "$schema" \
     --arg goal_id "gc:${session_id}:1" \
     --arg digest "$digest" \
     --arg intent "$intent" \
@@ -543,6 +695,7 @@ cmd_freeze() {
     --argjson nongoals "$(json_array ${non_goals[@]+"${non_goals[@]}"})" \
     --argjson targets "$targets" \
     --argjson boundary "$boundary" \
+    --argjson semantic "${semantic:-null}" \
     --arg created "$created_at" \
     --arg runner "$runner" \
     --arg session_id "$session_id" \
@@ -563,7 +716,8 @@ cmd_freeze() {
       approval: { state: "auto-frozen", approvedAt: null, approvalNote: null },
       supersedes: null
     }
-    + (if $failure == "" then {} else { failureCondition: $failure } end)')"
+    + (if $failure == "" then {} else { failureCondition: $failure } end)
+    + (if $semantic == null then {} else { semanticBoundary: $semantic } end)')"
 
   assert_valid_contract "$contract"
 
@@ -691,13 +845,34 @@ cmd_revise() {
   fi
   new_boundary="$(build_boundary_json "$policy")"
 
+  # Semantic boundary: replaced only when --execution-shape is supplied, else it
+  # carries forward untouched. A revise that forgot the flag must not silently
+  # drop the operator's declared shape.
+  local prior_semantic new_semantic semantic_change schema
+  prior_semantic="$(jq -c '.semanticBoundary // null' <<< "$prior")"
+  if [[ -n "$execution_shape" ]]; then
+    new_semantic="$(build_semantic_json)"
+  elif [[ "$prior_semantic" != "null" ]]; then
+    new_semantic="$prior_semantic"
+  else
+    new_semantic=""
+  fi
+  semantic_change="$(classify_semantic_change "$prior_semantic" "${new_semantic:-null}")"
+  if [[ -n "$new_semantic" ]]; then schema="$SCHEMA_VERSION_V2"; else schema="$SCHEMA_VERSION"; fi
+
   local change stored_note created_at contract
   change="$(classify_boundary_change "$prior_boundary" "$new_boundary")"
-  stored_note="${change}: ${approval_note}"
+  # v1 contracts keep the exact historical "<change>: <note>" prefix; the
+  # semantic term is appended only once a semantic boundary actually exists.
+  if [[ "$semantic_change" == "semantic-absent" ]]; then
+    stored_note="${change}: ${approval_note}"
+  else
+    stored_note="${change}/${semantic_change}: ${approval_note}"
+  fi
   created_at="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
 
   contract="$(jq -n \
-    --arg sv "$SCHEMA_VERSION" \
+    --arg sv "$schema" \
     --arg goal_id "gc:${prior_session_id}:${new_revision}" \
     --argjson revision "$new_revision" \
     --arg digest "$new_digest" \
@@ -708,6 +883,7 @@ cmd_revise() {
     --argjson nongoals "$new_nongoals" \
     --argjson targets "$new_targets" \
     --argjson boundary "$new_boundary" \
+    --argjson semantic "${new_semantic:-null}" \
     --arg created "$created_at" \
     --arg runner "$new_runner" \
     --arg session_id "$prior_session_id" \
@@ -730,7 +906,8 @@ cmd_revise() {
       approval: { state: "operator-approved", approvedAt: $created, approvalNote: $note },
       supersedes: $supersedes
     }
-    + (if $failure == "" then {} else { failureCondition: $failure } end)')"
+    + (if $failure == "" then {} else { failureCondition: $failure } end)
+    + (if $semantic == null then {} else { semanticBoundary: $semantic } end)')"
 
   assert_valid_contract "$contract"
 
@@ -832,7 +1009,8 @@ cmd_ref() {
     revision: .revision,
     sourceRequestDigest: .sourceRequestDigest,
     workBoundary: .workBoundary
-  }' <<< "$contract"
+  }
+  + (if has("semanticBoundary") then { semanticBoundary: .semanticBoundary } else {} end)' <<< "$contract"
 }
 
 # cmd_verify_ref — the ONE comparator for a goalRef arriving from any

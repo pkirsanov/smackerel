@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Capability: session-aware-runtime-coordination
 
 set -euo pipefail
 

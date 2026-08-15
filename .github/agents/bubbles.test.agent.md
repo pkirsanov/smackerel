@@ -109,6 +109,9 @@ When the user provides free-text input WITHOUT structured parameters, infer them
 
 This prompt is for **testing-first hardening**.
 
+- **Resolve every linked target BEFORE execution.** A `linkedTests` reference must resolve to a real file and, when a title is declared, a real title in it. A reference that resolves to nothing is a broken claim, and a suite that never ran it still reports green. Run `scenario-test-resolve.sh` on the packet first.
+- **Record mechanism and negative-control proof.** For each satisfying test, declare `testMechanism` (how it reaches and observes the behavior) and the `negativeControl` that makes it fail. A test with no stated perturbation has not been shown to be sensitive to what it claims. See [bubbles_shared/test-core.md](bubbles_shared/test-core.md).
+
 - **ALL selected tests must run and pass**: unit, functional, integration, ui-unit, e2e-api, e2e-ui, stress, load (per Canonical Test Taxonomy in `agent-common.md` — unless explicitly scoped by the user).
 - **ZERO skips/ignores/disabling**: no `skip`, no `xfail`, no "temporarily disable".
 - **Tests validate SPECS/USE CASES/DESIGN** — NOT the current implementation.

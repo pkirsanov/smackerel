@@ -63,9 +63,33 @@ set -euo pipefail
 #     "toolCallCount":    <int>
 #   }
 #
-# Reference: improvements/IMP-003-autonomy-dial-and-safety-caps.md (SCOPE-2)
+# CONTEXT-VOLUME DIMENSIONS (IMP-039 SCOPE-3)
+# The three original dimensions cannot see how much text a session carries. A
+# run can hold every one of them and still replay 1.77 MB of terminal records
+# into every later request, which is what the measured session behind IMP-039
+# did. Four OPTIONAL caps close that blind spot, each defaulting to null so
+# every existing repository keeps the current no-op posture:
+#
+#   maxSingleToolResultBytes      largest single tool result retained
+#   maxCumulativeToolResultBytes  sum of all retained tool results
+#   maxPromptTokensPerRequest     largest single request's prompt tokens
+#   maxCumulativePromptTokens     sum of prompt tokens across the session
+#
+# MEASURABILITY DIFFERS BY DIMENSION, and the existing rule applies unchanged:
+# a cap whose dimension cannot be measured is SKIPPED, never guessed.
+#   - Byte dimensions read `.specify/runtime/tool-calls.jsonl`
+#     (`stdoutBytes` + `stderrBytes` per record). No adapter needed.
+#   - Token dimensions require a configured usage adapter
+#     (`bubbles/adapters/usage/`, default `none`). With `none` there is no
+#     honest token number, so those caps are skipped rather than compared
+#     against a fabricated figure.
+#
+# Reference: improvements/IMP-003-autonomy-dial-and-safety-caps.md (SCOPE-2),
+#            IMP-039 SCOPE-3 (context-volume dimensions)
+
 
 QUIET="false"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 usage() {
   cat <<'EOF'
@@ -178,15 +202,21 @@ if ! jq -e '.sessionBudget != null' "$SESSION_FILE" >/dev/null 2>&1; then
   exit 0
 fi
 
-# --- Extract the three raw caps ("null" when absent) ---------------------
+# --- Extract the raw caps ("null" when absent) ---------------------------
 
 CAP_CONV="$(jq -r '.sessionBudget.maxTotalConvergenceIterations // "null"' "$SESSION_FILE")"
 CAP_MINS="$(jq -r '.sessionBudget.maxWallClockMinutes // "null"' "$SESSION_FILE")"
 CAP_TOOLS="$(jq -r '.sessionBudget.maxToolCalls // "null"' "$SESSION_FILE")"
+CAP_SINGLE_BYTES="$(jq -r '.sessionBudget.maxSingleToolResultBytes // "null"' "$SESSION_FILE")"
+CAP_CUM_BYTES="$(jq -r '.sessionBudget.maxCumulativeToolResultBytes // "null"' "$SESSION_FILE")"
+CAP_REQ_TOKENS="$(jq -r '.sessionBudget.maxPromptTokensPerRequest // "null"' "$SESSION_FILE")"
+CAP_CUM_TOKENS="$(jq -r '.sessionBudget.maxCumulativePromptTokens // "null"' "$SESSION_FILE")"
 
-# All three null/absent → no-op (the default for every existing repo).
-if [[ "$CAP_CONV" == "null" && "$CAP_MINS" == "null" && "$CAP_TOOLS" == "null" ]]; then
-  info "sessionBudget present but all three caps are null; nothing to enforce"
+# All caps null/absent → no-op (the default for every existing repo).
+if [[ "$CAP_CONV" == "null" && "$CAP_MINS" == "null" && "$CAP_TOOLS" == "null" &&
+  "$CAP_SINGLE_BYTES" == "null" && "$CAP_CUM_BYTES" == "null" &&
+  "$CAP_REQ_TOKENS" == "null" && "$CAP_CUM_TOKENS" == "null" ]]; then
+  info "sessionBudget present but every cap is null; nothing to enforce"
   echo "PASS Gate G128 (session_cap_enforcement_gate) — sessionBudget has no non-null cap"
   exit 0
 fi
@@ -207,6 +237,10 @@ validate_cap() {
 validate_cap "maxTotalConvergenceIterations" "$CAP_CONV"
 validate_cap "maxWallClockMinutes" "$CAP_MINS"
 validate_cap "maxToolCalls" "$CAP_TOOLS"
+validate_cap "maxSingleToolResultBytes" "$CAP_SINGLE_BYTES"
+validate_cap "maxCumulativeToolResultBytes" "$CAP_CUM_BYTES"
+validate_cap "maxPromptTokensPerRequest" "$CAP_REQ_TOKENS"
+validate_cap "maxCumulativePromptTokens" "$CAP_CUM_TOKENS"
 
 # --- Compute the aggregate usage across ALL specs in one jq pass ---------
 #
@@ -270,6 +304,70 @@ if [[ "$MIN_OBSERVED" != "null" ]]; then
   fi
 fi
 
+# --- Context-volume measurement (IMP-039 SCOPE-3) ------------------------
+#
+# Byte dimensions come from the tool-call log, which already records
+# stdoutBytes/stderrBytes per call. "null" means UNMEASURABLE (no log, or no
+# parsable record) and the corresponding cap is skipped, matching how the
+# wall-clock dimension already behaves when turnSnapshots is empty.
+
+TOOL_LOG="$REPO_ROOT/.specify/runtime/tool-calls.jsonl"
+SINGLE_BYTES_OBSERVED="null"
+CUM_BYTES_OBSERVED="null"
+
+if [[ -f "$TOOL_LOG" ]]; then
+  BYTES_JSON="$(jq -s -c '
+    [ .[] | objects | select(has("stdoutBytes") or has("stderrBytes"))
+          | ((.stdoutBytes // 0) + (.stderrBytes // 0))
+          | if type == "number" then . else 0 end ] as $b
+    | if ($b | length) == 0 then {max: null, sum: null}
+      else {max: ($b | max), sum: ($b | add)}
+      end
+  ' "$TOOL_LOG" 2>/dev/null || true)"
+  if [[ -n "$BYTES_JSON" ]] && echo "$BYTES_JSON" | jq empty >/dev/null 2>&1; then
+    SINGLE_BYTES_OBSERVED="$(echo "$BYTES_JSON" | jq -r '.max // "null"')"
+    CUM_BYTES_OBSERVED="$(echo "$BYTES_JSON" | jq -r '.sum // "null"')"
+  fi
+fi
+
+# Token dimensions require a configured usage adapter. With the default `none`
+# there is no honest number, so these stay "null" and their caps are skipped.
+# Guessing here would reintroduce exactly the fabrication IMP-039 SCOPE-2 exists
+# to forbid.
+REQ_TOKENS_OBSERVED="null"
+CUM_TOKENS_OBSERVED="null"
+
+if [[ "$CAP_REQ_TOKENS" != "null" || "$CAP_CUM_TOKENS" != "null" ]]; then
+  USAGE_RESOLVE="$SCRIPT_DIR/usage-resolve.sh"
+  if [[ -x "$USAGE_RESOLVE" || -f "$USAGE_RESOLVE" ]]; then
+    USAGE_ADAPTER_PATH="$(bash "$USAGE_RESOLVE" --repo-root "$REPO_ROOT" 2>/dev/null |
+      awk -F= '$1 == "adapterPath" { print $2 }' || true)"
+    USAGE_ADAPTER_NAME="$(bash "$USAGE_RESOLVE" --repo-root "$REPO_ROOT" --names-only 2>/dev/null |
+      awk -F= '$1 == "adapter" { print $2 }' || true)"
+    if [[ -n "$USAGE_ADAPTER_PATH" && "$USAGE_ADAPTER_NAME" != "none" ]]; then
+      USAGE_SESSION="$(bash "$USAGE_ADAPTER_PATH" session 2>/dev/null || true)"
+      if [[ -n "$USAGE_SESSION" ]] && echo "$USAGE_SESSION" | jq empty >/dev/null 2>&1; then
+        REQ_TOKENS_OBSERVED="$(echo "$USAGE_SESSION" | jq -r '.maxPromptTokens // "null"')"
+        CUM_TOKENS_OBSERVED="$(echo "$USAGE_SESSION" | jq -r '.promptTokens // "null"')"
+      fi
+    fi
+  fi
+fi
+
+validate_observed() {
+  local label="$1" value="$2"
+  [[ "$value" == "null" ]] && return 0
+  if ! [[ "$value" =~ ^[0-9]+$ ]]; then
+    echo "session-cap-guard: malformed $label measurement: $value" >&2
+    exit 2
+  fi
+}
+
+validate_observed "single tool-result bytes" "$SINGLE_BYTES_OBSERVED"
+validate_observed "cumulative tool-result bytes" "$CUM_BYTES_OBSERVED"
+validate_observed "per-request prompt tokens" "$REQ_TOKENS_OBSERVED"
+validate_observed "cumulative prompt tokens" "$CUM_TOKENS_OBSERVED"
+
 # --- Decision: check every PRESENT + MEASURABLE dimension ----------------
 
 declare -a BREACHES=()
@@ -292,9 +390,32 @@ if [[ "$CAP_MINS" != "null" ]] && [[ "$MIN_OBSERVED" != "null" ]]; then
   fi
 fi
 
+# Context volume (IMP-039 SCOPE-3). Each pair is checked only when the cap is
+# set AND the dimension was actually measured.
+if [[ "$CAP_SINGLE_BYTES" != "null" && "$SINGLE_BYTES_OBSERVED" != "null" ]] &&
+  [[ "$SINGLE_BYTES_OBSERVED" -gt "$CAP_SINGLE_BYTES" ]]; then
+  BREACHES+=("singleToolResultBytes: largest retained tool result=$SINGLE_BYTES_OBSERVED > maxSingleToolResultBytes=$CAP_SINGLE_BYTES")
+fi
+
+if [[ "$CAP_CUM_BYTES" != "null" && "$CUM_BYTES_OBSERVED" != "null" ]] &&
+  [[ "$CUM_BYTES_OBSERVED" -gt "$CAP_CUM_BYTES" ]]; then
+  BREACHES+=("cumulativeToolResultBytes: retained tool results=$CUM_BYTES_OBSERVED > maxCumulativeToolResultBytes=$CAP_CUM_BYTES")
+fi
+
+if [[ "$CAP_REQ_TOKENS" != "null" && "$REQ_TOKENS_OBSERVED" != "null" ]] &&
+  [[ "$REQ_TOKENS_OBSERVED" -gt "$CAP_REQ_TOKENS" ]]; then
+  BREACHES+=("promptTokensPerRequest: largest request=$REQ_TOKENS_OBSERVED > maxPromptTokensPerRequest=$CAP_REQ_TOKENS")
+fi
+
+if [[ "$CAP_CUM_TOKENS" != "null" && "$CUM_TOKENS_OBSERVED" != "null" ]] &&
+  [[ "$CUM_TOKENS_OBSERVED" -gt "$CAP_CUM_TOKENS" ]]; then
+  BREACHES+=("cumulativePromptTokens: session total=$CUM_TOKENS_OBSERVED > maxCumulativePromptTokens=$CAP_CUM_TOKENS")
+fi
+
 # --- Verdict -------------------------------------------------------------
 
 fmt_cap() { [[ "$1" == "null" ]] && printf 'unset' || printf '%s' "$1"; }
+fmt_obs() { [[ "$1" == "null" ]] && printf 'unmeasured' || printf '%s' "$1"; }
 fmt_min() { [[ "$MIN_OBSERVED" == "null" ]] && printf 'n/a' || printf '%s' "$MIN_OBSERVED"; }
 fmt_tool() { [[ "$TOOL_PRESENT" == "true" ]] && printf '%s' "$TOOL_OBSERVED" || printf 'n/a'; }
 
@@ -310,6 +431,10 @@ if [[ "${#BREACHES[@]}" -gt 0 ]]; then
     echo "    convergence iterations:     $CONV_OBSERVED (cap $(fmt_cap "$CAP_CONV"))"
     echo "    wall-clock minutes:         $(fmt_min) (cap $(fmt_cap "$CAP_MINS"))"
     echo "    tool calls:                 $(fmt_tool) (cap $(fmt_cap "$CAP_TOOLS"))"
+    echo "    largest tool result bytes:  $(fmt_obs "$SINGLE_BYTES_OBSERVED") (cap $(fmt_cap "$CAP_SINGLE_BYTES"))"
+    echo "    tool result bytes total:    $(fmt_obs "$CUM_BYTES_OBSERVED") (cap $(fmt_cap "$CAP_CUM_BYTES"))"
+    echo "    max prompt tokens/request:  $(fmt_obs "$REQ_TOKENS_OBSERVED") (cap $(fmt_cap "$CAP_REQ_TOKENS"))"
+    echo "    prompt tokens total:        $(fmt_obs "$CUM_TOKENS_OBSERVED") (cap $(fmt_cap "$CAP_CUM_TOKENS"))"
     echo "  distinction from G082:        G082 caps iterations PER (specDir, agent); G128 caps the AGGREGATE across the whole session"
     echo "  remediation:                  orchestrator MUST emit a 'blocked' RESULT-ENVELOPE referencing Gate G128 and STOP the session (no further specs/scopes)"
   } >&2
@@ -317,5 +442,6 @@ if [[ "${#BREACHES[@]}" -gt 0 ]]; then
 fi
 
 info "aggregate convergence=$CONV_OBSERVED (cap $(fmt_cap "$CAP_CONV")), wall-clock=$(fmt_min)min (cap $(fmt_cap "$CAP_MINS")), toolCalls=$(fmt_tool) (cap $(fmt_cap "$CAP_TOOLS"))"
-echo "PASS Gate G128 (session_cap_enforcement_gate) — no aggregate cap exceeded (conv=$CONV_OBSERVED/$(fmt_cap "$CAP_CONV"), mins=$(fmt_min)/$(fmt_cap "$CAP_MINS"), tools=$(fmt_tool)/$(fmt_cap "$CAP_TOOLS"))"
+info "context volume: largestToolResult=$(fmt_obs "$SINGLE_BYTES_OBSERVED")B (cap $(fmt_cap "$CAP_SINGLE_BYTES")), toolResultTotal=$(fmt_obs "$CUM_BYTES_OBSERVED")B (cap $(fmt_cap "$CAP_CUM_BYTES")), maxPromptTokens=$(fmt_obs "$REQ_TOKENS_OBSERVED") (cap $(fmt_cap "$CAP_REQ_TOKENS")), promptTokensTotal=$(fmt_obs "$CUM_TOKENS_OBSERVED") (cap $(fmt_cap "$CAP_CUM_TOKENS"))"
+echo "PASS Gate G128 (session_cap_enforcement_gate) — no aggregate cap exceeded (conv=$CONV_OBSERVED/$(fmt_cap "$CAP_CONV"), mins=$(fmt_min)/$(fmt_cap "$CAP_MINS"), tools=$(fmt_tool)/$(fmt_cap "$CAP_TOOLS"), toolBytesMax=$(fmt_obs "$SINGLE_BYTES_OBSERVED")/$(fmt_cap "$CAP_SINGLE_BYTES"), toolBytesSum=$(fmt_obs "$CUM_BYTES_OBSERVED")/$(fmt_cap "$CAP_CUM_BYTES"), promptTokensMax=$(fmt_obs "$REQ_TOKENS_OBSERVED")/$(fmt_cap "$CAP_REQ_TOKENS"), promptTokensSum=$(fmt_obs "$CUM_TOKENS_OBSERVED")/$(fmt_cap "$CAP_CUM_TOKENS"))"
 exit 0

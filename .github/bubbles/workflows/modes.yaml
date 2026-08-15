@@ -568,18 +568,26 @@ modes:
       antiFabricationDetection: true
 
   resume-only:
-    description: Resume from saved phase without re-selecting mode/work.
-    statusCeiling: in_progress
+    description: Transiently recover a saved non-terminal workflow without re-selecting mode or work. Preserve the recovered workflow mode for status and terminality; if no non-terminal work remains, return a completion recap and stop.
+    statusCeiling: done
     phaseOrder: [ select, finalize ]
     requiredGates: [ G001, G011, G012, G073 ]
     constraints:
       requireExistingSession: true
+      transientRoutingIntent: true
+      preserveOriginalWorkflowMode: true
+      persistAsWorkflowMode: false
+      statusMutationAllowed: false
+      terminalStatusSource: recovered-workflow-mode
       # A resumed session is the only moment at which work carried over from the
       # PREVIOUS session can still be recovered cheaply. The select phase must
       # name what is already open before it picks anything new, so a loose end
       # is not silently outlived by the session that created it. Surfacing only
       # — an open item never blocks resumption.
       requireOpenWorkReview: true
+      allowNewWorkSelection: false
+      terminalBehavior: recap-only
+      requireExplicitNewWorkRequest: true
 
   product-to-delivery:
     description: Full pipeline from business analysis through UX, design, scopes, implementation, testing, and quality gates. Analyst/UX phases skippable if spec.md already has their output. Optional `releases` phase at the end refreshes the release packet (features.md / Phase Overview) when the delivered capability is declared in a phase release packet.

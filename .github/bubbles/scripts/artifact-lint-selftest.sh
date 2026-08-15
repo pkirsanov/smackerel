@@ -403,5 +403,125 @@ expect_in "T11 the trailing claim past the old window is FOUND" \
 expect_not_in "T11 the trailing claim is not accused of fabrication" \
   "$out" "Required specialist phase 'implement' missing"
 
+# ── T12: a declared non-transcript fence (gherkin) is EXEMPT from the signal
+# heuristic. A specification cannot carry an exit code, so demanding one forces
+# the author to invent output no command produced.
+d="$(make_fixture nontranscript-gherkin-exempt)"
+cat > "$d/report.md" <<'RPT'
+# Report
+
+The scenario this fix preserves:
+
+```gherkin
+  Scenario: An empty attention tier with no recorded exclusions is refused
+    Given a committed payload whose attention tier is empty
+     When the publication gate runs
+     Then publication is refused by name
+```
+RPT
+out="$(run_lint "$d")"
+expect_not_in "T12 a gherkin block is not accused of lacking terminal signals" \
+  "$out" "lacks terminal output signals"
+expect_in "T12 the exemption is reported rather than silent" \
+  "$out" "non-transcript block"
+
+# ── T13: ADVERSARIAL CONTROL for T12. The SAME content in a BARE fence is still
+# enforced. Without this, T12 would also pass if the exemption had been written
+# as a blanket disable of the whole check, proving nothing about it being
+# language-gated.
+d="$(make_fixture nontranscript-bare-still-enforced)"
+cat > "$d/report.md" <<'RPT'
+# Report
+
+The same text, but claimed as output:
+
+```
+  Scenario: An empty attention tier with no recorded exclusions is refused
+    Given a committed payload whose attention tier is empty
+     When the publication gate runs
+     Then publication is refused by name
+```
+RPT
+out="$(run_lint "$d")"
+expect_in "T13 the identical content in a BARE fence is still enforced" \
+  "$out" "lacks terminal output signals"
+
+# ── T14: an .mjs path counts as a file-path signal. In a build-free ESM repo a
+# real executed command line is the ONLY path form available, and it previously
+# scored nothing because the alternation carried js but not mjs.
+d="$(make_fixture esm-path-signal)"
+cat > "$d/report.md" <<'RPT'
+# Report
+
+Executed:
+
+```
+$ node scripts/selftest.mjs
+(suite emitted no diagnostics)
+(run complete)
+```
+RPT
+out="$(run_lint "$d")"
+expect_not_in "T14 an .mjs command line supplies a second signal" \
+  "$out" "lacks terminal output signals"
+
+# ── T15: ADVERSARIAL CONTROL for T14. An unknown extension still scores only the
+# shell-prompt signal and is still refused, proving T14 passes because mjs was
+# recognised and not because the path check was loosened to match anything.
+d="$(make_fixture esm-path-signal-control)"
+cat > "$d/report.md" <<'RPT'
+# Report
+
+Executed:
+
+```
+$ node scripts/selftest.zzq
+(suite emitted no diagnostics)
+(run complete)
+```
+RPT
+out="$(run_lint "$d")"
+expect_in "T15 an unrecognised extension is still refused (1/2 signals)" \
+  "$out" "lacks terminal output signals"
+
+# ── T16: a ROOT-LEVEL filename supplies the path signal. A flat repository (every
+# file at the root, no directory prefix anywhere) could not emit this signal while
+# the pattern demanded a `dir/` prefix, so real output referencing a real file was
+# refused for the shape of the repository rather than the quality of the evidence.
+d="$(make_fixture flat-repo-path-signal)"
+cat > "$d/report.md" <<'RPT'
+# Report
+
+Executed:
+
+```
+$ node -e "..."
+market-brief.payload.json => attention: 3 item(s)
+(comparison complete)
+```
+RPT
+out="$(run_lint "$d")"
+expect_not_in "T16 a root-level filename supplies a second signal" \
+  "$out" "lacks terminal output signals"
+
+# ── T17: ADVERSARIAL CONTROL for T16. Prose with no extension-bearing filename is
+# still refused, proving T16 passes because a real file was named and not because
+# the path check was loosened into matching ordinary words.
+d="$(make_fixture flat-repo-path-signal-control)"
+cat > "$d/report.md" <<'RPT'
+# Report
+
+Executed:
+
+```
+$ node -e "..."
+the comparison completed and the tier looked correct
+(comparison complete)
+```
+RPT
+out="$(run_lint "$d")"
+expect_in "T17 prose naming no file is still refused (1/2 signals)" \
+  "$out" "lacks terminal output signals"
+
 echo
 echo "artifact-lint selftest: $passes/$assertions assertions passed"

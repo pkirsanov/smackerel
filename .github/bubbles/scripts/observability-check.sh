@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Capability: observability-adapter-contract
 set -uo pipefail
 
 # observability-check.sh

@@ -180,7 +180,20 @@ for rel in "${docs[@]}"; do
     continue
   fi
 
-  basename="$(basename "$rel")"
+  # A bare basename is not evidence of indexing for a skill: EVERY skill file is
+  # named SKILL.md, so any index mentioning that string once trivially satisfied
+  # all of them at once. Match the repository-relative path, and for a skill also
+  # accept its directory name, which is the identifier a human actually writes.
+  match_keys=("$rel")
+  case "$rel" in
+    skills/*/SKILL.md)
+      skill_dir="${rel#skills/}"
+      match_keys+=("${skill_dir%/SKILL.md}")
+      ;;
+    *)
+      match_keys+=("$(basename "$rel")")
+      ;;
+  esac
   hit=""
 
   for idx in "${indexes[@]}"; do
@@ -189,10 +202,12 @@ for rel in "${docs[@]}"; do
     if [[ "$idx" == "$repo_root/$rel" ]]; then
       continue
     fi
-    if grep -Fq -- "$basename" "$idx" 2>/dev/null; then
-      hit="$idx"
-      break
-    fi
+    for key in "${match_keys[@]}"; do
+      if grep -Fq -- "$key" "$idx" 2>/dev/null; then
+        hit="$idx"
+        break 2
+      fi
+    done
   done
 
   if [[ -z "$hit" ]]; then

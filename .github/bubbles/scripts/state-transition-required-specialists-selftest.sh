@@ -289,23 +289,27 @@ else
   fail "planning: expected EMPTY set for a planning-maturity mode, got '$planning_set'"
 fi
 
-# --- Assertion 4: structural placement — the block sits between the case
-#     `esac` and the consuming `if [[ ${#required_specialists[@]} -gt 0 ]]`
+# --- Assertion 4: structural placement — the block sits between the registry
+#     read and the consuming `if [[ ${#required_specialists[@]} -gt 0 ]]`
 #     (anchored on the unique 'missing_phases=0' line) so the guard actually
-#     reaches the fallback when the case left the array empty. ---
+#     reaches the fallback when the registry left the array empty.
+#     This used to anchor on the `esac` of the hardcoded specialist table. That
+#     table is gone, so the anchor silently degraded to whatever earlier `esac`
+#     happened to precede the sentinel and the assertion stopped testing its
+#     own claim. ---
 struct_ok="$(awk '
-  /^  esac$/ { last_esac=NR }
-  /# IMP-105-SCOPE-3-FALLBACK-BEGIN/ { begin=NR; esac_before=last_esac }
+  /required-specialists\.yaml/ { last_read=NR }
+  /# IMP-105-SCOPE-3-FALLBACK-BEGIN/ { begin=NR; read_before=last_read }
   /# IMP-105-SCOPE-3-FALLBACK-END/ { end=NR }
   $0 == "    missing_phases=0" && !seen_mp { mp=NR; seen_mp=1 }
   END {
-    if (esac_before > 0 && begin > esac_before && end > begin && mp > end) print "OK"; else print "BAD"
+    if (read_before > 0 && begin > read_before && end > begin && mp > end) print "OK"; else print "BAD"
   }
 ' "$GUARD_SCRIPT")"
 if [[ "$struct_ok" == "OK" ]]; then
-  pass "structure: fallback block sits after the case esac and before the consuming 'if -gt 0' (guard reaches it)"
+  pass "structure: fallback block sits after the registry read and before the consuming 'if -gt 0' (guard reaches it)"
 else
-  fail "structure: fallback block is NOT positioned between the case esac and the consuming 'if -gt 0'"
+  fail "structure: fallback block is NOT positioned between the registry read and the consuming 'if -gt 0'"
 fi
 
 if [[ "$failures" -ne 0 ]]; then

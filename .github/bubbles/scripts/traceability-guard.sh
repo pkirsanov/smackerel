@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Capability: dod-gherkin-fidelity-threshold
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -76,6 +77,7 @@ edge_declared=0
 edge_inferred=0
 edge_ambiguous=0
 report_reference_total=0
+deferred_evidence_total=0
 scenario_manifest_total=0
 scenario_manifest_file="$feature_dir/scenario-manifest.json"
 
@@ -429,9 +431,58 @@ extract_scenarios() {
   grep -E '^[[:space:]]*Scenario( Outline)?:' "$scope_path" | sed -E 's/^[[:space:]]*Scenario( Outline)?:[[:space:]]*//'
 }
 
+# Emits "TRACEID<TAB>TITLE" per scenario, where TRACEID is the SCN/AC/FR/UC id on
+# the nearest preceding heading (empty when the heading carries none). The TITLE
+# field is byte-identical to what extract_scenarios emits, deliberately: the id is
+# carried BESIDE the title rather than prefixed onto it, so the word-overlap
+# scorer sees exactly the same word set it saw before and no existing match can
+# change outcome. Without this the id never reached the comparison at all —
+# extract_scenarios strips everything before "Scenario:", while the id lives on
+# the heading above — which is why the guard reported declared=0 on every packet.
+extract_scenarios_with_ids() {
+  local scope_path="$1"
+  awk '
+    /^[[:space:]]*#{1,6}[[:space:]]/ {
+      heading_id = ""
+      if (match($0, /(SCN|AC|FR|UC)-[A-Za-z0-9_-]+/)) {
+        heading_id = substr($0, RSTART, RLENGTH)
+      }
+      next
+    }
+    /^[[:space:]]*Scenario( Outline)?:/ {
+      title = $0
+      sub(/^[[:space:]]*Scenario( Outline)?:[[:space:]]*/, "", title)
+      print heading_id "\t" title
+    }
+  ' "$scope_path"
+}
+
 extract_trace_ids() {
   local value="$1"
   printf '%s\n' "$value" | grep -Eo '(SCN|AC|FR|UC)-[A-Za-z0-9_-]+' || true
+}
+
+# An explicit shared trace id is stronger evidence of an intended mapping than any
+# similarity score, so it ESTABLISHES a match instead of only grading one that
+# word overlap already found. Previously this comparison existed only inside
+# classify_match_kind, which runs after a match succeeds — so a DoD item naming
+# its scenario outright was still reported as having no faithful DoD item.
+# Returns 1 on an empty id so a heading without an id can never blanket-match.
+trace_id_declared() {
+  local scenario_id="$1"
+  local target="$2"
+  local tid
+
+  [[ -n "$scenario_id" ]] || return 1
+
+  while IFS= read -r tid; do
+    [[ -n "$tid" ]] || continue
+    if [[ "$tid" == "$scenario_id" ]]; then
+      return 0
+    fi
+  done < <(extract_trace_ids "$target")
+
+  return 1
 }
 
 # classify_match_kind — IMP-015 Scope B (informational only).
@@ -441,8 +492,12 @@ extract_trace_ids() {
 classify_match_kind() {
   local scenario="$1"
   local target="$2"
+  local explicit_id="${3:-}"
   local sid tid
-  sid="$(extract_trace_ids "$scenario" | head -n 1 || true)"
+  # The caller may pass the id explicitly because the scenario title never
+  # contains one. Falling back to extraction keeps older callers working.
+  sid="$explicit_id"
+  [[ -n "$sid" ]] || sid="$(extract_trace_ids "$scenario" | head -n 1 || true)"
   if [[ -n "$sid" ]]; then
     while IFS= read -r tid; do
       [[ -n "$tid" ]] || continue
@@ -683,11 +738,22 @@ for scope_index in "${!scope_analysis_files[@]}"; do
     report_path="$feature_dir/report.md"
   fi
 
+  # A Not Started scope has, by definition, produced no execution evidence yet.
+  # Demanding a report evidence reference from it reports the sequential
+  # execution model the framework itself prescribes as a defect, and buries the
+  # findings that belong to scopes actually under way. This CANNOT weaken the
+  # done gate: promotion to done requires every scope to be Done, so no scope is
+  # Not Started at that point and every deferral has already expired.
+  scope_not_started=0
+  if grep -qE '^\*\*Status:\*\*[[:space:]]*Not Started[[:space:]]*$' "$scope_path" 2>/dev/null; then
+    scope_not_started=1
+  fi
+
   info "Checking traceability for $scope_label"
 
   scenarios=""
   scenario_status=0
-  if scenarios="$(extract_scenarios "$scope_path")"; then
+  if scenarios="$(extract_scenarios_with_ids "$scope_path")"; then
     scenario_status=0
   else
     scenario_status=$?
@@ -729,7 +795,10 @@ for scope_index in "${!scope_analysis_files[@]}"; do
 
   row_total=$((row_total + scope_row_count))
 
-  while IFS= read -r scenario; do
+  while IFS= read -r scenario_record; do
+    [[ -n "$scenario_record" ]] || continue
+    scenario_id="${scenario_record%%$'\t'*}"
+    scenario="${scenario_record#*$'\t'}"
     [[ -n "$scenario" ]] || continue
     scope_scenario_count=$((scope_scenario_count + 1))
     scenario_total=$((scenario_total + 1))
@@ -737,9 +806,20 @@ for scope_index in "${!scope_analysis_files[@]}"; do
     matched_row=""
     while IFS= read -r row; do
       [[ -n "$row" ]] || continue
-      if scenario_matches_row "$scenario" "$row"; then
-        matched_row="$row"
-        break
+      if scenario_matches_row "$scenario" "$row" || trace_id_declared "$scenario_id" "$row"; then
+        # One scenario is legitimately covered by several rows — a page-integrity
+        # row naming the page, plus the e2e row naming the spec file that
+        # exercises it. Row order in the table is arbitrary, so breaking on the
+        # first match made the concrete-path check below depend on authoring
+        # order: a scenario whose test file was named one row further down
+        # failed as though it had no test at all. Keep the first match as the
+        # fallback so single-match behaviour is unchanged, then upgrade to a
+        # matching row that actually carries a path.
+        [[ -n "$matched_row" ]] || matched_row="$row"
+        if [[ -n "$(extract_path_candidates "$row")" ]]; then
+          matched_row="$row"
+          break
+        fi
       fi
     done <<< "$test_rows"
 
@@ -751,7 +831,7 @@ for scope_index in "${!scope_analysis_files[@]}"; do
     mapped_total=$((mapped_total + 1))
     pass "$scope_label scenario mapped to Test Plan row: $scenario"
 
-    edge_kind="$(classify_match_kind "$scenario" "$matched_row")"
+    edge_kind="$(classify_match_kind "$scenario" "$matched_row" "$scenario_id")"
     if [[ "$edge_kind" == "inferred" ]]; then
       _amb=0
       while IFS= read -r _r; do
@@ -795,6 +875,9 @@ for scope_index in "${!scope_analysis_files[@]}"; do
     if report_mentions_path "$report_path" "$existing_path"; then
       report_reference_total=$((report_reference_total + 1))
       pass "$scope_label report references concrete test evidence: $existing_path"
+    elif [[ "$scope_not_started" -eq 1 ]]; then
+      deferred_evidence_total=$((deferred_evidence_total + 1))
+      info "$scope_label report evidence DEFERRED (scope is Not Started, so no run has produced evidence yet): $existing_path"
     else
       fail "$scope_label report is missing evidence reference for concrete test file: $existing_path"
     fi
@@ -823,7 +906,7 @@ for scope_index in "${!scope_analysis_files[@]}"; do
   scope_label="$(scope_analysis_label "$scope_index")"
   scenarios=""
   scenario_status=0
-  if scenarios="$(extract_scenarios "$scope_path")"; then
+  if scenarios="$(extract_scenarios_with_ids "$scope_path")"; then
     scenario_status=0
   else
     scenario_status=$?
@@ -842,14 +925,17 @@ for scope_index in "${!scope_analysis_files[@]}"; do
     continue
   fi
 
-  while IFS= read -r scenario; do
+  while IFS= read -r scenario_record; do
+    [[ -n "$scenario_record" ]] || continue
+    scenario_id="${scenario_record%%$'\t'*}"
+    scenario="${scenario_record#*$'\t'}"
     [[ -n "$scenario" ]] || continue
     dod_fidelity_total=$((dod_fidelity_total + 1))
 
     matched_dod=""
     while IFS= read -r dod_item; do
       [[ -n "$dod_item" ]] || continue
-      if scenario_matches_dod "$scenario" "$dod_item"; then
+      if scenario_matches_dod "$scenario" "$dod_item" || trace_id_declared "$scenario_id" "$dod_item"; then
         matched_dod="$dod_item"
         break
       fi
@@ -861,7 +947,7 @@ for scope_index in "${!scope_analysis_files[@]}"; do
     else
       dod_fidelity_mapped=$((dod_fidelity_mapped + 1))
       pass "$scope_label scenario maps to DoD item: $scenario"
-      edge_kind="$(classify_match_kind "$scenario" "$matched_dod")"
+      edge_kind="$(classify_match_kind "$scenario" "$matched_dod" "$scenario_id")"
       if [[ "$edge_kind" == "inferred" ]]; then
         _amb=0
         while IFS= read -r _d; do
@@ -898,6 +984,9 @@ info "Test rows checked: $row_total"
 info "Scenario-to-row mappings: $mapped_total"
 info "Concrete test file references: $file_reference_total"
 info "Report evidence references: $report_reference_total"
+if [[ "$deferred_evidence_total" -gt 0 ]]; then
+  info "Report evidence DEFERRED to their own execution (Not Started scopes): $deferred_evidence_total"
+fi
 info "DoD fidelity scenarios: $dod_fidelity_total (mapped: $dod_fidelity_mapped, unmapped: $dod_fidelity_unmapped)"
 info "Edge confidence (IMP-015 Scope B): declared=$edge_declared inferred=$edge_inferred ambiguous=$edge_ambiguous"
 

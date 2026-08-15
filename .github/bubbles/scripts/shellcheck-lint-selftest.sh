@@ -7,6 +7,11 @@ set -euo pipefail
 # fixture, FAILs on a dirty fixture (adversarial — a reintroduced SC2034 warning
 # must be caught), and rejects invalid arguments. When shellcheck is not
 # installed, the gate advisory-skips and the selftest asserts that path instead.
+#
+# This selftest tests the GATE, never the live tree. Scanning the real tracked
+# surface is the standalone `shellcheck-lint.sh` check's job, and framework-
+# validate already runs it; doing it here too scanned all 516 tracked scripts a
+# second time and cost 41s of a 109s core run for no additional coverage.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 GATE="$SCRIPT_DIR/shellcheck-lint.sh"
@@ -94,17 +99,6 @@ if [[ "$rc" -eq 2 ]]; then
   ok "gate rejects an invalid severity with exit 2"
 else
   bad "gate should exit 2 on an invalid severity (got $rc)"
-fi
-
-# 4. The live tracked shell surface must be clean at -S warning.
-set +e
-bash "$GATE" --quiet
-rc=$?
-set -e
-if [[ "$rc" -eq 0 ]]; then
-  ok "live tracked shell surface is clean at -S warning"
-else
-  bad "live tracked shell surface has shellcheck warnings (got $rc)"
 fi
 
 echo "shellcheck-lint-selftest: ${pass_count} pass, ${fail_count} fail"

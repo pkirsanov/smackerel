@@ -117,10 +117,11 @@ Project-installable instruction modules consumed by IDE agents via
 - [bubbles-deployment-target.instructions.md](../instructions/bubbles-deployment-target.instructions.md)
 - [bubbles-docker-lifecycle-governance.instructions.md](../instructions/bubbles-docker-lifecycle-governance.instructions.md)
 - [bubbles-env-pollution-isolation.instructions.md](../instructions/bubbles-env-pollution-isolation.instructions.md)
+- [bubbles-kernel.instructions.md](../instructions/bubbles-kernel.instructions.md) — the ONLY always-on instruction; carries repository authority, anti-fabrication, evidence integrity, and timeout invariants
 - [bubbles-skills.instructions.md](../instructions/bubbles-skills.instructions.md)
 - [bubbles-supply-chain-source-locking.instructions.md](../instructions/bubbles-supply-chain-source-locking.instructions.md)
 - [bubbles-test-environment-isolation.instructions.md](../instructions/bubbles-test-environment-isolation.instructions.md)
-- [wsl-macos-compatibility.instructions.md](../instructions/wsl-macos-compatibility.instructions.md)
+- [bubbles-wsl-macos-compatibility.instructions.md](../instructions/bubbles-wsl-macos-compatibility.instructions.md)
 
 ---
 
@@ -142,6 +143,12 @@ Discoverable procedural workflows packaged as model skills.
 - [bubbles-spec-template-bdd](../skills/bubbles-spec-template-bdd/SKILL.md)
 - [bubbles-test-environment-isolation](../skills/bubbles-test-environment-isolation/SKILL.md)
 - [bubbles-test-integrity](../skills/bubbles-test-integrity/SKILL.md)
+- [bubbles-code-index-adapter](../skills/bubbles-code-index-adapter/SKILL.md)
+- [bubbles-cross-platform-shell](../skills/bubbles-cross-platform-shell/SKILL.md)
+- [bubbles-datastore-isolation](../skills/bubbles-datastore-isolation/SKILL.md)
+- [bubbles-isolated-ml-sidecar](../skills/bubbles-isolated-ml-sidecar/SKILL.md)
+- [bubbles-technical-prose](../skills/bubbles-technical-prose/SKILL.md)
+- [bubbles-vscode-agent-constraints](../skills/bubbles-vscode-agent-constraints/SKILL.md)
 
 ---
 
@@ -235,3 +242,34 @@ end-to-end flows.
 - Validation IDs: `AN5`, `DE4`, `UX9`, `P4` in [validation-profiles.md](../agents/bubbles_shared/validation-profiles.md)
 - Gate: `G094 capability_foundation_gate` in [workflows.yaml](../bubbles/workflows.yaml)
 - Guard: [capability-foundation-guard.sh](../bubbles/scripts/capability-foundation-guard.sh)
+
+---
+
+## Generated Surfaces (`docs/generated/`)
+
+**Audience:** maintainer
+
+Regenerated from source registries, never hand-edited. Listed here so each one
+has a named reader rather than existing only as a generator output.
+
+- [competitive-capabilities.md](generated/competitive-capabilities.md) — capability ledger projected against adjacent tools
+- [framework-stats.md](generated/framework-stats.md) — agent, gate, mode, and phase counts at a glance
+- [framework-stats.json](generated/framework-stats.json) — the machine-readable form the release manifest and site consume
+- [gate-coverage-map.md](generated/gate-coverage-map.md) — gate to enforcer mapping with corroborating references
+- [interop-migration-matrix.md](generated/interop-migration-matrix.md) — interop apply and import support per target
+- [issue-status.md](generated/issue-status.md) — issue-linked capabilities; the ledger stays authoritative
+
+---
+
+## Historical Record (frozen)
+
+**Audience:** maintainer
+
+Kept in source for audit value. These describe how the framework USED to work and
+are not current guidance. Do not treat them as authority.
+
+- [v4.1.0-delivered-pending-activation.md](v4.1.0-delivered-pending-activation.md) — the delivered-pending-activation status ceiling as shipped in v4.1.0
+- [v5.2-design.md](v5.2-design.md) — v5.2 design record
+- [v6-mcp-design.md](v6-mcp-design.md) — v6 MCP surface design record
+- [Product-Review-2026-08-02.md](Product-Review-2026-08-02.md) — dated product review, superseded by later work
+- [ADR-001-v6.1-review-followups.md](decisions/ADR-001-v6.1-review-followups.md) — v6.1 review follow-up decisions

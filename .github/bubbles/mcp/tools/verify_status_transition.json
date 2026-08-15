@@ -1,6 +1,6 @@
 {
   "name": "verify_status_transition",
-  "description": "Alias surface for validate_dod with the v6 ABSOLUTE COMPLETION HIERARCHY framing. Equivalent invocation; semantics are 'before flipping state.json status to done, run the transition guard and surface the verbatim verdict'.",
+  "description": "DEPRECATED alias for validate_dod; it runs the identical script with identical arguments and will be removed once downstream usage reaches zero. Prefer validate_dod. Retained for the v6 ABSOLUTE COMPLETION HIERARCHY framing: 'before flipping state.json status to done, run the transition guard and surface the verbatim verdict'.",
   "inputSchema": {
     "type": "object",
     "properties": {

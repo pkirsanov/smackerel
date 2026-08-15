@@ -22,6 +22,9 @@
 #   - Opt out with BUBBLES_GATE_HIT_LOG=off. Opting out is silent and safe.
 #   - The log lives under .specify/runtime/, which the framework gitignores, so
 #     telemetry never enters a commit.
+#   - Every record carries a `sourceClass`. `report` counts product records only,
+#     so a fixture run cannot be mistaken for evidence about a shipped gate
+#     (IMP-042 SCOPE-17).
 #
 # Usage:
 #   bash bubbles/scripts/gate-hit-log.sh append \
@@ -29,7 +32,8 @@
 #     --verdict <PASS|FAIL> --exit-status <n> \
 #     [--passed "G001 G002"] [--failed "G003"]
 #
-#   bash bubbles/scripts/gate-hit-log.sh report [--repo-root <path>] [--json]
+#   bash bubbles/scripts/gate-hit-log.sh report [--repo-root <path>] [--json] \
+#     [--class product|fixture|selftest|migration] [--all-classes]
 #
 # Exit codes:
 #   0 = success (append always returns 0)
@@ -51,19 +55,50 @@ fi
 GATE_HIT_LOG_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 GATE_HIT_LOG_DEFAULT_ROOT="$(cd "$GATE_HIT_LOG_DIR/../.." && pwd)"
 GATE_HIT_SCHEMA_VERSION="gate-hit/v1"
+GATE_HIT_VALID_CLASSES="product fixture selftest migration"
+
+# Derive the record's source class. Returns exactly one of GATE_HIT_VALID_CLASSES
+# and never fails, because every path in append is telemetry.
+bubbles_gate_hit_source_class() {
+  local repo_root="${1:-}" declared="${BUBBLES_GATE_HIT_SOURCE_CLASS:-}" candidate
+  if [[ -n "$declared" ]]; then
+    for candidate in $GATE_HIT_VALID_CLASSES; do
+      [[ "$declared" == "$candidate" ]] && { printf '%s' "$declared"; return 0; }
+    done
+    # An unrecognised declaration is treated as a fixture rather than trusted as
+    # product: a typo must not promote a test record into retirement evidence.
+    printf '%s' 'fixture'
+    return 0
+  fi
+  local resolved="$repo_root"
+  case "$resolved" in
+    "${TMPDIR:-/nonexistent-tmpdir}"*| /tmp/* | /private/tmp/* | /var/tmp/* | /private/var/folders/* | /var/folders/*)
+      printf '%s' 'fixture'
+      return 0
+      ;;
+  esac
+  printf '%s' 'product'
+}
 
 bubbles_gate_hit_usage() {
   cat <<'USAGE'
 usage: gate-hit-log.sh append --repo-root R --spec S --mode M --target-status T
                               --verdict V --exit-status N
                               [--passed "G001 G002"] [--failed "G003"]
-       gate-hit-log.sh report [--repo-root R] [--json]
+       gate-hit-log.sh report [--repo-root R] [--json] [--class C] [--all-classes]
 
 append  records one JSONL line per gate id. Never fails the caller.
 report  aggregates the log: hits, passes, fails and last-seen per gate.
+        Counts sourceClass=product only, so fixture and selftest runs cannot
+        be mistaken for evidence that a gate is load-bearing in a product.
+        --class C     count class C instead (product|fixture|selftest|migration)
+        --all-classes count every record regardless of class
 
 Environment:
   BUBBLES_GATE_HIT_LOG=off   disable appending (silent, exit 0)
+  BUBBLES_GATE_HIT_SOURCE_CLASS=<class>
+                             declare the record class explicitly. Unset means
+                             derive it: a temp-dir repo root is a fixture.
 USAGE
 }
 
@@ -117,13 +152,30 @@ bubbles_gate_hit_append() {
   # Portable UTC timestamp: no GNU-only date flags (WSL + macOS).
   ts="$(date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null)" || return 0
 
+  # IMP-042 SCOPE-17. A retirement decision reads "gate G0xx never rejected
+  # anything". That is only true of PRODUCT runs. Selftests drive the guard
+  # through fixture repositories on purpose, including deliberate rejections, so
+  # counting those records makes a gate look busier -- or a fixture-only gate
+  # look load-bearing -- on evidence that describes the test suite rather than
+  # the product.
+  #
+  # The class is DERIVED from the repository root, not asked for, because a
+  # fixture that forgets to declare itself is exactly the record that pollutes
+  # the report. Every selftest here builds its fixture under a temp root, so
+  # that location is the signal. The env override exists for a caller that
+  # legitimately runs outside a temp dir (a migration replay, say), and is
+  # validated so a typo cannot invent a fourth class that the report then
+  # silently drops.
+  local source_class
+  source_class="$(bubbles_gate_hit_source_class "$repo_root")"
+
   local gate outcome group
   for group in "pass:$passed" "fail:$failed"; do
     outcome="${group%%:*}"
     for gate in ${group#*:}; do
       [[ "$gate" =~ ^G[0-9][0-9][0-9]$ ]] || continue
-      printf '{"schemaVersion":"%s","kind":"gate","ts":"%s","gate":"%s","outcome":"%s","spec":"%s","mode":"%s","targetStatus":"%s","guardVerdict":"%s","exitStatus":"%s"}\n' \
-        "$GATE_HIT_SCHEMA_VERSION" "$ts" "$gate" "$outcome" \
+      printf '{"schemaVersion":"%s","kind":"gate","ts":"%s","sourceClass":"%s","gate":"%s","outcome":"%s","spec":"%s","mode":"%s","targetStatus":"%s","guardVerdict":"%s","exitStatus":"%s"}\n' \
+        "$GATE_HIT_SCHEMA_VERSION" "$ts" "$source_class" "$gate" "$outcome" \
         "$(bubbles_gate_hit_json_escape "$spec")" "$(bubbles_gate_hit_json_escape "$mode")" \
         "$(bubbles_gate_hit_json_escape "$target_status")" "$(bubbles_gate_hit_json_escape "$verdict")" \
         "$(bubbles_gate_hit_json_escape "$exit_status")" >>"$log_file" 2>/dev/null || return 0
@@ -134,8 +186,8 @@ bubbles_gate_hit_append() {
   # Expansion is already gated by G022; this makes the RATE visible, which is the
   # only way to tell whether SCOPE-1's single-orchestrator rule actually moved it.
   if [[ "$parent_expanded" =~ ^[0-9]+$ ]]; then
-    printf '{"schemaVersion":"%s","kind":"run","ts":"%s","spec":"%s","mode":"%s","parentExpanded":%s,"guardVerdict":"%s"}\n' \
-      "$GATE_HIT_SCHEMA_VERSION" "$ts" \
+    printf '{"schemaVersion":"%s","kind":"run","ts":"%s","sourceClass":"%s","spec":"%s","mode":"%s","parentExpanded":%s,"guardVerdict":"%s"}\n' \
+      "$GATE_HIT_SCHEMA_VERSION" "$ts" "$source_class" \
       "$(bubbles_gate_hit_json_escape "$spec")" "$(bubbles_gate_hit_json_escape "$mode")" \
       "$parent_expanded" "$(bubbles_gate_hit_json_escape "$verdict")" >>"$log_file" 2>/dev/null || return 0
   fi
@@ -143,11 +195,14 @@ bubbles_gate_hit_append() {
 }
 
 bubbles_gate_hit_report() {
-  local repo_root="$GATE_HIT_LOG_DEFAULT_ROOT" as_json="false"
+  local repo_root="$GATE_HIT_LOG_DEFAULT_ROOT" as_json="false" class_filter="product"
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --repo-root) shift; repo_root="${1:-}" ;;
       --json) as_json="true" ;;
+      # Retirement reads product evidence only. These widen it deliberately.
+      --all-classes) class_filter="" ;;
+      --class) shift; class_filter="${1:-product}" ;;
       -h|--help) bubbles_gate_hit_usage; return 0 ;;
       *) bubbles_gate_hit_usage >&2; return 2 ;;
     esac
@@ -166,9 +221,14 @@ bubbles_gate_hit_report() {
     return 0
   fi
 
-  awk -v as_json="$as_json" -v schema="$GATE_HIT_SCHEMA_VERSION" '
+  awk -v as_json="$as_json" -v schema="$GATE_HIT_SCHEMA_VERSION" -v want_class="$class_filter" '
     {
-      gate=""; outcome=""; ts="";
+      gate=""; outcome=""; ts=""; sclass="";
+      if (match($0, /"sourceClass":"[^"]*"/)) { sclass = substr($0, RSTART+15, RLENGTH-16) }
+      # Records written before source classing carry no field. Treat them as
+      # product, which is what they were, rather than dropping history.
+      if (sclass == "") sclass = "product"
+      if (want_class != "" && sclass != want_class) { excluded++; next }
       if (match($0, /"gate":"[^"]*"/))    { gate    = substr($0, RSTART+8,  RLENGTH-9) }
       if (match($0, /"outcome":"[^"]*"/)) { outcome = substr($0, RSTART+11, RLENGTH-12) }
       if (match($0, /"ts":"[^"]*"/))      { ts      = substr($0, RSTART+6,  RLENGTH-7) }
@@ -181,7 +241,7 @@ bubbles_gate_hit_report() {
     }
     END {
       if (as_json == "true") {
-        printf "{\"schemaVersion\":\"%s\",\"logPresent\":true,\"totalRecords\":%d,\"gates\":[", schema, total+0
+        printf "{\"schemaVersion\":\"%s\",\"logPresent\":true,\"sourceClass\":\"%s\",\"excludedRecords\":%d,\"totalRecords\":%d,\"gates\":[", schema, (want_class == "" ? "all" : want_class), excluded+0, total+0
         first=1
         for (g in hits) {
           if (!first) printf ","
@@ -190,7 +250,10 @@ bubbles_gate_hit_report() {
         }
         printf "]}\n"
       } else {
-        printf "=== gate-hit report (%d records) ===\n", total+0
+        printf "=== gate-hit report (%d records, sourceClass=%s) ===\n", total+0, (want_class == "" ? "all" : want_class)
+        if (excluded+0 > 0) {
+          printf "  %d record(s) excluded as non-%s. Re-run with --all-classes to include them.\n", excluded+0, want_class
+        }
         printf "  %-8s %8s %8s %8s  %s\n", "gate", "hits", "passes", "fails", "lastSeen"
         n=0
         for (g in hits) { n++; order[n]=g }

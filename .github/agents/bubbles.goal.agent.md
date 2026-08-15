@@ -108,6 +108,14 @@ Before the phase router reads files, classifies the goal, resolves workflow stat
 ## PHASE ROUTER (EXECUTE TOP-TO-BOTTOM)
 
 ```yaml
+phase_0_continuation_intent:
+  do: run bubbles/scripts/continuation-intent-resolve.sh against the complete raw request before goal or target classification
+  call_runSubagent: no
+  route:
+    CONTINUE: recover one non-terminal goal constrained by any named target; if none exists, goto phase_8_terminal_recap
+    NEW_WORK: continue to phase_1_understand
+    OTHER: continue to phase_1_understand
+
 phase_1_understand:
   do: read files, search codebase, classify goal
   call_runSubagent: no
@@ -180,6 +188,11 @@ phase_7_convergence:
     all_gates_pass AND all_tests_pass AND zero_findings AND artifact_lint_clean AND all_scopes_done: EXIT_SUCCESS
     max_iterations_reached: EXIT_WITH_STATUS_REPORT
     else: goto phase_4_verify
+
+phase_8_terminal_recap:
+  do: invoke recap with the terminal result; recap may derive one read-only next-priority candidate from status and open-work surfaces
+  call_runSubagent: yes → runSubagent(bubbles.recap)
+  stop: always return control to the user; candidate work requires a new explicit request
 ```
 
 ## Agent Identity
@@ -193,6 +206,16 @@ phase_7_convergence:
 - The user's outcome is the authority. Resolve every needed mode against `workflowModeGrants`, execute each mode contract in this top-level runtime, and invoke its phase owners via `runSubagent`.
 - Never invoke `bubbles.workflow`, `bubbles.goal`, `bubbles.sprint`, or another workflow-running orchestrator as a subagent. Record every mode transition as `executionModel: direct-authorized-runner`.
 - If this goal runtime lacks `runSubagent`, return a `blocked` RESULT-ENVELOPE naming the missing `agent` tool and the exact phase owner invocation that would have run.
+
+## Terminal Recap Boundary
+
+Treat bare `continue`, `resume`, `next`, `keep going`, `go on`, or `proceed` as resume requests.
+Treat targeted forms such as `continue working on <feature>` the same way; the target constrains recovery and does not define a new goal.
+Resume only a recoverable non-terminal goal.
+If the goal is already terminal, invoke `runSubagent(bubbles.recap)` and stop.
+Let recap derive at most one possible next-priority candidate from read-only status and open-work surfaces.
+Starting that work requires a new explicit user request.
+Keep the goal `RESULT-ENVELOPE` as the final block.
 
 ## Workflow Mode Engine (MANDATORY)
 
@@ -281,7 +304,7 @@ exit_conditions:
   - fundamental_impossibility → EXIT_BLOCKED
 ```
 
-**Mechanical cap (Gate G082):** `max_iterations: 10` is mechanically enforced by `bubbles/scripts/convergence-cap-guard.sh` (registered as Gate G082 in `bubbles/workflows.yaml` and invoked as Check 23 inside `bubbles/scripts/state-transition-guard.sh`). The authoritative cap value lives in `bubbles/workflows.yaml` under `maxConvergenceIterations` (default 10). Every convergence iteration MUST record progress by calling `bash bubbles/scripts/state-snapshot.sh --convergence-iteration <N> --spec-dir <specDir> --session-id <session-id> --session-control-file <control-file> --binding-packet-file <packet-file>` with `BUBBLES_AGENT_NAME=bubbles.goal` set in env. When the guard reports the cap exceeded, this agent MUST emit a `blocked` RESULT-ENVELOPE whose `unresolvedFindings[]` includes finding `G082` and MUST NOT start another iteration.
+**Mechanical cap (Gate G082):** `max_iterations: 10` is mechanically enforced by `bubbles/scripts/convergence-cap-guard.sh` (registered as Gate G082 in `bubbles/workflows.yaml` and invoked as Check 23 inside `bubbles/scripts/state-transition-guard.sh`). The authoritative cap value lives in `bubbles/workflows.yaml` under `maxConvergenceIterations` (default 10). Every convergence iteration MUST record progress by calling `bash bubbles/scripts/state-snapshot.sh --convergence-iteration <N> --spec-dir <specDir> --session-id <session-id> --session-control-file <control-file> --binding-packet-file <packet-file>` with `BUBBLES_AGENT_NAME=bubbles.goal` set in env. When the current packet has `scopeKind: goal-node`, that same call MUST also include `--scenario-file <compiled-scenario.json> --node-id <node-id>` as a complete pair so the snapshot mirror validates the compiled node declaration. When the guard reports the cap exceeded, this agent MUST emit a `blocked` RESULT-ENVELOPE whose `unresolvedFindings[]` includes finding `G082` and MUST NOT start another iteration.
 
 **In-loop compaction discipline (Gate G083):** Between specialist dispatches inside the convergence loop, the orchestrator MUST keep its trailing transition-packet log inside per-spec budgets: the eligible slice (all envelopes for the active spec EXCEPT the latest 2 kept raw) MUST satisfy BOTH `count <= 3` AND `cumulative rawSizeBytes <= 8192` UNLESS each over-budget envelope carries a `compactedAt` timestamp. Enforced mechanically by `bubbles/scripts/compaction-discipline-guard.sh` against `.specify/memory/bubbles.session.json` `envelopesReceived[]`; invoked as Check 24 by `bubbles/scripts/state-transition-guard.sh`. A guard violation MUST emit a `blocked` RESULT-ENVELOPE with finding `G083`; remediate by running `bubbles/scripts/context-compactor.sh` with the current `--session-id`, `--session-control-file`, and `--binding-packet-file` on the over-budget envelopes (it additively stamps `compactedAt`) BEFORE proceeding to the next dispatch. See `agents/bubbles_shared/operating-baseline.md` → "Context Compaction Discipline" for the full operating contract.
 
@@ -341,6 +364,13 @@ time_budget:
 Three additive `executionOptions` knobs are resolved at session start; all default to today's fully-autonomous behavior:
 
 - **`autonomy` (default `full`)** — a convenience alias that sets `grillMode`/`socratic` together: `full` = `grillMode off` + `socratic false` (100% autonomous, today's default); `guarded` = `grillMode required-on-ambiguity` + a conditional `clarify` consistency gate; `interactive` = `grillMode on-demand` + `socratic true`. Explicit `grillMode`/`socratic` flags ALWAYS override the alias.
+- **`unattended`** — opt-in posture ABOVE `full`, never the default. REQUIRES a non-null `sessionBudget`; `autonomy-resolve.sh` refuses an unbounded one with `E039-UNATTENDED-UNBOUNDED`, because a run that will not stop on its own forfeits the right to be unbounded. When the resolved posture is `unattended` this agent performs four deltas:
+  1. Interactive questions are FORBIDDEN. Do not call the ask-user tool, and do not open a Socratic loop even when `socratic: true` is also present — the posture wins, and the override is logged.
+  2. Taste-decision overflow auto-resolves and is recorded, instead of routing to `bubbles.clarify` at the `maxPerPhase` threshold.
+  3. `autoCommit` resolves to `scope`. Commits land only after a scope reaches validated Done.
+  4. A `blocked` outcome whose cause is agent-solvable requires a recorded remediation attempt FIRST. An operator-only blocker (an absent credential, absent external access) remains a truthful terminal state and MUST NOT be suppressed.
+
+  The posture governs INTERACTION only. The Autonomy Floor in [critical-requirements.md](bubbles_shared/critical-requirements.md) is never waived, and a security-affecting decision is never auto-resolved — under `unattended` it produces a truthful `blocked` naming the decision rather than a guess.
 - **`sessionBudget` (all fields default `null` = unbounded)** — aggregate caps across the whole session: `maxTotalConvergenceIterations`, `maxWallClockMinutes`, `maxToolCalls`. Opt-in (default `null` = unbounded); when a cap is set it is MECHANICALLY enforced by Gate G128 (`session-cap-guard.sh`, state-transition Check 40) AND self-enforced by this orchestrator, which STOPS with a `blocked` RESULT-ENVELOPE when a cap is exceeded. A budget stop is a TERMINAL condition of the same class as `max iterations reached` — the run ends; it never pauses for a fresh prompt. **Per-mode seeding (IMP-100 Phase 1):** when the resolved workflow mode declares its own `sessionBudget` (e.g. `rapid-tool-delivery` ships `maxTotalConvergenceIterations: 2`, `maxWallClockMinutes: 90`, `maxToolCalls: 250`), those non-null caps SEED `.specify/memory/bubbles.session.json` `sessionBudget` at session start so a risk-proportional fast lane is bounded by default; an explicit operator `sessionBudget` flag always overrides the mode default. The seeded caps are enforced mechanically by Gate G128 (`session-cap-guard.sh`), identical to operator-supplied caps.
 - **`dryRun` (default `false`)** — `dryRun: plan` resolves the full plan (specs/scopes/intended changes) and REPORTS it WITHOUT mutating code or state, then terminates the run. Extends `parallelScopes=dag-dry` to the whole convergence loop.
 

@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Capability: done-with-concerns-outcome-state, observability-posture-and-slo-gates,
+# Capability: validate-owned-certification, workflow-orchestration,
+# Capability: workflow-runner-authorization
 # =============================================================================
 # state-transition-guard.sh
 # =============================================================================
@@ -1281,9 +1284,14 @@ if [[ "$scope_layout" == "per-scope-directory" ]] && [[ -f "$scope_index_file" ]
   for scope_path in ${scope_files[@]+"${scope_files[@]}"}; do
     [[ -f "$scope_path" ]] || continue
     scope_dir_name="$(basename "$(dirname "$scope_path")")"
+    # Two directory conventions are in use: "NN-name" and "SCOPE-N-name".
+    # Reading the ordinal with %%-* yields the literal "SCOPE" for the latter, so
+    # no index row ever matched and parity silently degraded to a warning for
+    # every scope in such a packet. Normalise the prefix away first.
+    scope_dir_core="${scope_dir_name#[Ss][Cc][Oo][Pp][Ee]-}"
     # Strip leading "NN-" prefix to get the scope's natural-language identifier
-    scope_dir_suffix="${scope_dir_name#[0-9]*-}"
-    scope_dir_num="${scope_dir_name%%-*}"
+    scope_dir_suffix="${scope_dir_core#[0-9]*-}"
+    scope_dir_num="${scope_dir_core%%-*}"
     scope_status_local="$(grep -m1 -E '^\*\*Status:\*\*' "$scope_path" \
       | sed -E 's/.*\*\*Status:\*\*[[:space:]]*([A-Za-z ]+).*/\1/' \
       | sed -E 's/[[:space:]]+$//' || true)"
@@ -1311,7 +1319,13 @@ if [[ "$scope_layout" == "per-scope-directory" ]] && [[ -f "$scope_index_file" ]
       continue
     fi
     index_parity_checked=$((index_parity_checked + 1))
-    if [[ "$index_status" != "$scope_status_local" ]]; then
+    # Index tables commonly write the status as a markdown checkbox ("[x] Done")
+    # while scope.md writes the bare word ("Done"). Comparing those raw reports a
+    # fabrication for two spellings of the same status. Strip the checkbox marker
+    # from both sides only — a real mismatch (Done vs In Progress) still fails.
+    index_status_norm="$(echo "$index_status" | sed -E 's/^\[[ xX]\][[:space:]]*//')"
+    scope_status_norm="$(echo "$scope_status_local" | sed -E 's/^\[[ xX]\][[:space:]]*//')"
+    if [[ "$index_status_norm" != "$scope_status_norm" ]]; then
       fail "_index.md says '$index_status' for scope $scope_dir_name but scope.md says '$scope_status_local' — fabrication indicator"
       index_parity_failures=$((index_parity_failures + 1))
     fi
@@ -1518,103 +1532,47 @@ PY
 
 if [[ -n "$state_workflow_mode" ]]; then
   required_specialists=()
-  case "$state_workflow_mode" in
-    value-first-e2e-batch)
-      required_specialists=("implement" "test" "regression" "simplify" "stabilize" "security" "docs" "validate" "audit" "chaos")
-      ;;
-    full-delivery)
-      required_specialists=("implement" "test" "regression" "simplify" "gaps" "harden" "stabilize" "security" "validate" "audit" "chaos" "docs")
-      ;;
-    feature-bootstrap)
-      required_specialists=("implement" "test" "regression" "simplify" "stabilize" "security" "docs" "validate" "audit")
-      ;;
-    bugfix-fastlane)
-      required_specialists=("implement" "test" "regression" "simplify" "stabilize" "security" "validate" "audit")
-      ;;
-    rapid-tool-delivery)
-      # IMP-101 SCOPE-5 (FLOW-101): this delivery mode was absent from the table,
-      # so Check 6 imposed no specialist-completion requirement on it. Its
-      # required specialists are its own declared phaseOrder in modes.yaml
-      # ([select, implement, test, validate, docs, finalize]) minus the select/
-      # finalize bookends. The read-only modes readiness-review and
-      # journey-refinement are intentionally NOT listed: they set
-      # allowImplementationForFindings:false and run review/journey phases, so a
-      # delivery-specialist requirement would be incorrect for them.
-      required_specialists=("implement" "test" "validate" "docs")
-      ;;
-    chaos-hardening)
-      required_specialists=("chaos" "implement" "test" "regression" "simplify" "stabilize" "security" "validate" "audit" "docs")
-      ;;
-    harden-to-doc)
-      required_specialists=("harden" "implement" "test" "regression" "simplify" "stabilize" "security" "chaos" "validate" "audit" "docs")
-      ;;
-    gaps-to-doc)
-      required_specialists=("gaps" "implement" "test" "regression" "simplify" "stabilize" "security" "chaos" "validate" "audit" "docs")
-      ;;
-    harden-gaps-to-doc)
-      required_specialists=("harden" "gaps" "implement" "test" "regression" "simplify" "stabilize" "security" "chaos" "validate" "audit" "docs")
-      ;;
-    reconcile-to-doc)
-      required_specialists=("implement" "test" "regression" "simplify" "stabilize" "security" "validate" "audit" "chaos" "docs")
-      ;;
-    test-to-doc)
-      required_specialists=("test" "validate" "audit" "docs")
-      ;;
-    chaos-to-doc)
-      required_specialists=("chaos" "validate" "audit" "docs")
-      ;;
-    batch-implement)
-      required_specialists=("implement" "test" "regression" "simplify" "stabilize" "security" "docs" "validate" "audit" "chaos")
-      ;;
-    batch-harden)
-      required_specialists=("harden" "implement" "test" "regression" "simplify" "stabilize" "security" "validate" "audit" "chaos" "docs")
-      ;;
-    batch-gaps)
-      required_specialists=("gaps" "implement" "test" "regression" "simplify" "stabilize" "security" "validate" "audit" "chaos" "docs")
-      ;;
-    batch-harden-gaps)
-      required_specialists=("harden" "gaps" "implement" "test" "regression" "simplify" "stabilize" "security" "validate" "audit" "chaos" "docs")
-      ;;
-    batch-improve-existing)
-      required_specialists=("harden" "gaps" "implement" "test" "regression" "simplify" "stabilize" "security" "validate" "audit" "chaos" "docs")
-      ;;
-    batch-reconcile-to-doc)
-      required_specialists=("implement" "test" "validate" "audit" "chaos" "docs")
-      ;;
-    product-to-delivery)
-      required_specialists=("implement" "test" "regression" "simplify" "stabilize" "security" "docs" "validate" "audit" "chaos")
-      ;;
-    improve-existing)
-      required_specialists=("harden" "gaps" "implement" "test" "regression" "simplify" "stabilize" "security" "validate" "audit" "chaos" "docs")
-      ;;
-    redesign-existing)
-      required_specialists=("implement" "test" "regression" "simplify" "stabilize" "security" "docs" "validate" "audit" "chaos")
-      ;;
-    stabilize-to-doc)
-      required_specialists=("stabilize" "implement" "test" "regression" "simplify" "security" "chaos" "validate" "audit" "docs")
-      ;;
-    security-to-doc)
-      required_specialists=("security" "implement" "test" "regression" "simplify" "stabilize" "devops" "chaos" "validate" "audit" "docs")
-      ;;
-    regression-to-doc)
-      required_specialists=("regression" "implement" "test" "simplify" "stabilize" "devops" "security" "chaos" "validate" "audit" "docs")
-      ;;
-    simplify-to-doc)
-      required_specialists=("simplify" "test" "validate" "audit" "docs")
-      ;;
-    iterate)
-      required_specialists=("validate" "audit")
-      ;;
-    stochastic-quality-sweep)
-      required_specialists=("validate" "audit")
-      ;;
-    product-discovery)
-      required_specialists=("harden" "docs" "validate" "audit")
-      ;;
-    validate-to-doc)
-      required_specialists=("validate" "audit" "docs")
-      ;;
-  esac
+  # Read the canonical mode -> required-specialist mapping. This table was
+  # duplicated here as a case statement that required-specialists.yaml mirrored,
+  # with a shadow comparator holding the two in step; the registry is now the
+  # only copy. yq is the normal path, and the awk fallback parses the flow-style
+  # lists so Check 6 still resolves under a minimal PATH. An unresolved mode
+  # leaves the array empty and falls through to the derivation below, which is
+  # the same fail-closed path an unlisted mode always took.
+  _rs_registry="$SCRIPT_DIR/../registry/required-specialists.yaml"
+  if [[ -f "$_rs_registry" ]]; then
+    if command -v yq >/dev/null 2>&1; then
+      # strenv, not --arg: the pinned yq is Go yq, which has no --arg flag and
+      # would return empty for every mode. It also keeps the mode out of the
+      # expression text.
+      _rs_list="$(_rs_mode="$state_workflow_mode" yq -r '.modes[strenv(_rs_mode)] // [] | join(" ")' "$_rs_registry" 2>/dev/null || true)"
+    else
+      _rs_list="$(awk -v want="$state_workflow_mode" '
+        /^modes:[[:space:]]*$/ { in_modes = 1; next }
+        /^[a-zA-Z]/ { in_modes = 0 }
+        in_modes == 1 && $0 ~ /^[[:space:]]+[a-z0-9][a-z0-9-]*:[[:space:]]*\[/ {
+          key = $0
+          sub(/^[[:space:]]*/, "", key)
+          sub(/:.*$/, "", key)
+          if (key != want) next
+          val = $0
+          sub(/^[^[]*\[/, "", val)
+          sub(/\].*$/, "", val)
+          gsub(/,/, " ", val)
+          gsub(/"/, "", val)
+          gsub(/[[:space:]]+/, " ", val)
+          sub(/^ /, "", val)
+          sub(/ $/, "", val)
+          print val
+        }
+      ' "$_rs_registry" 2>/dev/null || true)"
+    fi
+    for _rs_phase in $_rs_list; do
+      required_specialists+=("$_rs_phase")
+    done
+  else
+    warn "Check 6: required-specialists registry missing at $_rs_registry — falling back to phaseOrder derivation"
+  fi
 
   # IMP-105-SCOPE-3-FALLBACK-BEGIN
   # IMP-105 SCOPE-3 — close the Check 6 fail-open hole. A mode ABSENT from the
@@ -1960,6 +1918,11 @@ echo ""
 #   (a) uniform inter-entry intervals (e.g. exactly 15 minutes apart)
 #   (b) zero-duration entries (start == end) for non-trivial phases
 #   (c) overlapping entries (one agent's run overlaps the next)
+# For (b) and (c) an entry may declare its span weak rather than have it read as
+# fabricated: durationUnmeasured/durationUnmeasuredReason for a span that was
+# never measured, timestampReconstructed/timestampReconstructedReason for one
+# recovered after the fact. Both demand a substantive reason and both are still
+# reported, so neither is a silent bypass.
 echo "--- Check 7A: executionHistory Timestamp Plausibility ---"
 exec_history_analysis="$(python3 - "$state_file" <<'PY'
 import json
@@ -2032,6 +1995,17 @@ for entry in raw:
         "unmeasured": entry.get("durationUnmeasured") is True,
         "unmeasured_reason": (entry.get("durationUnmeasuredReason") or "").strip()
             if isinstance(entry.get("durationUnmeasuredReason"), str) else "",
+        # An entry may separately DECLARE that its span was reconstructed after
+        # the fact rather than measured from a clock. An overlap touching such a
+        # span is evidence that the RECORD is imprecise, not that two agents ran
+        # concurrently, and those are different findings. Without this the only
+        # ways to clear a historical overlap are to invent replacement
+        # timestamps — the fabrication this check exists to catch — or to leave
+        # the packet permanently uncertifiable. Same cost as the declaration
+        # above: the reason must be substantive, and it is reported either way.
+        "reconstructed": entry.get("timestampReconstructed") is True,
+        "reconstructed_reason": (entry.get("timestampReconstructedReason") or "").strip()
+            if isinstance(entry.get("timestampReconstructedReason"), str) else "",
     })
 
 if len(entries) < 3:
@@ -2071,13 +2045,33 @@ if zero_dur_offenders:
 
 # Check overlapping entries (entry N+1 starts before entry N ends)
 overlaps = []
+reconstructed_overlaps = []
+RECONSTRUCTED_REASON_MIN = 20
 for i in range(1, len(entries)):
     prev = entries[i-1]
     curr = entries[i]
     if curr["started"] < prev["completed"]:
-        overlaps.append(
-            f"{prev['agent']}({prev['started'].isoformat()}-{prev['completed'].isoformat()}) overlaps {curr['agent']}({curr['started'].isoformat()})"
+        detail = (
+            f"{prev['agent']}({prev['started'].isoformat()}-{prev['completed'].isoformat()}) "
+            f"overlaps {curr['agent']}({curr['started'].isoformat()})"
         )
+        # ONE declared side is enough. If either span was reconstructed rather
+        # than measured, the pair cannot testify to concurrency at all, so
+        # demanding the declaration on both would force a false declaration
+        # onto the entry whose timestamps are actually trustworthy.
+        declared = [
+            e["agent"] for e in (prev, curr)
+            if e["reconstructed"]
+            and len(e["reconstructed_reason"]) >= RECONSTRUCTED_REASON_MIN
+        ]
+        if declared:
+            reconstructed_overlaps.append(f"{detail} [reconstructed: {','.join(declared)}]")
+        else:
+            overlaps.append(detail)
+if reconstructed_overlaps:
+    print(f"RECONSTRUCTED_OVERLAPS={len(reconstructed_overlaps)}")
+    for line in reconstructed_overlaps:
+        print(f"RECONSTRUCTED_OVERLAP_DETAIL={line}")
 if overlaps:
     print(f"OVERLAPS={len(overlaps)}")
     for line in overlaps:
@@ -2106,6 +2100,17 @@ else
   zero_dur_line="$(echo "$exec_history_analysis" | grep -E '^ZERO_DURATION=' | head -n 1 | sed 's/^ZERO_DURATION=//' || true)"
   if [[ -n "$zero_dur_line" ]]; then
     fail "executionHistory contains zero-duration entries for non-trivial phases: $zero_dur_line"
+  fi
+
+  # Surfaced, never silent: a declared-reconstructed overlap is still a weaker
+  # record than a measured one, so the reader is told which spans carry it and
+  # why the pair was not blocked.
+  reconstructed_overlap_count="$(echo "$exec_history_analysis" | grep -E '^RECONSTRUCTED_OVERLAPS=' | head -n 1 | sed 's/^RECONSTRUCTED_OVERLAPS=//' || true)"
+  if [[ -n "$reconstructed_overlap_count" ]] && [[ "$reconstructed_overlap_count" -gt 0 ]]; then
+    info "executionHistory has $reconstructed_overlap_count overlapping entries whose spans are DECLARED reconstructed (reason given) — recorded as an imprecise record, not concurrent execution"
+    while IFS= read -r detail; do
+      info "$detail"
+    done < <(echo "$exec_history_analysis" | grep -E '^RECONSTRUCTED_OVERLAP_DETAIL=' | sed 's/^RECONSTRUCTED_OVERLAP_DETAIL=//')
   fi
 
   overlap_count="$(echo "$exec_history_analysis" | grep -E '^OVERLAPS=' | head -n 1 | sed 's/^OVERLAPS=//' || true)"
@@ -2232,9 +2237,20 @@ if not isinstance(history, list):
 
 claimed = {}
 for claim in claims:
-    if not isinstance(claim, dict):
-        continue
-    phase = claim.get("phase")
+    # completedPhaseClaims is written BOTH ways in the wild: a list of plain
+    # phase-name strings, and a list of {"phase": ...} objects. Accepting only
+    # the dict shape made this gate inert against the string shape — every
+    # element was skipped, `claimed` stayed empty, and an anti-fabrication check
+    # reported NO_CLAIMS and passed. Check 6B's _phase_name already normalises
+    # both; this now matches it.
+    phase = None
+    if isinstance(claim, str):
+        phase = claim
+    elif isinstance(claim, dict):
+        candidate = claim.get("phase")
+        if not isinstance(candidate, str):
+            candidate = claim.get("name")
+        phase = candidate if isinstance(candidate, str) else None
     if isinstance(phase, str) and phase:
         claimed[phase] = claimed.get(phase, 0) + 1
 
@@ -2251,6 +2267,15 @@ for entry in history:
 
 if not claimed:
     print("NO_CLAIMS=1")
+    sys.exit(0)
+
+# An entirely ABSENT execution record is not evidence of fabrication — it is a
+# packet that does not track executionHistory (planning-only and legacy shapes
+# routinely omit it). A GAP inside a record that exists is the real signal. This
+# check adjudicates the second and abstains on the first; without it, widening
+# claim parsing turns every history-less planning packet into a false block.
+if not executed:
+    print("NO_HISTORY=1")
     sys.exit(0)
 
 unbacked = sorted(p for p in claimed if executed.get(p, 0) == 0)
@@ -2270,6 +2295,8 @@ PY
 
 if echo "$claim_backing_analysis" | grep -q '^NO_CLAIMS=1'; then
   info "No completedPhaseClaims recorded — phase-claim backing check skipped"
+elif echo "$claim_backing_analysis" | grep -q '^NO_HISTORY=1'; then
+  info "No executionHistory recorded — phase-claim backing check abstains (an absent record is not evidence of an unbacked claim; a gap inside a present record still fails)"
 elif [[ -z "$claim_backing_analysis" ]]; then
   info "completedPhaseClaims unreadable — phase-claim backing check skipped"
 else
@@ -2927,7 +2954,7 @@ implementation_phase_claim_count="$(jq -r '
 # case-SENSITIVE (original grep -qE) — see the per-line tests below.
 _c11_sig_i_re='(passed|failed|ok$| PASS | FAIL |test result:|Tests:.*suites|✓|✗|PASSED|FAILED)'
 _c11_sig_ii_re='(exit code|Exit Code:|error\[|warning\[|Compiling |Finished |error:|warning:|WARN |ERROR |INFO )'
-_c11_sig_iii_re='([a-zA-Z0-9_-]+/[a-zA-Z0-9_.-]+\.(rs|py|ts|tsx|js|go|sh|sql|toml|yaml|json|proto|md)|\./)'
+_c11_sig_iii_re='(([a-zA-Z0-9_-]+/)?[a-zA-Z0-9_.-]+\.(rs|py|ts|tsx|js|jsx|mjs|cjs|go|sh|sql|toml|yaml|yml|json|proto|md|dart|kt|kts|swift|java|scala|rb|cs|cpp|cc|h|hpp|xml|gradle|tf|ex|exs)|\./)'
 _c11_sig_iv_re='(in [0-9]+(\.[0-9]+)?(s|ms|m)|elapsed|finished in|Duration|[0-9]+\.[0-9]+s$)'
 _c11_sig_v_re='(cargo |npm |pytest|go test|jest |playwright|vitest|running [0-9]+ test|test result:)'
 _c11_sig_vi_re='[0-9]+ (passed|failed|errors?|warnings?|skipped|ignored|tests?)'
@@ -3166,13 +3193,29 @@ echo ""
 # =============================================================================
 echo "--- Check 13: Artifact Lint ---"
 lint_script="$SCRIPT_DIR/artifact-lint.sh"
+# Check 13 is fail-closed, so "did not complete" and "completed and rejected"
+# must be reported as different things. Conflating them indicts a timing
+# artifact as a content defect: a large spec whose lint legitimately exits 0 can
+# exceed the cap under load and be reported as a lint FAILURE it does not have,
+# which sends the reader hunting for findings that do not exist. The cap was 60s
+# and is load-sensitive in practice (the same spec measured 32s idle and 73-90s
+# under concurrent load), so the default is raised and made overridable.
+artifact_lint_timeout="${BUBBLES_ARTIFACT_LINT_TIMEOUT:-300}"
 if [[ -f "$lint_script" ]]; then
-  if BUBBLES_WORKFLOWS_FILE="$workflow_registry_file" bubbles_run_with_timeout 60 bash "$lint_script" "$feature_dir" > /dev/null 2>&1; then
+  lint_rc=0
+  BUBBLES_WORKFLOWS_FILE="$workflow_registry_file" bubbles_run_with_timeout "$artifact_lint_timeout" bash "$lint_script" "$feature_dir" > /dev/null 2>&1 || lint_rc=$?
+  if [[ "$lint_rc" -eq 0 ]]; then
     pass "Artifact lint passes (exit 0)"
+  elif [[ "$lint_rc" -eq 124 ]]; then
+    if [[ "$is_test_fixture_dir" == "true" ]]; then
+      warn "Artifact lint TIMED OUT after ${artifact_lint_timeout}s for tests/fixtures target; not blocking fixture acceptance"
+    else
+      fail "Artifact lint did NOT COMPLETE within ${artifact_lint_timeout}s (exit 124) — this is a TIMEOUT, not a lint failure; re-run 'bash bubbles/scripts/artifact-lint.sh $feature_dir' directly, or raise BUBBLES_ARTIFACT_LINT_TIMEOUT"
+    fi
   elif [[ "$is_test_fixture_dir" == "true" ]]; then
     warn "Artifact lint subprocess failed for tests/fixtures target after direct guard artifact checks passed; not blocking fixture acceptance"
   else
-    fail "Artifact lint FAILED — run 'bash bubbles/scripts/artifact-lint.sh $feature_dir' for details"
+    fail "Artifact lint FAILED (exit $lint_rc) — run 'bash bubbles/scripts/artifact-lint.sh $feature_dir' for details"
   fi
 else
   fail "Artifact lint script not found at $lint_script"
@@ -4030,18 +4073,49 @@ else
     # vintage carries a stdoutHash, so the empty-string digest identifies
     # empty stdout with no field required. An explicitly-present
     # `stdoutBytes: 0` is still honoured; an ABSENT one exempts nothing.
+    # "SAME command" is command IDENTITY, not a byte-identical argv string.
+    # Keying it on the raw string re-broke the very re-run case the rule above
+    # promises never to fire on, because an honest re-run is routinely spelled
+    # differently: `--repo-root .` and `--repo-root /abs/path` name one
+    # directory, and an optional trailing filter argument narrows a run without
+    # making it a different claim. Both produce identical stdout because they
+    # ARE the same command, and the raw-string rule reported that as forgery.
+    #
+    # Identity is therefore (executable basename, first positional argument):
+    # the tool, and the subject it ran against. Option flags and their values
+    # are dropped, so a re-spelled invocation collapses to one identity, while
+    # `cargo test` vs `npm run lint` — different tool, different subject — stay
+    # distinct and still block. Dropping option VALUES does mean two runs of
+    # one tool over one subject under different flags no longer collide; that
+    # is the intended trade, because a false CLONE accuses honest work of the
+    # most serious thing this guard can allege, and the surviving rule still
+    # catches the case G021 exists for: one captured result reused for an
+    # UNRELATED claim.
     c43_empty_stdout_sha256="e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     c43_clones="$(jq -rs --arg empty_sha "$c43_empty_stdout_sha256" '
+      def cmd_identity:
+        ( . / " " | map(select(length > 0)) ) as $raw
+        | ( if (($raw[0] // "") == "bash") or (($raw[0] // "") == "sh")
+            then $raw[1:] else $raw end ) as $t
+        | ( ($t[0] // "") | split("/") | last ) as $exe
+        | ( reduce ($t[1:][]) as $tok ({skip:false, pos:[]};
+              if .skip then {skip:false, pos:.pos}
+              elif ($tok | startswith("-"))
+                then {skip: (($tok | contains("=")) | not), pos:.pos}
+              else {skip:false, pos:(.pos + [$tok])}
+              end)
+            | (.pos[0] // "") ) as $subject
+        | $exe + " " + $subject;
       map(select((.stdoutHash // "") != "" and (.cmd // "") != "" and (.stdoutHash != $empty_sha) and ((has("stdoutBytes") and .stdoutBytes == 0) | not)))
       | group_by(.stdoutHash)
-      | map(select((map(.cmd) | unique | length) > 1))
+      | map(select((map(.cmd | cmd_identity) | unique | length) > 1))
       | .[]
       | "\(.[0].stdoutHash[0:12])… reused by: \(map(.cmd) | unique | join(" AND "))"
     ' "$c43_log" 2>/dev/null || true)"
     if [[ -n "$c43_clones" ]]; then
       fail "Evidence receipt CLONE — one captured stdout is cited by two different commands, which cannot happen from honest execution: $(printf '%s' "$c43_clones" | tr '\n' ';' | head -c 400)"
     else
-      pass "No receipt clones (no stdout hash shared across differing commands)"
+      pass "No receipt clones (no stdout hash shared across differing command identities)"
     fi
   fi
 fi

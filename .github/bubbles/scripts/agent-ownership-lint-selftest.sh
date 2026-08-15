@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Capability: artifact-ownership
 # agent-ownership-lint-selftest.sh
 #
 # Hermetic selftest for agent-ownership-lint.sh.

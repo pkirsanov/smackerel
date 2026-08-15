@@ -84,6 +84,15 @@ resultPolicy:
   - route_required
   - blocked
 
+terminalRecapPolicy:
+  sharedContract: agents/bubbles_shared/agent-common.md
+  directInvocationOnly: true
+  phaseOwnersReturnUpward: true
+  additionalAgents:
+  - bubbles.super
+  - bubbles.code-review
+  - bubbles.system-review
+
 agents:
   bubbles.super:
     class: utility

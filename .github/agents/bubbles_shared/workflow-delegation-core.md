@@ -18,7 +18,7 @@ Classify incoming workflow requests into exactly one of these buckets before Pha
 2. `TARGETLESS_MODE` — explicit `mode:` keyword is present without concrete spec, bug, or ops targets. Mode-only input and `mode:` plus `repositoryRoot` are both `TARGETLESS_MODE`; `repositoryRoot` selects the repository but is not a concrete work target. Repository preflight MUST commit before mode-specific target requirements or discovery are evaluated.
 3. `CONTINUATION` — continuation envelopes, run-state, recap/status/handoff packets, or explicit continuation language tied to active workflow state are present. Preserve the active workflow mode when possible. **Binding re-validation (IMP-025 MR3):** when a continuation envelope carries a `provenance` block (`repositoryRoot` / `agentSourceRoot` / `frameworkVersion`), re-validate the repo↔agent binding on resume before mutable work — run `bubbles/scripts/repo-binding-preflight.sh --repo-root <repositoryRoot> --agent-source <agentSourceRoot>` (or `--canonical-source` for framework work). A binding mismatch is a REFUSE: the resumed session is bound to a different workspace root than the handoff assumed; surface the mismatch + remediation instead of editing.
 4. `VAGUE` — plain-English goal with no explicit `mode:` keyword, OR spec targets present without `mode:`. Delegate to `bubbles.super` and consume a `RESOLUTION-ENVELOPE`. This includes requests with planning-intent language ("plan", "design", "scope", "create specs", "create bugs", "planning cycle") even when the user names specific specs or features — the intent still needs NL-to-mode translation.
-5. `CONTINUE` — generic keep-going language with no recoverable active workflow target. Resolve through `bubbles.super` and route to `bubbles.goal` or `bubbles.iterate`; the workflow runner does not pick unrelated work.
+5. `CONTINUE` — input classified by `bubbles/scripts/continuation-intent-resolve.sh`, including targeted forms such as `continue working on <feature>`. A target narrows recovery but does not authorize implementation or scope creation. With no recoverable non-terminal workflow target, treat this as a completion checkpoint, invoke `bubbles.recap`, and surface candidate next-priority work as informational only. A candidate MUST NOT execute until the user explicitly requests that new work.
 6. `FRAMEWORK` — framework operations such as doctor, hooks, upgrade, status, metrics, lessons, gates, or install. Delegate to `bubbles.super` and consume a `FRAMEWORK-ENVELOPE`.
 
 ### Repository Binding Preflight (MANDATORY)
@@ -83,7 +83,7 @@ Before applying the classification contract, perform this literal substring chec
 - **A specialist may NEVER dispatch a specialist.** There is one dispatching agent per run: the active top-level runner. A phase owner that needs another phase owner returns `route_required` **upward** to that runner, which performs the next dispatch at depth 1. `route_required` is an upward return, never a lateral call.
 - Do not assume a subagent can invoke another subagent. Some host runtimes expose `agent`/`runSubagent` only to the active top-level agent, and the VS Code default measured above is one of them.
 - Workflow-running orchestrators MUST NOT invoke another workflow-running orchestrator as a subagent. The active top-level runner resolves the mode itself, verifies its grant in `workflowModeGrants`, invokes the required phase owners directly, and records `executionModel: direct-authorized-runner`.
-- Envelope-only utility dispatch remains allowed: `bubbles.super` may return a resolution envelope and `bubbles.iterate` may return a picker-only work envelope because neither path launches a nested workflow.
+- Envelope-only utility dispatch remains allowed for `bubbles.super` resolution. A top-level runner MUST NOT dispatch `bubbles.iterate` merely to suggest post-terminal work; recap derives at most one candidate from read-only status and open-work surfaces.
 - A domain orchestrator invoked as a phase owner performs only that phase and returns its result envelope. It may execute its granted workflow modes only when it owns the top-level runtime.
 - If the active orchestrator itself lacks `agent`/`runSubagent`, return `blocked`; do not emulate owner work inline and do not claim a delegation happened. Emulating the work and recording it as a specialist run is the failure this contract exists to prevent, and the rate is now counted: `state-transition-guard.sh` emits `parentExpandedPhases` and `gate-hit-log.sh report` prints the expansion rate per repo.
 
@@ -134,7 +134,7 @@ See the [`bubbles-vscode-agent-constraints`](../../skills/bubbles-vscode-agent-c
 skill for the full authoring rules and design-review checklist.
 
 - When the request is `VAGUE`, invoke `bubbles.super` as a subagent and require a `## RESOLUTION-ENVELOPE` only.
-- When the request is `CONTINUE` and no concrete workflow continuation can be recovered, invoke `bubbles.super` for a `RESOLUTION-ENVELOPE` and route to its `targetAgent`.
+- When the request is `CONTINUE` and no concrete non-terminal workflow continuation can be recovered, invoke `bubbles.recap` and stop after the completion summary. Recap may derive at most one possible next-priority candidate from read-only status and open-work surfaces, but MUST NOT dispatch or execute it.
 - When the request is `FRAMEWORK`, invoke `bubbles.super` as a subagent and require a `## FRAMEWORK-ENVELOPE` only.
 - `bubbles.workflow` MUST NOT re-run a second natural-language inference pass after `bubbles.super` has resolved the request.
 - `bubbles.workflow` MUST NOT recreate a local intent-to-mode keyword table or a local backlog-priority picker once these delegation paths are available.
@@ -151,13 +151,29 @@ skill for the full authoring rules and design-review checklist.
 - Treat phrases such as `fix all found`, `fix everything found`, `address rest`, `fix the rest`, `resolve remaining findings`, or `handle remaining issues` as workflow continuation, not as permission to downshift into direct specialist execution.
 - If continuation context narrows the remaining work to bug-only, docs-only, or validate-only work, route to the narrower workflow mode instead of echoing raw specialist commands.
 
+### Terminal Recap Boundary
+
+Every stateful top-level runner MUST invoke `bubbles.recap` before its final response.
+This applies to completion, terminal blocking, convergence caps, and user-requested stops.
+
+1. Preserve a recoverable non-terminal workflow as the continuation target.
+2. If no non-terminal workflow remains, invoke `runSubagent(bubbles.recap)` with the terminal result.
+3. Recap may derive at most one candidate from read-only status and open-work surfaces. Do not dispatch or execute the candidate.
+4. Compose the user-facing summary from the recap.
+5. Keep the runner's `RESULT-ENVELOPE` as the final block.
+
+A phase-owner subagent MUST NOT invoke recap. It returns its result upward because nested dispatch is unavailable.
+Starting candidate work requires an explicit new-work request such as `pick the next priority` or `/bubbles.iterate`.
+Bare `continue`, `resume`, `next`, `keep going`, `go on`, or `proceed` never grants that authority after completion.
+
 ### Delegated Intent Resolution Summary
 
 Use this summary before Phase 0 when no explicit `mode:` is present:
 
-1. `STRUCTURED` input (explicit `mode:` + concrete spec, bug, or ops targets) stays inside `bubbles.workflow`.
-2. `VAGUE` input (no `mode:` keyword, OR natural-language intent even with spec targets) delegates to `bubbles.super` and consumes only a `RESOLUTION-ENVELOPE`.
-3. `CONTINUE` input with no recoverable active workflow delegates resolution to `bubbles.super` and routes to the returned top-level runner.
-4. `FRAMEWORK` input delegates to `bubbles.super` and consumes only a `FRAMEWORK-ENVELOPE`.
-5. After `bubbles.super` resolves the request, `bubbles.workflow` MUST NOT run a second natural-language inference pass.
-6. **The `STRUCTURED` classification requires the literal keyword `mode:` in the input.** Spec targets, feature names, or natural-language descriptions — even when they reference specific specs — are NOT sufficient for `STRUCTURED` classification without `mode:`.
+1. Run `bubbles/scripts/continuation-intent-resolve.sh` against the complete raw input before extracting targets or work types. `CONTINUE` always takes the continuation path; `NEW_WORK` is explicit authorization to select work; `OTHER` continues through normal resolution.
+2. `STRUCTURED` input (explicit `mode:` + concrete spec, bug, or ops targets) stays inside `bubbles.workflow`.
+3. `VAGUE` input (no `mode:` keyword, OR natural-language intent even with spec targets) delegates to `bubbles.super` and consumes only a `RESOLUTION-ENVELOPE`.
+4. `CONTINUE` input with no recoverable non-terminal workflow invokes `bubbles.recap`, may include candidate-only next-priority work, and returns control to the user. Starting that work requires a new explicit request.
+5. `FRAMEWORK` input delegates to `bubbles.super` and consumes only a `FRAMEWORK-ENVELOPE`.
+6. After `bubbles.super` resolves the request, `bubbles.workflow` MUST NOT run a second natural-language inference pass.
+7. **The `STRUCTURED` classification requires the literal keyword `mode:` in the input.** Spec targets, feature names, or natural-language descriptions — even when they reference specific specs — are NOT sufficient for `STRUCTURED` classification without `mode:`.

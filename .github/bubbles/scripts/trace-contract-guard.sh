@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Capability: impact-aware-validation-trace-contracts
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

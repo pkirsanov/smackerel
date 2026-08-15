@@ -465,7 +465,10 @@ emit_nullable_binding() {
   fi
 }
 
-{
+# The record is BUILT here and emitted only after the session write below
+# succeeds. Emitting first would report a durable compaction that may not have
+# landed, which is the exact failure this scope closes.
+compact_record="$(
   printf '{'
   printf '"agent":%s,' "$(emit "$agent_v")"
   printf '"outcome":%s,' "$(emit "$outcome_v")"
@@ -523,30 +526,22 @@ emit_nullable_binding() {
   fi
   printf '"timestamp":"%s",' "$timestamp_v"
   printf '"rawPointer":"%s"' "$(printf '%s' "$raw_abs" | json_escape)"
-  printf '}\n'
-}
+  printf '}'
+)"
 
-# --- Gate G083: additively stamp `compactedAt` on the matching ------------
-# `envelopesReceived[]` entry, if any.
+# --- Gate G083: stamp `compactedAt` AND persist the compact record --------
+# together, in ONE rewrite of the session file.
 #
-# This is a BEST-EFFORT, ADDITIVE side effect. The primary stdout contract
-# (single-line compact JSON record) is preserved unconditionally. This
-# block:
-#   - Is a clean no-op if `jq` is missing.
-#   - Is a clean no-op if `.specify/memory/bubbles.session.json` is missing.
-#   - Is a clean no-op if no `envelopesReceived[]` entry exists whose
-#     `rawPointer` matches `$raw_abs`.
-#   - Stamps `compactedAt` only on entries that currently lack one
-#     (idempotent: re-running on an already-compacted entry is a no-op).
+# Previously the stamp was written here while the record went only to stdout,
+# leaving the caller to append it to `compactedHistory`. When that append did
+# not happen the envelope was marked compacted with its record gone, and G083
+# still passed because it only looked for `compactedAt`. The summary that
+# justified discarding the raw envelope was the thing that went missing.
 #
-# This field is consumed by `bubbles/scripts/compaction-discipline-guard.sh`
-# (Gate G083), which treats any over-budget envelope WITHOUT `compactedAt`
-# as a violation.
-#
-# Errors from this block MUST NOT fail the script — the operator could be
-# running the compactor against a one-off raw envelope file outside any
-# repo (e.g., to inspect a saved transition packet). We swallow any
-# failure on stderr and exit 0.
+# Still a clean no-op when `jq` is absent, when the session file is absent, or
+# when unbound (a pure stdout transformation over a one-off raw envelope). But
+# once the write is ATTEMPTED it must complete: a half-written compaction is
+# refused rather than reported as success.
 if command -v jq >/dev/null 2>&1 && [[ "$BINDING_REQUIRED" == true ]]; then
   # A repository-local mutation derives its target only from the validated
   # actionable packet. Unbound use remains a pure stdout transformation.
@@ -556,34 +551,50 @@ if command -v jq >/dev/null 2>&1 && [[ "$BINDING_REQUIRED" == true ]]; then
     if [[ -f "$_comp_session_file" ]]; then
       _comp_now="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
       _comp_tmp="$(mktemp "$(dirname "$_comp_session_file")/.bubbles-session.XXXXXX" 2>/dev/null || true)"
-      if [[ -n "$_comp_tmp" ]]; then
-        if jq \
-            --arg rawPointer "$raw_abs" \
-            --arg compactedAt "$_comp_now" \
-            '
-            . as $root
-            | if ($root.envelopesReceived // []) | type == "array" then
-                $root + {
-                  envelopesReceived: (
-                    ($root.envelopesReceived // [])
-                    | map(
-                        if (.rawPointer // "") == $rawPointer
-                           and (.compactedAt == null or (.compactedAt // "") == "")
-                        then . + { compactedAt: $compactedAt }
-                        else .
-                        end
-                      )
-                  )
-                }
-              else
-                $root
-              end
-            ' "$_comp_session_file" > "$_comp_tmp" 2>/dev/null; then
-          mv "$_comp_tmp" "$_comp_session_file" 2>/dev/null || rm -f "$_comp_tmp" 2>/dev/null || true
-        else
+      if [[ -z "$_comp_tmp" ]]; then
+        echo "context-compactor: cannot create a temp file beside $_comp_session_file; refusing a non-atomic compaction" >&2
+        exit 3
+      fi
+      if jq \
+          --arg rawPointer "$raw_abs" \
+          --arg compactedAt "$_comp_now" \
+          --argjson record "$compact_record" \
+          '
+          . as $root
+          | if ($root.envelopesReceived // []) | type == "array" then
+              $root + {
+                envelopesReceived: (
+                  ($root.envelopesReceived // [])
+                  | map(
+                      if (.rawPointer // "") == $rawPointer
+                         and (.compactedAt == null or (.compactedAt // "") == "")
+                      then . + { compactedAt: $compactedAt }
+                      else .
+                      end
+                    )
+                ),
+                compactedHistory: (
+                  (($root.compactedHistory // [])
+                   | map(select((.rawPointer // "") != $rawPointer)))
+                  + [$record]
+                )
+              }
+            else
+              $root
+            end
+          ' "$_comp_session_file" > "$_comp_tmp" 2>/dev/null; then
+        if ! mv "$_comp_tmp" "$_comp_session_file" 2>/dev/null; then
           rm -f "$_comp_tmp" 2>/dev/null || true
+          echo "context-compactor: could not replace $_comp_session_file atomically" >&2
+          exit 3
         fi
+      else
+        rm -f "$_comp_tmp" 2>/dev/null || true
+        echo "context-compactor: could not rewrite $_comp_session_file; compactedAt and compactedHistory must land together" >&2
+        exit 3
       fi
     fi
   fi
 fi
+
+printf '%s\n' "$compact_record"

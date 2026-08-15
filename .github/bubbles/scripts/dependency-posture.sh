@@ -14,7 +14,6 @@
 #   evidence-tool-log-bridge.sh   python3   (the receipt bridge itself)
 #   generate-gate-coverage-map.sh python3, PyYAML
 #   generate-gates-block.sh       python3
-#   generate-modes-block.sh       python3
 #   mode-family-inventory.sh      python3
 #   model-tier-advisory.sh        python3
 #   parallel-fanout.sh            python3

@@ -1,0 +1,59 @@
+# Bubbles changed-spec verification (IMP-040 SCOPE-11 / COV-12, BUG-031)
+#
+# Copy to `.github/workflows/bubbles-verify-changed-specs.yml` in a consumer
+# repository. This is a TEMPLATE, not a Bubbles-managed file: once copied, the
+# repository owns it and Bubbles will not overwrite it.
+#
+# WHY CI AND NOT A GIT HOOK
+# Bubbles does not install or manage Git hooks in consumer repositories. A hook
+# is local, per-clone, and invisible to review — the measurement that motivated
+# this template found five of six consumer repos carrying a pre-push hook while
+# exactly ONE invoked any Bubbles guard, and nobody noticed, because a hook that
+# is not wired looks identical to a hook that is. CI runs where the result is
+# visible and cannot be skipped by a fresh clone.
+#
+# WHAT IT VERIFIES
+# The specs the diff touched directly, AND the specs it did not touch whose
+# certified scenarios name changed source in their implementationRefs. The
+# second half is the point: a source-only diff touches no spec folder, so
+# discovery built on spec paths alone reports nothing while certified scenarios
+# go stale.
+
+name: Bubbles changed-spec verification
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  verify-changed-specs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout with history
+        uses: actions/checkout@v4
+        with:
+          # A shallow clone cannot diff against the base ref, and the command
+          # would exit 2 (usage) rather than silently passing. Full history
+          # keeps the failure mode honest.
+          fetch-depth: 0
+
+      - name: Resolve base ref
+        id: base
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "ref=origin/${{ github.base_ref }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "ref=${{ github.event.before }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Verify changed and impacted specs
+        run: |
+          set -euo pipefail
+          bash .github/bubbles/scripts/verify-changed-specs.sh \
+            --base-ref "${{ steps.base.outputs.ref }}" \
+            --head-ref HEAD

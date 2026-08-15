@@ -43,6 +43,7 @@ if [[ ! -f "$SERVER" ]]; then
 fi
 
 SELFTEST_REPO_ROOT="$REPO_ROOT" SELFTEST_OLD_SHA="1269bf0" python3 - <<'PY'
+import errno
 import importlib.util
 import json
 import logging
@@ -186,13 +187,141 @@ def drain(proc):
     return proc.returncode, out, err
 
 
+# --- timeout diagnostics ------------------------------------------------------
+# "alive but silent and not accepting where we probe" is consistent with BOTH
+# "blocked before it ever binds" AND "listening somewhere we never probed", and
+# stdout/stderr/rc cannot tell those apart. These ask the OS instead. They run
+# ONLY on the timeout path and ONLY before the child is drained, because after
+# drain the pid is gone and the question is unanswerable. Every call is bounded
+# and guarded: a diagnostic that raises destroys the evidence it exists to
+# collect, and one that hangs turns a failing test into a stuck job.
+DIAG_CAP = 800
+DIAG_CMD_TIMEOUT = 2.0
+DIAG_CONNECT_TIMEOUT = 1.0
+
+
+def diag_cap(text):
+    """Flatten to ONE line (annotation detail is line-based) and cap it."""
+    flat = " | ".join(s.strip() for s in (text or "").splitlines() if s.strip())
+    if not flat:
+        return "<empty>"
+    if len(flat) <= DIAG_CAP:
+        return flat
+    return f"{flat[:DIAG_CAP]} <TRUNCATED from {len(flat)} chars>"
+
+
+def diag_run(argv):
+    """Bounded best-effort exec. Returns (tool_present, stdout, stderr)."""
+    try:
+        r = subprocess.run(
+            argv, capture_output=True, text=True, timeout=DIAG_CMD_TIMEOUT
+        )
+    except FileNotFoundError:
+        return False, "", ""
+    except Exception as exc:
+        return True, "", f"<{type(exc).__name__}>"
+    return True, r.stdout or "", r.stderr or ""
+
+
+def diag_listen(pid, port):
+    """What does the OS say this pid is listening on? Names the tool that answered.
+
+    stdout carries the answer and stderr only carries noise (lsof warns loudly
+    about unstattable mounts), so they are kept apart -- a chatty warning must
+    not push the one line we came for past the cap.
+    """
+    for name, argv, keep in (
+        ("lsof", ["lsof", "-w", "-nP", "-p", str(pid), "-a", "-iTCP", "-sTCP:LISTEN"], None),
+        ("ss", ["ss", "-ltnp"], f"pid={pid}"),
+        ("netstat-ltnp", ["netstat", "-ltnp"], f"{pid}/"),
+        ("netstat-anv:port-filtered", ["netstat", "-anv"], f".{port}"),
+    ):
+        present, out, err = diag_run(argv)
+        if not present:
+            continue
+        if keep is not None:
+            out = "\n".join(ln for ln in out.splitlines() if keep in ln)
+        if out.strip():
+            return f"listen({name})={diag_cap(out)}"
+        return f"listen({name})=<NO LISTENING SOCKET> stderr={diag_cap(err)}"
+    return "listen(<no tool available: lsof, ss and netstat all absent>)=<unknown>"
+
+
+def diag_connect(host, port):
+    """Connect probe that names the resolved address and classifies the refusal."""
+    try:
+        infos = socket.getaddrinfo(host, port, 0, socket.SOCK_STREAM)
+    except Exception as exc:
+        return f"<resolve-failed:{type(exc).__name__}>"
+    if not infos:
+        return "<no-address>"
+    fam, stype, proto, _canon, sa = infos[0]
+    addr = sa[0]
+    s = None
+    try:
+        s = socket.socket(fam, stype, proto)
+        s.settimeout(DIAG_CONNECT_TIMEOUT)
+        rc = s.connect_ex(sa)
+    except Exception as exc:
+        return f"[{addr}]<{type(exc).__name__}>"
+    finally:
+        if s is not None:
+            try:
+                s.close()
+            except Exception:
+                pass
+    if rc == 0:
+        return f"[{addr}]OPEN"
+    return f"[{addr}]{errno.errorcode.get(rc, 'rc')}={rc}"
+
+
+def diag_ps(pid):
+    """Cheap liveness/state hint. wchan is unavailable on some platforms."""
+    for argv in (
+        ["ps", "-o", "pid,stat,wchan,command", "-p", str(pid)],
+        ["ps", "-o", "pid,stat,command", "-p", str(pid)],
+        ["ps", "-p", str(pid)],
+    ):
+        present, out, _err = diag_run(argv)
+        if not present:
+            return "ps=<ps not found>"
+        rows = [ln for ln in out.splitlines() if ln.strip()][1:]
+        if rows:
+            return f"ps={diag_cap(chr(10).join(rows))}"
+    return "ps=<no output>"
+
+
+def timeout_diagnostics(proc, port):
+    lines = []
+    try:
+        pid = proc.pid
+        alive = "yes" if proc.poll() is None else "no"
+        lines.append(f"  FAIL-DIAG: pid={pid} port={port} alive={alive}")
+        lines.append(f"  FAIL-DIAG: {diag_listen(pid, port)}")
+        fams = " ".join(
+            f"{h}={diag_connect(h, port)}" for h in ("127.0.0.1", "::1", "localhost")
+        )
+        lines.append(f"  FAIL-DIAG: connect {fams}")
+        lines.append(f"  FAIL-DIAG: {diag_ps(pid)}")
+    except Exception as exc:
+        lines.append(f"  FAIL-DIAG: <diagnostic failed: {type(exc).__name__}: {exc}>")
+    return "\n".join(lines)
+
+
 def launch_failure(label, proc, probe):
+    diag = ""
+    try:
+        if probe.outcome == "timeout" and proc.poll() is None:
+            diag = timeout_diagnostics(proc, probe.port)
+    except Exception:
+        pass
     rc, out, err = drain(proc)
-    return (
+    msg = (
         f"{label} did not come up: outcome={probe.outcome} "
         f"probe={probe.host}:{probe.port} rc={rc} "
         f"stdout={cap(out)} stderr={cap(err)}"
     )
+    return f"{msg}\n{diag}" if diag else msg
 
 
 def stop(proc):

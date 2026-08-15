@@ -3,7 +3,7 @@
 #
 # Deterministic Python implementation. Validates:
 #  1. Every Gxxx referenced across workflows.yaml / scripts / agents / registries
-#     resolves to a gate defined in bubbles/workflows.yaml gates: block.
+#     resolves to a gate defined in bubbles/registry/gates.yaml.
 #  2. state-transition-guard.sh has no duplicate `# CHECK <id>:` labels.
 #
 # Allowed exception patterns (intentional history mentions, fixtures, banners,
@@ -26,28 +26,26 @@ from pathlib import Path
 
 repo_root = Path(sys.argv[1])
 workflows = repo_root / "bubbles" / "workflows.yaml"
+gates_registry = repo_root / "bubbles" / "registry" / "gates.yaml"
 stg = repo_root / "bubbles" / "scripts" / "state-transition-guard.sh"
 
 if not workflows.exists():
     print(f"registry-consistency-selftest: ERROR workflows.yaml missing at {workflows}", file=sys.stderr)
     sys.exit(2)
+if not gates_registry.exists():
+    print(f"registry-consistency-selftest: ERROR gates registry missing at {gates_registry}", file=sys.stderr)
+    sys.exit(2)
 
-# 1. Parse defined gates from the gates: block of workflows.yaml.
+# 1. Parse defined gates from the CANONICAL registry. Reading the generated
+#    workflows.yaml block instead would make this check agree with a copy.
 defined = set()
-in_gates = False
-for line in workflows.read_text().splitlines():
-    if line.startswith("gates:"):
-        in_gates = True
-        continue
-    if in_gates and re.match(r"^[a-zA-Z]", line):
-        in_gates = False
-    if in_gates:
-        m = re.match(r"^  (G\d{3}):\s*$", line)
-        if m:
-            defined.add(m.group(1))
+for line in gates_registry.read_text().splitlines():
+    m = re.match(r"^  (G\d{3}):\s*$", line)
+    if m:
+        defined.add(m.group(1))
 
 if not defined:
-    print(f"registry-consistency-selftest: ERROR no gates parsed from {workflows} gates: block", file=sys.stderr)
+    print(f"registry-consistency-selftest: ERROR no gates parsed from {gates_registry}", file=sys.stderr)
     sys.exit(2)
 
 # 2. Collect surfaces to scan.
@@ -130,7 +128,7 @@ if duplicate_checks:
 
 if failures:
     print("registry-consistency-selftest: FAIL")
-    print(f"  {len(defined)} gates defined in bubbles/workflows.yaml gates: block")
+    print(f"  {len(defined)} gates defined in bubbles/registry/gates.yaml")
     for kind, payload in failures:
         if kind == "undefined-gate-refs":
             print(f"  Undefined gate references ({len(payload)}):")
@@ -142,7 +140,7 @@ if failures:
                 print(f"    CHECK {label}: {len(lines)} occurrences at lines {lines}")
     print("")
     print("  Fix by one of:")
-    print("    1. Define the missing gate in bubbles/workflows.yaml gates: block")
+    print("    1. Define the missing gate in bubbles/registry/gates.yaml")
     print("    2. Remove the stale reference")
     print("    3. Rewrite as 'former Gxxx' history mention if intentional")
     print("    4. Rename the duplicate CHECK label to keep IDs unique")

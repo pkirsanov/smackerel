@@ -36,6 +36,10 @@ handoffs:
 
 **Workflow Runner Contract:** When invoked as the top-level agent, `bubbles.stabilize` may execute only its granted `stabilize-to-doc` and `incident-fastlane` modes, invoking each phase owner directly with `executionModel: direct-authorized-runner`. When invoked for the `stabilize` phase by another runner, diagnose only that phase and return a RESULT-ENVELOPE; never launch a nested workflow.
 
+## Terminal Recap Boundary
+
+When this agent owns the top-level runtime, invoke `runSubagent(bubbles.recap)` before the final response. When invoked for the `stabilize` phase, return upward without recap.
+
 ## Repository Binding (NON-NEGOTIABLE)
 
 Before any spec, log, config, deployment, state, or dispatch read, follow [repository-binding-preflight.md](bubbles_shared/repository-binding-preflight.md). A top-level invocation executes `bubbles/scripts/repository-binding.sh preflight` and requires the current actionable packet plus `PREFLIGHT_COMMITTED`. A phase invocation executes `bubbles/scripts/repository-binding.sh validate-packet` against the inherited packet and requires local actionable `repositoryResolution`; successful validation is its `PREFLIGHT_COMMITTED` anchor. Never infer or substitute a root from CWD, prompts, editor state, or tools.

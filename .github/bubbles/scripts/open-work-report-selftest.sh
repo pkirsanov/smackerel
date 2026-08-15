@@ -251,6 +251,41 @@ else
   fail "d6 a duplicate residue id is a defect"
 fi
 
+# An unescaped `|` inside a cell is invisible to every other check here: the row
+# still parses, it just parses into the wrong columns. Only the column count
+# catches it.
+D6="$TMP_ROOT/d6"
+mk_repo "$D6"
+cat >> "$D6/.specify/memory/open-work.md" <<'EOF'
+| RES-7 | unescaped pipe in a quoted command | residue | src/x.rs | open | bubbles.implement | rerun `ls | head -5` and compare the output | 2026-02-01 | 2026-02-01 |
+EOF
+lint_rc "$D6"
+rc=$?
+if [[ "$rc" -eq 1 ]]; then
+  pass "d7 an unescaped '|' inside a cell fails the lint (exit 1)"
+else
+  fail "d7 an unescaped '|' inside a cell fails the lint — got exit $rc"
+fi
+if report_has "$D6" "has 11 column delimiters but the table header declares 10"; then
+  pass "d8 the column-count defect names the row and both counts"
+else
+  fail "d8 the column-count defect names the row and both counts"
+fi
+
+# The counterpart case. Without it the check could pass d7 by banning pipes
+# outright, which would make the register unable to quote a shell pipeline at
+# all — a cure worse than the defect.
+D7="$TMP_ROOT/d7"
+mk_repo "$D7"
+cat >> "$D7/.specify/memory/open-work.md" <<'EOF'
+| RES-8 | escaped pipe in a quoted command | residue | src/x.rs | open | bubbles.implement | rerun `ls \| head -5` and compare the output | 2026-02-01 | 2026-02-01 |
+EOF
+if lint_rc "$D7"; then
+  pass "d9 a pipe escaped as '\\|' is content, not a column break, and passes the lint"
+else
+  fail "d9 a pipe escaped as '\\|' passes the lint"
+fi
+
 # --- (e) the register has to travel -------------------------------------------
 E="$TMP_ROOT/e"
 mk_repo "$E"
@@ -277,15 +312,25 @@ fi
 
 # The shipped register in this very repository must not be ignored either —
 # a template that installs into an ignored path would defeat the whole scope.
-REPO_ROOT_SELF="$(cd "$SCRIPT_DIR/../.." && pwd)"
-if [[ -f "$REPO_ROOT_SELF/.specify/memory/open-work.md" ]]; then
-  if git -C "$REPO_ROOT_SELF" check-ignore -q "$REPO_ROOT_SELF/.specify/memory/open-work.md" 2>/dev/null; then
-    fail "e3 the framework's own .specify/memory/open-work.md must not be git-ignored"
-  else
-    pass "e3 the framework's own .specify/memory/open-work.md is not git-ignored"
-  fi
+#
+# Two corrections live here. The repository root was resolved as
+# "$SCRIPT_DIR/../..", which is the framework root: correct in the source tree,
+# but `.github/` in an installed downstream, where `.specify/` sits at the real
+# repository root instead. And the absence of a register was treated as a
+# defect, which is only true of the framework source tree — what ships is
+# `templates/open-work.md.tmpl`, so a repository that has not adopted a register
+# yet correctly has no file, and this selftest failed every downstream install
+# for it.
+REPO_ROOT_SELF="$(cd "$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel 2>/dev/null || printf '%s' "$SCRIPT_DIR/../..")" && pwd -P)"
+REGISTER_SELF="$REPO_ROOT_SELF/.specify/memory/open-work.md"
+if git -C "$REPO_ROOT_SELF" check-ignore -q "$REGISTER_SELF" 2>/dev/null; then
+  fail "e3 the open-work register path must not be git-ignored"
+elif [[ -f "$REGISTER_SELF" ]]; then
+  pass "e3 the register in this repository is not git-ignored"
+elif [[ -f "$REPO_ROOT_SELF/install.sh" && -f "$REPO_ROOT_SELF/VERSION" ]]; then
+  fail "e3 the framework source tree ships .specify/memory/open-work.md"
 else
-  fail "e3 the framework ships .specify/memory/open-work.md"
+  pass "e3 the register path is not git-ignored (none adopted in this repository)"
 fi
 
 # --- (f) the report is read-only ----------------------------------------------

@@ -164,8 +164,37 @@ if [[ -f "$RESOLVER" ]]; then
   done
 fi
 
+# --- 5. Every declared posture is CONSUMED by the runners ---------------------
+# IMP-045 SCOPE-2 (COV-14). Checks 1-4 compare the enum against the resolver and
+# the floor. None of them opens an agent file, so a posture could be declared,
+# implemented in the resolver, gated here, and still be absent from every agent
+# that would have to perform it -- which is exactly the state `unattended` was in.
+# A declaration describing behavior no runner implements is the AUT-2 shape this
+# gate exists to prevent, surviving one layer above where the gate looked.
+RUNNER_AGENTS=(
+  "agents/bubbles.goal.agent.md"
+  "agents/bubbles.workflow.agent.md"
+  "agents/bubbles.iterate.agent.md"
+  "agents/bubbles.sprint.agent.md"
+)
+if [[ -n "${enum_values:-}" ]]; then
+  for posture in ${enum_values}; do
+    [[ -n "$posture" ]] || continue
+    for runner in "${RUNNER_AGENTS[@]}"; do
+      runner_path="$REPO_ROOT/$runner"
+      if [[ ! -f "$runner_path" ]]; then
+        finding "runner agent $runner is missing; posture consumption cannot be verified"
+        continue
+      fi
+      if ! grep -q "$posture" "$runner_path"; then
+        finding "posture '$posture' is declared in workflows.yaml but never named in $runner; a posture no runner implements changes nothing"
+      fi
+    done
+  done
+fi
+
 if [[ "$FINDINGS" -eq 0 ]]; then
-  echo "autonomy-posture-guard: OK — floor intact, enum and resolver agree, unattended stays bounded, no bypass."
+  echo "autonomy-posture-guard: OK — floor intact, enum and resolver agree, every posture is named by all four runners, unattended stays bounded, no bypass."
   exit 0
 fi
 

@@ -191,6 +191,43 @@ else
   fail_test "an unknown bypass-shaped flag is rejected (rc=$flag_rc)"
 fi
 
+# --- Case 11: an UNCHECKED scaffold picker is not finished work -------------
+# The regression. The canonical scope scaffold renders every option unchecked, so a
+# counter matching the bare word `Done` reported an untouched template as shipped
+# work and flagged every freshly-scaffolded not_started packet.
+unchecked_root="$WORKSPACE/unchecked"
+write_spec "$unchecked_root" 021-scaffold not_started not_started '[ ] Not started | [ ] In progress | [ ] Done' '[]' -
+out="$WORKSPACE/unchecked.out"
+rc="$(run_scan "$unchecked_root" "$out")"
+if [[ "$rc" == "0" ]] && ! grep -q 'status-behind-evidence' "$out"; then
+  pass "an unchecked scaffold picker is not counted as a Done scope"
+else
+  fail_test "an unchecked scaffold picker is not counted as a Done scope (rc=$rc)"
+fi
+
+# --- Case 12: a CHECKED picker is still detected ----------------------------
+# Guards Case 11 against being "fixed" by disabling the check outright.
+checked_root="$WORKSPACE/checked"
+write_spec "$checked_root" 022-shipped not_started not_started '[ ] Not started | [ ] In progress | [x] Done' '[]' -
+out="$WORKSPACE/checked.out"
+rc="$(run_scan "$checked_root" "$out")"
+if [[ "$rc" == "0" ]] && grep -q 'status=not_started but doneScopes=1' "$out"; then
+  pass "a checked [x] Done picker is still reported as status-behind-evidence"
+else
+  fail_test "a checked [x] Done picker is still reported as status-behind-evidence (rc=$rc)"
+fi
+
+# --- Case 13: a checked EARLIER option does not imply Done ------------------
+inprogress_root="$WORKSPACE/inprogress"
+write_spec "$inprogress_root" 023-working not_started not_started '[x] In progress | [ ] Done' '[]' -
+out="$WORKSPACE/inprogress.out"
+rc="$(run_scan "$inprogress_root" "$out")"
+if [[ "$rc" == "0" ]] && ! grep -q 'status-behind-evidence' "$out"; then
+  pass "a checked In progress with an unchecked Done is not counted"
+else
+  fail_test "a checked In progress with an unchecked Done is not counted (rc=$rc)"
+fi
+
 printf '\nstate-consistency-scan-selftest: %s passed, %s failed\n' "$PASS_COUNT" "$FAIL_COUNT"
 [[ "$FAIL_COUNT" -eq 0 ]] || exit 1
 exit 0

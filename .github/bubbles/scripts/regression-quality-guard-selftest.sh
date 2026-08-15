@@ -143,6 +143,104 @@ else
   sed -n '1,80p' "$log4"
 fi
 
+# --- IMP-040 SCOPE-5: production-path fidelity (COV-10) ---------------------
+#
+# Cases 5-7 are the substitution shapes. Cases 8-9 are their GUARDS: the same
+# shapes must PASS when the file also asserts the current visible surface,
+# because the rule is "offered as the sole proof", not "present anywhere". If
+# 8-9 ever fail, the check has become a blanket ban on internal inspection and
+# will be switched off by the first team that hits it.
+
+detached="$TMPDIR/tests/detached-render.spec.ts"
+cat > "$detached" <<'EOF'
+import { render } from 'react-dom';
+import { Dashboard } from '../src/Dashboard';
+
+test('dashboard heading renders', () => {
+  const host = document.createElement('div');
+  ReactDOM.render(<Dashboard />, host);
+  expect(host.innerHTML).toContain('Dashboard');
+});
+EOF
+
+intercepted="$TMPDIR/tests/intercepted.spec.ts"
+cat > "$intercepted" <<'EOF'
+import { test, expect } from '@playwright/test';
+
+test('items list loads', async ({ page }) => {
+  await page.route('**/api/items', (r) => r.fulfill({ body: '[{"id":1}]' }));
+  await page.goto('/items');
+  const html = await page.evaluate(() => document.querySelector('#list').innerHTML);
+  expect(html).toContain('1');
+});
+EOF
+
+hidden="$TMPDIR/tests/hidden-surface.spec.ts"
+cat > "$hidden" <<'EOF'
+import { test, expect } from '@playwright/test';
+
+test('banner is present', async ({ page }) => {
+  await page.goto('/home');
+  const node = await page.evaluate(() => document.querySelector('.banner').innerHTML);
+  expect(node).toContain('Welcome');
+});
+EOF
+
+mixed_route="$TMPDIR/tests/mixed-route.spec.ts"
+cat > "$mixed_route" <<'EOF'
+import { test, expect } from '@playwright/test';
+
+test('banner is visible and carries the right payload', async ({ page }) => {
+  await page.goto('/home');
+  await expect(page.getByRole('banner')).toBeVisible();
+  const raw = await page.evaluate(() => document.querySelector('.banner').innerHTML);
+  expect(raw).toContain('Welcome');
+});
+EOF
+
+mixed_intercept="$TMPDIR/tests/mixed-intercept.spec.ts"
+cat > "$mixed_intercept" <<'EOF'
+import { test, expect } from '@playwright/test';
+
+test('empty provider response paints the unavailable state', async ({ page }) => {
+  await page.route('**/api/items', (r) => r.fulfill({ body: '[]' }));
+  await page.goto('/items');
+  await expect(page.getByText('No items available')).toBeVisible();
+});
+EOF
+
+check_fidelity() {
+  local label="$1" fixture="$2" want="$3" logf="$TMPDIR/log-$4.txt"
+  set +e
+  bash "$GUARD" "$fixture" >"$logf" 2>&1
+  local st=$?
+  set -e
+  if [[ "$want" == "reject" ]]; then
+    if [[ "$st" -ne 0 ]] && grep -Fq 'PRODUCTION_PATH_SUBSTITUTION' "$logf"; then
+      pass "$label"
+    else
+      fail "$label (exit $st)"
+      sed -n '1,60p' "$logf"
+    fi
+  else
+    if [[ "$st" -eq 0 ]]; then
+      pass "$label"
+    else
+      fail "$label (exit $st)"
+      sed -n '1,60p' "$logf"
+    fi
+  fi
+}
+
+echo "[selftest regression-quality-guard] Case 5-7: sole-proof substitution → exit 1"
+check_fidelity "detached render as sole proof is refused" "$detached" reject 5
+check_fidelity "interception plus internal DOM as sole proof is refused" "$intercepted" reject 6
+check_fidelity "internal DOM read as sole proof is refused" "$hidden" reject 7
+
+echo "[selftest regression-quality-guard] Case 8-9: mixed tests still pass → exit 0"
+check_fidelity "internal read WITH a visible assertion is accepted" "$mixed_route" accept 8
+check_fidelity "interception WITH a visible assertion is accepted" "$mixed_intercept" accept 9
+
 if [[ "$failures" -eq 0 ]]; then
   echo "[selftest regression-quality-guard] PASS"
   exit 0
