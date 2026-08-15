@@ -2865,3 +2865,242 @@ invocation — the two test files and the product code are exactly as committed 
 row is open; the bug top-level `status` and `certification.status` remain
 `blocked` because SCOPE-04 is open.
 
+---
+
+## SCOPE-03 Build Quality Gate Closure (2026-08-15)
+
+Closes the last open SCOPE-03 row — the **Build Quality Gate** — that the
+preceding section deliberately left `[ ]` pending "the broad-regression E2E
+evidence". That evidence now exists. Two clauses that the preceding sections had
+never separately evidenced, **docs** and the unit tier of **broad regression**,
+were **executed in this recording turn** rather than argued from adjacency.
+
+**No claim text was reworded.** No product source file, no test file, and no
+`state.json` was modified. SCOPE-03 moves to **14/14** and `Done`; the bug
+top-level `status` and `certification.status` remain `blocked` because SCOPE-04
+is open.
+
+<a id="scope-03-build-quality-gate"></a>
+
+### Clause-by-clause disposition
+
+The row enumerates twelve clauses plus a zero-warnings qualifier. Each is mapped
+to evidence below; nothing is carried by "most of it passed".
+
+| # | Clause | Evidence | Verdict |
+|---|---|---|---|
+| 1 | Synthetic | report.md#t080-03-synth (fixed-order authenticated family sequence) + report.md#scn-080-001-03-refusal (`ok internal/graphsynthetic`, refusal across all 7 outcome classes x 8 families); both re-executed inside the broad unit lane below | ✅ |
+| 2 | integration | Full `go-integration` lane, 14 packages `ok`, `PASS: go-integration`, `INTEGRATION_EXIT=0` | ✅ |
+| 3 | E2E | `PASS: go-e2e`, `PASS: go-e2e-graph-disabled`, `PASS: go-e2e-corpus-enforce`, `E2E_EXIT=0` | ✅ |
+| 4 | stress/SLO | report.md#t080-03-stress re-executed: `p95=189.673974ms` against `p95Budget=15s` (~79x headroom), `max=297.86766ms` against `hardCeiling=2m0s`, `recordedRuns=160` of `totalRuns=160`, `T080_03_STRESS_EXIT=0` | ✅ |
+| 5 | trace contract | report.md#t080-03-trace (39 spans / 469 attributes against closed vocabularies), re-executed green in this session's integration lane (`ok tests/integration/graphapi 4.701s`) | ✅ |
+| 6 | environment-pollution | Zero residual `smackerel-test` containers and volumes after all lanes; independently re-measured this turn (`container_count=0`, `volume_count=0`) | ✅ |
+| 7 | secret-content | `pii-scan: clean.` / `no leaks found`, `PII=0`; plus `T080-07-SECURITY` (`e2e-api`, "Regression: Graph activation output never contains secret or cursor material") which ran inside the green E2E lane | ✅ |
+| 8 | check/lint/format | `CHECK=0` (`env_file drift guard: OK`, `scenario-lint: OK` 17 registered / 0 rejected), `LINT=0` (`Web validation passed`), `FMT=0` (`78 files already formatted`) | ✅ |
+| 9 | artifact-lint | `Artifact lint PASSED.`, `ARTIFACT_LINT_EXIT=0`; re-run in this recording turn against the edited packet | ✅ |
+| 10 | traceability | `RESULT: PASSED (0 warnings)`, `TRACE=0` | ✅ |
+| 11 | **docs** | `internal/docfreshness` guard **executed this turn**: 43 packages / 0 undocumented, 46 migrations / 0, 27 prompt contracts / 0, adversarial anti-vacuity case `PASS`, exit `0`; backed by `docs/Development.md` documenting `internal/graphsynthetic/` since the SCOPE-03 delivery commit `94f9dd79` | ✅ |
+| 12 | **broad regression** | Full E2E lane (3 flavors) + full integration lane (14 packages) + **full Go unit suite executed this turn: 148 packages ran tests, `0` FAIL lines, `go test ./... finished OK`, `BROAD_UNIT_EXIT=0`** | ✅ |
+| — | zero warnings | `LINT=0` with `Web validation passed`, `FMT=0` with `78 files already formatted`, `CHECK=0`, and `0` FAIL lines across the whole unit suite | ✅ |
+
+#### T080-07-SECURITY is a real, checked row — verified, not assumed
+
+The secret-content clause leans on a security regression, so its existence was
+confirmed in-tree rather than taken on trust. `T080-07-SECURITY` is a declared
+`e2e-api` row in the SCOPE-01 Test Plan
+(`tests/e2e/graph_api_activation_e2e_test.go` — "Regression: Graph activation
+output never contains secret or cursor material", command `./smackerel.sh test
+e2e`), and its SCOPE-01 DoD row is `[x]` with an `→ Evidence:` citation to
+report.md#t080-07-security. It is therefore inside the `go-e2e` lane that
+reported `PASS` above, not an orphan claim.
+
+### The `FAIL:` line inside the green E2E block — investigated, not waved through
+
+The E2E capture contains this line:
+
+```
+FAIL: Services did not become healthy within 8s
+```
+
+immediately before three `PASS:` lines and `E2E_EXIT=0`. A `FAIL:` string inside
+a lane claimed green is exactly the shape that should not be accepted on
+assertion, so its source was located in-tree.
+
+It is **captured expected output from a deliberate negative test**:
+`tests/e2e/test_postgres_readiness_gate.sh`, scenario `SCN-002-BUG-002-001`
+("stopped postgres must fail the shared readiness gate"). The script's own
+control flow proves the direction of the assertion:
+
+```
+# Scenario: SCN-002-BUG-002-001
+...
+echo "Stopping postgres to force a readiness failure..."
+smackerel_compose "$TEST_ENV" stop postgres
+
+set +e
+READINESS_OUTPUT="$(e2e_wait_healthy 8 2>&1)"
+READINESS_EXIT=$?
+set -e
+
+printf '%s\n' "$READINESS_OUTPUT"
+
+if [ "$READINESS_EXIT" -eq 0 ]; then
+    e2e_fail "Readiness gate passed even though postgres was stopped"
+fi
+
+e2e_assert_contains "$READINESS_OUTPUT" "postgres readiness" "Readiness failure should name postgres readiness"
+```
+
+The test **stops postgres on purpose**, captures the readiness output under
+`set +e`, `printf`s it — which is the line above — and then calls `e2e_fail`
+**if readiness had PASSED**. A green gate here would be the failure. The lane is
+therefore genuinely green at exit `0`, and the line is a recorded expectation
+rather than a masked failure. Recorded here so a future reader does not
+re-litigate it.
+
+### The docs clause — the premise was wrong, and the correction favours the row
+
+This clause was carried into this turn as the least certain one, on the stated
+premise that *"there is no mechanical docs check wired into `./smackerel.sh`"*,
+supported by the absence of any `docfreshness` string in `cmd/`, `scripts/`, or
+`smackerel.sh`.
+
+**That grep is accurate but the inference from it is wrong.**
+`internal/docfreshness/doc_freshness_test.go` is a Go **test package**, so it is
+discovered by `go test ./...` and runs under `./smackerel.sh test unit --go`
+**without any named reference anywhere**. Absence of the string is exactly what a
+correctly-wired Go contract guard looks like. `docs/Development.md` itself
+describes it as asserting that the file "documents every `internal/` Go package,
+every `internal/db/migrations/*.sql`, and every `config/prompt_contracts/*.yaml`,
+so documentation-inventory drift fails the Go unit suite and CI."
+
+So rather than reasoning about whether SCOPE-03's documentation was aligned in an
+earlier session, the guard was **run**:
+
+**Command:** `./smackerel.sh test unit --go --go-run 'TestDocFreshness' --verbose`
+**Exit code:** `0`
+
+```
+=== RUN   TestDocFreshness_AllInternalPackagesDocumented
+    doc_freshness_test.go:161: internal/ package freshness: 43 packages on disk, 0 undocumented
+--- PASS: TestDocFreshness_AllInternalPackagesDocumented (0.02s)
+=== RUN   TestDocFreshness_AllMigrationsDocumented
+    doc_freshness_test.go:182: migration freshness: 46 migration files on disk, 0 undocumented
+--- PASS: TestDocFreshness_AllMigrationsDocumented (0.00s)
+=== RUN   TestDocFreshness_AllPromptContractsDocumented
+    doc_freshness_test.go:203: prompt-contract freshness: 27 contracts on disk, 0 undocumented
+--- PASS: TestDocFreshness_AllPromptContractsDocumented (0.00s)
+=== RUN   TestDocFreshness_AdversarialUndocumentedItemsDetected
+--- PASS: TestDocFreshness_AdversarialUndocumentedItemsDetected (0.01s)
+PASS
+ok      github.com/smackerel/smackerel/internal/docfreshness    0.062s
+=== DOCFRESHNESS_VERBOSE_EXIT=0 ===
+```
+
+`TestDocFreshness_AdversarialUndocumentedItemsDetected` passing is what makes
+this non-vacuous: the guard is proven able to **detect** an undocumented item, so
+`0 undocumented` is a finding rather than a silent default.
+
+**The specific SCOPE-03 documentation exists and is attributable.**
+`docs/Development.md` carries a `internal/graphsynthetic/` row describing exactly
+this scope's deliverable — the "READ-ONLY, fixed-order observation over the
+canonical eight-family `internal/api/graphapi` route manifest", the closed
+`GraphFamilyResult` / `AggregateResult` result contract, its consumption by
+`internal/api.GraphReadiness` through the `Observer` seam, and the
+`SCN-080-001-07` value-safety property. Its provenance was checked against git,
+not inferred:
+
+```
+$ git log -1 --format='commit=%h date=%ad subject=%s' --date=iso \
+    -S'internal/graphsynthetic/' -- docs/Development.md
+commit=94f9dd79 date=2026-07-28 09:37:16 +0000 subject=feat(080 BUG-080-001): SCOPE-03 product capability — graph read synthetic and readiness truth
+```
+
+The documentation landed **in the SCOPE-03 delivery commit itself**, so alignment
+was part of that delivery rather than a later patch. This turn's only commit,
+`b1b1ca5f`, touched two test files under `internal/graphsynthetic/` and **zero**
+`docs/` files, so no documentation drift could have been introduced since. The
+`docs/` entries in `git status --porcelain` are all under `docs/releases/` and
+belong to concurrent sessions; they were not touched here.
+
+For completeness on the comparison requested: SCOPE-01 evidenced its
+"documentation alignment" clause by resolving finding F-2 (`grep -c 'HARNESS
+LIMITATION'` = 0 after commit `6a12f1f4`); SCOPE-02's gate row lists the clause
+but its enumerated evidence covers check / lint / format / pii-scan /
+artifact-lint / traceability without breaking documentation out separately. The
+clause is therefore evidenced **more** strongly here than in either predecessor,
+because a mechanical guard was executed rather than a targeted grep.
+
+### The broad-regression clause — the unit tier was run, not assumed
+
+The unit evidence carried into this turn was **selector-scoped to one package**
+(`./smackerel.sh test unit --go --go-run '...'` → `ok internal/graphsynthetic`).
+That is sufficient for the *Synthetic* clause but is not a broad regression
+check, and closing clause 12 on it would have been the substitution this packet
+forbids. The full suite was therefore executed:
+
+**Command:** `./smackerel.sh test unit --go`
+**Exit code:** `0`
+
+```
+=== BROAD_UNIT_EXIT=0 ===
+--- FAIL lines (empty = none) ---
+--- FAIL count ---
+0
+--- packages that actually ran tests ---
+148
+--- tail ---
+ok      github.com/smackerel/smackerel/web/pwa/tests    1.271s
+[go-unit] go test ./... finished OK
+```
+
+**148** packages ran tests with **zero** `FAIL` lines across the entire capture.
+This matters beyond the clause itself: it independently re-confirms both
+repository meta-guards green on the current tree — `internal/docfreshness`
+(documentation inventory) and `internal/scopesdriftguard` (broken `path`
+references in `specs/*/scopes.md`) — under a working tree that carries concurrent
+sessions' modifications. Neither this packet nor its neighbours are in a
+regressed state.
+
+### Environment-pollution — re-measured independently
+
+```
+--- smackerel-test containers ---
+container_count=0
+--- smackerel-test volumes ---
+volume_count=0
+```
+
+Zero residual `smackerel-test` containers and zero residual volumes, consistent
+with the post-lane measurement recorded with the lane evidence.
+
+### Verdict
+
+All twelve clauses and the zero-warnings qualifier carry executed evidence, and
+the two weakest — **docs** and the unit tier of **broad regression** — were
+converted from assumption to execution in this turn rather than accepted on
+adjacency. The row is checked with its claim text unchanged. **SCOPE-03 is
+14/14 and `Done`.**
+
+### What this does NOT close
+
+SCOPE-04 (Wiki/Graph state and recovery integration) is untouched and remains
+open. The bug top-level `status` and `certification.status` therefore correctly
+remain `blocked`, and `state.json` was **not** modified in this invocation.
+
+One observation is surfaced rather than acted on, because it is outside this
+invocation's boundary: SCOPE-04's `Status` is `Blocked` while its only
+dependency, SCOPE-03, is now `Done`. That is the same stale-`Blocked` shape a
+previous invocation corrected for SCOPE-03 once SCOPE-02 closed. It is left for
+the owner rather than changed here.
+
+### Change surface for this closure
+
+`report.md` (this section) and `scopes.md` (the single SCOPE-03 Build Quality
+Gate row checked with an `→ Evidence:` citation to
+report.md#scope-03-build-quality-gate; SCOPE-03 `Status` `In Progress` → `Done`
+in both the Scope Inventory table and the scope header). **No DoD claim text was
+reworded.** No product source file, no test file, no `state.json`, no other spec,
+and nothing under `docs/` was modified. SCOPE-04 `Status` was deliberately left
+unchanged.
+

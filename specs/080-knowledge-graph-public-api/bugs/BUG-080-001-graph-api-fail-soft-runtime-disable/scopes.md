@@ -45,7 +45,7 @@ flowchart LR
 |---|---|---|---|---|
 | SCOPE-01 | Empty/missing enabler fails soft to a typed disabled capability; routes activate atomically when enabled | config, core wiring, router, route manifest | - | Done |
 | SCOPE-02 | Authorized Graph reads report truthful data and failure states | PostgreSQL readers, HTTP contracts, auth, cursors | SCOPE-01 | Done |
-| SCOPE-03 | Read-only synthetic and readiness prove actual Graph behavior | validate synthetic, health, metrics, traces, alerts | SCOPE-02 | In Progress |
+| SCOPE-03 | Read-only synthetic and readiness prove actual Graph behavior | validate synthetic, health, metrics, traces, alerts | SCOPE-02 | Done |
 | SCOPE-04 | Knowledge surfaces render the same honest state accessibly | PWA Knowledge/Wiki, status, responsive UI, Playwright | SCOPE-03 | Blocked |
 
 ---
@@ -269,7 +269,7 @@ Scenario: SCN-080-001-09 Explicit grant controls the global graph
 ## Scope 3: Product Read Synthetic And Readiness Truth
 
 **Scope ID:** SCOPE-03  
-**Status:** In Progress  
+**Status:** Done  
 **Scope-Kind:** runtime-behavior  
 **Depends On:** SCOPE-02
 
@@ -347,7 +347,7 @@ Scenario: SCN-080-001-07 Synthetic and telemetry disclose no content
 
 #### Build Quality Gate
 
-- [ ] Synthetic, integration, E2E, stress/SLO, trace contract, environment-pollution, secret-content, check/lint/format, artifact-lint, traceability, docs, and broad regression checks all pass with executed evidence and zero warnings.
+- [x] Synthetic, integration, E2E, stress/SLO, trace contract, environment-pollution, secret-content, check/lint/format, artifact-lint, traceability, docs, and broad regression checks all pass with executed evidence and zero warnings. → Evidence: report.md#scope-03-build-quality-gate — all twelve clauses mapped one-by-one to executed evidence, with the two weakest converted from assumption to execution rather than accepted on adjacency. Synthetic: report.md#t080-03-synth + report.md#scn-080-001-03-refusal. integration: 14 packages `ok`, `PASS: go-integration`, `INTEGRATION_EXIT=0`. E2E: `PASS: go-e2e` + `PASS: go-e2e-graph-disabled` + `PASS: go-e2e-corpus-enforce`, `E2E_EXIT=0` — the one `FAIL:` line inside that capture was traced to `tests/e2e/test_postgres_readiness_gate.sh` (`SCN-002-BUG-002-001`), which stops postgres ON PURPOSE and calls `e2e_fail` only if readiness had PASSED, so it is a recorded expectation, not a masked failure. stress/SLO: report.md#t080-03-stress, `p95=189.673974ms` against `p95Budget=15s`, `recordedRuns=160/160`, `T080_03_STRESS_EXIT=0`. trace contract: report.md#t080-03-trace, re-executed green in this session's integration lane. environment-pollution: `container_count=0`, `volume_count=0`, re-measured independently. secret-content: `pii-scan: clean.` `PII=0` plus the `T080-07-SECURITY` `e2e-api` row (verified present in the SCOPE-01 Test Plan and `[x]` at report.md#t080-07-security) which ran inside the green E2E lane. check/lint/format: `CHECK=0`, `LINT=0` (`Web validation passed`), `FMT=0` (`78 files already formatted`). artifact-lint: `Artifact lint PASSED.` exit 0. traceability: `RESULT: PASSED (0 warnings)`. **docs**: the premise that no mechanical docs check is wired into `./smackerel.sh` was tested and found wrong — `internal/docfreshness` is a Go test package discovered by `go test ./...`, so it runs under `./smackerel.sh test unit --go` with no named reference; executed this turn at 43 packages/0 undocumented, 46 migrations/0, 27 prompt contracts/0 with the adversarial anti-vacuity case PASSING, exit 0, and `docs/Development.md` has carried the `internal/graphsynthetic/` row since the SCOPE-03 delivery commit `94f9dd79`. **broad regression**: the carried-in unit evidence was selector-scoped to one package, so the full suite was run — 148 packages ran tests, `0` FAIL lines, `go test ./... finished OK`, `BROAD_UNIT_EXIT=0`, which also re-confirms the `docfreshness` and `scopesdriftguard` meta-guards green. zero warnings: lint/format/check all exit 0 with no warning lines and `0` FAIL across the unit suite.
 
 ---
 
