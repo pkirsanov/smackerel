@@ -26,12 +26,21 @@ type InMemoryAck struct {
 	mu      sync.Mutex
 	entries map[string]time.Time
 	clock   func() time.Time
+
+	// nextSweep mirrors DedupeIndex: zero value means "eligible now".
+	nextSweep time.Time
+	// sweeps counts completed GC sweeps, for deterministic assertion.
+	sweeps int
 }
 
 // ackRetention bounds opportunistic GC for the in-memory ack registry.
 // Suppression windows are owned by SuppressionWindow (typically hours);
 // any entry older than this floor is unreachable by any plausible window.
 const ackRetention = 30 * 24 * time.Hour
+
+// ackSweepInterval rate-limits the opportunistic sweep so Acknowledge
+// stays O(1) amortized. See DedupeIndex.Record for the full rationale.
+const ackSweepInterval = 24 * time.Hour
 
 // NewInMemoryAck returns an empty in-memory ack registry.
 func NewInMemoryAck() *InMemoryAck {
@@ -45,17 +54,20 @@ func (a *InMemoryAck) Acknowledge(contentKey string) {
 	}
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	a.entries[contentKey] = a.clock()
-	// Opportunistic GC: drop entries older than the retention floor to
-	// keep memory bounded over long uptimes without paying a periodic-
-	// sweep tax. Mirrors DedupeIndex.Record.
-	if len(a.entries) > 4096 {
-		cutoff := a.clock().Add(-ackRetention)
+	now := a.clock()
+	a.entries[contentKey] = now
+	// Opportunistic GC, AMORTIZED — see DedupeIndex.Record for the full
+	// rationale. Sweeping on every call is O(n) once the live set
+	// exceeds the threshold, which makes a sustained burst quadratic.
+	if len(a.entries) > gcSizeThreshold && !now.Before(a.nextSweep) {
+		cutoff := now.Add(-ackRetention)
 		for k, t := range a.entries {
 			if t.Before(cutoff) {
 				delete(a.entries, k)
 			}
 		}
+		a.nextSweep = now.Add(ackSweepInterval)
+		a.sweeps++
 	}
 }
 

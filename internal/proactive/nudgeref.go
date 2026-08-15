@@ -70,6 +70,13 @@ type NudgeRegistry struct {
 	ttl     time.Duration
 	clock   func() time.Time
 	mint    func() NudgeRef
+
+	// nextSweep is the earliest time gcLocked may scan again. Zero value
+	// means "eligible now", so the first sweep is never delayed.
+	nextSweep time.Time
+	// sweeps counts completed sweeps so the regression test can assert
+	// the sweep RATE deterministically rather than timing the scan.
+	sweeps int
 }
 
 // NewNudgeRegistry constructs a registry with the SST-resolved TTL. ttl MUST be
@@ -165,11 +172,23 @@ func (r *NudgeRegistry) gcLocked() {
 		return
 	}
 	now := r.clock()
+	// Amortized sweep. An entry only becomes evictable after ttl, so
+	// scanning on EVERY Mint reclaims nothing whenever the live set is
+	// younger than ttl — and Mint is on the card-projection hot path,
+	// which made a sustained burst of nudges O(n^2) and pushed the
+	// NFR-107-001 p99 ceiling (see tests/stress/proactive). Rate-limiting
+	// to once per ttl keeps Mint O(1) amortized and still bounds entry
+	// age at ~2x ttl.
+	if now.Before(r.nextSweep) {
+		return
+	}
 	for k, e := range r.entries {
 		if now.Sub(e.issuedAt) >= r.ttl {
 			delete(r.entries, k)
 		}
 	}
+	r.nextSweep = now.Add(r.ttl)
+	r.sweeps++
 }
 
 func resolvedFrom(e nudgeEntry) Resolved {
