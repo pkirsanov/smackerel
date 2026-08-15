@@ -19,6 +19,7 @@ import (
 
 	"github.com/smackerel/smackerel/internal/agent"
 	"github.com/smackerel/smackerel/internal/api"
+	"github.com/smackerel/smackerel/internal/auth"
 )
 
 // ToolName is the single tool registered by this package.
@@ -135,6 +136,22 @@ type recipeSearchOutput struct {
 }
 
 func handleRecipeSearch(ctx context.Context, raw json.RawMessage) (json.RawMessage, error) {
+	// BUG-061-012 SEC-01. Authorize BEFORE reading. This tool calls the same
+	// engine over the same corpus as retrieval_search, differing only by
+	// Filters{Domain: "recipe"} — so without this it is a second, ungated door
+	// onto the store retrieval_search now gates.
+	//
+	// The two refusals stay distinct, as retrieval's do. "Nobody is here" means
+	// a surface failed to inject a principal — an operational defect. "This
+	// caller may not" means the gate worked.
+	sess, ok := auth.SessionFromContext(ctx)
+	if !ok {
+		return nil, errors.New("recipe_search_no_principal")
+	}
+	if !auth.GateGlobalCorpusRead(sess).Allowed {
+		return nil, errors.New("recipe_search_grant_required")
+	}
+
 	svc, err := loadServices()
 	if err != nil {
 		return nil, err
