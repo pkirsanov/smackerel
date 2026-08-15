@@ -120,7 +120,7 @@ Run auth, native Search, HTMX read/mutation, Digest, Assistant, Wiki, Card PRG, 
 
 - [ ] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior in the shell cutover (one-session reach across renderers, expired-session clear-before-recovery, deep-link compatibility or explicit redirect) exist and pass — see `report.md#xp106-05-a`.
 - [ ] Broader E2E regression suite passes with no cutover-induced regression across server, PWA, and Card renderers — see `report.md#ux-e2e-106-008`.
-- [x] Consumer impact sweep is completed for the shell cutover and zero stale first-party references remain across server/PWA/Card navigation, breadcrumbs, redirects, deep links, native forms, HTMX targets, request clients, manifest shortcuts, service worker, and stable hooks — see `report.md#xp106-05-c`.
+- [ ] Consumer impact sweep is completed for the shell cutover and zero stale first-party references remain across server/PWA/Card navigation, breadcrumbs, redirects, deep links, native forms, HTMX targets, request clients, manifest shortcuts, service worker, and stable hooks — see `report.md#xp106-05-c`. (Partial: `report.md#xp106-05-c` proves the STATIC consumer-inventory sweep — server-nav, pwa-nav, manifest-shortcut, service-worker, catalog-href, projection supported paths and compat/redirect entries. The deep-link portion of this claim is carried by the LIVE rows XP106-05-I / XP106-05-A, which that report records as entry-gated on BUG-070-001 and unchecked, so this row cannot be closed yet.)
 
 #### Build Quality Gate
 
