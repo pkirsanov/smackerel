@@ -739,6 +739,252 @@ four sites realises that rationale.
 
 ---
 
+## Validate phase (`bubbles.validate`) — certification
+
+### Validation Evidence
+
+Independent certification of one claim: **agent tools no longer take caller identity from a
+model-supplied argument; the principal is derived server-side from `auth.SessionFromContext`.**
+
+Code HEAD `7032106a`. Every check below was **re-derived from source or executed this session**
+rather than read out of the sections above — where a preceding phase had already asserted something,
+it was reproduced independently and the two results compared. One finding below (V-02) contradicts a
+comment in the code, and one (V-04) narrows a claim the regression phase made; both are recorded as
+found rather than reconciled.
+
+**VERDICT: the claim is SUBSTANTIATED.** The packet does **not** reach `done` — see Ceiling below.
+
+Lanes run: exactly one, as scoped. `stress`, `e2e` and `integration` were **not** run by this phase
+and nothing here rests on them.
+
+#### C1 — The schema contract test really does cover every registered tool
+
+The test (`internal/agent/tools/toolscontract/schema_contract_test.go`) reads source as text and
+derives its file set from the registration call rather than from a directory or an enumerated list.
+That derivation was **reproduced independently** with the test's own regex, and it resolves to 20
+non-test registrar files, all 9 agent tools among them:
+
+```text
+$ grep -rlE 'agent\.RegisterTool\(|agent\.Register\(|RegisterTool\(agent\.Tool\{' --include='*.go' . \
+    --exclude='*_test.go' --exclude-dir=.git --exclude-dir=vendor --exclude-dir=node_modules \
+    --exclude-dir=specs --exclude-dir=docs --exclude-dir=web --exclude-dir=ml | sort
+./cmd/core/agent_e2e_tools.go
+./internal/agent/tools/microtools/calculator.go
+./internal/agent/tools/microtools/entity_resolve.go
+./internal/agent/tools/microtools/location_normalize.go
+./internal/agent/tools/microtools/unit_convert.go
+./internal/agent/tools/notification/execute.go
+./internal/agent/tools/notification/propose.go
+./internal/agent/tools/recipesearch/tool.go
+./internal/agent/tools/retrieval/tool.go
+./internal/agent/tools/weather/tool.go
+./internal/annotation/classifier_tool_noop.go
+./internal/assistant/openknowledge/agenttool/substrate_tool.go
+./internal/digest/hospitality_eval.go
+./internal/drive/tools/tools.go
+./internal/intelligence/alert_timing.go
+./internal/intelligence/cooling.go
+./internal/intelligence/expertise_eval.go
+./internal/intelligence/resurface_eval.go
+./internal/recommendation/tools/register.go
+./internal/retrieval/evergreen/bridge.go
+=== COUNT ===
+20
+```
+
+The result was then checked by a **wider net than the test itself uses** — the same
+caller-identity regex applied repo-wide to all non-test Go, not just to registrar files:
+
+```text
+$ grep -rnE '"(user_id|userId|user|principal|actor|actor_user_id|on_behalf_of)"[[:space:]]*:[[:space:]]*\{' \
+    --include='*.go' . --exclude='*_test.go' --exclude-dir=.git --exclude-dir=vendor --exclude-dir=node_modules
+GREP_A_EXIT=1 (1 = no match = clean)
+```
+
+Zero caller-identity schema properties anywhere in non-test Go. The contract is not merely passing;
+there is nothing in the tree for it to catch.
+
+**Absence of the property only matters if unknown arguments are rejected**, so closure was verified
+too rather than assumed. All 9 tools declare `additionalProperties: false`, and it is enforced
+*before* dispatch — `internal/agent/executor.go:580` validates against the compiled input schema and
+`continue`s on failure, so a model-injected `user_id` is recorded as `argument_schema_violation` and
+never reaches a handler:
+
+```text
+$ for f in <the 9 tool files>; do grep -cE '"additionalProperties"[[:space:]]*:[[:space:]]*false' "$f"; done
+calculator.go:1  entity_resolve.go:1  location_normalize.go:1  unit_convert.go:1
+execute.go:2  propose.go:2  recipesearch/tool.go:3  retrieval/tool.go:3  weather/tool.go:5
+
+$ grep -nE 'ValidateBytes|argument_schema_violation' internal/agent/executor.go
+563:  inSch, outSch, ok := SchemasFor(call.Name)
+580:  if err := inSch.ValidateBytes(call.Arguments); err != nil {
+586:          RejectionReason: "argument_schema_violation",
+645:  if err := outSch.ValidateBytes(toolResult); err != nil {
+```
+
+Read at `executor.go:558-615`: validation at 580 sits in step `3c`, ends in `continue`, and handler
+dispatch is step `3d` at 613 where `toolCtx` is derived from the caller's `ctx` — which is also what
+carries the session down to every tool without a signature change.
+
+**C1 finding V-01 (latent, not a defect at HEAD).** The scan is per-registrar-**FILE**: it looks for
+caller-identity properties only inside files that call a registrar. A tool whose schema literal
+lived in a *sibling* file would have its schema unexamined while the guards still passed. This does
+not bite today — all 9 tools declare their schemas in their own registrar file, verified by counting
+`json.RawMessage(` literals per file (2 each: input + output). Recorded because the test's own
+docstring argues it is future-proof against "a tool added by a different author", and that holds
+only for authors who keep the schema co-located.
+
+**C1 finding V-02 (contradicts a comment in the code).** The stale-fixture guard trips at
+`registrarsSeen < 10`, and its comment says the floor is "deliberately well below the 22 sites
+present when this was written". The measured count is **20, not 22**, and more importantly the floor
+permits **half the walk to disappear** — including real tool files — without failing. The guard
+protects against a totally broken walk, not against a partially broken one. Non-blocking: the
+repo-wide check above independently confirms there is nothing to miss at HEAD.
+
+#### C2 — All five named tool surfaces fail closed without a principal
+
+Verified in source that each refusal is placed **before** any corpus read or side effect, and that
+none falls back to an argument, a default, an empty identity, or a system identity:
+
+| Tool | Refusal | Placed before | Verified at |
+|---|---|---|---|
+| `retrieval_search` | `retrieval_search_no_principal` / `..._grant_required` | arg unmarshal + search | `retrieval/tool.go:185-194` |
+| `recipe_search` | `recipe_search_no_principal` / `..._grant_required` | `loadServices()` + search | `recipesearch/tool.go:147-153` |
+| `notification_propose` | `notification_propose_no_principal` / `..._principal_without_user` | envelope build | `notification/propose.go:80-87` |
+| `notification_execute` | `notification_execute_no_principal` / `..._principal_mismatch` | store read / `Scheduler.Schedule` | `notification/execute.go:62-98` |
+| `entity_resolve` | `entity_resolve_no_principal` / `..._principal_without_user` | `Resolver.Resolve` | `microtools/entity_resolve.go:220-226` |
+
+Two properties were checked rather than taken from the table:
+
+1. **`retrieval` and `recipe_search` reuse the HTTP gate** (`auth.GateGlobalCorpusRead`) instead of
+   re-deriving it, so the agent and HTTP boundaries cannot drift (R2.4).
+2. **`notification_execute` compares two server-derived values.** `execute.go:96` tests
+   `sess.UserID` (from context) against `envelope.UserID`, and `propose.go:85-113` stamps that
+   envelope field from `sess.UserID`. The model supplies only the `confirm_ref` that *selects* the
+   envelope — neither side of the comparison. This is the SEC-02 fix and it is the newest code in
+   the packet; it was read in full rather than inferred.
+
+Each refusal is asserted by at least one test, confirmed by grep against the literal error strings:
+
+```text
+$ grep -rn 'retrieval_search_no_principal|recipe_search_no_principal|notification_propose_no_principal
+          |notification_execute_no_principal|notification_execute_principal_mismatch
+          |entity_resolve_no_principal' --include='*_test.go' .
+internal/agent/tools/microtools/entity_resolve_test.go:224
+internal/agent/tools/recipesearch/tool_test.go:41
+internal/agent/tools/retrieval/tool_test.go:230
+internal/agent/tools/notification/notification_test.go:144   (propose, no principal)
+internal/agent/tools/notification/notification_test.go:253   (execute, no principal)
+internal/agent/tools/notification/notification_test.go:268   (execute, principal mismatch)
+internal/telegram/agent_bridge_test.go:167
+tests/integration/agent/retrieval_principal_test.go:160
+tests/integration/assistant/entity_resolve_test.go:158
+```
+
+#### C3 — All four system surfaces inject an explicitly empty grant set, each asserted
+
+Every production `Invoke` call site was enumerated, not sampled — six exist, and all six either
+inject a principal or fail closed by construction:
+
+```text
+$ grep -rnE '\.Invoke\(' --include='*.go' internal/ cmd/ --exclude='*_test.go'
+internal/api/agent_invoke.go:208        r.Context()                              (HTTP auth session)
+internal/agent/judgment.go:74           auth.SystemSession("judgment")
+internal/scheduler/agent_bridge.go:70   auth.SystemSession("scheduler")
+internal/telegram/agent_bridge.go:125   ctx  <- withPrincipal() at :119, or no session => tools refuse
+internal/pipeline/agent_bridge.go:50    auth.SystemSession("pipeline")
+internal/annotation/classifier_bridge.go:80  auth.SystemSession("annotation")
+```
+
+`auth.SystemSession` (`internal/auth/system_session.go:39-53`) returns `Scopes: []string{}` —
+explicitly empty, deliberately **not** `nil`, because `nil` is `Session.Scopes`' documented
+"legacy / non-scoped session" sentinel (`session.go:59-65`).
+
+Per-surface assertions, each read rather than counted:
+
+| Surface | Test | Asserts |
+|---|---|---|
+| scheduler | `scheduler_test.go:714` | Source, `UserID == "system:scheduler"`, `Scopes != nil`, `len == 0` |
+| pipeline | `constants_test.go:125` | Source, `UserID == "system:pipeline"`, `Scopes != nil`, `len == 0` |
+| annotation | `classifier_interface_test.go:172` | as above, **plus** that an inbound `corpus:read` caller session is *replaced*, not forwarded |
+| judgment | `judgment_test.go:129` | session present, `IsSystem`, `GateGlobalCorpusRead` denies, `UserID != ""`, **plus** inbound-session replacement |
+
+**C3 finding V-04 (narrows a prior claim).** The regression phase recorded that judgment's call site
+was one of the covered ones. It is covered — but **not for the property this bullet names**.
+`judgment_test.go` asserts the *gate outcome*, and `GateGlobalCorpusRead` is
+`slices.Contains(sess.Scopes, …)`, which returns false for `nil` **and** for `[]string{}`. So the
+judgment test would still pass if `SystemSession` regressed to `Scopes: nil`. The nil-sentinel is
+therefore asserted structurally at 3 of the 4 call sites, not 4.
+
+**This is closed centrally, not left open.** `internal/auth/system_session_test.go:36`
+(`TestSystemSession_HoldsNoCorpusGrantAndIsScopedNotLegacy`) asserts `Scopes != nil` **and**
+`len(Scopes) == 0` on the constructor itself, and all four surfaces call that one constructor. A
+regression to `nil` fails there. The claim as stated holds; the route to it at the judgment site is
+the constructor test rather than the call-site test.
+
+#### C4 — The one permitted lane
+
+```text
+# BUG-061-012 validate: unit --go
+$ ./smackerel.sh test unit --go
+exit: 0
+lines: 209
+sha256: dbee55f875c91e2a6d46cab8596c9153f592ef8152c35b552851a728915044d0
+--- last 20 (excerpt) ---
+ok      github.com/smackerel/smackerel/internal/topics  (cached)
+ok      github.com/smackerel/smackerel/internal/web     (cached)
+ok      github.com/smackerel/smackerel/internal/whatsapp/assistant_adapter  (cached)
+ok      github.com/smackerel/smackerel/tests/e2e/agent  (cached)
+ok      github.com/smackerel/smackerel/tests/eval/assistant     (cached)
+ok      github.com/smackerel/smackerel/tests/observability      (cached)
+ok      github.com/smackerel/smackerel/tests/unit/clients       (cached)
+[go-unit] go test ./... finished OK
+```
+
+Re-derivable: `bash bubbles/scripts/evidence-capture.sh --verify dbee55f875c91e2a6d46cab8596c9153f592ef8152c35b552851a728915044d0 -- ./smackerel.sh test unit --go`
+
+**C4 finding V-03 (bounds what this lane proves).** Many packages report `(cached)`. Go's test cache
+is content-addressed, so a cached `ok` is a valid result *for this tree state* — it is not stale.
+But the lane emits no per-test `--- PASS:` lines in the captured window, so **this exit 0 proves
+that nothing in the module fails at HEAD `7032106a`; it does not prove each named test executed
+freshly this session.** The certification above does not rest on it doing so: C1-C3 are source
+re-derivations, and the per-test execution claim was already discharged by the test phase with
+observed `--- PASS:` lines (§ *Per-test PASS lines*). Stated explicitly because this packet's own
+history records that exit code alone does not prove a test ran, and that caution applies to this
+lane too.
+
+#### Known-open items — confirmed, not re-litigated
+
+| Item | Confirmed how | State |
+|---|---|---|
+| **P1 hole #3** — live Telegram path never injects a session | `cmd/core/wiring_assistant_facade.go:328` sets `ResolveUser: telegram.NewBotChatResolver(tgBot)` and contains **no** `auth.WithSession` call; a repo-wide non-test grep for `NewAgentBridge` returns only its own definition and one doc comment — **no production caller** | **OPEN.** The bridge is correct and tested but dormant. |
+| **G136** — human acceptance | `grep -c '^- \[ \]' uservalidation.md` → **2** | **OPEN.** Human-only; not checked by this phase. |
+
+On P1 hole #3, one property is worth stating because it bounds the exposure: the dormant path is
+dormant in the *safe* direction. `AgentBridge.withPrincipal` (`agent_bridge.go:159-177`) returns the
+context **unchanged** when a chat cannot be resolved, so a Telegram turn with no principal reaches
+the tools with no session and the grant-gated tools refuse themselves. The open hole is a
+**capability** gap on that surface, not an authorization bypass.
+
+The same holds for the shared-token HTTP branch (`router.go:1101`), which is explicitly out of scope
+per `spec.md`: it injects `auth.Session{Source: SessionSourceSharedToken}` with `nil` scopes and an
+empty `UserID`, so corpus tools refuse it (`GateGlobalCorpusRead` false) and the identity-bearing
+tools refuse it on the empty-`UserID` check. Out of scope and still fail-closed.
+
+#### Ceiling
+
+`in_progress` — **unchanged by this phase.** Status was not written.
+
+`done` is unreachable and this phase did not attempt it: G136 requires two human-acceptance items
+that no agent may check, and `bugfix-fastlane` still has `audit` unexecuted. The honest terminal
+state for this packet once validation is recorded is **`blocked`** on human acceptance — a
+transition this phase does not own and did not make.
+
+Findings V-01 through V-04 are **observations, not blockers**: none contradicts the certified claim,
+and each is recorded with the evidence that bounds it.
+
+---
+
 ## Discovered issues
 
 ### 1. A sixth `Invoke` surface existed that no artifact named
