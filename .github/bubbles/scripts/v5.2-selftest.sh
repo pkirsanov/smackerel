@@ -14,8 +14,10 @@
 #   F7. model-tier-advisory.sh writes a model-tier-warning entry to the
 #       tool-call log when active < floor.
 #
-# F2 (diff-evidence auto-strict) and F4 (gates registry) have dedicated
-# selftests (diff-evidence-guard-selftest.sh, gates-registry-selftest.sh).
+# F2 (diff-evidence auto-strict) has a dedicated selftest
+# (diff-evidence-guard-selftest.sh). F4 (gates registry) no longer needs one:
+# the registry is the only gate definition, so there is no generated copy to
+# stay in sync with (IMP-042 SCOPE-13).
 # F5 ships its own validator that runs in framework-validate.
 #
 # Exit 0 = all PASS. Exit 1 = at least one FAIL.

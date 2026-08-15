@@ -167,7 +167,7 @@ if [[ "$selection" == "auto" ]]; then
 fi
 
 if [[ "$deprecated_fix" == "true" ]]; then
-  echo "WARNING: --fix is deprecated; use --reopen-failing with --recertify-all for explicit mutation."
+  echo "WARNING: --fix is deprecated and is REMOVED in 8.0.0; use --reopen-failing with --recertify-all for explicit mutation."
 fi
 
 if [[ "$reopen_failing" == "true" ]]; then

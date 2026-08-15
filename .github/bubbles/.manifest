@@ -181,14 +181,12 @@ bubbles/scripts/gate-vintage-guard.sh
 bubbles/scripts/gate-vintage-selftest.sh
 bubbles/scripts/gates-block-reader-lint-selftest.sh
 bubbles/scripts/gates-block-reader-lint.sh
-bubbles/scripts/gates-registry-selftest.sh
 bubbles/scripts/generate-capability-ledger-docs.sh
 bubbles/scripts/generate-cheatsheet-selftest.sh
 bubbles/scripts/generate-cheatsheet.sh
 bubbles/scripts/generate-framework-stats.sh
 bubbles/scripts/generate-gate-coverage-map-selftest.sh
 bubbles/scripts/generate-gate-coverage-map.sh
-bubbles/scripts/generate-gates-block.sh
 bubbles/scripts/generate-installer-selftest.sh
 bubbles/scripts/generate-installer.sh
 bubbles/scripts/generate-modes-block.sh

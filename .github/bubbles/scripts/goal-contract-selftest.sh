@@ -122,12 +122,16 @@ if [[ -f "$BOUNDARY_RESOLVER" ]]; then
   mkdir -p "$d/feature"
   jq '{ version: 3, status: "in_progress", workBoundary: .workBoundary }' "$d/out.json" \
     > "$d/feature/state.json"
-  if bash "$BOUNDARY_RESOLVER" --feature-dir "$d/feature" --candidate-repo bubbles \
-       --candidate-spec specs/038-goal-fidelity --candidate-path bubbles/scripts/x.sh \
-       2>"$d/wb.err" | grep -qx 'disposition=in-boundary'; then
+  # Exit code and stdout are reported too: a resolver that fails without writing
+  # stderr produced "rejected the frozen boundary:" with nothing after the colon.
+  wb_rc=0
+  bash "$BOUNDARY_RESOLVER" --feature-dir "$d/feature" --candidate-repo bubbles \
+    --candidate-spec specs/038-goal-fidelity --candidate-path bubbles/scripts/x.sh \
+    >"$d/wb.out" 2>"$d/wb.err" || wb_rc=$?
+  if grep -qx 'disposition=in-boundary' "$d/wb.out"; then
     pass "T1d frozen workBoundary is accepted in-boundary by work-boundary-resolve.sh"
   else
-    fail "T1d work-boundary-resolve.sh rejected the frozen boundary: $(cat "$d/wb.err")"
+    fail "T1d work-boundary-resolve.sh rejected the frozen boundary (exit=$wb_rc): stderr=$(tr '\n' ' ' <"$d/wb.err") stdout=$(tr '\n' ' ' <"$d/wb.out")"
   fi
 else
   skip "T1d boundary cross-check (work-boundary-resolve.sh not found)"

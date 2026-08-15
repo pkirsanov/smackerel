@@ -282,7 +282,7 @@ core_check_label() {
   case "$1" in
     *"Repository drift report"* | *"Gate-catalog freshness"* | \
       *"Portable surface agnosticity"* | *"Shellcheck lint"* | \
-      *"Registry consistency"* | *"Gates registry"* | *"YAML schema"* | \
+      *"Registry consistency"* | *"YAML schema"* | \
       *"Cheatsheet generator selftest"* | *"Modes split"* | \
       *"Scan-lib"* | *"Derived-artifact regen"* | *"Gate scaffolder"* | \
       *"drift-check selftest"* | *"hub-report selftest"* | \
@@ -566,11 +566,9 @@ run_check_self_only "Upgrade transactionality selftest (IMP-102 / SCOPE-6)" bash
 if [[ -x "$SCRIPT_DIR/migrate-modes-v5-to-v6.sh" ]]; then
   run_check_self_only "Migrate-modes-v5-to-v6 selftest (v6.0 / C1)" bash "$SCRIPT_DIR/migrate-modes-v5-to-v6-selftest.sh"
 fi
-run_check "Gates registry drift (v5.2 / F4)" bash "$SCRIPT_DIR/generate-gates-block.sh" --check
 if [[ -x "$SCRIPT_DIR/generate-modes-block.sh" ]]; then
   run_check "Modes split no-duplication (v6.1 / S2)" bash "$SCRIPT_DIR/generate-modes-block.sh" --check
 fi
-run_check "Gates registry selftest (v5.2 / F4)" bash "$SCRIPT_DIR/gates-registry-selftest.sh"
 # IMP-042 / SCOPE-13: the generated gates: block in workflows.yaml is a COPY of
 # the canonical registry. Deleting it once required "byte-equivalent queries for
 # every remaining reader", an inventory that was built by hand, missed the

@@ -92,6 +92,27 @@ py_read() { # py_read <label> <python-source>
   printf '%s' "$output"
 }
 
+# Same contract for the python calls that only WRITE fixtures. Under `set -e` an
+# unguarded failure here killed the whole selftest between two tests: no summary
+# line, a non-zero exit, and nothing saying which call died or why.
+py_run() { # py_run <label> <python-source>
+  local label="$1"
+  local source="$2"
+  local stderr_file
+  local status=0
+  stderr_file="$(mktemp)"
+  python3 -c "$source" </dev/null 2>"$stderr_file" || status=$?
+  if [[ "$status" -ne 0 ]]; then
+    printf '[v4.1.0-selftest] NOTE  %s: python3 fixture setup failed (exit=%s)\n' "$label" "$status" >&2
+    while IFS= read -r stderr_line; do
+      [[ -z "$stderr_line" ]] && continue
+      printf '[v4.1.0-selftest] NOTE  %s: python3 stderr: %s\n' "$label" "$stderr_line" >&2
+    done <"$stderr_file"
+  fi
+  rm -f "$stderr_file"
+  return "$status"
+}
+
 # ---- Test 1: ceiling string present in the modes registry ----------------
 if grep -qE '(^|[^_-])delivered_pending_activation' "$MODES"; then
   ok 1 "delivered_pending_activation ceiling string present in modes registry"
@@ -143,7 +164,7 @@ fi
 # ---- Test 5: G073 deliverableFiles[] semantics (direct logic test) --------
 # We test the in-guard manifest logic by extracting the inlined Python and
 # is_deliverable_file shell function shape via a focused python check.
-mf_test="$(python3 -c "
+mf_test="$(py_read test-5 "
 import json
 state={'deliverableFiles':['example-app/home-lab/apply.sh','example-app/home-lab/tests/**','docs/']}
 # Replicate the is_deliverable_file matching rules from state-transition-guard.sh
@@ -164,7 +185,9 @@ for f, want, why in checks:
     got=is_deliverable(f, state['deliverableFiles'])
     print(f'{\"OK\" if got==want else \"BAD\"}: {f} -> {got} ({why})')
 " 2>&1)"
-if echo "$mf_test" | grep -q '^BAD:'; then
+if [[ -z "$mf_test" ]]; then
+  ko 5 "deliverableFiles[] matching logic: the python check produced no output"
+elif echo "$mf_test" | grep -q '^BAD:'; then
   ko 5 "deliverableFiles[] matching logic: $mf_test"
 else
   ok 5 "deliverableFiles[] matching logic (exact/glob/prefix/denied all correct)"
@@ -172,11 +195,11 @@ fi
 
 # ---- Test 6: G090 manual runtime -> slo:skipped ---------------------------
 mkdir -p "$TMP/g090/.specify/memory" "$TMP/g090/specs/sample"
-python3 -c "
+py_run test-6 "
 import json
 json.dump({'executionRuntime':'manual'}, open('$TMP/g090/.specify/memory/bubbles.session.json','w'))
 json.dump({'status':'in_progress'}, open('$TMP/g090/specs/sample/state.json','w'))
-"
+" || true
 slo6="$(bash "$RCH" specs/sample --repo-root "$TMP/g090" --format json 2>/dev/null | jq -r '.convergenceHealth.slo' 2>/dev/null || echo PARSE_ERR)"
 if [[ "$slo6" == "skipped" ]]; then
   ok 6 "G090 executionRuntime=manual produces slo=skipped"
@@ -185,10 +208,10 @@ else
 fi
 
 # ---- Test 7: G090 goal-loop runtime -> slo:pass (not skipped) -------------
-python3 -c "
+py_run test-7 "
 import json
 json.dump({'executionRuntime':'goal-loop','runs':[{'specDir':'specs/sample','iterationCount':1}]}, open('$TMP/g090/.specify/memory/bubbles.session.json','w'))
-"
+" || true
 slo7="$(bash "$RCH" specs/sample --repo-root "$TMP/g090" --format json 2>/dev/null | jq -r '.convergenceHealth.slo' 2>/dev/null || echo PARSE_ERR)"
 if [[ "$slo7" == "pass" || "$slo7" == "degraded" || "$slo7" == "failed" ]]; then
   ok 7 "G090 executionRuntime=goal-loop bypasses skip (slo=$slo7)"
@@ -197,7 +220,7 @@ else
 fi
 
 # ---- Test 8: G022 phaseStubs merge ----------------------------------------
-ps_test="$(python3 -c "
+ps_test="$(py_read test-8 "
 state={'execution':{'phaseStubs':{'chaos':{'reason':'no SLA'},'stress':{'reason':'deploy-pointer kind'},'empty':{'reason':''}},'completedPhaseClaims':['implement','test']}}
 execution=(state.get('execution') or {})
 cp=execution.get('completedPhaseClaims') or []

@@ -248,6 +248,34 @@ docs_digest="$(printf '%s' "$docs_digest_material" | bubbles_sha256_stdin)"
 managed_file_count="${#managed_entries[@]}"
 source_only_file_count="${#source_only_entries[@]}"
 
+# Hash both inventories in one pass each (IMP-042 SCOPE-4). A short batch result
+# means the tool skipped an entry, which would silently pair a path with another
+# file's hash, so any count mismatch falls back to the per-file form rather than
+# emitting a manifest that looks well-formed and is wrong.
+hash_inventory() { # hash_inventory <result-array-name> <entry...>
+  local result_name="$1"
+  shift
+  local -a entries=("$@")
+  local -a hashes=()
+  local entry
+
+  if [[ "${#entries[@]}" -gt 0 ]]; then
+    mapfile -t hashes < <(printf '%s\n' "${entries[@]}" | bubbles_sha256_batch "$REPO_ROOT" | cut -f1)
+    if [[ "${#hashes[@]}" -ne "${#entries[@]}" ]]; then
+      hashes=()
+      for entry in "${entries[@]}"; do
+        hashes+=("$(bubbles_sha256_file "$REPO_ROOT/$entry")")
+      done
+    fi
+  fi
+  eval "$result_name=(\"\${hashes[@]}\")"
+}
+
+managed_checksums=()
+source_only_checksums=()
+hash_inventory managed_checksums ${managed_entries[@]+"${managed_entries[@]}"}
+hash_inventory source_only_checksums ${source_only_entries[@]+"${source_only_entries[@]}"}
+
 temp_output="$(mktemp)"
 trap 'rm -f "$temp_output"' EXIT
 
@@ -295,8 +323,7 @@ trap 'rm -f "$temp_output"' EXIT
   echo '  "managedFileChecksums": ['
   for idx in "${!managed_entries[@]}"; do
     entry="${managed_entries[$idx]}"
-    checksum_value="$(bubbles_sha256_file "$REPO_ROOT/$entry")"
-    printf '    {"path": "%s", "sha256": "%s"}' "$entry" "$checksum_value"
+    printf '    {"path": "%s", "sha256": "%s"}' "$entry" "${managed_checksums[$idx]}"
     if [[ "$idx" -lt $((managed_file_count - 1)) ]]; then
       echo ','
     else
@@ -308,8 +335,7 @@ trap 'rm -f "$temp_output"' EXIT
   echo '  "sourceOnlyFileChecksums": ['
   for idx in "${!source_only_entries[@]}"; do
     entry="${source_only_entries[$idx]}"
-    checksum_value="$(bubbles_sha256_file "$REPO_ROOT/$entry")"
-    printf '    {"path": "%s", "sha256": "%s"}' "$entry" "$checksum_value"
+    printf '    {"path": "%s", "sha256": "%s"}' "$entry" "${source_only_checksums[$idx]}"
     if [[ "$idx" -lt $((source_only_file_count - 1)) ]]; then
       echo ','
     else

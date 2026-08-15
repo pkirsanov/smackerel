@@ -7,4 +7,4 @@
 # To remove an entry, repoint the script at bubbles/registry/gates.yaml and
 # prove its output is byte-identical before and after.
 #
-bubbles/scripts/agent-ownership-lint.sh
+

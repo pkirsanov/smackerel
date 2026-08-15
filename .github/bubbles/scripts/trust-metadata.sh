@@ -25,6 +25,31 @@ bubbles_sha256_stdin() {
   bubbles_sha256_raw | awk '{print $1}'
 }
 
+# Batched sibling of bubbles_sha256_file() (IMP-042 SCOPE-4). Reads
+# newline-delimited paths relative to base_dir on stdin, emits
+# "<sha256>\t<relative-path>" in input order. The per-file form spawns two
+# processes per entry, which dominates a ~940-entry manifest generation, and the
+# manifest is generated or --check'd many times across one validation run.
+bubbles_sha256_batch() {
+  local base_dir="$1"
+  local sha_cmd
+
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha_cmd=sha256sum
+  elif command -v shasum >/dev/null 2>&1; then
+    sha_cmd='shasum -a 256'
+  else
+    return 1
+  fi
+
+  # Hashing from inside base_dir makes the tool report the relative path
+  # verbatim, so the emitted key matches the manifest entry exactly.
+  (
+    cd "$base_dir" 2>/dev/null || exit 0
+    tr '\n' '\0' | xargs -0 $sha_cmd 2>/dev/null
+  ) | awk '{ hash = $1; sub(/^[^ ]+[ ]+/, ""); print hash "\t" $0 }'
+}
+
 bubbles_current_timestamp() {
   date -u +"%Y-%m-%dT%H:%M:%SZ"
 }
@@ -341,10 +366,9 @@ bubbles_framework_manifest_entries() {
   bubbles_print_manifest_entry "$source_root" \
     "bubbles/eval/schemas/adversarial-sample.schema.json"
 
-  # v5.2.1 (F4 installer fix): bubbles/registry/gates.yaml is canonical for
-  # the workflows.yaml gates: block. Installed downstream so
-  # generate-gates-block.sh and gates-registry-selftest.sh have something
-  # to compare against.
+  # bubbles/registry/gates.yaml is the ONLY definition of a gate. Installed
+  # downstream so every gate reader resolves the same source the framework
+  # source repo uses.
   while IFS= read -r file_path; do
     [[ -f "$file_path" ]] || continue
     relative_path="${file_path#"$source_root"/}"

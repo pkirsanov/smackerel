@@ -222,10 +222,8 @@ then verified). Each line is the touchpoint; mirror an existing recent gate.
 
   [ ] bubbles/registry/gates.yaml
         add a '  ${GATE_ID}:' entry (name: ${GATE_NAME}, BLOCKING prose with
-        enforced-by/exits/selftest/regression), then regenerate the workflows
-        gates block:
-          bash bubbles/scripts/generate-gates-block.sh && \\
-          bash bubbles/scripts/generate-gates-block.sh --check
+        enforced-by/exits/selftest/regression). The registry is the ONLY gate
+        definition; there is no generated copy to regenerate.
   [ ] bubbles/scripts/guards/tail-delegated-gates.sh
         add a CHECK block that runs the guard in the feature repo (if delegated).
   [ ] bubbles/scripts/state-transition-guard.sh
