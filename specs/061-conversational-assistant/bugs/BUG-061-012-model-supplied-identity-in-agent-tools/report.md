@@ -1533,3 +1533,77 @@ identity anywhere in the call. The three together are the defect; none alone wou
 - It does not assert the fix size beyond the seven files named in the Change Boundary; that estimate
   is derived from the five `Invoke` call sites plus three tool files, and the implementing agent
   should treat it as a floor rather than a budget.
+
+## Framework Defect Resolved: Check 44 Plan Dependency Depth
+
+The second of the two blockers this packet was sitting behind was **not** a plan-shape finding
+against this packet. It was a defect in the framework guard itself, and it has now been fixed at
+source and propagated back into this repository. `state.json`'s `blockedReason` has been rewritten
+accordingly. The only blocker that remains is Gate G136, which needs the operator.
+
+### Root cause
+
+`plan-dependency-depth-guard.sh` resolved
+`(.scopeProgress // .certification.scopeProgress // [])` and then took `jq length` of the result
+with **no type check**. This packet's `certification.scopeProgress` is the counts-summary *object*
+`{"total":1,"done":1,"inProgress":0,"notStarted":0}`, and `jq length` on an object returns its
+**key count** — `4`, not `0`. The zero-length no-op therefore never fired. The guard went on to
+iterate and evaluate `.dependsOn` on what were actually numbers, jq raised a type error, and the
+script exited `5`. `state-transition-guard.sh` Check 44 converts any non-zero exit from that guard
+into a substantive verdict, so the crash was rendered as a confident **false** BLOCK claiming that
+every consumer-visible scope sat behind three or more foundation scopes — a claim that is not
+reachable in a packet holding exactly one scope.
+
+The fix type-checks first and no-ops unless the resolved `scopeProgress` is an array whose entries
+are all objects.
+
+### Real-artifact proof — old guard vs new guard, same input
+
+This is the strongest evidence available, because the input is the packet's own real artifact rather
+than a fixture: one `state.json`, run through the guard before and after the fix.
+
+```text
+# OLD — the pre-refresh copy of the installed plan-dependency-depth-guard.sh,
+# run against this packet's own state.json
+jq: error (at <stdin>:0): Cannot index number with string "dependsOn"
+exit=5
+
+# NEW — the fixed guard, same packet, same input
+[plan-dependency-depth-guard] scopeProgress is 'object', not the per-scope array — no-op (position guard covers this)
+exit=0
+```
+
+### Before / after on the state-transition guard
+
+```text
+BEFORE:  2 failure(s)    # G136 + Check 44 (the crash)
+AFTER:   1 failure(s)    # G136 only
+
+Check 44 now reports:
+✅ PASS: Plan dependency depth: no blocking horizontal-plan violation
+```
+
+### Commits
+
+| Repo | Commit | What landed |
+|---|---|---|
+| bubbles (source) | `450b2950` | Type-check in `plan-dependency-depth-guard.sh`, adversarial selftest cases `T12`–`T15`, regenerated `release-manifest.json` |
+| smackerel (this repo) | `d426c2e7` | Installer-driven framework refresh (`install.sh --local-source … --agents-only`) |
+
+The fix was made in the **source** repo and then installed, not hand-patched here, because
+`<repo-root>/.github/bubbles/` is an installed framework artifact that the next upgrade would
+revert. Before the install, 453 framework scripts were compared and exactly 2 differed; after the
+install, 0 differ.
+
+### Teeth — the new selftest cases would catch this regression
+
+Run against the **pre-fix** guard, `T12`, `T13` and `T14` each fail with exit `5` — the exact jq
+crash above — while `T15`, a real horizontal chain, still passes. That two-sided result is what
+makes the cases worth having: they detect the defect, and the fix did not blunt genuine detection.
+`shellcheck -x` is clean and the selftest is 15/15.
+
+### What was deliberately not done
+
+The packet's counts-object `scopeProgress` was **not** reshaped into a per-scope array to make the
+crash go away. That form is correct for a single-scope packet and `artifact-lint.sh` accepts it, so
+reshaping it would have been gaming a broken gate rather than fixing it.
