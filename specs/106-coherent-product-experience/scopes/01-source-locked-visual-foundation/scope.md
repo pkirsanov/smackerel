@@ -3,6 +3,7 @@
 Links: [spec.md](../../spec.md) | [design.md](../../design.md) | [scope index](../_index.md) | [report.md](report.md)
 
 **Status:** In Progress
+**DoD Progress:** 13 / 16 checked as of 2026-08-15 — 3 open: the `SCN-106-009` Core Outcome, the independent-canary-suite row, and the Build Quality Gate row (each carries an inline OPEN CLAUSES note naming exactly what is unproven).
 **Scope-Kind:** runtime-behavior
 **Tags:** foundation:true
 **Depends On:** -
@@ -62,27 +63,31 @@ Assets, manifest, CSP references, pre-paint code, and service-worker cache ident
 #### Core Outcomes
 
 - [ ] `SCN-106-009 Theme follows the user across renderers`: System, Light, Dark, Comfortable, and Compact resolve before first paint and remain coherent across server and PWA renderers while forced colors and reduced motion stay platform-controlled and no credential or business value enters appearance storage.
+  - OPEN CLAUSES (2026-08-15): the live `e2e-ui` spec exercises exactly one value, `v1:dark:compact`; **System, Light, and Comfortable** first-paint resolution is not demonstrated. No e2e-ui spec asserts **forced colors** or **reduced motion** (`grep -rnE 'forced-colors|prefers-reduced-motion' web/pwa/tests/` returns zero matches); the spec header asserts them in prose only. The legacy `localStorage['theme']` authority that can clobber the server-stamped `data-theme` remains routed to SCOPE-106-04/05 — see [report.md#session-2026-07-27-server-head-localstorage-blocked](report.md#session-2026-07-27-server-head-localstorage-blocked) and [report.md#session-2026-08-15-a-w-green](report.md#session-2026-08-15-a-w-green).
 - [x] One source-locked same-origin manifest and token source serves all renderers with explicit source, license, digest, CSP, and cache policy. → Evidence: [report.md#xp106-01-u](report.md#xp106-01-u) (per-asset real SHA-256/source/license/CSP-class/SW-cache-policy + semantic token source) and [report.md#build-quality](report.md#build-quality).
-- [ ] Typography, icons, controls, stable dimensions, no-overlap, no-nested-card, contrast, forced-colors, and reduced-motion contracts are mechanically enforceable.
+- [x] Typography, icons, controls, stable dimensions, no-overlap, no-nested-card, contrast, forced-colors, and reduced-motion contracts are mechanically enforceable. → Evidence: [report.md#contracts-mechanically-enforceable](report.md#contracts-mechanically-enforceable) (commit `b41c360b`: one exported checker per clause plus an adversarial case per rule, aggregated by `CheckExperienceContracts()` against the real embedded token source and every embedded PWA document; unit lane exit 0).
 - [x] Independent canaries and the immutable rollback unit protect every high-fan-out consumer before renderer migration. → Evidence: [report.md#xp106-01-c](report.md#xp106-01-c) (4 shared-infrastructure canaries green) and [report.md#xp106-01-r](report.md#xp106-01-r) (immutable rollback pointer).
 
 #### Test Evidence - 6 Rows / 6 Items
 
 - [x] XP106-01-U passes with current-session evidence → Evidence: [report.md#xp106-01-u](report.md#xp106-01-u).
 - [x] XP106-01-I passes with current-session evidence → Evidence: [report.md#xp106-01-i](report.md#xp106-01-i).
-- [ ] XP106-01-A passes with current-session evidence in `report.md#xp106-01-a`.
-- [ ] XP106-01-W passes without interception or auth injection in `report.md#xp106-01-w`.
+- [x] XP106-01-A passes with current-session evidence in `report.md#xp106-01-a`. → Evidence: [report.md#xp106-01-a](report.md#xp106-01-a) (exit 0).
+- [x] XP106-01-W passes without interception or auth injection in `report.md#xp106-01-w`. → Evidence: [report.md#xp106-01-w](report.md#xp106-01-w) (exit 0; interception scan on the spec returns empty).
 - [x] XP106-01-C passes every independent shared-infrastructure canary → Evidence: [report.md#xp106-01-c](report.md#xp106-01-c).
 - [x] XP106-01-R passes with current-session evidence → Evidence: [report.md#xp106-01-r](report.md#xp106-01-r).
 
 #### Shared-Infrastructure And Regression Planning
 
-- [ ] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior in this foundation (asset serving, digest identity, network-only protected routes) exist and pass — see `report.md#xp106-01-a`.
-- [ ] Broader E2E regression suite passes with no foundation-induced regression across the shared renderers — see `report.md#xp106-01-w`.
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior in this foundation (asset serving, digest identity, network-only protected routes) exist and pass — see `report.md#xp106-01-a`. → Evidence: [report.md#xp106-01-a](report.md#xp106-01-a).
+- [x] Broader E2E regression suite passes with no foundation-induced regression across the shared renderers — see `report.md#xp106-01-w`. → Evidence: [report.md#xp106-01-w](report.md#xp106-01-w) (whole `e2e-ui` lane 68 passed exit 0; every `tests/e2e/*` package green).
 - [ ] Independent canary suite for shared fixture/bootstrap contracts passes before broad suite reruns (native Search, HTMX read, HTMX mutation, PWA auth, Card PRG, service-worker isolation) — see `report.md#xp106-01-c`.
+  - OPEN CLAUSES (2026-08-15): the current-session `e2e-ui` capture itemizes only the two `coherent_appearance.spec.ts` lines plus the `68 passed` summary — `coherent_foundation_canary.spec.ts` results are not itemized, and the **"before broad suite reruns"** ordering clause has no captured evidence. [report.md#xp106-01-c](report.md#xp106-01-c) records four canaries; the spec now carries five named canaries.
 - [x] Rollback or restore path for shared infrastructure changes is documented and verified (immutable asset/manifest/CSP/service-worker-identity pointer swap) → Evidence: [report.md#xp106-01-r](report.md#xp106-01-r).
 
 #### Build Quality Gate
 
 - [ ] Source locking, trusted-source allowlist, license inventory, CSP, service-worker safety, no-hardcoded-token, no-nested-card, contrast, check, lint, format, artifact lint, traceability, rollback, and directly affected security/design documentation checks pass with zero warnings.
+  - PROVEN (2026-08-15): `check`, `lint`, `format`, `artifact lint`, and `traceability` all exit 0, and the `no-nested-card` + `contrast` + `no-hardcoded-token` clauses are mechanically enforced — see [report.md#build-quality-2026-08-15](report.md#build-quality-2026-08-15) and [report.md#contracts-mechanically-enforceable](report.md#contracts-mechanically-enforceable).
+  - OPEN CLAUSES: **license inventory**, **trusted-source allowlist**, **CSP**, **service-worker safety**, **rollback**, and **directly affected security/design documentation** have no current-session evidence. A partially-proven row stays open; the row is NOT narrowed to the proven subset.
 - [x] Change Boundary is respected and zero excluded file families were changed → Evidence: [report.md#change-boundary](report.md#change-boundary) (git-scoped change set: every changed file maps to an Allowed file family; zero Excluded surfaces touched).

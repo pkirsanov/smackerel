@@ -943,3 +943,174 @@ PII_SCAN_EXIT=0
   CSP-hash-coupled and boundary-blocked to SCOPE-106-04/05 (see the prior session above).
   `SCN-106-009` and every DoD checkbox in `scope.md` remain `[ ]`. `state.json` unchanged.
   This session records first-paint-stamping verification evidence ONLY.
+
+## <a id="session-2026-08-15-a-w-green"></a>Session 2026-08-15 — XP106-01-A and XP106-01-W GREEN (current session)
+
+This session is **evidence recording only**. No Go, TypeScript, or CSS source was changed
+while recording it; the mechanical contract checker referenced below landed earlier in
+commit `b41c360b`. All commands ran from `<repo-root>`.
+
+This section **supersedes the earlier RED readings** for two rows — Lane 4
+(`XP106-01-A **FAIL (RED)**, honest out-of-boundary block`) and Lane 5
+(`XP106-01-W honest cutover-only RED`). The head-adapter wiring those sessions routed has
+since landed, and both rows now run green on the disposable live stack.
+
+### XP106-01-A
+
+**XP106-01-A (regression E2E, `e2e-api`) — PASS, exit 0, current session.**
+
+**Claim Source:** executed
+**Command:** `./smackerel.sh test e2e --go-run 'TestExperienceAssetsExposeImmutableHeadersExactDigestsAndNetworkOnlyProtectedRoutes'`
+**Exit Code:** 0
+**Surface:** `tests/e2e/experience_assets_e2e_test.go:40` →
+`func TestExperienceAssetsExposeImmutableHeadersExactDigestsAndNetworkOnlyProtectedRoutes`
+
+The test name is the scenario-specific regression contract itself: immutable headers,
+**exact digests**, and **network-only protected routes** — i.e. asset serving, digest
+identity, and protected-route isolation are each asserted by the named test that ran green.
+
+```text
+go-e2e: applying -run selector: TestExperienceAssetsExposeImmutableHeadersExactDigestsAndNetworkOnlyProtectedRoutes
+=== RUN   TestExperienceAssetsExposeImmutableHeadersExactDigestsAndNetworkOnlyProtectedRoutes
+--- PASS: TestExperienceAssetsExposeImmutableHeadersExactDigestsAndNetworkOnlyProtectedRoutes (0.04s)
+PASS
+ok      github.com/smackerel/smackerel/tests/e2e        0.182s
+PASS
+ok      github.com/smackerel/smackerel/tests/e2e/admin  0.007s [no tests to run]
+PASS
+ok      github.com/smackerel/smackerel/tests/e2e/agent  0.160s [no tests to run]
+PASS
+ok      github.com/smackerel/smackerel/tests/e2e/auth   0.147s [no tests to run]
+PASS
+ok      github.com/smackerel/smackerel/tests/e2e/foundation     0.021s [no tests to run]
+PASS
+ok      github.com/smackerel/smackerel/tests/e2e/wiki   0.006s [no tests to run]
+PASS: go-e2e
+=== XP106_01_A_EXIT=0 ===
+```
+
+### XP106-01-W
+
+**XP106-01-W (E2E UI regression, `e2e-ui`) — PASS, exit 0, current session, live-stack authentic.**
+
+**Claim Source:** executed
+**Command:** `./smackerel.sh test e2e-ui`
+**Exit Code:** 0
+**Surface:** `web/pwa/tests/coherent_appearance.spec.ts` (both tests: `:33` and `:63`)
+
+```text
+  ✓  31 coherent_appearance.spec.ts:33:1 › source-locked pre-paint assets are served same-origin and cookie-only (389ms)
+  ✓  34 coherent_appearance.spec.ts:63:1 › appearance applies before first paint across server, PWA, and Card shells (943ms)
+  68 passed (27.4s)
+=== XP106_01_W_EXIT=0 ===
+```
+
+**Live-stack authenticity (no interception, no auth injection).** The interception scan on
+that spec returns EMPTY, re-verified this session:
+
+```text
+$ grep -nE 'page\.route|context\.route|intercept\(|msw|nock' web/pwa/tests/coherent_appearance.spec.ts
+SCAN_EXIT=1 (1 = no matches = clean)
+```
+
+The `68 passed` / exit 0 result is the whole `e2e-ui` lane, so the broader UI regression
+suite carries no foundation-induced regression across the shared renderers, and the
+`test e2e` lane above is green across every `tests/e2e/*` package.
+
+### <a id="contracts-mechanically-enforceable"></a>Mechanical enforceability of the shared visual contracts (commit `b41c360b`)
+
+**Claim Source:** executed (unit lane) + verified commit inspection.
+
+```text
+$ git show --stat --oneline b41c360b
+b41c360b feat(106-01): make the shared visual contracts mechanically enforceable
+ internal/web/experience_contracts.go      | 837 ++++++++++++++++++++++++++++++
+ internal/web/experience_contracts_test.go | 307 +++++++++++
+ web/pwa/experience-tokens.css             |  61 +++
+ 3 files changed, 1205 insertions(+)
+```
+
+Every clause named by the DoD row has an exported checker **and** at least one adversarial
+case that fails if the rule is removed:
+
+| Contract clause | Checker in `internal/web/experience_contracts.go` | Adversarial cases |
+|---|---|---|
+| Typography | `CheckTypographyContract` | viewport-scaled font, negative letter-spacing, below readable floor |
+| Icons (icon-only controls) | `CheckIconOnlyControlContract` | no accessible name, no tooltip, empty `aria-label` |
+| Controls (target size) | `CheckControlTargetContract` | target below coarse-pointer minimum, no icon-only geometry |
+| Stable dimensions | `CheckStableDimensionContract` | font-relative shell rail, missing required token |
+| No overlap | `CheckNoOverlapContract` | negative margin, fixed height cannot grow, unannotated `overflow:hidden` |
+| No nested card | `CheckNoNestedCardContract` | card inside card, card inside card via wrapper, card-styled landmark |
+| Contrast | `CheckContrastContract` | light body text too close to background, dark-theme regression judged independently, focus ring below non-text minimum, role the dark block forgot to override |
+| Forced colors | `CheckForcedColorsContract` | no `forced-colors` block, `forced-color-adjust: none`, literal color inside `forced-colors` |
+| Reduced motion | `CheckReducedMotionContract` | no `reduce` block, `reduce` block leaves motion running, `reduce` block forgets a declared token |
+
+The aggregate `CheckExperienceContracts()` is wired to the **real** surfaces, not fixtures:
+it reads the embedded semantic token source `experience-tokens.css` from `pwa.StaticFiles`
+for the CSS-expressed contracts, and globs **every** embedded PWA `*.html` document for the
+markup-expressed contracts, returning an error when a required surface is absent (an
+unmeasured contract is treated as unsatisfied, not as a pass).
+`TestExperienceContractsAreMechanicallyEnforcedOnTheRealSurfaces` executes that aggregate.
+
+Unit lane excerpt as captured this session (the pasted excerpt records the package result
+line and the exit code; the exact invocation flags were not part of the captured excerpt):
+
+```text
+ok      github.com/smackerel/smackerel/internal/web     0.436s
+UNIT_EXIT=0
+```
+
+### <a id="build-quality-2026-08-15"></a>Build Quality lanes — current session (partial, see open clauses)
+
+**Claim Source:** executed. Each lane below exited 0.
+
+```text
+=== check ===
+env_file drift guard: OK
+scenario-lint: scanning config/prompt_contracts (glob: *.yaml)
+scenarios registered: 17, rejected: 0
+scenario-lint: OK
+CHECK=0
+=== lint ===
+  OK: Extension versions match (1.0.0)
+Web validation passed
+LINT=0
+=== format ===
+78 files already formatted
+FMT=0
+=== traceability ===
+ℹ️  Edge confidence (IMP-015 Scope B): declared=44 inferred=1 ambiguous=13
+RESULT: PASSED (0 warnings)
+TRACE=0
+=== artifact lint ===
+Artifact lint PASSED.
+LINT_EXIT=0
+```
+
+**This does NOT close the Build Quality Gate DoD row.** That row enumerates further
+clauses for which this session captured no evidence — see the open-clause note in
+`scope.md`. The row stays `[ ]`.
+
+### Verdict for this session
+
+- **Checked this session (5 rows):** the typography/icons/controls/stable-dimensions/
+  no-overlap/no-nested-card/contrast/forced-colors/reduced-motion mechanical-enforceability
+  Core Outcome, `XP106-01-A`, `XP106-01-W`, the scenario-specific E2E regression row, and
+  the broader E2E regression row.
+- **Left open — `SCN-106-009` Core Outcome.** The row claims **System, Light, Dark,
+  Comfortable, and Compact** resolve before first paint and that forced colors and reduced
+  motion stay platform-controlled. The live spec sets exactly one cookie value,
+  `v1:dark:compact`, and asserts `data-theme="dark"` / `data-density="compact"`; it does not
+  exercise System, Light, or Comfortable, and a grep for `forced-colors` /
+  `prefers-reduced-motion` across `web/pwa/tests/` returns **zero** matches, so no e2e-ui
+  assertion covers those two clauses. The spec's own header comment asserts them in prose,
+  which is not evidence. The localStorage-authority half recorded in the 2026-07-27 session
+  above also remains routed to SCOPE-106-04/05. Claim is broader than the evidence — the row
+  is NOT narrowed to fit, it stays `[ ]`.
+- **Left open — independent canary suite row.** The captured `e2e-ui` output itemizes only
+  the two `coherent_appearance.spec.ts` lines plus the `68 passed` summary; it does not
+  itemize `coherent_foundation_canary.spec.ts` results, and the row's ordering clause
+  ("before broad suite reruns") has no captured evidence. The existing `#xp106-01-c` section
+  records four canaries while the spec now carries five named canaries. Stays `[ ]`.
+- **Left open — Build Quality Gate row.** See the open-clause note in `scope.md`.
+- `state.json` unchanged by this session.
