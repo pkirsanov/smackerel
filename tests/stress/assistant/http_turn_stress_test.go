@@ -35,6 +35,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"runtime"
 	"sort"
 	"strconv"
 	"sync"
@@ -115,7 +116,16 @@ func TestAssistantHTTPStress_PerUserRateLimitAndConversationTTLRemainStable(t *t
 		}
 	}
 	users := httpStressDefaultUsers
+	// Bound SELF-INFLICTED oversubscription. stressFacade.Handle is
+	// constant-time behind one global mutex, so this measured region is
+	// CPU-bound; running more workers than schedulable cores turns each
+	// wall-clock sample into a run-queue measurement rather than the
+	// transport overhead this budget targets. Same defect class already
+	// fixed in openknowledge_p95_test.go and assistant_facade_p95_test.go.
 	workers := httpStressDefaultWorkers
+	if p := runtime.GOMAXPROCS(0); p < workers {
+		workers = p
+	}
 	burstPerUser := turns / users // every user posts this many turns
 
 	facade := newStressFacade()
