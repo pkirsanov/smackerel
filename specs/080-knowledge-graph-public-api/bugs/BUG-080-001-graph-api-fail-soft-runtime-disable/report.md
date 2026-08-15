@@ -3246,3 +3246,134 @@ report.md#t080-08-unit; SCOPE-04 `Status` corrected from the stale `Blocked` to
 claim text was reworded.** No product source file, no test file, no `state.json`,
 no other spec, and nothing under `docs/` was modified in this invocation.
 
+<a id="scope-04-integration-gap"></a>
+
+### OPEN INTEGRATION GAP — `internal/graphreadstate` has no production consumer
+
+**Status: OPEN. This is not a completed item and closes no DoD row.** It is
+recorded so the gap is written down rather than left implicit: a package with
+tests and no caller is indistinguishable from dead code on a later audit, and
+this repo's integration-completeness expectation is that an implemented artifact
+is wired into the running system with at least one real consumer.
+
+Commit `a1824d63` (*"feat(BUG-080-001 SCOPE-04): one typed graph read-state
+projection, adversarially proven"*) landed the SCOPE-04 foundation slice —
+`internal/graphreadstate/state.go`, the `internal/graphsynthetic/projection.go`
+seam, and `web/pwa/tests/graph_activation_state_test.go` (855 insertions across
+4 files, `docs/Development.md` being the fourth). That work is real, tested, and
+adversarially proven; see [T080-08-UNIT](#t080-08-unit). **What it does not yet
+have is a caller.**
+
+**Re-verified in this session.** The consumer scan was re-run against the current
+tree rather than restated from the prior invocation, and the `KnowledgeDashboard`
+handler was re-read on disk before this section was written.
+
+```
+$ grep -rn 'graphreadstate' --include='*.go' internal/ cmd/ \
+    | grep -v _test.go | grep -v '^internal/graphreadstate/'
+GREP_EXIT=1
+```
+
+Exit `1` is grep's no-match exit and the output was empty. Widening the same scan
+to the whole tree returns matches in exactly two places: the package's own
+`internal/graphreadstate/state.go`, and `web/pwa/tests/graph_activation_state_test.go`
+(the `ui-unit` test that proves it). `ls internal/graphreadstate/` shows a single
+file, `state.go` — there is not even an in-package test. So `Project()` is invoked
+from a test and from nowhere else.
+
+#### 1. Why there is no consumer yet — sequencing, not oversight
+
+Implementation-plan item 1 (`scopes.md:394`) names three intended consumers:
+*"consumed by Wiki Browse, Graph availability, and readiness"*. Their states
+differ, and that difference is the whole explanation.
+
+- **readiness — already satisfied, and correctly does NOT call `Project`.**
+  `internal/api/graph_readiness.go` consumes `graphsynthetic.AggregateResult`
+  directly: it declares `var _ graphsynthetic.Observer = (*GraphReadiness)(nil)`
+  (line 137), takes the aggregate in `func (g *GraphReadiness) Publish(result
+  graphsynthetic.AggregateResult) error` (line 168), and receives it again via
+  `ObserveAggregate(result graphsynthetic.AggregateResult)` (line 206). It is
+  handed an **already-reduced** aggregate, so it sits *downstream* of the single
+  reducer. Adding a `Project` call there would introduce a second reduction, which
+  is precisely what item 1 forbids.
+- **Wiki Browse / Graph availability — the genuine consumer, and it does not exist
+  yet.** This is the surface that would hold RAW per-family observations and
+  therefore actually needs `Project`. There is no PWA graph-activation view:
+  `ls web/pwa/` shows no graph-activation page, `web/pwa/wiki.html` mentions the
+  knowledge graph only in a subtitle (line 18, `Browse your knowledge graph:
+  topics, people, places, and time.`), and the Test-Plan-named
+  `web/pwa/tests/graph-activation.spec.ts` is absent from disk. The existing
+  `go-e2e-graph-disabled` lane proves the disabled contract at the **API** level —
+  `tests/e2e/graph_api_activation_e2e_test.go` asserts against `/api/topics`,
+  `/api/topics/`, `/api/topics/does-not-exist`, and `/api/graph/edges` — not
+  against any UI.
+
+So the decoder landed ahead of the only surface that structurally requires it.
+
+#### 2. A real pre-existing defect of the same class, found while looking for a wiring point
+
+`internal/web/handler.go:997` `KnowledgeDashboard` (routed at
+`internal/api/router.go:522`, `r.Get("/knowledge", deps.WebHandler.KnowledgeDashboard)`)
+derives its state by inference and funnels three DISTINCT conditions into the same
+`"Empty"` template key. Re-read on disk this session:
+
+```go
+if h.KnowledgeStore == nil {
+        ... "Empty": "Knowledge layer is not enabled."
+}
+stats, err := h.KnowledgeStore.GetStats(r.Context())
+if err != nil {
+        slog.Error("knowledge stats failed", "error", err)
+        ... "Empty": "Unable to load knowledge dashboard. Check system status."
+}
+if stats.ConceptCount == 0 && stats.EntityCount == 0 {
+        ... "Empty": "No knowledge synthesized yet. Connect sources and ingest content ..."
+}
+```
+
+A store **error** and a genuinely **empty** knowledge layer are rendered through
+the same key, and emptiness is inferred from a **count**. That is the shape
+implementation-plan item 1 exists to eliminate — *"projections must not infer
+state from HTTP code or `items.length` independently."*
+
+**Stated honestly, and not overstated:** this handler reads `h.KnowledgeStore`, a
+**different data source** from the graph family reads that `Project` consumes. It
+is therefore a *related instance of the same defect class*, **not** a ready-made
+wiring target. Converting it is a design decision belonging to the UI slice, not
+a mechanical drop-in, and this section makes no claim that it is one.
+
+#### 3. What the remaining SCOPE-04 slice actually requires
+
+The four `e2e-ui` rows — `T080-04-UI`, `T080-05-UI`, `T080-06-UI`, `T080-08-A11Y`
+(`scopes.md:426-429`, all four still `[ ]` at `scopes.md:448-451`) — need three
+things, in this order:
+
+- **(a)** a PWA graph-activation surface that renders the closed exclusive states;
+- **(b)** that surface consuming `graphreadstate.Project` so it structurally cannot
+  re-infer state from HTTP code or row count;
+- **(c)** real-stack Playwright fixtures for the ten backend states **without**
+  request interception.
+
+**(c) needs nothing invented.** The fixture mechanism already exists and is proven
+in-tree: `SMACKEREL_COMPOSE_OVERRIDE_FILE` (resolved by
+`scripts/lib/runtime.sh:142-147`, exported by `smackerel.sh:2326`) layers a compose
+override onto a fresh project-scoped ephemeral `test` stack. That is exactly how
+`docker-compose.graph-disabled.override.yml` induces a **real** disabled backend
+for the `go-e2e-graph-disabled` lane today, by setting
+`KNOWLEDGE_GRAPH_API_CURSOR_SECRET` to an explicit empty value on `smackerel-core`.
+The remaining states can follow the same pattern.
+
+#### 4. The risk, stated plainly
+
+Until **(b)** lands, `internal/graphreadstate` is **correct, tested, and unused**.
+It must either gain its consumer in the UI slice, or be removed. It must not be
+left indefinitely as a tested library with no caller — that is the state an audit
+cannot distinguish from dead code, and it is the reason this gap is recorded here
+instead of being carried as tribal knowledge.
+
+#### Change surface for this entry
+
+`report.md` (this section) **only**. No DoD row was checked or unchecked, no scope
+`Status` was changed, and `scopes.md`, `state.json`, every other spec, all product
+source, all tests, and everything under `docs/` were left untouched.
+
