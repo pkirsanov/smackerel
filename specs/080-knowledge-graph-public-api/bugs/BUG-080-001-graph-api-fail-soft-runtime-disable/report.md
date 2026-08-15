@@ -2641,3 +2641,227 @@ product source file, and no `state.json` was modified in this invocation. The
 bug top-level `status` and `certification.status` remain `blocked` — SCOPE-04 is
 open.
 
+---
+
+## SCOPE-03 Aggregate-Refusal Closure — `SCN-080-001-03` (2026-08-15)
+
+Closes the last open SCOPE-03 **Core Outcome**, `SCN-080-001-03`, by **building
+the missing proof** rather than by narrowing the claim. The claim text is
+byte-unchanged.
+
+The Build Quality Gate row remains `[ ]` — its broad-regression E2E evidence is
+still in flight and closes separately. **SCOPE-03 therefore moves to 13/14 and
+stays `In Progress`, not `Done`**, and the bug top-level `status` and
+`certification.status` remain `blocked` because SCOPE-04 is still open.
+`state.json` was not modified in this invocation.
+
+<a id="scn-080-001-03-refusal"></a>
+
+### SCN-080-001-03 — aggregate refusal across all seven outcome classes
+
+#### Why this row was open: *reportable* is not *refused*
+
+The row makes two claims joined by "plus". Its **first** half — the synthetic
+executes its fixed family sequence and emits one value-safe row per required
+family plus one aggregate — was already proven by report.md#t080-03-synth and
+report.md#t080-03-stress (160/160 runs, 1280 family reads, canonical order
+enforced by `Aggregate.Validate()`).
+
+Its **second** half — that acceptance **fails** for any `401, 403, 404, 5xx,
+schema, cursor, or missing-row` outcome — was proven only for the auth pair. The
+`T080-03-SYNTH` rejection arm swaps **only** the credential and asserts
+`unavailable` with a real 401/403 family row, covering `401` and `403`.
+
+The remaining five classes had evidence that looked adjacent but was not the same
+claim. report.md#t080-03-trace does drive `CodeRouteAbsent`, `CodeServerError`,
+`CodeSchemaInvalid`, `CodeCursorInvalid`, and `CodeRowMissing` — but it feeds
+them to the telemetry observer as **inputs**, to prove the observability
+vocabulary is closed and content-free. That proves those codes are
+**reportable**. It does not prove that an aggregate **carrying** one is
+**refused**. Accepting the telemetry proof as an acceptance proof would be
+exactly the substitution this packet forbids, so the row stayed `[ ]` until the
+refusal itself was demonstrated.
+
+#### What was built — two layers, no internal mocks
+
+Commit `b1b1ca5f` adds two test files (600 insertions) to
+`internal/graphsynthetic`, a package that previously carried **zero** tests:
+
+| Layer | File | What it drives |
+|---|---|---|
+| Pure contract | `internal/graphsynthetic/result_aggregate_refusal_test.go` | Sweeps all 7 failure classes across **every** required family and asserts the aggregate is refused: `Available()==false`, `State==AggregateUnavailable`, and `Code` is the **failing family's own** code, so the specific cause propagates rather than being flattened. Also asserts a refusal still satisfies `Validate()` — a refusal stays a contract-valid closed-vocabulary result. Adds the missing-required-family case (`CodeFamilyMissing`), the optional-family degrade path, and a positive control where all families are populated/true-empty and the aggregate **is** available with `CodeOK`. |
+| Transport | `internal/graphsynthetic/synthetic_http_outcome_test.go` | Drives `Synthetic.Run` against an `httptest` server returning 401, 403, 404, 5xx and an undecodable body, asserting the family row carries the matching code **and** the aggregate is refused. |
+
+Structural properties verified in-tree this session rather than asserted:
+
+```
+$ grep -c 'RequiredGraphFamilies' internal/graphsynthetic/result_aggregate_refusal_test.go internal/graphsynthetic/synthetic_http_outcome_test.go
+internal/graphsynthetic/result_aggregate_refusal_test.go:10
+internal/graphsynthetic/synthetic_http_outcome_test.go:4
+
+$ grep -c 'anti-vacuity' internal/graphsynthetic/result_aggregate_refusal_test.go internal/graphsynthetic/synthetic_http_outcome_test.go
+internal/graphsynthetic/result_aggregate_refusal_test.go:12
+internal/graphsynthetic/synthetic_http_outcome_test.go:7
+```
+
+The family list is **derived** from `graphapi.RequiredGraphFamilies()` at all 14
+call sites — never hardcoded — so a family added to the product manifest is swept
+automatically instead of silently escaping the sweep. **19** anti-vacuity guards
+(12 + 7) assert real work happened before anything is asserted about it.
+
+All seven classes are present as named subtests in the pure layer
+(`401_unauthenticated`, `403_forbidden`, `404_route_absent`, `5xx_server_error`,
+`schema_invalid`, `cursor_invalid`, `row_missing`); the transport layer carries
+the same set with the schema class split into
+`schema_invalid_undecodable_body` and `schema_invalid_contract_invalid_body`.
+
+#### Executed result — implementing turn
+
+**Command:** `./smackerel.sh test unit --go --go-run 'TestAggregateRefuses|TestAggregateAvailable|TestAggregateDegrades|TestGraphSyntheticHTTP'`
+**Exit code:** `0`
+
+```
+./smackerel.sh test unit --go --go-run 'TestAggregateRefuses|TestAggregateAvailable|TestAggregateDegrades|TestGraphSyntheticHTTP'
+[go-unit] applying -run selector: TestAggregateRefuses|TestAggregateAvailable|TestAggregateDegrades|TestGraphSyntheticHTTP
+ok      github.com/smackerel/smackerel/internal/graphsynthetic  0.188s
+=== UNIT_EXIT=0 ===
+```
+
+#### Executed result — independent re-run (recording turn, same command)
+
+The recording turn re-executed the identical selector through the repo CLI rather
+than restating the block above, so the green state is confirmed against the
+committed tree by a second, separate execution:
+
+```
+$ ./smackerel.sh test unit --go --go-run 'TestAggregateRefuses|TestAggregateAvailable|TestAggregateDegrades|TestGraphSyntheticHTTP'
+[go-unit] applying -run selector: TestAggregateRefuses|TestAggregateAvailable|TestAggregateDegrades|TestGraphSyntheticHTTP
+[go-unit] starting go test ./...
+ok      github.com/smackerel/smackerel/internal/graphsynthetic  0.136s
+=== UNIT_EXIT=0 ===
+```
+
+Zero `FAIL` lines across the whole capture (`grep -c '^FAIL\|--- FAIL'` = `0`).
+The differing package time (`0.136s` vs `0.188s`) is ordinary run-to-run
+variance and is left as captured rather than harmonised.
+
+#### Adversarial proof — the load-bearing part
+
+A green suite proves the assertions run; it does not prove they would **catch**
+the defect. The refusal in `internal/graphsynthetic/result.go` was therefore
+temporarily weakened to `continue` (three lines), with `row`, `optional`,
+`degraded` and the `slices` import all deliberately left live so the package
+still **compiled** — the failures below are genuine **assertion** failures, not a
+compile error masquerading as detection.
+
+The suite then failed on all **7 classes × 8 families = 56 combinations**. Raw,
+verbatim:
+
+```
+--- FAIL: TestAggregateRefusesRequiredFamilyFailure (0.01s)
+    --- FAIL: TestAggregateRefusesRequiredFamilyFailure/401_unauthenticated/topics (0.00s)
+        result_aggregate_refusal_test.go:96: Available() = true after REQUIRED family "topics" failed with F080-SYNTH-UNAUTHENTICATED; a failed required family MUST refuse the aggregate
+    --- FAIL: TestAggregateRefusesRequiredFamilyFailure/403_forbidden/edges (0.00s)
+        result_aggregate_refusal_test.go:96: Available() = true after REQUIRED family "edges" failed with F080-SYNTH-FORBIDDEN; a failed required family MUST refuse the aggregate
+    --- FAIL: TestAggregateRefusesRequiredFamilyFailure/404_route_absent/places (0.00s)
+        result_aggregate_refusal_test.go:96: Available() = true after REQUIRED family "places" failed with F080-SYNTH-ROUTE-ABSENT; a failed required family MUST refuse the aggregate
+    --- FAIL: TestAggregateRefusesRequiredFamilyFailure/5xx_server_error/person_detail (0.00s)
+        result_aggregate_refusal_test.go:96: Available() = true after REQUIRED family "person_detail" failed with F080-SYNTH-SERVER-ERROR; a failed required family MUST refuse the aggregate
+    --- FAIL: TestAggregateRefusesRequiredFamilyFailure/schema_invalid/place_detail (0.00s)
+        result_aggregate_refusal_test.go:96: Available() = true after REQUIRED family "place_detail" failed with F080-SYNTH-SCHEMA-INVALID; a failed required family MUST refuse the aggregate
+    --- FAIL: TestAggregateRefusesRequiredFamilyFailure/row_missing/time (0.00s)
+        result_aggregate_refusal_test.go:96: Available() = true after REQUIRED family "time" failed with F080-SYNTH-ROW-MISSING; a failed required family MUST refuse the aggregate
+    result_aggregate_refusal_test.go:118: anti-vacuity: 0 of 56 refusal combinations executed; the sweep did not assert what it claims
+--- FAIL: TestGraphSyntheticHTTPOutcomeRefusesAggregate (0.30s)
+    --- FAIL: TestGraphSyntheticHTTPOutcomeRefusesAggregate/401_unauthenticated (0.04s)
+        synthetic_http_outcome_test.go:264: Available() = true after required family "topics" failed with F080-SYNTH-UNAUTHENTICATED; the aggregate MUST be refused
+```
+
+All seven classes were exercised under the weakened product code:
+`401_unauthenticated`, `403_forbidden`, `404_route_absent`, `5xx_server_error`,
+`schema_invalid`, `cursor_invalid`, `row_missing`.
+
+Two properties make this a real RED rather than a harness artifact:
+
+- **The failure message names the defect, not a generic mismatch.**
+  `Available() = true after REQUIRED family "topics" failed with
+  F080-SYNTH-UNAUTHENTICATED` is precisely the condition the row claims cannot
+  happen, and it is reported per (class, family) pair — so a partial regression
+  affecting one family would still be named.
+- **Both layers failed.** The pure contract layer and the transport layer are
+  independent paths into the same invariant; a defect that only one could see
+  would be a weaker proof than one both catch.
+
+#### Revert verification — checked against git, not assumed
+
+`result.go` was restored and the restoration was verified against the object
+store rather than by inspection. Recording turn, from `<repo-root>`:
+
+```
+$ git diff --stat -- internal/graphsynthetic/result.go
+(no output = byte-identical to committed state)
+
+$ git status --porcelain          # internal/graphsynthetic/ entries only
+(none)
+```
+
+Stated precisely, because the distinction matters: the whole-repo
+`git status --porcelain` is **not** empty at recording time — it carries
+modifications under `docs/releases/`, `specs/003-*`, `specs/061-*`,
+`specs/069-*`, and `specs/_ops/*` that belong to **concurrent sessions** and were
+not touched here. What is verified is the narrower and sufficient claim: **no
+file under `internal/graphsynthetic/` is modified**, and `result.go` diffs empty
+against `HEAD` (`b1b1ca5f`). The adversarial weakening left no residue in the
+product code the suite runs against.
+
+#### Supporting gates (implementing turn)
+
+- `./smackerel.sh lint` — exit `0` (`Web validation passed`)
+- `./smackerel.sh format --check` — exit `0` (`78 files already formatted`)
+
+#### What this closes
+
+The row's second half now has executed evidence for **every** enumerated class,
+sourced from the refusal path itself rather than from the telemetry vocabulary:
+
+| Outcome class | Refusal proven | Code asserted on the family row |
+|---|---|---|
+| `401` | pure + transport | `F080-SYNTH-UNAUTHENTICATED` |
+| `403` | pure + transport | `F080-SYNTH-FORBIDDEN` |
+| `404` | pure + transport | `F080-SYNTH-ROUTE-ABSENT` |
+| `5xx` | pure + transport | `F080-SYNTH-SERVER-ERROR` |
+| `schema` | pure + transport | `F080-SYNTH-SCHEMA-INVALID` |
+| `cursor` | pure + transport | `F080-SYNTH-CURSOR-INVALID` |
+| `missing-row` | pure + transport | `F080-SYNTH-ROW-MISSING` |
+
+In each case the aggregate reports `Available()==false` with
+`State==AggregateUnavailable`, and `Code` is the failing family's own code — so
+the aggregate refuses **and** discloses which class caused it, which is what
+makes the refusal diagnosable rather than merely safe. The positive control
+prevents the inverse failure mode: a build that refused everything would fail
+`TestAggregateAvailableRequiresContractValidReads`.
+
+Combined with the already-recorded first half
+(report.md#t080-03-synth, report.md#t080-03-stress), `SCN-080-001-03` is closed
+with its claim text unchanged.
+
+#### What this does NOT close
+
+The **Build Quality Gate** row stays `[ ]`. Its clause spans integration, E2E,
+stress/SLO, trace-contract, environment-pollution, secret-content, and **broad
+regression** checks; the broad-regression E2E evidence is still running and will
+be recorded separately. Two green unit layers do not satisfy it, and marking it
+on the strength of this section would be the substitution this packet forbids.
+SCOPE-03 is therefore **13/14** and remains `In Progress`.
+
+### Change surface for this closure
+
+`report.md` (this section) and `scopes.md` (the single `SCN-080-001-03`
+Core-Outcome row checked with an `→ Evidence:` citation to
+report.md#scn-080-001-03-refusal). **The DoD claim text was not reworded.** No
+test file, no product source file, and no `state.json` was modified in this
+invocation — the two test files and the product code are exactly as committed in
+`b1b1ca5f`. SCOPE-03 `Status` stays `In Progress` because its Build Quality Gate
+row is open; the bug top-level `status` and `certification.status` remain
+`blocked` because SCOPE-04 is open.
+
