@@ -99,8 +99,8 @@ Durable source-repo framework behavior and maintainer contracts.
 
 - [DEPRECATIONS.md](DEPRECATIONS.md)
 - [Framework_Convergence_Health.md](Framework_Convergence_Health.md)
-- [Framework_Improvements_Delivered.md](Framework_Improvements_Delivered.md)
-- [Spec_Implementation_Alignment.md](Spec_Implementation_Alignment.md)
+- [Framework_Improvements_Delivered.md](Framework_Improvements_Delivered.md) <!-- ref-ok: source-only maintainer history, present in the source repo and excluded from the downstream payload -->
+- [Spec_Implementation_Alignment.md](Spec_Implementation_Alignment.md) <!-- ref-ok: source-only maintainer history, present in the source repo and excluded from the downstream payload -->
 - [decisions/ADR-001-v6.1-review-followups.md](decisions/ADR-001-v6.1-review-followups.md)
 
 ---
@@ -268,8 +268,13 @@ has a named reader rather than existing only as a generator output.
 Kept in source for audit value. These describe how the framework USED to work and
 are not current guidance. Do not treat them as authority.
 
+Most of this section is source-only: the records live in the framework source
+repository and are excluded from the downstream payload, because a consuming
+repository never reads how this repository got here. The v4.1.0 record is the
+exception and still ships, because three installed skills link it.
+
 - [v4.1.0-delivered-pending-activation.md](v4.1.0-delivered-pending-activation.md) — the delivered-pending-activation status ceiling as shipped in v4.1.0
-- [v5.2-design.md](v5.2-design.md) — v5.2 design record
-- [v6-mcp-design.md](v6-mcp-design.md) — v6 MCP surface design record
-- [Product-Review-2026-08-02.md](Product-Review-2026-08-02.md) — dated product review, superseded by later work
+- [v5.2-design.md](v5.2-design.md) — v5.2 design record <!-- ref-ok: source-only maintainer history, excluded from the downstream payload -->
+- [v6-mcp-design.md](v6-mcp-design.md) — v6 MCP surface design record <!-- ref-ok: source-only maintainer history, excluded from the downstream payload -->
+- [Product-Review-2026-08-02.md](Product-Review-2026-08-02.md) — dated product review, superseded by later work <!-- ref-ok: source-only maintainer history, excluded from the downstream payload -->
 - [ADR-001-v6.1-review-followups.md](decisions/ADR-001-v6.1-review-followups.md) — v6.1 review follow-up decisions

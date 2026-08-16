@@ -107,10 +107,32 @@ demoted_source_only_scripts=(
   # Exercises release-check, so it travels with it.
   "bubbles/scripts/ci-annotation-emitter-selftest.sh"
 )
+# Maintainer-only history. Frozen per-release design records and dated internal
+# reviews describe how THIS repository got here, which a consuming repository
+# never reads. They stay in source and leave the payload.
+#
+# Chosen per candidate rather than by pattern. Two neighbours that look like the
+# same class are deliberately NOT here: v4.1.0-delivered-pending-activation.md
+# carries live markdown links from three shipped skills, and
+# Framework_Convergence_Health.md from a shipped recipe, so demoting either
+# would leave a dangling reference that G132 exists to catch. The five below
+# have no live link from any shipped surface; the guards and lints that name
+# them do so in comments or as inert exemption paths.
+demoted_source_only_docs=(
+  "docs/Product-Review-2026-08-02.md"
+  "docs/Framework_Improvements_Delivered.md"
+  "docs/Spec_Implementation_Alignment.md"
+  "docs/v5.2-design.md"
+  "docs/v6-mcp-design.md"
+)
+demoted_source_only_entries=(
+  "${demoted_source_only_scripts[@]}"
+  "${demoted_source_only_docs[@]}"
+)
 filtered_managed_entries=()
 for managed_entry in "${managed_entries[@]}"; do
   demote_entry=false
-  for eval_script in "${demoted_source_only_scripts[@]}"; do
+  for eval_script in "${demoted_source_only_entries[@]}"; do
     if [[ "$managed_entry" == "$eval_script" ]]; then
       demote_entry=true
       break
@@ -130,7 +152,7 @@ for installer_entry in "install.sh" "VERSION"; do
   bubbles_manifest_entry_is_tracked "$REPO_ROOT" "$installer_entry" || continue
   source_only_entries+=("$installer_entry")
 done
-for eval_script in "${demoted_source_only_scripts[@]}"; do
+for eval_script in "${demoted_source_only_entries[@]}"; do
   [[ -f "$REPO_ROOT/$eval_script" ]] || continue
   bubbles_manifest_entry_is_tracked "$REPO_ROOT" "$eval_script" || continue
   source_only_entries+=("$eval_script")
