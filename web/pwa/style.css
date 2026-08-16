@@ -12,6 +12,19 @@
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
+/* The `hidden` attribute must be authoritative for every surface.
+ *
+ * `!important` is required, not stylistic. The UA rule is `[hidden] {
+ * display: none }` at specificity 0-1-0, so ANY author `display` rule of
+ * equal-or-higher specificity silently defeats it — `.status { display:
+ * flex }` below is exactly that case, and `.btn` and `.connector-list`
+ * are others. Without this reset an element that JS has explicitly
+ * marked `hidden` is removed from the accessibility tree yet still
+ * painted, so a screen-reader user and a sighted user are shown
+ * different states of the same page. Scoped to `[hidden]` alone so no
+ * visible element is affected. */
+[hidden] { display: none !important; }
+
 body {
   font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   background: var(--bg);

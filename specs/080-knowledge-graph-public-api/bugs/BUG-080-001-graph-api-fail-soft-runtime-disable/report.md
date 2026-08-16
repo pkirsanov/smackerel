@@ -3246,6 +3246,151 @@ report.md#t080-08-unit; SCOPE-04 `Status` corrected from the stale `Blocked` to
 claim text was reworded.** No product source file, no test file, no `state.json`,
 no other spec, and nothing under `docs/` was modified in this invocation.
 
+### SUPERSESSION — parts of this section describe code that no longer exists (recorded 2026-08-16)
+
+**Read this before treating anything above as a current repository fact.** Commit
+`970016ab` (*"refactor(BUG-080-001 SCOPE-04): drop the redundant projection; test
+the shape the UI renders"*) deleted two of the artifacts this section cites and
+retargeted the test that proves the row. Nothing above is edited or removed — it
+is the audit trail of what was true when `T080-08-UNIT` was first checked. This
+subsection records what changed, why the row is still legitimately closed, and
+what the CURRENT adversarial proof is. **It closes no DoD row, checks and unchecks
+nothing, and changes no scope `Status`.**
+
+#### 1. What changed, and why
+
+`970016ab` removed `internal/graphreadstate` and `internal/graphsynthetic/projection.go`
+as redundant. The closed exclusive graph state they reduced is already produced and
+served by `GraphReadiness.Snapshot()` (`internal/api/graph_readiness.go:232`),
+reaching the wire at authenticated health (`internal/api/health.go:606`) and at
+strict readyz (`internal/api/graph_readiness.go:299`).
+
+The removal was not merely tidying. A second on-demand reduction path would have
+let two surfaces disagree — one showing the scheduled sweep, another a fresh read
+— which is the exact invariant this scope exists to protect. The parallel
+projection therefore worked against the scope's own guarantee.
+
+#### 2. Why `T080-08-UNIT` remains legitimately closed
+
+The Test Plan row pins a FILE PATH and a TEST NAME. Both still exist and pass:
+`web/pwa/tests/graph_activation_state_test.go` declares
+`TestGraphActivationProjectionUsesClosedExclusiveStates`.
+
+What moved is the SUBJECT under test. It went from a parallel projection that
+shipped to nobody, to `api.GraphHealthSection` — the shape the UI actually
+renders. That is strictly stronger evidence for the same row, not weaker.
+
+#### 3. The CURRENT adversarial proof — replaces §"ADVERSARIAL PROOF" above
+
+Two mutations of `internal/api/graph_readiness.go`, each reverted byte-identical
+(blob `994cc1a7` at both HEAD and worktree):
+
+- **Mutation A** — let a DISABLED policy report ready. Caught by an invariant RULE
+  clause (`Ready && !available`), which fires on both disabled cases independently
+  of any single case's pinned expectations.
+- **Mutation B** — break the fail-closed path with an internally CONSISTENT
+  fail-open quadruple (`Ready: true`, `Activation: enabled`, `State: available`,
+  `Code: CodeOK`). Because that shape satisfies EVERY consistency clause, it
+  initially slipped every rule and was caught only by one case's pinned
+  expectations. **A rule that checks only internal consistency cannot catch a
+  coherent lie.**
+
+An invariant rule was therefore added that uses `Publish` as an INDEPENDENT wiring
+oracle. It probes with a contract-invalid observation and reads whether the refusal
+names `GraphReadinessCodeConfigInvalid` — a path the mutation cannot touch.
+Re-applying mutation B now fails at that rule's `Fatalf`
+(`graph_activation_state_test.go:588`), rendering as:
+
+```
+graph_activation_state_test.go:588: an UNWIRED projection rendered ready=true;
+readiness derives from an explicit activation policy and this projection carries none
+```
+
+The OLD expectation messages never fire at all, because that rule's `Fatalf`
+aborts first — so detection no longer depends on those per-case expectations. The
+rule binds BOTH unwired shapes: the nil receiver, and the constructed-but-empty
+shell.
+
+**Provenance, stated plainly.** These mutations were performed during the
+`970016ab` change and are also recorded in
+[the resolution subsection below](#scope-04-integration-gap). They were **not**
+re-executed in this recording turn. This turn re-verified the static facts only,
+as listed in §5.
+
+#### 4. What is HISTORICAL above — do not read as current state
+
+Four references in the subsections above describe code and documentation that no
+longer exist. They are preserved as history, not as live repository facts:
+
+- **`internal/graphreadstate/state.go`** (cited under *"What landed"* and
+  *"ADVERSARIAL PROOF"*) — DELETED by `970016ab`. The whole
+  `internal/graphreadstate/` package is absent from the tree.
+- **`internal/graphsynthetic/projection.go`** (cited under *"What landed"*) —
+  DELETED by `970016ab`. The exported seam existed only to serve the removed
+  package and had no other caller.
+- **the `internal/graphreadstate/` row in `docs/Development.md`** (cited under
+  *"What landed"* and *"The docfreshness gate is load-bearing"*) — REMOVED by
+  `970016ab`. `TestDocFreshness_AllInternalPackagesDocumented` compares that table
+  against the packages ON DISK, so a row naming a deleted package fails the gate
+  exactly as a missing row did. The gate fired on the way out as it had on the way
+  in.
+- **subtests `route_missing_404_with_zero_rows_is_not_true_empty` and
+  `explicit_disabled_is_not_available_even_when_reads_look_populated`** (the two
+  named failures quoted in *"ADVERSARIAL PROOF"*) — GONE. `970016ab` retargeted
+  the test and renamed its cases. Neither name appears in
+  `web/pwa/tests/graph_activation_state_test.go` today, so the quoted `--- FAIL:`
+  lines cannot be reproduced against the current file and must not be read as a
+  reproducible result.
+
+One further line above is now stale for the same reason: the *"Test Plan row
+verified against disk"* paragraph cites the test function at
+`graph_activation_state_test.go:298`. The function is declared at line `517` in
+the current file. The file path and the test name — the two things the Test Plan
+row actually pins — are unchanged.
+
+#### 5. Independent verification performed for THIS recording turn
+
+Each fact asserted above was checked against the current tree before this
+subsection was written, rather than restated from the earlier narrative:
+
+- `internal/graphreadstate/` — absent (`ls` exit `2`, "No such file or
+  directory"); `git ls-files` returns nothing for it.
+- `internal/graphsynthetic/projection.go` — absent (`ls` exit `2`); the
+  `internal/graphsynthetic/` directory still holds `config.go`, `observer.go`,
+  `result.go`, `synthetic.go`, `telemetry.go` and two test files, but no
+  `projection.go`.
+- commit `970016ab` — exists as `970016ab90b1b8e53d60d7ca3deb38adfb0ecc71`. Its
+  `--name-status` is `D internal/graphreadstate/state.go`,
+  `D internal/graphsynthetic/projection.go`, `M docs/Development.md`,
+  `M web/pwa/tests/graph_activation_state_test.go`.
+- `TestGraphActivationProjectionUsesClosedExclusiveStates` — still declared, at
+  `web/pwa/tests/graph_activation_state_test.go:517`.
+- the two superseded subtest names — grep over that file returns no match
+  (exit `1`).
+- `graphreadstate` in `docs/Development.md` — no match (exit `1`).
+- the three cited source anchors — `func (g *GraphReadiness) Snapshot() GraphHealthSection`
+  at `graph_readiness.go:232`; `return d.GraphReadiness.Snapshot().Ready` inside
+  `graphJourneyReady` at `graph_readiness.go:299`; `graph := d.GraphReadiness.Snapshot()`
+  at `health.go:606`.
+- blob `994cc1a7` — `git rev-parse HEAD:internal/api/graph_readiness.go` and
+  `git hash-object internal/api/graph_readiness.go` both return
+  `994cc1a7c0b3340d255d3447c8e3e6e8fca00478`, so the mutation reverts left the
+  file byte-identical to HEAD.
+- the wiring oracle and the invariant clause — `graphSectionProjectionIsWired`
+  (`graph_activation_state_test.go:284`) calls `projection.Publish` and returns
+  whether the refusal names `api.GraphReadinessCodeConfigInvalid`; the rule-1
+  `Fatalf` is at line `588`; the `section.Ready && !available` clause is at line
+  `661`; the two unwired cases are `unconstructed_projection_fails_closed_instead_of_panicking`
+  and `constructed_shell_with_no_capability_also_fails_closed`; the two disabled
+  cases are `disabled_policy_is_truthfully_disabled_and_never_ready` and
+  `disabled_policy_with_a_published_observation_is_still_disabled`.
+
+#### 6. Change surface for this supersession
+
+`report.md` (this subsection) **only**. No DoD row was checked or unchecked, no
+scope `Status` was changed, and `scopes.md`, `state.json`, every other spec, all
+product source, all tests, and everything under `docs/` were left untouched.
+
 <a id="scope-04-integration-gap"></a>
 
 ### RESOLVED INTEGRATION GAP — `internal/graphreadstate` REMOVED (Reading A, commit `970016ab`)
