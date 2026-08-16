@@ -8,7 +8,32 @@ Planning artifacts only were initialized on 2026-07-23. No source, secret, confi
 
 ## Completion Statement
 
-Incomplete and non-terminal. Status is `blocked`. The fail-soft graph-API activation foundation (SCOPE-01) is WIRED into the runtime (`cmd/core/wiring.go`, `internal/api/router.go`, `internal/api/health.go`) and live-integration-proven (`tests/integration/graphapi/activation_test.go`: DISABLED → all eight canonical graph paths present as a typed HTTP 503 `capability_disabled` and the service keeps serving; ENABLED → `GET /api/topics` 200 over real PostgreSQL) — see "## Runtime Wiring And Live-Integration Proof" below. SCOPE-02 (authorized family reads + the operator/grant-holder/ungranted global-corpus grant matrix SCN-080-001-09), SCOPE-03 (product synthetic, readiness, content-free telemetry, stress), and SCOPE-04 (Wiki/Graph e2e-ui + accessibility) remain deferred/blocked; SCOPE-01's own e2e-api regression rows and manifest-tamper row are also deferred. Validation and audit are unclaimed.
+Incomplete and non-terminal. Status is `blocked`.
+
+**Corrected 2026-08 (this session).** The previous text stated that SCOPE-02,
+SCOPE-03 and SCOPE-04 "remain deferred/blocked". That is no longer true and is
+left here only as a record of the correction: ALL FOUR scopes are now Done, and
+scopes.md carries 63 checked / 0 unchecked DoD items with inline evidence.
+
+SCOPE-04 completed this session. The `e2e-ui` lane, which could previously
+exercise only ONE backend state, now exercises FIVE guarded states — ready,
+true-empty, store-unavailable, graph-disabled, and row-missing/degraded — each
+behind a precondition guard that REFUSES to run the state-adaptive specs unless
+the stack actually reports the target state. Final lane run: `LANE_EXIT=0`, `8
+passed` in every guarded phase, full suite `76 passed`, 0 failed. All supporting
+gates exit 0 (see "## Build Quality Gate — executed evidence").
+
+A real user-facing defect was found and fixed en route: F-080-06-ROWMISS.
+
+**The packet nonetheless remains `blocked`, and MUST NOT be certified.**
+`state-transition-guard.sh` exits 1 with 47 failures that are packet-wide and
+mostly pre-date this session's scope — eight missing specialist phases (Gate
+G022, `completedPhaseClaims` is empty), three failing cross-cutting guards
+(G089/G095/G084), planning-artifact backfill across all four scopes (25 items
+spanning regression-E2E, consumer-impact, shared-infrastructure and
+change-boundary requirements), plus G053, G055, G060 and residual G040 deferral
+wording in historical 2026-07-24 planning notes. The full enumeration lives in
+`state.json.blockedReason` so the next owner does not have to re-derive it.
 
 ## Bug Reproduction - Before Fix
 
@@ -5001,3 +5026,165 @@ the grant model in its "## Corpus Ownership And Authorization Model" section —
 with plan coverage added by `bubbles.plan` at 2026-07-24T18:49Z (Test Plan rows
 T080-09-CORPUS + T080-09-GRANT). The GATE still stands; only 105's stated REASON
 is out of date. Recorded here rather than silently edited in another packet.
+
+
+---
+
+<a id="t080-06-render"></a>
+
+## T080-06-RENDER — whole-vocabulary render contract (ui-unit)
+
+Classified `ui-unit`, NOT `e2e-ui`, and it satisfies no live-stack DoD row.
+
+### Why this cannot be an e2e test
+
+`route-absent` and `schema-invalid` are unreachable against a current,
+correctly-functioning core. That is this bug's own doing rather than a gap:
+
+| State | Requires | Why a healthy core cannot produce it |
+|---|---|---|
+| `route-absent` | a BARE 404 | `router.go` registers the graph manifest atomically behind an always-true `GraphCapability` guard; every path is mounted in BOTH enabled and disabled states, and a disabled deployment answers a typed `503` on the same manifest. A silent Chi 404 cannot occur. |
+| `schema-invalid` | a 400, or a typed 5xx | The PWA builds every graph request from fixed internal defaults; it never sends a user-controlled cursor, window or kind. |
+
+They remain correct DEFENSIVE states (rolling-deploy version skew, a misrouting
+proxy, a future paginating UI), so the render contract is verified by executing
+the REAL module in a REAL browser against a REAL DOM node. Nothing is mocked.
+
+### Observed classifier matrix (printed by the test)
+
+```
+bare404          = F080-SYNTH-ROUTE-ABSENT
+typed404NotFound = F080-SYNTH-ROW-MISSING
+plain400         = F080-SYNTH-SCHEMA-INVALID
+cursor400        = F080-SYNTH-CURSOR-INVALID
+schema500        = F080-SYNTH-SCHEMA-INVALID
+plain500         = F080-SYNTH-SERVER-ERROR
+disabled503      = F080-SYNTH-CAPABILITY-DISABLED
+store503         = F080-SYNTH-STORE-UNAVAILABLE
+bare503          = F080-SYNTH-SERVER-ERROR
+unauth401        = F080-SYNTH-UNAUTHENTICATED
+forbidden403     = F080-SYNTH-FORBIDDEN
+  8 passed (5.6s)   [every lane phase]     full suite: 76 passed   LANE_EXIT=0
+```
+
+Every meaning-carrying pair is asserted DISTINCT: bare-404 vs typed-404,
+disabled vs store-down, 401 vs 403. All ten states declare distinct values.
+
+### The affordance contract, and a corrected assertion
+
+A first draft FAILED on `store-unavailable must offer a retry`. The failure was
+mine, not the product's: `renderReadState` paints a retry button only when the
+caller supplies a real `onRetry` handler, because a dead retry button is worse
+than none.
+
+Relaxing the assertion would have deleted the finding. Instead each state is now
+rendered TWICE — with and without a handler — which asks the sharper question:
+
+| State | no handler | with handler | meaning |
+|---|---|---|---|
+| `route-absent` | 0 | **0** | refuses retry EVEN WHEN retry is available |
+| `schema-invalid` | 0 | **0** | refuses retry EVEN WHEN retry is available |
+| `disabled` | 0 | **0** | refuses retry EVEN WHEN retry is available |
+| `store-unavailable` | 0 | **1** | offered only when genuinely actionable |
+| `true-empty` | 1 (link) | 1 (link) | capture guidance needs no retry handler |
+
+The `withRetry` column is the load-bearing one: it proves the refusal is
+DELIBERATE rather than an artefact of a missing callback. The weaker assertion
+would have passed even if `route-absent` had silently begun offering a useless
+retry — which is exactly the class of regression this bug exists to prevent.
+
+---
+
+<a id="t080-08-matrix"></a>
+
+## T080-08-MATRIX — ten states x two viewports, real page layout (ui-unit)
+
+Drives all ELEVEN closed states (the ten named by SCN-080-001-08 plus `loading`)
+through the REAL `#wiki-topics-status` node on the REAL page at `1280x800` and
+`320x640` — 22 measured combinations. The induction is unit-level; the layout,
+geometry and accessibility tree are genuine.
+
+```
+Running 8 tests using 1 worker
+  8 passed (6.8s)                      [true-empty phase]
+[web-e2e-ui] true-empty phase: PASS (23s)
+Running 85 tests using 4 workers
+  76 passed (23.8s)
+  8 passed (7.7s)                      [store-unavailable phase]
+[web-e2e-ui] store-unavailable phase: PASS (20s)
+  8 passed (6.7s)                      [graph-disabled phase]
+[web-e2e-ui] graph-disabled phase: PASS (141s)
+LANE_EXIT=0
+```
+
+Asserted per combination — every prohibition the scenario names:
+
+| Clause | Assertion |
+|---|---|
+| declares its own state | `data-graph-state` equals the requested state |
+| no horizontal page scroll | `scrollWidth > clientWidth + 1` is false |
+| no overlap | geometric intersection of the status rect and the family-row rect is false |
+| no pointer-only action | any action is `<a>`/`<button>` AND is actually `.focus()`ed and asserted focused in the real browser |
+| no duplicate alert | at most one live region; exactly one for fault states |
+| no leaked prior label | the previous state's message does not survive into this paint |
+| perceivable | non-ready states are visible with non-empty copy; `ready` is not visible, since a working view has nothing to announce |
+
+**Why states render in SEQUENCE into the SAME node.** That is the only
+arrangement in which the leaked-prior-label clause has any force. Rendering into
+a fresh node per state would make that assertion vacuous — there would be no
+predecessor to leak. The sequence is the test.
+
+### Honest boundary
+
+Five states are induced by REAL backend conditions and covered live by
+T080-08-A11Y across the four guarded phases (`ready`, `true-empty`,
+`store-unavailable`, `disabled`, plus `unauthenticated` via T080-06-UI). The
+remainder are induced at unit level because a healthy current core cannot
+produce them. The layout and accessibility measurements are genuine in both
+cases; what differs is only how the state was reached.
+
+
+---
+
+<a id="build-quality-gate"></a>
+
+## Build Quality Gate — executed evidence
+
+```
+CHECK_EXIT=0            BUILD_EXIT=0           LINT_EXIT=0
+FMT_EXIT=0              UNIT_EXIT=0            ARTIFACT_LINT_EXIT=0
+TRACEABILITY_EXIT=0     REALITY_SCAN_EXIT=0
+LANE_EXIT=0  (e2e-ui: 8 passed in every guarded phase; full suite 76 passed)
+regression-quality-guard: 0 violation(s), 0 warning(s)
+```
+
+### Documentation alignment — the design was already correct
+
+This is worth recording precisely, because it changes what F-080-06-ROWMISS
+means. `design.md:392` ALREADY specified the rule:
+
+> `| not-found | 404 not_found for a requested existing route resource only | Resource missing, never activation |`
+
+So the fix did NOT introduce a new rule and required no design change. The JS
+implementation had drifted from a design that was written correctly from the
+start, and every guard that should have caught the drift was shaped to miss it:
+the vocabulary-drift test asserts classifier SOURCE-TEXT containment, and the
+projection test targets the Go side. `design.md` needs no update; the code now
+conforms to it.
+
+`docs/API.md` needs no update either — its `not_found` entries all belong to the
+ntfy source adapter, and this change is client-side classification only. The
+server's behaviour is byte-for-byte unchanged.
+
+### Consumer-impact review
+
+Covered by the consumer sweep above: no nil-handler assumption, no
+route-missing-as-empty site, a single `data-wiki-ready` writer, all four graph
+surfaces walked by T080-REGRESSION, and the spec-105 gate recorded and observed.
+
+### Zero warnings
+
+All eight gate commands exit `0` with no warning output. Suite counts moved
+monotonically as tests were added — 73 -> 74 -> 75 -> 76 passing — with zero
+failures and skips held constant, so no test was converted into a skip to obtain
+a green result.
