@@ -4912,3 +4912,92 @@ broken harness.
    mismatch through; recorded for follow-up.
 
 **Status: FIXED in `cb9f9ad0`. Test row T080-06-ROWMISS added and passing.**
+
+
+---
+
+<a id="consumer-sweep"></a>
+
+## Consumer sweep, Wiki-journey usability, and the spec-105 gate
+
+The SCOPE-04 implementation plan names three stale-reference classes. Each was
+scanned first-hand this session; raw commands and results below.
+
+### (a) nil-handler assumptions — CLEAN for graph
+
+```
+$ grep -rn 'Handlers == nil|Handlers != nil|GraphCapability == nil' \
+    internal/ cmd/ web/ --include='*.go' --include='*.js' | grep -v _test
+internal/api/router.go:210:  if deps.AnnotationHandlers != nil {
+internal/api/router.go:327:  if deps.ListHandlers != nil {
+internal/api/router.go:366:  if deps.RecommendationHandlers != nil {
+internal/api/router.go:391:  if deps.QFEvidenceHandlers != nil {
+internal/api/router.go:403:  if deps.PersonalContextHandlers != nil {
+internal/api/router.go:407:  if deps.NotificationHandlers != nil {
+internal/api/router.go:633:  if deps.DriveHandlers != nil {
+internal/api/router.go:687:  if deps.PhotosHandlers != nil {
+internal/api/router.go:781:  if deps.AuthAdminHandlers != nil {
+... (Drive/Photos/AuthAdmin siblings)
+```
+
+NO `TopicsHandlers` / `PeopleHandlers` / `PlacesHandlers` / `TimeHandlers` /
+`EdgesHandlers` nil-branch exists. The graph manifest registers **atomically**
+behind one `deps.GraphCapability != nil` guard, and that guard is provably
+always true: `NewGraphCapability` (`internal/api/graphapi/activation.go:167`)
+returns `&GraphCapability{...}` unconditionally, and every wiring branch in
+`cmd/core/wiring.go` (422, 428, 437, 443, 450) assigns it.
+
+Consequence, and it is the point of this whole bug: **a current-version core can
+never emit a silent Chi 404 for a graph path.** A disabled deployment answers a
+typed `503 capability_disabled` on the SAME route manifest. The remaining
+`!= nil` hits belong to unrelated subsystems and are outside this packet.
+
+### (b) route-missing-as-empty — CLEAN
+
+Every remaining 404 site in `web/pwa/*.js` was READ, not merely counted:
+
+| Site | Behaviour | Verdict |
+|---|---|---|
+| `wiki_lib.js:109` | capability probe → `{available:false, reason:"not-deployed"}` | correct — route-absent semantics, never "empty", and it is a capability probe rather than a row read |
+| `wiki_state.js:183` | now discriminates typed `not_found` (row) from bare 404 (route) | fixed in `cb9f9ad0`, see F-080-06-ROWMISS |
+| `drive-artifact-detail.js`, `model-connection-detail.js` | non-graph surfaces | out of packet scope |
+
+No site treats a 404 as an empty graph.
+
+### (c) static Wiki-ready assumptions — CLEAN
+
+```
+$ grep -rn 'data-wiki-ready' web/pwa/*.html web/pwa/*.js
+web/pwa/wiki.js:30:  document.documentElement.setAttribute("data-wiki-ready", "true");
+```
+
+Exactly ONE writer, on the landing page. No static or duplicated readiness claim
+exists. That single-writer fact is load-bearing, and it was confirmed the hard
+way: a test written this session wrongly waited on `data-wiki-ready` from a
+DETAIL page, which never sets it, and timed out. The sweep's claim is therefore
+backed by an observed failure, not only by a grep.
+
+### Existing Wiki journeys remain usable
+
+`T080-REGRESSION` passes inside the `74 passed` suite. It walks all four graph
+surfaces (`wiki_topics`, `wiki_people`, `wiki_places`, `wiki_time`), asserts each
+agrees with the published aggregate and that they do not disagree with each
+other, then re-walks the pre-existing Wiki landing journey.
+
+### Spec 105 gate — recorded AND holding
+
+`specs/105-connected-knowledge-graph-explorer/state.json` records verbatim:
+
+> `BUG-080-001 must be certified done before SCOPE-01 pickup`
+
+105 is at planning depth (`status: in_progress`, no implementation scope picked
+up), so the gate is not merely written down — it is being observed.
+
+**Correction to a stale upstream note.** 105 also states that this bug has an
+unresolved design-staleness gap (missing SCN-080-001-09 and the operator-owned
+global-corpus grant model). This packet's own `notes` show that gap was RESOLVED
+by `bubbles.design` at 2026-07-24T18:25Z — design.md grounds SCN-080-001-09 and
+the grant model in its "## Corpus Ownership And Authorization Model" section —
+with plan coverage added by `bubbles.plan` at 2026-07-24T18:49Z (Test Plan rows
+T080-09-CORPUS + T080-09-GRANT). The GATE still stands; only 105's stated REASON
+is out of date. Recorded here rather than silently edited in another packet.
