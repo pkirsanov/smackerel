@@ -4777,3 +4777,138 @@ onboarding true-empty view. That is an owner decision for `bubbles.analyst` /
 proves only that **when** the empty condition occurs, the UI contract holds.
 
 **Status: T080-05-UI `[x]`, SCN-080-001-05 `[x]`. `F-080-05-SEED` still OPEN.**
+
+
+---
+
+<a id="f-080-06-rowmiss"></a>
+
+## F-080-06-ROWMISS — a missing graph row was reported as an absent route (FIXED)
+
+Found while probing whether `route-absent` and `schema-invalid` were inducible.
+The answer turned out to be more valuable than the test gap: `route-absent` WAS
+reachable — for the wrong reason.
+
+### The defect
+
+`web/pwa/wiki_state.js::classifyStatus` mapped **every** HTTP 404 to
+`CODE_ROUTE_ABSENT`, ignoring the typed envelope code — even though the same
+function disambiguates `503` by typed code two lines below.
+
+The server draws the distinction precisely:
+
+| Condition | Server response |
+|---|---|
+| Missing ROW (deleted/stale id) | `404` + typed envelope `not_found` (`internal/api/graphapi/topics.go:129`, `people.go:128`, `places.go:134`) |
+| Genuinely unmounted ROUTE | bare `404`, no envelope at all |
+
+The Go model already encodes this and explicitly corrects for it
+(`internal/graphsynthetic/synthetic.go:214`):
+
+> `// A populated list whose own first row 404s is a missing row, not an absent route.`
+
+The UI model had drifted from it.
+
+### User impact
+
+Opening a stale or deleted topic link — reachable from any bookmark, and from
+`/pwa/wiki_topics.html?id=<id>` — displayed:
+
+> "This knowledge graph view is not available in the running build. It is not
+> empty — it is not deployed."
+
+That is **false**: the view IS deployed; only that one row is gone. And
+`STATE_ROUTE_ABSENT` deliberately carries `action: ""`, so the user was
+dead-ended by a wrong explanation with no recovery affordance. It also left
+`CODE_ROW_MISSING` **unreachable** — dead code, which repo policy forbids.
+
+### Why no existing test caught it
+
+- `graph_state_vocabulary_drift_test.go` asserts only that the classifier's
+  SOURCE TEXT contains `"404"` and yields `CODE_ROUTE_ABSENT` somewhere. That is
+  containment, not behaviour — the buggy mapping satisfies it perfectly.
+- `graph_activation_state_test.go` targets the **Go** readiness projection, not
+  the JS classifier.
+
+Both passed over it. This is the exact failure mode of a source-text gate: it
+proves a token is present, never that the branch is correct.
+
+### Reproduction gate — same probe on both sides
+
+The test probes the live server for the same id it then loads in the browser, so
+the assertion is anchored to what the backend actually answered.
+
+```
+BEFORE (commit 4308e64a):
+GRAPH-EV row-missing | probeStatus=404 | probeCode=not_found | painted=route-absent
+  ✘ Regression: a missing graph row is not reported as an absent route
+    Error: a typed 404 not_found means the row is gone, not that the route is absent
+    Expected: not "route-absent"
+  1 failed / 5 passed        LANE_EXIT=1
+
+AFTER (commit cb9f9ad0):
+GRAPH-EV row-missing | probeStatus=404 | probeCode=not_found | painted=degraded
+  6 passed (6.2s)            true-empty phase: PASS (23s)
+  74 passed (26.6s)          store-unavailable phase: PASS (19s)
+                             graph-disabled phase: PASS (127s)
+                             LANE_EXIT=0
+```
+
+The probe is byte-identical in both runs (`404` / `not_found`). The only variable
+was the fix.
+
+### The fix
+
+```js
+case 404:
+  return typed === ENVELOPE_NOT_FOUND ? CODE_ROW_MISSING : CODE_ROUTE_ABSENT;
+```
+
+A **bare** 404 still yields `route-absent`, so genuine version skew (a newer PWA
+against an older core with no graph routes) keeps its correct state. The fix
+narrows the false claim without erasing the true one. `CODE_ROW_MISSING` resolves
+to `degraded`, whose copy is honest ("Part of your knowledge graph could not be
+read… Nothing shown below is invented") and, unlike route-absent, offers a retry.
+
+### The regression test is provably non-tautological
+
+In the SAME run its other arms pass against genuinely different backend states:
+
+| Phase | probe | painted | verdict |
+|---|---|---|---|
+| enabled | `404 not_found` | `degraded` | row-missing arm |
+| store-down | `503 store_unavailable` | `store-unavailable` | 503 arm |
+| disabled | `503 capability_disabled` | `disabled` | 503 arm |
+
+Because every assertion is anchored to the API's actual answer rather than a
+hardcoded expectation, the test fails ONLY in the buggy condition. A tautological
+test would have passed before the fix.
+
+### Non-regression and gates
+
+Full suite `73 → 74` passing — exactly +1, this test — with zero failures.
+`UNIT_EXIT=0` (the `web/pwa/tests` drift suite still `ok`), `LINT_EXIT=0`,
+`FMT_EXIT=0`, `regression-quality-guard` `0 violation(s), 0 warning(s)`.
+
+### Honest note on an invalid measurement
+
+The first red run on this test was NOT a reproduction. It timed out waiting for
+`data-wiki-ready`, which `wiki.js` sets on the LANDING page only; the detail view
+signals readiness through `markReady()` in `wiki_lib.js` as
+`aria-busy="false"`. Accepting that red would have "confirmed" the defect via a
+test that never reached its assertion, then shown green after the fix for an
+unrelated reason. It was corrected to `#wiki-topic-detail[aria-busy="false"]`
+BEFORE any product change was written, so no fix was ever validated against a
+broken harness.
+
+### Left open (deliberately not invented here)
+
+1. Whether row-missing deserves its own "this item no longer exists" copy instead
+   of reusing `degraded` is a design decision, routed to `bubbles.design`.
+   `degraded` is honest and non-misleading today.
+2. `"not_found"` is a string literal in all three handlers but is ABSENT from the
+   `graphapi` closed-set constant block that claims to enumerate every code
+   (`internal/api/graphapi/errors.go`). That latent drift is what let the
+   mismatch through; recorded for follow-up.
+
+**Status: FIXED in `cb9f9ad0`. Test row T080-06-ROWMISS added and passing.**
