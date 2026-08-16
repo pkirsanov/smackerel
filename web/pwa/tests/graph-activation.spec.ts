@@ -329,7 +329,7 @@ test.describe("BUG-080-001 SCOPE-04 — Knowledge Graph activation truth", () =>
     await expect(page.locator("body")).not.toContainText(/sample|demo|example graph|placeholder/i);
   });
 
-  test("Regression: auth route store and schema failures are exclusive and private", async ({ page, context }) => {
+  test("Regression: auth route store and schema failures are exclusive and private", async ({ page, context }, testInfo) => {
     await authenticate(page);
 
     // Paint a real authenticated view first so there IS prior private
@@ -478,6 +478,24 @@ test.describe("BUG-080-001 SCOPE-04 — Knowledge Graph activation truth", () =>
       await page.locator("#wiki-topics-index [role=alert], #wiki-topics-index [role=status]").count(),
       "exactly one live region may be present per paint",
     ).toBe(1);
+
+    // The pixel half of the privacy claim. Everything above proves the DOM
+    // and accessibility halves — prior rows removed, no surviving count
+    // attribute, one assertive live region, no path or status-code leak —
+    // but a row can be absent from the DOM and still be on screen (a stale
+    // paint, a detached overlay, a cached canvas). This artifact is the
+    // durable visual evidence that NO prior private graph content remains
+    // visible after session loss. Captured explicitly because
+    // playwright.config.ts keeps `screenshot: "only-on-failure"`, so a
+    // PASSING run would otherwise leave no image to cite. Same
+    // outputPath/attach pattern as the disabled capture above, so the
+    // artifact is associated with this test rather than a loose file.
+    const authLossShot = testInfo.outputPath("auth-loss-privacy.png");
+    await page.screenshot({ path: authLossShot, fullPage: true });
+    await testInfo.attach("auth-loss-privacy.png", {
+      path: authLossShot,
+      contentType: "image/png",
+    });
   });
 
   test("Knowledge Graph activation states remain keyboard and screen-reader operable at desktop and 320px 200 percent zoom", async ({ page }) => {
