@@ -3248,7 +3248,110 @@ no other spec, and nothing under `docs/` was modified in this invocation.
 
 <a id="scope-04-integration-gap"></a>
 
-### OPEN INTEGRATION GAP — `internal/graphreadstate` has no production consumer
+### RESOLVED INTEGRATION GAP — `internal/graphreadstate` REMOVED (Reading A, commit `970016ab`)
+
+#### Resolution — read this before the analysis below
+
+**Status: RESOLVED. Closes no DoD row.** This section was written while the gap
+was open; the disposition rule it set — *"it gains a real consumer in the UI
+slice, or it is REMOVED"* — has now been exercised. **Reading A was chosen and
+executed in commit `970016ab`** (*"refactor(BUG-080-001 SCOPE-04): drop the
+redundant projection; test the shape the UI renders"*). Everything below this
+resolution is preserved **unedited**, as written at the time, because the
+reasoning is the audit trail for how the decision was reached. Read it as history,
+not as live state.
+
+**The deciding argument.** SCOPE-04's core invariant is that Wiki Browse, Graph
+availability, and readiness must never DISAGREE about what a read meant. The
+structural guarantee of that is ONE synthetic performing the reads, publishing ONE
+aggregate, and every surface reading that single published observation — and that
+architecture already exists and is already served: `Snapshot()` at
+`internal/api/graph_readiness.go:232`, reaching the wire through authenticated
+`GET /api/health` (`internal/api/health.go:606`) and strict readiness
+(`internal/api/graph_readiness.go:299`). A second on-demand reduction path would
+let two surfaces disagree — one showing the scheduled sweep, another a fresh read.
+So `graphreadstate` did not merely fail to help the invariant; **it worked against
+it.** That is a stronger reason to remove than redundancy alone, and it is what
+settled the choice the addendum below deliberately left open.
+
+**What was removed.** `internal/graphreadstate/state.go` and
+`internal/graphsynthetic/projection.go` — the exported seam existed only to serve
+the removed package and had no other caller. The `internal/graphreadstate/` row was
+removed from `docs/Development.md`, which is **required**, not cosmetic:
+`TestDocFreshness_AllInternalPackagesDocumented` compares that table against the
+packages ON DISK, so a row naming a deleted package fails the gate exactly as a
+missing row did. (§"The docfreshness gate is load-bearing" above recorded the
+mirror-image failure when the package was added; the same gate fired on the way
+out.)
+
+**What replaced it.** `web/pwa/tests/graph_activation_state_test.go` keeps its file
+path and the test name `TestGraphActivationProjectionUsesClosedExclusiveStates`
+that the `T080-08-UNIT` Test-Plan row pins, but now asserts the closed/exclusive
+contract of `api.GraphHealthSection` — **the shape the UI actually renders** —
+instead of a parallel projection that shipped to nobody. `T080-08-UNIT` therefore
+remains legitimately closed: its subject moved from redundant code to production
+code, so the row's evidence got stronger, not weaker.
+
+**A premise correction worth preserving.** While deciding, I asserted that
+`Snapshot()` was untested. **That was wrong.**
+`tests/integration/graphapi/readiness_test.go` exercises it across enabled/fresh,
+no-observation, stale, disabled-truthful, publication-disagreement-refused in BOTH
+directions, and static-wiki-cannot-make-ready, plus an AST guard against a third
+ready-assignment path. That error weakened one limb of the argument for removal but
+not the decision itself, which rests on the disagreement invariant rather than on a
+coverage gap. It is recorded because a later reader is entitled to know which
+premises of a decision held and which did not.
+
+**A test weakness found AND closed during the change.** Adversarial mutation of the
+**production** projection showed:
+
+- **mutation A** — let a DISABLED policy report ready — was caught by an invariant
+  RULE clause;
+- **mutation B** — break the fail-closed path with an internally CONSISTENT
+  fail-open quadruple (`ready` + `enabled` + `available` + `CodeOK`) — initially
+  slipped **every** consistency clause and was caught ONLY by one case's pinned
+  expectations. **A rule that checks only internal consistency cannot catch a
+  coherent lie.**
+
+An invariant rule was therefore added that uses `Publish` as an **independent
+wiring oracle**: it probes with a contract-invalid observation and reads whether
+the refusal names `GraphReadinessCodeConfigInvalid` — a path the mutation cannot
+touch. Re-applying mutation B now fails as:
+
+```
+graph_activation_state_test.go:588: an UNWIRED projection rendered ready=true;
+readiness derives from an explicit activation policy and this projection carries none
+```
+
+and the OLD expectation messages never fire at all, because rule 1's `Fatalf`
+aborts first — so detection no longer depends on those per-case expectations. The
+rule binds both unwired shapes: nil receiver, and constructed-but-empty shell.
+`internal/api/graph_readiness.go` was reverted **byte-identical** after every
+mutation (blob `994cc1a7` at both HEAD and worktree).
+
+**Verified for this change.** `./smackerel.sh test unit` exit `0` — go, pytest, and
+shell lanes all reported "finished OK", zero `FAIL` lines, and docfreshness green
+after the docs-row removal; lint `0`; format `0`; the targeted test exit `0` with
+all 12 subtests passing.
+
+**What this does NOT change.** The four `e2e-ui` rows (`T080-04-UI`, `T080-05-UI`,
+`T080-06-UI`, `T080-08-A11Y`), the Build Quality Gate row, and the Core Outcome
+rows all remain **OPEN**, and **SCOPE-04 stays In Progress**. The remaining slice
+still needs a PWA graph-activation surface plus real-stack Playwright fixtures for
+ten backend states without request interception. One thing did change for that
+slice: **§3(b) below is superseded.** It called for the surface to consume
+`graphreadstate.Project`; that package no longer exists, and the surface should
+instead consume the `graph` section of authenticated `/api/health` — the concrete
+design answer this investigation produced.
+
+**Change surface for this resolution:** `report.md` (this subsection) **only**. No
+DoD row was checked or unchecked, no scope `Status` was changed, and `scopes.md`,
+`state.json`, every other spec, all product source, all tests, and everything under
+`docs/` were left untouched.
+
+---
+
+#### Original analysis, preserved as written while the gap was open
 
 **Status: OPEN. This is not a completed item and closes no DoD row.** It is
 recorded so the gap is written down rather than left implicit: a package with
@@ -3451,4 +3554,11 @@ responsibility.
 row was checked or unchecked, no scope `Status` was changed, and `scopes.md`,
 `state.json`, every other spec, all product source, all tests, and everything under
 `docs/` were left untouched.
+
+---
+
+**End of preserved analysis — the disposition rule above has since been
+exercised.** Reading A was chosen and `internal/graphreadstate` was **REMOVED** in
+commit `970016ab`. Do not act on the two-option choice or on §3(b) as live state;
+see [Resolution](#scope-04-integration-gap) at the top of this section.
 
