@@ -355,6 +355,311 @@ bring_up_test_stack() {
 }
 
 # ------------------------------------------------------------------
+# true-empty phase — "an authorized graph that legitimately holds nothing"
+# ------------------------------------------------------------------
+#
+# web/pwa/tests/graph-activation.spec.ts carries a STATE_TRUE_EMPTY arm whose
+# assertions are strong and specific — zero rows, the exact copy "Nothing has
+# been synthesized into your knowledge graph yet", an action href of
+# /pwa/connectors.html (a capture/source next step, NOT a retry), no
+# unavailable/error/failed/retry text, and role="status" rather than "alert".
+# None of it had ever executed. cmd/core/services.go unconditionally calls
+# graph.SeedHospitalityTopics on EVERY startup, so the topics family is never
+# empty on a booted stack and the arm was unreachable (F-080-05-SEED).
+#
+# SCN-080-001-05 is a CONDITIONAL: *when* every authorized family read succeeds
+# with zero records, the user sees the true-empty state. Creating that
+# condition inside a DISPOSABLE lane stack is ordinary test-fixture setup, not
+# a product change. It does NOT resolve F-080-05-SEED — whether a
+# seeded-but-unlinked taxonomy should count as user content remains an open
+# product question — it proves the UI contract holds when the condition occurs.
+#
+# Placement is load-bearing. This phase runs immediately after
+# bring_up_test_stack and BEFORE the full suite, because that is the only
+# moment the stack is guaranteed fresh: on a just-booted stack `people` and
+# `places` are ALREADY empty (no artifacts, no location clusters), so clearing
+# the boot-seeded `topics` is the single remaining step to an all-family empty
+# graph. Later in the lane that no longer holds.
+#
+# Scoping is by Compose project, through the same e2e_ui_compose helper every
+# other lane operation uses, so only `smackerel-test-e2e-ui`'s containers are
+# touched. Credentials are read from the postgres container's OWN environment
+# and never cross the host shell or reach the transcript.
+
+# clear_seeded_taxonomy — delete the boot-seeded hospitality topics from THIS
+# lane's postgres. `topics.parent_id` is the only FK into the table and it is
+# self-referential, so a single whole-table DELETE satisfies referential
+# integrity at end-of-statement; the seeded rows carry no parent anyway.
+clear_seeded_taxonomy() {
+  local deleted status
+  set +e
+  # SC2016 is deliberate here, not an oversight: the single quotes keep the
+  # HOST shell from expanding $POSTGRES_PASSWORD / $POSTGRES_USER / $POSTGRES_DB
+  # so the credentials are read inside the container from its OWN environment
+  # and never traverse this shell, its argv, or the session transcript.
+  # shellcheck disable=SC2016
+  deleted="$(e2e_ui_compose exec -T postgres sh -c \
+    'PGPASSWORD="$POSTGRES_PASSWORD" psql -qtAX -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "DELETE FROM topics;"' 2>&1)"
+  status=$?
+  set -e
+  if [[ "$status" -ne 0 ]]; then
+    echo "ERROR: [web-e2e-ui] true-empty phase could not clear the boot-seeded taxonomy (exit ${status})." >&2
+    echo "       psql reported: ${deleted}" >&2
+    return "$status"
+  fi
+  if [[ -n "$deleted" ]]; then
+    echo "[web-e2e-ui] true-empty phase: cleared the boot-seeded taxonomy (psql: ${deleted})" >&2
+  else
+    # -q suppresses the DELETE command tag, so silence here is success, not a
+    # no-op. Say that outright rather than printing an empty field a reader
+    # would have to interpret — the family guard below is the actual proof.
+    echo "[web-e2e-ui] true-empty phase: cleared the boot-seeded taxonomy (psql exited 0; -q prints no command tag)" >&2
+  fi
+  return 0
+}
+
+# assert_all_graph_families_true_empty — refuse to run the specs unless ALL
+# THREE authorized family reads answer HTTP 200 with an empty items array.
+#
+# This guard is the entire point of the phase, not a nicety.
+# graph-activation.spec.ts is state-adaptive by design: it reads whatever the
+# stack publishes and asserts the matching arm. That is what keeps it honest on
+# any stack — and is exactly what would let this phase quietly degrade into a
+# second READY run, report green, and prove nothing. Reading the same family
+# routes the browser reads, and refusing unless every one of them is an empty
+# 200, is what makes a green phase mean the true-empty arm actually executed.
+#
+# 200-with-empty-items specifically, never a 503 or a 5xx: web/pwa/wiki_state.js
+# resolves zero items under CODE_OK to STATE_TRUE_EMPTY (emptyPermitted defaults
+# true), whereas a fault code resolves to a fault state and would send the spec
+# down a different branch.
+#
+# The routes are behind `knowledge-graph:read`, so the probe presents the same
+# lane token the spec's session cookie carries — an unauthenticated probe would
+# see 401 and could never observe the condition under test.
+assert_all_graph_families_true_empty() {
+  local label="$1"
+  if ! command -v curl >/dev/null 2>&1; then
+    echo "ERROR: [web-e2e-ui] true-empty phase needs 'curl' to prove the graph is empty but it is not on PATH." >&2
+    return 127
+  fi
+
+  local family response http_code body
+  for family in topics people places; do
+    # No --fail: a non-200 is exactly what this guard must be able to REPORT,
+    # and --fail would discard the body that identifies it. --write-out appends
+    # the status on its own final line so one call yields both.
+    if ! response="$(curl --silent --show-error --max-time 15 \
+      --write-out '\n%{http_code}' \
+      --header "Authorization: Bearer $SMACKEREL_AUTH_TOKEN" \
+      --header 'Accept: application/json' \
+      "$SMACKEREL_BASE_URL/api/${family}?limit=5" 2>/dev/null)"; then
+      echo "ERROR: [web-e2e-ui] true-empty phase (${label}) could not reach /api/${family}." >&2
+      echo "       curl transport failure; observed: ${response}" >&2
+      return 1
+    fi
+    http_code="${response##*$'\n'}"
+    body="${response%$'\n'*}"
+    if [[ "$http_code" != "200" ]] || ! printf '%s' "$body" | grep -qF '"items":[]'; then
+      echo "ERROR: [web-e2e-ui] true-empty phase (${label}) did NOT observe an all-family empty graph." >&2
+      echo "       Required: every authorized family answers HTTP 200 with a body carrying \"items\":[]." >&2
+      echo "       Observed /api/${family}?limit=5: HTTP ${http_code} body: ${body}" >&2
+      echo "       graph-activation.spec.ts would exercise a different arm and prove nothing about SCN-080-001-05." >&2
+      return 1
+    fi
+    echo "[web-e2e-ui] true-empty phase (${label}): GET /api/${family}?limit=5 answers HTTP ${http_code} ${body}" >&2
+  done
+  return 0
+}
+
+# await_core_healthy — bounded wait for THIS lane's core container to report a
+# healthy Docker healthcheck again after a restart. Bounded by the SST's own
+# COMPOSE_WAIT_TIMEOUT_S (the same budget `up --wait` is given), read fail-loud
+# rather than guessed: no default is invented here (Gate G028).
+await_core_healthy() {
+  local wait_timeout_s core_cid attempts attempt health
+  wait_timeout_s="$(smackerel_env_value "$SMACKEREL_E2E_UI_ENV_FILE" "COMPOSE_WAIT_TIMEOUT_S")"
+  if [[ -z "$wait_timeout_s" ]]; then
+    echo "ERROR: [web-e2e-ui] COMPOSE_WAIT_TIMEOUT_S missing from $SMACKEREL_E2E_UI_ENV_FILE; refusing to guess a health-wait bound." >&2
+    return 1
+  fi
+  core_cid="$(e2e_ui_compose ps -q smackerel-core)"
+  if [[ -z "$core_cid" ]]; then
+    echo "ERROR: [web-e2e-ui] true-empty phase could not resolve the smackerel-core container for project ${SMACKEREL_E2E_UI_COMPOSE_PROJECT}." >&2
+    return 1
+  fi
+
+  attempts=$((wait_timeout_s / 2))
+  ((attempts > 0)) || attempts=1
+  attempt=0
+  health="not-yet-probed"
+  while ((attempt < attempts)); do
+    attempt=$((attempt + 1))
+    health="$(docker inspect --format '{{.State.Health.Status}}' "$core_cid" 2>/dev/null || printf 'inspect-failed')"
+    if [[ "$health" == "healthy" ]]; then
+      echo "[web-e2e-ui] true-empty phase: smackerel-core reports healthy again (after ${attempt} probe(s))." >&2
+      return 0
+    fi
+    sleep 2
+  done
+
+  echo "ERROR: [web-e2e-ui] smackerel-core did not become healthy within ${wait_timeout_s}s of the restore restart." >&2
+  echo "       Last observed container health status: ${health}" >&2
+  return 1
+}
+
+# assert_seeded_taxonomy_restored — prove the boot seed actually came back.
+# "Container healthy" alone would not: it only says /api/health answers. This
+# reads the same family route the next phase's tests depend on and requires it
+# to be NON-empty, which is the direct observable of SeedHospitalityTopics
+# having re-run. Bounded, never an unbounded loop.
+assert_seeded_taxonomy_restored() {
+  local attempt=0 response http_code body
+  http_code="not-yet-probed"
+  body=""
+  while ((attempt < 30)); do
+    attempt=$((attempt + 1))
+    if response="$(curl --silent --show-error --max-time 15 \
+      --write-out '\n%{http_code}' \
+      --header "Authorization: Bearer $SMACKEREL_AUTH_TOKEN" \
+      --header 'Accept: application/json' \
+      "$SMACKEREL_BASE_URL/api/topics?limit=5" 2>/dev/null)"; then
+      http_code="${response##*$'\n'}"
+      body="${response%$'\n'*}"
+      if [[ "$http_code" == "200" ]] && ! printf '%s' "$body" | grep -qF '"items":[]'; then
+        echo "[web-e2e-ui] true-empty phase: boot seed RESTORED — GET /api/topics?limit=5 answers HTTP ${http_code} ${body}" >&2
+        return 0
+      fi
+    else
+      http_code="transport-failure"
+      body="$response"
+    fi
+    sleep 2
+  done
+
+  echo "ERROR: [web-e2e-ui] the boot-seeded taxonomy did NOT come back after restarting smackerel-core." >&2
+  echo "       Last observed /api/topics?limit=5: HTTP ${http_code} body: ${body}" >&2
+  return 1
+}
+
+# restore_seeded_taxonomy — put the stack back exactly as the full suite
+# expects to find it. Restarting core re-runs SetupServices, which calls the
+# explicitly idempotent SeedHospitalityTopics (ON CONFLICT (name) DO NOTHING)
+# before the HTTP listener binds. The wait is what makes this safe to hand on:
+# the full suite runs next and must not inherit a de-seeded database.
+restore_seeded_taxonomy() {
+  local status
+  echo "[web-e2e-ui] true-empty phase: restarting smackerel-core so the boot seed re-runs..." >&2
+  set +e
+  e2e_ui_compose restart --timeout 30 smackerel-core >&2
+  status=$?
+  set -e
+  if [[ "$status" -ne 0 ]]; then
+    echo "ERROR: [web-e2e-ui] true-empty phase could not restart smackerel-core (exit ${status})." >&2
+    return "$status"
+  fi
+  await_core_healthy || return $?
+  assert_seeded_taxonomy_restored || return $?
+  return 0
+}
+
+# true_empty_phase_applies — gate the phase on the caller's own Playwright
+# filter. Identical predicate to the two phases below (all three run exactly
+# the one activation-dependent spec), named separately so the gates read
+# independently and can diverge without a rename.
+true_empty_phase_applies() {
+  graph_disabled_phase_applies "$@"
+}
+
+run_true_empty_phase() {
+  local status=0
+  local restore_status=0
+  # `SECONDS` counts from shell start, so a snapshot here yields this phase's
+  # own wall-clock cost — the lane's added price is measurable, not estimated.
+  local phase_start="$SECONDS"
+
+  echo "" >&2
+  echo "[web-e2e-ui] true-empty phase: emptying every authorized graph family on the FRESH stack (project ${SMACKEREL_E2E_UI_COMPOSE_PROJECT})..." >&2
+
+  set +e
+  clear_seeded_taxonomy
+  status=$?
+  set -e
+
+  if [[ "$status" -eq 0 ]]; then
+    set +e
+    assert_all_graph_families_true_empty before-specs
+    status=$?
+    set -e
+  fi
+
+  if [[ "$status" -eq 0 ]]; then
+    echo "[web-e2e-ui] true-empty phase: running graph-activation.spec.ts against the ALL-FAMILY-EMPTY stack..." >&2
+    set +e
+    # Scoped to the ONE spec whose assertions are graph-state dependent.
+    # Re-running the whole suite here would cost minutes and blur the phases'
+    # result summaries together.
+    run_node_tooling graph-activation.spec.ts
+    status=$?
+    set -e
+  fi
+
+  # Re-prove emptiness AFTER the specs ran. The guard above establishes the
+  # condition at one instant; this closes the window, so the graph is known to
+  # have been empty for the WHOLE run rather than only at its start. That
+  # matters because the spec adapts to whatever it observes: had rows appeared
+  # mid-run the browser would have painted the ready view and the phase would
+  # still have reported green.
+  if [[ "$status" -eq 0 ]]; then
+    set +e
+    assert_all_graph_families_true_empty after-specs
+    status=$?
+    set -e
+    if [[ "$status" -ne 0 ]]; then
+      echo "ERROR: [web-e2e-ui] the graph refilled during the true-empty phase; the specs may have exercised a populated arm." >&2
+    fi
+  fi
+
+  # Diagnostic only — the bracket above already decided the outcome, so a
+  # missing extraction here can neither pass nor fail the phase. The
+  # store-exclusivity evidence line names the state the browser actually
+  # painted on the topics index, which the TTY list reporter overwrites in the
+  # live transcript but the JSON reporter records verbatim. In this phase it
+  # should read `painted=true-empty`.
+  local painted_arm=""
+  if [[ -r "$SMACKEREL_E2E_UI_PWA_DIR/test-results/results.json" ]]; then
+    painted_arm="$(grep -o 'GRAPH-EV [^"]*' "$SMACKEREL_E2E_UI_PWA_DIR/test-results/results.json" || true)"
+  fi
+  if [[ -n "$painted_arm" ]]; then
+    echo "[web-e2e-ui] true-empty phase: browser painted $painted_arm" >&2
+  fi
+
+  # RESTORE — on EVERY exit path above, including a failure before the specs
+  # ran. The full suite runs next on this same stack and must not inherit a
+  # de-seeded database.
+  set +e
+  restore_seeded_taxonomy
+  restore_status=$?
+  set -e
+  if [[ "$restore_status" -ne 0 ]]; then
+    echo "ERROR: [web-e2e-ui] true-empty phase FAILED TO RESTORE the boot seed — the full suite that runs next would inherit a de-seeded database." >&2
+    # First failure wins within the phase: a spec failure stays the reported
+    # cause, but a restore failure can never pass silently.
+    if [[ "$status" -eq 0 ]]; then
+      status="$restore_status"
+    fi
+  fi
+
+  local phase_seconds=$((SECONDS - phase_start))
+  if [[ "$status" -eq 0 ]]; then
+    echo "[web-e2e-ui] true-empty phase: PASS (${phase_seconds}s)" >&2
+  else
+    echo "[web-e2e-ui] true-empty phase: FAIL (exit=${status}, ${phase_seconds}s)" >&2
+  fi
+  return "$status"
+}
+
+# ------------------------------------------------------------------
 # store-unavailable phase — "the database is down"
 # ------------------------------------------------------------------
 #
@@ -692,15 +997,39 @@ if [[ -z "${SMACKEREL_E2E_UI_NPX:-}" ]]; then
   bring_up_test_stack
 fi
 
-# Phase 1 — the full suite against the default, graph-ENABLED stack.
+# Seeded so the phases below can fold in with first-failure-wins. On the
+# SMACKEREL_E2E_UI_NPX canary path no stack is brought up, every phase gate is
+# false, and the lane exit stays the full suite's own code verbatim — the
+# exit-code-propagation contract the canary asserts is unchanged.
+lane_status=0
+
+# Phase 1 — true-empty. MUST run here: the stack is freshly booted, so `people`
+# and `places` are already empty and clearing the boot-seeded `topics` is all
+# that stands between this run and an all-family empty graph. It restores the
+# seed (and waits for core to be healthy again) before handing the same stack
+# to the full suite. Live path only.
+if [[ -z "${SMACKEREL_E2E_UI_NPX:-}" ]] && true_empty_phase_applies "$@"; then
+  true_empty_status=0
+  run_true_empty_phase || true_empty_status=$?
+  # First failure wins, as with the phases below. The phase is NOT advisory:
+  # a red true-empty phase fails the lane.
+  if [[ "$lane_status" -eq 0 && "$true_empty_status" -ne 0 ]]; then
+    lane_status="$true_empty_status"
+  fi
+fi
+
+# Phase 2 — the full suite against the default, graph-ENABLED stack.
 # Behavior is unchanged: the exit code still propagates verbatim, including
 # on the SMACKEREL_E2E_UI_NPX canary path where no stack is brought up.
 set +e
 run_node_tooling "$@"
-lane_status=$?
+full_suite_status=$?
 set -e
+if [[ "$lane_status" -eq 0 && "$full_suite_status" -ne 0 ]]; then
+  lane_status="$full_suite_status"
+fi
 
-# Phase 2 — store-unavailable. Runs on the stack phase 1 JUST finished with,
+# Phase 3 — store-unavailable. Runs on the stack phase 2 JUST finished with,
 # still up: stopping one container is all the induction needs, so this phase
 # costs roughly the spec's runtime instead of a whole rebuild/boot cycle. It
 # must run BEFORE the graph-disabled phase, which recycles the stack. Live
@@ -715,7 +1044,7 @@ if [[ -z "${SMACKEREL_E2E_UI_NPX:-}" ]] && store_unavailable_phase_applies "$@";
   fi
 fi
 
-# Phase 3 — F-080-04-LANE. Live-stack path only: the canary injects a stub
+# Phase 4 — F-080-04-LANE. Live-stack path only: the canary injects a stub
 # npx and brings up no stack, so there is nothing to recycle there.
 if [[ -z "${SMACKEREL_E2E_UI_NPX:-}" ]] && graph_disabled_phase_applies "$@"; then
   graph_disabled_status=0
