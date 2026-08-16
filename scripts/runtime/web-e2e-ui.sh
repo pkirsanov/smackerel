@@ -244,11 +244,41 @@ e2e_ui_compose() {
     # excludes ml; ML-readiness is a background goroutine with text fallback).
   # The override is loaded ONLY here — the prod stack (deploy/compose.deploy.yml)
   # and the dev/integration/e2e lanes (smackerel_compose) are untouched.
+  #
+  # F-080-04-LANE — optional THIRD compose file. A lane phase MAY layer one
+  # extra file on top of the two above by exporting
+  # SMACKEREL_E2E_UI_EXTRA_COMPOSE_FILE; it is appended LAST so its keys win
+  # over both the base file and the e2e-ui override. This is a HARNESS PHASE
+  # SELECTOR, not runtime configuration: it names a repo-local compose file,
+  # carries no service value, and has NO default — when the variable is unset
+  # the compose argv is byte-for-byte what it was before, so the pre-existing
+  # single-phase lane is untouched. When it IS set it must resolve to a real
+  # file; a bad path fails loud HERE rather than silently degrading to the
+  # base-only stack (smackerel-no-defaults / Gate G028).
+  #
+  # This mirrors the SMACKEREL_COMPOSE_OVERRIDE_FILE hook in
+  # scripts/lib/runtime.sh::smackerel_compose, which this lane cannot reuse
+  # because it invokes docker compose directly (it must pin --project-name to
+  # `smackerel-test-e2e-ui` rather than inherit the env-file COMPOSE_PROJECT).
+  # A distinct variable name keeps the two hooks from cross-triggering.
+  #
+  # Because BOTH `up` and `down` funnel through this one helper, a phase that
+  # exports the variable gets a symmetric bring-up/teardown pair for free.
+  local -a extra_compose_file_args=()
+  if [[ -n "${SMACKEREL_E2E_UI_EXTRA_COMPOSE_FILE:-}" ]]; then
+    if [[ ! -f "$SMACKEREL_E2E_UI_EXTRA_COMPOSE_FILE" ]]; then
+      echo "ERROR: SMACKEREL_E2E_UI_EXTRA_COMPOSE_FILE is set but is not a readable file: $SMACKEREL_E2E_UI_EXTRA_COMPOSE_FILE" >&2
+      return 1
+    fi
+    extra_compose_file_args=(-f "$SMACKEREL_E2E_UI_EXTRA_COMPOSE_FILE")
+  fi
+
   docker compose \
     --project-name "$SMACKEREL_E2E_UI_COMPOSE_PROJECT" \
     --env-file "$SMACKEREL_E2E_UI_ENV_FILE" \
     -f "$SMACKEREL_E2E_UI_REPO_ROOT/docker-compose.yml" \
     -f "$SMACKEREL_E2E_UI_REPO_ROOT/docker-compose.e2e-ui.override.yml" \
+    ${extra_compose_file_args[@]+"${extra_compose_file_args[@]}"} \
     "$@"
 }
 
@@ -324,6 +354,153 @@ bring_up_test_stack() {
   e2e_ui_compose up -d --wait --wait-timeout "$wait_timeout_s" --build
 }
 
+# ------------------------------------------------------------------
+# F-080-04-LANE — graph-DISABLED second phase
+# ------------------------------------------------------------------
+#
+# The first phase can only ever boot an ENABLED graph core: the shared SST
+# test env always emits a NON-EMPTY KNOWLEDGE_GRAPH_API_CURSOR_SECRET and
+# docker-compose.yml sources it via `env_file:` with no per-run override. So
+# the activation-dependent assertions in web/pwa/tests/graph-activation.spec.ts
+# only ever exercised their ENABLED arm, and the DISABLED arm — the one the
+# BUG-080-001 SCOPE-04 rows are about — had no live-container proof.
+#
+# This second phase boots a FRESH stack with that enabler explicitly empty
+# (docker-compose.graph-disabled.override.yml -> SecretEmpty ->
+# ActivationDisabled -> policy_disabled) so the disabled arm runs against a
+# REAL container over REAL HTTP. The spec file is already state-adaptive and
+# needs no edit; nothing here mocks or intercepts anything.
+#
+# Exactly ONE core is alive at any moment: the enabled stack is torn down
+# COMPLETELY before the disabled one starts. The pipeline subscribers in
+# cmd/core/services.go use no queue groups, so two concurrent cores would
+# double-consume and pollute shared state.
+
+# assert_graph_activation_disabled — refuse to continue unless the freshly
+# booted stack actually PUBLISHES the disabled aggregate.
+#
+# This is the phase's precondition, not decoration. Every assertion in
+# graph-activation.spec.ts reads the published aggregate and then asserts
+# whichever arm matches, which is what makes the spec honest on either stack —
+# and is also exactly what would let this phase silently degrade into a
+# duplicate ENABLED run if the overlay ever stopped applying, reporting green
+# while proving nothing. Reading the same aggregate the spec reads, and
+# refusing unless it says policy_disabled, is what makes a green phase mean
+# the disabled branch really executed.
+assert_graph_activation_disabled() {
+  if ! command -v curl >/dev/null 2>&1; then
+    echo "ERROR: [web-e2e-ui] graph-disabled phase needs 'curl' to read the published graph aggregate but it is not on PATH." >&2
+    return 127
+  fi
+
+  # The `graph` section lives inside the AUTHENTICATED branch of /api/health
+  # (capability detail is withheld from anonymous callers, CWE-200), so the
+  # probe presents the same lane token the spec's session cookie carries.
+  local health
+  if ! health="$(curl --silent --show-error --fail --max-time 15 \
+    --header "Authorization: Bearer $SMACKEREL_AUTH_TOKEN" \
+    --header 'Accept: application/json' \
+    "$SMACKEREL_BASE_URL/api/health")"; then
+    echo "ERROR: [web-e2e-ui] graph-disabled phase could not read /api/health from the disabled stack." >&2
+    return 1
+  fi
+
+  if ! printf '%s' "$health" | grep -q '"state":"policy_disabled"'; then
+    echo "ERROR: [web-e2e-ui] graph-disabled phase booted a stack that does NOT publish the disabled aggregate." >&2
+    echo "       The overlay did not take effect, so graph-activation.spec.ts would exercise its ENABLED arm and prove nothing." >&2
+    echo "       observed /api/health body: $health" >&2
+    return 1
+  fi
+
+  # Diagnostic only — the assertion above already decided the outcome, so a
+  # non-matching extraction here can neither pass nor fail the phase.
+  local observed
+  observed="$(printf '%s' "$health" | grep -o '"activation":"[^"]*","state":"[^"]*","code":"[^"]*"' || true)"
+  if [[ -z "$observed" ]]; then
+    observed="$health"
+  fi
+  echo "[web-e2e-ui] graph-disabled phase: stack publishes $observed" >&2
+}
+
+# graph_disabled_phase_applies — gate the extra stack cycle on the caller's
+# own Playwright filter, mirroring `e2e_graph_disabled_phase_applies` in the
+# `./smackerel.sh test e2e` lane. The full lane (no filter) always proves the
+# disabled state; a caller who narrowed the run to some other spec should not
+# pay minutes for a stack cycle whose one spec they excluded.
+graph_disabled_phase_applies() {
+  if [[ "$#" -eq 0 ]]; then
+    return 0
+  fi
+  local arg
+  for arg in "$@"; do
+    if [[ "$arg" == *graph-activation* ]]; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+run_graph_disabled_phase() {
+  local status=0
+  # `SECONDS` counts from shell start, so a snapshot here yields this phase's
+  # own wall-clock cost — the lane's added price is then measurable rather
+  # than estimated.
+  local phase_start="$SECONDS"
+
+  echo "" >&2
+  echo "[web-e2e-ui] graph-disabled phase: recycling the stack with the graph activation enabler explicitly empty..." >&2
+
+  # Exactly ONE core alive at a time — the enabled stack must be fully gone
+  # before the disabled one starts. tear_down_test_stack is idempotent and
+  # project-scoped (`down --remove-orphans --volumes`).
+  tear_down_test_stack
+
+  # Exported so BOTH the `up` inside bring_up_test_stack and the matching
+  # `down` after the phase resolve the SAME compose file set through
+  # e2e_ui_compose.
+  export SMACKEREL_E2E_UI_EXTRA_COMPOSE_FILE="$SMACKEREL_E2E_UI_REPO_ROOT/docker-compose.graph-disabled.override.yml"
+
+  set +e
+  bring_up_test_stack
+  status=$?
+  set -e
+  if [[ "$status" -ne 0 ]]; then
+    echo "ERROR: [web-e2e-ui] graph-disabled phase stack failed to start (exit ${status})." >&2
+  fi
+
+  if [[ "$status" -eq 0 ]]; then
+    set +e
+    assert_graph_activation_disabled
+    status=$?
+    set -e
+  fi
+
+  if [[ "$status" -eq 0 ]]; then
+    echo "[web-e2e-ui] graph-disabled phase: running graph-activation.spec.ts against the DISABLED stack..." >&2
+    set +e
+    # Scoped to the ONE spec whose assertions are activation-dependent.
+    # Re-running the whole suite here would cost minutes and blur the two
+    # phases' result summaries together.
+    run_node_tooling graph-activation.spec.ts
+    status=$?
+    set -e
+  fi
+
+  # Symmetric teardown — the overlay is still exported here, so `down`
+  # resolves the same compose file set that `up` did. Runs on failure too,
+  # and the EXIT/INT/TERM traps remain installed as the outer safety net.
+  tear_down_test_stack
+  unset SMACKEREL_E2E_UI_EXTRA_COMPOSE_FILE
+
+  local phase_seconds=$((SECONDS - phase_start))
+  if [[ "$status" -eq 0 ]]; then
+    echo "[web-e2e-ui] graph-disabled phase: PASS (${phase_seconds}s)" >&2
+  else
+    echo "[web-e2e-ui] graph-disabled phase: FAIL (exit=${status}, ${phase_seconds}s)" >&2
+  fi
+  return "$status"
+}
+
 # Default action: bring up the disposable test stack under the
 # dedicated Compose project, invoke the Playwright runner against it,
 # and tear the stack down on exit.
@@ -344,4 +521,25 @@ if [[ -z "${SMACKEREL_E2E_UI_NPX:-}" ]]; then
   bootstrap_pwa_tooling
   bring_up_test_stack
 fi
+
+# Phase 1 — the full suite against the default, graph-ENABLED stack.
+# Behavior is unchanged: the exit code still propagates verbatim, including
+# on the SMACKEREL_E2E_UI_NPX canary path where no stack is brought up.
+set +e
 run_node_tooling "$@"
+lane_status=$?
+set -e
+
+# Phase 2 — F-080-04-LANE. Live-stack path only: the canary injects a stub
+# npx and brings up no stack, so there is nothing to recycle there.
+if [[ -z "${SMACKEREL_E2E_UI_NPX:-}" ]] && graph_disabled_phase_applies "$@"; then
+  graph_disabled_status=0
+  run_graph_disabled_phase || graph_disabled_status=$?
+  # First failure wins, mirroring the `./smackerel.sh test e2e` lane. The
+  # phase is NOT advisory: a red second phase fails the lane.
+  if [[ "$lane_status" -eq 0 && "$graph_disabled_status" -ne 0 ]]; then
+    lane_status="$graph_disabled_status"
+  fi
+fi
+
+exit "$lane_status"
