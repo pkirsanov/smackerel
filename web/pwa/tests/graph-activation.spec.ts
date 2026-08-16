@@ -550,6 +550,26 @@ test.describe("BUG-080-001 SCOPE-04 — Knowledge Graph activation truth", () =>
         ).toBe(1);
       }
 
+      // No overlap between the status region and the family rows. This is
+      // a separate failure mode from horizontal scroll: a status block
+      // can sit ON TOP of content at a narrow width while the page still
+      // fits horizontally, which silently obscures verified rows. Boxes
+      // are null when a node is not rendered (the ready state hides the
+      // status), and a non-rendered node cannot overlap anything.
+      const statusBox = await page.locator("#wiki-topics-status").boundingBox();
+      const listBox = await page.locator("#wiki-topics-list").boundingBox();
+      if (statusBox && listBox) {
+        const intersects =
+          statusBox.x < listBox.x + listBox.width &&
+          listBox.x < statusBox.x + statusBox.width &&
+          statusBox.y < listBox.y + listBox.height &&
+          listBox.y < statusBox.y + statusBox.height;
+        expect(
+          intersects,
+          `status region overlaps the family rows at ${viewport.label}`,
+        ).toBe(false);
+      }
+
       // Any offered recovery action must be keyboard-operable, not
       // pointer-only. Buttons and links both qualify; a div would not.
       const action = page.locator("#wiki-topics-status .graph-state-action");
