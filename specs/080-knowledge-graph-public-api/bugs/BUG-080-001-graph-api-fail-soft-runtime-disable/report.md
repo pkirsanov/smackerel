@@ -4684,3 +4684,96 @@ all-family condition.
 
 **Status: OPEN.** Nothing was staged or committed.
 
+
+
+---
+
+<a id="t080-05-ui-resolution"></a>
+
+## T080-05-UI / SCN-080-001-05 — RESOLVED: the true-empty state is inducible after all
+
+This supersedes the `OPEN` status recorded directly above and the
+"row stays `[ ]`" verdict under [T080-05-UI](#t080-05-ui). Both rows are now `[x]`.
+
+### Correcting my own earlier reasoning
+
+The section above asserted the true-empty state was **"currently unreachable by
+construction"** and that **"no amount of harness work can induce it while the product
+seeds `topics` at every startup."**
+
+That was wrong, and the error is worth naming precisely because it is the kind that
+quietly converts a solvable problem into a permanent one. I conflated *"the product
+seeds `topics` at boot"* with *"`topics` can never be empty"*. Those are different
+claims. The seed runs **once at startup**; nothing pins the rows afterward. A test
+harness that clears the table **after** boot reaches the all-family-empty condition
+directly. I had verified the seed existed and stopped there, treating a boot-time
+behaviour as an invariant without testing whether it actually held over time.
+
+I also over-read `F-080-05-SEED` as a blocking dependency. It is not.
+SCN-080-001-05 is a **conditional** — *"when every authorized family read succeeds
+with zero records, the user sees the true-empty state"*. Establishing that condition
+in a **disposable** test stack is ordinary fixture setup, not a product change, and it
+requires no guess about product intent.
+
+### What was built
+
+Commit `23396c5c` (`gitleaks`-clean) adds a fourth guarded phase to
+`scripts/runtime/web-e2e-ui.sh`. It runs in phase 1 immediately after the stack comes
+up and **before** the 82-test suite, because that is the only moment the database is
+guaranteed fresh.
+
+- **Induce:** clear the boot-seeded taxonomy on the disposable stack.
+- **Guard:** REQUIRE all three families to answer `HTTP 200` with `{"items":[]}`,
+  checked **before and after** the specs. Non-empty or non-`200` fails the lane loudly
+  instead of silently re-running the ready arm. This guard is load-bearing: the five
+  specs are state-adaptive, so without it they would take their healthy branch and
+  prove nothing while still reporting green.
+- **Restore:** restart `smackerel-core` so the idempotent boot seed re-runs, wait on
+  the health probe, then assert the five topics returned **with fresh ULIDs** — fresh
+  IDs prove the seed genuinely re-ran rather than the delete having silently failed.
+
+### Raw evidence — own run, `LANE_EXIT=0`
+
+```
+[web-e2e-ui] true-empty phase: cleared the boot-seeded taxonomy (psql exited 0)
+[web-e2e-ui] true-empty phase (before-specs): GET /api/topics?limit=5 answers HTTP 200 {"items":[],"nextCursor":""}
+[web-e2e-ui] true-empty phase (before-specs): GET /api/people?limit=5 answers HTTP 200 {"items":[],"nextCursor":""}
+[web-e2e-ui] true-empty phase (before-specs): GET /api/places?limit=5 answers HTTP 200 {"items":[],"nextCursor":""}
+Running 5 tests using 1 worker
+  5 passed (4.9s)
+[web-e2e-ui] true-empty phase (after-specs): GET /api/topics?limit=5 answers HTTP 200 {"items":[],"nextCursor":""}
+[web-e2e-ui] true-empty phase (after-specs): GET /api/people?limit=5 answers HTTP 200 {"items":[],"nextCursor":""}
+[web-e2e-ui] true-empty phase (after-specs): GET /api/places?limit=5 answers HTTP 200 {"items":[],"nextCursor":""}
+[web-e2e-ui] true-empty phase: browser painted GRAPH-EV store-exclusivity | painted=true-empty | storeRetryAffordance=0 | storeCopy=absent
+[web-e2e-ui] true-empty phase: restarting smackerel-core so the boot seed re-runs...
+[web-e2e-ui] true-empty phase: smackerel-core reports healthy again (after 4 probe(s)).
+[web-e2e-ui] true-empty phase: boot seed RESTORED — 5 topics with fresh ULIDs (01M05Y1DTKBZBRE7480MT863JM, ...)
+[web-e2e-ui] true-empty phase: PASS (20s)
+Running 82 tests using 4 workers
+  73 passed (25.3s)
+[web-e2e-ui] store-unavailable phase: PASS (17s)
+[web-e2e-ui] graph-disabled phase: PASS (130s)
+LANE_EXIT=0
+```
+
+`painted=true-empty` is the decisive line. The same lane run also observed
+`painted=store-unavailable` and the ready arm, so the three states are demonstrably
+**distinguishable** rather than one reachable arm being re-asserted three times.
+
+### Non-regression
+
+The 82-test suite that follows the restore held at `73 passed`, identical to the
+pre-change runs, confirming the de-seed/re-seed cycle left no residue for the rest of
+the suite to inherit.
+
+### What this does NOT resolve
+
+`F-080-05-SEED` remains **OPEN**. The unconditional startup seed at
+`cmd/core/services.go:225-227` is untouched, and the product question stands: because
+`wiki_state.js:239` decides emptiness on **row existence** rather than linked content,
+a brand-new deployment paints `ready` with five zero-content topics instead of the
+onboarding true-empty view. That is an owner decision for `bubbles.analyst` /
+`bubbles.design`, not something a test harness should silently settle. This section
+proves only that **when** the empty condition occurs, the UI contract holds.
+
+**Status: T080-05-UI `[x]`, SCN-080-001-05 `[x]`. `F-080-05-SEED` still OPEN.**
