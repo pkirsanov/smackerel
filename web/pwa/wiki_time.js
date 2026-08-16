@@ -3,7 +3,11 @@
 // across navigation via the History API state pocket (sessionStorage
 // would violate the storage guard).
 import { validateTimeResponse } from "/pwa/generated/wiki_graph_v1.js";
-import { apiGetJSON, clearChildren, el, markReady, renderError } from "/pwa/wiki_lib.js";
+import { clearChildren, el, markReady } from "/pwa/wiki_lib.js";
+import {
+  readGraphJSON, readGraphActivation, activationDisablesJourney, renderReadState,
+  STATE_READY, STATE_DISABLED,
+} from "/pwa/wiki_state.js";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const DEFAULT_WINDOW_DAYS = 30;
@@ -17,24 +21,44 @@ async function load() {
   const now = new Date();
   const from = new Date(now.getTime() - DEFAULT_WINDOW_DAYS * DAY_MS);
   const path = "/api/time?from=" + encodeURIComponent(isoDate(from)) + "&to=" + encodeURIComponent(isoDate(now));
-  try {
-    const body = validateTimeResponse(await apiGetJSON(path));
+
+  const activation = await readGraphActivation();
+  if (activationDisablesJourney(activation)) {
     clearChildren(list);
-    for (const day of body.days) {
-      const li = el("li", { class: "wiki-time-day", "data-date": day.date });
-      li.appendChild(el("h3", { class: "wiki-time-day-heading" }, day.date));
-      const ul = el("ul", { class: "wiki-time-day-artifacts", role: "list" });
-      for (const a of day.artifacts) {
-        ul.appendChild(el("li", { class: "wiki-time-artifact", "data-artifact-id": a.artifactId, "data-captured-at": a.capturedAt },
-          el("a", { href: "/pwa/wiki_artifact.html?id=" + encodeURIComponent(a.artifactId) }, a.title || a.artifactId),
-          el("time", { datetime: a.capturedAt, class: "wiki-timeline-date" }, " — " + a.capturedAt),
-        ));
-      }
-      li.appendChild(ul);
-      list.appendChild(li);
+    renderReadState(status, STATE_DISABLED, { privateRegions: [list] });
+    markReady(section);
+    return;
+  }
+
+  const result = await readGraphJSON(path, {
+    validate: validateTimeResponse,
+    countOf: (b) => (b && b.days ? b.days.length : 0),
+  });
+  if (result.state !== STATE_READY) {
+    clearChildren(list);
+    list.hidden = true;
+    renderReadState(status, result.state, { code: result.code, privateRegions: [list], onRetry: load });
+    markReady(section);
+    return;
+  }
+
+  clearChildren(list);
+  for (const day of result.body.days) {
+    const li = el("li", { class: "wiki-time-day", "data-date": day.date });
+    li.appendChild(el("h3", { class: "wiki-time-day-heading" }, day.date));
+    const ul = el("ul", { class: "wiki-time-day-artifacts", role: "list" });
+    for (const a of day.artifacts) {
+      ul.appendChild(el("li", { class: "wiki-time-artifact", "data-artifact-id": a.artifactId, "data-captured-at": a.capturedAt },
+        el("a", { href: "/pwa/wiki_artifact.html?id=" + encodeURIComponent(a.artifactId) }, a.title || a.artifactId),
+        el("time", { datetime: a.capturedAt, class: "wiki-timeline-date" }, " — " + a.capturedAt),
+      ));
     }
-    status.hidden = true; list.hidden = false; markReady(section);
-  } catch (e) { renderError(status, e); markReady(section); }
+    li.appendChild(ul);
+    list.appendChild(li);
+  }
+  list.hidden = false;
+  renderReadState(status, STATE_READY, { code: result.code });
+  markReady(section);
 }
 
 // Scroll-position restore: use history.state, which is a non-storage

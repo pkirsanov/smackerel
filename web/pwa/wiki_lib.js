@@ -13,7 +13,12 @@ import { validateCrossLink } from "/pwa/generated/wiki_graph_v1.js";
 
 export const ANNOTATION_PROBE_TIMEOUT_MS = 2500;
 
-export async function apiGetJSON(path) {
+// apiGetJSON is the plain reader for NON-graph reads (the annotation
+// summary below). Graph reads MUST go through readGraphJSON in
+// /pwa/wiki_state.js, which resolves a closed state instead of throwing
+// a status string — BUG-080-001 SCOPE-04. Deliberately not exported so a
+// future graph surface cannot reach for the untyped path by accident.
+async function apiGetJSON(path) {
   const resp = await fetch(path, {
     method: "GET",
     credentials: "same-origin",
@@ -168,14 +173,6 @@ function openAnnotationEditor(container, artifactID) {
     }
   });
   container.appendChild(form);
-}
-
-// renderError swaps the status node into an error role for assertions.
-export function renderError(statusNode, err) {
-  if (!statusNode) return;
-  statusNode.className = "status error";
-  statusNode.setAttribute("role", "alert");
-  statusNode.textContent = "Error: " + (err && err.message ? err.message : String(err));
 }
 
 // markReady toggles a section out of aria-busy.
