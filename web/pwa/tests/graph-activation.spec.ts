@@ -78,6 +78,19 @@ const ALL_UI_STATES = [
 ];
 
 /**
+ * A distinctive fragment of the disabled explanation, which is owned by
+ * web/pwa/wiki_state.js as STATE_COPY[STATE_DISABLED].message ("The
+ * knowledge graph is turned off for this deployment. This is a deliberate
+ * configuration, not a fault, and there is nothing to retry.").
+ *
+ * A fragment rather than the whole sentence on purpose: ordinary
+ * copy-editing of the rest must not fail the lane, but an explanation
+ * that is missing, blanked out, or replaced by an unrelated message still
+ * must.
+ */
+const DISABLED_EXPLANATION_FRAGMENT = "turned off for this deployment";
+
+/**
  * Establish a real browser session against the running stack by seeding
  * the lane's dev-token session cookie.
  *
@@ -158,7 +171,7 @@ async function paintedState(page: Page, statusSelector: string): Promise<string>
 }
 
 test.describe("BUG-080-001 SCOPE-04 — Knowledge Graph activation truth", () => {
-  test("Regression: explicit disabled Graph stays in shell and never reports Available", async ({ page }) => {
+  test("Regression: explicit disabled Graph stays in shell and never reports Available", async ({ page }, testInfo) => {
     await authenticate(page);
     const aggregate = await readPublishedAggregate(page.request);
     expect(aggregate, "an authenticated caller must receive the graph aggregate").not.toBeNull();
@@ -189,6 +202,53 @@ test.describe("BUG-080-001 SCOPE-04 — Knowledge Graph activation truth", () =>
       await expect(page.locator("#wiki-landing-subtitle")).not.toContainText("Browse your knowledge graph");
       // The word "Available" must never appear as a claim while disabled.
       await expect(page.locator("body")).not.toContainText(/\bAvailable\b/);
+
+      // Everything above is a NEGATION, and a page that rendered a blank
+      // panel would satisfy every one of them. SCN-080-001-04 also
+      // requires the shell to SHOW the unavailable explanation, so assert
+      // it is actually on screen. Scoped to the status element's own
+      // message node, not the body: #wiki-landing-subtitle carries
+      // similar wording, and matching that instead would prove nothing
+      // about the status region.
+      const disabledStatus = page.locator("#wiki-landing-status");
+      await expect(
+        disabledStatus,
+        "the disabled status region must be perceivable, not merely present in the DOM",
+      ).toBeVisible();
+      const disabledExplanation = disabledStatus.locator(".graph-state-message");
+      await expect(
+        disabledExplanation,
+        "the disabled explanation must be rendered and visible, not an empty panel",
+      ).toBeVisible();
+      await expect(
+        disabledExplanation,
+        "the disabled state must say WHY the graph is unavailable",
+      ).toContainText(DISABLED_EXPLANATION_FRAGMENT);
+
+      // That copy ends "there is nothing to retry", and web/pwa/wiki_state.js
+      // backs the promise structurally: the disabled entry carries no
+      // `action`, unlike store-unavailable and degraded which both define
+      // "Try this view again". Assert the promise holds. A deliberately
+      // disabled capability must offer no recovery affordance, because
+      // retrying can never help — an offered retry would be a real
+      // contradiction between the copy and the behaviour.
+      await expect(
+        disabledStatus.locator(".graph-state-action"),
+        "a deliberately disabled capability must not offer a retry action",
+      ).toHaveCount(0);
+
+      // T080-04-UI requires durable visual evidence. playwright.config.ts
+      // keeps `screenshot: "only-on-failure"` globally — correct for the
+      // suite, but it means a PASSING disabled run leaves no image to
+      // cite. Capture one explicitly, in this branch only, and attach it
+      // so the artifact is associated with this test in the report
+      // instead of being a loose file nothing points at.
+      const disabledShot = testInfo.outputPath("graph-disabled-wiki-landing.png");
+      await page.screenshot({ path: disabledShot, fullPage: true });
+      await testInfo.attach("graph-disabled-wiki-landing.png", {
+        path: disabledShot,
+        contentType: "image/png",
+      });
     } else {
       // The aggregate says the capability is NOT deliberately off, so the
       // UI must not claim it is. This branch asserts just as hard as the
