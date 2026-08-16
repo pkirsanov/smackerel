@@ -725,4 +725,182 @@ test.describe("BUG-080-001 SCOPE-04 — Knowledge Graph activation truth", () =>
       ).not.toBe(STATE_READY);
     }
   });
+
+  /**
+   * T080-06-RENDER — ui-unit, NOT e2e-ui. Classified honestly.
+   *
+   * `route-absent` and `schema-invalid` are UNREACHABLE against a
+   * current, correctly-functioning core, and that is this bug's own
+   * doing rather than a gap:
+   *
+   *   * route-absent needs a BARE 404. internal/api/router.go registers
+   *     the graph manifest atomically behind one always-true
+   *     GraphCapability guard, so every known graph path is mounted in
+   *     BOTH the enabled and disabled states and a disabled deployment
+   *     answers a typed 503 instead. A silent Chi 404 cannot happen.
+   *   * schema-invalid needs a 400 or a typed 5xx. The PWA builds every
+   *     graph request from fixed internal defaults -- it never sends a
+   *     user-controlled cursor, window or kind -- so it cannot elicit
+   *     one from a healthy server.
+   *
+   * They remain correct DEFENSIVE states (version skew during a rolling
+   * deploy, a misrouting proxy, a future paginating UI). Their RENDER
+   * contract is therefore verified here by executing the REAL module in
+   * a REAL browser against a REAL DOM node. Nothing is mocked: these are
+   * the shipped functions called with real inputs. What is not claimed
+   * is live inducement -- hence ui-unit, and hence this test does not
+   * satisfy any live-stack DoD row.
+   *
+   * It is deliberately a WHOLE-VOCABULARY sweep rather than two cases.
+   * F-080-06-ROWMISS showed a source-text containment test can pass
+   * while a real branch is wrong, so this asserts behaviour: that all
+   * ten states render DISTINCTLY and cannot collapse into one another.
+   */
+  test("Unit: every closed graph state renders a distinct exclusive contract", async ({ page }) => {
+    await authenticate(page);
+    await page.goto("/pwa/wiki_topics.html");
+    await expect(page.locator("#wiki-topics-index")).toHaveAttribute("aria-busy", "false");
+
+    const result = await page.evaluate(async () => {
+      const m = await import("/pwa/wiki_state.js");
+
+      // 1. The REAL classifier across the status/envelope matrix.
+      const classified = {
+        bare404: m.classifyStatus(404, ""),
+        typed404NotFound: m.classifyStatus(404, "not_found"),
+        plain400: m.classifyStatus(400, ""),
+        cursor400: m.classifyStatus(400, "invalid_cursor"),
+        schema500: m.classifyStatus(500, "schema_error"),
+        plain500: m.classifyStatus(500, ""),
+        disabled503: m.classifyStatus(503, "capability_disabled"),
+        store503: m.classifyStatus(503, "store_unavailable"),
+        bare503: m.classifyStatus(503, ""),
+        unauth401: m.classifyStatus(401, ""),
+        forbidden403: m.classifyStatus(403, ""),
+      };
+
+      // 2. The REAL renderer, for every closed state, into a real node.
+      const states = [
+        m.STATE_LOADING, m.STATE_READY, m.STATE_TRUE_EMPTY, m.STATE_PARTIAL,
+        m.STATE_DEGRADED, m.STATE_DISABLED, m.STATE_UNAUTHENTICATED,
+        m.STATE_FORBIDDEN, m.STATE_ROUTE_ABSENT, m.STATE_STORE_UNAVAILABLE,
+        m.STATE_SCHEMA_INVALID,
+      ];
+      // Each state is rendered TWICE: once with no retry handler, and
+      // once with a real one. The renderer only paints a retry button
+      // when the CALLER can actually retry (copy.action plus an onRetry
+      // function), which is why a single-shot render would understate
+      // the contract. The interesting question is not "is a button
+      // present" but "does this state offer retry EVEN WHEN retry is
+      // available" -- that is what separates a transient fault from a
+      // permanent one.
+      const render = (st, opts) => {
+        const node = document.createElement("div");
+        document.body.appendChild(node);
+        m.renderReadState(node, st, opts);
+        const action = node.querySelector(".graph-state-action");
+        const out = {
+          declared: node.getAttribute("data-graph-state"),
+          message: (node.querySelector(".graph-state-message")?.textContent ?? "").trim(),
+          actionCount: node.querySelectorAll(".graph-state-action").length,
+          actionTag: action ? action.tagName.toLowerCase() : "",
+          actionHref: action ? (action.getAttribute("href") ?? "") : "",
+          role: node.getAttribute("role") ?? "",
+        };
+        node.remove();
+        return out;
+      };
+
+      const rendered = [];
+      for (const st of states) {
+        rendered.push({
+          state: st,
+          bare: render(st, {}),
+          withRetry: render(st, { onRetry: () => {} }),
+        });
+      }
+      return { classified, rendered };
+    });
+
+    // eslint-disable-next-line no-console
+    console.log(`GRAPH-EV render-matrix | ${JSON.stringify(result.classified)}`);
+
+    // --- Classifier: the distinctions that carry meaning ---
+    expect(result.classified.bare404, "a bare 404 is a genuinely absent route").toBe(
+      "F080-SYNTH-ROUTE-ABSENT",
+    );
+    expect(
+      result.classified.typed404NotFound,
+      "a typed 404 not_found is a missing ROW, not an absent route",
+    ).toBe("F080-SYNTH-ROW-MISSING");
+    expect(
+      result.classified.bare404 === result.classified.typed404NotFound,
+      "the two 404 meanings must not collapse into one code",
+    ).toBe(false);
+    expect(result.classified.plain400).toBe("F080-SYNTH-SCHEMA-INVALID");
+    expect(result.classified.cursor400).toBe("F080-SYNTH-CURSOR-INVALID");
+    expect(result.classified.schema500).toBe("F080-SYNTH-SCHEMA-INVALID");
+    expect(result.classified.plain500).toBe("F080-SYNTH-SERVER-ERROR");
+    expect(
+      result.classified.disabled503 === result.classified.store503,
+      "deliberately-off must not collapse into store-is-down",
+    ).toBe(false);
+    expect(result.classified.unauth401).toBe("F080-SYNTH-UNAUTHENTICATED");
+    expect(
+      result.classified.unauth401 === result.classified.forbidden403,
+      "a rejected session must not collapse into a denied scope",
+    ).toBe(false);
+
+    // --- Renderer: every state declares itself, and none collapse ---
+    const byState = new Map(result.rendered.map((r) => [r.state, r]));
+    const declared = result.rendered.map((r) => r.bare.declared);
+    expect(
+      new Set(declared).size,
+      `all ${declared.length} states must declare distinct values, got ${JSON.stringify(declared)}`,
+    ).toBe(declared.length);
+    for (const r of result.rendered) {
+      expect(r.bare.declared, `${r.state} must declare its own state`).toBe(r.state);
+    }
+
+    // --- The recovery-affordance contract ---
+    //
+    // This is the user-visible difference between "retrying may help"
+    // and "retrying cannot help". Asserted against the render that WAS
+    // given a working retry handler, so a state that withholds retry is
+    // proven to withhold it deliberately rather than for want of a
+    // callback.
+    for (const st of ["route-absent", "schema-invalid", "disabled"]) {
+      const r = byState.get(st)!;
+      expect(r.bare.message.length, `${st} must explain itself`).toBeGreaterThan(0);
+      expect(
+        r.withRetry.actionCount,
+        `${st} must offer NO retry even when a retry handler is available: retrying cannot resolve it`,
+      ).toBe(0);
+    }
+
+    // The deliberate contrast: a transient store fault IS retryable, but
+    // only when the caller can actually perform the retry. Painting a
+    // dead retry button would be worse than painting none.
+    const storeDown = byState.get("store-unavailable")!;
+    expect(
+      storeDown.bare.actionCount,
+      "no retry button may be painted when the caller supplied no way to retry",
+    ).toBe(0);
+    expect(
+      storeDown.withRetry.actionCount,
+      "store-unavailable must offer a retry when one is possible",
+    ).toBe(1);
+    expect(["a", "button"]).toContain(storeDown.withRetry.actionTag);
+
+    // true-empty routes to capture rather than retry: it is a LINK, and
+    // it is offered unconditionally because it needs no retry handler.
+    const trueEmpty = byState.get("true-empty")!;
+    expect(trueEmpty.bare.actionCount, "true-empty guidance needs no retry handler").toBe(1);
+    expect(trueEmpty.bare.actionTag).toBe("a");
+    expect(trueEmpty.bare.actionHref, "true-empty must point at capture, not retry").toBe(
+      "/pwa/connectors.html",
+    );
+
+    expect(byState.get("ready")!.bare.message, "ready has nothing to say").toBe("");
+  });
 });
