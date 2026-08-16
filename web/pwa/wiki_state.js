@@ -60,6 +60,11 @@ const ENVELOPE_CAPABILITY_DISABLED = "capability_disabled";
 const ENVELOPE_STORE_UNAVAILABLE = "store_unavailable";
 const ENVELOPE_INVALID_CURSOR = "invalid_cursor";
 const ENVELOPE_SCHEMA_ERROR = "schema_error";
+// A DETAIL read whose row is gone. graphapi answers 404 with this typed
+// code (internal/api/graphapi/{topics,people,places}.go), whereas a
+// genuinely unmounted route yields a BARE 404 with no envelope at all.
+// That difference is the only honest discriminator available here.
+const ENVELOPE_NOT_FOUND = "not_found";
 
 // ---------------------------------------------------------------------
 // Closed EXCLUSIVE UI states. Every read resolves to exactly one. The
@@ -176,7 +181,17 @@ export function classifyStatus(status, envelopeCode) {
     case 403:
       return CODE_FORBIDDEN;
     case 404:
-      return CODE_ROUTE_ABSENT;
+      // A missing ROW is not an absent ROUTE. When the server sends the
+      // typed `not_found` envelope the route plainly exists — it just
+      // answered that this id is gone. Reporting that as route-absent
+      // told the user "it is not deployed", which is false, and offered
+      // no recovery action because route-absent deliberately has none.
+      // Bare 404s (no envelope) still mean the route really is absent.
+      // This mirrors the 503 disambiguation below, and the identical
+      // correction the Go model already makes in
+      // internal/graphsynthetic/synthetic.go ("A populated list whose
+      // own first row 404s is a missing row, not an absent route.").
+      return typed === ENVELOPE_NOT_FOUND ? CODE_ROW_MISSING : CODE_ROUTE_ABSENT;
     case 400:
       return typed === ENVELOPE_INVALID_CURSOR ? CODE_CURSOR_INVALID : CODE_SCHEMA_INVALID;
     case 503:

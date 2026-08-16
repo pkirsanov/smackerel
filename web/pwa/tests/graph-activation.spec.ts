@@ -609,4 +609,100 @@ test.describe("BUG-080-001 SCOPE-04 — Knowledge Graph activation truth", () =>
     await expect(page.locator("html")).toHaveAttribute("data-wiki-ready", "true");
     await expect(page.locator("h1")).toHaveText("Wiki");
   });
+
+  /**
+   * F-080-06-ROWMISS regression.
+   *
+   * A DETAIL read whose row is gone is NOT an absent route. The server
+   * already says so precisely: internal/api/graphapi/topics.go answers
+   * `404` with the TYPED envelope code `not_found`, whereas a genuinely
+   * unmounted route yields a bare Chi `404` with no envelope at all. The
+   * Go model encodes exactly this distinction and corrects for it in
+   * internal/graphsynthetic/synthetic.go ("A populated list whose own
+   * first row 404s is a missing row, not an absent route.").
+   *
+   * The UI model had drifted from it: web/pwa/wiki_state.js classified
+   * EVERY 404 as CODE_ROUTE_ABSENT regardless of the typed code, so a
+   * stale or deleted topic link told the user "This knowledge graph view
+   * is not available in the running build. It is not empty — it is not
+   * deployed." That is false — the view IS deployed — and route-absent
+   * carries NO recovery action, so the user was dead-ended by a wrong
+   * explanation. It also left CODE_ROW_MISSING unreachable, i.e. dead.
+   *
+   * This test induces the condition with a REAL server 404: a well-formed
+   * but non-existent id on the live stack. No interception, no fixture.
+   * It is state-adaptive without a bailout — it first asks the API what
+   * actually happened for that id, then requires the UI to agree with
+   * THAT. On a disabled or store-down stack the API answers 503 and the
+   * matching arm asserts; only when the API genuinely answered 404 does
+   * the row-missing arm apply. Every arm asserts.
+   */
+  test("Regression: a missing graph row is not reported as an absent route", async ({
+    page,
+  }) => {
+    await authenticate(page);
+
+    // Well-formed ULID shape, guaranteed absent: the boot seed uses real
+    // generated ULIDs, and this all-zero id can never collide with one.
+    const absentId = "00000000000000000000000000";
+
+    // Ask the live server what this id actually yields, so the UI
+    // assertion below is anchored to the real backend condition.
+    const probe = await page.request.get(`/api/topics/${absentId}`, {
+      headers: { Accept: "application/json" },
+    });
+    const probeStatus = probe.status();
+    let probeCode = "";
+    try {
+      const body = await probe.json();
+      if (body && body.error && typeof body.error.code === "string") {
+        probeCode = body.error.code;
+      }
+    } catch {
+      // A bare 404 from an unmounted route has no parseable envelope.
+      // Leaving probeCode empty is the meaningful outcome, not an error.
+    }
+
+    await page.goto(`/pwa/wiki_topics.html?id=${absentId}`);
+    // The DETAIL view signals readiness on its own section via
+    // markReady() in web/pwa/wiki_lib.js. `data-wiki-ready` belongs to the
+    // landing page (wiki.js) only and is never set here, so waiting on it
+    // would time out and report a harness fault as a product failure.
+    await expect(page.locator("#wiki-topic-detail")).toHaveAttribute("aria-busy", "false");
+
+    const painted = await paintedState(page, "#wiki-topic-status");
+    const statusText = ((await page.locator("#wiki-topic-status").textContent()) ?? "").trim();
+
+    // eslint-disable-next-line no-console
+    console.log(
+      `GRAPH-EV row-missing | probeStatus=${probeStatus} | probeCode=${probeCode || "<none>"} | painted=${painted}`,
+    );
+
+    if (probeStatus === 404 && probeCode === "not_found") {
+      // The route ANSWERED. It is present. Claiming otherwise is a lie.
+      expect(
+        painted,
+        "a typed 404 not_found means the row is gone, not that the route is absent",
+      ).not.toBe(STATE_ROUTE_ABSENT);
+      expect(
+        statusText,
+        "the user must not be told a deployed view is 'not deployed'",
+      ).not.toMatch(/not deployed|not available in the running build/i);
+      // Personal content must not survive a failed detail read.
+      await expect(page.locator("#wiki-topic-detail-heading")).toHaveText("");
+    } else if (probeStatus === 503) {
+      // Disabled or store-down stack: the UI must agree with THAT.
+      expect(
+        [STATE_DISABLED, STATE_STORE_UNAVAILABLE],
+        `a 503 (${probeCode || "<none>"}) must paint disabled or store-unavailable, not ${painted}`,
+      ).toContain(painted);
+    } else {
+      // Any other backend answer still must not be presented as a
+      // working graph built from a row that does not exist.
+      expect(
+        painted,
+        `an absent row must never paint ready (probe ${probeStatus})`,
+      ).not.toBe(STATE_READY);
+    }
+  });
 });
