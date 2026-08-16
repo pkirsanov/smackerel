@@ -4330,3 +4330,254 @@ row was added or removed, and no scope `Status` was changed.** `state.json`,
 every other spec, all product source, all tests, and everything under `docs/` were
 left untouched. Nothing was staged or committed.
 
+## SCOPE-04 Finding Record — `F-080-05-SEED` (evidence recording, 2026-08-16)
+
+Evidence-recording turn. **No DoD item was checked or unchecked, and no file other
+than this `report.md` was modified.** This section records a newly-discovered,
+independently re-verified finding that supersedes the *reason* previously given for
+`T080-05-UI` / `SCN-080-001-05` being unchecked. It does not change their state.
+
+<a id="f-080-05-seed"></a>
+
+### F-080-05-SEED — the all-family true-empty state is UNREACHABLE by construction, because the product seeds the topics family at every startup (PRODUCT, OPEN)
+
+**The all-family true-empty state that `SCN-080-001-05` describes cannot occur on any
+normal deployment.** `SCN-080-001-05` requires that **every** authorized family read
+returns zero records. The product seeds the `topics` family on every service startup,
+so that condition can never hold. This is not a harness limitation like
+[F-080-04-LANE](#f-080-04-lane) — it is a property of the running product.
+
+#### Evidence 1 — the seed runs at every service startup
+
+```
+$ grep -n 'SeedHospitalityTopics' cmd/core/services.go
+226:	if err := graph.SeedHospitalityTopics(ctx, svc.pg.Pool); err != nil {
+```
+
+```
+$ sed -n '224,228p' cmd/core/services.go
+	// Seed hospitality topics (idempotent — safe to call on every startup)
+	if err := graph.SeedHospitalityTopics(ctx, svc.pg.Pool); err != nil {
+		slog.Warn("failed to seed hospitality topics", "error", err)
+	}
+```
+
+The call is unconditional. It is not behind a demo flag, a fixture profile, an env
+guard, or a first-run check. A seed failure is `slog.Warn` only, so it does not even
+stop startup.
+
+#### Evidence 2 — the seed inserts five canonical topic labels
+
+```
+$ grep -n 'func SeedHospitalityTopics' internal/graph/hospitality_linker.go
+368:func SeedHospitalityTopics(ctx context.Context, pool *pgxpool.Pool) error {
+```
+
+```
+$ sed -n '366,390p' internal/graph/hospitality_linker.go
+// SeedHospitalityTopics creates the initial hospitality topics in the knowledge graph.
+// This is safe to call multiple times — topics are upserted by name.
+func SeedHospitalityTopics(ctx context.Context, pool *pgxpool.Pool) error {
+	topicNames := []string{
+		"guest-experience",
+		"property-maintenance",
+		"revenue-management",
+		"booking-operations",
+		"guest-communication",
+	}
+	...
+	_, err := pool.Exec(ctx, `
+		INSERT INTO topics (id, name, state)
+		SELECT unnest($1::text[]), unnest($2::text[]), 'emerging'
+		ON CONFLICT (name) DO NOTHING
+	`, ids, topicNames)
+```
+
+**The asymmetry is the whole finding.** `topics` is the only family with a startup
+seeder. `cmd/core/services.go` contains exactly one `Seed` call site (Evidence 1), and
+there is no non-test insert into `places` at all:
+
+```
+$ grep -rn 'INSERT INTO people\|INSERT INTO places' --include='*.go' internal/ cmd/ | grep -v '_test.go'
+internal/graph/linker.go:408:		INSERT INTO people (id, name)
+```
+
+The single `people` insert lives in the runtime linker, which only writes when real
+artifacts are extracted. Nothing pre-populates `people` or `places` at boot.
+
+#### Evidence 3 — observed on a freshly booted stack with clean volumes
+
+Booted the disposable `smackerel-test` project through the repo CLI. The dev stack
+(project `smackerel`) was never touched.
+
+```
+$ ./smackerel.sh --env test down --volumes
+DOWN_EXIT=0
+
+$ ./smackerel.sh --env test up
+ ✔ Volume "smackerel-test-postgres-data"                Created            0.0s
+ ✔ Volume "smackerel-test-nats-data"                    Created            0.0s
+ ✔ Container smackerel-test-postgres-1                  Healthy            8.5s
+ ✔ Container smackerel-test-smackerel-core-1            Healthy           18.1s
+UP_EXIT=0
+```
+
+`Volume ... Created` (not `Reused`) is the proof the volumes were genuinely clean;
+core reached `Healthy`. Then the same authorized reads the wiki index pages use,
+against `CORE_EXTERNAL_URL` from the generated test SST env, presenting the lane
+token (read value-safely from `config/generated/test.env`; never echoed):
+
+```
+$ curl --silent --max-time 20 --header "Authorization: Bearer $AUTH" \
+    --header 'Accept: application/json' "$BASE/api/topics?limit=50"
+{"items":[{"id":"01M04SPSZQNFP4MWPDP1TQDSQ0","label":"degraded-fallback","linkedArtifactCount":13,"peopleCount":0,"placeCount":0},{"id":"01M04SNTA9Z0STP1QG1KC2MNAA","label":"guest-experience","linkedArtifactCount":0,"peopleCount":0,"placeCount":0},{"id":"01M04SNTA9Z0STP1QG1PJD0QES","label":"property-maintenance","linkedArtifactCount":0,"peopleCount":0,"placeCount":0},{"id":"01M04SNTA9Z0STP1QG1QP0YR4A","label":"revenue-management","linkedArtifactCount":0,"peopleCount":0,"placeCount":0},{"id":"01M04SNTA9Z0STP1QG1SMYQ9S2","label":"booking-operations","linkedArtifactCount":0,"peopleCount":0,"placeCount":0},{"id":"01M04SNTA9Z0STP1QG1TFAX2MF","label":"guest-communication","linkedArtifactCount":0,"peopleCount":0,"placeCount":0}],"nextCursor":""}
+
+$ curl ... "$BASE/api/people?limit=50"
+{"items":[],"nextCursor":""}
+
+$ curl ... "$BASE/api/places?limit=50"
+{"items":[],"nextCursor":""}
+```
+
+| Family | Fresh-boot result | Empty? |
+|---|---|---|
+| `topics` | 6 rows — all 5 seeded labels present | **No** |
+| `people` | `{"items":[],"nextCursor":""}` | **Yes** |
+| `places` | `{"items":[],"nextCursor":""}` | **Yes** |
+
+**All five seeded labels carry `linkedArtifactCount: 0`, `peopleCount: 0`,
+`placeCount: 0`.** They contain none of the user's content. They are taxonomy, not
+knowledge.
+
+`people` and `places` ARE genuinely empty on a fresh boot. **The blocker is
+specifically the seeded `topics` family.**
+
+The graph aggregate published at the moment of these probes was:
+
+```
+"graph":{"ready":false,"activation":"enabled","state":"unavailable","code":"F080-READINESS-NOT-OBSERVED","evidence_ref":"graph-read/aggregate"}
+```
+
+**Two honest deltas from the earlier capture of this same observation.** First, this
+run's ULIDs differ (`01M04SNTA9...` vs the earlier `01M04S5WF1...`), which is expected
+— each boot mints fresh ULIDs. Second, this run additionally returned a
+`degraded-fallback` topic carrying `linkedArtifactCount: 13`, which is **not** one of
+the five seeded labels and which appeared within roughly a minute of boot. Its origin
+was **not** determined this turn; it is recorded because it is what the endpoint
+actually returned. If it is created by a background path on any healthy boot, it makes
+the true-empty state harder to reach still, and the finding below understates the
+problem rather than overstating it.
+
+#### Why this matters
+
+`SCN-080-001-05` requires that when every authorized family read returns zero records,
+the user sees the true-empty state with capture/source guidance. Because `topics` is
+always seeded, that precondition can never hold.
+
+The practical consequence, stated without softening: **a brand-new deployment paints
+the topics index as `ready` with five zero-content topics**, instead of the mandated
+guidance that `web/pwa/wiki_state.js:117` defines:
+
+> "Nothing has been synthesized into your knowledge graph yet. Connect a source or
+> capture something, and topics, people, places and time will appear here."
+
+The determination is made on **row existence**, not on linked counts. Client side, at
+`web/pwa/wiki_state.js:237-240`:
+
+```
+237:      return STATE_TRUE_EMPTY;
+239:      if (itemCount > 0) return STATE_READY;
+240:      return emptyPermitted ? STATE_TRUE_EMPTY : STATE_DEGRADED;
+```
+
+`itemCount > 0` is satisfied by five topics that link to nothing, so the seeded
+taxonomy alone flips the view to `STATE_READY`. The server-side family classification
+in `internal/graphsynthetic/synthetic.go` likewise keys off whether rows came back, not
+whether they carry any links.
+
+#### The open product question — recorded, NOT decided
+
+**Should seeded-but-unlinked topics count as content for graph-emptiness purposes?**
+
+This is genuinely open and is deliberately left undecided here. Both readings are
+coherent and they lead to opposite remedies:
+
+- **If seeded topics should NOT count as content**, this is a **product defect**: a
+  user is shown topology they never created, presented as their graph. The remedy is
+  in the product — the emptiness determination would need to consider linked counts
+  rather than row existence.
+- **If the seeded taxonomy IS legitimate content**, then `SCN-080-001-05` is
+  **unsatisfiable as written** and the remedy is in the **scenario** — it would need
+  amending, because no deployment can ever reach the state it describes.
+
+**Owner: `bubbles.analyst` / `bubbles.design`.** This is a specification and product
+intent decision. An implementing agent must not decide it unilaterally, and no attempt
+was made to do so here.
+
+#### The harness attempt, and why it was reverted
+
+A third `e2e-ui` phase was built to induce true-empty by running
+`graph-activation.spec.ts` alone against a freshly-booted **enabled** stack, before the
+82-test suite ingests data. Its precondition guard **correctly REFUSED**. Console
+output captured from that attempt:
+
+```
+[web-e2e-ui] graph-empty phase: proving the freshly-booted stack is graph-ENABLED and genuinely empty before any test ingests data...
+ERROR: [web-e2e-ui] graph-empty phase booted a stack whose topics family is NOT empty.
+[web-e2e-ui] graph-empty phase: FAIL (exit=1, 0s)
+```
+
+**That guard behaved CORRECTLY, and it is the reason this gap was discovered rather
+than papered over.** `graph-activation.spec.ts` is state-adaptive — re-read this turn,
+it branches at `:287-290`:
+
+```
+287:    if (state === STATE_READY) {
+288:      expect(rows, "the ready state must be backed by at least one real row").toBeGreaterThan(0);
+289:    } else if (state === STATE_TRUE_EMPTY) {
+290:      expect(rows, "true-empty must render no fabricated rows").toBe(0);
+```
+
+Without the guard, the run would have silently taken its `STATE_READY` arm and passed,
+and **a green result would have been mistaken for true-empty coverage** — the exact
+failure mode [F-080-04-LANE](#f-080-04-lane) records for the disabled arm.
+
+**The phase was REVERTED.** Shipping a permanently-red phase would break the lane for
+all future work and train readers to ignore failures. The revert is complete — verified
+this turn:
+
+```
+$ git status --porcelain scripts/
+(no output — clean)
+
+$ grep -c 'graph-empty' scripts/runtime/web-e2e-ui.sh
+0
+```
+
+The lane's committed state is unchanged and still exits clean: phase 1 enabled
+`73 passed`, phase 2 graph-DISABLED `5 passed`, `LANE_EXIT=0`.
+
+#### Consequence for the DoD — recorded, no checkbox changed
+
+`T080-05-UI` and the SCOPE-04 `SCN-080-001-05` Core Outcome remain **UNCHECKED**, and
+both were left exactly as found. Verified unchanged this turn:
+
+```
+$ grep -n 'T080-05-UI\|SCN-080-001-05' .../scopes.md
+438:- [ ] SCN-080-001-05: When every authorized family read succeeds with zero records, ...
+449:- [ ] T080-05-UI passes with current-session raw evidence and screenshot references ...
+```
+
+This finding supplies a **far more precise reason** than the previous
+"state not induced" recorded under [T080-05-UI](#t080-05-ui). The state is not merely
+un-induced by the current harness: **it is currently unreachable by construction.** No
+amount of harness work in `scripts/runtime/web-e2e-ui.sh` can induce it while the
+product seeds `topics` at every startup. That reclassifies the blocker from
+`bubbles.devops` harness work to an owner decision on the product question above.
+
+Scope of the residual is narrower than it first appears: `people` and `places` reach
+true-empty on a fresh boot without any intervention. Only `topics` blocks the
+all-family condition.
+
+**Status: OPEN.** Nothing was staged or committed.
+
