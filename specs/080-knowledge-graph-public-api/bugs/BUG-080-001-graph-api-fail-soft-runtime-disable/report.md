@@ -3794,6 +3794,12 @@ live-stack results.
 
 ### F-080-04-LANE — the `e2e-ui` lane cannot induce disabled / route / store / schema (STRUCTURAL, OPEN)
 
+> **Superseded in part (2026-08-16).** The `disabled` half of this finding is now
+> **CLOSED** — see [RESOLUTION](#f-080-04-lane-resolution) at the end of this
+> section. The heading and the analysis below are preserved verbatim as the record
+> of why the rows were unchecked at the time; do not read them as live state for
+> `disabled`. The true-empty / route / store / schema residual is still open.
+
 **This is the root gap, and it is why three rows below stay unchecked.** It is a
 harness limitation, not a test-authoring defect and not a product defect.
 
@@ -3872,9 +3878,75 @@ is harness work in `scripts/runtime/web-e2e-ui.sh` plus new overlays — **owner
 delivered for SCOPE-01. This finding is **OPEN** and is the blocker for the three
 unchecked rows and for the SCN-04/05/06 Core Outcomes.
 
+<a id="f-080-04-lane-resolution"></a>
+
+#### RESOLUTION (2026-08-16) — CLOSED for `disabled`; true-empty / route / store / schema residual carried forward
+
+**Everything above is preserved as written and is no longer live state for the
+`disabled` half.** The premise that made this a blocking finding — that the
+`e2e-ui` lane *structurally cannot* boot a graph-DISABLED stack — is now false.
+Commit `b13a99d8` gave the lane its own **graph-disabled phase**, which recycles
+the stack with the graph activation enabler explicitly empty. Commit `ca71cbb8`
+strengthened the disabled assertions and added the screenshot. Both commits are
+`gitleaks`-clean.
+
+**Why this closure cannot be faked.** The five specs in `graph-activation.spec.ts`
+are **state-adaptive** — each asserts truthfully against whatever the stack
+actually serves. Re-pointing them at a stack that came up enabled would simply
+exercise their enabled arm a second time and prove nothing, which is exactly the
+failure mode recorded above. The phase therefore carries an **assertion guard**:
+it reads the published graph aggregate and **REFUSES to run the specs at all**
+unless the stack reports `policy_disabled`. A green disabled row cannot be
+produced by an enabled stack. The phase's failure propagates **non-zero** into the
+lane result (first-failure-wins; there is no advisory bypass), so a broken
+disabled phase fails the lane rather than degrading into a warning.
+
+**Final `./smackerel.sh test e2e-ui` run — executed and observed directly:**
+
+```
+Running 82 tests using 4 workers
+  73 passed (38.4s)
+[web-e2e-ui] graph-disabled phase: recycling the stack with the graph activation enabler explicitly empty...
+[web-e2e-ui] graph-disabled phase: stack publishes "activation":"disabled","state":"policy_disabled","code":"F080-SYNTH-POLICY-DISABLED"
+[web-e2e-ui] graph-disabled phase: running graph-activation.spec.ts against the DISABLED stack...
+Running 5 tests using 1 worker
+  5 passed (12.6s)
+[web-e2e-ui] graph-disabled phase: PASS (271s)
+LANE_EXIT=0
+```
+
+**Independent corroboration obtained OUTSIDE the lane** — direct container
+inspection, value-safe (byte-length only, never the enabler value):
+
+- `enabler byte-length: 0` on `smackerel-test-e2e-ui-smackerel-core-1`
+- `published graph aggregate: "activation":"disabled","state":"policy_disabled","code":"F080-SYNTH-POLICY-DISABLED"`
+- the disabled stack reached `DISABLED_UP_EXIT=0` with a **healthy** core
+
+The third point carries weight beyond corroboration: the service came up healthy
+*with the graph off*. That is the **fail-soft contract this bug exists to enforce**
+— the service keeps serving with the graph off — demonstrated on a real stack
+rather than argued from source.
+
+`regression-quality-guard.sh` on the spec: `0 violation(s), 0 warning(s)`.
+
+**Residual — carried forward, NOT closed.** This resolution closes the `disabled`
+state ONLY. `true-empty`, `route-absent`, `store-unavailable`, and `schema-invalid`
+are **still not induced by any lane**. Only three states are inducible today:
+`enabled`, `disabled`, and `unauthenticated` — the last via a real
+`context.clearCookies()` producing a genuine server 401. The owner route recorded
+above (harness work in `scripts/runtime/web-e2e-ui.sh` plus new overlays, **owner:
+`bubbles.devops`**) remains open for those four states, and they continue to block
+`SCN-080-001-05`, the route/schema/store thirds of `SCN-080-001-06`, and the full
+ten-state matrix of `SCN-080-001-08`.
+
 <a id="t080-04-ui"></a>
 
 ### T080-04-UI — executed and passing; SCN-080-001-04 **NOT** proven; row stays `[ ]`
+
+> **Superseded (2026-08-16).** This heading records the ENABLED-stack run. The
+> disabled arm has since executed against a real disabled stack and the row is now
+> **CHECKED** — see [UPDATE](#t080-04-ui-disabled-run) at the end of this section.
+> The analysis below is preserved verbatim.
 
 **Command:** `./smackerel.sh test e2e-ui` — see [shared run block](#t080-e2e-ui-run).
 
@@ -3923,6 +3995,95 @@ $ find web/pwa/test-results web/pwa/playwright-report -name '*.png' | wc -l
 All five tests passed, so **no screenshot was captured and none exists on disk**.
 The row's stated evidence requirement is unmet on its own terms, independently of
 the scenario gap. Either reason alone blocks the check; both hold.
+
+<a id="t080-04-ui-disabled-run"></a>
+
+#### UPDATE (2026-08-16) — the disabled arm ran against a REAL disabled stack; row now CHECKED
+
+**Everything above is preserved as the record of the ENABLED-stack run.** It is no
+longer this row's live state.
+
+**Command:** `./smackerel.sh test e2e-ui`
+
+**Raw evidence — executed and observed directly:**
+
+```
+Running 82 tests using 4 workers
+  73 passed (38.4s)
+[web-e2e-ui] graph-disabled phase: recycling the stack with the graph activation enabler explicitly empty...
+[web-e2e-ui] graph-disabled phase: stack publishes "activation":"disabled","state":"policy_disabled","code":"F080-SYNTH-POLICY-DISABLED"
+[web-e2e-ui] graph-disabled phase: running graph-activation.spec.ts against the DISABLED stack...
+Running 5 tests using 1 worker
+  5 passed (12.6s)
+[web-e2e-ui] graph-disabled phase: PASS (271s)
+LANE_EXIT=0
+```
+
+Delivered by commit `b13a99d8` (the lane gains the graph-disabled phase) and
+commit `ca71cbb8` (strengthened disabled assertions + screenshot). Both are
+`gitleaks`-clean.
+
+**What is now proven.** The disabled arm executed against a **REAL disabled
+container** for the first time — not a fixture, not an interception, and not the
+`else` branch recorded above. On that stack:
+
+- **The shell shows the actual explanation.** The message is asserted **visible**
+  and scoped to `#wiki-landing-status .graph-state-message`, **NOT** `body`. That
+  scoping is load-bearing: `wiki.js` also sets the landing subtitle to similar
+  text, so a body-scoped assertion would have matched the subtitle and passed
+  while the status region said nothing — proving nothing.
+- **It offers NO retry action.** This matches the copy's own promise that *there
+  is nothing to retry*, and `wiki_state.js` backs that promise **structurally**:
+  the disabled state defines no `action`/`actionHref` at all, while
+  `store-unavailable` and `degraded` both define `"Try this view again"`. The
+  absence is a contract, not an accident of rendering.
+- **It renders no section navigation.**
+
+**Visual evidence.** An explicit **full-page screenshot** is captured and attached
+via `testInfo.attach("graph-disabled-wiki-landing.png")` — an unconditional
+capture, not the `only-on-failure` policy that produced the `png_count=0`
+measurement above. The artifact lands under Playwright's per-test output
+directory, which is **gitignored**, so it is cited here as a
+**produced-and-attached run artifact**, not as a committed file.
+
+**Independent corroboration obtained OUTSIDE the lane** — direct container
+inspection, value-safe:
+
+- `enabler byte-length: 0` on `smackerel-test-e2e-ui-smackerel-core-1`
+- `published graph aggregate: "activation":"disabled","state":"policy_disabled","code":"F080-SYNTH-POLICY-DISABLED"`
+- the disabled stack reached `DISABLED_UP_EXIT=0` with a **healthy** core, which
+  also demonstrates the fail-soft contract this bug exists to enforce: the service
+  keeps serving with the graph off
+
+`regression-quality-guard.sh` on the spec: `0 violation(s), 0 warning(s)`.
+
+**Both blocking reasons recorded above are now cleared.** The scenario gap is
+closed by [F-080-04-LANE RESOLUTION](#f-080-04-lane-resolution) — the phase's
+assertion guard refuses to run the state-adaptive specs unless the stack reports
+`policy_disabled`, and its failure propagates non-zero with no advisory bypass.
+The screenshot requirement is met by the unconditional `testInfo.attach` capture.
+The row is therefore **CHECKED** in `scopes.md`, and so is the **SCN-080-001-04**
+Core Outcome: every clause of that outcome — exact unavailable explanation shown;
+no local navigation, status, or static page claiming a working Graph journey — is
+now asserted against a genuinely disabled stack.
+
+**Still NOT proven — stated without softening.** The `true-empty`, `route-absent`,
+`store-unavailable`, and `schema-invalid` states are **still not induced by any
+lane**. Only `enabled`, `disabled`, and `unauthenticated` are inducible today
+(`unauthenticated` via a real `context.clearCookies()` producing a genuine server
+401). `SCN-080-001-05`, the route/schema/store thirds of `SCN-080-001-06`, and the
+full ten-state matrix of `SCN-080-001-08` therefore **remain unverified**, and
+`T080-05-UI` and `T080-06-UI` stay `[ ]`.
+
+**DoD accounting for this update.** Exactly TWO items were checked in `scopes.md`
+— the `T080-04-UI` Test-Evidence row and the `SCN-080-001-04` Core Outcome, each
+with an inline `→ Evidence:` citation. Counts: checked `48 → 50`, unchecked
+`12 → 10`, total DoD items `60` (unchanged). Test Plan rows across the packet:
+`26` (unchanged — SCOPE-01 `6`, SCOPE-02 `8`, SCOPE-03 `6`, SCOPE-04 `6`). No DoD
+claim text was reworded, no row was added or removed, and no scope `Status` was
+changed — SCOPE-04 remains `In Progress`. `state.json`, `spec.md`, `design.md`,
+`bug.md`, `uservalidation.md`, `scenario-manifest.json`, all product source, all
+tests, and all lane scripts were left untouched. Nothing was staged or committed.
 
 <a id="t080-05-ui"></a>
 
