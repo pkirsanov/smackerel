@@ -3707,3 +3707,465 @@ exercised.** Reading A was chosen and `internal/graphreadstate` was **REMOVED** 
 commit `970016ab`. Do not act on the two-option choice or on §3(b) as live state;
 see [Resolution](#scope-04-integration-gap) at the top of this section.
 
+---
+
+## SCOPE-04 Live-Stack `e2e-ui` Evidence + Conservative DoD Accounting (2026-08-16)
+
+Commit `03611451` landed `web/pwa/tests/graph-activation.spec.ts` (422 lines, the
+five titles pinned by the SCOPE-04 Test Plan), a `web/pwa/style.css` fix, and the
+packet edits. `gitleaks` reported `no leaks found`. All five tests pass by name
+against the real disposable `e2e-ui` stack with no request interception.
+
+**This section closes exactly TWO rows — `T080-08-A11Y` and `T080-REGRESSION`.**
+`T080-04-UI`, `T080-05-UI`, and `T080-06-UI` are recorded here as **executed and
+passing but NOT scenario-proving**, and they stay `[ ]`. Every Core Outcome and
+the Build Quality Gate row also stay `[ ]`. `state.json` was not modified; the bug
+top-level `status` and `certification.status` remain unchanged.
+
+The distinction this section exists to preserve: **a green test is not a proven
+scenario.** Three of these five tests are written with a state-dependent shape so
+they assert truthfully against whatever the stack actually serves. That is correct
+test design, but it means a pass records the branch that ran — not the branch the
+scenario names. Recording them as scenario proof would be exactly the silent-absence
+class of defect this packet was filed against, one layer up.
+
+### Evidence provenance — executed here vs. recorded here
+
+Stated plainly so an auditor can weigh each claim at its real strength:
+
+- **Recorded from the implementing turn of this work session** (not re-executed in
+  this recording turn): the `./smackerel.sh test e2e-ui` transcripts, the three-run
+  pass/fail totals, `LINT=0`, `FORMAT=0`, and the `gitleaks` result. The lane brings
+  up and tears down a full disposable stack; it was not re-run to author this text.
+- **Executed first-hand in this recording turn**, against the working tree, and
+  quoted below in each row's section: the commit and its file list, the five test
+  titles and their line numbers, the interception scan, the Playwright screenshot
+  policy, the on-disk screenshot count, the `e2e-ui` compose-argument construction,
+  the cursor-secret minting path, the `wiki_state.js` READY branch, and
+  `regression-quality-guard.sh`.
+
+Structural claims below are therefore first-hand; runtime claims are carried
+forward and labelled as such. Nothing is upgraded in transit.
+
+<a id="t080-e2e-ui-run"></a>
+
+### Shared run block — one `./smackerel.sh test e2e-ui` invocation, all five rows
+
+All five rows below come from the SAME final lane invocation. The block is recorded
+once here rather than pasted five times, because five identical blocks would falsely
+read as five independent executions. Each row section quotes its own verbatim result
+line and cites back to this block.
+
+```
+$ ./smackerel.sh test e2e-ui
+
+  ✓  59 graph-activation.spec.ts:161:3 › BUG-080-001 SCOPE-04 — Knowledge Graph activation truth › Regression: explicit disabled Graph stays in shell and never reports Available (1.9s)
+  ✓  61 graph-activation.spec.ts:214:3 › BUG-080-001 SCOPE-04 — Knowledge Graph activation truth › Regression: all-family true empty is actionable and contains no sample topology (2.2s)
+  ✓  73 graph-activation.spec.ts:259:3 › BUG-080-001 SCOPE-04 — Knowledge Graph activation truth › Regression: auth route store and schema failures are exclusive and private (2.9s)
+  ✓  77 graph-activation.spec.ts:311:3 › BUG-080-001 SCOPE-04 — Knowledge Graph activation truth › Knowledge Graph activation states remain keyboard and screen-reader operable at desktop and 320px 200 percent zoom (2.2s)
+  ✓  81 graph-activation.spec.ts:375:3 › BUG-080-001 SCOPE-04 — Knowledge Graph activation truth › Knowledge and Wiki journeys remain coherent after Graph activation repair (2.9s)
+  9 skipped
+  73 passed (57.1s)
+```
+
+Supporting lanes, same work session: `LINT=0`, `FORMAT=0`, `artifact-lint` exit `0`.
+
+**Test Plan rows verified against disk before any accounting** — file, titles, and
+line numbers all match the Test Plan exactly (executed this turn):
+
+```
+$ grep -nE "^\s*(test|test\.describe)\(" web/pwa/tests/graph-activation.spec.ts
+160:test.describe("BUG-080-001 SCOPE-04 — Knowledge Graph activation truth", () => {
+161:  test("Regression: explicit disabled Graph stays in shell and never reports Available", ...
+214:  test("Regression: all-family true empty is actionable and contains no sample topology", ...
+259:  test("Regression: auth route store and schema failures are exclusive and private", ...
+311:  test("Knowledge Graph activation states remain keyboard and screen-reader operable at desktop and 320px 200 percent zoom", ...
+375:  test("Knowledge and Wiki journeys remain coherent after Graph activation repair", ...
+
+$ grep -nE 'page\.route|context\.route|intercept\(|msw|nock|wiremock|fulfill\(' web/pwa/tests/graph-activation.spec.ts
+7: * These run WITHOUT request interception. `page.route`/`context.route`
+```
+
+The single interception hit is the file's own header comment asserting that no
+interception is used. There is no interception call site. These are genuine
+live-stack results.
+
+<a id="f-080-04-lane"></a>
+
+### F-080-04-LANE — the `e2e-ui` lane cannot induce disabled / route / store / schema (STRUCTURAL, OPEN)
+
+**This is the root gap, and it is why three rows below stay unchecked.** It is a
+harness limitation, not a test-authoring defect and not a product defect.
+
+`./smackerel.sh test e2e-ui` brings up **exactly ONE** disposable stack, and that
+stack always boots with the graph capability **ENABLED**. Two independent causes,
+both re-read on disk this turn:
+
+**1. The lane hardcodes its compose files and never consults the override selector.**
+`scripts/runtime/web-e2e-ui.sh:248-253` builds the compose argv literally:
+
+```
+  docker compose \
+    --project-name "$SMACKEREL_E2E_UI_COMPOSE_PROJECT" \
+    --env-file "$SMACKEREL_E2E_UI_ENV_FILE" \
+    -f "$SMACKEREL_E2E_UI_REPO_ROOT/docker-compose.yml" \
+    -f "$SMACKEREL_E2E_UI_REPO_ROOT/docker-compose.e2e-ui.override.yml" \
+    "$@"
+```
+
+`SMACKEREL_COMPOSE_OVERRIDE_FILE` is read only by
+`scripts/lib/runtime.sh::smackerel_compose` (`scripts/lib/runtime.sh:142-147`),
+which this lane does not call. The disabled overlay's own header states the same
+boundary: *"Loaded ONLY when SMACKEREL_COMPOSE_OVERRIDE_FILE points here
+(scripts/lib/runtime.sh::smackerel_compose). The dev/integration/stress lanes, the
+e2e-ui lane (docker-compose.e2e-ui.override.yml), and the PRODUCTION stack
+(deploy/compose.deploy.yml) never load this file."* The graph-disabled phase at
+`smackerel.sh:2312-2330` belongs to the **Go `test e2e`** lane, a different lane
+serving different rows (`T080-01-DISABLED`, `T080-02-ADVERSARIAL`).
+
+**2. The generated test env always mints a non-empty enabler.**
+`scripts/commands/config.sh:1355-1364`: for `TARGET_ENV` of `test` or `dev`, an
+empty `KNOWLEDGE_GRAPH_API_CURSOR_SECRET` is replaced with a reused existing value
+or a freshly minted `openssl rand -hex 32`. Per
+`internal/api/graphapi/activation.go`'s classification (quoted in the overlay
+header), a non-empty secret resolves to `ActivationEnabled`.
+
+**Consequence — the following states were NOT induced on this lane and therefore
+were NOT observed by any of the five tests:**
+
+| Scenario | State required | Induced on this lane? |
+|---|---|---|
+| SCN-080-001-04 | `disabled` | **No** — capability is enabled |
+| SCN-080-001-05 | `true-empty` | **No** — topics painted `READY` |
+| SCN-080-001-06 | `route-absent` | **No** — no fixture exists |
+| SCN-080-001-06 | `store-unavailable` | **No** — no fixture exists |
+| SCN-080-001-06 | `schema-invalid` | **No** — no fixture exists |
+| SCN-080-001-06 | `unauthenticated` | **Yes** — real 401 via `context.clearCookies()` |
+
+**Independent proof that `wiki_topics` painted `READY`, not `true-empty`.** An
+earlier failing run showed `#wiki-topics-status` **visible** with **zero** live
+regions. That combination is reachable from exactly one branch —
+`web/pwa/wiki_state.js:317-320`, re-read this turn:
+
+```
+317:  if (state === STATE_READY) {
+318:    statusNode.hidden = true;
+319:    statusNode.removeAttribute("role");
+320:    statusNode.removeAttribute("aria-live");
+...
+325:  statusNode.hidden = false;
+```
+
+`READY` is the only state that strips `role`/`aria-live` (hence zero live regions);
+every other state falls through to line 325 and sets `hidden = false`. Visible-with-
+zero-live-regions is thus uniquely `READY` painted while an author `display` rule
+defeated the `hidden` attribute — which is the very defect the `style.css` change
+fixed. So the stack held real topic rows: the true-empty state was not induced.
+
+**What closing this gap requires — lane support that does not exist today.** Proving
+SCN-080-001-04, the true-empty half of -05, and the route/store/schema thirds of -06
+needs the `e2e-ui` lane to be able to boot additional stack configurations (an
+empty-enabler stack for `disabled`; an empty-corpus stack for `true-empty`; and
+route/store/schema fault fixtures). None of those exist for this lane. Building them
+is harness work in `scripts/runtime/web-e2e-ui.sh` plus new overlays — **owner:
+`bubbles.devops`**, exactly as the Go `test e2e` graph-disabled phase was previously
+delivered for SCOPE-01. This finding is **OPEN** and is the blocker for the three
+unchecked rows and for the SCN-04/05/06 Core Outcomes.
+
+<a id="t080-04-ui"></a>
+
+### T080-04-UI — executed and passing; SCN-080-001-04 **NOT** proven; row stays `[ ]`
+
+**Command:** `./smackerel.sh test e2e-ui` — see [shared run block](#t080-e2e-ui-run).
+
+**Verbatim result:**
+
+```
+  ✓  59 graph-activation.spec.ts:161:3 › BUG-080-001 SCOPE-04 — Knowledge Graph activation truth › Regression: explicit disabled Graph stays in shell and never reports Available (1.9s)
+```
+
+**What this test DID prove.** The **agreement invariant**: the UI must not paint the
+disabled state while the published aggregate reports the capability is not
+deliberately off. Read at `graph-activation.spec.ts:194-203`, that is the `else`
+arm — `#wiki-landing-status` must NOT carry `data-graph-state=disabled`, and
+`#wiki-landing-nav` must have count 1. It also proved the unconditional tail at
+`:205-212`: the shell must not claim a ready Graph journey while the aggregate
+reports not-ready. Both arms assert; neither is a skip.
+
+**What this test did NOT prove.** The capability was **ENABLED** on this stack
+(F-080-04-LANE), so `const disabled = aggregate!.state === AGGREGATE_POLICY_DISABLED`
+at `:160` evaluated **false** and the test took its **`else`** branch. Every
+disabled-specific assertion in the `if` arm at `:172-192` **DID NOT EXECUTE**:
+
+- `#wiki-landing-nav` count `0` — not executed
+- `#wiki-landing-status` has `data-graph-state=disabled` — not executed
+- `#wiki-landing-subtitle` does not contain "Browse your knowledge graph" — not executed
+- `body` does not contain the word `Available` — not executed
+
+**SCN-080-001-04 is therefore UNVERIFIED.** The scenario requires the disabled
+capability to be the precondition; this run's precondition was the opposite one.
+
+**Second, independent reason this row stays `[ ]`.** The row's own text requires
+*"current-session raw evidence **and screenshot references**"*. Playwright is
+configured `screenshot: "only-on-failure"` (`web/pwa/playwright.config.ts:30`,
+executed this turn):
+
+```
+$ grep -rnE 'screenshot|trace|video' web/pwa/playwright.config.ts
+29:    trace: "retain-on-failure",
+30:    screenshot: "only-on-failure",
+31:    video: "retain-on-failure",
+
+$ find web/pwa/test-results web/pwa/playwright-report -name '*.png' | wc -l
+0
+```
+
+All five tests passed, so **no screenshot was captured and none exists on disk**.
+The row's stated evidence requirement is unmet on its own terms, independently of
+the scenario gap. Either reason alone blocks the check; both hold.
+
+<a id="t080-05-ui"></a>
+
+### T080-05-UI — executed and passing; SCN-080-001-05 **NOT** proven; row stays `[ ]`
+
+**Command:** `./smackerel.sh test e2e-ui` — see [shared run block](#t080-e2e-ui-run).
+
+**Verbatim result:**
+
+```
+  ✓  61 graph-activation.spec.ts:214:3 › BUG-080-001 SCOPE-04 — Knowledge Graph activation truth › Regression: all-family true empty is actionable and contains no sample topology (2.2s)
+```
+
+**What this test DID prove.** That the painted state is **consistent with the data
+actually present**, and that no fabricated content is shipped. On this run the
+`STATE_READY` arm at `graph-activation.spec.ts:227-229` executed and asserted
+`rows > 0` — a ready state must be backed by at least one real row, so a blank list
+cannot masquerade as ready. The unconditional tail at `:253-255` also executed: the
+body contains no `sample|demo|example graph|placeholder` text, so no demo topology
+is presented as the user's own graph.
+
+**What this test did NOT prove.** The **true-empty** state was never induced. Per
+F-080-04-LANE, `wiki_topics` painted `READY` on this stack — established
+independently by the `wiki_state.js:317-320` READY-only branch, not assumed. The
+entire `STATE_TRUE_EMPTY` arm at `:230-241` **DID NOT EXECUTE**:
+
+- `rows` is `0` — not executed
+- status contains `"Nothing has been synthesized into your knowledge graph yet"` — not executed
+- `.graph-state-action` has `href="/pwa/connectors.html"` (a capture/source next step, not a retry) — not executed
+- status does not match `/unavailable|error|failed|retry/i` — not executed
+- status has `role="status"` (polite, not an alert) — not executed
+
+**SCN-080-001-05 is therefore UNVERIFIED.** The scenario's precondition is *"every
+authorized family read succeeds with zero records"*; this stack held records.
+
+**Second, independent reason this row stays `[ ]`.** The row requires *"screenshot
+references"*. Zero screenshots exist — same `only-on-failure` policy and same
+`png_count=0` measurement recorded under `T080-04-UI` above. The row's own evidence
+requirement is unmet. Either reason alone blocks the check; both hold.
+
+<a id="t080-06-ui"></a>
+
+### T080-06-UI — executed and passing; **auth third proven**, route/store/schema **NOT**; row stays `[ ]`
+
+**Command:** `./smackerel.sh test e2e-ui` — see [shared run block](#t080-e2e-ui-run).
+
+**Verbatim result:**
+
+```
+  ✓  73 graph-activation.spec.ts:259:3 › BUG-080-001 SCOPE-04 — Knowledge Graph activation truth › Regression: auth route store and schema failures are exclusive and private (2.9s)
+```
+
+**What this test DID prove — genuinely, and unconditionally.** This is the strongest
+of the three. It induces a **REAL** session rejection at `graph-activation.spec.ts:271`
+via `await context.clearCookies()` — a genuine server-issued 401, no interception,
+no fixture. It first paints a real authenticated view at `:263-268` specifically so
+there IS prior private content to leak, which is what keeps the privacy assertion
+non-vacuous. Every assertion after the rejection is **unconditional** (no `if`):
+
+- identity state — `afterState` ∈ {`unauthenticated`, `forbidden`} (`:276-279`)
+- exclusivity — status is NOT `true-empty`, NOT `route-absent`, NOT `store-unavailable` (`:282-284`)
+- privacy — prior rows removed, `.wiki-list-item` count `0`, and no `data-people-count` attribute (`:288-292`)
+- recovery — `.graph-state-action` has `href="/pwa/index.html"` (`:295-298`)
+- announcement — status has `role="alert"` (`:300`)
+- no leak — status contains no `/api/` and no `HTTP NNN` (`:301-302`)
+- exactly one live region per paint (`:304-308`)
+
+**The authentication third of SCN-080-001-06 is PROVEN**, including the
+"prior private labels and topology are removed before an auth state paints" clause.
+
+**What this test did NOT prove.** The scenario names **four** failure classes and
+requires each to occur *"separately through a real stack state"*. Only one was
+induced. **Route-absent, store-unavailable, and schema-invalid were NOT induced**
+(F-080-04-LANE: no fixtures exist for this lane). The exclusivity assertions at
+`:282-284` prove the auth state is not *dressed as* those three — they do **not**
+prove those three render their own correct exclusive state and recovery action,
+because none of them was ever painted.
+
+**SCN-080-001-06 is therefore PARTIALLY verified — one class of four.** A row whose
+claim spans all four cannot be checked on one.
+
+**Second, independent reason this row stays `[ ]`.** The row requires *"current-session
+raw evidence, DOM/accessibility/pixel privacy checks, **and screenshots**"*. Zero
+screenshots exist — same `only-on-failure` policy and `png_count=0` measurement
+recorded under `T080-04-UI`. The pixel-privacy clause in particular has no captured
+artifact behind it. Either reason alone blocks the check; both hold.
+
+<a id="t080-08-a11y"></a>
+
+### T080-08-A11Y — PASSES at both required viewports; row CHECKED
+
+**Command:** `./smackerel.sh test e2e-ui` — see [shared run block](#t080-e2e-ui-run).
+
+**Verbatim result:**
+
+```
+  ✓  77 graph-activation.spec.ts:311:3 › BUG-080-001 SCOPE-04 — Knowledge Graph activation truth › Knowledge Graph activation states remain keyboard and screen-reader operable at desktop and 320px 200 percent zoom (2.2s)
+```
+
+**Why this row is checkable while the three above are not.** Its DoD text reads:
+*"T080-08-A11Y passes on desktop and narrow viewport with current-session evidence
+in `report.md#t080-08-a11y`."* Two differences are decisive. First, it requires
+**no screenshot references** — unlike rows 04/05/06 — so the `only-on-failure`
+policy does not leave a stated requirement unmet. Second, its stated condition is
+**both viewports**, and both ran: `graph-activation.spec.ts:314-318` iterates
+`{1280, 800, "desktop"}` then `{320, 640, "320px/200%"}`, and the single `✓` covers
+the whole loop — a failure at either width would have failed the test.
+
+**Assertions that executed at BOTH widths, unconditionally:**
+
+- painted state ∈ the closed vocabulary (`:324-325`)
+- **no horizontal page scroll** — `scrollWidth > clientWidth + 1` is `false` (`:328-332`)
+- recovery action, when offered, is natively focusable (`<a>`/`<button>`, not a `div`)
+  and actually receives focus (`:363-370`)
+
+**State-dependent arm — recorded precisely, not glossed.** The status contract at
+`:341-361` branches on painted state, and **both arms assert**; this is not a
+bailout. On this run the `STATE_READY` arm executed: status NOT visible, and live-
+region count `0` — correct, because `wiki_state.js:317-320` deliberately gives
+`READY` no message at all. The `else` arm (status visible, exactly one live region)
+did not execute here.
+
+**Honest boundary.** SCN-080-001-08 names ten states. This run asserted the
+**state-appropriate** contract for the states actually painted, not for all ten.
+The row's own claim is scoped to *"passes on desktop and narrow viewport"*, and that
+condition is fully met; the broader ten-state claim lives in the SCN-080-001-08
+**Core Outcome**, which remains `[ ]`.
+
+<a id="t080-regression"></a>
+
+### T080-REGRESSION — broad regression PASSES; row CHECKED
+
+**Command:** `./smackerel.sh test e2e-ui` — see [shared run block](#t080-e2e-ui-run).
+
+**Verbatim result:**
+
+```
+  ✓  81 graph-activation.spec.ts:375:3 › BUG-080-001 SCOPE-04 — Knowledge Graph activation truth › Knowledge and Wiki journeys remain coherent after Graph activation repair (2.9s)
+  9 skipped
+  73 passed (57.1s)
+```
+
+**What the named test proved.** Cross-surface coherence through the ONE model.
+`graph-activation.spec.ts:381-410` walks all four graph surfaces —
+`wiki_topics.html`, `wiki_people.html`, `wiki_places.html`, `wiki_time.html` —
+asserts each agrees with the published aggregate, and then asserts the surfaces do
+not disagree with **each other** (`disabledCount === 0 || disabledCount === length`).
+Before this scope each page derived its own state and they could diverge. It then
+re-walks the pre-existing Wiki landing journey (`:414-418`) and confirms it still
+works. On this enabled stack the `else` arm ran: every surface must NOT report
+`disabled`, and none did.
+
+**Suite-wide regression arithmetic — the load-bearing part.** The `style.css` change
+is a **GLOBAL** rule with `!important`:
+
+```
++[hidden] { display: none !important; }
+```
+
+A global reset can silently break any surface in the app, so a green targeted test
+is not sufficient evidence — the whole suite must be shown to hold. The suite totalled
+**82 tests in all three runs** (constant denominator, so no test was added, removed,
+or renamed between runs):
+
+| Run | passed | failed | skipped | total | this file (5) | rest of suite passing |
+|---|---|---|---|---|---|---|
+| 1 | 70 | 3 | 9 | 82 | 2 pass / 3 fail | 70 − 2 = **68** |
+| 2 | 71 | 2 | 9 | 82 | 3 pass / 2 fail | 71 − 3 = **68** |
+| 3 | 73 | 0 | 9 | 82 | 5 pass / 0 fail | 73 − 5 = **68** |
+
+**Every failure across all three runs came from this one new file, and the other 68
+tests passed in every run — including run 1, which already carried the global
+`[hidden]` rule.** The rest of the suite therefore never regressed; the run-to-run
+delta is entirely the two test defects being fixed inside
+`graph-activation.spec.ts` (the login rate-limit trip, and `waitForFunction` being
+refused by the page's strict `script-src` CSP). The 9 skipped tests are constant and
+were not converted into passes.
+
+**Supporting guard, executed first-hand in this recording turn:**
+
+```
+$ bash .github/bubbles/scripts/regression-quality-guard.sh web/pwa/tests/graph-activation.spec.ts
+============================================================
+  BUBBLES REGRESSION QUALITY GUARD
+  Repo: <repo-root>
+  Timestamp: 2026-08-16T05:31:10Z
+  Bugfix mode: false
+============================================================
+
+ℹ️  Scanning web/pwa/tests/graph-activation.spec.ts
+✅ Asserts the current surface in web/pwa/tests/graph-activation.spec.ts (mixed inspection accepted)
+
+============================================================
+  REGRESSION QUALITY RESULT: 0 violation(s), 0 warning(s)
+  Files scanned: 1
+============================================================
+REGRESSION_QUALITY_GUARD_EXIT=0
+```
+
+No silent-pass or bailout pattern in the required regression file.
+
+**Honest boundary.** The row's Test Plan scenario column reads `SCN-080-001-04..08`.
+This row is checked on the **broad-regression** claim its DoD text actually makes —
+*"T080-REGRESSION passes with current-session raw evidence"* — namely that Knowledge
+and Wiki journeys remain coherent and nothing else in the suite broke. It is **not**
+a proxy for SCN-080-001-04/05/06, which remain unverified per F-080-04-LANE and whose
+Core Outcomes stay `[ ]`.
+
+### DoD accounting for this turn
+
+Checked — **2** rows, both with inline `→ Evidence:` citations in `scopes.md`:
+
+- `T080-08-A11Y` → report.md#t080-08-a11y
+- `T080-REGRESSION` → report.md#t080-regression
+
+Left unchecked, deliberately — **3** rows, each for **two independent** reasons:
+
+| Row | Reason 1 — stated evidence requirement | Reason 2 — scenario not induced |
+|---|---|---|
+| `T080-04-UI` | requires screenshot references; `only-on-failure`, all passed, `png_count=0` | `disabled` never induced — test took its `else` arm |
+| `T080-05-UI` | requires screenshot references; same | `true-empty` never induced — topics painted `READY` |
+| `T080-06-UI` | requires screenshots + pixel-privacy artifacts; same | route/store/schema never induced — only `auth` of four |
+
+Also left unchecked: **all 8 Core Outcomes** (SCN-04/05/06 are unverified; SCN-08's
+ten-state claim exceeds what was painted; and the remaining outcomes depend on
+states never rendered), and the **Build Quality Gate** row (its clause set includes
+the broad accessibility and privacy proof that F-080-04-LANE blocks). No DoD claim
+text was reworded anywhere — where a row's claim is broader than the evidence, the
+row was left unchecked rather than narrowed.
+
+**Counts:** checked `46 → 48`, unchecked `14 → 12`, total DoD items `60`
+(unchanged). SCOPE-04 Test Plan rows: `6` (unchanged). SCOPE-04 Test-Evidence items:
+`6` (unchanged) — the one-row-per-Test-Plan-row parity holds.
+
+**SCOPE-04 remains `In Progress`, not `Done`** (3/15 Test-Evidence + Core + Gate
+items). The bug's top-level `status` and `certification.status` were not touched.
+
+### Change surface for this closure
+
+`report.md` (this section) and `scopes.md` (exactly two SCOPE-04 Test-Evidence rows
+checked, each with an `→ Evidence:` citation). **No DoD claim text was reworded, no
+row was added or removed, and no scope `Status` was changed.** `state.json`,
+`spec.md`, `design.md`, `bug.md`, `uservalidation.md`, `scenario-manifest.json`,
+every other spec, all product source, all tests, and everything under `docs/` were
+left untouched. Nothing was staged or committed.
+
