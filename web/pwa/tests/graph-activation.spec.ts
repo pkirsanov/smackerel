@@ -91,6 +91,19 @@ const ALL_UI_STATES = [
 const DISABLED_EXPLANATION_FRAGMENT = "turned off for this deployment";
 
 /**
+ * The matching fragment for the store-unavailable explanation, owned by
+ * web/pwa/wiki_state.js as STATE_COPY[STATE_STORE_UNAVAILABLE].message
+ * ("The knowledge graph store is temporarily unreachable. Your data is
+ * not lost; this view can be retried.").
+ *
+ * Same fragment-not-sentence reasoning as above. The half chosen is the
+ * half that carries the meaning under test: the store is unreachable
+ * TEMPORARILY, which is what makes this state retryable and therefore
+ * different from `disabled`.
+ */
+const STORE_UNAVAILABLE_EXPLANATION_FRAGMENT = "store is temporarily unreachable";
+
+/**
  * Establish a real browser session against the running stack by seeding
  * the lane's dev-token session cookie.
  *
@@ -326,6 +339,105 @@ test.describe("BUG-080-001 SCOPE-04 — Knowledge Graph activation truth", () =>
     await expect(page.locator("#wiki-topics-index")).toHaveAttribute("aria-busy", "false");
     const priorState = await paintedState(page, "#wiki-topics-status");
     expect(ALL_UI_STATES, "the authenticated paint must resolve a real state").toContain(priorState);
+
+    // The authenticated paint above is the only moment in this file where a
+    // REAL store outage is observable, so assert that state's full contract
+    // here before the session drop below overwrites it. The lane induces the
+    // outage by stopping the graph store container on a running stack
+    // (scripts/runtime/web-e2e-ui.sh store-unavailable phase); on a healthy
+    // stack the else arm runs instead. BOTH arms assert — the else arm proves
+    // no OTHER state may wear the store fault's copy or its recovery
+    // affordance — so this is an exclusivity check, not a bailout.
+    const priorStatus = page.locator("#wiki-topics-status");
+    if (priorState === STATE_STORE_UNAVAILABLE) {
+      // An unreachable store must yield nothing rather than something
+      // plausible. This is the whole promise of the fail-soft contract.
+      await expect(
+        page.locator("#wiki-topics-list .wiki-list-item"),
+        "an unreachable store must not leave or invent rows on screen",
+      ).toHaveCount(0);
+
+      // Perceivable, and it explains itself — a blank panel would satisfy
+      // every negation but tell the user nothing.
+      await expect(
+        priorStatus,
+        "the store fault must be perceivable, not merely present in the DOM",
+      ).toBeVisible();
+      await expect(
+        priorStatus.locator(".graph-state-message"),
+        "the store fault must say the store is unreachable and the data is not lost",
+      ).toContainText(STORE_UNAVAILABLE_EXPLANATION_FRAGMENT);
+
+      // The deliberate contrast with `disabled`. web/pwa/wiki_state.js gives
+      // this state an action ("Try this view again") and gives disabled NONE,
+      // because a transient outage CAN be recovered from and a deliberate
+      // configuration cannot. Assert the affordance is present AND natively
+      // operable: a pointer-only <div> would be a real defect, and an
+      // unfocusable one would strand a keyboard user at the outage.
+      const storeAction = priorStatus.locator(".graph-state-action");
+      await expect(
+        storeAction,
+        "a retryable outage must offer exactly one recovery action, unlike disabled",
+      ).toHaveCount(1);
+      const storeActionTag = await storeAction.evaluate((n) => n.tagName.toLowerCase());
+      expect(
+        ["a", "button"],
+        `store recovery action must be natively focusable, got <${storeActionTag}>`,
+      ).toContain(storeActionTag);
+      await storeAction.focus();
+      await expect(
+        storeAction,
+        "the store recovery action must be reachable by keyboard",
+      ).toBeFocused();
+
+      // A fault announces assertively. true-empty is a polite `status`
+      // because an empty graph is not a fault; this IS one, and announcing
+      // it politely would let the outage pass unnoticed.
+      await expect(priorStatus).toHaveAttribute("role", "alert");
+      await expect(priorStatus).toHaveAttribute("aria-live", "assertive");
+      expect(
+        await page.locator("#wiki-topics-index [role=alert], #wiki-topics-index [role=status]").count(),
+        "exactly one live region may be present while the store is unreachable",
+      ).toBe(1);
+
+      // Evidence line, in the same console idiom chaos_saga_20260702.spec.ts
+      // uses (the reporter prints test stdout). Because this file is
+      // state-adaptive, a PASS alone cannot tell a reader WHICH arm ran, and
+      // a phase that silently reverted to a healthy stack would look
+      // identical. Printing the observed arm makes that distinguishable from
+      // the lane output instead of inferable. Emitted AFTER the assertions,
+      // so it can only appear when they held.
+      console.log(
+        `GRAPH-EV store-unavailable | painted=${priorState} | rows=0 | ` +
+          `action=<${storeActionTag}> "${(await storeAction.textContent())?.trim()}" | ` +
+          "role=alert aria-live=assertive",
+      );
+    } else {
+      // Exclusivity in the other direction: only the store fault may wear
+      // the store fault's copy and its retry affordance. A state model that
+      // leaked either into a neighbouring state fails here. Note degraded
+      // also labels its button "Try this view again", so the marker — not
+      // the label — is what distinguishes them.
+      await expect(
+        priorStatus.locator('[data-graph-retry="store-unavailable"]'),
+        `${priorState} must not offer the store fault's retry affordance`,
+      ).toHaveCount(0);
+      await expect(
+        priorStatus,
+        `${priorState} must not borrow the store fault's explanation`,
+      ).not.toContainText(STORE_UNAVAILABLE_EXPLANATION_FRAGMENT);
+
+      // Same purpose as the line above: name the arm that ran, so a store
+      // phase that failed to induce the outage is visible in the output
+      // rather than passing as an unremarkable green.
+      console.log(`GRAPH-EV store-exclusivity | painted=${priorState} | storeRetryAffordance=0 | storeCopy=absent`);
+    }
+
+    // Value-safe in EVERY state, the store fault above included: the status
+    // may name a closed condition but never the request path or the status
+    // line that produced it.
+    await expect(priorStatus).not.toContainText("/api/");
+    await expect(priorStatus).not.toContainText(/HTTP \d\d\d/);
 
     // Induce a REAL session rejection: drop the session cookie. The next
     // read gets a genuine 401 from the server — no interception.

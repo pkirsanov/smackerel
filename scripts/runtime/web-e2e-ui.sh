@@ -355,6 +355,176 @@ bring_up_test_stack() {
 }
 
 # ------------------------------------------------------------------
+# store-unavailable phase — "the database is down"
+# ------------------------------------------------------------------
+#
+# Losing the graph store is a real, user-facing failure mode with its own
+# exclusive UI state (store-unavailable) and its own copy, and until now it
+# had no live-container proof at all: the lane's stack always boots a healthy
+# postgres, so the store arm of web/pwa/tests/graph-activation.spec.ts never
+# executed against a real outage.
+#
+# It is induced by STOPPING this lane's own postgres service on the stack the
+# full suite just finished using. That costs no rebuild and no boot cycle —
+# roughly the spec's own runtime — and it is a truthful outage rather than a
+# simulated one: core keeps running (that IS the fail-soft contract), the
+# family reads answer a typed 503, and the browser sees exactly what a user
+# would see if the database fell over mid-session.
+#
+# Scoping is by Compose project, through the same e2e_ui_compose helper every
+# other lane operation uses, so only `smackerel-test-e2e-ui`'s postgres is
+# touched. The dev stack and the `smackerel-test` integration stack are
+# unaffected. The service declares `restart: unless-stopped`, so an explicit
+# `stop` stays stopped for the duration of the phase.
+
+# assert_graph_store_unavailable — refuse to run the specs unless the store
+# really is unavailable.
+#
+# This guard is the entire point of the phase, not a nicety.
+# graph-activation.spec.ts is state-adaptive by design: it reads whatever the
+# stack publishes and asserts the matching arm. That is what makes it honest
+# on any stack — and it is also exactly what would let this phase quietly
+# degrade into a second HEALTHY run, report green, and prove nothing. Reading
+# the same family route the browser reads, and refusing unless it answers a
+# typed 503 store_unavailable, is what makes a green phase mean the store arm
+# actually executed.
+#
+# The route is behind `knowledge-graph:read`, so the probe presents the same
+# lane token the spec's session cookie carries — an unauthenticated probe
+# would see 401 and could never observe the condition under test.
+assert_graph_store_unavailable() {
+  local label="$1"
+  if ! command -v curl >/dev/null 2>&1; then
+    echo "ERROR: [web-e2e-ui] store-unavailable phase needs 'curl' to prove the store is down but it is not on PATH." >&2
+    return 127
+  fi
+
+  # Stopping a container kills its connections, but the core's pool may take a
+  # moment to observe that, so poll for the induced condition rather than
+  # sampling once. Bounded at 30 x 2s: this waits for a condition to become
+  # OBSERVABLE, and still fails loudly if it never does.
+  local attempt=0
+  local response="" http_code="" body=""
+  while (( attempt < 30 )); do
+    attempt=$((attempt + 1))
+    # No --fail: 503 is the EXPECTED answer here, and --fail would discard the
+    # very body that proves which 503 this is. --write-out appends the status
+    # on its own final line so one call yields both.
+    if response="$(curl --silent --show-error --max-time 15 \
+      --write-out '\n%{http_code}' \
+      --header "Authorization: Bearer $SMACKEREL_AUTH_TOKEN" \
+      --header 'Accept: application/json' \
+      "$SMACKEREL_BASE_URL/api/topics?limit=5" 2>/dev/null)"; then
+      http_code="${response##*$'\n'}"
+      body="${response%$'\n'*}"
+      if [[ "$http_code" == "503" ]] && printf '%s' "$body" | grep -q '"code":"store_unavailable"'; then
+        echo "[web-e2e-ui] store-unavailable phase (${label}): GET /api/topics?limit=5 answers HTTP $http_code $body" >&2
+        return 0
+      fi
+    else
+      http_code="transport-failure"
+      body="$response"
+    fi
+    sleep 2
+  done
+
+  echo "ERROR: [web-e2e-ui] store-unavailable phase (${label}) did NOT observe an unavailable graph store." >&2
+  echo "       Required: HTTP 503 whose body carries \"code\":\"store_unavailable\"." >&2
+  echo "       Observed after ${attempt} attempts: HTTP ${http_code} body: ${body}" >&2
+  echo "       graph-activation.spec.ts would exercise a different arm and prove nothing about this failure mode." >&2
+  return 1
+}
+
+# store_unavailable_phase_applies — gate the phase on the caller's own
+# Playwright filter. Identical predicate to graph_disabled_phase_applies (both
+# phases run exactly the one activation-dependent spec), named separately so
+# the two gates read independently and can diverge without a rename.
+store_unavailable_phase_applies() {
+  graph_disabled_phase_applies "$@"
+}
+
+run_store_unavailable_phase() {
+  local status=0
+  # `SECONDS` counts from shell start, so a snapshot here yields this phase's
+  # own wall-clock cost — the lane's added price is measurable, not estimated.
+  local phase_start="$SECONDS"
+
+  echo "" >&2
+  echo "[web-e2e-ui] store-unavailable phase: stopping the graph store on the running stack (project ${SMACKEREL_E2E_UI_COMPOSE_PROJECT})..." >&2
+
+  set +e
+  e2e_ui_compose stop --timeout 30 postgres >&2
+  status=$?
+  set -e
+  if [[ "$status" -ne 0 ]]; then
+    echo "ERROR: [web-e2e-ui] store-unavailable phase could not stop the postgres service (exit ${status})." >&2
+  fi
+
+  if [[ "$status" -eq 0 ]]; then
+    set +e
+    assert_graph_store_unavailable before-specs
+    status=$?
+    set -e
+  fi
+
+  if [[ "$status" -eq 0 ]]; then
+    echo "[web-e2e-ui] store-unavailable phase: running graph-activation.spec.ts against the STORE-DOWN stack..." >&2
+    set +e
+    # Scoped to the ONE spec whose assertions are store-state dependent.
+    # Re-running the whole suite here would cost minutes and blur the phases'
+    # result summaries together.
+    run_node_tooling graph-activation.spec.ts
+    status=$?
+    set -e
+  fi
+
+  # Re-prove the outage AFTER the specs ran. The guard above establishes the
+  # condition at one instant; this closes the window, so the store is known to
+  # have been down for the WHOLE run rather than only at its start. That
+  # matters because the spec adapts to whatever it observes: had the store
+  # come back mid-run the browser would have painted a healthy view and the
+  # phase would still have reported green. Bracketing the run is what makes
+  # the arm the specs took deterministic, and unlike the console evidence the
+  # spec emits, it survives the reporter's terminal redraw.
+  if [[ "$status" -eq 0 ]]; then
+    set +e
+    assert_graph_store_unavailable after-specs
+    status=$?
+    set -e
+    if [[ "$status" -ne 0 ]]; then
+      echo "ERROR: [web-e2e-ui] the graph store recovered during the store-unavailable phase; the specs may have exercised a healthy arm." >&2
+    fi
+  fi
+
+  # Diagnostic only — the bracket above already decided the outcome, so a
+  # missing extraction here can neither pass nor fail the phase. It surfaces
+  # the arm the browser actually painted, which the TTY list reporter
+  # overwrites in the live transcript but the JSON reporter records verbatim.
+  local painted_arm=""
+  if [[ -r "$SMACKEREL_E2E_UI_PWA_DIR/test-results/results.json" ]]; then
+    painted_arm="$(grep -o 'GRAPH-EV store[^"]*' "$SMACKEREL_E2E_UI_PWA_DIR/test-results/results.json" || true)"
+  fi
+  if [[ -n "$painted_arm" ]]; then
+    echo "[web-e2e-ui] store-unavailable phase: browser painted $painted_arm" >&2
+  fi
+
+  # Never hand a half-stopped stack to whatever runs next, on ANY exit path
+  # above — including a failure before the specs ran. The teardown is
+  # idempotent and project-scoped, the graph-disabled phase opens with its own
+  # (which then finds nothing to do and boots fresh), and the EXIT/INT/TERM
+  # traps remain the outer safety net.
+  tear_down_test_stack
+
+  local phase_seconds=$((SECONDS - phase_start))
+  if [[ "$status" -eq 0 ]]; then
+    echo "[web-e2e-ui] store-unavailable phase: PASS (${phase_seconds}s)" >&2
+  else
+    echo "[web-e2e-ui] store-unavailable phase: FAIL (exit=${status}, ${phase_seconds}s)" >&2
+  fi
+  return "$status"
+}
+
+# ------------------------------------------------------------------
 # F-080-04-LANE — graph-DISABLED second phase
 # ------------------------------------------------------------------
 #
@@ -530,7 +700,22 @@ run_node_tooling "$@"
 lane_status=$?
 set -e
 
-# Phase 2 — F-080-04-LANE. Live-stack path only: the canary injects a stub
+# Phase 2 — store-unavailable. Runs on the stack phase 1 JUST finished with,
+# still up: stopping one container is all the induction needs, so this phase
+# costs roughly the spec's runtime instead of a whole rebuild/boot cycle. It
+# must run BEFORE the graph-disabled phase, which recycles the stack. Live
+# path only: the canary injects a stub npx and brings up no stack.
+if [[ -z "${SMACKEREL_E2E_UI_NPX:-}" ]] && store_unavailable_phase_applies "$@"; then
+  store_unavailable_status=0
+  run_store_unavailable_phase || store_unavailable_status=$?
+  # First failure wins, as with the phase below. The phase is NOT advisory:
+  # a red store-unavailable phase fails the lane.
+  if [[ "$lane_status" -eq 0 && "$store_unavailable_status" -ne 0 ]]; then
+    lane_status="$store_unavailable_status"
+  fi
+fi
+
+# Phase 3 — F-080-04-LANE. Live-stack path only: the canary injects a stub
 # npx and brings up no stack, so there is nothing to recycle there.
 if [[ -z "${SMACKEREL_E2E_UI_NPX:-}" ]] && graph_disabled_phase_applies "$@"; then
   graph_disabled_status=0
