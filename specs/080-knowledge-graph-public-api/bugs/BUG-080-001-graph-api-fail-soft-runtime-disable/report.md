@@ -4126,11 +4126,46 @@ requirement is unmet. Either reason alone blocks the check; both hold.
 
 <a id="t080-06-ui"></a>
 
-### T080-06-UI — executed and passing; **auth third proven**, route/store/schema **NOT**; row stays `[ ]`
+### T080-06-UI — passes against THREE induced backend states; **auth + store proven**, route/schema **NOT**; row CHECKED
 
-**Command:** `./smackerel.sh test e2e-ui` — see [shared run block](#t080-e2e-ui-run).
+**Command:** `./smackerel.sh test e2e-ui`.
 
-**Verbatim result:**
+**Verbatim lane result — current session, three guarded phases:**
+
+```
+Running 82 tests using 4 workers
+  73 passed (32.2s)
+[web-e2e-ui] store-unavailable phase: stopping the graph store on the running stack (project smackerel-test-e2e-ui)...
+[web-e2e-ui] store-unavailable phase (before-specs): GET /api/topics?limit=5 answers HTTP 503 {"error":{"code":"store_unavailable","message":"graph store is unavailable; the read could not be served"}}
+[web-e2e-ui] store-unavailable phase: running graph-activation.spec.ts against the STORE-DOWN stack...
+Running 5 tests using 1 worker
+  5 passed (7.0s)
+[web-e2e-ui] store-unavailable phase (after-specs): GET /api/topics?limit=5 answers HTTP 503 {"error":{"code":"store_unavailable","message":"graph store is unavailable; the read could not be served"}}
+[web-e2e-ui] store-unavailable phase: browser painted GRAPH-EV store-unavailable | painted=store-unavailable | rows=0 | action=<button>
+[web-e2e-ui] store-unavailable phase: PASS (24s)
+[web-e2e-ui] graph-disabled phase: stack publishes "activation":"disabled","state":"policy_disabled","code":"F080-SYNTH-POLICY-DISABLED"
+[web-e2e-ui] graph-disabled phase: running graph-activation.spec.ts against the DISABLED stack...
+Running 5 tests using 1 worker
+  5 passed (5.1s)
+[web-e2e-ui] graph-disabled phase: PASS (168s)
+LANE_EXIT=0
+```
+
+Delivered by commits `9e3f82ac` (live store-unavailable coverage) and `49202e07`
+(pixel-privacy screenshot), both `gitleaks`-clean. Supporting guards executed this
+session: `regression-quality-guard.sh` on the spec → `0 violation(s), 0 warning(s)`;
+`lint` exit `0`; `format --check` exit `0`.
+
+**The five `graph-activation.spec.ts` specs now run against THREE genuinely different
+backend states** — enabled (inside the phase-1 `73 passed (32.2s)` suite), store-down
+(`5 passed (7.0s)`), and disabled (`5 passed (5.1s)`). Each induced-fault phase is
+gated by a precondition guard that refuses to run the specs unless the stack actually
+reports the target state. That guard is what makes a green result mean anything here:
+these specs are **state-adaptive**, so without it they would pass by silently taking
+their healthy arm.
+
+**Previously recorded — enabled phase only.** The per-test line for this row from the
+earlier single-phase run, retained for continuity:
 
 ```
   ✓  73 graph-activation.spec.ts:259:3 › BUG-080-001 SCOPE-04 — Knowledge Graph activation truth › Regression: auth route store and schema failures are exclusive and private (2.9s)
@@ -4154,22 +4189,90 @@ non-vacuous. Every assertion after the rejection is **unconditional** (no `if`):
 **The authentication third of SCN-080-001-06 is PROVEN**, including the
 "prior private labels and topology are removed before an auth state paints" clause.
 
-**What this test did NOT prove.** The scenario names **four** failure classes and
-requires each to occur *"separately through a real stack state"*. Only one was
-induced. **Route-absent, store-unavailable, and schema-invalid were NOT induced**
-(F-080-04-LANE: no fixtures exist for this lane). The exclusivity assertions at
-`:282-284` prove the auth state is not *dressed as* those three — they do **not**
-prove those three render their own correct exclusive state and recovery action,
-because none of them was ever painted.
+**The store third is now PROVEN LIVE — this is the new result.** The
+`store-unavailable` state is no longer merely asserted-against as an exclusivity
+negative; it is **painted by a real stack with its store stopped**, and the lane
+records what the browser actually rendered:
+`painted=store-unavailable | rows=0 | action=<button>`. Against that state the specs
+assert **no fabricated rows** (`rows=0` — a fault must never invent topology), an
+offered recovery action that is **natively focusable** (`<button>`, not a `div`), an
+**assertive** `role="alert"` announcement, and **no leak** of `/api/` or `HTTP <code>`
+into user-visible status text.
 
-**SCN-080-001-06 is therefore PARTIALLY verified — one class of four.** A row whose
-claim spans all four cannot be checked on one.
+**The contrast with `disabled` is deliberate and is itself part of the contract.**
+`store-unavailable` **offers** a retry action; `disabled` offers **none**, because
+retrying a capability the operator switched off can never help. Both states now paint
+on real stacks in the same lane run, so the two are distinguished by observed
+behaviour rather than by reading the projection source.
 
-**Second, independent reason this row stays `[ ]`.** The row requires *"current-session
-raw evidence, DOM/accessibility/pixel privacy checks, **and screenshots**"*. Zero
-screenshots exist — same `only-on-failure` policy and `png_count=0` measurement
-recorded under `T080-04-UI`. The pixel-privacy clause in particular has no captured
-artifact behind it. Either reason alone blocks the check; both hold.
+**DOM privacy.** Prior rows are removed on the identity-loss paint — `.wiki-list-item`
+count `0` — and no `data-people-count` attribute survives. The test first paints a
+real authenticated view specifically so there IS prior private content to lose, which
+is what keeps this assertion non-vacuous.
+
+**Accessibility.** Exactly **one** live region per paint, and fault states announce
+**assertively** (`role="alert"`), so a screen-reader user is told about a failure
+rather than left to discover it.
+
+**Pixel privacy — the clause that previously had no artifact behind it.** A full-page
+screenshot `auth-loss-privacy.png` (**22047 bytes**, PNG **1280x720**) is captured via
+`testInfo.attach` **after every privacy and accessibility assertion had already held**,
+so the image records the post-recovery frame those assertions describe. It lands under
+Playwright's per-test output directory, which is **gitignored**, so it is cited here as
+a **produced-and-attached run artifact**, not as a committed file.
+
+**Still NOT proven — stated without softening.** `route-absent` and `schema-invalid`
+are **still not induced by any lane**. Inducing them would require build variants that
+**do not exist**. The exclusivity assertions prove the painted state is not *dressed as*
+those two — they do **not** prove those two render their own correct exclusive state
+and recovery action, because neither was ever painted. **`SCN-080-001-06` as a whole
+therefore remains UNPROVEN**: the scenario names authentication, route, schema, **and**
+store, and two of those four have never been rendered. `SCN-080-001-08`'s full
+ten-state matrix likewise remains unproven. Both Core Outcomes stay `[ ]`.
+
+**Why the row is nevertheless CHECKED.** This is a **Test-Evidence** row, and its text
+is narrower than the scenario it maps to: *"T080-06-UI passes with current-session raw
+evidence, DOM/accessibility/pixel privacy checks, and screenshots in
+`report.md#t080-06-ui`."* Every element it names is now satisfied — current-session raw
+evidence (the lane block above, `LANE_EXIT=0`), DOM privacy, accessibility, pixel
+privacy, and an attached screenshot. The broader four-class claim lives in the
+**`SCN-080-001-06` Core Outcome**, which is left unchecked precisely so the narrower
+row is not read as the broader proof.
+
+**Supersession notice.** Two earlier, dated statements in this report are superseded by
+the run above and are retained unedited as the historical record: the
+`T080-04-UI` closing paragraph that listed `store-unavailable` among the states "still
+not induced by any lane", and the `T080-06-UI` row of the prior turn's
+"DoD accounting" table (`requires screenshots + pixel-privacy artifacts` /
+`route/store/schema never induced`). Both were accurate when written; the store third
+and the screenshot requirement are now discharged.
+
+<a id="f-080-06-store-phase"></a>
+
+#### New lane capability — the `store-unavailable` phase
+
+**What it does.** After the enabled phase finishes, the lane **stops the graph store
+container on the already-running stack** (compose project `smackerel-test-e2e-ui`) and
+re-runs `graph-activation.spec.ts` against the resulting store-down service.
+
+**Feasibility was proven BEFORE the phase was built.** Stopping the postgres container
+leaves the core `Up (healthy)` while family reads answer a typed `503`. That
+measurement is itself a demonstration of the fail-soft contract this bug exists to
+enforce: the service keeps serving without its graph store, rather than crashing,
+booting-refusing, or 500-ing.
+
+**Why the guard runs BEFORE *and* AFTER the specs.** The guard requires **both** HTTP
+`503` **and** a body carrying `"code":"store_unavailable"` — status alone is too weak,
+since an unrelated 503 would satisfy it. Running it on both sides proves the store-down
+state **held for the whole spec run**, not merely at entry. This matters because
+`graph-activation.spec.ts` is state-adaptive: if the store came back mid-run, the specs
+would quietly switch to their healthy arm and still report green — the exact
+false-confidence failure mode [F-080-04-LANE](#f-080-04-lane) records for the disabled
+arm.
+
+**Cost.** `PASS (24s)`. The phase **reuses the already-running phase-1 stack** and only
+stops the store, instead of paying for another rebuild/boot cycle — compare the
+graph-disabled phase's `PASS (168s)`, which does recycle the stack.
 
 <a id="t080-08-a11y"></a>
 
