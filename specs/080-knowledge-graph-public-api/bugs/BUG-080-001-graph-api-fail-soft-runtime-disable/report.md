@@ -48,6 +48,7 @@ with a commit, or routed to a named owner with the reason it is not settled here
 | 2026-08-17 | F-080-05-SEED — `SeedHospitalityTopics` runs unconditionally at boot, and `wiki_state.js` decides emptiness on ROW EXISTENCE, so a brand-new deployment paints `ready` with five zero-content topics instead of the onboarding true-empty view | **ROUTED — open product question.** Whether a seeded-but-unlinked taxonomy should count as user content cannot be settled by a test harness. The true-empty UI contract is nonetheless proven, by inducing the condition in the disposable test stack. Routed to `bubbles.analyst` / `bubbles.design`. | report.md § F-080-05-SEED; `cmd/core/services.go:225` |
 | 2026-08-17 | Spec 105 records a blocker against this packet citing an unresolved design-staleness gap that `bubbles.design` had already closed on 2026-07-24 | **RECORDED, NOT EDITED.** The GATE is correct and observed (105 has picked up no implementation scope); only its stated REASON is stale. Another packet's artifact is not this packet's to rewrite. Routed to the spec-105 owner. | report.md § Consumer sweep; `specs/105-.../state.json` |
 | 2026-08-17 | The `e2e-ui` lane could exercise only ONE backend state, so most branches of the graph-activation spec had never executed against a real stack | **FIXED IN-PACKET.** The lane now induces FIVE guarded states, each behind a precondition guard that refuses to run the state-adaptive specs unless the stack reports the target state. | commits `b13a99d8`, `9e3f82ac`, `23396c5c`, `cb9f9ad0` |
+| 2026-08-17 | The SCOPE-04 `[hidden]` reset does not cover the sibling `.hidden` CLASS mechanism. `.hidden { display: none }` (`style.css:97`) and `.btn { display: inline-flex }` (`style.css:231`) are both specificity 0-1-0, so the later `.btn` wins the cascade tie — and `assistant.js` toggles only the class, never the attribute, so `#assistant-retry-btn` (`assistant.html:62`, `class="btn btn-secondary hidden"`) stays painted while marked hidden | **ROUTED — deliberately not fixed here.** Same defect FAMILY as the fix this packet shipped, but a different mechanism on a different surface (assistant, not wiki). Correcting it changes observable assistant behaviour, so it needs its own reproduction and its own regression test rather than riding along inside a simplify pass. Routed to the spec-100 / assistant owner. **Claim Source:** interpreted — cascade read from source at the cited lines; NOT browser-verified in this session. | `web/pwa/style.css:97,231`; `web/pwa/assistant.html:62`; `web/pwa/assistant.js` |
 
 ### Code Diff Evidence
 
@@ -5332,3 +5333,146 @@ All eight gate commands exit `0` with no warning output. Suite counts moved
 monotonically as tests were added — 73 -> 74 -> 75 -> 76 passing — with zero
 failures and skips held constant, so no test was converted into a skip to obtain
 a green result.
+
+## Simplify Review (bubbles.simplify, 2026-08-17)
+
+**Verdict: NO code changed. Zero edits to any of the four reviewed files.**
+
+That is the finding, not an absence of one. Every duplication located is shallow,
+locally annotated, and sits in a protected shared harness whose refactor cost and
+blast radius exceed the readability it would buy.
+
+### Surface reviewed
+
+The four files changed by this session's SCOPE-04 work, and nothing else:
+
+| File | Change under review |
+|---|---|
+| `web/pwa/wiki_state.js` | 404 typed-code classification (commit `cb9f9ad0`) |
+| `web/pwa/style.css` | global `[hidden]` reset (commit `03611451`) |
+| `web/pwa/tests/graph-activation.spec.ts` | 8 Playwright tests |
+| `scripts/runtime/web-e2e-ui.sh` | 4 guarded lane phases |
+
+### Per-file findings
+
+**`wiki_state.js` — already minimal; nothing to extract.** The change is one
+ternary plus one constant. It is byte-for-byte the same shape as the pre-existing
+`case 400:` line directly beneath it, and the same shape as the `case 503:`
+disambiguation two lines below that. It does not introduce a pattern — it removes
+an inconsistency by conforming to the one already established in the same
+`switch`. Extracting a shared helper across three `case` arms that each map a
+different typed code to a different constant would obscure the mapping the
+function exists to express.
+
+**`style.css` — already minimal; the neighbouring rule is NOT dead.** The change
+is one declaration. `.hidden { display: none }` at line 97 looked like a
+redundant sibling of the new `[hidden]` reset, so it was checked before any
+removal was considered, per the deletion-safety gate. It is live: 44 references
+across `web/pwa/assistant.{html,js}` and `web/extension/popup/*`. Removing it
+would break the assistant retry/error toggles. It was left in place, and the
+cascade defect that check surfaced is recorded in `## Discovered Issues` above
+rather than silently repaired inside a simplify pass.
+
+**`graph-activation.spec.ts` — setup is already fully factored.** The measured
+answer to "does the spec repeat setup that belongs in a helper" is no: 8 tests,
+8 `authenticate(page)` calls — exactly one per test, and `authenticate` IS the
+extracted helper. `readPublishedAggregate` and `paintedState` likewise already
+exist, and the state vocabulary and copy fragments are named constants rather
+than inline literals. The only literal repetition left is the 2-element viewport
+array appearing at lines 505/508 and 937/938. Hoisting it to a shared constant
+would save two lines while coupling two loops that legitimately differ — one
+drives real page navigations, the other drives injected state renders — so the
+constant would be a false sharing rather than a real one.
+
+**`web-e2e-ui.sh` — real duplication, deliberately retained.** Measured, not
+estimated:
+
+| Repeated block | Call sites | Approx. lines each |
+|---|---|---|
+| `curl` + `http_code`/`body` split | L452/461, L522/527, L718/723 | 12 |
+| phase-result timing + PASS/FAIL echo | L653-657, L823-827, L970-974 | 6 |
+| bottom-of-file phase dispatch + first-failure-wins fold | 3 blocks | 8 |
+| repo-root subshell | L37 and L224 | 1 |
+
+### Why the lane duplication was retained
+
+Four reasons, in descending weight. This is a considered decision, not an
+omission.
+
+1. **It is a protected shared harness.** This packet's own `scopes.md:492`
+   records the Shared Infrastructure Impact Sweep for this exact file: *"blast
+   radius: all 85 collected browser tests."* Framework policy is to not rewrite
+   such a surface by default.
+2. **Five separate tests pin it by SOURCE TEXT.** `spec_077_compose_project_test.go`
+   and `spec_077_test_stack_isolation_test.go` assert on literal content, and
+   `spec_077_{bootstrap_pwa_tooling,playwright_config_fail_loud,test_dispatcher}_test.sh`
+   SOURCE the file. `spec077extractFunction` parses `bring_up_test_stack` and
+   `tear_down_test_stack` by naive brace-counting over raw text — its own comment
+   concedes it is *"crude"*. A cosmetic edit can break a contract test here
+   without touching any behaviour.
+3. **The repo-root duplication at L37/L224 is load-bearing, not accidental.**
+   The two computations are separated by the sourced-guard `return 0` at L202.
+   L37 is visible to a sourced context; L224 is not. Three shell unit tests
+   source this file. Hoisting the shared value above the guard changes what those
+   sourced contexts see — the archetypal free-looking change that is not free.
+4. **Extraction would strand the comments, which are the file's best content.**
+   Each repeated block carries phase-SPECIFIC rationale explaining why that phase
+   runs where it does — true-empty must precede the full suite because only a
+   freshly-booted stack has `people`/`places` already empty; store-unavailable
+   must follow it and precede graph-disabled because it degrades the stack in
+   place rather than recycling it. A shared helper would either orphan that
+   reasoning or push it to call sites where it reads worse.
+
+Against that, the whole extraction nets roughly 25 lines in a 1,059-line file and
+would require a full multi-stack `e2e-ui` re-run to re-establish the guarded-phase
+evidence this packet already holds. The trade is not favourable, so no edit was
+made.
+
+### On helper naming and factoring
+
+`true_empty_phase_applies` and `store_unavailable_phase_applies` both delegate to
+`graph_disabled_phase_applies`. This reads as redundant indirection and was
+examined as such. Both carry an inline comment stating the intent: the three
+gates are named separately so they read independently and can diverge without a
+rename. That is a defensible seam — collapsing three phase gates onto one
+concrete name would couple them precisely where they are most likely to need to
+differ. The remaining names (`clear_seeded_taxonomy`, `assert_*`,
+`restore_seeded_taxonomy`, `await_core_healthy`, `run_*_phase`) state what they
+do and group coherently by phase. No rename was warranted.
+
+### Guards and assertions
+
+No assertion, precondition guard, or `set -e` bracket was weakened, relaxed, or
+removed. The guards are the mechanism that stops a state-adaptive spec from
+passing vacuously on the wrong backend state, and the `curl` duplication above
+sits INSIDE that mechanism — a further reason it was left untouched rather than
+routed through a shared helper whose transport-failure and `--fail` semantics
+differ per call site.
+
+### Verification
+
+No behavioural verification was required, because no reviewed file changed. The
+lane, lint, and format gates recorded in `## Build Quality Gate — executed
+evidence` above therefore remain the current evidence for these files, unaltered
+by this review.
+
+The packet-level guard was re-run to establish a measured baseline before any
+edit, and this section's own edits are artifact-only:
+
+```
+$ bash .github/bubbles/scripts/state-transition-guard.sh specs/080-knowledge-graph-public-api/bugs/BUG-080-001-graph-api-fail-soft-runtime-disable
+exit: 1
+failureCount: 10
+failedGateIds: [G022,G089]
+verdict: FAIL
+sha256: 1eae019d02e23d0bbf73be4a9e79ec60cf43e3e64565b9b9198a4088a95c1e2e
+```
+
+Line 110 of that output is `🔴 BLOCK: Required phase 'simplify' NOT in
+execution/certification phase records (Gate G022 violation)` — the gap this
+invocation closes by recording the phase with real provenance.
+
+**Status is NOT promoted. The packet remains `blocked`.** Recording a phase is
+not a completion claim: G089 and the seven other absent phases are untouched by
+this review.
+

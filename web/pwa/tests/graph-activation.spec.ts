@@ -903,4 +903,106 @@ test.describe("BUG-080-001 SCOPE-04 — Knowledge Graph activation truth", () =>
 
     expect(byState.get("ready")!.bare.message, "ready has nothing to say").toBe("");
   });
+
+  /**
+   * T080-08-MATRIX — ui-unit induction, REAL page layout.
+   *
+   * SCN-080-001-08 names TEN states at desktop and 320px/200%. Five of
+   * them occur naturally on the lane's guarded phases and are covered
+   * live by T080-08-A11Y. The rest cannot be induced against a healthy
+   * current core (see T080-06-RENDER for why), so this drives every
+   * state through the REAL #wiki-topics-status node on the REAL page and
+   * measures REAL layout. The induction is unit-level; the layout,
+   * geometry and accessibility tree are genuine.
+   *
+   * States are rendered in sequence into the SAME node deliberately.
+   * That is what makes the leaked-prior-label clause testable: each
+   * state must fully replace its predecessor's message, not append to
+   * or leave it behind.
+   */
+  test("Unit: all ten graph states stay perceivable and operable at both viewports", async ({
+    page,
+  }) => {
+    await authenticate(page);
+    await page.goto("/pwa/wiki_topics.html");
+    await expect(page.locator("#wiki-topics-index")).toHaveAttribute("aria-busy", "false");
+
+    const STATES = [
+      "loading", "ready", "true-empty", "partial", "degraded", "disabled",
+      "unauthenticated", "forbidden", "route-absent", "store-unavailable",
+      "schema-invalid",
+    ];
+
+    for (const viewport of [
+      { width: 1280, height: 800, label: "desktop" },
+      { width: 320, height: 640, label: "320px/200%" },
+    ]) {
+      await page.setViewportSize({ width: viewport.width, height: viewport.height });
+
+      let previousMessage = "";
+      for (const state of STATES) {
+        const m = await page.evaluate(
+          async ([st, prev]) => {
+            const mod = await import("/pwa/wiki_state.js");
+            const node = document.getElementById("wiki-topics-status");
+            mod.renderReadState(node, st, { onRetry: () => {} });
+            const list = document.getElementById("wiki-topics-list");
+            const nb = node.getBoundingClientRect();
+            const lb = list ? list.getBoundingClientRect() : null;
+            const visible = !node.hidden && getComputedStyle(node).display !== "none";
+            const msg = (node.querySelector(".graph-state-message")?.textContent ?? "").trim();
+            const action = node.querySelector(".graph-state-action");
+            return {
+              declared: node.getAttribute("data-graph-state"),
+              visible,
+              message: msg,
+              // A non-empty previous message must not survive into this paint.
+              leakedPrior: prev.length > 0 && msg !== prev && node.textContent.includes(prev),
+              liveRegions: document.querySelectorAll(
+                "#wiki-topics-status[role=alert], #wiki-topics-status[role=status]",
+              ).length,
+              overlaps:
+                visible && lb !== null && nb.width > 0 && lb.width > 0
+                  ? nb.x < lb.x + lb.width && lb.x < nb.x + nb.width &&
+                    nb.y < lb.y + lb.height && lb.y < nb.y + nb.height
+                  : false,
+              horizontalScroll:
+                document.documentElement.scrollWidth > document.documentElement.clientWidth + 1,
+              actionTag: action ? action.tagName.toLowerCase() : "",
+            };
+          },
+          [state, previousMessage] as [string, string],
+        );
+
+        const where = `${state} @ ${viewport.label}`;
+        expect(m.declared, `${where}: must declare its own state`).toBe(state);
+        expect(m.horizontalScroll, `${where}: no horizontal page scroll`).toBe(false);
+        expect(m.overlaps, `${where}: status must not overlap the family rows`).toBe(false);
+        expect(m.leakedPrior, `${where}: a prior state's label must not survive`).toBe(false);
+        // Never more than one announcement: a duplicate alert is a defect.
+        expect(m.liveRegions, `${where}: at most one live region`).toBeLessThanOrEqual(1);
+
+        if (state === "ready") {
+          expect(m.visible, `${where}: a ready view has nothing to announce`).toBe(false);
+        } else if (state !== "loading") {
+          expect(m.visible, `${where}: the state must be perceivable`).toBe(true);
+          expect(m.message.length, `${where}: the state must explain itself`).toBeGreaterThan(0);
+          expect(m.liveRegions, `${where}: exactly one announcement`).toBe(1);
+        }
+
+        // No pointer-only affordance: any action must be natively focusable
+        // AND must actually take focus, asserted through the real browser.
+        if (m.actionTag) {
+          expect(["a", "button"], `${where}: action must be natively focusable`).toContain(
+            m.actionTag,
+          );
+          const action = page.locator("#wiki-topics-status .graph-state-action").first();
+          await action.focus();
+          await expect(action, `${where}: action must be keyboard-reachable`).toBeFocused();
+        }
+
+        previousMessage = m.message;
+      }
+    }
+  });
 });
