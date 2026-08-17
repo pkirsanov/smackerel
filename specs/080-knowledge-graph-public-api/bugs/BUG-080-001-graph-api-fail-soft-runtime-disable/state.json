@@ -53,9 +53,23 @@
     "pendingTransitionRequests": [],
     "audit": {
       "schemaVersion": "audit-run/v1",
-      "runId": null,
+      "runId": "audit-080-001-20260817T211816Z",
       "currentAttemptId": null,
-      "attempts": []
+      "attempts": [
+        {
+          "attemptId": "audit-080-001-20260817T211816Z-a1",
+          "resultState": "INCOMPLETE",
+          "targetRevision": "sha256:0b42df27bbaf7a8ac313dd82c15a3cb0fe746fc4b4be5f61fad967f2d1a4af77",
+          "contractDigest": "sha256:aa91472c047d3d985d38c1d308feb1e6081955b2aa553816deb5987d9cdc449f",
+          "auditProfile": "delivery-completion-v1",
+          "targetStatus": "done",
+          "auditVerdict": null,
+          "outcome": null,
+          "evidenceRef": "report.md#delivery-completion-audit---2026-08-17",
+          "addressedFindings": [],
+          "unresolvedFindings": []
+        }
+      ]
     }
   },
   "certification": {
