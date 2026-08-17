@@ -5476,3 +5476,79 @@ invocation closes by recording the phase with real provenance.
 not a completion claim: G089 and the seven other absent phases are untouched by
 this review.
 
+
+
+---
+
+<a id="security-review"></a>
+
+## Security Review (security phase, 2026-08-17)
+
+Executed directly against source after two dispatched subagent attempts produced
+no result. Every finding below cites the file it was read from; nothing is
+asserted from memory.
+
+**Verdict: no security defect. One deliberate design decision reviewed and
+accepted, recorded below so it is not rediscovered as a bug.**
+
+### 1. Information disclosure in typed error envelopes — CLEAN
+
+`ErrorEnvelope` (`internal/api/graphapi/errors.go`) is a CLOSED three-field
+shape: `{"error":{"code","message","field"}}`. `WriteError` encodes only those
+three values, all supplied as literals by the call sites (`"topic not found"`,
+`"invalid_cursor"`). No stack trace, no SQL, no table name, no filesystem path,
+and no upstream driver text can reach the wire, because no call site passes one.
+
+### 2. Auth and authorization ordering — CORRECT, with one accepted trade-off
+
+The graph manifest registers INSIDE the outer `bearerAuthMiddleware` group, so
+an UNAUTHENTICATED caller is rejected before any graph handler or the activation
+Guard is consulted. Within that group the order is `GraphCapability.Guard` then
+`auth.RequireScope("knowledge-graph:read")`.
+
+Accepted trade-off, reviewed not overlooked: an AUTHENTICATED caller who lacks
+the `knowledge-graph:read` scope receives `503 capability_disabled` rather than
+`403 forbidden` when the capability is off, which discloses deployment
+configuration to a user not authorized for the graph. This ordering is
+DELIBERATE and documented at the registration site — the design requires a
+disabled deployment to be honestly "present-but-disabled" on every known path.
+The disclosure is bounded: it requires a valid session, and it reveals only that
+the graph is off, which the authenticated `/api/health` graph aggregate already
+exposes to the same caller. Reordering would contradict the fail-soft contract
+this packet exists to establish, so it is accepted rather than changed.
+
+### 3. Existence oracle — CLOSED, and genuinely tested
+
+`tests/integration/graphapi/corpus_authorization_test.go:562` asserts that for an
+ungranted caller a path naming a REAL seeded row and a path naming a row that
+certainly does not exist are answered IDENTICALLY, comparing the two bodies
+byte-for-byte across nine paths spanning all five families. Without that, an
+ungranted caller could enumerate the corpus by diffing denials.
+
+### 4. Cache privacy on ERROR responses — CORRECT, ordering verified
+
+`WriteError` calls `SetPrivateNoStore(w)` BEFORE `w.WriteHeader(status)`. That
+ordering is load-bearing rather than stylistic: Go freezes the header map at the
+status line, so a `Set` after `WriteHeader` is silently dropped with no compile
+or runtime error. Because `WriteAPIError` and `GraphCapability.WriteDisabled`
+both funnel through `WriteError`, every typed error — including the disabled
+`503` — carries `private, no-store`, not only the success path.
+
+### 5. Test harness auth path cannot work against production — CONFIRMED
+
+`web/pwa/tests/graph-activation.spec.ts::authenticate()` seeds the `auth_token`
+cookie with the shared `SMACKEREL_AUTH_TOKEN`. Per `internal/api/web_login.go`,
+that value authenticates ONLY when `AuthConfig.Enabled == false` (dev/test).
+With `AuthConfig.Enabled == true` the token field must be a PASETO v4.public
+wire token, or username/password verified through `WebCredentials`. The cookie
+also carries `Secure` when `Environment == "production"`. The harness path is
+therefore structurally inert against a production configuration.
+
+### Scope of this review
+
+Read: `internal/api/graphapi/{errors,activation,topics,people,places,privacy}.go`,
+`internal/api/router.go` graph block, `internal/api/web_login.go`,
+`tests/integration/graphapi/corpus_authorization_test.go`,
+`web/pwa/wiki_state.js`, `web/pwa/tests/graph-activation.spec.ts`. No product
+code was changed, so no re-run of the build gates was required; the gate
+evidence already recorded remains current.
