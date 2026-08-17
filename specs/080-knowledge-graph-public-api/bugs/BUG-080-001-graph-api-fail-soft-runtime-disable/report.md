@@ -6672,3 +6672,346 @@ because Gate G089's upstream dependency
 `specs/070-web-username-password-login/bugs/BUG-070-001-production-credential-session-paseto-split`
 is genuinely incomplete, and nothing here changes that. Only the `regression`
 phase is claimed.
+
+---
+
+## INDEPENDENT STABILIZE PHASE — bubbles.stabilize (2026-08-17T08:11Z → 08:25Z)
+
+### Provenance, and a correction to the record
+
+An earlier `stabilize` summary already sits in `state.json.executionHistory`
+(the `2026-08-17T02:40Z` entry). Its own `provenanceNote` records that it was
+performed by the **orchestrator**, not by this specialist, and that the phase
+claim was **withdrawn** from `completedPhaseClaims` after
+`state-transition-guard.sh` correctly flagged it as phase impersonation
+(Gate G022). That entry stands as orchestrator-performed work. **This** section
+is the first execution of the phase by `bubbles.stabilize` itself, and it is
+what the accompanying `completedPhaseClaims` entry claims.
+
+Two things this phase did **not** do: it did not re-run the `e2e-ui` lane
+during this write-up (the lane had already completed and the stack was down),
+and it edited no product code, no test, and no guard.
+
+### Measured lane behaviour — run 2, unwrapped
+
+**Claim Source:** measured by this agent (`bubbles.stabilize`) earlier in this
+same session, run 2, `RUN2_START_UTC=08:11:09Z`, invoked as
+`./smackerel.sh test e2e-ui` with **no filter** and **no evidence-capture
+wrapper**, so no per-phase result line could be bounded out of the transcript.
+Relayed forward through the operator handoff after the lane finished.
+
+| Phase | Result | Painted arm |
+|---|---|---|
+| true-empty | PASS (25s) — 8 passed | `painted=true-empty` |
+| full suite (base / ready) | 76 passed, 9 skipped (28.3s) | `painted=ready` |
+| store-unavailable | PASS (20s) — 8 passed | `painted=store-unavailable` |
+| graph-disabled | **no result claimed** | — |
+
+The graph-disabled phase was still rebuilding its stack when the prior
+invocation returned. **No pass, no timing, and no painted arm is claimed for
+it here.** Its result from the earlier `test`-phase run remains recorded above
+under that phase's own evidence; it is not restated as this phase's
+observation.
+
+Three distinct painted arms from one unchanged spec file, in one run, is the
+same non-vacuity property the `test` phase measured, reproduced independently.
+
+### Fail-soft proven out of band
+
+The store-unavailable phase's own guard is the harness asserting about itself.
+To avoid taking that at face value, an **independent sampler** ran outside the
+lane, polling Docker container state and the HTTP surface directly during the
+induced outage:
+
+- `GET /api/topics` answered `HTTP 503 {"error":{"code":"store_unavailable",…}}`
+  **before and after** the specs ran.
+- Across the outage window `08:14:11Z → 08:14:26Z`, **8 of 8 samples** observed
+  `postgres=exited` together with `smackerel-core=running/healthy`
+  (`core_healthy_every_sample=1`).
+
+That is the reliability property this bug exists to establish, observed from
+outside the code that claims it: **the store went down and the service stayed
+up, healthy, and answering a typed refusal.** Not a degraded process, not a
+crash-loop, not a 500.
+
+### Robustness review of `scripts/runtime/web-e2e-ui.sh`
+
+Source reading, 1059 lines. Every line reference below was resolved against the
+working tree at commit `5c3a67d3`.
+
+#### S-1 — restore failure is LOUD, but it does not STOP the lane
+
+**Verdict: fails loudly AND continues. Both. That combination is the finding.**
+
+The loud half holds completely. `assert_seeded_taxonomy_restored` (`:516`) is
+bounded — `while ((attempt < 30))` (`:520`), each iteration a
+`curl --max-time 15` (`:522`) plus `sleep 2` (`:537`), so ~60s floor and ~510s
+ceiling, never unbounded. On exhaustion it writes an explicit `ERROR:` and
+`return 1` (`:543`-`:547`). `restore_seeded_taxonomy` propagates it (`:562`).
+`run_true_empty_phase` calls restore on **every** exit path (`:641`), names the
+consequence in its own error text (`:645`), and folds the failure into the
+phase status first-failure-wins (`:644`-`:650`). The call site folds that into
+`lane_status` (`:1013`-`:1018`), which reaches `exit "$lane_status"` (`:1059`).
+So the lane **does** exit non-zero. Nothing is swallowed.
+
+What does not hold is isolation. `run_true_empty_phase || true_empty_status=$?`
+(`:1013`) suppresses `set -e`, so control falls straight through to phase 2 at
+`:1027` and **the full browser suite runs against a fixture the harness has
+just declared unrestored.** The script's own error text at `:645` says exactly
+this would happen.
+
+Why that matters more than a stale fixture normally would: this suite is
+**state-adaptive by design** — the guard comments at `:430`-`:438` and
+`:690`-`:698` say so explicitly, and warn that adaptivity is precisely what
+would let a phase "quietly degrade … report green, and prove nothing." With
+topics unrestored, the graph specs would observe an empty graph, paint the
+true-empty arm, assert *that* arm, and **pass**. The transcript then shows a red
+true-empty line beside a healthy-looking `76 passed`, when the base arm was
+never exercised. The lane's exit code is right; the evidence in the middle is
+not trustworthy, and nothing marks it as such.
+
+Likelihood is low — restore gets a 300s health budget first (below), and the
+observed restart completed in 4 probes. Impact if it ever fires is an
+evidence-integrity failure that reads like a partial success. Routed to the
+owner; not changed here.
+
+#### S-2 — the retry bound is SST-derived in one function and a literal in its neighbours
+
+`await_core_healthy` (`:479`) reads its bound from the SST
+(`COMPOSE_WAIT_TIMEOUT_S`, `config/smackerel.yaml:60` → `300`,
+`config/generated/test.env:90`) and **refuses to guess** if it is absent
+(`:483`-`:486`), citing Gate G028 at `:477`. Three functions later
+`assert_seeded_taxonomy_restored` hardcodes `30` (`:520`), as does
+`assert_graph_store_unavailable` (`:713`).
+
+Under this repo's own NO-DEFAULTS policy
+(`.github/instructions/smackerel-no-defaults.instructions.md`) that asymmetry is
+worth naming: the function that explicitly declines to invent a bound sits
+beside two that invent one. The concrete consequence is a budget inversion — the
+seed proof gets a 60s floor while the health wait it depends on is allowed 300s.
+Ordering is the mitigation and it is real: `restore_seeded_taxonomy` runs
+`await_core_healthy` **first** (`:561`) and only then the seed proof (`:562`),
+and the boot seed commits before the listener binds (`:551`-`:553`), so healthy
+implies seeded. Low severity. Recorded for accuracy, not escalated.
+
+#### S-3 — the stopped postgres is handled on BOTH paths, by destruction rather than restoration
+
+**Verdict: yes, restored on failure too — and by a stronger mechanism than the
+question presumes.**
+
+`tear_down_test_stack` is called **unconditionally** at `:821`, outside every
+status branch, so it runs when the specs fail, when the guard fails, and even
+when the `stop` itself failed. It does not restart postgres; it destroys the
+whole project stack (`down --remove-orphans --volumes --timeout 60`, `:290`).
+Phase 4 then tears down again (`:931`) and boots fresh via `bring_up_test_stack`
+(`:939`), which itself pre-cleans at `:341` before `up`. There is no path that
+hands a half-stopped stack forward.
+
+This also explains an observed cost: destroying rather than restarting is why
+the graph-disabled phase pays a full boot cycle rather than a container restart.
+
+One caveat inside the safety net itself: `tear_down_test_stack` (`:285`-`:293`)
+is wrapped in `if [[ -n "${SMACKEREL_E2E_UI_ENV_FILE:-}" && -f … ]]` with **no
+`else`**. If that generated env file vanished mid-run — a concurrent
+`./smackerel.sh clean`, say — teardown becomes a **silent** no-op and the
+stopped postgres would survive. Narrow, but it is a silent-degradation branch in
+the one function every other safety guarantee delegates to.
+
+#### S-4 — traps: present, correct, and (measured) they survive SIGHUP
+
+Three traps are installed at `:334`/`:335`/`:336`, and installed **before** `up`
+(`:354`) so a failed bring-up still tears down. INT and TERM re-raise after
+teardown (`trap - INT; kill -INT $$`) so the exit status stays signal-correct.
+
+Prior work (`bubbles.regression`, table above) verified these three are
+*present*. Nobody had checked behaviour under a signal that is **not** trapped —
+and `HUP` is not in the list, which is what a closed terminal or a dropped SSH
+session delivers. Rather than reason about it, this phase measured it:
+
+- A child trapping only `EXIT`, sent an untrapped `SIGHUP`, **printed its EXIT
+  trap** and exited `129` (`128 + SIGHUP`).
+- Control: the same child with a `TERM` trap printed `TERM` then `EXIT`, rc `143`.
+
+So bash runs the `EXIT` trap even when the terminating signal is untrapped, and
+**teardown does run on a terminal close.** This is a gap I expected to find and
+did not; recording the negative result so the next reader does not re-derive it.
+
+Residual, genuine but minor: `SIGKILL` cannot be trapped, so `kill -9` or an
+OOM-kill leaves the project's containers and volumes behind. It is self-healing
+— the next run pre-cleans at `:341` before `up` — so the cost is idle containers
+until then, not a corrupted subsequent run.
+
+On the blanked enabler specifically: `SMACKEREL_E2E_UI_EXTRA_COMPOSE_FILE` is an
+exported variable of this process (`:940`), still set when the traps fire, so
+`tear_down_test_stack` resolves the **same** compose file set that `up` used
+(`:263`-`:270`) — symmetric by construction — and it dies with the process. No
+residue is possible.
+
+Boundary worth noting: `bootstrap_pwa_tooling` runs at `:996`, **before**
+`bring_up_test_stack` at `:997` installs the traps. During `npm ci` there is no
+trap — but also no stack, so nothing can leak.
+
+#### S-5 — the shared gate predicate: a real risk, and it compounds
+
+The `test` phase already recorded this limitation (above). Confirmed
+independently: `true_empty_phase_applies` (`:570`) and
+`store_unavailable_phase_applies` (`:747`) both delegate to
+`graph_disabled_phase_applies` (`:905`), which returns 0 when `$# -eq 0` and
+otherwise only when some argument contains `graph-activation`. One filter,
+three phases.
+
+**Two things not previously recorded.**
+
+First, **there is no skip marker.** None of the four call sites (`:1011`,
+`:1037`, `:1049`) has an `else`. A filtered run emits nothing at all — the
+induced-fault phases simply vanish from the transcript. Detecting that such a
+run proved nothing requires a reader to notice the **absence** of three lines in
+a long transcript, which is the hardest signal for a human to catch and the
+exact shape that lets a narrowed run be presented as full-lane evidence. That
+this packet's own `test` phase felt the need to state it ran the lane
+"UNFILTERED and UNWRAPPED" shows the concern is not theoretical.
+
+Second, **it compounds with the ready arm.** The `test` phase separately noted
+that the base/ready run has no dedicated precondition guard and is asserted only
+transitively, by `assert_seeded_taxonomy_restored` completing immediately before
+the full suite. Those two limitations were recorded apart; they interact. The
+single gate that switches off the three induced-fault phases is the **same** gate
+that switches off phase 1 — the phase supplying the ready arm's only transitive
+assertion. A filtered run therefore does not lose three of four state proofs.
+**It loses all four,** and the surviving full suite runs with zero state
+assertions of any kind.
+
+How real, precisely: the canonical `./smackerel.sh test e2e-ui` passes no filter,
+and `smackerel.sh:2666` `exec`s the lane forwarding argv verbatim, so a filter
+only exists when a human types one. The risk is not that CI silently degrades —
+it is that a human runs a narrowed lane, sees exit 0, and records it as lane
+evidence. That is an evidence-integrity risk, and it is the one weakness here
+with a plausible path to actually happening.
+
+Crediting the mitigation that does exist: `web/pwa/playwright.config.ts` does not
+set `passWithNoTests`, and the lane never passes `--pass-with-no-tests`; the
+installed runner reads it as
+`config.cliPassWithNoTests = !!opts.passWithNoTests`
+(`web/pwa/node_modules/playwright/lib/program.js:207`), i.e. false unless asked.
+So if `graph-activation.spec.ts` were renamed, each phase's
+`run_node_tooling graph-activation.spec.ts` would fail loudly rather than pass
+vacuously. The gate is fragile to a rename only in the filtered case.
+
+#### S-6 — timeout hygiene: clean except for exactly one call
+
+Clean, and deliberately so:
+
+| Surface | Bound | Evidence |
+|---|---|---|
+| every `curl` | `--max-time 15` | `:452`, `:522`, `:718`, `:875` — all four call sites |
+| `compose up --wait` | `--wait-timeout "$wait_timeout_s"` | `:354`, value read fail-loud from SST (`:303`, `:310`-`:312`) |
+| `compose down` | `--timeout 60` | `:290`, `:341` |
+| `compose restart` | `--timeout 30` | `:554` |
+| `compose stop` | `--timeout 30` | `:761` |
+| every loop | counted, none `while true` | `:448`, `:496`, `:520`, `:713`, `:910` |
+
+There is **no** `curl` without `--max-time` and **no** `up --wait` without
+`--wait-timeout`.
+
+**The one exception.** `clear_seeded_taxonomy` (`:393`) runs
+`e2e_ui_compose exec -T postgres sh -c '… psql … -c "DELETE FROM topics;"'`
+(`:401`-`:402`) with **no `timeout` wrapper, no `PGCONNECT_TIMEOUT`, no
+`lock_timeout`, and no `statement_timeout`.** `DELETE FROM topics` takes
+row-exclusive locks; against a conflicting lock the statement blocks
+indefinitely and the lane **hangs with no output and no exit**. That is the
+worst failure shape available here, because everything else in this file fails
+loudly and on a bound.
+
+Honest likelihood: **low.** The only other writer to `topics` is the boot
+seeder, which commits before the HTTP listener binds (`:551`-`:553`), and
+`up --wait` (`:354`) gates on the healthcheck that probes that listener — so by
+the time `:401` runs the seeding transaction has committed. The mitigation is
+real and documented. It is also a property of *another component's startup
+ordering* rather than a bound this call enforces on itself, and this is the only
+place in the lane where that is true.
+
+Two secondary unbounded surfaces, both outside the fault-injection path:
+
+- `bootstrap_pwa_tooling` runs `npm ci` (`:178`) and
+  `npx playwright install …` (`:188`) with no bound. The file's own comment at
+  `:74` calls `npx playwright install` "deadlock-prone" on some Docker-Desktop
+  hosts — so the hazard was known, and the author answered it by *avoiding* the
+  call (the revision-exact warm-cache probe) rather than by bounding it. On a
+  cold cache the hazard is live.
+- `web/pwa/playwright.config.ts` sets neither a per-test `timeout` nor a
+  `globalTimeout`, so the suite has no self-imposed wall-clock ceiling and
+  relies entirely on the caller wrapping the lane; `smackerel.sh:2666` `exec`s
+  it with no wrapper.
+
+### Findings
+
+| ID | Finding | Severity | Owner |
+|---|---|---|---|
+| S-1 | A restore failure does not stop the lane; the full suite then runs against a fixture the harness declared unrestored, and being state-adaptive it can report green while exercising the wrong arm | **Primary** — evidence integrity | `bubbles.implement` |
+| S-5 | The one gate that skips the three induced-fault phases also skips phase 1, so a filtered run loses **all four** state proofs and emits **no marker** that it did | **Primary** — evidence integrity | `bubbles.implement` |
+| S-6 | The `DELETE FROM topics` exec is the single unbounded call in the lane; its failure mode is a silent hang | Medium | `bubbles.implement` |
+| S-3b | `tear_down_test_stack` no-ops **silently** when the SST env file is missing | Low | `bubbles.implement` |
+| S-2 | Retry bound is SST-derived in `await_core_healthy` and a literal `30` in two neighbours | Low | `bubbles.implement` |
+
+All five are recorded for the owner. **No product code, test, or guard was
+edited by this phase**, so none of them is closed here. S-1 and S-5 are the two
+worth acting on: both convert a run that proved little into a transcript that
+reads like a run that proved a lot, which is the failure mode this packet has
+spent the most effort defending against everywhere else.
+
+### Persistence verification — executed this phase
+
+The prior orchestrator-performed stabilize pass left no phase record, and the
+`audit` phase captured the consequence verbatim above:
+`🔴 BLOCK: Required phase 'stabilize' NOT in execution/certification phase records (Gate G022 violation)`.
+This phase persisted the claim (`execution.completedPhaseClaims` +
+an `executionHistory` entry under `bubbles.stabilize`) and then re-ran the guard
+to check the effect rather than assume it:
+
+```
+$ bash .github/bubbles/scripts/artifact-lint.sh specs/080-…/BUG-080-001-…
+Artifact lint PASSED.
+ARTIFACT_LINT_EXIT=0
+```
+
+```
+$ bash .github/bubbles/scripts/state-transition-guard.sh specs/080-…/BUG-080-001-…
+exit: 1   lines: 398
+sha256: 96af159f2d2342abfd0845af6d102b143fae20564e1b6a3ff6abcfbf23c28f4e
+
+BEGIN TRANSITION_GUARD_RESULT_V1
+targetStatus: done
+failedGateIds: [G089]
+failedChecks: []
+failureCount: 1
+exitStatus: 1
+verdict: FAIL
+END TRANSITION_GUARD_RESULT_V1
+```
+
+`failedGateIds` is the guard's own complete failure set, and it now contains
+**exactly one** entry: **G089**, the genuine upstream-dependency blocker.
+**G022 is no longer among the failures.** The guard still returns `FAIL` against
+`targetStatus: done` with `blockingCode: DELIVERY_COMPLETION_FAILED`, which is
+the correct and desired outcome — this packet must not be promoted, and this
+phase did not promote it.
+
+Re-read after writing: `state.json` parses as valid JSON (`jq` exit 0),
+`status` is `blocked`, `certification.status` is `blocked`, and
+`certification.certifiedCompletedPhases` remains `[]`.
+
+### Coverage delta
+
+None. No test was weakened, skipped, deleted, or made permissive — none was
+edited at all. The lane was not re-run during this write-up; the measurements
+above are from run 2 as stated.
+
+### Scope of this phase
+
+Diagnosis and recording only. Status remains `blocked` and certification remains
+withheld: Gate G089's upstream dependency
+`specs/070-web-username-password-login/bugs/BUG-070-001-production-credential-session-paseto-split`
+is genuinely incomplete — re-verified read-only this session at **3 checked / 63
+unchecked** DoD items with **zero** of its six scopes `Done` (three `Not
+Started`, three `In Progress`) and its own `state.json` status `blocked`.
+Nothing in this phase changes that. Only the `stabilize` phase is claimed.
