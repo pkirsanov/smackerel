@@ -131,7 +131,7 @@ func (h *PlacesHandlers) GetPlace(w http.ResponseWriter, r *http.Request) {
 	detail, err := h.Source.GetPlace(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, ErrPlaceNotFound) {
-			WriteError(w, http.StatusNotFound, "not_found", "id", "place not found")
+			WriteError(w, http.StatusNotFound, CodeNotFound, "id", "place not found")
 			return
 		}
 		if storeErr := classifyStoreError(err); storeErr != nil {

@@ -125,7 +125,7 @@ func (h *PeopleHandlers) GetPerson(w http.ResponseWriter, r *http.Request) {
 	detail, err := h.Source.GetPerson(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, ErrPersonNotFound) {
-			WriteError(w, http.StatusNotFound, "not_found", "id", "person not found")
+			WriteError(w, http.StatusNotFound, CodeNotFound, "id", "person not found")
 			return
 		}
 		if storeErr := classifyStoreError(err); storeErr != nil {

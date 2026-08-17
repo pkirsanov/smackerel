@@ -23,6 +23,13 @@ const (
 	// for store connectivity/timeout failure (design.md §"Closed Read
 	// Outcomes": `store-unavailable` → 503 `store_unavailable`).
 	CodeStoreUnavailable = "store_unavailable"
+	// CodeNotFound is load-bearing on the wire: the PWA classifier reads it to
+	// tell a missing ROW from an absent ROUTE, and a bare 404 without it still
+	// means route-absent (design.md §"Closed Read Outcomes": `not-found` → 404
+	// `not_found` for a requested existing route resource only). Drifting this
+	// value silently reintroduces F-080-06-ROWMISS, which told users a deployed
+	// view was not deployed and offered no recovery.
+	CodeNotFound = "not_found"
 )
 
 // ErrorEnvelope is the uniform JSON shape every spec 080 endpoint

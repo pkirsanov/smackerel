@@ -43,7 +43,7 @@ with a commit, or routed to a named owner with the reason it is not settled here
 | Date | Issue | Disposition | Reference |
 |---|---|---|---|
 | 2026-08-17 | F-080-06-ROWMISS — `wiki_state.js` classified EVERY 404 as `CODE_ROUTE_ABSENT`, ignoring the typed envelope, so a stale or deleted topic link told the user a deployed view "is not deployed" and offered no recovery action | **FIXED IN-PACKET.** Classifier now honours the typed `not_found` code, mirroring the existing 503 disambiguation. A bare 404 still yields route-absent, so genuine version skew keeps its correct state. Regression test added and proven RED→GREEN. | commit `cb9f9ad0`; report.md § F-080-06-ROWMISS |
-| 2026-08-17 | `not_found` is used as a string literal in all three graph family handlers but is ABSENT from the `graphapi` closed-set constant block that claims to enumerate every code | **ROUTED — not fixed here.** This is the latent drift that allowed F-080-06-ROWMISS. Fixing it touches the server error-code contract, which is outside a client-classification bug fix and needs the owning spec's review. Routed to `bubbles.design` / spec 080. | `internal/api/graphapi/errors.go`; report.md § F-080-06-ROWMISS "Left open" |
+| 2026-08-17 | `not_found` is used as a string literal in all three graph family handlers but is ABSENT from the `graphapi` closed-set constant block that claims to enumerate every code | **FIXED IN-PACKET (supersedes the earlier ROUTED disposition).** The routing rationale was that this "touches the server error-code contract" and needs the owning spec's review. On inspection that was over-cautious: `design.md:392` ALREADY specifies `not-found` → 404 `not_found` in the Closed Read Outcomes table — the very line that specified the ROWMISS rule. So both halves of this defect were drift from the SAME correct design line: the client classifier ignored it, and the server's self-described "closed set" omitted it. `CodeNotFound` was added to the constant block citing design.md, and the three literals in `people.go`/`places.go`/`topics.go` now reference it. The wire value is byte-identical, so this is behaviour-preserving; proven by re-running the full lane. | `internal/api/graphapi/errors.go:26-30`, `people.go:128`, `places.go:134`, `topics.go:129`; design.md:392 |
 | 2026-08-17 | Whether a row-missing read deserves its own "this item no longer exists" copy instead of reusing `degraded` | **ROUTED — deliberately not invented mid-fix.** `degraded` is honest and non-misleading today and offers a retry, so there is no user-facing defect pending the decision. New user-facing copy is a design decision. Routed to `bubbles.design`. | report.md § F-080-06-ROWMISS "Left open" |
 | 2026-08-17 | F-080-05-SEED — `SeedHospitalityTopics` runs unconditionally at boot, and `wiki_state.js` decides emptiness on ROW EXISTENCE, so a brand-new deployment paints `ready` with five zero-content topics instead of the onboarding true-empty view | **ROUTED — open product question.** Whether a seeded-but-unlinked taxonomy should count as user content cannot be settled by a test harness. The true-empty UI contract is nonetheless proven, by inducing the condition in the disposable test stack. Routed to `bubbles.analyst` / `bubbles.design`. | report.md § F-080-05-SEED; `cmd/core/services.go:225` |
 | 2026-08-17 | Spec 105 records a blocker against this packet citing an unresolved design-staleness gap that `bubbles.design` had already closed on 2026-07-24 | **RECORDED, NOT EDITED.** The GATE is correct and observed (105 has picked up no implementation scope); only its stated REASON is stale. Another packet's artifact is not this packet's to rewrite. Routed to the spec-105 owner. | report.md § Consumer sweep; `specs/105-.../state.json` |
@@ -7275,3 +7275,53 @@ be fabrication.
 functioning. The verification it needs is staged and re-runnable in one command
 (`./smackerel.sh test e2e-ui`), the images are warm, and the guard is already at
 `failureCount: 0`.
+
+### Unplanned mutation test — the ROWMISS regression is adversarial, PROVEN BY MEASUREMENT
+
+**Claim Source: executed.** This evidence was produced accidentally, and it is
+the strongest single result in this packet, so it is recorded rather than
+discarded.
+
+One of the truncated `bubbles.validate` dispatches got far enough to begin the
+mutation test it had been asked to perform ("confirm the test would genuinely
+FAIL if the fix were reverted"). It edited `web/pwa/wiki_state.js`, replacing the
+repaired 404 branch with:
+
+```js
+return CODE_ROUTE_ABSENT; // MUTATION-PROBE: temporary revert, restored below
+```
+
+It was then cut off by the transport failure BEFORE restoring the line, leaving
+the revert uncommitted in the working tree. The next lane run therefore executed
+against a deliberately reverted classifier — an unplanned but perfectly valid
+mutation test.
+
+**Result with the fix REVERTED (`LANE_EXIT=1`):**
+
+| Observation | Value |
+|---|---|
+| row-missing probe | `probeStatus=404 probeCode=not_found painted=route-absent` |
+| true-empty phase | **FAIL** (exit=1, 27s) |
+| full suite | **2 failed**, 74 passed |
+| store-unavailable phase | **FAIL** (exit=1, 22s) |
+| graph-disabled phase | **FAIL** (exit=1, 152s) |
+| failing tests | `...reported-as-an-absent-route` (the ROWMISS regression) and `...distinct-exclusive-contract` (T080-06-RENDER) |
+
+**Result with the fix RESTORED:** `painted=degraded`, all phases green.
+
+This settles the non-tautology question by measurement rather than by argument.
+The regression test does NOT pass either way: reverting the single line under
+test turns it red, and restoring it turns it green. Both the browser-tier
+regression and the module-tier render matrix detected the reversion
+independently, in three separate backend states.
+
+**Handling.** The orphaned mutation was restored to the committed form and
+verified byte-identical to HEAD (`git diff` on the file is empty), and a
+repo-wide sweep for `MUTATION-PROBE` / `temporary revert` markers across
+`web/`, `internal/` and `scripts/` returned nothing.
+
+**Lesson recorded honestly:** after the earlier truncated dispatch this agent
+checked `git status` scoped to the PACKET directory only, saw it clean, and
+concluded there were no side effects. That check was too narrow — the mutation
+was in product code outside the packet path. Post-dispatch side-effect checks
+MUST scan the whole working tree, not just the spec folder.

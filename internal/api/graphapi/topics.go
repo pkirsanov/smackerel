@@ -126,7 +126,7 @@ func (h *TopicsHandlers) GetTopic(w http.ResponseWriter, r *http.Request) {
 	detail, err := h.Source.GetTopic(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, ErrTopicNotFound) {
-			WriteError(w, http.StatusNotFound, "not_found", "id", "topic not found")
+			WriteError(w, http.StatusNotFound, CodeNotFound, "id", "topic not found")
 			return
 		}
 		if storeErr := classifyStoreError(err); storeErr != nil {
