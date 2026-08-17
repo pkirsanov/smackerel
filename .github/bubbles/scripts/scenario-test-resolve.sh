@@ -33,13 +33,42 @@ set -euo pipefail
 # WITHOUT AN INVENTORY ADAPTER (testDiscovery.adapter: none, the default) the
 # title is resolved by a conservative literal scan of the referenced file. That
 # still catches BUG-030's absent titles with no runner. The runner-category
-# comparison is SKIPPED rather than guessed — the same discipline G128 applies
-# to token dimensions: an unmeasurable dimension is skipped, never inferred.
+# comparison is NOT APPLICABLE in that configuration — no runner was ever
+# declared, so there is nothing to execute and nothing to be unknown about.
+#
+# IMP-047 PD-04 — THE FALSE-PASS THIS FILE USED TO SHIP.
+# The two states below are not the same state, and collapsing them is what made
+# a unit test offered as E2E certify clean:
+#
+#   adapter: none              -> category comparison NOT APPLICABLE  -> exit 0
+#   adapter DECLARED, unable   -> category comparison UNKNOWN         -> exit 3
+#     to execute (no timeout
+#     implementation, command
+#     failed, bad contract,
+#     unparseable inventory)
+#
+# The repository that declares `testDiscovery.adapter: command` has asked for
+# category enforcement. When that runner cannot be executed the answer is
+# UNKNOWN, and an unknown result is never a pass. Previously the invocation used
+# a bare `timeout`, which does not exist on a stock macOS PATH; the command
+# substitution failed, the resolver silently degraded to the literal scan, and
+# printed OK. The mechanism built to prevent category fraud reported success
+# precisely when it could not run. It now routes through
+# `bubbles_run_with_timeout` (guard-lib.sh), which prefers `timeout`, then
+# `gtimeout`, then a bash watchdog — so the adapter actually runs — and fails
+# loud on exit 3 when it still cannot.
+#
+# Title resolution still falls back to the literal scan even in the unknown
+# case, so findings stay accurate: an inventory that failed must never be read
+# as "no tests exist" and manufacture MISSING-TITLE against a title that is
+# genuinely present in the file.
 #
 # Exit codes:
 #   0  every reference resolved (or nothing to resolve)
 #   1  one or more references failed to resolve
 #   2  usage error / unreadable manifest
+#   3  a declared inventory adapter could not be executed while at least one
+#      checked reference declares a requiredTestType (category UNKNOWN)
 
 SPEC_DIR=""
 REPO_ROOT=""
@@ -55,7 +84,7 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --repo-root) shift; REPO_ROOT="${1:-}" ;;
     --quiet) QUIET=1 ;;
-    -h|--help) sed -n '4,42p' "${BASH_SOURCE[0]}"; exit 0 ;;
+    -h|--help) sed -n '4,71p' "${BASH_SOURCE[0]}"; exit 0 ;;
     --skip*|--force*|--ignore*|--no-verify*)
       die_usage "bypass-shaped flag '$1' is not supported; fix the reference instead" ;;
     -*) die_usage "unknown option '$1'" ;;
@@ -85,10 +114,19 @@ command -v python3 >/dev/null 2>&1 || die_usage "python3 is required to parse sc
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Resolve the inventory adapter. `none` (the default) means title resolution
-# degrades to a literal scan and category comparison is skipped.
+# PD-04: the portable timeout helper. A bare `timeout` does not exist on a stock
+# macOS PATH, and its absence used to silently disable category enforcement.
+# shellcheck source=bubbles/scripts/guard-lib.sh
+. "$SCRIPT_DIR/guard-lib.sh"
+
+# Resolve the inventory adapter. Three distinct states, never collapsed:
+#   CATEGORY_STATE=not-applicable  no adapter declared; nothing to execute
+#   CATEGORY_STATE=available       the inventory ran and can report categories
+#   CATEGORY_STATE=unexecutable    an adapter IS declared but could not run
 INVENTORY_JSON=""
 ADAPTER="none"
+CATEGORY_STATE="not-applicable"
+CATEGORY_REASON=""
 if [[ -x "$SCRIPT_DIR/test-inventory-resolve.sh" ]]; then
   resolved="$(bash "$SCRIPT_DIR/test-inventory-resolve.sh" --repo-root "$REPO_ROOT" 2>/dev/null || true)"
   ADAPTER="$(printf '%s\n' "$resolved" | sed -n 's/^adapter=//p' | head -n 1)"
@@ -98,20 +136,36 @@ if [[ -x "$SCRIPT_DIR/test-inventory-resolve.sh" ]]; then
     inv_timeout="$(printf '%s\n' "$resolved" | sed -n 's/^timeoutSeconds=//p' | head -n 1)"
     if [[ -n "$inv_cmd" ]]; then
       # A failing or slow inventory must not silently become "no tests exist":
-      # an empty inventory would fail every declared title. On failure the
-      # adapter is treated as unavailable and the scan path is used instead.
-      if INVENTORY_JSON="$(cd "$REPO_ROOT" && timeout "${inv_timeout:-120}" "$inv_cmd" 2>/dev/null)"; then
-        :
+      # an empty inventory would fail every declared title. Title resolution
+      # therefore still degrades to the literal scan. What does NOT degrade is
+      # the category verdict — a declared adapter that cannot run leaves the
+      # category UNKNOWN, and the Python stage below refuses on exit 3.
+      CATEGORY_STATE="unexecutable"
+      CATEGORY_REASON="the declared inventory adapter did not produce a usable inventory"
+      inv_rc=0
+      INVENTORY_JSON="$(cd "$REPO_ROOT" && bubbles_run_with_timeout "${inv_timeout:-120}" "$inv_cmd" 2>/dev/null)" || inv_rc=$?
+      if [[ "$inv_rc" -eq 0 ]]; then
+        CATEGORY_STATE="available"
+        CATEGORY_REASON=""
       else
         INVENTORY_JSON=""
         ADAPTER="none"
+        if [[ "$inv_rc" -eq 124 ]]; then
+          CATEGORY_REASON="the declared inventory adapter timed out after ${inv_timeout:-120}s"
+        else
+          CATEGORY_REASON="the declared inventory adapter exited ${inv_rc}"
+        fi
         printf 'scenario-test-resolve: WARN inventory adapter failed; falling back to literal scan\n' >&2
       fi
+    else
+      CATEGORY_STATE="unexecutable"
+      CATEGORY_REASON="testDiscovery.adapter is 'command' but no command is configured"
     fi
   fi
 fi
 
 SPEC_DIR="$SPEC_DIR" REPO_ROOT="$REPO_ROOT" ADAPTER="$ADAPTER" \
+  CATEGORY_STATE="$CATEGORY_STATE" CATEGORY_REASON="$CATEGORY_REASON" \
   INVENTORY_JSON="$INVENTORY_JSON" QUIET="$QUIET" python3 - <<'PY'
 import json, os, sys
 
@@ -120,6 +174,9 @@ repo_root = os.environ["REPO_ROOT"]
 adapter = os.environ["ADAPTER"]
 inventory_raw = os.environ.get("INVENTORY_JSON", "")
 quiet = os.environ.get("QUIET") == "1"
+# PD-04: not-applicable | available | unexecutable. See the header.
+category_state = os.environ.get("CATEGORY_STATE", "not-applicable")
+category_reason = os.environ.get("CATEGORY_REASON", "")
 
 manifest_path = os.path.join(spec_dir, "scenario-manifest.json")
 try:
@@ -144,14 +201,27 @@ if adapter == "command" and inventory_raw.strip():
             if not version.startswith("bubbles-test-inventory/"):
                 print(f"scenario-test-resolve: WARN inventory contractVersion '{version}' "
                       "is not bubbles-test-inventory/*; falling back to literal scan", file=sys.stderr)
+                category_state = "unexecutable"
+                category_reason = (f"the declared inventory adapter returned contractVersion "
+                                   f"'{version}', which is not bubbles-test-inventory/*")
             else:
                 got = doc.get("tests")
                 inventory = got if isinstance(got, list) else []
+        else:
+            category_state = "unexecutable"
+            category_reason = "the declared inventory adapter did not return an inventory object"
     except ValueError as exc:
         print(f"scenario-test-resolve: WARN inventory is not valid JSON ({exc}); "
               "falling back to literal scan", file=sys.stderr)
+        category_state = "unexecutable"
+        category_reason = f"the declared inventory adapter returned invalid JSON ({exc})"
 
 use_inventory = bool(inventory)
+if category_state == "available" and not use_inventory:
+    # A declared adapter that ran but reported no tests cannot answer a category
+    # question either. Unknown, not clean.
+    category_state = "unexecutable"
+    category_reason = category_reason or "the declared inventory adapter reported no tests"
 
 def normalize(ref):
     """Return (file, title) for any of the four live reference shapes."""
@@ -177,6 +247,7 @@ def is_sentinel(value):
     return bool(value) and value.startswith("__") and value.endswith("__")
 
 findings = []
+unresolved_category = []
 checked = 0
 scanned_titles = 0
 skipped_category = 0
@@ -228,6 +299,15 @@ for scenario in scenarios:
                                  f"{len(matches)} tests share this title; a reference must resolve to exactly one"))
                 continue
             category = str(matches[0].get("category", "")) or None
+            if required and not category:
+                # PD-04: the inventory ran but declares no category for this
+                # test. The comparison is applicable and unperformed, which is
+                # UNKNOWN — the same false-PASS shape as a missing runner.
+                unresolved_category.append((sid, f"{rel}#{title}", required))
+                if not category_reason:
+                    category_reason = ("the inventory resolved this test but declares no "
+                                       "category for it")
+                continue
             if required and category:
                 if required in LIVE and category in MOCKED:
                     findings.append((sid, f"{rel}#{title}", "CATEGORY-MISMATCH",
@@ -259,6 +339,33 @@ for scenario in scenarios:
             scanned_titles += 1
             if required:
                 skipped_category += 1
+                # PD-04: this reference WOULD have been category-compared had the
+                # inventory been usable. Record it only where the comparison was
+                # actually applicable — a declared requiredTestType plus a
+                # declared title — so the refusal mirrors the check it replaces
+                # and never over-reaches to bare paths.
+                if category_state == "unexecutable":
+                    unresolved_category.append((sid, f"{rel}#{title}", required))
+
+if unresolved_category:
+    # An applicable category comparison that could not be executed is UNKNOWN.
+    # Reporting clean here is the exact false-PASS PD-04 exists to remove. This
+    # block is printed even when `findings` is non-empty, so an unknown category
+    # is never silently swallowed by a louder failure.
+    print("scenario-test-resolve: FAIL — an applicable test category could not be "
+          "executed (Gate G057 / IMP-047 PD-04)", file=sys.stderr)
+    print(f"  reason: {category_reason or 'the declared inventory adapter could not be executed'}",
+          file=sys.stderr)
+    for sid, ref, required in unresolved_category:
+        print(f"  CATEGORY-UNRESOLVED: {sid} -> {ref}", file=sys.stderr)
+        print(f"    requiredTestType '{required}' is declared but no runner category could be "
+              "obtained; an unmeasured category is UNKNOWN, never a pass", file=sys.stderr)
+    print("", file=sys.stderr)
+    print("scenario-test-resolve: repair the declared testDiscovery adapter, or set "
+          "testDiscovery.adapter to 'none' to declare that this repository does not "
+          "enforce runner categories.", file=sys.stderr)
+    print(f"scenario-test-resolve: {len(unresolved_category)} unresolved categor(y/ies) "
+          f"of {checked} checked.", file=sys.stderr)
 
 if findings:
     print("scenario-test-resolve: FAIL — linked tests that do not resolve (Gate G057)", file=sys.stderr)
@@ -269,11 +376,17 @@ if findings:
     print(f"scenario-test-resolve: {len(findings)} unresolved reference(s) of {checked} checked.", file=sys.stderr)
     sys.exit(1)
 
+if unresolved_category:
+    sys.exit(3)
+
 if not quiet:
     mode = "inventory" if use_inventory else "literal-scan"
     extra = ""
     if skipped_category:
-        extra = f"; {skipped_category} category comparison(s) skipped (no inventory adapter)"
+        # Reachable only when NO adapter was declared. A declared-but-unusable
+        # adapter exits 3 above; this line can no longer describe a false pass.
+        extra = (f"; {skipped_category} category comparison(s) not applicable "
+                 "(no test-discovery adapter declared)")
     print(f"[scenario-test-resolve] OK — {checked} reference(s) resolved via {mode}{extra}")
 sys.exit(0)
 PY

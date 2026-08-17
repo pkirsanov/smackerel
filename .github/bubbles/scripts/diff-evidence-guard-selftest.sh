@@ -146,7 +146,7 @@ SCOPES_REAL_CLAIM=$'## Scope 1\n\n### Definition of Done\n\n- [x] Added unit tes
 spec1="$(make_fixture case1 '{"diffEvidence": "enforce"}' "$SCOPES_FAKE_CLAIM")"
 out1="$(bash "$GUARD" "$spec1" 2>&1 || true)"
 rc1="$(bash "$GUARD" "$spec1" >/dev/null 2>&1; echo $?)"
-if [[ "$rc1" -ne 0 ]] && echo "$out1" | grep -q FAIL; then
+if [[ "$rc1" -ne 0 ]] && grep -q FAIL <<< "$out1"; then
   pass "1. enforce in state.json -> strict mode rejects fake claim"
 else
   fail "1. enforce mode: rc=$rc1 out=$out1"
@@ -156,7 +156,7 @@ fi
 spec2="$(make_fixture case2 '{"diffEvidence": "advisory"}' "$SCOPES_FAKE_CLAIM")"
 rc2="$(bash "$GUARD" "$spec2" >/dev/null 2>&1; echo $?)"
 out2="$(bash "$GUARD" "$spec2" 2>&1 || true)"
-if [[ "$rc2" -eq 0 ]] && echo "$out2" | grep -q -E 'WARN|advisory'; then
+if [[ "$rc2" -eq 0 ]] && grep -q -E 'WARN|advisory' <<< "$out2"; then
   pass "2. advisory in state.json -> WARN, exit 0"
 else
   fail "2. advisory mode: rc=$rc2 out=$out2"
@@ -166,7 +166,7 @@ fi
 spec3="$(make_fixture case3 '' "$SCOPES_FAKE_CLAIM")"
 rc3="$(bash "$GUARD" "$spec3" >/dev/null 2>&1; echo $?)"
 out3="$(bash "$GUARD" "$spec3" 2>&1 || true)"
-if [[ "$rc3" -ne 0 ]] && echo "$out3" | grep -q -E 'enforcing|FAIL'; then
+if [[ "$rc3" -ne 0 ]] && grep -q -E 'enforcing|FAIL' <<< "$out3"; then
   pass "3. no modernization block + new spec -> strict mode (v6 default-on)"
 else
   fail "3. v6 default-on: rc=$rc3 out=$out3"
@@ -176,7 +176,7 @@ fi
 spec4="$(make_fixture case4 '' "$SCOPES_FAKE_CLAIM" "" "2026-05-01")"
 rc4="$(bash "$GUARD" "$spec4" >/dev/null 2>&1; echo $?)"
 out4="$(bash "$GUARD" "$spec4" 2>&1 || true)"
-if [[ "$rc4" -eq 0 ]] && echo "$out4" | grep -q -E 'WARN|advisory|grandfather'; then
+if [[ "$rc4" -eq 0 ]] && grep -q -E 'WARN|advisory|grandfather' <<< "$out4"; then
   pass "4. no modernization block + pre-cutoff spec -> advisory (v5 grandfather)"
 else
   fail "4. v5 grandfather: rc=$rc4 out=$out4"
@@ -204,7 +204,7 @@ fi
 spec7="$(make_fixture case7 '{"diffEvidence": "enforce"}' "$SCOPES_REAL_CLAIM" "tests/real_committed.rs")"
 rc7="$(bash "$GUARD" "$spec7" >/dev/null 2>&1; echo $?)"
 out7="$(bash "$GUARD" "$spec7" 2>&1 || true)"
-if [[ "$rc7" -eq 0 ]] && echo "$out7" | grep -q PASS; then
+if [[ "$rc7" -eq 0 ]] && grep -q PASS <<< "$out7"; then
   pass "7. real committed path claim PASSes in strict mode"
 else
   fail "7. real-claim PASS: rc=$rc7 out=$out7"

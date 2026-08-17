@@ -95,26 +95,14 @@ List any deviation from the simplest fix that resolves the root cause. If the fi
 
 ## Additional Bug Artifact Expectations
 
-Bug folders do not stop at `bug.md` and `design.md`. Before any bug can be promoted, the bug packet must also include the standard execution artifacts from [feature-templates.md](feature-templates.md):
+The bug-artifact question has ONE authority:
+[`bubbles/registry/bug-packet.yaml`](../../bubbles/registry/bug-packet.yaml).
 
-- `scopes.md` — bug scope with Gherkin, Test Plan, and DoD
-- `report.md` — evidence with raw terminal output
-- `uservalidation.md` — checked-by-default validation checklist
-- `scenario-manifest.json` — required before any completion claim when the bug scope defines Gherkin or changes observable behavior
-- `state.json` — version 3 control-plane state with `workflowMode`, `execution`, `certification`, and `policySnapshot`
+It records all three admissible forms — the full packet, the compact micro-fix
+packet, and the deliberate single-file `BUGS.md` form for framework source bugs —
+along with the state.json and regression expectations that apply to each. The
+list used to be restated here, in `BUGS.md`, and in `micro-fix-packet.yaml`, and
+the three copies had drifted into different answers.
 
-Minimum bug-state expectations:
-
-- `workflowMode: "bugfix-fastlane"`
-- `status: "in_progress"` until validate-owned certification promotes it
-- `certification.status: "in_progress"` while work is active
-- `certification.completedScopes`, `certification.certifiedCompletedPhases`, `certification.scopeProgress`, and `certification.lockdownState` present
-- `policySnapshot` present with grill, TDD, auto-commit, lockdown, regression, and validation provenance
-- `transitionRequests` and `reworkQueue` present, even when empty
-
-Minimum regression planning expectations for bug scopes:
-
-- Test Plan includes at least one row whose label literally contains `Regression E2E`
-- DoD includes the exact checkbox items below so the transition guard can prove the regression contract mechanically:
-  - `- [ ] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior`
-  - `- [ ] Broader E2E regression suite passes`
+Read the registry. Do not restate its lists in a spec, an agent, or a script: a
+second copy is a second answer.

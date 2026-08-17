@@ -282,8 +282,9 @@ repo and treat a non-zero exit as a NON-terminal convergence state — continue 
 the missing specs) or end `blocked` with the guard's report, NEVER EXIT_SUCCESS. The scenario
 is NOT complete while any `delivery=required` feature is unspecced, non-terminal, blocked, or
 implement-self-certified (Gate **G101**). This is the teeth behind "MVP delivered": a
-phase's promised required-feature set must each map to a terminal, validate-certified spec —
-not merely that the nodes the orchestrator chose to create all passed.
+phase's promised required-feature set must each map to a delivery-capable terminal,
+validate-certified spec — not merely that the nodes the orchestrator chose to create all
+passed, and not merely that each spec reached the ceiling of whatever mode it ran in.
 
 ## Forbidden Patterns
 
@@ -309,7 +310,8 @@ not merely that the nodes the orchestrator chose to create all passed.
   `framework-validate.sh`.
 - `bubbles/scripts/release-delivery-reconciliation-guard.sh --repo-root <dir> [--phase <p>] [--require-coverage]`
   reconciles `docs/releases/<phase>/features.md` `delivery=required` features against the
-  delivered (terminal + validate-certified) spec truth (Gate **G101**). Run by
+  delivered (delivery-capable terminal + validate-certified) spec truth (Gate **G101**). A
+  planning/docs/review ceiling is terminal for its mode but is not delivery. Run by
   `bubbles.goal`/`bubbles.sprint` at convergence for release-phase scenarios; wired into
   `framework-validate.sh` (selftest + live guard). Hermetic selftest:
   `bubbles/scripts/release-delivery-reconciliation-guard-selftest.sh`.

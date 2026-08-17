@@ -4,6 +4,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 GUARD_SCRIPT="$SCRIPT_DIR/state-transition-guard.sh"
+PLANNING_CHECKS_SCRIPT="$SCRIPT_DIR/guards/planning-checks.sh"
 OWNERSHIP_LINT_SCRIPT="$SCRIPT_DIR/agent-ownership-lint.sh"
 # shellcheck source=/dev/null
 source "$SCRIPT_DIR/guard-lib.sh"
@@ -1820,6 +1821,54 @@ with open(path, "w", encoding="utf-8") as handle:
 PY
 }
 
+# Check 6B phase -> owning-agent resolution. `analyze` is owned by
+# bubbles.analyst, but Check 6B derived the expected agent as
+# "bubbles.${phase}" and so demanded a "bubbles.analyze" that has never
+# existed. An honest bubbles.analyst record was reported as phase
+# impersonation, blocking a transition that could only be "fixed" by
+# falsifying the record. $2 selects the recording agent so the same shape
+# drives the positive case and its adversarial twin.
+mutate_analyze_phase_provenance() {
+  local state_file="$1"
+  local recording_agent="$2"
+
+  python3 - "$state_file" "$recording_agent" <<'PY'
+import json
+import sys
+
+path = sys.argv[1]
+recording_agent = sys.argv[2]
+with open(path, encoding="utf-8") as handle:
+    data = json.load(handle)
+
+# iterate keeps required_specialists small so this fixture isolates Check 6B
+# provenance rather than tripping unrelated delivery-completion requirements.
+data["workflowMode"] = "iterate"
+snapshot = data.get("policySnapshot")
+if isinstance(snapshot, dict):
+    snapshot["workflowMode"] = "iterate"
+
+execution = data.get("execution")
+if not isinstance(execution, dict):
+    execution = {}
+    data["execution"] = execution
+
+execution["completedPhaseClaims"] = ["analyze"]
+execution["executionHistory"] = [
+    {
+        "agent": recording_agent,
+        "phasesExecuted": ["analyze"],
+        "startedAt": "2026-01-01T00:00:00Z",
+        "completedAt": "2026-01-01T00:20:00Z",
+    },
+]
+
+with open(path, "w", encoding="utf-8") as handle:
+    json.dump(data, handle, indent=2)
+    handle.write("\n")
+PY
+}
+
 mutate_dict_shaped_phase_claims() {
   local state_file="$1"
 
@@ -2198,6 +2247,18 @@ mutate_dict_shaped_phase_claims "$dict_phase_claims_dir/state.json"
 partial_certified_phase_claims_dir="$tmp_root/specs/940-transition-guard-selftest-partial-certified-phase-claims"
 cp -R "$positive_feature_dir" "$partial_certified_phase_claims_dir"
 mutate_partial_certified_phases_with_dict_claims "$partial_certified_phase_claims_dir/state.json"
+
+# Check 6B phase -> owning-agent resolution fixtures. The positive case records
+# the REAL owner of `analyze` (bubbles.analyst); the adversarial twin records an
+# unrelated agent for the same claim and must still be refused, so the fix
+# cannot pass by disabling the impersonation check.
+analyst_owned_phase_dir="$tmp_root/specs/941-transition-guard-selftest-analyst-owned-phase"
+cp -R "$positive_feature_dir" "$analyst_owned_phase_dir"
+mutate_analyze_phase_provenance "$analyst_owned_phase_dir/state.json" "bubbles.analyst"
+
+analyze_wrong_agent_dir="$tmp_root/specs/942-transition-guard-selftest-analyze-wrong-agent"
+cp -R "$positive_feature_dir" "$analyze_wrong_agent_dir"
+mutate_analyze_phase_provenance "$analyze_wrong_agent_dir/state.json" "bubbles.simplify"
 
 echo "Running agent ownership lint precheck..."
 lint_log="$tmp_root/agent-ownership-lint.log"
@@ -2738,6 +2799,25 @@ assert_log_not_contains "$partial_certified_log" "unhashable type: 'dict'" "Chec
 # the Check 6 needle asserted above, kept adjacent so both halves sit together.
 assert_log_contains "$partial_certified_log" "Phase 'audit' has specialist provenance from bubbles.audit" "Check 6B: the 'audit' claim record carries specialist provenance from bubbles.audit"
 assert_log_not_contains "$partial_certified_log" "Required phase 'audit' NOT in execution/certification phase records" "Check 6 emits no BLOCK for the same 'audit' record Check 6B accepted above (the two checks agree)"
+
+# Check 6B — a phase whose owning agent is NOT named "bubbles.<phase>" must be
+# resolved through the owner table. Asserting on Check 6B log content only, per
+# the fixture convention above; the fixture's overall exit may be non-zero for
+# unrelated ceiling reasons.
+echo "Running Check 6B phase-owner resolution regression selftest..."
+analyst_owned_log="$tmp_root/analyst-owned-phase.log"
+run_capture "$analyst_owned_log" bash "$GUARD_SCRIPT" "$analyst_owned_phase_dir" >/dev/null
+assert_log_contains "$analyst_owned_log" "Phase 'analyze' has specialist provenance from bubbles.analyst" "Check 6B: the 'analyze' phase resolves to its real owner bubbles.analyst"
+assert_log_not_contains "$analyst_owned_log" "Phase 'analyze' is in completedPhaseClaims but no specialist or parent-expanded provenance found" "Check 6B: an honest bubbles.analyst record is NOT reported as missing provenance (Gate G022 false positive)"
+assert_log_not_contains "$analyst_owned_log" "bubbles.analyze" "Check 6B: the guard never demands a 'bubbles.analyze' agent, which has never existed"
+
+# Adversarial twin. The owner table must not become a blanket pass: an unrelated
+# agent recording the same claim is impersonation and MUST still be refused.
+echo "Running Check 6B phase-owner adversarial selftest..."
+analyze_wrong_agent_log="$tmp_root/analyze-wrong-agent.log"
+run_capture "$analyze_wrong_agent_log" bash "$GUARD_SCRIPT" "$analyze_wrong_agent_dir" >/dev/null
+assert_log_contains "$analyze_wrong_agent_log" "Phase 'analyze' is in completedPhaseClaims but no specialist or parent-expanded provenance found" "Check 6B: an unrelated agent claiming 'analyze' is STILL refused (the impersonation check can fail)"
+assert_log_not_contains "$analyze_wrong_agent_log" "Phase 'analyze' has specialist provenance from bubbles.analyst" "Check 6B: bubbles.simplify is not accepted as provenance for the analyze phase"
 
 echo "Running negative packet-field selftest..."
 negative_log="$tmp_root/negative-guard.log"
@@ -3362,6 +3442,120 @@ EOF
   fi
 fi
 
+# BUG-032 D1: Check 8B must classify explicit consumer-interface mutations, not
+# benign provider, lifecycle, or generated-artifact replacement prose. Extract
+# the production regex so the fixtures cannot drift into a second classifier.
+echo "Running BUG-032 Check 8B consumer-interface mutation classifier..."
+
+check8b_regex="$(grep -E "^[[:space:]]*if grep -Eiq '.*renam.*route" "$PLANNING_CHECKS_SCRIPT" | sed -E "s/^.*grep -Eiq '([^']*)'.*$/\1/" || true)"
+if [[ -z "$check8b_regex" ]]; then
+  fail "BUG-032 Check 8B classifier could not be extracted from $PLANNING_CHECKS_SCRIPT (guard shape changed)"
+else
+  pass "BUG-032 Check 8B classifier extracted from production source (no test/source drift)"
+
+  check8b_must_not="$tmp_root/bug032-check8b-must-not-flag.txt"
+  cat <<'EOF' > "$check8b_must_not"
+The stale generation path is replaced by the current generated artifact.
+The provider implementation is replaced without changing its contract.
+The lifecycle state is replaced by the successor state; its public contract is unchanged.
+The generated artifact replaces a stale artifact path; route and endpoint identities are unchanged.
+EOF
+
+  check8b_must_flag="$tmp_root/bug032-check8b-must-flag.txt"
+  cat <<'EOF' > "$check8b_must_flag"
+The public route is renamed from /old to /new.
+The legacy path is removed after migration.
+Rename the endpoint from v1 to v2.
+The public contract is deprecated.
+Move the identifier to the canonical key.
+EOF
+
+  if grep -Eiq "$check8b_regex" "$check8b_must_not"; then
+    fail "BUG-032 Check 8B false-positives on replacement semantics that do not mutate a consumer interface"
+    echo "--- offending benign replacement lines ---"
+    grep -niE "$check8b_regex" "$check8b_must_not" || true
+    echo "--- end ---"
+  else
+    pass "BUG-032 Check 8B ignores stale-generation, provider, lifecycle, and artifact replacement semantics"
+  fi
+
+  check8b_exact_inflections="$tmp_root/bug032-check8b-exact-inflections.txt"
+  cat <<'EOF' > "$check8b_exact_inflections"
+The migration renames the public route from /old to /new.
+The migration removes the legacy path after compatibility expires.
+EOF
+  check8b_inflection_count="$({ grep -ciE "$check8b_regex" "$check8b_exact_inflections"; } || true)"
+  if [[ "$check8b_inflection_count" -eq 2 ]]; then
+    pass "BUG032-IV-F1 Check 8B triggers on the exact mutation inflections 'renames' and 'removes'"
+  else
+    fail "BUG032-IV-F1 Check 8B detected $check8b_inflection_count of 2 exact 'renames'/'removes' mutations"
+  fi
+
+  check8b_unrelated_clauses="$tmp_root/bug032-check8b-unrelated-clauses.txt"
+  cat <<'EOF' > "$check8b_unrelated_clauses"
+Remove stale cache entries after replacement; the public API contract is unchanged.
+EOF
+  if grep -Eiq "$check8b_regex" "$check8b_unrelated_clauses"; then
+    fail "BUG032-IV-F2 Check 8B bridges unrelated clauses and falsely classifies cache cleanup as a public-interface mutation"
+  else
+    pass "BUG032-IV-F2 Check 8B does not bridge cache cleanup to an unchanged public API contract in another clause"
+  fi
+
+  check8b_pos_count="$({ grep -ciE "$check8b_regex" "$check8b_must_flag"; } || true)"
+  if [[ "$check8b_pos_count" -eq 5 ]]; then
+    pass "BUG-032 Check 8B still flags all 5 explicit route/path/endpoint/contract/identifier mutations"
+  else
+    fail "BUG-032 Check 8B detected $check8b_pos_count of 5 explicit consumer-interface mutations"
+    echo "--- explicit mutation lines matched ---"
+    grep -niE "$check8b_regex" "$check8b_must_flag" || true
+    echo "--- end ---"
+  fi
+fi
+
+# BUG-032 D2: execute the real guard over an otherwise-passing fixture whose
+# only new prose explicitly opts out of SLA/SLO/observability evidence.
+echo "Running BUG-032 Check 5A explicit opt-out classifier..."
+bug032_sla_optout_dir="$tmp_root/specs/950-bug032-sla-optout"
+cp -R "$positive_feature_dir" "$bug032_sla_optout_dir"
+cat <<'EOF' >> "$bug032_sla_optout_dir/scopes.md"
+
+### Performance Posture
+
+Observability is opted out and no trace or SLO evidence is injected.
+No SLA is declared for this contract.
+SLA and SLO are not applicable to this documentation-only change.
+No SLO target is declared.
+The p95 latency target is not applicable.
+EOF
+bug032_sla_optout_log="$tmp_root/bug032-sla-optout.log"
+bug032_sla_optout_status="$(run_capture "$bug032_sla_optout_log" bash "$GUARD_SCRIPT" "$bug032_sla_optout_dir")"
+if [[ "$bug032_sla_optout_status" -eq 0 ]]; then
+  pass "BUG032-IV-F3 Check 5A accepts explicit no-SLA/no-SLO, negated-target, and not-applicable target prose without stress coverage"
+else
+  fail "BUG032-IV-F3 Check 5A should accept explicit no-SLA/no-SLO, negated-target, and not-applicable target prose (observed $bug032_sla_optout_status)"
+  sed -n '1,220p' "$bug032_sla_optout_log"
+fi
+assert_log_not_contains "$bug032_sla_optout_log" \
+  "SLA-sensitive scope is missing explicit stress coverage" \
+  "BUG032-IV-F3 Check 5A does not turn explicit negated or not-applicable target posture into an affirmative contract"
+
+# Adversarial polarity twin: `no more than` is a comparator, not an opt-out.
+# The real guard must still require stress coverage for this quantitative p95
+# contract, so this fixture intentionally omits a stress row.
+bug032_sla_comparator_dir="$tmp_root/specs/951-bug032-sla-comparator"
+cp -R "$positive_feature_dir" "$bug032_sla_comparator_dir"
+cat <<'EOF' >> "$bug032_sla_comparator_dir/scopes.md"
+
+### Performance Contract
+
+The p95 latency budget is no more than 200 ms.
+EOF
+bug032_sla_comparator_log="$tmp_root/bug032-sla-comparator.log"
+run_capture "$bug032_sla_comparator_log" bash "$GUARD_SCRIPT" "$bug032_sla_comparator_dir" >/dev/null
+assert_log_contains "$bug032_sla_comparator_log" \
+  "SLA-sensitive scope is missing explicit stress coverage" \
+  "BUG-032 Check 5A still treats 'no more than 200 ms p95 latency' as an affirmative performance contract"
+
 # Check 5A (Gate G026) decides whether a scope is SLA-sensitive and therefore owes
 # stress coverage. Its trigger list mixes long unambiguous terms (latency,
 # throughput) with the two three-letter abbreviations `sla` and `slo`. Unbounded,
@@ -3371,7 +3565,7 @@ fi
 # from the implementation it guards.
 echo "Running Check 5A — SLA trigger word-boundary (false-positive regression)..."
 
-check5a_regex="$(grep -E "grep -Eiq 'latency\|throughput" "$GUARD_SCRIPT" | sed -E "s/^.*grep -Eiq '([^']*)'.*\$/\1/" || true)"
+check5a_regex="$(grep -E "^[[:space:]]*local performance_signal='latency\|throughput" "$GUARD_SCRIPT" | sed -E "s/^.*performance_signal='([^']*)'.*\$/\1/" || true)"
 if [[ -z "$check5a_regex" ]]; then
   fail "Check 5A SLA regex could not be extracted from $GUARD_SCRIPT (guard shape changed)"
 else
@@ -3528,6 +3722,221 @@ else
 
   rm -rf "$c43_dir"
 fi
+
+# BUG-032 D3: drive the real Check 43 through an isolated tool-call log. Equal
+# non-empty stdout is content equality, not execution identity: deterministic
+# sibling validator runs are independent only when family/category/exit agree
+# and both target plus execution provenance distinguish the runs. Incompatible
+# commands and provenance-poor collisions remain conservative failures.
+echo "Running BUG-032 Check 43 receipt execution-identity matrix..."
+bug032_receipt_repo="$tmp_root/bug032-receipt-repo"
+bug032_receipt_feature="$bug032_receipt_repo/specs/950-bug032-receipt-identity"
+bug032_receipt_log="$bug032_receipt_repo/.specify/runtime/tool-calls.jsonl"
+clone_framework_surface "$bug032_receipt_repo"
+emit_base_fixture "$bug032_receipt_feature"
+mutate_delivery_contract "$bug032_receipt_feature/state.json"
+git -C "$bug032_receipt_repo" init -q
+mkdir -p "$(dirname "$bug032_receipt_log")"
+
+bug032_nonempty_hash="9f2c1a77b3e45d6081ca2be7f4d0913ac5e8b26df1074a3c9e5b0d8f6a271c43"
+bug032_empty_hash="e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+
+cat > "$bug032_receipt_log" <<EOF
+{"ts":"2026-08-15T10:00:01Z","sessionId":"receipt-sibling-a","spec":"specs/alpha","scope":"SCOPE-1","cmd":"bash bubbles/scripts/artifact-lint.sh specs/alpha","exitCode":0,"durationMs":101,"stdoutHash":"$bug032_nonempty_hash","stdoutBytes":128,"tags":["lint"]}
+{"ts":"2026-08-15T10:00:03Z","sessionId":"receipt-sibling-b","spec":"specs/beta","scope":"SCOPE-1","cmd":"bash bubbles/scripts/artifact-lint.sh specs/beta","exitCode":0,"durationMs":103,"stdoutHash":"$bug032_nonempty_hash","stdoutBytes":128,"tags":["lint"]}
+EOF
+bug032_receipt_sibling_log="$tmp_root/bug032-receipt-siblings.log"
+bug032_receipt_sibling_status="$(run_capture "$bug032_receipt_sibling_log" bash "$GUARD_SCRIPT" "$bug032_receipt_feature")"
+if [[ "$bug032_receipt_sibling_status" -eq 0 ]]; then
+  pass "BUG-032 Check 43 accepts independent deterministic validator siblings over distinct targets"
+else
+  fail "BUG-032 Check 43 should accept independent deterministic validator siblings (observed $bug032_receipt_sibling_status)"
+fi
+assert_log_not_contains "$bug032_receipt_sibling_log" \
+  "Evidence receipt CLONE" \
+  "BUG-032 Check 43 does not classify deterministic sibling validators as cloned evidence"
+assert_log_contains "$bug032_receipt_sibling_log" \
+  "deterministic sibling hash collision(s) accepted" \
+  "BUG-032 Check 43 sibling acceptance is earned by the multi-field identity path, not an empty analysis result"
+
+cat > "$bug032_receipt_log" <<EOF
+{"ts":"2026-08-15T10:00:11Z","sessionId":"receipt-spelling-a","spec":"specs/alpha","scope":"SCOPE-1","cmd":"bash bubbles/scripts/artifact-lint.sh specs/alpha","exitCode":0,"durationMs":111,"stdoutHash":"$bug032_nonempty_hash","stdoutBytes":128,"tags":["lint"]}
+{"ts":"2026-08-15T10:00:13Z","sessionId":"receipt-spelling-b","spec":"specs/alpha","scope":"SCOPE-1","cmd":"bash bubbles/scripts/artifact-lint.sh --repo-root . specs/alpha","exitCode":0,"durationMs":113,"stdoutHash":"$bug032_nonempty_hash","stdoutBytes":128,"tags":["lint"]}
+EOF
+bug032_receipt_spelling_log="$tmp_root/bug032-receipt-spelling.log"
+bug032_receipt_spelling_status="$(run_capture "$bug032_receipt_spelling_log" bash "$GUARD_SCRIPT" "$bug032_receipt_feature")"
+if [[ "$bug032_receipt_spelling_status" -eq 0 ]]; then
+  pass "BUG-032 Check 43 preserves BUG-019 equivalent command-spelling normalization"
+else
+  fail "BUG-032 Check 43 should preserve BUG-019 equivalent command-spelling normalization (observed $bug032_receipt_spelling_status)"
+fi
+assert_log_not_contains "$bug032_receipt_spelling_log" \
+  "Evidence receipt CLONE" \
+  "BUG-032 Check 43 does not classify equivalent command spellings over one target as cloned evidence"
+
+cat > "$bug032_receipt_log" <<EOF
+{"ts":"2026-08-15T10:00:21Z","sessionId":"receipt-npm-lint","spec":"specs/alpha","scope":"SCOPE-1","cmd":"npm run lint","exitCode":0,"durationMs":121,"stdoutHash":"$bug032_nonempty_hash","stdoutBytes":128,"tags":["lint"]}
+{"ts":"2026-08-15T10:00:23Z","sessionId":"receipt-npm-test","spec":"specs/beta","scope":"SCOPE-1","cmd":"npm run test","exitCode":0,"durationMs":123,"stdoutHash":"$bug032_nonempty_hash","stdoutBytes":128,"tags":["test"]}
+EOF
+bug032_receipt_same_identity_category_log="$tmp_root/bug032-receipt-same-identity-category.log"
+bug032_receipt_same_identity_category_status="$(run_capture "$bug032_receipt_same_identity_category_log" bash "$GUARD_SCRIPT" "$bug032_receipt_feature")"
+if [[ "$bug032_receipt_same_identity_category_status" -ne 0 ]]; then
+  pass "BUG032-IV-F4 Check 43 blocks substantive stdout reuse across incompatible categories with one normalized command identity"
+else
+  fail "BUG032-IV-F4 Check 43 must block npm-run lint versus npm-run test receipt reuse even though both normalize to 'npm run'"
+fi
+assert_log_contains "$bug032_receipt_same_identity_category_log" \
+  "Evidence receipt CLONE" \
+  "BUG032-IV-F4 Check 43 reports the same-identity incompatible-category receipt clone"
+assert_log_contains "$bug032_receipt_same_identity_category_log" \
+  "family=npm category=lint" \
+  "BUG032-IV-F4 Check 43 clone diagnostic names the npm lint category"
+assert_log_contains "$bug032_receipt_same_identity_category_log" \
+  "family=npm category=test" \
+  "BUG032-IV-F4 Check 43 clone diagnostic names the npm test category"
+
+cat > "$bug032_receipt_log" <<EOF
+{"ts":"2026-08-15T10:01:01Z","sessionId":"receipt-incompatible-a","spec":"specs/alpha","scope":"SCOPE-1","cmd":"cargo test","exitCode":0,"durationMs":201,"stdoutHash":"$bug032_nonempty_hash","stdoutBytes":128,"tags":["test"]}
+{"ts":"2026-08-15T10:01:03Z","sessionId":"receipt-incompatible-b","spec":"specs/beta","scope":"SCOPE-1","cmd":"npm run lint","exitCode":0,"durationMs":203,"stdoutHash":"$bug032_nonempty_hash","stdoutBytes":128,"tags":["lint"]}
+EOF
+bug032_receipt_incompatible_log="$tmp_root/bug032-receipt-incompatible.log"
+bug032_receipt_incompatible_status="$(run_capture "$bug032_receipt_incompatible_log" bash "$GUARD_SCRIPT" "$bug032_receipt_feature")"
+if [[ "$bug032_receipt_incompatible_status" -ne 0 ]]; then
+  pass "BUG-032 Check 43 blocks substantive stdout reuse across incompatible commands"
+else
+  fail "BUG-032 Check 43 must block cargo-test versus npm-lint receipt reuse"
+fi
+assert_log_contains "$bug032_receipt_incompatible_log" \
+  "Evidence receipt CLONE" \
+  "BUG-032 Check 43 reports the incompatible-command receipt clone"
+assert_log_contains "$bug032_receipt_incompatible_log" \
+  "family=cargo category=test" \
+  "BUG-032 Check 43 clone diagnostic names the cargo test identity"
+assert_log_contains "$bug032_receipt_incompatible_log" \
+  "family=npm category=lint" \
+  "BUG-032 Check 43 clone diagnostic names the npm lint identity"
+
+cat > "$bug032_receipt_log" <<EOF
+{"ts":"2026-08-15T10:02:01Z","sessionId":"receipt-empty-a","cmd":"grep -rn TODO src/","exitCode":1,"durationMs":11,"stdoutHash":"$bug032_empty_hash","tags":["lint"]}
+{"ts":"2026-08-15T10:02:03Z","sessionId":"receipt-empty-b","cmd":"node scripts/validate.mjs","exitCode":0,"durationMs":13,"stdoutHash":"$bug032_empty_hash","tags":["validate"]}
+EOF
+bug032_receipt_empty_log="$tmp_root/bug032-receipt-empty.log"
+bug032_receipt_empty_status="$(run_capture "$bug032_receipt_empty_log" bash "$GUARD_SCRIPT" "$bug032_receipt_feature")"
+if [[ "$bug032_receipt_empty_status" -eq 0 ]]; then
+  pass "BUG-032 Check 43 preserves empty-stdout exemption without stdoutBytes"
+else
+  fail "BUG-032 Check 43 must preserve empty-stdout exemption without stdoutBytes (observed $bug032_receipt_empty_status)"
+fi
+assert_log_not_contains "$bug032_receipt_empty_log" \
+  "Evidence receipt CLONE" \
+  "BUG-032 Check 43 does not treat empty stdout as substantive cloned evidence"
+
+cat > "$bug032_receipt_log" <<EOF
+{"cmd":"bash bubbles/scripts/artifact-lint.sh specs/alpha","exitCode":0,"stdoutHash":"$bug032_nonempty_hash","stdoutBytes":128,"tags":["lint"]}
+{"cmd":"bash bubbles/scripts/artifact-lint.sh specs/beta","exitCode":0,"stdoutHash":"$bug032_nonempty_hash","stdoutBytes":128,"tags":["lint"]}
+EOF
+bug032_receipt_ambiguous_log="$tmp_root/bug032-receipt-ambiguous.log"
+bug032_receipt_ambiguous_status="$(run_capture "$bug032_receipt_ambiguous_log" bash "$GUARD_SCRIPT" "$bug032_receipt_feature")"
+if [[ "$bug032_receipt_ambiguous_status" -ne 0 ]]; then
+  pass "BUG-032 Check 43 conservatively blocks a collision missing independent execution provenance"
+else
+  fail "BUG-032 Check 43 must not grant a blanket exemption when receipt provenance is missing"
+fi
+assert_log_contains "$bug032_receipt_ambiguous_log" \
+  "Evidence receipt CLONE" \
+  "BUG-032 Check 43 reports provenance-poor substantive collisions"
+
+# BUG-033: Check 43 accused honest re-runs of forgery through two independent
+# identity-normalization defects. Facet 1 measured target distinctness PER
+# RECEIPT, so a validator re-run over one subject failed on shape alone. Facet 2
+# unwrapped only a bare leading `bash`/`sh`, so one command spelled three
+# ordinary ways resolved to three different families. Each facet gets an
+# acceptance case AND an adversarial partner that must still refuse, because a
+# relaxation with no tested bound is a hole.
+echo "Running BUG-033 Check 43 re-run grouping and wrapper normalization..."
+
+# Facet 1 acceptance: 5 honest re-runs over specs/alpha and 4 over specs/beta,
+# one shared stdout hash (artifact-lint never prints its subject), 9 distinct
+# session/ts pairs. Two identities, two targets, nine independent executions.
+cat > "$bug032_receipt_log" <<EOF
+{"ts":"2026-08-16T09:00:01Z","sessionId":"bug033-rerun-a1","spec":"specs/alpha","scope":"SCOPE-1","cmd":"bash bubbles/scripts/artifact-lint.sh specs/alpha","exitCode":0,"durationMs":101,"stdoutHash":"$bug032_nonempty_hash","stdoutBytes":128,"tags":["lint"]}
+{"ts":"2026-08-16T09:00:02Z","sessionId":"bug033-rerun-a2","spec":"specs/alpha","scope":"SCOPE-1","cmd":"bash bubbles/scripts/artifact-lint.sh specs/alpha","exitCode":0,"durationMs":102,"stdoutHash":"$bug032_nonempty_hash","stdoutBytes":128,"tags":["lint"]}
+{"ts":"2026-08-16T09:00:03Z","sessionId":"bug033-rerun-a3","spec":"specs/alpha","scope":"SCOPE-1","cmd":"bash bubbles/scripts/artifact-lint.sh specs/alpha","exitCode":0,"durationMs":103,"stdoutHash":"$bug032_nonempty_hash","stdoutBytes":128,"tags":["lint"]}
+{"ts":"2026-08-16T09:00:04Z","sessionId":"bug033-rerun-a4","spec":"specs/alpha","scope":"SCOPE-1","cmd":"bash bubbles/scripts/artifact-lint.sh specs/alpha","exitCode":0,"durationMs":104,"stdoutHash":"$bug032_nonempty_hash","stdoutBytes":128,"tags":["lint"]}
+{"ts":"2026-08-16T09:00:05Z","sessionId":"bug033-rerun-a5","spec":"specs/alpha","scope":"SCOPE-1","cmd":"bash bubbles/scripts/artifact-lint.sh specs/alpha","exitCode":0,"durationMs":105,"stdoutHash":"$bug032_nonempty_hash","stdoutBytes":128,"tags":["lint"]}
+{"ts":"2026-08-16T09:00:06Z","sessionId":"bug033-rerun-b1","spec":"specs/beta","scope":"SCOPE-1","cmd":"bash bubbles/scripts/artifact-lint.sh specs/beta","exitCode":0,"durationMs":106,"stdoutHash":"$bug032_nonempty_hash","stdoutBytes":128,"tags":["lint"]}
+{"ts":"2026-08-16T09:00:07Z","sessionId":"bug033-rerun-b2","spec":"specs/beta","scope":"SCOPE-1","cmd":"bash bubbles/scripts/artifact-lint.sh specs/beta","exitCode":0,"durationMs":107,"stdoutHash":"$bug032_nonempty_hash","stdoutBytes":128,"tags":["lint"]}
+{"ts":"2026-08-16T09:00:08Z","sessionId":"bug033-rerun-b3","spec":"specs/beta","scope":"SCOPE-1","cmd":"bash bubbles/scripts/artifact-lint.sh specs/beta","exitCode":0,"durationMs":108,"stdoutHash":"$bug032_nonempty_hash","stdoutBytes":128,"tags":["lint"]}
+{"ts":"2026-08-16T09:00:09Z","sessionId":"bug033-rerun-b4","spec":"specs/beta","scope":"SCOPE-1","cmd":"bash bubbles/scripts/artifact-lint.sh specs/beta","exitCode":0,"durationMs":109,"stdoutHash":"$bug032_nonempty_hash","stdoutBytes":128,"tags":["lint"]}
+EOF
+bug033_rerun_log="$tmp_root/bug033-receipt-rerun.log"
+bug033_rerun_status="$(run_capture "$bug033_rerun_log" bash "$GUARD_SCRIPT" "$bug032_receipt_feature")"
+if [[ "$bug033_rerun_status" -eq 0 ]]; then
+  pass "BUG-033 facet 1: Check 43 accepts repeated honest re-runs of one validator over two targets"
+else
+  fail "BUG-033 facet 1: Check 43 must accept repeated honest re-runs (observed $bug033_rerun_status)"
+fi
+assert_log_not_contains "$bug033_rerun_log" \
+  "Evidence receipt CLONE" \
+  "BUG-033 facet 1: Check 43 does not report cloned evidence for repeated honest re-runs"
+
+# Facet 1 adversarial partner: two DIFFERENT command identities over ONE target,
+# sharing one stdout. Grouping targets by identity must not make this pass.
+cat > "$bug032_receipt_log" <<EOF
+{"ts":"2026-08-16T09:10:01Z","sessionId":"bug033-onetarget-a","spec":"specs/alpha","scope":"SCOPE-1","cmd":"npm run lint","exitCode":0,"durationMs":201,"stdoutHash":"$bug032_nonempty_hash","stdoutBytes":128,"tags":["lint"]}
+{"ts":"2026-08-16T09:10:03Z","sessionId":"bug033-onetarget-b","spec":"specs/alpha","scope":"SCOPE-1","cmd":"npm run test","exitCode":0,"durationMs":203,"stdoutHash":"$bug032_nonempty_hash","stdoutBytes":128,"tags":["test"]}
+EOF
+bug033_onetarget_log="$tmp_root/bug033-receipt-one-target.log"
+bug033_onetarget_status="$(run_capture "$bug033_onetarget_log" bash "$GUARD_SCRIPT" "$bug032_receipt_feature")"
+if [[ "$bug033_onetarget_status" -ne 0 ]]; then
+  pass "BUG-033 facet 1 bound: Check 43 still refuses two identities sharing one target and one stdout"
+else
+  fail "BUG-033 facet 1 bound: identity-grouped targets must not admit two commands over ONE target"
+fi
+assert_log_contains "$bug033_onetarget_log" \
+  "Evidence receipt CLONE" \
+  "BUG-033 facet 1 bound: Check 43 reports the single-target multi-identity clone"
+
+# Facet 2 acceptance: one command spelled three ordinary ways. After wrapper
+# normalization all three resolve to family=node over one target, so the group
+# is a single identity and never becomes a multi-identity collision at all.
+cat > "$bug032_receipt_log" <<EOF
+{"ts":"2026-08-16T09:20:01Z","sessionId":"bug033-wrap-a","spec":"specs/alpha","scope":"SCOPE-1","cmd":"node scripts/check-page.mjs alpha","exitCode":0,"durationMs":301,"stdoutHash":"$bug032_nonempty_hash","stdoutBytes":128,"tags":["validate"]}
+{"ts":"2026-08-16T09:20:02Z","sessionId":"bug033-wrap-b","spec":"specs/alpha","scope":"SCOPE-1","cmd":"env PAGE=alpha node scripts/check-page.mjs alpha","exitCode":0,"durationMs":302,"stdoutHash":"$bug032_nonempty_hash","stdoutBytes":128,"tags":["validate"]}
+{"ts":"2026-08-16T09:20:03Z","sessionId":"bug033-wrap-c","spec":"specs/alpha","scope":"SCOPE-1","cmd":"zsh -c node scripts/check-page.mjs alpha","exitCode":0,"durationMs":303,"stdoutHash":"$bug032_nonempty_hash","stdoutBytes":128,"tags":["validate"]}
+{"ts":"2026-08-16T09:20:04Z","sessionId":"bug033-wrap-d","spec":"specs/alpha","scope":"SCOPE-1","cmd":"PAGE=alpha node scripts/check-page.mjs alpha","exitCode":0,"durationMs":304,"stdoutHash":"$bug032_nonempty_hash","stdoutBytes":128,"tags":["validate"]}
+{"ts":"2026-08-16T09:20:05Z","sessionId":"bug033-wrap-e","spec":"specs/alpha","scope":"SCOPE-1","cmd":"bash -c node scripts/check-page.mjs alpha","exitCode":0,"durationMs":305,"stdoutHash":"$bug032_nonempty_hash","stdoutBytes":128,"tags":["validate"]}
+EOF
+bug033_wrapper_log="$tmp_root/bug033-receipt-wrapper.log"
+bug033_wrapper_status="$(run_capture "$bug033_wrapper_log" bash "$GUARD_SCRIPT" "$bug032_receipt_feature")"
+if [[ "$bug033_wrapper_status" -eq 0 ]]; then
+  pass "BUG-033 facet 2: Check 43 accepts one command spelled through shell, env and assignment wrappers"
+else
+  fail "BUG-033 facet 2: Check 43 must normalize wrapper spellings to one identity (observed $bug033_wrapper_status)"
+fi
+assert_log_not_contains "$bug033_wrapper_log" \
+  "Evidence receipt CLONE" \
+  "BUG-033 facet 2: Check 43 does not report cloned evidence for equivalent wrapper spellings"
+
+# Facet 2 adversarial partner: the SAME wrappers over two genuinely different
+# programs. Unwrapping must reveal the difference, not hide it.
+cat > "$bug032_receipt_log" <<EOF
+{"ts":"2026-08-16T09:30:01Z","sessionId":"bug033-wrapadv-a","spec":"specs/alpha","scope":"SCOPE-1","cmd":"zsh -c cargo test","exitCode":0,"durationMs":401,"stdoutHash":"$bug032_nonempty_hash","stdoutBytes":128,"tags":["test"]}
+{"ts":"2026-08-16T09:30:03Z","sessionId":"bug033-wrapadv-b","spec":"specs/beta","scope":"SCOPE-1","cmd":"env CI=1 npm run lint","exitCode":0,"durationMs":403,"stdoutHash":"$bug032_nonempty_hash","stdoutBytes":128,"tags":["lint"]}
+EOF
+bug033_wrapper_adv_log="$tmp_root/bug033-receipt-wrapper-adversarial.log"
+bug033_wrapper_adv_status="$(run_capture "$bug033_wrapper_adv_log" bash "$GUARD_SCRIPT" "$bug032_receipt_feature")"
+if [[ "$bug033_wrapper_adv_status" -ne 0 ]]; then
+  pass "BUG-033 facet 2 bound: Check 43 still refuses two different programs behind identical wrappers"
+else
+  fail "BUG-033 facet 2 bound: wrapper normalization must not collapse cargo-test and npm-lint into one identity"
+fi
+assert_log_contains "$bug033_wrapper_adv_log" \
+  "family=cargo category=test" \
+  "BUG-033 facet 2 bound: unwrapping reveals the cargo identity behind the shell wrapper"
+assert_log_contains "$bug033_wrapper_adv_log" \
+  "family=npm category=lint" \
+  "BUG-033 facet 2 bound: unwrapping reveals the npm identity behind the env wrapper"
 
 echo "Running Check 8 basename-only planning-maturity exemption (flat-layout root deliverables)..."
 # A flat-layout repository keeps its deliverables at the repository root (for example
@@ -4144,14 +4553,26 @@ fi
 
 # =============================================================================
 # Check 43: Human Acceptance Terminal Gate (Gate G136)  [IMP-040 SCOPE-10]
+#           IMP-047 PD-12: automation readiness is not human acceptance.
 # =============================================================================
-# BUG-029's exact shape. artifact-lint.sh requires at least ONE `[x]` and never
-# rejects a `[ ]`, so a checklist of one checked item and one unchecked passes
+# BUG-029's exact shape. artifact-lint.sh required at least ONE `[x]` and never
+# rejected a `[ ]`, so a checklist of one checked item and one unchecked passed
 # lint. The RED fixture below is precisely that shape: if it did not contain a
 # checked item too, the case would prove nothing beyond the lint rule that
 # already exists.
+#
+# PD-12 adds the case the original could not see. The TEMPLATE shipped checked,
+# so a fully checked list was obtainable with no human act at all — the gate was
+# satisfiable by automation writing a file. `all_checked.md` therefore now has
+# to be REFUSED at a terminal transition unless a human record exists.
+#
+# The cases run through the SHARED reader the guard sources, so the selftest
+# cannot pass against a parser the guard does not use.
 c43_dir="$tmp_root/c43-human-acceptance"
 mkdir -p "$c43_dir"
+
+# shellcheck source=acceptance-authority-lib.sh
+source "$SCRIPT_DIR/acceptance-authority-lib.sh"
 
 cat <<'EOF' > "$c43_dir/mixed.md"
 # User Validation
@@ -4179,13 +4600,33 @@ cat <<'EOF' > "$c43_dir/all_checked.md"
 - [ ] This bullet is outside the Checklist section and must be ignored.
 EOF
 
-# Same parser the guard and artifact-lint both use.
+cat <<'EOF' > "$c43_dir/human_accepted.md"
+# User Validation
+
+## Automation Readiness
+
+- [x] Both behaviors verified by automation.
+
+## Checklist
+
+- [x] The list renders on the dashboard route.
+- [x] Deleting an item removes it from the list.
+
+## Human Acceptance Record
+
+- acceptedBy: p.kirsanov
+- acceptedAt: 2026-08-16T10:00:00Z
+- method: human-interactive
+
+## Notes
+
+- [ ] This bullet is outside the Checklist section and must be ignored.
+EOF
+
 c43_unchecked() {
-  awk '
-    /^## Checklist/ {in_checklist=1; next}
-    /^## / {if (in_checklist) exit}
-    in_checklist {print}
-  ' "$1" | grep -cE '^- \[ \] ' || true
+  local items
+  items="$(bubbles_acceptance_unchecked_items "$1")"
+  if [[ -z "$items" ]]; then printf '0\n'; else printf '%s\n' "$items" | grep -c . || true; fi
 }
 
 c43_mixed_count="$(c43_unchecked "$c43_dir/mixed.md")"
@@ -4198,9 +4639,22 @@ else
 fi
 
 if [[ "$c43_clean_count" -eq 0 ]]; then
-  pass "Check 43 adversarial: a fully checked checklist reports nothing, and a '[ ]' outside the Checklist section is ignored"
+  pass "Check 43 adversarial: a fully checked checklist reports no unchecked item, and a '[ ]' outside the Checklist section is ignored"
 else
   fail "Check 43: a fully accepted checklist reported $c43_clean_count unchecked item(s) — the section parser is over-reaching beyond '## Checklist'"
+fi
+
+c43_all_checked_verdict="$(bubbles_acceptance_terminal_verdict "$c43_dir/all_checked.md" 2>&1 || true)"
+if printf '%s' "$c43_all_checked_verdict" | grep -q 'PD12-NO-RECORD'; then
+  pass "Check 43 (PD-12): a fully checked list with no human acceptance record is refused at a terminal transition"
+else
+  fail "Check 43 (PD-12): a fully checked list with no acceptance record was accepted — a shipped template would satisfy human sign-off again"
+fi
+
+if bubbles_acceptance_terminal_verdict "$c43_dir/human_accepted.md" > /dev/null 2>&1; then
+  pass "Check 43 (PD-12): checked items plus an authored human record satisfy terminal acceptance"
+else
+  fail "Check 43 (PD-12): a valid human acceptance record was refused: $(bubbles_acceptance_terminal_verdict "$c43_dir/human_accepted.md" 2>&1 || true)"
 fi
 
 rm -rf "$c43_dir"

@@ -5,8 +5,9 @@
 #   1. Bridge runs in text mode against a spec with no tool log.
 #   2. Bridge runs in JSON mode against a spec with no tool log
 #      (returns logPresent=false envelope, exit 0).
-#   3. Bridge runs in text mode against a spec with a matching tool-log entry
-#      and reports non-zero coverage.
+#   3. Bridge runs in text mode against a spec whose DoD items carry `Receipt:`
+#      pointers answered by semantically bound tool-log entries, and reports
+#      non-zero coverage.
 #   4. Bridge runs in JSON mode against the same fixture and returns a
 #      structured envelope with matches[] populated and coveragePct>0.
 #   5. --format=json output parses as valid JSON.
@@ -30,7 +31,9 @@ fail() { echo "FAIL: $1"; failures=$((failures + 1)); }
 TEST_ROOT="$(mktemp -d -t bubbles-bridge-selftest.XXXXXXXX)"
 trap 'rm -rf "$TEST_ROOT"' EXIT
 
-# Build a minimal spec dir.
+# Build a minimal spec dir. IMP-047 S-C: admission is SEMANTIC, so each checked
+# DoD item POINTS AT the scenario whose receipt is offered as its coverage. An
+# item with no pointer makes no verifiable claim and is reported as UNBOUND.
 mkdir -p "$TEST_ROOT/specs/042-foo"
 cat > "$TEST_ROOT/specs/042-foo/scopes.md" <<'EOF'
 # Test Plan
@@ -39,8 +42,8 @@ cat > "$TEST_ROOT/specs/042-foo/scopes.md" <<'EOF'
 
 ### Definition of Done
 
-- [x] go test ./internal/foo passes
-- [x] ./bubbles.sh validate exits zero
+- [x] go test ./internal/foo passes — Receipt: SCN-042-001
+- [x] ./bubbles.sh validate exits zero — Receipt: SCN-042-002
 - [ ] still in progress
 EOF
 
@@ -65,12 +68,22 @@ else
   fail "2. json mode with no log: got '$out_json'"
 fi
 
-# Build a tool-call log that should match both checked DoD items.
+# Build a tool-call log whose receipts satisfy all five bindings for both checked
+# DoD items: scenario, claim, command, source revision and outcome. The claim
+# must COVER its item, so it is written in the item's own words.
+#
+# The bridge resolves the source revision from the spec dir, which is a bare
+# temp dir on a normal run (no HEAD -> empty -> any cited revision is accepted).
+# Resolving it the same way here keeps the fixture correct even when TMPDIR
+# happens to sit inside a git work tree.
+REV="$(git -C "$TEST_ROOT/specs/042-foo" rev-parse --verify HEAD 2>/dev/null || true)"
+[[ -n "$REV" ]] || REV="0000000000000000000000000000000000000001"
+
 LOG="$TEST_ROOT/.specify/runtime/tool-calls.jsonl"
 mkdir -p "$(dirname "$LOG")"
-cat > "$LOG" <<'EOF'
-{"sessionId":"s1","agent":"bubbles.test","spec":"042-foo","cmd":"go test ./internal/foo","exitCode":0,"ts":"2026-06-05T17:00:00Z","stdoutHash":"a","stderrHash":"b","tags":["unit"]}
-{"sessionId":"s1","agent":"bubbles.validate","spec":"042-foo","cmd":"./bubbles.sh validate run","exitCode":0,"ts":"2026-06-05T17:05:00Z","stdoutHash":"c","stderrHash":"d","tags":["validate"]}
+cat > "$LOG" <<EOF
+{"schemaVersion":3,"sessionId":"s1","agent":"bubbles.test","spec":"042-foo","cmd":"go test ./internal/foo","exitCode":0,"ts":"2026-06-05T17:00:00Z","stdoutHash":"a","stderrHash":"b","tags":["unit"],"scenarioBinding":{"scenarioId":"SCN-042-001","phase":"green","testIdentity":"internal/foo::TestFoo","sourceRevision":"$REV","negativeControl":"revert the foo handler and TestFoo fails","claim":"go test ./internal/foo passes"}}
+{"schemaVersion":3,"sessionId":"s1","agent":"bubbles.validate","spec":"042-foo","cmd":"./bubbles.sh validate run","exitCode":0,"ts":"2026-06-05T17:05:00Z","stdoutHash":"c","stderrHash":"d","tags":["validate"],"scenarioBinding":{"scenarioId":"SCN-042-002","phase":"green","testIdentity":"validate::exit-status","sourceRevision":"$REV","negativeControl":"break a validate gate and the command exits non-zero","claim":"./bubbles.sh validate exits zero"}}
 EOF
 
 # 3. text mode reports coverage > 0.

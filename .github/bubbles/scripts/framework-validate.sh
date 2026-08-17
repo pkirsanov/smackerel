@@ -185,14 +185,45 @@ changed_paths_load() {
 
 # changed_surface_touches <selftest-path>
 #
-# A selftest owns itself and the script it tests: `X-selftest.sh` -> `X.sh`.
-# That mapping is DERIVED, not enumerated, so a new selftest is covered the
-# moment it exists.
+# IMP-047 S-E. This used to answer from a BASENAME PAIR: `X-selftest.sh` was
+# assumed to own `X.sh` and nothing else. Under that rule, changing
+# `bubbles/registry/gates.yaml` SKIPPED the 97 checks that read it and changing
+# `guard-lib.sh` SKIPPED nothing that sources it, because no basename moved. A
+# selection that answers "unaffected" about inputs it never looked at is a
+# skip dressed as a decision.
+#
+# The answer now comes from the DECLARED INPUT CLOSURE in
+# `bubbles/registry/validation-checks.yaml`, derived by tracing real references.
+# A check is affected when the change touches ANY declared input. A check with
+# an UNKNOWN closure is affected by every change, so it always runs.
+#
+# The retired basename rule is kept only as the report-only fallback below, for
+# the migration window, and only when the closure map cannot be loaded at all.
 changed_surface_touches() {
   local selftest="$1"
   changed_paths_load
   [[ "$CHANGED_PATHS" == "__NO_GIT__" ]] && return 0
 
+  if declare -F vclosure_load >/dev/null 2>&1; then
+    if [[ -z "${VCLOSURE_LOADED:-}" ]]; then
+      vclosure_load >/dev/null 2>&1 || true
+    fi
+    if [[ -n "${VCLOSURE_LOADED:-}" ]]; then
+      local rel="$selftest"
+      [[ "$rel" == "$VCLOSURE_LOADED/"* ]] && rel="${rel#"$VCLOSURE_LOADED"/}"
+      local id
+      id="$(vclosure_id_for_script "$rel")"
+      # A check the closure map does not know is an unknown dependency: run it.
+      [[ -n "$id" ]] || return 0
+      vclosure_affected "$id" "$CHANGED_PATHS" && return 0
+      return 1
+    fi
+  fi
+
+  # Report-only fallback (migration): the closure map is unreadable, so fall
+  # back to the retired basename rule and SAY SO, because a silent fallback to
+  # the defective rule is how the defect survives a migration.
+  echo "NOTE: closure map unavailable; falling back to the retired basename selection for $(basename "$selftest")" >&2
   local base subject
   base="$(basename "$selftest")"
   subject="${base%-selftest.sh}.sh"
@@ -248,6 +279,27 @@ CHANGED_ONLY="false"
 # the run is not exercising timing.
 CACHE_ENABLED="false"
 cache_hits=0
+# IMP-047 S-E. --record-debt turns a --changed-only deferral into a real
+# obligation in the append-only validation debt ledger. It is opt-in for the
+# migration window: the default keeps deferrals report-only so the selection can
+# be compared against a cold full run before anything depends on it.
+RECORD_DEBT="false"
+declare -a deferred_check_ids=()
+declare -a deferred_check_labels=()
+declare -a deferred_check_cmds=()
+
+# validation_check_id_for <script-path> — the stable id from the closure map, or
+# empty when the map does not know this script (which is itself the reason such a
+# check is never deferred silently).
+validation_check_id_for() {
+  local script="${1:-}"
+  [[ -n "$script" ]] || return 0
+  declare -F vclosure_id_for_script >/dev/null 2>&1 || return 0
+  [[ -n "${VCLOSURE_LOADED:-}" ]] || return 0
+  local rel="$script"
+  [[ "$rel" == "$VCLOSURE_LOADED/"* ]] && rel="${rel#"$VCLOSURE_LOADED"/}"
+  vclosure_id_for_script "$rel"
+}
 for _arg in "$@"; do
   case "$_arg" in
     --tier=core | --tier=full) VALIDATE_TIER="${_arg#--tier=}" ;;
@@ -258,14 +310,16 @@ for _arg in "$@"; do
     --changed-only) CHANGED_ONLY="true" ;;
     --cache) CACHE_ENABLED="true" ;;
     --no-cache) CACHE_ENABLED="false" ;;
+    --record-debt) RECORD_DEBT="true" ;;
     -h | --help)
-      echo "Usage: framework-validate.sh [--tier=core|full] [--list-tier=core|full] [--changed-only] [--cache] [--no-cache]"
+      echo "Usage: framework-validate.sh [--tier=core|full] [--list-tier=core|full] [--changed-only] [--cache] [--no-cache] [--record-debt]"
       echo "  (no flag)        run every check (full tier — unchanged default)"
       echo "  --tier=core      run only the fast structural/lint/generator subset"
       echo "  --list-tier=core dry-list what the core tier runs/skips, then exit 0"
-      echo "  --changed-only   run only checks whose owned surface the tree touched"
-      echo "  --cache          OPT IN to the hermetic-selftest result cache (off by default)"
-      echo "  --no-cache       ignore the hermetic-selftest result cache"
+      echo "  --changed-only   run only checks whose DECLARED CLOSURE the tree touched"
+      echo "  --cache          OPT IN to the closure-keyed result cache (off by default)"
+      echo "  --no-cache       ignore the result cache"
+      echo "  --record-debt    write each --changed-only deferral to the validation debt ledger"
       exit 0
       ;;
     *)
@@ -338,10 +392,21 @@ run_check() {
   fi
 
   if [[ "$_changed_skip" == "true" ]]; then
+    # IMP-047 S-E vocabulary. This is a DEFERRAL, not a pass and not a silent
+    # skip: the check has not run and something must still run it. The word
+    # stays distinct from PASS and REUSED so a scrollback cannot blur the three
+    # into "it was fine".
     echo "==> $label"
-    echo "SKIP: $label (--changed-only; neither the selftest nor the script it tests was modified)"
+    echo "DEFERRED: $label (--changed-only; no declared closure input was touched)"
     skipped=$((skipped + 1))
     skipped_changed_only=$((skipped_changed_only + 1))
+    if [[ "$RECORD_DEBT" == "true" ]]; then
+      local _did
+      _did="$(validation_check_id_for "$_script")"
+      deferred_check_ids+=("${_did:-unknown}")
+      deferred_check_labels+=("$label")
+      deferred_check_cmds+=("$(printf '%q ' "$@")")
+    fi
     echo
     return 0
   fi
@@ -350,8 +415,16 @@ run_check() {
   if [[ -n "$_script" && "$CACHE_ENABLED" == "true" ]] && declare -F validate_cache_key >/dev/null 2>&1; then
     _cache_key="$(validate_cache_key "$_script" "$FRAMEWORK_VERSION" 2>/dev/null || true)"
     if [[ -n "$_cache_key" ]] && validate_cache_get "$_cache_key"; then
+      # IMP-047 S-E: REUSED is its own result, and it NEVER prints PASS. PASS
+      # means this run executed the check and watched it succeed. Reuse means
+      # this run executed nothing and is citing an earlier verdict, which is a
+      # weaker claim, and printing the stronger word for the weaker claim is how
+      # a suite reports work it did not do.
+      local _receipt="unknown"
+      declare -F validate_cache_receipt >/dev/null 2>&1 &&
+        _receipt="$(validate_cache_receipt "$_cache_key" 2>/dev/null || echo unknown)"
       echo "==> $label"
-      echo "PASS: $label (cached — script unchanged since it last passed)"
+      echo "REUSED: $label (receipt $_receipt — every declared closure input unchanged)"
       cache_hits=$((cache_hits + 1))
       echo
       return 0
@@ -569,15 +642,18 @@ fi
 if [[ -x "$SCRIPT_DIR/generate-modes-block.sh" ]]; then
   run_check "Modes split no-duplication (v6.1 / S2)" bash "$SCRIPT_DIR/generate-modes-block.sh" --check
 fi
-# IMP-042 / SCOPE-13: the generated gates: block in workflows.yaml is a COPY of
-# the canonical registry. Deleting it once required "byte-equivalent queries for
-# every remaining reader", an inventory that was built by hand, missed the
-# scripts matching gate NAMES rather than the gates: key, and had to be reverted.
-# The inventory is now computed and held mechanically, so it can only shrink
-# deliberately and a new dependency cannot appear silently. The live check is
-# source-only because the declared inventory describes the source tree.
-run_check "Gates-block reader lint selftest (IMP-042 SCOPE-13)" bash "$SCRIPT_DIR/gates-block-reader-lint-selftest.sh"
-run_check_self_only "Gates-block reader inventory (live, IMP-042 SCOPE-13)" bash "$SCRIPT_DIR/gates-block-reader-lint.sh" --repo-root "$REPO_ROOT"
+# IMP-047 S-A: the `gates-block-reader` apparatus retired here. It guarded a
+# generated `gates:` block in workflows.yaml that IMP-042 SCOPE-13 removed, so
+# the lint had been computing an empty inventory and printing "the block is safe
+# to remove" on every run while still exiting 0 — which is why two checks stayed
+# scheduled against nothing. The corollary is now mechanical: a lint that reports
+# its own removal precondition must refuse, so the next orphaned guard fails
+# loudly instead of running forever. The live scan is source-only because it
+# reads this repository's own script tree.
+if [[ -x "$SCRIPT_DIR/orphaned-scaffolding-guard.sh" ]]; then
+  run_check "Orphaned-scaffolding rule selftest (IMP-047 S-A)" bash "$SCRIPT_DIR/orphaned-scaffolding-guard-selftest.sh"
+  run_check_self_only "Orphaned scaffolding (live, IMP-047 S-A)" bash "$SCRIPT_DIR/orphaned-scaffolding-guard.sh" --repo-root "$REPO_ROOT"
+fi
 # IMP-102 / SCOPE-9: gate-coverage map — advisory generated doc mapping every
 # gate to its enforcing surface(s) (modes / state-transition-guard / framework-
 # validate scripts / CI). --check keeps the committed doc fresh; the selftest
@@ -801,6 +877,20 @@ run_check "Output-policy coherence selftest (IMP-039 / EV-7)" bash "$SCRIPT_DIR/
 run_check "Usage-adapter contract selftest (IMP-039 / COST-4)" bash "$SCRIPT_DIR/usage-adapter-contract-selftest.sh"
 run_check "Test-inventory adapter contract selftest (IMP-040 / COV-8)" bash "$SCRIPT_DIR/test-inventory-adapter-contract-selftest.sh"
 run_check "Scenario linked-test resolution selftest (IMP-040 / COV-8)" bash "$SCRIPT_DIR/scenario-test-resolve-selftest.sh"
+run_check "Report-section contract selftest (IMP-047 / S-B)" bash "$SCRIPT_DIR/report-sections-selftest.sh"
+# Framework-source-only: check P3 requires the repo-root BUGS.md, which the
+# release manifest classifies as neither managed nor source-only-shipped, so it
+# does not exist in an installed tree. Scheduling it as portable made every
+# downstream install fail a check about a file it can never have.
+run_check_self_only "Bug-packet contract selftest (IMP-047 / S-B)" bash "$SCRIPT_DIR/bug-packet-selftest.sh"
+# IMP-047 S-E. These four cover the apparatus that decides what a run may SKIP:
+# the derived closure map, its consumer, the debt ledger that records every
+# deferral, and the batch executor that settles them. Each one removes work from
+# a run, so each one needs a guard that fails when its honesty rule is dropped.
+run_check "Closure-map generator selftest (IMP-047 S-E)" bash "$SCRIPT_DIR/generate-validation-checks-selftest.sh"
+run_check "Declared-input closure selftest (IMP-047 S-E)" bash "$SCRIPT_DIR/validation-closure-selftest.sh"
+run_check "Validation debt ledger selftest (IMP-047 S-E)" bash "$SCRIPT_DIR/validation-debt-selftest.sh"
+run_check "Batched obligation settlement selftest (IMP-047 S-E)" bash "$SCRIPT_DIR/validation-batch-selftest.sh"
 run_check "Scenario obligation matrix selftest (IMP-040 / COV-9)" bash "$SCRIPT_DIR/scenario-obligation-lint-selftest.sh"
 run_check "Test-mechanism declaration selftest (IMP-040 / COV-10)" bash "$SCRIPT_DIR/test-mechanism-lint-selftest.sh"
 run_check "Mutation adapter contract selftest (IMP-040 / COV-11)" bash "$SCRIPT_DIR/mutation-adapter-contract-selftest.sh"
@@ -964,6 +1054,14 @@ fi
 
 if [[ -x "$SCRIPT_DIR/release-delivery-reconciliation-guard.sh" ]]; then
   run_check "Release delivery reconciliation guard (live, G101)" bash "$SCRIPT_DIR/release-delivery-reconciliation-guard.sh" --repo-root "$REPO_ROOT"
+fi
+
+if [[ -x "$SCRIPT_DIR/release-ladder-schema-guard-selftest.sh" ]]; then
+  run_check "Release ladder schema guard selftest (G137)" bash "$SCRIPT_DIR/release-ladder-schema-guard-selftest.sh"
+fi
+
+if [[ -x "$SCRIPT_DIR/release-ladder-schema-guard.sh" ]]; then
+  run_check "Release ladder schema guard (live, G137)" bash "$SCRIPT_DIR/release-ladder-schema-guard.sh" --repo-root "$REPO_ROOT"
 fi
 
 if [[ -x "$SCRIPT_DIR/workflow-surface-selftest.sh" ]]; then
@@ -1235,6 +1333,30 @@ if [[ -x "$SCRIPT_DIR/agent-bundle-size-budget.sh" ]]; then
 fi
 
 # ---------------------------------------------------------------------------
+# IMP-047 S-C — the RED-to-GREEN outcome engine.
+#
+# Enumerated rather than left to the discovery sweep below, because these four
+# carry the outcome model itself: every scenario state derived from receipts,
+# every substitution refused by name, tool-log evidence admitted on semantics
+# instead of token overlap, and phase work resumed by occurrence identity.
+# ---------------------------------------------------------------------------
+if [[ -f "$SCRIPT_DIR/scenario-state-resolve-selftest.sh" ]]; then
+  run_check "Scenario-state resolver selftest (IMP-047 S-C)" bash "$SCRIPT_DIR/scenario-state-resolve-selftest.sh"
+fi
+
+if [[ -f "$SCRIPT_DIR/receipt-identity-selftest.sh" ]]; then
+  run_check "Receipt identity selftest (IMP-047 S-C)" bash "$SCRIPT_DIR/receipt-identity-selftest.sh"
+fi
+
+if [[ -f "$SCRIPT_DIR/tool-log-semantic-admission-selftest.sh" ]]; then
+  run_check "Tool-log semantic admission selftest (IMP-047 S-C / AC13)" bash "$SCRIPT_DIR/tool-log-semantic-admission-selftest.sh"
+fi
+
+if [[ -f "$SCRIPT_DIR/phase-coordinator-selftest.sh" ]]; then
+  run_check "Phase coordinator selftest (IMP-047 S-C / AC8-AC12)" bash "$SCRIPT_DIR/phase-coordinator-selftest.sh"
+fi
+
+# ---------------------------------------------------------------------------
 # IMP-027 SCOPE-2b — selftest discovery sweep
 #
 # Everything above is an ENUMERATED check: a human wired it by hand. That
@@ -1438,6 +1560,63 @@ if [[ "$failures" -gt 0 ]]; then
     echo "  - $failed_label"
   done
   exit 1
+fi
+
+# ---------------------------------------------------------------------------
+# IMP-047 S-E: settle the deferrals into the append-only ledger.
+#
+# ORDER IS THE POINT. `basic` is the immediate affected-validation floor INSIDE
+# `fast`, not a fourth assurance level, so the affected set must ALREADY HAVE RUN
+# before any obligation may be deferred. That is why this block sits after the
+# failure gate: a run with failures never reaches it, and debt is therefore never
+# taken out against a floor that did not hold.
+#
+# A MISSING LEDGER WRITE FORCES IMMEDIATE EXECUTION. If `record` refuses, the
+# check is run right here instead of being treated as deferred, because a
+# deferral nobody recorded is a silent skip.
+if [[ "$RECORD_DEBT" == "true" && "${#deferred_check_ids[@]}" -gt 0 ]]; then
+  echo "==> Validation debt (IMP-047 S-E)"
+  debt_tool="$SCRIPT_DIR/validation-debt.sh"
+  debt_dir="${BUBBLES_VALIDATION_DEBT_DIR:-$REPO_ROOT/.specify/runtime/validation-debt}"
+  source_revision="$(git -C "$REPO_ROOT" rev-parse HEAD 2>/dev/null || echo unknown)"
+
+  floor_receipt="$debt_dir/floor-$source_revision.json"
+  if mkdir -p "$debt_dir" 2>/dev/null; then
+    printf '{"floor":"basic","sourceRevision":"%s","executed":"%s","failures":"0","writtenAt":"%s"}\n' \
+      "$source_revision" "${#check_durations[@]}" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >"$floor_receipt"
+  fi
+
+  debt_idx=0
+  for deferred_id in "${deferred_check_ids[@]}"; do
+    deferred_label="${deferred_check_labels[$debt_idx]}"
+    deferred_cmd="${deferred_check_cmds[$debt_idx]}"
+    debt_idx=$((debt_idx + 1))
+    if [[ -x "$debt_tool" || -f "$debt_tool" ]] &&
+      bash "$debt_tool" record \
+        --check "$deferred_id" \
+        --class heavy-selftest \
+        --source-revision "$source_revision" \
+        --spec "framework-validate" \
+        --reason closure-unaffected \
+        --boundary release \
+        --floor-receipt "$floor_receipt" >/dev/null 2>&1; then
+      echo "DEFERRED: $deferred_label (obligation recorded, due at the release boundary)"
+      continue
+    fi
+    echo "LEDGER-WRITE-FAILED: $deferred_label — executing it now rather than deferring silently."
+    eval "$deferred_cmd" || {
+      echo "FAIL: $deferred_label (forced execution after a failed ledger write)"
+      bubbles_ci_annotate_failure "FAIL: $deferred_label (forced execution after a failed ledger write)"
+      failures=$((failures + 1))
+      failed_check_labels+=("$deferred_label")
+    }
+  done
+  echo
+
+  if [[ "$failures" -gt 0 ]]; then
+    echo "Framework validation failed with $failures failing check(s) after forced execution."
+    exit 1
+  fi
 fi
 
 if [[ "$skipped" -gt 0 ]]; then

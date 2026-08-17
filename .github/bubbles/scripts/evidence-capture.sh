@@ -88,16 +88,68 @@ hash_of() {
 
 tmp="$(mktemp)" || exit 2
 interrupted_rc=""
-cleanup() { rm -f "$tmp"; }
-record_signal() { interrupted_rc="$1"; }
+child_pid=""
+child_group_needs_cleanup=false
+child_group_exists() {
+  [[ -n "$child_pid" ]] || return 1
+  kill -0 -- "-$child_pid" 2>/dev/null || kill -0 "$child_pid" 2>/dev/null
+}
+signal_child_group() {
+  local signal_name="$1"
+
+  [[ -n "$child_pid" ]] || return 0
+  kill -s "$signal_name" -- "-$child_pid" 2>/dev/null ||
+    kill -s "$signal_name" "$child_pid" 2>/dev/null || true
+}
+# Invoked indirectly by the EXIT trap.
+# shellcheck disable=SC2317
+cleanup() {
+  if [[ "$child_group_needs_cleanup" == "true" ]] && child_group_exists; then
+    signal_child_group KILL
+  fi
+  rm -f "$tmp"
+}
+# Invoked indirectly by the INT/TERM traps.
+# shellcheck disable=SC2317
+forward_signal() {
+  local exit_code="$1"
+  local signal_name="$2"
+
+  interrupted_rc="$exit_code"
+  child_group_needs_cleanup=true
+  signal_child_group "$signal_name"
+}
 trap cleanup EXIT
-trap 'record_signal 130' INT
-trap 'record_signal 143' TERM
+trap 'forward_signal 130 INT' INT
+trap 'forward_signal 143 TERM' TERM
 
 # Interleave stdout and stderr: a runner's failure detail usually arrives on
 # stderr, and evidence that drops it is evidence of the wrong thing.
-"$@" >"$tmp" 2>&1
-rc=$?
+# Job control gives the background command its own process group. The signal
+# traps can therefore stop the complete validator tree instead of killing only
+# this wrapper and leaving a lock-holding grandchild behind.
+set -m
+"$@" >"$tmp" 2>&1 &
+child_pid=$!
+set +m
+
+rc=0
+while true; do
+  wait "$child_pid"
+  wait_rc=$?
+  if ! kill -0 "$child_pid" 2>/dev/null; then
+    rc="$wait_rc"
+    break
+  fi
+done
+# A direct child can exit while its descendants keep running (for example, a
+# nested timeout can stop one shell while a lock-holding grandchild survives).
+# Give the remaining process group a graceful shutdown opportunity; the EXIT
+# trap supplies a KILL safety net after the evidence block has been emitted.
+if child_group_exists; then
+  child_group_needs_cleanup=true
+  signal_child_group TERM
+fi
 if [[ -n "$interrupted_rc" ]]; then
   rc="$interrupted_rc"
 fi

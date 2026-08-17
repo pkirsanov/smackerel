@@ -652,11 +652,26 @@ append_probe "$duplicate_dir/scopes.md" \
 # every other fixture) and share ONE tool-calls.jsonl at the repo root — exactly
 # where the guard resolves the log from (the feature's git toplevel is tmp_root).
 # The structured-log matcher is spec-scoped and evaluates the spec match BEFORE
-# the token match, so each entry can only cover its OWN spec — no cross-fixture
-# bleed. Each probe item is a BARE `- [x]` with no markdown/inline evidence, so
-# ONLY the structured tool-log path (Check 9 case 4) can cover it.
+# the receipt bindings, so each entry can only cover its OWN spec — no
+# cross-fixture bleed. Each probe item is a BARE `- [x]` with no markdown/inline
+# evidence, so ONLY the structured tool-log path (Check 9 case 4) can cover it.
+#
+# IMP-047 S-C: admission is SEMANTIC, so the probe carries the `Receipt:`
+# pointer that names the scenario it claims coverage from, and each log entry
+# carries the scenarioBinding receipt that answers it. All three entries carry
+# the SAME well-formed binding on purpose: the only thing that differs between
+# the positive control and #4/#6 is their specific defect, which is what makes
+# the accept-vs-reject difference a real discriminator rather than "nothing is
+# bound, so everything blocks".
 # -----------------------------------------------------------------------------
-TOOLLOG_PROBE='- [x] IMP102 pytest evidence admission passed via structured tool log'
+TOOLLOG_SCENARIO='SCN-C9-001'
+TOOLLOG_CLAIM='IMP102 pytest evidence admission passed via structured tool log'
+# tmp_root is `git init`-ed with no commit, so the guard resolves an EMPTY
+# source revision and only requires the receipt to cite one. A fixed value keeps
+# the fixture deterministic.
+TOOLLOG_REV='0000000000000000000000000000000000000001'
+TOOLLOG_PROBE="- [x] ${TOOLLOG_CLAIM} — Receipt: ${TOOLLOG_SCENARIO}"
+TOOLLOG_BINDING="\"scenarioBinding\":{\"scenarioId\":\"${TOOLLOG_SCENARIO}\",\"phase\":\"green\",\"testIdentity\":\"tests/evidence/admission.spec::structured tool log\",\"sourceRevision\":\"${TOOLLOG_REV}\",\"negativeControl\":\"drop the tool-log entry and the DoD item loses its receipt\",\"claim\":\"${TOOLLOG_CLAIM}\"}"
 
 toollog_ok_dir="$tmp_root/specs/957-c9-toollog-ok"
 emit_pass_fixture "$toollog_ok_dir"
@@ -671,15 +686,18 @@ emit_pass_fixture "$toollog_forged_dir"
 append_probe "$toollog_forged_dir/scopes.md" "$TOOLLOG_PROBE"
 
 # Shared structured evidence log at the repo root (the feature git toplevel).
-#   OK  -> a VALID, spec-scoped, exit0, token-matching entry COVERS 957 (positive control).
-#   #6  -> spec:"" names nothing; fix #6 skips it, so 958 stays unevidenced -> BLOCKS.
+#   OK  -> a VALID, spec-scoped, exit0 entry whose scenarioBinding satisfies all
+#          five bindings (scenario, claim, command, source revision, outcome)
+#          COVERS 957 (positive control).
+#   #6  -> spec:"" names nothing; fix #6 skips it BEFORE the binding is read, so
+#          958 stays unevidenced -> BLOCKS.
 #   #4  -> an UNKNOWN extra key is schema-invalid under additionalProperties:false;
 #          fix #4 skips it, so 959 stays unevidenced -> BLOCKS.
 mkdir -p "$tmp_root/.specify/runtime"
 {
-  printf '%s\n' '{"ts":"2026-03-27T10:00:00Z","sessionId":"s-ok","spec":"957-c9-toollog-ok","cmd":"pytest evidence admission passed","exitCode":0}'
-  printf '%s\n' '{"ts":"2026-03-27T10:00:00Z","sessionId":"s-empty","spec":"","cmd":"pytest evidence admission passed","exitCode":0}'
-  printf '%s\n' '{"ts":"2026-03-27T10:00:00Z","sessionId":"s-forged","spec":"959-c9-forged-key","cmd":"pytest evidence admission passed","exitCode":0,"forgedExtraKey":"tampered"}'
+  printf '%s\n' "{\"schemaVersion\":3,\"ts\":\"2026-03-27T10:00:00Z\",\"sessionId\":\"s-ok\",\"spec\":\"957-c9-toollog-ok\",\"cmd\":\"pytest tests/evidence/admission.spec\",\"exitCode\":0,${TOOLLOG_BINDING}}"
+  printf '%s\n' "{\"schemaVersion\":3,\"ts\":\"2026-03-27T10:00:00Z\",\"sessionId\":\"s-empty\",\"spec\":\"\",\"cmd\":\"pytest tests/evidence/admission.spec\",\"exitCode\":0,${TOOLLOG_BINDING}}"
+  printf '%s\n' "{\"schemaVersion\":3,\"ts\":\"2026-03-27T10:00:00Z\",\"sessionId\":\"s-forged\",\"spec\":\"959-c9-forged-key\",\"cmd\":\"pytest tests/evidence/admission.spec\",\"exitCode\":0,\"forgedExtraKey\":\"tampered\",${TOOLLOG_BINDING}}"
 } >"$tmp_root/.specify/runtime/tool-calls.jsonl"
 
 # -----------------------------------------------------------------------------

@@ -25,12 +25,17 @@
 #   - Every record carries a `sourceClass`. `report` counts product records only,
 #     so a fixture run cannot be mistaken for evidence about a shipped gate
 #     (IMP-042 SCOPE-17).
+#   - Every gate record carries `fired` and `prevented` as SEPARATE facts
+#     (IMP-047 S-A). `fired` says the gate was actually evaluated; `prevented`
+#     says its refusal blocked a transition that would otherwise have proceeded.
+#     A gate that fires and permits is not the same as a gate that never fired,
+#     and only PREVENTION is a valid basis for retirement.
 #
 # Usage:
 #   bash bubbles/scripts/gate-hit-log.sh append \
 #     --repo-root <path> --spec <path> --mode <mode> --target-status <status> \
 #     --verdict <PASS|FAIL> --exit-status <n> \
-#     [--passed "G001 G002"] [--failed "G003"]
+#     [--passed "G001 G002"] [--failed "G003"] [--not-evaluated "G004"]
 #
 #   bash bubbles/scripts/gate-hit-log.sh report [--repo-root <path>] [--json] \
 #     [--class product|fixture|selftest|migration] [--all-classes]
@@ -85,10 +90,14 @@ bubbles_gate_hit_usage() {
 usage: gate-hit-log.sh append --repo-root R --spec S --mode M --target-status T
                               --verdict V --exit-status N
                               [--passed "G001 G002"] [--failed "G003"]
+                              [--not-evaluated "G004"]
        gate-hit-log.sh report [--repo-root R] [--json] [--class C] [--all-classes]
 
 append  records one JSONL line per gate id. Never fails the caller.
-report  aggregates the log: hits, passes, fails and last-seen per gate.
+        --passed        gates a check evaluated and permitted (fired)
+        --failed        gates a check evaluated and refused (fired)
+        --not-evaluated gates credited without being evaluated (did NOT fire)
+report  aggregates the log: fired, prevented and last-seen per gate.
         Counts sourceClass=product only, so fixture and selftest runs cannot
         be mistaken for evidence that a gate is load-bearing in a product.
         --class C     count class C instead (product|fixture|selftest|migration)
@@ -120,7 +129,7 @@ bubbles_gate_hit_append() {
   [[ "${BUBBLES_GATE_HIT_LOG:-on}" == "off" ]] && return 0
 
   local repo_root="" spec="" mode="" target_status="" verdict="" exit_status=""
-  local passed="" failed="" parent_expanded=""
+  local passed="" failed="" not_evaluated="" parent_expanded=""
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --repo-root) shift; repo_root="${1:-}" ;;
@@ -131,6 +140,7 @@ bubbles_gate_hit_append() {
       --exit-status) shift; exit_status="${1:-}" ;;
       --passed) shift; passed="${1:-}" ;;
       --failed) shift; failed="${1:-}" ;;
+      --not-evaluated) shift; not_evaluated="${1:-}" ;;
       --parent-expanded) shift; parent_expanded="${1:-}" ;;
       *) return 0 ;;
     esac
@@ -169,13 +179,40 @@ bubbles_gate_hit_append() {
   local source_class
   source_class="$(bubbles_gate_hit_source_class "$repo_root")"
 
-  local gate outcome group
-  for group in "pass:$passed" "fail:$failed"; do
+  # IMP-047 S-A. Firing and prevention are separate facts.
+  #
+  # `fired` answers "was this gate actually evaluated on this run?". The caller
+  # supplies the answer because only the caller knows: state-transition-guard.sh
+  # blanket-credits every REQUIRED gate id on a PASS verdict, so a `pass` record
+  # alone never proved a check ran. Gates credited that way arrive on
+  # --not-evaluated and are recorded as fired:false, which is what makes "fired
+  # and permitted" distinguishable from "never fired" instead of both being an
+  # indistinguishable `pass`.
+  #
+  # `prevented` answers "did this gate's refusal stop a transition that would
+  # otherwise have proceeded?". It is DERIVED, never asked for, from two facts
+  # already on the record: the gate itself refused, and the run did not proceed.
+  # A gate that refused while the guard still exited 0 fired without preventing
+  # anything, and recording it as a prevention would manufacture the exact
+  # retirement evidence this store exists to make honest.
+  local run_blocked="false"
+  if [[ -n "$exit_status" && "$exit_status" != "0" ]]; then
+    run_blocked="true"
+  fi
+
+  local gate outcome group fired prevented
+  for group in "pass:$passed" "fail:$failed" "not-evaluated:$not_evaluated"; do
     outcome="${group%%:*}"
+    case "$outcome" in
+      fail) fired="true"; prevented="$run_blocked" ;;
+      not-evaluated) fired="false"; prevented="false" ;;
+      *) fired="true"; prevented="false" ;;
+    esac
     for gate in ${group#*:}; do
       [[ "$gate" =~ ^G[0-9][0-9][0-9]$ ]] || continue
-      printf '{"schemaVersion":"%s","kind":"gate","ts":"%s","sourceClass":"%s","gate":"%s","outcome":"%s","spec":"%s","mode":"%s","targetStatus":"%s","guardVerdict":"%s","exitStatus":"%s"}\n' \
+      printf '{"schemaVersion":"%s","kind":"gate","ts":"%s","sourceClass":"%s","gate":"%s","outcome":"%s","fired":%s,"prevented":%s,"spec":"%s","mode":"%s","targetStatus":"%s","guardVerdict":"%s","exitStatus":"%s"}\n' \
         "$GATE_HIT_SCHEMA_VERSION" "$ts" "$source_class" "$gate" "$outcome" \
+        "$fired" "$prevented" \
         "$(bubbles_gate_hit_json_escape "$spec")" "$(bubbles_gate_hit_json_escape "$mode")" \
         "$(bubbles_gate_hit_json_escape "$target_status")" "$(bubbles_gate_hit_json_escape "$verdict")" \
         "$(bubbles_gate_hit_json_escape "$exit_status")" >>"$log_file" 2>/dev/null || return 0
@@ -223,7 +260,7 @@ bubbles_gate_hit_report() {
 
   awk -v as_json="$as_json" -v schema="$GATE_HIT_SCHEMA_VERSION" -v want_class="$class_filter" '
     {
-      gate=""; outcome=""; ts=""; sclass="";
+      gate=""; outcome=""; ts=""; sclass=""; firedf=""; preventedf=""; estatus="";
       if (match($0, /"sourceClass":"[^"]*"/)) { sclass = substr($0, RSTART+15, RLENGTH-16) }
       # Records written before source classing carry no field. Treat them as
       # product, which is what they were, rather than dropping history.
@@ -232,21 +269,42 @@ bubbles_gate_hit_report() {
       if (match($0, /"gate":"[^"]*"/))    { gate    = substr($0, RSTART+8,  RLENGTH-9) }
       if (match($0, /"outcome":"[^"]*"/)) { outcome = substr($0, RSTART+11, RLENGTH-12) }
       if (match($0, /"ts":"[^"]*"/))      { ts      = substr($0, RSTART+6,  RLENGTH-7) }
+      if (match($0, /"exitStatus":"[^"]*"/)) { estatus = substr($0, RSTART+14, RLENGTH-15) }
+      if (match($0, /"fired":(true|false)/))     { firedf     = substr($0, RSTART+8,  RLENGTH-8) }
+      if (match($0, /"prevented":(true|false)/)) { preventedf = substr($0, RSTART+12, RLENGTH-12) }
       if (match($0, /"parentExpanded":[0-9]+/)) { pe = substr($0, RSTART+17, RLENGTH-17); runs++; pe_total += pe; if (pe+0 > 0) runs_expanded++ }
       if (gate == "") next
+
+      # IMP-047 S-A backward compatibility. Records written before firing and
+      # prevention were separate facts carry neither field. They are NOT dropped
+      # and NOT re-labelled: the two values are derived from what the old record
+      # does carry -- a pass/fail record meant the gate was recorded on that run,
+      # and a refusal only stopped the run when the run itself did not proceed --
+      # and the derivation is counted so the report can say how much of its
+      # evidence is legacy rather than directly observed.
+      if (firedf == "") {
+        legacy[gate]++
+        legacy_total++
+        firedf = "true"
+        preventedf = (outcome == "fail" && estatus != "" && estatus != "0") ? "true" : "false"
+      }
+
       hits[gate]++
-      if (outcome == "fail") fails[gate]++; else passes[gate]++
+      if (outcome == "fail") fails[gate]++
+      else if (outcome == "pass") passes[gate]++
+      if (firedf == "true") fired[gate]++; else notfired[gate]++
+      if (preventedf == "true") prevented[gate]++
       if (ts > last[gate]) last[gate] = ts
       total++
     }
     END {
       if (as_json == "true") {
-        printf "{\"schemaVersion\":\"%s\",\"logPresent\":true,\"sourceClass\":\"%s\",\"excludedRecords\":%d,\"totalRecords\":%d,\"gates\":[", schema, (want_class == "" ? "all" : want_class), excluded+0, total+0
+        printf "{\"schemaVersion\":\"%s\",\"logPresent\":true,\"sourceClass\":\"%s\",\"excludedRecords\":%d,\"totalRecords\":%d,\"legacyDerivedRecords\":%d,\"gates\":[", schema, (want_class == "" ? "all" : want_class), excluded+0, total+0, legacy_total+0
         first=1
         for (g in hits) {
           if (!first) printf ","
           first=0
-          printf "{\"gate\":\"%s\",\"hits\":%d,\"passes\":%d,\"fails\":%d,\"lastSeen\":\"%s\"}", g, hits[g], passes[g]+0, fails[g]+0, last[g]
+          printf "{\"gate\":\"%s\",\"hits\":%d,\"passes\":%d,\"fails\":%d,\"fired\":%d,\"notFired\":%d,\"prevented\":%d,\"legacyDerived\":%d,\"lastSeen\":\"%s\"}", g, hits[g], passes[g]+0, fails[g]+0, fired[g]+0, notfired[g]+0, prevented[g]+0, legacy[g]+0, last[g]
         }
         printf "]}\n"
       } else {
@@ -254,20 +312,34 @@ bubbles_gate_hit_report() {
         if (excluded+0 > 0) {
           printf "  %d record(s) excluded as non-%s. Re-run with --all-classes to include them.\n", excluded+0, want_class
         }
-        printf "  %-8s %8s %8s %8s  %s\n", "gate", "hits", "passes", "fails", "lastSeen"
+        printf "  %-8s %8s %8s %8s %10s  %s\n", "gate", "records", "fired", "notFired", "prevented", "lastSeen"
         n=0
         for (g in hits) { n++; order[n]=g }
         for (i=1; i<n; i++) for (j=1; j<=n-i; j++) if (order[j] > order[j+1]) { t=order[j]; order[j]=order[j+1]; order[j+1]=t }
-        never=0
+        fired_never_prevented=0
+        never_fired=0
+        ever_prevented=0
         for (i=1; i<=n; i++) {
           g=order[i]
-          printf "  %-8s %8d %8d %8d  %s\n", g, hits[g], passes[g]+0, fails[g]+0, last[g]
-          if (fails[g]+0 == 0) never++
+          printf "  %-8s %8d %8d %8d %10d  %s\n", g, hits[g], fired[g]+0, notfired[g]+0, prevented[g]+0, last[g]
+          if (prevented[g]+0 > 0) ever_prevented++
+          else if (fired[g]+0 > 0) fired_never_prevented++
+          if (fired[g]+0 == 0) never_fired++
         }
         printf "  ---\n"
-        printf "  gates observed: %d\n", n
-        printf "  gates that have NEVER rejected anything: %d\n", never
-        printf "  A gate with zero rejections is a retirement CANDIDATE, not a decision.\n"
+        printf "  gates with any record: %d\n", n
+        printf "  gates that PREVENTED at least once: %d\n", ever_prevented
+        printf "  gates that FIRED but never prevented: %d\n", fired_never_prevented
+        printf "  gates recorded only as credited-without-evaluation (NEVER FIRED): %d\n", never_fired
+        printf "  Prevention is the only valid basis for retirement. A gate that never\n"
+        printf "  FIRED has not been exercised, which is not evidence of uselessness; a\n"
+        printf "  gate that fired and never prevented is a retirement CANDIDATE, not a\n"
+        printf "  decision.\n"
+        if (legacy_total+0 > 0) {
+          printf "  ---\n"
+          printf "  %d record(s) predate the fired/prevented fields; both values were\n", legacy_total+0
+          printf "  derived from outcome and exitStatus rather than directly observed.\n"
+        }
         if (runs+0 > 0) {
           printf "  ---\n"
           printf "  guard runs recorded: %d\n", runs+0

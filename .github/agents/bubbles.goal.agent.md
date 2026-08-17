@@ -282,8 +282,9 @@ authoritative contract. Summary:
    A release phase is NOT delivered while any `delivery=required` feature in
    `docs/releases/<phase>/features.md` is unspecced, non-terminal, blocked, or
    implement-self-certified (Gate **G101**). This is the mechanical teeth behind a "phase
-   delivered" claim — promised required features must each map to a terminal, validate-certified
-   spec, not merely that the nodes the orchestrator chose to create all passed.
+   delivered" claim — promised required features must each map to a delivery-capable terminal,
+   validate-certified spec. Reaching the ceiling of a planning, docs, or review mode is
+   terminal FOR THAT MODE and is NOT delivery.
 
 Hard rules (mechanically enforced): no fan-out mode as a node, exactly one of mode/agent per
 node, action nodes fully gated, per-repo certification only, no cross-repo `state.json`

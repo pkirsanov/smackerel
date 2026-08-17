@@ -236,7 +236,7 @@ schema_contract_tests() {
     | $contract.type == "object"
       and $contract.required == ["profile", "target"]
       and $contract.additionalProperties == false
-      and (($contract.properties.profile.enum | sort) == (["delivery-completion-fast-v1", "delivery-completion-v1", "planning-maturity-v1"] | sort))
+      and (($contract.properties.profile.enum | sort) == (["delivery-completion-fast-v1", "delivery-completion-v1", "framework-proposal-v1", "planning-maturity-v1"] | sort))
       and $contract.properties.target.const == "statusCeiling"
   ' "$SCHEMA" >/dev/null 2>&1; then
     pass "transitionAudit schema is closed to the designed profile and target fields"
@@ -386,6 +386,53 @@ rapid_missing_test_feature="$WORKSPACE/specs/019-rapid-missing-test"
 write_feature "$rapid_missing_test_feature" rapid-tool-delivery
 assert_failure "fast profile missing test phase" 72 E009-AUDIT-PROFILE-CONTRADICTION \
   bash "$fast_missing_test_framework/scripts/transition-contract-resolver.sh" "$rapid_missing_test_feature"
+
+# --- IMP-047 PD-11: the framework-proposal audit contract -------------------
+#
+# framework-health declares an `audit` phase over a ceiling BELOW `done`, so it
+# fell through every branch above and refused with E009-AUDIT-PROFILE-UNSUPPORTED
+# — the mode could not audit itself, which made S-A unrunnable. Three cases hold
+# the repair: the RED shape (no declared contract still refuses), the GREEN shape
+# (the declared contract resolves), and an adversarial invariant case proving the
+# new profile is not a rubber stamp.
+framework_health_feature="$WORKSPACE/specs/020-framework-health"
+write_feature "$framework_health_feature" framework-health framework_proposal_written
+
+# RED: strip the declared contract and the resolver must still refuse. This case
+# fails if the profile is ever made a silent default for this ceiling.
+fh_undeclared_root="$WORKSPACE/framework-health-undeclared-layout"
+fh_undeclared_framework="$(copy_framework_layout installed "$fh_undeclared_root")"
+yq -i 'del(.modes["framework-health"].transitionAudit)' "$fh_undeclared_framework/workflows/modes.yaml"
+assert_failure "framework-health without a declared contract" 71 E009-AUDIT-PROFILE-UNSUPPORTED \
+  bash "$fh_undeclared_framework/scripts/transition-contract-resolver.sh" "$framework_health_feature"
+
+# GREEN: the declared contract resolves against the shipped registry.
+framework_health_contract="$WORKSPACE/framework-health-contract.json"
+if bash "$RESOLVER" "$framework_health_feature" > "$framework_health_contract"; then
+  pass "framework-health resolves through the declared framework proposal profile"
+else
+  fail_test "framework-health resolves through the declared framework proposal profile"
+fi
+assert_json "$framework_health_contract" '.workflowMode == "framework-health" and .auditProfile == "framework-proposal-v1" and .statusCeiling == "framework_proposal_written" and .targetStatus == "framework_proposal_written"' "framework proposal contract derives its no-certification target from the registry"
+assert_json "$framework_health_contract" '.sourceEditLockoutRequired == true' "framework proposal contract keeps the G073 source-edit lockout"
+
+# ADVERSARIAL: the new profile must still refuse a mode that implements. Give
+# framework-health an `implement` phase and the invariant check must fire; this
+# case passes only because the profile carries real invariants.
+fh_implements_root="$WORKSPACE/framework-health-implements-layout"
+fh_implements_framework="$(copy_framework_layout installed "$fh_implements_root")"
+yq -i '.modes["framework-health"].phaseOrder = ["select", "implement", "audit", "docs", "finalize"]' "$fh_implements_framework/workflows/modes.yaml"
+assert_failure "framework proposal profile over an implementing mode" 72 E009-AUDIT-PROFILE-CONTRADICTION \
+  bash "$fh_implements_framework/scripts/transition-contract-resolver.sh" "$framework_health_feature"
+
+# ADVERSARIAL: the profile must refuse a mode permitted to auto-mutate the
+# framework. Without this, the contract would certify exactly the behavior
+# framework-health exists to forbid.
+fh_mutates_root="$WORKSPACE/framework-health-mutates-layout"
+fh_mutates_framework="$(copy_framework_layout installed "$fh_mutates_root")"
+yq -i '.modes["framework-health"].constraints.forbidFrameworkAutoMutation = false' "$fh_mutates_framework/workflows/modes.yaml"
+assert_failure "framework proposal profile over an auto-mutating mode" 72 E009-AUDIT-PROFILE-CONTRADICTION \
+  bash "$fh_mutates_framework/scripts/transition-contract-resolver.sh" "$framework_health_feature"
 
 expected_planning_mode="$WORKSPACE/product-to-planning.resolved.yaml"
 bash "$MODE_RESOLVER" --grandfather product-to-planning > "$expected_planning_mode" 2> "$WORKSPACE/product-to-planning.resolved.err"
@@ -597,7 +644,7 @@ assert_failure "planning profile on delivery mode" 72 E009-AUDIT-PROFILE-CONTRAD
 
 missing_delivery=0
 planning_bindings=0
-adjacent_bound=0
+adjacent_declared=""
 adjacent_unbound=0
 delivery_compatibility_exceptions=""
 while IFS= read -r mode_name; do
@@ -623,7 +670,7 @@ while IFS= read -r mode_name; do
   if [[ "$ceiling" != "done" && "$has_audit" == "true" \
     && "$mode_name" != "product-to-planning" && "$mode_name" != "spec-scope-hardening" ]]; then
     if [[ -n "$profile" ]]; then
-      adjacent_bound=$((adjacent_bound + 1))
+      adjacent_declared="${adjacent_declared}${adjacent_declared:+,}$mode_name:$profile"
     else
       adjacent_unbound=$((adjacent_unbound + 1))
     fi
@@ -631,8 +678,13 @@ while IFS= read -r mode_name; do
 done < <(bash "$MODE_RESOLVER" --list-modes)
 assert_equal 0 "$missing_delivery" "every audit-bearing done mode has an explicit delivery binding"
 assert_equal 2 "$planning_bindings" "exactly the two designed planning modes have planning bindings"
-assert_equal 0 "$adjacent_bound" "adjacent non-done audit modes receive no inferred profile"
-assert_equal 22 "$adjacent_unbound" "all 22 adjacent non-done audit modes remain explicitly unsupported"
+# IMP-047 PD-11. A non-done audit mode may carry a contract only when it DECLARES
+# one, and today exactly one does. Asserting the whole declared SET (not a count)
+# keeps the original invariant intact: any other adjacent mode acquiring a
+# profile, or framework-health acquiring a delivery profile, fails here.
+adjacent_declared="$(printf '%s\n' "$adjacent_declared" | tr ',' '\n' | grep -v '^$' | LC_ALL=C sort | paste -sd ',' -)"
+assert_equal "framework-health:framework-proposal-v1" "$adjacent_declared" "the only adjacent non-done audit contract is the declared framework proposal profile"
+assert_equal 21 "$adjacent_unbound" "all 21 undeclared adjacent non-done audit modes remain explicitly unsupported"
 delivery_compatibility_exceptions="$(printf '%s\n' "$delivery_compatibility_exceptions" | tr ',' '\n' | LC_ALL=C sort | paste -sd ',' -)"
 assert_equal "chaos-to-doc,devops-to-doc,redteam-to-doc,retro-to-simplify,simplify-to-doc,test-to-doc" \
   "$delivery_compatibility_exceptions" \
@@ -642,6 +694,7 @@ matrix_feature="$WORKSPACE/specs/020-mode-matrix"
 write_feature "$matrix_feature" bugfix-fastlane
 delivery_matrix_count=0
 adjacent_matrix_count=0
+adjacent_declared_matrix_count=0
 while IFS= read -r mode_name; do
   resolved_mode_file="$WORKSPACE/matrix-$mode_name.yaml"
   bash "$MODE_RESOLVER" --grandfather "$mode_name" > "$resolved_mode_file" 2> "$WORKSPACE/matrix-$mode_name.err"
@@ -663,6 +716,20 @@ while IFS= read -r mode_name; do
   elif [[ "$ceiling" != "done" && "$has_audit" == "true" \
     && "$mode_name" != "product-to-planning" && "$mode_name" != "spec-scope-hardening" ]]; then
     set_state_mode "$matrix_feature" "$mode_name"
+    if [[ -n "$profile" ]]; then
+      # A DECLARED adjacent contract must resolve, not refuse. The state fixture
+      # carries `in_progress`, which every ceiling accepts.
+      matrix_output="$WORKSPACE/matrix-$mode_name.json"
+      if bash "$RESOLVER" "$matrix_feature" > "$matrix_output" \
+        && jq -e --arg mode "$mode_name" --arg profile "$profile" \
+          '.workflowMode == $mode and .auditProfile == $profile and .targetStatus != "done"' \
+          "$matrix_output" >/dev/null 2>&1; then
+        adjacent_declared_matrix_count=$((adjacent_declared_matrix_count + 1))
+      else
+        fail_test "declared adjacent mode $mode_name resolves its no-certification contract"
+      fi
+      continue
+    fi
     matrix_stdout="$WORKSPACE/matrix-$mode_name.stdout"
     matrix_stderr="$WORKSPACE/matrix-$mode_name.stderr"
     set +e
@@ -678,7 +745,8 @@ while IFS= read -r mode_name; do
   fi
 done < <(bash "$MODE_RESOLVER" --list-modes)
 assert_equal 27 "$delivery_matrix_count" "all 27 audit-bearing done modes resolve through explicit delivery contracts"
-assert_equal 22 "$adjacent_matrix_count" "all 22 adjacent non-done audit modes fail unsupported through the real resolver"
+assert_equal 21 "$adjacent_matrix_count" "all 21 undeclared adjacent non-done audit modes fail unsupported through the real resolver"
+assert_equal 1 "$adjacent_declared_matrix_count" "the one declared adjacent contract resolves through the real resolver"
 
 printf '%s\n' '== transition contract resolver selftest summary =='
 printf 'passes=%s\nfailures=%s\nskips=%s\n' "$PASS_COUNT" "$FAIL_COUNT" "$SKIP_COUNT"

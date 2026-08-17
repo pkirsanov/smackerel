@@ -8,7 +8,7 @@
 #   - --write applies the rewrites byte-correctly
 #   - --write is idempotent (second run is no-op)
 #   - DISCOVERY SCOPE evidence lines remain byte-identical while adjacent executable references migrate
-#   - default scope excludes framework internals (bubbles/scripts/*, agents/, skills/)
+#   - default scope excludes report.md evidence and framework internals (bubbles/scripts/*, agents/, skills/)
 #   - real install.sh dry-run produces the expected v5 -> v6 rewrites
 #
 # Fixtures live under $HOME/.cache/bubbles-migrate-modes-selftest/.
@@ -204,9 +204,9 @@ else
   bad "T3.5 adversary -> second --write changed the fixture or reported pending rewrites: $second_out"
 fi
 
-# ── Assertion 6: default scope excludes framework internals ──────
+# ── Assertion 6: default scope excludes evidence and framework internals ──
 fix6="$FIXTURE_ROOT/fixture-default-scope"
-mkdir -p "$fix6/bubbles/scripts" "$fix6/agents" "$fix6/skills/some-skill" "$fix6/docs"
+mkdir -p "$fix6/bubbles/scripts" "$fix6/agents" "$fix6/skills/some-skill" "$fix6/docs" "$fix6/evidence"
 cat > "$fix6/bubbles/scripts/internal.sh" <<'EOF'
 #!/usr/bin/env bash
 echo "Test fixture: /bubbles.workflow full-delivery"
@@ -220,19 +220,37 @@ EOF
 cat > "$fix6/docs/operator-guide.md" <<'EOF'
 Operators run /bubbles.workflow full-delivery to ship.
 EOF
+cat > "$fix6/evidence/report.md" <<'EOF'
+D4_FAST_WRONG_KNOWN_MODE status=delivered_fast mode=full-delivery expected_rc=1 actual_rc=1
+EOF
 # Add a minimal .git to look like a repo root
 mkdir -p "$fix6/.git"
 echo 'ref: refs/heads/main' > "$fix6/.git/HEAD"
 
+report_before_hash=$(sha256sum "$fix6/evidence/report.md" | awk '{print $1}')
+
 if out=$(BUBBLES_REPO_ROOT="$fix6" bash "$SCRIPT" --check --aliases-file "$ALIASES_FIXTURE" 2>&1); then
   bad "default-scope dry-run exited 0 (expected 2 — operator-guide.md needs rewriting)"
 else
-  if grep -qF 'docs/operator-guide.md' <<< "$out" && ! grep -qF 'bubbles/scripts/internal.sh' <<< "$out" && ! grep -qF 'agents/some.agent.md' <<< "$out" && ! grep -qF 'skills/some-skill/SKILL.md' <<< "$out"; then
-    pass "default scope picks up docs/operator-guide.md but excludes bubbles/scripts/, agents/, skills/"
+  if grep -qF 'docs/operator-guide.md' <<< "$out" && ! grep -qF 'evidence/report.md' <<< "$out" && ! grep -qF 'bubbles/scripts/internal.sh' <<< "$out" && ! grep -qF 'agents/some.agent.md' <<< "$out" && ! grep -qF 'skills/some-skill/SKILL.md' <<< "$out"; then
+    pass "default scope picks up docs/operator-guide.md but excludes report.md, bubbles/scripts/, agents/, skills/"
   else
     bad "default scope did not behave as expected. Output:"
     echo "$out"
   fi
+fi
+
+if BUBBLES_REPO_ROOT="$fix6" bash "$SCRIPT" --write --aliases-file "$ALIASES_FIXTURE" >/dev/null 2>&1; then
+  report_after_hash=$(sha256sum "$fix6/evidence/report.md" | awk '{print $1}')
+  if [[ "$report_before_hash" == "$report_after_hash" ]] \
+    && grep -qF 'D4_FAST_WRONG_KNOWN_MODE status=delivered_fast mode=full-delivery expected_rc=1 actual_rc=1' "$fix6/evidence/report.md" \
+    && grep -qF '/bubbles.workflow implement action:full-delivery target:spec' "$fix6/docs/operator-guide.md"; then
+    pass "default scope preserves report.md evidence while rewriting the adjacent operator guide"
+  else
+    bad "default scope changed report.md evidence or failed to rewrite the adjacent operator guide"
+  fi
+else
+  bad "default-scope --write exited non-zero"
 fi
 
 # ── Assertion 7: real repo operator surfaces are fully migrated to v6 (v7) ──

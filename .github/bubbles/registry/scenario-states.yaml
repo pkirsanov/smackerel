@@ -1,0 +1,243 @@
+# Scenario State Authority (IMP-047 S-C)
+#
+# WHY THIS EXISTS
+# A scope is done when its named scenario went RED then GREEN on the same test.
+# It is not done when its checkboxes are full. Checkbox counting answers "did
+# somebody tick a box", which is a question about bookkeeping; RED-to-GREEN on
+# one scenario answers "did the behavior change", which is the question the
+# framework actually cares about.
+#
+# THE SINGLE MOST IMPORTANT RULE IN THIS FILE
+# Every state below is DERIVED FROM RECEIPTS AND NEVER DECLARED. No state is
+# written by a human or an agent into `scenario-manifest.json`. This applies to
+# ALL EIGHT states with no exception.
+#
+# The rule is stated this plainly because the failure mode is severe. Eight
+# states, per scenario, per scope, per spec, hand-maintained and drifting, is
+# strictly WORSE than the checkbox accounting it replaces. The outcome model is
+# a reduction only if the states are computed. A hand-written state is therefore
+# not a shortcut to be tolerated — it is refused, by name, with a failure code.
+#
+# READERS
+#   bubbles/scripts/scenario-state-resolve.sh   derives the states
+#   bubbles/scripts/phase-coordinator.sh        consumes them for routing
+#   bubbles/scripts/state-transition-guard.sh   consumes them for certification
+#
+# This registry is the ONLY authority. The readers READ it; they do not restate
+# it, because a second copy is a second answer.
+
+schemaVersion: scenario-states/v1
+
+# The state vocabulary is CLOSED and ORDERED. `rank` is the position in the
+# progression; a state is reachable only when every lower-ranked APPLICABLE
+# state holds. There are no synonyms and no ninth state.
+states:
+
+  - id: PLANNED
+    rank: 0
+    requiredFact: >-
+      A stable scenario ID, its traits, its obligations, its implementation refs
+      and its test plan exist.
+    derivedFrom: manifest-shape
+    owningProof: Planning artifacts only. This state carries NO execution claim.
+    note: >-
+      The only state derivable without a receipt, because it asserts nothing
+      about execution. Planning MAY define the RED discriminator here. Planning
+      MUST NOT claim RED_VERIFIED.
+
+  - id: RED_VERIFIED
+    rank: 1
+    requiredFact: >-
+      The planned discriminator executed BEFORE implementation and failed for
+      the expected behavior.
+    derivedFrom: receipt
+    receiptPhase: red
+    requiredOutcome: nonzero-exit
+    owningProof: >-
+      A receipt bound to scenario, test identity, negative control and source
+      revision.
+
+  - id: IMPLEMENTED
+    rank: 2
+    requiredFact: >-
+      Production or contract surfaces changed within the declared boundary.
+    derivedFrom: receipt
+    receiptPhase: implement
+    requiredOutcome: any
+    owningProof: Git-backed implementation refs plus a change receipt.
+
+  - id: GREEN_TARGETED
+    rank: 3
+    requiredFact: >-
+      The SAME scenario and the SAME negative control now pass through the
+      targeted path.
+    derivedFrom: receipt
+    receiptPhase: green
+    requiredOutcome: zero-exit
+    owningProof: A same-scenario receipt recorded after implementation.
+
+  - id: GREEN_LIVE
+    rank: 4
+    requiredFact: >-
+      The applicable current production route or boundary proves the outcome.
+    derivedFrom: receipt
+    receiptPhase: live
+    requiredOutcome: zero-exit
+    applicability: trait-derived
+    owningProof: >-
+      Playwright, a real API call, a state round trip, a provider boundary, or
+      an equivalent live proof.
+
+  - id: REGRESSION_GREEN
+    rank: 5
+    requiredFact: >-
+      Affected scenarios and the required broader regression remain green.
+    derivedFrom: receipt
+    receiptPhase: regression
+    requiredOutcome: zero-exit
+    owningProof: The affected plan plus regression receipts.
+
+  - id: OBSERVED
+    rank: 6
+    requiredFact: >-
+      The applicable trace, SLO or metric contract is met for the SAME execution
+      window.
+    derivedFrom: receipt
+    receiptPhase: observed
+    requiredOutcome: zero-exit
+    applicability: trait-derived
+    owningProof: A receipt-bound telemetry artifact.
+
+  - id: CERTIFIED
+    rank: 7
+    requiredFact: >-
+      All required scenario states, scopes, specialists, debt and certification
+      predicates hold.
+    derivedFrom: validate-transition
+    owningProof: Validate-owned transition evidence.
+    note: >-
+      The resolver NEVER emits CERTIFIED. It emits `certifiable: true|false` and
+      names what is missing. Certification is validate-owned, and a resolver that
+      could certify would be a second certifying authority.
+
+# Not a state in the progression — a state a scenario is PUT IN when a
+# prerequisite failed. It exists so that "we did not run this" is distinguishable
+# from "this passed" and from "this failed". Silence is the ambiguity that made
+# a skipped check look like a clean one.
+blockedState:
+  id: BLOCKED_NOT_RUN
+  meaning: >-
+    A prerequisite in the dependency graph failed, so this scenario or check was
+    never executed. It is NOT a pass and NOT a failure.
+  rule: >-
+    Dependents of a failed prerequisite are marked BLOCKED_NOT_RUN. Checks that
+    are INDEPENDENT of the failure still execute, because a single failed
+    prerequisite must not silently delete unrelated diagnostics.
+
+# What a receipt must BIND for it to advance a state. A receipt that omits any
+# required field is not weaker evidence — it is NOT evidence for that state, and
+# the resolver says which field is missing.
+receiptBinding:
+  carrier: .specify/runtime/tool-calls.jsonl
+  block: scenarioBinding
+  requiredFields:
+    - id: scenarioId
+      requirement: The stable SCN-* id this receipt is evidence for.
+    - id: phase
+      requirement: One of the receiptPhase values declared above.
+    - id: testIdentity
+      requirement: >-
+        The identity of the test that ran. RED and GREEN must cite the SAME
+        value; substituting the test is a different claim, not a repaired one.
+    - id: sourceRevision
+      requirement: >-
+        The source revision the receipt was recorded against. Drift invalidates
+        the receipt, because a receipt proves what the tree was, not what it is.
+    - id: negativeControl
+      requirement: >-
+        The perturbation that makes this test fail. RED and GREEN must cite the
+        SAME control. A test with no stated control has not been shown to be
+        sensitive to the behavior it claims to prove.
+  conditionalFields:
+    - id: implementationRefs
+      requiredForPhase: [implement]
+      requirement: >-
+        The production paths the change touched. A CHANGED implementation ref
+        marks every scenario governing it AFFECTED, which is what makes targeted
+        revalidation possible instead of full re-certification.
+    - id: claim
+      requiredForPhase: [red, green, regression, live, observed]
+      requirement: >-
+        The claim this receipt substantiates, in the words of the DoD item or
+        scenario it is offered for. This is what replaces token overlap in the
+        Check 9 admission path.
+
+# Keys that MUST NOT appear on a scenario in scenario-manifest.json. Each one is
+# a way of writing a state by hand. `lockdown.state` is deliberately ABSENT from
+# this list: it is a pre-existing approval flag with its own semantics, not a
+# position in this progression.
+forbiddenDeclaredKeys:
+  - state
+  - scenarioState
+  - derivedState
+  - stateHistory
+  - currentState
+  - redVerified
+  - greenTargeted
+  - certified
+
+# Closed failure enum. Each code maps to exactly one refusal message in
+# scenario-state-resolve.sh so a caller can grep the code rather than the prose.
+failureCodes:
+  - id: SCS-DECLARED-STATE
+    meaning: A scenario carries a hand-written state key. Every state is derived.
+  - id: SCS-CROSS-SCENARIO
+    meaning: A GREEN receipt cites a different scenario than its RED.
+  - id: SCS-TEST-SUBSTITUTED
+    meaning: A GREEN receipt cites a different test identity than its RED.
+  - id: SCS-CONTROL-SUBSTITUTED
+    meaning: A GREEN receipt cites a different negative control than its RED.
+  - id: SCS-REVISION-DRIFT
+    meaning: A receipt's source revision does not match the resolved source revision.
+  - id: SCS-NO-NEGATIVE-CONTROL
+    meaning: A receipt carries no negative control, so it proves nothing about sensitivity.
+  - id: SCS-GREEN-WITHOUT-RED
+    meaning: A GREEN receipt exists with no prior expected-behavioral RED for that scenario.
+  - id: SCS-RED-NOT-FAILING
+    meaning: A receipt claims the RED phase but exited zero, so nothing was discriminated.
+  - id: SCS-IMPL-REF-CHANGED
+    meaning: An implementation ref changed, so the scenario is AFFECTED and its GREEN is stale.
+  - id: SCS-MISSING-BINDING
+    meaning: A receipt names a scenario phase but omits a required binding field.
+
+# Implementation may not start without a receipt-bound RED. This is the ordering
+# rule the whole model rests on: without it, "the test passes" is compatible with
+# "the test always passed", and a test that always passed proves nothing about
+# the change.
+orderingRules:
+  - id: no-implementation-without-red
+    rule: >-
+      IMPLEMENTED is not derivable for a scenario with no RED_VERIFIED receipt.
+      The resolver reports the scenario as blocked on RED rather than advancing.
+  - id: same-scenario-same-control
+    rule: >-
+      GREEN_TARGETED requires a RED receipt and a GREEN receipt that agree on
+      scenarioId, testIdentity and negativeControl. Replacing any of the three
+      requires a planning revision and a NEW RED.
+  - id: gates-never-advance
+    rule: >-
+      A gate can REFUSE a transition. A gate can never ADVANCE a scenario state.
+      Only a receipt advances a state.
+
+# Migration and rollback. Both are conservative by construction: nothing is
+# inferred from a checked box, ever.
+migration:
+  derivePlannedFrom: manifest-shape
+  backfillLaterStatesFrom: resolvable-receipts-only
+  neverInferFrom: checked-boxes
+  rollback:
+    trigger: BUBBLES_SCENARIO_STATE_ROLLBACK=1
+    behavior: >-
+      State advancement stops, the legacy phase state is used, and ALL receipts
+      and occurrence records are preserved. Rollback loses the derivation, never
+      the evidence.

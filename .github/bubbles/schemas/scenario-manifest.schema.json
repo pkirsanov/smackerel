@@ -68,10 +68,22 @@
                 "shared-consumer",
                 "dependency-path",
                 "responsive-accessible",
-                "sla-sensitive"
+                "sla-sensitive",
+                "runtime-config",
+                "static-metadata"
               ]
             },
-            "description": "OPTIONAL (IMP-040 SCOPE-3, COV-9). The behavior traits this scenario actually has. bubbles.plan DERIVES the obligation set from these — see test-core.md 'Scenario Obligation Matrix'. Attaching every trait to every scenario is the failure mode this replaces, not a safe default: an always-identical set carries no information. Advisory and no-op unless declared; NOT part of required."
+            "description": "OPTIONAL (IMP-040 SCOPE-3, COV-9; extended IMP-047 S-D). The behavior traits this scenario actually has. bubbles.plan DERIVES the obligation set from these \u2014 see test-core.md 'Scenario Obligation Matrix' and bubbles/registry/proof-obligations.yaml, which is the authority scenario-obligation-lint.sh reads. Attaching every trait to every scenario is the failure mode this replaces, not a safe default: an always-identical set carries no information. `runtime-config` and `static-metadata` were added by IMP-047 S-D so that proportionate proof has a name and runtime configuration cannot claim a documentation exemption. Advisory and no-op unless declared; NOT part of required."
+          },
+          "liveProofNotApplicable": {
+            "type": "object",
+            "additionalProperties": true,
+            "required": ["absentTrait", "reason"],
+            "properties": {
+              "absentTrait": { "type": "string", "minLength": 1 },
+              "reason": { "type": "string", "minLength": 1 }
+            },
+            "description": "OPTIONAL (IMP-047 S-D). Declares that a live proof does not apply, by NAMING the trait the scenario does not have. An unnamed exemption is indistinguishable from an omission, and an omission is how the expensive obligation gets skipped. `absentTrait` must be a trait in bubbles/registry/proof-obligations.yaml and MUST NOT be one the scenario declares. A scenario carrying an unknown trait cannot claim any exemption \u2014 an unknown trait requires review, it never buys a discount."
           },
           "obligations": {
             "type": "array",

@@ -1,0 +1,119 @@
+# Acceptance Authority Contract (IMP-047 PD-12)
+#
+# WHY THIS EXISTS
+# `uservalidation.md` carried ONE checklist and TWO meanings. The template
+# shipped its entries CHECKED, artifact lint REQUIRED at least one checked
+# entry, and Gate G136 then read "every item checked" as terminal human
+# acceptance. Composed, those three rules say: a planning template satisfies
+# human sign-off with no human act. That is a fabrication vector, and worse, it
+# is one automation can satisfy on a human's behalf without ever intending to —
+# writing the template IS the acceptance.
+#
+# The repair is not a stricter checkbox. It is two DIFFERENT facts with two
+# DIFFERENT writers:
+#
+#   AUTOMATION READINESS — automation verified the behavior is ready to be shown
+#                          to a human. Automation writes this. It is NOT
+#                          acceptance and never becomes acceptance.
+#   HUMAN ACCEPTANCE     — a human ran the behavior and accepted it. Only a
+#                          human-owned action or an external acceptance record
+#                          establishes it.
+#
+# WHAT MECHANISM CAN AND CANNOT PROVE. No file check can prove a keystroke came
+# from a human. What it CAN do is remove every path where acceptance is the
+# DEFAULT: the template ships unchecked, lint no longer demands a checked entry,
+# and the terminal gate requires a separately authored record naming a
+# non-automation acceptor and a declared method. An agent that wants to forge
+# acceptance must now write a deliberate false record, which is a lie rather
+# than a side effect of using the template. That distinction is the whole point.
+#
+# This registry is the SINGLE authority for the three sections and the record
+# shape. `bubbles/scripts/acceptance-authority-lib.sh` reads it;
+# `artifact-lint.sh` and `guards/tail-delegated-gates.sh` (Gate G136) both
+# source that library, so the shape check and the terminal check cannot drift.
+
+schemaVersion: acceptance-authority/v1
+
+sections:
+
+  - id: automation-readiness
+    heading: "## Automation Readiness"
+    writer: automation
+    grantsAcceptance: false
+    required: false
+    note: >-
+      Automation MAY check these. They record that the delivered behavior was
+      verified far enough to be worth a human's time. A fully checked readiness
+      block satisfies no acceptance obligation whatsoever.
+
+  - id: acceptance-checklist
+    heading: "## Checklist"
+    writer: human
+    grantsAcceptance: true
+    required: true
+    shippedState: unchecked
+    note: >-
+      Ships UNCHECKED. An item is checked when a human accepts that behavior.
+      Automation MUST NOT check one; the terminal gate prints the item and stops
+      rather than checking it, because checking it would fabricate the exact
+      fact the gate exists to require.
+
+  - id: acceptance-record
+    heading: "## Human Acceptance Record"
+    writer: human
+    grantsAcceptance: true
+    required: false
+    requiredAtTerminal: true
+    note: >-
+      Required at a terminal transition. A checked box alone is no longer
+      terminal acceptance, because a checked box is exactly what a shipped
+      template used to provide for free.
+
+# Fields the acceptance record must carry. `record` is required only for the
+# `external-record` method, where the acceptance happened somewhere else and the
+# pointer IS the evidence.
+acceptanceRecord:
+  requiredFields:
+    - acceptedBy
+    - acceptedAt
+    - method
+  methods:
+    - id: human-interactive
+      description: >-
+        A human exercised the delivered behavior in a live session and accepted
+        it. `acceptedBy` names that human.
+    - id: external-record
+      description: >-
+        Acceptance was recorded outside this repository — a sign-off ticket, a
+        UAT record, a release-approval artifact. `record` points at it.
+      requiresField: record
+
+# `acceptedBy` may never be an automation identity. Every Bubbles agent id
+# begins `bubbles.`, so the pattern is exact rather than a guess at what an
+# agent might be called. Single-quoted on purpose: the reader consumes the raw
+# scalar, and a double-quoted form would require it to re-implement YAML escape
+# handling to recover one backslash.
+forbiddenAcceptedBy:
+  pattern: '^bubbles\.'
+  reason: >-
+    An agent cannot accept on a human's behalf. If an agent is the only party
+    that exercised the behavior, the correct state is that acceptance has not
+    happened yet.
+
+# Failure codes. Closed set; each maps to one refusal message in the library so
+# a reader can grep the code rather than the prose.
+failureCodes:
+  - id: PD12-NO-RECORD
+    meaning: A terminal transition claims acceptance with no Human Acceptance Record.
+  - id: PD12-RECORD-INCOMPLETE
+    meaning: The record omits a required field.
+  - id: PD12-METHOD-UNKNOWN
+    meaning: The record declares a method outside the closed vocabulary.
+  - id: PD12-METHOD-FIELD-MISSING
+    meaning: The declared method requires a field the record does not carry.
+  - id: PD12-AUTOMATION-ACCEPTOR
+    meaning: acceptedBy names an automation identity.
+  - id: PD12-UNCHECKED-ITEM
+    meaning: An acceptance checklist item is still unchecked at a terminal transition.
+  - id: PD12-READINESS-NOT-CHECKBOX
+    meaning: An Automation Readiness bullet is not checkbox syntax.

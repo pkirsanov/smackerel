@@ -55,7 +55,10 @@ else
 fi
 
 # --- P2. a coherent derived matrix passes -----------------------------------
-R="$(make_case p2 '{"schemaVersion":1,"scenarios":[{"id":"SCN-001-001","title":"t","requiredTestType":"e2e-ui","behaviorTraits":["user-visible-ui","dependency-path"],"obligations":[{"trait":"user-visible-ui","requiredProof":"visible assertion on the production route"},{"trait":"dependency-path","requiredProof":"stale-cache boundary observation"}]}]}')"
+# Each live-owing trait NAMES the test that discharges it (IMP-047 S-D). Whether
+# that test is really the category it claims is scenario-test-resolve.sh's
+# question; this lint only requires that the scenario say how the proof arrives.
+R="$(make_case p2 '{"schemaVersion":1,"scenarios":[{"id":"SCN-001-001","title":"t","requiredTestType":"e2e-ui","behaviorTraits":["user-visible-ui","dependency-path"],"obligations":[{"trait":"user-visible-ui","requiredProof":"visible assertion on the production route","satisfiedBy":["t/route.spec.ts"]},{"trait":"dependency-path","requiredProof":"stale-cache boundary observation","satisfiedBy":["t/boundary.spec.ts"]}]}]}')"
 run_lint "$R"
 if [[ "$RC" -eq 0 ]]; then
   ok "P2 a coherent two-trait matrix passes"
@@ -64,7 +67,7 @@ else
 fi
 
 # --- P3. scenarios may legitimately differ in trait count -------------------
-R="$(make_case p3 '{"schemaVersion":1,"scenarios":[{"id":"SCN-001-001","title":"a","requiredTestType":"unit","behaviorTraits":["pure-calculation"],"obligations":[{"trait":"pure-calculation","requiredProof":"assertion over transformed output"}]},{"id":"SCN-001-002","title":"b","requiredTestType":"e2e-ui","behaviorTraits":["user-visible-ui","sla-sensitive"],"obligations":[{"trait":"user-visible-ui","requiredProof":"visible assertion"},{"trait":"sla-sensitive","requiredProof":"stress assertion against the threshold"}]}]}')"
+R="$(make_case p3 '{"schemaVersion":1,"scenarios":[{"id":"SCN-001-001","title":"a","requiredTestType":"unit","behaviorTraits":["pure-calculation"],"obligations":[{"trait":"pure-calculation","requiredProof":"assertion over transformed output"}]},{"id":"SCN-001-002","title":"b","requiredTestType":"e2e-ui","behaviorTraits":["user-visible-ui"],"obligations":[{"trait":"user-visible-ui","requiredProof":"visible assertion","satisfiedBy":["t/b.spec.ts"]}]},{"id":"SCN-001-003","title":"c","requiredTestType":"stress","behaviorTraits":["sla-sensitive"],"obligations":[{"trait":"sla-sensitive","requiredProof":"stress assertion against the threshold","satisfiedBy":["t/c.stress.ts"]}]}]}')"
 run_lint "$R"
 if [[ "$RC" -eq 0 ]]; then
   ok "P3 differing per-scenario trait sets pass (derivation, not uniformity)"
@@ -100,9 +103,17 @@ else
 fi
 
 # --- A4. ADVERSARIAL: the enumeration anti-pattern --------------------------
-# The whole point of SCOPE-3: derived, not enumerated.
-ALL='"pure-calculation","user-visible-ui","api-contract","mutable-state","degraded-state","shared-consumer","dependency-path","responsive-accessible","sla-sensitive"'
-OBS='{"trait":"pure-calculation","requiredProof":"x"},{"trait":"user-visible-ui","requiredProof":"x"},{"trait":"api-contract","requiredProof":"x"},{"trait":"mutable-state","requiredProof":"x"},{"trait":"degraded-state","requiredProof":"x"},{"trait":"shared-consumer","requiredProof":"x"},{"trait":"dependency-path","requiredProof":"x"},{"trait":"responsive-accessible","requiredProof":"x"},{"trait":"sla-sensitive","requiredProof":"x"}'
+# The whole point of SCOPE-3: derived, not enumerated. The trait list is read
+# from the registry so this case cannot silently stop being "the entire
+# vocabulary" when a trait is added (IMP-047 S-D added two).
+REG_TRAITS="$(awk '/^traits:/{t=1;next} /^[a-zA-Z]/{t=0} t && /^  - id: /{sub(/^  - id: /,"");print}' "$SCRIPT_DIR/../registry/proof-obligations.yaml")"
+ALL=""
+OBS=""
+for trait in $REG_TRAITS; do
+  [[ -z "$ALL" ]] && ALL="\"$trait\"" || ALL="$ALL,\"$trait\""
+  entry="{\"trait\":\"$trait\",\"requiredProof\":\"x\",\"satisfiedBy\":[\"t/x.spec.ts\"]}"
+  [[ -z "$OBS" ]] && OBS="$entry" || OBS="$OBS,$entry"
+done
 R="$(make_case a4 "{\"schemaVersion\":1,\"scenarios\":[{\"id\":\"SCN-001-001\",\"title\":\"t\",\"requiredTestType\":\"e2e-ui\",\"behaviorTraits\":[$ALL],\"obligations\":[$OBS]}]}")"
 run_lint "$R"
 if [[ "$RC" -eq 1 ]] && printf '%s' "$OUT" | grep -q 'NOT-ENUMERATED'; then
@@ -111,17 +122,17 @@ else
   bad "A4 enumeration refused" "rc=$RC out=$(printf '%s' "$OUT" | tr '\n' '|')"
 fi
 
-# --- P4. eight of nine traits is NOT flagged --------------------------------
+# --- P4. one short of the whole vocabulary is NOT flagged -------------------
 # Guards A4 against becoming a judgement threshold. A genuinely multi-trait
 # scenario must pass; only the maximal set is unambiguous enumeration.
 ALL8='"pure-calculation","user-visible-ui","api-contract","mutable-state","degraded-state","shared-consumer","dependency-path","responsive-accessible"'
-OBS8='{"trait":"pure-calculation","requiredProof":"x"},{"trait":"user-visible-ui","requiredProof":"x"},{"trait":"api-contract","requiredProof":"x"},{"trait":"mutable-state","requiredProof":"x"},{"trait":"degraded-state","requiredProof":"x"},{"trait":"shared-consumer","requiredProof":"x","satisfiedBy":["parity:t/p.spec.ts","consumer-surface:t/c.spec.ts"]},{"trait":"dependency-path","requiredProof":"x"},{"trait":"responsive-accessible","requiredProof":"x"}'
+OBS8='{"trait":"pure-calculation","requiredProof":"x"},{"trait":"user-visible-ui","requiredProof":"x","satisfiedBy":["t/ui.spec.ts"]},{"trait":"api-contract","requiredProof":"x","satisfiedBy":["t/api.spec.ts"]},{"trait":"mutable-state","requiredProof":"x","satisfiedBy":["t/state.spec.ts"]},{"trait":"degraded-state","requiredProof":"x"},{"trait":"shared-consumer","requiredProof":"x","satisfiedBy":["parity:t/p.spec.ts","consumer-surface:t/c.spec.ts"]},{"trait":"dependency-path","requiredProof":"x","satisfiedBy":["t/boundary.spec.ts"]},{"trait":"responsive-accessible","requiredProof":"x","satisfiedBy":["t/a11y.spec.ts"]}'
 R="$(make_case p4 "{\"schemaVersion\":1,\"scenarios\":[{\"id\":\"SCN-001-001\",\"title\":\"t\",\"requiredTestType\":\"e2e-ui\",\"behaviorTraits\":[$ALL8],\"obligations\":[$OBS8]}]}")"
 run_lint "$R"
 if [[ "$RC" -eq 0 ]]; then
-  ok "P4 eight of nine traits passes (A4 is not a judgement threshold)"
+  ok "P4 a large but non-maximal trait set passes (A4 is not a judgement threshold)"
 else
-  bad "P4 eight traits pass" "rc=$RC out=$(printf '%s' "$OUT" | tr '\n' '|')"
+  bad "P4 large trait set passes" "rc=$RC out=$(printf '%s' "$OUT" | tr '\n' '|')"
 fi
 
 # --- A5. ADVERSARIAL: a trait outside the vocabulary ------------------------

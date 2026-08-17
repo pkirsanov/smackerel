@@ -220,8 +220,21 @@ mkdir -p "$red_git/agents"
 assert "red: untraceable co-mutation is caught" 1 "$red_git"
 
 # --- GREEN: traceable co-mutation naming the IMP ----------------------------
+#
+# The fixture must be internally consistent, or it stops isolating Check 6. A
+# commit that has already landed framework change for IMP-001 is exactly the
+# evidence Check 4c reads, so the proposal and its index row must say APPLIED;
+# leaving them at PROPOSED asserts "nothing has landed" inside a fixture whose
+# whole premise is that something did.
 green_git="$WORK/green-git"
 make_repo "$green_git"
+sed 's/^\*\*Status:\*\* PROPOSED/**Status:** APPLIED/' \
+  "$green_git/improvements/IMP-001-example.md" >"$green_git/tmp"
+mv "$green_git/tmp" "$green_git/improvements/IMP-001-example.md"
+{
+  index_body
+  echo "| IMP-001-example.md | Example | APPLIED |"
+} >"$green_git/improvements/INDEX.md"
 mkdir -p "$green_git/agents"
 (
   cd "$green_git"

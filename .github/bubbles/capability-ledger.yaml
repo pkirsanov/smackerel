@@ -266,7 +266,6 @@ capabilities:
     - bubbles/workflows.yaml
     consumers:
     - agents/bubbles.retro.agent.md # invokes retro-framework-health.sh, writes proposal
-    - bubbles/scripts/framework-validate.sh # runs retro-framework-health-selftest
     - bubbles/workflows.yaml # defines the framework-health workflow mode
     competitorTags:
     - claude-code
@@ -391,6 +390,7 @@ capabilities:
     - bubbles/scripts/interop-apply-selftest.sh
     - bubbles/interop-registry.yaml
     consumers:
+    - bubbles/scripts/interop-intake.sh # execs interop-apply.sh to perform the apply
     - bubbles/scripts/cli.sh # exposes the interop subcommand entrypoint
     - bubbles/scripts/interop-apply-selftest.sh # exercises the apply flow
     - bubbles/interop-registry.yaml # declares the supported interop surfaces
@@ -468,6 +468,7 @@ capabilities:
     - bubbles/scripts/traceability-guard.sh
     - docs/issues/G068-word-overlap-threshold.md
     consumers:
+    - bubbles/scripts/cli.sh # invokes state-transition-guard.sh at the guard entrypoint
     - bubbles/scripts/traceability-guard.sh # shares the tuned G068 overlap heuristic
     - bubbles/scripts/state-transition-guard-selftest.sh # covers the G068 threshold behavior
     - bubbles/workflows.yaml # registers G068 in the gate set
@@ -544,7 +545,6 @@ capabilities:
     - agents/bubbles_shared/operating-baseline.md
     consumers:
     - bubbles/scripts/edit-lint-gate-selftest.sh # exercises the gate dispatcher
-    - bubbles/scripts/framework-validate.sh # runs the edit-lint-gate selftest
     - agents/bubbles_shared/operating-baseline.md # documents the opt-in registration contract
     competitorTags:
     - claude-code
@@ -628,8 +628,8 @@ capabilities:
     - bubbles/scripts/framework-validate.sh
     - bubbles/workflows.yaml
     consumers:
+    - bubbles/scripts/phase-coordinator.sh # invokes test-impact-plan.sh to decide real execution
     - bubbles/scripts/trace-contract-guard.sh # validates trace evidence (G080)
-    - bubbles/scripts/framework-validate.sh # runs test-impact + trace-contract selftests
     - agents/bubbles_shared/validation-core.md # the impact-aware validation contract
     competitorTags:
     - test-impact-analysis

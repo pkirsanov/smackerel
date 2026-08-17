@@ -47,6 +47,11 @@ EOF
 make_stub generate-framework-stats.sh stats.stale
 make_stub generate-cheatsheet.sh cheat.stale
 make_stub generate-capability-ledger-docs.sh ledger.stale
+# The gate-coverage map is manifest-tracked, so it regenerates BEFORE the
+# manifest. A stub set that omits a generator the wrapper drives does not test a
+# shorter pipeline -- it aborts the wrapper on a missing file and then reports
+# the truncated order as the wrapper's own ordering defect.
+make_stub generate-gate-coverage-map.sh gatemap.stale
 make_stub generate-release-manifest.sh manifest.stale
 
 # --- Case 1: clean tree → exit 0, generators invoked in dependency order -------
@@ -62,9 +67,9 @@ else
   sed -n '1,60p' "$work/c1.log"
 fi
 
-expected="$(printf '%s\n' generate-framework-stats.sh generate-cheatsheet.sh generate-capability-ledger-docs.sh generate-release-manifest.sh)"
+expected="$(printf '%s\n' generate-framework-stats.sh generate-cheatsheet.sh generate-capability-ledger-docs.sh generate-gate-coverage-map.sh generate-release-manifest.sh)"
 if [[ "$(cat "$order_log")" == "$expected" ]]; then
-  pass "generators invoked in dependency order (stats -> cheatsheet -> ledger -> manifest LAST)"
+  pass "generators invoked in dependency order (stats -> cheatsheet -> ledger -> gate-map -> manifest LAST)"
 else
   fail "generator order is wrong"
   echo "--- expected ---"

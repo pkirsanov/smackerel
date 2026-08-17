@@ -240,6 +240,15 @@ if [ "$check_only" = true ]; then
     printf '%s\n' "README generated workflow mode count appears stale. Run bubbles/scripts/generate-framework-stats.sh"
     exit 1
   fi
+  # IMP-045 SCOPE-3 (REG-9). README states the shim count in two generated
+  # blocks. Without this assertion the count silently drifts whenever a prompt
+  # is added or retired, because the surrounding blocks regenerate cleanly and
+  # nothing compares the number itself.
+  if grep -q 'prompt shims' "$repo_root/README.md" && \
+    [ "$(grep -c "# $prompt_shim_count prompt shims" "$repo_root/README.md")" -ne 2 ]; then
+    printf '%s\n' "README generated prompt-shim count appears stale (expected $prompt_shim_count in both generated blocks). Run bubbles/scripts/generate-framework-stats.sh"
+    exit 1
+  fi
   html_file="$repo_root/docs/its-not-rocket-appliances.html"
   if [ -f "$html_file" ]; then
     if ! grep -q "v$version" "$html_file"; then

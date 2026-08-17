@@ -38,7 +38,8 @@
 #                       "toolLogEntries": N,
 #                       "matchedDodItems": N,
 #                       "coveragePct":    0-100,
-#                       "matches":        [{"scopeFile":..., "line":N, "dodBody":..., "cmd":..., "ts":...}, ...]
+#                       "matches":        [{"scopeFile":..., "line":N, "dodBody":..., "cmd":..., "ts":..., "scenarioId":..., "claim":..., "sourceRevision":..., "exitCode":N}, ...],
+#                       "unbound":        [{"scopeFile":..., "line":N, "dodBody":..., "reason":...}, ...]
 #                     }
 #
 # Exit codes:
@@ -106,7 +107,7 @@ SPEC_SLUG="$(basename "$SPEC_DIR")"
 
 if [[ ! -f "$LOG" ]]; then
   if [[ "$FORMAT" == "json" ]]; then
-    printf '{"spec":%s,"logPath":%s,"logPresent":false,"scopeFiles":0,"dodItems":0,"toolLogEntries":0,"matchedDodItems":0,"coveragePct":0,"matches":[],"note":"no tool-call log found"}\n' \
+    printf '{"spec":%s,"logPath":%s,"logPresent":false,"scopeFiles":0,"dodItems":0,"toolLogEntries":0,"matchedDodItems":0,"coveragePct":0,"matches":[],"unbound":[],"note":"no tool-call log found"}\n' \
       "$(python3 -c 'import json,sys; print(json.dumps(sys.argv[1]))' "$SPEC_SLUG")" \
       "$(python3 -c 'import json,sys; print(json.dumps(sys.argv[1]))' "$LOG")"
     exit 0
@@ -117,7 +118,9 @@ if [[ ! -f "$LOG" ]]; then
   exit 0
 fi
 
-SPEC_DIR="$SPEC_DIR" SPEC_SLUG="$SPEC_SLUG" LOG="$LOG" FORMAT="$FORMAT" python3 - <<'PY'
+SPEC_DIR="$SPEC_DIR" SPEC_SLUG="$SPEC_SLUG" LOG="$LOG" FORMAT="$FORMAT" \
+  SOURCE_REVISION="$(git -C "$SPEC_DIR" rev-parse --verify HEAD 2>/dev/null || true)" \
+  python3 - <<'PY'
 import json, os, re, sys
 from pathlib import Path
 
@@ -158,29 +161,79 @@ for sf in scope_files:
     except Exception:
         continue
 
-# Heuristic matching: DoD body contains tokens from cmd field.
-STOPWORDS = {'a', 'the', 'and', 'or', 'for', 'is', 'in', 'of', 'to', 'with'}
+# IMP-047 S-C (AC13). SEMANTIC admission, not token overlap.
+#
+# The retired rule matched a DoD item to any exit-zero command sharing two
+# non-stopword tokens with it. Two tokens is a coincidence; this bridge reported
+# it as coverage, and the guard admitted it as evidence. The five bindings below
+# replace it, and the token path is gone rather than kept alongside.
+STOP = {'the', 'and', 'for', 'with', 'this', 'that', 'from', 'into', 'have',
+        'has', 'was', 'were', 'are', 'its', 'via', 'per', 'all', 'any', 'each'}
+TOK_RE = re.compile(r'[a-zA-Z][a-zA-Z0-9._/-]{2,}')
+POINTER_RE = re.compile(r'receipt:\s*([A-Za-z][A-Za-z0-9_.-]*)', re.IGNORECASE)
+FAILURE_RE = re.compile(r'\b(fails?|failing|refus\w+|rejects?|blocked)\b', re.IGNORECASE)
 
-def tokens(s):
-    return set(re.findall(r'[a-zA-Z][a-zA-Z0-9._/-]+', s.lower()))
+def content(text):
+    return {t.lower() for t in TOK_RE.findall(text)} - STOP
+
+def claim_subject(body):
+    s = re.sub(r'(?:\u2192\s*)?receipt:\s*[A-Za-z][A-Za-z0-9_.-]*', ' ', body, flags=re.IGNORECASE)
+    return re.sub(r'(?:\u2192\s*)?evidence:\s*\S+', ' ', s, flags=re.IGNORECASE)
+
+source_revision = os.environ.get('SOURCE_REVISION', '').strip()
 
 matches = []
+unbound = []
 for sf, ln, body in dod_items:
-    body_toks = tokens(body)
+    pointer = POINTER_RE.search(body)
+    if not pointer:
+        unbound.append({"scopeFile": sf, "line": ln, "dodBody": body,
+                        "reason": "no `Receipt: <scenarioId>` pointer, so no claim of coverage to verify"})
+        continue
+    wanted = pointer.group(1)
+    subject = claim_subject(body)
+    item_toks = content(subject)
+    expects_failure = bool(FAILURE_RE.search(subject))
+    admitted = None
     for e in entries:
-        cmd = e.get('cmd', '')
-        cmd_toks = tokens(cmd)
-        overlap = (body_toks & cmd_toks) - STOPWORDS
-        if len(overlap) >= 2 and e.get('exitCode') == 0:
-            matches.append({
-                "scopeFile": sf,
-                "line": ln,
-                "dodBody": body,
-                "cmd": cmd,
-                "ts": e.get('ts', ''),
-                "overlapTokens": sorted(overlap),
-            })
-            break
+        binding = e.get('scenarioBinding')
+        if not isinstance(binding, dict):
+            continue
+        if (binding.get('scenarioId') or '').strip() != wanted:
+            continue
+        if not (e.get('cmd') or '').strip():
+            continue
+        rev = (binding.get('sourceRevision') or '').strip()
+        if not rev or (source_revision and rev != source_revision):
+            continue
+        exit_code = e.get('exitCode')
+        if not isinstance(exit_code, int):
+            continue
+        if expects_failure:
+            if exit_code == 0:
+                continue
+        elif exit_code != 0:
+            continue
+        claim = (binding.get('claim') or '').strip()
+        if not claim or (item_toks - content(claim)):
+            continue
+        admitted = {
+            "scopeFile": sf,
+            "line": ln,
+            "dodBody": body,
+            "cmd": e.get('cmd', ''),
+            "ts": e.get('ts', ''),
+            "scenarioId": wanted,
+            "claim": claim,
+            "sourceRevision": rev,
+            "exitCode": exit_code,
+        }
+        break
+    if admitted:
+        matches.append(admitted)
+    else:
+        unbound.append({"scopeFile": sf, "line": ln, "dodBody": body,
+                        "reason": "no receipt for scenario %r satisfies claim, command, revision and outcome binding" % wanted})
 
 matched_count = len(matches)
 total = len(dod_items)
@@ -197,6 +250,7 @@ if fmt == "json":
         "matchedDodItems": matched_count,
         "coveragePct": pct,
         "matches": matches,
+        "unbound": unbound,
     }
     print(json.dumps(out, indent=2))
     sys.exit(0)
@@ -215,6 +269,10 @@ if not entries:
     print("  Advisory only; existing prose-evidence path remains valid.")
     sys.exit(0)
 
-print(f"  Coverage: {pct}% ({matched_count}/{total} DoD items have a matching tool-log entry)")
-print("  v6.0: structured-evidence path is MCP-primary via query_tool_log; markdown ≥10-line raw evidence remains accepted.")
+print(f"  Coverage: {pct}% ({matched_count}/{total} DoD items have a semantically bound receipt)")
+print("  Admission requires all five bindings: scenario, claim, command, source revision, outcome.")
+for u in unbound[:10]:
+    print(f"  UNBOUND {u['scopeFile']}:{u['line']} — {u['reason']}")
+if len(unbound) > 10:
+    print(f"  ... and {len(unbound) - 10} more unbound item(s)")
 PY

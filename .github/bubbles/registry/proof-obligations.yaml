@@ -1,0 +1,168 @@
+# Proof Obligation Matrix (IMP-047 S-D)
+#
+# WHY THIS EXISTS
+# Three surfaces answered "what proof does this behavior owe?" and they did not
+# agree. `critical-requirements.md` and `e2e-regression.md` said EVERY change
+# owes a scenario-specific E2E test. `test-core.md` said the obligation is
+# DERIVED from the scenario's behavior traits. Under the universal reading a
+# pure calculation pays for an E2E shell that proves nothing, and under the
+# derived reading a UI change could satisfy its obligation with a unit test. The
+# framework was simultaneously too expensive and too weak, which is the shape
+# every "one rule for everything" policy eventually takes.
+#
+# This registry is the SINGLE authority. The trait matrix is authoritative and
+# the physical test CATEGORY is proportionate to traits. What stays UNIVERSAL is
+# persistent scenario-specific REGRESSION coverage: every changed behavior is
+# protected by a test that survives the change. What becomes proportionate is
+# which CATEGORY of test that is.
+#
+# WHAT PROPORTIONALITY IS NOT. It is not a discount. UI, API, mutable state,
+# dependency boundaries and SLA behavior pay MORE than they did: each now owes a
+# live proof that a synthetic test cannot discharge. Only pure logic, docs,
+# static metadata and non-runtime configuration pay less, and they pay less
+# because a live shell around a pure function never proved anything about it.
+#
+# RUNTIME CONFIGURATION GETS NO DOCS EXEMPTION. A configured value that changes
+# what the running system does is runtime behavior wearing a config file's
+# clothes, and "it is only config" is how an unexercised default ships.
+#
+# Read by bubbles/scripts/scenario-obligation-lint.sh, which is already blocking
+# under Gate G057. Restated by agents/bubbles_shared/test-core.md, which points
+# here rather than repeating the table.
+
+schemaVersion: proof-obligations/v1
+
+# Obligations no trait can retire. The Retirement Rule applies to the CATEGORY
+# question, never to this one.
+universal:
+  - id: persistent-regression
+    requirement: >-
+      Every changed, fixed or added behavior is protected by a persistent,
+      scenario-specific regression test that lives with the feature it verifies.
+      Universal. Traits decide the test's CATEGORY, never whether it exists.
+  - id: red-before-green
+    requirement: >-
+      The regression test fails for the expected behavior before the change and
+      passes after it, both runs shown.
+
+# One row per behavior trait. `liveProof: required` means a synthetic test can
+# COMPLEMENT the proof but can never BE it. The mechanism constraints are read
+# against the scenario's own `testMechanism`, whose four fields are closed
+# vocabularies, so a claim is checkable rather than prose.
+traits:
+
+  - id: pure-calculation
+    requiredProof: Production-unit assertion over transformed output.
+    liveProof: not-required
+    note: >-
+      A live shell around a deterministic function proves the shell. This is the
+      row that stops a calculation paying for a fake E2E.
+
+  - id: user-visible-ui
+    requiredProof: Visible or accessibility-tree assertion on the current production route.
+    liveProof: required
+    requiredEntrypoints: [production-route]
+    requiredAssertionSurfaces: [visible-ui, accessibility-tree]
+    note: >-
+      Browser automation against the route a user actually reaches. A hidden-DOM
+      read or a detached renderer call proves an internal projection, not a
+      visible outcome.
+
+  - id: api-contract
+    requiredProof: Real request and externally observable response.
+    liveProof: required
+    requiredEntrypoints: [production-api]
+    requiredAssertionSurfaces: [http-response]
+
+  - id: mutable-state
+    requiredProof: Write, read, and persistence round trip.
+    liveProof: required
+    requiredAssertionSurfaces: [persisted-state]
+    requiredDependencyPaths: [ephemeral-real, same-origin-real, external-live]
+    note: >-
+      A write asserted against the value the test itself injected is a
+      tautology. The read must come back through a real store.
+
+  - id: degraded-state
+    requiredProof: Named negative-path assertion with no plausible default.
+    liveProof: not-required
+
+  - id: shared-consumer
+    requiredProof: Producer-consumer parity plus a current consumer-surface assertion.
+    liveProof: required
+    requiredEntrypoints: [production-route, production-api, production-cli]
+    requiredAssertionSurfaces: [visible-ui, accessibility-tree, http-response]
+
+  - id: dependency-path
+    requiredProof: Declared dependency-path state plus a live boundary assertion.
+    liveProof: required
+    liveProofEnforcedBy: dependency-boundary
+    note: >-
+      Freshness, retry, queue, provider and transport are claims ABOUT the
+      boundary. A cache-only or synthetic-boundary test never reaches it, so it
+      cannot answer the question the scenario asked. The boundary rule is
+      enforced by the SCOPE-6 dependency-boundary check rather than a blanket
+      dependencyPath constraint, because a scenario about RENDERING a cached
+      value is legitimately cache-only. Two rules for one question would
+      contradict each other, and the narrower one is already tuned.
+
+  - id: responsive-accessible
+    requiredProof: Required viewport and accessibility behavior on the production route.
+    liveProof: required
+    requiredEntrypoints: [production-route]
+    requiredAssertionSurfaces: [visible-ui, accessibility-tree]
+
+  - id: sla-sensitive
+    requiredProof: Stress or load assertion against the declared threshold, with observation.
+    liveProof: required
+    requiredTestTypes: [stress, load]
+    note: >-
+      A latency claim measured once on an idle machine is an anecdote. The
+      category itself is the proof here, which is why this row constrains
+      requiredTestType rather than the mechanism.
+
+  - id: runtime-config
+    requiredProof: Startup or runtime behavior executes the configured value.
+    liveProof: required
+    requiredEntrypoints: [production-route, production-api, production-cli]
+    note: >-
+      NO DOCS EXEMPTION. A configured value that changes what the running system
+      does is runtime behavior. Asserting the file parses proves the parser.
+
+  - id: static-metadata
+    requiredProof: Production-unit or artifact assertion over the declared value.
+    liveProof: not-required
+    note: >-
+      Documentation, static metadata and NON-runtime configuration. If the value
+      reaches a running system, the scenario owes `runtime-config` instead, and
+      declaring this one does not discharge that.
+
+# A scenario may declare that a live proof does not apply — but only by NAMING
+# the trait it does not have. An unnamed exemption is indistinguishable from an
+# omission, and an omission is how the expensive obligation gets skipped.
+notApplicable:
+  field: liveProofNotApplicable
+  requiredFields: [absentTrait, reason]
+  rules:
+    - id: names-a-real-trait
+      rule: absentTrait must be an id in this registry's trait list.
+    - id: not-a-declared-trait
+      rule: absentTrait must NOT appear in the scenario's own behaviorTraits.
+    - id: unknown-earns-nothing
+      rule: >-
+        A scenario carrying an UNKNOWN trait cannot claim any exemption. An
+        unknown trait requires review; it never buys a discount.
+
+failureCodes:
+  - id: LIVE-PROOF-UNDECLARED
+    meaning: A trait owing live proof has no testMechanism and no named exemption.
+  - id: LIVE-PROOF-SUBSTITUTED
+    meaning: A trait owing live proof declares a mechanism that cannot supply it.
+  - id: LIVE-PROOF-CATEGORY
+    meaning: A trait owing a specific test category declares a different one.
+  - id: NA-MALFORMED
+    meaning: A live-proof exemption does not name an absent trait and a reason.
+  - id: NA-CONTRADICTS-TRAIT
+    meaning: A live-proof exemption names a trait the scenario itself declares.
+  - id: NA-UNKNOWN-TRAIT
+    meaning: A live-proof exemption is claimed by a scenario carrying an unknown trait.

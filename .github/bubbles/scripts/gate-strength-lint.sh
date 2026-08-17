@@ -65,7 +65,15 @@ classify_description() {
   fi
 }
 
-registry_gate_count="$( { grep -cE "^  G[0-9]+:" "$GATES" || true; } )"
+# IMP-047 S-A: count gate keys inside the `gates:` mapping only. gates.yaml now
+# also carries a GENERATED `gateEnforcement:` block keyed by the same ids, and an
+# unscoped count doubled every gate in the registry.
+registry_gate_count="$( { awk '
+  /^gates:[[:space:]]*$/ { inside = 1; next }
+  /^[^[:space:]#]/       { inside = 0 }
+  inside && /^  G[0-9]+:/ { n++ }
+  END { print n + 0 }
+' "$GATES" || true; } )"
 
 declare -A counts
 classified=0

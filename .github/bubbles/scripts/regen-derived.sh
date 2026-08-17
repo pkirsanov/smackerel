@@ -5,10 +5,10 @@
 # freshness `release-check.sh` enforces. Adding a gate / agent, or bumping
 # VERSION, stales one or more of: framework-stats (README, CHEATSHEET, the html
 # cheatsheet, docs/generated/framework-stats.*), the cheatsheet, the
-# capability-ledger docs, and the release manifest. They MUST be regenerated in
-# dependency order, and the RELEASE MANIFEST IS LAST because README / CHEATSHEET
-# / html are manifest-tracked, so regenerating any of them invalidates the
-# manifest.
+# capability-ledger docs, the gate-coverage map, and the release manifest. They
+# MUST be regenerated in dependency order, and the RELEASE MANIFEST IS LAST
+# because README / CHEATSHEET / html / gate-coverage-map are manifest-tracked,
+# so regenerating any of them invalidates the manifest.
 #
 # This wrapper removes the recurring "which generators, in what order?" trap (the
 # new-gate authoring checklist re-derives it every release; a manifest-before-
@@ -74,6 +74,12 @@ if [[ "$CHECK_ONLY" -eq 0 ]]; then
   run_generator sh generate-framework-stats.sh "framework stats (README / CHEATSHEET / html / framework-stats.*)"
   run_generator bash generate-cheatsheet.sh "cheatsheet"
   run_generator bash generate-capability-ledger-docs.sh "capability-ledger docs"
+  # The gate-coverage map is derived from the gates registry, mode requiredGates
+  # and the guard/script/CI surface, so ANY gate change stales it. It is
+  # manifest-tracked, so it regenerates before the manifest. Omitting it here is
+  # what let a stale map survive a full regeneration: the manifest recorded the
+  # stale bytes, so the manifest check stayed green while the map was wrong.
+  run_generator bash generate-gate-coverage-map.sh "gate-coverage map"
   run_generator bash generate-release-manifest.sh "release manifest (LAST — checksums everything above)"
   echo
 fi
@@ -83,6 +89,7 @@ fresh_failures=0
 check_generator sh generate-framework-stats.sh "framework stats" || fresh_failures=$((fresh_failures + 1))
 check_generator bash generate-cheatsheet.sh "cheatsheet" || fresh_failures=$((fresh_failures + 1))
 check_generator bash generate-capability-ledger-docs.sh "capability-ledger docs" || fresh_failures=$((fresh_failures + 1))
+check_generator bash generate-gate-coverage-map.sh "gate-coverage map" || fresh_failures=$((fresh_failures + 1))
 check_generator bash generate-release-manifest.sh "release manifest" || fresh_failures=$((fresh_failures + 1))
 
 if [[ "$fresh_failures" -gt 0 ]]; then

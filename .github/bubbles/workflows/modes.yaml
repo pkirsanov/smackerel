@@ -1545,6 +1545,13 @@ modes:
     description: "Framework self-observation mode. bubbles.retro (target: framework) analyzes Bubbles' own usage signals — framework-events.jsonl, workflow-runs.json, gate failure frequency, capability ledger staleness — and writes an improvement proposal to improvements/IMP-NNN-<slug>.md. NEVER auto-mutates bubbles/*, agents/*, or workflows.yaml — proposal-first, human reviewed. Routed by NL phrases 'framework health', 'anything broken in bubbles', 'improve bubbles'. Gate G125 enforces evidence."
     statusCeiling: framework_proposal_written
     terminalAliases: [ framework_proposal_written ]
+    # IMP-047 PD-11. This mode declares an `audit` phase, so the transition
+    # contract resolver reached it, found no profile, and refused with
+    # E009-AUDIT-PROFILE-UNSUPPORTED — framework health could not audit itself.
+    # The contract is now DECLARED rather than defaulted: `framework-proposal-v1`
+    # is the no-certification audit contract for a mode that terminates at a
+    # written proposal and is forbidden from mutating the framework.
+    transitionAudit: { profile: framework-proposal-v1, target: statusCeiling }
     phaseOrder: [ select, audit, docs, finalize ]
     requiredGates: [ G001, G006, G007, G011, G012, G073, G125 ]
     constraints:

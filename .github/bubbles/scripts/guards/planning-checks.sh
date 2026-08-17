@@ -82,7 +82,7 @@ if [[ "$missing_regression_e2e" -gt 0 ]]; then
 fi
 echo ""
 
-# CHECK 8B: Consumer trace planning for renames/removals
+# CHECK 8B: Consumer trace planning for explicit interface mutations
 # =============================================================================
 echo "--- Check 8B: Consumer Trace Planning For Renames/Removals ---"
 rename_scope_hits=0
@@ -93,7 +93,11 @@ for scope_index in "${!scope_analysis_files[@]}"; do
   [[ -f "$scope_path" ]] || continue
   scope_label="$(scope_analysis_label "$scope_index")"
 
-  if grep -Eiq '\b(rename|renamed|remove|removed|move|moved|replace|replaced|deprecat(e|ed)|migration)\b.*\b(route|path|endpoint|contract|api|url|slug|identifier|symbol|link|breadcrumb|navigation|redirect)\b|\b(route|path|endpoint|contract|api|url|slug|identifier|symbol|link|breadcrumb|navigation|redirect)\b.*\b(rename|renamed|remove|removed|move|moved|replace|replaced|deprecat(e|ed)|migration)\b' "$scope_path"; then
+  # BUG-032: replacement and migration prose does not prove that a public
+  # interface identity changed. Require an explicit rename, removal, move, or
+  # deprecation of the consumer surface. A replacement that really retires an
+  # interface must state that concrete mutation and will still match here.
+  if grep -Eiq '\b(renam(e|es|ed|ing)|remov(e|es|ed|ing)|mov(e|es|ed|ing)|deprecat(e|es|ed|ing))\b[^.;!?]{0,160}\b(route|path|endpoint|contract|api|url|slug|identifier|symbol|link|breadcrumb|navigation|redirect)\b|\b(route|path|endpoint|contract|api|url|slug|identifier|symbol|link|breadcrumb|navigation|redirect)\b[^.;!?]{0,160}\b(renam(e|es|ed|ing)|remov(e|es|ed|ing)|mov(e|es|ed|ing)|deprecat(e|es|ed|ing))\b' "$scope_path"; then
     rename_scope_hits=$((rename_scope_hits + 1))
 
     if grep -Eiq 'Consumer Impact Sweep' "$scope_path"; then
