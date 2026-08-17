@@ -7948,3 +7948,213 @@ the manifest itself is not.
    F-AUD-10.
 4. Re-dispatch `bubbles.validate`. Everything in C-1…C-7 re-runs clean and does
    not need redoing.
+
+---
+
+## Delivery Completion Audit - 2026-08-17
+
+**Agent:** `bubbles.audit` · **Attempt:** `audit-080-001-20260817T211816Z-a1` ·
+**Profile:** `delivery-completion-v1` · **HEAD:** `3f6e437d`
+
+**VERDICT: `REWORK_REQUIRED`** · outcome `route_required` · next owner
+`bubbles.plan` · full transcript at
+`.specify/runtime/audit-080-001-20260817T211816Z-a1.txt` (working notes alongside
+it as `…-a1.notes.md`).
+
+This section is the evidence anchor for that attempt. It closes item 1 of the
+certification-refusal list directly above: `execution.audit` now carries a
+completed attempt with a real verdict instead of an `INCOMPLETE` scaffold.
+
+### A-1 · Binding, provenance, and the guard
+
+| Step | Result |
+|---|---|
+| `repository-binding-host-context.sh` | `HOSTCTX_EXIT=0`, revision 5 |
+| `repository-binding.sh preflight` | `PREFLIGHT_EXIT=0`, `PREFLIGHT_COMMITTED`, actionable |
+| `transition-contract-resolver.sh` | `RESOLVER_EXIT=0`, profile `delivery-completion-v1` |
+| `state-transition-guard.sh` (assertion-only) | `GUARD_EXIT=0`, verdict PASS, `failureCount 0`, `failedGateIds []` |
+
+`targetRevision sha256:0b42df27…` and `contractDigest sha256:aa91472c…` from the
+resolver are **byte-identical** to the values already stored on the `INCOMPLETE`
+attempt, so there is no `AUDIT_PROVENANCE_CONFLICT` and the scaffold was
+**completed in place** rather than superseded.
+
+Four guard warnings and two advisory `claim-source-lint` findings were carried
+forward rather than auto-dismissed; they are itemised in the transcript.
+
+**Structural incoherence this attempt closes, which the guard cannot see:** guard
+Checks 6 and 6B both PASS for phase `audit` (claimed, with `bubbles.audit`
+provenance) while `execution.audit.attempts[0].resultState` was `INCOMPLETE` and
+`currentAttemptId` was `null`. The guard does not read the audit registry, so a
+claimed audit phase and an unfinished audit attempt coexisted undetected.
+
+### A-2 · Independent test execution (this audit, `./smackerel.sh` only)
+
+```
+./smackerel.sh test unit                                    AUDIT_UNIT_EXIT=0
+  go test ./... -> "[go-unit] go test ./... finished OK"
+  ok github.com/smackerel/smackerel/web/pwa/tests   1.437s   (NOT cached)
+  python sidecar: 720 passed, 1 skipped, 2 deselected in 16.60s
+
+./smackerel.sh test unit --go --go-run '<6 targeted names>'  AUDIT_TARGETED_EXIT=0
+  ok github.com/smackerel/smackerel/internal/api/graphapi  0.038s
+  --- PASS: TestAdversarial_EmptySecretMustNotRevertToSilentAbsenceOr500
+  --- PASS: TestHiddenUtilityBeatsLaterEqualSpecificityDisplay   (4bd2ade8 guard)
+  --- PASS: TestHiddenUtilityHasALiveConsumerThatDependsOnIt     (4bd2ade8 guard)
+  0 FAIL, 0 SKIP
+```
+
+**Claim Source:** direct · **Evidence integrity: VERIFIED.** My independently
+measured results AGREE with this report's recorded `UNIT/LINT/FORMAT/CHECK = 0`.
+No discrepancy, so no evidence-integrity violation.
+
+Skip-marker scan across `internal/api/graphapi/`, `web/pwa/tests/`, and
+`tests/integration/graphapi/`: 7 hits, **all legitimate environment guards**
+(6× `DATABASE_URL`/`CORE_EXTERNAL_URL` not set, 1× DOM-consumer precondition).
+Zero `.only(` / `xit(` / `xdescribe(` / `test.todo`. Whole-tree mutation sweep:
+**CLEAN** — the single grep hit is a historical spec-016 record, not a live probe.
+
+### A-3 · Adversarial review of the product commits — both claims hold
+
+- **`d74691ba`** — "wire value byte-identical" **VERIFIED TRUE**. After the change,
+  `grep` for `CodeNotFound|"not_found"` across `internal/api/graphapi/` returns
+  **only the constant definition**; zero bare literals survive, and the constant
+  value is byte-identical to what it replaced, so the refactor is
+  behaviour-preserving. `design.md:392` verified **verbatim** at the cited line.
+- **`4bd2ade8`** — mutation-proven guard; scope discipline correct. The guard
+  asserts the fix, *the reason* the priority flag is load-bearing, and a live
+  consumer, which is what stops it decaying into superstition.
+
+**Traced value, end to end:** `"not_found"` from `errors.go` (`CodeNotFound`) →
+emitted by `people.go`/`places.go`/`topics.go` on a missing resource →
+asserted at `graph-activation.spec.ts:660` *"a missing graph row is not reported
+as an absent route"*. The parts exist **and are connected**.
+
+### A-4 · Disposition of all 13 prior findings — 5 addressed / 8 unresolved
+
+**ADDRESSED (5):** `F-AUD-01` (canonical sections carry explicit supersession),
+`F-AUD-02`, `F-AUD-03` (both greps return 0 hits), `F-AUD-09` (the live
+`$.blockedReason` field re-measured and corrected), `F-AUD-10` (manifest
+reconciled: 14 scenarios / 31 linkedTests / 0 vacuous, every link landing on real
+covering code).
+
+**UNRESOLVED (8):** `F-AUD-04` (anchor resolution), `F-AUD-05` (canary rows still
+carry no row ID — independently re-confirmed by my own testId sweep), `F-AUD-06`
+(heading vs 44 items / 31 rows), `F-AUD-07` (two ui-unit rows marked
+`Live System: No`), `F-AUD-08` (10 of 11 classifier keys transcribed), `F-AUD-11`
+(`bubbles.security` zero-duration + future-dated timestamp), `F-AUD-12`
+(T080-08-A11Y citations drifted), `F-AUD-13` (T080-02-CANARY labelled `e2e-api`).
+
+The prior audit's three **blockers** — `F-AUD-01`, G089, G022 — are **all
+cleared**. The unresolved eight were filed by that audit as *also-filed*, not as
+blockers.
+
+### A-5 · This audit's sub-findings
+
+| ID | Sev | State | Substance |
+|---|---|---|---|
+| `AUD-080-001-STALECOUNT-001` | MEDIUM | **ADDRESSED** | `$.blockedReason` claimed a 6-row register; measured **8** (3 fixed / 5 routed). Now correct, and a second stale number in the same sentence ("two real product diffs") now reads "4 real product commits", matching the 4-row Code Diff Evidence table. Verified at HEAD `3f6e437d`. |
+| `AUD-080-001-REGISTER-001` | low | **ADDRESSED** | Register row 8 now reads "ROUTED, THEN RESOLVED OFF-PACKET", cites `4bd2ade8`, discharges the "NOT browser-verified" caveat via `LANE_EXIT=0`, and self-reports the earlier under-report. Verified at `report.md:52`. |
+| `AUD-080-001-REVLABEL-001` | low | **ADDRESSED** | Completion Statement re-anchored to "HEAD `8b9baf42`, stable across every commit since `44c9ae36`". Verified at `report.md:173`. |
+| `AUD-080-001-MANIFEST-001` | low | UNRESOLVED | `scenarioId` not unique: 14 rows carry 9 distinct ids. Inherited faithfully from `scopes.md`; the weakness is upstream in naming. |
+| `AUD-080-001-MANIFEST-002` | low | UNRESOLVED | 6 of 31 testId tokens do not resolve in their declared file, but second-step verification proved **none is a missing test**. Labelling precision, not fabrication. |
+| `AUD-080-001-BOUNDARY-001` | MEDIUM | **UNRESOLVED — NEW** | See below. |
+
+#### `AUD-080-001-BOUNDARY-001` — a live claim that is now false
+
+`scopes.md` **"## Change Boundary"** (packet level) states that two defects were
+diagnosed in excluded families and *"**BOTH were routed rather than edited**, which
+is the boundary holding under pressure rather than in principle"*, naming *"the
+`not_found` constant-block drift in `internal/api/graphapi/errors.go`"* as one.
+
+Measured: `d74691ba` edits **four** files under `internal/api/graphapi/` —
+`errors.go` (+7), `people.go`, `places.go`, `topics.go` — including `errors.go`,
+the exact file that sentence names. `d74691ba` appears **nowhere** in `scopes.md`;
+no amendment reconciles the text.
+
+**Both directions, stated plainly:**
+
+- **The edit is IN BOUNDARY, and is not charged as a violation.** SCOPE-01's own
+  `### Change Boundary` lists `internal/api/graphapi/**` in its **Allowed** set,
+  and the packet-level Allowed list is explicitly scoped to *"the only files this
+  packet's **SCOPE-04** work modified"* — so that exclusion list is a SCOPE-04
+  statement, not a packet-wide prohibition. No scope-discipline breach occurred.
+- **The claim is nonetheless FALSE.** It asserts a historical fact about the
+  packet's own conduct and offers it as an integrity credential. The defect was
+  routed, then edited in-packet. A claim used as evidence of discipline is held to
+  a higher accuracy bar, not a lower one.
+
+**Class:** identical to `F-AUD-01` and `STALECOUNT-001` — a fact-bearing claim in
+a live artifact that decayed when later work landed and was never re-measured.
+This is the **third** instance, found immediately after a dedicated correction
+pass (`3541c3dd`, "correct a stale blockedReason", did not catch the count
+either). This packet's own Completion Statement names the governing principle:
+*"a number-bearing claim decays unless something re-measures it."*
+
+### A-6 · Verdict rationale
+
+**The product is sound, and I say so plainly.** The guard is green with zero
+failures; my independent execution agrees with the record; both product commits
+survive adversarial review with their central claims verified TRUE; the traced
+value is connected end to end; there is no fabrication, no evidence-integrity
+violation, no live mutation, and no illegitimate skip. Nothing here is
+`DO_NOT_SHIP`.
+
+Certification at `done` asserts the artifact record is accurate, and it is not yet.
+One live claim is **false**, and it is a claim about the packet's own boundary
+discipline — the class of claim a future reader is least able to re-derive and
+most likely to trust on sight. Eight prior findings remain open alongside it,
+several of them traceability defects that reduce how far the test-plan record can
+be trusted without re-measurement.
+
+This is `REWORK_REQUIRED` rather than `SHIP_WITH_NOTES` because **the recurrence
+is the signal**: three instances of one defect class, the newest surfacing
+directly after a dedicated fix pass, is a pattern that regenerates because nothing
+systematically re-measures these claims — not a residue of isolated typos. The
+remedy is small and fully specified, which is precisely why it should be done
+rather than merely noted.
+
+### A-7 · Routed repair — owner `bubbles.plan`
+
+1. `AUD-080-001-BOUNDARY-001` — correct the packet-level `## Change Boundary`
+   paragraph to state what happened: the `not_found` drift was routed, then closed
+   in-packet by `d74691ba`, which sits inside SCOPE-01's Allowed set. The spec-105
+   half of the sentence remains true and should stay.
+2. `F-AUD-05` / `F-AUD-13` — give the canary rows their row IDs in
+   `scripts/runtime/web-e2e-ui.sh`; correct T080-02-CANARY's category label.
+3. `F-AUD-06` / `F-AUD-07` — reconcile the "One Item Per Test Plan Row" heading
+   with the actual 44/31 counts; correct the two ui-unit rows' `Live System` column.
+4. `F-AUD-04` / `F-AUD-08` / `F-AUD-12` — resolve the anchor defect, transcribe the
+   11th classifier key, re-anchor the T080-08-A11Y citations.
+5. `F-AUD-11` — reconcile the `bubbles.security` zero-duration and future-dated
+   timestamp, or record why the historical record cannot be corrected.
+
+### A-8 · Spot-check recommendations (automation-bias mitigation)
+
+Verify these yourself — they are where my confidence outruns my proof.
+
+1. **`AUD-080-001-BOUNDARY-001` is a finding against work landed after the prior
+   audit, so check it hardest.** Read `scopes.md` "## Change Boundary" and
+   `git show --stat d74691ba` side by side and judge the sentence yourself.
+2. **`AUD-080-001-MANIFEST-002` rests on an *inferred* convention** (testId token
+   lives in the declared file), not a documented contract. If that convention is
+   not real, the finding dissolves. Confirm whether it is written down anywhere.
+3. **T080-REGRESSION's disposition is "DEFENSIBLE"** — the weakest word in my
+   table. I read the declared path as "the broader suite must still pass".
+   Confirm that reading matches intent.
+4. **T080-02-CANARY / T080-04-CANARY:** canary machinery exists at
+   `web-e2e-ui.sh:996-1066` and `:1079`, but I could not tie either row ID to it.
+   Confirm those canaries cover the rows they are claimed to cover.
+5. **Guard Check 11's "45 of 123 evidence blocks lack terminal-output signals"** is
+   a warning I carried but did not individually adjudicate. Sample a few.
+6. **My `F-AUD-09` ADDRESSED call rests on a fix I did not author.** I verified the
+   corrected numbers (8 / 3 / 5) against my own measurement, but did not re-derive
+   the register from scratch a second time.
+
+### A-9 · Pre-existing tree state (not caused by this attempt)
+
+`git status --porcelain` is **identical at attempt start and attempt end**: 8
+modified files (`docs/releases/mvp/actions.md`, `features.md`, and six unrelated
+`state.json` files) and 2 untracked entries. **None is the BUG-080-001 packet**,
+and this attempt wrote no product source. Disposition: outside this work boundary,
+route-only observation.

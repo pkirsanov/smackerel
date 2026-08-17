@@ -92,8 +92,30 @@ this packet's own artifacts under
 `config/**`, every other `web/pwa/*.js` module, and every other spec packet
 under `specs/`. Two defects were diagnosed in excluded families this session —
 the `not_found` constant-block drift in `internal/api/graphapi/errors.go` and
-spec 105's stale blocker note — and BOTH were routed rather than edited, which
-is the boundary holding under pressure rather than in principle.
+spec 105's stale blocker note.
+
+**CORRECTED 2026-08-17 (AUD-080-001-BOUNDARY-001).** This paragraph previously
+read that BOTH were "routed rather than edited, which is the boundary holding
+under pressure rather than in principle". That is no longer true of the first
+one, and the claim was left standing after it stopped being true:
+
+- spec 105's stale blocker note — still ROUTED, never edited. Unchanged.
+- the `not_found` constant-block drift — **subsequently EDITED**, in commit
+  `d74691ba`, which touches four files under `internal/api/graphapi/`
+  (`errors.go`, `people.go`, `places.go`, `topics.go`).
+
+Stated precisely, because the two boundaries differ and the distinction matters:
+the edit is INSIDE **SCOPE-01's** own Change Boundary, which lists
+`internal/api/graphapi/**` as an allowed surface, so it is not a discipline
+breach. The exclusion above was written to describe **SCOPE-04's** surface, where
+that family genuinely is read-only. What failed was not the boundary — it was
+this sentence, which asserted a routing outcome that a later commit reversed and
+which nothing re-measured.
+
+This is the third instance in this packet of a fact-bearing claim decaying
+unsupervised (after F-AUD-01 and AUD-080-001-STALECOUNT-001), and it surfaced
+immediately after a dedicated correction pass. The recurrence — not the single
+sentence — is what the audit weighed in reaching `REWORK_REQUIRED`.
 
 ## Scope 1: Fail-Soft Graph Activation Foundation
 
@@ -550,7 +572,7 @@ SCOPE-04 modified the SHARED e2e-ui lane harness `scripts/runtime/web-e2e-ui.sh`
 
 #### Build Quality Gate
 
-- [x] Change Boundary is respected and zero excluded file families were changed. → Evidence: report.md#build-quality-gate. `git show --stat` for every commit in this session touches only the allowed surfaces listed in the Change Boundary section above. The two defects found in excluded families (`internal/api/graphapi/errors.go` constant-block drift; spec 105's stale note) were ROUTED, not edited.
+- [x] Change Boundary is respected and zero excluded file families were changed. → Evidence: report.md#build-quality-gate. **Evidence text corrected 2026-08-17 (AUD-080-001-BOUNDARY-001)** — it previously read that both defects found in excluded families "were ROUTED, not edited", which a later commit made false. Accurate statement: spec 105's stale note was ROUTED and never edited; the `internal/api/graphapi/errors.go` constant-block drift was subsequently EDITED in commit `d74691ba` (four files under `internal/api/graphapi/`). The DoD item still holds, on SCOPE-01's boundary rather than on the routing claim: `internal/api/graphapi/**` is an ALLOWED surface in SCOPE-01's Change Boundary, so no excluded family was changed. `git show --stat` for every commit in this session touches only surfaces allowed by the scope that made the change.
 - [x] All packet tests and broad Knowledge/Wiki regressions, accessibility checks, privacy scans, check/lint/format/build, artifact-lint, traceability guard, implementation reality scan, documentation alignment, zero warnings, and consumer-impact review pass with executed evidence before validation requests completion. → Evidence: report.md#build-quality-gate. Executed this session: `CHECK_EXIT=0`, `BUILD_EXIT=0`, `LINT_EXIT=0`, `FMT_EXIT=0`, `UNIT_EXIT=0`, `ARTIFACT_LINT_EXIT=0`, `TRACEABILITY_EXIT=0`, `REALITY_SCAN_EXIT=0`, `LANE_EXIT=0` (e2e-ui: `8 passed` in every guarded phase, full suite `76 passed`), and `regression-quality-guard` `0 violation(s), 0 warning(s)`. **Documentation alignment** — no doc change was required, and the reason matters: `design.md:392` ALREADY specified "404 `not_found` for a requested existing route resource only — Resource missing, never activation". F-080-06-ROWMISS was therefore the implementation drifting from a design that was correct from the start, not a missing rule; the code now conforms to it. `docs/API.md` needs no update either — its `not_found` entries all belong to the ntfy adapter, and this change is client-side classification only, leaving server behaviour byte-for-byte unchanged. **Consumer impact** — covered by the consumer sweep. **Zero warnings** — all eight gate commands exit 0 with no warning output, and suite counts moved monotonically 73 → 74 → 75 → 76 passing with zero failures and skips held constant, so no test was converted into a skip to obtain a green result.
 
 ## Planning Assumptions And Owner Routes

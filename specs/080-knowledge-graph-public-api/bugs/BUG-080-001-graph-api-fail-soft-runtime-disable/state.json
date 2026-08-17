@@ -54,20 +54,43 @@
     "audit": {
       "schemaVersion": "audit-run/v1",
       "runId": "audit-080-001-20260817T211816Z",
-      "currentAttemptId": null,
+      "currentAttemptId": "audit-080-001-20260817T211816Z-a1",
       "attempts": [
         {
           "attemptId": "audit-080-001-20260817T211816Z-a1",
-          "resultState": "INCOMPLETE",
-          "targetRevision": "sha256:0b42df27bbaf7a8ac313dd82c15a3cb0fe746fc4b4be5f61fad967f2d1a4af77",
+          "resultState": "ACTIVE",
+          "targetRevision": "sha256:92849b74c2fb9155103237ee836c692bb898410c25716add16f650baa3841a04",
           "contractDigest": "sha256:aa91472c047d3d985d38c1d308feb1e6081955b2aa553816deb5987d9cdc449f",
           "auditProfile": "delivery-completion-v1",
           "targetStatus": "done",
-          "auditVerdict": null,
-          "outcome": null,
+          "auditVerdict": "REWORK_REQUIRED",
+          "outcome": "route_required",
+          "blockingCode": "DELIVERY_COMPLETION_FAILED",
+          "nextRequiredOwner": "bubbles.plan",
           "evidenceRef": "report.md#delivery-completion-audit---2026-08-17",
-          "addressedFindings": [],
-          "unresolvedFindings": []
+          "addressedFindings": [
+            "F-AUD-01",
+            "F-AUD-02",
+            "F-AUD-03",
+            "F-AUD-09",
+            "F-AUD-10",
+            "AUD-080-001-STALECOUNT-001",
+            "AUD-080-001-REGISTER-001",
+            "AUD-080-001-REVLABEL-001"
+          ],
+          "unresolvedFindings": [
+            "F-AUD-04",
+            "F-AUD-05",
+            "F-AUD-06",
+            "F-AUD-07",
+            "F-AUD-08",
+            "F-AUD-11",
+            "F-AUD-12",
+            "F-AUD-13",
+            "AUD-080-001-MANIFEST-001",
+            "AUD-080-001-MANIFEST-002",
+            "AUD-080-001-BOUNDARY-001"
+          ]
         }
       ]
     }
