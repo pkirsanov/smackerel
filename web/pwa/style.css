@@ -94,7 +94,14 @@ h1 {
 
 @keyframes spin { to { transform: rotate(360deg); } }
 
-.hidden { display: none; }
+/* `!important` for the same cascade reason as `[hidden]` above, and this one is
+ * NOT theoretical. `.hidden` is (0,1,0) and `.btn` at line ~224 is also (0,1,0)
+ * but declared LATER, so `display: inline-flex` wins the tie and defeats it.
+ * `assistant.html` ships `class="btn btn-secondary hidden"` on the retry button
+ * and `assistant.js` calls `classList.add("hidden")` in four places to hide it;
+ * without this, every one of those is inert and the user is offered "Retry last"
+ * when there is nothing to retry. */
+.hidden { display: none !important; }
 
 /* Spec 100 SCOPE-01 — shared cross-surface app-shell nav (PWA surfaces) */
 .app-shell-nav {
