@@ -47,6 +47,7 @@ with a commit, or routed to a named owner with the reason it is not settled here
 | 2026-08-17 | Whether a row-missing read deserves its own "this item no longer exists" copy instead of reusing `degraded` | **ROUTED — deliberately not invented mid-fix.** `degraded` is honest and non-misleading today and offers a retry, so there is no user-facing defect pending the decision. New user-facing copy is a design decision. Routed to `bubbles.design`. | report.md § F-080-06-ROWMISS "Left open" |
 | 2026-08-17 | F-080-05-SEED — `SeedHospitalityTopics` runs unconditionally at boot, and `wiki_state.js` decides emptiness on ROW EXISTENCE, so a brand-new deployment paints `ready` with five zero-content topics instead of the onboarding true-empty view | **ROUTED — open product question.** Whether a seeded-but-unlinked taxonomy should count as user content cannot be settled by a test harness. The true-empty UI contract is nonetheless proven, by inducing the condition in the disposable test stack. Routed to `bubbles.analyst` / `bubbles.design`. | report.md § F-080-05-SEED; `cmd/core/services.go:225` |
 | 2026-08-17 | Spec 105 records a blocker against this packet citing an unresolved design-staleness gap that `bubbles.design` had already closed on 2026-07-24 | **RECORDED, NOT EDITED.** The GATE is correct and observed (105 has picked up no implementation scope); only its stated REASON is stale. Another packet's artifact is not this packet's to rewrite. Routed to the spec-105 owner. | report.md § Consumer sweep; `specs/105-.../state.json` |
+| 2026-08-17 | Gate G040's deferral-language regex contains a two-word alternative naming a code-review artefact, written with NO trailing word boundary, so it matches inside ordinary words. It fired on a sentence in which that two-word alternative was immediately followed by the word `PRE-EXISTING`, whose first three letters completed the match. The prose contained no deferral admission at all | **ROUTED — framework defect, not a packet defect.** Worked around locally by rewording to "one additional PRE-EXISTING defect", which loses no meaning. The alternative needs a trailing word-boundary anchor so it cannot match a longer word. Left unpatched here because `.github/bubbles/**` is framework-managed install output and must be refreshed through the Bubbles installer, not patched in a consumer repo. Routed to the Bubbles framework owner. | `.github/bubbles/scripts/state-transition-guard.sh` Check 18 `deferral_pattern` |
 | 2026-08-17 | The `e2e-ui` lane could exercise only ONE backend state, so most branches of the graph-activation spec had never executed against a real stack | **FIXED IN-PACKET.** The lane now induces FIVE guarded states, each behind a precondition guard that refuses to run the state-adaptive specs unless the stack reports the target state. | commits `b13a99d8`, `9e3f82ac`, `23396c5c`, `cb9f9ad0` |
 | 2026-08-17 | The SCOPE-04 `[hidden]` reset does not cover the sibling `.hidden` CLASS mechanism. `.hidden { display: none }` (`style.css:97`) and `.btn { display: inline-flex }` (`style.css:231`) are both specificity 0-1-0, so the later `.btn` wins the cascade tie — and `assistant.js` toggles only the class, never the attribute, so `#assistant-retry-btn` (`assistant.html:62`, `class="btn btn-secondary hidden"`) stays painted while marked hidden | **ROUTED — deliberately not fixed here.** Same defect FAMILY as the fix this packet shipped, but a different mechanism on a different surface (assistant, not wiki). Correcting it changes observable assistant behaviour, so it needs its own reproduction and its own regression test rather than riding along inside a simplify pass. Routed to the spec-100 / assistant owner. **Claim Source:** interpreted — cascade read from source at the cited lines; NOT browser-verified in this session. | `web/pwa/style.css:97,231`; `web/pwa/assistant.html:62`; `web/pwa/assistant.js` |
 
@@ -6191,6 +6192,13 @@ WORK has value independent of the claim; the attribution is not overstated.
 
 **Verdict: no regression found, on three independent vectors.**
 
+> **SUPERSEDED IN PART, 2026-08-17.** `bubbles.regression` independently CONFIRMED all three
+> conclusions below but found two of the three RATIONALES materially incomplete — see
+> "## INDEPENDENT REGRESSION PHASE — bubbles.regression" later in this report. Most importantly,
+> the reason claim 1 holds is NOT that few elements are affected (dozens are, across 31 PWA pages);
+> it is that EVERY reveal path in the PWA clears the `hidden` attribute itself, so an element is
+> visible if and only if the attribute is absent. Read that section as the authoritative version.
+
 ### 1. Global CSS blast radius — NO regression
 
 Commit `03611451` added a GLOBAL `[hidden] { display: none !important; }`
@@ -6432,4 +6440,235 @@ genuinely different backend states, not four repetitions of the healthy path.
 Verification only. Status remains `blocked` and certification remains withheld:
 Gate G089's upstream dependency `specs/070-web-username-password-login/bugs/BUG-070-001-production-credential-session-paseto-split`
 is genuinely incomplete, and nothing in this pass changes that. Only the `test`
+phase is claimed.
+
+---
+
+## INDEPENDENT REGRESSION PHASE — bubbles.regression (2026-08-17T07:38Z → 07:52Z)
+
+Executed by the `bubbles.regression` specialist. Repository binding was committed
+before any repo-local read (decision `rb:vscode-986d7892898d47784f4228d7687c9e4c:21`,
+revision 21, root `<repo-root>`). No product file, test file, guard or planning
+artifact was edited, weakened, skipped or deleted. Read-only analysis plus one
+test lane.
+
+**Task:** independently verify or refute the three claims in
+`## Regression Analysis (orchestrator-performed, 2026-08-17)` above.
+
+**Verdict: all three CONCLUSIONS confirmed. Two of the three RATIONALES are
+materially incomplete, and one additional PRE-EXISTING defect was found.** The
+distinction matters: a conclusion that is right for an under-stated reason is
+one refactor away from being wrong, so the corrections are recorded rather than
+folded silently into a "confirmed".
+
+### Claim 1 — global CSS blast radius: CONCLUSION CONFIRMED, RATIONALE INCOMPLETE
+
+Sub-claims that hold exactly as stated:
+
+| Sub-claim | Verified at | Result |
+|---|---|---|
+| Global `[hidden] { display: none !important; }` exists | `web/pwa/style.css:26` | CONFIRMED |
+| It is the ONLY `[hidden]` rule in any first-party stylesheet | grep over all 4 first-party CSS files; other hits at `style.css:17,24` are comment prose | CONFIRMED |
+| The PWA contains exactly TWO `style.display` writes | `web/pwa/app.js:31`, `web/pwa/app.js:42` | CONFIRMED |
+| Both target `#install-card` | `web/pwa/app.js:30`, `:41` | CONFIRMED |
+| `#install-card` uses an inline style, not the `hidden` attribute | `web/pwa/index.html:41` — `<div class="card" id="install-card" style="display:none">` | CONFIRMED — the rule cannot match it, so `card.style.display='block'` still works |
+
+The complete first-party stylesheet set is four files, not one:
+`web/pwa/style.css`, `web/pwa/experience-tokens.css`,
+`web/extension/popup/popup.css`, `internal/api/admin_ui_static/login.css`.
+
+**Where the rationale is wrong.** The claim states the rule is *"scoped to
+`[hidden]` alone so no visible element is affected"* and frames the only risk
+vector as `el.style.display` writes. Both are understatements:
+
+1. `!important` defeats **author rules**, not just inline styles — that is the
+   fix's entire purpose, and `style.css:19-20` names `.status`, `.btn` and
+   `.connector-list` as the rules being defeated. Elements carrying `hidden`
+   *plus* one of those classes were previously **painted**; they are now hidden.
+   That is a real, intended, user-visible change.
+2. The affected population is dozens of elements across **31 PWA pages** (every
+   page links `/pwa/style.css`), not two. Examples:
+   `web/pwa/model-connection-detail.html:64,70,76` (`class="status status-…" hidden`),
+   `:103,:104` (`class="btn btn-secondary" hidden`),
+   `web/pwa/drive-rules.html:22,23,44,50,64,71`,
+   `web/pwa/drive-artifact-detail.html:49,97,107,149`.
+
+**Why it is nevertheless NOT a regression — the load-bearing reason, which the
+claim never states.** Every reveal path in the PWA clears the attribute itself.
+A grep for `.hidden =` / `removeAttribute('hidden')` / `setAttribute('hidden')` /
+`toggleAttribute('hidden')` across `web/pwa/*.js` returns **73 matches in 22
+files, and every one manipulates the `hidden` property**, which reflects the
+attribute (e.g. the `show`/`hide` pair repeated at `connector-detail.js:38-39`,
+`connectors.js:20-21`, `drive-search.js:20-21`, `model-connections.js:31-32`,
+`photo-libraries.js:11-12`, and direct writes at `wiki_topics.js:46,65,71,73`,
+`wiki_people.js:31,44,50,52,87`, `wiki_state.js:310,333,340`). **Zero** reveal
+paths use `style.display` or `classList` while leaving the attribute set.
+So an element is visible iff the attribute is absent, in which case the new rule
+does not match it. The guarantee is structural, not incidental.
+
+Surfaces the claim did not cover, all checked and all clear:
+
+- **`web/pwa/experience-tokens.css`** — contains no `[hidden]` and no `.hidden`
+  rule; its only non-`font-display` rule is `display: inline-flex` at `:227`. No
+  PWA page links it (no `<link>` in any of the 31 pages; it is registered as a
+  served asset in `internal/web/experience_assets.go:146`). No interaction.
+- **Inline `<style>` blocks in PWA HTML** — none exist. Grep for `<style` across
+  `web/pwa/*.html` returns zero.
+- **`web/extension/` surface** — `web/extension/popup/popup.css:27` already
+  carried `.hidden { display: none !important; }` before this packet. Separate
+  stylesheet, separate surface, does not load `/pwa/style.css`. Unaffected.
+- **A third `style.display` write exists outside the PWA** —
+  `internal/api/admin_ui_static/tokens.html:219` (`enrollSecret.style.display =
+  'block'`). Genuinely out of blast radius: `tokens.html` links no external
+  stylesheet (it uses an inline `<style>` at `:27`), so `/pwa/style.css` is never
+  loaded there. The claim's word "PWA" was doing unstated load-bearing work.
+- **`<input type="hidden">`** (`login.html:28,42`; `register.html:14`) does NOT
+  match `[hidden]` — that is the `type` attribute, not the `hidden` attribute.
+
+### NEW FINDING (pre-existing defect, NOT a regression) — the `.hidden` CLASS is still defeated
+
+The packet fixed the `hidden` **attribute**. The `.hidden` **class** has the
+identical unfixed cascade bug, in the exact shape `style.css:18-20` describes:
+
+- `.hidden { display: none; }` — `web/pwa/style.css:97`, no `!important`
+- `.btn { … display: inline-flex; … }` — `web/pwa/style.css:224-237`, display at `:231`
+
+Both are specificity 0-1-0, so source order decides and `.btn` (231) beats
+`.hidden` (97). The only element affected is `#assistant-retry-btn`
+(`web/pwa/assistant.html:62`, `class="btn btn-secondary hidden"`), which
+`assistant.js` hides *only* via the class
+(`assistant.js:198,200,311,426`). It therefore stays painted when JS "hides" it.
+
+Not a regression from this packet: commit `03611451` is **purely additive**
+(`1 file changed, 13 insertions(+)`, zero deletions) and touches neither
+`.hidden` nor `.btn`; `assistant.html` predates it (`faddbd7d`, spec 100).
+
+The sibling element is fine: `#assistant-error` (`assistant.html:50`,
+`class="assistant-error hidden"`) has no competing rule — `.assistant-error` is
+absent from every first-party stylesheet — so `.hidden` applies uncontested.
+
+Recorded as a finding for the owning spec (spec 100 assistant surface), not
+actioned here: it is outside this packet's work boundary and fixing it would be
+unrequested product change during a regression phase.
+
+### Claim 2 — shared harness contract: CONCLUSION CONFIRMED, EVIDENCE INSUFFICIENT AS STATED
+
+**Unit lane, executed this session:**
+
+```
+$ ./smackerel.sh test unit
+exit: 0
+lines: 441
+sha256: b28df77e5d7e948ec68734f7a74a0014bacd07ad8c998d2ddb4b9309eb337c67
+```
+
+Wrapped in `evidence-capture.sh`; the hash re-derives with `--verify`. **Real
+exit code: 0.** (The hash differs from the test phase's `b8041120…` because the
+lane installs `gettext-base` via apt and that transcript varies; the exit code is
+the invariant.)
+
+**The count is right, the lane is not.** Exactly FIVE files pin
+`scripts/runtime/web-e2e-ui.sh` by source text — but only THREE run in the unit
+lane:
+
+| File | Lane | Ran under `test unit`? |
+|---|---|---|
+| `tests/unit/cli/spec_077_bootstrap_pwa_tooling_test.sh` | unit | YES |
+| `tests/unit/cli/spec_077_playwright_config_fail_loud_test.sh` | unit | YES |
+| `tests/unit/cli/spec_077_test_dispatcher_test.sh` | unit | YES |
+| `tests/integration/cli/spec_077_compose_project_test.go` | **integration** | **NO** |
+| `tests/integration/cli/spec_077_test_stack_isolation_test.go` | **integration** | **NO** |
+
+Both Go files carry `//go:build integration` (line 1 of each).
+`scripts/runtime/go-unit.sh:57-67` builds `go_test_args` with **no `-tags`** and
+runs `go test ./...`; only `scripts/runtime/go-integration.sh:48` passes
+`-tags integration`. Build-tag exclusion means those two files were not compiled,
+so `test unit` exit 0 cannot speak to them.
+
+That gap matters more than it sounds: the two excluded files assert precisely the
+invariants this packet's four new guarded phases are most likely to disturb — the
+teardown trap and the dedicated Compose project. The brace-balancing parser the
+claim worried about (`spec077extractFunction`,
+`spec_077_test_stack_isolation_test.go:126-152`) lives in one of them.
+
+**Gap closed by static verification** — the same checks those tests perform,
+executed by reading the harness rather than by spinning up a stack (the e2e-ui
+lane was deliberately not run):
+
+| Asserted invariant | Observed | Result |
+|---|---|---|
+| `trap 'tear_down_test_stack' EXIT` | `web-e2e-ui.sh:334` | HOLDS |
+| INT trap calling `tear_down_test_stack` | `:335` | HOLDS |
+| TERM trap calling `tear_down_test_stack` | `:336` | HOLDS |
+| `tear_down_test_stack` body invokes `e2e_ui_compose down` | fn spans `:285-293`; call at `:290` | HOLDS |
+| that body must NOT contain `smackerel.sh --env dev` / `--env test down` | absent | HOLDS |
+| `bring_up_test_stack` invokes `e2e_ui_compose up` | fn spans `:294-392`; call at `:354` | HOLDS |
+| that body must NOT contain `smackerel.sh --env test up` / `--env dev` | only `--env test build` appears, and only inside a comment at `:349` | HOLDS |
+| `smackerel_env_value "$SMACKEREL_E2E_UI_ENV_FILE" "CORE_EXTERNAL_URL"` | `:302` | HOLDS |
+| `export SMACKEREL_BASE_URL="$core_url"` | `:317` | HOLDS |
+| no hardcoded localhost / no `:-` fallback for `SMACKEREL_BASE_URL` | neither present | HOLDS |
+
+Brace balance for the two brace-parsed functions is intact — both extract as
+`{{}{}}` (3 open, 3 close), so the parser still terminates on the correct
+closing brace. The structural reason the packet did not break it: all twelve new
+phase functions begin at `:393` (`clear_seeded_taxonomy`) and run to `:918`,
+entirely **after** both parsed functions end at `:392`.
+
+### Claim 3 — classifier consumers: CONFIRMED, with a consumer undercount
+
+| Sub-claim | Verified at | Result |
+|---|---|---|
+| typed `404 not_found` → `CODE_ROW_MISSING`, bare 404 → `CODE_ROUTE_ABSENT` | `wiki_state.js:194` | CONFIRMED |
+| `CODE_ROW_MISSING` → `STATE_DEGRADED` | `wiki_state.js:246-250` | CONFIRMED |
+| ZERO PWA modules outside `wiki_state.js` reference `STATE_ROUTE_ABSENT` / `STATE_DEGRADED` / `CODE_ROW_MISSING` / `CODE_ROUTE_ABSENT` | grep over `web/pwa/*.js`: all 18 hits are in `wiki_state.js` | CONFIRMED |
+| consumers pass state through opaquely | every call site is `renderReadState(status, result.state, {...})` | CONFIRMED |
+| every such call site passes `onRetry` | see below | CONFIRMED |
+| `degraded` is retryable, `route-absent` is not | `wiki_state.js:131-134` `action: "Try this view again"`; `:151-155` `action: ""` | CONFIRMED |
+
+**Correction — the consumer surface is larger than "four surfaces".** The claim
+cites `wiki_topics.js`, `wiki_people.js`, `wiki_places.js`, `wiki_time.js`. It
+omits `wiki_artifact.js:47`, which is a fifth module using the identical
+pass-through shape, and it omits the three **edges-region** pass-through sites
+(`wiki_topics.js:131`, `wiki_people.js:106`, `wiki_places.js:106`) which forward
+`edgesResult.state`. Nine opaque pass-through sites in five modules, not four.
+Every one of the nine supplies `onRetry` (verified individually), so the
+verdict — and the "degraded now renders a retry affordance" consequence — is
+unchanged and in fact applies more broadly than claimed. `wiki.js:27` is a sixth
+importer but only ever passes the literal `STATE_DISABLED`, never a classifier
+result, so it is not a consumer of this mapping.
+
+**Indirect consumers — both vectors checked, both closed:**
+
+1. **DOM `data-graph-state`** — it is **write-only in product code**. The only
+   two occurrences are `setAttribute` calls at `wiki_state.js:336` and `:341`.
+   No product module reads the attribute back, so no behaviour can branch on it.
+2. **Tests asserting a state for a 404** — the only assertions are in this
+   packet's own `graph-activation.spec.ts`, and both assert the NEW behaviour:
+   `:456` `not.toHaveAttribute("data-graph-state", STATE_ROUTE_ABSENT)` and
+   `:706` `not.toBe(STATE_ROUTE_ABSENT)`. Aligned, not contradicted.
+   `web/pwa/tests/graph_state_vocabulary_drift_test.go:216` mentions
+   `CODE_ROUTE_ABSENT` only inside `jsConstName`, a wire-code→JS-identifier
+   helper used to assert vocabulary *coverage*; it does not pin the 404 mapping.
+   That file carries no build tag, so it ran in the unit lane above and passed.
+
+### Cross-spec impact
+
+No new conflict. Nothing outside `specs/080-…/` was touched by this phase. The
+downstream gates on spec 105, spec 106 and BUG-102-001 all key on this packet's
+CERTIFICATION, which remains withheld, so none can have consumed a changed
+contract.
+
+### Coverage delta
+
+No test was weakened, skipped, deleted or made permissive by this phase — none
+was edited at all. Coverage is unchanged relative to the `test` phase baseline
+recorded above; the unit lane reports the same exit 0 over the same 441-line
+transcript shape.
+
+### Scope of this phase
+
+Verification only. Status remains `blocked`; certification remains withheld
+because Gate G089's upstream dependency
+`specs/070-web-username-password-login/bugs/BUG-070-001-production-credential-session-paseto-split`
+is genuinely incomplete, and nothing here changes that. Only the `regression`
 phase is claimed.

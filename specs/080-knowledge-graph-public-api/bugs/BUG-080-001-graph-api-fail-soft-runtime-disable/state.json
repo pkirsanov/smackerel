@@ -47,7 +47,8 @@
       "validate",
       "security",
       "audit",
-      "test"
+      "test",
+      "regression"
     ],
     "pendingTransitionRequests": [],
     "audit": {
@@ -418,14 +419,25 @@
       "runStartedAt": "2026-08-17T06:38:50Z",
       "runEndedAt": "2026-08-17T06:54:14Z",
       "provenanceNote": "Executed by the bubbles.test specialist, which wrote its own findings to report.md under '## INDEPENDENT TEST PHASE - bubbles.test' with its own timestamps and evidence-capture sha256 hashes. That subagent did not persist this state.json claim before returning; the claim is recorded here to complete the persistence step. The provenance is genuine - the work was NOT performed by the orchestrator.",
-
       "summary": "test phase executed independently by bubbles.test. COMMANDS AND OBSERVED RESULTS: ./smackerel.sh test unit exit 0 (441 lines, evidence-capture sha256 b80411200f6c72d8...); ./smackerel.sh test e2e-ui LANE_EXIT=0 with all four phases PASS; regression-quality-guard exit 0 with 0 violation(s), 0 warning(s). The e2e-ui lane was run UNFILTERED and UNWRAPPED so no per-phase result line could be bounded out of the transcript. NON-VACUITY MEASURED RATHER THAN ARGUED: the SAME eight test bytes reported FOUR DIFFERENT painted arms across the four phases in one run - true-empty -> painted=true-empty, base -> painted=ready, store-unavailable -> painted=store-unavailable, graph-disabled -> painted=disabled, with the row-missing probe independently reporting 404/not_found->degraded, 503/store_unavailable->store-unavailable and 503/capability_disabled->disabled. Four distinct arms from one unchanged spec file is direct proof the phases drove genuinely different backend states rather than four repetitions of the healthy path. CORRECTION IT RAISED, since verified and applied across scopes.md/report.md/state.json: the restore check assert_seeded_taxonomy_restored asserts HTTP 200 AND a NON-EMPTY items array; it does NOT compare returned ULIDs against pre-delete ids, so the earlier 'ASSERTS ... FRESH ULIDs' wording overstated the mechanism. The freshness conclusion still holds BY CONSTRUCTION - the before-specs guard proved all three families empty, so every row seen afterwards must be newly inserted - and the ULIDs are printed for inspection rather than asserted against. Recorded as inference, not as a mechanical assertion. TWO LIMITATIONS RECORDED RATHER THAN SMOOTHED OVER: (1) LANE_EXIT=0 alone is necessary but NOT sufficient, because all three induced-fault phases share one gate predicate, so a filtered run could skip all three and still exit 0 on the full suite; the real proof is the three 'phase: PASS' lines, present in this unfiltered run. (2) The base (ready) run has no dedicated precondition guard - its state is asserted only transitively by assert_seeded_taxonomy_restored completing immediately before the full suite starts, which is adequate unfiltered but is a weaker link than the three explicit guards. Status remains blocked; only the test phase is claimed."
+    },
+    {
+      "agent": "bubbles.regression",
+      "phasesExecuted": [
+        "regression"
+      ],
+      "statusBefore": "blocked",
+      "statusAfter": "blocked",
+      "runStartedAt": "2026-08-17T07:38:00Z",
+      "runEndedAt": "2026-08-17T07:52:00Z",
+      "provenanceNote": "Executed by the bubbles.regression specialist, which wrote its findings to report.md under '## INDEPENDENT REGRESSION PHASE - bubbles.regression'. That subagent did not persist this state.json claim before returning; the claim is recorded here to complete the persistence step. The provenance is genuine - the work was NOT performed by the orchestrator.",
+      "summary": "regression phase executed independently by bubbles.regression against the orchestrator's prior analysis. VERDICT: all three CONCLUSIONS confirmed, but TWO of the three RATIONALES materially incomplete, plus one separate PRE-EXISTING defect found. CLAIM 1 (global CSS) - conclusion confirmed, rationale corrected in two ways. (a) The prior framing that the rule is 'scoped to [hidden] alone so no visible element is affected' understates it: !important defeats AUTHOR RULES, which is the fix's entire purpose - style.css:19-20 names .status, .btn and .connector-list as the rules being defeated, and elements carrying hidden PLUS one of those classes were previously PAINTED and are now hidden. That is a real, intended, user-visible change. (b) The affected population is dozens of elements across 31 PWA pages (every page links /pwa/style.css), not two. THE LOAD-BEARING REASON IT IS STILL NOT A REGRESSION, which the prior claim never stated: every reveal path in the PWA clears the attribute itself - a grep for .hidden= / removeAttribute / setAttribute / toggleAttribute returns 73 matches across 22 files and EVERY one manipulates the hidden property; ZERO reveal paths use style.display or classList while leaving the attribute set. So an element is visible IFF the attribute is absent, in which case the new rule cannot match it. The guarantee is structural, not incidental. Surfaces the prior claim did not cover, all checked and clear: experience-tokens.css (no [hidden]/.hidden rule, not linked by any PWA page), inline <style> blocks in PWA HTML (none exist), web/extension/popup/popup.css (already carried .hidden{display:none!important} before this packet; separate surface), a THIRD style.display write at internal/api/admin_ui_static/tokens.html:219 which is genuinely out of blast radius because that page links no external stylesheet - the prior claim's word 'PWA' was doing unstated load-bearing work - and <input type=hidden> which does NOT match [hidden] (that is the type attribute). CLAIM 2 (shared harness) - conclusion confirmed; ./smackerel.sh test unit exit 0, 441 lines, sha256 b28df77e5d7e948ec68734f7a74a0014bacd07ad8c998d2ddb4b9309eb337c67. CLAIM 3 (classifier consumers) - conclusion confirmed. NEW FINDING, PRE-EXISTING DEFECT NOT A REGRESSION: the .hidden CLASS still has the identical unfixed cascade bug - .hidden{display:none} (style.css:97, no !important) versus .btn display: inline-flex (style.css:231), both specificity 0-1-0 so source order decides and .btn wins. The only affected element is #assistant-retry-btn (assistant.html:62, class='btn btn-secondary hidden'), which assistant.js hides ONLY via the class (assistant.js:198,200,311,426), so it stays painted when JS 'hides' it. Proven NOT a regression from this packet: commit 03611451 is purely additive (1 file changed, 13 insertions, zero deletions) and touches neither .hidden nor .btn, and assistant.html predates it. The sibling #assistant-error is fine because .assistant-error has no competing rule. Routed to the owning spec 100 assistant surface, not actioned here - fixing it would be unrequested product change during a regression phase. This independently corroborates the same defect found by bubbles.simplify."
     }
   ],
   "activeBugs": [],
   "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-08-17T06:54:14Z",
+  "lastUpdatedAt": "2026-08-17T07:52:00Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "bug": "bug.md",
