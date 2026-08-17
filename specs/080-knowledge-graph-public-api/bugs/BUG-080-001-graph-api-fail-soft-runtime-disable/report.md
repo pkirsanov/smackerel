@@ -5482,6 +5482,78 @@ this review.
 
 <a id="security-review"></a>
 
+## Security Review — CORRECTED 2026-08-17 by independent bubbles.security pass
+
+**Read this before the orchestrator-authored review below.** An independent
+`bubbles.security` specialist re-derived all five claims from source and
+**REFUTED TWO of them as stated**. Both conclusions survive, but the REASONING
+was wrong, and in one case wrong in a security-relevant way. The original text is
+preserved below unedited so the correction is auditable.
+
+| # | Original claim | Verdict |
+|---|---|---|
+| 1 | Error envelopes carry only literals from call sites | **REFUTED as stated** — conclusion survives |
+| 2 | Auth-ordering trade-off is acceptable | **Fact confirmed; my justification unsound** |
+| 3 | No existence oracle | CONFIRMED |
+| 4 | Cache privacy covers errors | CONFIRMED |
+| 5 | Harness auth path is production-inert | **REFUTED as stated** — conclusion survives |
+
+**Claim 1 — my "all literals" invariant is false.** `parseSourceParam`
+(`internal/api/graphapi/edges.go`) formats the ATTACKER-CONTROLLED `kind` from
+`?source=` into its error with `%q`, and that string reaches the wire. I verified
+this myself at the call site. Not exploitable — `application/json` plus
+`json.NewEncoder`'s default `SetEscapeHTML(true)` and the global `nosniff` header,
+and the reflected value is the caller's own input, so no server-side detail
+escapes. But the invariant I asserted does not hold, and nothing enforces
+value-safety at that call site.
+
+**Claim 2 — the trade-off is still acceptable, but not for the reason I gave.**
+I argued that reordering Guard before RequireScope "would contradict the
+fail-soft contract". That is wrong: fail-soft owes *present-but-disabled* to
+ENTITLED callers, and an unscoped caller is not entitled. The code itself proves
+reordering is survivable — the terminal 503 responder is registered with a
+comment saying it holds "even if the Guard is ever reordered". ACCEPT stands on
+SEVERITY instead: one bit of deployment posture disclosed to an
+already-authenticated principal, revealing nothing about corpus content. LOW.
+
+Also corrected: my supporting sub-claim that "/api/health already exposes the
+same fact" was NOT verified by the specialist and is not evidence. It is
+withdrawn rather than inherited.
+
+**Claim 5 — I checked the wrong control.** `web_login.go` governs cookie
+ISSUANCE; the harness seeds the cookie DIRECTLY and never calls `/v1/web/login`,
+so the deciding control is `bearerAuthMiddleware`. I verified its Branch 3
+myself: `if d.AuthToken != "" && ConstantTimeCompare(token, d.AuthToken) == 1`
+mints a `SessionSourceSharedToken` session. The real gate is
+`perUserActive := Enabled && ActivePublicKey != ""`, NOT `Enabled == false` as I
+wrote. Inertness in production comes from SECRET SEPARATION, not from a config
+flag. The conclusion holds; my stated mechanism was wrong.
+
+**New finding F-SEC-01 (MEDIUM, routed).** `AuthConfig.Enabled = true` does not
+by itself disable shared-token auth. With `Enabled = true` but no verification
+key, control reaches Branch 3 and the shared token authenticates as
+`SessionSourceSharedToken`, which `RequireScope` passes WITHOUT checking scopes
+(`internal/auth/scope_middleware.go`) — an implicit `knowledge-graph:read`. The
+existing defence-in-depth 401 covers only the EMPTY-token case. Honest limit,
+stated by the specialist and not inflated here: reachability at boot was NOT
+established — `cmd/core/wiring.go` has a conditional, not a refusal, and no run
+was performed. If startup already refuses that combination this degrades to
+INFORMATIONAL. Routed to the auth owner (spec 070 / BUG-070-001), which is the
+same upstream packet this bug already depends on via Gate G089.
+
+**Cursor review — no finding.** MAC verified BEFORE `json.Unmarshal`,
+`hmac.Equal` constant-time, version pinned, and all failures collapse to a single
+error so there is no differential oracle. Latent note: cursors carry no identity
+binding or expiry, which is safe ONLY under the single global-corpus model and
+would become an immediate IDOR vector if per-user partitioning ever lands.
+
+**Test-precision note (LOW).** The nine-path oracle test uses
+`?sourceKind=…&sourceId=…` while the edges handler reads `?source=kind:id`.
+Denial happens at middleware so claim 3 is unaffected, but that row proves the
+edges ROUTE denies, never that the edges HANDLER is leak-free.
+
+---
+
 ## Security Review (security phase, 2026-08-17)
 
 Executed directly against source after two dispatched subagent attempts produced
@@ -5552,3 +5624,237 @@ Read: `internal/api/graphapi/{errors,activation,topics,people,places,privacy}.go
 `web/pwa/wiki_state.js`, `web/pwa/tests/graph-activation.spec.ts`. No product
 code was changed, so no re-run of the build gates was required; the gate
 evidence already recorded remains current.
+
+---
+
+## Independent Security Verification (bubbles.security, 2026-08-17)
+
+**Claim Source: interpreted** — this is a source-reading review. No command was
+executed against a running stack and no test was run in this session (the
+e2e-ui lane was held by another agent; running it would have contended for the
+same compose project). Every verdict below is grounded in a file:line that was
+read in this session. Where a property could only be settled by execution, that
+is stated as a limit rather than asserted.
+
+Two of the five prior claims are **REFUTED as stated**. In both cases the prior
+review's *conclusion* survives, but the *stated reason* is wrong — which matters,
+because a control justified by a false invariant is not actually held in place by
+anything.
+
+### Claim 1 — "only literal messages from call sites" — REFUTED (conclusion survives)
+
+The envelope shape is confirmed: `ErrorEnvelope`/`ErrorBody` is a closed
+`{code,message,field}` triple (`internal/api/graphapi/errors.go:31-40`), and
+`classifyStoreError` returns the canonical `ErrStoreUnavailable` singleton rather
+than driver text — the one `err.Error()` there
+(`internal/api/graphapi/storeerr.go:85`) is a comparison, never an output.
+
+But the "only literal messages" invariant is **false**. There is exactly one
+dynamic-message call site:
+
+- `internal/api/graphapi/edges.go:68` → `WriteError(w, 400, CodeInvalidKind, "source", err.Error())`
+- the error comes from `parseSourceParam`, which at
+  `internal/api/graphapi/edges.go:141` formats
+  `"source kind %q not allowed (allowed: %s)"` with `kind`
+- `kind` is attacker-controlled: `kind = raw[:idx]` (`edges.go:131`) where `raw`
+  is `r.URL.Query().Get("source")` (`edges.go:59`)
+
+So a graph error body **does** echo attacker-controlled input. That also answers
+the "ALSO CONSIDER" question about reflected input: yes, one path reflects.
+
+**Is it exploitable? No — and the reasons are worth naming, because they are the
+controls actually doing the work:**
+
+- Reflected XSS is ruled out by two independent facts: the body is written as
+  `Content-Type: application/json; charset=utf-8` (`errors.go:145`) and encoded
+  via `json.NewEncoder`, whose default `SetEscapeHTML(true)` renders `<`/`>`/`&`
+  as `\u003c`/`\u003e`/`\u0026`; and `X-Content-Type-Options: nosniff` is set
+  globally (`internal/api/router.go:46` → `:832`), so a browser will not sniff
+  the JSON into HTML.
+- No server-side information escapes: the reflected value is the caller's own
+  input. No stack trace, SQL, table name, or path — the prior review's actual
+  security conclusion holds.
+- Reflection is bounded by Go's `MaxHeaderBytes` (default 1 MiB), so there is no
+  meaningful amplification.
+
+**Severity: INFORMATIONAL.** No fix required. Recorded because the prior review
+asserted an invariant ("all literals") that the code does not hold. Nothing —
+no test, no lint — enforces value-safety at this call site, so a future edit that
+wraps a store or row error into `parseSourceParam` would ship it to the wire and
+the recorded review would read as if that had been checked.
+
+### Claim 2 — auth ordering and its trade-off — CONFIRMED (fact), JUSTIFICATION UNSOUND (disposition still defensible)
+
+The ordering is exactly as described:
+
+- `internal/api/router.go:87` — `r.Use(deps.bearerAuthMiddleware)` (enclosing group)
+- `internal/api/router.go:271` — `r.Use(deps.GraphCapability.Guard)`
+- `internal/api/router.go:272` — `r.Use(auth.RequireScope("knowledge-graph:read"))`
+
+`Guard` short-circuits when disabled (`internal/api/graphapi/activation.go:191-198`),
+so an authenticated caller lacking the scope does receive `503 capability_disabled`
+rather than `403`. It is documented at the registration site
+(`router.go:265-270`). All confirmed.
+
+**My independent judgement: the disposition ("accept") is right, but the recorded
+reason is not.** The review argues reordering "would contradict the fail-soft
+contract." It would not. The fail-soft contract (per `activation.go:10-21`) exists
+so a disabled capability is *present-but-disabled* instead of a silent 404 — a
+promise owed to callers **entitled** to the capability. An unscoped caller is not
+entitled, so answering them `403` breaks no part of it. The code itself proves
+reordering is survivable: the DISABLED branch independently registers every path
+against the terminal 503 responder, with the comment that this keeps paths
+503-answering "even if the Guard is ever reordered" (`router.go:279-285`).
+
+The disposition still stands on **severity**, not on contract necessity: what
+leaks is one bit of *deployment posture* ("graph is disabled") to a principal who
+already holds a valid session, and it reveals nothing about corpus content.
+That is LOW. Accept — but on the honest ground.
+
+I could **not** verify the sub-claim that "the same fact is already visible via
+authenticated `/api/health`". `internal/api/health.go:378` carries a
+`GraphCapability` field, but I did not trace it to a field actually serialized on
+the health response body, and I did not execute a request to check. Treating that
+sub-claim as established would be unfounded; the accept decision does not depend
+on it.
+
+### Claim 3 — no existence oracle — CONFIRMED
+
+`tests/integration/graphapi/corpus_authorization_test.go:562-596`. A real seeded
+id (`existing := "/api/topics/" + topicIDs[0]`, :562) and a certainly-absent id
+(`absent := ... "-topic-does-not-exist"`, :563) are both probed, the `paths` slice
+holds **nine** entries (:565-580), `assertDenialLeaksNothing` is applied to each
+(:584), and the byte-identity assertion is a literal body comparison
+(`if string(existingBody) != string(absentBody)`, :592). Confirmed as described.
+
+**One precision caveat the prior review did not note.** Path nine
+(`corpus_authorization_test.go:579`) is
+`/api/graph/edges?sourceKind=artifact&sourceId=...`, but `ListEdges` reads the
+`source` parameter in `kind:id` form (`edges.go:59`, `:129-142`). This is the only
+call site in the repository using `sourceKind=`/`sourceId=`; every other edges
+caller uses `?source=kind:id`. Because the ungranted caller is denied by
+`RequireScope` *before* the handler runs, the denial-identity property still holds
+and claim 3 is unaffected — but that row proves only that the edges **route**
+denies, never that the edges **handler** is leak-free. Test-precision finding,
+**LOW**, owner `bubbles.test`.
+
+### Claim 4 — cache privacy covers errors — CONFIRMED
+
+`WriteError` orders the calls correctly: `Content-Type` (`errors.go:145`),
+`SetPrivateNoStore(w)` (`:146`), then `w.WriteHeader(status)` (`:147`). The
+ordering is load-bearing exactly as claimed — `SetPrivateNoStore` is a
+`Header().Set` (`privacy.go:58`), and Go freezes the header map at the status
+line. `WriteAPIError` funnels through `WriteError` (`errors.go:162`) and
+`GraphCapability.WriteDisabled` funnels through `WriteAPIError`
+(`activation.go:182`), so the 503 disabled envelope inherits it. The success path
+has the same ordering (`topics.go:199-203`). Confirmed.
+
+### Claim 5 — harness auth path is production-inert — REFUTED as stated (conclusion survives; a real MEDIUM finding sits underneath)
+
+The harness behaviour is as described: `authenticate()` seeds an `auth_token`
+cookie whose value is `SMACKEREL_AUTH_TOKEN`
+(`web/pwa/tests/graph-activation.spec.ts:140-147`).
+
+But the claim checks the wrong control, and states the wrong condition:
+
+1. **Wrong file.** `internal/api/web_login.go` governs cookie *issuance*. Whether
+   a *seeded* cookie authenticates is decided by `bearerAuthMiddleware`
+   (`internal/api/router.go:961+`), which the harness reaches without ever calling
+   `/v1/web/login`. A reviewer who reads only `web_login.go` has not examined the
+   control that matters here.
+2. **Wrong condition.** The gate is not `AuthConfig.Enabled == false`. It is
+   `perUserActive := d.AuthConfig.Enabled && d.AuthVerifyOptions.ActivePublicKey != ""`
+   (`router.go:1085`). The shared token is accepted in **two** places:
+   `router.go:1098-1102` (Branch 3, whenever `perUserActive` is false) and
+   `router.go:1066-1076` (Branch 2, even when `perUserActive` is true, if
+   `ProductionSharedTokenFallbackEnabled` is on).
+
+The *conclusion* — the harness cannot authenticate against production — still
+holds, but for a reason the review did not give: the harness supplies the **test
+stack's** secret, and an attacker would need the production `AuthToken` value.
+It is secret separation, not a config flag.
+
+**New finding — F-SEC-01, `AuthConfig.Enabled = true` does not by itself disable
+shared-token auth, and shared-token sessions bypass the graph scope. Severity:
+MEDIUM.**
+
+Composing three verified facts:
+
+- `perUserActive` requires *both* `Enabled` **and** a non-empty `ActivePublicKey`
+  (`router.go:1085`). With `Enabled = true` but no verification key, control falls
+  through to Branch 3 and the shared token authenticates (`router.go:1098-1102`).
+- A shared-token session is `Source: auth.SessionSourceSharedToken`
+  (`router.go:1100`), and `RequireScope` **passes** that source without checking
+  scopes (`internal/auth/scope_middleware.go:71`, documented at `:17`). The graph
+  registration site already acknowledges this
+  (`router.go:237-239`: "shared-token / bootstrap sessions bypass the scope check").
+  So such a session obtains full `knowledge-graph:read` access implicitly.
+- The existing defence-in-depth 401 covers only the case where the token is
+  **empty** (`router.go:1087-1096`, `d.AuthToken == "" && !perUserActive`). A
+  deployment with a *non-empty* `AuthToken` is not covered by it.
+
+Net: a production deployment that sets `Auth.Enabled = true`, fails to configure a
+signing/verification key, and retains `SMACKEREL_AUTH_TOKEN` would silently serve
+the graph API on the shared-token path with the scope gate bypassed — while
+appearing, by the `Enabled` flag alone, to be running per-user auth.
+
+**Verification limit (stated rather than papered over):** I did **not** establish
+that this configuration is reachable at boot. `cmd/core/wiring.go:564` wires the
+verifier under `if cfg.Auth.Enabled && cfg.Auth.SigningActivePrivateKey != ""`,
+which is conditional rather than a refusal, and `router.go:1090` claims "the
+wiring layer already fails fast on this case" — but I did not read the whole of
+`wiring.go` and I ran nothing. If startup already refuses `Enabled=true` with no
+key, this degrades to INFORMATIONAL (defence-in-depth gap only). That question is
+the deciding one and is left explicitly open.
+
+Owner: `bubbles.implement` (guard) / `bubbles.test` (adversarial coverage). Routed,
+not fixed here — it is outside this packet's fail-soft boundary and touches the
+BUG-070-001 credential/session surface this packet already depends on.
+
+### Cursor tampering and forgery — reviewed, NO FINDING
+
+`internal/api/graphapi/cursor.go` is sound on the points that decide forgery:
+
+- HMAC-SHA256 over the payload JSON (`:113-117`), compared with `hmac.Equal`
+  (`:101`) — constant-time, so no MAC-byte timing oracle.
+- **The MAC is verified before `json.Unmarshal` (`:101` precedes `:105`)** — the
+  correct order; unmarshalling unverified attacker JSON first would widen the
+  attack surface for no benefit.
+- Version segment pinned and unknown versions rejected (`:88-90`), blocking
+  format-confusion/downgrade.
+- Every decode failure returns the *same* `ErrMalformedCursor` singleton
+  (`:83-108`), so an attacker cannot distinguish "bad base64" from "bad MAC" —
+  no differential oracle.
+- The secret is defensively copied (`:48`) and an empty secret is rejected
+  fail-loud (`:45-47`).
+
+Two observations, neither a live finding:
+
+- **Cross-family reuse is lenient but unreachable.** Both
+  `edges.go:170` and `topics.go:181` accept an *empty* `Resource`
+  (`payload.Resource != "" && ...`). Since every family stamps a non-empty
+  `Resource` on encode (`topics.go:97`, `people.go:99`, `places.go:106`,
+  `edges.go:105`) and an attacker cannot mint a MAC, no cursor with an empty
+  `Resource` can reach the check. Not exploitable today; it is a latent gap that
+  only holds because of the encoders.
+- **Cursors are unbound to caller identity and never expire** — no user/session
+  binding and no `exp` in `CursorPayload` (`:26-32`). This is safe *only because*
+  the corpus is a single operator-owned global corpus where the grant, not a row
+  partition, differentiates the projection (`activation.go:22-30`), so a replayed
+  cursor yields rows the replaying caller could already read; and a cursor confers
+  no access on its own (the route still sits behind bearer auth + scope).
+  **Recorded as an architectural coupling:** if per-user row partitioning is ever
+  introduced, an unbound cursor becomes an IDOR vector immediately (Gate G047).
+
+### Verdict
+
+⚠️ **FINDINGS** — no critical or high severity issue in the graph fail-soft
+surface. One MEDIUM (F-SEC-01, outside this packet's boundary, routed and with its
+reachability explicitly unresolved), one LOW (test precision, claim 3), one
+INFORMATIONAL (reflected-input invariant, claim 1). Claims 3 and 4 confirmed as
+written; claims 1 and 5 refuted as written with their conclusions intact; claim 2
+confirmed on fact with its justification corrected.
+
+No product code was changed in this review, so the recorded build-gate evidence
+remains current and no gate re-run was required. Status stays `blocked` —
+the upstream BUG-070-001 dependency is unaffected by this review.
