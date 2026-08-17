@@ -6175,3 +6175,87 @@ right, which is exactly when review gets thin. Verify these by hand:
    and no live lane was run this session. If you need the live rows re-proven
    rather than audited, that requires a lane run this audit deliberately did not
    take.
+
+
+---
+
+<a id="regression-analysis"></a>
+
+## Regression Analysis (orchestrator-performed, 2026-08-17)
+
+**Provenance, stated up front:** this analysis was performed by the orchestrator,
+NOT by `bubbles.regression`. Three dispatches of that specialist returned without
+acting, so no `regression` phase is claimed in `completedPhaseClaims` — Gate G022
+still correctly reports it absent. The analysis is recorded here because the
+WORK has value independent of the claim; the attribution is not overstated.
+
+**Verdict: no regression found, on three independent vectors.**
+
+### 1. Global CSS blast radius — NO regression
+
+Commit `03611451` added a GLOBAL `[hidden] { display: none !important; }`
+(`web/pwa/style.css:26`). Because it carries `!important`, it beats not only
+author rules but also NON-important INLINE styles — so the real risk is any code
+doing `el.style.display = '...'` on an element that still carries the `hidden`
+attribute. That element would silently stay invisible.
+
+The whole PWA contains exactly TWO such assignments, both in `web/pwa/app.js`
+(L31, L42), both targeting `#install-card`. That element is declared
+`<div class="card" id="install-card" style="display:none">`
+(`web/pwa/index.html:41`) — it uses an INLINE STYLE, not the `hidden` attribute,
+so the new rule never matches it and `card.style.display = 'block'` still works.
+
+No other `[hidden]` rule exists anywhere in the stylesheet, so there is no
+author rule that was previously overriding the UA behaviour and is now defeated.
+
+### 2. Shared-harness contract consumers — NO regression
+
+`scripts/runtime/web-e2e-ui.sh` gained four guarded phases. FIVE `spec_077_*`
+tests pin that file BY SOURCE TEXT, some parsing it by brace-counting, so a
+cosmetic edit can break a contract test without touching behaviour. All pass:
+
+```
+PASS: spec_077_e2e_ui_no_ml_and_ui_preflight_floor (F-100-OPT-02/03 lock)
+PASS: spec_077_bootstrap_pwa_tooling_test (macOS browser-cache OS-path lock)
+PASS: spec_077_playwright_config_fail_loud_test (TP-077-01-03 / SCN-077-A10)
+PASS: spec_077_test_dispatcher_test (TP-077-01-04 / SCN-077-A09)
+PASS: spec_077_discovery_convention_test (TP-077-02-01 / SCN-077-A02)
+PASS: spec_077_no_stub_bodies_test (TP-077-03-06 / SCN-077-A08)
+PASS: spec_077_test_category_parity_test (TP-077-02-03 / SCN-077-A06)
+ok      github.com/smackerel/smackerel/web/pwa/tests
+UNIT_EXIT=0
+```
+
+### 3. Classifier consumers — STRUCTURALLY non-regressive
+
+Commit `cb9f9ad0` changed what a typed `404 not_found` resolves to: previously
+`route-absent` (terminal, no retry), now `degraded` (retryable). A consumer that
+had hardcoded a branch on `STATE_ROUTE_ABSENT` would change behaviour.
+
+None exists. Grepping every PWA module OUTSIDE `wiki_state.js` for
+`STATE_ROUTE_ABSENT`, `STATE_DEGRADED` or `CODE_ROW_MISSING` returns ZERO hits.
+Every consumer uses the identical shape:
+
+```js
+if (result.state !== STATE_READY) {
+  renderReadState(status, result.state, { code: result.code, privateRegions, onRetry });
+}
+```
+
+(`wiki_topics.js:44,98`; `wiki_people.js:29,74`; and the same in `wiki_places.js`
+and `wiki_time.js`.) The state is passed through OPAQUELY to the single renderer.
+That is the choke-point design working as intended: because no consumer inspects
+which state it received, remapping a status inside the classifier cannot break
+one. It is a structural guarantee, not a lucky absence.
+
+One behavioural consequence, and it is an improvement: every one of those call
+sites passes an `onRetry`, so the newly-reachable `degraded` state renders its
+retry affordance — where `route-absent` deliberately offers none. A user who
+opens a stale topic link now gets a way forward instead of a dead end.
+
+### 4. Cross-spec conflict — none introduced
+
+This packet blocks spec 105, spec 106 and BUG-102-001. All three gate on its
+CERTIFICATION, which remains withheld, so none of them can have consumed a
+changed contract. Spec 105's recorded gate ("BUG-080-001 must be certified done
+before SCOPE-01 pickup") is unaffected and still holding.
