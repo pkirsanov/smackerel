@@ -42,6 +42,7 @@
     "substate": "implemented",
     "runStartedAt": "2026-07-28T08:40:00Z",
     "completedPhaseClaims": [
+      "implement",
       "simplify",
       "validate",
       "security",
@@ -417,6 +418,7 @@
       "runStartedAt": "2026-08-17T06:38:50Z",
       "runEndedAt": "2026-08-17T06:54:14Z",
       "provenanceNote": "Executed by the bubbles.test specialist, which wrote its own findings to report.md under '## INDEPENDENT TEST PHASE - bubbles.test' with its own timestamps and evidence-capture sha256 hashes. That subagent did not persist this state.json claim before returning; the claim is recorded here to complete the persistence step. The provenance is genuine - the work was NOT performed by the orchestrator.",
+
       "summary": "test phase executed independently by bubbles.test. COMMANDS AND OBSERVED RESULTS: ./smackerel.sh test unit exit 0 (441 lines, evidence-capture sha256 b80411200f6c72d8...); ./smackerel.sh test e2e-ui LANE_EXIT=0 with all four phases PASS; regression-quality-guard exit 0 with 0 violation(s), 0 warning(s). The e2e-ui lane was run UNFILTERED and UNWRAPPED so no per-phase result line could be bounded out of the transcript. NON-VACUITY MEASURED RATHER THAN ARGUED: the SAME eight test bytes reported FOUR DIFFERENT painted arms across the four phases in one run - true-empty -> painted=true-empty, base -> painted=ready, store-unavailable -> painted=store-unavailable, graph-disabled -> painted=disabled, with the row-missing probe independently reporting 404/not_found->degraded, 503/store_unavailable->store-unavailable and 503/capability_disabled->disabled. Four distinct arms from one unchanged spec file is direct proof the phases drove genuinely different backend states rather than four repetitions of the healthy path. CORRECTION IT RAISED, since verified and applied across scopes.md/report.md/state.json: the restore check assert_seeded_taxonomy_restored asserts HTTP 200 AND a NON-EMPTY items array; it does NOT compare returned ULIDs against pre-delete ids, so the earlier 'ASSERTS ... FRESH ULIDs' wording overstated the mechanism. The freshness conclusion still holds BY CONSTRUCTION - the before-specs guard proved all three families empty, so every row seen afterwards must be newly inserted - and the ULIDs are printed for inspection rather than asserted against. Recorded as inference, not as a mechanical assertion. TWO LIMITATIONS RECORDED RATHER THAN SMOOTHED OVER: (1) LANE_EXIT=0 alone is necessary but NOT sufficient, because all three induced-fault phases share one gate predicate, so a filtered run could skip all three and still exit 0 on the full suite; the real proof is the three 'phase: PASS' lines, present in this unfiltered run. (2) The base (ready) run has no dedicated precondition guard - its state is asserted only transitively by assert_seeded_taxonomy_restored completing immediately before the full suite starts, which is adequate unfiltered but is a weaker link than the three explicit guards. Status remains blocked; only the test phase is claimed."
     }
   ],
