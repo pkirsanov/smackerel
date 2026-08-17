@@ -147,7 +147,7 @@ Incomplete and non-terminal. Status is `blocked`.
 **Corrected 2026-08 (this session).** The previous text stated that SCOPE-02,
 SCOPE-03 and SCOPE-04 were still open. That is no longer true and is
 left here only as a record of the correction: ALL FOUR scopes are now Done, and
-scopes.md carries 63 checked / 0 unchecked DoD items with inline evidence.
+scopes.md carries 79 checked / 0 unchecked DoD items with inline evidence.
 
 SCOPE-04 completed this session. The `e2e-ui` lane, which could previously
 exercise only ONE backend state, now exercises FIVE guarded states — ready,
@@ -160,14 +160,26 @@ gates exit 0 (see "## Build Quality Gate — executed evidence").
 A real user-facing defect was found and fixed en route: F-080-06-ROWMISS.
 
 **The packet nonetheless remains `blocked`, and MUST NOT be certified.**
-`state-transition-guard.sh` exits 1 with 47 failures that are packet-wide and
-mostly pre-date this session's scope — eight missing specialist phases (Gate
-G022, `completedPhaseClaims` is empty), three failing cross-cutting guards
-(G089/G095/G084), planning-artifact backfill across all four scopes (25 items
-spanning regression-E2E, consumer-impact, shared-infrastructure and
-change-boundary requirements), plus G053, G055, G060 and residual G040
-wording in historical 2026-07-24 planning notes. The full enumeration lives in
-`state.json.blockedReason` so the next owner does not have to re-derive it.
+`state-transition-guard.sh` exits 1 with **6 failures across exactly TWO gates**.
+This paragraph is kept CURRENT deliberately — an earlier revision of it went
+stale within the same session as the count fell, which the independent audit
+caught (F-AUD-01), so it is now the single number-bearing statement here and is
+updated whenever the count moves.
+
+* **G022** — FOUR specialist phases remain unrecorded: `implement`, `test`,
+  `regression`, `stabilize`. Four are now recorded with correct specialist
+  provenance: `simplify`, `validate`, `security`, `audit`. Phase claims
+  previously made under the orchestrator identity were WITHDRAWN after the guard
+  flagged them as impersonation; the underlying work and evidence are retained
+  under `agent: bubbles.goal` with `phasesExecuted: []` and an explicit
+  provenanceNote.
+* **G089** — upstream `BUG-070-001` is genuinely `blocked` (3 checked / 63
+  unchecked DoD, three of six scopes Not Started). Independently re-read by the
+  audit pass. The dependency is real per `bug.md:46` and will not be deleted.
+
+Everything else the earlier revision listed is now CLEARED with evidence: G040,
+G053, G055, G060, G084, G095, and all 25 planning-artifact requirements across
+the four scopes. The full enumeration lives in `state.json.blockedReason`.
 
 ## Bug Reproduction - Before Fix
 
@@ -184,21 +196,32 @@ wording in historical 2026-07-24 planning notes. The full enumeration lives in
 
 ## Code Diff Evidence
 
-Not applicable to this planning-only invocation.
+**Superseded 2026-08-17.** This was true of the original planning-only
+invocation and is false now. Two real product diffs were delivered and are
+recorded verbatim under the `### Code Diff Evidence` section above:
+`web/pwa/wiki_state.js` (F-080-06-ROWMISS, commit `cb9f9ad0`) and
+`web/pwa/style.css` (the `[hidden]` reset, commit `03611451`).
 
 ## Test Evidence
 
-**Phase:** planning  
-**Command:** none  
-**Exit Code:** not applicable  
-**Claim Source:** not-run
+**Superseded 2026-08-17.** The planning-only text below was accurate when
+written and is false now.
 
-No test result is claimed.
+**Phase:** delivery  
+**Command:** `./smackerel.sh test e2e-ui`, `./smackerel.sh test unit`, plus the
+seven other build/validation gates  
+**Exit Code:** `LANE_EXIT=0`; all nine gates exit 0  
+**Claim Source:** executed
+
+Final verification run 2026-08-17T02:40:40Z → 02:46:53Z: `8 passed` in each of
+the four guarded e2e-ui phases and `76 passed` in the full browser suite, 0
+failed. Roughly 99 evidence blocks across this report carry executed results.
+Full detail in `## Build Quality Gate — executed evidence`.
 
 ## Uncertainty Declarations
 
 - Exact config/wiring branches and strict-acceptance omission are not locally confirmed.
-- No secret value was read and no red/green regression exists.
+- No secret value was read. **Superseded 2026-08-17:** a red/green regression DOES now exist — see `## TDD RED-GREEN Ordering (Gate G060)` at the top of this report, which records the RED and GREEN runs for F-080-06-ROWMISS with a byte-identical probe on both sides.
 - **(2026-07-27, bubbles.implement)** T080-02-ADVERSARIAL: the GREEN half is
   proven by a live DISABLED-stack `--- PASS` and the test is structurally
   adversarial (`regression-quality-guard --bugfix` → "Adversarial signal
@@ -5858,3 +5881,297 @@ confirmed on fact with its justification corrected.
 No product code was changed in this review, so the recorded build-gate evidence
 remains current and no gate re-run was required. Status stays `blocked` —
 the upstream BUG-070-001 dependency is unaffected by this review.
+
+---
+
+## Independent Audit (bubbles.audit, 2026-08-17)
+
+**Claim Source: executed** for every count, guard exit code and grep below —
+each was run this session via `run_in_terminal` against the working tree.
+**Claim Source: interpreted** for the honesty judgements drawn from them.
+No stack was brought up and no test lane was run: the `e2e-ui` lane was held by
+a concurrent agent and contending for the same compose project would have
+corrupted its run. This is therefore an artifact-and-source audit, and it does
+not re-prove any live-stack row — it audits whether the recorded proof is honest.
+
+Repository binding was committed before any repo-local read
+(decision `rb:vscode-…:13`, revision 13, root `<repo-root>`).
+
+### Headline
+
+The delivered work is **real and the evidence is genuine**. Sampled DoD claims
+resolve to actual recorded output, the two self-corrections are recorded exactly
+as described, phase-claim provenance is clean, and the `ui-unit` classification
+is honest *in the code*, not merely in the prose about the code.
+
+The packet nonetheless **MUST NOT be certified**, and it carries a real defect
+class this audit is refusing to pass silently: **the canonical report sections a
+reader enters the document through are unreconciled planning-time stubs, and
+several state present-tense facts that are now false.** The packet's supersession
+discipline is rigorous — 17 explicit `Superseded` markers — but every one of them
+sits inside the ad-hoc evidence sections. In the canonical range (`## Summary`
+through `## Audit Verdict`) exactly one marker exists.
+
+### A1 — Transition guard (assertion-only, registry-resolved)
+
+Contract resolved by `transition-contract-resolver.sh`: mode `bugfix-fastlane`,
+audit profile `delivery-completion-v1`, ceiling `done`, current `blocked`,
+digest `sha256:aa91472c…c449f`.
+
+```
+bash .github/bubbles/scripts/state-transition-guard.sh <spec> \
+  --target-status done --expect-workflow-mode bugfix-fastlane \
+  --expect-contract-digest sha256:aa91472c047d3d985d38c1d308feb1e6081955b2aa553816deb5987d9cdc449f
+...
+--- Check 6: Specialist Phase Completion ---
+🔴 BLOCK: Required phase 'implement' NOT in execution/certification phase records (Gate G022 violation)
+🔴 BLOCK: Required phase 'test' NOT in execution/certification phase records (Gate G022 violation)
+🔴 BLOCK: Required phase 'regression' NOT in execution/certification phase records (Gate G022 violation)
+✅ PASS: Required phase 'simplify' recorded in execution/certification phase records
+🔴 BLOCK: Required phase 'stabilize' NOT in execution/certification phase records (Gate G022 violation)
+✅ PASS: Required phase 'security' recorded in execution/certification phase records
+✅ PASS: Required phase 'validate' recorded in execution/certification phase records
+🔴 BLOCK: Required phase 'audit' NOT in execution/certification phase records (Gate G022 violation)
+--- Check 6B: Phase-Claim Provenance (Gate G022 extension) ---
+✅ PASS: Phase 'simplify' has specialist provenance from bubbles.simplify
+✅ PASS: Phase 'validate' has specialist provenance from bubbles.validate
+✅ PASS: Phase 'security' has specialist provenance from bubbles.security
+--- Check 31: Inter-Spec Dependency Enforcement (Gate G089) ---
+🔴 BLOCK: Inter-spec dependency guard failed — Gate G089.
+🔴 TRANSITION BLOCKED: 7 failure(s), 4 warning(s)
+GUARD_EXIT=1
+```
+
+**G089 verified independently, not accepted from the packet's own claim.**
+Upstream `BUG-070-001` read directly this session: `status=blocked`,
+`certification.status=blocked`, **3 checked / 63 unchecked** DoD items, and six
+scope statuses of which **three are `Not Started`** and three `In Progress`. The
+blocker is genuine and correctly characterised.
+
+### A2 — Evidence integrity: PASS
+
+Sampled DoD claims were traced to their recorded output rather than accepted:
+
+```
+8 passed                                             hits=5
+76 passed                                            hits=4
+graph-disabled phase: PASS (271s)                    hits=2
+5 passed (12.6s)                                     hits=2
+MUTATION_A_EXIT=1                                    hits=1
+MUTATION_B_EXIT=1                                    hits=1
+auth-loss-privacy.png / 22047                        hits=1 / 1
+LANE_EXIT=0                                          hits=13
+ok  github.com/smackerel/smackerel/web/pwa/tests  0.015s   → report.md:3337
+```
+
+All 38 distinct `report.md#…` anchors cited by DoD items were resolved against
+report headings: **21 exact, 14 prefix-resolvable, 3 findable only under a
+different heading** (`#f-080-04-lane-resolution` → `#### RESOLUTION (2026-08-16)`
+at :4042; `#scn-080-001-03-refusal` → `### SCN-080-001-03 — aggregate refusal…`
+at :2819; `#t080-04-static` → `#### What T080-04-STATIC proves` at :2363).
+**No cited evidence is missing.** 17 of 38 links do not resolve as literal
+Markdown anchors — a navigation defect (**F-AUD-04**), not fabrication.
+
+DoD items are substantive, not narrative: they name the command, the observed
+counts, the anti-vacuity guard that makes the result non-trivial, and an explicit
+honest boundary. Guard Check 9 confirms all 79 checked items carry evidence blocks.
+
+### A3 — Test Plan ↔ DoD parity: PASS, with a false section title
+
+31 Test Plan rows counted mechanically; **all 31 have a matching Test Evidence
+item**. Two rows (`T080-02-CANARY`, `T080-04-CANARY`) are matched by prose items
+that describe the canary behaviour without citing the row ID, so they are covered
+in substance but not mechanically traceable (**F-AUD-05**).
+
+The section heading **`#### Test Evidence - One Item Per Test Plan Row` is false
+as written**: there are **44** Test Evidence items against 31 rows (**F-AUD-06**).
+This is over-coverage, not a gap, and `bubbles.validate` recorded the 44 figure
+honestly — but the heading asserts a 1:1 mapping that does not hold.
+
+### A4 — Category honesty (`T080-06-RENDER`, `T080-08-MATRIX`): PASS — verified in code
+
+Verified against `web/pwa/tests/graph-activation.spec.ts`, not against the claim:
+
+- **No executable interception anywhere in the file.** The interception scan
+  returns exactly one hit, line 7, inside a doc comment.
+- `T080-06-RENDER` (:759) imports the real `/pwa/wiki_state.js`, calls the real
+  `classifyStatus` and `renderReadState` into real DOM nodes. State induction is
+  by direct module call — a server cannot emit a bare-404/typed-404 contrast on
+  demand. `ui-unit` is the honest label.
+- `T080-08-MATRIX` (:923) drives 11 states × 2 viewports = **22 combinations**,
+  matching the DoD claim exactly, through the real `#wiki-topics-status` node with
+  real geometry and real `.focus()` assertions.
+- **Neither is used to satisfy a live-stack requirement.** The scope's
+  scenario-specific E2E regression DoD item cites only `T080-04-UI`,
+  `T080-05-UI`, `T080-06-UI`, `T080-06-ROWMISS` — all `e2e-ui`. Both `ui-unit`
+  rows state in their own DoD text that they satisfy no live-stack row.
+
+Two precision defects, both minor: the Test Plan marks these rows **Live System:
+`No`**, but they do require a live authenticated stack (`authenticate(page)` +
+`page.goto`) — what is unit-level is the *state induction*, not the environment
+(**F-AUD-07**). And the RENDER DoD transcribes the printed classifier matrix as
+ten keys while the test prints eleven (`bare503` omitted) (**F-AUD-08**).
+
+### A5 — The two self-corrections: PASS, recorded accurately
+
+**(a) Discarded invalid measurement.** Recorded consistently in three places —
+`## TDD RED-GREEN Ordering` (:31-35), `### Honest note on an invalid measurement`
+(:5063), and the `T080-06-ROWMISS` DoD item. All three say the same thing: the
+early red run timed out on `data-wiki-ready`, a landing-page-only signal the
+detail view never sets, never reached its assertion, and was **discarded rather
+than counted as the RED stage**, with the harness corrected before any product
+change. The RED actually counted is the byte-identical `probeStatus=404
+probeCode=not_found painted=route-absent → 1 failed` probe. Not rewritten.
+
+**(b) "Unreachable by construction" correction.** The original wrong text is
+**preserved verbatim** at :4846 and superseded at :4863 by a section that names
+the reasoning error precisely ("I conflated *the product seeds `topics` at boot*
+with *`topics` can never be empty*"). Not quietly rewritten.
+
+### A6 — Withdrawn phase claims: PASS
+
+`execution.completedPhaseClaims` = `["simplify","validate","security"]`. Each is
+backed by an executionHistory entry from the **matching** specialist, and guard
+Check 6B independently confirms specialist provenance for all three. The six
+orchestrator-performed runs are recorded under `agent: "bubbles.goal"` with
+`phasesExecuted: []` and a `provenanceNote` stating the claim was withdrawn after
+the guard flagged impersonation. **No impersonated claim remains, and the
+withdrawal is documented rather than hidden** — including the withdrawn
+orchestrator *audit* verdict, which is exactly why this independent pass exists.
+
+### A7 — Stale claims: **FAIL** — the packet's one real honesty defect
+
+`## Summary` (:141) is correctly marked superseded. **Every other canonical
+section is not.** Measured against the working tree this session:
+
+| Canonical section | States | Actual | Marker? |
+|---|---|---|---|
+| `## Completion Statement` | "63 checked / 0 unchecked" | **79 / 0** | none |
+| `## Completion Statement` | "exits 1 with 47 failures" | **7 failures** | none |
+| `## Completion Statement` | "`completedPhaseClaims` is empty" | **3 claims** | none |
+| `## Completion Statement` | "three failing guards (G089/G095/G084)" | **only G089**; G095 and G084 both PASS | none |
+| `## Completion Statement` | "eight missing specialist phases" | **five** | none |
+| `## Test Evidence` | "Command: none / not-run / No test result is claimed" | ~99 evidence blocks | none |
+| `## Code Diff Evidence` | "Not applicable to this planning-only invocation" | two real product diffs in `### Code Diff Evidence` | none |
+| `## Uncertainty Declarations` | "no red/green regression exists" | report.md's own first section is a RED→GREEN | none |
+| `## Validation Summary` | "No completion validation or certification was performed" | independent validate phase, nine gates exit 0 | none |
+
+This is **F-AUD-01**, the finding that keeps this audit from being clean. It is
+not fabrication — the real evidence is all present further down — but a reader
+entering at the top is told the packet is planning-only with no tests, and the
+one section that summarises status has **every** quantitative claim wrong. The
+Completion Statement also now contradicts `state.json.blockedReason`, which
+correctly records the guard moving to 8 (now 7).
+
+Two further stale cross-references sit **inside checked DoD items** in scopes.md:
+
+- **F-AUD-02** — the `T080-08-A11Y` item and a Scope-4 Core Outcome both say the
+  ten-state claim "stays with the **unchecked** SCN-080-001-08 Core Outcome" /
+  "which stays `[ ]`". `SCN-080-001-08` is **`- [x]`**; the packet has 0 unchecked
+  items.
+- **F-AUD-03** — the `T080-REGRESSION` item says `SCN-080-001-04/05/06` "**remain
+  unverified**". All three are now checked with live-stack evidence, and
+  `SCN-080-001-05` was explicitly resolved at :4863.
+
+Note the historical *section headings* that read "row stays `[ ]`" (:4114, :4260)
+are **correctly** marked superseded and are not counted here.
+
+### A8 — Discovered Issues register: PASS on substance, stale count
+
+Seven rows, every one a decision: **2 fixed in-packet with commits**
+(`cb9f9ad0`; `b13a99d8`/`9e3f82ac`/`23396c5c`), **5 routed to a named owner with
+the reason it is not settled here** (`bubbles.design` ×2, `bubbles.analyst`/
+`bubbles.design`, spec-105 owner, spec-100/assistant owner). **None is a parking
+space.** The spec-105 row is notably disciplined — it records that another
+packet's stated reason is stale and explicitly declines to edit a foreign artifact.
+
+**F-AUD-09** — `state.json` says "Discovered Issues register, **6 rows**" and
+"**six rows** … two fixed in-packet with commits, **four** routed". Actual: **7
+rows, 2 fixed, 5 routed**. The 7th row was added by the simplify pass before
+those summaries were written.
+
+### A9 — Additional finding
+
+**F-AUD-10 — `scenario-manifest.json` is stale.** All 14 scenario entries carry
+`linkedTests: []` despite 31 delivered Test Plan rows and four Done scopes. This
+was correct at planning time (`bubbles.plan` recorded "linkedTests empty pending
+implementation, no fabricated file refs" — the right call then) but was never
+reconciled after implementation landed. `traceability-guard` passes because it
+derives mapping from scopes.md, so this is invisible to the gate. Plan-owned;
+routed to `bubbles.plan`.
+
+**F-AUD-11 — state.json timestamp integrity.** The `bubbles.security` entry
+records `runStartedAt` = `runEndedAt` = `2026-08-17T05:02:00Z`. That is a
+zero-duration run, and it is **later than the wall clock** observed while
+auditing (`NOW_UTC=2026-08-17T04:59:31Z`) and later than this audit's own guard
+run at `04:56:53Z` — which had already observed that entry. The timestamp is an
+estimate, not machine-recorded. The adjacent `bubbles.validate` entry is the
+contrast: it explicitly states its `runStartedAt` is "the machine-recorded mtime
+of the repository-binding control file … not an estimate". Additionally
+`lastUpdatedAt` (`04:26:28Z`) predates the security entry, so it was not advanced
+when that entry was appended. Routed to `bubbles.validate` as the state-owner.
+
+**F-AUD-12 — stale source line references.** The `T080-08-A11Y` DoD item cites
+`graph-activation.spec.ts:311:3`, `:314-318` and `:341-361`. The a11y test is now
+at **:501**; lines 311-318 hold the true-empty test's assertions. The `:311:3`
+figure is legitimate historical Playwright output, but the present-tense
+structural claims carry line numbers that no longer point at the code they
+describe. **The substance was verified true at the real location** (:504-509
+iterates `1280x800` then `320x640`; :540-551 is the both-arms status branch), so
+this is a citation-drift defect, not a false claim.
+
+**F-AUD-13 — Test Plan category mismatch.** `T080-02-CANARY` is classified
+`e2e-api` but its file is `scripts/runtime/web-e2e-ui.sh` and its command is
+`./smackerel.sh test e2e-ui`; the sibling `T080-04-CANARY` is classified `e2e-ui`.
+One of the two labels is wrong.
+
+### Audit verdict
+
+🔴 **DO_NOT_SHIP** — which here means *do not certify*; it is not a judgement on
+the engineering, which is strong and honestly evidenced.
+
+Two blocking conditions, both already correctly recognised by the packet:
+
+1. **Gate G089** — upstream `BUG-070-001` is genuinely blocked (3 checked / 63
+   unchecked, three scopes `Not Started`). Verified independently, not accepted.
+2. **Gate G022** — five required phases (`implement`, `test`, `regression`,
+   `stabilize`, `audit`) are absent from the effective phase record. This audit
+   closes exactly one of them: `audit`.
+
+Plus one audit-originated blocker on the packet's own terms:
+
+3. **F-AUD-01** — the canonical report sections contradict the delivered state
+   with no supersession marker. A packet whose central claim is "the evidence is
+   honestly recorded" cannot leave its Completion Statement asserting 47 guard
+   failures, an empty `completedPhaseClaims`, 63 DoD items and "no test result is
+   claimed". Routed to `bubbles.validate` (report.md status sections are
+   validate/report-owned; this audit does not rewrite them).
+
+**Status remains `blocked`. No DoD item was checked, no scope was marked Done,
+and no certification field was written by this audit.**
+
+### Spot-Check Recommendations
+
+Automation bias is the risk here: this packet reads as confident and is largely
+right, which is exactly when review gets thin. Verify these by hand:
+
+1. **`## Completion Statement` in this file (:143-171).** Read it cold and ask
+   whether a newcomer would be misled. Every number in it is wrong. This is the
+   single highest-value manual check.
+2. **The `bubbles.security` entry's timestamps** (F-AUD-11). A future-dated,
+   zero-duration run is the shape a fabricated timestamp takes; confirm the work
+   itself is real (this audit believes it is — the refutations are specific and
+   file:line-grounded) and correct the recording.
+3. **`scenario-manifest.json`** (F-AUD-10). Fourteen scenarios, zero linked
+   tests, four Done scopes. Confirm you want the manifest to stay unreconciled.
+4. **The two `ui-unit` rows.** This audit judged the classification honest by
+   reading the code. Confirm you agree that inducing states via direct module
+   call — while still needing a live authenticated stack — is `ui-unit` and not
+   `e2e-ui`, because that judgement decides whether SCN-080-001-08's ten-state
+   claim is live-proven or unit-proven.
+5. **`T080-08-A11Y`'s line citations** (F-AUD-12). Substance verified; the
+   numbers drifted. Worth confirming the drift is only cosmetic.
+6. Every verdict above is **Claim Source: interpreted** where it judges honesty,
+   and no live lane was run this session. If you need the live rows re-proven
+   rather than audited, that requires a lane run this audit deliberately did not
+   take.
