@@ -7325,3 +7325,541 @@ checked `git status` scoped to the PACKET directory only, saw it clean, and
 concluded there were no side effects. That check was too narrow — the mutation
 was in product code outside the packet path. Post-dispatch side-effect checks
 MUST scan the whole working tree, not just the spec folder.
+
+---
+
+## Independent Certification Review (bubbles.validate, 2026-08-17)
+
+**Reviewer:** `bubbles.validate`, dispatched as certifying authority because
+Check 6B disqualifies `bubbles.goal` from certifying its own execution.
+**Repository binding:** `PREFLIGHT_COMMITTED`,
+`decision=rb:vscode-…:1`, `authority=explicit-repository-root`,
+`repository=smackerel`, `actionable=true`.
+**HEAD at review:** `d74691ba2cd6ad82087bb41443d2096b79940fd8`.
+
+Everything below was executed by the reviewer in THIS session. Claims carried
+over from the orchestrator's report are labelled as such and are never treated
+as evidence on their own.
+
+### R-1 · Mutation-test record accuracy and `wiki_state.js` restoration
+
+**Claim Source: executed.**
+
+`web/pwa/wiki_state.js` is genuinely restored — verified by two independent
+methods, not one:
+
+```
+$ git diff --stat HEAD -- web/pwa/wiki_state.js
+                                        (empty output)
+diff-exit=0
+
+$ git status --short --untracked-files=all -- web/pwa/
+                                        (empty output)
+status-exit=0
+
+$ sha256sum web/pwa/wiki_state.js
+475ad909210408f45a3551cf720621cec46c98cb0d74f18f61199e96ba7f0356  web/pwa/wiki_state.js
+$ git show HEAD:web/pwa/wiki_state.js | sha256sum
+475ad909210408f45a3551cf720621cec46c98cb0d74f18f61199e96ba7f0356  -
+```
+
+Worktree content hash equals the HEAD blob hash. The file is byte-identical to
+the committed form.
+
+Repo-wide `MUTATION-PROBE` sweep, run twice — once over tracked files, once over
+the whole tree including untracked:
+
+```
+$ git grep -n -I "MUTATION-PROBE" -- .
+…/BUG-080-001…/report.md:7291:return CODE_ROUTE_ABSENT; // MUTATION-PROBE: temporary revert, restored below
+…/BUG-080-001…/report.md:7320:repo-wide sweep for `MUTATION-PROBE` / `temporary revert` markers across
+gitgrep-exit=0
+
+$ grep -rn --binary-files=without-match --exclude-dir=.git --exclude-dir=node_modules --exclude-dir=target "MUTATION-PROBE" .
+grep: ./config/generated/dev.env: Permission denied
+grep: ./config/generated/home-lab.env: Permission denied
+grep: ./config/generated/self-hosted.env: Permission denied
+./specs/…/BUG-080-001…/report.md:7291:…
+./specs/…/BUG-080-001…/report.md:7320:…
+grep-exit=2
+```
+
+The only two hits are report.md's own narrative of the incident. No live-code
+marker survives anywhere in the tree.
+
+**Disclosed sweep gap (immaterial, stated rather than smoothed over).** Three
+files were unreadable by the sweep. They are root-owned `0600` generated env
+files, gitignored at `.gitignore:17`, and `file(1)` reports them as
+`regular file, no read permission` — no contents were read and none are printed
+here. A JavaScript classifier mutation cannot live in a generated `.env`, and
+these are rebuilt by `./smackerel.sh config generate`, so the gap does not
+weaken the conclusion. It is recorded because "the sweep returned nothing" would
+otherwise overstate coverage.
+
+**Verdict on the record:** ACCURATE, and if anything UNDER-stated. The reviewer
+found no exaggeration. Two independent details in the write-up cross-check
+correctly: the reverted run reports `2 failed, 74 passed` and the restored run
+reports `76 passed` — the same 76-test denominator, which is what an honest
+before/after pair of the same suite must show. The reviewer's own re-run of the
+mutation is recorded in R-4 below.
+
+### R-2 · Is commit `d74691ba` truly behaviour-preserving?
+
+**Claim Source: executed.** Reviewer read the full diff rather than the commit
+message's summary of it.
+
+The change is a literal-to-constant substitution at three call sites plus one
+new constant:
+
+```
++       CodeNotFound = "not_found"
+
+-       WriteError(w, http.StatusNotFound, "not_found", "id", "person not found")
++       WriteError(w, http.StatusNotFound, CodeNotFound, "id", "person not found")
+-       WriteError(w, http.StatusNotFound, "not_found", "id", "place not found")
++       WriteError(w, http.StatusNotFound, CodeNotFound, "id", "place not found")
+-       WriteError(w, http.StatusNotFound, "not_found", "id", "topic not found")
++       WriteError(w, http.StatusNotFound, CodeNotFound, "id", "topic not found")
+```
+
+`CodeNotFound` is defined as the string `"not_found"`, so every call site passes
+a byte-identical argument. The wire value cannot change. **Behaviour-preserving
+by construction**, not merely by assertion — and independently corroborated by
+the reviewer's own green lane at HEAD (R-4).
+
+**Completeness check the reviewer added (the orchestrator did not claim it).**
+A literal-to-constant fix is only worth anything if no literal survives:
+
+```
+$ grep -rn '"not_found"' internal/api/graphapi/
+internal/api/graphapi/errors.go:32:     CodeNotFound = "not_found"
+```
+
+The sole remaining occurrence in the graph API surface is the constant's own
+definition. The repo-wide sweep's other hits are unrelated: two connector test
+fixtures, an `internal/experience` domain enum, two `graphsynthetic` test
+tables, the PWA's own named `ENVELOPE_NOT_FOUND`, and a Playwright assertion.
+None is a graphapi response path.
+
+**Sibling-drift check the reviewer added.** `errors.go` calls itself a "closed
+set", so the reviewer asked whether the SAME defect class survives for another
+classifier-read code. `capability_disabled` is absent from the `errors.go`
+block — but it is not a bare literal: it is
+`const CodeCapabilityDisabled = "capability_disabled"` in `activation.go:46`,
+co-located with the disabled responder that owns it. No sibling drift vector
+was found.
+
+### R-3 · Was the `design.md:392` justification overstated?
+
+**Claim Source: executed.** NO — the citation is exact.
+
+The reviewer initially read the SPEC-level `design.md`, which is only 256 lines,
+and got an empty result. That was the reviewer's own resolution error: inside a
+bug packet `design.md:392` refers to the packet's own design.md (717 lines).
+Recorded because a reader could otherwise repeat the same mistake.
+
+Line 392 verbatim, with its enclosing section:
+
+```
+380: ## HTTP Outcome And Error Model
+382: ### Closed Read Outcomes
+384: | State | HTTP Meaning | Projection Rule |
+392: | `not-found` | 404 `not_found` for a requested existing route resource only | Resource missing, never activation |
+```
+
+Both halves of the commit message's citation hold: the section really is
+`§"Closed Read Outcomes"`, and the quoted row is reproduced word for word. The
+design did specify `not_found` before the fix, so the supersession rationale —
+that the earlier ROUTED disposition ("needs the owning spec's review") was
+over-cautious — is **justified, not overstated**.
+
+### R-4 · Gates re-executed by the reviewer at HEAD `d74691ba`
+
+**Claim Source: executed.** Every result below is from a command the reviewer
+ran in this session.
+
+| Gate | Command | Result |
+|---|---|---|
+| State transition guard | `bash .github/bubbles/scripts/state-transition-guard.sh <packet>` | exit 0 · `failureCount: 0` · `failedGateIds: []` · `verdict: PASS` |
+| Artifact lint | `bash .github/bubbles/scripts/artifact-lint.sh <packet>` | exit 0 · `Artifact lint PASSED.` |
+| Implementation reality scan | `bash .github/bubbles/scripts/implementation-reality-scan.sh <packet> --verbose` | exit 0 · 12 files · 0 violations · 1 warning |
+
+Guard result block, captured through `evidence-capture.sh` so the hash covers
+all 390 lines:
+
+```
+# G080-001 state-transition-guard @ d74691ba
+$ bash .github/bubbles/scripts/state-transition-guard.sh specs/080-knowledge-graph-public-api/bugs/BUG-080-001-graph-api-fail-soft-runtime-disable
+exit: 0
+lines: 390
+sha256: 206890e34113abd1071a4e18fc10258430bbdab968d0bb5b4676415b1f07c3be
+--- last 20 ---
+
+state.json status may be set to 'done'.
+BEGIN TRANSITION_GUARD_RESULT_V1
+schemaVersion: transition-guard-result/v1
+workflowMode: bugfix-fastlane
+auditProfile: delivery-completion-v1
+targetStatus: done
+contractDigest: sha256:aa91472c047d3d985d38c1d308feb1e6081955b2aa553816deb5987d9cdc449f
+targetRevision: sha256:505a67204743761f656af3f6274438ca5057fbf77943c017d0ae69ec86205b3e
+applicableCheckClasses: [universal,mode-required,delivery-completion]
+notApplicableChecks: []
+passedGateIds: [G057,G053,G040,G051,G068,G082,G083,G084,G128,G085,G086,G091,G087,G093,G088,G089,G092,G090,G094,G095,G097,G098,G099,G100,G130,G131,G136,G001,G002,G003,G004,G005,G006,G007,G008,G009,G010,G011,G012,G014,G015,G016,G018,G019,G020,G021,G022,G023,G024,G025,G026,G027,G028,G029,G033,G034,G035,G044,G047,G048,G055,G056,G059,G060,G061]
+failedGateIds: []
+failedChecks: []
+blockingCode: none
+parentExpandedPhases: 0
+failureCount: 0
+exitStatus: 0
+verdict: PASS
+END TRANSITION_GUARD_RESULT_V1
+```
+
+G022 (phase-claim provenance) and G089 (inter-spec dependency) are both present
+in `passedGateIds`, confirming the orchestrator's two load-bearing claims.
+Check 6B individually attributed all eight phases to their owning specialist.
+
+**Warnings the reviewer is surfacing rather than burying** (all WARN-level; none
+contributes to `failureCount`):
+
+- Check 7: `No completedAt timestamps found in state.json`.
+- Check 11: `report.md has 37 of 108 evidence blocks that lack terminal output
+  signals` and `7 narrative summary phrases outside code blocks`. These are
+  fabrication *heuristics*. In a 7 300-line report a large share of blocks are
+  analysis prose rather than transcripts, so a 37/108 ratio is expected — but
+  it is a real ceiling on how much of this report is machine-attested, and it
+  is why the reviewer re-executed the load-bearing claims instead of reading
+  them.
+- Reality scan: `Scopes yielded 0 files — falling back to design.md`, i.e.
+  `scopes.md` does not reference implementation files directly. The scan still
+  resolved 12 files and passed, but the fallback means file discovery leaned on
+  design.md rather than the scope artifacts.
+
+> **THIS SECTION WAS TRUNCATED.** The dispatch that wrote the review above died
+> here, at the end of R-4. It never reached a verdict, never examined the
+> disclosed limits, and never wrote `state.json`. It also ran at HEAD
+> `d74691ba`, which PREDATES `4bd2ade8`. It is retained because its executed
+> transcripts are real, but it certifies nothing. The section below is a fresh,
+> complete review at current HEAD; nothing above is treated as evidence for it.
+
+---
+
+## Certification Review — complete pass at HEAD `4bd2ade8` (bubbles.validate)
+
+**Reviewer:** `bubbles.validate`, acting as certifying authority. `bubbles.goal`
+is disqualified by Check 6B from certifying its own execution.
+**Repository binding:** `PREFLIGHT_COMMITTED`,
+`decision=rb:vscode-…:2`, `revision=2`,
+`authority=explicit-repository-root`, `repository=smackerel`,
+`transition=confirmed`, `actionable=true`.
+**HEAD at review:** `4bd2ade8`.
+
+Every result below was executed by this reviewer in THIS session. Anything the
+orchestrator reported is labelled as its claim and is re-derived before use.
+
+### C-1 · Whole-tree mutation sweep and `wiki_state.js` restoration
+
+**Claim Source: executed.**
+
+The sweep was run over the WHOLE tree, not the packet directory — that scoping
+error is what let the orphaned mutation survive last time.
+
+```
+$ git status --porcelain                     # whole tree
+ M docs/releases/mvp/actions.md
+ M docs/releases/mvp/features.md
+ M specs/003-phase2-ingestion/bugs/BUG-003-002-…/state.json
+ M specs/061-conversational-assistant/bugs/BUG-061-006-…/state.json
+ M specs/061-conversational-assistant/bugs/BUG-061-007-…/state.json
+ M specs/061-conversational-assistant/bugs/BUG-061-008-…/state.json
+ M specs/069-assistant-http-transport/bugs/BUG-069-004-…/state.json
+ M specs/080-…/BUG-080-001-…/report.md
+ M specs/_ops/OPS-006-local-git-reconciliation/state.json
+?? docs/releases/README.md
+?? docs/releases/next/
+
+$ git grep -n 'MUTATION-PROBE' -- .
+…/BUG-080-001…/report.md:7291 · 7320 · 7369 · 7373 · 7374 · 7375 · 7378
+grep_exit=0
+```
+
+Every `MUTATION-PROBE` hit is inside report.md's own narrative of the incident.
+**No source file carries the marker.** No `web/` or `internal/` file is modified.
+
+`web/pwa/wiki_state.js` is restored, proven by blob identity rather than by a
+visual diff:
+
+```
+$ git diff --exit-code -- web/pwa/wiki_state.js
+diff_vs_HEAD_exit=0
+$ git hash-object web/pwa/wiki_state.js   → c83c7976f9c538da503b834e0afcca511c5a3bb9
+$ git rev-parse HEAD:web/pwa/wiki_state.js → c83c7976f9c538da503b834e0afcca511c5a3bb9
+```
+
+**VERDICT: restoration CONFIRMED.** The worktree blob hash equals the HEAD blob
+hash, so the file is byte-identical to its committed form.
+
+**Uncommitted drift disclosed rather than smoothed over.** Nine files are dirty
+and two are untracked. Eight of them are OUTSIDE this packet (other specs'
+`state.json`, release docs). This reviewer did not author them, did not touch
+them, and does not certify them; they are recorded here so the next owner knows
+the tree was not pristine at certification time. The only in-packet dirty file
+is this `report.md`.
+
+### C-2 · Is the mutation-test mechanism real? (judged from source, not report)
+
+**Claim Source: executed.**
+
+The mechanism was verified by reading `web/pwa/wiki_state.js` directly:
+
+- `classifyStatus`, case 404 (line 194):
+  `return typed === ENVELOPE_NOT_FOUND ? CODE_ROW_MISSING : CODE_ROUTE_ABSENT;`
+- `resolveReadState`: `CODE_ROW_MISSING → STATE_DEGRADED`;
+  `CODE_ROUTE_ABSENT → STATE_ROUTE_ABSENT`.
+
+Replacing that ternary with a bare `CODE_ROUTE_ABSENT` therefore forces
+`painted=degraded → painted=route-absent` for a typed `not_found` body. The
+reported flip is **mechanically coherent with the source**, not merely asserted.
+
+### C-3 · Is `d74691ba` behaviour-preserving?
+
+**Claim Source: executed.** `git show d74691ba`, full patch read.
+
+| Call site | Before | After |
+|---|---|---|
+| `people.go:128` | `WriteError(…, "not_found", …)` | `WriteError(…, CodeNotFound, …)` |
+| `places.go:134` | `WriteError(…, "not_found", …)` | `WriteError(…, CodeNotFound, …)` |
+| `topics.go:129` | `WriteError(…, "not_found", …)` | `WriteError(…, CodeNotFound, …)` |
+| `errors.go` | — | `+ CodeNotFound = "not_found"` |
+
+The constant's value is `"not_found"`, exactly the literal it replaces, so the
+emitted wire byte sequence is unchanged. **VERDICT: behaviour-preserving,
+CONFIRMED.** No remaining bare literal:
+
+```
+$ grep -rn '"not_found"' internal/api/graphapi/
+internal/api/graphapi/errors.go:32:  CodeNotFound = "not_found"
+```
+
+— the single hit is the constant definition itself, so all three call sites now
+route through the closed set.
+
+### C-4 · Was the `design.md:392` justification overstated?
+
+**Claim Source: executed.** **Substance upheld; citation imprecise.**
+
+The cited line exists verbatim and PREDATES the commit that invokes it:
+
+```
+$ git blame -L 392,392 -- …/BUG-080-001-…/design.md
+321c7c7be (pkirsanov 2026-07-24 392) | `not-found` | 404 `not_found` for a
+requested existing route resource only | Resource missing, never activation |
+
+$ git merge-base --is-ancestor 321c7c7be d74691ba
+YES — design line predates the citing commit
+```
+
+Authored 2026-07-24; cited by a commit dated 2026-08-17. The claim "the design
+had already specified the code" is therefore **TRUE**, and the justification is
+NOT overstated.
+
+**One correction the reviewer is recording.** The bare reference "design.md:392"
+is ambiguous and resolves to the WRONG file on a literal reading:
+
+| File | Lines | Contains `not_found`? |
+|---|---|---|
+| `specs/080-knowledge-graph-public-api/design.md` (parent spec) | 256 | **NO — zero hits** |
+| `…/bugs/BUG-080-001-…/design.md` (this packet) | 717 | YES, at line 392 |
+
+The parent spec's design.md is only 256 lines, so it has no line 392 at all, and
+`grep` for `not.found` in it exits 1. A future reader following the citation to
+the parent spec — the natural reading of "the design" for a server error-code
+contract — finds nothing and could wrongly conclude the justification was
+fabricated. It was not; the line simply lives in the BUG packet's design.md.
+Recorded as a documentation-precision finding, severity LOW, materially
+non-blocking.
+
+### C-5 · Gates re-executed at HEAD `4bd2ade8`
+
+**Claim Source: executed.** All four run by this reviewer, unfiltered.
+
+| Gate | Command | Exit | Result |
+|---|---|---|---|
+| State transition guard (G023) | `state-transition-guard.sh <packet>` | 0 | PASS |
+| Artifact lint | `artifact-lint.sh <packet>` | 0 | PASSED |
+| Traceability guard | `traceability-guard.sh <packet>` | 0 | PASSED (0 warnings) |
+| Implementation reality scan (G028) | `implementation-reality-scan.sh <packet>` | 0 | PASSED, 0 violations, 1 warning |
+
+```
+BEGIN TRANSITION_GUARD_RESULT_V1
+workflowMode: bugfix-fastlane
+auditProfile: delivery-completion-v1
+targetStatus: done
+contractDigest: sha256:aa91472c047d3d985d38c1d308feb1e6081955b2aa553816deb5987d9cdc449f
+targetRevision: sha256:61db9991ac8a5f40872dd3c36653bed643017249cee2d8d8040be91e9545680f
+failedGateIds: []
+failureCount: 0
+verdict: PASS
+END TRANSITION_GUARD_RESULT_V1
+```
+
+G022 and G089 are both in `passedGateIds` — the orchestrator's two load-bearing
+claims are CONFIRMED. Traceability: 14 scenarios, 14 mapped to rows, 14 to
+concrete test files, 14 to report evidence, 0 unmapped.
+
+An independently-resolved `transition-contract-resolver.sh` run returned the
+SAME `contractDigest` and `targetRevision` as the guard, so the guard was not
+run against a drifted contract.
+
+### C-6 · Lane re-executed at HEAD `4bd2ade8` — **`LANE_EXIT=0`**
+
+**Claim Source: executed.** `./smackerel.sh test e2e-ui`, run by this reviewer.
+
+The central behavioural claim REPRODUCES. The repaired classifier is observed
+live, not inferred:
+
+```
+GRAPH-EV row-missing | probeStatus=404 | probeCode=not_found | painted=degraded
+```
+
+and the module-tier matrix separates the two 404 species correctly:
+
+```
+GRAPH-EV render-matrix | {"bare404":"F080-SYNTH-ROUTE-ABSENT",
+ "typed404NotFound":"F080-SYNTH-ROW-MISSING", …}
+```
+
+| Segment | Result |
+|---|---|
+| main browser suite | **76 passed**, 9 skipped (40.1s), 0 failed |
+| `store-unavailable` phase | **PASS (22s)**, 8 passed |
+| `graph-disabled` phase | **PASS (154s)**, 8 passed |
+| lane | **`LANE_EXIT=0`** |
+
+**One discrepancy the reviewer is recording rather than rounding off.** The
+packet claims "**four** guarded e2e-ui phases". This run produced **two** named
+guarded phases (`store-unavailable`, `graph-disabled`) plus the main suite; a
+case-insensitive search for `true-empty` over the full lane transcript returned
+**nothing**, so no separately-named true-empty phase executed here. This is NOT
+called a falsehood: true-empty IS asserted inside the main suite (test 62,
+"…-family true empty is actionable and contains no sample topology ✓"), so the
+STATE is covered. What did not reproduce is the phase COUNT. Recorded as an
+evidence-precision finding, severity LOW.
+
+### C-7 · Disclosed limits — checked in both directions
+
+**Claim Source: executed** (presence and framing verified; not exhaustively
+re-derived).
+
+| Limit | Recorded at | Honest? |
+|---|---|---|
+| `route-absent` / `schema-invalid` unreachable by construction; render contract at ui-unit tier only | 2 occurrences (original verdict + explicit supersession) | YES — not claimed live |
+| S-1 `TRUE_EMPTY_FIXTURE_UNTRUSTWORTHY` | report.md:7047 | YES — not claimed cleanly proven |
+| `e2e-ui` runs DEV-TOKEN, production-auth browser proof undelivered | report.md:7158–7164, "it is a path production does not take" | YES — states the gap plainly |
+
+The disclosures do not overclaim. This reviewer found no case of a limitation
+being stated in a way that made it sound smaller than it is.
+
+---
+
+## ⛔ CERTIFICATION REFUSED — `done` NOT granted
+
+**Verdict: REFUSED.** `status` MUST remain `blocked`.
+`certification.status` remains `blocked`, `certifiedCompletedPhases` remains
+`[]`, `certifiedAt` remains `null`. **Zero phases are certified.**
+
+The engineering in this packet is strong and, on everything this reviewer
+re-executed, honestly reported. The refusal is NOT a quality judgement. It is
+that the evidence required to certify `done` under this packet's own audit
+profile does not exist on disk.
+
+**The orchestrator's premise is contradicted.** The dispatch stated that the
+Check 6B roll-up "is the ONLY thing keeping this packet blocked." It is not.
+Four further blockers were found, the first of which is independently decisive.
+
+### R-BLOCK-1 · The audit registry is EMPTY (decisive)
+
+The resolved contract is `auditProfile: delivery-completion-v1`,
+`targetStatus: done`, and `phaseOrder` still contains `audit`. Terminal
+certification under that profile requires resolving
+`execution.audit.currentAttemptId` to exactly ONE `ACTIVE` attempt whose
+non-empty `evidenceRef` resolves to exactly ONE complete `AUDIT_RESULT_V1`
+transcript. Actual value:
+
+```json
+"audit": { "schemaVersion": "audit-run/v1", "runId": null,
+           "currentAttemptId": null, "attempts": [] }
+```
+
+A search for `AUDIT_RESULT_V1` across the packet exits 1 — **no transcript
+exists**. This is not an unused convention in this repository:
+`specs/003-phase2-ingestion/bugs/BUG-003-002-…` and
+`specs/026-domain-extraction/bugs/BUG-026-008-…` both carry real
+`AUDIT_RESULT_V1` blocks. A dangling current pointer plus an absent attempt is a
+mandatory refusal, and a green guard BEFORE audit does not certify the ceiling.
+
+**Note on scope, so the guard is not blamed unfairly:** the guard does not
+inspect the audit registry, which is why it can legitimately report
+`failureCount: 0` while this blocker stands. This check lives at the
+certification boundary, not in the guard.
+
+### R-BLOCK-2 · The only recorded audit verdict is `DO_NOT_SHIP`
+
+The single `bubbles.audit` entry (runStartedAt `2026-08-17T04:55:00Z`) records
+verbatim:
+
+> **VERDICT: DO_NOT_SHIP (do not certify)** — … but three blockers stand.
+
+It has never been superseded by a clean re-audit. It also predates ALL FOUR of
+today's commits (`44c9ae36`, `3541c3dd`, `d74691ba`, `4bd2ade8`), so even had it
+been persisted as an attempt it would be revision-stale against the current
+`targetRevision sha256:61db9991…`. Two of its three blockers (G022, G089) were
+indeed cleared afterwards — but clearing an auditor's findings and then
+declaring the audit clean without re-running it is the exact substitution
+Check 6B exists to prevent.
+
+### R-BLOCK-3 · F-AUD-01 is still open, and has REGRESSED
+
+The audit's one blocking finding was that the canonical report sections
+contradict the delivered state. They still do — including in the very paragraph
+that promises not to:
+
+| Canonical section | Says | Measured this session |
+|---|---|---|
+| `## Completion Statement` | "guard **exits 1** with **6 failures across exactly TWO gates**"; G022 "FOUR specialist phases remain unrecorded"; G089 blocking | `failureCount: 0`, `failedGateIds: []`, verdict PASS; **G022 and G089 both in `passedGateIds`** |
+| `## Audit Verdict` | "**Not audited.** No terminal verdict is claimed." | An audit ran and returned `DO_NOT_SHIP` |
+| `## Validation Summary` | "No completion validation or certification was performed." | Nine-plus gates have since been executed |
+| `## Code Diff Evidence` | cites `cb9f9ad0`, `03611451` only | today's product commits `d74691ba` and `4bd2ade8` are absent |
+
+That Completion Statement paragraph explicitly says it "is now the single
+number-bearing statement here and is updated whenever the count moves." The
+count moved to zero and the paragraph did not follow. F-AUD-01 recurred exactly
+where it was promised it would not.
+
+### R-BLOCK-4 · `scenario-manifest.json` is still stale (F-AUD-10)
+
+All 14 scenarios carry `linkedTests: []` and `evidenceRefs: []` — verified by
+parsing the file, after first re-checking the parse against the real schema
+rather than trusting a first guess:
+
+```
+scenario count: 14 | with non-empty evidenceRefs: 0 | with non-empty linkedTests: 0
+```
+
+Consequently the traceability guard's manifest lines ("records evidenceRefs",
+"All linked tests … exist") pass **VACUOUSLY** over an empty set. The
+substantive traceability result (14/14 via scopes.md) is real and unaffected;
+the manifest itself is not.
+
+### What the next owner must do
+
+1. Run `bubbles.audit` to completion at HEAD `4bd2ade8` so it persists a real
+   attempt into `execution.audit` with an `AUDIT_RESULT_V1` transcript and a
+   clean verdict at `targetRevision sha256:61db9991…`.
+2. Reconcile the four canonical sections above (owner: `bubbles.docs` /
+   `bubbles.plan`) — closing F-AUD-01.
+3. Populate `scenario-manifest.json` `linkedTests` / `evidenceRefs` — closing
+   F-AUD-10.
+4. Re-dispatch `bubbles.validate`. Everything in C-1…C-7 re-runs clean and does
+   not need redoing.
