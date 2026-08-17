@@ -161,26 +161,66 @@ gates exit 0 (see "## Build Quality Gate — executed evidence").
 A real user-facing defect was found and fixed en route: F-080-06-ROWMISS.
 
 **The packet nonetheless remains `blocked`, and MUST NOT be certified.**
-`state-transition-guard.sh` exits 1 with **6 failures across exactly TWO gates**.
-This paragraph is kept CURRENT deliberately — an earlier revision of it went
-stale within the same session as the count fell, which the independent audit
-caught (F-AUD-01), so it is now the single number-bearing statement here and is
-updated whenever the count moves.
+This paragraph is the single number-bearing statement here and is updated
+whenever the count moves. It went stale once already within a session as the
+count fell — the independent audit caught that as F-AUD-01, and the independent
+certification review caught it a SECOND time on 2026-08-17 at HEAD `4bd2ade8`,
+when this text still asserted "exits 1 with 6 failures across exactly TWO gates"
+after the measured value had reached zero. Both stale revisions are recorded
+rather than quietly overwritten, because the recurrence is the point: a
+number-bearing claim decays unless something re-measures it.
 
-* **G022** — FOUR specialist phases remain unrecorded: `implement`, `test`,
-  `regression`, `stabilize`. Four are now recorded with correct specialist
-  provenance: `simplify`, `validate`, `security`, `audit`. Phase claims
-  previously made under the orchestrator identity were WITHDRAWN after the guard
+**Measured at HEAD `4bd2ade8`:** `state-transition-guard.sh` reports
+`failureCount: 0`, `failedGateIds: []`, `verdict: PASS`. **G022 and G089 are
+BOTH in `passedGateIds`** — the two gates the previous revision named as
+blocking are cleared:
+
+* **G022** — the specialist phases are now recorded with genuine provenance.
+  `executionHistory` carries `bubbles.implement` (six entries), `bubbles.test`,
+  `bubbles.regression`, `bubbles.stabilize`, `bubbles.security`,
+  `bubbles.audit`, `bubbles.simplify` and `bubbles.validate`. Phase claims
+  previously made under the orchestrator identity stay WITHDRAWN after the guard
   flagged them as impersonation; the underlying work and evidence are retained
-  under `agent: bubbles.goal` with `phasesExecuted: []` and an explicit
-  provenanceNote.
-* **G089** — upstream `BUG-070-001` is genuinely `blocked` (3 checked / 63
-  unchecked DoD, three of six scopes Not Started). Independently re-read by the
-  audit pass. The dependency is real per `bug.md:46` and will not be deleted.
+  under `agent: bubbles.goal` with `phasesExecuted: []` and a provenanceNote.
+* **G089** — adjudicated on 2026-08-17 by `bubbles.plan`, which owns
+  `specDependsOn`. `BUG-070-001` was over-broad AS A CERTIFICATION GATE and was
+  removed from that list; the relationship is RETAINED as a recorded limitation
+  (see `## Dependency Adjudication`). Browser proof under production
+  authentication is NOT delivered here and remains owned by `BUG-070-001`.
 
-Everything else the earlier revision listed is now CLEARED with evidence: G040,
-G053, G055, G060, G084, G095, and all 25 planning-artifact requirements across
-the four scopes. The full enumeration lives in `state.json.blockedReason`.
+**A GREEN GUARD IS NOT CERTIFICATION.** On 2026-08-17 `bubbles.validate`, acting
+as certifying authority at HEAD `4bd2ade8`, re-executed every gate itself and
+confirmed them green — and then REFUSED to grant `done` on four independent
+grounds, the first decisive:
+
+1. **The audit registry is empty.** The resolved contract is `auditProfile
+   delivery-completion-v1` with `targetStatus: done` and `audit` still in
+   `phaseOrder`, so terminal certification requires
+   `execution.audit.currentAttemptId` to resolve to exactly ONE active attempt
+   carrying an `AUDIT_RESULT_V1` transcript. The actual value is `runId: null`,
+   `currentAttemptId: null`, `attempts: []`. Sibling packets `BUG-003-002` and
+   `BUG-026-008` both carry real transcripts, so this is a genuine gap and not
+   an unused convention. The state-transition guard does NOT inspect the audit
+   registry, which is exactly why it can honestly report `failureCount: 0` while
+   this blocks.
+2. **The only recorded audit verdict is `DO_NOT_SHIP`.** The single
+   `bubbles.audit` entry (2026-08-17T04:55:00Z) says so, was never superseded by
+   a clean re-audit, and predates all four of that day's commits, making it
+   revision-stale. Clearing an auditor's findings and then treating the audit as
+   clean without re-running it is the substitution Check 6B exists to prevent.
+3. **F-AUD-01 had regressed** — this section, `## Audit Verdict`,
+   `## Validation Summary` and `## Code Diff Evidence` all carried claims the
+   measurements contradicted. This revision reconciles them.
+4. **`scenario-manifest.json` is stale (F-AUD-10)** — all 14 scenarios carry
+   `linkedTests: []` and `evidenceRefs: []`, so the manifest checks pass
+   VACUOUSLY over an empty set. The substantive 14/14 traceability through
+   `scopes.md` is real and unaffected.
+
+Everything the earlier revision listed as blocking is CLEARED with evidence:
+G022, G040, G053, G055, G060, G084, G089, G095, and all 25 planning-artifact
+requirements across the four scopes. The full enumeration lives in
+`state.json.blockedReason`. What stands between this packet and `done` is a
+completed audit at the current revision, not an unmet gate.
 
 ## Bug Reproduction - Before Fix
 
@@ -198,10 +238,17 @@ the four scopes. The full enumeration lives in `state.json.blockedReason`.
 ## Code Diff Evidence
 
 **Superseded 2026-08-17.** This was true of the original planning-only
-invocation and is false now. Two real product diffs were delivered and are
-recorded verbatim under the `### Code Diff Evidence` section above:
-`web/pwa/wiki_state.js` (F-080-06-ROWMISS, commit `cb9f9ad0`) and
-`web/pwa/style.css` (the `[hidden]` reset, commit `03611451`).
+invocation and is false now. FOUR real product diffs were delivered. The first
+two are recorded verbatim under the `### Code Diff Evidence` section above; all
+four are enumerated here so this section stops under-reporting the change set,
+which the certification review flagged as part of F-AUD-01.
+
+| Commit | Files | Change |
+|---|---|---|
+| `cb9f9ad0` | `web/pwa/wiki_state.js` | F-080-06-ROWMISS — a typed 404 `not_found` is a missing ROW, not an absent ROUTE. Bare 404 still yields route-absent, preserving version-skew behaviour deliberately. |
+| `03611451` | `web/pwa/style.css` | `[hidden]` attribute reset — `display: none !important`, because the UA rule at (0,1,0) was being defeated by equal-specificity author rules. |
+| `d74691ba` | `internal/api/graphapi/errors.go`, `people.go`, `places.go`, `topics.go` | Closes the drift vector behind F-080-06-ROWMISS. `not_found` was a bare literal in three handlers but absent from the block that calls itself a closed set, though `design.md:392` specifies it. Added `CodeNotFound`; the wire value is byte-identical, so the change is behaviour-preserving, and the full lane was re-run to prove it. |
+| `4bd2ade8` | `web/pwa/style.css`, `web/pwa/tests/pwa_hidden_cascade_guard_test.go` | `.hidden` lost a cascade tie to a later `.btn { display: inline-flex }` at equal specificity, so the assistant retry button shipped permanently visible and four `classList.add("hidden")` calls were inert. Fixed, plus an adversarial guard proven by mutation (revert → FAIL, restore → ok). Committed STANDALONE: the defect belongs to the assistant/app-shell surface, not to this packet, so the packet boundary stays clean. |
 
 ## Test Evidence
 
@@ -265,11 +312,49 @@ Initialized in [scenario-manifest.json](scenario-manifest.json); evidence refere
 
 ## Validation Summary
 
-No completion validation or certification was performed.
+**Completion validation WAS performed, and certification was REFUSED.**
+
+`bubbles.validate` ran as certifying authority at HEAD `4bd2ade8` on
+2026-08-17. It re-executed the gates itself rather than reading this report:
+`state-transition-guard` `failureCount: 0` / `failedGateIds: []` /
+`verdict: PASS` (G022 and G089 both in `passedGateIds`), `artifact-lint` PASSED,
+`traceability-guard` PASSED with 0 warnings (14/14 scenarios mapped),
+`implementation-reality-scan` PASSED (0 violations, 1 warning), and
+`./smackerel.sh test e2e-ui` `LANE_EXIT=0` (76 passed / 9 skipped / 0 failed;
+store-unavailable PASS 22s; graph-disabled PASS 154s), with `GRAPH-EV
+row-missing probeStatus=404 probeCode=not_found painted=degraded` confirming the
+F-080-06-ROWMISS repair live. It also verified `web/pwa/wiki_state.js`
+byte-identical to HEAD and swept the whole tree for the orphaned
+`MUTATION-PROBE` marker, finding it only in this report's narrative.
+
+It refused `done` regardless. Grounds are enumerated in `## Completion
+Statement` above and in full in `## ⛔ CERTIFICATION REFUSED — done NOT granted`.
+The decisive one: a green guard is not certification, because the guard does not
+inspect the audit registry, and that registry is empty.
 
 ## Audit Verdict
 
-Not audited. No terminal verdict is claimed.
+**Audited. Terminal verdict recorded: `DO_NOT_SHIP` (do not certify).**
+
+A `bubbles.audit` pass ran at 2026-08-17T04:55:00Z and returned
+`VERDICT: DO_NOT_SHIP`. It has NOT been superseded by a clean re-audit, and it
+predates the four commits made later that day (`44c9ae36`, `3541c3dd`,
+`d74691ba`, `4bd2ade8`), so it is also revision-stale against the current
+target revision.
+
+Two consequences are recorded honestly rather than smoothed over:
+
+* Findings raised by that audit have since been remediated, but **remediating an
+  auditor's findings is not the same as the auditor clearing them.** Treating a
+  fixed finding list as a clean verdict without re-running the audit is the
+  substitution Check 6B exists to prevent.
+* `execution.audit` is `{"runId": null, "currentAttemptId": null,
+  "attempts": []}` — no `AUDIT_RESULT_V1` transcript exists for this packet at
+  any revision, while sibling packets `BUG-003-002` and `BUG-026-008` carry real
+  ones. The registry gap is genuine, not an unused convention.
+
+A clean, current-revision audit that persists a real attempt is what this packet
+needs before certification can be reconsidered.
 
 ---
 
