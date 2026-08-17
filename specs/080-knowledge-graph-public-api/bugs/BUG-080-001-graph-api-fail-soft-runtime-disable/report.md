@@ -7087,3 +7087,98 @@ which is exactly the described hang (a lock held by a slow boot seed).
 Gates after remediation: `LANE_EXIT=0` (true-empty PASS 24s, full suite 76
 passed, store-unavailable PASS 18s, graph-disabled PASS 130s), `UNIT_EXIT=0`,
 `LINT_EXIT=0`, `FMT_EXIT=0`, `CHECK_EXIT=0`.
+
+---
+
+## Dependency Adjudication — `specDependsOn` Narrowed (bubbles.plan, 2026-08-17)
+
+**Claim Source: executed** for every count, path, symbol and guard result in this
+section — each was run this session against the working tree. **Claim Source:
+interpreted** for the adjudication judgement itself. Repository binding was
+committed before any repo-local read (decision
+`rb:vscode-986d7892898d47784f4228d7687c9e4c:25`, revision 25, root `<repo-root>`).
+
+**Question adjudicated:** does
+`specs/070-web-username-password-login/bugs/BUG-070-001-production-credential-session-paseto-split`
+belong in this packet's `specDependsOn`, where Gate G089 reads it as a hard
+CERTIFICATION gate requiring the upstream to reach status `done`?
+
+**Decision: NO.** The relationship is real, but it is narrower than a
+certification gate. The `BUG-070-001` entry has been removed from
+`specDependsOn`. It is RETAINED as a recorded relationship below, because the
+broader claim it governs is genuinely undelivered and must stay visible.
+
+### Evidence verified at the source this session
+
+| # | Claim | Verified at | Result |
+|---|---|---|---|
+| 1 | Sole declaring prose | `bug.md:46` | CONFIRMED — reads "Product-side contract is independent; full browser proof also depends on `BUG-070-001`." It is the ONLY prose in the packet declaring the relationship. |
+| 2 | No requirement is downstream of it | `spec.md`, `design.md` | CONFIRMED — ZERO matches for `BUG-070-001`, "production credential", "password login" or "paseto" in either artifact. Requirements `GRAPH-ACT-001`…`011` are graph-activation concerns only. |
+| 3 | Delivery is complete | `scopes.md` | CONFIRMED — 79 checked / **0** unchecked DoD items; all four scopes `**Status:** Done` (`:76`, `:200`, `:317`, `:406`). |
+| 4 | The grant mechanism already ships | `internal/db/migrations/063_auth_token_granted_scopes.sql` | CONFIRMED — the granted-scope surface `GRAPH-ACT-005`/`011` depend on is the LATEST migration in the tree, already present. |
+| 5 | Upstream is barely begun | upstream `state.json`, `scopes.md` | CONFIRMED — `status=blocked`, `completedScopes=[]`, 3 checked / **63** unchecked, ZERO of six scopes Done (three Not Started, three In Progress). |
+| 6 | Upstream foundation absent | repo-wide `*.go` grep | CONFIRMED — `BrowserAccountStore` has ZERO references of any kind. `NewRequestAuthenticator` exists (`internal/auth/request_authenticator.go:118`) but has ZERO non-test callers, so the Scope 03 seam is not wired into the runtime. |
+
+### Why the entry was over-broad as a certification gate
+
+`specDependsOn` is not a "these are related" list. Gate G089 treats every entry
+as a hard precondition that must reach `done` before this packet may be
+certified. That is the wrong instrument for this relationship.
+
+1. **The declaring sentence disclaims it for what is delivered.** `bug.md:46`
+   scopes the dependency to "full browser proof" and states in the same breath
+   that the "Product-side contract is independent". The single artifact that
+   records the relationship therefore argues AGAINST gating the product-side
+   contract on it.
+2. **Nothing delivered requires production credential auth.** The Outcome
+   Contract's Success Signal is a typed HTTP 503 `capability_disabled` on every
+   known graph path while the process keeps serving other capabilities, and —
+   with the enabler present — all five families mounted plus a non-mutating
+   authenticated synthetic. Every clause is satisfied on the auth surface that
+   ships today (`auth.RequireScope("knowledge-graph:read")` over the
+   shared-token / PASETO path, backed by migration `063`). No clause names
+   per-user browser credential login, which is what `BUG-070-001` builds.
+3. **The one real coupling was already routed away.** `F-SEC-01`, the security
+   finding that touches the credential/session surface, was classified OUTSIDE
+   this packet's fail-soft boundary and routed to its owner. It is not a
+   delivered claim of this packet.
+
+Retaining the entry would hold a Critical (S1) fix — a deployed capability
+vanishing behind an ordinary 404 while acceptance reported success — behind a
+six-scope packet at 3/63 DoD whose first scope has no code in the tree. The hold
+would be indefinite, and for a reason unrelated to what this packet repairs.
+
+### RETAINED RELATIONSHIP — what is thereby NOT claimed
+
+Narrowing the gate does NOT erase the limitation. Recorded plainly so no reader
+mistakes this packet for more than it proved:
+
+- **This packet does NOT deliver full browser proof under PRODUCTION
+  authentication.** That claim is undelivered and is owned by `BUG-070-001`.
+- The delivered `e2e-ui` proof runs in DEV-TOKEN mode. Verified at source this
+  session: `internal/api/router.go:981` computes
+  `perUserActive := d.AuthConfig.Enabled && d.AuthVerifyOptions.ActivePublicKey != ""`,
+  and the shared-token / `auth_token`-cookie path the harness relies on is
+  reachable only when per-user verification is inactive. The harness cookie is
+  structurally inert against a production configuration — it is not a weaker
+  variant of production auth, it is a path production does not take.
+- The `403` grant leg of `SCN-080-001-06` is proven at INTEGRATION tier rather
+  than in the browser, because the deployed container runs `AUTH_ENABLED=false`
+  with an empty signing key. This was disclosed in the DoD row, not hidden.
+- No per-user or tenant row-isolation claim is made, consistent with
+  `corpusOwnershipModel.tenantRowIsolationClaimed = false`.
+
+A reviewer who needs browser-tier proof under production credentials needs
+`BUG-070-001`. This packet does not assert otherwise, and certifying it does not
+assert otherwise either.
+
+### Change made
+
+- `state.json` — removed the single `BUG-070-001` entry from `specDependsOn`.
+  The parent feature `specs/080-knowledge-graph-public-api` is retained. Re-read
+  after writing: the file parses as valid JSON, `specDependsOn` is
+  `["specs/080-knowledge-graph-public-api"]`.
+- No product code, test, harness, guard, DoD item or evidence row was edited.
+  No status was promoted: `status` and `certification.status` both remain
+  `blocked`, and `certifiedAt` remains null. Promotion is left to the
+  certifying step.

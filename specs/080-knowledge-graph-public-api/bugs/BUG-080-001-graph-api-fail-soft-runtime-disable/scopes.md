@@ -46,7 +46,32 @@ flowchart LR
 | SCOPE-01 | Empty/missing enabler fails soft to a typed disabled capability; routes activate atomically when enabled | config, core wiring, router, route manifest | - | Done |
 | SCOPE-02 | Authorized Graph reads report truthful data and failure states | PostgreSQL readers, HTTP contracts, auth, cursors | SCOPE-01 | Done |
 | SCOPE-03 | Read-only synthetic and readiness prove actual Graph behavior | validate synthetic, health, metrics, traces, alerts | SCOPE-02 | Done |
-| SCOPE-04 | Knowledge surfaces render the same honest state accessibly | PWA Knowledge/Wiki, status, responsive UI, Playwright | SCOPE-03 | In Progress |
+| SCOPE-04 | Knowledge surfaces render the same honest state accessibly | PWA Knowledge/Wiki, status, responsive UI, Playwright | SCOPE-03 | Done |
+
+---
+
+## Dependency Note — BUG-070-001 Is A Recorded Relationship, Not A Certification Gate
+
+Adjudicated by `bubbles.plan` on 2026-08-17. Full evidence and reasoning:
+`report.md` → `## Dependency Adjudication — specDependsOn Narrowed`.
+
+`specs/070-web-username-password-login/bugs/BUG-070-001-production-credential-session-paseto-split`
+was removed from `state.json::specDependsOn`, where Gate G089 was reading it as a
+hard precondition requiring the upstream to reach `done`. The product-side
+contract this packet delivers does not depend on it: `spec.md` and `design.md`
+carry ZERO references to it, requirements `GRAPH-ACT-001`…`011` are
+graph-activation concerns only, and the granted-scope surface the authorization
+requirements rely on already ships as migration `063_auth_token_granted_scopes.sql`.
+The sole declaring sentence, `bug.md:46`, itself calls the product-side contract
+"independent" and scopes the relationship to "full browser proof".
+
+**The relationship is retained, and the limitation stands:** this packet does
+NOT deliver full browser proof under PRODUCTION authentication. The delivered
+`e2e-ui` proof runs in DEV-TOKEN mode and is structurally inert against a
+production configuration (`internal/api/router.go:981`), and the `403` grant leg
+of `SCN-080-001-06` is proven at INTEGRATION tier because the deployed container
+runs `AUTH_ENABLED=false`. Browser-tier proof under production credentials is
+owned by `BUG-070-001` and is undelivered here.
 
 ---
 

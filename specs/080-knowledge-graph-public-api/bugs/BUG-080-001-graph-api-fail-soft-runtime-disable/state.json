@@ -14,8 +14,7 @@
   "planningOnly": false,
   "planningOnlyJustification": null,
   "specDependsOn": [
-    "specs/080-knowledge-graph-public-api",
-    "specs/070-web-username-password-login/bugs/BUG-070-001-production-credential-session-paseto-split"
+    "specs/080-knowledge-graph-public-api"
   ],
   "certifiedAt": null,
   "requiresRevalidation": false,
