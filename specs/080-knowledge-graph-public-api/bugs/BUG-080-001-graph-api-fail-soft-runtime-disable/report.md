@@ -7015,3 +7015,75 @@ is genuinely incomplete — re-verified read-only this session at **3 checked / 
 unchecked** DoD items with **zero** of its six scopes `Done` (three `Not
 Started`, three `In Progress`) and its own `state.json` status `blocked`.
 Nothing in this phase changes that. Only the `stabilize` phase is claimed.
+
+
+---
+
+<a id="stabilize-remediation"></a>
+
+## Stabilize Findings — Remediation (2026-08-17, commit `c3dad8b1`)
+
+`bubbles.stabilize` returned `route_required` with five unresolved findings and
+named `bubbles.implement` as next owner for harness remediation. Three are now
+fixed and verified; two are recorded as accepted.
+
+| Finding | Disposition |
+|---|---|
+| **S-1** restore failure did not stop the lane | **FIXED** |
+| **S-5** phase skips were silent | **FIXED** |
+| **S-6** unbounded `DELETE FROM topics` | **FIXED** (server-side) |
+| S-3b teardown inside an env-file check with no `else` | ACCEPTED — see below |
+| S-2 inconsistent retry bounds | ACCEPTED — see below |
+
+### S-1 — the serious one, and it was my defect
+
+`run_true_empty_phase || true_empty_status=$?` suppressed `set -e`, so a FAILED
+restore recorded the error and then ran the 85-test suite against the de-seeded
+database anyway. The specs are state-adaptive, so they would paint the
+true-empty arm and PASS — printing a green `76 passed` beside the red line. The
+guards built to stop vacuous passes were undermined one level up by ordinary
+error handling.
+
+The phase now sets `TRUE_EMPTY_FIXTURE_UNTRUSTWORTHY`; phases 2 and 3, which
+REUSE that stack, refuse to run and say so. Phase 4 recreates the stack from
+scratch and is unaffected.
+
+The flag is deliberately NOT "any phase failure", and that distinction proved
+load-bearing within one run: when only the CLEAR step failed, the database was
+never de-seeded, the flag correctly stayed unset, and the suite ran legitimately
+at `76 passed`. A cruder flag would have suppressed a valid run.
+
+**Honest boundary.** The happy path is proven (`LANE_EXIT=0`, four phases PASS).
+The failure BRANCH is source-verified — no `local` shadowing, no subshell at the
+call site, so the global assignment propagates — and was once observed in a
+CONFOUNDED run (two lanes contending for one compose project) where the restore
+genuinely failed and the full suite did NOT run. Suggestive, not conclusive.
+Inducing a clean restore failure means deliberately breaking a live stack that
+five source-text contract tests pin, which was judged not worth the risk.
+
+### S-6 — my first fix was wrong and the lane caught it
+
+I wrapped the exec in `timeout 60`. `e2e_ui_compose` is a bash FUNCTION and
+`timeout(1)` execs a binary, so it failed with exit 126 (`failed to run command
+'e2e_ui_compose': Permission denied`), bounded nothing, and broke the phase
+outright. Removed, with a comment recording why so it is not re-added.
+
+The server-side bounds are the real protection and are what shipped:
+`lock_timeout = 10s` and `statement_timeout = 30s` inside the psql command,
+which is exactly the described hang (a lock held by a slow boot seed).
+
+### Accepted rather than fixed
+
+- **S-3b** — `tear_down_test_stack` is unconditional and destroys the whole
+  project stack, which is stronger than restoring postgres. Its enclosing
+  env-file check has no `else`, so a missing SST file makes it a silent no-op.
+  Accepted: a missing SST env file fails the lane far earlier, at bring-up, so
+  the no-op is unreachable in practice.
+- **S-2** — `await_core_healthy` derives its bound from SST while two neighbours
+  hardcode `30`. Cosmetic inconsistency with no behavioural consequence at
+  current values; changing it edits a file five contract tests pin by source
+  text, which is a poor trade for zero behaviour change.
+
+Gates after remediation: `LANE_EXIT=0` (true-empty PASS 24s, full suite 76
+passed, store-unavailable PASS 18s, graph-disabled PASS 130s), `UNIT_EXIT=0`,
+`LINT_EXIT=0`, `FMT_EXIT=0`, `CHECK_EXIT=0`.
