@@ -24,6 +24,8 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=bubbles/scripts/guard-lib.sh
+source "$SCRIPT_DIR/guard-lib.sh"
 repo_root="$(cd "$SCRIPT_DIR/../.." && pwd)"
 quiet=0
 
@@ -118,6 +120,12 @@ fi
 # Discovery covers anything not enumerated and not denied, so a finding here
 # means the sweep is unreachable for that file (e.g. it lives outside the glob).
 validator_text="$(cat "$validator")"
+# Same invocation-based rule the sweep itself uses. Counting a bare mention as
+# "enumerated" would let this lint report full coverage for a selftest the sweep
+# had already skipped, so both surfaces must agree on what "scheduled" means.
+# The trailing newline is re-appended because command substitution strips it,
+# which would leave the last scheduled entry undelimited and miscounted.
+validator_scheduled="$(bubbles_scheduled_selftests "$validator_text")"$'\n'
 total=0
 enumerated=0
 discovered=0
@@ -134,7 +142,7 @@ for path in "$scripts_dir"/*-selftest.sh; do
     continue
   fi
 
-  if [[ "$validator_text" == *"$name"* ]]; then
+  if [[ "$validator_scheduled" == *$'\n'"$name"$'\n'* ]]; then
     enumerated=$((enumerated + 1))
   else
     discovered=$((discovered + 1))

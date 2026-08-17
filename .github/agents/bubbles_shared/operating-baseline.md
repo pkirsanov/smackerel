@@ -72,8 +72,8 @@ The `agnosticity-lint.sh --staged` pre-commit check detects project-specific con
 ## Context Loading Profiles
 
 - `planner`: `plan-bootstrap.md`
-- `implementer`: `implement-bootstrap.md`
-- `tester`: `test-bootstrap.md`
+- `implementer`: `implement-bootstrap.md`, `execution-ops.md`
+- `tester`: `test-bootstrap.md`, `execution-ops.md`
 - `analyst`: `analysis-bootstrap.md`
 - `designer`: `design-bootstrap.md`
 - `docs`: `docs-bootstrap.md`
@@ -81,9 +81,15 @@ The `agnosticity-lint.sh --staged` pre-commit check detects project-specific con
 - `ux`: `ux-bootstrap.md`
 - `validator`: `audit-bootstrap.md` plus project command sources as needed
 - `auditor`: `audit-bootstrap.md`
-- `orchestrator`: `bubbles/workflows.yaml`, `state.json`, the scope entrypoint, and only the dispatch metadata required for the active step
+- `orchestrator`: `bubbles/workflows.yaml`, `state.json`, the scope entrypoint, `execution-ops.md`, and only the dispatch metadata required for the active step
 - `simplifier`: `implement-bootstrap.md`
 - `chaos`: `test-bootstrap.md`
+
+`execution-ops.md` is named by the three roles that CLOSE runs (IMP-043 SCOPE-2).
+It holds the lesson-capture rule, and no profile previously loaded it, so the
+only statement of that rule sat two optional hops from every agent that finishes
+work. The short form lives in the `bubbles-result-envelope` skill; this profile
+entry makes the long form reachable by the roles that need it.
 
 ### Phase-Local Authoring Reference (opt-in bundle reduction) — SUPERSEDED 2026-07-29
 

@@ -22,7 +22,7 @@ mkdir -p "$TMP/improvements"
 out_file="$("$SCRIPT" "$TMP" --slug "no-signal-test" 2>/dev/null | sed 's/.*Wrote //')"
 [[ -f "$out_file" ]] || { echo "FAIL: case 1 proposal file not written ($out_file)"; exit 1; }
 grep -q "no gate failure data" "$out_file" || { echo "FAIL: case 1 expected 'no gate failure data' marker"; exit 1; }
-grep -q "no non-completed run data" "$out_file" || { echo "FAIL: case 1 expected 'no non-completed run data' marker"; exit 1; }
+grep -q "no unsuccessful or pending run data" "$out_file" || { echo "FAIL: case 1 expected 'no unsuccessful or pending run data' marker"; exit 1; }
 echo "PASS: no input files → proposal with no-signal messages"
 
 # 2. Events file with gate failures
@@ -43,18 +43,33 @@ else
   echo "SKIP: jq not installed, gate failure ranking"
 fi
 
-# 3. Runs file with non-completed modes
+# 3. Runs file with unsuccessful and still-pending runs.
+#
+# The previous fixture here was a top-level array of {mode, outcome} records --
+# a schema workflow-runs.json has never used. It is an object holding
+# activeRuns/recentRuns whose records carry command/result. Because the fixture
+# agreed with the reader's wrong assumption, both were wrong together and the
+# selftest passed while the real report showed "no data" against a file holding
+# 22 active and 12 failed runs. The fixture now mirrors the real file.
 cat > "$TMP/.specify/runtime/workflow-runs.json" <<'EOF'
-[
-  {"mode":"full-delivery","outcome":"completed"},
-  {"mode":"full-delivery","outcome":"blocked"},
-  {"mode":"incident-fastlane","outcome":"timeout"},
-  {"mode":"full-delivery","outcome":"blocked"}
-]
+{
+  "version": 1,
+  "activeRuns": [
+    {"command":"full-delivery","status":"running"}
+  ],
+  "recentRuns": [
+    {"command":"full-delivery","result":"success"},
+    {"command":"full-delivery","result":"failed"},
+    {"command":"incident-fastlane","result":"timeout"}
+  ]
+}
 EOF
 if command -v jq >/dev/null 2>&1; then
   out_file="$("$SCRIPT" "$TMP" --slug "stalled-modes-test" 2>/dev/null | sed 's/.*Wrote //')"
-  grep -q "full-delivery (2 non-completed runs)" "$out_file" || { echo "FAIL: case 3 expected 'full-delivery (2 non-completed runs)'"; cat "$out_file"; exit 1; }
+  # full-delivery: one active run with no result yet, plus one failed. The
+  # successful one must not be counted.
+  grep -q "full-delivery (2 run(s) not completed successfully)" "$out_file" || { echo "FAIL: case 3 expected 'full-delivery (2 run(s) not completed successfully)'"; cat "$out_file"; exit 1; }
+  grep -q "incident-fastlane (1 run(s) not completed successfully)" "$out_file" || { echo "FAIL: case 3 expected 'incident-fastlane (1 run(s) not completed successfully)'"; cat "$out_file"; exit 1; }
   echo "PASS: stalled modes counted"
 fi
 

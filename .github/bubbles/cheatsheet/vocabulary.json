@@ -25,7 +25,7 @@
   },
   {
     "term": "continuation envelope",
-    "meaning": "Machine-readable packet from a read-only agent carrying the target, intent, preferred workflow mode, and reason for the next workflow step."
+    "meaning": "Machine-readable packet for one concrete non-terminal target. Terminal recap uses target `none`; possible next work stays an unstarted candidate until the user explicitly requests it."
   },
   {
     "term": "scenario replay",

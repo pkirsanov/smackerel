@@ -7,14 +7,14 @@ if [[ "$script_dir" == *"/.github/bubbles/scripts" ]]; then
   root_dir="${script_dir%/.github/bubbles/scripts}"
   agents_dir="$root_dir/.github/agents"
   shared_dir="$agents_dir/bubbles_shared"
-  workflows_file="$root_dir/.github/bubbles/workflows.yaml"
+  gates_file="$root_dir/.github/bubbles/registry/gates.yaml"
   ownership_file="$root_dir/.github/bubbles/agent-ownership.yaml"
   capabilities_file="$root_dir/.github/bubbles/agent-capabilities.yaml"
 else
   root_dir="${script_dir%/bubbles/scripts}"
   agents_dir="$root_dir/agents"
   shared_dir="$agents_dir/bubbles_shared"
-  workflows_file="$root_dir/bubbles/workflows.yaml"
+  gates_file="$root_dir/bubbles/registry/gates.yaml"
   ownership_file="$root_dir/bubbles/agent-ownership.yaml"
   capabilities_file="$root_dir/bubbles/agent-capabilities.yaml"
 fi
@@ -46,15 +46,17 @@ check_has_match "$capabilities_file" '^version:' 'agent capabilities manifest mi
 check_has_match "$capabilities_file" '^workflowModeGrants:' 'agent capabilities manifest missing workflow mode grants block'
 check_has_match "$capabilities_file" '^resultPolicy:' 'agent capabilities manifest missing result policy block'
 check_has_match "$shared_dir/agent-common.md" '^## Artifact Ownership And Delegation Contract$' 'agent-common.md missing ownership contract section'
-if grep -nE 'name: artifact_ownership_enforcement_gate' "$workflows_file" >/dev/null; then
+# Gate existence resolves against the canonical registry, not the generated
+# gates: block in workflows.yaml, which is a copy of it (IMP-042 SCOPE-13).
+if grep -nE 'name: artifact_ownership_enforcement_gate' "$gates_file" >/dev/null; then
   :
 else
-  check_has_match "$workflows_file" 'name: agent_ownership_gate' 'workflows.yaml missing ownership enforcement gate (expected consolidated artifact_ownership_enforcement_gate or legacy agent_ownership_gate)'
-  check_has_match "$workflows_file" 'name: capability_delegation_gate' 'workflows.yaml missing legacy capability delegation gate when consolidated artifact_ownership_enforcement_gate is absent'
-  check_has_match "$workflows_file" 'name: owner_only_remediation_gate' 'workflows.yaml missing legacy owner-only remediation gate when consolidated artifact_ownership_enforcement_gate is absent'
+  check_has_match "$gates_file" 'name: agent_ownership_gate' 'gates registry missing ownership enforcement gate (expected consolidated artifact_ownership_enforcement_gate or legacy agent_ownership_gate)'
+  check_has_match "$gates_file" 'name: capability_delegation_gate' 'gates registry missing legacy capability delegation gate when consolidated artifact_ownership_enforcement_gate is absent'
+  check_has_match "$gates_file" 'name: owner_only_remediation_gate' 'gates registry missing legacy owner-only remediation gate when consolidated artifact_ownership_enforcement_gate is absent'
 fi
-check_has_match "$workflows_file" 'name: concrete_result_gate' 'workflows.yaml missing G063 concrete result gate'
-check_has_match "$workflows_file" 'name: workflow_runner_authorization_gate' 'workflows.yaml missing G064 workflow runner authorization gate'
+check_has_match "$gates_file" 'name: concrete_result_gate' 'gates registry missing G063 concrete result gate'
+check_has_match "$gates_file" 'name: workflow_runner_authorization_gate' 'gates registry missing G064 workflow runner authorization gate'
 check_has_match "$ownership_file" '^  state\.json:' 'agent ownership manifest missing state.json ownership block'
 check_has_match "$ownership_file" '^  scenario-manifest\.json:' 'agent ownership manifest missing scenario-manifest ownership block'
 check_has_match "$capabilities_file" '^  bubbles\.validate:' 'agent capabilities manifest missing bubbles.validate entry'

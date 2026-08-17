@@ -391,3 +391,44 @@ bubbles_ci_failure_detail() {
   local _re="^[[:space:]]*(FAIL|ERROR|AssertionError|Traceback|not ok|✗|❌|(${_tools}):)|(${_phrases})"
   grep -aE "$_re" "$file" 2>/dev/null | head -n 10 | cut -c1-300 || true
 }
+
+# Emit the selftest basenames a validator actually SCHEDULES, as a newline-
+# wrapped block suitable for exact `*$'\n'name$'\n'*` matching.
+#
+# Detection is INVOCATION-based on purpose. Matching raw source text means any
+# mention removes a selftest from the run -- a comment, a rationale, even a
+# denylist note -- and nothing reports that it stopped executing. That is a
+# coverage hole that looks exactly like a passing suite.
+#
+# run_check invocations are frequently backslash-continued, so logical lines are
+# reassembled before matching; a line-at-a-time reader would miss the continued
+# form and re-run an already-wired selftest a second time.
+#
+# Builtins only: per BUG-021, no external tool may decide what a validator
+# executes, because a minimal PATH would silently collapse the answer to empty.
+bubbles_scheduled_selftests() {
+  local source_text="${1-}"
+  local line pending="" logical token out=$'\n'
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    if [[ "$line" == *\\ ]]; then
+      pending+="${line%\\} "
+      continue
+    fi
+    logical="$pending$line"
+    pending=""
+    logical="${logical#"${logical%%[![:space:]]*}"}"
+    case "$logical" in
+      'run_check '* | 'run_check_self_only '*) ;;
+      *) continue ;;
+    esac
+    while [[ "$logical" == *-selftest.sh* ]]; do
+      token="${logical%%-selftest.sh*}"
+      logical="${logical#*-selftest.sh}"
+      token="${token##*/}"
+      token="${token##*\"}"
+      token="${token##*[[:space:]]}"
+      out+="${token}-selftest.sh"$'\n'
+    done
+  done <<<"$source_text"
+  printf '%s' "$out"
+}

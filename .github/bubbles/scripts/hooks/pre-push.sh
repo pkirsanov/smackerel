@@ -33,27 +33,43 @@ fi
 # whole release gate locally and is what a release cut should use.
 #
 # Core-by-default is safe because the full gate is NOT skipped, only relocated:
-# .github/workflows/agnosticity.yml runs `cli.sh release-check` on every pull
-# request and every push to main, on Linux AND macOS. A local full run for each
-# routine push re-computes a verdict CI produces anyway, and a ~30-minute hook
-# is the strongest practical incentive toward the bypass behaviour this
-# framework exists to prevent.
+# .github/workflows/agnosticity.yml runs `cli.sh release-check` on Linux for
+# every pull request and every push to main, and on macOS for pushes to main
+# (the macOS leg is push-only because those runners bill at a 10x multiplier).
+# A local full run for each routine push re-computes a verdict CI produces
+# anyway, and a ~30-minute hook is the strongest practical incentive toward the
+# bypass behaviour this framework exists to prevent.
 PREPUSH_TIER="${BUBBLES_PREPUSH_TIER:-core}"
 
-# Per-process paths prevent concurrent pushes from overwriting each other's logs.
+# Per-process paths: a fixed name is silently overwritten by any concurrent
+# push on the same machine.
 PREPUSH_VALIDATE_LOG="/tmp/bubbles-pre-push-validate.$$.log"
 PREPUSH_RELEASE_LOG="/tmp/bubbles-pre-push-release.$$.log"
 
-# Per-process paths: a fixed name is silently overwritten by any concurrent push on the same machine.
-PREPUSH_VALIDATE_LOG="/tmp/bubbles-pre-push-validate.$$.log"
-PREPUSH_RELEASE_LOG="/tmp/bubbles-pre-push-release.$$.log"
+# Bounded failure diagnostic. A blind `tail -30` shows whatever happens to be
+# last, which is not necessarily the failure: the summary's failed-check list
+# grows with the failure count and pushes the useful lines out of the window.
+# Lead with the failure-shaped lines, then the tail, and always name the full
+# log so nothing is actually discarded.
+print_bounded_log() {
+  local log="$1"
+  local total failure_lines
+  total="$(wc -l <"$log" | tr -d ' ')"
+  echo "    Log lines: $total (full log preserved at $log)"
+  failure_lines="$(grep -nE '^(FAIL|ERROR)[: ]|^  - ' "$log" | awk 'NR<=40' || true)"
+  if [[ -n "$failure_lines" ]]; then
+    echo "    Failure-shaped lines (first 40):"
+    printf '%s\n' "$failure_lines" | sed 's/^/      /'
+  fi
+  echo "    Last 20 lines:"
+  tail -20 "$log" | sed 's/^/      /'
+}
 
 if [[ "$PREPUSH_TIER" == "core" ]]; then
   echo "🫧 bubbles pre-push: tier=core (fast structural gate — the full release gate runs in CI, and BUBBLES_PREPUSH_TIER=full runs it here)"
   if ! bash "$SCRIPT_DIR/framework-validate.sh" --tier=core >"$PREPUSH_VALIDATE_LOG" 2>&1; then
-    echo "❌ framework-validate (core tier) failed. Full log: $PREPUSH_VALIDATE_LOG"
-    echo "    Tail:"
-    tail -30 "$PREPUSH_VALIDATE_LOG" | sed 's/^/      /'
+    echo "❌ framework-validate (core tier) failed."
+    print_bounded_log "$PREPUSH_VALIDATE_LOG"
     echo ""
     echo "    Fix the failures and retry the push. There is no bypass."
     exit 1
@@ -69,9 +85,8 @@ fi
 if [[ -x "$SCRIPT_DIR/release-check.sh" ]]; then
   echo "🫧 bubbles pre-push: running release-check (framework-validate runs inside it)..."
   if ! bash "$SCRIPT_DIR/release-check.sh" >"$PREPUSH_RELEASE_LOG" 2>&1; then
-    echo "❌ release-check failed. Full log: $PREPUSH_RELEASE_LOG"
-    echo "    Tail:"
-    tail -30 "$PREPUSH_RELEASE_LOG" | sed 's/^/      /'
+    echo "❌ release-check failed."
+    print_bounded_log "$PREPUSH_RELEASE_LOG"
     echo ""
     echo "    Fix the failures and retry the push. There is no bypass."
     exit 1
@@ -81,9 +96,8 @@ if [[ -x "$SCRIPT_DIR/release-check.sh" ]]; then
 fi
 
 if ! bash "$SCRIPT_DIR/framework-validate.sh" >"$PREPUSH_VALIDATE_LOG" 2>&1; then
-  echo "❌ framework-validate failed. Full log: $PREPUSH_VALIDATE_LOG"
-  echo "    Tail:"
-  tail -30 "$PREPUSH_VALIDATE_LOG" | sed 's/^/      /'
+  echo "❌ framework-validate failed."
+  print_bounded_log "$PREPUSH_VALIDATE_LOG"
   echo ""
   echo "    Fix the failures and retry the push. There is no bypass."
   exit 1

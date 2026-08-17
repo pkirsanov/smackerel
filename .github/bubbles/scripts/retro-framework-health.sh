@@ -69,13 +69,19 @@ if [[ -f "$EVENTS_FILE" ]] && command -v jq >/dev/null 2>&1; then
 fi
 [[ -z "$top_failed_gates" ]] && top_failed_gates="- (no gate failure data found in framework-events.jsonl)"
 
-# Stalled modes from workflow-runs.json (mode with outcome != completed)
+# Unsuccessful runs from workflow-runs.json. The run-state file is an OBJECT
+# holding activeRuns/recentRuns arrays whose records carry status/result and a
+# command -- NOT a top-level array of records carrying mode/outcome. The old
+# filter raised "Cannot index number with string" on every run, and 2>/dev/null
+# swallowed it, so this section reported "no data" while 22 active and 12 failed
+# runs sat in the file. A health report that cannot see failures is worse than
+# no health report.
 stalled_modes=""
 if [[ -f "$RUNS_FILE" ]] && command -v jq >/dev/null 2>&1; then
-  stalled_modes="$(jq -r '.[]? | select(.outcome != "completed" and .outcome != null) | .mode' "$RUNS_FILE" 2>/dev/null \
-    | sort | uniq -c | sort -rn | head -3 | awk '{printf "- %s (%d non-completed runs)\n", $2, $1}' || true)"
+  stalled_modes="$(jq -r '(.activeRuns[]?, .recentRuns[]?) | select((.result // "pending") != "success") | .command // "unknown"' "$RUNS_FILE" 2>/dev/null \
+    | sort | uniq -c | sort -rn | head -3 | awk '{printf "- %s (%d run(s) not completed successfully)\n", $2, $1}' || true)"
 fi
-[[ -z "$stalled_modes" ]] && stalled_modes="- (no non-completed run data found in workflow-runs.json)"
+[[ -z "$stalled_modes" ]] && stalled_modes="- (no unsuccessful or pending run data found in workflow-runs.json)"
 
 # Stale capabilities (lastValidated > 90 days)
 stale_caps=""

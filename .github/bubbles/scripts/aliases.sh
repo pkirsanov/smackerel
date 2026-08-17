@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 # ────────────────────────────────────────────────────────────────────
+
+_ALIASES_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+_ALIASES_JSON="${BUBBLES_CHEATSHEET_ALIASES_FILE:-$_ALIASES_SCRIPT_DIR/../cheatsheet/aliases.json}"
+_MODES_JSON="${BUBBLES_CHEATSHEET_MODES_FILE:-$_ALIASES_SCRIPT_DIR/../cheatsheet/modes.json}"
 # aliases.sh — Sunnyvale alias resolution
 # ────────────────────────────────────────────────────────────────────
 # Resolves Sunnyvale-themed aliases to canonical Bubbles agent names
@@ -52,6 +56,7 @@ declare -A _AGENT_ALIASES=(
   [parts-unknown]="bubbles.code-review"
   [whole-show]="bubbles.system-review"
   [nice-kitty]="bubbles.bug"
+  [next-on-the-board]="bubbles.iterate"
   [just-fixes]="bubbles.stabilize"
   [used-to-be-a-vet]="bubbles.create-skill"
   [true]="bubbles.commands"
@@ -95,6 +100,7 @@ declare -A _AGENT_QUOTES=(
   [parts-unknown]="From parts unknown!"
   [whole-show]="Orangie sees everything. He's not dead, he's just... reviewing."
   [nice-kitty]="That's a nice f***ing kitty right there."
+  [next-on-the-board]="Pick the next job on the board."
   [just-fixes]="... (Bill spots the problem and points at it)"
   [used-to-be-a-vet]="I used to be a vet, you know. I got specialties."
   [true]="True."
@@ -117,7 +123,7 @@ declare -A _MODE_ALIASES=(
   [full-send]="full-delivery"
   [clean-and-sober]="full-delivery"
   [no-loose-ends]="full-delivery"
-  [keep-the-park-online]="devops-to-doc"
+  [park-ops-cycle]="devops-to-doc"
   [strip-it-down]="simplify-to-doc"
   [shit-storm]="chaos-hardening"
   [smash-and-grab]="bugfix-fastlane"
@@ -136,7 +142,8 @@ declare -A _MODE_ALIASES=(
   [open-and-shut]="audit-only"
   [just-watching]="validate-to-doc"
   [smokes-and-setup]="full-delivery"
-  [keep-going]="iterate"
+  [pick-next]="iterate"
+  [keep-going]="resume-only"
   [resume-the-tape]="resume-only"
   [whats-the-big-idea]="spec-scope-hardening"
   [harden-up]="spec-scope-hardening"
@@ -148,6 +155,7 @@ declare -A _MODE_QUOTES=(
   [full-send]="Full send, boys. No half-measures."
   [clean-and-sober]="We're doing this clean and sober."
   [no-loose-ends]="No loose ends. All green or we keep going."
+  [park-ops-cycle]="Get the rack humming and keep the park online."
   [strip-it-down]="Cut the nonsense. Keep what actually works."
   [shit-storm]="We're in the eye of a shiticane, Randy."
   [smash-and-grab]="Get in, fix it, get out. Smash and grab."
@@ -166,7 +174,8 @@ declare -A _MODE_QUOTES=(
   [open-and-shut]="Open and shut case."
   [just-watching]="(camera crew just watches)"
   [smokes-and-setup]="Smokes, let's go. Set it up."
-  [keep-going]="Keep going, boys. Don't stop."
+  [pick-next]="Pick the next job on the board."
+  [keep-going]="Keep going only if the tape still has work on it."
   [resume-the-tape]="Roll that tape back, boys."
   [whats-the-big-idea]="What's the big idea here, Julian?"
   [harden-up]="Harden up, boys. This has gotta be tight."
@@ -179,6 +188,10 @@ declare -A _MODE_QUOTES=(
 # Returns empty string if not found
 resolve_agent_alias() {
   local alias="$1"
+  if [[ -f "$_ALIASES_JSON" ]] && command -v jq >/dev/null 2>&1; then
+    jq -r --arg alias "$alias" '.[] | select(.alias == $alias) | (.target_agent // (if (.maps_to | test("^bubbles\\.[a-z0-9-]+$")) then .maps_to else empty end))' "$_ALIASES_JSON"
+    return 0
+  fi
   echo "${_AGENT_ALIASES[$alias]:-}"
 }
 
@@ -186,6 +199,14 @@ resolve_agent_alias() {
 # Returns empty string if not found
 resolve_mode_alias() {
   local alias="$1"
+  if [[ -f "$_MODES_JSON" ]] && command -v jq >/dev/null 2>&1; then
+    mode_target="$(jq -r --arg alias "$alias" '.[] | select(.alias == $alias) | (.canonical_name // .name)' "$_MODES_JSON")"
+    if [[ -z "$mode_target" && -f "$_ALIASES_JSON" ]]; then
+      mode_target="$(jq -r --arg alias "$alias" '.[] | select(.alias == $alias) | .target_mode // empty' "$_ALIASES_JSON")"
+    fi
+    printf '%s\n' "$mode_target"
+    return 0
+  fi
   echo "${_MODE_ALIASES[$alias]:-}"
 }
 
@@ -205,6 +226,35 @@ mode_alias_quote() {
 # Returns 0 if found, 1 if not found.
 sunnyvale_lookup() {
   local alias="$1"
+  if [[ -f "$_ALIASES_JSON" ]] && command -v jq >/dev/null 2>&1; then
+    local entry maps_to quote
+    entry="$(jq -c --arg alias "$alias" '[.[] | select(.alias == $alias)] | if length == 1 then .[0] else empty end' "$_ALIASES_JSON")"
+    if [[ -n "$entry" ]]; then
+      maps_to="$(jq -r '.target_agent // .target_mode // .maps_to' <<<"$entry")"
+      quote="$(jq -r '.quote // empty' <<<"$entry")"
+      if [[ "$maps_to" == bubbles.* ]]; then
+        echo "🫧 $alias → $maps_to"
+      else
+        echo "🫧 $alias → workflow mode: $maps_to"
+      fi
+      [[ -n "$quote" ]] && echo "   \"$quote\""
+      return 0
+    fi
+  fi
+  if [[ -f "$_MODES_JSON" ]] && command -v jq >/dev/null 2>&1; then
+    local mode_entry mode_name mode_quote
+    mode_entry="$(jq -c --arg alias "$alias" '[.[] | select(.alias == $alias)] | if length == 1 then .[0] else empty end' "$_MODES_JSON")"
+    if [[ -n "$mode_entry" ]]; then
+      mode_name="$(jq -r '.canonical_name // .name' <<<"$mode_entry")"
+      mode_quote="$(jq -r '.html_quote // empty' <<<"$mode_entry")"
+      echo "🫧 $alias → workflow mode: $mode_name"
+      [[ -n "$mode_quote" ]] && echo "   \"$mode_quote\""
+      return 0
+    fi
+  fi
+  if [[ -f "$_ALIASES_JSON" || -f "$_MODES_JSON" ]] && command -v jq >/dev/null 2>&1; then
+    return 1
+  fi
   local agent="${_AGENT_ALIASES[$alias]:-}"
   local mode="${_MODE_ALIASES[$alias]:-}"
 
@@ -227,6 +277,21 @@ sunnyvale_lookup() {
 
 # List all aliases in a formatted table
 list_all_aliases() {
+  if [[ -f "$_ALIASES_JSON" && -f "$_MODES_JSON" ]] && command -v jq >/dev/null 2>&1; then
+    echo ""
+    echo "🫧 Sunnyvale Aliases"
+    echo "──────────────────────────────────────────────────────────────"
+    printf "  %-28s %-38s %s\n" "ALIAS" "MAPS TO" "QUOTE"
+    printf "  %-28s %-38s %s\n" "─────" "───────" "─────"
+    while IFS=$'\t' read -r alias maps_to quote; do
+      printf "  %-28s %-38s %s\n" "$alias" "$maps_to" "\"$quote\""
+    done < <(jq -r '.[] | [.alias, .maps_to, (.quote // "")] | @tsv' "$_ALIASES_JSON")
+    while IFS=$'\t' read -r alias mode quote; do
+      printf "  %-28s %-38s %s\n" "$alias" "$mode" "\"$quote\""
+    done < <(jq -r '.[] | [.alias, .name, (.html_quote // "")] | @tsv' "$_MODES_JSON")
+    echo ""
+    return 0
+  fi
   echo ""
   echo "🫧 Sunnyvale Agent Aliases"
   echo "──────────────────────────────────────────────────────────────"

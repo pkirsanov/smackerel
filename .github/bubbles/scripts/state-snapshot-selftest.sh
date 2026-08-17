@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Capability: per-turn-state-snapshot
 set -euo pipefail
 
 # state-snapshot-selftest.sh — verify state-snapshot.sh behavior.

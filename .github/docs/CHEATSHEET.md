@@ -142,7 +142,7 @@ Some TPB characters carry different agent roles when their narrative context leg
 | `sunnyvale i-handle-things` | `bubbles.goal` | *"Tell Tyrone the outcome. He handles things, that's what he does."* |
 | `sunnyvale tyrone-got-this` | `bubbles.goal` | *"Peace. Tyrone got this."* |
 | `sunnyvale on-the-clock` | `bubbles.sprint` | *"Inside and outside, both at once. Don't fall behind."* |
-| `sunnyvale next-on-the-board` | `bubbles.sprint` | *"That one's done — keep both flows moving."* |
+| `sunnyvale next-on-the-board` | `bubbles.iterate` | *"Pick the next job on the board."* |
 | `sunnyvale just-fixes` | `bubbles.stabilize` | *"... (Bill spots the problem and points at it)"* |
 | `sunnyvale used-to-be-a-vet` | `bubbles.create-skill` | *"I used to be a vet, you know."* |
 | `sunnyvale true` | `bubbles.commands` | *"True."* |
@@ -176,7 +176,7 @@ Some TPB characters carry different agent roles when their narrative context leg
 | `value-first-e2e-batch` | boys-plan | Auto-discover highest-value work, full delivery pipeline |
 | `full-delivery` | full-send | Default maximum-assurance delivery — loops through implementation, tests, quality sweep, validation, and bug closure until truly green or blocked |
 | `full-delivery` | no-loose-ends | Maximum-assurance delivery — keep looping until validate certifies done or records a real blocker. Default continuation target for active recap/status/handoff follow-up. |
-| `devops-to-doc` | keep-the-park-online | Focused DevOps execution + operational verification + docs sync |
+| `devops-to-doc` | park-ops-cycle | Focused DevOps execution + operational verification + docs sync |
 | `simplify-to-doc` | strip-it-down | Simplify an existing implementation, prove it still works, then sync docs |
 | `spec-review-to-doc` | laser-eyes-sweep | Audit specs for freshness, classify trust levels, produce maintenance report |
 | `chaos-hardening` | shit-storm | Iterative chaos + bugfix cycles until clean |
@@ -186,8 +186,8 @@ Some TPB characters carry different agent roles when their narrative context leg
 | `harden-gaps-to-doc` | conky-says | Thorough pre-release sweep |
 | `product-to-delivery` | freedom-35 | Full pipeline: analyst → UX → design → implement → ship |
 | `docs-only` | gnome-sayin | Documentation maintenance only |
-| `iterate` | keep-going | Continue scope-by-scope implementation |
-| `resume-only` | resume-the-tape | Resume from last session state |
+| `iterate` | pick-next | Explicitly select and execute the next priority |
+| `resume-only` | keep-going | Resume active work or return a completion recap |
 | `spec-scope-hardening (with analyze)` | whats-the-big-idea | Business analysis + UX exploration only |
 | `test-to-doc` | quick-dirty | Run tests, fix failures, update docs |
 | `audit-only` | open-and-shut | Run audit phase only |
@@ -205,7 +205,7 @@ Some TPB characters carry different agent roles when their narrative context leg
 | `retro-to-harden` | liquor-then-harden | Data-driven hardening — retro finds bug magnets, then harden targets them |
 | `retro-quality-sweep` | liquor-then-sweep | Retro finds hotspots, then the deterministic quality crew cleans them up |
 | `retro-to-review` | liquor-then-look | Data-driven review — retro finds risks, then code-review diagnoses them |
-| `release-planning-to-doc` | plans-within-plans | Produce or refresh a phase release packet (vision/features/actions/business-plan/deployment/marketing/monetization/ops-scalability), enforce Product Direction Surfaces trio + carry-forward + cross-product coordination |
+| `release-planning-to-doc` | packet-within-packets | Produce or refresh a phase release packet (vision/features/actions/business-plan/deployment/marketing/monetization/ops-scalability), enforce Product Direction Surfaces trio + carry-forward + cross-product coordination |
 | `idea-to-release-completion` | rocket-appliance | Full lifecycle: idea -> release packet bootstrap-or-refresh -> spec/design/scopes -> implement/test/validate/audit/chaos -> final release packet refresh that flips the capability to `delivered`. Closes the loop the standard `product-to-delivery` mode used to leave open. Owned by Sonny "Iron Lung" Smith for the release phases. |
 | `release-train-cut` | cut-the-train | DVS cuts a candidate at a trunk SHA for a named train. Tag + signed candidate artifact, no deployment. |
 | `release-train-promote` | promote-the-pointer | Pointer-swap a candidate between slots on a train (e.g. staging→prod). Requires backup-freshness + restore-drill currency. |
@@ -228,8 +228,8 @@ Some TPB characters carry different agent roles when their narrative context leg
 | `adapter-readiness-to-packet` | adapter-ready-to-go | Deliver an adapter to readiness state; packet certifies the adapter is ready for downstream consumption. Terminal status: `delivered_pending_activation`. |
 | `dark-launch-shipped` | dark-and-quiet | Code shipped behind a default-off flag; terminal status `delivered_pending_activation` until flag flip. |
 | `migration-shipped-pending-cutover` | migration-shipped-not-cutover | Migration code shipped but cutover not executed; terminal status `delivered_pending_activation` until operator cutover. |
-| `redteam-to-doc` | prove-it | Adversarial red-team attack on a finished result (Green Bastard); finding-owned remediation chain then validate/audit/docs. Off by default. |
-| `production-adversarial-probe` | this-is-my-park-now | Bounded, armed, read-only chaos-monkey probing of a LIVE system (Green Bastard on a leash). Requires arming + target allowlist; restore-or-fix; never certifies. |
+| `redteam-to-doc` | prove-the-delivery | Adversarial red-team attack on a finished result (Green Bastard); finding-owned remediation chain then validate/audit/docs. Off by default. |
+| `production-adversarial-probe` | test-my-park | Bounded, armed, read-only chaos-monkey probing of a LIVE system (Green Bastard on a leash). Requires arming + target allowlist; restore-or-fix; never certifies. |
 | `rapid-tool-delivery` | in-and-out-legit | Risk-proportional fast lane for one low-risk, build-free tool increment — fewer phases, full integrity contract; escalates to full-delivery on any high-risk trigger; certifies `delivered_fast` |
 <!-- GENERATED:CHEATSHEET_MODES_END -->
 
@@ -243,7 +243,7 @@ Some TPB characters carry different agent roles when their narrative context leg
 | Design a multi-implementation capability | `/bubbles.workflow  design capability <name>` | Domain model, capability foundation, concrete implementations, variation axes, UI primitives when needed, and foundation-first scopes |
 | Improve an existing feature outcome | `/bubbles.goal  improve <feature>` | Goal composes research, planning, delivery, and certification as needed |
 | Fix a focused bug workflow | `/bubbles.bug  mode: fix <bug>` | Domain-owned bugfix-fastlane with reproduce/fix/verify flow |
-| Keep moving the current outcome forward | `/bubbles.goal  continue` | Resume active goal and preserve its workflow transitions |
+| Keep moving an active outcome forward | `/bubbles.goal  continue` | Resume active goal; otherwise recap and stop |
 | Keep going until the feature is truly green | `/bubbles.workflow  <feature> mode: full-delivery` | Repeated quality/certification rounds until done or concretely blocked |
 | Inspect rework and bug-magnet patterns | `/bubbles.retro  week` | Slop Tax, retries, reversions, hotspots |
 | Audit framework prompt size | `bash bubbles/scripts/cli.sh lint-budget` | Instruction budget report for framework maintainers |
@@ -263,7 +263,7 @@ Some TPB characters carry different agent roles when their narrative context leg
 | `single-mode workflow runner` | `bubbles.workflow` executes exactly one explicit `mode:` or one mode resolved by `bubbles.super`; it does not decompose broad goals or run timed goal queues. |
 | `direct authorized runner` | The top-level agent granted a workflow mode interprets its phase order and invokes specialist owners directly. Workflow-running orchestrators never invoke one another as subagents. |
 | `workflow mode grant` | A default-deny entry in `bubbles/agent-capabilities.yaml::workflowModeGrants` declaring exactly which modes an orchestrator may execute. Gate G064 enforces it. |
-| `continuation envelope` | Machine-readable packet from a read-only agent carrying the target, intent, preferred workflow mode, and reason for the next workflow step. |
+| `continuation envelope` | Machine-readable packet for one concrete non-terminal target. Terminal recap uses target `none`; possible next work stays an unstarted candidate until the user explicitly requests it. |
 | `scenario replay` | Validate reruns the linked live-system `SCN-*` user journeys from `scenario-manifest.json` before certification. |
 | `human acceptance` | `uservalidation.md` is human-owned acceptance input. Automation findings do not toggle it. |
 | `framework validation` | The framework's own self-check surface. Runs portable-surface, ownership, registry, and selftest checks before you trust a release or upgrade. |
@@ -458,7 +458,7 @@ Some TPB characters carry different agent roles when their narrative context leg
 | G083 | Context compaction discipline | Orchestrators must compact result envelopes before count/size thresholds are breached |
 | G084 | Pre-existing deferral block | Pre-existing failures cannot be hidden behind deferral language in active artifacts |
 | G085 | Framework dogfood evidence | Bubbles source has no persistent `specs/`; evidence comes from validation, selftests, release manifest, and downstream/fixture specs |
-| G086 | Orchestrator persistence lint | Orchestrators auto-continue non-terminal phases and do not ask continuation questions |
+| G086 | Orchestrator persistence lint | Classify continuation before parsing; auto-continue active work; recap terminal work without selecting another item |
 | G087 | Planning packet linkage | Hardened planning packets link to implementation specs or declare planning-only intent |
 | G088 | Post-certification edit guard | Done specs cannot silently change planning truth after certification |
 | G089 | Inter-spec dependency | Dependencies must resolve to stable specs and cycles fail |
@@ -650,7 +650,7 @@ Skills are portable procedural checklists auto-installed to every repo. They act
 | Situation | Command |
 |-----------|---------|
 | **Don't know what to do? Just describe it.** | **`/bubbles.workflow  <describe what you want in plain English>`** |
-| Continue toward the active outcome | `/bubbles.goal  continue` |
+| Continue an active outcome, or recap a completed one | `/bubbles.goal  continue` |
 | New feature from scratch | `/bubbles.goal  <describe outcome>` |
 | Full delivery pipeline as one known mode | `/bubbles.workflow  <feature> mode: full-delivery` |
 | Improve legacy feature with one stale-spec pass first | `/bubbles.workflow  improve action:analyze-and-harden target:existing-feature for <feature> specReview: once-before-implement` |
@@ -666,7 +666,7 @@ Use `/bubbles.goal` for one outcome, `/bubbles.workflow` for exactly one mode, `
 | You Type | Runner Behavior |
 |----------|-----------------|
 | `/bubbles.goal  improve the booking feature to be competitive` | Compose the workflows and agents needed for that outcome |
-| `/bubbles.goal  continue` | Resume the active goal and preserve its mode transitions |
+| `/bubbles.goal  continue` | Resume the active goal, or return its terminal recap without starting new work |
 | `/bubbles.workflow  fix all found` | Resume the active workflow's remaining routed work instead of dropping into raw specialists |
 | `/bubbles.workflow  specs/page-builder mode: bugfix-fastlane` | Execute one deterministic bugfix mode |
 | `/bubbles.workflow  specs/booking mode: stochastic-quality-sweep maxRounds: 10` | Execute one stochastic mode with ten rounds |
@@ -676,7 +676,8 @@ Use `/bubbles.goal` for one outcome, `/bubbles.workflow` for exactly one mode, `
 | `/bubbles.code-review  do an engineering sweep on the gateway` | profile: engineering-sweep, scope: service:gateway |
 | `/bubbles.system-review  review the booking feature as a user` | mode: full, scope: feature:booking |
 | `/bubbles.iterate  fix tests for the page builder` | type: tests, feature: page-builder |
-| `/bubbles.workflow  do the next thing from recap` | mode: full-delivery, target resolved from continuation envelope |
+| `/bubbles.workflow  continue the active item from recap` | mode preserved from a concrete non-terminal continuation envelope |
+| `/bubbles.iterate` | Explicitly select and start the next priority item |
 | `/bubbles.test  why are integration tests failing?` | action: triage, types: integration |
 | `/bubbles.analyst  how does our booking compare to competitors?` | mode: improve, competitive research on |
 | `/bubbles.security  scan for hardcoded secrets` | focus: secrets |
@@ -723,7 +724,7 @@ The super resolves intent and generates commands. A workflow runner may call it 
 | Continue an active feature safely | `/bubbles.workflow  <feature> mode: full-delivery` |
 | Continue routed work from a stochastic sweep | `/bubbles.workflow  fix all found` |
 | Implement a known scope surgically | `/bubbles.implement  execute scope 1 of <feature>` |
-| Continue next scope | `/bubbles.iterate  continue <feature>` |
+| Explicitly start the next scope | `/bubbles.iterate  <feature>` |
 | Simplify complex code | `/bubbles.simplify` |
 | Design the architecture | `/bubbles.design  create design for <feature>` |
 

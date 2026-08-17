@@ -4,6 +4,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/trust-metadata.sh"
 source "$SCRIPT_DIR/interop-registry.sh"
+# shellcheck source=/dev/null
+source "$SCRIPT_DIR/adoption-profile-lib.sh"
 
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 OUTPUT_PATH="$REPO_ROOT/bubbles/release-manifest.json"
@@ -55,16 +57,7 @@ done
 }
 
 adoption_profile_ids() {
-  local registry_file="$1"
-
-  awk '
-    /^profiles:/ { in_profiles=1; next }
-    in_profiles && /^  [A-Za-z0-9_-]+:$/ {
-      profile=$1
-      sub(":$", "", profile)
-      print profile
-    }
-  ' "$registry_file"
+  bubbles_adoption_profile_ids "$1"
 }
 
 mapfile -t managed_entries < <(bubbles_framework_manifest_entries "$REPO_ROOT" false)
@@ -84,7 +77,7 @@ mapfile -t managed_entries < <(bubbles_framework_manifest_entries "$REPO_ROOT" f
 # downstream-run script invokes eval-harness.sh at runtime (eval-heldout-guard.sh only
 # names it in comments; forecast-eval-check.sh is standalone), so this creates no
 # dangling reference.
-eval_source_only_scripts=(
+demoted_source_only_scripts=(
   "bubbles/scripts/eval-harness.sh"
   "bubbles/scripts/eval-harness-selftest.sh"
   # Its labeled corpus lives under bubbles/eval/, which is source-only in full,
@@ -93,11 +86,53 @@ eval_source_only_scripts=(
   # recall selftests that exercise the SHIPPED provider, CLI, and authority
   # firewall stay managed and do run downstream.
   "bubbles/scripts/experience-recall-eval-selftest.sh"
+  # These three drive eval-harness.sh through $SCRIPT_DIR. Shipping them while
+  # the harness stays source-only put a managed executable in the payload whose
+  # dependency was absent, so downstream it could only ever skip or fail. They
+  # travel with the subsystem they exercise.
+  "bubbles/scripts/eval-corpus-selftest.sh"
+  "bubbles/scripts/gate-detection-selftest.sh"
+  "bubbles/scripts/judge-adapter-contract-selftest.sh"
+  # Not an eval script. v5.3-selftest builds a downstream fixture by running
+  # install.sh, which lives at the source root and is never shipped. Shipping
+  # this selftest downstream made it resolve $ROOT_DIR to the installed
+  # .github/ directory, find no install.sh, and fail with rc=127 -- and it also
+  # ran a FULL downstream framework-validate inside an already-running
+  # framework-validate. It belongs with the installer it exercises.
+  "bubbles/scripts/v5.3-selftest.sh"
+  # The framework's own release gate. Its required-files list includes
+  # install.sh, and cli.sh has always described it as "source-repo release
+  # hygiene checks", so it can only ever run from a source checkout.
+  "bubbles/scripts/release-check.sh"
+  # Exercises release-check, so it travels with it.
+  "bubbles/scripts/ci-annotation-emitter-selftest.sh"
+)
+# Maintainer-only history. Frozen per-release design records and dated internal
+# reviews describe how THIS repository got here, which a consuming repository
+# never reads. They stay in source and leave the payload.
+#
+# Chosen per candidate rather than by pattern. Two neighbours that look like the
+# same class are deliberately NOT here: v4.1.0-delivered-pending-activation.md
+# carries live markdown links from three shipped skills, and
+# Framework_Convergence_Health.md from a shipped recipe, so demoting either
+# would leave a dangling reference that G132 exists to catch. The five below
+# have no live link from any shipped surface; the guards and lints that name
+# them do so in comments or as inert exemption paths.
+demoted_source_only_docs=(
+  "docs/Product-Review-2026-08-02.md"
+  "docs/Framework_Improvements_Delivered.md"
+  "docs/Spec_Implementation_Alignment.md"
+  "docs/v5.2-design.md"
+  "docs/v6-mcp-design.md"
+)
+demoted_source_only_entries=(
+  "${demoted_source_only_scripts[@]}"
+  "${demoted_source_only_docs[@]}"
 )
 filtered_managed_entries=()
 for managed_entry in "${managed_entries[@]}"; do
   demote_entry=false
-  for eval_script in "${eval_source_only_scripts[@]}"; do
+  for eval_script in "${demoted_source_only_entries[@]}"; do
     if [[ "$managed_entry" == "$eval_script" ]]; then
       demote_entry=true
       break
@@ -109,7 +144,15 @@ done
 managed_entries=("${filtered_managed_entries[@]}")
 
 source_only_entries=()
-for eval_script in "${eval_source_only_scripts[@]}"; do
+# The installer and the version file it stamps are source-root artifacts. They
+# were in NEITHER checksum section, so nothing tracked their integrity and the
+# payload-closure guard had no way to notice a managed script reaching for them.
+for installer_entry in "install.sh" "VERSION"; do
+  [[ -f "$REPO_ROOT/$installer_entry" ]] || continue
+  bubbles_manifest_entry_is_tracked "$REPO_ROOT" "$installer_entry" || continue
+  source_only_entries+=("$installer_entry")
+done
+for eval_script in "${demoted_source_only_entries[@]}"; do
   [[ -f "$REPO_ROOT/$eval_script" ]] || continue
   bubbles_manifest_entry_is_tracked "$REPO_ROOT" "$eval_script" || continue
   source_only_entries+=("$eval_script")
@@ -227,6 +270,34 @@ docs_digest="$(printf '%s' "$docs_digest_material" | bubbles_sha256_stdin)"
 managed_file_count="${#managed_entries[@]}"
 source_only_file_count="${#source_only_entries[@]}"
 
+# Hash both inventories in one pass each (IMP-042 SCOPE-4). A short batch result
+# means the tool skipped an entry, which would silently pair a path with another
+# file's hash, so any count mismatch falls back to the per-file form rather than
+# emitting a manifest that looks well-formed and is wrong.
+hash_inventory() { # hash_inventory <result-array-name> <entry...>
+  local result_name="$1"
+  shift
+  local -a entries=("$@")
+  local -a hashes=()
+  local entry
+
+  if [[ "${#entries[@]}" -gt 0 ]]; then
+    mapfile -t hashes < <(printf '%s\n' "${entries[@]}" | bubbles_sha256_batch "$REPO_ROOT" | cut -f1)
+    if [[ "${#hashes[@]}" -ne "${#entries[@]}" ]]; then
+      hashes=()
+      for entry in "${entries[@]}"; do
+        hashes+=("$(bubbles_sha256_file "$REPO_ROOT/$entry")")
+      done
+    fi
+  fi
+  eval "$result_name=(\"\${hashes[@]}\")"
+}
+
+managed_checksums=()
+source_only_checksums=()
+hash_inventory managed_checksums ${managed_entries[@]+"${managed_entries[@]}"}
+hash_inventory source_only_checksums ${source_only_entries[@]+"${source_only_entries[@]}"}
+
 temp_output="$(mktemp)"
 trap 'rm -f "$temp_output"' EXIT
 
@@ -274,8 +345,7 @@ trap 'rm -f "$temp_output"' EXIT
   echo '  "managedFileChecksums": ['
   for idx in "${!managed_entries[@]}"; do
     entry="${managed_entries[$idx]}"
-    checksum_value="$(bubbles_sha256_file "$REPO_ROOT/$entry")"
-    printf '    {"path": "%s", "sha256": "%s"}' "$entry" "$checksum_value"
+    printf '    {"path": "%s", "sha256": "%s"}' "$entry" "${managed_checksums[$idx]}"
     if [[ "$idx" -lt $((managed_file_count - 1)) ]]; then
       echo ','
     else
@@ -287,8 +357,7 @@ trap 'rm -f "$temp_output"' EXIT
   echo '  "sourceOnlyFileChecksums": ['
   for idx in "${!source_only_entries[@]}"; do
     entry="${source_only_entries[$idx]}"
-    checksum_value="$(bubbles_sha256_file "$REPO_ROOT/$entry")"
-    printf '    {"path": "%s", "sha256": "%s"}' "$entry" "$checksum_value"
+    printf '    {"path": "%s", "sha256": "%s"}' "$entry" "${source_only_checksums[$idx]}"
     if [[ "$idx" -lt $((source_only_file_count - 1)) ]]; then
       echo ','
     else

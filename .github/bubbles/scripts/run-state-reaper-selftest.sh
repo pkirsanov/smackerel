@@ -17,7 +17,14 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+FRAMEWORK_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+REPO_ROOT="$(cd "$FRAMEWORK_DIR/.." && pwd)"
+# bubbles_run_with_timeout resolves timeout -> gtimeout -> a watchdog fallback.
+# A bare `timeout` here made the reaper-triggering subshell fail outright on any
+# box without GNU coreutils, so nothing was reaped and A1/A3 failed while A2/A4
+# passed vacuously on "nothing happened". (IMP-042 SCOPE-12.)
+# shellcheck source=bubbles/scripts/guard-lib.sh
+. "$SCRIPT_DIR/guard-lib.sh"
 # Overridable so the reaper can be mutation-tested against a throwaway copy
 # without relocating this script (which would break REPO_ROOT resolution).
 CLI="${BUBBLES_CLI_UNDER_TEST:-$SCRIPT_DIR/cli.sh}"
@@ -46,7 +53,36 @@ if ! git -C "$REPO_ROOT" worktree add --detach "$WT" HEAD >/dev/null 2>&1; then
   echo "run-state-reaper-selftest: SKIP (could not create a worktree)"
   exit 0
 fi
-cp "$CLI" "$WT/bubbles/scripts/cli.sh"
+
+# The framework does not sit at the same repo-relative path everywhere: it is
+# bubbles/ in the source tree and .github/bubbles/ in an installed downstream,
+# and a downstream repository may not have committed its install at all, which
+# leaves the worktree without any framework to run. Materialise the LIVE
+# framework at its own repo-relative path instead of assuming the checkout
+# already carries it -- this is also what makes the selftest exercise the
+# working-tree code rather than HEAD.
+#
+# Both paths are resolved with `pwd -P`. `pwd` reports the LOGICAL path while
+# `git rev-parse --show-toplevel` reports the physical one, so under a symlinked
+# root -- /tmp and /var on macOS -- the prefix strip below silently fails and
+# leaves an ABSOLUTE path. That path still exists, so every command keeps
+# working while pointing at the wrong tree, and the reaper then edits a registry
+# this selftest never inspects.
+FRAMEWORK_TOPLEVEL="$(cd "$(git -C "$REPO_ROOT" rev-parse --show-toplevel 2>/dev/null || printf '%s' "$REPO_ROOT")" && pwd -P)"
+FRAMEWORK_PHYSICAL_DIR="$(cd "$FRAMEWORK_DIR" && pwd -P)"
+FRAMEWORK_REL="${FRAMEWORK_PHYSICAL_DIR#"$FRAMEWORK_TOPLEVEL"/}"
+if [[ "$FRAMEWORK_REL" == /* || "$FRAMEWORK_REL" == "$FRAMEWORK_PHYSICAL_DIR" ]]; then
+  echo "FAIL: could not resolve the framework directory relative to the repository root" >&2
+  echo "       framework=$FRAMEWORK_PHYSICAL_DIR root=$FRAMEWORK_TOPLEVEL" >&2
+  exit 1
+fi
+mkdir -p "$WT/$FRAMEWORK_REL"
+cp -R "$FRAMEWORK_DIR/." "$WT/$FRAMEWORK_REL/"
+if [[ -d "$FRAMEWORK_TOPLEVEL/.specify/memory" ]]; then
+  mkdir -p "$WT/.specify/memory"
+  cp -R "$FRAMEWORK_TOPLEVEL/.specify/memory/." "$WT/.specify/memory/"
+fi
+cp "$CLI" "$WT/$FRAMEWORK_REL/scripts/cli.sh"
 mkdir -p "$WT/.specify/runtime"
 
 iso_ago() { # iso_ago <seconds-ago>
@@ -70,7 +106,7 @@ seed_registry() { # seed_registry <line1> [line2]
 
 run_tracked() {
   set +e
-  (cd "$WT" && timeout 120 bash bubbles/scripts/cli.sh upgrade --help >/dev/null 2>&1)
+  (cd "$WT" && bubbles_run_with_timeout 120 bash "$FRAMEWORK_REL/scripts/cli.sh" upgrade --help >/dev/null 2>&1)
   set -e
 }
 
@@ -114,7 +150,7 @@ fi
 # distinguishable from one that actually compares against the cutoff.
 seed_registry "$(record wrn_OLD_leaked "$OLD")"
 set +e
-(cd "$WT" && BUBBLES_RUN_STATE_ABANDON_HOURS=100000 timeout 120 bash bubbles/scripts/cli.sh upgrade --help >/dev/null 2>&1)
+(cd "$WT" && BUBBLES_RUN_STATE_ABANDON_HOURS=100000 bubbles_run_with_timeout 120 bash "$FRAMEWORK_REL/scripts/cli.sh" upgrade --help >/dev/null 2>&1)
 set -e
 if [[ "$(jq -r '[.activeRuns[] | select(.runId=="wrn_OLD_leaked")] | length' "$REG")" == "1" ]]; then
   ok "A4 a threshold wider than the entry's age leaves it active"

@@ -66,6 +66,10 @@ handoffs:
 
 **Shared Review Baseline:** Follow [review-core.md](bubbles_shared/review-core.md) for the common review contract used across the Bubbles review surfaces.
 
+## Terminal Recap Boundary
+
+When this agent owns the top-level runtime, invoke `runSubagent(bubbles.recap)` before the final response. When invoked as a system-review phase or specialist lens for another top-level runner, return the review result upward without recap.
+
 **First-Class Mode Home:** `readiness-review` is the first-class workflow mode where this agent runs by default (the `system-review` phase in that mode's phase order), in addition to serving as an optional `iterate` precursor and a `code-review` escalation target.
 
 **Behavioral Rules:**

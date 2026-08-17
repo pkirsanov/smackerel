@@ -55,6 +55,12 @@ make_fixture() {
   cp "$REPO_ROOT/bubbles/workflows.yaml" "$root/bubbles/"
   cp "$REPO_ROOT/bubbles/scripts/autonomy-resolve.sh" "$root/bubbles/scripts/"
   chmod +x "$root/bubbles/scripts/autonomy-resolve.sh"
+  # IMP-045 SCOPE-2: check 5 requires every declared posture to be NAMED by all
+  # four runners, so a conformant fixture must carry them.
+  local runner
+  for runner in bubbles.goal bubbles.workflow bubbles.iterate bubbles.sprint; do
+    cp "$REPO_ROOT/agents/$runner.agent.md" "$root/agents/$runner.agent.md"
+  done
   printf '%s' "$root"
 }
 
@@ -107,6 +113,27 @@ bubbles_sed_inplace 's|^        interactive: |        supervised: placeholder po
         interactive: |' \
   "$ENUM_AHEAD/bubbles/workflows.yaml"
 check "an enum value the resolver does not accept is refused" "1" "$(guard_rc "$ENUM_AHEAD")"
+
+# --- 5. A declared posture no runner names is refused (IMP-045 SCOPE-2) -------
+# The paired adversarial half of check 5. Without it, check 5 could be a no-op
+# and this suite would still be green: `unattended` was declared, resolver-
+# implemented, and gated for an entire release while being absent from every
+# runner that would have to perform it.
+UNCONSUMED="$(make_fixture)"
+grep -v 'unattended' "$UNCONSUMED/agents/bubbles.iterate.agent.md" \
+  >"$UNCONSUMED/agents/.tmp" &&
+  mv "$UNCONSUMED/agents/.tmp" "$UNCONSUMED/agents/bubbles.iterate.agent.md"
+check "a posture named by three runners but not the fourth is refused" "1" "$(guard_rc "$UNCONSUMED")"
+
+UNCONSUMED_OUT="$(guard_out "$UNCONSUMED")"
+case "$UNCONSUMED_OUT" in
+  *unattended*bubbles.iterate.agent.md*)
+    check "the refusal names both the posture and the runner that omits it" "0" "0"
+    ;;
+  *)
+    check "the refusal names both the posture and the runner that omits it" "0" "1"
+    ;;
+esac
 
 RESOLVER_AHEAD="$(make_fixture)"
 bubbles_sed_inplace 's|^VALID_AUTONOMY=".*"$|VALID_AUTONOMY="full guarded interactive unattended rogue"|' \

@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Capability: framework-self-observation, impact-aware-validation-trace-contracts,
+# Capability: linter-on-edit-gate, observability-posture-and-slo-gates,
+# Capability: session-aware-runtime-coordination, workflow-runner-authorization
 set -euo pipefail
 
 # IMP-102 SCOPE-5: Bubbles requires bash 4.0+ — the framework uses associative
@@ -19,14 +22,17 @@ else
   REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 fi
 
-# Concurrency guard. framework-validate is NOT safe to run twice at once: a
-# number of selftests and lints below use FIXED scratch paths (e.g.
-# /tmp/bubbles-capability-check, /tmp/bubbles-agent-ownership-lint,
-# $HOME/.cache/bubbles-installer-selftest) with no per-run suffix. Two
-# simultaneous runs therefore delete and rewrite each other's fixtures midway,
-# which surfaces as a scatter of unrelated red checks that ALL pass when re-run
-# individually — an expensive false alarm that looks exactly like a real
-# regression. Measured: 8 spurious failures from one overlapping run.
+# Concurrency guard. framework-validate is NOT safe to run twice at once.
+#
+# The original reason was fixed scratch paths with no per-run suffix, measured at
+# 8 spurious failures from one overlapping run. That specific hazard is gone:
+# capability-freshness and generate-installer both mktemp their fixture roots
+# now, and /tmp/bubbles-agent-ownership-lint no longer exists at all. The guard
+# stays because two concurrent runs still share one working tree and its
+# generated files (release manifest, framework stats, gate coverage map), and
+# regenerating those under another run is the same class of interference. The
+# 8-failure measurement predates the mktemp fixes and is not evidence about the
+# state of the tree today.
 #
 # `flock` holds the lock on fd 9 and the kernel releases it when the process
 # dies, so this cannot leave a stale lock behind and needs no bypass flag. Where
@@ -112,6 +118,14 @@ fi
 
 failures=0
 skipped=0
+# Skips are counted per REASON. A single aggregate previously described every
+# skip as framework-source-only and told the operator to "run from a
+# framework-source tree" -- self-contradictory advice for the tier skips that
+# dominate a --tier=core run inside a source tree.
+skipped_tier=0
+skipped_changed_only=0
+skipped_self_only=0
+skipped_denied=0
 declare -a failed_check_labels=()
 # PERF. This suite is serial and its membership grows automatically via the
 # discovery sweep, so its wall clock only ever goes up. Recording each check's
@@ -268,7 +282,7 @@ core_check_label() {
   case "$1" in
     *"Repository drift report"* | *"Gate-catalog freshness"* | \
       *"Portable surface agnosticity"* | *"Shellcheck lint"* | \
-      *"Registry consistency"* | *"Gates registry"* | *"YAML schema"* | \
+      *"Registry consistency"* | *"YAML schema"* | \
       *"Cheatsheet generator selftest"* | *"Modes split"* | \
       *"Scan-lib"* | *"Derived-artifact regen"* | *"Gate scaffolder"* | \
       *"drift-check selftest"* | *"hub-report selftest"* | \
@@ -290,6 +304,7 @@ run_check() {
       echo "==> $label"
       echo "SKIP: $label (tier=core)"
       skipped=$((skipped + 1))
+      skipped_tier=$((skipped_tier + 1))
       echo
     fi
     return 0
@@ -326,6 +341,7 @@ run_check() {
     echo "==> $label"
     echo "SKIP: $label (--changed-only; neither the selftest nor the script it tests was modified)"
     skipped=$((skipped + 1))
+    skipped_changed_only=$((skipped_changed_only + 1))
     echo
     return 0
   fi
@@ -391,6 +407,7 @@ run_check_self_only() {
     echo "==> $label"
     echo "SKIP: $label (framework-source-only; install-mode=$INSTALL_MODE)"
     skipped=$((skipped + 1))
+    skipped_self_only=$((skipped_self_only + 1))
     echo
     return 0
   fi
@@ -402,14 +419,48 @@ echo "Repository: $REPO_ROOT"
 echo "Install mode: $INSTALL_MODE"
 echo
 
+# Resolve the managed interpreter for every check this run spawns.
+#
+# cli.sh does this before dispatch, so `cli.sh framework-validate` has satisfied
+# python3 while `bash framework-validate.sh` does not -- and the latter is a real
+# entry point: v5.3-selftest runs the DOWNSTREAM copy exactly that way. Without
+# it, every python-dependent check reads an empty registry and reports a content
+# mismatch instead of a missing module. That discrepancy produced a check that
+# passed through one entry point and failed through the other, with nothing
+# naming the difference.
+#
+# python-env.sh is EXECUTED, never sourced. cli.sh can source it safely because
+# cli.sh is not the script that repo-drift-report-selftest stages against a tree
+# of stubs -- and in that tree every sibling is a stub ending in `exit 0`, which
+# in a SOURCED file terminates this validator's own shell and reports a silent
+# pass that validated nothing. That fixture exists precisely to catch this, and
+# it did. A subprocess cannot end this run no matter what the file contains.
+#
+# The interpreter is only prepended when the one already on PATH cannot satisfy
+# the framework's declared requirements, so an operator's working environment is
+# never displaced. The import list duplicates dependency-posture.sh's declared
+# set; that is a deliberate two-line duplication rather than a second source of
+# truth, because resolving it through the helper would mean sourcing it.
+if [[ -f "$SCRIPT_DIR/python-env.sh" ]] &&
+  ! python3 -c 'import yaml, jsonschema' >/dev/null 2>&1; then
+  bubbles_managed_python="$(bash "$SCRIPT_DIR/python-env.sh" --path 2>/dev/null || true)"
+  if [[ -n "$bubbles_managed_python" && -x "$bubbles_managed_python" ]]; then
+    PATH="$(dirname "$bubbles_managed_python"):$PATH"
+    export PATH
+  fi
+fi
+
 run_check "Repository drift report (informational)" bash "$SCRIPT_DIR/repo-drift-report.sh" --repo-root "$REPO_ROOT"
 run_check "Gate-catalog freshness advisory (informational, IMP-005)" bash "$SCRIPT_DIR/gate-catalog-freshness.sh" --repo-root "$REPO_ROOT"
 run_check_self_only "Portable surface agnosticity" bash "$SCRIPT_DIR/agnosticity-lint.sh" --quiet
-run_check_self_only "Shellcheck lint (v7.0.2, -S warning, zero findings)" bash "$SCRIPT_DIR/shellcheck-lint.sh" --quiet
-run_check_self_only "Shellcheck lint selftest (v7.0.2)" bash "$SCRIPT_DIR/shellcheck-lint-selftest.sh"
-run_check_self_only "Git hook environment sanitization selftest" bash "$SCRIPT_DIR/hooks/git-env-sanitize-selftest.sh"
+# Cheap structural checks run BEFORE the whole-tree ShellCheck scan. A broken
+# registry or malformed schema is a one-second answer, and making the operator
+# wait ~42s to hear it is the difference between a fast loop and a slow one.
 run_check "Registry consistency selftest" bash "$SCRIPT_DIR/registry-consistency-selftest.sh"
 run_check "YAML schema validate" bash "$SCRIPT_DIR/yaml-schema-validate.sh"
+run_check_self_only "Git hook environment sanitization selftest" bash "$SCRIPT_DIR/hooks/git-env-sanitize-selftest.sh"
+run_check_self_only "Shellcheck lint (v7.0.2, -S warning, zero findings)" bash "$SCRIPT_DIR/shellcheck-lint.sh" --quiet
+run_check_self_only "Shellcheck lint selftest (v7.0.2)" bash "$SCRIPT_DIR/shellcheck-lint-selftest.sh"
 run_check_self_only "Cheatsheet generator selftest (v6.0 / B7)" bash "$SCRIPT_DIR/generate-cheatsheet-selftest.sh"
 run_check_self_only "Agent roster coverage (v7.18.0)" bash "$SCRIPT_DIR/agent-roster-coverage.sh" --repo-root "$REPO_ROOT"
 run_check_self_only "Agent roster coverage selftest (v7.18.0)" bash "$SCRIPT_DIR/agent-roster-coverage-selftest.sh"
@@ -423,6 +474,12 @@ run_check "Inventory parity check selftest (IMP-005)" bash "$SCRIPT_DIR/inventor
 # Live parity check is framework-source-only: skills/INVENTORY.md is a source-repo
 # artifact and is not vendored into downstream install trees.
 run_check_self_only "Inventory parity check (live, IMP-005)" bash "$SCRIPT_DIR/inventory-parity-check.sh" "$REPO_ROOT"
+# Framework-source-only for the same reason (IMP-042 SCOPE-12): this selftest reads
+# the LIVE .specify/memory/bubbles.config.json and drives developer-profile.sh set
+# against it, so downstream it asserts against whatever profile that repo chose and
+# fails on a correct configuration. Enumerating it here also removes it from the
+# discovery sweep, which ran it as portable.
+run_check_self_only "Profile transition selftest" bash "$SCRIPT_DIR/profile-transition-selftest.sh"
 # Skill invocation/description-load classification (IMP-021 SCOPE-5): a hermetic
 # selftest proving the report sums auto-discovery description bytes and flags a
 # class-less skill row, PLUS a live source-only report (skills/INVENTORY.md is a
@@ -471,7 +528,9 @@ run_check "guard-lib timeout fallback selftest (OW-009)" bubbles_run_with_timeou
 # machine. Check-run annotations ARE readable unauthenticated, so every FAIL
 # also emits `::error::` under GITHUB_ACTIONS. The selftest pins that the
 # annotation is additive, gated (no local noise), and correctly escaped.
-run_check "CI annotation emitter selftest (OW-002)" bubbles_run_with_timeout 120 bash "$SCRIPT_DIR/ci-annotation-emitter-selftest.sh"
+if [[ -x "$SCRIPT_DIR/ci-annotation-emitter-selftest.sh" ]]; then
+  run_check_self_only "CI annotation emitter selftest (OW-002)" bubbles_run_with_timeout 120 bash "$SCRIPT_DIR/ci-annotation-emitter-selftest.sh"
+fi
 # Bash baseline guard (IMP-102 / SCOPE-5): proves the shipped command surface
 # (cli.sh, framework-validate.sh) fails LOUDLY and EARLY on bash < 4 instead of
 # silently masking declare -A breakage — positive static + functional + an
@@ -507,11 +566,18 @@ run_check_self_only "Upgrade transactionality selftest (IMP-102 / SCOPE-6)" bash
 if [[ -x "$SCRIPT_DIR/migrate-modes-v5-to-v6.sh" ]]; then
   run_check_self_only "Migrate-modes-v5-to-v6 selftest (v6.0 / C1)" bash "$SCRIPT_DIR/migrate-modes-v5-to-v6-selftest.sh"
 fi
-run_check "Gates registry drift (v5.2 / F4)" bash "$SCRIPT_DIR/generate-gates-block.sh" --check
 if [[ -x "$SCRIPT_DIR/generate-modes-block.sh" ]]; then
   run_check "Modes split no-duplication (v6.1 / S2)" bash "$SCRIPT_DIR/generate-modes-block.sh" --check
 fi
-run_check "Gates registry selftest (v5.2 / F4)" bash "$SCRIPT_DIR/gates-registry-selftest.sh"
+# IMP-042 / SCOPE-13: the generated gates: block in workflows.yaml is a COPY of
+# the canonical registry. Deleting it once required "byte-equivalent queries for
+# every remaining reader", an inventory that was built by hand, missed the
+# scripts matching gate NAMES rather than the gates: key, and had to be reverted.
+# The inventory is now computed and held mechanically, so it can only shrink
+# deliberately and a new dependency cannot appear silently. The live check is
+# source-only because the declared inventory describes the source tree.
+run_check "Gates-block reader lint selftest (IMP-042 SCOPE-13)" bash "$SCRIPT_DIR/gates-block-reader-lint-selftest.sh"
+run_check_self_only "Gates-block reader inventory (live, IMP-042 SCOPE-13)" bash "$SCRIPT_DIR/gates-block-reader-lint.sh" --repo-root "$REPO_ROOT"
 # IMP-102 / SCOPE-9: gate-coverage map — advisory generated doc mapping every
 # gate to its enforcing surface(s) (modes / state-transition-guard / framework-
 # validate scripts / CI). --check keeps the committed doc fresh; the selftest
@@ -643,7 +709,7 @@ fi
 run_check "Result-envelope validate (v6.0 / B3, malformed blocks)" bash "$SCRIPT_DIR/result-envelope-validate.sh"
 run_check "v5.2 aggregate selftest (F1, F3, F6, F7)" bash "$SCRIPT_DIR/v5.2-selftest.sh"
 if [[ -x "$SCRIPT_DIR/v5.3-selftest.sh" ]]; then
-  run_check "v5.3 downstream-install selftest (G1)" bash "$SCRIPT_DIR/v5.3-selftest.sh"
+  run_check_self_only "v5.3 downstream-install selftest (G1)" bash "$SCRIPT_DIR/v5.3-selftest.sh"
 fi
 if [[ -x "$SCRIPT_DIR/mcp-server-selftest.sh" ]]; then
   run_check "v6 MCP server selftest (A5)" bash "$SCRIPT_DIR/mcp-server-selftest.sh"
@@ -705,11 +771,25 @@ run_check_self_only "Capability freshness selftest" bash "$SCRIPT_DIR/capability
 run_check_self_only "Competitive docs selftest" bash "$SCRIPT_DIR/competitive-docs-selftest.sh"
 run_check_self_only "Interop apply selftest" bash "$SCRIPT_DIR/interop-apply-selftest.sh"
 run_check_self_only "Interop import selftest" bash "$SCRIPT_DIR/interop-import-selftest.sh"
-run_check_self_only "Release manifest freshness" bash "$SCRIPT_DIR/generate-release-manifest.sh" --check
 run_check_self_only "Release manifest selftest" bash "$SCRIPT_DIR/release-manifest-selftest.sh"
 run_check_self_only "Release manifest purity selftest" bash "$SCRIPT_DIR/release-manifest-purity-selftest.sh"
+run_check_self_only "Payload closure guard (IMP-042 / REG-11)" bash "$SCRIPT_DIR/payload-closure-guard.sh"
+run_check_self_only "Payload closure guard selftest (IMP-042 / REG-11)" bash "$SCRIPT_DIR/payload-closure-guard-selftest.sh"
 run_check_self_only "Derived-artifact regen wrapper selftest (IMP-007)" bash "$SCRIPT_DIR/regen-derived-selftest.sh"
 run_check "Gate-hit telemetry selftest (IMP-036)" bash "$SCRIPT_DIR/gate-hit-log-selftest.sh"
+run_check "Micro-fix admission selftest (IMP-042 SCOPE-9)" bash "$SCRIPT_DIR/micro-fix-admission-selftest.sh"
+# IMP-043 SCOPE-6: the loop as a loop. Every component of the learning loop
+# already passes its own selftest while lessons.md stays empty everywhere, so the
+# defect lives in the seams the component tests never cross.
+if [[ -x "$SCRIPT_DIR/learning-loop-selftest.sh" ]]; then
+  run_check "Learning-loop selftest (IMP-043 SCOPE-6 / COV-18)" bash "$SCRIPT_DIR/learning-loop-selftest.sh"
+fi
+# IMP-044 SCOPE-3: the config writer rendered a fixed template, so every key it
+# did not name was destroyed on the next mutation, silently and with a success
+# message.
+if [[ -x "$SCRIPT_DIR/control-plane-config-merge-selftest.sh" ]]; then
+  run_check "Control-plane config merge selftest (IMP-044 SCOPE-3 / REG-15)" bash "$SCRIPT_DIR/control-plane-config-merge-selftest.sh"
+fi
 run_check "Agent-id enum lint selftest (IMP-036)" bash "$SCRIPT_DIR/agent-id-enum-lint-selftest.sh"
 run_check "Collected-test-count guard selftest (IMP-036)" bash "$SCRIPT_DIR/collected-test-count-guard-selftest.sh"
 run_check "Gate-vintage selftest (IMP-036)" bash "$SCRIPT_DIR/gate-vintage-selftest.sh"
@@ -749,6 +829,16 @@ run_check_self_only "Scan-lib helpers selftest (IMP-009)" bash "$SCRIPT_DIR/scan
 run_check_self_only "DoD section lib selftest (BUG-026)" bash "$SCRIPT_DIR/dod-section-lib-selftest.sh"
 run_check_self_only "Scope universe resolver selftest (BUG-026)" bash "$SCRIPT_DIR/scope-universe-resolver-selftest.sh"
 run_check_self_only "Framework-validate tiering selftest (IMP-012)" bash "$SCRIPT_DIR/framework-validate-tier-selftest.sh"
+# IMP-042 SCOPE-2: core_check_label() selects the push-blocking tier by substring
+# match on check LABELS, so renaming a check silently drops it from that tier with
+# nothing reporting the loss. Source-only because it reads this validator's own
+# text, which downstream carries under a different path prefix.
+if [[ -x "$SCRIPT_DIR/core-tier-pattern-lint.sh" ]]; then
+  run_check_self_only "Core-tier pattern lint (IMP-042 SCOPE-2)" bash "$SCRIPT_DIR/core-tier-pattern-lint.sh"
+fi
+if [[ -x "$SCRIPT_DIR/core-tier-pattern-lint-selftest.sh" ]]; then
+  run_check_self_only "Core-tier pattern lint selftest (IMP-042 SCOPE-2)" bash "$SCRIPT_DIR/core-tier-pattern-lint-selftest.sh"
+fi
 run_check_self_only "Framework-validate changed-only selftest (IMP-027 SCOPE-7)" bash "$SCRIPT_DIR/framework-validate-changed-only-selftest.sh"
 run_check_self_only "Install provenance selftest" bash "$SCRIPT_DIR/install-provenance-selftest.sh"
 run_check_self_only "Trust doctor selftest" bash "$SCRIPT_DIR/trust-doctor-selftest.sh"
@@ -767,13 +857,13 @@ run_check "Finding closure selftest" bash "$SCRIPT_DIR/finding-closure-selftest.
 run_check "Super surface selftest" bash "$SCRIPT_DIR/super-surface-selftest.sh"
 run_check "Workflow delegation selftest" bash "$SCRIPT_DIR/workflow-delegation-selftest.sh"
 run_check "Top-level-runtime routing selftest" bash "$SCRIPT_DIR/top-level-runtime-routing-selftest.sh"
+run_check "Continuation intent resolver selftest" bash "$SCRIPT_DIR/continuation-intent-resolve-selftest.sh"
 run_check "Continuation routing selftest" bash "$SCRIPT_DIR/continuation-routing-selftest.sh"
 planning_provenance_timeout_seconds="${BUBBLES_WORKFLOW_PLANNING_PROVENANCE_SELFTEST_TIMEOUT_SECONDS:-120}"
 run_check "Workflow planning provenance selftest" bubbles_run_with_timeout "$planning_provenance_timeout_seconds" bash "$SCRIPT_DIR/workflow-planning-provenance-selftest.sh"
 run_check "Transition guard selftest" bash "$SCRIPT_DIR/state-transition-guard-selftest.sh"
 run_check "Required-specialists fallback selftest (IMP-105 / SCOPE-3 — Check 6 fail-open closure)" bash "$SCRIPT_DIR/state-transition-required-specialists-selftest.sh"
-run_check "Required-specialists registry consistency (IMP-105 / SCOPE-7 — ONT-UNIFY)" bash "$SCRIPT_DIR/required-specialists-consistency.sh"
-run_check "Required-specialists consistency selftest (IMP-105 / SCOPE-7)" bash "$SCRIPT_DIR/required-specialists-consistency-selftest.sh"
+run_check "Required-specialists registry selftest (IMP-042 SCOPE-13)" bash "$SCRIPT_DIR/required-specialists-registry-selftest.sh"
 run_check_self_only "BUG-009 planning audit contract regression" bash "$REPO_ROOT/tests/regression/test_23_planning_audit_contract.sh"
 run_check_self_only "BUG-013 sensitive client storage regression" bash "$REPO_ROOT/tests/regression/test_24_g028_sensitive_client_storage.sh"
 run_check_self_only "BUG-018 traceability Test Plan heading-depth regression" bash "$REPO_ROOT/tests/regression/test_25_traceability_test_plan_heading_depth.sh"
@@ -791,6 +881,7 @@ run_check "Domain-invariant guard selftest (G130)" bash "$SCRIPT_DIR/domain-inva
 run_check "Domain-model consistency guard selftest (G131)" bash "$SCRIPT_DIR/domain-model-consistency-selftest.sh"
 run_check "Framework dogfood guard selftest" bash "$SCRIPT_DIR/framework-dogfood-guard-selftest.sh"
 run_check "Orchestrator persistence lint selftest" bash "$SCRIPT_DIR/orchestrator-persistence-lint-selftest.sh"
+run_check_self_only "Orchestrator persistence persistent regression" bash "$REPO_ROOT/tests/regression/test_05_orchestrator_persistence.sh"
 run_check "Validation latency report selftest" bash "$SCRIPT_DIR/validation-latency-report-selftest.sh"
 run_check "Retro convergence health selftest" bash "$SCRIPT_DIR/retro-convergence-health-selftest.sh"
 run_check "Planning workflow chain guard selftest" bash "$SCRIPT_DIR/planning-workflow-chain-guard-selftest.sh"
@@ -1042,6 +1133,28 @@ if [[ -x "$SCRIPT_DIR/management-truth-lint-selftest.sh" ]]; then
   run_check "Management-truth lint selftest" bash "$SCRIPT_DIR/management-truth-lint-selftest.sh"
 fi
 
+if [[ -x "$SCRIPT_DIR/managed-docs-existence-lint-selftest.sh" ]]; then
+  run_check "Managed-doc existence lint selftest (IMP-042 SCOPE-13)" bash "$SCRIPT_DIR/managed-docs-existence-lint-selftest.sh"
+fi
+
+if [[ -x "$SCRIPT_DIR/adoption-profile-lib-selftest.sh" ]]; then
+  run_check "Adoption-profile library selftest (IMP-042 SCOPE-13)" bash "$SCRIPT_DIR/adoption-profile-lib-selftest.sh"
+fi
+
+if [[ -x "$SCRIPT_DIR/capability-consumer-naming-selftest.sh" ]]; then
+  run_check "Capability consumer naming selftest (IMP-042 SCOPE-11)" bash "$SCRIPT_DIR/capability-consumer-naming-selftest.sh"
+fi
+
+if [[ -x "$SCRIPT_DIR/capability-consumer-naming.sh" ]]; then
+  run_check_self_only "Capability consumer naming (live, IMP-042 SCOPE-11)" bash "$SCRIPT_DIR/capability-consumer-naming.sh" "$REPO_ROOT"
+fi
+
+if [[ -x "$SCRIPT_DIR/managed-docs-existence-lint.sh" ]]; then
+  # Skips in a framework source tree; the managed-doc contract governs product
+  # repositories, which is where this has something to check.
+  run_check "Managed-doc existence lint (live, IMP-042 SCOPE-13)" bash "$SCRIPT_DIR/managed-docs-existence-lint.sh" "$REPO_ROOT"
+fi
+
 if [[ -x "$SCRIPT_DIR/management-truth-lint.sh" ]]; then
   # Live scan is source-only: it checks the framework's OWN recipe catalog
   # (docs/recipes/README.md) and installer --profile help against the live
@@ -1140,7 +1253,15 @@ fi
 # assignments, install-mode gating, and arguments that a glob cannot infer.
 # ---------------------------------------------------------------------------
 if [[ "$LIST_TIER_ONLY" != "true" ]]; then
-  selftest_denylist="$REPO_ROOT/bubbles/registry/selftest-denylist.txt"
+  # Resolved from the FRAMEWORK directory, not the repository root. The framework
+  # is bubbles/ in the source tree and .github/bubbles/ in an installed
+  # downstream, so a repo-root path resolved to nothing downstream, the denylist
+  # read as EMPTY, and the sweep ran two suites it is contracted not to run --
+  # repository-binding-selftest.sh asserts it was entered through the cli.sh
+  # boundary, so a direct second run fails BY CONSTRUCTION. That is exactly the
+  # fail-open shape the note below exists to prevent, one layer up, and it is
+  # refused just as loudly.
+  selftest_denylist="$SCRIPT_DIR/../registry/selftest-denylist.txt"
 
   # BUG-021. This sweep decides WHAT RUNS by matching each discovered name
   # against this validator's own source, so reading that source is control
@@ -1169,27 +1290,52 @@ if [[ "$LIST_TIER_ONLY" != "true" ]]; then
     failures=$((failures + 1))
     failed_check_labels+=("Discovered selftest sweep (IMP-027 SCOPE-2b)")
     echo
+  elif [[ ! -r "$selftest_denylist" && -d "$SCRIPT_DIR/../registry" ]]; then
+    echo "==> Discovered selftest sweep (IMP-027 SCOPE-2b)"
+    echo "FAIL: cannot read $selftest_denylist to identify denied selftests"
+    bubbles_ci_annotate_failure "FAIL: cannot read $selftest_denylist to identify denied selftests"
+    echo "      refusing to run suites contracted to run only through their own entry point"
+    failures=$((failures + 1))
+    failed_check_labels+=("Discovered selftest sweep (IMP-027 SCOPE-2b)")
+    echo
   else
     # Newline-delimited denied names, read ONCE with builtins. Semantics match
     # the previous grep pair exactly: blank lines and lines whose first
     # non-space character is '#' are ignored, and a name must match a whole
     # line exactly.
     selftest_denied_names=$'\n'
-    if [[ -f "$selftest_denylist" ]]; then
+    if [[ -r "$selftest_denylist" ]]; then
       while IFS= read -r selftest_deny_line || [[ -n "$selftest_deny_line" ]]; do
         selftest_deny_trimmed="${selftest_deny_line#"${selftest_deny_line%%[![:space:]]*}"}"
         [[ -z "$selftest_deny_trimmed" || "$selftest_deny_trimmed" == '#'* ]] && continue
         selftest_denied_names+="$selftest_deny_line"$'\n'
       done <"$selftest_denylist"
+    else
+      # No registry directory at all: a deliberately partial tree, such as the
+      # stub fixture repo-drift-report-selftest stages to prove this validator
+      # runs non-blockingly. Proceeding is correct there, but it must be SAID --
+      # the whole point of the branch above is that an empty deny-list silently
+      # decides what runs.
+      echo "NOTE: no registry directory at $SCRIPT_DIR/../registry; running the sweep with an EMPTY deny-list"
     fi
+
+    # Which selftests are ALREADY wired. Decided from real run_check invocations
+    # rather than from raw source text: a substring match treats ANY mention as
+    # "already covered", so a single comment naming a selftest would remove it
+    # from the run with nothing reporting the loss.
+    #
+    # The trailing newline is re-appended because command substitution strips
+    # every trailing newline, which would leave the LAST scheduled entry without
+    # its delimiter and re-run it a second time.
+    fv_scheduled="$(bubbles_scheduled_selftests "$fv_source")"$'\n'
 
     for selftest_path in "$SCRIPT_DIR"/*-selftest.sh; do
       [[ -f "$selftest_path" ]] || continue
       selftest_name="${selftest_path##*/}"
 
       # Already wired by an enumerated check above.
-      case "$fv_source" in
-        *"$selftest_name"*) continue ;;
+      case "$fv_scheduled" in
+        *$'\n'"$selftest_name"$'\n'*) continue ;;
       esac
 
       # Explicitly denied, with a documented reason.
@@ -1198,6 +1344,7 @@ if [[ "$LIST_TIER_ONLY" != "true" ]]; then
           echo "==> Discovered selftest: $selftest_name"
           echo "SKIP: $selftest_name (denied in bubbles/registry/selftest-denylist.txt)"
           skipped=$((skipped + 1))
+          skipped_denied=$((skipped_denied + 1))
           echo
           continue
           ;;
@@ -1214,6 +1361,13 @@ fi
 if [[ -x "$SCRIPT_DIR/selftest-coverage-lint-selftest.sh" ]]; then
   run_check "Selftest coverage lint selftest (IMP-027 SCOPE-2b)" bash "$SCRIPT_DIR/selftest-coverage-lint-selftest.sh"
 fi
+
+# Manifest freshness runs LAST, and deliberately so. Several checks above
+# regenerate derived artifacts, so a freshness verdict computed mid-run
+# describes a tree that the rest of the run can still change. Asking the
+# question at the end is the only placement that answers it about the tree the
+# operator is actually about to ship.
+run_check_self_only "Release manifest freshness" bash "$SCRIPT_DIR/generate-release-manifest.sh" --check
 
 if [[ "$LIST_TIER_ONLY" == "true" ]]; then
   echo "Tier listing complete (tier=$VALIDATE_TIER). No checks were executed."
@@ -1254,8 +1408,31 @@ if [[ ${#check_durations[@]} -gt 0 ]]; then
   echo
 fi
 
+# Reports skips per reason so the operator can tell tier filtering apart from
+# a genuinely unavailable framework-source check.
+skip_summary() {
+  local parts=""
+  if [[ "$skipped_tier" -gt 0 ]]; then
+    parts="$skipped_tier tier=$VALIDATE_TIER"
+  fi
+  if [[ "$skipped_changed_only" -gt 0 ]]; then
+    parts="${parts:+$parts, }$skipped_changed_only --changed-only"
+  fi
+  if [[ "$skipped_self_only" -gt 0 ]]; then
+    parts="${parts:+$parts, }$skipped_self_only framework-source-only (install-mode=$INSTALL_MODE)"
+  fi
+  if [[ "$skipped_denied" -gt 0 ]]; then
+    parts="${parts:+$parts, }$skipped_denied denylisted"
+  fi
+  printf '%s' "$parts"
+}
+
 if [[ "$failures" -gt 0 ]]; then
-  echo "Framework validation failed with $failures failing check(s)$([[ "$skipped" -gt 0 ]] && echo " ($skipped self-only check(s) skipped under install-mode=$INSTALL_MODE)")."
+  if [[ "$skipped" -gt 0 ]]; then
+    echo "Framework validation failed with $failures failing check(s) ($skipped skipped: $(skip_summary))."
+  else
+    echo "Framework validation failed with $failures failing check(s)."
+  fi
   echo "Failed checks:"
   for failed_label in "${failed_check_labels[@]}"; do
     echo "  - $failed_label"
@@ -1264,7 +1441,10 @@ if [[ "$failures" -gt 0 ]]; then
 fi
 
 if [[ "$skipped" -gt 0 ]]; then
-  echo "Framework validation passed ($skipped self-only check(s) skipped under install-mode=$INSTALL_MODE). Run from a framework-source tree to execute them."
+  echo "Framework validation passed ($skipped skipped: $(skip_summary))."
+  if [[ "$skipped_self_only" -gt 0 ]]; then
+    echo "Run from a framework-source tree to execute the framework-source-only check(s)."
+  fi
 fi
 
 echo "Framework validation passed."

@@ -64,6 +64,15 @@
 #   T26. The MCP surface exposes ONLY the read-only recall subcommands: no tool
 #        in the catalog wraps experience-recall.sh's mutating subcommands
 #        (sync/delete/admit/lifecycle/export), which stay CLI-only.
+#   T27. `tools/call` for `resolve_mode` in the v7 primitive+tag form resolves.
+#        The catalog previously declared a single `mode` string, so the tags
+#        arrived as ONE argv token and the resolver rejected every tagged mode
+#        (IMP-042 / SCOPE-8).
+#   T28. Adversarially: a REMOVED v5 mode name without grandfather still gets
+#        rejected, and the error names the v6 form. Proves T27 passes because
+#        argv is now correct, not because the resolver stopped refusing.
+#   T29. The same v5 name WITH grandfather=true resolves, so persisted keys
+#        remain reachable through an explicit, deprecation-stamped path.
 #
 # Exit 0 = all assertions pass. Exit 1 = at least one failed.
 
@@ -228,6 +237,16 @@ msgs = [
     {"jsonrpc": "2.0", "id": 20, "method": "tools/call",
      "params": {"name": "graph_neighbors",
                 "arguments": {"node": "definitely-not-a-real-node-xyz.sh"}}},
+    {"jsonrpc": "2.0", "id": 21, "method": "tools/call",
+     "params": {"name": "resolve_mode",
+                "arguments": {"primitive": "review",
+                              "tags": ["action:readiness-synthesis", "target:system"]}}},
+    {"jsonrpc": "2.0", "id": 22, "method": "tools/call",
+     "params": {"name": "resolve_mode",
+                "arguments": {"mode": "bugfix-fastlane"}}},
+    {"jsonrpc": "2.0", "id": 23, "method": "tools/call",
+     "params": {"name": "resolve_mode",
+                "arguments": {"mode": "bugfix-fastlane", "grandfather": True}}},
 ]
 for m in msgs:
     proc.stdin.write(frame(m))
@@ -235,7 +254,7 @@ proc.stdin.flush()
 proc.stdin.close()
 
 replies = {}
-for _ in range(20):  # 20 IDs (notifications/initialized has no reply)
+for _ in range(23):  # 23 IDs (notifications/initialized has no reply)
     r = read_frame(proc.stdout)
     if r is None:
         break
@@ -541,6 +560,53 @@ if [[ "$ok" == "YES" ]]; then
   pass "T22: graph_neighbors unknown node returned a structured error result"
 else
   fail "T22: graph_neighbors unknown node did not return structured error: $gn_bad_reply"
+fi
+
+# T27/T28/T29: resolve_mode argv shape. The v7 form needs primitive and tags as
+# SEPARATE argv elements; a single `mode` string could never express it.
+rm_v7_reply="$(get 21)"
+ok="$(echo "$rm_v7_reply" | python3 -c "
+import json,sys
+r = json.load(sys.stdin)
+res = r.get('result') or {}
+text = ((res.get('content') or [{}])[0]).get('text', '')
+ok = res.get('isError') is not True and 'statusCeiling' in text and 'phaseOrder' in text
+print('YES' if ok else 'NO')
+")"
+if [[ "$ok" == "YES" ]]; then
+  pass "T27: resolve_mode resolved the v7 primitive+tag form"
+else
+  fail "T27: resolve_mode did not resolve the v7 tagged form: $rm_v7_reply"
+fi
+
+rm_v5_reply="$(get 22)"
+ok="$(echo "$rm_v5_reply" | python3 -c "
+import json,sys
+r = json.load(sys.stdin)
+res = r.get('result') or {}
+text = ((res.get('content') or [{}])[0]).get('text', '')
+ok = res.get('isError') is True and 'removed in v7' in text
+print('YES' if ok else 'NO')
+")"
+if [[ "$ok" == "YES" ]]; then
+  pass "T28: resolve_mode still rejects a removed v5 name without grandfather"
+else
+  fail "T28: resolve_mode did not reject the bare v5 name: $rm_v5_reply"
+fi
+
+rm_gf_reply="$(get 23)"
+ok="$(echo "$rm_gf_reply" | python3 -c "
+import json,sys
+r = json.load(sys.stdin)
+res = r.get('result') or {}
+text = ((res.get('content') or [{}])[0]).get('text', '')
+ok = res.get('isError') is not True and 'statusCeiling' in text
+print('YES' if ok else 'NO')
+")"
+if [[ "$ok" == "YES" ]]; then
+  pass "T29: resolve_mode resolves a persisted v5 key with grandfather=true"
+else
+  fail "T29: resolve_mode grandfather path did not resolve: $rm_gf_reply"
 fi
 
 # ---------------------------------------------------------------------------

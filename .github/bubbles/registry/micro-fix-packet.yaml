@@ -1,0 +1,81 @@
+# Micro-Fix Packet Contract (IMP-042 SCOPE-9 / HO-3, EV-9)
+#
+# WHY THIS EXISTS
+# The full bug packet is seven artifacts. That is proportionate to a defect that
+# changes a contract and disproportionate to a one-line guard on an off-by-one.
+# Paying full ceremony for a trivial fix does not buy assurance; it buys a
+# thinner report written under time pressure.
+#
+# This registry is the SINGLE source for what the compact packet admits, what it
+# still requires, and what it may never drop. `micro-fix-admission.sh` reads it.
+# Do not restate these lists in an agent, a doc, or a script: a second copy is a
+# second answer.
+#
+# NOT THE DEFAULT. IMP-042 SCOPE-9 requires packet authoring time and defect
+# escape rate to be MEASURED before this becomes the default route for any bug.
+# Until that measurement exists it is opt-in per bug, recorded as OW-015.
+
+schemaVersion: micro-fix-packet/v1
+
+# A bug may use the compact packet only when EVERY condition holds. Each is
+# phrased so a reviewer answers yes or no, not "roughly".
+admission:
+  - id: no-new-behavior
+    question: Does the fix add, remove, or alter any behavior a user or caller can observe?
+    admitWhen: "no"
+    reason: New observable behavior needs scenarios, and scenarios need the full packet.
+  - id: no-schema-change
+    question: Does the fix change a persisted schema, wire contract, or artifact shape?
+    admitWhen: "no"
+    reason: A schema change outlives the fix and needs a migration record.
+  - id: no-auth-surface
+    question: Does the fix touch authentication, authorization, or session identity?
+    admitWhen: "no"
+    reason: Auth defects are never localized in blast radius even when localized in code.
+  - id: no-payment-surface
+    question: Does the fix touch payment, billing, or money movement?
+    admitWhen: "no"
+    reason: Money paths require the full evidence trail regardless of diff size.
+  - id: no-secret-surface
+    question: Does the fix touch secret handling, key material, or credential flow?
+    admitWhen: "no"
+    reason: A secret path defect can be one character and still be a breach.
+  - id: no-deployment-surface
+    question: Does the fix change deployment, host configuration, or release wiring?
+    admitWhen: "no"
+    reason: Deployment changes are validated on a target, which the compact packet cannot show.
+  - id: no-cross-product-effect
+    question: Does the fix change a surface another product or repository consumes?
+    admitWhen: "no"
+    reason: A cross-product change needs the consuming side represented.
+  - id: contract-preserving
+    question: Does every existing test still assert exactly what it asserted before?
+    admitWhen: "yes"
+    reason: Changing an assertion to accommodate a fix is the fabrication this packet must not enable.
+
+# Artifacts the compact packet still requires. Fewer than the full packet, but
+# never zero: a fix with no reproduction and no evidence is an assertion.
+requiredArtifacts:
+  - bug.md
+  - report.md
+  - state.json
+
+# Obligations the compact packet may NEVER drop. These are the assurance floor.
+# Dropping any of them converts proportionality into a loophole.
+preservedObligations:
+  - id: reproduce-before-fix
+    requirement: report.md records the failing reproduction, with real output, BEFORE the fix.
+  - id: adversarial-regression
+    requirement: A regression test that FAILS without the fix and PASSES with it, both runs shown.
+  - id: root-cause-stated
+    requirement: bug.md names the root cause, not the symptom that surfaced it.
+  - id: evidence-is-execution
+    requirement: Every claim maps to a command that ran, with its real exit code.
+
+# When any admission condition fails, the bug escalates. Escalation is automatic
+# and mechanical: there is no reviewer discretion and no override flag, because a
+# discretionary downgrade is exactly how a payment defect ships as a typo fix.
+escalation:
+  target: bugfix-fastlane
+  rule: Any failed admission condition escalates to the full bug packet.
+  overrideFlag: none

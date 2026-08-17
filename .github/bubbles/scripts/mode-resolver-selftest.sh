@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Capability: mode-template-inheritance
 # bubbles/scripts/mode-resolver-selftest.sh
 #
 # Selftest for mode-resolver.sh — exercises template inheritance,

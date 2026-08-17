@@ -46,7 +46,7 @@ Corroborating (grep-derived, advisory) numbers:
 | G008 | audit_gate | `mode-required` | 42 | — | 1 | — |
 | G009 | chaos_gate | `mode-required` | 26 | — | 4 | — |
 | G010 | user_validation_gate | `mode-required` | 31 | — | 2 | — |
-| G011 | session_gate | `mode-required` | 55 | — | — | — |
+| G011 | session_gate | `mode-required` | 55 | — | 1 | — |
 | G012 | final_promotion_gate | `mode-required` | 55 | — | — | — |
 | G013 | priority_selection_gate | `behavioral:bubbles.workflow` | 3 | — | — | — |
 | G014 | bootstrap_readiness_gate | `mode-required` | 18 | — | — | — |
@@ -123,7 +123,7 @@ Corroborating (grep-derived, advisory) numbers:
 | G095 | discovered_issue_disposition_gate | `script:bubbles/scripts/discovered-issue-disposition-guard-selftest.sh`, `script:bubbles/scripts/discovered-issue-disposition-guard.sh` | 0 | Check 35 | 8 | guard |
 | G097 | requirement_mechanism_correspondence_gate | `script:bubbles/scripts/requirement-mechanism-guard-selftest.sh`, `script:bubbles/scripts/requirement-mechanism-guard.sh` | 0 | Check 36 | 7 | guard |
 | G098 | observability_posture_declared_gate | `script:bubbles/scripts/observability-posture-guard-selftest.sh`, `script:bubbles/scripts/observability-posture-guard.sh` | 0 | Check 37 | 7 | guard |
-| G099 | observability_opt_out_freshness_gate | `script:bubbles/scripts/observability-opt-out-guard-selftest.sh`, `script:bubbles/scripts/observability-opt-out-guard.sh` | 0 | Check 38 | 9 | guard |
+| G099 | observability_opt_out_freshness_gate | `script:bubbles/scripts/observability-opt-out-guard-selftest.sh`, `script:bubbles/scripts/observability-opt-out-guard.sh` | 0 | Check 38 | 10 | guard |
 | G100 | observability_slo_evidence_gate | `script:bubbles/scripts/observability-slo-guard-selftest.sh`, `script:bubbles/scripts/observability-slo-guard.sh` | 0 | Check 39 | 7 | guard |
 | G101 | release_delivery_reconciliation_gate | `script:bubbles/scripts/is-terminal-for-mode.sh`, `script:bubbles/scripts/release-delivery-reconciliation-guard-selftest.sh`, `script:bubbles/scripts/release-delivery-reconciliation-guard.sh`, `script:bubbles/scripts/scenario-compile-lint.sh` | 0 | — | 7 | — |
 | G110 | release_train_discipline_gate | `script:bubbles/scripts/release-train-guard.sh` | 8 | — | 4 | — |
@@ -143,12 +143,12 @@ Corroborating (grep-derived, advisory) numbers:
 | G124 | incident_severity_declared_gate | `mode-required` | 1 | — | 1 | — |
 | G125 | framework_health_evidence_gate | `script:bubbles/scripts/framework-health-evidence-lint.sh`, `script:bubbles/scripts/retro-framework-health.sh` | 1 | — | 3 | — |
 | G126 | model_tier_floor_gate | `script:bubbles/scripts/model-tier-advisory-selftest.sh`, `script:bubbles/scripts/model-tier-advisory.sh` | 0 | — | 4 | — |
-| G127 | capability_consumer_freshness_gate | `script:bubbles/scripts/capability-consumer-freshness-selftest.sh`, `script:bubbles/scripts/capability-consumer-freshness.sh` | 0 | — | 4 | — |
+| G127 | capability_consumer_freshness_gate | `script:bubbles/scripts/capability-consumer-freshness-selftest.sh`, `script:bubbles/scripts/capability-consumer-freshness.sh` | 0 | — | 5 | — |
 | G128 | session_cap_enforcement_gate | `script:bubbles/scripts/session-cap-guard-selftest.sh`, `script:bubbles/scripts/session-cap-guard.sh` | 0 | Check 40 | 8 | guard |
 | G129 | repository_binding_classification_discovery_conformance_gate | `script:bubbles/scripts/repository-binding-conformance-guard.sh` | 0 | — | 1 | — |
 | G130 | domain_invariant_correspondence_gate | `script:bubbles/scripts/domain-invariant-guard-selftest.sh`, `script:bubbles/scripts/domain-invariant-guard.sh` | 0 | Check 41 | 4 | guard |
 | G131 | domain_model_consistency_gate | `script:bubbles/scripts/claim-source-lint.sh`, `script:bubbles/scripts/domain-model-consistency-selftest.sh`, `script:bubbles/scripts/domain-model-consistency.sh` | 0 | Check 42 | 5 | guard |
-| G132 | reference_existence_gate | `script:bubbles/scripts/reference-existence-lint-selftest.sh`, `script:bubbles/scripts/reference-existence-lint.sh` | 0 | — | 3 | — |
+| G132 | reference_existence_gate | `script:bubbles/scripts/reference-existence-lint-selftest.sh`, `script:bubbles/scripts/reference-existence-lint.sh` | 0 | — | 4 | — |
 | G133 | collected_test_count_gate | `script:bubbles/scripts/collected-test-count-guard.sh`, `script:bubbles/scripts/collected-test-count-guard-selftest.sh` | 0 | — | 1 | — |
 | G134 | goal_fidelity_gate | `script:bubbles/scripts/goal-fidelity-guard.sh`, `script:bubbles/scripts/goal-fidelity-guard-selftest.sh` | 0 | — | 4 | — |
 | G135 | autonomy_posture_gate | `script:bubbles/scripts/autonomy-posture-guard.sh`, `script:bubbles/scripts/autonomy-posture-guard-selftest.sh` | 0 | — | 3 | — |
@@ -198,16 +198,16 @@ These gates are intentionally enforced OUTSIDE the mode `requiredGates` lists. E
 | G095 | discovered_issue_disposition_gate | Check 35 | 8 | guard | discovered-issue-disposition-guard-selftest.sh, discovered-issue-disposition-guard.sh, evidence-admission-hardening-selftest.sh, framework-validate.sh, gate-bands.sh, goal-fidelity-telemetry-selftest.sh, +2 more |
 | G097 | requirement_mechanism_correspondence_gate | Check 36 | 7 | guard | capability-consumer-freshness.sh, domain-invariant-guard.sh, framework-validate.sh, release-delivery-reconciliation-guard.sh, requirement-mechanism-guard-selftest.sh, requirement-mechanism-guard.sh, +1 more |
 | G098 | observability_posture_declared_gate | Check 37 | 7 | guard | cli.sh, framework-validate.sh, observability-check.sh, observability-opt-out-guard.sh, observability-posture-guard-selftest.sh, observability-posture-guard.sh, +1 more |
-| G099 | observability_opt_out_freshness_gate | Check 38 | 9 | guard | cli.sh, framework-validate.sh, gate-id-grep-selftest.sh, observability-opt-out-guard-selftest.sh, observability-opt-out-guard.sh, observability-posture-guard-selftest.sh, +3 more |
+| G099 | observability_opt_out_freshness_gate | Check 38 | 10 | guard | cli.sh, framework-validate.sh, gate-hit-log-selftest.sh, gate-id-grep-selftest.sh, observability-opt-out-guard-selftest.sh, observability-opt-out-guard.sh, +4 more |
 | G100 | observability_slo_evidence_gate | Check 39 | 7 | guard | framework-validate.sh, gate-bands-selftest.sh, gate-bands.sh, observability-check.sh, observability-slo-guard-selftest.sh, observability-slo-guard.sh, +1 more |
 | G101 | release_delivery_reconciliation_gate | — | 7 | — | adversarial-resolve.sh, framework-validate.sh, release-delivery-reconciliation-guard-selftest.sh, release-delivery-reconciliation-guard.sh, scaffold-gate-selftest.sh, scenario-compile-lint-selftest.sh, +1 more |
 | G126 | model_tier_floor_gate | — | 4 | — | framework-validate.sh, model-tier-advisory-selftest.sh, model-tier-advisory.sh, v5.2-selftest.sh |
-| G127 | capability_consumer_freshness_gate | — | 4 | — | capability-consumer-freshness-selftest.sh, capability-consumer-freshness.sh, framework-validate.sh, scaffold-gate-selftest.sh |
+| G127 | capability_consumer_freshness_gate | — | 5 | — | capability-consumer-freshness-selftest.sh, capability-consumer-freshness.sh, capability-consumer-naming.sh, framework-validate.sh, scaffold-gate-selftest.sh |
 | G128 | session_cap_enforcement_gate | Check 40 | 8 | guard | framework-validate.sh, rapid-tool-delivery-mode-selftest.sh, risk-tier-resolve.sh, scaffold-gate-selftest.sh, scenario-test-resolve.sh, session-cap-guard-selftest.sh, +2 more |
 | G129 | repository_binding_classification_discovery_conformance_gate | — | 1 | — | framework-validate.sh |
 | G130 | domain_invariant_correspondence_gate | Check 41 | 4 | guard | domain-invariant-guard-selftest.sh, domain-invariant-guard.sh, domain-model-consistency.sh, framework-validate.sh |
 | G131 | domain_model_consistency_gate | Check 42 | 5 | guard | domain-model-consistency-selftest.sh, domain-model-consistency.sh, framework-validate.sh, gate-bands-selftest.sh, gate-bands.sh |
-| G132 | reference_existence_gate | — | 3 | — | framework-validate.sh, reference-existence-lint-selftest.sh, reference-existence-lint.sh |
+| G132 | reference_existence_gate | — | 4 | — | framework-validate.sh, generate-release-manifest.sh, reference-existence-lint-selftest.sh, reference-existence-lint.sh |
 | G133 | collected_test_count_gate | — | 1 | — | gate-vintage-guard.sh |
 | G134 | goal_fidelity_gate | — | 4 | — | framework-validate.sh, goal-boundary-receipt-selftest.sh, goal-boundary-receipt.sh, goal-fidelity-guard.sh |
 | G135 | autonomy_posture_gate | — | 3 | — | autonomy-posture-guard-selftest.sh, autonomy-posture-guard.sh, framework-validate.sh |

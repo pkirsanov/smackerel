@@ -57,6 +57,10 @@ handoffs:
 
 **Shared Review Baseline:** Follow [review-core.md](bubbles_shared/review-core.md) for the common review contract used across the Bubbles review surfaces.
 
+## Terminal Recap Boundary
+
+When this agent owns the top-level runtime, invoke `runSubagent(bubbles.recap)` before the final response. When invoked as an engineering lens for another top-level runner, return the review result upward without recap.
+
 **Behavioral Rules:**
 - Stay code-only: review files, modules, services, packages, symbols, or full repositories strictly from an engineering perspective
 - Default to lightweight review behavior with evidence-backed findings

@@ -37,8 +37,14 @@ info() { echo "[management-truth-lint] $*"; }
 findings=0
 
 # ── Check 1: recipe catalog completeness ──────────────────────────────
+#
+# Two inventories list recipes and only one was checked, so docs/CATALOG.md
+# drifted to 61 of 75 entries while docs/recipes/README.md stayed complete. Both
+# are now checked. CATALOG.md is not redundant -- it carries the mode/agent
+# mapping and the decision tree that the categorized index does not.
 recipes_dir="$REPO_ROOT/docs/recipes"
 recipes_readme="$recipes_dir/README.md"
+recipe_catalog="$REPO_ROOT/docs/CATALOG.md"
 if [[ -d "$recipes_dir" && -f "$recipes_readme" ]]; then
   for recipe in "$recipes_dir"/*.md; do
     [[ -e "$recipe" ]] || continue
@@ -46,6 +52,10 @@ if [[ -d "$recipes_dir" && -f "$recipes_readme" ]]; then
     [[ "$base" == "README.md" ]] && continue
     if ! grep -q "($base)" "$recipes_readme"; then
       err "recipe not linked in catalog: docs/recipes/$base"
+      findings=$((findings + 1))
+    fi
+    if [[ -f "$recipe_catalog" ]] && ! grep -q "(recipes/$base)" "$recipe_catalog"; then
+      err "recipe not listed in docs/CATALOG.md: docs/recipes/$base"
       findings=$((findings + 1))
     fi
   done
@@ -100,10 +110,59 @@ compare_doc_count "prompt-shim count" "$prompts_n" "$REPO_ROOT/docs/guides/INSTA
 compare_doc_count "MCP tool count" "$tools_n" "$REPO_ROOT/docs/MCP.md" "annotated tools"
 compare_doc_count "MCP prompt count" "$prompts_n" "$REPO_ROOT/docs/MCP.md" "prompts"
 
+# ── Check 4: managed-doc requiredSections survive resolution ──────────
+#
+# The resolver parses the registry with portable awk, so an indentation
+# assumption is enough to drop a whole list without any error. It accepted only
+# sequences indented under their key while the registry writes them flush, and
+# every requiredSections list vanished from both projections while the resolver
+# still exited 0. Compare declared lists against resolved ones.
+docs_registry="$REPO_ROOT/bubbles/docs-registry.yaml"
+docs_resolver="$REPO_ROOT/bubbles/scripts/docs-registry-resolve.sh"
+if [[ -f "$docs_registry" && -x "$docs_resolver" ]]; then
+  declared_sections="$( { grep -cE '^[[:space:]]+requiredSections:' "$docs_registry" || true; } )"
+  resolved_sections="$( { bash "$docs_resolver" --framework-default 2>/dev/null || true; } | { grep -cE '^[[:space:]]+requiredSections:' || true; } )"
+  if [[ "$declared_sections" -ne "$resolved_sections" ]]; then
+    err "managed-doc requiredSections lost in resolution: $declared_sections declared in bubbles/docs-registry.yaml, $resolved_sections survived docs-registry-resolve.sh --framework-default"
+    findings=$((findings + 1))
+  fi
+else
+  info "docs registry or resolver not present (skipping check 4)"
+fi
+
+# ── Check 5: improvement-index rows stay scannable ────────────────────
+#
+# The index is a routing surface: id, state, owner, gate, gap codes, date. When
+# a full delivery narrative is pasted into the Status cell the table stops being
+# readable and the row becomes the only copy of that narrative. Long detail
+# belongs in the IMP file, or in git history once the IMP is deleted on delivery.
+#
+# IMP-037 is the single documented exception. Its IMP file was deleted on
+# delivery, so its 13k-character cell is now the only record; migrating it would
+# risk losing an audit trail for zero functional gain. It is grandfathered by id
+# rather than by raising the bound, so a NEW oversized row still fails.
+imp_index="$REPO_ROOT/improvements/INDEX.md"
+index_row_max=2500
+index_row_grandfathered="IMP-037"
+if [[ -f "$imp_index" ]]; then
+  while IFS= read -r row; do
+    [[ -n "$row" ]] || continue
+    row_id="$(printf '%s' "$row" | awk -F'|' '{gsub(/^[[:space:]]+|[[:space:]]+$/,"",$2); print $2}')"
+    [[ "$row_id" == "$index_row_grandfathered" ]] && continue
+    row_len="${#row}"
+    if [[ "$row_len" -gt "$index_row_max" ]]; then
+      err "improvement-index row '$row_id' is $row_len chars (max $index_row_max); move the narrative into the IMP file and keep the row to id, state, owner, gate, gap codes and date"
+      findings=$((findings + 1))
+    fi
+  done < <( { grep -E '^\| IMP-' "$imp_index" || true; } )
+else
+  info "improvements/INDEX.md not present (skipping check 5)"
+fi
+
 if [[ "$findings" -gt 0 ]]; then
   err "found $findings management-truth catalog omission(s)"
   exit 1
 fi
 
-info "OK — recipe catalog, adoption-profile help, and documented counts match the live inventory"
+info "OK — recipe catalog, adoption-profile help, documented counts, managed-doc sections, and improvement-index rows match the live inventory"
 exit 0

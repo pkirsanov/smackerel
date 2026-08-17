@@ -39,7 +39,7 @@ Pick the right workflow mode for a request, understand the mode's inherited and 
 | "make sure specs are tight" | `spec-scope-hardening` |
 | "improve an existing feature" | `improve-existing` |
 | "fix the bug" | `bugfix-fastlane` |
-| "keep going until done" | `full-delivery` |
+| "keep going until done" | Continuation: recover and preserve the active mode; recap if terminal |
 | "review documentation only" | `docs-only` |
 | "validate the certification" | `validate-only` |
 | "audit findings only" | `audit-only` |

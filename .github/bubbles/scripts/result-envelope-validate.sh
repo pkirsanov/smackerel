@@ -470,6 +470,44 @@ def recall_authority_error(doc):
             return recall_refusal(field, 'a recall export path', citation)
     return None
 
+# IMP-043 SCOPE-1. Schema validation alone cannot enforce this: this script exits
+# 0 and skips schema checks entirely when python3 or jsonschema is absent, so a
+# claim of `captured` would go unchecked exactly where dependencies are thinnest.
+# The refusal therefore lives here, in the hard-check path that runs in EVERY
+# mode, next to the authority checks.
+#
+# It refuses only the claim it can falsify: `captured` with no lesson to point
+# at. `not-applicable` is a legitimate answer and is never questioned, because
+# the alternative is a quota that manufactures filler.
+def learning_disposition_error(doc):
+    learning = doc.get('learning')
+    if not isinstance(learning, dict):
+        return None
+    disposition = learning.get('disposition')
+    if disposition is None:
+        return "'learning' is present but declares no 'disposition'."
+    if disposition not in ('captured', 'not-applicable', 'deferred'):
+        return (
+            f"'learning.disposition' is '{disposition}', which is not one of "
+            "captured, not-applicable, deferred."
+        )
+    if disposition == 'captured':
+        lesson_id = learning.get('lessonId')
+        if not isinstance(lesson_id, str) or not lesson_id.strip():
+            return (
+                "'learning.disposition' claims 'captured' but no 'lessonId' names "
+                "the lesson. A capture nobody can resolve is indistinguishable "
+                "from no capture at all."
+            )
+    if disposition == 'deferred':
+        reason = learning.get('reason')
+        if not isinstance(reason, str) or len(reason.strip()) < 20:
+            return (
+                "'learning.disposition' is 'deferred' but 'reason' is missing or "
+                "shorter than 20 characters. 'later' is not a reason."
+            )
+    return None
+
 # Match a fenced block that looks like an envelope. Two acceptable shapes:
 #   1. ```json result_envelope:        ```  ... ```
 #   2. <!-- result_envelope --> ```json ... ```
@@ -492,6 +530,7 @@ agents_missing_envelope = []
 malformed_envelopes = []  # list of (path, error_text)
 repository_binding_errors = []
 recall_authority_errors = []
+learning_errors = []
 
 for p in sorted(agents_dir.glob('*.agent.md')):
     total_agents += 1
@@ -514,6 +553,10 @@ for p in sorted(agents_dir.glob('*.agent.md')):
         recall_error = recall_authority_error(doc)
         if recall_error:
             recall_authority_errors.append((p.name, recall_error))
+            continue
+        learning_error = learning_disposition_error(doc)
+        if learning_error:
+            learning_errors.append((p.name, learning_error))
             continue
         projection_error = repository_projection_error(doc)
         if projection_error:
@@ -542,6 +585,7 @@ print(f"  with valid envelope: {agents_with_envelope}")
 print(f"  missing envelope: {len(agents_missing_envelope)}")
 print(f"  malformed envelope(s): {len(malformed_envelopes)}")
 print(f"  recall-authority violation(s): {len(recall_authority_errors)}")
+print(f"  learning-disposition violation(s): {len(learning_errors)}")
 print(f"  mode: {mode}")
 
 if agents_missing_envelope and mode != "strict":
@@ -559,13 +603,17 @@ for name, err in malformed_envelopes[:10]:
 for name, err in recall_authority_errors[:10]:
     print(f"  RECALL-AUTHORITY: {name}: {err}")
 
+for name, err in learning_errors[:10]:
+    print(f"  LEARNING-DISPOSITION: {name}: {err}")
+
 # Exit policy:
 #   advisory     -> always 0
 #   v6-default   -> 1 iff any malformed; missing warns only
 #   strict       -> 1 iff any malformed OR missing
-# Repository-provenance and recall-authority breaches are authority failures,
-# not schema nits, so they block in EVERY mode including advisory.
-if repository_binding_errors or recall_authority_errors:
+# Repository-provenance, recall-authority and learning-disposition breaches are
+# truthfulness failures, not schema nits, so they block in EVERY mode including
+# advisory.
+if repository_binding_errors or recall_authority_errors or learning_errors:
     sys.exit(1)
 if mode == "advisory":
     sys.exit(0)

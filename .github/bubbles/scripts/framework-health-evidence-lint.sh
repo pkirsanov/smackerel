@@ -29,6 +29,13 @@
 #                          capability-ledger.yaml), a "## Provenance" section, or
 #                          a Motivation naming a commit SHA.
 #   4. index-row-present   each IMP has a row in INDEX.md.
+#   4b. index-status-derived  that row's status cell must equal the status the
+#                          IMP itself declares, so the index derives status from
+#                          the owning proposal instead of restating it. Two files
+#                          claiming one id are reported as duplicate-imp-id
+#                          instead, because an ambiguous owner cannot govern a
+#                          row. Rows whose IMP file is gone are grandfathered:
+#                          the loop only visits proposals that still exist.
 #   5. generator-contained retro-framework-health.sh writes ONLY under
 #                          improvements/. This is G125's literal guarantee and
 #                          has NO exemption.
@@ -162,11 +169,23 @@ if command -v git >/dev/null 2>&1 && git -C "$repo_root" rev-parse --git-dir >/d
   have_git=1
 fi
 
+# Every id claimed by a proposal file. Two files claiming one id make the index
+# row ambiguous, and reporting that as a status drift would blame the row for a
+# collision it cannot resolve.
+all_imp_ids=""
+for imp in "${imp_files[@]}"; do
+  imp_base="$(basename "$imp")"
+  if [[ "$imp_base" =~ ^(IMP-[0-9]{3}) ]]; then
+    all_imp_ids+="${BASH_REMATCH[1]}"$'\n'
+  fi
+done
+
 for imp in "${imp_files[@]}"; do
   rel="${imp#"$repo_root"/}"
   base="$(basename "$imp")"
 
   # --- Check 2: a declared Status ------------------------------------------
+  status_value=""
   status_line="$(grep -m1 -oE '^\*\*Status:\*\*[[:space:]]*[A-Z][A-Z ]*' "$imp" 2>/dev/null || true)"
   if [[ -z "$status_line" ]]; then
     report "status-missing" "$rel has no '**Status:** <STATUS>' line (G125 proposals must declare review state)"
@@ -208,6 +227,44 @@ for imp in "${imp_files[@]}"; do
   fi
   if [[ -f "$index_file" ]] && [[ -n "$imp_id" ]] && ! grep -qF "$imp_id" "$index_file" 2>/dev/null; then
     report "index-row-missing" "$rel has no row in improvements/INDEX.md"
+  fi
+
+  # --- Check 4b: the row derives its status, it does not restate one --------
+  #
+  # The row carries its own status cell, so nothing stopped the index from
+  # asserting a state the proposal itself had already moved past. Binding the
+  # cell to the owning file makes the proposal authoritative and turns a
+  # divergence into a finding instead of two plausible answers.
+  #
+  # Rows whose proposal file is gone are never reached: this loop iterates
+  # existing IMP files only, which is the documented grandfather that keeps
+  # closed historical rows readable after their file is deleted on delivery.
+  if [[ -f "$index_file" && -n "$imp_id" && -n "$status_value" ]]; then
+    id_count="$(grep -cxF "$imp_id" <<<"$all_imp_ids" || true)"
+    if [[ "${id_count:-0}" -gt 1 ]]; then
+      report "duplicate-imp-id" "$rel shares proposal id $imp_id with another file in improvements/; one id must have one owner before a row can derive its status"
+    else
+      # Match on the id CONTAINED in the first cell, the way Check 4 does: a row
+      # may key on the bare id or on the filename, and an exact-id pattern would
+      # silently match neither and pass by finding nothing.
+      index_row="$(awk -F'|' -v id="$imp_id" 'index($2, id) > 0 { print; exit }' "$index_file" 2>/dev/null || true)"
+      if [[ -n "$index_row" ]]; then
+        index_cell="$(printf '%s' "$index_row" | awk -F'|' '{print $4}' | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//')"
+        index_status=""
+        while IFS= read -r candidate; do
+          [[ -n "$candidate" ]] || continue
+          # Longest legend match wins so "IN PROGRESS" is never read as a prefix.
+          if [[ "$index_cell" == "$candidate" || "$index_cell" == "$candidate "* ]]; then
+            [[ "${#candidate}" -gt "${#index_status}" ]] && index_status="$candidate"
+          fi
+        done <<<"$valid_statuses"
+        if [[ -z "$index_status" ]]; then
+          report "index-status-unreadable" "$rel has an INDEX.md row whose status cell does not begin with a legend status: '$index_cell'"
+        elif [[ "$index_status" != "$status_value" ]]; then
+          report "index-status-drift" "$rel declares Status '$status_value' but its INDEX.md row states '$index_status' (the row must derive from the proposal, not restate it)"
+        fi
+      fi
+    fi
   fi
 
   # --- Check 6: proposal traceability --------------------------------------

@@ -29,3 +29,16 @@ Each agent must also satisfy its role-specific validation profile from `validati
 4. Prompts should reference the matching profile instead of embedding duplicate tables.
 5. **Execution means terminal execution (Gate G071).** Running `artifact-lint.sh`, `traceability-guard.sh`, test commands, or any validation script means invoking it via `run_in_terminal` and recording the real output. Reading the files those scripts would check and predicting findings is analysis-as-execution fabrication — see `evidence-rules.md`. If a command cannot be executed, report it as NOT RUN.
 6. `testImpact` and `traceContracts` are opt-in project config surfaces. Missing config is not a validation failure unless the specific workflow or command was invoked with `--require-config`.
+
+## Validation Cadence
+
+A validation epoch is one tree SHA on one platform with one toolchain. A verdict
+belongs to the epoch that produced it and MUST NOT be carried across a changed
+tree.
+
+1. Run focused validation immediately after each edit.
+2. During a repair loop, rerun the failed checks and their affected closure. A full suite after every scope, finding, or documentation correction buys no assurance the final gate does not already buy.
+3. Unrelated side-effect risk accumulates until the next heavy boundary rather than forcing a full suite mid-loop.
+4. Run one cold full `release-check` on the final exact release candidate. This is the assurance gate and it is not optional, not reused, and not replaced by any focused run.
+5. The full-suite fallback stays permanently available. `test-impact-shadow.sh` gives the reason. A skipped test and a passing test look identical in a summary line, so any narrowing must be reportable before it may skip work.
+6. `--tier=core` is the routine local tier. The full tier is for release cuts and CI.

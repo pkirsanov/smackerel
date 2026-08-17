@@ -33,6 +33,71 @@
       ],
       "description": "One of the four canonical outcomes from Gate G063 (concrete_result_gate)."
     },
+    "learning": {
+      "type": "object",
+      "description": "IMP-043 SCOPE-1. Records the lesson decision made at result-envelope close. The object is OPTIONAL, so no existing envelope becomes invalid; when present it must be a decision rather than a gesture. This is deliberately NOT a per-run lesson quota: execution-ops.md argues that forcing one lesson per run manufactures filler and degrades clustering, and that reasoning is preserved. What is recorded is that the decision was MADE.",
+      "required": [
+        "disposition"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "disposition": {
+          "type": "string",
+          "enum": [
+            "captured",
+            "not-applicable",
+            "deferred"
+          ],
+          "description": "captured = a lesson was written and lessonId names it. not-applicable = the run produced nothing generalizable. deferred = a lesson is owed and reason says why it was not written now."
+        },
+        "lessonId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Identifier of the written lesson. Required when disposition is `captured`."
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 20,
+          "description": "Why capture was deferred. Required when disposition is `deferred`. The length floor exists because 'later' is not a reason."
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "disposition": {
+                "const": "captured"
+              }
+            },
+            "required": [
+              "disposition"
+            ]
+          },
+          "then": {
+            "required": [
+              "lessonId"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "disposition": {
+                "const": "deferred"
+              }
+            },
+            "required": [
+              "disposition"
+            ]
+          },
+          "then": {
+            "required": [
+              "reason"
+            ]
+          }
+        }
+      ]
+    },
     "summary": {
       "type": "string",
       "minLength": 1,

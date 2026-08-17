@@ -130,6 +130,57 @@ make_repo "$red_no_row"
 index_body >"$red_no_row/improvements/INDEX.md"
 assert "red: proposal with no index row is caught" 1 "$red_no_row"
 
+# --- RED: the index row restates a status the proposal disowns --------------
+#
+# The row is the only other place a status is written, so this is the exact
+# divergence the derived-status binding exists to remove.
+red_status_drift="$WORK/red-status-drift"
+make_repo "$red_status_drift"
+index_body >"$red_status_drift/improvements/INDEX.md"
+echo "| IMP-001-example.md | Example | APPLIED |" >>"$red_status_drift/improvements/INDEX.md"
+assert "red: index row stating APPLIED against a PROPOSED proposal is caught" 1 "$red_status_drift"
+
+# --- RED: the row's status cell carries no legend status --------------------
+red_status_unreadable="$WORK/red-status-unreadable"
+make_repo "$red_status_unreadable"
+index_body >"$red_status_unreadable/improvements/INDEX.md"
+echo "| IMP-001-example.md | Example | almost certainly done |" >>"$red_status_unreadable/improvements/INDEX.md"
+assert "red: unreadable index status cell is caught" 1 "$red_status_unreadable"
+
+# --- GREEN: a multi-word legend status matches exactly ----------------------
+#
+# "IN PROGRESS" must not be read as a prefix of some shorter legend entry, so
+# it is asserted rather than assumed.
+green_multiword="$WORK/green-multiword"
+make_repo "$green_multiword"
+{
+  index_body
+  echo "| \`IN PROGRESS\` | One or more scopes landing. |"
+  echo "| IMP-001-example.md | Example | IN PROGRESS — scope 2 of 5 landed |"
+} >"$green_multiword/improvements/INDEX.md"
+sed 's/^\*\*Status:\*\* PROPOSED/**Status:** IN PROGRESS/' \
+  "$green_multiword/improvements/IMP-001-example.md" >"$green_multiword/tmp"
+mv "$green_multiword/tmp" "$green_multiword/improvements/IMP-001-example.md"
+assert "green: multi-word IN PROGRESS matches on both sides" 0 "$green_multiword"
+
+# --- GREEN: a historical row whose proposal file is gone is grandfathered ---
+green_grandfather="$WORK/green-grandfather"
+make_repo "$green_grandfather"
+echo "| IMP-000-retired.md | Retired | APPLIED 2026-01-01 |" >>"$green_grandfather/improvements/INDEX.md"
+assert "green: closed row with no proposal file is not checked" 0 "$green_grandfather"
+
+# --- RED: two proposals claiming one id ------------------------------------
+#
+# A collision must be named as a collision. Reporting it as a status drift
+# blames the row for an ambiguity it cannot resolve.
+red_dup_id="$WORK/red-dup-id"
+make_repo "$red_dup_id"
+good_imp_body >"$red_dup_id/improvements/IMP-001-second-claimant.md"
+sed 's/^\*\*Status:\*\* PROPOSED/**Status:** APPLIED/' \
+  "$red_dup_id/improvements/IMP-001-second-claimant.md" >"$red_dup_id/tmp"
+mv "$red_dup_id/tmp" "$red_dup_id/improvements/IMP-001-second-claimant.md"
+assert "red: two files claiming one IMP id is caught" 1 "$red_dup_id"
+
 # --- RED: generator writing outside improvements/ ---------------------------
 red_generator="$WORK/red-generator"
 make_repo "$red_generator"

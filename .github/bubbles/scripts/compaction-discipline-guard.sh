@@ -226,7 +226,8 @@ ENV_FILTER='
         else 0
         end
       ),
-      compactedAt: (.compactedAt // null)
+      compactedAt: (.compactedAt // null),
+      rawPointer: (.rawPointer // "")
     })
   | sort_by(.ts)
 '
@@ -322,6 +323,36 @@ fi
 
 BOUNDARY_JSON="$(jq -c '.contextBoundary // null' "$SESSION_FILE" 2>/dev/null || printf 'null')"
 COMPACTED_COUNT="$(echo "$PROJECTED_JSON" | jq '[.[] | select(.compactedAt != null)] | length')"
+
+# Record parity (IMP-042 SCOPE-7). A `compactedAt` stamp asserts the raw
+# envelope was replaced by a durable summary, so that summary must exist.
+# Checking the stamp alone let an envelope be marked compacted while its record
+# was lost: the raw content is discarded and the thing that justified
+# discarding it is gone, with the gate still green.
+#
+# Scoped to sessions that carry a `compactedHistory` key, matching the
+# contextBoundary precedent above -- an upgrade must not retroactively block a
+# session compacted under the older contract. The compactor now always writes
+# the key, so every newly compacted session is covered.
+if jq -e 'has("compactedHistory")' "$SESSION_FILE" >/dev/null 2>&1; then
+  HISTORY_POINTERS="$(jq -c '[(.compactedHistory // [])[] | (.rawPointer // "")]' "$SESSION_FILE" 2>/dev/null || printf '[]')"
+  MISSING_RECORDS="$(echo "$PROJECTED_JSON" | jq -c --argjson hist "$HISTORY_POINTERS" \
+    '[.[] | select(.compactedAt != null) | .rawPointer as $p | select(($hist | index($p)) == null) | $p]' 2>/dev/null || printf '[]')"
+  MISSING_RECORD_COUNT="$(echo "$MISSING_RECORDS" | jq 'length' 2>/dev/null || printf '0')"
+  if [[ "$MISSING_RECORD_COUNT" -gt 0 ]]; then
+    {
+      echo "G083 context_compaction_discipline_gate violation (compact record missing)"
+      echo "  specDir:                          $NORMALIZED_SPEC"
+      echo "  session.json:                     $SESSION_FILE"
+      echo "  compacted envelopes (this spec):  $COMPACTED_COUNT"
+      echo "  stamped without a record:         $MISSING_RECORD_COUNT"
+      echo "  rawPointers:                      $MISSING_RECORDS"
+      echo "  detail:                           compactedAt claims the raw envelope was summarized, but no compactedHistory entry carries that rawPointer"
+      echo "  remediation:                      re-run bubbles/scripts/context-compactor.sh on each listed rawPointer; it now writes the stamp and the record together"
+    } >&2
+    exit 1
+  fi
+fi
 
 emit_boundary_violation() {
   {

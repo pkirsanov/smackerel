@@ -331,7 +331,7 @@
   <img src="../icons/bubbles-logo.svg" alt="Bubbles Logo">
   <h1>BUBBLES</h1>
   <!-- GENERATED:FRAMEWORK_STATS_HTML_VERSION_HEADER_START -->
-  <div class="subtitle">Agent Orchestration System v7.27.0</div>
+  <div class="subtitle">Agent Orchestration System v7.28.0</div>
   <!-- GENERATED:FRAMEWORK_STATS_HTML_VERSION_HEADER_END -->
   <div class="subtitle">Sunnyvale Trailer Park Software Division</div>
   <div class="tagline">"It Ain't Rocket Appliances, But It Works."</div>
@@ -932,8 +932,8 @@
     </tr>
     <tr>
       <td class="cmd">sunnyvale next-on-the-board</td>
-      <td class="maps-to">bubbles.sprint</td>
-      <td class="quote-col">"That one&#x27;s done — keep both flows moving."</td>
+      <td class="maps-to">bubbles.iterate</td>
+      <td class="quote-col">"Pick the next job on the board."</td>
     </tr>
     <tr>
       <td class="cmd">sunnyvale just-fixes</td>
@@ -1063,7 +1063,7 @@
   </div>
   <div class="workflow-card">
     <div class="wf-name">devops-to-doc</div>
-    <div class="wf-alias">→ sunnyvale keep-the-park-online</div>
+    <div class="wf-alias">→ sunnyvale park-ops-cycle</div>
     <div class="wf-desc">Focused DevOps execution for CI/CD, build, deployment, monitoring, observability, and release automation.</div>
     <div class="wf-quote">"Get the rack humming and keep the park online."</div>
   </div>
@@ -1123,15 +1123,15 @@
   </div>
   <div class="workflow-card">
     <div class="wf-name">iterate</div>
-    <div class="wf-alias">→ sunnyvale keep-going</div>
-    <div class="wf-desc">Priority-driven scope-by-scope execution. Picks the next thing and does it.</div>
-    <div class="wf-quote">"Keep going, boys. Don&#x27;t stop."</div>
+    <div class="wf-alias">→ sunnyvale pick-next</div>
+    <div class="wf-desc">Priority-driven execution. Explicitly selects the next work item and starts it.</div>
+    <div class="wf-quote">"Pick the next job on the board."</div>
   </div>
   <div class="workflow-card">
     <div class="wf-name">resume-only</div>
-    <div class="wf-alias">→ sunnyvale resume-the-tape</div>
-    <div class="wf-desc">Resume from saved session state. Pick up where you left off.</div>
-    <div class="wf-quote">"Roll that tape back, boys."</div>
+    <div class="wf-alias">→ sunnyvale keep-going</div>
+    <div class="wf-desc">Resume saved non-terminal work. If none remains, return a completion recap without starting another item.</div>
+    <div class="wf-quote">"Keep going only if the tape still has work on it."</div>
   </div>
   <div class="workflow-card">
     <div class="wf-name">spec-scope-hardening (with analyze)</div>
@@ -1237,7 +1237,7 @@
   </div>
   <div class="workflow-card">
     <div class="wf-name">release-planning-to-doc</div>
-    <div class="wf-alias">→ sunnyvale plans-within-plans</div>
+    <div class="wf-alias">→ sunnyvale packet-within-packets</div>
     <div class="wf-desc">Produce or refresh a phase release packet (vision / features / actions / business-plan / deployment / marketing / monetization / ops-scalability); enforces Product Direction Surfaces trio + carry-forward + cross-product coordination.</div>
     <div class="wf-quote">"Plans within plans within plans."</div>
   </div>
@@ -1375,13 +1375,13 @@
   </div>
   <div class="workflow-card">
     <div class="wf-name">redteam-to-doc</div>
-    <div class="wf-alias">→ sunnyvale prove-it</div>
+    <div class="wf-alias">→ sunnyvale prove-the-delivery</div>
     <div class="wf-desc">Adversarial red-team attack on a finished result (Green Bastard). Finding-owned remediation chain, then validate/audit/docs. Off by default.</div>
     <div class="wf-quote">"You say it&#x27;s done? Prove it."</div>
   </div>
   <div class="workflow-card">
     <div class="wf-name">production-adversarial-probe</div>
-    <div class="wf-alias">→ sunnyvale this-is-my-park-now</div>
+    <div class="wf-alias">→ sunnyvale test-my-park</div>
     <div class="wf-desc">Bounded, armed, read-only chaos-monkey probing of a LIVE system (Green Bastard on a leash). Requires arming + target allowlist; restore-or-fix; never certifies.</div>
     <div class="wf-quote">"This is my park now. Let&#x27;s see what holds."</div>
   </div>
@@ -1424,7 +1424,7 @@
   </div>
   <div class="workflow-card">
     <div class="wf-name">continuation envelope</div>
-    <div class="wf-desc">Machine-readable packet from a read-only agent carrying the target, intent, preferred workflow mode, and reason for the next workflow step.</div>
+    <div class="wf-desc">Machine-readable packet for one concrete non-terminal target. Terminal recap uses target <code>none</code>; possible next work stays an unstarted candidate until the user explicitly requests it.</div>
   </div>
   <div class="workflow-card">
     <div class="wf-name">scenario replay</div>
@@ -2473,7 +2473,7 @@
 <div class="footer">
   <div class="big-quote">"Have a good one, boys."</div>
   <!-- GENERATED:FRAMEWORK_STATS_HTML_VERSION_FOOTER_START -->
-  <p>Bubbles Agent System v7.27.0 — Sunnyvale Trailer Park Software Division</p>
+  <p>Bubbles Agent System v7.28.0 — Sunnyvale Trailer Park Software Division</p>
   <!-- GENERATED:FRAMEWORK_STATS_HTML_VERSION_FOOTER_END -->
   <!-- GENERATED:FRAMEWORK_STATS_HTML_FOOTER_START -->
   <p>117 Gates • 41 Agents • 61 Workflow Modes • 30 Phases • 0 Shit Hawks</p>

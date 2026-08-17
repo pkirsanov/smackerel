@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Capability: dod-gherkin-fidelity-threshold
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

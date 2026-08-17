@@ -784,6 +784,14 @@ def _render_args(template: list[str], arguments: dict[str, Any]) -> list[str]:
                    "${args*}"]` so the wrapped command's own arguments survive
                    (IMP-102 / SCOPE-7 defect #3). A non-list value raises
                    ValueError.
+      ${var!}    — boolean flag; the argv element carries the flag literal and
+                   the placeholder contributes no text. A truthy `var` keeps the
+                   element, a falsy or missing one DROPS it, so
+                   `"--no-cap${no_cap!}"` yields either `["--no-cap"]` or
+                   nothing. Without this, a declared boolean input had no way to
+                   reach argv at all: `${var}` renders the literal "False" and
+                   `${var?}` only drops on None/"" -- which is why every boolean
+                   in the catalog was silently ignored (IMP-042 / SCOPE-8).
 
     Unknown placeholders (not `?`-suffixed) raise ValueError so the caller
     gets ERR_INVALID_PARAMS rather than passing the literal text down.
@@ -818,7 +826,15 @@ def _render_args(template: list[str], arguments: dict[str, Any]) -> list[str]:
                 break
             raw = out[start + 2 : end]
             optional = raw.endswith("?")
-            var = raw[:-1] if optional else raw
+            boolean_flag = raw.endswith("!")
+            var = raw[:-1] if (optional or boolean_flag) else raw
+            if boolean_flag:
+                if not arguments.get(var):
+                    drop_this_arg = True
+                    break
+                out = out[:start] + out[end + 1 :]
+                i = start
+                continue
             if var not in arguments or arguments[var] is None or arguments[var] == "":
                 if optional:
                     drop_this_arg = True

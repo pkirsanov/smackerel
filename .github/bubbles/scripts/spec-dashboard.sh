@@ -41,8 +41,8 @@ printf "\n${BLUE}═════════════════════
 printf "${BLUE}  Bubbles Spec Progress Dashboard${NC}\n"
 printf "${BLUE}═══════════════════════════════════════════════════════════════════════════${NC}\n\n"
 
-printf "%-40s %-16s %-24s %-8s %-8s\n" "SPEC" "STATUS" "MODE" "SCOPES" "DONE"
-printf "%-40s %-16s %-24s %-8s %-8s\n" "────" "──────" "────" "──────" "────"
+printf "%-40s %-16s %-24s %-8s\n" "SPEC" "STATUS" "MODE" "SCOPES"
+printf "%-40s %-16s %-24s %-8s\n" "────" "──────" "────" "──────"
 
 for state_file in $(find "$SPECS_DIR" -maxdepth 2 -name "state.json" -not -path "*/bugs/*" | sort); do
   spec_dir="$(dirname "$state_file")"
@@ -145,7 +145,7 @@ for state_file in $(find "$SPECS_DIR" -maxdepth 2 -name "state.json" -not -path 
 
   ((total_specs++))
 
-  printf "%-40s %-16b %-24s %-8s %-8s\n" "$spec_name" "$status_display" "${mode:--}" "$scope_info" ""
+  printf "%-40s %-16b %-24s %-8s\n" "$spec_name" "$status_display" "${mode:--}" "$scope_info"
 done
 
 # Bug summary — "done" OR terminal-for-mode (validated, docs_updated, etc.)

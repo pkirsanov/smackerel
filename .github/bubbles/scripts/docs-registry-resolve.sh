@@ -179,7 +179,11 @@ function parse_framework_registry(file,    line, section, doc_key, list_field, m
         continue
       }
 
-      if (doc_key != "" && list_field != "" && litem(line, "      ")) {
+      # YAML permits a sequence either indented under its key or flush with it.
+      # Accepting only the indented form silently dropped every requiredSections
+      # list, because the registry writes the flush form.
+      if (doc_key != "" && list_field != "" &&
+          (litem(line, "      ") || litem(line, "    "))) {
         append_list_value(default_doc_list, doc_key, list_field, ITEM)
         continue
       }
@@ -266,7 +270,9 @@ function parse_project_overrides(file,    line, section, subsection, doc_key, li
         continue
       }
 
-      if (doc_key != "" && list_field != "" && litem(line, "        ")) {
+      # Same both-indentations rule as the framework default above.
+      if (doc_key != "" && list_field != "" &&
+          (litem(line, "        ") || litem(line, "      "))) {
         append_list_value(override_doc_list, doc_key, list_field, ITEM)
         continue
       }

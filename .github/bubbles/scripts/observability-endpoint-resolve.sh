@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Capability: observability-adapter-contract
 set -euo pipefail
 
 # observability-endpoint-resolve.sh

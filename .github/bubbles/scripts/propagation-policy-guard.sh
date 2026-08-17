@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Capability: cross-train-propagation
 # propagation-policy-guard.sh — validates propagation-policy.yaml schema and
 # cross-references against config/release-trains.yaml.
 #

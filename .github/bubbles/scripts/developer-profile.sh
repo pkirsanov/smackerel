@@ -15,6 +15,8 @@ trap '[[ ${#_BTMPS[@]} -gt 0 ]] && rm -rf "${_BTMPS[@]}" 2>/dev/null || true' EX
 _btmp() { local t; t="$(mktemp "$@")"; _BTMPS+=("$t"); printf '%s' "$t"; }
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=bubbles/scripts/adoption-profile-lib.sh
+. "$SCRIPT_DIR/adoption-profile-lib.sh"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 SPECS_DIR="$REPO_ROOT/specs"
 CONFIG_FILE="$REPO_ROOT/.specify/memory/bubbles.config.json"
@@ -45,27 +47,15 @@ read_config_string() {
 }
 
 active_adoption_profile() {
-  if [[ -f "$CONFIG_FILE" ]]; then
-    grep -oE '"adoptionProfile"[[:space:]]*:[[:space:]]*"[^"]+"' "$CONFIG_FILE" 2>/dev/null \
-      | sed -E 's/.*"([^"]+)"$/\1/'
-  fi
+  bubbles_active_adoption_profile "$CONFIG_FILE"
 }
 
 adoption_profile_is_explicit() {
-  [[ -f "$CONFIG_FILE" ]] && grep -q '"adoptionProfile"' "$CONFIG_FILE"
+  bubbles_adoption_profile_is_explicit "$CONFIG_FILE"
 }
 
 adoption_profile_ids() {
-  [[ -f "$ADOPTION_PROFILES_FILE" ]] || return 0
-
-  awk '
-    /^profiles:/ { in_profiles=1; next }
-    in_profiles && /^  [A-Za-z0-9_-]+:$/ {
-      profile=$1
-      sub(":$", "", profile)
-      print profile
-    }
-  ' "$ADOPTION_PROFILES_FILE"
+  bubbles_adoption_profile_ids "$ADOPTION_PROFILES_FILE"
 }
 
 adoption_profile_scalar() {
@@ -110,7 +100,6 @@ adoption_profile_list() {
 effective_adoption_profile() {
   local requested_profile="${1:-}"
   local active_profile
-  local known_profile
 
   if [[ -n "$requested_profile" ]]; then
     active_profile="$requested_profile"
@@ -120,13 +109,10 @@ effective_adoption_profile() {
 
   [[ -n "$active_profile" ]] || active_profile='delivery'
 
-  while IFS= read -r known_profile; do
-    [[ -n "$known_profile" ]] || continue
-    if [[ "$known_profile" == "$active_profile" ]]; then
-      printf '%s\n' "$active_profile"
-      return 0
-    fi
-  done < <(adoption_profile_ids)
+  if bubbles_adoption_profile_is_known "$active_profile" "$ADOPTION_PROFILES_FILE"; then
+    printf '%s\n' "$active_profile"
+    return 0
+  fi
 
   echo "Unknown adoption profile: $active_profile" >&2
   exit 1

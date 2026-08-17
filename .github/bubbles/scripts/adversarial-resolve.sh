@@ -86,12 +86,12 @@ chain: per-run directive -> BUBBLES_ADVERSARIAL* env -> bubbles-project.yaml
 Options:
   --mode <off|auto|on>      Per-run mode (directive layer, highest precedence).
   --samples <N>             Per-run correlated sample count (integer 1..5).
-  --passes <N>              Deprecated compatibility alias for --samples.
-  --teeth <warn|blocking>   Per-run teeth.
+  --passes <N>              Deprecated compatibility alias for --samples.                            REMOVED in 8.0.0; use --samples.  --teeth <warn|blocking>   Per-run teeth.
   --directive "<str>"       Free-form per-run string; mode:/samples:/teeth: tokens
                             are extracted (what an orchestrator forwards from
                             $ADDITIONAL_CONTEXT, e.g. "adversarial: on samples: 3").
-                            The deprecated passes: token remains accepted.
+                            The deprecated passes: token remains accepted and
+                            is REMOVED in 8.0.0; use samples:.
                             Explicit --mode/--samples/--passes/--teeth override the same
                             token inside --directive.
   --repo-root <dir>         Repo root to scan for bubbles-project.yaml

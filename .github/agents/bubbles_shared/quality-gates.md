@@ -212,7 +212,7 @@ Before any final completion claim, confirm:
 - **G083** `context_compaction_discipline_gate` — orchestrators compact trailing transition packets within per-spec budgets before the next dispatch (`compaction-discipline-guard.sh`).
 - **G084** `pre_existing_deferral_block_gate` — "pre-existing / out of scope" without a filed artifact is forbidden (`pre-existing-deferral-guard.sh`).
 - **G085** `framework_dogfood_evidence_gate` — the Bubbles source repo MUST NOT keep persistent `specs/`; framework work lives in `improvements/` (`framework-dogfood-guard.sh`).
-- **G086** `orchestrator_persistence_lint_gate` — orchestrators auto-continue after a non-terminal phase; only convergence/cap/stop/impossibility halts (`orchestrator-persistence-lint.sh`).
+- **G086** `orchestrator_persistence_lint_gate` — orchestrators classify continuation before parsing, auto-continue non-terminal phases, then invoke non-recursive recap at terminal stops instead of selecting unrelated work. An independent 15-agent minimum roster prevents registry shrinkage (`orchestrator-persistence-lint.sh`).
 
 **Planning & spec integrity (G087–G091)** — protect the plan→implementation chain:
 - **G087** `planning_packet_implementation_linkage_gate` — planning packets link to their implementation evidence.

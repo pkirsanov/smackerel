@@ -25,8 +25,16 @@ You were working on something in a previous session and need to pick up where yo
 1. Repository preflight resolves an explicit `repositoryRoot`, the current host session's durable work boundary, or the sole eligible root in a true single-repository workspace
 2. Any inherited continuation packet is captured once and validated against the exact current session/root/decision/revision before repository-local reads
 3. `continue` tries to resume the active workflow context first when a valid continuation envelope, workflow run-state record, or non-terminal spec state is available under that repository
-4. If no active workflow continuation can be recovered safely, workflow falls back to `iterate`, which discovers and ranks work only under `<resolved-repository-root>/specs`
-5. `resume` reads `state.json` only from the committed repository and continues from exactly where it stopped
+4. If no non-terminal continuation can be recovered, workflow invokes recap and stops
+5. Recap may show one next-priority candidate as `not started`; it does not start that item
+6. `resume` reads `state.json` only from the committed repository and continues from exactly where it stopped
+
+To start new work after the recap, ask explicitly:
+
+```
+/bubbles.iterate
+/bubbles.super  pick the next priority and start it
+```
 
 That matters after workflows like `stochastic-quality-sweep`: follow-ups such as `fix all found` or `address the rest` should keep the work inside the active workflow mode instead of downshifting into raw specialist execution.
 
@@ -51,7 +59,7 @@ If the previous run ended with remaining routed work, you can also say things li
 /bubbles.workflow  address the rest
 ```
 
-Those are continuation-shaped requests. Workflow now resolves them against active continuation context before it ever falls back to generic work-picking.
+Those are continuation-shaped requests. Workflow resolves them against active continuation context. If that context is terminal, it recaps and returns control.
 
 ## Session Boundary And Safe Packets
 

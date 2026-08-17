@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2001,SC2086 # Existing diagnostics formatting and intentional tag argv expansion.
 # Bubbles v6 mode-alias selftest (v6.0 / B4).
 #
 # Enforces the invariants of bubbles/workflows/aliases.yaml:
@@ -34,6 +35,8 @@ RESOLVER="$SCRIPT_DIR/mode-resolver.sh"
 WORKFLOWS_FILE="$REPO_ROOT/bubbles/workflows.yaml"
 ALIASES_FILE="$REPO_ROOT/bubbles/workflows/aliases.yaml"
 SHELL_ALIASES_FILE="$SCRIPT_DIR/aliases.sh"
+CHEATSHEET_ALIASES_FILE="$REPO_ROOT/bubbles/cheatsheet/aliases.json"
+CHEATSHEET_MODES_FILE="$REPO_ROOT/bubbles/cheatsheet/modes.json"
 
 failures=0
 pass() { echo "PASS: $1"; }
@@ -45,8 +48,12 @@ fail() { echo "FAIL: $1"; failures=$((failures + 1)); }
 command -v yq >/dev/null 2>&1 || { echo "mode-alias-selftest: yq required" >&2; exit 2; }
 command -v python3 >/dev/null 2>&1 || { echo "mode-alias-selftest: python3 required" >&2; exit 2; }
 
-# Cache aliased modes once.
-v5_in_workflows="$(bash "$RESOLVER" --list-modes | grep -v '^phaseRelevance$' | sort -u)"
+# Cache aliased modes once. Deliberately NOT filtered here: `--list-modes` is
+# contracted to emit modes and nothing else, and this consumer previously had to
+# strip `phaseRelevance` itself. Dropping that workaround turns check 2 below
+# into the regression for the contract -- if the non-mode block leaks back into
+# the inventory, it surfaces as a mode with no alias entry.
+v5_in_workflows="$(bash "$RESOLVER" --list-modes | sort -u)"
 v5_in_aliases="$(yq -r '.v5Aliases | keys[]' "$ALIASES_FILE" | sort -u)"
 v6_primitives="$(yq -r '.v6Primitives[]' "$ALIASES_FILE" | sort -u)"
 
@@ -253,6 +260,51 @@ if [[ -f "$SHELL_ALIASES_FILE" ]]; then
   fi
 else
   fail "aliases.sh: missing shell alias file: $SHELL_ALIASES_FILE"
+fi
+
+# 11. Every generated alias resolves through the runtime lookup to the exact
+# documented target. aliases.json is the installed canonical source; arrays in
+# aliases.sh are fallback-only compatibility for older partial installs.
+if [[ -f "$CHEATSHEET_ALIASES_FILE" ]]; then
+  runtime_alias_failures=0
+  # shellcheck source=/dev/null
+  source "$SHELL_ALIASES_FILE"
+  while IFS=$'\t' read -r alias_name target_kind expected_target; do
+    [[ -n "$alias_name" ]] || continue
+    if [[ "$target_kind" == "agent" ]]; then
+      runtime_target="$(resolve_agent_alias "$alias_name")"
+    else
+      runtime_target="$(resolve_mode_alias "$alias_name")"
+    fi
+    if [[ "$runtime_target" != "$expected_target" ]]; then
+      fail "runtime alias [$alias_name] does not resolve to '$expected_target'"
+      runtime_alias_failures=$((runtime_alias_failures + 1))
+    fi
+  done < <(jq -r '.[] | if (.target_agent // "") != "" then [.alias, "agent", .target_agent] elif (.target_mode // "") != "" then [.alias, "mode", .target_mode] elif (.maps_to | test("^bubbles\\.[a-z0-9-]+$")) then [.alias, "agent", .maps_to] else [.alias, "mode", .maps_to] end | @tsv' "$CHEATSHEET_ALIASES_FILE")
+  if [[ "$runtime_alias_failures" -eq 0 ]]; then
+    runtime_alias_count="$(jq 'length' "$CHEATSHEET_ALIASES_FILE")"
+    pass "every generated alias resolves to the exact runtime target ($runtime_alias_count aliases)"
+  fi
+else
+  fail "missing canonical generated alias registry: $CHEATSHEET_ALIASES_FILE"
+fi
+
+if [[ -f "$CHEATSHEET_MODES_FILE" ]]; then
+  runtime_mode_alias_failures=0
+  while IFS=$'\t' read -r alias_name expected_mode; do
+    [[ -n "$alias_name" ]] || continue
+    runtime_output="$(sunnyvale_lookup "$alias_name" 2>/dev/null || true)"
+    if ! grep -qF "$alias_name → workflow mode: $expected_mode" <<<"$runtime_output"; then
+      fail "runtime mode alias [$alias_name] does not resolve to '$expected_mode'"
+      runtime_mode_alias_failures=$((runtime_mode_alias_failures + 1))
+    fi
+  done < <(jq -r '.[] | [.alias, (.canonical_name // .name)] | @tsv' "$CHEATSHEET_MODES_FILE")
+  if [[ "$runtime_mode_alias_failures" -eq 0 ]]; then
+    runtime_mode_alias_count="$(jq 'length' "$CHEATSHEET_MODES_FILE")"
+    pass "every generated mode alias resolves to the exact runtime target ($runtime_mode_alias_count aliases)"
+  fi
+else
+  fail "missing canonical generated mode registry: $CHEATSHEET_MODES_FILE"
 fi
 
 if [[ "$failures" -gt 0 ]]; then

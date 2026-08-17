@@ -322,7 +322,7 @@ Rules:
   "featureDir": "specs/NNN-feature-name",
   "featureName": "Feature Name",
   "status": "not_started",
-  "workflowMode": "full-delivery | spec-scope-hardening | docs-only | validate-only | audit-only | resume-only",
+  "workflowMode": "full-delivery | spec-scope-hardening | docs-only | validate-only | audit-only",
   "linkedImplementationSpec": null,
   "linkedPlanningPacket": null,
   "planningOnly": false,

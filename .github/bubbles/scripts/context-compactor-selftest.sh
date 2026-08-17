@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Capability: orchestrator-context-compaction
 set -euo pipefail
 
 # context-compactor-selftest.sh — verify context-compactor.sh behavior.

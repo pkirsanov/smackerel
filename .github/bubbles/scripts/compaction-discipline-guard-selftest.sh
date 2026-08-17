@@ -558,6 +558,124 @@ assert_exit 0 "S12 exit code (no compaction exercised -> no boundary required)"
 assert_stdout_contains "contextBoundary=none" "S12 reports no boundary without failing"
 
 # =============================================================================
+# Scenario S13 — RED: a compactedAt stamp with no matching compact record.
+#
+# The stamp asserts the raw envelope was replaced by a durable summary. If the
+# summary is missing, the raw content was discarded and the justification for
+# discarding it went with it. Before IMP-042 SCOPE-7 this passed, because the
+# gate looked only at the stamp.
+# =============================================================================
+
+note "Scenario S13: a compacted envelope with no compactedHistory record should exit 1"
+
+S13_ROOT="$WORKSPACE/s13"
+stage_repo_root "$S13_ROOT"
+write_session_json "$S13_ROOT" '{
+  "contextBoundary": {
+    "kind": "host-checkpoint",
+    "checkpointId": "ckpt-s13",
+    "at": "2026-06-01T10:05:00Z"
+  },
+  "compactedHistory": [],
+  "envelopesReceived": [
+    {
+      "specDir": "specs/900-convergence-fixture",
+      "agent": "bubbles.workflow",
+      "receivedAt": "2026-06-01T10:00:00Z",
+      "rawSizeBytes": 200,
+      "incomingMessage": "oldest-compacted",
+      "compactedAt": "2026-06-01T10:04:00Z",
+      "rawPointer": "/fixture/raw-s13-a.json"
+    },
+    {
+      "specDir": "specs/900-convergence-fixture",
+      "agent": "bubbles.workflow",
+      "receivedAt": "2026-06-01T10:01:00Z",
+      "rawSizeBytes": 200,
+      "incomingMessage": "latest-2-raw",
+      "compactedAt": null,
+      "rawPointer": null
+    },
+    {
+      "specDir": "specs/900-convergence-fixture",
+      "agent": "bubbles.workflow",
+      "receivedAt": "2026-06-01T10:02:00Z",
+      "rawSizeBytes": 200,
+      "incomingMessage": "latest-1-raw",
+      "compactedAt": null,
+      "rawPointer": null
+    }
+  ]
+}'
+
+run_guard "$S13_ROOT" "specs/900-convergence-fixture"
+
+assert_exit 1 "S13 exit code (stamped compacted, record missing)"
+assert_stderr_contains "compact record missing" "S13 stderr names the record-parity check"
+assert_stderr_contains "/fixture/raw-s13-a.json" "S13 stderr names the offending rawPointer"
+assert_stderr_contains "context-compactor.sh" "S13 stderr names remediation tool"
+
+# =============================================================================
+# Scenario S14 — GREEN: the same shape WITH the matching record present.
+#
+# Paired with S13 so the check is proven to distinguish the two cases rather
+# than simply refusing every compacted session.
+# =============================================================================
+
+note "Scenario S14: a compacted envelope WITH its compactedHistory record should exit 0"
+
+S14_ROOT="$WORKSPACE/s14"
+stage_repo_root "$S14_ROOT"
+write_session_json "$S14_ROOT" '{
+  "contextBoundary": {
+    "kind": "host-checkpoint",
+    "checkpointId": "ckpt-s14",
+    "at": "2026-06-01T10:05:00Z"
+  },
+  "compactedHistory": [
+    {
+      "agent": "bubbles.workflow",
+      "outcome": "completed_owned",
+      "rawPointer": "/fixture/raw-s14-a.json"
+    }
+  ],
+  "envelopesReceived": [
+    {
+      "specDir": "specs/900-convergence-fixture",
+      "agent": "bubbles.workflow",
+      "receivedAt": "2026-06-01T10:00:00Z",
+      "rawSizeBytes": 200,
+      "incomingMessage": "oldest-compacted",
+      "compactedAt": "2026-06-01T10:04:00Z",
+      "rawPointer": "/fixture/raw-s14-a.json"
+    },
+    {
+      "specDir": "specs/900-convergence-fixture",
+      "agent": "bubbles.workflow",
+      "receivedAt": "2026-06-01T10:01:00Z",
+      "rawSizeBytes": 200,
+      "incomingMessage": "latest-2-raw",
+      "compactedAt": null,
+      "rawPointer": null
+    },
+    {
+      "specDir": "specs/900-convergence-fixture",
+      "agent": "bubbles.workflow",
+      "receivedAt": "2026-06-01T10:02:00Z",
+      "rawSizeBytes": 200,
+      "incomingMessage": "latest-1-raw",
+      "compactedAt": null,
+      "rawPointer": null
+    }
+  ]
+}'
+
+run_guard "$S14_ROOT" "specs/900-convergence-fixture"
+
+assert_exit 0 "S14 exit code (stamp and record both present)"
+assert_stdout_contains "PASS Gate G083" "S14 PASS marker on stdout"
+
+# =============================================================================
 # Final verdict
 # =============================================================================
 

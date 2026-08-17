@@ -11,7 +11,7 @@ Goal resolves the outcome and then executes any required workflows and specialis
 | Input Type | What Happens | Example |
 |-----------|-------------|---------|
 | **One outcome** | Goal resolves and composes whatever modes/agents are necessary | `/bubbles.goal improve the booking feature` |
-| **"Continue"** | Goal resumes active outcome state and preserves its mode transitions | `/bubbles.goal continue` |
+| **"Continue"** | Goal resumes active non-terminal outcome state. If none remains, it returns a recap without starting new work. | `/bubbles.goal continue` |
 | **One known mode** | Workflow executes exactly that root mode | `/bubbles.workflow specs/042 mode: full-delivery` |
 | **Several timed goals** | Sprint prioritizes the goal queue under one clock | `/bubbles.sprint minutes: 120` |
 | **Framework ops or routing advice** | Super resolves or executes the framework action | `/bubbles.super doctor` |
@@ -53,7 +53,7 @@ Goal resolves the outcome and then executes any required workflows and specialis
 | `/bubbles.goal  <outcome>` | Any required modes and specialists composed toward one result |
 | `/bubbles.workflow  mode: brainstorm for <idea>` | One exploration mode without code |
 | `/bubbles.bug  mode: fix <bug>` | Domain-owned reproduce/fix/verify workflow |
-| `/bubbles.goal  continue` | Resume the active outcome and its current workflow state |
+| `/bubbles.goal  continue` | Resume an active outcome, or return its completion recap when already terminal |
 | `/bubbles.workflow  <feature> mode: full-delivery` | Keep looping through implementation, tests, quality, validation, and audit until truly green |
 
 The planning improvements are mostly artifact-driven:

@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Capability: done-with-concerns-outcome-state, observability-posture-and-slo-gates,
+# Capability: validate-owned-certification, workflow-orchestration,
+# Capability: workflow-runner-authorization
 # =============================================================================
 # state-transition-guard.sh
 # =============================================================================
@@ -1529,103 +1532,47 @@ PY
 
 if [[ -n "$state_workflow_mode" ]]; then
   required_specialists=()
-  case "$state_workflow_mode" in
-    value-first-e2e-batch)
-      required_specialists=("implement" "test" "regression" "simplify" "stabilize" "security" "docs" "validate" "audit" "chaos")
-      ;;
-    full-delivery)
-      required_specialists=("implement" "test" "regression" "simplify" "gaps" "harden" "stabilize" "security" "validate" "audit" "chaos" "docs")
-      ;;
-    feature-bootstrap)
-      required_specialists=("implement" "test" "regression" "simplify" "stabilize" "security" "docs" "validate" "audit")
-      ;;
-    bugfix-fastlane)
-      required_specialists=("implement" "test" "regression" "simplify" "stabilize" "security" "validate" "audit")
-      ;;
-    rapid-tool-delivery)
-      # IMP-101 SCOPE-5 (FLOW-101): this delivery mode was absent from the table,
-      # so Check 6 imposed no specialist-completion requirement on it. Its
-      # required specialists are its own declared phaseOrder in modes.yaml
-      # ([select, implement, test, validate, docs, finalize]) minus the select/
-      # finalize bookends. The read-only modes readiness-review and
-      # journey-refinement are intentionally NOT listed: they set
-      # allowImplementationForFindings:false and run review/journey phases, so a
-      # delivery-specialist requirement would be incorrect for them.
-      required_specialists=("implement" "test" "validate" "docs")
-      ;;
-    chaos-hardening)
-      required_specialists=("chaos" "implement" "test" "regression" "simplify" "stabilize" "security" "validate" "audit" "docs")
-      ;;
-    harden-to-doc)
-      required_specialists=("harden" "implement" "test" "regression" "simplify" "stabilize" "security" "chaos" "validate" "audit" "docs")
-      ;;
-    gaps-to-doc)
-      required_specialists=("gaps" "implement" "test" "regression" "simplify" "stabilize" "security" "chaos" "validate" "audit" "docs")
-      ;;
-    harden-gaps-to-doc)
-      required_specialists=("harden" "gaps" "implement" "test" "regression" "simplify" "stabilize" "security" "chaos" "validate" "audit" "docs")
-      ;;
-    reconcile-to-doc)
-      required_specialists=("implement" "test" "regression" "simplify" "stabilize" "security" "validate" "audit" "chaos" "docs")
-      ;;
-    test-to-doc)
-      required_specialists=("test" "validate" "audit" "docs")
-      ;;
-    chaos-to-doc)
-      required_specialists=("chaos" "validate" "audit" "docs")
-      ;;
-    batch-implement)
-      required_specialists=("implement" "test" "regression" "simplify" "stabilize" "security" "docs" "validate" "audit" "chaos")
-      ;;
-    batch-harden)
-      required_specialists=("harden" "implement" "test" "regression" "simplify" "stabilize" "security" "validate" "audit" "chaos" "docs")
-      ;;
-    batch-gaps)
-      required_specialists=("gaps" "implement" "test" "regression" "simplify" "stabilize" "security" "validate" "audit" "chaos" "docs")
-      ;;
-    batch-harden-gaps)
-      required_specialists=("harden" "gaps" "implement" "test" "regression" "simplify" "stabilize" "security" "validate" "audit" "chaos" "docs")
-      ;;
-    batch-improve-existing)
-      required_specialists=("harden" "gaps" "implement" "test" "regression" "simplify" "stabilize" "security" "validate" "audit" "chaos" "docs")
-      ;;
-    batch-reconcile-to-doc)
-      required_specialists=("implement" "test" "validate" "audit" "chaos" "docs")
-      ;;
-    product-to-delivery)
-      required_specialists=("implement" "test" "regression" "simplify" "stabilize" "security" "docs" "validate" "audit" "chaos")
-      ;;
-    improve-existing)
-      required_specialists=("harden" "gaps" "implement" "test" "regression" "simplify" "stabilize" "security" "validate" "audit" "chaos" "docs")
-      ;;
-    redesign-existing)
-      required_specialists=("implement" "test" "regression" "simplify" "stabilize" "security" "docs" "validate" "audit" "chaos")
-      ;;
-    stabilize-to-doc)
-      required_specialists=("stabilize" "implement" "test" "regression" "simplify" "security" "chaos" "validate" "audit" "docs")
-      ;;
-    security-to-doc)
-      required_specialists=("security" "implement" "test" "regression" "simplify" "stabilize" "devops" "chaos" "validate" "audit" "docs")
-      ;;
-    regression-to-doc)
-      required_specialists=("regression" "implement" "test" "simplify" "stabilize" "devops" "security" "chaos" "validate" "audit" "docs")
-      ;;
-    simplify-to-doc)
-      required_specialists=("simplify" "test" "validate" "audit" "docs")
-      ;;
-    iterate)
-      required_specialists=("validate" "audit")
-      ;;
-    stochastic-quality-sweep)
-      required_specialists=("validate" "audit")
-      ;;
-    product-discovery)
-      required_specialists=("harden" "docs" "validate" "audit")
-      ;;
-    validate-to-doc)
-      required_specialists=("validate" "audit" "docs")
-      ;;
-  esac
+  # Read the canonical mode -> required-specialist mapping. This table was
+  # duplicated here as a case statement that required-specialists.yaml mirrored,
+  # with a shadow comparator holding the two in step; the registry is now the
+  # only copy. yq is the normal path, and the awk fallback parses the flow-style
+  # lists so Check 6 still resolves under a minimal PATH. An unresolved mode
+  # leaves the array empty and falls through to the derivation below, which is
+  # the same fail-closed path an unlisted mode always took.
+  _rs_registry="$SCRIPT_DIR/../registry/required-specialists.yaml"
+  if [[ -f "$_rs_registry" ]]; then
+    if command -v yq >/dev/null 2>&1; then
+      # strenv, not --arg: the pinned yq is Go yq, which has no --arg flag and
+      # would return empty for every mode. It also keeps the mode out of the
+      # expression text.
+      _rs_list="$(_rs_mode="$state_workflow_mode" yq -r '.modes[strenv(_rs_mode)] // [] | join(" ")' "$_rs_registry" 2>/dev/null || true)"
+    else
+      _rs_list="$(awk -v want="$state_workflow_mode" '
+        /^modes:[[:space:]]*$/ { in_modes = 1; next }
+        /^[a-zA-Z]/ { in_modes = 0 }
+        in_modes == 1 && $0 ~ /^[[:space:]]+[a-z0-9][a-z0-9-]*:[[:space:]]*\[/ {
+          key = $0
+          sub(/^[[:space:]]*/, "", key)
+          sub(/:.*$/, "", key)
+          if (key != want) next
+          val = $0
+          sub(/^[^[]*\[/, "", val)
+          sub(/\].*$/, "", val)
+          gsub(/,/, " ", val)
+          gsub(/"/, "", val)
+          gsub(/[[:space:]]+/, " ", val)
+          sub(/^ /, "", val)
+          sub(/ $/, "", val)
+          print val
+        }
+      ' "$_rs_registry" 2>/dev/null || true)"
+    fi
+    for _rs_phase in $_rs_list; do
+      required_specialists+=("$_rs_phase")
+    done
+  else
+    warn "Check 6: required-specialists registry missing at $_rs_registry — falling back to phaseOrder derivation"
+  fi
 
   # IMP-105-SCOPE-3-FALLBACK-BEGIN
   # IMP-105 SCOPE-3 — close the Check 6 fail-open hole. A mode ABSENT from the

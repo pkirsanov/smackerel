@@ -99,8 +99,8 @@ Durable source-repo framework behavior and maintainer contracts.
 
 - [DEPRECATIONS.md](DEPRECATIONS.md)
 - [Framework_Convergence_Health.md](Framework_Convergence_Health.md)
-- [Framework_Improvements_Delivered.md](Framework_Improvements_Delivered.md)
-- [Spec_Implementation_Alignment.md](Spec_Implementation_Alignment.md)
+- [Framework_Improvements_Delivered.md](Framework_Improvements_Delivered.md) <!-- ref-ok: source-only maintainer history, present in the source repo and excluded from the downstream payload -->
+- [Spec_Implementation_Alignment.md](Spec_Implementation_Alignment.md) <!-- ref-ok: source-only maintainer history, present in the source repo and excluded from the downstream payload -->
 - [decisions/ADR-001-v6.1-review-followups.md](decisions/ADR-001-v6.1-review-followups.md)
 
 ---
@@ -143,6 +143,12 @@ Discoverable procedural workflows packaged as model skills.
 - [bubbles-spec-template-bdd](../skills/bubbles-spec-template-bdd/SKILL.md)
 - [bubbles-test-environment-isolation](../skills/bubbles-test-environment-isolation/SKILL.md)
 - [bubbles-test-integrity](../skills/bubbles-test-integrity/SKILL.md)
+- [bubbles-code-index-adapter](../skills/bubbles-code-index-adapter/SKILL.md)
+- [bubbles-cross-platform-shell](../skills/bubbles-cross-platform-shell/SKILL.md)
+- [bubbles-datastore-isolation](../skills/bubbles-datastore-isolation/SKILL.md)
+- [bubbles-isolated-ml-sidecar](../skills/bubbles-isolated-ml-sidecar/SKILL.md)
+- [bubbles-technical-prose](../skills/bubbles-technical-prose/SKILL.md)
+- [bubbles-vscode-agent-constraints](../skills/bubbles-vscode-agent-constraints/SKILL.md)
 
 ---
 
@@ -236,3 +242,39 @@ end-to-end flows.
 - Validation IDs: `AN5`, `DE4`, `UX9`, `P4` in [validation-profiles.md](../agents/bubbles_shared/validation-profiles.md)
 - Gate: `G094 capability_foundation_gate` in [workflows.yaml](../bubbles/workflows.yaml)
 - Guard: [capability-foundation-guard.sh](../bubbles/scripts/capability-foundation-guard.sh)
+
+---
+
+## Generated Surfaces (`docs/generated/`)
+
+**Audience:** maintainer
+
+Regenerated from source registries, never hand-edited. Listed here so each one
+has a named reader rather than existing only as a generator output.
+
+- [competitive-capabilities.md](generated/competitive-capabilities.md) — capability ledger projected against adjacent tools
+- [framework-stats.md](generated/framework-stats.md) — agent, gate, mode, and phase counts at a glance
+- [framework-stats.json](generated/framework-stats.json) — the machine-readable form the release manifest and site consume
+- [gate-coverage-map.md](generated/gate-coverage-map.md) — gate to enforcer mapping with corroborating references
+- [interop-migration-matrix.md](generated/interop-migration-matrix.md) — interop apply and import support per target
+- [issue-status.md](generated/issue-status.md) — issue-linked capabilities; the ledger stays authoritative
+
+---
+
+## Historical Record (frozen)
+
+**Audience:** maintainer
+
+Kept in source for audit value. These describe how the framework USED to work and
+are not current guidance. Do not treat them as authority.
+
+Most of this section is source-only: the records live in the framework source
+repository and are excluded from the downstream payload, because a consuming
+repository never reads how this repository got here. The v4.1.0 record is the
+exception and still ships, because three installed skills link it.
+
+- [v4.1.0-delivered-pending-activation.md](v4.1.0-delivered-pending-activation.md) — the delivered-pending-activation status ceiling as shipped in v4.1.0
+- [v5.2-design.md](v5.2-design.md) — v5.2 design record <!-- ref-ok: source-only maintainer history, excluded from the downstream payload -->
+- [v6-mcp-design.md](v6-mcp-design.md) — v6 MCP surface design record <!-- ref-ok: source-only maintainer history, excluded from the downstream payload -->
+- [Product-Review-2026-08-02.md](Product-Review-2026-08-02.md) — dated product review, superseded by later work <!-- ref-ok: source-only maintainer history, excluded from the downstream payload -->
+- [ADR-001-v6.1-review-followups.md](decisions/ADR-001-v6.1-review-followups.md) — v6.1 review follow-up decisions

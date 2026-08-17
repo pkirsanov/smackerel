@@ -1,6 +1,6 @@
 {
   "name": "list_open_findings",
-  "description": "Run the finding-closure selftest, which surfaces the canonical contract for finding-set closure (no cherry-picking, no easy-subset remediation) and validates that the workflow agents enforce one-to-one finding accounting. Wraps finding-closure-selftest.sh. Use to inspect the active finding-closure policy + verify enforcement.",
+  "description": "Run the finding-closure POLICY SELFTEST. This does NOT project the open findings of any spec -- despite the name it takes no spec and returns no finding list. It executes finding-closure-selftest.sh, which surfaces the canonical contract for finding-set closure (no cherry-picking, no easy-subset remediation) and validates that the workflow agents enforce one-to-one finding accounting. Use to inspect and verify the active finding-closure policy.",
   "inputSchema": {
     "type": "object",
     "properties": {},

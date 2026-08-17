@@ -312,15 +312,25 @@ fi
 
 # The shipped register in this very repository must not be ignored either —
 # a template that installs into an ignored path would defeat the whole scope.
-REPO_ROOT_SELF="$(cd "$SCRIPT_DIR/../.." && pwd)"
-if [[ -f "$REPO_ROOT_SELF/.specify/memory/open-work.md" ]]; then
-  if git -C "$REPO_ROOT_SELF" check-ignore -q "$REPO_ROOT_SELF/.specify/memory/open-work.md" 2>/dev/null; then
-    fail "e3 the framework's own .specify/memory/open-work.md must not be git-ignored"
-  else
-    pass "e3 the framework's own .specify/memory/open-work.md is not git-ignored"
-  fi
+#
+# Two corrections live here. The repository root was resolved as
+# "$SCRIPT_DIR/../..", which is the framework root: correct in the source tree,
+# but `.github/` in an installed downstream, where `.specify/` sits at the real
+# repository root instead. And the absence of a register was treated as a
+# defect, which is only true of the framework source tree — what ships is
+# `templates/open-work.md.tmpl`, so a repository that has not adopted a register
+# yet correctly has no file, and this selftest failed every downstream install
+# for it.
+REPO_ROOT_SELF="$(cd "$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel 2>/dev/null || printf '%s' "$SCRIPT_DIR/../..")" && pwd -P)"
+REGISTER_SELF="$REPO_ROOT_SELF/.specify/memory/open-work.md"
+if git -C "$REPO_ROOT_SELF" check-ignore -q "$REGISTER_SELF" 2>/dev/null; then
+  fail "e3 the open-work register path must not be git-ignored"
+elif [[ -f "$REGISTER_SELF" ]]; then
+  pass "e3 the register in this repository is not git-ignored"
+elif [[ -f "$REPO_ROOT_SELF/install.sh" && -f "$REPO_ROOT_SELF/VERSION" ]]; then
+  fail "e3 the framework source tree ships .specify/memory/open-work.md"
 else
-  fail "e3 the framework ships .specify/memory/open-work.md"
+  pass "e3 the register path is not git-ignored (none adopted in this repository)"
 fi
 
 # --- (f) the report is read-only ----------------------------------------------

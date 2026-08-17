@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Capability: cross-repo-scenario-orchestration
 # scenario-compile-lint.sh — validates a compiled Goal Scenario DAG against the
 # contract in agents/bubbles_shared/scenario-compile.md.
 #

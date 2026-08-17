@@ -19,6 +19,10 @@ description: Retrospective analyst — velocity metrics, gate health trends, dee
 
 **Workflow Runner Contract:** When invoked as the top-level agent, `bubbles.retro` may execute only its granted retro and framework-health modes, invoking each phase owner directly with `executionModel: direct-authorized-runner`. When invoked for the `retro` phase by another runner, perform only retrospective analysis and return a RESULT-ENVELOPE; never launch a nested workflow.
 
+## Terminal Recap Boundary
+
+When this agent owns the top-level runtime, invoke `runSubagent(bubbles.recap)` before the final response. When invoked for the `retro` phase, return upward without recap.
+
 ## Repository Binding (NON-NEGOTIABLE)
 
 Before any Git, spec, metrics, state, retro, or dispatch read, follow [repository-binding-preflight.md](bubbles_shared/repository-binding-preflight.md). A top-level invocation executes `bubbles/scripts/repository-binding.sh preflight` and requires the current actionable packet plus `PREFLIGHT_COMMITTED`. A phase invocation executes `bubbles/scripts/repository-binding.sh validate-packet` against the inherited packet and requires local actionable `repositoryResolution`; successful validation is its `PREFLIGHT_COMMITTED` anchor. Never infer or substitute a root from CWD, prompts, editor state, or tools.

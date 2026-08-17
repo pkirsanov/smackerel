@@ -1,18 +1,33 @@
 {
   "name": "resolve_mode",
-  "description": "Resolve a Bubbles workflow mode (v5 name OR v6 primitive+tag form once B4 lands) to its fully-expanded YAML definition with template inheritance applied. Wraps mode-resolver.sh against bubbles/workflows.yaml. Use to discover a mode's phases, gates, status ceiling, and termination criteria before dispatch.",
+  "description": "Resolve a Bubbles workflow mode to its fully-expanded YAML definition with template inheritance applied. Wraps mode-resolver.sh against bubbles/workflows.yaml. Supply EITHER 'mode' (a registered key, or '--list-modes' to enumerate) OR the v7 form as 'primitive' plus 'tags'. The resolver requires the v7 form as SEPARATE argv elements, so passing 'review action:readiness-synthesis target:system' as one string is rejected. Removed v5 names need grandfather=true. Use to discover a mode's phases, gates, status ceiling, and termination criteria before dispatch.",
   "inputSchema": {
     "type": "object",
     "properties": {
       "mode": {
         "type": "string",
-        "description": "Mode name (e.g. 'bugfix-fastlane', 'spec-scope-hardening'). Use '--list-modes' as the mode value to enumerate every defined mode."
+        "description": "Registered mode key (e.g. 'bugfix-fastlane', 'spec-scope-hardening'), or '--list-modes' to enumerate every defined mode. Mutually exclusive with primitive/tags. A removed v5 name is REJECTED here unless grandfather=true."
+      },
+      "primitive": {
+        "type": "string",
+        "description": "v7 primitive, e.g. 'review'. Use together with tags. Mutually exclusive with mode."
+      },
+      "tags": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": "v7 tags, one per entry, e.g. ['action:readiness-synthesis', 'target:system'].",
+        "default": []
+      },
+      "grandfather": {
+        "type": "boolean",
+        "description": "Resolve a PERSISTED v5 mode key, such as one already stored in a state.json. New operator input must use primitive+tags; without this the resolver rejects removed v5 names and tells you the v6 form. Emits --grandfather, which also prints a deprecation line on stderr.",
+        "default": false
       }
     },
-    "required": ["mode"]
+    "required": []
   },
   "script": "mode-resolver.sh",
-  "argsTemplate": ["${mode}"],
+  "argsTemplate": ["${mode?}", "${primitive?}", "${tags*}", "--grandfather${grandfather!}"],
   "annotations": {
     "readOnlyHint": true,
     "destructiveHint": false,

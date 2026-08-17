@@ -68,6 +68,14 @@ Before parsing goals, estimating or ordering the queue, reading repository state
 ## PHASE ROUTER (EXECUTE TOP-TO-BOTTOM)
 
 ```yaml
+phase_0_continuation_intent:
+  do: run bubbles/scripts/continuation-intent-resolve.sh against the complete raw request before parsing or queuing goals
+  call_runSubagent: no
+  route:
+    CONTINUE: recover the existing non-terminal sprint and its unfinished goals; if none exists, goto phase_4_wrap_up
+    NEW_WORK: continue to phase_1_parse_and_estimate
+    OTHER: continue to phase_1_parse_and_estimate
+
 phase_1_parse_and_estimate:
   do: parse goals, classify types, estimate effort, sort by priority, build queue
   call_runSubagent: only if goal is vague → runSubagent(bubbles.super)
@@ -98,7 +106,8 @@ phase_3_inter_goal:
 
 phase_4_wrap_up:
   do: generate sprint report, record state
-  call_runSubagent: optional → runSubagent(bubbles.docs), runSubagent(bubbles.recap)
+  call_runSubagent: required → runSubagent(bubbles.recap); runSubagent(bubbles.docs) remains optional
+  rule: pass any unfinished active goal as continuation; otherwise recap may derive one read-only next-priority candidate and must not execute it
 ```
 
 ## Agent Identity
@@ -112,6 +121,15 @@ phase_4_wrap_up:
 - If a queued item needs another Bubbles mode, resolve and execute that granted mode in this runtime, invoking only its specialist phase owners through `runSubagent`.
 - Never invoke `bubbles.goal`, `bubbles.workflow`, or another workflow-running orchestrator as a subagent. Record `executionModel: direct-authorized-runner` for each goal and mode.
 - If this sprint runtime lacks `runSubagent`, return a `blocked` RESULT-ENVELOPE naming the missing `agent` tool and the exact phase owner invocation that would have run.
+
+## Terminal Recap Boundary
+
+Invoke `runSubagent(bubbles.recap)` at every sprint terminal stop.
+Do not re-execute completed goals when the user says `continue`, `resume`, `next`, or `keep going`.
+Targeted forms such as `continue the booking sprint` constrain sprint recovery and never create a new queue.
+If no in-progress goal remains, let recap derive at most one candidate from read-only status and open-work surfaces, then stop.
+Starting that candidate requires a new explicit user request.
+Keep the sprint `RESULT-ENVELOPE` as the final block.
 
 ## Experience Recall (Advisory)
 
@@ -144,6 +162,13 @@ After any non-terminal phase, this orchestrator MUST automatically continue to t
 Three additive `executionOptions` knobs are resolved at sprint start; all default to today's fully-autonomous behavior:
 
 - **`autonomy` (default `full`)** — a convenience alias that sets `grillMode`/`socratic` together: `full` = `grillMode off` + `socratic false` (100% autonomous, today's default); `guarded` = `grillMode required-on-ambiguity` + a conditional `clarify` consistency gate; `interactive` = `grillMode on-demand` + `socratic true`. Explicit `grillMode`/`socratic` flags ALWAYS override the alias.
+- **`unattended`** — opt-in posture ABOVE `full`, never the default. REQUIRES a non-null `sessionBudget`; `autonomy-resolve.sh` refuses an unbounded one with `E039-UNATTENDED-UNBOUNDED`, because a run that will not stop on its own forfeits the right to be unbounded. When the resolved posture is `unattended` this agent performs four deltas:
+  1. Interactive questions are FORBIDDEN. Do not call the ask-user tool, and do not open a Socratic loop even when `socratic: true` is also present — the posture wins, and the override is logged.
+  2. Taste-decision overflow auto-resolves and is recorded, instead of routing to `bubbles.clarify` at the `maxPerPhase` threshold.
+  3. `autoCommit` resolves to `scope`. Commits land only after a scope reaches validated Done.
+  4. A `blocked` outcome whose cause is agent-solvable requires a recorded remediation attempt FIRST. An operator-only blocker (an absent credential, absent external access) remains a truthful terminal state and MUST NOT be suppressed.
+
+  The posture governs INTERACTION only. The Autonomy Floor in [critical-requirements.md](bubbles_shared/critical-requirements.md) is never waived, and a security-affecting decision is never auto-resolved — under `unattended` it produces a truthful `blocked` naming the decision rather than a guess.
 - **`sessionBudget` (all fields default `null` = unbounded)** — aggregate caps across the ENTIRE sprint session (spanning every dispatched goal): `maxTotalConvergenceIterations`, `maxWallClockMinutes`, `maxToolCalls`. Advisory: this sprint controller self-enforces them and, when a cap is exceeded, STOPS with a `blocked` RESULT-ENVELOPE to the sprint ledger. A budget stop is a TERMINAL condition of the same class as `max iterations reached` — the sprint ends; it never pauses for a fresh prompt. (This makes the previously advisory sprint time budget mechanically self-enforced under `maxWallClockMinutes`.)
 - **`dryRun` (default `false`)** — `dryRun: plan` resolves the full sprint plan (queued goals/specs/scopes/intended changes) and REPORTS it WITHOUT mutating code or state, then terminates the sprint. Extends `parallelScopes=dag-dry` to the whole multi-goal loop.
 

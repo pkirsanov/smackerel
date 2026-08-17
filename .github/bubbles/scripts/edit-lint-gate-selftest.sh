@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Capability: linter-on-edit-gate
 set -euo pipefail
 
 # edit-lint-gate-selftest.sh — verify edit-lint-gate.sh behavior.

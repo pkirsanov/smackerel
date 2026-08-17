@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Capability: done-with-concerns-outcome-state
 set -euo pipefail
 
 # strict-terminal-status-guard.sh

@@ -6,7 +6,7 @@
 # marker checks would catch each bug class declared in
 # bubbles/installer/installer.yaml.
 #
-# All fixtures live under $HOME/.cache/bubbles-installer-selftest/
+# All fixtures live under a per-run mktemp root (see FIXTURE_ROOT below).
 # (snap-confined yq compatibility — /tmp is off-limits).
 
 set -euo pipefail

@@ -7,9 +7,8 @@ set -euo pipefail
 #
 # Scans the 4 orchestrator prompt files for user-reprompt language that
 # would make continuation depend on a fresh user prompt. Orchestrators
-# must default to persistence: after non-terminal phases, continue to the
-# next phase until convergence achieved, max iterations reached, the user
-# requests stop, or fundamental impossibility is encountered.
+# must auto-continue non-terminal phases. At a terminal stop, they must
+# invoke recap and return control instead of silently selecting new work.
 #
 # Usage:
 #   bash bubbles/scripts/orchestrator-persistence-lint.sh [--quiet] [--root <repo>]
@@ -22,12 +21,51 @@ set -euo pipefail
 QUIET="false"
 ROOT_FLAG=""
 
-TARGET_FILES=(
+PERSISTENCE_TARGET_FILES=(
   "agents/bubbles.goal.agent.md"
   "agents/bubbles.workflow.agent.md"
   "agents/bubbles.iterate.agent.md"
   "agents/bubbles.sprint.agent.md"
 )
+
+REQUIRED_RECAP_TARGET_FILES=(
+  "agents/bubbles.workflow.agent.md"
+  "agents/bubbles.goal.agent.md"
+  "agents/bubbles.sprint.agent.md"
+  "agents/bubbles.iterate.agent.md"
+  "agents/bubbles.bug.agent.md"
+  "agents/bubbles.releases.agent.md"
+  "agents/bubbles.train.agent.md"
+  "agents/bubbles.upkeep.agent.md"
+  "agents/bubbles.propagate.agent.md"
+  "agents/bubbles.stabilize.agent.md"
+  "agents/bubbles.retro.agent.md"
+  "agents/bubbles.journey.agent.md"
+  "agents/bubbles.super.agent.md"
+  "agents/bubbles.code-review.agent.md"
+  "agents/bubbles.system-review.agent.md"
+)
+
+RECAP_TARGET_FILES=()
+
+array_contains() {
+  local needle="$1"
+  shift
+  local value
+  for value in "$@"; do
+    [[ "$value" == "$needle" ]] && return 0
+  done
+  return 1
+}
+
+append_recap_target() {
+  local candidate="$1"
+  local existing
+  for existing in "${RECAP_TARGET_FILES[@]}"; do
+    [[ "$existing" == "$candidate" ]] && return 0
+  done
+  RECAP_TARGET_FILES+=("$candidate")
+}
 
 resolve_repo_file() {
   local rel="$1"
@@ -51,14 +89,20 @@ FORBIDDEN_PHRASES=(
   "ask the user before continuing"
 )
 
-REQUIRED_MARKERS=(
+PERSISTENCE_REQUIRED_MARKERS=(
   "g086"
   "automatically continue"
   "non-terminal"
+  "bubbles/scripts/continuation-intent-resolve.sh"
   "convergence achieved"
   "max iterations"
   "user requests stop"
   "fundamental impossibility"
+)
+
+RECAP_REQUIRED_MARKERS=(
+  "terminal recap boundary"
+  "runSubagent(bubbles.recap)"
 )
 
 usage() {
@@ -154,8 +198,74 @@ if [[ ! -d "$REPO_ROOT" ]]; then
   exit 2
 fi
 
+CLASSIFIER_FILE="$(resolve_repo_file "bubbles/scripts/continuation-intent-resolve.sh" || true)"
+SHARED_CONTRACT_FILE="$(resolve_repo_file "agents/bubbles_shared/agent-common.md" || true)"
+RECAP_AGENT_FILE="$(resolve_repo_file "agents/bubbles.recap.agent.md" || true)"
+if [[ -z "$CLASSIFIER_FILE" || ! -x "$CLASSIFIER_FILE" ]]; then
+  echo "orchestrator-persistence-lint: missing/non-executable continuation classifier" >&2
+  exit 2
+fi
+if [[ -z "$SHARED_CONTRACT_FILE" || -z "$RECAP_AGENT_FILE" ]]; then
+  echo "orchestrator-persistence-lint: missing shared completion contract or recap agent" >&2
+  exit 2
+fi
+
+CAPABILITIES_FILE="$(resolve_repo_file "bubbles/agent-capabilities.yaml" || true)"
+if [[ -z "$CAPABILITIES_FILE" ]]; then
+  echo "orchestrator-persistence-lint: missing workflow grant registry: bubbles/agent-capabilities.yaml" >&2
+  exit 2
+fi
+
+while IFS= read -r runner_file; do
+  [[ -n "$runner_file" ]] || continue
+  append_recap_target "$runner_file"
+done < <(awk '
+  /^workflowModeGrants:[[:space:]]*$/ { in_grants = 1; next }
+  in_grants && /^  agents:[[:space:]]*$/ { in_agents = 1; next }
+  in_agents && /^    bubbles\.[a-z0-9-]+:[[:space:]]*$/ {
+    name = $1
+    sub(/:$/, "", name)
+    print "agents/" name ".agent.md"
+    next
+  }
+  in_agents && /^[^[:space:]]/ { exit }
+' "$CAPABILITIES_FILE")
+
+while IFS= read -r agent_file; do
+  [[ -n "$agent_file" ]] || continue
+  append_recap_target "$agent_file"
+done < <(awk '
+  /^terminalRecapPolicy:[[:space:]]*$/ { in_policy = 1; next }
+  in_policy && /^  additionalAgents:[[:space:]]*$/ { in_agents = 1; next }
+  in_agents && /^  - bubbles\.[a-z0-9-]+[[:space:]]*$/ {
+    name = $2
+    print "agents/" name ".agent.md"
+    next
+  }
+  in_policy && /^[^[:space:]]/ { exit }
+' "$CAPABILITIES_FILE")
+
+if [[ "${#RECAP_TARGET_FILES[@]}" -eq 0 ]]; then
+  echo "orchestrator-persistence-lint: no terminal recap agents resolved from workflowModeGrants or terminalRecapPolicy" >&2
+  exit 2
+fi
+
+finding_count=0
+for required_recap_file in "${REQUIRED_RECAP_TARGET_FILES[@]}"; do
+  if ! array_contains "$required_recap_file" "${RECAP_TARGET_FILES[@]}"; then
+    echo "G086 orchestrator_persistence_lint_gate violation: required recap agent absent from registry policy: $required_recap_file" >&2
+    finding_count=$((finding_count + 1))
+  fi
+done
+for configured_recap_file in "${RECAP_TARGET_FILES[@]}"; do
+  if ! array_contains "$configured_recap_file" "${REQUIRED_RECAP_TARGET_FILES[@]}"; then
+    echo "G086 orchestrator_persistence_lint_gate violation: unreviewed recap agent added to registry policy: $configured_recap_file" >&2
+    finding_count=$((finding_count + 1))
+  fi
+done
+
 missing_count=0
-for rel in "${TARGET_FILES[@]}"; do
+for rel in "${RECAP_TARGET_FILES[@]}"; do
   path="$(resolve_repo_file "$rel" || true)"
   if [[ -z "$path" ]]; then
     echo "orchestrator-persistence-lint: missing target file: $rel" >&2
@@ -171,7 +281,27 @@ if [[ "$missing_count" -gt 0 ]]; then
   exit 2
 fi
 
-finding_count=0
+if ! grep -qF 'directInvocationOnly: true' "$CAPABILITIES_FILE"; then
+  echo "G086 orchestrator_persistence_lint_gate violation: terminalRecapPolicy.directInvocationOnly must be true" >&2
+  finding_count=$((finding_count + 1))
+fi
+if ! grep -qF 'phaseOwnersReturnUpward: true' "$CAPABILITIES_FILE"; then
+  echo "G086 orchestrator_persistence_lint_gate violation: terminalRecapPolicy.phaseOwnersReturnUpward must be true" >&2
+  finding_count=$((finding_count + 1))
+fi
+if ! grep -qF 'A dispatched phase-owner subagent MUST NOT invoke recap' "$SHARED_CONTRACT_FILE"; then
+  echo "G086 orchestrator_persistence_lint_gate violation: shared phase-owner upward-return contract missing" >&2
+  finding_count=$((finding_count + 1))
+fi
+if grep -qF 'runSubagent(bubbles.recap)' "$RECAP_AGENT_FILE"; then
+  echo "G086 orchestrator_persistence_lint_gate violation: bubbles.recap must not recursively dispatch itself" >&2
+  finding_count=$((finding_count + 1))
+fi
+# shellcheck disable=SC2016 # Literal Markdown backticks, not shell expansion.
+if ! grep -qF '`bubbles.recap` never invokes itself' "$RECAP_AGENT_FILE"; then
+  echo "G086 orchestrator_persistence_lint_gate violation: recap non-recursion contract missing" >&2
+  finding_count=$((finding_count + 1))
+fi
 
 scan_forbidden_phrases() {
   local rel="$1"
@@ -228,6 +358,11 @@ scan_forbidden_phrases() {
       fi
     done
 
+    if [[ "$allowed_context" != "true" && "$lower_line" != *"do not"* && "$lower_line" != *"refuse"* && "$lower_line" == *"continue"* && ( "$lower_line" == *"type: implement"* || "$lower_line" == *"create new scope"* ) ]]; then
+      echo "G086 orchestrator_persistence_lint_gate violation: $rel:$line_no maps continuation to new implementation work" >&2
+      finding_count=$((finding_count + 1))
+    fi
+
     if [[ "$same_line_marked" == "true" && "$in_fence" == "false" ]]; then
       in_marked_block="true"
     fi
@@ -237,12 +372,37 @@ scan_forbidden_phrases() {
   done < "$path"
 }
 
+first_line_with() {
+  local path="$1"
+  local marker="$2"
+  awk -v marker="$marker" 'index($0, marker) { print NR; exit }' "$path"
+}
+
+first_exact_line() {
+  local path="$1"
+  local marker="$2"
+  awk -v marker="$marker" '$0 == marker { print NR; exit }' "$path"
+}
+
+check_classifier_order() {
+  local rel="$1"
+  local path="$2"
+  local parser_marker="$3"
+  local classifier_line parser_line
+  classifier_line="$(first_line_with "$path" 'bubbles/scripts/continuation-intent-resolve.sh')"
+  parser_line="$(first_exact_line "$path" "$parser_marker")"
+  if [[ -z "$classifier_line" || -z "$parser_line" || "$classifier_line" -ge "$parser_line" ]]; then
+    echo "G086 orchestrator_persistence_lint_gate violation: $rel must classify continuation before '$parser_marker'" >&2
+    finding_count=$((finding_count + 1))
+  fi
+}
+
 check_required_language() {
   local rel="$1"
   local path="$2"
   local marker
 
-  for marker in "${REQUIRED_MARKERS[@]}"; do
+  for marker in "${PERSISTENCE_REQUIRED_MARKERS[@]}"; do
     if ! grep -qiF "$marker" "$path"; then
       echo "G086 orchestrator_persistence_lint_gate violation: $rel missing required persistence-default marker '$marker'" >&2
       finding_count=$((finding_count + 1))
@@ -250,10 +410,34 @@ check_required_language() {
   done
 }
 
-for rel in "${TARGET_FILES[@]}"; do
+check_terminal_recap_language() {
+  local rel="$1"
+  local path="$2"
+  local marker
+
+  for marker in "${RECAP_REQUIRED_MARKERS[@]}"; do
+    if ! grep -qiF "$marker" "$path"; then
+      echo "G086 orchestrator_persistence_lint_gate violation: $rel missing required terminal recap marker '$marker'" >&2
+      finding_count=$((finding_count + 1))
+    fi
+  done
+}
+
+for rel in "${PERSISTENCE_TARGET_FILES[@]}"; do
   path="$(resolve_repo_file "$rel" || true)"
   scan_forbidden_phrases "$rel" "$path"
   check_required_language "$rel" "$path"
+  case "$rel" in
+    agents/bubbles.goal.agent.md) check_classifier_order "$rel" "$path" 'phase_1_understand:' ;;
+    agents/bubbles.workflow.agent.md) check_classifier_order "$rel" "$path" '### Phase 0: Resolve Inputs' ;;
+    agents/bubbles.iterate.agent.md) check_classifier_order "$rel" "$path" '## Scope Selection Priority' ;;
+    agents/bubbles.sprint.agent.md) check_classifier_order "$rel" "$path" 'phase_1_parse_and_estimate:' ;;
+  esac
+done
+
+for rel in "${RECAP_TARGET_FILES[@]}"; do
+  path="$(resolve_repo_file "$rel" || true)"
+  check_terminal_recap_language "$rel" "$path"
 done
 
 if [[ "$finding_count" -gt 0 ]]; then
@@ -261,8 +445,8 @@ if [[ "$finding_count" -gt 0 ]]; then
   exit 1
 fi
 
-info "scannedFiles=${#TARGET_FILES[@]} findings=0 root=$REPO_ROOT"
+info "persistenceFiles=${#PERSISTENCE_TARGET_FILES[@]} recapFiles=${#RECAP_TARGET_FILES[@]} findings=0 root=$REPO_ROOT"
 if [[ "$QUIET" != "true" ]]; then
-  echo "PASS Gate G086 (orchestrator_persistence_lint_gate) — scannedFiles=${#TARGET_FILES[@]}, findings=0"
+  echo "PASS Gate G086 (orchestrator_persistence_lint_gate) — persistenceFiles=${#PERSISTENCE_TARGET_FILES[@]}, recapFiles=${#RECAP_TARGET_FILES[@]}, findings=0"
 fi
 exit 0

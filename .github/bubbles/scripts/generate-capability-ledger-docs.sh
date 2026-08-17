@@ -264,6 +264,7 @@ BEGIN {
   section = ""
   cap_id = ""
   list_field = ""
+  block_field = ""
 }
 /^capabilities:[[:space:]]*$/ {
   section = "capabilities"
@@ -273,17 +274,37 @@ section == "capabilities" && kv($0, "  ", "^[a-z0-9-]+$") && VAL == "" {
   flush_capability()
   cap_id = KEY
   list_field = ""
+  block_field = ""
   next
 }
 section == "capabilities" && cap_id != "" && kv($0, "    ", "^[A-Za-z]+$") {
   field = KEY
   value = VAL
+  block_field = ""
   if (field == "docsRefs" || field == "evidenceRefs" || field == "competitorTags" || field == "issueRefs" || field == "freshnessTargets") {
     list_field = field
     next
   }
+  # YAML block scalar. The value is only the `>`/`|` indicator; the real text is
+  # on the following more-indented lines. Storing the indicator dropped every
+  # such summary and rendered a bare ">" in the generated tables.
+  if (value ~ /^[>|][-+]?[0-9]*$/) {
+    block_field = field
+    fields[cap_id SUBSEP field] = ""
+    list_field = ""
+    next
+  }
   fields[cap_id SUBSEP field] = value
   list_field = ""
+  next
+}
+section == "capabilities" && cap_id != "" && block_field != "" && $0 ~ /^      [^[:space:]]/ {
+  btext = trim($0)
+  if (fields[cap_id SUBSEP block_field] == "") {
+    fields[cap_id SUBSEP block_field] = btext
+  } else {
+    fields[cap_id SUBSEP block_field] = fields[cap_id SUBSEP block_field] " " btext
+  }
   next
 }
 section == "capabilities" && cap_id != "" && list_field != "" && litem($0, "    ") {
@@ -319,6 +340,13 @@ while IFS=$'\t' read -r kind _ _ state _ _ _ _ _ _ issue_refs; do
 done < "$records_file"
 
 competitive_doc_temp="$(_btmp)"
+# Markdown table cells are pipe-delimited, so a literal pipe inside a ledger
+# value silently adds columns to its row. One shipped summary documents a posture
+# triple as "wired | opted-out | undeclared", which gave that row 10 delimiters
+# against the header's 8 and misaligned every cell after it.
+md_cell() {
+  printf '%s' "${1//|/\\|}"
+}
 {
   echo '# Competitive Capabilities'
   echo
@@ -332,9 +360,9 @@ competitive_doc_temp="$(_btmp)"
   while IFS=$'\t' read -r kind _ label state summary owner_surface _ competitor_tags docs_refs evidence_refs issue_refs; do
     [[ "$kind" == "CAP" ]] || continue
     printf '| %s | %s | %s | %s | %s | `%s`' \
-      "$label" \
+      "$(md_cell "$label")" \
       "$state" \
-      "$summary" \
+      "$(md_cell "$summary")" \
       "$(format_inline_list "$competitor_tags")" \
       "$(format_doc_list "$docs_refs")" \
       "$owner_surface"
@@ -349,24 +377,25 @@ issue_doc_temp="$(_btmp)"
 {
   echo '# Issue Status'
   echo
-  printf 'Tracked gaps: %s issue-backed capabilities.\n' "$issue_backed_count"
+  printf 'Issue-linked capabilities: %s.\n' "$issue_backed_count"
   echo
-  echo '| Issue | Ledger Status | Related Capability | Summary |'
-  echo '| --- | --- | --- | --- |'
+  echo 'The capability ledger is authoritative. An issue link records follow-up work against a capability; it does NOT make that capability a gap, and a `shipped` state here is shipped.'
+  echo
+  echo '| Issue | Ledger Status | Related Capability |'
+  echo '| --- | --- | --- |'
 
-  while IFS=$'\t' read -r kind _ label state summary _ _ _ _ _ issue_refs; do
+  while IFS=$'\t' read -r kind _ label state _ _ _ _ _ _ issue_refs; do
     [[ "$kind" == "CAP" ]] || continue
     [[ -n "$issue_refs" ]] || continue
     IFS=$'\034' read -r -a issue_paths <<< "$issue_refs"
     for issue_path in "${issue_paths[@]}"; do
       [[ -n "$issue_path" ]] || continue
       issue_label="${issue_path#docs/issues/}"
-      printf '| [%s](%s) | %s | %s | %s |\n' \
+      printf '| [%s](%s) | %s | %s |\n' \
         "$issue_label" \
         "$(relative_doc_link "$issue_path")" \
         "$state" \
-        "$label" \
-        "$summary"
+        "$(md_cell "$label")"
     done
   done < "$records_file"
 } > "$issue_doc_temp"

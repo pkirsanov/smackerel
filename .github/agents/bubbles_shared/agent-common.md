@@ -102,6 +102,9 @@ Required behavior:
 - Direct specialist continuation commands such as `/bubbles.implement`, `/bubbles.test`, `/bubbles.validate`, or `/bubbles.audit` are allowed only when the user explicitly asks for a surgical direct-agent invocation.
 - Read-only continuation surfaces may emit a `## CONTINUATION-ENVELOPE` carrying `target`, `intent`, `preferredWorkflowMode`, `tags`, and `reason` so `bubbles.workflow` can consume the recommendation safely.
 - If a continuation recommendation came from recap, status, handoff, or another advisory surface, treat it as intent-routing metadata, not as permission to bypass workflow orchestration.
+- Emit an actionable continuation target only for concrete non-terminal work.
+- After terminal completion, emit the repository binding's redacted projection: `repositoryRoot: <redacted-local-root>`, `repositoryResolution.pathVisibility: redacted`, `repositoryResolution.actionable: false`, `target: none`, and `preferredWorkflowMode: none`. Preserve the remaining decision provenance exactly. This is schema-valid but cannot resume or dispatch work.
+- Label possible next-priority work as an unstarted candidate. Never execute it without a new explicit user request.
 
 Repository-sensitive continuation is actionable only when it also carries this exact current decision unchanged:
 
@@ -120,6 +123,18 @@ Repository-sensitive continuation is actionable only when it also carries this e
 - `repositoryResolution.actionable`
 
 The consumer MUST run `bubbles/scripts/repository-binding.sh validate-packet` before any read, write, listing, discovery, or dispatch. Stale revisions, substituted roots, malformed packets, and cross-scope packets refuse. A public projection uses `repositoryRoot: <redacted-local-root>`, `repositoryResolution.pathVisibility: redacted`, and `repositoryResolution.actionable: false`; it is non-actionable and cannot resume work.
+
+## Top-Level Completion Recap Contract (NON-NEGOTIABLE)
+
+Every top-level Bubbles agent that performs stateful or work-producing activity MUST invoke `runSubagent(bubbles.recap)` before its final user response.
+
+- Pass the completed, blocked, stopped, or capped result to recap.
+- Preserve one concrete non-terminal continuation when it exists.
+- Otherwise recap may derive at most one next-priority candidate from read-only status and open-work surfaces. A top-level runner MUST NOT dispatch another workflow runner to obtain it.
+- Never execute candidate work until the user explicitly requests it.
+- Keep any required `RESULT-ENVELOPE` as the final machine-readable block after recap composition.
+
+A dispatched phase-owner subagent MUST NOT invoke recap. It returns its `RESULT-ENVELOPE` upward, and the active top-level runner invokes recap once. `bubbles.recap` itself never invokes recap.
 
 ## Top-Level Adversarial Sample Execution Contract (NON-NEGOTIABLE)
 

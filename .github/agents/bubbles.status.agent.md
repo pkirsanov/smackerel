@@ -271,8 +271,8 @@ These recommendations are informational only. They do not certify completion, do
 | Scopes pending, no errors | Run `/bubbles.workflow  {FEATURE_DIR} mode: full-delivery` |
 | Error in fix.log, iteration < 3 | Run `/bubbles.workflow  {FEATURE_DIR} mode: full-delivery` |
 | Error in fix.log, iteration = 3 | 🔴 Human intervention needed - see fix.log |
-| All scopes/tasks complete | Run `/bubbles.workflow  {FEATURE_DIR} mode: validate-to-doc` |
-| Validation passed | Run `/bubbles.workflow  {FEATURE_DIR} mode: full-delivery` for the no-loose-ends finish |
+| All scopes/tasks complete, certification non-terminal | Run `/bubbles.workflow  {FEATURE_DIR} mode: validate-to-doc` |
+| Certification is terminal for the active mode | Stop. Show completion summary and an unstarted next-priority candidate. |
 
 **Example Output:**
 
@@ -294,13 +294,16 @@ These recommendations are informational only. They do not certify completion, do
 
 ## Health Indicators
 
-| Status         | Condition                  | Action                                 |
+The Decision Tree above is the single routing table. This one maps a health
+state to whether work should continue at all.
+
+| Status         | Condition                  | Meaning                                |
 | -------------- | -------------------------- | -------------------------------------- |
-| 🟢 HEALTHY     | No errors, making progress | Continue with `/bubbles.workflow  <feature> mode: full-delivery` |
+| 🟢 HEALTHY     | No errors, making progress | Continue per the Decision Tree         |
 | 🟡 STUCK       | Same error 2 iterations    | Error auto-retrying, monitor progress  |
 | 🔴 ESCALATION  | Same error 3+ iterations   | Human review required - check fix.log  |
-| ⚪ NOT STARTED | No tasks attempted         | Run `/bubbles.workflow  <feature> mode: full-delivery` |
-| ✅ COMPLETE    | All scopes/tasks done      | Run `/bubbles.workflow  <feature> mode: validate-to-doc` |
+| ⚪ NOT STARTED | No tasks attempted         | Continue per the Decision Tree         |
+| ✅ COMPLETE    | Certification is terminal  | Stop; new work needs an explicit request |
 
 ## Pre-Implementation Checklist
 
@@ -318,12 +321,11 @@ Before starting implementation, verify Bubbles artifacts are ready:
 
 ```
 /bubbles.workflow  <feature> mode: full-delivery
-
-# Once work exists and you want the highest-assurance finish:
-/bubbles.workflow  <feature> mode: full-delivery
 ```
 
-Docs hardening (recommended when specs/scopes change):
+`full-delivery` already carries the no-loose-ends finish, so there is no second
+command to run after it. Use `docs-only` when specs or scopes changed and only
+the managed docs need to catch up:
 
 ```
 /bubbles.workflow  <feature> mode: docs-only
@@ -359,5 +361,9 @@ When status can identify a concrete continuation target, append:
 ```
 
 When `.specify/runtime/workflow-runs.json` or active spec state identifies a concrete non-terminal workflow run, preserve that exact workflow mode in the continuation envelope instead of flattening it to a narrower direct-specialist follow-up.
+
+When certification is terminal for the active mode, emit the repository binding's schema-valid redacted projection: `repositoryRoot: <redacted-local-root>`, `repositoryResolution.pathVisibility: redacted`, `repositoryResolution.actionable: false`, `target: none`, and `preferredWorkflowMode: none`. Preserve repository alias and all remaining decision fields.
+Show possible next-priority work only as an unstarted candidate.
+Do not turn that candidate into continuation authority.
 
 ---

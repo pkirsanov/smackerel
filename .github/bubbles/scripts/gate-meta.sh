@@ -18,9 +18,18 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
-WORKFLOWS="$REPO_ROOT/bubbles/workflows.yaml"
 
-[[ -f "$WORKFLOWS" ]] || { echo "gate-meta: workflows.yaml missing at $WORKFLOWS" >&2; exit 2; }
+# bubbles/registry/gates.yaml is the only gate source. workflows.yaml used to
+# carry a generated copy and was accepted as a fallback for trees installed
+# before the registry existed; that copy was deleted in IMP-042 SCOPE-13, so
+# falling back to it would now silently find no gates at all.
+GATES_REGISTRY="$REPO_ROOT/bubbles/registry/gates.yaml"
+if [[ -f "$GATES_REGISTRY" ]]; then
+  GATES_SOURCE="$GATES_REGISTRY"
+else
+  echo "gate-meta: gate registry not found at $GATES_REGISTRY" >&2
+  exit 2
+fi
 
 if ! command -v python3 >/dev/null 2>&1; then
   echo "gate-meta: python3 required" >&2
@@ -30,7 +39,7 @@ fi
 OP="${1:-}"
 [[ -z "$OP" ]] && { echo "usage: gate-meta.sh {list|exists|name|description|json|count} [Gxxx]" >&2; exit 2; }
 
-WORKFLOWS="$WORKFLOWS" OP="$OP" GATE="${2:-}" python3 - <<'PY'
+WORKFLOWS="$GATES_SOURCE" OP="$OP" GATE="${2:-}" python3 - <<'PY'
 import os, re, sys, json
 
 workflows = os.environ['WORKFLOWS']

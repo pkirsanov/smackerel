@@ -2,6 +2,8 @@
 # Files listed here are framework-owned and overwritten on upgrade.
 # DO NOT add project-specific files to these directories.
 bubbles/scripts/action-risk-registry-lint.sh
+bubbles/scripts/adoption-profile-lib-selftest.sh
+bubbles/scripts/adoption-profile-lib.sh
 bubbles/scripts/adversarial-aggregate-selftest.sh
 bubbles/scripts/adversarial-aggregate.sh
 bubbles/scripts/adversarial-resolve-selftest.sh
@@ -49,6 +51,8 @@ bubbles/scripts/bundle-cost-report-selftest.sh
 bubbles/scripts/bundle-cost-report.sh
 bubbles/scripts/capability-consumer-freshness-selftest.sh
 bubbles/scripts/capability-consumer-freshness.sh
+bubbles/scripts/capability-consumer-naming-selftest.sh
+bubbles/scripts/capability-consumer-naming.sh
 bubbles/scripts/capability-foundation-guard-selftest.sh
 bubbles/scripts/capability-foundation-guard.sh
 bubbles/scripts/capability-freshness-selftest.sh
@@ -72,13 +76,18 @@ bubbles/scripts/compaction-discipline-guard.sh
 bubbles/scripts/competitive-docs-selftest.sh
 bubbles/scripts/context-compactor-selftest.sh
 bubbles/scripts/context-compactor.sh
+bubbles/scripts/continuation-intent-resolve-selftest.sh
+bubbles/scripts/continuation-intent-resolve.sh
 bubbles/scripts/continuation-routing-selftest.sh
+bubbles/scripts/control-plane-config-merge-selftest.sh
 bubbles/scripts/control-plane-policy-activation-selftest.sh
 bubbles/scripts/control-plane-rce-selftest.sh
 bubbles/scripts/convergence-cap-guard-selftest.sh
 bubbles/scripts/convergence-cap-guard.sh
 bubbles/scripts/convergence-materiality-selftest.sh
 bubbles/scripts/convergence-materiality.sh
+bubbles/scripts/core-tier-pattern-lint-selftest.sh
+bubbles/scripts/core-tier-pattern-lint.sh
 bubbles/scripts/delivery-implementation-delta-guard-selftest.sh
 bubbles/scripts/delivery-implementation-delta-guard.sh
 bubbles/scripts/dependency-posture.sh
@@ -170,14 +179,14 @@ bubbles/scripts/gate-strength-lint.sh
 bubbles/scripts/gate-vintage-annotate.sh
 bubbles/scripts/gate-vintage-guard.sh
 bubbles/scripts/gate-vintage-selftest.sh
-bubbles/scripts/gates-registry-selftest.sh
+bubbles/scripts/gates-block-reader-lint-selftest.sh
+bubbles/scripts/gates-block-reader-lint.sh
 bubbles/scripts/generate-capability-ledger-docs.sh
 bubbles/scripts/generate-cheatsheet-selftest.sh
 bubbles/scripts/generate-cheatsheet.sh
 bubbles/scripts/generate-framework-stats.sh
 bubbles/scripts/generate-gate-coverage-map-selftest.sh
 bubbles/scripts/generate-gate-coverage-map.sh
-bubbles/scripts/generate-gates-block.sh
 bubbles/scripts/generate-installer-selftest.sh
 bubbles/scripts/generate-installer.sh
 bubbles/scripts/generate-modes-block.sh
@@ -218,8 +227,11 @@ bubbles/scripts/inventory-parity-check-selftest.sh
 bubbles/scripts/inventory-parity-check.sh
 bubbles/scripts/is-terminal-for-mode.sh
 bubbles/scripts/judge-adapter-contract-selftest.sh
+bubbles/scripts/learning-loop-selftest.sh
 bubbles/scripts/macos-portability-guard-selftest.sh
 bubbles/scripts/macos-portability-guard.sh
+bubbles/scripts/managed-docs-existence-lint-selftest.sh
+bubbles/scripts/managed-docs-existence-lint.sh
 bubbles/scripts/management-truth-lint-selftest.sh
 bubbles/scripts/management-truth-lint.sh
 bubbles/scripts/mcp-grant-reconcile.sh
@@ -228,6 +240,8 @@ bubbles/scripts/mcp-grant-sync.sh
 bubbles/scripts/mcp-http-transport-selftest.sh
 bubbles/scripts/mcp-server-selftest.sh
 bubbles/scripts/mcp-trust-boundary-selftest.sh
+bubbles/scripts/micro-fix-admission-selftest.sh
+bubbles/scripts/micro-fix-admission.sh
 bubbles/scripts/migrate-modes-v5-to-v6-selftest.sh
 bubbles/scripts/migrate-modes-v5-to-v6.sh
 bubbles/scripts/mode-alias-selftest.sh
@@ -264,6 +278,8 @@ bubbles/scripts/output-policy-coherence-guard-selftest.sh
 bubbles/scripts/output-policy-coherence-guard.sh
 bubbles/scripts/parallel-fanout-determinism-selftest.sh
 bubbles/scripts/parallel-fanout.sh
+bubbles/scripts/payload-closure-guard-selftest.sh
+bubbles/scripts/payload-closure-guard.sh
 bubbles/scripts/phase-relevance-resolve-selftest.sh
 bubbles/scripts/phase-relevance-resolve.sh
 bubbles/scripts/pii-scan.sh
@@ -325,8 +341,7 @@ bubbles/scripts/repository-binding-host-context-selftest.sh
 bubbles/scripts/repository-binding-host-context.sh
 bubbles/scripts/repository-binding-selftest.sh
 bubbles/scripts/repository-binding.sh
-bubbles/scripts/required-specialists-consistency-selftest.sh
-bubbles/scripts/required-specialists-consistency.sh
+bubbles/scripts/required-specialists-registry-selftest.sh
 bubbles/scripts/requirement-mechanism-guard-selftest.sh
 bubbles/scripts/requirement-mechanism-guard.sh
 bubbles/scripts/result-envelope-validate-selftest.sh
@@ -489,7 +504,9 @@ bubbles/schemas/tool-call.schema.json
 bubbles/schemas/tool-trust-registry.schema.json
 bubbles/schemas/workflows.schema.json
 bubbles/eval/schemas/adversarial-sample.schema.json
+bubbles/registry/gates-block-readers.txt
 bubbles/registry/gates.yaml
+bubbles/registry/micro-fix-packet.yaml
 bubbles/registry/optional-skills.txt
 bubbles/registry/required-specialists.yaml
 bubbles/registry/selftest-denylist.txt

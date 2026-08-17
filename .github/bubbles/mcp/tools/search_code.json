@@ -1,6 +1,6 @@
 {
   "name": "search_code",
-  "description": "Search the workspace for a pattern with the v5.2-auto-selected backend (ripgrep when available, else grep). Wraps code-search.sh which caches the chosen backend at .specify/runtime/code-search.tool. Output is capped to 200 lines by default; pass no_cap=true to disable. Use over raw ripgrep/grep because the wrapper enforces consistent backend selection across agent and human callers.",
+  "description": "Search the workspace for a pattern with the v5.2-auto-selected backend (ripgrep when available, else grep). Wraps code-search.sh which caches the chosen backend at .specify/runtime/code-search.tool. Output is capped at 400 lines by default; pass no_cap=true to disable. Use over raw ripgrep/grep because the wrapper enforces consistent backend selection across agent and human callers.",
   "inputSchema": {
     "type": "object",
     "properties": {
@@ -28,7 +28,7 @@
     "required": ["pattern"]
   },
   "script": "code-search.sh",
-  "argsTemplate": ["${pattern}"],
+  "argsTemplate": ["--kind=${kind?}", "--no-cap${no_cap!}", "${pattern}", "${paths*}"],
   "annotations": {
     "readOnlyHint": true,
     "destructiveHint": false,

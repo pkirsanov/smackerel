@@ -22,7 +22,7 @@
   },
   {
     "name": "devops-to-doc",
-    "alias": "keep-the-park-online",
+    "alias": "park-ops-cycle",
     "description": "Focused DevOps execution + operational verification + docs sync",
     "description_html": "Focused DevOps execution for CI/CD, build, deployment, monitoring, observability, and release automation.",
     "html_quote": "Get the rack humming and keep the park online."
@@ -91,20 +91,21 @@
   },
   {
     "name": "iterate",
-    "alias": "keep-going",
-    "description": "Continue scope-by-scope implementation",
-    "description_html": "Priority-driven scope-by-scope execution. Picks the next thing and does it.",
-    "html_quote": "Keep going, boys. Don't stop."
+    "alias": "pick-next",
+    "description": "Explicitly select and execute the next priority",
+    "description_html": "Priority-driven execution. Explicitly selects the next work item and starts it.",
+    "html_quote": "Pick the next job on the board."
   },
   {
     "name": "resume-only",
-    "alias": "resume-the-tape",
-    "description": "Resume from last session state",
-    "description_html": "Resume from saved session state. Pick up where you left off.",
-    "html_quote": "Roll that tape back, boys."
+    "alias": "keep-going",
+    "description": "Resume active work or return a completion recap",
+    "description_html": "Resume saved non-terminal work. If none remains, return a completion recap without starting another item.",
+    "html_quote": "Keep going only if the tape still has work on it."
   },
   {
     "name": "spec-scope-hardening (with analyze)",
+    "canonical_name": "spec-scope-hardening",
     "alias": "whats-the-big-idea",
     "description": "Business analysis + UX exploration only",
     "description_html": "Business analysis + UX exploration. No implementation — just discovery.",
@@ -140,6 +141,7 @@
   },
   {
     "name": "product-to-delivery (with existing impl)",
+    "canonical_name": "product-to-delivery",
     "alias": "same-lot-new-trailer",
     "description": "Reconcile stale artifacts, redesign an existing feature, then deliver",
     "description_html": "Reconcile stale artifacts, redesign the feature, then deliver it through the full quality chain.",
@@ -189,6 +191,7 @@
   },
   {
     "name": "spec-scope-hardening (with analyze + socratic)",
+    "canonical_name": "spec-scope-hardening",
     "alias": "smokes-and-think",
     "description": "Explore ideas before building — produces design artifacts, no code",
     "description_html": "Explore ideas before building — produces design artifacts, no code.",
@@ -224,7 +227,7 @@
   },
   {
     "name": "release-planning-to-doc",
-    "alias": "plans-within-plans",
+    "alias": "packet-within-packets",
     "description": "Produce or refresh a phase release packet (vision/features/actions/business-plan/deployment/marketing/monetization/ops-scalability), enforce Product Direction Surfaces trio + carry-forward + cross-product coordination",
     "description_html": "Produce or refresh a phase release packet (vision / features / actions / business-plan / deployment / marketing / monetization / ops-scalability); enforces Product Direction Surfaces trio + carry-forward + cross-product coordination.",
     "html_quote": "Plans within plans within plans."
@@ -377,14 +380,14 @@
   },
   {
     "name": "redteam-to-doc",
-    "alias": "prove-it",
+    "alias": "prove-the-delivery",
     "description": "Adversarial red-team attack on a finished result (Green Bastard); finding-owned remediation chain then validate/audit/docs. Off by default.",
     "description_html": "Adversarial red-team attack on a finished result (Green Bastard). Finding-owned remediation chain, then validate/audit/docs. Off by default.",
     "html_quote": "You say it's done? Prove it."
   },
   {
     "name": "production-adversarial-probe",
-    "alias": "this-is-my-park-now",
+    "alias": "test-my-park",
     "description": "Bounded, armed, read-only chaos-monkey probing of a LIVE system (Green Bastard on a leash). Requires arming + target allowlist; restore-or-fix; never certifies.",
     "description_html": "Bounded, armed, read-only chaos-monkey probing of a LIVE system (Green Bastard on a leash). Requires arming + target allowlist; restore-or-fix; never certifies.",
     "html_quote": "This is my park now. Let's see what holds."

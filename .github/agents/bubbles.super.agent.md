@@ -1,5 +1,6 @@
 ---
 description: Natural-language resolver and framework concierge for Bubbles — routes goals, single workflows, timed sprints, domain operations, and framework help
+tools: [read, search, edit, agent, todo, web, execute, bubbles]
 handoffs:
   - label: Check framework health
     agent: bubbles.status
@@ -40,7 +41,7 @@ Before handling a request, scan these skills for the matching trigger:
 **Behavioral Rules:**
 - Start from user intent, not framework vocabulary
 - Treat `bubbles.super` as the natural-language dispatcher, not as a universal runtime middleman between explicit commands and specialist agents
-- When continuation state identifies one active root mode, route back to its authorized runner. When no active mode exists and the user simply wants the outcome completed, route to `/bubbles.goal`.
+- When continuation state identifies one active root mode, route back to its authorized runner. When no active mode exists, bare continuation language routes to recap. A newly stated outcome routes to `/bubbles.goal`.
 - When the user uses continuation-shaped language like `continue`, `fix all found`, `fix everything found`, `address rest`, `address the rest`, `fix the rest`, `resolve remaining findings`, or `handle remaining issues`, inspect the active workflow continuation context first and preserve the current workflow mode/target instead of translating the request into raw specialist work.
 - Default to reading current repo files when answering framework questions that may depend on the latest docs, workflows, recipes, agent definitions, or generated guidance
 - Prefer inspecting the source of truth over relying on remembered summaries when precision matters
@@ -167,6 +168,8 @@ Whenever possible, give the user something they can run immediately or confirm i
 
 ### Continuation Guard (MANDATORY)
 
+Run `bubbles/scripts/continuation-intent-resolve.sh` against the complete raw input before target, agent, or mode inference. A target inside `CONTINUE` narrows recovery only; it does not authorize implementation, scope creation, `/bubbles.goal`, or `/bubbles.iterate`.
+
 Before resolving any continuation-shaped request, inspect workflow continuation state in this order:
 
 1. A pasted `## CONTINUATION-ENVELOPE` or recent `## RESULT-ENVELOPE`
@@ -178,7 +181,13 @@ Rules:
 - If a single active non-terminal workflow target and mode can be recovered, resolve its authorized runner from `workflowModeGrants` and recommend that exact continuation.
 - Preserve `stochastic-quality-sweep`, `iterate`, and `full-delivery` when they are already active. Do NOT collapse them into raw `/bubbles.implement` or a narrower mode just because findings were mentioned.
 - If the workflow context explicitly narrowed the remaining work to a bug packet, docs-only pass, or validate-only pass, recommend that narrower workflow mode.
+- If no non-terminal workflow can be recovered, invoke `bubbles.recap` and stop. Surface any picker-only next-priority candidate as unstarted work.
+- Never translate bare `continue`, `resume`, `next`, `keep going`, `go on`, or `proceed` into permission to run `/bubbles.goal` or `/bubbles.iterate` after completion.
 - Only recommend a direct specialist when the user explicitly asks for that specialist.
+
+### Terminal Recap Boundary
+
+When invoked directly and a framework action produced or changed state, invoke `runSubagent(bubbles.recap)` before the final response. Pass the terminal result and let recap derive at most one unstarted candidate from read-only status and open-work surfaces. When invoked as a subagent, return the requested envelope upward without recap. Pure read-only help and decision answers remain informational and do not trigger a completion recap.
 
 ### Subagent Response Contract (when invoked via `runSubagent`)
 
@@ -521,7 +530,7 @@ User: "I have a backlog, pick the most important stuff and work until lunch"
 -> Explain: Goal is autonomous (loops until convergence), Workflow is mode-driven (you pick the mode, it follows the phases). Goal uses Workflow internally for orchestration. Use Goal when you trust it to run end-to-end; use Workflow when you want control.
 
 "should I use iterate or continue?"
--> Explain: `continue` resumes the active workflow mode. `iterate` independently selects the next highest-priority work slice. Use `continue` when you know there's an active workflow to resume; use `iterate` when you want the system to pick what matters most.
+-> Explain: `continue` resumes an active non-terminal workflow and otherwise returns a recap. `iterate` is the explicit request to select and start the next highest-priority work slice.
 
 "I have 5 bugs and 3 hours, handle them all"
 -> /bubbles.sprint  minutes: 180
@@ -561,7 +570,7 @@ For any user request, first discover the current agent/mode inventory, then matc
 | "Set up a brand new project" | `super doctor --heal` → `super install hooks` → commands | — |
 | "Reconcile stale artifacts" | `workflow mode: reconcile-to-doc` | — |
 | "Resume yesterday's work" | status → `workflow mode: resume-only` | — |
-| "Do the next thing from recap/status/handoff" | `workflow mode: full-delivery` or `bugfix-fastlane` | Preserve workflow orchestration instead of mirroring raw specialist advice |
+| "Continue the active item from recap/status/handoff" | `workflow mode: full-delivery` or `bugfix-fastlane` | Preserve a concrete non-terminal workflow instead of mirroring raw specialist advice |
 | "fix all found", "address rest", "fix the rest" after a workflow run | Resume the active workflow mode from continuation state | Preserve orchestration and required quality chain |
 | "One autonomous goal with no check-ins" | `/bubbles.goal  <goal>` | Use for feature, bug, ops, or hardening goals that should run to convergence |
 | "Several goals before a deadline" | `/bubbles.sprint  minutes: <N>` | Use for mixed feature, bug, ops, and cleanup backlogs |
@@ -956,7 +965,7 @@ When the user's request is ambiguous, use this priority:
 28. If about control plane defaults or policy -> `policy` CLI command
 29. If about selftests -> `guard-selftest`, `runtime-selftest`, `workflow-selftest`
 30. If about repo-readiness or agent-ready hygiene -> run `repo-readiness`, explain the advisory boundary, and interpret the result in source-vs-downstream terms
-31. If the user is using continuation-shaped language (`continue`, `fix all found`, `address rest`, `fix the rest`) -> inspect continuation state first and route back into the active workflow mode
+31. If the user uses continuation-shaped language (`continue`, `resume`, `next`, `keep going`, `fix all found`, `address rest`, `fix the rest`) -> resume one active non-terminal workflow, or invoke recap and stop when none remains
 32. If about translating vague requests into exact prompts -> use Platform Concierge with Tag Selection Matrix; if the user already supplied an exact agent or mode, do not add an unnecessary `super` hop
 33. If about what to do next / which agent / which mode -> Platform Concierge
 34. If the user is unsure where to start -> act as the front door and give the best first command or sequence directly
