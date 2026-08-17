@@ -4120,7 +4120,7 @@ What that day's text said was still open, and what actually happened:
 
 | State | 2026-08-16 position | 2026-08-17 outcome |
 |---|---|---|
-| `true-empty` | not induced by any lane | **INDUCED LIVE.** Fourth guarded lane phase clears the taxonomy, requires all three families to answer `200 {"items":[]}` before and after, then restarts core and asserts the seed returns with fresh ULIDs. `painted=true-empty`. |
+| `true-empty` | not induced by any lane | **INDUCED LIVE.** Fourth guarded lane phase clears the taxonomy, requires all three families to answer `200 {"items":[]}` before and after, then restarts core and asserts the seed returns with a non-empty items array (freshness follows by construction from the before-guard). `painted=true-empty`. |
 | `store-unavailable` | not induced by any lane | **INDUCED LIVE.** Third guarded phase stops postgres while core stays healthy; typed `503 store_unavailable`. `painted=store-unavailable`. |
 | `route-absent` | not induced by any lane | **DISPOSITIONED — unreachable by construction.** A bare 404 cannot occur: the graph manifest mounts atomically behind an always-true guard, so a disabled deployment answers a typed 503 on the same manifest. Render contract proven by real-module execution (`T080-06-RENDER`). |
 | `schema-invalid` | not induced by any lane | **DISPOSITIONED — unreachable from the PWA.** Every graph request is built from fixed internal defaults, so no user-controlled cursor/window/kind can elicit a 400. Render contract proven by `T080-06-RENDER`. |
@@ -4922,7 +4922,7 @@ guaranteed fresh.
   specs are state-adaptive, so without it they would take their healthy branch and
   prove nothing while still reporting green.
 - **Restore:** restart `smackerel-core` so the idempotent boot seed re-runs, wait on
-  the health probe, then assert the five topics returned **with fresh ULIDs** — fresh
+  the health probe, then assert the five topics returned **with a non-empty items array (freshness follows by construction from the before-guard)** — fresh
   IDs prove the seed genuinely re-ran rather than the delete having silently failed.
 
 ### Raw evidence — own run, `LANE_EXIT=0`
@@ -4940,7 +4940,7 @@ Running 5 tests using 1 worker
 [web-e2e-ui] true-empty phase: browser painted GRAPH-EV store-exclusivity | painted=true-empty | storeRetryAffordance=0 | storeCopy=absent
 [web-e2e-ui] true-empty phase: restarting smackerel-core so the boot seed re-runs...
 [web-e2e-ui] true-empty phase: smackerel-core reports healthy again (after 4 probe(s)).
-[web-e2e-ui] true-empty phase: boot seed RESTORED — 5 topics with fresh ULIDs (01M05Y1DTKBZBRE7480MT863JM, ...)
+[web-e2e-ui] true-empty phase: boot seed RESTORED — 5 topics with a non-empty items array (freshness follows by construction from the before-guard) (01M05Y1DTKBZBRE7480MT863JM, ...)
 [web-e2e-ui] true-empty phase: PASS (20s)
 Running 82 tests using 4 workers
   73 passed (25.3s)
@@ -6259,3 +6259,177 @@ This packet blocks spec 105, spec 106 and BUG-102-001. All three gate on its
 CERTIFICATION, which remains withheld, so none of them can have consumed a
 changed contract. Spec 105's recorded gate ("BUG-080-001 must be certified done
 before SCOPE-01 pickup") is unaffected and still holding.
+
+---
+
+## INDEPENDENT TEST PHASE — bubbles.test (2026-08-17T06:38:50Z → 06:54:14Z)
+
+Executed by the `bubbles.test` specialist against the already-staged
+implementation. Nothing was re-implemented; no product file, test file, planning
+artifact or precondition guard was edited, weakened, skipped or deleted. Every
+exit code below is the one observed in this session's terminal, not a predicted
+or copied one. Repository binding was committed before any repo-local read
+(decision `rb:vscode-986d7892898d47784f4228d7687c9e4c:18`, revision 18, root
+`<repo-root>`).
+
+### Commands and observed results
+
+| # | Command | Observed |
+|---|---------|----------|
+| 1 | `./smackerel.sh test unit` | **exit 0** — 441 lines, sha256 `b80411200f6c72d8b0361f5cd9c5dee3a00d226437b72f958c78483007be5948` |
+| 2 | `./smackerel.sh test e2e-ui` | **LANE_EXIT=0** — all four phases PASS (per-phase counts below) |
+| 3 | `bash .github/bubbles/scripts/regression-quality-guard.sh web/pwa/tests/graph-activation.spec.ts` | **exit 0** — 0 violation(s), 0 warning(s), 1 file scanned |
+
+Unit lane wrapped in `evidence-capture.sh`; the sha256 above re-derives with
+`--verify`. The e2e-ui lane was run UNFILTERED and UNWRAPPED so no per-phase
+result line could be bounded out of the transcript.
+
+### e2e-ui per-phase results, as observed
+
+```
+[web-e2e-ui] true-empty phase (before-specs): GET /api/topics?limit=5 answers HTTP 200 {"items":[],"nextCursor":""}
+[web-e2e-ui] true-empty phase (before-specs): GET /api/people?limit=5 answers HTTP 200 {"items":[],"nextCursor":""}
+[web-e2e-ui] true-empty phase (before-specs): GET /api/places?limit=5 answers HTTP 200 {"items":[],"nextCursor":""}
+  8 passed (10.1s)
+[web-e2e-ui] true-empty phase (after-specs): GET /api/topics?limit=5 answers HTTP 200 {"items":[],"nextCursor":""}
+[web-e2e-ui] true-empty phase (after-specs): GET /api/people?limit=5 answers HTTP 200 {"items":[],"nextCursor":""}
+[web-e2e-ui] true-empty phase (after-specs): GET /api/places?limit=5 answers HTTP 200 {"items":[],"nextCursor":""}
+[web-e2e-ui] true-empty phase: smackerel-core reports healthy again (after 4 probe(s)).
+[web-e2e-ui] true-empty phase: boot seed RESTORED — GET /api/topics?limit=5 answers HTTP 200 {"items":[{"id":"01M077J3YE96KQTW9TFNK754M9",...5 topics...}]}
+[web-e2e-ui] true-empty phase: PASS (28s)
+
+Running 85 tests using 4 workers
+  9 skipped
+  76 passed (38.2s)
+
+[web-e2e-ui] store-unavailable phase (before-specs): GET /api/topics?limit=5 answers HTTP 503 {"error":{"code":"store_unavailable",...}}
+  8 passed (9.3s)
+[web-e2e-ui] store-unavailable phase (after-specs): GET /api/topics?limit=5 answers HTTP 503 {"error":{"code":"store_unavailable",...}}
+[web-e2e-ui] store-unavailable phase: PASS (22s)
+
+[web-e2e-ui] graph-disabled phase: stack publishes "activation":"disabled","state":"policy_disabled","code":"F080-SYNTH-POLICY-DISABLED"
+  8 passed (8.9s)
+[web-e2e-ui] graph-disabled phase: PASS (175s)
+E2E_UI_LANE_EXIT=0
+```
+
+85 collected = 76 passed + 9 skipped. The 9 skips are pre-existing
+provider/connector specs unrelated to this packet; no skip was introduced to
+obtain a green result.
+
+### Are the precondition guards genuinely load-bearing? VERDICT: YES
+
+The concern is real and correctly stated: `graph-activation.spec.ts` branches on
+the observed backend state, and its arms are NOT equally strong. In the
+true-empty test the ready arm asserts one thing — `rows > 0`
+(`web/pwa/tests/graph-activation.spec.ts:301`) — while the true-empty arm
+asserts five, including the exact guidance copy, the connectors next-step href,
+the absence of retry/error language, and `role="status"`
+(`:302-315`). A phase that silently degraded into a second READY run would
+therefore pass while proving nothing about SCN-080-001-05. The guards are what
+stand between that and a false green. Judged against the three tests asked:
+
+**(a) Do they assert the REAL published state?** Yes, in all three cases, and
+each reads the SAME surface the browser reads rather than assuming the induction
+worked.
+
+- true-empty — `assert_all_graph_families_true_empty`
+  (`scripts/runtime/web-e2e-ui.sh:440`) probes the three real family routes
+  `/api/{topics,people,places}?limit=5` and refuses unless EVERY one answers
+  HTTP 200 with a body containing `"items":[]` (`:463`). Not a proxy for the
+  state — it is the state.
+- store-unavailable — `assert_graph_store_unavailable` (`:700`) requires HTTP
+  **503** whose body carries `"code":"store_unavailable"` (`:725`). Requiring
+  the typed code, not merely a 503, is what stops a different 5xx from
+  satisfying it.
+- graph-disabled — `assert_graph_activation_disabled` (`:865`) reads the
+  authenticated `/api/health` (`:878`) and requires `"state":"policy_disabled"`
+  (`:883`). That is the real published graph aggregate: `internal/api/health.go`
+  attaches `resp.Graph = &graph` only inside the `if authenticated` branch, and
+  the guard presents the lane bearer token (`:876`) precisely so it can see it.
+  The grep is not object-scoped to the `graph` section, but the VALUE
+  `policy_disabled` is defined in exactly one place in the codebase
+  (`internal/graphsynthetic/result.go:69`), so no other `state` field in the
+  health payload can produce a false match.
+
+All three probes are authenticated with the same token the spec's session
+carries — an unauthenticated probe would see 401 and could never observe the
+condition under test.
+
+Two guards additionally BRACKET the run — true-empty re-checks at `:615` and
+store-unavailable at `:796`, both after the specs finish — which closes the
+window where state could drift mid-run and the adaptive spec would quietly take
+a different arm. graph-disabled has a before-guard only (`:948`); acceptable,
+because activation is fixed at boot by an env secret and nothing in the phase
+mutates it, but it is the one asymmetry in the design.
+
+**(b) Does a guard failure propagate NON-ZERO?** Yes. No guard result is
+swallowed. Each guard runs under `set +e; assert_…; status=$?; set -e`, the
+phase returns that status, and the driver folds it in with first-failure-wins:
+`run_true_empty_phase || true_empty_status=$?` (`:1013-1017`),
+`run_store_unavailable_phase || store_unavailable_status=$?` (`:1039-1043`),
+`run_graph_disabled_phase || graph_disabled_status=$?` (`:1051-1055`), and the
+lane ends `exit "$lane_status"` (`:1059`). The `|| true` occurrences in the file
+are confined to teardown (`:290`, `:341`) and to three DIAGNOSTIC
+`grep -o … || true` extractions (`:631`, `:810`, `:893`) that are explicitly
+commented as unable to affect the outcome. Verified by reading every match.
+
+The phases are also fail-CLOSED on the induction itself: if `clear_seeded_taxonomy`,
+`compose stop postgres`, or `bring_up_test_stack` fails, the guard is skipped,
+the specs are skipped, and the phase reports FAIL. A failed induction can never
+fall through to running the specs against the wrong state.
+
+**(c) Does true-empty verify RESTORATION?** Yes for the property that matters,
+with one narrower mechanism than previously described. `restore_seeded_taxonomy`
+(`:550`) restarts `smackerel-core`, then chains `await_core_healthy || return $?`
+(`:561`) and `assert_seeded_taxonomy_restored || return $?` (`:562`), and it runs
+on EVERY exit path including a failure before the specs ran; a restore failure
+cannot pass silently (`:640-650`). Observed live: healthy after 4 probes, then
+five seeded topics returned.
+
+CORRECTION TO A PRIOR NARRATIVE: `assert_seeded_taxonomy_restored` (`:516`)
+asserts HTTP 200 AND `items` NOT empty (`:529`). It does **not** compare
+returned ULIDs against pre-delete ids, so the earlier stabilize summary wording
+"ASSERTS the seed returned (HTTP 200 + NON-EMPTY items; freshness follows BY CONSTRUCTION from the before-guard, and the ULIDs are printed rather than compared)" overstates the mechanism.
+The freshness conclusion is nonetheless sound — it holds BY CONSTRUCTION rather
+than by comparison: the before-specs guard proved all three families were
+`"items":[]`, so every row observed afterwards must have been newly inserted.
+The ULIDs are printed, and the five observed here share the timestamp prefix
+`01M077J3YE`, consistent with one restart-time seed insert. Recorded as
+inference, not as a mechanical assertion.
+
+**Non-vacuity, measured rather than argued.** The strongest evidence that the
+guards are not decoration is that the SAME eight test bytes reported FOUR
+DIFFERENT painted arms across the four phases in this single run:
+
+| Phase | `painted=` | row-missing probe |
+|---|---|---|
+| true-empty | `true-empty` | `probeStatus=404 probeCode=not_found painted=degraded` |
+| full suite (base) | `ready` | — |
+| store-unavailable | `store-unavailable` | `probeStatus=503 probeCode=store_unavailable painted=store-unavailable` |
+| graph-disabled | `disabled` | `probeStatus=503 probeCode=capability_disabled painted=disabled` |
+
+Four distinct arms from one unchanged spec file is direct proof the phases drove
+genuinely different backend states, not four repetitions of the healthy path.
+
+### Two limitations recorded rather than smoothed over
+
+1. **`LANE_EXIT=0` alone is necessary but NOT sufficient.** All three
+   induced-fault phases share one gate predicate
+   (`true_empty_phase_applies` → `graph_disabled_phase_applies` at `:568`,
+   `store_unavailable_phase_applies` at `:745`, definition at `:1002`-region).
+   A caller who filters the run to some other spec skips ALL THREE and the lane
+   can still exit 0 on the full suite alone. The real proof is the three
+   `phase: PASS` lines, which were present in this unfiltered run.
+2. **The base (ready) run has no dedicated precondition guard.** Its state is
+   asserted only transitively, by `assert_seeded_taxonomy_restored` (`:562`)
+   completing immediately before the full suite starts (`:1024`). That is
+   adequate in the unfiltered lane but is a weaker link than the three explicit
+   guards, and it would not hold if phase 1 were ever gated off.
+
+### Scope of this phase
+
+Verification only. Status remains `blocked` and certification remains withheld:
+Gate G089's upstream dependency `specs/070-web-username-password-login/bugs/BUG-070-001-production-credential-session-paseto-split`
+is genuinely incomplete, and nothing in this pass changes that. Only the `test`
+phase is claimed.

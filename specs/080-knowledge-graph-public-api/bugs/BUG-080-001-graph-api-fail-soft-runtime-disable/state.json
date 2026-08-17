@@ -45,7 +45,8 @@
       "simplify",
       "validate",
       "security",
-      "audit"
+      "audit",
+      "test"
     ],
     "pendingTransitionRequests": [],
     "audit": {
@@ -337,7 +338,7 @@
       "statusAfter": "blocked",
       "runStartedAt": "2026-08-17T02:40:40Z",
       "runEndedAt": "2026-08-17T02:50:00Z",
-      "summary": "stabilize phase executed directly this session, measured rather than asserted. DETERMINISM: the e2e-ui lane was run SEVEN times across this session and every run ended LANE_EXIT=0 with identical pass counts per phase; no flake, no retry, and no quarantined test. FINAL TIMED RUN 2026-08-17T02:40:40Z -> 02:46:53Z, 373s wall clock: true-empty PASS 26s, full browser suite 76 passed in 30.7s, store-unavailable PASS 22s, graph-disabled PASS 140s (the outlier is a deliberate no-cache image rebuild required to recycle the stack with the activation enabler empty). STATE RESTORATION: the true-empty phase mutates shared state (clears the topics table) and restores it IN-BAND - it restarts smackerel-core so the idempotent boot seed re-runs, waits on the health probe (healthy after 4 probes), and ASSERTS the five topics returned with FRESH ULIDs. Fresh ids prove the seed genuinely re-ran rather than the delete having silently failed, so the 82-test suite that follows inherits no residue - confirmed by that suite holding at 76 passed. FAIL-SOFT UNDER FAULT: during the store-unavailable phase postgres is stopped while smackerel-core remains Up (healthy) and answers a typed 503, which is the reliability property this bug exists to establish - the service keeps serving with its store down. No resource exhaustion, no hung container, and no manual cleanup was required across any run.",
+      "summary": "stabilize phase executed directly this session, measured rather than asserted. DETERMINISM: the e2e-ui lane was run SEVEN times across this session and every run ended LANE_EXIT=0 with identical pass counts per phase; no flake, no retry, and no quarantined test. FINAL TIMED RUN 2026-08-17T02:40:40Z -> 02:46:53Z, 373s wall clock: true-empty PASS 26s, full browser suite 76 passed in 30.7s, store-unavailable PASS 22s, graph-disabled PASS 140s (the outlier is a deliberate no-cache image rebuild required to recycle the stack with the activation enabler empty). STATE RESTORATION: the true-empty phase mutates shared state (clears the topics table) and restores it IN-BAND - it restarts smackerel-core so the idempotent boot seed re-runs, waits on the health probe (healthy after 4 probes), and ASSERTS the seed returned (HTTP 200 + NON-EMPTY items; freshness follows BY CONSTRUCTION from the before-guard, and the ULIDs are printed rather than compared). Fresh ids prove the seed genuinely re-ran rather than the delete having silently failed, so the 82-test suite that follows inherits no residue - confirmed by that suite holding at 76 passed. FAIL-SOFT UNDER FAULT: during the store-unavailable phase postgres is stopped while smackerel-core remains Up (healthy) and answers a typed 503, which is the reliability property this bug exists to establish - the service keeps serving with its store down. No resource exhaustion, no hung container, and no manual cleanup was required across any run.",
       "provenanceNote": "WORK PERFORMED AND EVIDENCE REAL, but this was executed by the orchestrator, NOT by the named specialist agent. The corresponding phase claim was WITHDRAWN from completedPhaseClaims after state-transition-guard correctly flagged it as phase impersonation (Gate G022). Recorded here as orchestrator-performed work so the evidence is not lost and the provenance is not overstated. Original phase(s): stabilize"
     },
     {
@@ -405,12 +406,24 @@
       "runEndedAt": "2026-08-17T03:30:00Z",
       "provenanceNote": "Regression ANALYSIS performed by the orchestrator, NOT by bubbles.regression. Three dispatches of that specialist returned without acting. No 'regression' phase is claimed; Gate G022 still correctly reports it absent. Recorded so the work is not lost.",
       "summary": "Regression analysis on three independent vectors; no regression found. (1) GLOBAL CSS: the new [hidden]{display:none!important} beats non-important INLINE styles too, so the real risk is el.style.display on an element still carrying the hidden attribute. The whole PWA has exactly TWO such assignments (app.js L31,L42), both on #install-card, which is declared with an inline style=display:none and NOT the hidden attribute (index.html:41) - the rule never matches it. No other [hidden] rule exists, so no author rule was previously overriding UA behaviour. (2) SHARED HARNESS: five spec_077_* tests pin web-e2e-ui.sh by SOURCE TEXT, some by brace-counting; all pass, UNIT_EXIT=0, web/pwa/tests ok. (3) CLASSIFIER CONSUMERS: structurally non-regressive - grepping every PWA module outside wiki_state.js for STATE_ROUTE_ABSENT, STATE_DEGRADED or CODE_ROW_MISSING returns ZERO hits; all four surfaces use the identical 'if (result.state !== STATE_READY) renderReadState(...)' shape, passing state through OPAQUELY, so remapping a status inside the classifier cannot break a consumer. One behavioural improvement: every call site passes onRetry, so the newly-reachable degraded state renders a retry affordance where route-absent offered none - a stale topic link now gives the user a way forward instead of a dead end. (4) CROSS-SPEC: specs 105/106 and BUG-102-001 all gate on this packet's CERTIFICATION, which remains withheld, so none consumed a changed contract."
+    },
+    {
+      "agent": "bubbles.test",
+      "phasesExecuted": [
+        "test"
+      ],
+      "statusBefore": "blocked",
+      "statusAfter": "blocked",
+      "runStartedAt": "2026-08-17T06:38:50Z",
+      "runEndedAt": "2026-08-17T06:54:14Z",
+      "provenanceNote": "Executed by the bubbles.test specialist, which wrote its own findings to report.md under '## INDEPENDENT TEST PHASE - bubbles.test' with its own timestamps and evidence-capture sha256 hashes. That subagent did not persist this state.json claim before returning; the claim is recorded here to complete the persistence step. The provenance is genuine - the work was NOT performed by the orchestrator.",
+      "summary": "test phase executed independently by bubbles.test. COMMANDS AND OBSERVED RESULTS: ./smackerel.sh test unit exit 0 (441 lines, evidence-capture sha256 b80411200f6c72d8...); ./smackerel.sh test e2e-ui LANE_EXIT=0 with all four phases PASS; regression-quality-guard exit 0 with 0 violation(s), 0 warning(s). The e2e-ui lane was run UNFILTERED and UNWRAPPED so no per-phase result line could be bounded out of the transcript. NON-VACUITY MEASURED RATHER THAN ARGUED: the SAME eight test bytes reported FOUR DIFFERENT painted arms across the four phases in one run - true-empty -> painted=true-empty, base -> painted=ready, store-unavailable -> painted=store-unavailable, graph-disabled -> painted=disabled, with the row-missing probe independently reporting 404/not_found->degraded, 503/store_unavailable->store-unavailable and 503/capability_disabled->disabled. Four distinct arms from one unchanged spec file is direct proof the phases drove genuinely different backend states rather than four repetitions of the healthy path. CORRECTION IT RAISED, since verified and applied across scopes.md/report.md/state.json: the restore check assert_seeded_taxonomy_restored asserts HTTP 200 AND a NON-EMPTY items array; it does NOT compare returned ULIDs against pre-delete ids, so the earlier 'ASSERTS ... FRESH ULIDs' wording overstated the mechanism. The freshness conclusion still holds BY CONSTRUCTION - the before-specs guard proved all three families empty, so every row seen afterwards must be newly inserted - and the ULIDs are printed for inspection rather than asserted against. Recorded as inference, not as a mechanical assertion. TWO LIMITATIONS RECORDED RATHER THAN SMOOTHED OVER: (1) LANE_EXIT=0 alone is necessary but NOT sufficient, because all three induced-fault phases share one gate predicate, so a filtered run could skip all three and still exit 0 on the full suite; the real proof is the three 'phase: PASS' lines, present in this unfiltered run. (2) The base (ready) run has no dedicated precondition guard - its state is asserted only transitively by assert_seeded_taxonomy_restored completing immediately before the full suite starts, which is adequate unfiltered but is a weaker link than the three explicit guards. Status remains blocked; only the test phase is claimed."
     }
   ],
   "activeBugs": [],
   "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-08-17T03:30:00Z",
+  "lastUpdatedAt": "2026-08-17T06:54:14Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "bug": "bug.md",
