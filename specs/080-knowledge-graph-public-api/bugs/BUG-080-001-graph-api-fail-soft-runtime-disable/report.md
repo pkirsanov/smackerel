@@ -7182,3 +7182,96 @@ assert otherwise either.
   No status was promoted: `status` and `certification.status` both remain
   `blocked`, and `certifiedAt` remains null. Promotion is left to the
   certifying step.
+
+---
+
+## Orchestrator Self-Audit — Re-Verification At HEAD 44c9ae36 (2026-08-17T16:05:45Z)
+
+**Claim Source: executed.** Every exit code below came from a command run in this
+session against the working tree at commit `44c9ae36`.
+
+**THIS IS NOT CERTIFICATION.** It was performed by `bubbles.goal`, the
+orchestrator that did the work. Under Check 6B an agent may not certify its own
+execution, so nothing here is recorded as a phase claim and
+`certifiedCompletedPhases` is left untouched. It is re-verification evidence
+only: proof that the packet is green *now*, at the current commit, rather than
+only at the timestamps recorded earlier.
+
+### Gate results
+
+| Command | Exit |
+|---|---|
+| `./smackerel.sh build` | `BUILD_EXIT=0` |
+| `./smackerel.sh test unit` | `UNIT_EXIT=0` |
+| `./smackerel.sh lint` | `LINT_EXIT=0` |
+| `./smackerel.sh format --check` | `FMT_EXIT=0` (78 files already formatted) |
+| `./smackerel.sh check` | `CHECK_EXIT=0` |
+| `./smackerel.sh test e2e-ui` | **`LANE_EXIT=0`** |
+| `artifact-lint.sh` | PASSED |
+| `state-transition-guard.sh` | `failureCount: 0`, `failedGateIds: []`, verdict PASS |
+
+Lane phases: true-empty PASS (25s, 8 passed), full suite 76 passed / 9 skipped,
+store-unavailable PASS (23s, 8 passed), graph-disabled PASS (198s, 8 passed).
+
+Timing drifted from the earlier recorded run — graph-disabled took 198s against
+the 130s previously recorded. Noted rather than smoothed over; it is ordinary
+variance in stack recycling, and every phase still gated on its own precondition
+before running.
+
+### Non-vacuity, re-observed independently
+
+The same 8 test bytes painted FOUR different arms in a single lane run, which is
+the property that makes the suite meaningful rather than self-satisfying:
+
+| Lane phase | `painted=` | row-missing probe |
+|---|---|---|
+| true-empty | `true-empty` | `probeStatus=404 probeCode=not_found` → **degraded** |
+| full suite | `ready` | `probeStatus=404 probeCode=not_found` → **degraded** |
+| store-unavailable | `store-unavailable` | `probeStatus=503 probeCode=store_unavailable` → store-unavailable |
+| graph-disabled | `disabled` | `probeStatus=503 probeCode=capability_disabled` → disabled |
+
+The row-missing probe tracks the backend state rather than being hardcoded: it
+reports `degraded` only where the server actually answers a typed `404
+not_found`, and correctly reports the store/disabled arms elsewhere. The
+`F-080-06-ROWMISS` fix therefore still holds at this commit.
+
+### Both previously-recorded blockers are resolved
+
+The `blockedReason` field named exactly two, and the guard now contradicts both:
+
+1. **Gate G022** — recorded as "SIX specialist phases (implement, test,
+   regression, stabilize, security, audit) are absent from the execution
+   records". That is **no longer true.** `executionHistory` now carries genuine
+   specialist entries for `bubbles.implement` (six), `bubbles.test`,
+   `bubbles.regression`, `bubbles.stabilize`, `bubbles.security` and
+   `bubbles.audit`. **G022 appears in `passedGateIds`.**
+2. **Gate G089** — recorded as "THIS PACKET CANNOT BE CERTIFIED until
+   BUG-070-001 is delivered". That position was overturned on 2026-08-17 by
+   `bubbles.plan`, the agent that OWNS `specDependsOn`, on source evidence (see
+   `## Dependency Adjudication` above). **G089 appears in `passedGateIds`.**
+
+`blockedReason` has been rewritten so it no longer asserts these two resolved
+items as current. Leaving stale text that says the packet "cannot be certified"
+would misinform the next owner about work that is in fact finished.
+
+### What remains — and why this agent did not do it
+
+`certification.status` is still `blocked` and `certifiedCompletedPhases` is still
+`[]`. That roll-up is the certifying act, and this orchestrator is disqualified
+from performing it on its own execution.
+
+`bubbles.validate` was dispatched FOUR times while attempting exactly that. Every
+attempt failed on GitHub transport (`Reason: key is missing`, three times) or was
+truncated mid-execution (once, during the lane's Phase 4 rebuild) — never on a
+refusal, and never with a finding. Verified after each: `state.json` unchanged,
+working tree clean, no orphaned containers.
+
+That is an infrastructure blocker, not an evidence gap. The honest consequence is
+that the packet stays `blocked` until a certifying pass runs, even though every
+gate is green — a truthful `blocked` is correct where a self-issued `done` would
+be fabrication.
+
+**NEXT OWNER:** dispatch `bubbles.validate` once specialist transport is
+functioning. The verification it needs is staged and re-runnable in one command
+(`./smackerel.sh test e2e-ui`), the images are warm, and the guard is already at
+`failureCount: 0`.
