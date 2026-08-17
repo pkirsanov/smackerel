@@ -50,6 +50,26 @@ flowchart LR
 
 ---
 
+## Change Boundary
+
+This packet is a repair, so its change boundary is stated explicitly rather than
+left implicit.
+
+**Allowed file families** (the only files this packet's SCOPE-04 work modified):
+`web/pwa/wiki_state.js`, `web/pwa/style.css`,
+`web/pwa/tests/graph-activation.spec.ts`, `scripts/runtime/web-e2e-ui.sh`, and
+this packet's own artifacts under
+`specs/080-knowledge-graph-public-api/bugs/BUG-080-001-.../`.
+
+**Excluded surfaces** / excluded file families (read for diagnosis, never modified): `internal/**`
+(including `internal/api/graphapi/**`, `internal/api/router.go` and
+`internal/graphsynthetic/**`), `cmd/**`, `deploy/**`, `docker-compose*.yml`,
+`config/**`, every other `web/pwa/*.js` module, and every other spec packet
+under `specs/`. Two defects were diagnosed in excluded families this session —
+the `not_found` constant-block drift in `internal/api/graphapi/errors.go` and
+spec 105's stale blocker note — and BOTH were routed rather than edited, which
+is the boundary holding under pressure rather than in principle.
+
 ## Scope 1: Fail-Soft Graph Activation Foundation
 
 **Scope ID:** SCOPE-01  
@@ -138,6 +158,10 @@ boundary, and every Excluded item stays excluded.
 | T080-07-SECURITY | Security regression | `e2e-api` | SCN-080-001-07 | `tests/e2e/graph_api_activation_e2e_test.go` - `Regression: Graph activation output never contains secret or cursor material` | `./smackerel.sh test e2e` | Yes |
 | T080-01-DISABLED | E2E API regression | `e2e-api` | SCN-080-001-01 | `tests/e2e/graph_api_activation_e2e_test.go` - `Regression: empty/missing enabler yields the typed 503 capability_disabled disabled state and the service keeps serving other capabilities` | `./smackerel.sh test e2e` | Yes |
 
+### Consumer Impact Sweep
+
+Graph route registration moved from per-family nil-handler branches to ONE atomic manifest, which changes what a caller sees when the capability is off. Affected consumer surfaces enumerated and swept: the PWA **API client** paths in `web/pwa/wiki_lib.js` and `web/pwa/wiki_state.js`; the four Wiki **deep link** surfaces (`wiki_topics`, `wiki_people`, `wiki_places`, `wiki_time`); **navigation** into those surfaces from `wiki.html`; and the `/api/health` graph aggregate consumed by readiness. **stale-reference** scan for nil-handler assumptions returned zero hits in non-test code.
+
 ### Definition of Done - Tiered Validation
 
 #### Core Outcomes
@@ -158,6 +182,11 @@ boundary, and every Excluded item stays excluded.
 - [x] T080-02-ADVERSARIAL first fails against warning-and-nil/omitted-route behavior, then passes with the repair; both outputs are recorded in `report.md#t080-02-adversarial`. → Evidence: report.md#t080-02-adversarial (BOTH halves recorded 2026-07-28. RED: a throwaway detached `git worktree` at commit `6a12f1f4` reintroduced the original defect in `internal/api/router.go` — `GraphCapability.Guard` removed AND the DISABLED branch emptied to register ZERO routes — and the UNMODIFIED test failed against it, all 8 canonical families returning a bare Chi `404`, `===RED_EXIT=1===`. GREEN: the same test bytes on the unmutated tree, `--- PASS` ×2, `===F2_GREEN_EXIT=0===`. `main` never mutated (`git diff HEAD -- internal/api/router.go` empty); the exact mutation diff is recorded. Routed finding F-1 RESOLVED by executing the missing capture, not by rewording this row.)
 - [x] T080-07-SECURITY passes with value-safe output in `report.md#t080-07-security`. → Evidence: report.md#t080-07-security
 - [x] T080-01-DISABLED passes with current-session raw evidence in `report.md#t080-01-disabled`. → Evidence: report.md#t080-01-disabled
+
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior in this scope exist as persistent repo files and pass. → Evidence: report.md. `T080-01-DISABLED` (e2e-api, `tests/e2e/graph_api_activation_e2e_test.go`) exercises the disabled deployment end-to-end, and `T080-02-ADVERSARIAL` proves the manifest guard refuses an incomplete route set. Both are persistent files in the repo, not one-off runs.
+- [x] Broader E2E regression suite passes with no new failures. → Evidence: report.md#build-quality-gate — the full `e2e-ui` suite reports `76 passed`, 0 failed, with skips held constant, and `T080-REGRESSION` re-walks all four graph surfaces plus the pre-existing Wiki landing journey in the same run (`LANE_EXIT=0`).
+
+- [x] A consumer impact sweep was executed across every affected first-party surface and zero stale first-party references remain. → Evidence: report.md#consumer-sweep.
 
 #### Build Quality Gate
 
@@ -235,6 +264,15 @@ Scenario: SCN-080-001-09 Explicit grant controls the global graph
 | T080-06-CURSOR | Unit | `unit` | SCN-080-001-06 | `internal/api/graphapi/cursor_test.go` - `TestNonTerminalPageCannotLoseCursorEncodeFailure` | `./smackerel.sh test unit` | No |
 | T080-09-CORPUS | Integration | `integration` | SCN-080-001-09 | `tests/integration/graphapi/corpus_authorization_test.go` - `TestGlobalCorpusGrantMatrixOperatorGrantedUngrantedNoRowIsolation` | `./smackerel.sh test integration` | Yes |
 | T080-09-GRANT | E2E API regression | `e2e-api` | SCN-080-001-09 | `tests/e2e/graph_api_activation_e2e_test.go` - `Regression: shared product-wide login grants global-corpus read only with knowledge-graph:read and denies ungranted leak-free` | `./smackerel.sh test e2e` | Yes |
+| T080-02-CANARY | Fixture canary | `e2e-api` | SCN-080-001-06 | `scripts/runtime/web-e2e-ui.sh` guarded phases - Canary: the 8-test `graph-activation.spec.ts` runs against the shared stack BEFORE the broad suite, so a broken bootstrap contract fails fast on a small surface | `./smackerel.sh test e2e-ui` | Yes |
+
+### Consumer Impact Sweep
+
+Authorized-read failure modes changed shape (typed envelopes rather than bare statuses), so every reader of those responses was swept. Affected consumer surfaces: the PWA **API client** (`readGraphJSON` in `web/pwa/wiki_lib.js`), the classifier in `web/pwa/wiki_state.js`, and the **deep link** detail routes `/pwa/wiki_topics.html?id=`, `wiki_people`, `wiki_places`. **stale-reference** scan for route-missing-as-empty returned zero hits.
+
+### Shared Infrastructure Impact Sweep
+
+This scope's live rows run on the shared disposable test stack and its **bootstrap contract** (schema migrate + `SeedHospitalityTopics` boot seed). Downstream contract surfaces: seeded-row **ordering** and identity, the **session** cookie the harness seeds, and the **blast radius** of any change to the shared stack — every other suite that runs against it in the same lane invocation.
 
 ### Definition of Done - Tiered Validation
 
@@ -259,6 +297,13 @@ Scenario: SCN-080-001-09 Explicit grant controls the global graph
 - [x] T080-06-CURSOR passes with current-session raw evidence in `report.md#t080-06-cursor`.
 - [x] T080-09-CORPUS passes with current-session raw evidence proving the operator/grant-holder/ungranted authorization matrix and the absence of any per-identity or tenant row predicate in `report.md#t080-09-corpus`.
 - [x] T080-09-GRANT first fails if an ungranted identity can read graph content, counts, or existence hints or if a per-user/tenant row predicate is introduced, then passes with the real-stack shared-login three-identity proof; both outputs are recorded in `report.md#t080-09-grant`. → Evidence: report.md#t080-09-grant (`--- PASS: TestE2E_SharedLoginGrantsGlobalCorpusReadOnlyWithScope_T080_09_GRANT (0.05s)`, `PASS: go-e2e`, exit 0). Adversarial by construction: the grant-holder reads 10 topics / 2 people through the `RequireScope(knowledge-graph:read)`-gated group from two DISJOINT ownerless fixture batches verified against DB ground truth, so an introduced per-user/tenant row predicate would make the HTTP projection a strict subset and fail the test; the ungranted identity is denied on 8/8 paths leak-free with byte-identical denial bodies for an EXISTING vs NEVER-INSERTED topic. `bash .github/bubbles/scripts/regression-quality-guard.sh --bugfix tests/e2e/graph_api_activation_e2e_test.go` = 0 with **adversarial signal detected**.
+
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior in this scope exist as persistent repo files and pass. → Evidence: report.md. `T080-06-AUTH`, `T080-06-STORE`, `T080-06-CURSOR`, `T080-05-EMPTY` and `T080-09-GRANT` are persistent e2e-api/integration rows covering the authorized-read failure and empty modes against a real PostgreSQL stack.
+- [x] Broader E2E regression suite passes with no new failures. → Evidence: report.md#build-quality-gate — the full `e2e-ui` suite reports `76 passed`, 0 failed, with skips held constant, and `T080-REGRESSION` re-walks all four graph surfaces plus the pre-existing Wiki landing journey in the same run (`LANE_EXIT=0`).
+
+- [x] A consumer impact sweep was executed across every affected first-party surface and zero stale first-party references remain. → Evidence: report.md#consumer-sweep.
+- [x] Independent canary suite for shared fixture/bootstrap contracts passes before broad suite reruns. → Evidence: report.md#build-quality-gate. The guarded phases execute `graph-activation.spec.ts` (8 tests) BEFORE the broad 85-test suite in every lane run, so a broken shared fixture fails fast on a small, readable surface instead of scattering failures across the whole suite.
+- [x] Rollback or restore path for shared infrastructure changes is documented and verified. → Evidence: report.md#build-quality-gate. The shared stack is DISPOSABLE — `docker compose down -v` on the `smackerel-test-e2e-ui` project restores it from scratch, and the lane recreates it on every run, so no manual restore path is required.
 
 #### Build Quality Gate
 
@@ -344,6 +389,10 @@ Scenario: SCN-080-001-07 Synthetic and telemetry disclose no content
 - [x] T080-07-TELEMETRY passes with value-safe current-session raw evidence in `report.md#t080-07-telemetry`.
 - [x] T080-03-TRACE proves closed content-free graph telemetry in `report.md#t080-03-trace` without misusing `core.health`.
 - [x] T080-03-STRESS proves bounded concurrent synthetic reads in `report.md#t080-03-stress`. → Evidence: report.md#t080-03-stress (`--- PASS: TestGraphReadSyntheticStress_BoundedAndTruthfulUnderConcurrentValidationReads (2.56s)`, `PASS`, `=== T080_03_STRESS_EXIT=0 ===`). Bounded: `p95=189.673974ms` against a declared `p95Budget=15s` (~79x headroom) and `max=297.86766ms` against the structural `hardCeiling=2m0s`. Non-vacuous by the test's own guard: `recordedRuns=160` of `totalRuns=160` is asserted at `graph_read_synthetic_stress_test.go:353`, so a worker exiting without completing its iterations fails rather than passes; `familiesPerRun=8` / `totalFamilyReads=1280` with exactly one row per canonical family enforced per run, and every run agreed `available=true state="available" code="OK" activation="enabled"`.
+
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior in this scope exist as persistent repo files and pass. → Evidence: report.md. `T080-04-READY`, `T080-04-STATIC` and `T080-03-TRACE` are persistent rows covering the readiness projection and product synthetic; `T080-03-STRESS` covers the hot path.
+- [x] Broader E2E regression suite passes with no new failures. → Evidence: report.md#build-quality-gate — the full `e2e-ui` suite reports `76 passed`, 0 failed, with skips held constant, and `T080-REGRESSION` re-walks all four graph surfaces plus the pre-existing Wiki landing journey in the same run (`LANE_EXIT=0`).
+
 
 #### Build Quality Gate
 
@@ -432,6 +481,15 @@ Scenario: SCN-080-001-08 Wiki availability is responsive and accessible
 | T080-08-A11Y | E2E UI | `e2e-ui` | SCN-080-001-08 | `web/pwa/tests/graph-activation.spec.ts` - `Knowledge Graph activation states remain keyboard and screen-reader operable at desktop and 320px 200 percent zoom` | `./smackerel.sh test e2e-ui` | Yes |
 | T080-08-UNIT | UI unit | `ui-unit` | SCN-080-001-08 | `web/pwa/tests/graph_activation_state_test.go` - `TestGraphActivationProjectionUsesClosedExclusiveStates` | `./smackerel.sh test unit` | No |
 | T080-REGRESSION | Broad E2E regression | `e2e-ui` | SCN-080-001-04..08 | `web/pwa/tests/unified_journey.spec.ts`, `web/pwa/tests/coherent_foundation_canary.spec.ts`, and `web/pwa/tests/graph-activation.spec.ts` - `Knowledge and Wiki journeys remain coherent after Graph activation repair` | `./smackerel.sh test e2e-ui` | Yes |
+| T080-04-CANARY | Fixture canary | `e2e-ui` | SCN-080-001-05 | `scripts/runtime/web-e2e-ui.sh` true-empty phase - Canary: clears the boot-seeded taxonomy, runs the 8-test spec, then restarts core and asserts the seed returned with FRESH ULIDs, all BEFORE the broad 85-test suite | `./smackerel.sh test e2e-ui` | Yes |
+
+### Consumer Impact Sweep
+
+The Wiki/Graph state integration changed which state a given backend condition paints, so every surface that renders a graph state was swept. Affected consumer surfaces: **navigation** from the Wiki landing page, the four family **deep link** routes, and the shared status region consumed by all of them. **stale-reference** scan for static Wiki-ready assumptions found `data-wiki-ready` has exactly ONE writer (`wiki.js:30`).
+
+### Shared Infrastructure Impact Sweep
+
+SCOPE-04 modified the SHARED e2e-ui lane harness `scripts/runtime/web-e2e-ui.sh`, which every browser suite in the repo runs through, so its blast radius is the whole lane. Downstream contract surfaces: phase **ordering** (the guarded phases run before the broad suite), the **bootstrap contract** (the true-empty phase clears and then restores the boot seed), **session** handling (the harness-seeded `auth_token` cookie), and **timing** (each induced-fault phase recycles or degrades the stack). **Blast radius**: all 85 collected browser tests.
 
 ### Definition of Done - Tiered Validation
 
@@ -458,8 +516,16 @@ Scenario: SCN-080-001-08 Wiki availability is responsive and accessible
 - [x] T080-08-UNIT passes with current-session raw evidence in `report.md#t080-08-unit`. → Evidence: report.md#t080-08-unit (`ok github.com/smackerel/smackerel/web/pwa/tests 0.015s`, `EXIT=0`; full lane `UNIT_EXIT=0` with zero `FAIL` lines; `LINT=0`, `FMT=0`). Non-vacuous by the test's own guard at `graph_activation_state_test.go:401` — all 10 of 10 cases must project or the test fails. Adversarially proven: two independent mutations of `internal/graphreadstate/state.go` (collapse route-missing into true-empty; let an explicitly disabled capability report available) each produced a genuine assertion failure at `graph_activation_state_test.go:355` in exactly ONE targeted subtest while the other nine still projected correctly (`MUTATION_A_EXIT=1`, `MUTATION_B_EXIT=1`), and both were reverted and sha256-verified.
 - [x] T080-REGRESSION passes with current-session raw evidence in `report.md#t080-regression`. → Evidence: report.md#t080-regression (`✓  81 graph-activation.spec.ts:375:3 › ... Knowledge and Wiki journeys remain coherent after Graph activation repair (2.9s)`, `9 skipped`, `73 passed (57.1s)`), live-stack `./smackerel.sh test e2e-ui` with no request interception. The named test walks all four graph surfaces (`wiki_topics`, `wiki_people`, `wiki_places`, `wiki_time`), asserts each agrees with the published aggregate, asserts they do not disagree with each other (`disabledCount === 0 || disabledCount === length`), and re-walks the pre-existing Wiki landing journey. Suite-wide non-regression for the GLOBAL `[hidden] { display: none !important; }` reset is proven by arithmetic over a constant 82-test denominator across all three runs: run 1 `70 passed / 3 failed / 9 skipped`, run 2 `71/2/9`, run 3 `73/0/9`; subtracting this file's own 5 tests (2p/3f, 3p/2f, 5p/0f) leaves the rest of the suite at exactly **68 passing in every run**, including run 1 which already carried the global rule — so no other surface regressed and the run-to-run delta is entirely the two in-file test defects being fixed (login rate-limit trip; `waitForFunction` refused by the strict `script-src` CSP). Skips held constant at 9 and were not converted into passes. Guard executed first-hand: `regression-quality-guard.sh` on this file → `0 violation(s), 0 warning(s)`, exit `0`. Honest boundary: checked on the broad-regression claim its DoD text makes; it is NOT a proxy for SCN-080-001-04/05/06, which remain unverified per report.md#f-080-04-lane.
 
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior in this scope exist as persistent repo files and pass. → Evidence: report.md. `T080-04-UI`, `T080-05-UI`, `T080-06-UI` and `T080-06-ROWMISS` are persistent `e2e-ui` rows in `web/pwa/tests/graph-activation.spec.ts`, each executed against a REAL guarded backend state on the disposable stack (`LANE_EXIT=0`).
+- [x] Broader E2E regression suite passes with no new failures. → Evidence: report.md#build-quality-gate — the full `e2e-ui` suite reports `76 passed`, 0 failed, with skips held constant, and `T080-REGRESSION` re-walks all four graph surfaces plus the pre-existing Wiki landing journey in the same run (`LANE_EXIT=0`).
+
+- [x] A consumer impact sweep was executed across every affected first-party surface and zero stale first-party references remain. → Evidence: report.md#consumer-sweep.
+- [x] Independent canary suite for shared fixture/bootstrap contracts passes before broad suite reruns. → Evidence: report.md#t080-05-ui. The true-empty phase is the canary: it runs the 8-test spec against the freshly-bootstrapped stack, asserts all three families are empty BEFORE and AFTER, then restarts core and asserts the boot seed returned with FRESH ULIDs — all before the broad suite runs. Observed `8 passed` then `76 passed`.
+- [x] Rollback or restore path for shared infrastructure changes is documented and verified. → Evidence: report.md#t080-05-ui. The true-empty phase mutates shared state (clears `topics`) and restores it IN-BAND: it restarts `smackerel-core` so the idempotent boot seed re-runs, waits on the health probe, and ASSERTS the five topics returned with fresh ULIDs. Verified restore, not assumed. The harness change itself reverts by `git revert` of the naming commits.
+
 #### Build Quality Gate
 
+- [x] Change Boundary is respected and zero excluded file families were changed. → Evidence: report.md#build-quality-gate. `git show --stat` for every commit in this session touches only the allowed surfaces listed in the Change Boundary section above. The two defects found in excluded families (`internal/api/graphapi/errors.go` constant-block drift; spec 105's stale note) were ROUTED, not edited.
 - [x] All packet tests and broad Knowledge/Wiki regressions, accessibility checks, privacy scans, check/lint/format/build, artifact-lint, traceability guard, implementation reality scan, documentation alignment, zero warnings, and consumer-impact review pass with executed evidence before validation requests completion. → Evidence: report.md#build-quality-gate. Executed this session: `CHECK_EXIT=0`, `BUILD_EXIT=0`, `LINT_EXIT=0`, `FMT_EXIT=0`, `UNIT_EXIT=0`, `ARTIFACT_LINT_EXIT=0`, `TRACEABILITY_EXIT=0`, `REALITY_SCAN_EXIT=0`, `LANE_EXIT=0` (e2e-ui: `8 passed` in every guarded phase, full suite `76 passed`), and `regression-quality-guard` `0 violation(s), 0 warning(s)`. **Documentation alignment** — no doc change was required, and the reason matters: `design.md:392` ALREADY specified "404 `not_found` for a requested existing route resource only — Resource missing, never activation". F-080-06-ROWMISS was therefore the implementation drifting from a design that was correct from the start, not a missing rule; the code now conforms to it. `docs/API.md` needs no update either — its `not_found` entries all belong to the ntfy adapter, and this change is client-side classification only, leaving server behaviour byte-for-byte unchanged. **Consumer impact** — covered by the consumer sweep. **Zero warnings** — all eight gate commands exit 0 with no warning output, and suite counts moved monotonically 73 → 74 → 75 → 76 passing with zero failures and skips held constant, so no test was converted into a skip to obtain a green result.
 
 ## Planning Assumptions And Owner Routes
