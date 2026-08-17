@@ -397,9 +397,16 @@ clear_seeded_taxonomy() {
   # HOST shell from expanding $POSTGRES_PASSWORD / $POSTGRES_USER / $POSTGRES_DB
   # so the credentials are read inside the container from its OWN environment
   # and never traverse this shell, its argv, or the session transcript.
+  #
+  # S-6: bounded SERVER-SIDE. lock_timeout caps waiting on a lock the boot seed
+  # may still hold; statement_timeout caps the DELETE itself. Both surface as a
+  # loud psql error instead of the silent unbounded hang this call used to risk.
+  # Deliberately NOT wrapped in `timeout`: e2e_ui_compose is a bash function, and
+  # timeout(1) execs a binary, so wrapping it fails with exit 126 rather than
+  # bounding anything.
   # shellcheck disable=SC2016
   deleted="$(e2e_ui_compose exec -T postgres sh -c \
-    'PGPASSWORD="$POSTGRES_PASSWORD" psql -qtAX -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "DELETE FROM topics;"' 2>&1)"
+    'PGPASSWORD="$POSTGRES_PASSWORD" psql -qtAX -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1 -c "SET lock_timeout = '"'"'10s'"'"'; SET statement_timeout = '"'"'30s'"'"'; DELETE FROM topics;"' 2>&1)"
   status=$?
   set -e
   if [[ "$status" -ne 0 ]]; then
@@ -643,6 +650,12 @@ run_true_empty_phase() {
   set -e
   if [[ "$restore_status" -ne 0 ]]; then
     echo "ERROR: [web-e2e-ui] true-empty phase FAILED TO RESTORE the boot seed — the full suite that runs next would inherit a de-seeded database." >&2
+    # S-1: tell the CALLER the fixture is untrustworthy, not merely that the
+    # phase failed. Without this the lane recorded the failure and then ran the
+    # full suite anyway against the de-seeded database; because the specs are
+    # state-adaptive they would paint the true-empty arm and PASS, printing a
+    # green suite result beside this red line.
+    TRUE_EMPTY_FIXTURE_UNTRUSTWORTHY=1
     # First failure wins within the phase: a spec failure stays the reported
     # cause, but a restore failure can never pass silently.
     if [[ "$status" -eq 0 ]]; then
@@ -1002,6 +1015,9 @@ fi
 # false, and the lane exit stays the full suite's own code verbatim — the
 # exit-code-propagation contract the canary asserts is unchanged.
 lane_status=0
+# S-1: set by run_true_empty_phase when the boot seed could not be restored.
+# Phases 2 and 3 REUSE that stack, so their results would be meaningless.
+TRUE_EMPTY_FIXTURE_UNTRUSTWORTHY=0
 
 # Phase 1 — true-empty. MUST run here: the stack is freshly booted, so `people`
 # and `places` are already empty and clearing the boot-seeded `topics` is all
@@ -1016,15 +1032,29 @@ if [[ -z "${SMACKEREL_E2E_UI_NPX:-}" ]] && true_empty_phase_applies "$@"; then
   if [[ "$lane_status" -eq 0 && "$true_empty_status" -ne 0 ]]; then
     lane_status="$true_empty_status"
   fi
+else
+  # S-5: say so. A silent skip is indistinguishable from a phase that ran, so
+  # detecting a filtered run required noticing an ABSENCE in the transcript.
+  echo "[web-e2e-ui] true-empty phase: SKIPPED (gate false — no true-empty state proof in this run)" >&2
 fi
 
 # Phase 2 — the full suite against the default, graph-ENABLED stack.
 # Behavior is unchanged: the exit code still propagates verbatim, including
 # on the SMACKEREL_E2E_UI_NPX canary path where no stack is brought up.
-set +e
-run_node_tooling "$@"
-full_suite_status=$?
-set -e
+if [[ "$TRUE_EMPTY_FIXTURE_UNTRUSTWORTHY" -ne 0 ]]; then
+  # S-1: the true-empty phase could not restore the boot seed, so this stack is
+  # de-seeded. Running the suite here would print a green result that proves
+  # nothing -- the specs are state-adaptive and would simply paint the
+  # true-empty arm. Refusing to run is the honest outcome; the lane is already
+  # failing on the restore error.
+  echo "ERROR: [web-e2e-ui] full suite SKIPPED — the true-empty phase left the fixture unrestored, so any result here would be untrustworthy." >&2
+  full_suite_status=0
+else
+  set +e
+  run_node_tooling "$@"
+  full_suite_status=$?
+  set -e
+fi
 if [[ "$lane_status" -eq 0 && "$full_suite_status" -ne 0 ]]; then
   lane_status="$full_suite_status"
 fi
@@ -1034,7 +1064,7 @@ fi
 # costs roughly the spec's runtime instead of a whole rebuild/boot cycle. It
 # must run BEFORE the graph-disabled phase, which recycles the stack. Live
 # path only: the canary injects a stub npx and brings up no stack.
-if [[ -z "${SMACKEREL_E2E_UI_NPX:-}" ]] && store_unavailable_phase_applies "$@"; then
+if [[ -z "${SMACKEREL_E2E_UI_NPX:-}" && "$TRUE_EMPTY_FIXTURE_UNTRUSTWORTHY" -eq 0 ]] && store_unavailable_phase_applies "$@"; then
   store_unavailable_status=0
   run_store_unavailable_phase || store_unavailable_status=$?
   # First failure wins, as with the phase below. The phase is NOT advisory:
@@ -1042,6 +1072,8 @@ if [[ -z "${SMACKEREL_E2E_UI_NPX:-}" ]] && store_unavailable_phase_applies "$@";
   if [[ "$lane_status" -eq 0 && "$store_unavailable_status" -ne 0 ]]; then
     lane_status="$store_unavailable_status"
   fi
+else
+  echo "[web-e2e-ui] store-unavailable phase: SKIPPED (gate false — no store-unavailable state proof in this run)" >&2
 fi
 
 # Phase 4 — F-080-04-LANE. Live-stack path only: the canary injects a stub
@@ -1054,6 +1086,8 @@ if [[ -z "${SMACKEREL_E2E_UI_NPX:-}" ]] && graph_disabled_phase_applies "$@"; th
   if [[ "$lane_status" -eq 0 && "$graph_disabled_status" -ne 0 ]]; then
     lane_status="$graph_disabled_status"
   fi
+else
+  echo "[web-e2e-ui] graph-disabled phase: SKIPPED (gate false — no disabled state proof in this run)" >&2
 fi
 
 exit "$lane_status"
