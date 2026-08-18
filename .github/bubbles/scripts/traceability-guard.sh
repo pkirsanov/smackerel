@@ -7,6 +7,12 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=/dev/null
 source "$SCRIPT_DIR/dod-section-lib.sh"
 
+# Shared scenario->DoD matcher (BUG-004): ONE implementation of the G068 rule,
+# consumed here and by state-transition-guard.sh Check 22. This guard passes the
+# `id-hint-lenient` id policy; see scenario-match-lib.sh for what that means.
+# shellcheck source=/dev/null
+source "$SCRIPT_DIR/scenario-match-lib.sh"
+
 if [[ "${BASH_VERSINFO[0]}" -ge 4 ]]; then
   # shellcheck source=/dev/null
   source "$SCRIPT_DIR/fun-mode.sh"
@@ -191,43 +197,6 @@ scope_analysis_label() {
   fi
 }
 
-normalize_text() {
-  local value="$1"
-  value="$(printf '%s' "$value" | tr '[:upper:]' '[:lower:]')"
-  value="$(printf '%s' "$value" | sed -E 's/[^a-z0-9]+/ /g; s/[[:space:]]+/ /g; s/^ //; s/ $//')"
-  printf '%s' "$value"
-}
-
-significant_words() {
-  local text="$1"
-  local normalized
-  local word
-  local output=()
-
-  normalized="$(normalize_text "$text")"
-  for word in $normalized; do
-    # G068 false-positive fix (v3.8.0): lowered min word length 4 -> 3 so
-    # 3-letter domain words (API, DoD, SLA, CSV, CSP, JWT, SDK, CLI, CRD,
-    # SBOM) are counted as significant instead of stripped as noise.
-    if [[ ${#word} -lt 3 ]]; then
-      continue
-    fi
-    # G068 false-positive fix (v3.8.0): trimmed exclusion list to TRUE stop
-    # words only. Removed domain-relevant words (user, users, system, should,
-    # must, have, has, will, given, after, before, where, their, there,
-    # about, only) that are frequently the distinguishing words in Gherkin
-    # scenario titles.
-    case "$word" in
-      the|are|was|were|been|being|for|from|with|and|but|not|then|else|when|while|that|this|these|those|its|into|onto|out|all|any|each|every|some|more|less|also)
-        continue
-        ;;
-    esac
-    output+=("$word")
-  done
-
-  printf '%s\n' "${output[@]}"
-}
-
 extract_test_rows() {
   local scope_path="$1"
   [[ -f "$scope_path" && -r "$scope_path" ]] || return 2
@@ -332,100 +301,6 @@ extract_dod_items() {
   '
 }
 
-# G068 false-positive fix: whole-word overlap with no stemming meant a single
-# singular/plural mismatch could sink an otherwise near-verbatim DoD item.
-# Scenario "JSON request rejected" scored 2 against DoD "JSON requests rejected
-# with 415" — below the >=3 floor — because "request" != "requests".
-# Kept to regular -s/-es forms; no general stemmer, so unrelated words still
-# cannot collide. MUST stay aligned with stg_word_matches_text.
-word_matches_text() {
-  local word="$1"
-  local text=" $2 "
-  local singular
-  local tok
-
-  case "$text" in
-    *" $word "* | *" ${word}s "* | *" ${word}es "*) return 0 ;;
-  esac
-
-  if [[ "$word" == *es && ${#word} -gt 4 ]]; then
-    singular="${word%es}"
-    case "$text" in *" $singular "*) return 0 ;; esac
-  fi
-  if [[ "$word" == *s && ${#word} -gt 3 ]]; then
-    singular="${word%s}"
-    case "$text" in *" $singular "*) return 0 ;; esac
-  fi
-
-  # Inflection/derivation, e.g. persisted~persist and stale~staleness. Both were
-  # observed sinking otherwise-identical claims below the >=3 overlap floor.
-  # Bounded to stems of 5+ chars so short roots cannot collide (test~testament).
-  [[ ${#word} -ge 5 ]] || return 1
-  for tok in $2; do
-    case "$tok" in "$word"*) return 0 ;; esac
-    [[ ${#tok} -ge 5 ]] || continue
-    case "$word" in "$tok"*) return 0 ;; esac
-  done
-
-  return 1
-}
-
-scenario_matches_dod() {
-  local scenario="$1"
-  local dod_item="$2"
-  local scenario_id
-  local dod_id
-  local words
-  local word
-  local dod_norm
-  local score=0
-  local threshold=0
-  local word_count=0
-
-  # Try trace ID matching first
-  scenario_id="$(extract_trace_ids "$scenario" | head -n 1 || true)"
-  if [[ -n "$scenario_id" ]]; then
-    while IFS= read -r dod_id; do
-      if [[ -n "$dod_id" ]] && [[ "$dod_id" == "$scenario_id" ]]; then
-        return 0
-      fi
-    done < <(extract_trace_ids "$dod_item")
-  fi
-
-  # Fuzzy word matching — extract significant words from the scenario
-  # and check how many appear in the DoD item.
-  #
-  # G068 false-positive fix (v3.8.0): percentage-based threshold with floor
-  # (see stg_scenario_matches_dod in state-transition-guard.sh for the same
-  # logic — both implementations MUST stay aligned).
-  # - Very small scenarios (<3 significant words): require ALL words to
-  #   match so a hard >=3 floor doesn't penalize them.
-  # - Larger scenarios: require BOTH (overlap >= ceil(50% * word_count))
-  #   AND (overlap >= 3) — percentage threshold with absolute floor.
-  dod_norm="$(normalize_text "$dod_item")"
-  words="$(significant_words "$scenario")"
-  if [[ -z "$words" ]]; then
-    [[ "$dod_norm" == *"$(normalize_text "$scenario")"* ]]
-    return
-  fi
-
-  while IFS= read -r word; do
-    [[ -n "$word" ]] || continue
-    word_count=$((word_count + 1))
-    if word_matches_text "$word" "$dod_norm"; then
-      score=$((score + 1))
-    fi
-  done <<< "$words"
-
-  if [[ "$word_count" -lt 3 ]]; then
-    [[ "$score" -eq "$word_count" ]]
-    return
-  fi
-
-  threshold=$(( (word_count + 1) / 2 ))
-  [[ "$score" -ge 3 && "$score" -ge "$threshold" ]]
-}
-
 extract_scenarios() {
   local scope_path="$1"
   grep -E '^[[:space:]]*Scenario( Outline)?:' "$scope_path" | sed -E 's/^[[:space:]]*Scenario( Outline)?:[[:space:]]*//'
@@ -457,11 +332,6 @@ extract_scenarios_with_ids() {
   ' "$scope_path"
 }
 
-extract_trace_ids() {
-  local value="$1"
-  printf '%s\n' "$value" | grep -Eo '(SCN|AC|FR|UC)-[A-Za-z0-9_-]+' || true
-}
-
 # An explicit shared trace id is stronger evidence of an intended mapping than any
 # similarity score, so it ESTABLISHES a match instead of only grading one that
 # word overlap already found. Previously this comparison existed only inside
@@ -480,7 +350,7 @@ trace_id_declared() {
     if [[ "$tid" == "$scenario_id" ]]; then
       return 0
     fi
-  done < <(extract_trace_ids "$target")
+  done < <(bubbles_scenario_extract_trace_ids "$target")
 
   return 1
 }
@@ -497,7 +367,7 @@ classify_match_kind() {
   # The caller may pass the id explicitly because the scenario title never
   # contains one. Falling back to extraction keeps older callers working.
   sid="$explicit_id"
-  [[ -n "$sid" ]] || sid="$(extract_trace_ids "$scenario" | head -n 1 || true)"
+  [[ -n "$sid" ]] || sid="$(bubbles_scenario_extract_trace_ids "$scenario" | head -n 1 || true)"
   if [[ -n "$sid" ]]; then
     while IFS= read -r tid; do
       [[ -n "$tid" ]] || continue
@@ -505,7 +375,7 @@ classify_match_kind() {
         printf 'declared\n'
         return 0
       fi
-    done < <(extract_trace_ids "$target")
+    done < <(bubbles_scenario_extract_trace_ids "$target")
   fi
   printf 'inferred\n'
 }
@@ -553,19 +423,19 @@ scenario_matches_row() {
   local threshold=0
   local word_count=0
 
-  scenario_id="$(extract_trace_ids "$scenario" | head -n 1 || true)"
+  scenario_id="$(bubbles_scenario_extract_trace_ids "$scenario" | head -n 1 || true)"
   if [[ -n "$scenario_id" ]]; then
     while IFS= read -r row_id; do
       if [[ -n "$row_id" ]] && [[ "$row_id" == "$scenario_id" ]]; then
         return 0
       fi
-    done < <(extract_trace_ids "$row")
+    done < <(bubbles_scenario_extract_trace_ids "$row")
   fi
 
-  row_norm="$(normalize_text "$row")"
-  words="$(significant_words "$scenario")"
+  row_norm="$(bubbles_scenario_normalize_text "$row")"
+  words="$(bubbles_scenario_significant_words "$scenario")"
   if [[ -z "$words" ]]; then
-    [[ "$row_norm" == *"$(normalize_text "$scenario")"* ]]
+    [[ "$row_norm" == *"$(bubbles_scenario_normalize_text "$scenario")"* ]]
     return
   fi
 
@@ -935,7 +805,7 @@ for scope_index in "${!scope_analysis_files[@]}"; do
     matched_dod=""
     while IFS= read -r dod_item; do
       [[ -n "$dod_item" ]] || continue
-      if scenario_matches_dod "$scenario" "$dod_item" || trace_id_declared "$scenario_id" "$dod_item"; then
+      if bubbles_scenario_matches_dod "$scenario" "$dod_item" id-hint-lenient || trace_id_declared "$scenario_id" "$dod_item"; then
         matched_dod="$dod_item"
         break
       fi
@@ -952,7 +822,7 @@ for scope_index in "${!scope_analysis_files[@]}"; do
         _amb=0
         while IFS= read -r _d; do
           [[ -n "$_d" ]] || continue
-          if scenario_matches_dod "$scenario" "$_d"; then
+          if bubbles_scenario_matches_dod "$scenario" "$_d" id-hint-lenient; then
             _amb=$((_amb + 1))
           fi
         done <<< "$dod_items"

@@ -667,12 +667,13 @@ Verify `state.json` reflects reality:
 1. **Status matches scopes:** If state.json says `"done"`, ALL scopes MUST be "Done" with ALL DoD items `[x]`.
 2. **Certification owns completion:** `certification.status`, `certification.completedScopes`, and `certification.certifiedCompletedPhases` are the authoritative fields. The top-level compatibility `status` must mirror `certification.status`, not contradict it.
 3. **Certified scopes match reality:** Every scope listed in `certification.completedScopes` MUST actually have status "Done" in scope files.
-4. **Execution/certification phases coherent:** If `execution.completedPhaseClaims` or `certification.certifiedCompletedPhases` includes `"implement"` or `"test"`, `certification.completedScopes` MUST NOT be empty.
-5. **Policy provenance present:** `policySnapshot` must exist and record effective grill/TDD/auto-commit/lockdown/regression/validation values with provenance.
-6. **Scenario contract state present:** `scenario-manifest.json` must exist for scoped Gherkin behavior, and `transitionRequests`/`reworkQueue` must be closed before validate certifies completion.
-7. **No stale done:** If any scope has unchecked DoD items, spec status MUST NOT be `"done"`.
-8. **DoD format integrity (G041):** ALL DoD items MUST use checkbox format (`- [ ]` or `- [x]`). If any item uses `- (deferred)`, `- ~~text~~`, or unformatted list items inside a DoD section, it is format manipulation — report as a **CRITICAL finding**.
-9. **Scope status canonicality (G041):** ALL scope statuses MUST be one of: `Not Started`, `In Progress`, `Done`, `Blocked`. Invented statuses (e.g., "Deferred", "Deferred — Planned Improvement", "Skipped") are manipulation — report as a **CRITICAL finding**.
+4. **Certified scopes are string scope IDs, never ordinals (BUG-011):** Each `certification.completedScopes` entry MUST be the scope's string ID — `["01-core-scope", "02-follow-up-scope"]` — copied from the IDs already in this file (`scopeProgress[].scopeId`, or the `scopeDir` basename), never invented and never a positional number. Writing ordinals (`[1, 2, 3]`) makes the entries unmappable to any scope artifact, silently disables the phantom-scope check that maps each entry to a directory, and reads downstream as a count of zero — the guard then reports EMPTY against the six scopes you just certified.
+5. **Execution/certification phases coherent:** If `execution.completedPhaseClaims` or `certification.certifiedCompletedPhases` includes `"implement"` or `"test"`, `certification.completedScopes` MUST NOT be empty.
+6. **Policy provenance present:** `policySnapshot` must exist and record effective grill/TDD/auto-commit/lockdown/regression/validation values with provenance.
+7. **Scenario contract state present:** `scenario-manifest.json` must exist for scoped Gherkin behavior, and `transitionRequests`/`reworkQueue` must be closed before validate certifies completion.
+8. **No stale done:** If any scope has unchecked DoD items, spec status MUST NOT be `"done"`.
+9. **DoD format integrity (G041):** ALL DoD items MUST use checkbox format (`- [ ]` or `- [x]`). If any item uses `- (deferred)`, `- ~~text~~`, or unformatted list items inside a DoD section, it is format manipulation — report as a **CRITICAL finding**.
+10. **Scope status canonicality (G041):** ALL scope statuses MUST be one of: `Not Started`, `In Progress`, `Done`, `Blocked`. Invented statuses (e.g., "Deferred", "Deferred — Planned Improvement", "Skipped") are manipulation — report as a **CRITICAL finding**.
 
 **If any state incoherence → validation FAILS.**
 

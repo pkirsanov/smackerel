@@ -61,13 +61,13 @@ Corroborating (grep-derived, advisory) numbers:
 | G024 | all_scopes_done_before_spec_done_gate | `script:bubbles/scripts/release-delivery-reconciliation-guard.sh` | 25 | ref | 5 | guard |
 | G025 | per_dod_item_raw_evidence_gate | `script:bubbles/scripts/release-delivery-reconciliation-guard.sh` | 25 | — | 4 | — |
 | G026 | sla_stress_coverage_gate | `guard-check:5A` | 22 | ref | 2 | guard |
-| G027 | phase_scope_coherence_gate | `guard-check:15` | 25 | Check 15 | 2 | guard |
+| G027 | phase_scope_coherence_gate | `guard-check:15` | 25 | Check 15 | 3 | guard |
 | G028 | implementation_reality_scan_gate | `guard-check:16` | 23 | Check 16 | 6 | guard |
 | G029 | integration_completeness_gate | `script:bubbles/scripts/capability-consumer-freshness.sh`, `script:bubbles/scripts/release-delivery-reconciliation-guard.sh` | 23 | — | 3 | — |
 | G031 | findings_artifact_update_gate | `mode-required` | 9 | — | 1 | — |
 | G032 | business_analysis_gate | `mode-required` | 4 | — | 1 | — |
 | G033 | design_readiness_gate | `mode-required` | 22 | — | — | — |
-| G034 | security_gate | `script:bubbles/scripts/security-gate.sh`, `behavioral:bubbles.security` | 22 | — | 4 | — |
+| G034 | security_gate | `script:bubbles/scripts/security-gate.sh`, `behavioral:bubbles.security` | 22 | — | 3 | — |
 | G035 | vertical_slice_gate | `mode-required` | 22 | — | 1 | — |
 | G036 | red_green_traceability_gate | `mode-required` | 2 | — | — | — |
 | G037 | scope_size_discipline_gate | `script:bubbles/scripts/scope-context-fit-lint.sh` | 0 | — | 1 | — |
@@ -93,7 +93,7 @@ Corroborating (grep-derived, advisory) numbers:
 | G064 | workflow_runner_authorization_gate | `guard-check:3H` | 0 | Check 3H | 7 | guard |
 | G066 | phase_claim_provenance_gate | `guard-check:6B` | 0 | — | — | — |
 | G067 | shared_infrastructure_blast_radius_gate | `script:bubbles/scripts/guards/planning-checks.sh` | 0 | ref | 1 | guard |
-| G068 | dod_gherkin_content_fidelity_gate | `guard-check:22` | 0 | Check 22 | 9 | guard |
+| G068 | dod_gherkin_content_fidelity_gate | `guard-check:22` | 0 | Check 22 | 11 | guard |
 | G069 | collateral_change_containment_gate | `script:bubbles/scripts/guards/planning-checks.sh` | 0 | ref | 1 | guard |
 | G070 | outcome_contract_gate | `script:bubbles/scripts/goal-fidelity-guard.sh`, `script:bubbles/scripts/scenario-compile-lint.sh` | 0 | — | 4 | — |
 | G071 | execution_only_validation_gate | `unbound` | 0 | — | 3 | — |
@@ -172,7 +172,7 @@ These gates are intentionally enforced OUTSIDE the mode `requiredGates` lists. E
 | G064 | workflow_runner_authorization_gate | Check 3H | 7 | guard | agent-ownership-lint.sh, cli.sh, framework-validate.sh, scenario-compile-lint-selftest.sh, scenario-compile-lint.sh, state-transition-guard-selftest.sh, +1 more |
 | G066 | phase_claim_provenance_gate | — | — | — | — |
 | G067 | shared_infrastructure_blast_radius_gate | ref | 1 | guard | imp021-interaction-contracts-selftest.sh |
-| G068 | dod_gherkin_content_fidelity_gate | Check 22 | 9 | guard | audit-result-contract-lint-selftest.sh, capability-freshness-selftest.sh, dod-section-lib.sh, evidence-admission-hardening-selftest.sh, skill-evolution.sh, state-transition-guard-selftest.sh, +3 more |
+| G068 | dod_gherkin_content_fidelity_gate | Check 22 | 11 | guard | audit-result-contract-lint-selftest.sh, capability-freshness-selftest.sh, dod-section-lib.sh, evidence-admission-hardening-selftest.sh, scenario-match-lib-selftest.sh, scenario-match-lib.sh, +5 more |
 | G069 | collateral_change_containment_gate | ref | 1 | guard | imp021-interaction-contracts-selftest.sh |
 | G070 | outcome_contract_gate | — | 4 | — | generate-gate-enforcement.sh, goal-fidelity-guard-selftest.sh, goal-fidelity-guard.sh, scenario-compile-lint.sh |
 | G071 | execution_only_validation_gate | — | 3 | — | gate-id-grep.sh, generate-gate-enforcement-selftest.sh, generate-gate-enforcement.sh |

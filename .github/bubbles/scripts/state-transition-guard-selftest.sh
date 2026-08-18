@@ -2040,6 +2040,8 @@ g040_cw_pre_skipped_dir="$tmp_root/specs/934-g040-cw-pre-marker-skipped"
 g040_cw_post_blocks_dir="$tmp_root/specs/935-g040-cw-post-marker-blocks"
 g040_cw_no_marker_dir="$tmp_root/specs/936-g040-cw-no-marker-full-enforcement"
 g040_cw_two_markers_dir="$tmp_root/specs/937-g040-cw-two-markers-fail-loud"
+fast_lane_profile_dir="$tmp_root/specs/940-fast-lane-profile-resolve"
+framework_proposal_profile_dir="$tmp_root/specs/941-framework-proposal-profile-resolve"
 g064_framework_root="$tmp_root/framework-g064"
 g064_feature_dir="$g064_framework_root/specs/902-transition-guard-selftest-unauthorized-workflow-runner"
 mkdir -p "$tmp_root/specs"
@@ -2081,6 +2083,17 @@ cp -R "$s03_planning_feature_dir" "$s03_g068_dir"
 break_gherkin_dod_fidelity "$s03_g068_dir/scopes.md"
 cp -R "$s03_delivery_negative_dir" "$s03_delivery_checked_dir"
 mark_first_dod_checked "$s03_delivery_checked_dir/scopes.md"
+# The other two profiles transition-contract-resolver.sh supports. Both were
+# unreachable through the guard until the contract validator's auditProfile
+# allow-list was widened to the resolver's full four-profile set, so neither had
+# any fixture at all. The fast-lane packet is an otherwise-passing delivery
+# packet re-pointed at rapid-tool-delivery; the framework-proposal packet is the
+# honestly-unimplemented delivery negative re-pointed at framework-health, so it
+# carries exactly the four artifacts the declared exclusions cover.
+cp -R "$positive_feature_dir" "$fast_lane_profile_dir"
+set_fixture_contract "$fast_lane_profile_dir/state.json" "rapid-tool-delivery" "in_progress"
+cp -R "$s03_delivery_negative_dir" "$framework_proposal_profile_dir"
+set_fixture_contract "$framework_proposal_profile_dir/state.json" "framework-health" "in_progress"
 # BUG-026 G060 profile-awareness: isolate Check 3E's scenario-first enforcement to
 # the audit profile. Each fixture is cloned from an already-PASSING packet and
 # only flips policySnapshot.tdd.mode -> scenario-first, so the SOLE differentiator
@@ -3024,6 +3037,60 @@ assert_transition_result "$s03_delivery_log" \
 s03_delivery_checked_log="$tmp_root/s03-delivery-checked.log"
 run_capture "$s03_delivery_checked_log" bash "$GUARD_SCRIPT" "$s03_delivery_checked_dir" >/dev/null
 assert_log_contains "$s03_delivery_checked_log" "DoD item [x] has NO evidence block" "BUG-009 S03: delivery Check 9 checked-item evidence remains blocking"
+
+echo "Running four-profile transition-contract resolution matrix..."
+# transition-contract-resolver.sh supports four audit profiles. The guard's
+# contract validator once accepted only two, so a packet on either other profile
+# was rejected as MALFORMED (E009-AUDIT-PROFILE-CONTRADICTION) before any
+# applicability branch could run — rapid-tool-delivery and framework-health could
+# not clear the guard at all. These cases pin BOTH previously-unreachable
+# profiles: each must RESOLVE, and only framework-proposal-v1 may actually skip
+# the delivery-completion checks it declares non-applicable.
+fast_lane_profile_log="$tmp_root/fast-lane-profile-resolve.log"
+fast_lane_profile_status="$(run_capture "$fast_lane_profile_log" bash "$GUARD_SCRIPT" "$fast_lane_profile_dir")"
+if [[ "$fast_lane_profile_status" -ne 2 ]]; then
+  pass "Four-profile matrix: rapid-tool-delivery resolves its transition contract instead of blocking (exit $fast_lane_profile_status)"
+else
+  fail "Four-profile matrix: rapid-tool-delivery must not be blocked at contract resolution (observed $fast_lane_profile_status)"
+  sed -n '1,260p' "$fast_lane_profile_log"
+fi
+assert_log_not_contains "$fast_lane_profile_log" "E009-AUDIT-PROFILE-CONTRADICTION" "Four-profile matrix: delivery-completion-fast-v1 is not rejected as a malformed contract"
+assert_log_not_contains "$fast_lane_profile_log" "auditProfile: UNRESOLVED" "Four-profile matrix: rapid-tool-delivery reaches a resolved audit profile"
+assert_log_contains "$fast_lane_profile_log" "auditProfile: delivery-completion-fast-v1" "Four-profile matrix: rapid-tool-delivery reports its declared fast-lane profile"
+assert_log_contains "$fast_lane_profile_log" "applicableCheckClasses: [universal,mode-required,delivery-completion]" "Four-profile matrix: the fast lane asserts the full delivery-completion classes"
+assert_log_contains "$fast_lane_profile_log" "notApplicableChecks: []" "Four-profile matrix: the fast lane declares no delivery exclusion"
+assert_log_not_contains "$fast_lane_profile_log" "NOT_APPLICABLE: Check-4-completion" "Four-profile matrix: the fast lane skips no completion check"
+assert_log_not_contains "$fast_lane_profile_log" "NOT_APPLICABLE: Check-11-execution-evidence" "Four-profile matrix: the fast lane skips no execution-evidence check"
+
+framework_proposal_profile_log="$tmp_root/framework-proposal-profile-resolve.log"
+framework_proposal_profile_status="$(run_capture "$framework_proposal_profile_log" bash "$GUARD_SCRIPT" "$framework_proposal_profile_dir")"
+if [[ "$framework_proposal_profile_status" -ne 2 ]]; then
+  pass "Four-profile matrix: framework-health resolves its transition contract instead of blocking (exit $framework_proposal_profile_status)"
+else
+  fail "Four-profile matrix: framework-health must not be blocked at contract resolution (observed $framework_proposal_profile_status)"
+  sed -n '1,260p' "$framework_proposal_profile_log"
+fi
+assert_log_not_contains "$framework_proposal_profile_log" "E009-AUDIT-PROFILE-CONTRADICTION" "Four-profile matrix: framework-proposal-v1 is not rejected as a malformed contract"
+assert_log_not_contains "$framework_proposal_profile_log" "auditProfile: UNRESOLVED" "Four-profile matrix: framework-health reaches a resolved audit profile"
+assert_log_contains "$framework_proposal_profile_log" "auditProfile: framework-proposal-v1" "Four-profile matrix: framework-health reports its declared proposal profile"
+assert_log_contains "$framework_proposal_profile_log" "notApplicableChecks: $s03_not_applicable" "Four-profile matrix: framework-health declares the four delivery-completion exclusions"
+assert_log_contains "$framework_proposal_profile_log" "NOT_APPLICABLE: Check-4-completion" "Four-profile matrix: framework proposal skips the DoD completion check"
+assert_log_contains "$framework_proposal_profile_log" "NOT_APPLICABLE: Check-5-all-done" "Four-profile matrix: framework proposal skips the all-scopes-Done check"
+assert_log_contains "$framework_proposal_profile_log" "NOT_APPLICABLE: Check-8-file-existence" "Four-profile matrix: framework proposal skips the test-file existence check"
+assert_log_contains "$framework_proposal_profile_log" "NOT_APPLICABLE: Check-11-execution-evidence" "Four-profile matrix: framework proposal skips the delivery execution-evidence check"
+assert_log_not_contains "$framework_proposal_profile_log" "UNCHECKED DoD items" "Four-profile matrix: a skipped Check 4 emits no completion failure"
+assert_log_not_contains "$framework_proposal_profile_log" "still marked 'Not Started'" "Four-profile matrix: a skipped Check 5 emits no all-Done failure"
+assert_log_not_contains "$framework_proposal_profile_log" "Test Plan references non-existent file" "Four-profile matrix: a skipped Check 8 emits no missing-file failure"
+assert_log_not_contains "$framework_proposal_profile_log" "has ZERO evidence code blocks" "Four-profile matrix: a skipped Check 11 emits no missing-evidence failure"
+
+# Paired contrast against the SAME artifact content under delivery-completion-v1
+# (the s03 delivery negative above is the identical packet on autonomous-goal):
+# the exclusions are enforced for framework-proposal-v1 ONLY, so every one of
+# these four checks must still adjudicate — and fail — under the live profile.
+assert_log_contains "$s03_delivery_log" "UNCHECKED DoD items" "Four-profile matrix: delivery-completion-v1 still runs the DoD completion check"
+assert_log_contains "$s03_delivery_log" "still marked 'Not Started'" "Four-profile matrix: delivery-completion-v1 still runs the all-scopes-Done check"
+assert_log_contains "$s03_delivery_log" "Test Plan references non-existent file" "Four-profile matrix: delivery-completion-v1 still runs the test-file existence check"
+assert_log_contains "$s03_delivery_log" "has ZERO evidence code blocks" "Four-profile matrix: delivery-completion-v1 still runs the execution-evidence check"
 
 echo "Running BUG-026 G060 profile-awareness matrix (Check 3E honors the audit profile)..."
 # Case 1 — planning-maturity exemption: a product-to-planning/specs_hardened packet
@@ -4658,6 +4725,257 @@ else
 fi
 
 rm -rf "$c43_dir"
+
+# =============================================================================
+# Check 5 — completedScopes element type (BUG-011)
+# =============================================================================
+# bubbles.validate wrote certification.completedScopes as INTEGER ordinals while
+# Check 5 counted QUOTED STRINGS. An integer array matched nothing, so the count
+# read 0 — the SAME value a genuinely EMPTY array produces — and both states
+# emitted the identical "is EMPTY" message. The collision, not the type
+# mismatch, is what made this expensive: the guard's own output pointed away
+# from the defect. The control case below is therefore load-bearing, because a
+# fix that merely RENAMED the empty-array failure would satisfy the negative
+# case while leaving the two states just as indistinguishable.
+set_completed_scopes() {
+  local state_file="$1"
+  local entries_json="$2"
+
+  python3 - "$state_file" "$entries_json" <<'PY'
+import json
+import sys
+
+path, entries = sys.argv[1], sys.argv[2]
+with open(path, encoding="utf-8") as handle:
+    data = json.load(handle)
+
+certification = data.get("certification")
+if not isinstance(certification, dict):
+    certification = {}
+    data["certification"] = certification
+certification["completedScopes"] = json.loads(entries)
+
+with open(path, "w", encoding="utf-8") as handle:
+    json.dump(data, handle, indent=2)
+    handle.write("\n")
+PY
+}
+
+echo "Running Check 5 completedScopes element-type selftest (BUG-011)..."
+
+bug011_ordinal_dir="$tmp_root/specs/940-bug011-completedscopes-ordinals"
+bug011_empty_dir="$tmp_root/specs/941-bug011-completedscopes-empty"
+bug011_string_dir="$tmp_root/specs/942-bug011-completedscopes-strings"
+
+# The per-scope fixture is the nearest existing packet that reaches Check 5 with
+# a real Done scope artifact behind it, so all three cases clone its shape and
+# vary ONLY the completedScopes element type.
+emit_per_scope_fixture "$bug011_ordinal_dir" "Done" "scope-1-index-parity-proof"
+mutate_delivery_contract "$bug011_ordinal_dir/state.json"
+set_completed_scopes "$bug011_ordinal_dir/state.json" '[1, 2]'
+
+emit_per_scope_fixture "$bug011_empty_dir" "Done" "scope-1-index-parity-proof"
+mutate_delivery_contract "$bug011_empty_dir/state.json"
+set_completed_scopes "$bug011_empty_dir/state.json" '[]'
+
+emit_per_scope_fixture "$bug011_string_dir" "Done" "scope-1-index-parity-proof"
+mutate_delivery_contract "$bug011_string_dir/state.json"
+set_completed_scopes "$bug011_string_dir/state.json" '["scope-1-index-parity-proof"]'
+
+BUG011_ORDINAL_MSG="completedScopes is present but its entries are not string scope IDs"
+BUG011_EMPTY_MSG="state.json completedScopes is EMPTY"
+
+bug011_ordinal_log="$tmp_root/bug011-ordinal.log"
+bug011_ordinal_status="$(run_capture "$bug011_ordinal_log" bash "$GUARD_SCRIPT" "$bug011_ordinal_dir")"
+if [[ "$bug011_ordinal_status" -ne 0 ]]; then
+  pass "BUG-011: an ordinal completedScopes array fails the transition guard"
+else
+  fail "BUG-011: an ordinal completedScopes array should fail the transition guard (observed exit $bug011_ordinal_status)"
+  sed -n '1,260p' "$bug011_ordinal_log"
+fi
+assert_log_contains "$bug011_ordinal_log" "$BUG011_ORDINAL_MSG" \
+  "BUG-011: an ordinal completedScopes array is reported as a WRONG-ELEMENT-TYPE failure"
+assert_log_not_contains "$bug011_ordinal_log" "$BUG011_EMPTY_MSG" \
+  "BUG-011: a populated ordinal array is NOT reported as EMPTY (the two states are distinguishable)"
+
+bug011_empty_log="$tmp_root/bug011-empty.log"
+bug011_empty_status="$(run_capture "$bug011_empty_log" bash "$GUARD_SCRIPT" "$bug011_empty_dir")"
+if [[ "$bug011_empty_status" -ne 0 ]]; then
+  pass "BUG-011 control: a genuinely empty completedScopes array still fails the transition guard"
+else
+  fail "BUG-011 control: an empty completedScopes array should fail the transition guard (observed exit $bug011_empty_status)"
+  sed -n '1,260p' "$bug011_empty_log"
+fi
+assert_log_contains "$bug011_empty_log" "$BUG011_EMPTY_MSG" \
+  "BUG-011 control: a genuinely empty array still reports EMPTY (the empty-array failure was not merely renamed)"
+assert_log_not_contains "$bug011_empty_log" "$BUG011_ORDINAL_MSG" \
+  "BUG-011 control: an empty array is NOT reported as a wrong-element-type failure"
+
+bug011_string_log="$tmp_root/bug011-string.log"
+run_capture "$bug011_string_log" bash "$GUARD_SCRIPT" "$bug011_string_dir" >/dev/null
+assert_log_not_contains "$bug011_string_log" "$BUG011_ORDINAL_MSG" \
+  "BUG-011 adversarial: a quoted string scope ID is NOT reported as a wrong element type"
+assert_log_not_contains "$bug011_string_log" "$BUG011_EMPTY_MSG" \
+  "BUG-011 adversarial: a populated string array is NOT reported as EMPTY"
+assert_log_contains "$bug011_string_log" "completedScopes count matches artifact Done scope count (1)" \
+  "BUG-011 adversarial: one quoted scope ID against one Done scope artifact passes Check 5"
+
+# =============================================================================
+# Check 7A — completedPhaseClaims[].claimedAt plausibility (BUG-013)
+# =============================================================================
+# The uniform-interval analysis ran over executionHistory only. Gates G022/G027
+# read execution.completedPhaseClaims — the load-bearing assertion that a phase
+# was performed — and NOTHING analysed the claimedAt instants on it, so claims
+# sitting on a perfect grid were invisible to every check in the guard.
+mutate_completed_phase_claims() {
+  local state_file="$1"
+  local shape="$2"
+
+  python3 - "$state_file" "$shape" <<'PY'
+import json
+import sys
+from datetime import datetime, timedelta
+
+path, shape = sys.argv[1], sys.argv[2]
+with open(path, encoding="utf-8") as handle:
+    data = json.load(handle)
+
+execution = data.get("execution")
+if not isinstance(execution, dict):
+    execution = {}
+    data["execution"] = execution
+
+BASE = datetime(2026, 3, 27, 10, 0, 0)
+# Cycle the phases the delivery contract already records in executionHistory so
+# the fixture varies the claim TIMESTAMPS and nothing else.
+PHASES = ["test", "validate", "audit", "docs"]
+
+
+def claim(index, offset_seconds):
+    phase = PHASES[index % len(PHASES)]
+    return {
+        "phase": phase,
+        "agent": f"bubbles.{phase}",
+        "claimedAt": (BASE + timedelta(seconds=offset_seconds)).strftime("%Y-%m-%dT%H:%M:%SZ"),
+    }
+
+
+if shape == "absent":
+    execution.pop("completedPhaseClaims", None)
+    data.pop("completedPhaseClaims", None)
+elif shape == "uniform":
+    execution["completedPhaseClaims"] = [claim(i, i * 600) for i in range(10)]
+elif shape == "backwards":
+    execution["completedPhaseClaims"] = [
+        claim(i, offset) for i, offset in enumerate([0, 900, 300, 2400])
+    ]
+elif shape == "irregular":
+    execution["completedPhaseClaims"] = [
+        claim(i, offset) for i, offset in enumerate([0, 437, 1310, 1622, 3050])
+    ]
+elif shape == "short-reason-escape":
+    # The same 600s grid, with the MIDDLE claim attempting the
+    # claimedAtUnreconciled escape on a reason below DECLARED_REASON_MIN.
+    # Removing a middle point from an even grid leaves a doubled gap, so an
+    # escape that were wrongly honored would DISSOLVE the uniform spacing and
+    # this fixture would stop failing. That is what makes the case
+    # discriminating rather than a restatement of the uniform case.
+    claims = [claim(i, i * 600) for i in range(10)]
+    claims[4]["claimedAtUnreconciled"] = True
+    claims[4]["claimedAtUnreconciledReason"] = "lost"
+    execution["completedPhaseClaims"] = claims
+else:
+    raise SystemExit(f"unknown completedPhaseClaims shape: {shape}")
+
+with open(path, "w", encoding="utf-8") as handle:
+    json.dump(data, handle, indent=2)
+    handle.write("\n")
+PY
+}
+
+echo "Running Check 7A completedPhaseClaims timestamp selftest (BUG-013)..."
+
+bug013_uniform_dir="$tmp_root/specs/943-bug013-claims-uniform-grid"
+bug013_backwards_dir="$tmp_root/specs/944-bug013-claims-backwards"
+bug013_irregular_dir="$tmp_root/specs/945-bug013-claims-irregular"
+bug013_absent_dir="$tmp_root/specs/946-bug013-claims-absent"
+bug013_escape_dir="$tmp_root/specs/947-bug013-claims-short-reason-escape"
+
+for bug013_shape_pair in \
+  "$bug013_uniform_dir:uniform" \
+  "$bug013_backwards_dir:backwards" \
+  "$bug013_irregular_dir:irregular" \
+  "$bug013_absent_dir:absent" \
+  "$bug013_escape_dir:short-reason-escape"; do
+  bug013_dir="${bug013_shape_pair%%:*}"
+  bug013_shape="${bug013_shape_pair##*:}"
+  cp -R "$positive_feature_dir" "$bug013_dir"
+  mutate_completed_phase_claims "$bug013_dir/state.json" "$bug013_shape"
+done
+
+BUG013_UNIFORM_MSG="claimedAt values with identical 600s intervals"
+BUG013_BACKWARDS_MSG="completedPhaseClaims claimedAt runs backwards:"
+BUG013_PLAUSIBLE_MSG="completedPhaseClaims claimedAt timestamps look plausible"
+BUG013_ABSTAIN_MSG="No completedPhaseClaims recorded — claim-timestamp plausibility abstains"
+
+bug013_uniform_log="$tmp_root/bug013-uniform.log"
+bug013_uniform_status="$(run_capture "$bug013_uniform_log" bash "$GUARD_SCRIPT" "$bug013_uniform_dir")"
+if [[ "$bug013_uniform_status" -ne 0 ]]; then
+  pass "BUG-013: completedPhaseClaims on an exact 600s grid fails the transition guard"
+else
+  fail "BUG-013: completedPhaseClaims on an exact 600s grid should fail the transition guard (observed exit $bug013_uniform_status)"
+  sed -n '1,260p' "$bug013_uniform_log"
+fi
+assert_log_contains "$bug013_uniform_log" "completedPhaseClaims has 10 $BUG013_UNIFORM_MSG — FABRICATION INDICATOR" \
+  "BUG-013: uniformly spaced claimedAt values are named a FABRICATION INDICATOR"
+
+bug013_backwards_log="$tmp_root/bug013-backwards.log"
+bug013_backwards_status="$(run_capture "$bug013_backwards_log" bash "$GUARD_SCRIPT" "$bug013_backwards_dir")"
+if [[ "$bug013_backwards_status" -ne 0 ]]; then
+  pass "BUG-013: completedPhaseClaims whose claimedAt runs backwards fails the transition guard"
+else
+  fail "BUG-013: backwards claimedAt ordering should fail the transition guard (observed exit $bug013_backwards_status)"
+  sed -n '1,260p' "$bug013_backwards_log"
+fi
+assert_log_contains "$bug013_backwards_log" "$BUG013_BACKWARDS_MSG" \
+  "BUG-013: a claim recorded before the claim ahead of it is reported as backwards ordering"
+
+# Adversarial twin: a detector that fired on every claim set would satisfy both
+# negative cases above and prove nothing.
+bug013_irregular_log="$tmp_root/bug013-irregular.log"
+run_capture "$bug013_irregular_log" bash "$GUARD_SCRIPT" "$bug013_irregular_dir" >/dev/null
+assert_log_contains "$bug013_irregular_log" "$BUG013_PLAUSIBLE_MSG" \
+  "BUG-013 adversarial: irregular forward-moving claimedAt values are reported plausible"
+assert_log_not_contains "$bug013_irregular_log" "$BUG013_UNIFORM_MSG" \
+  "BUG-013 adversarial: irregular spacing is NOT reported as a uniform interval"
+assert_log_not_contains "$bug013_irregular_log" "$BUG013_BACKWARDS_MSG" \
+  "BUG-013 adversarial: forward-moving claims are NOT reported as backwards"
+
+# Absence of a record is not evidence of fabrication — the same abstention
+# Check 7C makes for an absent executionHistory.
+bug013_absent_log="$tmp_root/bug013-absent.log"
+run_capture "$bug013_absent_log" bash "$GUARD_SCRIPT" "$bug013_absent_dir" >/dev/null
+assert_log_contains "$bug013_absent_log" "$BUG013_ABSTAIN_MSG" \
+  "BUG-013: an absent completedPhaseClaims abstains instead of adjudicating"
+assert_log_not_contains "$bug013_absent_log" "$BUG013_UNIFORM_MSG" \
+  "BUG-013: an absent completedPhaseClaims yields no uniform-interval finding"
+assert_log_not_contains "$bug013_absent_log" "$BUG013_BACKWARDS_MSG" \
+  "BUG-013: an absent completedPhaseClaims yields no backwards-ordering finding"
+
+# The declaration escape has to cost a substantive reason, or it is a bypass
+# with extra steps.
+bug013_escape_log="$tmp_root/bug013-escape.log"
+bug013_escape_status="$(run_capture "$bug013_escape_log" bash "$GUARD_SCRIPT" "$bug013_escape_dir")"
+if [[ "$bug013_escape_status" -ne 0 ]]; then
+  pass "BUG-013: claimedAtUnreconciled with a sub-threshold reason still fails the transition guard"
+else
+  fail "BUG-013: a sub-threshold claimedAtUnreconciled reason should NOT buy an exclusion (observed exit $bug013_escape_status)"
+  sed -n '1,260p' "$bug013_escape_log"
+fi
+assert_log_contains "$bug013_escape_log" "completedPhaseClaims has 10 $BUG013_UNIFORM_MSG — FABRICATION INDICATOR" \
+  "BUG-013: a claim declared unreconciled on a short reason stays IN the analysed set (count is still 10)"
+assert_log_not_contains "$bug013_escape_log" "completedPhaseClaims declares unreconciled claim timestamps" \
+  "BUG-013: a sub-threshold reason does not register as a declared unreconciled claim"
 
 echo "----------------------------------------"
 if [[ "$failures" -gt 0 ]]; then

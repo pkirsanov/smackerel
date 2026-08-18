@@ -343,6 +343,13 @@ core_check_label() {
       *"guard-lib timeout fallback"*) # portable-ok: case pattern matching a check NAME, not a timeout invocation
       return 0
       ;;
+    # The one LIVE check in core: 14s, and the cheapest detector of a stale
+    # committed release manifest. Without it a stale manifest survives the core
+    # tier and only surfaces in a full validate, where one root cause presents
+    # as many unrelated-looking failures (interop, install provenance, trust doctor).
+    *"Release manifest freshness"*)
+      return 0
+      ;;
     *) return 1 ;;
   esac
 }
@@ -917,6 +924,7 @@ run_check_self_only "Spec dashboard selftest (portfolio-count correctness)" bash
 run_check_self_only "Governance hub-report selftest (IMP-014)" bash "$SCRIPT_DIR/bubbles-hub-report-selftest.sh"
 run_check_self_only "Scan-lib helpers selftest (IMP-009)" bash "$SCRIPT_DIR/scan-lib-selftest.sh"
 run_check_self_only "DoD section lib selftest (BUG-026)" bash "$SCRIPT_DIR/dod-section-lib-selftest.sh"
+run_check_self_only "Scenario-match lib selftest (BUG-004)" bash "$SCRIPT_DIR/scenario-match-lib-selftest.sh"
 run_check_self_only "Scope universe resolver selftest (BUG-026)" bash "$SCRIPT_DIR/scope-universe-resolver-selftest.sh"
 run_check_self_only "Framework-validate tiering selftest (IMP-012)" bash "$SCRIPT_DIR/framework-validate-tier-selftest.sh"
 # IMP-042 SCOPE-2: core_check_label() selects the push-blocking tier by substring
