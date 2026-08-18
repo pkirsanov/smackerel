@@ -1,0 +1,95 @@
+{
+  "version": 1,
+  "featureDir": "specs/074-capture-as-fallback-policy/bugs/BUG-074-002-noground-e2e-skip-guard-masks-canonical-ack-regression",
+  "generatedAt": "2026-08-18T00:00:00Z",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-BUG-074-002-01",
+      "scope": "SCOPE-BUG-074-002-01",
+      "title": "An off-contract status FAILS the test instead of skipping it",
+      "gherkin": {
+        "given": "a live open-knowledge no-ground turn returns an envelope whose status is not saved_as_idea and which carries no grounded sources",
+        "when": "the regression test evaluates the envelope",
+        "then": "the test reports a failure and does not report a skip"
+      },
+      "behaviorClass": "e2e-api",
+      "changeType": "bugfix",
+      "requiredTestType": "e2e-api",
+      "regressionRequired": true,
+      "adversarial": true,
+      "lockdown": false,
+      "linkedTests": [
+        {"file": "tests/e2e/assistant/capture_fallback_trigger_e2e_test.go", "testId": "TestAssistantHTTPE2E_CaptureFallbackOpenKnowledgeNoGround", "status": "planned"}
+      ],
+      "evidenceRefs": [],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "SCN-BUG-074-002-02",
+      "scope": "SCOPE-BUG-074-002-01",
+      "title": "A genuinely grounded turn still passes (non-tautology control)",
+      "gherkin": {
+        "given": "a live open-knowledge turn that the model grounded, whose envelope carries at least one source and capture_route false",
+        "when": "the regression test evaluates the envelope",
+        "then": "the test passes without asserting the capture acknowledgement and does not report a skip"
+      },
+      "behaviorClass": "e2e-api",
+      "changeType": "bugfix",
+      "requiredTestType": "e2e-api",
+      "regressionRequired": true,
+      "adversarial": false,
+      "lockdown": false,
+      "linkedTests": [
+        {"file": "tests/e2e/assistant/capture_fallback_trigger_e2e_test.go", "testId": "TestAssistantHTTPE2E_CaptureFallbackOpenKnowledgeNoGround", "status": "planned"}
+      ],
+      "evidenceRefs": [],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "SCN-BUG-074-002-03",
+      "scope": "SCOPE-BUG-074-002-01",
+      "title": "The SCOPE-074-04B canonical acknowledgement is still enforced",
+      "gherkin": {
+        "given": "a live open-knowledge no-ground turn that was captured",
+        "when": "the regression test evaluates the envelope",
+        "then": "capture_route is true, confirm_card and disambiguation_prompt are absent, and the body carries the canonical saved-as-idea acknowledgement"
+      },
+      "behaviorClass": "e2e-api",
+      "changeType": "regression-preserved",
+      "requiredTestType": "e2e-api",
+      "regressionRequired": true,
+      "adversarial": false,
+      "lockdown": false,
+      "linkedTests": [
+        {"file": "tests/e2e/assistant/capture_fallback_trigger_e2e_test.go", "testId": "TestAssistantHTTPE2E_CaptureFallbackOpenKnowledgeNoGround", "status": "planned"}
+      ],
+      "evidenceRefs": [],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "SCN-BUG-074-002-04",
+      "scope": "SCOPE-BUG-074-002-01",
+      "title": "Only adapter unavailability may skip",
+      "gherkin": {
+        "given": "the assistant HTTP adapter never binds and answers 503 assistant_http_not_ready",
+        "when": "the regression test runs",
+        "then": "the test may skip for infrastructure unavailability and no other condition in the test may skip"
+      },
+      "behaviorClass": "unit",
+      "changeType": "bugfix",
+      "requiredTestType": "unit",
+      "regressionRequired": true,
+      "adversarial": true,
+      "lockdown": false,
+      "linkedTests": [
+        {"file": "tests/e2e/assistant/capture_fallback_trigger_e2e_test.go", "testId": "static bailout scan (grep census of t.Skip vs t.Errorf/t.Fatalf)", "status": "planned"}
+      ],
+      "evidenceRefs": [],
+      "replacedBy": null,
+      "invalidatedBy": null
+    }
+  ]
+}

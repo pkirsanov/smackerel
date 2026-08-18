@@ -1,0 +1,126 @@
+{
+  "version": 3,
+  "specId": "074-capture-as-fallback-policy",
+  "bugId": "BUG-074-002-noground-e2e-skip-guard-masks-canonical-ack-regression",
+  "featureDir": "specs/074-capture-as-fallback-policy/bugs/BUG-074-002-noground-e2e-skip-guard-masks-canonical-ack-regression",
+  "featureName": "BUG-074-002 no-ground E2E skip-guard masks the canonical-ack regression",
+  "workflowMode": "bugfix-fastlane",
+  "executionRuntime": "direct",
+  "status": "route_required",
+  "severity": "S3",
+  "severityClass": "test-integrity",
+  "releaseTrain": "mvp",
+  "flagsIntroduced": [],
+  "createdAt": "2026-08-18T00:00:00Z",
+  "lastUpdatedAt": "2026-08-18T00:00:00Z",
+  "certifiedAt": null,
+  "certifiedBy": null,
+  "discoveredBy": "bubbles.bug (finding DI-5 during BUG-061-009 close-out)",
+  "discoveredAt": "2026-08-18",
+  "sourceRevision": "d62f2e750ab315767199ce29b5862e9ae509cccd",
+  "filingNote": "FILING + ROOT-CAUSE only. No fix implemented, no test executed, no live stack started. Every scopes.md DoD item is deliberately unchecked. Status is route_required, not done and not blocked: nothing prevents the fix, it simply has not been done and is owned by another phase.",
+  "explicitNonClaims": [
+    "No production regression is asserted or proven. No user-facing defect is implied.",
+    "No contradiction with BUG-061-009 is asserted; SCOPE-074-04B and INV-HB-REFUSAL plausibly govern different branches and may legitimately coexist.",
+    "Which branch the live stack takes today for the fabricated-city prompt is NOT verified; no live run was performed."
+  ],
+  "execution": {
+    "activeAgent": "bubbles.bug",
+    "currentPhase": "analysis",
+    "executionModel": "direct-authorized-runner",
+    "runStartedAt": "2026-08-18T00:00:00Z",
+    "completedScopes": [],
+    "completedPhaseClaims": [],
+    "executionHistory": [
+      {
+        "at": "2026-08-18",
+        "agent": "bubbles.bug",
+        "phasesExecuted": ["discovery", "documentation", "analysis"],
+        "executionModel": "direct-authorized-runner",
+        "claimSource": "executed",
+        "summary": "Filed the packet closing the DI-5 routing loop from BUG-061-009. Re-verified every line number by reading tests/e2e/assistant/capture_fallback_trigger_e2e_test.go at HEAD d62f2e75 (119 lines, sha256 3d695eac...92b1d): guard `if env.Status != string(contracts.StatusSavedAsIdea)` at line 98 with t.Skipf at 99-100; the four SCOPE-074-04B contract assertions below it at 103/106/109/117; unconditional assertions above it at 83/86/89; second t.Skipf at 71. No line-number corrections were required. Root cause: the test absorbs live-model nondeterminism at the assertion layer, and the variable it tolerates (status) IS the contract under test, so tolerance and detection collapse into one predicate and tolerance always wins. Policy violated: .github/copilot-instructions.md line 331 (no failure-condition early exits). Primary fix direction chosen: assert unconditionally via a two-branch outcome-space assertion modelled on tests/e2e/assistant/high_band_refusal_e2e_test.go (18 t.Errorf/t.Fatalf assertions, single t.Skip at line 90 for adapter-never-bound); deterministic stubbing retained as a declared fallback with a falsifiable adoption condition. NO fix implemented and NO test executed."
+      }
+    ],
+    "scopeSummary": [
+      {
+        "scopeId": "SCOPE-BUG-074-002-01",
+        "title": "Make the no-ground live E2E fail — not skip — on a canonical-ack regression",
+        "owner": "bubbles.implement",
+        "dodCount": 13,
+        "dodComplete": 0,
+        "status": "not_started",
+        "dependsOn": []
+      }
+    ]
+  },
+  "certification": {
+    "status": "route_required",
+    "completedScopes": [],
+    "certifiedCompletedPhases": [],
+    "certifierAgent": null,
+    "certifiedAt": null,
+    "scopeProgress": [
+      {"scopeId": "SCOPE-BUG-074-002-01", "status": "not_started", "dodComplete": 0, "dodTotal": 13}
+    ],
+    "achievedAssuranceLevel": "root cause established by static source inspection with executed evidence; zero fix assurance",
+    "pendingGates": [
+      "Resolve the open unknown: live run recording which branch the fabricated-city prompt takes at HEAD",
+      "Reproduce the defect (current test reports SKIP on an off-contract status)",
+      "Adversarial regression flips SKIP -> FAIL",
+      "Non-tautology control (grounded envelope still passes)",
+      "Full assistant e2e package with no collateral regression",
+      "validate-owned certification"
+    ],
+    "lockdownState": {
+      "active": false,
+      "round": 0,
+      "reason": "Newly filed bug; certification is validate-owned and has not begun.",
+      "lastUpdatedAt": "2026-08-18T00:00:00Z"
+    }
+  },
+  "policySnapshot": {
+    "grill": {"value": "off", "source": "repo-default"},
+    "tdd": {"value": "scenario-first", "source": "workflow-forced"},
+    "autoCommit": {"value": "off", "source": "user-request"},
+    "lockdown": {"value": "off", "source": "repo-default"},
+    "regression": {"value": "standard", "source": "repo-default"},
+    "validation": {"value": "required", "source": "repo-default"},
+    "regressionStrictness": {"value": "standard", "source": "repo-default"},
+    "validateCertificationRequired": {"value": true, "source": "repo-default"}
+  },
+  "transitionRequests": [
+    {
+      "id": "TR-BUG-074-002-IMPLEMENT-001",
+      "requestedAt": "2026-08-18T00:00:00Z",
+      "requestedBy": "bubbles.bug",
+      "fromStatus": "in_progress",
+      "toStatus": "route_required",
+      "targetAgent": "bubbles.implement",
+      "routedTo": "bubbles.implement",
+      "productAction": "none",
+      "crossRepoFollowUp": false,
+      "reason": "Filing + root-cause complete under an explicit instruction not to implement the fix. Scope SCOPE-BUG-074-002-01 is defined with Gherkin, a five-row test plan and an unchecked DoD; design.md selects the primary fix direction and records a falsifiable condition for the declared fallback. Implementation, the live branch determination, and the adversarial SKIP->FAIL flip are owned by bubbles.implement and bubbles.test.",
+      "packetRef": "report.md#static-verification-control-flow-of-the-defective-test",
+      "status": "open",
+      "resolution": null
+    }
+  ],
+  "reworkQueue": [],
+  "routing": {
+    "outcome": "route_required",
+    "nextRequiredOwner": "bubbles.implement",
+    "reason": "Test-integrity defect filed and root-caused; fix deliberately not implemented per the filing task's constraints. Change boundary is tests/e2e/assistant/capture_fallback_trigger_e2e_test.go plus this packet; internal/ is explicitly forbidden because no production defect is asserted.",
+    "subsequentOwners": ["bubbles.test", "bubbles.validate"]
+  },
+  "related": {
+    "originFinding": "specs/061-conversational-assistant/bugs/BUG-061-009-high-band-refusal-masked-as-saved-as-idea/report.md#discovered-issues (DI-5)",
+    "governingScope": "specs/074-capture-as-fallback-policy/scopes.md SCOPE-074-04B (line 365), TP-074-14 / SCN-074-A01 (line 404)",
+    "siblingBug": "specs/074-capture-as-fallback-policy/bugs/BUG-074-001-canonical-capture-response (done; does not cover this)",
+    "referenceImplementation": "tests/e2e/assistant/high_band_refusal_e2e_test.go",
+    "policyAnchor": ".github/copilot-instructions.md line 331 (Adversarial Regression Tests For Bug Fixes)"
+  },
+  "deploymentBoundary": {
+    "impacted": false,
+    "note": "Test-only change boundary. No deployment, release-train, host, secret, image, or config-bundle change."
+  }
+}
