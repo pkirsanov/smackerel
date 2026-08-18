@@ -2849,7 +2849,7 @@ E2EUI_HELP
     ;;
   release)
     # Thin wrapper over bubbles framework + knb adapter.
-    # Sub-actions: guard | flag-audit | status
+    # Sub-actions: guard | reconcile | flag-audit | backfill-plan | status
     # Real cut/promote/rollback flow lands when the framework workflow modes
     # are wired into a runtime; today this is the operator entry point.
     SUBCOMMAND="${1:-status}"
@@ -2865,18 +2865,95 @@ E2EUI_HELP
       backfill-plan)
         bash "$BUBBLES_DIR/scripts/release-train-backfill-planner.sh" "$SCRIPT_DIR" "$@"
         ;;
+      reconcile)
+        # G101 release-delivery reconciliation, aggregated across every phase.
+        #
+        # The framework guard is per-phase by design, so hand-invoking it can
+        # only ever prove the ONE phase the operator happened to name. This arm
+        # discovers every phase packet on disk and runs all of them, which is
+        # what makes it safe to wire into pre-push and CI as a single call.
+        #
+        # No --skip / --force / --ignore bypass exists: the only way past a
+        # failure is to fix the drift (same posture as `release guard`).
+        RECONCILE_GUARD="$BUBBLES_DIR/scripts/release-delivery-reconciliation-guard.sh"
+        if [[ ! -f "$RECONCILE_GUARD" ]]; then
+          echo "[release reconcile] guard not found: $RECONCILE_GUARD" >&2
+          echo "  remediation: restore the bubbles install under .github/bubbles/scripts/" >&2
+          exit 1
+        fi
+
+        RECONCILE_PHASES=()
+        while [[ $# -gt 0 ]]; do
+          case "$1" in
+            --phase)
+              RECONCILE_PHASES+=("${2:?--phase requires a value}")
+              shift 2
+              ;;
+            --phase=*)
+              RECONCILE_PHASES+=("${1#*=}")
+              shift
+              ;;
+            *)
+              echo "Unknown release reconcile option: $1" >&2
+              echo "Usage: ./smackerel.sh release reconcile [--phase <name>]" >&2
+              exit 1
+              ;;
+          esac
+        done
+
+        if [[ ${#RECONCILE_PHASES[@]} -eq 0 ]]; then
+          for _features_md in "$SCRIPT_DIR"/docs/releases/*/features.md; do
+            [[ -f "$_features_md" ]] || continue
+            RECONCILE_PHASES+=("$(basename "$(dirname "$_features_md")")")
+          done
+        fi
+
+        # A discovery that finds nothing is a broken repo, not a clean run.
+        if [[ ${#RECONCILE_PHASES[@]} -eq 0 ]]; then
+          echo "[release reconcile] no phase packets found under docs/releases/*/features.md" >&2
+          exit 1
+        fi
+
+        RECONCILE_FAILED=0
+        RECONCILE_SUMMARY=()
+        for _phase in "${RECONCILE_PHASES[@]}"; do
+          echo ""
+          echo "=== release reconcile — phase: $_phase ==="
+          # Aggregate rather than short-circuit: a later phase must never be
+          # masked by an earlier failure, or one fix at a time is all an
+          # operator ever learns about.
+          if bash "$RECONCILE_GUARD" --repo-root "$SCRIPT_DIR" --phase "$_phase" --require-coverage; then
+            RECONCILE_SUMMARY+=("  PASS  $_phase")
+          else
+            _phase_exit=$?
+            RECONCILE_SUMMARY+=("  FAIL  $_phase (exit $_phase_exit)")
+            RECONCILE_FAILED=1
+          fi
+        done
+
+        echo ""
+        echo "Release-delivery reconciliation (G101) — per-phase verdict:"
+        printf '%s\n' "${RECONCILE_SUMMARY[@]}"
+        if [[ $RECONCILE_FAILED -ne 0 ]]; then
+          echo "[release reconcile] FAILED — release-delivery drift in at least one phase." >&2
+          exit 1
+        fi
+        echo "[release reconcile] OK — ${#RECONCILE_PHASES[@]} phase(s) reconciled."
+        ;;
       status|"")
         echo "Release trains declared in config/release-trains.yaml:"
         yq -r '.trains[] | "  \(.id) — phase: \(.phase) — slot: \(.target_slot)"' "$SCRIPT_DIR/config/release-trains.yaml" 2>/dev/null
         echo ""
         echo "Subcommands:"
         echo "  release guard           — validate release-trains.yaml + G110/G111"
+        echo "  release reconcile       — G101 delivery reconciliation across every phase"
+        echo "  release reconcile --phase <name>  — reconcile a single phase"
         echo "  release flag-audit      — list overdue feature flags"
         echo "  release backfill-plan   — advisory backfill suggestions for legacy specs"
         ;;
       *)
         echo "Unknown release subcommand: $SUBCOMMAND" >&2
-        echo "Available: guard | flag-audit | backfill-plan | status" >&2
+        echo "Available: guard | reconcile | flag-audit | backfill-plan | status" >&2
         exit 1
         ;;
     esac

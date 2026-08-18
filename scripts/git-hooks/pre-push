@@ -102,3 +102,37 @@ else
   exit 1
 fi
 # === end knb product deployment-boundary guard ===
+
+# === smackerel release-schema gates (G110 + G101) ===
+# Action OPS-N3 (docs/releases/next/actions.md).
+#
+# Before this block NEITHER release-axis gate had any mechanical enforcement:
+# release-train-guard.sh was reachable only through the manual
+# `./smackerel.sh release guard` subcommand, and the delivery-reconciliation
+# guard was wired nowhere in the product at all. Release-ladder drift was
+# therefore caught at review, or not at all.
+#
+# Both gates are pure shell over committed docs/config (jq + yq): no Docker,
+# no test stack, no build. Both are BLOCKING — a non-zero exit rejects the push.
+#
+# No bypass, matching the C3 posture of the knb blocks above: no --skip /
+# --force / --no-release-schema flag exists here or on either gate. The only
+# way past a failure is to fix the drift.
+_repo_root="$(git rev-parse --show-toplevel)"
+
+# G110/G111 — release-train declaration + flag-ownership discipline.
+_release_train_guard="$_repo_root/.github/bubbles/scripts/release-train-guard.sh"
+if [ ! -f "$_release_train_guard" ]; then
+  printf '%s\n' \
+    "[E-RELEASE-PRE-PUSH-MISSING-GUARD] release-train guard missing at $_release_train_guard" \
+    "       Push rejected. Restore the bubbles install under .github/bubbles/scripts/." >&2
+  exit 1
+fi
+bash "$_release_train_guard" "$_repo_root" || exit $?
+
+# G101 — required-feature delivery reconciliation across EVERY phase packet.
+# Deliberately the aggregate `release reconcile` form, not a single --phase
+# call: naming one phase would only ever prove that phase, which is exactly how
+# a `next` regression can slip past a green `mvp`.
+bash "$_repo_root/smackerel.sh" release reconcile || exit $?
+# === end smackerel release-schema gates ===

@@ -165,6 +165,45 @@ jobs:
           -run 'TestRenderDescriptorV1_CrossLanguageCanary|TestRenderDescriptorV1_DartPreCompiled_NoFallbackToDartRun' \
           ./tests/unit/clients/...
 
+  # Action OPS-N3 — release-schema safety net.
+  # Mirrors the release-schema block in scripts/git-hooks/pre-push so ladder
+  # drift is still caught when a push skipped the local hook (the hook is an
+  # opt-in per-clone install). Before OPS-N3 neither release-axis gate had any
+  # mechanical enforcement anywhere in the product.
+  #
+  # Deliberately independent of lint-and-test/build/integration: both gates are
+  # pure shell over committed docs/config (jq + yq, both preinstalled on
+  # ubuntu-latest) with no Docker, Go, Python, or build dependency. Keeping the
+  # lane standalone means release drift cannot be masked by an unrelated
+  # failure upstream, and the verdict lands in seconds.
+  #
+  # No bypass flag exists on either gate.
+  release-schema:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+    - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+    # Fail loud rather than degrade silently: the reconciliation guard resolves
+    # workflow-mode metadata with `yq ... || true`, so a missing yq would parse
+    # as empty and quietly weaken the gate instead of failing it.
+    - name: Verify guard parsers are present
+      run: |
+        for _bin in jq yq; do
+          command -v "$_bin" >/dev/null 2>&1 || {
+            echo "::error::$_bin is required by the release-schema gates but is not on PATH"
+            exit 1
+          }
+        done
+        jq --version
+        yq --version
+
+    - name: Release-train guard (G110/G111)
+      run: bash .github/bubbles/scripts/release-train-guard.sh "$(pwd)"
+
+    - name: Release-delivery reconciliation, all phases (G101)
+      run: ./smackerel.sh release reconcile
+
   build:
     needs: lint-and-test
     runs-on: ubuntu-latest

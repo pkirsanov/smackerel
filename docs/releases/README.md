@@ -19,7 +19,7 @@ Last reconciled: **2026-08-04** against `HEAD` = `8d971420`.
 
 | Phase | Packet | Backing train | Train slot | Status | What it covers |
 |---|---|---|---|---|---|
-| `mvp` | [`mvp/`](mvp/) | `mvp` | `home-lab` | active | The founding-promise gate **plus the entire pre-train legacy estate** (Phase 1–5 and every spec that predates the release-train policy). |
+| `mvp` | [`mvp/`](mvp/) | `mvp` | `<deploy-slot>` | active | The founding-promise gate **plus the entire pre-train legacy estate** (Phase 1–5 and every spec that predates the release-train policy). |
 | `next` | [`next/`](next/) | `next` | `staging` | active | The promotion candidate: open-knowledge reasoning + synthesis, runtime-switchable models, retrieval-strategy routing, knowledge-graph public API, and the hardened-but-undelivered supervisor / corpus-grant / MCP plans. |
 | `v1` | [`v1/`](v1/) | *(none yet)* | — | planning | The forward-looking personal-productivity + outbound-action product gate. No train is cut for it; it owns planned capability and the deferrals it inherited from `mvp`. |
 

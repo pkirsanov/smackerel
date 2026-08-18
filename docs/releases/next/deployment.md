@@ -11,7 +11,7 @@
 
 Release train `next` targets slot **`staging`** (`config/release-trains.yaml`, owned
 by `bubbles.train`). `staging` is the promotion-candidate slot: a capability set
-proves itself there before it is promoted onto the `mvp` train's `home-lab` slot.
+proves itself there before it is promoted onto the `mvp` train's `<deploy-slot>`.
 
 The train-to-phase binding is one-to-one and is registered in
 [`../README.md`](../README.md): train `next` ⇄ phase `next` ⇄ this packet. That
@@ -46,7 +46,7 @@ not have to reconstruct them:
 2. Gate G101 for phase `next` is green — every `required` binding in [`features.md`](features.md) resolves to a terminal, non-blocked, validate-certified spec.
 3. The operator promotes the manifest onto the `staging` slot through the adapter, by digest.
 4. Post-apply verification confirms the running digests match the deployment manifest. Drift is a blocking error, not a warning.
-5. Only after `staging` holds does a promotion onto the `home-lab` slot become a candidate — and that is a `bubbles.train` decision, not a `bubbles.releases` one.
+5. Only after `staging` holds does a promotion onto the `mvp` train's `<deploy-slot>` become a candidate — and that is a `bubbles.train` decision, not a `bubbles.releases` one.
 
 Step 2 is the part this packet adds. It did not previously exist for this train.
 

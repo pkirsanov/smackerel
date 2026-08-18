@@ -16,7 +16,7 @@ that authorization is per-client and audited.
 
 `next` is the **promotion-candidate gate**. It is backed by release train `next`
 (`config/release-trains.yaml`, slot `staging`) — the staging train that proves a
-capability set before it is promoted onto the home-lab train.
+capability set before it is promoted onto the `mvp` train.
 
 The `mvp` gate proved that Smackerel can *capture* and *deliver*: ingest from many
 sources, build the graph, produce a digest, surface it without nagging. `next`
