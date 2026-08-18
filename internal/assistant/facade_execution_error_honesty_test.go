@@ -25,10 +25,15 @@ import (
 )
 
 // requiresProvenanceScenarios is the closed set whose manifest sets
-// requires_provenance=true (skills_manifest_test.go asserts this exact set).
-// Every one is subject to the provenance gate and therefore to the masking
-// defect if the gate ever runs on a non-OK outcome.
-var requiresProvenanceScenarios = []string{"weather_query", "retrieval_qa", "recipe_search"}
+// requires_provenance=true. Every one is subject to the provenance gate and
+// therefore to the masking defect if the gate ever runs on a non-OK outcome.
+//
+// The set is closed over the SST by TestRequiresProvenanceScenarios_ClosedOverSST,
+// which reads config/assistant/scenarios.yaml directly — skills_manifest_test.go
+// spot-checks individual entries but never asserted the set was complete, which
+// is how open_knowledge (the `/ask` scenario BUG-061-009 was reported against)
+// stayed out of this sweep while the packet claimed it was covered.
+var requiresProvenanceScenarios = []string{"weather_query", "retrieval_qa", "recipe_search", "open_knowledge"}
 
 // errorOutcomes are non-OK executor outcomes that represent an execution
 // FAILURE (not a genuine no-answer). Each MUST surface honestly.

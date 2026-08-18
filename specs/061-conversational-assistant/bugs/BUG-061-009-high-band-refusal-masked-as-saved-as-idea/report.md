@@ -203,3 +203,72 @@ proven at the unit level by the extended cross-path invariant test
 (`TestExecutionErrorHonesty_*`), which exercises the exact open_knowledge
 OK-but-uncited path and asserts `StatusUnavailable` + honest body, never the
 capture acknowledgement.
+
+---
+
+### Regression Invariant Closure
+
+**Phase:** regression · **Claim Source:** executed · **Live system:** no
+
+**What the regression phase found.** The class-killer for INV-HB-REFUSAL in
+`internal/assistant/facade_execution_error_honesty_test.go` sweeps a
+**hand-written** list, `requiresProvenanceScenarios`. That list had drifted from
+the SST: it named `weather_query`, `retrieval_qa`, and `recipe_search` but **not
+`open_knowledge`** — the `/ask` scenario this bug was actually reported against,
+and the only requires_provenance scenario with its own facade fast-path and its
+own `OutcomeOK → StatusAnswered` mapping. So the sweep this packet cited as
+proof that no band-high path can render the capture acknowledgement never
+executed the path the bug was filed about. A hand-written sweep is a class-killer
+only while it matches reality, and nothing failed when it stopped matching.
+
+**What now prevents recurrence.**
+
+1. `requiresProvenanceScenarios` now contains `open_knowledge`
+   (`internal/assistant/facade_execution_error_honesty_test.go:36`), so the
+   existing invariant sweep exercises the reported path rather than skipping it.
+2. `internal/assistant/facade_high_band_invariant_coverage_test.go` (new) adds
+   `TestRequiresProvenanceScenarios_ClosedOverSST`, which closes the sweep list
+   over the SST. It loads `config/assistant/scenarios.yaml` — the same file the
+   runtime manifest loads — and fails on drift in **both** directions: a
+   requires_provenance scenario declared in the SST but absent from the sweep (an
+   uncovered masking path), and a sweep entry the SST does not gate (a row that
+   proves nothing). A closing `t.Fatal` on an empty declared set stops the
+   assertion from passing vacuously if the manifest or its path is ever wrong.
+
+The residual failure mode is now mechanical rather than editorial: adding a
+requires_provenance scenario to the SST without extending the invariant sweep
+fails the unit suite instead of silently shipping an uncovered copy of this bug.
+
+**Verification — focused run of the two owning tests, executed in this session.**
+
+```
+./smackerel.sh test unit --go \
+  --go-run 'TestRequiresProvenanceScenarios_ClosedOverSST|TestHighBandNeverMaskedAsSavedAsIdea' \
+  --verbose
+```
+
+Key captured line, verbatim:
+
+```
+    facade_high_band_invariant_coverage_test.go:80: SST requires_provenance scenarios (all swept by the INV-HB-REFUSAL invariant): [open_knowledge recipe_search retrieval_qa weather_query]
+```
+
+**Exit code: 0.**
+
+**Why this evidence and not a suite tail.** An earlier `./smackerel.sh test unit`
+run did report green, but the Go phase printed the owning package as
+`ok  github.com/smackerel/smackerel/internal/assistant  (cached)`. A cache hit is
+not an execution: it asserts that a previous run of an identical tree passed, and
+it prints nothing the two tests themselves produced. Pasting that suite tail as
+proof of this fix would therefore have been proof of the wrong thing — worse, the
+tail it produced showed unrelated shell tests and never named either Go test. The
+focused run above changes the `-run` pattern, which is part of Go's test cache
+key, so the package is re-executed rather than replayed. The line-80 output is
+emitted by `TestRequiresProvenanceScenarios_ClosedOverSST` itself and lists the
+four requires_provenance scenarios it read out of the SST, `open_knowledge`
+among them — that log line only exists if the test actually ran, and its contents
+only match if the sweep is genuinely closed over the manifest. That is the
+evidence; the cached suite tail was not.
+
+_PII note: absolute paths in this section's evidence were written in relative
+form per the repository PII policy. No result, count, or exit code was altered._

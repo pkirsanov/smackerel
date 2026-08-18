@@ -71,11 +71,15 @@ capture acknowledgement nor the "(saved as idea)" suffix.
 | Test Type | Category | File | Description | Command |
 |---|---|---|---|---|
 | Unit | unit | `internal/assistant/facade_execution_error_honesty_test.go` | cross-path invariant: band-high never masked; band-low capture preserved | `./smackerel.sh test unit --go` |
+| Unit | unit | `internal/assistant/facade_execution_error_honesty_test.go` | regression: `requiresProvenanceScenarios` gains `open_knowledge`, so the INV-HB-REFUSAL sweep actually covers the `/ask` scenario this bug was reported against; no live system | `./smackerel.sh test unit` |
+| Unit | unit | `internal/assistant/facade_high_band_invariant_coverage_test.go` | regression: `TestRequiresProvenanceScenarios_ClosedOverSST` closes the sweep list over `config/assistant/scenarios.yaml` — fails on drift in both directions, with an anti-vacuity `t.Fatal`; no live system | `./smackerel.sh test unit` |
 
 ### Definition of Done
 - [x] OK-uncited assertion flipped to honest refusal → `TestExecutionErrorHonesty_OKNoSourcesRefusesHonestly` (Evidence: report.md#test-evidence)
 - [x] One invariant test covers every requires_provenance × high-band-no-sources path → `TestExecutionErrorHonesty_NonOKNeverMaskedAsSavedAsIdea` sweeps {provider error, timeout, OK-uncited} (Evidence: report.md#test-evidence)
 - [x] Reverting any fix layer fails the invariant test (adversarial) → invariant asserts `Status != StatusSavedAsIdea` AND `Body != captureFallbackAcknowledgement` AND `CaptureRoute == false` AND `ErrorCause != ""` per row
+- [x] Scenario-specific regression coverage exists for the reported `open_knowledge` masking path — `requiresProvenanceScenarios` now contains `open_knowledge`, so the INV-HB-REFUSAL sweep exercises the exact `/ask` scenario the bug was filed against instead of skipping it → Evidence: [report.md#regression-invariant-closure]
+- [x] Broader regression suite passes with the coverage-closure test in place — `TestRequiresProvenanceScenarios_ClosedOverSST` binds the sweep list to `config/assistant/scenarios.yaml` and the full unit suite is green → Evidence: [report.md#regression-invariant-closure]
 - [x] Build Quality Gate: build + check + lint clean, zero warnings → (Evidence: report.md#test-evidence)
 
 ---

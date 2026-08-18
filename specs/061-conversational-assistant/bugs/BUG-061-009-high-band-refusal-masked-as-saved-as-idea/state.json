@@ -58,7 +58,8 @@
     "implement",
     "test",
     "harden",
-    "docs"
+    "docs",
+    "regression"
   ],
   "certification": {
     "status": "blocked",
