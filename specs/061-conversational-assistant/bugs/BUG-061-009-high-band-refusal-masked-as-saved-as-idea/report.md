@@ -104,7 +104,7 @@ Artifact lint PASSED.
 === artifact-lint exit: 0 ===
 ```
 
-## Grounding-gap follow-up (SCOPE-05 diagnosis)
+## Grounding-gap diagnosis and routing (SCOPE-05)
 
 **Question:** why did `/ask how smackerel works as second brain or llm wiki?`
 ground nothing (agent `status=success termination=final`, but zero sources →
@@ -144,10 +144,18 @@ facade change:
    with an explicit "unsourced / general knowledge" caveat (weakens
    `requires_provenance` — needs owner sign-off).
 
-**Routed as follow-up:** `BUG-061-010-open-knowledge-grounding-gap` (to be
-created) — out of scope for BUG-061-009, which owns only the honest-refusal
-invariant. This bug does NOT claim to make `/ask` answer; it claims the refusal
-is now honest.
+**Routing decision (completed).** The grounding gap was routed to
+`BUG-061-010-open-knowledge-grounding-gap`, which exists at
+`specs/061-conversational-assistant/bugs/BUG-061-010-open-knowledge-grounding-gap/`
+(`bug.md` + `state.json`) and owns the three investigation lines above. That bug
+is the owner of record for making `/ask` answer.
+
+This paragraph previously read "(to be created)". That was true when written and
+is false now, so it is corrected rather than preserved: a routing claim that
+names an artifact which does not exist is indistinguishable from no routing at
+all, and the correction is a truth repair, not a softer wording. BUG-061-009 owns
+exactly one thing — the honest-refusal invariant (INV-HB-REFUSAL). It does NOT
+claim to make `/ask` answer; it claims the refusal is now honest.
 
 ## Deploy Evidence (local-operator on `<deploy-host>`, `<target>`)
 
@@ -272,3 +280,143 @@ evidence; the cached suite tail was not.
 
 _PII note: absolute paths in this section's evidence were written in relative
 form per the repository PII policy. No result, count, or exit code was altered._
+
+---
+
+## Implementation Delta
+
+### Code Diff Evidence
+
+**Phase:** regression · **Claim Source:** executed · **Live system:** no
+
+The two source changes this packet made most recently both landed in commit
+`5c24a74f` ("fix(BUG-061-009): close the INV-HB-REFUSAL sweep over the scenario
+SST"). Diff retrieved with, and reproduced from, this command executed in this
+session from the repository root `<repo-root>`:
+
+```
+git show 5c24a74f -- internal/assistant/facade_execution_error_honesty_test.go internal/assistant/facade_high_band_invariant_coverage_test.go
+```
+
+Changed-path summary, from `git show --stat 5c24a74f` on the same two paths:
+
+```
+ .../facade_execution_error_honesty_test.go         | 13 ++--
+ .../facade_high_band_invariant_coverage_test.go    | 81 ++++++++++++++++++++++
+ 2 files changed, 90 insertions(+), 4 deletions(-)
+```
+
+**1 — `internal/assistant/facade_execution_error_honesty_test.go` (modified).**
+Complete hunk, verbatim:
+
+```
+diff --git a/internal/assistant/facade_execution_error_honesty_test.go b/internal/assistant/facade_execution_error_honesty_test.go
+index 13ae26e6..48252925 100644
+--- a/internal/assistant/facade_execution_error_honesty_test.go
++++ b/internal/assistant/facade_execution_error_honesty_test.go
+@@ -25,10 +25,15 @@ import (
+ )
+ 
+ // requiresProvenanceScenarios is the closed set whose manifest sets
+-// requires_provenance=true (skills_manifest_test.go asserts this exact set).
+-// Every one is subject to the provenance gate and therefore to the masking
+-// defect if the gate ever runs on a non-OK outcome.
+-var requiresProvenanceScenarios = []string{"weather_query", "retrieval_qa", "recipe_search"}
++// requires_provenance=true. Every one is subject to the provenance gate and
++// therefore to the masking defect if the gate ever runs on a non-OK outcome.
++//
++// The set is closed over the SST by TestRequiresProvenanceScenarios_ClosedOverSST,
++// which reads config/assistant/scenarios.yaml directly — skills_manifest_test.go
++// spot-checks individual entries but never asserted the set was complete, which
++// is how open_knowledge (the `/ask` scenario BUG-061-009 was reported against)
++// stayed out of this sweep while the packet claimed it was covered.
++var requiresProvenanceScenarios = []string{"weather_query", "retrieval_qa", "recipe_search", "open_knowledge"}
+ 
+ // errorOutcomes are non-OK executor outcomes that represent an execution
+ // FAILURE (not a genuine no-answer). Each MUST surface honestly.
+```
+
+That one added element, `"open_knowledge"`, is the whole behavioural delta of
+this file: it is what makes the existing `TestHighBandNeverMaskedAsSavedAsIdea`
+sweep actually traverse the `/ask` path this bug was reported against.
+
+**2 — `internal/assistant/facade_high_band_invariant_coverage_test.go` (new,
+81 added lines).** Reproduced below as a labelled **excerpt**, not the whole
+hunk. The elision is marked inline and is the only omission; every line shown is
+verbatim from the command above, and Go's leading tabs are preserved. The
+complete file lives at
+`internal/assistant/facade_high_band_invariant_coverage_test.go`, and the full
+hunk is reproducible with
+`git show 5c24a74f -- internal/assistant/facade_high_band_invariant_coverage_test.go`.
+
+```
+diff --git a/internal/assistant/facade_high_band_invariant_coverage_test.go b/internal/assistant/facade_high_band_invariant_coverage_test.go
+new file mode 100644
+index 00000000..29f6f0d6
+--- /dev/null
++++ b/internal/assistant/facade_high_band_invariant_coverage_test.go
+@@ -0,0 +1,81 @@
++// BUG-061-009 (regression phase) — coverage closure for INV-HB-REFUSAL.
++//
++// TestHighBandNeverMaskedAsSavedAsIdea is the class-killer for the "saved as an
++// idea" masking, but it sweeps a HAND-WRITTEN list (requiresProvenanceScenarios).
++// A hand-written list is only a class-killer while it matches reality: a
++// requires_provenance scenario absent from it is an uncovered copy of the same
++// defect, and nothing fails when the SST gains one. That is not hypothetical —
++// `open_knowledge` (the `/ask` scenario BUG-061-009 was actually reported
++// against, and the only one with its own facade fast-path and its own
++// OutcomeOK→StatusAnswered mapping) was missing from the list while the packet
++// claimed the invariant covered it.
++//
++// This test closes the list over the SST: the covered set is checked against
++// config/assistant/scenarios.yaml, the same file the runtime manifest loads. It
++// fails on drift in either direction, so the invariant sweep cannot silently
++// stop covering the class it exists to kill.
++
++package assistant
++
++import (
++	"sort"
++	"testing"
++)
++
+[EXCERPT MARKER — added lines 25 through 66 elided here: the doc comment on
+TestRequiresProvenanceScenarios_ClosedOverSST, the LoadSkillsManifest call with
+its permissive enable-key resolver, and the construction of the swept /
+declared / uncovered / notProvenanceBearing sets. Nothing else is omitted.]
++
++	if len(uncovered) > 0 {
++		t.Errorf("requires_provenance scenario(s) %v are declared in config/assistant/scenarios.yaml but absent from requiresProvenanceScenarios %v — "+
++			"each is an uncovered high-band path that can mask a refusal as 'saved as an idea' (INV-HB-REFUSAL)",
++			uncovered, requiresProvenanceScenarios)
++	}
++	if len(notProvenanceBearing) > 0 {
++		t.Errorf("requiresProvenanceScenarios names %v which the SST does NOT mark requires_provenance — "+
++			"those sweep rows never exercise the provenance gate and prove nothing", notProvenanceBearing)
++	}
++	if len(declared) == 0 {
++		t.Fatal("manifest declared zero requires_provenance scenarios — the closure assertion would pass vacuously; the manifest or its path is wrong")
++	}
++	t.Logf("SST requires_provenance scenarios (all swept by the INV-HB-REFUSAL invariant): %v", declared)
++}
+```
+
+The two `t.Errorf` branches are what make the assertion bidirectional, and the
+`t.Fatal` is what stops it passing vacuously — those three are the reason this
+file is a coverage closure rather than another hand-maintained list. The
+`t.Logf` on the last line is the line quoted as execution proof in
+*Regression Invariant Closure* above.
+
+---
+
+## Discovered Issues
+
+Issues surfaced while working this packet that are not the reported defect. Each
+carries a disposition and a concrete reference, so none survives as an
+unattributed aside.
+
+| # | Date | Issue | Disposition | Reference |
+|---|------|-------|-------------|-----------|
+| DI-1 | 2026-08-18 | `open_knowledge` grounds nothing for a question about smackerel's own product. The agent terminates `status=success termination=final` with zero citable sources, so the provenance gate refuses. The refusal is correct anti-fabrication; the gap is that the user wants an answer, and closing it needs retrieval/ingestion investigation, not a facade change. | **routed** — owned by a real bug artifact, not by this packet. BUG-061-009 owns only INV-HB-REFUSAL (make the refusal honest) and makes no claim about making `/ask` answer. | `BUG-061-010-open-knowledge-grounding-gap` at `specs/061-conversational-assistant/bugs/BUG-061-010-open-knowledge-grounding-gap/` (`bug.md`, `state.json`); diagnosis in *Grounding-gap diagnosis and routing (SCOPE-05)* above |
+| DI-2 | 2026-08-18 | The `requiresProvenanceScenarios` sweep list in `internal/assistant/facade_execution_error_honesty_test.go` had drifted from the scenario SST: it named `weather_query`, `retrieval_qa`, `recipe_search` but not `open_knowledge` — the exact `/ask` path this bug was reported against — while the packet cited that sweep as proof no band-high path can render the capture acknowledgement. | **fixed-in-session** — `open_knowledge` added to the sweep, and `TestRequiresProvenanceScenarios_ClosedOverSST` added in `internal/assistant/facade_high_band_invariant_coverage_test.go` to close the list over `config/assistant/scenarios.yaml` bidirectionally, so the same drift now fails the unit suite instead of shipping silently. | commit `5c24a74f`; diff in *Code Diff Evidence* above; execution proof in *Regression Invariant Closure* above |
+| DI-3 | 2026-08-18 | The `## Grounding-gap …` routing paragraph in this report named `BUG-061-010-open-knowledge-grounding-gap` as "(to be created)". That was accurate when written; the artifact has since been created, so the parenthetical had become a false statement about the state of the repository. | **fixed-in-session** — corrected to a completed routing decision citing the artifact's on-disk path, verified present before the edit. A routing claim naming a non-existent artifact is indistinguishable from no routing, which is why this was repaired rather than reworded. | `specs/061-conversational-assistant/bugs/BUG-061-010-open-knowledge-grounding-gap/` (`bug.md`, `state.json`); *Grounding-gap diagnosis and routing (SCOPE-05)* above |

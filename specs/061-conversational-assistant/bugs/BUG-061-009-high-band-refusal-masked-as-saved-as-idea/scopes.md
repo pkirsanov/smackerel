@@ -125,16 +125,16 @@ capture acknowledgement nor the "(saved as idea)" suffix.
 - SCN-061-009-05 — grounding gap diagnosed and routed (no code fix here).
 
 ### Implementation
-- Diagnose why open_knowledge grounded nothing for a question about the user's own product (retrieval wiring vs un-ingested docs vs agent search); document the finding in `report.md` and route as a separate follow-up.
+- Diagnose why open_knowledge grounded nothing for a question about the user's own product (retrieval wiring vs un-ingested docs vs agent search); document the finding in `report.md` and route the grounding gap to its own bug artifact.
 - `docs/smackerel.md` §3.8.6: extend the honesty invariant to OK-uncited + "saved as an idea is band-low-only".
 - `.github/copilot-instructions.md`: extend the Assistant Response Honesty review rule to INV-HB-REFUSAL.
 
 ### Test Plan
 | Test Type | Category | File | Description | Command |
 |---|---|---|---|---|
-| Doc | n/a | `docs/smackerel.md`, `.github/copilot-instructions.md` | invariant documented; grounding follow-up routed | n/a (review) |
+| Doc | n/a | `docs/smackerel.md`, `.github/copilot-instructions.md` | invariant documented; grounding gap routed to `BUG-061-010-open-knowledge-grounding-gap` | n/a (review) |
 
 ### Definition of Done
-- [x] Grounding gap diagnosed with evidence + routed as a follow-up (bug/spec id recorded) → `BUG-061-010-open-knowledge-grounding-gap` (Evidence: report.md#grounding-gap-follow-up-scope-05-diagnosis)
+- [x] Grounding gap diagnosed with evidence + routed to a real bug artifact whose id is recorded → `BUG-061-010-open-knowledge-grounding-gap`, which exists at `specs/061-conversational-assistant/bugs/BUG-061-010-open-knowledge-grounding-gap/` and owns the grounding gap (Evidence: report.md#grounding-gap-diagnosis-and-routing-scope-05)
 - [x] `docs/smackerel.md` §3.8.6 + copilot-instructions encode INV-HB-REFUSAL → §3.8.6 Invariant 3 added; copilot-instructions "Assistant Response Honesty" INV-HB-REFUSAL bullet added
 - [x] artifact-lint clean → (Evidence: report.md#artifact-lint)
