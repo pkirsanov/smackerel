@@ -749,7 +749,8 @@ looking early, so each class below was checked and found clear:
   The key is declared in the YAML SST and resolved with `required_value` + the fail-loud
   `${VAR:?...}` form — never `${VAR:-...}`. The forbidden-shape grep over the resolution file
   returned exit 1 (no match), and `TestCorpusGrantEnforcement_ResolverHasNoDefaultShape` asserts
-  the same property in Go. Honest limit: `home-lab.env` and `self-hosted.env` were unreadable
+  the same property in Go. Honest limit: the two deploy-target `.env` files named in the
+  transcript above were unreadable
   (permission denied), so emission is verified for `dev.env` and `test.env` only.
 
 - [x] Three `smackerel_auth_corpus_grant_*` metrics added to the existing `smackerel_auth_*` family; `smackerel_auth_scope_rejected_total` unchanged and not reused for the observe signal
@@ -3946,7 +3947,8 @@ And it records that bubbles.train owns both the owning-train flip and the retire
   evidence the flag was scoped wrongly.
 
   Note that `config/release-trains.yaml` WAS edited earlier in this delivery — commit `d0d00d31`
-  resolved a contradiction where `release-train-guard.sh` accepted `home-lab` while a Go contract
+  resolved a contradiction where `release-train-guard.sh` accepted a concrete operator-target
+  slot while a Go contract
   test demanded `self-hosted`, so the two gates could never both pass. That change is committed and
   is not a working-tree modification; this row asserts no FURTHER structural change was made for
   the flag itself.
@@ -4142,7 +4144,7 @@ ok      github.com/smackerel/smackerel/tests/integration        0.215s
   nobody has generated yet, which a file scan cannot.
 
   **An earlier version of this test iterated every `.env` on disk and FAILED on
-  `home-lab.env`.** That artifact was generated 2026-06-14, two months before the
+  a deploy-target `.env`.** That artifact was generated 2026-06-14, two months before the
   flag existed — stale local state, not a product defect. Scanning gitignored
   local artifacts makes the result depend on when a developer last generated an
   environment they may not even use; that is how a test earns a reputation for

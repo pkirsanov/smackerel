@@ -434,7 +434,7 @@ Bound by [`.github/instructions/product-principles.instructions.md`](../../.gith
 ## Release Train
 
 Targets the **`mvp`** train (`config/release-trains.yaml` — `id: mvp`, `phase: active`,
-`target_slot: home-lab`, `flags_bundle: config/feature-flags.mvp.yaml`).
+`target_slot: prod`, `flags_bundle: config/feature-flags.mvp.yaml`).
 
 **Why `mvp`.** This is a defect fix in the capability the currently-deployed train already
 claims to provide. Product Principle 2 is an MVP promise, the plan of record places P8 in

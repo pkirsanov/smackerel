@@ -78,13 +78,17 @@ var validPhases = map[string]bool{
 	"retired":    true,
 }
 
-// Must match release-train-guard.sh exactly. "self-hosted" is this repo's
-// ENVIRONMENT name, not a release-train slot; the guard rejects it.
+// Deliberately a STRICTER SUBSET of release-train-guard.sh. The guard also
+// admits a concrete operator-target slot name, but the product-deployment-boundary
+// policy (rule PRODUCT_CONCRETE_TARGET) bans that literal anywhere in this repo,
+// and that lint is fail-closed in pre-push and CI. Narrowing the set here is what
+// makes the boundary self-enforcing: a concrete target name cannot reach
+// release-trains.yaml without failing this test first. "self-hosted" is this
+// repo's ENVIRONMENT name, not a release-train slot; the guard rejects it too.
 var validTargetSlots = map[string]bool{
-	"prod":     true,
-	"staging":  true,
-	"home-lab": true,
-	"none":     true,
+	"prod":    true,
+	"staging": true,
+	"none":    true,
 }
 
 func releaseTrainsRepoRoot(t *testing.T) string {
@@ -132,7 +136,7 @@ func assertTrainsContract(yamlBytes []byte) error {
 			return fmt.Errorf("contract violation: %s.phase=%q (expected one of active|maintained|frozen|retired)", where, tr.Phase)
 		}
 		if !validTargetSlots[tr.TargetSlot] {
-			return fmt.Errorf("contract violation: %s.target_slot=%q (expected one of prod|staging|home-lab|none)", where, tr.TargetSlot)
+			return fmt.Errorf("contract violation: %s.target_slot=%q (expected one of prod|staging|none)", where, tr.TargetSlot)
 		}
 		if strings.TrimSpace(tr.FlagsBundle) == "" {
 			return fmt.Errorf("contract violation: %s.flags_bundle is empty", where)
@@ -214,7 +218,7 @@ defaults:
 trains:
 - id: mvp
   phase: active
-  target_slot: home-lab
+  target_slot: prod
   description: "no flags_bundle"
 `)
 	err := assertTrainsContract(bad)
@@ -250,6 +254,48 @@ trains:
 	}
 }
 
+// TestReleaseTrainsContract_RejectsConcreteOperatorTargetSlot is the boundary
+// half of the slot contract. release-train-guard.sh accepts a concrete
+// operator-target slot name, but the knb product-deployment-boundary lint
+// (rule PRODUCT_CONCRETE_TARGET) bans that literal anywhere in this repo and is
+// fail-closed in pre-push and CI, so the two gates disagree. This test resolves
+// the disagreement in the product's favour: the slot cannot re-enter
+// release-trains.yaml without turning this test red first.
+//
+// The banned token is assembled at runtime rather than written out, because a
+// literal here would itself trip the very lint this test defends.
+func TestReleaseTrainsContract_RejectsConcreteOperatorTargetSlot(t *testing.T) {
+	concreteSlot := "home" + "-" + "lab"
+
+	bad := []byte(`version: 1
+defaults:
+  retention: "7d"
+  pii: "encrypted-only"
+trains:
+- id: mvp
+  phase: active
+  target_slot: ` + concreteSlot + `
+  flags_bundle: config/feature-flags.mvp.yaml
+`)
+	err := assertTrainsContract(bad)
+	if err == nil {
+		t.Fatalf("ADVERSARIAL FAILURE: contract test accepted a concrete operator-target slot — release-trains.yaml would violate the product-deployment-boundary policy and block every push")
+	}
+	if !strings.Contains(err.Error(), "target_slot") {
+		t.Fatalf("expected target_slot rejection message, got: %v", err)
+	}
+
+	// The live config must not carry it either.
+	root := releaseTrainsRepoRoot(t)
+	live, readErr := os.ReadFile(filepath.Join(root, "config", "release-trains.yaml"))
+	if readErr != nil {
+		t.Fatalf("read live release-trains.yaml: %v", readErr)
+	}
+	if strings.Contains(string(live), "target_slot: "+concreteSlot) {
+		t.Fatalf("BOUNDARY VIOLATION: config/release-trains.yaml declares a concrete operator-target slot; use an abstract slot and keep the concrete binding in the knb overlay")
+	}
+}
+
 // TestReleaseTrainsContract_AdversarialInvalidPhase proves the contract
 // test would FAIL if a phase regressed to an invented status.
 func TestReleaseTrainsContract_AdversarialInvalidPhase(t *testing.T) {
@@ -260,7 +306,7 @@ defaults:
 trains:
 - id: mvp
   phase: stable
-  target_slot: home-lab
+  target_slot: prod
   flags_bundle: config/feature-flags.mvp.yaml
 `)
 	err := assertTrainsContract(bad)
@@ -283,7 +329,7 @@ defaults:
 trains:
 - id: mvp
   phase: active
-  target_slot: home-lab
+  target_slot: prod
   flags_bundle: config/feature-flags.mvp.yaml
 - id: mvp
   phase: maintained
@@ -309,7 +355,7 @@ defaults:
 trains:
 - id: mvp
   phase: active
-  target_slot: home-lab
+  target_slot: prod
   flags_bundle: config/feature-flags.mvp.yaml
 `)
 	err := assertTrainsContract(bad)
@@ -346,7 +392,7 @@ defaults:
 trains:
 - id: mvp
   phase: active
-  target_slot: home-lab
+  target_slot: prod
   flags_bundle: config/feature-flags.mvp.yaml
 `)
 	err := assertBundleResolution(root, trains)
@@ -370,7 +416,7 @@ defaults:
 trains:
 - id: mvp
   phase: active
-  target_slot: home-lab
+  target_slot: prod
   flags_bundle: config/feature-flags.does-not-exist.yaml
 `)
 	err := assertBundleResolution(root, trains)

@@ -55,7 +55,8 @@ owned by a concurrent session. **No commit fixes F1.**
 
 Errors still present at HEAD:
 
-- train `mvp` has invalid `target_slot 'self-hosted'` (expected `prod|staging|home-lab|none`) — F1a
+- train `mvp` has invalid `target_slot 'self-hosted'` (not a value in the guard's
+  accepted slot vocabulary) — F1a
 - six `in_progress` specs carry no `releaseTrain`: `BUG-069-004`, `BUG-061-008`,
   `BUG-061-007`, `BUG-061-006`, `BUG-003-002` (the review's five) plus
   `OPS-006-local-git-reconciliation`, added since the review

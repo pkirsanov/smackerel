@@ -13,13 +13,17 @@ defaults:
 trains:
 - id: mvp
   phase: active
-  # Abstract slot from the guard's accepted vocabulary (prod|staging|home-lab|none).
+  # Abstract slot only. The guard's vocabulary also admits a concrete
+  # operator-target name, but naming it here would violate the
+  # product-deployment-boundary policy (rule PRODUCT_CONCRETE_TARGET), which is
+  # fail-closed in pre-push and CI. `prod` is the correct abstraction: this is
+  # smackerel's live slot, and WHICH machine serves it is knb's business.
   # "self-hosted" is this repo's ENVIRONMENT name (./smackerel.sh --env=self-hosted,
-  # config bundles), not a release-train slot; the two axes are distinct. This train
-  # deploys to the operator's home-lab host, and the concrete binding for that host
-  # (hostname, IP, tailnet identity, Caddy/systemd fragments, per-target manifest)
-  # lives ONLY in the knb deploy-adapter overlay under <product>/home-lab/ — never here.
-  target_slot: home-lab
+  # config bundles), not a release-train slot; the two axes are distinct. The
+  # concrete binding (hostname, IP, tailnet identity, Caddy/systemd fragments,
+  # per-target manifest) lives ONLY in the knb deploy-adapter overlay, never here.
+  # Nothing in knb consumes this field; it is release metadata, not a deploy input.
+  target_slot: prod
   flags_bundle: config/feature-flags.mvp.yaml
   description: "Current self-hosted train (ingest + digest + delivery foundation)"
 

@@ -677,7 +677,7 @@ exact name.
 **Declared train: `next`** (`target_slot: staging`, per
 [`config/release-trains.yaml`](../../config/release-trains.yaml)).
 
-The two valid trains are `mvp` (`target_slot: home-lab`) and `next` (`target_slot: staging`).
+The two valid trains are `mvp` (`target_slot: prod`) and `next` (`target_slot: staging`).
 
 ### Why `next` and not `mvp`
 
