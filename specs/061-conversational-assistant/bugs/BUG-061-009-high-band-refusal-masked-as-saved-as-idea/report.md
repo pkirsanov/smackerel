@@ -1154,6 +1154,185 @@ assertions actually deliver.
 
 ---
 
+<a id="security"></a>
+
+## Security — Refusal-Path Disclosure Review (`bubbles.security`) — 2026-08-18
+
+**Phase:** `security` · **Agent:** `bubbles.security` · **Date:** 2026-08-18 ·
+**Claim Source:** executed · **Live system:** no
+
+### The question
+
+The fix makes the system say **more** on failure. Where a band-high turn
+previously emitted a capture acknowledgement, it now emits an honest refusal
+plus a populated `ErrorCause`. Additional output on a failure path is where
+disclosure defects live. So: does the added output reveal anything it should
+not?
+
+### Verdict
+
+The user-visible refusal surface is **security-neutral by construction**. Two
+mechanisms carry that property, and neither depends on a reviewer noticing.
+Three corrections to the findings as received are recorded below. Two residuals
+are stated as open rather than cleared.
+
+### Finding 1 — `ErrorCause` cannot carry raw upstream text
+
+**VERIFIED, with three corrections.**
+
+The type declaration and its documentation are exactly where claimed.
+`<repo-root>/internal/assistant/contracts/response.go:187-188` carries the
+comment "ErrorCause is the closed-vocabulary error discriminator populated when
+Status == StatusUnavailable". Line 189 declares `type ErrorCause string`.
+
+All eight constants match the list as given:
+
+| Constant | Wire value | Line |
+|---|---|---|
+| `ErrNone` | `""` | `response.go:194` |
+| `ErrProviderUnavailable` | `provider_unavailable` | `response.go:197` |
+| `ErrMissingScope` | `missing_scope` | `response.go:200` |
+| `ErrSlotMissing` | `slot_missing` | `response.go:203` |
+| `ErrInternalError` | `internal_error` | `response.go:206` |
+| `ErrNoMatch` | `no_match` | `response.go:211` |
+| `ErrModelNotSwitchable` | `model_not_switchable` | `response.go:219` |
+| `ErrNoGroundedAnswer` | `no_grounded_answer` | `response.go:229` |
+
+**Correction 1a — `facade.go:710` is a string-to-enum conversion, not an
+enum-to-enum conversion.** The finding described it as enum-to-enum. It is not.
+The source field is declared `ErrorCause string` at
+`<repo-root>/internal/assistant/legacyretirement/closedresponse.go:25`. That is
+a plain Go `string`, not `contracts.ErrorCause`. So
+`contracts.ErrorCause(closed.ErrorCause)` **widens an unconstrained string into
+the enum type**. The premise was wrong.
+
+The conclusion survives anyway, for a reason the original framing did not
+supply. `ClosedResponseFor` is the only constructor of that struct, and it
+hardcodes `ErrorCause: "retired_command_closed"` at `closedresponse.go:53`. The
+value is a literal. Nothing is interpolated into it.
+
+**Correction 1b — the live value set is nine, not eight.**
+`"retired_command_closed"` reaches `contracts.ErrorCause` at runtime but appears
+in no `const` block. The vocabulary is therefore closed **by construction site**,
+not by the declared constant list. A reader auditing only the `const` block
+would miss a live value. That is worth recording, because the safety argument
+rests on enumerating construction sites rather than constants.
+
+**Correction 1c — the enumeration of assignment shapes was incomplete.**
+`internal/assistant/facade.go` holds 19 `ErrorCause` assignments. The finding
+named two non-literal shapes. Two more exist:
+
+| Site | Shape | Why it is closed |
+|---|---|---|
+| `facade.go:1337` | `resp.ErrorCause = assembly.Override.ErrorCause` | Source field is typed `ErrorCause` at `contracts/source_assembler.go:144` |
+| `facade.go:1851` | `resp.ErrorCause = ""` | The `ErrNone` zero value, written as a literal |
+
+Neither interpolates. `translateOutcomeToErrorCause` at `facade.go:1799-1806`
+was checked directly and returns only `ErrProviderUnavailable` or `ErrNone`.
+
+**The decisive check.** A repo-wide sweep of non-test Go for an `ErrorCause`
+built from `Sprintf`, concatenation, `err.Error()`, or any format verb returned
+**zero matches**. Exactly three `ErrorCause(` sites exist outside tests, all in
+`facade.go`, all analysed above. The "no raw upstream error string" claim is
+therefore substantiated by a negative sweep, not assumed from spot checks.
+
+### Finding 2 — the refusal body is a constant that replaces rather than appends
+
+**VERIFIED as stated. One scope boundary added.**
+
+Every line citation is exact:
+
+| Line | Statement | Effect |
+|---|---|---|
+| `gate.go:30` | `const CanonicalRefusalBody = "I don't have a sourced answer for that."` | Fixed string, no format verbs, no interpolation |
+| `gate.go:117` | `resp.Body = CanonicalRefusalBody` | Plain assignment, so the ungrounded answer is **discarded** |
+| `gate.go:118-119` | `StatusUnavailable` + `ErrNoGroundedAnswer` | Structural refusal discriminator |
+| `gate.go:120` | `resp.CaptureRoute = false` | Leaves the capture path |
+| `gate.go:123` | `resp.Sources = nil` | Drops partially-invalid provenance |
+
+Because line 117 is `=` and not `+=`, the ungrounded model answer the gate
+refused **cannot** reach the user through the gate's refusal path. That is the
+core of the finding, and it holds.
+
+**Strengthening the finding.** The transport does not always read the gate
+constant, so checking `gate.go` alone would have been insufficient. Telegram
+renders through `contracts.CanonicalRefusalBodyFor` at
+`<repo-root>/internal/assistant/contracts/refusal.go:73`. That function is a
+total switch over six package-level constants declared at `refusal.go:61-68`,
+with a `default` arm returning the default body. Both body sources are closed.
+The entire user-visible refusal vocabulary is six fixed strings.
+
+**Scope boundary — one path preserves an existing body.** The facade backstop at
+`facade.go:1834-1842` replaces the body **only** when it is empty or equal to
+the capture acknowledgement. Otherwise it keeps the body it was handed. The
+gate's replacement is unconditional. The backstop's is not. Finding 2's
+"replaces rather than appends" is true of the gate, which is what it cites. Do
+not generalise it to every honest-refusal path.
+
+### Finding 3 — G034 repo floor is GREEN, and the earlier RED claim is FALSE
+
+**VERIFIED. Run in this session, both ways.**
+
+The invocation contract is as stated. The gate takes no spec-dir argument, and
+passing one is a usage error.
+
+```text
+$ bash .github/bubbles/scripts/security-gate.sh specs/061-conversational-assistant/bugs/BUG-061-009-high-band-refusal-masked-as-saved-as-idea
+security-gate: unknown argument: specs/061-conversational-assistant/bugs/BUG-061-009-high-band-refusal-masked-as-saved-as-idea
+WITH_ARG_EXIT=2
+
+$ bash .github/bubbles/scripts/security-gate.sh
+[security-gate] OK — 931 tracked file(s), zero G034 findings
+NO_ARG_EXIT=0
+```
+
+Both commands were run from `<repo-root>`. The repo floor is **GREEN**: 931
+tracked files, zero G034 findings, exit 0.
+
+The earlier assertion that "the G034 floor is RED" was tested against the real
+gate and **did not hold**. It is recorded here as a failed verification rather
+than dropped silently. A security finding relayed without execution is worse
+than no finding, because it spends reviewer attention on a condition that does
+not exist.
+
+### Conclusion
+
+The honest-refusal path is security-neutral **by construction**, not by
+convention or reviewer vigilance. Two mechanisms carry it:
+
+1. **A closed discriminator.** Every `ErrorCause` construction site writes a
+   fixed literal. A future leak would require a new interpolating assignment,
+   and the negative sweep above is the check that would catch one.
+2. **A constant body.** Both refusal-body sources return one of six fixed
+   strings, and the gate discards the ungrounded answer instead of appending to
+   it.
+
+The distinction matters. A property enforced by the shape of the code survives
+a careless edit. A property enforced by habit does not.
+
+### Residuals — stated, not cleared
+
+| # | Residual | Status |
+|---|---|---|
+| SEC-R1 | Logging and telemetry on the refusal path | **not analysed** |
+| SEC-R2 | Corpus-membership oracle in response shape | **unassessed** |
+
+**SEC-R1.** This review covers the **user-visible** response surface only:
+`Status`, `ErrorCause`, `Body`, `Sources`, and `CaptureRoute`. It did not
+examine what the audit writer, the metrics counters, or structured logs record
+when a refusal fires. One incidental observation is not a review: the counter at
+`gate.go:106` is `ViolationsCounter.WithLabelValues(scenarioLabel, string(cause))`,
+which is label-only and carries no turn text. That single site is not evidence
+about the rest of the logging surface.
+
+**SEC-R2.** An honest refusal is structurally distinguishable from an answer by
+design. That is precisely what INV-HB-REFUSAL exists to guarantee. Whether that
+distinguishability lets a user infer **whether a document exists** in a corpus
+they do not own was not assessed. The question is noted as open. It is not
+cleared, and nothing in this section should be read as clearing it.
+
+---
+
 ## Discovered Issues
 
 Issues surfaced while working this packet that are not the reported defect. Each
