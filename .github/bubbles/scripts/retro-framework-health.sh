@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 # retro-framework-health.sh — framework self-observation analysis.
 #
+# Gate G125 — framework_health_evidence_gate, generator half. This script is the
+# surface that MUST emit the proposal and MUST NOT auto-mutate framework files;
+# framework-health-evidence-lint.sh is the half that independently verifies it.
+#
 # Reads bubbles' own usage signals and emits an improvement proposal under
 # improvements/IMP-NNN-<slug>.md. NEVER mutates bubbles/, agents/, or
 # bubbles/workflows.yaml.

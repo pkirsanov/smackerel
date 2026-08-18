@@ -249,12 +249,24 @@ is_delivered_status() {
 # Does the spec's effective completed-phases record include "validate"?
 # Tolerates both the v3 certification.certifiedCompletedPhases[] and the older
 # top-level completedPhases[] shapes.
+#
+# Elements may be bare strings OR per-phase provenance objects carrying
+# {phase, agent, certifiedAt, ...}. Both shapes are in the wild, and
+# state-transition-guard.sh already normalises them the same way. Feeding an
+# object straight to ascii_downcase aborts the whole jq program, and because
+# jq streams, the abort silently TRUNCATES the phase list at the first object
+# rather than erroring visibly: a spec whose only "validate" record sits in an
+# object read as never-certified, while one that happened to list "validate"
+# as a string before its first object passed. That made the verdict depend on
+# element ORDER, which is not a delivery fact.
 is_validate_certified() {
   local state_json="$1"
   local phases
   phases="$(jq -r '
     ((.certification.certifiedCompletedPhases // []) + (.completedPhases // []))
-    | .[]? | ascii_downcase' "$state_json" 2>/dev/null || true)"
+    | .[]?
+    | (if type == "string" then . else (.phase // empty) end)
+    | ascii_downcase' "$state_json" 2>/dev/null || true)"
   grep -qx "validate" <<<"$phases"
 }
 

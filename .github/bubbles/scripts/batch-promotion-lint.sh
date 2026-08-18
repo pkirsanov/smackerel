@@ -2,6 +2,8 @@
 # =============================================================================
 # batch-promotion-lint.sh
 # =============================================================================
+# Gate G078 — batch_promotion_limit_gate.
+#
 # Detect "batch promotion" fabrication: a single git commit (or staged change
 # set) that flips multiple specs' state.json `status` fields to "done" at
 # once. Real workflows complete one spec at a time with full evidence; mass

@@ -470,7 +470,13 @@ for row in results:
             continue
         if want not in row['derivedStates']:
             unsatisfied.append({'scenarioId': row['scenarioId'], 'missing': want})
-certifiable = (not refusals) and (not unsatisfied) if required_states or certifiable_mode else None
+
+# A stale receipt is EXCLUDED from derivation, so it can only withhold evidence,
+# never contradict it — and a scenario left without fresh evidence already lands
+# in `unsatisfied`. Counting drift here would block every spec whose append-only
+# log outlived a commit, which is every spec eventually.
+blocking_refusals = [r for r in refusals if r['code'] != 'SCS-REVISION-DRIFT']
+certifiable = (not blocking_refusals) and (not unsatisfied) if required_states or certifiable_mode else None
 
 out = {
     'specDir': os.path.dirname(manifest_path),
@@ -481,6 +487,7 @@ out = {
     'scenarioCount': len(results),
     'scenarios': results,
     'refusals': refusals,
+    'blockingRefusalCount': len(blocking_refusals),
     'unsatisfied': unsatisfied,
     'certifiable': certifiable,
 }
@@ -501,12 +508,14 @@ else:
             print('      AFFECTED by: %s' % ' '.join(row['affectedBy']))
     for r in refusals:
         print('  REFUSED %s [%s]: %s' % (r['code'], r['scenarioId'], r['detail']))
+    if refusals and not blocking_refusals:
+        print('  (all %d refusals are SCS-REVISION-DRIFT: superseded receipts, excluded from derivation, not blocking)' % len(refusals))
     for u in unsatisfied:
         print('  UNSATISFIED %s does not hold for %s' % (u['missing'], u['scenarioId']))
     if certifiable is not None:
         print('  certifiable: %s' % ('yes' if certifiable else 'no'))
 
-if refusals:
+if blocking_refusals:
     sys.exit(1)
 if certifiable_mode and not certifiable:
     sys.exit(1)

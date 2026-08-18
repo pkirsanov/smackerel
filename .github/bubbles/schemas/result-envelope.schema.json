@@ -98,6 +98,53 @@
         }
       ]
     },
+    "reviewCompliance": {
+      "type": "array",
+      "description": "IMP-048 SCOPE-1. Names which active Class A in-session adjustments this run honored, and why any did not apply. The array is OPTIONAL, so no existing envelope becomes invalid; when present it turns an adjustment from a note the parent wrote into something the child is accountable for. An adjustment reported as not honored twice becomes an automatic Class B improvement candidate in `.specify/runtime/session-review.jsonl`.",
+      "items": {
+        "type": "object",
+        "required": [
+          "adjustment",
+          "honored"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "adjustment": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The Class A `change` identifier carried in the dispatch packet's activeAdjustments[]."
+          },
+          "honored": {
+            "type": "boolean",
+            "description": "Whether this run actually followed the adjustment."
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 20,
+            "description": "Why the adjustment did not apply. Required when `honored` is false, because 'did not apply' with no reason is indistinguishable from having ignored it."
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "honored": {
+                  "const": false
+                }
+              },
+              "required": [
+                "honored"
+              ]
+            },
+            "then": {
+              "required": [
+                "reason"
+              ]
+            }
+          }
+        ]
+      }
+    },
     "summary": {
       "type": "string",
       "minLength": 1,

@@ -482,6 +482,247 @@ assert_exit 0 "Sq exit code (every cap null -> no-op even with huge retained byt
 assert_stdout_contains "no non-null cap" "Sq reports the default-off posture"
 
 # =============================================================================
+# IMP-048 SCOPE-6: the 70% SOFT boundary and the mode-default budgets.
+#
+# The hard stop used to be the guard's only outcome, so a session learned it was
+# over budget at the moment it was refused. These scenarios prove the soft
+# boundary warns and CONTINUES, that it never converts a full session into a
+# blocked spec, and that the hard stop is untouched.
+# =============================================================================
+
+assert_stdout_lacks() {
+  local needle="$1"
+  local label="$2"
+  if grep -Fq -- "$needle" "$WORKSPACE/stdout.last"; then
+    ko "$label: stdout unexpectedly contained '$needle'"
+    echo "  --- stdout ---" >&2
+    last_stdout >&2
+    return 1
+  fi
+  ok "$label: stdout does not contain '$needle'"
+}
+
+assert_file_unchanged() {
+  local file="$1" before="$2" label="$3" after
+  after="$(cat "$file")"
+  if [[ "$after" != "$before" ]]; then
+    ko "$label: $file was modified"
+    return 1
+  fi
+  ok "$label: $file byte-identical"
+}
+
+note "Scenario Sr: crossing 70% warns, continues, and does NOT block the spec"
+
+SR_ROOT="$WORKSPACE/sr"
+stage_repo_root "$SR_ROOT"
+mkdir -p "$SR_ROOT/specs/900-a"
+# A real spec, in a real status, sitting next to a session that is 74% full. The
+# distinction this scenario exists to prove is that a full SESSION is not a
+# blocked SPEC — the work is fine, the container is not.
+printf '%s\n' '{ "status": "in_progress" }' > "$SR_ROOT/specs/900-a/state.json"
+SR_STATE_BEFORE="$(cat "$SR_ROOT/specs/900-a/state.json")"
+write_session_json "$SR_ROOT" '{
+  "sessionBudget": { "maxToolCalls": 350 },
+  "toolCallCount": 260
+}'
+
+run_guard "$SR_ROOT"
+
+assert_exit 0 "Sr exit code (260/350 = 74% -> soft boundary, NOT a refusal)"
+assert_stdout_contains "SOFT-BOUNDARY Gate G128" "Sr announces the soft boundary"
+assert_stdout_contains "consumedPct=74" "Sr names the observed consumption"
+assert_stdout_contains "rollover=recommended" "Sr recommends a rollover"
+assert_stdout_contains "specBlocked=false" "Sr states the spec is NOT blocked"
+assert_stdout_contains "continuation envelope" "Sr names the owed continuation envelope"
+assert_stdout_contains "bubbles.handoff" "Sr names the owed handoff packet"
+assert_stdout_contains "PASS Gate G128" "Sr still reports the gate as passed"
+assert_stdout_lacks "violation" "Sr does not report a gate violation"
+assert_file_unchanged "$SR_ROOT/specs/900-a/state.json" "$SR_STATE_BEFORE" "Sr spec state.json"
+
+note "Scenario Ss: crossing 100% still hard-stops (unchanged)"
+
+SS_ROOT="$WORKSPACE/ss"
+stage_repo_root "$SS_ROOT"
+write_session_json "$SS_ROOT" '{
+  "sessionBudget": { "maxToolCalls": 350 },
+  "toolCallCount": 351
+}'
+
+run_guard "$SS_ROOT"
+
+assert_exit 1 "Ss exit code (351 > cap 350 -> hard stop preserved)"
+assert_stderr_contains "G128 session_cap_enforcement_gate violation" "Ss stderr still reports the violation"
+assert_stderr_contains "maxToolCalls=350" "Ss stderr names the breached cap"
+assert_stderr_contains "blocked" "Ss stderr still demands a blocked envelope at the HARD stop"
+
+note "Scenario St: below the soft boundary emits no rollover recommendation"
+
+ST_ROOT="$WORKSPACE/st"
+stage_repo_root "$ST_ROOT"
+write_session_json "$ST_ROOT" '{
+  "sessionBudget": { "maxToolCalls": 350 },
+  "toolCallCount": 240
+}'
+
+run_guard "$ST_ROOT"
+
+assert_exit 0 "St exit code (240/350 = 68% -> under the 70% boundary)"
+assert_stdout_lacks "SOFT-BOUNDARY" "St stays quiet below the boundary"
+assert_stdout_contains "PASS Gate G128" "St PASS marker on stdout"
+
+note "Scenario Su: the soft boundary reuses the EXISTING Class C surface"
+
+SU_ROOT="$WORKSPACE/su"
+stage_repo_root "$SU_ROOT"
+mkdir -p "$SU_ROOT/.github"
+printf 'sessionReview:\n  adapter: jsonl\n' > "$SU_ROOT/.github/bubbles-project.yaml"
+write_session_json "$SU_ROOT" '{
+  "sessionBudget": { "maxToolCalls": 350 },
+  "toolCallCount": 300
+}'
+
+run_guard "$SU_ROOT"
+
+assert_exit 0 "Su exit code (86% -> soft boundary, still continuing)"
+assert_stdout_contains "handoffRecommendation:        recorded" "Su records the recommendation"
+if [[ -f "$SU_ROOT/.specify/runtime/session-review.jsonl" ]] &&
+  grep -Fq 'handoff-to-fresh-session' "$SU_ROOT/.specify/runtime/session-review.jsonl"; then
+  ok "Su: the recommendation landed in the EXISTING session-review store (no second handoff mechanism)"
+else
+  ko "Su: no Class C handoff-to-fresh-session record in .specify/runtime/session-review.jsonl"
+fi
+
+note "Scenario Sv: with sessionReview off, the soft boundary still warns and still passes"
+
+SV_ROOT="$WORKSPACE/sv"
+stage_repo_root "$SV_ROOT"
+write_session_json "$SV_ROOT" '{
+  "sessionBudget": { "maxToolCalls": 350 },
+  "toolCallCount": 300
+}'
+
+run_guard "$SV_ROOT"
+
+assert_exit 0 "Sv exit code (review adapter none -> recommendation unrecorded, guard unaffected)"
+assert_stdout_contains "handoffRecommendation:        unrecorded" "Sv reports the recommendation as unrecorded"
+assert_stdout_contains "SOFT-BOUNDARY Gate G128" "Sv still announces the boundary"
+
+# =============================================================================
+# IMP-048 SCOPE-6 registry assertions.
+#
+# The mode-default budgets are FRAMEWORK defaults in bubbles/workflows/modes.yaml
+# and are NOT per-repo config. Nothing mechanically copies them into a session
+# file, which is why declaring them cannot newly block an existing repository —
+# Sw proves that from the guard's side, and Sx/Sy prove the registry side.
+# =============================================================================
+
+MODES_YAML="$(cd "$SCRIPT_DIR/../.." && pwd)/bubbles/workflows/modes.yaml"
+
+note "Scenario Sw: a session recording no sessionBudget is UNBOUNDED, mode defaults notwithstanding"
+
+SW_ROOT="$WORKSPACE/sw"
+stage_repo_root "$SW_ROOT"
+write_session_json "$SW_ROOT" '{
+  "workflowMode": "full-delivery",
+  "toolCallCount": 99999,
+  "convergenceLoops": [ { "specDir": "specs/900-a", "agent": "bubbles.workflow", "iterationCount": 9999 } ],
+  "turnSnapshots": [
+    { "turnNumber": 1, "timestamp": "2026-06-01T00:00:00Z", "mode": "start" },
+    { "turnNumber": 2, "timestamp": "2026-06-08T00:00:00Z", "mode": "end" }
+  ]
+}'
+
+run_guard "$SW_ROOT"
+
+assert_exit 0 "Sw exit code (mode names full-delivery; the SESSION records no budget -> unbounded)"
+assert_stdout_contains "no sessionBudget recorded" "Sw confirms the guard reads only the session file"
+assert_stdout_lacks "SOFT-BOUNDARY" "Sw emits no soft boundary for an unbounded session"
+
+note "Scenario Sx: rapid-tool-delivery keeps its own TIGHTER caps"
+
+if [[ ! -f "$MODES_YAML" ]]; then
+  ko "Sx: modes registry not found at $MODES_YAML"
+else
+  RTD_BLOCK="$(awk '
+    /^  rapid-tool-delivery:[[:space:]]*$/ { inmode = 1; next }
+    inmode && /^  [a-z]/ { inmode = 0 }
+    inmode && /^    sessionBudget:[[:space:]]*$/ { inbudget = 1; next }
+    inbudget && /^    [a-zA-Z]/ { inbudget = 0 }
+    inbudget { print }
+  ' "$MODES_YAML")"
+  RTD_OK=1
+  for expected in "maxTotalConvergenceIterations: 2" "maxWallClockMinutes: 90" "maxToolCalls: 250"; do
+    if ! grep -Fq -- "$expected" <<< "$RTD_BLOCK"; then
+      RTD_OK=0
+      ko "Sx: rapid-tool-delivery lost its own cap '$expected'"
+    fi
+  done
+  if grep -Fq -- "maxWallClockMinutes: 180" <<< "$RTD_BLOCK"; then
+    RTD_OK=0
+    ko "Sx: rapid-tool-delivery was overwritten with the looser 180-minute default"
+  fi
+  [[ "$RTD_OK" -eq 1 ]] && ok "Sx: rapid-tool-delivery keeps 2 iterations / 90 min / 250 tool calls"
+fi
+
+note "Scenario Sy: every delivery mode declares a budget; no other mode does"
+
+if [[ ! -f "$MODES_YAML" ]]; then
+  ko "Sy: modes registry not found at $MODES_YAML"
+else
+  # SELECTION RULE, read straight off the registry rather than from a
+  # hand-maintained list: a delivery mode is one whose phaseOrder contains BOTH
+  # `implement` and `test`. A hand-maintained list is exactly how a new mode
+  # ships unbounded without anyone noticing.
+  MODE_AUDIT="$(awk '
+    /^  [a-z][a-zA-Z0-9-]*:[[:space:]]*$/ {
+      if (mode != "") emit()
+      mode = $1; sub(/:$/, "", mode); po = ""; budget = 0
+      next
+    }
+    mode != "" && /^    phaseOrder:/ { po = $0 }
+    mode != "" && /^    sessionBudget:/ { budget = 1 }
+    END { if (mode != "") emit() }
+    function emit(   hasimpl, hastest) {
+      hasimpl = (po ~ /[[:space:],]implement[[:space:],]/)
+      hastest = (po ~ /[[:space:],]test[[:space:],]/)
+      if (hasimpl && hastest) {
+        delivery++
+        if (budget) budgeted++; else printf "UNBOUNDED-DELIVERY %s\n", mode
+      } else if (budget) {
+        printf "STRAY-BUDGET %s\n", mode
+      }
+    }
+    END { printf "TOTALS delivery=%d budgeted=%d\n", delivery, budgeted }
+  ' "$MODES_YAML")"
+
+  MODE_TOTALS="$(awk '$1 == "TOTALS" { print $2, $3 }' <<< "$MODE_AUDIT")"
+  MODE_PROBLEMS="$(awk '$1 == "UNBOUNDED-DELIVERY" || $1 == "STRAY-BUDGET" { print }' <<< "$MODE_AUDIT")"
+
+  if [[ -n "$MODE_PROBLEMS" ]]; then
+    while IFS= read -r problem; do
+      [[ -n "$problem" ]] || continue
+      ko "Sy: $problem"
+    done <<< "$MODE_PROBLEMS"
+  else
+    ok "Sy: every delivery mode is bounded and no other mode is ($MODE_TOTALS)"
+  fi
+
+  # docs-only is the canonical non-delivery mode. It must stay unbounded, which
+  # is the mechanical form of "no existing repo is newly blocked".
+  DOCS_BLOCK="$(awk '
+    /^  docs-only:[[:space:]]*$/ { inmode = 1; next }
+    inmode && /^  [a-z]/ { inmode = 0 }
+    inmode { print }
+  ' "$MODES_YAML")"
+  if grep -Fq 'sessionBudget' <<< "$DOCS_BLOCK"; then
+    ko "Sy: docs-only (a non-delivery mode) acquired a session budget"
+  else
+    ok "Sy: docs-only stays unbounded"
+  fi
+fi
+
+# =============================================================================
 # Final verdict
 # =============================================================================
 

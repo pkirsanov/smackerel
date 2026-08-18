@@ -137,6 +137,54 @@ traits:
       reaches a running system, the scenario owes `runtime-config` instead, and
       declaring this one does not discharge that.
 
+  - id: return-time-ordering
+    requiredProof: Assertion sampled at production return, plus a delayed-mutation sentinel.
+    liveProof: required
+    liveProofEnforcedBy: return-time-ordering
+    note: >-
+      An ordering claim is a claim about WHEN a value becomes observable, so it
+      is the one obligation a later sample can never discharge. A test that
+      sleeps and then polls until the condition becomes true passes whether or
+      not production honoured the ordering, because the property is sampled
+      AFTER the window in which it could be violated. That test proves eventual
+      convergence, not the contract. The mechanism-field constraints are
+      deliberately absent: those fields say WHERE a test asserts, and this trait
+      is about WHEN, so it is enforced by the ordering block below instead.
+
+# --- Return-time ordering (IMP-048 SCOPE-5 / EV-12) -------------------------
+#
+# The TRIGGER is textual, mirroring the SCOPE-6 dependency-boundary rule: an
+# ordering claim announces itself in the obligation's own `requiredProof`. A
+# scenario may also declare the `return-time-ordering` trait explicitly. Either
+# route owes the same proof, and a scenario doing NEITHER carries no new burden.
+#
+# Tokens are named in an obligation's `satisfiedBy` as `ordering:<token>`, the
+# same shape `cache-case:` and `parity:` already use. The vocabulary is closed
+# so a typo is a finding rather than a silently uncounted proof, and it INCLUDES
+# the dishonest shapes: a scenario that samples late has to say so, and saying
+# so is a finding.
+ordering:
+  satisfiedByPrefix: [ordering]
+  claimPhrases: [returns only after, return only after, cannot return before, does not return before, must not return before, remains held until, remain held until, held until, only after finality]
+  preconditionPhrases: [preceded by, after observing, only after an observed, written only after, following an observed]
+  pollingPhrases: [polls until, poll until, polling until, sleeps then, sleep then, waits until, wait until, retries until, retry until, eventually becomes, until it becomes true]
+  requiredTokens: [at-return, sentinel]
+  conditionalTokens: [precondition-attempts]
+  forbiddenTokens: [poll-until, sleep-then-assert, retry-until]
+  tokenContract:
+    - id: at-return
+      rule: >-
+        The asserted state is sampled AT production return, with no sleep and no
+        polling before the assertion.
+    - id: sentinel
+      rule: >-
+        A delayed-mutation sentinel is armed and proven unchanged after a bounded
+        observation.
+    - id: precondition-attempts
+      rule: >-
+        Where the contract names a precondition, every attempt is recorded and
+        each is shown to have been preceded by that observation.
+
 # A scenario may declare that a live proof does not apply — but only by NAMING
 # the trait it does not have. An unnamed exemption is indistinguishable from an
 # omission, and an omission is how the expensive obligation gets skipped.
@@ -166,3 +214,18 @@ failureCodes:
     meaning: A live-proof exemption names a trait the scenario itself declares.
   - id: NA-UNKNOWN-TRAIT
     meaning: A live-proof exemption is claimed by a scenario carrying an unknown trait.
+  - id: ORDERING-TOKEN
+    meaning: An ordering proof token is not in the closed ordering vocabulary.
+  - id: ORDERING-SAMPLED-LATE
+    meaning: >-
+      An ordering scenario samples the asserted state after the window in which
+      it could be violated, which proves eventual convergence rather than the
+      ordering contract.
+  - id: ORDERING-AT-RETURN
+    meaning: An ordering scenario names no assertion sampled at production return.
+  - id: ORDERING-SENTINEL
+    meaning: An ordering scenario arms no delayed-mutation sentinel.
+  - id: ORDERING-PRECONDITION-ATTEMPTS
+    meaning: >-
+      An ordering scenario naming a precondition does not record every attempt
+      and show each was preceded by the required observation.

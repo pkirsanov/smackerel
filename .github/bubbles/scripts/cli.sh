@@ -2746,6 +2746,50 @@ except Exception:
   fi
 
   echo ""
+  echo -e "${BOLD}Session Liveness${NC}"
+  echo -e "${DIM}Advisory only — never changes doctor's exit code. G083, G128 and trajectory-inspector --health all read .specify/memory/bubbles.session.json; over an empty store they measure nothing, so this reports UNMEASURED rather than a pass. A newest snapshot older than the newest commit is STALE: the repository moved and the session did not record it. Default OFF (sessionLiveness.adapter: none).${NC}"
+  echo ""
+
+  local doctor_liveness_out=''
+  if [[ -f "$SCRIPT_DIR/session-liveness.sh" ]]; then
+    doctor_liveness_out="$(bash "$SCRIPT_DIR/session-liveness.sh" check --repo-root "$REPO_ROOT" 2>/dev/null || true)"
+  fi
+  if [[ -z "$doctor_liveness_out" ]]; then
+    echo -e "  ${CYAN}ℹ️${NC}  session-liveness.sh not installed — session liveness not evaluated"
+  else
+    local doctor_liveness_verdict=''
+    local doctor_liveness_snapshots=''
+    local doctor_liveness_newest=''
+    local doctor_liveness_commit=''
+    doctor_liveness_verdict="$(awk -F= '$1 == "verdict" { print $2; exit }' <<< "$doctor_liveness_out")"
+    doctor_liveness_snapshots="$(awk -F= '$1 == "snapshotCount" { print $2; exit }' <<< "$doctor_liveness_out")"
+    doctor_liveness_newest="$(awk -F= '$1 == "newestSnapshotAt" { print $2; exit }' <<< "$doctor_liveness_out")"
+    doctor_liveness_commit="$(awk -F= '$1 == "newestCommitAt" { print $2; exit }' <<< "$doctor_liveness_out")"
+    case "$doctor_liveness_verdict" in
+      SKIPPED)
+        echo -e "  ${CYAN}ℹ️${NC}  Session liveness not configured (sessionLiveness.adapter: none) — default off"
+        ;;
+      STALE)
+        echo -e "  ${YELLOW}⚠️${NC}  Session file STALE: newest snapshot ${doctor_liveness_newest} predates newest commit ${doctor_liveness_commit}"
+        advisory_count=$((advisory_count + 1))
+        ;;
+      FINDING)
+        echo -e "  ${YELLOW}⚠️${NC}  Session liveness FINDING: a run past the grace window appended no turnSnapshots[] entry"
+        advisory_count=$((advisory_count + 1))
+        ;;
+      UNMEASURED)
+        echo -e "  ${CYAN}ℹ️${NC}  Session liveness UNMEASURED (${doctor_liveness_snapshots:-0} snapshot(s)) — not a pass; nothing was measurable"
+        ;;
+      PASS)
+        echo -e "  ${GREEN}✅${NC} Session file live and fresh (${doctor_liveness_snapshots} snapshot(s), newest ${doctor_liveness_newest})"
+        ;;
+      *)
+        echo -e "  ${CYAN}ℹ️${NC}  Session liveness reported no verdict — treated as unmeasured"
+        ;;
+    esac
+  fi
+
+  echo ""
   echo -e "${BOLD}Adoption Profile Progress${NC}"
   echo -e "${DIM}Profile guidance is advisory and separate from trust or certification.${NC}"
   echo ""

@@ -32,11 +32,36 @@ set -euo pipefail
 #
 # Exit codes:
 #   0  no active budget (no-op) OR no present cap exceeded by its aggregate
+#      (INCLUDING a crossed SOFT boundary — see below; a soft boundary is a
+#      recommendation, not a refusal)
 #   1  an active cap exceeded — orchestrator MUST emit a `blocked`
 #      RESULT-ENVELOPE with finding G128 and STOP the session; stderr names
 #      the breached dimension(s) and observed-vs-cap
 #   2  malformed / missing inputs (unparseable session.json, non-integer
 #      cap or counter), or bad usage — diagnostic on stderr
+#
+# SOFT BOUNDARY AT 70% (IMP-048 SCOPE-6 / COST-9)
+# The hard stop was the guard's ONLY outcome, so a session learned it was over
+# budget at the moment it was refused, with nothing preserved and no warning it
+# could have acted on. A soft boundary fires when the most-consumed measurable
+# dimension reaches 70% of its cap: the guard reports the crossing on STDOUT,
+# asks `session-review.sh` for a Class C `handoff-to-fresh-session`
+# recommendation, and CONTINUES with exit 0. The hard stop at 100% is
+# unchanged.
+#
+# A rollover is NOT a blocked spec. The work is fine; the SESSION is full. The
+# guard therefore never touches any `state.json`, and the soft-boundary block
+# says so in the output, because "budget exhausted" being recorded as "work
+# blocked" is how a healthy spec acquires a false terminal status. The owed
+# response is a continuation envelope plus a `bubbles.handoff` packet.
+#
+# The recommendation reuses the EXISTING Class C surface rather than inventing
+# a second one: `session-review.sh emit --trigger budget-threshold --budget-pct
+# <pct> --class-c handoff-to-fresh-session=<pct>`. That surface already
+# deduplicates (re-emitting only when the metric worsens by 25%) and already
+# fires its 50/70/90 bands once each, so a long session is warned rather than
+# nagged. With the default `sessionReview.adapter: none` the call is a clean
+# no-op and the guard simply reports the recommendation as unrecorded.
 #
 # Usage:
 #   bash bubbles/scripts/session-cap-guard.sh [--quiet]
@@ -90,6 +115,12 @@ set -euo pipefail
 
 QUIET="false"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# The soft boundary. Deliberately a single number: a per-dimension threshold
+# would let the noisiest dimension pick its own warning point, and the whole
+# value of one boundary is that the operator learns "this session is filling up"
+# once, not seven times at seven different moments.
+SOFT_BOUNDARY_PCT=70
 
 usage() {
   cat <<'EOF'
@@ -372,6 +403,26 @@ validate_observed "cumulative prompt tokens" "$CUM_TOKENS_OBSERVED"
 
 declare -a BREACHES=()
 
+# Consumption is recorded for exactly the dimensions the breach checks below
+# consider: present cap AND measurable aggregate. A dimension that cannot be
+# measured contributes no percentage, for the same reason it contributes no
+# breach — a soft boundary derived from an unmeasured dimension would be the
+# fabricated number this guard already refuses to produce for tokens.
+declare -a CONSUMPTION=()
+
+record_consumption() {
+  local label="$1" observed="$2" cap="$3" pct
+  [[ "$cap" == "null" || "$observed" == "null" ]] && return 0
+  # awk, not shell arithmetic: wall-clock minutes carry a fractional part.
+  pct="$(awk -v o="$observed" -v c="$cap" 'BEGIN {
+    if (c + 0 <= 0) { print (o + 0 > 0) ? 100 : 0; exit }
+    p = int(o * 100 / c)
+    if (p < 0) p = 0
+    print p
+  }')"
+  CONSUMPTION+=("$pct|$label|$observed|$cap")
+}
+
 # Convergence: aggregate is always measurable (defaults to 0).
 if [[ "$CAP_CONV" != "null" ]] && [[ "$CONV_OBSERVED" -gt "$CAP_CONV" ]]; then
   BREACHES+=("convergence: aggregate iterationCount=$CONV_OBSERVED > maxTotalConvergenceIterations=$CAP_CONV")
@@ -412,6 +463,18 @@ if [[ "$CAP_CUM_TOKENS" != "null" && "$CUM_TOKENS_OBSERVED" != "null" ]] &&
   BREACHES+=("cumulativePromptTokens: session total=$CUM_TOKENS_OBSERVED > maxCumulativePromptTokens=$CAP_CUM_TOKENS")
 fi
 
+# --- Consumption, over the same present + measurable set -----------------
+
+record_consumption "convergence" "$CONV_OBSERVED" "$CAP_CONV"
+if [[ "$TOOL_PRESENT" == "true" ]]; then
+  record_consumption "toolCalls" "$TOOL_OBSERVED" "$CAP_TOOLS"
+fi
+record_consumption "wallClockMinutes" "$MIN_OBSERVED" "$CAP_MINS"
+record_consumption "singleToolResultBytes" "$SINGLE_BYTES_OBSERVED" "$CAP_SINGLE_BYTES"
+record_consumption "cumulativeToolResultBytes" "$CUM_BYTES_OBSERVED" "$CAP_CUM_BYTES"
+record_consumption "promptTokensPerRequest" "$REQ_TOKENS_OBSERVED" "$CAP_REQ_TOKENS"
+record_consumption "cumulativePromptTokens" "$CUM_TOKENS_OBSERVED" "$CAP_CUM_TOKENS"
+
 # --- Verdict -------------------------------------------------------------
 
 fmt_cap() { [[ "$1" == "null" ]] && printf 'unset' || printf '%s' "$1"; }
@@ -439,6 +502,75 @@ if [[ "${#BREACHES[@]}" -gt 0 ]]; then
     echo "  remediation:                  orchestrator MUST emit a 'blocked' RESULT-ENVELOPE referencing Gate G128 and STOP the session (no further specs/scopes)"
   } >&2
   exit 1
+fi
+
+# --- Soft boundary (IMP-048 SCOPE-6) -------------------------------------
+#
+# Reached only when NOTHING breached. Everything below is written to STDOUT and
+# leaves the exit code at 0, because a soft boundary that could fail the guard
+# would just be the hard stop moved to 70%.
+
+request_handoff_recommendation() {
+  local pct="$1" detail="$2" review="$SCRIPT_DIR/session-review.sh" out rc adapter emitted
+
+  if [[ ! -f "$review" ]]; then
+    printf 'unrecorded (session-review.sh not installed)'
+    return 0
+  fi
+
+  set +e
+  out="$(bash "$review" emit \
+    --repo-root "$REPO_ROOT" \
+    --trigger budget-threshold \
+    --budget-pct "$pct" \
+    --class-c "handoff-to-fresh-session=$pct" \
+    --class-c-reason "handoff-to-fresh-session=session budget at ${pct}% of cap on ${detail}; roll over to a fresh session before the hard stop" 2>&1)"
+  rc=$?
+  set -e
+
+  # The review refusing, being off, or being absent must never turn a
+  # recommendation into a failure. The guard reports what happened and moves on.
+  if [[ "$rc" -ne 0 ]]; then
+    printf 'unrecorded (session-review exit %s)' "$rc"
+    return 0
+  fi
+
+  adapter="$(awk -F= '$1 == "adapter" { print $2; exit }' <<< "$out")"
+  if [[ "$adapter" == "none" ]]; then
+    printf 'unrecorded (sessionReview.adapter: none — default off)'
+    return 0
+  fi
+
+  emitted="$(awk -F= '$1 == "classCEmitted" { print $2; exit }' <<< "$out")"
+  if [[ "${emitted:-0}" -gt 0 ]]; then
+    printf 'recorded (Class C handoff-to-fresh-session, emitted)'
+  else
+    printf 'recorded (Class C handoff-to-fresh-session, deduplicated)'
+  fi
+}
+
+if [[ "${#CONSUMPTION[@]}" -gt 0 ]]; then
+  # awk rather than `sort | head`: the list is bounded and one pass cannot
+  # truncate a producer mid-write.
+  TOP_CONSUMPTION="$(printf '%s\n' "${CONSUMPTION[@]}" |
+    awk -F'|' '$1 + 0 > max { max = $1 + 0; best = $0 } END { print best }')"
+  TOP_PCT="${TOP_CONSUMPTION%%|*}"
+  TOP_REST="${TOP_CONSUMPTION#*|}"
+  TOP_LABEL="${TOP_REST%%|*}"
+  TOP_REST="${TOP_REST#*|}"
+  TOP_OBSERVED="${TOP_REST%%|*}"
+  TOP_CAP="${TOP_REST##*|}"
+
+  if [[ "${TOP_PCT:-0}" -ge "$SOFT_BOUNDARY_PCT" ]]; then
+    HANDOFF_STATUS="$(request_handoff_recommendation "$TOP_PCT" "$TOP_LABEL")"
+    echo "SOFT-BOUNDARY Gate G128 (session_cap_enforcement_gate) — session budget at ${TOP_PCT}% (threshold ${SOFT_BOUNDARY_PCT}%)"
+    echo "  most-consumed dimension:      $TOP_LABEL $TOP_OBSERVED/$TOP_CAP = ${TOP_PCT}%"
+    echo "  outcome:                      CONTINUING — the hard stop remains at 100%"
+    echo "  owed response:                persist state, emit a continuation envelope, open a bubbles.handoff packet"
+    echo "  specStatus:                   UNCHANGED — the work is not blocked, the session is full"
+    echo "  handoffRecommendation:        $HANDOFF_STATUS"
+    echo "  softBoundary=crossed dimension=$TOP_LABEL consumedPct=$TOP_PCT rollover=recommended specBlocked=false"
+  fi
 fi
 
 info "aggregate convergence=$CONV_OBSERVED (cap $(fmt_cap "$CAP_CONV")), wall-clock=$(fmt_min)min (cap $(fmt_cap "$CAP_MINS")), toolCalls=$(fmt_tool) (cap $(fmt_cap "$CAP_TOOLS"))"

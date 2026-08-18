@@ -236,7 +236,7 @@ schema_contract_tests() {
     | $contract.type == "object"
       and $contract.required == ["profile", "target"]
       and $contract.additionalProperties == false
-      and (($contract.properties.profile.enum | sort) == (["delivery-completion-fast-v1", "delivery-completion-v1", "framework-proposal-v1", "planning-maturity-v1"] | sort))
+      and (($contract.properties.profile.enum | sort) == (["delivery-completion-fast-v1", "delivery-completion-v1", "framework-proposal-v1", "operational-completion-v1", "planning-maturity-v1"] | sort))
       and $contract.properties.target.const == "statusCeiling"
   ' "$SCHEMA" >/dev/null 2>&1; then
     pass "transitionAudit schema is closed to the designed profile and target fields"
@@ -603,8 +603,16 @@ assert_failure "missing designated planning profile" 70 E009-AUDIT-PROFILE-MISSI
 
 unsupported_feature="$WORKSPACE/specs/015-unsupported"
 write_feature "$unsupported_feature" docs-only
+# BUG-017. Every non-done ceiling in the shipped registry now DECLARES a profile,
+# so the fall-through refusal can only be exercised by removing one. Deleting the
+# binding under test is strictly stronger than the previous form, which relied on
+# docs-only happening to have no contract: it proves the refusal still fires for
+# any mode that loses its declaration.
+unsupported_adjacent_root="$WORKSPACE/unsupported-adjacent-layout"
+unsupported_adjacent_framework="$(copy_framework_layout installed "$unsupported_adjacent_root")"
+yq -i 'del(.modes.docs-only.transitionAudit)' "$unsupported_adjacent_framework/workflows/modes.yaml"
 assert_failure "unsupported adjacent non-done mode" 71 E009-AUDIT-PROFILE-UNSUPPORTED \
-  bash "$RESOLVER" "$unsupported_feature"
+  bash "$unsupported_adjacent_framework/scripts/transition-contract-resolver.sh" "$unsupported_feature"
 
 unknown_profile_root="$WORKSPACE/unknown-profile-layout"
 unknown_profile_framework="$(copy_framework_layout installed "$unknown_profile_root")"
@@ -678,13 +686,17 @@ while IFS= read -r mode_name; do
 done < <(bash "$MODE_RESOLVER" --list-modes)
 assert_equal 0 "$missing_delivery" "every audit-bearing done mode has an explicit delivery binding"
 assert_equal 2 "$planning_bindings" "exactly the two designed planning modes have planning bindings"
-# IMP-047 PD-11. A non-done audit mode may carry a contract only when it DECLARES
-# one, and today exactly one does. Asserting the whole declared SET (not a count)
-# keeps the original invariant intact: any other adjacent mode acquiring a
-# profile, or framework-health acquiring a delivery profile, fails here.
+# IMP-047 PD-11 / BUG-017. A non-done audit mode may carry a contract only when
+# it DECLARES one. Asserting the whole declared SET (not a count) keeps the
+# original invariant intact: any adjacent mode acquiring a DIFFERENT profile, or
+# framework-health acquiring a delivery profile, still fails here. BUG-017 moved
+# the operational and docs terminals from "undeclared, and therefore refused" to
+# an explicit operational-completion-v1 binding, so they are now listed.
 adjacent_declared="$(printf '%s\n' "$adjacent_declared" | tr ',' '\n' | grep -v '^$' | LC_ALL=C sort | paste -sd ',' -)"
-assert_equal "framework-health:framework-proposal-v1" "$adjacent_declared" "the only adjacent non-done audit contract is the declared framework proposal profile"
-assert_equal 21 "$adjacent_unbound" "all 21 undeclared adjacent non-done audit modes remain explicitly unsupported"
+assert_equal "adapter-readiness-to-packet:operational-completion-v1,audit-only:operational-completion-v1,dark-launch-shipped:operational-completion-v1,docs-only:operational-completion-v1,framework-health:framework-proposal-v1,incident-fastlane:operational-completion-v1,migration-shipped-pending-cutover:operational-completion-v1,propagate-audit:operational-completion-v1,propagate-backport:operational-completion-v1,propagate-forward:operational-completion-v1,release-train-cut:operational-completion-v1,release-train-promote:operational-completion-v1,release-train-retire:operational-completion-v1,release-train-rollback:operational-completion-v1,release-train-status-all:operational-completion-v1,upkeep-bcdr-drill:operational-completion-v1,upkeep-compliance-sweep:operational-completion-v1,upkeep-flag-cleanup:operational-completion-v1,upkeep-patch-cycle:operational-completion-v1,upkeep-restore-drill:operational-completion-v1,upkeep-secret-rotation:operational-completion-v1,validate-to-doc:operational-completion-v1" \
+  "$adjacent_declared" \
+  "every adjacent non-done audit contract is the declared framework proposal or operational completion profile"
+assert_equal 0 "$adjacent_unbound" "no adjacent non-done audit mode advertises a ceiling with no audit contract"
 delivery_compatibility_exceptions="$(printf '%s\n' "$delivery_compatibility_exceptions" | tr ',' '\n' | LC_ALL=C sort | paste -sd ',' -)"
 assert_equal "chaos-to-doc,devops-to-doc,redteam-to-doc,retro-to-simplify,simplify-to-doc,test-to-doc" \
   "$delivery_compatibility_exceptions" \
@@ -745,8 +757,8 @@ while IFS= read -r mode_name; do
   fi
 done < <(bash "$MODE_RESOLVER" --list-modes)
 assert_equal 27 "$delivery_matrix_count" "all 27 audit-bearing done modes resolve through explicit delivery contracts"
-assert_equal 21 "$adjacent_matrix_count" "all 21 undeclared adjacent non-done audit modes fail unsupported through the real resolver"
-assert_equal 1 "$adjacent_declared_matrix_count" "the one declared adjacent contract resolves through the real resolver"
+assert_equal 0 "$adjacent_matrix_count" "no adjacent non-done audit mode is refused for want of a declared contract"
+assert_equal 22 "$adjacent_declared_matrix_count" "all 22 declared adjacent contracts resolve through the real resolver"
 
 printf '%s\n' '== transition contract resolver selftest summary =='
 printf 'passes=%s\nfailures=%s\nskips=%s\n' "$PASS_COUNT" "$FAIL_COUNT" "$SKIP_COUNT"

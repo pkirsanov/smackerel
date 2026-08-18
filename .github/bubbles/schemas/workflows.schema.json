@@ -114,7 +114,8 @@
                     "planning-maturity-v1",
                     "delivery-completion-v1",
                     "delivery-completion-fast-v1",
-                    "framework-proposal-v1"
+                    "framework-proposal-v1",
+                    "operational-completion-v1"
                   ]
                 },
                 "target": { "const": "statusCeiling" }

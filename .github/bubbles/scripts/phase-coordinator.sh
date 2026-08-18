@@ -67,6 +67,12 @@ RELEVANCE="$SCRIPT_DIR/phase-relevance-resolve.sh"
 TEST_IMPACT="$SCRIPT_DIR/test-impact-plan.sh"
 SCENARIO_RESOLVER="$SCRIPT_DIR/scenario-state-resolve.sh"
 
+# Occurrence identity is shared with test-leaf-receipt.sh (IMP-048 SCOPE-3),
+# which extends these guarantees one level down to individual test leaves. One
+# rule, one implementation, two consumers.
+# shellcheck source=occurrence-identity-lib.sh
+. "$SCRIPT_DIR/occurrence-identity-lib.sh"
+
 SPEC_DIR=""
 CURSOR=""
 FORMAT="text"
@@ -135,17 +141,13 @@ command -v python3 >/dev/null 2>&1 || {
 
 # --- occurrence identity ---------------------------------------------------
 # Positional, and assigned BEFORE anything is read from the cursor, so the ids
-# a resume compares against are the same ids the original run produced.
+# a resume compares against are the same ids the original run produced. The rule
+# itself lives in occurrence-identity-lib.sh; this is one of its two consumers.
 OCCURRENCE_IDS=()
-declare -a _seen_names=()
-for name in "${PLAN_NAMES[@]}"; do
-  count=1
-  for prior in ${_seen_names[@]+"${_seen_names[@]}"}; do
-    [[ "$prior" == "$name" ]] && count=$((count + 1))
-  done
-  _seen_names+=("$name")
-  OCCURRENCE_IDS+=("${name}#${count}")
-done
+while IFS= read -r _occ_id; do
+  [[ -n "$_occ_id" ]] || continue
+  OCCURRENCE_IDS+=("$_occ_id")
+done < <(occurrence_ids_for "${PLAN_NAMES[@]}")
 
 # --- cursor read -----------------------------------------------------------
 CURSOR_JSON='{"schemaVersion":1,"occurrences":[],"iterations":[]}'
@@ -155,12 +157,9 @@ fi
 
 # An outcome that RESOLVES an occurrence. A failure and a BLOCKED_NOT_RUN both
 # leave the occurrence outstanding, which is what makes resume land on them.
-accepting_outcome() {
-  case "$1" in
-    RAN_PASS | SKIPPED_IRRELEVANT | ACCEPTED) return 0 ;;
-    *) return 1 ;;
-  esac
-}
+# The closed set is owned by occurrence-identity-lib.sh so the leaf coordinator
+# cannot drift from the phase coordinator on what "resolved" means.
+accepting_outcome() { occurrence_resolving_outcome "$1"; }
 
 cursor_outcome() {
   CURSOR_JSON="$CURSOR_JSON" OCC="$1" python3 -c '

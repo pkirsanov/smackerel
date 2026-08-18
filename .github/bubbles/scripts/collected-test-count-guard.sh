@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # bubbles/scripts/collected-test-count-guard.sh
 #
+# Gate G133 — collected_test_count_gate.
+#
 # Refuse test evidence that proves nothing (IMP-036 SCOPE-3).
 #
 # WHY THIS EXISTS

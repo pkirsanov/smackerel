@@ -28,6 +28,17 @@ set -euo pipefail
 # trips by accident; C catches the substitution an author makes deliberately
 # because the test was easier to write that way.
 #
+#   E. EXECUTED    — IMP-048 SCOPE-4 / EV-11. A and B..D check that a
+#                    DECLARATION exists. A `riskTier: high` scenario declaring
+#                    `negativeControlMechanism: mutation` also owes proof the
+#                    mutation RAN, which this file cannot answer because the
+#                    answer lives in an execution receipt rather than in the
+#                    manifest. Delegated to `mutation-receipt.sh check` so the
+#                    declaration rules and the execution rules stay one
+#                    implementation each. Inert unless the repository has
+#                    configured `mutationExecution:`, which no repository does
+#                    by default.
+#
 # SAFE TO BLOCK on day one: testMechanism is a new optional field, so the lint
 # is inert on every packet that does not declare one.
 #
@@ -36,19 +47,24 @@ set -euo pipefail
 #   1  finding
 #   2  usage error / unparseable manifest
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SPEC_DIR=""
+REPO_ROOT="$PWD"
 QUIET=0
 
 die_usage() {
   printf 'test-mechanism-lint: %s\n' "$1" >&2
-  printf 'usage: test-mechanism-lint.sh <specDir> [--quiet]\n' >&2
+  printf 'usage: test-mechanism-lint.sh <specDir> [--repo-root PATH] [--quiet]\n' >&2
   exit 2
 }
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --quiet) QUIET=1 ;;
-    -h|--help) sed -n '4,34p' "${BASH_SOURCE[0]}"; exit 0 ;;
+    --repo-root)
+      [[ $# -ge 2 ]] || die_usage "--repo-root requires a value"
+      REPO_ROOT="$2"; shift ;;
+    -h|--help) sed -n '4,48p' "${BASH_SOURCE[0]}"; exit 0 ;;
     --skip*|--force*|--ignore*|--no-verify*)
       die_usage "bypass-shaped flag '$1' is not supported; declare the real mechanism instead" ;;
     -*) die_usage "unknown option '$1'" ;;
@@ -59,6 +75,8 @@ done
 
 [[ -n "$SPEC_DIR" ]] || die_usage "a spec directory is required"
 [[ -d "$SPEC_DIR" ]] || die_usage "spec directory not found: $SPEC_DIR"
+
+[[ -d "$REPO_ROOT" ]] || die_usage "repo root not found: $REPO_ROOT"
 
 MANIFEST="$SPEC_DIR/scenario-manifest.json"
 if [[ ! -f "$MANIFEST" ]]; then
@@ -253,3 +271,19 @@ if not quiet:
         print("[test-mechanism-lint] OK — no testMechanism declared (inert)")
 sys.exit(0)
 PY
+
+# --- E. the declared mutation actually RAN (IMP-048 SCOPE-4 / EV-11) -------
+#
+# Delegated, never duplicated. This file owns the DECLARATION; the receipt store
+# owns the EXECUTION, and a second reader of that store would be a second answer
+# to one question. Guarded on presence so a partial installation degrades to
+# today's behaviour rather than to a broken tool.
+COMPANION="$SCRIPT_DIR/mutation-receipt.sh"
+if [[ -f "$COMPANION" ]]; then
+  if [[ "$QUIET" -eq 1 ]]; then
+    bash "$COMPANION" check --spec-dir "$SPEC_DIR" --repo-root "$REPO_ROOT" --quiet
+  else
+    bash "$COMPANION" check --spec-dir "$SPEC_DIR" --repo-root "$REPO_ROOT"
+  fi
+fi
+exit 0

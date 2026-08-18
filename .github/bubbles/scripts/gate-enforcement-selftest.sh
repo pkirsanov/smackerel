@@ -15,6 +15,14 @@ if [[ ! -f "$TOOL" ]]; then
   exit 2
 fi
 
+# Resolve the same managed interpreter the tool resolves. Without this the
+# selftest probed the bare python3 and skipped on hosts where the tool itself
+# runs fine — a selftest that never executes cannot witness a regression.
+if [[ -f "$SCRIPT_DIR/dependency-posture.sh" ]]; then
+  # shellcheck source=/dev/null
+  . "$SCRIPT_DIR/dependency-posture.sh"
+fi
+
 if ! command -v python3 >/dev/null 2>&1 || ! python3 -c "import yaml" >/dev/null 2>&1; then
   echo "gate-enforcement-selftest: SKIP (python3 + PyYAML not installed)"
   exit 0
@@ -56,7 +64,12 @@ echo "--- Check 1: Something ---"
 EOF
   cat >"$d/bubbles/scripts/real-guard.sh" <<'EOF'
 #!/usr/bin/env bash
+# Gate G001 — example_gate.
 echo real
+EOF
+  cat >"$d/bubbles/scripts/silent-guard.sh" <<'EOF'
+#!/usr/bin/env bash
+echo silent
 EOF
   cat >"$d/agents/bubbles.workflow.agent.md" <<'EOF'
 ---
@@ -72,7 +85,7 @@ assert "green: resolvable guard-check" 0 "$g1"
 
 g2="$WORK/g2"
 make_repo "$g2" "script:bubbles/scripts/real-guard.sh"
-assert "green: resolvable script" 0 "$g2"
+assert "green: resolvable script that names the gate" 0 "$g2"
 
 g3="$WORK/g3"
 make_repo "$g3" "behavioral:bubbles.workflow"
@@ -94,6 +107,12 @@ assert "red: dangling guard-check label" 1 "$r1"
 r2="$WORK/r2"
 make_repo "$r2" "script:bubbles/scripts/does-not-exist.sh"
 assert "red: dangling script path" 1 "$r2"
+
+# IMP-049 SCOPE-5: existence alone is too weak. A gate may name a real script
+# that never mentions it, which is a declaration nothing verifies.
+r2b="$WORK/r2b"
+make_repo "$r2b" "script:bubbles/scripts/silent-guard.sh"
+assert "red: declared script exists but never names the gate id" 1 "$r2b"
 
 r3="$WORK/r3"
 make_repo "$r3" "behavioral:bubbles.nonexistent"

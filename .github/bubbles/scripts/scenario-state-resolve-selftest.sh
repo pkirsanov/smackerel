@@ -250,7 +250,40 @@ d_log="$TMP_DIR/revision-drift.jsonl"
 receipt red 1 "2026-08-17T09:00:00Z" "SCN-999-001" \
   "tests/e2e/checkout.spec.ts::coupon recomputes total" \
   "drop the coupon multiplier; the asserted total stops changing" "$OTHER_REV" > "$d_log"
-adv "source-revision drift" "SCS-REVISION-DRIFT" "$d_log"
+
+# Drift is REPORTED and the receipt is excluded, but it does not block on its own.
+# The receipt log is append-only, so a superseded receipt outlives every commit;
+# treating drift as fatal made a spec permanently uncertifiable once it had
+# recorded receipts and then committed anything at all.
+d_out="$(resolve "$life_dir" "$d_log")"
+d_rc=$?
+if [[ "$d_rc" -eq 0 ]] &&
+  [[ "$(json_get "$d_out" '.refusals[0].code')" == "SCS-REVISION-DRIFT" ]] &&
+  [[ "$(json_get "$d_out" '.blockingRefusalCount')" == "0" ]]; then
+  pass "source-revision drift is reported but does not block"
+else
+  fail "source-revision drift should report and not block (exit $d_rc)"
+  printf '  output: %s\n' "$d_out"
+fi
+
+# Load-bearing half: exclusion still denies certification. A scenario whose only
+# evidence is stale reaches no state, so the required state is unsatisfied. If
+# this stops failing, drift has been made cosmetic rather than excluding.
+d2_out="$(resolve "$life_dir" "$d_log" --require RED_VERIFIED --certifiable)"
+d2_rc=$?
+if [[ "$d2_rc" -ne 0 ]] && [[ "$(json_get "$d2_out" '.certifiable')" == "false" ]]; then
+  pass "drift-only evidence still fails certification via unsatisfied"
+else
+  fail "drift-only evidence MUST NOT certify (exit $d2_rc)"
+  printf '  output: %s\n' "$d2_out"
+fi
+
+# A genuine refusal alongside drift must still block, so the exemption is scoped
+# to SCS-REVISION-DRIFT and did not neutralise the other codes.
+d3_log="$TMP_DIR/drift-plus-blocking.jsonl"
+cat "$d_log" > "$d3_log"
+printf '{"schemaVersion":2,"ts":"2026-08-17T09:30:00Z","sessionId":"s-nc2","cmd":"npx playwright test checkout","exitCode":1,"scenarioBinding":{"scenarioId":"SCN-999-001","phase":"red","testIdentity":"tests/e2e/checkout.spec.ts::coupon recomputes total","sourceRevision":"%s","claim":"coupon recomputes the checkout total"}}\n' "$REV" >> "$d3_log"
+adv "a blocking refusal alongside drift" "SCS-NO-NEGATIVE-CONTROL" "$d3_log"
 
 n_log="$TMP_DIR/no-control.jsonl"
 printf '{"schemaVersion":2,"ts":"2026-08-17T09:00:00Z","sessionId":"s-nc","cmd":"npx playwright test checkout","exitCode":1,"scenarioBinding":{"scenarioId":"SCN-999-001","phase":"red","testIdentity":"tests/e2e/checkout.spec.ts::coupon recomputes total","sourceRevision":"%s","claim":"coupon recomputes the checkout total"}}\n' "$REV" > "$n_log"

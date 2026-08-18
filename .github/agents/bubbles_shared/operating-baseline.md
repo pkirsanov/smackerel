@@ -452,6 +452,16 @@ Before every autonomous convergence iteration, run `bubbles/scripts/convergence-
 
 **`neverStopForFixableObstacles` does not apply to goal expansion.** Persistence exists to push through difficulty, not through size; neither that rule nor solution search distinguishes "this is hard" from "this is bigger", which is how persistence amplifies expansion. Solution search may find a narrower implementation inside the boundary; it may not add a change class or a target. A generic continuation resumes the approved graph and nothing more, and a session budget limits runtime cost without ever granting scope. Only an approved contract revision re-baselines the brake — re-baselining at the same revision is refused, because that is how a runner would release the brake from inside the loop.
 
+## In-Session Review Cadence (IMP-048 SCOPE-1 / LRN-8 — Orchestrator Agents)
+
+At each phase boundary — never mid-tool — ask `bubbles/scripts/session-review.sh check` whether a review is due, passing turns and minutes since the last review, retained tool-result bytes, repeated failure signatures, resultless dispatches, and budget consumption. Defaults: 8 turns, 45 minutes, 150 KB, a signature seen twice, one resultless dispatch, each of 50/70/90% once. First to fire wins; the winner is the most diagnostic dimension.
+
+Record the outcome with `session-review.sh emit`. Class A: change your behaviour for the rest of the session, state it in one line, write no artifact. Class B buffers a candidate that reaches `lessons.md` only at `emit --close`, only after recurring twice, at most three per session. Class C is a user-only action — hand off, approve a widening, supply a credential — deduplicated until its metric worsens by 25%. A review that found nothing records `netEffect: no-adjustment`; one that found nothing **while a repeated failure signature or a resultless dispatch was observed** is refused.
+
+Before the next phase, honour active corrections from `session-review.sh show --active-adjustments`; carry them into every dispatch packet as `activeAdjustments[]`; report them through the OPTIONAL `reviewCompliance` field in the RESULT-ENVELOPE, naming each honoured or why it did not apply. An adjustment contradicted twice becomes a Class B candidate. Review records compact under G083 — the two most recent stay raw.
+
+Proposal-first like `retro-framework-health.sh`: the loop never writes under `bubbles/`, `agents/`, or `workflows.yaml`, enforced on the resolved physical path. Promotion appends to the lessons corpus `skill-evolution.sh` clusters. Default-off per repo: with no `sessionReview:` block every subcommand is a no-op.
+
 ## Phase Relevance Resolution (Orchestrator Agents — IMP-038 SCOPE-5 / GF-4)
 
 Authorized top-level runners (`bubbles.workflow`, `bubbles.goal`, `bubbles.sprint`, `bubbles.iterate`) MUST obtain each phase's skip/run verdict from the shared resolver instead of deciding for themselves:
@@ -554,7 +564,16 @@ Hard dependency: `jq` is required (already used elsewhere in the framework). If 
 ### What
 
 - Orchestrators snapshot each turn boundary with `bash bubbles/scripts/state-snapshot.sh --mode <start|end> --phase <p> --session-id <session-id> --session-control-file <control-file> --binding-packet-file <packet-file>`. Goal-node calls add the required pair `--scenario-file <compiled-scenario.json> --node-id <node-id>`.
-- Each invocation appends a single record to `.specify/memory/bubbles.session.json` `turnSnapshots[]` carrying: `turnNumber` (auto-incremented), `timestamp` (UTC ISO8601), `phase`, `scopeId` (or null), `mode` (`start` | `end`), `note` (or null), and `agent` (from `$BUBBLES_AGENT_NAME`, defaulting to `unknown`).
+- Each invocation appends a single record to `.specify/memory/bubbles.session.json` `turnSnapshots[]` carrying: `turnNumber` (auto-incremented), `timestamp` (UTC ISO8601), `phase`, `scopeId` (or null), `mode` (`start` | `end`), `note` (or null), `agent` (from `$BUBBLES_AGENT_NAME`, defaulting to `unknown`), and `hostSessionId` (from the already-required `--session-id`).
+
+### The obligation (IMP-048 SCOPE-7)
+
+A run past 3 turns that appended no `turnSnapshots[]` entry for its own `hostSessionId` is a FINDING, reported by `bash bubbles/scripts/session-liveness.sh check --session-id <id> --turns <n>`.
+
+Two rules follow:
+
+- **Attribution.** `hostSessionId` keys each record. Records with no `hostSessionId` are `unattributed`, never counted as another session's.
+- **An empty store is UNMEASURED, never PASS.** G083, G128 and `trajectory-inspector.sh --health` all read this file; over silence they measure nothing. `session-liveness.sh` reaches `verdict=PASS` only from measured snapshots AND freshness. `doctor` also reports a session file whose newest snapshot predates the newest commit as STALE, advisory only.
 
 ### Why
 

@@ -40,6 +40,32 @@ check_absent() {
   fi
 }
 
+# IMP-049 SCOPE-6. A narrative doc states a boundary; the sentence it uses to
+# state it is presentation. Require the named concepts independently, in any
+# order and any sentence shape, so rewording a recipe or a README row cannot
+# break a release gate. The exact sentences moved to docs-wording-advisory.sh,
+# which reports drift and always exits 0.
+check_tokens() {
+  local file_path="$1"
+  local label="$2"
+  shift 2
+  local missing=()
+  local token
+
+  if [[ ! -f "$file_path" ]]; then
+    fail "$label (missing $(basename "$file_path"))"
+    return 0
+  fi
+  for token in "$@"; do
+    grep -Fq -- "$token" "$file_path" || missing+=("$token")
+  done
+  if [[ "${#missing[@]}" -eq 0 ]]; then
+    pass "$label"
+  else
+    fail "$label (missing concept token(s): ${missing[*]})"
+  fi
+}
+
 echo "Running continuation-routing regression selftest..."
 echo "Scenario: stochastic-quality-sweep finishes a round, user says 'fix all found', workflow must preserve workflow-owned continuation."
 
@@ -70,15 +96,18 @@ check_pattern "$ROOT_DIR/../agents/bubbles.recap.agent.md" 'next-priority candid
 check_pattern "$ROOT_DIR/../agents/bubbles.recap.agent.md" 'When dispatched with an inherited packet.*validate-packet.*do not run a second preflight' "Dispatched recap preserves the parent packet revision"
 check_pattern "$ROOT_DIR/../agents/bubbles.recap.agent.md" 'repositoryRoot: <redacted-local-root>.*pathVisibility: redacted.*actionable: false.*target: none.*preferredWorkflowMode: none' "Terminal recap envelope uses a valid redacted projection"
 check_pattern "$ROOT_DIR/../agents/bubbles.handoff.agent.md" 'repositoryRoot: <redacted-local-root>.*pathVisibility: redacted.*actionable: false.*target: none.*preferredWorkflowMode: none' "Terminal handoff envelope uses a valid redacted projection"
-check_pattern "$ROOT_DIR/../docs/recipes/resume-work.md" 'tries to resume the active workflow context first' "Resume recipe documents active-workflow resume precedence"
-check_pattern "$ROOT_DIR/../docs/recipes/resume-work.md" 'Recap may show one next-priority candidate as `not started`; it does not start that item' "Resume recipe documents terminal recap without execution"
+check_tokens "$ROOT_DIR/../docs/recipes/resume-work.md" "Resume recipe documents active-workflow resume precedence" \
+  'resume the active workflow' 'continuation envelope'
+check_tokens "$ROOT_DIR/../docs/recipes/resume-work.md" "Resume recipe documents terminal recap without execution" \
+  'next-priority candidate' 'not started'
 # The framework README is a source-repo artifact. An installed downstream tree
 # puts this selftest under .github/bubbles/scripts, so "$ROOT_DIR/.." is
 # .github/ -- which never contains a README. Assert the claim where the file
 # exists and say so explicitly everywhere else, rather than failing a
 # downstream install for a document it was never given.
 if [[ -f "$ROOT_DIR/../README.md" ]]; then
-  check_pattern "$ROOT_DIR/../README.md" 'returns a completion recap and an unstarted next-priority candidate' "README documents the completed-state boundary"
+  check_tokens "$ROOT_DIR/../README.md" "README documents the completed-state boundary" \
+    'recap' 'next-priority candidate'
 else
   echo "SKIP: README documents the completed-state boundary (no README alongside the framework root)"
 fi

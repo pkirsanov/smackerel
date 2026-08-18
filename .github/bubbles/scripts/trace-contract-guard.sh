@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 # Capability: impact-aware-validation-trace-contracts
+# Gate G080 — trace_contract_evidence_gate. Advisory until a project declares a
+# `traceContracts` map; `--require-config` makes a missing map fail.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
