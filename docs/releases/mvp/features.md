@@ -225,7 +225,7 @@ All capabilities below were certified `done` (or equivalent terminal-for-mode) b
 | Actionable lists | 028 | delivered |
 | DevOps pipeline + observability + monitoring | 029, 030, 047, 049, 053 | delivered |
 | Live-stack testing + ML sidecar health isolation | 031, 043, 050 | delivered |
-| Documentation freshness + spec-banner sweep | 032, _ops/OPS-001 | executed, **not current** — the OPS-001 sweep was a point-in-time remediation and banner drift has since re-accumulated (measured at `HEAD` `2a54d2fe`: 15 of 99 `done` specs carrying a `spec.md` are drifted). Tracked as RTE-M5 in [`actions.md`](actions.md); re-sweeping is deliberately out of scope here because it edits already-certified `spec.md` files and collides with Gate G088 |
+| Documentation freshness + spec-banner sweep | 032, _ops/OPS-001 | executed, **not current** — the OPS-001 sweep was a point-in-time remediation and banner drift has since re-accumulated (re-measured at `HEAD` `57bcb187`: **37 of 99** `done` specs carrying a `spec.md` are drifted; a prior claim of 15 was a mismeasurement, corrected under RTE-M5). Tracked as RTE-M5 in [`actions.md`](actions.md); re-sweeping is **deliberately not to be executed** because it edits already-certified `spec.md` files and would add 37 new Gate G088 violations to the 40 that already exist |
 | Mobile capture (PWA) | 033 | delivered |
 | Expense tracking, recipe enhancements, meal planning | 034, 035, 036 | delivered |
 | LLM agent tools + structured intent compiler + intent-driven policy enforcement | 037, 068, 067 | delivered |
