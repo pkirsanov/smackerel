@@ -283,6 +283,196 @@ form per the repository PII policy. No result, count, or exit code was altered._
 
 ---
 
+<a id="simplify"></a>
+
+### Simplify — Post-Implementation Review Of The Regression Diff
+
+**Phase:** simplify · **Claim Source:** executed · **Live system:** no
+
+**Review surface.** The two source files this packet touched most recently
+(commit `5c24a74f`), and nothing else:
+
+| File | Change under review |
+|---|---|
+| `internal/assistant/facade_execution_error_honesty_test.go` | `requiresProvenanceScenarios` gained `open_knowledge` (1 line + doc comment) |
+| `internal/assistant/facade_high_band_invariant_coverage_test.go` | new, 81 lines, `TestRequiresProvenanceScenarios_ClosedOverSST` |
+
+Three passes were run over that surface — code reuse, code quality, efficiency.
+One finding was acted on. Three were considered and declined; they are recorded
+below rather than omitted, so a reader can audit the *declines* as well as the
+change.
+
+---
+
+#### Applied — F1 (quality): the second closure assertion could not detect the case its own message described
+
+`TestRequiresProvenanceScenarios_ClosedOverSST` claims to fail on drift in
+**both** directions. The first direction was closed. The second was not.
+
+Both checks were derived from a single walk of `manifest.AllScenarioIDs()`, with
+the "this sweep row proves nothing" case detected by peeking at `swept[id]`
+inside the `continue` branch. A manifest walk can only ever see ids the manifest
+still contains. An id **retired from `config/assistant/scenarios.yaml`
+outright** — a scenario renamed or removed, leaving a stale entry in
+`requiresProvenanceScenarios` — is never visited, so nothing reported it.
+
+That gap was not cosmetic, because the other half of the invariant cannot
+compensate for it: `TestHighBandNeverMaskedAsSavedAsIdea` builds a **synthetic**
+manifest per id via `newTestManifest`, so a retired id keeps producing a green
+sweep row forever. A stale row would go on being counted as coverage. That is
+the same failure shape this packet's regression phase was created to close, one
+level up.
+
+The fix asks each question from the side that can see its own counterexample:
+the manifest walk answers "is every gated scenario swept?", and a second short
+walk over `requiresProvenanceScenarios` answers "does every swept id still
+gate?". This also removes a conditional nested inside a skip branch, so the loop
+body now does one thing.
+
+```diff
++       allIDs := manifest.AllScenarioIDs()
++       gated := make(map[string]bool, len(allIDs))
+        var declared, uncovered, notProvenanceBearing []string
+-       for _, id := range manifest.AllScenarioIDs() {
++       for _, id := range allIDs {
+                if !manifest.RequiresProvenance(id) {
+-                       if swept[id] {
+-                               notProvenanceBearing = append(notProvenanceBearing, id)
+-                       }
+                        continue
+                }
++               gated[id] = true
+                declared = append(declared, id)
+                if !swept[id] {
+                        uncovered = append(uncovered, id)
+                }
+        }
++       // Asked from the sweep side: an id retired from the SST is never visited
++       // by a manifest walk, so a manifest walk cannot report it.
++       for _, id := range requiresProvenanceScenarios {
++               if !gated[id] {
++                       notProvenanceBearing = append(notProvenanceBearing, id)
++               }
++       }
+```
+
+The assertion message was widened to match what the check now covers ("absent
+from the manifest, or present and false"), and `AllScenarioIDs()` — which
+allocates a fresh slice per call — is now called once instead of once per use.
+`git diff --stat`: 1 file changed, 19 insertions, 9 deletions.
+
+**Behavior on the current tree is unchanged.** The SST declares five scenarios,
+four with `requires_provenance: true`, and all four are swept; every swept id is
+gated. The change alters only what the test *can* catch on a future drift.
+
+---
+
+#### Verification
+
+**1. Green — both owning tests, focused run (uncached), current tree.**
+
+```
+./smackerel.sh test unit --go \
+  --go-run 'TestRequiresProvenanceScenarios_ClosedOverSST|TestHighBandNeverMaskedAsSavedAsIdea' \
+  --verbose
+```
+
+```
+=== RUN   TestRequiresProvenanceScenarios_ClosedOverSST
+=== PAUSE TestRequiresProvenanceScenarios_ClosedOverSST
+=== CONT  TestHighBandNeverMaskedAsSavedAsIdea
+=== CONT  TestRequiresProvenanceScenarios_ClosedOverSST
+    facade_high_band_invariant_coverage_test.go:90: SST requires_provenance scenarios (all swept by the INV-HB-REFUSAL invariant): [open_knowledge recipe_search retrieval_qa weather_query]
+--- PASS: TestRequiresProvenanceScenarios_ClosedOverSST (0.00s)
+```
+
+```
+ok      github.com/smackerel/smackerel/internal/assistant       0.414s
+```
+
+`FINAL_GREEN_EXIT=0`. Grep counts over the captured output: `--- FAIL`/`^FAIL`
+lines = 0; `internal/assistant …(cached)` = 0, so the package genuinely
+re-executed rather than replaying a prior result.
+
+Note the log line is now `coverage_test.go:90`, where the regression phase
+recorded `:80`. The shift is this section's comment edits above the assertion
+block. The regression phase's recorded evidence above is left exactly as it was
+captured — it is that phase's record of what it ran, and rewriting it here would
+be tampering with someone else's evidence, not correcting it.
+
+**2. Adversarial — the newly-closed edge actually fires.**
+
+A retired id (`retired_scenario_probe`, present in no manifest) was temporarily
+added to `requiresProvenanceScenarios`, and the closure test run alone:
+
+```
+    facade_high_band_invariant_coverage_test.go:83: requiresProvenanceScenarios names [retired_scenario_probe] which config/assistant/scenarios.yaml does NOT declare with requires_provenance: true (absent from the manifest, or present and false) — those sweep rows never exercise the provenance gate and prove nothing
+--- FAIL: TestRequiresProvenanceScenarios_ClosedOverSST (0.00s)
+FAIL    github.com/smackerel/smackerel/internal/assistant       0.507s
+```
+
+`ADVERSARIAL_PROBE_EXIT=1`.
+
+**3. Counter-proof — the edge was genuinely open before this change.**
+
+With the same retired id still in place, only the coverage test's body was
+reverted to its pre-simplify form (`git stash push` on that one path), and the
+run repeated:
+
+```
+    facade_high_band_invariant_coverage_test.go:80: SST requires_provenance scenarios (all swept by the INV-HB-REFUSAL invariant): [open_knowledge recipe_search retrieval_qa weather_query]
+--- PASS: TestRequiresProvenanceScenarios_ClosedOverSST (0.00s)
+ok      github.com/smackerel/smackerel/internal/assistant       0.304s
+```
+
+`PRESIMPLIFY_WITH_RETIRED_ID_EXIT=0`. The pre-simplify body passed with a stale
+sweep row present; the simplified body fails on it. Without this step the change
+would be an assertion about a gap rather than a demonstration of one. Both
+temporary edits were then reverted (`git stash pop`, `git checkout --`) and
+step 1 was re-run on the restored tree, which is the run quoted above.
+
+**4. Hygiene.** `gofmt -l` on the changed file returned no output (exit 0). Vet
+runs as part of `go test`; the package compiled and passed.
+
+---
+
+#### Considered and declined
+
+**F2 (reuse, declined): triplicated real-manifest load.** The pattern
+`LoadSkillsManifest(repoFile(t, "config", "assistant", "scenarios.yaml"),
+func(string) (bool, bool) { return true, true })` now appears three times in
+package `assistant` — twice pre-existing in `skills_manifest_loader_test.go`
+(lines 51 and 102) and once in the new file — and `testhelpers_test.go` is the
+package's established home for shared test helpers. A `loadRealManifest(t)`
+helper is defensible. It was declined because collapsing it would edit a file
+outside this packet's diff for a net saving of roughly a dozen lines, and
+because the three call sites are not the same thing: the loader test pairs the
+manifest load with a `config/prompt_contracts` directory load and needs the
+blank tool imports for it, while the new call carries an inline comment
+explaining *why* its resolver is permissive — context a helper would dilute. The
+duplication is recorded here so a future consolidation has a starting point.
+
+**F3 (quality, declined): duplicated narrative.** The `open_knowledge` drift
+story is told at length twice — in the new file's 16-line header and again in
+the `requiresProvenanceScenarios` doc comment. Trimming one is a prose
+preference, not an evidence-driven improvement, so it was left alone.
+
+**F4 (efficiency): nothing found beyond the one-call change above.** Both maps
+were already pre-sized, the slices hold at most five elements, and the three
+`sort.Strings` calls are on those same slices. There is no measurable cost here
+and no reason to touch it.
+
+**Boundaries respected.** `uservalidation.md` untouched (G136 requires the
+author). `status` unchanged (`blocked`). Only `simplify` was appended to
+`completedPhases`. Nothing under `.github/bubbles/` was modified. Nothing was
+committed.
+
+_PII note: this section's evidence quotes command output with absolute paths
+rewritten in repo-relative form per the repository PII policy. No result, count,
+or exit code was altered._
+
+---
+
 ## Implementation Delta
 
 ### Code Diff Evidence
@@ -409,6 +599,358 @@ file is a coverage closure rather than another hand-maintained list. The
 
 ---
 
+## Stabilize — Stability, Performance, Reliability And Resource Assessment
+
+<a id="stabilize-assessment"></a>
+
+**Phase:** `stabilize` · **Agent:** `bubbles.stabilize` · **Date:** 2026-08-18
+**Verdict:** ⚠️ PARTIALLY_STABLE — one finding, recorded and routed, not fixed
+inline. See *Verdict* at the end of this section for why that token was chosen
+over 🟢 and over 🛑.
+
+### What was assessed
+
+The change this packet ships is a refusal-path correctness fix plus two
+test-only additions:
+
+- **Runtime:** a high-band `requires_provenance` turn that returns OK-but-uncited
+  now renders an honest refusal (`StatusUnavailable` + `ErrNoGroundedAnswer` +
+  `CanonicalRefusalBody`, `CaptureRoute=false`) instead of the band-low capture
+  acknowledgement. Implemented in `provenance/gate.go` `Enforce` and
+  `facade.go` `canonicalizeSuccessfulCaptureResponse`, plus the adapter render
+  paths.
+- **Test-only (commit `5c24a74f`):** `open_knowledge` added to
+  `requiresProvenanceScenarios`, and `TestRequiresProvenanceScenarios_ClosedOverSST`
+  added to close that sweep over `config/assistant/scenarios.yaml`.
+
+The assessment is scoped to that. A load test was not run, because nothing in
+this change alters throughput, concurrency, allocation behaviour on the hot
+path, or any external call — the reasoning for that claim is below, and it is
+reasoning from the code, not an assumption.
+
+### Finding: no performance, resource or reliability risk introduced
+
+Four grounded reasons, each checked against the source rather than assumed:
+
+1. **The refusal branch performs no additional work and allocates nothing.**
+   `Enforce`'s rewrite is a fixed set of field assignments on a struct that is
+   already materialized. `CanonicalRefusalBody` is a package-level `const`
+   string (`provenance/gate.go`) and `contracts.CanonicalRefusalBodyFor` returns
+   package-level `const` strings from a closed `switch` — neither allocates.
+   `resp.Sources = nil` drops a slice reference, so the branch is marginally
+   *cheaper* in retained memory than the pre-fix path, not more expensive. The
+   pre-fix path assigned the same number of fields to reach the capture shape;
+   this assigns them to reach the refusal shape.
+
+2. **The branch is off the hot path by construction.** It can only fire on a
+   turn that already completed an LLM invocation for a `requires_provenance`
+   scenario and returned a body with no valid sources. Any cost it adds is
+   dominated by the invocation that preceded it by orders of magnitude. The
+   existing p95 guards (`tests/stress/assistant_facade_p95_test.go`,
+   `tests/stress/openknowledge_p95_test.go`) already cover that hot path; this
+   change does not move the code they measure.
+
+3. **No metric-cardinality risk from the new `ErrorCause`.** `ErrNoGroundedAnswer`
+   grows the closed `AllErrorCauses` vocabulary to 7 values, but `ErrorCause` is
+   never used as a Prometheus label value anywhere in non-test `internal/` code
+   — a repo-wide scan of `WithLabelValues` call sites returns zero matches that
+   reference it (evidence below). It is consumed structurally, by adapters and
+   tests, not as a label. The packet registered no new metric;
+   `provenance.ViolationsCounter` predates it and its `(scenario_id, cause)`
+   label pair is unchanged.
+
+4. **No new goroutine, IO, lock, timer, or external call** appears anywhere on
+   the changed path. The rewrite is synchronous field assignment inside a
+   function that was already on the call path.
+
+### Finding: the new test adds no new dependency class and no measurable cost
+
+`TestRequiresProvenanceScenarios_ClosedOverSST` parses
+`config/assistant/scenarios.yaml` — 77 lines, 3,353 bytes — once per run, and Go
+reports it at `0.00s`, i.e. below the 10 ms reporting resolution. It resolves
+that path through the pre-existing `repoFile`/`repoRoot` helper in
+`testhelpers_test.go`, which seven other tests in the same package
+(`skills_manifest_test.go`, `skills_manifest_loader_test.go`,
+`scenarios_validator_test.go`) already use to read the same file. So it
+introduces no new filesystem-dependency class, no new working-directory
+coupling, and no new failure mode for hermetic or packaged test execution that
+the package did not already carry.
+
+### Finding: a real configuration→build coupling, accepted by design
+
+Closing the sweep over the SST creates a genuine operational consequence that is
+worth naming rather than discovering later as a surprise build break: **a
+config-only edit can now fail the Go unit suite.** Adding a scenario with
+`requires_provenance: true` to `config/assistant/scenarios.yaml` without also
+adding its id to `requiresProvenanceScenarios` in
+`internal/assistant/facade_execution_error_honesty_test.go` fails
+`TestRequiresProvenanceScenarios_ClosedOverSST`.
+
+This is the intended property — it is exactly what makes the invariant a
+class-killer rather than a snapshot of one moment, and it is the drift the
+regression phase caught. It is recorded here as a **posture note, not a defect**:
+whoever next edits the scenario SST must update the sweep list in the same
+change, and the test's failure message already says so in both directions.
+Severity: low. Disposition: accepted-by-design.
+
+### Observation: the invariant's guarantee is chokepoint-based, and two sites return before it
+
+Not a defect, and not routed — recorded so a future author knows the shape of
+the guarantee. The user-visible capture acknowledgement has exactly one literal
+in the tree (`facade.go:60`) and exactly four writers:
+
+| Site | Band | Reaches `canonicalizeSuccessfulCaptureResponse`? |
+|---|---|---|
+| `facade.go:1072` | low | yes — flows to the chokepoint at `facade.go:1416` |
+| `facade.go:1130` | low | yes |
+| `facade.go:1853` | low | this *is* the chokepoint's band-low branch |
+| `facade.go:2194` | low | **no** — returns early, self-audits `BandLow` |
+
+`facade.go:~2192` is the pending-disambiguation non-matching-reply path. It
+emits the capture shape and returns before the chokepoint, persisting and
+auditing itself as `BandLow`. That is defensible: no scenario matched that turn,
+so it is band-low by construction — but the invariant holds there by *labelling*,
+not by the chokepoint that mechanically enforces it everywhere else.
+
+I checked the one other non-test `StatusSavedAsIdea` producer for a masking hole
+and found none: `compiled_interactions.go:173` (confirm-negative) sets
+`Status=StatusSavedAsIdea` with `Body: "Change cancelled."` and leaves
+`CaptureRoute` unset, so the chokepoint's `!resp.CaptureRoute` guard returns it
+unchanged — and the Telegram adapter's `statusPrefix` renders
+`StatusSavedAsIdea` with no prefix and the response's own `Body`
+(`render_outbound.go:288`), so it surfaces "Change cancelled.", never the capture
+string. No user-visible masking exists on that path.
+
+### Finding: the recorded deployment `sourceSha` is dangling (NOT caused by this packet)
+
+`state.json.deployment.sourceSha` is `2e84a1b4df78c3b1932ddf91def2ededcf34cb9e`.
+That object still exists and is the real fix commit
+(`fix(assistant): BUG-061-009 — high-band turns never render 'saved as an idea'`,
+2026-07-23), but it is **not an ancestor of HEAD** and **no branch contains it**.
+History was rewritten after the deploy was recorded.
+
+What this does and does not mean, stated precisely:
+
+- **The pending operator smoke test remains valid.** The behaviour it exercises
+  is byte-identical between that commit and HEAD: `provenance/gate.go`,
+  `contracts/refusal.go`, `telegram/.../render_outbound.go`,
+  `telegram/.../render_openknowledge.go`, `whatsapp/.../adapter.go` and
+  `config/assistant/scenarios.yaml` are all UNCHANGED across that range. The one
+  refusal-adjacent line that differs in `facade.go` is `turnBand = BandLow`
+  inside the compiled-weather short-circuit, which feeds the structured log
+  label at `facade.go:539` and not the enforcement path. `contracts/response.go`
+  differs only by two additive fields (`AssistantTurnID`, `AgentTraceID`, from
+  BUG-069-004). So the deployed image genuinely carries the fix under test.
+- **What is lost is rebuildability from the record.** The deployed digest cannot
+  be reproduced by checking out the `sourceSha` the deployment block names,
+  because that SHA is on no branch. The provenance chain from record to artifact
+  is broken even though the artifact is correct.
+- **Not an incident.** Nothing is degraded and nothing is failing. Severity:
+  medium (audit/provenance), not S1/S2.
+
+Disposition: **recorded and routed, not fixed inline.** Correcting it requires
+either re-recording the deployment against a reachable SHA or rebuilding and
+redeploying from HEAD; both are deployment-record actions owned by
+`bubbles.devops` / `bubbles.train`, not a stabilize edit. Logged as DI-4 below.
+
+### Verification evidence
+
+**Claim Source:** commands executed in this session, in this repository, at HEAD
+`76a27269`. Absolute home paths in the transcripts below are rewritten to
+`<repo-root>` to satisfy the repo PII gate; no command, count, exit code or
+result was altered.
+
+#### `./smackerel.sh check` — exit 0
+
+```
+$ ./smackerel.sh check
+config-validate: <repo-root>/config/generated/dev.env.tmp.3230055 OK
+Config is in sync with SST
+env_file drift guard: OK
+scenario-lint: scanning config/prompt_contracts (glob: *.yaml)
+scenarios registered: 17, rejected: 0
+scenario-lint: OK
+SMACKEREL_CHECK_EXIT=0
+CHECK_WALL_SECONDS=14
+```
+
+Config is in sync with the SST and all 17 scenarios register with zero
+rejections, so the config→build coupling described above is currently satisfied.
+
+#### `./smackerel.sh test unit` — exit 0
+
+```
+# BUG-061-009 stabilize: ./smackerel.sh test unit
+$ ./smackerel.sh test unit
+exit: 0
+lines: 441
+sha256: e18130813126ab85652f3fa24dca41bf12b8e1bfab13b9f62be50ef5a5512d00
+--- first 20 ---
+oom-preflight: OK — 36579 MB available (need 6000 MB; swap used 670 MB).
+disk-preflight: OK — C: 73 GB free (need 40 GB), WSL / 473 GB free (need 25 GB).
+++ dirname /workspace/scripts/runtime/go-unit.sh
+[go-unit] envsubst missing — installing gettext-base
++ source /workspace/scripts/runtime/_ensure_envsubst.sh
++ ensure_envsubst go-unit
++ local tag=go-unit
++ command -v envsubst
++ echo '[go-unit] envsubst missing — installing gettext-base'
++ apt-get update -qq
++ apt-get install -y --no-install-recommends gettext-base
+Reading package lists...
+Building dependency tree...
+Reading state information...
+The following NEW packages will be installed:
+  gettext-base
+0 upgraded, 1 newly installed, 0 to remove and 20 not upgraded.
+Need to get 160 kB of archives.
+After this operation, 660 kB of additional disk space will be used.
+Get:1 http://deb.debian.org/debian bookworm/main amd64 gettext-base amd64 0.21-12 [160 kB]
+--- omitted 401 line(s); sha256 above covers the full output ---
+--- last 20 ---
+  ...
+1..2
+# tests 2
+# suites 0
+# pass 2
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 142.106003
+PASS: bug_077_002_login_session_reuse_test (SCN-077-BUG-002-01 / SCN-077-BUG-002-02)
+[test unit] -> bash <repo-root>/tests/unit/web/spec_077_discovery_convention_test.sh
+PASS: spec_077_discovery_convention_test (TP-077-02-01 / SCN-077-A02)
+[test unit] -> bash <repo-root>/tests/unit/web/spec_077_no_stub_bodies_test.sh
+PASS: spec_077_no_stub_bodies_test (TP-077-03-06 / SCN-077-A08)
+[test unit] shell unit tests in tests/unit/web/ finished OK
+[test unit] running 1 shell unit test(s) from tests/unit/docs/
+[test unit] -> bash <repo-root>/tests/unit/docs/spec_077_test_category_parity_test.sh
+PASS: spec_077_test_category_parity_test (TP-077-02-03 / SCN-077-A06)
+[test unit] shell unit tests in tests/unit/docs/ finished OK
+```
+
+```
+EVIDENCE_CAPTURE_EXIT=0
+TEST_UNIT_WALL_SECONDS=117
+```
+
+The `apt-get` in the first 20 lines is a pre-existing, documented and
+intentional bootstrap (`scripts/runtime/_ensure_envsubst.sh`, added by the
+spec-052 chaos phase because the `golang:1.25.10-bookworm` base image omits
+`gettext-base`). It is idempotent per container and unrelated to this packet.
+Noting it because I observed it, not as a finding.
+
+#### The packet's own tests genuinely re-execute (not cache-served)
+
+A full-suite pass can report `internal/assistant` as `(cached)`, which asserts
+only that some prior identical tree passed. A focused run defeats that, because
+the `-run` pattern is part of Go's test cache key:
+
+```
+$ ./smackerel.sh test unit --go --go-run 'TestRequiresProvenanceScenarios_ClosedOverSST|TestHighBandNeverMaskedAsSavedAsIdea|TestExecutionErrorHonesty' --verbose
+FOCUSED_EXIT=0
+FOCUSED_WALL_SECONDS=33
+
+ok      github.com/smackerel/smackerel/internal/assistant       0.280s
+
+facade_high_band_invariant_coverage_test.go:90: SST requires_provenance scenarios (all swept by the INV-HB-REFUSAL invariant): [open_knowledge recipe_search retrieval_qa weather_query]
+
+--- PASS: TestRequiresProvenanceScenarios_ClosedOverSST (0.00s)
+--- PASS: TestExecutionErrorHonesty_OKNoSourcesRefusesHonestly (0.00s)
+--- PASS: TestExecutionErrorHonesty_MetricIncrements (0.00s)
+--- PASS: TestHighBandNeverMaskedAsSavedAsIdea (0.00s)
+    (12 subtests: {weather_query, retrieval_qa, recipe_search, open_knowledge}
+     x {provider-error, timeout, ok_uncited})
+
+FAIL/--- FAIL line count: 0
+```
+
+`0.280s` rather than `(cached)` proves re-execution, and the
+`facade_high_band_invariant_coverage_test.go:90` line exists only if the closure
+test actually ran. All four swept scenarios are named, `open_knowledge` among
+them. The `0.00s` per-test timings are the measurement behind the "no
+measurable cost" claim above.
+
+#### Metric-cardinality check
+
+```
+$ grep -rn 'WithLabelValues' internal/ --include='*.go' | grep -v '_test.go' | grep -iE 'errorcause'
+ERRCAUSE_LABEL_EXIT=1   # 1 = no match: ErrorCause never becomes a metric label
+
+$ grep -rn 'prometheus.New\|MustRegister' internal/assistant/provenance/gate.go internal/assistant/contracts/response.go internal/assistant/contracts/refusal.go
+internal/assistant/provenance/gate.go:53:var ViolationsCounter = prometheus.NewCounterVec(
+internal/assistant/provenance/gate.go:62:       prometheus.MustRegister(ViolationsCounter)
+```
+
+The only registration on the changed surface is the pre-existing
+`ViolationsCounter`, whose labels this packet did not touch.
+
+#### Deployment-provenance check
+
+```
+$ git rev-parse HEAD
+76a27269b51308a2414ca348a226a73e476bccbe
+
+$ git merge-base --is-ancestor 2e84a1b4df78c3b1932ddf91def2ededcf34cb9e HEAD
+IS_ANCESTOR_EXIT=1   # 0=ancestor, 1=NOT an ancestor
+
+$ git log -1 --format='%H %ad %s' 2e84a1b4df78c3b1932ddf91def2ededcf34cb9e
+2e84a1b4df78c3b1932ddf91def2ededcf34cb9e Thu Jul 23 03:20:20 2026 +0000 fix(assistant): BUG-061-009 — high-band turns never render 'saved as an idea'
+
+$ git branch -a --contains 2e84a1b4df78c3b1932ddf91def2ededcf34cb9e
+CONTAINS_EXIT=0      # empty output: no local or remote branch contains it
+```
+
+```
+$ for f in <refusal surface>; do git diff --quiet 2e84a1b4..HEAD -- "$f"; done
+UNCHANGED  internal/assistant/provenance/gate.go
+UNCHANGED  internal/assistant/contracts/refusal.go
+CHANGED    internal/assistant/contracts/response.go
+CHANGED    internal/assistant/facade.go
+UNCHANGED  internal/telegram/assistant_adapter/render_outbound.go
+UNCHANGED  internal/telegram/assistant_adapter/render_openknowledge.go
+UNCHANGED  internal/whatsapp/assistant_adapter/adapter.go
+UNCHANGED  config/assistant/scenarios.yaml
+```
+
+The two CHANGED files were inspected line by line; their diffs are the additive
+BUG-069-004 turn-identity fields and the telemetry-only `turnBand = BandLow`
+assignment described above, neither of which touches refusal enforcement.
+
+### Verdict
+
+**⚠️ PARTIALLY_STABLE.**
+
+The change under assessment carries **no stability, performance, reliability or
+resource risk**. That is the honest answer and it is supported by the four
+reasons in the first finding, each read out of the source rather than assumed.
+A load test was deliberately not run because nothing in the change moves a
+measured hot path.
+
+The token is not 🟢 because one real finding exists — the dangling deployment
+`sourceSha` — and I did not fix it inline. It is not 🛑 because nothing is
+degraded, no code defect was found, and the deployed artifact demonstrably
+carries the correct behaviour; declaring the packet unstable would imply the
+refusal fix is broken, which the evidence contradicts. The verdict definition
+for ⚠️ assumes inline repair; I am deviating from that clause deliberately and
+saying so, because the finding is a deployment-record fact that only a
+re-record or a rebuild-and-redeploy can resolve, and both belong to
+`bubbles.devops` / `bubbles.train`.
+
+**Routed, not fixed here:**
+
+| Finding | Owner | Why not stabilize |
+|---|---|---|
+| Dangling deployment `sourceSha` (DI-4) | `bubbles.devops` / `bubbles.train` | Resolution is a re-record or a rebuild-and-redeploy, not a code edit |
+| Check 8A: `scopes.md` lacks the scenario-specific regression E2E DoD items and Test Plan rows the guard requires (3 blocks) | `bubbles.plan` | `scopes.md` is planning-owned; stabilize must not edit it |
+
+Neither the configuration→build coupling nor the chokepoint-topology
+observation is routed: the first is accepted by design, and the second is not a
+defect.
+
+---
+
 ## Discovered Issues
 
 Issues surfaced while working this packet that are not the reported defect. Each
@@ -420,3 +962,4 @@ unattributed aside.
 | DI-1 | 2026-08-18 | `open_knowledge` grounds nothing for a question about smackerel's own product. The agent terminates `status=success termination=final` with zero citable sources, so the provenance gate refuses. The refusal is correct anti-fabrication; the gap is that the user wants an answer, and closing it needs retrieval/ingestion investigation, not a facade change. | **routed** — owned by a real bug artifact, not by this packet. BUG-061-009 owns only INV-HB-REFUSAL (make the refusal honest) and makes no claim about making `/ask` answer. | `BUG-061-010-open-knowledge-grounding-gap` at `specs/061-conversational-assistant/bugs/BUG-061-010-open-knowledge-grounding-gap/` (`bug.md`, `state.json`); diagnosis in *Grounding-gap diagnosis and routing (SCOPE-05)* above |
 | DI-2 | 2026-08-18 | The `requiresProvenanceScenarios` sweep list in `internal/assistant/facade_execution_error_honesty_test.go` had drifted from the scenario SST: it named `weather_query`, `retrieval_qa`, `recipe_search` but not `open_knowledge` — the exact `/ask` path this bug was reported against — while the packet cited that sweep as proof no band-high path can render the capture acknowledgement. | **fixed-in-session** — `open_knowledge` added to the sweep, and `TestRequiresProvenanceScenarios_ClosedOverSST` added in `internal/assistant/facade_high_band_invariant_coverage_test.go` to close the list over `config/assistant/scenarios.yaml` bidirectionally, so the same drift now fails the unit suite instead of shipping silently. | commit `5c24a74f`; diff in *Code Diff Evidence* above; execution proof in *Regression Invariant Closure* above |
 | DI-3 | 2026-08-18 | The `## Grounding-gap …` routing paragraph in this report named `BUG-061-010-open-knowledge-grounding-gap` as "(to be created)". That was accurate when written; the artifact has since been created, so the parenthetical had become a false statement about the state of the repository. | **fixed-in-session** — corrected to a completed routing decision citing the artifact's on-disk path, verified present before the edit. A routing claim naming a non-existent artifact is indistinguishable from no routing, which is why this was repaired rather than reworded. | `specs/061-conversational-assistant/bugs/BUG-061-010-open-knowledge-grounding-gap/` (`bug.md`, `state.json`); *Grounding-gap diagnosis and routing (SCOPE-05)* above |
+| DI-4 | 2026-08-18 | `state.json.deployment.sourceSha` (`2e84a1b4…`) is a real commit — the BUG-061-009 fix commit — but it is not an ancestor of `HEAD` and no branch contains it, so history was rewritten after the deploy was recorded. The deployed digest therefore cannot be rebuilt from the SHA the deployment block names. The behaviour under test is unaffected: the whole refusal surface (`provenance/gate.go`, `contracts/refusal.go`, both adapters' render paths, `config/assistant/scenarios.yaml`) is byte-identical between that commit and `HEAD`, so the deployed image genuinely carries the fix and the pending operator smoke test stays valid. What is broken is the provenance chain from record to artifact, not the artifact. | **routed** — not fixable by a stabilize edit. Resolution is either re-recording the deployment against a reachable SHA or rebuilding and redeploying from `HEAD`; both are deployment-record actions owned by `bubbles.devops` / `bubbles.train`. Not an incident: nothing is degraded and nothing is failing. | git evidence in *Stabilize — Stability, Performance, Reliability And Resource Assessment → Deployment-provenance check* above; `state.json` `deployment` block |

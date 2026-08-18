@@ -59,7 +59,9 @@
     "test",
     "harden",
     "docs",
-    "regression"
+    "regression",
+    "simplify",
+    "stabilize"
   ],
   "certification": {
     "status": "blocked",

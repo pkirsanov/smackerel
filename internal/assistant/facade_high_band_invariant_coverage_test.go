@@ -25,9 +25,11 @@ import (
 // TestRequiresProvenanceScenarios_ClosedOverSST — SCN-061-009-02 durability.
 // Adversarial by construction: it fails when a requires_provenance scenario in
 // the SST is missing from the invariant sweep (an uncovered masking path), and
-// it fails when the sweep names a scenario the SST does not gate (a sweep row
-// that proves nothing). The final emptiness check keeps it from passing
-// vacuously if the manifest ever loads without provenance-bearing scenarios.
+// it fails when the sweep names a scenario the SST does not gate — including
+// one retired from the manifest outright, which the sweep would keep "covering"
+// against its own synthetic manifest forever. The final emptiness check keeps
+// it from passing vacuously if the manifest ever loads without
+// provenance-bearing scenarios.
 func TestRequiresProvenanceScenarios_ClosedOverSST(t *testing.T) {
 	t.Parallel()
 
@@ -48,17 +50,24 @@ func TestRequiresProvenanceScenarios_ClosedOverSST(t *testing.T) {
 		swept[id] = true
 	}
 
+	allIDs := manifest.AllScenarioIDs()
+	gated := make(map[string]bool, len(allIDs))
 	var declared, uncovered, notProvenanceBearing []string
-	for _, id := range manifest.AllScenarioIDs() {
+	for _, id := range allIDs {
 		if !manifest.RequiresProvenance(id) {
-			if swept[id] {
-				notProvenanceBearing = append(notProvenanceBearing, id)
-			}
 			continue
 		}
+		gated[id] = true
 		declared = append(declared, id)
 		if !swept[id] {
 			uncovered = append(uncovered, id)
+		}
+	}
+	// Asked from the sweep side: an id retired from the SST is never visited
+	// by a manifest walk, so a manifest walk cannot report it.
+	for _, id := range requiresProvenanceScenarios {
+		if !gated[id] {
+			notProvenanceBearing = append(notProvenanceBearing, id)
 		}
 	}
 	sort.Strings(declared)
@@ -71,8 +80,9 @@ func TestRequiresProvenanceScenarios_ClosedOverSST(t *testing.T) {
 			uncovered, requiresProvenanceScenarios)
 	}
 	if len(notProvenanceBearing) > 0 {
-		t.Errorf("requiresProvenanceScenarios names %v which the SST does NOT mark requires_provenance — "+
-			"those sweep rows never exercise the provenance gate and prove nothing", notProvenanceBearing)
+		t.Errorf("requiresProvenanceScenarios names %v which config/assistant/scenarios.yaml does NOT declare with requires_provenance: true "+
+			"(absent from the manifest, or present and false) — those sweep rows never exercise the provenance gate and prove nothing",
+			notProvenanceBearing)
 	}
 	if len(declared) == 0 {
 		t.Fatal("manifest declared zero requires_provenance scenarios — the closure assertion would pass vacuously; the manifest or its path is wrong")
