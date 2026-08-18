@@ -200,8 +200,8 @@ name the branch that actually fired. Full analysis:
 
 ### Definition of Done
 
-- [ ] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior
-- [ ] Broader E2E regression suite passes
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior — `tests/e2e/assistant/high_band_refusal_e2e_test.go` (`TestAssistantHTTPE2E_HighBandUncitedRefusesHonestly`), exit 0, `--- PASS` (Evidence: [report.md#check-8a-focused-run](report.md#check-8a-focused-run)). **Scoped claim, not a blanket one:** the observed envelope was `status=unavailable error_cause=provider_unavailable capture_route=false sources=0`, so the run exercised the PROVIDER-OUTAGE branch — **not** the OK-but-uncited `no_grounded_answer` branch this bug was filed about. What is proven on the wire is INV-HB-REFUSAL itself: no capture acknowledgement on a band-high turn, and a typed cause from the closed `contracts.AllErrorCauses` vocabulary. The `no_grounded_answer` rewrite remains proven at the unit level only. Checking this box does not retire that distinction — see *What the delivered run proves — and what it does not* above and [report.md#check-8a-branch-nuance](report.md#check-8a-branch-nuance), both of which stay accurate as written.
+- [x] Broader E2E regression suite passes — `./smackerel.sh test e2e` exit 0, 4703 lines, `sha256 69f65d1cc9…`, 2283s wall (Evidence: [report.md#check-8a-broader-suite](report.md#check-8a-broader-suite)). Exactly one failure-shaped line appears inside the omitted region and did **not** fail the run: it is the required success output of the negative-path readiness canary `SCN-002-BUG-002-001`, attributed from source in that section rather than glossed.
 
 ### This test can fail — verified, not asserted
 
