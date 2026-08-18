@@ -1604,6 +1604,131 @@ that are not this agent's to clear:
 
 ---
 
+<a id="check-8a-live-e2e"></a>
+
+## Check 8A — Live E2E Regression Coverage, Delivered — 2026-08-18
+
+**Phase:** implement · **Claim Source:** executed · **Live system:** yes
+
+This section closes the gap that the `bubbles.validate` addendum immediately
+above recorded as open. The addendum was accurate when written: no live test
+asserted this packet's honest-refusal wire contract. That is no longer true. The
+test now exists, it ran, and it passed — and the paragraphs below state exactly
+which branch of INV-HB-REFUSAL the passing run actually exercised, because the
+run exercised one branch and not the other.
+
+**The test.** `tests/e2e/assistant/high_band_refusal_e2e_test.go`,
+`TestAssistantHTTPE2E_HighBandUncitedRefusesHonestly`. It drives the live
+chi-mounted `POST /api/assistant/turn` route with a band-HIGH `/ask` turn and
+asserts the envelope a real client receives.
+
+<a id="check-8a-focused-run"></a>
+
+### Focused run — the scenario-specific regression test
+
+Executed in this session, on the working tree carrying the new test file
+(`sha256:ba5ad07859fbcdaeffd561a7584422a72cf3d1b56e54b4d40cea7084edcb7480`) at
+`HEAD 17bd5a38`.
+
+```
+$ ./smackerel.sh test e2e --go-package assistant --go-run TestAssistantHTTPE2E_HighBandUncitedRefusesHonestly
+exit: 0
+lines: 416
+sha256: 483b866c867c5c82cefb14417dc9e6cea1ce0448d8f7c600d21f95cd7579c565
+```
+
+Verbatim from that run's Go phase:
+
+```
+go-e2e: applying package selector: assistant
+go-e2e: applying -run selector: TestAssistantHTTPE2E_HighBandUncitedRefusesHonestly
+=== RUN   TestAssistantHTTPE2E_HighBandUncitedRefusesHonestly
+    high_band_refusal_e2e_test.go:107: live envelope: status="unavailable" error_cause="provider_unavailable" capture_route=false sources=0 body="the service is unavailable right now — please try again in a moment."
+--- PASS: TestAssistantHTTPE2E_HighBandUncitedRefusesHonestly (0.24s)
+PASS
+ok      github.com/smackerel/smackerel/tests/e2e/assistant      0.276s
+PASS: go-e2e
+```
+
+**Exit code: 0.** Wall time 151s including disposable-stack build, up, and
+teardown.
+
+<a id="check-8a-branch-nuance"></a>
+
+### Which branch actually fired — stated, not smoothed over
+
+The envelope came back with `error_cause="provider_unavailable"`, **not**
+`no_grounded_answer`. That distinction is the single most important fact in this
+section, and collapsing it would misrepresent the coverage this packet now has.
+
+BUG-061-009 was filed about the **OK-but-uncited** path: the agent terminates
+successfully, grounds nothing, and the provenance gate rewrites the response into
+`StatusUnavailable` + `ErrNoGroundedAnswer`. This run did not reach that path. It
+hit the **provider-outage** branch instead — the LLM provider was unavailable on
+the disposable test stack, so the turn failed before it could produce an
+ungrounded answer for the gate to refuse.
+
+| | Proven on the wire by this run | Not proven on the wire by this run |
+|---|---|---|
+| Band-HIGH turn did not render the band-LOW capture acknowledgement | ✅ `status="unavailable"`, never `saved_as_idea` | |
+| `capture_route` is false on a band-HIGH turn | ✅ `capture_route=false` | |
+| Body carries no `saved as an idea` substring | ✅ asserted, passed | |
+| Refusal carries a typed cause from the closed vocabulary | ✅ `provider_unavailable` ∈ `contracts.AllErrorCauses` | |
+| The `no_grounded_answer` path end-to-end | | ❌ **not exercised this run** |
+| Canonical refusal body ↔ `ErrNoGroundedAnswer` bidirectional binding | | ❌ both conditionals were vacuously true — neither side was present |
+
+So INV-HB-REFUSAL itself — *a band-high turn never renders the capture
+acknowledgement* — **is** proven over the wire, for a real honest-refusal cause,
+by a test that would have failed had the invariant been violated. What is **not**
+proven over the wire is the specific `no_grounded_answer` rewrite this packet
+introduced. That remains proven only at the unit level, by
+`internal/assistant/provenance/gate_test.go` and the
+`TestExecutionErrorHonesty_*` sweep.
+
+**Why the test accepts both branches, and why that is not a weakened
+assertion.** Both `provider_unavailable` and `no_grounded_answer` are honest
+terminations of a band-high turn; a test that demanded one specific cause would
+fail whenever the stack happened to fail earlier, which is a flaky test, not a
+stronger one. Nondeterminism is absorbed in the *input* choice — a question with
+no real referent — never in an assertion. Every branch of the `switch` asserts
+something, the `default` arm fails outright, and there is no path on which the
+test passes without proving a contract. The cost of that design is exactly what
+this section records: which branch fired is a fact about the run, so the run must
+report it rather than the reader assuming it.
+
+**Consequence for a later reader.** Do not cite this section as end-to-end proof
+of the `no_grounded_answer` rewrite. It is end-to-end proof that a band-high turn
+refuses honestly with a typed cause and no capture acknowledgement. Closing the
+narrower gap needs a run in which the provider is available and the agent
+genuinely returns an ungrounded success — a stack condition this run did not
+produce.
+
+<a id="check-8a-bailout-scan"></a>
+
+### Bailout scan — the test can fail
+
+`report.md` → *Discovered Issues* → **DI-5** records a sibling live E2E in this
+same package whose contract assertions sit below a status-conditional `t.Skipf`,
+so the regression its own header advertises cannot fail it. The new test was
+written to not repeat that, and the claim is checked rather than asserted:
+
+```
+$ grep -nE 't\.Skip|t\.Fatalf|t\.Errorf' tests/e2e/assistant/high_band_refusal_e2e_test.go
+```
+
+- Exactly **one** `t.Skip` in executable code, at **line 90**, guarding HTTP 503
+  `assistant_http_not_ready` — the adapter never binding within 60s. That is
+  genuine infrastructure unavailability, not an outcome of the contract under
+  test.
+- Lines 31 and 36 also match `t.Skip`, but both are prose inside the header
+  comment describing why the test avoids that pattern.
+- Every one of the **18** contract assertions uses `t.Errorf` or `t.Fatalf`. A
+  wrong status, a true `capture_route`, a `saved as an idea` body, an untyped
+  cause, or a cause outside `contracts.AllErrorCauses` **fails** the test. None of
+  them skips it.
+
+---
+
 ## Discovered Issues
 
 Issues surfaced while working this packet that are not the reported defect. Each
