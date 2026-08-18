@@ -36,6 +36,18 @@
 #                          instead, because an ambiguous owner cannot govern a
 #                          row. Rows whose IMP file is gone are grandfathered:
 #                          the loop only visits proposals that still exist.
+#   4c. status-vs-evidence  the declared status must not contradict the delivery
+#                          evidence: acceptance-criteria receipts inside the
+#                          proposal and landing commits that name its id and
+#                          touched governed paths (IMP-047 S-A). Only the two
+#                          unambiguously false shapes are reported — APPLIED with
+#                          no landing commit, and PROPOSED with landing commits —
+#                          because everything between them is a judgement the
+#                          owner makes, not one a lint can derive.
+#   4d. no-sibling-state   a proposal MUST NOT be accompanied by an
+#                          improvements/IMP-NNN.state.json. A second
+#                          hand-written status copy reproduces exactly the
+#                          divergence Check 4b exists to prevent (OW-016).
 #   5. generator-contained retro-framework-health.sh writes ONLY under
 #                          improvements/. This is G125's literal guarantee and
 #                          has NO exemption.
@@ -265,6 +277,46 @@ for imp in "${imp_files[@]}"; do
         fi
       fi
     fi
+  fi
+
+  # --- Check 4c: the declared status must not contradict the evidence -------
+  #
+  # IMP-047 S-A. Status was asserted by the author and mirrored into the index,
+  # so a proposal could read APPLIED with nothing landed, or sit at PROPOSED
+  # long after its scopes shipped. Both shapes are derivable from evidence that
+  # already exists, and neither needs a second status file to hold it: the
+  # receipts are the checked acceptance criteria inside the proposal, and the
+  # landing evidence is the set of commits naming this id that touched governed
+  # paths.
+  #
+  # Only the two unambiguously false shapes are reported. ACCEPTED and
+  # IN PROGRESS legitimately span the whole range between them, so deriving a
+  # verdict for those would replace an author's assertion with a lint's guess.
+  if [[ -n "$status_value" && -n "$imp_id" && "$have_git" -eq 1 ]]; then
+    landing_commits="$(git -C "$repo_root" log --format=%H --grep="$imp_id" -- bubbles agents 2>/dev/null | grep -c '[^[:space:]]' || true)"
+    criteria_total="$(grep -cE '^[[:space:]]*- \[[ x]\] ' "$imp" 2>/dev/null || true)"
+    criteria_met="$(grep -cE '^[[:space:]]*- \[x\] ' "$imp" 2>/dev/null || true)"
+    case "$status_value" in
+      APPLIED)
+        if [[ "${landing_commits:-0}" -eq 0 ]]; then
+          report "status-unsupported-by-evidence" "$rel declares Status APPLIED but no commit naming $imp_id has touched bubbles/ or agents/ (acceptance receipts: ${criteria_met:-0}/${criteria_total:-0})"
+        fi
+        ;;
+      PROPOSED)
+        if [[ "${landing_commits:-0}" -gt 0 ]]; then
+          report "status-lags-evidence" "$rel declares Status PROPOSED but ${landing_commits} commit(s) naming $imp_id have already touched bubbles/ or agents/"
+        fi
+        ;;
+    esac
+  fi
+
+  # --- Check 4d: no sibling state file --------------------------------------
+  #
+  # A per-proposal state file is a second hand-written copy of the status, which
+  # is the failure Check 4b already exists to prevent. Status derives from the
+  # proposal and its delivery evidence; there is nowhere else for it to live.
+  if [[ -n "$imp_id" && -f "$improvements_dir/$imp_id.state.json" ]]; then
+    report "sibling-state-file" "improvements/$imp_id.state.json exists; status derives from the proposal and its delivery evidence, so a sibling state file is a second authority that can only diverge"
   fi
 
   # --- Check 6: proposal traceability --------------------------------------

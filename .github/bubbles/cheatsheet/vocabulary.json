@@ -153,7 +153,7 @@
   },
   {
     "term": "release-delivery reconciliation",
-    "meaning": "Gate G101: every `delivery=required` feature declared in a phase's `features.md` (via `bubbles:feature` machine annotations) MUST map to a terminal + validate-certified spec. Blocks a `bubbles.goal`/`bubbles.sprint` release-phase scenario from self-certifying 'delivered' while required features are unspecced, non-terminal, blocked, or implement-self-certified. WARN-grandfathered until a packet opts in with a `bubbles:reconciled-packet` header. Enforced by `release-delivery-reconciliation-guard.sh`; the compile-time twin in `scenario-compile-lint.sh` rejects an under-scoped scenario DAG."
+    "meaning": "Gate G101: every `delivery=required` feature declared in a phase's `features.md` (via `bubbles:feature` machine annotations) MUST map to a delivery-capable terminal + validate-certified spec. Delivery-capable means terminal for the spec's resolved mode AND owned by a mode that actually delivers: a planning/docs/review ceiling (`specs_hardened`, `docs_updated`, `validated`) or `delivered_prototype` is NOT delivery. Blocks a `bubbles.goal`/`bubbles.sprint` release-phase scenario from self-certifying 'delivered' while required features are unspecced, non-terminal, blocked, or implement-self-certified. WARN-grandfathered until a packet opts in with a `bubbles:reconciled-packet` header. Enforced by `release-delivery-reconciliation-guard.sh`; the compile-time twin in `scenario-compile-lint.sh` rejects an under-scoped scenario DAG."
   },
   {
     "term": "carry-forward table",

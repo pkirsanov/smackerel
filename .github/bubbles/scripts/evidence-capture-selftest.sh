@@ -167,22 +167,50 @@ else
   bad "--diagnostic bounded by ceiling" "emitted $big_lines line(s)"
 fi
 
-# --- 14. ADVERSARIAL: TERM preserves partial evidence and records interruption -
-# A timeout signals the wrapper while its child is running. The signal handler
-# must not delete the capture before line count, hash, and bounded output are
-# emitted; that produced a misleading empty block plus missing-file errors.
+# --- 14. ADVERSARIAL: TERM stops the child tree and preserves partial evidence -
+# A timeout signals the wrapper while its child is running. The child below
+# cannot exit unless the wrapper forwards TERM; the outer deadline prevents a
+# broken implementation from hanging this selftest forever.
 set +e
-term_out="$(bash "$TARGET" -- sh -c 'printf "before-signal\n"; kill -TERM "$PPID"; printf "after-signal\n"' 2>&1)"
+# PPID expands inside the child shell.
+# shellcheck disable=SC2016
+term_out="$(timeout --kill-after=1 5 bash "$TARGET" -- bash -c 'trap '\''printf "child-terminated\n"; exit 0'\'' TERM; printf "before-signal\n"; kill -TERM "$PPID"; while :; do :; done' 2>&1)"
 term_rc=$?
 set -e
 if [[ "$term_rc" -eq 143 ]] &&
   printf '%s' "$term_out" | grep -q '^exit: 143$' &&
   printf '%s' "$term_out" | grep -qE '^sha256: [0-9a-f]{64}$' &&
   printf '%s' "$term_out" | grep -qx 'before-signal' &&
+  printf '%s' "$term_out" | grep -qx 'child-terminated' &&
   ! printf '%s' "$term_out" | grep -q 'No such file or directory'; then
-  ok "TERM preserves captured output and emits an interrupted evidence block"
+  ok "TERM stops the child process group and emits preserved interrupted evidence"
 else
-  bad "TERM preserves interrupted evidence" "rc=$term_rc $(printf '%s' "$term_out" | tr '\n' '|')"
+  bad "TERM stops children and preserves interrupted evidence" "rc=$term_rc $(printf '%s' "$term_out" | tr '\n' '|')"
+fi
+
+# --- 15. ADVERSARIAL: a completed parent cannot leave a descendant behind ---
+# Nested wrappers can exit before a background lock holder. Evidence capture
+# owns the complete command tree, so returning to the caller must also mean the
+# process group has drained.
+descendant_pid_file="$(mktemp)"
+set +e
+# Positional parameters expand inside the child shell.
+# shellcheck disable=SC2016
+descendant_out="$(timeout --kill-after=1 5 bash "$TARGET" -- bash -c 'bash -c '\''trap "exit 0" TERM; while :; do :; done'\'' & printf "%s\n" "$!" >"$1"' _ "$descendant_pid_file" 2>&1)"
+descendant_rc=$?
+set -e
+descendant_pid="$(cat "$descendant_pid_file")"
+rm -f "$descendant_pid_file"
+if [[ "$descendant_rc" -eq 0 ]] &&
+  printf '%s' "$descendant_out" | grep -q '^exit: 0$' &&
+  [[ "$descendant_pid" =~ ^[0-9]+$ ]] &&
+  ! kill -0 "$descendant_pid" 2>/dev/null; then
+  ok "completed commands leave no background descendant behind"
+else
+  if [[ "$descendant_pid" =~ ^[0-9]+$ ]]; then
+    kill -KILL "$descendant_pid" 2>/dev/null || true
+  fi
+  bad "completed command tree cleanup" "rc=$descendant_rc pid=$descendant_pid $(printf '%s' "$descendant_out" | tr '\n' '|')"
 fi
 
 printf '\n%s: %d/%d checks passed\n' "$NAME" "$((checks - failures))" "$checks"

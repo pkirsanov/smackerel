@@ -6,6 +6,13 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Source fun mode support
 source "$SCRIPT_DIR/fun-mode.sh"
 
+# IMP-047 PD-12. The acceptance reader is SHARED with guards/tail-delegated-gates.sh
+# (Gate G136). Both used to carry private copies of the same section parser with
+# a comment asking the next author to keep them in step; a comment is not a
+# mechanism. Sourced rather than re-implemented so a change to one is a change
+# to both.
+source "$SCRIPT_DIR/acceptance-authority-lib.sh"
+
 # Portable ISO/date -> epoch, kept self-contained (NO cross-file source) for
 # isolation robustness (a fixture may copy this script without its sibling libs).
 # GNU date uses -d; BSD/macOS date uses -j -f (also handles a bare YYYY-MM-DD).
@@ -20,11 +27,10 @@ bubbles_iso_to_epoch() {
 feature_dir="${1:-}"
 default_scenario_pattern='SCN-[0-9]{3}-[A-Z][0-9]{2}'
 scenario_pattern="$default_scenario_pattern"
-enable_autofix="false"
 
 if [[ -z "$feature_dir" ]]; then
   echo "ERROR: missing feature directory argument"
-  echo "Usage: bash bubbles/scripts/artifact-lint.sh specs/<NNN-feature-name> [scenario-regex] [--autofix]"
+  echo "Usage: bash bubbles/scripts/artifact-lint.sh specs/<NNN-feature-name> [scenario-regex]"
   echo "Example: bash bubbles/scripts/artifact-lint.sh specs/037-future-enhancements-missing-implementation 'SCN-037-[A-Z][0-9]{2}'"
   exit 2
 fi
@@ -32,12 +38,21 @@ fi
 shift
 for arg in "$@"; do
   if [[ "$arg" == "--autofix" ]]; then
-    enable_autofix="true"
+    # IMP-047 S-B removed report-section-autofix.sh. The report.md template is
+    # now GENERATED from bubbles/registry/report-sections.yaml, which is the same
+    # authority this lint reads, so a report authored from the canonical template
+    # already contains every required section. Injecting empty headings after the
+    # fact only ever made an empty report look compliant.
+    echo "ERROR: --autofix was removed by IMP-047 S-B"
+    echo "  The report.md template is generated from bubbles/registry/report-sections.yaml"
+    echo "  and emits every section this lint requires. Author report.md from the"
+    echo "  canonical template in agents/bubbles_shared/feature-templates.md instead."
+    exit 2
   elif [[ "$scenario_pattern" == "$default_scenario_pattern" ]]; then
     scenario_pattern="$arg"
   else
     echo "ERROR: unsupported argument '$arg'"
-    echo "Usage: bash bubbles/scripts/artifact-lint.sh specs/<NNN-feature-name> [scenario-regex] [--autofix]"
+    echo "Usage: bash bubbles/scripts/artifact-lint.sh specs/<NNN-feature-name> [scenario-regex]"
     exit 2
   fi
 done
@@ -45,17 +60,6 @@ done
 if [[ ! -d "$feature_dir" ]]; then
   echo "ERROR: feature directory not found: $feature_dir"
   exit 2
-fi
-
-if [[ "$enable_autofix" == "true" ]]; then
-  autofix_script="$SCRIPT_DIR/report-section-autofix.sh"
-  if [[ ! -x "$autofix_script" ]]; then
-    echo "ERROR: autofix requested but helper is missing or not executable: $autofix_script"
-    exit 2
-  fi
-
-  echo "🔧 Running report section autofix before lint"
-  bash "$autofix_script" "$feature_dir" --write
 fi
 
 resolve_script_repo_root() {
@@ -542,28 +546,22 @@ if [[ -f "$uservalidation_file" ]]; then
   if grep -Eq '^## Checklist' "$uservalidation_file"; then
     pass "Found Checklist section in uservalidation.md"
 
-    checklist_section_content="$({
-      awk '
-        /^## Checklist/ {in_checklist=1; next}
-        /^## / {if (in_checklist) exit}
-        in_checklist {print}
-      ' "$uservalidation_file"
-    } || true)"
-
-    checklist_checkbox_lines="$({ echo "$checklist_section_content" | grep -E '^- \[(x| )\] '; } || true)"
+    checklist_checkbox_lines="$(bubbles_acceptance_checklist_items "$uservalidation_file")"
     if [[ -z "$checklist_checkbox_lines" ]]; then
       fail "uservalidation checklist has no checkbox entries"
     else
       pass "uservalidation checklist contains checkbox entries"
     fi
 
-    baseline_checked_lines="$({ echo "$checklist_section_content" | grep -E '^- \[x\] '; } || true)"
-    if [[ -z "$baseline_checked_lines" ]]; then
-      fail "uservalidation checklist has no checked-by-default [x] entry"
-    else
-      pass "uservalidation checklist has checked-by-default entries"
-    fi
-
+    # IMP-047 PD-12. There is deliberately NO "must carry a checked [x] entry"
+    # check here any more. That rule is what made a shipped template satisfy
+    # Gate G136's terminal human acceptance with no human act: the template
+    # arrived checked because lint demanded it, and the terminal gate then read
+    # those boxes as sign-off. Acceptance items now ship UNCHECKED, automation
+    # readiness is a separate section that grants nothing, and terminal
+    # acceptance additionally requires a human-owned record. Lint keeps only
+    # the SHAPE questions, which are the ones that are true during planning.
+    checklist_section_content="$(bubbles_acceptance_section_body "$uservalidation_file" '## Checklist')"
     checklist_bullet_lines="$({ echo "$checklist_section_content" | grep -E '^- '; } || true)"
     invalid_checklist_bullets="$({ echo "$checklist_bullet_lines" | grep -Ev '^- \[(x| )\] '; } || true)"
     if [[ -n "$invalid_checklist_bullets" ]]; then
@@ -571,6 +569,14 @@ if [[ -f "$uservalidation_file" ]]; then
       echo "$invalid_checklist_bullets" | sed 's/^/   -> /'
     else
       pass "All checklist bullet items use checkbox syntax"
+    fi
+
+    acceptance_shape_findings="$(bubbles_acceptance_shape_verdict "$uservalidation_file" || true)"
+    if [[ -n "$acceptance_shape_findings" ]]; then
+      fail "uservalidation acceptance authority is malformed (IMP-047 PD-12)"
+      echo "$acceptance_shape_findings" | sed 's/^/   -> /'
+    else
+      pass "uservalidation separates automation readiness from human acceptance"
     fi
   else
     legacy_checklist_section="$({
@@ -1189,11 +1195,39 @@ fi
 
 for report_file in "${report_files[@]}"; do
 if [[ -f "$report_file" ]]; then
-  required_report_headers=(
-    '^###[[:space:]]+Summary|^##[[:space:]]+Summary'
-    '^###[[:space:]]+Completion Statement|^##[[:space:]]+Completion Statement'
-    '^###[[:space:]]+Test Evidence|^##[[:space:]]+Test Evidence'
-  )
+  # IMP-047 S-B: the section contract is READ from
+  # bubbles/registry/report-sections.yaml, not restated here. Three hand-kept
+  # copies (this lint, state-transition-guard.sh, report-section-autofix.sh)
+  # disagreed with each other and with the template. There is no fallback list:
+  # an unreadable registry is a broken install, and degrading to "no sections
+  # required" would be a false-PASS.
+  report_sections_resolver="$SCRIPT_DIR/report-sections-resolve.sh"
+  if [[ ! -f "$report_sections_resolver" ]]; then
+    echo "ERROR: report-sections-resolve.sh is missing next to artifact-lint.sh"
+    exit 2
+  fi
+  if ! report_sections_facts="$(bash "$report_sections_resolver" 2>&1)"; then
+    echo "ERROR: cannot read bubbles/registry/report-sections.yaml"
+    echo "$report_sections_facts" | sed 's/^/   -> /'
+    exit 2
+  fi
+
+  required_report_headers=()
+  while IFS= read -r fact_line; do
+    fact_heading="${fact_line#always=}"
+    fact_shallow="${fact_heading##*|}"
+    fact_heading="${fact_heading%|*}"
+    if [[ "$fact_shallow" == "yes" ]]; then
+      required_report_headers+=("^###[[:space:]]+${fact_heading}|^##[[:space:]]+${fact_heading}")
+    else
+      required_report_headers+=("^###[[:space:]]+${fact_heading}")
+    fi
+  done < <(printf '%s\n' "$report_sections_facts" | grep '^always=' || true)
+
+  if [[ ${#required_report_headers[@]} -eq 0 ]]; then
+    echo "ERROR: bubbles/registry/report-sections.yaml declares no alwaysRequired sections"
+    exit 2
+  fi
 
   for required_header in "${required_report_headers[@]}"; do
     if grep -Eq "$required_header" "$report_file"; then
@@ -1210,11 +1244,13 @@ if [[ -f "$report_file" ]]; then
   fi
 
   should_enforce_mode_gates="false"
-  case "$state_status" in
-    done|validated|docs_updated|specs_hardened)
+  report_enforce_statuses="$(printf '%s\n' "$report_sections_facts" | sed -n 's/^enforceStatus=//p' | head -n 1)"
+  for enforce_status in $report_enforce_statuses; do
+    if [[ "$state_status" == "$enforce_status" ]]; then
       should_enforce_mode_gates="true"
-      ;;
-  esac
+      break
+    fi
+  done
 
   if [[ "$should_enforce_mode_gates" == "true" ]] && [[ -z "$state_workflow_mode" ]]; then
     fail "state.json status '$state_status' requires workflowMode to enforce mode-specific report gates"
@@ -1222,32 +1258,15 @@ if [[ -f "$report_file" ]]; then
 
   mode_required_evidence_headers=()
   if [[ "$should_enforce_mode_gates" == "true" ]] && [[ -n "$state_workflow_mode" ]]; then
-    case "$state_workflow_mode" in
-      full-delivery|value-first-e2e-batch|chaos-hardening|harden-to-doc|gaps-to-doc|harden-gaps-to-doc|reconcile-to-doc|chaos-to-doc|batch-implement|batch-harden|batch-gaps|batch-harden-gaps|batch-improve-existing|batch-reconcile-to-doc|product-to-delivery|improve-existing)
-        mode_required_evidence_headers=(
-          '^### Validation Evidence'
-          '^### Audit Evidence'
-          '^### Chaos Evidence'
-        )
-        ;;
-      feature-bootstrap|bugfix-fastlane|test-to-doc)
-        mode_required_evidence_headers=(
-          '^### Validation Evidence'
-          '^### Audit Evidence'
-        )
-        ;;
-      validate-only|validate-to-doc)
-        mode_required_evidence_headers=(
-          '^### Validation Evidence'
-          '^### Audit Evidence'
-        )
-        ;;
-      audit-only)
-        mode_required_evidence_headers=(
-          '^### Audit Evidence'
-        )
-        ;;
-    esac
+    mode_section_list="$(printf '%s\n' "$report_sections_facts" \
+      | sed -n "s/^mode=${state_workflow_mode}|//p" | head -n 1)"
+    if [[ -n "$mode_section_list" ]]; then
+      old_ifs="$IFS"; IFS=';'
+      for mode_section in $mode_section_list; do
+        [[ -n "$mode_section" ]] && mode_required_evidence_headers+=("^### ${mode_section}")
+      done
+      IFS="$old_ifs"
+    fi
   fi
 
   if [[ ${#mode_required_evidence_headers[@]} -gt 0 ]]; then
@@ -1266,8 +1285,13 @@ if [[ -f "$report_file" ]]; then
     pass "Mode-specific report gates skipped (status not in promotion set)"
   fi
 
-  if [[ "$state_workflow_mode" == "full-delivery" ]] && [[ "$state_status" == "done" ]]; then
-    strict_sections=("Validation Evidence|bubbles.validate" "Audit Evidence|bubbles.audit" "Chaos Evidence|bubbles.chaos")
+  strict_mode="$(printf '%s\n' "$report_sections_facts" | sed -n 's/^strictMode=//p' | head -n 1)"
+  strict_status="$(printf '%s\n' "$report_sections_facts" | sed -n 's/^strictStatus=//p' | head -n 1)"
+  if [[ -n "$strict_mode" ]] && [[ "$state_workflow_mode" == "$strict_mode" ]] && [[ "$state_status" == "$strict_status" ]]; then
+    strict_sections=()
+    while IFS= read -r strict_line; do
+      [[ -n "$strict_line" ]] && strict_sections+=("${strict_line#strict=}")
+    done < <(printf '%s\n' "$report_sections_facts" | grep '^strict=' || true)
     for strict_entry in "${strict_sections[@]}"; do
       strict_section="${strict_entry%%|*}"
       strict_agent="${strict_entry##*|}"

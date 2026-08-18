@@ -131,6 +131,18 @@ After all rounds complete:
 - Follow-ups like "fix all found", "fix everything found", "address rest", "fix the rest", "resolve remaining findings" are workflow continuation — preserve the active mode and target from the continuation envelope.
 - Do NOT collapse stochastic sweep continuation into raw specialist advice like "run `/bubbles.implement`".
 
+#### Occurrence-Aware Resume (IMP-047 S-C)
+
+Resume is keyed on OCCURRENCE IDENTITY, never on a phase name. A mode whose `phaseOrder` lists `validate` twice produces two runs whose phase name is identical, so a cursor that records only names cannot tell them apart: interrupt after the first `validate` and the runner either replays an accepted phase or skips an unrun one, and both look the same in the record.
+
+- **Occurrence ids are positional.** The nth run of a phase is `<phase>#<n>` — `validate#1` and `validate#2` are different work items, assigned by `bubbles/scripts/phase-coordinator.sh` before the cursor is read.
+- **Resume starts at the FIRST UNRESOLVED occurrence.** Not the first unfamiliar phase name, and not a model's choice of where to pick up.
+- **An accepted occurrence is NEVER replayed.** It is reported `ACCEPTED` and its command does not run again. Re-running accepted work is how a green result gets manufactured by repetition.
+- **A failed prerequisite marks its dependents `BLOCKED_NOT_RUN`** — not a pass and not a failure. Checks INDEPENDENT of the failure still execute, because one failed prerequisite must not silently delete unrelated diagnostics.
+- **Every iteration records plan fidelity** (planned, resolved, outstanding, blocked, failed, not-replayed, off-plan) into the cursor.
+- **Exhausting the iteration budget with work outstanding exits NON-ZERO** and is reported as `exhausted`. Exhaustion is never reported as success.
+- `bubbles/scripts/state-snapshot.sh --occurrence-id <id>` mirrors the legacy `phase` field with the distinct identity, so historical snapshots stay readable while new ones are resumable.
+
 ### Top-level-runtime modes
 
 All workflow execution requires an authorized top-level runner under Gate G064. These additional **fan-out modes** are marked `constraints.requiresTopLevelRuntime: true` because they also cannot appear as a node inside another compiled scenario:

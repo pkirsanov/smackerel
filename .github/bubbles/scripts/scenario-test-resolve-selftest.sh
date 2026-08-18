@@ -52,6 +52,47 @@ run_resolve() {
   set -e
 }
 
+# IMP-047 PD-04. The defect was host-shaped: a bare `timeout` does not exist on
+# a stock macOS PATH, the command substitution failed, and the resolver reported
+# OK. A selftest that only ever runs on the developer's own PATH cannot see
+# that, so this helper runs the resolver with every timeout implementation
+# hidden.
+#
+# The shim mirrors the WHOLE of the caller's PATH and omits exactly two names,
+# `timeout` and `gtimeout`. An allowlist of "the tools I think are needed" was
+# tried first and silently produced a vacuous pass: `test-inventory-resolve.sh`
+# needs `awk`, the allowlist did not have it, the adapter resolved to `none`,
+# and the fixture proved nothing. Mirroring instead of allowlisting means a new
+# dependency in any resolver cannot quietly hollow this case out.
+NOTIMEOUT_BIN="$WORK/.notimeout-bin"
+mkdir -p "$NOTIMEOUT_BIN"
+_old_ifs="$IFS"; IFS=':'
+for _dir in $PATH; do
+  [[ -d "$_dir" ]] || continue
+  for _exe in "$_dir"/*; do
+    [[ -x "$_exe" && ! -d "$_exe" ]] || continue
+    _base="${_exe##*/}"
+    case "$_base" in timeout|gtimeout) continue ;; esac
+    [[ -e "$NOTIMEOUT_BIN/$_base" ]] && continue
+    ln -sf "$_exe" "$NOTIMEOUT_BIN/$_base" 2>/dev/null || true
+  done
+done
+IFS="$_old_ifs"
+unset _old_ifs _dir _exe _base
+
+# Non-vacuity guard on the shim itself. If either binary leaks through, A6b and
+# P8b stop testing the no-timeout host and start re-testing A6 and P8.
+if [[ -e "$NOTIMEOUT_BIN/timeout" || -e "$NOTIMEOUT_BIN/gtimeout" ]]; then
+  bad "shim integrity: the no-timeout PATH still exposes a \`timeout\`/\`gtimeout\` binary"
+fi
+
+run_resolve_without_timeout() {
+  set +e
+  OUT="$(PATH="$NOTIMEOUT_BIN" bash "$TARGET" "$1/specs/001-x" --repo-root "$1" 2>&1)"
+  RC=$?
+  set -e
+}
+
 # --- P1. no manifest is NA, not a failure -----------------------------------
 R="$WORK/p1"; mkdir -p "$R/specs/001-x"
 run_resolve "$R"
@@ -196,6 +237,20 @@ else
   bad "A6 unit-as-e2e refused" "rc=$RC out=$(printf '%s' "$OUT" | tr '\n' '|')"
 fi
 
+# --- A6b. ADVERSARIAL (IMP-047 PD-04): the SAME refusal with NO `timeout` ---
+# This is the case that shipped broken. A6's fixture is re-run with every
+# timeout implementation removed from PATH. Before the repair the bare `timeout`
+# call failed, the resolver degraded to the literal scan, printed
+# "category comparison(s) skipped", and exited 0 — a unit test certified as
+# e2e-ui coverage on the exact host this framework is developed on.
+# Reverting to a bare `timeout` makes this case exit 0 again.
+run_resolve_without_timeout "$R"
+if [[ "$RC" -eq 1 ]] && printf '%s' "$OUT" | grep -q 'CATEGORY-MISMATCH'; then
+  ok "A6b PD-04: unit-as-e2e is still refused with no \`timeout\`/\`gtimeout\` on PATH"
+else
+  bad "A6b unit-as-e2e refused without timeout" "rc=$RC out=$(printf '%s' "$OUT" | tr '\n' '|')"
+fi
+
 # --- P8. the same inventory accepts a correctly-categorised test ------------
 # Guards A6 against over-matching: the category check must accept a match.
 cat >"$R/scripts/inv" <<'EOF'
@@ -214,9 +269,23 @@ else
   bad "P8 category match accepted" "rc=$RC out=$(printf '%s' "$OUT" | tr '\n' '|')"
 fi
 
+# --- P8b. the accepting path also holds with no `timeout` on PATH -----------
+# Non-vacuity guard for A6b: proving the no-timeout path REFUSES is worthless if
+# the no-timeout path refuses everything. This pins that it still accepts.
+run_resolve_without_timeout "$R"
+if [[ "$RC" -eq 0 ]] && printf '%s' "$OUT" | grep -q 'via inventory'; then
+  ok "P8b a correct category is still accepted with no \`timeout\`/\`gtimeout\` on PATH"
+else
+  bad "P8b category match accepted without timeout" "rc=$RC out=$(printf '%s' "$OUT" | tr '\n' '|')"
+fi
+
 # --- A7. ADVERSARIAL: a failing inventory must not read as "no tests" -------
-# An empty inventory would fail EVERY declared title. Falling back to the scan
-# keeps a broken adapter from manufacturing findings.
+# Two invariants, and PD-04 changed only the second:
+#   (1) title resolution still falls back to the literal scan, so a title that
+#       IS in the file must NOT be reported MISSING-TITLE. Unchanged.
+#   (2) the CATEGORY verdict is now UNKNOWN, not clean. A declared adapter that
+#       cannot run leaves an applicable category unmeasured, and an unmeasured
+#       category exits 3. Reporting OK here was the PD-04 false-PASS.
 cat >"$R/scripts/inv" <<'EOF'
 #!/bin/sh
 exit 3
@@ -226,10 +295,62 @@ cat >"$R/specs/001-x/scenario-manifest.json" <<'EOF'
 {"schemaVersion":1,"scenarios":[{"id":"SCN-001-011","requiredTestType":"e2e-ui","linkedTests":["tests/unit.spec.ts#computes a total"]}]}
 EOF
 run_resolve "$R"
-if [[ "$RC" -eq 0 ]] && printf '%s' "$OUT" | grep -q 'falling back to literal scan'; then
-  ok "A7 a failing inventory falls back to the scan, not to 'no tests exist'"
+if [[ "$RC" -eq 3 ]] &&
+  printf '%s' "$OUT" | grep -q 'CATEGORY-UNRESOLVED' &&
+  printf '%s' "$OUT" | grep -q 'falling back to literal scan' &&
+  ! printf '%s' "$OUT" | grep -q 'MISSING-TITLE'; then
+  ok "A7 a failing inventory falls back to the scan for titles and refuses on 3 for the category"
 else
   bad "A7 inventory failure fallback" "rc=$RC out=$(printf '%s' "$OUT" | tr '\n' '|')"
+fi
+
+# --- A7b. ADVERSARIAL: an inventory with NO category is equally unknown -----
+# The adapter runs, the title resolves, and the runner declares no category.
+# The comparison is applicable and unperformed. Before PD-04 this exited 0.
+cat >"$R/scripts/inv" <<'EOF'
+#!/bin/sh
+cat <<'JSON'
+{"contractVersion":"bubbles-test-inventory/v1","tests":[
+ {"id":"t1","file":"tests/unit.spec.ts","title":"computes a total","category":"","runner":"jest","tags":[]}
+]}
+JSON
+EOF
+chmod +x "$R/scripts/inv"
+run_resolve "$R"
+if [[ "$RC" -eq 3 ]] && printf '%s' "$OUT" | grep -q 'CATEGORY-UNRESOLVED'; then
+  ok "A7b an inventory that declares no category is UNKNOWN, not clean"
+else
+  bad "A7b uncategorised inventory refused" "rc=$RC out=$(printf '%s' "$OUT" | tr '\n' '|')"
+fi
+
+# --- P10. no requiredTestType means nothing is applicable to be unknown ----
+# Bounds A7/A7b. A broken adapter must not become a universal blocker: with no
+# declared requiredTestType there is no applicable comparison, so exit 0 stays
+# correct. Without this, PD-04's refusal would be a false-block machine.
+cat >"$R/scripts/inv" <<'EOF'
+#!/bin/sh
+exit 3
+EOF
+chmod +x "$R/scripts/inv"
+cat >"$R/specs/001-x/scenario-manifest.json" <<'EOF'
+{"schemaVersion":1,"scenarios":[{"id":"SCN-001-012","linkedTests":["tests/unit.spec.ts#computes a total"]}]}
+EOF
+run_resolve "$R"
+if [[ "$RC" -eq 0 ]]; then
+  ok "P10 a failing adapter with no requiredTestType is not an applicable category"
+else
+  bad "P10 no requiredTestType tolerated" "rc=$RC out=$(printf '%s' "$OUT" | tr '\n' '|')"
+fi
+
+# --- P11. adapter 'none' is NOT APPLICABLE, and says so ---------------------
+# The declared default. A repository that never asked for category enforcement
+# must not be refused, and the message must not read as a skipped check.
+R="$(make_case p11 '{"schemaVersion":1,"scenarios":[{"id":"SCN-001-013","requiredTestType":"e2e-ui","linkedTests":["tests/demo.spec.ts#visible outcome renders"]}]}')"
+run_resolve "$R"
+if [[ "$RC" -eq 0 ]] && printf '%s' "$OUT" | grep -q 'not applicable'; then
+  ok "P11 no declared adapter reports category comparison as not applicable"
+else
+  bad "P11 adapter none not applicable" "rc=$RC out=$(printf '%s' "$OUT" | tr '\n' '|')"
 fi
 
 # --- P9. the legacy bare-list manifest envelope -----------------------------

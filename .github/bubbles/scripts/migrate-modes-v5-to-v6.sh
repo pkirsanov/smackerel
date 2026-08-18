@@ -5,7 +5,7 @@
 # Modes (idempotent in all cases):
 #   --check         dry-run, list every occurrence that would be rewritten (exit 0 if none, 2 if any)
 #   --write         rewrite in place (default off)
-#   --paths "<glob>" comma-separated paths/globs to scan (default: scripts/ + docs/ + .specify/ + Makefile + repo-root *.md)
+#   --paths "<glob>" comma-separated paths/globs to scan (default: operator-visible Markdown/Makefile + install.sh; excludes report.md evidence)
 #   --include-instructions  also scan instructions/ + .github/instructions/ + .github/copilot-instructions.md
 #   --aliases-file <path>  alternate v5->v6 aliases.yaml (selftest hook)
 #
@@ -21,6 +21,7 @@
 #   any path under .pre-push-validated/
 #   the alias map itself (bubbles/workflows/aliases.yaml)
 #   the migration script + its selftest
+#   any file named report.md (captured execution evidence)
 #
 # Exit codes:
 #   0  no rewrites needed (--check) or rewrites applied successfully (--write)
@@ -150,6 +151,7 @@ else
   #   bubbles/scripts/*selftest.sh (selftests carry v5 names as fixtures)
   #   bubbles/scripts/* (framework internals, NOT operator-side)
   #   skills, agents (framework internals, owned by maintainers)
+  #   report.md files (captured execution evidence, NOT operator commands)
   #   docs/CHEATSHEET.md and docs/its-not-rocket-appliances.html (generated)
   #   docs/v5.2-design.md, docs/v6-mcp-design.md (historical design docs preserve v5 vocabulary)
   #   CHANGELOG.md (historical record preserves v5 vocabulary)
@@ -168,6 +170,7 @@ else
       \( -path "$REPO_ROOT/bubbles/scripts" -prune \) -o \
       \( -path "$REPO_ROOT/skills" -prune \) -o \
       \( -path "$REPO_ROOT/agents" -prune \) -o \
+      \( -name 'report.md' -prune \) -o \
       \( -path "$REPO_ROOT/docs/CHEATSHEET.md" -prune \) -o \
       \( -path "$REPO_ROOT/docs/its-not-rocket-appliances.html" -prune \) -o \
       \( -path "$REPO_ROOT/docs/v5.2-design.md" -prune \) -o \

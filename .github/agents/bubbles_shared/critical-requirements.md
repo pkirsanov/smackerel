@@ -39,9 +39,12 @@ A fabricated completion is infinitely worse than an honest gap. An incorrect evi
    - Agents MUST NOT weaken, delete, or rewrite tests to match the currently broken implementation.
    - If the planned behavior is genuinely wrong or incomplete, the owning planning artifact MUST be corrected first; only then may tests and implementation be updated together.
 
-3. **Persistent Regression E2E Coverage**
-   - Every feature, fix, or behavior change MUST add or update at least one scenario-specific E2E regression test tied to the planned behavior it protects.
-   - Regression E2E coverage MUST live with the feature/component it verifies, not in a generic catch-all bucket.
+3. **Persistent Regression Coverage (universal) With Proportionate Category (IMP-047 S-D)**
+   - Every feature, fix, or behavior change MUST add or update at least one scenario-specific PERSISTENT REGRESSION test tied to the planned behavior it protects. This half is UNIVERSAL and no trait retires it.
+   - The physical test CATEGORY is PROPORTIONATE to the scenario's behavior traits, per the authoritative matrix in [test-core.md](test-core.md) and [`bubbles/registry/proof-obligations.yaml`](../../bubbles/registry/proof-obligations.yaml). This requirement previously read as universal E2E, which made a pure calculation pay for an E2E shell that proved nothing while a UI change could satisfy the same words with a unit test.
+   - Traits owing LIVE proof (user-visible UI, API contract, mutable state, shared consumer, dependency path, responsive/accessible, SLA-sensitive, runtime config) MUST have it. A synthetic test may complement an applicable live proof; it may NEVER replace one.
+   - Pure logic, documentation, static metadata, and NON-runtime configuration receive proportionate proof. Runtime configuration receives NO documentation exemption.
+   - Regression coverage MUST live with the feature/component it verifies, not in a generic catch-all bucket.
 
 4. **Consumer Trace For Renames And Removals**
    - Renaming, removing, moving, or deprecating any route, path, contract, identifier, symbol, link target, or UI target MUST include a complete consumer inventory before completion.

@@ -25,27 +25,66 @@ Purpose: mandatory testing rules for `bubbles.test` and test-facing checks perfo
 - When project config defines `testImpact`, use `bubbles/scripts/test-impact-plan.sh` to choose the narrow-first test order and always-run checks for changed paths, then still execute any required final broad suites.
 - When project config defines `traceContracts`, preserve actual trace/log output for configured workflows so validation can run `bubbles/scripts/trace-contract-guard.sh` against evidence rather than predictions.
 
-## Scenario Obligation Matrix (IMP-040 SCOPE-3 / COV-9)
+## Scenario Obligation Matrix (IMP-040 SCOPE-3 / COV-9; authoritative IMP-047 S-D)
 
 A scenario can have a Test Plan row and still have no test of the behavior it
 describes: a row proves that SOMETHING was planned, not that the user-visible
 path was proven. Coverage is therefore derived from the scenario's BEHAVIOR
 TRAITS, not from a row count.
 
+**This matrix is AUTHORITATIVE.** Persistent scenario-specific regression
+coverage stays UNIVERSAL — every changed behavior is protected by a test that
+survives the change. What became proportionate is the physical test CATEGORY.
+Where [critical-requirements.md](critical-requirements.md) and
+[e2e-regression.md](e2e-regression.md) previously read as a universal E2E
+obligation, they now defer here.
+
+The rows below are a rendering of
+[`bubbles/registry/proof-obligations.yaml`](../../bubbles/registry/proof-obligations.yaml),
+which `scenario-obligation-lint.sh` reads and enforces under Gate G057. Edit the
+registry, not this table.
+
 For each active scenario, `bubbles.plan` records the obligations its traits
 imply:
 
-| Behavior trait | Required proof |
-|---|---|
-| Pure calculation or validation | Production-unit assertion over transformed output |
-| User-visible UI | Visible or accessibility-tree assertion on the current production route |
-| API or wire contract | Real request and externally observable response |
-| Mutable state | Write, read, and persistence round trip |
-| Degraded or unavailable state | Named negative-path assertion with no plausible default |
-| Shared consumer or adapter | Producer-consumer parity plus current consumer-surface assertion |
-| Cache, provider, queue, or transport | Declared dependency-path state and boundary assertion |
-| Responsive or accessible UI | Required viewport and accessibility behavior |
-| SLA-sensitive behavior | Stress or load assertion against the declared threshold |
+| Behavior trait | Required proof | Live proof |
+|---|---|---|
+| Pure calculation or validation | Production-unit assertion over transformed output | not required |
+| User-visible UI | Visible or accessibility-tree assertion on the current production route | REQUIRED |
+| API or wire contract | Real request and externally observable response | REQUIRED |
+| Mutable state | Write, read, and persistence round trip | REQUIRED |
+| Degraded or unavailable state | Named negative-path assertion with no plausible default | not required |
+| Shared consumer or adapter | Producer-consumer parity plus current consumer-surface assertion | REQUIRED |
+| Cache, provider, queue, or transport | Declared dependency-path state and live boundary assertion | REQUIRED |
+| Responsive or accessible UI | Required viewport and accessibility behavior | REQUIRED |
+| SLA-sensitive behavior | Stress or load assertion against the declared threshold | REQUIRED |
+| Runtime configuration | Startup or runtime behavior executes the configured value | REQUIRED |
+| Documentation, static metadata, non-runtime config | Production-unit or artifact assertion over the declared value | not required |
+
+**Proportionate is not cheaper.** UI, API, mutable state, dependency boundaries
+and SLA behavior pay MORE than under the universal-E2E wording: each owes a live
+proof. Only pure logic, docs, static metadata and non-runtime configuration pay
+less, and they pay less because a live shell around a pure function never proved
+anything about the function.
+
+**Synthetic complements, never replaces.** A synthetic fixture may accompany an
+applicable live proof. It may not stand in for one. A declared mechanism that
+reaches the behavior through a synthetic path where the trait requires a live one
+is refused as `LIVE-PROOF-SUBSTITUTED`, and a live-owing trait with no declared
+mechanism at all is refused as `LIVE-PROOF-UNDECLARED` — silence is exactly how
+the expensive obligation used to get skipped.
+
+**Runtime configuration gets no documentation exemption.** A configured value
+that changes what the running system does is runtime behavior wearing a config
+file's clothes. Asserting the file parses proves the parser. If the value never
+reaches a running system it is `static-metadata` instead, and declaring the
+weaker trait does not discharge the stronger one.
+
+**A live proof may be declared not applicable only by NAMING the absent trait.**
+`liveProofNotApplicable` carries `absentTrait` and `reason`. An unnamed exemption
+is indistinguishable from an omission. An UNKNOWN trait requires review and can
+never earn an exemption — a trait the framework does not recognise is a question,
+not a discount.
 
 **Derive, do not enumerate.** The matrix is applied per scenario from the traits
 that scenario actually has. Attaching every row to every scenario is the failure
@@ -57,6 +96,11 @@ assertion and nothing else.
 **One trait can imply several obligations.** A scenario that renders a cached
 value on a route is both "user-visible UI" and "cache/provider/transport", and
 owes both proofs — the visible assertion does not discharge the boundary one.
+
+**Migration.** Backfill traits conservatively. Old E2E links stay valid as
+regression evidence while traits are backfilled; the lint is inert on a scenario
+that declares no traits, so an unbackfilled packet is not retro-broken. Rollback
+restores the previous policy text without deleting trait data.
 
 ## Test Mechanism Declaration (IMP-040 SCOPE-4 / COV-10)
 

@@ -3,7 +3,7 @@
 #
 # Capability: bug-packet-proportionality
 #
-# Enforce the micro-fix packet contract (IMP-042 SCOPE-9).
+# Enforce the micro-fix packet contract (IMP-042 SCOPE-9; activated IMP-047 S-D).
 #
 # WHY THIS EXISTS
 # The full bug packet is seven artifacts. Paying that for a one-line guard does
@@ -17,6 +17,15 @@
 # adversarial regression, stated root cause) is missing. There is no override:
 # a discretionary downgrade is how a payment defect ships as a typo fix.
 #
+# ACTIVATED AS THE DEFAULT (IMP-047 S-D). The compact route was previously
+# opt-in per bug, pending measurements of authoring time and defect escape that
+# no producer existed for -- a precondition the system cannot produce is a
+# permanent veto dressed as rigour. A bug answering every admission condition
+# admissibly now uses the compact packet by default; any failed condition
+# escalates AUTOMATICALLY to the full packet with no reviewer discretion and no
+# override, and that mechanical escalation is what makes the default safe.
+# Outcomes are recorded FORWARD through micro-fix-outcome-log.sh.
+#
 # The admission conditions live in bubbles/registry/micro-fix-packet.yaml. This
 # script READS them. It does not restate them, because a second copy is a second
 # answer.
@@ -26,8 +35,8 @@
 #   bash bubbles/scripts/micro-fix-admission.sh --registry   # print the contract
 #
 # Exit codes:
-#   0 = the bug is not a micro-fix packet, or it is and it conforms
-#   1 = declared micro-fix but REFUSED (reason printed)
+#   0 = the bug is on the full packet, or it is on the compact packet and conforms
+#   1 = compact packet REFUSED (reason printed)
 #   2 = usage error, or the registry is missing
 
 set -uo pipefail
@@ -41,12 +50,16 @@ usage() {
 usage: micro-fix-admission.sh <bugDir>
        micro-fix-admission.sh --registry
 
-Refuses a declared micro-fix packet that fails any admission condition or drops
-any preserved obligation. A bug that does not declare `packet: micro` passes
-untouched, so this is opt-in per bug and never a new tax on the full packet.
+Resolves the packet route for a bug and enforces the compact packet's admission
+conditions and preserved obligations.
 
-No --force, --skip or --allow flag exists. A failed condition escalates to the
-full bug packet by editing the bug, never by silencing the check.
+The compact packet is the DEFAULT route (IMP-047 S-D). A bug answering every
+admission condition admissibly uses it; any failed condition escalates
+AUTOMATICALLY to the full packet; a bug that answers nothing stays on the full
+packet untouched.
+
+No --force, --skip or --allow flag exists, and escalation has no override. A
+failed condition is resolved by editing the bug, never by silencing the check.
 USAGE
 }
 
@@ -106,11 +119,78 @@ BUG_DIR="$1"
 STATE="$BUG_DIR/state.json"
 BUG_MD="$BUG_DIR/bug.md"
 
-# A bug that does not declare the compact packet is none of this guard's
-# business. Passing it untouched is what keeps the compact route opt-in.
-if [[ ! -f "$STATE" ]] || ! grep -q '"packet"[[:space:]]*:[[:space:]]*"micro"' "$STATE" 2>/dev/null; then
-  printf '[%s] %s does not declare the micro-fix packet - nothing to enforce.\n' "$NAME" "$BUG_DIR"
+# --- route resolution (IMP-047 S-D: the compact packet is the DEFAULT) -------
+#
+# The compact route used to require an explicit `"packet": "micro"` opt-in,
+# pending measurements of authoring time and defect escape that no producer
+# existed for. A precondition the system cannot produce is a permanent veto, so
+# the ordering is inverted: the route is on, and the measurement runs forward
+# from activation through micro-fix-outcome-log.sh.
+#
+# Resolution, in order:
+#   1. state.json says "packet": "full"  -> full, no enforcement here.
+#   2. state.json says "packet": "micro" -> compact, enforced.
+#   3. no declaration                    -> DEFAULT. Every admission condition
+#      answered admissibly in bug.md means compact; any failed condition
+#      escalates automatically to the full packet; no answers at all means the
+#      bug has not been assessed and stays on the full packet untouched.
+#
+# Escalation is mechanical in every branch. There is no reviewer discretion and
+# no override flag, which is exactly what makes turning the default on safe: a
+# payment defect cannot ship as a typo fix because nobody has the authority to
+# wave it through.
+declared_packet=""
+if [[ -f "$STATE" ]]; then
+  if grep -q '"packet"[[:space:]]*:[[:space:]]*"micro"' "$STATE" 2>/dev/null; then
+    declared_packet="micro"
+  elif grep -q '"packet"[[:space:]]*:[[:space:]]*"full"' "$STATE" 2>/dev/null; then
+    declared_packet="full"
+  fi
+fi
+
+log_route() {
+  local route="$1" resolution="$2" failed="${3:-}"
+  local logger="$SCRIPT_DIR/micro-fix-outcome-log.sh"
+  [[ -f "$logger" ]] || return 0
+  bash "$logger" route --bug "$BUG_DIR" --route "$route" \
+    --resolution "$resolution" --failed "$failed" 2>/dev/null || true
+}
+
+# Which admission conditions does bug.md actually answer, and how?
+answered=0
+failed_ids=""
+for id in $(registry_ids); do
+  want="$(registry_admit_when "$id")"
+  line="$(grep -i -m1 "micro-fix-admission:[[:space:]]*${id}[[:space:]]*=" "$BUG_MD" 2>/dev/null)"
+  if [[ -z "$line" ]]; then
+    continue
+  fi
+  answered=$((answered + 1))
+  got="$(printf '%s' "$line" | sed -E 's/.*=[[:space:]]*([A-Za-z]+).*/\1/' | tr '[:upper:]' '[:lower:]')"
+  [[ "$got" == "$want" ]] || failed_ids="$failed_ids $id"
+done
+failed_ids="${failed_ids# }"
+
+if [[ "$declared_packet" == "full" ]]; then
+  printf '[%s] %s declares packet: full - nothing to enforce.\n' "$NAME" "$BUG_DIR"
+  log_route full declared
   exit 0
+fi
+
+if [[ -z "$declared_packet" ]]; then
+  if [[ "$answered" -eq 0 ]]; then
+    printf '[%s] %s answers no admission condition - it uses the full bug packet.\n' "$NAME" "$BUG_DIR"
+    log_route full unassessed
+    exit 0
+  fi
+  if [[ -n "$failed_ids" ]]; then
+    printf '[%s] %s fails admission (%s) - it escalates automatically to the full bug packet.\n' \
+      "$NAME" "$BUG_DIR" "$failed_ids"
+    printf '[%s] Escalation is mechanical. There is no reviewer discretion and no override flag.\n' "$NAME"
+    log_route full escalated "$failed_ids"
+    exit 0
+  fi
+  printf '[%s] %s passes every admission condition - the COMPACT packet is the default route.\n' "$NAME" "$BUG_DIR"
 fi
 
 refusals=0
@@ -119,7 +199,9 @@ refuse() {
   printf '  REFUSED (%s): %s\n' "$1" "$2"
 }
 
-printf '[%s] %s declares packet: micro. Checking admission.\n' "$NAME" "$BUG_DIR"
+if [[ "$declared_packet" == "micro" ]]; then
+  printf '[%s] %s declares packet: micro. Checking admission.\n' "$NAME" "$BUG_DIR"
+fi
 
 # 1. Required artifacts must exist. Fewer than the full packet, never zero.
 for artifact in $(registry_required_artifacts); do
@@ -173,10 +255,12 @@ done
 
 if [[ "$refusals" -eq 0 ]]; then
   printf '[%s] admitted: compact packet is proportionate for this defect.\n' "$NAME"
+  log_route compact "${declared_packet:-default}"
   exit 0
 fi
 
 printf '\n[%s] %d refusal(s). This bug uses the FULL packet (%s).\n' \
   "$NAME" "$refusals" "$(awk '/^escalation:/{e=1;next} e && /^  target:/{print $2;exit}' "$REGISTRY")"
 printf '[%s] Fix the bug artifacts or escalate. There is no override flag.\n' "$NAME"
+log_route full refused "$failed_ids"
 exit 1

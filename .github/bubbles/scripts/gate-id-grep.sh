@@ -24,8 +24,17 @@
 #       an intentional reserved gap so the two bands can never overlap.
 #
 # Modes:
-#   default   - only fail on duplicate-adjacent findings
-#   --strict  - also fail on unknown-gate-id findings
+#   default     - only fail on duplicate-adjacent findings
+#   --strict    - also fail on unknown-gate-id findings
+#   --emit-refs - print every resolved reference as "<GID>\t<repo-relative path>"
+#                 and exit 0. This is the EVIDENCE surface the generated
+#                 enforcement block consumes (IMP-047 S-A): `enforcedBy` used to
+#                 be hand-written, and G071 proved it drifts — the field read
+#                 `unbound` while the same entry's description named three
+#                 enforcing agents. Deriving the binding from the scanner that
+#                 already knows where a gate id appears removes the second,
+#                 hand-maintained answer. Full-line comments are excluded, so
+#                 prose ABOUT a gate is never counted as a binding to it.
 #
 # Portability: both scans are POSIX awk programs (2-arg match() plus
 # RSTART/RLENGTH/substr) driven over a POSIX `find` file list. There is no
@@ -41,12 +50,13 @@
 #   - bubbles/scripts/
 #
 # Exit codes:
-#   0 - no findings (in the active mode)
+#   0 - no findings (in the active mode), or --emit-refs completed
 #   1 - one or more findings printed
 #   2 - usage error / missing inputs
 #
 # Usage:
 #   bash bubbles/scripts/gate-id-grep.sh [--repo-root <path>] [--strict]
+#   bash bubbles/scripts/gate-id-grep.sh [--repo-root <path>] --emit-refs
 
 set -euo pipefail
 
@@ -55,10 +65,12 @@ REPO_ROOT_DEFAULT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 repo_root="$REPO_ROOT_DEFAULT"
 strict="false"
+emit_refs="false"
 
 usage() {
   cat <<'EOF'
 Usage: bash bubbles/scripts/gate-id-grep.sh [--repo-root <path>] [--strict]
+       bash bubbles/scripts/gate-id-grep.sh [--repo-root <path>] --emit-refs
 
 Scans agents/, instructions/, docs/, bubbles/scripts/ under <repo-root>
 for gate ID patterns (G[0-9]{3}). Detects:
@@ -70,6 +82,8 @@ for gate ID patterns (G[0-9]{3}). Detects:
 Options:
   --repo-root <path>   Repo root to scan (default: script repo root)
   --strict             Also fail on unknown-gate-id findings
+  --emit-refs          Print "<GID><TAB><repo-relative path>" per referencing
+                       file, excluding full-line comments, then exit 0
   -h, --help           Print this help
 
 Exit 0 when no findings in the active mode, 1 when findings exist.
@@ -85,6 +99,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --strict)
       strict="true"
+      shift
+      ;;
+    --emit-refs)
+      emit_refs="true"
       shift
       ;;
     -h|--help)
@@ -171,6 +189,9 @@ FNR == 1 { skipfile = looks_binary($0) }
 skipfile { next }
 {
   line = $0
+  # --emit-refs derives a BINDING, so prose about a gate must not count as one.
+  # Full-line comments in the three syntaxes these roots use are skipped.
+  if (nocomment == 1 && line ~ /^[ \t]*(#|\/\/|<!--)/) next
   base = 0
   rest = line
   n = 0
@@ -269,20 +290,47 @@ fi
 # any batch fails so the caller can fail loud instead of scanning nothing.
 run_scan() {
   local mode="$1"
+  local nocomment="${2:-0}"
   local -a batch=()
   local f
   for f in "${scan_files[@]}"; do
     batch+=("$f")
     if [[ "${#batch[@]}" -ge 400 ]]; then
-      LC_ALL=C "$AWK_BIN" -v mode="$mode" "$AWK_PROG" "${batch[@]}" || return 1
+      LC_ALL=C "$AWK_BIN" -v mode="$mode" -v nocomment="$nocomment" "$AWK_PROG" "${batch[@]}" || return 1
       batch=()
     fi
   done
   if [[ "${#batch[@]}" -gt 0 ]]; then
-    LC_ALL=C "$AWK_BIN" -v mode="$mode" "$AWK_PROG" "${batch[@]}" || return 1
+    LC_ALL=C "$AWK_BIN" -v mode="$mode" -v nocomment="$nocomment" "$AWK_PROG" "${batch[@]}" || return 1
   fi
   return 0
 }
+
+# --- --emit-refs: the derived-binding evidence surface ---------------------
+#
+# One row per (gate id, referencing file). Line numbers are dropped on purpose:
+# a binding is a property of the FILE, and keeping line numbers would make the
+# generated block churn on every unrelated edit above a reference.
+if [[ "$emit_refs" == "true" ]]; then
+  if ! emit_raw="$(run_scan refs 1)"; then
+    echo "gate-id-grep: reference scan failed (awk returned non-zero)." >&2
+    echo "  Refusing to emit an incomplete binding set." >&2
+    exit 2
+  fi
+  printf '%s\n' "$emit_raw" \
+    | LC_ALL=C "$AWK_BIN" -F: -v root="$repo_root/" '
+        NF >= 3 {
+          gid = $NF
+          path = $1
+          for (i = 2; i < NF - 1; i++) path = path ":" $i
+          sub("^" root, "", path)
+          key = gid "\t" path
+          if (!(key in seen)) { seen[key] = 1; print key }
+        }
+      ' \
+    | LC_ALL=C sort -u
+  exit 0
+fi
 
 # This scanner and its selftest necessarily CONTAIN illustrative duplicate-ID
 # examples ("G028, G028") in their documentation and fixtures. Scanning them

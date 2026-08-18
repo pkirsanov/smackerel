@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Capability: observability-posture-and-slo-gates,
 # Capability: session-aware-runtime-coordination, supported-interop-apply
+# Capability: dod-gherkin-fidelity-threshold
 # ────────────────────────────────────────────────────────────────────
 # bubbles — Lightweight CLI for Bubbles governance queries and script dispatch
 # ────────────────────────────────────────────────────────────────────
@@ -39,7 +40,6 @@
 #   repo-readiness [path] [--profile PROFILE]  Run advisory repo-readiness checks
 #   framework-proposal <slug>     Scaffold a project-owned upstream Bubbles change proposal
 #   audit-done [--changed|--recertify-all]  Audit done specs using advisory/changed/recertification profiles
-#   autofix <spec>                Scaffold missing report sections
 #   metrics <subcommand>          Manage metrics and activity tracking
 #   lessons [add|--all|compact]   Record, view, or compact lessons-learned memory
 #   recall <subcommand>           Search, read, inspect, sync, or curate experience recall
@@ -663,7 +663,7 @@ command_effective_risk_class() {
         printf '%s' "$default_risk"
       fi
       ;;
-    hooks|framework-proposal|autofix|upgrade)
+    hooks|framework-proposal|upgrade)
       printf '%s' 'owned_mutation'
       ;;
     audit-done|audit)
@@ -1481,7 +1481,6 @@ Commands:
   framework-proposal <slug>     Scaffold a project-owned upstream Bubbles change proposal
   audit-done [--changed|--recertify-all]
                               Audit done specs using advisory/changed/recertification profiles
-  autofix <spec>                Scaffold missing report sections
   dag <spec>                    Show scope dependency graph (Mermaid)
   doctor [--heal]               Check project health, optionally auto-fix
   hooks <subcommand>            Manage git hooks (catalog|list|install|add|remove|run|status)
@@ -2248,13 +2247,6 @@ EOF
 
 cmd_audit_done() {
   bash "$SCRIPT_DIR/done-spec-audit.sh" "$@"
-}
-
-cmd_autofix() {
-  [[ $# -lt 1 ]] && die "Usage: bubbles autofix <spec>"
-  local spec_dir
-  spec_dir="$(resolve_spec "$1")"
-  bash "$SCRIPT_DIR/report-section-autofix.sh" "$spec_dir" --write
 }
 
 cmd_sunnyvale() {
@@ -4495,7 +4487,6 @@ main() {
     repo-readiness)     cmd_repo_readiness "$@" ;;
     framework-proposal)  cmd_framework_proposal "$@" ;;
     audit-done|audit)   cmd_audit_done "$@" ;;
-    autofix)            cmd_autofix "$@" ;;
     dag)                cmd_dag "$@" ;;
     doctor)             cmd_doctor "$@" ;;
     hooks)              cmd_hooks "$@" ;;

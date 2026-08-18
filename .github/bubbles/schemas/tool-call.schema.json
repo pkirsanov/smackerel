@@ -9,8 +9,8 @@
   "properties": {
     "schemaVersion": {
       "type": "integer",
-      "enum": [1, 2],
-      "description": "Record schema version. Absent or 1 = v5.1 shape. 2 = v5.2 shape (includes framework field). Readers MUST accept both. v3+ will be additive over v2."
+      "enum": [1, 2, 3],
+      "description": "Record schema version. Absent or 1 = v5.1 shape. 2 = v5.2 shape (includes framework field). 3 = IMP-047 S-C shape (adds scenarioBinding, the receipt block that binds a command to a scenario, a claim, a source revision and an outcome). Readers MUST accept 1, 2 and 3."
     },
     "framework": {
       "type": "object",
@@ -86,6 +86,60 @@
       "type": "array",
       "items": { "type": "string" },
       "description": "Freeform tags for evidence categorization (e.g. 'test', 'build', 'lint', 'curl', 'psql')."
+    },
+    "inputClosure": {
+      "type": "array",
+      "description": "Declared input files hashed at record time (IMP-024). A later change to a declared input invalidates exactly this receipt.",
+      "items": {
+        "type": "object",
+        "required": ["path"],
+        "properties": {
+          "path": { "type": "string" },
+          "sha256": { "type": ["string", "null"] }
+        },
+        "additionalProperties": false
+      }
+    },
+    "scenarioBinding": {
+      "type": "object",
+      "description": "IMP-047 S-C receipt block. Present only when this command was recorded AS EVIDENCE for a named scenario. It is what makes the entry admissible: without it the entry records that a command ran, which is not the same as proving a claim. The binding contract lives in bubbles/registry/scenario-states.yaml.",
+      "required": ["scenarioId", "phase", "testIdentity", "sourceRevision"],
+      "properties": {
+        "scenarioId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The stable SCN-* id this receipt is evidence for."
+        },
+        "phase": {
+          "type": "string",
+          "enum": ["red", "implement", "green", "live", "regression", "observed"],
+          "description": "Receipt phase, matching a receiptPhase declared in bubbles/registry/scenario-states.yaml."
+        },
+        "testIdentity": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Identity of the test that ran. RED and GREEN must cite the SAME value; substituting the test is a different claim, not a repaired one."
+        },
+        "sourceRevision": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Source revision the receipt was recorded against. Drift invalidates the receipt, because a receipt proves what the tree was, not what it is."
+        },
+        "negativeControl": {
+          "type": "string",
+          "description": "The perturbation that makes this test fail. Required for state derivation; a test with no stated control has not been shown to be sensitive to the behavior it claims to prove."
+        },
+        "claim": {
+          "type": "string",
+          "description": "The claim this receipt substantiates, in the words of the DoD item or scenario it is offered for. This is what replaces token overlap in the Check 9 admission path: the claim must COVER the DoD item, and the DoD item must POINT AT this scenario."
+        },
+        "implementationRefs": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Production paths the change touched. A CHANGED implementation ref marks every scenario governing it AFFECTED."
+        }
+      },
+      "additionalProperties": false
     }
   }
 }

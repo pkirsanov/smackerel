@@ -192,6 +192,8 @@ status_ceiling="$(yq -r '.statusCeiling // ""' "$resolved_mode_file")"
 audit_profile="$(yq -r '.transitionAudit.profile // ""' "$resolved_mode_file")"
 transition_target="$(yq -r '.transitionAudit.target // ""' "$resolved_mode_file")"
 focus="$(yq -r '.constraints.focus // ""' "$resolved_mode_file")"
+forbid_framework_auto_mutation_json="$(yq -o=json -I=0 '.constraints.forbidFrameworkAutoMutation' "$resolved_mode_file")"
+audit_only_json="$(yq -o=json -I=0 '.constraints.auditOnly' "$resolved_mode_file")"
 allow_implementation_json="$(yq -o=json -I=0 '.constraints.allowImplementationForFindings' "$resolved_mode_file")"
 mode_class_json="$(yq -o=json -I=0 '.constraints.modeClass' "$resolved_mode_file")"
 phase_order_json="$(yq -o=json -I=0 '.phaseOrder // []' "$resolved_mode_file")"
@@ -232,7 +234,10 @@ if [[ -z "$audit_profile" ]]; then
   fi
   fail 71 E009-AUDIT-PROFILE-UNSUPPORTED "resolved mode has no supported transition audit contract"
 fi
-if [[ "$audit_profile" != "planning-maturity-v1" && "$audit_profile" != "delivery-completion-v1" && "$audit_profile" != "delivery-completion-fast-v1" ]]; then
+if [[ "$audit_profile" != "planning-maturity-v1" \
+  && "$audit_profile" != "delivery-completion-v1" \
+  && "$audit_profile" != "delivery-completion-fast-v1" \
+  && "$audit_profile" != "framework-proposal-v1" ]]; then
   fail 71 E009-AUDIT-PROFILE-UNSUPPORTED "resolved mode declares an unknown transition audit profile"
 fi
 if [[ "$transition_target" != "statusCeiling" ]]; then
@@ -255,6 +260,22 @@ if [[ "$audit_profile" == "planning-maturity-v1" ]]; then
     || has_phase implement \
     || has_phase test; then
     fail 72 E009-AUDIT-PROFILE-CONTRADICTION "planning profile invariants contradict the resolved mode"
+  fi
+elif [[ "$audit_profile" == "framework-proposal-v1" ]]; then
+  # IMP-047 PD-11. The DECLARED no-certification audit contract. A mode on this
+  # profile audits the framework's own runtime data and terminates at a written
+  # proposal, so it never certifies delivery and never implements. The contract
+  # is explicit precisely so it can never be reached by falling through: a mode
+  # that simply omits `transitionAudit` still refuses with
+  # E009-AUDIT-PROFILE-UNSUPPORTED above.
+  if [[ "$status_ceiling" != "framework_proposal_written" \
+    || "$forbid_framework_auto_mutation_json" != "true" \
+    || "$audit_only_json" != "true" \
+    || "$source_edit_lockout_required" != "true" ]] \
+    || ! has_phase audit \
+    || has_phase implement \
+    || has_phase test; then
+    fail 72 E009-AUDIT-PROFILE-CONTRADICTION "framework proposal profile invariants contradict the resolved mode"
   fi
 elif [[ "$audit_profile" == "delivery-completion-fast-v1" ]]; then
   # Fast delivery lane (IMP-100 Phase 2 R4): full implement+test+validate
@@ -298,6 +319,9 @@ case "$current_status" in
 esac
 if [[ "$audit_profile" == "planning-maturity-v1" && "$current_status" == "done" ]]; then
   fail 69 E009-TARGET-MISMATCH "planning profile cannot be paired with done status"
+fi
+if [[ "$audit_profile" == "framework-proposal-v1" && "$current_status" == "done" ]]; then
+  fail 69 E009-TARGET-MISMATCH "framework proposal profile cannot be paired with done status"
 fi
 
 contract_projection="$(jq -cnS \

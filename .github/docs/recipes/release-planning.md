@@ -123,7 +123,7 @@ For a phase that opts in, `bubbles.releases` annotates `features.md` with HTML-c
 ```
 
 - `delivery` is one of `required` | `optional` | `carried` | `deferred-to:<phase>`. Only `required` is enforced by the delivery layer.
-- Every `delivery=required` feature MUST bind a real spec dir whose `state.json` is terminal (`done` or the mode's ceiling) AND validate-certified (`validate` in completed phases).
+- Every `delivery=required` feature MUST bind a real spec dir whose `state.json` is DELIVERY-CAPABLE terminal AND validate-certified (`validate` in completed phases). Delivery-capable means the status is terminal for the spec's resolved `workflowMode` AND that mode actually delivers implementation. A mode ceiling alone is not enough: `specs_hardened`, `docs_updated`, and `validated` are legitimate terminal states for planning, docs, and review modes but are NOT delivery, and `delivered_prototype` is never deployable. Planning maturity is not product delivery.
 
 Run the reconciliation directly:
 

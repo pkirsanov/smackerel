@@ -50,6 +50,14 @@ Optional goal-node binding:
 
 Optional:
   --scope-id <id>      Scope being worked, when applicable.
+  --occurrence-id <id> IMP-047 S-C. Occurrence identity for THIS phase run,
+                       e.g. `validate#2`, as assigned by
+                       bubbles/scripts/phase-coordinator.sh. A mode that runs
+                       one phase twice produces two snapshots whose `phase` is
+                       identical, so resume keyed on the name alone cannot tell
+                       them apart. The legacy `phase` field is UNCHANGED and
+                       still written; this mirrors it with the id that is
+                       actually distinct. Omitted for a single-occurrence phase.
   --note <string>      Free-form note attached to this snapshot.
   --mode <start|end>   Records turn-start (default) or turn-end.
   --convergence-iteration <N>
@@ -70,6 +78,8 @@ Behavior:
         turnNumber  (auto-incremented integer; 1 for first record)
         timestamp   (UTC ISO8601, wall clock)
         phase       (the --phase value)
+        occurrenceId(the --occurrence-id value or null; mirrors `phase` with an
+                     identity that is distinct across repeated occurrences)
         scopeId     (the --scope-id value or null)
         mode        ("start" | "end")
         note        (the --note value or null)
@@ -94,6 +104,7 @@ EOF
 
 PHASE=""
 SCOPE_ID=""
+OCCURRENCE_ID=""
 NOTE=""
 MODE="start"
 POSTURE=""
@@ -130,6 +141,11 @@ while [[ $# -gt 0 ]]; do
     --scope-id)
       [[ $# -ge 2 ]] || { echo "state-snapshot: --scope-id requires a value" >&2; exit 2; }
       SCOPE_ID="$2"
+      shift 2
+      ;;
+    --occurrence-id)
+      [[ $# -ge 2 ]] || { echo "state-snapshot: --occurrence-id requires a value" >&2; exit 2; }
+      OCCURRENCE_ID="$2"
       shift 2
       ;;
     --note)
@@ -673,6 +689,7 @@ jq \
   --arg timestamp "$TIMESTAMP" \
   --arg phase "$PHASE" \
   --arg scope_id "$SCOPE_ID" \
+  --arg occurrence_id "$OCCURRENCE_ID" \
   --arg note "$NOTE" \
   --arg mode "$MODE" \
   --arg posture "$POSTURE" \
@@ -699,6 +716,7 @@ jq \
           turnNumber: $turn,
           timestamp: $timestamp,
           phase: $phase,
+          occurrenceId: (if $occurrence_id == "" then null else $occurrence_id end),
           scopeId: (if $scope_id == "" then null else $scope_id end),
           mode: $mode,
           posture: (if $posture == "" then null else $posture end),

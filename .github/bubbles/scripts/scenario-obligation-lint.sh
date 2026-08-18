@@ -20,6 +20,10 @@ set -euo pipefail
 #   A. TRAIT-COVERED     — every declared trait owes at least one obligation.
 #   B. OBLIGATION-ANCHORED — every obligation names a trait the scenario declared.
 #   C. NOT-ENUMERATED    — no scenario declares the ENTIRE trait vocabulary.
+#   F. LIVE-PROOF        — a trait the registry marks `liveProof: required`
+#                          cannot be discharged by a synthetic path, an absent
+#                          mechanism, or the wrong test category (IMP-047 S-D).
+#                          An exemption must NAME the absent trait.
 #
 # Check C is deliberately narrow. It fires only on the maximal set, which is
 # unambiguous: a scenario that is simultaneously pure calculation, user-visible
@@ -28,6 +32,14 @@ set -euo pipefail
 # scenario. A judgement-based threshold ("too many traits") would reject
 # legitimate multi-trait scenarios, and a gate that rejects correct work gets
 # switched off.
+#
+# Check F is where the matrix becomes AUTHORITATIVE (IMP-047 S-D). Persistent
+# regression stays universal; the physical test CATEGORY becomes proportionate
+# to traits. UI, API, mutable state, dependency boundaries and SLA behavior pay
+# MORE than under the old universal-E2E wording; pure logic, docs, static
+# metadata and non-runtime config pay less, because a live shell around a pure
+# function never proved anything about it. Runtime config gets no docs
+# exemption. The rows live in bubbles/registry/proof-obligations.yaml.
 #
 # SAFE TO BLOCK ON DAY ONE, unlike the linked-test resolver: these fields are
 # new and optional, so the lint is inert on every packet that does not declare
@@ -70,7 +82,38 @@ fi
 
 command -v python3 >/dev/null 2>&1 || die_usage "python3 is required"
 
-MANIFEST="$MANIFEST" QUIET="$QUIET" python3 - <<'PY'
+# --- IMP-047 S-D: the trait matrix is AUTHORITATIVE -------------------------
+#
+# The trait vocabulary and every live-proof obligation are READ from
+# bubbles/registry/proof-obligations.yaml. They used to be a literal set in this
+# file, which meant the prose matrix in test-core.md and the enforced matrix
+# here were two answers to one question, free to drift.
+#
+# Flattened to `traitId|field|value` lines because the registry is a fixed
+# shallow shape, so awk is enough and yq stays an optional convenience rather
+# than a hard dependency that would make the check unavailable where it matters.
+PROOF_REGISTRY_FILE="${BUBBLES_PROOF_OBLIGATIONS_REGISTRY:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../registry/proof-obligations.yaml}"
+[[ -f "$PROOF_REGISTRY_FILE" ]] ||
+  die_usage "proof-obligation registry not found: $PROOF_REGISTRY_FILE"
+
+PROOF_REGISTRY="$(awk '
+  /^traits:/ {t=1; next}
+  /^[a-zA-Z]/ {t=0; id=""}
+  t && /^  - id: / {id=$0; sub(/^  - id: /, "", id); next}
+  t && id != "" && /^    [a-zA-Z]+:/ {
+    line=$0
+    sub(/^    /, "", line)
+    k=line; sub(/:.*/, "", k)
+    v=line; sub(/^[a-zA-Z]+:[ ]*/, "", v)
+    if (k == "note" || k == "requiredProof") next
+    print id "|" k "|" v
+  }
+' "$PROOF_REGISTRY_FILE")"
+
+[[ -n "$PROOF_REGISTRY" ]] ||
+  die_usage "proof-obligation registry declares no traits: $PROOF_REGISTRY_FILE"
+
+MANIFEST="$MANIFEST" QUIET="$QUIET" PROOF_REGISTRY="$PROOF_REGISTRY" python3 - <<'PY'
 import json, os, sys
 
 manifest_path = os.environ["MANIFEST"]
@@ -83,10 +126,37 @@ except (OSError, ValueError) as exc:
     print(f"scenario-obligation-lint: cannot parse {manifest_path}: {exc}", file=sys.stderr)
     sys.exit(2)
 
-VOCABULARY = {
-    "pure-calculation", "user-visible-ui", "api-contract", "mutable-state",
-    "degraded-state", "shared-consumer", "dependency-path",
-    "responsive-accessible", "sla-sensitive",
+VOCABULARY = set()
+TRAIT_RULES = {}
+
+
+def _flow_list(raw):
+    raw = raw.strip()
+    if raw.startswith("[") and raw.endswith("]"):
+        raw = raw[1:-1]
+    return [item.strip() for item in raw.split(",") if item.strip()]
+
+
+# The trait vocabulary and every live-proof rule come from
+# bubbles/registry/proof-obligations.yaml (IMP-047 S-D). Nothing is restated
+# here: a second copy of the matrix is a second answer, and the prose matrix in
+# test-core.md points at the same file for exactly that reason.
+for line in os.environ.get("PROOF_REGISTRY", "").splitlines():
+    if line.count("|") < 2:
+        continue
+    trait_id, field, value = line.split("|", 2)
+    VOCABULARY.add(trait_id)
+    rule = TRAIT_RULES.setdefault(trait_id, {})
+    if field in ("requiredEntrypoints", "requiredAssertionSurfaces",
+                 "requiredDependencyPaths", "requiredTestTypes"):
+        rule[field] = _flow_list(value)
+    else:
+        rule[field] = value.strip()
+
+MECHANISM_FIELD_FOR = {
+    "requiredEntrypoints": "entrypoint",
+    "requiredAssertionSurfaces": "assertionSurface",
+    "requiredDependencyPaths": "dependencyPath",
 }
 
 # --- IMP-040 SCOPE-6: dependency-path coverage (COV-9, COV-10) --------------
@@ -180,6 +250,7 @@ for scenario in scenarios:
                          "varies carries no information about the scenario"))
 
     obligation_traits = set()
+    satisfied_by_trait = {}
     if isinstance(obligations, list):
         for ob in obligations:
             if not isinstance(ob, dict):
@@ -190,6 +261,10 @@ for scenario in scenarios:
                 findings.append((sid, "OBLIGATION-ANCHORED", "an obligation declares no trait"))
                 continue
             obligation_traits.add(trait)
+            named = [e for e in (ob.get("satisfiedBy") or [])
+                     if isinstance(e, str) and e.strip()]
+            if named:
+                satisfied_by_trait.setdefault(trait, []).extend(named)
             if not isinstance(proof, str) or not proof.strip():
                 findings.append((sid, "TRAIT-COVERED",
                                  f"obligation for '{trait}' states no requiredProof"))
@@ -273,6 +348,83 @@ for scenario in scenarios:
                              "a shared-consumer scenario names no productionOwners. The "
                              "controlling code path must be recorded as repository-relative "
                              "paths when no code-index adapter is configured"))
+
+    # --- F. live-proof obligations (IMP-047 S-D) ----------------------------
+    #
+    # Persistent regression stays universal; the CATEGORY becomes proportionate.
+    # A trait whose registry row says `liveProof: required` cannot be discharged
+    # by a synthetic test — synthetic may COMPLEMENT it, never replace it. A
+    # trait whose row says `not-required` owes proportionate proof and pays for
+    # no live shell, which is the half that stops a pure calculation buying a
+    # fake E2E.
+    #
+    # An absent declaration is a finding rather than silence. The whole point of
+    # making the matrix authoritative is that "no mechanism declared" stops
+    # meaning "no obligation".
+    na = scenario.get("liveProofNotApplicable")
+    if na is not None:
+        na_absent = na.get("absentTrait") if isinstance(na, dict) else None
+        na_reason = na.get("reason") if isinstance(na, dict) else None
+        if not isinstance(na_absent, str) or not na_absent.strip() \
+                or not isinstance(na_reason, str) or not na_reason.strip():
+            findings.append((sid, "NA-MALFORMED",
+                             "liveProofNotApplicable must name an absentTrait AND a reason. "
+                             "An unnamed exemption is indistinguishable from an omission"))
+        elif na_absent not in VOCABULARY:
+            findings.append((sid, "NA-MALFORMED",
+                             f"liveProofNotApplicable names '{na_absent}', which is not a "
+                             "trait in the proof-obligation registry"))
+        elif na_absent in trait_set:
+            findings.append((sid, "NA-CONTRADICTS-TRAIT",
+                             f"liveProofNotApplicable names '{na_absent}' while the scenario "
+                             "declares it. A declared trait owes its proof"))
+        elif unknown:
+            findings.append((sid, "NA-UNKNOWN-TRAIT",
+                             f"a scenario carrying unknown trait(s) ({', '.join(unknown)}) "
+                             "cannot claim a live-proof exemption. An unknown trait requires "
+                             "review; it never buys a discount"))
+
+    for trait in sorted(trait_set & VOCABULARY):
+        rule = TRAIT_RULES.get(trait, {})
+        if rule.get("liveProof") != "required":
+            continue
+
+        required_types = rule.get("requiredTestTypes")
+        if required_types:
+            actual_type = scenario.get("requiredTestType")
+            if actual_type not in required_types:
+                findings.append((sid, "LIVE-PROOF-CATEGORY",
+                                 f"trait '{trait}' owes {' or '.join(required_types)} proof "
+                                 f"but requiredTestType is '{actual_type}'"))
+
+        # A trait whose obligation NAMES the test that discharges it has said
+        # how the proof is obtained. Whether that test is really the category it
+        # claims is scenario-test-resolve.sh's question, not this lint's — two
+        # checks answering one question is the drift this slice removes.
+        if satisfied_by_trait.get(trait):
+            continue
+
+        mech_rules = {k: v for k, v in rule.items() if k in MECHANISM_FIELD_FOR and v}
+        if not mech_rules:
+            continue
+
+        if not isinstance(mech, dict) or not mech:
+            findings.append((sid, "LIVE-PROOF-UNDECLARED",
+                             f"trait '{trait}' owes live proof but the scenario names no "
+                             "satisfiedBy test and declares no testMechanism. Name the test "
+                             "that supplies the live proof, declare the mechanism, or declare "
+                             "liveProofNotApplicable naming the absent trait"))
+            continue
+
+        for key, allowed in mech_rules.items():
+            field = MECHANISM_FIELD_FOR[key]
+            actual = mech.get(field)
+            if actual not in allowed:
+                findings.append((sid, "LIVE-PROOF-SUBSTITUTED",
+                                 f"trait '{trait}' requires {field} in "
+                                 f"({', '.join(allowed)}) but the declared mechanism is its "
+                                 f"only named proof and uses '{actual}'. A synthetic path may "
+                                 "complement live proof; it cannot replace it"))
 
 if findings:
     print("scenario-obligation-lint: FAIL — obligation matrix is not coherent (COV-9)", file=sys.stderr)

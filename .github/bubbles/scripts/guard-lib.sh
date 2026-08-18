@@ -432,3 +432,26 @@ bubbles_scheduled_selftests() {
   done <<<"$source_text"
   printf '%s' "$out"
 }
+
+# IMP-047 S-A. The orphaned-scaffolding rule, made mechanical.
+#
+# `gates-block-reader-lint.sh` computed that its own guarded surface was gone,
+# printed "the block is safe to remove" and "the inventory is empty; SCOPE-13
+# removal precondition is met", and then exited 0. Because it PASSED, every
+# scheduler kept running it, and it survived long after the thing it guarded had
+# been deleted. A check that announces its own obsolescence and reports success
+# is indistinguishable from a check that is still doing work.
+#
+# A lint reaching this helper is stating a fact about ITSELF, not about the tree,
+# so it must stop being green. The helper prints the declaration and returns 3 --
+# a distinct code, because this is neither a finding in the guarded surface nor a
+# usage error -- and the caller propagates it. There is no suppression flag;
+# suppression would recreate the exact silence this removes.
+bubbles_removal_precondition_met() {
+  local name="${1:-lint}"
+  local detail="${2:-its guarded surface is absent}"
+  printf '%s: REMOVAL PRECONDITION MET: %s\n' "$name" "$detail" >&2
+  printf '%s: this check now guards nothing and must be deleted, not scheduled.\n' "$name" >&2
+  printf '%s: refusing to PASS a check that has reported its own obsolescence.\n' "$name" >&2
+  return 3
+}

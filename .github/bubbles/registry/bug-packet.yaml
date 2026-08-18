@@ -1,0 +1,158 @@
+# Bug Artifact Contract (IMP-047 S-B)
+#
+# WHY THIS EXISTS
+# Ask the framework how many artifacts a bug needs and it returned FOUR answers:
+#
+#   BUGS.md                                  one file
+#   bubbles/registry/micro-fix-packet.yaml   requires three, and describes the
+#                                            full packet as seven
+#   agents/bubbles_shared/bug-templates.md   enumerates seven under two headings
+#                                            (bug.md + design.md templates, then
+#                                            five "additional expectations")
+#
+# Three of those were prose restatements of the same intent, drifting apart at
+# their own pace. This registry is the SINGLE bug-artifact authority and the
+# sibling of `micro-fix-packet.yaml`. The prose restatements point here instead
+# of repeating the list.
+#
+# The `BUGS.md` single-file form is NOT the fourth contradiction — it is a
+# DELIBERATE declared case, recorded below with its precondition. IMP-047
+# rejected converting it into a seven-artifact packet (old PD-10): that change
+# would multiply framework-bug artifacts sixfold to satisfy a consistency
+# argument, buy no assurance, and retire nothing. A declared exception with a
+# stated precondition is a contract; an undeclared one is a contradiction. The
+# difference is this file.
+
+schemaVersion: bug-packet/v1
+
+# The three admissible forms. `form` is the vocabulary every reader uses; there
+# are no synonyms and no fifth form.
+forms:
+
+  - form: full
+    name: Full bug packet
+    appliesTo: >-
+      Any bug in a repository that keeps specs/ — the normal downstream case.
+      Filed under specs/<feature>/bugs/BUG-NNN-<slug>/.
+    workflowMode: bugfix-fastlane
+    artifacts:
+      - id: bug.md
+        purpose: Reproduction, severity, status, environment, error output, root cause.
+      - id: design.md
+        purpose: Root-cause analysis, impact analysis, fix design, alternatives considered.
+      - id: scopes.md
+        purpose: Bug scope with Gherkin, Test Plan, and DoD.
+      - id: report.md
+        purpose: Evidence with raw terminal output, in the sections report-sections.yaml declares.
+      - id: uservalidation.md
+        purpose: >-
+          Acceptance checklist shipped UNCHECKED, with automation readiness and
+          the human acceptance record as separate sections (IMP-047 PD-12).
+          Shape authority: bubbles/registry/acceptance-authority.yaml.
+      - id: scenario-manifest.json
+        purpose: >-
+          Required before any completion claim when the bug scope defines Gherkin
+          or changes observable behavior.
+        conditional: true
+      - id: state.json
+        purpose: >-
+          Version 3 control-plane state with workflowMode, execution,
+          certification, and policySnapshot.
+
+  - form: compact
+    name: Compact micro-fix packet
+    appliesTo: >-
+      A bug that clears EVERY admission condition in micro-fix-packet.yaml.
+      THE DEFAULT ROUTE since IMP-047 S-D: a bug answering all 8 conditions
+      admissibly uses this form without opting in. Any failed condition
+      escalates automatically to `full`, with no reviewer discretion and no
+      override. A bug that answers no condition has not been assessed and uses
+      `full`.
+    workflowMode: bugfix-fastlane
+    admissionAuthority: bubbles/registry/micro-fix-packet.yaml
+    outcomeTelemetry: bubbles/scripts/micro-fix-outcome-log.sh
+    artifacts:
+      - id: bug.md
+      - id: report.md
+      - id: state.json
+    note: >-
+      Fewer artifacts, never fewer obligations. micro-fix-packet.yaml's
+      preservedObligations still hold in full: reproduce before fix, adversarial
+      regression, root cause stated, evidence is execution.
+
+  - form: single-file
+    name: BUGS.md entry (framework source repo only)
+    appliesTo: >-
+      A defect in the Bubbles FRAMEWORK SOURCE repository itself, recorded as one
+      entry in the top-level BUGS.md.
+    precondition: >-
+      The repository cannot keep specs/ because Gate G085 (dogfood guard) forbids
+      it there. This is a structural fact about one repository, not a preference,
+      and it is the entire reason the form exists.
+    scope: >-
+      The Bubbles source repository ONLY. A downstream consumer repository keeps
+      specs/ and therefore has no access to this form; it uses `full` or
+      `compact`.
+    artifacts:
+      - id: BUGS.md entry
+        purpose: >-
+          One entry carrying reproduction, root cause, disposition (Gate G095),
+          and the fix or the recommended upstream fix.
+    obligationsRetained:
+      - id: explicit-disposition
+        requirement: Every entry carries a Gate G095 disposition.
+      - id: reproduce-before-fix
+        requirement: The entry records the failing reproduction with real output.
+      - id: root-cause-stated
+        requirement: The entry names the root cause, not the symptom.
+      - id: evidence-is-execution
+        requirement: Every claim maps to a command that ran, with its real exit code.
+    note: >-
+      Some entries are EXTERNAL/upstream defects with nothing in this repository
+      to fix (BUG-003). Those record reproduction, root cause, the recommended
+      upstream fix, and the confirmed workaround IN LIEU OF an in-repo change.
+      That is a disposition, not a missing artifact.
+
+# Minimum state.json expectations for the `full` and `compact` forms. The
+# single-file form has no state.json by construction — BUGS.md carries the
+# disposition instead.
+stateExpectations:
+  appliesToForms: [full, compact]
+  workflowMode: bugfix-fastlane
+  status: in_progress
+  note: status stays in_progress until validate-owned certification promotes it.
+  requiredFields:
+    - certification.status
+    - certification.completedScopes
+    - certification.certifiedCompletedPhases
+    - certification.scopeProgress
+    - certification.lockdownState
+    - policySnapshot
+    - transitionRequests
+    - reworkQueue
+  policySnapshotProvenance:
+    - grill
+    - tdd
+    - auto-commit
+    - lockdown
+    - regression
+    - validation
+
+# Regression planning expectations for bug scopes. Mechanically checked by the
+# transition guard, which is why the checkbox text is recorded literally.
+regressionExpectations:
+  appliesToForms: [full]
+  testPlan:
+    requirement: At least one Test Plan row whose label literally contains `Regression E2E`.
+  dodCheckboxes:
+    - '- [ ] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior'
+    - '- [ ] Broader E2E regression suite passes'
+
+# Escalation is mechanical. A failed compact-form admission condition escalates
+# to `full`; there is no reviewer discretion and no override flag, because a
+# discretionary downgrade is how a payment defect ships as a typo fix.
+escalation:
+  from: compact
+  to: full
+  rule: Any failed admission condition in micro-fix-packet.yaml escalates the form.
+  overrideFlag: none

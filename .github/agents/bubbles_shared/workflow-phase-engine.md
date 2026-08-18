@@ -104,6 +104,13 @@ Two obligations belong to this phase loop specifically:
 
 6. **Resume phaseOrder.** Only after ALL findings are closed, continue with the remaining phases in `phaseOrder`.
 
+**Occurrence identity (IMP-047 S-C).** A `phaseOrder` may list the same phase more than once. Each listed position is a SEPARATE work item with its own identity `<phase>#<n>`, assigned positionally by `bubbles/scripts/phase-coordinator.sh`. Advancement, resume, and "already done" are decided on that identity, never on the phase name:
+
+- Resume enters at the FIRST UNRESOLVED occurrence.
+- An occurrence already accepted is reported `ACCEPTED` and is NOT re-executed.
+- A dependent of a failed occurrence is `BLOCKED_NOT_RUN` — not a pass, not a failure — while phases independent of that failure still execute so their diagnostics survive.
+- Exhausting the iteration budget with occurrences outstanding is reported as exhaustion and exits non-zero. It is never reported as completion.
+
 **One-to-one accounting rule:** The orchestrator MUST maintain a finding ledger. Every finding is tracked individually. The implement prompt MUST include the full finding list. The implement result MUST account for every finding. Unaccounted findings block advancement.
 
 **⛔ PROHIBITED PATTERNS:**

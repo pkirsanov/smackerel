@@ -1,0 +1,203 @@
+# Report Section Contract (IMP-047 S-B)
+#
+# WHY THIS EXISTS
+# Before this file there were THREE report-section authorities and a template
+# that agreed with none of them:
+#
+#   bubbles/scripts/artifact-lint.sh          required 3 always + up to 3 by mode
+#   bubbles/scripts/state-transition-guard.sh restated the always-required 3
+#   bubbles/scripts/report-section-autofix.sh restated BOTH lists a third time
+#   agents/bubbles_shared/feature-templates.md contained ZERO occurrences of
+#     `Completion Statement`, `Validation Evidence`, `Audit Evidence`, or
+#     `Chaos Evidence`
+#
+# The framework therefore shipped a report template that could not pass its own
+# lint, plus a 185-line script whose entire job was to inject the headings the
+# template had omitted. Papering over a disagreement is not the same as not
+# having one: the autofix wrote EMPTY headings, so a `report.md` could satisfy
+# the section check while carrying no evidence at all.
+#
+# This registry is the SINGLE source. The lint reads it, the guard reads it, and
+# the template generator emits from it. Because the template is GENERATED from
+# this file, the template and the lint cannot disagree — there is no second copy
+# to drift. `report-section-autofix.sh` is deleted: a generated template already
+# emits every required section, so there is nothing left to inject.
+#
+# Do NOT restate these lists in an agent, a doc, or a script. A second copy is a
+# second answer, and the second answer is how the first one silently rots.
+
+schemaVersion: report-sections/v1
+
+# The heading level each section is written at, and the levels a reader accepts.
+# `##` is accepted alongside `###` for the always-required set because existing
+# single-scope reports in the corpus use the shallower level, and refusing them
+# would convert this registry's arrival into a corpus-wide build break.
+headingLevels:
+  emit: 3
+  accept: [2, 3]
+
+# Required in EVERY report.md, at every status, in every workflow mode.
+alwaysRequired:
+  - id: summary
+    heading: Summary
+    acceptShallow: true
+    body: |
+      - What changed (files/surfaces)
+      - Scenarios validated
+  - id: completion-statement
+    heading: Completion Statement
+    acceptShallow: true
+    body: |
+      State the delivered outcome and the evidence that proves it. A completion
+      claim with no executed command behind it is a fabrication, not a summary.
+  - id: test-evidence
+    heading: Test Evidence
+    acceptShallow: true
+    body: |
+      Use the test evidence sections from scope-workflow.md and include raw
+      terminal output.
+
+      When `policySnapshot.tdd.mode` is `scenario-first`, include explicit
+      red-stage and green-stage evidence for the changed scenario contracts.
+
+      All required tests must pass with zero skipped required tests.
+
+      Claims of completion/success must be evidence-linked; if any required
+      evidence is missing or unknowns remain unresolved, status must be
+      `blocked`.
+
+# Emitted by the template and read by no section check. Retained because it
+# carries the git-backed implementation proof that other guards look for; it is
+# a template obligation, not a heading-presence gate.
+templateOnly:
+  - id: code-diff-evidence
+    heading: Code Diff Evidence
+    body: |
+      - Record executed git-backed evidence for implementation-bearing work.
+      - Include the exact git command used, relevant output, and at least one
+        non-artifact runtime/source/config/contract file path.
+      - Artifact-only paths such as `spec.md`, `design.md`, docs, or `.github/`
+        files are insufficient when claiming delivered implementation.
+
+# Sections required only when the packet is being PROMOTED. Enforcement is the
+# intersection of two facts: the status must be in `enforceWhenStatusIn`, and the
+# workflow mode must appear in a group below.
+modeRequired:
+  enforceWhenStatusIn: [done, validated, docs_updated, specs_hardened]
+  groups:
+    - id: validate-audit-chaos
+      sections: [validation-evidence, audit-evidence, chaos-evidence]
+      modes:
+        - full-delivery
+        - value-first-e2e-batch
+        - chaos-hardening
+        - harden-to-doc
+        - gaps-to-doc
+        - harden-gaps-to-doc
+        - reconcile-to-doc
+        - chaos-to-doc
+        - batch-implement
+        - batch-harden
+        - batch-gaps
+        - batch-harden-gaps
+        - batch-improve-existing
+        - batch-reconcile-to-doc
+        - product-to-delivery
+        - improve-existing
+    - id: validate-audit
+      sections: [validation-evidence, audit-evidence]
+      modes:
+        - feature-bootstrap
+        - bugfix-fastlane
+        - test-to-doc
+        - validate-only
+        - validate-to-doc
+    - id: audit
+      sections: [audit-evidence]
+      modes:
+        - audit-only
+
+# The promotion-gated sections themselves. The template emits ALL of them so a
+# report authored from the canonical template passes the lint on FIRST WRITE, in
+# any mode, with no autofix step.
+promotionSections:
+  - id: validation-evidence
+    heading: Validation Evidence
+    owner: bubbles.validate
+    body: |
+      **Executed:** [YES|NO]
+      **Command:** [the exact command that ran]
+      **Phase Agent:** bubbles.validate
+      **Claim Source:** [executed|interpreted|not-run]
+
+      [raw terminal output, or an evidence-capture.sh block above 40 lines]
+  - id: audit-evidence
+    heading: Audit Evidence
+    owner: bubbles.audit
+    body: |
+      **Executed:** [YES|NO]
+      **Command:** [the exact command that ran]
+      **Phase Agent:** bubbles.audit
+      **Claim Source:** [executed|interpreted|not-run]
+
+      [raw terminal output, or an evidence-capture.sh block above 40 lines]
+  - id: chaos-evidence
+    heading: Chaos Evidence
+    owner: bubbles.chaos
+    body: |
+      **Executed:** [YES|NO]
+      **Command:** [the exact command that ran]
+      **Phase Agent:** bubbles.chaos
+      **Claim Source:** [executed|interpreted|not-run]
+
+      [raw terminal output, or an evidence-capture.sh block above 40 lines]
+
+# A heading alone never satisfied a promotion. `full-delivery` at `done` also
+# requires the section to be POPULATED with an executed claim. This is the check
+# the autofix script could not have satisfied even in principle — it wrote empty
+# headings — and it is the reason deleting that script removes a loophole rather
+# than a safeguard.
+strictPopulated:
+  whenWorkflowMode: full-delivery
+  whenStatus: done
+  sections: [validation-evidence, audit-evidence, chaos-evidence]
+  requiredMarkers:
+    - '**Executed:** YES'
+    - '**Command:** '
+    - '**Phase Agent:** <owner>'
+
+# One evidence-location contract (IMP-047 S-B, old PD-16). Three forms are
+# admissible and they are NOT ranked: each is a different way of showing the same
+# executed command, chosen by output size and by whether a tool log exists.
+#
+# The inline-only reading was a misreading of "inline evidence" in scope DoD
+# text. `scopes.md` DoD items carry an inline evidence BLOCK; that block may
+# itself be an evidence-capture receipt or a tool-log reference. What is never
+# admissible is a claim with no executed command behind it in any of the three
+# forms.
+evidenceLocation:
+  forms:
+    - id: inline-raw
+      where: the report.md section, or the scopes.md DoD item
+      admissibleWhen: the command produced 40 lines of output or fewer
+      requires: [command, exit code, verbatim output]
+    - id: bounded-capture
+      where: the report.md section, or the scopes.md DoD item
+      admissibleWhen: the command produced more than 40 lines of output
+      requires: [command, exit code, line count, sha256 over every line, failure-shaped lines, first and last 20 lines]
+      producedBy: bubbles/scripts/evidence-capture.sh
+      note: >-
+        Stronger than a paste, not weaker: --verify re-derives the hash, and a
+        paste can never be checked at all.
+    - id: tool-log-entry
+      where: .specify/runtime/tool-calls.jsonl
+      admissibleWhen: the command was wrapped by the MCP record_evidence path
+      requires: [argv, exit code, duration, stdout/stderr hashes]
+      note: >-
+        The DoD item still carries a reference resolving to the entry. A bare
+        assertion that "the tool log has it" is not a reference.
+  neverAdmissible:
+    - a claim with no executed command in any of the three forms
+    - output filtered through a discarding pipe (head/tail/grep) before capture
+    - operator-supplied scrollback restated as the agent's own execution
+    - a heading with no body, which is what an autofixed section always was

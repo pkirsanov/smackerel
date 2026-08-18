@@ -105,9 +105,11 @@ fi
 # `fixture`. This case is about aggregation arithmetic, so it reads every class;
 # the filtering behaviour itself is cases 17-22.
 out="$(bash "$TARGET" report --repo-root "$r1" --all-classes 2>&1)"
-if printf '%s' "$out" | grep -qE '^\s+G024\s+2\s+1\s+1' &&
-  printf '%s' "$out" | grep -q 'NEVER rejected anything'; then
-  ok "report aggregates per gate and names never-rejecting gates"
+# G024 appears twice: permitted on the first run, then refused on a run that did
+# not proceed. Two records, two firings, one prevention.
+if printf '%s' "$out" | grep -qE '^\s+G024\s+2\s+2\s+0\s+1' &&
+  printf '%s' "$out" | grep -q 'gates that FIRED but never prevented'; then
+  ok "report aggregates per gate and names gates that fired without preventing"
 else
   bad "report aggregates per gate" "$(printf '%s' "$out" | tr '\n' '|')"
 fi
@@ -302,6 +304,105 @@ if printf '%s' "$out" | grep -q '"gate":"G099"'; then
   ok "records written before source classing still count as product"
 else
   bad "legacy unlabelled records still count as product" "$out"
+fi
+
+# --- IMP-047 S-A: firing and prevention are separate facts -------------------
+#
+# Every case below fails if the fired/prevented split is reverted, because the
+# old contract wrote neither field and folded "credited without evaluation" into
+# `pass`.
+
+# --- 23. a fired-and-permitted gate is distinguishable from one that never fired
+r23="$WORK/r23"
+mkdir -p "$r23"
+bash "$TARGET" append --repo-root "$r23" --spec "specs/001-x" --mode full-delivery \
+  --target-status "done" --verdict PASS --exit-status 0 \
+  --passed "G024" --not-evaluated "G025" >/dev/null 2>&1
+if grep -q '"gate":"G024","outcome":"pass","fired":true,"prevented":false' "$(log_of "$r23")" 2>/dev/null &&
+  grep -q '"gate":"G025","outcome":"not-evaluated","fired":false,"prevented":false' "$(log_of "$r23")" 2>/dev/null; then
+  ok "a gate that fired and permitted is distinguishable from one that never fired"
+else
+  bad "fired and never-fired are distinguishable" \
+    "$(cat "$(log_of "$r23")" 2>/dev/null)"
+fi
+
+# --- 24. ADVERSARIAL: a refusal on a run that still proceeded is NOT prevention
+# Recording this as a prevention would manufacture retirement evidence out of a
+# gate that changed no outcome.
+r24="$WORK/r24"
+mkdir -p "$r24"
+bash "$TARGET" append --repo-root "$r24" --spec "specs/001-x" --mode full-delivery \
+  --target-status "done" --verdict PASS --exit-status 0 --failed "G028" >/dev/null 2>&1
+if grep -q '"gate":"G028","outcome":"fail","fired":true,"prevented":false' "$(log_of "$r24")" 2>/dev/null; then
+  ok "a refusal on a run that still proceeded is fired but NOT prevented"
+else
+  bad "non-blocking refusal is not recorded as prevention" \
+    "$(cat "$(log_of "$r24")" 2>/dev/null)"
+fi
+
+# --- 25. a refusal that stopped the run IS prevention ------------------------
+r25="$WORK/r25"
+mkdir -p "$r25"
+bash "$TARGET" append --repo-root "$r25" --spec "specs/001-x" --mode full-delivery \
+  --target-status "done" --verdict BLOCKED --exit-status 2 --failed "G028" >/dev/null 2>&1
+if grep -q '"gate":"G028","outcome":"fail","fired":true,"prevented":true' "$(log_of "$r25")" 2>/dev/null; then
+  ok "a refusal that stopped the run is recorded as prevention"
+else
+  bad "blocking refusal is recorded as prevention" \
+    "$(cat "$(log_of "$r25")" 2>/dev/null)"
+fi
+
+# --- 26. the report separates prevention from firing -------------------------
+r26="$WORK/r26"
+mkdir -p "$r26"
+bash "$TARGET" append --repo-root "$r26" --spec "specs/001-x" --mode full-delivery \
+  --target-status "done" --verdict BLOCKED --exit-status 2 \
+  --passed "G024" --failed "G028" --not-evaluated "G025" >/dev/null 2>&1
+out="$(bash "$TARGET" report --repo-root "$r26" --json --all-classes 2>&1)"
+if printf '%s' "$out" | grep -q '"gate":"G028","hits":1,"passes":0,"fails":1,"fired":1,"notFired":0,"prevented":1' &&
+  printf '%s' "$out" | grep -q '"gate":"G024","hits":1,"passes":1,"fails":0,"fired":1,"notFired":0,"prevented":0' &&
+  printf '%s' "$out" | grep -q '"gate":"G025","hits":1,"passes":0,"fails":0,"fired":0,"notFired":1,"prevented":0'; then
+  ok "the report counts fired, notFired and prevented as separate per-gate facts"
+else
+  bad "report separates fired, notFired and prevented" "$out"
+fi
+
+# --- 27. the retirement basis is stated as prevention, not as a pass count ----
+out="$(bash "$TARGET" report --repo-root "$r26" --all-classes 2>&1)"
+if printf '%s' "$out" | grep -q 'gates that PREVENTED at least once: 1' &&
+  printf '%s' "$out" | grep -q 'gates that FIRED but never prevented: 1' &&
+  printf '%s' "$out" | grep -q 'NEVER FIRED): 1' &&
+  printf '%s' "$out" | grep -q 'Prevention is the only valid basis for retirement'; then
+  ok "the text report names prevention as the retirement basis"
+else
+  bad "text report names prevention as the retirement basis" "$out"
+fi
+
+# --- 28. ADVERSARIAL: legacy records are derived, counted, and never relabelled
+# A record predating the split carries neither field. Dropping it would discard
+# history; silently treating it as directly observed would overstate the
+# evidence. It must be derived AND declared as derived.
+r28="$WORK/r28"
+mkdir -p "$r28/.specify/runtime"
+{
+  printf '%s\n' '{"schemaVersion":"gate-hit/v1","kind":"gate","ts":"2026-01-01T00:00:00Z","sourceClass":"product","gate":"G099","outcome":"fail","spec":"specs/001-x","mode":"full-delivery","targetStatus":"done","guardVerdict":"FAIL","exitStatus":"1"}'
+  printf '%s\n' '{"schemaVersion":"gate-hit/v1","kind":"gate","ts":"2026-01-01T00:00:00Z","sourceClass":"product","gate":"G098","outcome":"fail","spec":"specs/001-x","mode":"full-delivery","targetStatus":"done","guardVerdict":"PASS","exitStatus":"0"}'
+} >"$(log_of "$r28")"
+out="$(bash "$TARGET" report --repo-root "$r28" --json 2>&1)"
+if printf '%s' "$out" | grep -q '"legacyDerivedRecords":2' &&
+  printf '%s' "$out" | grep -q '"gate":"G099","hits":1,"passes":0,"fails":1,"fired":1,"notFired":0,"prevented":1,"legacyDerived":1' &&
+  printf '%s' "$out" | grep -q '"gate":"G098","hits":1,"passes":0,"fails":1,"fired":1,"notFired":0,"prevented":0,"legacyDerived":1'; then
+  ok "legacy records derive fired/prevented from their own fields and are counted as derived"
+else
+  bad "legacy records are derived and declared" "$out"
+fi
+
+# --- 29. the text report discloses how much evidence is legacy-derived -------
+out="$(bash "$TARGET" report --repo-root "$r28" 2>&1)"
+if printf '%s' "$out" | grep -q '2 record(s) predate the fired/prevented fields'; then
+  ok "the report discloses legacy-derived evidence instead of presenting it as observed"
+else
+  bad "report discloses legacy-derived evidence" "$out"
 fi
 
 printf '\n%s: %d/%d checks passed\n' "$NAME" "$((checks - failures))" "$checks"

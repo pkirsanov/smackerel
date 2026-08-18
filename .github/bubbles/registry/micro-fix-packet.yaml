@@ -6,16 +6,33 @@
 # Paying full ceremony for a trivial fix does not buy assurance; it buys a
 # thinner report written under time pressure.
 #
-# This registry is the SINGLE source for what the compact packet admits, what it
-# still requires, and what it may never drop. `micro-fix-admission.sh` reads it.
-# Do not restate these lists in an agent, a doc, or a script: a second copy is a
-# second answer.
+# This registry owns ADMISSION — which bugs may use the compact form, and which
+# obligations survive the reduction. It does NOT own the artifact question. That
+# has one authority: bubbles/registry/bug-packet.yaml, which records all three
+# admissible forms and their artifacts. IMP-047 S-B collapsed the restatements.
 #
-# NOT THE DEFAULT. IMP-042 SCOPE-9 requires packet authoring time and defect
-# escape rate to be MEASURED before this becomes the default route for any bug.
-# Until that measurement exists it is opt-in per bug, recorded as OW-015.
+# THE DEFAULT ROUTE SINCE IMP-047 S-D. This block previously read "NOT THE
+# DEFAULT", because IMP-042 SCOPE-9 required packet authoring time and defect
+# escape rate to be MEASURED before activation. No producer for either
+# measurement existed, and none could exist, because both are outcomes of a
+# route nobody was permitted to take. A precondition the system cannot produce
+# is a permanent veto dressed as rigour, so the ordering is inverted: the route
+# is active, and `bubbles/scripts/micro-fix-outcome-log.sh` records authoring
+# route and defect escape FORWARD from activation.
+#
+# What makes activation safe is not optimism. It is the escalation rule below:
+# any failed admission condition escalates automatically, with no reviewer
+# discretion and `overrideFlag: none`. Nobody can wave a payment defect through
+# as a typo fix, so the admission window cannot widen while the numbers
+# accumulate. Recorded as OW-015.
+#
+# THE CONTRACT BELOW IS UNCHANGED BY ACTIVATION. The 8 admission questions, the
+# 3 required artifacts, the 4 preserved obligations and `overrideFlag: none` are
+# byte-identical to the IMP-042 SCOPE-9 form. Activation changed which route a
+# bug takes by default, never what the route demands.
 
 schemaVersion: micro-fix-packet/v1
+artifactAuthority: bubbles/registry/bug-packet.yaml
 
 # A bug may use the compact packet only when EVERY condition holds. Each is
 # phrased so a reviewer answers yes or no, not "roughly".
