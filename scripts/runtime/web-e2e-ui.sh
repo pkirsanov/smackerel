@@ -1024,6 +1024,10 @@ TRUE_EMPTY_FIXTURE_UNTRUSTWORTHY=0
 # that stands between this run and an all-family empty graph. It restores the
 # seed (and waits for core to be healthy again) before handing the same stack
 # to the full suite. Live path only.
+#
+# Test Plan row: T080-04-CANARY (SCN-080-001-05). The row ID is named here so
+# the scopes.md row is mechanically traceable to the code that implements it;
+# it was previously findable only by prose description (F-AUD-05).
 if [[ -z "${SMACKEREL_E2E_UI_NPX:-}" ]] && true_empty_phase_applies "$@"; then
   true_empty_status=0
   run_true_empty_phase || true_empty_status=$?
@@ -1041,6 +1045,11 @@ fi
 # Phase 2 — the full suite against the default, graph-ENABLED stack.
 # Behavior is unchanged: the exit code still propagates verbatim, including
 # on the SMACKEREL_E2E_UI_NPX canary path where no stack is brought up.
+#
+# Test Plan row: T080-02-CANARY (SCN-080-001-06). The 8-test
+# graph-activation.spec.ts runs against the shared stack BEFORE this broad
+# suite, so a broken bootstrap contract fails fast on a small surface. Row ID
+# named here for mechanical traceability (F-AUD-05).
 if [[ "$TRUE_EMPTY_FIXTURE_UNTRUSTWORTHY" -ne 0 ]]; then
   # S-1: the true-empty phase could not restore the boot seed, so this stack is
   # de-seeded. Running the suite here would print a green result that proves
