@@ -329,15 +329,15 @@ the two specs flagged by finding F-13.
 | MVP item | Delivered / bound spec | Workflow mode | G101 delivery |
 |----------|------------------------|---------------|---------------|
 | M1a | `specs/078-cross-surface-surfacing-prioritizer` | `improve-existing` | required |
-| M1b | `specs/025-knowledge-synthesis-layer` (Scope 9) | deferred | deferred-to:release-v1 |
+| M1b | `specs/025-knowledge-synthesis-layer` (Scope 9) | deferred | deferred-to:v1 |
 | M1c (basic) | `specs/054-notification-intelligence-handler` | `improve-existing` | carried |
-| M1c (full engine) | `specs/025-knowledge-synthesis-layer` (Scope 10) | deferred | deferred-to:release-v1 |
+| M1c (full engine) | `specs/025-knowledge-synthesis-layer` (Scope 10) | deferred | deferred-to:v1 |
 | M2a | `specs/073-web-mobile-assistant-frontend` (Scope 5) | `improve-existing` | required |
 | M2b | `specs/027-user-annotations` (Scope 9) | `improve-existing` | required |
 | M3  | `.github/instructions/product-principles.instructions.md` | `bubbles.docs` single-file edit | optional (`spec=none`) |
 | M4  | `specs/026-domain-extraction` | `improve-existing` | required |
 | M5a | `specs/039-recommendations-engine` | `improve-existing` | carried |
-| M5b | `specs/058-chrome-extension-bridge` | `improve-existing` (blocked) | deferred-to:release-v1 |
+| M5b | `specs/058-chrome-extension-bridge` | `improve-existing` (blocked) | deferred-to:v1 |
 | M5c | `specs/067-intent-driven-policy-enforcement` | `improve-existing` | carried |
 | M5d | `specs/_ops/OPS-001-spec-banner-sweep` | `spec-scope-hardening` | carried |
 
