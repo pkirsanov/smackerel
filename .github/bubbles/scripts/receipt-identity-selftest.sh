@@ -252,6 +252,93 @@ else
   fail "BUG-032 pin: incompatible families no longer refused (observed $(clone_count "$incompatible_out") clone group(s))"
 fi
 
+# ---------------------------------------------------------------------------
+# BUG-028 defect 1 — a differing CATEGORY is not a forgery trigger.
+#
+# `evidence_category` comes from operator-supplied tags, which describe a run
+# rather than identify it. These two receipts are the SAME command: identical
+# cmd, family, and identity. They were executed two days apart in two sessions
+# and tagged differently, and the old disjunction alleged forgery for that
+# alone.
+# ---------------------------------------------------------------------------
+category_log="$TMP_DIR/bug028-category.jsonl"
+write_log "$category_log" \
+  "{\"ts\":\"2026-07-13T22:40:55Z\",\"sessionId\":\"b28-test\",\"spec\":\"specs/alpha\",\"scope\":\"01-fail-closed\",\"cmd\":\"bash bubbles/scripts/macos-portability-guard-selftest.sh\",\"exitCode\":0,\"durationMs\":1213,\"stdoutHash\":\"$NONEMPTY\",\"stdoutBytes\":128,\"tags\":[\"test\"]}" \
+  "{\"ts\":\"2026-07-15T22:05:13Z\",\"sessionId\":\"b28-validate\",\"spec\":\"specs/alpha\",\"scope\":\"Scope-1\",\"cmd\":\"bash bubbles/scripts/macos-portability-guard-selftest.sh\",\"exitCode\":0,\"durationMs\":991,\"stdoutHash\":\"$NONEMPTY\",\"stdoutBytes\":128,\"tags\":[\"validate\"]}"
+
+category_out="$(analyze "$category_log")"
+if [[ "$(clone_count "$category_out")" == "0" ]]; then
+  pass "BUG-028 defect 1: one command tagged test and validate is not reported as cloned evidence"
+else
+  fail "BUG-028 defect 1: a tag difference alone still alleges forgery ($(clone_count "$category_out") group(s))"
+  printf '  analysis: %s\n' "$category_out"
+fi
+
+# ADVERSARIAL BOUND for defect 1. Two genuinely DIFFERENT command identities
+# sharing ONE target and one substantive stdout. Removing category as a TRIGGER
+# must not remove this: neither identity's target can vouch for the other's.
+category_adv_log="$TMP_DIR/bug028-category-adversarial.jsonl"
+write_log "$category_adv_log" \
+  "{\"ts\":\"2026-08-16T10:00:01Z\",\"sessionId\":\"b28c-a\",\"spec\":\"specs/alpha\",\"cmd\":\"cargo test\",\"exitCode\":0,\"durationMs\":601,\"stdoutHash\":\"$NONEMPTY\",\"stdoutBytes\":128,\"tags\":[\"test\"]}" \
+  "{\"ts\":\"2026-08-16T10:00:03Z\",\"sessionId\":\"b28c-b\",\"spec\":\"specs/alpha\",\"cmd\":\"npm run lint\",\"exitCode\":0,\"durationMs\":603,\"stdoutHash\":\"$NONEMPTY\",\"stdoutBytes\":128,\"tags\":[\"lint\"]}"
+
+category_adv_out="$(analyze "$category_adv_log")"
+if [[ "$(clone_count "$category_adv_out")" == "1" ]]; then
+  pass "BUG-028 defect 1 bound: two identities sharing ONE target and one stdout are still refused"
+else
+  fail "BUG-028 defect 1 bound: expected 1 clone group for cargo-vs-npm over one target, observed $(clone_count "$category_adv_out")"
+  printf '  analysis: %s\n' "$category_adv_out"
+fi
+
+# ---------------------------------------------------------------------------
+# ADVERSARIAL BOUND, cross-spec reuse. The receipt log is repository-wide, and
+# grouping deliberately spans every spec: that is what catches one captured
+# result reused for an UNRELATED claim. Two incompatible identities colliding
+# on one stdout across two specs must still be refused.
+# ---------------------------------------------------------------------------
+cross_log="$TMP_DIR/bug028-cross-spec.jsonl"
+write_log "$cross_log" \
+  "{\"ts\":\"2026-08-16T10:20:01Z\",\"sessionId\":\"b28x-a\",\"spec\":\"specs/alpha\",\"cmd\":\"cargo test\",\"exitCode\":0,\"durationMs\":801,\"stdoutHash\":\"$NONEMPTY\",\"stdoutBytes\":128,\"tags\":[\"test\"]}" \
+  "{\"ts\":\"2026-08-16T10:20:03Z\",\"sessionId\":\"b28x-b\",\"spec\":\"specs/gamma\",\"cmd\":\"npm run lint\",\"exitCode\":0,\"durationMs\":803,\"stdoutHash\":\"$NONEMPTY\",\"stdoutBytes\":128,\"tags\":[\"lint\"]}"
+
+cross_out="$(analyze "$cross_log")"
+if [[ "$(clone_count "$cross_out")" == "1" ]]; then
+  pass "BUG-028 bound: a group mixing two specs on one stdout is still refused"
+else
+  fail "BUG-028 bound: cross-spec reuse no longer blocks (observed $(clone_count "$cross_out"))"
+  printf '  analysis: %s\n' "$cross_out"
+fi
+
+# ---------------------------------------------------------------------------
+# BUG-028 canonical case — ONE deterministic validator over THREE subjects.
+#
+# This is the reported defect. `artifact-lint.sh` never prints its subject, so
+# three honest runs over three different improvement directories share one
+# substantive stdout. They were refused because the operator tagged them
+# differently, which a category-uniqueness constraint read as incompatible
+# evidence. Distinct subjects and distinct executions are what make these
+# independent; the label an agent chose is not part of the program's identity.
+# ---------------------------------------------------------------------------
+canonical_log="$TMP_DIR/bug028-canonical-three-subjects.jsonl"
+write_log "$canonical_log" \
+  "{\"ts\":\"2026-08-16T11:00:01Z\",\"sessionId\":\"b28k-1\",\"spec\":\"specs/alpha\",\"scope\":\"SCOPE-1\",\"cmd\":\"bash bubbles/scripts/artifact-lint.sh improvements/BUG-013-alpha\",\"exitCode\":0,\"durationMs\":701,\"stdoutHash\":\"$NONEMPTY\",\"stdoutBytes\":128,\"tags\":[\"lint\"]}" \
+  "{\"ts\":\"2026-08-16T11:00:05Z\",\"sessionId\":\"b28k-2\",\"spec\":\"specs/alpha\",\"scope\":\"SCOPE-1\",\"cmd\":\"bash bubbles/scripts/artifact-lint.sh improvements/BUG-018-beta\",\"exitCode\":0,\"durationMs\":702,\"stdoutHash\":\"$NONEMPTY\",\"stdoutBytes\":128,\"tags\":[\"test\"]}" \
+  "{\"ts\":\"2026-08-16T11:00:09Z\",\"sessionId\":\"b28k-3\",\"spec\":\"specs/alpha\",\"scope\":\"SCOPE-1\",\"cmd\":\"bash bubbles/scripts/artifact-lint.sh improvements/BUG-019-gamma\",\"exitCode\":0,\"durationMs\":703,\"stdoutHash\":\"$NONEMPTY\",\"stdoutBytes\":128,\"tags\":[\"lint\"]}"
+
+canonical_out="$(analyze "$canonical_log")"
+if [[ "$(clone_count "$canonical_out")" == "0" ]]; then
+  pass "BUG-028 canonical: one validator over three subjects with differing tags is not reported as cloned evidence"
+else
+  fail "BUG-028 canonical: differing tags across one validator's three subjects still allege forgery ($(clone_count "$canonical_out") group(s))"
+  printf '  analysis: %s\n' "$canonical_out"
+fi
+if [[ "$(sibling_count "$canonical_out")" == "1" ]]; then
+  pass "BUG-028 canonical: the three-subject group is accepted through the deterministic-sibling path"
+else
+  fail "BUG-028 canonical: expected exactly 1 accepted sibling group, observed $(sibling_count "$canonical_out")"
+  printf '  analysis: %s\n' "$canonical_out"
+fi
+
 printf '\n%s: %d passed, %d failed\n' "$NAME" "$passes" "$failures"
 [[ "$failures" -eq 0 ]] || exit 1
 exit 0

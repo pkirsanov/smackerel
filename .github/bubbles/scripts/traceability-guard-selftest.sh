@@ -664,22 +664,23 @@ assert_case_not_contains 'unbound variable' "Case 10 optional fun mode does not 
 # rejected" scored 2 against DoD "JSON requests rejected with 415", below the
 # >=3 floor, purely because "request" != "requests". Negative controls assert
 # the tolerance did not become a general substring match.
-# Sourced from a file rather than eval'd: G034 rejects eval on a substitution.
-matcher_src="$TMPDIR/word-matches-text.sh"
-sed -n '/^word_matches_text()/,/^}/p' "$GUARD" >"$matcher_src"
+# BUG-004: the tolerance moved into the shared scenario-match-lib.sh, so this
+# sources the lib instead of slicing the function body out of the guard. The
+# assertions are unchanged — they now exercise the single implementation both
+# G068 call paths use.
 # shellcheck source=/dev/null
-. "$matcher_src"
+. "$SCRIPT_DIR/scenario-match-lib.sh"
 plural_dod="json requests rejected with 415 protobuf only middleware"
 
 for probe in json request rejected; do
-  if word_matches_text "$probe" "$plural_dod"; then
+  if bubbles_scenario_word_matches_text "$probe" "$plural_dod"; then
     pass "G068 plural tolerance matches '$probe'"
   else
     fail "G068 plural tolerance failed to match '$probe'"
   fi
 done
 
-if word_matches_text "requests" "json request rejected"; then
+if bubbles_scenario_word_matches_text "requests" "json request rejected"; then
   pass "G068 tolerance also matches plural scenario word against singular DoD"
 else
   fail "G068 tolerance missed plural-scenario/singular-DoD direction"
@@ -687,28 +688,28 @@ fi
 
 # Inflection/derivation cases observed sinking real DoD items below the floor.
 inflect_dod="post api trips group handler implemented with protobuf decode postgresql persist"
-if word_matches_text "persisted" "$inflect_dod"; then
+if bubbles_scenario_word_matches_text "persisted" "$inflect_dod"; then
   pass "G068 matches inflected scenario word 'persisted' against DoD 'persist'"
 else
   fail "G068 failed to match 'persisted' against 'persist'"
 fi
 
 derive_dod="staleness warning amber displayed when bundled data published at 90 days"
-if word_matches_text "stale" "$derive_dod"; then
+if bubbles_scenario_word_matches_text "stale" "$derive_dod"; then
   pass "G068 matches derived DoD word 'staleness' from scenario 'stale'"
 else
   fail "G068 failed to match 'stale' against 'staleness'"
 fi
 
 # The prefix rule is floored at 5 chars so short roots cannot collide.
-if word_matches_text "test" "testament of unrelated things"; then
+if bubbles_scenario_word_matches_text "test" "testament of unrelated things"; then
   fail "G068 prefix rule over-matched a 4-char root ('test' vs 'testament')"
 else
   pass "G068 prefix rule correctly refuses a 4-char root ('test' vs 'testament')"
 fi
 
 for probe in authentication websocket participant; do
-  if word_matches_text "$probe" "$plural_dod"; then
+  if bubbles_scenario_word_matches_text "$probe" "$plural_dod"; then
     fail "G068 tolerance over-matched unrelated word '$probe'"
   else
     pass "G068 tolerance correctly rejects unrelated word '$probe'"

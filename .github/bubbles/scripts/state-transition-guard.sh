@@ -49,6 +49,11 @@ source "$SCRIPT_DIR/scan-lib.sh"
 # by Check 4A (G041 list-format policy) and Check 22 (G068 checkbox fidelity).
 source "$SCRIPT_DIR/dod-section-lib.sh"
 
+# Shared scenario->DoD matcher (BUG-004): ONE implementation of the G068 rule,
+# consumed here and by traceability-guard.sh. Check 22 passes the
+# structural-strict id policy; see scenario-match-lib.sh for what that means.
+source "$SCRIPT_DIR/scenario-match-lib.sh"
+
 transition_workflow_mode="UNRESOLVED"
 transition_audit_profile="UNRESOLVED"
 transition_target_status="UNRESOLVED"
@@ -318,10 +323,17 @@ if [[ "$transition_resolver_status" -ne 0 ]]; then
 fi
 rm -f "$transition_contract_stderr"
 
+# The auditProfile allow-list below is the exact set transition-contract-resolver.sh
+# accepts (its own four-way check). Both lists MUST move together: a profile the
+# resolver supports but this list omits is rejected here as MALFORMED, which
+# blocks the mode outright before any applicability branch is reached.
 if ! jq -e '
   .schemaVersion == "transition-contract/v1"
   and (.workflowMode | type == "string" and length > 0)
-  and (.auditProfile == "planning-maturity-v1" or .auditProfile == "delivery-completion-v1")
+  and (.auditProfile == "planning-maturity-v1"
+    or .auditProfile == "delivery-completion-v1"
+    or .auditProfile == "delivery-completion-fast-v1"
+    or .auditProfile == "framework-proposal-v1")
   and (.targetStatus | type == "string" and length > 0)
   and (.currentStatus | type == "string" and length > 0)
   and (.contractDigest | type == "string" and test("^sha256:[0-9a-f]{64}$"))
@@ -346,15 +358,50 @@ while IFS= read -r gate_id; do
 done < <(jq -r '.requiredGates[]' "$transition_contract_stdout")
 rm -f "$transition_contract_stdout"
 
+# These two lists are REPORTED in the TRANSITION_GUARD_RESULT_V1 block and gate
+# no check execution. That is exactly why every profile the resolver supports
+# needs a branch: a supported profile with no branch keeps the empty initialiser
+# and publishes `applicableCheckClasses: []`, a false declaration about itself.
 case "$transition_audit_profile" in
   planning-maturity-v1)
     transition_applicable_check_classes=(universal mode-required planning-maturity)
     transition_not_applicable_checks=(Check-4-completion Check-5-all-done Check-8-file-existence Check-11-execution-evidence)
     ;;
-  delivery-completion-v1)
+  delivery-completion-v1 | delivery-completion-fast-v1)
+    # The fast lane keeps full implement+test+validate assurance and only omits
+    # the heavyweight `audit` phase (transition-contract-resolver.sh:280-286), so
+    # it asserts the same completion classes as the full delivery profile.
     transition_applicable_check_classes=(universal mode-required delivery-completion)
     ;;
+  framework-proposal-v1)
+    # IMP-047 PD-11: audit-only, never implements, never certifies delivery
+    # (transition-contract-resolver.sh:264-278 requires audit_only, forbids
+    # implement/test, and pins the ceiling to framework_proposal_written), so no
+    # completion class is true for it.
+    transition_applicable_check_classes=(universal mode-required)
+    transition_not_applicable_checks=(Check-4-completion Check-5-all-done Check-8-file-existence Check-11-execution-evidence)
+    ;;
 esac
+
+# The declared exclusions are ENFORCED for framework-proposal-v1 only. That
+# profile has no passing users yet, so enforcing them there has zero blast
+# radius and is the only way an audit-only mode can clear delivery-completion
+# checks it declares do not apply. planning-maturity-v1 and
+# delivery-completion-v1 are in live use and already pass with their list purely
+# declarative; honouring it for them would newly ADMIT packets those checks
+# currently refuse, so this helper is a no-op under every other profile.
+check_is_applicable() {
+  local check_id="$1"
+  local declared
+
+  [[ "$transition_audit_profile" == "framework-proposal-v1" ]] || return 0
+  for declared in ${transition_not_applicable_checks[@]+"${transition_not_applicable_checks[@]}"}; do
+    if [[ "$declared" == "$check_id" ]]; then
+      return 1
+    fi
+  done
+  return 0
+}
 
 resolve_script_repo_root() {
   if [[ "$(basename "$(dirname "$SCRIPT_DIR")")" == "bubbles" && "$(basename "$(dirname "$(dirname "$SCRIPT_DIR")")")" == ".github" ]]; then
@@ -1144,6 +1191,8 @@ elif [[ "$transition_audit_profile" == "planning-maturity-v1" ]]; then
   # A planning ceiling claims no delivery, so neither basis applies: there is no
   # completion to verify, by either accounting.
   info "NOT_APPLICABLE: Check-4-completion — planning maturity permits unchecked implementation DoD"
+elif ! check_is_applicable Check-4-completion; then
+  info "NOT_APPLICABLE: Check-4-completion — a framework proposal never implements, so it certifies no DoD completion"
 elif [[ "$scenario_basis" == "scenario-states" ]]; then
   info "Completion basis: REQUIRED SCENARIO STATES (checkbox counts are reported, not decisive)"
   scenario_rc=0
@@ -1313,6 +1362,8 @@ elif [[ "$transition_audit_profile" == "planning-maturity-v1" ]]; then
       fail "Planning scope claims Done while unchecked DoD remain in ${scope_path#$feature_dir/} — false completion claim"
     fi
   done
+elif ! check_is_applicable Check-5-all-done; then
+  info "NOT_APPLICABLE: Check-5-all-done — a framework proposal terminates at a written proposal and certifies no scope delivery"
 elif [[ "$not_started_scopes" -gt 0 ]]; then
   record_failed_check Check-5-all-done
   fail "Resolved scope artifacts have $not_started_scopes scope(s) still marked 'Not Started' — ALL scopes must be Done"
@@ -1326,24 +1377,35 @@ else
   pass "All $done_scopes scope(s) are marked Done"
 fi
 
-state_completed_scopes_count="$({
-  certification_scopes_block="$({
-    grep -A40 '"certification"' "$state_file" 2>/dev/null \
-      | awk '/"completedScopes"[[:space:]]*:/ {capture=1} capture {print} capture && /\]/ {exit}'
-  } || true)"
-
-  if [[ -n "$certification_scopes_block" ]]; then
-    echo "$certification_scopes_block" \
-      | sed -E '1s/.*"completedScopes"[[:space:]]*:[[:space:]]*\[//' \
-      | grep -cE '"[^"]+"' || true
-  else
-    awk '/"completedScopes"[[:space:]]*:/ {capture=1} capture {print} capture && /\]/ {exit}' "$state_file" \
-      | sed -E '1s/.*"completedScopes"[[:space:]]*:[[:space:]]*\[//' \
-      | grep -cE '"[^"]+"' || true
-  fi
+certification_scopes_block="$({
+  grep -A40 '"certification"' "$state_file" 2>/dev/null \
+    | awk '/"completedScopes"[[:space:]]*:/ {capture=1} capture {print} capture && /\]/ {exit}'
 } || true)"
 
-if [[ "$done_scopes" -gt 0 ]] && [[ "$state_completed_scopes_count" -eq 0 ]]; then
+if [[ -n "$certification_scopes_block" ]]; then
+  completed_scopes_body="$(printf '%s\n' "$certification_scopes_block" \
+    | sed -E '1s/.*"completedScopes"[[:space:]]*:[[:space:]]*\[//' || true)"
+else
+  completed_scopes_body="$({
+    awk '/"completedScopes"[[:space:]]*:/ {capture=1} capture {print} capture && /\]/ {exit}' "$state_file" \
+      | sed -E '1s/.*"completedScopes"[[:space:]]*:[[:space:]]*\[//'
+  } || true)"
+fi
+
+state_completed_scopes_count="$(printf '%s\n' "$completed_scopes_body" | grep -cE '"[^"]+"' || true)"
+
+# BUG-011: an integer-ordinal array ([1,2,3,…]) matches no quoted string, so the
+# count above reads 0 — the SAME value a genuinely empty array produces. The two
+# states then report the identical "is EMPTY" message, which is what made a
+# writer/reader type mismatch cost a schema comparison across four other specs to
+# diagnose. Anything between the brackets that is not whitespace or a separator
+# means the array is POPULATED, whatever its element type.
+completed_scopes_payload="$(printf '%s\n' "$completed_scopes_body" \
+  | sed -e '/\]/q' | sed -E 's/\].*$//' | tr -d '[:space:],')"
+
+if [[ -n "$completed_scopes_payload" ]] && [[ "$state_completed_scopes_count" -eq 0 ]]; then
+  fail "completedScopes is present but its entries are not string scope IDs (found: ${completed_scopes_payload:0:60}) — entries must be quoted scope IDs such as \"01-core-scope\", not ordinals; nothing can map an ordinal to a scope artifact"
+elif [[ "$done_scopes" -gt 0 ]] && [[ "$state_completed_scopes_count" -eq 0 ]]; then
   fail "Resolved scope artifacts report $done_scopes Done scope(s) but state.json completedScopes is EMPTY — state.json integrity failure"
 elif [[ "$done_scopes" -ne "$state_completed_scopes_count" ]]; then
   fail "completedScopes count ($state_completed_scopes_count) does not match artifact Done scope count ($done_scopes) — state.json integrity failure"
@@ -1870,18 +1932,61 @@ for p in set(names):
     expansion_reason_regex='runSubagent|tool unavailable|nested runtime|capability missing|parent-expand|nested workflow'
     spec_dir_for_evidence="$(dirname "$state_file")"
 
+    # BUG-020: the set of agents that may execute a phase owned by
+    # `activeWorkflowRunner`. agent-capabilities.yaml `workflowModeGrants.agents`
+    # is the same list Gate G064 lints, so it is the only copy. yq is the normal
+    # path; without it the resolution degrades to the parent-expansion allowlist
+    # above rather than introducing a new hard dependency.
+    workflow_runner_agents=""
+    capabilities_registry_file=""
+    for _pa_candidate in \
+      "$guard_repo_root/bubbles/agent-capabilities.yaml" \
+      "$guard_repo_root/.github/bubbles/agent-capabilities.yaml" \
+      "$script_repo_root/bubbles/agent-capabilities.yaml" \
+      "$script_repo_root/.github/bubbles/agent-capabilities.yaml"; do
+      if [[ -f "$_pa_candidate" ]]; then
+        capabilities_registry_file="$_pa_candidate"
+        break
+      fi
+    done
+    if [[ -n "$capabilities_registry_file" ]] && command -v yq >/dev/null 2>&1; then
+      workflow_runner_agents="$(yq -r '.workflowModeGrants.agents // {} | keys | join(" ")' "$capabilities_registry_file" 2>/dev/null || true)"
+    fi
+    [[ -n "$workflow_runner_agents" ]] || workflow_runner_agents="$orchestrator_allowlist"
+
     # Phase -> owning-agent resolution. The owning specialist is normally named
     # "bubbles.<phase>", but that identity is a NAMING CONVENTION, not a
     # guarantee, and deriving it blindly made Check 6B demand agents that have
-    # never existed. `analyze` is owned by bubbles.analyst, so an honest
-    # bubbles.analyst record was read as "phase impersonation" and blocked a
-    # transition no one could fix without falsifying the record. Every other
-    # specialist phase does match its agent name; this table carries only the
-    # genuine exceptions, so a new phase keeps the convention by default.
+    # never existed (`bubbles.bug-discovery`, `bubbles.certify-state`,
+    # `bubbles.interrogate`, `bubbles.select`, the removed `bubbles.bootstrap`).
+    #
+    # BUG-020: workflows.yaml `phases.<phase>.owner` is the single source of
+    # truth, so the owner is READ from the registry instead of concatenated.
+    # `activeWorkflowRunner` means the phase runs in whichever orchestrator is
+    # driving, so any granted workflow runner is accepted. The convention is kept
+    # alongside the declared owner purely for backward compatibility: a phase the
+    # registry does not declare, and the historical `analyze` -> bubbles.analyst
+    # record, keep passing exactly as they do today.
     phase_owner_agent() {
-      case "$1" in
-        analyze) printf 'bubbles.analyst' ;;
-        *) printf 'bubbles.%s' "$1" ;;
+      local phase="$1"
+      local declared=""
+      local legacy=""
+
+      case "$phase" in
+        analyze) legacy='bubbles.analyst' ;;
+        *) legacy="bubbles.$phase" ;;
+      esac
+
+      if [[ -n "$workflow_registry_file" ]] && command -v yq >/dev/null 2>&1; then
+        # strenv, not --arg: the pinned yq is Go yq, which has no --arg flag.
+        declared="$(_pa_phase="$phase" yq -r '.phases[strenv(_pa_phase)].owner // ""' "$workflow_registry_file" 2>/dev/null || true)"
+      fi
+
+      case "$declared" in
+        '') printf '%s' "$legacy" ;;
+        activeWorkflowRunner) printf '%s %s' "$workflow_runner_agents" "$legacy" ;;
+        "$legacy") printf '%s' "$legacy" ;;
+        *) printf '%s %s' "$declared" "$legacy" ;;
       esac
     }
 
@@ -1892,9 +1997,19 @@ for p in set(names):
         expected_agent="$(phase_owner_agent "$claimed_phase")"
         matched="false"
 
-        # Pass 1: specialist provenance (existing behavior)
-        if echo "$execution_history_block" | awk -F'\t' -v a="$expected_agent" -v p="$claimed_phase" '$1==a && $2==p && ($3=="" || $3=="specialist") {found=1} END{exit !found}'; then
-          pass "Phase '$claimed_phase' has specialist provenance from $expected_agent"
+        # Pass 1: specialist provenance (existing behavior). BUG-020: the owner
+        # is now a SET (a registry-declared owner plus the legacy convention, or
+        # every granted workflow runner for an `activeWorkflowRunner` phase), so
+        # awk reports which member actually supplied the provenance.
+        matched_agent="$(echo "$execution_history_block" | awk -F'\t' -v alist="$expected_agent" -v p="$claimed_phase" '
+          BEGIN { owner_count = split(alist, owners, " ") }
+          $2==p && ($3=="" || $3=="specialist") {
+            for (i = 1; i <= owner_count; i++) {
+              if ($1 == owners[i]) { print $1; exit }
+            }
+          }')"
+        if [[ -n "$matched_agent" ]]; then
+          pass "Phase '$claimed_phase' has specialist provenance from $matched_agent"
           matched="true"
         # bubbles.bug delegation shortcut for implement/test
         elif [[ "$claimed_phase" == "implement" || "$claimed_phase" == "test" ]] && echo "$execution_history_block" | awk -F'\t' -v p="$claimed_phase" '$1=="bubbles.bug" && $2==p && ($3=="" || $3=="specialist") {found=1} END{exit !found}'; then
@@ -2058,6 +2173,9 @@ import sys
 from datetime import datetime
 
 ZERO_DURATION_EXEMPT = {"finalize", "select"}
+# One threshold for every "I am declaring this record weak" escape on this
+# surface. Three literals drift; one does not.
+DECLARED_REASON_MIN = 20
 
 def parse_ts(value):
     if not isinstance(value, str) or not value:
@@ -2069,6 +2187,29 @@ def parse_ts(value):
         return datetime.fromisoformat(value)
     except Exception:
         return None
+
+def uniform_interval(instants):
+    """Constant positive spacing over >=3 instants — the fabrication signature.
+
+    Shared by BOTH timestamp surfaces this check analyses (executionHistory
+    spans and completedPhaseClaims[].claimedAt). A second copy of this rule is
+    exactly how the two G068 implementations drifted apart in BUG-004.
+    """
+    if len(instants) < 3:
+        return None
+    gaps = [int((instants[i] - instants[i - 1]).total_seconds())
+            for i in range(1, len(instants))]
+    if len(set(gaps)) == 1 and gaps[0] > 0:
+        return gaps[0]
+    return None
+
+def first_backwards_step(labelled):
+    """First point where a recorded sequence of instants runs backwards."""
+    for i in range(1, len(labelled)):
+        if labelled[i][1] < labelled[i - 1][1]:
+            return (f"{labelled[i - 1][0]}@{labelled[i - 1][1].isoformat()}"
+                    f" -> {labelled[i][0]}@{labelled[i][1].isoformat()}")
+    return None
 
 try:
     with open(sys.argv[1], encoding="utf-8") as fh:
@@ -2136,6 +2277,52 @@ for entry in raw:
             if isinstance(entry.get("timestampReconstructedReason"), str) else "",
     })
 
+# --- Second input set: completedPhaseClaims[].claimedAt (BUG-013) ------------
+# executionHistory is the narrative log; completedPhaseClaims is the load-bearing
+# assertion Gates G022/G027 read to decide whether a phase was performed. This
+# analysis only ever ran over the log, so ten claims sitting on an exact
+# 600-second grid — the precise signature `uniform_interval` recognises — were
+# read by no check at all. Same helpers, second input set: not a second copy.
+# Emitted BEFORE the history early-exit so a packet with a short history still
+# gets its claims analysed.
+claims_raw = execution_obj.get("completedPhaseClaims")
+if not isinstance(claims_raw, list):
+    claims_raw = data.get("completedPhaseClaims")
+if not isinstance(claims_raw, list):
+    # Absence is not evidence of fabrication — abstain, as Check 7C does for an
+    # absent executionHistory.
+    print("CLAIMS_ABSENT=1")
+else:
+    claim_instants = []
+    claim_unreconciled = []
+    for claim in claims_raw:
+        if not isinstance(claim, dict):
+            continue
+        claimed = parse_ts(claim.get("claimedAt"))
+        if claimed is None:
+            continue
+        label = claim.get("phase") or claim.get("agent") or "<unknown>"
+        reason = claim.get("claimedAtUnreconciledReason")
+        reason = reason.strip() if isinstance(reason, str) else ""
+        # The claim-side equivalent of the durationUnmeasured escape: a claim
+        # whose instant could never be reconciled against a real run may DECLARE
+        # that, and is then excluded from the grid rather than blocked. Same cost
+        # as the other declarations — an absent or perfunctory reason buys
+        # nothing, or the escape is a bypass with extra steps.
+        if claim.get("claimedAtUnreconciled") is True and len(reason) >= DECLARED_REASON_MIN:
+            claim_unreconciled.append(label)
+            continue
+        claim_instants.append((label, claimed))
+    if claim_unreconciled:
+        print(f"CLAIM_UNRECONCILED={'|'.join(claim_unreconciled)}")
+    print(f"CLAIM_COUNT={len(claim_instants)}")
+    claim_disorder = first_backwards_step(claim_instants)
+    if claim_disorder:
+        print(f"CLAIM_OUT_OF_ORDER={claim_disorder}")
+    claim_interval = uniform_interval([instant for _, instant in claim_instants])
+    if claim_interval is not None:
+        print(f"CLAIM_UNIFORM_INTERVAL={claim_interval}")
+
 if len(entries) < 3:
     print(f"COUNT={len(entries)}")
     sys.exit(0)
@@ -2144,16 +2331,13 @@ entries.sort(key=lambda e: e["started"])
 print(f"COUNT={len(entries)}")
 
 # Check uniform intervals between consecutive runStartedAt timestamps
-intervals = []
-for i in range(1, len(entries)):
-    intervals.append(int((entries[i]["started"] - entries[i-1]["started"]).total_seconds()))
-if intervals and len(set(intervals)) == 1 and intervals[0] > 0:
-    print(f"UNIFORM_INTERVAL={intervals[0]}")
+history_interval = uniform_interval([e["started"] for e in entries])
+if history_interval is not None:
+    print(f"UNIFORM_INTERVAL={history_interval}")
 
 # Check zero-duration entries (excluding intentionally zero phases)
 zero_dur_offenders = []
 unmeasured_spans = []
-UNMEASURED_REASON_MIN = 20
 for e in entries:
     duration = (e["completed"] - e["started"]).total_seconds()
     if duration <= 0:
@@ -2162,7 +2346,7 @@ for e in entries:
             # A declared-unmeasured span is surfaced, not blocked. An EMPTY or
             # perfunctory reason is still an offender: the declaration has to
             # cost something or it is just a bypass with extra steps.
-            if e["unmeasured"] and len(e["unmeasured_reason"]) >= UNMEASURED_REASON_MIN:
+            if e["unmeasured"] and len(e["unmeasured_reason"]) >= DECLARED_REASON_MIN:
                 unmeasured_spans.append(label)
             else:
                 zero_dur_offenders.append(label)
@@ -2174,7 +2358,6 @@ if zero_dur_offenders:
 # Check overlapping entries (entry N+1 starts before entry N ends)
 overlaps = []
 reconstructed_overlaps = []
-RECONSTRUCTED_REASON_MIN = 20
 for i in range(1, len(entries)):
     prev = entries[i-1]
     curr = entries[i]
@@ -2190,7 +2373,7 @@ for i in range(1, len(entries)):
         declared = [
             e["agent"] for e in (prev, curr)
             if e["reconstructed"]
-            and len(e["reconstructed_reason"]) >= RECONSTRUCTED_REASON_MIN
+            and len(e["reconstructed_reason"]) >= DECLARED_REASON_MIN
         ]
         if declared:
             reconstructed_overlaps.append(f"{detail} [reconstructed: {','.join(declared)}]")
@@ -2251,6 +2434,37 @@ else
 
   if [[ -z "$uniform_interval" ]] && [[ -z "$zero_dur_line" ]] && { [[ -z "$overlap_count" ]] || [[ "$overlap_count" -eq 0 ]]; }; then
     pass "executionHistory timestamps look plausible (no uniform spacing, zero-duration entries, or overlaps)"
+  fi
+fi
+
+# BUG-013: the SAME uniform-interval and ordering analysis over the second
+# timestamp surface. It is reported outside the executionHistory branch above
+# because a packet with a short history still carries load-bearing phase claims.
+claim_unreconciled_line="$(echo "$exec_history_analysis" | grep -E '^CLAIM_UNRECONCILED=' | head -n 1 | sed 's/^CLAIM_UNRECONCILED=//' || true)"
+if [[ -n "$claim_unreconciled_line" ]]; then
+  info "completedPhaseClaims declares unreconciled claim timestamps (reason given): $claim_unreconciled_line"
+fi
+
+claim_count="$(echo "$exec_history_analysis" | grep -E '^CLAIM_COUNT=' | head -n 1 | sed 's/^CLAIM_COUNT=//' || true)"
+if echo "$exec_history_analysis" | grep -qE '^CLAIMS_ABSENT=1$'; then
+  info "No completedPhaseClaims recorded — claim-timestamp plausibility abstains (an absent record is not evidence of fabrication)"
+elif [[ -z "$claim_count" ]] || [[ "$claim_count" -lt 3 ]]; then
+  info "completedPhaseClaims has fewer than 3 reconcilable claimedAt values — claim-timestamp plausibility skipped"
+else
+  info "completedPhaseClaims claimedAt values analyzed: $claim_count"
+
+  claim_uniform_interval="$(echo "$exec_history_analysis" | grep -E '^CLAIM_UNIFORM_INTERVAL=' | head -n 1 | sed 's/^CLAIM_UNIFORM_INTERVAL=//' || true)"
+  if [[ -n "$claim_uniform_interval" ]]; then
+    fail "completedPhaseClaims has $claim_count claimedAt values with identical ${claim_uniform_interval}s intervals — FABRICATION INDICATOR"
+  fi
+
+  claim_disorder_line="$(echo "$exec_history_analysis" | grep -E '^CLAIM_OUT_OF_ORDER=' | head -n 1 | sed 's/^CLAIM_OUT_OF_ORDER=//' || true)"
+  if [[ -n "$claim_disorder_line" ]]; then
+    fail "completedPhaseClaims claimedAt runs backwards: $claim_disorder_line — a phase cannot be claimed complete before the phase recorded ahead of it"
+  fi
+
+  if [[ -z "$claim_uniform_interval" ]] && [[ -z "$claim_disorder_line" ]]; then
+    pass "completedPhaseClaims claimedAt timestamps look plausible (no uniform spacing, no backwards ordering)"
   fi
 fi
 echo ""
@@ -2582,6 +2796,8 @@ if [[ ${#test_files_in_plan[@]} -gt 0 ]]; then
     if [[ -f "$test_path" ]]; then
       if [[ "$transition_audit_profile" == "planning-maturity-v1" ]]; then
         info "Planned test file already exists; physical existence is not used as planning-maturity proof: $test_path"
+      elif ! check_is_applicable Check-8-file-existence; then
+        info "Planned test file already exists; physical existence is not used as framework-proposal proof: $test_path"
       else
         pass "Test file exists: $test_path"
       fi
@@ -2601,6 +2817,9 @@ if [[ ${#test_files_in_plan[@]} -gt 0 ]]; then
     elif [[ "$transition_audit_profile" == "planning-maturity-v1" ]]; then
       info "Future implementation-owned test file is not physically required at planning maturity: $test_path"
       missing_test_files=$((missing_test_files + 1))
+    elif ! check_is_applicable Check-8-file-existence; then
+      info "Future implementation-owned test file is not physically required for a framework proposal: $test_path"
+      missing_test_files=$((missing_test_files + 1))
     else
       record_failed_check Check-8-file-existence
       fail "Test Plan references non-existent file: $test_path"
@@ -2610,12 +2829,16 @@ if [[ ${#test_files_in_plan[@]} -gt 0 ]]; then
   if [[ "$missing_test_files" -gt 0 ]]; then
     if [[ "$transition_audit_profile" == "planning-maturity-v1" ]]; then
       info "NOT_APPLICABLE: Check-8-file-existence — $missing_test_files future implementation-owned test file(s) are absent"
+    elif ! check_is_applicable Check-8-file-existence; then
+      info "NOT_APPLICABLE: Check-8-file-existence — $missing_test_files future implementation-owned test file(s) are absent"
     else
       record_failed_check Check-8-file-existence
       fail "$missing_test_files of ${#test_files_in_plan[@]} test files from Test Plan DO NOT EXIST"
     fi
   elif [[ "$transition_audit_profile" == "planning-maturity-v1" ]]; then
     info "NOT_APPLICABLE: Check-8-file-existence — planning maturity validates test contracts, not delivery file presence"
+  elif ! check_is_applicable Check-8-file-existence; then
+    info "NOT_APPLICABLE: Check-8-file-existence — a framework proposal validates test contracts, not delivery file presence"
   fi
 else
   warn "No concrete test file paths found in Test Plan across resolved scope files (all may be placeholders)"
@@ -2924,7 +3147,13 @@ resolve_evidence_by_reference() {
     # what closes the gap between README's stated guarantee and the code — a
     # narrative "all tests pass" with no terminal output is now refused, while
     # "architecture decision recorded in design.md" still passes on prose.
-    if ! printf '%s\n' "$block_text" | grep -qE '```|Exit Code:|^[[:space:]]*\$ |Executed:|Command:'; then
+    #
+    # BUG-009: this MUST NOT pipe into `grep -q`. `grep -q` exits on the first
+    # match, so a block larger than the 64 KiB pipe buffer kills the still-
+    # writing `printf` with SIGPIPE; under `set -o pipefail` the pipeline then
+    # reports 141 even though the pattern WAS found, and the leading `!` turned
+    # that into a false "prose-only" block. A herestring is a file, not a pipe.
+    if ! grep -qE '```|Exit Code:|^[[:space:]]*\$ |Executed:|Command:' <<< "$block_text"; then
       if dod_item_claims_execution "$dod_item_text"; then
         check9_prose_execution_anchor="$anchor"
         return 1
@@ -3053,7 +3282,11 @@ for scope_path in ${scope_files[@]+"${scope_files[@]}"}; do
         # fenced command-output signature is accepted as prose documentation /
         # attestation evidence, but counted as an advisory (R1, non-blocking).
         _c9_inline_nonblank="$(printf '%s\n' "$next_lines" | grep -cE '\S' || true)"
-        if [[ "${_c9_inline_nonblank:-0}" -ge 10 ]] && ! printf '%s\n' "$next_lines" | grep -qE '```|Exit Code:|^[[:space:]]*\$ |Executed:|Command:'; then
+        # BUG-009: herestring, not a pipe — see the same fix in
+        # resolved_block_has_execution_signature. `grep -q` closing the pipe
+        # early SIGPIPEs `printf`, and `pipefail` turns a FOUND pattern into a
+        # non-zero status that `!` reads as "no command-output signature".
+        if [[ "${_c9_inline_nonblank:-0}" -ge 10 ]] && ! grep -qE '```|Exit Code:|^[[:space:]]*\$ |Executed:|Command:' <<< "$next_lines"; then
           check9_advisory_count=$((${check9_advisory_count:-0} + 1))
           info "Check-9 ADVISORY: inline evidence block in $(relative_artifact_path "$scope_path") has no command-output signature (prose-only); accepted as documentation/attestation evidence"
         fi
@@ -3260,6 +3493,8 @@ for report_path in ${report_files[@]+"${report_files[@]}"}; do
     elif [[ "$transition_audit_profile" == "planning-maturity-v1" ]]; then
       record_failed_check Check-11-execution-honesty
       fail "$(relative_artifact_path "$report_path") has ZERO evidence code blocks but state or scope artifacts claim completed delivery work"
+    elif ! check_is_applicable Check-11-execution-evidence; then
+      info "Framework proposal report has zero execution-evidence blocks: $(relative_artifact_path "$report_path")"
     else
       record_failed_check Check-11-execution-evidence
       fail "$(relative_artifact_path "$report_path") has ZERO evidence code blocks — no execution evidence exists"
@@ -3285,6 +3520,8 @@ for report_path in ${report_files[@]+"${report_files[@]}"}; do
 done
 if [[ "$transition_audit_profile" == "planning-maturity-v1" ]]; then
   info "NOT_APPLICABLE: Check-11-execution-evidence — honest unimplemented scope reports need no delivery execution block"
+elif ! check_is_applicable Check-11-execution-evidence; then
+  info "NOT_APPLICABLE: Check-11-execution-evidence — a framework proposal runs no delivery execution, so it produces no delivery execution block"
 fi
 echo ""
 
@@ -3999,157 +4236,20 @@ echo ""
 # failure mode where DoD items are silently rewritten by execution agents
 # to match what was delivered instead of what the spec planned.
 #
-# Uses the same fuzzy matching approach as traceability-guard.sh:
-# - Extract significant words (4+ chars, excluding stop words) from each
-#   Gherkin scenario
-# - Check that at least 2-3 of those words appear in at least one DoD item
-# - If no DoD item preserves the scenario's behavioral claim, flag it
+# The matcher itself lives in scenario-match-lib.sh (BUG-004), which is the ONE
+# implementation of the G068 rule. This check consumes it with the
+# `structural-strict` id policy: SCN ids only, and a scenario that carries an
+# SCN id whose DoD item does not cite it fails outright with no lexical
+# fallback (the IMP-027 SCOPE-8 decision — when a stable id exists the linkage
+# is a fact, not something a tunable word-overlap proxy may override).
+# Scenarios that carry no id keep the lexical behavior exactly.
+#
+# traceability-guard.sh consumes the SAME function with the `id-hint-lenient`
+# policy. That difference is now a declared argument rather than two copies
+# drifting apart, and scenario-match-lib-selftest.sh asserts the two policies
+# differ ONLY where documented.
 # =============================================================================
 echo "--- Check 22: DoD-Gherkin Content Fidelity (Gate G068) ---"
-
-# Helper: extract significant words from text (same logic as traceability-guard.sh)
-stg_normalize_text() {
-  local value="$1"
-  value="$(printf '%s' "$value" | tr '[:upper:]' '[:lower:]')"
-  value="$(printf '%s' "$value" | sed -E 's/[^a-z0-9]+/ /g; s/[[:space:]]+/ /g; s/^ //; s/ $//')"
-  printf '%s' "$value"
-}
-
-stg_significant_words() {
-  local text="$1"
-  local normalized
-  local word
-
-  normalized="$(stg_normalize_text "$text")"
-  for word in $normalized; do
-    # G068 false-positive fix (v3.8.0): lowered min word length 4 -> 3 so
-    # 3-letter domain words (API, DoD, SLA, CSV, CSP, JWT, SDK, CLI, CRD,
-    # SBOM) are counted as significant instead of stripped as noise.
-    if [[ ${#word} -lt 3 ]]; then
-      continue
-    fi
-    # G068 false-positive fix (v3.8.0): trimmed exclusion list to TRUE stop
-    # words only. Removed domain-relevant words (user, users, system, should,
-    # must, have, has, will, given, after, before, where, their, there,
-    # about, only) that are frequently the distinguishing words in Gherkin
-    # scenario titles.
-    case "$word" in
-      the|are|was|were|been|being|for|from|with|and|but|not|then|else|when|while|that|this|these|those|its|into|onto|out|all|any|each|every|some|more|less|also)
-        continue
-        ;;
-    esac
-    printf '%s\n' "$word"
-  done
-}
-
-# G068 false-positive fix: whole-word overlap with no stemming meant a single
-# singular/plural mismatch could sink an otherwise near-verbatim DoD item.
-# Scenario "JSON request rejected" scored 2 against DoD "JSON requests rejected
-# with 415" — below the >=3 floor — because "request" != "requests".
-# Kept to regular -s/-es forms; no general stemmer, so unrelated words still
-# cannot collide. MUST stay aligned with word_matches_text in traceability-guard.sh.
-stg_word_matches_text() {
-  local word="$1"
-  local text=" $2 "
-  local singular
-  local tok
-
-  case "$text" in
-    *" $word "* | *" ${word}s "* | *" ${word}es "*) return 0 ;;
-  esac
-
-  if [[ "$word" == *es && ${#word} -gt 4 ]]; then
-    singular="${word%es}"
-    case "$text" in *" $singular "*) return 0 ;; esac
-  fi
-  if [[ "$word" == *s && ${#word} -gt 3 ]]; then
-    singular="${word%s}"
-    case "$text" in *" $singular "*) return 0 ;; esac
-  fi
-
-  # Inflection/derivation, e.g. persisted~persist and stale~staleness. Bounded
-  # to stems of 5+ chars so short roots cannot collide (test~testament).
-  [[ ${#word} -ge 5 ]] || return 1
-  for tok in $2; do
-    case "$tok" in "$word"*) return 0 ;; esac
-    [[ ${#tok} -ge 5 ]] || continue
-    case "$word" in "$tok"*) return 0 ;; esac
-  done
-
-  return 1
-}
-
-stg_scenario_matches_dod() {
-  local scenario="$1"
-  local dod_item="$2"
-  local dod_norm
-  local words
-  local word
-  local score=0
-  local word_count=0
-  local half_threshold=0
-
-  # IMP-027 SCOPE-8 (EV-3): structural linkage beats a lexical proxy.
-  #
-  # Word overlap is an INFERENCE about whether a DoD item preserves a
-  # scenario's behavioral claim, and every threshold it uses (>=3 words, >=50%)
-  # is a tuning knob rather than a fact. That is the documented root of the
-  # G068 false-positive/false-negative pair: rewording a scenario breaks the
-  # match, and unrelated items sharing vocabulary create one.
-  #
-  # When the scenario carries a stable SCN-* ID, the linkage is a FACT and no
-  # inference is needed: the DoD item either cites that ID or it does not. This
-  # is deterministic and has no threshold to tune.
-  #
-  # Deliberately NO-OP-UNLESS-EARNED, matching Check 43's pattern: the ID path
-  # engages ONLY when the scenario actually carries an ID. Specs that have not
-  # adopted SCN-* IDs keep today's word-overlap behavior EXACTLY, so this
-  # cannot newly fail an existing artifact and removes no enforcement.
-  #
-  # Divergence from the proposal, recorded deliberately: it also asked that the
-  # lexical scan be demoted to advisory. That is NOT done here. Demoting it
-  # would silently switch G068 off for every project that has not adopted IDs
-  # — which today is effectively all of them — trading a tuning-accuracy
-  # problem for a no-enforcement problem. The lexical path stays authoritative
-  # exactly where no structural fact is available to replace it.
-  local scenario_scn
-  scenario_scn="$(printf '%s' "$scenario" | grep -oE 'SCN-[A-Za-z0-9][A-Za-z0-9_-]*' | head -1 || true)"
-  if [[ -n "$scenario_scn" ]]; then
-    # Word-boundary compare so SCN-1 does not match SCN-12.
-    if printf '%s' "$dod_item" | grep -qE "(^|[^A-Za-z0-9_-])${scenario_scn}([^A-Za-z0-9_-]|\$)"; then
-      return 0
-    fi
-    return 1
-  fi
-
-  dod_norm="$(stg_normalize_text "$dod_item")"
-  words="$(stg_significant_words "$scenario")"
-  if [[ -z "$words" ]]; then
-    [[ "$dod_norm" == *"$(stg_normalize_text "$scenario")"* ]]
-    return
-  fi
-
-  while IFS= read -r word; do
-    [[ -n "$word" ]] || continue
-    word_count=$((word_count + 1))
-    if stg_word_matches_text "$word" "$dod_norm"; then
-      score=$((score + 1))
-    fi
-  done <<< "$words"
-
-  # G068 false-positive fix (v3.8.0): percentage-based threshold with floor.
-  # - Very small scenarios (<3 significant words): require ALL words to match
-  #   so a hard >=3 floor doesn't penalize them.
-  # - Larger scenarios: require BOTH (overlap >= ceil(50% * word_count))
-  #   AND (overlap >= 3) — percentage threshold with absolute floor.
-  if [[ "$word_count" -lt 3 ]]; then
-    [[ "$score" -eq "$word_count" ]]
-    return
-  fi
-
-  half_threshold=$(( (word_count + 1) / 2 ))
-  [[ "$score" -ge 3 && "$score" -ge "$half_threshold" ]]
-}
 
 dod_fidelity_failures=0
 dod_fidelity_total=0
@@ -4183,7 +4283,7 @@ for scope_index in "${!scope_analysis_files[@]}"; do
     matched=0
     while IFS= read -r dod_item; do
       [[ -n "$dod_item" ]] || continue
-      if stg_scenario_matches_dod "$scenario" "$dod_item"; then
+      if bubbles_scenario_matches_dod "$scenario" "$dod_item" structural-strict; then
         matched=1
         break
       fi
@@ -4307,6 +4407,16 @@ else
     # most serious thing this guard can allege, and the surviving rule still
     # catches the case G021 exists for: one captured result reused for an
     # UNRELATED claim.
+    #
+    # BUG-028 fix A: a differing CATEGORY no longer TRIGGERS the allegation.
+    # `evidence_category` is derived from operator-supplied `tags`, which are
+    # metadata ABOUT a run, not a statement of WHAT ran. Two honest executions
+    # of one command — identical cmd, identical family, identical identity —
+    # two days apart in two sessions were accused of forgery solely because one
+    # was tagged `test` and the other `validate`. Category survives INSIDE
+    # `deterministic_siblings`, where it still constrains the multi-identity
+    # case that is now the only reachable one; it just cannot, alone, allege
+    # forgery when command identity is single.
     c43_empty_stdout_sha256="e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     c43_analysis="$(jq -rs --arg empty_sha "$c43_empty_stdout_sha256" '
       # BUG-033 facet 2: unwrap every TRANSPARENT prefix, not just a bare
@@ -4331,6 +4441,11 @@ else
         cmd_parts as $t
         | ( ($t[0] // "") | split("/") | last ) as $exe
         | $exe;
+      # BUG-028 fix C: a generic dispatch verb is not a subject. Keeping only
+      # the FIRST positional made `npm run lint` and `npm run test` one
+      # identity, discarding the script name that is the actual claim, so one
+      # receipt covering both escaped detection. When the first positional is
+      # `run` or `exec`, the next one is retained; no wider verb list is used.
       def positional_target:
         cmd_parts as $t
         | ( reduce ($t[1:][]) as $tok ({skip:false, pos:[]};
@@ -4339,9 +4454,22 @@ else
                 then {skip: (($tok | contains("=")) | not), pos:.pos}
               else {skip:false, pos:(.pos + [$tok])}
               end)
-            | (.pos[0] // "") );
+            | .pos ) as $pos
+        | ($pos[0] // "") as $first
+        | if ($first | test("^(run|exec)$")) and (($pos | length) > 1)
+            then $first + " " + $pos[1]
+            else $first end;
       def cmd_identity:
-        command_family + " " + positional_target;
+        [command_family, positional_target] | map(select(length > 0)) | join(" ");
+      # BUG-028 fix D: the PROGRAM that ran, without its plain subject. One
+      # deterministic validator over several subjects must resolve to one
+      # program (`artifact-lint.sh`), while a dispatched script name is part of
+      # the program itself (`npm run lint` vs `npm run test`). The dispatch-verb
+      # decision is reused from `positional_target` rather than restated, so the
+      # two definitions can never disagree about what a subject is.
+      def program_identity:
+        positional_target as $pt
+        | if ($pt | test("^(run|exec) ")) then command_family + " " + $pt else command_family end;
       def tag_category:
         [(.tags // [])[]?
           | ascii_downcase
@@ -4368,7 +4496,12 @@ else
         if ((.inputClosure // []) | type) == "array" and ((.inputClosure // []) | length) > 0 then
           "closure:" + ([.inputClosure[] | ((.path // "") + "@" + (.sha256 // ""))] | sort | join(","))
         elif ((.spec // "") != "") or ((.scope // "") != "") then
-          "spec:" + (.spec // "") + "|scope:" + (.scope // "")
+          # BUG-028 fix E: a spec/scope pair names WHERE the work sits, not WHAT
+          # was examined. Two runs of one validator over two different files in
+          # one scope collapsed to a single target and were refused for it, so
+          # the subject is carried alongside. This only ever splits targets
+          # further apart; it can never merge two that were distinct.
+          "spec:" + (.spec // "") + "|scope:" + (.scope // "") + "|subject:" + (.cmd | positional_target)
         else
           "target:" + (.cmd | positional_target)
         end;
@@ -4381,6 +4514,7 @@ else
       def deterministic_siblings:
         . as $rows
         | ($rows | map(.cmd | command_family)) as $families
+        | ($rows | map(.cmd | program_identity)) as $programs
         | ($rows | map(evidence_category)) as $categories
         | ($rows | map(.exitCode)) as $exits
         # BUG-033 facet 1: one target per command IDENTITY, not per RECEIPT.
@@ -4395,9 +4529,16 @@ else
         | ($rows | map(provenance_identity)) as $provenance
         | (($families | unique | length) == 1)
           and (($families[0] // "") != "")
-          and (($categories | unique | length) == 1)
-          and (($categories[0] // "") != "other")
-          and (($categories[0] // "") | startswith("mixed:") | not)
+          # BUG-028 fix D: a tag describes a run, it does not name the program.
+          # One deterministic validator over several subjects is expected to
+          # repeat its output, so identity is judged by the program that ran
+          # plus distinct subjects and distinct executions — not by how an agent
+          # labelled the run. Category survives only as a sanity floor applied
+          # to every row: an unclassifiable or self-contradictory tagging still
+          # blocks, but honest runs may legitimately carry different labels.
+          and (($programs | unique | length) == 1)
+          and (($programs[0] // "") != "")
+          and all($categories[]; . != "other" and ((startswith("mixed:")) | not))
           and all($exits[]; type == "number")
           and (($exits | unique | length) == 1)
           and ($targets | all_distinct_nonempty)
@@ -4412,13 +4553,11 @@ else
       | group_by(.stdoutHash)
       | {
           siblings: map(select(
-            (((map(.cmd | cmd_identity) | unique | length) > 1)
-              or ((map(evidence_category) | unique | length) > 1))
+            ((map(.cmd | cmd_identity) | unique | length) > 1)
             and deterministic_siblings
           )),
           clones: (map(select(
-            (((map(.cmd | cmd_identity) | unique | length) > 1)
-              or ((map(evidence_category) | unique | length) > 1))
+            ((map(.cmd | cmd_identity) | unique | length) > 1)
             and (deterministic_siblings | not)
           )) | map({hash: .[0].stdoutHash, identities: map(identity_detail)}))
         }

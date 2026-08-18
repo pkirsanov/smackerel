@@ -383,6 +383,8 @@ bubbles/scripts/scenario-compile-lint-selftest.sh
 bubbles/scripts/scenario-compile-lint.sh
 bubbles/scripts/scenario-impact-resolve-selftest.sh
 bubbles/scripts/scenario-impact-resolve.sh
+bubbles/scripts/scenario-match-lib-selftest.sh
+bubbles/scripts/scenario-match-lib.sh
 bubbles/scripts/scenario-obligation-lint-selftest.sh
 bubbles/scripts/scenario-obligation-lint.sh
 bubbles/scripts/scenario-state-resolve-selftest.sh
