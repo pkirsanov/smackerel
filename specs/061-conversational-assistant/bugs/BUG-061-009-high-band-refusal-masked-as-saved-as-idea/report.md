@@ -951,6 +951,209 @@ defect.
 
 ---
 
+## Audit — Adversarial Reversion Probe (`bubbles.audit`) — 2026-08-18
+
+### Headline finding: the invariant is defended by two jointly load-bearing layers, and the test suite cannot tell them apart
+
+The adversarial probe reverted the provenance-gate fix in
+`internal/assistant/provenance/gate.go` (restoring `resp.Status =
+contracts.StatusSavedAsIdea` / `resp.CaptureRoute = true`) and re-ran the two
+invariant tests. **The suite still passed, exit 0.** Reverting the gate alone
+does not fail the invariant.
+
+Only when the facade layer in `internal/assistant/facade.go` was **also**
+disabled did the suite fail, exit 1, on all four `requiresProvenanceScenarios`
+entries' `ok_uncited` cases.
+
+**Why this matters, stated plainly.** A reader who assumed single-layer
+reversion was the adversarial proof would overestimate what these tests pin
+down. They do not pin down the provenance gate's own contribution to
+INV-HB-REFUSAL. They pin down the *conjunction* of gate and facade. Anyone
+refactoring either layer on its own could remove that layer's honest-refusal
+shaping and no test would object — the surviving layer would still produce a
+conforming response, CI would stay green, and the reviewer would receive no
+signal that the defence had been halved.
+
+**What the redundancy is, and is not.** It is intentional, and the facade
+states so in its own comment at `internal/assistant/facade.go:1826-1830`:
+convert a band-high capture-shaped response to the honest refusal "so
+INV-HB-REFUSAL holds structurally **even if an upstream path regresses into the
+capture shape**". So the runtime property is genuinely good: either layer alone
+still yields an honest response to the user. What the probe establishes is a
+*test-sensitivity* limit, not a runtime defect. The suite asserts the observable
+contract (`Status`, `Body`, `CaptureRoute`, `ErrorCause`) at the facade
+boundary, and both layers independently satisfy that contract for this path, so
+no assertion can distinguish "gate fixed" from "gate reverted, facade
+compensating".
+
+This is recorded rather than repaired because closing it means adding a
+gate-level assertion that the gate itself emits the honest shape, which is a
+planning-owned Test Plan change (`bubbles.plan`), not an audit edit.
+
+### The probe
+
+**Command (identical for both runs):**
+
+```
+./smackerel.sh test unit --go --go-run 'TestHighBandNeverMaskedAsSavedAsIdea|TestExecutionErrorHonesty_OKNoSourcesRefusesHonestly' --verbose
+```
+
+| Run | Layers reverted | Exit code | Meaning |
+|---|---|---|---|
+| 1 | `provenance/gate.go` only | **0** | Suite still passes. Gate reversion alone is invisible to the tests. |
+| 2 | `provenance/gate.go` **and** `facade.go` | **1** | Suite fails. Both layers must be removed before any assertion fires. |
+
+Run 2 reported `--- FAIL: TestHighBandNeverMaskedAsSavedAsIdea` and `--- FAIL:
+TestExecutionErrorHonesty_OKNoSourcesRefusesHonestly`, failing on every
+scenario's `ok_uncited` case. Representative verbatim assertion messages:
+
+```
+facade_execution_error_honesty_test.go:116: Status = saved_as_idea; a high-band no-source outcome (ok_uncited) MUST surface honestly, never masked
+facade_execution_error_honesty_test.go:122: Body is the capture acknowledgement
+facade_execution_error_honesty_test.go:125: CaptureRoute = true
+facade_execution_error_honesty_test.go:128: ErrorCause empty
+```
+
+**Claim Source:** not-run
+
+**Provenance of this block (read this before citing it).** The two probe runs
+above were executed by the `bubbles.audit` phase and are recorded here as an
+**observed result relayed to the recording agent**. The agent writing this
+section did **not** execute them and deliberately did not reproduce them: the
+probe is destructive to tracked source, both files are restored, and they must
+stay that way. The exit codes and assertion text above are therefore reported
+evidence, not this session's execution evidence, and are tagged `not-run` for
+that reason. The corroboration in the next subsection *was* executed in this
+session and is tagged accordingly.
+
+### Corroboration executed in this session
+
+The relayed probe result is not self-verifying, so the recording agent grounded
+every structural claim it depends on against the committed tree at `HEAD`.
+
+**Command:**
+
+```
+$ grep -nE 'MUST surface honestly, never masked|Body is the capture acknowledgement|CaptureRoute = true|ErrorCause empty' internal/assistant/facade_execution_error_honesty_test.go
+116:   t.Errorf("Status = saved_as_idea; a high-band no-source outcome (%s) MUST surface honestly, never masked", tc.name)
+122:   t.Errorf("Body is the capture acknowledgement; %s must surface an honest message, never 'saved as an idea'", tc.name)
+125:   t.Errorf("CaptureRoute = true; a high-band %s must not be captured as an idea", tc.name)
+128:   t.Errorf("ErrorCause empty; a high-band %s must carry a cause so the transport can render it honestly", tc.name)
+163:   t.Errorf("Body is the capture acknowledgement; an OK-but-uncited refusal must be honest, never 'saved as an idea'")
+169:   t.Errorf("CaptureRoute = true; a high-band refusal is not a capture")
+ASSERT_GREP_EXIT=0
+
+$ grep -nE 'func TestHighBandNeverMaskedAsSavedAsIdea|func TestExecutionErrorHonesty_OKNoSourcesRefusesHonestly' internal/assistant/*_test.go
+internal/assistant/facade_execution_error_honesty_test.go:88:func TestHighBandNeverMaskedAsSavedAsIdea(t *testing.T) {
+internal/assistant/facade_execution_error_honesty_test.go:141:func TestExecutionErrorHonesty_OKNoSourcesRefusesHonestly(t *testing.T) {
+FUNC_GREP_EXIT=0
+
+$ grep -nA8 'requiresProvenanceScenarios = ' internal/assistant/facade_execution_error_honesty_test.go
+36:var requiresProvenanceScenarios = []string{"weather_query", "retrieval_qa", "recipe_search", "open_knowledge"}
+SWEEP_GREP_EXIT=0
+```
+
+**Exit Code:** 0 (all three greps)
+
+**Claim Source:** executed
+
+Three facts the relayed result depends on are now grounded rather than assumed:
+the four cited line numbers carry exactly the four quoted assertion messages;
+both named test functions exist; and `requiresProvenanceScenarios` holds exactly
+four entries, so "all four scenarios' `ok_uncited` cases" is an accurate count
+and not a rounding of the failure list.
+
+### Restoration verified: both probe-touched files are byte-identical to `HEAD`
+
+The probe mutates tracked source. The audit phase restored both files with `git
+checkout --`. The recording agent re-verified that restoration in this session
+by blob hash, which is stronger than an empty `git diff` because it compares
+content identity directly rather than relying on diff configuration.
+
+**Command:**
+
+```
+$ git diff --stat HEAD -- internal/assistant/provenance/gate.go internal/assistant/facade.go
+DIFF_STAT_EXIT=0
+
+$ git status --porcelain -- internal/assistant/provenance/gate.go internal/assistant/facade.go
+PORCELAIN_EXIT=0
+
+$ for f in internal/assistant/provenance/gate.go internal/assistant/facade.go; do printf '%s worktree=%s head=%s\n' "$f" "$(git hash-object "$f")" "$(git rev-parse HEAD:"$f")"; done
+internal/assistant/provenance/gate.go worktree=e728e50d115e3c61e437bc2905058c3e62c23eb9 head=e728e50d115e3c61e437bc2905058c3e62c23eb9
+internal/assistant/facade.go          worktree=139510ffc375b310e2dd8c4309afe7b07e085edb head=139510ffc375b310e2dd8c4309afe7b07e085edb
+```
+
+**Exit Code:** 0
+
+**Claim Source:** executed
+
+Both `git diff --stat` and `git status --porcelain` emit nothing for these two
+paths, and each worktree blob hash equals its `HEAD` blob hash. No residue of
+the probe survives in the tree.
+
+### Security sweep of the changed surface
+
+Greps over the packet's changed surface found no hardcoded credentials and no
+secrets written into log statements. The uncited model body is **replaced, not
+leaked**: `internal/assistant/provenance/gate.go:117` assigns `resp.Body =
+CanonicalRefusalBody` and `:120` assigns `resp.CaptureRoute = false`, so the
+model's unsourced text is overwritten before the response leaves the gate rather
+than being passed through alongside a refusal status. That distinction is the
+security-relevant one — a refusal that still carried the ungrounded body would
+present fabricated content to the user under an honest-looking status.
+
+**Claim Source:** interpreted
+
+**Interpretation:** the sweep commands were run by the audit phase and are
+relayed here. The recording agent independently confirmed the two assignment
+sites exist at the cited lines in the committed source (`grep -nE
+'CanonicalRefusalBody|StatusSavedAsIdea|CaptureRoute'
+internal/assistant/provenance/gate.go`, exit 0). The conclusion "replaced rather
+than leaked" is a reading of those two assignments in context, not a single
+unambiguous command signal, so it is labelled `interpreted` rather than
+`executed`.
+
+### Artifact lint
+
+```
+$ bash .github/bubbles/scripts/artifact-lint.sh specs/061-conversational-assistant/bugs/BUG-061-009-high-band-refusal-masked-as-saved-as-idea
+PASSED
+ARTIFACT_LINT_EXIT=0
+```
+
+**Claim Source:** interpreted
+
+**Interpretation:** the audit phase reported `PASSED`, exit 0. The recording
+agent did not re-run `artifact-lint.sh` directly, but ran the state transition
+guard against this packet in this session, whose Check 13 independently
+re-executes the same lint and reported `✅ PASS: Artifact lint passes (exit 0)`.
+The claim is therefore corroborated through the guard rather than by a direct
+invocation, which is why it is labelled `interpreted`.
+
+### Audit verdict
+
+⚠️ **PASS WITH ONE RECORDED FINDING.**
+
+No defect was found in the shipped behaviour. The invariant holds, the tests
+are real, the assertions are specific, the probe-touched files are restored
+byte-identical to `HEAD`, and the security posture of the refusal path is sound.
+
+The recorded finding is the coverage-topology fact in the headline: the two
+enforcement layers are jointly load-bearing under the current assertions, so no
+test fails when exactly one of them is removed. That is a limit on what this
+suite proves, and it is stated here precisely so no later reader infers a
+stronger guarantee from the packet's existing "class-killer" language than the
+assertions actually deliver.
+
+**Owned elsewhere, not edited here:**
+
+| Finding | Owner | Why not audit |
+|---|---|---|
+| No assertion pins the provenance gate's own honest-refusal shape independently of the facade backstop | `bubbles.plan` | Closing it adds a Test Plan row and a DoD item; `scopes.md` planning content is planning-owned and audit must not author it |
+
+---
+
 ## Discovered Issues
 
 Issues surfaced while working this packet that are not the reported defect. Each

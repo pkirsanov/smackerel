@@ -61,7 +61,8 @@
     "docs",
     "regression",
     "simplify",
-    "stabilize"
+    "stabilize",
+    "audit"
   ],
   "certification": {
     "status": "blocked",
