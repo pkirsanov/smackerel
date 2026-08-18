@@ -1333,6 +1333,250 @@ cleared, and nothing in this section should be read as clearing it.
 
 ---
 
+## Validate — Independent Certification (`bubbles.validate`) — 2026-08-18
+
+<a id="validate-certification"></a>
+
+**Phase:** `validate` · **Agent:** `bubbles.validate` · **Date:** 2026-08-18 ·
+**Claim Source:** executed · **Live system:** no
+
+Independent certification at code HEAD `75eeb774`. ZERO code changed by this
+run: no production file, no test file, no `scopes.md`, and no
+`uservalidation.md`. The only files this run wrote are this section and
+`state.json` (`completedPhases`, `certification.certifiedCompletedPhases`,
+`certification.lockdownState`). `status` stays `blocked`.
+
+Working tree at entry, executed this session:
+
+```
+$ git rev-parse --short HEAD
+75eeb774
+$ git status --porcelain -- internal/ cmd/ tests/ config/ docs/ .github/
+$ git status --porcelain | wc -l
+0
+```
+
+Both `git status` invocations returned zero lines, so every result below was
+measured against committed source, not against uncommitted working-tree state.
+
+**Path substitution declared.** Where a captured line printed the repository's
+absolute checkout path, it is rendered `<repo-root>/…` here. That is the only
+alteration made to any transcript in this section, and it is required by the
+repository's no-absolute-path rule; nothing else was edited, reordered, or
+summarised.
+
+### Lane 1 — `./smackerel.sh test unit` — exit 0
+
+Run through `.github/bubbles/scripts/evidence-capture.sh` so the receipt is
+re-derivable rather than merely pasted:
+
+```
+# BUG-061-009 validate: ./smackerel.sh test unit
+$ ./smackerel.sh test unit
+exit: 0
+lines: 441
+sha256: 8f04bb694ee755d2d2c953bc532f03586c1763bba54e7a11284bfac4458eaeec
+--- first 20 ---
+oom-preflight: OK — 36292 MB available (need 6000 MB; swap used 1228 MB).
+disk-preflight: OK — C: 76 GB free (need 40 GB), WSL / 488 GB free (need 25 GB).
+++ dirname /workspace/scripts/runtime/go-unit.sh
+[go-unit] envsubst missing — installing gettext-base
++ source /workspace/scripts/runtime/_ensure_envsubst.sh
++ ensure_envsubst go-unit
++ local tag=go-unit
++ command -v envsubst
++ echo '[go-unit] envsubst missing — installing gettext-base'
++ apt-get update -qq
++ apt-get install -y --no-install-recommends gettext-base
+Reading package lists...
+Building dependency tree...
+Reading state information...
+The following NEW packages will be installed:
+  gettext-base
+0 upgraded, 1 newly installed, 0 to remove and 20 not upgraded.
+Need to get 160 kB of archives.
+After this operation, 660 kB of additional disk space will be used.
+Get:1 http://deb.debian.org/debian bookworm/main amd64 gettext-base amd64 0.21-12 [160 kB]
+--- omitted 401 line(s); sha256 above covers the full output ---
+--- last 20 ---
+  ...
+1..2
+# tests 2
+# suites 0
+# pass 2
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 147.684489
+PASS: bug_077_002_login_session_reuse_test (SCN-077-BUG-002-01 / SCN-077-BUG-002-02)
+[test unit] -> bash <repo-root>/tests/unit/web/spec_077_discovery_convention_test.sh
+PASS: spec_077_discovery_convention_test (TP-077-02-01 / SCN-077-A02)
+[test unit] -> bash <repo-root>/tests/unit/web/spec_077_no_stub_bodies_test.sh
+PASS: spec_077_no_stub_bodies_test (TP-077-03-06 / SCN-077-A08)
+[test unit] shell unit tests in tests/unit/web/ finished OK
+[test unit] running 1 shell unit test(s) from tests/unit/docs/
+[test unit] -> bash <repo-root>/tests/unit/docs/spec_077_test_category_parity_test.sh
+PASS: spec_077_test_category_parity_test (TP-077-02-03 / SCN-077-A06)
+[test unit] shell unit tests in tests/unit/docs/ finished OK
+```
+
+`UNIT_EXIT=0`, 441 lines, wall 138s. Re-derive with
+`bash .github/bubbles/scripts/evidence-capture.sh --verify 8f04bb694ee755d2d2c953bc532f03586c1763bba54e7a11284bfac4458eaeec -- ./smackerel.sh test unit`.
+
+### Lane 2 — the two closure tests, forced to genuinely re-execute — exit 0
+
+A full-suite pass is weak evidence for *these two* tests, because Go serves an
+unchanged package from its test cache and prints `(cached)`; the lane would exit
+0 without either test running. The `-run` pattern is part of Go's cache key, so
+naming the tests explicitly forces real execution:
+
+```
+$ ./smackerel.sh test unit --go \
+    --go-run 'TestRequiresProvenanceScenarios_ClosedOverSST|TestHighBandNeverMaskedAsSavedAsIdea' \
+    --verbose
+
+--- PASS: TestHighBandNeverMaskedAsSavedAsIdea (0.00s)
+    --- PASS: TestHighBandNeverMaskedAsSavedAsIdea/weather_query/provider-error (0.00s)
+    --- PASS: TestHighBandNeverMaskedAsSavedAsIdea/weather_query/timeout (0.00s)
+    --- PASS: TestHighBandNeverMaskedAsSavedAsIdea/weather_query/ok_uncited (0.00s)
+    --- PASS: TestHighBandNeverMaskedAsSavedAsIdea/retrieval_qa/provider-error (0.00s)
+    --- PASS: TestHighBandNeverMaskedAsSavedAsIdea/retrieval_qa/timeout (0.00s)
+    --- PASS: TestHighBandNeverMaskedAsSavedAsIdea/retrieval_qa/ok_uncited (0.00s)
+    --- PASS: TestHighBandNeverMaskedAsSavedAsIdea/recipe_search/provider-error (0.00s)
+    --- PASS: TestHighBandNeverMaskedAsSavedAsIdea/recipe_search/timeout (0.00s)
+    --- PASS: TestHighBandNeverMaskedAsSavedAsIdea/recipe_search/ok_uncited (0.00s)
+    --- PASS: TestHighBandNeverMaskedAsSavedAsIdea/open_knowledge/provider-error (0.00s)
+    --- PASS: TestHighBandNeverMaskedAsSavedAsIdea/open_knowledge/timeout (0.00s)
+    --- PASS: TestHighBandNeverMaskedAsSavedAsIdea/open_knowledge/ok_uncited (0.00s)
+=== CONT  TestRequiresProvenanceScenarios_ClosedOverSST
+    facade_high_band_invariant_coverage_test.go:90: SST requires_provenance scenarios (all swept by the INV-HB-REFUSAL invariant): [open_knowledge recipe_search retrieval_qa weather_query]
+--- PASS: TestRequiresProvenanceScenarios_ClosedOverSST (0.00s)
+PASS
+ok      github.com/smackerel/smackerel/internal/assistant       0.558s
+testing: warning: no tests to run
+PASS
+```
+
+`SCOPED_GO_EXIT=0`, wall 82s. Three facts carry the certification, and each is
+visible in the transcript rather than inferred:
+
+1. **It really ran.** The package line reads `ok … internal/assistant 0.558s`,
+   not `(cached)`. A measured duration is what distinguishes an execution from a
+   cache hit.
+2. **The sweep is closed over the SST, and the closure is not vacuous.** The
+   test's own `t.Logf` names the set it read from `config/assistant/scenarios.yaml`:
+   `[open_knowledge recipe_search retrieval_qa weather_query]` — four scenarios,
+   printed by the code rather than asserted by this report. `open_knowledge` is
+   present, which is the specific drift DI-2 recorded.
+3. **The invariant sweep traverses all four.** Twelve subtests passed — each of
+   the four scenarios against each of `provider-error`, `timeout`, `ok_uncited`.
+   The `open_knowledge/ok_uncited` row is the exact `/ask` path this bug was
+   reported against.
+
+### Lane 3 — `bash .github/bubbles/scripts/artifact-lint.sh <packet>` — exit 0
+
+```
+✅ Detected state.json status: blocked
+✅ Detected state.json workflowMode: bugfix-fastlane
+✅ All DoD bullet items use checkbox syntax in scopes.md
+✅ uservalidation separates automation readiness from human acceptance
+✅ report.md contains section matching: Summary / Completion Statement / Test Evidence
+=== Anti-Fabrication Evidence Checks ===
+✅ All checked DoD items in scopes.md have evidence blocks
+✅ No unfilled evidence template placeholders in scopes.md
+✅ No unfilled evidence template placeholders in report.md
+✅ No repo-CLI bypass detected in report.md command evidence
+Artifact lint PASSED.
+ARTIFACT_LINT_EXIT=0
+```
+
+### Phase-to-evidence cross-check
+
+`completedPhases` carried eleven entries. Certification is not a restatement of
+that list — each entry was checked against this report for a section that
+actually evidences it, because a phase recorded with no evidence is a claim, not
+a record. Section headings and `**Phase:**` provenance tags were enumerated with
+`grep` over `report.md` this session.
+
+| Phase in `completedPhases` | Evidencing section in `report.md` | Certified |
+|---|---|---|
+| `select` | none found | **no** |
+| `bootstrap` | none found | **no** |
+| `implement` | *Test Evidence* (pre-fix red → post-fix green, exit 0) + *Implementation Delta → Code Diff Evidence* (git-backed; guard Check 13B / G053 PASS) | yes |
+| `test` | *Test Evidence* | yes |
+| `harden` | none found — the string `harden` does not occur anywhere in `report.md` | **no** |
+| `docs` | none found — no section, no `**Phase:** docs` tag, and no mention of either documentation surface | **no** |
+| `regression` | *Regression Invariant Closure* (`**Phase:** regression`) | yes |
+| `simplify` | *Simplify — Post-Implementation Review Of The Regression Diff* (`**Phase:** simplify`) | yes |
+| `stabilize` | *Stabilize — Stability, Performance, Reliability And Resource Assessment* (`**Phase:** stabilize`) | yes |
+| `security` | *Security — Refusal-Path Disclosure Review* (`**Phase:** security`) | yes |
+| `audit` | *Audit — Adversarial Reversion Probe* | yes |
+| `validate` | this section | yes |
+
+Two entries deserve their reasoning stated rather than left to the table.
+
+**`docs` is declined even though the documentation change is real.** Both
+surfaces the packet claims carry the invariant do carry it —
+`grep -c 'INV-HB-REFUSAL' docs/smackerel.md .github/copilot-instructions.md`
+returned `1` for each. The work happened. What is missing is any record of it in
+this report: no section, no phase tag, no reference to either file. Certifying a
+phase on the strength of a grep this agent ran, rather than on the phase's own
+recorded evidence, would invert the direction certification is supposed to run.
+The change stands on its own; the phase claim does not.
+
+**`implement` is certified on two artifacts, not one.** The *Code Diff Evidence*
+block is tagged `**Phase:** regression` and documents commit `5c24a74f`, the
+regression-phase SST-closure test — not the original SCOPE-01..05 delta. What
+evidences the implementation is the red→green pair in *Test Evidence*: a first
+run with three named pre-fix failures at the guard update points, then a second
+run at exit 0. That pairing is execution evidence; the guard's Check 13B
+independently passed the implementation-delta requirement.
+
+The four declined phases are all outside the `bugfix-fastlane` required set
+(`implement`, `test`, `regression`, `simplify`, `stabilize`, `security`,
+`validate`, `audit`), so declining them withholds an unevidenced claim without
+withholding anything G022 requires.
+
+### `lockdownState` — what was checked before choosing a value
+
+The recorded value is the string `n/a-no-locked-scenarios`, matching the
+established convention in this repository (4 existing uses, e.g.
+`specs/095-retrieval-strategy-routing/bugs/BUG-095-001-route-guard-compiler-provenance/state.json`).
+It is accurate: the guard counts locked scenarios by matching
+`"lockdown": true` in `scenario-manifest.json`, and this packet's manifest
+contains zero such entries (`grep -cE '"lockdown"[[:space:]]*:[[:space:]]*true'`
+returned `0`, exit 1).
+
+One distinction is worth recording so the value is not read as more than it
+says. This packet's manifest **does** mark four of its five scenarios
+`"regressionProtected": true`. That is a different field from the one the
+lockdown check reads, and `n/a-no-locked-scenarios` speaks only to the lockdown
+concept — it is not a statement that the packet lacks regression protection.
+
+### Verdict
+
+The INV-HB-REFUSAL claim is **SUBSTANTIATED** at HEAD `75eeb774`: the full unit
+lane is green, and the two tests that carry the invariant were forced past Go's
+cache and passed, with the swept scenario set printed by the code and closed
+over the scenario SST.
+
+Certification is **partial and the status stays `blocked`**, for two reasons
+that are not this agent's to clear:
+
+- **G136 — human acceptance.** `uservalidation.md` does not establish human
+  acceptance. Its four items are checked, but its own note says they are checked
+  by default on the strength of the mechanical invariant tests. That is
+  automation readiness, not a human exercising the deployed bot. Only the
+  operator can supply it; an agent checking those items would fabricate the
+  acceptance the gate exists to require. This file was not touched.
+- **Four regression-E2E planning gaps (guard Check 8A).** `scopes.md` is missing
+  the scenario-specific regression-E2E DoD item, the broader E2E regression suite
+  DoD item, and the explicit scenario-specific regression-E2E Test Plan row.
+  `scopes.md` is owned by `bubbles.plan`; this agent does not edit it.
+
+---
+
 ## Discovered Issues
 
 Issues surfaced while working this packet that are not the reported defect. Each

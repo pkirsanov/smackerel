@@ -9,7 +9,7 @@
   "owner": "bubbles.goal",
   "discoveredBy": "operator (live /ask on the deployed bot after BUG-061-008 P1-P5 shipped)",
   "discoveredAt": "2026-07-23",
-  "lastUpdatedAt": "2026-07-23",
+  "lastUpdatedAt": "2026-08-18",
   "rootCause": {
     "summary": "open_knowledge (requires_provenance) produced an OK answer with no citations. The provenance gate correctly refuses the uncited body but rewrites to Status=StatusSavedAsIdea + CaptureRoute=true with ErrorCause unset; canonicalizeSuccessfulCaptureResponse then overwrites the gate's honest body ('I don't have a sourced answer for that.') with the generic capture acknowledgement ('saved as an idea — i'll surface it later.'). BUG-061-008 P1 only guarded NON-OK outcomes, so this OK-but-uncited path was left intact — and its P2 test asserted the OK+no-sources case SHOULD return saved_as_idea, test-locking the reported behavior. An honest open_knowledge refusal renderer exists but is bypassed (it fires only when ErrorCause matches a spec-064 RefusalCause, which the gate leaves empty) and even it appends a confusing '(saved as idea)' suffix."
   },
@@ -63,12 +63,26 @@
     "simplify",
     "stabilize",
     "audit",
-    "security"
+    "security",
+    "validate"
   ],
   "certification": {
     "status": "blocked",
     "achievedAssuranceLevel": "deployed-verified; operator behavioral smoke test pending (agent-side complete)",
+    "certifiedCompletedPhases": [
+      "implement",
+      "test",
+      "regression",
+      "simplify",
+      "stabilize",
+      "security",
+      "audit",
+      "validate"
+    ],
+    "certifiedCompletedPhasesNote": "Deliberately FEWER than completedPhases (11 recorded, 8 certified). Each recorded phase was cross-checked against report.md for a section that actually evidences it; 'select', 'bootstrap', 'harden' and 'docs' have none and are therefore NOT certified. 'harden' does not occur anywhere in report.md, and 'docs' has no section, no phase tag and no reference to either documentation surface — even though the documentation change itself is real (grep -c 'INV-HB-REFUSAL' returns 1 for both docs/smackerel.md and .github/copilot-instructions.md). Certifying a phase on a grep this agent ran, rather than on the phase's own recorded evidence, would invert the direction certification runs. All four declined phases are outside the bugfix-fastlane required set, so withholding them withholds an unevidenced claim without withholding anything G022 requires. See report.md#validate-certification.",
     "scopeProgress": { "total": 5, "done": 5, "inProgress": 0, "notStarted": 0, "blocked": 0 },
+    "lockdownState": "n/a-no-locked-scenarios",
+    "lockdownStateNote": "Accurate for the lockdown concept the guard measures: it counts locked scenarios by matching '\"lockdown\": true' in scenario-manifest.json, and this packet's manifest has zero such entries. NOT a statement that the packet lacks regression protection — four of its five scenarios carry 'regressionProtected': true, which is a different field.",
     "gatesPassed": [
       "implement SCOPE-01..05",
       "test unit --go (all packages ok, exit 0; gate + facade + adapter + cross-path invariant green)",
@@ -76,10 +90,13 @@
       "lint (go vet + ruff + web: All checks passed!)",
       "artifact-lint.sh (PASSED, exit 0)",
       "build --target <build-target> (exit 0; cosign-signed + SBOM-attested; signed local-build-manifest emitted)",
-      "deploy via knb-owned Smackerel adapter (promote/apply exit 0; cosign verified; strict current-release health accepted; running core+ml digests match build, healthy, 0 restarts)"
+      "deploy via knb-owned Smackerel adapter (promote/apply exit 0; cosign verified; strict current-release health accepted; running core+ml digests match build, healthy, 0 restarts)",
+      "validate (2026-08-18, HEAD 75eeb774): ./smackerel.sh test unit exit 0, 441 lines, sha256 8f04bb694ee755d2d2c953bc532f03586c1763bba54e7a11284bfac4458eaeec (re-derivable via evidence-capture.sh --verify); the two INV-HB-REFUSAL closure tests forced past Go's test cache with an explicit --go-run pattern, exit 0, package reported 'ok internal/assistant 0.558s' rather than '(cached)' \u2014 12 subtests PASS across all four SST requires_provenance scenarios, and TestRequiresProvenanceScenarios_ClosedOverSST printed its own swept set [open_knowledge recipe_search retrieval_qa weather_query]; artifact-lint.sh exit 0. See report.md#validate-certification."
     ],
     "pendingGates": [
-      "operator live Telegram behavioral smoke test (operator-only: prod assistant HTTP requires per-user PASETO; behavior unit-proven by TestExecutionErrorHonesty_* cross-path invariant)"
+      "operator live Telegram behavioral smoke test (operator-only: prod assistant HTTP requires per-user PASETO; behavior unit-proven by TestExecutionErrorHonesty_* cross-path invariant)",
+      "G136 \u2014 uservalidation.md does not establish human acceptance. Its four items are checked, but its own note records that they are checked by default on the strength of the mechanical invariant tests; that is automation readiness, not a human exercising the deployed bot. Human-only \u2014 an agent checking them would fabricate the acceptance the gate exists to require. NOT touched by the validate phase.",
+      "Guard Check 8A (4 blocking failures) \u2014 scopes.md is missing the scenario-specific regression-E2E DoD item, the broader E2E regression suite DoD item, and the explicit scenario-specific regression-E2E Test Plan row. scopes.md is owned by bubbles.plan; bubbles.validate does not edit it."
     ]
   },
   "nextRequiredOwner": "operator (live Telegram /ask smoke test; behavior already unit-proven and deploy-verified)",
