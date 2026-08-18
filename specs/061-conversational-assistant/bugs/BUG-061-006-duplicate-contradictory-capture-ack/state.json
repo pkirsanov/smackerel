@@ -5,6 +5,7 @@
   "severity": "S2",
   "status": "in_progress",
   "workflowMode": "bugfix-fastlane",
+  "releaseTrain": "mvp",
   "owner": "bubbles.goal",
   "discoveredBy": "operator (live deployed Telegram bot, screenshot)",
   "discoveredAt": "2026-07-21",

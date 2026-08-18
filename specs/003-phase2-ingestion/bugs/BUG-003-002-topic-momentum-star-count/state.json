@@ -6,6 +6,7 @@
   "bugId": "BUG-003-002",
   "status": "in_progress",
   "workflowMode": "bugfix-fastlane",
+  "releaseTrain": "mvp",
   "linkedImplementationSpec": null,
   "linkedPlanningPacket": null,
   "planningOnly": false,

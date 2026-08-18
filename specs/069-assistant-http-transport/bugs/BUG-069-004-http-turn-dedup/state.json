@@ -6,6 +6,7 @@
   "featureName": "BUG-069-004: HTTP assistant turn response deduplication",
   "workflowMode": "bugfix-fastlane",
   "executionRuntime": "direct",
+  "releaseTrain": "mvp",
   "status": "in_progress",
   "execution": {
     "activeAgent": "bubbles.bug",

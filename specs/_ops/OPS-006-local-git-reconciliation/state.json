@@ -4,6 +4,7 @@
   "featureName": "OPS-006: Local Git reconciliation",
   "status": "in_progress",
   "workflowMode": "stabilize-to-doc",
+  "releaseTrain": "mvp",
   "planningOnly": false,
   "execution": {
     "activeAgent": "bubbles.devops",
