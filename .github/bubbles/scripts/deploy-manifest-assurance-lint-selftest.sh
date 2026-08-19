@@ -30,7 +30,7 @@ fi
 # Computed through the guard's OWN --compute-digest, so the fixtures cannot drift
 # from the verifier's formula. If the two ever disagree, every positive case
 # fails loudly instead of quietly asserting a wrong constant.
-SRC_REV="a1b2c3d4e5f60718293a4b5c6d7e8f9012345678"
+SRC_REV="$(printf '%040d' 1)"
 ART_DIGEST="sha256:1111111111111111111111111111111111111111111111111111111111111111"
 RECEIPT_ROOT="sha256:2222222222222222222222222222222222222222222222222222222222222222"
 

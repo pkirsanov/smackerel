@@ -47,8 +47,22 @@ command -v jq >/dev/null 2>&1 || {
   exit 2
 }
 
+sha256_text() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    printf '%s' "$1" | sha256sum | awk '{print $1}'
+  elif command -v shasum >/dev/null 2>&1; then
+    printf '%s' "$1" | shasum -a 256 | awk '{print $1}'
+  else
+    return 1
+  fi
+}
+
 EMPTY_SHA="$(grep -oE 'c43_empty_stdout_sha256="[0-9a-f]{64}"' "$GUARD_SCRIPT" | grep -oE '[0-9a-f]{64}' | head -1 || true)"
-if [[ "$EMPTY_SHA" != "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855" ]]; then
+EXPECTED_EMPTY_SHA="$(sha256_text '')" || {
+  printf '%s: sha256sum or shasum is required\n' "$NAME" >&2
+  exit 2
+}
+if [[ "$EMPTY_SHA" != "$EXPECTED_EMPTY_SHA" ]]; then
   printf '%s: empty-stdout constant not extractable from the guard (got %s)\n' "$NAME" "${EMPTY_SHA:-<none>}" >&2
   exit 2
 fi
@@ -79,7 +93,7 @@ fi
 TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/bubbles-receipt-identity.XXXXXX")"
 trap 'rm -rf "$TMP_DIR"' EXIT INT TERM
 
-NONEMPTY="9f2c1a77b3e45d6081ca2be7f4d0913ac5e8b26df1074a3c9e5b0d8f6a271c43"
+NONEMPTY="$(sha256_text "$NAME-nonempty-fixture")"
 
 write_log() {
   local path="$1"

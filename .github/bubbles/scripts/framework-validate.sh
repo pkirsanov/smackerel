@@ -784,6 +784,16 @@ fi
 if [[ -x "$SCRIPT_DIR/gate-bands.sh" ]]; then
   run_check_self_only "Gate-band strings current (IMP-027 SCOPE-2d)" bash "$SCRIPT_DIR/gate-bands.sh" --check --repo-root "$REPO_ROOT"
 fi
+# The generated `gateEnforcement:` block shipped a --check mode that nothing
+# invoked, so a stale block could only be noticed by hand. That is the same
+# shape as the unrun enforcement IMP-051 SCOPE-5 closed: a check that exists but
+# never executes is indistinguishable from no check at all. Registering a gate
+# without regenerating leaves declaredEnforcedBy describing the previous state,
+# which is precisely the "declared vs observed" drift this block exists to make
+# legible.
+if [[ -x "$SCRIPT_DIR/generate-gate-enforcement.sh" ]]; then
+  run_check_self_only "Generated gate-enforcement block current" bash "$SCRIPT_DIR/generate-gate-enforcement.sh" --check
+fi
 # IMP-027 SCOPE-11: a modelCompensation gate with no recorded retirement
 # criterion carries unbounded cost in time — nobody can say what would have to
 # be true to turn it off, so it is carried forever by default. `lint` keeps
@@ -1155,6 +1165,17 @@ fi
 
 if [[ -x "$SCRIPT_DIR/release-packet-location-guard-selftest.sh" ]]; then
   run_check "Release packet location guard selftest" bash "$SCRIPT_DIR/release-packet-location-guard-selftest.sh"
+fi
+
+if [[ -x "$SCRIPT_DIR/release-packet-completeness-guard-selftest.sh" ]]; then
+  run_check "Release packet completeness guard selftest (G138)" bash "$SCRIPT_DIR/release-packet-completeness-guard-selftest.sh"
+fi
+
+# The live guard runs too, not only its selftest. IMP-050 SCOPE-3: the location
+# guard's own live path was never wired here, so it was exercised solely against
+# synthetic fixtures. A repo with no docs/releases/ auto-exempts at exit 0.
+if [[ -x "$SCRIPT_DIR/release-packet-completeness-guard.sh" ]]; then
+  run_check "Release packet completeness (live, G138)" bash "$SCRIPT_DIR/release-packet-completeness-guard.sh" "$REPO_ROOT"
 fi
 
 if [[ -x "$SCRIPT_DIR/release-delivery-reconciliation-guard-selftest.sh" ]]; then

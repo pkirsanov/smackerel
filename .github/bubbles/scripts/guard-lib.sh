@@ -44,8 +44,21 @@ bubbles_run_with_timeout() {
   #      Killing the subshell does not reap a `sleep` grandchild, so a single
   #      long sleep survives as an orphan for its full duration. Polling lets
   #      the watchdog notice the command finished and exit within ~1s.
+  # POSIX shells start asynchronous commands with SIGINT/SIGQUIT ignored when
+  # job control is off. That disposition survives exec and cannot be trapped by
+  # a nested non-interactive Bash, so signal-cleanup tests (and real children)
+  # hang until the watchdog kills them. Enable monitor mode only for the launch,
+  # then restore the caller's state.
+  local monitor_was_on=0
+  case "$-" in
+    *m*) monitor_was_on=1 ;;
+    *) set -m ;;
+  esac
   "$@" &
   local cmd_pid=$!
+  if [[ "$monitor_was_on" -eq 0 ]]; then
+    set +m
+  fi
   (
     waited=0
     while [ "$waited" -lt "$secs" ]; do

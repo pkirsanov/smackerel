@@ -44,8 +44,8 @@ fail() {
 TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/bubbles-scenario-state.XXXXXX")"
 trap 'rm -rf "$TMP_DIR"' EXIT INT TERM
 
-REV="1111111111111111111111111111111111111111"
-OTHER_REV="2222222222222222222222222222222222222222"
+REV="$(printf '%040d' 1)"
+OTHER_REV="$(printf '%040d' 2)"
 
 # A manifest with one UI scenario (so GREEN_LIVE applies) that is also
 # SLA-sensitive (so OBSERVED applies). Every applicable state is therefore in

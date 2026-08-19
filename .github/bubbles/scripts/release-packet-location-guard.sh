@@ -23,6 +23,13 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+
+# The canonical eight have ONE authority (IMP-050 SCOPE-2 requirement 2); this
+# guard no longer carries its own copy of the list or its own alternation.
+# shellcheck source=./release-packet-docs-lib.sh
+. "$SCRIPT_DIR/release-packet-docs-lib.sh"
+
 REPO_ROOT="${1:-.}"
 
 if [[ ! -d "$REPO_ROOT" ]]; then
@@ -32,16 +39,7 @@ fi
 
 REPO_ROOT_ABS="$(cd "$REPO_ROOT" && pwd -P)"
 
-CANONICAL_DOCS=(
-  "vision.md"
-  "features.md"
-  "actions.md"
-  "business-plan.md"
-  "deployment.md"
-  "marketing.md"
-  "monetization.md"
-  "ops-scalability.md"
-)
+CANONICAL_DOCS=( "${RELEASE_PACKET_DOCS[@]}" )
 
 # Build the find -name expression: \( -name a -o -name b -o ... \)
 find_name_expr=()
@@ -57,8 +55,9 @@ done
 
 # Canonical path regex anchored at repo root:
 #   ${REPO_ROOT}/docs/releases/<phase>/<canonical-basename>
-# <phase> may not contain '/'.
-canonical_re="^${REPO_ROOT_ABS}/docs/releases/[^/]+/(vision|features|actions|business-plan|deployment|marketing|monetization|ops-scalability)\.md$"
+# <phase> may not contain '/'. The alternation is derived from the shared list
+# rather than restated, so a rename cannot silently diverge from it.
+canonical_re="^${REPO_ROOT_ABS}/docs/releases/[^/]+/($(release_packet_docs_alternation))\.md$"
 
 # "Looks like a release packet" filter — path (case-insensitive) contains 'release'.
 # This is the false-positive filter requested in the design.

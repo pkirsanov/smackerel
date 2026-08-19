@@ -669,7 +669,7 @@ TOOLLOG_CLAIM='IMP102 pytest evidence admission passed via structured tool log'
 # tmp_root is `git init`-ed with no commit, so the guard resolves an EMPTY
 # source revision and only requires the receipt to cite one. A fixed value keeps
 # the fixture deterministic.
-TOOLLOG_REV='0000000000000000000000000000000000000001'
+TOOLLOG_REV="$(printf '%040d' 1)"
 TOOLLOG_PROBE="- [x] ${TOOLLOG_CLAIM} — Receipt: ${TOOLLOG_SCENARIO}"
 TOOLLOG_BINDING="\"scenarioBinding\":{\"scenarioId\":\"${TOOLLOG_SCENARIO}\",\"phase\":\"green\",\"testIdentity\":\"tests/evidence/admission.spec::structured tool log\",\"sourceRevision\":\"${TOOLLOG_REV}\",\"negativeControl\":\"drop the tool-log entry and the DoD item loses its receipt\",\"claim\":\"${TOOLLOG_CLAIM}\"}"
 

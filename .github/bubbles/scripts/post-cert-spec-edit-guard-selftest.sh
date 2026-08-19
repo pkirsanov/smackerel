@@ -388,6 +388,175 @@ assert_exit "N4 no invariantRefs no-op" 0
 assert_stdout_lacks "N4" "ADVISORY (IMP-106 DOM-LINEAGE)"
 
 echo ""
+echo "=== IMP-049 Option C — placeholder-aware redaction classification ==="
+# The load-bearing risk (IMP-049 R1) is a filter bug that silently suppresses a
+# real requirements change, converting a noisy gate into a quiet wrong one.
+# C2/C3/C4/C5/C10 are the adversarial cases that must STILL fail.
+
+# stage a spec whose planning truth carries a concrete environment value
+c_stage() {
+  local sid="$1" body="$2"
+  local repo
+  repo="$(stage_repo "$sid")"
+  write_truth_files "$repo"
+  printf '%s\n' "$body" > "$repo/specs/300-certified/spec.md"
+  write_state "$repo" "done" '"2026-05-01T00:00:00Z"' "false" '[]'
+  commit_all "$repo" "2026-04-30T00:00:00Z" "baseline certified spec"
+  printf '%s' "$repo"
+}
+
+echo ""
+echo "--- C1: pure hostname -> placeholder redaction is cleared ---"
+repo="$(c_stage c1-hostname 'Deploy the service to prod-01.internal.example-corp.com nightly.')"
+printf '%s\n' 'Deploy the service to <DEPLOY_HOST> nightly.' > "$repo/specs/300-certified/spec.md"
+commit_all "$repo" "2026-05-02T00:00:00Z" "chore(genericize): remove machine-local values"
+run_guard "$repo"
+assert_exit "C1 redaction cleared" 0
+assert_stdout_contains "C1" "clearedAsRedaction=1"
+
+echo ""
+echo "--- C2 ADVERSARIAL: a changed REQUIREMENT still fails ---"
+repo="$(c_stage c2-requirement 'The system MUST retain audit records for 30 days.')"
+printf '%s\n' 'The system MUST retain audit records for 90 days.' > "$repo/specs/300-certified/spec.md"
+commit_all "$repo" "2026-05-02T00:00:00Z" "chore(genericize): remove machine-local values"
+run_guard "$repo"
+assert_exit "C2 requirement change still fails" 1
+assert_stderr_contains "C2" "G088"
+
+echo ""
+echo "--- C3 ADVERSARIAL: a changed SCENARIO still fails ---"
+repo="$(c_stage c3-scenario 'Scenario: a guest checks out and receives a receipt.')"
+printf '%s\n' 'Scenario: a guest checks out and receives no receipt.' > "$repo/specs/300-certified/spec.md"
+commit_all "$repo" "2026-05-02T00:00:00Z" "chore(genericize): remove machine-local values"
+run_guard "$repo"
+assert_exit "C3 scenario change still fails" 1
+
+echo ""
+echo "--- C4 ADVERSARIAL: a changed ACCEPTANCE CRITERION still fails ---"
+repo="$(c_stage c4-acceptance 'Acceptance: p95 latency below 200ms under nominal load.')"
+printf '%s\n' 'Acceptance: p95 latency below 800ms under nominal load.' > "$repo/specs/300-certified/spec.md"
+commit_all "$repo" "2026-05-02T00:00:00Z" "chore(genericize): remove machine-local values"
+run_guard "$repo"
+assert_exit "C4 acceptance change still fails" 1
+
+echo ""
+echo "--- C5 ADVERSARIAL: a MIXED commit (redaction + requirement) still fails ---"
+repo="$(c_stage c5-mixed 'Host is prod-01.internal.example-corp.com.
+The system MUST retain audit records for 30 days.')"
+printf '%s\n' 'Host is <DEPLOY_HOST>.
+The system MUST retain audit records for 90 days.' > "$repo/specs/300-certified/spec.md"
+commit_all "$repo" "2026-05-02T00:00:00Z" "chore(genericize): remove machine-local values"
+run_guard "$repo"
+assert_exit "C5 mixed commit still fails" 1
+
+echo ""
+echo "--- C6: IPv4 -> placeholder redaction is cleared ---"
+# RFC 5737 documentation range; never a real address.
+repo="$(c_stage c6-ipv4 'The collector listens on 203.0.113.10 for telemetry.')"
+printf '%s\n' 'The collector listens on <COLLECTOR_IP> for telemetry.' > "$repo/specs/300-certified/spec.md"
+commit_all "$repo" "2026-05-02T00:00:00Z" "refactor(deploy): enforce generic self-hosted boundary"
+run_guard "$repo"
+assert_exit "C6 ipv4 redaction cleared" 0
+
+echo ""
+echo "--- C7: operator home path -> placeholder redaction is cleared ---"
+# Assembled at runtime so this portable file carries no literal absolute path.
+_home_root="/Users"
+repo="$(c_stage c7-homepath "Artifacts land under ${_home_root}/operator/exports.")"
+printf '%s\n' 'Artifacts land under ${EXPORT_ROOT}/exports.' > "$repo/specs/300-certified/spec.md"
+commit_all "$repo" "2026-05-02T00:00:00Z" "chore(genericize): remove machine-local values"
+run_guard "$repo"
+assert_exit "C7 home path redaction cleared" 0
+
+echo ""
+echo "--- C8 ADVERSARIAL: a pure INSERTION is not a substitution ---"
+repo="$(c_stage c8-insert 'Deploy to prod-01.internal.example-corp.com nightly.')"
+printf '%s\n' 'Deploy to prod-01.internal.example-corp.com nightly.
+The system MUST also notify the on-call rota.' > "$repo/specs/300-certified/spec.md"
+commit_all "$repo" "2026-05-02T00:00:00Z" "chore(genericize): remove machine-local values"
+run_guard "$repo"
+assert_exit "C8 insertion still fails" 1
+
+echo ""
+echo "--- C9 ADVERSARIAL: removing a value without adding a placeholder fails ---"
+repo="$(c_stage c9-noplaceholder 'Deploy to prod-01.internal.example-corp.com nightly.')"
+printf '%s\n' 'Deploy to the cluster nightly.' > "$repo/specs/300-certified/spec.md"
+commit_all "$repo" "2026-05-02T00:00:00Z" "chore(genericize): remove machine-local values"
+run_guard "$repo"
+assert_exit "C9 no placeholder gained still fails" 1
+
+echo ""
+echo "--- C10 ADVERSARIAL: swapping a FILE REFERENCE is not a redaction ---"
+repo="$(c_stage c10-fileref 'Refer to design.md for the rollout plan.')"
+printf '%s\n' 'Refer to <DESIGN_DOC> for the rollout plan.' > "$repo/specs/300-certified/spec.md"
+commit_all "$repo" "2026-05-02T00:00:00Z" "chore(genericize): remove machine-local values"
+run_guard "$repo"
+assert_exit "C10 file reference swap still fails" 1
+
+echo ""
+echo "--- C11: an UNCOMMITTED redaction in the worktree is cleared ---"
+repo="$(c_stage c11-worktree 'Deploy to prod-01.internal.example-corp.com nightly.')"
+printf '%s\n' 'Deploy to <DEPLOY_HOST> nightly.' > "$repo/specs/300-certified/spec.md"
+run_guard "$repo"
+assert_exit "C11 uncommitted redaction cleared" 0
+
+echo ""
+echo "--- C12 ADVERSARIAL: one concrete value swapped for ANOTHER is not a redaction ---"
+# Masked equality alone is not sufficient evidence. Both sides here carry a
+# concrete value, so the masked lines are identical, yet the meaning changed and
+# no placeholder was gained. Found by mutation testing: deleting the
+# "new line must gain a placeholder" check left every other case still passing.
+repo="$(c_stage c12-value-swap 'Primary region is us-east-1.aws.internal for all writes.')"
+printf '%s\n' 'Primary region is eu-west-2.aws.internal for all writes.' > "$repo/specs/300-certified/spec.md"
+commit_all "$repo" "2026-05-02T00:00:00Z" "chore(genericize): remove machine-local values"
+run_guard "$repo"
+assert_exit "C12 concrete-to-concrete swap still fails" 1
+
+echo ""
+echo "=== IMP-049 SCOPE-3 — carried-finding ledger ==="
+# A carry is a RECORD, never an EXEMPTION. The decisive assertion is L1: a fully
+# declared carry must STILL fail. A ledger entry that cleared a blocking gate
+# would be the same unvalidated self-assertion the proposal refuses.
+
+l_stage() {
+  local sid="$1" carry="$2"
+  local repo
+  repo="$(stage_repo "$sid")"
+  write_truth_files "$repo"
+  printf '%s\n' 'The system MUST retain audit records for 30 days.' > "$repo/specs/300-certified/spec.md"
+  write_state "$repo" "done" '"2026-05-01T00:00:00Z"' "false" '[]' "$carry"
+  commit_all "$repo" "2026-04-30T00:00:00Z" "baseline certified spec"
+  printf '%s\n' 'The system MUST retain audit records for 90 days.' > "$repo/specs/300-certified/spec.md"
+  commit_all "$repo" "2026-05-02T00:00:00Z" "docs(specs): reconcile stale annotations"
+  printf '%s' "$repo"
+}
+
+echo ""
+echo "--- L1: a fully declared carry is recorded but STILL FAILS ---"
+repo="$(l_stage l1-declared ',
+  "g088Carry": [ { "file": "specs/300-certified/spec.md", "reason": "reconciliation", "owner": "release-owner", "date": "2026-05-03" } ]')"
+run_guard "$repo"
+assert_exit "L1 declared carry still fails" 1
+assert_stderr_contains "L1" "carriedDeclared: 1"
+assert_stderr_contains "L1" "carriedUndeclared: 0"
+
+echo ""
+echo "--- L2: a carry missing a required field does NOT count as declared ---"
+repo="$(l_stage l2-malformed ',
+  "g088Carry": [ { "file": "specs/300-certified/spec.md", "reason": "reconciliation", "date": "2026-05-03" } ]')"
+run_guard "$repo"
+assert_exit "L2 malformed carry still fails" 1
+assert_stderr_contains "L2" "carriedDeclared: 0"
+assert_stderr_contains "L2" "carriedUndeclared: 1"
+
+echo ""
+echo "--- L3: no ledger at all reports the finding as undeclared ---"
+repo="$(l_stage l3-noledger '')"
+run_guard "$repo"
+assert_exit "L3 no ledger still fails" 1
+assert_stderr_contains "L3" "carriedUndeclared: 1"
+
+echo ""
 echo "=== Selftest verdict ==="
 printf '  Total assertions: %d\n' "$((PASS_COUNT + FAIL_COUNT))"
 printf '  Passed:           %d\n' "$PASS_COUNT"

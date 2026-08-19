@@ -19,7 +19,7 @@
 #   2. `kill -TERM "$watch_pid"` kills the SUBSHELL, not its `sleep` grandchild,
 #      so a single long sleep survives as an orphan for its whole duration.
 #
-# These three cases fail against the old implementation and pass against the
+# These four cases fail against the relevant old implementation and pass against the
 # fixed one. Case A is the adversarial case: it is the one that would regress if
 # the /dev/null redirection were ever removed as "noise".
 set -uo pipefail
@@ -40,6 +40,8 @@ command() {
 failures=0
 pass() { printf '  PASS  %s\n' "$1"; }
 fail() { printf '  FAIL  %s\n' "$1"; failures=$((failures + 1)); }
+tmp_root="$(mktemp -d)"
+trap 'rm -rf "$tmp_root"' EXIT INT TERM
 
 # --- Case A: instant command inside a command substitution returns instantly ---
 # Against the old watchdog this took the full 20s.
@@ -74,9 +76,36 @@ else
   fail "expected rc=7 within 3s, got rc=$rc after ${elapsed}s"
 fi
 
+# --- Case D: fallback children inherit a trappable SIGINT disposition -------
+# Without monitor mode around the asynchronous launch, Bash starts the command
+# with SIGINT ignored. A nested non-interactive Bash cannot undo that inherited
+# disposition, so its INT trap never runs and the watchdog eventually returns
+# 124 instead of the command's intended 130.
+signal_fifo="$tmp_root/sigint-ready"
+mkfifo "$signal_fifo"
+(
+  IFS= read -r signal_pid < "$signal_fifo"
+  kill -INT "$signal_pid"
+) &
+signaler_pid=$!
+start=$(date +%s)
+bubbles_run_with_timeout 10 bash -c '
+  trap "exit 130" INT
+  printf "%s\n" "$$" > "$1"
+  while :; do :; done
+' bash "$signal_fifo" >/dev/null 2>&1
+rc=$?
+elapsed=$(($(date +%s) - start))
+wait "$signaler_pid" 2>/dev/null || true
+if [ "$rc" -eq 130 ] && [ "$elapsed" -le 3 ]; then
+  pass "fallback child can trap SIGINT (rc=$rc, ${elapsed}s)"
+else
+  fail "fallback child SIGINT returned rc=$rc after ${elapsed}s (expected rc=130 within 3s)"
+fi
+
 if [ "$failures" -ne 0 ]; then
   printf 'guard-lib timeout selftest: %d failure(s)\n' "$failures"
   exit 1
 fi
-printf 'guard-lib timeout selftest: OK (3 cases)\n'
+printf 'guard-lib timeout selftest: OK (4 cases)\n'
 exit 0
