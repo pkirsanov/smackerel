@@ -115,11 +115,11 @@ else
 	echo "go-integration: NOTICE: acceptance-gate executed-assertion assertion NOT ENFORCED for this run — a focused --run selector (${go_run_selector}) is active. Only a full lane run with no --run selector enforces that TestAcceptanceGate_RoutingAccuracyAndCaptureFallback ran with a non-zero executed-assertion count."
 fi
 
-# Neither failure may mask the other: report both, then exit non-zero.
+# Neither failure may mask the other. The gate-check ERROR above is already on
+# stderr by this point, so reporting the go-test failure here still surfaces
+# both before the first exit decides the status.
 if [[ "$go_test_rc" -ne 0 ]]; then
 	echo "ERROR: go-integration: go test failed (exit ${go_test_rc})." >&2
-fi
-if [[ "$go_test_rc" -ne 0 ]]; then
 	exit "$go_test_rc"
 fi
 if [[ "$gate_marker_check_failed" -ne 0 ]]; then

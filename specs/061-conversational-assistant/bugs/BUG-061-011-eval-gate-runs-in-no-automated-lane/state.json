@@ -6,21 +6,21 @@
   "workflowMode": "bugfix-fastlane",
   "releaseTrain": "mvp",
   "status": "blocked",
-  "blockedReason": "Human acceptance only (Gate G136). uservalidation.md line 24 carries one unchecked acceptance item and NO agent may check it. Every engineering obligation this packet can discharge is discharged: the fix is committed (c7667d99), 27 of 28 DoD items are checked with inline raw evidence, artifact-lint exits 0, and the acceptance criteria the item names have both been demonstrated — `./smackerel.sh test integration` exits 0 emitting exactly one `ASSISTANT_ACCEPTANCE_GATE_V1 executed_assertions=210` line with 1974 pass / 0 fail, and `./smackerel.sh test unit --go --go-run 'TestEvalLaneContract' --verbose` passes all adversarial cases. OPERATOR NEXT STEP: re-run those two commands (or read the evidence recorded inline under the Group A/B DoD items in scopes.md), then check the box at uservalidation.md:24. The remaining G022 phases (simplify, stabilize, security, audit) have NOT been run and are deliberately NOT recorded as complete; the regression phase HAS been run and is now recorded in completedPhases, with its evidence under report.md § Regression Record. If a clean `done` is wanted rather than operator sign-off on the fix alone, those four specialists must execute first.",
+  "blockedReason": "Human acceptance only (Gate G136). uservalidation.md line 24 carries one unchecked acceptance item and NO agent may check it. Every engineering obligation this packet can discharge is discharged: the fix is committed (c7667d99), 27 of 28 DoD items are checked with inline raw evidence, artifact-lint exits 0, and the acceptance criteria the item names have both been demonstrated — `./smackerel.sh test integration` exits 0 emitting exactly one `ASSISTANT_ACCEPTANCE_GATE_V1 executed_assertions=210` line with 1974 pass / 0 fail, and `./smackerel.sh test unit --go --go-run 'TestEvalLaneContract' --verbose` passes all adversarial cases. OPERATOR NEXT STEP: re-run those two commands (or read the evidence recorded inline under the Group A/B DoD items in scopes.md), then check the box at uservalidation.md:24. The remaining G022 phases have NOW been run: simplify, stabilize, security and audit each executed on 2026-08-19 and are recorded in completedPhases, with per-phase evidence under report.md § Simplify Record / § Stabilize Record / § Security Record / § Audit Record. Simplify made one low-risk source change (merged a duplicated `if [[ \"$go_test_rc\" -ne 0 ]]` block in scripts/runtime/go-integration.sh); its guard suite and the full untagged suite were re-run at exit 0. Stabilize, security and audit each produced an evidenced result: the fail-loud lane coupling is spec-required (R3.1-R3.5), the SST chain carries no forbidden `:-` fallback, no secret or untrusted input is handled, and implementation-reality-scan exits 0 with 0 violations. Two non-functional artifact-hygiene observations were recorded rather than fixed: scopes.md does not reference the implementation files directly (reality-scan warning, owner bubbles.plan) and spec.md cites a stale line anchor 1351-1353 for a threshold SST that now sits at 1370-1371. These four phases were NOT certified into certification.certifiedCompletedPhases, because certifying a phase is bubbles.validate's act and validate has not re-run since. G136 remains the only operator-owned blocker.",
   "severity": "S1",
   "createdAt": "2026-08-10T20:45:00Z",
-  "lastUpdatedAt": "2026-08-19T02:05:00Z",
+  "lastUpdatedAt": "2026-08-19T03:40:00Z",
   "discoveredBy": "delivery-plan audit (docs/Product_Delivery_Plan.md § P3, D27)",
   "discoveredAt": "2026-08-10",
-  "completedPhases": ["discovery", "documentation", "analysis", "implement", "test", "validate", "regression"],
+  "completedPhases": ["discovery", "documentation", "analysis", "implement", "test", "validate", "regression", "simplify", "stabilize", "security", "audit"],
   "completedScopes": [],
   "execution": {
-    "activeAgent": "bubbles.regression",
-    "currentPhase": "regression",
+    "activeAgent": "bubbles.audit",
+    "currentPhase": "audit",
     "currentScope": "BUG-061-011-SCOPE-01",
     "completedScopes": [],
-    "completedPhaseClaims": ["discovery", "documentation", "analysis", "implement", "test", "validate", "regression"],
-    "lastUpdatedAt": "2026-08-19T02:05:00Z",
+    "completedPhaseClaims": ["discovery", "documentation", "analysis", "implement", "test", "validate", "regression", "simplify", "stabilize", "security", "audit"],
+    "lastUpdatedAt": "2026-08-19T03:40:00Z",
     "executionHistory": [
       {
         "agent": "bubbles.bug",
@@ -84,7 +84,7 @@
     "lockdownState": "open",
     "pendingGates": [
       "G136 human acceptance — uservalidation.md:24 unchecked; NO agent may check it (operator-only)",
-      "G022 — simplify, stabilize, security, audit phases have not been run and are not recorded as complete (regression HAS now been run and is recorded; see report.md § Regression Record)",
+      "G022 — simplify, stabilize, security and audit have NOW been run (2026-08-19) and are recorded in completedPhases; evidence under report.md § Simplify/Stabilize/Security/Audit Record. They are NOT in certifiedCompletedPhases because certification is bubbles.validate's act and validate has not re-run since",
       "G068 — 8 of 12 declared scenarios have no faithful DoD item (owner: bubbles.plan)",
       "G094 — spec.md lacks Domain Capability Model; design.md lacks Capability Foundation (owners: bubbles.analyst, bubbles.design)"
     ]

@@ -489,7 +489,7 @@ Every item requires: (1) implementation complete, (2) behaviour validated by exe
       216:func TestExecutedAssertions_ZeroOnEmptyCorpus(t *testing.T) {
       231:func TestFormatGateMarker_SingleLineParseableWithPrefix(t *testing.T) {
       --- 5/5 eval_lane_contract_test.go exists ---
-      -rw-r--r-- 1 philipk philipk 14061 Aug 10 21:17 internal/deploy/eval_lane_contract_test.go
+      -rw-r--r-- 1 <user> <group> 14061 Aug 10 21:17 internal/deploy/eval_lane_contract_test.go
 
   All five carry their named change: plan item 1 (`harness.go`) has all three new symbols; item 2 (`harness_test.go`) has all three new tests; item 3 (`acceptance_test.go`) calls `FormatGateMarker(r)` at line 65; item 4 (`go-integration.sh`) has `./tests/eval/...` appended to the `go_test_args` allow-list; item 5 (`eval_lane_contract_test.go`) exists as a new untracked file (14061 bytes).
 

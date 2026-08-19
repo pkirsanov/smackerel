@@ -1175,3 +1175,485 @@ Recorded so the absence is not mistaken for a clean result:
 - **No DoD checkbox was checked and no acceptance was recorded.** Gate G136 is
   operator-only; this phase has no standing to discharge it. `scopes.md` and
   `uservalidation.md` were not modified.
+
+---
+
+## Simplify Record — `bubbles.simplify`, 2026-08-19
+
+**Scope of review.** The seven files in `state.json::affectedSurface`. Commit
+`c7667d99` touches 66 files, but it carries three unrelated Stage 1 items; the
+other 59 belong to spec 108 (corpus grants) and BUG-064-003 (router warm-up) and
+are outside this bug's blast radius. Reviewing them here would be reviewing
+someone else's change.
+
+**Files inspected — every one, not a sample:**
+
+    scripts/runtime/go-integration.sh                    127 lines  c7667d99
+    tests/eval/assistant/acceptance_test.go              83 lines  c7667d99
+    tests/eval/assistant/harness.go                      389 lines  c7667d99
+    tests/eval/assistant/harness_test.go                 267 lines  c7667d99
+    internal/deploy/eval_lane_contract_test.go           325 lines  c7667d99
+    docs/Testing.md                                      920 lines  c7667d99
+    tests/e2e/assistant_regression_e2e_test.sh           268 lines  c7667d99
+
+### Finding S-1 — duplicated condition in the wrapper's exit block (FIXED)
+
+`scripts/runtime/go-integration.sh` closed with two **consecutive `if` blocks
+testing the identical condition**, the first echoing and the second exiting:
+
+    # Neither failure may mask the other: report both, then exit non-zero.
+    if [[ "$go_test_rc" -ne 0 ]]; then
+            echo "ERROR: go-integration: go test failed (exit ${go_test_rc})." >&2
+    fi
+    if [[ "$go_test_rc" -ne 0 ]]; then
+            exit "$go_test_rc"
+    fi
+    if [[ "$gate_marker_check_failed" -ne 0 ]]; then
+            exit 1
+    fi
+
+Nothing between the two blocks can change `go_test_rc`, so the split is pure
+duplication. **Merged** into one block. Behaviour is identical, and spec R3.5
+("neither failure may mask the other into a pass") still holds for the reason it
+always did: the gate-check `ERROR` is written to stderr **earlier**, inside the
+marker-check block, so both diagnostics still reach the operator before the first
+`exit` decides the status. The replacement comment now says that, instead of
+implying the redundant second block was what achieved it.
+
+**Diff:**
+
+    -# Neither failure may mask the other: report both, then exit non-zero.
+    +# Neither failure may mask the other. The gate-check ERROR above is already on
+    +# stderr by this point, so reporting the go-test failure here still surfaces
+    +# both before the first exit decides the status.
+     if [[ "$go_test_rc" -ne 0 ]]; then
+            echo "ERROR: go-integration: go test failed (exit ${go_test_rc})." >&2
+    -fi
+    -if [[ "$go_test_rc" -ne 0 ]]; then
+            exit "$go_test_rc"
+     fi
+     if [[ "$gate_marker_check_failed" -ne 0 ]]; then
+
+**Verification — the file is guarded, so the guard had to be re-run.**
+`internal/deploy/eval_lane_contract_test.go` asserts on literal substrings of
+this exact file, so an edit here is only safe if that suite still passes.
+
+    --- bash -n ---
+    bash -n exit=0
+    --- shellcheck -x ---
+    shellcheck exit=0
+    --- identical-condition count (was 2) ---
+    1
+
+Command: `./smackerel.sh test unit --go --go-run 'TestEvalLaneContract' --verbose`
+· Exit code: `0`
+
+    --- PASS: TestEvalLaneContract_LaneRunsGateAndAssertsExecutedAssertions (0.00s)
+    --- PASS: TestEvalLaneContract_AcceptsMinimalConformantFixtures (0.00s)
+    --- PASS: TestEvalLaneContract_AdversarialRejectsMissingEvalPackage (0.00s)
+    --- PASS: TestEvalLaneContract_AdversarialRejectsMissingOrZeroAssertion (0.01s)
+        --- PASS: TestEvalLaneContract_AdversarialRejectsMissingOrZeroAssertion/A2_a
+        --- PASS: TestEvalLaneContract_AdversarialRejectsMissingOrZeroAssertion/A3_a
+    --- PASS: TestEvalLaneContract_AdversarialRejectsConditionalOrAbsentMarker (0.00s)
+        --- PASS: TestEvalLaneContract_AdversarialRejectsConditionalOrAbsentMarker/A
+        --- PASS: TestEvalLaneContract_AdversarialRejectsConditionalOrAbsentMarker/A
+    --- PASS: TestEvalLaneContract_AdversarialRejectsBypassOrBroadenedSkip (0.00s)
+        --- PASS: TestEvalLaneContract_AdversarialRejectsBypassOrBroadenedSkip/A6_by
+        --- PASS: TestEvalLaneContract_AdversarialRejectsBypassOrBroadenedSkip/A7_sk
+    ok      github.com/smackerel/smackerel/internal/deploy  0.055s
+    [go-unit] go test ./... finished OK
+    EXIT=0
+
+The whole untagged suite was run, not only the contract file: `go test ./...`
+finished OK at exit `0`, so nothing else in the repository regressed on this edit.
+
+### Inspected and deliberately NOT changed
+
+- **The gate-marker literal is duplicated four ways** — `harness.go:343`
+  (`const GateMarkerPrefix`), `go-integration.sh:65` (`gate_marker_prefix=`), and
+  `eval_lane_contract_test.go:25,33`. This looks like duplication and is not a
+  defect: the sites span Go and bash, so no single symbol can serve both, and the
+  contract test exists precisely to keep them in lockstep — it asserts the bash
+  assignment verbatim. Collapsing it is impossible; guarding it is what was done.
+- **No dead code.** All three new exported symbols have real consumers:
+  `ExecutedAssertions` (harness.go:352 + 3 test sites), `FormatGateMarker`
+  (acceptance_test.go:65 + harness_test.go + contract fixtures), `GateMarkerPrefix`
+  (harness.go:351 + harness_test.go:242). No unused imports: `fmt` is used twice in
+  `acceptance_test.go`, `strconv` at `harness_test.go:257`.
+- **`shellcheck -x` is clean at exit 0** on the wrapper, before and after the edit.
+
+**No other simplification was found, and none was invented.** The remaining
+complexity in the wrapper — the single-assignment `PIPESTATUS` capture, the
+`mktemp`/`trap` pair, the two-branch marker parse — is load-bearing; each is
+required by a specific spec requirement (R3.5, R3.1, R3.2) and removing any of it
+would weaken the gate this bug exists to arm.
+
+---
+
+## Stabilize Record — `bubbles.stabilize`, 2026-08-19
+
+**Question.** Wiring the acceptance gate into the integration lane makes the lane
+depend on it. What reliability, performance, build, config and resource risk does
+that introduce?
+
+### Finding T-1 — the coupling is fail-loud, and that is specified, not accidental
+
+A failing gate **does** now fail the whole integration lane, by two independent
+paths: the gate's package is inside the `go test` argv, so a threshold failure
+raises `go_test_rc`; and the marker assertion exits `1` on its own even when
+`go test` exits `0`. That second path is the entire point — it is the shape of
+the original defect. `spec.md` requires it explicitly:
+
+- **R3.1** — a full-lane run MUST fail if no executed-assertion emission is present
+- **R3.2** — MUST fail if the emitted count is `0`
+- **R3.3** — "the lane MUST fail when `go test` exits `0` but the gate did not run"
+- **R3.5** — when both fail, "neither failure may mask the other into a pass"
+
+Mechanically confirmed present:
+
+    R1       eval pkg in lane argv                                      SATISFIED
+    R3.1     fails on absent marker                                     SATISFIED
+    R3.2     fails on zero count                                        SATISFIED
+    R3.3     gate verdict independent of rc                             SATISFIED
+    R3.4     error names the gate                                       SATISFIED
+    R5.2     focused-run NOT ENFORCED notice                            SATISFIED
+    R5.3     no bypass token present                                    SATISFIED
+    R7.1     e2e R10-3 prose corrected                                  SATISFIED
+    R7.2     docs/Testing.md documents R3/R5                            SATISFIED
+
+**Verdict: intended.** Not a stability finding.
+
+### Finding T-2 — the two thresholds exist, and the SST chain is fail-loud end to end
+
+This repo's `smackerel-no-defaults` policy forbids `${VAR:-default}` for an
+SST-managed runtime value, so the shape had to be measured rather than assumed.
+The whole chain was traced:
+
+    SOURCE      config/smackerel.yaml:1370   routing_accuracy_min: 0.85   # REQUIRED
+                config/smackerel.yaml:1371   capture_fallback_min: 1.0    # REQUIRED
+    GENERATOR   scripts/commands/config.sh:2022  ="$(required_value assistant.eval.routing_accuracy_min)"
+                scripts/commands/config.sh:2023  ="$(required_value assistant.eval.capture_fallback_min)"
+    EMISSION    scripts/commands/config.sh:2926  ASSISTANT_EVAL_ROUTING_ACCURACY_MIN=${ASSISTANT_EVAL_ROUTING_ACCURACY_MIN}
+                scripts/commands/config.sh:2927  ASSISTANT_EVAL_CAPTURE_FALLBACK_MIN=${ASSISTANT_EVAL_CAPTURE_FALLBACK_MIN}
+    GENERATED   config/generated/test.env:575    ASSISTANT_EVAL_ROUTING_ACCURACY_MIN=0.85
+                config/generated/test.env:576    ASSISTANT_EVAL_CAPTURE_FALLBACK_MIN=1.0
+    CONSUMERS   internal/config/assistant.go:442      mustFloat(...)
+                tests/eval/assistant/acceptance_test.go:47  mustFloatEnv(...)
+
+Both values are present and match the SST source. Every link refuses absence
+rather than substituting:
+
+    required_value() {
+      local key="$1"
+      local value
+      value="$(yaml_get "$key")" || config_key_missing "$key"
+      printf '%s' "$value"
+    }
+
+The emission is a **bare `${VAR}`**, not `${VAR:-…}`. A dedicated scan for the
+forbidden form across `*.sh`, `*.go`, `*.yaml`, `*.yml` found none:
+
+    ===== NO-DEFAULTS scan: any :- or - fallback on these two vars, anywhere =====
+    fallback-scan exit=1 (1 = no fallback form found = COMPLIANT)
+
+And the consumer fatals rather than defaulting:
+
+    v := os.Getenv(key)
+    if v == "" {
+            t.Fatalf("SST contract violation: %s is empty; should be set by config/generated/<env>.env", key)
+    }
+    f, err := strconv.ParseFloat(v, 64)
+    if err != nil {
+            t.Fatalf("SST contract violation: %s = %q is not a float: %v", key, v, err)
+    }
+
+**Verdict: COMPLIANT with `smackerel-no-defaults`.** No `:-` shape exists on this
+path. No finding.
+
+### Finding T-3 — the added package's cost against the lane budget is negligible
+
+The lane runs serially under a fixed ceiling:
+
+    48:go_test_args=(-p 1 -tags integration -v -count=1 -timeout 300s)
+    53:go_test_args+=(./tests/integration/... ./internal/notification/... ./internal/assistant/... ./internal/cardrewards/... ./tests/eval/...)
+
+Measured, not estimated:
+
+    --- PASS: TestRun_AgainstShippedCorpus (0.00s)
+    --- PASS: TestExecutedAssertions_CountsRoutingPlusCaptureRows (0.00s)
+    --- PASS: TestExecutedAssertions_ZeroOnEmptyCorpus (0.00s)
+    --- PASS: TestFormatGateMarker_SingleLineParseableWithPrefix (0.00s)
+    ok      github.com/smackerel/smackerel/tests/eval/assistant     0.023s
+
+`0.023s` against a `300s` ceiling — under 0.01% of the budget. Corpus is
+`tests/eval/assistant/corpus.yaml`, 794 lines / 31,157 bytes / **150 rows**.
+
+### Finding T-4 — the added package contributes no new flakiness surface
+
+The gate is pure in-memory computation. Its entire import set:
+
+    "fmt"
+    "gopkg.in/yaml.v3"
+    "os"
+    "path/filepath"
+    "sort"
+    "strconv"
+    "strings"
+    "testing"
+
+A scan for network, database, container and subprocess use across the package
+found nothing:
+
+    --- network / db / container references (expect none) ---
+    external-dep scan exit=1 (1 = none found)
+
+No socket, no `pgx`/`sql`, no `docker`, no `exec.Command`. A deterministic
+classifier over a committed YAML file cannot flake, so making the lane depend on
+it does not make the lane less reliable — only stricter.
+
+### Finding T-5 — the new `trap`/`mktemp` pair introduces no collision or leak
+
+`trap … EXIT` overwrites any prior EXIT trap, so a collision had to be excluded:
+
+    --- traps in go-integration.sh ---
+    70:trap cleanup_gate_output EXIT
+    --- traps in the sourced helper ---
+    helper-trap exit=1 (1 = helper sets no trap = no collision)
+
+    go-unit.sh       traps=0 mktemp=0
+    go-e2e.sh        traps=0 mktemp=0
+    go-stress.sh     traps=0 mktemp=0
+
+Exactly one trap in the file; the sourced `_ensure_envsubst.sh` sets none. No
+collision. Temp-file placement confirmed empirically below (Security S-2).
+
+### Observation T-6 — a stale line reference in this packet's own `spec.md` (NOT fixed)
+
+`spec.md` § Traceability cites the threshold SST as
+`config/smackerel.yaml:1351-1353`. The keys are actually at **1370-1371** — the
+YAML has grown since the spec was written. The **keys named are correct**; only
+the line anchor drifted, so nothing functional is wrong and no behaviour depends
+on it. Recorded rather than silently corrected: `spec.md` is plan-owned, and
+editing another owner's artifact to tidy a line number is not this phase's call.
+Low severity; does not warrant its own BUG packet.
+
+---
+
+## Security Record — `bubbles.security`, 2026-08-19
+
+**Question.** Does the change introduce secret handling, a leak path, or an
+untrusted-input path?
+
+### Finding S-1 — the wrapper cannot print a secret value (no fallback expansion)
+
+This repo forbids `${VAR:-mask}` because it prints the **real value** whenever the
+variable is set. A scan of the changed wrapper for any `:-` or `-` expansion:
+
+    ===== S1. Forbidden value-printing expansion in the changed wrapper =====
+    exit=1 (1 = no :- / - fallback expansion present = COMPLIANT)
+
+Zero occurrences. Every variable the wrapper echoes was then enumerated
+line-by-line rather than spot-checked:
+
+    42:
+    50: $go_run_selector
+    83: ${tee_rc}
+    95: ${gate_marker_prefix}
+    98: ${gate_marker_count} ${gate_marker_prefix}
+    105: ${gate_marker_line}
+    108: ${gate_marker_line}
+    111: ${gate_executed_assertions}
+    115: ${go_run_selector}
+    122: ${go_test_rc}
+
+Seven distinct variables: a fixed literal prefix, three integers, two exit codes,
+the operator's own `-run` regex, and the marker line — which by construction
+carries only counts and two floats. **None is secret-bearing.**
+
+### Finding S-2 — the capture file is owner-only, outside the tree, and removed on exit
+
+The gate assertion reads a tee'd copy of lane output, so its placement and mode
+matter. Measured on the real `mktemp` this wrapper calls:
+
+    mktemp path: /tmp/tmp.TorKArhkyu
+    mktemp mode: 600 <user>:<group>
+    LOCATION: outside repo tree ($TMPDIR/tmp) — no untracked artifact in the working tree
+
+Mode `600`, owner-only, outside `/workspace`, deleted by `cleanup_gate_output` on
+`EXIT`. **Honest caveat, recorded not glossed:** the tee captures the *entire*
+lane's stdout+stderr, not just the gate's lines, so anything another integration
+test printed lands there too. That does not *widen* exposure — the same bytes are
+already streaming to the operator's console by design — and `600` plus
+EXIT-removal bounds it to the invoking user and the process lifetime. `trap` does
+not fire on `SIGKILL`, so a hard kill would strand one mode-`600` file in `/tmp`.
+Bounded and standard; not a finding.
+
+### Finding S-3 — no untrusted input; the read path is a fixed in-repo literal
+
+    func corpusPath(t *testing.T) string {
+            t.Helper()
+            abs, err := filepath.Abs("corpus.yaml")
+            ...
+            return abs
+    }
+
+The path is a literal resolved relative to the package directory — not from an
+environment variable, not from argv, so there is no traversal or substitution
+vector. `LoadCorpus` takes the path as a parameter and its only caller passes
+that fixed value. The corpus is version-controlled:
+
+    corpus last touched: abd60886 pkirsanov Sun Jul 12 15:06:42 2026 -0700
+    tracked in git: YES
+
+The package's **entire** environment surface is one call site:
+
+    ===== S7. full env-var surface read by the eval package =====
+    tests/eval/assistant/acceptance_test.go:35:     v := os.Getenv(key)
+
+reached only through `mustFloatEnv` for the two non-secret threshold keys. No
+credential, token or connection string is read.
+
+### Finding S-4 — no credential handling anywhere in the changed surface
+
+A scan for `token|secret|password|api_key|credential|bearer|passphrase|COSIGN|auth_token`
+across the five changed code files returned matches that are **all false
+positives**, each inspected individually:
+
+    tests/eval/assistant/harness.go:161:    notifTokens := []string{"remind me", ...}
+    tests/eval/assistant/harness.go:168:    weatherTokens := []string{"weather", ...}
+    tests/eval/assistant/harness.go:225:    calendarTokens := []string{"monday", ...}
+    tests/eval/assistant/harness_test.go:77:    "Note: cosign needs an OIDC token.",
+    internal/deploy/eval_lane_contract_test.go:65:  var evalLaneBypassTokens = []string{
+
+Three are keyword-classifier vocabularies (`…Tokens` in the lexical sense), one is
+a corpus *sample sentence* used as classifier input, and one is the guard's own
+list of refusal-shaped bypass strings. **No secret, credential, or key material is
+handled by this change.**
+
+**Security verdict: no findings.**
+
+---
+
+## Audit Record — `bubbles.audit`, 2026-08-19
+
+### A-1 — implementation-reality scan
+
+Command: `bash .github/bubbles/scripts/implementation-reality-scan.sh <packet> --verbose`
+· Exit code: `0`
+
+    --- Scan 4: Prohibited Simulation Helpers in Production ---
+    --- Scan 5: Default/Fallback Value Patterns ---
+    --- Scan 6: Live-System Test Interception ---
+    --- Scan 7: IDOR / Auth Bypass Detection (Gate G047) ---
+    --- Scan 8: Silent Decode Failure Detection (Gate G048) ---
+    ============================================================
+      IMPLEMENTATION REALITY SCAN RESULT
+    ============================================================
+      Files scanned:  11
+      Violations:     0
+      Warnings:       1
+    🟡 PASSED with 1 warning(s) — manual review advised
+    SCAN_EXIT=0
+
+**The one warning, stated rather than buried:**
+
+    ℹ️  INFO: Scopes yielded 0 files — falling back to design.md for file discovery
+    ⚠️  WARN: Resolved 11 file(s) from design.md fallback — scopes.md should reference these directly
+
+`scopes.md` does not name the implementation files, so the scanner fell back to
+`design.md`. It still resolved the correct 11 files and passed with zero
+violations, so this is an artifact-hygiene gap, not a code defect. Owner is
+`bubbles.plan` (`scopes.md` is plan-owned). Recorded, not silently absorbed.
+
+### A-2 — no stub, TODO, or fabrication in the changed source
+
+    ===== A2. stub/TODO/fabrication scan on the changed source =====
+    stub-scan exit=1 (1 = none found)
+
+Pattern `TODO|FIXME|XXX|HACK|STUB|unimplemented|not implemented|panic("TODO`
+across all six changed code/script files: **zero matches**.
+
+### A-3 — delivered change matches `spec.md`
+
+Ten requirements were checked mechanically against the delivered files (table
+reproduced under Stabilize T-1: R1, R3.1–R3.4, R5.2, R5.3, R7.1, R7.2 all
+SATISFIED). Two further requirements are satisfied by executed tests rather than
+by static shape:
+
+- **R4** ("the count is capable of being zero") — `TestExecutedAssertions_ZeroOnEmptyCorpus`
+  PASSED in this session. Without it, R3.2 would be decorative.
+- **R6.1–R6.5** (adversarial regression outside the guarded lane) — all six
+  `TestEvalLaneContract_*` tests plus sub-cases A2/A3/A4/A5/A6/A7 PASSED, and the
+  suite ran in the **unit** lane (`ok …/internal/deploy 0.055s`).
+
+**One correction to my own first pass, recorded because the correction is the
+point.** An initial automated check reported `R6.4 *** NOT SATISFIED ***`, keyed
+on the string `build integration` appearing in `internal/deploy/eval_lane_contract_test.go`.
+That check was wrong. The file carries **zero** build directives:
+
+    --- every 'build integration' occurrence ---
+    11:// tests/eval/assistant/acceptance_test.go behind `//go:build integration`,
+    --- actual //go:build directives in the file ---
+    go:build directive count=0
+
+The single match is a **comment describing the other file's tag**. R6.4 is
+**SATISFIED**, proven twice over: no `//go:build` line exists, and the suite
+demonstrably executed in the untagged unit lane. A guard keyed on a substring
+that also appears in prose is exactly the vacuous-signal failure this bug is
+about, so the false positive is reported rather than quietly dropped.
+
+### A-4 — checked DoD items are genuinely backed by inline evidence
+
+    checked   [x] : 31
+    unchecked [ ] : 3
+
+The three unchecked items are all downstream of operator acceptance:
+
+    806:- [ ] `bug.md` status advanced to Fixed and then Verified
+    820:      - [ ] Verified
+    821:      - [ ] Closed
+
+Correctly unchecked. Evidence shape was sampled at item **A1** and is real
+captured output carrying command, tree, and exit code — not a summary:
+
+    **Claim Source:** executed · **Tree:** working tree, HEAD `63cc1349` · **Exit code:** `0`
+    **Command:** `./smackerel.sh test unit --go --go-run 'TestExecutedAssertions_...' --verbose`
+
+          === RUN   TestExecutedAssertions_CountsRoutingPlusCaptureRows
+          --- PASS: TestExecutedAssertions_CountsRoutingPlusCaptureRows (0.00s)
+          PASS
+          ok      github.com/smackerel/smackerel/tests/eval/assistant     0.011s
+
+`artifact-lint` independently confirms the property across all 31:
+
+    ✅ All checked DoD items in scopes.md have evidence blocks
+    ✅ No unfilled evidence template placeholders in scopes.md
+    ✅ No unfilled evidence template placeholders in report.md
+    ✅ No repo-CLI bypass detected in report.md command evidence
+
+### A-5 — operator-only boundary intact
+
+    ===== A4. uservalidation.md acceptance box (MUST stay unchecked - G136) =====
+    24:- [ ] **What:** `./smackerel.sh test integration` executes `TestAcceptanceGate_...`
+    ===== A5. Human Acceptance Record present? (MUST be absent) =====
+    exit=1 (1 = absent, correct)
+
+`uservalidation.md:24` remains **unchecked** and no `Human Acceptance Record`
+exists. No agent may discharge G136; none of these four phases attempted to.
+
+**Audit verdict: the delivered change matches the specification. No violations.
+Two artifact-hygiene observations recorded (A-1 warning, Stabilize T-6), neither
+functional, both owned by `bubbles.plan`.**
+
+### Honest limits of these four phases
+
+- **The integration lane was NOT executed in this session.** Nothing above claims
+  it passed, failed, or was measured. The runtime half continues to rest on the
+  `bubbles.test` evidence recorded earlier in this report; what these phases add
+  is static, contractual and measured-in-the-unit-lane evidence.
+- **One source file was changed** (`scripts/runtime/go-integration.sh`, Finding
+  S-1). Its guard suite and the full untagged suite were re-run at exit `0`.
+- **BUG-061-013 remains open and was not touched** by these phases.
+- **No DoD checkbox was checked; no acceptance was recorded.** Status stays
+  `blocked` on G136, which is operator-only.
+
