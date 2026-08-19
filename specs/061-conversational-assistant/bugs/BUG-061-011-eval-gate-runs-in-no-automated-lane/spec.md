@@ -6,6 +6,28 @@ Define the behaviour the repository's test tooling MUST exhibit so that the assi
 
 Scope boundary: this specification governs **execution and reporting of the gate**. It does not change the gate's thresholds, the corpus, or the harness classifier, and it makes no claim about corpus-grant enforcement (spec 108, D25/D28), which is a different axis of assurance.
 
+### Single-Capability Justification
+
+Gate G094's proportionality trigger fires on this packet, so this section records why one capability is the correct shape here and why a full domain-capability model would be ceremony.
+
+**What actually triggered the gate.** All four trigger hits are the same word — *connector* — and not one of them is in this file or in `design.md`. They are the substring inside the path `internal/connector/` in `scopes.md`, at four places that each say the opposite of a capability family:
+
+| `scopes.md` line | What the line says |
+|---|---|
+| 29 | lists `internal/connector/` among the trees this packet does **not** touch |
+| 259, 289 | pasted lane transcript: `ok … /internal/connector/youtube … [no tests to run]` |
+| 933 | again lists `internal/connector/` among the untouched trees |
+
+Two exclusion lists and two lines of captured `go test` output. The gate matched a substring in evidence prose. No connector, adapter, provider, or driver is introduced, extended, or varied by this packet.
+
+**The single capability.** *An existing acceptance gate is bound to an automated lane, and its execution is proved by a measured count instead of asserted by a comment.* R1–R7 are seven requirements on that one capability — where it runs (R1), what it emits (R2), when the lane refuses (R3), that the measurement can genuinely be zero (R4), how a focused run behaves (R5), that the binding is guarded (R6), and that stale prose is corrected (R7). Seven requirements on one capability, not seven capabilities.
+
+**Why no variation axis exists at the spec level.** An axis needs two or more members a caller could choose between. This specification names exactly one of each: one gate (`TestAcceptanceGate_RoutingAccuracyAndCaptureFallback`), one lane that must run it, one marker vocabulary (a single fixed prefix, versioned `V1`), and one enforcement rule.
+
+R5's full-lane/focused-run distinction is the nearest candidate, and it is deliberately not an axis: R5.1 and R5.4 describe two invocation modes of the *same* rule, and R5.3 forbids the focused mode from becoming a selectable bypass. A caller chooses a test selector; the rule's response to that choice is fixed and unconfigurable.
+
+**What would change this.** A second gate needing the same binding — another corpus, or an equivalent floor in another lane — would make *which gate, which lane, which floor* a real axis and would justify promoting this section to a domain capability model. No second member exists today, and R2.3's single-fixed-prefix contract would have to be reopened first. Modelling the family now would be abstraction ahead of its second member.
+
 ## Definitions
 
 | Term | Definition |

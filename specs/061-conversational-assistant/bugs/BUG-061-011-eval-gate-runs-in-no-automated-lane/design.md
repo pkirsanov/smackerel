@@ -220,6 +220,35 @@ Complementary harness-level tests in `tests/eval/assistant/harness_test.go` (unt
 
 `TestExecutedAssertions_ZeroOnEmptyCorpus` is the anti-tautology proof for R3.2. Without it, "assert count ≥ 1" could be a check on a quantity that is positive by construction — which would be a decorative gate protecting a decorative gate.
 
+### Single-Implementation Justification
+
+Gate G094 applies to this packet, so this section records why the fix is one implementation rather than a foundation with concrete implementations behind it. The trigger itself is examined in `spec.md` § *Single-Capability Justification*: all four hits are the substring `connector` in `scopes.md`, in two lists of trees this packet does **not** touch and two pasted `go test` transcript lines. Nothing in this design introduces a connector, adapter, provider, or driver.
+
+**Three roles in one pipeline, not three implementations of one thing.** Four files carry the fix, and they do invite the foundation reading, so it is worth stating exactly what each one does. Every path and line reference below was verified against the working tree in this session:
+
+| File | Role | Verified evidence |
+|------|------|-------------------|
+| `tests/eval/assistant/harness.go` | defines the vocabulary | `ExecutedAssertions` `:335`, `GateMarkerPrefix` `:343`, `FormatGateMarker` `:349`; file carries no build tag |
+| `tests/eval/assistant/acceptance_test.go` | **produces** the marker | `fmt.Println(FormatGateMarker(r))` at `:65`, ahead of the `if !t.Failed()` block at `:80`; `//go:build integration` at `:1` |
+| `scripts/runtime/go-integration.sh` | **consumes** and enforces | `./tests/eval/...` in the argv at `:53`, prefix at `:65`, enforcement gated on an empty selector at `:88`, count parsed and floored at `:102`–`:108`, skip notice at `:115` |
+| `internal/deploy/eval_lane_contract_test.go` | **guards** the pairing | `package deploy`, no build tag, so it runs in `go test ./...` (`scripts/runtime/go-unit.sh:67`) |
+
+That is a producer, a consumer, and a guard over one shared vocabulary. A capability foundation means an abstraction with two or more interchangeable members behind it. Here `FormatGateMarker` has exactly one caller, `GateMarkerPrefix` has exactly one producer and exactly one consumer, and the guard has exactly one pairing to watch. Listing these three roles as concrete implementations would assert an interchangeability that does not exist, and would send the next reader looking for a second implementation that was never written.
+
+**The plan shape agrees.** A foundation/implementation split is expected to carry a scope graph — a scope tagged `foundation: true`, with overlay scopes declaring `Depends On` it. `scopes.md` carries neither marker, because this packet is scope 1 of 1. The work was not decomposed that way because it does not decompose that way.
+
+**Variation axes, stated rather than invented.** Exactly one axis is real, and it is already implemented: **build-tag lane membership**. The gate is `integration`-tagged, so it runs only when its package is also named in the lane's allow-list — that two-half requirement is the whole root cause of this bug. The vocabulary and the guard are untagged and run in the default lane. The split is load-bearing rather than incidental: R6.4 requires the guard not to depend on the lane it guards, so the single edit that removes the gate from the lane cannot also disable the test that detects the removal. It is one axis with two positions fixed at design time, not a dimension any caller varies at run time.
+
+The further axes a foundation split would need are absent, and saying why is more useful than listing plausible-sounding ones:
+
+| Candidate axis | Why it is absent |
+|---|---|
+| Which gate is measured | One gate exists. A second corpus, or an equivalent floor elsewhere, would create the axis; neither exists. |
+| Which lane enforces | R5.4 fixes enforcement to the full-lane run. The focused-run path is the same rule declining to fire (`:88`, notice at `:115`), not a second strategy, and R5.3 forbids it becoming selectable. |
+| Which marker shape | One fixed prefix, versioned `V1`. The lane refuses more than one marker line by design, so a second shape would be a new prefix and a new consumer branch rather than a variant of this one. |
+
+**What would justify promotion.** A second gate needing the same binding. At that point the vocabulary in `harness.go` gains a second producer, *which gate* becomes a genuine axis, and this section should be replaced by the foundation-and-implementations split with a matching foundation scope in the plan. Building that now would be the premature abstraction this same gate penalises when the execution shape is `one-off`.
+
 ### Alternative Approaches Considered
 
 1. **Add `./tests/eval/...` to the package list and stop there (the literal two-file reading).** Rejected. It satisfies R1 but not R2, R3, R4, or R6. The Stage 1 criterion explicitly demands a reported non-zero count, and none is emitted today. It also leaves the invariant unguarded: the identical regression could land again in one line with nothing turning red — which is how the bug arose in the first place.
