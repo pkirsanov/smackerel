@@ -8,23 +8,23 @@
   "status": "in_progress",
   "severity": "S2",
   "createdAt": "2026-08-19T00:30:12Z",
-  "lastUpdatedAt": "2026-08-19T00:30:12Z",
+  "lastUpdatedAt": "2026-08-19T23:26:00Z",
   "discoveredBy": "BUG-061-011 regression phase; independently re-verified by the operator and again by bubbles.bug at HEAD 4895d446",
   "discoveredAt": "2026-08-19",
-  "completedPhases": [],
-  "completedScopes": [],
+  "completedPhases": ["implement"],
+  "completedScopes": ["BUG-061-013-SCOPE-01"],
   "affectedSurface": [
     "internal/deploy/envsubst_wrapper_contract_test.go"
   ],
   "execution": {
-    "activeAgent": "bubbles.bug",
-    "currentPhase": "analysis",
+    "activeAgent": "bubbles.implement",
+    "currentPhase": "implement",
     "currentScope": "BUG-061-013-SCOPE-01",
-    "substate": "filed_not_fixed",
-    "completedScopes": [],
-    "completedPhaseClaims": [],
-    "lastUpdatedAt": "2026-08-19T00:30:12Z",
-    "nextRequiredOwner": "bubbles.implement",
+    "substate": "implemented",
+    "completedScopes": ["BUG-061-013-SCOPE-01"],
+    "completedPhaseClaims": ["implement"],
+    "lastUpdatedAt": "2026-08-19T23:26:00Z",
+    "nextRequiredOwner": "bubbles.test",
     "executionHistory": [
       {
         "agent": "bubbles.bug",
@@ -34,23 +34,32 @@
         "statusBefore": "not_started",
         "statusAfter": "in_progress",
         "summary": "Filed BUG-061-013 at HEAD 4895d446. NO FIX IMPLEMENTED and no source file touched; every DoD item in scopes.md and every delivery item in uservalidation.md is unchecked. The defect was reported by the BUG-061-011 regression phase and by the operator, and was RE-VERIFIED here rather than restated: (1) `grep -nE '^\\s*go\\s+test\\b' scripts/runtime/go-integration.sh` exits 1 with no output, which is the exact pattern compiled at internal/deploy/envsubst_wrapper_contract_test.go:82; (2) `grep -n 'go test'` on the same file returns line 76 `if ! go test \"${go_test_args[@]}\" 2>&1 | tee \"$gate_output_file\"; then`, whose `if ! ` prefix defeats the `^\\s*` anchor; (3) the green subtest was CONFIRMED IN THIS SESSION rather than taken on report — `./smackerel.sh test unit --go --go-run 'TestEnvsubstWrapperContract' --verbose` exits 0 with a literal `--- PASS: TestEnvsubstWrapperContract_LiveWrappers/go-integration.sh (0.00s)` line and `ok github.com/smackerel/smackerel/internal/deploy 0.115s`. No drift from the reported observations was found. ROOT CAUSE, located in source: two composing mistakes. Cause 1 — envsubstGoTestRE is lexical and anchored, so it encodes a syntax assumption; its own comment concedes only that 'Whitespace-leading is OK', which is false for `if`, `if !`, `&&`, `||`, pipelines, `env VAR=x`, or `timeout N`. Cause 2 — line 108's `goTestIdx != nil &&` short-circuit reads absence as compliance, so a zero match returns nil. The function is internally inconsistent: the source-line locator (92-96) and the call locator (98-101) both ERROR on absence; only the go-test locator passes. The charitable reading of `!= nil` ('nothing to order against') is sound only if the locator is complete; because it is anchored, zero-match actually means 'runs go test in a form I do not recognise'. envsubstTrackedWrappers (lines 55-60) is itself the disproof — membership asserts the wrapper runs go test, so a tracked wrapper with zero matches is self-contradictory and must fail. ORIGIN traced by execution: c7667d99 ('feat(stage-1): eval-gate lane wiring…', the BUG-061-011 fix) changed the file by 74 insertions / 2 deletions; at c7667d99^ line 55 read `go test \"${go_test_args[@]}\"` and MATCHED. BLAST RADIUS measured: go-integration.sh is the ONLY wrapper currently blind — go-unit.sh (line 67), go-e2e.sh (line 89) and go-stress.sh (line 50) all still match — but all four share the zero-match branch, so the latent radius is all four (recorded in report.md as an inference, not an observation). WHY NOTHING CAUGHT IT: all three adversarial fixtures (lines 184, 204, 224) write `go test ./...` bare and at line start, so the regex matches in every fixture the suite owns and the zero-match branch has no test at all. FIX DIRECTIONS with tradeoffs are in design.md; PRIMARY is (a) make zero-match a hard failure, chosen because it is the only option that fixes the class rather than the instance — (b) widening the regex and (c) semantic parsing both improve the locator's reach, and neither changes what happens when the locator is out of reach, which is the actual defect. (a) and (b) must land together: (a) alone leaves the lane RED on a true finding, (b) alone turns it green while the silent-pass hole stays open. SEVERITY IS DELIBERATELY NOT INFLATED: ensure_envsubst runs at line 14 and go test at line 76, so the ordering the contract protects genuinely holds and no user-facing behaviour is asserted broken. ARTIFACT SET — all SEVEN were created (bug.md, spec.md, design.md, scopes.md, report.md, uservalidation.md, state.json) as the deliberate UNION of two disagreeing definitions in this repo, a conflict filed this session as RTE-N6 in docs/releases/next/actions.md: the prose authorities (.github/skills/bubbles-bug-template/SKILL.md and .github/agents/bubbles_shared/critical-requirements.md:105) name bug.md/spec.md/design.md/scopes.md/report.md/state.json, while enforcement (artifact-lint.sh:401-406 and state-transition-guard.sh:725) requires spec.md/design.md/uservalidation.md/state.json plus scopes.md and report.md and never checks bug.md. The union satisfies both; bug.md was confirmed absent from artifact-lint's forbidden_artifacts list before relying on it. scenario-manifest.json was NOT created — no enforcement path requires it (artifact-lint has zero references; state-transition-guard consumes it only when present), and it is a completion-time artifact rather than a filing-time one. NOT RUN and recorded as such in report.md: the full unit lane, integration, e2e, stress, lint, format; any red-then-green pair (impossible pre-fix); and any behavioural mutation of go-integration.sh to observe the guard failing to catch inverted ordering, which the change boundary forbids. No commit and no push was made."
+      },
+      {
+        "agent": "bubbles.implement",
+        "runStartedAt": "2026-08-19T23:15:37Z",
+        "runCompletedAt": "2026-08-19T23:26:00Z",
+        "phasesExecuted": ["implement"],
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "summary": "Implement phase, executed by the declared specialist. PROVENANCE, STATED PLAINLY: this session did NOT author the code change. The fix is commit 40a9e942, whose only source path is internal/deploy/envsubst_wrapper_contract_test.go, made in an earlier session this agent never observed — the commit is the evidence, not a remembered session. What this session did was VERIFY that implementation against the repository rather than accept it on report, and then execute the implement-phase gates. NO source change was required and none was made: the working tree was clean at session start (git status --porcelain empty at d0b42dfe) and clean at finish, so nothing here had to be repaired. (1) MATCHER COVERAGE re-derived rather than assumed. The widened envsubstGoTestRE was transcribed to an equivalent POSIX ERE and run over the four tracked wrappers: it binds exactly one invocation each at go-unit.sh:67, go-integration.sh:76 (the `if ! go test ... | tee ...` form) and go-e2e.sh:89, and two in go-stress.sh, where Go's FindStringIndex takes the leftmost, line 50. Every bound line is a real invocation, and the prose lines that merely contain the words 'go test' (go-unit.sh:4, :25, :66) do NOT bind — so the line-start anchor still holds and the widening did not degrade into a substring search. (2) NEGATIVE CONTROL, which is what makes (1) mean anything: the pre-fix whitespace-only pattern binds 1, 0, 1, 2 over those same four files — ZERO on go-integration.sh. That reproduces the reported defect on this session's own authority and shows the widening changed behaviour on exactly the one file that was blind and nowhere else. (3) ABSENCE BRANCH read in source at assertEnvsubstWrapperContract: a nil goTestIdx now returns a non-nil error naming the LOCATOR ('could not LOCATE', 'matcher may need widening') and explicitly telling the reader NOT to rewrite the wrapper; the `goTestIdx != nil &&` short-circuit that made a zero match read as compliance is gone. (4) AC-5 CONFIRMED, since a detector fix that edited its own subject would be no fix at all: git status --porcelain and git diff HEAD over scripts/runtime/ are both empty, and git show --stat 40a9e942 lists three paths — the one test file plus this packet's report.md and scopes.md — with no wrapper among them. (5) GATES EXECUTED IN THIS SESSION, via the repo CLI only: `./smackerel.sh test unit --go --go-run 'TestEnvsubstWrapperContract' --verbose` exits 0 with 6 top-level PASS and all 4 LiveWrappers subtests PASS, including the two new BUG-061-013 fixtures RejectsUnlocatableInvocation and RejectsConditionalCallAfterGoTest, and `ok github.com/smackerel/smackerel/internal/deploy 0.075s`, with zero FAIL lines anywhere in the 536-line transcript; `./smackerel.sh lint` exits 0 (157 lines, sha256 af6fae4590ab14bde385bec6766e5a23dc93cf98ffae346694dd5a21936e7465); `./smackerel.sh format --check` exits 0 reporting '78 files already formatted' (136 lines, sha256 f85b0feb14b355e4a1447bdceba09ca058918fc06ac1177cf9d70f7b07322bf). SCOPE OF THIS ENTRY: the implement phase ONLY. The seven remaining G022 phases — test, regression, simplify, stabilize, security, validate, audit — were NOT run here and are NOT claimed, and certification.certifiedCompletedPhases is deliberately left empty because certifying a phase is bubbles.validate's act, not this agent's."
       }
     ]
   },
   "certification": {
     "status": "in_progress",
-    "completedScopes": [],
+    "completedScopes": ["BUG-061-013-SCOPE-01"],
     "certifiedCompletedPhases": [],
     "scopeProgress": {
       "total": 1,
-      "done": 0,
+      "done": 1,
       "inProgress": 0,
-      "notStarted": 1
+      "notStarted": 0
     },
     "lockdownState": "open",
     "pendingGates": [
-      "No fix implemented. BUG-061-013-SCOPE-01 is Not Started and all 10 DoD items are unchecked.",
-      "G022 — every bugfix-fastlane specialist phase (implement, test, regression, simplify, stabilize, security, validate, audit) is unexecuted. bubbles.bug owns discovery/documentation/analysis only and MUST NOT claim foreign-owned phases.",
+      "Fix implemented and verified. BUG-061-013-SCOPE-01 is Done with all 10 DoD items checked; the source change is commit 40a9e942 (internal/deploy/envsubst_wrapper_contract_test.go only) and bubbles.implement re-verified it and re-ran the implement-phase gates on 2026-08-19. Superseded the earlier 'No fix implemented' entry, which this run made false.",
+      "G022 — 7 of the 8 bugfix-fastlane specialist phases remain unexecuted: test, regression, simplify, stabilize, security, validate, audit. implement has now run and is claimed by bubbles.implement in execution.completedPhaseClaims with a matching executionHistory entry. bubbles.bug owns discovery/documentation/analysis only, and no agent may claim a phase it did not execute.",
       "report.md sections '### Validation Evidence' and '### Audit Evidence' are required by workflowMode bugfix-fastlane at a promotion status and are owned by bubbles.validate / bubbles.audit. Absent by design at in_progress.",
       "G136 — uservalidation.md carries 4 unchecked human-acceptance items. Human-only; an agent checking them would fabricate the acceptance the gate exists to require. No '## Human Acceptance Record' section was authored, per operator instruction that it is operator-only."
     ]
@@ -96,8 +105,8 @@
   },
   "repositoryResolution": {
     "sessionId": "vscode-6af2178e10192363b0e52a46fb5e0950",
-    "decisionId": "rb:vscode-6af2178e10192363b0e52a46fb5e0950:40",
-    "controlRevision": 40,
+    "decisionId": "rb:vscode-6af2178e10192363b0e52a46fb5e0950:2",
+    "controlRevision": 2,
     "authority": "explicit-repository-root",
     "transition": "confirmed",
     "repositoryAlias": "smackerel",
