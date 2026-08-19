@@ -250,7 +250,7 @@ Every item requires: (1) implementation complete, (2) behaviour validated by exe
       + echo '[go-unit] go test ./... finished OK'
       [go-unit] go test ./... finished OK
 
-- [x] **A4** — Test Plan row 4 passes: `TestEvalLaneContract_LaneRunsGateAndAssertsExecutedAssertions` against the real `go-integration.sh` and `acceptance_test.go`
+- [x] **A4** — Test Plan row 4 passes: `TestEvalLaneContract_LaneRunsGateAndAssertsExecutedAssertions` against the real `go-integration.sh` and `acceptance_test.go` — asserted on the real files: the lane requires the marker line and names the gate in its diagnostics, so a lane run that never executed the gate fails loudly instead of passing silently; and the marker is emitted before the threshold comparison, so the gate emits its count even when the thresholds are missed
 
   **Claim Source:** executed · **Tree:** working tree, HEAD `63cc1349` · **Exit code:** `0`
   **Command:** `./smackerel.sh test unit --go --go-run 'TestEvalLaneContract_LaneRunsGateAndAssertsExecutedAssertions' --verbose`
@@ -279,7 +279,7 @@ Every item requires: (1) implementation complete, (2) behaviour validated by exe
       ...
       [go-unit] go test ./... finished OK
 
-- [x] **A5** — Test Plan row 5 passes: `TestEvalLaneContract_AdversarialRejectsMissingEvalPackage` (case A1) fails the contract on a lane fixture with `./tests/eval/...` removed
+- [x] **A5** — Test Plan row 5 passes: `TestEvalLaneContract_AdversarialRejectsMissingEvalPackage` (case A1) fails the contract on a lane fixture with `./tests/eval/...` removed — removing the eval package from the lane is detected, and detected outside that lane, because this contract test is untagged and runs in the unit lane rather than the integration lane it guards
 
   **Claim Source:** executed · **Tree:** WORKING TREE, HEAD=6ad1e8c9 · **Exit code:** `0`
   **Command:** `./smackerel.sh test unit --go --go-run 'TestEvalLaneContract_Adversarial' --verbose`
@@ -296,7 +296,7 @@ Every item requires: (1) implementation complete, (2) behaviour validated by exe
       PASS
       ok      github.com/smackerel/smackerel/internal/deploy  0.091s
 
-- [x] **A6** — Test Plan row 6 passes: `TestEvalLaneContract_AdversarialRejectsMissingOrZeroAssertion` (cases A2, A3)
+- [x] **A6** — Test Plan row 6 passes: `TestEvalLaneContract_AdversarialRejectsMissingOrZeroAssertion` (cases A2, A3) — weakening the lane assertion is detected, whether the marker assertion is removed outright (case A2) or its count comparison is weakened to accept zero (case A3)
 
   **Claim Source:** executed · **Tree:** WORKING TREE, HEAD=6ad1e8c9 · **Exit code:** `0`
   **Command:** `./smackerel.sh test unit --go --go-run 'TestEvalLaneContract_Adversarial' --verbose`
@@ -314,7 +314,7 @@ Every item requires: (1) implementation complete, (2) behaviour validated by exe
       PASS
       ok      github.com/smackerel/smackerel/internal/digest  0.125s [no tests to run]
 
-- [x] **A7** — Test Plan row 7 passes: `TestEvalLaneContract_AdversarialRejectsConditionalOrAbsentMarker` (cases A4, A5)
+- [x] **A7** — Test Plan row 7 passes: `TestEvalLaneContract_AdversarialRejectsConditionalOrAbsentMarker` (cases A4, A5) — making the marker emission conditional on passing is detected (case A4 moves the emission inside `if !t.Failed()`), as is dropping the emission altogether (case A5)
 
   **Claim Source:** executed · **Tree:** WORKING TREE, HEAD=6ad1e8c9 · **Exit code:** `0`
   **Command:** `./smackerel.sh test unit --go --go-run 'TestEvalLaneContract_Adversarial' --verbose`
@@ -332,7 +332,7 @@ Every item requires: (1) implementation complete, (2) behaviour validated by exe
       PASS
       ok      github.com/smackerel/smackerel/internal/docfreshness    0.033s [no tests to run]
 
-- [x] **A8** — Test Plan row 8 passes: `TestEvalLaneContract_AdversarialRejectsBypassOrBroadenedSkip` (cases A6, A7)
+- [x] **A8** — Test Plan row 8 passes: `TestEvalLaneContract_AdversarialRejectsBypassOrBroadenedSkip` (cases A6, A7) — introducing a bypass is detected (case A6 injects a skip environment variable into the enforcement condition), as is broadening the skip condition beyond the focused-run case (case A7)
 
   **Claim Source:** executed · **Tree:** WORKING TREE, HEAD=6ad1e8c9 · **Exit code:** `0`
   **Command:** `./smackerel.sh test unit --go --go-run 'TestEvalLaneContract_Adversarial' --verbose`
@@ -388,7 +388,7 @@ Every item requires: (1) implementation complete, (2) behaviour validated by exe
 
   **Provenance note (unbent).** Group A's evidence tree names `63cc1349`; this run executed at its child `3af96a02`. Both intervening commits are `chore(bubbles)` framework-install syncs, and `git diff --name-only 6ad1e8c9..3af96a02 -- scripts/runtime/go-integration.sh tests/eval internal/deploy smackerel.sh` returns empty, so the lane surface is byte-identical across all three SHAs. The true SHA is recorded rather than restating the block header's.
 
-- [x] **A10** — Test Plan row 10 passes: the documented focused invocation runs the gate, emits the marker, and prints the not-enforced notice
+- [x] **A10** — Test Plan row 10 passes: the documented focused invocation runs the gate, emits the marker, and prints the not-enforced notice — a focused run stays usable, because the missing-marker assertion does not fail it, and says so through the explicit NOT ENFORCED notice naming the active selector
 
   **Claim Source:** executed · **Tree:** WORKING TREE, HEAD=63cc1349 · **Exit code:** `0`
   **Command:** `./smackerel.sh test integration --go-run 'TestAcceptanceGate'`
@@ -802,6 +802,10 @@ Every item requires: (1) implementation complete, (2) behaviour validated by exe
   Read individually, the six are: `bug.md:99` *"does **not** measure corpus-grant enforcement … fixing this bug does not make those measurable and must not be reported as doing so"*; `spec.md:108`, which places the corpus-grant axis outside this bug's remit and states it is *"not made measurable by this work"*; `spec.md:7` *"makes no claim about corpus-grant enforcement"*; `design.md:49` *"must not be described as becoming measurable through this fix"*; plus this DoD item and its `uservalidation.md` counterpart, which restate the prohibition. `report.md` mentions the topic **zero** times, so no evidence narrative drifts into the claim either.
 
   **Exit-code reading.** `1` is the passing outcome because the asserted property is *absence of an affirmative claim*. GNU grep exits `0` on a match, `1` on none, `2` on error; a wrong path would have exited `2`. Exit `0` here would have printed the offending lines and failed the item.
+
+- [ ] A failing go test and a missing marker cannot mask each other — the lane implements the behaviour but **no executing test asserts it**, so this item cannot be checked
+
+  > **Unticked — this is a real coverage gap, recorded rather than papered over.** The behaviour exists: `scripts/runtime/go-integration.sh:118-127` echoes the gate-check ERROR and the `go test` failure before either exit decides the status, under the comment *"Neither failure may mask the other."* But `report.md` §3 discharges **R3.5** with `read` in its *Discharged by* column — code reading, not a test name. `assertEvalLaneContract` asserts no dual-reporting property (it checks literal presence only), and no test drives a lane run with both failures present. A future edit that reordered the two exits so one failure masked the other would turn **nothing** red. This item is therefore left unchecked; checking it would claim test-backed coverage that does not exist, which is precisely the fabrication Gate G068 exists to catch.
 
 - [ ] `bug.md` status advanced to Fixed and then Verified
 
