@@ -2315,7 +2315,19 @@ input reaches an `eval`/`exec` path, and both SST thresholds resolve fail-loud.
 
 ---
 
-## Audit Record — `bubbles.goal` (general runner; `bubbles.audit` did not run), 2026-08-19
+## Audit Record — `bubbles.audit`, 2026-08-19
+
+**Provenance, stated plainly.** Findings **A-1 through A-5 below were originally
+recorded by `bubbles.goal`**, a general runner, on 2026-08-19 — the specialist
+`bubbles.audit` had not run at that point, and that section's heading said so.
+Gate G022 Check 6B was right to refuse the claim. The remedy applied was to **run
+the phase**, not to rename the earlier author: A-1..A-5 are preserved below
+byte-for-byte, and `bubbles.audit` re-derived every one of them from its own
+commands. All five hold. Four new observations are raised, and one figure in the
+inherited A-4 block is shown to have gone **stale** since it was written — stale,
+not wrong; it was accurate at the commit that authored it. The re-execution is
+recorded under **§ Re-execution by `bubbles.audit`** at the end of this section.
+Nothing here was rubber-stamped.
 
 ### A-1 — implementation-reality scan
 
@@ -2437,6 +2449,174 @@ functional, both owned by `bubbles.plan`.**
 - **BUG-061-013 remains open and was not touched** by these phases.
 - **No DoD checkbox was checked; no acceptance was recorded.** Status stays
   `blocked` on G136, which is operator-only.
+
+---
+
+### § Re-execution by `bubbles.audit`
+
+Everything above this line was written by `bubbles.goal` and is preserved
+byte-for-byte. Everything below was produced by `bubbles.audit` from its own
+commands in this session, at a clean tree (`git status --porcelain` empty at
+`46d8eab6`).
+
+**Audit verdict: `SHIP_WITH_NOTES`** on the `delivery-completion-v1` profile the
+guard resolved. The delivered change matches `spec.md`, no fabrication was found,
+**no source file was changed by this phase**, and four observations are recorded
+— none functional, none requiring rework of the delivered change.
+
+**This is an audit verdict, not a certification.** `bubbles.validate` has not
+re-run. The packet stays `blocked`, and its remaining blockers are outside this
+phase's authority: G136 is operator-only, and the residual G022 claims
+(`discovery`, `documentation`, `analysis`) name owners that do not exist as agent
+files, so no agent can discharge them.
+
+#### The five inherited findings, re-derived
+
+| Finding | Verdict | How it was re-derived here |
+|---|---|---|
+| A-1 | **Confirmed** | Scan re-run: exit `0`, 11 files, **0 violations, 1 warning**, the warning being the `design.md` fallback. Reproduced exactly. |
+| A-2 | **Confirmed** | `TODO\|FIXME\|HACK\|XXX\|STUB\|unimplemented` over all **7** `affectedSurface` paths → exit `1`, zero matches. All 7 paths exist. |
+| A-3 | **Confirmed, and strengthened** | Requirements re-checked against the files, not the prose. See the table below. |
+| A-4 | **Confirmed in substance, stale in its figures** | See **AU-1**. |
+| A-5 | **Confirmed** | No heading matching `^#+ Human Acceptance Record` in any packet markdown (exit `1`); `uservalidation.md:24` still unchecked. |
+
+#### A-3 re-derived requirement by requirement
+
+| Req | Verdict | Evidence taken this session |
+|---|---|---|
+| R2.2 | SATISFIED | Proven by **ordering**, not presence: `FormatGateMarker` is called at `acceptance_test.go:65`; the two threshold `t.Errorf` calls are at `70`/`74`; `if !t.Failed()` is at `80`. The emission precedes every failure path, so it survives both. |
+| R3.1 / R3.2 / R3.4 | SATISFIED | `go-integration.sh:94-108` names `TestAcceptanceGate_RoutingAccuracyAndCaptureFallback` explicitly in each diagnostic, and refuses both a missing marker and a zero count. |
+| R3.5 | SATISFIED | Both diagnostics reach stderr before either `exit` decides status; the gate exit is a sibling reached after the go-test exit. |
+| R5.1 / R5.2 | SATISFIED | The focused path prints an explicit `NOT ENFORCED` notice carrying the active selector. |
+| R5.3 | SATISFIED | `SKIP_\|--no-\|--force\|--insecure\|--unsafe\|BYPASS\|IGNORE_` over the wrapper → exit `1`, zero matches. |
+| R6.4 | SATISFIED | See below — proven three ways. |
+| R7.1 | SATISFIED | **Both** named surfaces corrected: the `acceptance_test.go` header **and** the R10-3 prose at `assistant_regression_e2e_test.sh:247` now each state that the build tag alone does **NOT** make the gate run, and name the allow-list as the required second half. |
+| R7.2 | SATISFIED | `docs/Testing.md:763-800` documents the marker line verbatim, the `>= 1` assertion, and the focused-run notice. |
+
+**R6.4 — the inherited self-correction is right, and a stronger proof exists.**
+The inherited reasoning was that the sole `build integration` occurrence sits
+inside a comment. That is true — it is at `eval_lane_contract_test.go:11` and it
+describes the *other* file's tag. But the decisive fact is structural:
+`package deploy` is **line 1**, and a Go build constraint is honoured only in the
+leading comment block *before* the package clause, so nothing below line 1 could
+be a constraint under any formatting. Proven three ways:
+
+    --- anchored directive scan ---
+    grep -nE '^//go:build|^// \+build' internal/deploy/eval_lane_contract_test.go
+    exit=1   (zero directives)
+
+    --- execution, not inspection ---
+    ./smackerel.sh test unit --go --go-run 'TestEvalLaneContract|TestEvalLaneDualFailure'
+    ok  github.com/smackerel/smackerel/internal/deploy   0.082s
+    CLI_EXIT=0 · zero FAIL lines
+
+`internal/deploy` was the **one** package in that entire run reporting `ok`
+*without* a `[no tests to run]` suffix — so the guard demonstrably executes in the
+untagged unit lane it claims, rather than being merely believed to.
+
+#### The three post-audit commits
+
+- **`a5e64a10`** — DoD item **A11** is genuinely backed, not asserted. The R3.5
+  suite reads the **real** lane file via `evalLaneSources`, and A8/A9/A10 have
+  teeth by four independent mechanisms: `requireEvalDualReportingBaselinePasses`
+  refuses to proceed unless the unmutated baseline passes (so a case cannot pass
+  because the baseline was already broken); `mutateEvalFixture` fatals both when
+  the literal is absent *and* when the replacement is a no-op; each case asserts a
+  **specific error substring** rather than merely `err != nil`; and
+  `evalLaneFirstGateDiagnostic` relocates the real line verbatim rather than a
+  paraphrase that could drift. The `+253 / -0` claim was checked against
+  `git show --numstat` and matches exactly — **no existing assertion was weakened
+  to make room**. The item's own scope-limit disclaimer (static ordering contract,
+  not a lane spawn) is accurate and was verified rather than taken on trust.
+- **`5ca7a870`** — the 6 reworded items (A4, A5, A6, A7, A8, A10) were diffed line
+  by line. Every rewording **appends** scenario vocabulary; none removes a test
+  name, weakens an assertion, or drops a condition. The item it recorded unchecked
+  was the R3.5 gap, which `a5e64a10` then closed while retaining the original gap
+  note verbatim as a superseded note rather than deleting it.
+- **`46d8eab6`** — U-3 survived intact. See **AU-3**.
+
+#### New observations
+
+**AU-1 (LOW, artifact hygiene) — the inherited A-4 block has gone stale, though it
+was accurate when written.** It reports `checked [x] : 31 / unchecked [ ] : 3` and
+cites lines `806/820/821`. Those figures are exactly right at `fa61daa0` /
+`831ab6d2`, where that section was authored. Two later commits shifted the file.
+Measured across the range rather than assumed:
+
+    commit      anchored [x]   unanchored [x]   unanchored [ ]
+    831ab6d2         27              31               3     <- A-4 written here
+    5ca7a870         27              31               4
+    a5e64a10         28              32               3
+    46d8eab6         28              32               3     <- HEAD
+
+The cited items now live at `852/866/867`. This is **staleness, not fabrication**,
+and the block is preserved verbatim per instruction with the correction recorded
+here. Note the two patterns count different things: the constraint-relevant
+**anchored** count (`^- [x]`) is **28**, and was 28 at `a5e64a10` — unchanged by
+this phase.
+
+**AU-2 (LOW) — confirms security finding S-5, and sharpens it.** All three legs
+reproduce on this phase's own authority: `assertEvalLaneContract`'s ten required
+signals contain no numeric validation; a scan of all 581 lines for `=~`,
+`[0-9]+` or `numeric` returns exit `1`; and
+`TestEvalLaneContract_AcceptsMinimalConformantFixtures` (line 210) embeds string
+extraction straight into `[[ … -lt 1 ]]` with no regex. The sharpening: the guard
+is not merely **unpinned**, it is pinned **open** — that fixture test asserts the
+contract *must accept* the unguarded shape, so a future agent adding the
+`^[0-9]+$` requirement to `assertEvalLaneContract` will find this test turn red
+and must edit the fixture in the same change. Recorded so the next owner is not
+surprised by a self-inflicted failure. Correctly routed to test ownership by
+`bubbles.security`, and correctly **not** fixed here: authoring a test assertion
+is not this phase's to do, the packet is blocked, and its DoD must not move.
+Severity stays LOW — reaching the arithmetic sink presupposes code execution in
+the lane.
+
+**AU-3 (OBSERVATION) — evidence provenance of the U-3 redaction.** The finding's
+substance survived fully, checked element by element: the uid asymmetry with its
+real numbers (`0` vs `1000`), the three-root-owned-files count, the measured
+consequence that a repo-wide `grep` silently returns `exit 2`, the
+non-attribution to `c7667d99`, the reason the lane is unaffected (`test.env` is
+uid-1000-owned), and the routing to `bubbles.devops`. Only a filename was
+replaced. The observation is that the replacement sits inside a block presented
+as verbatim `ls -ln` output, so that block is no longer byte-verbatim capture.
+This was the right trade and is recorded rather than waved through: the
+product-deployment-boundary guard is fail-closed with no bypass, so redaction was
+the only lawful way to retain the finding at all, and `<target>` is visibly a
+placeholder rather than a silent substitution.
+
+**AU-4 (INFORMATIONAL) — the A-1 warning is a standing item.** `scopes.md` still
+does not name the 11 implementation files, so the scanner falls back to
+`design.md` on every run. Plan-owned, non-functional, reproduced this session.
+
+#### Independent test execution (trust-but-verify)
+
+Tests were **executed here**, not inherited from `report.md`:
+
+    ./smackerel.sh test unit --go --go-run 'TestEvalLaneContract|TestEvalLaneDualFailure'
+    ok  github.com/smackerel/smackerel/internal/deploy   0.082s
+    CLI_EXIT=0
+    FAIL lines: 0
+    packages reporting ok WITHOUT '[no tests to run]': exactly 1 (internal/deploy)
+
+Cross-referenced against the inherited evidence: **no discrepancy found.** All 7
+`affectedSurface` paths were confirmed present on disk.
+
+    bash .github/bubbles/scripts/artifact-lint.sh <packet>
+    Artifact lint PASSED.
+    LINT_EXIT=0
+
+#### What this phase did NOT do
+
+- **Changed no source.** No audit finding warranted one. S-5/AU-2 is a test-file
+  assertion owned elsewhere and deliberately left to its owner.
+- **Did not execute the integration lane.** Nothing above claims it passed,
+  failed, or was measured this session.
+- **Did not certify.** `status` and `certification.status` remain `blocked`,
+  nothing was added to `certification.certifiedCompletedPhases`, and no DoD
+  checkbox was touched — `scopes.md` anchored checked count is **28** before and
+  **28** after.
+- **Authored no `Human Acceptance Record`.** G136 is operator-only and the
+  `uservalidation.md` `## Checklist` is `writer: human`.
 
 ---
 
