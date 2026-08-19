@@ -810,3 +810,368 @@ disposition and a reference, so none of them survives as an unattributed aside.
 | DI-3 | 2026-08-14 | No test guards the R10-3 prose in `docs/Testing.md`. R7.1 requires the prose be true or corrected, not that a test protect it, so this never held R7 open. | **Accepted with a named consequence.** A later edit to that prose has no mechanical backstop. Raising a test for documentation prose would assert a contract R7.1 does not create. | `spec.md` R7.1; `docs/Testing.md` R10-3 |
 | DI-4 | 2026-08-14 | The DoD item *"Scenario-specific E2E regression tests…"* names a tier (`e2e`) that does not match what the plan-owned `scenario-manifest.json` declares for all twelve scenarios, and that `spec.md` R6.4 positively forbids. | **Wording repair owned by `bubbles.plan`.** `bubbles.validate` ruled the substance ACCEPTED (V3); only the checkbox text misdescribes the delivered tier. | *Validation Record* → V3, qualification 1 |
 | DI-5 | 2026-08-14 | `internal/deploy/eval_lane_contract_test.go` reads two protected files as source text. If either file is renamed, the contract test fails on a missing path rather than on a broken contract. | **Accepted as the intended failure mode.** A rename SHOULD stop the lane and force a human to re-point the contract; a test that silently tolerated a rename would be the weaker design. | `internal/deploy/eval_lane_contract_test.go` |
+| DI-6 | 2026-08-19 | `TestEnvsubstWrapperContract_LiveWrappers` no longer matches any `go test` line in `scripts/runtime/go-integration.sh`, because this packet's own commit `c7667d99` reshaped that invocation to `if ! go test …`. The subtest still reports GREEN. | **Filed as its own packet, not fixed here.** Guard erosion, not a functional break — runtime ordering is still correct. See *Regression Record* → R2. | `BUG-061-013-wrapper-contract-zero-match-silent-pass` (commit `f48b6642`) |
+
+---
+
+## Regression Record — `bubbles.regression`, 2026-08-19
+
+This section exists because the phase it records **was executed and then not written
+down**. That is the inverse of the failure mode the anti-fabrication policy usually
+guards against: the risk here was not a claim without work, it was work without a
+claim, leaving `state.json` understating what this packet had already been through.
+
+Every finding below was **re-executed in the session that authored this section**
+rather than transcribed from a prior one. Where a re-run refined a remembered figure,
+the re-run wins and the difference is stated.
+
+**Scope.** Regression only. `simplify`, `stabilize`, `security` and `audit` have NOT
+run and are NOT recorded as complete. Gate G136 remains operator-only and untouched.
+
+### R1. The eval-lane guard is non-tautological — shown red, then green
+
+A guard is not adversarial because its function name begins with `Adversarial`. The
+only evidence that settles it is that the guard goes **red** when the property it
+protects is removed, and **green** when it is present. That was demonstrated on disk
+against a throwaway copy, with the committed file untouched throughout.
+
+The perturbation is one token: `./tests/eval/...` deleted from the lane's `go test`
+argument vector — precisely the pre-fix content this bug was filed against.
+
+**Command:** `git archive HEAD | tar -x -C /tmp/bug061011-perturbed`
+
+```
+COPY_MADE exit=0
+--- copy has no .git: ---
+.
+..
+.dockerignore
+.env.example
+.github
+--- copy line 53 BEFORE perturbation ---
+go_test_args+=(./tests/integration/... ./internal/notification/... ./internal/assistant/... ./internal/cardrewards/... ./tests/eval/...)
+--- byte-identical to repo? ---
+IDENTICAL_OK
+```
+
+The copy starts byte-identical (`cmp` silent, `IDENTICAL_OK`). After the edit, the
+copy differs from the committed file by exactly one line, and the repository working
+tree is still clean:
+
+```
+=== PERTURBATION: copy line 53 AFTER ===
+go_test_args+=(./tests/integration/... ./internal/notification/... ./internal/assistant/... ./internal/cardrewards/...)
+
+=== diff copy vs committed (the ONLY change) ===
+--- scripts/runtime/go-integration.sh   2026-08-10 21:16:39.528602281 +0000
++++ /tmp/bug061011-perturbed/scripts/runtime/go-integration.sh  2026-08-19 01:44:28.717338981 +0000
+@@ -50,7 +50,7 @@
+     echo "go-integration: applying -run selector: $go_run_selector"
+     go_test_args+=(-run "$go_run_selector")
+ fi
+-go_test_args+=(./tests/integration/... ./internal/notification/... ./internal/assistant/... ./internal/cardrewards/... ./tests/eval/...)
++go_test_args+=(./tests/integration/... ./internal/notification/... ./internal/assistant/... ./internal/cardrewards/...)
+
+ # BUG-061-011 — ./tests/eval/... above carries the assistant acceptance gate
+ # (TestAcceptanceGate_RoutingAccuracyAndCaptureFallback, build tag
+DIFF_EXIT=1
+
+=== the real repo file is UNTOUCHED ===
+## main...origin/main
+REPO_CLEAN_CONFIRMED
+```
+
+**GREEN half — the committed tree.** The guard and the envsubst wrapper contract both
+run clean at `HEAD` (`b79f8e3e`), exit `0` over 560 lines:
+
+**Command:** `./smackerel.sh test unit --go --go-run 'TestEvalLaneContract|TestEnvsubstWrapperContract' --verbose`
+
+```
+# CLAIM 1+2 GREEN half: eval-lane guard + envsubst wrapper contract on the pristine committed tree
+$ ./smackerel.sh test unit --go --go-run TestEvalLaneContract|TestEnvsubstWrapperContract --verbose
+exit: 0
+lines: 560
+sha256: 6546243670cf63bd8b3660be45c254ab8e2431c39746493e1eff9f67b6dbe3f1
+--- first 20 ---
+oom-preflight: OK — 35525 MB available (need 6000 MB; swap used 1120 MB).
+disk-preflight: OK — C: 59 GB free (need 40 GB), WSL / 471 GB free (need 25 GB).
+++ dirname /workspace/scripts/runtime/go-unit.sh
++ source /workspace/scripts/runtime/_ensure_envsubst.sh
++ ensure_envsubst go-unit
++ local tag=go-unit
++ command -v envsubst
+[go-unit] envsubst missing — installing gettext-base
+--- omitted 520 line(s); sha256 above covers the full output ---
+--- last 20 ---
+ok      github.com/smackerel/smackerel/web/pwa/tests    0.155s [no tests to run]
+[go-unit] go test ./... finished OK
++ echo '[go-unit] go test ./... finished OK'
+```
+
+**RED half — the perturbed copy.** The same guard, same container image, same
+selector, run through the copy's own CLI. Exit `1`:
+
+**Command:** `bash /tmp/bug061011-perturbed/smackerel.sh test unit --go --go-run 'TestEvalLaneContract' --verbose`
+
+```
+# CLAIM 1 RED half: same guard, throwaway copy with ./tests/eval/... removed from the lane argv
+$ bash /tmp/bug061011-perturbed/smackerel.sh test unit --go --go-run TestEvalLaneContract --verbose
+exit: 1
+lines: 534
+sha256: f307136242c59f7e937dd2802c5ed7cacc0c363964fae13f752d594b1bae78f0
+--- failure-shaped lines from the omitted region ---
+FAIL
+FAIL    github.com/smackerel/smackerel/internal/deploy  0.040s
+--- omitted 494 line(s); sha256 above covers the full output ---
+--- last 20 ---
+ok      github.com/smackerel/smackerel/tests/unit/clients       0.004s [no tests to run]
+?       github.com/smackerel/smackerel/web/pwa  [no test files]
+ok      github.com/smackerel/smackerel/web/pwa/tests    0.113s [no tests to run]
+FAIL
+```
+
+**Per-check partition.** A package-level `FAIL` proves only that *something* failed,
+so each of the six top-level checks was re-run individually against the perturbed
+copy under an anchored `-run` selector. The result is **5 FAIL / 1 PASS**:
+
+| # | Top-level check | Perturbed exit | sha256 of full output |
+|---|-----------------|:--------------:|-----------------------|
+| 1 | `TestEvalLaneContract_LaneRunsGateAndAssertsExecutedAssertions` | **1 FAIL** | `b982dcdb9609c2986d65c2bcad811e7d390a0ad49e8560a0dbe75276bd1d0d95` |
+| 2 | `TestEvalLaneContract_AcceptsMinimalConformantFixtures` | **0 PASS** | `2525973ac5a88abc367eb5911264cd621c99618d45614d93eff9996507b5f780` |
+| 3 | `TestEvalLaneContract_AdversarialRejectsMissingEvalPackage` | **1 FAIL** | `a972576fa5c75d91062788a9507cc3cb839da2a558d0e5c4f821183b04075ae7` |
+| 4 | `TestEvalLaneContract_AdversarialRejectsMissingOrZeroAssertion` | **1 FAIL** | `54b2e84d43bf92d6513a478b26d4131adaab7a3eabebdf98efb019b10caead2e` |
+| 5 | `TestEvalLaneContract_AdversarialRejectsConditionalOrAbsentMarker` | **1 FAIL** | `70c6b3f23d4ac8248572fc47845326df2bfb9cce778b4379b2feb53297dc5fc6` |
+| 6 | `TestEvalLaneContract_AdversarialRejectsBypassOrBroadenedSkip` | **1 FAIL** | `18116b299890d942c691e1fab0a744202277e7a69b85a071971d2b314b7f3fe4` |
+
+```
+PERCHECK LaneRunsGateAndAssertsExecutedAssertions EXIT=1
+PERCHECK AcceptsMinimalConformantFixtures EXIT=0
+PERCHECK AdversarialRejectsMissingEvalPackage EXIT=1
+PERCHECK AdversarialRejectsMissingOrZeroAssertion EXIT=1
+PERCHECK AdversarialRejectsConditionalOrAbsentMarker EXIT=1
+PERCHECK AdversarialRejectsBypassOrBroadenedSkip EXIT=1
+```
+
+**Why 5 and not 1, and why the one PASS is correct.** Five of the six checks open with
+`lane, gate := evalLaneSources(t)`, which reads the **live** wrapper and gate files;
+four of those then call `requireEvalBaselinePasses(t, lane, gate)`, which fails fast
+if the unmutated baseline no longer satisfies the contract. So removing the package
+does not merely break the one check that asserts on it — it invalidates the shared
+premise every adversarial mutation is layered on top of, and they all refuse to
+proceed. The single survivor, `AcceptsMinimalConformantFixtures`, is the satisfiability
+case: it is built from two `const` string literals and deliberately never touches the
+repository, which is exactly why it stays green while the live-file checks go red.
+That asymmetry is itself evidence the suite is wired the way it claims to be.
+
+### R2. A new defect was found and filed — BUG-061-013
+
+`TestEnvsubstWrapperContract_LiveWrappers` locates each tracked wrapper's `go test`
+invocation with an anchored regex at `internal/deploy/envsubst_wrapper_contract_test.go:82`:
+
+```
+72:var envsubstSourceLineRE = regexp.MustCompile(`(?m)^[^\S\n]*(?:source|\.)\s+\S.*_ensure_envsubst\.sh`)
+77:var envsubstCallRE = regexp.MustCompile(`(?m)^\s*ensure_envsubst\s+`)
+82:var envsubstGoTestRE = regexp.MustCompile(`(?m)^\s*go\s+test\b`)
+107:    goTestIdx := envsubstGoTestRE.FindStringIndex(src)
+108:    if goTestIdx != nil && goTestIdx[0] < callIdx[0] {
+110:                    wrapperName, goTestIdx[0], callIdx[0])
+```
+
+Commit `c7667d99` — this packet's own lane wiring — reshaped `go-integration.sh:76` to
+open with `if ! go test`, so the line no longer begins with optional whitespace then
+`go`. The anchored regex stops matching it. Match counts per tracked wrapper:
+
+```
+scripts/runtime/go-unit.sh: anchored-matches=1
+67:go test "${go_test_args[@]}" ./...
+scripts/runtime/go-integration.sh: anchored-matches=0
+   ALL 'go test' occurrences (any position):
+     76:if ! go test "${go_test_args[@]}" 2>&1 | tee "$gate_output_file"; then
+     83:        echo "ERROR: go-integration: could not capture go test output (tee exit ${tee_rc}); the acceptance-gate assertion cannot be trusted." >&2
+     120:       echo "ERROR: go-integration: go test failed (exit ${go_test_rc})." >&2
+scripts/runtime/go-e2e.sh: anchored-matches=1
+89:go test "${go_test_args[@]}"
+scripts/runtime/go-stress.sh: anchored-matches=2
+50:go test -tags stress -v -count=1 -timeout 90s -run '^TestStressReadinessCanary_Live$' ./tests/stress/readiness
+90:     go test "${go_test_args[@]}" "$package_path"
+```
+
+Refinement over the first reading: `go-stress.sh` has **two** anchored matches, not
+one. This does not change the verdict — `FindStringIndex` returns the first match, so
+`go-stress.sh:50` is the line the matcher actually binds — but "the other three each
+match at exactly one line" would have been wrong, so it is corrected here.
+
+`go-integration.sh` is a tracked wrapper (`envsubstTrackedWrappers` names all four) and
+`LiveWrappers` runs one `t.Run(name, …)` subtest per wrapper, so the subtest exists and
+executes. It matches nothing, and because line 108 short-circuits on `goTestIdx != nil`,
+a nil match skips the ordering assertion entirely and the subtest returns **GREEN**.
+The pristine run recorded in R1 exits `0` with that subtest included, which is the
+runtime confirmation.
+
+**Severity: guard erosion, not a functional break.** `ensure_envsubst "go-integration"`
+is still at line 14 and `go test` is still at line 76, so the runtime ordering the
+contract exists to protect is correct today. What is broken is the detector: if a
+future edit moved `go test` above `ensure_envsubst`, this subtest would not notice.
+
+```
+=== CLAIM 2c: ensure_envsubst line ===
+12:# shellcheck source=scripts/runtime/_ensure_envsubst.sh
+13:source "$(dirname "${BASH_SOURCE[0]}")/_ensure_envsubst.sh"
+14:ensure_envsubst "go-integration"
+```
+
+Filed as its own packet rather than repaired here, because it is a defect in a
+different contract from the one this bug records:
+
+```
+$ ls specs/061-conversational-assistant/bugs/BUG-061-013-wrapper-contract-zero-match-silent-pass/
+bug.md  design.md  report.md  scopes.md  spec.md  state.json  uservalidation.md
+$ git log --oneline -3 -- specs/061-conversational-assistant/bugs/BUG-061-013-wrapper-contract-zero-match-silent-pass/
+f48b6642 docs(BUG-061-013): file the wrapper-contract zero-match silent pass
+```
+
+### R3. No cross-spec conflict with BUG-061-009
+
+The two open packets under spec 061 touch disjoint file sets, so neither can invalidate
+the other's evidence. Computed from each packet's declared `affectedSurface`:
+
+```
+BUG-061-011 files: 7
+    docs/Testing.md
+    internal/deploy/eval_lane_contract_test.go
+    scripts/runtime/go-integration.sh
+    tests/e2e/assistant_regression_e2e_test.sh
+    tests/eval/assistant/acceptance_test.go
+    tests/eval/assistant/harness.go
+    tests/eval/assistant/harness_test.go
+BUG-061-009 files: 9
+    docs/smackerel.md
+    internal/assistant/contracts/refusal.go
+    internal/assistant/contracts/response.go
+    internal/assistant/facade.go
+    internal/assistant/facade_execution_error_honesty_test.go
+    internal/assistant/facade_open_knowledge_no_ground_test.go
+    internal/assistant/provenance/gate.go
+    internal/telegram/assistant_adapter/render_outbound.go
+    internal/whatsapp/assistant_adapter/*
+INTERSECTION     : EMPTY -> no shared file, no conflict
+```
+
+BUG-061-009 is a response-honesty defect in the assistant facade and its transport
+adapters; this packet is a test-lane wiring defect. They share spec 061 as a parent and
+nothing else.
+
+### R4. Blast radius of `c7667d99` — STRUCTURAL ONLY, no lane run behind this claim
+
+**Read this qualification before the finding.** A full integration-lane run was launched
+in an earlier session as blast-radius evidence and **its result was never read**. Nothing
+in this section therefore asserts that the integration lane passed, failed, or was
+measured at this tree. What follows is derived entirely from reading `c7667d99` and
+`config/generated/test.env`. It is a claim about **structure**, not about an observed run.
+
+`c7667d99` makes the assistant acceptance gate a **hard dependency of the entire
+integration lane**. On a full-lane run — no `--run` selector — the wrapper does not
+merely execute the gate, it asserts on the gate's machine-readable marker and exits
+non-zero if the marker is absent, duplicated, non-numeric, or reports fewer than one
+executed assertion:
+
+```
++gate_marker_check_failed=0
++if [[ -z "$go_run_selector" ]]; then # full-lane run: acceptance-gate assertion is ENFORCED
++       gate_marker_count=0
++       if grep -q "^${gate_marker_prefix} " "$gate_output_file"; then
++               gate_marker_count="$(grep -c "^${gate_marker_prefix} " "$gate_output_file")"
++       fi
++
++       if [[ "$gate_marker_count" -eq 0 ]]; then
++               echo "ERROR: go-integration: the assistant acceptance gate did not run — no ${gate_marker_prefix} line was emitted by TestAcceptanceGate_RoutingAccuracyAndCaptureFallback." >&2
++               gate_marker_check_failed=1
++       elif [[ "$gate_marker_count" -gt 1 ]]; then
++               echo "ERROR: go-integration: ambiguous acceptance-gate result — ${gate_marker_count} ${gate_marker_prefix} lines were emitted" >&2
++               gate_marker_check_failed=1
+```
+
+The coupling is fail-loud on SST because the gate reads both thresholds through a
+helper that aborts on an empty value rather than substituting a default:
+
+```
+tests/eval/assistant/acceptance_test.go:33:func mustFloatEnv(t *testing.T, key string) float64 {
+tests/eval/assistant/acceptance_test.go-35:     v := os.Getenv(key)
+tests/eval/assistant/acceptance_test.go-36:     if v == "" {
+tests/eval/assistant/acceptance_test.go-37:             t.Fatalf("SST contract violation: %s is empty; should be set by config/generated/<env>.env", key)
+tests/eval/assistant/acceptance_test.go-38:     }
+```
+
+Both variables are present in the generated test environment with the stated values —
+verified directly, since `config/generated/` is git-ignored and does not appear in a
+tracked-file search:
+
+```
+$ grep -n 'ASSISTANT_EVAL_ROUTING_ACCURACY_MIN\|ASSISTANT_EVAL_CAPTURE_FALLBACK_MIN' config/generated/test.env
+575:ASSISTANT_EVAL_ROUTING_ACCURACY_MIN=0.85
+576:ASSISTANT_EVAL_CAPTURE_FALLBACK_MIN=1.0
+GREP_EXIT=0
+```
+
+**Consequence, stated as structure.** Any future change that stops the gate emitting
+exactly one marker line — a build-tag edit, a corpus load failure, a wholesale skip, or
+a missing threshold variable — takes the whole integration lane down with it, not just
+the gate. That is the intended design (a silently-absent test is the failure mode this
+bug was filed about), but it widens the lane's failure surface and is recorded here so
+the trade is explicit. **No integration-lane execution result is offered in support of
+this paragraph.**
+
+### R5. Gate readings, before and after this record
+
+Recording a phase that ran is itself a change to the packet, so it is measured like any
+other. `artifact-lint` exits `0` on both sides (identical output hash, since the lint
+does not read `completedPhases` content):
+
+| Surface | Before | After |
+|---------|--------|-------|
+| `artifact-lint.sh` | exit `0` (sha256 `ea7781e8…`) | exit `0` (sha256 `ea7781e8…`) |
+| `state-transition-guard.sh` | exit `1`, `failureCount: 26` | exit `1`, `failureCount: 25` |
+| `failedGateIds` | `[G022,G027,G068,G094,G136]` | `[G022,G027,G068,G094,G136]` — **unchanged** |
+
+```
+--- BEFORE ---
+passedGateIds: [G057,G053,G040,G051,G082,G083,G084,G128,G085,G086,G091,G087,G093,G088,G089,G092,G090,G095,G097,G098,G099,G100,G130,G131]
+failedGateIds: [G022,G027,G068,G094,G136]
+failedChecks: [Check-4-completion,Check-5-all-done]
+blockingCode: DELIVERY_COMPLETION_FAILED
+failureCount: 26
+exitStatus: 1
+verdict: FAIL
+
+--- AFTER ---
+passedGateIds: [G057,G053,G040,G051,G082,G083,G084,G128,G085,G086,G091,G087,G093,G088,G089,G092,G090,G095,G097,G098,G099,G100,G130,G131]
+failedGateIds: [G022,G027,G068,G094,G136]
+failedChecks: [Check-4-completion,Check-5-all-done]
+blockingCode: DELIVERY_COMPLETION_FAILED
+failureCount: 25
+exitStatus: 1
+verdict: FAIL
+```
+
+The delta is exactly **one** finding, and the failing gate set does not move. That is the
+expected shape: G022 previously counted `regression` among the unrun phases, and it no
+longer does. G022 still fails on the four that genuinely have not run, G136 still fails
+because human acceptance is operator-only, and G027/G068/G094 are untouched by this
+record. A change that dropped a *gate* here would have meant this record had discharged
+something it did not.
+
+### R6. What this phase did NOT do
+
+Recorded so the absence is not mistaken for a clean result:
+
+- **The integration lane was not executed at this tree.** See the qualification in R4.
+- **BUG-061-013 was filed, not fixed.** The wrapper-contract matcher is still blind to
+  `go-integration.sh` at `HEAD`.
+- **`simplify`, `stabilize`, `security` and `audit` did not run** and are not recorded
+  in `completedPhases`.
+- **`regression` was added to `completedPhases` and `completedPhaseClaims` only.** It is
+  deliberately absent from `certification.certifiedCompletedPhases`, because certifying
+  a phase is `bubbles.validate`'s act and validate has not re-run since.
+- **No DoD checkbox was checked and no acceptance was recorded.** Gate G136 is
+  operator-only; this phase has no standing to discharge it. `scopes.md` and
+  `uservalidation.md` were not modified.

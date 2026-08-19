@@ -6,21 +6,21 @@
   "workflowMode": "bugfix-fastlane",
   "releaseTrain": "mvp",
   "status": "blocked",
-  "blockedReason": "Human acceptance only (Gate G136). uservalidation.md line 24 carries one unchecked acceptance item and NO agent may check it. Every engineering obligation this packet can discharge is discharged: the fix is committed (c7667d99), 27 of 28 DoD items are checked with inline raw evidence, artifact-lint exits 0, and the acceptance criteria the item names have both been demonstrated — `./smackerel.sh test integration` exits 0 emitting exactly one `ASSISTANT_ACCEPTANCE_GATE_V1 executed_assertions=210` line with 1974 pass / 0 fail, and `./smackerel.sh test unit --go --go-run 'TestEvalLaneContract' --verbose` passes all adversarial cases. OPERATOR NEXT STEP: re-run those two commands (or read the evidence recorded inline under the Group A/B DoD items in scopes.md), then check the box at uservalidation.md:24. The remaining G022 phases (regression, simplify, stabilize, security, audit) have NOT been run and are deliberately NOT recorded as complete; if a clean `done` is wanted rather than operator sign-off on the fix alone, those specialists must execute first.",
+  "blockedReason": "Human acceptance only (Gate G136). uservalidation.md line 24 carries one unchecked acceptance item and NO agent may check it. Every engineering obligation this packet can discharge is discharged: the fix is committed (c7667d99), 27 of 28 DoD items are checked with inline raw evidence, artifact-lint exits 0, and the acceptance criteria the item names have both been demonstrated — `./smackerel.sh test integration` exits 0 emitting exactly one `ASSISTANT_ACCEPTANCE_GATE_V1 executed_assertions=210` line with 1974 pass / 0 fail, and `./smackerel.sh test unit --go --go-run 'TestEvalLaneContract' --verbose` passes all adversarial cases. OPERATOR NEXT STEP: re-run those two commands (or read the evidence recorded inline under the Group A/B DoD items in scopes.md), then check the box at uservalidation.md:24. The remaining G022 phases (simplify, stabilize, security, audit) have NOT been run and are deliberately NOT recorded as complete; the regression phase HAS been run and is now recorded in completedPhases, with its evidence under report.md § Regression Record. If a clean `done` is wanted rather than operator sign-off on the fix alone, those four specialists must execute first.",
   "severity": "S1",
   "createdAt": "2026-08-10T20:45:00Z",
-  "lastUpdatedAt": "2026-08-14T04:22:00Z",
+  "lastUpdatedAt": "2026-08-19T02:05:00Z",
   "discoveredBy": "delivery-plan audit (docs/Product_Delivery_Plan.md § P3, D27)",
   "discoveredAt": "2026-08-10",
-  "completedPhases": ["discovery", "documentation", "analysis", "implement", "test", "validate"],
+  "completedPhases": ["discovery", "documentation", "analysis", "implement", "test", "validate", "regression"],
   "completedScopes": [],
   "execution": {
-    "activeAgent": "bubbles.validate",
-    "currentPhase": "validate",
+    "activeAgent": "bubbles.regression",
+    "currentPhase": "regression",
     "currentScope": "BUG-061-011-SCOPE-01",
     "completedScopes": [],
-    "completedPhaseClaims": ["discovery", "documentation", "analysis", "implement", "test", "validate"],
-    "lastUpdatedAt": "2026-08-14T04:22:00Z",
+    "completedPhaseClaims": ["discovery", "documentation", "analysis", "implement", "test", "validate", "regression"],
+    "lastUpdatedAt": "2026-08-19T02:05:00Z",
     "executionHistory": [
       {
         "agent": "bubbles.bug",
@@ -59,6 +59,15 @@
         "statusBefore": "in_progress",
         "statusAfter": "blocked",
         "summary": "Certification REFUSED; Verified NOT set in bug.md. Re-executed the contract and adversarial suites independently (7 top-level + 6 sub-tests PASS, exit 0), confirmed the eval package is in the lane argv at HEAD and the fix files are tracked, and recorded artifact-lint exit 0 against a state-transition-guard exit 1 at failureCount 52. Ruled ACCEPTED on the tests/e2e category judgement: scenario-manifest.json is plan-owned, predates implementation and names no tests/e2e path for any of its 12 scenarios, and spec.md R6.4 positively forbids that placement. Raised 12 findings (F1-F12) with owners. Stated plainly that it did NOT re-run the integration or e2e lanes, so the runtime half rests on the bubbles.test evidence above while the static and contractual half was proven in its own session."
+      },
+      {
+        "agent": "bubbles.regression",
+        "runStartedAt": "2026-08-19T01:40:00Z",
+        "runCompletedAt": "2026-08-19T02:05:00Z",
+        "phasesExecuted": ["regression"],
+        "statusBefore": "blocked",
+        "statusAfter": "blocked",
+        "summary": "Regression phase. Recorded here because it was genuinely executed and then left out of completedPhases, so the repo understated the packet; every finding below was RE-EXECUTED in the session that wrote this entry rather than transcribed. (1) Proved the eval-lane guard non-tautological on disk rather than by naming convention: a git-archive copy of HEAD b79f8e3e was byte-identical (cmp silent), the committed tree ran the guard at exit 0 over 560 lines (sha256 65462436...), and a copy differing by exactly one line -- ./tests/eval/... deleted from the lane argv -- ran the same guard at exit 1 (sha256 f3071362...). Each of the 6 top-level checks was then re-run individually under an anchored -run selector, giving 5 FAIL / 1 PASS: only AcceptsMinimalConformantFixtures survives, because it is built from const literals and never reads the repository, while the other five open with evalLaneSources(t) and four of those gate on requireEvalBaselinePasses. The committed file was untouched throughout; git status stayed clean. (2) Found and filed a NEW defect, BUG-061-013 (committed f48b6642): the anchored matcher at envsubst_wrapper_contract_test.go:82 no longer matches go-integration.sh because this packet's own commit c7667d99 reshaped line 76 to open with 'if ! go test'. Measured anchored-match counts: go-unit.sh 1, go-integration.sh 0, go-e2e.sh 1, go-stress.sh 2. go-integration.sh matches nothing and its LiveWrappers subtest still reports GREEN, since line 108 short-circuits on a nil match. Severity is guard erosion, NOT a functional break: ensure_envsubst is still at line 14 and go test at line 76, so runtime ordering is correct today; the detector is what is blind. Correction to the first reading: go-stress.sh has TWO anchored matches, not one -- the verdict is unchanged because FindStringIndex binds the first (line 50). (3) Confirmed no cross-spec conflict with BUG-061-009: the declared affectedSurface sets intersect EMPTY (7 files vs 9 files, zero shared). (4) Recorded the c7667d99 blast radius as a STRUCTURAL observation ONLY. The commit makes the acceptance gate a hard dependency of the whole integration lane -- a full-lane run asserts on the gate marker and exits non-zero if it is absent, duplicated, non-numeric, or reports fewer than one executed assertion -- with fail-loud SST coupling via mustFloatEnv, and ASSISTANT_EVAL_ROUTING_ACCURACY_MIN=0.85 / ASSISTANT_EVAL_CAPTURE_FALLBACK_MIN=1.0 verified present at config/generated/test.env:575-576. HONEST LIMIT: an integration-lane run was launched in an earlier session as blast-radius evidence and its result was NEVER READ, and this phase did not re-run it. Nothing here claims the integration lane passed, failed, or was measured. NOT DONE by this phase: simplify, stabilize, security, audit did not run and are not recorded; no DoD checkbox was checked; no acceptance was recorded -- G136 is operator-only."
       }
     ]
   },
@@ -75,7 +84,7 @@
     "lockdownState": "open",
     "pendingGates": [
       "G136 human acceptance — uservalidation.md:24 unchecked; NO agent may check it (operator-only)",
-      "G022 — regression, simplify, stabilize, security, audit phases have not been run and are not recorded as complete",
+      "G022 — simplify, stabilize, security, audit phases have not been run and are not recorded as complete (regression HAS now been run and is recorded; see report.md § Regression Record)",
       "G068 — 8 of 12 declared scenarios have no faithful DoD item (owner: bubbles.plan)",
       "G094 — spec.md lacks Domain Capability Model; design.md lacks Capability Foundation (owners: bubbles.analyst, bubbles.design)"
     ]
