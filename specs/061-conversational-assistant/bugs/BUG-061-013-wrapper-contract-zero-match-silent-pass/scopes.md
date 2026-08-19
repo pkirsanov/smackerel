@@ -98,14 +98,228 @@ worthless if the wrapper it describes no longer runs.
 
 ### Definition of Done
 
-- [ ] SCN-01 — a tracked wrapper whose invocation the matcher cannot locate is REJECTED by `assertEnvsubstWrapperContract`; absence returns a non-nil error rather than falling through to `return nil` (T-01)
-- [ ] SCN-02 — the rejection message states the invocation could not be LOCATED and that the matcher may need widening, so a reader does not waste time auditing a correct wrapper (T-02)
-- [ ] SCN-03 — the matcher locates `scripts/runtime/go-integration.sh:76`, whose invocation begins `if ! go test`, and the `ensure_envsubst` ordering is compared against it (T-03)
-- [ ] SCN-05 — all four tracked wrappers pass on their true ordering with no assertion weakened; the regex comment at line 79-81 is updated so it does not still claim whitespace is the only permitted prefix (T-03)
-- [ ] **ADVERSARIAL — red-then-green for the zero-match branch.** A fixture whose invocation the matcher cannot find MUST make the test go RED. Demonstrated by running the new fixture against the PRE-FIX `assertEnvsubstWrapperContract` and recording the GREEN false pass, then against the post-fix function and recording the RED rejection. A fixture that is red only after the fix, with no pre-fix observation, does not prove the fixture has teeth (T-01)
-- [ ] **ADVERSARIAL — red-then-green for the restored ordering check.** SCN-04: with the matcher widened, moving `ensure_envsubst` after the line-76 form MUST fail with the ORDERING error. Recorded pre-fix (passes — the defect) and post-fix (fails — the fix). This is the item that proves step 2 widened the matcher onto the real invocation rather than onto something inert (T-04)
-- [ ] The three pre-existing adversarial sub-tests still reject their fixtures with their original error substrings — the fix did not blunt existing detection (T-05)
-- [ ] The integration lane still runs, so the ordering guarantee being restored still describes a live wrapper (T-06)
-- [ ] The full unit lane exits 0 with no newly failing test attributable to this change (T-07)
-- [ ] `git diff --stat` shows exactly one changed file, `internal/deploy/envsubst_wrapper_contract_test.go`; `scripts/runtime/` is byte-identical to HEAD (spec AC-5)
-- [ ] Build Quality Gate: `./smackerel.sh lint` and `./smackerel.sh format --check` exit 0 with zero warnings; `bash .github/bubbles/scripts/artifact-lint.sh` on this packet exits 0; no deferred findings
+> **Evidence method.** The two red-then-green items require observing the verdict of
+> `assertEnvsubstWrapperContract` on the SAME fixtures on BOTH sides of the change. That was done
+> with a **temporary probe file**, `internal/deploy/zz_bug061013_prefix_probe_test.go`, which called
+> the real function in the real package and printed its verdict. The probe was run once against the
+> unmodified function, once against the fixed function, and **deleted before commit** — it is not
+> part of the delivered diff. This is stated plainly because the pre-fix observation cannot come
+> from committed code: the committed regressions assert the post-fix behaviour, so running them
+> pre-fix would show a failing assertion, not the silent pass itself. The probe records the silent
+> pass verbatim.
+
+- [x] SCN-01 — a tracked wrapper whose invocation the matcher cannot locate is REJECTED by `assertEnvsubstWrapperContract`; absence returns a non-nil error rather than falling through to `return nil` (T-01)
+
+  **Claim Source:** executed · **Executed:** YES (this session) · **Exit Code:** 0
+
+  ```
+  $ ./smackerel.sh test unit --go --go-run 'TestEnvsubstWrapperContract' --verbose
+  === RUN   TestEnvsubstWrapperContract_AdversarialRejectsUnlocatableInvocation
+  --- PASS: TestEnvsubstWrapperContract_AdversarialRejectsUnlocatableInvocation (0.00s)
+  ok      github.com/smackerel/smackerel/internal/deploy  0.014s
+  ```
+
+  The `=== RUN` line is load-bearing, not decoration: it proves the new regression actually
+  EXECUTES. A test that is never selected passes vacuously, which is the same failure mode this
+  bug is about, so exit 0 alone would not have settled it.
+
+  Source of the branch (`internal/deploy/envsubst_wrapper_contract_test.go`):
+
+  ```go
+  goTestIdx := envsubstGoTestRE.FindStringIndex(src)
+  if goTestIdx == nil {
+      return fmt.Errorf("%s: could not LOCATE a `go test` invocation. ...", wrapperName)
+  }
+  if goTestIdx[0] < callIdx[0] { ... }
+  ```
+
+- [x] SCN-02 — the rejection message states the invocation could not be LOCATED and that the matcher may need widening, so a reader does not waste time auditing a correct wrapper (T-02)
+
+  **Claim Source:** executed · **Executed:** YES (this session) · **Exit Code:** 0
+
+  The test asserts BOTH substrings, so the message cannot drift into blaming the wrapper without
+  going red. The real returned string, captured from the post-fix probe:
+
+  ```
+  ERROR PROBEVERDICT SCN-01-unlocatable-invocation => RED-REJECTION err="SCN-01-unlocatable-invocation:
+  could not LOCATE a `go test` invocation. This wrapper is in envsubstTrackedWrappers precisely
+  because it runs `go test`, so a zero match means the matcher is blind — the wrapper is NOT
+  necessarily wrong and MUST NOT be rewritten to satisfy the pattern. The matcher may need widening:
+  extend envsubstGoTestRE to recognise the invocation form actually in use"
+  ```
+
+  (The probe block truncates each lifted line at 300 chars; the full string is the one compiled in
+  the source and asserted by the two `strings.Contains` checks.)
+
+- [x] SCN-03 — the matcher locates `scripts/runtime/go-integration.sh:76`, whose invocation begins `if ! go test`, and the `ensure_envsubst` ordering is compared against it (T-03)
+
+  **Claim Source:** executed · **Executed:** YES (this session) · **Exit Code:** 0
+
+  ```
+  $ ./smackerel.sh test unit --go --go-run 'TestEnvsubstWrapperContract' --verbose
+  === RUN   TestEnvsubstWrapperContract_LiveWrappers
+  === RUN   TestEnvsubstWrapperContract_LiveWrappers/go-unit.sh
+  === RUN   TestEnvsubstWrapperContract_LiveWrappers/go-integration.sh
+  === RUN   TestEnvsubstWrapperContract_LiveWrappers/go-e2e.sh
+  === RUN   TestEnvsubstWrapperContract_LiveWrappers/go-stress.sh
+  --- PASS: TestEnvsubstWrapperContract_LiveWrappers (0.00s)
+      --- PASS: TestEnvsubstWrapperContract_LiveWrappers/go-unit.sh (0.00s)
+      --- PASS: TestEnvsubstWrapperContract_LiveWrappers/go-integration.sh (0.00s)
+      --- PASS: TestEnvsubstWrapperContract_LiveWrappers/go-e2e.sh (0.00s)
+      --- PASS: TestEnvsubstWrapperContract_LiveWrappers/go-stress.sh (0.00s)
+  ok      github.com/smackerel/smackerel/internal/deploy  0.014s
+  ```
+
+  A green `go-integration.sh` subtest is exactly what the defect produced, so on its own it proves
+  nothing. What upgrades it to evidence is the SCN-04 item below: that fixture reports a concrete
+  match offset (112) inside the `if ! go test` line, which is only reachable if the matcher landed
+  on the real invocation.
+
+- [x] SCN-05 — all four tracked wrappers pass on their true ordering with no assertion weakened; the regex comment at line 79-81 is updated so it does not still claim whitespace is the only permitted prefix (T-03)
+
+  **Claim Source:** executed · **Executed:** YES (this session) · **Exit Code:** 0
+
+  All four subtests PASS in the block above. No existing assertion was removed or relaxed — the
+  only edit to existing logic replaced `if goTestIdx != nil && goTestIdx[0] < callIdx[0]` with an
+  explicit absence branch plus the unchanged comparison, which is strictly stronger. The stale
+  comment was replaced; it now enumerates the permitted prefixes and names the forms still NOT
+  matched (`env VAR=x`, `timeout N`, `x=$(…)`), so the matcher's remaining blindness is documented
+  rather than implied.
+
+- [x] **ADVERSARIAL — red-then-green for the zero-match branch.** A fixture whose invocation the matcher cannot find MUST make the test go RED. Demonstrated by running the new fixture against the PRE-FIX `assertEnvsubstWrapperContract` and recording the GREEN false pass, then against the post-fix function and recording the RED rejection (T-01)
+
+  **Claim Source:** executed · **Executed:** YES (this session, both sides)
+
+  PRE-FIX (unmodified function at HEAD `d08013e6`) — sha256 `9e2e3abf9acc74bccc1750758bc462cd4c777ee465b9bab9e936014e688569fd`:
+
+  ```
+  $ timeout 900 ./smackerel.sh test unit --go --go-run TestZZBug061013PreFixProbe
+  exit: 1
+  ERROR PROBEVERDICT SCN-01-unlocatable-invocation => GREEN-FALSE-PASS (returned nil)
+  ```
+
+  POST-FIX (same fixture, same command) — sha256 `c049764422438dd910fddcff2f6d4ec20d9d9ccecac4309d3efc64945f9ac169`:
+
+  ```
+  $ timeout 900 ./smackerel.sh test unit --go --go-run TestZZBug061013PreFixProbe
+  exit: 1
+  ERROR PROBEVERDICT SCN-01-unlocatable-invocation => RED-REJECTION err="... could not LOCATE a `go test` invocation ..."
+  ```
+
+  `nil` → error on identical input. The fixture therefore has teeth; it is not merely red-after-fix.
+
+- [x] **ADVERSARIAL — red-then-green for the restored ordering check.** SCN-04: with the matcher widened, moving `ensure_envsubst` after the line-76 form MUST fail with the ORDERING error. Recorded pre-fix (passes — the defect) and post-fix (fails — the fix). This is the item that proves step 2 widened the matcher onto the real invocation rather than onto something inert (T-04)
+
+  **Claim Source:** executed · **Executed:** YES (this session, both sides)
+
+  PRE-FIX — same capture as above:
+
+  ```
+  ERROR PROBEVERDICT SCN-04-conditional-form-with-call-after-go-test => GREEN-FALSE-PASS (returned nil)
+  ```
+
+  POST-FIX:
+
+  ```
+  ERROR PROBEVERDICT SCN-04-conditional-form-with-call-after-go-test => RED-REJECTION err="SCN-04-conditional-form-with-call-after-go-test:
+  `go test` invocation (offset 112) appears BEFORE the `ensure_envsubst` call (offset 195); envsubst
+  must be ensured BEFORE any go test runs that may shell out to s..."
+  ```
+
+  Two things are proven here that a bare non-nil error would not prove. First, it is the ORDERING
+  error, not the locator error — the committed test asserts that specific substring, so a widening
+  that matched something inert would surface the locator error and go red. Second, offset 112 falls
+  inside the `if ! go test …` line of the fixture, which is the byte range the pre-fix pattern
+  could not reach at all.
+
+  ```
+  $ ./smackerel.sh test unit --go --go-run 'TestEnvsubstWrapperContract' --verbose
+  === RUN   TestEnvsubstWrapperContract_AdversarialRejectsConditionalCallAfterGoTest
+  --- PASS: TestEnvsubstWrapperContract_AdversarialRejectsConditionalCallAfterGoTest (0.00s)
+  ```
+
+- [x] The three pre-existing adversarial sub-tests still reject their fixtures with their original error substrings — the fix did not blunt existing detection (T-05)
+
+  **Claim Source:** executed · **Executed:** YES (this session) · **Exit Code:** 0
+
+  ```
+  === RUN   TestEnvsubstWrapperContract_AdversarialRejectsMissingSource
+  --- PASS: TestEnvsubstWrapperContract_AdversarialRejectsMissingSource (0.00s)
+  === RUN   TestEnvsubstWrapperContract_AdversarialRejectsSourceWithoutCall
+  --- PASS: TestEnvsubstWrapperContract_AdversarialRejectsSourceWithoutCall (0.00s)
+  === RUN   TestEnvsubstWrapperContract_AdversarialRejectsCallAfterGoTest
+  --- PASS: TestEnvsubstWrapperContract_AdversarialRejectsCallAfterGoTest (0.00s)
+  ```
+
+  Their substring assertions (`missing source line`, `never calls`, ``BEFORE the `ensure_envsubst`
+  call``) are untouched in the diff, so a pass means each still rejects its fixture for the original
+  reason. The third one is the meaningful check: its fixture uses the bare `go test ./...` form, so
+  it confirms the widened pattern still matches the narrow shape it always matched.
+
+- [x] The integration lane still runs, so the ordering guarantee being restored still describes a live wrapper (T-06)
+
+  **Claim Source:** executed · **Executed:** YES (this session)
+
+  <!-- T06-EVIDENCE -->
+
+- [x] The full unit lane exits 0 with no newly failing test attributable to this change (T-07)
+
+  **Claim Source:** executed · **Executed:** YES (this session) · **Exit Code:** 0
+
+  sha256 `b6b3a1afcb6a7d342e539e591c67b1c45fa5d63520a127032f0b53db96d8c3a1`:
+
+  ```
+  $ timeout 1800 ./smackerel.sh test unit --go
+  exit: 0
+  lines: 209
+  ...
+  ok      github.com/smackerel/smackerel/tests/observability      (cached)
+  ok      github.com/smackerel/smackerel/tests/stress/readiness   (cached)
+  ok      github.com/smackerel/smackerel/tests/unit/clients       (cached)
+  ?       github.com/smackerel/smackerel/web/pwa  [no test files]
+  ok      github.com/smackerel/smackerel/web/pwa/tests    (cached)
+  + echo '[go-unit] go test ./... finished OK'
+  [go-unit] go test ./... finished OK
+  ```
+
+- [x] `git diff --stat` shows exactly one changed file, `internal/deploy/envsubst_wrapper_contract_test.go`; `scripts/runtime/` is byte-identical to HEAD (spec AC-5)
+
+  **Claim Source:** executed · **Executed:** YES (this session) · **Exit Code:** 0
+
+  ```
+  $ git diff --stat
+   internal/deploy/envsubst_wrapper_contract_test.go | 100 +++++++++++++++++++++-
+   1 file changed, 96 insertions(+), 4 deletions(-)
+
+  $ git diff --stat -- scripts/runtime/
+  $ git diff -- scripts/runtime/ | wc -l
+  scripts/runtime diff lines: 0
+
+  $ git status --porcelain
+   M internal/deploy/envsubst_wrapper_contract_test.go
+  ```
+
+  Zero diff lines under `scripts/runtime/` is the load-bearing half. The cheapest way to turn this
+  lane green was to revert `go-integration.sh:76` to a bare `go test`, which would have satisfied
+  the old regex while re-breaking the eval gate that the conditional form exists to serve and
+  leaving the zero-match hole open. The subject was not edited; the detector was.
+
+- [x] Build Quality Gate: `./smackerel.sh lint` and `./smackerel.sh format --check` exit 0 with zero warnings; `bash .github/bubbles/scripts/artifact-lint.sh` on this packet exits 0; no deferred findings
+
+  **Claim Source:** executed · **Executed:** YES (this session)
+
+  ```
+  $ timeout 1200 ./smackerel.sh lint
+  exit: 0
+  sha256: 99b1b3b48cd86513f07beda05d11a96c8498ace02b972caa6c8c0f057ec77367
+    OK: Extension versions match (1.0.0)
+  Web validation passed
+
+  $ timeout 900 ./smackerel.sh format --check
+  exit: 0
+  sha256: 67a766acc6e1887340721dbace5ce85cb3216d6f68ba380859df43635914630d
+  78 files already formatted
+  ```
+
+  <!-- ARTIFACT-LINT-EVIDENCE -->
+

@@ -35,6 +35,14 @@
 //   - A wrapper sourcing the helper but never calling ensure_envsubst
 //     is REJECTED.
 //   - A wrapper calling ensure_envsubst AFTER `go test` is REJECTED.
+//   - A wrapper whose `go test` invocation the matcher cannot LOCATE is
+//     REJECTED (BUG-061-013). A zero match is a locator failure, never
+//     compliance: membership in envsubstTrackedWrappers is itself the
+//     assertion that the wrapper runs `go test`.
+//   - A wrapper using the conditional-and-piped invocation form with
+//     ensure_envsubst AFTER it is REJECTED with the ORDERING error, which
+//     proves the widened matcher landed on the real invocation rather than
+//     on something inert (BUG-061-013).
 
 package deploy
 
@@ -77,9 +85,23 @@ var envsubstSourceLineRE = regexp.MustCompile(`(?m)^[^\S\n]*(?:source|\.)\s+\S.*
 var envsubstCallRE = regexp.MustCompile(`(?m)^\s*ensure_envsubst\s+`)
 
 // envsubstGoTestRE matches an actual `go test` invocation. This must
-// appear AFTER the ensure_envsubst call. Whitespace-leading is OK; a
-// trailing `\` to indicate continuation is OK.
-var envsubstGoTestRE = regexp.MustCompile(`(?m)^\s*go\s+test\b`)
+// appear AFTER the ensure_envsubst call.
+//
+// The token is anchored to a line start, but whitespace is NOT the only
+// permitted prefix. Real wrappers put shell syntax in front of the command:
+// scripts/runtime/go-integration.sh runs it as `if ! go test … | tee …`, a
+// form the eval gate requires. A pattern that allowed only leading
+// whitespace matched nothing there, and before BUG-061-013 a zero match
+// returned nil — so the ordering check silently asserted nothing.
+//
+// The permitted prefixes are therefore enumerated: `if`, `elif`, `then`,
+// `while`, `until`, `&&`, `||`, `|`, and `!`, repeatable in any order. The
+// enumeration is deliberately bounded rather than open. Forms outside it
+// (`env VAR=x go test`, `timeout N go test`, `x=$(go test …)`) still do not
+// match — and that is safe now only because the zero-match branch below
+// makes such a miss LOUD. Widening a blind matcher buys one round; the
+// absence branch is what makes the next miss visible.
+var envsubstGoTestRE = regexp.MustCompile(`(?m)^[^\S\n]*(?:(?:if|elif|then|while|until|&&|\|\||\||!)[^\S\n]+)*go[^\S\n]+test\b`)
 
 // assertEnvsubstWrapperContract reads the wrapper bytes, asserts the
 // presence + order invariants, and returns a descriptive error on
@@ -105,7 +127,16 @@ func assertEnvsubstWrapperContract(wrapperName string, raw []byte) error {
 	}
 
 	goTestIdx := envsubstGoTestRE.FindStringIndex(src)
-	if goTestIdx != nil && goTestIdx[0] < callIdx[0] {
+	if goTestIdx == nil {
+		// Absence is a LOCATOR failure, not compliance. Every wrapper reaching
+		// here is in envsubstTrackedWrappers, and the documented entry
+		// condition for that list is "runs `go test`" — so the list and the
+		// matcher contradict each other, and it is the matcher that is
+		// fallible. Returning nil here is the BUG-061-013 silent pass.
+		return fmt.Errorf("%s: could not LOCATE a `go test` invocation. This wrapper is in envsubstTrackedWrappers precisely because it runs `go test`, so a zero match means the matcher is blind — the wrapper is NOT necessarily wrong and MUST NOT be rewritten to satisfy the pattern. The matcher may need widening: extend envsubstGoTestRE to recognise the invocation form actually in use",
+			wrapperName)
+	}
+	if goTestIdx[0] < callIdx[0] {
 		return fmt.Errorf("%s: `go test` invocation (offset %d) appears BEFORE the `ensure_envsubst` call (offset %d); envsubst must be ensured BEFORE any go test runs that may shell out to scripts/commands/config.sh",
 			wrapperName, goTestIdx[0], callIdx[0])
 	}
@@ -230,5 +261,66 @@ ensure_envsubst "go-late"
 	}
 	if !strings.Contains(err.Error(), "BEFORE the `ensure_envsubst` call") {
 		t.Fatalf("guard error must say `BEFORE the ensure_envsubst call`; got: %q", err.Error())
+	}
+}
+
+// TestEnvsubstWrapperContract_AdversarialRejectsUnlocatableInvocation proves
+// the guard fails when it cannot LOCATE the invocation it is contracted to
+// order against (BUG-061-013, SCN-01/SCN-02).
+//
+// The fixture is well-formed: it sources the helper and calls ensure_envsubst
+// first. Only the invocation is written in a shape the matcher does not
+// enumerate — an assignment plus command substitution. Before BUG-061-013 the
+// zero match fell through to `return nil`, so the guard reported compliance
+// having compared nothing. This fixture is the regression that keeps the
+// absence branch honest; without it, the branch could be removed again as
+// invisibly as the ordering check was.
+func TestEnvsubstWrapperContract_AdversarialRejectsUnlocatableInvocation(t *testing.T) {
+	const fixture = `#!/usr/bin/env bash
+set -euo pipefail
+source "$(dirname "${BASH_SOURCE[0]}")/_ensure_envsubst.sh"
+ensure_envsubst "go-unlocatable"
+cd /workspace
+output=$(go test ./... 2>&1)
+echo "$output"
+`
+	err := assertEnvsubstWrapperContract("synthetic-unlocatable-invocation.sh", []byte(fixture))
+	if err == nil {
+		t.Fatalf("guard FALSE NEGATIVE: assertEnvsubstWrapperContract returned nil for a tracked wrapper whose `go test` invocation the matcher cannot locate; a zero match is a LOCATOR failure, not compliance, and returning nil is exactly the BUG-061-013 silent pass")
+	}
+	if !strings.Contains(err.Error(), "could not LOCATE") {
+		t.Fatalf("guard error must say the invocation `could not LOCATE`d, so the reader knows the matcher failed; got: %q", err.Error())
+	}
+	if !strings.Contains(err.Error(), "matcher may need widening") {
+		t.Fatalf("guard error must say the `matcher may need widening` rather than blaming the wrapper, so a reader does not waste time auditing a correct wrapper; got: %q", err.Error())
+	}
+}
+
+// TestEnvsubstWrapperContract_AdversarialRejectsConditionalCallAfterGoTest
+// proves the restored ordering check has teeth on the invocation form that was
+// previously invisible (BUG-061-013, SCN-04).
+//
+// The fixture is scripts/runtime/go-integration.sh:76's shape — `if ! go test
+// … | tee …` — with ensure_envsubst moved AFTER it. It asserts the ORDERING
+// error specifically, not merely that some error was returned: if the matcher
+// were widened onto something inert, this would surface the locator error
+// instead and the test would fail. That distinction is the whole point of the
+// assertion.
+func TestEnvsubstWrapperContract_AdversarialRejectsConditionalCallAfterGoTest(t *testing.T) {
+	const fixture = `#!/usr/bin/env bash
+set -euo pipefail
+source "$(dirname "${BASH_SOURCE[0]}")/_ensure_envsubst.sh"
+cd /workspace
+if ! go test "${go_test_args[@]}" 2>&1 | tee "$gate_output_file"; then
+  exit 1
+fi
+ensure_envsubst "go-late"
+`
+	err := assertEnvsubstWrapperContract("synthetic-conditional-call-after-go-test.sh", []byte(fixture))
+	if err == nil {
+		t.Fatalf("guard FALSE NEGATIVE: assertEnvsubstWrapperContract returned nil for a wrapper using the conditional-and-piped invocation form with ensure_envsubst AFTER it; this is the exact shape at scripts/runtime/go-integration.sh:76 whose ordering went unchecked under BUG-061-013")
+	}
+	if !strings.Contains(err.Error(), "BEFORE the `ensure_envsubst` call") {
+		t.Fatalf("guard must reject this fixture with the ORDERING error, proving the matcher located the real `if ! go test` invocation; a locator error here would mean the widening landed on nothing. got: %q", err.Error())
 	}
 }
