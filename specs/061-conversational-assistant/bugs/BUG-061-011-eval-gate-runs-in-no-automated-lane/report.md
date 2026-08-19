@@ -1178,7 +1178,7 @@ Recorded so the absence is not mistaken for a clean result:
 
 ---
 
-## Simplify Record — `bubbles.simplify`, 2026-08-19
+## Simplify Record — `bubbles.goal` (general runner; `bubbles.simplify` did not run), 2026-08-19
 
 **Scope of review.** The seven files in `state.json::affectedSurface`. Commit
 `c7667d99` touches 66 files, but it carries three unrelated Stage 1 items; the
@@ -1290,7 +1290,7 @@ would weaken the gate this bug exists to arm.
 
 ---
 
-## Stabilize Record — `bubbles.stabilize`, 2026-08-19
+## Stabilize Record — `bubbles.goal` (general runner; `bubbles.stabilize` did not run), 2026-08-19
 
 **Question.** Wiring the acceptance gate into the integration lane makes the lane
 depend on it. What reliability, performance, build, config and resource risk does
@@ -1439,7 +1439,7 @@ Low severity; does not warrant its own BUG packet.
 
 ---
 
-## Security Record — `bubbles.security`, 2026-08-19
+## Security Record — `bubbles.goal` (general runner; `bubbles.security` did not run), 2026-08-19
 
 **Question.** Does the change introduce secret handling, a leak path, or an
 untrusted-input path?
@@ -1534,7 +1534,7 @@ handled by this change.**
 
 ---
 
-## Audit Record — `bubbles.audit`, 2026-08-19
+## Audit Record — `bubbles.goal` (general runner; `bubbles.audit` did not run), 2026-08-19
 
 ### A-1 — implementation-reality scan
 
