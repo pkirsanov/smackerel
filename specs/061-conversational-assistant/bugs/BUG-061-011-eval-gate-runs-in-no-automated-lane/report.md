@@ -2017,7 +2017,18 @@ Owner: `bubbles.devops`.
 
 ---
 
-## Security Record — `bubbles.goal` (general runner; `bubbles.security` did not run), 2026-08-19
+## Security Record — `bubbles.security`, 2026-08-19
+
+**Provenance, stated plainly.** Findings **S-1 through S-4 below were originally
+recorded by `bubbles.goal`**, a general runner, on 2026-08-19 — the specialist
+`bubbles.security` had not run at that point, and that section said so. Gate G022
+Check 6B was right to refuse the claim. The remedy applied was to **run the
+phase**, not to rename the earlier author: S-1..S-4 are preserved below
+byte-for-byte, and `bubbles.security` re-derived every one of them from its own
+commands. Two of the four are **corrected** — the conclusions survive, the stated
+reasons do not — and one **new** finding was raised. The re-execution is recorded
+under **§ Re-execution by `bubbles.security`** at the end of this section.
+Nothing here was rubber-stamped.
 
 **Question.** Does the change introduce secret handling, a leak path, or an
 untrusted-input path?
@@ -2109,6 +2120,197 @@ list of refusal-shaped bypass strings. **No secret, credential, or key material 
 handled by this change.**
 
 **Security verdict: no findings.**
+
+### Re-execution by `bubbles.security` — 2026-08-19
+
+**Claim Source: executed** — every figure below came from a command run in this
+session against this working tree at `a9ac3e21`, clean. The four findings above
+were re-derived rather than read. **S-2 and S-4 are confirmed. S-1's conclusion
+holds but its inventory is wrong. S-3's conclusion holds but its stated reason is
+wrong, and the real reason is a guard nobody is protecting — which is new finding
+S-5.**
+
+#### S-1 — CONFIRMED as to conclusion, CORRECTED as to inventory
+
+S-1 says the marker carries "seven variables: a fixed literal prefix, three
+integers, two exit codes, the operator's own `-run` regex, and the marker line."
+That sentence conflates two different sets — the **marker line's fields** and the
+**wrapper's shell variables**. The marker line is built in one place
+(`tests/eval/assistant/harness.go:349-356`):
+
+    fmt.Sprintf("%s executed_assertions=%d rows=%d capture_expected=%d routing_accuracy=%.4f capture_fallback_rate=%.4f", ...)
+
+That is **one fixed literal + three integers + two floats**. It carries no exit
+code and no `-run` regex; those are wrapper shell variables, not marker fields.
+`GateMarkerPrefix` is `const GateMarkerPrefix = "ASSISTANT_ACCEPTANCE_GATE_V1"`
+(`harness.go:343`) — a compile-time literal, not interpolated.
+
+The conclusion is unaffected: taking S-1's inventory and the corrected one
+together, every member is a count, a rate, a literal, an exit code or an operator
+regex. **None is secret-bearing.** The forbidden expansion is also absent —
+scanning `go-integration.sh`, `assistant_regression_e2e_test.sh` and
+`_ensure_envsubst.sh` for `${VAR:-…}`/`${VAR-…}` returned **exit 1, zero
+matches**, so no shape exists that would print a real value when the variable is
+set.
+
+#### S-2 — CONFIRMED by measurement, and the caveat is smaller than recorded
+
+Re-measured rather than trusted:
+
+    path=/tmp/tmp.fsnC00V4Cn
+    mode=600
+    owner_perms_only=-rw-------
+
+Mode `600`, owner-only. Three further properties S-2 did not establish:
+
+1. **`mktemp` cannot be redirected into the repo.** `mktemp` honours `TMPDIR`, so
+   "outside `/workspace`" is a property of the environment, not of the call.
+   `TMPDIR` is **not** present in `config/generated/test.env` (grep exit 1), and
+   the only `TMPDIR` assignment in the whole shell surface is local to
+   `scripts/commands/package-extension.sh`, a different script that sets it to
+   its own `mktemp -d`. Nothing reaching this lane can point `mktemp` at the
+   bind-mounted tree.
+2. **The stranded-file caveat is bounded by the container.** S-2 is right that
+   `trap` does not fire on `SIGKILL`. But the lane runs inside `docker run --rm`
+   (`smackerel.sh:1199,1215`) whose only bind mounts are `/workspace`,
+   `/go/pkg/mod` and `/root/.cache/go-build`. `/tmp` is **container-local**, so a
+   stranded file sits in an ephemeral layer that `--rm` destroys and **never
+   touches the host filesystem**. Lower residual risk than recorded.
+3. **The framing "the capture file" understates what is in it, and that matters.**
+   The file is a verbatim copy of the *entire* lane's stdout+stderr. S-2 says this
+   and calls it bounded; what it does not say is that the lane's process
+   environment demonstrably carries secret-bearing values —
+   `smackerel.sh:1205-1209` injects `DATABASE_URL`/`POSTGRES_URL` embedding
+   `${pg_pass}`, `NATS_URL` embedding `${auth_token}`, and `SMACKEREL_AUTH_TOKEN`,
+   plus the whole `--env-file`. So the mode and lifetime are **load-bearing, not
+   incidental**.
+
+   S-2's conclusion still stands, and the reason is worth stating precisely: the
+   change **does not open a new disclosure channel**. Those same bytes already
+   streamed to the console before this change. The tee adds a second copy that is
+   owner-only, container-local, and destroyed at process exit — strictly
+   shorter-lived and strictly less exposed than the terminal scrollback and CI log
+   that already existed. **Net exposure is not increased. Not a finding.**
+
+#### S-3 — CONCLUSION HOLDS, STATED REASON IS WRONG
+
+S-3 claims "no untrusted input; the read path is a fixed in-repo literal." The
+second half is true and re-verified — `corpusPath` is `filepath.Abs("corpus.yaml")`
+resolved against the package directory, and the capture path is a `mktemp` result.
+But "no untrusted input" is too strong. Two externally-influenced inputs exist:
+
+**(a) the `--run` selector.** Operator-supplied. Safe, and for a structural
+reason: it is only ever expanded as a single quoted array element,
+`go_test_args+=(-run "$go_run_selector")`, invoked as `go test
+"${go_test_args[@]}"`. No word-splitting, no glob expansion, no `eval`. Go's RE2
+engine has no catastrophic backtracking, so a hostile regex is not a ReDoS vector
+either.
+
+**(b) the marker line parsed out of `go test` stdout — this one reaches a
+command-execution sink.** `gate_executed_assertions` is cut from that line by
+parameter expansion and then compared with `[[ "$gate_executed_assertions" -lt 1 ]]`.
+Bash performs **arithmetic evaluation** on `-lt` operands, and arithmetic
+evaluation expands array subscripts — so command substitution inside the operand
+*executes*. Demonstrated, not asserted:
+
+    UNGUARDED -lt  => COMMAND EXECUTED (sink is real)
+    GUARDED (^[0-9]+$) => rejected before -lt; arithmetic never reached
+    GUARDED => no execution (guard is load-bearing and effective)
+
+The wrapper is **safe**, because `go-integration.sh:105-113` tests
+`[[ ! "$gate_executed_assertions" =~ ^[0-9]+$ ]]` **first** and only reaches the
+`-lt` in the `elif`. A second injected marker line would also trip the
+exactly-one-marker check. So the property S-3 asserts is real — but it rests on an
+anchored regex executed in a specific order, not on the absence of untrusted
+input. Severity of the underlying sink is **LOW**: reaching it requires injecting
+a line into `go test` stdout, which already implies code execution in the lane.
+
+#### S-4 — CONFIRMED
+
+Scanning `tests/eval/assistant/` and `scripts/runtime/go-integration.sh` for
+`DATABASE_URL|POSTGRES_URL|SMACKEREL_AUTH_TOKEN|NATS_URL|auth_token|api_key|bot_token|password|secret`
+returned **exit 1 — zero matches**. `internal/deploy/eval_lane_contract_test.go`
+contains no `exec.`, no `http.`/`net.`, no `os.WriteFile`/`os.Create`/`os.Remove`,
+and no `Setenv`/`Getenv` (grep exit 1): it is a pure source-text assertion over
+two files. No credential, key or connection string is handled by this change.
+
+#### Finding S-5 — NEW — the guard that closes the S-3 sink is not pinned by the contract test (LOW)
+
+The `^[0-9]+$` check is the only thing standing between attacker-influenced text
+and a bash arithmetic sink. `internal/deploy/eval_lane_contract_test.go` exists
+precisely to stop the lane's shape from regressing — but it does **not** require
+that guard. Three independent proofs:
+
+1. **`assertEvalLaneContract` never asks for it.** Its required signals are: the
+   eval package reaches `go test`; the marker prefix is bound; `executed_assertions`
+   is parsed; a zero-rejecting comparison exists; no zero-accepting comparison
+   exists; the selector guard and skip notice are present; the gate test is named;
+   no bypass token appears; and the marker is emitted before the threshold and
+   failed-guard blocks. Numeric validation is not among them.
+2. **No such token appears anywhere in the file.** `grep -nE '=~|\[0-9\]\+|non-numeric|\^\[0-9'`
+   across all 581 lines returns **exit 1**.
+3. **The contract's own "minimal conformant" fixture omits the guard and is
+   asserted to be *acceptable*.** `TestEvalLaneContract_AcceptsMinimalConformantFixtures`
+   (lines 210-231) embeds exactly:
+
+       gate_executed_assertions="${gate_marker_line##*executed_assertions=}"
+       if [[ "$gate_executed_assertions" -lt 1 ]]; then
+
+   — string extraction straight into arithmetic, no regex — and fails the test if
+   the contract *refuses* it.
+
+Confirmed green in this session via the approved CLI
+(`./smackerel.sh test unit --go --go-run 'TestEvalLaneContract'`):
+
+    ok      github.com/smackerel/smackerel/internal/deploy  0.021s
+    [go-unit] go test ./... finished OK
+    EXIT=0
+
+`internal/deploy` is the one package in that run without a `[no tests to run]`
+suffix, so the contract tests genuinely executed.
+
+**Consequence:** deleting the `^[0-9]+$` branch from the real wrapper would leave
+every eval-lane contract test green. The safety property is real today and
+unprotected tomorrow.
+
+**Severity LOW — hardening, not a live vulnerability.** Exploiting it needs the
+ability to emit a line on `go test` stdout, which presupposes code execution in
+the lane. **Not fixed here, deliberately:** the remedy is a new assertion in a
+test file, test artifacts are not this agent's to author, this packet is `blocked`,
+and its DoD must not move. Routed to test ownership.
+
+#### Observation S-6 — the two SST thresholds are fail-loud at every link
+
+Traced end to end rather than sampled:
+
+| Link | Location | Behaviour on missing/invalid |
+|---|---|---|
+| SST source | `config/smackerel.yaml:1370-1371` (`0.85` / `1.0`) | — |
+| Generator read | `scripts/commands/config.sh:2022-2023` `required_value` | `config_key_missing` → `exit 1` |
+| Generator emit | `scripts/commands/config.sh:2926-2927` | bare `${VAR}`, **no `:-` fallback** |
+| Generated env | `config/generated/test.env:575-576` | — |
+| Runtime consumer | `internal/config/assistant.go:442-443` `mustFloat` | appends to `errs`, assigns no default; range-checked at 625-628 |
+| Gate consumer | `tests/eval/assistant/acceptance_test.go:35-42` `mustFloatEnv` | `t.Fatalf` on empty or non-float |
+
+Two independent fail-loud consumers, no silent fallback anywhere. One precise
+nuance worth recording: `required_value` keys its failure on `yaml_get`'s **exit
+status**, not on emptiness, so a key resolving to an empty string would pass the
+generator and emit `VAR=`. Both Go consumers still refuse empty, so the chain is
+fail-loud overall — just one link later than the generator.
+
+A useful consequence: `mustFloatEnv` runs **before** `fmt.Println(FormatGateMarker(r))`,
+so missing thresholds `t.Fatalf` the gate *before* any marker is emitted → marker
+count `0` → the wrapper reports "the assistant acceptance gate did not run".
+Missing SST config fails the lane instead of silently passing it.
+
+#### Verdict
+
+**⚠️ FINDINGS — 1 new finding (S-5), LOW severity, no critical or high.**
+S-2 and S-4 confirmed as written. S-1 confirmed in conclusion, inventory
+corrected. S-3 confirmed in conclusion, reason corrected and shown to depend on a
+guard. No secret value can be printed, no fallback expansion exists, no untrusted
+input reaches an `eval`/`exec` path, and both SST thresholds resolve fail-loud.
+**No source change was made by this phase.**
 
 ---
 
