@@ -36,7 +36,7 @@
 <!-- bubbles:feature id=m2b-wiki-editable-annotations spec=specs/027-user-annotations delivery=required -->
 <!-- bubbles:feature id=m3-ratify-product-principles spec=none delivery=optional -->
 <!-- bubbles:feature id=m4-domain-extraction-manifest-fix spec=specs/026-domain-extraction delivery=required -->
-<!-- bubbles:feature id=m5a-recommendations-drift spec=specs/039-recommendations-engine delivery=carried -->
+<!-- bubbles:feature id=m5a-recommendations-drift spec=specs/039-recommendations-engine delivery=required -->
 <!-- bubbles:feature id=m5b-chrome-extension-bridge spec=specs/058-chrome-extension-bridge delivery=deferred-to:v1 -->
 <!-- bubbles:feature id=m5c-intent-policy-drift spec=specs/067-intent-driven-policy-enforcement delivery=required -->
 <!-- bubbles:feature id=m5d-spec-banner-sweep spec=specs/_ops/OPS-001-spec-banner-sweep delivery=carried -->
