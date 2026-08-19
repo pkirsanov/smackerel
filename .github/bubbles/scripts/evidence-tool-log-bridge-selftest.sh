@@ -77,7 +77,7 @@ fi
 # Resolving it the same way here keeps the fixture correct even when TMPDIR
 # happens to sit inside a git work tree.
 REV="$(git -C "$TEST_ROOT/specs/042-foo" rev-parse --verify HEAD 2>/dev/null || true)"
-[[ -n "$REV" ]] || REV="0000000000000000000000000000000000000001"
+[[ -n "$REV" ]] || REV="$(printf '%040d' 1)"
 
 LOG="$TEST_ROOT/.specify/runtime/tool-calls.jsonl"
 mkdir -p "$(dirname "$LOG")"

@@ -342,6 +342,9 @@ bubbles/scripts/release-ladder-schema-guard-selftest.sh
 bubbles/scripts/release-ladder-schema-guard.sh
 bubbles/scripts/release-manifest-purity-selftest.sh
 bubbles/scripts/release-manifest-selftest.sh
+bubbles/scripts/release-packet-completeness-guard-selftest.sh
+bubbles/scripts/release-packet-completeness-guard.sh
+bubbles/scripts/release-packet-docs-lib.sh
 bubbles/scripts/release-packet-location-guard-selftest.sh
 bubbles/scripts/release-packet-location-guard.sh
 bubbles/scripts/release-train-backfill-planner.sh

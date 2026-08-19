@@ -367,6 +367,107 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
+# ---------------------------------------------------------------------------
+# IMP-049 SCOPE-1 Option C — placeholder-aware hunk classification.
+#
+# Path-level detection above cannot distinguish a mandated PII/genericization
+# redaction from a requirements change, because every inspection is
+# --name-only. A consumer under a policy that forbids real hostnames, IPs,
+# operator usernames, or tailnet identifiers in committed files must edit
+# certified planning files to obey it, and therefore accumulates G088 findings
+# with no planning-truth drift at all. The two policies were individually
+# correct and jointly unsatisfiable.
+#
+# This classifier reads the actual hunks and clears an edit ONLY when every
+# changed line is a concrete-value -> placeholder substitution. It is
+# FAIL-CLOSED by construction (IMP-049 R1: a filter bug that silently
+# suppresses a real requirements change is a worse outcome than a noisy gate):
+#   - unreadable or empty diff            -> NOT redaction (stays a finding)
+#   - added/removed line counts differ    -> NOT redaction
+#   - any pair not equal after masking    -> NOT redaction
+#   - a pair where the old line carried no concrete value, or the new line
+#     gained no placeholder                -> NOT redaction
+# Only a positively-proven substitution is cleared; silence never clears.
+#
+# This is deliberately NOT a declared-marker channel (Option B). A marker the
+# guard does not verify is indistinguishable from --skip, which this framework
+# does not ship, and G088 already carries one unvalidated escape in
+# requiresRevalidation. Nothing here is self-asserted: the diff is the evidence.
+# ---------------------------------------------------------------------------
+
+# Concrete environment-specific values a redaction policy compels scrubbing.
+_G088_CONCRETE_RE='([0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3})|(/(Users|home)/[A-Za-z0-9_.-]+)|([A-Za-z0-9][A-Za-z0-9-]*(\.[A-Za-z0-9-]+)+)'
+# Placeholder shapes a redaction substitutes in.
+_G088_PLACEHOLDER_RE='(<[A-Za-z0-9_. -]+>)|(\$\{[A-Za-z0-9_]+\})|(REDACTED)|(redacted)|(example\.(com|org|net))|(placeholder)'
+# A file reference such as design.md or state.json satisfies the hostname shape
+# above. Neutralize those FIRST so swapping a doc reference can never be
+# mistaken for scrubbing a hostname.
+#
+# No pattern here uses \b: that is a GNU extension, and BSD sed on macOS does
+# not honour it, which would silently leave file references looking like
+# hostnames. Over-neutralizing is the safe direction — it can only withhold a
+# clear, never grant one.
+_G088_FILENAME_RE='[A-Za-z0-9_-]+\.(md|json|sh|ya?ml|txt|py|rs|ts|js|toml|lock|cfg|ini)'
+
+# The delimiter must appear in NEITHER regex: both carry '|' alternation and
+# the concrete pattern carries '/' in its /Users|/home branch.
+_g088_norm() {
+  printf '%s' "$1" | sed -E "s%${_G088_FILENAME_RE}%#%g"
+}
+
+_g088_mask() {
+  _g088_norm "$1" | sed -E -e "s%${_G088_PLACEHOLDER_RE}%@%g" -e "s%${_G088_CONCRETE_RE}%@%g"
+}
+
+_g088_has() {
+  _g088_norm "$1" | grep -Eq "$2"
+}
+
+# _g088_is_redaction_only <commit-or-WORKTREE> <file> -> 0 when every changed
+# line in that edit is a proven concrete-value -> placeholder substitution.
+_g088_is_redaction_only() {
+  local commit="$1" file="$2" raw="" old_lines="" new_lines="" line
+  if [[ "$commit" == "WORKTREE" ]]; then
+    raw="$(git -C "$REPO_ROOT" diff --unified=0 -- "$file" 2>/dev/null || true)"
+    raw="$raw
+$(git -C "$REPO_ROOT" diff --cached --unified=0 -- "$file" 2>/dev/null || true)"
+  else
+    raw="$(git -C "$REPO_ROOT" show --unified=0 --format='' "$commit" -- "$file" 2>/dev/null || true)"
+  fi
+
+  # Fail closed on an unreadable or empty diff.
+  [[ -n "${raw//[[:space:]]/}" ]] || return 1
+
+  while IFS= read -r line; do
+    case "$line" in
+      ---*|+++*) continue ;;
+      -*) old_lines="${old_lines}${line:1}"$'\n' ;;
+      +*) new_lines="${new_lines}${line:1}"$'\n' ;;
+    esac
+  done <<< "$raw"
+
+  local old_count new_count
+  old_count="$(printf '%s' "$old_lines" | grep -c '' 2>/dev/null || echo 0)"
+  new_count="$(printf '%s' "$new_lines" | grep -c '' 2>/dev/null || echo 0)"
+  # A pure substitution rewrites lines in place; an insertion or deletion is not
+  # a redaction and must remain a finding.
+  [[ "$old_count" -gt 0 && "$old_count" -eq "$new_count" ]] || return 1
+
+  local i=1 o n
+  while [[ "$i" -le "$old_count" ]]; do
+    o="$(printf '%s' "$old_lines" | sed -n "${i}p")"
+    n="$(printf '%s' "$new_lines" | sed -n "${i}p")"
+    # The old line must actually carry a concrete value and the new line must
+    # actually gain a placeholder, otherwise this is some other edit that
+    # merely happens to normalize equal.
+    _g088_has "$o" "$_G088_CONCRETE_RE" || return 1
+    _g088_has "$n" "$_G088_PLACEHOLDER_RE" || return 1
+    [[ "$(_g088_mask "$o")" == "$(_g088_mask "$n")" ]] || return 1
+    i=$((i + 1))
+  done
+  return 0
+}
+
 if ! git -C "$REPO_ROOT" log --format='@@G088@@%x09%H%x09%cI%x09%s' --name-only --since="$certified_at" -- "${tracked_paths[@]}" > "$LOG_FILE"; then
   echo "post-cert-spec-edit-guard: git log inspection failed for $spec_rel" >&2
   exit 2
@@ -383,6 +484,8 @@ if ! git -C "$REPO_ROOT" diff --cached --name-only -- "${tracked_paths[@]}" >> "
 fi
 
 post_cert_entries=()
+post_cert_commits=()
+post_cert_files=()
 current_hash=""
 current_date=""
 current_subject=""
@@ -395,13 +498,77 @@ while IFS= read -r line; do
 
   if [[ -n "$line" && -n "$current_hash" ]]; then
     post_cert_entries+=("commit=$current_hash date=$current_date file=$line subject=$current_subject")
+    post_cert_commits+=("$current_hash")
+    post_cert_files+=("$line")
   fi
 done < "$LOG_FILE"
 
 while IFS= read -r dirty_path; do
   [[ -n "$dirty_path" ]] || continue
   post_cert_entries+=("commit=WORKTREE date=uncommitted file=$dirty_path subject=uncommitted planning truth edit")
+  post_cert_commits+=("WORKTREE")
+  post_cert_files+=("$dirty_path")
 done < "$DIFF_FILE"
+
+# Partition the path-level detections into proven redactions and real findings.
+# The redaction set is REPORTED, never hidden: a cleared edit that nobody can
+# see would be the same silence this gate exists to interrupt.
+drift_entries=()
+redaction_entries=()
+_idx=0
+while [[ "$_idx" -lt "${#post_cert_entries[@]}" ]]; do
+  if _g088_is_redaction_only "${post_cert_commits[$_idx]}" "${post_cert_files[$_idx]}"; then
+    redaction_entries+=("${post_cert_entries[$_idx]}")
+  else
+    drift_entries+=("${post_cert_entries[$_idx]}")
+  fi
+  _idx=$((_idx + 1))
+done
+post_cert_entries=("${drift_entries[@]+"${drift_entries[@]}"}")
+
+# ---------------------------------------------------------------------------
+# IMP-049 SCOPE-3 — carried-finding ledger.
+#
+# The measured downstream state was 40 certified specs whose findings were being
+# carried with no record anywhere. Carrying is the option actually taken and the
+# one the framework never recorded, so the erosion was invisible.
+#
+# A carry is a RECORD, never an EXEMPTION. Declaring one does NOT change the
+# exit code: the finding still fails. That is deliberate — a ledger entry that
+# cleared a blocking gate would be exactly the unvalidated self-assertion this
+# proposal refuses (see requiresRevalidation, and Option B). What the ledger
+# buys is attribution: who decided, why, and when, plus an aggregate that can be
+# argued about instead of a silence that becomes the norm.
+#
+# Shape, in state.json:
+#   "g088Carry": [ { "file": "...", "reason": "...", "owner": "...", "date": "..." } ]
+# An entry missing any of the four fields is malformed and does NOT count as
+# declared, so a half-filled ledger cannot launder a finding into looking owned.
+# ---------------------------------------------------------------------------
+carry_files=""
+if jq -e 'has("g088Carry") and (.g088Carry | type == "array")' "$STATE_FILE" >/dev/null 2>&1; then
+  carry_files="$(jq -r '
+    [ .g088Carry[]?
+      | select(((.file // "") | tostring | length) > 0
+            and ((.reason // "") | tostring | length) > 0
+            and ((.owner // "") | tostring | length) > 0
+            and ((.date // "") | tostring | length) > 0)
+      | .file ] | .[]?' "$STATE_FILE" 2>/dev/null || true)"
+fi
+
+carry_declared=0
+carry_undeclared=0
+_i=0
+while [[ "$_i" -lt "${#post_cert_entries[@]}" ]]; do
+  _entry_file="${post_cert_entries[$_i]#*file=}"
+  _entry_file="${_entry_file%% subject=*}"
+  if [[ -n "$carry_files" ]] && printf '%s\n' "$carry_files" | grep -Fxq "$_entry_file"; then
+    carry_declared=$((carry_declared + 1))
+  else
+    carry_undeclared=$((carry_undeclared + 1))
+  fi
+  _i=$((_i + 1))
+done
 
 if [[ "${#post_cert_entries[@]}" -gt 0 && "$requires_revalidation" == "true" ]]; then
   if [[ "$QUIET" != "true" ]]; then
@@ -417,20 +584,33 @@ if [[ "${#post_cert_entries[@]}" -gt 0 ]]; then
   echo "  certifiedAt: $certified_at" >&2
   echo "  trackedFiles: ${#tracked_paths[@]}" >&2
   echo "  postCertEdits: ${#post_cert_entries[@]}" >&2
+  echo "  clearedAsRedaction: ${#redaction_entries[@]}" >&2
+  echo "  carriedDeclared: $carry_declared" >&2
+  echo "  carriedUndeclared: $carry_undeclared" >&2
   echo "  remediation: demote status out of done, set requiresRevalidation:true, or complete a current bubbles.spec-review recertification and update certifiedAt after the edit" >&2
   echo "  G092: legacy done_with_concerns is read-only compatibility only; touched or recertified specs must migrate to done plus observations or blocked" >&2
   echo "  commits/files:" >&2
   for entry in "${post_cert_entries[@]}"; do
     echo "    - $entry" >&2
   done
+  if [[ "${#redaction_entries[@]}" -gt 0 ]]; then
+    echo "  cleared as concrete-value->placeholder redaction (not planning drift):" >&2
+    for entry in "${redaction_entries[@]}"; do
+      echo "    ~ $entry" >&2
+    done
+  fi
   exit 1
 fi
 
 if [[ "$QUIET" != "true" ]]; then
+  _redaction_note=""
+  if [[ "${#redaction_entries[@]}" -gt 0 ]]; then
+    _redaction_note=" clearedAsRedaction=${#redaction_entries[@]}"
+  fi
   if [[ -n "$latest_current_review" && "$latest_current_review_epoch" -le "$certified_epoch" ]]; then
-    echo "post-cert-spec-edit-guard: PASS Gate G088 (post_certification_spec_edit_gate) - spec=$spec_rel status=$status certifiedAt=$certified_at currentSpecReview=$latest_current_review trackedFiles=${#tracked_paths[@]}"
+    echo "post-cert-spec-edit-guard: PASS Gate G088 (post_certification_spec_edit_gate) - spec=$spec_rel status=$status certifiedAt=$certified_at currentSpecReview=$latest_current_review trackedFiles=${#tracked_paths[@]}${_redaction_note}"
   else
-    echo "post-cert-spec-edit-guard: PASS Gate G088 (post_certification_spec_edit_gate) - spec=$spec_rel status=$status certifiedAt=$certified_at trackedFiles=${#tracked_paths[@]}"
+    echo "post-cert-spec-edit-guard: PASS Gate G088 (post_certification_spec_edit_gate) - spec=$spec_rel status=$status certifiedAt=$certified_at trackedFiles=${#tracked_paths[@]}${_redaction_note}"
   fi
 fi
 

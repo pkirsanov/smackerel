@@ -1157,6 +1157,17 @@ if [[ -x "$SCRIPT_DIR/release-packet-location-guard-selftest.sh" ]]; then
   run_check "Release packet location guard selftest" bash "$SCRIPT_DIR/release-packet-location-guard-selftest.sh"
 fi
 
+if [[ -x "$SCRIPT_DIR/release-packet-completeness-guard-selftest.sh" ]]; then
+  run_check "Release packet completeness guard selftest (G138)" bash "$SCRIPT_DIR/release-packet-completeness-guard-selftest.sh"
+fi
+
+# The live guard runs too, not only its selftest. IMP-050 SCOPE-3: the location
+# guard's own live path was never wired here, so it was exercised solely against
+# synthetic fixtures. A repo with no docs/releases/ auto-exempts at exit 0.
+if [[ -x "$SCRIPT_DIR/release-packet-completeness-guard.sh" ]]; then
+  run_check "Release packet completeness (live, G138)" bash "$SCRIPT_DIR/release-packet-completeness-guard.sh" "$REPO_ROOT"
+fi
+
 if [[ -x "$SCRIPT_DIR/release-delivery-reconciliation-guard-selftest.sh" ]]; then
   run_check "Release delivery reconciliation guard selftest (G101)" bash "$SCRIPT_DIR/release-delivery-reconciliation-guard-selftest.sh"
 fi

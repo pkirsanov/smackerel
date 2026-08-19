@@ -86,7 +86,7 @@ printf 'fixture\n' > "$REPO/README.md"
 git -C "$REPO" add -A >/dev/null 2>&1
 git -C "$REPO" -c commit.gpgsign=false commit -qm fixture >/dev/null 2>&1
 REV="$(git -C "$REPO" rev-parse --verify HEAD)"
-OTHER_REV="0000000000000000000000000000000000000000"
+OTHER_REV="$(printf '%040d' 0)"
 
 SPEC_DIR="$REPO/specs/900-admission"
 printf '# spec\n' > "$SPEC_DIR/spec.md"
