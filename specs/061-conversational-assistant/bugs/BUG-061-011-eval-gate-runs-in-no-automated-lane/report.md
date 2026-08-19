@@ -1982,21 +1982,22 @@ No action; recorded so the root cause is not over-stated in future readings.
 
     $ ls -ln config/generated/
     -rw------- 1    0    0 35431 dev.env
-    -rw------- 1    0    0 29928 home-lab.env
+    -rw------- 1    0    0 29928 <target>.env
     -rw------- 1 1000 1000 35861 test.env
     -rw------- 1    0    0 36004 self-hosted.env
     $ id -u
     1000
 
-`dev.env`, `home-lab.env` and `self-hosted.env` are owned by uid `0` — written by
+`dev.env`, `<target>.env` and `self-hosted.env` are owned by uid `0` — written by
 a container running as root — while `test.env` is owned by uid `1000`. Mode
 `0600` on secret-bearing files is *correct* hardening; the owner is the issue.
 Consequence measured, not speculated: it silently turns a repo-wide `grep` into
 `exit 2`, which is how V-2's evidence correction was found. **Pre-existing, and
-not attributable to `c7667d99`** — `home-lab.env` is dated months before that
-commit, and the lane under review consumes `test.env` (`smackerel.sh:1127` →
-`smackerel_require_env_file test`), which is uid-1000-owned and read cleanly this
-session. Not caused by this bug; not this diagnostic phase's to remediate.
+not attributable to `c7667d99`** — one of those generated env files predates
+that commit by months, and the lane under review consumes `test.env`
+(`smackerel.sh:1127` → `smackerel_require_env_file test`), which is
+uid-1000-owned and read cleanly this session. Not caused by this bug; not this
+diagnostic phase's to remediate.
 Owner: `bubbles.devops`.
 
 #### What this phase did NOT do
