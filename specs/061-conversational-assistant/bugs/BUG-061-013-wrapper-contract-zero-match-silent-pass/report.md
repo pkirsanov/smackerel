@@ -7,6 +7,60 @@
 
 ---
 
+### Red-then-green ordering index
+
+> Added by `bubbles.implement`. This is an INDEX, not a second set of observations: every line
+> below is a pointer to a block recorded in full further down. It sits at the top of the file
+> because the ordering itself is the claim — the proof of absence must be readable before the
+> proof of presence.
+
+**RED stage — the required behaviour was absent before the change.**
+On the SCN-01 fixture the pre-fix `assertEnvsubstWrapperContract` returned `nil`: the contract
+asserted nothing, so the scenario's required rejection did not happen. Failing proof captured by
+the scratch probe described in *Red-then-green method* below, exit 1, sha256
+`9e2e3abf9acc74bccc1750758bc462cd4c777ee465b9bab9e936014e688569fd`:
+
+```
+ERROR PROBEVERDICT SCN-01-unlocatable-invocation => GREEN-FALSE-PASS (returned nil)
+ERROR PROBEVERDICT SCN-04-conditional-form-with-call-after-go-test => GREEN-FALSE-PASS (returned nil)
+```
+
+Then, still pre-fix in effect but measured against the fixed function, the SAME fixtures are
+rejected — exit 1, sha256 `c049764422438dd910fddcff2f6d4ec20d9d9ccecac4309d3efc64945f9ac169`:
+
+```
+ERROR PROBEVERDICT SCN-01-unlocatable-invocation => RED-REJECTION err="SCN-01-unlocatable-invocation:
+could not LOCATE a `go test` invocation. This wrapper is in envsubstTrackedWrappers precisely
+because it runs `go test`, so a zero match means the matcher is blind — the wrapper is NOT
+necessarily wrong…"
+ERROR PROBEVERDICT SCN-04-conditional-form-with-call-after-go-test => RED-REJECTION err="…`go test`
+invocation (offset 112) appears BEFORE the `ensure_envsubst` call (offset 195); envsubst must be
+ensured BEFORE any go test runs…"
+```
+
+> **A vocabulary collision worth naming, because it inverts the usual reading.** The probe's own
+> verdict words are about the *guard's* verdict on a bad fixture, not about the TDD stage.
+> `GREEN-FALSE-PASS` is the DEFECT — the guard passing something it should reject — and is
+> therefore the TDD **red**. `RED-REJECTION` is the FIX working — the guard rejecting what it
+> should — and is part of the TDD **green**. Read the verdicts as the guard's output, not as the
+> stage names.
+
+**GREEN stage — the committed regressions now pass on the same behaviour.**
+Post-fix the real suite runs 7 top-level tests plus 4 sub-tests and every one is PASS, exit 0,
+sha256 `813701950a8c19adddffabc7ae0926b013eb89cf0e6126aa6eae48e732a21c30`; the full untagged unit
+lane exits 0 at sha256 `b6b3a1afcb6a7d342e539e591c67b1c45fa5d63520a127032f0b53db96d8c3a1`. Both
+blocks are reproduced in full under *Committed regressions execute (not vacuous)* and *Lane
+results*.
+
+**The probe was temporary and is not in the delivered diff.** It lived at
+`internal/deploy/zz_bug061013_prefix_probe_test.go`, was run once per side, and was deleted before
+commit. `git status --porcelain` is empty at the recorded HEAD and `git log --oneline` shows the
+single fix commit `40a9e942`; no file matching `zz_bug061013*` exists in the tree or in that
+commit. Verified by `git show --stat 40a9e942`, reproduced under *Code Diff Evidence*, whose file
+list is exactly three artifacts and one source file — the probe is absent from it.
+
+---
+
 ### Summary
 
 A contract test stopped checking anything and continued to report green.
@@ -438,6 +492,94 @@ because the cheapest route to a green lane was to revert `go-integration.sh:76` 
 `go test` — which would have satisfied the old regex, re-broken the eval gate the conditional form
 serves, and left the zero-match hole open for the next wrapper. The detector was fixed; the subject
 was not touched.
+
+### Code Diff Evidence
+
+**Claim Source:** executed · **Executed:** YES (this session) · **Exit Code:** 0
+
+The change landed as a single commit, `40a9e942`.
+
+```
+$ git show --stat --oneline 40a9e942
+40a9e942 fix(BUG-061-013): a wrapper-contract zero match is now a hard failure
+ internal/deploy/envsubst_wrapper_contract_test.go  | 100 ++++++++-
+ .../report.md                                      | 242 +++++++++++++++++++++
+ .../scopes.md                                      | 236 +++++++++++++++++++-
+ 3 files changed, 563 insertions(+), 15 deletions(-)
+```
+
+`--stat` elides the two long packet paths. Unelided, so the delivered set is unambiguous — one
+source file and two packet artifacts, and nothing else:
+
+```
+$ git show --name-only --format='' 40a9e942
+internal/deploy/envsubst_wrapper_contract_test.go
+specs/061-conversational-assistant/bugs/BUG-061-013-wrapper-contract-zero-match-silent-pass/report.md
+specs/061-conversational-assistant/bugs/BUG-061-013-wrapper-contract-zero-match-silent-pass/scopes.md
+```
+
+No path under `scripts/runtime/` appears, and no `zz_bug061013*` probe file appears. Both absences
+are load-bearing and are the reason the full file list is quoted rather than summarised.
+
+#### Change 1 — the matcher was widened onto the real invocation form
+
+```diff
+ // envsubstGoTestRE matches an actual `go test` invocation. This must
+-// appear AFTER the ensure_envsubst call. Whitespace-leading is OK; a
+-// trailing `\` to indicate continuation is OK.
+-var envsubstGoTestRE = regexp.MustCompile(`(?m)^\s*go\s+test\b`)
++// appear AFTER the ensure_envsubst call.
++//
++// The token is anchored to a line start, but whitespace is NOT the only
++// permitted prefix. Real wrappers put shell syntax in front of the command:
++// scripts/runtime/go-integration.sh runs it as `if ! go test … | tee …`, a
++// form the eval gate requires. A pattern that allowed only leading
++// whitespace matched nothing there, and before BUG-061-013 a zero match
++// returned nil — so the ordering check silently asserted nothing.
++//
++// The permitted prefixes are therefore enumerated: `if`, `elif`, `then`,
++// `while`, `until`, `&&`, `||`, `|`, and `!`, repeatable in any order. The
++// enumeration is deliberately bounded rather than open. Forms outside it
++// (`env VAR=x go test`, `timeout N go test`, `x=$(go test …)`) still do not
++// match — and that is safe now only because the zero-match branch below
++// makes such a miss LOUD. Widening a blind matcher buys one round; the
++// absence branch is what makes the next miss visible.
++var envsubstGoTestRE = regexp.MustCompile(`(?m)^[^\S\n]*(?:(?:if|elif|then|while|until|&&|\|\||\||!)[^\S\n]+)*go[^\S\n]+test\b`)
+```
+
+The stale comment was replaced in the same hunk. Leaving `Whitespace-leading is OK` in place would
+have made the file assert something false about its own regex.
+
+#### Change 2 — a zero match became a hard failure
+
+```diff
+        goTestIdx := envsubstGoTestRE.FindStringIndex(src)
+-       if goTestIdx != nil && goTestIdx[0] < callIdx[0] {
++       if goTestIdx == nil {
++               // Absence is a LOCATOR failure, not compliance. Every wrapper reaching
++               // here is in envsubstTrackedWrappers, and the documented entry
++               // condition for that list is "runs `go test`" — so the list and the
++               // matcher contradict each other, and it is the matcher that is
++               // fallible. Returning nil here is the BUG-061-013 silent pass.
++               return fmt.Errorf("%s: could not LOCATE a `go test` invocation. This wrapper is in envsubstTrackedWrappers precisely because it runs `go test`, so a zero match means the matcher is blind — the wrapper is NOT necessarily wrong and MUST NOT be rewritten to satisfy the pattern. The matcher may need widening: extend envsubstGoTestRE to recognise the invocation form actually in use",
++                       wrapperName)
++       }
++       if goTestIdx[0] < callIdx[0] {
+                return fmt.Errorf("%s: `go test` invocation (offset %d) appears BEFORE the `ensure_envsubst` call (offset %d); envsubst must be ensured BEFORE any go test runs that may shell out to scripts/commands/config.sh",
+                        wrapperName, goTestIdx[0], callIdx[0])
+        }
+```
+
+This is the load-bearing half. Splitting the compound condition does not merely reorder it: the
+`!= nil` conjunct was the silent pass, because absence took the same path as compliance. The
+locator now behaves like the two locators above it in the same function, both of which already
+errored on absence — so the change removes an internal inconsistency rather than adding a rule.
+
+The remaining hunks are additive: the two new adversarial sub-tests
+(`…AdversarialRejectsUnlocatableInvocation`, `…AdversarialRejectsConditionalCallAfterGoTest`) and
+the two new bullets in the file's header contract comment. No existing assertion or error substring
+was removed or relaxed — verifiable in the diff above, which shows deletions only on the regex line
+and its stale comment, and on the compound `if`.
 
 ### Lane results
 

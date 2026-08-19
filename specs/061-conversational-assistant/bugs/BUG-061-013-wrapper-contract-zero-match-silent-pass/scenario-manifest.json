@@ -1,0 +1,112 @@
+{
+  "specId": "061-conversational-assistant",
+  "bugId": "BUG-061-013",
+  "version": 1,
+  "scenarios": [
+    {
+      "scopeId": "BUG-061-013-SCOPE-01",
+      "scenarioId": "BUG-061-013-SCN-01-unlocatable-invocation-is-rejected",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        { "file": "internal/deploy/envsubst_wrapper_contract_test.go", "function": "TestEnvsubstWrapperContract_AdversarialRejectsUnlocatableInvocation" }
+      ],
+      "evidenceRefs": ["scopes.md", "report.md"],
+      "label": "A tracked wrapper whose `go test` invocation the matcher cannot locate is REJECTED — a zero match returns a non-nil error instead of falling through to return nil",
+      "type": "adversarial-regression-unit",
+      "source": "specs/061-conversational-assistant/bugs/BUG-061-013-wrapper-contract-zero-match-silent-pass/scopes.md",
+      "test": "internal/deploy/envsubst_wrapper_contract_test.go::TestEnvsubstWrapperContract_AdversarialRejectsUnlocatableInvocation",
+      "adversarial": true
+    },
+    {
+      "scopeId": "BUG-061-013-SCOPE-01",
+      "scenarioId": "BUG-061-013-SCN-02-error-blames-the-locator-not-the-wrapper",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        { "file": "internal/deploy/envsubst_wrapper_contract_test.go", "function": "TestEnvsubstWrapperContract_AdversarialRejectsUnlocatableInvocation" }
+      ],
+      "evidenceRefs": ["scopes.md", "report.md"],
+      "label": "The rejection message states the invocation could not be LOCATED and that the matcher may need widening, so a reader does not waste time auditing a correct wrapper",
+      "type": "adversarial-regression-unit",
+      "source": "specs/061-conversational-assistant/bugs/BUG-061-013-wrapper-contract-zero-match-silent-pass/scopes.md",
+      "test": "internal/deploy/envsubst_wrapper_contract_test.go::TestEnvsubstWrapperContract_AdversarialRejectsUnlocatableInvocation",
+      "adversarial": true
+    },
+    {
+      "scopeId": "BUG-061-013-SCOPE-01",
+      "scenarioId": "BUG-061-013-SCN-03-conditional-and-piped-form-is-located",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        { "file": "internal/deploy/envsubst_wrapper_contract_test.go", "function": "TestEnvsubstWrapperContract_LiveWrappers" },
+        { "file": "scripts/runtime/go-integration.sh" }
+      ],
+      "evidenceRefs": ["scopes.md", "report.md"],
+      "label": "The widened matcher locates scripts/runtime/go-integration.sh:76, whose invocation begins `if ! go test`, and the ensure_envsubst ordering is genuinely compared against it",
+      "type": "regression-unit",
+      "source": "specs/061-conversational-assistant/bugs/BUG-061-013-wrapper-contract-zero-match-silent-pass/scopes.md",
+      "test": "internal/deploy/envsubst_wrapper_contract_test.go::TestEnvsubstWrapperContract_LiveWrappers",
+      "adversarial": false
+    },
+    {
+      "scopeId": "BUG-061-013-SCOPE-01",
+      "scenarioId": "BUG-061-013-SCN-04-restored-ordering-check-has-teeth",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        { "file": "internal/deploy/envsubst_wrapper_contract_test.go", "function": "TestEnvsubstWrapperContract_AdversarialRejectsConditionalCallAfterGoTest" }
+      ],
+      "evidenceRefs": ["scopes.md", "report.md"],
+      "label": "A fixture carrying line 76's conditional-and-piped shape with ensure_envsubst moved AFTER it is rejected with the ORDERING error, not the locator error — proving the widening landed on the real invocation rather than on something inert",
+      "type": "adversarial-regression-unit",
+      "source": "specs/061-conversational-assistant/bugs/BUG-061-013-wrapper-contract-zero-match-silent-pass/scopes.md",
+      "test": "internal/deploy/envsubst_wrapper_contract_test.go::TestEnvsubstWrapperContract_AdversarialRejectsConditionalCallAfterGoTest",
+      "adversarial": true
+    },
+    {
+      "scopeId": "BUG-061-013-SCOPE-01",
+      "scenarioId": "BUG-061-013-SCN-05-all-four-tracked-wrappers-still-pass",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        { "file": "internal/deploy/envsubst_wrapper_contract_test.go", "function": "TestEnvsubstWrapperContract_LiveWrappers" },
+        { "file": "scripts/runtime/go-unit.sh" },
+        { "file": "scripts/runtime/go-integration.sh" },
+        { "file": "scripts/runtime/go-e2e.sh" },
+        { "file": "scripts/runtime/go-stress.sh" }
+      ],
+      "evidenceRefs": ["scopes.md", "report.md"],
+      "label": "All four tracked wrappers pass on their true ordering with no assertion weakened, and the regex comment no longer claims whitespace is the only permitted prefix",
+      "type": "regression-unit",
+      "source": "specs/061-conversational-assistant/bugs/BUG-061-013-wrapper-contract-zero-match-silent-pass/scopes.md",
+      "test": "internal/deploy/envsubst_wrapper_contract_test.go::TestEnvsubstWrapperContract_LiveWrappers",
+      "adversarial": false
+    },
+    {
+      "scopeId": "BUG-061-013-SCOPE-01",
+      "scenarioId": "BUG-061-013-SCN-06-pre-existing-adversarial-trio-not-blunted",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        { "file": "internal/deploy/envsubst_wrapper_contract_test.go", "function": "TestEnvsubstWrapperContract_AdversarialRejectsMissingSource" },
+        { "file": "internal/deploy/envsubst_wrapper_contract_test.go", "function": "TestEnvsubstWrapperContract_AdversarialRejectsSourceWithoutCall" },
+        { "file": "internal/deploy/envsubst_wrapper_contract_test.go", "function": "TestEnvsubstWrapperContract_AdversarialRejectsCallAfterGoTest" }
+      ],
+      "evidenceRefs": ["scopes.md", "report.md"],
+      "label": "The three pre-existing adversarial sub-tests still reject their fixtures with their original error substrings; the third uses the bare `go test ./...` form, confirming the widened pattern still matches the narrow shape it always matched",
+      "type": "regression-unit",
+      "source": "specs/061-conversational-assistant/bugs/BUG-061-013-wrapper-contract-zero-match-silent-pass/scopes.md",
+      "test": "internal/deploy/envsubst_wrapper_contract_test.go::TestEnvsubstWrapperContract_Adversarial",
+      "adversarial": true
+    },
+    {
+      "scopeId": "BUG-061-013-SCOPE-01",
+      "scenarioId": "BUG-061-013-SCN-07-integration-lane-still-runs-the-guarded-wrapper",
+      "requiredTestType": ["integration"],
+      "linkedTests": [
+        { "file": "scripts/runtime/go-integration.sh" }
+      ],
+      "evidenceRefs": ["scopes.md", "report.md"],
+      "label": "The integration lane still runs, so the ordering guarantee being restored still describes a live wrapper rather than a dead one",
+      "type": "regression-integration",
+      "source": "specs/061-conversational-assistant/bugs/BUG-061-013-wrapper-contract-zero-match-silent-pass/scopes.md",
+      "test": "./smackerel.sh test integration",
+      "adversarial": false
+    }
+  ]
+}

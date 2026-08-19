@@ -3,7 +3,7 @@
 ## Scope 1: Zero-match is a hard failure, and the matcher recognises real shell forms
 
 **Scope ID:** `BUG-061-013-SCOPE-01`
-**Status:** Not Started
+**Status:** Done
 **Depends On:** none
 
 ### Change Boundary
@@ -260,7 +260,63 @@ worthless if the wrapper it describes no longer runs.
 
   **Claim Source:** executed · **Executed:** YES (this session)
 
-  <!-- T06-EVIDENCE -->
+  Captured with `evidence-capture.sh` because the raw lane emits 10,355 lines. **Two lines are
+  redacted:** the two `config-validate:` lines named an absolute checkout path under the operator's
+  home directory, which this repository forbids committing; `<repo-root>` is substituted. The
+  redaction is disclosed rather than silent, because an evidence block that presents itself as
+  verbatim while having been edited is exactly the kind of small untruth this packet exists to
+  remove. The `sha256` covers the true unedited output, so the `verify` line below re-derives it.
+
+  ```
+  # BUG-061-013 T-06: integration lane (the wrapper whose ordering guarantee is restored)
+  $ timeout 2400 ./smackerel.sh test integration
+  exit: 0
+  lines: 10355
+  sha256: 579e9a146fa39bc4f20c066cb044800dd1071080469b7fd4eccdb18e75df6ba0
+  --- first 20 ---
+  oom-preflight: OK — 35186 MB available (need 6000 MB; swap used 1298 MB).
+  disk-preflight: OK — C: 56 GB free (need 40 GB), WSL / 464 GB free (need 25 GB).
+  config-validate: <repo-root>/config/generated/test.env.tmp.2441050 OK
+  Smackerel pre-flight resource check: OK
+    RAM  available: 35329 MB (required >= 6000 MB)
+    Disk available: 475185 MB / 464.0 GB (required >= 15 GB)
+  oom-preflight: OK — 35159 MB available (need 6000 MB; swap used 1296 MB).
+  disk-preflight: OK — C: 56 GB free (need 40 GB), WSL / 464 GB free (need 25 GB).
+  config-validate: <repo-root>/config/generated/test.env.tmp.2447562 OK
+  Smackerel pre-flight resource check: OK
+    RAM  available: 35177 MB (required >= 6000 MB)
+    Disk available: 475184 MB / 464.0 GB (required >= 15 GB)
+  Preparing disposable test stack...
+  Building disposable test stack images before up (freshness convention)...
+  #0 building with "default" instance using docker driver
+  #1 [smackerel-ml internal] load build definition from Dockerfile
+  #1 transferring dockerfile: 4.87kB done
+  --- failure-shaped lines from the omitted region ---
+          ERROR: model envelope validation failed (spec 045 FR-045-002): model envelope exceeded:
+          LLM_MODEL="bug-045-fixture-llm-20gib" requires 20480 MiB ... but OLLAMA_MEMORY_LIMIT="8G"
+          resolves to 8192 MiB ...
+          ERROR: config-generate-time validation failed for env=test (see above)
+  --- omitted 10315 line(s); sha256 above covers the full output ---
+  --- last 20 ---
+   Container smackerel-test-postgres-1  Removed
+   Container smackerel-test-intent-compiler-provider-1  Removed
+   Container smackerel-test-smackerel-ml-1  Removed
+   Container smackerel-test-nats-1  Removed
+   Volume smackerel-test-nats-data  Removed
+   Volume smackerel-test-ollama-data  Removed
+   Volume smackerel-test-postgres-data  Removed
+   Network smackerel-test_default  Removed
+  ```
+
+  <!-- verify: bash .github/bubbles/scripts/evidence-capture.sh --verify 579e9a146fa39bc4f20c066cb044800dd1071080469b7fd4eccdb18e75df6ba0 -- timeout 2400 ./smackerel.sh test integration -->
+
+  The two `ERROR:` lines the capture lifts out of the omitted region are **not** a lane failure, and
+  saying so is not a reassurance — it is checkable. They are emitted by a deliberate negative
+  fixture: `tests/integration/config_validate_test.go` rewrites the model name to
+  `bug-045-fixture-llm-20gib` (20480 MiB) against an 8G envelope precisely to assert that
+  config-validate REJECTS it. A run in which those lines were absent would mean that assertion had
+  stopped firing. The lane verdict is the `exit: 0` above, and the teardown block shows the
+  disposable stack was removed rather than leaked.
 
 - [x] The full unit lane exits 0 with no newly failing test attributable to this change (T-07)
 
@@ -304,7 +360,7 @@ worthless if the wrapper it describes no longer runs.
   the old regex while re-breaking the eval gate that the conditional form exists to serve and
   leaving the zero-match hole open. The subject was not edited; the detector was.
 
-- [x] Build Quality Gate: `./smackerel.sh lint` and `./smackerel.sh format --check` exit 0 with zero warnings; `bash .github/bubbles/scripts/artifact-lint.sh` on this packet exits 0; no deferred findings
+- [x] Build Quality Gate: `./smackerel.sh lint` and `./smackerel.sh format --check` exit 0 with zero warnings; `bash .github/bubbles/scripts/artifact-lint.sh` on this packet exits 0; no findings left unresolved
 
   **Claim Source:** executed · **Executed:** YES (this session)
 
