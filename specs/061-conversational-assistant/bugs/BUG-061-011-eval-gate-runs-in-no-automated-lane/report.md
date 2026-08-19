@@ -375,7 +375,7 @@ Built by reading `spec.md` and mapping each requirement to the executed test or 
 | R3.2 | Zero count fails the lane | `go-integration.sh:107-109`; contract cases **A2/A3** | A6 | ✅ |
 | R3.3 | Independent of the `go test` verdict | **Observed in one real run**: `go test` failed while the gate assertion passed (@8431 vs @8433) | A9 | ✅ |
 | R3.4 | Failure message names the gate and the count | All three ERROR strings (`:105`, `:108`, and `:98`) name `TestAcceptanceGate_RoutingAccuracyAndCaptureFallback` | read | ✅ |
-| R3.5 | Both failures reported; neither masks the other | `go-integration.sh:118-127` — both errors echoed, then non-zero exit on either | read | ✅ |
+| R3.5 | Both failures reported; neither masks the other | `TestEvalLaneContract_DualFailureReportingNeitherMasksTheOther` + adversarial cases **A8/A9/A10**, all in `internal/deploy/eval_lane_contract_test.go` | A11 | ✅ |
 | R4.1 | Count provably able to be `0` | `TestExecutedAssertions_ZeroOnEmptyCorpus` asserts exactly `0` | A2 | ✅ |
 | R4.2 | R4.1 shown by an executable test, not prose | Same test; it is executed, not asserted | A2 | ✅ |
 | R5.1 | Focused runs still usable | Focused run completed without the marker assertion failing it | A10 | ✅ |
@@ -1656,4 +1656,198 @@ functional, both owned by `bubbles.plan`.**
 - **BUG-061-013 remains open and was not touched** by these phases.
 - **No DoD checkbox was checked; no acceptance was recorded.** Status stays
   `blocked` on G136, which is operator-only.
+
+---
+
+## A11 — R3.5 Coverage-Gap Closure — `bubbles.implement`, 2026-08-19
+
+**Tree:** WORKING TREE, HEAD=`5ca7a870`. **Claim Source:** executed.
+
+### What was missing, stated exactly
+
+`spec.md` **R3.5** requires that when `go test` fails **and** the emission is
+absent or zero, the lane still exits non-zero and neither failure masks the
+other. Until this session that row of the requirement table above carried
+`read` in its *Discharged by* column — code-reading, not execution. The Gherkin
+scenario *"A failing go test and a missing marker cannot mask each other"* had
+no executing assertion behind it: `assertEvalLaneContract` checks literal
+**presence** of tokens, and presence survives a reordering. A recent `simplify`
+change (`fa61daa0`) merged two consecutive `if [[ "$go_test_rc" -ne 0 ]]` blocks
+in exactly this region. That edit was behaviour-preserving — and nothing would
+have turned red had it not been. That is the risk this section closes.
+
+### Control flow established by reading the script (NOT modified)
+
+`scripts/runtime/go-integration.sh`, verified by line number:
+
+| Line | Statement | Role |
+|------|-----------|------|
+| 87 | `gate_marker_check_failed=0` | flag initialised before either exit is decided |
+| 95, 98, 105, 108 | `echo "ERROR: …" >&2` | the four gate-check diagnostics, each naming the gate test |
+| 96, 99, 106, 109 | `gate_marker_check_failed=1` | each raised on the line immediately after its own diagnostic |
+| 121 | `if [[ "$go_test_rc" -ne 0 ]]; then` | go-test exit guard |
+| 122 | `echo "ERROR: … go test failed (exit ${go_test_rc})." >&2` | the go-test failure is **reported** before it exits |
+| 123 | `exit "$go_test_rc"` | go-test failure owns the exit code |
+| 125 | `if [[ "$gate_marker_check_failed" -ne 0 ]]; then` | sibling guard, reached when go test passed |
+| 126 | `exit 1` | gate-check failure exits non-zero on its own |
+
+Every gate diagnostic reaches stderr at lines 95-108, i.e. **before** the guard
+at 121. So when both fail, the gate diagnostic has already printed and the
+go-test diagnostic prints at 122 — both reported — and the exit at 123 is
+non-zero. When only the gate fails, 125-126 exits non-zero. Neither masks the
+other. The runtime behaviour was already correct; what was absent was a
+**detector**.
+
+### The assertion added
+
+`internal/deploy/eval_lane_contract_test.go` — same file, same idiom as the
+existing A0-A7 cases (named literal constants, a pure `assert…` returning
+`error`, `mutateEvalFixture` with its staleness guard, and an anti-tautology
+baseline precondition). No existing test, constant, or assertion was changed:
+the diff is **+253 / -0**.
+
+- `assertEvalLaneDualFailureReporting(lane string) error` — the pure R3.5
+  invariant, expressed as an **ordering property over byte offsets** rather
+  than presence, because ordering is precisely what a future edit can silently
+  change. It requires: the go-test failure is reported before it exits; the
+  gate-failure exit is a sibling **after** the go-test exit, not before it;
+  every diagnostic naming the gate reaches stderr **before** the go-test exit
+  guard; and every raised flag is paired with a diagnostic immediately above it.
+- `TestEvalLaneContract_DualFailureReportingNeitherMasksTheOther` — runs it
+  against the real, unmutated script.
+- `TestEvalLaneContract_AdversarialRejectsMaskedFailureReporting` — A8, A9, A10.
+
+It lives in the untagged `internal/deploy` unit lane for the same reason the
+rest of the file does: a detector hosted inside the integration lane would be
+disabled by the very edit that breaks the lane.
+
+### Red proof — the property has teeth
+
+The three adversarial cases were re-run with the ordering logic temporarily
+neutered (an early `return nil` inserted after the presence checks, then
+reverted). All three FAILED, which is what proves the ordering logic — not the
+surrounding presence checks — is what rejects the fixtures.
+
+**Command:** `./smackerel.sh test unit --go --go-run 'TestEvalLaneContract_AdversarialRejectsMaskedFailureReporting|TestEvalLaneContract_DualFailureReportingNeitherMasksTheOther' --verbose`
+**Exit code:** `1`
+**Output (verbatim, ANSI stripped):**
+
+```
+=== RUN   TestEvalLaneContract_DualFailureReportingNeitherMasksTheOther
+--- PASS: TestEvalLaneContract_DualFailureReportingNeitherMasksTheOther (0.00s)
+=== RUN   TestEvalLaneContract_AdversarialRejectsMaskedFailureReporting
+=== RUN   TestEvalLaneContract_AdversarialRejectsMaskedFailureReporting/A8_gate_diagnostic_moved_below_go_test_exit
+    eval_lane_contract_test.go:542: contract accepted a lane whose gate-check diagnostic is emitted only after `exit "$go_test_rc"`, where a concurrent go-test failure masks it entirely
+=== RUN   TestEvalLaneContract_AdversarialRejectsMaskedFailureReporting/A9_exit_blocks_reordered_go_test_failure_unreported
+    eval_lane_contract_test.go:560: contract accepted a lane whose gate-failure exit fires before the go-test failure is reported, masking the go-test failure
+=== RUN   TestEvalLaneContract_AdversarialRejectsMaskedFailureReporting/A10_gate_flag_raised_with_no_diagnostic
+    eval_lane_contract_test.go:575: contract accepted a lane that raises the gate-failure flag without printing anything, so the operator sees a non-zero exit with no cause
+--- FAIL: TestEvalLaneContract_AdversarialRejectsMaskedFailureReporting (0.00s)
+    --- FAIL: TestEvalLaneContract_AdversarialRejectsMaskedFailureReporting/A8_gate_diagnostic_moved_below_go_test_exit (0.00s)
+    --- FAIL: TestEvalLaneContract_AdversarialRejectsMaskedFailureReporting/A9_exit_blocks_reordered_go_test_failure_unreported (0.00s)
+    --- FAIL: TestEvalLaneContract_AdversarialRejectsMaskedFailureReporting/A10_gate_flag_raised_with_no_diagnostic (0.00s)
+FAIL
+FAIL    github.com/smackerel/smackerel/internal/deploy  0.053s
+```
+
+**Reading it.** The live test stayed green under neutering, which is correct:
+neutering can only make the assertion more permissive, and the real script is
+conformant. The three adversarial cases are the ones that must go red, and they
+did — each with its own "contract accepted …" message, meaning
+`assertEvalLaneDualFailureReporting` returned `nil` for a fixture that masks a
+failure. Restoring the logic restores all three to PASS (next block).
+
+### Green proof — the real script passes and each mutation is rejected
+
+The neutering was reverted (`grep -n neuteredForRedProof` → exit 1, no matches;
+`git diff --stat` → one file, **253 insertions, 0 deletions**).
+
+**Command:** `./smackerel.sh test unit --go --go-run 'TestEvalLaneContract' --verbose`
+**Exit code:** `0`
+**Output (verbatim, ANSI stripped, the R3.5 block):**
+
+```
+=== RUN   TestEvalLaneContract_DualFailureReportingNeitherMasksTheOther
+--- PASS: TestEvalLaneContract_DualFailureReportingNeitherMasksTheOther (0.00s)
+=== RUN   TestEvalLaneContract_AdversarialRejectsMaskedFailureReporting
+=== RUN   TestEvalLaneContract_AdversarialRejectsMaskedFailureReporting/A8_gate_diagnostic_moved_below_go_test_exit
+    eval_lane_contract_test.go:543: A8 REJECTED as required: scripts/runtime/go-integration.sh: a gate-check diagnostic at offset 5124 reaches stderr only after the go-test exit guard (offset 4994), so a concurrent go-test failure exits before it prints and masks it: echo "ERROR: go-integration: the assistant acceptance gate did not run — no ${gate_marker_prefix} line was emitted by TestAcceptanceGate_RoutingAccuracyAndCaptureFallback." >&2
+=== RUN   TestEvalLaneContract_AdversarialRejectsMaskedFailureReporting/A9_exit_blocks_reordered_go_test_failure_unreported
+    eval_lane_contract_test.go:561: A9 REJECTED as required: scripts/runtime/go-integration.sh places the gate-failure exit (offset 5175) before "exit \"$go_test_rc\"" (offset 5343), so the go-test failure would never be reported when both fail
+=== RUN   TestEvalLaneContract_AdversarialRejectsMaskedFailureReporting/A10_gate_flag_raised_with_no_diagnostic
+    eval_lane_contract_test.go:576: A10 REJECTED as required: scripts/runtime/go-integration.sh raises the gate-failure flag with no stderr diagnostic before it at offset 3317: gate_marker_check_failed=1
+--- PASS: TestEvalLaneContract_AdversarialRejectsMaskedFailureReporting (0.00s)
+    --- PASS: TestEvalLaneContract_AdversarialRejectsMaskedFailureReporting/A8_gate_diagnostic_moved_below_go_test_exit (0.00s)
+    --- PASS: TestEvalLaneContract_AdversarialRejectsMaskedFailureReporting/A9_exit_blocks_reordered_go_test_failure_unreported (0.00s)
+    --- PASS: TestEvalLaneContract_AdversarialRejectsMaskedFailureReporting/A10_gate_flag_raised_with_no_diagnostic (0.00s)
+PASS
+ok      github.com/smackerel/smackerel/internal/deploy  0.016s
+```
+
+The A8 offsets are the load-bearing detail: the relocated diagnostic sits at
+`5124` while the go-test exit guard is at `4994`. A8 relocates the **real**
+diagnostic line, extracted verbatim from the script rather than retyped, so the
+fixture cannot drift out of sync with the wording it mutates.
+
+### The pre-existing adversarial cases still reject
+
+The three pre-existing adversarial sub-tests that assert on specific error
+substrings (`missing source line`, `never calls`, `` BEFORE the `ensure_envsubst` call ``)
+were re-run unchanged and still reject their fixtures.
+
+**Command:** `./smackerel.sh test unit --go --go-run 'TestEnvsubstWrapperContract' --verbose`
+**Exit code:** `0`
+**Output (verbatim, ANSI stripped):**
+
+```
+--- PASS: TestEnvsubstWrapperContract_HelperExistsAndIsExecutable (0.00s)
+--- PASS: TestEnvsubstWrapperContract_LiveWrappers (0.00s)
+    --- PASS: TestEnvsubstWrapperContract_LiveWrappers/go-unit.sh (0.00s)
+    --- PASS: TestEnvsubstWrapperContract_LiveWrappers/go-integration.sh (0.00s)
+    --- PASS: TestEnvsubstWrapperContract_LiveWrappers/go-e2e.sh (0.00s)
+    --- PASS: TestEnvsubstWrapperContract_LiveWrappers/go-stress.sh (0.00s)
+--- PASS: TestEnvsubstWrapperContract_AdversarialRejectsMissingSource (0.00s)
+--- PASS: TestEnvsubstWrapperContract_AdversarialRejectsSourceWithoutCall (0.00s)
+--- PASS: TestEnvsubstWrapperContract_AdversarialRejectsCallAfterGoTest (0.00s)
+```
+
+The seven pre-existing eval-lane adversarial cases (A1-A7) also still pass —
+see the full `TestEvalLaneContract` listing under the green proof command above,
+which runs A1 through A10 in one invocation.
+
+### Full untagged suite — no collateral damage
+
+**Command:** `./smackerel.sh test unit --go`
+**Exit code:** `0` · **148** packages reported `ok` · **zero** `FAIL` lines.
+**Output (verbatim tail, ANSI stripped):**
+
+```
+ok      github.com/smackerel/smackerel/tests/eval/assistant     (cached)
+ok      github.com/smackerel/smackerel/tests/integration        (cached) [no tests to run]
+?       github.com/smackerel/smackerel/tests/integration/agent/routerwarmup     [no test files]
+?       github.com/smackerel/smackerel/tests/integration/drive/fixtures [no test files]
+?       github.com/smackerel/smackerel/tests/integration/nslock [no test files]
+ok      github.com/smackerel/smackerel/tests/observability      (cached)
+ok      github.com/smackerel/smackerel/tests/stress/readiness   (cached)
+ok      github.com/smackerel/smackerel/tests/unit/clients       (cached)
+?       github.com/smackerel/smackerel/web/pwa  [no test files]
+ok      github.com/smackerel/smackerel/web/pwa/tests    (cached)
+[go-unit] go test ./... finished OK
+```
+
+### Honest limits of A11
+
+- **This is a static contract over the script text, not a lane execution.** It
+  does not spawn `go-integration.sh` with a failing `go test` and an absent
+  marker. It asserts the ordering property that makes the runtime behaviour
+  hold. That is deliberate — the thing that regresses silently is the ORDER of
+  the two reporting sites and the two exits, and an ordering property is what
+  turns red when they move. It is not a claim that the lane was run.
+- **`scripts/runtime/go-integration.sh` was NOT modified.** `git diff
+  --name-only` lists exactly one path: `internal/deploy/eval_lane_contract_test.go`.
+- **No status or certification field was changed.** Both remain `blocked`;
+  certification is `bubbles.validate`'s act.
+- **No `Human Acceptance Record` was authored** and `uservalidation.md` was not
+  touched. G136 remains operator-only and remains unsatisfied.
+
 

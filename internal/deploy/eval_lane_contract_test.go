@@ -323,3 +323,256 @@ func TestEvalLaneContract_AdversarialRejectsBypassOrBroadenedSkip(t *testing.T) 
 		}
 	})
 }
+
+// ---------------------------------------------------------------------------
+// R3.5 — "when go test itself fails AND the emission is absent or zero, the
+// lane MUST still exit non-zero. Neither failure may mask the other."
+//
+// The lane already behaves this way. What was missing was a DETECTOR: every
+// signal above is a presence check, and presence survives a reordering. R3.5
+// is an ORDERING property — the gate diagnostic must reach stderr before the
+// go-test path exits, and the gate's own exit must remain reachable after it.
+// Commit fa61daa0 merged two consecutive `if [[ "$go_test_rc" -ne 0 ]]` blocks
+// in this exact region; that edit was behaviour-preserving, and nothing would
+// have turned red had it not been.
+// ---------------------------------------------------------------------------
+
+const (
+	evalLaneGateFlagInit    = `gate_marker_check_failed=0`
+	evalLaneGateFlagSet     = `gate_marker_check_failed=1`
+	evalLaneGoTestExitGuard = `if [[ "$go_test_rc" -ne 0 ]]; then`
+	evalLaneGoTestExit      = `exit "$go_test_rc"`
+	evalLaneGoTestFailError = `ERROR: go-integration: go test failed`
+	evalLaneGateExitGuard   = `if [[ "$gate_marker_check_failed" -ne 0 ]]; then`
+
+	// Asserted verbatim by the adversarial cases so a reworded message
+	// cannot silently retire the case it was written to catch.
+	evalLaneMaskedGateDiagErr  = "reaches stderr only after the go-test exit guard"
+	evalLaneSilentGateFlagErr  = "raises the gate-failure flag with no stderr diagnostic before it"
+	evalLaneMaskedGoTestErr    = "the go-test failure would never be reported"
+	evalLaneUnreportedExitErr  = "exits on the go-test failure without reporting it"
+	evalLaneMissingGateExitErr = "has no gate-failure exit"
+)
+
+// evalLaneStderrDiagnostic reports whether a line is an error diagnostic
+// written to stderr. Read as a shape rather than as specific wording: a
+// reworded message must stay a REPORTED message, and that is the property
+// R3.5 protects.
+func evalLaneStderrDiagnostic(line string) bool {
+	trimmed := strings.TrimSpace(line)
+	return strings.HasPrefix(trimmed, "echo ") &&
+		strings.Contains(trimmed, "ERROR:") &&
+		strings.Contains(trimmed, ">&2")
+}
+
+// evalLaneIsGateDiagnostic distinguishes the gate-check diagnostics from the
+// go-test one. Naming the gate test is the discriminator because R3.4 already
+// requires every gate diagnostic to name it, and the go-test failure message
+// does not.
+func evalLaneIsGateDiagnostic(line string) bool {
+	return evalLaneStderrDiagnostic(line) && strings.Contains(line, evalGateTestName)
+}
+
+// assertEvalLaneDualFailureReporting is the R3.5 invariant, expressed over the
+// lane text as an ordering property so a future reordering turns red.
+//
+// Pure, like assertEvalLaneContract, so fixtures can be mutations of the real
+// file with no filesystem dependency.
+func assertEvalLaneDualFailureReporting(lane string) error {
+	offset := func(literal string) int { return strings.Index(lane, literal) }
+
+	flagInit := offset(evalLaneGateFlagInit)
+	goTestGuard := offset(evalLaneGoTestExitGuard)
+	goTestErr := offset(evalLaneGoTestFailError)
+	goTestExit := offset(evalLaneGoTestExit)
+	gateExitGuard := offset(evalLaneGateExitGuard)
+
+	for _, required := range []struct {
+		at      int
+		literal string
+	}{
+		{flagInit, evalLaneGateFlagInit},
+		{goTestGuard, evalLaneGoTestExitGuard},
+		{goTestExit, evalLaneGoTestExit},
+	} {
+		if required.at < 0 {
+			return fmt.Errorf("%s does not contain %q, so the two failure paths R3.5 governs cannot both be present",
+				evalLaneRelpath, required.literal)
+		}
+	}
+	if gateExitGuard < 0 {
+		return fmt.Errorf("%s %s (%q absent); a gate-check failure would leave the lane exiting zero whenever go test passed",
+			evalLaneRelpath, evalLaneMissingGateExitErr, evalLaneGateExitGuard)
+	}
+	if goTestErr < 0 || goTestErr > goTestExit {
+		return fmt.Errorf("%s %s: the %q diagnostic must precede %q, otherwise a go-test failure exits silently",
+			evalLaneRelpath, evalLaneUnreportedExitErr, evalLaneGoTestFailError, evalLaneGoTestExit)
+	}
+
+	// The gate-failure exit is a SIBLING of the go-test exit, reached after
+	// it. Placed before, `exit 1` would fire first and the go-test failure
+	// diagnostic at goTestErr would never print — the mirror-image mask.
+	if gateExitGuard < goTestExit {
+		return fmt.Errorf("%s places the gate-failure exit (offset %d) before %q (offset %d), so %s when both fail",
+			evalLaneRelpath, gateExitGuard, evalLaneGoTestExit, goTestExit, evalLaneMaskedGoTestErr)
+	}
+	if flagInit > goTestGuard {
+		return fmt.Errorf("%s initialises %q (offset %d) after the go-test exit guard (offset %d); the flag must exist before either exit is decided",
+			evalLaneRelpath, evalLaneGateFlagInit, flagInit, goTestGuard)
+	}
+
+	// Every gate diagnostic must already be on stderr by the time the
+	// go-test path can exit. This is the check that the "diagnostic moved
+	// below the exit" mutation trips.
+	lineStart := 0
+	gateDiagnostics := 0
+	for _, line := range strings.Split(lane, "\n") {
+		start := lineStart
+		lineStart += len(line) + 1
+		if !evalLaneIsGateDiagnostic(line) {
+			continue
+		}
+		gateDiagnostics++
+		if start > goTestGuard {
+			return fmt.Errorf("%s: a gate-check diagnostic at offset %d %s (offset %d), so a concurrent go-test failure exits before it prints and masks it: %s",
+				evalLaneRelpath, start, evalLaneMaskedGateDiagErr, goTestGuard, strings.TrimSpace(line))
+		}
+	}
+	if gateDiagnostics == 0 {
+		return fmt.Errorf("%s emits no stderr diagnostic naming %s, so a gate-check failure is unreportable",
+			evalLaneRelpath, evalGateTestName)
+	}
+
+	// Every raised flag must be paired with a diagnostic immediately above
+	// it. A flag raised silently exits non-zero but tells the operator
+	// nothing, which is R3.4's failure and R3.5's mask in combination.
+	lineStart = 0
+	flagSites := 0
+	diagnosticPending := false
+	for _, line := range strings.Split(lane, "\n") {
+		start := lineStart
+		lineStart += len(line) + 1
+
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
+			continue
+		}
+		if evalLaneStderrDiagnostic(line) {
+			diagnosticPending = true
+			continue
+		}
+		if !strings.Contains(line, evalLaneGateFlagSet) {
+			diagnosticPending = false
+			continue
+		}
+		flagSites++
+		if !diagnosticPending {
+			return fmt.Errorf("%s %s at offset %d: %s",
+				evalLaneRelpath, evalLaneSilentGateFlagErr, start, trimmed)
+		}
+		if start > goTestGuard {
+			return fmt.Errorf("%s raises the gate-failure flag at offset %d, after the go-test exit guard (offset %d), where a go-test failure has already exited past it",
+				evalLaneRelpath, start, goTestGuard)
+		}
+		diagnosticPending = false
+	}
+	if flagSites == 0 {
+		return fmt.Errorf("%s never sets %q, so no gate-check failure can reach the gate-failure exit",
+			evalLaneRelpath, evalLaneGateFlagSet)
+	}
+	return nil
+}
+
+// requireEvalDualReportingBaselinePasses is the anti-tautology precondition for
+// the R3.5 adversarial cases, mirroring requireEvalBaselinePasses.
+func requireEvalDualReportingBaselinePasses(t *testing.T, lane string) {
+	t.Helper()
+	if err := assertEvalLaneDualFailureReporting(lane); err != nil {
+		t.Fatalf("adversarial precondition failed: the unmutated lane must satisfy the R3.5 invariant, got: %v", err)
+	}
+}
+
+// evalLaneFirstGateDiagnostic returns the first gate diagnostic verbatim, with
+// its original indentation, so a fixture relocates the REAL line rather than a
+// paraphrase that could drift out of sync with the script.
+func evalLaneFirstGateDiagnostic(t *testing.T, lane string) string {
+	t.Helper()
+	for _, line := range strings.Split(lane, "\n") {
+		if evalLaneIsGateDiagnostic(line) {
+			return line
+		}
+	}
+	t.Fatalf("adversarial fixture is stale: the lane contains no stderr diagnostic naming %s", evalGateTestName)
+	return ""
+}
+
+// TestEvalLaneContract_DualFailureReportingNeitherMasksTheOther reads the real
+// lane wrapper. This is the R3.5 assertion that was missing: report.md
+// discharged R3.5 by code reading, and a reordering of the block this test
+// covers would previously have turned nothing red.
+func TestEvalLaneContract_DualFailureReportingNeitherMasksTheOther(t *testing.T) {
+	lane, _ := evalLaneSources(t)
+	if err := assertEvalLaneDualFailureReporting(lane); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestEvalLaneContract_AdversarialRejectsMaskedFailureReporting is the R3.5
+// adversarial set: A8 (gate diagnostic relocated below the go-test exit),
+// A9 (the two exit blocks reordered so the go-test failure goes unreported),
+// A10 (a gate-failure flag raised with no diagnostic at all).
+func TestEvalLaneContract_AdversarialRejectsMaskedFailureReporting(t *testing.T) {
+	lane, _ := evalLaneSources(t)
+	requireEvalDualReportingBaselinePasses(t, lane)
+
+	t.Run("A8_gate_diagnostic_moved_below_go_test_exit", func(t *testing.T) {
+		diagnostic := evalLaneFirstGateDiagnostic(t, lane)
+		stripped := mutateEvalFixture(t, lane, diagnostic+"\n", "")
+		broken := mutateEvalFixture(t, stripped,
+			evalLaneGateExitGuard,
+			diagnostic+"\n"+evalLaneGateExitGuard)
+
+		err := assertEvalLaneDualFailureReporting(broken)
+		if err == nil {
+			t.Fatal("contract accepted a lane whose gate-check diagnostic is emitted only after `exit \"$go_test_rc\"`, where a concurrent go-test failure masks it entirely")
+		}
+		if !strings.Contains(err.Error(), evalLaneMaskedGateDiagErr) {
+			t.Fatalf("rejection did not name the masking it detected: want substring %q, got: %v",
+				evalLaneMaskedGateDiagErr, err)
+		}
+		t.Logf("A8 REJECTED as required: %v", err)
+	})
+
+	t.Run("A9_exit_blocks_reordered_go_test_failure_unreported", func(t *testing.T) {
+		gateExitBlock := evalLaneGateExitGuard + "\n\texit 1\nfi\n"
+		stripped := mutateEvalFixture(t, lane, gateExitBlock, "")
+		broken := mutateEvalFixture(t, stripped,
+			evalLaneGoTestExitGuard,
+			gateExitBlock+evalLaneGoTestExitGuard)
+
+		err := assertEvalLaneDualFailureReporting(broken)
+		if err == nil {
+			t.Fatal("contract accepted a lane whose gate-failure exit fires before the go-test failure is reported, masking the go-test failure")
+		}
+		if !strings.Contains(err.Error(), evalLaneMaskedGoTestErr) {
+			t.Fatalf("rejection did not name the masking it detected: want substring %q, got: %v",
+				evalLaneMaskedGoTestErr, err)
+		}
+		t.Logf("A9 REJECTED as required: %v", err)
+	})
+
+	t.Run("A10_gate_flag_raised_with_no_diagnostic", func(t *testing.T) {
+		diagnostic := evalLaneFirstGateDiagnostic(t, lane)
+		broken := mutateEvalFixture(t, lane, diagnostic+"\n", "")
+
+		err := assertEvalLaneDualFailureReporting(broken)
+		if err == nil {
+			t.Fatal("contract accepted a lane that raises the gate-failure flag without printing anything, so the operator sees a non-zero exit with no cause")
+		}
+		if !strings.Contains(err.Error(), evalLaneSilentGateFlagErr) {
+			t.Fatalf("rejection did not name the silent flag it detected: want substring %q, got: %v",
+				evalLaneSilentGateFlagErr, err)
+		}
+		t.Logf("A10 REJECTED as required: %v", err)
+	})
+}

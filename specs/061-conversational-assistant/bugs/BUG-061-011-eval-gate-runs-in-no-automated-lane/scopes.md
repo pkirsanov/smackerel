@@ -803,9 +803,51 @@ Every item requires: (1) implementation complete, (2) behaviour validated by exe
 
   **Exit-code reading.** `1` is the passing outcome because the asserted property is *absence of an affirmative claim*. GNU grep exits `0` on a match, `1` on none, `2` on error; a wrong path would have exited `2`. Exit `0` here would have printed the offending lines and failed the item.
 
-- [ ] A failing go test and a missing marker cannot mask each other — the lane implements the behaviour but **no executing test asserts it**, so this item cannot be checked
+- [x] A failing go test and a missing marker cannot mask each other — closed by `TestEvalLaneContract_DualFailureReportingNeitherMasksTheOther` with adversarial cases A8/A9/A10
 
-  > **Unticked — this is a real coverage gap, recorded rather than papered over.** The behaviour exists: `scripts/runtime/go-integration.sh:118-127` echoes the gate-check ERROR and the `go test` failure before either exit decides the status, under the comment *"Neither failure may mask the other."* But `report.md` §3 discharges **R3.5** with `read` in its *Discharged by* column — code reading, not a test name. `assertEvalLaneContract` asserts no dual-reporting property (it checks literal presence only), and no test drives a lane run with both failures present. A future edit that reordered the two exits so one failure masked the other would turn **nothing** red. This item is therefore left unchecked; checking it would claim test-backed coverage that does not exist, which is precisely the fabrication Gate G068 exists to catch.
+  > **Superseded gap note, retained verbatim.** The original wording of this item ended *"the lane implements the behaviour but **no executing test asserts it**, so this item cannot be checked"*, and carried this note: *"**Unticked — this is a real coverage gap, recorded rather than papered over.** The behaviour exists: `scripts/runtime/go-integration.sh:118-127` echoes the gate-check ERROR and the `go test` failure before either exit decides the status, under the comment 'Neither failure may mask the other.' But `report.md` §3 discharges **R3.5** with `read` in its *Discharged by* column — code reading, not a test name. `assertEvalLaneContract` asserts no dual-reporting property (it checks literal presence only), and no test drives a lane run with both failures present. A future edit that reordered the two exits so one failure masked the other would turn **nothing** red."*
+  >
+  > Only the trailing *"so this item cannot be checked"* clause was retired, because its stated condition no longer holds. The behavioural claim — *A failing go test and a missing marker cannot mask each other* — is unchanged. The gap it recorded was real and is preserved above rather than deleted.
+
+  **Claim Source:** executed · **Tree:** WORKING TREE, HEAD=5ca7a870 · **Exit code:** `0`
+  **Command:** `./smackerel.sh test unit --go --go-run 'TestEvalLaneContract' --verbose`
+
+      === RUN   TestEvalLaneContract_DualFailureReportingNeitherMasksTheOther
+      --- PASS: TestEvalLaneContract_DualFailureReportingNeitherMasksTheOther (0.00s)
+      === RUN   TestEvalLaneContract_AdversarialRejectsMaskedFailureReporting
+      === RUN   TestEvalLaneContract_AdversarialRejectsMaskedFailureReporting/A8_gate_diagnostic_moved_below_go_test_exit
+          eval_lane_contract_test.go:543: A8 REJECTED as required: scripts/runtime/go-integration.sh: a gate-check diagnostic at offset 5124 reaches stderr only after the go-test exit guard (offset 4994), so a concurrent go-test failure exits before it prints and masks it: echo "ERROR: go-integration: the assistant acceptance gate did not run — no ${gate_marker_prefix} line was emitted by TestAcceptanceGate_RoutingAccuracyAndCaptureFallback." >&2
+      === RUN   TestEvalLaneContract_AdversarialRejectsMaskedFailureReporting/A9_exit_blocks_reordered_go_test_failure_unreported
+          eval_lane_contract_test.go:561: A9 REJECTED as required: scripts/runtime/go-integration.sh places the gate-failure exit (offset 5175) before "exit \"$go_test_rc\"" (offset 5343), so the go-test failure would never be reported when both fail
+      === RUN   TestEvalLaneContract_AdversarialRejectsMaskedFailureReporting/A10_gate_flag_raised_with_no_diagnostic
+          eval_lane_contract_test.go:576: A10 REJECTED as required: scripts/runtime/go-integration.sh raises the gate-failure flag with no stderr diagnostic before it at offset 3317: gate_marker_check_failed=1
+      --- PASS: TestEvalLaneContract_AdversarialRejectsMaskedFailureReporting (0.00s)
+          --- PASS: TestEvalLaneContract_AdversarialRejectsMaskedFailureReporting/A8_gate_diagnostic_moved_below_go_test_exit (0.00s)
+          --- PASS: TestEvalLaneContract_AdversarialRejectsMaskedFailureReporting/A9_exit_blocks_reordered_go_test_failure_unreported (0.00s)
+          --- PASS: TestEvalLaneContract_AdversarialRejectsMaskedFailureReporting/A10_gate_flag_raised_with_no_diagnostic (0.00s)
+      PASS
+      ok      github.com/smackerel/smackerel/internal/deploy  0.016s
+
+  **Why this discharges the item rather than restating it.** The assertion is an *ordering* property over `scripts/runtime/go-integration.sh`, not another presence check — presence is exactly what survives a reordering, which is why the seven pre-existing cases could not see this. `assertEvalLaneDualFailureReporting` requires that every stderr diagnostic naming the gate test reaches stderr **before** the go-test exit guard (offset comparison), that the go-test failure is reported before its own `exit`, that the gate-failure exit is a sibling reached **after** the go-test exit rather than in front of it, and that every raised `gate_marker_check_failed=1` is paired with a diagnostic on the line above. The script itself was **not modified**: `git diff --name-only` lists only `internal/deploy/eval_lane_contract_test.go`, and the diff is `+253 / -0`, so no existing test or assertion was weakened to make room.
+
+  **Red-then-green, because a test that only ever passes proves nothing.** The three adversarial cases were re-run with the ordering logic temporarily neutered by an early `return nil`, then reverted. All three went RED with "contract accepted …" — proving the ordering logic, not the surrounding presence checks, is what rejects the fixtures:
+
+      === RUN   TestEvalLaneContract_AdversarialRejectsMaskedFailureReporting/A8_gate_diagnostic_moved_below_go_test_exit
+          eval_lane_contract_test.go:542: contract accepted a lane whose gate-check diagnostic is emitted only after `exit "$go_test_rc"`, where a concurrent go-test failure masks it entirely
+      === RUN   TestEvalLaneContract_AdversarialRejectsMaskedFailureReporting/A9_exit_blocks_reordered_go_test_failure_unreported
+          eval_lane_contract_test.go:560: contract accepted a lane whose gate-failure exit fires before the go-test failure is reported, masking the go-test failure
+      === RUN   TestEvalLaneContract_AdversarialRejectsMaskedFailureReporting/A10_gate_flag_raised_with_no_diagnostic
+          eval_lane_contract_test.go:575: contract accepted a lane that raises the gate-failure flag without printing anything, so the operator sees a non-zero exit with no cause
+      --- FAIL: TestEvalLaneContract_AdversarialRejectsMaskedFailureReporting (0.00s)
+          --- FAIL: TestEvalLaneContract_AdversarialRejectsMaskedFailureReporting/A8_gate_diagnostic_moved_below_go_test_exit (0.00s)
+          --- FAIL: TestEvalLaneContract_AdversarialRejectsMaskedFailureReporting/A9_exit_blocks_reordered_go_test_failure_unreported (0.00s)
+          --- FAIL: TestEvalLaneContract_AdversarialRejectsMaskedFailureReporting/A10_gate_flag_raised_with_no_diagnostic (0.00s)
+      FAIL
+      FAIL    github.com/smackerel/smackerel/internal/deploy  0.053s
+
+  The live test stayed green under neutering, which is the correct reading: neutering can only make an assertion more permissive, and the real script is conformant. It is the adversarial cases that must go red, and they did.
+
+  **Scope limit — read before relying on this tick.** This is a static contract over the script text; it does **not** spawn the lane with a failing `go test` and an absent marker. It asserts the ordering property that makes the runtime behaviour hold, which is the property a future edit can silently break — commit `fa61daa0` merged two consecutive `if [[ "$go_test_rc" -ne 0 ]]` blocks in exactly this region and nothing would have turned red had that edit not been behaviour-preserving. Full evidence including the control-flow reading is at `report.md` § **A11**.
 
 - [ ] `bug.md` status advanced to Fixed and then Verified
 
