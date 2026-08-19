@@ -51,7 +51,7 @@ Before any release packet lookup, direction read, discovery, or dispatch, follow
 
 **Canonical Output Path (BLOCKING):**
 - Release packets MUST be written under `docs/releases/<phase>/` where `<phase>` is the lowercase phase name from the `docs/INVESTOR_OVERVIEW.md` Phase Overview table (e.g., `mvp`, `v1.0`, `v1.5`, `v2.0`).
-- Exactly 8 docs per phase, no more and no fewer: `vision.md`, `features.md`, `actions.md`, `business-plan.md`, `deployment.md`, `marketing.md`, `monetization.md`, `ops-scalability.md`.
+- Exactly 8 docs per phase, no more and no fewer: `vision.md`, `features.md`, `actions.md`, `business-plan.md`, `deployment.md`, `marketing.md`, `monetization.md`, `ops-scalability.md`. Both halves are mechanical: `release-packet-location-guard.sh` refuses a ninth doc inside a packet, and Gate G138 (`release-packet-completeness-guard.sh`) refuses a packet holding fewer than the eight, naming each absent doc.
 - NO `state.json` — release packets are managed-docs, NOT workflow artifacts. They have no spec lifecycle and the state-transition guard does not apply.
 - NO `README.md` — `vision.md` IS the entry doc. Routing / `route_required` dispatches belong in `actions.md`.
 - Forbidden alternative locations (rejected by `bubbles/scripts/release-packet-location-guard.sh`): `specs/_ops/RELEASE-*/`, `specs/releases/<phase>/`, `docs/RELEASE-*/`, `docs/release-*/`, anywhere outside `docs/releases/<phase>/`.
@@ -110,7 +110,7 @@ Supported options:
 - `mode: refresh` — Reconcile an existing release packet against current capability state (default if packet exists)
 - `mode: extend` — Add new plans to an existing phase's `docs/plans/<phase>/` (e.g., adding a P07 paired-companion plan to v1.5)
 - `mode: cross-product` — Produce coordinated plans across two repos (requires `paired_repo: <path>` argument)
-- `docs: vision|features|actions|business-plan|deployment|marketing|monetization|ops-scalability|all` — Restrict update scope (default: all)
+- `docs: vision|features|actions|business-plan|deployment|marketing|monetization|ops-scalability|all` — Restrict which docs this run REFRESHES (default: all). This is a refresh-scope control over an already-complete packet, not an authoring path: it never licenses a packet that comes to rest holding fewer than the canonical eight, which Gate G138 refuses.
 - `paired_repo: <path>` — When `mode: cross-product`, the path to the partner repo
 - `phase_model: <list>` — Override the per-repo phase model auto-detection (e.g., `mvp,v1.0,v2.0`)
 - `socratic: true|false` — Opt into clarifying interview before producing the packet (default: false)
