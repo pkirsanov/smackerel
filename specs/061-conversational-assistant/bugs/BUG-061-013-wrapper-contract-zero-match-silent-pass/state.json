@@ -1,0 +1,108 @@
+{
+  "stateVersion": 3,
+  "specId": "061-conversational-assistant",
+  "bugId": "BUG-061-013",
+  "title": "The envsubst wrapper contract passes when it cannot find the invocation it is contracted to check",
+  "workflowMode": "bugfix-fastlane",
+  "releaseTrain": "mvp",
+  "status": "in_progress",
+  "severity": "S2",
+  "createdAt": "2026-08-19T00:30:12Z",
+  "lastUpdatedAt": "2026-08-19T00:30:12Z",
+  "discoveredBy": "BUG-061-011 regression phase; independently re-verified by the operator and again by bubbles.bug at HEAD 4895d446",
+  "discoveredAt": "2026-08-19",
+  "completedPhases": [],
+  "completedScopes": [],
+  "affectedSurface": [
+    "internal/deploy/envsubst_wrapper_contract_test.go"
+  ],
+  "execution": {
+    "activeAgent": "bubbles.bug",
+    "currentPhase": "analysis",
+    "currentScope": "BUG-061-013-SCOPE-01",
+    "substate": "filed_not_fixed",
+    "completedScopes": [],
+    "completedPhaseClaims": [],
+    "lastUpdatedAt": "2026-08-19T00:30:12Z",
+    "nextRequiredOwner": "bubbles.implement",
+    "executionHistory": [
+      {
+        "agent": "bubbles.bug",
+        "runStartedAt": "2026-08-19T00:24:00Z",
+        "runCompletedAt": "2026-08-19T00:33:00Z",
+        "phasesExecuted": ["discovery", "documentation", "analysis"],
+        "statusBefore": "not_started",
+        "statusAfter": "in_progress",
+        "summary": "Filed BUG-061-013 at HEAD 4895d446. NO FIX IMPLEMENTED and no source file touched; every DoD item in scopes.md and every delivery item in uservalidation.md is unchecked. The defect was reported by the BUG-061-011 regression phase and by the operator, and was RE-VERIFIED here rather than restated: (1) `grep -nE '^\\s*go\\s+test\\b' scripts/runtime/go-integration.sh` exits 1 with no output, which is the exact pattern compiled at internal/deploy/envsubst_wrapper_contract_test.go:82; (2) `grep -n 'go test'` on the same file returns line 76 `if ! go test \"${go_test_args[@]}\" 2>&1 | tee \"$gate_output_file\"; then`, whose `if ! ` prefix defeats the `^\\s*` anchor; (3) the green subtest was CONFIRMED IN THIS SESSION rather than taken on report — `./smackerel.sh test unit --go --go-run 'TestEnvsubstWrapperContract' --verbose` exits 0 with a literal `--- PASS: TestEnvsubstWrapperContract_LiveWrappers/go-integration.sh (0.00s)` line and `ok github.com/smackerel/smackerel/internal/deploy 0.115s`. No drift from the reported observations was found. ROOT CAUSE, located in source: two composing mistakes. Cause 1 — envsubstGoTestRE is lexical and anchored, so it encodes a syntax assumption; its own comment concedes only that 'Whitespace-leading is OK', which is false for `if`, `if !`, `&&`, `||`, pipelines, `env VAR=x`, or `timeout N`. Cause 2 — line 108's `goTestIdx != nil &&` short-circuit reads absence as compliance, so a zero match returns nil. The function is internally inconsistent: the source-line locator (92-96) and the call locator (98-101) both ERROR on absence; only the go-test locator passes. The charitable reading of `!= nil` ('nothing to order against') is sound only if the locator is complete; because it is anchored, zero-match actually means 'runs go test in a form I do not recognise'. envsubstTrackedWrappers (lines 55-60) is itself the disproof — membership asserts the wrapper runs go test, so a tracked wrapper with zero matches is self-contradictory and must fail. ORIGIN traced by execution: c7667d99 ('feat(stage-1): eval-gate lane wiring…', the BUG-061-011 fix) changed the file by 74 insertions / 2 deletions; at c7667d99^ line 55 read `go test \"${go_test_args[@]}\"` and MATCHED. BLAST RADIUS measured: go-integration.sh is the ONLY wrapper currently blind — go-unit.sh (line 67), go-e2e.sh (line 89) and go-stress.sh (line 50) all still match — but all four share the zero-match branch, so the latent radius is all four (recorded in report.md as an inference, not an observation). WHY NOTHING CAUGHT IT: all three adversarial fixtures (lines 184, 204, 224) write `go test ./...` bare and at line start, so the regex matches in every fixture the suite owns and the zero-match branch has no test at all. FIX DIRECTIONS with tradeoffs are in design.md; PRIMARY is (a) make zero-match a hard failure, chosen because it is the only option that fixes the class rather than the instance — (b) widening the regex and (c) semantic parsing both improve the locator's reach, and neither changes what happens when the locator is out of reach, which is the actual defect. (a) and (b) must land together: (a) alone leaves the lane RED on a true finding, (b) alone turns it green while the silent-pass hole stays open. SEVERITY IS DELIBERATELY NOT INFLATED: ensure_envsubst runs at line 14 and go test at line 76, so the ordering the contract protects genuinely holds and no user-facing behaviour is asserted broken. ARTIFACT SET — all SEVEN were created (bug.md, spec.md, design.md, scopes.md, report.md, uservalidation.md, state.json) as the deliberate UNION of two disagreeing definitions in this repo, a conflict filed this session as RTE-N6 in docs/releases/next/actions.md: the prose authorities (.github/skills/bubbles-bug-template/SKILL.md and .github/agents/bubbles_shared/critical-requirements.md:105) name bug.md/spec.md/design.md/scopes.md/report.md/state.json, while enforcement (artifact-lint.sh:401-406 and state-transition-guard.sh:725) requires spec.md/design.md/uservalidation.md/state.json plus scopes.md and report.md and never checks bug.md. The union satisfies both; bug.md was confirmed absent from artifact-lint's forbidden_artifacts list before relying on it. scenario-manifest.json was NOT created — no enforcement path requires it (artifact-lint has zero references; state-transition-guard consumes it only when present), and it is a completion-time artifact rather than a filing-time one. NOT RUN and recorded as such in report.md: the full unit lane, integration, e2e, stress, lint, format; any red-then-green pair (impossible pre-fix); and any behavioural mutation of go-integration.sh to observe the guard failing to catch inverted ordering, which the change boundary forbids. No commit and no push was made."
+      }
+    ]
+  },
+  "certification": {
+    "status": "in_progress",
+    "completedScopes": [],
+    "certifiedCompletedPhases": [],
+    "scopeProgress": {
+      "total": 1,
+      "done": 0,
+      "inProgress": 0,
+      "notStarted": 1
+    },
+    "lockdownState": "open",
+    "pendingGates": [
+      "No fix implemented. BUG-061-013-SCOPE-01 is Not Started and all 10 DoD items are unchecked.",
+      "G022 — every bugfix-fastlane specialist phase (implement, test, regression, simplify, stabilize, security, validate, audit) is unexecuted. bubbles.bug owns discovery/documentation/analysis only and MUST NOT claim foreign-owned phases.",
+      "report.md sections '### Validation Evidence' and '### Audit Evidence' are required by workflowMode bugfix-fastlane at a promotion status and are owned by bubbles.validate / bubbles.audit. Absent by design at in_progress.",
+      "G136 — uservalidation.md carries 4 unchecked human-acceptance items. Human-only; an agent checking them would fabricate the acceptance the gate exists to require. No '## Human Acceptance Record' section was authored, per operator instruction that it is operator-only."
+    ]
+  },
+  "policySnapshot": {
+    "source": ".specify/memory/bubbles.config.json",
+    "capturedAt": "2026-08-19T00:30:12Z",
+    "workflowMode": "bugfix-fastlane",
+    "workflowModeSource": "packet-classification",
+    "statusCeiling": "done",
+    "grill": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "tdd": {
+      "mode": "scenario-first",
+      "source": "packet-declared"
+    },
+    "autoCommit": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "lockdown": {
+      "mode": "fastlane",
+      "source": "packet-declared"
+    },
+    "regression": {
+      "mode": "adversarial-required",
+      "source": "packet-declared"
+    },
+    "validation": {
+      "mode": "certification-required",
+      "source": "repo-default"
+    },
+    "evidenceRequired": true,
+    "canonicalCommands": {
+      "unit": "./smackerel.sh test unit",
+      "integration": "./smackerel.sh test integration",
+      "e2e-api": "./smackerel.sh test e2e",
+      "lint": "./smackerel.sh lint",
+      "format": "./smackerel.sh format --check"
+    }
+  },
+  "repositoryResolution": {
+    "sessionId": "vscode-6af2178e10192363b0e52a46fb5e0950",
+    "decisionId": "rb:vscode-6af2178e10192363b0e52a46fb5e0950:40",
+    "controlRevision": 40,
+    "authority": "explicit-repository-root",
+    "transition": "confirmed",
+    "repositoryAlias": "smackerel",
+    "actionable": true
+  },
+  "transitionRequests": [],
+  "reworkQueue": []
+}
