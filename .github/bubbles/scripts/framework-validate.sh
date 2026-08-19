@@ -947,7 +947,9 @@ run_check_self_only "Competitive docs selftest" bash "$SCRIPT_DIR/competitive-do
 run_check_self_only "Interop apply selftest" bash "$SCRIPT_DIR/interop-apply-selftest.sh"
 run_check_self_only "Interop import selftest" bash "$SCRIPT_DIR/interop-import-selftest.sh"
 run_check_self_only "Release manifest selftest" bash "$SCRIPT_DIR/release-manifest-selftest.sh"
-run_check "Validation run receipt selftest (IMP-049 SCOPE-2)" bash "$SCRIPT_DIR/validation-receipt-selftest.sh"
+# Source-only: it drives the release-check receipt-consumption branch, and
+# release-check is itself source-only, so downstream there is nothing to test.
+run_check_self_only "Validation run receipt selftest (IMP-049 SCOPE-2)" bash "$SCRIPT_DIR/validation-receipt-selftest.sh"
 run_check_self_only "Release manifest purity selftest" bash "$SCRIPT_DIR/release-manifest-purity-selftest.sh"
 run_check_self_only "Payload closure guard (IMP-042 / REG-11)" bash "$SCRIPT_DIR/payload-closure-guard.sh"
 run_check_self_only "Payload closure guard selftest (IMP-042 / REG-11)" bash "$SCRIPT_DIR/payload-closure-guard-selftest.sh"

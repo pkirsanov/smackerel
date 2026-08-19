@@ -260,7 +260,16 @@ if command -v yq >/dev/null 2>&1; then
   fi
 
   # Non-vacuity: the assertion must reject the exact shape that shipped.
-  printf 'checks:\n  a:\n    commands:\n    []\n' >"$WORK/a11-bad.yaml"
+  # Written as a heredoc rather than a printf carrying escaped newlines, because
+  # the agnosticity lint's Windows drive-letter rule matches any letter followed
+  # by a colon and a backslash -- which an escaped newline after a YAML key
+  # produces. The rule is right; the printf was the wrong way to spell this.
+  cat >"$WORK/a11-bad.yaml" <<'A11_BAD_YAML'
+checks:
+  a:
+    commands:
+    []
+A11_BAD_YAML
   if yq -o=json '.' "$WORK/a11-bad.yaml" >/dev/null 2>&1; then
     bad "A11 parser rejects the shipped defect" "yq accepted 'commands:' with a bare [] on the next line"
   else

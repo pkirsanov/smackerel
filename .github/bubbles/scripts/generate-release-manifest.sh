@@ -106,6 +106,11 @@ demoted_source_only_scripts=(
   "bubbles/scripts/release-check.sh"
   # Exercises release-check, so it travels with it.
   "bubbles/scripts/ci-annotation-emitter-selftest.sh"
+  # Also exercises release-check: it drives the receipt-consumption branch that
+  # only release-check has. Shipped, it put a managed file in the payload whose
+  # dependency is source-only, and it ran downstream against a release gate that
+  # is not there.
+  "bubbles/scripts/validation-receipt-selftest.sh"
 )
 # Maintainer-only history. Frozen per-release design records and dated internal
 # reviews describe how THIS repository got here, which a consuming repository

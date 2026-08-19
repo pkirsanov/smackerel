@@ -113,7 +113,12 @@ validation_receipt_path() {
 validation_receipt_tree_digest() {
   local repo_root="${1:-}"
   [[ -n "$repo_root" ]] || return 1
+  # Both layouts, in source-first order. The manifest is at bubbles/ in a source
+  # checkout and .github/bubbles/ in an installed one, and framework-validate --
+  # which is shipped and sources this file -- runs in both. Resolving relative to
+  # repo_root rather than to this script keeps synthetic fixture roots working.
   local manifest="$repo_root/bubbles/release-manifest.json"
+  [[ -r "$manifest" ]] || manifest="$repo_root/.github/bubbles/release-manifest.json"
   [[ -r "$manifest" ]] || return 1
 
   local -a entries=()
