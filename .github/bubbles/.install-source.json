@@ -1,9 +1,9 @@
 {
   "installedVersion": "7.28.0",
   "installMode": "local-source",
-  "sourceRef": "yamlfix",
-  "sourceGitSha": "32cbc574724d9cf78528f3b033ea5c0bb45bb877",
+  "sourceRef": "local-source",
+  "sourceGitSha": "2f6c6c43f9d88889caf297b2774011f487c4b2ae",
   "sourceDirty": false,
   "targetRepoSlug": "smackerel",
-  "installedAt": "2026-08-19T00:11:29Z"
+  "installedAt": "2026-08-19T04:02:11Z"
 }
