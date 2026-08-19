@@ -784,6 +784,16 @@ fi
 if [[ -x "$SCRIPT_DIR/gate-bands.sh" ]]; then
   run_check_self_only "Gate-band strings current (IMP-027 SCOPE-2d)" bash "$SCRIPT_DIR/gate-bands.sh" --check --repo-root "$REPO_ROOT"
 fi
+# The generated `gateEnforcement:` block shipped a --check mode that nothing
+# invoked, so a stale block could only be noticed by hand. That is the same
+# shape as the unrun enforcement IMP-051 SCOPE-5 closed: a check that exists but
+# never executes is indistinguishable from no check at all. Registering a gate
+# without regenerating leaves declaredEnforcedBy describing the previous state,
+# which is precisely the "declared vs observed" drift this block exists to make
+# legible.
+if [[ -x "$SCRIPT_DIR/generate-gate-enforcement.sh" ]]; then
+  run_check_self_only "Generated gate-enforcement block current" bash "$SCRIPT_DIR/generate-gate-enforcement.sh" --check
+fi
 # IMP-027 SCOPE-11: a modelCompensation gate with no recorded retirement
 # criterion carries unbounded cost in time — nobody can say what would have to
 # be true to turn it off, so it is carried forever by default. `lint` keeps
