@@ -66,6 +66,48 @@ Precisely:
 - Any change to `_ensure_envsubst.sh`, the four wrappers, or the envsubst install path.
 - Broadening the *scope* of what the contract asserts (e.g. adding new invariants).
 
+### Single-Capability Justification
+
+Gate G094's proportionality trigger fires on this packet, so this section records why one capability
+is the correct shape and why a domain-capability model would be fiction here.
+
+**What actually triggered the gate.** Both hits are in `scopes.md`, and neither is a design
+statement. Both sit inside a single block of captured verbatim terminal output, sealed by an
+`evidence-capture.sh` sha256:
+
+| `scopes.md` line | Literal text | What it actually is |
+|---|---|---|
+| 291 | `#0 building with "default" instance using docker driver` | a Docker buildx status line |
+| 302 | `Container smackerel-test-intent-compiler-provider-1  Removed` | a Compose container name |
+
+The gate matched `driver` and `provider` as substrings of machine output. This file and `design.md`
+contain zero trigger words. That evidence is deliberately left byte-identical: captured output
+records what a command printed, and editing it to clear a trigger would corrupt the record to buy a
+green gate — the same inversion the first non-goal above rejects.
+
+**The single capability.** *Locate the `go test` invocation inside a tracked wrapper, and assert that
+`ensure_envsubst` precedes it.* EB-1 through EB-5 are five requirements on that one capability: what
+a zero match means (EB-1), what the error must say (EB-2), which invocation forms must be locatable
+(EB-3), that the ordering assertion is unchanged (EB-4), and that the blindness is itself tested
+(EB-5). Five requirements on one capability, not five capabilities.
+
+**Why no variation axis exists.** An axis needs two or more members a caller can choose between.
+There is one contract, one locator, and one ordering rule, applied uniformly to one list of wrappers.
+Every member of `envsubstTrackedWrappers` presents an invocation that the single locator reaches —
+three bare at line start (`go-unit.sh:67`, `go-e2e.sh:89`, `go-stress.sh:50`) and one behind shell
+syntax (`go-integration.sh:76`, `if ! go test … | tee …`). That last one is the nearest candidate for
+an axis and is not one: it is a different *spelling* of the same command, which is why EB-3 widens
+the one pattern instead of adding a second locator.
+
+**What would make a second implementation correct.** A tracked wrapper that does not share the
+`go test` grammar: one that runs its suite through a different runner, or that builds the invocation
+where no lexical pattern can reach it (`env VAR=x go test`, `timeout N go test`, a `$( … )` capture).
+*How the invocation is located* would then have two real members, and a locator abstraction would be
+warranted. No such wrapper exists today, and EB-3's bounded enumeration would have to be reopened
+first. Modelling that family now would be abstraction ahead of its second member — and EB-1 is what
+will announce the day that member arrives, because it converts an unlocatable wrapper from a silent
+pass into a named failure.
+
 ## Principle this restores
 
 The repository already applies this rule to its guards and states it explicitly. Verified in-repo at

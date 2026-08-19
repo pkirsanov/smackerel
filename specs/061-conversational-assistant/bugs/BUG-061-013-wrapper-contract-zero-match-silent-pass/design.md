@@ -170,3 +170,47 @@ Low. The change is confined to one test file; its worst realistic outcome is a R
 real gap. The notable risk is the *opposite* of the usual one: a fix that lands (b) without (a) would
 turn the lane green and look complete while leaving the actual defect — the silent zero-match — fully
 intact.
+
+### Single-Implementation Justification
+
+Gate G094 applies to this packet, so this section records why the fix is one implementation rather
+than a foundation with concrete implementations behind it. The trigger itself is examined in
+`spec.md` § *Single-Capability Justification*: both hits are substrings inside captured terminal
+output in `scopes.md` — a Docker buildx status line and a Compose container name — and neither is a
+design statement. Nothing in this design introduces or varies an adapter, provider, driver, or
+strategy.
+
+**What actually shipped.** Two edits inside one function in one file,
+`internal/deploy/envsubst_wrapper_contract_test.go`:
+
+| Change | Location | Effect |
+|---|---|---|
+| Matcher widened | `envsubstGoTestRE`, line 104 | a bounded enumeration of shell prefixes (`if`, `elif`, `then`, `while`, `until`, and the list and pipe operators) may precede the token, so the conditional-and-piped form at `scripts/runtime/go-integration.sh:76` is located |
+| Zero match hard-fails | `assertEnvsubstWrapperContract`, line 130 | absence returns a LOCATOR error instead of `nil`, so a miss is loud rather than compliant |
+
+The `## Change boundary` above held: commit `40a9e942` carries the one test file and two packet
+artifacts, and no path under `scripts/`. The detector was fixed; the subject was not touched.
+
+**Why one implementation is correct.** A foundation means an abstraction with two or more
+interchangeable members behind it. Here there is one locator (`envsubstGoTestRE`), one assertion
+function (`assertEnvsubstWrapperContract`), and one list (`envsubstTrackedWrappers`) whose four
+members each expose an invocation that the single locator reaches. The four wrappers are not four
+implementations of a locator; they are four *inputs* to one. Declaring a locator interface with a
+single conforming member would assert an interchangeability that does not exist, and would send the
+next reader hunting for a second implementation that was never written. Direction (c) above is the
+shape that would eventually need one — it is recorded, and deliberately not chosen, for the cost
+stated there.
+
+**The plan shape agrees.** A foundation/implementation split is expected to carry a scope graph: a
+scope tagged `foundation: true`, with overlay scopes declaring `Depends On` it. `scopes.md` carries
+neither marker, because this packet is scope 1 of 1. The work was not decomposed that way because it
+does not decompose that way.
+
+**The condition that would warrant a second implementation.** A wrapper joining
+`envsubstTrackedWrappers` whose invocation does not share the `go test` grammar the one matcher
+encodes — a different test runner, or a construction outside the bounded prefix enumeration
+(`env VAR=x go test`, `timeout N go test`, `x=$(go test …)`). At that point *how the invocation is
+located* has two real members, and the abstraction in direction (c) is justified rather than
+premature. This packet is what makes that moment observable instead of silent: the line-130 branch
+turns the first unlocatable wrapper into a named failure, and
+`TestEnvsubstWrapperContract_AdversarialRejectsUnlocatableInvocation` proves that branch has bite.
