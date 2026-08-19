@@ -1178,7 +1178,18 @@ Recorded so the absence is not mistaken for a clean result:
 
 ---
 
-## Simplify Record — `bubbles.goal` (general runner; `bubbles.simplify` did not run), 2026-08-19
+## Simplify Record — `bubbles.simplify`, 2026-08-19
+
+**Attribution, stated plainly.** Everything from here down to
+"Re-execution by `bubbles.simplify`" was first drafted by a general delivery
+agent dispatched under `bubbles.goal`, and the heading said so, correctly, until
+now. The declared specialist has since genuinely run the phase: it re-derived the
+changed surface, re-confirmed finding S-1 from the commits rather than from this
+prose, reviewed 253 lines the earlier pass never saw, and corrected two of the
+earlier verdicts. The earlier content below is retained **unaltered** — it is
+accurate as far as it goes — and the specialist's own findings are appended
+beneath it rather than folded into it, so a reader can always tell which pass
+produced which claim.
 
 **Scope of review.** The seven files in `state.json::affectedSurface`. Commit
 `c7667d99` touches 66 files, but it carries three unrelated Stage 1 items; the
@@ -1287,6 +1298,266 @@ complexity in the wrapper — the single-assignment `PIPESTATUS` capture, the
 `mktemp`/`trap` pair, the two-branch marker parse — is load-bearing; each is
 required by a specific spec requirement (R3.5, R3.1, R3.2) and removing any of it
 would weaken the gate this bug exists to arm.
+
+---
+
+### Re-execution by `bubbles.simplify` — 2026-08-19
+
+**Why this section exists.** Gate G022 Check 6B resolves the owner of the
+`simplify` phase from `workflows.yaml` as the literal specialist
+`bubbles.simplify`, and the only `executionHistory` entry behind the claim named
+`bubbles.goal`, a general runner. The guard was right to refuse it. The remedy
+applied here is to **run the phase**, not to rename the earlier agent: the
+`bubbles.goal` entry in `state.json` is left byte-for-byte as written. Nothing
+above was rubber-stamped — every claim this pass relies on was re-derived from
+the repository, and two of the earlier verdicts are corrected below.
+
+Guard state before this pass: `failureCount: 14`,
+`failedGateIds: [G022,G027,G136]`, with
+`🔴 BLOCK: Phase 'simplify' is in completedPhaseClaims but no specialist or
+parent-expanded provenance found (Gate G022)`.
+
+#### D0. Inherited working tree — disclosed, not passed off
+
+This session opened on a **dirty tree** left by an earlier, unfinished simplify
+attempt: an uncommitted edit to `internal/deploy/eval_lane_contract_test.go`,
+plus uncommitted `report.md` and `state.json` drafts.
+
+    $ git status --short
+     M internal/deploy/eval_lane_contract_test.go
+     M .../report.md
+     M .../state.json
+
+This pass **did not author that source edit**. The two artifact drafts were
+reverted to `HEAD` and rewritten from this session's own commands, because they
+carried sha256 and line-count figures produced in a session this agent never
+observed. Adopting another run's transcript as one's own record is precisely the
+provenance laundering this packet exists to stop, and it would have been a
+smaller version of the same fault the earlier `bubbles.goal` entry avoided by
+naming itself honestly. The **source** edit was kept — but only after being
+re-derived and re-verified below.
+
+#### D1. The changed surface, re-derived rather than inherited
+
+| Source | Observed this pass |
+| --- | --- |
+| `state.json::affectedSurface` | 7 paths |
+| Line counts at worktree | 127 + 83 + 389 + 267 + 581 + 920 + 268 = **2635** |
+| `git log` over those 7 paths | exactly 3 commits: `c7667d99`, `fa61daa0`, `a5e64a10` |
+| `git show --stat c7667d99` | 66 files, 12402 insertions, 342 deletions |
+
+The other 59 files in `c7667d99` belong to spec 108 (corpus grants) and
+BUG-064-003 (router warm-up); reviewing them here would be reviewing someone
+else's change. All 7 in-radius paths were read in full, not sampled.
+
+Note the drift the earlier pass could not have seen: it recorded
+`eval_lane_contract_test.go` at **325 lines**; it is now **581**, because
+`a5e64a10` added 253 lines after that pass ran.
+
+#### D2. Finding S-1 — CONFIRMED on this pass's own authority
+
+Re-derived from the commits, not from the prose above:
+
+    $ for r in c7667d99~1 c7667d99 fa61daa0 HEAD; do
+        git show $r:scripts/runtime/go-integration.sh |
+        grep -c 'if \[\[ "\$go_test_rc" -ne 0 \]\]'; done
+    c7667d99~1   0
+    c7667d99     2      ← duplication introduced
+    fa61daa0     1      ← merged
+    HEAD         1
+    worktree     1
+
+The `fa61daa0` diff shows the merge directly. It is behaviour-preserving because
+**no statement separates the two guards**, so `go_test_rc` cannot differ between
+them. **S-1 holds at the worktree.**
+
+#### D3. The inherited source edit — verified and kept
+
+`evalGateMarkerAssignment` is composed from `evalGateMarkerPrefix` instead of
+repeating the marker literal:
+
+    evalGateMarkerPrefix     = "ASSISTANT_ACCEPTANCE_GATE_V1"
+    evalGateMarkerAssignment = `gate_marker_prefix="` + evalGateMarkerPrefix + `"`
+
+Byte-identity is **not** an inspection claim here. The `A2_assertion_removed`
+subtest opens by requiring the **real** `scripts/runtime/go-integration.sh`, read
+from disk, to contain `evalGateMarkerAssignment`, and calls `t.Fatalf` otherwise.
+A one-byte difference in the composed constant fails it. It **PASSES** (see D6).
+
+Why it matters rather than being tidiness: bumping the marker at line 25 alone
+previously left line 33 asserting that the lane binds the **old** marker, so the
+guard's two halves could name different markers while both still compiled and
+both still passed — the exact split-contract shape BUG-061-011 records,
+reproduced inside the guard the bug introduced to prevent it.
+
+**This corrects the earlier pass**, which grouped four marker sites under one
+"collapsing it is impossible" verdict. That is true of the Go/bash pair and was
+**not** true of two constants sitting in the same Go `const` block of the same
+file. Grouping four sites under one verdict let the genuinely impossible
+cross-language pair carry two that were trivially collapsible.
+
+#### D4. The R3.5 addition (`a5e64a10`) — reviewed for duplication
+
+`a5e64a10` added 253 lines and five helpers. Verdict per helper:
+
+| Added helper | Duplicates an existing helper? |
+| --- | --- |
+| `evalLaneStderrDiagnostic` | No — new predicate, no counterpart |
+| `evalLaneIsGateDiagnostic` | No — **composes** on `evalLaneStderrDiagnostic` rather than repeating it |
+| `assertEvalLaneDualFailureReporting` | No — sibling of `assertEvalLaneContract`, different arity and different invariant |
+| `requireEvalDualReportingBaselinePasses` | **Closest match** — same 4-line shape as `requireEvalBaselinePasses` |
+| `evalLaneFirstGateDiagnostic` | No — reuses `evalLaneIsGateDiagnostic` |
+
+`assertEvalLaneDualFailureReporting` is not a merge candidate: it takes one
+argument to the contract's two, and it asserts an **ordering/masking** property
+where the other asserts **presence**. Merging them would force the A0 minimal
+fixture — which exists to prove the presence contract is satisfiable — to also
+satisfy an ordering contract it was never built for.
+
+The one real near-duplicate is `requireEvalDualReportingBaselinePasses` against
+`requireEvalBaselinePasses`: identical four-line anti-tautology shape, differing
+only in which assert function is called and in the message wording.
+**Deliberately not collapsed**, for reasons that are the mirror image of D3:
+
+- **No drift risk, so no correctness payoff.** Each guards its own assert
+  function; they cannot disagree in a way that weakens a contract. D3 was worth
+  fixing precisely because those two *could* silently disagree. These cannot.
+- A collapsed form would have to take a pre-evaluated `error`, moving the
+  assertion call out to each call site and making the precondition **less**
+  self-documenting.
+- The new helper's own doc comment already reads *"mirroring
+  `requireEvalBaselinePasses`"*, so the parallelism is documented and intentional
+  rather than accidental copy-paste.
+
+**The strongest evidence the addition was not duplicative** is what it did *not*
+do: the new tests **reuse** the pre-existing `mutateEvalFixture` and
+`evalLaneSources` instead of forking them.
+
+#### D5. New observation — recorded, not acted on
+
+The marker literal still has four sites, and **two are Go constants in different
+packages**:
+
+    internal/deploy/eval_lane_contract_test.go:25   evalGateMarkerPrefix   (package deploy)
+    internal/deploy/eval_lane_contract_test.go:212  ← inside the A0 fixture string
+    scripts/runtime/go-integration.sh:65            ← bash
+    tests/eval/assistant/harness.go:343             GateMarkerPrefix       (package assistanteval)
+
+`tests/eval/assistant/harness.go` is **untagged**, so `internal/deploy` could
+import `assistanteval` and bind the two constants. **Deliberately not done.** The
+guard today imports stdlib only —
+
+    import ( "fmt"; "path/filepath"; "strings"; "testing" )
+
+— and its own header states it sits outside both halves on purpose. Importing
+`assistanteval` would make the guard's ability to compile and run depend on the
+gate package compiling, so an edit that broke the gate could also disable the
+guard that exists to detect a disabled gate. That is the same failure shape this
+bug records.
+
+Honest counterweight, not suppressed: a precedent for `internal/**` importing the
+tests tree **does** exist (`internal/agent/bug064003_router_warmup_contract_test.go`),
+so the objection is **guard independence**, not layering novelty. And the drift is
+already caught loudly at runtime — rename the harness constant alone and the shell
+greps a prefix that is never emitted, yielding *"the assistant acceptance gate did
+not run"*. Later than guard time, but loud and correctly attributed. Recorded as an
+observation for design, **not** filed as a defect.
+
+The fixture literal at `:212` was deliberately left alone: a fixture composed from
+the same constants the assertion reads would be satisfied by construction, and a
+self-satisfying fixture is the vacuous signal this packet exists to remove.
+
+#### D6. Verification — repo CLI only, never a bare `go test`
+
+Command: `./smackerel.sh test unit --go --go-run 'TestEvalLaneContract'`
+· Exit code: `0`
+
+    ok      github.com/smackerel/smackerel/internal/deploy  0.029s
+
+`internal/deploy` is the **only** package in the run that does not report
+`[no tests to run]`, which is what proves the selector actually bound tests there
+rather than filtering everything away.
+
+Command: `./smackerel.sh test unit --go --go-run 'TestEvalLaneContract' --verbose`
+· Exit code: `0` · 555 lines · `FAIL` line count: `0`
+
+    --- PASS: TestEvalLaneContract_LaneRunsGateAndAssertsExecutedAssertions (0.00s)
+    --- PASS: TestEvalLaneContract_AcceptsMinimalConformantFixtures (0.00s)
+    --- PASS: TestEvalLaneContract_AdversarialRejectsMissingEvalPackage (0.00s)
+    --- PASS: TestEvalLaneContract_AdversarialRejectsMissingOrZeroAssertion (0.00s)
+    --- PASS: TestEvalLaneContract_AdversarialRejectsConditionalOrAbsentMarker (0.00s)
+    --- PASS: TestEvalLaneContract_AdversarialRejectsBypassOrBroadenedSkip (0.00s)
+    --- PASS: TestEvalLaneContract_DualFailureReportingNeitherMasksTheOther (0.00s)
+    --- PASS: TestEvalLaneContract_AdversarialRejectsMaskedFailureReporting (0.00s)
+        --- PASS: .../A2_assertion_removed (0.00s)
+        --- PASS: .../A3_assertion_accepts_zero (0.00s)
+        --- PASS: .../A4_marker_conditional_on_passing (0.00s)
+        --- PASS: .../A5_marker_never_emitted (0.00s)
+        --- PASS: .../A6_bypass_env_var_introduced (0.00s)
+        --- PASS: .../A7_skip_condition_broadened (0.00s)
+        --- PASS: .../A8_gate_diagnostic_moved_below_go_test_exit (0.00s)
+        --- PASS: .../A9_exit_blocks_reordered_go_test_failure_unreported (0.00s)
+        --- PASS: .../A10_gate_flag_raised_with_no_diagnostic (0.00s)
+    ok      github.com/smackerel/smackerel/internal/deploy  0.033s
+
+8 of 8 top-level tests PASS, 9 of 9 subtests PASS — including the three new R3.5
+cases A8, A9 and A10. The CLI runs `go test ./...`, so these figures cover the
+**entire untagged suite**, not the selected package alone.
+
+#### D7. Inspected and deliberately NOT changed
+
+- **Triple `ERROR: --run requires a non-empty regex`** — out of blast radius.
+  Count is `3` at `c7667d99~1` and `3` now, and `c7667d99`'s first hunk on that
+  file opens at `@@ -50,6 +50,78 @@`, after the argument-parsing block.
+- **Four repeated `Unit evidence: internal/assistant/metrics/metrics_test.go`
+  echoes** in `tests/e2e/assistant_regression_e2e_test.sh` — likewise
+  pre-existing, count `4` before and `4` now.
+- **`gate_marker_check_failed=1` appears 4×** — *not* collapsible. Each of the
+  four branches reports a distinct failure cause, and the R3.5 invariant that
+  this same file asserts (subtest A10) requires every flag-raise to be preceded
+  by its own diagnostic. Collapsing them would break the very contract the file
+  exists to enforce.
+- **Two line-scanning loops inside `assertEvalLaneDualFailureReporting`** share
+  their `lineStart`/`start` bookkeeping, but they enforce independent invariants
+  with different early-return semantics. Merging them would change which error
+  surfaces first for the A8 and A10 mutations, which both operate on the same
+  diagnostic line. Extracting only the offset bookkeeping would need a callback,
+  and early-return-with-error through a callback needs a sentinel error — a net
+  complexity increase.
+- **`harness_test.go` inline corpora left inline.** This **corrects** the earlier
+  pass's count of "two": there are **five** inline corpora plus one `Rows: nil`
+  construction (lines 116, 133, 175, 197, 221, 232). Each fixture's row count and
+  label composition is itself the thing under test — 4 rows, 2 capture-expected,
+  6 assertions — so a shared builder would either break those arithmetic
+  assertions or carry the same information at the call site.
+- **`scripts/runtime/go-integration.sh` line 76 NOT touched.** It remains
+  `if ! go test "${go_test_args[@]}" 2>&1 | tee "$gate_output_file"; then`, so
+  **BUG-061-013 stays unmasked**.
+
+#### D8. Dead code and incomplete-work markers
+
+    identifiers extracted from eval_lane_contract_test.go: 45
+    declared-but-never-used:                                0
+
+Checked mechanically because Go does not reject unused constants. A
+`TODO|FIXME|HACK|XXX|STUB` scan across all 7 `affectedSurface` paths exits `1`
+with **zero matches**.
+
+#### D9. Conclusion
+
+Beyond confirming S-1 and verifying the inherited D3 edit, **no further
+simplification was found, and none was invented.**
+
+**NOT DONE by this pass:** `status` and `certification.status` stay `blocked`;
+nothing was added to `certifiedCompletedPhases`, because certifying a phase is
+`bubbles.validate`'s act and validate has not re-run; no DoD checkbox was checked
+(`scopes.md` stays at 28 checked / 1 unchecked) and no Human Acceptance Record was
+authored — G136 is operator-only and `## Checklist` in `uservalidation.md` is
+`writer: human`; `scopes.md` and `uservalidation.md` were not modified; the
+integration lane was **not** executed and nothing here claims it passed, failed,
+or was measured; BUG-061-013 remains filed and unfixed. Only `simplify` moved —
+`stabilize`, `security` and `audit` still carry general-runner provenance and
+G022 Check 6B still refuses them.
 
 ---
 

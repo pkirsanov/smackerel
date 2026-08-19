@@ -29,8 +29,11 @@ const (
 	evalGateCountParse   = "executed_assertions"
 
 	// Asserted as an assignment rather than a bare mention so a comment
-	// naming the marker cannot satisfy the signal.
-	evalGateMarkerAssignment = `gate_marker_prefix="ASSISTANT_ACCEPTANCE_GATE_V1"`
+	// naming the marker cannot satisfy the signal. Composed from
+	// evalGateMarkerPrefix rather than repeating the literal, so the two
+	// halves of this guard cannot name different markers — the same
+	// split-contract failure BUG-061-011 records.
+	evalGateMarkerAssignment = `gate_marker_prefix="` + evalGateMarkerPrefix + `"`
 
 	// The bare `[[ -z "$go_run_selector" ]]` test also appears in the
 	// wrapper's --run= argument parsing, so a contract keyed on it alone
