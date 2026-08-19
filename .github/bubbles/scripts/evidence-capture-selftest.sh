@@ -171,10 +171,30 @@ fi
 # A timeout signals the wrapper while its child is running. The child below
 # cannot exit unless the wrapper forwards TERM; the outer deadline prevents a
 # broken implementation from hanging this selftest forever.
+#
+# The deadline is a BACKSTOP and must not rewrite the command's exit code: the
+# assertions below require the 143 the child's own `kill -TERM "$PPID"`
+# produces. guard-lib's bubbles_run_with_timeout is deliberately NOT used here
+# because it normalizes 143 to 124 to match GNU timeout, which would mask
+# exactly the signal this case exists to observe. Bare `timeout` is not an
+# option either -- stock macOS ships none, and it exited 127 here.
+run_with_deadline() {
+  local secs="$1"
+  shift
+  if command -v timeout >/dev/null 2>&1; then
+    timeout --kill-after=1 "$secs" "$@"
+  elif command -v gtimeout >/dev/null 2>&1; then
+    gtimeout --kill-after=1 "$secs" "$@"
+  else
+    # alarm(2) survives exec, so the deadline still applies while the exec'd
+    # command keeps its own exit status.
+    /usr/bin/perl -e 'alarm shift @ARGV; exec @ARGV' "$secs" "$@"
+  fi
+}
 set +e
 # PPID expands inside the child shell.
 # shellcheck disable=SC2016
-term_out="$(timeout --kill-after=1 5 bash "$TARGET" -- bash -c 'trap '\''printf "child-terminated\n"; exit 0'\'' TERM; printf "before-signal\n"; kill -TERM "$PPID"; while :; do :; done' 2>&1)"
+term_out="$(run_with_deadline 5 bash "$TARGET" -- bash -c 'trap '\''printf "child-terminated\n"; exit 0'\'' TERM; printf "before-signal\n"; kill -TERM "$PPID"; while :; do :; done' 2>&1)"
 term_rc=$?
 set -e
 if [[ "$term_rc" -eq 143 ]] &&
@@ -196,7 +216,7 @@ descendant_pid_file="$(mktemp)"
 set +e
 # Positional parameters expand inside the child shell.
 # shellcheck disable=SC2016
-descendant_out="$(timeout --kill-after=1 5 bash "$TARGET" -- bash -c 'bash -c '\''trap "exit 0" TERM; while :; do :; done'\'' & printf "%s\n" "$!" >"$1"' _ "$descendant_pid_file" 2>&1)"
+descendant_out="$(run_with_deadline 5 bash "$TARGET" -- bash -c 'bash -c '\''trap "exit 0" TERM; while :; do :; done'\'' & printf "%s\n" "$!" >"$1"' _ "$descendant_pid_file" 2>&1)"
 descendant_rc=$?
 set -e
 descendant_pid="$(cat "$descendant_pid_file")"
