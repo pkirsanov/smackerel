@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# test-impact-plan.sh — mechanical enforcer for Gate G079
+# (impact_aware_validation_plan_gate). Advisory until a project declares a
+# `testImpact` map; `--require-config` makes a missing map fail.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

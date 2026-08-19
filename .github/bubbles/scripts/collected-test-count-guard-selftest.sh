@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # bubbles/scripts/collected-test-count-guard-selftest.sh
 #
-# Hermetic selftest for collected-test-count-guard.sh (IMP-036 SCOPE-3).
+# Hermetic selftest for collected-test-count-guard.sh (IMP-036 SCOPE-3)
+# (Gate G133 — collected_test_count_gate).
 #
 # Case 1 replays the ACTUAL defect: a downstream e2e suite emitted
 # "No tests found" for 15 days while spec commits recorded passing evidence.

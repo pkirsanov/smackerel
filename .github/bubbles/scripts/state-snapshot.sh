@@ -84,6 +84,11 @@ Behavior:
         mode        ("start" | "end")
         note        (the --note value or null)
         agent       ($BUBBLES_AGENT_NAME if set, otherwise "unknown")
+        hostSessionId
+                    (the --session-id value; attributes the record to ONE host
+                     session so two concurrent sessions in one repository read
+                     back their own trajectory instead of each other's —
+                     bubbles/scripts/session-liveness.sh consumes it)
   - Prior records are NEVER touched. The array grows monotonically.
   - Two consecutive `--mode start` calls for the same phase + scope are
     intentionally allowed to support resume-after-crash flows.
@@ -700,6 +705,7 @@ jq \
   --arg dchose "$DECISION_CHOSE" \
   --arg dconsidered "$DECISION_CONSIDERED" \
   --arg agent "$AGENT_NAME" \
+  --arg host_session "$SESSION_ID" \
   '
   def goal_ref:
     if (.goalContract | type) == "object" then
@@ -722,6 +728,7 @@ jq \
           posture: (if $posture == "" then null else $posture end),
           note: (if $note == "" then null else $note end),
           agent: $agent,
+          hostSessionId: (if $host_session == "" then null else $host_session end),
           goalRef: $goalRef
         }
       ])),

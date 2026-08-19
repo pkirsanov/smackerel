@@ -49,7 +49,52 @@ fi
 # exported marker below is inherited only by descendants of a holding run, so
 # nested invocations pass through while two INDEPENDENT top-level runs still
 # contend.
-if [[ -z "${BUBBLES_FRAMEWORK_VALIDATE_LOCK_HELD:-}" ]] && command -v flock >/dev/null 2>&1; then
+#
+# IMP-049 SCOPE-3. The lock protects the SHARED SCRATCH FIXTURES that executing
+# checks build. An invocation that executes no check touches none of them, so
+# making it wait is protection against nothing. Before this, the lock was taken
+# here and arguments were parsed ~250 lines later, which meant `--help`,
+# `--list-tier` AND an ordinary typo all exited 1 with a lock error whenever any
+# run was in flight — observed while preparing IMP-049 by the review that needed
+# `--list-tier=full` and could not get an answer.
+#
+# The predicate is "will this invocation execute checks?", not "is it one of the
+# read-only flags". That direction matters: an argument this pre-scan does not
+# recognise means the parser below is about to reject it with exit 2, so holding
+# the lock for it would replace a precise usage error with a misleading lock
+# error. No arguments at all is the default full run, which does execute and
+# therefore does lock. `framework-validate-tier-selftest.sh` asserts that the
+# executing-flag list here still matches the parser's own case arms, so the two
+# cannot drift apart silently.
+#
+# IMP-049 SCOPE-2. Whether THIS invocation is the outermost one is decided here,
+# before anything can set the marker, and it governs the run receipt below.
+# Several selftests run a NESTED framework-validate as part of their fixture, and
+# a nested run that wrote a receipt would describe a synthesized fixture while
+# appearing to describe this tree. The marker is deliberately separate from the
+# lock marker, which is never set when `flock` is absent (stock macOS) and would
+# therefore report every nested run on a Mac as outermost.
+_fv_outermost=false
+[[ -z "${BUBBLES_FRAMEWORK_VALIDATE_DEPTH:-}" ]] && _fv_outermost=true
+export BUBBLES_FRAMEWORK_VALIDATE_DEPTH=$((${BUBBLES_FRAMEWORK_VALIDATE_DEPTH:-0} + 1))
+
+_fv_executes_checks=true
+if [[ $# -gt 0 ]]; then
+  _fv_executes_checks=false
+  for _fv_arg in "$@"; do
+    case "$_fv_arg" in
+      --tier=core | --tier=full | --changed-only | --cache | --no-cache | --record-debt)
+        _fv_executes_checks=true
+        ;;
+      -h | --help | --list-tier=core | --list-tier=full) ;;
+      *)
+        _fv_executes_checks=false
+        break
+        ;;
+    esac
+  done
+fi
+if [[ "$_fv_executes_checks" == "true" ]] && [[ -z "${BUBBLES_FRAMEWORK_VALIDATE_LOCK_HELD:-}" ]] && command -v flock >/dev/null 2>&1; then
   _fv_lockfile="${TMPDIR:-/tmp}/bubbles-framework-validate.lock"
   # Probe writability on a THROWAWAY command first. `exec 9>file` with no command
   # applies its redirections to the shell PERMANENTLY, so appending an error
@@ -65,7 +110,7 @@ if [[ -z "${BUBBLES_FRAMEWORK_VALIDATE_LOCK_HELD:-}" ]] && command -v flock >/de
     fi
     export BUBBLES_FRAMEWORK_VALIDATE_LOCK_HELD=1
   fi
-elif [[ -z "${BUBBLES_FRAMEWORK_VALIDATE_LOCK_HELD:-}" ]]; then
+elif [[ "$_fv_executes_checks" == "true" ]] && [[ -z "${BUBBLES_FRAMEWORK_VALIDATE_LOCK_HELD:-}" ]]; then
   # flock absent (stock macOS ships none). The guard degrades to a no-op, so say
   # so — a silent degrade lets an operator believe concurrent-run protection is
   # active when it is not.
@@ -328,6 +373,53 @@ for _arg in "$@"; do
       ;;
   esac
 done
+
+# IMP-049 SCOPE-2: the run receipt. release-check.sh runs this entire suite as
+# its first check — 3743s across 338 checks, measured — on a tree a validate run
+# may have proven minutes earlier. A receipt lets that consumer re-derive the
+# tree digest itself and decide, rather than re-running on faith.
+#
+# THE PREVIOUS RECEIPT DIES HERE, before the first check. The tree can be
+# byte-identical to the one that passed last time while THIS run is on its way
+# to discovering a failure, so a surviving pass-receipt would be consumed on a
+# tree whose verdict has just changed. Removing it first is what makes a receipt
+# describe only runs that reached an end.
+_fv_receipt_ready=false
+if [[ "$_fv_outermost" == "true" && "$_fv_executes_checks" == "true" && "$LIST_TIER_ONLY" == "false" ]] &&
+  [[ -f "$SCRIPT_DIR/validation-receipt.sh" ]]; then
+  # Same defence as the validate-cache source above, and for the same reason:
+  # `source` runs in THIS shell, so a sibling that merely exits would terminate
+  # framework-validate mid-run — and because it exits 0, the run would look like
+  # a silent PASS that validated nothing. Confirming the API is actually defined
+  # keeps a stubbed or truncated sibling from being able to end the run. Checked
+  # with builtins only, before the portability harness has a full PATH.
+  _fv_receipt_src="$(<"$SCRIPT_DIR/validation-receipt.sh")"
+  if [[ "$_fv_receipt_src" == *"validation_receipt_invalidate()"* ]]; then
+    # shellcheck source=bubbles/scripts/validation-receipt.sh
+    source "$SCRIPT_DIR/validation-receipt.sh"
+  fi
+  unset _fv_receipt_src
+  if declare -F validation_receipt_invalidate >/dev/null 2>&1; then
+    if validation_receipt_invalidate "$REPO_ROOT"; then
+      _fv_receipt_ready=true
+    else
+      # A receipt we cannot delete is a receipt a later release-check might
+      # consume against a tree this run has not finished judging. Say so; the
+      # consumer still re-derives the digest, but the operator should know the
+      # invalidation did not take.
+      printf 'NOTE: could not clear the previous validation receipt; no receipt will be written this run.\n' >&2
+    fi
+  fi
+fi
+
+# fv_write_receipt <verdict> — best-effort, never fails the run. A missing
+# receipt costs a consumer nothing but a re-run, which is the safe direction.
+fv_write_receipt() {
+  [[ "$_fv_receipt_ready" == "true" ]] || return 0
+  declare -F validation_receipt_write >/dev/null 2>&1 || return 0
+  validation_receipt_write "$REPO_ROOT" "$VALIDATE_TIER" "$1" \
+    "${#check_durations[@]}" "$SECONDS" "$CHANGED_ONLY" "$CACHE_ENABLED" 2>/dev/null || true
+}
 
 # A check is CORE (fast, high-signal, deterministic) when its label matches one
 # of these substrings. The set is intentionally small — structural registry/lint
@@ -855,6 +947,7 @@ run_check_self_only "Competitive docs selftest" bash "$SCRIPT_DIR/competitive-do
 run_check_self_only "Interop apply selftest" bash "$SCRIPT_DIR/interop-apply-selftest.sh"
 run_check_self_only "Interop import selftest" bash "$SCRIPT_DIR/interop-import-selftest.sh"
 run_check_self_only "Release manifest selftest" bash "$SCRIPT_DIR/release-manifest-selftest.sh"
+run_check "Validation run receipt selftest (IMP-049 SCOPE-2)" bash "$SCRIPT_DIR/validation-receipt-selftest.sh"
 run_check_self_only "Release manifest purity selftest" bash "$SCRIPT_DIR/release-manifest-purity-selftest.sh"
 run_check_self_only "Payload closure guard (IMP-042 / REG-11)" bash "$SCRIPT_DIR/payload-closure-guard.sh"
 run_check_self_only "Payload closure guard selftest (IMP-042 / REG-11)" bash "$SCRIPT_DIR/payload-closure-guard-selftest.sh"
@@ -910,6 +1003,12 @@ run_check "Always-on instruction budget selftest (IMP-039 / COST-6)" bash "$SCRI
 # over-narrow grant breaks dispatch silently. Report the delta, narrow one agent
 # at a time, and only then flip a repo to --strict.
 run_check_self_only "Tool-grant lint (IMP-039 / COST-6, advisory)" bash "$SCRIPT_DIR/tool-grant-lint.sh" --quiet
+# IMP-049 SCOPE-6 / COST-1. Exact documentation wording that used to gate a
+# release: generated cheatsheet markup, rendered table rows, and literal English
+# sentences. The owning selftests now assert the structure underneath each one,
+# so rewording a doc no longer breaks a build. This reports drift and always
+# exits 0. Self-only: it reads this repo's own docs, prompts, and README.
+run_check_self_only "Documentation wording (IMP-049 / COST-1, advisory)" bash "$SCRIPT_DIR/docs-wording-advisory.sh" --quiet
 # Self-only: it reads this repo's own instruction surfaces. A downstream repo
 # gets the coherent text from the template on upgrade, so running it there would
 # report the framework's own upgrade lag as a consumer defect.
@@ -1364,6 +1463,40 @@ if [[ -f "$SCRIPT_DIR/phase-coordinator-selftest.sh" ]]; then
   run_check "Phase coordinator selftest (IMP-047 S-C / AC8-AC12)" bash "$SCRIPT_DIR/phase-coordinator-selftest.sh"
 fi
 
+# Dispatch receipts extend the same occurrence model UP one level, from the
+# phase to the dispatch that was supposed to resolve it, so they are enumerated
+# beside the coordinator rather than left to the sweep below.
+if [[ -f "$SCRIPT_DIR/dispatch-receipt-selftest.sh" ]]; then
+  run_check "Dispatch receipt selftest (IMP-048 SCOPE-2 / HO-4)" bash "$SCRIPT_DIR/dispatch-receipt-selftest.sh"
+fi
+
+# Leaf receipts extend that same occurrence model DOWN one level, from the phase
+# to the individual test commands it is made of, so all three sit together.
+if [[ -f "$SCRIPT_DIR/test-leaf-receipt-selftest.sh" ]]; then
+  run_check "Test-leaf receipt selftest (IMP-048 SCOPE-3 / PERF-9)" bash "$SCRIPT_DIR/test-leaf-receipt-selftest.sh"
+fi
+
+# The review loop CONSUMES the signals the two receipt surfaces above produce —
+# a repeated failure signature, a dispatch that returned no envelope — so it is
+# enumerated with them rather than left to the sweep below.
+if [[ -f "$SCRIPT_DIR/session-review-selftest.sh" ]]; then
+  run_check "Session review selftest (IMP-048 SCOPE-1 / LRN-8)" bash "$SCRIPT_DIR/session-review-selftest.sh"
+fi
+
+# Liveness is what makes the session controls above readable at all: G083, G128
+# and trajectory health all read the session store, so it is enumerated beside
+# the cap guard whose store it keeps honest.
+if [[ -f "$SCRIPT_DIR/session-liveness-selftest.sh" ]]; then
+  run_check "Session liveness selftest (IMP-048 SCOPE-7 / WIP-5)" bash "$SCRIPT_DIR/session-liveness-selftest.sh"
+fi
+
+# Mutation receipts are the same earned-receipt rule applied to the strongest
+# negative control: test-mechanism-lint.sh checks the declaration EXISTS, this
+# checks the declared mutation actually RAN, in isolation, and was restored.
+if [[ -f "$SCRIPT_DIR/mutation-receipt-selftest.sh" ]]; then
+  run_check "Mutation receipt selftest (IMP-048 SCOPE-4 / EV-11)" bash "$SCRIPT_DIR/mutation-receipt-selftest.sh"
+fi
+
 # ---------------------------------------------------------------------------
 # IMP-027 SCOPE-2b — selftest discovery sweep
 #
@@ -1558,6 +1691,7 @@ skip_summary() {
 }
 
 if [[ "$failures" -gt 0 ]]; then
+  fv_write_receipt fail
   if [[ "$skipped" -gt 0 ]]; then
     echo "Framework validation failed with $failures failing check(s) ($skipped skipped: $(skip_summary))."
   else
@@ -1622,6 +1756,7 @@ if [[ "$RECORD_DEBT" == "true" && "${#deferred_check_ids[@]}" -gt 0 ]]; then
   echo
 
   if [[ "$failures" -gt 0 ]]; then
+    fv_write_receipt fail
     echo "Framework validation failed with $failures failing check(s) after forced execution."
     exit 1
   fi
@@ -1633,5 +1768,10 @@ if [[ "$skipped" -gt 0 ]]; then
     echo "Run from a framework-source tree to execute the framework-source-only check(s)."
   fi
 fi
+
+# The receipt is written LAST, for the same reason the manifest freshness check
+# runs last: several checks above regenerate derived artifacts, so a digest taken
+# any earlier would describe a tree the rest of the run could still change.
+fv_write_receipt pass
 
 echo "Framework validation passed."

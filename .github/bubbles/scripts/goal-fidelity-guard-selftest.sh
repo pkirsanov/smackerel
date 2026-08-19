@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Hermetic selftest for goal-fidelity-guard.sh (IMP-038 SCOPE-6 / SCOPE-7).
+# Hermetic selftest for goal-fidelity-guard.sh (IMP-038 SCOPE-6 / SCOPE-7)
+# (Gate G134 — goal_fidelity_gate).
 #
 # The guard's whole value is that it FAILS on drift a runner would otherwise
 # carry to certification. Every case below therefore pairs a green fixture with

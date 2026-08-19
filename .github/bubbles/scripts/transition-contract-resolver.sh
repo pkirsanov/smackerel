@@ -237,7 +237,8 @@ fi
 if [[ "$audit_profile" != "planning-maturity-v1" \
   && "$audit_profile" != "delivery-completion-v1" \
   && "$audit_profile" != "delivery-completion-fast-v1" \
-  && "$audit_profile" != "framework-proposal-v1" ]]; then
+  && "$audit_profile" != "framework-proposal-v1" \
+  && "$audit_profile" != "operational-completion-v1" ]]; then
   fail 71 E009-AUDIT-PROFILE-UNSUPPORTED "resolved mode declares an unknown transition audit profile"
 fi
 if [[ "$transition_target" != "statusCeiling" ]]; then
@@ -276,6 +277,26 @@ elif [[ "$audit_profile" == "framework-proposal-v1" ]]; then
     || has_phase implement \
     || has_phase test; then
     fail 72 E009-AUDIT-PROFILE-CONTRADICTION "framework proposal profile invariants contradict the resolved mode"
+  fi
+elif [[ "$audit_profile" == "operational-completion-v1" ]]; then
+  # BUG-017. The DECLARED contract for an operational or docs terminal: a mode
+  # that finishes at its own below-`done` ceiling (validated, docs_updated,
+  # train_*, backup_verified, propagated_forward, incident_mitigated, ...)
+  # rather than certifying delivery. Before this profile existed these 29 modes
+  # advertised a ceiling with no declared audit contract, so the check above
+  # refused every one of them with E009-AUDIT-PROFILE-UNSUPPORTED at ANY status
+  # — the same defect framework-health hit before framework-proposal-v1.
+  #
+  # The ceiling exclusions below are what keep this from becoming a bypass: a
+  # `done` ceiling MUST use a delivery profile, `specs_hardened` MUST use
+  # planning-maturity-v1, and `framework_proposal_written` MUST use
+  # framework-proposal-v1. Without them a delivery or planning mode could adopt
+  # this profile and escape the stricter invariants those branches enforce.
+  if [[ "$status_ceiling" == "done" \
+    || "$status_ceiling" == "specs_hardened" \
+    || "$status_ceiling" == "framework_proposal_written" ]] \
+    || ! has_phase finalize; then
+    fail 72 E009-AUDIT-PROFILE-CONTRADICTION "operational completion profile ceiling or required phases contradict the resolved mode"
   fi
 elif [[ "$audit_profile" == "delivery-completion-fast-v1" ]]; then
   # Fast delivery lane (IMP-100 Phase 2 R4): full implement+test+validate
@@ -322,6 +343,9 @@ if [[ "$audit_profile" == "planning-maturity-v1" && "$current_status" == "done" 
 fi
 if [[ "$audit_profile" == "framework-proposal-v1" && "$current_status" == "done" ]]; then
   fail 69 E009-TARGET-MISMATCH "framework proposal profile cannot be paired with done status"
+fi
+if [[ "$audit_profile" == "operational-completion-v1" && "$current_status" == "done" ]]; then
+  fail 69 E009-TARGET-MISMATCH "operational completion profile cannot be paired with done status"
 fi
 
 contract_projection="$(jq -cnS \

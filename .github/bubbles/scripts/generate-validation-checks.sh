@@ -472,10 +472,13 @@ emit_registry() {
     while IFS= read -r item; do
       [[ -n "$item" ]] && printf '    - %s\n' "$item"
     done <<<"$CLOSURE_DATA"
-    printf '    commands:\n'
+    # `commands:` and a bare `[]` on the NEXT line at the SAME indent is not a
+    # value -- YAML reads the `[]` as a sibling key and refuses the document.
+    # An empty flow sequence has to sit on the key's own line.
     if [[ -z "$CLOSURE_COMMANDS" ]]; then
-      printf '    []\n'
+      printf '    commands: []\n'
     else
+      printf '    commands:\n'
       while IFS= read -r item; do
         [[ -n "$item" ]] && printf '    - %s\n' "$item"
       done <<<"$CLOSURE_COMMANDS"
@@ -525,10 +528,11 @@ emit_registry() {
     while IFS= read -r item; do
       [[ -n "$item" ]] && printf '    - %s\n' "$item"
     done <<<"$CLOSURE_DATA"
-    printf '    commands:\n'
+    # Same as above: an empty sequence must not start on the following line.
     if [[ -z "$CLOSURE_COMMANDS" ]]; then
-      printf '    []\n'
+      printf '    commands: []\n'
     else
+      printf '    commands:\n'
       while IFS= read -r item; do
         [[ -n "$item" ]] && printf '    - %s\n' "$item"
       done <<<"$CLOSURE_COMMANDS"

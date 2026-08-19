@@ -333,7 +333,8 @@ if ! jq -e '
   and (.auditProfile == "planning-maturity-v1"
     or .auditProfile == "delivery-completion-v1"
     or .auditProfile == "delivery-completion-fast-v1"
-    or .auditProfile == "framework-proposal-v1")
+    or .auditProfile == "framework-proposal-v1"
+    or .auditProfile == "operational-completion-v1")
   and (.targetStatus | type == "string" and length > 0)
   and (.currentStatus | type == "string" and length > 0)
   and (.contractDigest | type == "string" and test("^sha256:[0-9a-f]{64}$"))
@@ -378,6 +379,19 @@ case "$transition_audit_profile" in
     # (transition-contract-resolver.sh:264-278 requires audit_only, forbids
     # implement/test, and pins the ceiling to framework_proposal_written), so no
     # completion class is true for it.
+    transition_applicable_check_classes=(universal mode-required)
+    transition_not_applicable_checks=(Check-4-completion Check-5-all-done Check-8-file-existence Check-11-execution-evidence)
+    ;;
+  operational-completion-v1)
+    # BUG-017: an operational or docs terminal (validated, docs_updated,
+    # train_*, backup_verified, propagated_forward, incident_mitigated, ...).
+    # The resolver pins its ceiling BELOW `done` and away from the planning and
+    # framework-proposal ceilings, so this mode terminates at an operational
+    # outcome and never certifies delivery — asserting delivery-completion here
+    # would be a claim it cannot satisfy. Its exclusion list stays DECLARATIVE:
+    # check_is_applicable below enforces exclusions for framework-proposal-v1
+    # only, so adding this profile cannot admit any packet the live checks
+    # refuse today.
     transition_applicable_check_classes=(universal mode-required)
     transition_not_applicable_checks=(Check-4-completion Check-5-all-done Check-8-file-existence Check-11-execution-evidence)
     ;;

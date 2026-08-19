@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 # bubbles/scripts/is-terminal-for-mode.sh
 #
+# Helper for Gate G101 (release_delivery_reconciliation_gate): it resolves the
+# "delivery-capable terminal" predicate that release-delivery-reconciliation-
+# guard.sh reconciles the promised required-feature set against.
+#
 # Returns 0 (true) when a given status is the terminal status for a workflow
 # mode, 1 (false) otherwise.
 #

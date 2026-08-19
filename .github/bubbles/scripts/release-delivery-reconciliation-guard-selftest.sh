@@ -192,6 +192,19 @@ expect_rc() {
   fi
 }
 
+# mk_spec_cert_mixed <repo> <specpath> <status> <json-array-body>
+# Writes certification.certifiedCompletedPhases VERBATIM so a case can pin the
+# exact element order and element types under test.
+mk_spec_cert_mixed() {
+  local repo="$1" specpath="$2" status="$3" phases_json="$4"
+  local dir="$repo/$specpath"
+  mkdir -p "$dir"
+  cat >"$dir/state.json" <<EOF
+{ "version": 3, "specId": "$(basename "$specpath")", "status": "$status", "workflowMode": "full-delivery",
+  "certification": { "status": "$status", "certifiedCompletedPhases": $phases_json } }
+EOF
+}
+
 expect_output_contains() {
   local needle="$1" desc="$2"
   if grep -Fq -- "$needle" <<< "$RUN_OUTPUT"; then
@@ -481,6 +494,51 @@ mk_features_dep "$R31" voyager mvp \
 mk_spec "$R31" specs/101-later "done" plan design implement test validate
 run_guard --repo-root "$R31" --phase voyager --mode structural
 expect_rc 0 "S31 structural does not apply the prerequisite block"
+
+# ----------------------------------------------------------------------------
+# certifiedCompletedPhases[] may hold per-phase provenance OBJECTS as well as
+# bare strings. jq streams, so feeding an object to ascii_downcase used to abort
+# mid-stream and silently TRUNCATE the phase list at the first object. The
+# verdict then depended on element ORDER: a spec listing "validate" as a string
+# before its first object passed, while one recording validate only inside an
+# object read as never-certified. S32-S34 pin all three halves of that.
+
+# S32 — validate recorded ONLY inside an object element -> 0
+# Real shape: 12 bare strings, then one object per scope, each {"phase":"validate"}.
+R32="$(new_repo s32)"
+mk_features "$R32" mvp true \
+  "bubbles:feature id=objcert spec=specs/100-objcert delivery=required"
+mk_spec_cert_mixed "$R32" specs/100-objcert "done" \
+  '["implement","test","docs","audit","chaos","spec-review","regression","gaps","security","simplify","stabilize","harden",
+    {"phase":"validate","agent":"bubbles.validate","scope":"scope-01","certifiedAt":"2026-04-30T06:52:15Z"},
+    {"phase":"validate","agent":"bubbles.validate","scope":"scope-02","certifiedAt":"2026-04-30T14:55:37Z"}]'
+run_guard --repo-root "$R32" --phase mvp
+expect_rc 0 "S32 validate recorded only inside a provenance object is certified"
+
+# S33 — non-vacuity: same mixed shape, validate genuinely absent -> 1
+# Without this, S32 could be satisfied by a guard that treats every mixed array
+# as certified.
+R33="$(new_repo s33)"
+mk_features "$R33" mvp true \
+  "bubbles:feature id=objuncert spec=specs/100-objuncert delivery=required"
+mk_spec_cert_mixed "$R33" specs/100-objuncert "done" \
+  '["implement","test","docs","audit",
+    {"phase":"security","agent":"bubbles.security","certifiedAt":"2026-04-30T06:52:15Z"},
+    {"phase":"harden","agent":"bubbles.harden","certifiedAt":"2026-04-30T14:55:37Z"}]'
+run_guard --repo-root "$R33" --phase mvp
+expect_rc 1 "S33 mixed array without any validate is still refused"
+
+# S34 — order independence: validate is a bare string AFTER an object -> 0
+# This is the case the truncation hid; it fails on the pre-fix guard.
+R34="$(new_repo s34)"
+mk_features "$R34" mvp true \
+  "bubbles:feature id=lateval spec=specs/100-lateval delivery=required"
+mk_spec_cert_mixed "$R34" specs/100-lateval "done" \
+  '["implement","test",
+    {"phase":"security","agent":"bubbles.security","certifiedAt":"2026-04-30T06:52:15Z"},
+    "validate"]'
+run_guard --repo-root "$R34" --phase mvp
+expect_rc 0 "S34 validate after an object element is still seen (order independence)"
 
 # ----------------------------------------------------------------------------
 echo ""

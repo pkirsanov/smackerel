@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# repository-binding-conformance-guard.sh — mechanical enforcer for Gate G129
+# (repository_binding_classification_discovery_conformance_gate).
 set -u
 set -o pipefail
 

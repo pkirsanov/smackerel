@@ -103,7 +103,10 @@ bubbles/scripts/diff-evidence-guard-selftest.sh
 bubbles/scripts/diff-evidence-guard.sh
 bubbles/scripts/discovered-issue-disposition-guard-selftest.sh
 bubbles/scripts/discovered-issue-disposition-guard.sh
+bubbles/scripts/dispatch-receipt-selftest.sh
+bubbles/scripts/dispatch-receipt.sh
 bubbles/scripts/docs-registry-resolve.sh
+bubbles/scripts/docs-wording-advisory.sh
 bubbles/scripts/doctor-hygiene-surface-selftest.sh
 bubbles/scripts/dod-section-lib-selftest.sh
 bubbles/scripts/dod-section-lib.sh
@@ -263,6 +266,8 @@ bubbles/scripts/model-tier-advisory-selftest.sh
 bubbles/scripts/model-tier-advisory.sh
 bubbles/scripts/multi-root-honesty-selftest.sh
 bubbles/scripts/mutation-adapter-contract-selftest.sh
+bubbles/scripts/mutation-receipt-selftest.sh
+bubbles/scripts/mutation-receipt.sh
 bubbles/scripts/mutation-resolve.sh
 bubbles/scripts/observability-adapter-lint-selftest.sh
 bubbles/scripts/observability-adapter-lint.sh
@@ -276,6 +281,7 @@ bubbles/scripts/observability-posture-guard-selftest.sh
 bubbles/scripts/observability-posture-guard.sh
 bubbles/scripts/observability-slo-guard-selftest.sh
 bubbles/scripts/observability-slo-guard.sh
+bubbles/scripts/occurrence-identity-lib.sh
 bubbles/scripts/open-work-report-selftest.sh
 bubbles/scripts/open-work-report.sh
 bubbles/scripts/open-work-surface-selftest.sh
@@ -400,6 +406,10 @@ bubbles/scripts/selftest-coverage-lint-selftest.sh
 bubbles/scripts/selftest-coverage-lint.sh
 bubbles/scripts/session-cap-guard-selftest.sh
 bubbles/scripts/session-cap-guard.sh
+bubbles/scripts/session-liveness-selftest.sh
+bubbles/scripts/session-liveness.sh
+bubbles/scripts/session-review-selftest.sh
+bubbles/scripts/session-review.sh
 bubbles/scripts/shellcheck-lint-selftest.sh
 bubbles/scripts/shellcheck-lint.sh
 bubbles/scripts/skill-description-load-selftest.sh
@@ -436,6 +446,8 @@ bubbles/scripts/test-impact-shadow-selftest.sh
 bubbles/scripts/test-impact-shadow.sh
 bubbles/scripts/test-inventory-adapter-contract-selftest.sh
 bubbles/scripts/test-inventory-resolve.sh
+bubbles/scripts/test-leaf-receipt-selftest.sh
+bubbles/scripts/test-leaf-receipt.sh
 bubbles/scripts/test-mechanism-lint-selftest.sh
 bubbles/scripts/test-mechanism-lint.sh
 bubbles/scripts/tool-capture-shim-selftest.sh
@@ -476,6 +488,8 @@ bubbles/scripts/validation-debt.sh
 bubbles/scripts/validation-latency-report-selftest.sh
 bubbles/scripts/validation-latency-report.sh
 bubbles/scripts/validation-plan-shadow.sh
+bubbles/scripts/validation-receipt-selftest.sh
+bubbles/scripts/validation-receipt.sh
 bubbles/scripts/value-selection-lint-selftest.sh
 bubbles/scripts/value-selection-lint.sh
 bubbles/scripts/verify-changed-specs-selftest.sh

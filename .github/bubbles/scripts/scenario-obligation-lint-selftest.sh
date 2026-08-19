@@ -284,6 +284,145 @@ else
   bad "A13 bare-list still validated" "rc=$RC out=$(printf '%s' "$OUT" | tr '\n' '|')"
 fi
 
+# --- IMP-048 SCOPE-5: the return-time ordering contract (EV-12) -------------
+#
+# A14-A19 are the rules. P10-P12 are their guards, and P12 is the load-bearing
+# one: a scenario making NO ordering claim must be completely unaffected. An
+# obligation that quietly taxed every scenario would be switched off, and the
+# ordering rule would go with it.
+#
+# The shape being refused is the S5B false green: a test that calls production,
+# sleeps, then polls until the condition becomes true passes whether or not
+# production honoured the ordering, because the property is sampled AFTER the
+# window in which it could be violated.
+
+ORD_HEAD='"behaviorTraits":["mutable-state"],"obligations":[{"trait":"mutable-state"'
+
+# A14. the claim is made, and the proof itself describes polling.
+R="$(make_case a14 "{\"schemaVersion\":1,\"scenarios\":[{\"id\":\"SCN-001-001\",\"title\":\"t\",\"requiredTestType\":\"integration\",$ORD_HEAD,\"requiredProof\":\"the call returns only after the write is durable; the test polls until the row is visible\",\"satisfiedBy\":[\"ordering:at-return\",\"ordering:sentinel\"]}]}]}")"
+run_lint "$R"
+if [[ "$RC" -eq 1 ]] && printf '%s' "$OUT" | grep -q 'ORDERING-SAMPLED-LATE'; then
+  ok "A14 an ordering claim whose proof polls before asserting is refused"
+else
+  bad "A14 polling proof" "rc=$RC out=$(printf '%s' "$OUT" | tr '\n' '|')"
+fi
+
+# A15. the same shape declared as a token rather than described in prose.
+R="$(make_case a15 "{\"schemaVersion\":1,\"scenarios\":[{\"id\":\"SCN-001-001\",\"title\":\"t\",\"requiredTestType\":\"integration\",$ORD_HEAD,\"requiredProof\":\"the call returns only after the write is durable\",\"satisfiedBy\":[\"ordering:at-return\",\"ordering:sentinel\",\"ordering:poll-until\"]}]}]}")"
+run_lint "$R"
+if [[ "$RC" -eq 1 ]] && printf '%s' "$OUT" | grep -q 'ORDERING-SAMPLED-LATE'; then
+  ok "A15 a declared late-sampling token is refused, not silently counted"
+else
+  bad "A15 late token" "rc=$RC out=$(printf '%s' "$OUT" | tr '\n' '|')"
+fi
+
+# A16. an ordering claim naming no ordering proof at all.
+R="$(make_case a16 "{\"schemaVersion\":1,\"scenarios\":[{\"id\":\"SCN-001-001\",\"title\":\"t\",\"requiredTestType\":\"integration\",$ORD_HEAD,\"requiredProof\":\"the handle cannot return before the lease is released\",\"satisfiedBy\":[\"tests/order.spec.ts\"]}]}]}")"
+run_lint "$R"
+if [[ "$RC" -eq 1 ]] && printf '%s' "$OUT" | grep -q 'ORDERING-AT-RETURN'; then
+  ok "A16 an ordering claim with no at-return assertion is refused"
+else
+  bad "A16 no at-return" "rc=$RC out=$(printf '%s' "$OUT" | tr '\n' '|')"
+fi
+
+# A17. the sentinel is owed separately: sampling at return shows the value at
+# one instant, the sentinel shows nothing mutated it afterwards.
+R="$(make_case a17 "{\"schemaVersion\":1,\"scenarios\":[{\"id\":\"SCN-001-001\",\"title\":\"t\",\"requiredTestType\":\"integration\",$ORD_HEAD,\"requiredProof\":\"the handle cannot return before the lease is released\",\"satisfiedBy\":[\"ordering:at-return\"]}]}]}")"
+run_lint "$R"
+if [[ "$RC" -eq 1 ]] && printf '%s' "$OUT" | grep -q 'ORDERING-SENTINEL'; then
+  ok "A17 a missing delayed-mutation sentinel is refused"
+else
+  bad "A17 no sentinel" "rc=$RC out=$(printf '%s' "$OUT" | tr '\n' '|')"
+fi
+
+# A18. the contract NAMES a precondition, so every attempt owes an ordering
+# proof that it was preceded by the observation.
+R="$(make_case a18 "{\"schemaVersion\":1,\"scenarios\":[{\"id\":\"SCN-001-001\",\"title\":\"t\",\"requiredTestType\":\"integration\",$ORD_HEAD,\"requiredProof\":\"the control is written only after an observed quorum and remains held until finality\",\"satisfiedBy\":[\"ordering:at-return\",\"ordering:sentinel\"]}]}]}")"
+run_lint "$R"
+if [[ "$RC" -eq 1 ]] && printf '%s' "$OUT" | grep -q 'ORDERING-PRECONDITION-ATTEMPTS'; then
+  ok "A18 a named precondition owes a recorded-attempt proof"
+else
+  bad "A18 precondition attempts" "rc=$RC out=$(printf '%s' "$OUT" | tr '\n' '|')"
+fi
+
+# A19. a mistyped ordering token is a finding, not a silently uncounted proof.
+R="$(make_case a19 "{\"schemaVersion\":1,\"scenarios\":[{\"id\":\"SCN-001-001\",\"title\":\"t\",\"requiredTestType\":\"integration\",$ORD_HEAD,\"requiredProof\":\"the call returns only after the write is durable\",\"satisfiedBy\":[\"ordering:at-retrn\",\"ordering:sentinel\"]}]}]}")"
+run_lint "$R"
+if [[ "$RC" -eq 1 ]] && printf '%s' "$OUT" | grep -q 'ORDERING-TOKEN'; then
+  ok "A19 a mistyped ordering token is refused"
+else
+  bad "A19 mistyped ordering token" "rc=$RC out=$(printf '%s' "$OUT" | tr '\n' '|')"
+fi
+
+# P10. the SAME scenario asserting AT return, with a sentinel and no
+# pre-assertion sleep or poll, passes. Without this the rule would be a ban on
+# ordering claims rather than a contract for proving them.
+R="$(make_case p10 "{\"schemaVersion\":1,\"scenarios\":[{\"id\":\"SCN-001-001\",\"title\":\"t\",\"requiredTestType\":\"integration\",$ORD_HEAD,\"requiredProof\":\"the call returns only after the write is durable\",\"satisfiedBy\":[\"tests/order.spec.ts\",\"ordering:at-return\",\"ordering:sentinel\"]}]}]}")"
+run_lint "$R"
+if [[ "$RC" -eq 0 ]]; then
+  ok "P10 an ordering claim proved at return with a sentinel passes"
+else
+  bad "P10 ordering satisfied" "rc=$RC out=$(printf '%s' "$OUT" | tr '\n' '|')"
+fi
+
+# P11. the trait route reaches the same obligation as the phrase route, so a
+# scenario cannot escape by declaring the trait and writing bland proof prose.
+R="$(make_case p11 "{\"schemaVersion\":1,\"scenarios\":[{\"id\":\"SCN-001-001\",\"title\":\"t\",\"requiredTestType\":\"integration\",\"behaviorTraits\":[\"return-time-ordering\"],\"obligations\":[{\"trait\":\"return-time-ordering\",\"requiredProof\":\"x\",\"satisfiedBy\":[\"tests/order.spec.ts\"]}]}]}")"
+run_lint "$R"
+if [[ "$RC" -eq 1 ]] && printf '%s' "$OUT" | grep -q 'ORDERING-AT-RETURN'; then
+  ok "P11 the declared ordering trait owes the same proof as the phrase"
+else
+  bad "P11 trait route" "rc=$RC out=$(printf '%s' "$OUT" | tr '\n' '|')"
+fi
+
+R="$(make_case p11b "{\"schemaVersion\":1,\"scenarios\":[{\"id\":\"SCN-001-001\",\"title\":\"t\",\"requiredTestType\":\"integration\",\"behaviorTraits\":[\"return-time-ordering\"],\"obligations\":[{\"trait\":\"return-time-ordering\",\"requiredProof\":\"x\",\"satisfiedBy\":[\"ordering:at-return\",\"ordering:sentinel\"]}]}]}")"
+run_lint "$R"
+if [[ "$RC" -eq 0 ]]; then
+  ok "P11b the declared ordering trait is dischargeable"
+else
+  bad "P11b trait route satisfied" "rc=$RC out=$(printf '%s' "$OUT" | tr '\n' '|')"
+fi
+
+# P12. GUARD, and the load-bearing one: a scenario making NO ordering claim
+# carries NO new burden. Asserted explicitly rather than inferred from the exit
+# code, because an ordering finding on an ordinary scenario is the failure mode
+# that would get this check switched off.
+R="$(make_case p12 "{\"schemaVersion\":1,\"scenarios\":[{\"id\":\"SCN-001-001\",\"title\":\"t\",\"requiredTestType\":\"integration\",$ORD_HEAD,\"requiredProof\":\"write, read and persistence round trip\",\"satisfiedBy\":[\"tests/state.spec.ts\"]}]}]}")"
+run_lint "$R"
+if [[ "$RC" -eq 0 ]] && [[ "$OUT" != *ORDERING* ]]; then
+  ok "P12 a scenario with NO ordering claim is completely unaffected"
+else
+  bad "P12 no new burden" "rc=$RC out=$(printf '%s' "$OUT" | tr '\n' '|')"
+fi
+
+# P13. GUARD: the registry is the AUTHORITY, not a second copy of a list that
+# also lives in the lint. Proved by CHANGING the registry and showing the lint's
+# behaviour follows: a grep for a phrase cannot tell an illustrative comment
+# apart from an enforced list, but a swapped vocabulary can.
+ALT_REG="$WORK/alt-proof-obligations.yaml"
+awk '/^  claimPhrases:/ { print "  claimPhrases: [flibberty gibbet]"; next } { print }' \
+  "$SCRIPT_DIR/../registry/proof-obligations.yaml" > "$ALT_REG"
+
+ORD_BODY='"requiredProof":"the call returns only after the write is durable","satisfiedBy":["tests/order.spec.ts"]}]}]}'
+R="$(make_case p13a "{\"schemaVersion\":1,\"scenarios\":[{\"id\":\"SCN-001-001\",\"title\":\"t\",\"requiredTestType\":\"integration\",$ORD_HEAD,$ORD_BODY")"
+set +e
+ALT_OUT="$(BUBBLES_PROOF_OBLIGATIONS_REGISTRY="$ALT_REG" bash "$TARGET" "$R" --quiet 2>&1)"
+ALT_RC=$?
+set -e
+
+R="$(make_case p13b "{\"schemaVersion\":1,\"scenarios\":[{\"id\":\"SCN-001-001\",\"title\":\"t\",\"requiredTestType\":\"integration\",$ORD_HEAD,\"requiredProof\":\"flibberty gibbet is honoured\",\"satisfiedBy\":[\"tests/order.spec.ts\"]}]}]}")"
+set +e
+ALT2_OUT="$(BUBBLES_PROOF_OBLIGATIONS_REGISTRY="$ALT_REG" bash "$TARGET" "$R" --quiet 2>&1)"
+ALT2_RC=$?
+set -e
+
+if [[ "$ALT_RC" -eq 0 && "$ALT_OUT" != *ORDERING* ]] &&
+  [[ "$ALT2_RC" -eq 1 ]] && printf '%s' "$ALT2_OUT" | grep -q 'ORDERING-AT-RETURN'; then
+  ok "P13 the ordering phrase list is READ from the registry, not restated in the lint"
+else
+  bad "P13 registry authority" "original=$ALT_RC swapped=$ALT2_RC"
+fi
+
 # --- U1. usage -------------------------------------------------------------
 set +e
 bash "$TARGET" >/dev/null 2>&1; u1=$?

@@ -24,6 +24,9 @@ set -euo pipefail
 #                          cannot be discharged by a synthetic path, an absent
 #                          mechanism, or the wrong test category (IMP-047 S-D).
 #                          An exemption must NAME the absent trait.
+#   G. ORDERING          — a scenario making a RETURN-TIME claim owes an
+#                          assertion sampled at production return plus a
+#                          delayed-mutation sentinel (IMP-048 SCOPE-5).
 #
 # Check C is deliberately narrow. It fires only on the maximal set, which is
 # unambiguous: a scenario that is simultaneously pure calculation, user-visible
@@ -40,6 +43,16 @@ set -euo pipefail
 # metadata and non-runtime config pay less, because a live shell around a pure
 # function never proved anything about it. Runtime config gets no docs
 # exemption. The rows live in bubbles/registry/proof-obligations.yaml.
+#
+# Check G extends that SAME derivation to ORDERING traits (IMP-048 SCOPE-5 /
+# EV-12) rather than standing up a second obligation engine beside it. A
+# scenario asserting "no success returns before finality" is satisfiable today
+# by a test that calls production, sleeps, then polls until the condition
+# becomes true — which passes whether or not production honoured the ordering,
+# because the property is sampled AFTER the window in which it could be
+# violated. The trigger is textual, exactly like the SCOPE-6 dependency-boundary
+# rule, and the phrase lists and token vocabulary are READ from the registry so
+# the matrix stays the single authority.
 #
 # SAFE TO BLOCK ON DAY ONE, unlike the linked-test resolver: these fields are
 # new and optional, so the lint is inert on every packet that does not declare
@@ -113,7 +126,24 @@ PROOF_REGISTRY="$(awk '
 [[ -n "$PROOF_REGISTRY" ]] ||
   die_usage "proof-obligation registry declares no traits: $PROOF_REGISTRY_FILE"
 
-MANIFEST="$MANIFEST" QUIET="$QUIET" PROOF_REGISTRY="$PROOF_REGISTRY" python3 - <<'PY'
+# The ordering block is the SAME registry, read with the same flat idiom. A
+# second pass rather than a second file: the phrase lists and the token
+# vocabulary belong beside the traits they qualify.
+ORDERING_REGISTRY="$(awk '
+  /^ordering:/ {o=1; next}
+  /^[a-zA-Z]/ {o=0}
+  o && /^  [a-zA-Z]+:/ {
+    line=$0
+    sub(/^  /, "", line)
+    k=line; sub(/:.*/, "", k)
+    v=line; sub(/^[a-zA-Z]+:[ ]*/, "", v)
+    if (v == "") next
+    print k "|" v
+  }
+' "$PROOF_REGISTRY_FILE")"
+
+MANIFEST="$MANIFEST" QUIET="$QUIET" PROOF_REGISTRY="$PROOF_REGISTRY" \
+  ORDERING_REGISTRY="$ORDERING_REGISTRY" python3 - <<'PY'
 import json, os, sys
 
 manifest_path = os.environ["MANIFEST"]
@@ -158,6 +188,33 @@ MECHANISM_FIELD_FOR = {
     "requiredAssertionSurfaces": "assertionSurface",
     "requiredDependencyPaths": "dependencyPath",
 }
+
+# --- IMP-048 SCOPE-5: the ordering contract (EV-12) -------------------------
+#
+# Read from the SAME registry as the traits. Nothing about ordering is spelled
+# out here, for the reason check F already established: a second copy of a
+# matrix is a second answer.
+ORDERING = {}
+for line in os.environ.get("ORDERING_REGISTRY", "").splitlines():
+    if "|" not in line:
+        continue
+    key, value = line.split("|", 1)
+    ORDERING[key] = _flow_list(value)
+
+ORDERING_PREFIX = (ORDERING.get("satisfiedByPrefix") or ["ordering"])[0]
+CLAIM_PHRASES = [p.lower() for p in ORDERING.get("claimPhrases", []) if p]
+PRECONDITION_PHRASES = [p.lower() for p in ORDERING.get("preconditionPhrases", []) if p]
+POLLING_PHRASES = [p.lower() for p in ORDERING.get("pollingPhrases", []) if p]
+ORDERING_REQUIRED = [t for t in ORDERING.get("requiredTokens", []) if t]
+ORDERING_CONDITIONAL = [t for t in ORDERING.get("conditionalTokens", []) if t]
+ORDERING_FORBIDDEN = [t for t in ORDERING.get("forbiddenTokens", []) if t]
+ORDERING_VOCAB = set(ORDERING_REQUIRED) | set(ORDERING_CONDITIONAL) | set(ORDERING_FORBIDDEN)
+ORDERING_TRAIT = "return-time-ordering"
+
+
+def ordering_code(token):
+    """Derive the failure code from the registry token so the two cannot drift."""
+    return "ORDERING-" + token.upper()
 
 # --- IMP-040 SCOPE-6: dependency-path coverage (COV-9, COV-10) --------------
 #
@@ -348,6 +405,79 @@ for scenario in scenarios:
                              "a shared-consumer scenario names no productionOwners. The "
                              "controlling code path must be recorded as repository-relative "
                              "paths when no code-index adapter is configured"))
+
+    # --- G. return-time ordering (IMP-048 SCOPE-5 / EV-12) ------------------
+    #
+    # Triggered by the scenario's OWN words. An ordering claim announces itself
+    # in the obligation's requiredProof ("returns only after", "cannot return
+    # before", "remains held until"), and a scenario may also declare the trait
+    # outright. A scenario doing NEITHER is untouched: ordinary scenarios carry
+    # no new burden, which is the condition under which a check like this stays
+    # switched on.
+    proof_text = " ".join(
+        ob.get("requiredProof") for ob in (obligations if isinstance(obligations, list) else [])
+        if isinstance(ob, dict) and isinstance(ob.get("requiredProof"), str)
+    ).lower()
+    claim_hits = [p for p in CLAIM_PHRASES if p in proof_text]
+
+    if claim_hits or ORDERING_TRAIT in trait_set:
+        trigger = ", ".join(f"'{p}'" for p in claim_hits) or f"the '{ORDERING_TRAIT}' trait"
+
+        ordering_tokens = set()
+        malformed_tokens = set()
+        for ob in obligations if isinstance(obligations, list) else []:
+            if not isinstance(ob, dict):
+                continue
+            for entry in ob.get("satisfiedBy") or []:
+                if not isinstance(entry, str) or not entry.startswith(ORDERING_PREFIX + ":"):
+                    continue
+                token = entry.split(":", 1)[1].strip()
+                if token in ORDERING_VOCAB:
+                    ordering_tokens.add(token)
+                else:
+                    malformed_tokens.add(token)
+
+        if malformed_tokens:
+            findings.append((sid, "ORDERING-TOKEN",
+                             f"ordering token(s) not in the vocabulary: "
+                             f"{', '.join(sorted(malformed_tokens))}. Valid: "
+                             f"{', '.join(sorted(ORDERING_VOCAB))}"))
+
+        # THE FALSE-GREEN SHAPE. A test that sleeps and then polls until the
+        # condition becomes true passes whether or not production honoured the
+        # ordering, because the property is sampled after the window in which it
+        # could be violated. It proves eventual convergence, not the contract.
+        late_tokens = sorted(ordering_tokens & set(ORDERING_FORBIDDEN))
+        late_phrases = sorted({p for p in POLLING_PHRASES if p in proof_text})
+        if late_tokens or late_phrases:
+            named = ", ".join(f"'{t}'" for t in late_tokens + late_phrases)
+            findings.append((sid, "ORDERING-SAMPLED-LATE",
+                             f"the scenario makes an ordering claim ({trigger}) but its proof "
+                             f"samples the asserted state after the window ({named}). A test that "
+                             "polls until the condition becomes true proves eventual convergence, "
+                             "not the ordering contract; sample AT production return instead"))
+
+        for token in ORDERING_REQUIRED:
+            if token in ordering_tokens:
+                continue
+            findings.append((sid, ordering_code(token),
+                             f"the scenario makes an ordering claim ({trigger}) but no obligation "
+                             f"names '{ORDERING_PREFIX}:{token}' in satisfiedBy. The owed proof is "
+                             "an assertion sampled AT production return with no pre-assertion sleep "
+                             "or poll, PLUS a delayed-mutation sentinel proven unchanged after a "
+                             f"bounded observation. Tokens: {', '.join(sorted(ORDERING_VOCAB))}"))
+
+        # CONDITIONAL. Only a contract that NAMES a precondition owes the
+        # attempt ledger, so an ordinary ordering claim is not charged for it.
+        precondition_hits = sorted({p for p in PRECONDITION_PHRASES if p in proof_text})
+        if precondition_hits:
+            for token in ORDERING_CONDITIONAL:
+                if token in ordering_tokens:
+                    continue
+                findings.append((sid, ordering_code(token),
+                                 f"the scenario names a precondition ({', '.join(precondition_hits)}) "
+                                 f"but no obligation names '{ORDERING_PREFIX}:{token}'. Record every "
+                                 "attempt and show each was preceded by the required observation"))
 
     # --- F. live-proof obligations (IMP-047 S-D) ----------------------------
     #

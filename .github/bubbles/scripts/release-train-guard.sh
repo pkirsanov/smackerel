@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # release-train-guard.sh — validates release-train discipline across a repo.
 #
+# Gate G110 — release_train_discipline_gate.
+#
 # Enforces (per spec — bubbles-release-trains.instructions.md):
 #   1. config/release-trains.yaml exists and is well-formed
 #   2. Every train declared has phase ∈ {active, maintained, frozen, retired}

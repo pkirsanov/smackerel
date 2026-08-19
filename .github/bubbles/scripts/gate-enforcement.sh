@@ -16,6 +16,21 @@
 # an `enforcedBy` list; the coverage map is generated from that field; and this
 # script verifies every declaration actually resolves.
 #
+# A DECLARED ENFORCER MUST ACTUALLY ENFORCE (IMP-049 / SCOPE-5)
+# -------------------------------------------------------------
+# File existence alone is too weak a resolution test for `script:`. A gate could
+# name a real script that has nothing to do with it, and nothing noticed: on the
+# tree that introduced this check, 11 of 101 `script:` declarations pointed at a
+# file that never mentioned the gate id it was declared to enforce, so the
+# binding was hand-maintained prose. `lint` therefore also requires the named
+# file to NAME the gate id.
+#
+# SCOPE, deliberately narrow. This asks ONLY the strict question: a gate that
+# ITSELF declares `script:<path>` must have that path name that gate. It does
+# NOT grep the script tree to decide whether a gate is enforced somewhere, which
+# is a different and unsound measurement (it counts guard-check, behavioral,
+# mode-required and CI surfaces as absence). Do not widen it into that.
+#
 # VOCABULARY (constrained)
 #   guard-check:<N>        a labeled check in state-transition-guard.sh
 #   script:<path>          a script that enforces the gate
@@ -30,9 +45,9 @@
 #   bind     seed `enforcedBy` for gates that lack it, using the strict rule
 #            below. NEVER overwrites an existing value, so hand corrections
 #            survive re-runs.
-#   lint     verify every declared value resolves (the file exists, the guard
-#            check label exists, the agent exists). Exit 1 on any dangling
-#            declaration. This is the check 2a asks for.
+#   lint     verify every declared value resolves (the file exists AND names
+#            the gate id, the guard check label exists, the agent exists).
+#            Exit 1 on any dangling declaration. This is the check 2a asks for.
 #   report   print the distribution and the unbound set.
 #
 # STRICT DERIVATION RULE (bind only; precedence order)
@@ -333,9 +348,16 @@ for gid in gate_ids:
             ):
                 report_finding("guard-check-unresolved", f"{gid} declares {v} but no such check label exists")
         elif kind == "script":
-            target = repo_root / v.split(":", 1)[1]
+            rel = v.split(":", 1)[1]
+            target = repo_root / rel
             if not target.is_file():
                 report_finding("script-unresolved", f"{gid} declares {v} but that file does not exist")
+            elif gid not in target.read_text(errors="replace"):
+                report_finding(
+                    "script-gate-id-absent",
+                    f"{gid} declares {v} but that file never names {gid} "
+                    f"(add the gate id to the script, or drop the declaration)",
+                )
         elif kind == "behavioral":
             agent = v.split(":", 1)[1]
             if AGENTS_DIR.is_dir() and not (AGENTS_DIR / f"{agent}.agent.md").is_file():

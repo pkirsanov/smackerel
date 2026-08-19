@@ -68,6 +68,47 @@ supported_options_inventory() {
     | sed '/^$/d'
 }
 
+# BUG-017. A mode whose statusCeiling is below `done` terminates at that ceiling,
+# so the ceiling IS its certification target. transition-contract-resolver.sh
+# refuses any such mode that declares no transitionAudit profile
+# (E009-AUDIT-PROFILE-UNSUPPORTED), and state-transition-guard.sh turns that into
+# a hard BLOCKED verdict — the registry would be advertising a terminal state
+# with no truthful path to it. Modes at `done` are exempt: they fall through to
+# the delivery profiles.
+#
+# Reading the raw block is sufficient because a below-`done` ceiling can only be
+# declared locally. The single inheritable ceiling is `base-delivery` in
+# bubbles/workflows.yaml, and it is `done`; no mode template declares a
+# transitionAudit. Should a template ever declare a below-`done` ceiling, this
+# check must grow to resolve inheritance.
+unaudited_ceiling_inventory() {
+  awk '
+    function flush() {
+      if (mode != "" && ceiling != "" && ceiling != "done" && !audited) {
+        printf "%s (statusCeiling: %s)\n", mode, ceiling
+      }
+      mode = ""
+      ceiling = ""
+      audited = 0
+    }
+    BEGIN { in_modes = 0 }
+    /^[a-zA-Z][a-zA-Z0-9_-]*:/ {
+      flush()
+      in_modes = ($0 ~ /^modes:/) ? 1 : 0
+      next
+    }
+    in_modes && /^  [a-z][a-z0-9-]*:$/ {
+      flush()
+      mode = $1
+      sub(/:$/, "", mode)
+      next
+    }
+    in_modes && mode != "" && /^    statusCeiling:[[:space:]]/ { ceiling = $2 }
+    in_modes && mode != "" && /^    transitionAudit:/ { audited = 1 }
+    END { flush() }
+  ' "$MODES_FILE"
+}
+
 assert_file "$WORKFLOWS_FILE" "Workflow registry"
 assert_file "$WORKFLOW_AGENT_FILE" "Workflow agent"
 assert_file "$CLI_FILE" "CLI"
@@ -85,6 +126,17 @@ if [[ "$actual_modes" != "$agent_modes" ]]; then
     printf '%s\n' "$actual_modes"
     echo "Advertised by workflow agent:"
     printf '%s\n' "$agent_modes"
+  fi
+  exit 1
+fi
+
+unaudited_ceilings="$(unaudited_ceiling_inventory)"
+if [[ -n "$unaudited_ceilings" ]]; then
+  if [[ "$quiet" == "false" ]]; then
+    echo "Modes declare a statusCeiling below 'done' with no transitionAudit profile."
+    echo "Each terminates at that ceiling, so the transition contract resolver refuses"
+    echo "them with E009-AUDIT-PROFILE-UNSUPPORTED and the ceiling is unreachable:"
+    printf '%s\n' "$unaudited_ceilings"
   fi
   exit 1
 fi

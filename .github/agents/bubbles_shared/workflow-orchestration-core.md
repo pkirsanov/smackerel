@@ -79,4 +79,18 @@ failed dispatch as not-run rather than completed, and resumes the remaining
 batch from that checkpoint. A dispatch that never returned a result must never
 be counted as a passed phase or a closed finding.
 
+`bubbles/scripts/dispatch-receipt.sh` records one receipt per dispatch ATTEMPT —
+`occurrenceId`, `attemptId`, `packetDigest`, `agent`, `startedAt`, `finishedAt`,
+`dispatchStatus`, `resultEnvelopeStatus`, `evidenceRefs` — and classifies it
+into a closed set: `ENVELOPE_OK` (advance), `TRANSPORT_TERMINATED` and
+`NO_RESULT` (retry once with the identical packet and occurrence id),
+`NARRATIVE_ONLY` (recover the envelope from durable evidence; do NOT re-run
+tests), `ENVELOPE_FAILURE` (route to the fix loop; NOT a dispatch retry),
+`TIMEOUT` (resume at the unresolved leaf; do NOT re-run the phase), and
+`REPEAT_INFRASTRUCTURE` (a second identical transport failure — stop with a
+typed infrastructure `blocked` envelope). Only `ENVELOPE_OK` exits 0; every
+other class refuses the advance. Retry budgets are keyed on the class. A receipt
+derives from the dispatched packet bytes; merely asserting one is refused.
+Default OFF per repository via `dispatchReceipts.adapter` in the project config.
+
 When both `bubbles.gaps` and `bubbles.harden` are dispatched for the same spec, order them gaps → harden: gaps audits spec/design ↔ implementation fidelity first, then harden verifies DoD/tests/policy compliance.
