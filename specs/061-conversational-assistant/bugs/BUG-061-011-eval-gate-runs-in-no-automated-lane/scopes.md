@@ -3,17 +3,25 @@
 ## Scope 1: Wire the acceptance gate into the integration lane and make its absence loud
 
 **Scope ID:** `BUG-061-011-SCOPE-01`
-**Status:** In Progress (certification refused; the validate-owned `Verified` transition is the one open DoD item)
+**Status:** Done (all 29 DoD items checked with inline evidence; certified by `bubbles.validate` 2026-08-19)
 **Depends On:** none
 
-> **Why `In Progress` and not `Done`.** 25 of the 26 DoD items are checked with inline
-> evidence. The 26th — *"`bug.md` status advanced to Fixed and then Verified"* — names a
-> transition that only `bubbles.validate` may make, and validate refused certification on
-> 2026-08-14 (see `report.md` → *Validation Record*). A scope cannot be `Done` while its own
-> certification is refused, so `Done` would be a false claim. `Blocked` would also be false:
-> the remaining findings are being worked, not halted. The previous value, `[ ] Not started`,
-> was wrong twice over — it is not one of the four canonical values, and a checkbox in the
-> status field left the guard with zero resolvable scope-status markers.
+> **Why `Done` as of 2026-08-19.** All 29 DoD items are now checked with inline evidence. The
+> last one — *"`bug.md` status advanced to Fixed and then Verified"* — named a transition only
+> `bubbles.validate` may make, and validate granted it on 2026-08-19 after re-executing the fix
+> at HEAD `aec892de` (see `report.md` → *Validation Record — 2026-08-19*).
+>
+> **Scope-`Done` is not packet-`done`, and the difference is the whole point.** This scope's
+> planned work is complete and evidenced. The packet itself stays `blocked`, because Gate G136
+> requires a *human* to exercise the behaviour and accept it, and no agent may supply that. Those
+> are two different facts with two different writers, per
+> `.github/bubbles/registry/acceptance-authority.yaml`. Collapsing them would either fabricate
+> acceptance or make this scope permanently uncloseable.
+>
+> **Prior value, kept for the record.** `In Progress` was correct from 2026-08-14 to 2026-08-19,
+> while validate's refusal stood on nine substantive gate failures. Before that the value was
+> `[ ] Not started`, which was wrong twice over — not one of the four canonical values, and a
+> checkbox in the status field left the guard with zero resolvable scope-status markers.
 
 ### Change Boundary
 
@@ -849,9 +857,16 @@ Every item requires: (1) implementation complete, (2) behaviour validated by exe
 
   **Scope limit — read before relying on this tick.** This is a static contract over the script text; it does **not** spawn the lane with a failing `go test` and an absent marker. It asserts the ordering property that makes the runtime behaviour hold, which is the property a future edit can silently break — commit `fa61daa0` merged two consecutive `if [[ "$go_test_rc" -ne 0 ]]` blocks in exactly this region and nothing would have turned red had that edit not been behaviour-preserving. Full evidence including the control-flow reading is at `report.md` § **A11**.
 
-- [ ] `bug.md` status advanced to Fixed and then Verified
+- [x] `bug.md` status advanced to Fixed and then Verified
 
-  > **Unticked — this item names two transitions and only one has happened: `Fixed` is set in `bug.md`; `Verified` is pending validate-owned certification (`bubbles.validate`) and MUST NOT be self-certified here. The evidence block below is retained unchanged and documents the `Fixed` half only.**
+  > **TICKED 2026-08-19 by `bubbles.validate`, superseding the two notes below.** Both transitions
+  > have now happened. The `Fixed` half was discharged by `bubbles.test` and its evidence is
+  > preserved verbatim underneath. The `Verified` half was refused on 2026-08-14 and granted on
+  > 2026-08-19 by the agent that owns it; its own evidence block is appended at the end of this
+  > item. The two notes below are kept, not deleted, because they were true when written and they
+  > record why this item sat unticked for five days.
+
+  > **Superseded — this item names two transitions and only one has happened: `Fixed` is set in `bug.md`; `Verified` is pending validate-owned certification (`bubbles.validate`) and MUST NOT be self-certified here. The evidence block below is retained unchanged and documents the `Fixed` half only.**
 
   > **⚠️ SCOPE OF THIS TICK — READ BEFORE RELYING ON IT.** Only the **Fixed** transition is done. **`Verified` is deliberately NOT set** and its checkbox in `bug.md` remains `[ ]`. `Verified` is a certification-state claim owned by `bubbles.validate`; this agent (`bubbles.test`) must not write it, and setting it here would be a self-certification. The tick therefore covers the half of this item that is this agent's to discharge; the `Verified` half remains outstanding and is owned by validate. Read the checkbox text as *"advanced to Fixed"* — `bug.md` itself is the authoritative record and shows exactly that.
 
@@ -869,6 +884,64 @@ Every item requires: (1) implementation complete, (2) behaviour validated by exe
   The advance to **Fixed** is warranted on evidence already recorded in this scope, not on assertion. The fix is implemented across all six planned surfaces (five code/lane files plus `docs/Testing.md`), and the gate **demonstrably runs**: the full integration lane compiled and executed `./tests/eval/assistant`, the gate emitted exactly one marker line reporting `executed_assertions=210`, and the lane's own enforced assertion accepted it (`go-integration: acceptance gate executed 210 assertions.`) — all evidenced under **A9**. The defect this bug records was that the gate executed in **no** lane; it now executes in the automated one CI runs. `In Progress` is checked alongside `Fixed` because the packet did pass through that state; back-filling it keeps the status ladder monotonic rather than showing an impossible jump.
 
   **What Fixed does NOT assert here.** It does not assert the integration lane is green — it exited `1` on the unrelated BUG-064-003 failure. It does not assert E2E regression coverage exists; those two items below remain unchecked. It does not assert every stale claim was corrected; surface (c) above is still outstanding. `Fixed` means the reported defect no longer reproduces, and that is exactly what the A9 evidence shows.
+
+  ---
+
+  **The `Verified` half — evidence, `bubbles.validate`, 2026-08-19.**
+
+  **Claim Source:** executed · **Tree:** HEAD=`aec892de`, `git status --porcelain` empty at session start · **Exit code:** `0`
+  **Command:** `timeout 1500 ./smackerel.sh test integration --go-run TestAcceptanceGate_RoutingAccuracyAndCaptureFallback`
+
+      === RUN   TestAcceptanceGate_RoutingAccuracyAndCaptureFallback
+      ASSISTANT_ACCEPTANCE_GATE_V1 executed_assertions=210 rows=150 capture_expected=60 routing_accuracy=1.0000 capture_fallback_rate=1.0000
+      Smackerel Assistant Eval Harness — spec 061 SCOPE-10
+        total rows:                150
+        intent correct:            150
+        routing accuracy:          1.0000
+        capture-expected rows:     60
+        capture-fallback hits:     60
+        capture-fallback rate:     1.0000
+        per-label breakdown:
+          retrieval              30/30 correct
+          weather                30/30 correct
+          notifications          30/30 correct
+          capture                30/30 correct
+          ambiguous-borderline   30/30 correct
+      --- PASS: TestAcceptanceGate_RoutingAccuracyAndCaptureFallback (0.00s)
+      ok      github.com/smackerel/smackerel/tests/eval/assistant     0.019s
+      INT_EXIT=0
+
+  This is the first time the runtime half of the claim was executed *by the certifying agent*. The
+  2026-08-14 record stated plainly in its V2 that it had not run the lane and was inheriting that
+  evidence from a prior session; that gap is now closed rather than inherited again.
+
+  **Command:** `timeout 900 ./smackerel.sh test unit --go --go-run 'TestEvalLaneContract|TestExecutedAssertions_ZeroOnEmptyCorpus' --verbose`
+
+      --- PASS: TestEvalLaneContract_LaneRunsGateAndAssertsExecutedAssertions (0.00s)
+      --- PASS: TestEvalLaneContract_AcceptsMinimalConformantFixtures (0.00s)
+      --- PASS: TestEvalLaneContract_AdversarialRejectsMissingEvalPackage (0.00s)
+      --- PASS: TestEvalLaneContract_AdversarialRejectsMissingOrZeroAssertion (0.00s)
+      --- PASS: TestEvalLaneContract_AdversarialRejectsConditionalOrAbsentMarker (0.00s)
+      --- PASS: TestEvalLaneContract_AdversarialRejectsBypassOrBroadenedSkip (0.00s)
+      --- PASS: TestEvalLaneContract_DualFailureReportingNeitherMasksTheOther (0.00s)
+      --- PASS: TestEvalLaneContract_AdversarialRejectsMaskedFailureReporting (0.00s)
+      --- PASS: TestExecutedAssertions_ZeroOnEmptyCorpus (0.00s)
+      ok      github.com/smackerel/smackerel/internal/deploy  0.028s
+      ok      github.com/smackerel/smackerel/tests/eval/assistant     0.010s
+      [go-unit] go test ./... finished OK
+      UNIT_EXIT=0
+
+  Over the 506-line transcript: `--- PASS` count **18**, `--- FAIL` count **0**, `^FAIL` count
+  **0**. The suite is *larger* than the 2026-08-14 run recorded — A8/A9/A10 (masked failure
+  reporting) did not exist then — so the contract got stronger between the refusal and the grant.
+
+  **Two limits on this tick, stated rather than smoothed over.** First, the integration run was
+  **focused**, and the lane said so itself: `NOTICE: acceptance-gate executed-assertion assertion
+  NOT ENFORCED for this run — a focused --run selector … is active.` So this proves the gate
+  *executes in the lane and emits a real non-zero count*; it does not re-prove that the lane's own
+  enforcement fires, which is covered by cases A0–A10 above and by the full-lane evidence under
+  **A9**. Second, `Verified` is not human acceptance — see `bug.md` § Status and
+  `report.md` → *Validation Record — 2026-08-19* § W3.
 
 - [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior
 

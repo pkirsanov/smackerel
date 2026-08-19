@@ -16,7 +16,7 @@
 - [x] Confirmed (reproduced)
 - [x] In Progress
 - [x] Fixed
-- [ ] Verified
+- [x] Verified
 - [ ] Closed
 
 **Fixed in commit `c7667d99`** ("feat(stage-1): eval-gate lane wiring, router warm-up contract,
@@ -33,7 +33,28 @@ the lane's own enforced assertion accepted it. Raw evidence is in [`scopes.md`](
 
 **Two things `Fixed` deliberately does not assert.** First, the integration lane is **not green** — it exited `1` on a single unrelated failure, `TestOpenKnowledgeRouting_FallbackToOpenKnowledge`, filed separately as `specs/064-open-ended-knowledge-agent/bugs/BUG-064-003-router-warmup-exceeds-fixed-deadline/`. The Stage 1 exit criterion therefore remains blocked on that bug, not on this one. Second, the R10-3 prose in `tests/e2e/assistant_regression_e2e_test.sh` (false claim 3 below) is still uncorrected; its outcome clause became true when the fix landed, but its causal clause — that the build tag is what makes the gate run — remains false.
 
-`Verified` is not set. That transition is owned by validation, not by the implementing or testing agent.
+**`Verified` set 2026-08-19 by `bubbles.validate`** at HEAD `aec892de`, superseding the
+2026-08-14 refusal. It is the validate-owned rung, and it asserts exactly two things: that
+validation re-executed the fix and found the defect does not reproduce, and that the packet no
+longer contradicts itself. Both were established by execution in that session — the gate ran
+*inside* the integration lane emitting `ASSISTANT_ACCEPTANCE_GATE_V1 executed_assertions=210
+rows=150 capture_expected=60 routing_accuracy=1.0000 capture_fallback_rate=1.0000`, and the
+18-case contract suite passed with zero failures. Evidence: [`report.md`](report.md) →
+*Validation Record — `bubbles.validate`, 2026-08-19*.
+
+**What `Verified` does not assert, and the distinction is load-bearing.** It is not human
+acceptance. `.github/bubbles/registry/acceptance-authority.yaml` defines those as two different
+facts with two different writers: automation readiness, which automation may write, and human
+acceptance, which "only a human-owned action or an external acceptance record establishes".
+`Verified` is the first. The second is `uservalidation.md:24` plus a `## Human Acceptance Record`,
+and no agent may supply either. `Closed` therefore stays unchecked, this packet stays `blocked`,
+and Gate G136 stays red — by design, not by oversight.
+
+One engineering-adjacent finding is also still open and is recorded rather than absorbed: Gate
+G022 rejects the `discovery` / `documentation` / `analysis` phase claims, because it resolves their
+owners to `bubbles.discovery` / `bubbles.documentation` / `bubbles.analysis` — three agents that do
+not exist — while the agent that actually performed them was `bubbles.bug`. That is phase
+bookkeeping, not a claim about this fix.
 
 ## Reproduction Steps
 

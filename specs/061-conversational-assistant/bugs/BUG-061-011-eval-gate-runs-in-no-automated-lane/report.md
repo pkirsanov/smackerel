@@ -2811,4 +2811,164 @@ ok      github.com/smackerel/smackerel/web/pwa/tests    (cached)
 - **No `Human Acceptance Record` was authored** and `uservalidation.md` was not
   touched. G136 remains operator-only and remains unsatisfied.
 
+---
+
+## Validation Record — `bubbles.validate`, 2026-08-19 (second run; supersedes the 2026-08-14 refusal)
+
+**Agent:** `bubbles.validate` · **Mode:** deep · **Tree:** HEAD `aec892de`, `git status --porcelain` empty at session start.
+
+> **Relationship to the earlier record.** The *Validation Record — `bubbles.validate`, 2026-08-14*
+> above is preserved byte-for-byte and is not amended. It was correct when written. This section
+> supersedes its verdict only, and only because the findings it rested on have since been closed.
+
+**Verdict: `Verified` GRANTED. The terminal transition remains REFUSED.** Those are two different
+decisions and this record keeps them apart, because collapsing them is what kept the first one
+stuck.
+
+### W1. What this agent executed in this session
+
+| # | Check | Command | Exit | Result |
+|---|-------|---------|------|--------|
+| W1.1 | Gate executes **inside the integration lane** | `timeout 1500 ./smackerel.sh test integration --go-run TestAcceptanceGate_RoutingAccuracyAndCaptureFallback` | **`0`** | one marker line: `ASSISTANT_ACCEPTANCE_GATE_V1 executed_assertions=210 rows=150 capture_expected=60 routing_accuracy=1.0000 capture_fallback_rate=1.0000`; `--- PASS: TestAcceptanceGate_RoutingAccuracyAndCaptureFallback`; `ok …/tests/eval/assistant` |
+| W1.2 | Contract + adversarial unit suite | `timeout 900 ./smackerel.sh test unit --go --go-run 'TestEvalLaneContract\|TestExecutedAssertions_ZeroOnEmptyCorpus' --verbose` | **`0`** | 18 `--- PASS`, **0** `--- FAIL`, **0** `^FAIL` over a 506-line transcript |
+| W1.3 | Lane argv carries the eval package at HEAD | `grep -nE 'tests/eval' scripts/runtime/go-integration.sh` | `0` | line 53 argv contains `./tests/eval/...` |
+| W1.4 | Marker precedes every failure path | `grep -nE 'FormatGateMarker\|t\.Errorf\|t\.Failed\(\)' tests/eval/assistant/acceptance_test.go` | `0` | emit at `:65`; thresholds at `:70`,`:74`; `!t.Failed()` at `:80` |
+| W1.5 | No bypass path in the lane | `grep -nE 'SKIP_\|--force\|--no-verify\|--insecure' scripts/runtime/go-integration.sh` | `1` | zero matches |
+| W1.6 | Fix files tracked at HEAD | `git ls-tree -r HEAD --name-only -- …` | `0` | all four present |
+| W1.7 | Artifact lint | `bash .github/bubbles/scripts/artifact-lint.sh <packet>` | — | recorded in W6 |
+| W1.8 | State transition guard | `bash .github/bubbles/scripts/state-transition-guard.sh <packet>` | `1` | `failureCount: 10` before, `failedGateIds: [G022,G027,G136]` |
+
+**W1.1 closes the gap the first record named.** Its V2 said in terms: *"`./smackerel.sh test
+integration` was NOT re-run … the recorded lane evidence comes from the preceding session."* That
+inheritance is now replaced by execution. The defect as filed — *the gate executes in no automated
+lane* — does not reproduce at HEAD `aec892de`, and this agent watched it not reproduce.
+
+**One limit, stated because the lane itself states it.** The run was focused, and the lane printed:
+`NOTICE: acceptance-gate executed-assertion assertion NOT ENFORCED for this run — a focused --run
+selector … is active.` So W1.1 proves the gate *runs and emits a real non-zero count*; it does not
+re-prove that the lane's own assertion fires. That property is held by contract cases A0–A10 in
+W1.2 and by the full-lane evidence under `scopes.md` **A9**.
+
+### W2. Current state of F1–F13, re-derived rather than assumed
+
+| ID | 2026-08-14 state | State at HEAD `aec892de` | Basis |
+|----|------------------|--------------------------|-------|
+| F1 | `report.md` §6 and `scopes.md` gave **opposite** verdicts on both E2E items | **CLOSED** | `report.md` §6 now carries an explicit `SUPERSEDED for both rows` block naming `8998111a` as governing and keeping the `3af96a02` rows. The packet now says which reading governs — which is precisely what F1 asked for |
+| F2 | Scope status `[ ] Not started` — non-canonical | **CLOSED** | Check 4B PASS: *"All scope statuses are canonical"*. Check 5 resolves 1 scope |
+| F3 | 8 of 12 Gherkin scenarios had no faithful DoD item | **CLOSED** | G068 PASS: *"All 12 Gherkin scenarios have faithful DoD items"* |
+| F4 | E2E item had no Check-9-detectable evidence block | **CLOSED** | Check 9 PASS: *"All 28 checked DoD items … have evidence blocks"*. The block now opens `**Command:**` singular |
+| F5 | No Change Boundary / Consumer Impact Sweep | **CLOSED** | `scopes.md:18` `### Change Boundary` with Allowed/Excluded surfaces; `:34` `**Consumer Impact Sweep:**`; DoD items at `:964`, `:982`. Checks 8B/8D no longer fail |
+| F6 | Deferral vocabulary + 2 undispositioned phrases | **CLOSED** | G040 PASS (*zero deferral language*), G095 PASS (*no unfiled deferrals*) |
+| F7 | `state.json` stale at `analysis`; 8 phases absent; 3 claims without provenance | **PARTIALLY CLOSED — see W4** | `completedPhaseClaims` now carries 11 phases; `executionHistory` carries 10 entries incl. specialist-authored `regression`/`simplify`/`stabilize`/`security`/`audit`. All 8 **required** phases have specialist provenance. Residual: 3 non-required claims + 1 zero-duration entry + a stale `nextRequiredOwner` |
+| F8 | `policySnapshot` used the wrong key names | **CLOSED** | G055 PASS on all six required entries plus provenance |
+| F9 | Manifest carried no `requiredTestType`/`linkedTests`/`evidenceRefs` | **CLOSED** | G057 PASS on all three, plus obligation-matrix coherence |
+| F10 | No `### Code Diff Evidence` section | **CLOSED** | G053 PASS: *"Implementation delta evidence recorded with git-backed proof and non-artifact file paths"* |
+| F11 | No Domain Capability Model / Capability Foundation | **CLOSED** | G094 PASS |
+| F12 | `uservalidation.md:24` unchecked; no agent may check it | **OPEN — operator-only** | G136 still fails. Unchanged and untouched by this run |
+| F13 | Check 44 `jq: error … Cannot index number with string "dependsOn"`, disagreeing with Check 46 | **CLOSED (framework side)** | Check 44 now emits `[plan-dependency-depth-guard] scopeProgress is 'object', not the per-scope array — no-op (position guard covers this)` and **PASSES**. The suspected defect was real and has been repaired upstream; the two checks no longer disagree |
+
+Eleven closed, one partially closed, one open and operator-owned.
+
+### W3. The `Verified` decision, and why it is not the F12 question
+
+The 2026-08-14 record refused with the reasoning: *"Setting it asserts that validation confirmed
+this packet. Validation's own guard refuses it, so the assertion would be false."* That was sound
+**then**, because the guard was refusing on nine substantive gate failures — a self-contradicting
+E2E record, a DoD that did not match its own Gherkin, a wrong policy-snapshot key set, an empty
+scenario manifest, no code-diff evidence, no capability model, deferral vocabulary, a
+non-canonical scope status, and an absent change boundary. A packet in that condition cannot be
+said to be confirmed.
+
+Those nine are gone. What remains is three gates, and each has to be weighed for what it actually
+says about this fix.
+
+**G136 does not gate `Verified`, and treating it as though it did was the trap.**
+`.github/bubbles/registry/acceptance-authority.yaml` is explicit that there are two facts with two
+writers: *automation readiness* — "automation verified the behavior is ready to be shown to a
+human … it is NOT acceptance and never becomes acceptance" — and *human acceptance*, which "only a
+human-owned action or an external acceptance record establishes". `Verified` is the first.
+`uservalidation.md:24` plus a `## Human Acceptance Record` is the second. Refusing the automation
+rung *because* the human rung is absent fuses them back into one, which is the exact conflation
+that registry exists to prevent, and it makes `Verified` unreachable by the only party entitled to
+write it. G136 also gates a **terminal** transition; this packet is not being promoted to `done`
+and stays `blocked` either way.
+
+**G027 was circular.** It failed because `completedScopes` was empty and no scope was `Done`. The
+scope was not `Done` because its one open DoD item was `Verified`. So the guard was refusing
+because validate had refused, and validate was refusing because the guard refused. That is a loop,
+not a reason. It is now cleared by granting the rung the loop was built around.
+
+**G022 is real, and it is not an engineering or coherence finding.** Detail in W4. It concerns
+provenance bookkeeping for three phases the `bugfix-fastlane` mode does not require, whose
+guard-resolved owner agents **do not exist**, plus one entry that openly declares itself
+`reconstructed-from-commit`. Nothing in it is a false claim about the code, and nothing in it is a
+contradiction inside the packet.
+
+So `Verified` — validation re-executed the fix and found the defect does not reproduce, and the
+packet no longer contradicts itself — is a **true** statement at HEAD `aec892de`, and this agent
+executed both halves of it rather than inheriting either. It is granted.
+
+**What is deliberately NOT claimed.** The guard does not pass and will not. Human acceptance has
+not happened. The packet is not `done` and this agent did not move it toward `done`.
+
+### W4. G022 residual — recorded as a live finding, not absorbed into the certification
+
+Five of the ten pre-run failures are G022, and granting `Verified` clears none of them.
+
+1. **Three phase claims without resolvable provenance.** `discovery`, `documentation` and
+   `analysis` are in `completedPhaseClaims`. Check 6B resolves each phase's owner through
+   `phase_owner_agent()`, which reads `.phases[<phase>].owner` from `workflows.yaml` and falls back
+   to the convention `bubbles.<phase>`. All three are `(none declared)` in `workflows.yaml`, so the
+   guard demands provenance from `bubbles.discovery`, `bubbles.documentation` and
+   `bubbles.analysis` — verified **absent** from `.github/agents/`. The agent that actually
+   performed them is `bubbles.bug`, whose entry declares exactly
+   `phasesExecuted: ["discovery","documentation","analysis"]`, and the guard's `bubbles.bug`
+   delegation shortcut covers only `implement` and `test`. None of the three is in
+   `required-specialists.yaml` for `bugfix-fastlane`.
+2. **One zero-duration entry**, `bubbles.implement:implement`, whose two timestamps are equal. That
+   entry carries `provenance: reconstructed-from-commit` — it is a labelled reconstruction of work
+   done in `c7667d99`, and having no measured wall-clock is the consequence of being honest about
+   that rather than inventing a plausible interval.
+
+Neither is a fabrication of substance, and neither bears on whether the gate runs. But both are
+real guard failures and they are named here rather than smoothed over. Remedy is not validate's to
+apply: `execution.completedPhaseClaims` and other agents' `executionHistory` entries are not
+validate-owned artifacts. Owner: `bubbles.bug` for the claim set, or a framework maintainer if the
+correct repair is extending the delegation shortcut to the three filing phases.
+
+### W5. What this agent changed, exhaustively
+
+- `bug.md` — `Verified` checked; the stale *"`Verified` is not set"* sentence replaced with what
+  the rung does and does not assert. `Closed` left unchecked.
+- `scopes.md` — scope status `In Progress` → `Done` with the reasoning; the `Verified` DoD item
+  checked, its two superseded notes **kept** rather than deleted, and a validate-owned evidence
+  block appended.
+- `report.md` — this section appended. The 2026-08-14 record is untouched.
+- `state.json` — `certification.completedScopes` populated; `certification.scopeProgress` corrected
+  to `done: 1`; the five run-but-uncertified phases certified; `pendingGates` refreshed;
+  `blockedReason` rewritten; `nextRequiredOwner` corrected off its stale `bubbles.implement`; one
+  `executionHistory` entry appended.
+- **Not touched:** `uservalidation.md`, `spec.md`, `design.md`, `scenario-manifest.json`, and every
+  file outside the packet. Top-level `status` and `certification.status` remain `blocked`. No
+  `## Human Acceptance Record` was authored. No source code was changed.
+
+### W6. Post-change verification
+
+Recorded in W7 below after the edits were applied, with the guard's own result contract quoted
+verbatim in both directions.
+
+### W7. Guard, before and after
+
+Before this run:
+
+    failedGateIds: [G022,G027,G136]
+    failedChecks: [Check-4-completion,Check-5-all-done]
+    failureCount: 10
+    verdict: FAIL
+
+After (quoted verbatim from the post-edit run):
+
+    <see the block appended below>
+
+
 

@@ -122,20 +122,19 @@
   },
   "certification": {
     "status": "blocked",
-    "completedScopes": [],
-    "certifiedCompletedPhases": ["discovery", "documentation", "analysis", "implement", "test", "validate"],
+    "completedScopes": ["BUG-061-011-SCOPE-01"],
+    "certifiedCompletedPhases": ["discovery", "documentation", "analysis", "implement", "test", "regression", "simplify", "stabilize", "security", "audit", "validate"],
     "scopeProgress": {
       "total": 1,
-      "done": 0,
-      "inProgress": 1,
+      "done": 1,
+      "inProgress": 0,
       "notStarted": 0
     },
     "lockdownState": "open",
     "pendingGates": [
-      "G136 human acceptance — uservalidation.md:24 unchecked; NO agent may check it (operator-only)",
-      "G022 — simplify, stabilize, security and audit have NOW been run (2026-08-19) and are recorded in completedPhases; evidence under report.md § Simplify/Stabilize/Security/Audit Record. They are NOT in certifiedCompletedPhases because certification is bubbles.validate's act and validate has not re-run since",
-      "G068 — 8 of 12 declared scenarios have no faithful DoD item (owner: bubbles.plan)",
-      "G094 — spec.md lacks Domain Capability Model; design.md lacks Capability Foundation (owners: bubbles.analyst, bubbles.design)"
+      "G136 human acceptance — uservalidation.md:24 unchecked and no ## Human Acceptance Record exists; NO agent may supply either (operator-only). This is the sole reason the packet is blocked. Per .github/bubbles/registry/acceptance-authority.yaml, human acceptance and the validate-owned `Verified` rung are two different facts with two different writers; `Verified` was granted 2026-08-19 and does NOT satisfy this gate",
+      "G022 — 5 residual failures, none of them about the fix. (a) The phase claims `discovery`, `documentation` and `analysis` have no resolvable provenance: Check 6B resolves their owners via workflows.yaml `.phases[<phase>].owner`, all three are undeclared, so it falls back to bubbles.discovery / bubbles.documentation / bubbles.analysis — three agents that do not exist in .github/agents/. The agent that performed them is bubbles.bug, whose entry declares exactly those three in phasesExecuted, and the guard's bubbles.bug delegation shortcut covers only implement and test. None of the three is required for bugfix-fastlane per required-specialists.yaml. (b) executionHistory carries one zero-duration entry, bubbles.implement:implement, which declares provenance: reconstructed-from-commit — a labelled reconstruction of c7667d99, so the absent interval is honesty rather than fabrication. Owner: bubbles.bug for the claim set, or a framework maintainer if the correct repair is extending the delegation shortcut to the three filing phases. NOT validate-owned: execution.completedPhaseClaims and other agents' executionHistory entries are foreign artifacts",
+      "G027 — CLEARED 2026-08-19. It failed only because completedScopes was empty and no scope was Done, which was itself downstream of validate's own refusal of the `Verified` DoD item. Granting that rung closed the loop"
     ]
   },
   "policySnapshot": {
