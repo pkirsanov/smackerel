@@ -942,7 +942,7 @@
   "sourceOnlyFileCount": 111,
   "sourceOnlyFileChecksums": [
     {"path": "VERSION", "sha256": "38d6f3cbc1cdf64a7971ee46eb6397142820bcf2150e8429d45e6dc5c1c75a35"},
-    {"path": "bubbles/agent-bundle-budgets.json", "sha256": "81b180c80dc33ba9c214f33283be715e0f454250cfdc3ae57df0f34fb450efe6"},
+    {"path": "bubbles/agent-bundle-budgets.json", "sha256": "e1a9c849cc6b09a423811346c8f7a6d936b522226c235f3d5a97e657d3ff1af8"},
     {"path": "bubbles/eval/README.md", "sha256": "354a6fa0beb2139aa747be566e0f6e448366eb48e24455de232f82b93356063b"},
     {"path": "bubbles/eval/fixtures/experience-recall/corpus.json", "sha256": "e7ad4a1d4dc4b1d89f0e18108cdebf8b955452bcca43943d44638aa80bb9afee"},
     {"path": "bubbles/eval/fixtures/negative/hollow-report/report.md", "sha256": "dd058caeee3e2a7dc549b1fd754b21c9d49e4b8558d85188bebd962c61ff6aa8"},
