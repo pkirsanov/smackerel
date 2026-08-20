@@ -8,23 +8,23 @@
   "status": "in_progress",
   "severity": "S2",
   "createdAt": "2026-08-19T00:30:12Z",
-  "lastUpdatedAt": "2026-08-19T23:26:00Z",
+  "lastUpdatedAt": "2026-08-20T01:52:00Z",
   "discoveredBy": "BUG-061-011 regression phase; independently re-verified by the operator and again by bubbles.bug at HEAD 4895d446",
   "discoveredAt": "2026-08-19",
-  "completedPhases": ["implement"],
+  "completedPhases": ["implement", "test"],
   "completedScopes": ["BUG-061-013-SCOPE-01"],
   "affectedSurface": [
     "internal/deploy/envsubst_wrapper_contract_test.go"
   ],
   "execution": {
-    "activeAgent": "bubbles.implement",
-    "currentPhase": "implement",
+    "activeAgent": "bubbles.test",
+    "currentPhase": "test",
     "currentScope": "BUG-061-013-SCOPE-01",
-    "substate": "implemented",
+    "substate": "independently_verified",
     "completedScopes": ["BUG-061-013-SCOPE-01"],
-    "completedPhaseClaims": ["implement"],
-    "lastUpdatedAt": "2026-08-19T23:26:00Z",
-    "nextRequiredOwner": "bubbles.test",
+    "completedPhaseClaims": ["implement", "test"],
+    "lastUpdatedAt": "2026-08-20T01:52:00Z",
+    "nextRequiredOwner": "bubbles.regression",
     "executionHistory": [
       {
         "agent": "bubbles.bug",
@@ -43,6 +43,15 @@
         "statusBefore": "in_progress",
         "statusAfter": "in_progress",
         "summary": "Implement phase, executed by the declared specialist. PROVENANCE, STATED PLAINLY: this session did NOT author the code change. The fix is commit 40a9e942, whose only source path is internal/deploy/envsubst_wrapper_contract_test.go, made in an earlier session this agent never observed — the commit is the evidence, not a remembered session. What this session did was VERIFY that implementation against the repository rather than accept it on report, and then execute the implement-phase gates. NO source change was required and none was made: the working tree was clean at session start (git status --porcelain empty at d0b42dfe) and clean at finish, so nothing here had to be repaired. (1) MATCHER COVERAGE re-derived rather than assumed. The widened envsubstGoTestRE was transcribed to an equivalent POSIX ERE and run over the four tracked wrappers: it binds exactly one invocation each at go-unit.sh:67, go-integration.sh:76 (the `if ! go test ... | tee ...` form) and go-e2e.sh:89, and two in go-stress.sh, where Go's FindStringIndex takes the leftmost, line 50. Every bound line is a real invocation, and the prose lines that merely contain the words 'go test' (go-unit.sh:4, :25, :66) do NOT bind — so the line-start anchor still holds and the widening did not degrade into a substring search. (2) NEGATIVE CONTROL, which is what makes (1) mean anything: the pre-fix whitespace-only pattern binds 1, 0, 1, 2 over those same four files — ZERO on go-integration.sh. That reproduces the reported defect on this session's own authority and shows the widening changed behaviour on exactly the one file that was blind and nowhere else. (3) ABSENCE BRANCH read in source at assertEnvsubstWrapperContract: a nil goTestIdx now returns a non-nil error naming the LOCATOR ('could not LOCATE', 'matcher may need widening') and explicitly telling the reader NOT to rewrite the wrapper; the `goTestIdx != nil &&` short-circuit that made a zero match read as compliance is gone. (4) AC-5 CONFIRMED, since a detector fix that edited its own subject would be no fix at all: git status --porcelain and git diff HEAD over scripts/runtime/ are both empty, and git show --stat 40a9e942 lists three paths — the one test file plus this packet's report.md and scopes.md — with no wrapper among them. (5) GATES EXECUTED IN THIS SESSION, via the repo CLI only: `./smackerel.sh test unit --go --go-run 'TestEnvsubstWrapperContract' --verbose` exits 0 with 6 top-level PASS and all 4 LiveWrappers subtests PASS, including the two new BUG-061-013 fixtures RejectsUnlocatableInvocation and RejectsConditionalCallAfterGoTest, and `ok github.com/smackerel/smackerel/internal/deploy 0.075s`, with zero FAIL lines anywhere in the 536-line transcript; `./smackerel.sh lint` exits 0 (157 lines, sha256 af6fae4590ab14bde385bec6766e5a23dc93cf98ffae346694dd5a21936e7465); `./smackerel.sh format --check` exits 0 reporting '78 files already formatted' (136 lines, sha256 f85b0feb14b355e4a1447bdceba09ca058918fc06ac1177cf9d70f7b07322bf). SCOPE OF THIS ENTRY: the implement phase ONLY. The seven remaining G022 phases — test, regression, simplify, stabilize, security, validate, audit — were NOT run here and are NOT claimed, and certification.certifiedCompletedPhases is deliberately left empty because certifying a phase is bubbles.validate's act, not this agent's."
+      },
+      {
+        "agent": "bubbles.test",
+        "runStartedAt": "2026-08-20T01:35:00Z",
+        "runCompletedAt": "2026-08-20T01:52:00Z",
+        "phasesExecuted": ["test"],
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "summary": "Test phase. ATTRIBUTION FIRST, because 'this session' and 'this agent' are not the same claim and only one of them is true for every row. All eight Test Plan rows ran to a verdict and all eight exited 0. bubbles.test EXECUTED five of them: T-01/T-02 (sha 08330fe1), T-03 (f63fb209), T-04, T-05, and T-07 (3f8dd248). The ORCHESTRATOR (bubbles.goal) executed the two multi-thousand-line Docker lanes in THIS SAME SESSION and bubbles.test OBSERVED the captures rather than producing them: T-06 `./smackerel.sh test integration` exit 0, 10252 lines, sha a3230783b2c46e98b21c9dd5d93aa26bdac0ae0fbe8b196a8c24cf4f611c531a; T-08 `./smackerel.sh test e2e` exit 0, 4528 lines, sha eb5e8fa3c316b1f2212bf96e721d54779b3dc07a2b159513da4f1ab084f6cea4. The reason is mechanical, not a division of labour: this agent's process ends each time it returns and takes any running lane with it, so a 35-minute Docker lane cannot survive its own turn. Both captures carry --verify lines in report.md so the hashes are re-derivable by anyone. NO row is recorded as agent-run that was not. WHAT THIS PHASE VERIFIED RATHER THAN ACCEPTED: both captures lift a failure-shaped line out of their omitted regions, and both were checked against source before being repeated. (a) T-06's `ERROR: model envelope validation failed ... bug-045-fixture-llm-20gib` is a spec-045 NEGATIVE FIXTURE: tests/integration/config_validate_test.go::buildOversizedEnvFile rewrites LLM_MODEL/OLLAMA_MODEL to that name, declares it at weights_mib 20480, and PINS OLLAMA_MEMORY_LIMIT=8G; TestConfigValidate_AC5c_BinaryRejectsOversizedModel then asserts exitCode==1 plus the substrings OLLAMA_MEMORY_LIMIT, bug-045-fixture-llm-20gib and 20480 — so the ERROR lines are the assertion PASSING, and their absence would turn the lane red. (b) T-08's `FAIL: Services did not become healthy within 8s` was handed over as belonging to an 'adversarial lifecycle scenario'; that framing is CORRECTED here. It is adversarial but not lifecycle: the string is emitted by e2e_wait_healthy (tests/e2e/lib/helpers.sh:103) whose timeout is a parameter, and the literal 8s pins it to the ONLY caller passing 8 — tests/e2e/test_postgres_readiness_gate.sh:24, the SCN-002-BUG-002-001 readiness canary, which stops postgres on purpose and calls e2e_fail if the gate PASSES. Every other caller passes 120. Attributing it to the BUG-031-004/009 lifecycle scenarios in the first-20 window would have been a plausible guess the source does not support. Neither lane is suspect: both exited 0, both tore down their disposable stacks, and T-08 ends `PASS: go-e2e-corpus-enforce`. ARTIFACTS: report.md T-06/T-08 placeholders replaced with the captures, an attribution-split note added above the lane table before any figure can be read, and a `Ran by` column added so no row can be read without its provenance; scopes.md gained the two regression-E2E DoD items Check 8A requires (scenario-specific for go-e2e.sh, broader e2e suite), both checked against non-overlapping windows of the T-08 capture. GAPS LEFT VISIBLE RATHER THAN CLOSED: go-stress.sh is still statically asserted only, per the Test Plan's stated reason; the implement phase's own T-06 placeholders were left alone because that phase's run is a DIFFERENT run (sha 579e9a14, 10355 lines) and back-filling it with this one would misdate the evidence; and certification.pendingGates still says test is unexecuted, which is now false but is validate-owned, so it is ROUTED not edited. ONLY the test phase is claimed — regression, simplify, stabilize, security, validate and audit belong to their own specialists, uservalidation.md is untouched, and no Human Acceptance Record was authored (G136 is operator-only)."
       }
     ]
   },

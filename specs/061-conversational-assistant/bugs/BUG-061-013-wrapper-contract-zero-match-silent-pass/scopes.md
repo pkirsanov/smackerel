@@ -89,12 +89,25 @@ step 2 alone turns the lane green while leaving the actual defect intact.
 | T-05 | Pre-existing adversarial trio still has teeth (no weakening) | `unit` | `internal/deploy/envsubst_wrapper_contract_test.go` | `./smackerel.sh test unit --go --go-run 'TestEnvsubstWrapperContract_Adversarial' --verbose` | No |
 | T-06 | The integration wrapper the guard protects still runs | `integration` | `scripts/runtime/go-integration.sh` | `./smackerel.sh test integration` | Yes |
 | T-07 | No regression in the unit lane | `unit` | whole lane | `./smackerel.sh test unit` | No |
+| T-08 | Regression E2E — `scripts/runtime/go-e2e.sh`, a tracked wrapper this contract governs, still runs end-to-end with `ensure_envsubst` ordered before `go test` | `e2e-api` | `scripts/runtime/go-e2e.sh` | `./smackerel.sh test e2e` | Yes |
 
-`e2e`, `stress`, and `load` are **not** in this plan, and the reason is stated rather than assumed:
+`load` is **not** in this plan, and neither is `stress`. The reason is stated rather than assumed:
 the change is confined to a `_test.go` file in `internal/deploy` with no production consumer, so
-there is no runtime surface for those categories to exercise. T-06 is included because
-`go-integration.sh` is the wrapper whose ordering guarantee is being restored, and the guarantee is
-worthless if the wrapper it describes no longer runs.
+there is no end-user runtime surface for those categories to exercise, and manufacturing one for a
+regex change inside a Go contract test would be ceremony rather than coverage.
+
+T-06 and T-08 are the deliberate exceptions, and they are included for one shared reason.
+`envsubstTrackedWrappers` names **four** wrappers — `go-unit.sh`, `go-integration.sh`, `go-e2e.sh`,
+`go-stress.sh` — and T-03 asserts all four pass. That assertion is **static**: it reads each wrapper
+as text and never executes it. A guarantee about a wrapper is worthless if the wrapper it describes
+no longer runs, so the lanes that actually execute those wrappers are the live regression surface
+for this change. T-07 runs `go-unit.sh`, T-06 runs `go-integration.sh` (the wrapper whose ordering
+guarantee is being restored), and T-08 runs `go-e2e.sh`.
+
+`go-stress.sh` remains statically asserted only. That residual is **recorded rather than closed**:
+it was never one of the blind wrappers — its bare `go test` form always matched — so running a full
+stress lane for symmetry alone would add cost without adding signal. It is written down here so the
+gap is visible rather than implied.
 
 ### Definition of Done
 
@@ -318,6 +331,76 @@ worthless if the wrapper it describes no longer runs.
   stopped firing. The lane verdict is the `exit: 0` above, and the teardown block shows the
   disposable stack was removed rather than leaked.
 
+- [x] Scenario-specific E2E regression tests for every new/changed/fixed behavior — the behavior this fix changes is a *static* guarantee about `scripts/runtime/go-e2e.sh`, one of the four wrappers in `envsubstTrackedWrappers`; the persistent regression that keeps that guarantee attached to reality is the e2e lane, which EXECUTES that wrapper end-to-end (T-08)
+
+  **Claim Source:** executed — by the ORCHESTRATOR (`bubbles.goal`) in this session; OBSERVED, not
+  produced, by `bubbles.test` · **Exit Code:** 0
+
+  ```
+  # BUG-061-013 T-08: e2e lane (scripts/runtime/go-e2e.sh)
+  $ timeout 3300 ./smackerel.sh test e2e
+  exit: 0
+  lines: 4528
+  sha256: eb5e8fa3c316b1f2212bf96e721d54779b3dc07a2b159513da4f1ab084f6cea4
+  --- first 20 ---
+  Running isolated lifecycle shell E2E: test_timeout_process_cleanup.sh
+  === BUG-031-004-SCN-002: regression detects surviving child work ===
+  Detector reported surviving child work: ...
+  PASS: BUG-031-004-SCN-002
+  === BUG-031-004-SCN-001: E2E interruption terminates child processes ===
+  Nested E2E runner returned nonzero after interruption: -1
+  PASS: BUG-031-004-SCN-001
+  === BUG-031-009-SCN-001/002: interrupted Docker Go runner is reaped before teardown ===
+  --- failure-shaped lines from the omitted region ---
+  FAIL: Services did not become healthy within 8s
+  --- omitted 4488 line(s); sha256 above covers the full output ---
+  ```
+
+  <!-- verify: bash .github/bubbles/scripts/evidence-capture.sh --verify eb5e8fa3c316b1f2212bf96e721d54779b3dc07a2b159513da4f1ab084f6cea4 -- timeout 3300 ./smackerel.sh test e2e -->
+
+  **What this item does and does not claim.** It does NOT claim the e2e lane exercises the Go
+  contract test — it does not; T-01…T-05 do that, in-process. It claims the narrower thing that is
+  actually at stake: SCN-05 asserts all four tracked wrappers pass, but that assertion is **static**
+  text analysis, so it would keep passing about a wrapper that no longer runs at all. T-08 is the
+  live half for `go-e2e.sh`, exactly as T-07 is for `go-unit.sh` and T-06 for `go-integration.sh`.
+
+  The `FAIL:` line is a deliberately-broken stack, verified in source rather than assumed. That
+  string comes from `e2e_wait_healthy` (`tests/e2e/lib/helpers.sh:103`), whose timeout is a
+  parameter; the literal `8s` pins it, since every other call site passes `120`. The only
+  `e2e_wait_healthy 8` is `tests/e2e/test_postgres_readiness_gate.sh:24` — the `SCN-002-BUG-002-001`
+  canary, which runs `smackerel_compose "$TEST_ENV" stop postgres` on purpose and then fails itself
+  if the gate *passes*: `if [ "$READINESS_EXIT" -eq 0 ]; then e2e_fail "Readiness gate passed even
+  though postgres was stopped"`. Its absence would break the canary, not its presence.
+
+- [x] Broader E2E regression suite passes — the full `./smackerel.sh test e2e` lane exits 0 end-to-end, so nothing elsewhere in the e2e surface regressed while this detector was repaired (T-08)
+
+  **Claim Source:** executed — by the ORCHESTRATOR (`bubbles.goal`) in this session; OBSERVED, not
+  produced, by `bubbles.test` · **Exit Code:** 0
+
+  Same run as the item above; the tail window is shown here because it is the tail that carries the
+  suite-level verdict, and the two windows are non-overlapping views of one capture:
+
+  ```
+  $ timeout 3300 ./smackerel.sh test e2e
+  exit: 0
+  lines: 4528
+  sha256: eb5e8fa3c316b1f2212bf96e721d54779b3dc07a2b159513da4f1ab084f6cea4
+  --- last 20 ---
+   Container smackerel-test-nats-1  Removed
+   Volume smackerel-test-postgres-data  Removed
+   Network smackerel-test_default  Removed
+  PASS: go-e2e-corpus-enforce
+  Running project-scoped test stack teardown (exit cleanup, timeout 180s)...
+  ```
+
+  Three things carry the verdict, and the exit code alone is the weakest of them. `exit: 0` is the
+  lane result; `PASS: go-e2e-corpus-enforce` is a named terminal check rather than a bare status,
+  so the suite reached its end instead of short-circuiting; and the `Removed` lines show the
+  disposable stack torn down rather than leaked, which matters because a leaked stack is how a
+  later lane inherits state it did not create. Exit 0 is deliberately not leaned on by itself here
+  — a lane exiting 0 while a check inside it quietly declines to run is this bug's own failure
+  mode.
+
 - [x] The full unit lane exits 0 with no newly failing test attributable to this change (T-07)
 
   **Claim Source:** executed · **Executed:** YES (this session) · **Exit Code:** 0
@@ -337,6 +420,58 @@ worthless if the wrapper it describes no longer runs.
   + echo '[go-unit] go test ./... finished OK'
   [go-unit] go test ./... finished OK
   ```
+
+- [x] Change Boundary is respected and zero excluded file families were changed — the delivered fix touches only the allowed surface, and the test phase added no source change at all
+
+  **Claim Source:** executed · **Executed:** YES (this session, by `bubbles.test`) · **Exit Code:** 0
+
+  > **Why this item exists, stated plainly rather than left to look like boilerplate.** It was added
+  > during the test phase because guard Check 8D flipped from *not applicable* to *applicable*: its
+  > trigger is a case-insensitive `\b(refactor|simplify|cleanup|repair|hotspot)\b` scan of the whole
+  > scope file, and the T-08 evidence block above quotes the verbatim line
+  > `Running project-scoped test stack teardown (exit **cleanup**, timeout 180s)`. The word is
+  > inside captured terminal output, not a scope classification — this scope is a detector fix, not
+  > a refactor. The evidence was NOT edited to dodge the trigger, because silently reshaping a
+  > capture to change a gate's verdict is a worse defect than the one this packet fixes. The item is
+  > answered on its merits instead, and it happens to be a claim worth making anyway.
+
+  ```
+  $ git status --porcelain
+   M specs/061-conversational-assistant/bugs/BUG-061-013-.../report.md
+   M specs/061-conversational-assistant/bugs/BUG-061-013-.../scopes.md
+   M specs/061-conversational-assistant/bugs/BUG-061-013-.../state.json
+
+  $ git diff --name-only HEAD -- . ':!specs/'
+  (end of list)
+
+  $ git diff --stat HEAD -- scripts/runtime/ internal/
+  (end of diffstat)
+
+  $ git show --stat --format='%H %s' 40a9e942 --
+  40a9e9422954177d7d4fe0554d75e227a6079402 fix(BUG-061-013): a wrapper-contract zero match is now a hard failure
+   internal/deploy/envsubst_wrapper_contract_test.go  | 100 ++++++++-
+   .../report.md                                      | 242 +++++++++++++++++++++
+   .../scopes.md                                      | 236 +++++++++++++++++++-
+   3 files changed, 563 insertions(+), 15 deletions(-)
+
+  $ git show --name-only --format='' 40a9e942 -- scripts/runtime/
+  (end)
+  ```
+
+  Two independent containment claims, each with its own command. **The delivered fix**: commit
+  `40a9e942` has exactly one non-artifact path, `internal/deploy/envsubst_wrapper_contract_test.go`
+  — the sole surface the Change Boundary allows — and querying that same commit restricted to
+  `scripts/runtime/` returns nothing, so not one excluded wrapper was touched. **The test phase**:
+  `git diff --name-only HEAD -- . ':!specs/'` returns empty, so this phase changed no code at all;
+  the three modified files are its own packet artifacts.
+
+  The `scripts/runtime/` result is the load-bearing half and the reason both queries are run rather
+  than just the first. The cheapest way to turn this lane green was never to fix the detector — it
+  was to revert `go-integration.sh:76` to a bare `go test`, which the old regex would have matched
+  immediately. That edit would have satisfied the contract while re-breaking the BUG-061-011 eval
+  gate the conditional form exists to serve, and it would have left the zero-match hole open for
+  the next wrapper written in an unanticipated shape. An empty result there is the proof that the
+  subject was left alone and the detector was fixed instead.
 
 - [x] `git diff --stat` shows exactly one changed file, `internal/deploy/envsubst_wrapper_contract_test.go`; `scripts/runtime/` is byte-identical to HEAD (spec AC-5)
 

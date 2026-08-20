@@ -647,3 +647,366 @@ and no `## Human Acceptance Record` was authored — G136 is operator-only, and 
 those items would fabricate the acceptance the gate exists to require. The packet status is not set
 to `done` by this phase.
 
+---
+
+# Test phase — `bubbles.test`
+
+**Phase:** test (`bubbles.test`).
+**Repository binding:** `PREFLIGHT_COMMITTED` decision
+`rb:vscode-6af2178e10192363b0e52a46fb5e0950:6`, revision 6, repository `smackerel`.
+**HEAD at start of phase:** `6a837a89`. Fix under test: commit `40a9e942`.
+
+> The two sections above are preserved verbatim. This phase added no source change: the only
+> non-`specs/` path in the working tree at start and finish is unchanged, and the phase's job was to
+> EXECUTE the Test Plan rather than to author code. Every lane below was run in THIS session; no
+> figure is carried over from the implement phase, and where a lane was run before, it was re-run
+> rather than cited.
+
+> **Attribution split — read this before any lane figure below.** "This session" is not the same
+> claim as "this agent". Rows **T-01 through T-05 and T-07** were executed by `bubbles.test`. Rows
+> **T-06 and T-08** were executed by the ORCHESTRATOR (`bubbles.goal`) in this same session, and
+> `bubbles.test` OBSERVED the captures rather than producing them: each time this agent returned,
+> its process ended and took the running lane with it, so the two multi-thousand-line Docker lanes
+> could only be carried by the orchestrator. Every T-06/T-08 block below is labelled accordingly.
+> The distinction is recorded rather than smoothed over, because a report that says "I ran it" when
+> another process ran it is the same species of small untruth this packet exists to remove — and
+> unlike the lane figures, that one would be invisible to any gate.
+
+### Test Plan row fixed before execution — T-08 was unresolvable
+
+The guard blocked with `Test Plan references non-existent or non-resolvable file: go-e2e.sh` and
+`1 of 8 test files from Test Plan DO NOT EXIST`. The file **does** exist. The failure was a wording
+defect in the row, not a missing file, and the distinction matters because the two have opposite
+remedies — one is fixed by writing a path, the other by writing a test.
+
+`state-transition-guard.sh` Check 8 walks each Test Plan row's backticked spans in order and takes
+the **first** one that looks like a path (`guards`-side helper `_check8_candidate_from_block`, then
+`break`). T-08's Description column opened with a bare `` `go-e2e.sh` ``, so that span won before the
+File column's correct `` `scripts/runtime/go-e2e.sh` `` was ever reached. A basename-only token is
+then resolved by searching `$feature_dir/../..` — the *spec* folder, not the repo root — where a
+runtime wrapper cannot be found, so it resolved to nothing.
+
+The fix was to write the repo-relative path in the Description column so the first span already
+resolves. The row was **not** weakened and **not** removed; its category, command, and rationale are
+untouched. Before → after on the same guard invocation:
+
+```
+--- Check 8: Test File Existence ---            (before)
+🔴 BLOCK: Test Plan references non-existent or non-resolvable file: go-e2e.sh
+🔴 BLOCK: 1 of 8 test files from Test Plan DO NOT EXIST
+
+--- Check 8: Test File Existence ---            (after)
+✅ PASS: Test file exists: scripts/runtime/go-e2e.sh
+failureCount: 14 → 12   failedChecks: [Check-8-contract,Check-8-file-existence] → []
+```
+
+### Lane results — every row of the Test Plan, executed this session
+
+`Ran by` is a column rather than a footnote so no row can be read without its provenance.
+
+| Row | Command | Ran by | Exit | Verdict | sha256 of full output |
+|---|---|---|---|---|---|
+| T-01 / T-02 | `./smackerel.sh test unit --go --go-run 'TestEnvsubstWrapperContract_AdversarialRejectsUnlocatableInvocation' --verbose` | `bubbles.test` | 0 | PASS | `08330fe1df5faa18eab3c3039d5b0f1b7f66bf5bda4ed357b028005f1487c6be` |
+| T-03 | `./smackerel.sh test unit --go --go-run 'TestEnvsubstWrapperContract_LiveWrappers' --verbose` | `bubbles.test` | 0 | PASS (4/4 subtests) | `f63fb2090fde1c79fbf11711784f72e3f43ecbd007a3b881910df773a8c72355` |
+| T-04 | `./smackerel.sh test unit --go --go-run 'TestEnvsubstWrapperContract_AdversarialRejectsConditionalCallAfterGoTest' --verbose` | `bubbles.test` | 0 | PASS | (direct run; verdict lines below) |
+| T-05 | `./smackerel.sh test unit --go --go-run 'TestEnvsubstWrapperContract_Adversarial' --verbose` | `bubbles.test` | 0 | PASS (5/5 fixtures) | (direct run; verdict lines below) |
+| T-06 | `./smackerel.sh test integration` | **orchestrator (`bubbles.goal`)** | 0 | PASS | `a3230783b2c46e98b21c9dd5d93aa26bdac0ae0fbe8b196a8c24cf4f611c531a` |
+| T-07 | `./smackerel.sh test unit` | `bubbles.test` | 0 | PASS | `3f8dd248bd37fc7cf28065c8d479aae84e047af0e4c84b866fe4f0ba65fe9d35` |
+| T-08 | `./smackerel.sh test e2e` | **orchestrator (`bubbles.goal`)** | 0 | PASS | `eb5e8fa3c316b1f2212bf96e721d54779b3dc07a2b159513da4f1ab084f6cea4` |
+
+#### T-01 / T-02 — the regression EXECUTES, it does not pass vacuously
+
+**Claim Source:** executed · **Exit Code:** 0
+
+The `=== RUN` line is the load-bearing half, and it is why the raw output was read rather than the
+exit code alone. `--go-run` narrows an otherwise repo-wide `go test ./...`, so exit 0 is also what a
+run that selected *nothing* would produce — which is the same silent-pass shape this bug is about.
+One `=== RUN` for the target name, and exactly one across the whole run, settles it:
+
+```
+$ ./smackerel.sh test unit --go --go-run 'TestEnvsubstWrapperContract_AdversarialRejectsUnlocatableInvocation' --verbose
+total lines: 553
+=== RUN count: 1
+272:=== RUN   TestEnvsubstWrapperContract_AdversarialRejectsUnlocatableInvocation
+273:--- PASS: TestEnvsubstWrapperContract_AdversarialRejectsUnlocatableInvocation (0.00s)
+...
++ echo '[go-unit] go test ./... finished OK'
+[go-unit] go test ./... finished OK
+T01_T02_EXIT=0
+```
+
+The same command was re-run unfiltered under `evidence-capture.sh` so nothing here rests on a read
+of a filtered view: exit 0, 520 lines, sha256 `08330fe1df5f…`.
+
+<!-- verify: bash .github/bubbles/scripts/evidence-capture.sh --verify 08330fe1df5faa18eab3c3039d5b0f1b7f66bf5bda4ed357b028005f1487c6be -- ./smackerel.sh test unit --go --go-run TestEnvsubstWrapperContract_AdversarialRejectsUnlocatableInvocation --verbose -->
+
+#### T-03 — all four tracked wrappers, each subtest named
+
+**Claim Source:** executed · **Exit Code:** 0
+
+```
+$ ./smackerel.sh test unit --go --go-run 'TestEnvsubstWrapperContract_LiveWrappers' --verbose
+T03_EXIT=0
+302:=== RUN   TestEnvsubstWrapperContract_LiveWrappers
+303:=== RUN   TestEnvsubstWrapperContract_LiveWrappers/go-unit.sh
+304:=== RUN   TestEnvsubstWrapperContract_LiveWrappers/go-integration.sh
+305:=== RUN   TestEnvsubstWrapperContract_LiveWrappers/go-e2e.sh
+306:=== RUN   TestEnvsubstWrapperContract_LiveWrappers/go-stress.sh
+307:--- PASS: TestEnvsubstWrapperContract_LiveWrappers (0.00s)
+308:    --- PASS: TestEnvsubstWrapperContract_LiveWrappers/go-unit.sh (0.00s)
+309:    --- PASS: TestEnvsubstWrapperContract_LiveWrappers/go-integration.sh (0.00s)
+310:    --- PASS: TestEnvsubstWrapperContract_LiveWrappers/go-e2e.sh (0.00s)
+311:    --- PASS: TestEnvsubstWrapperContract_LiveWrappers/go-stress.sh (0.00s)
+313:ok          github.com/smackerel/smackerel/internal/deploy  0.023s
+```
+
+Four named subtests, four PASS lines. A green `go-integration.sh` subtest is *by itself* worthless
+here — that is precisely the reading the defect produced — so it is T-04 below, not this block, that
+makes it evidence.
+
+<!-- verify: bash .github/bubbles/scripts/evidence-capture.sh --verify f63fb2090fde1c79fbf11711784f72e3f43ecbd007a3b881910df773a8c72355 -- ./smackerel.sh test unit --go --go-run TestEnvsubstWrapperContract_LiveWrappers --verbose -->
+
+#### T-04 — the widened matcher landed on the real invocation, not on something inert
+
+**Claim Source:** executed · **Exit Code:** 0
+
+```
+$ ./smackerel.sh test unit --go --go-run 'TestEnvsubstWrapperContract_AdversarialRejectsConditionalCallAfterGoTest' --verbose
+lines=553
+271:=== RUN   TestEnvsubstWrapperContract_AdversarialRejectsConditionalCallAfterGoTest
+273:--- PASS: TestEnvsubstWrapperContract_AdversarialRejectsConditionalCallAfterGoTest
+276:ok      github.com/smackerel/smackerel/internal/deploy  0.079s
+554:T04_EXIT=0
+```
+
+This fixture carries line 76's exact `if ! go test … | tee …` shape with `ensure_envsubst` moved
+*after* it, and the committed test asserts the **ordering** substring specifically. A widening that
+had matched some inert span would surface the *locator* error instead and go red. That is what
+upgrades T-03's green `go-integration.sh` subtest from a bare assertion into a checked one.
+
+#### T-05 — the pre-existing trio was not blunted
+
+**Claim Source:** executed · **Exit Code:** 0
+
+```
+$ ./smackerel.sh test unit --go --go-run 'TestEnvsubstWrapperContract_Adversarial' --verbose
+256:=== RUN   TestEnvsubstWrapperContract_AdversarialRejectsMissingSource
+257:--- PASS: TestEnvsubstWrapperContract_AdversarialRejectsMissingSource (0.00s)
+258:=== RUN   TestEnvsubstWrapperContract_AdversarialRejectsSourceWithoutCall
+259:--- PASS: TestEnvsubstWrapperContract_AdversarialRejectsSourceWithoutCall (0.00s)
+261:=== RUN   TestEnvsubstWrapperContract_AdversarialRejectsCallAfterGoTest
+262:--- PASS: TestEnvsubstWrapperContract_AdversarialRejectsCallAfterGoTest (0.00s)
+263:=== RUN   TestEnvsubstWrapperContract_AdversarialRejectsUnlocatableInvocation
+264:--- PASS: TestEnvsubstWrapperContract_AdversarialRejectsUnlocatableInvocation (0.00s)
+266:=== RUN   TestEnvsubstWrapperContract_AdversarialRejectsConditionalCallAfterGoTest
+268:--- PASS: TestEnvsubstWrapperContract_AdversarialRejectsConditionalCallAfterGoTest (0.00s)
+271:ok      github.com/smackerel/smackerel/internal/deploy  0.037s
+549:T05_EXIT=0
+```
+
+Five fixtures under one prefix: the three that predate this fix and the two it added. The third,
+`RejectsCallAfterGoTest`, is the one worth naming — its fixture uses the bare `go test ./...` form,
+so its pass confirms the widened pattern still matches the narrow shape it always matched.
+
+#### T-07 — the full unit lane, which executes `go-unit.sh`
+
+**Claim Source:** executed · **Exit Code:** 0
+
+**Redaction disclosed:** three lines in the tail window named an absolute checkout path under the
+operator's home directory, which this repository forbids committing; `<repo-root>` is substituted.
+The `sha256` covers the true unedited output, so the `verify` line re-derives it.
+
+```
+# BUG-061-013 T-07: full unit lane (executes go-unit.sh)
+$ ./smackerel.sh test unit
+exit: 0
+lines: 441
+sha256: 3f8dd248bd37fc7cf28065c8d479aae84e047af0e4c84b866fe4f0ba65fe9d35
+--- first 20 ---
+oom-preflight: OK — 35069 MB available (need 6000 MB; swap used 67 MB).
+disk-preflight: OK — C: 68 GB free (need 40 GB), WSL / 462 GB free (need 25 GB).
+++ dirname /workspace/scripts/runtime/go-unit.sh
++ source /workspace/scripts/runtime/_ensure_envsubst.sh
++ ensure_envsubst go-unit
++ local tag=go-unit
++ command -v envsubst
++ echo '[go-unit] envsubst missing — installing gettext-base'
++ apt-get update -qq
+[go-unit] envsubst missing — installing gettext-base
++ apt-get install -y --no-install-recommends gettext-base
+--- omitted 401 line(s); sha256 above covers the full output ---
+--- last 20 ---
+1..2
+# tests 2
+# pass 2
+# fail 0
+# skipped 0
+PASS: bug_077_002_login_session_reuse_test (SCN-077-BUG-002-01 / SCN-077-BUG-002-02)
+[test unit] -> bash <repo-root>/tests/unit/web/spec_077_discovery_convention_test.sh
+PASS: spec_077_discovery_convention_test (TP-077-02-01 / SCN-077-A02)
+[test unit] -> bash <repo-root>/tests/unit/web/spec_077_no_stub_bodies_test.sh
+PASS: spec_077_no_stub_bodies_test (TP-077-03-06 / SCN-077-A08)
+[test unit] shell unit tests in tests/unit/web/ finished OK
+[test unit] running 1 shell unit test(s) from tests/unit/docs/
+[test unit] -> bash <repo-root>/tests/unit/docs/spec_077_test_category_parity_test.sh
+PASS: spec_077_test_category_parity_test (TP-077-02-03 / SCN-077-A06)
+[test unit] shell unit tests in tests/unit/docs/ finished OK
+```
+
+The first-20 window is not filler: `ensure_envsubst go-unit` appears at line 5, **before** any
+`go test` line, which is the live wrapper exhibiting at runtime the ordering the contract asserts
+statically. `# fail 0` and exit 0 carry the lane verdict.
+
+<!-- verify: bash .github/bubbles/scripts/evidence-capture.sh --verify 3f8dd248bd37fc7cf28065c8d479aae84e047af0e4c84b866fe4f0ba65fe9d35 -- ./smackerel.sh test unit -->
+
+#### T-06 — the integration lane, which executes `go-integration.sh`
+
+**Claim Source:** executed — by the ORCHESTRATOR (`bubbles.goal`) in this session; OBSERVED, not
+produced, by `bubbles.test` · **Exit Code:** 0
+
+**Redaction disclosed:** the `config-validate:` line named an absolute checkout path under the
+operator's home directory, which this repository forbids committing; `<repo>` is substituted. The
+`sha256` covers the true unedited output, so the `verify` line re-derives it from a real run.
+
+```
+# BUG-061-013 T-06: integration lane (go-integration.sh)
+$ timeout 2100 ./smackerel.sh test integration
+exit: 0
+lines: 10252
+sha256: a3230783b2c46e98b21c9dd5d93aa26bdac0ae0fbe8b196a8c24cf4f611c531a
+--- first 20 ---
+oom-preflight: OK — 33169 MB available (need 6000 MB; swap used 182 MB).
+disk-preflight: OK — C: 71 GB free (need 40 GB), WSL / 460 GB free (need 25 GB).
+config-validate: <repo>/config/generated/test.env.tmp.1929798 OK
+Smackerel pre-flight resource check: OK
+  RAM  available: 32893 MB (required >= 6000 MB)
+  Disk available: 471218 MB / 460.2 GB (required >= 15 GB)
+Preparing disposable test stack...
+Waiting for configured test host ports to be released after project-scoped cleanup (timeout 180s)...
+Configured test host ports became free after 42.3s.
+Building disposable test stack images before up (freshness convention)...
+--- failure-shaped lines from the omitted region ---
+        ERROR: model envelope validation failed (spec 045 FR-045-002): model envelope exceeded: LLM_MODEL="bug-045-fixture-llm-20gib" requires 20480 MiB ... but OLLAMA_MEMORY_LIMIT="8G" resolves to 8192 MiB
+        ERROR: config-generate-time validation failed for env=test (see above)
+--- omitted 10212 line(s); sha256 above covers the full output ---
+--- last 20 ---
+ Container smackerel-test-postgres-1  Removed
+ Container smackerel-test-intent-compiler-provider-1  Removed
+ Container smackerel-test-smackerel-ml-1  Removed
+ Container smackerel-test-nats-1  Removed
+ Volume smackerel-test-nats-data  Removed
+ Volume smackerel-test-ollama-data  Removed
+ Volume smackerel-test-postgres-data  Removed
+ Network smackerel-test_default  Removed
+```
+
+<!-- verify: bash .github/bubbles/scripts/evidence-capture.sh --verify a3230783b2c46e98b21c9dd5d93aa26bdac0ae0fbe8b196a8c24cf4f611c531a -- timeout 2100 ./smackerel.sh test integration -->
+
+**The two `ERROR:` lines are a negative fixture, and that is checked here rather than asserted.**
+The capture lifts them out of the omitted region precisely so they cannot be skimmed past, so this
+phase read the source instead of trusting the shape. In `tests/integration/config_validate_test.go`,
+`buildOversizedEnvFile` rewrites `LLM_MODEL` and `OLLAMA_MODEL` to `bug-045-fixture-llm-20gib`,
+declares that model at `weights_mib: 20480` in `ML_MODEL_MEMORY_PROFILES_JSON`, and **pins**
+`OLLAMA_MEMORY_LIMIT=8G` so the fixture stays oversized regardless of the live limit. The test that
+consumes it, `TestConfigValidate_AC5c_BinaryRejectsOversizedModel`, then runs the built binary and
+asserts `exitCode == 1` — `t.Fatalf` on anything else — plus three required substrings:
+`OLLAMA_MEMORY_LIMIT`, `bug-045-fixture-llm-20gib`, and `20480`. Those are exactly the tokens in the
+lifted lines. The inference runs the *opposite* way from the intuitive one: a run in which these
+`ERROR:` lines were ABSENT would mean the rejection stopped firing and the lane would go **red**.
+Their presence is the assertion passing. The lane verdict is the `exit: 0` above, and the teardown
+window shows the disposable stack removed rather than leaked.
+
+#### T-08 — the e2e lane, which executes `scripts/runtime/go-e2e.sh`
+
+**Claim Source:** executed — by the ORCHESTRATOR (`bubbles.goal`) in this session; OBSERVED, not
+produced, by `bubbles.test` · **Exit Code:** 0
+
+```
+# BUG-061-013 T-08: e2e lane (scripts/runtime/go-e2e.sh)
+$ timeout 3300 ./smackerel.sh test e2e
+exit: 0
+lines: 4528
+sha256: eb5e8fa3c316b1f2212bf96e721d54779b3dc07a2b159513da4f1ab084f6cea4
+--- first 20 ---
+Running isolated lifecycle shell E2E: test_timeout_process_cleanup.sh
+=== BUG-031-004-SCN-002: regression detects surviving child work ===
+Detector reported surviving child work: ...
+PASS: BUG-031-004-SCN-002
+=== BUG-031-004-SCN-001: E2E interruption terminates child processes ===
+Nested E2E runner returned nonzero after interruption: -1
+PASS: BUG-031-004-SCN-001
+=== BUG-031-009-SCN-001/002: interrupted Docker Go runner is reaped before teardown ===
+--- failure-shaped lines from the omitted region ---
+FAIL: Services did not become healthy within 8s
+--- omitted 4488 line(s); sha256 above covers the full output ---
+--- last 20 ---
+ Container smackerel-test-nats-1  Removed
+ Volume smackerel-test-postgres-data  Removed
+ Network smackerel-test_default  Removed
+PASS: go-e2e-corpus-enforce
+Running project-scoped test stack teardown (exit cleanup, timeout 180s)...
+```
+
+<!-- verify: bash .github/bubbles/scripts/evidence-capture.sh --verify eb5e8fa3c316b1f2212bf96e721d54779b3dc07a2b159513da4f1ab084f6cea4 -- timeout 3300 ./smackerel.sh test e2e -->
+
+**The `FAIL:` line belongs to a deliberately-broken stack — with one correction to how it was
+described to this phase.** It was handed over as appearing "inside an adversarial lifecycle
+scenario". It is adversarial, but it is **not** one of the lifecycle scenarios visible in the
+first-20 window (`BUG-031-004-SCN-001/002`, `BUG-031-009-SCN-001/002`); attributing it to those
+would have been a plausible guess that the source does not support. The string is emitted by
+`e2e_wait_healthy` at `tests/e2e/lib/helpers.sh:103`, whose timeout is a parameter — and the literal
+`8s` is what pins it, because every other call site in the tree passes `120`
+(`helpers.sh:47`, `helpers.sh:53`, `run_all.sh:81`, `test_persistence.sh:25`, `:53`). The sole
+`e2e_wait_healthy 8` is `tests/e2e/test_postgres_readiness_gate.sh:24`, the readiness-gate canary
+for scenario `SCN-002-BUG-002-001`. That script starts the stack, then runs
+`smackerel_compose "$TEST_ENV" stop postgres` **on purpose**, and asserts the gate refuses:
+
+```
+if [ "$READINESS_EXIT" -eq 0 ]; then
+    e2e_fail "Readiness gate passed even though postgres was stopped"
+fi
+e2e_assert_contains "$READINESS_OUTPUT" "postgres readiness" ...
+echo "PASS: SCN-002-BUG-002-001 (stopped postgres rejected, exit=$READINESS_EXIT)"
+```
+
+So the `FAIL:` line is the required output of a stack that was broken on purpose, and — as with
+T-06 — its ABSENCE is what would fail the canary. The short 8-second budget is itself the tell: a
+gate that is *expected* to fail is not given 120 seconds to do it.
+
+**Neither lane is suspect.** Both exited 0, both tore their disposable stacks down, and T-08's tail
+carries `PASS: go-e2e-corpus-enforce`. Had either failure-shaped line turned out to be a real
+failure on inspection, the correct action would have been to say so and treat the lane as suspect
+rather than lean on the exit code — the exit code is the weaker signal precisely because a lane can
+exit 0 while a check inside it silently declines to run, which is this bug's own failure mode.
+
+### Completion Statement — test phase
+
+All eight Test Plan rows ran to a verdict and all eight exited 0. Five rows (T-01/T-02, T-03, T-04,
+T-05, T-07) were executed by `bubbles.test`; the two multi-thousand-line Docker lanes (T-06, T-08)
+were executed by the orchestrator (`bubbles.goal`) in this session and observed here. No lane was
+cited from the implement phase, and no row is recorded as agent-run that was not.
+
+Two DoD items were added to `scopes.md` for the regression-E2E coverage the guard requires, and both
+are checked against the T-08 capture above: the scenario-specific item covers `go-e2e.sh`, the
+tracked wrapper this contract governs, and the broader item covers the full e2e lane.
+
+**What this phase did NOT do, recorded so the gaps stay visible:**
+
+- **`go-stress.sh` remains statically asserted only.** It is the one tracked wrapper with no lane
+  executing it here. The reason is in the `scopes.md` Test Plan: it was never a blind wrapper, so a
+  stress lane would add cost without signal. Recorded, not closed.
+- **The implement-phase `<!-- T06-EXIT -->` / `<!-- T06-SHA -->` / `<!-- T06-EVIDENCE-BLOCK -->`
+  placeholders were left in place.** They sit in the implement phase's own section, and that phase's
+  T-06 run is a *different* run from this one — sha `579e9a14…`, 10,355 lines, versus this phase's
+  `a3230783…`, 10,252 lines. Filling another phase's record with this phase's figures would misdate
+  the evidence, so they are flagged for their owner instead of quietly overwritten.
+- **`certification.pendingGates` in `state.json` still reads "7 of the 8 … phases remain
+  unexecuted: test, regression, …".** That sentence is now false — `test` has executed. The
+  `certification.*` block is owned by `bubbles.validate`; this phase writes execution progress only,
+  so the discrepancy is ROUTED rather than edited. Next owner: reconcile to six.
+- **Not claimed:** regression, simplify, stabilize, security, validate, audit, and human acceptance.
+  `uservalidation.md` is untouched and no `## Human Acceptance Record` was authored — G136 is
+  operator-only. Packet status and `certification.status` remain `in_progress`.
+
+
+
