@@ -1,9 +1,9 @@
 {
   "installedVersion": "7.28.0",
   "installMode": "local-source",
-  "sourceRef": "fix/bundle-budget-reseed",
-  "sourceGitSha": "98eb67d88e400817d94a640fa45bb5ed9fe928fa",
+  "sourceRef": "local-source",
+  "sourceGitSha": "75a4732768ba716144ac47727839fdce1075cfa0",
   "sourceDirty": false,
   "targetRepoSlug": "smackerel",
-  "installedAt": "2026-08-20T06:56:31Z"
+  "installedAt": "2026-08-20T22:38:46Z"
 }

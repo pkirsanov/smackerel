@@ -122,6 +122,98 @@ inject_phase_owner() {
   mv "$tmp_file" "$workflows_file"
 }
 
+inject_agent_owns_phases() {
+  local capabilities_file="$1"
+  local agent="$2"
+  local value="$3"
+  local tmp_file
+  tmp_file="$(mktemp)"
+
+  awk -v agent="$agent" -v value="$value" '
+    $0 == "  " agent ":" { in_agent=1 }
+    in_agent && /^    ownsPhases:/ {
+      print "    ownsPhases: " value
+      changed=1
+      in_agent=0
+      next
+    }
+    { print }
+    END { if (changed != 1) exit 1 }
+  ' "$capabilities_file" > "$tmp_file"
+
+  mv "$tmp_file" "$capabilities_file"
+}
+
+rename_capability_agent() {
+  local capabilities_file="$1"
+  local old_agent="$2"
+  local new_agent="$3"
+  local tmp_file
+  tmp_file="$(mktemp)"
+
+  awk -v old_agent="$old_agent" -v new_agent="$new_agent" '
+    $0 == "  " old_agent ":" {
+      print "  " new_agent ":"
+      changed=1
+      next
+    }
+    { print }
+    END { if (changed != 1) exit 1 }
+  ' "$capabilities_file" > "$tmp_file"
+
+  mv "$tmp_file" "$capabilities_file"
+}
+
+malform_workflow_runner_grants() {
+  local capabilities_file="$1"
+  local replacement="${2:-malformed}"
+  local tmp_file
+  tmp_file="$(mktemp)"
+
+  awk -v replacement="$replacement" '
+    /^workflowModeGrants:$/ { in_grants=1; print; next }
+    in_grants && /^  agents:$/ {
+      print "  agents: " replacement
+      skipping_agents=1
+      changed=1
+      next
+    }
+    skipping_agents && /^[^[:space:]]/ {
+      skipping_agents=0
+      in_grants=0
+      print
+      next
+    }
+    skipping_agents { next }
+    { print }
+    END { if (changed != 1) exit 1 }
+  ' "$capabilities_file" > "$tmp_file"
+
+  mv "$tmp_file" "$capabilities_file"
+}
+
+inject_unknown_workflow_runner() {
+  local capabilities_file="$1"
+  local runner="$2"
+  local tmp_file
+  tmp_file="$(mktemp)"
+
+  awk -v runner="$runner" '
+    /^workflowModeGrants:$/ { in_grants=1 }
+    in_grants && /^  agents:$/ { in_agents=1; print; next }
+    in_agents && /^    [a-z][a-z0-9.-]*:$/ {
+      print "    " runner ":"
+      print "      modes: [ iterate ]"
+      changed=1
+      in_agents=0
+    }
+    { print }
+    END { if (changed != 1) exit 1 }
+  ' "$capabilities_file" > "$tmp_file"
+
+  mv "$tmp_file" "$capabilities_file"
+}
+
 assert_log_contains() {
   local log_file="$1"
   local needle="$2"
@@ -928,12 +1020,12 @@ EOF
   "planningOnlyJustification": "This fixture evaluates planning maturity without delivery claims.",
   "execution": {
     "currentScope": null,
-    "currentPhase": "plan",
-    "completedPhaseClaims": ["analyze", "ux", "design", "plan"]
+    "currentPhase": "bootstrap",
+    "completedPhaseClaims": ["analyze", "bootstrap"]
   },
   "certification": {
     "status": "specs_hardened",
-    "certifiedCompletedPhases": ["analyze", "ux", "design", "plan"],
+    "certifiedCompletedPhases": ["analyze", "bootstrap"],
     "completedScopes": [],
     "scopeProgress": [
       {
@@ -962,27 +1054,31 @@ EOF
     {
       "phase": "analyze",
       "agent": "bubbles.analyst",
+      "phasesExecuted": ["analyze"],
       "outcome": "completed_diagnostic",
       "startedAt": "2026-07-10T10:00:00Z",
       "completedAt": "2026-07-10T10:01:13Z"
     },
     {
-      "phase": "ux",
+      "phase": "analyze",
       "agent": "bubbles.ux",
+      "phasesExecuted": ["analyze"],
       "outcome": "completed_diagnostic",
       "startedAt": "2026-07-10T10:02:01Z",
       "completedAt": "2026-07-10T10:04:29Z"
     },
     {
-      "phase": "design",
+      "phase": "bootstrap",
       "agent": "bubbles.design",
+      "phasesExecuted": ["bootstrap"],
       "outcome": "completed_diagnostic",
       "startedAt": "2026-07-10T10:05:17Z",
       "completedAt": "2026-07-10T10:08:52Z"
     },
     {
-      "phase": "plan",
+      "phase": "bootstrap",
       "agent": "bubbles.plan",
+      "phasesExecuted": ["bootstrap"],
       "outcome": "completed_diagnostic",
       "startedAt": "2026-07-10T10:09:31Z",
       "completedAt": "2026-07-10T10:14:47Z"
@@ -1854,23 +1950,21 @@ with open(path, "w", encoding="utf-8") as handle:
 PY
 }
 
-# Check 6B phase -> owning-agent resolution. `analyze` is owned by
-# bubbles.analyst, but Check 6B derived the expected agent as
-# "bubbles.${phase}" and so demanded a "bubbles.analyze" that has never
-# existed. An honest bubbles.analyst record was reported as phase
-# impersonation, blocking a transition that could only be "fixed" by
-# falsifying the record. $2 selects the recording agent so the same shape
-# drives the positive case and its adversarial twin.
-mutate_analyze_phase_provenance() {
+# Check 6B phase -> owning-agent resolution. $2 selects a registered phase and
+# $3 selects the recording agent so one shape drives declared-owner,
+# capability-owner, and adversarial cases.
+mutate_phase_provenance() {
   local state_file="$1"
-  local recording_agent="$2"
+  local phase="$2"
+  local recording_agent="$3"
 
-  python3 - "$state_file" "$recording_agent" <<'PY'
+  python3 - "$state_file" "$phase" "$recording_agent" <<'PY'
 import json
 import sys
 
 path = sys.argv[1]
-recording_agent = sys.argv[2]
+phase = sys.argv[2]
+recording_agent = sys.argv[3]
 with open(path, encoding="utf-8") as handle:
     data = json.load(handle)
 
@@ -1886,11 +1980,11 @@ if not isinstance(execution, dict):
     execution = {}
     data["execution"] = execution
 
-execution["completedPhaseClaims"] = ["analyze"]
+execution["completedPhaseClaims"] = [phase]
 execution["executionHistory"] = [
     {
         "agent": recording_agent,
-        "phasesExecuted": ["analyze"],
+    "phasesExecuted": [phase],
         "startedAt": "2026-01-01T00:00:00Z",
         "completedAt": "2026-01-01T00:20:00Z",
     },
@@ -1900,6 +1994,10 @@ with open(path, "w", encoding="utf-8") as handle:
     json.dump(data, handle, indent=2)
     handle.write("\n")
 PY
+}
+
+mutate_analyze_phase_provenance() {
+  mutate_phase_provenance "$1" "analyze" "$2"
 }
 
 mutate_unregistered_phase_claim() {
@@ -2110,6 +2208,18 @@ g064_framework_root="$tmp_root/framework-g064"
 g064_feature_dir="$g064_framework_root/specs/902-transition-guard-selftest-unauthorized-workflow-runner"
 broken_phase_owner_root="$tmp_root/framework-broken-phase-owner"
 broken_phase_owner_dir="$broken_phase_owner_root/specs/944-transition-guard-selftest-broken-phase-owner"
+malformed_capability_owner_root="$tmp_root/framework-malformed-capability-owner"
+malformed_capability_owner_dir="$malformed_capability_owner_root/specs/945-transition-guard-selftest-malformed-capability-owner"
+missing_capability_owner_root="$tmp_root/framework-missing-capability-owner"
+missing_capability_owner_dir="$missing_capability_owner_root/specs/946-transition-guard-selftest-missing-capability-owner"
+explicit_owner_conflict_root="$tmp_root/framework-explicit-owner-conflict"
+explicit_owner_conflict_dir="$explicit_owner_conflict_root/specs/947-transition-guard-selftest-explicit-owner-conflict"
+malformed_runner_grants_root="$tmp_root/framework-malformed-runner-grants"
+malformed_runner_grants_dir="$malformed_runner_grants_root/specs/950-transition-guard-selftest-malformed-runner-grants"
+sequence_runner_grants_root="$tmp_root/framework-sequence-runner-grants"
+sequence_runner_grants_dir="$sequence_runner_grants_root/specs/951-transition-guard-selftest-sequence-runner-grants"
+unknown_runner_grant_root="$tmp_root/framework-unknown-runner-grant"
+unknown_runner_grant_dir="$unknown_runner_grant_root/specs/952-transition-guard-selftest-unknown-runner-grant"
 mkdir -p "$tmp_root/specs"
 clone_framework_surface "$tmp_root"
 git -C "$tmp_root" init -q
@@ -2335,6 +2445,14 @@ analyst_owned_phase_dir="$tmp_root/specs/941-transition-guard-selftest-analyst-o
 cp -R "$positive_feature_dir" "$analyst_owned_phase_dir"
 mutate_analyze_phase_provenance "$analyst_owned_phase_dir/state.json" "bubbles.analyst"
 
+ux_owned_phase_dir="$tmp_root/specs/948-transition-guard-selftest-ux-owned-phase"
+cp -R "$positive_feature_dir" "$ux_owned_phase_dir"
+mutate_phase_provenance "$ux_owned_phase_dir/state.json" "analyze" "bubbles.ux"
+
+plan_owned_phase_dir="$tmp_root/specs/949-transition-guard-selftest-plan-owned-phase"
+cp -R "$positive_feature_dir" "$plan_owned_phase_dir"
+mutate_phase_provenance "$plan_owned_phase_dir/state.json" "bootstrap" "bubbles.plan"
+
 analyze_wrong_agent_dir="$tmp_root/specs/942-transition-guard-selftest-analyze-wrong-agent"
 cp -R "$positive_feature_dir" "$analyze_wrong_agent_dir"
 mutate_analyze_phase_provenance "$analyze_wrong_agent_dir/state.json" "bubbles.simplify"
@@ -2348,6 +2466,42 @@ mkdir -p "$broken_phase_owner_root/specs"
 cp -R "$positive_feature_dir" "$broken_phase_owner_dir"
 mutate_analyze_phase_provenance "$broken_phase_owner_dir/state.json" "bubbles.analyst"
 inject_phase_owner "$broken_phase_owner_root/bubbles/workflows.yaml" "analyze" "bubbles.nonexistent-phase-owner"
+
+clone_framework_surface "$malformed_capability_owner_root"
+mkdir -p "$malformed_capability_owner_root/specs"
+cp -R "$positive_feature_dir" "$malformed_capability_owner_dir"
+mutate_phase_provenance "$malformed_capability_owner_dir/state.json" "bootstrap" "bubbles.plan"
+inject_agent_owns_phases "$malformed_capability_owner_root/bubbles/agent-capabilities.yaml" "bubbles.plan" "bootstrap"
+
+clone_framework_surface "$missing_capability_owner_root"
+mkdir -p "$missing_capability_owner_root/specs"
+cp -R "$positive_feature_dir" "$missing_capability_owner_dir"
+mutate_phase_provenance "$missing_capability_owner_dir/state.json" "bootstrap" "bubbles.plan"
+rename_capability_agent "$missing_capability_owner_root/bubbles/agent-capabilities.yaml" "bubbles.plan" "bubbles.nonexistent-capability-owner"
+
+clone_framework_surface "$explicit_owner_conflict_root"
+mkdir -p "$explicit_owner_conflict_root/specs"
+cp -R "$positive_feature_dir" "$explicit_owner_conflict_dir"
+mutate_phase_provenance "$explicit_owner_conflict_dir/state.json" "docs" "bubbles.simplify"
+inject_agent_owns_phases "$explicit_owner_conflict_root/bubbles/agent-capabilities.yaml" "bubbles.simplify" "[ simplify, docs ]"
+
+clone_framework_surface "$malformed_runner_grants_root"
+mkdir -p "$malformed_runner_grants_root/specs"
+cp -R "$positive_feature_dir" "$malformed_runner_grants_dir"
+mutate_phase_provenance "$malformed_runner_grants_dir/state.json" "analyze" "bubbles.ux"
+malform_workflow_runner_grants "$malformed_runner_grants_root/bubbles/agent-capabilities.yaml"
+
+clone_framework_surface "$sequence_runner_grants_root"
+mkdir -p "$sequence_runner_grants_root/specs"
+cp -R "$positive_feature_dir" "$sequence_runner_grants_dir"
+mutate_phase_provenance "$sequence_runner_grants_dir/state.json" "analyze" "bubbles.ux"
+malform_workflow_runner_grants "$sequence_runner_grants_root/bubbles/agent-capabilities.yaml" "[ bubbles.workflow ]"
+
+clone_framework_surface "$unknown_runner_grant_root"
+mkdir -p "$unknown_runner_grant_root/specs"
+cp -R "$positive_feature_dir" "$unknown_runner_grant_dir"
+mutate_phase_provenance "$unknown_runner_grant_dir/state.json" "analyze" "bubbles.ux"
+inject_unknown_workflow_runner "$unknown_runner_grant_root/bubbles/agent-capabilities.yaml" "bubbles.nonexistent-workflow-runner"
 
 echo "Running agent ownership lint precheck..."
 lint_log="$tmp_root/agent-ownership-lint.log"
@@ -2900,6 +3054,18 @@ assert_log_contains "$analyst_owned_log" "Phase 'analyze' has specialist provena
 assert_log_not_contains "$analyst_owned_log" "Phase 'analyze' is in completedPhaseClaims but no specialist or parent-expanded provenance found" "Check 6B: an honest bubbles.analyst record is NOT reported as missing provenance (Gate G022 false positive)"
 assert_log_not_contains "$analyst_owned_log" "bubbles.analyze" "Check 6B: the guard never demands a 'bubbles.analyze' agent, which has never existed"
 
+echo "Running Check 6B UX capability-owner regression selftest..."
+ux_owned_log="$tmp_root/ux-owned-phase.log"
+run_capture "$ux_owned_log" bash "$GUARD_SCRIPT" "$ux_owned_phase_dir" >/dev/null
+assert_log_contains "$ux_owned_log" "Phase 'analyze' has specialist provenance from bubbles.ux" "Check 6B: the analyze phase accepts its capability-declared UX specialist"
+assert_log_not_contains "$ux_owned_log" "Phase 'analyze' is in completedPhaseClaims but no specialist or parent-expanded provenance found" "Check 6B: UX-only analyze provenance is not hidden by analyst-first fixture ordering"
+
+echo "Running Check 6B plan capability-owner regression selftest..."
+plan_owned_log="$tmp_root/plan-owned-phase.log"
+run_capture "$plan_owned_log" bash "$GUARD_SCRIPT" "$plan_owned_phase_dir" >/dev/null
+assert_log_contains "$plan_owned_log" "Phase 'bootstrap' has specialist provenance from bubbles.plan" "Check 6B: the bootstrap phase accepts its capability-declared planning specialist"
+assert_log_not_contains "$plan_owned_log" "Phase 'bootstrap' is in completedPhaseClaims but no specialist or parent-expanded provenance found" "Check 6B: plan-only bootstrap provenance is not hidden by design-first fixture ordering"
+
 # Adversarial twin. The owner table must not become a blanket pass: an unrelated
 # agent recording the same claim is impersonation and MUST still be refused.
 echo "Running Check 6B phase-owner adversarial selftest..."
@@ -2924,9 +3090,60 @@ assert_log_not_contains "$unregistered_phase_log" "phase provenance check skippe
 echo "Running Check 6B broken declared-owner adversarial selftest..."
 broken_phase_owner_log="$tmp_root/broken-phase-owner.log"
 run_capture "$broken_phase_owner_log" bash "$GUARD_SCRIPT" "$broken_phase_owner_dir" >/dev/null
-assert_log_contains "$broken_phase_owner_log" "Phase 'analyze' declares owner 'bubbles.nonexistent-phase-owner', but that owner has no shipped agent definition" "Check 6B: a registered phase with a nonexistent declared owner is refused as framework corruption"
+assert_log_contains "$broken_phase_owner_log" "Phase 'analyze' resolves to owner 'bubbles.nonexistent-phase-owner', but that owner has no shipped agent definition" "Check 6B: a registered phase with a nonexistent declared owner is refused as framework corruption"
 assert_log_not_contains "$broken_phase_owner_log" "Phase 'analyze' has specialist provenance from bubbles.analyst" "Check 6B: legacy provenance cannot conceal a broken declared owner"
 assert_log_contains "$broken_phase_owner_log" "framework integrity check failed" "Check 6B: a broken declared owner cannot degrade to a pass"
+
+echo "Running Check 6B malformed capability-owner registry selftest..."
+malformed_capability_owner_log="$tmp_root/malformed-capability-owner.log"
+run_capture "$malformed_capability_owner_log" bash "$GUARD_SCRIPT" "$malformed_capability_owner_dir" >/dev/null
+assert_log_contains "$malformed_capability_owner_log" "could not query capability owners for phase 'bootstrap'" "Check 6B: malformed capability ownership is refused instead of treated as an empty owner set"
+assert_log_not_contains "$malformed_capability_owner_log" "Phase 'bootstrap' has specialist provenance from bubbles.plan" "Check 6B: a parser failure cannot silently admit plan provenance"
+assert_log_contains "$malformed_capability_owner_log" "framework integrity check failed" "Check 6B: malformed capability ownership cannot degrade to a pass"
+
+echo "Running Check 6B nonexistent capability-owner selftest..."
+missing_capability_owner_log="$tmp_root/missing-capability-owner.log"
+run_capture "$missing_capability_owner_log" bash "$GUARD_SCRIPT" "$missing_capability_owner_dir" >/dev/null
+assert_log_contains "$missing_capability_owner_log" "Phase 'bootstrap' resolves to owner 'bubbles.nonexistent-capability-owner', but that owner has no shipped agent definition" "Check 6B: a capability-declared owner without an agent definition is refused"
+assert_log_not_contains "$missing_capability_owner_log" "Phase 'bootstrap' has specialist provenance from bubbles.plan" "Check 6B: another valid capability owner cannot conceal a nonexistent co-owner"
+assert_log_contains "$missing_capability_owner_log" "framework integrity check failed" "Check 6B: a nonexistent capability owner cannot degrade to a pass"
+
+echo "Running Check 6B explicit-owner precedence selftest..."
+explicit_owner_conflict_log="$tmp_root/explicit-owner-conflict.log"
+run_capture "$explicit_owner_conflict_log" bash "$GUARD_SCRIPT" "$explicit_owner_conflict_dir" >/dev/null
+assert_log_contains "$explicit_owner_conflict_log" "Phase 'docs' is in completedPhaseClaims but no specialist or parent-expanded provenance found" "Check 6B: capability metadata cannot widen an explicitly workflow-owned phase"
+assert_log_not_contains "$explicit_owner_conflict_log" "Phase 'docs' has specialist provenance from bubbles.simplify" "Check 6B: explicit bubbles.docs ownership wins over a stale capability co-owner"
+
+echo "Running Check 6B malformed workflow-runner grants selftest..."
+malformed_runner_grants_log="$tmp_root/malformed-runner-grants.log"
+run_capture "$malformed_runner_grants_log" bash "$GUARD_SCRIPT" "$malformed_runner_grants_dir" >/dev/null
+assert_log_contains "$malformed_runner_grants_log" "must be a mapping, observed !!str" "Check 6B: scalar active-runner grants are refused instead of replaced by a hardcoded owner list"
+assert_log_not_contains "$malformed_runner_grants_log" "Phase 'analyze' has specialist provenance from bubbles.ux" "Check 6B: malformed runner grants cannot silently admit capability provenance"
+assert_log_contains "$malformed_runner_grants_log" "framework integrity check failed" "Check 6B: malformed workflow-runner grants cannot degrade to a pass"
+
+echo "Running Check 6B sequence-shaped workflow-runner grants selftest..."
+sequence_runner_grants_log="$tmp_root/sequence-runner-grants.log"
+sequence_runner_grants_status="$(run_capture "$sequence_runner_grants_log" bash "$GUARD_SCRIPT" "$sequence_runner_grants_dir")"
+if [[ "$sequence_runner_grants_status" -ne 0 ]]; then
+  pass "Check 6B: sequence-shaped workflow-runner grants fail the transition guard"
+else
+  fail "Check 6B: sequence-shaped workflow-runner grants must not pass"
+fi
+assert_log_contains "$sequence_runner_grants_log" "must be a mapping, observed !!seq" "Check 6B: successful yq output with the wrong container shape is refused"
+assert_log_not_contains "$sequence_runner_grants_log" "Phase 'analyze' has specialist provenance from bubbles.ux" "Check 6B: sequence-shaped grants cannot silently admit capability provenance"
+assert_log_contains "$sequence_runner_grants_log" "framework integrity check failed" "Check 6B: sequence-shaped workflow-runner grants cannot degrade to a pass"
+
+echo "Running Check 6B nonexistent workflow-runner identity selftest..."
+unknown_runner_grant_log="$tmp_root/unknown-runner-grant.log"
+unknown_runner_grant_status="$(run_capture "$unknown_runner_grant_log" bash "$GUARD_SCRIPT" "$unknown_runner_grant_dir")"
+if [[ "$unknown_runner_grant_status" -ne 0 ]]; then
+  pass "Check 6B: a workflow-runner grant without a shipped agent definition fails the transition guard"
+else
+  fail "Check 6B: a nonexistent workflow-runner identity must not pass"
+fi
+assert_log_contains "$unknown_runner_grant_log" "resolves to owner 'bubbles.nonexistent-workflow-runner', but that owner has no shipped agent definition" "Check 6B: every extracted workflow-runner identity must resolve to a shipped agent"
+assert_log_not_contains "$unknown_runner_grant_log" "Phase 'analyze' has specialist provenance from bubbles.ux" "Check 6B: a valid capability owner cannot conceal a nonexistent workflow runner"
+assert_log_contains "$unknown_runner_grant_log" "framework integrity check failed" "Check 6B: a nonexistent workflow runner cannot degrade to a pass"
 
 echo "Running negative packet-field selftest..."
 negative_log="$tmp_root/negative-guard.log"
@@ -4636,7 +4853,7 @@ JSON
   # claim, so the check must ABSTAIN here — otherwise widening claim parsing
   # (cases E/F) turns every history-less planning packet into a false block.
   cat >"$c7c_dir/no_history.json" <<'JSON'
-{"execution":{"completedPhaseClaims":["analyze","ux","design","plan"]}}
+{"execution":{"completedPhaseClaims":["analyze","bootstrap"]}}
 JSON
 
   c7c_backed="$(python3 "$c7c_dir/analyzer.py" "$c7c_dir/backed.json" 2>&1 || true)"

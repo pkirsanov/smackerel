@@ -65,7 +65,7 @@ cat > "$repo/.specify/memory/bubbles.session.json" <<'EOF'
     {
       "turnNumber": 1,
       "timestamp": "2026-05-09T11:00:00Z",
-      "phase": "design",
+      "phase": "bootstrap",
       "scopeId": "01-scope-a",
       "mode": "implement",
       "agent": "bubbles.design",
@@ -95,7 +95,7 @@ cat > "$repo/.specify/memory/bubbles.session.json" <<'EOF'
   "executionHistory": [
     {
       "agent": "bubbles.design",
-      "phasesExecuted": ["design"],
+      "phasesExecuted": ["bootstrap"],
       "featureDir": "specs/777-fake",
       "runStartedAt": "2026-05-09T10:00:00Z",
       "runCompletedAt": "2026-05-09T10:05:00Z"

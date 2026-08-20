@@ -76,7 +76,7 @@ write_sample_session() {
   "turnSnapshots": [
     {
       "agent": "bubbles.design",
-      "phase": "design",
+      "phase": "bootstrap",
       "specDir": "specs/900-latency-fixture",
       "startedAt": "2026-05-24T08:00:00Z",
       "completedAt": "2026-05-24T08:07:00Z"

@@ -170,7 +170,7 @@ EOF
   "workflowMode": "$workflow_mode",
   "execution": {
     "currentPhase": "audit",
-    "completedPhaseClaims": ["analyze", "ux", "design", "plan"]
+    "completedPhaseClaims": ["analyze", "bootstrap"]
   },
   "certification": {
     "status": "$current_status",
@@ -181,8 +181,9 @@ EOF
   },
   "executionHistory": [
     {
-      "phase": "plan",
+      "phase": "bootstrap",
       "agent": "bubbles.plan",
+      "phasesExecuted": ["bootstrap"],
       "outcome": "completed_diagnostic"
     }
   ],
