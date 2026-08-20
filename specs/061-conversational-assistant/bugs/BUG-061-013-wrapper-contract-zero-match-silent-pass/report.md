@@ -1824,4 +1824,300 @@ simplify, …". **Four** have now executed — `implement`, `test`, `regression`
 the count is flagged for its owner rather than corrected here.
 
 
+# Stabilize phase — `bubbles.stabilize`
+
+### Verdict
+
+🟢 **STABLE** for the packet-attributable surface. The change introduces **no** determinism, latency,
+resource, or failure-mode risk, and the four lanes it touches show **zero** instability markers.
+
+One **real** stability weakness was found, but it is **pre-existing** and **foreign-owned**:
+`ensure_envsubst` installs `gettext-base` over the network on every fresh container with no retry, no
+timeout, and no offline fallback. It is recorded below as `OBS-061-013-STAB-01` and routed to
+`bubbles.devops`. It is **not** a defect of this packet, it does **not** gate this packet, and it was
+deliberately not fixed here — AC-5 forbids touching `scripts/runtime/`, and the durable fix is a
+container-image change outside this lane.
+
+### Scope of this phase
+
+The change is test-only: one file, `internal/deploy/envsubst_wrapper_contract_test.go`. So the
+stability question is not "does the product degrade" but "is this guard itself dependable" — does it
+run the same way every time, fail usefully when it fails, and cost nothing meaningful.
+
+Where a property examined below is **pre-existing** rather than introduced by `40a9e942`, it is
+labelled as such. The packet's own diff touched the matcher (line 104), the zero-match branch (line
+130), and two adversarial fixtures; `envsubstWrapperRepoRoot`, the exec-bit check, and the tracked-
+wrapper slice all predate it.
+
+### Area 1 — Flakiness and determinism: CLEAN
+
+Four independent nondeterminism sources were checked and all are absent.
+
+```
+# BUG-061-013 stabilize: nondeterminism sweep over the contract test
+$ grep -nE 'range .*map|os\.ReadDir|filepath\.Walk|filepath\.Glob|time\.Now|math/rand|t\.Parallel' \
+    internal/deploy/envsubst_wrapper_contract_test.go
+NONDET_EXIT=1 (1=none found)
+```
+
+No map iteration (Go randomises map order), no directory listing (filesystem order), no wall-clock,
+no RNG, no `t.Parallel` interleaving. The only iteration is over `envsubstTrackedWrappers`, a fixed
+slice literal, so subtest order is fixed — confirmed by the transcript, which emits `go-unit.sh`,
+`go-integration.sh`, `go-e2e.sh`, `go-stress.sh` in declaration order.
+
+**Working-directory and checkout-layout independence.** `envsubstWrapperRepoRoot` derives the repo
+root from `runtime.Caller(0)` plus `../..`, never from `os.Getwd()` or an env var. `runtime.Caller`
+returns the path recorded at *compile* time, so the decisive question is whether the build trims it —
+a trimmed path would be module-relative and therefore resolved against CWD at runtime.
+
+```
+# Is -trimpath in play anywhere? (tracked files, repo-wide)
+$ git grep -n 'trimpath'
+GITGREP_EXIT=1 (1=absent)
+
+# Could a binary be built in one place and run in another?
+$ grep -rnE 'go test -c|go build[^|]*\.test' scripts/
+GOTESTC_EXIT=1 (1=absent)
+```
+
+`-trimpath` is absent, so the recorded path is absolute; and no wrapper builds a detached test binary,
+so compile and run always happen in the same container against the same mount. Root resolution is
+therefore CWD-independent and survives any checkout root. It breaks only if the test file itself is
+moved out of `internal/deploy/` — and then `os.Stat` fails and `t.Fatalf` fires, which is loud, not
+silent.
+
+An earlier form of this check returned `TRIMPATH_EXIT=2`. That is grep's *error* code, not "no match"
+(which is 1) — a non-existent glob had poisoned the argument list. It was re-run against paths that
+exist; the exit 1 above is the trustworthy result. Recorded because accepting the first result would
+have been the same class of mistake this packet exists to remove.
+
+**The exec-bit check is reproducible**, because the mode is versioned rather than filesystem-derived:
+
+```
+$ git ls-files -s scripts/runtime/_ensure_envsubst.sh
+100755 3e7a6af135f9b3b5251163b8177b7ec026df52a3 0       scripts/runtime/_ensure_envsubst.sh
+```
+
+**The test cache cannot mask a stale pass.** `scripts/runtime/go-unit.sh:63` appends `-count=1`
+alongside the `-run` selector, so a scoped re-run genuinely re-executes instead of replaying a cached
+`(cached)` verdict. Both runs below are real executions.
+
+**Empirical:** two runs, both `exit 0`, both 540 lines, identical eleven-PASS set.
+
+### Area 2 — Failure-mode quality: CLEAN, and proven by executed test
+
+The zero-match branch returns an `error` that `TestEnvsubstWrapperContract_LiveWrappers` hands to
+`t.Fatalf`. It **cannot hang**: it is a pure in-memory regex over an already-read `[]byte`, with no
+I/O, no network, no loop, and no sleep on that path. It fails on the first tracked wrapper that
+cannot be located.
+
+The message is actionable *and correctly directed* — it names the wrapper, states the invocation
+`could not LOCATE`, says explicitly that the wrapper is **not** necessarily wrong and must not be
+rewritten to satisfy the pattern, and names the remediation target (`envsubstGoTestRE`). That matters
+because the tempting wrong fix is to edit a correct wrapper until the blind matcher matches it.
+
+This is not an assertion of mine; it is executed. `AdversarialRejectsUnlocatableInvocation` asserts
+the message contains both `could not LOCATE` and `matcher may need widening`, and it **passed**.
+`AdversarialRejectsConditionalCallAfterGoTest` demands the *ordering* error specifically — obtainable
+only if the widened matcher located the real `if ! go test … | tee …` line — and it **passed** too.
+So the widening landed on the real invocation rather than on something inert.
+
+### Area 3 — Resource and time behaviour: no measurable cost
+
+`internal/deploy` completed in **0.025s**, the floor of the 0.025–0.075s band recorded by prior lanes.
+Every one of the four `LiveWrappers` subtests reports 0.00s. Total input scanned is 12,799 bytes
+(go-unit 2,181 + go-integration 5,365 + go-e2e 2,533 + go-stress 2,720). All three patterns are
+package-level `regexp.MustCompile` vars (lines 80, 85, 104), so they compile **once per test binary**,
+not once per wrapper.
+
+**Catastrophic backtracking cannot occur here** — not "is unlikely". Go's `regexp` is RE2-based and is
+documented to run in time linear in the size of the input; it simulates an NFA and does not backtrack.
+The nested quantifier `(?:(?:if|elif|then|while|until|&&|\|\||\||!)[^\S\n]+)*` is the classic
+catastrophic-backtracking shape in a PCRE-family engine, and would deserve a warning there. In RE2 it
+is linear, so the widening carries no ReDoS risk by construction. The measured 0.025s corroborates it.
+
+### Area 4 — Operational stability of the touched lanes: CLEAN in transcript
+
+Signal sweep over this packet's 104 KB `report.md`, which contains the recorded integration (10,252
+lines, exit 0) and e2e (4,528 lines, exit 0) transcripts:
+
+```
+# BUG-061-013 stabilize: instability-signal counts in report.md
+retry          0
+retrying       0
+timed out      0
+unhealthy      0
+restarting     0
+flaky          0
+panic:         0
+DATA RACE      0
+health         3
+```
+
+No retries, no timeouts, no unhealthy containers, no restarts, no panics, no data races. The three
+`health` hits are ordinary readiness references, not failures. Those long lanes were **not** re-run —
+there was no reason to, and the regression phase already recorded why.
+
+### OBS-061-013-STAB-01 — network-dependent `apt-get` in all four Go lanes (pre-existing, routed)
+
+**Severity:** medium. **Provenance:** pre-existing (spec-045 / 047 / 052); **not** introduced by this
+packet. **Owner:** `bubbles.devops`.
+
+`ensure_envsubst` runs `apt-get update -qq` followed by `apt-get install` against the Debian mirror
+whenever `envsubst` is absent, which is every fresh container. Observed live in both runs this phase:
+`[go-unit] envsubst missing — installing gettext-base` → `Need to get 160 kB of archives`.
+
+```
+# Resilience around that install
+$ grep -nE 'retry|--retries|timeout|\|\||set \+e|until |for i in' scripts/runtime/_ensure_envsubst.sh
+RESILIENCE_EXIT=1 (1=none present)
+```
+
+There is no retry, no timeout, and no offline fallback. Callers run `set -euo pipefail`, so a
+transient mirror failure aborts the wrapper **before any test executes**, across all four Go lanes
+(unit, integration, e2e, stress).
+
+The failure mode is fail-fast and loud, so this degrades **availability, not correctness** — it cannot
+produce a false green. The durable fix is to bake `gettext-base` into the test image so no per-run
+network install is needed, which is a `Dockerfile` change owned by `bubbles.devops`. It was not
+attempted here: AC-5 requires `scripts/runtime/` stay byte-identical, and image changes are outside a
+diagnostic lane.
+
+Worth stating plainly: this packet's contract test is precisely what guarantees that helper is invoked
+in the right place. The packet **strengthens** the guard around a dependency whose own resilience is
+weak. Fixing the dependency would make the guard cheaper, not redundant.
+
+**Checked and dismissed, so it is not recorded as a finding:** `go-e2e.sh` and
+`go-integration.sh` are git mode `100644` while `go-unit.sh` and `go-stress.sh` are `100755`. This is
+not a contract violation — the test checks the exec bit on the *helper* only — and it is empirically
+harmless, since both lanes ran to `exit 0` this session and are therefore invoked as `bash <script>`.
+
+### Lane evidence — the non-vacuity proof
+
+`--go-run` narrows an otherwise repo-wide run, so `exit 0` is **also** what a zero-match selection
+produces. The first capture was therefore rejected as insufficient: its bounded window omitted 500
+middle lines and the visible tail was entirely `[no tests to run]`. The window was widened until the
+selected package was visible.
+
+```
+# BUG-061-013 stabilize run2: NON-VACUITY proof (named PASS lines) + internal/deploy timing
+$ ./smackerel.sh test unit --go --go-run 'TestEnvsubstWrapperContract' --verbose
+exit: 0
+lines: 540
+sha256: 976c1d16437b2f71207a72dd402e7db05c5aead45658b68725f1843fa803b6ce
+
+ok      github.com/smackerel/smackerel/internal/db      0.020s [no tests to run]
+=== RUN   TestEnvsubstWrapperContract_HelperExistsAndIsExecutable
+--- PASS: TestEnvsubstWrapperContract_HelperExistsAndIsExecutable (0.00s)
+=== RUN   TestEnvsubstWrapperContract_LiveWrappers
+=== RUN   TestEnvsubstWrapperContract_LiveWrappers/go-unit.sh
+=== RUN   TestEnvsubstWrapperContract_LiveWrappers/go-integration.sh
+=== RUN   TestEnvsubstWrapperContract_LiveWrappers/go-e2e.sh
+=== RUN   TestEnvsubstWrapperContract_LiveWrappers/go-stress.sh
+--- PASS: TestEnvsubstWrapperContract_LiveWrappers (0.00s)
+    --- PASS: TestEnvsubstWrapperContract_LiveWrappers/go-unit.sh (0.00s)
+    --- PASS: TestEnvsubstWrapperContract_LiveWrappers/go-integration.sh (0.00s)
+    --- PASS: TestEnvsubstWrapperContract_LiveWrappers/go-e2e.sh (0.00s)
+    --- PASS: TestEnvsubstWrapperContract_LiveWrappers/go-stress.sh (0.00s)
+=== RUN   TestEnvsubstWrapperContract_AdversarialRejectsMissingSource
+--- PASS: TestEnvsubstWrapperContract_AdversarialRejectsMissingSource (0.00s)
+=== RUN   TestEnvsubstWrapperContract_AdversarialRejectsSourceWithoutCall
+--- PASS: TestEnvsubstWrapperContract_AdversarialRejectsSourceWithoutCall (0.00s)
+=== RUN   TestEnvsubstWrapperContract_AdversarialRejectsCallAfterGoTest
+--- PASS: TestEnvsubstWrapperContract_AdversarialRejectsCallAfterGoTest (0.00s)
+=== RUN   TestEnvsubstWrapperContract_AdversarialRejectsUnlocatableInvocation
+--- PASS: TestEnvsubstWrapperContract_AdversarialRejectsUnlocatableInvocation (0.00s)
+=== RUN   TestEnvsubstWrapperContract_AdversarialRejectsConditionalCallAfterGoTest
+--- PASS: TestEnvsubstWrapperContract_AdversarialRejectsConditionalCallAfterGoTest (0.00s)
+PASS
+ok      github.com/smackerel/smackerel/internal/deploy  0.025s
+testing: warning: no tests to run
+PASS
+ok      github.com/smackerel/smackerel/internal/digest  0.028s [no tests to run]
+```
+
+Eleven named `--- PASS:` lines — seven top-level plus four subtests — including both fixtures this
+packet added. The decisive discriminator is the **absence** of a suffix: `internal/deploy 0.025s`
+carries no `[no tests to run]`, while its immediate neighbours `internal/db` and `internal/digest`
+both do. A zero-match selection would have rendered `internal/deploy` exactly like its neighbours.
+That contrast, not the exit code, is what proves the selector bound real tests.
+
+Replay (selector quoted; it contains no `|`, but quoting it keeps the hint copy-pasteable):
+
+```
+bash .github/bubbles/scripts/evidence-capture.sh --lines 280 --label "…" -- \
+  ./smackerel.sh test unit --go --go-run 'TestEnvsubstWrapperContract' --verbose
+```
+
+### Determinism across runs, with an honest caveat
+
+| | run 1 | run 2 |
+|---|---|---|
+| exit | 0 | 0 |
+| lines | 540 | 540 |
+| sha256 | `9053b2a826ed0401836d70019198d3a295601790ed892f48b6105e960ac21b58` | `976c1d16437b2f71207a72dd402e7db05c5aead45658b68725f1843fa803b6ce` |
+| eleven-PASS set | identical | identical |
+
+The lane is **result-deterministic but not byte-deterministic**: the digests differ because per-package
+timings (`0.020s`, `0.028s`, …) and `apt-get` transfer rates vary between runs. The practical
+consequence is worth recording for later phases — `evidence-capture.sh --verify <sha>` against this
+lane will return **exit 3 (mismatch)** on a clean re-run with nothing regressed. A `--verify` mismatch
+here must not be read as a regression; compare the named PASS set instead.
+
+### Not run in this phase
+
+`./smackerel.sh lint` and `./smackerel.sh format --check` were **not** run and no result for them is
+claimed: both gate *changed* source, and this phase changed none. The integration, e2e, and stress
+lanes were **not** re-run — their recorded transcripts carry zero instability markers and re-running
+them would re-derive a property of unmodified files. No security review was performed; that is
+`bubbles.security`'s lane. No benchmark was added, because that would require writing into
+`internal/`, which AC-5 forbids.
+
+### Uncertainty declaration
+
+`OBS-061-013-STAB-01` is derived from reading the helper's source and observing two live installs; the
+mirror-failure path itself was **not** induced, so its abort behaviour is inferred from `set -euo
+pipefail` semantics plus the measured absence of retry/timeout/fallback, not observed. Inducing a
+network partition inside the test container is a fault-injection exercise that a read-only diagnostic
+phase does not perform.
+
+The RE2 linear-time claim is a property of Go's `regexp` package documented by its authors, not
+something re-measured here; the 0.025s figure corroborates but does not prove it. The 12,799-byte
+input total is measured.
+
+### Completion Statement — stabilize phase
+
+The stabilize phase executed. On the packet's own surface it is a **clean pass, and that conclusion
+rests on measurement rather than on the change being small**: nondeterminism sweep empty, `-trimpath`
+absent so root resolution is CWD-independent, no detached test binary to desync compile-time paths,
+exec bit versioned at `100755`, `-count=1` defeating the test cache, 0.025s at the floor of the prior
+band, and backtracking structurally impossible under RE2 rather than merely unobserved.
+
+Failure-mode quality is proven by execution, not argued: the two fixtures this packet added both
+passed, and they assert the *content* of the diagnostic — that it says the invocation could not be
+located and that the **matcher**, not the wrapper, may need widening.
+
+The one first capture that exited 0 was **rejected** rather than recorded, because its visible tail
+was entirely `[no tests to run]` and could not distinguish a real selection from a zero-match one.
+Accepting it would have reproduced, inside this packet's own evidence, the exact silent-pass shape the
+packet exists to remove.
+
+One real stability weakness exists — the unconditional, unretried network `apt-get` in all four Go
+lanes — but it is pre-existing, foreign-owned, degrades availability rather than correctness, and is
+routed to `bubbles.devops` rather than fixed here.
+
+No source file was modified. `internal/deploy/envsubst_wrapper_contract_test.go` and
+`scripts/runtime/` remain byte-identical to HEAD, so **AC-5 is preserved by this phase**. The only
+working-tree changes are this packet's `report.md` and `state.json`. `uservalidation.md` was not
+opened and no `## Human Acceptance Record` section was authored (G136 is operator-only). Only
+`stabilize` is claimed; `security`, `validate`, and `audit` remain unexecuted and belong to their own
+specialists. Packet `status` and `certification.status` remain `in_progress`.
+
+**Routed, not edited (unchanged from the regression and simplify phases' routing):**
+`certification.pendingGates` still claims phases are unexecuted that have now run. **Five** have now
+executed — `implement`, `test`, `regression`, `simplify`, `stabilize`. The `certification.*` block is
+owned by `bubbles.validate`; this phase writes execution progress only, so the count is flagged for
+its owner rather than corrected here.
+
+
 
