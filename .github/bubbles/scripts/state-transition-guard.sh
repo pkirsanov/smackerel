@@ -1948,10 +1948,14 @@ for p in set(names):
 
     # BUG-020: the set of agents that may execute a phase owned by
     # `activeWorkflowRunner`. agent-capabilities.yaml `workflowModeGrants.agents`
-    # is the same list Gate G064 lints, so it is the only copy. yq is the normal
-    # path; without it the resolution degrades to the parent-expansion allowlist
-    # above rather than introducing a new hard dependency.
+    # is the same list Gate G064 lints, so it is the only copy. A missing,
+    # malformed, or empty registry is framework corruption and must refuse; the
+    # hardcoded orchestrator list remains only for legacy parent-expansion
+    # provenance below, never as an active-runner owner fallback.
     workflow_runner_agents=""
+    workflow_runner_shape=""
+    workflow_runner_resolution="registry-unavailable"
+    workflow_runner_detail="no agent-capabilities.yaml registry could be resolved"
     capabilities_registry_file=""
     for _pa_candidate in \
       "$guard_repo_root/bubbles/agent-capabilities.yaml" \
@@ -1964,9 +1968,21 @@ for p in set(names):
       fi
     done
     if [[ -n "$capabilities_registry_file" ]] && command -v yq >/dev/null 2>&1; then
-      workflow_runner_agents="$(yq -r '.workflowModeGrants.agents // {} | keys | join(" ")' "$capabilities_registry_file" 2>/dev/null || true)"
+      if ! workflow_runner_shape="$(yq -r '.workflowModeGrants.agents | type' "$capabilities_registry_file" 2>/dev/null)"; then
+        workflow_runner_detail="could not query workflow runner grants from $capabilities_registry_file"
+      elif [[ "$workflow_runner_shape" != "!!map" ]]; then
+        workflow_runner_detail="workflow runner grants in $capabilities_registry_file must be a mapping, observed $workflow_runner_shape"
+      elif ! workflow_runner_agents="$(yq -r '.workflowModeGrants.agents | keys | join(" ")' "$capabilities_registry_file" 2>/dev/null)"; then
+        workflow_runner_detail="could not read workflow runner identities from $capabilities_registry_file"
+      elif [[ -z "$workflow_runner_agents" ]]; then
+        workflow_runner_detail="no workflow runner grants are declared in $capabilities_registry_file"
+      else
+        workflow_runner_resolution="registered"
+        workflow_runner_detail=""
+      fi
+    elif [[ -n "$capabilities_registry_file" ]]; then
+      workflow_runner_detail="yq is unavailable for reading $capabilities_registry_file"
     fi
-    [[ -n "$workflow_runner_agents" ]] || workflow_runner_agents="$orchestrator_allowlist"
 
     agent_definition_exists() {
       local agent="$1"
@@ -1993,6 +2009,9 @@ for p in set(names):
       local declared=""
       local legacy=""
       local phase_missing=""
+      local capability_agents=""
+      local capability_agent=""
+      local workflow_runner_agent=""
 
       phase_owner_resolution=""
       phase_owner_agents=""
@@ -2043,7 +2062,51 @@ for p in set(names):
 
       case "$declared" in
         activeWorkflowRunner)
+          if [[ "$workflow_runner_resolution" != "registered" ]]; then
+            phase_owner_resolution="registry-unavailable"
+            phase_owner_detail="$workflow_runner_detail"
+            return 0
+          fi
+          for workflow_runner_agent in $workflow_runner_agents; do
+            if ! agent_definition_exists "$workflow_runner_agent"; then
+              phase_owner_resolution="owner-unregistered"
+              phase_owner_detail="$workflow_runner_agent"
+              return 0
+            fi
+          done
           phase_owner_agents="$workflow_runner_agents"
+          if [[ -n "$capabilities_registry_file" ]]; then
+            if ! capability_agents="$(_pa_phase="$phase" yq -r '
+              (.agents // {}) | to_entries[] |
+              select((.value.ownsPhases // []) | any_c(. == strenv(_pa_phase))) |
+              .key
+            ' "$capabilities_registry_file" 2>/dev/null)"; then
+              phase_owner_resolution="registry-unavailable"
+              phase_owner_detail="could not query capability owners for phase '$phase' from $capabilities_registry_file"
+              return 0
+            fi
+          fi
+          while IFS= read -r capability_agent; do
+            [[ -n "$capability_agent" ]] || continue
+            if ! agent_definition_exists "$capability_agent"; then
+              phase_owner_resolution="owner-unregistered"
+              phase_owner_detail="$capability_agent"
+              return 0
+            fi
+            case " $phase_owner_agents " in
+              *" $capability_agent "*) ;;
+              *) phase_owner_agents="$phase_owner_agents $capability_agent" ;;
+            esac
+          done <<EOF
+$capability_agents
+EOF
+
+          if agent_definition_exists "$legacy"; then
+            case " $phase_owner_agents " in
+              *" $legacy "*) ;;
+              *) phase_owner_agents="$phase_owner_agents $legacy" ;;
+            esac
+          fi
           ;;
         *)
           if ! agent_definition_exists "$declared"; then
@@ -2054,10 +2117,6 @@ for p in set(names):
           phase_owner_agents="$declared"
           ;;
       esac
-
-      if [[ "$legacy" != "$declared" ]] && agent_definition_exists "$legacy"; then
-        phase_owner_agents="$phase_owner_agents $legacy"
-      fi
       phase_owner_agents="${phase_owner_agents# }"
       phase_owner_resolution="registered"
     }
@@ -2082,7 +2141,7 @@ for p in set(names):
             continue
             ;;
           owner-unregistered)
-            fail "Phase '$claimed_phase' declares owner '$phase_owner_detail', but that owner has no shipped agent definition (Gate G022 framework integrity)"
+            fail "Phase '$claimed_phase' resolves to owner '$phase_owner_detail', but that owner has no shipped agent definition (Gate G022 framework integrity)"
             phase_registry_failures=$((phase_registry_failures + 1))
             continue
             ;;
