@@ -1493,5 +1493,335 @@ unexecuted: test, regression, …". Two of those have now executed. The `certifi
 owned by `bubbles.validate`; this phase writes execution progress only, so the count is flagged for
 its owner rather than corrected here.
 
+---
+
+# Simplify phase — `bubbles.simplify`
+
+### Verdict
+
+**NO CHANGE. `internal/deploy/envsubst_wrapper_contract_test.go` is unmodified, and the working tree
+carries no source diff.** The review ran all three passes — reuse, quality, efficiency — and each
+one's headline recommendation was already satisfied or was measured to be net-negative for this
+file. One genuine inaccuracy was found; it was **proven inert** and therefore flagged rather than
+fixed, because rewriting a hardened, adversarially-tested contract file for a change that cannot
+alter behaviour is the churn this phase is supposed to refuse.
+
+A no-op simplify phase is a result, not an absence of one. What follows is the measurement behind it.
+
+### Review surface
+
+One file, 326 lines, byte-identical to the fix commit `40a9e942`
+(`git diff --quiet 40a9e942 HEAD -- <file>` → identical). That commit's only source path is this same
+file, so the packet's change surface and this phase's review surface are the same object.
+
+```
+=== incomplete-work markers (TODO|FIXME|HACK|XXX|nolint|t.Skip) ===
+marker-grep-exit=1        # grep found nothing
+```
+
+### Pass 1 — reuse: the extraction is already done
+
+| Measurement | Result |
+|---|---|
+| Files in `internal/deploy` containing the wrapper-scan logic | **1 of 38** — no cross-file duplication |
+| Call sites of `assertEnvsubstWrapperContract` | **6** — 1 live loop + 5 adversarial |
+| `TestEnvsubstWrapperContract_LiveWrappers` shape | already table-driven over `envsubstTrackedWrappers` |
+
+The reuse pass exists to recommend extracting a shared helper. That helper exists, is the single
+point of truth for the contract, and every test routes through it. There is nothing to extract.
+
+### Pass 1 — reuse: why the five adversarial tests are NOT table-driven
+
+This was the primary question, so it was answered with a line census rather than an impression:
+
+```
+total lines in adversarial block : 116
+  mechanically repeated skeleton : 42
+  doc-comment lines (rationale)  : 29
+  blank                          :  4
+  unique payload (fixtures+msgs) : 41
+```
+
+A table can remove **only the 42 skeleton lines**. It must reintroduce a struct definition (~7), a
+runner loop (~12), and per-row field labels plus row braces (5 rows × 5 fields + 10 ≈ 35) — roughly
+**54 lines to remove 42**, before any table-integrity guard. The 41 unique payload lines and 29
+rationale lines survive in either shape. **A table here relocates the content; it does not reduce
+it, and on raw count it grows the file.**
+
+Three costs that do not appear in the line count, and that matter more than it:
+
+1. **One row would have to carry two assertions.** `AdversarialRejectsUnlocatableInvocation` asserts
+   *both* `could not LOCATE` and `matcher may need widening` — EB-2 and AC-4 are distinct claims, one
+   about locating and one about blame attribution. A single `wantSubstr` field forces merging them,
+   which is weakening; a `[]string` field adds exactly the complexity the table was meant to remove.
+
+2. **The names are load-bearing recorded evidence.** Any table conversion turns five top-level
+   functions into subtests with new identifiers. Those five names are referenced **10–12× each in
+   `report.md`, 2–4× in `scopes.md`**, plus `design.md` and `state.json` — roughly fifty references
+   in artifacts this phase must not rewrite.
+
+3. **The decisive one — a table makes this file's own failure mode easier.** This packet exists
+   because an assertion silently stopped asserting. Five top-level `func`s are maximally visible in
+   review: deleting one deletes a named function and removes a line from the test output. Blanking a
+   `wantSubstrings` field in a table row **still compiles and still passes**. Converting independent
+   named assertions into rows of a shared table enlarges the surface for precisely the defect
+   BUG-061-013 removes. That is the opposite of a simplification here.
+
+### Pass 2 — quality: the line-104 matcher comment is accurate and complete
+
+Every claim the comment makes was checked against the compiled pattern rather than read
+sympathetically:
+
+| Comment claim | Verified against `envsubstGoTestRE` |
+|---|---|
+| prefixes `if`, `elif`, `then`, `while`, `until`, `&&`, `\|\|`, `\|`, `!`, repeatable in any order | matches the pattern's `(?:(?:…)[^\S\n]+)*` group exactly |
+| `env VAR=x go test` does not match | correct — `env` is not an enumerated token and the anchor forbids it |
+| `timeout N go test` does not match | correct — same reason |
+| `x=$(go test …)` does not match | correct, **and executed**: this is fixture 4, which the lane below proves returns the locator error |
+
+One thing deliberately **not** added: a note about alternation order. `\|\|` precedes `\|`, which
+looks load-bearing but is not — Go's `regexp` is RE2, which finds a match if *any* alternative
+matches, so ordering affects preference, not existence. A comment warning about a non-hazard would
+mislead the next reader, which is the failure this pass is trying to prevent.
+
+### Pass 2 — quality: the one real inaccuracy, and why it was flagged instead of fixed
+
+Line 75 describes `envsubstSourceLineRE`'s prefix as `(?m)^\s*`. Line 80 compiles
+`(?m)^[^\S\n]*`. Those are **not** interchangeable, and the difference is not theoretical — measured
+on a blank-line-before-token shape:
+
+```
+claimed  \s*: start=45  matched='\nensure_envsubst '
+compiled [^\S\n]*: start=46  matched='ensure_envsubst '
+blank-line offset=45  true-call-line offset=46  delta=1
+```
+
+`\s` includes `\n`, so under `(?m)` it can begin a match at an earlier blank line and report an
+offset that is not the token's line. Offsets are exactly what this function's ordering comparisons
+consume, so this looked like a live mis-widening hazard.
+
+**It is not.** Substituting `\s` for `[^\S\n]` in all three matchers changes **0 of 11 verdicts**,
+across the five real fixtures, two probes built specifically to trigger the offset shift, and all
+four live wrappers:
+
+```
+fx1 missing-source         compiled=missing source line    claimed=missing source line    same
+fx2 source-only            compiled=never calls            claimed=never calls            same
+fx3 call-after-gotest      compiled=go test BEFORE call    claimed=go test BEFORE call    same
+fx4 unlocatable            compiled=could not LOCATE       claimed=could not LOCATE       same
+fx5 conditional-late       compiled=go test BEFORE call    claimed=go test BEFORE call    same
+probe blank+violation      compiled=go test BEFORE call    claimed=go test BEFORE call    same
+probe blank+compliant      compiled=PASS                   claimed=PASS                   same
+live go-unit.sh            compiled=PASS                   claimed=PASS                   same
+live go-integration.sh     compiled=PASS                   claimed=PASS                   same
+live go-e2e.sh             compiled=PASS                   claimed=PASS                   same
+live go-stress.sh          compiled=PASS                   claimed=PASS                   same
+
+verdict divergences across 11 inputs: 0
+```
+
+The zero is **structural, not luck**, and that is what makes it safe to rely on: `\s*` can only
+extend a match start backward through *contiguous whitespace*, and every offset pair the function
+compares (`callIdx` vs `srcIdx`, `goTestIdx` vs `callIdx`) is separated by a line containing
+non-whitespace text that `\s*` cannot span. The pull-back is bounded by the preceding blank run and
+can never cross the other token's line. So no substitution of this kind can flip a comparison in
+this file — including in `envsubstGoTestRE` itself.
+
+The comment's operative claim — "anchors to line start so the rationale comment above does NOT
+match" — is true of both forms (a `//` line begins with non-whitespace either way). The imprecision
+is in a paraphrase that cannot reach a comparison. **Fixing it would mean editing a hardened file
+and re-running lanes to change a character class in prose. Flagged here, with the proof, so the next
+reader gets the analysis without the file being churned.**
+
+**Related, also left alone:** `envsubstCallRE` (line 85) is the one matcher that genuinely uses
+`\s*`, which makes the file's convention inconsistent. The same proof covers it — it cannot produce
+a false pass or a false failure. It is also a **matcher**, and changing a matcher changes bindings;
+the regression phase established the binding set as exactly 4 → 5 lines, so touching it would be a
+regression to re-measure, not a simplification.
+
+### Pass 2 — quality: function size
+
+```
+assertEnvsubstWrapperContract                              lines= 37 <-- OVER 30
+envsubstWrapperRepoRoot                                    lines= 13
+TestEnvsubstWrapperContract_HelperExistsAndIsExecutable    lines= 29
+TestEnvsubstWrapperContract_LiveWrappers                   lines= 19
+TestEnvsubstWrapperContract_AdversarialRejectsMissingSource lines= 18
+TestEnvsubstWrapperContract_AdversarialRejectsSourceWithoutCall lines= 19
+TestEnvsubstWrapperContract_AdversarialRejectsCallAfterGoTest lines= 27
+TestEnvsubstWrapperContract_AdversarialRejectsUnlocatableInvocation lines= 30
+TestEnvsubstWrapperContract_AdversarialRejectsConditionalCallAfterGoTest lines= 18
+```
+
+One function exceeds the 30-line guideline, at 37. Its excess is **entirely error prose**: five
+guard clauses, each a two-line `fmt.Errorf`, plus the five-line rationale comment on the zero-match
+branch and five blank separators. Maximum nesting is 1 and every branch is an early return. Those
+messages are themselves pinned by tests (EB-2 / AC-4 assert their substrings), so splitting the
+function would separate each guard from the message its test asserts — worse on every axis the
+guideline is trying to protect. Not a defect; not changed.
+
+### Pass 3 — efficiency
+
+| Candidate | Disposition |
+|---|---|
+| `src := string(raw)` copies the file bytes; `FindIndex` on `[]byte` would avoid it | **Rejected.** 9 call sites over ~100-line shell scripts; the whole package runs in 0.025s. Trading a clear `string` API for a `[]byte` one buys an unmeasurable amount. |
+| Three regexes recompiled per call | **Already correct** — all three are package-level `MustCompile`, compiled once. |
+| `os.Stat` + `os.ReadFile` in the helper test are two syscalls | **Rejected.** `ReadFile` does not return the mode the test asserts; `Open`+`Stat`+`ReadAll` is more code for one fewer syscall in a test. |
+
+No efficiency change is warranted.
+
+### Lane evidence — review surface green, and the selector proven to bind
+
+```
+# BUG-061-013 simplify: review-surface lane, unchanged file
+$ ./smackerel.sh test unit --go --go-run TestEnvsubstWrapperContract --verbose
+exit: 0
+lines: 540
+sha256: 2a51e6d2bb79ba9a49785f364f88091fb4bfd5bfda5f83f2b49cc4f653e7aa86
+--- first 20 ---
+oom-preflight: OK — 26407 MB available (need 6000 MB; swap used 672 MB).
+disk-preflight: OK — C: 69 GB free (need 40 GB), WSL / 490 GB free (need 25 GB).
+++ dirname /workspace/scripts/runtime/go-unit.sh
++ source /workspace/scripts/runtime/_ensure_envsubst.sh
++ ensure_envsubst go-unit
++ local tag=go-unit
++ command -v envsubst
++ echo '[go-unit] envsubst missing — installing gettext-base'
++ apt-get update -qq
+[go-unit] envsubst missing — installing gettext-base
++ apt-get install -y --no-install-recommends gettext-base
+Reading package lists...
+Building dependency tree...
+Reading state information...
+The following NEW packages will be installed:
+  gettext-base
+0 upgraded, 1 newly installed, 0 to remove and 20 not upgraded.
+Need to get 160 kB of archives.
+After this operation, 660 kB of additional disk space will be used.
+Get:1 http://deb.debian.org/debian bookworm/main amd64 gettext-base amd64 0.21-12 [160 kB]
+--- omitted 500 line(s); sha256 above covers the full output ---
+--- last 20 ---
+PASS
+ok      github.com/smackerel/smackerel/tests/integration        0.017s [no tests to run]
+?       github.com/smackerel/smackerel/tests/integration/agent/routerwarmup    [no test files]
+?       github.com/smackerel/smackerel/tests/integration/drive/fixtures [no test files]
+?       github.com/smackerel/smackerel/tests/integration/nslock [no test files]
+testing: warning: no tests to run
+PASS
+ok      github.com/smackerel/smackerel/tests/observability      0.003s [no tests to run]
+testing: warning: no tests to run
+PASS
+ok      github.com/smackerel/smackerel/tests/stress/readiness   0.014s [no tests to run]
+testing: warning: no tests to run
+PASS
+ok      github.com/smackerel/smackerel/tests/unit/clients       0.006s [no tests to run]
+?       github.com/smackerel/smackerel/web/pwa  [no test files]
+testing: warning: no tests to run
+PASS
+ok      github.com/smackerel/smackerel/web/pwa/tests    0.189s [no tests to run]
+[go-unit] go test ./... finished OK
++ echo '[go-unit] go test ./... finished OK'
+```
+
+<!-- verify: bash .github/bubbles/scripts/evidence-capture.sh --verify 2a51e6d2bb79ba9a49785f364f88091fb4bfd5bfda5f83f2b49cc4f653e7aa86 -- ./smackerel.sh test unit --go --go-run 'TestEnvsubstWrapperContract' --verbose -->
+
+**Exit 0 was not accepted as proof.** The tail above shows repeated `testing: warning: no tests to
+run` / `PASS` pairs — a `--go-run` selector that binds *nothing* also exits 0. Treating that as a
+pass would be this packet's own defect, committed while recording its cleanup phase. The lane was
+therefore re-run plainly and the binding read out of the full transcript:
+
+```
+232:=== RUN   TestEnvsubstWrapperContract_HelperExistsAndIsExecutable
+233:--- PASS: TestEnvsubstWrapperContract_HelperExistsAndIsExecutable (0.00s)
+234:=== RUN   TestEnvsubstWrapperContract_LiveWrappers
+235:=== RUN   TestEnvsubstWrapperContract_LiveWrappers/go-unit.sh
+236:=== RUN   TestEnvsubstWrapperContract_LiveWrappers/go-integration.sh
+237:=== RUN   TestEnvsubstWrapperContract_LiveWrappers/go-e2e.sh
+238:=== RUN   TestEnvsubstWrapperContract_LiveWrappers/go-stress.sh
+239:--- PASS: TestEnvsubstWrapperContract_LiveWrappers (0.00s)
+240:    --- PASS: TestEnvsubstWrapperContract_LiveWrappers/go-unit.sh (0.00s)
+241:    --- PASS: TestEnvsubstWrapperContract_LiveWrappers/go-integration.sh (0.00s)
+242:    --- PASS: TestEnvsubstWrapperContract_LiveWrappers/go-e2e.sh (0.00s)
+243:    --- PASS: TestEnvsubstWrapperContract_LiveWrappers/go-stress.sh (0.00s)
+244:=== RUN   TestEnvsubstWrapperContract_AdversarialRejectsMissingSource
+245:--- PASS: TestEnvsubstWrapperContract_AdversarialRejectsMissingSource (0.00s)
+246:=== RUN   TestEnvsubstWrapperContract_AdversarialRejectsSourceWithoutCall
+247:--- PASS: TestEnvsubstWrapperContract_AdversarialRejectsSourceWithoutCall (0.00s)
+249:=== RUN   TestEnvsubstWrapperContract_AdversarialRejectsCallAfterGoTest
+250:--- PASS: TestEnvsubstWrapperContract_AdversarialRejectsCallAfterGoTest (0.00s)
+251:=== RUN   TestEnvsubstWrapperContract_AdversarialRejectsUnlocatableInvocation
+252:--- PASS: TestEnvsubstWrapperContract_AdversarialRejectsUnlocatableInvocation (0.00s)
+254:=== RUN   TestEnvsubstWrapperContract_AdversarialRejectsConditionalCallAfterGoTest
+256:--- PASS: TestEnvsubstWrapperContract_AdversarialRejectsConditionalCallAfterGoTest (0.00s)
+
+259:ok      github.com/smackerel/smackerel/internal/deploy  0.025s
+537:LANE_EXIT=0
+
+count of bound top-level tests: 7
+```
+
+Seven top-level tests bound and passed, four `LiveWrappers` subtests passed, zero `FAIL`, and the
+package reports `ok`. That is what makes the exit code mean something.
+
+**Replay-hint correction, disclosed.** `evidence-capture.sh` emitted its hint with the source-repo
+path `bubbles/scripts/evidence-capture.sh`, which does not exist in this downstream checkout; the
+hint above uses the installed path `.github/bubbles/scripts/evidence-capture.sh` and quotes the
+`--go-run` selector. Same correction class the regression phase applied to its own hint — an
+un-runnable re-derivation hint is an unchecked assertion.
+
+### Not run in this phase
+
+`./smackerel.sh lint` and `./smackerel.sh format --check` were **not** run, and no result for them is
+claimed. Both are gates on *changed* source; this phase changed no source, and the file is
+byte-identical to `40a9e942`, whose implement phase already recorded them. Running them would
+re-derive a property of an unmodified file. The integration, e2e, and stress lanes were likewise not
+re-run for the same reason — see the test and regression phases for their recorded results.
+
+### Uncertainty declaration
+
+The eleven-input verdict comparison was executed with Python's `re`, not Go's `regexp`. The two
+engines differ in backtracking strategy, so this is a **transcription**, not a run of the compiled
+patterns. It is sound for the specific question asked — whether `\s` consuming `\n` moves a reported
+offset — because that turns on what `\s` matches, which both engines define identically, and because
+RE2 reports the leftmost start at which any match exists, so it would report the same earlier start.
+The structural argument above does not depend on the engine at all. The Go-side facts are covered by
+the executed lane: fixture 4 (`x=$(go test …)`) really does produce the locator error under the
+compiled pattern, because `AdversarialRejectsUnlocatableInvocation` passed.
+
+The claim that a table-driven form would be **~54 lines to remove 42** is an estimate of code not
+written; the 116 / 42 / 29 / 41 / 4 census of the existing block is measured. The three non-line-count
+objections stand independently of that estimate.
+
+### Completion Statement — simplify phase
+
+The simplify phase executed and **changed nothing**, which is the correct outcome here rather than an
+absent one. Reuse: the shared helper already exists with six call sites and the logic appears in one
+file of thirty-eight. Duplication: the five adversarial tests share 42 skeleton lines that a table
+would replace with roughly 54, while relocating rather than removing the 41 unique and 29 rationale
+lines — and would convert five independently-visible assertions into rows where a blanked field still
+compiles and still passes, which is this packet's own failure mode. Clarity: the line-104 comment's
+claims were each checked against the compiled pattern and hold. Efficiency: the only candidates trade
+clarity for an unmeasurable gain in a 0.025s package.
+
+The one genuine inaccuracy — line 75 describing a `[^\S\n]*` prefix as `\s*` — was measured rather
+than assumed, found to change offsets but **zero of eleven verdicts**, and shown to be structurally
+incapable of flipping any comparison because every compared offset pair is separated by
+non-whitespace text. It is recorded here for its owner instead of being fixed, because editing a
+hardened, adversarially-tested contract file for an inert paraphrase is churn, not simplification.
+
+No source file was modified. `internal/deploy/envsubst_wrapper_contract_test.go` and
+`scripts/runtime/` are byte-identical to HEAD, so **AC-5 is preserved by this phase as well** — the
+subject still was not edited to satisfy its own detector. The only working-tree changes are this
+packet's `report.md` and `state.json`. `uservalidation.md` was not opened and no
+`## Human Acceptance Record` section was authored. Only `simplify` is claimed; `stabilize`,
+`security`, `validate`, and `audit` remain unexecuted and belong to their own specialists. Packet
+`status` and `certification.status` remain `in_progress`.
+
+**Routed, not edited (unchanged from the regression phase's routing):**
+`certification.pendingGates` still reads "7 of the 8 … phases remain unexecuted: test, regression,
+simplify, …". **Four** have now executed — `implement`, `test`, `regression`, `simplify`. The
+`certification.*` block is owned by `bubbles.validate`; this phase writes execution progress only, so
+the count is flagged for its owner rather than corrected here.
+
 
 
