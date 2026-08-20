@@ -1,9 +1,9 @@
 {
   "installedVersion": "7.28.0",
   "installMode": "local-source",
-  "sourceRef": "local-source",
-  "sourceGitSha": "56a17a88d81f3781bf56902e9288b43fad98618c",
+  "sourceRef": "fix/v410-pyyaml-guard",
+  "sourceGitSha": "90c070c5e5c041309b93f14df96f22736fddc650",
   "sourceDirty": false,
   "targetRepoSlug": "smackerel",
-  "installedAt": "2026-08-20T06:00:29Z"
+  "installedAt": "2026-08-20T06:13:20Z"
 }
