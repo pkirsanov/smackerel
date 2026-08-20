@@ -55,6 +55,12 @@
   "certification": {
     "status": "in_progress",
     "achievedAssuranceLevel": "deployed-and-infra-verified",
+    "certifiedCompletedPhases": [],
+    "lockdownState": {
+      "round": 0,
+      "lastCleanRound": null,
+      "note": "No lockdown round has run: the certifying agent (bubbles.validate) has not executed for this packet, so nothing is certified and no remediation round has been opened."
+    },
     "scopeProgress": { "total": 2, "done": 2, "inProgress": 0, "notStarted": 0, "blocked": 0 },
     "gatesPassed": [
       "test unit --go --go-run BUG061006: 4 BUG-061-006 adversarial tests GREEN; internal/telegram ok, internal/telegram/assistant_adapter ok; go test ./... (compile+vet, filtered) zero FAILs",
@@ -64,6 +70,7 @@
       "deploy via knb-owned Smackerel adapter: recreate rollout applied; cosign release-proof verified; running core+ml digests match the fix build and are healthy; Telegram assistant adapter wired and bound"
     ],
     "pendingGates": [
+      "scenario-specific regression E2E (tests/e2e/assistant/capture_ack_bug061006_e2e_test.go) is PLANNED but NOT WRITTEN; ./smackerel.sh test e2e --go-package assistant has NOT been run for this packet — owner: the regression phase",
       "operator live Telegram behavioral smoke test (human turn): /ask <question> -> exactly ONE ack; bare /ask -> ONE honest line, never '? Failed to save' + 'saved as an idea'"
     ]
   },
