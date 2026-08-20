@@ -195,7 +195,7 @@ SCOPE-07 ─> SCOPE-03/04 (sensitivity must travel in a bundle)
 
 **Status:** Not Started
 **Depends On:** SCOPE-07
-**Blocked by:** `F-111-108-01` (BLOCKING) — the decision consumes spec 108's grants, and spec 108 is `specs_hardened`, not delivered.
+**Blocked by:** `F-111-108-01` (BLOCKING) — the decision consumes spec 108's grants, and spec 108 is `blocked`, not `specs_hardened`. Its grant model is **built, mounted and green** (SCOPE-01/02/03/05 `Done`, 87 of 90 DoD items closed with executed evidence), but it runs in the OBSERVE (non-denying) stage: SCOPE-04 is held by three operator-owned, time-bound items and the enforcement flip is gated by a review carrying `blocks_on_failure: [release-train-promote]`. This scope cannot complete before those grants actually deny.
 **Requirements:** R-111-24 … R-111-29
 **Scenarios:** SCN-111-E01 … SCN-111-E07
 

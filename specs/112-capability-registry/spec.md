@@ -127,7 +127,7 @@ exist; they prove nothing about a fix.
 | E15 | The slash table maps `/ask` to `open_knowledge`, while the assistant registry assigns `/ask` to `retrieval_qa`. **The same token names two different targets in two files** | `internal/assistant/shortcuts.go:47` vs `config/assistant/scenarios.yaml:25-31` |
 | E16 | The slash table ships `/recipe` and `/cook`, while the registry records `recipe_search` with `slash_shortcut: ""` and a comment that the set "stays frozen at `/ask`, `/weather`, `/remind`, `/reset`". The registry states the shortcuts do not exist; the code ships them | `internal/assistant/shortcuts.go:50-51` vs `config/assistant/scenarios.yaml:47-57` |
 | E17 | 31 first-party PWA pages exist; **2** load the shared navigation (`assistant.html`, `index.html`). The other 29 render no shared navigation at all | `web/pwa/*.html`, `grep` for `appnav.js` |
-| E18 | Spec 108 (corpus grant enforcement), which owns the `corpus:read` boundary this feature's authorization requirement depends on, is `specs_hardened` — **planned, not delivered** — and targets the `next` train | `specs/108-corpus-grant-enforcement/state.json` |
+| E18 | Spec 108 (corpus grant enforcement), which owns the `corpus:read` boundary this feature's authorization requirement depends on, is **`blocked`** and targets the `next` train. Its engineering is complete and green — SCOPE-01 (scope registration), SCOPE-02 (observe-stage plumbing), SCOPE-03 (gate mount) and SCOPE-05 (docs, release train, flag bundles) are all `Done`, 87 of its 90 DoD items are closed with executed evidence. SCOPE-04 (caller remediation) is `Blocked` on three **operator-owned, time-bound** items no code can satisfy: a ≥14-day OBSERVE window, proactive rotation of principals whose grants are unknowable, and an empty-or-accepted go/no-go denial set. So the gate is **built and mounted but still in the OBSERVE (non-denying) stage**; the enforcement flip is gated by a daily review carrying `blocks_on_failure: [release-train-promote]`. **Built and green ≠ enforcing** | `specs/108-corpus-grant-enforcement/state.json` (`status`, `blockedReason`, `certification.scopeProgress`) |
 | E19 | Spec 109 (MCP) is `specs_hardened`, targets `next`, and explicitly forbids deriving the tool list by passthrough: "no MCP tool is derived by passthrough from `agent.All()`" | `specs/109-mcp-knowledge-server/state.json`; `specs/109-mcp-knowledge-server/spec.md:80-81` |
 
 ### Sharpening of `D17` — the unsurfaced count is 11, not 22
@@ -644,7 +644,7 @@ Requirements are behavioural and tech-agnostic. They state what must be true, ne
 | ID | Severity | Finding | Owner |
 |---|---|---|---|
 | `F-112-FLAG-01` | **BLOCKING** | No feature flag is declared, so `flagsIntroduced` is deliberately empty. A cutover that replaces live navigation and widens natural-language reach warrants a flag, but gate G111 requires an introduced flag to be default-OFF in every non-owning train's bundle, which means editing `config/feature-flags.mvp.yaml` — an artifact owned by `bubbles.train` and outside this authoring run's permitted surface. Naming a flag here without the backing bundle entries would be a declaration with no enforcement. | `bubbles.train` |
-| `F-112-108-01` | **BLOCKING** | R-112-23 through R-112-26 depend on spec 108's `corpus:read` grant model. Spec 108 is `specs_hardened` — planned, not delivered (E18). Surfacing capabilities before that boundary is enforceable violates P4. The ordering between the two specs is a real dependency, not a preference. | `bubbles.plan` |
+| `F-112-108-01` | **BLOCKING** | R-112-23 through R-112-26 depend on spec 108's `corpus:read` grant model. Spec 108 is **`blocked`**, not `specs_hardened` (E18) — its grant model is **built, mounted and green**, but it sits in the OBSERVE (non-denying) stage behind three operator-owned, time-bound items, and its enforcement flip is gated by a review carrying `blocks_on_failure: [release-train-promote]`. Surfacing capabilities before that boundary actually **denies** violates P4. **This correction narrows the finding's rationale — from "the grant model does not exist" to "the grant model exists and is green but does not yet enforce" — and it is recorded here rather than used to silently downgrade the finding. The severity is left at BLOCKING; reclassifying it is a judgement for the owning agent, not a side effect of a fact correction.** | `bubbles.plan` |
 | `F-112-UNIT-01` | **BLOCKING** | The registry's unit is the capability; the built artifacts are prompt contracts, and the mapping is not 1:1 (E3, §3 sharpening). The rule that decides what constitutes one capability, and how contracts bind to capabilities, is undecided. Getting it wrong reproduces the original defect at a new granularity. | `bubbles.design` |
 | `F-112-UNIVERSE-01` | **BLOCKING** | R-112-31 requires the coverage check to compare against an independently derived universe. How that universe is derived — and how it avoids the circularity already present at `route_inventory_test.go:92-100` (E9) — is undecided. Without this the check cannot fail and is decorative. | `bubbles.design` |
 | `F-112-109-01` | HIGH | Spec 109 explicitly forbids deriving the tool list by passthrough (E19). The external tool projection must therefore be a per-capability declared projection, not a blanket export of the capability set. Reconciling R-112-08 with that constraint is a design decision. | `bubbles.design` (with spec 109) |
@@ -652,7 +652,7 @@ Requirements are behavioural and tech-agnostic. They state what must be true, ne
 | `F-112-ALIAS-01` | HIGH | The alias table and the assistant registry currently contradict each other on `/ask`, `/recipe` and `/cook` (E15, E16). Generating both from one descriptor forces a decision about which existing behaviour is correct. That decision changes shipped user-visible behaviour for at least one token and cannot be made silently by a generator. | `bubbles.design` |
 | `F-112-ISLANDS-01` | MEDIUM | 29 of 31 first-party PWA pages render no shared navigation (E17). R-112-20 is satisfiable in principle by a core that reaches only surfaces which render navigation at all, which would make the guarantee vacuous on most pages. The relationship between this feature's guarantee and the island pages must be stated rather than assumed. | `bubbles.design` (with the shell spec) |
 | `F-112-TEMPLATE-01` | LOW | The authoring brief noted that `.specify/templates/spec-template.md` is expected to govern spec structure. **That file does not exist in this repository** — `.specify/` contains only `memory/`, `metrics/` and `runtime/`; there is no `templates/` directory. This spec follows the structure of the adjacent sibling spec together with the Bubbles BDD scenario contract. Either the template should be installed or the instruction corrected. | operator via `bubbles.plan` |
-| `F-112-110-01` | LOW | Sibling spec `110-retrieval-quality-foundation` has no `state.json`, so it carries no `releaseTrain` or `flagsIntroduced` declaration. This was observed while reading siblings for consistency and is **not modified here** (that spec is outside this run's permitted surface), but it is recorded because gate G110 covers train declaration across specs. | `bubbles.plan` |
+| `F-112-110-01` | LOW — **RESOLVED BY FACT** | Originally recorded because sibling spec `110-retrieval-quality-foundation` had no `state.json` and therefore no `releaseTrain` or `flagsIntroduced` declaration under gate G110. **That is no longer true.** `specs/110-retrieval-quality-foundation/state.json` now exists and declares `status: not_started`, `releaseTrain: mvp`, `flagsIntroduced: []`. The gap the finding reported has closed on its own, without this spec modifying that packet. The finding is marked resolved rather than left open asserting a condition that no longer holds. | `bubbles.plan` |
 
 ---
 
@@ -681,16 +681,22 @@ The two valid trains are `mvp` (`target_slot: prod`) and `next` (`target_slot: s
 
 ### Why `next` and not `mvp`
 
-1. **This raises reach, and the guard that should bound it is not delivered.** Surfacing the
+1. **This raises reach, and the guard that should bound it does not yet deny.** Surfacing the
    eleven currently-undeclared dispatchable capabilities makes them invocable by anyone who
    can talk to the assistant. The per-capability authorization that bounds that
-   (`corpus:read`, spec 108) is `specs_hardened`, not delivered, and targets `next` (E18).
-   Shipping the exposure on the live train while its boundary lives on the other train would
-   widen reach ahead of its guard — precisely what P4 forbids.
-2. **Its two hard dependencies are both on `next`.** Spec 108 (grants) and spec 109 (the
-   external tool surface) are both `specs_hardened` on `next`. A registry on `mvp` would
-   project into a tool list that does not exist on that train, and would declare grants that
-   train does not enforce.
+   (`corpus:read`, spec 108) is `blocked`, targets `next`, and is **built, mounted and green
+   but still in the OBSERVE (non-denying) stage** (E18). Its enforcement flip is held by
+   three operator-owned, time-bound items and by a review carrying
+   `blocks_on_failure: [release-train-promote]`. A guard that observes is not a guard that
+   refuses, so shipping the exposure on the live train would still widen reach ahead of
+   enforcement — precisely what P4 forbids. **This is a weaker statement than the one
+   originally written here, which claimed the grant model was undelivered. The grant model
+   exists. The train choice does not rest on that claim: it rests on the enforcement flip
+   being outstanding, which it is.**
+2. **Its two hard dependencies are both on `next`.** Spec 108 (grants, `blocked` — engineering
+   complete, enforcement flip outstanding) and spec 109 (the external tool surface,
+   `specs_hardened`) both target `next`. A registry on `mvp` would project into a tool list
+   that does not exist on that train, and would declare grants that train does not enforce.
 3. **It replaces live navigation on a running shell.** Three navigation authorities are
    active and already divergent (E11–E14). Cutting them over to a generated projection is a
    change with real regression surface on every page a user touches; proving it on staging

@@ -33,7 +33,7 @@ page. Anything that reads like a proposal is a restatement of a **requirement al
 | The catalog's generation path | `config/smackerel.yaml` `product_experience` block → `catalog.gen.json` | The registry's generation must join this path, not create a second one |
 | Principle 5 | [`docs/Product-Principles.md`](../../docs/Product-Principles.md) — Principle 5, One Graph, Many Views | The governing principle; it is what forbids a second registry |
 | Principle 11 | [`docs/Product-Principles.md`](../../docs/Product-Principles.md) — Principle 11, Local-First Data Ownership (ratified 2026-07-29, BLOCKING) | Governs the external tool projection: exposure to an external client is a grant decision |
-| Spec 108 grant model | [`specs/108-corpus-grant-enforcement/spec.md`](../108-corpus-grant-enforcement/spec.md) | Supplies `corpus:read`; `specs_hardened`, not delivered; same `next` train |
+| Spec 108 grant model | [`specs/108-corpus-grant-enforcement/spec.md`](../108-corpus-grant-enforcement/spec.md) | Supplies `corpus:read`; `blocked`, not `specs_hardened` — built, mounted and green, but still in the OBSERVE (non-denying) stage; same `next` train |
 | Spec 109 tool surface | [`specs/109-mcp-knowledge-server/spec.md`](../109-mcp-knowledge-server/spec.md) | Consumes the external projection; explicitly forbids passthrough derivation |
 
 ---
@@ -53,7 +53,7 @@ would be `bubbles.analyst` making a `bubbles.design` decision.
 | D6 | Whether this feature performs the **navigation cutover** or hands it to the shell specification, and how R-112-09 is satisfied by whichever does not | `F-112-CUTOVER-01` | The hand-maintained authorities survive beside their projections, which P2 defines as a defect |
 | D7 | How the **external tool projection** is declared per capability without becoming the passthrough spec 109 forbids | `F-112-109-01` | Either the tool list is hand-maintained again, or spec 109's constraint is violated |
 | D8 | What the **guaranteed core guarantees on a surface that renders no navigation**, given 29 of 31 PWA pages render none | `F-112-ISLANDS-01` | R-112-20 is satisfied vacuously and the guarantee means nothing on most pages |
-| D9 | **Ordering against spec 108 and spec 109**, both `specs_hardened` on the same train and both depended on | `F-112-108-01` | Building against a grant model or a tool surface that does not exist yet |
+| D9 | **Ordering against spec 108 and spec 109**, both on the same `next` train and both depended on — 108 is `blocked` with its gate built but not yet enforcing, 109 is `specs_hardened` | `F-112-108-01` | Building against a grant model that does not yet deny, or a tool surface that does not exist yet |
 | D10 | How a capability is **withheld** under R-112-25 when its grant is unenforceable, and how that withholding is reported without leaking the capability's existence (NFR-112-06) | — | Either capabilities surface unguarded, or the withholding itself becomes an information leak |
 
 ---

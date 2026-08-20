@@ -114,7 +114,7 @@ that SCOPE-08 validates. It is deliberately not a projection itself.
 
 **Status:** Not Started
 **Depends On:** SCOPE-01 (foundation — authorization is a facet of the descriptor record)
-**Blocked by:** `F-112-108-01` (BLOCKING) — the grant model belongs to spec 108, which is `specs_hardened`, not delivered. This scope cannot complete before that grant model exists.
+**Blocked by:** `F-112-108-01` (BLOCKING) — the grant model belongs to spec 108, which is `blocked`, not `specs_hardened`. That model is **built, mounted and green**, but it runs in the OBSERVE (non-denying) stage and its enforcement flip is held by three operator-owned, time-bound items plus a review carrying `blocks_on_failure: [release-train-promote]`. This scope cannot complete before that grant model actually denies.
 **Requirements:** R-112-23 … R-112-28
 **Scenarios:** SCN-112-D01, SCN-112-D02, SCN-112-D03, SCN-112-D04, SCN-112-D05
 

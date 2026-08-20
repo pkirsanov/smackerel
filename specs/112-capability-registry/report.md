@@ -118,7 +118,7 @@ rather than left for discovery during execution.
 | `F-112-ALIAS-01` | HIGH | `bubbles.design` |
 | `F-112-ISLANDS-01` | MEDIUM | `bubbles.design` (with the shell spec) |
 | `F-112-TEMPLATE-01` | LOW | operator via `bubbles.plan` |
-| `F-112-110-01` | LOW | `bubbles.plan` |
+| `F-112-110-01` | LOW — **RESOLVED BY FACT** (spec 110 now has a `state.json` declaring `releaseTrain: mvp`; the reported gap has closed) | `bubbles.plan` |
 
 ## Test Evidence
 
