@@ -288,7 +288,7 @@ Before ANY bug work (discovery, analysis, or fixing), ensure the bug folder and 
    - `report.md` — initialize using the `report.md` template from `feature-templates.md` / `scope-workflow.md` with `### Summary`, `### Completion Statement`, and `### Test Evidence`
    - `uservalidation.md` — initialize using the checklist template from `feature-templates.md` with a `## Checklist` section and checked-by-default entries
    - `scenario-manifest.json` — initialize when the bug scopes define Gherkin scenarios or create it before any completion claim is allowed
-   - `state.json` — initialize the version 3 control-plane state model with `workflowMode: "bugfix-fastlane"`, `execution.activeAgent: "bubbles.bug"`, `execution.currentPhase: "discovery"`, `status: "in_progress"`, `certification.status: "in_progress"`, empty `transitionRequests` / `reworkQueue`, and timestamps
+   - `state.json` — initialize the version 3 control-plane state model with `workflowMode: "bugfix-fastlane"`, `execution.activeAgent: "bubbles.bug"`, `execution.currentPhase: "bug-discovery"`, `status: "in_progress"`, `certification.status: "in_progress"`, empty `transitionRequests` / `reworkQueue`, and timestamps
 
 4. **Verify ALL required artifacts exist** — BLOCKING. Do NOT proceed to Phase 1 until all exist.
 
@@ -336,7 +336,7 @@ If user said "find bugs" or no specific bug:
    - Add acceptance criteria
 
 3. **Update state.json**:
-   - Set `execution.currentPhase: "documentation"`
+   - Set `execution.currentPhase: "bug"`
 
 4. **If mode: document → STOP here**:
    - Set state.json `status: "blocked"` and `certification.status: "blocked"`
@@ -383,7 +383,7 @@ If you reach Phase 5 without having written and executed a failing test, STOP �
    - If design.md is still empty/skeletal after the specialist returns → re-invoke with more specific root cause context
 
 5. **Update state.json**:
-   - Set `execution.currentPhase: "analysis"`
+   - Set `execution.currentPhase: "analyze"`
 
 ### Phase 4: Define Fix Scopes
  

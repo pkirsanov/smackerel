@@ -312,6 +312,24 @@ else
   fail "structure: fallback block is NOT positioned between the registry read and the consuming 'if -gt 0'"
 fi
 
+# IMP-052 SCOPE-2: Check 6B must resolve the registered owner before it attempts
+# specialist provenance matching. This complements the end-to-end adversarial
+# fixtures in state-transition-guard-selftest.sh and prevents a future refactor
+# from restoring the old `bubbles.<phase>` match ahead of registry validation.
+owner_resolution_order="$(awk '
+  /CHECK 6B: Phase-claim provenance/ { check6b=NR }
+  /resolve_phase_owner "\$claimed_phase"/ { resolve=NR }
+  /matched_agent=.*expected_agent/ { match_line=NR }
+  END {
+    if (check6b > 0 && resolve > check6b && match_line > resolve) print "OK"; else print "BAD"
+  }
+' "$GUARD_SCRIPT")"
+if [[ "$owner_resolution_order" == "OK" ]]; then
+  pass "structure: Check 6B resolves phase ownership before specialist provenance matching"
+else
+  fail "structure: Check 6B does NOT resolve phase ownership before specialist provenance matching"
+fi
+
 if [[ "$failures" -ne 0 ]]; then
   echo "$failures case(s) failed." >&2
   exit 1

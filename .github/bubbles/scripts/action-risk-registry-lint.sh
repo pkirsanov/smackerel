@@ -3,6 +3,7 @@
 # contract (Gate G139, IMP-052).
 set -euo pipefail
 
+GATE_ID="G139"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 if [[ "$(basename "$(dirname "$SCRIPT_DIR")")" == "bubbles" && "$(basename "$(dirname "$(dirname "$SCRIPT_DIR")")")" == ".github" ]]; then
   REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
@@ -186,8 +187,8 @@ EOF
 fi
 
 if [[ "$failures" -gt 0 ]]; then
-  echo "Action risk registry FAILED with $failures finding(s): $REGISTRY_FILE" >&2
+  echo "Action risk registry FAILED [$GATE_ID] with $failures finding(s): $REGISTRY_FILE" >&2
   exit 1
 fi
 
-echo "Action risk registry OK: $REGISTRY_FILE ($command_count commands validated)"
+echo "Action risk registry OK [$GATE_ID]: $REGISTRY_FILE ($command_count commands validated)"

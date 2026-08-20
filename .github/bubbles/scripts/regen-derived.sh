@@ -12,9 +12,11 @@
 #
 # This wrapper removes the recurring "which generators, in what order?" trap (the
 # new-gate authoring checklist re-derives it every release; a manifest-before-
-# stats mistake blocks the push at release-check with stale checksums). It is
-# idempotent: on an already-fresh tree it rewrites identical bytes and the final
-# verification pass is a no-op.
+# stats mistake blocks the push at release-check with stale checksums). The gate
+# enforcement block regenerates FIRST because it rewrites gates.yaml, which the
+# stats and gate-coverage generators consume. It is idempotent: on an
+# already-fresh tree it rewrites identical bytes and the final verification pass
+# is a no-op.
 #
 # Usage: regen-derived.sh [--check-only | -h | --help]
 #   (no args)     regenerate in dependency order, then verify every generator
@@ -71,6 +73,7 @@ check_generator() {
 }
 
 if [[ "$CHECK_ONLY" -eq 0 ]]; then
+  run_generator bash generate-gate-enforcement.sh "gate-enforcement registry block"
   run_generator sh generate-framework-stats.sh "framework stats (README / CHEATSHEET / html / framework-stats.*)"
   run_generator bash generate-cheatsheet.sh "cheatsheet"
   run_generator bash generate-capability-ledger-docs.sh "capability-ledger docs"
@@ -86,6 +89,7 @@ fi
 
 echo "Verifying derived-artifact freshness..."
 fresh_failures=0
+check_generator bash generate-gate-enforcement.sh "gate-enforcement registry block" || fresh_failures=$((fresh_failures + 1))
 check_generator sh generate-framework-stats.sh "framework stats" || fresh_failures=$((fresh_failures + 1))
 check_generator bash generate-cheatsheet.sh "cheatsheet" || fresh_failures=$((fresh_failures + 1))
 check_generator bash generate-capability-ledger-docs.sh "capability-ledger docs" || fresh_failures=$((fresh_failures + 1))

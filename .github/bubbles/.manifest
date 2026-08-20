@@ -301,6 +301,8 @@ bubbles/scripts/payload-closure-guard-selftest.sh
 bubbles/scripts/payload-closure-guard.sh
 bubbles/scripts/phase-coordinator-selftest.sh
 bubbles/scripts/phase-coordinator.sh
+bubbles/scripts/phase-name-enum-lint-selftest.sh
+bubbles/scripts/phase-name-enum-lint.sh
 bubbles/scripts/phase-relevance-resolve-selftest.sh
 bubbles/scripts/phase-relevance-resolve.sh
 bubbles/scripts/pii-scan.sh

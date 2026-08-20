@@ -1909,9 +1909,8 @@ for entry in history:
 ' "$state_file" 2>/dev/null
   } || true)"
 
-  if [[ -n "$execution_history_block" ]]; then
-    claimed_phases="$({
-      python3 -c '
+  claimed_phases="$({
+    python3 -c '
 import json, sys
 with open(sys.argv[1]) as f:
     data = json.load(f)
@@ -1936,8 +1935,9 @@ for entry in list(claims) + list(certified):
 for p in set(names):
     print(p)
 ' "$state_file" 2>/dev/null
-    } || true)"
+  } || true)"
 
+  if [[ -n "$claimed_phases" ]]; then
     # Orchestrator allowlist for parent-expansion (sourced from workflows.yaml is future work;
     # for now hardcode the three registered orchestrators).
     orchestrator_allowlist="bubbles.workflow bubbles.goal bubbles.sprint bubbles.iterate"
@@ -2062,10 +2062,9 @@ for p in set(names):
       phase_owner_resolution="registered"
     }
 
-    if [[ -n "$claimed_phases" ]]; then
-      provenance_failures=0
-      phase_registry_failures=0
-      while IFS= read -r claimed_phase; do
+    provenance_failures=0
+    phase_registry_failures=0
+    while IFS= read -r claimed_phase; do
         [[ -z "$claimed_phase" ]] && continue
         resolve_phase_owner "$claimed_phase"
         case "$phase_owner_resolution" in
@@ -2171,18 +2170,17 @@ for p in set(names):
           fail "Phase '$claimed_phase' is in completedPhaseClaims but no specialist or parent-expanded provenance found (Gate G022)"
           provenance_failures=$((provenance_failures + 1))
         fi
-      done <<< "$claimed_phases"
-      if [[ "$provenance_failures" -gt 0 ]]; then
-        fail "$provenance_failures phase claim(s) lack proper agent provenance — phase impersonation detected"
-      fi
-      if [[ "$phase_registry_failures" -gt 0 ]]; then
-        fail "$phase_registry_failures phase claim(s) violate the registered phase-owner contract — framework integrity check failed"
-      fi
-    else
-      info "No phase claims to verify provenance for"
+    done <<< "$claimed_phases"
+    if [[ "$provenance_failures" -gt 0 ]]; then
+      fail "$provenance_failures phase claim(s) lack proper agent provenance — phase impersonation detected"
     fi
+    if [[ "$phase_registry_failures" -gt 0 ]]; then
+      fail "$phase_registry_failures phase claim(s) violate the registered phase-owner contract — framework integrity check failed"
+    fi
+  elif [[ -n "$execution_history_block" ]]; then
+    info "No phase claims to verify provenance for"
   else
-    info "No executionHistory found — phase provenance check skipped (state.json may be legacy format)"
+    info "No phase claims or executionHistory found — phase provenance check not applicable"
   fi
 fi
 echo ""

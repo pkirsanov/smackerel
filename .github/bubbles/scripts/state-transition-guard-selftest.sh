@@ -100,6 +100,28 @@ inject_unauthorized_workflow_runner() {
   mv "$tmp_file" "$capabilities_file"
 }
 
+inject_phase_owner() {
+  local workflows_file="$1"
+  local phase="$2"
+  local owner="$3"
+  local tmp_file
+  tmp_file="$(mktemp)"
+
+  awk -v phase="$phase" -v owner="$owner" '
+    $0 == "  " phase ":" { in_phase=1 }
+    in_phase && /^    owner:/ {
+      print "    owner: " owner
+      changed=1
+      in_phase=0
+      next
+    }
+    { print }
+    END { if (changed != 1) exit 1 }
+  ' "$workflows_file" > "$tmp_file"
+
+  mv "$tmp_file" "$workflows_file"
+}
+
 assert_log_contains() {
   local log_file="$1"
   local needle="$2"
@@ -1902,14 +1924,8 @@ if not isinstance(execution, dict):
   data["execution"] = execution
 
 execution["completedPhaseClaims"] = ["totally-made-up-phase"]
-execution["executionHistory"] = [
-  {
-    "agent": "bubbles.bug",
-    "phasesExecuted": ["totally-made-up-phase"],
-    "startedAt": "2026-01-01T00:00:00Z",
-    "completedAt": "2026-01-01T00:20:00Z",
-  },
-]
+execution.pop("executionHistory", None)
+data.pop("executionHistory", None)
 
 with open(path, "w", encoding="utf-8") as handle:
   json.dump(data, handle, indent=2)
@@ -2092,6 +2108,8 @@ fast_lane_profile_dir="$tmp_root/specs/940-fast-lane-profile-resolve"
 framework_proposal_profile_dir="$tmp_root/specs/941-framework-proposal-profile-resolve"
 g064_framework_root="$tmp_root/framework-g064"
 g064_feature_dir="$g064_framework_root/specs/902-transition-guard-selftest-unauthorized-workflow-runner"
+broken_phase_owner_root="$tmp_root/framework-broken-phase-owner"
+broken_phase_owner_dir="$broken_phase_owner_root/specs/944-transition-guard-selftest-broken-phase-owner"
 mkdir -p "$tmp_root/specs"
 clone_framework_surface "$tmp_root"
 git -C "$tmp_root" init -q
@@ -2324,6 +2342,12 @@ mutate_analyze_phase_provenance "$analyze_wrong_agent_dir/state.json" "bubbles.s
 unregistered_phase_dir="$tmp_root/specs/943-transition-guard-selftest-unregistered-phase"
 cp -R "$positive_feature_dir" "$unregistered_phase_dir"
 mutate_unregistered_phase_claim "$unregistered_phase_dir/state.json"
+
+clone_framework_surface "$broken_phase_owner_root"
+mkdir -p "$broken_phase_owner_root/specs"
+cp -R "$positive_feature_dir" "$broken_phase_owner_dir"
+mutate_analyze_phase_provenance "$broken_phase_owner_dir/state.json" "bubbles.analyst"
+inject_phase_owner "$broken_phase_owner_root/bubbles/workflows.yaml" "analyze" "bubbles.nonexistent-phase-owner"
 
 echo "Running agent ownership lint precheck..."
 lint_log="$tmp_root/agent-ownership-lint.log"
@@ -2895,6 +2919,14 @@ assert_log_contains "$unregistered_phase_log" "Phase 'totally-made-up-phase' is 
 assert_log_contains "$unregistered_phase_log" "refusing without synthesizing a phantom owner" "Check 6B: the refusal explains that no owner was invented"
 assert_log_not_contains "$unregistered_phase_log" "bubbles.totally-made-up-phase" "Check 6B: the guard never demands a fabricated agent identity"
 assert_log_contains "$unregistered_phase_log" "framework integrity check failed" "Check 6B: an unknown phase cannot degrade to a pass"
+assert_log_not_contains "$unregistered_phase_log" "phase provenance check skipped" "Check 6B: missing execution history cannot bypass phase registry validation"
+
+echo "Running Check 6B broken declared-owner adversarial selftest..."
+broken_phase_owner_log="$tmp_root/broken-phase-owner.log"
+run_capture "$broken_phase_owner_log" bash "$GUARD_SCRIPT" "$broken_phase_owner_dir" >/dev/null
+assert_log_contains "$broken_phase_owner_log" "Phase 'analyze' declares owner 'bubbles.nonexistent-phase-owner', but that owner has no shipped agent definition" "Check 6B: a registered phase with a nonexistent declared owner is refused as framework corruption"
+assert_log_not_contains "$broken_phase_owner_log" "Phase 'analyze' has specialist provenance from bubbles.analyst" "Check 6B: legacy provenance cannot conceal a broken declared owner"
+assert_log_contains "$broken_phase_owner_log" "framework integrity check failed" "Check 6B: a broken declared owner cannot degrade to a pass"
 
 echo "Running negative packet-field selftest..."
 negative_log="$tmp_root/negative-guard.log"

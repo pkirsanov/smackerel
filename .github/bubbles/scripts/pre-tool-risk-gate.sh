@@ -39,6 +39,7 @@
 
 set -euo pipefail
 
+GATE_ID="G139"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 if [[ "$(basename "$(dirname "$SCRIPT_DIR")")" == "bubbles" && "$(basename "$(dirname "$(dirname "$SCRIPT_DIR")")")" == ".github" ]]; then
   FRAMEWORK_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)/.github/bubbles"
@@ -320,7 +321,7 @@ in_list() { local needle="$1" hay="$2" x; for x in $hay; do [[ "$x" == "$needle"
 # the true risk of a class we cannot interpret, so we refuse. Validated against
 # the shared vocabulary directly, so BUBBLES_RISK_BLOCK/WARN cannot defeat it.
 if ! action_risk_is_valid_class "$RISK_CLASS"; then
-  echo "pre-tool-risk-gate: BLOCK — '$TARGET' carries unrecognized risk class '$RISK_CLASS'." >&2
+  echo "pre-tool-risk-gate: BLOCK [$GATE_ID] — '$TARGET' carries unrecognized risk class '$RISK_CLASS'." >&2
   echo "  Valid classes: $(action_risk_classes_list)" >&2
   echo "  Fix the classification in the action risk registry; this is not a confirmable action." >&2
   echo "decision=block reason=unknown-risk-class enforcement=enforced riskClass=$RISK_CLASS"
