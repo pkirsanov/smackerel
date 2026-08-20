@@ -25,7 +25,7 @@ page. Anything that reads like a proposal is a restatement of a **requirement al
 | Input | Location | Why it is load-bearing |
 |---|---|---|
 | Requirements R-112-01 … R-112-33 | [`spec.md`](spec.md) §8 | The behavioural contract; design chooses how, never whether |
-| Domain capability model | [`spec.md`](spec.md) §4 | Primitives, relationships, and the nine policies every implementation must obey |
+| Domain capability model | [`spec.md`](spec.md) — `## Domain Capability Model` | Primitives, relationships, and the nine policies every implementation must obey |
 | Verified evidence base E1 … E19 | [`spec.md`](spec.md) §3 | Current-state facts, each re-verified 2026-08-04 against the working tree |
 | The `D17` sharpening | [`spec.md`](spec.md) §3 | The unsurfaced set is 11 dispatchable capabilities, not 22 contracts; the unit distinction drives `F-112-UNIT-01` |
 | Open findings `F-112-*` | [`spec.md`](spec.md) §11 | Four are BLOCKING and gate the design pass itself |
@@ -78,6 +78,94 @@ inside it.
 
 ---
 
+## Capability Foundation
+
+**This section records the shape `spec.md` already establishes. It is not a design decision,
+and it does not resolve one.** `spec.md` — `## Domain Capability Model` §4.1 defines
+`Projection` as a primitive ("a generated view of the descriptor set onto one reachability
+surface — derived, never authored"), §4.2 states that "every `ReachabilitySurface` is a
+`Projection` of the descriptor set", and the Outcome Contract requires that "every
+reachability surface becomes a projection". Four such surfaces are named. The foundation is
+therefore already in the requirements; naming it here only makes it addressable.
+
+The foundation is the **CapabilityDescriptor record plus the Projection contract**: the one
+place a capability fact is authored, and the rule that every reachability surface is derived
+from it rather than authored beside it.
+
+Foundation-owned and identical for every projection:
+
+- capability identity, and its stability across changes to phrasing, navigation position,
+  alias and exposure class (R-112-01, R-112-03);
+- the declared exposure class and the recorded reason any non-user-facing class requires
+  (R-112-13, R-112-14);
+- the authorization requirement — authenticated principal plus grants — derived on the
+  server, never asserted by the caller (R-112-23, R-112-24);
+- the side-effect class and the provenance requirement, so every surface enforces the same
+  rule without re-deriving it (R-112-27, R-112-28, P8);
+- the content-free discipline: identity and policy only (R-112-07, P9);
+- determinism and stable ordering of any projection (NFR-112-01, NFR-112-04);
+- the coverage check that refuses to let any of those facets go missing (R-112-29 …
+  R-112-33).
+
+**What naming the foundation does not settle.** Its unit of record — what constitutes one
+capability, and how prompt contracts bind to it given the mapping is not 1:1 — is `D1` /
+`F-112-UNIT-01`, BLOCKING and undecided. How the foundation extends the existing catalog is
+`D3`. How the coverage check derives its independent universe is `D2` / `F-112-UNIVERSE-01`,
+BLOCKING and undecided. This section names the abstraction; it does not choose its shape,
+its fields, its format, or its generation mechanism.
+
+## Concrete Implementations
+
+The four projections below are the concrete implementations of the single foundation above.
+They are not proposed here — `spec.md` §4.1 enumerates all four as `ReachabilitySurface`
+instances, R-112-08 requires all four to be generated from the one descriptor set, and
+[`scopes.md`](scopes.md) already carries each as its own scope with its own blockers.
+
+| Concrete Implementation | Reachability surface it projects onto | Predecessor it must retire (R-112-09) | Owning scope | Gating finding |
+|---|---|---|---|---|
+| Assistant intent projection | the natural-language intent set | the hand-maintained assistant intent registry (inventory #1) | SCOPE-04 | `F-112-108-01` (BLOCKING, through SCOPE-03) |
+| Navigation core projection | the guaranteed cross-surface navigation core, digest included | three live navigation authorities that have already diverged (E11 – E14) | SCOPE-05 | `F-112-CUTOVER-01` (HIGH), `F-112-ISLANDS-01` (MEDIUM) |
+| Alias projection | the slash alias table | the hand-maintained alias table, which currently contradicts the intent registry (E15, E16) | SCOPE-06 | `F-112-ALIAS-01` (HIGH) |
+| External tool projection | the external tool list | none — the tool surface is not built (spec 109) | SCOPE-07 | `F-112-109-01` (HIGH), `F-112-108-01` (BLOCKING) |
+
+### Variation Axes
+
+The foundation above is shared. These are the dimensions along which `spec.md`'s own
+requirements already say the four projections differ — each axis is a real difference with a
+cited requirement, scenario or evidence id behind it, not a category invented to fill a
+heading. How each projection realises its point on an axis is undecided (`D3` … `D10`).
+
+- **Axis 1 — Consuming surface and its input shape.** The intent projection is consumed by a
+  natural-language matcher, the navigation projection by a rendered shell, the alias
+  projection by a token parser, and the external projection by a protocol client. `spec.md`
+  §4.1 names all four as distinct `ReachabilitySurface` instances; R-112-08 requires one
+  descriptor set to produce all four.
+- **Axis 2 — Admission rule.** Each projection admits a different subset of the same
+  descriptor set. A test-only capability appears in none of the user-facing projections
+  (R-112-16, SCN-112-B04). The navigation core admits by declared navigation status
+  (R-112-19 … R-112-22). The external projection admits only where the grant is declared
+  and enforceable (R-112-25, SCN-112-D03). The record is shared; the filter is not.
+- **Axis 3 — Where the authorization decision sits.** P4 binds all four equally, but the
+  enforcement point is not the same. For the external projection, admission is itself a
+  per-client grant decision under Principle 11 and spec 108's vocabulary (R-112-25,
+  R-112-26, `F-112-109-01`). For the intent and navigation projections the guard is applied
+  at dispatch. `F-112-108-01` is BLOCKING on this axis alone.
+- **Axis 4 — The invariant each projection must hold.** Navigation must hold an ordered
+  guaranteed core with cross-surface parity (R-112-20, R-112-21, NFR-112-04). The alias
+  projection must hold token uniqueness — one token resolving to exactly one capability —
+  which is the invariant the shipped code violates today (E15, E16). The intent projection
+  must hold an honest no-match path rather than silently substituting a different capability
+  (UC-112-001, alternative flow). The external projection must hold per-capability declared
+  naming, because passthrough derivation is forbidden (E19).
+- **Axis 5 — Retirement cost.** R-112-09 requires each projection to retire its
+  hand-maintained predecessor, but the number of authorities to reconcile is not uniform:
+  the intent and alias projections each replace one (the alias one actively contradicting
+  it), the navigation projection must reconcile three already-divergent authorities
+  (E11 – E14, `F-112-CUTOVER-01`), and the external projection has no predecessor at all.
+  SCOPE-09 owns the retirement, and its cost differs per projection for this reason.
+
+---
+
 ## Explicitly Not Decided Here
 
 Record shape, field types, file format, generation mechanism, the exposure-class values
@@ -85,3 +173,10 @@ themselves, the intent-phrasing representation, projection file layout, the cove
 check's implementation, migration sequencing, and scope decomposition. Scope decomposition
 belongs to `bubbles.plan`; everything else on that list belongs to `bubbles.design` and is
 untouched.
+
+The `Capability Foundation`, `Concrete Implementations` and `Variation Axes` sections above
+are **not** exceptions to this. They record which abstraction `spec.md` establishes, which
+concrete instances it names, and which dimensions its requirements say those instances
+differ along. Every one of those facts is traceable to a requirement, scenario or evidence
+id in `spec.md`. None of them chooses a mechanism, and none of them closes a row in the
+decision table above — `D1` and `D2` in particular remain BLOCKING and open.

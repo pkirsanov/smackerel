@@ -168,7 +168,7 @@ does not claim the digest is unreachable today.
 
 ---
 
-## 4. Domain Capability Model
+## Domain Capability Model
 
 ### 4.1 Primitives
 
