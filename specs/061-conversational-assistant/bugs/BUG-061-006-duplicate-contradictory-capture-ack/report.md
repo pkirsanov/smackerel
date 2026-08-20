@@ -234,15 +234,25 @@ See "After Fix — unit evidence" above. Command exit status: the CLI printed
 
 This section records a CHANGE OF PLAN, not the original plan. The Test Plan and
 DoD for both scopes originally required two `e2e-api` tests in a
-`tests/e2e/assistant/` file dedicated to this bug. That file was written, could
-not be made to run honestly, and was DELETED together with both of its test
-symbols. Those two symbol names and that file path are deliberately not repeated
-anywhere in this packet: naming a test that does not exist is how a reader (or a
-grep-based audit) comes to believe coverage exists when it does not. The
-regression coverage now lives at
+`tests/e2e/assistant/` file dedicated to this bug. A draft of that file was
+written in the working tree, could not be made to run honestly, and was removed
+from the working tree. It was **never committed**: `git log --all` returns zero
+commits for either draft path, and the packet's implementation commit records
+zero deletions, so neither the file nor its two test symbols appear anywhere in
+git history. "Deleted" would overstate it — nothing was ever in the repository
+to delete. The regression coverage now lives at
 `tests/integration/assistant/capture_ack_bug061006_integration_test.go` as three
-`integration` tests. The artifacts named the deleted tests until this session;
-removing every one of those references is part of this entry.
+`integration` tests.
+
+Those two draft symbol names and that draft file path are deliberately not
+repeated anywhere in this packet **as though the test existed**: naming a test
+that does not exist is how a reader (or a grep-based audit) comes to believe
+coverage exists when it does not. The path does appear exactly once more, in
+`state.json` → `certification.pendingGates`, and that occurrence is deliberate
+and is KEPT. It is not a coverage claim; it is the open-gap pointer that names
+the missing test and its owner, so the next owner reads which coverage is
+absent rather than having to rediscover it. A pending gate that names nothing is
+not auditable.
 
 A category was changed, so say plainly what that costs. `integration` is a
 WEAKER claim than `e2e-api`: it substitutes the router/executor and therefore
