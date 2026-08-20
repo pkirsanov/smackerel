@@ -9,7 +9,7 @@
   "owner": "bubbles.goal",
   "discoveredBy": "operator (live deployed Telegram bot, screenshot)",
   "discoveredAt": "2026-07-21",
-  "lastUpdatedAt": "2026-07-22",
+  "lastUpdatedAt": "2026-08-20",
   "rootCause": {
     "defect1": "The CaptureRoute=true fallback drives two reply sinks: (A) NewBotCaptureFn -> Bot.handleTextCapture persists AND replies (replyWithMapping '. Saved …' / captureErrorReply '? Failed to save …'); (B) the renderer sends resp.Body 'saved as an idea — i'll surface it later.'. Two messages per turn.",
     "defect2": "For a bare '/ask', StripShortcutPrefix('/ask') == '' so sink A's callCapture fails ('? Failed to save') while sink B still claims 'saved as an idea' — a false, contradictory pair; the renderer asserted the idea was saved even when it was not."
@@ -50,12 +50,41 @@
     "bootstrap",
     "implement",
     "test",
-    "devops"
+    "devops",
+    "regression"
   ],
+  "execution": {
+    "timestampProvenance": "startedAt is anchored to the earliest Go build-cache write of this session's suite runs (2026-08-20T20:26:42Z, read from GOCACHE); completedAt/claimedAt are real wall-clock at record time (date -u). No timestamp here is estimated to look plausible: the suites ran across earlier turns of this same session and the write-up completed at the recorded instant.",
+    "completedPhaseClaims": [
+      {
+        "phase": "regression",
+        "agent": "bubbles.regression",
+        "claimedAt": "2026-08-20T23:44:00Z",
+        "evidenceRef": "specs/061-conversational-assistant/bugs/BUG-061-006-duplicate-contradictory-capture-ack/report.md#regression-phase",
+        "verdict": "REGRESSION_FREE",
+        "summary": "Cross-suite delta after the CaptureFn error-return change. Four suites executed through the repo CLI under evidence-capture.sh, all exit 0: unit --go; integration (whole lane, no selector, 10252 lines); integration --go-run TestAssistantIntegration_BUG061006 (3/3 PASS, ok tests/integration/assistant 15.343s); e2e --go-package assistant (sha256 e34ed293b05c5eeddfb661c83a92b327a42d75a7eb10e3fc8dcfcef3bdedbbc1, ok tests/e2e/assistant 59.289s, 50 PASSED / 12 SKIPPED / 0 FAILED). No coverage removed, no assertion weakened, no new skip markers. Skips are NOT counted as passes and are enumerated by cause in the report."
+      }
+    ],
+    "executionHistory": [
+      {
+        "phase": "regression",
+        "phasesExecuted": [
+          "regression"
+        ],
+        "agent": "bubbles.regression",
+        "provenanceMode": "specialist",
+        "startedAt": "2026-08-20T20:26:42Z",
+        "completedAt": "2026-08-20T23:44:00Z",
+        "outcome": "completed_diagnostic",
+        "evidence": "report.md#regression-phase. Verdict REGRESSION_FREE. The reclassification of this packet's regression coverage from e2e-api to integration introduced no failures anywhere; the assistant e2e package is green with zero failures. Three capture-path e2e tests SKIPPED on status=\"unavailable\" with capture_route=false, which independently CONFIRMS the root cause measured during the test phase (provider unavailable => capture hook never fires); per BUG-061-008 the product is CORRECT to refuse rather than capture in that state, corroborated by TestAssistantHTTPE2E_HighBandUncitedRefusesHonestly PASSING with error_cause=\"provider_unavailable\". HONEST LIMIT: this verdict does NOT close the e2e coverage gap for this bug's own scenarios. The one passing open-ended subtest (capture_fallback_for_open_ended_text) asserts only Status != \"\", which \"unavailable\" also satisfies, so it cannot distinguish a capture-fallback turn from a provider-unavailable one. Also corrected a FALSE clause carried by two DoD items ('no lane compiles an assistant-package e2e file today'): tests/e2e/assistant/ holds 47 _test.go files, --go-package assistant is whitelisted at smackerel.sh:1430-1449, and the lane compiled and ran them this session."
+      }
+    ]
+  },
   "certification": {
     "status": "in_progress",
     "achievedAssuranceLevel": "deployed-and-infra-verified",
     "certifiedCompletedPhases": [],
+    "certifiedCompletedPhasesNote": "Deliberately EMPTY even though completedPhases now carries 'regression'. bubbles.regression is a diagnostic agent with no certifying authority, and the certifying agent (bubbles.validate) has not executed for this packet. Recording a phase as EXECUTED (execution.completedPhaseClaims + executionHistory + top-level completedPhases) is a different act from CERTIFYING it; writing the regression phase here would give an uncertified packet the appearance of certification.",
     "lockdownState": {
       "round": 0,
       "lastCleanRound": null,
@@ -70,7 +99,7 @@
       "deploy via knb-owned Smackerel adapter: recreate rollout applied; cosign release-proof verified; running core+ml digests match the fix build and are healthy; Telegram assistant adapter wired and bound"
     ],
     "pendingGates": [
-      "scenario-specific regression E2E (tests/e2e/assistant/capture_ack_bug061006_e2e_test.go) is PLANNED but NOT WRITTEN; ./smackerel.sh test e2e --go-package assistant has NOT been run for this packet — owner: the regression phase",
+      "scenario-specific regression E2E for THIS BUG's scenarios does not exist. CORRECTED 2026-08-20 by the regression phase: an earlier wording of this gate said './smackerel.sh test e2e --go-package assistant has NOT been run for this packet'. That is now FALSE \u2014 the lane WAS run this session (exit 0, sha256 e34ed293b05c5eeddfb661c83a92b327a42d75a7eb10e3fc8dcfcef3bdedbbc1, ok tests/e2e/assistant 59.289s, 50 PASSED / 12 SKIPPED / 0 FAILED), and tests/e2e/assistant/ holds 47 compiled test files. What remains genuinely open is narrower: no e2e test binds THIS bug's capture-fallback outcome. The planned file tests/e2e/assistant/capture_ack_bug061006_e2e_test.go was never written (git log --all: zero commits for that path), and the three existing e2e tests that would bind the outcome all SKIPPED on status=\"unavailable\" / capture_route=false. Owner: a harness change providing a provider-enabled assistant e2e phase \u2014 outside this bug's three-file fix surface.",
       "operator live Telegram behavioral smoke test (human turn): /ask <question> -> exactly ONE ack; bare /ask -> ONE honest line, never '? Failed to save' + 'saved as an idea'"
     ]
   },

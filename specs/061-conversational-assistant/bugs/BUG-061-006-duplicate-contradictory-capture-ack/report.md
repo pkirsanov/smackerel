@@ -648,3 +648,194 @@ The two **LIVE** items in `uservalidation.md` require observing the actual
 Telegram exchange, which only the operator can perform (send `/ask <question>`
 and a bare `/ask` to `<configured-bot>`). The fixed binary is deployed and healthy;
 the 30-second UX confirmation is handed to the operator.
+
+---
+
+## Regression phase — cross-suite delta after the `CaptureFn error` change {#regression-phase}
+
+**Agent:** `bubbles.regression` · **Verdict:** 🟢 REGRESSION_FREE
+
+**Claim Source:** executed in this session. The four suites below were run
+through the repo CLI under `.github/bubbles/scripts/evidence-capture.sh` in
+earlier turns of this same session and each returned exit 0; the terminal
+history for this session carries the invocations. `evidence-capture.sh` bounds
+its transcript through a `mktemp` file that is not retained after the process
+exits, so the full 10 252-line integration transcript and the e2e transcript are
+no longer on disk — re-verification via `evidence-capture.sh --verify` would
+require re-running. The recorded sha256 below is the mechanism that makes the
+e2e claim checkable; it is quoted, not re-derived, and this section says so
+rather than implying a fresh derivation.
+
+### What was run, and what it returned {#regression-suite-census}
+
+| # | Command | Exit | Result |
+|---|---------|------|--------|
+| 1 | `./smackerel.sh test unit --go` | 0 | full Go unit lane green |
+| 2 | `./smackerel.sh test integration` (no selector) | 0 | 10 252 lines; whole Go integration lane green |
+| 3 | `./smackerel.sh test integration --go-run 'TestAssistantIntegration_BUG061006'` | 0 | 3/3 PASS — `ok .../tests/integration/assistant 15.343s` |
+| 4 | `./smackerel.sh test e2e --go-package assistant` | 0 | `ok github.com/smackerel/smackerel/tests/e2e/assistant 59.289s` |
+
+Run 2 was executed WITHOUT a `--go-run` selector on purpose: a focused selector
+disables the lane's `ASSISTANT_ACCEPTANCE_GATE_V1` executed-assertion
+enforcement, so a selector-scoped green is a weaker claim than a whole-lane
+green.
+
+**The two failure-shaped `ERROR` lines in run 2 are not failures.** They are
+emitted by a spec-045 adversarial negative fixture in
+`tests/integration/config_validate_test.go` whose assertion at line 317 FAILS IF
+THE ERROR IS ABSENT. Their presence is the fixture working. They are unrelated
+to this bug's surface (`internal/telegram/`), and the lane exited 0.
+
+### Run 4 — e2e assistant package, raw census {#regression-e2e-census}
+
+```
+command : ./smackerel.sh test e2e --go-package assistant
+exit    : 0
+sha256  : e34ed293b05c5eeddfb661c83a92b327a42d75a7eb10e3fc8dcfcef3bdedbbc1
+result  : ok  github.com/smackerel/smackerel/tests/e2e/assistant  59.289s
+
+top-level test census
+  PASSED  : 50
+  SKIPPED : 12
+  FAILED  : 0
+```
+
+**A SKIP is not a PASS and is not aggregated with one here.** The 62 top-level
+tests resolve as 50 passed and 12 skipped; the 12 are enumerated below by cause,
+because "62 green" would be a false summary.
+
+### The 12 skips, by cause {#regression-e2e-skips}
+
+**(a) Provider-unavailable — this bug's own capture path (3).** Each of these
+skips on a status check, so each is a measurement of the live lane's routing,
+not a harness defect:
+
+| Test | Skip reason (verbatim from source) |
+|------|-------------------------------------|
+| `TestAssistantHTTPE2E_CaptureFallbackOpenKnowledgeNoGround` (`capture_fallback_trigger_e2e_test.go:99`) | `live stack did not route through the open-knowledge no-ground capture path (status=%q, capture_route=%v); facade no-ground hook is covered by unit + integration tests` |
+| `TestAssistantHTTPE2E_CaptureRouteInvokesCaptureOnceAndAcknowledges` (`http_capture_test.go:72`) | `live stack did not route open-ended text into capture fallback (status=%q); HTTP wire forwarding is covered by SCOPE-1a/3 tests` |
+| `TestAssistantHTTPE2E_CaptureAcknowledgementMatchesTelegramShape` (`http_capture_test.go:106`) | `live stack did not route into capture fallback (status=%q); cannot assert acknowledgement shape parity without a deterministic capture fixture` |
+
+Observed at run time: `status="unavailable"`, `capture_route=false`.
+
+**(b) Provider-unavailable — other live-LLM tests (3).**
+`TestMicroToolsE2E_ConvertsThreeCupsFlourToGrams` and
+`TestMicroToolsE2E_CalculatorRejectsUnsafeExpression` skip because no live LLM
+was available; `TestIntentCompilerE2E_MalformedJSONBlocksRoutingAndCaptures`
+skips because no borderline turn triggered it on this run.
+
+**(c) Unconditional `planned` placeholders — spec-074 scenarios (4).** These
+carry `status=planned` and skip on every run regardless of environment, so they
+tell us nothing about this change:
+`TestAssistantE2E_CaptureAcknowledgementIsCrossTransportIdentical_TP_074_17`,
+`TestAssistantHTTPE2E_CaptureFallbackDedupWithinWindow_TP_074_11`,
+`TestAssistantHTTPE2E_CaptureFallbackIsInviolable_TP_074_04`,
+`TestAssistantHTTPE2E_CaptureProvenanceIsDistinct_TP_074_07`.
+
+**(d) Environment-gated (2).**
+`TestLegacyRetirementE2E_AliasWindowRoutesPlainEnglishWithNotice` and
+`TestLegacyRetirementE2E_ExpiredSlashCommandDoesNotInvokeScenario` skip because
+telegram is not in webhook mode on this lane.
+
+### Two passes that corroborate the root cause {#regression-corroboration}
+
+`TestAssistantHTTPE2E_HighBandUncitedRefusesHonestly` **PASSED**, logging:
+
+```
+status="unavailable" error_cause="provider_unavailable" capture_route=false
+sources=0 body="the service is unavailable right now — please try again in a moment."
+```
+
+That is BUG-061-008's ratified invariant holding on the live stack: an execution
+error rendered as an honest unavailability line, **not** as "saved as an idea".
+It also independently establishes the provider state that the three (a) skips
+report, from a test that passed rather than skipped.
+
+`TestAssistantHTTPE2E_LiveStackWithoutTelegramCoversCanonicalFlows/capture_fallback_for_open_ended_text`
+**PASSED** (0.53s). Its value must be stated precisely, because overstating it
+would manufacture coverage that does not exist. Read at
+`http_live_stack_test.go:157-175`, this subtest posts an open-ended prose turn
+through the real HTTP ingress and its shared helper asserts `facade_invoked` and
+`transport=="web"`; the subtest body then asserts **only** `Status != ""`. Its
+own comment says both a high-band resolution and a capture fallback are valid
+outcomes. `"unavailable"` is also a non-empty status, so this assertion cannot
+distinguish a capture-fallback turn from the provider-unavailable turn the rest
+of the run demonstrates was actually happening.
+
+**Therefore: the open-ended capture-fallback turn IS driven end-to-end through
+real HTTP ingress into the facade, but NO passing e2e assertion binds
+`status=saved_as_idea` or `capture_route=true`.** Every test that would bind
+that outcome is in group (a) and skipped. The capture-fallback *outcome* remains
+uncovered at e2e level.
+
+### Cross-spec impact scan {#regression-cross-spec}
+
+The fix surface is three Go files under `internal/telegram/` plus their tests.
+The neighbouring contracts most at risk from the `CaptureFn` signature change —
+capture fallback, dedup window, provenance, and cross-transport acknowledgement
+parity — live in specs 074 and 064. Runs 2 and 4 compiled and executed those
+lanes with zero failures. No route collision, shared-table mutation, or
+contradictory business rule was introduced: the change alters one Go function
+signature and its two call sites, adds a sentinel error, and adds no route, no
+migration, and no config key.
+
+### Coverage delta {#regression-coverage-delta}
+
+No coverage was removed. This change ADDED four unit tests and three integration
+tests and deleted none. No assertion was weakened, no `skip`/`ignore` marker was
+added to a pre-existing test, and the 12 e2e skips are all pre-existing
+conditional or `planned` guards in files this packet never touched (no
+`*bug061006*` file has ever existed under `tests/e2e/` — `git log --all` returns
+zero commits for any such path).
+
+### Verdict {#regression-verdict}
+
+🟢 **REGRESSION_FREE.**
+
+The reclassification of this packet's regression coverage from `e2e-api` to
+`integration` introduced no failures anywhere. Four suites ran; all four exited
+0; the e2e assistant package is green with zero failures. The three capture-path
+skips do not weaken the verdict — they independently CONFIRM the root cause
+measured during the test phase (provider unavailable ⇒ `capture_route=false` ⇒
+the capture hook never fires), and per BUG-061-008 the product is CORRECT to
+refuse rather than capture in that state.
+
+What this verdict does NOT say: it does not close the e2e coverage gap recorded
+at [FINDING — e2e coverage gap](#finding-e2e-gap). That gap is about coverage of
+THIS bug's scenarios, and it remains open.
+
+### Correction — a false clause in this packet's own DoD {#regression-correction}
+
+Two DoD items (one per scope) asserted that *"no lane compiles an
+assistant-package e2e file today"*. **That clause was false**, and run 4
+disproves it directly:
+
+- `tests/e2e/assistant/` holds **47** `_test.go` files (`find tests/e2e/assistant -name '*_test.go' | wc -l` → 47).
+- `--go-package assistant` is an explicitly supported selector, whitelisted at `smackerel.sh:1430-1449` (`allowed: assistant`); any other value is rejected.
+- The lane compiled and ran those files this session: 50 passed, 12 skipped, 0 failed.
+
+Charitably the clause meant "no e2e file **for this bug**" — which IS true, and
+is now what it says. Both items were rewritten to state the true, narrower fact
+and to carry the real numbers.
+
+One nearby claim is narrower and SURVIVES unchanged: the bullet in the FINDING
+section reasoning that an `e2e_ollama`-**tagged** file under
+`tests/e2e/assistant/` would be compiled by nothing. That is about the opt-in
+build-tagged Ollama phase, whose package list is hardcoded to
+`./tests/e2e/agent/...`. It is a different statement from "no lane compiles an
+assistant-package e2e file", and run 4 does not contradict it: the default,
+untagged assistant e2e lane is what ran.
+
+### Phase recording {#regression-phase-recording}
+
+Recorded in `state.json` in the fields the guard actually reads: top-level
+`completedPhases[]`, `execution.completedPhaseClaims[]` (dict record with
+`claimedAt` + `evidenceRef` → this section), and
+`execution.executionHistory[]`. `execution.completedPhases` was deliberately NOT
+used — the guard does not read it, so writing there would be a silent no-op.
+
+`certification.certifiedCompletedPhases` was deliberately NOT written.
+`bubbles.regression` is a diagnostic agent with no certifying authority, and
+`bubbles.validate` has not run for this packet. Recording a phase as *executed*
+is a different act from certifying it, and conflating them is how an
+uncertified packet acquires the appearance of certification.
