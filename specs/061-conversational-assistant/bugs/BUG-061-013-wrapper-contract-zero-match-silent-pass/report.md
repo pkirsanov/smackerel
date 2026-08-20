@@ -1008,5 +1008,490 @@ tracked wrapper this contract governs, and the broader item covers the full e2e 
   `uservalidation.md` is untouched and no `## Human Acceptance Record` was authored — G136 is
   operator-only. Packet status and `certification.status` remain `in_progress`.
 
+---
+
+# Regression phase — `bubbles.regression`
+
+**Phase:** regression (`bubbles.regression`).
+**Repository binding:** `PREFLIGHT_COMMITTED` decision
+`rb:vscode-6af2178e10192363b0e52a46fb5e0950:11`, revision 11, repository `smackerel`.
+**HEAD throughout this phase:** `9af5e309` (unchanged at start and finish; `git status --porcelain`
+empty at both ends). **Fix under review:** commit `40a9e942`. **Baseline:** `d08013e6`, which is
+`40a9e942^`.
+
+> **The risk this phase was asked to characterise is not "do the new tests pass".** The test phase
+> already settled that. This change *widened a regex that other assertions depend on*, and a
+> widening fails in two directions that a green suite does not distinguish: it can bind something it
+> should not, and it can blunt an existing detector so that a fixture still fails but for the wrong
+> reason. Both of those produce green. So every question below is answered by a **delta** — old
+> matcher versus new, pre-fix tree versus HEAD — and never by the post-fix state alone.
+
+### Verdict
+
+**🟢 REGRESSION_FREE.** No regression was found, and the numbers that decide it are below rather
+than asserted. Three independent deltas were measured: the matcher's binding set changed by exactly
+`+1` line and that line is a real invocation; the three pre-existing adversarial fixtures bind at
+**byte-identical** offsets on both sides; and the full unit lane exits 0 at the pre-fix baseline and
+at HEAD with an identical 441-line transcript.
+
+### The change surface, measured before anything was run
+
+Bounding the blast radius first is what makes the later "nothing else broke" claim cheap to trust,
+so it was measured rather than inferred from the commit message.
+
+**Claim Source:** executed · **Exit Code:** 0
+
+```
+$ git diff --name-only 40a9e942^ 40a9e942 -- '*.go' '*.sh' '*.py' '*.ts' '*.yaml' '*.yml' '*.json'
+internal/deploy/envsubst_wrapper_contract_test.go
+count=1
+
+$ git diff --name-status 40a9e942^ HEAD -- '*.go' '*.sh' '*.py' '*.ts' '*.tsx' '*.js' '*.yaml' '*.yml' 'Dockerfile*' 'go.mod' 'go.sum'
+M       .github/bubbles/...            (11 paths — framework-managed, unrelated upgrade)
+M       internal/deploy/envsubst_wrapper_contract_test.go
+
+$ git diff --stat HEAD -- scripts/runtime/      # AC-5
+(no output)
+$ git status --porcelain -- scripts/runtime/
+(no output)
+```
+
+Across the **entire** pre-fix→HEAD span, exactly **one** product-code file changed, and it is a
+`_test.go`. The other 11 code paths are `.github/bubbles/` framework files from an unrelated
+framework upgrade; they carry no Go build input. `scripts/runtime/` is byte-identical to `HEAD` on
+both checks, so **AC-5 holds** — the subject of the detector was not edited to satisfy its own
+detector.
+
+### Q1 — Did the widening blunt the three pre-existing adversarial tests?
+
+**Answer: No.** Two independent lines of evidence, because the interesting failure mode here is a
+test that still fails *for the wrong reason*, which a PASS/FAIL column cannot see.
+
+**(a) The blunting mode is structurally detectable, by construction.** All three pre-existing tests
+assert a *specific error substring*, not merely `err != nil`:
+
+| Test | Asserted substring | Which locator produces it |
+|---|---|---|
+| `AdversarialRejectsMissingSource` | `missing source line` | `envsubstSourceLineRE` — reached **before** the go-test matcher |
+| `AdversarialRejectsSourceWithoutCall` | `never calls` | `envsubstCallRE` — reached **before** the go-test matcher |
+| `AdversarialRejectsCallAfterGoTest` | ``BEFORE the `ensure_envsubst` call`` | the **ordering** branch, downstream of the widened matcher |
+
+The first two short-circuit before `envsubstGoTestRE` is consulted at all, so the widening is
+unreachable for them. The third is the one that matters, and its substring is precisely what
+discriminates the **ordering** error from the new **locator** error (`could not LOCATE`). Had the
+widening blunted the matcher on that fixture, the post-fix function would have returned the locator
+error and the test would have gone **red** on the substring check — not passed quietly. The
+substring assertions are what convert "still fails" into "still fails for the right reason".
+
+**(b) The widening is a strict no-op on all three fixtures — measured, not argued.** Each fixture
+body was run through the pre-fix and post-fix patterns and the first-match **byte offset** compared:
+
+**Claim Source:** executed · **Exit Code:** 0
+
+```
+---- fixture 1 (missing source)      ----   OLD 52:go test    NEW 52:go test
+---- fixture 2 (source without call) ----   OLD 112:go test   NEW 112:go test
+---- fixture 3 (call after go test)  ----   OLD 112:go test   NEW 112:go test
+```
+
+Identical offsets on all three. The ordering comparison `goTestIdx[0] < callIdx[0]` therefore
+receives the *same integer* it received before the change, so its verdict cannot have moved.
+
+**(c) The lane confirms it.** The trio was run in isolation. The `=== RUN` lines are load-bearing
+and are the reason the transcript was read rather than the exit code trusted: `--go-run` narrows an
+otherwise repo-wide `go test ./...`, so **exit 0 is also what a selection that matched nothing
+would produce** — the same silent-pass shape this packet exists to remove. Reading only the exit
+code here would have reproduced the bug inside its own regression check.
+
+**Claim Source:** executed · **Exit Code:** 0
+
+```
+$ ./smackerel.sh test unit --go --go-run 'TestEnvsubstWrapperContract_AdversarialRejectsMissingSource|TestEnvsubstWrapperContract_AdversarialRejectsSourceWithoutCall|TestEnvsubstWrapperContract_AdversarialRejectsCallAfterGoTest' --verbose
+exit: 0    lines: 524    sha256: 4d194a16149dea50f662f0dd3edf7cc16d1286d749d1c2519898bf2b95a556b9
+
+403:=== RUN   TestEnvsubstWrapperContract_AdversarialRejectsMissingSource
+404:--- PASS: TestEnvsubstWrapperContract_AdversarialRejectsMissingSource (0.00s)
+405:=== RUN   TestEnvsubstWrapperContract_AdversarialRejectsSourceWithoutCall
+406:--- PASS: TestEnvsubstWrapperContract_AdversarialRejectsSourceWithoutCall (0.00s)
+408:=== RUN   TestEnvsubstWrapperContract_AdversarialRejectsCallAfterGoTest
+409:--- PASS: TestEnvsubstWrapperContract_AdversarialRejectsCallAfterGoTest (0.00s)
+411:ok      github.com/smackerel/smackerel/internal/deploy  0.038s
+```
+
+Three `=== RUN` lines for three requested names, and `ok …/internal/deploy 0.038s` rather than
+`[no tests to run]` — so the selection was non-empty and the greens are real. The verdict lines were
+read from the full unfiltered transcript emitted under `--diagnostic` (exit 0, 524 lines, sha256
+`b39f401a1f72f52da68433aa1e7c6096a4660758e8ec30dac0e996e269d39ea0`), not from a filtering pipe.
+
+The `--go-run` regex is **quoted** in the verify hint below. `evidence-capture.sh:218` renders the
+replayed command with `"$*"`, which drops the original quoting; for a single-name selector that is
+harmless, but this selector contains `|`, so the emitted form would parse as a three-stage shell
+pipeline with `TestEnvsubst…SourceWithoutCall` as a command name. The quoting is restored so the
+hint is actually runnable. Digest and command semantics are unchanged.
+
+<!-- verify: bash .github/bubbles/scripts/evidence-capture.sh --verify 4d194a16149dea50f662f0dd3edf7cc16d1286d749d1c2519898bf2b95a556b9 -- ./smackerel.sh test unit --go --go-run 'TestEnvsubstWrapperContract_AdversarialRejectsMissingSource|TestEnvsubstWrapperContract_AdversarialRejectsSourceWithoutCall|TestEnvsubstWrapperContract_AdversarialRejectsCallAfterGoTest' --verbose -->
+
+### Q2 — Does the widened matcher bind anything it should NOT?
+
+**Answer: No. It binds exactly one line more than the pre-fix pattern, and that line is a real
+invocation.** Both patterns were run over the four live wrappers and the match sets compared
+line-by-line.
+
+| Wrapper | Pre-fix matches | Post-fix matches | Delta |
+|---|---|---|---|
+| `scripts/runtime/go-unit.sh` | 1 — line 67 | 1 — line 67 | **0** — identical |
+| `scripts/runtime/go-integration.sh` | **0** | 1 — line 76 (`if ! go test … \| tee …`) | **+1** — the defect |
+| `scripts/runtime/go-e2e.sh` | 1 — line 89 | 1 — line 89 | **0** — identical |
+| `scripts/runtime/go-stress.sh` | 2 — lines 50, 90 | 2 — lines 50, 90 | **0** — identical |
+| **total** | **4** | **5** | **+1** |
+
+The widening changed behaviour on **exactly the one file that was blind and nowhere else**. That is
+the shape a correct narrow fix should have, and it is the reason the delta table is more informative
+than the post-fix match list on its own.
+
+**The negative control is what makes that mean something.** A widened matcher that had degraded into
+a substring search would also "locate" every wrapper — and would be worthless. The four wrappers
+contain **12** lines carrying the words `go test`; the widened matcher binds **5**. These are the
+**7** it correctly refuses:
+
+**Claim Source:** executed · **Exit Code:** 0
+
+```
+scripts/runtime/go-unit.sh:4:   # externally. No secrets pass through this script — only apt + go test
+scripts/runtime/go-unit.sh:25:  # bypassing into raw `go test`.
+scripts/runtime/go-unit.sh:66:  echo "[go-unit] starting go test ./..."
+scripts/runtime/go-unit.sh:68:  echo "[go-unit] go test ./... finished OK"
+scripts/runtime/go-integration.sh:83:   echo "ERROR: go-integration: could not capture go test output (tee exit ${tee_rc}); …"
+scripts/runtime/go-integration.sh:122:  echo "ERROR: go-integration: go test failed (exit ${go_test_rc})." >&2
+scripts/runtime/go-stress.sh:76:        done < <(go test -tags stress -list "$go_run_selector" "$package_path")
+
+substring 'go test' lines : 12
+widened-anchored matches  : 5
+pre-fix anchored matches  : 4
+```
+
+The three prose lines named in the phase brief — `go-unit.sh:4`, `:25`, `:66` — are all present in
+the refused set, and the scan surfaced **four more** that the brief did not name (`go-unit.sh:68`
+and both `go-integration.sh` `echo "ERROR: …"` lines), plus `go-stress.sh:76`. The `(?m)^` anchor
+still holds: a match must begin at a line start, and none of these lines *begins* with an enumerated
+prefix or with `go`.
+
+**One property moved in the safe direction and is worth recording, because it is easy to read the
+other way.** The pre-fix pattern used `\s`, which in Go's regexp **includes `\n`**; the post-fix
+pattern uses `[^\S\n]`, which does not. On the newline axis the new pattern is therefore *stricter*,
+not looser — it can no longer span a line boundary between `go` and `test`. The widening is confined
+entirely to the bounded prefix enumeration.
+
+### Q3 — Did any previously-green test elsewhere break?
+
+**Answer: No — and this was established against a real baseline that was executed, not inferred.**
+
+**Method.** A detached worktree was created at `40a9e942^` and the *identical* lane was run there.
+This is a supported path in this repository rather than a hack: `smackerel_prepare_tooling_git_mount_args`
+(`scripts/lib/runtime.sh:10`) explicitly detects a linked worktree's `.git` **file** and mounts the
+git common dir read-only for the tooling container. The main checkout was never modified — verified
+clean by `git status --porcelain` before, during, and after — and the worktree was removed at the
+end. The baseline tree was confirmed to carry the **pre-fix** pattern before any lane was run:
+
+```
+$ git -C <baseline-worktree> rev-parse HEAD
+d08013e6fb7089cadef873240d0d0ee3a6f48894
+$ grep -n 'envsubstGoTestRE = regexp' <baseline-worktree>/internal/deploy/envsubst_wrapper_contract_test.go
+82:var envsubstGoTestRE = regexp.MustCompile(`(?m)^\s*go\s+test\b`)
+```
+
+**The full-lane comparison.** Both sides, same command, same tool:
+
+| | Commit | Command | Exit | Lines | sha256 of full output |
+|---|---|---|---|---|---|
+| **BASELINE** | `d08013e6` (pre-fix) | `./smackerel.sh test unit` | **0** | **441** | `90c060e034b6ab7a889e984c3a13e0e7d25277de5aff9b55d41f8d5daddb3964` |
+| **HEAD** | `9af5e309` | `./smackerel.sh test unit` | **0** | **441** | `9c8e86a9cd2fa63a13cccba78a841e6b5ab8a3551e5440b22cff89fa1769fb41` |
+
+Green on both sides, with an **identical 441-line transcript length**. The hashes differ only
+because the transcript embeds run-varying values — preflight RAM/disk figures, per-package timings,
+and the checkout path — which is why the line count and the exit code carry the comparison and the
+hash carries re-derivability. `evidence-capture.sh` surfaced **no failure-shaped lines** from either
+omitted region.
+
+<!-- verify: bash .github/bubbles/scripts/evidence-capture.sh --verify 9c8e86a9cd2fa63a13cccba78a841e6b5ab8a3551e5440b22cff89fa1769fb41 -- ./smackerel.sh test unit -->
+
+**Coverage delta — did a test disappear?** A suite can stay green by losing a test, so the inventory
+was enumerated on both sides. Only package `deploy` changed, so it is the only package where the
+inventory *could* move:
+
+| | Exit | Lines | Top-level tests | Subtests | Failures |
+|---|---|---|---|---|---|
+| **BASELINE** `d08013e6` | 0 | 536 | **5** | 4 (`LiveWrappers/*`) | 0 |
+| **HEAD** `9af5e309` | 0 | 540 | **7** | 4 (`LiveWrappers/*`) | 0 |
+
+```
+BASELINE (sha256 5f3dcb0970d0be07d527d2949b9f0ad9bf0eca222589ce99b1c89924345aee94)
+  HelperExistsAndIsExecutable · LiveWrappers (+4 subtests) ·
+  AdversarialRejectsMissingSource · AdversarialRejectsSourceWithoutCall · AdversarialRejectsCallAfterGoTest
+
+HEAD     (sha256 7f30160c12647a94fa6d706db7dba34a9fade1a91eb5d6cce5798b5bfc7bdfc0)
+  …the same five, byte-identical names and PASS verdicts, plus
+  + AdversarialRejectsUnlocatableInvocation
+  + AdversarialRejectsConditionalCallAfterGoTest
+```
+
+**+2 added, 0 removed, 0 renamed, 0 subtests lost.** The coverage delta is strictly additive.
+
+**The baseline run independently reproduced the defect, which is the strongest single datum here.**
+At `d08013e6` the subtest `TestEnvsubstWrapperContract_LiveWrappers/go-integration.sh` reports
+`--- PASS` — while the pre-fix matcher binds **zero** lines in that file (measured in the Q2 table).
+That is BUG-061-013 caught in the act on this phase's own authority: a green subtest that compared
+nothing. The same subtest is green at HEAD, but now with a located invocation behind it.
+
+### Cross-spec impact scan
+
+**Symbol reachability.** Every symbol the commit touches is package-private and referenced from a
+single file:
+
+```
+$ grep -rn 'envsubstGoTestRE|assertEnvsubstWrapperContract|envsubstTrackedWrappers|envsubstCallRE|envsubstSourceLineRE'
+81 matches in 8 files — of which the ONLY .go file is
+    internal/deploy/envsubst_wrapper_contract_test.go
+(the other 7 files are spec .md / .json inside this and the BUG-061-011 packet)
+```
+
+No other Go file can observe the widened matcher, so there is no "elsewhere" inside the codebase for
+its behaviour to leak into.
+
+**The other guard over the same wrapper — checked, because this is where a real conflict would
+live.** `internal/deploy/eval_lane_contract_test.go` also reads
+`scripts/runtime/go-integration.sh` (BUG-061-011's invariant), and both guards compile into the same
+package test binary. They share **no literals**: the eval-lane guard keys on
+`gate_marker_prefix="ASSISTANT_ACCEPTANCE_GATE_V1"`, on
+`if [[ -z "$go_run_selector" ]]; then # full-lane run: …`, and on the
+`"$gate_executed_assertions"` comparisons — none of which the `go test` matcher can reach. The
+"column zero" phrase in `tests/eval/assistant/harness.go:340` refers to the gate **marker** in the
+lane's *output stream*, not to the invocation line. No interaction, no contradiction.
+
+**A second `go test` matcher exists in the same package and was left alone, correctly.**
+`internal/deploy/ci_integration_topology_contract_test.go:82` compiles
+`` `go\s+test\b[^\n]*-tags[=\s]+integration\b[^\n]*\./tests/integration` `` — deliberately
+*unanchored*, because its job is the opposite one: to **forbid** a raw `go test` anywhere in a CI
+workflow step, not to locate one at a line start. It scans `.github/workflows` YAML, never
+`scripts/runtime/`. Divergent semantics here are correct rather than drift, and the commit did not
+touch it.
+
+### Test baseline comparison
+
+| Category | Baseline `d08013e6` | HEAD `9af5e309` | Delta | Status |
+|---|---|---|---|---|
+| Full unit lane (Go + Python + shell, all packages) | exit 0, 441 lines, 0 failures | exit 0, 441 lines, 0 failures | 0 | 🟢 CLEAN |
+| `internal/deploy` contract suite | 5 tests + 4 subtests, all PASS | 7 tests + 4 subtests, all PASS | **+2 tests** | 🟢 CLEAN (additive) |
+| Wrapper matcher binding set | 4 matches | 5 matches | **+1** (`go-integration.sh:76`) | 🟢 INTENDED |
+| Pre-existing adversarial fixture offsets | 52 / 112 / 112 | 52 / 112 / 112 | 0 | 🟢 CLEAN |
+| `scripts/runtime/` bytes | — | identical to `HEAD` | 0 | 🟢 AC-5 HOLDS |
+
+### Deployment regression scan
+
+**Not applicable, and measured rather than waved off.** The Build-Once Deploy-Many surfaces —
+`deploy/`, `.github/workflows/build.yml`, `config/smackerel.yaml`, `scripts/deploy/` — appear
+nowhere in `git diff --name-only 40a9e942^ HEAD`. No manifest pointer, image digest, bundle hash,
+cosign step, attestation, Trivy gate, or adapter script was touched, so none of the Gate G081
+detection patterns has an input to fire on.
+
+### Why the integration and e2e lanes were not re-run
+
+This is a deliberate scoping decision with a stronger justification than a re-run would have
+produced, so it is recorded rather than left as an absence. The two heavyweight lanes **cannot
+compile the changed file**, by their own package selection:
+
+```
+scripts/runtime/go-integration.sh:53:  go_test_args+=(./tests/integration/... ./internal/notification/... \
+                                          ./internal/assistant/... ./internal/cardrewards/... ./tests/eval/...)
+scripts/runtime/go-e2e.sh:78:          go_test_packages=(./tests/e2e/...)
+```
+
+`./internal/deploy/...` is in **neither** allow-list. The changed file is compiled only by the unit
+lane's `go test ./...`. That is a structural proof that those lanes are unaffected, which is
+strictly better evidence than a green re-run — a re-run shows they *did not* break, while the
+allow-list shows they *could not*. Both lanes were in any case already executed green at this exact
+HEAD in this session by the orchestrator (T-06 `a3230783…`, T-08 `eb5e8fa3…`), and re-running them
+without a matching baseline-side run would have added ~75 minutes and no delta.
+
+### Baseline method, disclosed
+
+Three things were done to the scratch worktree that a reader should be able to audit:
+
+1. **The first baseline attempt failed, and it was not a regression.** `./smackerel.sh test unit` at
+   `d08013e6` exited **1** (214 lines, sha256
+   `21b0ddb4ab41f6c2853c936a2a02d7a5a385b51394e46e1e97238a139575dd32`) with
+   `docker_security_test.go:231: read config/generated/nats.conf: … no such file or directory`.
+   `config/generated/` is gitignored, so a fresh worktree has none. This is a **worktree artifact**,
+   not a finding — it is recorded because discarding a red run without saying why is exactly how a
+   baseline gets quietly shopped for. It was repaired by generating the config, after which the
+   lane exited 0 (R-04 above).
+2. **A gitignored operator-local env file was copied into the worktree** for environment parity
+   (`config generate` refused without it). Its contents were never printed. It was **deleted first**
+   during cleanup and its absence confirmed, before anything else was removed.
+3. **The worktree was fully removed.** `git worktree list` reports only the main checkout, the
+   scratch directory no longer exists, and `git status --porcelain` on the main checkout is empty at
+   `9af5e309`. Some generated files were root-owned by the tooling container and were removed via a
+   container running as root, since host-side removal returned `Permission denied` and privilege
+   escalation is not available.
+
+### Deviation from terminal discipline, disclosed
+
+One command in this phase — a `./smackerel.sh config generate` in the scratch worktree — was
+invoked with `>/dev/null 2>&1`, which discards output and is forbidden. It was caught immediately
+and the command was **re-run unfiltered**, which is how the real cause (`Permission denied` writing
+`nats.conf`, not the hardware-tier error the suppressed run implied) was found. No claim in this
+section rests on the suppressed invocation. It is recorded rather than omitted, because a discarded
+stream is the same species of self-inflicted blindness this packet exists to remove.
+
+### Not run in this phase
+
+- **`./smackerel.sh test integration` and `./smackerel.sh test e2e`** — not re-run; reason and the
+  allow-list proof are in the section above. Already green at this HEAD in this session.
+- **`./smackerel.sh test stress`** — not run. `go-stress.sh` is a tracked wrapper, but it was never
+  blind (2 matches on both sides of the change) and the stress lane does not compile
+  `internal/deploy` either.
+- **No mutation test against the live `scripts/runtime/go-integration.sh`.** AC-5 forbids touching
+  it. The equivalent behavioural proof is the `AdversarialRejectsConditionalCallAfterGoTest`
+  fixture, which carries line 76's exact shape.
+- **No baseline-side integration/e2e run**, which is what a full two-sided comparison of those lanes
+  would have required. Recorded as a scope boundary, not closed.
+
+### Uncertainty declaration
+
+Two limits are worth stating plainly rather than leaving for a reader to discover.
+
+**The prefix enumeration remains a judgement.** `envsubstGoTestRE` still cannot match
+`env VAR=x go test`, `timeout N go test`, or `x=$(go test …)`. This phase did not remove that
+blindness and did not try to. What it verified is that the blindness is no longer *dangerous*: the
+zero-match branch now converts any future miss into a loud locator failure, and
+`AdversarialRejectsUnlocatableInvocation` is the regression that keeps that branch honest.
+
+**"No regression elsewhere" is scoped to what the change can reach.** That scope was measured — one
+`_test.go`, package-private symbols, absent from the integration/e2e/stress allow-lists — rather
+than assumed, and the full unit lane was run on both sides of it. It is not a claim that every lane
+in the repository was executed twice.
+
+### Independent re-derivation before recording
+
+The analysis above was produced by an earlier `bubbles.regression` invocation in this session that
+returned before writing the phase to `state.json`. The recording invocation did **not** rubber-stamp
+it. The two load-bearing claims were re-derived from the tree, and one defect was found and fixed.
+
+**Re-derivation 1 — the fixture offsets, from absolute file offsets rather than retyped fixtures.**
+Retyping a fixture to re-measure it would test the transcription, not the claim, so the offsets were
+taken directly out of the source file and subtracted.
+
+**Claim Source:** executed · **Exit Code:** 0
+
+```
+$ grep -abo '`#!/usr/bin/env bash' internal/deploy/envsubst_wrapper_contract_test.go
+9864  10720  11572  13023  14765          ← opening backtick; fixture[0] is backtick+1
+
+$ grep -abo -E '^go[[:blank:]]+test' internal/deploy/envsubst_wrapper_contract_test.go
+9917:go test    10833:go test    11685:go test     ← the ONLY line-starting tokens in the file
+
+fixture1  9917 − 9865 =  52
+fixture2 10833 − 10721 = 112
+fixture3 11685 − 11573 = 112
+```
+
+`52 / 112 / 112`, matching the figures recorded in Q1(b).
+
+**This upgrades the claim from "measured equal" to "structurally forced equal", which is stronger.**
+Both patterns are `(?m)^`-anchored, so a match can only *begin* at a line start; and both require a
+literal `go`, then whitespace, then `test`. The file contains exactly **three** line-starting
+`go<blank>test` tokens — one per fixture — so within any one fixture there is exactly **one**
+position at which either pattern can match at all. Two patterns that can each only match in one
+place, and do both match there, cannot disagree about the offset. The equality is therefore not a
+lucky measurement that a future edit might quietly break.
+
+The one way the old pattern could have matched somewhere else is its `\s`, which in Go **includes
+`\n`** and so could have spanned a line boundary between `go` and `test`. That was checked and does
+not occur inside any fixture: the only end-of-line `go` in the file is at lines 25–26, inside a
+comment naming `…_test.go` filenames, at byte offsets far below the first fixture at 9865.
+
+**Re-derivation 2 — the Q2 binding delta, reproduced independently.** The three counts and both
+match sets were regenerated with a fresh scan of the four live wrappers.
+
+**Claim Source:** executed · **Exit Code:** 0
+
+```
+substring 'go test' lines : 12   ← identical 12 lines to those listed in Q2
+pre-fix anchored matches  :  4   ← go-unit:67, go-e2e:89, go-stress:50, go-stress:90
+post-fix anchored matches :  5   ← the same 4, plus go-integration.sh:76
+delta                     : +1   ← if ! go test "${go_test_args[@]}" 2>&1 | tee "$gate_output_file"; then
+```
+
+The `+1` line is a real invocation, and the seven refused lines are line-for-line the seven listed
+in Q2. Q2 is reproduced exactly.
+
+**Re-derivation 3 — the lane allow-lists that justify not re-running integration and e2e.** This is
+the claim that buys ~75 minutes, so it was checked rather than accepted.
+
+**Claim Source:** executed · **Exit Codes:** 0 (allow-list read), 1 (`internal/deploy` absent — the
+desired result)
+
+```
+$ grep -n 'go_test_args+=(\./|go_test_packages=(' scripts/runtime/go-{integration,e2e,stress}.sh
+go-integration.sh:53: ./tests/integration/... ./internal/notification/... ./internal/assistant/... \
+                      ./internal/cardrewards/... ./tests/eval/...
+go-e2e.sh:78:         ./tests/e2e/...
+go-e2e.sh:81:         ./tests/e2e/assistant
+
+$ grep -n 'internal/deploy' scripts/runtime/go-{integration,e2e,stress}.sh
+(no output — exit 1)
+
+$ grep -n 'go test' scripts/runtime/go-unit.sh
+67: go test "${go_test_args[@]}" ./...      ← repo-wide; the only lane that compiles the changed file
+```
+
+Neither heavyweight lane can compile `internal/deploy`. The structural argument holds.
+
+**Defect found and fixed: an unrunnable verify hint.** The Q1(c) `<!-- verify: -->` comment carried
+its `--go-run` alternation **unquoted**, because `evidence-capture.sh:218` renders the replayed
+command with `"$*"` and that drops the caller's quoting. For the single-name selectors elsewhere in
+this report that is harmless; for this one it is not, because the selector contains `|` and the
+emitted line parses as a three-stage shell pipeline. A re-derivation hint that cannot be run is the
+same species of unchecked assertion this packet exists to remove, so the quoting was restored. The
+digest and the command's semantics are unchanged.
+
+**Nothing else was altered, and no claim was weakened.** No further correction was required: the
+`--go-run` / `--verbose` flags cited in Q1(c) are real `test unit` flags (`smackerel.sh:58`, gated
+behind `--go`, which the recorded command passes), `--diagnostic` is `evidence-capture.sh`'s
+retention escalation rather than a CLI flag, and the two 524-line transcripts differing in sha256 is
+the run-varying-content pattern the phase already documents for the 441-line pair.
+
+### Completion Statement — regression phase
+
+The regression phase executed and found **no regression**. All three questions were answered by a
+measured delta: the widened matcher binds exactly one line more than its predecessor and that line
+is `go-integration.sh:76`, a real invocation; it refuses all seven prose and `echo` lines that
+merely contain the words `go test`; the three pre-existing adversarial fixtures bind at identical
+byte offsets on both sides and all three still reject with their original error substrings; and the
+full unit lane exits 0 at both the pre-fix baseline `d08013e6` and at HEAD `9af5e309` with identical
+441-line transcripts and a strictly additive `+2 / -0` test inventory.
+
+The baseline was **executed**, not inferred — and it independently reproduced BUG-061-013, showing
+`LiveWrappers/go-integration.sh` green at a commit where the matcher bound nothing in that file.
+
+The analysis was performed by an earlier `bubbles.regression` invocation in this session which
+returned before recording the phase; the recording invocation re-derived the two load-bearing claims
+from the tree rather than accepting them, and the offset claim came back **stronger** than recorded
+(forced by there being exactly one line-starting `go<blank>test` token per fixture, not merely
+observed equal). One defect was found and fixed — an unrunnable `<!-- verify: -->` hint whose
+alternation regex had lost its quoting. No claim was weakened and no verdict changed.
+
+No source file was modified by this phase. `scripts/runtime/` and `internal/` are untouched, the
+working tree is clean at `9af5e309` apart from this packet's `report.md` and `state.json`, and
+`uservalidation.md` was not opened. Only `regression` is claimed; `simplify`, `stabilize`,
+`security`, `validate`, and `audit` remain unexecuted and are left to their own specialists. Packet
+`status` and `certification.status` remain `in_progress` — certification belongs to
+`bubbles.validate`.
+
+**Routed, not edited:** `certification.pendingGates` still reads "7 of the 8 … phases remain
+unexecuted: test, regression, …". Two of those have now executed. The `certification.*` block is
+owned by `bubbles.validate`; this phase writes execution progress only, so the count is flagged for
+its owner rather than corrected here.
+
 
 
