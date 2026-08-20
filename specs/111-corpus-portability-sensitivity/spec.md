@@ -1,6 +1,6 @@
 # Feature: 111 Corpus Portability & Artifact Sensitivity
 
-**Status:** `not_started` · **Workflow mode:** `product-to-planning` · **Release train:** `next`
+**Status:** `in_progress` · **Workflow mode:** `product-to-planning` · **Release train:** `next`
 **Authored by:** `bubbles.analyst` (requirements only — no source file changed, no test run)
 **Governing product rule:** [`docs/Product-Principles.md`](../../docs/Product-Principles.md) **Principle 11 — Local-First Data Ownership** (ratified 2026-07-29)
 **Diagnostic findings:** D12, D23, D11
@@ -196,6 +196,39 @@ spec exists to remove, so the domain model is defined before any surface.
 - **P8 — Growth is a manifest change.** Introducing a new content-bearing record class
   requires adding it to the manifest in the same change. A class that exists in the store
   but not the manifest is a detectable defect.
+
+### Single-Capability Justification
+
+The capability-foundation doctrine is checked explicitly here because the word *provider*
+appears in this spec. It appears exactly once — in §4's opening sentence, arguing that
+modelling this **provider-first** would recreate the divergence the spec exists to remove.
+That is an argument against a provider abstraction, not evidence of one. No adapter,
+strategy, plugin, channel, driver, connector or variant set is proposed anywhere in this
+document.
+
+**One capability is introduced — corpus portability — and it needs no new foundation
+beside the one already modelled above.** Its foundation is the **manifest** (§4.1), and
+that foundation is the whole point: export, import and delete are three *operations* that
+resolve scope from one shared declaration (P1). They are not three interchangeable
+implementations of a common contract, so there is no second implementation for a provider
+layer to abstract over. The spec forecloses the shapes that would create one:
+
+- **No second export path** (Non-Goal 1). The existing surface is corrected in place.
+- **One egress decision** governs every external path (R-111-27, P7). A second chokepoint
+  would make the first decorative.
+- **One sensitivity vocabulary**, and E9 records that canonical sensitivity columns already
+  exist for other record classes. The correct move is to extend the repository's
+  established pattern; a third independent scheme would be the new inconsistency.
+
+This constrains design rather than merely describing it. A per-operation record-class list,
+a "full export" beside the normal one, a second egress evaluation point, or a corpus-local
+sensitivity vocabulary unrelated to `drive_files.sensitivity` and `photo_sensitivity` would
+each fork the foundation this spec is trying to establish, and each is out of bounds.
+
+Growth is handled by manifest versioning (P8), not by adding implementations. If a future
+feature genuinely introduces a second implementation of one of these operations — a
+different transport for a bundle, say — that feature raises the foundation question then,
+with a real second implementation in hand rather than an anticipated one.
 
 ---
 

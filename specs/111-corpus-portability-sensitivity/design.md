@@ -1,6 +1,6 @@
 # Design: 111 Corpus Portability & Artifact Sensitivity
 
-**Status:** `not_started` · **Workflow mode:** `product-to-planning` · **Release train:** `next`
+**Status:** `in_progress` · **Workflow mode:** `product-to-planning` · **Release train:** `next`
 **Owner of this artifact:** `bubbles.design`
 **Created by:** `bubbles.analyst` as an honest initial artifact so the packet is structurally complete
 
@@ -65,6 +65,38 @@ inside it.
 - **Membership never depends on processing state** (P2, R-111-08).
 - **Copy obeys Principle 11's honesty constraint** (NFR-111-06). No surface may claim the
   product enforces, verifies, guarantees or attests client-side inference locality.
+
+### Single-Implementation Justification
+
+**This design declares no capability-foundation split, because there is no second
+implementation to split from.** Recording that is not a design decision; it is a
+restatement of constraints already fixed in `spec.md`, which is what this section of the
+file is for.
+
+The capability-foundation gate applies to this packet on one trigger: the word *provider*
+occurs once, in `spec.md` §4, in a sentence arguing that provider-first modelling would
+recreate the divergence the feature exists to remove. Nothing in this packet proposes an
+adapter, strategy, plugin, channel, driver, connector or variant set, and no concrete
+implementation entries exist to abstract over.
+
+The shared element is the **manifest**, and it is already a spec-level contract (`spec.md`
+§4.1, P1) rather than something this design would invent. Export, import and delete consume
+it; they are operations over one declaration, not competing implementations of one
+interface. `spec.md` forecloses a second export path (Non-Goal 1) and a second egress
+evaluation point (R-111-27), which are the two places a provider layer would otherwise
+appear.
+
+Declaring `## Capability Foundation` / `## Concrete Implementations` / `### Variation Axes`
+here would be worse than unnecessary — it would be false. Every decision D1 through D8
+above is open, three of them behind BLOCKING findings, so any foundation, implementation
+set or variation axis written today would be invention presented as a chosen architecture.
+The design pass owns that choice and has not made it.
+
+**What would reopen this.** If the design pass answers D7 (where the egress chokepoint
+sits) or D1 (how the class list is derived) in a way that produces two or more
+interchangeable implementations of the same contract, this justification no longer holds
+and the foundation split becomes required. The decision belongs to `bubbles.design`, not
+here.
 
 ---
 
