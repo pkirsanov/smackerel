@@ -708,9 +708,10 @@ fi
 # silently masking declare -A breakage — positive static + functional + an
 # adversarial guard-removed fixture that must break the static check.
 run_check "Bash baseline guard selftest (IMP-102 / SCOPE-5)" bash "$SCRIPT_DIR/bash-baseline-guard-selftest.sh"
-# Evidence-Backed Experience Recall (IMP-037). Registration is explicit here --
-# nothing in this file auto-discovers `*-selftest.sh`, so an unregistered suite
-# is simply never executed. These six were green but unwired through SCOPE-5,
+# Evidence-Backed Experience Recall (IMP-037). Registration is explicit here
+# because these carry per-suite timeouts a glob cannot infer; the discovery
+# sweep near the end of this file now runs any *-selftest.sh that no enumerated
+# check already scheduled. These six were green but unwired through SCOPE-5,
 # which meant ~516 assertions guarded nothing in pre-push or release-check.
 # Timeouts are ~4x the measured runtime (1s/1s/11s/45s/16s/7s) so a normal run
 # never trips them but a hang still fails instead of blocking the gate forever.

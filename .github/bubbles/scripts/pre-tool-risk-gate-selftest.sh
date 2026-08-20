@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # pre-tool-risk-gate-selftest.sh — hermetic selftest for the v6.1 (R10)
-# real-time PreToolUse risk gate.
+# real-time PreToolUse risk gate; covers Gate G139 classification integrity.
 #
 # Stages a fixture action-risk-registry.yaml (via BUBBLES_ACTION_RISK_REGISTRY)
 # and asserts the gate's ALLOW / WARN / BLOCK decisions and confirmation path.
@@ -177,6 +177,31 @@ expect_exit 3 "event: injection text in target does not authorize" -- --server t
 rc=0; BUBBLES_TOOL_TRUST_REGISTRY="$TMPDIR/nope.yaml" bash "$TARGET" --server trusted-srv --operation read >/dev/null 2>&1 || rc=$?
 if [[ "$rc" -eq 3 ]]; then pass "event: missing registry fails closed (exit 3)"; else fail "missing registry expected 3, got $rc"; fi
 unset BUBBLES_TOOL_TRUST_REGISTRY
+
+# IMP-052 SCOPE-2: an unrecognized risk class must FAIL CLOSED.
+# BLOCK_CLASSES is an allow-list, so before this every near-miss fell past both
+# list checks into the silent allow -- a single-character error in the registry
+# turned a blocking classification into permission. Each string below was
+# measured exiting 0 against the shipped gate prior to the fix.
+expect_exit 3 "unknown class: typo fails closed" -- --risk-class destructive_mutuation
+expect_exit 3 "unknown class: hyphen variant fails closed" -- --risk-class destructive-mutation
+expect_exit 3 "unknown class: case variant fails closed" -- --risk-class DESTRUCTIVE_MUTATION
+expect_exit 3 "unknown class: garbage fails closed" -- --risk-class totally_bogus_class
+
+# The refusal must NOT be confirmable: an unreadable classification is an
+# integrity failure, not a risk the operator can knowingly accept.
+rc=0; BUBBLES_RISK_CONFIRM=1 bash "$TARGET" --risk-class totally_bogus_class >/dev/null 2>&1 || rc=$?
+if [[ "$rc" -eq 3 ]]; then pass "unknown class: --confirm cannot override (exit 3)"; else fail "unknown class with confirm expected 3, got $rc"; fi
+
+# Emptying the block list must not turn an unknown class into an allow.
+rc=0; BUBBLES_RISK_BLOCK="" bash "$TARGET" --risk-class totally_bogus_class >/dev/null 2>&1 || rc=$?
+if [[ "$rc" -eq 3 ]]; then pass "unknown class: BUBBLES_RISK_BLOCK cannot defeat it (exit 3)"; else fail "unknown class with empty block list expected 3, got $rc"; fi
+
+# Valid classes keep their existing verdicts -- the fix is observable ONLY for
+# strings that were already meaningless.
+expect_exit 0 "valid class read_only still allows" -- --risk-class read_only
+expect_exit 0 "valid class owned_mutation still allows" -- --risk-class owned_mutation
+expect_exit 0 "valid class runtime_teardown still warns" -- --risk-class runtime_teardown
 
 echo ""
 echo "[pre-tool-risk-gate-selftest] $pass_count passed, $fail_count failed"

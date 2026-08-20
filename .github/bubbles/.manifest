@@ -3,6 +3,8 @@
 # DO NOT add project-specific files to these directories.
 bubbles/scripts/acceptance-authority-lib.sh
 bubbles/scripts/acceptance-authority-selftest.sh
+bubbles/scripts/action-risk-classes-lib.sh
+bubbles/scripts/action-risk-registry-lint-selftest.sh
 bubbles/scripts/action-risk-registry-lint.sh
 bubbles/scripts/adoption-profile-lib-selftest.sh
 bubbles/scripts/adoption-profile-lib.sh

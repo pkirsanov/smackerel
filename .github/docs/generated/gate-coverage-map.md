@@ -18,8 +18,8 @@ Detection is limited to these MECHANICAL surfaces. A gate with none of them may 
 
 ## Coverage Summary
 
-- Gates defined: **119**
-- Declared mechanically enforced (`guard-check:` / `script:` / `ci:`): **82**
+- Gates defined: **120**
+- Declared mechanically enforced (`guard-check:` / `script:` / `ci:`): **83**
 - Declared `mode-required` only (a mode requires it; no dedicated mechanical enforcer): **35**
 - Declared `behavioral:` (agent-behavior enforcement, by design): **1**
 - Declared `unbound` (NO enforcement surface — genuine coverage gap): **1** — G071
@@ -27,9 +27,9 @@ Detection is limited to these MECHANICAL surfaces. A gate with none of them may 
 Corroborating (grep-derived, advisory) numbers:
 
 - Referenced by ≥1 workflow mode: **65**
-- Not referenced by any mode: **54**
+- Not referenced by any mode: **55**
   - of those, referenced by state-transition-guard: **36**
-  - of those, referenced by a framework-validate script: **50**
+  - of those, referenced by a framework-validate script: **51**
   - of those, referenced in CI: **36**
 
 ## All Gates
@@ -155,6 +155,7 @@ Corroborating (grep-derived, advisory) numbers:
 | G136 | human_acceptance_terminal_gate | `script:bubbles/scripts/guards/tail-delegated-gates.sh`, `script:bubbles/scripts/state-transition-guard-selftest.sh`, `script:tests/regression/test_35_human_acceptance_terminal.sh` | 0 | Check 43 | 5 | guard |
 | G137 | release_ladder_schema_gate | `script:bubbles/scripts/release-ladder-schema-guard.sh`, `script:bubbles/scripts/release-ladder-schema-guard-selftest.sh` | 0 | — | 3 | — |
 | G138 | release_packet_completeness_gate | `script:bubbles/scripts/release-packet-completeness-guard.sh`, `script:bubbles/scripts/release-packet-completeness-guard-selftest.sh` | 0 | — | 3 | — |
+| G139 | action_risk_classification_integrity_gate | `script:bubbles/scripts/action-risk-registry-lint.sh`, `script:bubbles/scripts/action-risk-registry-lint-selftest.sh`, `script:bubbles/scripts/pre-tool-risk-gate.sh`, `script:bubbles/scripts/pre-tool-risk-gate-selftest.sh` | 0 | — | 4 | — |
 
 ## Gates Not Referenced By Any Mode
 
@@ -216,4 +217,5 @@ These gates are intentionally enforced OUTSIDE the mode `requiredGates` lists. E
 | G136 | human_acceptance_terminal_gate | Check 43 | 5 | guard | acceptance-authority-lib.sh, acceptance-authority-selftest.sh, artifact-lint.sh, framework-validate.sh, state-transition-guard-selftest.sh |
 | G137 | release_ladder_schema_gate | — | 3 | — | framework-validate.sh, release-ladder-schema-guard-selftest.sh, release-ladder-schema-guard.sh |
 | G138 | release_packet_completeness_gate | — | 3 | — | framework-validate.sh, release-packet-completeness-guard-selftest.sh, release-packet-completeness-guard.sh |
+| G139 | action_risk_classification_integrity_gate | — | 4 | — | action-risk-registry-lint-selftest.sh, action-risk-registry-lint.sh, pre-tool-risk-gate-selftest.sh, pre-tool-risk-gate.sh |
 

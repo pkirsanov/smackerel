@@ -81,8 +81,6 @@ commands:
     notes:
     - Default advisory and changed-spec profiles are read-only.
     - Historical recertification is read-only unless paired with --reopen-failing or deprecated --fix.
-  autofix:
-    defaultRiskClass: owned_mutation
   dag:
     defaultRiskClass: read_only
   doctor:
@@ -107,6 +105,51 @@ commands:
     defaultRiskClass: read_only
   sunnyvale:
     defaultRiskClass: read_only
+  closeout:
+    defaultRiskClass: owned_mutation
+    notes:
+    - Writes a session archive under .specify/memory/sessions.
+  interop:
+    defaultRiskClass: owned_mutation
+    notes:
+    - Intake writes candidate, proposal, and normalized artifacts.
+  mcp:
+    defaultRiskClass: owned_mutation
+    notes:
+    - Grant sync rewrites agent files; unmapped subcommands stay fail-safe.
+  open-work:
+    defaultRiskClass: read_only
+  trajectory:
+    defaultRiskClass: read_only
+  verify-changed-specs:
+    defaultRiskClass: read_only
+  release-train-backfill:
+    defaultRiskClass: read_only
+    notes:
+    - Planner only; emits a plan and writes no repository state.
+  work-tracker-project:
+    defaultRiskClass: read_only
+  eval:
+    defaultRiskClass: read_only
+  finding-closure-selftest:
+    defaultRiskClass: read_only
+  repository-binding-selftest:
+    defaultRiskClass: read_only
+  audit:
+    defaultRiskClass: read_only
+    overrides:
+      --fix: owned_mutation
+      --reopen-failing: owned_mutation
+    notes:
+    - Alias of audit-done; classified explicitly because lookup is by literal name.
+  dashboard:
+    defaultRiskClass: read_only
+    notes:
+    - Alias of status.
+  list:
+    defaultRiskClass: read_only
+    notes:
+    - Alias of specs.
   aliases:
     defaultRiskClass: read_only
   help:

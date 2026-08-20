@@ -1968,47 +1968,131 @@ for p in set(names):
     fi
     [[ -n "$workflow_runner_agents" ]] || workflow_runner_agents="$orchestrator_allowlist"
 
-    # Phase -> owning-agent resolution. The owning specialist is normally named
-    # "bubbles.<phase>", but that identity is a NAMING CONVENTION, not a
-    # guarantee, and deriving it blindly made Check 6B demand agents that have
-    # never existed (`bubbles.bug-discovery`, `bubbles.certify-state`,
-    # `bubbles.interrogate`, `bubbles.select`, the removed `bubbles.bootstrap`).
-    #
-    # BUG-020: workflows.yaml `phases.<phase>.owner` is the single source of
-    # truth, so the owner is READ from the registry instead of concatenated.
-    # `activeWorkflowRunner` means the phase runs in whichever orchestrator is
-    # driving, so any granted workflow runner is accepted. The convention is kept
-    # alongside the declared owner purely for backward compatibility: a phase the
-    # registry does not declare, and the historical `analyze` -> bubbles.analyst
-    # record, keep passing exactly as they do today.
-    phase_owner_agent() {
+    agent_definition_exists() {
+      local agent="$1"
+      local definition="${agent}.agent.md"
+      local candidate
+
+      for candidate in \
+        "$guard_repo_root/agents/$definition" \
+        "$guard_repo_root/.github/agents/$definition" \
+        "$script_repo_root/agents/$definition" \
+        "$script_repo_root/.github/agents/$definition"; do
+        [[ -f "$candidate" ]] && return 0
+      done
+      return 1
+    }
+
+    # Phase -> owning-agent resolution. workflows.yaml `phases.<phase>.owner`
+    # is the authority. An absent phase or a declared owner with no agent
+    # definition is a framework-integrity refusal, never a cue to synthesize
+    # `bubbles.<phase>`. Existing legacy identities remain accepted only when
+    # that identity names a real shipped agent definition.
+    resolve_phase_owner() {
       local phase="$1"
       local declared=""
       local legacy=""
+      local phase_missing=""
+
+      phase_owner_resolution=""
+      phase_owner_agents=""
+      phase_owner_detail=""
+
+      if [[ -z "$workflow_registry_file" ]]; then
+        phase_owner_resolution="registry-unavailable"
+        phase_owner_detail="no workflows.yaml registry could be resolved"
+        return 0
+      fi
+      if ! command -v yq >/dev/null 2>&1; then
+        phase_owner_resolution="registry-unavailable"
+        phase_owner_detail="yq is unavailable for reading $workflow_registry_file"
+        return 0
+      fi
+
+      if ! phase_missing="$(_pa_phase="$phase" yq -r '.phases[strenv(_pa_phase)] == null' "$workflow_registry_file" 2>/dev/null)"; then
+        phase_owner_resolution="registry-unavailable"
+        phase_owner_detail="could not query $workflow_registry_file"
+        return 0
+      fi
+      if [[ "$phase_missing" == "true" ]]; then
+        phase_owner_resolution="unregistered-phase"
+        phase_owner_detail="$workflow_registry_file"
+        return 0
+      fi
+      if [[ "$phase_missing" != "false" ]]; then
+        phase_owner_resolution="registry-unavailable"
+        phase_owner_detail="unexpected phase lookup result '$phase_missing' from $workflow_registry_file"
+        return 0
+      fi
+
+      if ! declared="$(_pa_phase="$phase" yq -r '.phases[strenv(_pa_phase)].owner // ""' "$workflow_registry_file" 2>/dev/null)"; then
+        phase_owner_resolution="registry-unavailable"
+        phase_owner_detail="could not read owner for phase '$phase' from $workflow_registry_file"
+        return 0
+      fi
+      if [[ -z "$declared" ]]; then
+        phase_owner_resolution="owner-missing"
+        phase_owner_detail="$workflow_registry_file"
+        return 0
+      fi
 
       case "$phase" in
         analyze) legacy='bubbles.analyst' ;;
         *) legacy="bubbles.$phase" ;;
       esac
 
-      if [[ -n "$workflow_registry_file" ]] && command -v yq >/dev/null 2>&1; then
-        # strenv, not --arg: the pinned yq is Go yq, which has no --arg flag.
-        declared="$(_pa_phase="$phase" yq -r '.phases[strenv(_pa_phase)].owner // ""' "$workflow_registry_file" 2>/dev/null || true)"
-      fi
-
       case "$declared" in
-        '') printf '%s' "$legacy" ;;
-        activeWorkflowRunner) printf '%s %s' "$workflow_runner_agents" "$legacy" ;;
-        "$legacy") printf '%s' "$legacy" ;;
-        *) printf '%s %s' "$declared" "$legacy" ;;
+        activeWorkflowRunner)
+          phase_owner_agents="$workflow_runner_agents"
+          ;;
+        *)
+          if ! agent_definition_exists "$declared"; then
+            phase_owner_resolution="owner-unregistered"
+            phase_owner_detail="$declared"
+            return 0
+          fi
+          phase_owner_agents="$declared"
+          ;;
       esac
+
+      if [[ "$legacy" != "$declared" ]] && agent_definition_exists "$legacy"; then
+        phase_owner_agents="$phase_owner_agents $legacy"
+      fi
+      phase_owner_agents="${phase_owner_agents# }"
+      phase_owner_resolution="registered"
     }
 
     if [[ -n "$claimed_phases" ]]; then
       provenance_failures=0
+      phase_registry_failures=0
       while IFS= read -r claimed_phase; do
         [[ -z "$claimed_phase" ]] && continue
-        expected_agent="$(phase_owner_agent "$claimed_phase")"
+        resolve_phase_owner "$claimed_phase"
+        case "$phase_owner_resolution" in
+          registered)
+            expected_agent="$phase_owner_agents"
+            ;;
+          unregistered-phase)
+            fail "Phase '$claimed_phase' is not registered in phase registry '$phase_owner_detail' (Gate G022 framework integrity); refusing without synthesizing a phantom owner"
+            phase_registry_failures=$((phase_registry_failures + 1))
+            continue
+            ;;
+          owner-missing)
+            fail "Phase '$claimed_phase' is registered in '$phase_owner_detail' but declares no owner (Gate G022 framework integrity)"
+            phase_registry_failures=$((phase_registry_failures + 1))
+            continue
+            ;;
+          owner-unregistered)
+            fail "Phase '$claimed_phase' declares owner '$phase_owner_detail', but that owner has no shipped agent definition (Gate G022 framework integrity)"
+            phase_registry_failures=$((phase_registry_failures + 1))
+            continue
+            ;;
+          *)
+            fail "Phase '$claimed_phase' owner could not be resolved: $phase_owner_detail (Gate G022 framework integrity)"
+            phase_registry_failures=$((phase_registry_failures + 1))
+            continue
+            ;;
+        esac
         matched="false"
 
         # Pass 1: specialist provenance (existing behavior). BUG-020: the owner
@@ -2090,6 +2174,9 @@ for p in set(names):
       done <<< "$claimed_phases"
       if [[ "$provenance_failures" -gt 0 ]]; then
         fail "$provenance_failures phase claim(s) lack proper agent provenance — phase impersonation detected"
+      fi
+      if [[ "$phase_registry_failures" -gt 0 ]]; then
+        fail "$phase_registry_failures phase claim(s) violate the registered phase-owner contract — framework integrity check failed"
       fi
     else
       info "No phase claims to verify provenance for"

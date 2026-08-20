@@ -1880,6 +1880,43 @@ with open(path, "w", encoding="utf-8") as handle:
 PY
 }
 
+mutate_unregistered_phase_claim() {
+  local state_file="$1"
+
+  python3 - "$state_file" <<'PY'
+import json
+import sys
+
+path = sys.argv[1]
+with open(path, encoding="utf-8") as handle:
+  data = json.load(handle)
+
+data["workflowMode"] = "iterate"
+snapshot = data.get("policySnapshot")
+if isinstance(snapshot, dict):
+  snapshot["workflowMode"] = "iterate"
+
+execution = data.get("execution")
+if not isinstance(execution, dict):
+  execution = {}
+  data["execution"] = execution
+
+execution["completedPhaseClaims"] = ["totally-made-up-phase"]
+execution["executionHistory"] = [
+  {
+    "agent": "bubbles.bug",
+    "phasesExecuted": ["totally-made-up-phase"],
+    "startedAt": "2026-01-01T00:00:00Z",
+    "completedAt": "2026-01-01T00:20:00Z",
+  },
+]
+
+with open(path, "w", encoding="utf-8") as handle:
+  json.dump(data, handle, indent=2)
+  handle.write("\n")
+PY
+}
+
 mutate_dict_shaped_phase_claims() {
   local state_file="$1"
 
@@ -2283,6 +2320,10 @@ mutate_analyze_phase_provenance "$analyst_owned_phase_dir/state.json" "bubbles.a
 analyze_wrong_agent_dir="$tmp_root/specs/942-transition-guard-selftest-analyze-wrong-agent"
 cp -R "$positive_feature_dir" "$analyze_wrong_agent_dir"
 mutate_analyze_phase_provenance "$analyze_wrong_agent_dir/state.json" "bubbles.simplify"
+
+unregistered_phase_dir="$tmp_root/specs/943-transition-guard-selftest-unregistered-phase"
+cp -R "$positive_feature_dir" "$unregistered_phase_dir"
+mutate_unregistered_phase_claim "$unregistered_phase_dir/state.json"
 
 echo "Running agent ownership lint precheck..."
 lint_log="$tmp_root/agent-ownership-lint.log"
@@ -2842,6 +2883,18 @@ analyze_wrong_agent_log="$tmp_root/analyze-wrong-agent.log"
 run_capture "$analyze_wrong_agent_log" bash "$GUARD_SCRIPT" "$analyze_wrong_agent_dir" >/dev/null
 assert_log_contains "$analyze_wrong_agent_log" "Phase 'analyze' is in completedPhaseClaims but no specialist or parent-expanded provenance found" "Check 6B: an unrelated agent claiming 'analyze' is STILL refused (the impersonation check can fail)"
 assert_log_not_contains "$analyze_wrong_agent_log" "Phase 'analyze' has specialist provenance from bubbles.analyst" "Check 6B: bubbles.simplify is not accepted as provenance for the analyze phase"
+
+# Unknown phase names are framework-vocabulary errors, not instructions to
+# invent an owner. The adversarial executor matches the old synthesized shape
+# only by phase, so this test fails if the guard silently skips the claim or
+# resumes demanding `bubbles.totally-made-up-phase`.
+echo "Running Check 6B unregistered-phase adversarial selftest..."
+unregistered_phase_log="$tmp_root/unregistered-phase.log"
+run_capture "$unregistered_phase_log" bash "$GUARD_SCRIPT" "$unregistered_phase_dir" >/dev/null
+assert_log_contains "$unregistered_phase_log" "Phase 'totally-made-up-phase' is not registered in phase registry" "Check 6B: an unregistered phase is refused as a registry-integrity error"
+assert_log_contains "$unregistered_phase_log" "refusing without synthesizing a phantom owner" "Check 6B: the refusal explains that no owner was invented"
+assert_log_not_contains "$unregistered_phase_log" "bubbles.totally-made-up-phase" "Check 6B: the guard never demands a fabricated agent identity"
+assert_log_contains "$unregistered_phase_log" "framework integrity check failed" "Check 6B: an unknown phase cannot degrade to a pass"
 
 echo "Running negative packet-field selftest..."
 negative_log="$tmp_root/negative-guard.log"

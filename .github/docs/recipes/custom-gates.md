@@ -51,7 +51,7 @@ The state transition guard automatically discovers and runs these gates. Blockin
 ## Gate IDs
 
 <!-- GENERATED:GATE_BANDS_START — do not edit by hand; run bubbles/scripts/gate-bands.sh -->
-- Framework (built-in) gates: **G001–G199 reserved**. Active IDs are listed in `bubbles/registry/gates.yaml` (the framework currently uses G001-G016 plus G018-G029 plus G031-G038 plus G040-G044 plus G047-G048 plus G051-G053 plus G055-G061 plus G063-G064 plus G066-G095 plus G097-G101 plus G110-G138).
+- Framework (built-in) gates: **G001–G199 reserved**. Active IDs are listed in `bubbles/registry/gates.yaml` (the framework currently uses G001-G016 plus G018-G029 plus G031-G038 plus G040-G044 plus G047-G048 plus G051-G053 plus G055-G061 plus G063-G064 plus G066-G095 plus G097-G101 plus G110-G139).
 <!-- GENERATED:GATE_BANDS_END -->
 - Project-local custom gates: **G900+** (auto-assigned). The custom band is kept clear of the framework-reserved range so Bubbles upgrades can never collide with your gate IDs. The G200–G899 span is an intentional reserved gap.
 - Custom gates survive Bubbles upgrades — `bubbles-project.yaml` is never overwritten

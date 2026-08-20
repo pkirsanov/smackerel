@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 #
 # pre-tool-risk-gate.sh — real-time PreToolUse risk gate (review R10, v6.1).
+# Classification integrity is Gate G139 (IMP-052).
 #
 # Bubbles classifies every CLI command in bubbles/action-risk-registry.yaml.
 # Until v6.1 that classification was only RECORDED (framework events) after the
@@ -47,6 +48,9 @@ else
 fi
 REGISTRY_FILE="${BUBBLES_ACTION_RISK_REGISTRY:-$FRAMEWORK_DIR/action-risk-registry.yaml}"
 TRUST_REGISTRY="${BUBBLES_TOOL_TRUST_REGISTRY:-$FRAMEWORK_DIR/tool-trust-registry.yaml}"
+
+# shellcheck source=/dev/null
+. "$SCRIPT_DIR/action-risk-classes-lib.sh"
 
 BLOCK_CLASSES="${BUBBLES_RISK_BLOCK:-destructive_mutation external_side_effect}"
 WARN_CLASSES="${BUBBLES_RISK_WARN:-runtime_teardown}"
@@ -308,6 +312,21 @@ fi
 # --- Decision ---------------------------------------------------------------
 in_list() { local needle="$1" hay="$2" x; for x in $hay; do [[ "$x" == "$needle" ]] && return 0; done; return 1; }
 
+# An unrecognized class is an INTEGRITY failure, not a low-risk action. Because
+# BLOCK_CLASSES is an allow-list, a near-miss ('destructive_mutuation', a hyphen
+# or case variant, or outright garbage) used to fall past both list checks and
+# reach the silent allow at the bottom of this file -- converting a blocking
+# classification into permission via a single-character error. We cannot know
+# the true risk of a class we cannot interpret, so we refuse. Validated against
+# the shared vocabulary directly, so BUBBLES_RISK_BLOCK/WARN cannot defeat it.
+if ! action_risk_is_valid_class "$RISK_CLASS"; then
+  echo "pre-tool-risk-gate: BLOCK — '$TARGET' carries unrecognized risk class '$RISK_CLASS'." >&2
+  echo "  Valid classes: $(action_risk_classes_list)" >&2
+  echo "  Fix the classification in the action risk registry; this is not a confirmable action." >&2
+  echo "decision=block reason=unknown-risk-class enforcement=enforced riskClass=$RISK_CLASS"
+  exit 3
+fi
+
 if in_list "$RISK_CLASS" "$BLOCK_CLASSES"; then
   if [[ "$CONFIRM" == "1" ]]; then
     echo "pre-tool-risk-gate: ALLOW (confirmed) — '$TARGET' is $RISK_CLASS" >&2
@@ -324,5 +343,7 @@ if in_list "$RISK_CLASS" "$WARN_CLASSES"; then
   exit 0
 fi
 
-# read_only / owned_mutation / anything else -> allow silently.
+# read_only / owned_mutation -> allow. Every other string was already refused
+# above as an unrecognized class, so this path is reached only by a validated
+# low-risk classification.
 exit 0
