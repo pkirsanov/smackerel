@@ -2625,4 +2625,316 @@ block is owned by `bubbles.validate`; this phase writes execution progress only,
 for its owner rather than corrected here.
 
 
+# Audit phase — `bubbles.audit`
+
+### Verdict
+
+**AUDIT CLEAN — no defect found.** The fix genuinely closes the defect it claims; it does not merely
+appear to. Every central claim below was **re-derived by execution in this session**, not read from a
+prior phase's transcript.
+
+This verdict is bounded, and the bound is stated rather than implied: it certifies **evidence integrity
+and completion honesty** for the audit phase. It is **not** a delivery certification. `validate` remains
+unexecuted and belongs to its own specialist; `status` and `certification.status` stay `in_progress`.
+
+### Scope of this phase
+
+Read-only adversarial review of commit `40a9e942` and the packet's ten commits. No source file, no
+wrapper, and no foreign artifact was modified. The prior phases were **not** re-run; they were attacked.
+
+### The trap this packet is about, demonstrated before relying on any selector
+
+`--go-run` narrows the selection, so **exit 0 is also what a zero match produces**. Before trusting any
+focused run, the audit established the discriminator with a selector that cannot match anything:
+
+```
+$ timeout 900 ./smackerel.sh test unit --go --go-run 'TestNoSuchTestExistsAnywhere_AuditControl' --verbose
+ok      github.com/smackerel/smackerel/internal/deploy  0.021s [no tests to run]
+LANE_EXIT=0
+```
+
+Zero `=== RUN` lines, green lane, exit 0. The discriminator is therefore the `[no tests to run]` suffix
+and the presence of named `=== RUN` / `--- PASS` lines — never the exit code.
+
+### AUDIT-01 — the tests actually execute (exit 0 was not accepted as proof)
+
+```
+$ timeout 900 ./smackerel.sh test unit --go --go-run 'TestEnvsubstWrapperContract' --verbose
+=== RUN   TestEnvsubstWrapperContract_HelperExistsAndIsExecutable
+--- PASS: TestEnvsubstWrapperContract_HelperExistsAndIsExecutable (0.00s)
+=== RUN   TestEnvsubstWrapperContract_LiveWrappers
+=== RUN   TestEnvsubstWrapperContract_LiveWrappers/go-unit.sh
+=== RUN   TestEnvsubstWrapperContract_LiveWrappers/go-integration.sh
+=== RUN   TestEnvsubstWrapperContract_LiveWrappers/go-e2e.sh
+=== RUN   TestEnvsubstWrapperContract_LiveWrappers/go-stress.sh
+--- PASS: TestEnvsubstWrapperContract_LiveWrappers (0.01s)
+    --- PASS: TestEnvsubstWrapperContract_LiveWrappers/go-unit.sh (0.00s)
+    --- PASS: TestEnvsubstWrapperContract_LiveWrappers/go-integration.sh (0.00s)
+    --- PASS: TestEnvsubstWrapperContract_LiveWrappers/go-e2e.sh (0.00s)
+    --- PASS: TestEnvsubstWrapperContract_LiveWrappers/go-stress.sh (0.00s)
+=== RUN   TestEnvsubstWrapperContract_AdversarialRejectsMissingSource
+--- PASS: TestEnvsubstWrapperContract_AdversarialRejectsMissingSource (0.00s)
+=== RUN   TestEnvsubstWrapperContract_AdversarialRejectsSourceWithoutCall
+--- PASS: TestEnvsubstWrapperContract_AdversarialRejectsSourceWithoutCall (0.00s)
+=== RUN   TestEnvsubstWrapperContract_AdversarialRejectsCallAfterGoTest
+--- PASS: TestEnvsubstWrapperContract_AdversarialRejectsCallAfterGoTest (0.00s)
+=== RUN   TestEnvsubstWrapperContract_AdversarialRejectsUnlocatableInvocation
+--- PASS: TestEnvsubstWrapperContract_AdversarialRejectsUnlocatableInvocation (0.00s)
+=== RUN   TestEnvsubstWrapperContract_AdversarialRejectsConditionalCallAfterGoTest
+--- PASS: TestEnvsubstWrapperContract_AdversarialRejectsConditionalCallAfterGoTest (0.00s)
+ok      github.com/smackerel/smackerel/internal/deploy  0.048s
+LANE_EXIT=0
+```
+
+Five functions and four subtests genuinely ran. The package line reads `ok … 0.048s` **without** the
+`[no tests to run]` suffix that the control run carried — the two runs differ exactly where they must.
+
+**Note the property the fix creates:** `LiveWrappers/go-integration.sh` passing is now *load-bearing*.
+Before the fix that subtest passed vacuously; after it, a zero match is fatal, so its green is a
+positive assertion that the invocation was located **and** the ordering compared.
+
+### AUDIT-02 — the defect and the fix, re-derived directly against the live wrappers
+
+Both regexes were lifted from the source and applied to the four wrappers independently of the test:
+
+```
+=== OLD regex (pre-fix)  ^\s*go\s+test\b ===
+go-unit.sh       1
+go-integration.sh 0          <-- the defect: matched NOTHING, yet reported GREEN
+go-e2e.sh        1
+go-stress.sh     2
+
+=== NEW regex (post-fix) ===
+go-unit.sh       count=1  lines=67
+go-integration.sh count=1  lines=76
+go-e2e.sh        count=1  lines=89
+go-stress.sh     count=2  lines=50,90
+```
+
+This reproduces the packet's measured claim **exactly**: before-counts `1 / 0 / 1 / 2`, after-lines
+`67 / 76 / 89 / 50`. The binding set moves **4 → 5**, the single addition being the genuine invocation
+at `go-integration.sh:76`, which at HEAD reads:
+
+```
+if ! go test "${go_test_args[@]}" 2>&1 | tee "$gate_output_file"; then
+```
+
+The security phase's independently-stated "4 → 5, single addition" is therefore corroborated by
+measurement rather than accepted on assertion.
+
+### AUDIT-03 — the widening landed on real invocations, not inert text
+
+`FindStringIndex` returns only the **first** match, so `go-stress.sh` having two matches is a place a
+widening could silently bind to the wrong thing. Both are real invocations, and every wrapper orders
+the helper first:
+
+```
+go-stress.sh:50  go test -tags stress -v -count=1 -timeout 90s -run '^TestStressReadinessCanary_Live$' ./tests/stress/readiness
+go-stress.sh:90          go test "${go_test_args[@]}" "$package_path"
+
+go-unit.sh         ensure_envsubst@17   firstGoTest@67   ordered=YES
+go-integration.sh  ensure_envsubst@14   firstGoTest@76   ordered=YES
+go-e2e.sh          ensure_envsubst@14   firstGoTest@89   ordered=YES
+go-stress.sh       ensure_envsubst@11   firstGoTest@50   ordered=YES
+```
+
+### AUDIT-04 — the regression tests are ADVERSARIAL, not tautological
+
+This is the check that decides whether the fix is real or cosmetic. A regression that passes whether or
+not the bug returns is worthless. Each new fixture was tested against **both** regexes:
+
+```
+FIXTURE A (unlocatable):  output=$(go test ./... 2>&1)
+  NEW regex: NO MATCH  -> genuinely exercises the hard-failure branch
+
+FIXTURE B (conditional):  if ! go test "${go_test_args[@]}" 2>&1 | tee "$gate_output_file"; then
+  OLD regex: NO MATCH  -> reverting the widening breaks this test (it would see a LOCATOR error,
+                          not the asserted ORDERING error)
+  NEW regex: MATCH     -> the widening is what makes the ordering assertion reachable
+```
+
+Both halves of the fix are **independently** guarded, which is the property that matters:
+
+- Revert the hard-failure to `return nil` → fixture A returns nil → `AdversarialRejectsUnlocatableInvocation` fails.
+- Revert the widening → fixture B yields the locator error → `AdversarialRejectsConditionalCallAfterGoTest` asserts the *ordering* substring and fails.
+
+Neither test can pass through the bug. The packet's decision to assert the **specific** error substring
+rather than "some error" is what buys the second property, and it is load-bearing.
+
+### AUDIT-05 — AC-5 verified across all ten packet commits, not just the fix
+
+AC-5 requires `scripts/runtime/` to stay byte-identical — the wrapper must not be edited to satisfy its
+own detector. Checked per commit, not merely at the tip:
+
+```
+f48b6642 : offending=0      7acbaaf3 : offending=0
+40a9e942 : offending=0      9af5e309 : offending=0
+ffc7f60d : offending=0      65ec19b9 : offending=0
+d0b42dfe : offending=0      b316e027 : offending=0
+                            cc43f087 : offending=0
+                            8cdc31e8 : offending=0
+
+$ git status --porcelain -- scripts/runtime/ internal/
+(empty — clean)
+
+$ git show --stat 40a9e942
+ internal/deploy/envsubst_wrapper_contract_test.go  | 100 ++++++++-
+ .../report.md                                      | 242 +++++++++++++++++++++
+ .../scopes.md                                      | 236 +++++++++++++++++++-
+ 3 files changed, 563 insertions(+), 15 deletions(-)
+```
+
+One naive check deserves recording because it is misleading and a future reader will hit it: a diff over
+the raw linear range `f48b6642^..HEAD -- scripts/runtime/` **does** report a change to
+`go-integration.sh`. That change belongs to commit `fa61daa0` (**BUG-061-011**, dated `05:41:57`,
+*sixteen hours before* this packet's fix at `21:58:27`) — a different packet's simplify phase, which
+explicitly recorded that it left line 76 alone so this bug would stay unmasked. It is **interleaved
+foreign work, not this packet's**. Confirmed decisively:
+
+```
+$ git log --format='%h %s' 40a9e942..HEAD -- scripts/runtime/
+(empty — nothing after the fix touched scripts/runtime/)
+```
+
+**AC-5 is intact.**
+
+### AUDIT-06 — phase attribution is truthful
+
+Seven `executionHistory` entries, one per agent, spans non-uniform (9, 11, 17, 48, 24, 15, 24 minutes) —
+no fabrication-indicating uniform spacing. The cited pre-fix baseline is real and is exactly the right
+commit:
+
+```
+d08013e6 2026-08-19T21:15:57+00:00  validate(BUG-061-011): …
+parent of 40a9e942 = d08013e6
+```
+
+The red-then-green probe `TestZZBug061013PreFixProbe` is **not** in the tree (`grep` → 0 hits), which is
+correct: a probe that exercises pre-fix code cannot be kept. Its captures are therefore not replayable —
+but the property they establish **is** independently re-derivable, and AUDIT-04 re-derived it.
+
+### AUDIT-07 — replay hints are runnable (the defect class a prior phase already caught once)
+
+The regression phase found and fixed an unquoted `--go-run` alternation that would parse as a shell
+pipeline. Swept for recurrence across the packet:
+
+```
+=== UNQUOTED --go-run containing a shell metachar (would misparse) ===
+--- end (empty = clean) ---
+
+quoted-with-pipe   : 2
+UNquoted-with-pipe : 0
+```
+
+Not merely well-formed — **executed verbatim**:
+
+```
+$ timeout 900 ./smackerel.sh test unit --go --go-run 'TestEnvsubstWrapperContract_AdversarialRejectsMissingSource|TestEnvsubstWrapperContract_AdversarialRejectsSourceWithoutCall|TestEnvsubstWrapperContract_AdversarialRejectsCallAfterGoTest' --verbose
+=== RUN   TestEnvsubstWrapperContract_AdversarialRejectsMissingSource
+--- PASS: TestEnvsubstWrapperContract_AdversarialRejectsMissingSource (0.00s)
+=== RUN   TestEnvsubstWrapperContract_AdversarialRejectsSourceWithoutCall
+--- PASS: TestEnvsubstWrapperContract_AdversarialRejectsSourceWithoutCall (0.00s)
+=== RUN   TestEnvsubstWrapperContract_AdversarialRejectsCallAfterGoTest
+--- PASS: TestEnvsubstWrapperContract_AdversarialRejectsCallAfterGoTest (0.00s)
+ok      github.com/smackerel/smackerel/internal/deploy  0.080s
+LANE_EXIT=0
+```
+
+Three real tests selected and run — not a zero match. T-05 holds.
+
+### AUDIT-08 — DoD honesty: 14 of 14 checked, none on weaker evidence than it asserts
+
+Two items were spot-checked because they are the ones most likely to be asserted rather than run:
+
+- **The two ADVERSARIAL red-then-green items** claim `nil → error` on identical input across the fix
+  boundary. Independently corroborated by AUDIT-04 without relying on the vanished probe capture.
+- **The full e2e lane item (T-08)** is the most expensive claim in the packet. Its evidence is a real
+  capture block (`exit: 0`, `lines: 4528`, `sha256 eb5e8fa3…`) and it explicitly declines to lean on
+  exit 0 alone, naming the terminal check `PASS: go-e2e-corpus-enforce` and the stack-teardown lines as
+  the load-bearing signals — *because a lane exiting 0 while a check inside it quietly declines to run
+  is this bug's own failure mode*. Its provenance is attributed honestly ("by the ORCHESTRATOR
+  (`bubbles.goal`) … OBSERVED, not produced, by `bubbles.test`") rather than claimed as own work.
+
+Evidence provenance across the report is **27 `Claim Source: executed` and 0 `interpreted`**, with six
+explicit uncertainty declarations. There are no interpreted claims requiring reviewer spot-check.
+
+### AUDIT-09 — overclaim review: none found
+
+- **Security verdict.** States `SECURE` *with its limits attached*, not as a blanket clean bill: an
+  explicit "Not run in this phase" section, an uncertainty declaration conceding the truncation
+  *consequence* was "reasoned from them, not measured", the caller sweep called "a strong signal, not an
+  exhaustive proof", and RE2 linearity "not re-measured under adversarial input here". Its `4 → 5`
+  binding-set claim is corroborated by AUDIT-02. Its one observation is marked pre-existing and
+  foreign-owned rather than attributed to this packet.
+- **Simplify no-op.** Honest and *quantified*, not lazy: the table-driven refactor was measured as
+  net-negative (42 skeleton lines → roughly 54) and rejected on a semantic ground that is precisely this
+  packet's failure mode — a blanked table field still compiles and still passes. It also flagged a
+  genuine residual inaccuracy and routed it instead of silently fixing it. **Verified still present:**
+  line 75's comment says `(?m)^\s*` while line 80's pattern is `(?m)^[^\S\n]*`. It is inert (both match
+  leading horizontal whitespace) and correctly left to its owner.
+
+### Observations (non-blocking; for `bubbles.validate` and the operator)
+
+1. `OBS-061-013-AUDIT-01` — **cosmetic execution-block drift.** `execution.completedPhaseClaims` lists
+   four phases while top-level `completedPhases` lists six, and `execution.activeAgent` /
+   `execution.currentPhase` still read `simplify` although `stabilize`, `security` and now `audit` have
+   run. This is **not** a functional gap, and the guard's own output proves it: `stabilize` and
+   `security` are absent from `completedPhaseClaims` yet the guard does **not** report them missing, so
+   it reads the **union** of both records. Left uncorrected here deliberately — the same treatment
+   `stabilize` and `security` gave it — and routed to `bubbles.validate`, which owns reconciliation.
+2. `OBS-061-013-AUDIT-02` — the guard warns "20 of 68 evidence blocks lack terminal output signals
+   (potentially fabricated)". Assessed as **benign**: the blocks in question are source excerpts, regex
+   listings and file dumps rather than terminal claims, and the provenance discipline is 27 executed /
+   0 interpreted. Recorded so the warning is not silently absorbed.
+3. `certification.pendingGates` prose remains stale — already routed by the regression, simplify,
+   stabilize, and security phases to `bubbles.validate`. Unchanged here; audit does not write
+   `certification.*`.
+
+### Not run in this phase
+
+`./smackerel.sh lint` and `./smackerel.sh format --check` were **not** re-run and no result is claimed
+for them: both gate changed source, and this phase changed none. The integration, e2e and stress lanes
+were **not** re-run — re-running them would re-execute the regression phase's work rather than audit it,
+and the audit's contribution is independent re-derivation of the central claims, which was performed
+against the wrapper files and the committed tests directly. No fixture was mutated in-tree to force the
+hard-failure branch, because AC-5 forbids editing `internal/`; the equivalent property was established
+analytically in AUDIT-04 instead.
+
+### Uncertainty declaration
+
+The pre-fix probe captures (`9e2e3abf…`, `c049764…`) and the e2e capture (`eb5e8fa3…`) cite sha256
+digests over evidence-capture output whose temporary directories no longer exist, so those specific
+hashes cannot be re-verified now. This is a property of the capture tool, **not** a packet defect — the
+packet mitigated it correctly by copying the decisive windows into the artifacts. Where it mattered, the
+underlying property was re-derived by other means rather than trusted (AUDIT-04).
+
+The regex comparison in AUDIT-02 and AUDIT-04 was performed with PCRE `grep -P` against patterns Go
+compiles under RE2. The constructs used here (anchors, character classes, non-capturing groups,
+alternation, `\b`) carry identical semantics in both engines, and the results agree with the committed
+test's live behaviour in AUDIT-01, which is the corroborating control. It was not verified under a Go
+harness, because building one would require creating a package outside the permitted change surface.
+
+### Completion Statement — audit phase
+
+The audit phase executed. Verdict: **AUDIT CLEAN — no defect found.** No finding is attributable to this
+packet, and the verdict is recorded with its limits rather than as a blanket pass.
+
+The packet's central claim survives adversarial re-derivation. The defect was real (`go-integration.sh`
+matched **nothing** while reporting green), the fix locates it at line 76, the binding set moves 4 → 5,
+and — the part that decides soundness — **both** halves of the fix are independently guarded by
+regression tests that cannot pass through the bug. The subject was never edited to satisfy its own
+detector: AC-5 holds across all ten packet commits and the working tree, and the one apparent
+counter-example is interleaved foreign work from BUG-061-011 that predates the fix by sixteen hours.
+
+Exit 0 was never accepted as proof. The zero-match trap this packet documents was first demonstrated on
+a control selector, and every subsequent claim of execution rests on named `=== RUN` / `--- PASS` lines.
+
+No source file was modified. `internal/deploy/envsubst_wrapper_contract_test.go` and `scripts/runtime/`
+remain byte-identical to HEAD, so **AC-5 is preserved by this phase**. The only working-tree changes are
+this packet's `report.md` and `state.json`. `uservalidation.md` was not opened and no
+`## Human Acceptance Record` section was authored (G136 is operator-only). Only `audit` is claimed;
+`validate` remains unexecuted and belongs to its own specialist. Packet `status` and
+`certification.status` remain `in_progress` — audit reports evidence integrity; it does not certify.
+
+
 
