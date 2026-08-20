@@ -2936,5 +2936,361 @@ this packet's `report.md` and `state.json`. `uservalidation.md` was not opened a
 `validate` remains unexecuted and belongs to its own specialist. Packet `status` and
 `certification.status` remain `in_progress` — audit reports evidence integrity; it does not certify.
 
+---
+
+## Validate phase — `bubbles.validate`
+
+### Verdict
+
+**CERTIFIED on the technical surface; packet status `blocked` on G136 alone.** Scope
+`BUG-061-013-SCOPE-01` is Done, all 14 DoD items are backed by evidence that demonstrates what each item
+actually asserts, and no finding is attributable to this packet. `status` is **not** set to `done`,
+because human acceptance has not occurred and cannot be manufactured — see *The G136 boundary* below.
+
+This phase did **not** rubber-stamp seven green phases. Every load-bearing claim below was re-derived by
+execution or by direct source inspection in this session. Where a prior phase's conclusion was
+interpretive rather than mechanical, the interpretation was checked against the source it rests on.
+
+### Validation Evidence
+
+#### V-01 — The trap first: the zero-match discriminator, established in THIS session
+
+`--go-run` narrows selection, so exit 0 is also what a zero match produces. Before trusting any focused
+run, a selector that cannot match anything was executed and its signature recorded.
+
+**Claim Source:** executed · **Exit Code:** 0 (both runs)
+
+```
+# NEGATIVE CONTROL — selector matches nothing
+$ ./smackerel.sh test unit --go --go-run 'TestZZZValidateNegativeControlMatchesNothing' --verbose
+NEGCTL_LANE_EXIT=0
+TOTAL_LINES=519
+=== RUN lines: 0
+ok      github.com/smackerel/smackerel/internal/deploy  0.078s [no tests to run]
+```
+
+Both the control and the real run exit 0. The exit code therefore carries no information here, and every
+execution claim below rests on named `=== RUN` / `--- PASS` lines and on the **absence** of the
+`[no tests to run]` suffix.
+
+#### V-02 — The contract family genuinely executes
+
+**Claim Source:** executed · **Exit Code:** 0 · 540 lines ·
+sha256 `fdc36c2a71924c50a8b37ec78eb2bce2def87cff384bdcbac1dcc8afaa0f95d9`
+
+```
+$ ./smackerel.sh test unit --go --go-run 'TestEnvsubstWrapperContract' --verbose
+=== RUN   TestEnvsubstWrapperContract_HelperExistsAndIsExecutable
+--- PASS: TestEnvsubstWrapperContract_HelperExistsAndIsExecutable (0.00s)
+=== RUN   TestEnvsubstWrapperContract_LiveWrappers
+=== RUN   TestEnvsubstWrapperContract_LiveWrappers/go-unit.sh
+=== RUN   TestEnvsubstWrapperContract_LiveWrappers/go-integration.sh
+=== RUN   TestEnvsubstWrapperContract_LiveWrappers/go-e2e.sh
+=== RUN   TestEnvsubstWrapperContract_LiveWrappers/go-stress.sh
+--- PASS: TestEnvsubstWrapperContract_LiveWrappers (0.00s)
+    --- PASS: TestEnvsubstWrapperContract_LiveWrappers/go-unit.sh (0.00s)
+    --- PASS: TestEnvsubstWrapperContract_LiveWrappers/go-integration.sh (0.00s)
+    --- PASS: TestEnvsubstWrapperContract_LiveWrappers/go-e2e.sh (0.00s)
+    --- PASS: TestEnvsubstWrapperContract_LiveWrappers/go-stress.sh (0.00s)
+=== RUN   TestEnvsubstWrapperContract_AdversarialRejectsMissingSource
+--- PASS: TestEnvsubstWrapperContract_AdversarialRejectsMissingSource (0.00s)
+=== RUN   TestEnvsubstWrapperContract_AdversarialRejectsSourceWithoutCall
+--- PASS: TestEnvsubstWrapperContract_AdversarialRejectsSourceWithoutCall (0.00s)
+=== RUN   TestEnvsubstWrapperContract_AdversarialRejectsCallAfterGoTest
+--- PASS: TestEnvsubstWrapperContract_AdversarialRejectsCallAfterGoTest (0.00s)
+=== RUN   TestEnvsubstWrapperContract_AdversarialRejectsUnlocatableInvocation
+--- PASS: TestEnvsubstWrapperContract_AdversarialRejectsUnlocatableInvocation (0.00s)
+=== RUN   TestEnvsubstWrapperContract_AdversarialRejectsConditionalCallAfterGoTest
+--- PASS: TestEnvsubstWrapperContract_AdversarialRejectsConditionalCallAfterGoTest (0.00s)
+ok      github.com/smackerel/smackerel/internal/deploy  0.028s
+```
+
+Seven functions and four subtests, each named. The package line carries **no** `[no tests to run]`
+suffix, which is exactly where this run differs from V-01's control. Covers DoD SCN-01, SCN-02, SCN-03,
+SCN-05, and the two adversarial red-then-green items on their green side.
+
+#### V-03 — The defect and the fix, re-derived against the live wrappers, independently of the test
+
+Both regexes were lifted from the committed source and applied directly to the four tracked wrappers
+with PCRE, so this measurement does not depend on the test that is under validation.
+
+**Claim Source:** executed
+
+```
+OLD  ^\s*go\s+test\b
+NEW  ^[^\S\n]*(?:(?:if|elif|then|while|until|&&|\|\||\||!)[^\S\n]+)*go[^\S\n]+test\b
+
+scripts/runtime/go-unit.sh         OLD 67          NEW 67
+scripts/runtime/go-integration.sh  OLD (NONE)      NEW 76
+scripts/runtime/go-e2e.sh          OLD 89          NEW 89
+scripts/runtime/go-stress.sh       OLD 50, 90      NEW 50, 90
+
+go-integration.sh:76 = if ! go test "${go_test_args[@]}" 2>&1 | tee "$gate_output_file"; then
+```
+
+This reproduces the packet's measured claim exactly: the binding set moves 4 → 5, and the single
+addition is the genuine invocation the old pattern could not reach. The defect was real.
+
+#### V-04 — The ordering comparison is genuinely performed, so `go-integration.sh` PASS is load-bearing
+
+**Claim Source:** executed
+
+```
+wrapper                 ensure_envsubst      go test (first match)
+go-unit.sh              17                   67
+go-integration.sh       14                   76
+go-e2e.sh               14                   89
+go-stress.sh            11                   50
+```
+
+`ensure_envsubst` precedes the located invocation in all four. Combined with the zero-match branch now
+being fatal, the green `LiveWrappers/go-integration.sh` subtest is a positive assertion that the
+invocation was **located** and the ordering **compared** — where before the fix it passed vacuously.
+
+#### V-05 — The two new adversarial tests are NON-VACUOUS
+
+This is the check that separates a real fix from a decorative one, and it was made against the fixtures
+themselves rather than assumed. Both fixtures are raw string literals in the test file, so the committed
+matcher can be applied to them directly.
+
+**Claim Source:** executed
+
+```
+NEW regex applied to internal/deploy/envsubst_wrapper_contract_test.go:
+  215: go test ./...
+  235: go test ./...
+  255: go test ./...
+  314: if ! go test "${go_test_args[@]}" 2>&1 | tee "$gate_output_file"; then
+
+fixture lines, verbatim:
+  284: output=$(go test ./... 2>&1)      <- NOT in the match list
+  314: if ! go test ... | tee ...        <- IS in the match list
+```
+
+Line 284 is the `RejectsUnlocatableInvocation` fixture: it genuinely **evades** the widened matcher, so
+that test exercises the real zero-match branch rather than passing for an unrelated reason. Line 314 is
+the `RejectsConditionalCallAfterGoTest` fixture: it genuinely **matches**, so its assertion on the
+*ordering* substring proves the widening landed on a real invocation. Had the widening landed on
+something inert, that test would have surfaced the locator error and gone red. Neither test is
+tautological.
+
+#### V-06 — Replay hints are runnable, including the alternation class a prior phase already fixed
+
+Every `--go-run` selector in the packet was enumerated and checked for shell-parse hazards.
+
+**Claim Source:** executed · **Exit Code:** 0
+
+```
+hazard class — --go-run with an UNQUOTED value containing | ( ) ^ $ * :
+  (no matches)
+
+the one alternation selector, executed end-to-end:
+$ ./smackerel.sh test unit --go --go-run 'TestEnvsubstWrapperContract_AdversarialRejectsMissingSource|TestEnvsubstWrapperContract_AdversarialRejectsSourceWithoutCall|TestEnvsubstWrapperContract_AdversarialRejectsCallAfterGoTest' --verbose
+ALT3_LANE_EXIT=0
+=== RUN   TestEnvsubstWrapperContract_AdversarialRejectsMissingSource
+--- PASS: TestEnvsubstWrapperContract_AdversarialRejectsMissingSource (0.00s)
+=== RUN   TestEnvsubstWrapperContract_AdversarialRejectsSourceWithoutCall
+--- PASS: TestEnvsubstWrapperContract_AdversarialRejectsSourceWithoutCall (0.00s)
+=== RUN   TestEnvsubstWrapperContract_AdversarialRejectsCallAfterGoTest
+--- PASS: TestEnvsubstWrapperContract_AdversarialRejectsCallAfterGoTest (0.00s)
+ok      github.com/smackerel/smackerel/internal/deploy  0.044s
+```
+
+The alternation is single-quoted at every occurrence, so it reaches `go test` as one argument instead of
+parsing as a shell pipeline. The hint is runnable, and running it also discharges the DoD item asserting
+the three pre-existing adversarial sub-tests were not blunted (T-05).
+
+#### V-07 — AC-5 verified across the packet's whole commit range, not just the fix
+
+**Claim Source:** executed
+
+```
+$ git status --porcelain -- scripts/runtime/ internal/
+(empty — working tree clean on both paths)
+
+$ git diff --stat 40a9e942^..HEAD -- scripts/runtime/
+(empty — scripts/runtime BYTE-IDENTICAL from the fix's parent through HEAD)
+
+$ git diff --stat 40a9e942^..HEAD -- scripts/ cmd/ internal/
+ internal/deploy/envsubst_wrapper_contract_test.go | 100 +++++++++++++++++++++-
+ 1 file changed, 96 insertions(+), 4 deletions(-)
+
+$ git show --name-only 40a9e942
+internal/deploy/envsubst_wrapper_contract_test.go
+<packet>/report.md
+<packet>/scopes.md
+```
+
+Across every BUG-061-013 commit, the only non-artifact file touched is the one test file. Two commits in
+the same log window do touch `internal/deploy/eval_lane_contract_test.go` and
+`scripts/runtime/go-integration.sh`, but both belong to sibling BUG-061-011 and both **precede**
+`40a9e942`; the `40a9e942^..HEAD` diffs above are bounded to this packet and are the decisive form.
+
+The scratch probe used for the pre-fix red-then-green was confirmed genuinely disposed of: absent from
+the working tree, and `git log --all -- internal/deploy/zz_bug061013_prefix_probe_test.go` returns
+nothing, so it never entered a commit and cannot have widened the change surface.
+
+#### V-08 — The prior phases' interpretive claims were checked against source, not accepted
+
+The test phase explained two failure-shaped lines inside otherwise-green live lanes as required output of
+deliberate negative fixtures. That is an interpretation, and interpretations are where a green lane can
+hide a real failure, so each was verified at its source.
+
+**Claim Source:** executed
+
+```
+tests/e2e/lib/helpers.sh:103
+  echo "FAIL: Services did not become healthy within ${timeout}s"
+
+all e2e_wait_healthy call sites:
+  tests/e2e/lib/helpers.sh:47              e2e_wait_healthy 120
+  tests/e2e/lib/helpers.sh:53              e2e_wait_healthy 120
+  tests/e2e/run_all.sh:81                  e2e_wait_healthy 120
+  tests/e2e/test_persistence.sh:25         e2e_wait_healthy 120
+  tests/e2e/test_persistence.sh:53         e2e_wait_healthy 120
+  tests/e2e/test_postgres_readiness_gate.sh:24   e2e_wait_healthy 8   <- sole 8s call site
+
+tests/integration/config_validate_test.go
+  74  func buildOversizedEnvFile(...)
+  106 ML_MODEL_MEMORY_PROFILES_JSON ... "bug-045-fixture-llm-20gib","weights_mib":20480
+  138 func TestConfigValidate_AC5c_BinaryRejectsOversizedModel(...)
+```
+
+Both interpretations hold. The `8s` timeout is unique to the readiness-gate canary, which stops postgres
+on purpose, and the oversized-model fixture exists exactly as described. In both lanes the
+failure-shaped line is the assertion **passing**; its absence is what would turn the lane red. The
+T-06 and T-08 DoD items therefore rest on evidence that means what they claim.
+
+#### V-09 — Build Quality Gate, re-run rather than inherited
+
+**Claim Source:** executed
+
+```
+$ ./smackerel.sh lint
+exit: 0 · 157 lines · sha256 9cef6098a51e7e1f2321a9d65bf994d1a511488880bb13a790242bf58c0d393e
+  Web validation passed
+
+$ ./smackerel.sh format --check
+exit: 0 · 136 lines · sha256 655526ae031b729a88f829c04ffb4b614d9163b5cd25529d72a7d76aaea2d999
+  78 files already formatted
+
+$ bash .github/bubbles/scripts/artifact-lint.sh <packet>
+  Artifact lint PASSED.        ARTIFACT_LINT_EXIT=0
+
+$ bash .github/bubbles/scripts/pii-scan.sh
+  no leaks found · pii-scan: clean.     PII_SCAN_EXIT=0
+```
+
+The audit phase correctly declined to claim `lint` and `format` because it changed no source. This phase
+re-ran both rather than inheriting the test phase's result, and additionally confirmed no packet artifact
+contains an absolute home-directory path.
+
+### DoD versus evidence — the judgement
+
+All 14 checked items in `scopes.md` are backed by evidence that demonstrates what the item asserts, not
+merely something adjacent to it. The items that could most easily have been over-claimed were checked
+specifically:
+
+| DoD item | What it asserts | Why the evidence actually demonstrates it |
+|---|---|---|
+| SCN-01 / SCN-02 | absence is rejected, and the message blames the *matcher* | V-05 proves the fixture evades the matcher, so the branch is genuinely reached; V-02 shows the test named and passing |
+| SCN-03 / SCN-05 | `go-integration.sh:76` is located and its ordering compared | V-03 locates it at 76 independently; V-04 shows ordering holds; the zero-match branch makes the green load-bearing |
+| adversarial red-then-green (both) | verdict differs across the change on the SAME input | executed via a scratch probe on both sides with recorded verdict lines, and the probe was proven never committed (V-07) |
+| T-05 trio not blunted | three pre-existing fixtures still reject | re-executed in V-06 with named RUN/PASS |
+| T-06 / T-08 live lanes | the wrappers the contract governs still run | exit 0 plus V-08's source-level confirmation that the failure-shaped lines are passing negative fixtures |
+| AC-5 / change boundary | one file, `scripts/runtime/` untouched | V-07, in three independent diff forms |
+| Build Quality Gate | lint, format, artifact-lint clean | V-09, re-run this session |
+
+Phase attributions are truthful. Each of the seven recorded phases has exactly one `executionHistory`
+entry written by the matching specialist, and the git log carries one commit per phase in the same
+order. No agent claims a phase it did not execute. T-06 and T-08 are explicitly attributed to the
+orchestrator as **observed, not produced** — an under-claim, which is the safe direction.
+
+The stated bounds are accurate rather than decorative. Security states its limits and its read-only
+scope; simplify is an honest no-op, confirmed by `git diff --quiet 40a9e942 HEAD -- <file>` returning
+identical; audit bounds itself to evidence integrity and completion honesty and says in terms that it is
+**not** a delivery certification.
+
+### Finding
+
+**No blocking finding.** No defect is attributable to this packet.
+
+One non-blocking observation was carried into this phase and is now reconciled, because it was the only
+statement in the packet that was actually **false** rather than merely incomplete:
+
+- `OBS-061-013-AUDIT-01` / stale `certification.pendingGates`. The pending-gate prose still asserted that
+  seven specialist phases remained unexecuted and that `## Validation Evidence` was "absent by design",
+  both of which this session made untrue. `execution.activeAgent` and `execution.currentPhase` still read
+  `simplify` after three further phases had run. Certification reconciliation is this phase's ownership,
+  so those fields are rewritten to the truth and `validate` is claimed with first-hand provenance. The
+  residual under-claim in `execution.completedPhaseClaims` for `stabilize`, `security` and `audit` is
+  **left alone**: those are other agents' claims to make, the guard reads the union of both records so
+  nothing is gated on it, and an under-claim cannot fabricate.
+
+### The G136 boundary, and why this packet is `blocked` rather than `done`
+
+`uservalidation.md` `## Checklist` is `writer: human` in
+`.github/bubbles/registry/acceptance-authority.yaml` (`acceptance-checklist` → `writer: human`;
+`acceptance-record` → `writer: human`). Its four `[Bug Fix]` items ship unchecked and only the operator
+may check them. This phase did not open them, did not check them, and authored no
+`## Human Acceptance Record`.
+
+Gate G136 therefore **remains red**, and that is the correct outcome rather than a shortfall. Technical
+verification is not human acceptance: everything above establishes that the fix does what it claims, and
+none of it establishes that a human looked at the resulting behaviour and accepted it. An agent checking
+those boxes would manufacture precisely the signal the gate exists to require.
+
+Status is therefore set to `blocked` on G136 alone, with the operator action named in `blockedReason`.
+Sibling `BUG-061-011` was resolved the same way, and for the same reason.
+
+### Not run in this phase
+
+The integration (`T-06`), e2e (`T-08`) and stress lanes were **not** re-executed, and no fresh result is
+claimed for them. Their DoD items were validated by assessing the recorded evidence and by verifying at
+source that the failure-shaped lines inside them are passing negative fixtures (V-08) — which is the
+check that could actually have falsified them. Re-running them would have re-done the test phase's work
+rather than validated it, at roughly forty minutes per lane.
+
+No fixture was mutated in-tree to force the hard-failure branch, because AC-5 forbids editing
+`internal/`; the equivalent property was established in V-05 by applying the committed matcher to the
+committed fixtures instead.
+
+### Uncertainty declaration
+
+The pre-fix probe captures (`9e2e3abf…`, `c049764…`), the T-06 capture (`a3230783…`) and the T-08 capture
+(`eb5e8fa3…`) cite sha256 digests over evidence-capture output whose temporary directories no longer
+exist, so those specific hashes cannot be re-derived now. This phase's own captures
+(`fdc36c2a…`, `9cef6098…`, `655526ae…`) were taken this session, but they cover output containing
+timings and package-install lines, so `--verify` would not reproduce them byte-for-byte either. This is a
+property of capturing non-deterministic output, **not** a packet defect. Where it mattered, the
+underlying property was re-derived by other means rather than trusted: V-03, V-04, V-05 and V-08 depend
+on no prior hash at all.
+
+The regex re-derivation in V-03 and V-05 used PCRE `grep -P` against a pattern Go compiles under RE2. The
+constructs involved (anchors, negated character classes, non-capturing groups, alternation, `\b`) carry
+identical semantics in both engines, and the result agrees with the committed test's live behaviour in
+V-02, which is the corroborating control.
+
+### Completion Statement — validate phase
+
+The validate phase executed. Verdict: **technically certified, `blocked` on human acceptance.**
+
+Scope `BUG-061-013-SCOPE-01` is Done and all 14 DoD items are backed by evidence demonstrating what they
+assert. The defect was real and is closed: `go-integration.sh` matched **nothing** while reporting green,
+the widened matcher now locates it at line 76, and — the part that decides durability — a zero match is
+now fatal, so the next syntax shift produces a loud failure rather than another silent pass. Both halves
+are guarded by regression tests that were shown to be non-vacuous rather than assumed to be.
+
+Exit 0 was never accepted as proof. The zero-match trap was demonstrated on a control selector before any
+focused run was trusted, and every execution claim rests on named `=== RUN` / `--- PASS` lines.
+
+No source file was modified by this phase. `internal/deploy/envsubst_wrapper_contract_test.go` and
+`scripts/runtime/` remain byte-identical to HEAD, so **AC-5 is preserved**. The only working-tree changes
+are this packet's `report.md` and `state.json`. `uservalidation.md` was not modified, no box was checked,
+and no `## Human Acceptance Record` was authored.
+
+`status` and `certification.status` are set to `blocked`, not `done`. G136 human acceptance is the sole
+outstanding item, and it belongs to the operator.
+
 
 
