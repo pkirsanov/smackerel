@@ -2119,5 +2119,510 @@ executed — `implement`, `test`, `regression`, `simplify`, `stabilize`. The `ce
 owned by `bubbles.validate`; this phase writes execution progress only, so the count is flagged for
 its owner rather than corrected here.
 
+---
+
+# Security phase — `bubbles.security`
+
+### Verdict
+
+🔒 **SECURE** — no security finding is attributable to this packet.
+
+That verdict is recorded with its limits stated. It rests on four executed checks, not on the change
+being test-only: the guarded property was traced to its single call site and shown to carry no secret;
+the widened matcher was re-derived independently and shown to bind the real invocation in all four
+wrappers; the changed file was shown to have no exec, network, or deserialization surface and to run
+on RE2; and this packet's artifacts were scanned on disk rather than through the staged-diff path that
+would have inspected nothing.
+
+One pre-existing, foreign-owned observation is recorded below (`OBS-061-013-SEC-01`). It is
+informational, it is not introduced by this packet, and it does not change the verdict.
+
+### Scope of this phase
+
+Read-only. `internal/deploy/envsubst_wrapper_contract_test.go` and `scripts/runtime/` were **read but
+not modified**, so AC-5 is preserved. The only working-tree changes are this packet's `report.md` and
+`state.json`.
+
+### What the guarantee protects, and the precise security consequence if it silently breaks
+
+The contract asserts that `ensure_envsubst` is sourced and called BEFORE `go test` in each tracked
+wrapper. The obvious hypothesis is that a missing or mis-ordered substitution could leak, blank, or
+mis-resolve a secret-bearing value. **That hypothesis is false here, and the reason is worth stating
+precisely rather than assumed in either direction.**
+
+`envsubst` has exactly **one** call site in the entire repository:
+
+```
+$ grep -rn envsubst scripts/ --include='*.sh'    # invocation sites only
+scripts/commands/config.sh:3163:  envsubst "$PROM_SUBST_VARS" < "$PROM_TMPL_FILE" > "$PROM_OUT_FILE"
+```
+
+Read at `scripts/commands/config.sh:3155-3167`:
+
+```bash
+# Use envsubst to substitute ONLY the named variables. This avoids
+# accidental expansion of '$' characters in the template that happen
+# to look like env vars but aren't.
+PROM_SUBST_VARS='${PROMETHEUS_SCRAPE_INTERVAL_S} ${PROMETHEUS_EVALUATION_INTERVAL_S} ${CORE_CONTAINER_PORT} ${ML_CONTAINER_PORT}'
+...
+  envsubst "$PROM_SUBST_VARS" < "$PROM_TMPL_FILE" > "$PROM_OUT_FILE"
+chmod 0644 "$PROM_OUT_FILE"
+```
+
+Three properties follow, each load-bearing for the verdict:
+
+1. **The call uses envsubst's allow-list form.** `envsubst "$PROM_SUBST_VARS"` substitutes ONLY the
+   four named variables; every other `$TOKEN` in the template is emitted literally. This is the
+   opposite of a leak primitive — it is the control that prevents ambient environment values from
+   being interpolated into a rendered artifact. The unrestricted form (`envsubst` with no argument),
+   which WOULD expand every variable in the environment, is not used anywhere.
+2. **All four substituted variables are non-secret.** Two scrape intervals and two container ports —
+   integers. No token, password, or key is in the set.
+3. **The secret-bearing artifact does not go through envsubst at all.** Thirty lines earlier, the NATS
+   config — the one carrying `${NATS_AUTH_SECTION}` — is rendered by bash and locked down separately:
+
+   ```
+   scripts/commands/config.sh:3101:NATS_AUTH_SECTION=""
+   scripts/commands/config.sh:3130:printf '%s\n' "$NATS_CONF_CONTENT" > "$NATS_CONF_FILE"
+   scripts/commands/config.sh:3131:chmod 0600 "$NATS_CONF_FILE"
+   ```
+
+   Different renderer, `0600` rather than `0644`. The envsubst path never handles it.
+
+`scripts/runtime/go-unit.sh:4` states the same boundary in the wrapper itself: *"No secrets pass
+through this script — only apt + go test."* That comment is corroborated by the call-site reading, not
+taken on trust.
+
+**So the consequence of this guard silently breaking is availability and guard integrity, not
+confidentiality.** The failure shape is `envsubst: command not found`, exit 127. Whether that is loud
+or silent is the question that actually decides severity, so it was measured rather than assumed:
+
+```
+$ grep -rln 'config\.sh' --include='*_test.go' .        # 35 files shell out to config.sh
+$ # for each: count exit-ignoring patterns vs error checks
+cmd/core/connectors_startup_gate_test.go                    ignored_exit_patterns=0  error_checks=7
+internal/config/validate_test.go                            ignored_exit_patterns=0  error_checks=116
+internal/deploy/bundle_secret_contract_test.go              ignored_exit_patterns=0  error_checks=105
+internal/deploy/envsubst_wrapper_contract_test.go           ignored_exit_patterns=0  error_checks=22
+tests/integration/config_validate_test.go                   ignored_exit_patterns=0  error_checks=19
+tests/e2e/drive/drive_foundation_e2e_test.go                ignored_exit_patterns=0  error_checks=24
+   … all 35 files: ignored_exit_patterns=0
+```
+
+**Every one of the 35 callers checks the exit status; none ignores it.** `config.sh` itself opens with
+`set -euo pipefail` (line 2), so a 127 aborts generation immediately. And a bad render cannot pass
+unnoticed either — `internal/deploy/alertmanager_bundle_contract_test.go:48-64` parses the rendered
+`prometheus.yml` as YAML and fails if it lacks an `alerting.alertmanagers` block, which a zero-byte
+render necessarily does.
+
+The conclusion is therefore bounded and honest: **this contract is a second line of defence over an
+already-loud failure.** Its security value is that it catches the mis-ordering at build time instead of
+at lane runtime. It is not the only thing standing between the repository and a silent compromise, and
+this phase does not claim it is.
+
+**What the zero-match hole actually meant.** Before the fix, `go-integration.sh` was **silently
+unguarded** — the assertion ran, compared nothing, and reported PASS. That is the real security story:
+not a leak, but a control that had become decorative on one of four surfaces while continuing to report
+success. A guard that cannot fail provides assurance it has not earned, and the assurance is what other
+decisions are then built on.
+
+### Does the widened matcher weaken the guarantee?
+
+This was the sharpest risk to check. A locator that binds the **wrong** line would assert ordering
+against something inert and pass while the true invocation stayed unguarded — trading a silent pass for
+a subtler silent pass. The regression phase measured the binding set as 4 → 5; that was re-derived here
+independently, by extracting the literal regex from line 104 and running both the old and new patterns
+against the four wrappers, with the literal `go test` occurrences as ground truth.
+
+```
+$ OLD='^\s*go\s+test\b'
+$ NEW='^[^\S\n]*(?:(?:if|elif|then|while|until|&&|\|\||\||!)[^\S\n]+)*go[^\S\n]+test\b'
+$ for w in go-unit go-integration go-e2e go-stress; do grep -Pn "$OLD" / "$NEW" scripts/runtime/$w.sh; done
+```
+
+| Wrapper | literal `go test` lines | OLD matches | NEW matches | `ensure_envsubst` at | ordering asserted? |
+|---|---|---|---|---|---|
+| `go-unit.sh` | 4, 25, 66, 67, 68 | **67** | **67** | 17 | yes (17 < 67) — unchanged |
+| `go-integration.sh` | 76, 83, 122 | *(none)* | **76** | 14 | **yes (14 < 76) — was vacuous** |
+| `go-e2e.sh` | 89 | **89** | **89** | 14 | yes (14 < 89) — unchanged |
+| `go-stress.sh` | 50, 76, 90 | **50**, 90 | **50**, 90 | 11 | yes (11 < 50) — unchanged |
+| **total matched lines** | | **4** | **5** | | |
+
+4 → 5 confirmed independently. Three findings follow, and the third is the one that answers the
+question:
+
+1. **The single added line is the real invocation.** `go-integration.sh:76` is
+   `if ! go test "${go_test_args[@]}" 2>&1 | tee "$gate_output_file"; then` — the actual command, not a
+   mention of it.
+2. **The other three wrappers bind byte-identically before and after.** Same line numbers. The widening
+   could not have blunted them, because it did not move them.
+3. **The widening opened no path into inert text.** This is the decisive one. Every wrapper contains
+   `go test` inside comments or `echo` strings — `go-unit.sh:4,25,66,68` and `go-integration.sh:83,122`
+   — and the new pattern matches **none** of them. It cannot: the prefix enumeration is a closed set of
+   shell keywords and operators (`if|elif|then|while|until|&&|\|\||\||!`), each requiring trailing
+   whitespace, anchored at line start with only horizontal whitespace ahead of it. `#` and `echo` are
+   not members. `go-stress.sh:76`'s process substitution `done < <(go test …)` is likewise unmatched,
+   which is harmless because line 50 already binds first.
+
+The guard uses `FindStringIndex`, i.e. the **leftmost** match, so the assertion is "the first locatable
+invocation follows the first `ensure_envsubst` call". For a false pass the matcher would have to miss
+the real invocation **and** bind an inert line sitting after the call. Neither half occurs in any
+tracked wrapper, as measured above. **The widened matcher strengthens the guarantee: one vacuous
+assertion became live, and the other three are unchanged.**
+
+The residual risk of a bounded enumeration is real — a future `env VAR=x go test` or `timeout N go
+test` would not match — but it is now **loud** rather than silent, which is the half of the fix that
+does the durable work. That was proven by execution, not argued:
+`TestEnvsubstWrapperContract_AdversarialRejectsConditionalCallAfterGoTest` asserts the **ORDERING**
+error specifically on the `if ! go test … | tee …` shape. Had the matcher bound something inert, that
+fixture would surface the *locator* error instead and the test would fail.
+
+One property is unchanged by this packet and is recorded so it is not mistaken for a new guarantee: the
+contract compares **textual** order, and shell textual order is not execution order (a function defined
+early and invoked late would read as "before"). That asymmetry errs toward a false **failure**, which is
+the safe direction, and it predates this change.
+
+### Injection and ReDoS surface of the changed file
+
+The test reads wrapper files and regex-matches them, so path traversal, unsanitised input, and command
+execution were each checked. The accurate answer is that none is present, and the reason is structural:
+
+```
+$ sed -n '/^import (/,/^)/p' internal/deploy/envsubst_wrapper_contract_test.go
+import ( "fmt"  "os"  "path/filepath"  "regexp"  "runtime"  "strings"  "testing" )
+
+$ grep -nE 'os/exec|exec\.Command|syscall|net/http|os\.Getenv|encoding/json|yaml\.|template\.|unsafe' <file>
+   exit=1   → no match (1 is clean; 2 would be a grep error)
+```
+
+- **No command execution.** No `os/exec`, no `syscall`, no shell. The wrapper bytes are matched
+  in-memory and never executed or evaluated. There is no injection sink for the file content to reach.
+- **No attacker-controlled path.** Every path component is fixed at compile time:
+  `filepath.Join(root, "scripts", "runtime", name)` where `root` derives from `runtime.Caller(0)` and
+  `name` iterates the hardcoded `envsubstTrackedWrappers` slice literal. No env var, flag, file
+  content, or network input contributes. `os.Getenv` does not appear in the file.
+- **No deserialization.** No `encoding/*`, no YAML, no `text/template`, no `unsafe`.
+
+So the honest statement is that this is a pure in-memory regex over an already-read `[]byte`, with no
+exec and no external input — not a hazard requiring mitigation.
+
+**ReDoS.** The new pattern contains a nested quantifier, `(?:(?:if|elif|…)[^\S\n]+)*`, which under a
+backtracking engine such as PCRE would be a catastrophic-backtracking candidate. It is not one here,
+and the reason is the engine rather than the pattern: Go's `regexp` is RE2, which simulates an NFA in
+time linear in the input and does not backtrack. That the module uses stdlib RE2 and not a PCRE binding
+was verified rather than assumed:
+
+```
+$ grep -rnE 'dlclark/regexp2|GRegexp|gijit/pcre|glenn-brown/golang-pkg-pcre' --include='*.go' --include='go.mod' .
+   exit=1   → no PCRE binding anywhere in the module; stdlib RE2 only
+```
+
+Input size is bounded by the four wrapper files, and the package runs in 0.025s.
+
+### Secret hygiene of this packet's own artifacts
+
+The packet's transcripts are large (`report.md` 2,123 lines before this section; `scopes.md` 516),
+which is exactly the condition under which a pasted absolute path or credential slips in. Three
+independent checks were run.
+
+**First, the limitation was demonstrated rather than described.** `pii-scan.sh` runs
+`gitleaks protect --staged` and greps `git diff --cached`. With a clean tree it inspects nothing:
+
+```
+$ git status --porcelain      → (empty)
+$ git diff --cached --name-only | wc -l   → 0
+$ bash .github/bubbles/scripts/pii-scan.sh
+4:06AM INF 0 commits scanned.
+4:06AM INF scan completed in 31.9ms
+4:06AM INF no leaks found
+🫧 pii-scan: clean.
+   PII_SCAN_EXIT=0
+```
+
+**`0 commits scanned` — that "clean" is vacuous.** It is worth naming the shape: a check reporting
+success having examined nothing is precisely the defect class this packet exists to remove. Accepting
+it as the secret-hygiene result would have reproduced BUG-061-013 inside the security phase's own
+evidence. It is recorded here as a demonstration, not as a pass.
+
+**Second, the files were scanned on disk**, bypassing the staged-diff path entirely:
+
+```
+$ gitleaks detect --no-git --source <packet> --config .gitleaks.toml --redact --verbose
+4:06AM INF scan completed in 187ms
+4:06AM INF no leaks found
+GITLEAKS_DETECT_EXIT=0
+```
+
+187ms over real file content, against the repo's own rule set — a genuine scan, unlike the 31.9ms
+zero-commit run above.
+
+**Third, the machine-local token list and explicit deployment-identity patterns**, reported as counts
+only so no value is echoed:
+
+```
+   token list: present, 56 non-empty entries
+   non-empty non-comment = 23      tokens_checked = 23      → complete coverage, none skipped
+   token#1 … token#23              → matches=0 for every token
+
+   home-dir path                      matches=0
+   PRIVATE KEY block                  matches=0
+   tailnet FQDN (.ts.net)             matches=0
+   CGNAT 100.64/10                    matches=0
+   public-ish IPv4                    matches=0   (grep_exit=1, re-run under -P)
+   AWS-style key id                   matches=0
+   bearer/authz header                matches=0
+   ssh-rsa/ed25519 pubkey             matches=0
+   assigned secret literal            matches=0
+```
+
+Two of those lines were nearly wrong, and the corrections are the reason the result can be trusted:
+
+- The token-list sweep checked 23 of 56 non-empty lines. Rather than assume the other 33 were comments,
+  the arithmetic was closed: `56 non-empty − 33 comment lines = 23`. Coverage is complete.
+- The IPv4 pattern uses a negative lookahead, which **ERE does not support**, so the first run's `0`
+  could have been a broken pattern rather than a clean sweep. It was re-run under `grep -P` with the
+  exit code read explicitly (**1** = no match, not **2** = error), and then given a positive control:
+
+  ```
+  $ printf '203.0.113.7\n' > /tmp/pii-positive-control.txt
+  $ grep -PIn '<same pattern>' /tmp/pii-positive-control.txt
+  1:203.0.113.7
+     control_exit=0   → the harness fires, so the 1 above is a REAL clean sweep
+  ```
+
+  Without that control, "no matches" would have been indistinguishable from "the check cannot match
+  anything" — the same silent-pass shape again.
+
+**Result: no secret, token, credential, private key, real username, home-directory path, tailnet
+identity, or concrete deploy-target name is present in this packet's artifacts.**
+
+### G034 — mechanical security gate
+
+```
+# G034 security-gate.sh --repo-root . (BUG-061-013 security phase)
+$ bash .github/bubbles/scripts/security-gate.sh --repo-root .
+exit: 1
+lines: 13
+sha256: 2cd11a85cbf5f98814e79f92906b0a9fffedcd39805ac5a881d10b3f4a27a75a
+--- output ---
+FINDING: inline-credentials: ./scripts/commands/config.sh:866:  POSTGRES_PASSWORD="__SECRET_PLACEHOLDER__POSTGRES_PASSWORD__"
+FINDING: inline-credentials: ./scripts/commands/config.sh:1070:  LLM_PROVIDER_SECRET_MASTER_KEY="__SECRET_PLACEHOLDER__LLM_PROVIDER_SECRET_MASTER_KEY__"
+FINDING: inline-credentials: ./scripts/commands/config.sh:1236:  TELEGRAM_BOT_TOKEN="__SECRET_PLACEHOLDER__TELEGRAM_BOT_TOKEN__"
+FINDING: inline-credentials: ./scripts/commands/config.sh:1542:  KEEP_GOOGLE_APP_PASSWORD="__SECRET_PLACEHOLDER__KEEP_GOOGLE_APP_PASSWORD__"
+FINDING: inline-credentials: ./scripts/commands/config.sh:1841:  AUTH_BOOTSTRAP_TOKEN="__SECRET_PLACEHOLDER__AUTH_BOOTSTRAP_TOKEN__"
+FINDING: inline-credentials: ./scripts/commands/config.sh:1851:  WEB_REGISTRATION_INVITE_TOKEN="__SECRET_PLACEHOLDER__WEB_REGISTRATION_INVITE_TOKEN__"
+FINDING: inline-credentials: ./scripts/commands/config.sh:2239:  ASSISTANT_TRANSPORTS_TELEGRAM_WEBHOOK_SECRET_REF="ASSISTANT_TELEGRAM_WEBHOOK_SECRET"
+FINDING: inline-credentials: ./scripts/commands/config.sh:2240:  ASSISTANT_TELEGRAM_WEBHOOK_SECRET="test-webhook-secret-061-scope-05-bs001-fixture"
+FINDING: inline-credentials: ./scripts/commands/config_secret_rejection_test.sh:56:  echo "FAIL: SST loader returned exit 0 for POSTGRES_PASSWORD=smackerel + TARGET_ENV=self-hosted (expected non-zero)"
+FINDING: inline-credentials: ./scripts/commands/config_secret_rejection_test.sh:111:  if grep -qE '^POSTGRES_PASSWORD=__SECRET_PLACEHOLDER__POSTGRES_PASSWORD__$' "$SELF_HOSTED_ENV"; then
+FINDING: inline-credentials: ./scripts/commands/config_secret_rejection_test.sh:118:  if grep -qE '^POSTGRES_PASSWORD=smackerel$' "$SELF_HOSTED_ENV"; then
+FINDING: inline-credentials: ./scripts/commands/config_secret_rejection_test.sh:122:    echo "PASS: self-hosted.env does NOT contain literal POSTGRES_PASSWORD=smackerel"
+[security-gate] FAIL — G034 findings: 12
+```
+
+The gate exits 1. **None of the 12 is attributable to this packet, and on inspection none is a true
+positive.** Both halves were checked rather than asserted.
+
+**Attribution.** All 12 sit in `scripts/commands/`. This packet's entire source change is one file:
+
+```
+$ git diff --stat 40a9e942~1..HEAD -- scripts/ cmd/ internal/
+ internal/deploy/envsubst_wrapper_contract_test.go | 100 +++++++++++++++++++++-
+ 1 file changed, 96 insertions(+), 4 deletions(-)
+```
+
+`scripts/` is byte-identical — AC-5 confirmed independently here. Per-line blame puts every flagged
+line months before this packet (2026-08-19):
+
+| line | last touched | commit |
+|---|---|---|
+| `config.sh:866`, `:1841` | 2026-05-15 | `6ead0b27` spec-052 bundle secret injection contract |
+| `config.sh:1236`, `:1542` | 2026-05-28 | `4d63905a`, `e22a2cb0` |
+| `config.sh:2239`, `:2240` | 2026-05-28 | `6f0b80db` BS-001 Telegram webhook e2e |
+| `config.sh:1851` | 2026-06-14 | `b9171571` invite-token-gated registration |
+| `config.sh:1070` | 2026-06-18 | `48cfb6fc` multi-provider model registry |
+
+**True-positive assessment.** The gate matches `NAME="value"` lexically and cannot tell a sentinel from
+a credential. Each class was read at source:
+
+- **Six `__SECRET_PLACEHOLDER__<KEY>__` hits are a deliberate sentinel**, documented at `config.sh:497`,
+  `:853`, `:1812`, `:3062`, `:3299`: the SST loader emits these markers *instead of* literal values for
+  production-class targets, so the deploy adapter injects the real secret. This is the mechanism that
+  **prevents** a hardcoded credential, and `internal/config/placeholder_runtime_test.go` plus
+  `config_secret_rejection_test.sh` assert it holds.
+- **`:2239` is a reference name, not a value** — `…_SECRET_REF="ASSISTANT_TELEGRAM_WEBHOOK_SECRET"` names
+  the variable to resolve.
+- **`:2240` is a test-target-only fixture.** Read in context (`config.sh:2234-2240`) it sits inside
+  `if [[ "$TARGET_ENV" == "test" ]]`, with the surrounding comment stating that
+  production/self-hosted/dev retain their SST-resolved values. It is self-labelled
+  (`…-061-scope-05-bs001-fixture`) and cannot reach a production render.
+- **The four `config_secret_rejection_test.sh` hits are negative assertions** — a test proving a weak
+  password is REJECTED and does not appear in the rendered env. The inverse of a leak.
+
+So G034's exit 1 reflects a **pre-existing repository-wide baseline of 12 benign lexical matches**, not
+a defect in this packet. The gate's inability to distinguish a placeholder sentinel from a credential is
+a precision property of the enforcer, which lives under `.github/bubbles/` and is **owned by the
+framework**; this phase does not edit it, and the repository's own `gitleaks` configuration — the tool
+that gates commits — passes cleanly on the same tree.
+
+### Non-vacuity of this phase's own lane evidence
+
+The guard lane was executed through the repo CLI. The first capture exited 0 over 540 lines, and was
+**rejected as proof**, because `--go-run` narrows an otherwise repo-wide run and exit 0 is also what a
+zero-match selection produces — the visible window was entirely `[no tests to run]`, with the
+`internal/deploy` block in the omitted region (measured: 88 package directories sort before it, putting
+it near line 317 of 540). Widening the window far enough to show it would have pasted essentially the
+whole transcript, so a **differential control** was used instead — the identical lane, with a selector
+that matches no test:
+
+| | selector `TestEnvsubstWrapperContract` | negative control `…_NoSuchTestZZZ_NegativeControl` |
+|---|---|---|
+| exit | **0** | **0** |
+| lines | **540** | **519** |
+| sha256 | `ded98abca5f83cc5883fea0b0e8c7db6d6c578ab479fe9dc367ff39c900b88fc` | `7858a32ec9c2dc070acfd63ef89389d2f88147dde74fb45f45324e4b4bbbaa9c` |
+
+Both exit 0, which demonstrates rather than merely asserts that **the exit code carries no information
+here**. The 21-line delta does, and it reconciles exactly with the test inventory:
+
+```
+   top-level tests matching the selector = 7   (lines 161, 191, 211, 230, 250, 278, 309)
+   LiveWrappers subtests                 = 4   (one per tracked wrapper)
+   total test entities                   = 11
+
+   predicted: 11 '=== RUN' + 11 '--- PASS:' − 1 'no tests to run' = 21
+   observed delta (540 − 519)                                     = 21
+```
+
+Predicted equals observed with nothing left over, so all 11 entities — the four live wrapper subtests
+and the five adversarial rejections, including both added by this packet — executed and passed. The
+`internal/deploy` package's `ok` line necessarily carries no `[no tests to run]` suffix, because those
+21 lines exist only if tests ran.
+
+Replay hints (the selector contains no `|`; both are quoted for safety):
+
+```
+bash .github/bubbles/scripts/evidence-capture.sh --verify ded98abca5f83cc5883fea0b0e8c7db6d6c578ab479fe9dc367ff39c900b88fc -- ./smackerel.sh test unit --go --go-run 'TestEnvsubstWrapperContract' --verbose
+bash .github/bubbles/scripts/evidence-capture.sh --verify 7858a32ec9c2dc070acfd63ef89389d2f88147dde74fb45f45324e4b4bbbaa9c -- ./smackerel.sh test unit --go --go-run 'TestEnvsubstWrapperContract_NoSuchTestZZZ_NegativeControl' --verbose
+```
+
+Per the stabilize phase's recorded caveat, this lane is result-deterministic but not byte-deterministic
+(per-package timings and `apt-get` transfer rates vary), so `--verify` will return **exit 3** on a clean
+re-run. That mismatch is not a regression; compare the 21-line delta and the named PASS set instead.
+
+### OBS-061-013-SEC-01 — the rendered monitoring config is truncated before the failed exec (pre-existing)
+
+**Severity: LOW / informational. Availability and observability, not confidentiality. Not introduced by
+this packet. Owner: `bubbles.devops`, jointly with `OBS-061-013-STAB-01` — both concern
+`scripts/commands/` and `scripts/runtime/`, which AC-5 puts beyond this packet's reach.**
+
+While tracing the guarded property, one behaviour was measured that sharpens why the ordering matters.
+At `config.sh:3163` the shell sets up `> "$PROM_OUT_FILE"` **before** attempting to exec `envsubst`, so
+a missing binary truncates the previously-rendered `config/generated/prometheus.yml` to zero bytes and
+only then fails. Verified outside the repository tree:
+
+```
+$ printf 'PRE-EXISTING RENDERED CONFIG\n' > out.yml
+$ ( set -euo pipefail; definitely_not_a_real_binary_envsubst '${X}' < tmpl > out.yml )
+before: size=29 content=[PRE-EXISTING RENDERED CONFIG]
+definitely_not_a_real_binary_envsubst: command not found
+subshell_exit=127
+after:  size=0  content=[]
+```
+
+The exposure is tightly bounded, which is why this is informational rather than a finding, and each
+bound was checked rather than assumed:
+
+- `config.sh` runs under `set -euo pipefail`, so generation aborts at that line — the failure is loud.
+- The artifact is **gitignored** (`.gitignore:17`) and untracked, so a truncated render cannot
+  propagate through version control.
+- Its only consumer is `docker-compose.yml:317`, a read-only bind mount into Prometheus.
+- `internal/deploy/alertmanager_bundle_contract_test.go` parses the rendered file and requires an
+  `alerting.alertmanagers` block, so a zero-byte render fails a contract test.
+
+The residual path requires an operator to ignore a failed `config generate` and start the stack anyway,
+which would leave Prometheus with no scrape configuration — a monitoring blind spot (OWASP A09) rather
+than a disclosure. A durable remedy would render to a temporary file and move it into place only on
+success, so a failed generation leaves the previous config intact. That work belongs to the owner named
+above; this phase records it and modifies nothing.
+
+### Not run in this phase
+
+`./smackerel.sh lint` and `./smackerel.sh format --check` were **not** run and no result is claimed for
+them: both gate changed source, and this phase changed none. The integration, e2e, and stress lanes were
+**not** re-run; the security-relevant property of those wrappers is their `ensure_envsubst` ordering,
+which was verified statically above against the wrapper files themselves. No dependency-vulnerability
+scan (`govulncheck`, `nancy`) was run: this packet adds no dependency, `go.mod` is untouched, and a
+module-wide CVE sweep would report the repository's standing posture rather than anything about this
+change. No penetration test or fault injection was performed — inducing a missing `envsubst` inside the
+container is fault injection, which a read-only diagnostic phase does not perform.
+
+### Uncertainty declaration
+
+The `OBS-061-013-SEC-01` truncation mechanism was reproduced directly, but the **consequence** of a
+zero-byte `prometheus.yml` reaching a running Prometheus was **not** observed — no stack was started
+against a truncated render. The four bounds listed above were each verified; the residual operator path
+is reasoned from them, not measured.
+
+The claim that no test tolerates a `config.sh` failure rests on a pattern sweep for exit-ignoring idioms
+across all 35 caller files (`ignored_exit_patterns=0` in every one) plus the presence of substantial
+error checking in each. It is a strong signal, not an exhaustive proof that no caller anywhere swallows
+a specific error branch.
+
+The RE2 linear-time property is documented by Go's authors and corroborated by the absence of any PCRE
+binding in the module; it was not re-measured under adversarial input here.
+
+The G034 true-positive assessment rests on reading each flagged line in its source context. That reading
+is reproducible from the file/line references given, and the sentinel mechanism is independently
+asserted by the repository's own placeholder and secret-rejection tests.
+
+### Completion Statement — security phase
+
+The security phase executed, and its verdict is 🔒 **SECURE** with no finding attributable to this
+packet.
+
+The guarded property was traced to its single call site rather than assumed. The tempting hypothesis —
+that a broken substitution could leak or blank a secret — is **false here**, because `envsubst` is
+invoked in its allow-list form over four non-secret numeric variables, while the one secret-bearing
+artifact is rendered by a different mechanism at `0600`. The real security story is the one the packet
+already names: `go-integration.sh` was silently unguarded, and a control that reports success without
+comparing anything supplies assurance it has not earned.
+
+The widened matcher does **not** weaken the guarantee. Re-derived independently, the binding set goes
+4 → 5; the single addition is the genuine invocation at `go-integration.sh:76`; the other three wrappers
+bind byte-identically; and the closed prefix enumeration provably admits no comment or `echo` line, so
+the widening opened no route onto inert text.
+
+The changed file has no exec, network, or deserialization surface, and every path component is fixed at
+compile time — so path traversal and command injection are absent by construction rather than mitigated.
+Catastrophic backtracking is impossible under RE2, verified as the engine actually in use.
+
+Secret hygiene is clean, and clean by a check that could have failed: the staged-diff scan was shown to
+inspect **0 commits** and its "clean" was rejected as vacuous, the artifacts were scanned on disk
+instead, the token-list arithmetic was closed at 23 of 23, and the IPv4 pattern was re-run under a
+PCRE-capable grep with a positive control after ERE silently could not honour its lookahead.
+
+The one lane capture that exited 0 with an all-`[no tests to run]` window was **rejected** rather than
+recorded, and replaced with a differential negative control whose 21-line delta reconciles exactly with
+the 11-entity test inventory — so the assertion that the guard ran and passed is arithmetic, not
+eyeballing.
+
+G034's mechanical enforcer exits 1 on a pre-existing baseline of 12 lexical matches in
+`scripts/commands/`, every one last touched months before this packet, and every one a placeholder
+sentinel, a reference name, a labelled test fixture, or a negative assertion in a secret-rejection test.
+One informational observation, `OBS-061-013-SEC-01`, is recorded with its owner named.
+
+No source file was modified. `internal/deploy/envsubst_wrapper_contract_test.go` and `scripts/runtime/`
+remain byte-identical to HEAD, so **AC-5 is preserved by this phase**. The only working-tree changes are
+this packet's `report.md` and `state.json`. `uservalidation.md` was not opened and no
+`## Human Acceptance Record` section was authored (G136 is operator-only). Only `security` is claimed;
+`validate` and `audit` remain unexecuted and belong to their own specialists. Packet `status` and
+`certification.status` remain `in_progress`.
+
+**Routed, not edited (unchanged from the regression, simplify, and stabilize phases' routing):**
+`certification.pendingGates` still claims phases are unexecuted that have now run. **Six** have now
+executed — `implement`, `test`, `regression`, `simplify`, `stabilize`, `security`. The `certification.*`
+block is owned by `bubbles.validate`; this phase writes execution progress only, so the count is flagged
+for its owner rather than corrected here.
+
 
 
