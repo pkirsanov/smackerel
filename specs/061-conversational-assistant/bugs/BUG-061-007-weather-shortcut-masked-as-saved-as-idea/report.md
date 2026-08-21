@@ -50,8 +50,8 @@ was selected by execution rather than by picking the first line of the log:
 
 ```text
 $ git log --oneline --all --grep='BUG-061-007'
-0d5f9d51 docs(061): BUG-061-007 — record home-lab deploy + live infra-verification evidence
-fe571649 docs(061): BUG-061-007 — record home-lab deploy + live infra-verification evidence
+0d5f9d51 docs(061): BUG-061-007 — record <deploy-target> deploy + live infra-verification evidence
+fe571649 docs(061): BUG-061-007 — record <deploy-target> deploy + live infra-verification evidence
 f213a681 chore(deps): bump google.golang.org/grpc v1.81.1 -> v1.82.1 (GHSA-hrxh-6v49-42gf)
 bcfbcb2c chore(deps): bump google.golang.org/grpc v1.81.1 -> v1.82.1 (GHSA-hrxh-6v49-42gf)
 2f35e26f fix(061): BUG-061-007 — deterministic /weather shortcut (no more "saved as an idea")
@@ -66,6 +66,11 @@ bcfbcb2c : ANCESTOR-OF-HEAD : branches=[ ... * main   remotes/origin/main ]
 fe571649 : ANCESTOR-OF-HEAD : branches=[ ... * main   remotes/origin/main ]
 d4755abd : ORPHANED (not an ancestor of HEAD) : branches=[none]
 ```
+
+The `0d5f9d51` / `fe571649` subjects are quoted with the concrete deployment-target
+name redacted to `<deploy-target>` per the product-deployment-boundary policy; the
+commit SHAs are unaltered and remain the verifiable anchor, so `git show <sha>`
+resolves the real subject.
 
 Per-file delta of the commit of record, as executed:
 
@@ -311,3 +316,224 @@ requires a PASETO login session, not the raw shared token — a security-correct
 so the end-to-end behavioral confirmation is an operator Telegram turn: send
 `/weather <city or ZIP>` and confirm a forecast (or an honest "unavailable" line), never
 "saved as an idea". The fix binary is deployed + running + healthy + adapter-bound.
+
+## Regression phase (`bubbles.regression`) {#regression-phase}
+
+**Claim Source:** every command below was executed in this session against `HEAD=063a17fb`
+on a clean tree. Exit codes are the observed values, not expectations.
+
+### 1. Host-preflight override — disclosed, not buried {#regression-preflight-override}
+
+`./smackerel.sh test …` is gated by `host_resource_preflight`, which refuses on this host.
+Run standalone, first-hand:
+
+```text
+$ disk-preflight.sh
+  ┌─ disk-preflight: REFUSED — not enough free disk ──────────────────┐
+  │  C: (backs the vhdx): 34     GB free   required: 40   GB
+  │  WSL / (ext4)       : 495    GB free   required: 25   GB
+  │  Current Docker footprint:
+  │      Images          119   58   61.41GB   21GB (34%)
+  │      Local Volumes   112   24   165.5GB   39.73GB (24%)
+  │      Build Cache     638    0   27.05GB   14.6GB
+  └────────────────────────────────────────────────────────────────────┘
+DISK_PREFLIGHT_EXIT=1
+```
+
+Every `test` run in this phase therefore carried `SMACKEREL_SKIP_HOST_PREFLIGHT=1`. That is
+the CLI's **own documented opt-out**, not an invented bypass — `smackerel.sh:715` reads
+`Opt out with SMACKEREL_SKIP_HOST_PREFLIGHT=1`, and `smackerel.sh:726` implements it. The
+same comment block scopes the guard to *"heavy (multi-minute, multi-GB) commands"* whose
+failure modes are *"OOM-kill … when the shared WSL host is out of RAM"* and a
+*"disk-full wedge … [when] a heavy build can fill the disk"*. `test unit --go` is neither: it
+is a `docker run --rm` against an already-present image with warm caches, and it builds no
+image, so the guard's premise does not hold for it. The override is recorded here rather
+than silently applied.
+
+The remedy the banner suggests first — `docker-safe-prune.sh --apply` — was deliberately
+**NOT** run. The measured footprint above shows 14.6 GB reclaimable build cache and 39.73 GB
+reclaimable volumes; that cache is shared with sibling repositories whose builds were active,
+so reclaiming it to satisfy a guard that does not apply to this command would have destroyed
+other work. Declining the suggested remedy is part of the finding, not an omission.
+
+### 2. Test baseline — full Go unit suite {#regression-baseline}
+
+```text
+$ SMACKEREL_SKIP_HOST_PREFLIGHT=1 ./smackerel.sh test unit --go
+[go-unit] starting go test ./...
+ok      github.com/smackerel/smackerel/cmd/core                       1.474s
+ok      github.com/smackerel/smackerel/internal/agent/tools/weather   (cached)
+ok      github.com/smackerel/smackerel/internal/api                   6.454s
+ok      github.com/smackerel/smackerel/internal/assistant             (cached)
+ok      github.com/smackerel/smackerel/internal/auth                  3.200s
+ok      github.com/smackerel/smackerel/internal/config                45.504s
+…
+[go-unit] go test ./... finished OK
+UNIT_GO_EXIT=0
+```
+
+Whole-module `go test ./...`: **exit 0**, zero `FAIL` lines, zero `--- FAIL` lines. No
+previously-passing test regressed.
+
+| Category | Command | Result | Status |
+|---|---|---|---|
+| `unit` (Go, whole module) | `test unit --go` | `finished OK`, exit 0, 0 FAIL | 🟢 CLEAN |
+| `unit` (3 BUG-061-007 tests) | `test unit --go --go-run 'TestFacadeWeatherShortcut'` | exit 0 | 🟢 CLEAN |
+| `integration` | see [§5](#regression-integration) | `PASS: go-integration` + `PASS: python-integration`, exit 0 | 🟢 CLEAN |
+
+### 3. Mutation re-derivation — the tests are genuinely adversarial {#regression-mutation}
+
+Coverage that cannot fail is not coverage. One mutant was re-derived **first-hand** this
+session rather than inherited from a prior pass.
+
+**Mutant M1 — relational-operator replacement on the fast-path guard** (`facade.go:1006`),
+inverting `!= nil` to `== nil` so the fast path can never fire when the seam IS wired, which
+is exactly the pre-fix behaviour:
+
+```text
+$ git diff -- internal/assistant/facade.go
+index 139510ff..31174bc3 100644
+-  if msg.Kind == contracts.KindText && shortcutScenarioID == "weather_query" && f.weatherLookup != nil {
++  if msg.Kind == contracts.KindText && shortcutScenarioID == "weather_query" && f.weatherLookup == nil {
+
+$ SMACKEREL_SKIP_HOST_PREFLIGHT=1 ./smackerel.sh test unit --go --go-run 'TestFacadeWeatherShortcut'
+--- FAIL: TestFacadeWeatherShortcut_EmptyLocation_HonestPrompt_NoLookup (0.00s)
+    facade_weather_shortcut_test.go:191: executor invoked 1 times; want 0
+    facade_weather_shortcut_test.go:197: error_cause = "provider_unavailable"; want "slot_missing"
+--- FAIL: TestFacadeWeatherShortcut_ProviderError_HonestUnavailable_NotSavedAsIdea (0.00s)
+    facade_weather_shortcut_test.go:152: executor invoked 1 times; want 0
+--- FAIL: TestFacadeWeatherShortcut_DirectDispatch_RendersForecast_BypassesExecutor (0.00s)
+    facade_weather_shortcut_test.go:102: executor invoked 1 times; the /weather fast-path MUST bypass the LLM (want 0)
+    facade_weather_shortcut_test.go:105: weather lookup called 0 times; want exactly 1
+    facade_weather_shortcut_test.go:108: lookup location = ""; want "90210" (the stripped shortcut tail)
+    facade_weather_shortcut_test.go:111: status = "unavailable"; want "answered"
+    facade_weather_shortcut_test.go:114: body = "the service is unavailable right now — …"; want the forecast line "Beverly Hills, CA: clear, 22°C"
+    facade_weather_shortcut_test.go:125: len(Sources) = 0; want 1 provider attribution source
+FAIL    github.com/smackerel/smackerel/internal/assistant       0.282s
+M1_MUTANT_EXIT=1
+```
+
+**M1 KILLED by all three tests.** Tree then restored and proven byte-identical — not merely
+"reverted", but hash-equal to the pre-mutation blob:
+
+```text
+$ git hash-object internal/assistant/facade.go   # before mutation
+139510ffc375b310e2dd8c4309afe7b07e085edb
+$ git hash-object internal/assistant/facade.go   # after restore
+139510ffc375b310e2dd8c4309afe7b07e085edb
+$ git status --porcelain
+PORCELAIN_LINES=0
+
+$ SMACKEREL_SKIP_HOST_PREFLIGHT=1 ./smackerel.sh test unit --go --go-run 'TestFacadeWeatherShortcut'
+ok      github.com/smackerel/smackerel/internal/assistant       0.262s
+[go-unit] go test ./... finished OK
+M1_RESTORED_EXIT=0
+```
+
+#### Honest nuance — which assertion actually discriminates in SCN-061-007-03
+
+The mutant output above is more informative than a bare pass/fail, and it corrects a claim
+that a coarser reading would have made. In `SCN-061-007-03`
+(`_EmptyLocation_HonestPrompt_NoLookup`) the assertion `lookupCalls == 0` did **NOT** fire
+under M1 — with the fast path disabled the lookup is never called *either*, so that line is
+satisfied by both the fixed and the broken build and is **not individually discriminating**.
+The two assertions that actually killed the mutant for that test are the ones printed above:
+`executor invoked 1 times; want 0` (line 191) and `error_cause = "provider_unavailable"; want
+"slot_missing"` (line 197).
+
+A further first-hand correction: the capture-acknowledgement assertion did not fire for that
+test either. Under M1 this unit harness produced `status=unavailable
+error_cause=provider_unavailable` — visible in the emitted `assistant_turn` audit line — not
+`saved_as_idea`, because no source-assembler is registered in the harness. So SCN-061-007-03
+is adversarial via the executor-invocation and error-cause assertions **only**. Recorded as
+measured rather than as assumed.
+
+### 4. Cross-spec impact — no conflict with BUG-061-008 {#regression-cross-spec}
+
+Both packets touch the same file (`internal/assistant/facade.go`) and the same scenario ID
+(`weather_query`), which is the shape that usually indicates interference. Verified
+first-hand that it does not, here:
+
+```text
+$ awk 'NR==36' internal/assistant/facade_execution_error_honesty_test.go
+var requiresProvenanceScenarios = []string{"weather_query", "retrieval_qa", "recipe_search", "open_knowledge"}
+
+$ awk 'NR==1006' internal/assistant/facade.go
+  if msg.Kind == contracts.KindText && shortcutScenarioID == "weather_query" && f.weatherLookup != nil {
+```
+
+The two are **complementary, not overlapping**:
+
+| | BUG-061-008 | BUG-061-007 (this packet) |
+|---|---|---|
+| Path exercised | `weather_query` + `OutcomeProviderError` through the **UNWIRED** seam | explicit `/weather` shortcut through the **WIRED** seam |
+| Guard | `requiresProvenanceScenarios` sweep | `f.weatherLookup != nil` (`facade.go:1006`) |
+| Reachable together? | No — the guard is mutually exclusive on `weatherLookup` nil-ness | |
+
+The fast path also `return`s at `facade.go:1010`, **before**
+`canonicalizeSuccessfulCaptureResponse` is ever reached; it sets neither `StatusSavedAsIdea`
+nor `CaptureRoute`, and it audits `BandHigh` (`f.writeAudit(ctx, msg, BandHigh, …)` at
+`facade.go:1009`). It therefore cannot regress the band-LOW-only capture-acknowledgement rule
+that BUG-061-008 and the `INV-HB-REFUSAL` invariant protect. The whole-module suite in §2
+passing with zero FAILs is the corroborating measurement: `facade_execution_error_honesty_test.go`
+and `contracts/refusal_test.go` both ran and both passed.
+
+### 5. Integration suite {#regression-integration}
+
+The broader integration suite **was** executed for this packet, after the artifacts above had
+already been written. Both halves passed:
+
+```text
+$ SMACKEREL_SKIP_HOST_PREFLIGHT=1 ./smackerel.sh test integration
+--- PASS: TestAcceptanceGate_RoutingAccuracyAndCaptureFallback (0.00s)
+--- PASS: TestClassify_WeatherSignal (0.00s)
+    --- PASS: TestClassify_WeatherSignal/What's_the_weather_like_today? (0.00s)
+    --- PASS: TestClassify_WeatherSignal/Will_it_rain_tomorrow? (0.00s)
+    --- PASS: TestClassify_WeatherSignal/Forecast_for_Berlin_this_weekend? (0.00s)
+--- PASS: TestRun_AdversarialFailureSurfaces (0.00s)
+--- PASS: TestRun_AgainstShippedCorpus (0.00s)
+ok      github.com/smackerel/smackerel/internal/cardrewards     3.187s
+ok      github.com/smackerel/smackerel/tests/eval/assistant     0.034s
+PASS: go-integration
+[py-integration] live integration pytest finished OK
+PASS: python-integration
+INTEGRATION_EXIT=0
+```
+
+Two details worth recording rather than glossing:
+
+- The weather-routing acceptance tests (`TestClassify_WeatherSignal` and
+  `TestAcceptanceGate_RoutingAccuracyAndCaptureFallback`) are the ones most exposed to this
+  fix, since it changes what happens to a `weather_query` turn. Both passed, which is direct
+  corroboration that the fast path did not disturb routing or the capture-fallback acceptance
+  floor.
+- The run stood up a **project-scoped ephemeral stack** (`smackerel-test-*`: postgres, nats,
+  ollama, searxng, jaeger, stub-providers, core, ml) and tore it down completely on exit —
+  every container removed, and the `smackerel-test-postgres-data`, `-nats-data` and
+  `-ollama-data` volumes removed with it. No persistent dev or production state was touched.
+
+### 6. Coverage delta
+
+No test was deleted, skipped, or weakened in this phase — the only tree mutation was the
+temporary mutant in §3, reverted to a byte-identical blob and proven so by hash. The
+scenario-specific E2E gap for `SCN-061-007-01/02/03` is **unchanged and still open**; it is
+recorded in `state.json` `certification.pendingGates` and is not closed by this phase. Per
+`planning-checks.sh:72`, which text-matches the literal string `Regression E2E` in any Test
+Plan row, no such row was added to a `unit`-category row: doing so would turn that gate green
+while misdescribing the test category. That gate stays red honestly.
+
+### Verdict
+
+```text
+🟢 REGRESSION_FREE
+
+Test baseline (unit, whole module): exit 0, zero FAIL — no previously-passing test regressed
+Integration suite: exit 0 — go-integration PASS, python-integration PASS
+Mutation (M1, re-derived first-hand): KILLED by 3/3 tests; tree restored byte-identical
+Cross-spec conflicts: 0 (BUG-061-008 verified complementary, not overlapping)
+Design contradictions: 0
+Coverage delta: 0 removed / 0 weakened / 0 skipped
+Still open (NOT closed by this phase): scenario-specific E2E for SCN-061-007-01/02/03;
+  operator live Telegram turn; five specialist phases (simplify, stabilize, security,
+  audit, validate)
+```

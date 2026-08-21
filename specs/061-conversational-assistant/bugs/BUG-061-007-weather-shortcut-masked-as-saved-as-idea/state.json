@@ -9,7 +9,7 @@
   "owner": "bubbles.goal",
   "discoveredBy": "operator (live deployed Telegram bot, screenshot)",
   "discoveredAt": "2026-07-22",
-  "lastUpdatedAt": "2026-07-22",
+  "lastUpdatedAt": "2026-08-21",
   "rootCause": {
     "summary": "The explicit /weather shortcut routes to the weather_query scenario, which depends on the LLM emitting a weather_lookup tool call (direct_output_from_tool short-circuits only AFTER the call). The configured local model (qwen3:30b) sometimes returns no tool call and no final (llm_returned_no_tool_calls_and_no_final), producing OutcomeProviderError. Because weather_query is requires_provenance and the assembler yields empty Sources, the provenance gate rewrites the provider-error into the capture-as-fallback body 'saved as an idea — i'll surface it later.' Geocoding was never the cause (Open-Meteo resolves the ZIP directly)."
   },
@@ -45,8 +45,68 @@
     "bootstrap",
     "implement",
     "test",
-    "devops"
+    "devops",
+    "regression"
   ],
+  "execution": {
+    "completedPhaseClaims": [
+      {
+        "phase": "regression",
+        "agent": "bubbles.regression",
+        "claimedAt": "2026-08-21T05:44:19Z",
+        "evidenceRef": "report.md#regression-phase",
+        "repositoryBindingDecisionId": "rb:vscode-6af2178e10192363b0e52a46fb5e0950:33",
+        "headAtClaim": "063a17fb",
+        "summary": "Go unit baseline re-run through the repo CLI: whole-module `go test ./...` exit 0, zero FAIL, so no previously-passing test regressed. Integration suite re-run: exit 0, go-integration PASS and python-integration PASS, on a project-scoped ephemeral stack that was fully torn down (containers and test volumes removed). Mutation re-derived FIRST-HAND this session (not inherited): mutant M1 inverted the fast-path guard `f.weatherLookup != nil` -> `== nil` at facade.go:1006 and was KILLED by all three BUG-061-007 tests (exit 1); the tree was then restored to a byte-identical blob (git hash-object 139510ffc375b310e2dd8c4309afe7b07e085edb before AND after, git status --porcelain empty) and all three tests returned green (exit 0). Cross-spec checked against BUG-061-008 and found complementary, not overlapping.",
+        "scopeOfClaim": "Go unit baseline + integration suite + single-mutant mutation re-derivation + cross-spec analysis.",
+        "honestLimitations": [
+          "Only ONE mutant (M1) was re-derived first-hand this session. A second mutant (reintroducing the 'saved as an idea' body) was NOT executed in this pass.",
+          "Every `test` invocation used the CLI's own documented opt-out SMACKEREL_SKIP_HOST_PREFLIGHT=1 (smackerel.sh:715 documents it, :726 implements it) because disk-preflight.sh refuses on this host (C: 34 GB free vs 40 GB required). The guard is scoped by its own comment to heavy multi-GB build commands; `test unit --go` builds no image. The banner's suggested remedy `docker-safe-prune.sh --apply` was deliberately NOT run: the measured footprint showed 14.6 GB reclaimable build cache shared with sibling repositories whose builds were active. Disclosed at report.md#regression-preflight-override, not buried.",
+          "SCN-061-007-03's `lookupCalls == 0` assertion was measured NON-discriminating: under M1 the lookup is never called either, so that line passes on both the fixed and the broken build. That test is adversarial via the executor-invocation and error-cause assertions only. The capture-acknowledgement assertion also did not fire for it under M1 (the harness produced status=unavailable/provider_unavailable, not saved_as_idea, because no source-assembler is registered).",
+          "The scenario-specific E2E gap for SCN-061-007-01/02/03 is UNCHANGED and still open; this phase did not close it. No `Regression E2E` Test Plan row was added to a unit-category row, because planning-checks.sh:72 text-matches that literal string and would have greened the gate while misdescribing the category.",
+          "certification.pendingGates still contains a G022 entry asserting that no execution.completedPhaseClaims record exists for any phase. That sentence is now stale for the regression phase. It was deliberately left unedited: certification.* is owned by bubbles.validate, the sole certifying authority, and this diagnostic phase holds no certifying authority. Five specialist phases (simplify, stabilize, security, audit, validate) genuinely remain unexecuted."
+        ],
+        "verdict": "REGRESSION_FREE (scoped as above)"
+      }
+    ],
+    "executionHistory": [
+      {
+        "startedAt": "2026-08-21T05:33:00Z",
+        "completedAt": "2026-08-21T05:54:15Z",
+        "agent": "bubbles.regression",
+        "phasesExecuted": [
+          "regression"
+        ],
+        "outcome": "completed_diagnostic",
+        "headAtRun": "063a17fb",
+        "repositoryBindingDecisionId": "rb:vscode-6af2178e10192363b0e52a46fb5e0950:33",
+        "commandsExecuted": [
+          { "command": "repository-binding.sh preflight --request-class STRUCTURED", "exitCode": 0, "result": "PREFLIGHT_COMMITTED revision=33 actionable=true" },
+          { "command": "disk-preflight.sh", "exitCode": 1, "result": "REFUSED — C: 34 GB free vs 40 GB required (motivates the documented opt-out; observed first-hand, not inherited)" },
+          { "command": "SMACKEREL_SKIP_HOST_PREFLIGHT=1 ./smackerel.sh test unit --go", "exitCode": 0, "result": "[go-unit] go test ./... finished OK; zero FAIL across the whole module" },
+          { "command": "SMACKEREL_SKIP_HOST_PREFLIGHT=1 ./smackerel.sh test unit --go --go-run 'TestFacadeWeatherShortcut'  [mutant M1 applied]", "exitCode": 1, "result": "M1 KILLED — all 3 tests FAIL (facade_weather_shortcut_test.go:102/105/108/111/114/125, :152, :191/:197)" },
+          { "command": "git hash-object internal/assistant/facade.go && git status --porcelain  [after restore]", "exitCode": 0, "result": "139510ffc375b310e2dd8c4309afe7b07e085edb — identical to pre-mutation blob; working tree clean (0 lines)" },
+          { "command": "SMACKEREL_SKIP_HOST_PREFLIGHT=1 ./smackerel.sh test unit --go --go-run 'TestFacadeWeatherShortcut'  [restored tree]", "exitCode": 0, "result": "internal/assistant ok 0.262s; finished OK — all 3 tests green again" },
+          { "command": "bash .github/bubbles/scripts/artifact-lint.sh <bug-dir>", "exitCode": 0, "result": "Artifact lint PASSED" },
+          { "command": "SMACKEREL_SKIP_HOST_PREFLIGHT=1 ./smackerel.sh test integration", "exitCode": 0, "result": "PASS: go-integration; PASS: python-integration; weather-routing acceptance tests (TestClassify_WeatherSignal, TestAcceptanceGate_RoutingAccuracyAndCaptureFallback) PASS; ephemeral smackerel-test-* stack fully torn down, test volumes removed" }
+        ],
+        "notRun": [
+          "A second mutation (reintroducing the 'saved as an idea' body) — not executed in this pass"
+        ],
+        "artifactsWritten": [
+          "report.md#regression-phase (new section)",
+          "state.json completedPhases[] += regression",
+          "state.json execution.completedPhaseClaims[] and execution.executionHistory[] (object created)"
+        ],
+        "artifactsDeliberatelyNotWritten": [
+          "certification.certifiedCompletedPhases — remains []; only bubbles.validate may populate it",
+          "certification.pendingGates — foreign-owned; the stale G022 sentence is reported, not edited",
+          "uservalidation.md — G136: no checklist item checked, no '## Human Acceptance Record' authored",
+          "scopes.md — the one unchecked DoD item (operator-observable live bot turn) remains unchecked"
+        ]
+      }
+    ]
+  },
   "certification": {
     "status": "in_progress",
     "achievedAssuranceLevel": "deployed-and-infra-verified",
