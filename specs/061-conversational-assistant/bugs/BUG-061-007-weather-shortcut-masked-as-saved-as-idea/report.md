@@ -1360,3 +1360,409 @@ mechanical floor exits non-zero at repo level. The packet's own changed
 surface is clean on all five axes.
 ```
 
+## Audit phase (`bubbles.audit`) {#audit-phase}
+
+**Claim Source:** executed. Every number below was measured in this session against
+`HEAD=b5373b4f` on a clean tree. This phase is diagnostic: 0 production files and
+0 test files changed. It writes only its own report evidence plus the additive
+`execution` records; it does NOT write `certification.certifiedCompletedPhases`,
+does NOT mark scopes, and does NOT check DoD boxes.
+
+### 1. Spec compliance — the delivered code, read directly {#audit-spec-compliance}
+
+Checked against `spec.md` FR-1..FR-5 by reading the implementation, not the
+report's summary of itself.
+
+| Req | Verified where | Verdict |
+|-----|----------------|---------|
+| FR-1 explicit `/weather` dispatches deterministically, independent of LLM tool-call emission | `facade.go:1006` gates Step 3.9 on `msg.Kind == KindText && shortcutScenarioID == "weather_query" && f.weatherLookup != nil`, then returns before the Step-4 envelope/route block at `:1014` | 🟢 SATISFIED |
+| FR-2 success body is the forecast line + exactly one external-provider Source (provider + upstream `retrieved_at`) | `handleWeatherShortcut` sets `Body = payload.ForecastLine`, `Status = StatusAnswered`, and one `SourceExternalProvider` carrying `ProviderName` + parsed `RetrievedAt` | 🟡 SATISFIED WITH A NUANCE — see below |
+| FR-3 provider failure / unreadable output → honest `provider_unavailable`, never `CaptureRoute` | two `StatusUnavailable` / `ErrProviderUnavailable` returns (lookup error; unmarshal error or blank `forecast_line`); neither sets `CaptureRoute` | 🟢 SATISFIED |
+| FR-4 bare `/weather` → `slot_missing` prompt, provider not called | empty-location branch returns before `f.weatherLookup` is called | 🟢 SATISFIED |
+| FR-5 un-wired seam keeps prior LLM-routed behavior | `f.weatherLookup != nil` guard; confirmed mechanically that `WithWeatherLookup` is wired in exactly two places — `cmd/core/wiring_assistant_facade.go:241` and `facade_weather_shortcut_test.go:71` — so every other `/weather` test still exercises the executor path | 🟢 SATISFIED |
+
+The FR-2 nuance is real but already routed, so it is named rather than re-raised:
+`handleWeatherShortcut` attaches the Source only when `payload.ProviderName` is
+non-blank, so a blank provider name yields `StatusAnswered` with a forecast body and
+ZERO Sources — weaker than FR-2's "MUST carry exactly one". Audit traced whether that
+branch is reachable in production and found it is not: `LookupForecast`
+(`internal/agent/tools/weather/tool.go:315-317`) back-fills
+`fresh.ProviderName = svc.Provider.Name()` before marshalling, so the wired seam cannot
+emit a blank provider. The branch is therefore unreachable through the shipped wiring
+and untested — which is exactly what `bubbles.simplify` recorded as observation S-3 and
+routed as `WEATHER-ATTRIBUTION-BRANCH` (owner `bubbles.plan`). Audit confirms that
+disposition and adds nothing.
+
+### 2. Over-claim hunt — one found {#audit-over-claim}
+
+This packet family has produced several statements stronger than their evidence, so
+audit re-read each claim against the assertion it rests on rather than against its
+name. Result: **one over-claim, in `report.md` §Regression quality.** It is finding
+A-1 in `## Discovered Issues` below.
+
+That paragraph states that if Step 3.9 were removed, "the provenance gate would mask
+the error, and the `body != "saved as an idea"` + `executor.invocations == 0`
+assertions would fail." The first half is contradicted by this report's own measured
+M1 mutant output in §3.
+
+The capture-acknowledgement assertions sit at three known lines of
+`internal/assistant/facade_weather_shortcut_test.go` — read first-hand:
+
+```text
+$ grep -n "captureFallbackAcknowledgement" internal/assistant/facade_weather_shortcut_test.go
+119:    if resp.Body == captureFallbackAcknowledgement {
+120:            t.Errorf("body is the capture-fallback acknowledgement %q — /weather must render the forecast, not save it as an idea", captureFallbackAcknowledgement)
+169:    if resp.Body == captureFallbackAcknowledgement {
+170:            t.Errorf("body is the capture-fallback acknowledgement %q — a failed weather lookup must say so honestly, not claim it was saved", captureFallbackAcknowledgement)
+211:    if resp.Body == captureFallbackAcknowledgement {
+212:            t.Errorf("body is the capture-fallback acknowledgement %q — a bare /weather must ask for a location, not save an empty idea", captureFallbackAcknowledgement)
+```
+
+The M1 mutant failure list recorded in [§3](#regression-mutation) cites these lines
+and no others:
+
+| Test | Lines that failed under M1 | Is 119 / 169 / 211 among them? |
+|------|----------------------------|-------------------------------|
+| `_DirectDispatch_RendersForecast_BypassesExecutor` | 102, 105, 108, 111, 114, 125 | NO (114 is the forecast-body compare, 125 is `len(Sources)`) |
+| `_ProviderError_HonestUnavailable_NotSavedAsIdea` | 152 | NO |
+| `_EmptyLocation_HonestPrompt_NoLookup` | 191, 197 | NO |
+
+So the capture-acknowledgement assertion discriminated in **zero of three** tests, not
+in two of three. `bubbles.regression` did detect part of this and wrote the "Honest
+nuance" subsection — but scoped the correction to SCN-061-007-03 with the wording "did
+not fire for that test **either**", which leaves a reader to infer it DID fire for
+SCN-061-007-01 and -02. The line-number evidence above shows it did not.
+
+**Materiality, stated precisely so the finding is not read as larger than it is.**
+This does NOT invalidate the fix, the tests, or any DoD item:
+
+- The tests remain genuinely adversarial. M1 was killed by all three, via the
+  executor-invocation, status, error-cause, body-content and `len(Sources)`
+  assertions. `regression-quality-guard --bugfix` PASS stands.
+- No DoD item over-claims. Each SCN item says the body "is asserted unequal to"
+  `captureFallbackAcknowledgement` — an accurate statement about an assertion that
+  exists. None claims that assertion is mutation-discriminating. Audit re-read all
+  three and left all three checked.
+- The reason the assertion cannot fire is benign and is already explained in §3: the
+  unit harness registers no source-assembler, so the masking rewrite that produced the
+  live symptom is not reachable inside these tests at all. The assertion is a
+  correctness guard against a future regression, not a live discriminator.
+
+The defect is confined to one prose sentence in a section this phase does not own, so
+it is routed to `bubbles.regression` rather than edited here.
+
+### 3. DoD integrity — every checked item re-verified {#audit-dod}
+
+8 checked, 1 unchecked. Audit re-read each checked item's inline claim against the
+assertion it names in the test source, including the three per-scenario items added by
+the planning repair.
+
+| DoD item | Claim re-checked against source | Verdict |
+|----------|--------------------------------|---------|
+| SCN-061-007-01 | body == forecast line; `StatusAnswered`; body != `captureFallbackAcknowledgement`; `CaptureRoute` false; exactly 1 `SourceExternalProvider`; executor 0 — all ten assertions present at test lines 101-133 | ✅ supported |
+| SCN-061-007-02 | lookup stub errors; `StatusUnavailable`; `ErrProviderUnavailable`; body != `captureFallbackAcknowledgement`; `CaptureRoute` false; executor 0 — all present at lines 143-176 | ✅ supported |
+| SCN-061-007-03 | `lookupCalls == 0`; `StatusUnavailable`; `ErrSlotMissing`; body != `captureFallbackAcknowledgement` — all present at lines 186-213 | ✅ supported |
+| Implementation behavior complete | matches the code read in §1 | ✅ supported |
+| Scenario-specific tests pass (`unit`) | three per-test `--- PASS:` lines, package line without a `[no tests to run]` suffix | ✅ supported |
+| Adversarial regression | claims the assertions EXIST and that the guard PASSed — both true; does not claim mutation-discrimination, so A-1 does not touch it | ✅ supported |
+| No regression | named backward-compat test verified to exist: `TestFacade_BandHigh_StructuredContextPopulated_WeatherQuery` at `internal/assistant/facade_test.go:250`, driving `/weather barcelona tomorrow` with the seam un-wired; plus whole-module `test unit --go` exit 0 | ✅ supported |
+| Build Quality Gate | filtered `go test ./...` clean + `smackerel.sh check` OK | ✅ supported |
+
+**No DoD item was unchecked by this phase.** Each checked item's inline evidence
+genuinely supports it. The single unchecked item is the operator-observable live
+Telegram turn and stays unchecked — audit cannot perform a human turn.
+
+Two claims audit verified by execution rather than accepting, because both name a
+specific test and the surrounding evidence rests on a package-level `ok`:
+
+```text
+$ grep -rn "func TestFacade_BandHigh_StructuredContextPopulated" internal/assistant/
+internal/assistant/facade_test.go:184:func TestFacade_BandHigh_StructuredContextPopulated_RetrievalQA(t *testing.T) {
+internal/assistant/facade_test.go:250:func TestFacade_BandHigh_StructuredContextPopulated_WeatherQuery(t *testing.T) {
+internal/assistant/facade_test.go:313:func TestFacade_BandHigh_StructuredContextPopulated_NoSlashCommand(t *testing.T) {
+
+$ grep -rn "WithWeatherLookup" --include='*.go' .
+./cmd/core/wiring_assistant_facade.go:241:      facade.WithWeatherLookup(func(ctx context.Context, location string) (json.RawMessage, error) {
+./internal/assistant/facade_weather_shortcut_test.go:71:                WithWeatherLookup(lookup)
+./internal/assistant/facade.go:327:// WithWeatherLookup attaches the deterministic /weather fast-path seam
+./internal/assistant/facade.go:333:func (f *Facade) WithWeatherLookup(fn func(ctx context.Context, location string) (json.RawMessage, error)) *Facade {
+```
+
+Both named tests exist and match the `-run` selector recorded in
+[§After Fix](#after-fix-unit-evidence), and the seam is wired in exactly one
+production site and one test site — so the FR-5 backward-compatibility claim is
+structural, not merely asserted.
+
+### 4. Transition guard — verbatim {#audit-guard}
+
+The guard was run TWICE: once before this phase wrote anything (the entry
+measurement) and once after (the exit measurement). Both are recorded, because the
+delta is itself evidence.
+
+**Entry run — before any write by this phase:**
+
+```text
+$ timeout 840 bash .github/bubbles/scripts/state-transition-guard.sh specs/061-conversational-assistant/bugs/BUG-061-007-weather-shortcut-masked-as-saved-as-idea
+BEGIN TRANSITION_GUARD_RESULT_V1
+schemaVersion: transition-guard-result/v1
+workflowMode: bugfix-fastlane
+auditProfile: delivery-completion-v1
+targetStatus: done
+contractDigest: sha256:aa91472c047d3d985d38c1d308feb1e6081955b2aa553816deb5987d9cdc449f
+targetRevision: sha256:c53b652ff313fbc058b4c002ffd32b928f24761e3f81d83e9842f41999455223
+applicableCheckClasses: [universal,mode-required,delivery-completion]
+notApplicableChecks: []
+passedGateIds: [G057,G053,G051,G068,G082,G083,G084,G128,G085,G086,G091,G087,G093,G088,G089,G092,G090,G094,G097,G098,G099,G100,G130,G131]
+failedGateIds: [G022,G040,G095,G136]
+failedChecks: [Check-4-completion]
+blockingCode: DELIVERY_COMPLETION_FAILED
+parentExpandedPhases: 0
+failureCount: 11
+exitStatus: 1
+verdict: FAIL
+END TRANSITION_GUARD_RESULT_V1
+GUARD_EXIT=1
+```
+
+Full 344-line capture, hash-verifiable:
+`sha256:f3bdf2584959da7c184d66d270495b8936885fc4a495711546a6acb8e18325f2`
+(`evidence-capture.sh --verify …`).
+
+**Exit run — after this phase wrote `report.md` and the `state.json` execution
+records:**
+
+```text
+$ timeout 840 bash .github/bubbles/scripts/state-transition-guard.sh specs/061-conversational-assistant/bugs/BUG-061-007-weather-shortcut-masked-as-saved-as-idea
+🔴 TRANSITION BLOCKED: 10 failure(s), 1 warning(s)
+state.json status MUST NOT be set to 'done'.
+
+BEGIN TRANSITION_GUARD_RESULT_V1
+schemaVersion: transition-guard-result/v1
+workflowMode: bugfix-fastlane
+auditProfile: delivery-completion-v1
+targetStatus: done
+contractDigest: sha256:aa91472c047d3d985d38c1d308feb1e6081955b2aa553816deb5987d9cdc449f
+targetRevision: sha256:f3d611eb0b7f6622ab9489cbf6d94637d102cb3c059459197c05b0b66810743d
+applicableCheckClasses: [universal,mode-required,delivery-completion]
+notApplicableChecks: []
+passedGateIds: [G057,G053,G051,G068,G082,G083,G084,G128,G085,G086,G091,G087,G093,G088,G089,G092,G090,G094,G095,G097,G098,G099,G100,G130,G131]
+failedGateIds: [G022,G040,G136]
+failedChecks: [Check-4-completion]
+blockingCode: DELIVERY_COMPLETION_FAILED
+parentExpandedPhases: 0
+failureCount: 10
+exitStatus: 1
+verdict: FAIL
+END TRANSITION_GUARD_RESULT_V1
+GUARD_EXIT=1
+```
+
+**`failureCount: 11 → 10`. `failedGateIds: [G022,G040,G095,G136] → [G022,G040,G136]`
+— G095 moved into `passedGateIds`.** Attribution of all 10 remaining, read from the
+guard's own blocking lines:
+
+| # | Guard line | Gate | Status |
+|---|-----------|------|--------|
+| 1 | Check 4 — 1 UNCHECKED DoD item (live-stack operator turn) | — | ✅ expected; must stay unchecked |
+| 2 | Check 6 — required phase `validate` not recorded | G022 | ✅ expected; `bubbles.validate` has not run |
+| 3 | Check 6 — rollup, now `1 specialist phase(s) missing` (was 2) | G022 | ⬇ reduced by this phase |
+| 4-7 | Check 8A — 3 regression-E2E planning items + rollup | — | ✅ expected; deliberately unsatisfied, reasoned in [§E2E Coverage](#e2e-coverage-absence) |
+| 8 | Check 7A — `completedPhaseClaims claimedAt runs backwards: security@07:12:40 -> audit@06:53:11` | — | ❌ **NEW — finding A-5, and the cause is NOT this phase's record** |
+| 9 | Check 18 — 5 deferral-language hits in report.md | G040 | ❌ pre-existing — finding A-2 |
+| 10 | Check 43 — human acceptance not established | G136 | ✅ expected; operator-only |
+
+Cleared by this phase: the Check 6 `audit` line, one unit off the Check 6 rollup, and
+Check 35 / G095. Newly surfaced: Check 7A. Net 11 → 10.
+
+Two advisory, non-blocking findings the guard printed and audit is recording rather
+than passing over:
+
+- Check 40 `claim-source-lint` flagged `report.md:322` and `report.md:545` as invalid
+  `**Claim Source:**` values — both are sentences beginning "every command below was
+  executed…" where the tag expects exactly `executed`, `interpreted` or `not-run`.
+  Advisory (exit 0) under the current project config. Owner: `bubbles.regression`
+  (:322) and `bubbles.stabilize` (:545).
+- Check 46 `vertical-delivery-plan-guard` flagged the single scope as an unexposed
+  increment. Advisory. It is arguably a false positive here — the fix is reached
+  through an existing user-facing surface (the `/weather` slash command itself), which
+  the guard's route/screen/CLI heuristic does not recognise. Recorded, not acted on.
+- Check 11 emitted `⚠️ WARN: report.md has 10 of 28 evidence blocks that lack terminal
+  output signals`. Audit sampled those blocks; they are prose tables and verdict
+  panels that carry no command by design, not evidence blocks asserting an unrun
+  command. No action.
+
+### 4A. Check 7A — why this phase did NOT make its timestamp fit {#audit-timestamp}
+
+Check 7A began blocking only after this phase recorded its claim, so the honest
+question is whether this phase's timestamp is the wrong one. It is not.
+
+`claimedAt` values, against the commit each phase actually produced:
+
+```text
+$ git log -5 --format='%h %ad %s' --date=format-local:'%Y-%m-%dT%H:%M:%SZ'
+b5373b4f 2026-08-21T06:39:13Z docs(061): BUG-061-007 — record security phase (bubbles.security)
+12083d0e 2026-08-21T06:24:26Z docs(061): BUG-061-007 stabilize phase — STABLE verdict, 2 …
+da77b9c1 2026-08-21T06:13:37Z simplify(BUG-061-007): two tests named for a body they never asserted
+121d063b 2026-08-21T06:01:00Z regression(BUG-061-007): REGRESSION_FREE, proved by mutation; …
+063a17fb 2026-08-21T05:12:36Z plan(BUG-061-007): repair planning artifacts; failureCount 21 -> 13
+
+$ date -u +%Y-%m-%dT%H:%M:%SZ    # wall clock during this phase
+2026-08-21T06:55:49Z
+```
+
+| Phase | recorded `claimedAt` | its own commit | Consistent? |
+|-------|---------------------|----------------|-------------|
+| regression | 05:44:19Z | 06:01:00Z | ✅ claim precedes commit |
+| simplify | 06:07:56Z | 06:13:37Z | ✅ claim precedes commit |
+| stabilize | 06:41:18Z | 06:24:26Z | ❌ claim is 16m 52s AFTER its own commit |
+| security | 07:12:40Z | 06:39:13Z | ❌ claim is 33m 27s AFTER its own commit |
+| audit (this phase) | 06:53:11Z | — | ✅ matches wall clock at write time |
+
+A phase cannot be claimed complete after the commit that records it, and neither
+stabilize nor security could have observed a 07:12:40Z clock — the wall clock was
+06:55:49Z while this phase ran, sixteen minutes earlier. So the two future-dated
+values are the defect, and Check 7A is correct to block: it is reporting a real
+timestamp-integrity problem, not a problem with this record.
+
+The one move that would have made the guard quieter — writing an `audit` `claimedAt`
+later than 07:12:40Z — is precisely the fabrication this phase exists to catch. A
+timestamp is a claim like any other. Audit recorded the wall clock it actually
+observed, let the guard surface the contradiction, and routed the root cause as A-5.
+The two wrong values are in records owned by `bubbles.stabilize` and
+`bubbles.security` and were not edited here.
+
+### 5. G040 / G095 — measured attribution {#audit-g040-g095}
+
+Audit reproduced both scanners rather than inferring which lines were at fault.
+
+G095, first-hand, naming the single offending line:
+
+```text
+$ bash .github/bubbles/scripts/discovered-issue-disposition-guard.sh specs/061-conversational-assistant/bugs/BUG-061-007-weather-shortcut-masked-as-saved-as-idea
+🔴 G095 BLOCK: report.md …/report.md:1163 — forbidden deferral phrase 'skipping' without disposition citation and no '## Discovered Issues' row for 2026-08-21 in …/report.md
+
+G095: 1 discovered-issue disposition violation(s).
+G095_EXIT=1
+```
+
+G040, reproduced by replaying the guard's own fence-stripping `awk` plus its two
+`grep` expressions (`state-transition-guard.sh:4119-4157`) against `report.md` and
+`scopes.md`, so the five hits are located rather than counted:
+
+```text
+=== G040 hits in report.md (line|text) ===
+720|changed surface; 2 non-blocking follow-ups routed) · **Production code changed: 0 files**
+860|of follow-up F-2.
+1073|both are recorded as follow-ups in `#security-findings`, not as packet
+1161|  limiter is repo-level and pre-existing; see follow-up SEC-3.)
+1267|**Zero security defects attributable to this packet.** All four follow-ups
+=== same scan over scopes.md ===
+SCOPES_HITS_ABOVE (empty = 0)
+```
+
+The reading that matters: all five hits are the same hyphenated noun used to *route*
+adjacent work with a named owner — the honest disposition — and none admits unfinished
+work inside this packet's own scope. The scanner's exclusion list already exempts the
+`state.json` key spellings and the phrases "…narrative" / "…section", but not this
+bare noun in prose. `scopes.md` is clean, so no DoD or Test Plan text is implicated.
+Line 1163 is the same shape: it says Step 3.9 bypasses *routing machinery*, which is
+the fix, not unfinished work.
+
+**Audit did not remediate either gate, and the reason is a boundary, not an
+oversight.** All five G040 lines and the G095 line sit inside the stabilize and
+security sections, which this phase does not own. The framework does provide a
+sanctioned mechanical escape — the `bubbles:g040-skip-begin` / `-end` sentinel pair
+(`state-transition-guard.sh:4140-4148`) — and audit deliberately did NOT wrap another
+phase's prose in it. Silencing a gate on an artifact section owned by a different
+agent is indistinguishable from gate-gaming, and it would have destroyed the signal
+that these two gates are red. Both are routed with owners in `## Discovered Issues`.
+
+Neither gate blocks anything this phase could have unblocked: G022 keeps the packet
+non-terminal until `bubbles.validate` runs regardless.
+
+### 6. Commands executed (this phase) {#audit-commands}
+
+| # | Command | Exit | Purpose |
+|---|---------|------|---------|
+| 1 | `repository-binding-host-context.sh` + `repository-binding.sh preflight` | 0 | `PREFLIGHT_COMMITTED`, `actionable: true`, control revision 39 |
+| 2 | `git status --porcelain` / `git log --oneline -6` | 0 | clean tree at `HEAD=b5373b4f` |
+| 3 | `grep -n "captureFallbackAcknowledgement" …facade_weather_shortcut_test.go` | 0 | located assertion lines 119/169/211 → finding A-1 |
+| 4 | `grep -rn "func TestFacade_BandHigh_StructuredContextPopulated" internal/assistant/` | 0 | backward-compat test exists at `facade_test.go:250` |
+| 5 | `grep -rn "WithWeatherLookup" --include='*.go' .` | 0 | seam wired in exactly 1 production + 1 test site (FR-5) |
+| 6 | `state-transition-guard.sh <packet>` (via `evidence-capture.sh`) | 1 | `failureCount: 11`; hash `f3bdf258…` |
+| 7 | `discovered-issue-disposition-guard.sh <packet>` | 1 | G095: 1 violation at report.md:1163 |
+| 8 | G040 scanner replay (`awk` fence-strip + the guard's two `grep` expressions) | 0 | located all 5 hits |
+| 9 | `artifact-lint.sh <packet>` | 0 | see [§7](#audit-verification) |
+| 10 | `pii-scan.sh` (staged diff) | 0 | see [§7](#audit-verification) |
+
+### 7. Not run — stated, not implied {#audit-not-run}
+
+- **No test suite was re-executed by this phase.** `unit --go` (exit 0), `integration`
+  (exit 0) and the M1 mutation were measured earlier in this same session by
+  `bubbles.regression`; audit cites those runs rather than re-running them, and every
+  number attributed to them above is quoted from their recorded output, not restated
+  from memory.
+- **No live/deployed behavior was observed.** The packet's one unchecked DoD item and
+  both LIVE `uservalidation.md` items require a human Telegram turn. Audit did not
+  attempt, simulate, or infer one.
+- **No source or test file was modified.** This phase changed exactly two artifacts:
+  `report.md` (this section) and `state.json` (additive execution records).
+
+### 8. Verdict {#audit-verdict}
+
+```
+⚠️ REWORK_REQUIRED  (routed — not a defect in the delivered fix)
+
+Spec compliance (FR-1..FR-5)      : SATISFIED (FR-2 nuance unreachable + already routed)
+DoD integrity (8 checked)         : ALL SUPPORTED — 0 items unchecked by audit
+Over-claim hunt                   : 1 FOUND — report.md §Regression quality (A-1)
+Evidence integrity                : 1 DEFECT FOUND — two future-dated claimedAt
+                                    values (A-5). Otherwise VERIFIED: no
+                                    fabricated, duplicated or placeholder
+                                    evidence; both tests named in prose exist;
+                                    per-test PASS lines bind the 3 scenarios
+Transition guard (entry -> exit)   : failureCount 11 -> 10
+                                    failedGateIds [G022,G040,G095,G136] -> [G022,G040,G136]
+                                    G095 cleared by this phase; Check 7A newly surfaced
+Production code changed           : 0 files
+Test code changed                 : 0 files
+
+Blocking for a terminal status, with owners:
+  A-1  bubbles.regression  §Regression quality asserts an assertion discriminates
+                           that the same report's M1 output shows never fired
+  A-2  bubbles.stabilize + bubbles.security   G040 red: 5 deferral-phrase hits
+  A-5  bubbles.stabilize + bubbles.security   Check 7A red: two claimedAt values
+                           dated AFTER the commit that recorded them
+
+Addressed by this phase:
+  A-3  G095 cleared — '## Discovered Issues' dated 2026-08-21 satisfies the
+       guard's own remediation (b); inline citation still routed to bubbles.security
+
+Not blocking, correctly left standing:
+  1 unchecked DoD item + 2 LIVE uservalidation items  → operator (human turn)
+  3 regression-E2E planning rows                      → assistant e2e harness owner
+  G136                                                → operator only
+  2 claim-source-lint + 1 vertical-plan advisory      → advisory, exit 0
+
+Next required owner: bubbles.validate (G022 still names 'validate' after this write)
+```
+
+The verdict is REWORK_REQUIRED because four gate-visible items are routed, NOT
+because the delivered `/weather` fix is unsound. Audit found the implementation
+conformant to every requirement in `spec.md`, the three scenario tests genuinely
+adversarial, and all eight checked DoD items supported by evidence that says no more
+than it measured. A-1 is a single over-stated sentence; A-2 and A-3 are prose-hygiene
+gates tripped by honest routing language in two earlier sections; A-5 is a
+timestamp-integrity defect this phase surfaced by recording the clock it actually
+observed instead of one that would have kept the guard quiet.
+
+## Discovered Issues
+
+| ID | Date | Issue | Disposition | Owner | Reference |
+|----|------|-------|-------------|-------|-----------|
+| A-1 | 2026-08-21 | `report.md` §Regression quality claims that removing Step 3.9 would make the `body != "saved as an idea"` assertion fail. The same report's M1 mutant output shows that assertion (test lines 119 / 169 / 211) fired in **zero of three** tests. §3's "Honest nuance" corrects this only for SCN-061-007-03, implying it fired for -01 and -02; it did not. | ROUTED — correct the sentence to name only the assertions M1 actually killed (executor-invocation, status, error-cause, body-content, `len(Sources)`), and widen the "Honest nuance" scope to all three tests. No test or DoD change required; no DoD item over-claims. | `bubbles.regression` | [§Regression quality](#regression-quality) · [§3 mutation](#regression-mutation) · [audit §2](#audit-over-claim) |
+| A-2 | 2026-08-21 | Gate G040 is RED: 5 deferral-phrase hits in `report.md` at lines 720, 860, 1073, 1161, 1267 — all the same hyphenated routing noun in stabilize/security narrative. `scopes.md` is clean (0 hits). Pre-existing; not disclosed by either authoring phase. | ROUTED — the owning phases either reword those five lines to name each routed item by its ID without the scanner-matched noun, or bracket their own paragraphs with the sanctioned `bubbles:g040-skip-begin`/`-end` sentinel. Audit did not edit sections it does not own. | `bubbles.stabilize` (720, 860) · `bubbles.security` (1073, 1161, 1267) | [audit §5](#audit-g040-g095) · `state-transition-guard.sh:4119-4157` |
+| A-3 | 2026-08-21 | Gate G095 is RED: `report.md:1163` uses a phrase on the disposition guard's forbidden list with no artifact citation in the same paragraph. The sentence is describing what Step 3.9 bypasses (routing machinery), i.e. the opposite of unfinished work. Pre-existing. | ADDRESSED (mechanically) + ROUTED (prose) — this `## Discovered Issues` table dated 2026-08-21 satisfies the guard's own remediation (b) for the file. The owning phase should still add an inline artifact citation to that paragraph so the disposition is legible where the sentence sits, not only in this table. | `bubbles.security` | [audit §5](#audit-g040-g095) · `discovered-issue-disposition-guard.sh:94-103` |
+| A-4 | 2026-08-21 | `handleWeatherShortcut` attaches the provider Source only when `payload.ProviderName` is non-blank, so a blank name would yield `StatusAnswered` + 0 Sources — weaker than FR-2. Audit traced the branch UNREACHABLE via the shipped wiring (`tool.go:315-317` back-fills the provider name) and untested. | NO NEW ACTION — already recorded by `bubbles.simplify` as observation S-3 and routed as `WEATHER-ATTRIBUTION-BRANCH`. Logged here only to record that audit independently reached the branch and confirmed the existing disposition rather than re-raising it. | `bubbles.plan` (existing routing) | [§Observation S-3](#simplify-phase) · [audit §1](#audit-spec-compliance) |
+| A-5 | 2026-08-21 | Guard Check 7A blocks: `completedPhaseClaims claimedAt runs backwards: security@07:12:40 -> audit@06:53:11`. Root cause is NOT the audit record. Two `claimedAt` values are dated AFTER the commit that recorded them — stabilize claims 06:41:18Z but committed at 06:24:26Z (+16m52s), security claims 07:12:40Z but committed at 06:39:13Z (+33m27s). The wall clock during the audit phase was 06:55:49Z, so neither phase could have observed a 07:12:40Z clock. | ROUTED — the owning phases correct their `claimedAt` (and security's `startedAt`/`completedAt`) to values consistent with their own commit times. Audit recorded the clock it actually observed and did NOT date its claim forward past 07:12:40Z to silence the check: a timestamp is a claim like any other, and fabricating one is exactly what this phase exists to catch. Foreign-owned records were not edited. | `bubbles.stabilize` · `bubbles.security` | [audit §4A](#audit-timestamp) · guard Check 7A |
+

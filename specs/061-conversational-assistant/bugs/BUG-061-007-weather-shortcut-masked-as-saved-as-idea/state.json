@@ -49,7 +49,8 @@
     "regression",
     "simplify",
     "stabilize",
-    "security"
+    "security",
+    "audit"
   ],
   "execution": {
     "completedPhaseClaims": [
@@ -132,6 +133,27 @@
           "certification.pendingGates still carries the G022 sentence asserting that no execution.completedPhaseClaims record exists for any phase — already stale for regression, simplify and stabilize, and now additionally stale for security. Left unedited on purpose: certification.* is owned by bubbles.validate. Two specialist phases (audit, validate) genuinely remain unexecuted."
         ],
         "verdict": "FINDINGS (0 security defects attributable to this packet across all 5 axes; 4 adjacent follow-ups routed with owners; verdict is FINDINGS rather than SECURE solely because the mandatory G034 mechanical floor exits 1 at repo level; no fix cycle needed)"
+      },
+      {
+        "phase": "audit",
+        "agent": "bubbles.audit",
+        "claimedAt": "2026-08-21T06:53:11Z",
+        "evidenceRef": "report.md#audit-phase",
+        "repositoryBindingDecisionId": "rb:vscode-6af2178e10192363b0e52a46fb5e0950:39",
+        "headAtClaim": "b5373b4f",
+        "summary": "Final compliance audit before validate. SPEC COMPLIANCE: FR-1..FR-5 checked against the delivered code rather than the report's summary of itself. FR-1 holds by the Step 3.9 guard at facade.go:1006 returning before the Step-4 route block at :1014; FR-3 by two StatusUnavailable/ErrProviderUnavailable returns (lookup error; unmarshal error or blank forecast_line), neither setting CaptureRoute; FR-4 by the empty-location branch returning before the lookup is called; FR-5 structurally, since WithWeatherLookup is wired in exactly TWO places repo-wide (cmd/core/wiring_assistant_facade.go:241 and facade_weather_shortcut_test.go:71), so every other /weather test still drives the executor path. FR-2 carries one nuance: the provider Source is attached only when payload.ProviderName is non-blank, so a blank name would yield StatusAnswered with ZERO Sources — weaker than 'MUST carry exactly one'. Audit traced the branch UNREACHABLE through the shipped wiring (LookupForecast back-fills fresh.ProviderName = svc.Provider.Name() at tool.go:315-317 before marshalling) and confirmed it is already routed as WEATHER-ATTRIBUTION-BRANCH from simplify observation S-3; recorded as A-4 to show audit reached it independently, not re-raised. OVER-CLAIM HUNT: ONE found (A-1). report.md#regression-quality states that removing Step 3.9 would make 'the body != \"saved as an idea\" + executor.invocations == 0 assertions' fail. The capture-acknowledgement assertions sit at test lines 119, 169 and 211, and NONE of those line numbers appears in this report's own recorded M1 mutant failure list (101-133 test: 102,105,108,111,114,125; provider-error test: 152; empty-location test: 191,197). So that assertion discriminated in ZERO of three tests, not two of three. bubbles.regression detected part of this and wrote the 'Honest nuance' subsection, but scoped the correction to SCN-061-007-03 with 'did not fire for that test either', which implies it DID fire for -01 and -02; the line numbers show it did not. Materiality is bounded and stated: the tests remain genuinely adversarial (M1 killed by all three via executor-invocation, status, error-cause, body-content and len(Sources)), regression-quality-guard --bugfix PASS stands, and NO DoD item over-claims, because each SCN item asserts only that the comparison EXISTS, never that it is mutation-discriminating. Routed to bubbles.regression as a one-sentence prose correction. DOD INTEGRITY: all 8 checked items re-read against the assertions they name; all 8 SUPPORTED; ZERO unchecked by audit. The three per-scenario items added by the planning repair were verified assertion-by-assertion at test lines 101-133, 143-176 and 186-213. The 'No regression' item names a backward-compat test, so audit executed a lookup rather than accepting it: TestFacade_BandHigh_StructuredContextPopulated_WeatherQuery exists at internal/assistant/facade_test.go:250 and drives '/weather barcelona tomorrow' with the seam un-wired. The single unchecked item is the operator-observable live Telegram turn and stays unchecked. GUARD: run TWICE, entry and exit, because the delta is itself evidence. Entry (before any write): failureCount 11, failedGateIds [G022,G040,G095,G136], 344 lines, hash f3bdf2584959da7c184d66d270495b8936885fc4a495711546a6acb8e18325f2. Exit (after this phase's writes): failureCount 10, failedGateIds [G022,G040,G136], exitStatus 1. G095 moved into passedGateIds. All 10 remaining attributed individually. NEW FINDINGS: G040 and G095 were RED BEFORE this phase wrote anything and no prior phase disclosed them. G040 = 5 deferral-phrase hits at report.md:720,860,1073,1161,1267, all the same hyphenated routing noun in stabilize/security narrative; scopes.md is CLEAN at 0, so no DoD or Test Plan text is implicated. G095 = 1 violation at report.md:1163, now CLEARED by the '## Discovered Issues' table dated 2026-08-21, which is the guard's own documented remediation (b). Audit located both by replaying each scanner rather than inferring, and did NOT remediate G040: every offending line sits in a section this phase does not own, and the sanctioned bubbles:g040-skip sentinel was deliberately NOT wrapped around another agent's prose because silencing a gate on a foreign-owned section is indistinguishable from gate-gaming. Audit re-ran the G040 scanner after writing its own section and confirmed a delta of ZERO (still exactly the pre-existing 5) after correcting three pattern words in its own draft. A-5, TIMESTAMP INTEGRITY: Check 7A began blocking only after this phase recorded its claim, so audit tested whether ITS OWN timestamp was the wrong one. It is not. Against each phase's own commit time, regression (claim 05:44:19Z, commit 06:01:00Z) and simplify (06:07:56Z, 06:13:37Z) are consistent, but stabilize claims 06:41:18Z while committing at 06:24:26Z (+16m52s) and security claims 07:12:40Z while committing at 06:39:13Z (+33m27s). The wall clock during this phase was 06:55:49Z, so neither could have observed a 07:12:40Z clock. A phase cannot be claimed complete after the commit that records it, so the two future-dated values are the defect and Check 7A is correct to block. The single move that would have quieted the check — dating the audit claim past 07:12:40Z — is precisely the fabrication this phase exists to catch, so audit recorded the clock it actually observed, let the guard surface the contradiction, and routed the root cause to bubbles.stabilize and bubbles.security. ADVISORY, recorded not passed over: claim-source-lint flagged report.md:322 and :545 as invalid **Claim Source:** values (exit 0, advisory); vertical-delivery-plan-guard flagged the single scope as an unexposed increment, arguably a false positive since the fix is reached through the /weather slash command itself, which the guard's route/screen/CLI heuristic does not recognise; Check 11 warned that 10 of 28 evidence blocks lack terminal-output signals, sampled and judged to be prose tables and verdict panels that carry no command by design.",
+        "scopeOfClaim": "Read-only compliance audit of the delivered fix (facade.go Step 3.9 + handleWeatherShortcut, tool.go LookupForecast, the wiring site) against spec.md FR-1..FR-5; assertion-level re-verification of all 3 scenario tests and all 8 checked DoD items against the test source; independent existence checks for the two tests named in report prose; the state-transition guard; and replay of the G040 and G095 scanners to attribute their failures. NO source, test, DoD checkbox, scope status, certification field or uservalidation item was changed.",
+        "honestLimitations": [
+          "NO test suite was re-executed by this phase. unit --go (exit 0), integration (exit 0) and the M1 mutation were measured earlier in this same session by bubbles.regression; audit CITES those runs per the phase brief. Every number attributed to them is quoted from their recorded output, not restated from memory.",
+          "A-1 was established from the M1 failure LINE NUMBERS recorded in report.md#regression-mutation cross-referenced against the current assertion line numbers, NOT by re-running the mutant. The inference is sound only because the tree is byte-identical to the mutation run (git status --porcelain clean at the same HEAD lineage) and the assertion lines were re-read first-hand this session.",
+          "The FR-2 unreachability conclusion is a code-reading claim: LookupForecast back-fills the provider name, so the wired seam cannot emit a blank one. No test exercises the blank-provider branch, and audit did not add one — that is exactly what the existing WEATHER-ATTRIBUTION-BRANCH routing covers.",
+          "The G040 attribution reproduced the guard's fence-stripping awk and its two grep expressions from state-transition-guard.sh:4119-4157 rather than calling the guard's internal function directly. The reproduced count matched the guard's reported 5 exactly, before and after this phase's write, which is the evidence that the replay is faithful.",
+          "Check 11 emitted a non-blocking WARN that 10 of 28 evidence blocks lack terminal-output signals. Audit SAMPLED those blocks and judged them prose tables and verdict panels that carry no command by design; it did not enumerate all 28.",
+          "No live or deployed behavior was observed. The one unchecked DoD item and both LIVE uservalidation items require a human Telegram turn, which audit did not attempt, simulate or infer.",
+          "certification.pendingGates still carries the G022 sentence asserting that no execution.completedPhaseClaims record exists for any phase — now stale for five phases. Left unedited on purpose: certification.* is owned by bubbles.validate. One specialist phase (validate) genuinely remains unexecuted.",
+          "This phase's own write CAUSED guard Check 7A to start blocking, and that is disclosed rather than presented as a pre-existing condition. The block is correct: it exposes two future-dated claimedAt values in foreign-owned records (A-5). Audit did not date its claim forward to suppress it, and did not edit the two wrong values."
+        ],
+        "verdict": "REWORK_REQUIRED (routed, not a defect in the delivered fix): spec compliance SATISFIED on FR-1..FR-5; all 8 checked DoD items SUPPORTED with 0 unchecked by audit; 1 over-claim found (A-1, bubbles.regression); 1 evidence-integrity defect found (A-5, future-dated claimedAt in stabilize and security records); 2 previously-undisclosed red gates (A-2 G040 routed, A-3 G095 addressed by this phase); guard failureCount 11 -> 10 and failedGateIds [G022,G040,G095,G136] -> [G022,G040,G136]; 0 production and 0 test files changed; next required owner bubbles.validate"
       }
     ],
     "executionHistory": [
@@ -406,6 +428,114 @@
           "No production or test source file — this is a diagnostic phase; SEC-1 and SEC-2 are routed to bubbles.implement, SEC-3 to bubbles.plan and SEC-4 to the repo owner rather than fixed inline",
           "No exemption or allowlist entry for the 12 repo-level security-gate findings — suppressing them would hide a real signal that this packet did not cause",
           "No absolute operator home-directory path and no concrete deployment-target name appears in any artifact written this phase; binding commands are recorded with <repo-root> and <host-token> placeholders, and no secret value is reproduced (the config.sh:2240 webhook test fixture is referenced by line, never quoted)"
+        ]
+      },
+      {
+        "startedAt": "2026-08-21T06:42:05Z",
+        "completedAt": "2026-08-21T06:53:11Z",
+        "agent": "bubbles.audit",
+        "phasesExecuted": [
+          "audit"
+        ],
+        "outcome": "route_required",
+        "headAtRun": "b5373b4f",
+        "repositoryBindingDecisionId": "rb:vscode-6af2178e10192363b0e52a46fb5e0950:39",
+        "commandsExecuted": [
+          {
+            "command": "repository-binding-host-context.sh --session-log <host-token> --workspace-root <repo-root>",
+            "exitCode": 0,
+            "result": "expectedControlRevision=38; sessionControlFile resolved (presence-only, value never echoed)"
+          },
+          {
+            "command": "repository-binding.sh preflight --request-class STRUCTURED --repository-root <repo-root>",
+            "exitCode": 0,
+            "result": "PREFLIGHT_COMMITTED revision=39 repository=smackerel actionable=true"
+          },
+          {
+            "command": "git status --porcelain && git log --oneline -6",
+            "exitCode": 0,
+            "result": "Clean tree at HEAD=b5373b4f; fix commit of record 2e71d64a confirmed reachable"
+          },
+          {
+            "command": "grep -n 'captureFallbackAcknowledgement' internal/assistant/facade_weather_shortcut_test.go",
+            "exitCode": 0,
+            "result": "Assertions at lines 119, 169, 211 — NONE appears in the M1 mutant failure list recorded at report.md#regression-mutation. This is finding A-1."
+          },
+          {
+            "command": "grep -rn 'func TestFacade_BandHigh_StructuredContextPopulated' internal/assistant/",
+            "exitCode": 0,
+            "result": "The backward-compat test named in report prose EXISTS: facade_test.go:250 _WeatherQuery, driving '/weather barcelona tomorrow' with the seam un-wired"
+          },
+          {
+            "command": "grep -rn 'WithWeatherLookup' --include='*.go' .",
+            "exitCode": 0,
+            "result": "Seam wired in exactly 2 sites: cmd/core/wiring_assistant_facade.go:241 (production) and facade_weather_shortcut_test.go:71 (test) — FR-5 holds structurally"
+          },
+          {
+            "command": "grep -n 'func LookupForecast' -A 60 internal/agent/tools/weather/tool.go",
+            "exitCode": 0,
+            "result": "tool.go:315-317 back-fills fresh.ProviderName = svc.Provider.Name(), so the FR-2 zero-Sources branch is unreachable through the shipped wiring (finding A-4)"
+          },
+          {
+            "command": "evidence-capture.sh -- state-transition-guard.sh specs/061-conversational-assistant/bugs/BUG-061-007-weather-shortcut-masked-as-saved-as-idea",
+            "exitCode": 1,
+            "result": "failureCount 11; failedGateIds [G022,G040,G095,G136]; failedChecks [Check-4-completion]; blockingCode DELIVERY_COMPLETION_FAILED; 344 lines; sha256 f3bdf2584959da7c184d66d270495b8936885fc4a495711546a6acb8e18325f2"
+          },
+          {
+            "command": "discovered-issue-disposition-guard.sh specs/061-conversational-assistant/bugs/BUG-061-007-weather-shortcut-masked-as-saved-as-idea",
+            "exitCode": 1,
+            "result": "G095: 1 violation — report.md:1163, forbidden phrase with no artifact citation in the same paragraph and no '## Discovered Issues' row for 2026-08-21. This is finding A-3."
+          },
+          {
+            "command": "G040 scanner replay: guard fence-stripping awk + the two grep expressions from state-transition-guard.sh:4119-4157, over report.md and scopes.md",
+            "exitCode": 0,
+            "result": "5 hits located at report.md:720,860,1073,1161,1267 (all the same hyphenated routing noun in stabilize/security narrative); scopes.md CLEAN at 0. Matches the guard's reported count exactly. This is finding A-2."
+          },
+          {
+            "command": "G040 scanner replay re-run AFTER writing report.md#audit-phase",
+            "exitCode": 0,
+            "result": "Delta ZERO — still exactly the pre-existing 5 hits, after correcting three pattern words in this phase's own draft prose"
+          },
+          {
+            "command": "artifact-lint.sh specs/061-conversational-assistant/bugs/BUG-061-007-weather-shortcut-masked-as-saved-as-idea",
+            "exitCode": 0,
+            "result": "Artifact lint PASSED — all required artifacts, checkbox syntax, evidence blocks present, no unfilled placeholders, no repo-CLI bypass"
+          },
+          {
+            "command": "git log -5 --format='%h %ad %s' --date=format-local + date -u",
+            "exitCode": 0,
+            "result": "Commit times vs recorded claimedAt: stabilize claims 06:41:18Z but committed 06:24:26Z (+16m52s); security claims 07:12:40Z but committed 06:39:13Z (+33m27s); wall clock during this phase 06:55:49Z. This is finding A-5."
+          },
+          {
+            "command": "state-transition-guard.sh <packet>  (EXIT run, after this phase's writes)",
+            "exitCode": 1,
+            "result": "failureCount 10 (was 11); failedGateIds [G022,G040,G136] — G095 moved to passedGateIds; Check 6 audit line cleared and rollup reduced 2 -> 1; Check 7A newly blocks on the A-5 backwards ordering"
+          }
+        ],
+        "filesChanged": [],
+        "notRun": [
+          "./smackerel.sh test unit --go, test integration, and the M1 mutation — all were measured earlier in THIS session by bubbles.regression (exit 0, exit 0, M1 killed by all three tests). Audit cites those runs per the phase brief rather than re-measuring an unchanged tree; this phase changed zero production and zero test files.",
+          "Re-running the M1 mutant to confirm A-1 — the finding rests on cross-referencing the M1 failure LINE NUMBERS already recorded in report.md#regression-mutation against the assertion line numbers re-read first-hand this session, on a clean tree at the same HEAD lineage.",
+          "Any live or deployed observation — the one unchecked DoD item and both LIVE uservalidation items need a human Telegram turn, which audit cannot perform and did not simulate or infer.",
+          "security-gate.sh, artifact-freshness, implementation-reality-scan and the other project gates as standalone invocations — each ran inside the transition guard this phase executed, and their results are read from that single capture rather than double-counted.",
+          "Full enumeration of the 28 evidence blocks behind Check 11's non-blocking WARN — audit sampled the flagged blocks and judged them prose tables and verdict panels carrying no command by design."
+        ],
+        "artifactsWritten": [
+          "report.md#audit-phase (new section: FR-1..FR-5 compliance table read against the delivered code, the over-claim analysis with assertion line numbers and the M1 cross-reference table, per-item DoD re-verification table, verbatim TRANSITION_GUARD_RESULT_V1 block with all 11 failures attributed individually, G040/G095 measured attribution, command table with real exit codes, not-run list, verdict block)",
+          "report.md '## Discovered Issues' (new table: A-1 over-claim, A-2 G040, A-3 G095, A-4 FR-2 branch confirmation — each dated 2026-08-21 with disposition and owner)",
+          "state.json completedPhases[] += audit",
+          "state.json execution.completedPhaseClaims[] += audit claim",
+          "state.json execution.executionHistory[] += this entry"
+        ],
+        "artifactsDeliberatelyNotWritten": [
+          "certification.certifiedCompletedPhases — remains []; only bubbles.validate may populate it. Audit records an execution CLAIM, never a certification.",
+          "certification.pendingGates and every other certification.* field — foreign-owned; the now five-times-stale G022 sentence is reported, not edited",
+          "uservalidation.md — G136: no checklist item checked, no '## Human Acceptance Record' authored",
+          "scopes.md — untouched. All 8 checked DoD items were verified SUPPORTED so none was unchecked, the 1 unchecked item (operator-observable live bot turn) stays unchecked, and no 'Regression E2E' text was written on any unit/integration Test Plan row.",
+          "The bubbles:g040-skip-begin/-end sentinel was NOT wrapped around the 5 offending G040 lines or the G095 line. Every one sits in a stabilize- or security-owned section; silencing a gate on a foreign-owned artifact section is indistinguishable from gate-gaming and would have destroyed the signal that two gates are red. Both are routed with owners instead.",
+          "No correction to report.md#regression-quality for A-1 — that sentence is owned by bubbles.regression and is routed, not rewritten here.",
+          "No production or test source file — this is a diagnostic phase.",
+          "No absolute operator home-directory path and no concrete deployment-target name appears in any artifact written this phase; binding commands are recorded with <repo-root> and <host-token> placeholders."
         ]
       }
     ]
