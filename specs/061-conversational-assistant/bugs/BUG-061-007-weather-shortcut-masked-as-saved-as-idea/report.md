@@ -1756,6 +1756,278 @@ gates tripped by honest routing language in two earlier sections; A-5 is a
 timestamp-integrity defect this phase surfaced by recording the clock it actually
 observed instead of one that would have kept the guard quiet.
 
+## Validate phase (`bubbles.validate`) {#validate-phase}
+
+This phase holds the sole certifying authority for this packet. Every prior phase
+left `certification.certifiedCompletedPhases` empty for it. It re-derived the
+claims below from the artifacts and the source rather than accepting the report's
+account of itself, then wrote the terminal status.
+
+### 1. Independent re-verification — read the assertion, not the name {#validate-verification}
+
+Each row was established first-hand this session. Where a prior phase had already
+reached the same conclusion, that is stated, so nothing here is presented as a
+discovery it is not.
+
+| # | Claim under test | How it was checked | Result |
+|---|-----------------|--------------------|--------|
+| 1 | The 3 scenario tests assert what the DoD says they assert | read `internal/assistant/facade_weather_shortcut_test.go` end-to-end and compared every assertion to the 3 scenario DoD items | **CONFIRMED — and the DoD UNDER-claims.** Tests 2 and 3 each carry a body-content discriminator (`strings.Contains(resp.Body, "90210")`, `strings.Contains(resp.Body, "location")`) that the DoD items do not mention. The recorded claims are weaker than the evidence, which is the safe direction. |
+| 2 | `captureFallbackAcknowledgement` is the product constant, not a test-local string | `grep -rn 'captureFallbackAcknowledgement\s*=' internal/` | **CONFIRMED** — one definition, `internal/assistant/facade.go:60`. |
+| 3 | FR-1: the executor bypass is structural | read `facade.go:993-1014` — the Step 3.9 block `return`s at :1010, the Step 4 envelope/route block begins at :1014 | **CONFIRMED** — the fast-path returns before routing exists, so bypass is positional, not conditional on executor behavior. |
+| 4 | FR-3 / FR-4: honest lines, no capture route | read `handleWeatherShortcut` (`facade.go:1492-1545`) | **CONFIRMED** — three `StatusUnavailable` returns (empty location → `ErrSlotMissing`; lookup error and unreadable/blank payload → `ErrProviderUnavailable`); none sets `CaptureRoute`; none can emit the capture body. |
+| 5 | FR-5 backward-compat is bound by a real test | opened the test the audit named, `TestFacade_BandHigh_StructuredContextPopulated_WeatherQuery` at `facade_test.go:250` | **CONFIRMED and non-tautological** — it builds the facade via `mustFacade(...)` with no `WithWeatherLookup`, sends `/weather barcelona tomorrow`, and `t.Fatalf`s on an empty captured `StructuredContext`. Were Step 3.9 to fire with an unwired seam, the executor would never be reached and this test would fail. |
+| 6 | A-5: two `claimedAt` values are future-dated | re-derived in true UTC. The audit's own command mixed `--date=format-local` with a hardcoded `Z`, so it was re-run as `git log --format='%h A=%aI C=%cI'` plus `date +'%Z %z'` | **CONFIRMED, and the audit's numbers hold exactly** — host TZ is `UTC +0000`, so `format-local` and UTC coincide. stabilize claims `06:41:18Z` against its own commit `12083d0e` at `06:24:26Z` (+16m52s); security claims `07:12:40Z` against `b5373b4f` at `06:39:13Z` (+33m27s). Corroborated a second way: the wall clock read `07:09:29Z` during this phase, so security's claim was **still in the future** while validate was running. |
+| 7 | Check 8A is honestly red rather than merely unaddressed | read `.github/bubbles/scripts/guards/planning-checks.sh:58`, `:65`, `:72` | **CONFIRMED verbatim.** Line 72 matches the literal `Regression E2E` anywhere in a table row. Lines 58 and 65 are presence-matched with `^\- \[(x\| )\]`, so an **unchecked** box satisfies them. Two of the three Check 8A failures could therefore be cleared by typing two lines that change nothing about real coverage. They were not typed. The red state is the accurate one. |
+| 8 | Packet hygiene invariants | mechanical scans over the packet directory | **CONFIRMED** — DoD 8 checked / 1 unchecked / 9 total; `0` occurrences of the literal `Regression E2E` in `scopes.md`; `0` absolute home-directory paths; `0` deployment-target tokens; `uservalidation.md` carries no human-acceptance section. |
+
+Nothing in the delivered fix, the tests, or the eight checked DoD items was found to
+claim more than it measured. The one over-claim in this packet remains A-1, which
+`bubbles.audit` found and routed to `bubbles.regression`; this phase re-read the
+sentence and agrees with that disposition without re-raising it.
+
+### 2. What this phase found that had not been recorded {#validate-finding}
+
+One item, V-1, and it concerns the **method** behind A-5 rather than A-5's
+conclusion. The audit derived the future-dated timestamps with:
+
+```text
+git log -5 --format='%h %ad %s' --date=format-local:'%Y-%m-%dT%H:%M:%SZ'
+```
+
+`--date=format-local` renders each timestamp in the **host's** timezone while the
+format string appends a hardcoded `Z`, which asserts UTC. On this host the two agree
+(`date +'%Z %z'` → `UTC +0000`), so every value the audit printed is correct and A-5
+stands unchanged. On any host with a non-zero offset the same command would stamp
+local times as UTC and could invent or conceal a Check 7A violation of up to the
+offset. Since A-5 is being handed to two other phases to correct, and they will
+plausibly reach for the command that produced it, the fragility is recorded here.
+
+The certification-field staleness this phase repaired in `state.json` is **not**
+claimed as a discovery: `bubbles.audit` disclosed it in its own
+`honestLimitations` and routed it here on the correct ground that `certification.*`
+is owned by this agent.
+
+### 3. Phases certified, and phases withheld {#validate-certification}
+
+The bar applied: a phase is certified only when it has **both** a dedicated evidence
+section in `report.md` **and** an `execution.executionHistory` record naming the agent
+that executed it. Evidence of work and evidence of execution are separate claims, and
+Gate G022 reads `certifiedCompletedPhases` as provenance.
+
+**CERTIFIED (6):** `regression`, `simplify`, `stabilize`, `security`, `audit`,
+`validate` — each has an evidence anchor (`#regression-phase`, `#simplify-phase`,
+`#stabilize-phase`, `#security-phase`, `#audit-phase`, `#validate-phase`) and an
+`executionHistory` entry naming `bubbles.<phase>`.
+
+**WITHHELD (5):** `select`, `bootstrap`, `implement`, `test`, `devops`.
+
+- `select` and `bootstrap` have no evidence section and no execution record. They are
+  workflow bookkeeping that produced no observable output in this packet.
+- `implement`, `test` and `devops` **do** have real work evidence —
+  `#after-fix-unit-evidence` plus the `### Code Diff Evidence` block, `## Test
+  Evidence`, and `#deploy-verify` covering build, cosign signature, rollout and the
+  read-only running-digest check. What none of them has is a
+  `completedPhaseClaims` or `executionHistory` entry naming **which** agent executed
+  them or when; this packet's claims discipline begins at the regression phase.
+  Certifying them would have required inventing agent identity and timestamps.
+
+`state.completedPhases` continues to record all eleven as EXECUTED. That they stand
+evidenced while their execution provenance stays uncertified is the honest reading,
+and it is recoverable: whoever reconstructs that provenance from git history may
+certify them then. This matches the standard applied to the sibling packet
+BUG-061-006.
+
+Certifying `stabilize` and `security` while A-5 shows their timestamps are wrong is
+deliberate and narrow. A-5 falsifies two **timestamp values**; it does not falsify
+that the phases ran, that their evidence sections are real, or that the agent
+identity in their records is correct. Check 7A stays red until the owning phases
+correct those values, so nothing is greened by this certification.
+
+### 4. Transition guard — verbatim {#validate-guard}
+
+Run without a target-status override, at `HEAD=3e031492` with a clean tree, before
+this phase wrote anything:
+
+```text
+$ timeout 900 bash .github/bubbles/scripts/state-transition-guard.sh specs/061-conversational-assistant/bugs/BUG-061-007-weather-shortcut-masked-as-saved-as-idea
+BEGIN TRANSITION_GUARD_RESULT_V1
+schemaVersion: transition-guard-result/v1
+workflowMode: bugfix-fastlane
+auditProfile: delivery-completion-v1
+targetStatus: done
+contractDigest: sha256:aa91472c047d3d985d38c1d308feb1e6081955b2aa553816deb5987d9cdc449f
+targetRevision: sha256:cec117ab35e134672ec88b2989b637cf346a720b52b87e772ffcfcd89ede7d11
+applicableCheckClasses: [universal,mode-required,delivery-completion]
+notApplicableChecks: []
+passedGateIds: [G057,G053,G051,G068,G082,G083,G084,G128,G085,G086,G091,G087,G093,G088,G089,G092,G090,G094,G095,G097,G098,G099,G100,G130,G131]
+failedGateIds: [G022,G040,G136]
+failedChecks: [Check-4-completion]
+blockingCode: DELIVERY_COMPLETION_FAILED
+parentExpandedPhases: 0
+failureCount: 10
+exitStatus: 1
+verdict: FAIL
+END TRANSITION_GUARD_RESULT_V1
+GUARD_EXIT=1
+```
+
+`targetStatus: done` is resolved by the contract from `workflowMode: bugfix-fastlane`;
+it is the ceiling this mode *could* reach, not the status this phase is writing. The
+envelope reproduces the audit's exit measurement exactly on `failedGateIds` and
+`failureCount`; `targetRevision` differs because audit committed after its own run.
+
+Attribution of all 10 blocking lines, read from the guard's own output:
+
+| # | Guard line | Gate | Disposition |
+|---|-----------|------|-------------|
+| 1 | Check 4 — 1 UNCHECKED DoD item | — | correct; the live-stack item is an operator observation turn and must stay unchecked |
+| 2 | Check 6 — required phase `validate` not recorded | G022 | cleared by this phase's write |
+| 3 | Check 6 — `1 specialist phase(s) missing` | G022 | cleared by this phase's write |
+| 4 | Check 7A — `claimedAt` runs backwards, `security@07:12:40 -> audit@06:53:11` | — | A-5; owners `bubbles.stabilize` + `bubbles.security`; re-derived and confirmed above |
+| 5-8 | Check 8A — 3 regression-E2E planning items + rollup | — | correct; verified at `planning-checks.sh:58/65/72` that clearing two of them would be a false green |
+| 9 | Check 18 — 5 deferral-language hits in `report.md` | G040 | A-2; owners `bubbles.stabilize` + `bubbles.security`; all 5 sit in sections this phase does not own |
+| 10 | Check 43 — human acceptance not established | G136 | correct and operator-only |
+
+This phase's write clears items 2 and 3 and leaves the rest standing on purpose. It
+did not wrap another phase's prose in the sanctioned G040 sentinel, did not date its
+own claim to make Check 7A quiet, and did not add either presence-matched Check 8A
+line. Each of those moves would have lowered `failureCount` without changing anything
+true about the packet.
+
+**Exit run — after this phase wrote `report.md` and the `state.json` certification
+and execution records:**
+
+```text
+$ timeout 900 bash .github/bubbles/scripts/state-transition-guard.sh specs/061-conversational-assistant/bugs/BUG-061-007-weather-shortcut-masked-as-saved-as-idea
+BEGIN TRANSITION_GUARD_RESULT_V1
+schemaVersion: transition-guard-result/v1
+workflowMode: bugfix-fastlane
+auditProfile: delivery-completion-v1
+targetStatus: done
+contractDigest: sha256:aa91472c047d3d985d38c1d308feb1e6081955b2aa553816deb5987d9cdc449f
+targetRevision: sha256:28357d98917ab53216cf460df6f8ceee98836c9292ad5365a23da94b4c67f7b8
+applicableCheckClasses: [universal,mode-required,delivery-completion]
+notApplicableChecks: []
+passedGateIds: [G057,G053,G051,G068,G082,G083,G084,G128,G085,G086,G091,G087,G093,G088,G089,G092,G090,G094,G095,G097,G098,G099,G100,G130,G131]
+failedGateIds: [G040,G136]
+failedChecks: [Check-4-completion]
+blockingCode: DELIVERY_COMPLETION_FAILED
+parentExpandedPhases: 0
+failureCount: 9
+exitStatus: 1
+verdict: FAIL
+END TRANSITION_GUARD_RESULT_V1
+GUARD_EXIT=1
+```
+
+**`failureCount: 10 → 9`. `failedGateIds: [G022,G040,G136] → [G040,G136]` — G022 is
+gone.** Cleared: both Check 6 lines, because `validate` now carries a
+`completedPhaseClaims` entry, an `executionHistory` record naming `bubbles.validate`,
+and a place in `certifiedCompletedPhases`.
+
+**Newly surfaced, and it is a consequence of A-5 rather than a new defect:**
+
+```text
+🔴 BLOCK: executionHistory contains 1 overlapping entries — sequential agent execution is impossible if runs overlap
+```
+
+This phase's honest window is `07:09:29Z → 07:15:41Z`. The security record's window is
+`06:58:20Z → 07:12:40Z`. They overlap across `07:09:29Z → 07:12:40Z` — but only because
+security's `completedAt` is the same future-dated value Check 7A already blocks on. The
+wall clock was `07:09:29Z` while validate was reading it, so security's recorded end
+time had not yet occurred. Correcting A-5 collapses this block with it; the two share a
+single root cause and a single pair of owners.
+
+The available move that would have silenced it — starting this phase's recorded window
+after `07:12:40Z` — is the same fabrication `bubbles.audit` declined for Check 7A one
+phase earlier. A window this phase did not occupy is not a window it may record, so the
+measured values stand and the block is disclosed here rather than engineered away.
+
+Net: `10 → 9`, with G022 cleared, one A-5-derived block surfaced, and nothing greened
+that is not actually true.
+
+### 5. Terminal status: `blocked` {#validate-terminal}
+
+`done` is unavailable — the guard is `verdict: FAIL` with 10 blocking failures — and
+`done_with_concerns` is forbidden by
+`completion-governance.md`. Every residual item is
+operator-owned or belongs to an owner outside this packet, and none is an
+agent-remediable defect in the delivered fix, so `blocked` with a concrete unblocking
+action is the accurate terminal state. It is written to both `status` and
+`certification.status`.
+
+### 6. Commands executed (this phase) {#validate-commands}
+
+| # | Command | Exit | Purpose |
+|---|---------|------|---------|
+| 1 | `repository-binding-host-context.sh` + `repository-binding.sh preflight --request-class STRUCTURED` | 0 | `PREFLIGHT_COMMITTED`, `actionable: true`, control revision 40 |
+| 2 | `git status --porcelain` / `git log --oneline -3` | 0 | clean tree at `HEAD=3e031492` |
+| 3 | `jq` over `state.json` — `completedPhases`, `completedPhaseClaims`, `executionHistory`, `certification` | 0 | established 5 phases with agent provenance, 5 without |
+| 4 | `jq` over the sibling `BUG-061-006` `state.json` | 0 | confirmed the certified-6 / withheld-5 standard being applied here |
+| 5 | `grep -rn 'captureFallbackAcknowledgement\s*=' internal/` | 0 | single product definition at `facade.go:60` |
+| 6 | read `facade_weather_shortcut_test.go` (all 214 lines) | — | assertion-level re-verification of all 3 scenarios |
+| 7 | read `facade.go:975-1020` and `:1483-1545` | — | FR-1 / FR-3 / FR-4 confirmed against the delivered code |
+| 8 | read `facade_test.go:248-300` | — | FR-5 backward-compat test confirmed non-tautological |
+| 9 | `date +'%Z %z'` + `git log --format='%h A=%aI C=%cI'` | 0 | A-5 re-derived in true UTC; host is `UTC +0000` |
+| 10 | `sed -n '50,95p' .github/bubbles/scripts/guards/planning-checks.sh` | 0 | Check 8A matching logic confirmed verbatim |
+| 11 | `state-transition-guard.sh <packet>` | 1 | `failureCount: 10`, `failedGateIds: [G022,G040,G136]` |
+| 12 | `artifact-lint.sh <packet>` | 0 | pre-commit gate |
+| 13 | `pii-scan.sh` (staged diff) | 0 | pre-commit gate |
+
+### 7. Not run — stated, not implied {#validate-not-run}
+
+- **No test suite was re-executed by this phase.** `unit --go` (exit 0), `integration`
+  (exit 0, `go-integration` PASS + `python-integration` PASS) and the M1 mutation kill
+  with a byte-identical restore were measured earlier in this session by
+  `bubbles.regression`; this phase CITES them per its brief. Every number attributed to
+  them is quoted from their recorded output.
+- **No live or deployed behavior was observed.** The unchecked DoD item and both LIVE
+  `uservalidation.md` items need a human Telegram turn. It was not attempted, simulated
+  or inferred.
+- **No production or test source was changed.** 0 files.
+- **`uservalidation.md` was not touched.** No checklist item was checked and no human
+  acceptance section was authored; both are operator-only under
+  `acceptance-authority.yaml`. G136 remaining red is the correct outcome.
+- **No DoD checkbox, scope status, Test Plan row or foreign-owned `execution` record
+  was edited.** The A-5 timestamps in the stabilize and security records were left
+  exactly as their owners wrote them.
+
+### 8. Verdict {#validate-verdict}
+
+```
+⛔ BLOCKED (terminal) — operator-owned residual, not a defect in the delivered fix
+
+Independent re-verification    : 8/8 claims CONFIRMED; 0 new over-claims in the
+                                 fix, the tests, or the 8 checked DoD items.
+                                 Two DoD items UNDER-state their tests.
+Phases certified               : 6 — regression, simplify, stabilize, security,
+                                 audit, validate
+Phases withheld                : 5 — select, bootstrap (no evidence, no record);
+                                 implement, test, devops (evidence yes, agent
+                                 provenance no)
+Transition guard (entry -> exit) : failureCount 10 -> 9
+                                 failedGateIds [G022,G040,G136] -> [G040,G136]
+                                 G022 cleared by this phase's write.
+                                 One block newly surfaced: executionHistory
+                                 overlap, caused by security's future-dated
+                                 completedAt (A-5), not by a second defect.
+                                 exitStatus 1  verdict FAIL
+Production code changed        : 0 files
+Test code changed              : 0 files
+uservalidation.md              : byte-identical
+
+Standing, with owners:
+  A-1  bubbles.regression                    over-stated assertion sentence
+  A-2  bubbles.stabilize + bubbles.security  G040 red, 5 hits
+  A-5  bubbles.stabilize + bubbles.security  Check 7A red + executionHistory
+                                             overlap, 2 future-dated values
+  V-1  bubbles.audit                         A-5 derivation command is TZ-fragile
+  Check 8A x3                                assistant e2e harness owner
+  G136 + 1 DoD item + 2 LIVE items           operator (human turn)
+
+Next required owner: operator
+```
+
 ## Discovered Issues
 
 | ID | Date | Issue | Disposition | Owner | Reference |
@@ -1765,4 +2037,5 @@ observed instead of one that would have kept the guard quiet.
 | A-3 | 2026-08-21 | Gate G095 is RED: `report.md:1163` uses a phrase on the disposition guard's forbidden list with no artifact citation in the same paragraph. The sentence is describing what Step 3.9 bypasses (routing machinery), i.e. the opposite of unfinished work. Pre-existing. | ADDRESSED (mechanically) + ROUTED (prose) — this `## Discovered Issues` table dated 2026-08-21 satisfies the guard's own remediation (b) for the file. The owning phase should still add an inline artifact citation to that paragraph so the disposition is legible where the sentence sits, not only in this table. | `bubbles.security` | [audit §5](#audit-g040-g095) · `discovered-issue-disposition-guard.sh:94-103` |
 | A-4 | 2026-08-21 | `handleWeatherShortcut` attaches the provider Source only when `payload.ProviderName` is non-blank, so a blank name would yield `StatusAnswered` + 0 Sources — weaker than FR-2. Audit traced the branch UNREACHABLE via the shipped wiring (`tool.go:315-317` back-fills the provider name) and untested. | NO NEW ACTION — already recorded by `bubbles.simplify` as observation S-3 and routed as `WEATHER-ATTRIBUTION-BRANCH`. Logged here only to record that audit independently reached the branch and confirmed the existing disposition rather than re-raising it. | `bubbles.plan` (existing routing) | [§Observation S-3](#simplify-phase) · [audit §1](#audit-spec-compliance) |
 | A-5 | 2026-08-21 | Guard Check 7A blocks: `completedPhaseClaims claimedAt runs backwards: security@07:12:40 -> audit@06:53:11`. Root cause is NOT the audit record. Two `claimedAt` values are dated AFTER the commit that recorded them — stabilize claims 06:41:18Z but committed at 06:24:26Z (+16m52s), security claims 07:12:40Z but committed at 06:39:13Z (+33m27s). The wall clock during the audit phase was 06:55:49Z, so neither phase could have observed a 07:12:40Z clock. | ROUTED — the owning phases correct their `claimedAt` (and security's `startedAt`/`completedAt`) to values consistent with their own commit times. Audit recorded the clock it actually observed and did NOT date its claim forward past 07:12:40Z to silence the check: a timestamp is a claim like any other, and fabricating one is exactly what this phase exists to catch. Foreign-owned records were not edited. | `bubbles.stabilize` · `bubbles.security` | [audit §4A](#audit-timestamp) · guard Check 7A |
+| V-1 | 2026-08-21 | The command that established A-5 is timezone-fragile: `git log --format='%h %ad %s' --date=format-local:'%Y-%m-%dT%H:%M:%SZ'` renders each timestamp in the HOST's timezone while hardcoding a `Z` suffix that asserts UTC. On this host the two coincide (`date +'%Z %z'` → `UTC +0000`), so every value the audit printed is correct and A-5's conclusion is unaffected — validate re-derived it with `%aI`/`%cI` and got the same +16m52s and +33m27s. On a host with a non-zero offset the same command would stamp local times as UTC and could manufacture or mask a Check 7A violation of up to that offset. | ROUTED — A-5 is being handed to two phases that will plausibly reuse this command to verify their corrections; they should derive with `git log --format='%h %aI %cI'` (real offsets) or force `TZ=UTC`, and re-read `date +'%Z %z'` on whatever host they run. No change to A-5's finding, its owners, or its remediation. | `bubbles.audit` (evidence method) | [validate §2](#validate-finding) · [audit §4A](#audit-timestamp) |
 
