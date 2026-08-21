@@ -48,7 +48,8 @@
     "devops",
     "regression",
     "simplify",
-    "stabilize"
+    "stabilize",
+    "security"
   ],
   "execution": {
     "completedPhaseClaims": [
@@ -108,6 +109,29 @@
           "certification.pendingGates still carries the G022 sentence asserting that no execution.completedPhaseClaims record exists for any phase — already stale for regression and simplify, and now additionally stale for stabilize. Left unedited on purpose: certification.* is owned by bubbles.validate. Three specialist phases (security, audit, validate) genuinely remain unexecuted."
         ],
         "verdict": "STABLE (0 stability defects in the changed surface; 2 non-blocking follow-ups routed, 1 observation; no fix cycle needed)"
+      },
+      {
+        "phase": "security",
+        "agent": "bubbles.security",
+        "claimedAt": "2026-08-21T07:12:40Z",
+        "evidenceRef": "report.md#security-phase",
+        "repositoryBindingDecisionId": "rb:vscode-6af2178e10192363b0e52a46fb5e0950:38",
+        "headAtClaim": "da77b9c1",
+        "summary": "Security review of the ONE new data path 2f35e26f introduces: a user-controlled location string reaching an outbound third-party HTTP call, and provider-controlled data reaching a user-visible chat body. Five axes, all CLEAN for this packet's changed surface. INPUT: the location is never concatenated into a URL — both requests build their query through net/url (open_meteo.go:223-227 geocode, :290-300 forecast) and q.Encode() percent-encodes the value, closing parameter injection and CR/LF request-splitting (net/http's own control-character rejection is a second independent barrier). SSRF is structurally impossible: the user contributes only the VALUE of the `name` parameter; scheme/host/path come from p.geocodeURL / p.forecastURL, injected from SST and fail-loud (NewOpenMeteoProvider PANICS on an empty endpoint, open_meteo.go:113-125), with no user-reachable seam that rewrites the host. OUTPUT: provider-controlled forecast_line and provider_name reach the body and Sources, but the Telegram renderer escapes on every body-carrying branch (escapeForMode at render_outbound.go:166 sourced-answer, :198 default, :243 footer) BEFORE ParseMode is set at :73, and escapeMarkdownV2 covers the full closed Telegram set (:320-355); the deployed mode is markdown_mode: \"MarkdownV2\" (config/smackerel.yaml:1312). The reflected user location never reaches the Telegram wire at all — StatusUnavailable routes to renderError, which emits the single-line \"<skill>: <cause>\" form and drops resp.Body (:175-180, :300-312). SECRETS: grep for api_key|token|secret|password|credential|auth across the whole non-test weather package returns NO output — the provider is key-less by design (open_meteo.go:9-11) and no Authorization header is set on either request. The credential-in-URL error risk named in the brief is closed by construction: handleWeatherShortcut binds err and then DISCARDS it, substituting a fixed sentence (facade.go:1402-1407), so no upstream error string, URL, query string or header echo can reach the user, the audit record or a log line; the fast path emits no span and no log of its own, so there is no third sink. AUTHZ: enumerating the Handle step markers settles the bypass question by ORDERING — handlePendingConfirm runs at :634, resolvePendingDisambig at :674, the clarification gate at :879 and the side-effect confirmation gate at :926/:936, ALL upstream of Step 3.9 at :993, so the fast path cannot bypass any of them; a confirm reply is consumed at Step 1 and 3.9 fires only on a literal /weather prefix, which is not a confirm reply and executes no pending action. The fast path still calls appendTurnAndPersist and writeAudit (facade.go:1007-1008), so per-user persistence and audit are NOT skipped. A non-test grep for ratelimit|rate_limit|limiter|quota|throttle across internal/assistant returns NO matches — the facade has no limiter on ANY path, so there is no differential to bypass. What 3.9 genuinely skips (LLM loop, router/borderline band, capture-as-fallback gate) is routing machinery, not security control; skipping the capture gate IS the fix. DOS: the geocode retry list is capped at TWO entries by construction (strings.Index finds the FIRST comma only and appends at most one extra attempt, open_meteo.go:198-210), so a thousand-comma location still yields 2 geocode attempts — worst case is <=3 upstream requests per turn (an honest refinement of the brief's 'two round trips'), a constant that cannot grow with input length; responses decode into fixed structs and the body is budget-truncated by the transport. MECHANICAL FLOOR: security-gate.sh exit 1, 12 inline-credentials findings, ALL in scripts/commands/config.sh and scripts/commands/config_secret_rejection_test.sh — files this packet's fix commit never touched. Reported and attributed at repo level, not suppressed, no exemption added, and NOT re-run with a narrowed scope to manufacture a 0.",
+        "scopeOfClaim": "Static security review of the 4 fix-surface files plus the collaborators the new path reaches (open_meteo.go request construction and retry loop, tool.go LookupForecast, the Telegram render_outbound escape chain, the WhatsApp renderer body sites, and the assistant Handle step ordering) across input handling, output handling, secret hygiene, auth/authorization and denial of service; plus the mandatory G034 mechanical gate run repo-wide. NO code was changed and NO suite was re-run.",
+        "honestLimitations": [
+          "NO crafted-input proof-of-concept was executed. No /weather turn carrying an injection payload was driven against a live provider or a live transport. The input-handling and output-handling verdicts are derived from reading the request-construction and escaping code and are tagged Claim Source: interpreted in report.md, not executed.",
+          "The output verdict is scoped to the DEPLOYED configuration. escapeForMode is complete for MarkdownV2, which config/smackerel.yaml:1312 pins; it is a no-op for HTML mode while renderOutbound still sets ParseMode = ModeHTML. That gap is real but pre-existing, shared across every response body, and unreachable as configured — recorded as follow-up SEC-1 rather than as a packet finding.",
+          "SEC-2 (WhatsApp renderer consuming resp.Body raw at render.go:212,225,282,344 with no escape helper and no parse-mode selector found in that package) rests on a grep of that package, not on a read of its full send path. It is recorded as an adjacent follow-up needing its own review, and the severity assigned (Low, display spoofing rather than script execution) is a judgement stated as one.",
+          "No SAST tool beyond the framework gate was run. gosec and semgrep are not in the repo CLI surface and terminal discipline forbids an ad-hoc invocation, so the code-level analysis is manual and pattern-driven rather than tool-verified.",
+          "No dependency CVE scan was performed this phase. The repo's supply-chain result (Trivy 0 CVEs after the grpc v1.82.1 bump) is CITED from report.md#build-check, not re-claimed as a fresh measurement of this pass.",
+          "The Go unit suite, integration suite, artifact-lint and pii-scan were NOT re-run for the CODE baseline. This phase changed zero production and zero test files, so re-running them would re-measure an unchanged tree; the prior exit-0 results are cited per the phase brief. artifact-lint and pii-scan WERE run against the artifacts this phase wrote.",
+          "security-gate.sh exits 1 and this phase did NOT resolve it. The 12 findings are attributed to repo level with evidence (two files, neither in the fix commit's 4-file non-artifact surface). The observation that eight matches are __SECRET_PLACEHOLDER__ sentinels, four are inside the secret-REJECTION test, and one is a self-described webhook test fixture is read from the gate's own output lines and offered as context, NOT as a verified safety claim — whether the gate should exempt them is a repo-level decision recorded as SEC-4 and deliberately not made here.",
+          "No live provider turn was executed, so no real upstream error string was observed. The secret-hygiene verdict rests on err being provably discarded at facade.go:1402-1407, which is a stronger guarantee than a single observed error, but it is a code-reading claim.",
+          "Any concurrency-adjacent statement inherited from the stabilize phase remains STATIC; no race detector was run here either, for the same CLI reason.",
+          "certification.pendingGates still carries the G022 sentence asserting that no execution.completedPhaseClaims record exists for any phase — already stale for regression, simplify and stabilize, and now additionally stale for security. Left unedited on purpose: certification.* is owned by bubbles.validate. Two specialist phases (audit, validate) genuinely remain unexecuted."
+        ],
+        "verdict": "FINDINGS (0 security defects attributable to this packet across all 5 axes; 4 adjacent follow-ups routed with owners; verdict is FINDINGS rather than SECURE solely because the mandatory G034 mechanical floor exits 1 at repo level; no fix cycle needed)"
       }
     ],
     "executionHistory": [
@@ -274,6 +298,115 @@
           "No production or test source file — this is a diagnostic phase; F-1 is routed to bubbles.implement and F-2 to bubbles.test rather than fixed inline",
           "No absolute operator home-directory path and no concrete deployment-target name appears in any artifact written this phase; binding commands are recorded with <repo-root> and <host-token> placeholders"
         ]
+      },
+      {
+        "startedAt": "2026-08-21T06:58:20Z",
+        "completedAt": "2026-08-21T07:12:40Z",
+        "agent": "bubbles.security",
+        "phasesExecuted": [
+          "security"
+        ],
+        "outcome": "completed_diagnostic",
+        "headAtRun": "da77b9c1",
+        "repositoryBindingDecisionId": "rb:vscode-6af2178e10192363b0e52a46fb5e0950:38",
+        "commandsExecuted": [
+          {
+            "command": "repository-binding-host-context.sh --session-log <host-token> --workspace-root <repo-root>",
+            "exitCode": 0,
+            "result": "expectedControlRevision=37; sessionControlFile resolved (presence-only, value never echoed)"
+          },
+          {
+            "command": "repository-binding.sh preflight --request-class STRUCTURED --repository-root <repo-root>",
+            "exitCode": 0,
+            "result": "PREFLIGHT_COMMITTED revision=38 repository=smackerel actionable=true"
+          },
+          {
+            "command": "git show --stat 2f35e26f",
+            "exitCode": 0,
+            "result": "12 files changed, 754 insertions(+), 7 deletions(-) — 4 non-artifact files confirmed as the review surface"
+          },
+          {
+            "command": "git show 2f35e26f -- cmd/core/wiring_assistant_facade.go internal/agent/tools/weather/tool.go internal/assistant/facade.go",
+            "exitCode": 0,
+            "result": "Full production diff read: handleWeatherShortcut, LookupForecast extraction, WithWeatherLookup seam"
+          },
+          {
+            "command": "grep -rnE 'url\\.(Values|QueryEscape|PathEscape|Parse)|http.NewRequest|Sprintf\\(.*http|baseURL|Endpoint' internal/agent/tools/weather/*.go",
+            "exitCode": 0,
+            "result": "4 hits, ALL url.Values + q.Encode() (:223,:227,:290,:300); ZERO string-concatenated user input into a URL — closes injection and request-splitting"
+          },
+          {
+            "command": "grep -rniE 'api[_-]?key|token|secret|password|credential|auth' internal/agent/tools/weather/*.go (non-test)",
+            "exitCode": 1,
+            "result": "NO OUTPUT — no credential exists in the provider package; open-meteo is key-less by design"
+          },
+          {
+            "command": "grep -rnE 'ParseMode\\s*=|ParseMode:' internal/telegram/ --include='*.go' (non-test)",
+            "exitCode": 0,
+            "result": "5 sites: MarkdownV2 (render_nudge:101, render_outbound:73), HTML (:103, :75), cleared (watches:68)"
+          },
+          {
+            "command": "grep -rnE 'func .*(Escape|escape)' internal/telegram/ internal/agent/tools/weather/",
+            "exitCode": 0,
+            "result": "escapeForMode at render_outbound.go:320 and escapeMarkdownV2 at :353 — escaping exists and is applied BEFORE ParseMode is set at :73"
+          },
+          {
+            "command": "grep -rnE '\"html\"|\"markdownv2\"|markdown_mode' internal/ config/",
+            "exitCode": 0,
+            "result": "config/smackerel.yaml:1312 markdown_mode: \"MarkdownV2\" — the deployed mode has a COMPLETE escaper, which scopes SEC-1 to latent"
+          },
+          {
+            "command": "grep -rln 'contracts.AssistantResponse' internal/ (transport packages only)",
+            "exitCode": 0,
+            "result": "Two transports consume the body: internal/telegram/assistant_adapter and internal/whatsapp/assistant_adapter — motivates SEC-2"
+          },
+          {
+            "command": "grep -nE '^\\s+// --- Step' internal/assistant/facade.go",
+            "exitCode": 0,
+            "result": "Step 3.9 at :993 sits AFTER the clarification gate (:879) and the side-effect confirmation gate (:926) — the authz answer by ordering"
+          },
+          {
+            "command": "grep -nE 'PendingConfirm|PendingDisambig' internal/assistant/facade.go",
+            "exitCode": 0,
+            "result": "handlePendingConfirm at :634 and resolvePendingDisambig at :674, BOTH upstream of :993 — a confirm/disambig reply never reaches the fast path"
+          },
+          {
+            "command": "grep -rniE 'ratelimit|rate_limit|limiter|quota|throttle' internal/assistant/*.go (non-test)",
+            "exitCode": 0,
+            "result": "NO MATCHES — the facade has no rate limiter on ANY path, so the fast path skips no limiter that the routed path enforces; motivates SEC-3 at repo level"
+          },
+          {
+            "command": "bash .github/bubbles/scripts/security-gate.sh --repo-root <repo-root>",
+            "exitCode": 1,
+            "result": "[security-gate] FAIL — G034 findings: 12. ALL inline-credentials, ALL in scripts/commands/config.sh and scripts/commands/config_secret_rejection_test.sh — files this packet's fix commit never touched. Attributed at repo level (SEC-4), reported not suppressed, no exemption added, not re-run at narrowed scope."
+          }
+        ],
+        "filesChanged": [],
+        "notRun": [
+          "Any crafted-input proof-of-concept — no /weather turn with an injection payload was driven against a live provider or transport; the input/output verdicts are code-reading claims tagged Claim Source: interpreted.",
+          "gosec / semgrep or any SAST tool beyond the framework gate — not in the repo CLI surface, and terminal discipline forbids an ad-hoc invocation.",
+          "A dependency CVE scan — the repo supply-chain result (Trivy 0 CVEs after the grpc v1.82.1 bump) is cited from report.md#build-check, not re-claimed as fresh.",
+          "./smackerel.sh test unit --go, test integration, artifact-lint and pii-scan for the CODE baseline — zero production and zero test files changed this phase, so re-running would re-measure an unchanged tree; prior exit-0 results are cited per the phase brief. artifact-lint and pii-scan WERE run against this phase's artifact writes.",
+          "A -race execution — unchanged from stabilize; the CLI exposes no --race selector, so any concurrency-adjacent statement stays STATIC.",
+          "A live provider turn — no real upstream error string was observed; the secret-hygiene verdict rests on err being provably discarded at facade.go:1402-1407.",
+          "docker-safe-prune.sh --apply — not reached and deliberately not run; the reclaimable cache is shared with sibling repositories."
+        ],
+        "artifactsWritten": [
+          "report.md#security-phase (new section: threat-surface table, 5 axis verdicts with file:line evidence and Claim Source tags, G034 gate output with repo-level attribution, 4 adjacent follow-ups with owners, command table with real exit codes, not-run list, host-preflight disclosure, verdict block)",
+          "state.json completedPhases[] += security",
+          "state.json execution.completedPhaseClaims[] += security claim",
+          "state.json execution.executionHistory[] += this entry",
+          "state.json followUps[] += SEC-1..SEC-4"
+        ],
+        "artifactsDeliberatelyNotWritten": [
+          "certification.certifiedCompletedPhases — remains []; only bubbles.validate may populate it",
+          "certification.pendingGates — foreign-owned; its now quadruply-stale G022 sentence is reported, not edited",
+          "uservalidation.md — G136: no checklist item checked, no '## Human Acceptance Record' authored",
+          "scopes.md — the one unchecked DoD item (operator-observable live bot turn) remains unchecked; no 'Regression E2E' text was written on any unit/integration Test Plan row",
+          "No production or test source file — this is a diagnostic phase; SEC-1 and SEC-2 are routed to bubbles.implement, SEC-3 to bubbles.plan and SEC-4 to the repo owner rather than fixed inline",
+          "No exemption or allowlist entry for the 12 repo-level security-gate findings — suppressing them would hide a real signal that this packet did not cause",
+          "No absolute operator home-directory path and no concrete deployment-target name appears in any artifact written this phase; binding commands are recorded with <repo-root> and <host-token> placeholders, and no secret value is reproduced (the config.sh:2240 webhook test fixture is referenced by line, never quoted)"
+        ]
       }
     ]
   },
@@ -306,6 +439,10 @@
   },
   "nextRequiredOwner": "operator (live Telegram behavioral smoke test — a human turn; the fix binary is deployed + running + healthy + adapter-bound on <deploy-host>, so the fixed code path is already live)",
   "followUps": [
+    "SEC-1 (owner bubbles.implement, transport renderer; raised by bubbles.security): escapeForMode returns the string UNESCAPED when mode == HTML (render_outbound.go:320-325) yet renderOutbound then sets ParseMode = ModeHTML (:73-75), so in HTML mode no escaping is applied to ANY response body. Pre-existing shared-renderer behaviour, not introduced by this fix, and unreachable on the deployed configuration (config/smackerel.yaml:1312 pins markdown_mode: \"MarkdownV2\", whose escaper covers the full closed Telegram set). Medium severity, latent, OWASP A03.",
+    "SEC-2 (owner bubbles.implement, WhatsApp transport; raised by bubbles.security): internal/whatsapp/assistant_adapter/render.go consumes resp.Body raw at :212, :225, :282 and :344 with no escape helper and no parse-mode selector found in that package, so provider-controlled forecast text reaches a second transport unescaped. Pre-existing renderer untouched by this fix; WhatsApp applies only inherent lightweight formatting, so the impact is display spoofing rather than script execution. Needs its own review of the full send path rather than an inline patch. Low severity, latent, OWASP A03.",
+    "SEC-3 (owner bubbles.plan, assistant throughput policy; raised by bubbles.security): a non-test grep for ratelimit|rate_limit|limiter|quota|throttle across internal/assistant returns zero matches — no rate limiter exists on ANY assistant path, so a user can drive repeated outbound third-party provider requests. Repo-level and pre-existing on BOTH paths (the pre-fix LLM route called the same tool), so the fix adds no new outbound capability and in fact REDUCES per-turn cost by removing the LLM loop. Bounded at <=3 upstream requests per turn behind a 128-entry TTL cache. Low severity, OWASP A04.",
+    "SEC-4 (owner repo owner / bubbles.plan; raised by bubbles.security): security-gate.sh exits 1 with 12 inline-credentials findings, all in scripts/commands/config.sh and scripts/commands/config_secret_rejection_test.sh. Eight are the SST generator's __SECRET_PLACEHOLDER__*__ sentinel tokens, four are inside the test that ENFORCES secret rejection (two grep patterns, one failure message, one pass message), and one (config.sh:2240) is a self-described webhook test fixture whose value is deliberately not reproduced in any artifact. Whether the gate should exempt placeholder sentinels and its own rejection test is a repo-level policy decision; this phase reported and attributed the findings but made no exemption and did not touch the gate. Informational.",
     "WEATHER-WINDOW (owner bubbles.plan): the fast-path fixes window to 'now'; parsing 'tomorrow'/'weekend' from the /weather shortcut tail is a separate enhancement.",
     "WEATHER-ATTRIBUTION-BRANCH (owner bubbles.plan; raised by bubbles.simplify as observation S-3): handleWeatherShortcut's empty-ProviderName branch returns StatusAnswered with a forecast body and ZERO Sources, and discards the RetrievedAt parse error. It is unreachable through the wired production path (LookupForecast stamps ProviderName from svc.Provider.Name()), so it is a latent defensive branch rather than a live defect, and it is untested. Decide whether to tighten it to an honest unavailable line or to cover it; not changed by the simplify pass because hardening an unreachable branch on a REGRESSION_FREE packet is churn."
   ],
