@@ -987,3 +987,345 @@ Recorded in the fields the guard reads: top-level `completedPhases[]`,
 `certification.certifiedCompletedPhases` was NOT written. `bubbles.simplify` has
 no certifying authority and `bubbles.validate` has still not run; the existing
 `certifiedCompletedPhasesNote` continues to hold and is preserved verbatim.
+
+---
+
+## Stabilize phase — changed surface is stable; two pre-existing defects found next to it {#stabilize-phase}
+
+Stability and operations review of the three production files this packet
+changed (`internal/telegram/bot.go`, `internal/telegram/assistant_wiring.go`,
+`internal/telegram/assistant_adapter/adapter.go`) across four axes:
+goroutine/lifecycle, concurrency, resource usage, config/deployment reliability.
+
+No test suite was re-run. Unit, full integration, targeted integration and
+`e2e --go-package assistant` were all measured earlier in this same session and
+are recorded above; re-running them would have produced no new stability
+information and is not what this phase is for.
+
+### What ingress the changed code actually runs under {#stabilize-ingress}
+
+The concurrency question is only answerable once the ingress is pinned, because
+the two ingresses have opposite concurrency shapes:
+
+| Ingress | Concurrency | Selected when |
+|---|---|---|
+| long-poll (`Bot.Start`, `bot.go:378-400`) | **serialised** — one goroutine, `safeHandleMessage` called synchronously in the loop | `ASSISTANT_TRANSPORTS_TELEGRAM_MODE=long_poll` |
+| webhook (`webhook_handler.go` `ServeHTTP`) | **concurrent** — `net/http` runs one goroutine per request, dispatching into the same `safeHandleMessage` | `…_MODE=webhook` |
+
+They are mutually exclusive by construction (`cmd/core/wiring.go:838-859`: the
+`webhook` branch does not call `tgBot.Start`; the route is registered only under
+`mode == "webhook"` at `cmd/core/main.go:280`). So concurrent turns are a real
+possibility, not a hypothetical — the review below therefore assumes the
+concurrent (webhook) shape, which is the stricter of the two.
+
+### Axis 1 — goroutine / lifecycle: CLEAN {#stabilize-goroutines}
+
+The fix adds no goroutine, no timer, no background worker. `persistTextIdea`,
+`captureIdeaSilent` and `honestCaptureFallbackFailure` are synchronous;
+the last is a pure function returning a new value struct.
+
+Span lifecycle in `HandleUpdate` was checked specifically, because the fix
+inserted a new early-exit-shaped branch between two spans: `rootSpan` is ended
+by `defer` (`adapter.go:353-355`) and `renderSpan` is ended on both the error and
+success branches (`adapter.go:403`, `adapter.go:408`). The capture call sits
+between them and opens no span of its own, so the new branch cannot leak a span
+per turn.
+
+### Axis 2 — concurrency: CLEAN, and structurally so {#stabilize-concurrency}
+
+This is the axis that matters most for this packet, since the defect being fixed
+was a *duplicate acknowledgement*. The load-bearing property:
+
+> **The fix removes a reply sink. It does not add a dedup flag.**
+
+There is therefore no acknowledgement state for concurrent turns to race on. A
+stateful fix ("remember whether we already acked this turn") would have needed
+synchronisation and would have been racy under the webhook ingress; sink removal
+cannot be, because there is nothing to remember.
+
+Everything the new code touches is per-turn or immutable:
+
+- `Adapter.capture`, `.sender`, `.resolveUser`, `.markdownMode`,
+  `.maxMessageChars`, `.tracer` are written once in `NewAdapter` and never
+  mutated (`adapter.go:127-134`). The only mutable field, `assistant`, is
+  guarded by `mu sync.RWMutex` and read through the `Assistant()` accessor.
+- `resp = honestCaptureFallbackFailure(resp, capErr)` reassigns a **local**.
+  The helper returns a fresh struct and copies the `Routing` pointer without
+  mutating it; `Routing` is only read afterwards (`adapter.go:398-400`).
+- `captureIdeaSilent` → `persistTextIdea` → `callCapture` uses locals plus
+  `b.httpClient` (`*http.Client`, safe for concurrent use) and the immutable
+  `b.captureURL`.
+
+`go vet`'s `copylocks` ran clean as part of repo lint (below), which is the
+mechanical check for the one shape this reasoning could have missed.
+
+One deliberate detail worth recording: `honestCaptureFallbackFailure` does **not**
+carry `CaptureRoute` into the replacement response. That is correct and worth
+keeping — it means the failure response can never re-enter a capture dispatch,
+even if `RenderToChat` ever grew a `CaptureRoute` branch (today the dispatch is
+owned solely by `HandleUpdate`, `render_outbound.go:53`).
+
+### Axis 3 — resource usage: CLEAN {#stabilize-resources}
+
+| Concern | Bound | Where |
+|---|---|---|
+| Request body size | truncated to `maxShareTextLen` before the POST | `bot.go` `persistTextIdea` |
+| Response body size | `io.LimitReader(resp.Body, maxAPIResponseBytes)` | `bot.go` `callCapture` |
+| Call duration | `http.NewRequestWithContext(ctx, …)` **and** `httpClient{Timeout: 30s}` | `bot.go:182` |
+| Retries | none added on the ack path | — |
+
+The truncation bound deserves an explicit note because it was nearly lost: it
+used to live *inside* `handleTextCapture`. The fix moved it down into the shared
+`persistTextIdea`, so the new silent path inherits it. Had the truncation stayed
+in `handleTextCapture`, the new `captureIdeaSilent` path would have POSTed
+unbounded text. It did not, and that is the right shape.
+
+Redelivery was also considered, since at-least-once webhook delivery is the one
+way a duplicate ack could still occur. `captureIdeaSilent` maps `errDuplicate`
+(capture API `409`) to `nil` — a benign success — so a redelivered update
+re-persists nothing and still renders one honest ack. The webhook handler
+dispatches synchronously and then returns `200` unconditionally for any
+well-formed authenticated update (`webhook_handler.go:264`), and
+`safeHandleMessage` swallows panics rather than surfacing an error, so a failed
+capture or a failed render cannot itself provoke a Telegram retry.
+
+### Axis 4 — config / deployment reliability: CLEAN {#stabilize-config}
+
+The question was whether the fix depends on any value that could be unset at
+runtime and fail *silently*. It does not — it introduces **no new configuration
+value at all**. Its two new user-facing strings are compile-time constants in
+`honestCaptureFallbackFailure`, and `ErrNothingToCapture` is a package sentinel.
+
+The values it does depend on all fail loud:
+
+- `NewAdapter` rejects a nil `Capture`, a `MaxMessageChars <= 0`, and an
+  out-of-vocabulary `MarkdownMode` — construction errors, not defaults
+  (`adapter.go:146-158`).
+- `ASSISTANT_TRANSPORTS_TELEGRAM_MODE` is read with `mustString`
+  (`internal/config/assistant.go:402`) and validated against the closed
+  vocabulary `long_poll | webhook` with an error on anything else
+  (`assistant.go:576`, `:614`).
+
+The one dead branch: `NewBotCaptureFn` returns `ErrNothingToCapture` when
+`b == nil || msg == nil` (`assistant_wiring.go:54-57`), which would render
+"Nothing to save…" for what is really a wiring fault. It is unreachable in
+production — `wireAssistantTelegramAdapter` returns early on a nil bot
+(`wiring_assistant_facade.go:313-315`) and the only call site guards
+`update.Message != nil` (`adapter.go:383`). Recorded, not raised.
+
+### Verification run this phase {#stabilize-verification}
+
+```text
+# BUG-061-006 stabilize: repo lint (go vet + ruff + web asset validation)
+$ ./smackerel.sh lint
+exit: 0
+lines: 157
+sha256: e308658676d5853a2bcc5ec398b93e6180919541ed8a512a34b662535b879ba0
+--- last 20 ---
+  OK: web/pwa/manifest.json
+  OK: PWA manifest has required fields
+  OK: web/extension/manifest.json
+  OK: Chrome extension manifest has required fields (MV3)
+  OK: web/extension/manifest.firefox.json
+  OK: Firefox extension manifest has required fields (MV2 + gecko)
+
+=== Validating JS syntax ===
+  OK: web/pwa/app.js
+  OK: web/pwa/sw.js
+  OK: web/pwa/lib/queue.js
+  OK: web/extension/background.js
+  OK: web/extension/popup/popup.js
+  OK: web/extension/lib/queue.js
+  OK: web/extension/lib/browser-polyfill.js
+
+=== Checking extension version consistency ===
+  OK: Extension versions match (1.0.0)
+
+Web validation passed
+LINT_EXIT=0
+```
+
+`./smackerel.sh lint` is the surface that runs `go vet`; `copylocks` and
+`loopclosure` are the two vet checks relevant to the concurrency axis above.
+
+**Honest limit on this phase's evidence.** The race detector was **not** run. The
+repo CLI exposes no `--race` selector (`smackerel.sh` test surface, lines 58-62),
+and reaching for a bare `go test -race` would violate the repo's terminal
+discipline. The concurrency verdict above is therefore *static* — grounded in
+field-mutability analysis plus `go vet` — and is not a claim that a dynamic race
+detector was clean on this code. Adding a `--race` selector to the unit lane is
+the change that would let a future phase make the stronger claim.
+
+### OBSERVATION 1 — webhook mode never closes `b.done`, so shutdown skips the buffer flush {#stabilize-obs-1}
+
+**Not a defect in this packet. Pre-existing since spec 061 SCOPE-05 introduced
+webhook mode. Recorded because it lives in `bot.go`, a file this packet touched,
+and because it is a data-loss shape rather than a cosmetic one.**
+
+`b.done` is closed in exactly one place — `defer close(b.done)` inside the
+long-poll goroutine. Webhook mode deliberately never starts that goroutine. So in
+webhook mode nothing ever closes `b.done`, and `Bot.Stop()` — which waits on it —
+always burns its full 5s timeout before reaching the flush below it. The caller
+budgets 2s and **abandons** the call after that (`runWithTimeout` runs `fn` in a
+goroutine and proceeds on timeout without cancelling it), so shutdown moves on to
+close NATS and Postgres while the abandoned goroutine is still waiting.
+
+```text
+=== [1] b.done is CLOSED in exactly one place (Bot.Start's goroutine) ===
+internal/telegram/bot.go:381:           defer close(b.done)
+
+=== [2] Bot.Stop WAITS on b.done with a 5s bound ===
+1563:   case <-b.done:
+1564-   case <-time.After(5 * time.Second):
+1565-           slog.Warn("telegram bot update goroutine did not stop within 5s timeout")
+1566-   }
+
+=== [3] webhook mode deliberately does NOT call tgBot.Start (so nothing ever closes b.done) ===
+845:    case "webhook":
+846-            slog.Info("telegram bot constructed; long-poll suppressed (assistant.transports.telegram.mode=webhook)",
+847-                    "webhook_path", cfg.Assistant.TelegramWebhookPath)
+848-    case "long_poll":
+849-            tgBot.Start(ctx)
+
+=== [4] shutdown budgets Bot.Stop at 2s, i.e. LESS than the 5s wait it will always burn ===
+87:     runWithTimeout("Telegram bot", 2*time.Second, deadline, func() {
+88-             if tgBot != nil {
+89-                     tgBot.Stop()
+90-             }
+91-     })
+
+=== [5] the flush that never gets reached in time ===
+1557:func (b *Bot) Stop() {
+1560-   // Wait for the update processing goroutine to exit before flushing
+1562-   select {
+1563-   case <-b.done:
+1564-   case <-time.After(5 * time.Second):
+1568-   slog.Info("telegram bot flushing buffers")
+1569-   if b.assembler != nil {
+```
+
+Consequence in webhook mode: a guaranteed 2s shutdown stall, two misleading
+warnings on every clean shutdown, and — the part that matters —
+`assembler.FlushAll()` / `mediaAssembler.FlushAll()` racing process exit instead
+of running inside the shutdown budget. Buffered conversation and media captures
+can be lost on restart.
+
+**Not currently biting.** This packet's own recorded deploy evidence
+(`state.json.deployment.runningVerification`) reports the startup log line
+`telegram bot started`, which is emitted only on the `long_poll` branch
+(`wiring.go:851`). Under long-poll the goroutine exists, `b.done` closes, and
+`Stop` returns promptly. The observation is latent and fires the day the
+transport is switched to webhook — which is exactly when it would be hardest to
+attribute. Note this is read off the packet's recorded evidence, not verified by
+me against the running system this phase.
+
+Routed as a follow-up, not fixed here: `bubbles.stabilize` is diagnostic, the
+file is outside this packet's three-file fix surface, and the correct repair
+(close `b.done` at construction when the long-poll goroutine will not run, or
+give `Stop` a mode-aware wait) is a shutdown-semantics decision that belongs with
+the owner of spec 061 SCOPE-05.
+
+### OBSERVATION 2 — a failed capture is still counted as `outcome="captured"` {#stabilize-obs-2}
+
+**Not a defect in this packet — and this fix made it strictly better, without
+closing it.**
+
+The facade emits its per-turn metric and its `assistant_turn` log line from a
+`defer` inside `Handle`, so both fire when `Handle` *returns*:
+
+- `facade.go:511-513` — `FacadeTurnsTotal.WithLabelValues(transportLabel, outcome).Inc()`
+- `facade.go:559` — `slog.Info("assistant_turn", logAttrs…)`
+- `facade.go:1891-1893` — `deriveFacadeOutcome`: `if resp.CaptureRoute { return OutcomeCaptured }`
+
+The adapter's capture hook runs *after* that, at `adapter.go:390`. So when the
+persist fails, the turn has already been counted `outcome="captured"` with
+`status="saved_as_idea"`, and `honestCaptureFallbackFailure` — which sets
+`Status: StatusAnswered` and leaves `ErrorCause` empty — does not revise it.
+A dashboard reading `smackerel_assistant_facade_turns_total` cannot see
+capture-persist failures at all.
+
+What the fix *did* improve: before it, `CaptureFn` had no error return, so the
+failure could not be propagated anywhere. The fix added the error channel and an
+`slog.Error("assistant capture-fallback persist failed", "chat_id", …, "error", …)`
+at `bot.go:821`. So an operator does now get an Error-level line — the gap is
+that the turn-level metric and the structured `assistant_turn` line still
+disagree with it.
+
+This is a genuine tension with the repo's own stated invariant that
+refusal-vs-answer distinguishability is *structural* (`Status` / `ErrorCause`),
+not prose. The prose is honest here; the structure is not yet. Closing it means
+either a dedicated counter on the capture-fallback path or moving the outcome
+emission after the transport's capture hook — both design changes outside this
+packet. Routed to `bubbles.plan`.
+
+### OBSERVATION 3 — local dev stack drift, unrelated to this packet {#stabilize-obs-3}
+
+Verified read-only this phase; **not** caused by this bug's code and **not**
+attributable to it. Nothing was restarted or repaired — other suites may be
+using Docker, and repairing it is not this phase's job.
+
+```text
+=== containers in compose project 'smackerel' (dev) ===
+NAMES                        STATUS                          IMAGE
+smackerel-smackerel-core-1   Restarting (1) 38 seconds ago   8ffc393f62e1
+smackerel-smackerel-ml-1     Up 9 hours (unhealthy)          91ebb230fcd2
+smackerel-postgres-1         Up 9 hours (healthy)            pgvector/pgvector:pg16
+smackerel-nats-1             Up 9 hours (healthy)            nats:2.10-alpine
+smackerel-searxng-1          Up 9 hours (healthy)            searxng/searxng:2026.5.30-bd863f16b
+
+=== core container: restart count / exit code / attached networks ===
+name=/smackerel-smackerel-core-1 restarts=569 running=true exit=1 networks=0 names=
+
+=== postgres container: attached networks + aliases ===
+name=/smackerel-postgres-1 running=true networks=smackerel_default(aliases=[smackerel-postgres-1 postgres])
+```
+
+```text
+=== dev core container logs, last 90s (read-only) ===
+{"level":"INFO","msg":"starting smackerel-core","port":"8080","version":"dev","commit":"f9bf9d41b6cb"}
+{"level":"ERROR","msg":"fatal startup error","error":"database connection: ping database: failed to connect to
+ `user=smackerel database=smackerel`: hostname resolving error: lookup postgres … network is unreachable"}
+```
+
+`networks=0` is the whole explanation: the dev core container has **no Docker
+network attached**, while `postgres` is reachable only via the alias `postgres`
+on `smackerel_default`. With no network attached, the name falls through to a
+host-level resolver that is unreachable from inside the container. Consistent
+with a network prune having detached an already-restarting container. Repair is
+a `down`/`up` of the dev project once no suite is running.
+
+Worth stating positively: the application's response to this drift is *correct*.
+It logs `fatal startup error` at ERROR and exits 1 rather than starting degraded
+or silently falling back to a default DSN — which is the fail-loud posture the
+repo requires.
+
+### Verdict {#stabilize-verdict}
+
+🟢 **STABLE — for the surface this packet changed.**
+
+Across all four axes the changed code is clean, and its central property is
+structural rather than incidental: the duplicate acknowledgement was fixed by
+*removing a sink*, so there is no acknowledgement state for concurrent turns to
+race on. No goroutine, timer, buffer, retry or configuration value was added.
+
+The verdict is scoped deliberately. Two real defects were found *next to* the
+changed code — neither introduced by this fix, neither inside its three-file
+surface — and they are recorded as observations with owners rather than folded
+into this packet's verdict. Calling this packet `UNSTABLE` on their account would
+misroute a fix cycle onto code that is not at fault; leaving them unrecorded
+would waste the one review that actually found them.
+
+Nothing was fixed inline. No DoD item was checked — the four that remain
+unchecked are unchecked for reasons this phase did not change (three skipped e2e
+tests, and operator-observable Telegram turns). `scopes.md` and
+`uservalidation.md` were not touched.
+
+### Phase recording {#stabilize-phase-recording}
+
+Recorded in the fields the guard reads: top-level `completedPhases[]`,
+`execution.completedPhaseClaims[]`, `execution.executionHistory[]`.
+`execution.completedPhases` was again NOT used (silent no-op).
+
+`certification.certifiedCompletedPhases` was NOT written. `bubbles.stabilize` is
+a diagnostic agent with no certifying authority and `bubbles.validate` has still
+not run; the existing `certifiedCompletedPhasesNote` is preserved verbatim.
