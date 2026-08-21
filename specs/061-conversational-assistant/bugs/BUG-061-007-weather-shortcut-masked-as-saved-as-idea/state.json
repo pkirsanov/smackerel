@@ -47,7 +47,8 @@
     "test",
     "devops",
     "regression",
-    "simplify"
+    "simplify",
+    "stabilize"
   ],
   "execution": {
     "completedPhaseClaims": [
@@ -87,6 +88,26 @@
           "certification.pendingGates still contains a G022 entry asserting that no execution.completedPhaseClaims record exists for any phase. That sentence was already stale for the regression phase and is now additionally stale for simplify. It was deliberately left unedited: certification.* is owned by bubbles.validate, the sole certifying authority. Four specialist phases (stabilize, security, audit, validate) genuinely remain unexecuted."
         ],
         "verdict": "SIMPLIFIED (1 finding accepted + fixed, 1 declined, 1 recorded; no production change)"
+      },
+      {
+        "phase": "stabilize",
+        "agent": "bubbles.stabilize",
+        "claimedAt": "2026-08-21T06:41:18Z",
+        "evidenceRef": "report.md#stabilize-phase",
+        "repositoryBindingDecisionId": "rb:vscode-6af2178e10192363b0e52a46fb5e0950:37",
+        "headAtClaim": "da77b9c1",
+        "summary": "Stability and reliability review of the four-file fix surface of 2f35e26f (facade Step 3.9 guard at facade.go:1006 + handleWeatherShortcut with rendering at :1498/:1508, the weather.LookupForecast extraction, the cmd/core seam wiring, and the 3 adversarial tests), extended to every collaborator the new fast path reaches at runtime: the weather LRU cache, the open-meteo provider, the skills wiring that constructs the HTTP client, and the LateBoundHandler that publishes the facade to request goroutines. All four requested domains came back CLEAN. Goroutine/lifecycle: a whole-file scan of facade.go for `go func`/`go ident(`/time.After/time.NewTicker/time.NewTimer returns ZERO matches, so no goroutine or timer can leak per turn; handleWeatherShortcut is straight-line, holds no lock and registers no cleanup; the path returns before Step 4 so it starts NO span, and zero started is trivially zero leaked. Concurrency: the premise is real (one goroutine per HTTP request into one shared *Facade, and wireAssistantFacade runs in a background goroutine while the listener already accepts POST /api/assistant/turn per cmd/core/main.go:541,564), and the seam is nonetheless safe on four counts — weatherLookup is write-once (sole write facade.go:335, sole caller wiring:241, all 7 references enumerated); the wired closure captures nothing mutable (package-level LookupForecast + the constant WindowNow); the plain write is PUBLISHED through a synchronizing operation because it is sequenced before SetAdapter at wiring:409, which is h.adapter.Store over atomic.Pointer[HTTPAdapter] (late_binding.go:33,42) whose matching Load in ServeHTTP establishes happens-before, with LateBoundHandler fail-closed at 503 before that store; and the state behind the seam is already guarded (services by servicesMu sync.RWMutex, the LRU by mu sync.Mutex across Get/Put/Len). Resource usage: bounded at ~4s per cold-cache turn by http.Client{Timeout: 2s} over two sequential round trips, with NO retry construct in the package and a 128-entry TTL cache; the client timeout spans the body read, so the unbounded-looking json.NewDecoder(resp.Body).Decode cannot be held open. The tool's PerCallTimeoutMs: 8000 does NOT apply to the fast path (it belongs to the bypassed tool-call loop) and does not need to — the 2s transport bound is strictly tighter and governs both paths. Config/deployment: a disabled or misconfigured skill yields weather_tools_not_configured, rendered as StatusUnavailable + provider_unavailable + an honest 'couldn't get the weather' line and NEVER StatusSavedAsIdea, so the masking this bug removed stays removed on the config-failure branch too. Cause-token conflation between permanent misconfiguration and transient outage was checked before being written up and is FORCED by the 8-member closed vocabulary in contracts/response.go:194-229 (no config-missing token exists; internal_error would be actively wrong), so it was deliberately NOT recorded as a finding. Zero stability defects attributable to this fix; two non-blocking follow-ups recorded rather than escalated. Zero production and zero test files changed.",
+        "scopeOfClaim": "Static stability review of the 4 fix-surface files plus 4 runtime collaborators (cache.go, open_meteo.go, wiring_assistant_skills.go, late_binding.go) across goroutine/lifecycle, concurrency, resource-boundedness and config/deployment-honesty; git-provenance attribution of the adjacent timeout finding; grep-based enumeration of the seam's write sites and test protection. NO code was changed and NO suite was re-run.",
+        "honestLimitations": [
+          "The concurrency verdict is STATIC. It is derived from reading the atomic Store/Load publication barrier, the write-once seam and the existing mutexes against the Go memory model — NOT from a -race execution. The repo CLI exposes no --race selector on `test unit`, and terminal discipline forbids reaching around it with an ad-hoc `go test -race`, so no race detector was run this phase.",
+          "Resource bounds in §3 are READ from the constructed http.Client, the two call sites and the cache constructor. No load or soak run was performed, so behaviour under sustained concurrent /weather traffic is reasoned, not measured.",
+          "F-1 argues that the 2s per-request client bound fires before the 8s tool budget using the comments' OWN stated measurement ('~2s per call'). No live provider turn was executed this phase, so whether upstream currently exceeds 2s was not re-measured against the real endpoint.",
+          "The Go unit and integration suites were NOT re-run. This phase changed zero production and zero test files, so re-running them would re-measure an unchanged tree; the prior exit-0 results are CITED per the phase brief, not re-claimed as fresh measurements of this pass.",
+          "F-2 is a design property of THIS fix (an optional nil-safe seam with no wiring-level guard), not an adjacent defect. It was recorded rather than escalated to UNSTABLE because the wiring is present and unconditional today and mutation M1 was killed by all 3 tests — marking the packet unstable would route a fix cycle onto code that works. That is a routing judgement, and it is stated as one.",
+          "SMACKEREL_SKIP_HOST_PREFLIGHT=1 was NOT used this phase (no command required the disk-preflight guard; only git, grep and file reads ran, building no image). Recorded so its absence reads as a true negative rather than an omission. disk-preflight.sh would still refuse on this host (~34 GB free vs a 40 GB threshold) if a build command were run.",
+          "certification.pendingGates still carries the G022 sentence asserting that no execution.completedPhaseClaims record exists for any phase — already stale for regression and simplify, and now additionally stale for stabilize. Left unedited on purpose: certification.* is owned by bubbles.validate. Three specialist phases (security, audit, validate) genuinely remain unexecuted."
+        ],
+        "verdict": "STABLE (0 stability defects in the changed surface; 2 non-blocking follow-ups routed, 1 observation; no fix cycle needed)"
       }
     ],
     "executionHistory": [
@@ -162,6 +183,96 @@
           "uservalidation.md — G136: no checklist item checked, no '## Human Acceptance Record' authored",
           "scopes.md — the one unchecked DoD item (operator-observable live bot turn) remains unchecked; no 'Regression E2E' text was written on any unit/integration Test Plan row (planning-checks.sh:72 text-matches it and would green a gate while misdescribing the category)",
           "spec.md / design.md — no design or planning change was implied by this pass; S-3 is routed to bubbles.plan as a follow-up rather than authored here"
+        ]
+      },
+      {
+        "startedAt": "2026-08-21T06:29:05Z",
+        "completedAt": "2026-08-21T06:41:18Z",
+        "agent": "bubbles.stabilize",
+        "phasesExecuted": [
+          "stabilize"
+        ],
+        "outcome": "completed_diagnostic",
+        "headAtRun": "da77b9c1",
+        "repositoryBindingDecisionId": "rb:vscode-6af2178e10192363b0e52a46fb5e0950:37",
+        "commandsExecuted": [
+          {
+            "command": "repository-binding-host-context.sh --session-log <host-token> --workspace-root <repo-root>",
+            "exitCode": 0,
+            "result": "expectedControlRevision=36; sessionControlFile resolved under /run/user/1000/bubbles"
+          },
+          {
+            "command": "repository-binding.sh preflight --request-class STRUCTURED --repository-root <repo-root>",
+            "exitCode": 0,
+            "result": "PREFLIGHT_COMMITTED revision=37 repository=smackerel actionable=true"
+          },
+          {
+            "command": "git show --stat 2f35e26f",
+            "exitCode": 0,
+            "result": "12 files changed, 754 insertions(+), 7 deletions(-) — fix surface confirmed (4 non-artifact files)"
+          },
+          {
+            "command": "git show 2f35e26f -- internal/agent/tools/weather/tool.go | grep -i percall",
+            "exitCode": 0,
+            "result": "EMPTY — the fix did NOT touch PerCallTimeoutMs; this is the attribution evidence for F-1"
+          },
+          {
+            "command": "git log --oneline -S\"PerCallTimeoutMs: 8000\" -- internal/agent/tools/weather/tool.go",
+            "exitCode": 0,
+            "result": "2084cbf5 fix(weather,telegram): /weather provider_unavailable + bot DNS-race silent disable — the commit that raised the budget 2000->8000"
+          },
+          {
+            "command": "git merge-base --is-ancestor 2084cbf5 2f35e26f",
+            "exitCode": 1,
+            "result": "NOT an ancestor — 2084cbf5 is outside this fix's history, so F-1 is adjacent and not caused by this packet"
+          },
+          {
+            "command": "grep -nE \"go func|go [a-zA-Z_]+\\(|time.After|time.NewTicker|time.NewTimer\" internal/assistant/facade.go",
+            "exitCode": 1,
+            "result": "ZERO matches — no goroutine or timer exists anywhere in the facade, so none can leak per turn"
+          },
+          {
+            "command": "grep -n \"sync.|mu.|atomic.|func (h *LateBoundHandler)\" internal/assistant/httpadapter/late_binding.go",
+            "exitCode": 0,
+            "result": "adapter atomic.Pointer[HTTPAdapter] at :33; SetAdapter = h.adapter.Store(a) at :42 — the happens-before publication barrier for the seam write"
+          },
+          {
+            "command": "grep -n \"sync.|func (c *Cache)\" internal/agent/tools/weather/cache.go",
+            "exitCode": 0,
+            "result": "mu sync.Mutex at :24, held across Get :70, Put :95, Len :118 — the LRU behind the seam is synchronized"
+          },
+          {
+            "command": "grep -rn \"WithWeatherLookup\" --include='*_test.go' .",
+            "exitCode": 0,
+            "result": "single hit at facade_weather_shortcut_test.go:71 — NO wiring-level guard test; this is the evidence for F-2"
+          },
+          {
+            "command": "grep -rn \"Err[A-Za-z]* ErrorCause = \" internal/assistant/contracts/*.go",
+            "exitCode": 0,
+            "result": "8-member closed vocabulary (response.go:194-229); no config-missing token — cause conflation is forced, so it was NOT recorded as a finding"
+          }
+        ],
+        "filesChanged": [],
+        "notRun": [
+          "A -race execution. The repo CLI exposes no --race selector on `test unit` and terminal discipline forbids an ad-hoc `go test -race`; the concurrency verdict is STATIC and labelled as such wherever it appears.",
+          "Any load or soak run — the resource bounds are read from the constructed http.Client, the two provider call sites and the cache constructor, not measured under sustained concurrent /weather traffic.",
+          "A live provider turn to re-measure whether upstream currently exceeds the 2s per-request client bound (the F-1 concern).",
+          "./smackerel.sh test unit --go and test integration — zero production and zero test files changed this phase, so re-running would re-measure an unchanged tree; the prior exit-0 results are cited per the phase brief, not re-claimed.",
+          "docker-safe-prune.sh --apply — deliberately refused; the reclaimable cache is shared with sibling repositories."
+        ],
+        "artifactsWritten": [
+          "report.md#stabilize-phase (new section: surface table, 4 domain verdicts with evidence, F-1 + F-2 follow-ups with owners, 1 observation, command table with real exit codes, not-run list, host-preflight disclosure, verdict block)",
+          "state.json completedPhases[] += stabilize",
+          "state.json execution.completedPhaseClaims[] += stabilize claim",
+          "state.json execution.executionHistory[] += this entry"
+        ],
+        "artifactsDeliberatelyNotWritten": [
+          "certification.certifiedCompletedPhases — remains []; only bubbles.validate may populate it",
+          "certification.pendingGates — foreign-owned; its now triply-stale G022 sentence is reported, not edited",
+          "uservalidation.md — G136: no checklist item checked, no '## Human Acceptance Record' authored",
+          "scopes.md — the one unchecked DoD item (operator-observable live bot turn) remains unchecked; no 'Regression E2E' text was written on any unit/integration Test Plan row",
+          "No production or test source file — this is a diagnostic phase; F-1 is routed to bubbles.implement and F-2 to bubbles.test rather than fixed inline",
+          "No absolute operator home-directory path and no concrete deployment-target name appears in any artifact written this phase; binding commands are recorded with <repo-root> and <host-token> placeholders"
         ]
       }
     ]

@@ -711,3 +711,268 @@ Deliberately not written: certification.certifiedCompletedPhases (bubbles.valida
   certification.pendingGates (foreign-owned; its stale G022 sentence is reported, not edited);
   uservalidation.md (G136); the unchecked live-stack DoD item
 ```
+
+---
+
+## Stabilize phase (`bubbles.stabilize`) {#stabilize-phase}
+
+**Agent:** `bubbles.stabilize` · **Verdict:** 🟢 STABLE (0 stability defects in the
+changed surface; 2 non-blocking follow-ups routed) · **Production code changed: 0 files**
+
+### Surface reviewed
+
+The four non-artifact files of fix commit `2f35e26f`, read in full, plus every
+collaborator the new fast path reaches at runtime:
+
+| File | Role in the fast path |
+|---|---|
+| `internal/assistant/facade.go` | Step 3.9 guard (`:1006`) + `handleWeatherShortcut` (`:1492`), rendering at `:1498`/`:1508`; seam field `:213`, `WithWeatherLookup` `:333` |
+| `internal/agent/tools/weather/tool.go` | `LookupForecast` (extracted by the fix), `loadServices`, `servicesMu`, tool registration |
+| `cmd/core/wiring_assistant_facade.go` | seam wiring (`:241`), adapter publication (`:409`) |
+| `internal/agent/tools/weather/cache.go` | in-process LRU reached on every lookup |
+| `internal/agent/tools/weather/open_meteo.go` | the two upstream round trips |
+| `cmd/core/wiring_assistant_skills.go` | provider + HTTP client + cache construction |
+| `internal/assistant/httpadapter/late_binding.go` | the publication barrier between wiring and request goroutines |
+
+### 1. Goroutine / lifecycle — CLEAN
+
+The fast path starts nothing that needs stopping. A whole-file scan of
+`facade.go` for `go func` / `go <ident>(` / `time.After` / `time.NewTicker` /
+`time.NewTimer` returns **zero matches**, so there is no goroutine or timer to
+leak per turn anywhere in the facade, let alone on this path.
+
+`handleWeatherShortcut` is a straight-line function: it trims the location,
+calls the seam, unmarshals into a local struct, and returns a value. It opens
+no store, holds no lock, registers no cleanup, and allocates nothing that
+outlives the return.
+
+On spans specifically: the fast path returns at `facade.go:1010` **before**
+Step 4, so it never reaches `routeWithSpan` / `borderlineWithSpan` and creates
+no span at all. A span leak requires a span that is started and never ended;
+zero started is trivially zero leaked. (That the path is consequently
+un-traced is an observability gap, recorded as an observation below — it is
+not a leak and not a stability defect.)
+
+### 2. Concurrency — CLEAN, and the verdict is **STATIC**
+
+The premise in the review brief is correct and load-bearing: the assistant HTTP
+ingress runs one goroutine per request into one shared `*Facade`, and
+`wireAssistantFacade` runs in a **background goroutine while the listener is
+already accepting** `POST /api/assistant/turn`
+(`cmd/core/main.go:541,564`, `runAssistantFacadeWiringWithRetry`). So the
+question of whether a request goroutine can observe a half-wired `Facade` is
+real, not hypothetical. Four sub-checks:
+
+**(a) `weatherLookup` is write-once at construction.** The only write site in
+the repository is `facade.go:335` inside `WithWeatherLookup`, and the only
+caller is `wiring_assistant_facade.go:241`, executed once. Confirmed by
+enumerating all 7 references to the identifier. No turn-time write exists.
+
+**(b) The closure captures nothing mutable.** The wired value is
+`func(ctx, location) { return weather.LookupForecast(ctx, location, weather.WindowNow) }`
+— a package-level function and a package-level constant. There is no captured
+variable, so there is no per-turn shared cell to race on.
+
+**(c) The write is published through a synchronizing operation.** This is the
+part that actually makes (a) safe rather than merely plausible. In the wiring
+goroutine, the plain write at `facade.go:335` is sequenced before
+`svc.assistantHTTPHandler.SetAdapter(adapter)` at
+`wiring_assistant_facade.go:409`. `SetAdapter` is
+`h.adapter.Store(a)` over `adapter atomic.Pointer[HTTPAdapter]`
+(`late_binding.go:33,42`), and `ServeHTTP` reads it back with the matching
+`Load`. Under the Go memory model an atomic `Store` observed by an atomic
+`Load` establishes happens-before, so any request goroutine that reaches the
+adapter at all is guaranteed to observe the fully-wired `weatherLookup`. Before
+that store, `LateBoundHandler` is fail-closed (503), so there is no window in
+which a turn sees a nil seam that "should" have been set. The Telegram adapter
+is wired at `:256`, also after `:241`, in the same goroutine, and a `go`
+statement is itself a happens-before edge.
+
+**(d) Shared state behind the seam is synchronized.** `weather.services` is
+guarded by `servicesMu sync.RWMutex` and read only through `loadServices()`
+(`tool.go:126-128,146-149`). The LRU is guarded by `mu sync.Mutex` held across
+`Get`, `Put` and `Len` (`cache.go:24,70,95,118`). `handleWeatherShortcut`
+writes no `Facade` field. The fast path therefore adds a second concurrent
+*caller* of an already-synchronized cache, not a new unsynchronized one.
+
+**Honest limitation — this verdict is STATIC.** It is derived from reading the
+code and the memory-model rules above, not from a `-race` execution. The repo
+CLI exposes no `--race` selector on `test unit`, and terminal discipline
+forbids reaching around it with an ad-hoc `go test -race`. No race detector was
+run this phase; that is stated plainly rather than implied away.
+
+### 3. Resource usage — BOUNDED
+
+| Bound | Value | Source |
+|---|---|---|
+| Per upstream HTTP request | `2 * time.Second` | `wiring_assistant_skills.go:148-149` — `&http.Client{Timeout: 2 * time.Second}` |
+| Requests per lookup | 2, sequential (geocode → forecast) | `open_meteo.go:227-231`, `:300-304` |
+| Effective ceiling per cold-cache turn | ≈ 4 s | the two bounds above |
+| Retries | **none** | no retry/backoff construct exists in the weather package |
+| Cache size | 128 entries + TTL | `wiring_assistant_skills.go` `cacheCapacity = 128`, `NewCache(ttl, 128)` |
+
+`http.Client.Timeout` spans connection, redirects and **body read**, so the
+unbounded-looking `json.NewDecoder(resp.Body).Decode(&f)` (`open_meteo.go:240`,
+`:313`) cannot be held open by a slow or endless body — it is cut at 2 s. There
+is no unbounded retry, no per-turn allocation that survives the turn, and the
+cache is capacity-bounded, so repeated `/weather` traffic cannot grow memory
+without limit.
+
+Worth stating precisely, because it is easy to misread as a defect: the tool's
+`PerCallTimeoutMs: 8000` is a property of the **registered agent tool**, applied
+by the tool-call loop, and the fast path deliberately bypasses that loop — so
+that budget does **not** apply here. It does not need to: the transport-layer
+2 s client timeout is strictly tighter and is what actually bounds both paths.
+The fast path is therefore bounded by the same mechanism as the tool path, not
+by a weaker one.
+
+### 4. Config / deployment reliability — HONEST, fails loud to the user
+
+Two distinct degraded states, both checked:
+
+**Weather skill disabled or misconfigured.** `wireWeatherSkillServices` returns
+early when `WeatherEnabled=false` without calling `SetServices`, so
+`loadServices()` returns `weather_tools_not_configured`
+(`tool.go:146-158`). `LookupForecast` propagates it, and
+`handleWeatherShortcut` renders `Status=StatusUnavailable`,
+`ErrorCause=ErrProviderUnavailable`, body "couldn't get the weather for
+`<location>` right now — please try again." That is the honest outcome: the
+user is told weather is unavailable and is **never** told the question was
+saved as an idea. This is exactly the masking the bug removed, and it holds on
+the config-failure branch too, not just the provider-failure branch.
+
+**Cause-token conflation is forced, not sloppy — non-finding.** A permanent
+misconfiguration and a transient upstream outage both surface as
+`provider_unavailable`. I checked whether a better token exists before writing
+this up: the closed vocabulary in `contracts/response.go:194-229` is
+`""`, `provider_unavailable`, `missing_scope`, `slot_missing`,
+`internal_error`, `no_match`, `model_not_switchable`, `no_grounded_answer`.
+There is no config-missing member, and `internal_error` would be actively
+wrong (a disabled skill is an intended state, not an internal failure). So
+`provider_unavailable` is the most honest available token. **Not recorded as a
+finding.**
+
+**Unwired seam.** `f.weatherLookup == nil` skips Step 3.9 and falls through to
+the LLM tool-call path — i.e. the documented, backward-compatible pre-fix
+behavior. In production the seam is wired unconditionally (not behind any SST
+flag), and per §2(c) no turn can observe it unset, so there is no runtime
+silent-degradation path today. The durability of that guarantee is the subject
+of follow-up F-2.
+
+### Findings
+
+**Zero stability defects attributable to `2f35e26f` across all four domains.**
+The two items below are recorded rather than fixed, and neither makes this
+packet unstable.
+
+**F-1 — ADJACENT (not caused by this fix): the raised tool budget cannot be
+consumed, and its wiring comment is now factually wrong.**
+`PerCallTimeoutMs` was raised `2000 → 8000` by commit `2084cbf5`
+("fix(weather,telegram): /weather provider_unavailable + bot DNS-race silent
+disable"). Provenance was checked before attributing it: `git show 2f35e26f --
+internal/agent/tools/weather/tool.go` contains **no** `PerCallTimeoutMs` hunk,
+and `git merge-base --is-ancestor 2084cbf5 2f35e26f` reports **not an
+ancestor**, so that change is not in this fix's history at all. The comment
+above the client construction (`wiring_assistant_skills.go:135-136`, written
+by `0f36093f`) still asserts the client timeout "matches the tool's
+PerCallTimeoutMs budget (2s, see …tool.go init())" — that sentence is now
+false. Runtime arithmetic remains coherent (2 × 2 s = 4 s < 8 s), so nothing is
+broken today; but `tool.go`'s stated rationale — "8s gives ~2x headroom over
+the observed worst case" of "~2s per call" — is not achieved for a *single*
+slow call, because the tighter 2 s per-request client bound fires first and
+still yields `provider_error`. That is the very symptom `2084cbf5` set out to
+eliminate. Owner: `bubbles.implement`. Severity: medium (stale doc + partially
+ineffective remediation on an adjacent commit). Not this packet's defect and
+explicitly **not** grounds for a fix cycle here.
+
+**F-2 — DURABILITY (design property of this fix, not an instability): seam
+removal is not test-protected.** `WithWeatherLookup` is nil-safe by *ignoring*
+nil (`facade.go:334`), and the seam is optional by design. Deleting
+`facade.WithWeatherLookup(...)` from `wireAssistantFacade` would compile
+cleanly and leave all three fast-path unit tests **green**, because those tests
+call `WithWeatherLookup(lookup)` directly on a locally constructed facade
+(`facade_weather_shortcut_test.go:71`). A repo-wide grep confirms that is the
+only `_test.go` reference to the identifier: there is **no** wiring-level
+assertion that production actually installs the seam. The consequence is that
+the pre-fix "saved as an idea" behavior could be silently restored in
+production by a one-line deletion with a fully green suite. This is a
+regression-durability gap, not a runtime defect — the wiring is present and
+unconditional today, and mutation M1 was killed by all three tests. Recording
+it rather than escalating: marking the packet UNSTABLE would route a fix cycle
+onto code that works. Owner: `bubbles.test` (add a wiring-level guard), with
+`bubbles.plan` if it warrants a DoD row.
+
+**Observation (no owner, no action requested):** the fast path emits no OTel
+span and no dedicated counter, so `/weather` shortcut turns are invisible in
+the assistant's per-turn tracing that Step 4+ turns produce. It is audited
+(`writeAudit(..., BandHigh, ...)` at `facade.go:1008`) and persisted, so it is
+not unobservable — only less observable than the path it replaces.
+
+### Commands executed (this phase)
+
+| Command | Exit | Result |
+|---|---|---|
+| `repository-binding-host-context.sh --session-log <host-token> --workspace-root <repo-root>` | 0 | `expectedControlRevision=36`; control file under `/run/user/1000/bubbles` |
+| `repository-binding.sh preflight --request-class STRUCTURED --repository-root <repo-root>` | 0 | `PREFLIGHT_COMMITTED revision=37 repository=smackerel actionable=true` |
+| `git show --stat 2f35e26f` | 0 | 12 files / 754 insertions — fix surface confirmed (4 non-artifact files) |
+| `git show 2f35e26f -- internal/agent/tools/weather/tool.go \| grep -i percall` | 0 | **empty** — fix did not touch `PerCallTimeoutMs` (F-1 attribution) |
+| `git log -S"PerCallTimeoutMs: 8000" -- …/weather/tool.go` | 0 | `2084cbf5` — the commit that raised the budget |
+| `git merge-base --is-ancestor 2084cbf5 2f35e26f` | 1 | not an ancestor — `2084cbf5` is outside this fix's history |
+| `grep -nE "go func\|go [a-zA-Z_]+\(\|time.After\|time.NewTicker\|time.NewTimer" internal/assistant/facade.go` | 1 | **zero matches** — no goroutine/timer anywhere in the facade |
+| `grep -n "sync.\|mu.\|atomic." internal/assistant/httpadapter/late_binding.go` | 0 | `atomic.Pointer[HTTPAdapter]`, `Store` at `:42` — the publication barrier |
+| `grep -n "sync.\|func (c *Cache)" internal/agent/tools/weather/cache.go` | 0 | `mu sync.Mutex` held in `Get`/`Put`/`Len` |
+| `grep -rn "WithWeatherLookup" --include='*_test.go' .` | 0 | single hit in the unit test; **no** wiring-level guard (F-2) |
+| `grep -rn "Err… ErrorCause = " internal/assistant/contracts/*.go` | 0 | 8-member closed vocabulary; no config-missing token (cause conflation is forced) |
+
+**Reused, not re-run** (cited per the phase brief, measured earlier this
+packet): `test unit --go` exit 0; `test integration` exit 0; `artifact-lint`
+exit 0; mutation M1 killed by all 3 fast-path tests with a byte-identical
+restore.
+
+### Not run — stated, not implied
+
+- **No `-race` execution.** The repo CLI exposes no `--race` selector, and
+  terminal discipline forbids an ad-hoc `go test -race` around it. The §2
+  concurrency verdict is STATIC, derived from the atomic publication barrier
+  and the write-once seam, and is labelled as such wherever it appears.
+- **No load or soak run.** The resource bounds in §3 are read from the
+  constructed `http.Client`, the two call sites and the cache constructor; they
+  are not measured under sustained concurrent `/weather` traffic.
+- **No re-run of the Go or integration suites.** This phase changed zero
+  production and zero test files, so re-running them would re-measure an
+  unchanged tree. The prior exit-0 results are cited, not re-claimed as fresh.
+- **No live provider turn.** Whether upstream currently exceeds the 2 s
+  per-request bound (the F-1 concern) was not measured against the real
+  endpoint; F-1 is argued from the comments' own stated measurements, not from
+  a new one.
+- **`docker-safe-prune.sh --apply` deliberately not run** — the reclaimable
+  cache is shared with sibling repositories.
+
+### Host preflight disclosure
+
+No command in this phase required the disk-preflight guard: the phase ran only
+`git`, `grep` and file reads, and built no image. `SMACKEREL_SKIP_HOST_PREFLIGHT=1`
+was therefore **not** used this phase. (It was used in the preceding simplify
+phase and is disclosed at `#simplify-verification`.) Recorded so its absence
+here reads as a true negative rather than an omission.
+
+### Verdict
+
+```
+🟢 STABLE
+
+Domains audited: goroutine/lifecycle, concurrency, resource usage,
+                 config/deployment reliability
+Stability defects in the changed surface: 0
+Follow-ups recorded (non-blocking): 2
+  F-1 adjacent  — timeout-budget incoherence + stale comment, owner bubbles.implement,
+                  attributable to 2084cbf5 (proved not an ancestor of 2f35e26f)
+  F-2 durability— seam removal not test-protected, owner bubbles.test
+Observations: 1 (fast path emits no span/counter; audited, so not unobservable)
+Production code changed: 0 files
+Fix cycle needed: NO
+
+Concurrency verdict is STATIC (no race detector was run; the CLI exposes no
+--race selector and terminal discipline was not breached to obtain one).
+```
+
