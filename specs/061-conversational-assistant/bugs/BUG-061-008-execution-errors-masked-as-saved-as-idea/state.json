@@ -9,7 +9,7 @@
   "owner": "bubbles.goal",
   "discoveredBy": "operator (recurring pattern after per-scenario fixes)",
   "discoveredAt": "2026-07-22",
-  "lastUpdatedAt": "2026-07-23",
+  "lastUpdatedAt": "2026-08-21",
   "rootCause": {
     "summary": "The facade high-band path runs the provenance gate unconditionally when a requires_provenance scenario has no sources, regardless of outcome. For a non-OK execution outcome (provider-error/timeout/no-tool-call/schema-failure) the gate rewrites Status to StatusSavedAsIdea + CaptureRoute=true, and canonicalizeSuccessfulCaptureResponse then clears ErrorCause and forces Body='saved as an idea'. A real failure is laundered into a benign capture, invisible to users and alerting. The gate's purpose (anti-fabrication) is only meaningful for an OK outcome that produced a body without valid sources."
   },
@@ -59,6 +59,13 @@
   "certification": {
     "status": "in_progress",
     "achievedAssuranceLevel": "deployed-and-infra-verified",
+    "certifiedCompletedPhases": [],
+    "certifiedCompletedPhasesNote": "EMPTY BY CONSTRUCTION, not by oversight. bubbles.validate is the sole certifying authority for this packet and has not run against it, so there is nothing this pass may legitimately certify. The six entries in the top-level completedPhases array (select, bootstrap, implement, test, docs, devops) record phases that were EXECUTED; certifying a phase is a separate act that requires bubbles.validate to have verified its evidence. Copying completedPhases into this array would assert a certification that never happened, which is the exact false-green this repair pass exists to remove. The planning pass that added this field deliberately left it empty rather than seed it. Whoever runs bubbles.validate against this packet may populate it then, phase by phase, against the report.md evidence sections each phase carries.",
+    "lockdownState": {
+      "round": 0,
+      "lastCleanRound": null,
+      "note": "No lockdown round has run. This packet's residual findings are not agent-remediable defects in the delivered code: the single unchecked human-acceptance item is operator-owned (G136), the live behavioral confirmation needs an operator turn on the messaging transport, and the scenario-level end-to-end coverage gap (D-3 in report.md) needs an assistant e2e harness change outside this bug's six-file fix surface. Opening a lockdown round would point a fix cycle at code that is not at fault."
+    },
     "scopeProgress": { "total": 5, "done": 5, "inProgress": 0, "notStarted": 0, "blocked": 0 },
     "gatesPassed": [
       "implement P1-P5",
@@ -69,7 +76,12 @@
       "deploy via knb-owned Smackerel adapter (local-operator promote/apply): cosign release-proof verified; core+ml recreated; running digests match the P1-P5 build and are healthy (0 restarts); Telegram assistant adapter wired and bound"
     ],
     "pendingGates": [
-      "operator live Telegram behavioral smoke test (human turn): a failed scenario execution surfaces an honest error, never 'saved as an idea'"
+      "operator live behavioral smoke test on the messaging transport (human turn): a failed scenario execution surfaces an honest error, never 'saved as an idea'",
+      "G022 \u2014 the specialist phases (regression, simplify, stabilize, security, audit, validate) have NOT executed for this packet. No execution.completedPhaseClaims or execution.executionHistory record exists for any of them, which is also why certification.certifiedCompletedPhases is empty. Owner: the workflow orchestrator dispatching each specialist in turn, bubbles.validate last as the sole certifying authority.",
+      "G136 \u2014 human acceptance is operator-owned. uservalidation.md ships its LIVE item unchecked and carries no '## Human Acceptance Record'; only the operator may check that item and author that section. G136 remaining open is CORRECT, not a defect.",
+      "Scenario-level end-to-end coverage does not exist for SCN-061-008-01/02/03. scenario-manifest.json declares requiredTestType 'unit' for all four scenarios and the unit binding satisfies that contract (see report.md 'Scenario binding evidence'), but no e2e-api/e2e-ui test drives them against a provider-enabled assistant stack. The Test Plan row asserting end-to-end regression coverage was deliberately NOT written: planning-checks.sh:72 text-matches that phrase in any table row, so adding it to a unit-category row would turn the gate green while misdescribing the category. Owner: the assistant e2e harness owner \u2014 outside this bug's six-file fix surface. Recorded as D-3 in report.md.",
+      "Traceability (D-2) \u2014 deployment.sourceSha '19fe72c8' is an orphaned object: not an ancestor of HEAD, contained by no branch. The commit of record is '44dc0c94' and the two trees are byte-identical (3481978a...), so the running binary corresponds to the code on main and the defect is traceability only. Left as measured rather than rewritten, because tree equivalence is provable but which object the build host consumed is not. See report.md#code-diff-orphaned-sha.",
+      "Stale transcript (D-1) \u2014 the '## P2 evidence' block quotes two test names that BUG-061-009 renamed. The transcript is left unaltered because editing a recorded run's output would fabricate evidence; current binding is recorded separately under 'Scenario binding evidence'. Owner: bubbles.regression."
     ]
   },
   "nextRequiredOwner": "operator (live Telegram behavioral smoke test — a human turn; the P1-P5 fix is deployed + running + healthy + adapter-bound on <deploy-host>, so the honest-error code path is already live)",

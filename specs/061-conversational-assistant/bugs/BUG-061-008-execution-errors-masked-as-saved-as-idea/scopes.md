@@ -21,13 +21,16 @@ Scenario: SCN-061-008-02 — timeout surfaces honestly, never "saved as an idea"
 Scenario: SCN-061-008-03 — OK + no sources still refuses (fabrication guard preserved)
 ```
 
-### Implementation
+### Implementation Files
 - `internal/assistant/facade.go`: gate `enforceProvenanceWithSpan` on
   `result != nil && result.Outcome == agent.OutcomeOK`; upgrade `translateFinalToBody`'s
   provider-error/timeout body to a friendly truthful line.
 - `internal/assistant/facade_weather_integration_test.go`: update `BS006` to assert the
   honest error contract (`StatusUnavailable`, `ErrProviderUnavailable`, `CaptureRoute=false`,
   no capture body).
+
+Paths above are the non-artifact files this scope changed in the commit of record
+`44dc0c94` — see [report.md](report.md) → "Code Diff Evidence" for the per-file delta.
 
 ### Test Plan
 | Test Type | Category | File | Description | Command | Live |
@@ -39,6 +42,9 @@ Scenario: SCN-061-008-03 — OK + no sources still refuses (fabrication guard pr
 - [x] Provenance gate runs only on `OutcomeOK`; non-OK outcomes surface honest `StatusUnavailable` + `ErrorCause`, never the capture acknowledgement. **Claim Source:** executed. Evidence: [report.md](report.md) → "P1 evidence".
 - [x] Friendly truthful provider/timeout body (not a bare token). **Claim Source:** executed. Evidence: [report.md](report.md) → "P1 evidence".
 - [x] `BS006` updated to the honest-error contract; `ProvenanceGateRewritesWhenSourcesMissing` + `AntiFabrication` (OK+no-sources) remain GREEN (fabrication guard intact). **Claim Source:** executed. Evidence: [report.md](report.md) → "P1 evidence".
+- [x] SCN-061-008-01 — a provider error surfaces honestly and is never rendered as "saved as an idea": the reply carries `StatusUnavailable` with a non-empty `ErrorCause`, `CaptureRoute=false`, and a body that is not the capture acknowledgement, so the failure reaches the user and alerting instead of being laundered into a benign capture. **Claim Source:** executed. Evidence: [report.md](report.md) → "Scenario binding evidence".
+- [x] SCN-061-008-02 — a timeout surfaces honestly on exactly the same terms as a provider error and is never rendered as "saved as an idea"; the timeout cause survives to the transport rather than being discarded by the gate. **Claim Source:** executed. Evidence: [report.md](report.md) → "Scenario binding evidence".
+- [x] SCN-061-008-03 — an OK outcome that produced a body with no valid sources still refuses: the anti-fabrication guard is preserved, the uncited body never reaches the user, and the refusal itself reads honestly rather than as a capture. **Claim Source:** executed. Evidence: [report.md](report.md) → "Scenario binding evidence".
 - [x] Build Quality Gate — module compiles + vet clean; zero warnings. **Claim Source:** executed. Evidence: [report.md](report.md) → "P1 evidence".
 
 ---
@@ -54,10 +60,17 @@ Scenario: SCN-061-008-03 — OK + no sources still refuses (fabrication guard pr
 Scenario: SCN-061-008-01/02/03 — every requires_provenance scenario × each error outcome is honest; OK+no-sources still refuses
 ```
 
-### Implementation
+### Implementation Files
 - `internal/assistant/facade_execution_error_honesty_test.go` (new): table over
-  {weather_query, retrieval_qa, recipe_search} × {OutcomeProviderError, OutcomeTimeout} →
+  every `requires_provenance` scenario × {OutcomeProviderError, OutcomeTimeout} →
   assert honest surfacing; plus per-scenario OK+no-sources → assert fabrication guard fires.
+- `internal/assistant/facade_high_band_invariant_coverage_test.go`: closes the sweep set over
+  the scenario SST (`config/assistant/scenarios.yaml`) so the "every scenario" quantifier is
+  proven rather than asserted against a hand-maintained list. Landed with BUG-061-009, which
+  found `open_knowledge` outside the original hardcoded sweep.
+
+Paths above are the non-artifact files backing this scope — see [report.md](report.md) →
+"Code Diff Evidence" for the per-file delta of the commit of record `44dc0c94`.
 
 ### Test Plan
 | Test Type | Category | File | Description | Command | Live |
@@ -67,6 +80,7 @@ Scenario: SCN-061-008-01/02/03 — every requires_provenance scenario × each er
 ### Definition of Done
 - [x] Table-driven invariant test covers all requires_provenance scenarios × {provider-error, timeout} asserting honest surfacing (never `StatusSavedAsIdea`, never capture body, `CaptureRoute=false`). **Claim Source:** executed. Evidence: [report.md](report.md) → "P2 evidence".
 - [x] Complementary OK+no-sources cases assert the fabrication guard still fires (P1 does not over-correct). **Claim Source:** executed. Evidence: [report.md](report.md) → "P2 evidence".
+- [x] SCN-061-008-01/02/03 — the honesty invariant holds for EVERY `requires_provenance` scenario × each error outcome and for OK+no-sources, not only the paths patched by hand; the sweep set is proven closed over the scenario SST, so a scenario added to the manifest cannot silently escape the check and still refuses honestly. **Claim Source:** executed. Evidence: [report.md](report.md) → "Scenario binding evidence".
 - [x] Adversarial — the test FAILS if the P1 guard is reverted (regression-quality-guard PASS). **Claim Source:** executed. Evidence: [report.md](report.md) → "P2 evidence".
 
 ---
@@ -77,7 +91,7 @@ Scenario: SCN-061-008-01/02/03 — every requires_provenance scenario × each er
 
 **Depends on:** Scope 1
 
-### Implementation
+### Implementation Files
 - `internal/assistant/metrics/metrics.go`: add `ExecutionErrorSurfacedTotal{scenario_id, outcome, transport}`.
 - `internal/assistant/facade.go`: increment it in the high-band non-OK branch.
 
@@ -98,8 +112,8 @@ Scenario: SCN-061-008-01/02/03 — every requires_provenance scenario × each er
 
 **Depends on:** none
 
-### Implementation
-- `docs/smackerel.md` (or the assistant design section): document the BUG-061-007
+### Implementation Files
+- `docs/smackerel.md`: document the BUG-061-007
   `WithWeatherLookup` seam as the recommended pattern for explicit slash commands with an
   unambiguous tool argument (dispatch directly; never depend on LLM tool-call reliability).
 
@@ -114,11 +128,11 @@ Scenario: SCN-061-008-01/02/03 — every requires_provenance scenario × each er
 
 **Depends on:** Scope 2
 
-### Implementation
-- Assistant design/docs: add the invariant ("execution errors never rendered as
+### Implementation Files
+- `docs/smackerel.md`: add the invariant ("execution errors never rendered as
   capture/soft-refusal; provenance gate runs only on OK outcomes").
-- `.github/copilot-instructions.md` (or the assistant review checklist): add the review rule,
-  citing the P2 test as mechanical enforcement.
+- `.github/copilot-instructions.md`: add the review rule, citing the P2 test as mechanical
+  enforcement.
 
 ### Definition of Done
 - [x] The invariant is stated in the assistant design/docs. **Claim Source:** executed. Evidence: [report.md](report.md) → "P5 evidence".
