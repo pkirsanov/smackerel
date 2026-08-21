@@ -1329,3 +1329,184 @@ Recorded in the fields the guard reads: top-level `completedPhases[]`,
 `certification.certifiedCompletedPhases` was NOT written. `bubbles.stabilize` is
 a diagnostic agent with no certifying authority and `bubbles.validate` has still
 not run; the existing `certifiedCompletedPhasesNote` is preserved verbatim.
+
+## Security phase — no finding on the changed surface {#security-phase}
+
+Reviewed surface: the three production files commit `5285e77f` changed
+(`internal/telegram/bot.go`, `internal/telegram/assistant_wiring.go`,
+`internal/telegram/assistant_adapter/adapter.go`) plus the one code file the
+later commits changed
+(`tests/integration/assistant/capture_ack_bug061006_integration_test.go`).
+
+This path matters more than its size suggests: `internal/telegram` ingests
+webhook payloads posted from an external network, and the text it forwards is
+attacker-controllable in full.
+
+### Axis 1 — untrusted input reaching capture/persist: CLEAN {#security-input}
+
+The capture payload is built by *structured encoding*, never interpolation:
+`persistTextIdea` → `callCapture` does
+`json.Marshal(map[string]string{"text": text})` and POSTs it with
+`Content-Type: application/json` (bot.go:1145-1152). A targeted scan of the
+three changed files for injection sinks — `exec.Command`, `os/exec`,
+`db.Query`/`db.Exec`, `Sprintf` into SQL verbs, `text/template`, `html/template`,
+`unsafe.` — returned **zero matches** (grep exit 1).
+
+The byte bound was preserved rather than dropped. `maxShareTextLen` truncation
+used to live inside `handleTextCapture`; the fix moved it *down* into the shared
+`persistTextIdea` (bot.go:793-799), so the new silent path inherits it instead of
+bypassing it. `stringutil.TruncateUTF8` walks back to a rune boundary
+(stringutil.go:10-19), so truncation cannot emit a split multi-byte sequence to
+the decoder downstream. `captureIdeaSilent` additionally rejects
+whitespace-only text before any persist (bot.go:814-816), and the webhook ingress
+caps the body at 1 MiB upstream (webhook_handler.go:44, :180).
+
+### Axis 2 — log / PII hygiene: CLEAN {#security-logging}
+
+This is the axis with a real precedent in this repo —
+`BUG-076-001-ml-agent-logs-raw-conversational-content` was a defect of exactly
+this shape — so the new `slog.Error` the fix added at bot.go:821 was checked
+directly rather than assumed.
+
+It logs `chat_id` and `error`. It does **not** log `text`. Scanning every
+`slog.*` call site in the three changed files for `"text"` / `, text` /
+`msg.Text` / `resp.Body` returned **zero matches** (grep exit 1); the full
+34-site inventory carries only metadata (`error`, `chat_id`, `status`,
+`service`, `command`, `bot_name`, `panic`). That satisfies the BUG-076-001
+contract, which permits non-reversible metadata and forbids raw content.
+
+The indirect path was traced too, because "the error object" is where content
+usually leaks. Every error string reachable on this path is a **fixed
+constant**. The one non-constant message the capture API can return —
+`writeError(w, 422, "EXTRACTION_FAILED", err.Error())` (capture.go:137) — is
+produced only on the `req.URL != ""` branch of `processor.go:323`. The assistant
+capture-fallback posts `{"text": …}` with no `url`, and URL-bearing Telegram text
+short-circuits to `handleShareCapture` *before* the adapter is ever reached
+(bot.go:731-734). `EXTRACTION_FAILED` is therefore **unreachable** on the changed
+path, and no user text can enter the logged error.
+
+Logging the raw `chat_id` is this package's established convention, not a
+deviation introduced here: 23 sites across 9 files, including the webhook handler
+itself (webhook_handler.go:260).
+
+### Axis 3 — authN / authZ: no bypass introduced {#security-authz}
+
+The fix modifies none of the gates and sits strictly downstream of all of them:
+
+| Gate | Where | Touched by this fix? |
+|---|---|---|
+| Webhook secret, `subtle.ConstantTimeCompare`, POST-only, 401 on missing *and* mismatch | webhook_handler.go:139-176 | No |
+| Chat allowlist (`b.allowedChats`) | bot.go:469-473 | No |
+| Spec 044 claim binding — unmapped chat dropped before any internal API call | bot.go:487-489 | No |
+| Per-user PASETO bearer minted from the chat id | bot.go:1157 (`setBearerHeader`) | No |
+
+The per-user bearer is preserved with the *same* real chat id:
+`captureIdeaSilent` → `persistTextIdea(ctx, msg.Chat.ID, …)` → `callCapture` →
+`setBearerHeader(req, chatID)`. The refactor also *removed* the previous
+"minimal stub message" reconstruction — the adapter now passes the genuine
+inbound `update.Message` (adapter.go:390) — which is a small integrity
+improvement, not a regression. IDOR detection (Gate G047, Scan 7) and silent-decode
+detection (Gate G048, Scan 8) both reported **0 violations**.
+
+### Axis 4 — error-message leakage to the user: CLEAN, and improved {#security-error-leak}
+
+`honestCaptureFallbackFailure` (adapter.go:413-431) returns one of exactly **two
+constant bodies**. `capErr` is consumed only as a branch predicate
+(`errors.Is(capErr, ErrNothingToCapture)`) and is never interpolated into the
+body, so no DSN, stack frame, internal hostname or upstream status can reach the
+user. That is strictly better than the legacy `captureErrorReply` shape it
+displaces on this path.
+
+Worth noting because it is easy to get wrong: the body renders through the
+`default:` branch of `buildTelegramRendering`, which applies
+`escapeForMode` (render_outbound.go:198-201, :320-324). Under `MarkdownV2` the
+`.` and `—` in both constants are escaped against the full Telegram reserved set
+(render_outbound.go:329-352). Had they not been, Telegram would reject the
+message with a parse error and the user would receive **nothing** on a capture
+failure — i.e. the escaping is what makes the honest line actually arrive.
+
+### Axis 5 — secrets: CLEAN {#security-secrets}
+
+No token, secret, password, bearer or key **value** appears in any of the three
+new test files. The integration test reads `SMACKEREL_AUTH_TOKEN` via
+`os.Getenv` and **fails loud** when it is empty
+(`capture_ack_bug061006_integration_test.go:196-199`) rather than substituting a
+default, which matches the repo's NO-DEFAULTS SST policy. A scan for the token
+being interpolated into any `t.Log`/`t.Errorf`/`t.Fatalf` returned **zero
+matches** (grep exit 1) — the failure message names the variable, never its
+value.
+
+### Gate G034 mechanical floor — RED repo-wide, zero attributable {#security-g034}
+
+`security-gate.sh` exits **1** with 12 findings. All 12 are honest to report and
+none belongs to this packet:
+
+- **Location** — every finding is in `scripts/commands/config.sh` or
+  `scripts/commands/config_secret_rejection_test.sh`. **No BUG-061-006 commit
+  touched either file** (verified across all 15 commits that touch this bug's
+  packet directory).
+- **Composition** — 10 are `__SECRET_PLACEHOLDER__<NAME>__` SST sentinels, which
+  are deliberately *not* secrets; 1 is `…_SECRET_REF="<ENV_VAR_NAME>"`, a name
+  rather than a value; 2 are lines *inside the guard that proves* the SST loader
+  rejects a weak value for the self-hosted target.
+- **The one genuine literal** is a dev/test webhook fixture, introduced
+  2026-05-28 by commit `6f0b80db4` — roughly two months **before** the
+  2026-07-22 fix — and paired with `config_secret_rejection_test.sh`, whose whole
+  purpose is to make the non-dev targets refuse it. Pre-existing and deliberate
+  by design.
+
+Recorded as a repo-level observation, not as a finding against this bug. Marking
+this packet on account of a 2026-05-28 line in a file it never opened would
+misroute a fix cycle.
+
+### Commands run, with exit codes {#security-commands}
+
+| Command | Exit | Result |
+|---|---|---|
+| `./smackerel.sh lint` | **0** | PASS (157 lines, sha256 `3e696fa78898340c…`) |
+| `bash .github/bubbles/scripts/implementation-reality-scan.sh <packet> --verbose` | **0** | 5 files, **0 violations**, 1 artifact-hygiene warning (sha256 `4e7b701bb2e96e37…`) |
+| `bash .github/bubbles/scripts/security-gate.sh --repo-root <repo>` | **1** | 12 findings, **0 attributable to the reviewed surface** (see above) |
+| injection-sink grep over the 3 changed files | **1** | zero matches = clean |
+| raw-text-logging grep over the 3 changed files | **1** | zero matches = clean |
+| secret-literal grep over the 3 new test files | — | env-var *names* only; no values |
+| token-print grep over the integration test | **1** | zero matches = value never printed |
+
+The 1 warning from the reality scan is `scopes.md` not referencing the
+implementation files directly (design.md fallback was used). That is an
+artifact-hygiene concern owned by `bubbles.plan`, not a security finding.
+
+### Two informational notes, deliberately not raised as findings {#security-informational}
+
+1. **`captureIdeaSilent` dereferences `msg.Chat.ID`** while `NewBotCaptureFn`
+   guards only `msg == nil`, not `msg.Chat == nil`. Not reachable: the sole route
+   to `HandleUpdate` with a non-nil `Message` is `handleMessage`, which returns
+   early on `msg.Chat == nil` (bot.go:462-465), and dispatch is panic-guarded.
+   The pre-fix code contained the identical dereference, so this is neither new
+   nor a regression — defense-in-depth only.
+2. **The dev webhook fixture** described under G034 above.
+
+Neither is invented into a severity it does not have.
+
+### Verdict {#security-verdict}
+
+🔒 **SECURE — for the surface this packet changed.**
+
+Zero security findings across all five focus axes. The two mechanical gates that
+scope to this packet (`lint`, `implementation-reality-scan` incl. G047 + G048)
+are green; the repo-wide G034 floor is red on 12 pre-existing findings in files
+this packet never touched.
+
+Nothing was fixed inline — there was nothing to fix. No DoD item was checked;
+the four that remain unchecked are unchecked for reasons this phase did not
+change (three skipped e2e tests, and operator-observable Telegram turns).
+`scopes.md` and `uservalidation.md` were not touched.
+
+### Phase recording {#security-phase-recording}
+
+Recorded in the fields the guard reads: top-level `completedPhases[]`,
+`execution.completedPhaseClaims[]`, `execution.executionHistory[]`.
+`execution.completedPhases` was again NOT used (silent no-op).
+
+`certification.certifiedCompletedPhases` was NOT written. `bubbles.security` is
+a diagnostic agent with no certifying authority and `bubbles.validate` has still
+not run; the existing `certifiedCompletedPhasesNote` is preserved verbatim.
