@@ -9,7 +9,7 @@
   "owner": "bubbles.goal",
   "discoveredBy": "operator (live deployed Telegram bot, screenshot)",
   "discoveredAt": "2026-07-21",
-  "lastUpdatedAt": "2026-08-20",
+  "lastUpdatedAt": "2026-08-21",
   "rootCause": {
     "defect1": "The CaptureRoute=true fallback drives two reply sinks: (A) NewBotCaptureFn -> Bot.handleTextCapture persists AND replies (replyWithMapping '. Saved …' / captureErrorReply '? Failed to save …'); (B) the renderer sends resp.Body 'saved as an idea — i'll surface it later.'. Two messages per turn.",
     "defect2": "For a bare '/ask', StripShortcutPrefix('/ask') == '' so sink A's callCapture fails ('? Failed to save') while sink B still claims 'saved as an idea' — a false, contradictory pair; the renderer asserted the idea was saved even when it was not."
@@ -51,10 +51,11 @@
     "implement",
     "test",
     "devops",
-    "regression"
+    "regression",
+    "simplify"
   ],
   "execution": {
-    "timestampProvenance": "startedAt is anchored to the earliest Go build-cache write of this session's suite runs (2026-08-20T20:26:42Z, read from GOCACHE); completedAt/claimedAt are real wall-clock at record time (date -u). No timestamp here is estimated to look plausible: the suites ran across earlier turns of this same session and the write-up completed at the recorded instant.",
+    "timestampProvenance": "startedAt is anchored to the earliest Go build-cache write of this session's suite runs (2026-08-20T20:26:42Z, read from GOCACHE); completedAt/claimedAt are real wall-clock at record time (date -u). No timestamp here is estimated to look plausible: the suites ran across earlier turns of this same session and the write-up completed at the recorded instant. For the simplify phase, startedAt is anchored to the mtime of the edited test file (date -u -r), which is the observable instant the change landed; the review that preceded it is therefore NOT back-dated into the record.",
     "completedPhaseClaims": [
       {
         "phase": "regression",
@@ -63,6 +64,14 @@
         "evidenceRef": "specs/061-conversational-assistant/bugs/BUG-061-006-duplicate-contradictory-capture-ack/report.md#regression-phase",
         "verdict": "REGRESSION_FREE",
         "summary": "Cross-suite delta after the CaptureFn error-return change. Four suites executed through the repo CLI under evidence-capture.sh, all exit 0: unit --go; integration (whole lane, no selector, 10252 lines); integration --go-run TestAssistantIntegration_BUG061006 (3/3 PASS, ok tests/integration/assistant 15.343s); e2e --go-package assistant (sha256 e34ed293b05c5eeddfb661c83a92b327a42d75a7eb10e3fc8dcfcef3bdedbbc1, ok tests/e2e/assistant 59.289s, 50 PASSED / 12 SKIPPED / 0 FAILED). No coverage removed, no assertion weakened, no new skip markers. Skips are NOT counted as passes and are enumerated by cause in the report."
+      },
+      {
+        "phase": "simplify",
+        "agent": "bubbles.simplify",
+        "claimedAt": "2026-08-21T00:10:56Z",
+        "evidenceRef": "specs/061-conversational-assistant/bugs/BUG-061-006-duplicate-contradictory-capture-ack/report.md#simplify-phase",
+        "verdict": "ONE_FINDING_FIXED",
+        "summary": "Post-implement cleanup review of the single code file this packet changed (tests/integration/assistant/capture_ack_bug061006_integration_test.go). Six candidate findings were checked and REJECTED rather than converted into churn (openScope2Pool is already reused not duplicated; no existing TELEGRAM_USER_MAPPING parser or tgbotapi.Chattable sink exists to reuse; Adapter.Stop is a documented no-op at adapter.go:292 so the unpaired Start is not a leak; openScope2Pool registers t.Cleanup(pool.Close); no dead code or unused imports). ONE real finding: SCN-061-006-02 was named BareShortcutPersistsNothing and its comment claimed RED against an 'empty or placeholder' idea, but its predicate matched only blank text, so a wrong fix persisting the /ask token verbatim would have passed. Strengthened: the predicate now also matches btrim(content_raw) = the shortcut token, and the helper was renamed bug061006CountBlankArtifactsSince -> bug061006CountInventedArtifactsSince because the old name described a narrower query than the assertion now makes. Diff: 23 insertions, 16 deletions, one file. Verification: format --check exit 0 (sha256 a4c3f9366ff31e65c4b4d01b5783b3e385d5e56c9448bc29fb92167ec9284ebe, '78 files already formatted'); three independent focused re-runs of integration --go-run TestAssistantIntegration_BUG061006 all exit 0 (sha256 023630bf..., deca7739..., 6acd275a...). HONEST LIMIT on the word 'passed': the integration lane exposes no --verbose flag (smackerel.sh:59) and non-verbose go test prints 'ok pkg time' for skipped tests too, so per-test PASS lines were NOT visually bound this session. Passed is DEDUCED by closing both skip paths: the lane exports non-empty CORE_EXTERNAL_URL (smackerel.sh:1212) and DATABASE_URL (smackerel.sh:1206) -- the empty CORE_EXTERNAL_URL at smackerel.sh:1413 belongs to the unused integration-light lane -- and every other missing-wiring condition in the file is t.Fatal, which would return non-zero. No DoD item was checked, no test was renamed, no coverage was removed, and scopes.md / uservalidation.md were not touched."
       }
     ],
     "executionHistory": [
@@ -77,6 +86,18 @@
         "completedAt": "2026-08-20T23:44:00Z",
         "outcome": "completed_diagnostic",
         "evidence": "report.md#regression-phase. Verdict REGRESSION_FREE. The reclassification of this packet's regression coverage from e2e-api to integration introduced no failures anywhere; the assistant e2e package is green with zero failures. Three capture-path e2e tests SKIPPED on status=\"unavailable\" with capture_route=false, which independently CONFIRMS the root cause measured during the test phase (provider unavailable => capture hook never fires); per BUG-061-008 the product is CORRECT to refuse rather than capture in that state, corroborated by TestAssistantHTTPE2E_HighBandUncitedRefusesHonestly PASSING with error_cause=\"provider_unavailable\". HONEST LIMIT: this verdict does NOT close the e2e coverage gap for this bug's own scenarios. The one passing open-ended subtest (capture_fallback_for_open_ended_text) asserts only Status != \"\", which \"unavailable\" also satisfies, so it cannot distinguish a capture-fallback turn from a provider-unavailable one. Also corrected a FALSE clause carried by two DoD items ('no lane compiles an assistant-package e2e file today'): tests/e2e/assistant/ holds 47 _test.go files, --go-package assistant is whitelisted at smackerel.sh:1430-1449, and the lane compiled and ran them this session."
+      },
+      {
+        "phase": "simplify",
+        "phasesExecuted": [
+          "simplify"
+        ],
+        "agent": "bubbles.simplify",
+        "provenanceMode": "specialist",
+        "startedAt": "2026-08-20T23:51:19Z",
+        "completedAt": "2026-08-21T00:10:56Z",
+        "outcome": "completed_owned",
+        "evidence": "report.md#simplify-phase. Verdict ONE_FINDING_FIXED. Reviewed the only code file this packet changed; six candidate findings were checked against the package and REJECTED as non-defects rather than turned into churn. The one real finding was a claim-exceeds-evidence defect of the same shape this packet has already been corrected for three times: TestAssistantIntegration_BUG061006_BareShortcutPersistsNothing asserted only that no BLANK row landed, while its name and its own comment claimed coverage of a 'placeholder' persist -- so a wrong fix storing the /ask token verbatim would have passed the test while violating the property. Strengthened the predicate to also match the shortcut token and renamed the helper to stop the name overstating the query. RESIDUAL BOUND, recorded in the helper doc comment rather than hidden: the assertion is still not RED against an ARBITRARY invented string, because a total-row-count-zero assertion would be flaky against unrelated async writes from the live core and neighbouring tests in the same created_at window. Verification: format --check exit 0; three focused re-runs exit 0. PASS-vs-SKIP was NOT visually bound (no --verbose on this lane); it is deduced from both skip paths being closed by the lane's own non-empty CORE_EXTERNAL_URL and DATABASE_URL exports, with every other failure mode being t.Fatal. certification.certifiedCompletedPhases deliberately NOT written: bubbles.simplify has no certifying authority and bubbles.validate has still not run."
       }
     ]
   },

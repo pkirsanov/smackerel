@@ -839,3 +839,151 @@ used — the guard does not read it, so writing there would be a silent no-op.
 `bubbles.validate` has not run for this packet. Recording a phase as *executed*
 is a different act from certifying it, and conflating them is how an
 uncertified packet acquires the appearance of certification.
+
+## Simplify phase — one strengthened assertion, no cosmetic churn {#simplify-phase}
+
+**Agent:** `bubbles.simplify` · **Reviewed surface:** the single code file this
+packet changed, `tests/integration/assistant/capture_ack_bug061006_integration_test.go`
+(477 lines, `//go:build integration`, 3 tests).
+
+### Scope check first {#simplify-scope}
+
+`git show --name-only` on the three post-implement commits (`b098149c` test,
+`7f775a64` docs, `de298b81` regression) shows they touched only this packet's
+artifacts plus that one test file. Production source WAS changed by this
+packet, but by the implement commit `5285e77f`
+(`internal/telegram/bot.go`, `internal/telegram/assistant_wiring.go`,
+`internal/telegram/assistant_adapter/adapter.go`) — that is the fix itself, it is
+covered by its own unit tests, and it is out of scope for a post-implement
+cleanup pass. Nothing in `scripts/`, `cmd/`, or `ml/` was touched at all.
+
+### Findings that were checked and are NOT defects {#simplify-non-findings}
+
+Recorded so a later reader does not re-open them:
+
+| Candidate | Verdict | Why |
+|---|---|---|
+| `openScope2Pool` duplication | not a defect | It is an EXISTING package helper (`capture_fallback_policy_test.go:47`) and this file already reuses it rather than opening its own pool. |
+| `bug061006MappedChat` duplicates a mapping parser | not a defect | `grep` across the package returns `TELEGRAM_USER_MAPPING` only in this file. There is no existing helper to reuse. |
+| `bug061006Sender` duplicates a message recorder | not a defect | `grep` for `tgbotapi.Chattable` returns only this file. No existing sink to reuse. |
+| `Adapter.Start` without a matching `Stop` leaks goroutines | not a defect | `adapter.go:292` — `Stop` is a documented no-op: "there are no background goroutines". |
+| Pool opened once per test (3×) leaks connections | not a defect | `openScope2Pool` registers `t.Cleanup(pool.Close)`. |
+| Dead code / unused imports | not a defect | Every declared helper and every import is referenced. |
+
+### The one real finding {#simplify-finding}
+
+**SCN-061-006-02 asserted something weaker than its name and weaker than its own
+stated adversarial claim.**
+
+The test is named `..._BareShortcutPersistsNothing`, and its comment claimed to
+be RED against a wrong fix that "persists an empty **or placeholder** idea".
+The query behind it counted only blank rows:
+
+```sql
+AND coalesce(btrim(content_raw), '') = ''
+```
+
+A wrong fix that made the acknowledgement true by persisting the `/ask` token
+verbatim is a *placeholder*, not a *blank* — it would have landed a row,
+contradicted "persists nothing", and the test would still have passed. The
+comment's word "placeholder" was doing work the SQL did not do. This is the same
+claim-exceeds-evidence shape this packet has already been corrected for three
+times, so it was strengthened rather than re-worded away.
+
+**Change applied** (23 insertions, 16 deletions, one file):
+
+- `bug061006CountBlankArtifactsSince` → `bug061006CountInventedArtifactsSince`;
+  the predicate now also matches `btrim(content_raw) = $2` bound to
+  `bug061006BareShortcut`. The rename is required, not cosmetic: the old name
+  described a narrower query than the assertion now needs to make.
+- The failure message and the test's adversarial comment were re-worded to name
+  the two concrete shapes that are caught instead of the open-ended
+  "placeholder".
+
+**Residual bound, stated rather than papered over.** The assertion is RED
+against a blank body and against the shortcut token stored verbatim. It is NOT
+RED against an *arbitrary* invented string (e.g. `"(no content)"`). A
+total-row-count-zero assertion would cover that, but the live core and preceding
+tests in the package land unrelated async writes inside the same `created_at`
+window, so such an assertion would be flaky rather than adversarial — a flaky
+gate is worse than a bounded one. The bound is now written into the helper's
+doc comment so the next reader inherits the limit instead of the illusion.
+
+### Verification {#simplify-verification}
+
+Format check — no drift introduced by the hand-written Go:
+
+```
+# BUG-061-006 simplify: gofmt/format check after edit
+$ ./smackerel.sh format --check
+exit: 0
+lines: 136
+sha256: a4c3f9366ff31e65c4b4d01b5783b3e385d5e56c9448bc29fb92167ec9284ebe
+--- last line ---
+78 files already formatted
+```
+
+Focused re-run of the three tests after the change (three independent
+executions, all exit 0):
+
+```
+# BUG-061-006 simplify: re-run after strengthening SCN-061-006-02 assertion
+$ ./smackerel.sh test integration --go-run TestAssistantIntegration_BUG061006
+exit: 0
+lines: 758
+sha256: 023630bfceedaea7e9a016ab8908ae4191e7ba593e391bac9146b1e6d741c277
+
+# BUG-061-006 simplify: re-run (wide tail)
+exit: 0
+lines: 658
+sha256: deca77391e757ebb5c9dd022a6389e23c639e75a72c31f9afdb4e1cee576bf14
+
+# BUG-061-006 simplify: re-run (diagnostic)
+exit: 0
+lines: 656
+sha256: 6acd275a68e9d8872104c95b7144c2ef1ee5118d168328dd107bb92dbad014fc
+--- lane acknowledging the selector was applied ---
+go-integration: NOTICE: acceptance-gate executed-assertion assertion NOT ENFORCED
+for this run — a focused --run selector (TestAssistantIntegration_BUG061006) is
+active.
+PASS: go-integration
+```
+
+### How "passed" is established here, and its limit {#simplify-pass-vs-skip}
+
+Stated precisely, because exit 0 alone does NOT separate *passed* from
+*skipped*, and `go test` in non-verbose mode prints `ok <pkg> <time>` for both.
+The integration lane exposes no `--verbose` flag (`smackerel.sh:59`), so the
+per-test `--- PASS:` lines were not visually bound in this session. The
+conclusion rests on closing the skip paths instead:
+
+1. This file has exactly two `t.Skip` paths — empty `CORE_EXTERNAL_URL`
+   (`loadBUG061006Stack`) and empty `DATABASE_URL` (`openScope2Pool`).
+2. The `integration` lane exports both non-empty: `smackerel.sh:1212`
+   (`CORE_EXTERNAL_URL=http://smackerel-core:${core_container_port}`) and
+   `smackerel.sh:1206` (`DATABASE_URL=postgres://...`). The empty
+   `CORE_EXTERNAL_URL=` at `smackerel.sh:1413` belongs to `integration-light`,
+   which is a different lane and was not used.
+3. Every other missing-wiring condition in this file is `t.Fatal`, which fails
+   the package and returns non-zero.
+4. All three runs returned exit 0 with `PASS: go-integration`.
+
+⇒ The three tests executed and passed. This is a deduction from verified lane
+exports, not an observation of `--- PASS:` lines, and it is recorded as such.
+
+### Verdict {#simplify-verdict}
+
+🟢 **One real finding, fixed.** The file was otherwise clean; six candidate
+findings were checked and rejected rather than converted into churn. No test was
+renamed, no assertion was weakened, no coverage was removed, no DoD item was
+checked, and `scopes.md` / `uservalidation.md` were not touched.
+
+### Phase recording {#simplify-phase-recording}
+
+Recorded in the fields the guard reads: top-level `completedPhases[]`,
+`execution.completedPhaseClaims[]`, `execution.executionHistory[]`.
+`execution.completedPhases` was again NOT used (silent no-op).
+
+`certification.certifiedCompletedPhases` was NOT written. `bubbles.simplify` has
+no certifying authority and `bubbles.validate` has still not run; the existing
+`certifiedCompletedPhasesNote` continues to hold and is preserved verbatim.

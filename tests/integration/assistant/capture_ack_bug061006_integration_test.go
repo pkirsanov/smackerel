@@ -322,10 +322,16 @@ func bug061006CountArtifacts(t *testing.T, pool *pgxpool.Pool, content string) i
 	return count
 }
 
-// bug061006CountBlankArtifactsSince counts rows whose captured text is empty or
-// whitespace-only. Pre-conditions on created_at so a neighbouring test's rows
-// can never satisfy or break the assertion.
-func bug061006CountBlankArtifactsSince(t *testing.T, pool *pgxpool.Pool, since time.Time) int {
+// bug061006CountInventedArtifactsSince counts rows a bare shortcut could only
+// have produced by inventing content: blank/whitespace text, or the shortcut
+// token persisted verbatim. Pre-conditions on created_at so a neighbouring
+// test's rows can never satisfy or break the assertion.
+//
+// It deliberately does not count EVERY row since `since`: the live core and
+// preceding tests land unrelated async writes, so a total-count zero would be
+// flaky rather than adversarial. The bound is therefore these two concrete
+// shapes, not "no row of any content".
+func bug061006CountInventedArtifactsSince(t *testing.T, pool *pgxpool.Pool, since time.Time) int {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
@@ -333,9 +339,10 @@ func bug061006CountBlankArtifactsSince(t *testing.T, pool *pgxpool.Pool, since t
 	if err := pool.QueryRow(ctx,
 		`SELECT count(*) FROM artifacts
 		  WHERE created_at >= $1
-		    AND coalesce(btrim(content_raw), '') = ''`, since,
+		    AND (coalesce(btrim(content_raw), '') = ''
+		         OR btrim(content_raw) = $2)`, since, bug061006BareShortcut,
 	).Scan(&count); err != nil {
-		t.Fatalf("count blank-text artifacts: %v", err)
+		t.Fatalf("count invented-content artifacts: %v", err)
 	}
 	return count
 }
@@ -393,16 +400,16 @@ func TestAssistantIntegration_BUG061006_CaptureFallbackPersistsExactlyOneIdea(t 
 // TestAssistantIntegration_BUG061006_BareShortcutPersistsNothing — SCN-061-006-02.
 //
 // A bare "/ask" strips to an empty body, so captureIdeaSilent MUST report
-// nothing-to-capture and MUST NOT reach /api/capture. Asserts no blank-text
-// idea was written and the single acknowledgement never claims "saved", then
-// proves in the same run and the same chat that the persist path is live — so
-// the zero can never be produced by "nothing ran".
+// nothing-to-capture and MUST NOT reach /api/capture. Asserts no invented idea
+// was written and the single acknowledgement never claims "saved", then proves
+// in the same run and the same chat that the persist path is live — so the zero
+// can never be produced by "nothing ran".
 //
 // Adversarial: the obvious wrong way to stop the acknowledgement lying is to
-// make it true, by persisting an empty or placeholder idea for the bare
-// shortcut. That fix lands a blank-text row and fails the first assertion. The
-// control fails if the capture path is dead, so the pair cannot both be
-// satisfied vacuously.
+// make it true, by persisting something for the bare shortcut. The two concrete
+// shapes that takes — an empty body, or the "/ask" token stored verbatim — both
+// land a row the first assertion counts. The control fails if the capture path
+// is dead, so the pair cannot both be satisfied vacuously.
 func TestAssistantIntegration_BUG061006_BareShortcutPersistsNothing(t *testing.T) {
 	stack := loadBUG061006Stack(t)
 
@@ -414,8 +421,8 @@ func TestAssistantIntegration_BUG061006_BareShortcutPersistsNothing(t *testing.T
 	// the negative is a decision rather than a race we happened to win.
 	time.Sleep(bug061006SettleWindow)
 
-	if got := bug061006CountBlankArtifactsSince(t, stack.Pool, since); got != 0 {
-		t.Fatalf("ADVERSARIAL: bare %q persisted %d blank-text idea(s); want 0 — nothing was said, so nothing may be saved and nothing may be acknowledged as saved", bug061006BareShortcut, got)
+	if got := bug061006CountInventedArtifactsSince(t, stack.Pool, since); got != 0 {
+		t.Fatalf("ADVERSARIAL: bare %q persisted %d invented idea(s) — blank text, or the shortcut token stored verbatim; want 0 — nothing was said, so nothing may be saved and nothing may be acknowledged as saved", bug061006BareShortcut, got)
 	}
 
 	sent := stack.Sender.snapshot()
