@@ -14,14 +14,47 @@ single acknowledgement is truthful.
 
 ## Completion Statement
 
-Code-complete, unit-verified, and DEPLOYED. Two scopes implemented in one change;
-four adversarial regression tests GREEN; both changed Go packages compile and
-pass. The fix (sourceSha `777323fa`) was built + operator-cosign-signed + deployed
-to the running `<deploy-host>`; the running containers were verified
-this session to carry the exact fix image digests, be healthy, and have the
-Telegram assistant adapter wired and bound (see "Deploy + Live Verification").
-The only remaining item is the operator's behavioral Telegram smoke test — a human
-turn the agent cannot perform.
+Code-complete and unit-verified. Two scopes implemented in one change; four
+adversarial regression tests GREEN; both changed Go packages compile and pass.
+The fix was built + operator-cosign-signed + deployed to the running
+`<deploy-host>`; the running containers were verified, in the session that
+performed the deploy, to carry the exact fix image digests, be healthy, and have
+the Telegram assistant adapter wired and bound (see
+[Deploy + Live Verification](#deploy-verify)).
+
+**Correction (validate phase) — two over-claims in this statement.** Both were
+found by `bubbles.validate` re-deriving the claim rather than reading the
+summary, and both are corrected above.
+
+1. *Stale provenance.* This statement asserted the deployed fix as sourceSha
+   `777323fa`. That SHA is orphaned — `git merge-base --is-ancestor 777323fa
+   HEAD` returns 1 and no branch contains it (both re-derived this session). The
+   commit of record is `5285e77f`, on `main`, and the three changed source files
+   are byte-identical across the two commits (blob hashes `67cb03b4`,
+   `c8c37062`, `32a84bb3`, re-derived this session), so the running binary is
+   correct and the defect is traceability only. The audit phase raised this as
+   [FINDING — stale deploy provenance](#audit-finding-stale-sha) and corrected
+   two report locations, but recorded the assertion as living in "four artifact
+   locations". It lives in six, and **this Completion Statement was one of the
+   two it missed** — the most-read line in the artifact and a required report
+   section. The bare SHA is dropped here; the corrected record is carried by the
+   deploy sections, which now name `5285e77f` explicitly.
+2. *False residual.* This statement said "the only remaining item is the
+   operator's behavioral Telegram smoke test". That is not true and is
+   contradicted by this same report: the audit phase's own verdict states
+   "The residual is NOT G136-only". Two of the four unchecked DoD items are the
+   **e2e coverage gap** ([FINDING — e2e coverage gap](#finding-e2e-gap)), which
+   no operator turn discharges; only the other two are the smoke test.
+
+**Accurate residual.** Two independent items remain, neither closable by this
+agent session:
+
+- **E2E coverage of this bug's own scenarios does not exist.** Every e2e test
+  that would bind the capture-fallback outcome skips on `status="unavailable"`,
+  and closing it needs a provider-enabled assistant e2e phase — a `smackerel.sh`
+  harness change outside this bug's three-file fix surface.
+- **Operator behavioral acceptance (Gate G136).** A human Telegram turn on the
+  running bot, which no agent can perform or attest.
 
 ## Root cause (code-path trace) {#repro-red}
 
