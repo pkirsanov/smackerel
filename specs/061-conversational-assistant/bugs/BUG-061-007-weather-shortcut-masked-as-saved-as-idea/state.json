@@ -50,6 +50,13 @@
   "certification": {
     "status": "in_progress",
     "achievedAssuranceLevel": "deployed-and-infra-verified",
+    "certifiedCompletedPhases": [],
+    "certifiedCompletedPhasesNote": "Deliberately EMPTY. bubbles.validate is the sole certifying authority for this packet and it has NOT executed here — there is no execution.completedPhaseClaims or execution.executionHistory record for any phase, so no phase has provenance naming the agent that ran it. The planning-repair pass that added this field holds no certifying authority and therefore certified nothing: populating this array would have simultaneously fabricated a certification and silently cleared the six Gate G022 'specialist phase missing' blocks, which are CORRECT while regression, simplify, stabilize, security, audit and validate have not run. state.completedPhases still records select/bootstrap/implement/test/devops as EXECUTED; recording a phase as executed and CERTIFYING it are different claims, and only the first is substantiated here.",
+    "lockdownState": {
+      "round": 0,
+      "lastCleanRound": null,
+      "note": "No lockdown round has run. The planning-repair pass opened none: it authored no code and re-ran no suite for remediation, and the residual findings are not agent-remediable defects in the delivered code — six specialist phases have simply not executed (G022), human acceptance is operator-owned (G136), the live-stack DoD item is an operator observation turn, and the scenario-specific E2E coverage gap needs an assistant e2e harness change outside this bug's four-file fix surface. Opening a lockdown round would misroute a fix cycle onto code that is not at fault."
+    },
     "scopeProgress": { "total": 1, "done": 1, "inProgress": 0, "notStarted": 0, "blocked": 0 },
     "gatesPassed": [
       "test unit --go --go-run TestFacadeWeatherShortcut|TestWeatherLookup|TestFacadeWeatherIntegration|...: 3 BUG-061-007 adversarial tests GREEN; internal/agent/tools/weather ok, internal/assistant ok; go test ./... (compile+vet, filtered) zero FAILs (also GREEN after the grpc v1.82.1 bump)",
@@ -60,7 +67,11 @@
       "deploy via knb-owned Smackerel adapter (local-operator promote/apply): cosign release-proof verified; smackerel-core + smackerel-ml recreated; running digests match the fix build and are healthy; Telegram assistant adapter wired and bound"
     ],
     "pendingGates": [
-      "operator live Telegram behavioral smoke test (human turn): /weather <city or ZIP> -> a forecast (or honest unavailable line), never 'saved as an idea'"
+      "operator live Telegram behavioral smoke test (human turn): /weather <city or ZIP> -> a forecast (or honest unavailable line), never 'saved as an idea'",
+      "G022 — six specialist phases (regression, simplify, stabilize, security, audit, validate) have NOT executed for this packet. No execution.completedPhaseClaims or execution.executionHistory record exists for any phase. Owner: the workflow orchestrator dispatching each specialist in turn; bubbles.validate last, as the sole certifying authority.",
+      "G136 — human acceptance is operator-owned. uservalidation.md ships with its two LIVE items unchecked and carries no '## Human Acceptance Record'; only the operator may check those items and author that section. G136 remaining open is CORRECT, not a defect.",
+      "Scenario-specific regression E2E for THIS bug's scenarios does not exist. SCN-061-007-01/02/03 are bound by `unit` tests at the facade weather-lookup seam (which is what scenario-manifest.json declares), and no e2e-api/e2e-ui test drives an explicit /weather turn against a provider-enabled assistant stack. The Check 8A Test Plan row was deliberately NOT written: planning-checks.sh:72 matches the literal text 'Regression E2E' in any table row, so adding it to a unit-category row would turn the gate green while misdescribing the category. Owner: the assistant e2e harness owner — outside this bug's four-file fix surface.",
+      "Traceability — deployment.sourceSha 'd4755abd' is an orphaned object (not an ancestor of HEAD, contained by no branch); the commit of record for that grpc bump is 'bcfbcb2c', and for the fix itself it is '2e71d64a' rather than the orphaned '2f35e26f'. Each orphaned commit and its on-main counterpart carry an IDENTICAL tree (git diff --stat produced no output in both cases), so the running binary corresponds to the code on main and the defect is traceability only. Recorded rather than rewritten: tree equivalence is provable, but which object the build host consumed is not. See report.md#code-diff-orphaned-sha."
     ]
   },
   "nextRequiredOwner": "operator (live Telegram behavioral smoke test — a human turn; the fix binary is deployed + running + healthy + adapter-bound on <deploy-host>, so the fixed code path is already live)",
