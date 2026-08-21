@@ -10,7 +10,12 @@ Five cohesive scopes: the systemic honest-error fix (P1), its mechanical regress
 
 ## Scope 1 (P1): Honest execution-error surfacing
 
-**Status:** Done
+**Status:** In Progress
+
+Returned to In Progress because two DoD items (SCN-061-008-01 and SCN-061-008-02) were
+unchecked under finding D-4 once mutation showed the test named as their binding does not
+bind them; the delivered behavior is unchanged and still held by two independent mechanisms,
+and the remaining work is test strength, owner `bubbles.test`.
 
 **Depends on:** none
 
