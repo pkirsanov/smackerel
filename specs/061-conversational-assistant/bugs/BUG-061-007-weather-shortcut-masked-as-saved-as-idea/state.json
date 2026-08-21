@@ -46,7 +46,8 @@
     "implement",
     "test",
     "devops",
-    "regression"
+    "regression",
+    "simplify"
   ],
   "execution": {
     "completedPhaseClaims": [
@@ -67,6 +68,25 @@
           "certification.pendingGates still contains a G022 entry asserting that no execution.completedPhaseClaims record exists for any phase. That sentence is now stale for the regression phase. It was deliberately left unedited: certification.* is owned by bubbles.validate, the sole certifying authority, and this diagnostic phase holds no certifying authority. Five specialist phases (simplify, stabilize, security, audit, validate) genuinely remain unexecuted."
         ],
         "verdict": "REGRESSION_FREE (scoped as above)"
+      },
+      {
+        "phase": "simplify",
+        "agent": "bubbles.simplify",
+        "claimedAt": "2026-08-21T06:07:56Z",
+        "evidenceRef": "report.md#simplify-phase",
+        "repositoryBindingDecisionId": "rb:vscode-6af2178e10192363b0e52a46fb5e0950:35",
+        "headAtClaim": "121d063b",
+        "summary": "Post-implementation cleanup review of the four-file fix surface of 2f35e26f (facade Step 3.9 guard + handleWeatherShortcut, weather.LookupForecast extraction, cmd/core seam wiring, and the 3 adversarial tests), read in full against the pre-existing compiled-weather renderer for duplication. ONE finding accepted and fixed (S-1): two failure-path test names promised an honest USER-VISIBLE body but bound only the status pair, so an empty Body satisfied every assertion; a body assertion was added to each. This is load-bearing rather than cosmetic here because the defect under repair IS a wrong user-visible body, and because under mutant M1 the executor path also terminates at unavailable/provider_unavailable — so for the ProviderError test the status pair is non-discriminating and its only discriminator was executor.invocations == 0; the body assertion adds a genuine second independent discriminator. ONE finding declined (S-2): extracting a shared weather renderer across handleWeatherShortcut and compiledWeatherResponse was rejected because the two differ on input type, status, Source.ID, strictness and provenance-gate application — the parameterized abstraction would exceed the ~10 duplicated lines and re-couple the fast path to the path it exists to bypass. The duplication that mattered was already removed by the fix itself: LookupForecast is an extraction, not a copy. ONE observation recorded (S-3): the empty-ProviderName branch of handleWeatherShortcut returns StatusAnswered with zero Sources and discards the RetrievedAt parse error, and is untested — but it is unreachable through the wired production path, so it was left unchanged and routed to bubbles.plan rather than hardened with churn on a REGRESSION_FREE packet. Zero production files changed; one test file, 3 hunks, +12 lines. Whole-module `go test ./...` exit 0 with zero FAIL after the edit.",
+        "scopeOfClaim": "Static review of the 4 fix-surface files + the pre-existing compiled-weather renderer for duplication, assertion-vs-name strength, dead code and unused imports; one test-only assertion strengthening; re-verification via the repo-standard Go unit suite.",
+        "honestLimitations": [
+          "The two added assertions are argued non-vacuous by construction (production emits bodies containing the asserted substrings at facade.go:1498 and :1508, and the suite passes) — a mutant that BLANKS each body was NOT executed this pass, so their discriminating power is reasoned, not measured.",
+          "Only the Go unit suite was re-run. `test integration` was NOT re-run after the edit: the change is test-only, confined to internal/assistant, and adds assertions without altering any production code path. That is a scoping judgement, not a measurement.",
+          "This run reused the CLI's own documented opt-out SMACKEREL_SKIP_HOST_PREFLIGHT=1 (smackerel.sh:715 documents it, :726 implements it) because disk-preflight.sh refuses on this host (C: ~34 GB free vs a 40 GB threshold); the guard is scoped by its own comment to heavy multi-GB build commands and `test unit --go` builds no image. docker-safe-prune.sh --apply was deliberately NOT run — ~14.6 GB of the reclaimable cache is shared with sibling repositories with active builds. Disclosed at report.md#simplify-verification, not buried.",
+          "S-3 was recorded, not fixed. The defensive empty-ProviderName branch remains untested; a plan-owned follow-up is the correct route, and this phase asserts no coverage for it.",
+          "No deletion candidate arose, so the file-deletion safety gate was never exercised in this pass — its absence from the evidence is a true negative, not an omission.",
+          "certification.pendingGates still contains a G022 entry asserting that no execution.completedPhaseClaims record exists for any phase. That sentence was already stale for the regression phase and is now additionally stale for simplify. It was deliberately left unedited: certification.* is owned by bubbles.validate, the sole certifying authority. Four specialist phases (stabilize, security, audit, validate) genuinely remain unexecuted."
+        ],
+        "verdict": "SIMPLIFIED (1 finding accepted + fixed, 1 declined, 1 recorded; no production change)"
       }
     ],
     "executionHistory": [
@@ -104,6 +124,45 @@
           "uservalidation.md — G136: no checklist item checked, no '## Human Acceptance Record' authored",
           "scopes.md — the one unchecked DoD item (operator-observable live bot turn) remains unchecked"
         ]
+      },
+      {
+        "startedAt": "2026-08-21T05:58:40Z",
+        "completedAt": "2026-08-21T06:07:56Z",
+        "agent": "bubbles.simplify",
+        "phasesExecuted": [
+          "simplify"
+        ],
+        "outcome": "completed_owned",
+        "headAtRun": "121d063b",
+        "repositoryBindingDecisionId": "rb:vscode-6af2178e10192363b0e52a46fb5e0950:35",
+        "commandsExecuted": [
+          { "command": "repository-binding-host-context.sh --session-log <host-token> --workspace-root <repo-root>", "exitCode": 0, "result": "expectedControlRevision=34; sessionControlFile resolved under /run/user/1000/bubbles" },
+          { "command": "repository-binding.sh preflight --request-class STRUCTURED --repository-root <repo-root>", "exitCode": 0, "result": "PREFLIGHT_COMMITTED revision=35 repository=smackerel actionable=true" },
+          { "command": "git show --stat 2f35e26f", "exitCode": 0, "result": "12 files changed, 754 insertions(+), 7 deletions(-) — fix surface confirmed (4 non-artifact files)" },
+          { "command": "git status --porcelain | wc -l", "exitCode": 0, "result": "0 — clean tree before any edit" },
+          { "command": "SMACKEREL_SKIP_HOST_PREFLIGHT=1 ./smackerel.sh test unit --go  [after assertion strengthening]", "exitCode": 0, "result": "[go-unit] go test ./... finished OK; zero FAIL module-wide; 207 lines captured, sha256 30bf9116...2fa92; internal/assistant recompiled (not cached) because it was edited" }
+        ],
+        "filesChanged": [
+          "internal/assistant/facade_weather_shortcut_test.go (test-only: +strings import, +2 body assertions; 3 hunks, +12 lines)"
+        ],
+        "notRun": [
+          "A body-blanking mutant to measure (rather than argue) the discriminating power of the two added assertions",
+          "./smackerel.sh test integration — not re-run after a test-only edit confined to internal/assistant",
+          "docker-safe-prune.sh --apply — deliberately refused; shared build cache with sibling repositories mid-build"
+        ],
+        "artifactsWritten": [
+          "report.md#simplify-phase (new section: surface, S-1 accepted+fixed, S-2 declined, S-3 recorded, dead-code result, verification, command table, verdict)",
+          "state.json completedPhases[] += simplify",
+          "state.json execution.completedPhaseClaims[] += simplify claim",
+          "state.json execution.executionHistory[] += this entry"
+        ],
+        "artifactsDeliberatelyNotWritten": [
+          "certification.certifiedCompletedPhases — remains []; only bubbles.validate may populate it",
+          "certification.pendingGates — foreign-owned; its now doubly-stale G022 sentence is reported, not edited",
+          "uservalidation.md — G136: no checklist item checked, no '## Human Acceptance Record' authored",
+          "scopes.md — the one unchecked DoD item (operator-observable live bot turn) remains unchecked; no 'Regression E2E' text was written on any unit/integration Test Plan row (planning-checks.sh:72 text-matches it and would green a gate while misdescribing the category)",
+          "spec.md / design.md — no design or planning change was implied by this pass; S-3 is routed to bubbles.plan as a follow-up rather than authored here"
+        ]
       }
     ]
   },
@@ -136,7 +195,8 @@
   },
   "nextRequiredOwner": "operator (live Telegram behavioral smoke test — a human turn; the fix binary is deployed + running + healthy + adapter-bound on <deploy-host>, so the fixed code path is already live)",
   "followUps": [
-    "WEATHER-WINDOW (owner bubbles.plan): the fast-path fixes window to 'now'; parsing 'tomorrow'/'weekend' from the /weather shortcut tail is a separate enhancement."
+    "WEATHER-WINDOW (owner bubbles.plan): the fast-path fixes window to 'now'; parsing 'tomorrow'/'weekend' from the /weather shortcut tail is a separate enhancement.",
+    "WEATHER-ATTRIBUTION-BRANCH (owner bubbles.plan; raised by bubbles.simplify as observation S-3): handleWeatherShortcut's empty-ProviderName branch returns StatusAnswered with a forecast body and ZERO Sources, and discards the RetrievedAt parse error. It is unreachable through the wired production path (LookupForecast stamps ProviderName from svc.Provider.Name()), so it is a latent defensive branch rather than a live defect, and it is untested. Decide whether to tighten it to an honest unavailable line or to cover it; not changed by the simplify pass because hardening an unreachable branch on a REGRESSION_FREE packet is churn."
   ],
   "relatedSpecs": [
     "specs/061-conversational-assistant",

@@ -537,3 +537,177 @@ Still open (NOT closed by this phase): scenario-specific E2E for SCN-061-007-01/
   operator live Telegram turn; five specialist phases (simplify, stabilize, security,
   audit, validate)
 ```
+
+---
+
+## Simplify phase (`bubbles.simplify`) {#simplify-phase}
+
+**Claim Source:** every command below was executed in THIS session against
+`<repo-root>`; repository binding `rb:vscode-6af2178e10192363b0e52a46fb5e0950:35`
+(`PREFLIGHT_COMMITTED`, `actionable: true`, control revision 35).
+
+### Review surface {#simplify-surface}
+
+`git show --stat 2f35e26f` (exit 0) — 12 files, 754 insertions / 7 deletions; the four
+non-artifact files are the fix surface already recorded in `affectedSurface`. Commit subject
+is not quoted here: the pre-push deployment-boundary scanner does not strip code fences, and
+the SHA is a sufficient anchor.
+
+Files read in full for this pass:
+
+| File | Region reviewed |
+|---|---|
+| `internal/assistant/facade.go` | Step 3.9 guard (`:1006`), `weatherLookup` field + `WithWeatherLookup` (`:204`–`:336`), `handleWeatherShortcut` (`:1492`–`:1544`) |
+| `internal/assistant/compiled_interactions.go` | `handleResolvedCompiledWeather`, `compiledWeatherResponse`, `compiledWeatherFailure` (`:301`–`:430`) |
+| `internal/agent/tools/weather/tool.go` | `handleWeatherLookup` + extracted `LookupForecast` (`:266`–`:310`) |
+| `internal/assistant/facade_weather_shortcut_test.go` | all 3 tests, full file |
+| `cmd/core/wiring_assistant_facade.go` | import block + seam wiring |
+
+### Finding S-1 (ACCEPTED, fixed) — two test names promised more than their assertions bound
+
+Both failure-path tests named an honest **user-visible body** in their title but asserted only
+the structural status pair, never the body itself. An empty `Body` satisfied every assertion in
+each test.
+
+| Test | Name promises | Was bound | Gap |
+|---|---|---|---|
+| `..._ProviderError_HonestUnavailable_NotSavedAsIdea` | an honest *unavailable* line | `status`, `error_cause`, `body != capture-ack`, `!CaptureRoute` | body never asserted to be the fast-path failure line |
+| `..._EmptyLocation_HonestPrompt_NoLookup` | a *prompt* asking for a location | `status`, `error_cause`, `body != capture-ack`, `lookupCalls == 0` | body never asserted to be a prompt |
+
+This is the exact class this packet family has been bitten by, and it is not cosmetic here: the
+defect under repair *is* a wrong user-visible body. A test that binds only `status` cannot see a
+body regression.
+
+The second row matters more than it looks. Under mutant **M1** (`f.weatherLookup != nil` →
+`== nil`, re-derived in the regression phase) the executor path also terminates at
+`status=unavailable` / `error_cause=provider_unavailable` — so for
+`_ProviderError_HonestUnavailable_` the status pair is **non-discriminating**, and its only
+discriminator was `executor.invocations == 0`. Binding the fast-path copy adds a genuine second
+independent discriminator rather than restating the first.
+
+**Fix applied** — assertions strengthened, no production code touched:
+
+```go
+// _ProviderError_HonestUnavailable_NotSavedAsIdea
+if !strings.Contains(resp.Body, "90210") {
+    t.Errorf("body = %q; want the fast-path failure line naming the requested location %q", resp.Body, "90210")
+}
+
+// _EmptyLocation_HonestPrompt_NoLookup
+if !strings.Contains(resp.Body, "location") {
+    t.Errorf("body = %q; want a prompt asking for a location", resp.Body)
+}
+```
+
+Plus the `strings` import. Diff is 3 hunks, +12 lines, in one file.
+
+Both new assertions are **non-vacuous by construction**: production emits
+`"couldn't get the weather for %s right now — please try again."` (facade.go:1508) and
+`"which location? try \`/weather <city or ZIP>\`."` (facade.go:1498), so an empty or
+substituted body fails `strings.Contains`. **Honest limitation:** that non-vacuity is argued
+from reading the production strings and from the suite passing — a mutant that blanks each body
+was **not** executed this pass.
+
+### Finding S-2 (REVIEWED, DECLINED) — apparent duplication between the two weather renderers
+
+`handleWeatherShortcut` builds a `SourceExternalProvider` attribution block, and so does
+`compiledWeatherResponse`. Extracting a shared renderer was considered and **rejected**: the
+two differ on four axes that the caller must decide anyway.
+
+| Axis | `handleWeatherShortcut` | `compiledWeatherResponse` |
+|---|---|---|
+| Input | `json.RawMessage` from the seam | typed `weather.Forecast` |
+| Status | `StatusAnswered` | `StatusCheckingWeather` |
+| `Source.ID` | `"weather-provider"` | `provider:retrievedAtUnixNano` |
+| Strictness | forecast line required; attribution best-effort | line + provider + non-zero `RetrievedAt` all required, else error |
+| Provenance gate | deliberately bypassed (this is the fix) | `provenance.Enforce` applied |
+
+A shared helper would need all four parameterized — larger than the ~10 duplicated lines — and
+would re-couple the fast path to the compiled path it exists to bypass. Declined as taste churn.
+
+The duplication that **did** matter was already removed by the fix itself: `LookupForecast` is
+an extraction, not a copy, and both `handleWeatherLookup` and the facade seam call it, so
+provider + cache + `RetrievedAt` invariants have exactly one implementation.
+
+### Observation S-3 (RECORDED, not changed) — best-effort attribution branch is untested
+
+When `payload.ProviderName` is empty, `handleWeatherShortcut` returns `StatusAnswered` with a
+forecast body and **zero** `Sources`, and the `RetrievedAt` parse error is discarded
+(`retrievedAt, _ := time.Parse(...)`). No test covers that branch. It is not reachable through
+the wired production path — `LookupForecast` stamps `ProviderName` from `svc.Provider.Name()` —
+so it is a latent defensive branch, not a live defect. Left unchanged: touching production code
+on a packet already verified `REGRESSION_FREE`, to harden an unreachable branch, is exactly the
+churn this phase is told not to invent. Routed as an observation for `bubbles.plan`.
+
+### Dead code / unused imports {#simplify-dead-code}
+
+None found. Unused imports and unused local variables are **compile errors** in Go, so the
+`go build`/`go vet` stage inside `go test ./...` returning exit 0 is positive evidence for the
+whole module, not an assertion. No commented-out code, `TODO`, `FIXME`, or unreachable branch
+was observed in the four fix-surface files.
+
+### Verification {#simplify-verification}
+
+**Host-preflight override — disclosed, not buried.** `SMACKEREL_SKIP_HOST_PREFLIGHT=1` was set
+for the run below, the same documented opt-out (`smackerel.sh:715` documents it, `:726`
+implements it) and for the same reason as the regression phase: `disk-preflight.sh` refuses on
+this host (C: ~34 GB free vs a 40 GB threshold) and the guard is scoped by its own comment to
+heavy multi-GB build commands — `test unit --go` builds no image. `docker-safe-prune.sh --apply`
+was deliberately **not** run: ~14.6 GB of the reclaimable cache is shared with sibling
+repositories whose builds were active.
+
+```text
+$ SMACKEREL_SKIP_HOST_PREFLIGHT=1 ./smackerel.sh test unit --go
+exit: 0
+lines: 207
+sha256: 30bf91163102e3bad7c4e82a7d1aef503797350e61bdef6396af8b470de2fa92
+--- last 20 (excerpt) ---
+ok      github.com/smackerel/smackerel/internal/topics  (cached)
+ok      github.com/smackerel/smackerel/internal/web     (cached)
+ok      github.com/smackerel/smackerel/internal/web/admin       (cached)
+ok      github.com/smackerel/smackerel/internal/whatsapp/assistant_adapter      (cached)
+ok      github.com/smackerel/smackerel/tests/e2e/agent  (cached)
+ok      github.com/smackerel/smackerel/tests/eval/assistant     (cached)
+ok      github.com/smackerel/smackerel/tests/observability      (cached)
+ok      github.com/smackerel/smackerel/tests/stress/readiness   (cached)
+ok      github.com/smackerel/smackerel/tests/unit/clients       (cached)
+ok      github.com/smackerel/smackerel/web/pwa/tests    (cached)
+[go-unit] go test ./... finished OK
+```
+
+Captured via `.github/bubbles/scripts/evidence-capture.sh`; the sha256 covers all 207 produced
+lines and is re-derivable with `--verify`. `internal/assistant` was edited this pass, so it
+could **not** serve from the test cache — it recompiled and re-ran, and the module-wide exit 0
+therefore covers the three strengthened tests.
+
+### Commands executed this phase
+
+| # | Command | Exit | Result |
+|---|---|---|---|
+| 1 | `repository-binding-host-context.sh --session-log … --workspace-root <repo-root>` | 0 | `expectedControlRevision=34` |
+| 2 | `repository-binding.sh preflight --request-class STRUCTURED` | 0 | `PREFLIGHT_COMMITTED` revision=35, `actionable: true` |
+| 3 | `git show --stat 2f35e26f` | 0 | 12 files, +754/−7 — fix surface confirmed |
+| 4 | `git status --porcelain \| wc -l` | 0 | `0` — clean tree before edits |
+| 5 | `SMACKEREL_SKIP_HOST_PREFLIGHT=1 ./smackerel.sh test unit --go` | 0 | `[go-unit] go test ./... finished OK` — zero FAIL, module-wide |
+
+### Verdict
+
+```text
+🟢 SIMPLIFIED — one accepted finding, one declined, one recorded
+
+Findings accepted + fixed : 1 (S-1 — 2 test names stronger than their assertions)
+Findings declined         : 1 (S-2 — cross-renderer duplication; abstraction > duplication)
+Observations recorded     : 1 (S-3 — untested defensive attribution branch, unreachable in prod)
+Production code changed   : 0 files
+Test code changed         : 1 file, 3 hunks, +12 lines
+Dead code / unused imports removed : 0 (none present; proved by the Go compiler, exit 0)
+Files deleted             : 0 (no deletion candidate arose; deletion-safety gate not triggered)
+Verification              : test unit --go exit 0, zero FAIL
+
+Still open (NOT closed by this phase): scenario-specific E2E for SCN-061-007-01/02/03;
+  operator live Telegram turn; the 1 unchecked DoD item; four specialist phases
+  (stabilize, security, audit, validate)
+Deliberately not written: certification.certifiedCompletedPhases (bubbles.validate owns it);
+  certification.pendingGates (foreign-owned; its stale G022 sentence is reported, not edited);
+  uservalidation.md (G136); the unchecked live-stack DoD item
+```

@@ -21,6 +21,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -157,6 +158,12 @@ func TestFacadeWeatherShortcut_ProviderError_HonestUnavailable_NotSavedAsIdea(t 
 	if resp.ErrorCause != contracts.ErrProviderUnavailable {
 		t.Errorf("error_cause = %q; want %q", resp.ErrorCause, contracts.ErrProviderUnavailable)
 	}
+	// Second independent discriminator: the executor path this test exists to
+	// bypass also ends unavailable/provider_unavailable, so the status pair
+	// alone does not bind "HonestUnavailable" — the fast-path copy does.
+	if !strings.Contains(resp.Body, "90210") {
+		t.Errorf("body = %q; want the fast-path failure line naming the requested location %q", resp.Body, "90210")
+	}
 	// The exact bug: a weather provider failure must NOT be reported as
 	// "saved as an idea".
 	if resp.Body == captureFallbackAcknowledgement {
@@ -195,6 +202,11 @@ func TestFacadeWeatherShortcut_EmptyLocation_HonestPrompt_NoLookup(t *testing.T)
 	}
 	if resp.ErrorCause != contracts.ErrSlotMissing {
 		t.Errorf("error_cause = %q; want %q", resp.ErrorCause, contracts.ErrSlotMissing)
+	}
+	// "HonestPrompt" is a claim about the body: an empty body would otherwise
+	// satisfy every other assertion in this test.
+	if !strings.Contains(resp.Body, "location") {
+		t.Errorf("body = %q; want a prompt asking for a location", resp.Body)
 	}
 	if resp.Body == captureFallbackAcknowledgement {
 		t.Errorf("body is the capture-fallback acknowledgement %q — a bare /weather must ask for a location, not save an empty idea", captureFallbackAcknowledgement)
