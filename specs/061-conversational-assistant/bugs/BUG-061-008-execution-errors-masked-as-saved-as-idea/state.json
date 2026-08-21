@@ -54,8 +54,63 @@
     "implement",
     "test",
     "docs",
-    "devops"
+    "devops",
+    "regression"
   ],
+  "execution": {
+    "completedPhaseClaims": [
+      {
+        "phase": "regression",
+        "agent": "bubbles.regression",
+        "claimedAt": "2026-08-21T08:17:26Z",
+        "evidenceRef": "report.md#regression-evidence",
+        "outcome": "completed_diagnostic_with_findings",
+        "summary": "Ran the full Go unit suite (exit 0) on a restored tree and a four-mutant campaign against the four per-scenario DoD claims. M3 (fabrication guard inverted) and M4 (sweep set no longer closed over the SST) were KILLED, so SCN-061-008-03 and the matrix claim are genuinely bound. M1 (provider error re-masked) and M2 (timeout re-masked) SURVIVED their named binding assertion TestHighBandNeverMaskedAsSavedAsIdea, because BUG-061-009's band-LOW-only canonicalizeSuccessfulCaptureResponse converts the resulting capture shape back into an honest refusal downstream and the sweep asserts only that ErrorCause is non-empty. The ratified invariant still holds via two independent mechanisms; the attribution in the DoD is what is overstated. Recorded as D-4, owner bubbles.test. Every mutant was reverted and both mutated files were proven byte-identical to their pre-mutation blobs with a clean git status and an empty git diff.",
+        "timestampNote": "claimedAt is a real instant captured with `date -u` in the executing session. Wall-clock phase start is not instrumented by this workflow, so no startedAt is asserted rather than inferring one."
+      }
+    ],
+    "executionHistory": [
+      {
+        "phasesExecuted": ["regression"],
+        "agent": "bubbles.regression",
+        "startedAt": "2026-08-21T08:17:26Z",
+        "completedAt": "2026-08-21T08:17:26Z",
+        "startedAtNote": "Both fields record the same measured instant: this workflow does not instrument phase start, and the value is the first timestamp this phase captured with `date -u` rather than an inferred or back-dated start.",
+        "headAtExecution": "d405f24a",
+        "outcome": "completed_diagnostic_with_findings",
+        "findingsOpened": 1,
+        "findingIds": ["D-4"],
+        "regressionsFound": 0,
+        "crossSpecConflictsFound": 0,
+        "verdict": "REGRESSION_FREE for delivered behavior; one test-strength finding (D-4) recorded against the named regression gate, not against the shipped code",
+        "suites": [
+          {
+            "command": "./smackerel.sh test unit --go",
+            "exitCode": 0,
+            "lines": 207,
+            "sha256": "102eb9c7a9d918d9ff4305e8128a8f4f01acbef71dbd7fc97008e503ce8f6e7b"
+          }
+        ],
+        "mutationCampaign": {
+          "method": "control run green, then one targeted mutant per per-scenario DoD claim, each run against that claim's own binding assertion, then revert and prove byte-identical restoration",
+          "controlSha256": "e24bd7a7cf4d3720fd26dbd5e6bcc04d6b5aab85a1345eda46356fd3f140760e",
+          "results": [
+            { "mutant": "M1", "claim": "SCN-061-008-01", "bindingAssertion": "TestHighBandNeverMaskedAsSavedAsIdea", "exitCode": 0, "verdict": "SURVIVED" },
+            { "mutant": "M2", "claim": "SCN-061-008-02", "bindingAssertion": "TestHighBandNeverMaskedAsSavedAsIdea", "exitCode": 0, "verdict": "SURVIVED" },
+            { "mutant": "M3", "claim": "SCN-061-008-03", "bindingAssertion": "TestExecutionErrorHonesty_OKNoSourcesRefusesHonestly", "exitCode": 1, "verdict": "KILLED" },
+            { "mutant": "M4", "claim": "SCN-061-008-01/02/03 matrix", "bindingAssertion": "TestRequiresProvenanceScenarios_ClosedOverSST", "exitCode": 1, "verdict": "KILLED" }
+          ],
+          "methodCorrection": "The first M1 run used a wider --go-run filter than the M2 run and exited 1, which would have read as a kill. That comparison was invalid because the two mutants were not measured against the same assertion. M1 was re-run against the identical narrow filter and exited 0; the wide-filter kill was then attributed to TestExecutionErrorHonesty_MetricIncrements, which exits 1 under M1.",
+          "restorationProof": {
+            "facade.go": "139510ffc375b310e2dd8c4309afe7b07e085edb",
+            "facade_execution_error_honesty_test.go": "482529251894b7abac1e5b2678b564c974964b01",
+            "gitStatusPorcelain": "empty",
+            "gitDiffStat": "empty"
+          }
+        }
+      }
+    ]
+  },
   "certification": {
     "status": "in_progress",
     "achievedAssuranceLevel": "deployed-and-infra-verified",
@@ -77,11 +132,11 @@
     ],
     "pendingGates": [
       "operator live behavioral smoke test on the messaging transport (human turn): a failed scenario execution surfaces an honest error, never 'saved as an idea'",
-      "G022 \u2014 the specialist phases (regression, simplify, stabilize, security, audit, validate) have NOT executed for this packet. No execution.completedPhaseClaims or execution.executionHistory record exists for any of them, which is also why certification.certifiedCompletedPhases is empty. Owner: the workflow orchestrator dispatching each specialist in turn, bubbles.validate last as the sole certifying authority.",
+      "G022 \u2014 PARTIALLY CLEARED. The regression phase HAS now executed (2026-08-21, agent bubbles.regression) and is recorded in execution.completedPhaseClaims + execution.executionHistory with evidence at report.md#regression-evidence. The remaining specialist phases (simplify, stabilize, security, audit, validate) have still NOT executed and hold no claim or history record, which is also why certification.certifiedCompletedPhases remains empty \u2014 regression is a diagnostic surface and is not a certifying authority, so its execution does not certify itself. Owner: the workflow orchestrator dispatching each remaining specialist in turn, bubbles.validate last as the sole certifying authority.",
       "G136 \u2014 human acceptance is operator-owned. uservalidation.md ships its LIVE item unchecked and carries no '## Human Acceptance Record'; only the operator may check that item and author that section. G136 remaining open is CORRECT, not a defect.",
       "Scenario-level end-to-end coverage does not exist for SCN-061-008-01/02/03. scenario-manifest.json declares requiredTestType 'unit' for all four scenarios and the unit binding satisfies that contract (see report.md 'Scenario binding evidence'), but no e2e-api/e2e-ui test drives them against a provider-enabled assistant stack. The Test Plan row asserting end-to-end regression coverage was deliberately NOT written: planning-checks.sh:72 text-matches that phrase in any table row, so adding it to a unit-category row would turn the gate green while misdescribing the category. Owner: the assistant e2e harness owner \u2014 outside this bug's six-file fix surface. Recorded as D-3 in report.md.",
       "Traceability (D-2) \u2014 deployment.sourceSha '19fe72c8' is an orphaned object: not an ancestor of HEAD, contained by no branch. The commit of record is '44dc0c94' and the two trees are byte-identical (3481978a...), so the running binary corresponds to the code on main and the defect is traceability only. Left as measured rather than rewritten, because tree equivalence is provable but which object the build host consumed is not. See report.md#code-diff-orphaned-sha.",
-      "Stale transcript (D-1) \u2014 the '## P2 evidence' block quotes two test names that BUG-061-009 renamed. The transcript is left unaltered because editing a recorded run's output would fabricate evidence; current binding is recorded separately under 'Scenario binding evidence'. Owner: bubbles.regression."
+      "Stale transcript (D-1) \u2014 CLOSED 2026-08-21 by bubbles.regression. The '## P2 evidence' block still quotes two test names that BUG-061-009 renamed, and it remains unaltered on purpose: editing a recorded run's output would fabricate evidence for a run that never produced it. It is now SUPERSEDED rather than rewritten \u2014 report.md#regression-evidence carries fresh bounded captures executed against the CURRENT test names (TestHighBandNeverMaskedAsSavedAsIdea, TestExecutionErrorHonesty_OKNoSourcesRefusesHonestly, TestRequiresProvenanceScenarios_ClosedOverSST), so no reader depends on the stale block for current binding."
     ]
   },
   "nextRequiredOwner": "operator (live Telegram behavioral smoke test — a human turn; the P1-P5 fix is deployed + running + healthy + adapter-bound on <deploy-host>, so the honest-error code path is already live)",

@@ -244,11 +244,142 @@ measured rather than silently rewritten, because this pass can prove tree equiva
 cannot prove which object the build host consumed. Same finding class as the sibling packet
 BUG-061-007, recorded at `report.md#code-diff-orphaned-sha` there.
 
+## Regression phase evidence {#regression-evidence}
+
+Executed by `bubbles.regression` on 2026-08-21 against HEAD `d405f24a` (the planning-repair
+commit), working tree clean at entry. Every command below was run in this session from the
+repository root via the repo CLI; each block is bounded by `evidence-capture.sh`, whose sha256
+covers every produced line and is re-derivable with `--verify`.
+
+All Go runs used `SMACKEREL_SKIP_HOST_PREFLIGHT=1`. That is the documented host-preflight
+opt-out at `smackerel.sh:715`; the host disk check refuses at roughly 34 GB free against a
+40 GB threshold, and `test unit --go` builds no image, so the opt-out is scoped to a check that
+does not apply. No shared cache was pruned. The opt-out is disclosed here rather than left
+implicit.
+
+### Suites executed
+
+| Command | Exit | Lines | sha256 |
+|---|---|---|---|
+| `./smackerel.sh test unit --go` (full, restored tree) | **0** | 207 | `102eb9c7a9d918d9ff4305e8128a8f4f01acbef71dbd7fc97008e503ce8f6e7b` |
+| `./smackerel.sh test unit --go --go-run 'HighBandNeverMaskedAsSavedAsIdea\|ExecutionErrorHonesty\|RequiresProvenanceScenarios_ClosedOverSST\|CanonicalRefusalBodyFor'` (mutation control) | **0** | 216 | `e24bd7a7cf4d3720fd26dbd5e6bcc04d6b5aab85a1345eda46356fd3f140760e` |
+
+`go test ./... finished OK` on the full run. The integration suite is recorded in its own
+block below.
+
+### Mutation testing — do the four per-scenario DoD claims actually hold?
+
+The DoD added four items that restate a scenario's behavioral claim and bind it to a named
+assertion. A passing test does not prove a claim is *enforced*; it only proves the test agrees
+with today's code. Each claim was therefore checked by MUTATION: introduce a targeted change
+that reintroduces the masking defect the claim forbids, run the claim's own binding assertion,
+and record whether the assertion kills the mutant. A claim whose mutant survives is
+over-checked — the checkbox asserts more than the test enforces.
+
+Pre-mutation bytes, recorded before the first mutant:
+
+```text
+139510ffc375b310e2dd8c4309afe7b07e085edb  internal/assistant/facade.go
+482529251894b7abac1e5b2678b564c974964b01  internal/assistant/facade_execution_error_honesty_test.go
+```
+
+| Mutant | Mutation applied | Claim under test | Binding assertion run | Exit | Verdict |
+|---|---|---|---|---|---|
+| M1 | gate condition widened to `OutcomeOK \|\| OutcomeProviderError` — the provenance gate runs again on a provider error | SCN-061-008-01 | `TestHighBandNeverMaskedAsSavedAsIdea` | **0** | 🔴 **SURVIVED** |
+| M2 | gate condition widened to `OutcomeOK \|\| OutcomeTimeout` — the gate runs again on a timeout | SCN-061-008-02 | `TestHighBandNeverMaskedAsSavedAsIdea` | **0** | 🔴 **SURVIVED** |
+| M3 | gate condition inverted to `Outcome != OutcomeOK` — the fabrication guard no longer runs on an OK outcome | SCN-061-008-03 | `TestExecutionErrorHonesty_OKNoSourcesRefusesHonestly` | **1** | 🟢 KILLED |
+| M4 | `open_knowledge` removed from `requiresProvenanceScenarios` — the sweep set is no longer closed over the SST | SCN-061-008-01/02/03 (the matrix) | `TestRequiresProvenanceScenarios_ClosedOverSST` | **1** | 🟢 KILLED |
+
+Bounded captures: M1 narrow `b5ece537458f3de1abe6693d2b204c1a221bd7517c3a3640ed60ce9f9fa4798c`;
+M2 `9acfa8a3f66e14b287fdff0dbcdd26bc7d06f354c4c41d0f54028d9a76f516b9`;
+M3 `b61060ae7e0fec1d6917209582598d17b68f97c51dbd9e4cd74eac65bd0085fd`;
+M4 `6e36a3aa962bd1937726d21b1796d751b9918a692709ef4e5b16035a4fcc9ccb`.
+
+A method correction is recorded rather than hidden. The first M1 run used a wider `--go-run`
+filter (`HighBandNeverMaskedAsSavedAsIdea|ExecutionErrorHonesty`) than the M2 run, exited 1,
+and would have read as a kill. That comparison was invalid — the two mutants were not measured
+against the same assertion. M1 was re-run against the identical narrow filter and exited 0.
+The wide-filter kill was then attributed by running M1 against
+`TestExecutionErrorHonesty_MetricIncrements` alone: exit **1**, capture
+`76059cd03a16088526ea632c71994e4e6cb90c1b2a4597b9194edbc84b054642`.
+
+### Finding R-1 — the named regression gate does not kill the defect it is named for
+
+Two of the four claims survive. The mechanism is specific and worth stating exactly, because
+the packet still behaves correctly at runtime; what fails is the *proof*.
+
+`TestHighBandNeverMaskedAsSavedAsIdea` asserts five properties of the response: `Status` is not
+`StatusSavedAsIdea`, `Status` is `StatusUnavailable`, `Body` is not the capture
+acknowledgement, `CaptureRoute` is false, and `ErrorCause` is non-empty. When M1 or M2 lets the
+provenance gate fire on a non-OK outcome, the gate does rewrite the response to
+`StatusSavedAsIdea` with `CaptureRoute=true` — the original defect. But
+`canonicalizeSuccessfulCaptureResponse` then runs, and BUG-061-009 scoped the capture
+acknowledgement to band LOW (`facade.go:1832`, `if band != BandLow`). A band-high response
+still carrying the capture shape is converted into the honest refusal. All five assertions pass
+again.
+
+So the sweep is a check on the response *shape at the boundary*, not on the P1 guard. After
+BUG-061-009 landed, its band-scoping became a second, independent defence sitting downstream of
+the P1 guard — and it is strong enough to hide the P1 guard's removal from the very test this
+packet names as its mechanical enforcement.
+
+One consequence is a real behavioral loss the suite does not catch. Under M2 the gate replaces
+the true cause with `ErrNoGroundedAnswer`, so a timeout reaches the transport and alerting
+labelled "no grounded answer". The sweep only asserts `ErrorCause != ""`, so the substitution
+passes. That is precisely the clause the SCN-061-008-02 DoD item claims — *"the timeout cause
+survives to the transport rather than being discarded by the gate"* — and no assertion in the
+tree enforces it.
+
+**Which DoD items are over-checked.** Both are in Scope 1 of `scopes.md`:
+
+- SCN-061-008-01 — the "never rendered as saved as an idea" half is enforced (by the downstream
+  band scoping, and separately by the P3 metric test, which is what actually killed M1). The
+  item's attribution in "Scenario binding evidence" to `TestHighBandNeverMaskedAsSavedAsIdea`
+  overstates what that test enforces.
+- SCN-061-008-02 — same, plus the "the timeout cause survives" clause is unenforced and is
+  false under M2. This is the stronger over-check of the two.
+
+The user-visible invariant this packet ratified — *an execution error must never render as
+"saved as an idea"* — is **not** falsified by this finding. Two independent mechanisms still
+hold it. What the finding falsifies is the claim that the named sweep is what holds it. Sibling
+packets that cite this packet's sweep as their guarantee are citing a check weaker than they
+assume. Filed as D-4, owner `bubbles.test`; no code is at fault, so no fix cycle is opened here.
+
+### Cross-spec coherence
+
+| Check | Result |
+|---|---|
+| Does this packet contradict the band-LOW-only capture-ack rule (BUG-061-009 / INV-HB-REFUSAL)? | **No.** `facade.go:1825-1832` carries the band scoping intact; this packet's guard sits upstream of it and the two compose. The gate narrows *when* the capture shape may be produced; the canonicalisation narrows *which band* may keep it. |
+| BUG-061-006 (duplicate/contradictory capture ack) | Present at `specs/061-conversational-assistant/bugs/BUG-061-006-duplicate-contradictory-capture-ack`. Relies on exactly one capture-ack shaping path; this packet adds no second one. |
+| BUG-061-007 (weather shortcut masked) | Present at `.../BUG-061-007-weather-shortcut-masked-as-saved-as-idea`. Its deterministic-dispatch seam is documented by this packet's Scope 4 and is unmodified here. |
+| Refusal taxonomy free of the capture ack | `grep 'saved as an idea' internal/assistant/contracts/refusal.go` returns exactly **one** line, `refusal.go:56`, and it is a prohibitive comment (*"NOT a 'saved as an idea' capture tail"*), not a refusal body. Recorded as one match rather than claimed as zero. |
+| `requires_provenance` closure proof | Confirmed to have arrived with **BUG-061-009**, not this packet — `facade_high_band_invariant_coverage_test.go` header names SCN-061-009-02. M4 shows it is genuinely load-bearing today. The matrix DoD item is true of the tree as it stands and was not proven when this packet shipped, which "Scenario binding evidence" already qualifies. |
+
+### Restoration proof
+
+Every mutant was reverted. Post-restore bytes equal the pre-mutation bytes exactly, and the
+whole working tree carries zero residual diff:
+
+```text
+$ git hash-object internal/assistant/facade.go
+139510ffc375b310e2dd8c4309afe7b07e085edb          # == pre-mutation
+$ git hash-object internal/assistant/facade_execution_error_honesty_test.go
+482529251894b7abac1e5b2678b564c974964b01          # == pre-mutation
+$ git status --porcelain
+                                                   # empty
+$ git diff --stat
+                                                   # empty
+```
+
+The full unit suite above was run **after** restoration, so its exit 0 describes the restored
+tree and not a mutated one.
+
 ## Discovered Issues
 
 | # | Date | Finding | Owner |
 |---|------|---------|-------|
-| D-1 | 2026-08-21 | The `## P2 evidence` transcript above quotes test names that no longer exist in the tree: `TestExecutionErrorHonesty_NonOKNeverMaskedAsSavedAsIdea` is now `TestHighBandNeverMaskedAsSavedAsIdea`, and `TestExecutionErrorHonesty_OKNoSourcesStillRefuses` is now `TestExecutionErrorHonesty_OKNoSourcesRefusesHonestly`. Both were renamed by BUG-061-009 when it widened the invariant. The transcript was captured from a real run at the time and is left unaltered, because editing a recorded transcript to match today's names would fabricate evidence for a run that never produced it. The current binding is recorded separately under "Scenario binding evidence". | `bubbles.regression` (re-capture the P2 block against current test names, or supersede it with the scenario-binding section) |
+| D-4 | 2026-08-21 | `TestHighBandNeverMaskedAsSavedAsIdea` does not kill a reintroduction of the P1 masking defect: mutants M1 (provider error) and M2 (timeout) both re-enable the provenance gate on a non-OK outcome and the test still exits 0, because BUG-061-009's band-LOW-only `canonicalizeSuccessfulCaptureResponse` converts the resulting capture shape back into an honest refusal downstream. The sweep asserts only `ErrorCause != ""`, so it also misses that the gate substitutes `ErrNoGroundedAnswer` for the true timeout/provider cause — the exact clause the SCN-061-008-02 DoD item claims. The invariant itself still holds via two independent mechanisms (the band scoping, and the P3 metric test, which does kill M1); what is unproven is the attribution. Strengthening candidate: assert the specific expected `ErrorCause` per outcome row instead of mere non-emptiness, which would make the sweep kill M1 and M2 directly. Full analysis at `#regression-evidence`. | `bubbles.test` |
+| D-1 | 2026-08-21 | The `## P2 evidence` transcript above quotes test names that no longer exist in the tree: `TestExecutionErrorHonesty_NonOKNeverMaskedAsSavedAsIdea` is now `TestHighBandNeverMaskedAsSavedAsIdea`, and `TestExecutionErrorHonesty_OKNoSourcesStillRefuses` is now `TestExecutionErrorHonesty_OKNoSourcesRefusesHonestly`. Both were renamed by BUG-061-009 when it widened the invariant. The transcript was captured from a real run at the time and is left unaltered, because editing a recorded transcript to match today's names would fabricate evidence for a run that never produced it. The current binding is recorded separately under "Scenario binding evidence". **CLOSED 2026-08-21 by `bubbles.regression`** — superseded, not rewritten: `#regression-evidence` carries fresh bounded captures run against the current test names, so no reader depends on the stale block for current binding. | `bubbles.regression` (closed) |
 | D-2 | 2026-08-21 | `deployment.sourceSha` `19fe72c8` is orphaned — see `#code-diff-orphaned-sha`. Tree equivalence with the commit of record is proven; which object the build host consumed is not. | `bubbles.devops` (re-point `sourceSha` to `44dc0c94` only if the build host's consumed object can be confirmed) |
 | D-3 | 2026-08-21 | No `e2e-api`/`e2e-ui` test drives these scenarios against a provider-enabled assistant stack. `scenario-manifest.json` declares `requiredTestType: "unit"` for all four, so the unit binding satisfies the declared contract, but the scenario-level end-to-end path is unproven. A Test Plan row naming this as end-to-end regression coverage was deliberately not written: `planning-checks.sh:72` text-matches that phrase in any table row, so putting it on a `unit`-category row would green the gate while misdescribing the category. | assistant e2e harness owner — outside this bug's six-file fix surface |
 
