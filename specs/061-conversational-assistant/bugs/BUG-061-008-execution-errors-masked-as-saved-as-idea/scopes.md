@@ -99,7 +99,7 @@ Paths above are the non-artifact files this scope changed in the commit of recor
 
 ## Scope 2 (P2): Cross-scenario invariant test (the regression gate)
 
-**Status:** In Progress
+**Status:** Done
 
 Returned to In Progress on 2026-08-22 by `bubbles.audit` under finding D-6: the matrix DoD item
 below was unchecked because its outcome-axis quantifier ("each error outcome") is not merely
@@ -111,6 +111,13 @@ unmapped terminal outcomes resolve to `contracts.ErrInternalError` (see [design.
 "Decision — per-outcome `ErrorCause` for terminal non-OK outcomes"). The item stays unchecked and
 its wording stays as written; it is re-earned by code plus a test, not by an artifact edit. Scope
 remains In Progress.
+
+Returned to Done on 2026-08-22 by `bubbles.implement`: the answered decision was implemented in
+code (`translateOutcomeToErrorCause` gained the `ErrInternalError` arm for the four terminal
+outcomes) and the sweep was widened to all six terminal outcomes with its cause map still
+hand-written. The item's wording was NOT touched — it was re-earned exactly as `bubbles.plan`
+required. Zero DoD items in this scope are now unchecked, and a two-mutant campaign proves the
+widened sweep binds rather than merely passes (raw evidence inline on the item below).
 
 **Depends on:** Scope 1
 
@@ -139,7 +146,45 @@ Paths above are the non-artifact files backing this scope — see [report.md](re
 ### Definition of Done
 - [x] Table-driven invariant test covers all requires_provenance scenarios × {provider-error, timeout} asserting honest surfacing (never `StatusSavedAsIdea`, never capture body, `CaptureRoute=false`). **Claim Source:** executed. Evidence: [report.md](report.md) → "P2 evidence".
 - [x] Complementary OK+no-sources cases assert the fabrication guard still fires (P1 does not over-correct). **Claim Source:** executed. Evidence: [report.md](report.md) → "P2 evidence".
-- [ ] SCN-061-008-01/02/03 — the honesty invariant holds for EVERY `requires_provenance` scenario × each error outcome and for OK+no-sources, not only the paths patched by hand; the sweep set is proven closed over the scenario SST, so a scenario added to the manifest cannot silently escape the check and still refuses honestly. **UNCHECKED 2026-08-22 by `bubbles.audit`** — the scenario half of the quantifier is genuinely earned (`TestRequiresProvenanceScenarios_ClosedOverSST` reads `config/assistant/scenarios.yaml` and fails in both directions). The outcome half is not, and the cited evidence section never addresses that axis. Read this turn rather than taken from the report: `translateOutcomeToErrorCause` (`internal/assistant/facade.go:1798-1804`) returns `ErrProviderUnavailable` for `OutcomeProviderError` and `OutcomeTimeout` and `contracts.ErrNone` for everything else; `ErrNone ErrorCause = ""` (`internal/assistant/contracts/response.go:194`); `internal/agent/executor.go:59-88` declares 10 non-OK outcomes. So for the other 8 the `ErrorCause` half of the honesty invariant — which `spec.md` P1 states as "`Status=StatusUnavailable` + a set `ErrorCause` + a truthful body" — does not hold. `D-5` frames this as an unproven cause; it is stronger than that, and a checked item may not assert a universal its own code contradicts. The `StatusUnavailable` / `CaptureRoute=false` / never-capture-body half DOES hold for all ten, via the single `result.Outcome != OutcomeOK` branch at `facade.go:1368`. **Remedy for the owner:** the `D-5` spec question is **ANSWERED 2026-08-22 by `bubbles.plan`** — a schema failure, an invalid tool return, an input-schema violation and a loop limit each owe the transport a cause, and that cause is the existing `contracts.ErrInternalError`; `ErrNone` is not correct for them. The count in this item is also corrected: the mapping gap is **four**, not eight, because `OutcomeAllowlistViolation` / `OutcomeHallucinatedTool` / `OutcomeToolError` are per-`ExecutedToolCall` records the loop continues past and `OutcomeUnknownIntent` is emitted only by `Bridge.Invoke`, which never reaches the facade mapping. What re-earns this check is now purely mechanical and owned by `bubbles.implement`: add the `ErrInternalError` arm to `translateOutcomeToErrorCause`, then widen `errorOutcomes` and `errorOutcomeCauses` to the six terminal outcomes. The narrowing option this remedy previously offered is **withdrawn** — rewording the item to match current delivery is the G068 anti-pattern. Rationale: [design.md](design.md) → "Decision — per-outcome `ErrorCause` for terminal non-OK outcomes". **Claim Source:** executed. Evidence: [report.md](report.md) → "Scenario binding evidence" and `#audit-evidence`.
+- [x] SCN-061-008-01/02/03 — the honesty invariant holds for EVERY `requires_provenance` scenario × each error outcome and for OK+no-sources, not only the paths patched by hand; the sweep set is proven closed over the scenario SST, so a scenario added to the manifest cannot silently escape the check and still refuses honestly. **UNCHECKED 2026-08-22 by `bubbles.audit`** — the scenario half of the quantifier is genuinely earned (`TestRequiresProvenanceScenarios_ClosedOverSST` reads `config/assistant/scenarios.yaml` and fails in both directions). The outcome half is not, and the cited evidence section never addresses that axis. Read this turn rather than taken from the report: `translateOutcomeToErrorCause` (`internal/assistant/facade.go:1798-1804`) returns `ErrProviderUnavailable` for `OutcomeProviderError` and `OutcomeTimeout` and `contracts.ErrNone` for everything else; `ErrNone ErrorCause = ""` (`internal/assistant/contracts/response.go:194`); `internal/agent/executor.go:59-88` declares 10 non-OK outcomes. So for the other 8 the `ErrorCause` half of the honesty invariant — which `spec.md` P1 states as "`Status=StatusUnavailable` + a set `ErrorCause` + a truthful body" — does not hold. `D-5` frames this as an unproven cause; it is stronger than that, and a checked item may not assert a universal its own code contradicts. The `StatusUnavailable` / `CaptureRoute=false` / never-capture-body half DOES hold for all ten, via the single `result.Outcome != OutcomeOK` branch at `facade.go:1368`. **Remedy for the owner:** the `D-5` spec question is **ANSWERED 2026-08-22 by `bubbles.plan`** — a schema failure, an invalid tool return, an input-schema violation and a loop limit each owe the transport a cause, and that cause is the existing `contracts.ErrInternalError`; `ErrNone` is not correct for them. The count in this item is also corrected: the mapping gap is **four**, not eight, because `OutcomeAllowlistViolation` / `OutcomeHallucinatedTool` / `OutcomeToolError` are per-`ExecutedToolCall` records the loop continues past and `OutcomeUnknownIntent` is emitted only by `Bridge.Invoke`, which never reaches the facade mapping. What re-earns this check is now purely mechanical and owned by `bubbles.implement`: add the `ErrInternalError` arm to `translateOutcomeToErrorCause`, then widen `errorOutcomes` and `errorOutcomeCauses` to the six terminal outcomes. The narrowing option this remedy previously offered is **withdrawn** — rewording the item to match current delivery is the G068 anti-pattern. Rationale: [design.md](design.md) → "Decision — per-outcome `ErrorCause` for terminal non-OK outcomes". **Claim Source:** executed. Evidence: [report.md](report.md) → "Scenario binding evidence" and `#audit-evidence`. **RE-CHECKED 2026-08-22 by `bubbles.implement`** — the remedy above was executed exactly as written, with no rewording of this item's claim. `translateOutcomeToErrorCause` now maps the four terminal outcomes `OutcomeToolReturnInvalid` / `OutcomeSchemaFailure` / `OutcomeLoopLimit` / `OutcomeInputSchemaViolation` to `contracts.ErrInternalError`, and `errorOutcomes` + `errorOutcomeCauses` were widened to all six terminal outcomes with the cause map still hand-written (deriving it from the production mapping would assert that mapping against itself — the D-4 tautology). The three per-`ExecutedToolCall` outcomes and router-emitted `OutcomeUnknownIntent` are deliberately excluded, re-derived this turn from the `terminal:` / "§5.1 loop continues" comments on the `Outcome` constants in `internal/agent/executor.go:52-89` rather than taken from the prior annotation. Both quantifier axes are now earned: the scenario axis by `TestRequiresProvenanceScenarios_ClosedOverSST`, and the outcome axis by the widened sweep binding each row's exact cause. The sweep is proven to BIND rather than merely pass, by a two-mutant campaign in which each mutant dropped one newly-mapped outcome so it fell through to `ErrNone`; both were KILLED at exit 1 across all four scenarios, and the tree was then proven byte-identical to its pre-mutation blobs. `SMACKEREL_SKIP_HOST_PREFLIGHT=1` was set for every run and is disclosed here: the disk preflight refuses at ~35 GB free against a 40 GB floor, the opt-out is the documented one at `smackerel.sh:715`, and `test unit --go` builds no image; no shared cache was pruned. **Claim Source:** executed. Raw evidence inline below.
+
+  ```text
+  $ SMACKEREL_SKIP_HOST_PREFLIGHT=1 ./smackerel.sh test unit --go   # widened sweep, restored tree
+  ok      github.com/smackerel/smackerel/internal/assistant       0.271s
+  [go-unit] go test ./... finished OK
+  UNIT_EXIT=0
+
+  # MUTANT A — drop OutcomeSchemaFailure from the ErrInternalError arm (falls through to default ErrNone)
+      --- FAIL: TestHighBandNeverMaskedAsSavedAsIdea/weather_query/schema-failure
+      --- FAIL: TestHighBandNeverMaskedAsSavedAsIdea/retrieval_qa/schema-failure
+      --- FAIL: TestHighBandNeverMaskedAsSavedAsIdea/recipe_search/schema-failure
+      --- FAIL: TestHighBandNeverMaskedAsSavedAsIdea/open_knowledge/schema-failure
+          facade_execution_error_honesty_test.go:189: ErrorCause = ""; want "internal_error" for a high-band schema-failure.
+  FAIL    github.com/smackerel/smackerel/internal/assistant       0.278s
+  MUTANT_A_EXIT=1
+
+  # MUTANT B — drop OutcomeLoopLimit from the ErrInternalError arm
+      --- FAIL: TestHighBandNeverMaskedAsSavedAsIdea/weather_query/loop-limit
+      --- FAIL: TestHighBandNeverMaskedAsSavedAsIdea/retrieval_qa/loop-limit
+      --- FAIL: TestHighBandNeverMaskedAsSavedAsIdea/recipe_search/loop-limit
+      --- FAIL: TestHighBandNeverMaskedAsSavedAsIdea/open_knowledge/loop-limit
+          facade_execution_error_honesty_test.go:189: ErrorCause = ""; want "internal_error" for a high-band loop-limit.
+  FAIL    github.com/smackerel/smackerel/internal/assistant       0.298s
+  MUTANT_B_EXIT=1
+
+  # RESTORATION — byte-identity against the pre-mutation blobs
+  $ git hash-object internal/assistant/facade.go internal/assistant/facade_execution_error_honesty_test.go
+  b93320457a874ecc5a643a7e3a907b9c91b3695d   (expected b93320457a874ecc5a643a7e3a907b9c91b3695d)
+  6230ce733c6b73a0dccb3e8bc109b57af3a6dbe2   (expected 6230ce733c6b73a0dccb3e8bc109b57af3a6dbe2)
+  $ git status --porcelain
+   M internal/assistant/facade.go
+   M internal/assistant/facade_execution_error_honesty_test.go
+  $ SMACKEREL_SKIP_HOST_PREFLIGHT=1 ./smackerel.sh test unit --go
+  ok      github.com/smackerel/smackerel/internal/assistant       (cached)
+  [go-unit] go test ./... finished OK
+  RESTORED_EXIT=0
+  ```
+
 - [x] Adversarial — the test FAILS if the P1 guard is reverted (regression-quality-guard PASS). **Claim Source:** executed. Evidence: [report.md](report.md) → "P2 evidence".
 
 ---

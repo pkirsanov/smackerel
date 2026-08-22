@@ -1792,14 +1792,34 @@ func translateOutcomeToStatus(outcome agent.Outcome, scenarioID string) contract
 // transport adapter would lose the cause needed to render the
 // `weather: unavailable`-style error line.
 //
-// OutcomeOK and all other outcomes leave ErrorCause unset (ErrNone);
-// the BandHigh dispatch path uses ErrInternalError + ErrMissingScope +
-// ErrSlotMissing explicitly for its own short-circuits and does not
+// EVERY terminal non-OK outcome MUST resolve to a SET cause. Spec 061 P1
+// requires a non-OK turn to carry one, and ErrNone is the empty string —
+// so a terminal outcome falling to the default would reach the transport
+// and the alerting pipeline with no discriminator at all, which is the
+// masking class BUG-061-008 exists to prevent (D-6). internal/agent
+// declares exactly six terminal outcomes: provider-error and timeout are
+// genuinely upstream failures, and the remaining four are internal
+// capability-layer failures, which is what ErrInternalError names. The
+// cause is deliberately coarse rather than one token per outcome: no
+// diagnostic granularity is lost, because the ExecutionErrorSurfacedTotal
+// metric already carries the precise `outcome` label. ErrorCause is the
+// transport-facing discriminator; `outcome` is the telemetry one.
+//
+// The outcomes NOT listed here are not terminal results and must keep
+// ErrNone: allowlist-violation, hallucinated-tool and tool-error are
+// recorded against an individual tool call while the §5.1 loop continues,
+// and unknown-intent is produced by the router, never the executor.
+// OutcomeOK likewise stays ErrNone — a successful turn must not acquire a
+// cause. The BandHigh dispatch path uses ErrInternalError + ErrMissingScope
+// + ErrSlotMissing explicitly for its own short-circuits and does not
 // depend on this helper.
 func translateOutcomeToErrorCause(outcome agent.Outcome) contracts.ErrorCause {
 	switch outcome {
 	case agent.OutcomeProviderError, agent.OutcomeTimeout:
 		return contracts.ErrProviderUnavailable
+	case agent.OutcomeToolReturnInvalid, agent.OutcomeSchemaFailure,
+		agent.OutcomeLoopLimit, agent.OutcomeInputSchemaViolation:
+		return contracts.ErrInternalError
 	default:
 		return contracts.ErrNone
 	}

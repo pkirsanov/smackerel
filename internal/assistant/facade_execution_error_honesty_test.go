@@ -35,17 +35,34 @@ import (
 // stayed out of this sweep while the packet claimed it was covered.
 var requiresProvenanceScenarios = []string{"weather_query", "retrieval_qa", "recipe_search", "open_knowledge"}
 
-// errorOutcomes are the non-OK executor outcomes swept here. Each MUST surface
-// honestly. It is deliberately NOT the whole ratified non-OK set — which also
-// names OutcomeSchemaFailure, OutcomeToolReturnInvalid,
-// OutcomeInputSchemaViolation and OutcomeLoopLimit: translateOutcomeToErrorCause
-// defines a cause only for these two and returns ErrNone for the rest, so a
-// wider list would fail the per-row cause assertion below. Whether a schema
-// failure owes the transport a cause is a spec-061 question, not a test edit.
+// errorOutcomes are the TERMINAL non-OK executor outcomes swept here. Each MUST
+// surface honestly with its own set cause. This is the full terminal set that
+// internal/agent declares: provider-error, timeout, tool-return-invalid,
+// schema-failure, loop-limit and input-schema-violation.
+//
+// The other non-OK outcomes are deliberately absent because they are not
+// terminal results. allowlist-violation, hallucinated-tool and tool-error are
+// recorded against an individual tool call while the §5.1 loop continues, so
+// they never reach the facade as a result outcome; unknown-intent is produced
+// by the router, not the executor. Adding one would assert a facade contract
+// the executor never exercises.
+//
+// D-6 — this list was two rows for as long as translateOutcomeToErrorCause
+// defined a cause for only those two and returned ErrNone for the rest, which
+// made spec-061 P1's "a non-OK turn carries a set ErrorCause" false for the
+// other four. That was a spec question, not a test edit, and it was answered by
+// mapping the four to ErrInternalError; the sweep widened to match.
 //
 // Unlike requiresProvenanceScenarios, this axis has no SST to close over, so
 // nothing here fails when the outcome vocabulary grows.
-var errorOutcomes = []agent.Outcome{agent.OutcomeProviderError, agent.OutcomeTimeout}
+var errorOutcomes = []agent.Outcome{
+	agent.OutcomeProviderError,
+	agent.OutcomeTimeout,
+	agent.OutcomeToolReturnInvalid,
+	agent.OutcomeSchemaFailure,
+	agent.OutcomeLoopLimit,
+	agent.OutcomeInputSchemaViolation,
+}
 
 // errorOutcomeCauses binds every errorOutcomes row to the EXACT ErrorCause the
 // transport and alerting must receive for it. Hand-written on purpose: reading
@@ -60,8 +77,12 @@ var errorOutcomes = []agent.Outcome{agent.OutcomeProviderError, agent.OutcomeTim
 // "no grounded answer". Binding the specific cause is what makes this test
 // bind the clause it claims (SCN-061-008-01/02).
 var errorOutcomeCauses = map[agent.Outcome]contracts.ErrorCause{
-	agent.OutcomeProviderError: contracts.ErrProviderUnavailable,
-	agent.OutcomeTimeout:       contracts.ErrProviderUnavailable,
+	agent.OutcomeProviderError:        contracts.ErrProviderUnavailable,
+	agent.OutcomeTimeout:              contracts.ErrProviderUnavailable,
+	agent.OutcomeToolReturnInvalid:    contracts.ErrInternalError,
+	agent.OutcomeSchemaFailure:        contracts.ErrInternalError,
+	agent.OutcomeLoopLimit:            contracts.ErrInternalError,
+	agent.OutcomeInputSchemaViolation: contracts.ErrInternalError,
 }
 
 // newExecErrHonestyFacade builds a Facade for scenarioID with a stub executor

@@ -37,13 +37,14 @@
   ],
   "scopes": [
     { "id": "scope-01", "title": "P1 honest execution-error surfacing", "status": "done" },
-    { "id": "scope-02", "title": "P2 cross-scenario invariant test", "status": "in_progress" },
+    { "id": "scope-02", "title": "P2 cross-scenario invariant test", "status": "done" },
     { "id": "scope-03", "title": "P3 execution-error observability metric", "status": "done" },
     { "id": "scope-04", "title": "P4 deterministic-dispatch seam pattern (doc)", "status": "done" },
     { "id": "scope-05", "title": "P5 invariant encoded + review checklist", "status": "done" }
   ],
   "completedScopes": [
     "scope-01",
+    "scope-02",
     "scope-03",
     "scope-04",
     "scope-05"
