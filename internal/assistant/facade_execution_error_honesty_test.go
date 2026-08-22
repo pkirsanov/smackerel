@@ -39,6 +39,23 @@ var requiresProvenanceScenarios = []string{"weather_query", "retrieval_qa", "rec
 // FAILURE (not a genuine no-answer). Each MUST surface honestly.
 var errorOutcomes = []agent.Outcome{agent.OutcomeProviderError, agent.OutcomeTimeout}
 
+// errorOutcomeCauses binds every errorOutcomes row to the EXACT ErrorCause the
+// transport and alerting must receive for it. Hand-written on purpose: reading
+// it from translateOutcomeToErrorCause would assert the production mapping
+// against itself and so could never detect a substituted cause.
+//
+// D-4 — asserting only that ErrorCause was non-empty is what left this sweep
+// green under mutation. When the masking regressed, BUG-061-009's band-high
+// canonicalize converted the capture shape into an honest refusal carrying
+// ErrNoGroundedAnswer, which is non-empty, so every assertion still passed: a
+// timeout would reach the transport and the alerting pipeline labelled
+// "no grounded answer". Binding the specific cause is what makes this test
+// bind the clause it claims (SCN-061-008-01/02).
+var errorOutcomeCauses = map[agent.Outcome]contracts.ErrorCause{
+	agent.OutcomeProviderError: contracts.ErrProviderUnavailable,
+	agent.OutcomeTimeout:       contracts.ErrProviderUnavailable,
+}
+
 // newExecErrHonestyFacade builds a Facade for scenarioID with a stub executor
 // returning the given outcome. No source-assembler is registered: for a non-OK
 // outcome the assembler is irrelevant (the gate is skipped), and for the
@@ -80,25 +97,37 @@ func newExecErrHonestyFacade(t *testing.T, scenarioID string, outcome agent.Outc
 // The invariant INV-HB-REFUSAL, across EVERY requires_provenance scenario ×
 // EVERY high-band no-source outcome (provider error, timeout, AND an OK outcome
 // that produced no valid sources): the response surfaces honestly
-// (StatusUnavailable + a non-empty ErrorCause) and is NEVER the capture-as-
-// fallback "saved as an idea". This is the mechanical regression gate that
+// (StatusUnavailable + the outcome's OWN ErrorCause) and is NEVER the capture-
+// as-fallback "saved as an idea". This is the mechanical regression gate that
 // catches the recurring masking for the whole class at once — reverting the
 // gate's honest-refusal shape, the OK-outcome guard, OR the band-low
 // canonicalize scoping fails a row here.
+//
+// The per-row cause assertion is load-bearing, not cosmetic. Because the
+// band-high canonicalize (BUG-061-009) rewrites a regressed capture shape into
+// an honest refusal downstream, the shape assertions below stay green even when
+// the masking IS reintroduced; only the substituted ErrorCause still differs.
+// Asserting the exact cause per row is therefore the assertion that binds
+// SCN-061-008-01/02 to this test (D-4).
 func TestHighBandNeverMaskedAsSavedAsIdea(t *testing.T) {
 	t.Parallel()
 	type hbCase struct {
-		name    string
-		outcome agent.Outcome
-		final   []byte
+		name      string
+		outcome   agent.Outcome
+		final     []byte
+		wantCause contracts.ErrorCause
 	}
 	var cases []hbCase
 	for _, o := range errorOutcomes {
-		cases = append(cases, hbCase{string(o), o, nil})
+		wantCause, declared := errorOutcomeCauses[o]
+		if !declared {
+			t.Fatalf("errorOutcomes has %q with no entry in errorOutcomeCauses; every error outcome must declare the exact cause the transport receives, or its row degrades to a non-emptiness check", o)
+		}
+		cases = append(cases, hbCase{string(o), o, nil, wantCause})
 	}
 	// The OK-but-uncited case: the agent succeeded (produced a body) but with
 	// no valid sources — the exact /ask path BUG-061-009 fixes.
-	cases = append(cases, hbCase{"ok_uncited", agent.OutcomeOK, []byte(`"a synthesized answer with no citations"`)})
+	cases = append(cases, hbCase{"ok_uncited", agent.OutcomeOK, []byte(`"a synthesized answer with no citations"`), contracts.ErrNoGroundedAnswer})
 
 	for _, scenarioID := range requiresProvenanceScenarios {
 		for _, tc := range cases {
@@ -126,6 +155,9 @@ func TestHighBandNeverMaskedAsSavedAsIdea(t *testing.T) {
 				}
 				if resp.ErrorCause == "" {
 					t.Errorf("ErrorCause empty; a high-band %s must carry a cause so the transport can render it honestly", tc.name)
+				}
+				if resp.ErrorCause != tc.wantCause {
+					t.Errorf("ErrorCause = %q; want %q for a high-band %s. A substituted cause mislabels this failure to the transport and to alerting even when the response shape looks honest", resp.ErrorCause, tc.wantCause, tc.name)
 				}
 			})
 		}
