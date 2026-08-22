@@ -1050,5 +1050,168 @@ this report section and the two `execution` records in `state.json`.
 `certification.certifiedCompletedPhases` was not written — it remains the sole property of
 `bubbles.validate`.
 
+### Certification Evidence
+
+`bubbles.validate` ran against this bug folder as the certifying authority. This phase is
+the only writer of `certification.certifiedCompletedPhases`, and this section records what
+it certified, what it declined to certify, and why the packet does not reach a clean close.
+
+Repository binding was established before any repository-local read:
+`PREFLIGHT_COMMITTED decision=rb:…:40 revision=40 repository=smackerel`, affinity confirmed,
+`actionable: true`.
+
+#### The one open question the security phase left unproven is now closed by measurement
+
+The security phase recorded, in `unprovenClaimNote`, that it had **not** computed
+`Key("smackerel_self")` and therefore could not prove it differs from production's migration
+constant `42`. It declined to answer from memory. That question is real rather than
+theoretical, because advisory locks share **one global keyspace per database**. This phase
+computed it.
+
+`Key()` is Go's FNV-1a-64 reinterpreted as a signed integer, read from source at
+`tests/integration/nslock/nslock.go:105-109` rather than assumed:
+
+```
+func Key(namespace string) int64 {
+	h := fnv.New64a()
+	_, _ = h.Write([]byte(namespace))
+	return int64(h.Sum64())
+}
+```
+
+A reimplementation of FNV can agree with itself and still be wrong about what the repository
+actually computes, so it was first **anchored to a value measured live from PostgreSQL**. The
+`pg_advisory_unlock(-3753811720078285197)` for `nslock-guard-namespace` recorded at line 556
+of this report is a real observation from test output, not an assertion. The reimplementation
+reproduces that measured value exactly, which is what licenses trusting it on the target:
+
+```
+CONTROL namespace       = nslock-guard-namespace
+CONTROL computed int64  = -3753811720078285197
+CONTROL measured int64  = -3753811720078285197
+CONTROL AGREES          = True
+
+TARGET  namespace       = smackerel_self
+TARGET  fnv1a64 unsigned= 7135712157784582883
+TARGET  int64 key       = 7135712157784582883
+TARGET  is_negative     = False
+PRODUCTION migration key= 42
+COLLIDES_WITH_42        = False
+```
+
+Production's constant was confirmed at source in the same pass:
+
+```
+internal/db/migrate.go:27:  conn.Exec(ctx, "SELECT pg_advisory_lock(42)") // 42 = smackerel migration lock
+```
+
+**Result: no collision.** `Key("smackerel_self")` is `7135712157784582883`; the production
+migration lock is `42`. The key is also **positive**, so ST-7's negative-key concern does not
+arise for this namespace at all.
+
+Stated precisely, because this closes a question without changing a conclusion: S2's argument
+never depended on the answer. S2 held that a collision degrades liveness and never safety,
+whichever way the number fell. The measurement removes the hypothetical rather than repairing
+a weak link — the security posture is unchanged, and one claim moved from *unproven* to
+*measured*. `unprovenClaimNote` in `state.json` is resolved accordingly.
+
+#### Standing evidence: verified, not re-run
+
+The dangerous parts were **read**, not re-executed. Re-running the mutation would strip the
+shared harness of its lock, and the recorded mutate-then-restore is already complete and
+independently restore-verified. What this phase re-measured is the cheap guard baseline:
+
+```
+--- PASS: TestNamespaceLock_KnownContendersAcquireTheLock (0.00s)
+--- PASS: TestNamespaceLock_DiscoveredContendersAcquireTheLock (0.35s)
+--- PASS: TestNamespaceLock_ExcludesASecondSession (0.08s)
+--- PASS: TestNamespaceLock_DistinctNamespacesDoNotContend (0.04s)
+ok  github.com/smackerel/smackerel/tests/integration/nslock 0.502s
+```
+
+Exit 0. The four guards **executed** rather than skipped: the package line reports a real
+elapsed time with per-test durations, not `[no test files]`, so `openPool` did not hit its
+`t.Skip` on an unset `DATABASE_URL`. Timing differs from the recorded `0.201s` baseline by
+ordinary run-to-run variance, and the pass/fail shape is identical. The guarded sources are
+byte-identical to `HEAD` (`git status --porcelain tests/integration/nslock/` empty).
+
+#### What was certified, and what was withheld
+
+The admission bar applied here is the one used across this session's sibling packets: certify
+a phase only when **both** a real `report.md` evidence section exists **and** an
+`execution.executionHistory` record names the agent that executed it. A third condition is
+implicit in what certification asserts and is applied explicitly: the named agent must be the
+registered owner of that phase, because certifying a phase executed by a non-owner would
+certify the impersonation that Gate G022 exists to detect.
+
+| Phase | Evidence section | executionHistory agent | Registered owner | Check 6B | Certified |
+|---|---|---|---|---|---|
+| `implement` | `## Test Evidence`, `### Code Diff Evidence` | `bubbles.goal` | `bubbles.implement` | BLOCK | **NO** |
+| `test` | `## Test Evidence` | `bubbles.goal` | `bubbles.test` | BLOCK | **NO** |
+| `validate` | `### Validation Evidence` | `bubbles.validate` | `bubbles.validate` | PASS | YES |
+| `audit` | `### Audit Evidence` | `bubbles.audit` | `bubbles.audit` | PASS | YES |
+| `regression` | `### Regression Evidence` | `bubbles.regression` | `bubbles.regression` | PASS | YES |
+| `simplify` | `### Simplify Evidence` | `bubbles.simplify` | `bubbles.simplify` | PASS | YES |
+| `stabilize` | `### Stabilize Evidence` | `bubbles.stabilize` | `bubbles.stabilize` | PASS | YES |
+| `security` | `### Security Evidence` | `bubbles.security` | `bubbles.security` | PASS | YES |
+
+**Certified: 6 of 8.** Withheld: `implement` and `test`.
+
+The reason they are withheld is worth stating exactly, because it is not that their work is
+missing. The code landed, the guards exist and are non-vacuous, and the evidence is real. What
+is absent is authorized provenance: the only truthful record says `bubbles.goal` executed
+both, and `bubbles.goal` owns neither phase. Two edits would turn Gate G022 green, and both
+are forbidden. Rewriting the agent name to `bubbles.implement` / `bubbles.test` would
+fabricate a record of who ran the work. Removing the two claims would erase real execution
+history to make a counter line up. The honest third option is the one taken: leave the record
+accurate, certify 6, and let the gate stay red for a reason the reader can see.
+
+#### Terminal status: `blocked`, on four live blockers
+
+`done` is unreachable, and the packet is not merely waiting on more agent work, so `blocked`
+is the honest terminal state. All four live blockers are named in `blockedReason`; naming only
+the most convenient one would understate the packet's condition.
+
+1. **G136 — human acceptance (structurally unreachable by any agent).** Check 43 reports
+   `PD12-NO-RECORD`: no authored `## Human Acceptance Record`. The guard's own source states
+   that checking a box on the author's behalf *"would fabricate the human acceptance this gate
+   exists to require"*. `uservalidation.md` is human-owned and was left byte-identical. Only a
+   human can clear this.
+2. **G022 — `implement` / `test` provenance.** Recorded above. Unconvertible without
+   fabricating an agent name.
+3. **Check 8A — three planning requirements owned by `bubbles.plan`.** The check demands E2E
+   regression DoD items and a Test Plan row matching `^\|.*Regression E2E`
+   (`planning-checks.sh:72` matches a row's leading text and never reads the category column).
+   Every test this packet delivers is `integration`; it ships no end-to-end test. Satisfying
+   the check would mean asserting E2E coverage that does not exist. `scopes.md` is
+   `bubbles.plan`'s artifact and was left byte-identical.
+4. **The demonstrated open mechanism.** Spec 108 independently reproduced the same three
+   failures *after* this lock landed, and demonstrated the F4 boot-time stale sweep on a live
+   stack. This change broke nothing; the original defect still occurs. A packet whose delivered
+   fix does not close the failure it was opened for must not be called done.
+
+Blockers 1 and 4 are the substantive ones. Blocker 4 in particular means that even if every
+mechanical gate were green, closing this packet would record a fix for a mechanism that is
+demonstrably not the one firing.
+
+#### Follow-Up Narrative
+
+Recorded in the schema-canonical shape; nothing here is a soft promise.
+
+- `followUpOwner: human operator` / `followUpAction: accept or reject the delivered behavior and author the acceptance record in uservalidation.md` / `followUpTarget: G136 Check 43`
+- `followUpOwner: bubbles.plan` / `followUpAction: reconcile the packet's planning artifacts with the integration-only test reality it delivers` / `followUpTarget: Check 8A, scopes.md`
+- `followUpOwner: bubbles.implement` / `followUpAction: address the F4 production boot-time stale sweep that spec 108 demonstrated on a live stack` / `followUpTarget: internal/assistant/selfknowledge/ingestor.go`
+- `followUpOwner: bubbles.implement` / `followUpAction: resolve SEC-1 and SEC-2, both already routed by the security phase and outside this packet's Change Boundary` / `followUpTarget: the three e2e files that print the live DSN`
+
+#### Phase hygiene
+
+The tree was verified clean at phase start and again before writing. This phase authored no
+test, changed no source file, ran no mutation experiment and created no probe, so no restore
+was required. `scopes.md` and `uservalidation.md` were both left byte-identical — neither was
+edited to turn a check green. The only writes are this report section and the
+`certification` / `execution` records in `state.json`. The measurement recorded above is pure
+arithmetic over a string constant, anchored to a previously measured database value; it
+touched no runtime service and no repository file.
+
 
 
