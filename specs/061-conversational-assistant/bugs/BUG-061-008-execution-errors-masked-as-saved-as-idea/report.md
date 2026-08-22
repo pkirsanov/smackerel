@@ -1164,3 +1164,200 @@ one over-claim was found, withdrawn, and routed to `bubbles.plan` as D-6, which 
 decision that closes `D-5` will close. Certification is untouched: `certification.certifiedCompletedPhases`
 remains `[]`, and this phase moved exactly one checkbox, only in the withdrawing direction.
 
+---
+
+## Validate Evidence (bubbles.validate) {#validate-evidence}
+
+Executed 2026-08-22, agent `bubbles.validate`, HEAD `017d75af`. This is the certifying phase:
+it is the only surface authorised to write `certification.certifiedCompletedPhases` and the
+terminal status for this packet.
+
+**Verdict: BLOCKED.** Not `done` — a real DoD item is unchecked on a claim the code falsifies.
+Not the forbidden middle status. The delivered fix is sound and live; the packet is not
+certifiable.
+
+### 1. Independent verification (re-derived from source, not read from this report)
+
+This packet's own history justified re-deriving rather than trusting: the audit phase found and
+withdrew an over-claim (D-6), so `report.md` was known to have carried at least one. Every
+assertion below was re-measured against the working tree this turn.
+
+| Claim under test | Where I looked | Result |
+|---|---|---|
+| FR-1 guard exists and is correctly conditioned | `internal/assistant/facade.go:1368` | **CONFIRMED** — `assemblerOverride == nil && result != nil && result.Outcome == agent.OutcomeOK` |
+| The ratified invariant holds for *all* non-OK outcomes | `translateOutcomeToStatus`, `facade.go:1763-1784` | **CONFIRMED** — the `default:` arm returns `StatusUnavailable`, and one `else if` at `facade.go:1373` covers every non-OK outcome |
+| D-6 is real | `translateOutcomeToErrorCause`, `facade.go:1799-1806`; `contracts/response.go:194` | **CONFIRMED** — maps only `OutcomeProviderError`/`OutcomeTimeout`; `default:` returns `ErrNone`, and `ErrNone ErrorCause = ""` |
+| The D-4 remedy is genuine, not cosmetic | `facade_execution_error_honesty_test.go:62-65`, `:132` | **CONFIRMED** — `errorOutcomeCauses` binds the exact cause per row, and `t.Fatalf` fires if a member joins `errorOutcomes` without declaring its cause |
+| The sweep's outcome axis really is two-wide | `facade_execution_error_honesty_test.go:48` | **CONFIRMED** — exactly `{OutcomeProviderError, OutcomeTimeout}`; the file's own comment at `:38-48` states the limit honestly |
+| D-3 is real | `scenario-manifest.json` | **CONFIRMED** — `requiredTestType` is `"unit"` for all four scenarios; every `linkedTests` entry is a Go unit file |
+| All five prior phase claims resolve to real evidence | `report.md` anchors | **CONFIRMED** — `#regression-evidence`, `#simplify-evidence`, `#stabilize-evidence`, `#security-evidence`, `#audit-evidence` all exist |
+
+### 2. Two over-claims found and corrected by this phase
+
+**(a) Outcome arity.** A count of *13 declared outcomes* reached this phase in its dispatch
+brief. Measured:
+
+```text
+$ grep -nE '^\s+Outcome[A-Za-z]+\s+Outcome' internal/agent/executor.go
+56:  OutcomeOK …                    73:  OutcomeToolReturnInvalid …
+59:  OutcomeUnknownIntent …         77:  OutcomeSchemaFailure …
+63:  OutcomeAllowlistViolation …    80:  OutcomeLoopLimit …
+66:  OutcomeHallucinatedTool …      82:  OutcomeTimeout …
+70:  OutcomeToolError …             85:  OutcomeProviderError …
+                                    88:  OutcomeInputSchemaViolation …
+# 11 Outcome constants; 10 non-OK; 2 mapped to a cause; 8 -> ErrNone.
+```
+
+`executor.go` declares **11** constants, of which **10** are non-OK — not 13. The `D-5` and
+`D-6` rows in the tables above already say *ten non-OK* and are correct. Restating the arity
+does not weaken D-6: it is the same finding at its true size, 8 of 10 rather than a larger
+number.
+
+**(b) Stale `certification.scopeProgress`.** The field read `{total:5, done:5, inProgress:0}`
+even though `bubbles.audit` had returned Scope 2 to In Progress and dropped `scope-02` from
+`completedScopes` **in the same write**. `scopes.md` shows Scope 2 In Progress, and guard
+Check 5 reports `1 scope(s) still marked 'In Progress'`. Corrected here to
+`{total:5, done:4, inProgress:1}`. Left alone it would have been a second false green sitting
+inside the certification block itself.
+
+### 3. D-6 — scoped precisely, and NOT resolved by narrowing the DoD
+
+The distinction that matters, and that this phase preserves:
+
+- **The filed defect IS fixed.** `StatusUnavailable`, `CaptureRoute=false`, and never-the-capture-body
+  hold for all ten non-OK outcomes, through the single guarded branch. The masking bug is gone.
+- **Only the cause-labelling half is partial.** `spec.md` P1 states the invariant as
+  `Status=StatusUnavailable` **+ a set `ErrorCause`** + a truthful body. For 8 of the 10 non-OK
+  outcomes the middle clause is *false*, not unproven — `ErrNone` is the empty string.
+
+A checked DoD item may not assert a universal its own production code contradicts, which is why
+the audit's uncheck was correct and why this phase leaves it unchecked. The item was **not**
+re-checked to force a `done`, and its wording was **not** narrowed to match what was delivered —
+rewriting the claim to fit the code is the shape `G068` exists to catch, and this packet's whole
+subject is a defect that hid behind a reassuring surface.
+
+**Owner `bubbles.plan` must decide the spec question first:** do `OutcomeSchemaFailure`,
+`OutcomeToolReturnInvalid`, `OutcomeInputSchemaViolation` and `OutcomeLoopLimit` owe the
+transport a distinct `ErrorCause`, or is `ErrNone` correct for them? Then **either** widen
+`errorOutcomes` to the full vocabulary and bind each row's cause, **or** amend the scenario.
+Either re-earns the check.
+
+### 4. Phases certified vs withheld
+
+Admission standard applied: certify a phase only when it carries **both** a `report.md` evidence
+section **and** an `execution.executionHistory` record naming the agent that executed it.
+
+| Phase | Evidence section | History record naming agent | Certified |
+|---|---|---|---|
+| `select` | none | none | **withheld** |
+| `bootstrap` | none | none | **withheld** |
+| `implement` | P1–P5 evidence | none | **withheld** |
+| `test` | P1–P5 evidence | none | **withheld** |
+| `docs` | P4/P5 evidence | none | **withheld** |
+| `devops` | `#deploy-verify` | none | **withheld** |
+| `regression` | `#regression-evidence` | `bubbles.regression` | ✅ certified |
+| `simplify` | `#simplify-evidence` | `bubbles.simplify` | ✅ certified |
+| `stabilize` | `#stabilize-evidence` | `bubbles.stabilize` | ✅ certified |
+| `security` | `#security-evidence` | `bubbles.security` | ✅ certified |
+| `audit` | `#audit-evidence` | `bubbles.audit` | ✅ certified |
+| `validate` | this section | `bubbles.validate` | ✅ certified |
+
+**6 certified, 6 withheld.** `implement` / `test` / `docs` / `devops` plainly landed — commit
+`44dc0c94` carries the work and the deployment is live and healthy — but **nothing in this packet
+records which agent executed them**. They predate the `completedPhaseClaims` / `executionHistory`
+convention. Certifying them would require this phase to assert provenance it cannot observe, and
+`G022` merges `certifiedCompletedPhases` into its provenance check, so a fabricated entry would be
+laundered into a passing gate. Inferring the agent from the fact that the work shipped is exactly
+the inference this field must refuse. `select` / `bootstrap` are bookkeeping with nothing to
+verify. The remedy is a provenance record from the owning agent, not a certification edit.
+
+### 5. Guard result (verbatim, captured before this phase's state write)
+
+Run with **no** `--target-status` argument, so the guard applied its default `targetStatus: done`.
+
+```text
+$ bash .github/bubbles/scripts/state-transition-guard.sh <packet>
+BEGIN TRANSITION_GUARD_RESULT_V1
+schemaVersion: transition-guard-result/v1
+workflowMode: bugfix-fastlane
+auditProfile: delivery-completion-v1
+targetStatus: done
+applicableCheckClasses: [universal,mode-required,delivery-completion]
+notApplicableChecks: []
+passedGateIds: [G057,G053,G051,G068,G082,G083,G084,G128,G085,G086,G091,G087,G093,G088,G089,G092,G090,G094,G095,G097,G098,G099,G100,G130,G131]
+failedGateIds: [G022,G040,G136]
+failedChecks: [Check-4-completion,Check-5-all-done]
+blockingCode: DELIVERY_COMPLETION_FAILED
+parentExpandedPhases: 0
+failureCount: 11
+exitStatus: 1
+verdict: FAIL
+END TRANSITION_GUARD_RESULT_V1
+```
+
+The eleven failures, attributed:
+
+| Check | Blocking line | Attribution |
+|---|---|---|
+| 4 | `1 UNCHECKED DoD items` | D-6 — correctly open |
+| 5 | `1 scope(s) still marked 'In Progress'` | Scope 2 — correctly open |
+| 6 | `Required phase 'validate' NOT in ... phase records` | **cleared by this write** |
+| 6 | `1 specialist phase(s) missing` | **cleared by this write** |
+| 6B | `zero-duration entries ... regression\|simplify\|stabilize\|security` | pre-existing — those four recorded `startedAt == completedAt`; this entry does not repeat it |
+| 13 | 3 regression-E2E planning requirements + summary line | D-3 — harness owner |
+| 18 | `3 deferral language hit(s): report.md` | pre-existing, not added here |
+| 43 | `uservalidation.md does not establish human acceptance` | G136 — operator-owned, correctly open |
+
+### 5b. Guard result AFTER this phase's write (verbatim)
+
+```text
+$ bash .github/bubbles/scripts/state-transition-guard.sh <packet>
+BEGIN TRANSITION_GUARD_RESULT_V1
+schemaVersion: transition-guard-result/v1
+workflowMode: bugfix-fastlane
+auditProfile: delivery-completion-v1
+targetStatus: done
+applicableCheckClasses: [universal,mode-required,delivery-completion]
+notApplicableChecks: []
+passedGateIds: [G057,G053,G051,G068,G082,G083,G084,G128,G085,G086,G091,G087,G093,G088,G089,G092,G090,G094,G095,G097,G098,G099,G100,G130,G131]
+failedGateIds: [G027,G040,G136]
+failedChecks: [Check-4-completion,Check-5-all-done]
+blockingCode: DELIVERY_COMPLETION_FAILED
+parentExpandedPhases: 0
+failureCount: 10
+exitStatus: 1
+verdict: FAIL
+END TRANSITION_GUARD_RESULT_V1
+```
+
+`G022` cleared and `failureCount` fell 11 → 10, because this write supplied the missing `validate`
+phase record. **`G027` is newly reported, and it was surfaced by this write — it is not hidden:**
+
+```text
+--- Check 15: Phase-Scope Coherence (Gate G027) ---
+🔴 BLOCK: Execution/certification phases claim 5 lifecycle phases but only 4 of
+         5 scopes are Done — PHASE-SCOPE INCOHERENCE (Gate G027)
+✅ PASS: completedScopes (4) matches artifact Done scopes (4)
+```
+
+While `certifiedCompletedPhases` was `[]` this check had nothing to weigh, so it passed. Populating
+it made a real proportionality visible: five lifecycle phases are certified as executed while one
+scope sits reopened. That is an accurate description of the packet, and it is *part of why the
+status is blocked* rather than an artefact to be dissolved.
+
+The certification was **not** trimmed to clear it. Withholding `regression` / `simplify` /
+`stabilize` / `security` / `audit` — five phases that demonstrably ran and each carry both an
+evidence section and a named-agent history record — purely to make a counter line up would be
+fabrication pointed the other way, and it is the same class of move as re-checking the D-6 item or
+narrowing its wording. `G027` clears on its own once `bubbles.plan` resolves D-6 and Scope 2
+returns to Done; nothing else about it needs repairing.
+
+### 6. What this phase did not do
+
+`uservalidation.md` was not opened or modified — G136 is operator-owned and its remaining open is
+**correct**, not a defect. No DoD checkbox moved in either direction. No scope status changed. No
+production or test source line changed. No suite was re-run: the packet's existing measurements
+(`./smackerel.sh test unit --go` exit 0, `artifact-lint` exit 0, `pii-scan` clean) were cited, not
+re-derived, since the tree is unchanged. The four zero-duration history entries were left as their
+phases recorded them — inventing a duration would fabricate the provenance Check 6B exists to test.
+
