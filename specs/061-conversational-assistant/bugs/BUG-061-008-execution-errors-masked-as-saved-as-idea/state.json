@@ -36,14 +36,13 @@
   ],
   "scopes": [
     { "id": "scope-01", "title": "P1 honest execution-error surfacing", "status": "done" },
-    { "id": "scope-02", "title": "P2 cross-scenario invariant test", "status": "done" },
+    { "id": "scope-02", "title": "P2 cross-scenario invariant test", "status": "in_progress" },
     { "id": "scope-03", "title": "P3 execution-error observability metric", "status": "done" },
     { "id": "scope-04", "title": "P4 deterministic-dispatch seam pattern (doc)", "status": "done" },
     { "id": "scope-05", "title": "P5 invariant encoded + review checklist", "status": "done" }
   ],
   "completedScopes": [
     "scope-01",
-    "scope-02",
     "scope-03",
     "scope-04",
     "scope-05"
@@ -58,7 +57,8 @@
     "regression",
     "simplify",
     "stabilize",
-    "security"
+    "security",
+    "audit"
   ],
   "execution": {
     "completedPhaseClaims": [
@@ -118,6 +118,26 @@
         },
         "timestampNote": "claimedAt is a real instant captured with `date -u` in this session. This workflow does not instrument phase start, so no separate startedAt is inferred.",
         "certificationNote": "certification.certifiedCompletedPhases is deliberately NOT touched by this phase. bubbles.validate is the sole certifying authority for this packet; recording an executed phase here is not a certification."
+      },
+      {
+        "phase": "audit",
+        "agent": "bubbles.audit",
+        "claimedAt": "2026-08-22T19:52:10Z",
+        "evidenceRef": "report.md#audit-evidence",
+        "outcome": "route_required",
+        "verdict": "REWORK_REQUIRED",
+        "summary": "Final audit of the delivered fix against bug.md / spec.md / design.md, read from the source tree rather than from the report's summary of itself. Spec compliance holds on all six requirements: FR-1 is the guard at facade.go:1368, whose condition is assemblerOverride == nil && result != nil && result.Outcome == agent.OutcomeOK, exactly the design's prescription; FR-2 is translateFinalToBody:1743-1746, and the friendly line is pinned by an exact-string assertion at facade_weather_integration_test.go:261 rather than merely differing from the capture acknowledgement; FR-3 is the sweep, which now asserts the exact expected ErrorCause per row at facade_execution_error_honesty_test.go:167-169 and additionally t.Fatalf-s at :132 if a member is added to errorOutcomes without declaring its cause, so the D-4 remedy is real and the row cannot silently degrade back to a non-emptiness check; FR-4 is ExecutionErrorSurfacedTotal, defined metrics.go:156 with labels scenario_id/outcome/transport, registered metrics.go:208, incremented facade.go:1376 in the non-OK branch, and asserted for a delta of exactly 1. ONE over-claim was found and withdrawn, recorded as D-6. The Scope 2 matrix DoD item asserted the honesty invariant for every requires_provenance scenario TIMES each error outcome. The scenario half is earned: TestRequiresProvenanceScenarios_ClosedOverSST reads config/assistant/scenarios.yaml and fails in both directions. The outcome half is not, and the cited evidence section is silent on that axis while explicitly qualifying the other one. It is also stronger than unproven: translateOutcomeToErrorCause (facade.go:1798-1804) returns ErrNone for everything but OutcomeProviderError and OutcomeTimeout, ErrNone is the empty string (contracts/response.go:194), and executor.go:59-88 declares ten non-OK outcomes, so for eight of them the 'a set ErrorCause' half of the spec.md P1 invariant does not hold at all. D-5 reads this gap as an unproven cause; it is a false one. The item was unchecked, Scope 2 returned to In Progress, and the Scope 1 gate item was bounded rather than withdrawn because its subject, the guard, is delivered and its evidence exercises the two outcomes that do carry a cause. Coherence between the 2026-08-21 unchecking and the 2026-08-22 re-checking was verified and is told consistently across scopes.md, the D-4 row and the report body; no stale sentence still claims what was withdrawn, and the one prose sentence that repeated the outcome-axis over-claim now carries an inline correction while its transcript is left byte-identical.",
+        "guardResult": {
+          "command": "bash .github/bubbles/scripts/state-transition-guard.sh <packet>",
+          "exitCode": 1,
+          "failedGateIds": ["G022", "G027", "G040", "G136"],
+          "failedChecks": ["Check-4-completion", "Check-5-all-done"],
+          "failureCount": 14,
+          "verdict": "FAIL",
+          "note": "Captured BEFORE this state write. G022 is validate plus audit missing from the phase records; this write supplies audit, and validate remains correctly absent. G027 was completedScopes 5 against artifact Done count 4, created by this phase's uncheck and repaired by this write. G040 is 2 pre-existing deferral-language hits, proven pre-existing by grepping the same pattern against HEAD's report.md and getting the identical two lines. G136 is operator-only."
+        },
+        "timestampNote": "claimedAt is a real instant captured with `date -u` in this session, taken immediately before the commit.",
+        "certificationNote": "certification.certifiedCompletedPhases is deliberately NOT touched by this phase. Audit reports evidence integrity; bubbles.validate is the sole certifying authority. This phase moved exactly one checkbox, and only in the withdrawing direction."
       }
     ],
     "executionHistory": [
@@ -243,6 +263,61 @@
           "state.json — completedPhases += security; execution.completedPhaseClaims += security claim; execution.executionHistory += this entry"
         ],
         "notWritten": "certification.certifiedCompletedPhases — left [] by design; only bubbles.validate may populate it. No DoD checkbox was checked or unchecked (16/0 preserved). uservalidation.md was not opened or modified (G136)."
+      },
+      {
+        "phasesExecuted": ["audit"],
+        "agent": "bubbles.audit",
+        "startedAt": "2026-08-22T19:43:49Z",
+        "completedAt": "2026-08-22T19:52:10Z",
+        "startedAtNote": "Both instants were captured with `date -u` in this session; startedAt is the timestamp taken immediately before the first artifact edit and completedAt the one taken immediately before the commit.",
+        "headAtExecution": "21c1f426",
+        "outcome": "route_required",
+        "verdict": "REWORK_REQUIRED — one over-claim found and withdrawn. Spec compliance verified in code, not from the report: FR-1 (facade.go:1368 gates the provenance call on assemblerOverride == nil && result != nil && result.Outcome == agent.OutcomeOK), FR-2 (translateFinalToBody:1743-1746 returns friendly truthful lines, bound by an exact-string assertion at facade_weather_integration_test.go:261), FR-3 (the sweep asserts the exact expected ErrorCause per row at facade_execution_error_honesty_test.go:167, which is the D-4 remedy), FR-4 (ExecutionErrorSurfacedTotal defined at metrics.go:156 with labels scenario_id/outcome/transport, registered at metrics.go:208, incremented at facade.go:1376, delta==1 asserted by TestExecutionErrorHonesty_MetricIncrements). D-4's closure is genuine. The over-claim is on the outcome axis of the Scope 2 matrix DoD item and is recorded as D-6.",
+        "findingsOpened": 1,
+        "followUpsOpened": 0,
+        "followUpIds": ["D-6"],
+        "dodItemsUnchecked": 1,
+        "dodItemsChecked": 0,
+        "suitesRun": [],
+        "suitesRunNote": "No test suite was re-run by this phase. The prior unit --go exit 0, artifact-lint 0 and pii-scan clean results are CITED from earlier in this session per the packet instruction; every code claim in the verdict above was re-derived this turn by reading the named source lines.",
+        "commandsExecuted": [
+          {
+            "command": "bash .github/bubbles/scripts/repository-binding.sh preflight --request-class STRUCTURED",
+            "exitCode": 0,
+            "result": "PREFLIGHT_COMMITTED revision=25 repository=smackerel actionable=true"
+          },
+          {
+            "command": "git merge-base --is-ancestor 44dc0c94 HEAD; git merge-base --is-ancestor 0281bdca HEAD",
+            "exitCode": 0,
+            "result": "44dc0c94 IS an ancestor of HEAD; 0281bdca is NOT — the artifacts cite the reachable commit, which is correct"
+          },
+          {
+            "command": "grep -rn 'ExecutionErrorSurfacedTotal' internal/ --include='*.go'",
+            "exitCode": 0,
+            "result": "defined metrics.go:156, registered metrics.go:208, incremented facade.go:1376, asserted facade_execution_error_honesty_test.go:225-236 — FR-4 bound"
+          },
+          {
+            "command": "read internal/assistant/facade.go:1798-1804 and internal/assistant/contracts/response.go:194 and internal/agent/executor.go:59-88",
+            "exitCode": 0,
+            "result": "translateOutcomeToErrorCause maps only OutcomeProviderError and OutcomeTimeout; default returns ErrNone, which is the empty string; ten non-OK outcomes are declared — this is the evidence for D-6"
+          },
+          {
+            "command": "bash .github/bubbles/scripts/state-transition-guard.sh <packet>",
+            "exitCode": 1,
+            "result": "failedGateIds [G022,G027,G040,G136], failureCount 14 — run BEFORE this state write; G027 was the completedScopes/Done mismatch that this write repairs"
+          },
+          {
+            "command": "git show HEAD:<report.md> | grep -niE '<G040 deferral pattern>' vs the same grep on the working file",
+            "exitCode": 0,
+            "result": "identical 2 hits in both (report.md:704/807 in HEAD, :712/815 in the working tree, both the pre-existing stabilize-phase followUp wording) — G040 is pre-existing and this phase introduced no new hit"
+          }
+        ],
+        "artifactsWritten": [
+          "scopes.md — Scope 2 matrix DoD item UNCHECKED with an inline reason and an owner remedy; Scope 2 Status Done -> In Progress; Scope 1 gate item bounded (still checked) so its ErrorCause clause is not read wider than the code",
+          "report.md — new '## Audit Evidence {#audit-evidence}' section, an inline correction note under the P2 prose, and row D-6 in the final '## Discovered Issues' table",
+          "state.json — completedPhases += audit; execution.completedPhaseClaims += audit claim; execution.executionHistory += this entry; scopes[scope-02].status -> in_progress and completedScopes -= scope-02 to repair the G027 coherence the uncheck created"
+        ],
+        "notWritten": "certification.certifiedCompletedPhases — left [] by design; bubbles.validate is the sole certifying authority. No DoD item was CHECKED by this phase; the only checkbox movement was one withdrawal. uservalidation.md was not opened or modified (G136). The P2 evidence transcript was left byte-identical; only the prose above it was corrected."
       }
     ]
   },

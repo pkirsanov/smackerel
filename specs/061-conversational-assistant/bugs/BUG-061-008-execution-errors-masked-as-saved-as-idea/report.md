@@ -51,6 +51,14 @@ New table invariant test `internal/assistant/facade_execution_error_honesty_test
 every `requires_provenance` scenario × each error outcome and asserts honest surfacing; plus
 OK+no-sources cases assert the fabrication guard still fires.
 
+> **Correction 2026-08-22 (`bubbles.audit`, finding D-6).** The sentence above overstates the
+> outcome axis: the sweep's `errorOutcomes` holds two members (`OutcomeProviderError`,
+> `OutcomeTimeout`), not "each error outcome" — `internal/agent/executor.go:59-88` declares ten
+> non-OK outcomes. The scenario half of the quantifier is accurate and is closed over the SST.
+> The transcript below is left byte-identical: it was produced by a real run and rewriting a
+> recorded transcript to match a corrected sentence would fabricate evidence. See
+> `#audit-evidence`.
+
 ```text
 $ ./smackerel.sh test unit --go --go-run 'ExecutionErrorHonesty' --verbose
 === RUN   TestExecutionErrorHonesty_NonOKNeverMaskedAsSavedAsIdea
@@ -1000,3 +1008,159 @@ is clean.
 | S-1 | 2026-08-22 | `bubbles.implement` | low | Log hygiene, pre-existing and outside commit `44dc0c94`: `summarizeOutcomeDetail` (`facade.go:2223`) bounds `outcome_detail` to 200 runes per value / 512 total but does not content-redact, and `executor.go:337,346` place `"detail": err.Error()` into that map, so a raw upstream validation error can reach the turn log truncated. It cannot reach the user-visible body — `translateFinalToBody` never consults `OutcomeDetail`. Introduced by the `BUG-061-004` log enrichment, which keys off `invocation.Outcome` and therefore already fired on non-OK turns before this fix. |
 | S-2 | 2026-08-22 | `bubbles.devops` | medium | Repo-level G034: `security-gate.sh --repo-root <repo-root>` exits 1 with 12 `inline-credentials` findings, all in `scripts/commands/config.sh` and `scripts/commands/config_secret_rejection_test.sh`. Commit `44dc0c94` touches zero files under `scripts/commands/`. Inspection indicates mostly `__SECRET_PLACEHOLDER__` SST sentinels, one `*_SECRET_REF` name pointer, one spec-061 test fixture, and the assertions of a secret-**rejection** test — i.e. probable scanner false positives — but the exit code is real and is reported unsuppressed. Needs either a reviewed gate allowlist entry per hit or a rule refinement; it is not resolvable inside this packet. |
 | D-5 | 2026-08-22 | `bubbles.plan` | open | Pre-existing and unchanged by this phase: `translateOutcomeToErrorCause` binds a cause for 2 of the 10 declared non-OK outcomes. Whether the other 8 owe the transport an explicit cause is a spec-061 question, not a stability defect. Re-confirmed at `facade.go:1799` during this review; not re-litigated here. |
+| D-6 | 2026-08-22 | `bubbles.plan` | medium | Over-claim found by `bubbles.audit` and corrected in place. The Scope 2 matrix DoD item asserted the honesty invariant holds for every `requires_provenance` scenario **× each error outcome**, and the `## P2 evidence` prose repeated it. The scenario half is earned (`TestRequiresProvenanceScenarios_ClosedOverSST`). The outcome half is contradicted by the code: `translateOutcomeToErrorCause` (`internal/assistant/facade.go:1798-1804`) returns `contracts.ErrNone`, which is `""` (`internal/assistant/contracts/response.go:194`), for 8 of the 10 non-OK outcomes declared at `internal/agent/executor.go:59-88`, so the "a set `ErrorCause`" half of the `spec.md` P1 invariant does not hold for them. This is a strictly stronger statement than `D-5`, which reads the gap as an unproven cause rather than a false one. Action taken: the matrix DoD item was **UNCHECKED**, Scope 2 returned to In Progress, `completedScopes` lost `scope-02`, the Scope 1 gate item was bounded to the two outcomes its evidence exercises, and the P2 prose carries an inline correction. Nothing about the delivered fix changed. Resolving `D-5` resolves this. |
+
+## Audit Evidence {#audit-evidence}
+
+`bubbles.audit`, 2026-08-22, at `HEAD` `21c1f426`. Read-only against the source tree; the only
+writes are this section, the D-6 row, the P2 correction note, the `scopes.md` changes described
+below, and the phase record in `state.json`. No test suite was re-run: the `unit --go` exit 0,
+`artifact-lint` 0 and `pii-scan` clean results from earlier in this session are cited per the
+packet instruction. Every code assertion below was re-derived this turn by opening the named
+file at the named line.
+
+### Commit of record
+
+`44dc0c94` is an ancestor of `HEAD` (`git merge-base --is-ancestor` exit 0). The orphaned twin
+`0281bdca` is not (exit 1). The artifacts cite the reachable object, which is correct.
+
+### Spec compliance — verified in the code, not in the report
+
+| Requirement | Where it lives | Verified this turn |
+|---|---|---|
+| **FR-1** gate runs only on `OutcomeOK` | `facade.go:1368` | The condition is `assemblerOverride == nil && result != nil && result.Outcome == agent.OutcomeOK` — the design's prescription plus the BUG-061-003 override clause. Present. |
+| **FR-2** friendly truthful body | `facade.go:1743-1746` | Returns `that took too long — please try again in a moment.` / `the service is unavailable right now — please try again in a moment.` The claim is not merely "not a bare token": `facade_weather_integration_test.go:261` pins the exact string, so the copy cannot silently regress. |
+| **FR-3** cross-scenario invariant test | `facade_execution_error_honesty_test.go` | Sweeps 4 scenarios × 2 outcomes + an `ok_uncited` row. `:167-169` asserts the **exact** expected `ErrorCause`, which is the D-4 remedy. `:132` additionally `t.Fatalf`s if a member is added to `errorOutcomes` without an `errorOutcomeCauses` entry, so the row cannot decay back to a non-emptiness check. |
+| **FR-4** observability metric | `metrics.go:156`, `:208`; `facade.go:1376` | `ExecutionErrorSurfacedTotal` carries exactly the labels `{scenario_id, outcome, transport}` the DoD names, is in the `MustRegister` list, and is incremented in the non-OK branch. `TestExecutionErrorHonesty_MetricIncrements` asserts a delta of exactly 1, so "incremented exactly once" is bound rather than asserted. |
+| **FR-5 / FR-6** pattern + invariant encoded | `docs/smackerel.md`, `.github/copilot-instructions.md` | Present; the ratified invariant text at `.github/copilot-instructions.md:343` is the same one `D-5` cites, so the two artifacts agree. |
+
+### The over-claim (D-6)
+
+The instruction for this phase was to check whether any checked item's inline evidence actually
+supports it. One does not.
+
+```text
+$ read internal/assistant/facade.go:1798-1804
+func translateOutcomeToErrorCause(outcome agent.Outcome) contracts.ErrorCause {
+        switch outcome {
+        case agent.OutcomeProviderError, agent.OutcomeTimeout:
+                return contracts.ErrProviderUnavailable
+        default:
+                return contracts.ErrNone
+        }
+}
+
+$ read internal/assistant/contracts/response.go:194
+        ErrNone ErrorCause = ""
+
+$ read internal/agent/executor.go:59-88   # 10 non-OK outcomes declared
+OutcomeUnknownIntent, OutcomeAllowlistViolation, OutcomeHallucinatedTool,
+OutcomeToolError, OutcomeToolReturnInvalid, OutcomeSchemaFailure,
+OutcomeLoopLimit, OutcomeTimeout, OutcomeProviderError, OutcomeInputSchemaViolation
+```
+
+`spec.md` P1 states the invariant as "`Status=StatusUnavailable` + **a set `ErrorCause`** + a
+truthful body; `CaptureRoute=false`", and names `OutcomeSchemaFailure`, `OutcomeToolReturnInvalid`,
+`OutcomeInputSchemaViolation`, `OutcomeLoopLimit` and `OutcomeUnknownIntent` among the outcomes it
+binds. For those the `ErrorCause` is the empty string. So the matrix item's "× each error outcome"
+is not weakly unproven; part of the invariant it names is **false** for 8 of 10.
+
+What survives, and is worth stating so the withdrawal is not read as wider than it is: the
+`StatusUnavailable` / `CaptureRoute=false` / never-the-capture-body half **does** hold for all ten,
+because they share the single `result.Outcome != OutcomeOK` branch at `facade.go:1368`. The defect
+this bug was filed against is fixed for the whole vocabulary. Only the cause-labelling half is
+partial, and only the DoD sentence claiming otherwise was withdrawn.
+
+`D-5` had already noticed this axis but framed it as "what is unproven per-outcome is the
+**cause**". That reading is too generous by one step, and the difference matters: an unproven
+claim may stay checked pending evidence, whereas a claim the code contradicts may not.
+
+### Items examined and found sound
+
+The other 15 checked items were each read against their cited evidence. `SCN-061-008-01` and
+`SCN-061-008-02` — the two withdrawn on 2026-08-21 and re-checked on 2026-08-22 — are genuinely
+re-earned: the exact-cause assertion at `:167-169` is what kills M1 and M2, and it is present in
+the tree, not merely described in the report. The Scope 3 metric items, the Scope 1 `BS006` item
+and the Scope 4/5 documentation items are bound to assertions or files that exist.
+
+The Scope 1 gate item was **bounded rather than withdrawn**. Its second clause ("non-OK outcomes
+surface honest `StatusUnavailable` + `ErrorCause`") reads wider than the code for the same reason
+as D-6, but its subject is the guard, its cited `P1 evidence` exercises the provider-error path
+that does carry a cause, and the guard is verified present. Narrowing the sentence is the honest
+correction; withdrawing the item would misdescribe a delivered thing as undelivered.
+
+### Coherence of the uncheck / re-check history
+
+Checked, because this packet's record contains a withdrawal and a restoration and a stale
+sentence would be exactly the kind of residue this audit exists to catch:
+
+- `scopes.md` Scope 1 header narrates both movements with dates and agents; both DoD items carry
+  their `UNCHECKED 2026-08-21` and `RE-CHECKED 2026-08-22` annotations in full, rather than the
+  unchecking being erased once it was resolved.
+- The D-4 row states the original finding, the consequence, the remedy and its closure in one
+  place, and does not claim the mutants are killed anywhere it also says they survived.
+- `#d4-remediation` and the inline `scopes.md` blocks agree on the same `M1_AFTER_EXIT=1` /
+  `M2_AFTER_EXIT=1`.
+- The one incoherence found is D-6's second location: the `## P2 evidence` prose sentence still
+  described the sweep as covering each error outcome. That sentence now carries a correction note.
+  Its transcript was left byte-identical, on the same principle D-1 applied.
+
+### Guard result (verbatim, run before the `state.json` write)
+
+```text
+$ timeout 900 bash .github/bubbles/scripts/state-transition-guard.sh <packet>
+GUARD_EXIT=1
+workflowMode: bugfix-fastlane
+auditProfile: delivery-completion-v1
+targetStatus: done
+applicableCheckClasses: [universal,mode-required,delivery-completion]
+notApplicableChecks: []
+passedGateIds: [G057,G053,G051,G068,G082,G083,G084,G128,G085,G086,G091,G087,G093,G088,G089,G092,G090,G094,G095,G097,G098,G099,G100,G130,G131]
+failedGateIds: [G022,G027,G040,G136]
+failedChecks: [Check-4-completion,Check-5-all-done]
+blockingCode: DELIVERY_COMPLETION_FAILED
+failureCount: 14
+verdict: FAIL
+```
+
+Attribution of each failed gate:
+
+- **G022** — `validate` and `audit` were both absent from the phase records at capture time. This
+  write supplies `audit`; `validate` is correctly still absent, since it has not run.
+- **G027** — `completedScopes` count 5 against artifact Done count 4. This is a direct consequence
+  of the D-6 uncheck and is repaired by this write (`scope-02` removed from `completedScopes`, its
+  `scopes[]` entry set to `in_progress`).
+- **G040** — 2 deferral-language hits in `report.md`. **Pre-existing.** Proven rather than assumed:
+  the guard's own pattern was run against `git show HEAD:report.md` and against the working file
+  and returned the identical two lines both times — the stabilize phase's `followUp` wording at
+  `report.md:704`/`:807` in `HEAD` and `:712`/`:815` after this phase's insertions. This phase
+  introduced no new hit.
+- **G136** — human acceptance. Operator-only; `uservalidation.md` was not opened or modified.
+
+Re-run after the `state.json` write, to confirm the coherence repair rather than assert it:
+
+```text
+$ timeout 900 bash .github/bubbles/scripts/state-transition-guard.sh <packet>
+GUARD_EXIT=1
+failedGateIds: [G022,G040,G136]
+failedChecks: [Check-4-completion,Check-5-all-done]
+failureCount: 11
+verdict: FAIL
+```
+
+`G027` is gone and the failure count fell from 14 to 11. The three that remain are the expected
+residual: `validate` has not run, the two `G040` hits are pre-existing, and `G136` is the operator's.
+
+Check 8A's regression-E2E rows remain unsatisfied by design, recorded as `D-3`: no genuine
+`e2e-api`/`e2e-ui` coverage exists, `scenario-manifest.json` declares `requiredTestType: "unit"`
+for all four scenarios, and a Test Plan row naming end-to-end regression coverage was deliberately
+not written onto a `unit`-category row because `planning-checks.sh:72` text-matches that phrase and
+would green the gate while misdescribing the category.
+
+### Verdict
+
+**REWORK_REQUIRED.** The delivered fix satisfies the specification and the D-4 closure is real;
+one over-claim was found, withdrawn, and routed to `bubbles.plan` as D-6, which the same spec-061
+decision that closes `D-5` will close. Certification is untouched: `certification.certifiedCompletedPhases`
+remains `[]`, and this phase moved exactly one checkbox, only in the withdrawing direction.
+
