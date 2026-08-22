@@ -118,9 +118,16 @@ func TestIngestor_IdempotentWithStaleSweep(t *testing.T) {
 	// This test owns the `smackerel_self` namespace for its duration: it
 	// wipes the namespace to establish a baseline and then asserts
 	// namespace-wide counts. tests/integration/openknowledge inserts into
-	// the same namespace, and `go test` runs the two packages in parallel,
-	// so without this lock the wipe lands between that package's INSERT and
-	// its SEARCH and the search returns zero rows. See tests/integration/nslock.
+	// the same namespace, so a CONCURRENT run would land this wipe between
+	// that package's INSERT and its SEARCH and the search would return zero
+	// rows.
+	//
+	// That interleaving is not reachable today, and an earlier version of
+	// this comment claimed otherwise: audit finding A1 established that
+	// scripts/runtime/go-integration.sh passes `-p 1`, so the two packages
+	// never run concurrently. The lock is defence-in-depth — it makes
+	// exclusion a property of the namespace, so dropping `-p 1` for speed
+	// cannot silently make the hazard real. See tests/integration/nslock.
 	nslock.AcquireSelfKnowledge(t, pool)
 
 	cleanupSelfKnowledge(t, pool)

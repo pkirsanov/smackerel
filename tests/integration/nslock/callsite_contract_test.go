@@ -60,6 +60,34 @@ var mutatesArtifacts = regexp.MustCompile(`(?i)(INSERT\s+INTO\s+artifacts|DELETE
 // so a literal-only match found that file only through its comments (A3).
 var namesNamespace = regexp.MustCompile(`smackerel_self|SelfKnowledgeNamespace`)
 
+// acquireCall matches a CALL to the helper rather than a mention of its name.
+var acquireCall = regexp.MustCompile(`nslock\.Acquire[A-Za-z]*\(`)
+
+// acquiresLock reports whether src actually CALLS the namespace lock helper.
+// Both checks below use it, so the two cannot drift apart.
+//
+// The predicate this replaces was strings.Contains(src, "nslock.Acquire"),
+// which PROSE satisfies: a comment reading "we deliberately do not call
+// nslock.Acquire here" would have held both checks green with no lock taken
+// anywhere in the file. That is the same comment-text evasion audit finding
+// A3 found in the discovery regex, left open on this predicate. Requiring a
+// call shape on a non-comment line closes the ordinary form of it.
+//
+// Honest limit: line comments only. A call-shaped mention inside a /* … */
+// block would still satisfy this. That is a narrower hole than the one it
+// replaces, not the absence of one.
+func acquiresLock(src string) bool {
+	for _, line := range strings.Split(src, "\n") {
+		if strings.HasPrefix(strings.TrimSpace(line), "//") {
+			continue
+		}
+		if acquireCall.MatchString(line) {
+			return true
+		}
+	}
+	return false
+}
+
 // TestNamespaceLock_KnownContendersAcquireTheLock asserts the named floor.
 // This is the check that catches a deleted call in a file the discovery pass
 // cannot see.
@@ -73,7 +101,7 @@ func TestNamespaceLock_KnownContendersAcquireTheLock(t *testing.T) {
 			t.Errorf("known contender %s is unreadable (%v). If it was renamed or deleted, update knownContenders deliberately — dropping it silently is how namespace protection rots", rel, err)
 			continue
 		}
-		if !strings.Contains(string(b), "nslock.Acquire") {
+		if !acquiresLock(string(b)) {
 			t.Errorf("%s writes to the shared `smackerel_self` namespace but does not call nslock.Acquire…; it can wipe or race another writer's rows", rel)
 		}
 	}
@@ -107,7 +135,7 @@ func TestNamespaceLock_DiscoveredContendersAcquireTheLock(t *testing.T) {
 		if !namesNamespace.MatchString(src) || !mutatesArtifacts.MatchString(src) {
 			return nil
 		}
-		if !strings.Contains(src, "nslock.Acquire") {
+		if !acquiresLock(src) {
 			missing = append(missing, filepath.ToSlash(path))
 		}
 		return nil

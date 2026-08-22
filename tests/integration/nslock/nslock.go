@@ -138,15 +138,25 @@ func Acquire(t *testing.T, pool *pgxpool.Pool, namespace string) {
 		// and an unlock that silently failed would leak the lock.
 		uctx, ucancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer ucancel()
-		if _, err := conn.Exec(uctx, `SELECT pg_advisory_unlock($1)`, k); err != nil {
-			// NOTE: conn.Release() below returns the connection to the POOL; it
-			// does not close the session, and pgx issues no DISCARD ALL, so a
-			// failed unlock leaves the advisory lock held on a pooled
-			// connection until pool.Close() runs. The contending tests register
-			// pool.Close before this cleanup, and t.Cleanup is LIFO, so the
-			// close does run after this and bounds the leak to one test — but
-			// that is a property of the CALLER's ordering, not of Release.
+
+		// pg_advisory_unlock RETURNS a boolean, and it reports "this session
+		// did not hold that lock" as false rather than as an error. Exec
+		// discards that boolean, so the precise failure this cleanup exists
+		// to notice would have been invisible. Scan it.
+		//
+		// NOTE, on either branch: conn.Release() below returns the connection
+		// to the POOL; it does not close the session, and pgx issues no
+		// DISCARD ALL, so a lock that was not actually released stays held on
+		// a pooled connection until pool.Close() runs. The contending tests
+		// register pool.Close before this cleanup, and t.Cleanup is LIFO, so
+		// the close does run after this and bounds the leak to one test — but
+		// that is a property of the CALLER's ordering, not of Release.
+		var released bool
+		switch err := conn.QueryRow(uctx, `SELECT pg_advisory_unlock($1)`, k).Scan(&released); {
+		case err != nil:
 			t.Logf("nslock: pg_advisory_unlock(%d) for namespace %q: %v (lock remains held until this pool is closed)", k, namespace, err)
+		case !released:
+			t.Logf("nslock: pg_advisory_unlock(%d) for namespace %q returned false — this session did not hold the lock, so nothing was released (lock remains held until this pool is closed)", k, namespace)
 		}
 		conn.Release()
 	})
@@ -169,10 +179,12 @@ func AcquireSelfKnowledge(t *testing.T, pool *pgxpool.Pool) {
 // that is genuinely held. "Any backend" is also the property the guard needs
 // — exclusion is about the lock being unavailable to others.
 //
-// It queries pg_locks for an advisory lock matching the derived key held by
-// the current backend. Advisory-lock keys are split across classid/objid in
-// pg_locks for the two-argument form; the single-argument bigint form stores
-// the high 32 bits in classid and the low 32 bits in objid.
+// It queries pg_locks for a GRANTED advisory lock matching the derived key,
+// across all backends — consistent with the paragraph above; an earlier
+// version of this sentence said "held by the current backend", which the SQL
+// below does not do and must not do. Advisory-lock keys are split across
+// classid/objid in pg_locks for the two-argument form; the single-argument
+// bigint form stores the high 32 bits in classid and the low 32 bits in objid.
 func IsHeld(ctx context.Context, pool *pgxpool.Pool, namespace string) (bool, error) {
 	k := Key(namespace)
 	var held bool
