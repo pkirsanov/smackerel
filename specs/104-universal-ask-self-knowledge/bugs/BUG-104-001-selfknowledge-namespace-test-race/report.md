@@ -618,5 +618,192 @@ the phase-close section of this report and in `state.json`. This phase does not 
 packet's status and does not certify anything; `certification.certifiedCompletedPhases`
 remains the sole property of `bubbles.validate` and was not written here.
 
+### Stabilize Evidence
+
+Reliability, flakiness, resource and operational-soundness pass over the delivered
+namespace-lock harness, executed by `bubbles.stabilize` on 2026-08-22. This phase is
+DIAGNOSTIC: it authored no test, changed no source file, and left the tree byte-identical
+to `6784a873` throughout. Every finding below is therefore routed, not fixed.
+
+**Verdict: 🛑 UNSTABLE — with a precise qualification that matters.** No active instability
+was measured: all four `TestNamespaceLock_` guards pass and the whole `integration-light`
+lane exits 0. The verdict is not `PARTIALLY_STABLE` only because the mode reserves that
+label for findings fixed inline, and the two substantive findings here (ST-1, ST-2) require
+authoring a test, which is `bubbles.test`'s artifact and not stabilize's to write.
+
+#### What was measured this phase
+
+```
+GUARDS_EXIT=0
+--- PASS: TestNamespaceLock_KnownContendersAcquireTheLock (0.00s)
+--- PASS: TestNamespaceLock_DiscoveredContendersAcquireTheLock (0.16s)
+--- PASS: TestNamespaceLock_ExcludesASecondSession (0.03s)
+--- PASS: TestNamespaceLock_DistinctNamespacesDoNotContend (0.02s)
+ok      github.com/smackerel/smackerel/tests/integration/nslock 0.214s
+PASS: go-integration-light
+```
+
+Lane and helper constants, read from the tree rather than recalled:
+
+```
+scripts/runtime/go-integration.sh:48:
+  go_test_args=(-p 1 -tags integration -v -count=1 -timeout 300s)
+tests/integration/nslock/nslock.go:
+  const acquireTimeout = 60 * time.Second
+go.mod: github.com/jackc/pgx/v5 v5.9.2
+```
+
+Acquire points per test package (`nslock.Acquire…` call count in package source):
+
+| Package | Acquire points | Worst-case cumulative blocked wait |
+|---|---|---|
+| `tests/integration/nslock` (guards) | 4 | 240s |
+| `tests/integration/openknowledge` | 3 | 180s |
+| `tests/e2e/openknowledge` | 2 | 120s |
+| `tests/integration` | 1 | 60s |
+| `tests/integration/selfknowledge` | 1 | 60s |
+
+#### ST-1 (MEDIUM) — the release path has no guard, and the suite structurally cannot give it one
+
+All four guards assert ACQUIRE, EXCLUSION and KEY DISTINCTNESS. None asserts RELEASE. The
+`nslock` package doc names a leaked lock as the worst outcome in the design — "A leaked
+lock would convert a flaky suite into a HUNG suite, which is strictly worse than the bug
+being fixed" — and that is the one property nothing tests.
+
+The second half is the part worth stating carefully, because it is not simply a missing
+test. Release is **not observable in-process by any test that could be written against the
+current callers**: every caller creates its pool through a helper that registers
+`t.Cleanup(func() { pool.Close() })` before `Acquire` registers the unlock, and closing the
+pool ends the sessions, which releases the advisory lock regardless of whether
+`pg_advisory_unlock` did anything. A working unlock and a broken one produce the same
+observable. Verified in all four pool helpers (`newTestPool` in
+`tests/e2e/openknowledge/open_knowledge_e2e_test.go` and
+`tests/integration/openknowledge/tool_trace_writer_test.go`, `openPool` in
+`tests/integration/nslock/nslock_test.go`).
+
+An in-process probe would need `-count=2`, and the lane hardcodes `-count=1` and exposes
+only `--go-run` (`scripts/runtime/go-integration.sh:17-51`), so no zero-mutation probe was
+available. This phase deliberately did not mutate the lane or the source to manufacture one.
+
+#### ST-2 (MEDIUM) — the leak backstop is a caller convention, not a package property
+
+The package doc is already honest about this: the LIFO ordering that bounds a failed unlock
+to one test "is a property of the CALLER's ordering, not of Release". The gap is that
+nothing enforces it. `callsite_contract_test.go` enforces that a contender CALLS `Acquire`;
+it does not enforce that the contender built its pool with a per-test
+`t.Cleanup(pool.Close)`.
+
+ST-1 and ST-2 compound, and the trigger is a change the package doc actively anticipates. A
+package-scoped pool created once in `TestMain` is the ordinary optimisation that relaxing
+`-p 1` would motivate. Under it the backstop disappears (the pool outlives every test) at
+the same moment ST-1 leaves the unlock unguarded, so a broken release would surface as a
+hung suite with no failing test pointing at it.
+
+#### ST-3 (LOW-MEDIUM) — `acquireTimeout` is not budgeted against the package timeout
+
+`acquireTimeout` is 60s per acquire; `go test` is given `-timeout 300s` per package binary.
+These two numbers are set in different files and neither references the other. The largest
+acquiring package today is `tests/integration/nslock` at 4 acquire points, so the worst-case
+cumulative blocked wait is 240s against a 300s budget — one acquire of headroom.
+
+A fifth acquiring test in any single package reaches 300s, at which point `go test` panics
+with a whole-process goroutine dump instead of the clean, addressed
+`t.Fatalf("nslock: pg_advisory_lock(%d) for namespace %q: …")` the helper is written to
+emit. The diagnosis degrades precisely when contention becomes real, which is the case the
+diagnosis exists for.
+
+Reachability is narrow and is stated as such: under `-p 1` alone there is no concurrent
+holder, so no acquire blocks. It needs the cross-lane scenario the package doc already
+names — an operator running `test integration` and `test e2e` against one database.
+
+#### ST-4 (LOW, latent) — a double acquire on one `*testing.T` self-deadlocks for 60s
+
+`Acquire` pins a fresh pooled connection per call, so a second `Acquire` on the same `t` is
+a different backend session and blocks against the first until `acquireTimeout`, then fails
+the test. It is bounded and diagnosed, not a true hang.
+
+Not reachable today — no test acquires twice. It is recorded because
+`resetKnowledgeStatsTables(t, ctx, pool)` acquires from inside a *helper*
+(`tests/integration/knowledge_stats_test.go:60,75`), and a helper that takes `t` and
+acquires is exactly the shape that eventually gets called twice from one test.
+
+#### ST-5 / ST-6 (informational) — two properties worth not losing
+
+Lock-ordering (ABBA) deadlock is impossible today: only one namespace, `smackerel_self`, is
+genuinely locked, and two locks are required to order them wrongly. Should a second
+namespace ever be locked, `acquireTimeout` converts the deadlock into a bounded, named
+failure rather than a hang. That is a real design property of the 60s bound and is worth
+preserving alongside the ST-3 caveat about its size.
+
+There is no runtime cliff today: under `-p 1` nothing contends, `pg_advisory_lock` returns
+immediately, and the whole guard package costs 0.214s. The cliff is conditional and
+slightly ironic — relaxing `-p 1` for speed re-serialises every acquiring package on one
+global lock, so the lock caps the payoff of the very change it was written to protect.
+
+#### ST-7 — a defect this phase hypothesised and then refuted by measurement
+
+`Key()` returns `int64(h.Sum64())`, which is a wrapping conversion, so a namespace key can
+be negative — `nslock-guard-namespace` is `-3753811720078285197`. `IsHeld` reconstructs the
+key in SQL as `(classid::bigint << 32) | (objid::bigint & 4294967295)`, and the hypothesis
+was that this cannot reconstruct a negative key, which would make the exclusion guard's
+`IsHeld` assertion vacuous.
+
+The hypothesis is WRONG, and it is recorded because a refuted hypothesis is evidence too.
+PostgreSQL's `int8shl` wraps rather than raising on overflow, so the recomposition is exact
+for both signs. Measured against a live PostgreSQL:
+
+```
+neg_key_roundtrip shift_wraps_not_errors=-3755067272415150080   (no error raised)
+smackerel_self         key=7135712157784582883  negative=false IsHeld_roundtrip=true
+nslock-guard-namespace key=-3753811720078285197 negative=true  IsHeld_roundtrip=true
+nslock-guard-alpha     key=1265726022951694496  negative=false IsHeld_roundtrip=true
+nslock-guard-beta      key=-6846045461519432274 negative=true  IsHeld_roundtrip=true
+PSQL_EXIT=0
+```
+
+`IsHeld` is sound for both signs, and the exclusion guard happens to exercise the harder
+(negative-key) case, so the coverage is better than it looks rather than worse.
+
+#### The residual this phase does NOT close
+
+The regression phase's finding stands unchanged and is not re-litigated here: spec 108 ran
+the full lane after this lock landed, reproduced the same three failures (1971 pass / 7 fail
+against its own 1974 / 0), and demonstrated the F4 boot-time stale sweep on a live stack
+(`swept` 0 to 1, probe row 1 to 0 on a core restart). This fix caused no breakage, and an
+independent spec has demonstrated the mechanism this packet left open. The packet is
+correctly non-terminal.
+
+Nothing in ST-1 through ST-7 addresses F4, and none of them could: F4 is production code
+that never takes the test-side lock. One observation is offered only as corroboration that
+the F4 trigger is ordinary rather than exotic — during this phase the development stack's
+`smackerel-core` container was observed in `Restarting (1)`, i.e. crash-looping, and a core
+restart is exactly what runs the boot sweep. That is an observation about the development
+stack, not a measurement of the test lane, and it is not offered as evidence about either.
+
+#### Follow-Up Narrative
+
+| id | summary | followUpOwner | followUpAction | followUpTarget |
+|---|---|---|---|---|
+| ST-1 | Add a release guard, and make release independently observable (a caller whose pool outlives the acquiring test, or a lane `-count` seam) | `bubbles.test` | new-spec | 2026-09-05 |
+| ST-2 | Extend `callsite_contract_test.go` to assert the per-test `t.Cleanup(pool.Close)` ordering the release safety depends on | `bubbles.test` | new-spec | 2026-09-05 |
+| ST-3 | Budget `acquireTimeout` against `-timeout`, or derive one from the other so they cannot drift apart in separate files | `bubbles.devops` | next-sprint-todo | 2026-09-05 |
+| ST-4 | Make a double acquire on one `*testing.T` fail fast instead of blocking 60s | `bubbles.test` | next-sprint-todo | 2026-09-19 |
+
+Each entry carries a concrete `followUpOwner` and target date rather than being executed
+here, because each requires authoring or changing a test or a lane script — another agent's
+artifact, and outside this packet's Change Boundary. `scopes.md` was left byte-identical
+(it belongs to `bubbles.plan`), and `uservalidation.md` was left byte-identical (G136 is
+human-owned).
+
+#### Phase hygiene
+
+The tree was verified byte-identical to `6784a873` at phase start (`git status --porcelain`
+empty, `git diff --quiet HEAD` clean) and again before writing artifacts. No probe was
+created, so nothing had to be restored and no `git checkout --` was needed; no `trap … EXIT`
+was used anywhere, as it does not fire on command completion in a persistent agent shell.
+The only writes this phase made are this report section and the two `execution` records in
+`state.json`. `certification.certifiedCompletedPhases` was not written — it remains the sole
+property of `bubbles.validate`.
+
 
 
