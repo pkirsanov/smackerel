@@ -9,7 +9,7 @@
   "owner": "bubbles.goal",
   "discoveredBy": "operator (recurring pattern after per-scenario fixes)",
   "discoveredAt": "2026-07-22",
-  "lastUpdatedAt": "2026-08-21",
+  "lastUpdatedAt": "2026-08-22",
   "rootCause": {
     "summary": "The facade high-band path runs the provenance gate unconditionally when a requires_provenance scenario has no sources, regardless of outcome. For a non-OK execution outcome (provider-error/timeout/no-tool-call/schema-failure) the gate rewrites Status to StatusSavedAsIdea + CaptureRoute=true, and canonicalizeSuccessfulCaptureResponse then clears ErrorCause and forces Body='saved as an idea'. A real failure is laundered into a benign capture, invisible to users and alerting. The gate's purpose (anti-fabrication) is only meaningful for an OK outcome that produced a body without valid sources."
   },
@@ -55,7 +55,8 @@
     "test",
     "docs",
     "devops",
-    "regression"
+    "regression",
+    "simplify"
   ],
   "execution": {
     "completedPhaseClaims": [
@@ -67,6 +68,16 @@
         "outcome": "completed_diagnostic_with_findings",
         "summary": "Ran the full Go unit suite (exit 0) on a restored tree and a four-mutant campaign against the four per-scenario DoD claims. M3 (fabrication guard inverted) and M4 (sweep set no longer closed over the SST) were KILLED, so SCN-061-008-03 and the matrix claim are genuinely bound. M1 (provider error re-masked) and M2 (timeout re-masked) SURVIVED their named binding assertion TestHighBandNeverMaskedAsSavedAsIdea, because BUG-061-009's band-LOW-only canonicalizeSuccessfulCaptureResponse converts the resulting capture shape back into an honest refusal downstream and the sweep asserts only that ErrorCause is non-empty. The ratified invariant still holds via two independent mechanisms; the attribution in the DoD is what is overstated. Recorded as D-4, owner bubbles.test. Every mutant was reverted and both mutated files were proven byte-identical to their pre-mutation blobs with a clean git status and an empty git diff.",
         "timestampNote": "claimedAt is a real instant captured with `date -u` in the executing session. Wall-clock phase start is not instrumented by this workflow, so no startedAt is asserted rather than inferring one."
+      },
+      {
+        "phase": "simplify",
+        "agent": "bubbles.simplify",
+        "claimedAt": "2026-08-22T19:14:39Z",
+        "evidenceRef": "report.md#simplify-evidence",
+        "outcome": "completed_owned",
+        "summary": "Reviewed the fix commit 44dc0c94 plus the two D-4 remediation commits (f3b80e22, 2a6f53e8) across three passes (reuse, quality, efficiency). One finding applied (S-1): the errorOutcomes doc comment described the whole non-OK class while the list holds a two-member subset, and unlike the scenario axis this axis has no SST-closure test, so the comment now states actual membership and the reason for it. Comment-only diff: 1 file, 10 insertions, 2 deletions; no assertion, set member, or production line changed. Two candidate refactors were considered and REJECTED with reasoning recorded in the report so they are not retried: deriving errorOutcomeCauses from translateOutcomeToErrorCause (would assert the production mapping against itself and re-open D-4) and folding TestExecutionErrorHonesty_OKNoSourcesRefusesHonestly into the sweep (would lose its unique CanonicalRefusalBodyFor binding and merge two scenario-bound tests). Dead code, unused imports, and refusal_test.go name-vs-assertion strength all came back clean; the sweep's citation of TestRequiresProvenanceScenarios_ClosedOverSST was verified real and bidirectional. The unwidenable-outcome-set question is a spec-061 decision and was recorded as D-5 for bubbles.plan rather than acted on, because changing the production cause mapping is a behavior change outside a simplify pass. ./smackerel.sh test unit --go re-run after the edit: exit 0, 207 lines, sha256 11c738539df2b1f72b8883e8ee57808cbaf84089648e7abc2c09bae51474f294.",
+        "timestampNote": "claimedAt is a real instant captured with `date -u` in this session. This workflow does not instrument phase start, so no separate startedAt is inferred.",
+        "certificationNote": "certification.certifiedCompletedPhases is deliberately NOT touched by this phase. bubbles.validate is the sole certifying authority for this packet; recording an executed phase here is not a certification."
       }
     ],
     "executionHistory": [
@@ -108,6 +119,32 @@
             "gitDiffStat": "empty"
           }
         }
+      },
+      {
+        "phasesExecuted": ["simplify"],
+        "agent": "bubbles.simplify",
+        "startedAt": "2026-08-22T19:14:39Z",
+        "completedAt": "2026-08-22T19:14:39Z",
+        "startedAtNote": "Both fields record the same measured instant: this workflow does not instrument phase start, and the value is the timestamp this phase captured with `date -u` rather than an inferred or back-dated start.",
+        "headAtExecution": "2a6f53e8",
+        "outcome": "completed_owned",
+        "findingsOpened": 1,
+        "findingIds": ["D-5"],
+        "findingsApplied": 1,
+        "appliedFindingIds": ["S-1"],
+        "refactorsRejected": 2,
+        "regressionsFound": 0,
+        "verdict": "One comment-scope repair applied (S-1); two candidate refactors rejected with recorded reasoning; one spec question opened (D-5). No behavior change, no assertion change, no DoD item re-checked, no scope status changed.",
+        "diffScope": "internal/assistant/facade_execution_error_honesty_test.go only — 10 insertions, 2 deletions, comment block only",
+        "suites": [
+          {
+            "command": "SMACKEREL_SKIP_HOST_PREFLIGHT=1 ./smackerel.sh test unit --go",
+            "exitCode": 0,
+            "lines": 207,
+            "sha256": "11c738539df2b1f72b8883e8ee57808cbaf84089648e7abc2c09bae51474f294",
+            "preflightNote": "The host preflight opt-out documented at smackerel.sh:715 was used. It guards RAM and the Windows volume backing the WSL vhdx; `test unit --go` builds no image. `df -h /` reported 542G available on the Linux root at run time. No cache was pruned and no shared resource was touched."
+          }
+        ]
       }
     ]
   },

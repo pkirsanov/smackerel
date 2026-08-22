@@ -35,8 +35,16 @@ import (
 // stayed out of this sweep while the packet claimed it was covered.
 var requiresProvenanceScenarios = []string{"weather_query", "retrieval_qa", "recipe_search", "open_knowledge"}
 
-// errorOutcomes are non-OK executor outcomes that represent an execution
-// FAILURE (not a genuine no-answer). Each MUST surface honestly.
+// errorOutcomes are the non-OK executor outcomes swept here. Each MUST surface
+// honestly. It is deliberately NOT the whole ratified non-OK set — which also
+// names OutcomeSchemaFailure, OutcomeToolReturnInvalid,
+// OutcomeInputSchemaViolation and OutcomeLoopLimit: translateOutcomeToErrorCause
+// defines a cause only for these two and returns ErrNone for the rest, so a
+// wider list would fail the per-row cause assertion below. Whether a schema
+// failure owes the transport a cause is a spec-061 question, not a test edit.
+//
+// Unlike requiresProvenanceScenarios, this axis has no SST to close over, so
+// nothing here fails when the outcome vocabulary grows.
 var errorOutcomes = []agent.Outcome{agent.OutcomeProviderError, agent.OutcomeTimeout}
 
 // errorOutcomeCauses binds every errorOutcomes row to the EXACT ErrorCause the

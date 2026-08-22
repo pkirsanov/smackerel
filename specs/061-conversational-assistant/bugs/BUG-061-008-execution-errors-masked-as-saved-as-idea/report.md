@@ -520,10 +520,127 @@ so the two DoD items may name it as their binding. The three other mechanisms th
 held the invariant (band-low-only canonicalisation, the P3 metric test, the sibling
 OK-no-sources test) are untouched.
 
+## Simplify phase evidence {#simplify-evidence}
+
+Reviewed surface: the fix commit `44dc0c94` plus the two D-4 remediation commits `f3b80e22`
+and `2a6f53e8` — `internal/assistant/facade_execution_error_honesty_test.go` and
+`internal/assistant/contracts/refusal_test.go`, with `internal/assistant/facade.go` read for
+the production mapping. Three review passes were run (code reuse, code quality, efficiency).
+One finding was applied; two candidate refactors were considered and **rejected**, with the
+reasoning recorded here so a future reader does not retry them.
+
+### Finding S-1 (applied) — `errorOutcomes` claimed a scope wider than its membership
+
+`errorOutcomes` sweeps two outcomes (`OutcomeProviderError`, `OutcomeTimeout`). Its doc comment
+read *"non-OK executor outcomes that represent an execution FAILURE … Each MUST surface
+honestly"*, which describes the whole non-OK class. The ratified invariant in
+`.github/copilot-instructions.md:343` names **six** such outcomes, and `internal/agent/executor.go`
+declares ten non-OK outcomes in total. The comment therefore promised a closed class while the
+list held a two-member subset — the same unclosed-hand-written-list shape that BUG-061-009 was
+filed against on the *scenario* axis, where `requiresProvenanceScenarios` at least has
+`TestRequiresProvenanceScenarios_ClosedOverSST` to fail on drift. This outcome axis has no
+equivalent, so nothing fails when the vocabulary grows.
+
+The list is **correctly narrow** and was NOT widened. `translateOutcomeToErrorCause`
+(`facade.go:1799`) returns `ErrProviderUnavailable` for exactly these two and `ErrNone` for
+every other outcome, so adding `OutcomeSchemaFailure` would fail the row's own
+`ErrorCause != ""` and exact-cause assertions. Widening it is a behavior/spec question, not a
+test edit, and is recorded as D-5 rather than acted on here.
+
+Applied change: comment-only, stating actual membership, the reason for it, and the absence of
+a closure test on this axis. No assertion, no set member, and no production line was touched.
+
+```text
+$ git diff --stat
+ internal/assistant/facade_execution_error_honesty_test.go | 12 ++++++++++--
+ 1 file changed, 10 insertions(+), 2 deletions(-)
+```
+
+### Rejected refactor 1 — deriving `errorOutcomeCauses` from the production mapping
+
+`errorOutcomeCauses` does literally duplicate the `translateOutcomeToErrorCause` switch, so a
+reuse pass flags it. **Rejected, and it must stay duplicated.** Deriving the expectation from
+the production function would assert that mapping against itself: every mutation of the cause
+would move expectation and actual together, so no substituted cause could ever fail the test.
+That is precisely the tautology that produced D-4 — a sweep green under M1/M2 — and collapsing
+it would re-open the finding this packet just closed. The in-file comment at
+`facade_execution_error_honesty_test.go:42-52` already names the function and states the
+reasoning, so the guard against retrying this is in the code, not only in this report.
+
+### Rejected refactor 2 — folding `TestExecutionErrorHonesty_OKNoSourcesRefusesHonestly` into the sweep
+
+Its assertions overlap the sweep's `ok_uncited` row heavily. **Rejected.** It carries one
+assertion the sweep does not — `Body == CanonicalRefusalBodyFor(RefusalDefault)`, which proves
+the uncited answer does not leak — so folding it in either loses that binding or requires a
+per-row `wantBody`, which would pull the `translateFinalToBody` literals for each error outcome
+into the test and widen, not simplify, the surface. Both tests are also individually named by
+scenario IDs (SCN-061-009-01 / SCN-061-008-01-02) in the traceability record. Merging two
+scenario-bound tests inside a packet whose entire finding history is *assertions that did not
+bind what they claimed* is net-negative.
+
+### Passes that found nothing
+
+- **Dead code / unused imports.** None. Every helper in the reviewed files has a live caller:
+  `newExecErrHonestyFacade` is used by all three tests, `requiresProvenanceScenarios` is read
+  by the sweep and by the SST-closure test, `captureFallbackAcknowledgement` is a production
+  const with six production and eight test references. Go would fail compilation on an unused
+  import; the suite below builds clean.
+- **Citation accuracy.** The sweep's comment claims the scenario set is *"closed over the SST by
+  `TestRequiresProvenanceScenarios_ClosedOverSST`"*. Verified real: it exists at
+  `facade_high_band_invariant_coverage_test.go:33`, loads `config/assistant/scenarios.yaml`,
+  asserts drift in **both** directions, and has a vacuity guard.
+- **`refusal_test.go`.** Both tests bind what their names promise:
+  `TestCanonicalRefusalBodyFor_EachCauseHasExactBody` asserts exact bodies plus a
+  closed-vocabulary length guard against `AllRefusalCauses`;
+  `TestCanonicalRefusalBodyFor_AdversarialDefault` asserts totality and default fallback.
+- **Efficiency.** Nothing found. The suite is table-driven with `t.Parallel()` where safe;
+  `TestExecutionErrorHonesty_MetricIncrements` correctly omits it, since it reads a
+  before/after delta on a process-global counter, and isolates itself via the `fake` transport
+  label.
+
+### Verification after the change
+
+`unit --go` was re-run because a `_test.go` file changed. Run with
+`SMACKEREL_SKIP_HOST_PREFLIGHT=1`, the opt-out documented at `smackerel.sh:715`: the host
+preflight guards RAM and the Windows volume backing the WSL vhdx, and `test unit --go` builds
+no image. `df -h /` reported 542G available on the Linux root at run time. No cache was pruned
+and no shared resource was touched.
+
+```text
+# BUG-061-008 simplify: unit --go after comment-scope repair
+$ env SMACKEREL_SKIP_HOST_PREFLIGHT=1 ./smackerel.sh test unit --go
+exit: 0
+lines: 207
+sha256: 11c738539df2b1f72b8883e8ee57808cbaf84089648e7abc2c09bae51474f294
+--- last 20 ---
+ok      github.com/smackerel/smackerel/internal/topics  (cached)
+ok      github.com/smackerel/smackerel/internal/web     (cached)
+ok      github.com/smackerel/smackerel/internal/web/admin       (cached)
+ok      github.com/smackerel/smackerel/internal/web/icons       (cached)
+ok      github.com/smackerel/smackerel/internal/whatsapp/assistant_adapter     (cached)
+ok      github.com/smackerel/smackerel/tests/e2e/agent  (cached)
+ok      github.com/smackerel/smackerel/tests/eval/assistant     (cached)
+ok      github.com/smackerel/smackerel/tests/integration        (cached) [no tests to run]
+ok      github.com/smackerel/smackerel/tests/observability      (cached)
+ok      github.com/smackerel/smackerel/tests/stress/readiness   (cached)
+ok      github.com/smackerel/smackerel/tests/unit/clients       (cached)
+ok      github.com/smackerel/smackerel/web/pwa/tests    (cached)
+[go-unit] go test ./... finished OK
+```
+
+**Claim Source:** every command in this section was executed in this session; the block above is
+a bounded `evidence-capture.sh` record whose sha256 covers all 207 produced lines.
+
+**Scope of the claim.** This phase changed one comment block in one test file. No DoD item is
+re-checked, no scope status changes, and no assertion strength claim is added or withdrawn —
+the D-4 closure recorded above stands exactly as `bubbles.test` measured it. This phase did not
+re-run the mutation campaign and makes no independent claim about M1/M2.
+
 ## Discovered Issues
 
 | # | Date | Finding | Owner |
 |---|------|---------|-------|
+| D-5 | 2026-08-22 | The **outcome** axis of `TestHighBandNeverMaskedAsSavedAsIdea` is an unclosed hand-written list. `errorOutcomes` holds two members; the ratified invariant at `.github/copilot-instructions.md:343` names six non-OK outcomes that must surface honestly (`OutcomeSchemaFailure`, `OutcomeToolReturnInvalid`, `OutcomeInputSchemaViolation`, `OutcomeLoopLimit` are absent), and `internal/agent/executor.go` declares ten non-OK outcomes overall. The *scenario* axis is protected by `TestRequiresProvenanceScenarios_ClosedOverSST`; this axis has no equivalent, so nothing fails when the vocabulary grows — the same shape BUG-061-009 was filed against. The P1 guard is a single `result.Outcome != OutcomeOK` branch, so all ten share one code path and the honest-surfacing invariant is structurally exercised; what is unproven per-outcome is the **cause**. The list cannot simply be widened: `translateOutcomeToErrorCause` (`facade.go:1799`) returns `ErrNone` for the other four, so adding them fails the row's exact-cause assertion. The open question is a spec one — does a schema failure, an invalid tool return, or a loop-limit owe the transport a distinct `ErrorCause`, or is `ErrNone` correct for them? Answer it in spec 061 first; only then widen the sweep. `bubbles.simplify` recorded this rather than acting: changing production cause mapping is a behavior change outside a simplify pass. Comment scope corrected in the meantime — see `#simplify-evidence` (S-1). | `bubbles.plan` (spec-061 decision on per-outcome `ErrorCause`, then widen `errorOutcomes`) |
 | D-4 | 2026-08-21 | `TestHighBandNeverMaskedAsSavedAsIdea` does not kill a reintroduction of the P1 masking defect: mutants M1 (provider error) and M2 (timeout) both re-enable the provenance gate on a non-OK outcome and the test still exits 0, because BUG-061-009's band-LOW-only `canonicalizeSuccessfulCaptureResponse` converts the resulting capture shape back into an honest refusal downstream. The sweep asserts only `ErrorCause != ""`, so it also misses that the gate substitutes `ErrNoGroundedAnswer` for the true timeout/provider cause — the exact clause the SCN-061-008-02 DoD item claims. The invariant itself still holds via two independent mechanisms (the band scoping, and the P3 metric test, which does kill M1); what is unproven is the attribution. **Consequence recorded 2026-08-21 by `bubbles.regression`:** the two Scope 1 DoD items whose binding this falsifies — SCN-061-008-01 and SCN-061-008-02 — were **UNCHECKED** in `scopes.md`. A checked DoD item that mutation proves unbound is a false green, and this packet's own subject is a masking defect, so tolerating a masked test weakness here would be the wrong precedent. The delivered behavior is unchanged and still holds; only the two attribution claims are withdrawn. SCN-061-008-03 and the Scope 2 matrix item stay checked — mutants M3 and M4 were KILLED, so those are genuinely bound. **Remedy for the owner:** assert the specific expected `ErrorCause` per outcome row (`ErrProviderUnavailable` for `OutcomeProviderError`, the timeout cause for `OutcomeTimeout`) instead of mere non-emptiness; that makes the sweep kill M1 and M2 directly and re-earns both checkmarks. Full analysis at `#regression-evidence`. **CLOSED 2026-08-22 by `bubbles.test` in commit `f3b80e22`** — the remedy was applied: each sweep row now asserts its exact expected `ErrorCause` from a hand-written `errorOutcomeCauses` table. M1 and M2 were re-run and both now exit 1 (**KILLED**, from 0/**SURVIVED**), the unmutated tree stays green, and `facade.go` was restored byte-identically (`139510ff…`). One correction to the remedy text above: there is no timeout-specific cause constant — the closed vocabulary maps `OutcomeProviderError` and `OutcomeTimeout` both to `ErrProviderUnavailable`, so both rows expect `provider_unavailable`; a constant was not invented to match the wording. Closure evidence at `#d4-remediation`. | `bubbles.test` (closed) |
 | D-1 | 2026-08-21 | The `## P2 evidence` transcript above quotes test names that no longer exist in the tree: `TestExecutionErrorHonesty_NonOKNeverMaskedAsSavedAsIdea` is now `TestHighBandNeverMaskedAsSavedAsIdea`, and `TestExecutionErrorHonesty_OKNoSourcesStillRefuses` is now `TestExecutionErrorHonesty_OKNoSourcesRefusesHonestly`. Both were renamed by BUG-061-009 when it widened the invariant. The transcript was captured from a real run at the time and is left unaltered, because editing a recorded transcript to match today's names would fabricate evidence for a run that never produced it. The current binding is recorded separately under "Scenario binding evidence". **CLOSED 2026-08-21 by `bubbles.regression`** — superseded, not rewritten: `#regression-evidence` carries fresh bounded captures run against the current test names, so no reader depends on the stale block for current binding. | `bubbles.regression` (closed) |
 | D-2 | 2026-08-21 | `deployment.sourceSha` `19fe72c8` is orphaned — see `#code-diff-orphaned-sha`. Tree equivalence with the commit of record is proven; which object the build host consumed is not. | `bubbles.devops` (re-point `sourceSha` to `44dc0c94` only if the build host's consumed object can be confirmed) |
