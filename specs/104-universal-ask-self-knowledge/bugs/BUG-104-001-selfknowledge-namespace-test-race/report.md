@@ -441,4 +441,182 @@ genuine end-to-end coverage, or record an explicit exception stating that a test
 mutual-exclusion fix has no user-facing journey to exercise. Relabelling an `integration`
 row is not one of them.
 
+### Simplify Evidence
+
+Post-implementation cleanup pass over the delivered namespace-lock work, executed by
+`bubbles.simplify` on 2026-08-22. Commit of record `8c6211f5`.
+
+**The governing constraint for this phase was that a simplification must preserve or
+strengthen what a test asserts.** Two of the five changes are strengthenings; none is a
+weakening; one candidate simplification was examined and REJECTED for that reason, and the
+rejection is recorded below rather than omitted.
+
+#### Baseline before any edit
+
+The tree was byte-identical to HEAD (`git status --porcelain` empty, `git diff --quiet
+HEAD` clean) and the affected tests were green, so any later red would be attributable to
+this phase:
+
+```
+--- PASS: TestKnowledgeStats_EmptyStoreReturnsZeroValues (0.57s)
+--- PASS: TestNamespaceLock_KnownContendersAcquireTheLock (0.00s)
+--- PASS: TestNamespaceLock_DiscoveredContendersAcquireTheLock (0.15s)
+--- PASS: TestNamespaceLock_ExcludesASecondSession (0.03s)
+--- PASS: TestNamespaceLock_DistinctNamespacesDoNotContend (0.01s)
+--- PASS: TestSelfKnowledge_TrustPerimeter (0.03s)
+--- PASS: TestSelfKnowledgeTool_CitesOnlySmackerelSelf (0.04s)
+--- PASS: TestPgxSemanticSearcher_NamespaceScopedCosine (0.04s)
+--- PASS: TestIngestor_IdempotentWithStaleSweep (0.06s)
+BASELINE_EXIT=0
+```
+
+#### Findings and disposition
+
+| # | Pass | File | Finding | Disposition |
+|---|---|---|---|---|
+| S1 | code quality | `tests/integration/selfknowledge/ingest_test.go` | Call-site comment asserted "`go test` runs the two packages in parallel" | Rewritten |
+| S2 | code quality | `tests/integration/knowledge_stats_test.go` | Same claim, as "a THIRD package that runs in parallel with" | Rewritten |
+| S3 | code quality (error handling that hides a failure) | `tests/integration/nslock/nslock.go` | `Acquire` cleanup ran the unlock through `conn.Exec`, discarding its boolean result | Fixed, strengthening |
+| S4 | code quality | `tests/integration/nslock/nslock.go` | `IsHeld` doc said "held by the current backend", contradicting the paragraph above it and its own SQL | Rewritten |
+| S5 | code reuse | `tests/integration/nslock/callsite_contract_test.go` | Both checks duplicated `strings.Contains(src, "nslock.Acquire")`, which prose satisfies | Deduplicated, strengthening |
+| S6 | code reuse | three `openknowledge` call sites | Folding the acquire into `openSemanticPool` would remove three duplicated lines | **REJECTED — see below** |
+
+S1 and S2 are not stylistic. Audit finding A1 (CRITICAL) established that
+`scripts/runtime/go-integration.sh` passes `-p 1`, so the contending packages never run
+concurrently and the documented interleaving is unreachable. The `nslock` package doc was
+corrected at the time and flags that exact sentence as WRONG in so many words; the e2e call
+site was corrected too. These two were missed, leaving the tree asserting both a claim and
+its own refutation in files a future reader would consult first.
+
+#### S6 — the simplification that was rejected
+
+Three `openknowledge` tests each call `openSemanticPool(t)` and then
+`nslock.AcquireSelfKnowledge(t, pool)`. Folding the acquire into the pool helper would
+delete three duplicated lines and reads like an obvious win. It is wrong:
+
+- `TestNamespaceLock_KnownContendersAcquireTheLock` asserts the call **per file**. Two of
+  the three files would no longer contain it and the named floor would go red.
+- More fundamentally, a call hidden in a shared helper is the exact evasion audit findings
+  A2 and A3 recorded: the first guard draft missed 2 of the 3 originally-failing tests
+  because they insert via `insertEmbeddedArtifact`, whose SQL lives in a third file.
+
+Measured confirmation that the evasion is real and that the named floor is load-bearing —
+`self_knowledge_tool_test.go` and `self_knowledge_provenance_test.go` do NOT match a direct
+artifact-mutation scan, because their writes go through that helper:
+
+```
+=== files naming the namespace AND mutating artifacts directly ===
+tests/e2e/openknowledge/self_knowledge_ask_e2e_test.go
+tests/integration/knowledge_stats_test.go
+tests/integration/selfknowledge/ingest_test.go
+tests/integration/openknowledge/semantic_searcher_test.go
+```
+
+The duplication is load-bearing and was left in place.
+
+#### Build quality gates after the change
+
+```
+FORMAT_EXIT=0
+LINT_EXIT=0
+```
+
+#### Affected tests after the change
+
+All nine still pass, and no `nslock:` diagnostic line is emitted — evidence that the new
+unlock check does not fire spuriously on the healthy path:
+
+```
+--- PASS: TestKnowledgeStats_EmptyStoreReturnsZeroValues (0.48s)
+--- PASS: TestNamespaceLock_KnownContendersAcquireTheLock (0.00s)
+--- PASS: TestNamespaceLock_DiscoveredContendersAcquireTheLock (0.16s)
+--- PASS: TestNamespaceLock_ExcludesASecondSession (0.03s)
+--- PASS: TestNamespaceLock_DistinctNamespacesDoNotContend (0.01s)
+--- PASS: TestSelfKnowledge_TrustPerimeter (0.03s)
+--- PASS: TestSelfKnowledgeTool_CitesOnlySmackerelSelf (0.03s)
+--- PASS: TestPgxSemanticSearcher_NamespaceScopedCosine (0.04s)
+--- PASS: TestIngestor_IdempotentWithStaleSweep (0.07s)
+FINAL_EXIT=0
+```
+
+#### Probe P1 — the refactor did not let the known mutant survive
+
+A passing suite does not prove a guard still has teeth. The operator-measured property that
+had to be preserved is: deleting the `pg_advisory_lock` call from `Acquire` makes
+`TestNamespaceLock_ExcludesASecondSession` FAIL while the other three
+`TestNamespaceLock_` tests still pass, because only that one is the exclusion guard. That
+property was re-measured against the simplified code and is intact:
+
+```
+--- PASS: TestNamespaceLock_KnownContendersAcquireTheLock (0.00s)
+--- PASS: TestNamespaceLock_DiscoveredContendersAcquireTheLock (0.15s)
+=== RUN   TestNamespaceLock_ExcludesASecondSession
+    nslock_test.go:89: nslock.Acquire returned but no advisory lock is granted for the namespace — the critical section is unprotected and the cross-package race is live again
+    nslock_test.go:98: a SECOND database session acquired the namespace lock while the first held it — mutual exclusion is not in force, so tests/integration/selfknowledge can still wipe the namespace mid-flight under tests/integration/openknowledge
+    nslock.go:155: nslock: pg_advisory_unlock(-3753811720078285197) for namespace "nslock-guard-namespace" returned false — this session did not hold the lock, so nothing was released (lock remains held until this pool is closed)
+--- FAIL: TestNamespaceLock_ExcludesASecondSession (0.03s)
+--- PASS: TestNamespaceLock_DistinctNamespacesDoNotContend (0.01s)
+FAIL    github.com/smackerel/smackerel/tests/integration/nslock 0.199s
+PROBE_P1_EXIT=1
+```
+
+Same kill, same single killer, same three survivors as the pre-change measurement.
+Structural corroboration: the diff touches only `pg_advisory_unlock` lines; the
+`pg_advisory_lock` acquire statement is byte-untouched.
+
+**This probe also produced the direct proof for S3.** The `nslock.go:155` line above is the
+NEW branch. Under the mutant no lock was ever taken, so `pg_advisory_unlock` returned
+`false` — and `false` is not an error, so the previous `conn.Exec` form returned `nil` and
+printed **nothing at all**. The failure class the surrounding comment claimed to watch for
+was genuinely invisible before this change and is now reported. Note it fired in
+`TestNamespaceLock_DistinctNamespacesDoNotContend` too, which still PASSED: the check is
+`t.Logf`, not `t.Errorf`, so it adds diagnosis without altering any pass/fail contract.
+Escalating it to a failure was considered and rejected as an over-reach that could turn a
+legitimate teardown race into a red suite.
+
+#### Probe P2 — S5 catches an evasion the previous predicate accepted
+
+The real call in `semantic_searcher_test.go` was replaced by a comment reading
+`// PROBE: we deliberately do not call nslock.AcquireSelfKnowledge(t, pool) here.`, leaving
+the token present but no lock taken. The previous predicate would have accepted this file:
+
+```
+real call lines remaining in file: 1  (all in prose)
+old predicate strings.Contains(src,"nslock.Acquire") would still be: TRUE_SO_OLD_GUARD_PASSES
+```
+
+The strengthened predicate refuses it, in BOTH checks:
+
+```
+--- FAIL: TestNamespaceLock_KnownContendersAcquireTheLock (0.00s)
+--- FAIL: TestNamespaceLock_DiscoveredContendersAcquireTheLock (0.16s)
+    [tests/integration/openknowledge/semantic_searcher_test.go]
+--- PASS: TestNamespaceLock_ExcludesASecondSession (0.03s)
+--- PASS: TestNamespaceLock_DistinctNamespacesDoNotContend (0.02s)
+PROBE_P2_EXIT=1
+```
+
+The limit is stated in the code rather than glossed: `acquiresLock` skips `//` lines only,
+so a call-shaped mention inside a `/* … */` block would still satisfy it. That is a
+narrower hole than the one it replaces, not the absence of one.
+
+#### Probe hygiene
+
+Both probes were restored with an explicit `git checkout -- <file>` immediately after the
+measurement, each followed by a verified `git status --porcelain` (empty) and
+`git diff --quiet HEAD` (clean). No `trap … EXIT` was used: the agent terminal is a
+persistent shell, so an EXIT trap does not fire when a command finishes and would have left
+the mutation in the tree. The restore point for both probes was commit `8c6211f5`, created
+before the first probe precisely so that `git checkout --` could never restore to a state
+missing this phase's work. The affected suite was re-run green after the final restore.
+
+#### Gate state at close
+
+`bash .github/bubbles/scripts/artifact-lint.sh <packet>` and
+`bash .github/bubbles/scripts/state-transition-guard.sh <packet>` results are recorded in
+the phase-close section of this report and in `state.json`. This phase does not change the
+packet's status and does not certify anything; `certification.certifiedCompletedPhases`
+remains the sole property of `bubbles.validate` and was not written here.
+
+
 
