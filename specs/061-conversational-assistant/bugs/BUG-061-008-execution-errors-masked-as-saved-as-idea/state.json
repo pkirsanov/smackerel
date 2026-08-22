@@ -122,7 +122,7 @@
       {
         "phase": "audit",
         "agent": "bubbles.audit",
-        "claimedAt": "2026-08-22T19:52:10Z",
+        "claimedAt": "2026-08-22T19:53:15Z",
         "evidenceRef": "report.md#audit-evidence",
         "outcome": "route_required",
         "verdict": "REWORK_REQUIRED",
@@ -136,7 +136,7 @@
           "verdict": "FAIL",
           "note": "Captured BEFORE this state write. G022 is validate plus audit missing from the phase records; this write supplies audit, and validate remains correctly absent. G027 was completedScopes 5 against artifact Done count 4, created by this phase's uncheck and repaired by this write. G040 is 2 pre-existing deferral-language hits, proven pre-existing by grepping the same pattern against HEAD's report.md and getting the identical two lines. G136 is operator-only."
         },
-        "timestampNote": "claimedAt is a real instant captured with `date -u` in this session, taken immediately before the commit.",
+        "timestampNote": "claimedAt is the commit instant of c43071bb, read back with `git show -s --format=%cI`. It replaces a hand-written value whose original note wrongly described it as captured with `date -u`; the correction is recorded in executionHistory rather than silently applied.",
         "certificationNote": "certification.certifiedCompletedPhases is deliberately NOT touched by this phase. Audit reports evidence integrity; bubbles.validate is the sole certifying authority. This phase moved exactly one checkbox, and only in the withdrawing direction."
       }
     ],
@@ -268,8 +268,8 @@
         "phasesExecuted": ["audit"],
         "agent": "bubbles.audit",
         "startedAt": "2026-08-22T19:43:49Z",
-        "completedAt": "2026-08-22T19:52:10Z",
-        "startedAtNote": "Both instants were captured with `date -u` in this session; startedAt is the timestamp taken immediately before the first artifact edit and completedAt the one taken immediately before the commit.",
+        "completedAt": "2026-08-22T19:53:15Z",
+        "startedAtNote": "startedAt is a real instant captured with `date -u` immediately before the first artifact edit. completedAt was initially hand-written and is CORRECTED here to the commit instant of c43071bb, read back with `git show -s --format=%cI`; the earlier note claimed it had been measured with `date -u`, which it had not. Recording the correction rather than quietly swapping the value, since this phase withdrew a checkbox for a claim its evidence did not support and the same standard applies to its own record.",
         "headAtExecution": "21c1f426",
         "outcome": "route_required",
         "verdict": "REWORK_REQUIRED — one over-claim found and withdrawn. Spec compliance verified in code, not from the report: FR-1 (facade.go:1368 gates the provenance call on assemblerOverride == nil && result != nil && result.Outcome == agent.OutcomeOK), FR-2 (translateFinalToBody:1743-1746 returns friendly truthful lines, bound by an exact-string assertion at facade_weather_integration_test.go:261), FR-3 (the sweep asserts the exact expected ErrorCause per row at facade_execution_error_honesty_test.go:167, which is the D-4 remedy), FR-4 (ExecutionErrorSurfacedTotal defined at metrics.go:156 with labels scenario_id/outcome/transport, registered at metrics.go:208, incremented at facade.go:1376, delta==1 asserted by TestExecutionErrorHonesty_MetricIncrements). D-4's closure is genuine. The over-claim is on the outcome axis of the Scope 2 matrix DoD item and is recorded as D-6.",
