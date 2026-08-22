@@ -10,12 +10,14 @@ Five cohesive scopes: the systemic honest-error fix (P1), its mechanical regress
 
 ## Scope 1 (P1): Honest execution-error surfacing
 
-**Status:** In Progress
+**Status:** Done
 
-Returned to In Progress because two DoD items (SCN-061-008-01 and SCN-061-008-02) were
-unchecked under finding D-4 once mutation showed the test named as their binding does not
-bind them; the delivered behavior is unchanged and still held by two independent mechanisms,
-and the remaining work is test strength, owner `bubbles.test`.
+Returned to In Progress on 2026-08-21 because two DoD items (SCN-061-008-01 and SCN-061-008-02)
+were unchecked under finding D-4 once mutation showed the test named as their binding does not
+bind them. Returned to Done on 2026-08-22 by `bubbles.test`: the remedy landed in commit
+`f3b80e22`, mutants M1 and M2 were re-run and both now exit 1 (KILLED, from 0/SURVIVED), the
+unmutated tree stays green, and `facade.go` was restored byte-identically. The delivered
+behavior never changed — only the attribution is now earned. Zero unchecked DoD items.
 
 **Depends on:** none
 
@@ -47,8 +49,49 @@ Paths above are the non-artifact files this scope changed in the commit of recor
 - [x] Provenance gate runs only on `OutcomeOK`; non-OK outcomes surface honest `StatusUnavailable` + `ErrorCause`, never the capture acknowledgement. **Claim Source:** executed. Evidence: [report.md](report.md) → "P1 evidence".
 - [x] Friendly truthful provider/timeout body (not a bare token). **Claim Source:** executed. Evidence: [report.md](report.md) → "P1 evidence".
 - [x] `BS006` updated to the honest-error contract; `ProvenanceGateRewritesWhenSourcesMissing` + `AntiFabrication` (OK+no-sources) remain GREEN (fabrication guard intact). **Claim Source:** executed. Evidence: [report.md](report.md) → "P1 evidence".
-- [ ] SCN-061-008-01 — a provider error surfaces honestly and is never rendered as "saved as an idea": the reply carries `StatusUnavailable` with a non-empty `ErrorCause`, `CaptureRoute=false`, and a body that is not the capture acknowledgement, so the failure reaches the user and alerting instead of being laundered into a benign capture. **UNCHECKED 2026-08-21 by `bubbles.regression`** — the behavior IS delivered and is held by two independent mechanisms (BUG-061-009's band-LOW-only canonicalisation, and the P3 metric test), but the test named as this item's binding does NOT bind it. Mutant M1 re-enables the provenance gate on `OutcomeProviderError` and `TestHighBandNeverMaskedAsSavedAsIdea` still exits 0, because the downstream `canonicalizeSuccessfulCaptureResponse` converts the resulting capture shape back into an honest refusal; the sweep asserts only that `ErrorCause` is non-empty, so a substituted cause is undetected. Owner-routed as D-4 (`bubbles.test`). **Claim Source:** executed. Evidence: [report.md](report.md) → "Discovered Issues" D-4 and `#regression-evidence`.
-- [ ] SCN-061-008-02 — a timeout surfaces honestly on exactly the same terms as a provider error and is never rendered as "saved as an idea"; the timeout cause survives to the transport rather than being discarded by the gate. **UNCHECKED 2026-08-21 by `bubbles.regression`** — same unbinding as SCN-061-008-01, and strictly worse: mutant M2 survives for the same downstream reason, and the "timeout cause survives to the transport" clause is additionally FALSE under M2, where the gate substitutes `ErrNoGroundedAnswer` for the true cause and no assertion in the tree detects the substitution. A timeout would reach transport and alerting labelled "no grounded answer". Owner-routed as D-4 (`bubbles.test`). **Claim Source:** executed. Evidence: [report.md](report.md) → "Discovered Issues" D-4 and `#regression-evidence`.
+- [x] SCN-061-008-01 — a provider error surfaces honestly and is never rendered as "saved as an idea": the reply carries `StatusUnavailable` with `ErrorCause = provider_unavailable`, `CaptureRoute=false`, and a body that is not the capture acknowledgement, so the failure reaches the user and alerting instead of being laundered into a benign capture. **UNCHECKED 2026-08-21 by `bubbles.regression`** — the behavior was delivered, but the test named as this item's binding did not bind it: mutant M1 re-enables the provenance gate on `OutcomeProviderError` and `TestHighBandNeverMaskedAsSavedAsIdea` still exited 0, because the downstream `canonicalizeSuccessfulCaptureResponse` converts the resulting capture shape back into an honest refusal and the sweep asserted only that `ErrorCause` was non-empty. **RE-CHECKED 2026-08-22 by `bubbles.test` (commit `f3b80e22`, D-4 closed)** — each row now asserts its exact expected cause, so M1 is KILLED. **Claim Source:** executed. Evidence: [report.md](report.md) → `#d4-remediation`, and inline below.
+
+  ```text
+  # M1 applied at facade.go:1367 — (Outcome == OutcomeOK || Outcome == OutcomeProviderError)
+  $ SMACKEREL_SKIP_HOST_PREFLIGHT=1 ./smackerel.sh test unit --go \
+      --go-run 'TestHighBandNeverMaskedAsSavedAsIdea'
+  M1_BEFORE_EXIT=0          # pre-fix test: SURVIVED
+  M1_AFTER_EXIT=1           # strengthened test: KILLED
+  --- FAIL: TestHighBandNeverMaskedAsSavedAsIdea (0.01s)
+      --- FAIL: TestHighBandNeverMaskedAsSavedAsIdea/weather_query/provider-error (0.00s)
+          facade_execution_error_honesty_test.go:160: ErrorCause = "no_grounded_answer"; want "provider_unavailable" for a high-band provider-error. A substituted cause mislabels this failure to the transport and to alerting even when the response shape looks honest
+      --- FAIL: TestHighBandNeverMaskedAsSavedAsIdea/retrieval_qa/provider-error (0.00s)
+      --- FAIL: TestHighBandNeverMaskedAsSavedAsIdea/recipe_search/provider-error (0.00s)
+      --- FAIL: TestHighBandNeverMaskedAsSavedAsIdea/open_knowledge/provider-error (0.01s)
+  FAIL	github.com/smackerel/smackerel/internal/assistant	0.585s
+  # observable surface during the same run — the mislabel, with its own control:
+  assistant_turn user_id=u-weather_query/provider-error ... error_cause=no_grounded_answer ... outcome=provider-error
+  assistant_turn user_id=u-weather_query/timeout        ... error_cause=provider_unavailable ... outcome=timeout
+  # restored tree (facade.go byte-identical 139510ff…), strengthened test:
+  RESTORED_FULL_EXIT=0      # full Go unit suite, ok_packages=148, no FAIL lines
+  ```
+
+- [x] SCN-061-008-02 — a timeout surfaces honestly on exactly the same terms as a provider error and is never rendered as "saved as an idea"; the timeout cause survives to the transport rather than being discarded by the gate. **UNCHECKED 2026-08-21 by `bubbles.regression`** — same unbinding as SCN-061-008-01 and strictly worse: mutant M2 survived for the same downstream reason, and the "cause survives to the transport" clause was additionally FALSE under M2, where the gate substitutes `ErrNoGroundedAnswer` for the true cause with no assertion detecting it. **RE-CHECKED 2026-08-22 by `bubbles.test` (commit `f3b80e22`, D-4 closed)** — the row now asserts `provider_unavailable` explicitly, so M2 is KILLED and the surviving-cause clause is enforced. Note the closed vocabulary has no timeout-specific member: `translateOutcomeToErrorCause` maps `OutcomeTimeout` and `OutcomeProviderError` both to `ErrProviderUnavailable`, so that is the cause this row requires. **Claim Source:** executed. Evidence: [report.md](report.md) → `#d4-remediation`, and inline below.
+
+  ```text
+  # M2 applied at facade.go:1367 — (Outcome == OutcomeOK || Outcome == OutcomeTimeout)
+  $ SMACKEREL_SKIP_HOST_PREFLIGHT=1 ./smackerel.sh test unit --go \
+      --go-run 'TestHighBandNeverMaskedAsSavedAsIdea'
+  M2_BEFORE_EXIT=0          # pre-fix test: SURVIVED
+  M2_AFTER_EXIT=1           # strengthened test: KILLED
+  --- FAIL: TestHighBandNeverMaskedAsSavedAsIdea (0.00s)
+      --- FAIL: TestHighBandNeverMaskedAsSavedAsIdea/weather_query/timeout (0.00s)
+          facade_execution_error_honesty_test.go:160: ErrorCause = "no_grounded_answer"; want "provider_unavailable" for a high-band timeout. A substituted cause mislabels this failure to the transport and to alerting even when the response shape looks honest
+      --- FAIL: TestHighBandNeverMaskedAsSavedAsIdea/retrieval_qa/timeout (0.00s)
+      --- FAIL: TestHighBandNeverMaskedAsSavedAsIdea/recipe_search/timeout (0.00s)
+      --- FAIL: TestHighBandNeverMaskedAsSavedAsIdea/open_knowledge/timeout (0.00s)
+  FAIL	github.com/smackerel/smackerel/internal/assistant	0.543s
+  # the clause itself, on the observable surface — a timeout labelled "no grounded answer":
+  assistant_turn user_id=u-weather_query/timeout        ... error_cause=no_grounded_answer ... outcome=timeout
+  assistant_turn user_id=u-weather_query/provider-error ... error_cause=provider_unavailable ... outcome=provider-error
+  # restored tree (facade.go byte-identical 139510ff…), strengthened test:
+  RESTORED_FULL_EXIT=0      # full Go unit suite, ok_packages=148, no FAIL lines
+  ```
 - [x] SCN-061-008-03 — an OK outcome that produced a body with no valid sources still refuses: the anti-fabrication guard is preserved, the uncited body never reaches the user, and the refusal itself reads honestly rather than as a capture. **Claim Source:** executed. Evidence: [report.md](report.md) → "Scenario binding evidence".
 - [x] Build Quality Gate — module compiles + vet clean; zero warnings. **Claim Source:** executed. Evidence: [report.md](report.md) → "P1 evidence".
 

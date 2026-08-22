@@ -345,6 +345,15 @@ hold it. What the finding falsifies is the claim that the named sweep is what ho
 packets that cite this packet's sweep as their guarantee are citing a check weaker than they
 assume. Filed as D-4, owner `bubbles.test`; no code is at fault, so no fix cycle is opened here.
 
+**SUPERSEDED 2026-08-22 by `bubbles.test` (commit `f3b80e22`).** The analysis above is left
+unaltered — it was accurate for the tree it was run against, and editing a recorded finding to
+match a later tree would fabricate evidence. It no longer describes the current tree: the sweep
+now asserts the exact expected `ErrorCause` per row, M1 and M2 were re-run and both exit 1
+(KILLED), and the "the timeout cause survives to the transport" clause is enforced by an
+assertion rather than merely believed. Both DoD items were re-checked and Scope 1 returned to
+Done. The section heading's present tense reads as still-open; it is not. Current state at
+`#d4-remediation`.
+
 ### Cross-spec coherence
 
 | Check | Result |
@@ -374,11 +383,148 @@ $ git diff --stat
 The full unit suite above was run **after** restoration, so its exit 0 describes the restored
 tree and not a mutated one.
 
+## D-4 remediation — the sweep now binds its clause {#d4-remediation}
+
+Owner `bubbles.test`, 2026-08-22. Fix commit `f3b80e22`. All commands below were executed
+this session against this working tree.
+
+**What changed.** `TestHighBandNeverMaskedAsSavedAsIdea` asserted only
+`resp.ErrorCause != ""`. Each row now also asserts the **exact** cause that row must carry,
+read from a hand-written table:
+
+```go
+var errorOutcomeCauses = map[agent.Outcome]contracts.ErrorCause{
+	agent.OutcomeProviderError: contracts.ErrProviderUnavailable,
+	agent.OutcomeTimeout:       contracts.ErrProviderUnavailable,
+}
+```
+
+and, per row, `if resp.ErrorCause != tc.wantCause { t.Errorf(...) }`. The `ok_uncited` row
+declares `contracts.ErrNoGroundedAnswer`. A row whose outcome has no entry in the table calls
+`t.Fatalf` rather than silently degrading back to a non-emptiness check. The table is written
+by hand on purpose: reading it from `translateOutcomeToErrorCause` would assert the production
+mapping against itself and could never detect a substitution. The five pre-existing assertions
+are unchanged — this is an addition.
+
+**Correction to the D-4 remedy text.** That text asked for "the timeout cause for
+`OutcomeTimeout`". No such constant exists. `contracts.ErrorCause` is a closed vocabulary of
+seven non-zero values (`response.go:194-229`) with no timeout member, and
+`facade.go:1799-1806` maps `OutcomeProviderError` **and** `OutcomeTimeout` to the same
+`ErrProviderUnavailable`. Both rows therefore expect `provider_unavailable`. Inventing a
+timeout-specific constant to match the remedy wording would have changed the shipped contract
+to satisfy a note; the note is corrected instead.
+
+### Mutants re-run — both now KILLED {#d4-mutants}
+
+Same two mutants as `#regression-evidence`, applied at `facade.go:1367` (the gate whose
+`OutcomeOK`-only condition is the P1 fix), one at a time:
+
+- **M1** — `(result.Outcome == agent.OutcomeOK || result.Outcome == agent.OutcomeProviderError)`
+- **M2** — `(result.Outcome == agent.OutcomeOK || result.Outcome == agent.OutcomeTimeout)`
+
+Command for every run below (the disk preflight refuses on this host at ~35 GB free against a
+40 GB floor; `test unit --go` builds no image, and the opt-out is documented at
+`smackerel.sh:715` — disclosed, not silent):
+
+```text
+SMACKEREL_SKIP_HOST_PREFLIGHT=1 ./smackerel.sh test unit --go \
+  --go-run 'TestHighBandNeverMaskedAsSavedAsIdea'
+```
+
+| Run | Tree | Exit | Verdict |
+|-----|------|------|---------|
+| baseline | unmutated, pre-fix test | `0` | green |
+| M1 | provider-error re-masked, pre-fix test | `0` | **SURVIVED** (D-4 reproduced) |
+| M2 | timeout re-masked, pre-fix test | `0` | **SURVIVED** (D-4 reproduced) |
+| clean | unmutated, strengthened test | `0` | green — no false positive |
+| M1 | provider-error re-masked, strengthened test | `1` | **KILLED** |
+| M2 | timeout re-masked, strengthened test | `1` | **KILLED** |
+
+M1 against the strengthened test:
+
+```text
+M1_AFTER_EXIT=1
+--- FAIL: TestHighBandNeverMaskedAsSavedAsIdea (0.01s)
+    --- FAIL: TestHighBandNeverMaskedAsSavedAsIdea/weather_query/provider-error (0.00s)
+        facade_execution_error_honesty_test.go:160: ErrorCause = "no_grounded_answer"; want "provider_unavailable" for a high-band provider-error. A substituted cause mislabels this failure to the transport and to alerting even when the response shape looks honest
+    --- FAIL: TestHighBandNeverMaskedAsSavedAsIdea/retrieval_qa/provider-error (0.00s)
+        facade_execution_error_honesty_test.go:160: ErrorCause = "no_grounded_answer"; want "provider_unavailable" for a high-band provider-error. A substituted cause mislabels this failure to the transport and to alerting even when the response shape looks honest
+    --- FAIL: TestHighBandNeverMaskedAsSavedAsIdea/recipe_search/provider-error (0.00s)
+        facade_execution_error_honesty_test.go:160: ErrorCause = "no_grounded_answer"; want "provider_unavailable" for a high-band provider-error. A substituted cause mislabels this failure to the transport and to alerting even when the response shape looks honest
+    --- FAIL: TestHighBandNeverMaskedAsSavedAsIdea/open_knowledge/provider-error (0.01s)
+        facade_execution_error_honesty_test.go:160: ErrorCause = "no_grounded_answer"; want "provider_unavailable" for a high-band provider-error. A substituted cause mislabels this failure to the transport and to alerting even when the response shape looks honest
+FAIL	github.com/smackerel/smackerel/internal/assistant	0.585s
+```
+
+M2 against the strengthened test:
+
+```text
+M2_AFTER_EXIT=1
+--- FAIL: TestHighBandNeverMaskedAsSavedAsIdea (0.00s)
+    --- FAIL: TestHighBandNeverMaskedAsSavedAsIdea/weather_query/timeout (0.00s)
+        facade_execution_error_honesty_test.go:160: ErrorCause = "no_grounded_answer"; want "provider_unavailable" for a high-band timeout. A substituted cause mislabels this failure to the transport and to alerting even when the response shape looks honest
+    --- FAIL: TestHighBandNeverMaskedAsSavedAsIdea/retrieval_qa/timeout (0.00s)
+        facade_execution_error_honesty_test.go:160: ErrorCause = "no_grounded_answer"; want "provider_unavailable" for a high-band timeout. A substituted cause mislabels this failure to the transport and to alerting even when the response shape looks honest
+    --- FAIL: TestHighBandNeverMaskedAsSavedAsIdea/recipe_search/timeout (0.00s)
+        facade_execution_error_honesty_test.go:160: ErrorCause = "no_grounded_answer"; want "provider_unavailable" for a high-band timeout. A substituted cause mislabels this failure to the transport and to alerting even when the response shape looks honest
+    --- FAIL: TestHighBandNeverMaskedAsSavedAsIdea/open_knowledge/timeout (0.00s)
+        facade_execution_error_honesty_test.go:160: ErrorCause = "no_grounded_answer"; want "provider_unavailable" for a high-band timeout. A substituted cause mislabels this failure to the transport and to alerting even when the response shape looks honest
+FAIL	github.com/smackerel/smackerel/internal/assistant	0.543s
+```
+
+The structured turn log emitted during the same two runs shows the mislabel reaching the
+observable surface directly, and carries its own control — under M1 the timeout row is still
+correct, and under M2 the provider-error row is still correct, so the delta is attributable to
+the mutant and not to the harness:
+
+```text
+# M1 run — provider-error mislabelled, timeout still correct
+assistant_turn user_id=u-weather_query/provider-error ... band=high status=unavailable error_cause=no_grounded_answer ... outcome=provider-error
+assistant_turn user_id=u-weather_query/timeout        ... band=high status=unavailable error_cause=provider_unavailable ... outcome=timeout
+
+# M2 run — timeout mislabelled, provider-error still correct
+assistant_turn user_id=u-weather_query/provider-error ... band=high status=unavailable error_cause=provider_unavailable ... outcome=provider-error
+assistant_turn user_id=u-weather_query/timeout        ... band=high status=unavailable error_cause=no_grounded_answer ... outcome=timeout
+```
+
+`outcome=timeout` carrying `error_cause=no_grounded_answer` is verbatim the failure mode the
+SCN-061-008-02 DoD item claims and that nothing in the tree previously detected.
+
+### Restoration proof {#d4-restoration}
+
+`facade.go` was the only production file mutated. Restored and proven byte-identical by
+content hash and by an empty diff, with the test file the sole remaining modification:
+
+```text
+POST_RESTORE facade.go = 139510ffc375b310e2dd8c4309afe7b07e085edb
+PRE_MUTATION facade.go = 139510ffc375b310e2dd8c4309afe7b07e085edb
+$ git status --porcelain
+ M internal/assistant/facade_execution_error_honesty_test.go
+$ git --no-pager diff --stat internal/assistant/facade.go
+(no output — byte-identical)
+```
+
+Full Go unit suite on the restored tree, run **after** restoration:
+
+```text
+RESTORED_FULL_EXIT=0
+ok_packages=148
+(no FAIL lines)
+ok  	github.com/smackerel/smackerel/internal/assistant	0.744s
+```
+
+**Scope of the claim.** This closes the attribution gap only. The delivered behavior was never
+in question and is unchanged — `facade.go` is byte-identical to the commit of record. What is
+new is that `TestHighBandNeverMaskedAsSavedAsIdea` now fails when the masking is reintroduced,
+so the two DoD items may name it as their binding. The three other mechanisms that already
+held the invariant (band-low-only canonicalisation, the P3 metric test, the sibling
+OK-no-sources test) are untouched.
+
 ## Discovered Issues
 
 | # | Date | Finding | Owner |
 |---|------|---------|-------|
-| D-4 | 2026-08-21 | `TestHighBandNeverMaskedAsSavedAsIdea` does not kill a reintroduction of the P1 masking defect: mutants M1 (provider error) and M2 (timeout) both re-enable the provenance gate on a non-OK outcome and the test still exits 0, because BUG-061-009's band-LOW-only `canonicalizeSuccessfulCaptureResponse` converts the resulting capture shape back into an honest refusal downstream. The sweep asserts only `ErrorCause != ""`, so it also misses that the gate substitutes `ErrNoGroundedAnswer` for the true timeout/provider cause — the exact clause the SCN-061-008-02 DoD item claims. The invariant itself still holds via two independent mechanisms (the band scoping, and the P3 metric test, which does kill M1); what is unproven is the attribution. **Consequence recorded 2026-08-21 by `bubbles.regression`:** the two Scope 1 DoD items whose binding this falsifies — SCN-061-008-01 and SCN-061-008-02 — were **UNCHECKED** in `scopes.md`. A checked DoD item that mutation proves unbound is a false green, and this packet's own subject is a masking defect, so tolerating a masked test weakness here would be the wrong precedent. The delivered behavior is unchanged and still holds; only the two attribution claims are withdrawn. SCN-061-008-03 and the Scope 2 matrix item stay checked — mutants M3 and M4 were KILLED, so those are genuinely bound. **Remedy for the owner:** assert the specific expected `ErrorCause` per outcome row (`ErrProviderUnavailable` for `OutcomeProviderError`, the timeout cause for `OutcomeTimeout`) instead of mere non-emptiness; that makes the sweep kill M1 and M2 directly and re-earns both checkmarks. Full analysis at `#regression-evidence`. | `bubbles.test` |
+| D-4 | 2026-08-21 | `TestHighBandNeverMaskedAsSavedAsIdea` does not kill a reintroduction of the P1 masking defect: mutants M1 (provider error) and M2 (timeout) both re-enable the provenance gate on a non-OK outcome and the test still exits 0, because BUG-061-009's band-LOW-only `canonicalizeSuccessfulCaptureResponse` converts the resulting capture shape back into an honest refusal downstream. The sweep asserts only `ErrorCause != ""`, so it also misses that the gate substitutes `ErrNoGroundedAnswer` for the true timeout/provider cause — the exact clause the SCN-061-008-02 DoD item claims. The invariant itself still holds via two independent mechanisms (the band scoping, and the P3 metric test, which does kill M1); what is unproven is the attribution. **Consequence recorded 2026-08-21 by `bubbles.regression`:** the two Scope 1 DoD items whose binding this falsifies — SCN-061-008-01 and SCN-061-008-02 — were **UNCHECKED** in `scopes.md`. A checked DoD item that mutation proves unbound is a false green, and this packet's own subject is a masking defect, so tolerating a masked test weakness here would be the wrong precedent. The delivered behavior is unchanged and still holds; only the two attribution claims are withdrawn. SCN-061-008-03 and the Scope 2 matrix item stay checked — mutants M3 and M4 were KILLED, so those are genuinely bound. **Remedy for the owner:** assert the specific expected `ErrorCause` per outcome row (`ErrProviderUnavailable` for `OutcomeProviderError`, the timeout cause for `OutcomeTimeout`) instead of mere non-emptiness; that makes the sweep kill M1 and M2 directly and re-earns both checkmarks. Full analysis at `#regression-evidence`. **CLOSED 2026-08-22 by `bubbles.test` in commit `f3b80e22`** — the remedy was applied: each sweep row now asserts its exact expected `ErrorCause` from a hand-written `errorOutcomeCauses` table. M1 and M2 were re-run and both now exit 1 (**KILLED**, from 0/**SURVIVED**), the unmutated tree stays green, and `facade.go` was restored byte-identically (`139510ff…`). One correction to the remedy text above: there is no timeout-specific cause constant — the closed vocabulary maps `OutcomeProviderError` and `OutcomeTimeout` both to `ErrProviderUnavailable`, so both rows expect `provider_unavailable`; a constant was not invented to match the wording. Closure evidence at `#d4-remediation`. | `bubbles.test` (closed) |
 | D-1 | 2026-08-21 | The `## P2 evidence` transcript above quotes test names that no longer exist in the tree: `TestExecutionErrorHonesty_NonOKNeverMaskedAsSavedAsIdea` is now `TestHighBandNeverMaskedAsSavedAsIdea`, and `TestExecutionErrorHonesty_OKNoSourcesStillRefuses` is now `TestExecutionErrorHonesty_OKNoSourcesRefusesHonestly`. Both were renamed by BUG-061-009 when it widened the invariant. The transcript was captured from a real run at the time and is left unaltered, because editing a recorded transcript to match today's names would fabricate evidence for a run that never produced it. The current binding is recorded separately under "Scenario binding evidence". **CLOSED 2026-08-21 by `bubbles.regression`** — superseded, not rewritten: `#regression-evidence` carries fresh bounded captures run against the current test names, so no reader depends on the stale block for current binding. | `bubbles.regression` (closed) |
 | D-2 | 2026-08-21 | `deployment.sourceSha` `19fe72c8` is orphaned — see `#code-diff-orphaned-sha`. Tree equivalence with the commit of record is proven; which object the build host consumed is not. | `bubbles.devops` (re-point `sourceSha` to `44dc0c94` only if the build host's consumed object can be confirmed) |
 | D-3 | 2026-08-21 | No `e2e-api`/`e2e-ui` test drives these scenarios against a provider-enabled assistant stack. `scenario-manifest.json` declares `requiredTestType: "unit"` for all four, so the unit binding satisfies the declared contract, but the scenario-level end-to-end path is unproven. A Test Plan row naming this as end-to-end regression coverage was deliberately not written: `planning-checks.sh:72` text-matches that phrase in any table row, so putting it on a `unit`-category row would green the gate while misdescribing the category. | assistant e2e harness owner — outside this bug's six-file fix surface |
