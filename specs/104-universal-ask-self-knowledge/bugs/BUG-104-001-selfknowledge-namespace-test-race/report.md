@@ -805,5 +805,250 @@ The only writes this phase made are this report section and the two `execution` 
 `state.json`. `certification.certifiedCompletedPhases` was not written — it remains the sole
 property of `bubbles.validate`.
 
+### Security Evidence
+
+Security and compliance pass over the delivered namespace-lock harness, executed by
+`bubbles.security` on 2026-08-22. This phase is DIAGNOSTIC: it authored no test, changed no
+source file, and left the tree byte-identical to `6861024b` throughout.
+
+**Verdict: ⚠️ FINDINGS — and the headline is that none of them belong to this packet.**
+Across the nine files this packet changed, this phase found **no security defect**. The one
+substantive finding (SEC-1) is in files this packet never touched and is routed, not fixed.
+The mechanical G034 floor is repo-wide red, and that is reported honestly below rather than
+rounded down — but zero of its 12 findings are attributable to this change.
+
+#### Scope, stated before the findings
+
+This is test-harness code. A security review that graded it as if it were a production
+request handler would manufacture severity, so the reachability question was **verified, not
+assumed**, and it governs every severity below. The nine changed files:
+
+```
+tests/integration/nslock/nslock.go
+tests/integration/nslock/nslock_test.go
+tests/integration/nslock/callsite_contract_test.go
+tests/integration/knowledge_stats_test.go
+tests/integration/selfknowledge/ingest_test.go
+tests/integration/openknowledge/self_knowledge_tool_test.go
+tests/integration/openknowledge/self_knowledge_provenance_test.go
+tests/integration/openknowledge/semantic_searcher_test.go
+tests/e2e/openknowledge/self_knowledge_ask_e2e_test.go
+```
+
+#### S1 — SQL construction: no injection path, eliminated by type rather than by escaping
+
+The namespace string never reaches SQL at all. `Key()` converts it to an `int64` before any
+statement is built, and the `int64` is then bound as `$1`. All three statements in
+`nslock.go` are parameterised:
+
+```
+tests/integration/nslock/nslock.go:131:  conn.Exec(ctx, `SELECT pg_advisory_lock($1)`, k)
+tests/integration/nslock/nslock.go:155:  conn.QueryRow(uctx, `SELECT pg_advisory_unlock($1)`, k)
+tests/integration/nslock/nslock.go:191:  pool.QueryRow(ctx, `… (classid::bigint << 32) | … = $1`, k)
+```
+
+Two scans, both empty, both run over all nine changed files:
+
+```
+# SQL built by concatenation or Sprintf
+SQL_CONCAT_EXIT=1        (no match)
+# the namespace string reaching any Exec/QueryRow/Query call
+NS_IN_SQL_EXIT=1         (no match)
+```
+
+This is stronger than "the query is parameterised". A parameterised query still has a string
+flowing into the driver; here the only value that reaches SQL is an `int64`, which carries no
+injection surface of any kind. The namespace string's sole other use is `t.Fatalf` /
+`t.Logf` format arguments — Go test output, not SQL.
+
+#### S2 — FNV collision: acceptable here, and the reason is the direction of the failure
+
+FNV-1a is non-cryptographic, so distinct namespaces can collide onto one advisory key, and
+advisory locks share **one global keyspace per database**. Production does take a lock in
+that same keyspace:
+
+```
+internal/db/migrate.go:27:  conn.Exec(ctx, "SELECT pg_advisory_lock(42)") // 42 = smackerel migration lock
+internal/db/migrate.go:33:  defer conn.Exec(context.Background(), "SELECT pg_advisory_unlock(42)")
+```
+
+The property that makes this acceptable is the **direction** of a collision's effect. A
+collision in an exclusive-lock keyspace causes two unrelated things to serialise — it can
+never cause two contenders that need the same lock to believe they hold different ones. So a
+collision degrades liveness, never safety; it cannot produce the missed exclusion this packet
+exists to prevent. Non-cryptographic hashing is therefore the right tool for this job.
+
+There is also no adversarial path into `Key()`: every namespace argument in the tree is a
+compile-time constant in test source (`SelfKnowledgeNamespace`, `"nslock-guard-alpha"`,
+`"nslock-guard-beta"`, `"nslock-guard-namespace"`). No untrusted input reaches the hash, so
+collision cannot be *induced*, only stumbled into.
+
+**Stated honestly:** this phase did **not** compute `Key("smackerel_self")` and therefore did
+not prove it differs from the production constant `42`. Running an ad-hoc hash was outside
+the repo's allowed read-only command set, and asserting a hash value from memory would be
+fabrication. What is proven instead is that the impact is bounded either way: keys are
+full-width `int64` (recorded evidence, this report line 556:
+`pg_advisory_unlock(-3753811720078285197)`), and even under an exact collision the worst
+outcome is the bounded, loudly-failing wait analysed in S5 — never a lost exclusion and never
+a production-reachable effect, because of S4.
+
+#### S3 — Credentials: no leak, including the non-obvious path
+
+`nslock.go` never reads `DATABASE_URL` at all. The `openPool` this packet added
+(`nslock_test.go:31`) does, and handles it correctly — the value is read, tested for empty,
+and passed to `pgxpool.New`. It never reaches a format verb:
+
+```
+# dbURL flowing into any Fatalf/Errorf/Logf/Printf across the nine changed files
+(no match)
+```
+
+The subtle path is the error return, not the variable: `t.Fatalf("pgxpool.New: %v", err)`
+prints a `*ParseConfigError`, and that struct **does** carry the connection string
+(`ConnString: connString`). Its `Error()` method redacts before rendering, verified in the
+pgx v5.9.2 module source:
+
+```
+pgconn/errors.go:127:  connString := redactPW(e.ConnString)
+pgconn/errors.go:216:  func redactPW(connString string) string {
+pgconn/errors.go:222:    quotedKV := regexp.MustCompile(`password='[^']*'`)
+pgconn/errors.go:224:    plainKV  := regexp.MustCompile(`password=[^ ]*`)
+pgconn/errors.go:226:    brokenURL := regexp.MustCompile(`:[^:@]+?@`)
+```
+
+So the password is masked on every branch that can print it. No credential leak in this
+packet's surface.
+
+#### S4 — This helper does not ship in a production binary (verified twice, not assumed)
+
+The user-facing question was whether `nslock` is fenced. The answer is that it is unreachable
+in the shipped artifact by **two independent mechanisms**, either of which alone suffices:
+
+1. **Not linked.** Nothing outside `tests/` imports it, so it is absent from the import graph
+   of both shipped binaries (`smackerel-core`, `alertmanager-ntfy-bridge`):
+   ```
+   grep -rn 'integration/nslock' --include='*.go' . | grep -v '^./tests/'
+   NONTEST_IMPORT_EXIT=1   (no match)
+   ```
+2. **Not shipped as source.** The root `Dockerfile` is multi-stage. `COPY . .` (line 13) lands
+   in the *builder*; the runtime stage copies only compiled binaries:
+   ```
+   Dockerfile:13:  COPY . .                                              # builder stage
+   Dockerfile:73:  COPY --from=builder /bin/smackerel-core        /usr/local/bin/smackerel-core
+   Dockerfile:78:  COPY --from=builder /bin/alertmanager-ntfy-bridge /usr/local/bin/…
+   ```
+
+**Observation, deliberately not raised to a finding.** `nslock.go` carries no
+`//go:build integration` tag, while both of its `_test.go` siblings do — so the file compiles
+unconditionally and imports `testing`. Current exposure is zero, per the two proofs above,
+and Go has not auto-registered `testing`'s flags at package init since the introduction of
+`testing.Init()`, so even a hypothetical link would not pollute a binary's flag set. Calling
+this a vulnerability would be manufacturing severity. It is recorded as SEC-2 hygiene only.
+
+#### S5 — Denial of service: bounded, self-healing, and it fails loudly
+
+A leaked advisory lock cannot wedge a shared PostgreSQL instance beyond the test lane. Four
+independent bounds, each read from the tree:
+
+| Bound | Value | Source |
+|---|---|---|
+| Per-acquire wait | 60s, then `t.Fatalf` | `nslock.go` `acquireTimeout` |
+| Per-package wall clock | 300s | `scripts/runtime/go-integration.sh:48` `-timeout 300s` |
+| End of test | `pool.Close()` closes backends; PostgreSQL releases session locks | caller `t.Cleanup` |
+| Process death / panic / kill | connection closes; PostgreSQL releases session locks | PostgreSQL session-lock semantics |
+
+The deciding property is that release is driven by **connection teardown**, which is
+unconditional, rather than by the `pg_advisory_unlock` call, which is not. That is also why
+**ST-1 has no security consequence**: ST-1 (open, stabilize-owned) observes that a working
+unlock and a broken one are indistinguishable, because every caller registers
+`t.Cleanup(pool.Close)` before `Acquire` registers its unlock. That is a genuine
+*testability* defect and it is correctly ST-1's, but it is not a DoS escape — the mechanism
+it masks is the *backstop*, and the backstop is the thing that always runs. A lock cannot
+outlive the test process, so it cannot reach another lane or a production database. Assessed,
+not re-diagnosed, per the routing instruction.
+
+The `-p 1` serialisation control and the lock call are both intact in the tree this phase
+reviewed:
+
+```
+scripts/runtime/go-integration.sh:48:  go_test_args=(-p 1 -tags integration -v -count=1 -timeout 300s)
+tests/integration/nslock/nslock.go:131:  conn.Exec(ctx, `SELECT pg_advisory_lock($1)`, k)
+```
+
+#### G034 mechanical floor — red repo-wide, clean for this packet
+
+```
+[security-gate] FAIL — G034 findings: 12
+SECURITY_GATE_EXIT=1
+```
+
+Reported as measured, not rounded down. All 12 findings are in `scripts/commands/config.sh`
+and `scripts/commands/config_secret_rejection_test.sh`; **none** is in the nine files this
+packet changed. Each was inspected rather than dismissed by path:
+
+- 6 are `__SECRET_PLACEHOLDER__<NAME>__` tokens — the SST placeholder mechanism itself,
+  matched by a credential-shaped regex.
+- 4 are `grep` patterns and `echo` strings inside the secret-*rejection* guard, i.e. the test
+  that asserts a placeholder was never replaced by a literal.
+- 1 is a `_REF` key name, not a value.
+- 1 is a literal test fixture, and it is correctly environment-gated — the default is empty
+  and the assignment is fenced to the test target, so it does not reach any other target:
+  ```
+  scripts/commands/config.sh:2237:  ASSISTANT_TELEGRAM_WEBHOOK_SECRET=""
+  scripts/commands/config.sh:2238:  if [[ "$TARGET_ENV" == "test" ]]; then
+  scripts/commands/config.sh:2240:    ASSISTANT_TELEGRAM_WEBHOOK_SECRET="…-fixture"
+  ```
+
+No live credential is committed. The floor's red state is pre-existing and owned elsewhere;
+it is recorded here so that a future reader does not mistake this phase's clean packet result
+for a green repo.
+
+#### SEC-1 (LOW-MEDIUM, out of boundary) — three e2e files print the live DSN into test output
+
+Found while auditing credential handling. Three files render `DATABASE_URL` through `%q` in a
+`t.Fatalf`, which emits the full connection string — password included, with no redaction —
+into test output that CI commonly archives:
+
+```
+tests/e2e/assistant/intent_trace_privacy_e2e_test.go:47
+tests/e2e/assistant/intent_trace_contract_e2e_test.go:41
+tests/e2e/assistant/intent_replay_test.go:70
+  t.Fatalf("e2e: partial test env — SMACKEREL_TEST_ENV_FILE=%q DATABASE_URL=%q …", envFile, dbURL)
+```
+
+The branch is reachable: it fires when exactly one of the two variables is set, so a set
+`DATABASE_URL` with an unset env-file path prints a real DSN. Severity is held at LOW-MEDIUM
+because the lane's database is the ephemeral test instance, not a production store.
+
+**This is not this packet's to fix.** None of the three files appears in the nine changed
+files, `workBoundary` is absent from `state.json`, and this agent owns no source artifact.
+Per the cross-boundary rule it is routed rather than repaired, and this packet's scope is not
+widened to absorb it.
+
+#### Follow-Up Narrative
+
+| id | summary | followUpOwner | followUpAction | followUpTarget |
+|---|---|---|---|---|
+| SEC-1 | Redact or drop the `DATABASE_URL` value in the three `tests/e2e/assistant` partial-env `t.Fatalf` messages; presence (`set`/`unset`) is sufficient to diagnose a partial env | `bubbles.implement` | new-spec | 2026-09-05 |
+| SEC-2 | Add `//go:build integration` to `tests/integration/nslock/nslock.go` so the helper's non-test file matches its own test files and cannot be linked by a future non-test import | `bubbles.implement` | next-sprint-todo | 2026-09-19 |
+
+Each entry carries a concrete `followUpOwner` and target date rather than being executed
+here: SEC-1 is outside this packet's changed-file set, and SEC-2 edits a source file, which is
+`bubbles.implement`'s artifact and not this diagnostic agent's to write. `scopes.md` was left
+byte-identical (it belongs to `bubbles.plan`), and `uservalidation.md` was left byte-identical
+(G136 is human-owned).
+
+#### Phase hygiene
+
+The tree was verified clean at phase start (`git status --porcelain` empty,
+`git diff --quiet HEAD` exit 0, `HEAD=6861024b`) and again before writing artifacts. This
+phase created no probe, mutated no source file, and ran no mutation experiment — the verified
+mutation evidence already recorded for this packet was read, not re-run. Nothing therefore
+had to be restored and no `git checkout --` was required; no `trap … EXIT` was used anywhere,
+since it does not fire on command completion in a persistent agent shell. The only writes are
+this report section and the two `execution` records in `state.json`.
+`certification.certifiedCompletedPhases` was not written — it remains the sole property of
+`bubbles.validate`.
+
 
 
