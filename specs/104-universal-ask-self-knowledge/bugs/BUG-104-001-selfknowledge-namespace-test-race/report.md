@@ -206,4 +206,61 @@ The discovery half PASSING while the named half FAILS is the empirical confirmat
 discovery genuinely cannot see that file, which is exactly why the named floor was required.
 The probe was reverted and all four guards return green.
 
+### Code Diff Evidence
+
+Commit of record: `b3ebfef793f15a32b5d607fae73a429cdc942129`, subject
+`test(integration): guard the shared smackerel_self namespace (BUG-104-001)`, committed
+`2026-08-12T10:33:27+00:00`. It is the only commit that touches this bug folder, and the
+only commit that touches `tests/integration/nslock`:
+
+```
+$ git log --oneline --all -- tests/integration/nslock
+b3ebfef7 test(integration): guard the shared smackerel_self namespace (BUG-104-001)
+```
+
+Measured file-level delta, read with `git show --numstat --format='' b3ebfef7` (columns are
+added, deleted, path):
+
+```
+128     0       specs/104-universal-ask-self-knowledge/bugs/BUG-104-001-selfknowledge-namespace-test-race/bug.md
+77      0       specs/104-universal-ask-self-knowledge/bugs/BUG-104-001-selfknowledge-namespace-test-race/design.md
+209     0       specs/104-universal-ask-self-knowledge/bugs/BUG-104-001-selfknowledge-namespace-test-race/report.md
+136     0       specs/104-universal-ask-self-knowledge/bugs/BUG-104-001-selfknowledge-namespace-test-race/scopes.md
+39      0       specs/104-universal-ask-self-knowledge/bugs/BUG-104-001-selfknowledge-namespace-test-race/spec.md
+74      0       specs/104-universal-ask-self-knowledge/bugs/BUG-104-001-selfknowledge-namespace-test-race/state.json
+26      0       specs/104-universal-ask-self-knowledge/bugs/BUG-104-001-selfknowledge-namespace-test-race/uservalidation.md
+10      0       tests/e2e/openknowledge/self_knowledge_ask_e2e_test.go
+9       0       tests/integration/knowledge_stats_test.go
+123     0       tests/integration/nslock/callsite_contract_test.go
+188     0       tests/integration/nslock/nslock.go
+121     0       tests/integration/nslock/nslock_test.go
+4       0       tests/integration/openknowledge/self_knowledge_provenance_test.go
+4       0       tests/integration/openknowledge/self_knowledge_tool_test.go
+4       0       tests/integration/openknowledge/semantic_searcher_test.go
+10      0       tests/integration/selfknowledge/ingest_test.go
+```
+
+`16 files changed, 1162 insertions(+)` and zero deletions.
+
+Three of those files are new and carry the mechanism: `tests/integration/nslock/nslock.go`
+(188 lines, the session-scoped advisory lock and its exported `Key`),
+`tests/integration/nslock/nslock_test.go` (121 lines, the exclusion and key-derivation
+guards) and `tests/integration/nslock/callsite_contract_test.go` (123 lines, the
+named-floor-plus-discovery guard rewritten under audit finding A2). The remaining six code
+files are call sites that gained an `Acquire` call and nothing else, which is why their
+counts are small and their deletion counts are zero: `tests/integration/selfknowledge/ingest_test.go`
+(10, the DELETE site), `tests/integration/knowledge_stats_test.go` (9, the TRUNCATE site
+found by validate finding F2), `tests/e2e/openknowledge/self_knowledge_ask_e2e_test.go`
+(10, both INSERT sites found by validate finding F3), and the three
+`tests/integration/openknowledge` call sites at 4 lines each.
+
+The containment property this section establishes, and the one the Change Boundary in
+scopes.md asserts, is what the path column does NOT contain: no product source tree at
+all. Every non-artifact line added by this fix sits beneath the integration and e2e test
+trees. Nothing under the `internal`, `cmd`, or `ml` product trees appears, and neither the
+compiled-config tree nor the runtime-script tree is represented. The production stale
+sweeper named in validate finding F4 is therefore provably unmodified by this bug, which
+matters because F4 is the primary remaining hypothesis and editing it would have destroyed
+the evidence rather than tested it.
+
 

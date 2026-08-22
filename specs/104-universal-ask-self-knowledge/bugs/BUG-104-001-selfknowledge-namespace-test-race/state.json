@@ -13,7 +13,57 @@
     "currentPhase": "diagnosis-open",
     "executionModel": "direct-authorized-runner",
     "runStartedAt": "2026-08-12T08:40:00Z",
-    "completedPhaseClaims": ["implement", "test", "validate", "audit"],
+    "completedPhaseClaimsNote": "CONVERTED 2026-08-22 by bubbles.plan from four bare strings to dict records. The strings carried no agent, no instant and no evidence pointer, so `jq '.[]|.phase'` failed with 'Cannot index string with string' and Gate G022 Check 6B could not read provenance off them at all. Every agent name below is copied from an existing execution.executionHistory entry in this same file; none was inferred from what the work looks like. Two of the four are recorded honestly as UNCONVERTIBLE TO PASSING PROVENANCE and are explained in their own provenanceNote.",
+    "completedPhaseClaims": [
+      {
+        "phase": "implement",
+        "agent": "bubbles.goal",
+        "provenanceMode": "direct",
+        "claimedAt": "2026-08-12T10:33:27Z",
+        "claimedAtUnreconciled": true,
+        "claimedAtUnreconciledReason": "No wall-clock instant was ever recorded for this phase. The executionHistory entry carries only the calendar date 2026-08-12, and a date is not an instant. The value shown is the committer instant of the commit of record b3ebfef7, read back with `git show -s --format=%cI`, so it is an upper bound on when the phase finished rather than a measured completion time. Declared unreconciled instead of inventing a clock value that would look measured.",
+        "evidenceRef": "report.md#test-evidence",
+        "outcome": "completed",
+        "summary": "Added tests/integration/nslock (session-level advisory lock keyed on the artifact namespace) and acquired it at every contending call site. Landed in commit b3ebfef7.",
+        "provenanceNote": "GATE G022 CHECK 6B STILL REFUSES THIS CLAIM, and that refusal is CORRECT rather than a defect in this record. workflows.yaml registers the owner of the 'implement' phase as bubbles.implement; the only agent this packet records as having executed it is bubbles.goal, under provenanceMode 'direct'. Check 6B accepts exactly two shapes: Pass 1 wants an executionHistory entry whose agent is the registered owner (or the bubbles.bug delegation shortcut) with provenanceMode '' or 'specialist'; Pass 2 wants provenanceMode 'parent-expanded' plus an expansionReason naming a capability that was missing. Neither is available truthfully. Renaming the agent to bubbles.implement would fabricate an agent that never ran, which is the impersonation this gate exists to catch. Re-labelling the mode 'parent-expanded' would require asserting that runSubagent or a nested runtime was unavailable, and nothing in this packet records that -- it records the opposite, an authorised direct run (execution.executionModel is 'direct-authorized-runner'). The claim is therefore left standing with its real provenance and the gate is left red."
+      },
+      {
+        "phase": "test",
+        "agent": "bubbles.goal",
+        "provenanceMode": "direct",
+        "claimedAt": "2026-08-12T10:33:27Z",
+        "claimedAtUnreconciled": true,
+        "claimedAtUnreconciledReason": "No wall-clock instant was ever recorded for this phase. The executionHistory entry carries only the calendar date 2026-08-12, and a date is not an instant. The value shown is the committer instant of the commit of record b3ebfef7, read back with `git show -s --format=%cI`, so it is an upper bound on when the phase finished rather than a measured completion time. Declared unreconciled instead of inventing a clock value that would look measured.",
+        "evidenceRef": "report.md#test-evidence",
+        "outcome": "completed",
+        "summary": "Exclusion guard, key-derivation guard and call-site contract guard added; full integration suite exits 0 on two consecutive runs at 1969 PASS / 0 FAIL.",
+        "provenanceNote": "GATE G022 CHECK 6B STILL REFUSES THIS CLAIM, for the same reason as the implement claim above and with the same resolution. workflows.yaml registers the owner of the 'test' phase as bubbles.test; this packet records bubbles.goal executing it directly. No substitution of agent name or provenance mode is available that would be both accurate and gate-passing, so the accurate record is kept and the gate stays red."
+      },
+      {
+        "phase": "validate",
+        "agent": "bubbles.validate",
+        "provenanceMode": "specialist",
+        "claimedAt": "2026-08-12T10:33:27Z",
+        "claimedAtUnreconciled": true,
+        "claimedAtUnreconciledReason": "Same measurement gap as the two claims above: executionHistory records only the calendar date 2026-08-12 for this phase. The value shown is the committer instant of commit b3ebfef7, used as a recorded upper bound rather than a measured phase-completion time.",
+        "evidenceRef": "report.md#validation-evidence",
+        "outcome": "completed_with_findings",
+        "findingsOpened": 7,
+        "summary": "Seven findings. F2, F3, F5 and F6 remediated in the same change; F4 (the production boot-time stale sweeper) recorded as unresolved. Independently re-ran the suite at INTEGRATION_EXIT=0."
+      },
+      {
+        "phase": "audit",
+        "agent": "bubbles.audit",
+        "provenanceMode": "specialist",
+        "claimedAt": "2026-08-12T10:33:27Z",
+        "claimedAtUnreconciled": true,
+        "claimedAtUnreconciledReason": "Same measurement gap as the claims above: executionHistory records only the calendar date 2026-08-12 for this phase. The value shown is the committer instant of commit b3ebfef7, used as a recorded upper bound rather than a measured phase-completion time.",
+        "evidenceRef": "report.md#audit-evidence",
+        "outcome": "completed_with_findings",
+        "findingsOpened": 10,
+        "summary": "A1 (CRITICAL) overturned the root-cause diagnosis: go-integration.sh passes -p 1, so the documented interleaving was unreachable. A2/A3/A4 showed the call-site guard missed 2 of the 3 originally-failing tests; guard rewritten with a named floor plus discovery and both probes verified."
+      }
+    ],
     "executionHistory": [
       {
         "at": "2026-08-12",
@@ -62,6 +112,15 @@
     "status": "in_progress",
     "certifiedBy": null,
     "certifiedAt": null,
+    "certifiedCompletedPhases": [],
+    "certifiedCompletedPhasesNote": "DELIBERATELY EMPTY, and empty is the correct value here rather than a placeholder. bubbles.validate is the sole certifying authority for this packet; bubbles.plan added this field to satisfy the Gate G056 shape requirement and has no authority to populate it. Populating it would also be unsupportable on the evidence: the admission bar used by sibling packets is that a phase carries BOTH a report.md evidence section AND an executionHistory record naming the executing agent, and the two phases that clear that bar here (validate, audit) are already visible to the guard through execution.completedPhaseClaims. Certification is a separate assertion from execution and is not being made.",
+    "lockdownState": {
+      "round": 0,
+      "lastCleanRound": null,
+      "note": "No lockdown round has run. The residual findings on this packet are not agent-remediable defects in the delivered test code: F4 is the production boot-time stale sweeper, which is designed behaviour and unchanged by this bug, and the open item is a diagnosis question rather than a code fault. Opening a lockdown round would point a fix cycle at code that is not at fault."
+    },
+    "scopeProgress": { "total": 1, "done": 1, "inProgress": 0, "notStarted": 0, "blocked": 0 },
+    "scopeProgressNote": "MEASURED 2026-08-22 by bubbles.plan from scopes.md, not carried over from a prior turn. scopes.md declares exactly one scope (SCOPE-01) whose Status line reads Done; state.json scopes{} and completedScopes both list that one scope; guard Check 5 independently reports total=1, Done=1, In Progress=0, Not Started=0, Blocked=0 and confirms completedScopes count matches the artifact Done count. Recorded with the caution that a count inside the certification block is a claim like any other and goes stale the moment the scope artifacts move, in either direction.",
     "basis": "NOT certified. The hardening is complete, guarded and green (three consecutive full integration runs at exit 0), but audit finding A1 established that the documented root-cause mechanism is unreachable under `-p 1`, so the original failure is NOT root-caused. Closing this as done would record a fix for a mechanism that cannot fire while the one that can (F4, the production boot-time stale sweeper) is unaddressed."
   },
   "notes": [

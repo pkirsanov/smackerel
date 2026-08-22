@@ -38,6 +38,44 @@ Then beta is reported unlocked
 3. Acquire it in the three contending `openknowledge` tests.
 4. Add exclusion and key-derivation guards.
 
+### Change Boundary
+
+This scope is a test-harness repair. It hardens how the integration suite shares one
+artifact namespace; it changes no product behaviour. The boundary below is enumerated
+from the commit of record `b3ebfef7` as measured by `git show --numstat b3ebfef7`, not
+from intent — every allowed path listed carries a real insertion count from that commit,
+and the excluded list is what that commit demonstrably did not touch.
+
+**Allowed file families**
+
+| Path | Lines added | Role |
+|---|---|---|
+| `tests/integration/nslock/nslock.go` | 188 | new shared lock helper |
+| `tests/integration/nslock/nslock_test.go` | 121 | exclusion + key-derivation guards |
+| `tests/integration/nslock/callsite_contract_test.go` | 123 | call-site contract guard |
+| `tests/integration/selfknowledge/ingest_test.go` | 10 | acquire at the DELETE site |
+| `tests/integration/openknowledge/semantic_searcher_test.go` | 4 | acquire at an INSERT site |
+| `tests/integration/openknowledge/self_knowledge_tool_test.go` | 4 | acquire at an INSERT site |
+| `tests/integration/openknowledge/self_knowledge_provenance_test.go` | 4 | acquire at an INSERT site |
+| `tests/integration/knowledge_stats_test.go` | 9 | acquire at the TRUNCATE site (validate F2) |
+| `tests/e2e/openknowledge/self_knowledge_ask_e2e_test.go` | 10 | acquire at both INSERT sites (validate F3) |
+
+The packet artifacts under this bug folder are also in scope, as the record of the work.
+
+**Excluded surfaces** — these MUST remain byte-unchanged by this scope, and `git show
+--numstat b3ebfef7` confirms none of them appears in the commit:
+
+| Excluded surface | Why it is excluded |
+|---|---|
+| `internal/assistant/selfknowledge/ingestor.go` | The production namespace-wide stale sweep (validate finding F4). It is designed behaviour. A test-harness repair MUST NOT alter it to make a test suite quieter — that would convert a test problem into a product change. |
+| `cmd/core/wiring_selfknowledge.go` | Read-only in this scope. One DoD item inspects it with `grep` to establish that `Ingest` runs once at boot; inspection is not licence to edit. |
+| `scripts/runtime/go-integration.sh` | Carries the `-p 1` flag that audit finding A1 turns on. Changing it would move the very condition under which the original red was observed, destroying the evidence. |
+| All other product source under `internal/`, `cmd/`, `ml/` | The whole commit adds 1162 lines and every non-artifact line is under `tests/`. Zero product source lines were changed, and that is the containment property this boundary asserts. |
+| Config, compose, and deploy surfaces | No runtime topology change is required to serialise two test packages against one namespace. |
+
+Collateral cleanup in adjacent test files is NOT implied by this boundary. A new contending
+file is caught by the call-site contract guard rather than by widening this scope.
+
 ### Test Plan
 
 | Test Type | Category | File | Description | Command | Live System |
@@ -134,3 +172,17 @@ Then beta is reported unlocked
     with no ticker — so the production namespace-wide stale sweep re-runs only on a core
     restart. No test-side lock can prevent it. Recorded in report.md as a live alternative
     hypothesis for the original red, which was observed once and never reproduced.
+
+- [x] Change Boundary is respected and zero excluded file families were changed
+  - **Command:** `git show --numstat --format='' b3ebfef7`
+  - **Exit Code:** 0
+  - **Evidence:** the commit reports `16 files changed, 1162 insertions(+)` with zero
+    deletions. Seven of the sixteen are this bug folder's own artifacts; the remaining
+    nine are all under `tests/` — `tests/integration/nslock/{nslock.go,nslock_test.go,callsite_contract_test.go}`
+    (188/121/123 added), `tests/integration/selfknowledge/ingest_test.go` (10),
+    `tests/integration/knowledge_stats_test.go` (9),
+    `tests/e2e/openknowledge/self_knowledge_ask_e2e_test.go` (10), and the three
+    `tests/integration/openknowledge/*_test.go` call sites (4 each). No path under
+    `internal/`, `cmd/`, `ml/`, `config/`, or `scripts/` appears in the commit, so every
+    excluded surface named in the Change Boundary is byte-unchanged. The check is a
+    measurement of the commit rather than a reading of the intent.
