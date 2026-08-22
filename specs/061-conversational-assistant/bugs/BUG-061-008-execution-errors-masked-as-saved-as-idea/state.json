@@ -56,7 +56,8 @@
     "docs",
     "devops",
     "regression",
-    "simplify"
+    "simplify",
+    "stabilize"
   ],
   "execution": {
     "completedPhaseClaims": [
@@ -76,6 +77,16 @@
         "evidenceRef": "report.md#simplify-evidence",
         "outcome": "completed_owned",
         "summary": "Reviewed the fix commit 44dc0c94 plus the two D-4 remediation commits (f3b80e22, 2a6f53e8) across three passes (reuse, quality, efficiency). One finding applied (S-1): the errorOutcomes doc comment described the whole non-OK class while the list holds a two-member subset, and unlike the scenario axis this axis has no SST-closure test, so the comment now states actual membership and the reason for it. Comment-only diff: 1 file, 10 insertions, 2 deletions; no assertion, set member, or production line changed. Two candidate refactors were considered and REJECTED with reasoning recorded in the report so they are not retried: deriving errorOutcomeCauses from translateOutcomeToErrorCause (would assert the production mapping against itself and re-open D-4) and folding TestExecutionErrorHonesty_OKNoSourcesRefusesHonestly into the sweep (would lose its unique CanonicalRefusalBodyFor binding and merge two scenario-bound tests). Dead code, unused imports, and refusal_test.go name-vs-assertion strength all came back clean; the sweep's citation of TestRequiresProvenanceScenarios_ClosedOverSST was verified real and bidirectional. The unwidenable-outcome-set question is a spec-061 decision and was recorded as D-5 for bubbles.plan rather than acted on, because changing the production cause mapping is a behavior change outside a simplify pass. ./smackerel.sh test unit --go re-run after the edit: exit 0, 207 lines, sha256 11c738539df2b1f72b8883e8ee57808cbaf84089648e7abc2c09bae51474f294.",
+        "timestampNote": "claimedAt is a real instant captured with `date -u` in this session. This workflow does not instrument phase start, so no separate startedAt is inferred.",
+        "certificationNote": "certification.certifiedCompletedPhases is deliberately NOT touched by this phase. bubbles.validate is the sole certifying authority for this packet; recording an executed phase here is not a certification."
+      },
+      {
+        "phase": "stabilize",
+        "agent": "bubbles.stabilize",
+        "claimedAt": "2026-08-22T19:23:49Z",
+        "evidenceRef": "report.md#stabilize-evidence",
+        "outcome": "completed_diagnostic",
+        "summary": "Stability and reliability review of the production surface changed by fix commit 44dc0c94 (two files: internal/assistant/facade.go outcome gate plus counter branch, and internal/assistant/metrics/metrics.go new CounterVec plus init registration). Verdict STABLE on all four requested axes; no stability finding opened against this packet, and no suite was re-run (the prior unit --go exit 0, artifact-lint 0, and pii-scan clean results are cited, not re-derived). Goroutine/lifecycle: the error path is strictly subtractive because enforceProvenanceWithSpan now runs only on OutcomeOK (facade.go:1367), so a non-OK turn opens one fewer span than before and the new branch does only a counter Inc with no lifecycle; an awk sweep over the whole Handle body found no goroutine spawned. Concurrency (STATIC verdict, no race detector because the CLI exposes no --race selector and terminal discipline forbids invoking the toolchain directly): errorOutcomeCauses is test-only (facade_execution_error_honesty_test.go:62, read once at :130), a package-level composite literal fully initialised before any test goroutine, and grep for assignment-into and delete-from found no writer; this matters because that file does use t.Parallel() at :121 and :182, so the map really is read concurrently and its safety rests on no writer existing rather than on no concurrency existing. New production shared state is one prometheus CounterVec whose WithLabelValues().Inc() is the goroutine-safe API; the helpers on the path are pure switch functions. Resource usage: no retry, buffer, or accumulating body added, translateFinalToBody returns a fixed literal for every non-OK outcome and is still truncated by BodyMaxChars, and all three metric labels are bounded (scenarioID is manifest-gated at :1152 before the counter at :1372, outcome is the closed agent.Outcome vocabulary, transport is folded into a two-value closed set by normalizeTransportLabel's default arm at :1870, so a hostile transport string cannot inflate series count). Config/deployment reliability, the axis flagged highest-severity: the gate cannot be silently disabled because there is no value to unset; it is a hard-coded result.Outcome == agent.OutcomeOK comparison, facade.go contains no os.Getenv, and the only Enabled hits are per-scenario enablement plus an unrelated struct field, so removing the invariant would require a reviewable Go source change rather than environment drift. The obvious residual-masking suspicion was checked and cleared: the Spec 074 capture hook at :1386 runs after the gate and is not outcome-gated, but openKnowledgeNoGround (:419-430) requires Final to parse as JSON with status refused and returns false for nil/empty Final, and decisively the hook leaves resp untouched on capture success and replaces it only in the capErr branch with StatusUnavailable + ErrInternalError, so no path through it can set StatusSavedAsIdea on a non-OK outcome. One ADJACENT observation recorded as followUp F-1 for bubbles.implement rather than as a packet defect: facade.go:1286-1287 dereferences result.Outcome twice with no nil guard while every neighbouring helper and this fix's own gate guard it, but reachability was traced and agent.Executor.Run never returns nil (every return is &InvocationResult{} at executor.go:299 or e.finalize(result), and finalize at :708-712 returns its non-nil argument), so the deref is unreachable today and the only consequence is that the gate's own result != nil clause is unreachable defensive code while the == OutcomeOK comparison that actually enforces the invariant stays live. D-5 re-confirmed at facade.go:1799 and left with bubbles.plan; not re-litigated.",
         "timestampNote": "claimedAt is a real instant captured with `date -u` in this session. This workflow does not instrument phase start, so no separate startedAt is inferred.",
         "certificationNote": "certification.certifiedCompletedPhases is deliberately NOT touched by this phase. bubbles.validate is the sole certifying authority for this packet; recording an executed phase here is not a certification."
       }
@@ -143,6 +154,36 @@
             "lines": 207,
             "sha256": "11c738539df2b1f72b8883e8ee57808cbaf84089648e7abc2c09bae51474f294",
             "preflightNote": "The host preflight opt-out documented at smackerel.sh:715 was used. It guards RAM and the Windows volume backing the WSL vhdx; `test unit --go` builds no image. `df -h /` reported 542G available on the Linux root at run time. No cache was pruned and no shared resource was touched."
+          }
+        ]
+      },
+      {
+        "phasesExecuted": ["stabilize"],
+        "agent": "bubbles.stabilize",
+        "startedAt": "2026-08-22T19:23:49Z",
+        "completedAt": "2026-08-22T19:23:49Z",
+        "startedAtNote": "Both fields record the same measured instant: this workflow does not instrument phase start, and the value is the timestamp this phase captured with `date -u` rather than an inferred or back-dated start.",
+        "headAtExecution": "0eee55bb",
+        "outcome": "completed_diagnostic",
+        "findingsOpened": 1,
+        "findingIds": ["F-1"],
+        "findingsApplied": 0,
+        "appliedFindingIds": [],
+        "regressionsFound": 0,
+        "verdict": "STABLE on all four requested axes (goroutine/lifecycle, concurrency, resource usage, config/deployment reliability). No stability finding opened against this packet; no production or test line changed by this phase; no DoD item checked or unchecked; no scope status changed. One ADJACENT observation recorded as followUp F-1 with owner bubbles.implement.",
+        "diffScope": "No source change. This phase is diagnostic; it wrote only report.md (stabilize evidence section) and state.json (phase recording).",
+        "concurrencyVerdictNote": "The concurrency verdict is STATIC, not empirical. The repo CLI exposes no --race selector and terminal discipline forbids invoking the Go toolchain directly to obtain one, so no race detector was run and none is claimed. The verdict rests on source-level reasoning: errorOutcomeCauses is a test-only package-level composite literal with no writer anywhere in the file, read under t.Parallel(), and the sole new production shared state is a prometheus CounterVec accessed through its goroutine-safe WithLabelValues().Inc() API.",
+        "suites": [],
+        "suitesNote": "No suite was executed by this phase. The measurements this packet already carries were cited rather than re-derived, per the phase instruction: `./smackerel.sh test unit --go` exit 0 (207 lines, sha256 11c738539df2b1f72b8883e8ee57808cbaf84089648e7abc2c09bae51474f294), artifact-lint exit 0, pii-scan clean. Re-running them would have produced no new information about the four stability axes, all of which are answered by source-level analysis of a two-file production diff.",
+        "followUps": [
+          {
+            "id": "F-1",
+            "owner": "bubbles.implement",
+            "severity": "low",
+            "openedAt": "2026-08-22",
+            "adjacent": true,
+            "blocksPacket": false,
+            "summary": "facade.go:1286-1287 dereferences result.Outcome twice with no nil guard, while every neighbouring helper guards nil (translateFinalToBody :1728, normalizeSkillOutcome :1910, openKnowledgeNoGround :420) and so does the BUG-061-008 gate itself via result != nil (:1367). Reachability was traced rather than assumed: agent.Executor.Run returns &InvocationResult{} at executor.go:299 on its defensive nil-scenario path and e.finalize(result) on every other return, and finalize at :708-712 returns the same non-nil pointer it receives, so the executor never returns nil and line 1286 is not reachable in production today. The narrow consequence is that a real nil would panic at :1286 before reaching :1367, which makes the gate's own result != nil clause unreachable defensive code; the == agent.OutcomeOK comparison that actually enforces the invariant is unaffected and live. Pre-dates commit 44dc0c94, which only ADDED guards, so this is recorded as a followUp rather than as a defect of this packet."
           }
         ]
       }

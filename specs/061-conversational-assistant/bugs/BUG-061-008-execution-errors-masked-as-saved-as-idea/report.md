@@ -686,3 +686,152 @@ model is flaky) and confirm the reply is an honest "couldn't do that right now" 
 as an idea"; a genuine low-confidence capture should still say "saved as an idea". An authenticated
 HTTP probe is not feasible (prod requires a PASETO session), and the agent cannot send Telegram
 messages.
+
+---
+
+## Stabilize Evidence (bubbles.stabilize) {#stabilize-evidence}
+
+**Phase:** `stabilize` · **Agent:** `bubbles.stabilize` · **Executed:** 2026-08-22T19:23:49Z ·
+**HEAD at execution:** `0eee55bb`
+
+Stability and reliability review of the surface changed by fix commit `44dc0c94` (the orphaned twin
+`0281bdca` is unreachable; `44dc0c94` is the commit cited here). The production diff under review is
+two files: `internal/assistant/facade.go` (the outcome gate plus the new counter branch) and
+`internal/assistant/metrics/metrics.go` (the new `CounterVec` and its `init()` registration).
+Everything else in that commit is tests, docs, and packet artifacts.
+
+**Verdict: 🟢 STABLE** on all four requested axes. No stability finding is opened against this
+packet. One ADJACENT defensive-consistency observation is recorded as a followUp with an owner
+(F-1) rather than as a packet defect: it pre-dates this fix, and this fix only ADDED nil guards.
+
+**Claim Source:** every statement below maps to a command executed in this session against
+`<repo-root>` at HEAD `0eee55bb`. No suite was re-run; the previously measured results
+(`unit --go` exit 0, artifact-lint 0, pii-scan clean) are cited, not re-derived.
+
+### Axis 1 — Goroutine / lifecycle: CLEAN
+
+The error path is strictly **subtractive**. Before the fix, `enforceProvenanceWithSpan` ran for
+every non-override turn; after the fix it runs only when `result.Outcome == agent.OutcomeOK`
+(`facade.go:1367`). A non-OK turn therefore starts **one fewer span** than it used to, so the change
+cannot leak a span it no longer opens. The new `else if` branch does exactly one thing — a counter
+`.Inc()` — which has no lifecycle to stop, no timer, and no handle to close.
+
+No goroutine is spawned anywhere in `Handle`:
+
+```text
+$ awk '/^func \(f \*Facade\) Handle\(/{f=1} f&&/go func|go f\./{print NR": "$0} f&&/^}/{exit}' \
+    internal/assistant/facade.go
+(no output — no goroutine spawned in Handle)
+```
+
+### Axis 2 — Concurrency: CLEAN (STATIC verdict)
+
+This verdict is **STATIC**. The repo CLI exposes no `--race` selector, and terminal discipline
+forbids invoking the toolchain directly to obtain one, so no race detector was run. The reasoning
+below is source-level.
+
+`errorOutcomeCauses` was called out for review. It is **test-only**, not production: it is declared
+at `facade_execution_error_honesty_test.go:62` and read once at `:130`. It is a package-level `var`
+composite literal, so it is fully initialised before any test goroutine starts, and it is never
+written afterwards:
+
+```text
+$ grep -nE "errorOutcomeCauses\s*\[[^]]*\]\s*=|delete\(errorOutcomeCauses" \
+    internal/assistant/facade_execution_error_honesty_test.go
+(no output — no assignment into, and no delete from, the map)
+```
+
+The distinction matters: that file **does** use `t.Parallel()` (`:121`, `:182`), so the map genuinely
+is read from multiple goroutines. Concurrent reads of a Go map are safe only while no goroutine
+writes it, and a concurrent write would be a runtime throw rather than a benign race. The safety here
+rests on "no writer exists", not on "no concurrency exists".
+
+New production shared state is one `prometheus.CounterVec`. `WithLabelValues(...).Inc()` is the
+library's goroutine-safe API, so the per-request handler goroutines contend only inside Prometheus's
+own locking. The helpers on this path — `translateOutcomeToErrorCause` (`:1799`),
+`translateFinalToBody` (`:1727`), `normalizeTransportLabel` (`:1864`) — are pure switch functions
+over their arguments and hold no state.
+
+### Axis 3 — Resource usage: CLEAN
+
+Nothing on the error path is unbounded. No retry, no buffer, and no accumulating body was added.
+`translateFinalToBody` returns a **fixed literal** for every non-OK outcome, and the result is still
+passed through `truncateBody(body, f.cfg.BodyMaxChars)`.
+
+The one growth risk a new `CounterVec` introduces is label cardinality, since each distinct label
+tuple allocates a child series that is never reclaimed. All three labels are bounded:
+
+| Label | Source | Bound |
+|---|---|---|
+| `scenarioID` | `decision.Chosen` (`facade.go:1122`) | gated by `f.manifest.Enabled(scenarioID)` at `:1152`, which precedes the counter at `:1372` — manifest-declared ids only |
+| `outcome` | `string(result.Outcome)` | closed `agent.Outcome` vocabulary |
+| `transport` | `normalizeTransportLabel(msg.Transport)` (`:449`) | two-value closed set; the `default` arm at `:1870` collapses anything unknown |
+
+Because a caller-supplied transport string is folded into the `fake` bucket rather than passed
+through, an unrouted or hostile transport value cannot inflate the series count.
+
+### Axis 4 — Config / deployment reliability: CLEAN (strongest axis)
+
+This was flagged as the highest-severity potential failure mode: a gate that an unset value could
+disable SILENTLY would restore exactly the masking this packet exists to prevent. It cannot happen
+here, because **there is no value to unset**. The gate is a hard-coded comparison in the control
+flow:
+
+```go
+if assemblerOverride == nil && result != nil && result.Outcome == agent.OutcomeOK {
+```
+
+No environment variable, feature flag, or config key governs it:
+
+```text
+$ grep -nE "os.Getenv|FeatureFlag|Enabled\b" internal/assistant/facade.go | head -12
+253:            Enabled:     false,
+1152:           if !f.manifest.Enabled(scenarioID) {
+1557:           if !f.manifest.Enabled(c.ScenarioID) {
+```
+
+`facade.go` contains no `os.Getenv` at all. The two `manifest.Enabled` hits are per-scenario
+enablement (they decide whether a scenario runs, not how a failure is rendered), and `:253` is an
+unrelated struct field. Disabling the invariant would require editing and shipping Go source, which
+is a loud, reviewable change — not a silent environment drift.
+
+**Residual-masking check (the obvious suspicion, verified and cleared).** The Spec 074 capture hook
+at `:1386` runs *after* the gate and is not itself outcome-gated, so it was worth confirming it
+cannot re-introduce a capture on a failed turn. It cannot, for two independent reasons. First, its
+predicate `openKnowledgeNoGround` (`:419-430`) requires `result.Final` to parse as JSON carrying
+`status == "refused"`; it returns `false` for nil or empty `Final`. Second, and decisively, on
+capture **success** the hook leaves `resp` untouched — it replaces `resp` only in the `capErr`
+branch, and that replacement is `StatusUnavailable` + `ErrInternalError`, which is itself honest. No
+path through that hook can set `StatusSavedAsIdea` on a non-OK outcome.
+
+### F-1 — Adjacent observation (followUp, NOT a defect of this packet)
+
+`facade.go:1286-1287` dereferences `result.Outcome` twice with no nil guard:
+
+```go
+Status:     translateOutcomeToStatus(result.Outcome, scenarioID),
+ErrorCause: translateOutcomeToErrorCause(result.Outcome),
+```
+
+Every neighbouring helper guards nil — `translateFinalToBody` (`:1728`), `normalizeSkillOutcome`
+(`:1910`), `openKnowledgeNoGround` (`:420`) — and so does this fix's own gate, via `result != nil`
+(`:1367`). The guard discipline is therefore inconsistent along a single straight-line path.
+
+I traced reachability rather than assuming it. `agent.Executor.Run` returns `&InvocationResult{...}`
+on its defensive nil-scenario path (`executor.go:299`) and `e.finalize(result)` on every other
+return; `finalize` (`executor.go:708-712`) returns the same non-nil pointer it receives. The
+open-knowledge fast path returns a `result` its own construction populates. **The executor never
+returns nil**, so line 1286 is not reachable in production today.
+
+The consequence is narrow and worth stating precisely: because an actual nil would panic at `:1286`
+*before* control reaches `:1367`, the `result != nil` clause inside this fix's gate is unreachable
+defensive code. That does not weaken the invariant — the `== agent.OutcomeOK` comparison is what
+enforces it, and that clause is live. Severity low; no user-visible impact; no action required for
+this packet.
+
+## Discovered Issues
+
+| ID | Date | Owner | Severity | Description |
+|---|---|---|---|---|
+| F-1 | 2026-08-22 | `bubbles.implement` | low | `facade.go:1286-1287` dereferences `result.Outcome` without the nil guard used by every adjacent helper and by the BUG-061-008 gate itself. Not reachable today (`agent.Executor.Run` never returns nil, verified through `finalize`), so this is a defensive-consistency repair, not a live crash. Pre-dates commit `44dc0c94`; that commit only added guards. |
+| D-5 | 2026-08-22 | `bubbles.plan` | open | Pre-existing and unchanged by this phase: `translateOutcomeToErrorCause` binds a cause for 2 of the 10 declared non-OK outcomes. Whether the other 8 owe the transport an explicit cause is a spec-061 question, not a stability defect. Re-confirmed at `facade.go:1799` during this review; not re-litigated here. |
