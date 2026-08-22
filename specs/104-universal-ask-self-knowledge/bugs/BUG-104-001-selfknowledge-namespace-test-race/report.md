@@ -263,4 +263,182 @@ sweeper named in validate finding F4 is therefore provably unmodified by this bu
 matters because F4 is the primary remaining hypothesis and editing it would have destroyed
 the evidence rather than tested it.
 
+### Regression Evidence
+
+`bubbles.regression` was run against this bug folder. The phase asks one question the
+earlier phases do not: does the landed namespace lock break, or fail to cover, anything
+outside this packet? All test categories referenced below are `integration`; this packet
+delivers no end-to-end test.
+
+#### Guard non-vacuity — the mutant is killed
+
+**Claim Source:** operator-measured in this session under a controlled mutate-then-restore.
+The mutation was NOT re-run by this phase, because re-running it risks leaving the shared
+harness stripped of its lock. The restore was independently verified here before any other
+work: `git status --porcelain` empty, `git diff --quiet HEAD` clean, and the
+`pg_advisory_lock($1)` call present at `tests/integration/nslock/nslock.go:131`.
+
+Baseline, `./smackerel.sh test integration-light --go-run 'TestNamespaceLock_'`, exit 0:
+
+```
+--- PASS: TestNamespaceLock_KnownContendersAcquireTheLock (0.00s)
+--- PASS: TestNamespaceLock_DiscoveredContendersAcquireTheLock (0.15s)
+--- PASS: TestNamespaceLock_ExcludesASecondSession (0.03s)
+--- PASS: TestNamespaceLock_DistinctNamespacesDoNotContend (0.02s)
+ok  github.com/smackerel/smackerel/tests/integration/nslock 0.201s
+```
+
+These four **execute** rather than skip. `openPool` calls `t.Skip` when `DATABASE_URL` is
+unset, and no skip appears, so the lane genuinely supplied a database.
+
+Mutation, the `pg_advisory_lock($1)` call deleted from `nslock.Acquire`, same lane and
+selector, exit 1:
+
+```
+--- PASS: TestNamespaceLock_KnownContendersAcquireTheLock (0.00s)
+--- PASS: TestNamespaceLock_DiscoveredContendersAcquireTheLock (0.15s)
+--- FAIL: TestNamespaceLock_ExcludesASecondSession (0.02s)
+--- PASS: TestNamespaceLock_DistinctNamespacesDoNotContend (0.01s)
+FAIL github.com/smackerel/smackerel/tests/integration/nslock 0.197s
+```
+
+**Mutant killed**, matching the promise in `nslock_test.go`'s own header: *"If mutual
+exclusion is removed, TestNamespaceLock_ExcludesASecondSession fails."*
+
+Recorded honestly: **only one of the four guards catches it.** The other three survive the
+mutation by design and their survival is not a weakness. `KnownContenders` and
+`DiscoveredContenders` assert the call-site contract by reading test source, so deleting
+the SQL inside the helper is invisible to them. `DistinctNamespacesDoNotContend` asserts
+that two namespaces do not collide, and removing the lock does not make them collide. One
+guard owns the exclusion property, and that guard fired.
+
+#### Cross-spec breakage scan
+
+**Claim Source:** measured first-hand by this phase with read-only inspection; no source
+file was modified.
+
+| Check | Method | Result |
+|---|---|---|
+| Guarded surface drift since the fix | `git log --oneline b3ebfef7..HEAD` over `tests/integration/nslock`, the four `tests/integration` call sites and `tests/e2e/openknowledge` | Empty. Byte-untouched since the commit of record. |
+| New contenders introduced since the fix | `git diff --name-status --diff-filter=A b3ebfef7..HEAD -- tests/` | 11 test files added. **None** appears in the set of files that mutate the `artifacts` table. |
+| Files naming the shared namespace | `grep -rln 'smackerel_self\|SelfKnowledgeNamespace' --include='*.go' tests/` | 8 files: the 6 named contenders plus `nslock.go` and `callsite_contract_test.go`, which are the provider. Every one of the 6 imports `nslock`. |
+| Whole-tree contract | `./smackerel.sh test integration-light --go-run 'TestNamespaceLock_KnownContendersAcquireTheLock\|TestNamespaceLock_DiscoveredContendersAcquireTheLock'` | Exit 0 |
+
+The whole-tree check is the load-bearing one, because `DiscoveredContendersAcquireTheLock`
+walks `tests/` from the repository root and excludes only the `nslock` package itself. It
+is therefore already a cross-spec scan rather than a package-local one, and its green
+covers every suite in the tree, not just this packet's:
+
+```
+=== RUN   TestNamespaceLock_KnownContendersAcquireTheLock
+--- PASS: TestNamespaceLock_KnownContendersAcquireTheLock (0.00s)
+=== RUN   TestNamespaceLock_DiscoveredContendersAcquireTheLock
+--- PASS: TestNamespaceLock_DiscoveredContendersAcquireTheLock (0.15s)
+PASS
+ok      github.com/smackerel/smackerel/tests/integration/nslock 0.157s
+CROSSSPEC_GUARD_EXIT=0
+```
+
+**No suite outside this packet is broken by the lock, and no suite outside this packet has
+introduced an unguarded writer.** The lock is keyed per namespace, so the many other
+`artifacts` writers across the drive, graphapi, capture, photos and stress trees do not
+contend with it and are not serialised by it — the property
+`TestNamespaceLock_DistinctNamespacesDoNotContend` exists to hold.
+
+The scan's honest limit: discovery requires a single file to BOTH name the namespace AND
+mutate `artifacts`. A future contender that names the namespace in one file and mutates in
+another evades it. That is audit finding A2's exact shape, it is why the named floor of 6
+files exists alongside discovery, and it remains a maintenance obligation rather than a
+solved problem.
+
+#### Cross-spec corroboration — spec 108 reproduced the failure after this fix landed
+
+**Claim Source:** documentary reading of `specs/108-corpus-grant-enforcement/report.md`,
+not a measurement by this phase.
+
+This is the finding that matters most, and it does not go the direction a regression phase
+usually reports. Spec 108 ran the full integration lane after this lock had landed and saw
+**the same three tests fail again**, at 1971 pass / 7 fail against its own 1974 / 0
+baseline, with the identical zero-rows symptom. Spec 108 records the failure as not caused
+by its own change.
+
+That is not breakage introduced here. It is independent confirmation that the delivered
+lock does not prevent the original red, which is exactly what audit finding A1 predicted
+and what this packet already states. Spec 108 went further and executed the F4 mechanism
+against a live stack: it inserted one `smackerel_self` row carrying the synthetic
+`content_hash` shape these tests use, restarted the core, and observed the boot-time sweep
+move `swept` from 0 to 1 and the probe row count from 1 to 0.
+
+So F4 is no longer only the most plausible remaining hypothesis. Its capability is now
+demonstrated, by a different spec, on a live stack. Spec 108 also states the containment
+this packet asserts: the sweeper runs as production code in another process, holds no
+lock, and therefore cannot be reached by a regex-over-test-sources contract even in
+principle.
+
+The consequence for this packet is that the certification basis already recorded is
+corroborated rather than revised. The hardening is complete and guarded; the diagnosis
+stays open; the packet stays non-terminal.
+
+#### Coverage delta
+
+**Claim Source:** documentary comparison of two reports written in different sessions, not
+a same-session measurement.
+
+This packet measured 1969 passing tests in the full integration lane. Spec 108 later
+records a 1974 baseline in the same lane. Test count moved up by five, consistent with the
+11 test files added since the commit of record, so **coverage did not decrease**. Two
+readings taken in different sessions are weaker than one measured delta, and are reported
+as such.
+
+#### Verdict
+
+**REGRESSION_FREE with respect to breakage caused by this change.** No test outside this
+packet fails because of the namespace lock, no guarded call site has drifted, no new
+unguarded contender exists, and coverage did not drop.
+
+That verdict is deliberately narrow. It answers whether this change broke anything, and
+it does not upgrade the packet's status: spec 108's independent reproduction confirms the
+original defect still occurs, so the open diagnosis recorded above is unchanged.
+
+#### Gate state at close
+
+`bash .github/bubbles/scripts/artifact-lint.sh <packet>` exits 0, `Artifact lint PASSED`.
+
+`bash .github/bubbles/scripts/state-transition-guard.sh <packet>` exits 1, verdict FAIL,
+`failedGateIds: [G022,G136]`, `failureCount: 12`. The failing gate set is unchanged by this
+phase. The count moved from 13 to 12 because recording this phase satisfied two checks that
+previously had nothing to read:
+
+```
+✅ PASS: Required phase 'regression' recorded in execution/certification phase records
+✅ PASS: Phase 'regression' has specialist provenance from bubbles.regression
+```
+
+G022 still blocks on `simplify`, `stabilize` and `security` never having run, and on the
+`implement` and `test` claims carrying `bubbles.goal` rather than their registered owners.
+Both are pre-existing and are explained in state.json rather than papered over.
+
+#### Routed finding — not fixable by this agent
+
+Check 8A blocks three times, asking Scope 01 for scenario-specific and broader regression
+end-to-end rows. **This was deliberately not resolved, and the reason is the resolution
+itself would be dishonest.** The detector at `planning-checks.sh:72` is:
+
+```
+grep -Eiq '^\|.*Regression E2E' "$scope_path" || grep -Eiq '^\|.*e2e-(api|ui).*(\||`).*Regression:' "$scope_path"
+```
+
+Its first alternative matches the row's leading text and never inspects the category
+column. Typing that token into the first cell of any existing row in this packet's Test
+Plan would turn all three blocks green in one edit, while asserting an end-to-end category
+that this packet does not contain — every test it delivers is `integration`. That is a
+gate satisfied by text rather than by coverage, and taking it would be the exact
+fabrication the packet's own audit history exists to prevent.
+
+`scopes.md` is owned by `bubbles.plan`; this agent is diagnostic and did not edit it. The
+finding is routed there with two honest resolutions available and a third excluded: add
+genuine end-to-end coverage, or record an explicit exception stating that a test-harness
+mutual-exclusion fix has no user-facing journey to exercise. Relabelling an `integration`
+row is not one of them.
+
 

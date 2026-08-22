@@ -62,6 +62,17 @@
         "outcome": "completed_with_findings",
         "findingsOpened": 10,
         "summary": "A1 (CRITICAL) overturned the root-cause diagnosis: go-integration.sh passes -p 1, so the documented interleaving was unreachable. A2/A3/A4 showed the call-site guard missed 2 of the 3 originally-failing tests; guard rewritten with a named floor plus discovery and both probes verified."
+      },
+      {
+        "phase": "regression",
+        "agent": "bubbles.regression",
+        "provenanceMode": "specialist",
+        "claimedAt": "2026-08-22T22:02:58Z",
+        "evidenceRef": "report.md#regression-evidence",
+        "outcome": "completed_diagnostic",
+        "summary": "Cross-spec breakage scan is clean. The guarded surface is byte-untouched since b3ebfef7, none of the 11 test files added since then mutates the artifacts table, and the whole-tests-tree discovery guard exits 0 (measured first-hand this phase). The operator-run mutation probe killed the mutant through TestNamespaceLock_ExcludesASecondSession, and only that one of the four guards catches it, which is recorded rather than smoothed over. Cross-spec corroboration added from spec 108, which reproduced the original three failures AFTER this lock landed and demonstrated the F4 boot-time sweep deleting a synthetic-content_hash row on core restart.",
+        "claimedAtNote": "MEASURED, not inferred, and deliberately not marked unreconciled like the four claims above. The instant is the close of this phase's evidence collection, read with `date -u`. The paired executionHistory entry carries the measured span: its startedAt is the mtime of the repository-binding control file written by this phase's own preflight, which is a recorded instant rather than an estimate. Artifact writing and the lint/guard runs follow this instant, as they normally do; the claim is about when the analytical work closed.",
+        "provenanceNote": "This claim SATISFIES Gate G022 Check 6B Pass 1, unlike the implement and test claims above, and the difference is a fact about ownership rather than a difference in rigour. workflows.yaml registers the owner of the 'regression' phase as bubbles.regression, and that is the agent that actually ran it, so the accurate record and the gate-passing record are the same record here. No agent name or provenance mode had to be chosen; there was only one truthful option. The backing executionHistory entry below names the same agent with provenanceMode 'specialist', which is the shape Pass 1 reads."
       }
     ],
     "executionHistory": [
@@ -88,6 +99,18 @@
         "provenanceMode": "specialist",
         "outcome": "completed_with_findings",
         "note": "A1 CRITICAL overturned the root-cause diagnosis: go-integration.sh passes -p 1, so the two packages never run concurrently and the documented interleaving is unreachable. A2/A3/A4 showed the call-site guard missed 2 of the 3 originally-failing tests (helper-built SQL) and was held for two others only by comment text. Guard rewritten with a named floor plus discovery; both probes verified. Artifacts corrected to state the lock is defence-in-depth and F4 is the primary hypothesis."
+      },
+      {
+        "at": "2026-08-22",
+        "startedAt": "2026-08-22T21:57:07Z",
+        "completedAt": "2026-08-22T22:02:58Z",
+        "durationSeconds": 351,
+        "durationSource": "MEASURED. startedAt is the mtime of the repository-binding control file written by this phase's own preflight; completedAt is `date -u` at the close of evidence collection; durationSeconds is their difference. No value here was estimated or back-filled.",
+        "agent": "bubbles.regression",
+        "phasesExecuted": ["regression"],
+        "provenanceMode": "specialist",
+        "outcome": "completed_diagnostic",
+        "note": "Cross-spec breakage scan clean, verdict REGRESSION_FREE with respect to breakage caused by this change. Measured first-hand: `git log b3ebfef7..HEAD` over the nslock package and all six call sites is empty, so the guarded surface has not drifted; of the 11 test files added since the commit of record, none mutates the artifacts table; and the whole-tests-tree discovery guard exits 0 (CROSSSPEC_GUARD_EXIT=0, TestNamespaceLock_KnownContendersAcquireTheLock and TestNamespaceLock_DiscoveredContendersAcquireTheLock both PASS). The verdict is deliberately narrow and does NOT raise the packet's status: spec 108 independently reproduced the same three failures after this lock landed, at 1971 pass / 7 fail against its own 1974 / 0 baseline, and executed the F4 mechanism on a live stack, moving `swept` 0 to 1 and the probe row 1 to 0 on a core restart. That corroborates the open diagnosis rather than revising it. Coverage did not decrease (1969 to 1974 across the two reports, read documentarily). The mutation probe was NOT re-run by this phase because a prior run of it died before restoring and left the harness without its lock; the restore was verified byte-exact before any other work."
       }
     ]
   },
