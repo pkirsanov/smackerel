@@ -648,7 +648,7 @@ re-run the mutation campaign and makes no independent claim about M1/M2.
 
 | # | Date | Finding | Owner |
 |---|------|---------|-------|
-| D-5 | 2026-08-22 | The **outcome** axis of `TestHighBandNeverMaskedAsSavedAsIdea` is an unclosed hand-written list. `errorOutcomes` holds two members; the ratified invariant at `.github/copilot-instructions.md:343` names six non-OK outcomes that must surface honestly (`OutcomeSchemaFailure`, `OutcomeToolReturnInvalid`, `OutcomeInputSchemaViolation`, `OutcomeLoopLimit` are absent), and `internal/agent/executor.go` declares ten non-OK outcomes overall. The *scenario* axis is protected by `TestRequiresProvenanceScenarios_ClosedOverSST`; this axis has no equivalent, so nothing fails when the vocabulary grows — the same shape BUG-061-009 was filed against. The P1 guard is a single `result.Outcome != OutcomeOK` branch, so all ten share one code path and the honest-surfacing invariant is structurally exercised; what is unproven per-outcome is the **cause**. The list cannot simply be widened: `translateOutcomeToErrorCause` (`facade.go:1799`) returns `ErrNone` for the other four, so adding them fails the row's exact-cause assertion. The open question is a spec one — does a schema failure, an invalid tool return, or a loop-limit owe the transport a distinct `ErrorCause`, or is `ErrNone` correct for them? Answer it in spec 061 first; only then widen the sweep. `bubbles.simplify` recorded this rather than acting: changing production cause mapping is a behavior change outside a simplify pass. Comment scope corrected in the meantime — see `#simplify-evidence` (S-1). | `bubbles.plan` (spec-061 decision on per-outcome `ErrorCause`, then widen `errorOutcomes`) |
+| D-5 | 2026-08-22 | The **outcome** axis of `TestHighBandNeverMaskedAsSavedAsIdea` is an unclosed hand-written list. `errorOutcomes` holds two members; the ratified invariant at `.github/copilot-instructions.md:343` names six non-OK outcomes that must surface honestly (`OutcomeSchemaFailure`, `OutcomeToolReturnInvalid`, `OutcomeInputSchemaViolation`, `OutcomeLoopLimit` are absent), and `internal/agent/executor.go` declares ten non-OK outcomes overall. The *scenario* axis is protected by `TestRequiresProvenanceScenarios_ClosedOverSST`; this axis has no equivalent, so nothing fails when the vocabulary grows — the same shape BUG-061-009 was filed against. The P1 guard is a single `result.Outcome != OutcomeOK` branch, so all ten share one code path and the honest-surfacing invariant is structurally exercised; what is unproven per-outcome is the **cause**. The list cannot simply be widened: `translateOutcomeToErrorCause` (`facade.go:1799`) returns `ErrNone` for the other four, so adding them fails the row's exact-cause assertion. The open question is a spec one — does a schema failure, an invalid tool return, or a loop-limit owe the transport a distinct `ErrorCause`, or is `ErrNone` correct for them? Answer it in spec 061 first; only then widen the sweep. `bubbles.simplify` recorded this rather than acting: changing production cause mapping is a behavior change outside a simplify pass. Comment scope corrected in the meantime — see `#simplify-evidence` (S-1). **SPEC QUESTION ANSWERED 2026-08-22 by `bubbles.plan`** — the four unmapped **terminal** outcomes (`OutcomeSchemaFailure`, `OutcomeToolReturnInvalid`, `OutcomeInputSchemaViolation`, `OutcomeLoopLimit`) resolve to the existing `contracts.ErrInternalError`; `ErrNone` is NOT correct for them, and the closed vocabulary does not grow. Recorded with full rationale and the rejected caller-fault alternative in [design.md](design.md) → "Decision — per-outcome `ErrorCause` for terminal non-OK outcomes", and the P1 scope clarified in [spec.md](spec.md). The count in this row is corrected there: the gap is **four**, not eight — three of the ten non-OK constants are per-`ExecutedToolCall` records the loop continues past (`executor.go:535,552,571,585,633`) and `OutcomeUnknownIntent` is emitted only by `Bridge.Invoke` (`bridge.go:211,220`), which never reaches the facade's cause mapping. The sweep may now widen to the six terminal outcomes. Implementation is not done: it needs the `translateOutcomeToErrorCause` arm plus the matching `errorOutcomes`/`errorOutcomeCauses` rows, which is why the Scope 2 DoD item stays unchecked. | `bubbles.implement` (add the `ErrInternalError` arm to `translateOutcomeToErrorCause`, then widen `errorOutcomes` + `errorOutcomeCauses` to the six terminal outcomes) |
 | D-4 | 2026-08-21 | `TestHighBandNeverMaskedAsSavedAsIdea` does not kill a reintroduction of the P1 masking defect: mutants M1 (provider error) and M2 (timeout) both re-enable the provenance gate on a non-OK outcome and the test still exits 0, because BUG-061-009's band-LOW-only `canonicalizeSuccessfulCaptureResponse` converts the resulting capture shape back into an honest refusal downstream. The sweep asserts only `ErrorCause != ""`, so it also misses that the gate substitutes `ErrNoGroundedAnswer` for the true timeout/provider cause — the exact clause the SCN-061-008-02 DoD item claims. The invariant itself still holds via two independent mechanisms (the band scoping, and the P3 metric test, which does kill M1); what is unproven is the attribution. **Consequence recorded 2026-08-21 by `bubbles.regression`:** the two Scope 1 DoD items whose binding this falsifies — SCN-061-008-01 and SCN-061-008-02 — were **UNCHECKED** in `scopes.md`. A checked DoD item that mutation proves unbound is a false green, and this packet's own subject is a masking defect, so tolerating a masked test weakness here would be the wrong precedent. The delivered behavior is unchanged and still holds; only the two attribution claims are withdrawn. SCN-061-008-03 and the Scope 2 matrix item stay checked — mutants M3 and M4 were KILLED, so those are genuinely bound. **Remedy for the owner:** assert the specific expected `ErrorCause` per outcome row (`ErrProviderUnavailable` for `OutcomeProviderError`, the timeout cause for `OutcomeTimeout`) instead of mere non-emptiness; that makes the sweep kill M1 and M2 directly and re-earns both checkmarks. Full analysis at `#regression-evidence`. **CLOSED 2026-08-22 by `bubbles.test` in commit `f3b80e22`** — the remedy was applied: each sweep row now asserts its exact expected `ErrorCause` from a hand-written `errorOutcomeCauses` table. M1 and M2 were re-run and both now exit 1 (**KILLED**, from 0/**SURVIVED**), the unmutated tree stays green, and `facade.go` was restored byte-identically (`139510ff…`). One correction to the remedy text above: there is no timeout-specific cause constant — the closed vocabulary maps `OutcomeProviderError` and `OutcomeTimeout` both to `ErrProviderUnavailable`, so both rows expect `provider_unavailable`; a constant was not invented to match the wording. Closure evidence at `#d4-remediation`. | `bubbles.test` (closed) |
 | D-1 | 2026-08-21 | The `## P2 evidence` transcript above quotes test names that no longer exist in the tree: `TestExecutionErrorHonesty_NonOKNeverMaskedAsSavedAsIdea` is now `TestHighBandNeverMaskedAsSavedAsIdea`, and `TestExecutionErrorHonesty_OKNoSourcesStillRefuses` is now `TestExecutionErrorHonesty_OKNoSourcesRefusesHonestly`. Both were renamed by BUG-061-009 when it widened the invariant. The transcript was captured from a real run at the time and is left unaltered, because editing a recorded transcript to match today's names would fabricate evidence for a run that never produced it. The current binding is recorded separately under "Scenario binding evidence". **CLOSED 2026-08-21 by `bubbles.regression`** — superseded, not rewritten: `#regression-evidence` carries fresh bounded captures run against the current test names, so no reader depends on the stale block for current binding. | `bubbles.regression` (closed) |
 | D-2 | 2026-08-21 | `deployment.sourceSha` `19fe72c8` is orphaned — see `#code-diff-orphaned-sha`. Tree equivalence with the commit of record is proven; which object the build host consumed is not. | `bubbles.devops` (re-point `sourceSha` to `44dc0c94` only if the build host's consumed object can be confirmed) |
@@ -1007,8 +1007,8 @@ is clean.
 | F-1 | 2026-08-22 | `bubbles.implement` | low | `facade.go:1286-1287` dereferences `result.Outcome` without the nil guard used by every adjacent helper and by the BUG-061-008 gate itself. Not reachable today (`agent.Executor.Run` never returns nil, verified through `finalize`), so this is a defensive-consistency repair, not a live crash. Pre-dates commit `44dc0c94`; that commit only added guards. |
 | S-1 | 2026-08-22 | `bubbles.implement` | low | Log hygiene, pre-existing and outside commit `44dc0c94`: `summarizeOutcomeDetail` (`facade.go:2223`) bounds `outcome_detail` to 200 runes per value / 512 total but does not content-redact, and `executor.go:337,346` place `"detail": err.Error()` into that map, so a raw upstream validation error can reach the turn log truncated. It cannot reach the user-visible body — `translateFinalToBody` never consults `OutcomeDetail`. Introduced by the `BUG-061-004` log enrichment, which keys off `invocation.Outcome` and therefore already fired on non-OK turns before this fix. |
 | S-2 | 2026-08-22 | `bubbles.devops` | medium | Repo-level G034: `security-gate.sh --repo-root <repo-root>` exits 1 with 12 `inline-credentials` findings, all in `scripts/commands/config.sh` and `scripts/commands/config_secret_rejection_test.sh`. Commit `44dc0c94` touches zero files under `scripts/commands/`. Inspection indicates mostly `__SECRET_PLACEHOLDER__` SST sentinels, one `*_SECRET_REF` name pointer, one spec-061 test fixture, and the assertions of a secret-**rejection** test — i.e. probable scanner false positives — but the exit code is real and is reported unsuppressed. Needs either a reviewed gate allowlist entry per hit or a rule refinement; it is not resolvable inside this packet. |
-| D-5 | 2026-08-22 | `bubbles.plan` | open | Pre-existing and unchanged by this phase: `translateOutcomeToErrorCause` binds a cause for 2 of the 10 declared non-OK outcomes. Whether the other 8 owe the transport an explicit cause is a spec-061 question, not a stability defect. Re-confirmed at `facade.go:1799` during this review; not re-litigated here. |
-| D-6 | 2026-08-22 | `bubbles.plan` | medium | Over-claim found by `bubbles.audit` and corrected in place. The Scope 2 matrix DoD item asserted the honesty invariant holds for every `requires_provenance` scenario **× each error outcome**, and the `## P2 evidence` prose repeated it. The scenario half is earned (`TestRequiresProvenanceScenarios_ClosedOverSST`). The outcome half is contradicted by the code: `translateOutcomeToErrorCause` (`internal/assistant/facade.go:1798-1804`) returns `contracts.ErrNone`, which is `""` (`internal/assistant/contracts/response.go:194`), for 8 of the 10 non-OK outcomes declared at `internal/agent/executor.go:59-88`, so the "a set `ErrorCause`" half of the `spec.md` P1 invariant does not hold for them. This is a strictly stronger statement than `D-5`, which reads the gap as an unproven cause rather than a false one. Action taken: the matrix DoD item was **UNCHECKED**, Scope 2 returned to In Progress, `completedScopes` lost `scope-02`, the Scope 1 gate item was bounded to the two outcomes its evidence exercises, and the P2 prose carries an inline correction. Nothing about the delivered fix changed. Resolving `D-5` resolves this. |
+| D-5 | 2026-08-22 | `bubbles.implement` | open | Pre-existing and unchanged by that phase: `translateOutcomeToErrorCause` binds a cause for 2 of the 10 declared non-OK outcomes. Whether the others owe the transport an explicit cause was a spec-061 question, not a stability defect. **ANSWERED 2026-08-22 by `bubbles.plan`:** they do — the four unmapped **terminal** outcomes (`OutcomeSchemaFailure`, `OutcomeToolReturnInvalid`, `OutcomeInputSchemaViolation`, `OutcomeLoopLimit`) map to the existing `contracts.ErrInternalError`, with no growth of the closed vocabulary. The "other 8" framing is corrected to **four**: three of the ten are per-`ExecutedToolCall` records the loop continues past (`executor.go:535,552,571,585,633`) and `OutcomeUnknownIntent` comes only from `Bridge.Invoke` (`bridge.go:211,220`), which never reaches this function. Rationale and the rejected caller-fault alternative: [design.md](design.md) → "Decision — per-outcome `ErrorCause` for terminal non-OK outcomes". Ownership moves to `bubbles.implement` for the code arm plus the sweep widening. |
+| D-6 | 2026-08-22 | `bubbles.implement` | medium | Over-claim found by `bubbles.audit` and corrected in place. The Scope 2 matrix DoD item asserted the honesty invariant holds for every `requires_provenance` scenario **× each error outcome**, and the `## P2 evidence` prose repeated it. The scenario half is earned (`TestRequiresProvenanceScenarios_ClosedOverSST`). The outcome half is contradicted by the code: `translateOutcomeToErrorCause` (`internal/assistant/facade.go:1798-1804`) returns `contracts.ErrNone`, which is `""` (`internal/assistant/contracts/response.go:194`), for 8 of the 10 non-OK outcomes declared at `internal/agent/executor.go:59-88`, so the "a set `ErrorCause`" half of the `spec.md` P1 invariant does not hold for them. This is a strictly stronger statement than `D-5`, which reads the gap as an unproven cause rather than a false one. Action taken: the matrix DoD item was **UNCHECKED**, Scope 2 returned to In Progress, `completedScopes` lost `scope-02`, the Scope 1 gate item was bounded to the two outcomes its evidence exercises, and the P2 prose carries an inline correction. Nothing about the delivered fix changed. Resolving `D-5` resolves this. **SPEC HALF RESOLVED 2026-08-22 by `bubbles.plan`.** The contradiction is removed at its source: the four unmapped terminal outcomes now have a ratified cause (`contracts.ErrInternalError`), so P1's "a set `ErrorCause`" clause is satisfiable for every outcome that can actually reach the mapping. Two scope corrections to this row, both re-derived from source: the gap is **four**, not eight (`OutcomeAllowlistViolation`, `OutcomeHallucinatedTool`, `OutcomeToolError` are per-`ExecutedToolCall` records followed by `continue`; `OutcomeUnknownIntent` is emitted only by `Bridge.Invoke`, whose signature cannot satisfy the facade `Executor` interface at `facade.go:66`), and P1's own enumeration wrongly listed `OutcomeUnknownIntent` as an executor outcome — corrected in [spec.md](spec.md). The DoD item is deliberately **left unchecked and NOT narrowed**: narrowing it to match current delivery is the G068 anti-pattern and is refused. It is re-earned when the code arm and the widened sweep land. Implementation ownership: `bubbles.implement`. |
 
 ## Audit Evidence {#audit-evidence}
 
@@ -1360,4 +1360,91 @@ production or test source line changed. No suite was re-run: the packet's existi
 (`./smackerel.sh test unit --go` exit 0, `artifact-lint` exit 0, `pii-scan` clean) were cited, not
 re-derived, since the tree is unchanged. The four zero-duration history entries were left as their
 phases recorded them — inventing a duration would fabricate the provenance Check 6B exists to test.
+
+## Plan Evidence (bubbles.plan) {#plan-evidence}
+
+`bubbles.plan`, 2026-08-22, at `HEAD` `02067472`. This phase answers the spec question that `D-6`
+and `D-5` route to `bubbles.plan`, and writes nothing outside the packet's artifacts. Every code
+assertion below was re-derived this turn by opening the named file at the named line; none is
+taken from an earlier section of this report.
+
+### 1. The question
+
+`spec.md` P1 requires a non-OK turn to carry "a set `ErrorCause`", but
+`translateOutcomeToErrorCause` (`internal/assistant/facade.go:1799-1805`) maps only
+`OutcomeProviderError` and `OutcomeTimeout`, returning `contracts.ErrNone` for everything else —
+and `ErrNone ErrorCause = ""` (`internal/assistant/contracts/response.go:194`). For the remaining
+outcomes the clause is contradicted by the code, which is why the Scope 2 matrix item is unchecked
+and the packet is `blocked`.
+
+### 2. Terminal-outcome taxonomy, verified from source
+
+The prior rows state the gap as "8 of the 10 non-OK outcomes". That count is too broad: it counts
+every declared constant, but the mapping is only ever reached with a **terminal** `result.Outcome`
+(`facade.go:1287`). `internal/agent/executor.go:56-88` declares 11 constants — `OutcomeOK` plus 10
+non-OK — which divide three ways:
+
+| Class | Count | Members | Source basis |
+|---|---|---|---|
+| Terminal | 6 | `OutcomeProviderError`, `OutcomeTimeout`, `OutcomeSchemaFailure`, `OutcomeToolReturnInvalid`, `OutcomeInputSchemaViolation`, `OutcomeLoopLimit` | assigned to `result.Outcome` at `executor.go:336,345,408,437,444,455,475,487,502,658`; each carries a `terminal:` doc comment |
+| Per-tool-call, never terminal | 3 | `OutcomeAllowlistViolation`, `OutcomeHallucinatedTool`, `OutcomeToolError` | assigned only to an `ExecutedToolCall` appended to `result.ToolCalls`, each followed by `continue` (`executor.go:535,552,571,585,633`) |
+| Terminal but unreachable here | 1 | `OutcomeUnknownIntent` | emitted only by `Bridge.Invoke` (`bridge.go:211,220`) which returns without an executor call; its signature cannot satisfy the facade `Executor` interface, which requires an already-chosen `*agent.Scenario` (`facade.go:66`) |
+
+The facade's only other result producer, `runOpenKnowledgeDirect`, sets `OutcomeProviderError` or
+`OutcomeOK` only (`facade.go:1467,1473`). Two of the six terminal outcomes are already mapped, so
+**the real gap is four** — matching the four named in `state.json.nextRequiredOwner`, and narrower
+than the eight the `D-5`/`D-6` rows assert. Both rows are corrected above.
+
+### 3. Decision
+
+The four unmapped terminal outcomes map to the existing `contracts.ErrInternalError`. The closed
+vocabulary does not grow. Full rationale, and the rejected caller-fault alternative for
+`OutcomeInputSchemaViolation`, are in [design.md](design.md) → "Decision — per-outcome
+`ErrorCause` for terminal non-OK outcomes". The two load-bearing checks behind it:
+
+- **Not a mislabel (the `D-4` lesson).** `translateFinalToBody` (`facade.go:1743-1748`) already
+  collapses `OutcomeSchemaFailure` + `OutcomeToolReturnInvalid` + `OutcomeInputSchemaViolation`
+  into one body and gives `OutcomeLoopLimit` its own, so the user-visible surface already treats
+  them as an internal-error class. `ErrInternalError` agrees with the shipped body;
+  `ErrProviderUnavailable` would repeat `D-4`'s substitution, since no provider fails in a loop
+  limit or an input-schema violation.
+- **Telemetry granularity is genuinely preserved, not assumed.** Verified at
+  `internal/assistant/metrics/metrics.go:158-163`: `ExecutionErrorSurfacedTotal` is labelled
+  `{scenario_id, outcome, transport}`, so a dashboard still separates a schema failure from a loop
+  limit. `ErrorCause` is transport-facing; `outcome` is telemetry-facing.
+
+### 4. A defect found in P1's own enumeration
+
+P1 lists `OutcomeUnknownIntent` among outcomes owing a set `ErrorCause`, under a clause header
+that says "a non-OK **executor** outcome". The executor never emits it (§2 above). The clause's
+enumeration is therefore internally inconsistent, independently of the mapping gap. Corrected by a
+dated clarification in [spec.md](spec.md); the invariant is not weakened, only its scope stated
+correctly.
+
+### 5. What this phase did not do
+
+No production or test source line changed — `translateOutcomeToErrorCause` is untouched and is
+`bubbles.implement`'s to change. No DoD checkbox moved in either direction; the Scope 2 matrix
+item stays unchecked and **its wording stays as written**, because narrowing it to match current
+delivery is the G068 anti-pattern. No scope status changed. `uservalidation.md` was not opened —
+G136 is operator-owned. No suite was re-run; the tree's code is unchanged, so the packet's existing
+measurements stand and are cited rather than re-derived.
+
+### 6. What remains, and who owns it
+
+Owner `bubbles.implement`, two mechanical steps that must land together:
+
+1. Add the arm to `translateOutcomeToErrorCause` (`facade.go:1799`) returning
+   `contracts.ErrInternalError` for `OutcomeSchemaFailure`, `OutcomeToolReturnInvalid`,
+   `OutcomeInputSchemaViolation` and `OutcomeLoopLimit`, and update the helper's doc comment, which
+   currently states that all other outcomes leave `ErrorCause` unset.
+2. Widen `errorOutcomes` (`facade_execution_error_honesty_test.go:48`) to the six terminal
+   outcomes and add the four rows to `errorOutcomeCauses` (`:62-65`). This widening is guarded:
+   the `t.Fatalf` at `:129-133` fails if a member joins `errorOutcomes` without a declared cause,
+   so the sweep cannot silently degrade back to the non-emptiness check `D-4` was filed against.
+   The stale comment at `:41-46` — which says a wider list "would fail the per-row cause
+   assertion" and calls this "a spec-061 question, not a test edit" — is superseded by this
+   decision and should be rewritten to match.
+
+Only then is the Scope 2 matrix item re-earned, Scope 2 returns to Done, and `G027` clears.
 

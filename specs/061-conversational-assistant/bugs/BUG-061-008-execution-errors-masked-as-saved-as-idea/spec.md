@@ -13,6 +13,28 @@ capture-as-fallback / "saved as an idea".**
   body; `CaptureRoute=false`; the response is NOT re-canonicalised into the "saved as an
   idea" acknowledgement.
 
+> **Clarification 2026-08-22 (`bubbles.plan`, resolving `D-6`/`D-5`).** Two corrections to the
+> enumeration above, both re-derived from source rather than from the report.
+>
+> 1. **`OutcomeUnknownIntent` is not an executor outcome.** The clause header says "a non-OK
+>    **executor** outcome", but the executor never emits it: it is produced only by
+>    `Bridge.Invoke` (`internal/agent/bridge.go:211,220`), which returns without calling the
+>    executor. It therefore cannot reach the facade's cause mapping, and the "a set `ErrorCause`"
+>    obligation does not bind it on this path.
+> 2. **The obligation binds the six terminal outcomes.** Of the ten declared non-OK constants,
+>    `OutcomeAllowlistViolation`, `OutcomeHallucinatedTool` and `OutcomeToolError` are recorded
+>    against an individual `ExecutedToolCall` and the loop continues past them
+>    (`internal/agent/executor.go:535,552,571,585,633`), so they are never a terminal
+>    `result.Outcome` either.
+>
+> The "a set `ErrorCause`" half of P1 is therefore owed by exactly six outcomes:
+> `OutcomeProviderError` and `OutcomeTimeout` (already mapped to `ErrProviderUnavailable`), plus
+> `OutcomeSchemaFailure`, `OutcomeToolReturnInvalid`, `OutcomeInputSchemaViolation` and
+> `OutcomeLoopLimit`, which resolve to `ErrInternalError`. P1 requires a **set** cause, not a
+> unique one. Full rationale and the rejected alternative are in
+> [design.md](design.md) → "Decision — per-outcome `ErrorCause` for terminal non-OK outcomes".
+> This clarifies the clause's scope; it does not weaken the invariant.
+
 ## Scenarios (BDD)
 
 ```gherkin
