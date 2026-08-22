@@ -57,7 +57,8 @@
     "devops",
     "regression",
     "simplify",
-    "stabilize"
+    "stabilize",
+    "security"
   ],
   "execution": {
     "completedPhaseClaims": [
@@ -87,6 +88,34 @@
         "evidenceRef": "report.md#stabilize-evidence",
         "outcome": "completed_diagnostic",
         "summary": "Stability and reliability review of the production surface changed by fix commit 44dc0c94 (two files: internal/assistant/facade.go outcome gate plus counter branch, and internal/assistant/metrics/metrics.go new CounterVec plus init registration). Verdict STABLE on all four requested axes; no stability finding opened against this packet, and no suite was re-run (the prior unit --go exit 0, artifact-lint 0, and pii-scan clean results are cited, not re-derived). Goroutine/lifecycle: the error path is strictly subtractive because enforceProvenanceWithSpan now runs only on OutcomeOK (facade.go:1367), so a non-OK turn opens one fewer span than before and the new branch does only a counter Inc with no lifecycle; an awk sweep over the whole Handle body found no goroutine spawned. Concurrency (STATIC verdict, no race detector because the CLI exposes no --race selector and terminal discipline forbids invoking the toolchain directly): errorOutcomeCauses is test-only (facade_execution_error_honesty_test.go:62, read once at :130), a package-level composite literal fully initialised before any test goroutine, and grep for assignment-into and delete-from found no writer; this matters because that file does use t.Parallel() at :121 and :182, so the map really is read concurrently and its safety rests on no writer existing rather than on no concurrency existing. New production shared state is one prometheus CounterVec whose WithLabelValues().Inc() is the goroutine-safe API; the helpers on the path are pure switch functions. Resource usage: no retry, buffer, or accumulating body added, translateFinalToBody returns a fixed literal for every non-OK outcome and is still truncated by BodyMaxChars, and all three metric labels are bounded (scenarioID is manifest-gated at :1152 before the counter at :1372, outcome is the closed agent.Outcome vocabulary, transport is folded into a two-value closed set by normalizeTransportLabel's default arm at :1870, so a hostile transport string cannot inflate series count). Config/deployment reliability, the axis flagged highest-severity: the gate cannot be silently disabled because there is no value to unset; it is a hard-coded result.Outcome == agent.OutcomeOK comparison, facade.go contains no os.Getenv, and the only Enabled hits are per-scenario enablement plus an unrelated struct field, so removing the invariant would require a reviewable Go source change rather than environment drift. The obvious residual-masking suspicion was checked and cleared: the Spec 074 capture hook at :1386 runs after the gate and is not outcome-gated, but openKnowledgeNoGround (:419-430) requires Final to parse as JSON with status refused and returns false for nil/empty Final, and decisively the hook leaves resp untouched on capture success and replaces it only in the capErr branch with StatusUnavailable + ErrInternalError, so no path through it can set StatusSavedAsIdea on a non-OK outcome. One ADJACENT observation recorded as followUp F-1 for bubbles.implement rather than as a packet defect: facade.go:1286-1287 dereferences result.Outcome twice with no nil guard while every neighbouring helper and this fix's own gate guard it, but reachability was traced and agent.Executor.Run never returns nil (every return is &InvocationResult{} at executor.go:299 or e.finalize(result), and finalize at :708-712 returns its non-nil argument), so the deref is unreachable today and the only consequence is that the gate's own result != nil clause is unreachable defensive code while the == OutcomeOK comparison that actually enforces the invariant stays live. D-5 re-confirmed at facade.go:1799 and left with bubbles.plan; not re-litigated.",
+        "timestampNote": "claimedAt is a real instant captured with `date -u` in this session. This workflow does not instrument phase start, so no separate startedAt is inferred.",
+        "certificationNote": "certification.certifiedCompletedPhases is deliberately NOT touched by this phase. bubbles.validate is the sole certifying authority for this packet; recording an executed phase here is not a certification."
+      },
+      {
+        "phase": "security",
+        "agent": "bubbles.security",
+        "claimedAt": "2026-08-22T19:33:56Z",
+        "evidenceRef": "report.md#security-evidence",
+        "outcome": "completed_diagnostic",
+        "summary": "Security review of the surface changed by fix commit 44dc0c94 (internal/assistant/facade.go +31/-18: the outcome gate condition, the new counter branch, and four user-visible error-body literals; internal/assistant/metrics/metrics.go +16: one CounterVec plus its init registration). Verdict SECURE on all five requested axes for the packet surface; zero security findings opened against this packet. Axis 1 information disclosure in error bodies is CLEAN on the decisive property that translateFinalToBody (facade.go:1727) never reads result.Final on ANY non-OK branch: every non-OK arm returns a fixed string literal with no fmt.Sprintf, no err.Error(), and no interpolation, so no raw upstream error, stack trace, internal hostname, file path, provider URL, or credential-bearing string can reach the user-visible body through the path this fix opened. The raw upstream text does exist in the system (executor.go:337,346 store err.Error() under OutcomeDetail[detail]) but is structurally unreachable from the body because the body translator never consults OutcomeDetail. The rewrite is a net reduction in disclosure surface, since the pre-fix strings leaked implementation vocabulary (provider unavailable, internal validation failure, request exceeded internal limits) and the replacements name no internal component. translateOutcomeToErrorCause (facade.go:1799) returns closed-vocabulary contracts.ErrorCause constants from a two-member switch. The sibling renderer internal/agent/userreply was checked because it is on the same axis: it reads only OutcomeDetail[error] (fixed classifier tokens) and never the detail key holding err.Error() (grep exit 1), and it is not referenced from internal/assistant at all (grep exit 1). Axis 2 telemetry disclosure is CLEAN: ExecutionErrorSurfacedTotal labels scenario_id/outcome/transport are byte-identical in label set and value provenance to the pre-existing SkillInvocationsTotal (metrics.go:146), scenarioID is decision.Chosen which the router only ever assigns as Chosen: sc.ID from the manifest (router.go:195,272,292) and never user text, and outcome is the closed agent.Outcome enum, so no label value can carry user content or a secret into a Prometheus series. Axis 3 log hygiene is CLEAN for this packet: the turn log asserts body_redacted=true and logs no body and no user message text, and the non-OK enrichment branch keys off invocation.Outcome rather than resp.Status, which is why it already fired on non-OK turns BEFORE this fix and is therefore unchanged by it (annotated BUG-061-004, untouched by 44dc0c94). One honest observation on that pre-existing path was recorded as S-1 rather than folded into the verdict: summarizeOutcomeDetail (facade.go:2223) bounds output to 200 runes per value and 512 total but does not content-redact, so a raw upstream validation error can reach the log truncated; it cannot reach the user body. Axis 4 secret hygiene is CLEAN: a credential-shaped-assignment grep across both changed Go files returned nothing (exit 1), neither changed file reads provider credentials, and presence-only reporting was used throughout so no secret value was read or echoed. Axis 5 cardinality was confirmed briefly and not re-litigated: all three labels are closed-vocabulary so the counter cannot be driven to unbounded cardinality, and the branch is a single Inc with no allocation on a path that now opens one fewer span than before. Mechanical floor G034 security-gate.sh was run at FULL repo scope and returned a REAL exit 1 with 12 inline-credentials findings, all in scripts/commands/config.sh and scripts/commands/config_secret_rejection_test.sh; commit 44dc0c94 touches ZERO files under scripts/commands/, so the result is attributed at REPO level and recorded as S-2 with owner bubbles.devops. It was NOT suppressed and the gate was NOT re-run at a narrowed scope to manufacture a 0. Matched line bodies were withheld deliberately (rule plus file:line locates each hit; reproducing the matched text would put credential-shaped strings into the transcript for no analytic gain). Facts established earlier in this session were cited rather than re-derived: facade.go has no os.Getenv so the gate has no config seam, label cardinality is bounded, errorOutcomeCauses is test-only, unit --go exit 0, artifact-lint 0, pii-scan clean.",
+        "mechanicalFloor": {
+          "gate": "G034",
+          "command": "bash .github/bubbles/scripts/security-gate.sh --repo-root <repo-root>",
+          "exitCode": 1,
+          "findings": 12,
+          "rule": "inline-credentials",
+          "attribution": "repo-level, NOT this packet: all 12 hits are in scripts/commands/config.sh and scripts/commands/config_secret_rejection_test.sh, and commit 44dc0c94 touches zero files under scripts/commands/ (proved by git show --stat filtered on that path, which matched nothing)",
+          "inspection": "6 of 8 config.sh hits are __SECRET_PLACEHOLDER__<NAME>__ SST not-a-value sentinels, 1 is a *_SECRET_REF name pointer, 1 is a spec-061 test fixture, and all 4 config_secret_rejection_test.sh hits are the assertions of a secret-REJECTION test, i.e. the scanner matches the code that exists to reject weak secrets",
+          "suppressed": false,
+          "rerunAtNarrowedScope": false
+        },
+        "axisVerdicts": {
+          "informationDisclosureInErrorBodies": "CLEAN",
+          "disclosureViaTelemetry": "CLEAN",
+          "logHygiene": "CLEAN for this packet (S-1 pre-existing, outside the diff)",
+          "secretHygiene": "CLEAN",
+          "denialOfServiceCardinality": "CLEAN (confirmed, not re-litigated)"
+        },
         "timestampNote": "claimedAt is a real instant captured with `date -u` in this session. This workflow does not instrument phase start, so no separate startedAt is inferred.",
         "certificationNote": "certification.certifiedCompletedPhases is deliberately NOT touched by this phase. bubbles.validate is the sole certifying authority for this packet; recording an executed phase here is not a certification."
       }
@@ -186,6 +215,34 @@
             "summary": "facade.go:1286-1287 dereferences result.Outcome twice with no nil guard, while every neighbouring helper guards nil (translateFinalToBody :1728, normalizeSkillOutcome :1910, openKnowledgeNoGround :420) and so does the BUG-061-008 gate itself via result != nil (:1367). Reachability was traced rather than assumed: agent.Executor.Run returns &InvocationResult{} at executor.go:299 on its defensive nil-scenario path and e.finalize(result) on every other return, and finalize at :708-712 returns the same non-nil pointer it receives, so the executor never returns nil and line 1286 is not reachable in production today. The narrow consequence is that a real nil would panic at :1286 before reaching :1367, which makes the gate's own result != nil clause unreachable defensive code; the == agent.OutcomeOK comparison that actually enforces the invariant is unaffected and live. Pre-dates commit 44dc0c94, which only ADDED guards, so this is recorded as a followUp rather than as a defect of this packet."
           }
         ]
+      },
+      {
+        "phasesExecuted": ["security"],
+        "agent": "bubbles.security",
+        "startedAt": "2026-08-22T19:33:56Z",
+        "completedAt": "2026-08-22T19:33:56Z",
+        "startedAtNote": "Both fields record the same measured instant: this workflow does not instrument phase start, and the value is the timestamp this phase captured with `date -u` rather than an inferred or back-dated start.",
+        "headAtExecution": "3f09c098",
+        "outcome": "completed_diagnostic",
+        "verdict": "SECURE (packet surface) — zero security findings against the surface commit 44dc0c94 changed, across all five requested axes. The G034 mechanical floor exits 1 for pre-existing repo-level reasons in files this packet never touched; that is recorded as S-2 rather than folded into the packet verdict, so this must not be read as a claim that the repository as a whole is clean.",
+        "findingsOpened": 0,
+        "followUpsOpened": 2,
+        "followUpIds": ["S-1", "S-2"],
+        "suitesRun": [],
+        "suitesRunNote": "No test suite was re-run by this phase. The prior unit --go exit 0, artifact-lint 0, and pii-scan clean results are CITED from earlier in this session, not re-derived, per the packet instruction.",
+        "commandsExecuted": [
+          { "command": "bash .github/bubbles/scripts/repository-binding.sh preflight --request-class STRUCTURED", "exitCode": 0, "result": "PREFLIGHT_COMMITTED revision=24 repository=smackerel actionable=true" },
+          { "command": "bash .github/bubbles/scripts/security-gate.sh --repo-root <repo-root>", "exitCode": 1, "result": "G034 FAIL, 12 inline-credentials findings, ALL repo-level in scripts/commands/ — outside this packet's diff" },
+          { "command": "git show --stat --format=\"\" 44dc0c94 | grep -E 'scripts/commands'", "exitCode": 1, "result": "no match — attribution proof that the commit touches zero flagged files" },
+          { "command": "grep -rln 'userreply' --include='*.go' internal/assistant/", "exitCode": 1, "result": "facade does not use the userreply renderer" },
+          { "command": "grep -n 'detailString(r, \"detail\")|OutcomeDetail[\"detail\"]' internal/agent/userreply/userreply.go", "exitCode": 1, "result": "userreply never reads the raw err.Error() key" },
+          { "command": "grep -nEi credential-shaped assignments in internal/assistant/facade.go and internal/assistant/metrics/metrics.go", "exitCode": 1, "result": "no hardcoded credentials in either changed Go file" }
+        ],
+        "artifactsWritten": [
+          "report.md — new '## Security Evidence (bubbles.security) {#security-evidence}' section plus rows S-1 and S-2 in the existing '## Discovered Issues' table",
+          "state.json — completedPhases += security; execution.completedPhaseClaims += security claim; execution.executionHistory += this entry"
+        ],
+        "notWritten": "certification.certifiedCompletedPhases — left [] by design; only bubbles.validate may populate it. No DoD checkbox was checked or unchecked (16/0 preserved). uservalidation.md was not opened or modified (G136)."
       }
     ]
   },

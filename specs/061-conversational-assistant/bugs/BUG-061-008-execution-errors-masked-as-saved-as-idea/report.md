@@ -829,9 +829,174 @@ defensive code. That does not weaken the invariant — the `== agent.OutcomeOK` 
 enforces it, and that clause is live. Severity low; no user-visible impact; no action required for
 this packet.
 
+## Security Evidence (bubbles.security) {#security-evidence}
+
+Security review of the surface changed by fix commit `44dc0c94`. That commit changes two
+production files: `internal/assistant/facade.go` (+31/-18 — the outcome gate condition, the
+new counter branch, and four user-visible error-body literals) and
+`internal/assistant/metrics/metrics.go` (+16 — one `CounterVec` plus its `init` registration).
+The security question this fix raises is **what an error path reveals**, because the fix
+changes what users and telemetry see on failure.
+
+Facts already established earlier in this session are **cited, not re-derived**: `facade.go`
+contains no `os.Getenv`, so the gate has no config seam and cannot be silently disabled;
+label cardinality is bounded on all three labels; `errorOutcomeCauses` is test-only;
+`./smackerel.sh test unit --go` exit 0; artifact-lint exit 0; pii-scan clean.
+
+### Mechanical floor — G034 `security-gate.sh`: REAL EXIT 1 (repo-level, NOT this packet)
+
+**Claim Source:** executed this session.
+
+```text
+$ bash .github/bubbles/scripts/security-gate.sh --repo-root <repo-root>
+FINDING: inline-credentials: ./scripts/commands/config.sh:866
+FINDING: inline-credentials: ./scripts/commands/config.sh:1070
+FINDING: inline-credentials: ./scripts/commands/config.sh:1236
+FINDING: inline-credentials: ./scripts/commands/config.sh:1542
+FINDING: inline-credentials: ./scripts/commands/config.sh:1841
+FINDING: inline-credentials: ./scripts/commands/config.sh:1851
+FINDING: inline-credentials: ./scripts/commands/config.sh:2239
+FINDING: inline-credentials: ./scripts/commands/config.sh:2240
+FINDING: inline-credentials: ./scripts/commands/config_secret_rejection_test.sh:56
+FINDING: inline-credentials: ./scripts/commands/config_secret_rejection_test.sh:111
+FINDING: inline-credentials: ./scripts/commands/config_secret_rejection_test.sh:118
+FINDING: inline-credentials: ./scripts/commands/config_secret_rejection_test.sh:122
+[security-gate] FAIL — G034 findings: 12
+SECURITY_GATE_EXIT=1
+```
+
+The matched line bodies are withheld deliberately: the rule name plus `file:line` is
+sufficient to locate each hit, and reproducing the matched text would put credential-shaped
+strings into the transcript for no analytic gain.
+
+**Attribution — repo level, not packet level.** All 12 findings sit in two files under
+`scripts/commands/`. Commit `44dc0c94` touches **zero** files under that path:
+
+```text
+$ git show --stat --format="" 44dc0c94 | grep -E 'scripts/commands'
+NO — commit 44dc0c94 touches ZERO files under scripts/commands/
+```
+
+Inspecting the hits: 6 of the 8 `config.sh` hits are `__SECRET_PLACEHOLDER__<NAME>__`
+sentinels — the SST's deliberate not-a-value marker — one is a `*_SECRET_REF` pointer
+(a name, not a value), one is a spec-061 test fixture, and all 4
+`config_secret_rejection_test.sh` hits are the assertions of a secret-**rejection** test,
+i.e. the scanner is matching the very code that exists to reject weak secrets.
+
+This exit code is reported as-is. It was **not** suppressed, and the gate was **not** re-run
+at a narrowed scope to manufacture a 0. It is recorded below as `S-2` with an owner so the
+repo-level state is visible rather than absorbed into this packet's verdict.
+
+### Axis 1 — Information disclosure in error bodies: CLEAN
+
+The decisive property is that `translateFinalToBody` (`facade.go:1727`) **never reads
+`result.Final` on any non-OK branch**. Every non-OK arm returns a fixed string literal:
+
+```go
+case agent.OutcomeTimeout:
+        return "that took too long — please try again in a moment."
+case agent.OutcomeProviderError:
+        return "the service is unavailable right now — please try again in a moment."
+case agent.OutcomeSchemaFailure, agent.OutcomeToolReturnInvalid, agent.OutcomeInputSchemaViolation:
+        return "something went wrong handling that — please try again."
+case agent.OutcomeLoopLimit:
+        return "I couldn't finish that in time — please try again."
+```
+
+These four literals are exactly what the fix changed. There is no `fmt.Sprintf`, no
+`err.Error()`, no `result.Final`, no interpolation of any kind on these arms — so no raw
+upstream error, stack trace, internal hostname, file path, provider URL, or credential-bearing
+string can reach the user-visible body through the path this fix opened. The `%v`-formatted
+upstream text does exist in the system (`executor.go` stores `err.Error()` under
+`OutcomeDetail["detail"]`), but it is structurally unreachable from the body because the body
+translator does not consult `OutcomeDetail` at all.
+
+The rewrite is also a net *reduction* in disclosure surface: the pre-fix strings leaked
+implementation vocabulary (`"provider unavailable."`, `"internal validation failure."`,
+`"request exceeded internal limits."`); the replacements name no internal component.
+
+`translateOutcomeToErrorCause` (`facade.go:1799`) returns closed-vocabulary
+`contracts.ErrorCause` constants (`ErrProviderUnavailable` / `ErrNone`) — a two-member switch
+with no interpolation and no upstream input beyond the outcome enum.
+
+I checked the sibling renderer too, since it is on the same axis: `internal/agent/userreply`
+reads `OutcomeDetail["error"]` (fixed classifier tokens such as `input_schema_violation`) and
+**never** reads the `"detail"` key that holds `err.Error()` — verified by grep, exit 1. It is
+also not referenced from `internal/assistant/` at all (grep exit 1), so it is not on the
+facade path this fix changed.
+
+### Axis 2 — Disclosure via telemetry: CLEAN
+
+`ExecutionErrorSurfacedTotal` is declared with `[]string{"scenario_id", "outcome", "transport"}`
+and incremented at `facade.go:1376` with `(scenarioID, string(result.Outcome), transportLabel)`.
+No label value can carry user content or a secret:
+
+- `scenarioID` is `decision.Chosen` (`facade.go:1122`), and the router only ever assigns
+  `Chosen: sc.ID` (`internal/agent/router.go:195,272,292`) — a scenario identifier from the
+  manifest, never user text.
+- `outcome` is `string(result.Outcome)`, the closed `agent.Outcome` enum.
+- `transport` is the normalized transport label.
+
+This is byte-identical in label set and in value provenance to the pre-existing
+`SkillInvocationsTotal` (`metrics.go:146`), so it introduces no new label vocabulary and no
+new way for a caller to influence a series name. The `Help` text names no secret and no host.
+
+### Axis 3 — Log hygiene: CLEAN for this packet
+
+The turn log (`facade.go:559`, `slog.Info("assistant_turn", logAttrs...)`) asserts
+`"body_redacted", true` and carries no body: it logs status/error-cause tokens, IDs, and
+timings. It does **not** log `result.Final` and does not log the user's message text.
+
+The non-OK enrichment branch (`outcome`, `outcome_iterations`, `outcome_detail`, `provider`,
+`model`) keys off `invocation.Outcome`, not off `resp.Status`. That distinction matters for
+attribution: because it reads the raw outcome rather than the post-gate status, that branch
+already fired on non-OK turns *before* this fix, so the fix did not change what enters it.
+The branch is annotated `BUG-061-004` and is untouched by `44dc0c94`.
+
+One honest observation on that pre-existing path: `summarizeOutcomeDetail` (`facade.go:2223`)
+**bounds** what it emits (200 runes per value, 512 total) but does not content-redact — it
+`%v`-formats whatever the executor placed in the map, and `executor.go:337,346` place
+`"detail": err.Error()` there for input-schema violations. So a raw upstream validation error
+can reach the log, truncated. It cannot reach the user body (Axis 1). Recorded as `S-1`
+against `bubbles.implement`; it is not a defect of this packet and does not change this
+verdict.
+
+### Axis 4 — Secret hygiene: CLEAN
+
+No credential-bearing value is reachable from the error path into body, label, or log. A grep
+for credential-shaped assignments across both changed Go files returned nothing:
+
+```text
+$ grep -nEi '(api[_-]?key|token|secret|password|credential)[[:space:]]*[:=][[:space:]]*"[^"]+"' \
+    internal/assistant/facade.go internal/assistant/metrics/metrics.go
+grep_exit=1 (1 = none)
+```
+
+Neither changed file reads provider credentials; the facade receives an already-constructed
+executor and never handles key material. Presence-only reporting was used throughout this
+review; no secret value was read or echoed.
+
+### Axis 5 — Denial of service / cardinality: CLEAN (confirmed, not re-litigated)
+
+Confirmed briefly per the packet's instruction. All three labels are closed-vocabulary
+(Axis 2), so the counter cannot be driven to unbounded cardinality by a caller. The counter
+branch is a single `Inc()` with no allocation, no retry, and no accumulating buffer, and it
+runs on a path that now opens *one fewer* span than before (the provenance gate no longer runs
+on non-OK). The bounded-cardinality analysis established earlier in this session stands.
+
+### Verdict
+
+**🔒 SECURE — packet surface.** Zero security findings against the surface commit `44dc0c94`
+changed, across all five axes. The G034 mechanical floor exits 1 for pre-existing repo-level
+reasons in files this packet never touched; that is recorded as `S-2` rather than folded into
+the packet verdict, so this section must not be read as a claim that the repository as a whole
+is clean.
+
 ## Discovered Issues
 
 | ID | Date | Owner | Severity | Description |
 |---|---|---|---|---|
 | F-1 | 2026-08-22 | `bubbles.implement` | low | `facade.go:1286-1287` dereferences `result.Outcome` without the nil guard used by every adjacent helper and by the BUG-061-008 gate itself. Not reachable today (`agent.Executor.Run` never returns nil, verified through `finalize`), so this is a defensive-consistency repair, not a live crash. Pre-dates commit `44dc0c94`; that commit only added guards. |
+| S-1 | 2026-08-22 | `bubbles.implement` | low | Log hygiene, pre-existing and outside commit `44dc0c94`: `summarizeOutcomeDetail` (`facade.go:2223`) bounds `outcome_detail` to 200 runes per value / 512 total but does not content-redact, and `executor.go:337,346` place `"detail": err.Error()` into that map, so a raw upstream validation error can reach the turn log truncated. It cannot reach the user-visible body — `translateFinalToBody` never consults `OutcomeDetail`. Introduced by the `BUG-061-004` log enrichment, which keys off `invocation.Outcome` and therefore already fired on non-OK turns before this fix. |
+| S-2 | 2026-08-22 | `bubbles.devops` | medium | Repo-level G034: `security-gate.sh --repo-root <repo-root>` exits 1 with 12 `inline-credentials` findings, all in `scripts/commands/config.sh` and `scripts/commands/config_secret_rejection_test.sh`. Commit `44dc0c94` touches zero files under `scripts/commands/`. Inspection indicates mostly `__SECRET_PLACEHOLDER__` SST sentinels, one `*_SECRET_REF` name pointer, one spec-061 test fixture, and the assertions of a secret-**rejection** test — i.e. probable scanner false positives — but the exit code is real and is reported unsuppressed. Needs either a reviewed gate allowlist entry per hit or a rule refinement; it is not resolvable inside this packet. |
 | D-5 | 2026-08-22 | `bubbles.plan` | open | Pre-existing and unchanged by this phase: `translateOutcomeToErrorCause` binds a cause for 2 of the 10 declared non-OK outcomes. Whether the other 8 owe the transport an explicit cause is a spec-061 question, not a stability defect. Re-confirmed at `facade.go:1799` during this review; not re-litigated here. |
