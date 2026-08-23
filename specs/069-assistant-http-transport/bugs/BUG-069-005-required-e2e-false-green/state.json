@@ -17,7 +17,15 @@
     "executionModel": "direct-authorized-runner",
     "runStartedAt": "2026-07-20T23:07:25Z",
     "lastUpdatedAt": "2026-07-21T01:12:06Z",
-    "completedPhaseClaims": [],
+    "completedPhaseClaims": [
+      {
+        "phase": "regression",
+        "agent": "bubbles.regression",
+        "provenanceMode": "specialist",
+        "claimedAt": "2026-08-23T02:14:33Z",
+        "evidenceRef": "report.md#regression-evidence-bug-069-005"
+      }
+    ],
     "completedScopes": [
       "Scope 1: Compiler SST, provider transport, and core wiring",
       "Scope 2: Persistent disambiguation and confirmation state"
@@ -46,6 +54,19 @@
         "claimSource": "executed",
         "outcome": "route_required",
         "summary": "Implemented product-owned Scopes 1 and 2 plus implementation-adjacent strict required tests. Go/Python units, focused live integration, exact five required E2E, full assistant E2E, check, lint, format, artifact lint, traceability, and installed regression guard passed. Scopes remain in_progress because planning-owned concrete path reconciliation and the upstream Bubbles Go skip-family guard remain open; certification was not modified."
+      },
+      {
+        "at": "2026-08-23T02:14:33Z",
+        "agent": "bubbles.regression",
+        "phasesExecuted": [
+          "regression"
+        ],
+        "runStartedAt": "2026-08-23T01:59:29Z",
+        "runEndedAt": "2026-08-23T02:14:33Z",
+        "runDurationSeconds": 904,
+        "claimSource": "executed",
+        "outcome": "completed_diagnostic",
+        "summary": "Regression phase executed against the packet's own subject: do the tests covering this fix bind their claims? ONE mutation check on the guard that closes the named root cause (compiler-disabled test config). Baseline at clean HEAD: focused unit selector on TestIntentCompilerRequiredWhenAssistantHTTPEnabled exited 0 in 96s wall with internal/config reporting 0.091s (executed, not 'no tests to run'). Mutation: the F069-INTENT-COMPILER-DISABLED coherence check in internal/config/assistant.go was disabled by short-circuiting its condition. Mutated run FAILED exactly as required — '--- FAIL: TestIntentCompilerRequiredWhenAssistantHTTPEnabled' with 'enabled transport with compiler disabled error = <nil>, want F069-INTENT-COMPILER-DISABLED'. Restored with an explicit git checkout as its own step; porcelain verified empty and the guard condition verified present at line 556. Post-restore run exited 0 in 64s. The test therefore binds its claim: removing the fix kills it. Direct grep across all five manifest-required assistant test files found zero t.Skip/t.Skipf/t.SkipNow, and the two bare returns present sit in non-required negative-invariant tests exiting on a false antecedent, not on a failure condition. Adversarial probe recorded a real limitation: regression-quality-guard.sh reports 0 violations on a throwaway file containing nothing but t.Skip and t.Skipf, and its source contains zero skip-family tokens, so its clean result on the five required files is a blind pass rather than skip-freeness evidence. tests/e2e/agent/no_skip_guard_test.go enforces no-skip but scans only its own directory without recursing, so it does not cover tests/e2e/assistant. Skip-freeness is therefore true by content today and mechanically unguarded, which reinforces the already-open TR-BUG-069-005-FRAMEWORK-001 rather than opening a new route. No source file was modified on exit; no DoD item was checked; no certification field was written."
       }
     ]
   },

@@ -1544,3 +1544,182 @@ The working tree was clean before this session's artifact writes, so the counts
 above describe committed history and not an uncommitted local state. All paths
 are repository-relative from `<repo-root>`.
 
+## Regression Evidence (BUG-069-005)
+
+Executed by `bubbles.regression` on 2026-08-23 (run window 01:59:29Z to
+02:14:33Z UTC, 904s measured). This packet is titled *required-e2e-false-green*,
+so the regression question is the packet's own subject: **do the tests covering
+this fix actually fail when the fix is removed?** A test that cannot fail is the
+defect this packet exists to remove, so a passing suite proves nothing on its
+own.
+
+Scope note: this phase is diagnostic. No source file, no DoD checkbox, no
+certification field, and no `uservalidation.md` byte was modified.
+
+### Mutation Check — The Load-Bearing Evidence
+
+One mutation, chosen because it targets the packet's own named root cause: a
+**compiler-disabled test config**. The fix that closes it is the
+`F069-INTENT-COMPILER-DISABLED` coherence rule in
+`internal/config/assistant.go`, which makes the false-green configuration
+refuse to validate. Its guard is `TestIntentCompilerRequiredWhenAssistantHTTPEnabled`
+in `internal/config/assistant_intent_compiler_test.go` — a pure unit test with
+no build tag and no live-stack dependency, so the check is deterministic.
+
+**Claim Source:** executed in this session via the repo CLI.
+
+Baseline at clean HEAD (`7a0f2b2e`), working tree verified empty first:
+
+```text
+$ ./smackerel.sh test unit --go --go-run 'TestIntentCompilerRequiredWhenAssistantHTTPEnabled'
+ok      github.com/smackerel/smackerel/internal/config  0.091s
+[go-unit] go test ./... finished OK
+=== BASELINE_EXIT=0 WALL_SECONDS=96 ===
+```
+
+The `0.091s` timing matters: `internal/config` reports an elapsed duration
+rather than `[no tests to run]`, which is how a focused selector that matched
+nothing would have presented. The selector really bound to a test.
+
+Mutation applied — the coherence condition short-circuited so the rule can
+never fire:
+
+```text
+$ git status --porcelain
+ M internal/config/assistant.go
+
+$ git diff -U1 internal/config/assistant.go
+@@ -555,3 +555,3 @@ func (c *Config) validateAssistantConfig() error {
+                c.Assistant.IntentCompiler.ProviderName != "" || ...ProviderURL != ""
+-       if compilerConfigLoaded && !c.Assistant.IntentCompiler.Enabled {
++       if false && compilerConfigLoaded && !c.Assistant.IntentCompiler.Enabled {
+                return fmt.Errorf("[F069-INTENT-COMPILER-DISABLED] enabled assistant transport requires ...")
+```
+
+Mutated run — the test **died**, naming the exact missing behaviour:
+
+```text
+--- FAIL: TestIntentCompilerRequiredWhenAssistantHTTPEnabled (0.00s)
+    assistant_intent_compiler_test.go:37: enabled transport with compiler disabled error = <nil>, want F069-INTENT-COMPILER-DISABLED
+FAIL
+FAIL        github.com/smackerel/smackerel/internal/config  0.031s
+=== MUTATED_PIPELINE_EXIT=1 ===
+```
+
+Restoration was performed as its own explicit step, then verified — not folded
+into a shell trap, because the agent terminal is a persistent shell where an
+`EXIT` trap does not fire on command completion and would have left the
+mutation resident in the tree:
+
+```text
+$ git checkout -- internal/config/assistant.go
+$ git status --porcelain
+--- end porcelain (empty above = clean) ---
+$ grep -n 'if compilerConfigLoaded && !c.Assistant.IntentCompiler.Enabled' internal/config/assistant.go
+556:    if compilerConfigLoaded && !c.Assistant.IntentCompiler.Enabled {
+
+$ ./smackerel.sh test unit --go --go-run 'TestIntentCompilerRequiredWhenAssistantHTTPEnabled'
+POST_RESTORE_EXIT=0 WALL_SECONDS=64
+ok          github.com/smackerel/smackerel/internal/config  0.117s
+[go-unit] go test ./... finished OK
+```
+
+**Result: PASS to FAIL to PASS.** The guard binds its claim. Removing the fix
+kills the test, which is the property the original false-green lacked.
+
+### Skip-Family Scan Of The Five Required Tests
+
+**Claim Source:** executed static scan in this session.
+
+```text
+$ grep -nE 't\.Skip|t\.Skipf|t\.SkipNow|testing\.Short' <each required file>
+--- tests/e2e/assistant/annotation_intent_test.go ---     (no skip-family call)
+--- tests/e2e/assistant/intent_clarify_test.go ---        (no skip-family call)
+--- tests/e2e/assistant/http_disambiguation_test.go ---   (no skip-family call)
+--- tests/e2e/assistant/intent_side_effect_test.go ---    (no skip-family call)
+--- tests/e2e/assistant/http_confirm_test.go ---          (no skip-family call)
+```
+
+All five are free of the five original `t.Skipf` bailouts. Two bare `return`
+statements do remain in that directory, at `intent_clarify_test.go:99` and
+`intent_side_effect_test.go:132`, and both were read in full rather than
+pattern-matched. Neither is a silent pass and neither belongs to a required
+test: both sit in *negative-invariant* tests
+(`TestIntentCompilerE2E_AmbiguousLocationNeverRoutesWeatherLookup`,
+`TestIntentCompilerE2E_WriteAndStateMutationNeverBypassConfirmGate`) and exit on
+the antecedent being false, where the conditional invariant holds trivially.
+That is sound, and distinct from returning on a failure condition.
+
+The required list-write test now carries hard assertions where it previously
+skipped, including a database round-trip proving non-persistence before
+confirmation (`listCountBySourceQuery(...) != 0` is fatal).
+
+### Honest Negative Finding — The Guard Does Not Look
+
+`regression-quality-guard.sh` returns `0 violation(s), 0 warning(s)` on all five
+required files. That result is **not** evidence of skip-freeness, and reporting
+it as such would repeat this packet's own mistake in a new place. An adversarial
+probe was run against a throwaway file outside the repository tree containing
+nothing but two skip bailouts:
+
+**Claim Source:** executed adversarial probe in this session; probe deleted, repository tree unaffected.
+
+```text
+$ bash .github/bubbles/scripts/regression-quality-guard.sh <temp>/adversarial_skip_test.go
+  REGRESSION QUALITY RESULT: 0 violation(s), 0 warning(s)
+  Files scanned: 1
+exit=0
+
+$ grep -cE 't\.Skip|SkipNow|Skipf' .github/bubbles/scripts/regression-quality-guard.sh
+0
+```
+
+The guard passes a file that is *entirely* skip bailouts, and its source
+contains zero skip-family tokens. Its clean verdict on the required tests is a
+blind pass. Skip-freeness above was established independently by direct scan,
+not by that guard.
+
+The in-repository `tests/e2e/agent/no_skip_guard_test.go` does enforce a no-skip
+contract, but it resolves its scan directory from its own file location and does
+not recurse, so it covers `tests/e2e/agent/` only and never inspects
+`tests/e2e/assistant/` — the directory this packet is about.
+
+Net: the five required assistant tests are skip-free **by content today** and
+**mechanically unguarded** against reintroduction. That is a durability gap, not
+a live regression, and it substantiates the already-open
+`TR-BUG-069-005-FRAMEWORK-001` rather than opening a new route.
+
+### Cross-Spec Observation (read-only)
+
+Establishable read-only: the file header and function doc comment in
+`tests/e2e/assistant/intent_side_effect_test.go` still describe the removed
+behaviour, stating that the strict assertion "is skipped to keep the test stable
+under LLM nondeterminism". The code now calls `t.Fatalf` instead. The prose
+contradicts the executable contract and describes exactly the false-green
+posture this packet removed, so a future reader could reinstate the skip
+believing it sanctioned. Documentation drift only; no behaviour is affected.
+
+### Verdict
+
+**REGRESSION_DETECTED — none in the code under test; one durability gap recorded.**
+
+| Check | Result |
+|---|---|
+| Mutation binds the fix | PASS to FAIL to PASS, proven |
+| Skip-family bailouts in required tests | none |
+| Silent-pass early returns in required tests | none |
+| Bailout guard actually detects Go skips | NO — blind pass, evidenced |
+| No-skip guard covers the assistant directory | NO — scoped to the agent directory |
+| Source tree modified on exit | none; porcelain empty |
+
+#### Follow-Up Narrative
+
+- `followUpOwner`: `bubbles.implement` in the framework repository, under the existing open `TR-BUG-069-005-FRAMEWORK-001`.
+- `followUpAction`: extend the bailout guard so a Go skip-family call in a manifest-required test is rejected, with a hermetic adversarial selftest proving the guard can fail; the probe above is a ready reproduction.
+- `followUpTarget`: the framework-owned guard script; this session made no edit under `.github/bubbles/`, which another session owns.
+
+- `followUpOwner`: `bubbles.docs`.
+- `followUpAction`: reconcile the stale skip narrative in the `intent_side_effect_test.go` header and function comment with the fail-closed code.
+- `followUpTarget`: `tests/e2e/assistant/intent_side_effect_test.go` comment blocks only.
+
+
