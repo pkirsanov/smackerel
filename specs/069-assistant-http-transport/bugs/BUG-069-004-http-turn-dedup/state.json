@@ -14,6 +14,7 @@
     "executionModel": "direct-authorized-runner",
     "runStartedAt": "2026-07-19T00:00:00Z",
     "completedPhaseClaims": ["security", "validate", "audit"],
+    "completedScopes": [],
     "executionHistory": [
       {
         "at": "2026-07-19",
@@ -50,6 +51,13 @@
   "certification": {
     "status": "in_progress",
     "completedScopes": [],
+    "scopeProgress": {
+      "total": 1,
+      "done": 0,
+      "inProgress": 1,
+      "notStarted": 0,
+      "blocked": 0
+    },
     "certifiedCompletedPhases": [],
     "lockdownState": {
       "active": false,

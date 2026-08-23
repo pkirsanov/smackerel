@@ -47,6 +47,10 @@ Scenario: Identity and payload collisions do not leak or re-execute
 | SCN-BUG069004-002 | unit | `internal/assistant/httpadapter/dedup_test.go` | Concurrent same-ID retries collapse | `./smackerel.sh test unit --go --go-run 'TestHTTPTurnDedup' --verbose` | No |
 | SCN-BUG069004-003 | e2e-api | `tests/e2e/assistant/web_pwa_retry_e2e_test.go` | Different IDs execute distinct turns | focused PWA retry E2E command | Yes |
 | SCN-BUG069004-004 | unit | `internal/assistant/httpadapter/dedup_test.go` | Identity and payload collisions do not leak or re-execute | focused dedup unit command | No |
+| Regression E2E API - SCN-BUG069004-001 | e2e-api | `tests/e2e/assistant/web_pwa_retry_e2e_test.go` | Regression: `TestAssistantWebPWARetryE2E_SameTransportMessageIDDedupes_TP_073_10` keeps a same-ID retry replaying one logical turn instead of executing twice | `SMACKEREL_HARDWARE_TIER=cpu ./smackerel.sh test e2e --go-run '^TestAssistantWebPWARetryE2E_SameTransportMessageIDDedupes_TP_073_10$'` | Yes |
+| Regression E2E API - SCN-BUG069004-003 | e2e-api | `tests/e2e/assistant/web_pwa_retry_e2e_test.go` | Regression: `TestAssistantWebPWARetryE2E_DifferentTransportMessageIDsAreDistinct_TP_073_10_Adversarial` keeps distinct transport message IDs executing distinct turns, so replay cannot over-collapse | `SMACKEREL_HARDWARE_TIER=cpu ./smackerel.sh test e2e --go-run '^TestAssistantWebPWARetryE2E_DifferentTransportMessageIDsAreDistinct_TP_073_10_Adversarial$'` | Yes |
+| Regression E2E API - shared-identity row isolation | e2e-api | `tests/e2e/assistant/conversation_isolation_test.go` | Regression: `TestAssistantConversationIsolation_RestoresExactTargetAndPreservesNeighbor_Adversarial` keeps the exact shared-identity conversation row restored and neighbour rows unchanged | `SMACKEREL_HARDWARE_TIER=cpu ./smackerel.sh test e2e --go-run '^TestAssistantConversationIsolation_RestoresExactTargetAndPreservesNeighbor_Adversarial$'` | Yes |
+| Regression E2E API - broader assistant suite | e2e-api | `tests/e2e/assistant/` | Regression: the broader assistant E2E package runs in package order so dedup replay does not regress neighbouring HTTP turn, confirm, disambiguation, and capture flows | exact anchored selector generated from package test declarations and passed to `./smackerel.sh test e2e --go-run` | Yes |
 | HTTP adapter integration | integration | `tests/integration/api/assistant_http_turn_test.go` | Same-ID retry invokes the adapter facade boundary once | `SMACKEREL_HARDWARE_TIER=cpu ./smackerel.sh test integration --go-run 'TestAssistantHTTPTurn|TestAssistantHTTPAuth_|TestAssistantTransportParity_'` | Yes |
 | Assistant package order | e2e-api | `tests/e2e/assistant/` | Entire assistant package executes in package order | exact anchored selector generated from package test declarations and passed to `./smackerel.sh test e2e --go-run` | Yes |
 | Impacted units | unit | `internal/assistant/httpadapter/`, `ml/tests/` | Full Go and Python regression lanes | `./smackerel.sh test unit --go`; `./smackerel.sh test unit --python` | No |
@@ -63,6 +67,8 @@ Scenario: Identity and payload collisions do not leak or re-execute
 - [ ] Cache expiry/capacity and accepted-error replay are covered.
 - [ ] Exact shared-identity conversation row is restored; unrelated rows are unchanged.
 - [ ] Focused and assistant-package E2E pass on the disposable stack.
+- [ ] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior pass.
+- [ ] Broader E2E regression suite passes.
 - [ ] Impacted units and check/lint/format/regression/packet gates pass.
 
 All items remain unchecked until current-session execution evidence is recorded.
