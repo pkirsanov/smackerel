@@ -1,0 +1,104 @@
+{
+  "version": 1,
+  "featureDir": "specs/069-assistant-http-transport/bugs/BUG-069-006-confirm-redemption-not-single-flight",
+  "generatedAt": "2026-08-23T00:00:00Z",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-BUG069006-001",
+      "scope": "Scope 1",
+      "title": "Two concurrent confirms redeem one reference exactly once",
+      "gherkin": {
+        "given": "a live pending confirm holds one reference for an authenticated user and two confirm attempts for that reference are released simultaneously",
+        "when": "both attempts execute concurrently",
+        "then": "exactly one attempt returns a populated ConfirmResult, the other returns ErrPendingNotFound, the gated action has executed exactly once, and exactly one confirmed audit row exists"
+      },
+      "requiredTestType": "unit",
+      "regressionRequired": true,
+      "linkedTests": [
+        {
+          "type": "unit",
+          "file": "internal/assistant/confirm/machine_concurrency_test.go",
+          "name": "TestMachineConfirm_ConcurrentRedemptionExecutesOnce"
+        },
+        {
+          "type": "integration",
+          "file": "internal/assistant/context/pg_store_test.go",
+          "name": "TestPgStoreClearPendingConfirm_IsConditionalAndAtomic"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#test-evidence"
+      ],
+      "status": "not_started"
+    },
+    {
+      "scenarioId": "SCN-BUG069006-002",
+      "scope": "Scope 1",
+      "title": "Two concurrent HTTP confirms with distinct message ids execute once",
+      "gherkin": {
+        "given": "a live pending confirm holds one reference and two POSTs to the assistant turn endpoint both carry that reference under different transport_message_id values",
+        "when": "both requests are issued concurrently",
+        "then": "the gated action has executed exactly once and exactly one response reports a successful confirmation"
+      },
+      "requiredTestType": "e2e-api",
+      "regressionRequired": true,
+      "linkedTests": [
+        {
+          "type": "e2e-api",
+          "file": "tests/e2e/assistant/http_confirm_concurrent_test.go",
+          "name": "TestAssistantHTTPE2E_ConcurrentConfirmExecutesGatedActionOnce"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#test-evidence"
+      ],
+      "status": "not_started"
+    },
+    {
+      "scenarioId": "SCN-BUG069006-003",
+      "scope": "Scope 1",
+      "title": "A confirm racing the timeout sweep yields one terminal outcome",
+      "gherkin": {
+        "given": "a pending confirm holds one reference whose expiry has elapsed and a confirm attempt and a timeout sweep for that reference run concurrently",
+        "when": "both complete",
+        "then": "exactly one terminal audit row exists for the reference and it is either confirmed or discarded_timeout but never both"
+      },
+      "requiredTestType": "unit",
+      "regressionRequired": true,
+      "linkedTests": [
+        {
+          "type": "unit",
+          "file": "internal/assistant/confirm/machine_concurrency_test.go",
+          "name": "TestMachineConfirm_RacingSweepProducesOneTerminalOutcome"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#test-evidence"
+      ],
+      "status": "not_started"
+    },
+    {
+      "scenarioId": "SCN-BUG069006-004",
+      "scope": "Scope 1",
+      "title": "Sequential redemption behaviour is unchanged",
+      "gherkin": {
+        "given": "a live pending confirm holds one reference",
+        "when": "a single confirm for that reference is issued and then replayed",
+        "then": "the first returns a populated ConfirmResult and executes the action once, the replay returns ErrPendingNotFound without executing again, and the other conversation columns are unchanged"
+      },
+      "requiredTestType": "e2e-api",
+      "regressionRequired": true,
+      "linkedTests": [
+        {
+          "type": "e2e-api",
+          "file": "tests/e2e/assistant/http_confirm_test.go",
+          "name": "TestAssistantHTTPE2E_ConfirmAcceptExecutesGatedActionOnce"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#test-evidence"
+      ],
+      "status": "not_started"
+    }
+  ]
+}

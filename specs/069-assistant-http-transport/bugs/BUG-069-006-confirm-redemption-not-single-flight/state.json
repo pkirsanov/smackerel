@@ -1,0 +1,78 @@
+{
+  "version": 3,
+  "specId": "069-assistant-http-transport",
+  "bugId": "BUG-069-006-confirm-redemption-not-single-flight",
+  "featureDir": "specs/069-assistant-http-transport/bugs/BUG-069-006-confirm-redemption-not-single-flight",
+  "featureName": "BUG-069-006: Confirm redemption is not single-flight under concurrency",
+  "workflowMode": "bugfix-fastlane",
+  "executionRuntime": "direct",
+  "releaseTrain": "mvp",
+  "status": "in_progress",
+  "originFinding": {
+    "id": "SEC-069-005-1",
+    "severity": "MEDIUM",
+    "classification": "OWASP A04 Insecure Design (TOCTOU)",
+    "raisedBy": "bubbles.security",
+    "raisedAt": "2026-08-23",
+    "originPacket": "specs/069-assistant-http-transport/bugs/BUG-069-005-required-e2e-false-green"
+  },
+  "execution": {
+    "activeAgent": "bubbles.bug",
+    "currentPhase": "bug-discovery",
+    "executionModel": "direct-authorized-runner",
+    "runStartedAt": "2026-08-23T00:00:00Z",
+    "completedPhaseClaims": [],
+    "executionHistory": [
+      {
+        "at": "2026-08-23",
+        "agent": "bubbles.bug",
+        "phasesExecuted": ["bug-discovery", "analyze"],
+        "provenanceMode": "direct",
+        "claimSource": "executed",
+        "outcome": "completed_diagnostic",
+        "note": "Authored the packet and independently re-verified every evidence claim inherited from SEC-069-005-1 by static inspection of the current tree. Four claims confirmed as stated; the PgStore claim confirmed with a type-name correction and found to be stronger than reported. Two additional defects in the same mechanism recorded in report.md Discovered Issues. No product or test source modified, no test suite executed, no DoD item checked."
+      }
+    ]
+  },
+  "certification": {
+    "status": "in_progress",
+    "completedScopes": [],
+    "certifiedCompletedPhases": [],
+    "lockdownState": {
+      "active": false,
+      "round": 0,
+      "reason": "Packet is newly authored; no implementation has begun and validate-owned certification has not started.",
+      "lastUpdatedAt": "2026-08-23T00:00:00Z"
+    }
+  },
+  "policySnapshot": {
+    "grill": {"value": "off", "source": "repo-default"},
+    "tdd": {"value": "scenario-first", "source": "workflow-forced"},
+    "autoCommit": {"value": "off", "source": "user-approved"},
+    "lockdown": {"value": "off", "source": "repo-default"},
+    "regression": {"value": "standard", "source": "repo-default"},
+    "validation": {"value": "required", "source": "repo-default"},
+    "regressionStrictness": {"value": "standard", "source": "repo-default"},
+    "validateCertificationRequired": {"value": true, "source": "repo-default"}
+  },
+  "routing": {
+    "nextRequiredOwner": "bubbles.implement",
+    "reason": "The remedy lands in internal/assistant/confirm/machine.go, internal/assistant/context/store.go, internal/assistant/context/pg_store.go, and internal/assistant/testing_support.go, all product runtime files. The first execution obligation is recording the concurrent regression test FAILING against the unfixed implementation before any fix lands.",
+    "relatedPackets": [
+      {
+        "packet": "specs/069-assistant-http-transport/bugs/BUG-069-004-http-turn-dedup",
+        "relationship": "same defect family, different defect",
+        "note": "Both concern duplicate execution on the same endpoint. BUG-069-004 dedups on transport_message_id in the transport layer with a process-local cache; this packet fixes redemption atomicity in the domain and persistence layers and requires cross-process coordination. Neither packet's Change Boundary overlaps the other. Coordinated sequencing at delivery is warranted; merging is not."
+      },
+      {
+        "packet": "specs/069-assistant-http-transport/bugs/BUG-069-005-required-e2e-false-green",
+        "relationship": "origin",
+        "note": "Raised SEC-069-005-1 and routed it to bubbles.implement. That packet's sequential-replay scenario is satisfied and is not reopened. No artifact of that packet is modified here."
+      }
+    ]
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "createdAt": "2026-08-23T00:00:00Z",
+  "updatedAt": "2026-08-23T00:00:00Z"
+}
