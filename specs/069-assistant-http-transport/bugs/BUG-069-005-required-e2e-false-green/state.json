@@ -9,14 +9,14 @@
   "releaseTrain": "mvp",
   "flagsIntroduced": [],
   "status": "in_progress",
-  "lastUpdatedAt": "2026-07-21T01:12:06Z",
+  "lastUpdatedAt": "2026-08-23T06:52:26Z",
   "execution": {
     "activeAgent": "bubbles.implement",
     "currentPhase": "implement",
     "currentScope": "Scopes 1-2",
     "executionModel": "direct-authorized-runner",
     "runStartedAt": "2026-07-20T23:07:25Z",
-    "lastUpdatedAt": "2026-07-21T01:12:06Z",
+    "lastUpdatedAt": "2026-08-23T06:52:26Z",
     "completedPhaseClaims": [
       {
         "phase": "regression",
@@ -24,8 +24,23 @@
         "provenanceMode": "specialist",
         "claimedAt": "2026-08-23T02:14:33Z",
         "evidenceRef": "report.md#regression-evidence-bug-069-005"
+      },
+      {
+        "phase": "implement",
+        "agent": "bubbles.implement",
+        "provenanceMode": "specialist",
+        "claimedAt": "2026-08-23T05:29:09Z",
+        "evidenceRef": "report.md#required-test-no-skip-guard-2026-08-23"
+      },
+      {
+        "phase": "test",
+        "agent": "bubbles.test",
+        "provenanceMode": "specialist",
+        "claimedAt": "2026-08-23T06:52:26Z",
+        "evidenceRef": "report.md#test-phase--required-e2e-execution-2026-08-23"
       }
     ],
+    "completedPhaseClaimsNote": "The implement entry was appended 2026-08-23 by bubbles.implement and is a dict record, not a bare string, because Check 6 normalizes both shapes but only a dict carries the agent identity Check 6B needs. Its evidenceRef resolves to the literal report.md heading '### Required-Test No-Skip Guard (2026-08-23)' at report.md line 81, verified by grep before it was cited rather than assumed from the slug. The claim is backed by two independent executionHistory entries naming bubbles.implement with claimSource 'executed': the 2026-07-21 product run and the 2026-08-23 run recorded below. This records an EXECUTION claim only; certification.certifiedCompletedPhases remains empty and is writable solely by bubbles.validate.",
     "completedScopes": [
       "Scope 1: Compiler SST, provider transport, and core wiring",
       "Scope 2: Persistent disambiguation and confirmation state"
@@ -67,6 +82,30 @@
         "claimSource": "executed",
         "outcome": "completed_diagnostic",
         "summary": "Regression phase executed against the packet's own subject: do the tests covering this fix bind their claims? ONE mutation check on the guard that closes the named root cause (compiler-disabled test config). Baseline at clean HEAD: focused unit selector on TestIntentCompilerRequiredWhenAssistantHTTPEnabled exited 0 in 96s wall with internal/config reporting 0.091s (executed, not 'no tests to run'). Mutation: the F069-INTENT-COMPILER-DISABLED coherence check in internal/config/assistant.go was disabled by short-circuiting its condition. Mutated run FAILED exactly as required — '--- FAIL: TestIntentCompilerRequiredWhenAssistantHTTPEnabled' with 'enabled transport with compiler disabled error = <nil>, want F069-INTENT-COMPILER-DISABLED'. Restored with an explicit git checkout as its own step; porcelain verified empty and the guard condition verified present at line 556. Post-restore run exited 0 in 64s. The test therefore binds its claim: removing the fix kills it. Direct grep across all five manifest-required assistant test files found zero t.Skip/t.Skipf/t.SkipNow, and the two bare returns present sit in non-required negative-invariant tests exiting on a false antecedent, not on a failure condition. Adversarial probe recorded a real limitation: regression-quality-guard.sh reports 0 violations on a throwaway file containing nothing but t.Skip and t.Skipf, and its source contains zero skip-family tokens, so its clean result on the five required files is a blind pass rather than skip-freeness evidence. tests/e2e/agent/no_skip_guard_test.go enforces no-skip but scans only its own directory without recursing, so it does not cover tests/e2e/assistant. Skip-freeness is therefore true by content today and mechanically unguarded, which reinforces the already-open TR-BUG-069-005-FRAMEWORK-001 rather than opening a new route. No source file was modified on exit; no DoD item was checked; no certification field was written."
+      },
+      {
+        "at": "2026-08-23T05:29:09Z",
+        "agent": "bubbles.implement",
+        "phasesExecuted": [
+          "implement"
+        ],
+        "runStartedAt": "2026-08-23T05:24:21Z",
+        "runEndedAt": "2026-08-23T05:29:09Z",
+        "claimSource": "executed",
+        "outcome": "route_required",
+        "summary": "DELIVERED: tests/e2e/assistant/required_no_skip_guard_test.go (commit 673bb6a073062287d52db53d531bcc62534ba906), a no-skip guard bound to the five manifest-required assistant E2E identities. It is a DENYLIST keyed to those five names, not a directory-wide no-skip rule, because tests/e2e/assistant carries roughly thirty legitimate t.Skip/t.Skipf calls across twenty-one files (live-stack guards, environment branches, planned placeholders) and a blanket rule would be both wrong and immediately red. Skip detection is function-body scoped through go/parser rather than brace counting, because these files embed JSON string literals whose braces would desynchronize a counter. A MISSING required test is FATAL rather than a silent pass, so deleting a required identity cannot quietly satisfy the guard. Seven named adversarial subtests prove the guard can fail. Also delivered in this run: the four artifact-gate repairs recorded in report.md, and the two state.json routing/claim repairs recorded here. NOT DELIVERED, and deliberately so: no product runtime behavior changed. The guard is test-surface only, adds no production code path, and does not repair the upstream framework gap; regression-quality-guard.sh still contains zero skip-family tokens and still cannot detect Go skips, which is why TR-BUG-069-005-FRAMEWORK-001 remains open. runStartedAt is the measured commit time of this invocation's repository-binding decision rb:vscode-...:4, not a reconstructed session start; runDurationSeconds is omitted because the true end of the run postdates this write and no honest single measurement spans it. No DoD box was checked, no certification field was written, and status remains in_progress."
+      },
+      {
+        "at": "2026-08-23T06:52:26Z",
+        "agent": "bubbles.test",
+        "phasesExecuted": [
+          "test"
+        ],
+        "runStartedAt": "2026-08-23T06:10:46Z",
+        "runEndedAt": "2026-08-23T06:52:26Z",
+        "claimSource": "executed",
+        "evidenceRef": "report.md#test-phase--required-e2e-execution-2026-08-23",
+        "note": "Executed the five manifest-required assistant E2E tests by name (5 PASS / 0 FAIL / 0 SKIP, exit 0), the unfiltered assistant package including both no-skip guards (52 PASS / 0 FAIL / 12 SKIP, exit 0), and the canonical repository-wide suite (exit 0, zero failure lines). Checked 8 DoD items across Scopes 1-3. Left the validate-owned certification item unchecked; Scope 3 stays In Progress because of it."
       }
     ]
   },
@@ -80,7 +119,13 @@
     ],
     "completedScopesNote": "POPULATED 2026-08-23 by bubbles.plan, same two names and same reasoning as execution.completedScopes above. Recording a scope here asserts only that the scope artifact declares Done; it does NOT assert certification, which remains in_progress. The array is written one entry per line on purpose: the guard counts entries with a line-oriented match, so an inline array of two names would be counted as one and would then be reported as a count mismatch.",
     "certifiedCompletedPhases": [],
-    "scopeProgress": { "total": 3, "done": 2, "inProgress": 1, "notStarted": 0, "blocked": 0 },
+    "scopeProgress": {
+      "total": 3,
+      "done": 2,
+      "inProgress": 1,
+      "notStarted": 0,
+      "blocked": 0
+    },
     "scopeProgressNote": "MEASURED 2026-08-23 by bubbles.plan from scopes.md, not carried over from a prior turn. scopes.md declares three scopes; their canonical **Status:** lines read Done, Done, In Progress, which the Scope Inventory table reproduces. The same five numbers were read back independently from the transition guard's Check 5 line 'Resolved scopes: total=3, Done=2, In Progress=1, Not Started=0, Blocked=0'. Recorded with the caution that a count inside the certification block is a claim like any other and goes stale the moment the scope artifacts move, in either direction.",
     "lockdownState": {
       "active": false,
@@ -147,7 +192,15 @@
       "targetRepository": "bubbles",
       "reason": "Upstream regression-quality guard must reject required Go t.Skip/t.Skipf/t.SkipNow bailouts; add hermetic selftests, validate upstream, and propagate canonically. Do not patch Smackerel framework-managed files inline.",
       "packetRef": "design.md#8-framework-guard-routing",
-      "status": "open"
+      "status": "open",
+      "routedTo": "bubbles.implement",
+      "routedToCommit": "673bb6a073062287d52db53d531bcc62534ba906",
+      "routingClass": "upstream-framework",
+      "productAction": "none",
+      "crossRepoFollowUp": true,
+      "routingNote": "ROUTING FIELDS COMPLETED 2026-08-23 by bubbles.implement. This finding has two halves and they are owned by different repositories. The PRODUCT half -- the five manifest-required assistant E2E tests were mechanically unguarded against skipping in THIS repository -- is CLOSED by commit 673bb6a073062287d52db53d531bcc62534ba906, which adds tests/e2e/assistant/required_no_skip_guard_test.go. The FRAMEWORK half -- the installed regression-quality-guard.sh contains zero skip-family tokens and therefore cannot itself detect Go t.Skip/t.Skipf/t.SkipNow -- is owned by the upstream framework repository and is NOT repairable from here, because .github/bubbles/ is framework-managed and MUST NOT be edited downstream. status stays open because that framework half genuinely remains unrepaired; closing it would be a false claim.",
+      "productActionNote": "productAction is 'none' as an honest measurement, not as a formality. Every action this repository can legitimately take against this finding has been taken: the downstream guard now exists and the five required identities are bound by it. The only work left is an edit inside framework-managed files, which this repository is forbidden to make. There is therefore no remaining PRODUCT action, while the request itself is still open.",
+      "routedToCommitNote": "673bb6a073062287d52db53d531bcc62534ba906 is the real commit that closed the product half; it anchors the routing point so the upstream owner can see exactly what downstream coverage already exists and what it deliberately does not attempt. It is NOT a claim that the upstream framework repair landed in that commit."
     }
   ],
   "reworkQueue": [],

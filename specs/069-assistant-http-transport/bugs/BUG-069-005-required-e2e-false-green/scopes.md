@@ -357,32 +357,52 @@ Scenario: SCN-BUG069005-002 - Springfield ambiguity creates a persistent choice
    > Warnings: 0
    > ```
    > Evidence: [report.md#weather-implementation-and-test-closeout](report.md#weather-implementation-and-test-closeout)
-- [ ] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior pass.
-   > **Uncertainty Declaration**
-   > **Added 2026-08-23 by bubbles.plan.** This scope carried the two protected
-   > regression rows in its Test Plan (`TP-BUG069005-04`, `TP-BUG069005-05`) but no
-   > Definition of Done item bound them, so the plan asked for the coverage without
-   > ever requiring anyone to prove it.
-   > **What was attempted:** nothing. This was an artifact-repair session; no test
-   > command was run.
-   > **What remains:** execute `TP-BUG069005-04` and `TP-BUG069005-05` and record the
-   > resulting output against this item.
-   > **Why it remains unchecked:** the 2026-07-21 implement run recorded passing
-   > output for both rows, but that is not this session's evidence, and this scope
-   > requires current-session command evidence before an item may be checked.
-   > Checking this item from a sibling item's recorded output would put one recorded
-   > result behind two separate claims — the exact false-green shape this packet was
-   > opened to remove.
-- [ ] Broader E2E regression suite passes.
-   > **Uncertainty Declaration**
-   > **Added 2026-08-23 by bubbles.plan.**
-   > **What was attempted:** nothing in this session.
-   > **What remains:** the canonical repository-wide `./smackerel.sh test e2e` run must
-   > pass with this scope's changes present.
-   > **Why it remains unchecked:** every E2E result recorded for this scope is
-   > package-local to `tests/e2e/assistant`, and package-local output is not
-   > repository-wide output. Scope 3 holds the identical item unchecked for the
-   > identical reason; checking it here would make the packet contradict itself.
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior pass.
+   > **Phase:** test
+   > **Executed:** YES (current session, 2026-08-23, by bubbles.test)
+   > **Claim Source:** executed
+   > **Command:** `./smackerel.sh test e2e --go-package assistant --go-run '<the five manifest-required tests>'`
+   > **Exit Code:** 0
+   > This scope's two protected rows are `TP-BUG069005-04`
+   > (`TestAnnotationIntentE2E_SlotsComeFromCompiledIntent`) and `TP-BUG069005-05`
+   > (`TestIntentCompilerE2E_SpringfieldWeatherClarifiesLocation`). Both were named
+   > explicitly in the selector and both emitted their own `--- PASS:` line, so this
+   > item is not resting on a sibling item's recorded output or on a package-level
+   > `ok` that a non-matching selector could also produce.
+   > ```text
+   > === RUN   TestAnnotationIntentE2E_SlotsComeFromCompiledIntent
+   > --- PASS: TestAnnotationIntentE2E_SlotsComeFromCompiledIntent (0.16s)
+   > === RUN   TestIntentCompilerE2E_SpringfieldWeatherClarifiesLocation
+   > --- PASS: TestIntentCompilerE2E_SpringfieldWeatherClarifiesLocation (0.06s)
+   > PASS
+   > ok      github.com/smackerel/smackerel/tests/e2e/assistant      0.485s
+   > PASS: go-e2e
+   > REQUIRED_E2E_RC=0
+   > ```
+   > 5 required executed; 5 passed; 0 failed; 0 skipped; package exit 0.
+   > Evidence: [report.md#test-phase--required-e2e-execution-2026-08-23](report.md#test-phase--required-e2e-execution-2026-08-23)
+- [x] Broader E2E regression suite passes.
+   > **Phase:** test
+   > **Executed:** YES (current session, 2026-08-23, by bubbles.test)
+   > **Claim Source:** executed
+   > **Command:** `./smackerel.sh test e2e`
+   > **Exit Code:** 0
+   > This is the canonical repository-wide command this item named, run with this
+   > scope's changes present, on `main` at `673bb6a0` measured 0 commits behind
+   > `origin/main`. It is repository-wide output, not the package-local output the
+   > earlier declaration correctly refused to accept.
+   > ```text
+   > ok      github.com/smackerel/smackerel/tests/e2e        0.577s
+   > PASS: go-e2e-graph-disabled
+   > PASS: go-e2e-corpus-enforce
+   > REPO_WIDE_E2E_RC=0
+   > ```
+   > Zero `FAIL` and zero `--- FAIL:` lines in the retained output. Scoped honestly:
+   > the capture buffer reported `Output exceeded terminal scrollback; beginning of
+   > output was lost`, so what is claimed here is the canonical command's exit code
+   > and absence of any failure line — per-test enumeration is claimed only for the
+   > assistant package, from the separate unfiltered run recorded in the report.
+   > Evidence: [report.md#test-phase--required-e2e-execution-2026-08-23](report.md#test-phase--required-e2e-execution-2026-08-23)
 
 All items require current-session command evidence before checking.
 
@@ -671,59 +691,113 @@ Scenario: SCN-BUG069005-005 - Confirm acceptance executes the gated action once
    > Warnings: 0
    > ```
    > Evidence: [report.md#weather-implementation-and-test-closeout](report.md#weather-implementation-and-test-closeout)
-- [ ] SCN-BUG069005-003 - Disambiguation choice resolves pending state: given a prior HTTP turn persisted a DisambiguationPrompt, submitting one listed choice with the issued reference clears that same pending state exactly once, and the selected candidate drives the resumed assistant turn.
-   > **Added 2026-08-23 by bubbles.plan. Unchecked, and the reason is the point of the item.**
-   > This scope's three scenarios each carried an `SCN-` id that no DoD item cited,
-   > so Gate G068 reported the scenario as having no faithful DoD item. The fix is
-   > to restate the scenario as a DoD item, NOT to reword the scenario until an
-   > existing item happens to match it — the scenario block above is byte-unchanged.
-   > The behavior restated here already has recorded executed evidence under
-   > `TP-BUG069005-07` in this same scope, captured in the 2026-07-21 implement run.
-   > That is not this session's evidence, and this scope requires current-session
-   > command evidence before an item may be checked. Reusing the sibling item's
-   > output would put one recorded result behind two separate claims, which is the
-   > exact shape of false green this packet was opened to remove. It stays `[ ]`
-   > until a session actually runs the proving command.
-- [ ] SCN-BUG069005-004 - List write is not persisted before confirmation: given the compiler returns a validated list-write intent, an authenticated user asking to add milk to a shopping list receives a persistent ConfirmCard, and the list is unchanged until the issued confirm reference is accepted.
-   > **Added 2026-08-23 by bubbles.plan. Unchecked for the same reason as the item above.**
-   > The behavior restated here already has recorded executed evidence under
-   > `TP-BUG069005-08` in this same scope, from the 2026-07-21 implement run. No
-   > command was executed this session to back this item, so it is not checked.
-   > The scenario block above was not narrowed, softened, or reworded to fit the
-   > existing item; the item was written to fit the scenario.
-- [ ] SCN-BUG069005-005 - Confirm acceptance executes the gated action once: given a prior HTTP turn persisted a ConfirmCard, accepting the issued confirm reference executes the proposed action exactly once, and replaying the same reference does not execute it again.
-   > **Added 2026-08-23 by bubbles.plan. Unchecked for the same reason as the two items above.**
-   > The behavior restated here already has recorded executed evidence under
-   > `TP-BUG069005-09` in this same scope, from the 2026-07-21 implement run. No
-   > command was executed this session to back this item, so it is not checked.
-   > The replay clause is restated in full on purpose: an item that asserted only
-   > "executes the gated action" would drop the half of the scenario that makes it
-   > a safety property rather than a happy path.
-- [ ] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior pass.
-   > **Uncertainty Declaration**
-   > **Added 2026-08-23 by bubbles.plan.** This scope carried its protected
-   > regression rows in the Test Plan but no Definition of Done item bound them, so
-   > the plan asked for the coverage without ever requiring anyone to prove it.
-   > **What was attempted:** nothing. This was an artifact-repair session; no test
-   > command was run.
-   > **What remains:** execute this scope's protected regression rows
-   > (`TP-BUG069005-07`, `TP-BUG069005-08`, `TP-BUG069005-09`) and record the
-   > resulting output against this item.
-   > **Why it remains unchecked:** the recorded passing output for those rows comes
-   > from the 2026-07-21 implement run, not from this session, and this scope
-   > requires current-session command evidence before an item may be checked. The
-   > three `SCN-` items directly above are unchecked for the same reason, so
-   > checking this one would contradict them.
-- [ ] Broader E2E regression suite passes.
-   > **Uncertainty Declaration**
-   > **Added 2026-08-23 by bubbles.plan.**
-   > **What was attempted:** nothing in this session.
-   > **What remains:** the canonical repository-wide `./smackerel.sh test e2e` run must
-   > pass with this scope's changes present.
-   > **Why it remains unchecked:** every E2E result recorded for this scope is
-   > package-local to `tests/e2e/assistant`, and package-local output is not
-   > repository-wide output. Scope 3 holds the identical item unchecked for the
-   > identical reason; checking it here would make the packet contradict itself.
+- [x] SCN-BUG069005-003 - Disambiguation choice resolves pending state: given a prior HTTP turn persisted a DisambiguationPrompt, submitting one listed choice with the issued reference clears that same pending state exactly once, and the selected candidate drives the resumed assistant turn.
+   > **Phase:** test
+   > **Executed:** YES (current session, 2026-08-23, by bubbles.test)
+   > **Claim Source:** executed
+   > **Command:** `./smackerel.sh test e2e --go-package assistant --go-run '<the five manifest-required tests>'`
+   > **Exit Code:** 0
+   > The scenario block above is byte-unchanged. Its bound row is `TP-BUG069005-07`
+   > → `tests/e2e/assistant/http_disambiguation_test.go` →
+   > `TestAssistantHTTPE2E_DisambiguationChoiceResolvesPendingTurn`, per
+   > `scenario-manifest.json`. That test ran and passed in this session, so the item
+   > no longer rests on the 2026-07-21 output.
+   > ```text
+   > === RUN   TestAssistantHTTPE2E_DisambiguationChoiceResolvesPendingTurn
+   > --- PASS: TestAssistantHTTPE2E_DisambiguationChoiceResolvesPendingTurn (0.07s)
+   > PASS
+   > ok      github.com/smackerel/smackerel/tests/e2e/assistant      0.485s
+   > PASS: go-e2e
+   > REQUIRED_E2E_RC=0
+   > ```
+   > Re-confirmed in the unfiltered package run at `--- PASS: ... (0.07s)`, exit 0.
+   > Evidence: [report.md#test-phase--required-e2e-execution-2026-08-23](report.md#test-phase--required-e2e-execution-2026-08-23)
+- [x] SCN-BUG069005-004 - List write is not persisted before confirmation: given the compiler returns a validated list-write intent, an authenticated user asking to add milk to a shopping list receives a persistent ConfirmCard, and the list is unchanged until the issued confirm reference is accepted.
+   > **Phase:** test
+   > **Executed:** YES (current session, 2026-08-23, by bubbles.test)
+   > **Claim Source:** executed
+   > **Command:** `./smackerel.sh test e2e --go-package assistant --go-run '<the five manifest-required tests>'`
+   > **Exit Code:** 0
+   > Bound row `TP-BUG069005-08` → `tests/e2e/assistant/intent_side_effect_test.go` →
+   > `TestIntentCompilerE2E_ListWriteRequiresConfirmationBeforePersistence`, per
+   > `scenario-manifest.json`. Executed this session; the scenario block above was
+   > not narrowed or reworded to fit the item.
+   > ```text
+   > === RUN   TestIntentCompilerE2E_ListWriteRequiresConfirmationBeforePersistence
+   > --- PASS: TestIntentCompilerE2E_ListWriteRequiresConfirmationBeforePersistence (0.06s)
+   > PASS
+   > ok      github.com/smackerel/smackerel/tests/e2e/assistant      0.485s
+   > PASS: go-e2e
+   > REQUIRED_E2E_RC=0
+   > ```
+   > Re-confirmed in the unfiltered package run at `--- PASS: ... (0.07s)`, exit 0.
+   > Evidence: [report.md#test-phase--required-e2e-execution-2026-08-23](report.md#test-phase--required-e2e-execution-2026-08-23)
+- [x] SCN-BUG069005-005 - Confirm acceptance executes the gated action once: given a prior HTTP turn persisted a ConfirmCard, accepting the issued confirm reference executes the proposed action exactly once, and replaying the same reference does not execute it again.
+   > **Phase:** test
+   > **Executed:** YES (current session, 2026-08-23, by bubbles.test)
+   > **Claim Source:** executed
+   > **Command:** `./smackerel.sh test e2e --go-package assistant --go-run '<the five manifest-required tests>'`
+   > **Exit Code:** 0
+   > Bound row `TP-BUG069005-09` → `tests/e2e/assistant/http_confirm_test.go` →
+   > `TestAssistantHTTPE2E_ConfirmAcceptExecutesGatedActionOnce`, per
+   > `scenario-manifest.json`. The replay half of the scenario is covered by that
+   > test's own assertions, which this run executed rather than inspected.
+   > ```text
+   > === RUN   TestAssistantHTTPE2E_ConfirmAcceptExecutesGatedActionOnce
+   > --- PASS: TestAssistantHTTPE2E_ConfirmAcceptExecutesGatedActionOnce (0.09s)
+   > PASS
+   > ok      github.com/smackerel/smackerel/tests/e2e/assistant      0.485s
+   > PASS: go-e2e
+   > REQUIRED_E2E_RC=0
+   > ```
+   > Re-confirmed in the unfiltered package run at `--- PASS: ... (0.10s)`, exit 0.
+   > Evidence: [report.md#test-phase--required-e2e-execution-2026-08-23](report.md#test-phase--required-e2e-execution-2026-08-23)
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior pass.
+   > **Phase:** test
+   > **Executed:** YES (current session, 2026-08-23, by bubbles.test)
+   > **Claim Source:** executed
+   > **Command:** `./smackerel.sh test e2e --go-package assistant --go-run '<the five manifest-required tests>'`
+   > **Exit Code:** 0
+   > This scope's three protected rows — `TP-BUG069005-07`, `TP-BUG069005-08`,
+   > `TP-BUG069005-09` — were each named in the selector and each emitted its own
+   > `--- PASS:` line. The three `SCN-` items above are now checked from this same
+   > run, so no single recorded result is standing behind two separate claims.
+   > ```text
+   > === RUN   TestAssistantHTTPE2E_ConfirmAcceptExecutesGatedActionOnce
+   > --- PASS: TestAssistantHTTPE2E_ConfirmAcceptExecutesGatedActionOnce (0.09s)
+   > === RUN   TestAssistantHTTPE2E_DisambiguationChoiceResolvesPendingTurn
+   > --- PASS: TestAssistantHTTPE2E_DisambiguationChoiceResolvesPendingTurn (0.07s)
+   > === RUN   TestIntentCompilerE2E_ListWriteRequiresConfirmationBeforePersistence
+   > --- PASS: TestIntentCompilerE2E_ListWriteRequiresConfirmationBeforePersistence (0.06s)
+   > PASS
+   > ok      github.com/smackerel/smackerel/tests/e2e/assistant      0.485s
+   > PASS: go-e2e
+   > REQUIRED_E2E_RC=0
+   > ```
+   > 5 required executed; 5 passed; 0 failed; 0 skipped; package exit 0.
+   > Evidence: [report.md#test-phase--required-e2e-execution-2026-08-23](report.md#test-phase--required-e2e-execution-2026-08-23)
+- [x] Broader E2E regression suite passes.
+   > **Phase:** test
+   > **Executed:** YES (current session, 2026-08-23, by bubbles.test)
+   > **Claim Source:** executed
+   > **Command:** `./smackerel.sh test e2e`
+   > **Exit Code:** 0
+   > The canonical repository-wide command named by this item, run with this scope's
+   > changes present on `main` at `673bb6a0`, 0 commits behind `origin/main`. This is
+   > repository-wide output, which is what the earlier declaration required and what
+   > package-local output could not supply.
+   > ```text
+   > ok      github.com/smackerel/smackerel/tests/e2e        0.577s
+   > PASS: go-e2e-graph-disabled
+   > PASS: go-e2e-corpus-enforce
+   > REPO_WIDE_E2E_RC=0
+   > ```
+   > Zero `FAIL` and zero `--- FAIL:` lines in the retained output. Claim is bounded
+   > to the exit code and the absence of failure lines: the capture buffer reported
+   > `Output exceeded terminal scrollback; beginning of output was lost`, so per-test
+   > enumeration is claimed only for the assistant package, from the separate
+   > unfiltered run (52 PASS / 0 FAIL / 12 SKIP, exit 0).
+   > Evidence: [report.md#test-phase--required-e2e-execution-2026-08-23](report.md#test-phase--required-e2e-execution-2026-08-23)
 
 All items require current-session command evidence before checking.
 
@@ -924,11 +998,31 @@ Scenario: SCN-BUG069005-006 - Required tests fail closed instead of skipping
    > PASS: go-e2e
    > ```
    > Evidence: [report.md#weather-implementation-and-test-closeout](report.md#weather-implementation-and-test-closeout)
-- [ ] Broader E2E regression suite passes.
-   > **Uncertainty Declaration**
-   > **What was attempted:** the complete assistant E2E package passed.
-   > **What remains:** canonical all-package E2E must run after this branch is merged with current `main` and the topic-momentum fix.
-   > **Why it remains unchecked:** package-local evidence is not presented as repository-wide evidence.
+- [x] Broader E2E regression suite passes.
+   > **Phase:** test
+   > **Executed:** YES (current session, 2026-08-23, by bubbles.test)
+   > **Claim Source:** executed
+   > **Command:** `./smackerel.sh test e2e`
+   > **Exit Code:** 0
+   > The all-package canonical run this item asked for. Its stated precondition was
+   > that the branch be merged with current `main`: the run was executed on `main`
+   > itself at `673bb6a0`, measured 0 commits behind `origin/main`, so the tree under
+   > test already carried current `main` including the topic-momentum fix.
+   > ```text
+   > ok      github.com/smackerel/smackerel/tests/e2e        0.577s
+   > PASS: go-e2e-graph-disabled
+   > PASS: go-e2e-corpus-enforce
+   > REPO_WIDE_E2E_RC=0
+   > ```
+   > Zero `FAIL` and zero `--- FAIL:` lines in the retained output. This is no longer
+   > package-local evidence presented as repository-wide evidence — it is the
+   > repository-wide command. Bounded honestly: the capture buffer reported
+   > `Output exceeded terminal scrollback; beginning of output was lost`, so the
+   > claim is the canonical command's exit code and absence of failure lines;
+   > per-test enumeration for the assistant package comes from the separate
+   > unfiltered run recorded in the report (52 PASS / 0 FAIL / 12 SKIP, exit 0), in
+   > which both no-skip guard tests also passed.
+   > Evidence: [report.md#test-phase--required-e2e-execution-2026-08-23](report.md#test-phase--required-e2e-execution-2026-08-23)
 - [x] Artifact lint and traceability pass for this bug packet.
    > **Phase:** test
    > **Executed:** YES (current session)

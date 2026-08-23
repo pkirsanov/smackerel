@@ -1904,4 +1904,141 @@ believing it sanctioned. Documentation drift only; no behaviour is affected.
 - `followUpAction`: reconcile the stale skip narrative in the `intent_side_effect_test.go` header and function comment with the fail-closed code.
 - `followUpTarget`: `tests/e2e/assistant/intent_side_effect_test.go` comment blocks only.
 
+### Test Phase — Required E2E Execution (2026-08-23)
+
+**Phase:** test
+**Agent:** bubbles.test
+**Executed:** YES (current session)
+**Claim Source:** executed
+
+Three commands were run, in this order. All exit codes are the real observed values.
+
+#### Command 1 — the five manifest-required tests, named explicitly
+
+**Command:** `./smackerel.sh test e2e --go-package assistant --go-run 'TestAnnotationIntentE2E_SlotsComeFromCompiledIntent|TestIntentCompilerE2E_SpringfieldWeatherClarifiesLocation|TestAssistantHTTPE2E_DisambiguationChoiceResolvesPendingTurn|TestIntentCompilerE2E_ListWriteRequiresConfirmationBeforePersistence|TestAssistantHTTPE2E_ConfirmAcceptExecutesGatedActionOnce'`
+**Exit Code:** 0
+**Accounting:** 5 top-level PASS, 0 FAIL, **0 SKIP**
+
+```text
+go-e2e: applying package selector: assistant
+=== RUN   TestAnnotationIntentE2E_SlotsComeFromCompiledIntent
+--- PASS: TestAnnotationIntentE2E_SlotsComeFromCompiledIntent (0.16s)
+=== RUN   TestAssistantHTTPE2E_ConfirmAcceptExecutesGatedActionOnce
+--- PASS: TestAssistantHTTPE2E_ConfirmAcceptExecutesGatedActionOnce (0.09s)
+=== RUN   TestAssistantHTTPE2E_DisambiguationChoiceResolvesPendingTurn
+--- PASS: TestAssistantHTTPE2E_DisambiguationChoiceResolvesPendingTurn (0.07s)
+=== RUN   TestIntentCompilerE2E_SpringfieldWeatherClarifiesLocation
+--- PASS: TestIntentCompilerE2E_SpringfieldWeatherClarifiesLocation (0.06s)
+=== RUN   TestIntentCompilerE2E_ListWriteRequiresConfirmationBeforePersistence
+--- PASS: TestIntentCompilerE2E_ListWriteRequiresConfirmationBeforePersistence (0.06s)
+PASS
+ok      github.com/smackerel/smackerel/tests/e2e/assistant      0.485s
+PASS: go-e2e
+REQUIRED_E2E_RC=0
+```
+
+Each of the five carries its own `--- PASS:` line. That is the load-bearing check for this
+packet: an `ok` line alone would not distinguish a real pass from a selector that matched
+nothing, and package exit 0 is exactly what the original false green produced while all five
+skipped. Zero `--- SKIP:` lines were emitted.
+
+#### Command 2 — the unfiltered assistant package, including the no-skip guards
+
+**Command:** `./smackerel.sh test e2e --go-package assistant`
+**Exit Code:** 0
+**Accounting:** 52 top-level PASS, 0 FAIL, 12 SKIP
+
+```text
+--- PASS: TestAnnotationIntentE2E_SlotsComeFromCompiledIntent (0.16s)
+--- PASS: TestIntentCompilerE2E_SpringfieldWeatherClarifiesLocation (0.06s)
+--- PASS: TestAssistantHTTPE2E_DisambiguationChoiceResolvesPendingTurn (0.07s)
+--- PASS: TestIntentCompilerE2E_ListWriteRequiresConfirmationBeforePersistence (0.06s)
+--- PASS: TestAssistantHTTPE2E_ConfirmAcceptExecutesGatedActionOnce (0.10s)
+--- PASS: TestRequiredAssistantE2ETestsNeverSkip (0.00s)
+--- PASS: TestRequiredNoSkipGuard_AdversarialFinding (0.01s)
+PASS
+ok      github.com/smackerel/smackerel/tests/e2e/assistant      20.372s
+PASS: go-e2e
+FULL_ASSISTANT_E2E_RC=0
+```
+
+The two guard tests that protect the required set both pass, including the adversarial guard
+with all seven of its subtests.
+
+**The 12 skips, named rather than summarised.** None is in the manifest-required set, and the
+`TestRequiredAssistantE2ETestsNeverSkip` guard passing is the mechanical statement that the
+required set contains no skip-family call:
+
+```text
+--- SKIP: TestAssistantE2E_CaptureAcknowledgementIsCrossTransportIdentical_TP_074_xx
+--- SKIP: TestAssistantHTTPE2E_CaptureFallbackDedupWithinWindow_TP_074_11
+--- SKIP: TestAssistantHTTPE2E_CaptureFallbackIsInviolable_TP_074_04
+--- SKIP: TestAssistantHTTPE2E_CaptureFallbackOpenKnowledgeNoGround
+--- SKIP: TestAssistantHTTPE2E_CaptureProvenanceIsDistinct_TP_074_07
+--- SKIP: TestAssistantHTTPE2E_CaptureRouteInvokesCaptureOnceAndAcknowledges
+--- SKIP: TestAssistantHTTPE2E_CaptureAcknowledgementMatchesTelegramShape
+--- SKIP: TestIntentCompilerE2E_MalformedJSONBlocksRoutingAndCaptures
+--- SKIP: TestLegacyRetirementE2E_AliasWindowRoutesPlainEnglishWithNotice
+--- SKIP: TestLegacyRetirementE2E_ExpiredSlashCommandDoesNotInvokeScenario
+--- SKIP: TestMicroToolsE2E_ConvertsThreeCupsFlourToGrams
+--- SKIP: TestMicroToolsE2E_CalculatorRejectsUnsafeExpression
+```
+
+Their recorded reasons are environment gating, not assertion weakening — the two
+`LegacyRetirementE2E` skips report `TELEGRAM_WEBHOOK_PATH / TELEGRAM_WEBHOOK_SECRET not set`,
+and the two `MicroToolsE2E` skips report the live LLM answering `the service is unavailable
+right now`. These belong to Spec 072/074/075 surfaces, not to this packet's required five.
+
+#### Command 3 — the canonical repository-wide suite
+
+**Command:** `./smackerel.sh test e2e`
+**Exit Code:** 0
+**Accounting:** zero `FAIL` and zero `--- FAIL:` lines in the retained output
+
+```text
+ok      github.com/smackerel/smackerel/tests/e2e        0.577s
+PASS: go-e2e-graph-disabled
+PASS: go-e2e-corpus-enforce
+REPO_WIDE_E2E_RC=0
+```
+
+This is the run the three `Broader E2E regression suite passes.` items name by command. It was
+executed on `main` at `673bb6a0`, measured `0` commits behind `origin/main`, so the
+"merged with current main" precondition attached to the Scope 3 wording holds.
+
+#### Two honest qualifications on the evidence above
+
+**First — the counts in Command 2 were corrected mid-session, and the first reading was wrong.**
+The initial capture of that run was truncated by the harness, and counting `--- PASS:` lines in
+the truncated file yielded `35 PASS / 5 SKIP` with four of the five required tests appearing
+absent. That reading was discarded once the truncation marker was found; the numbers recorded
+above come from the complete untruncated output. The apparent absence was a capture artifact,
+not a test result. It is recorded here because a truncated capture that still ends in exit 0 is
+the same class of trap this packet documents.
+
+**Second — Command 3's retained output is the tail of the run, not the whole run.** The capture
+buffer reports `Output exceeded terminal scrollback; beginning of output was lost`, so the main
+`go-e2e` phase scrolled out and its per-test lines cannot be quoted from this session. What is
+claimed for Command 3 is therefore exactly what was observed: the canonical command completed
+with exit code 0 and no failure line in the retained portion. Per-test enumeration of the
+assistant package is not inferred from Command 3 — it is taken from Command 2, which was run
+separately for that purpose.
+
+The `[no tests to run]` lines visible against most packages in Command 3's tail are the two
+deliberately filtered phases (`-run TestE2E_GraphActivation_Disabled` and
+`-run TestE2E_Spec108_CorpusEnforce`); non-matching packages correctly report no match. That is
+selector behaviour, not an empty suite.
+
+#### Verdict
+
+| Required test | Verdict | Own `--- PASS:` line |
+|---|---|---|
+| `TestAnnotationIntentE2E_SlotsComeFromCompiledIntent` | PASS | yes |
+| `TestIntentCompilerE2E_SpringfieldWeatherClarifiesLocation` | PASS | yes |
+| `TestAssistantHTTPE2E_DisambiguationChoiceResolvesPendingTurn` | PASS | yes |
+| `TestIntentCompilerE2E_ListWriteRequiresConfirmationBeforePersistence` | PASS | yes |
+| `TestAssistantHTTPE2E_ConfirmAcceptExecutesGatedActionOnce` | PASS | yes |
+
+5 required executed; 5 passed; 0 failed; 0 skipped; package exit 0.
+
 
