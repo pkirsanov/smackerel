@@ -936,7 +936,7 @@ func (f *Facade) Handle(ctx context.Context, msg contracts.AssistantMessage) (re
 	if compiledOK && conv.PendingConfirm == nil && intent.RequiresConfirmation(compiled) {
 		intent.SideEffectBlockedTotal.WithLabelValues(string(compiled.SideEffectClass), "missing_confirmation").Inc()
 		if f.compiledInteractions != nil {
-			confirmResp, confirmErr := f.proposeCompiledAction(ctx, msg, conv, compiled, emittedAt)
+			confirmResp, confirmErr := f.proposeCompiledAction(ctx, msg, compiled, emittedAt)
 			if confirmErr != nil {
 				return contracts.AssistantResponse{}, fmt.Errorf("assistant: propose compiled action: %w", confirmErr)
 			}

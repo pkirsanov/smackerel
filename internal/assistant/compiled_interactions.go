@@ -101,7 +101,6 @@ func (f *Facade) ConfigureCompiledInteractions(
 func (f *Facade) proposeCompiledAction(
 	ctx context.Context,
 	msg contracts.AssistantMessage,
-	conv assistantctx.Conversation,
 	compiled intent.CompiledIntent,
 	emittedAt time.Time,
 ) (contracts.AssistantResponse, error) {
@@ -358,12 +357,7 @@ func (f *Facade) handleResolvedCompiledWeather(
 	if err != nil {
 		return f.compiledWeatherFailure(ctx, msg, conv, contracts.ErrProviderUnavailable, contracts.ProvenanceCauseFabricatedSource, emittedAt), true, nil
 	}
-	resp = provenance.Enforce(
-		f.manifest.RequiresProvenance(compiledWeatherScenarioID),
-		compiledWeatherScenarioID,
-		"",
-		resp,
-	)
+	resp = f.enforceCompiledWeatherProvenance(resp, "")
 	f.appendTurnAndPersist(ctx, conv, msg, resp, emittedAt)
 	f.writeAudit(ctx, msg, BandHigh, nil, nil, resp)
 	return resp, true, nil
@@ -421,15 +415,24 @@ func (f *Facade) compiledWeatherFailure(
 		Status: contracts.StatusUnavailable, ErrorCause: errorCause,
 		Body: "weather source unavailable.", EmittedAt: emittedAt,
 	}
-	resp = provenance.Enforce(
-		f.manifest.RequiresProvenance(compiledWeatherScenarioID),
-		compiledWeatherScenarioID,
-		provenanceCause,
-		resp,
-	)
+	resp = f.enforceCompiledWeatherProvenance(resp, provenanceCause)
 	f.appendTurnAndPersist(ctx, conv, msg, resp, emittedAt)
 	f.writeAudit(ctx, msg, BandLow, nil, nil, resp)
 	return resp
+}
+
+// enforceCompiledWeatherProvenance applies the weather scenario's manifest
+// provenance requirement. An empty cause marks a successful lookup.
+func (f *Facade) enforceCompiledWeatherProvenance(
+	resp contracts.AssistantResponse,
+	cause contracts.ProvenanceCause,
+) contracts.AssistantResponse {
+	return provenance.Enforce(
+		f.manifest.RequiresProvenance(compiledWeatherScenarioID),
+		compiledWeatherScenarioID,
+		cause,
+		resp,
+	)
 }
 
 func compiledLocationRaw(compiled intent.CompiledIntent) (string, bool) {
@@ -461,14 +464,17 @@ func (f *Facade) resolveCompilerDisambig(
 	if pending == nil || pending.Resume == nil || msg.Kind != contracts.KindDisambiguation {
 		return msg, conv, contracts.AssistantResponse{}, false, nil
 	}
-	if msg.DisambiguationRef != pending.DisambiguationRef {
+	rejectChoice := func(body string) (contracts.AssistantMessage, assistantctx.Conversation, contracts.AssistantResponse, bool, error) {
 		resp := contracts.AssistantResponse{
 			Status: contracts.StatusUnavailable, ErrorCause: contracts.ErrNoMatch,
-			Body: "That choice reference is stale.", EmittedAt: emittedAt,
+			Body: body, EmittedAt: emittedAt,
 		}
 		f.appendTurnAndPersist(ctx, conv, msg, resp, emittedAt)
 		f.writeAudit(ctx, msg, BandLow, nil, nil, resp)
 		return msg, conv, resp, true, nil
+	}
+	if msg.DisambiguationRef != pending.DisambiguationRef {
+		return rejectChoice("That choice reference is stale.")
 	}
 	var selected *assistantctx.DisambigChoiceID
 	for index := range pending.Choices {
@@ -478,13 +484,7 @@ func (f *Facade) resolveCompilerDisambig(
 		}
 	}
 	if selected == nil || len(selected.Value) == 0 {
-		resp := contracts.AssistantResponse{
-			Status: contracts.StatusUnavailable, ErrorCause: contracts.ErrNoMatch,
-			Body: "That choice is not available.", EmittedAt: emittedAt,
-		}
-		f.appendTurnAndPersist(ctx, conv, msg, resp, emittedAt)
-		f.writeAudit(ctx, msg, BandLow, nil, nil, resp)
-		return msg, conv, resp, true, nil
+		return rejectChoice("That choice is not available.")
 	}
 	assistantmetrics.DisambiguationOutcomesTotal.WithLabelValues(
 		assistantmetrics.DisambigOutcomeResolvedUser, transportLabel,
@@ -510,12 +510,7 @@ func (f *Facade) resolveCompilerDisambig(
 	if err != nil {
 		return msg, conv, contracts.AssistantResponse{}, true, err
 	}
-	resp = provenance.Enforce(
-		f.manifest.RequiresProvenance(compiledWeatherScenarioID),
-		compiledWeatherScenarioID,
-		"",
-		resp,
-	)
+	resp = f.enforceCompiledWeatherProvenance(resp, "")
 	f.appendTurnAndPersist(ctx, conv, msg, resp, emittedAt)
 	f.writeAudit(ctx, msg, BandHigh, nil, nil, resp)
 	return msg, conv, resp, true, nil

@@ -11,6 +11,7 @@ import (
 	"github.com/smackerel/smackerel/internal/agent/tools/weather"
 	"github.com/smackerel/smackerel/internal/assistant/contracts"
 	"github.com/smackerel/smackerel/internal/assistant/intent"
+	"github.com/smackerel/smackerel/internal/assistant/provenance"
 )
 
 func TestFacadeResolvedCompiledWeatherConsumesStructuredLocationAndReturnsSource(t *testing.T) {
@@ -288,6 +289,12 @@ func assertCompiledWeatherHonestFailure(t *testing.T, response contracts.Assista
 	}
 	if response.ErrorCause != contracts.ErrNoGroundedAnswer {
 		t.Fatalf("failure cause = %q, want %q", response.ErrorCause, contracts.ErrNoGroundedAnswer)
+	}
+	// The user-visible body is the half of "honest failure" the status token
+	// cannot express: a body still reading as a capture ack would satisfy every
+	// structural field above.
+	if response.Body != provenance.CanonicalRefusalBody {
+		t.Fatalf("failure body = %q, want canonical refusal %q", response.Body, provenance.CanonicalRefusalBody)
 	}
 	if len(response.Sources) != 0 {
 		t.Fatalf("failure sources = %d, want 0", len(response.Sources))
