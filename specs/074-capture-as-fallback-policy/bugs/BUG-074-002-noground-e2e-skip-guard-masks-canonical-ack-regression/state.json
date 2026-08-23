@@ -6,13 +6,14 @@
   "featureName": "BUG-074-002 no-ground E2E skip-guard masks the canonical-ack regression",
   "workflowMode": "bugfix-fastlane",
   "executionRuntime": "direct",
-  "status": "route_required",
+  "status": "in_progress",
+  "statusCorrectionNote": "CORRECTED 2026-08-23 by bubbles.goal. This field read 'route_required', which is a ROUTING OUTCOME vocabulary word, not a schema-valid persisted status. transition-contract-resolver.sh:329 accepts only not_started, in_progress, blocked, the mode's statusCeiling, or a declared terminalAlias; bugfix-fastlane inherits ceiling 'done' and declares no aliases, so the guard failed at contract resolution with E009-TARGET-MISMATCH and exit 2 and never reached Check 6 at all. The packet was therefore unmeasurable rather than merely failing. in_progress is the accurate replacement: implement has shipped and been recorded, test is next. The routing intent is not lost -- it already lives in routing.outcome, which is its correct home and is unchanged. A portfolio scan of all state.json files found this packet was the only one carrying a non-schema status.",
   "severity": "S3",
   "severityClass": "test-integrity",
   "releaseTrain": "mvp",
   "flagsIntroduced": [],
   "createdAt": "2026-08-18T00:00:00Z",
-  "lastUpdatedAt": "2026-08-18T00:00:00Z",
+  "lastUpdatedAt": "2026-08-23T23:05:01Z",
   "certifiedAt": null,
   "certifiedBy": null,
   "discoveredBy": "bubbles.bug (finding DI-5 during BUG-061-009 close-out)",
@@ -25,12 +26,22 @@
     "Which branch the live stack takes today for the fabricated-city prompt is NOT verified; no live run was performed."
   ],
   "execution": {
-    "activeAgent": "bubbles.bug",
-    "currentPhase": "analysis",
+    "activeAgent": "bubbles.implement",
+    "currentPhase": "implement",
+    "substate": "implemented",
+    "currentScope": "SCOPE-BUG-074-002-01",
     "executionModel": "direct-authorized-runner",
     "runStartedAt": "2026-08-18T00:00:00Z",
     "completedScopes": [],
-    "completedPhaseClaims": [],
+    "completedPhaseClaims": [
+      {
+        "phase": "implement",
+        "agent": "bubbles.implement",
+        "provenanceMode": "specialist",
+        "claimedAt": "2026-08-23T23:05:01Z",
+        "evidenceRef": "report.md#implementation-delta"
+      }
+    ],
     "executionHistory": [
       {
         "at": "2026-08-18",
@@ -39,6 +50,17 @@
         "executionModel": "direct-authorized-runner",
         "claimSource": "executed",
         "summary": "Filed the packet closing the DI-5 routing loop from BUG-061-009. Re-verified every line number by reading tests/e2e/assistant/capture_fallback_trigger_e2e_test.go at HEAD d62f2e75 (119 lines, sha256 3d695eac...92b1d): guard `if env.Status != string(contracts.StatusSavedAsIdea)` at line 98 with t.Skipf at 99-100; the four SCOPE-074-04B contract assertions below it at 103/106/109/117; unconditional assertions above it at 83/86/89; second t.Skipf at 71. No line-number corrections were required. Root cause: the test absorbs live-model nondeterminism at the assertion layer, and the variable it tolerates (status) IS the contract under test, so tolerance and detection collapse into one predicate and tolerance always wins. Policy violated: .github/copilot-instructions.md line 331 (no failure-condition early exits). Primary fix direction chosen: assert unconditionally via a two-branch outcome-space assertion modelled on tests/e2e/assistant/high_band_refusal_e2e_test.go (18 t.Errorf/t.Fatalf assertions, single t.Skip at line 90 for adapter-never-bound); deterministic stubbing retained as a declared fallback with a falsifiable adoption condition. NO fix implemented and NO test executed."
+      },
+      {
+        "at": "2026-08-23T23:05:01Z",
+        "agent": "bubbles.implement",
+        "phasesExecuted": ["implement"],
+        "provenanceMode": "specialist",
+        "executionModel": "direct-authorized-runner",
+        "claimSource": "executed",
+        "outcome": "completed_owned",
+        "evidenceRef": "report.md#implementation-delta",
+        "summary": "Replaced the status-keyed escape hatch in tests/e2e/assistant/capture_fallback_trigger_e2e_test.go with a total switch over the decoded 200 envelope. The removed guard was `if env.Status != string(contracts.StatusSavedAsIdea) { t.Skipf(...) }` sitting directly above the four SCOPE-074-04B assertions, so the predicate and the assertions it protected read the same variable: any regression moving the turn off saved_as_idea selected its own escape hatch and the run reported SKIP where the file header promised FAIL. The shipped control flow CLASSIFIES each run from `error_cause` and `sources` and ASSERTS the contract on `status` and `body`; those two sets are deliberately disjoint, which is what makes the escape hatch structurally impossible rather than merely discouraged. Five branches, four of which assert. (1) status=saved_as_idea asserts the four canonical-ack rules strictly - capture_route true, nil confirm card, nil disambiguation prompt, canonical ack substring in the body. (2) error_cause=no_grounded_answer asserts the typed high-band refusal that BUG-061-009 / INV-HB-REFUSAL ratified - unavailable status, capture_route false, canonical refusal body, zero partial sources, and the capture acknowledgement string absent; that whole shape previously reported SKIP and asserted nothing. (3) error_cause=provider_unavailable asserts status coherence and capture_route false, then skips, because response.go types that cause as an upstream failure explicitly distinct from could-not-ground, so the grounding decision was never reached and FAIL would assert a violation nobody observed. (4) sources present passes while still asserting the two invariants a grounded answer must satisfy, so the one legitimate non-exercise cannot become a silent catch-all. (5) default fails loudly on any off-contract envelope, including an answered-with-zero-sources fabrication leak. Two skips survive and both key on infrastructure availability - the HTTP 503 assistant_http_not_ready readiness poll and branch 3 - and neither keys on the saved_as_idea status that the canonical-ack assertions police, which is the precise defect this packet was filed for. The file header comment and the scopes.md DoD item describing the branch table were updated in the same change so the documented shape matches the shipped five-branch switch. Change boundary honoured: zero files under internal/ were touched. Live evidence of the SKIP->FAIL flip is recorded in report.md under 'Live Execution - The Adversarial Flip, Demonstrated (2026-08-23)'. Execution of the SCOPE-BUG-074-002-01 DoD test matrix in scopes.md is owned by bubbles.test per routing.nextRequiredOwner; no DoD item is checked by this phase."
       }
     ],
     "scopeSummary": [
@@ -54,7 +76,8 @@
     ]
   },
   "certification": {
-    "status": "route_required",
+    "status": "in_progress",
+    "statusCorrectionNote": "CORRECTED 2026-08-23 by bubbles.goal, mirroring the top-level status for the same reason and keeping the two in agreement. Certification remains genuinely in_progress: certifiedCompletedPhases is empty and only bubbles.validate may write it.",
     "completedScopes": [],
     "certifiedCompletedPhases": [],
     "certifierAgent": null,
@@ -108,9 +131,9 @@
   "reworkQueue": [],
   "routing": {
     "outcome": "route_required",
-    "nextRequiredOwner": "bubbles.implement",
-    "reason": "Test-integrity defect filed and root-caused; fix deliberately not implemented per the filing task's constraints. Change boundary is tests/e2e/assistant/capture_fallback_trigger_e2e_test.go plus this packet; internal/ is explicitly forbidden because no production defect is asserted.",
-    "subsequentOwners": ["bubbles.test", "bubbles.validate"]
+    "nextRequiredOwner": "bubbles.test",
+    "reason": "Implementation landed at commit 343d6076: the status-keyed skip guard in tests/e2e/assistant/capture_fallback_trigger_e2e_test.go is replaced by a five-branch total switch that classifies on error_cause/sources and asserts on status/body. Change boundary held - zero files under internal/. The DoD test matrix in scopes.md SCOPE-BUG-074-002-01 is owned by bubbles.test, which executes it and records the per-item evidence; certification remains owned by bubbles.validate per certification.status.",
+    "subsequentOwners": ["bubbles.validate"]
   },
   "related": {
     "originFinding": "specs/061-conversational-assistant/bugs/BUG-061-009-high-band-refusal-masked-as-saved-as-idea/report.md#discovered-issues (DI-5)",
