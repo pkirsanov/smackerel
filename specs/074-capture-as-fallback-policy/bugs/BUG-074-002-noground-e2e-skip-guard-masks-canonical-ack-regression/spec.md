@@ -64,6 +64,32 @@ hunted regression. It MUST NOT be reported as "path not exercised".
    `.github/copilot-instructions.md` line 331 (no failure-condition early
    exits).
 
+### Single-Capability Justification
+
+Gate G094 asks whether this work introduces a reusable foundation or a single
+concrete capability. It is a **single capability**, and the proportionality
+argument is the packet's own change boundary: exactly one test function in
+exactly one file, `tests/e2e/assistant/capture_fallback_trigger_e2e_test.go`,
+with `internal/` explicitly forbidden.
+
+The gate's trigger words fire here because the shipped fix is a five-branch
+switch, and a branch set can look like a provider or strategy family. It is not
+one. The branches are a **total partition of one response envelope's outcome
+space**, not interchangeable implementations of a shared contract: they are
+selected by reading `error_cause` and `sources` on a single `TurnResponse`, they
+share no interface, nothing dispatches between them at runtime, and no second
+caller can select one. Extracting a "branch strategy" abstraction over them
+would add indirection with exactly one consumer.
+
+There is a real reuse question here, and it is honestly out of scope rather than
+absent: `tests/e2e/assistant/http_capture_test.go:71` carries the same
+branch-on-the-thing-you-assert defect. That is recorded as DI-6 in `report.md`
+and routed to its own packet. If and when a second instance is fixed, the shared
+**shape** — classify on fields disjoint from the asserted fields, close the
+outcome space totally, keep skips keyed only on infrastructure availability — is
+what would become a documented pattern. Two instances is the point at which that
+becomes evidence rather than speculation; one is not.
+
 ## Non-Goals
 
 - Changing `internal/assistant/` production code. This packet asserts **no**

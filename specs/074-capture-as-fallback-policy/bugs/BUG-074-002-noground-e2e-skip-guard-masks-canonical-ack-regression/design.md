@@ -198,3 +198,50 @@ The fix is proven by flipping the outcome, not by asserting it was fixed:
 
 Task 1 of the fix scope must also record which branch the live stack actually
 takes today — the open unknown this packet declines to guess at.
+
+### Single-Implementation Justification
+
+Gate G094's proportionality triggers fire on this packet (18 keyword hits),
+because the shipped fix is a five-branch switch and a branch set can read like a
+provider or strategy family. It is not one, and the honest record is a single
+implementation rather than a foundation-plus-overlay split.
+
+**What shipped is one concrete implementation.** Exactly one test function in
+exactly one file — `tests/e2e/assistant/capture_fallback_trigger_e2e_test.go` →
+`TestAssistantHTTPE2E_CaptureFallbackOpenKnowledgeNoGround`, commit `343d6076`.
+`spec.md` → *Change Boundary* confines this packet to that file and forbids
+`internal/` changes, because no production defect is asserted.
+
+**Why the five branches are not variants of a shared capability.** They are a
+total partition of one response envelope's outcome space, not interchangeable
+implementations behind a contract. They are selected by reading `error_cause`
+and `sources` on a single `TurnResponse`; they share no interface; nothing
+dispatches between them at runtime; no second caller can select one. Extracting
+a strategy abstraction over them would add indirection with exactly one consumer.
+
+**The design rule worth naming, even though it is not yet a foundation.** The
+old guard branched on `status` and then asserted `status`, so a status regression
+selected its own escape hatch and reported SKIP. The shipped test classifies on
+`error_cause` and `sources` and asserts on `status` and `body` — deliberately
+disjoint sets, which is what makes the escape hatch unreachable rather than
+merely relocated. The second rule is total closure: every decoded 200 envelope
+lands in exactly one branch and the `default` branch fails, so an unanticipated
+envelope is reported rather than silently accepted.
+
+| Axis | Discriminator | Verdict | Why it is not an escape hatch |
+|---|---|---|---|
+| Capture shape | `status == saved_as_idea` | assert 4 SCOPE-074-04B rules | The contract under test actually ran |
+| Honest no-ground refusal | `error_cause == no_grounded_answer` | assert 5 INV-HB-REFUSAL rules | A typed refusal is a real outcome, not an absence |
+| Upstream failure | `error_cause == provider_unavailable` | assert 2 invariants, then skip | `response.go:195/227` types this as "upstream failed", distinct from "could not ground"; the grounding decision was never reached |
+| Grounded answer | `len(sources) > 0` | assert 2 invariants, pass | Model nondeterminism absorbed here, never by relaxing an assertion |
+| Off-contract | none of the above | **FAIL** | The shape the old guard swallowed |
+
+**The reuse question is real and deliberately deferred to evidence, not
+speculation.** `tests/e2e/assistant/http_capture_test.go:71` carries the same
+branch-on-the-thing-you-assert defect one field over; it is recorded as DI-6 in
+`report.md` and routed to its own packet. If a second instance is fixed, the
+shared *shape* — classify on fields disjoint from the asserted fields, close the
+outcome space totally, key skips only on infrastructure availability — becomes a
+documented pattern backed by two instances. Promoting it to a foundation now,
+on one instance, would be the premature abstraction this gate exists to
+question.

@@ -124,8 +124,11 @@
       "crossRepoFollowUp": false,
       "reason": "Filing + root-cause complete under an explicit instruction not to implement the fix. Scope SCOPE-BUG-074-002-01 is defined with Gherkin, a five-row test plan and an unchecked DoD; design.md selects the primary fix direction and records a falsifiable condition for the declared fallback. Implementation, the live branch determination, and the adversarial SKIP->FAIL flip are owned by bubbles.implement and bubbles.test.",
       "packetRef": "report.md#static-verification-control-flow-of-the-defective-test",
-      "status": "open",
-      "resolution": null
+      "status": "resolved",
+      "resolvedAt": "2026-08-23T23:03:07Z",
+      "routedToCommit": "343d6076",
+      "resolutionRef": "report.md#live-execution--the-adversarial-flip-demonstrated-2026-08-23",
+      "resolution": "Resolved by commit 343d6076, which shipped the total five-branch outcome-space switch this request asked bubbles.implement to build. Closed rather than left open with routing fields attached: the work it routes is done, and an open request decorated with a routedToCommit would describe a handoff that is no longer pending. The implement phase is recorded in execution.completedPhaseClaims with specialist provenance, and the SKIP->FAIL flip this request named as its acceptance signal is demonstrated in the referenced report section."
     }
   ],
   "reworkQueue": [],

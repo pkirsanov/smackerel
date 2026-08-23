@@ -45,10 +45,39 @@ here".
 
 ### Code Diff Evidence
 
-**Not applicable, deliberately.** This packet is a filing + root-cause task with
-no implementation. There is no source diff to record, and recording an
-artifact-only diff as implementation evidence would be exactly the substitution
-the report-sections registry warns against. The fix scope owns this section.
+**Superseded 2026-08-23.** This section previously read "Not applicable,
+deliberately", which was accurate while the packet was a filing plus root-cause
+task with no implementation. The fix has since shipped, so that statement is now
+false and is replaced rather than left standing — a stale "not applicable" is
+indistinguishable from a missing record to anyone auditing later.
+
+**Claim Source:** executed — every sha, path, and count below was read from
+`git` in this session.
+
+```text
+$ git show -s --format='%H%n%cI%n%s' 343d6076
+343d6076b1bd7bb1c118466e1463d9eecba3cc04
+2026-08-23T23:03:07+00:00
+fix(BUG-074-002): make the no-ground E2E able to fail on the regression it advertises
+
+$ git show --shortstat --format='' 343d6076
+ 3 files changed, 457 insertions(+), 38 deletions(-)
+
+$ git show --numstat --format='' 343d6076 | awk -F'\t' 'NF==3 && $3 !~ /^specs\// {print}'
+153     37      tests/e2e/assistant/capture_fallback_trigger_e2e_test.go
+```
+
+The delivery delta outside `specs/` is exactly one path:
+
+tests/e2e/assistant/capture_fallback_trigger_e2e_test.go
+
+That single-file delta is the point rather than a limitation. `spec.md` →
+*Change Boundary* confines this packet to that one test file and forbids
+`internal/` changes, because no production defect is asserted; the headline
+`3 files changed` counts this packet's own `report.md` and `scopes.md` alongside
+it. A change here that touched `internal/` would have contradicted the packet's
+own severity classification, so the narrow diff is the boundary being honoured,
+not evidence thinness.
 
 ## Test Evidence
 
