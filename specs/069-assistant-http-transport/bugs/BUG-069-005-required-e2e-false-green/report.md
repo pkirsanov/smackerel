@@ -1084,6 +1084,11 @@ for ownership routing and DoD disposition.
 | 2026-08-23 | The finding behind `TR-BUG-069-005-FRAMEWORK-001` has two halves that were previously tracked as one, which made its product disposition unreadable | routed (upstream half only): the PRODUCT half — assistant required tests being unguarded in this repo — is now closed in-repo by the new guard. The FRAMEWORK half — the installed regression guard's own blindness to Go skip tokens — is owned by the upstream framework repository and is not repairable from here, because `.github/bubbles/` is framework-managed and MUST NOT be edited downstream | `TR-BUG-069-005-FRAMEWORK-001` in `state.json`; `tests/e2e/assistant/required_no_skip_guard_test.go` |
 | 2026-08-23 | `TestRequiredAssistantE2ETestsNeverSkip` resolves its scan directory from `runtime.Caller(0)`, which bakes the compile-time source path into the test binary. Building the Go lane with `-trimpath` would rewrite that path to a module-relative form and the five `os.ReadFile` calls would stop resolving | accepted-as-designed, no change required: `-trimpath` is absent from every shell, Dockerfile, compose, workflow and Makefile surface in the repository, verified in the stabilize phase; and if it were introduced the guard fails loud rather than quiet — each unreadable required file appends a violation and the run ends in `t.Fatalf` — so the silent-green class this packet exists to prevent cannot recur through this path | `tests/e2e/assistant/required_no_skip_guard_test.go`; [stabilize evidence](#stabilize-phase--operational-risk-of-the-landed-guard-2026-08-23) |
 | 2026-08-23 | `./smackerel.sh test e2e` refuses with exit 73 while another runner holds the `flock` suite lock, and an orphaned descendant can hold that lock after its parent shell exits because `exec {FD}>` places the descriptor in the shell table and children inherit it | not-a-defect and outside this packet's Change Boundary: `smackerel.sh` is absent from the allowed implementation path set in `scopes.md`; exit 73 is the CLI's designed non-blocking refusal carrying a named remediation message; and the lock is advisory and kernel-released on process death, so no stale-lock class exists. Verified free in the stabilize phase with zero holders and no live runner | `smackerel.sh` lines 552-583; `scopes.md` Change Boundary; [stabilize evidence](#stabilize-phase--operational-risk-of-the-landed-guard-2026-08-23) |
+| 2026-08-23 | SEC-069-005-1 (MEDIUM, OWASP A04 TOCTOU): confirm redemption is not single-flight under concurrency. `Machine.Confirm` performs load-check-persist as three separate store operations with no row lock, no transaction, no mutex and no compare-and-swap (`PGStore.Persist` is an unconditional upsert), and the HTTP dedup key is `{userDigest, transport, messageID}` rather than `confirm_ref`, so two concurrent callbacks sharing one `confirm_ref` but carrying different `transport_message_id` values can both pass the pending check and execute the gated write twice. The code comment asserting single-flight overstates what the implementation enforces | routed to `bubbles.implement`, NOT fixed in this phase: the remedy lands in `internal/assistant/confirm/machine.go` and `internal/assistant/context/pg_store.go`, both product runtime files outside this packet's Change Boundary, and the change requires a test phase that a security agent editing inline would bypass. Suggested shape: make the clear conditional (`UPDATE ... WHERE pending_confirm->>'confirm_ref' = $ref`, zero rows affected ⇒ `ErrPendingNotFound`) or wrap load-and-clear in one transaction with `SELECT ... FOR UPDATE`. Sequential replay protection is unaffected and remains correct | `internal/assistant/confirm/machine.go` `Machine.Confirm`; `internal/assistant/context/pg_store.go` `Persist`; `internal/assistant/httpadapter/dedup.go` `turnDedupKey`; [security evidence](#security-phase--confirm-gating-and-guard-integrity-2026-08-23) |
+| 2026-08-23 | SEC-069-005-2 (LOW): the disambiguation reference is `fmt.Sprintf("disambig-location-%d", emittedAt.UnixNano())` — a wall-clock nanosecond value with no random component, therefore predictable | recorded as not-exploitable-today with a named precondition: `resolveCompilerDisambig` matches the reference only against `conv.PendingDisambig` for the conversation already loaded from the auth-derived `(UserID, Transport)` key, so another user's reference is unreachable rather than merely hard to guess. No lookup in this path is keyed on the reference alone. The safety is a property of that lookup shape, so any future change resolving pending state by reference must add a `crypto/rand` component in the same change | `internal/assistant/compiled_interactions.go` `proposeCompilerLocationDisambiguation`; [security evidence](#security-phase--confirm-gating-and-guard-integrity-2026-08-23) |
+| 2026-08-23 | SEC-069-005-3 (LOW): the new required-test guard has two residual evasions — an indirect skip through a helper whose body calls `t.Skip()` is invisible because detection is scoped to the required function's own braces, and a nested closure using a receiver not named `t` (`func(sub *testing.T) { sub.Skip() }`) does not match the `\bt\.(Skip\|SkipNow\|Skipf)\(` pattern | recorded, not repaired in this phase: the direct `t.Skipf` form that caused THIS bug is caught and verified caught, so the guard closes the defect it was built for; body scoping is a deliberate design choice documented in the guard's own header and widening it would couple a required test's verdict to its neighbours. Closing the helper evasion needs call-graph analysis rather than a regex widening, which is a different piece of work from the one this packet scoped | `tests/e2e/assistant/required_no_skip_guard_test.go` `requiredNoSkipPattern`, `scanRequiredTestBodyForSkips`; [security evidence](#security-phase--confirm-gating-and-guard-integrity-2026-08-23) |
+| 2026-08-23 | SEC-069-005-4 (LOW): `requiredNoSkipTests` is a five-entry compile-time literal with no runtime cross-check against `scenario-manifest.json`. Emptying it is caught by an explicit `t.Fatal`, but removing a single entry silently narrows coverage while the guard stays green | recorded with a concrete remedy shape: derive the denylist from the manifest, or assert `len(requiredNoSkipTests)` equals the manifest's required-scenario count so drift fails loud. The file's own header already concedes the manual coupling. Not repaired here because the guard is test-surface owned by the implement/test phases and this phase is diagnostic | `tests/e2e/assistant/required_no_skip_guard_test.go` `requiredNoSkipTests`; `specs/069-assistant-http-transport/bugs/BUG-069-005-required-e2e-false-green/scenario-manifest.json`; [security evidence](#security-phase--confirm-gating-and-guard-integrity-2026-08-23) |
+| 2026-08-23 | The mechanical G034 floor `.github/bubbles/scripts/security-gate.sh` exits 1 with 12 `inline-credentials` findings. All twelve are in `scripts/commands/config.sh` and `scripts/commands/config_secret_rejection_test.sh`; none is a real credential (eight are `__SECRET_PLACEHOLDER__<KEY>__` substitution markers documented at `config.sh:497/853/1812/3299`, one is a labelled test fixture, one is a `*_SECRET_REF` naming an env var, four are grep/echo strings inside the test that exists to REJECT a literal password). The scanner matches the `NAME="value"` shape without distinguishing a placeholder from a value | pre-existing and unattributable to this packet, measured not assumed: `security-gate.sh \| grep -cE 'internal/assistant/\|internal/config/assistant\|tests/e2e/assistant'` returned `0`, so zero findings fall in the changed surface. G034 is therefore NOT claimed as passing by this phase. The scanner's precision gap is not repairable from this repository because `.github/bubbles/` is framework-managed and MUST NOT be edited downstream — the same ownership boundary already recorded for `TR-BUG-069-005-FRAMEWORK-001` | `TR-BUG-069-005-FRAMEWORK-001` in `state.json`; `scripts/commands/config.sh:497`; [security evidence](#security-phase--confirm-gating-and-guard-integrity-2026-08-23) |
 
 ## Test Continuation: Deterministic Weather And Readiness (2026-07-21)
 
@@ -2372,5 +2377,332 @@ with concrete references: the `-trimpath` coupling, which is absent today and fa
 introduced, and the suite-lock descriptor-inheritance property, which is owned by `smackerel.sh`.
 Nothing in this phase modified source, checked a DoD item, changed a scope status, or wrote a
 certification field.
+
+### Security Phase — Confirm Gating And Guard Integrity (2026-08-23)
+
+**Agent:** bubbles.security · **Claim Source:** `executed` for every command block below;
+`interpreted` for each control-flow conclusion, which is derived by reading the implementation
+rather than by running a proof-of-concept exploit. Each interpreted conclusion names the file and
+line the reading rests on so it can be re-checked without trusting this narrative.
+
+**Redaction:** in the two pasted terminal blocks below, absolute paths under the operator home
+directory were replaced with `<operator-home>` by `sed -e "s#/home/[A-Za-z0-9._-]*#<operator-home>#g"`
+at capture time. Only the leading directory component changed. Exit codes, finding counts, finding
+text, file paths relative to the repository, and every load-bearing fact are unaltered.
+
+**Scope.** Bounded to what BUG-069-005 changed: the required-test no-skip guard, the
+`F069-INTENT-COMPILER-DISABLED` coherence check, the compiled-intent execution path
+(`compiled_interactions.go`, `facade.go`), and the five manifest-required tests. The confirm state
+machine, the conversation store, and the HTTP adapter were read because the changed surface calls
+into them and its security properties cannot be judged without them; nothing outside that call
+graph was reviewed.
+
+#### Verdict
+
+🟡 **FINDINGS** — one MEDIUM, three LOW. No critical or high-severity vulnerability. Nothing found
+is an authorization break, a credential exposure, or a cross-user data path. The MEDIUM is a
+concurrency defect in a security-relevant single-flight control, and it is real in the product code
+rather than a test artifact.
+
+| ID | Severity | OWASP | Finding | State |
+|---|---|---|---|---|
+| SEC-069-005-1 | MEDIUM | A04 Insecure Design (TOCTOU) | Confirm redemption is not single-flight under concurrency; the code comment asserting single-flight overstates what the implementation enforces | routed to `bubbles.implement` |
+| SEC-069-005-2 | LOW | A04 Insecure Design | Disambiguation reference is a predictable nanosecond timestamp; not currently exploitable because lookup is keyed on the authenticated identity, not on the reference | recorded, not exploitable today |
+| SEC-069-005-3 | LOW | A09 Logging/Monitoring Failures | The new guard is evadable by an indirect skip (helper call) or a non-`t` receiver name; the direct form that caused this bug IS caught | recorded |
+| SEC-069-005-4 | LOW | A04 Insecure Design | The guard's required-test denylist is a compile-time literal with no runtime cross-check against `scenario-manifest.json`; removing one entry silently narrows coverage | recorded |
+
+Answers to the five scoped questions, in order: (1) replay protection **is real in the code**,
+sequentially — see SEC-069-005-1 for the concurrency gap; (2) references are predictable but
+**cannot** be redeemed across users; (3) the FATAL-on-missing claim is **true and verified**;
+(4) the coherence gate **genuinely refuses**; (5) **no** credential exposure.
+
+#### Q1 — Confirm-gating integrity: is replay protection real in the code, or only in the test?
+
+**Real in the code, for the sequential case.** `Machine.Confirm`
+(`internal/assistant/confirm/machine.go`) loads the conversation, rejects when
+`conv.PendingConfirm == nil || conv.PendingConfirm.ConfirmRef != in.ConfirmRef` with
+`ErrPendingNotFound`, then sets `conv.PendingConfirm = nil` and persists that clear **before** it
+writes the audit row and **before** the facade calls `actionExecutor.Execute`. A second sequential
+confirm therefore finds a nil pending and returns `ErrPendingNotFound`, which
+`finishConfirmResponse` (`internal/assistant/compiled_interactions.go`) turns into
+`StatusUnavailable` + `ErrNoMatch` + "That confirmation is stale or already resolved." The
+executor is never reached. This is not an assertion that exists only in the test.
+
+The path also carries a genuine defence-in-depth re-check the test does not depend on: after
+decoding the persisted payload, `handlePendingConfirm` re-verifies
+`proposal.UserID == msg.UserID && proposal.Transport == msg.Transport && proposal.ConfirmRef == msg.ConfirmRef`
+and the schema version, failing closed with "confirmed compiled action ownership mismatch". The
+server-owned payload is persisted behind the reference and the callback carries only the reference
+and the choice, so the client cannot influence what gets executed.
+
+**SEC-069-005-1 (MEDIUM) — the concurrency gap.** The single-flight guarantee holds only if the
+load/check/persist triple is atomic. It is not. Evidence, all from execution:
+
+```
+$ grep -rnE 'FOR UPDATE|pg_advisory|BeginTx|\.Begin\(|sync\.Mutex|sync\.RWMutex' \
+    internal/assistant/confirm/machine.go internal/assistant/context/pg_store.go
+(grep exit=1 ; 1 == no match)
+
+$ grep -nE 'sync\.Mutex|sync\.RWMutex|singleflight|\.Lock\(\)' internal/assistant/facade.go
+(exit=1 ; 1 == none)
+```
+
+There is no row lock, no advisory lock, no explicit transaction, and no mutex in the confirm
+machine, the Postgres conversation store, or the facade. `PGStore.Persist` is an unconditional
+`INSERT ... ON CONFLICT (user_id, transport) DO UPDATE SET ...` with no version column and no
+`confirm_ref` predicate in the `WHERE` clause, so it is last-write-wins rather than a
+compare-and-swap. `Machine.Confirm` reads with a plain `SELECT` and writes with that upsert as two
+separate round trips.
+
+The transport layer does not close the window either. The HTTP dedup key is
+`turnDedupKey{userDigest, transport, messageID}` (`internal/assistant/httpadapter/dedup.go`) — keyed
+on `transport_message_id`, **not** on `confirm_ref`. Two POSTs carrying the same `confirm_ref` but
+different `transport_message_id` values produce two distinct keys, both acquire an owner lease, and
+both proceed into the facade concurrently.
+
+Consequence: two concurrent confirm callbacks for one reference can both observe a matching
+non-nil `PendingConfirm` before either persists the clear, and both then call
+`actionExecutor.Execute(proposal)`. The gated write executes twice. The comment above `Confirm`
+reads "Single-flight: clear pending BEFORE writing the audit row so a racing callback hits
+ErrPendingNotFound" — that ordering does defeat a race against the *audit write*, but not a race
+against the *pending check*, which is the one that gates execution.
+
+The required test does not cover this. `TestAssistantHTTPE2E_ConfirmAcceptExecutesGatedActionOnce`
+exercises replay as a third **sequential** turn and asserts `list count after replay = 1`; the file
+contains no `go func`, no `sync.WaitGroup`, and no concurrent driver. So the test is honest about
+what it proves and simply does not reach this case — this is a coverage boundary, not a false
+green, and it is a different defect class from the one this packet fixed.
+
+Severity is MEDIUM, not HIGH: exploitation requires an already-authenticated actor racing their own
+confirm, there is no cross-user or cross-tenant reach, and the product posture is single-operator
+local-first. It is not LOW because it falsifies an invariant the code explicitly claims and
+because the remedy is small and local — make the clear conditional, e.g. an `UPDATE ... WHERE
+pending_confirm->>'confirm_ref' = $ref` that treats zero affected rows as `ErrPendingNotFound`, or
+wrap load-and-clear in one transaction with `SELECT ... FOR UPDATE`.
+
+Routed to `bubbles.implement`. It is NOT fixed here: the change lands in
+`internal/assistant/confirm/machine.go` and `internal/assistant/context/pg_store.go`, which are
+product runtime files outside this packet's Change Boundary, and a security agent editing the
+confirm state machine inline would bypass the test phase that such a change requires.
+
+#### Q2 — Reference handling: guessable, and can one user redeem another's?
+
+**Cross-user redemption: NO.** Both redemption paths resolve pending state from the caller's own
+conversation row and only then compare the reference:
+
+- `Machine.Confirm` / `Machine.Discard` call `m.store.Load(ctx, in.UserID, in.Transport)` and
+  compare `conv.PendingConfirm.ConfirmRef` against the supplied reference.
+- `resolveCompilerDisambig` reads `conv.PendingDisambig` — the conversation already loaded for the
+  caller — and rejects on `msg.DisambiguationRef != pending.DisambiguationRef`.
+
+No lookup anywhere in this path is keyed on the reference alone. A reference belonging to another
+user is therefore not merely hard to guess, it is **unreachable**: it never appears in the
+attacker's own conversation row, so the comparison fails regardless of whether the value was
+guessed correctly.
+
+That holds because `UserID` is auth-derived and not client-supplied, which is the load-bearing
+precondition. `internal/assistant/httpadapter/adapter.go` sets
+`userID := auth.UserIDFromContext(r.Context())` and returns **401 `auth_required`** when that is
+empty and no session-backed shared-token substitution applies. The request body type `TurnRequest`
+(`schema.go`) has no user-identity field at all — its fields are `schema_version`,
+`transport_message_id`, `kind`, `transport_hint`, `text`, `confirm_ref`, `confirm_choice`,
+`disambiguation_ref`, `disambiguation_choice`, `client_context` — and `Translate` sets
+`UserID: p.UserID` from the handler-supplied auth value, never from `req`. This is the pattern
+Gate G047 exists to enforce, and this surface satisfies it: identity comes from the auth context,
+not from the body.
+
+**SEC-069-005-2 (LOW) — predictable disambiguation reference.** The reference is built as
+`ref := fmt.Sprintf("disambig-location-%d", emittedAt.UnixNano())`
+(`internal/assistant/compiled_interactions.go`) — a nanosecond wall-clock timestamp with no random
+component. Confirm references come from the executor's `Prepare` rather than from this line, so
+the predictability is specific to disambiguation. It is not exploitable today for the structural
+reason above: the reference functions as a staleness token compared inside an already-authorized
+conversation, not as a bearer capability. It is recorded because that safety is a property of the
+current lookup shape, and any future change that resolves pending state by reference — a shared
+pending table, a cross-transport resume, an admin replay tool — would convert a predictable value
+into a forgeable one. A `crypto/rand` suffix would remove the dependency on that lookup shape
+staying as it is.
+
+**One deployment caveat, stated plainly and not a defect.** When the bearer middleware yields a
+shared-token session, the adapter substitutes the SST-configured `SharedUserID`, so every caller
+holding that token collapses onto one conversation row and therefore one `PendingConfirm`. Callers
+sharing that token can consequently see and redeem one another's confirms. That is the declared
+behaviour of a single-user shared-token deployment (`F-069-USERID-BINDING`), the per-user PASETO
+path never reaches that branch, and it is consistent with the local-first single-operator posture.
+It is not counted as a finding.
+
+#### Q3 — Test-guard integrity: can it be neutered by renaming a test?
+
+**No. The claim is true and verified against the source, not accepted from the comment.**
+`scanRequiredTestBodyForSkips` walks the parsed declarations for a `*ast.FuncDecl` whose name
+matches, and when the loop completes without a match it returns `errRequiredNoSkipTestMissing`. In
+`TestRequiredAssistantE2ETestsNeverSkip` that error is matched with `errors.Is` and appended as a
+violation reading "required test %s is MISSING (deleted, renamed or moved)", and any non-empty
+violation slice ends in `t.Fatalf`. Deleting, renaming, or moving a required test therefore fails
+the guard rather than silently satisfying it. Two adjacent fail-closed properties hold as well: an
+unreadable required file is a violation rather than a skip, and an empty denylist is its own
+`t.Fatal` ("the guard would be a no-op"). The adversarial subtest
+`renamed_or_deleted_required_test_is_reported_missing` exercises exactly this and asserts the
+missing sentinel, so the behaviour is proven by execution and not only by inspection.
+
+**SEC-069-005-3 (LOW) — two evasions that remain.** The detector is
+`regexp.MustCompile(`+"`"+`\bt\.(Skip|SkipNow|Skipf)\(`+"`"+`)` applied to the required function's own body text:
+
+1. **Indirect skip.** A required test that calls a helper — `requireLiveStack(t)` — whose body
+   calls `t.Skip()` is invisible to the guard, because body scoping deliberately stops at the
+   required function's braces. That scoping is correct for its stated purpose (a neighbour must be
+   free to skip) but it means the false-green class can return in one refactor: move the bailout
+   into a helper and the guard stays green while the required behaviour goes unexercised.
+2. **Receiver name.** A nested closure written `t.Run("x", func(sub *testing.T) { sub.Skip() })`
+   does not match, because the pattern is anchored to a receiver literally named `t`. The common
+   shadowing form `func(t *testing.T)` does match, since the raw-text body search covers nested
+   closures.
+
+The original defect — five direct `t.Skipf` calls in the required bodies — is caught, so the guard
+does close the bug it was built for. This is recorded as the residual boundary of that guarantee,
+with a concrete artifact reference in `## Discovered Issues` below.
+
+**SEC-069-005-4 (LOW) — denylist drift.** `requiredNoSkipTests` is a five-entry compile-time
+literal inside the guard file, and nothing cross-checks it against
+`scenario-manifest.json` at runtime; the file's own comment concedes the manual coupling ("Adding a
+required scenario to the manifest without adding it here leaves that scenario unguarded"). Emptying
+it is caught by the explicit `t.Fatal`, but removing a single entry is not — coverage narrows
+silently while the guard stays green. Deriving the list from the manifest, or asserting
+`len(requiredNoSkipTests)` equals the manifest's required-scenario count, would make the drift
+loud. Recorded with a row in `## Discovered Issues` below.
+
+#### Q4 — Does `F069-INTENT-COMPILER-DISABLED` refuse, or only warn?
+
+**It genuinely refuses.** At `internal/config/assistant.go:557` the check is a
+`return fmt.Errorf("[F069-INTENT-COMPILER-DISABLED] enabled assistant transport requires ASSISTANT_INTENT_COMPILER_ENABLED=true; raw-text routing is forbidden")`
+inside the config validation function — an error return that aborts startup, not a log line. The
+contrast is visible in the same function twenty lines later, where rule #4 handles a
+non-recommended `state_key` with `slog.Warn` and continues. The two shapes sit side by side, so
+the refusing one is unambiguous.
+
+One subtlety was checked rather than assumed, because the guard's antecedent is not the one the
+error message describes. The predicate is `compilerConfigLoaded && !c.Assistant.IntentCompiler.Enabled`,
+where `compilerConfigLoaded` is true only when `ModelRole`, `ProviderName`, or `ProviderURL` is
+non-empty. On its face that suggests a bypass: blank all three and the incoherent combination would
+pass validation. It does not work, because blanking them is itself fatal one layer up —
+`internal/config/assistant_intent_compiler.go:138` loads the field with
+`mustString("ASSISTANT_INTENT_COMPILER_MODEL_ROLE", ...)`, and `mustString` appends to the error
+list on an empty value under the documented contract "Every key is REQUIRED; missing/unparsable
+values produce an entry in errs and abort startup once the caller collects them"
+(`F068-SST-MISSING`). `config/smackerel.yaml` pins `model_role: "assistant_intent_compiler"` as a
+REQUIRED non-empty literal. In any configuration that can boot, `compilerConfigLoaded` is therefore
+structurally true, and the coherence check is effectively unconditional. The antecedent is
+belt-and-braces for partially constructed `Config` values in unit tests, not an escape hatch.
+
+The regression phase already proved this check binds by mutation: short-circuiting it made
+`TestIntentCompilerRequiredWhenAssistantHTTPEnabled` fail with
+`want F069-INTENT-COMPILER-DISABLED`. No finding.
+
+#### Q5 — Secret and credential exposure in the changed surface
+
+**None found.** Scanned the changed files for credential tokens and for logging that could echo
+one:
+
+```
+$ grep -nEi 'token|apikey|api_key|secret|password|Authorization|Bearer' \
+    internal/assistant/compiled_interactions.go tests/e2e/assistant/required_no_skip_guard_test.go
+internal/assistant/compiled_interactions.go:45: Status contracts.StatusToken
+tests/e2e/assistant/required_no_skip_guard_test.go:71:  "go/token"
+tests/e2e/assistant/required_no_skip_guard_test.go:144: fset := token.NewFileSet()
+```
+
+Three matches, all false positives on the substring `token`: a status-token type name and two
+references to the Go standard library `go/token` package. No credential literal, no auth header
+construction, no bearer handling in the changed surface.
+
+The single logging site in the changed surface is `slog.Info("assistant_turn", logAttrs...)` at
+`internal/assistant/facade.go:559`. Its attribute list carries `user_id`, `transport`,
+`correlation_id`, `assistant_turn_id`, `scenario_id`, `top_score`, `band`, `status`,
+`error_cause`, `latency_ms`, `agent_trace_id`, and — decisively — the literal pair
+`"body_redacted", true`: the response body is deliberately excluded. On a non-OK outcome it adds
+`provider` and `model`, which are names rather than secrets. Nothing in the confirm or
+disambiguation path logs the persisted payload, the confirm reference, or a session token.
+
+Worth stating so it is not mistaken for an omission: `user_id` is logged in clear text here, while
+the tracing layer hashes it (`tracing.HashUserID` in `confirm/machine.go`). That inconsistency is
+noted and is **not** counted as a finding — a user identifier is not a credential, it is already
+the conversation partition key, and the product is single-operator local-first.
+
+#### Mechanical G034 floor — executed, and it does NOT pass
+
+The gate is `businessInvariant`, so the script's real output is recorded rather than a judgement
+that it felt satisfied.
+
+```
+$ timeout 600 bash .github/bubbles/scripts/security-gate.sh --repo-root <operator-home>/smackerel
+FINDING: inline-credentials: ./scripts/commands/config.sh:866:  POSTGRES_PASSWORD="__SECRET_PLACEHOLDER__POSTGRES_PASSWORD__"
+FINDING: inline-credentials: ./scripts/commands/config.sh:1070:  LLM_PROVIDER_SECRET_MASTER_KEY="__SECRET_PLACEHOLDER__LLM_PROVIDER_SECRET_MASTER_KEY__"
+FINDING: inline-credentials: ./scripts/commands/config.sh:1236:  TELEGRAM_BOT_TOKEN="__SECRET_PLACEHOLDER__TELEGRAM_BOT_TOKEN__"
+FINDING: inline-credentials: ./scripts/commands/config.sh:1542:  KEEP_GOOGLE_APP_PASSWORD="__SECRET_PLACEHOLDER__KEEP_GOOGLE_APP_PASSWORD__"
+FINDING: inline-credentials: ./scripts/commands/config.sh:1841:  AUTH_BOOTSTRAP_TOKEN="__SECRET_PLACEHOLDER__AUTH_BOOTSTRAP_TOKEN__"
+FINDING: inline-credentials: ./scripts/commands/config.sh:1851:  WEB_REGISTRATION_INVITE_TOKEN="__SECRET_PLACEHOLDER__WEB_REGISTRATION_INVITE_TOKEN__"
+FINDING: inline-credentials: ./scripts/commands/config.sh:2239:  ASSISTANT_TRANSPORTS_TELEGRAM_WEBHOOK_SECRET_REF="ASSISTANT_TELEGRAM_WEBHOOK_SECRET"
+FINDING: inline-credentials: ./scripts/commands/config.sh:2240:  ASSISTANT_TELEGRAM_WEBHOOK_SECRET="test-webhook-secret-061-scope-05-bs001-fixture"
+FINDING: inline-credentials: ./scripts/commands/config_secret_rejection_test.sh:56:  echo "FAIL: SST loader returned exit 0 for POSTGRES_PASSWORD=smackerel + TARGET_ENV=self-hosted (expected non-zero)"
+FINDING: inline-credentials: ./scripts/commands/config_secret_rejection_test.sh:111:  if grep -qE '^POSTGRES_PASSWORD=__SECRET_PLACEHOLDER__POSTGRES_PASSWORD__$' "$SELF_HOSTED_ENV"; then
+FINDING: inline-credentials: ./scripts/commands/config_secret_rejection_test.sh:118:  if grep -qE '^POSTGRES_PASSWORD=smackerel$' "$SELF_HOSTED_ENV"; then
+FINDING: inline-credentials: ./scripts/commands/config_secret_rejection_test.sh:122:    echo "PASS: self-hosted.env does NOT contain literal POSTGRES_PASSWORD=smackerel"
+[security-gate] FAIL — G034 findings: 12
+===SECURITY_GATE_EXIT=1===
+```
+
+**The floor exits 1, so G034 is not claimed as passing.** Triage of all twelve, none of which is a
+real credential and none of which this packet introduced:
+
+- Eight are `__SECRET_PLACEHOLDER__<KEY>__` markers. These are substitution tokens the SST loader
+  emits for the deploy adapter to replace at apply time, documented in the same file at
+  `scripts/commands/config.sh:497`, `:853`, `:1812`, and `:3299`. The literal committed value is
+  the marker string, not a secret.
+- One is a labelled test fixture (`test-webhook-secret-061-scope-05-bs001-fixture`), and one is a
+  `*_SECRET_REF` pointing at an environment variable *name*.
+- Four are `grep` patterns and `echo` strings inside `config_secret_rejection_test.sh` — the test
+  whose whole purpose is to REJECT a literal password reaching a production-class env file. Those
+  lines are the enforcement, not a leak.
+
+Attribution to this packet was measured, not assumed:
+
+```
+$ bash .github/bubbles/scripts/security-gate.sh --repo-root <operator-home>/smackerel 2>&1 \
+    | grep -cE 'internal/assistant/|internal/config/assistant|tests/e2e/assistant'
+0
+```
+
+Zero of the twelve fall inside this packet's changed surface. The scanner's matcher keys on the
+`NAME="value"` shape without distinguishing a placeholder from a real value; that precision gap is
+recorded as a row in `## Discovered Issues` dated 2026-08-23 with a concrete reference, and is not
+repairable from here because `.github/bubbles/` is framework-managed and MUST NOT be edited
+downstream.
+
+#### Supporting evidence — reviewed tree compiles and is SST-consistent
+
+Read-only review is only meaningful against a coherent tree, so the bounded check was executed:
+
+```
+$ timeout 900 ./smackerel.sh check
+config-validate: <operator-home>/smackerel/config/generated/dev.env.tmp.2757901
+OK
+Config is in sync with SST
+env_file drift guard: OK
+scenario-lint: scanning config/prompt_contracts (glob: *.yaml)
+scenarios registered: 17, rejected: 0
+scenario-lint: OK
+===CHECK_EXIT=0===
+```
+
+The full E2E suite was deliberately not run: it is slow and holds a `flock` suite lock, and none of
+the conclusions above depend on it. Every finding is grounded in source that was read and in the
+commands shown.
+
+#### Disposition
+
+`SEC-069-005-1` is routed to `bubbles.implement` and carries a row in `## Discovered Issues` dated
+2026-08-23. `SEC-069-005-2`, `SEC-069-005-3`, and `SEC-069-005-4` each carry a row in that same
+table with a concrete file reference and an explicit disposition. Nothing in this phase modified
+product or test source, checked a DoD item, changed a scope status, or wrote a certification field.
 
 
