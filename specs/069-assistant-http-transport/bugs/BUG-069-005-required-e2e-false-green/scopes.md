@@ -63,6 +63,16 @@ artifacts are not product implementation files.
 - `tests/e2e/assistant/intent_clarify_test.go`
 - `tests/e2e/assistant/intent_side_effect_test.go`
 - `tests/e2e/assistant/required_compiler_state_helpers_test.go`
+- `tests/e2e/assistant/required_no_skip_guard_test.go`
+
+The last entry was added 2026-08-23 closing AUDIT-069-005-1. It is this packet's
+headline deliverable — the guard that fails when any of the five
+manifest-required assistant E2E tests carries a skip-family call — and it was
+absent from the list while the packet was named for it. The list's preamble
+scopes itself retrospectively to the path set changed at revision `ebf41941`,
+and this file was first added later at `673bb6a0`, so its absence was a
+snapshot artifact rather than a boundary breach; recording it here makes the
+planning surface describe the delivery instead of predating it.
 
 ## Mechanical Excluded List
 

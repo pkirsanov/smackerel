@@ -1088,6 +1088,9 @@ for ownership routing and DoD disposition.
 | 2026-08-23 | SEC-069-005-2 (LOW): the disambiguation reference is `fmt.Sprintf("disambig-location-%d", emittedAt.UnixNano())` — a wall-clock nanosecond value with no random component, therefore predictable | recorded as not-exploitable-today with a named precondition: `resolveCompilerDisambig` matches the reference only against `conv.PendingDisambig` for the conversation already loaded from the auth-derived `(UserID, Transport)` key, so another user's reference is unreachable rather than merely hard to guess. No lookup in this path is keyed on the reference alone. The safety is a property of that lookup shape, so any future change resolving pending state by reference must add a `crypto/rand` component in the same change | `internal/assistant/compiled_interactions.go` `proposeCompilerLocationDisambiguation`; [security evidence](#security-phase--confirm-gating-and-guard-integrity-2026-08-23) |
 | 2026-08-23 | SEC-069-005-3 (LOW): the new required-test guard has two residual evasions — an indirect skip through a helper whose body calls `t.Skip()` is invisible because detection is scoped to the required function's own braces, and a nested closure using a receiver not named `t` (`func(sub *testing.T) { sub.Skip() }`) does not match the `\bt\.(Skip\|SkipNow\|Skipf)\(` pattern | recorded, not repaired in this phase: the direct `t.Skipf` form that caused THIS bug is caught and verified caught, so the guard closes the defect it was built for; body scoping is a deliberate design choice documented in the guard's own header and widening it would couple a required test's verdict to its neighbours. Closing the helper evasion needs call-graph analysis rather than a regex widening, which is a different piece of work from the one this packet scoped | `tests/e2e/assistant/required_no_skip_guard_test.go` `requiredNoSkipPattern`, `scanRequiredTestBodyForSkips`; [security evidence](#security-phase--confirm-gating-and-guard-integrity-2026-08-23) |
 | 2026-08-23 | SEC-069-005-4 (LOW): `requiredNoSkipTests` is a five-entry compile-time literal with no runtime cross-check against `scenario-manifest.json`. Emptying it is caught by an explicit `t.Fatal`, but removing a single entry silently narrows coverage while the guard stays green | recorded with a concrete remedy shape: derive the denylist from the manifest, or assert `len(requiredNoSkipTests)` equals the manifest's required-scenario count so drift fails loud. The file's own header already concedes the manual coupling. Not repaired here because the guard is test-surface owned by the implement/test phases and this phase is diagnostic | `tests/e2e/assistant/required_no_skip_guard_test.go` `requiredNoSkipTests`; `specs/069-assistant-http-transport/bugs/BUG-069-005-required-e2e-false-green/scenario-manifest.json`; [security evidence](#security-phase--confirm-gating-and-guard-integrity-2026-08-23) |
+| 2026-08-23 | AUDIT-069-005-1 (LOW): the Mechanical Allowed List in `scopes.md` does not name this packet's headline deliverable. `tests/e2e/assistant/required_no_skip_guard_test.go` appears nowhere in `scopes.md`, and the `#### Scope 3 Paths` block enumerates six files without it, so the packet's planning artifact does not describe the file the packet is actually about | recorded as planning-artifact accuracy, NOT a boundary violation, and routed to `bubbles.plan` for reconciliation when the packet's planning surface is next opened. Two disconfirming checks were run before assigning that class: the Mechanical Excluded List does not cover the file, and the Allowed List's own preamble scopes itself retrospectively to "the complete implementation path set changed at revision `ebf41941…`", so a file first added at `673bb6a0` is outside that snapshot by construction rather than by breach. The two checked "Change Boundary is respected and zero excluded file families were changed" items assert only that no EXCLUDED family changed and remain literally true; Scope 3, which delivered the guard, carries no such item, so no false boundary claim exists anywhere in the packet. **RESOLVED 2026-08-23T18:00Z by `bubbles.goal`**: `tests/e2e/assistant/required_no_skip_guard_test.go` was appended to `#### Scope 3 Paths` with an inline note recording why it was absent (the list's preamble is a retrospective snapshot of revision `ebf41941`; the file first appears at `673bb6a0`). Additive only — no existing path was reworded or removed, and the Excluded List is untouched, so the two checked change-boundary DoD items remain literally true | `specs/069-assistant-http-transport/bugs/BUG-069-005-required-e2e-false-green/scopes.md` `#### Scope 3 Paths`; `tests/e2e/assistant/required_no_skip_guard_test.go`; [audit evidence](#audit-phase--packet-integrity-under-adversarial-falsification-2026-08-23) |
+| 2026-08-23 | AUDIT-069-005-2 (INFO): the brief driving the audit phase described the discarded truncated pass/skip reading as `59/0/0`, while `report.md` records that discarded reading as `35 PASS / 5 SKIP`. Both agree the discarded figure was wrong and that `52 PASS / 0 FAIL / 12 SKIP` is the correction | no action required and nothing to repair in the artifact: the audit verified the CORRECTED figures directly at `report.md:1956`, counted the 12 named skips, and confirmed none is in the manifest-required five. The discrepancy is recorded rather than silently reconciled because restating an unverified externally-supplied number as an audit finding would reproduce the unverified-claim class this packet documents | `specs/069-assistant-http-transport/bugs/BUG-069-005-required-e2e-false-green/report.md:1956`; [audit evidence](#audit-phase--packet-integrity-under-adversarial-falsification-2026-08-23) |
+| 2026-08-23 | AUDIT-069-005-3 (MEDIUM): the `security` phase's recorded instants cannot be reconciled with the commit carrying them. `state.json` records `runStartedAt 2026-08-23T18:22:40Z`, `runEndedAt`/`claimedAt 2026-08-23T18:41:05Z`, but commit `9223ea8f`, which contains that record, has author AND committer date `2026-08-23T17:35:30+00:00` — 47 minutes BEFORE the claimed run start — and wall clock at audit time was `17:50:16Z`, still 32 minutes before it. Author-vs-committer backdating was ruled out: the two dates are identical. Check 7A did not catch it because that check tests only monotonic ordering and uniform spacing, and a single forward jump at the end of an increasing series trips neither; there is no wall-clock ceiling check on `claimedAt` | routed to `bubbles.security` to correct its own record, NOT edited here: a phase claim belongs to the agent that wrote it, and audit's mandate is additive evidence plus routing rather than mutation of another agent's state. The substantive security findings are unaffected and were spot-checked as grounded in re-runnable greps and file reads. Consequence recorded rather than engineered around: because this audit wrote its REAL instant (`17:50Z`), the claims array now contains a true backwards step at `security → audit` and Check 7A reports `CLAIM_OUT_OF_ORDER`. Writing a later timestamp, or declaring `claimedAtUnreconciled` on a claim that reconciles perfectly against a run happening now, were both rejected as fabrication and as the guard's own "bypass with extra steps". **RESOLVED 2026-08-23T17:58Z by `bubbles.goal`** in the orchestrator role, correcting the record audit correctly declined to mutate: the four future-dated security instants were rebounded to the interval git can prove the work occupied — start `17:17:45Z`, just after the preceding stabilize commit `3d85a532` (`17:17:40Z`), and end/claim `17:35:00Z`, just before commit `9223ea8f` (`17:35:30Z`) whose tree already contains the security artifacts. Both replacements are bounded by committer dates rather than chosen, `state.json` carries a `claimedAtCorrectionNote` and a `timestampCorrectionNote` naming the corrector and the evidence, and no finding, verdict, or evidence line was altered — only the clock. The audit's own `17:50:16Z` was deliberately left untouched because it was never the wrong value | `specs/069-assistant-http-transport/bugs/BUG-069-005-required-e2e-false-green/state.json` `execution.completedPhaseClaims[security]`; commit `9223ea8f`; [audit evidence](#audit-phase--packet-integrity-under-adversarial-falsification-2026-08-23) |
 | 2026-08-23 | The mechanical G034 floor `.github/bubbles/scripts/security-gate.sh` exits 1 with 12 `inline-credentials` findings. All twelve are in `scripts/commands/config.sh` and `scripts/commands/config_secret_rejection_test.sh`; none is a real credential (eight are `__SECRET_PLACEHOLDER__<KEY>__` substitution markers documented at `config.sh:497/853/1812/3299`, one is a labelled test fixture, one is a `*_SECRET_REF` naming an env var, four are grep/echo strings inside the test that exists to REJECT a literal password). The scanner matches the `NAME="value"` shape without distinguishing a placeholder from a value | pre-existing and unattributable to this packet, measured not assumed: `security-gate.sh \| grep -cE 'internal/assistant/\|internal/config/assistant\|tests/e2e/assistant'` returned `0`, so zero findings fall in the changed surface. G034 is therefore NOT claimed as passing by this phase. The scanner's precision gap is not repairable from this repository because `.github/bubbles/` is framework-managed and MUST NOT be edited downstream — the same ownership boundary already recorded for `TR-BUG-069-005-FRAMEWORK-001` | `TR-BUG-069-005-FRAMEWORK-001` in `state.json`; `scripts/commands/config.sh:497`; [security evidence](#security-phase--confirm-gating-and-guard-integrity-2026-08-23) |
 
 ## Test Continuation: Deterministic Weather And Readiness (2026-07-21)
@@ -2704,5 +2707,286 @@ commands shown.
 2026-08-23. `SEC-069-005-2`, `SEC-069-005-3`, and `SEC-069-005-4` each carry a row in that same
 table with a concrete file reference and an explicit disposition. Nothing in this phase modified
 product or test source, checked a DoD item, changed a scope status, or wrote a certification field.
+
+---
+
+### Audit Phase — Packet Integrity Under Adversarial Falsification (2026-08-23)
+
+**Phase:** audit
+**Agent:** bubbles.audit
+**Executed:** YES (current session)
+**Claim Source:** executed
+**Verdict:** SHIP_WITH_NOTES — one MEDIUM and one LOW finding routed; no fabricated evidence
+
+**Redaction:** absolute operator paths and the local account name are replaced with
+`<operator-home>` / `<operator>` throughout this section, matching the convention already used
+above. Shell prompt strings were stripped from every quoted transcript for the same reason. No
+command, exit code, or count was altered by that substitution.
+
+This packet exists because an exit code 0 lied. This audit was therefore run as an attempt to
+**falsify the packet's own claims**, not to confirm them. Seven lines of attack were pursued
+(A1-A7). Two of them produced false positives from my own over-strict detectors, which I
+disconfirmed by reading the source rather than reporting; both are recorded below, because an
+audit that hides its own wrong turns is asking for the same trust this packet withdrew.
+
+#### A1 — Is the fix real? Denylist-versus-manifest drift
+
+The guard claims to bind the five manifest-required identities. Drift between the two lists would
+leave a required test unguarded while the guard stayed green — the packet's own defect class.
+Both sets were extracted mechanically and compared:
+
+```text
+=== MANIFEST required set (file::name), deduped ===
+tests/e2e/assistant/annotation_intent_test.go::TestAnnotationIntentE2E_SlotsComeFromCompiledIntent
+tests/e2e/assistant/http_confirm_test.go::TestAssistantHTTPE2E_ConfirmAcceptExecutesGatedActionOnce
+tests/e2e/assistant/http_disambiguation_test.go::TestAssistantHTTPE2E_DisambiguationChoiceResolvesPendingTurn
+tests/e2e/assistant/intent_clarify_test.go::TestIntentCompilerE2E_SpringfieldWeatherClarifiesLocation
+tests/e2e/assistant/intent_side_effect_test.go::TestIntentCompilerE2E_ListWriteRequiresConfirmationBeforePersistence
+MANIFEST_COUNT= 5
+```
+
+The guard's `requiredNoSkipTests` literal at `required_no_skip_guard_test.go:94-117` carries the
+same five basenames and the same five function names, each tagged `SCN-BUG069005-001..005`.
+**Zero drift.** All five manifest paths are under `tests/e2e/assistant/`, which is also the
+directory the guard anchors on via `runtime.Caller(0)`, so the basename-join resolves correctly
+today. That directory agreement is load-bearing and undeclared — a future manifest entry outside
+this directory would be silently unguarded — and is the same manual-coupling class already
+recorded as `SEC-069-005-4`.
+
+Existence and skip-freeness were then checked **independently of the guard**, so that the guard
+passing is not the only evidence that the guard's premise holds:
+
+```text
+=== existence of the five required funcs (independent of guard) ===
+annotation_intent_test.go   :: TestAnnotationIntentE2E_SlotsComeFromCompiledIntent            -> declarations=1
+intent_clarify_test.go      :: TestIntentCompilerE2E_SpringfieldWeatherClarifiesLocation      -> declarations=1
+http_disambiguation_test.go :: TestAssistantHTTPE2E_DisambiguationChoiceResolvesPendingTurn   -> declarations=1
+intent_side_effect_test.go  :: TestIntentCompilerE2E_ListWriteRequiresConfirmationBeforePersistence -> declarations=1
+http_confirm_test.go        :: TestAssistantHTTPE2E_ConfirmAcceptExecutesGatedActionOnce      -> declarations=1
+
+=== skip-family tokens anywhere in the five files ===
+skipscan_exit=1 (1 == zero matches == clean)
+```
+
+The grep is whole-file, which is *stricter* than the guard's body-scoped assertion: it would fire
+on a skip anywhere in those files, including helpers. It found none.
+
+#### A2 — Does the guard actually execute, and does it run outside the e2e tag?
+
+The file's header claims it deliberately omits `//go:build e2e` so it runs even when the gated
+suite is off. That claim is checkable by running the **unit** lane, which does not set the e2e
+tag. The full E2E suite was NOT run: it is slow and holds a `flock` suite lock (exit 73).
+
+**Command:** `./smackerel.sh test unit --go --go-run 'TestRequiredAssistantE2ETestsNeverSkip|TestRequiredNoSkipGuard_AdversarialFinding' --verbose`
+**Exit Code:** 0
+
+```text
+--- PASS: TestRequiredAssistantE2ETestsNeverSkip (0.02s)
+--- PASS: TestRequiredNoSkipGuard_AdversarialFinding (0.00s)
+    --- PASS: TestRequiredNoSkipGuard_AdversarialFinding/skip_inside_required_test_is_caught (0.00s)
+    --- PASS: TestRequiredNoSkipGuard_AdversarialFinding/skipnow_and_skipf_are_caught (0.00s)
+    --- PASS: TestRequiredNoSkipGuard_AdversarialFinding/clean_required_test_reports_nothing (0.00s)
+    --- PASS: TestRequiredNoSkipGuard_AdversarialFinding/skip_in_neighbouring_func_is_ignored (0.00s)
+    --- PASS: TestRequiredNoSkipGuard_AdversarialFinding/brace_in_string_literal_does_not_break_boundaries (0.00s)
+    --- PASS: TestRequiredNoSkipGuard_AdversarialFinding/renamed_or_deleted_required_test_is_reported_missing (0.00s)
+    --- PASS: TestRequiredNoSkipGuard_AdversarialFinding/method_named_skip_is_not_a_match (0.00s)
+PASS
+ok      github.com/smackerel/smackerel/tests/e2e/assistant      0.040s
+[go-unit] go test ./... finished OK
+AUDIT_GUARD_EXIT=0
+```
+
+A grep for `FAIL`, `--- FAIL`, and `SKIP` across the whole 541-line capture returned nothing.
+The untagged-execution claim is therefore **verified by observation, not accepted on assertion**:
+the package ran and reported real per-test lines under a lane that never sets the e2e tag.
+
+#### A3 — Is the recorded evidence internally consistent?
+
+The specific risk flagged for this audit was a truncated capture that briefly produced a wrong
+pass/skip count. Current state of the artifact:
+
+- `report.md:1956` carries **`52 top-level PASS, 0 FAIL, 12 SKIP`** — the corrected figures.
+- `report.md:1975-1993` enumerates the 12 skips **by name**. I counted them: exactly 12.
+  Internally consistent with the stated count, and **none of the 12 is in the required five**.
+- `report.md:1927` carries `5 top-level PASS, 0 FAIL, 0 SKIP` for the required-five run, and each
+  of the five has its own `--- PASS:` line rather than only a package `ok` line.
+- The truncation artifact is **disclosed in the artifact itself** at `report.md:2018-2024`, under
+  the heading "the counts in Command 2 were corrected mid-session, and the first reading was
+  wrong", together with a second qualification that Command 3's retained output is a tail.
+
+A search for a surviving `59` returned three hits, all inspected and none a pass/skip claim:
+`45 files changed, 6036 insertions(+), 59 deletions(-)` and two further diffstat restatements,
+plus one substring match inside the timestamp `01:59:29Z`. **No surviving contradiction.**
+
+One honest discrepancy, reported rather than smoothed over: the brief for this audit described
+the discarded intermediate reading as `59/0/0`, whereas the artifact records it as
+`35 PASS / 5 SKIP`. Both agree the discarded number was wrong and that `52/0/12` is the
+correction, so the audit conclusion is unchanged; I record the difference because adopting the
+brief's figure silently would be exactly the unverified restatement this packet is about.
+
+#### A4 — Are the DoD items honestly checked?
+
+31 checked, 1 unchecked. The unchecked item is `scopes.md:1049`,
+"`bubbles.validate` reconciles certification and any parent Spec 069 invalidation only after
+executable evidence is complete" — correctly left for its owner and untouched by this phase.
+
+Every one of the 31 checked items was machine-scanned for a complete evidence block:
+
+```text
+=== checked items missing any evidence component ===
+   NONE — all 31 checked items carry Phase/Command/ExitCode/ClaimSource/raw-block/Evidence-ref
+
+=== thin evidence blocks (<6 quoted output lines) ===
+   NONE
+```
+
+**Two false positives of my own, disconfirmed by reading the source.** My first detector required
+the literal `**Executed:**` header and flagged 14 items; reading `scopes.md:173-190` showed those
+items use `**Claim Source:** executed` with full `**Command:**` / `**Exit Code:**` / fenced raw
+output / `Evidence:` — a complete block in the older header shape. My second detector used a
+singular `**Command:**` regex and flagged `scopes.md:983`; that item uses plural
+`**Commands:**` / `**Exit Codes:**`. Neither was a defect in the packet. Both are recorded here
+because a detector that over-fires is the mirror image of one that under-fires, and this packet's
+whole subject is trusting a mechanical verdict without reading what it measured.
+
+The regression-E2E items called out for sampling number **six**, not four — Scopes 1, 2 and 3 each
+carry a "Scenario-specific E2E regression tests…" / "Broader E2E regression suite passes." pair at
+`scopes.md:360/384`, `755/779`, and `983/1001`. All six carry a named command and a real exit code.
+
+#### A5 — Do the phase claims match reality?
+
+```text
+=== ORPHAN CHECK: each claim must have a history entry with SAME agent AND SAME phase ===
+  claim regression  agent=bubbles.regression   -> matching history entries=1
+  claim implement   agent=bubbles.implement    -> matching history entries=2
+  claim test        agent=bubbles.test         -> matching history entries=1
+  claim simplify    agent=bubbles.simplify     -> matching history entries=1
+  claim stabilize   agent=bubbles.stabilize    -> matching history entries=1
+  claim security    agent=bubbles.security     -> matching history entries=1
+  ORPHANED_CLAIMS=NONE
+```
+
+All six claims are `dict` records carrying `provenanceMode: specialist`; none is a bare string.
+`certification.certifiedCompletedPhases` is `[]`.
+
+The six `evidenceRef` anchors were then resolved against the actual headings, because a citation
+that points nowhere is a fabricated citation:
+
+```text
+  RESOLVED  #regression-evidence-bug-069-005                                  -> report.md:1736
+  RESOLVED  #required-test-no-skip-guard-2026-08-23                           -> report.md:81
+  RESOLVED  #test-phase--required-e2e-execution-2026-08-23                    -> report.md:1914
+  RESOLVED  #simplify-phase--review-of-the-landed-diff-2026-08-23             -> report.md:2053
+  RESOLVED  #stabilize-phase--operational-risk-of-the-landed-guard-2026-08-23 -> report.md:2171
+  RESOLVED  #security-phase--confirm-gating-and-guard-integrity-2026-08-23    -> report.md:2381
+  UNRESOLVED_COUNT=0
+```
+
+#### A6 — Change Boundary
+
+```text
+=== files changed e4618e8e..HEAD ===
+specs/069-assistant-http-transport/bugs/BUG-069-005-required-e2e-false-green/report.md
+specs/069-assistant-http-transport/bugs/BUG-069-005-required-e2e-false-green/scopes.md
+specs/069-assistant-http-transport/bugs/BUG-069-005-required-e2e-false-green/state.json
+tests/e2e/assistant/required_no_skip_guard_test.go
+count=4
+
+=== any .github/bubbles/ file touched since e4618e8e? ===
+(no output — none)
+```
+
+Three packet artifacts plus the one delivered guard. **Zero framework-managed files touched**, and
+zero surfaces from the Mechanical Excluded List: no parent Spec 069 artifact, no other packet, no
+public assistant HTTP v1 schema, no test-only ingress, no runtime environment detection or hidden
+default, no release-train or flag bundle, no secrets/deployment/topology.
+
+**AUDIT-069-005-1 (LOW)** — the Mechanical Allowed List does not name this packet's headline
+deliverable. `tests/e2e/assistant/required_no_skip_guard_test.go` appears nowhere in `scopes.md`;
+the `#### Scope 3 Paths` block lists six files and the guard is not among them.
+
+This is **not** a boundary violation, and I checked the two things that would make it one. First,
+the Excluded List does not cover the file. Second, the Allowed List's own preamble declares itself
+retrospective — "the complete implementation path set changed at revision `ebf41941…`" — so a file
+first added later at `673bb6a0` falls outside that snapshot by construction rather than by breach.
+The two checked "Change Boundary is respected and zero excluded file families were changed" items
+at `scopes.md:317` and `scopes.md:654` remain literally true, because they assert only that no
+*excluded* family changed; and Scope 3, which delivered the guard, carries no such item, so no
+false boundary claim was made anywhere in the packet. The finding is planning-artifact accuracy
+only, owned by `bubbles.plan`, and carries a row in `## Discovered Issues` dated 2026-08-23.
+
+#### A7 — Timestamp reconcilability (the check that actually found something)
+
+Recording this phase required choosing a `claimedAt`, which meant reading the existing ones. They
+do not reconcile:
+
+```text
+=== author vs committer dates, last 4 commits ===
+9223ea8f  A=2026-08-23T17:35:30+00:00  C=2026-08-23T17:35:30+00:00  security(BUG-069-005): review confirm gating and guard integrity; one MEDIUM routed
+3d85a532  A=2026-08-23T17:17:40+00:00  C=2026-08-23T17:17:40+00:00  stabilize(BUG-069-005): record operational-risk assessment of the landed no-skip guard
+
+=== wall clock now (UTC) ===
+2026-08-23T17:50:16Z
+
+=== claimedAt values in order ===
+  regression 2026-08-23T02:14:33Z
+  implement  2026-08-23T05:29:09Z
+  test       2026-08-23T06:52:26Z
+  simplify   2026-08-23T07:06:11Z
+  stabilize  2026-08-23T17:12:40Z
+  security   2026-08-23T18:41:05Z
+
+ hist bubbles.security 2026-08-23T18:41:05Z runStarted= 2026-08-23T18:22:40Z runEnded= 2026-08-23T18:41:05Z
+```
+
+**AUDIT-069-005-3 (MEDIUM)** — the security phase's recorded instants are **future-dated and
+cannot be reconciled with the commit that carries them**. It records a run window of
+`18:22:40Z → 18:41:05Z`, but commit `9223ea8f`, which contains that very record, has an author
+*and* committer date of `17:35:30Z` — 47 minutes **before** the claimed run start. The current
+wall clock, `17:50:16Z`, is still 32 minutes before that claimed start. Author-vs-committer date
+confusion was ruled out explicitly: both dates are identical, so no backdating explains it.
+
+This does not invalidate the security phase's substantive findings, which are grounded in greps
+and file reads I can re-run. But a recorded instant that could not have occurred is the timestamp
+form of exactly the unverified claim this packet exists to police, and it is worth stating plainly
+that **the mechanical guard did not catch it**: Check 7A tests only monotonic ordering and uniform
+spacing across claims, so a single forward jump at the end of an otherwise increasing series is
+invisible to it. There is no wall-clock ceiling check on `claimedAt`. Routed to `bubbles.security`
+to correct its own record; it carries a row in `## Discovered Issues` dated 2026-08-23.
+
+**Consequence for this phase's own record, stated rather than engineered around.** This audit
+executed at `17:50Z` and recorded that real instant. Because the preceding `security` claim is
+future-dated to `18:41:05Z`, the claims array now contains a genuine backwards step at
+`security → audit`, and Check 7A reports `CLAIM_OUT_OF_ORDER`. That signal is **true**: the array
+does run backwards. It is caused by the future-dated claim, not by this one.
+
+Two alternatives were available and both were rejected. Writing a `claimedAt` after `18:41:05Z`
+would have produced a clean guard run by recording a time at which no work occurred — the precise
+fabrication class this packet documents. Setting `claimedAtUnreconciled: true` on this claim would
+also have cleared it, but that escape is defined in the guard's own source as being for "a claim
+whose instant could never be reconciled against a real run"; this claim reconciles perfectly
+against a run happening now, so declaring otherwise would be, in the guard's own words, "a bypass
+with extra steps". The honest record is the real timestamp plus this paragraph.
+
+#### Verdict
+
+| Line of attack | Result |
+|---|---|
+| A1 guard denylist vs manifest | no drift; 5/5 identities match; verified independently of the guard |
+| A2 guard executes, untagged | PASS + PASS, 7/7 subtests, exit 0, zero FAIL/SKIP lines in 541 |
+| A3 evidence consistency | corrected 52/0/12 present; 12 skips enumerated and counted; no surviving contradiction |
+| A4 DoD honesty | 31/31 checked items carry complete evidence; the 1 unchecked is validate-owned |
+| A5 phase-claim provenance | 6/6 dict + specialist; zero orphans; 6/6 evidence anchors resolve |
+| A6 change boundary | 4 files; zero excluded surfaces; zero framework files; one LOW list-staleness finding |
+| A7 timestamp reconcilability | **one MEDIUM: security's run window post-dates its own commit by 47 min** |
+
+**The packet's fix and evidence are sound. No fabricated evidence was found**, and no checked DoD
+item was found unsupported. Two findings are routed and neither blocks the substantive work:
+`AUDIT-069-005-1` (LOW, planning-artifact accuracy, to `bubbles.plan`) and `AUDIT-069-005-3`
+(MEDIUM, unreconcilable recorded instants, to `bubbles.security`).
+
+This phase modified NO product or test source, checked NO DoD item, changed NO scope status, and
+wrote NO certification field. `certification.certifiedCompletedPhases` remains `[]` and writable
+solely by `bubbles.validate`, whose phase is the one remaining `G022` block.
 
 
