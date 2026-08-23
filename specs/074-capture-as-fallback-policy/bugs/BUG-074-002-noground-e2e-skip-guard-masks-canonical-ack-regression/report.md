@@ -116,9 +116,9 @@ sha256sum tests/e2e/assistant/capture_fallback_trigger_e2e_test.go
 117** — all below it. The unconditional assertions are at **83, 86, 89** — all
 above it. A second `t.Skipf` sits at **71**.
 
-**Line-number reconciliation with DI-5:** every line number carried forward from
-the DI-5 finding was re-verified and is **correct as stated**. No corrections
-were required. One precision note, not a correction: DI-5 and the filing brief
+**Line-number reconciliation with DI-5:** every line number `carried forward`
+from the DI-5 finding was re-verified and is **correct as stated**. No
+corrections were required. One precision note, not a correction: DI-5 and the filing brief
 refer to the guard as "line 98" and "line 99" respectively; both are right —
 `if` at 98, `t.Skipf(` at 99, its argument continuation at 100. Likewise the
 header claim is introduced at **16** (`// Adversarial coverage:`) while the
@@ -244,7 +244,11 @@ rendering. It says nothing about the branch taken **today at HEAD
 It was **NOT verified** which branch the live stack currently takes for the
 prompt `"what is the population of the fictional city of Zorthonia-by-the-Sea in
 2024?"`. That requires a live run against the disposable stack, which was **not
-performed** — this is a filing task and starting the stack was out of scope.
+performed** — this is a filing task, and starting the stack was outside its
+declared mandate in `spec.md` → *Non-Goals*. The live run is tracked as the
+unchecked DoD item *"The open unknown is resolved"* in `scopes.md` →
+*Definition of Done*, and is owned by `bubbles.test` per `state.json` →
+`routing.nextRequiredOwner`.
 
 **The defect holds regardless of the answer.** Were that prompt ever to move onto
 the honest-refusal branch, the test would report **SKIP rather than FAIL** and
@@ -547,8 +551,9 @@ returned by this task.
 | DI-5 | 2026-08-23 | The strict `default:` branch now fails on an honest live infrastructure failure (for example `StatusUnavailable` + `ErrProviderUnavailable` when the LLM provider is down), because such an envelope is neither a capture, nor a typed no-ground refusal, nor grounded. | **Intentional, and it follows the packet's own Gherkin.** SCN-BUG-074-002-01 in `scopes.md` requires a failure whenever the status is not `saved_as_idea` and no grounded sources are present, and SCN-BUG-074-002-04 permits only the 503 adapter skip. Reporting a provider outage loudly is the specified behaviour; the failure message names that case explicitly so `bubbles.test` can classify a red run correctly. If live runs show this is operationally noisy, the remedy is a planning decision on `scopes.md` SCN-BUG-074-002-01, not a quiet relaxation of the assertion. | `scopes.md` → SCN-BUG-074-002-01, SCN-BUG-074-002-04; `tests/e2e/assistant/capture_fallback_trigger_e2e_test.go` `default:` branch |
 
 No other issues surfaced. No sweep for the analogous pattern elsewhere in the
-repository was performed; `spec.md` → *Non-Goals* records that as deliberately
-out of scope rather than as a completed check.
+repository was performed; `spec.md` → *Non-Goals* records that sweep as a
+declared non-goal of this packet rather than as a completed check, and DI-6 below
+is the one instance that surfaced incidentally while executing the suite.
 
 **DI-6 (2026-08-23, found while executing the suite, not by a sweep).** One
 analogous instance surfaced incidentally in the broader package run and is

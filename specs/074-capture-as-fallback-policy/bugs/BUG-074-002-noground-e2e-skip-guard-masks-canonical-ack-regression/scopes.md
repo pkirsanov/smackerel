@@ -2,16 +2,18 @@
 
 Links: [bug.md](bug.md) | [spec.md](spec.md) | [design.md](design.md) | [report.md](report.md) | [uservalidation.md](uservalidation.md)
 
-> **Filing state.** This packet was filed by `bubbles.bug` as a FILING +
-> ROOT-CAUSE task. **No fix was implemented and none is claimed.** Every DoD item
-> below is deliberately unchecked. The scope is routed to `bubbles.implement`;
-> see `state.json` → `routing` and `transitionRequests`.
+> **Execution state (updated 2026-08-23).** Filed 2026-08-18 by `bubbles.bug` as
+> a FILING + ROOT-CAUSE task, which implemented nothing. The implementation
+> landed 2026-08-23 at commit `343d6076` under `bubbles.implement`; see
+> `report.md` → *Implementation Delta*. Every DoD item below is still unchecked
+> because the test, regression and validation phases have not run. Remaining
+> ownership sits with `bubbles.test`; see `state.json` → `routing`.
 
 ## Scope 1: Make the no-ground live E2E fail — not skip — on a canonical-ack regression
 
-**Status:** Not Started
+**Status:** In Progress
 **Depends On:** none
-**Owner:** `bubbles.implement`
+**Owner:** `bubbles.test`
 **Scope-Id:** SCOPE-BUG-074-002-01
 
 ### Change Boundary
@@ -96,6 +98,7 @@ its shape.
 | TP-B074-002-03 | SCN-BUG-074-002-03 | Contract regression | `e2e-api` | `tests/e2e/assistant/capture_fallback_trigger_e2e_test.go` | The four SCOPE-074-04B assertions still hold on the capture path | `./smackerel.sh test e2e --go-package assistant --go-run 'CaptureFallbackOpenKnowledgeNoGround'` | Yes |
 | TP-B074-002-04 | SCN-BUG-074-002-04 | Bailout scan | `unit` | `tests/e2e/assistant/capture_fallback_trigger_e2e_test.go` | Static scan proves the only `t.Skip` in executable code is the 503 adapter guard | `grep -nE 't\.Skip\|t\.Errorf\|t\.Fatalf' tests/e2e/assistant/capture_fallback_trigger_e2e_test.go` | No |
 | TP-B074-002-05 | all | Neighbour regression | `e2e-api` | `tests/e2e/assistant/` | Full assistant e2e package shows no collateral regression | `./smackerel.sh test e2e --go-package assistant` | Yes |
+| TP-B074-002-06 | SCN-BUG-074-002-01, SCN-BUG-074-002-03 | Regression E2E | `e2e-api` | `tests/e2e/assistant/capture_fallback_trigger_e2e_test.go` :: `TestAssistantHTTPE2E_CaptureFallbackOpenKnowledgeNoGround` | Regression: the persistent live-stack E2E that permanently protects the SKIP→FAIL flip and the SCOPE-074-04B canonical-ack contract against reintroduction of a status-keyed escape hatch | `./smackerel.sh test e2e --go-package assistant --go-run 'CaptureFallbackOpenKnowledgeNoGround'` | Yes |
 
 ### Definition of Done — Tiered Validation
 
@@ -111,6 +114,12 @@ its shape.
 - [ ] Policy compliance: no failure-condition early exit remains, per `.github/copilot-instructions.md` line 331. → Evidence: [report.md](report.md)
 - [ ] Change boundary honoured: the diff touches only `tests/e2e/assistant/capture_fallback_trigger_e2e_test.go` and this packet; zero `internal/` changes. → Evidence: [report.md](report.md)
 - [ ] If option (b) was adopted instead of the primary, the falsifiable condition in `design.md` is shown to have been met by live evidence. → Evidence: [report.md](report.md)
+- [ ] `SCN-BUG-074-002-01` holds on the live stack: an envelope whose status is not `saved_as_idea` and which carries no grounded sources makes the test report a failure, and the same run reports no skip. → Evidence: [report.md](report.md)
+- [ ] `SCN-BUG-074-002-02` holds on the live stack: a turn the model genuinely grounded — at least one source, capture route false — passes without asserting the capture acknowledgement, and reports no skip. → Evidence: [report.md](report.md)
+- [ ] `SCN-BUG-074-002-03` holds on the live stack: on a captured no-ground turn the test asserts capture route true, confirm card absent, disambiguation prompt absent, and the canonical saved-as-idea acknowledgement present in the body. → Evidence: [report.md](report.md)
+- [ ] `SCN-BUG-074-002-04` holds as shipped, and shipped reality is TWO infrastructure-keyed skips rather than the single one the scenario's title and Given describe: HTTP 503 `assistant_http_not_ready` (the adapter never bound) and `error_cause=provider_unavailable` (upstream failed before the grounding decision was reached). Both key on infrastructure availability and neither keys on the `saved_as_idea` status the canonical-ack assertions police, so the scenario's Then clause — skip permitted only for infrastructure unavailability — is satisfied. This item records the second skip faithfully instead of narrowing the scenario to match delivery; the title/Given divergence is planning-owned and is recorded here so it stays visible. → Evidence: [report.md](report.md)
+- [ ] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior exist and pass: `TestAssistantHTTPE2E_CaptureFallbackOpenKnowledgeNoGround` in `tests/e2e/assistant/capture_fallback_trigger_e2e_test.go` permanently covers the SKIP→FAIL flip (`SCN-BUG-074-002-01`), the grounded-turn control (`SCN-BUG-074-002-02`) and the canonical-ack contract (`SCN-BUG-074-002-03`) per Test Plan row TP-B074-002-06. → Evidence: [report.md](report.md)
+- [ ] Broader E2E regression suite passes: the full `tests/e2e/assistant/` package runs green with zero skipped required tests, proving no neighbouring assistant regression was introduced (TP-B074-002-05). → Evidence: [report.md](report.md)
 
 **Build Quality Gate**
 

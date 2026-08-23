@@ -13,7 +13,7 @@
   "releaseTrain": "mvp",
   "flagsIntroduced": [],
   "createdAt": "2026-08-18T00:00:00Z",
-  "lastUpdatedAt": "2026-08-23T23:05:01Z",
+  "lastUpdatedAt": "2026-08-23T23:22:51Z",
   "certifiedAt": null,
   "certifiedBy": null,
   "discoveredBy": "bubbles.bug (finding DI-5 during BUG-061-009 close-out)",
@@ -67,10 +67,10 @@
       {
         "scopeId": "SCOPE-BUG-074-002-01",
         "title": "Make the no-ground live E2E fail — not skip — on a canonical-ack regression",
-        "owner": "bubbles.implement",
-        "dodCount": 13,
+        "owner": "bubbles.test",
+        "dodCount": 19,
         "dodComplete": 0,
-        "status": "not_started",
+        "status": "in_progress",
         "dependsOn": []
       }
     ]
@@ -83,7 +83,7 @@
     "certifierAgent": null,
     "certifiedAt": null,
     "scopeProgress": [
-      {"scopeId": "SCOPE-BUG-074-002-01", "status": "not_started", "dodComplete": 0, "dodTotal": 13}
+      {"scopeId": "SCOPE-BUG-074-002-01", "status": "in_progress", "dodComplete": 0, "dodTotal": 19}
     ],
     "achievedAssuranceLevel": "root cause established by static source inspection with executed evidence; zero fix assurance",
     "pendingGates": [
