@@ -97,7 +97,7 @@ of the following:
 |-------|------|------------|--------------|--------|
 | 1 | Compiler SST, provider transport, and core wiring | none | SCN-BUG069005-001, SCN-BUG069005-002 | Done |
 | 2 | Persistent disambiguation and confirmation state | Scope 1 | SCN-BUG069005-003, SCN-BUG069005-004, SCN-BUG069005-005 | Done |
-| 3 | Strict required E2E and product guard proof | Scopes 1, 2 | all five | In Progress |
+| 3 | Strict required E2E and product guard proof | Scopes 1, 2 | all five | Done |
 
 ## Scope 1: Compiler SST, provider transport, and core wiring
 
@@ -813,7 +813,7 @@ All items require current-session command evidence before checking.
 
 ## Scope 3: Strict required E2E and product guard proof
 
-**Status:** In Progress
+**Status:** Done
 **Priority:** P0
 **Scope-Kind:** tests-and-governance
 **Depends On:** Scopes 1, 2
@@ -1056,6 +1056,58 @@ Scenario: SCN-BUG069005-006 - Required tests fail closed instead of skipping
    > RESULT: PASSED (0 warnings)
    > ```
    > Evidence: [report.md#packet-guards-and-test-fidelity](report.md#packet-guards-and-test-fidelity)
-- [ ] `bubbles.validate` reconciles certification and any parent Spec 069 invalidation only after executable evidence is complete.
+- [x] `bubbles.validate` reconciles certification and any parent Spec 069 invalidation only after executable evidence is complete.
+   > **Phase:** validate
+   > **Executed:** YES (current session, 2026-08-23, by bubbles.validate)
+   > **Claim Source:** executed for the commands below; interpreted for the
+   > reconciliation decision, which is a judgement applied to that output.
+   > **Commands:** independent required-test verification; guard execution through
+   > the UNIT lane; parent Spec 069 transition guard run before AND after the edit
+   > **Exit Codes:** grep 1 (zero skip matches), 0 (guard run), 1/1 (parent guard,
+   > unchanged on both sides)
+   > The precondition this item names — "only after executable evidence is
+   > complete" — was tested first rather than assumed. All five manifest-required
+   > identities were confirmed present and skip-free by whole-file search, which is
+   > stricter than the guard's own body-scoped assertion, and the guard itself was
+   > executed through the UNIT lane, which never sets the e2e build tag.
+   > ```text
+   > $ grep -nE '\.(Skip|Skipf|SkipNow)\(' <the five required files>
+   > SKIP_SCAN_EXIT=1
+   > $ ./smackerel.sh test unit --go --go-run 'RequiredNoSkip|RequiredAssistantE2ETestsNeverSkip' --verbose
+   > --- PASS: TestRequiredAssistantE2ETestsNeverSkip (0.03s)
+   > --- PASS: TestRequiredNoSkipGuard_AdversarialFinding (0.01s)
+   >     (7 named subtests, each --- PASS)
+   > ok      github.com/smackerel/smackerel/tests/e2e/assistant      0.063s
+   > 538 lines retained; 9 PASS; 0 FAIL; 0 SKIP
+   > ===GUARD_UNIT_VERBOSE_EXIT=0===
+   > ```
+   > RECONCILIATION PERFORMED. The contradiction is real and internal to the parent:
+   > all five falsely-green tests are named in Spec 069's own `scenario-manifest.json`
+   > as `regressionRequired: true` linked tests, in its `scopes.md` Test Plan rows,
+   > and in its `test-plan.json`, under `SCN-068-A03`, `SCN-068-A04`, `SCN-068-A05`,
+   > `SCN-069-A03`, `SCN-069-A04`. One additive `certificationEvidenceReconciliation`
+   > record was appended to `specs/069-assistant-http-transport/state.json` naming
+   > those five scenarios and tests, recording that the parent's 2026-06-02 evidence
+   > for them was a false green, and recording that the sound evidence now exists but
+   > was produced by THIS packet rather than by the parent.
+   > INVALIDATION DELIBERATELY NOT PERFORMED. The parent's `status` and
+   > `certification.status` remain `done`. Invalidation forces rework that has not
+   > happened; here it has happened, under this packet, and the same five tests ran
+   > at 5 PASS / 0 FAIL / 0 SKIP. Demoting the parent would assert those behaviors
+   > are unproven, which is false today — a fabrication in the opposite direction
+   > from the one this packet exists to correct.
+   > Non-destructiveness was measured, not assumed:
+   > ```text
+   > $ bash .github/bubbles/scripts/state-transition-guard.sh specs/069-assistant-http-transport
+   > BEFORE:  failureCount: 16   failedGateIds: [G022,G088,G095,G136]
+   > AFTER:   failureCount: 16   failedGateIds: [G022,G088,G095,G136]
+   > ```
+   > Identical on both sides. Gate G088 tracks `spec.md`, `design.md`, and
+   > `scopes.md` only, so a `state.json` record cannot create a post-certification
+   > planning-truth edit. The parent's pre-existing 16-failure current-policy debt is
+   > unrelated to these five tests, is not repaired here, and is recorded with its
+   > disposition in the `## Discovered Issues` table row dated 2026-08-23 that names
+   > `specs/069-assistant-http-transport/state.json`.
+   > Evidence: [report.md#validate-phase--certification-and-parent-spec-069-reconciliation-2026-08-23](report.md#validate-phase--certification-and-parent-spec-069-reconciliation-2026-08-23)
 
 All items require current-session command evidence before checking.

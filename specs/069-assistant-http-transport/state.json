@@ -7,6 +7,21 @@
   "certifiedAt": "2026-06-06T17:00:00Z",
   "certifiedBy": "bubbles.workflow",
   "lastUpdatedAt": "2026-06-06T17:00:00Z",
+  "certificationEvidenceReconciliation": [
+    {
+      "reconciledAt": "2026-08-23T18:12:25Z",
+      "reconciledBy": "bubbles.validate",
+      "sourcePacket": "specs/069-assistant-http-transport/bugs/BUG-069-005-required-e2e-false-green",
+      "statusChanged": false,
+      "class": "evidence-provenance-correction",
+      "finding": "This spec's certification rested in part on evidence that was a false green. Five of its own regressionRequired linked tests reported a passing package exit while every one of them called a Go skip-family method, so zero of the five required behaviors actually executed. The affected scenarios are SCN-068-A03, SCN-068-A04, SCN-068-A05 (cross-spec, authored in specs/068-structured-intent-compiler, HTTP proof owned here), and SCN-069-A03, SCN-069-A04. The affected tests are TestIntentCompilerE2E_ListWriteRequiresConfirmationBeforePersistence, TestAnnotationIntentE2E_SlotsComeFromCompiledIntent, TestIntentCompilerE2E_SpringfieldWeatherClarifiesLocation, TestAssistantHTTPE2E_DisambiguationChoiceResolvesPendingTurn, and TestAssistantHTTPE2E_ConfirmAcceptExecutesGatedActionOnce. All five are named in this spec's own scenario-manifest.json linkedTests, scopes.md Test Plan rows, and test-plan.json, so the contradiction is internal to this spec and not an external opinion about it.",
+      "affectedCertifiedPhases": ["test", "validate"],
+      "resolution": "Sound evidence now exists, but it was produced by BUG-069-005 and NOT by this spec's own 2026-06-02 test run. Under that packet the missing runtime path was implemented, the skip-family bailouts were removed, and the same five tests were executed by bubbles.test on 2026-08-23 reporting 5 PASS / 0 FAIL / 0 SKIP with package exit 0. A denylist guard bound to those five identities, tests/e2e/assistant/required_no_skip_guard_test.go, now fails if any of the five carries a skip-family call in its body or is deleted or renamed, so the specific false-green recurrence is mechanically blocked.",
+      "whyStatusUnchanged": "status and certification.status stay 'done' because the behaviors this spec claims are proven to work TODAY, and downgrading would assert the opposite. Invalidation is the instrument for forcing rework that has not happened; here the rework HAS happened, in the bug packet named above. Recording a provenance correction is therefore the honest action and demoting the spec would be a false claim in the other direction. This is a correction to the AUDIT TRAIL, not an assertion that the behavior is broken.",
+      "residualCaveat": "Anyone auditing this spec must not treat its 2026-06-02 certification evidence as self-sufficient proof for the five scenarios listed above. For those five, the load-bearing evidence lives in the bug packet's report.md, not in this spec's report.md. The remaining certified phases and the other scenarios in this spec are untouched by this reconciliation and are not re-asserted by it.",
+      "scopeOfThisEdit": "Additive only. No existing field was reworded, removed, or renumbered; no scope status, DoD item, phase claim, or planning-truth file (spec.md, design.md, scopes.md) was modified, so the Gate G088 post-certification spec-edit surface is untouched. This spec independently failed 16 current-policy guard checks (G022, G088, G095, G136) both before and after this edit; none of those failures relates to the five tests above and none is introduced or repaired here."
+    }
+  ],
   "workflowMode": "full-delivery",
   "statusCeiling": "done",
   "linkedImplementationSpec": null,

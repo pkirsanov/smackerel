@@ -1092,6 +1092,8 @@ for ownership routing and DoD disposition.
 | 2026-08-23 | AUDIT-069-005-2 (INFO): the brief driving the audit phase described the discarded truncated pass/skip reading as `59/0/0`, while `report.md` records that discarded reading as `35 PASS / 5 SKIP`. Both agree the discarded figure was wrong and that `52 PASS / 0 FAIL / 12 SKIP` is the correction | no action required and nothing to repair in the artifact: the audit verified the CORRECTED figures directly at `report.md:1956`, counted the 12 named skips, and confirmed none is in the manifest-required five. The discrepancy is recorded rather than silently reconciled because restating an unverified externally-supplied number as an audit finding would reproduce the unverified-claim class this packet documents | `specs/069-assistant-http-transport/bugs/BUG-069-005-required-e2e-false-green/report.md:1956`; [audit evidence](#audit-phase--packet-integrity-under-adversarial-falsification-2026-08-23) |
 | 2026-08-23 | AUDIT-069-005-3 (MEDIUM): the `security` phase's recorded instants cannot be reconciled with the commit carrying them. `state.json` records `runStartedAt 2026-08-23T18:22:40Z`, `runEndedAt`/`claimedAt 2026-08-23T18:41:05Z`, but commit `9223ea8f`, which contains that record, has author AND committer date `2026-08-23T17:35:30+00:00` — 47 minutes BEFORE the claimed run start — and wall clock at audit time was `17:50:16Z`, still 32 minutes before it. Author-vs-committer backdating was ruled out: the two dates are identical. Check 7A did not catch it because that check tests only monotonic ordering and uniform spacing, and a single forward jump at the end of an increasing series trips neither; there is no wall-clock ceiling check on `claimedAt` | routed to `bubbles.security` to correct its own record, NOT edited here: a phase claim belongs to the agent that wrote it, and audit's mandate is additive evidence plus routing rather than mutation of another agent's state. The substantive security findings are unaffected and were spot-checked as grounded in re-runnable greps and file reads. Consequence recorded rather than engineered around: because this audit wrote its REAL instant (`17:50Z`), the claims array now contains a true backwards step at `security → audit` and Check 7A reports `CLAIM_OUT_OF_ORDER`. Writing a later timestamp, or declaring `claimedAtUnreconciled` on a claim that reconciles perfectly against a run happening now, were both rejected as fabrication and as the guard's own "bypass with extra steps". **RESOLVED 2026-08-23T17:58Z by `bubbles.goal`** in the orchestrator role, correcting the record audit correctly declined to mutate: the four future-dated security instants were rebounded to the interval git can prove the work occupied — start `17:17:45Z`, just after the preceding stabilize commit `3d85a532` (`17:17:40Z`), and end/claim `17:35:00Z`, just before commit `9223ea8f` (`17:35:30Z`) whose tree already contains the security artifacts. Both replacements are bounded by committer dates rather than chosen, `state.json` carries a `claimedAtCorrectionNote` and a `timestampCorrectionNote` naming the corrector and the evidence, and no finding, verdict, or evidence line was altered — only the clock. The audit's own `17:50:16Z` was deliberately left untouched because it was never the wrong value | `specs/069-assistant-http-transport/bugs/BUG-069-005-required-e2e-false-green/state.json` `execution.completedPhaseClaims[security]`; commit `9223ea8f`; [audit evidence](#audit-phase--packet-integrity-under-adversarial-falsification-2026-08-23) |
 | 2026-08-23 | The mechanical G034 floor `.github/bubbles/scripts/security-gate.sh` exits 1 with 12 `inline-credentials` findings. All twelve are in `scripts/commands/config.sh` and `scripts/commands/config_secret_rejection_test.sh`; none is a real credential (eight are `__SECRET_PLACEHOLDER__<KEY>__` substitution markers documented at `config.sh:497/853/1812/3299`, one is a labelled test fixture, one is a `*_SECRET_REF` naming an env var, four are grep/echo strings inside the test that exists to REJECT a literal password). The scanner matches the `NAME="value"` shape without distinguishing a placeholder from a value | pre-existing and unattributable to this packet, measured not assumed: `security-gate.sh \| grep -cE 'internal/assistant/\|internal/config/assistant\|tests/e2e/assistant'` returned `0`, so zero findings fall in the changed surface. G034 is therefore NOT claimed as passing by this phase. The scanner's precision gap is not repairable from this repository because `.github/bubbles/` is framework-managed and MUST NOT be edited downstream — the same ownership boundary already recorded for `TR-BUG-069-005-FRAMEWORK-001` | `TR-BUG-069-005-FRAMEWORK-001` in `state.json`; `scripts/commands/config.sh:497`; [security evidence](#security-phase--confirm-gating-and-guard-integrity-2026-08-23) |
+| 2026-08-23 | Parent Spec 069 is a certified `done` spec that does not pass current-policy gates: its own transition guard reports `failureCount: 16` with `failedGateIds: [G022,G088,G095,G136]`. Measured by this phase both before and after its reconciliation edit, with identical results on each side | recorded, not repaired, and explicitly not attributed to this packet: none of the 16 failures relates to the five falsely-green tests, and all 16 predate this phase. Repairing a historical certified spec's current-policy debt is a different piece of work from reconciling its evidence provenance, and it is outside this packet's Change Boundary, which excludes parent Spec 069 artifacts other than the validate-owned reconciliation itself. What this phase DID change in the parent is one additive `certificationEvidenceReconciliation` record, proven non-destructive by the identical 16/16 guard readings; Gate G088 tracks `spec.md`/`design.md`/`scopes.md` only, so a `state.json` record cannot create a post-certification planning-truth edit | `specs/069-assistant-http-transport/state.json` `certificationEvidenceReconciliation`; [validate evidence](#validate-phase--certification-and-parent-spec-069-reconciliation-2026-08-23) |
+| 2026-08-23 | Gate G136 blocks the terminal transition: `uservalidation.md` carries no authored `## Human Acceptance Record`, and only agents exercised this packet's behavior | recorded as an operator-only residual and left standing by design, NOT worked around: `.github/bubbles/registry/acceptance-authority.yaml` requires `acceptedBy` to be a human identity not matching `^bubbles\.`, so no agent can clear it without fabricating the exact signal the gate exists to obtain. Status is therefore set to `blocked` rather than `done`, with `blockedReason` naming the exact operator action that clears it — author `## Human Acceptance Record` in `uservalidation.md` with `acceptedBy` (the operator's own identity), `acceptedAt` (ISO-8601), and `method` of either `human-interactive` or `external-record` (the latter additionally requiring a `record` field pointing at the external sign-off artifact) | `specs/069-assistant-http-transport/bugs/BUG-069-005-required-e2e-false-green/uservalidation.md`; `.github/bubbles/registry/acceptance-authority.yaml`; [validate evidence](#validate-phase--certification-and-parent-spec-069-reconciliation-2026-08-23) |
 
 ## Test Continuation: Deterministic Weather And Readiness (2026-07-21)
 
@@ -2988,5 +2990,206 @@ item was found unsupported. Two findings are routed and neither blocks the subst
 This phase modified NO product or test source, checked NO DoD item, changed NO scope status, and
 wrote NO certification field. `certification.certifiedCompletedPhases` remains `[]` and writable
 solely by `bubbles.validate`, whose phase is the one remaining `G022` block.
+
+---
+
+### Validate Phase — Certification And Parent Spec 069 Reconciliation (2026-08-23)
+
+**Agent:** `bubbles.validate` · **Phase:** validate · **Claim Source:** `executed` for every
+command block below; `interpreted` for the certification decisions, which are judgements applied
+to executed output and are shown with the evidence they rest on.
+
+**Redaction:** absolute paths under the operator home directory are written as `<operator>` in
+this section. Only that path component is altered; exit codes, counts, repository-relative paths,
+and every load-bearing fact are unaltered.
+
+This phase is the last one. It owns certification, so it re-verified the substantive fix from
+source rather than accepting the preceding phases' conclusions, then decided each phase claim
+against a fixed bar and recorded the terminal status.
+
+#### V1 — Is the fix real? Re-verified independently of the guard
+
+The packet's claim is that five manifest-required assistant E2E tests were skipping while the
+package exited 0, and that a denylist guard now prevents recurrence. Three checks, none of which
+trusts the guard's own verdict.
+
+First, the guard's denylist was compared against `scenario-manifest.json` by reading both. All
+five entries match on file, function name, and scenario id, with zero drift:
+
+| Scenario | Manifest file | Manifest test | In guard denylist |
+|---|---|---|---|
+| SCN-BUG069005-001 | `annotation_intent_test.go` | `TestAnnotationIntentE2E_SlotsComeFromCompiledIntent` | yes |
+| SCN-BUG069005-002 | `intent_clarify_test.go` | `TestIntentCompilerE2E_SpringfieldWeatherClarifiesLocation` | yes |
+| SCN-BUG069005-003 | `http_disambiguation_test.go` | `TestAssistantHTTPE2E_DisambiguationChoiceResolvesPendingTurn` | yes |
+| SCN-BUG069005-004 | `intent_side_effect_test.go` | `TestIntentCompilerE2E_ListWriteRequiresConfirmationBeforePersistence` | yes |
+| SCN-BUG069005-005 | `http_confirm_test.go` | `TestAssistantHTTPE2E_ConfirmAcceptExecutesGatedActionOnce` | yes |
+
+Second, the five required identities were confirmed present and skip-free by direct search, which
+is a stricter assertion than the guard's own body-scoped one because it covers the whole file:
+
+```text
+$ grep -c "func <each required test>(" <its file>          # five separate greps
+1
+1
+1
+1
+1
+
+$ grep -nE '\.(Skip|Skipf|SkipNow)\(' \
+    tests/e2e/assistant/annotation_intent_test.go \
+    tests/e2e/assistant/intent_clarify_test.go \
+    tests/e2e/assistant/http_disambiguation_test.go \
+    tests/e2e/assistant/intent_side_effect_test.go \
+    tests/e2e/assistant/http_confirm_test.go
+SKIP_SCAN_EXIT=1
+```
+
+Exactly one declaration of each required function, and grep exit 1 across all five files — zero
+skip-family calls anywhere in them, not merely outside the required bodies.
+
+Third, the guard was executed. The full E2E suite was deliberately NOT run: it is slow and takes
+a `flock` suite lock whose held state is reported as exit 73, and fighting that lock would prove
+nothing this run needs. The guard carries no `//go:build e2e` tag by design, so the UNIT lane
+runs it, and the UNIT lane never sets that tag — which means running it there verifies the
+untagged claim by observation rather than accepting it from the file's own header comment.
+
+```text
+$ ./smackerel.sh test unit --go --go-run 'RequiredNoSkip|RequiredAssistantE2ETestsNeverSkip' --verbose
+=== RUN   TestRequiredAssistantE2ETestsNeverSkip
+--- PASS: TestRequiredAssistantE2ETestsNeverSkip (0.03s)
+=== RUN   TestRequiredNoSkipGuard_AdversarialFinding
+--- PASS: TestRequiredNoSkipGuard_AdversarialFinding (0.01s)
+    --- PASS: TestRequiredNoSkipGuard_AdversarialFinding/skip_inside_required_test_is_caught (0.00s)
+    --- PASS: TestRequiredNoSkipGuard_AdversarialFinding/skipnow_and_skipf_are_caught (0.00s)
+    --- PASS: TestRequiredNoSkipGuard_AdversarialFinding/clean_required_test_reports_nothing (0.00s)
+    --- PASS: TestRequiredNoSkipGuard_AdversarialFinding/skip_in_neighbouring_func_is_ignored (0.00s)
+    --- PASS: TestRequiredNoSkipGuard_AdversarialFinding/brace_in_string_literal_does_not_break_boundaries (0.00s)
+    --- PASS: TestRequiredNoSkipGuard_AdversarialFinding/renamed_or_deleted_required_test_is_reported_missing (0.00s)
+    --- PASS: TestRequiredNoSkipGuard_AdversarialFinding/method_named_skip_is_not_a_match (0.00s)
+ok      github.com/smackerel/smackerel/tests/e2e/assistant      0.063s
+[go-unit] go test ./... finished OK
+===GUARD_UNIT_VERBOSE_EXIT=0===
+```
+
+Accounting over the retained unfiltered capture: 538 lines, 9 `--- PASS:` lines (2 tests plus 7
+subtests), 0 `FAIL` matches, 0 `--- SKIP` matches, exit 0. The run is not vacuous — the
+`tests/e2e/assistant` package line carries no `[no tests to run]` marker while the other packages
+in the same run do, so the selector matched there and the detector executed.
+
+**V1 verdict: the fix is real.** The five required tests exist, contain no skip-family call, and
+are bound by a guard that executes outside the e2e tag and proves its own detector fires.
+
+#### V2 — Phase certification, decided against a fixed bar
+
+A phase was certified only when BOTH conditions held and this phase verified each itself: (a)
+`report.md` carries real evidence for that phase, and (b) `execution.executionHistory[]` carries
+an entry naming the agent that executed it. Report evidence alone is not sufficient, because an
+evidence section with no execution record cannot show who ran it.
+
+Each claimed phase's `evidenceRef` anchor was resolved against the actual headings in this file,
+and each section's body was read rather than merely measured:
+
+| Phase | executionHistory entry | Evidence anchor | Line | Body | Decision |
+|---|---|---|---|---|---|
+| implement | `bubbles.implement` ×2 (2026-07-21, 2026-08-23) | resolves | 81 | RED exit 1, restore verified, GREEN exit 0, `go vet` tagged + untagged | **CERTIFIED** |
+| test | `bubbles.test` (2026-08-23) | resolves | 1917 | 3 commands with exit codes; 5 PASS / 0 FAIL / 0 SKIP required run | **CERTIFIED** |
+| regression | `bubbles.regression` (2026-08-23) | resolves | 1739 | 12 commands / 11 exit codes; mutation kill-test with restore | **CERTIFIED** |
+| simplify | `bubbles.simplify` (2026-08-23) | resolves | 2056 | `UNIT_RC=0`, `VERBOSE_RC=0`, per-subtest PASS lines | **CERTIFIED** |
+| stabilize | `bubbles.stabilize` (2026-08-23) | resolves | 2174 | 5 commands / 5 exit codes; determinism and `-trimpath` searches | **CERTIFIED** |
+| security | `bubbles.security` (2026-08-23) | resolves | 2384 | executed `security-gate.sh` output recorded honestly as exit 1, four findings | **CERTIFIED** |
+| audit | `bubbles.audit` (2026-08-23) | resolves | 2713 | 4 commands / 3 exit codes across seven lines of attack | **CERTIFIED** |
+| validate | `bubbles.validate` (this run) | this section | — | V1-V5 below | **CERTIFIED** |
+
+Two notes on how this table was reached, because both could have produced a wrong answer.
+
+A first mechanical pass scanned for the literal `**Command:**` and `**Exit Code:**` labels and
+flagged `implement`, `simplify`, and `security` as thin. That pass was wrong: those three sections
+record evidence in a `$ command` / `NAME_EXIT=n` form instead. All three were then read in full
+and each carries real executed output — the `implement` section in particular contains the RED
+capture at exit 1 with the guard naming `http_confirm_test.go:28`, the explicit `git checkout --`
+restore, and the verification that the marker is gone. Certifying on the label-matching result
+would have withheld three phases for a formatting difference, so the sections were read instead.
+
+Nothing was trimmed to make a count line up. Eight phases meet the bar and eight are certified;
+no phase was dropped, and no phase was certified on report evidence alone.
+
+#### V3 — Parent Spec 069 reconciliation
+
+This is the substance of the one DoD item this phase owned. The finding is real and internal to
+the parent: all five falsely-green tests are named in Spec 069's own `scenario-manifest.json` as
+`regressionRequired: true` linked tests, in its `scopes.md` Test Plan rows, and in its
+`test-plan.json` — under scenarios `SCN-068-A03`, `SCN-068-A04`, `SCN-068-A05` (cross-spec,
+authored in Spec 068 with the HTTP proof owned by 069), `SCN-069-A03`, and `SCN-069-A04`. Spec
+069 was certified `done` on 2026-06-02 partly on the strength of those five reporting green while
+none of them ran. Its certification evidence was therefore contradicted, exactly as `bug.md`
+recorded and as `spec.md` R10 assigned to this phase.
+
+**What was changed:** one additive `certificationEvidenceReconciliation` record was appended to
+`specs/069-assistant-http-transport/state.json`. It names the five scenarios and five tests,
+records that the parent's own 2026-06-02 evidence for them was a false green, records that sound
+evidence now exists but was produced by THIS packet rather than by the parent, and states the
+residual caveat that an auditor must not treat the parent's 2026-06-02 evidence as self-sufficient
+for those five.
+
+**What was deliberately NOT changed, and why:** the parent's `status` and `certification.status`
+remain `done`. Invalidation is the instrument for forcing rework that has not happened. Here the
+rework HAS happened — under this packet the runtime path was implemented, the bailouts removed,
+and the same five tests executed at 5 PASS / 0 FAIL / 0 SKIP. Demoting the parent would assert
+those behaviors are unproven, which is false today, so it would be a fabrication in the opposite
+direction from the one this packet exists to correct. The honest instrument for evidence that was
+unsound but has since been made sound is a provenance correction, which is what was written. No
+scope status, DoD item, phase claim, or planning-truth file in the parent was touched.
+
+The edit was proven non-destructive by running the parent's own guard on both sides of it:
+
+```text
+$ bash .github/bubbles/scripts/state-transition-guard.sh specs/069-assistant-http-transport
+BEFORE:  failureCount: 16   failedGateIds: [G022,G088,G095,G136]
+AFTER:   failureCount: 16   failedGateIds: [G022,G088,G095,G136]
+```
+
+Identical on both sides. Two facts make that outcome expected rather than lucky. Gate G088 tracks
+`spec.md`, `design.md`, `scopes.md`, `scopes/_index.md`, and `scopes/*/scope.md`; `state.json` is
+not in that set, so an additive record there cannot create a post-certification planning-truth
+edit. And the parent already failed those 16 checks before this phase existed — it is a historical
+`done` spec carrying current-policy debt under `G022`, `G088`, `G095`, and `G136`, none of which
+relates to the five tests. That pre-existing parent debt is not repaired here and is not claimed
+to be; it is recorded in the `## Discovered Issues` table above under the 2026-08-23 row naming
+`specs/069-assistant-http-transport/state.json`.
+
+#### V4 — Human acceptance (Gate G136) is an operator-only residual
+
+`G136` requires `uservalidation.md` to carry an authored `## Human Acceptance Record`. The
+acceptance registry at `.github/bubbles/registry/acceptance-authority.yaml` requires
+`acceptedBy` / `acceptedAt` / `method`, forbids an `acceptedBy` matching `^bubbles\.`, and states
+that an agent cannot accept on a human's behalf.
+
+Only agents exercised this behavior. This phase therefore authored no acceptance record, checked
+no `uservalidation.md` box, and named no human as acceptor. Doing any of those would fabricate the
+exact signal the gate exists to obtain, and would do it inside a packet whose entire subject is a
+green result that was not earned. `G136` is a legitimate operator-only residual and is left
+standing.
+
+#### V5 — Terminal status
+
+`G136` cannot be cleared by any agent, so the guard still exits non-zero after this phase. Status
+is therefore set to `blocked`, not `done`. Everything agent-ownable in this packet is complete;
+one human-owned gate remains, and `blockedReason` names the exact operator action that clears it.
+
+Setting `done` would be a false claim in a packet about false claims. Leaving `in_progress` would
+misrepresent finished work as unfinished. `blocked` is the honest terminal state.
+
+#### Verdict
+
+| Question | Result |
+|---|---|
+| V1 fix is real | verified independently: 5/5 identities present, skip scan exit 1, guard 9 PASS / 0 FAIL / 0 SKIP exit 0 |
+| V2 phase certification | 8 certified, 0 withheld; each verified against report evidence AND executionHistory |
+| V3 parent Spec 069 | reconciled additively; status intentionally unchanged; parent guard 16 → 16, zero delta |
+| V4 human acceptance | not authored; operator-only residual, correctly left standing |
+| V5 terminal status | `blocked` with an operator-actionable `blockedReason` |
+
+Expected residual guard state after this phase: `G136` alone. That is correct and is not a defect
+in this packet.
 
 

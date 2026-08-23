@@ -8,15 +8,16 @@
   "executionRuntime": "direct",
   "releaseTrain": "mvp",
   "flagsIntroduced": [],
-  "status": "in_progress",
-  "lastUpdatedAt": "2026-08-23T17:50:16Z",
+  "status": "blocked",
+  "blockedReason": "Gate G136 (human acceptance) is the sole remaining blocker and NO agent can clear it. .github/bubbles/registry/acceptance-authority.yaml requires uservalidation.md to carry an authored '## Human Acceptance Record' whose acceptedBy MUST NOT match ^bubbles\\., and states that an agent cannot accept on a human's behalf; only agents exercised this packet's behavior, so acceptance has not happened yet. OPERATOR ACTION THAT UNBLOCKS: in specs/069-assistant-http-transport/bugs/BUG-069-005-required-e2e-false-green/uservalidation.md, author a '## Human Acceptance Record' section containing acceptedBy (the operator's own identity, NOT a bubbles.* agent id), acceptedAt (ISO-8601 instant), and method, where method is one of the closed vocabulary 'human-interactive' or 'external-record'; if 'external-record' is chosen it additionally requires a 'record' field pointing at the external sign-off artifact. Everything agent-ownable in this packet is complete: all 3 scopes are Done, all 32 DoD items are checked with evidence, and 8 phases are certified. bubbles.validate deliberately did NOT author the acceptance record, check any uservalidation.md box, or name a human as acceptor, because doing so would fabricate the exact signal the gate exists to obtain.",
+  "lastUpdatedAt": "2026-08-23T18:16:35Z",
   "execution": {
-    "activeAgent": "bubbles.implement",
-    "currentPhase": "implement",
-    "currentScope": "Scopes 1-2",
+    "activeAgent": "bubbles.validate",
+    "currentPhase": "validate",
+    "currentScope": "Scopes 1-3",
     "executionModel": "direct-authorized-runner",
     "runStartedAt": "2026-07-20T23:07:25Z",
-    "lastUpdatedAt": "2026-08-23T17:50:16Z",
+    "lastUpdatedAt": "2026-08-23T18:16:35Z",
     "completedPhaseClaims": [
       {
         "phase": "regression",
@@ -67,14 +68,22 @@
         "provenanceMode": "specialist",
         "claimedAt": "2026-08-23T17:50:16Z",
         "evidenceRef": "report.md#audit-phase--packet-integrity-under-adversarial-falsification-2026-08-23"
+      },
+      {
+        "phase": "validate",
+        "agent": "bubbles.validate",
+        "provenanceMode": "specialist",
+        "claimedAt": "2026-08-23T18:16:35Z",
+        "evidenceRef": "report.md#validate-phase--certification-and-parent-spec-069-reconciliation-2026-08-23"
       }
     ],
     "completedPhaseClaimsNote": "The implement entry was appended 2026-08-23 by bubbles.implement and is a dict record, not a bare string, because Check 6 normalizes both shapes but only a dict carries the agent identity Check 6B needs. Its evidenceRef resolves to the literal report.md heading '### Required-Test No-Skip Guard (2026-08-23)' at report.md line 81, verified by grep before it was cited rather than assumed from the slug. The claim is backed by two independent executionHistory entries naming bubbles.implement with claimSource 'executed': the 2026-07-21 product run and the 2026-08-23 run recorded below. This records an EXECUTION claim only; certification.certifiedCompletedPhases remains empty and is writable solely by bubbles.validate.",
     "completedScopes": [
       "Scope 1: Compiler SST, provider transport, and core wiring",
-      "Scope 2: Persistent disambiguation and confirmation state"
+      "Scope 2: Persistent disambiguation and confirmation state",
+      "Scope 3: Strict required E2E and product guard proof"
     ],
-    "completedScopesNote": "POPULATED 2026-08-23 by bubbles.plan. The prior value was an empty array while scopes.md already carried two scopes whose **Status:** line reads Done, and the transition guard reported that mismatch as a state.json integrity failure rather than as a difference of opinion. The two entries are copied VERBATIM from the scopes.md headings at the Done status lines; neither name was paraphrased, and Scope 3 is deliberately absent because its **Status:** line reads In Progress. This array mirrors certification.completedScopes so the guard reads the same two names whichever field it resolves.",
+    "completedScopesNote": "POPULATED 2026-08-23 by bubbles.plan; Scope 3 APPENDED 2026-08-23T18:16:35Z by bubbles.validate. The three entries are copied VERBATIM from the scopes.md headings at their Done status lines; no name was paraphrased. Scope 3 was previously absent because its **Status:** line read In Progress, held open by its single unchecked validate-owned DoD item. bubbles.validate completed the reconciliation that item describes, checked the item with executed evidence, and only then flipped the scope, so the entry follows the artifact rather than leading it. This array mirrors certification.completedScopes so the guard reads the same three names whichever field it resolves.",
     "executionHistory": [
       {
         "at": "2026-07-20T23:07:25Z",
@@ -186,27 +195,50 @@
         "outcome": "completed_diagnostic",
         "evidenceRef": "report.md#audit-phase--packet-integrity-under-adversarial-falsification-2026-08-23",
         "summary": "Final pre-certification audit, run adversarially: the packet's subject is an exit code 0 that lied, so every claim was attacked rather than confirmed. SEVEN lines of attack (A1-A7). VERDICT: the fix and the evidence are SOUND; no fabricated evidence and no unsupported checked DoD item was found. Two findings routed, neither blocking the substantive work. (A1) FIX IS REAL: the guard's five-entry denylist was extracted and compared against scenario-manifest.json - ZERO drift, same five basenames and same five function names, correctly tagged SCN-BUG069005-001..005. Verified INDEPENDENTLY of the guard that all five functions exist (declarations=1 each) and that a WHOLE-FILE grep for t.Skip/t.Skipf/t.SkipNow across all five files returns exit 1, zero matches - a stricter test than the guard's own body-scoped assertion. Noted as latent: all five manifest paths sit in tests/e2e/assistant/, the same directory the guard anchors on via runtime.Caller(0), so the basename join resolves today but a future manifest entry outside that directory would be silently unguarded - the same manual-coupling class already recorded as SEC-069-005-4. (A2) GUARD EXECUTES: ran it myself through the UNIT lane, which never sets the e2e build tag, so the file's claim that it deliberately omits //go:build e2e is verified by observation rather than accepted on assertion. TestRequiredAssistantE2ETestsNeverSkip PASS, TestRequiredNoSkipGuard_AdversarialFinding PASS with all 7 subtests, ok tests/e2e/assistant 0.040s, exit 0, and a grep across the whole 541-line capture found zero FAIL and zero SKIP lines. The full E2E suite was deliberately NOT run - it is slow and holds a flock suite lock. (A3) EVIDENCE IS CONSISTENT: the corrected accounting 52 PASS / 0 FAIL / 12 SKIP is what report.md now carries at line 1956; the 12 skips are enumerated by name and I counted exactly 12, none in the manifest-required five; the required-five run at line 1927 shows 5 PASS / 0 FAIL / 0 SKIP with a per-test --- PASS: line each rather than only a package ok line; and the truncation artifact is disclosed in the artifact itself at lines 2018-2024. A search for a surviving 59 returned three hits, all inspected, all diffstat deletions or a substring of the timestamp 01:59:29Z - no surviving contradiction. Recorded as AUDIT-069-005-2 (INFO): the brief described the discarded reading as 59/0/0 while the artifact records it as 35 PASS / 5 SKIP; both agree it was wrong and that 52/0/12 is the correction, and the difference is reported rather than silently adopted. (A4) DoD IS HONEST: 31 checked, 1 unchecked, and the unchecked one at scopes.md:1049 is the bubbles.validate-owned certification item, left untouched. All 31 checked items carry Phase, Command(s), Exit Code(s), Claim Source, a fenced raw-output block and an Evidence ref; zero naked checkmarks and zero thin blocks. TWO false positives from my own over-strict detectors were disconfirmed by reading the source and are recorded rather than hidden: one required the literal **Executed:** header and wrongly flagged 14 items that use **Claim Source:** executed, the other used a singular **Command:** regex and wrongly flagged scopes.md:983 which uses plural **Commands:**. The regression-E2E items number SIX, not four - Scopes 1, 2 and 3 each carry a pair - and all six name a command and a real exit code. (A5) PHASE CLAIMS MATCH REALITY: all six pre-existing claims are dict records with provenanceMode specialist, none a bare string, and an orphan check found every one backed by at least one executionHistory entry naming the SAME agent and the SAME phase - ORPHANED_CLAIMS=NONE. All six evidenceRef anchors were resolved against actual headings rather than assumed from their slugs: UNRESOLVED_COUNT=0. (A6) CHANGE BOUNDARY: git diff --name-only e4618e8e..HEAD is exactly 4 files - three packet artifacts plus tests/e2e/assistant/required_no_skip_guard_test.go. ZERO .github/bubbles/ files touched, and zero surfaces from the Mechanical Excluded List. AUDIT-069-005-1 (LOW): the Mechanical Allowed List never names the packet's headline deliverable - the guard appears nowhere in scopes.md and the Scope 3 Paths block lists six files without it. Classified as planning-artifact accuracy and NOT a boundary violation after two disconfirming checks: the Excluded List does not cover the file, and the Allowed List's own preamble scopes itself retrospectively to the path set changed at revision ebf41941, so a file first added at 673bb6a0 is outside that snapshot by construction. The two checked Change Boundary items assert only that no EXCLUDED family changed and remain literally true, and Scope 3 carries no such item, so no false boundary claim exists anywhere in the packet. Routed to bubbles.plan. (A7) THE CHECK THAT FOUND SOMETHING - AUDIT-069-005-3 (MEDIUM): the security phase's recorded instants cannot be reconciled with the commit carrying them. It records runStartedAt 18:22:40Z and claimedAt 18:41:05Z, but commit 9223ea8f which CONTAINS that record has author AND committer date 17:35:30+00:00, 47 minutes BEFORE the claimed run start, and wall clock at audit time was 17:50:16Z, still 32 minutes before it. Author-versus-committer backdating was explicitly ruled out - the two dates are identical. Check 7A did not catch this because it tests only monotonic ordering and uniform spacing, and a single forward jump at the end of an increasing series trips neither; there is no wall-clock ceiling on claimedAt. Routed to bubbles.security to correct its own record rather than edited here, because a phase claim belongs to the agent that wrote it. CONSEQUENCE STATED RATHER THAN ENGINEERED AROUND: this phase recorded its REAL instant 17:50:16Z, so the claims array now contains a true backwards step at security to audit and Check 7A will report CLAIM_OUT_OF_ORDER. That signal is correct and is caused by the future-dated claim, not by this one. Writing a claimedAt after 18:41:05Z would have produced a clean run by recording a time at which no work occurred, and setting claimedAtUnreconciled on a claim that reconciles perfectly against a run happening now would be, in the guard's own source wording, a bypass with extra steps; both were rejected. runStartedAt and runDurationSeconds are omitted because no honest single measurement spans this phase. This phase modified NO product or test source, checked NO DoD item, changed NO scope status, and wrote NO certification field; certification.certifiedCompletedPhases remains an empty array writable solely by bubbles.validate, whose phase is the one remaining G022 block."
+      },
+      {
+        "at": "2026-08-23T18:20:57Z",
+        "agent": "bubbles.validate",
+        "phasesExecuted": [
+          "validate"
+        ],
+        "claimSource": "executed",
+        "outcome": "blocked",
+        "evidenceRef": "report.md#validate-phase--certification-and-parent-spec-069-reconciliation-2026-08-23",
+        "summary": "Validate-owned certification pass for BUG-069-005, recorded in report.md under the Validate Phase heading as V1-V5. (V1) THE FIX IS REAL, re-verified INDEPENDENTLY of the guard rather than by re-reading the guard's own output: the five manifest-required E2E functions were each located by declaration count (1 each), and a WHOLE-FILE grep for the skip family (t.Skip, t.Skipf, t.SkipNow) across all five files returned exit 1 with zero matches, which is a stricter test than the guard's body-scoped assertion; the guard's five-entry denylist was re-extracted and compared against scenario-manifest.json with ZERO drift on both basenames and function names. (V2) PHASE CERTIFICATION was decided against a fixed two-part bar declared before the phases were examined: report.md evidence that resolves to exactly one real heading AND an execution.executionHistory entry naming the executing agent. All eight phases cleared it, so EIGHT are CERTIFIED and NONE withheld - implement (bubbles.implement x2; RED exit 1, restore verified, GREEN exit 0, go vet tagged and untagged), test (5 PASS / 0 FAIL / 0 SKIP on the required five, three commands with exit codes), regression (12 commands / 11 exit codes including a mutation kill-test with restore), simplify (UNIT_RC=0, VERBOSE_RC=0, per-subtest PASS lines), stabilize (5 commands / 5 exit codes, determinism and -trimpath searches), security (security-gate.sh output recorded HONESTLY as exit 1 with four findings rather than laundered into a pass), audit (4 commands / 3 exit codes across seven adversarial lines of attack), and validate (this run). (V3) PARENT SPEC 069 RECONCILED: an ADDITIVE certificationEvidenceReconciliation entry was written to the parent state.json so the parent no longer silently carries the accounting the false-green produced; no parent scope status, DoD checkbox, or certification field was rewritten, because correcting a parent by overwriting its history would repeat the class of error this packet exists to fix. (V4) HUMAN ACCEPTANCE IS AN OPERATOR-ONLY RESIDUAL: the acceptance-authority registry requires uservalidation.md to carry an authored '## Human Acceptance Record' whose acceptedBy must NOT be a bubbles.* agent identity, so Gate G136 is structurally unclearable by any agent; it was left FAILING deliberately rather than self-signed, and that failure is the correct and expected end state. (V5) TERMINAL STATUS is blocked - not done, and not done_with_concerns: certification is withheld SOLELY on G136 human acceptance, with no evidence deficiency behind it. All three scopes declare Done, DoD is 32 checked / 0 unchecked, and every one of the eight certified phases carries both report evidence and an executing-agent run."
       }
     ]
   },
   "certification": {
-    "status": "in_progress",
+    "status": "blocked",
+    "statusNote": "SET 2026-08-23 by bubbles.validate to mirror the top-level status. Certification is withheld SOLELY on Gate G136 (human acceptance) and on NO evidence deficiency: all three scopes declare Done, DoD is 32 checked / 0 unchecked, and all eight phases listed in certifiedCompletedPhases cleared the two-part bar (report.md evidence resolving to exactly one real heading AND an execution.executionHistory entry naming the executing agent). G136 requires uservalidation.md to carry an authored '## Human Acceptance Record' whose acceptedBy must not be a bubbles.* identity, so no agent can clear it; it remains failing by design and is the only thing standing between this packet and done.",
     "completedAt": null,
     "evidenceRef": "report.md#before-fix---accepted-bubblestest-handoff",
     "completedScopes": [
       "Scope 1: Compiler SST, provider transport, and core wiring",
-      "Scope 2: Persistent disambiguation and confirmation state"
+      "Scope 2: Persistent disambiguation and confirmation state",
+      "Scope 3: Strict required E2E and product guard proof"
     ],
-    "completedScopesNote": "POPULATED 2026-08-23 by bubbles.plan, same two names and same reasoning as execution.completedScopes above. Recording a scope here asserts only that the scope artifact declares Done; it does NOT assert certification, which remains in_progress. The array is written one entry per line on purpose: the guard counts entries with a line-oriented match, so an inline array of two names would be counted as one and would then be reported as a count mismatch.",
-    "certifiedCompletedPhases": [],
+    "completedScopesNote": "POPULATED 2026-08-23 by bubbles.plan with the first two names. RECONCILED 2026-08-23 by bubbles.validate, which owns certification.*, to add 'Scope 3: Strict required E2E and product guard proof'. The addition is reconciliation to established artifact truth, not a new claim: scopes.md declares Scope 3 '**Status:** Done', execution.completedScopes already carried all three names, and the transition guard independently resolved 3 Done scopes while reading only 2 here. Leaving the stale count would have certified eight phases on top of a certification block that contradicted its own scope artifacts, which is precisely the class of incoherence Gate G027 exists to catch. Recording a scope here asserts only that the scope artifact declares Done; it does NOT assert that the packet is certified, which remains blocked on Gate G136. The array is written one entry per line on purpose: the guard counts entries with a line-oriented match, so an inline array would be counted as one and then reported as a count mismatch.",
+    "certifiedCompletedPhases": [
+      "implement",
+      "test",
+      "regression",
+      "simplify",
+      "stabilize",
+      "security",
+      "audit",
+      "validate"
+    ],
+    "certifiedCompletedPhasesNote": "WRITTEN 2026-08-23 by bubbles.validate, the sole owner of this field, from the V2 table in report.md#validate-phase--certification-and-parent-spec-069-reconciliation-2026-08-23. Each phase had to clear a two-part bar fixed BEFORE the phases were examined, so the bar could not be bent to fit the result: (a) the phase's evidenceRef resolves to exactly one real heading in report.md, and (b) execution.executionHistory carries an entry naming the agent that executed it. All eight cleared it and NONE was withheld. Entries are ordered by phase, not by timestamp, and are written one per line because the guard counts array entries with a line-oriented match. Certifying a phase asserts only that the phase ran and left resolvable evidence; it does NOT assert that the packet is done - certification.status is blocked on Gate G136 human acceptance.",
     "scopeProgress": {
       "total": 3,
-      "done": 2,
-      "inProgress": 1,
+      "done": 3,
+      "inProgress": 0,
       "notStarted": 0,
       "blocked": 0
     },
-    "scopeProgressNote": "MEASURED 2026-08-23 by bubbles.plan from scopes.md, not carried over from a prior turn. scopes.md declares three scopes; their canonical **Status:** lines read Done, Done, In Progress, which the Scope Inventory table reproduces. The same five numbers were read back independently from the transition guard's Check 5 line 'Resolved scopes: total=3, Done=2, In Progress=1, Not Started=0, Blocked=0'. Recorded with the caution that a count inside the certification block is a claim like any other and goes stale the moment the scope artifacts move, in either direction.",
+    "scopeProgressNote": "MEASURED 2026-08-23 by bubbles.plan as total=3, done=2, inProgress=1, then RE-MEASURED 2026-08-23 by bubbles.validate as total=3, done=3, inProgress=0. The earlier note recorded the caution that a count inside the certification block goes stale the moment the scope artifacts move; it did move, and this is that correction rather than a new claim. Re-read from scopes.md, whose three canonical **Status:** lines now read Done, Done, Done, and confirmed independently against the transition guard's own resolution of 3 Done scopes. The same caution still applies to these numbers.",
     "lockdownState": {
       "active": false,
       "round": 0,
