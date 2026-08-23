@@ -7,13 +7,14 @@
   "workflowMode": "bugfix-fastlane",
   "executionRuntime": "direct",
   "releaseTrain": "mvp",
-  "status": "in_progress",
+  "status": "blocked",
+  "blockedReason": "Gate G136 (Human Acceptance Terminal Gate) is the sole remaining guard failure and no agent can clear it. `uservalidation.md` carries four checked checklist boxes but no authored `## Human Acceptance Record`, and `.github/bubbles/registry/acceptance-authority.yaml` makes that section `requiredAtTerminal: true` while forbidding an `acceptedBy` that matches `^bubbles\\.`, on the stated ground that an agent cannot accept on a human's behalf and that if an agent is the only party to have exercised the behavior then acceptance has not happened yet. Only agents exercised this behavior in this packet, so `bubbles.validate` deliberately authored no record, checked no box, and named no acceptor. OPERATOR ACTION TO CLEAR: a human who has themselves exercised the delivered behavior appends a `## Human Acceptance Record` section to `specs/069-assistant-http-transport/bugs/BUG-069-004-http-turn-dedup/uservalidation.md` carrying three required fields — `acceptedBy` set to their own identity and never a `bubbles.*` agent id; `acceptedAt` as an ISO-8601 timestamp; and `method` set to exactly one of `human-interactive` (they exercised it in a live session) or `external-record` (acceptance happened elsewhere, in which case a fourth field `record` must point at the external sign-off artifact). The behaviors to exercise are the four checklist items already listed in that file: same-message-ID retry returns one logical response without duplicate execution; different message IDs still create distinct turns; two authenticated users may reuse one opaque message ID without sharing responses; and reusing one message ID with a changed body is rejected rather than replayed. Once that record exists, re-run `bash .github/bubbles/scripts/state-transition-guard.sh specs/069-assistant-http-transport/bugs/BUG-069-004-http-turn-dedup` and the packet is eligible for a terminal transition. Nothing else in this packet is outstanding: the guard reports `failureCount: 1` with `failedGateIds: [G136]`, and certification of the six evidenced phases is already recorded.",
   "execution": {
-    "activeAgent": "bubbles.bug",
-    "currentPhase": "governance-reconciliation",
+    "activeAgent": "bubbles.validate",
+    "currentPhase": "validate",
     "executionModel": "direct-authorized-runner",
     "runStartedAt": "2026-07-19T00:00:00Z",
-    "completedPhaseClaims": ["security", "validate", "audit", {"phase": "implement", "agent": "bubbles.implement", "provenanceMode": "specialist", "claimedAt": "2026-08-23T19:46:02Z", "evidenceRef": "report.md#implementation-delta"}, {"phase": "regression", "agent": "bubbles.regression", "provenanceMode": "specialist", "claimedAt": "2026-08-23T20:02:26Z", "evidenceRef": "report.md#regression-phase--independent-mutation-kill-test-2026-08-23"}, {"phase": "test", "agent": "bubbles.test", "provenanceMode": "specialist", "claimedAt": "2026-08-23T20:13:19Z", "evidenceRef": "report.md#test-phase--specialist-audit-of-the-current-session-record-2026-08-23"}],
+    "completedPhaseClaims": ["security", "validate", "audit", {"phase": "implement", "agent": "bubbles.implement", "provenanceMode": "specialist", "claimedAt": "2026-08-23T19:46:02Z", "evidenceRef": "report.md#implementation-delta"}, {"phase": "regression", "agent": "bubbles.regression", "provenanceMode": "specialist", "claimedAt": "2026-08-23T20:02:26Z", "evidenceRef": "report.md#regression-phase--independent-mutation-kill-test-2026-08-23"}, {"phase": "test", "agent": "bubbles.test", "provenanceMode": "specialist", "claimedAt": "2026-08-23T20:13:19Z", "evidenceRef": "report.md#test-phase--specialist-audit-of-the-current-session-record-2026-08-23"}, {"phase": "simplify", "agent": "bubbles.simplify", "provenanceMode": "specialist", "claimedAt": "2026-08-23T20:27:38Z", "evidenceRef": "report.md#simplify-phase--bounded-review-of-the-session-delta-2026-08-23"}, {"phase": "stabilize", "agent": "bubbles.stabilize", "provenanceMode": "specialist", "claimedAt": "2026-08-23T20:44:03Z", "evidenceRef": "report.md#stabilize-phase--bounded-operational-review-of-the-dedup-surface-2026-08-23"}, {"phase": "validate", "agent": "bubbles.validate", "provenanceMode": "specialist", "claimedAt": "2026-08-23T20:56:00Z", "evidenceRef": "report.md#validate-phase--certification-audit-2026-08-23"}],
     "completedScopes": [
       "Scope 1: Add bounded auth-scoped response replay and live regression coverage"
     ],
@@ -113,11 +114,43 @@
         "claimSource": "operator-attested-outer-session",
         "outcome": "blocked",
         "note": "Exact-candidate source, test, and documentation consistency passed; delivery completion was blocked only by packet governance."
+      },
+      {
+        "at": "2026-08-23T20:27:38Z",
+        "agent": "bubbles.simplify",
+        "phasesExecuted": ["simplify"],
+        "provenanceMode": "specialist",
+        "claimSource": "executed",
+        "outcome": "completed_owned",
+        "evidenceRef": "report.md#simplify-phase--bounded-review-of-the-session-delta-2026-08-23",
+        "summary": "Bounded simplify pass over this session's eight-line delta at HEAD 0c200519 plus a read-only review of the dedup code delivered in 60dfcfe7. Outcome is no code change and three recorded findings, and the governing constraint was established before candidates were weighed rather than after: all three touched files carry //go:build e2e, the unit lane reports tests/e2e/assistant 0.010s [no tests to run] for all 48 files in the package, and ./smackerel.sh check compiles no Go at all, so an e2e refactor is not even syntax-checked by either permitted command while the E2E lane is out of bounds. Q1, extracting the repeated waitHTTPTurnHealthy plus waitAssistantFacadeReady preamble, was rejected on merits as well as verifiability: four pre-existing call sites already pair these waits at a 90s facade timeout rather than 5m, so a fixed-timeout helper would create a second convention instead of removing the first, and waitHTTPTurnHealthy spans 23 files of which several never post a turn, so a combined helper cannot subsume it. Q2, collapsing parityLiveStack into httpTurnLiveStack, is genuine duplication and was measured exactly, 32 lines with both loader and waiter byte-identical after rename, but it was recorded rather than applied because the gain is 32 scaffolding lines while the loss if any conversion detail is wrong is a compile error inside a required E2E lane this phase cannot compile, surfacing to the next phase as the same false-RED class HEAD 0c200519 exists to remove. Q3 found no scaffolding, TODO, or orphan symbol in dedup.go, and one structural finding: evictCompletedLocked's guard len(entries) > capacity is unreachable because the single insertion site at line 100 sits behind the line 91 capacity guard and no other path grows the map. It was deliberately retained, not deleted, because begin makes room for one entry while this function trims to the bound unconditionally, and that is what makes HTTPTurnDedupCapacity a hard DoS memory ceiling rather than one contingent on a single guard staying correct. Verification with no code changed: ./smackerel.sh test unit --go --go-run TestHTTPTurnDedup --verbose gave 8 RUN, 8 PASS, 0 FAIL, exit 0, and ./smackerel.sh check exited 0 with no config drift. The E2E suite was not run; it holds a flock suite lock and this phase produced no source edit for it to cover."
+      },
+      {
+        "at": "2026-08-23T20:44:03Z",
+        "agent": "bubbles.stabilize",
+        "phasesExecuted": ["stabilize"],
+        "provenanceMode": "specialist",
+        "claimSource": "executed",
+        "outcome": "completed_diagnostic",
+        "evidenceRef": "report.md#stabilize-phase--bounded-operational-review-of-the-dedup-surface-2026-08-23",
+        "summary": "Bounded operational review of the process-local turn-dedup surface at HEAD 0c200519. Verdict PARTIALLY_STABLE: the concurrency design is sound and no source file was changed, with three findings recorded as Discovered Issues rows dated 2026-08-23 naming their owning artifact. Q1, the single-replica premise was confirmed by search rather than assumed; grep for replicas across docker-compose files, deploy, and config returns exactly one hit, deploy/README.md:51, which is prose about what a target params.yaml may contain, so no compose file or SST key sets a replica count. The blast radius if that changes is worth stating precisely because two guarantees fail in opposite directions: replay degrades to a second facade execution, which for a CaptureRoute turn double-persists the prompt at adapter.go:424, but the conflict guarantee inverts, since a changed payload under a reused ID is rejected 409 at adapter.go:385 today and on a replica holding no entry is instead executed and answered 200. The safety property flips from refuse to execute, which is why scale-out needs the durable design named in Open Findings rather than a larger local cache. Q2, all three retention mechanisms are present and were re-derived from source: capacity guard at dedup.go:91 surfacing 503 at adapter.go:388, TTL expiry driven from the head of begin so there is no timer goroutine to leak, and completed-only eviction at dedup.go:134 and dedup.go:153 so an in-flight turn is never evicted from under its waiters. What the bound does not cover is bytes. HTTPTurnDedupCapacity=16384 counts entries while each retains a whole TurnResponse whose Body has no cap in this adapter, and the only size limit on the path, http.MaxBytesReader at middleware.go:109, bounds the request not the retained response, so the ceiling is 16384 times the largest emitted body, roughly 64 MB at 4 KB and roughly 1 GB at 64 KB. Compounding it, adapter.go:75 reuses ConversationTTL, set to conversation_ttl_seconds 86400 at config/smackerel.yaml:1360, so a transport idempotency window that exists to absorb a seconds-to-minutes retry is held 24 hours; the defect is the coupling of two unrelated durations to one knob. Q3, I agree with retaining evictCompletedLocked and re-derived its unreachability independently rather than inheriting it. begin makes room for one entry while that function trims to the bound unconditionally, which is what keeps the ceiling from depending on line 91 staying correct, at a cost of one integer compare under a mutex already held. The caveat belonging with that agreement is that an unreachable guard cannot be covered by a test and can rot silently, which is exactly why the reachable guard must carry coverage, and it does: TestHTTPTurnDedup_CacheRejectsUniqueWorkWhenAllSlotsAreInFlight drives dedup.go:91 to its refusal branch and passed here. Q4, the readiness-budget split is real but its failure mode is benign in direction and the count given to this phase was low. The helper calls t.Fatalf on deadline at nl_facade_readiness_helper_test.go:54, so an under-budgeted site yields a loud false RED rather than a silent false GREEN. There are five 90s sites, not four: nl_facade_routing:27, annotation_classifier:41, nl_rate_disambig:34, nl_find_replacement:33, and legacy_retirement_notice:135 whose timeout argument sits on line 138 where a single-line grep does not show it, against four 5-minute sites added this session. All five predate this session and the helper header attributes it to Spec 076 SCOPE-4a, so harmonization is owned by specs/076-assistant-completion-rescope. Q5, surfaced rather than asked and the most operationally significant: a recovered panic orphans an in-flight entry permanently. lease.complete runs on exactly two paths, adapter.go:409 and adapter.go:428, and neither call site is protected by a defer, the handler's only defer being the body close at adapter.go:347, while middleware.Recoverer sits at internal/api/router.go:44 above the route registered at router.go:98. The process survives the panic and the entry stays completed false, which both reclamation paths skip by design, so the transport message ID is poisoned permanently, a retry blocking as a non-owner waiter until its own context expires instead of re-executing, and one of 16384 slots is consumed for the process lifetime. Severity medium and latent: no facade panic was observed here, and what lifts it above theory is that Recoverer exists at all, meaning the repo treats panics as survivable and this cache is the component on that path that does not. Verification with no code changed: ./smackerel.sh check exited 0 with config in sync and no env_file drift, and ./smackerel.sh test unit --go --go-run TestHTTPTurnDedup --verbose gave 8 RUN, 8 PASS, 0 FAIL, 0 SKIP, exit 0, with the httpadapter ok line carrying a real duration rather than the no-tests-to-run suffix. The E2E suite was not executed; it takes a flock suite lock returning exit 73 when held, and this phase produced no source edit for it to cover."
+      },
+      {
+        "at": "2026-08-23T20:56:00Z",
+        "agent": "bubbles.validate",
+        "phasesExecuted": ["validate"],
+        "provenanceMode": "specialist",
+        "claimSource": "executed",
+        "outcome": "blocked",
+        "evidenceRef": "report.md#validate-phase--certification-audit-2026-08-23",
+        "summary": "Certification audit. Applied a two-part standard and refused to relax it: a phase is certified only when report.md carries evidence for it AND executionHistory names the agent that executed it. Six phases clear it and are written to certifiedCompletedPhases - implement, regression, test, simplify, stabilize, and validate itself, the last on this session's own execution rather than on the legacy 2026-07-19 validate attestation. Two are WITHHELD. security and audit pass the guard's Check 6 and Check 6B because those checks read the shape of a phase record, not whether anything backs it; three searches of report.md settled the substance and all three came back empty - the only heading matching Security/Validate/Audit is the test phase's own title where 'Audit' is prose, the candidate revision b476198898f005ac5bad25510fcb9d90cbe50939 that both entries name is cited zero times, and no SEC finding id appears at all. Separately and independently disqualifying: claimSource operator-attested-outer-session does not meet the bar, because the Bubbles kernel holds that operator-supplied context including another session's state is diagnostic input only and must never be restated as the agent's own execution evidence. Their date-only 2026-07-19 stamps were left as they are; inventing a precise time would fabricate the exact precision the record honestly lacks. The phase list was not trimmed to make any counter agree. Finding verdict: none of the four open findings blocks certification of the delivered scope, and S-1 was the one that had to be argued rather than waved through - it is the only finding in code this packet delivered, it does not violate R1-R8 since R2 is preserved and R6's completion mechanism simply has no non-return path, but it IS a regression on the panic path relative to pre-fix behavior and is named as delivery-owned work for bubbles.implement rather than filed as benign. S-2 is a critique of R5 rather than a failure to meet it, since R5 explicitly specified the SST conversation TTL the finding objects to. S-3 is pre-existing, loud-failing, and owned by specs/076-assistant-completion-rescope. SEC-069-005-1 was checked rather than assumed: turnDedupKey carries no confirm_ref and httpadapter has zero references to confirm.Machine, so the key spaces are disjoint and it has its own packet BUG-069-006. Two findings raised here: spec.md has no Outcome Contract so goal-fidelity-guard returns findings=2 against an analyst-owned artifact, and the Open Findings six-red claim is stale against this session's PASS=52 FAIL=0 SKIP=12. TR-BUG-069-004-GOVERNANCE-001 closed as satisfied on all four of its asks. Terminal status is blocked, not done: Gate G136 is the sole remaining guard failure and is structurally unclearable by any agent, so no Human Acceptance Record was authored, no checklist box was checked, and no human was named."
       }
     ]
   },
   "certification": {
-    "status": "in_progress",
+    "status": "blocked",
+    "certifiedBy": "bubbles.validate",
+    "certifiedAt": "2026-08-23T20:56:00Z",
     "completedScopes": [
       "Scope 1: Add bounded auth-scoped response replay and live regression coverage"
     ],
@@ -128,7 +161,30 @@
       "notStarted": 0,
       "blocked": 0
     },
-    "certifiedCompletedPhases": [],
+    "certifiedCompletedPhases": ["implement", "regression", "test", "simplify", "stabilize", "validate"],
+    "withheldPhases": [
+      {
+        "phase": "security",
+        "recordedAgent": "bubbles.security",
+        "recordedAt": "2026-07-19",
+        "claimSource": "operator-attested-outer-session",
+        "reason": "Withheld on both halves of the certification standard. (1) No report evidence: report.md contains no security-phase section, cites the entry's own candidate revision b476198898f005ac5bad25510fcb9d90cbe50939 zero times, and contains no SEC finding id. (2) Claim class: an operator-attested outer-session claim is another session's state, which the Bubbles kernel classifies as diagnostic input only and forbids restating as the agent's own execution evidence. It passes guard Check 6 and Check 6B because those read record shape, not backing. The date-only stamp is preserved rather than given an invented time."
+      },
+      {
+        "phase": "audit",
+        "recordedAgent": "bubbles.audit",
+        "recordedAt": "2026-07-19",
+        "claimSource": "operator-attested-outer-session",
+        "reason": "Withheld on the same two grounds as security: no audit-phase evidence exists anywhere in report.md, and an operator-attested outer-session claim is not evidence this agent executed or can re-derive. Noted additionally that this entry's own recorded outcome is 'blocked', so even taken at face value it does not assert a clean audit."
+      },
+      {
+        "phase": "validate",
+        "recordedAgent": "bubbles.validate",
+        "recordedAt": "2026-07-19",
+        "claimSource": "operator-attested-outer-session",
+        "reason": "The LEGACY 2026-07-19 validate attestation is withheld on the same grounds as its two siblings. The 'validate' phase appears in certifiedCompletedPhases on the strength of the SEPARATE 2026-08-23T20:56:00Z entry executed in this session, which carries its own report.md section. The two must not be conflated."
+      }
+    ],
     "lockdownState": {
       "active": false,
       "round": 0,
@@ -160,7 +216,10 @@
       "crossRepoFollowUp": true,
       "reason": "Append packet-attributed git-backed Code Diff Evidence for G053/G093. Then bubbles.implement reconciles supported execution items while leaving the six assistant-package failures and multi-replica residual risk open; bubbles.validate repairs scopeProgress and certifies only the supported state.",
       "packetRef": "report.md#open-findings",
-      "status": "open"
+      "status": "closed",
+      "closedAt": "2026-08-23T20:56:00Z",
+      "closedBy": "bubbles.validate",
+      "resolution": "SATISFIED on all four asks, each verified rather than assumed. (1) G053/G093 diff evidence: report.md now carries `## Implementation Delta` -> `### Code Diff Evidence` naming the commit of record 60dfcfe7 plus the 22 non-artifact source paths, and state-transition-guard Check 13B (G053) and Check 29B (G093) both PASS. (2) Supported claims reconciled: five phase claims were corrected from parent-expanded to specialist provenance by their owning specialists, and Check 6B now passes for all eight phases. (3) scopeProgress repaired: Check 5 reports total=1, Done=1, and completedScopes count matches the artifact Done count. (4) Only the supported state certified: bubbles.validate certified six phases and WITHHELD security and audit, which are the two the original routing implicitly treated as settled; see certification.withheldPhases. Two qualifications recorded honestly rather than dropped. First, the request's own reason mentions 'the six assistant-package failures' as something to leave open; that count is stale, since this session's package run returns PASS=52 FAIL=0 SKIP=12 at PKG_RC=0, and a supersession note is recorded under report.md `## Open Findings` with a `## Discovered Issues` row dated 2026-08-23. Second, the multi-replica residual risk the request asked to preserve IS preserved, as the first bullet of `## Open Findings`. productAction was `none` and remains `none`: closing this request altered governance records only, never product code. Certification is nonterminal because Gate G136 requires a human acceptance record no agent may author; that is tracked in the top-level blockedReason, not in this request."
     }
   ],
   "reworkQueue": [],
@@ -170,12 +229,24 @@
       "summary": "Deterministic live RED proves identical HTTP idempotency keys execute the facade twice; the distinct-ID adversary passes.",
       "followUpOwner": "parent-synthesis",
       "followUpAction": "Consolidate this tested packet while preserving validate-owned certification as in_progress."
+    },
+    {
+      "severity": "medium",
+      "summary": "S-1, delivery-owned: a panic inside a.facade.Handle is caught by the root-level middleware.Recoverer at internal/api/router.go:44, but lease.complete is called only on the two returning paths adapter.go:409 and adapter.go:428, neither guarded by defer. The entry stays completed==false, both reclamation paths skip it by design at dedup.go:134 and dedup.go:153, so the transport message ID is poisoned permanently and one of the 16384 capacity slots is consumed for the process lifetime. It does not violate R1-R8 - R2 at-most-once is preserved and even strengthened, R3's precondition never arises because a panicking facade produces no response to replay, and R6's completion mechanism exists for the returned-error path but not for a non-return - yet relative to pre-fix behavior it IS a regression on the panic path, where a 500 plus a re-executing retry becomes a retry that blocks until its own context expires. Trigger not observed in this session; recorded as latent, not as an incident.",
+      "followUpOwner": "bubbles.implement",
+      "followUpAction": "Add an unconditional terminal completion or abandon guarded by defer on the owner branch of internal/assistant/httpadapter/adapter.go, so a recovered panic releases the lease instead of orphaning it. Carries a `## Discovered Issues` row dated 2026-08-23 in report.md. Does not retract certification of the delivered scope, which is bounded by R1-R8 and the five acceptance scenarios, all mutation-bound."
+    },
+    {
+      "severity": "low",
+      "summary": "spec.md carries no `## Outcome Contract`, so `bash .github/bubbles/scripts/goal-fidelity-guard.sh --boundary pre-certification` returns FAIL with findings=2: the section is absent, and no Hard Constraints are declared. The delivered fix is governed instead by the eight explicit R1-R8 requirements and five Gherkin scenarios in the same spec.md, every one of which carries mutation-bound passing evidence, so the gap is in the statement of intent rather than in behavioral coverage. goal-fidelity-guard.sh is a standalone advisory script and is not among the checks state-transition-guard.sh runs for this packet, so this does not alter the guard's failureCount of 1.",
+      "followUpOwner": "bubbles.analyst",
+      "followUpAction": "Author `## Outcome Contract` in specs/069-assistant-http-transport/bugs/BUG-069-004-http-turn-dedup/spec.md with Intent, Success Signal, Hard Constraints, and Failure Condition. Not repaired by bubbles.validate: authoring the contract from the certification phase would let the certifier write the standard it then certifies against. Carries a `## Discovered Issues` row dated 2026-08-23 in report.md."
     }
   ],
   "routing": {
-    "outcome": "route_required",
-    "nextRequiredOwner": "bubbles.audit",
-    "reason": "Append candidate-attributed G053/G093 diff evidence first; then reconcile only supported DoD/phase claims, preserve package failures and residual risk, and route certification schema/status to bubbles.validate.",
-    "subsequentOwners": ["bubbles.implement", "bubbles.test", "bubbles.validate"]
+    "outcome": "blocked",
+    "nextRequiredOwner": null,
+    "reason": "Certification is complete for everything an agent can decide: six phases certified, two withheld, and the open transition request closed as satisfied. The sole remaining guard failure is Gate G136, which requires a human acceptance record that no agent may author - see the top-level blockedReason for the exact operator action. No specialist can advance this packet, so no next owner is named; the next actor is a human who exercises the delivered behavior and records their acceptance.",
+    "subsequentOwners": []
   }
 }
