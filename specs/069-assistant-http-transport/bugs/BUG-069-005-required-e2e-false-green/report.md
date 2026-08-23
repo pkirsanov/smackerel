@@ -1082,6 +1082,8 @@ for ownership routing and DoD disposition.
 | 2026-08-23 | `tests/e2e/assistant/` had NO skip guard of any kind. The sibling guard resolves its scan directory from `runtime.Caller(0)` and reads that one directory non-recursively, so it covers `tests/e2e/agent/` only. All five manifest-required assistant tests were therefore unguarded — the exact hole this packet's false green fell through | fixed-in-session: added a required-test denylist guard asserting the five manifest-required tests contain no `t.Skip`-family call in their function bodies AND that none of the five has been deleted or renamed. RED proved by seeding a marker into one required test (caught at `http_confirm_test.go:28`, exit 1); mutation restored via `git checkout --` and re-verified clean; GREEN re-run exit 0 with 2 tests + 7 subtests executed | `tests/e2e/assistant/required_no_skip_guard_test.go`; [Required-Test No-Skip Guard](#required-test-no-skip-guard-2026-08-23) |
 | 2026-08-23 | The G095 scanner flags the word `skipping` at `report.md:977`. That sentence is preserved historical RED evidence — it records that a required weather E2E stopped bailing out and began failing loudly — so it is a scanner match on a real English word, not a deferral | status-adjusted (documentation-only): the historical sentence is retained VERBATIM because rewording preserved red evidence would itself be evidence tampering; disposition is recorded here instead per remediation option (b). The underlying substantive finding is split into the two rows adjacent to this one, both of which are present in this same table | `specs/069-assistant-http-transport/bugs/BUG-069-005-required-e2e-false-green/report.md#test-continuation-deterministic-weather-and-readiness-2026-07-21` |
 | 2026-08-23 | The finding behind `TR-BUG-069-005-FRAMEWORK-001` has two halves that were previously tracked as one, which made its product disposition unreadable | routed (upstream half only): the PRODUCT half — assistant required tests being unguarded in this repo — is now closed in-repo by the new guard. The FRAMEWORK half — the installed regression guard's own blindness to Go skip tokens — is owned by the upstream framework repository and is not repairable from here, because `.github/bubbles/` is framework-managed and MUST NOT be edited downstream | `TR-BUG-069-005-FRAMEWORK-001` in `state.json`; `tests/e2e/assistant/required_no_skip_guard_test.go` |
+| 2026-08-23 | `TestRequiredAssistantE2ETestsNeverSkip` resolves its scan directory from `runtime.Caller(0)`, which bakes the compile-time source path into the test binary. Building the Go lane with `-trimpath` would rewrite that path to a module-relative form and the five `os.ReadFile` calls would stop resolving | accepted-as-designed, no change required: `-trimpath` is absent from every shell, Dockerfile, compose, workflow and Makefile surface in the repository, verified in the stabilize phase; and if it were introduced the guard fails loud rather than quiet — each unreadable required file appends a violation and the run ends in `t.Fatalf` — so the silent-green class this packet exists to prevent cannot recur through this path | `tests/e2e/assistant/required_no_skip_guard_test.go`; [stabilize evidence](#stabilize-phase--operational-risk-of-the-landed-guard-2026-08-23) |
+| 2026-08-23 | `./smackerel.sh test e2e` refuses with exit 73 while another runner holds the `flock` suite lock, and an orphaned descendant can hold that lock after its parent shell exits because `exec {FD}>` places the descriptor in the shell table and children inherit it | not-a-defect and outside this packet's Change Boundary: `smackerel.sh` is absent from the allowed implementation path set in `scopes.md`; exit 73 is the CLI's designed non-blocking refusal carrying a named remediation message; and the lock is advisory and kernel-released on process death, so no stale-lock class exists. Verified free in the stabilize phase with zero holders and no live runner | `smackerel.sh` lines 552-583; `scopes.md` Change Boundary; [stabilize evidence](#stabilize-phase--operational-risk-of-the-landed-guard-2026-08-23) |
 
 ## Test Continuation: Deterministic Weather And Readiness (2026-07-21)
 
@@ -2158,5 +2160,217 @@ test phase above.
 
 No architectural change was implied, so no design or planning route was raised. No file was
 deleted, so the deletion-safety gate did not apply.
+
+---
+
+### Stabilize Phase — Operational Risk Of The Landed Guard (2026-08-23)
+
+Owner: `bubbles.stabilize`. Surface: the operational behaviour of what this packet actually
+changed — `tests/e2e/assistant/required_no_skip_guard_test.go` — plus the test lane that carries
+it. This is a diagnostic phase. No source file, DoD item, scope status, or certification field
+was written by it.
+
+The question this phase answers is narrow and specific: the packet's fix is a guard that runs
+`go/parser` over source files at test time. Does that guard itself introduce flake, cost, or a
+hidden environmental coupling? A guard that is itself unreliable would replace one false green
+with another.
+
+#### Finding 1 — Runtime and resource cost: 9 ms, bounded by a fixed 5-file read
+
+**Claim Source:** executed
+**Command:** `./smackerel.sh test unit --go --verbose --go-run '^(TestRequiredAssistantE2ETestsNeverSkip|TestRequiredNoSkipGuard_AdversarialFinding)$'` (run from the repository root)
+**Exit Code:** 0
+
+```text
+START=2026-08-23T17:05:19Z
+=== RUN   TestRequiredAssistantE2ETestsNeverSkip
+--- PASS: TestRequiredAssistantE2ETestsNeverSkip (0.00s)
+=== RUN   TestRequiredNoSkipGuard_AdversarialFinding
+=== RUN   TestRequiredNoSkipGuard_AdversarialFinding/skip_inside_required_test_is_caught
+=== RUN   TestRequiredNoSkipGuard_AdversarialFinding/skipnow_and_skipf_are_caught
+=== RUN   TestRequiredNoSkipGuard_AdversarialFinding/clean_required_test_reports_nothing
+=== RUN   TestRequiredNoSkipGuard_AdversarialFinding/skip_in_neighbouring_func_is_ignored
+=== RUN   TestRequiredNoSkipGuard_AdversarialFinding/brace_in_string_literal_does_not_break_boundaries
+=== RUN   TestRequiredNoSkipGuard_AdversarialFinding/renamed_or_deleted_required_test_is_reported_missing
+=== RUN   TestRequiredNoSkipGuard_AdversarialFinding/method_named_skip_is_not_a_match
+--- PASS: TestRequiredNoSkipGuard_AdversarialFinding (0.00s)
+    --- PASS: TestRequiredNoSkipGuard_AdversarialFinding/skip_inside_required_test_is_caught (0.00s)
+    --- PASS: TestRequiredNoSkipGuard_AdversarialFinding/skipnow_and_skipf_are_caught (0.00s)
+    --- PASS: TestRequiredNoSkipGuard_AdversarialFinding/clean_required_test_reports_nothing (0.00s)
+    --- PASS: TestRequiredNoSkipGuard_AdversarialFinding/skip_in_neighbouring_func_is_ignored (0.00s)
+    --- PASS: TestRequiredNoSkipGuard_AdversarialFinding/brace_in_string_literal_does_not_break_boundaries (0.00s)
+    --- PASS: TestRequiredNoSkipGuard_AdversarialFinding/renamed_or_deleted_required_test_is_reported_missing (0.00s)
+    --- PASS: TestRequiredNoSkipGuard_AdversarialFinding/method_named_skip_is_not_a_match (0.00s)
+PASS
+ok      github.com/smackerel/smackerel/tests/e2e/assistant      0.009s
+real    0m28.428s
+=====RC=0
+END=2026-08-23T17:05:48Z
+```
+
+The `tests/e2e/assistant` package reports **0.009 s** for both guard tests together — 2 tests
+plus 7 subtests. The work it performs is fixed and knowable, not proportional to repository size:
+five `os.ReadFile` calls and five `parser.ParseFile` calls with `parser.SkipObjectResolution`,
+plus seven in-memory fixture parses in the adversarial table. The denylist is a compile-time
+literal of five entries, so the cost cannot grow as `tests/e2e/assistant/` grows. The 28.4 s wall
+figure is the whole focused unit lane including container start and compile, not the guard.
+
+#### Finding 2 — Determinism: the guard has no non-deterministic input to be flaky about
+
+**Claim Source:** executed (read-only source search)
+**Command:** `grep -nE 'os\.Getwd|"\.\.?/|Getenv|time\.Now|rand\.|http\.|net\.|net/http' tests/e2e/assistant/required_no_skip_guard_test.go`
+**Exit Code:** 1 (no match)
+
+```text
+NONE: no Getwd, no relative path literal, no env read, no clock, no rand, no network in the guard
+
+=== path anchor actually used ===
+6:// skipping, but it resolves its scan directory from runtime.Caller(0) and
+133:    _, here, _, ok := runtime.Caller(0)
+135:            t.Fatal("runtime.Caller failed — cannot locate this test file")
+137:    return filepath.Dir(here)
+186:            path := filepath.Join(dir, rt.File)
+187:            src, err := os.ReadFile(path)
+```
+
+Flake needs a varying input. This guard has exactly two: `runtime.Caller(0)`, which is a constant
+baked into the binary at compile time, and five file reads. There is no clock, no RNG, no
+environment variable, no network call, no goroutine, no container, no database and no live stack.
+The adversarial fixtures are in-memory source strings rather than files on disk, so they cannot be
+picked up by the production assertion that scans the real directory. The verdict is a pure
+function of the five files' contents at the revision under test.
+
+#### Finding 3 — Working-directory independence holds, and the residual coupling fails loud
+
+The question was whether the guard breaks under a different working directory. It does not.
+`assistantE2ERequiredGuardDir` anchors on `runtime.Caller(0)`, which yields the compile-time
+source path, and the file contains no `os.Getwd` and no relative-path literal (Finding 2). The
+process working directory is never consulted, so it cannot change the result.
+
+The real coupling is to the source tree being present at that compile-time path when the binary
+runs. In this repository that holds by construction: the Go lane compiles and runs inside one
+container invocation against one mount.
+
+**Claim Source:** executed (read-only source search)
+**Command:** `grep -nE 'docker run|-v |--workdir|-w ' scripts/runtime/go-unit.sh smackerel.sh`
+**Exit Code:** 0
+
+```text
+smackerel.sh:129:    -v "$SCRIPT_DIR:/workspace" \
+smackerel.sh:133:    -w /workspace \
+smackerel.sh:1201:          -v "$SCRIPT_DIR:/workspace" \
+smackerel.sh:1204:          -w /workspace \
+```
+
+Compile-time path and run-time path are the same `/workspace` mount in the same container, so the
+five reads resolve. The one input that would break this is `-trimpath`, which would rewrite
+`runtime.Caller(0)` to a module-relative path. It is absent from every shell, Dockerfile, compose
+file, workflow and Makefile surface in the repository, verified in this phase. More importantly,
+if it were ever introduced the guard does not go quiet: each unreadable required file appends a
+violation and the run ends in `t.Fatalf`. That is fail-closed, which is the correct direction of
+error for a guard whose entire purpose is to refuse a silent pass — the bug class this packet
+exists to prevent cannot recur through this path. Recorded as a row in `## Discovered Issues`
+dated 2026-08-23 against `tests/e2e/assistant/required_no_skip_guard_test.go`.
+
+#### Finding 4 — Build-tag isolation is what makes the fix durable, and it is verified
+
+**Claim Source:** executed (read-only source search)
+**Command:** `for f in tests/e2e/assistant/*.go; do grep -q '^//go:build' "$f" || echo "UNTAGGED: $f"; done`
+**Exit Code:** 0
+
+```text
+UNTAGGED: tests/e2e/assistant/required_no_skip_guard_test.go  pkg=package assistant_e2e
+--- total .go files in dir: 48
+```
+
+One file of 48 in that directory omits `//go:build e2e`, and it is the guard. Under a plain
+`go test ./...` the `assistant_e2e` package therefore compiles from the guard alone, with none of
+the 47 gated files and no live stack. Finding 1 is the proof that this actually happens: that run
+was a `test unit --go` invocation with no e2e tag, and the assistant package still executed and
+reported `ok`. This matters operationally rather than cosmetically. A guard that only runs when
+the gated suite runs cannot detect the gated suite silently not running, which is the precise
+shape of BUG-069-005. The tag omission is the property that closes it.
+
+#### Finding 5 — The `flock` suite lock and exit 73 are correct behaviour, and lie outside this packet
+
+`./smackerel.sh test e2e` acquires a suite lock and refuses with exit 73 when another runner holds
+it. This phase examined whether that is a stability defect worth recording against this packet.
+It is not, for three separable reasons.
+
+The refusal is designed, not accidental: `smackerel.sh` lines 569 and 578 call `flock -n`, the
+non-blocking form, and on contention print a named remediation before `exit 73`. Exiting rather
+than blocking is the honest answer when a concurrent stack run would corrupt the other run's
+state.
+
+There is no stale-lock failure class. The descriptor is opened with `exec {FD}>`, so the advisory
+lock is released by the kernel when the holding process dies. No manual cleanup path is needed and
+none exists, which is why the earlier exit 73 in this session cleared without intervention.
+
+**Claim Source:** executed (read-only inspection)
+**Command:** `ls -la /tmp/smackerel-*.lock; fuser -v /tmp/smackerel-*.lock; pgrep -af 'smackerel.sh (test|up|down)'`
+**Exit Code:** 0
+**Redaction:** the owner/group column is shown as `<operator>`; the raw output named the local account. Nothing else is altered — the load-bearing facts here are the zero byte sizes and the empty `fuser` holder list.
+
+```text
+-rw-r--r-- 1 <operator> <operator> 0 Aug 23 07:08 /tmp/smackerel-1000-test-e2e-suite.lock
+-rw-r--r-- 1 <operator> <operator> 0 Aug 23 07:11 /tmp/smackerel-1000-test-stack.lock
+-rw-r--r-- 1 <operator> <operator> 0 Aug 23 07:08 /tmp/smackerel-1000-test-test-suite.lock
+
+=== current holders (fuser) ===
+-- /tmp/smackerel-1000-test-e2e-suite.lock
+-- /tmp/smackerel-1000-test-stack.lock
+-- /tmp/smackerel-1000-test-test-suite.lock
+
+=== any live smackerel test runner? ===
+(no live smackerel.sh test/stack runner)
+```
+
+The three lock files persist as zero-byte artefacts from 07:08 and 07:11 with **zero holders** and
+no live runner. The files are inert; the locks are free. The mechanism by which an orphan can hold
+one is descriptor inheritance — `exec {FD}>` places the descriptor in the shell's table and every
+child inherits it, so a detached descendant outliving its parent keeps the lock alive until it
+too exits. That is a true property of the lock's implementation, not a fault introduced here.
+
+On ownership: `smackerel.sh` does not appear in this packet's Change Boundary allowed
+implementation path set in `scopes.md`, which enumerates `cmd/`, `internal/`, `config/`, `ml/` and
+test paths. The lock therefore belongs to the CLI's own surface, and this phase records it as an
+observation against `smackerel.sh` lines 552-583 rather than claiming it as packet work. A row is
+present in `## Discovered Issues` dated 2026-08-23 carrying that reference.
+
+#### Finding 6 — The five required tests are skip-free by content at the current revision
+
+The test phase recorded 5 required executed, 5 passed, 0 skipped, package exit 0. This phase adds
+an independent and cheaper confirmation taken fresh at the current revision: the production guard
+`TestRequiredAssistantE2ETestsNeverSkip` passed in Finding 1, and passing means it re-read all
+five files, located all five function declarations, and found zero `t.Skip`-family calls inside
+their bodies. A missing declaration is fatal there, so the pass also proves none of the five has
+been renamed or deleted.
+
+The 12 skips reported by the unfiltered assistant package are environment-gated and sit in the
+non-required set. They are outside the guard's assertion by construction, because the guard is a
+denylist keyed to exactly five function names rather than a directory-wide rule — in a directory
+where roughly thirty legitimate skips exist, a directory-wide rule would be red on arrival and
+would have to be weakened to land.
+
+#### Verdict
+
+🟢 **STABLE**
+
+| Domain | Outcome |
+|---|---|
+| Performance | 0.009 s for the guard package; fixed 5-file cost, cannot grow with the directory |
+| Resource usage | 5 file reads, 5 parses; no goroutine, container, socket or database |
+| Reliability | no clock, RNG, env, CWD or network input; verdict is a pure function of file content |
+| Infrastructure | compile path equals run path on one `/workspace` mount; verified |
+| Build / CI | guard is the only untagged file of 48, so it runs without the e2e tag; verified by execution |
+| Configuration | not applicable — the guard reads no configuration |
+| Test-lane concurrency | `flock -n` plus kernel-released advisory lock; no stale-lock class; verified free |
+
+No remediation was required inside this packet's Change Boundary, so no fix was applied and no
+route was raised. Two observations that are not defects are recorded in `## Discovered Issues`
+with concrete references: the `-trimpath` coupling, which is absent today and fails loud if
+introduced, and the suite-lock descriptor-inheritance property, which is owned by `smackerel.sh`.
+Nothing in this phase modified source, checked a DoD item, changed a scope status, or wrote a
+certification field.
 
 
