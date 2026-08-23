@@ -145,6 +145,8 @@ func requireNormalParityTurn(t *testing.T, hint string, response httpadapter.Tur
 func TestAssistantTransportHintParity_WebAndMobileShareResponseShape(t *testing.T) {
 	stack := loadParityLiveStack(t)
 	waitParityHealthy(t, stack, 30*time.Second)
+	// /api/health goes 200 before the facade finishes late-binding, so poll the turn route too.
+	waitAssistantFacadeReady(t, loadHTTPTurnLiveStack(t), 5*time.Minute)
 	isolation := isolateSharedHTTPConversation(t)
 
 	stamp := time.Now().UTC().Format("20060102T150405.000")

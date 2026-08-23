@@ -59,6 +59,8 @@ func postNeutralTurn(t *testing.T, stack httpTurnLiveStack, turnID string) httpa
 func TestAssistantWebPWARetryE2E_SameTransportMessageIDDedupes_TP_073_10(t *testing.T) {
 	stack := loadHTTPTurnLiveStack(t)
 	waitHTTPTurnHealthy(t, stack, 30*time.Second)
+	// /api/health goes 200 before the facade finishes late-binding, so poll the turn route too.
+	waitAssistantFacadeReady(t, stack, 5*time.Minute)
 	isolateSharedHTTPConversation(t)
 
 	turnID := "spec-073-scope-2-a03-tp-073-10-retry-" + time.Now().UTC().Format("20060102T150405.000000")
@@ -82,6 +84,8 @@ func TestAssistantWebPWARetryE2E_SameTransportMessageIDDedupes_TP_073_10(t *test
 func TestAssistantWebPWARetryE2E_DifferentTransportMessageIDsAreDistinct_TP_073_10_Adversarial(t *testing.T) {
 	stack := loadHTTPTurnLiveStack(t)
 	waitHTTPTurnHealthy(t, stack, 30*time.Second)
+	// /api/health goes 200 before the facade finishes late-binding, so poll the turn route too.
+	waitAssistantFacadeReady(t, stack, 5*time.Minute)
 	isolateSharedHTTPConversation(t)
 
 	stamp := time.Now().UTC().Format("20060102T150405.000000")

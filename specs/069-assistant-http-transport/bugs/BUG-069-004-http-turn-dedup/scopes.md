@@ -2,7 +2,7 @@
 
 ## Scope 1: Add bounded auth-scoped response replay and live regression coverage
 
-**Status:** In Progress
+**Status:** Done
 
 **Scope-Kind:** runtime-behavior
 
@@ -58,17 +58,29 @@ Scenario: Identity and payload collisions do not leak or re-execute
 
 ### Definition of Done
 
-- [ ] Deterministic same-ID ordinary-turn RED proves duplicate facade execution.
-- [ ] SCN-BUG069004-001 - Sequential same-ID retry replays one logical turn: an exact retry executes the facade once and replays assistant turn ID, body, status, and emitted time.
-- [ ] SCN-BUG069004-002 - Concurrent same-ID retries collapse: one request owns execution and all matching waiters receive its response.
-- [ ] Retries replay logical response fields with a current request ID.
-- [ ] SCN-BUG069004-003 - Different IDs execute distinct turns: the adversary returns different non-empty assistant turn IDs.
-- [ ] SCN-BUG069004-004 - Identity and payload collisions do not leak or re-execute: cross-user same-ID requests remain isolated and changed-payload reuse is rejected.
-- [ ] Cache expiry/capacity and accepted-error replay are covered.
-- [ ] Exact shared-identity conversation row is restored; unrelated rows are unchanged.
-- [ ] Focused and assistant-package E2E pass on the disposable stack.
-- [ ] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior pass.
-- [ ] Broader E2E regression suite passes.
-- [ ] Impacted units and check/lint/format/regression/packet gates pass.
+- [x] Deterministic same-ID ordinary-turn RED proves duplicate facade execution.
+  - Evidence: [report.md → Current-Session Mutation Verification](report.md#current-session-mutation-verification--do-the-dedup-tests-bind-their-claim-2026-08-23). The cache-hit branch in `dedup.go` `begin()` was short-circuited and the suite re-run: `--- FAIL: TestHTTPTurnDedup_SequentialReplayExecutesFacadeOnce` with `dedup_test.go:133: Facade.Handle calls=2, want 1`, `MUTATED_RC=1`. Duplicate facade execution is therefore demonstrated, not asserted. Restored by editing the file back (not a shell `trap`, which does not fire reliably in a persistent agent shell) and verified as its own step: `porcelain_lines=0`, `mutation_present=0`, then `GREEN_RC=0`.
+- [x] SCN-BUG069004-001 - Sequential same-ID retry replays one logical turn: an exact retry executes the facade once and replays assistant turn ID, body, status, and emitted time.
+  - Evidence: unit `--- PASS: TestHTTPTurnDedup_SequentialReplayExecutesFacadeOnce (0.01s)` and live E2E `--- PASS: TestAssistantWebPWARetryE2E_SameTransportMessageIDDedupes_TP_073_10 (0.21s)` in [report.md → Current-Session E2E](report.md#current-session-e2e--a-cold-start-false-red-found-and-fixed-2026-08-23). The E2E asserts both `assistant_turn_id` equality and `body` equality across the retry; under mutation this same test failed, so the assertion binds.
+- [x] SCN-BUG069004-002 - Concurrent same-ID retries collapse: one request owns execution and all matching waiters receive its response.
+  - Evidence: `--- PASS: TestHTTPTurnDedup_ConcurrentReplayExecutesFacadeOnce (0.01s)`. Under mutation: `dedup_test.go:156: concurrent Facade.Handle calls=2, want 1`. The mechanism is the owner lease in `dedup.go` — the owner executes while matching waiters block in `wait()` and receive the owner's result.
+- [x] Retries replay logical response fields with a current request ID.
+  - Evidence: asserted inside `TestHTTPTurnDedup_SequentialReplayExecutesFacadeOnce` at `dedup_test.go:138` — `if first.Trace.RequestID == "" || second.Trace.RequestID == "" || first.Trace.RequestID == second.Trace.RequestID { t.Fatalf("HTTP request IDs must be current per request: ...") }`. The production seam is `adapter.go:401`, `replayed.Trace.RequestID = requestID`, which overwrites the replayed trace's request ID with the current one. So the logical turn replays while the transport-level request ID stays current.
+- [x] SCN-BUG069004-003 - Different IDs execute distinct turns: the adversary returns different non-empty assistant turn IDs.
+  - Evidence: `--- PASS: TestAssistantWebPWARetryE2E_DifferentTransportMessageIDsAreDistinct_TP_073_10_Adversarial (0.06s)`. This is the adversarial guard against over-collapsing: it fails if the dedup fix were to merge turns it should not.
+- [x] SCN-BUG069004-004 - Identity and payload collisions do not leak or re-execute: cross-user same-ID requests remain isolated and changed-payload reuse is rejected.
+  - Evidence: `--- PASS: TestHTTPTurnDedup_SameIDIsIsolatedAcrossUsers (0.00s)` and `--- PASS: TestHTTPTurnDedup_ChangedPayloadConflictsWithoutReexecution (0.00s)`. Under mutation the payload-collision case failed with `dedup_test.go:183: statuses first=200 second=200, want 200/409`, proving the 409 rejection is real. Isolation is structural: the cache key is `{userDigest, transport, messageID}`, so a second user's identical message id hashes to a different key.
+- [x] Cache expiry/capacity and accepted-error replay are covered.
+  - Evidence: `--- PASS: TestHTTPTurnDedup_CacheExpiresAndEvictsCompletedEntries (0.00s)`, `--- PASS: TestHTTPTurnDedup_CacheRejectsUniqueWorkWhenAllSlotsAreInFlight (0.00s)`, `--- PASS: TestHTTPTurnDedup_AcceptedFailureIsReplayed (0.02s)`. The accepted-error case failed under mutation (`dedup_test.go:201: Facade.Handle calls=2, want 1 for replayed failure`), so replay of an accepted failure is genuinely exercised rather than incidentally true.
+- [x] Exact shared-identity conversation row is restored; unrelated rows are unchanged.
+  - Evidence: `--- PASS: TestAssistantConversationIsolation_RestoresExactTargetAndPreservesNeighbor_Adversarial (0.02s)` on the live disposable stack. This test passed in BOTH the pre-fix and post-fix E2E runs, which is expected and correct — it never posts an assistant turn, so it was unaffected by the facade-readiness defect that failed its four neighbours.
+- [x] Focused and assistant-package E2E pass on the disposable stack.
+  - Evidence: focused set `E2E2_RC=0` with 5/5 PASS; package run `PKG_RC=0` with `PASS=52 FAIL=0 SKIP=12`. Both in [report.md → Current-Session Broader Suite And Quality Gates](report.md#current-session-broader-suite-and-quality-gates-2026-08-23). All 12 skips are enumerated by name there and none is one of this packet's five required tests.
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior pass.
+  - Evidence: the four Regression E2E API rows in the Test Plan above all executed and passed in the focused run — same-ID dedup, the adversarial distinct-ID case, shared-identity row isolation, and the broader package. `E2E2_RC=0`, zero SKIP in the required set.
+- [x] Broader E2E regression suite passes.
+  - Evidence: `./smackerel.sh test e2e --go-package assistant` → `PKG_RC=0`, `PASS=52 FAIL=0 SKIP=12`, zero failures.
+- [x] Impacted units and check/lint/format/regression/packet gates pass.
+  - Evidence: `UNIT_RC=0` with all eight `TestHTTPTurnDedup_` cases carrying a `=== RUN` line (not a vacuous `[no tests to run]` pass); `CHECK_RC=0`; `LINT_RC=0`; `FMT_RC=0` ("78 files already formatted"); regression-quality guard `RQG_RC=0` with `0 violation(s), 0 warning(s)` across the four required E2E files — which is the check that matters most here, since it confirms the newly added readiness wait did not become a silent-pass escape hatch.
 
-All items remain unchecked until current-session execution evidence is recorded.
+Every item above carries current-session execution evidence. The mutation kill-test is what separates these from a passing-by-accident suite: removing the fix turns five of the eight unit cases red with this bug's exact signature.

@@ -13,9 +13,77 @@
     "currentPhase": "governance-reconciliation",
     "executionModel": "direct-authorized-runner",
     "runStartedAt": "2026-07-19T00:00:00Z",
-    "completedPhaseClaims": ["security", "validate", "audit"],
-    "completedScopes": [],
+    "completedPhaseClaims": ["security", "validate", "audit", {"phase": "implement", "agent": "bubbles.implement", "provenanceMode": "specialist", "claimedAt": "2026-08-23T19:46:02Z", "evidenceRef": "report.md#implementation-delta"}, {"phase": "regression", "agent": "bubbles.regression", "provenanceMode": "specialist", "claimedAt": "2026-08-23T20:02:26Z", "evidenceRef": "report.md#regression-phase--independent-mutation-kill-test-2026-08-23"}, {"phase": "test", "agent": "bubbles.test", "provenanceMode": "specialist", "claimedAt": "2026-08-23T20:13:19Z", "evidenceRef": "report.md#test-phase--specialist-audit-of-the-current-session-record-2026-08-23"}],
+    "completedScopes": [
+      "Scope 1: Add bounded auth-scoped response replay and live regression coverage"
+    ],
     "executionHistory": [
+      {
+        "at": "2026-08-23T19:15:00Z",
+        "agent": "bubbles.goal",
+        "phasesExecuted": ["implement"],
+        "provenanceMode": "parent-expanded",
+        "expandedBy": "bubbles.goal",
+        "expansionReason": "bubbles.implement was dispatched for this packet and returned no output while writing nothing to the tree, verified by git status --porcelain immediately after. Rather than re-dispatch indefinitely, the orchestrator executed the implement phase directly and records that fact here instead of attributing the work to a specialist that did not run.",
+        "expansionEvidenceRef": "report.md#implementation-delta",
+        "claimSource": "executed",
+        "outcome": "completed_owned",
+        "summary": "Established WHAT was delivered rather than re-deriving it. The commit of record is 60dfcfe7, settled by git merge-base --is-ancestor against a subject-identical twin 56dea60c that is NOT reachable from HEAD and must never be cited as the delivery. Delta split recorded because the raw headline overstates code delivery: packet-artifact files=24 +1423 -0 against source files=22 +976 -34. The load-bearing file is internal/assistant/httpadapter/dedup.go (+161), introducing the process-local turn-response cache keyed on {userDigest, transport, messageID} with an owner lease, waiter blocking, and TTL plus capacity eviction; adapter.go (+52 -4) wires the lease around facade invocation. Writing the 22 non-spec paths into the Code Diff Evidence section body moved Gate G093 from FAIL to exit 0 and satisfied G053."
+      },
+      {
+        "at": "2026-08-23T19:16:00Z",
+        "agent": "bubbles.goal",
+        "phasesExecuted": ["regression"],
+        "provenanceMode": "parent-expanded",
+        "expandedBy": "bubbles.goal",
+        "expansionReason": "Same dispatch gap as the implement phase; the orchestrator ran the mutation kill-test itself and attributes it honestly rather than to an unrun specialist.",
+        "expansionEvidenceRef": "report.md#current-session-mutation-verification--do-the-dedup-tests-bind-their-claim-2026-08-23",
+        "claimSource": "executed",
+        "outcome": "completed_diagnostic",
+        "summary": "Asked the only question that matters about this packet's tests: do they bind their claim? Baseline at clean HEAD ran all eight TestHTTPTurnDedup_ cases with a === RUN line each, so the pass was not a vacuous [no tests to run] under a selector matching nothing. The cache-hit branch in dedup.go begin() was then short-circuited, disabling replay while leaving every other path intact. Five of eight failed, with this bug's exact signature: Facade.Handle calls=2, want 1 sequentially, the same concurrently, plus 200/200 instead of 200/409 on payload collision. Removing the fix reproduces duplicate execution, so the tests genuinely bind. The three that still passed are correct to pass, since SameIDIsIsolatedAcrossUsers and the two cache-bookkeeping tests do not touch the disabled cache-HIT branch; a mutation killing all eight would have been the weaker result. Restored by editing the file back rather than trusting a shell trap, which does not fire reliably in a persistent agent shell, then verified as its own step: porcelain empty and zero occurrences of the mutation token. GREEN re-confirmed at exit 0."
+      },
+      {
+        "at": "2026-08-23T19:35:00Z",
+        "agent": "bubbles.goal",
+        "phasesExecuted": ["test"],
+        "provenanceMode": "parent-expanded",
+        "expandedBy": "bubbles.goal",
+        "expansionReason": "Same dispatch gap; the orchestrator executed the required E2E set directly and records the result, including a defect it exposed.",
+        "expansionEvidenceRef": "report.md#current-session-e2e--a-cold-start-false-red-found-and-fixed-2026-08-23",
+        "claimSource": "executed",
+        "outcome": "completed_owned",
+        "summary": "Running this packet's required E2E set exposed a second test-integrity defect, the mirror image of the false-green class this spec family keeps finding: a false RED. Four of five required tests failed on a cold stack in about 0.04s each with error_cause=assistant_http_not_ready and facade_invoked=false, which is not a dedup regression because the turn never reached the facade. /api/health returns 200 as soon as the core HTTP server listens, but the assistant facade wires asynchronously after the ML sidecar reports ready, so waitHTTPTurnHealthy alone lets a test fire into that gap; the one test that passed never posts a turn. Re-running could not have fixed it, because the stack is torn down after every run and every run is therefore a cold start. Fixed by wiring the EXISTING fail-loud helper waitAssistantFacadeReady, already used by two other specs, into the four affected tests. A t.Skipf on 503 would also have turned the lane green and would have been precisely the wrong fix, reproducing the pattern BUG-069-005 exists to remove; the chosen helper calls t.Fatalf on deadline so a genuine wiring failure still surfaces red. After the fix: five of five PASS, zero SKIP, exit 0. The dedup assertions now execute against a bound facade, which is what makes SameTransportMessageIDDedupes real evidence rather than an unreached assertion."
+      },
+      {
+        "at": "2026-08-23T19:46:02Z",
+        "agent": "bubbles.implement",
+        "phasesExecuted": ["implement"],
+        "provenanceMode": "specialist",
+        "claimSource": "executed",
+        "outcome": "completed_owned",
+        "evidenceRef": "report.md#implementation-delta",
+        "summary": "Verified the delivered implement phase as a specialist rather than re-implementing it, and corrected the phase claim from parent-expanded to specialist because a dispatch that returned no output is not a missing capability. Read internal/assistant/httpadapter/dedup.go directly: the cache key is turnDedupKey{userDigest, transport, messageID} where begin() hashes the user ID with sha256.Sum256 and pins transport to TransportName, so auth scoping is structural and a same-ID turn from another identity cannot collide. The lease carries owner bool; the first caller for a key executes and every later caller gets a non-owner lease whose wait() selects on entry.ready against ctx.Done(), so a duplicate blocks on the owner instead of re-executing yet still unblocks if its own client drops. complete() is owner-guarded and re-checks entry identity under the lock before stamping expiresAt and closing ready. Retention is bounded on both axes: removeExpiredLocked drops completed entries past TTL and evictOldestCompletedLocked walks the LRU list from the back and evicts only entries already marked completed, so an in-flight turn is never evicted out from under its waiters and a cache saturated with in-flight work refuses new unique work rather than corrupting a live lease. Read the adapter.go wiring: line 75 builds the cache from HTTPTurnDedupCapacity=16384 plus ConversationTTL and the injected clock; line 383 calls begin() with a sha256 fingerprint of the marshalled request, which is what converts a changed payload under a reused ID into 409 transport_message_id_conflict at line 385 instead of a silent second execution, with capacity exhaustion as 503 at line 388; the non-owner branch at line 396 replays cached status and body under a fresh Trace.RequestID and returns without reaching facade.Handle, while the owner branch invokes facade.Handle exactly once and completes on both outcomes, 500 at line 409 and 200 at line 428, so an accepted failure is replayed rather than retried. Confirmation run of ./smackerel.sh test unit --go --go-run TestHTTPTurnDedup --verbose returned exit 0 with 8 RUN, 8 PASS, 0 FAIL, 0 SKIP, each PASS paired with its own === RUN line. The httpadapter ok line reports a real 0.083s duration and does NOT carry the [no tests to run] suffix, which is the discriminator against a vacuous pass and is meaningful rather than incidental because the same run emits that suffix 203 times for packages the selector correctly matches nothing in. The E2E suite was intentionally not re-executed because it takes a flock suite lock and the required set already carries a recorded green; that green was produced against exactly this tree, which was checked rather than assumed. git status --porcelain carries three modified source paths, tests/e2e/assistant/transport_hint_parity_test.go, web_pwa_chat_e2e_test.go and web_pwa_retry_e2e_test.go, whose diff is precisely the four added waitAssistantFacadeReady calls of that same false-RED fix, with mtimes at 19:24Z predating this phase at 19:44Z. Everything this phase wrote is packet artifacts."
+      },
+      {
+        "at": "2026-08-23T20:02:26Z",
+        "agent": "bubbles.regression",
+        "phasesExecuted": ["regression"],
+        "provenanceMode": "specialist",
+        "claimSource": "executed",
+        "outcome": "completed_diagnostic",
+        "evidenceRef": "report.md#regression-phase--independent-mutation-kill-test-2026-08-23",
+        "summary": "Re-executed the dedup mutation kill-test as the owning specialist and corrected the regression claim from bubbles.goal/parent-expanded to bubbles.regression/specialist. The prior parent-expanded numbers were treated as a hypothesis to test rather than a result to restate. Verdict: CONFIRMED. Baseline ran all eight TestHTTPTurnDedup_ cases with a === RUN line each at exit 0. Short-circuiting the cache-HIT branch at dedup.go:85 in begin() to 'ok && false' then produced 5 FAIL / 3 PASS with this bug's exact signature reproduced independently, dedup_test.go:133 Facade.Handle calls=2 want 1, plus :156 concurrent, :201 replayed failure, and :221 facade 2 capture 2 want 1/1. The three survivors are correct survivors because none touches the disabled branch; killing all eight would have been the weaker outcome since it would mean the suite cannot separate the replay path from cache bookkeeping. SameIDIsIsolatedAcrossUsers was run alone under the live mutation and asserted at exit 0 rather than inferred from the absence of a FAIL line. Two evidence-integrity defects surfaced and are recorded as dated Discovered Issues rows. First, the prior Step 3 restore assertion porcelain_lines=0 is not sound for this packet: the tree legitimately carries modified packet artifacts and three waitAssistantFacadeReady source edits, so a whole-tree check does not hold and cannot separate an un-restored mutation from unrelated dirt; the path-scoped git diff --name-only -- internal/assistant/httpadapter/dedup.go supersedes it. Second, a full-repository verbose go test ./... sweep produced a captured log that arrived already elided and was internally inconsistent, 4 === RUN lines against 5 verdicts in the same file, hiding three of eight per-test verdicts behind evidence that looked complete; recovered by narrowed --go-run re-runs plus an evidence-capture sha256 over the full 229-line sweep. Restored by explicit file edit, never a shell trap, and verified as its own step: zero occurrences of the mutation token, line 85 back to its original form, and dedup.go absent from git diff. GREEN re-confirmed with all eight PASS at exit 0. The E2E suite was deliberately left unexecuted because it serializes on a flock suite lock returning exit 73 when held, and a mutation confined to one unit-level branch cannot be evidenced by it; the required E2E green for this exact tree is the one already recorded in the Current-Session E2E section."
+      },
+      {
+        "at": "2026-08-23T20:13:19Z",
+        "agent": "bubbles.test",
+        "phasesExecuted": ["test"],
+        "provenanceMode": "specialist",
+        "claimSource": "executed",
+        "outcome": "completed_owned",
+        "evidenceRef": "report.md#test-phase--specialist-audit-of-the-current-session-record-2026-08-23",
+        "summary": "Recorded the test phase as the owning specialist and corrected the claim from bubbles.goal/parent-expanded to bubbles.test/specialist. Split of provenance, stated plainly: the E2E figures (5/5 PASS on the required set, PASS=52 FAIL=0 SKIP=12 on the assistant package, LINT/FMT/CHECK/regression-quality all clean) were AUDITED, not re-executed — that suite serializes on a flock lock returning exit 73 when held, and the claims carrying real risk are structural, answerable from the working tree more cheaply and more directly than a re-run. Executed here: the audit commands below and a narrowed unit re-run. Three claims checked adversarially, all three CONFIRMED. First, the four waitAssistantFacadeReady call sites are real: git diff --stat shows 8 insertions across three files, 2+2+4, the 4 in web_pwa_retry being its two affected tests, each call placed after the existing waitHTTPTurnHealthy rather than replacing it. Second, and the one that decides whether the fix was legitimate at all, the helper fails loud: its file is UNMODIFIED in this tree, carries zero t.Skip/Skipf/SkipNow, and its only non-success loop exit is t.Fatalf at line 54 with the last status and body; five pre-existing call sites confirm it was wired in, not written to order. A t.Skipf on 503 would have greened the lane while erasing the signal, the exact pattern BUG-069-005 exists to remove. Third, the 12-skip set intersected against this packet's five required tests is empty, checked by grep rather than by eye; all 12 are capture-fallback, legacy-retirement, intent-compiler or micro-tools tests. Unit re-confirmation executed: TestHTTPTurnDedup gives RUN_COUNT=8 PASS_COUNT=8 FAIL=0 SKIP=0, ok httpadapter 0.111s, exit 0 — RUN_COUNT reported beside PASS_COUNT because a selector matching nothing also exits 0, so the RUN lines are what make the pass non-vacuous. One qualification the prior record did not state, now a dated Discovered Issues row: two required test files carry pre-existing environment-gate skips in their stack loaders, transport_hint_parity_test.go:48 on CORE_EXTERNAL_URL and conversation_isolation_test.go:43 on DATABASE_URL. Both were inert in the run of record and neither is in this session's diff, but a required test that silently skips on a misconfigured stack reports the same green as one that ran; changing them belongs to BUG-069-005, which owns skip-guard removal across this surface."
+      },
       {
         "at": "2026-07-19",
         "agent": "bubbles.security",
@@ -50,11 +118,13 @@
   },
   "certification": {
     "status": "in_progress",
-    "completedScopes": [],
+    "completedScopes": [
+      "Scope 1: Add bounded auth-scoped response replay and live regression coverage"
+    ],
     "scopeProgress": {
       "total": 1,
-      "done": 0,
-      "inProgress": 1,
+      "done": 1,
+      "inProgress": 0,
       "notStarted": 0,
       "blocked": 0
     },

@@ -66,6 +66,8 @@ func getServedText(t *testing.T, baseURL, path string) string {
 func TestAssistantWebPWAChatE2E_ServedRouteHasComposerTranscriptAndResponseMarkup_TP_073_09(t *testing.T) {
 	stack := loadHTTPTurnLiveStack(t)
 	waitHTTPTurnHealthy(t, stack, 30*time.Second)
+	// /api/health goes 200 before the facade finishes late-binding, so poll the turn route too.
+	waitAssistantFacadeReady(t, stack, 5*time.Minute)
 	isolateSharedHTTPConversation(t)
 
 	html := getServedText(t, stack.BaseURL, "/pwa/assistant.html")
