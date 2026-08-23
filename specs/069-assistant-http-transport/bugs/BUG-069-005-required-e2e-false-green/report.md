@@ -1386,3 +1386,161 @@ Scopes 1 and 2 are implementation-complete. Scope 3 has current evidence for
 the protected tests and full assistant package, but canonical all-package E2E
 must run on the eventual merged-main candidate. Certification remains
 `in_progress`; security, audit, and validate ownership are not claimed here.
+
+## Implementation Delta
+
+### Code Diff Evidence
+
+**Phase:** plan (linkage repair)
+**Recorded:** 2026-08-23 by bubbles.plan
+**Claim Source:** executed — every sha, path, and count below was read from
+`git` in this session. Nothing here is a re-run of the test suite; this section
+records WHAT CHANGED, not what passed.
+
+#### Locating the commit of record
+
+`git log --oneline --all --grep='BUG-069-005'` returns FOUR commits, in two
+subject-identical pairs. That matters, because a reader who cites by subject can
+easily cite a sha that is not in the shipped history. `git merge-base
+--is-ancestor` was run against each to settle it:
+
+```text
+$ git log --oneline --all --grep='BUG-069-005'
+92865443 merge(consolidate): bug/spec069 BUG-069-005 assistant intent-compiler fixes (in_progress — dedicated to late completion)
+f8e51b5e merge(consolidate): bug/spec069 BUG-069-005 assistant intent-compiler fixes (in_progress — dedicated to late completion)
+aeb1b966 plan: reconcile BUG-069-005 implementation paths
+eeccb00a plan: reconcile BUG-069-005 implementation paths
+
+$ for c in 92865443 f8e51b5e aeb1b966 eeccb00a; do git merge-base --is-ancestor $c HEAD && echo "$c ANCESTOR-OF-HEAD" || echo "$c not-ancestor"; done
+92865443 not-ancestor
+f8e51b5e ANCESTOR-OF-HEAD
+aeb1b966 not-ancestor
+eeccb00a ANCESTOR-OF-HEAD
+```
+
+The commit of record for the delivered tree is therefore `f8e51b5e`, and the
+planning reconciliation that followed it is `eeccb00a`. `92865443` and
+`aeb1b966` carry the same subjects but are NOT reachable from `HEAD`; they are
+pre-rebase copies and must not be cited as the delivery.
+
+```text
+$ git show -s --format='%H%n%cI%n%s' f8e51b5e
+f8e51b5ed237dcfa44ee7951fbfa38c272ddf934
+2026-07-27T06:24:05+00:00
+merge(consolidate): bug/spec069 BUG-069-005 assistant intent-compiler fixes (in_progress — dedicated to late completion)
+
+$ git show -s --format='%H%n%cI%n%s' eeccb00a
+eeccb00a448bbd15d8e03dddf0504012c3a55913
+2026-07-21T01:22:39+00:00
+plan: reconcile BUG-069-005 implementation paths
+```
+
+#### Delta size, split by artifact vs source
+
+```text
+$ git show --shortstat --format='' f8e51b5e
+ 45 files changed, 6036 insertions(+), 59 deletions(-)
+
+$ git show --numstat --format='' f8e51b5e | awk -F'\t' 'NF==3 { if ($3 ~ /BUG-069-005-required-e2e-false-green/) { pf++; pa+=$1; pd+=$2 } else { sf++; sa+=$1; sd+=$2 } } END { printf "packet-artifact files=%d +%d -%d\nsource files=%d +%d -%d\n", pf, pa, pd, sf, sa, sd }'
+packet-artifact files=8 +3304 -0
+source files=37 +2732 -59
+```
+
+The split is recorded because the raw `45 files / 6036 insertions` headline
+overstates the code delivery by more than half: 8 of those files and 3304 of
+those insertions are this packet's own markdown and JSON artifacts. The runtime
+delivery is **37 files, +2732 / -59**.
+
+`eeccb00a` touches exactly one file and no source at all:
+
+```text
+$ git show --stat --format='' eeccb00a
+ .../BUG-069-005-required-e2e-false-green/scopes.md | 149 ++++++++++++++++-----
+ 1 file changed, 115 insertions(+), 34 deletions(-)
+```
+
+#### Non-artifact runtime, source, and config paths changed by `f8e51b5e`
+
+```text
+$ git show --stat --format='' f8e51b5e
+ cmd/core/main.go                                   |   10 +-
+ cmd/core/wiring_assistant_actions.go               |  163 +++
+ cmd/core/wiring_assistant_facade.go                |   49 +
+ config/smackerel.yaml                              |   16 +-
+ docker-compose.yml                                 |   37 +
+ .../agent/tools/microtools/location_normalize.go   |   21 +
+ .../microtools/location_normalize_openmeteo.go     |   12 +-
+ .../location_normalize_openmeteo_test.go           |   35 +
+ internal/agent/tools/weather/tool.go               |   38 +
+ internal/assistant/compiled_interactions.go        |  534 ++++++++
+ internal/assistant/compiled_weather_test.go        |  292 ++++
+ internal/assistant/context/store.go                |   15 +-
+ internal/assistant/facade.go                       |   58 +
+ internal/assistant/intent/http_transport.go        |  117 ++
+ internal/assistant/intent/http_transport_test.go   |  100 ++
+ internal/config/assistant.go                       |   13 +-
+ internal/config/assistant_intent_compiler.go       |   14 +-
+ internal/config/assistant_intent_compiler_test.go  |   43 +
+ internal/config/assistant_test.go                  |   35 +-
+ internal/config/validate_test.go                   |    4 +-
+ ml/app/main.py                                     |   31 +
+ ml/app/routes/intent_compile.py                    |  175 +++
+ ml/tests/conftest.py                               |   11 +
+ ml/tests/test_intent_compiler.py                   |  122 ++
+ ml/tests/test_intent_compiler_provider_fixture.py  |   42 +
+ ml/tests/test_main.py                              |   20 +
+ scripts/commands/config.sh                         |    8 +-
+ tests/e2e/assistant/annotation_intent_test.go      |   44 +-
+ tests/e2e/assistant/http_confirm_test.go           |   30 +-
+ tests/e2e/assistant/http_disambiguation_test.go    |   20 +-
+ tests/e2e/assistant/intent_clarify_test.go         |   11 +-
+ tests/e2e/assistant/intent_compiler_http_test.go   |   77 +-
+ tests/e2e/assistant/intent_side_effect_test.go     |   11 +-
+ .../required_compiler_state_helpers_test.go        |  184 +++
+ tests/e2e/intent-compiler-provider/provider.py     |  122 ++
+ tests/e2e/stub-providers/nginx.conf                |    3 +
+ .../assistant/bug069005_runtime_canary_test.go     |  274 ++++
+```
+
+The paths abbreviated by `git`'s own `.../` prefix elision resolve to
+`internal/agent/tools/microtools/location_normalize.go`,
+`internal/agent/tools/microtools/location_normalize_openmeteo.go`,
+`internal/agent/tools/microtools/location_normalize_openmeteo_test.go`,
+`tests/e2e/assistant/required_compiler_state_helpers_test.go`, and
+`tests/integration/assistant/bug069005_runtime_canary_test.go`.
+
+#### The five protected E2E files, individually
+
+This packet exists because five manifest-required tests reported success while
+asserting nothing. The per-file delta on exactly those five is therefore the
+most load-bearing part of the diff, and is recorded separately rather than left
+inside a 37-file list:
+
+```text
+$ git show --numstat --format='' f8e51b5e | grep -E 'tests/e2e/assistant/(annotation_intent|http_confirm|http_disambiguation|intent_clarify|intent_side_effect)_test\.go'
+36      8       tests/e2e/assistant/annotation_intent_test.go
+22      8       tests/e2e/assistant/http_confirm_test.go
+15      5       tests/e2e/assistant/http_disambiguation_test.go
+9       2       tests/e2e/assistant/intent_clarify_test.go
+9       2       tests/e2e/assistant/intent_side_effect_test.go
+```
+
+Read as insertions/deletions: every one of the five was both ADDED to and
+DELETED from. A file that only gained lines would be consistent with adding an
+assertion beside a surviving bailout; the deletions are what show the
+skip-family branches were removed rather than supplemented.
+
+#### Tree state at the time of this recording
+
+```text
+$ git log -1 --oneline
+c8ec870b (HEAD -> main, origin/main) validate(BUG-104-001): certify 6 of 8 phases; terminal status blocked
+
+$ git status --porcelain
+(no output)
+```
+
+The working tree was clean before this session's artifact writes, so the counts
+above describe committed history and not an uncommitted local state. All paths
+are repository-relative from `<repo-root>`.
+

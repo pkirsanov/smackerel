@@ -18,7 +18,11 @@
     "runStartedAt": "2026-07-20T23:07:25Z",
     "lastUpdatedAt": "2026-07-21T01:12:06Z",
     "completedPhaseClaims": [],
-    "completedScopes": [],
+    "completedScopes": [
+      "Scope 1: Compiler SST, provider transport, and core wiring",
+      "Scope 2: Persistent disambiguation and confirmation state"
+    ],
+    "completedScopesNote": "POPULATED 2026-08-23 by bubbles.plan. The prior value was an empty array while scopes.md already carried two scopes whose **Status:** line reads Done, and the transition guard reported that mismatch as a state.json integrity failure rather than as a difference of opinion. The two entries are copied VERBATIM from the scopes.md headings at the Done status lines; neither name was paraphrased, and Scope 3 is deliberately absent because its **Status:** line reads In Progress. This array mirrors certification.completedScopes so the guard reads the same two names whichever field it resolves.",
     "executionHistory": [
       {
         "at": "2026-07-20T23:07:25Z",
@@ -49,8 +53,14 @@
     "status": "in_progress",
     "completedAt": null,
     "evidenceRef": "report.md#before-fix---accepted-bubblestest-handoff",
-    "completedScopes": [],
+    "completedScopes": [
+      "Scope 1: Compiler SST, provider transport, and core wiring",
+      "Scope 2: Persistent disambiguation and confirmation state"
+    ],
+    "completedScopesNote": "POPULATED 2026-08-23 by bubbles.plan, same two names and same reasoning as execution.completedScopes above. Recording a scope here asserts only that the scope artifact declares Done; it does NOT assert certification, which remains in_progress. The array is written one entry per line on purpose: the guard counts entries with a line-oriented match, so an inline array of two names would be counted as one and would then be reported as a count mismatch.",
     "certifiedCompletedPhases": [],
+    "scopeProgress": { "total": 3, "done": 2, "inProgress": 1, "notStarted": 0, "blocked": 0 },
+    "scopeProgressNote": "MEASURED 2026-08-23 by bubbles.plan from scopes.md, not carried over from a prior turn. scopes.md declares three scopes; their canonical **Status:** lines read Done, Done, In Progress, which the Scope Inventory table reproduces. The same five numbers were read back independently from the transition guard's Check 5 line 'Resolved scopes: total=3, Done=2, In Progress=1, Not Started=0, Blocked=0'. Recorded with the caution that a count inside the certification block is a claim like any other and goes stale the moment the scope artifacts move, in either direction.",
     "lockdownState": {
       "active": false,
       "round": 0,

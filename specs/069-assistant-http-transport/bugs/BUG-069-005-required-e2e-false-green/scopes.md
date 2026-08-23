@@ -641,6 +641,34 @@ Scenario: SCN-BUG069005-005 - Confirm acceptance executes the gated action once
    > Warnings: 0
    > ```
    > Evidence: [report.md#weather-implementation-and-test-closeout](report.md#weather-implementation-and-test-closeout)
+- [ ] SCN-BUG069005-003 - Disambiguation choice resolves pending state: given a prior HTTP turn persisted a DisambiguationPrompt, submitting one listed choice with the issued reference clears that same pending state exactly once, and the selected candidate drives the resumed assistant turn.
+   > **Added 2026-08-23 by bubbles.plan. Unchecked, and the reason is the point of the item.**
+   > This scope's three scenarios each carried an `SCN-` id that no DoD item cited,
+   > so Gate G068 reported the scenario as having no faithful DoD item. The fix is
+   > to restate the scenario as a DoD item, NOT to reword the scenario until an
+   > existing item happens to match it — the scenario block above is byte-unchanged.
+   > The behavior restated here already has recorded executed evidence under
+   > `TP-BUG069005-07` in this same scope, captured in the 2026-07-21 implement run.
+   > That is not this session's evidence, and this scope requires current-session
+   > command evidence before an item may be checked. Reusing the sibling item's
+   > output would put one recorded result behind two separate claims, which is the
+   > exact shape of false green this packet was opened to remove. It stays `[ ]`
+   > until a session actually runs the proving command.
+- [ ] SCN-BUG069005-004 - List write is not persisted before confirmation: given the compiler returns a validated list-write intent, an authenticated user asking to add milk to a shopping list receives a persistent ConfirmCard, and the list is unchanged until the issued confirm reference is accepted.
+   > **Added 2026-08-23 by bubbles.plan. Unchecked for the same reason as the item above.**
+   > The behavior restated here already has recorded executed evidence under
+   > `TP-BUG069005-08` in this same scope, from the 2026-07-21 implement run. No
+   > command was executed this session to back this item, so it is not checked.
+   > The scenario block above was not narrowed, softened, or reworded to fit the
+   > existing item; the item was written to fit the scenario.
+- [ ] SCN-BUG069005-005 - Confirm acceptance executes the gated action once: given a prior HTTP turn persisted a ConfirmCard, accepting the issued confirm reference executes the proposed action exactly once, and replaying the same reference does not execute it again.
+   > **Added 2026-08-23 by bubbles.plan. Unchecked for the same reason as the two items above.**
+   > The behavior restated here already has recorded executed evidence under
+   > `TP-BUG069005-09` in this same scope, from the 2026-07-21 implement run. No
+   > command was executed this session to back this item, so it is not checked.
+   > The replay clause is restated in full on purpose: an item that asserted only
+   > "executes the gated action" would drop the half of the scenario that makes it
+   > a safety property rather than a happy path.
 
 All items require current-session command evidence before checking.
 
