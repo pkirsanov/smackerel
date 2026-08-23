@@ -106,7 +106,7 @@ its shape.
 - [ ] Adversarial regression flips: the same off-contract condition reports FAIL after the fix. A regression that cannot be shown to flip the outcome does not satisfy this item. → Evidence: [report.md](report.md)
 - [ ] Non-tautology proven: a legitimately grounded envelope still passes post-fix, so the fix is not an always-fail. → Evidence: [report.md](report.md)
 - [ ] The four SCOPE-074-04B assertions (`capture_route`, nil `confirm_card`, nil `disambiguation_prompt`, canonical body) execute on every run that got HTTP 200 with a decodable envelope. → Evidence: [report.md](report.md)
-- [ ] Bailout scan clean: the only `t.Skip` in executable code guards HTTP 503 `assistant_http_not_ready`; every contract assertion uses `t.Errorf`/`t.Fatalf`. → Evidence: [report.md](report.md)
+- [ ] Bailout scan clean: the only `t.Skip` calls in executable code guard infrastructure availability — HTTP 503 `assistant_http_not_ready` (adapter bind timing) and `error_cause=provider_unavailable` (upstream failed before the grounding decision). Neither keys on the `saved_as_idea` status the canonical-ack assertions police. Every contract assertion uses `t.Errorf`/`t.Fatalf`. → Evidence: [report.md](report.md)
 - [ ] Header comment (lines 16–20) matches the code; no comment promises a failure mode the code cannot produce. → Evidence: [report.md](report.md)
 - [ ] Policy compliance: no failure-condition early exit remains, per `.github/copilot-instructions.md` line 331. → Evidence: [report.md](report.md)
 - [ ] Change boundary honoured: the diff touches only `tests/e2e/assistant/capture_fallback_trigger_e2e_test.go` and this packet; zero `internal/` changes. → Evidence: [report.md](report.md)

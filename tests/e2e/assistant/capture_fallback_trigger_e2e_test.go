@@ -13,15 +13,49 @@
 // canonical saved-as-idea acknowledgement on the wire — identical
 // shape to the BandLow fallback path covered by spec 069 SCOPE-4.
 //
-// Adversarial coverage: if the facade silently dropped the no-ground
-// capture (regression of SCOPE-074-04A change-boundary "capture
-// failure must be observable") OR if it routed to a different status
-// (regression of SCOPE-074-04B canonical-ack rule), this test would
-// fail. The test is defensive: if open-knowledge actually grounds the
-// query (LLM nondeterminism / model drift), the strict assertions are
-// skipped (the no-ground path simply wasn't exercised on this run);
-// the same defensive pattern is used by spec 069 SCOPE-4
-// http_capture_test.go.
+// Adversarial coverage (BUG-074-002). The run is CLASSIFIED from
+// `error_cause` and `sources`; the contract is ASSERTED on `status` and
+// `body`. Those two sets are deliberately disjoint. The previous guard
+// branched on `status` and then asserted `status`, so a status
+// regression selected its own escape hatch and the test reported SKIP
+// instead of FAIL — the header promised a failure mode the code could
+// not produce.
+//
+// Every decoded 200 envelope now lands in exactly one of five branches,
+// four of which assert:
+//
+//  1. status=saved_as_idea           → the capture shape. The four
+//     SCOPE-074-04B rules are asserted strictly (capture_route, nil
+//     confirm card, nil disambiguation prompt, canonical ack body).
+//  2. error_cause=no_grounded_answer → the honest high-band no-ground
+//     refusal (BUG-061-009 / INV-HB-REFUSAL, which governs the
+//     BandHigh open_knowledge path). Asserted strictly: unavailable,
+//     capture_route=false, canonical refusal body, no partial
+//     provenance, and the capture acknowledgement string ABSENT.
+//  3. error_cause=provider_unavailable → the upstream provider failed,
+//     so the grounding decision was never reached and no conclusion
+//     about SCOPE-074-04B is available. Asserts status coherence and
+//     capture_route=false, then skips. response.go documents this cause
+//     as "upstream failed", explicitly distinct from no_grounded_answer
+//     ("could not ground"), so the split follows the contract rather
+//     than working around it.
+//  4. sources present                → the model grounded the prompt,
+//     so the no-ground path was not exercised on this run. Passes, and
+//     still asserts the two invariants a grounded answer must satisfy.
+//  5. anything else                  → FAILS. An envelope that is
+//     neither a capture, nor a typed no-ground refusal, nor an upstream
+//     failure, nor grounded is off-contract; that includes an
+//     answered-with-zero-sources fabrication leak.
+//
+// Two skips survive, both keyed on infrastructure availability and
+// neither on a contract outcome: the HTTP 503 `assistant_http_not_ready`
+// readiness poll below (adapter bind timing) and branch 3 (upstream
+// provider down). Critically, neither keys on the `saved_as_idea` status
+// that the four canonical-ack assertions police, which is the precise
+// defect BUG-074-002 was filed for. Model nondeterminism is absorbed by
+// branch 4 and by the input choice, never by relaxing an assertion —
+// the same discipline as
+// tests/e2e/assistant/high_band_refusal_e2e_test.go.
 
 package assistant_e2e
 
@@ -56,7 +90,9 @@ func TestAssistantHTTPE2E_CaptureFallbackOpenKnowledgeNoGround(t *testing.T) {
 	// returning 503 assistant_http_not_ready briefly after the core
 	// container reports /api/health=200. Poll for up to 5 minutes;
 	// late-binding depends on ML sidecar reachability and can take
-	// substantial time on a cold test stack.
+	// substantial time on a cold test stack. This is the ONLY condition
+	// on which this test declines to run: the route is not up, so no
+	// conclusion about the no-ground contract is available either way.
 	var (
 		resp *http.Response
 		body []byte
@@ -68,7 +104,12 @@ func TestAssistantHTTPE2E_CaptureFallbackOpenKnowledgeNoGround(t *testing.T) {
 			break
 		}
 		if time.Now().After(deadline) {
-			t.Skipf("assistant adapter not ready after 5min on this run; routing this as test-infra timing rather than a SCOPE-074-04B regression (unit + integration coverage proves the no-ground hook is wired). Last body=%s", string(body))
+			// States only what was observed. The previous message
+			// classified the run as "test-infra timing rather than a
+			// SCOPE-074-04B regression" and asserted that unit and
+			// integration coverage proved the hook wired — two
+			// conclusions this loop never tested (BUG-074-002 DI-2).
+			t.Skipf("assistant HTTP adapter never bound within 5min (still 503 assistant_http_not_ready), so the turn never reached the facade and this run establishes nothing about the no-ground contract; last body=%s", string(body))
 		}
 		time.Sleep(3 * time.Second)
 	}
@@ -89,31 +130,106 @@ func TestAssistantHTTPE2E_CaptureFallbackOpenKnowledgeNoGround(t *testing.T) {
 		t.Errorf("transport_message_id echo = %q, want %q", env.TransportMessageID, req.TransportMessageID)
 	}
 
-	// SCOPE-074-04B canonical ack rule. The no-ground path MUST land
-	// on the saved-as-idea envelope. If the live LLM actually
-	// grounded the prompt (which it should not, but model drift
-	// happens), skip — this test's job is to PROVE the no-ground
-	// capture path produces the canonical ack, not to prove the
-	// model refuses.
-	if env.Status != string(contracts.StatusSavedAsIdea) {
-		t.Skipf("live stack did not route through the open-knowledge no-ground capture path (status=%q, capture_route=%v); facade no-ground hook is covered by unit + integration tests",
-			env.Status, env.CaptureRoute)
-	}
-	if !env.CaptureRoute {
-		t.Errorf("capture_route = false; no-ground fallback MUST set capture_route=true (regression of SCOPE-074-04B canonical ack)")
-	}
-	if env.ConfirmCard != nil {
-		t.Errorf("confirm_card non-nil on no-ground capture path; want nil")
-	}
-	if env.DisambiguationPrompt != nil {
-		t.Errorf("disambiguation_prompt non-nil on no-ground capture path; want nil")
-	}
-	// Canonical body substring — must match the shared
-	// saved-as-idea acknowledgement string emitted by the facade
-	// (same as spec 069 SCOPE-4 BandLow path) so the cross-transport
-	// acknowledgement contract holds for the no-ground cause.
-	body4 := strings.ToLower(env.Body)
-	if !strings.Contains(body4, "saved as an idea") {
-		t.Errorf("body = %q; expected canonical 'saved as an idea' acknowledgement (SCOPE-074-04B canonical ack rule)", env.Body)
+	// Record the exact envelope the live stack produced before asserting
+	// on it. Which branch a run took is a fact about the stack, and it
+	// belongs in the log rather than inside a relaxed assertion.
+	t.Logf("live envelope: status=%q error_cause=%q capture_route=%v sources=%d body=%q",
+		env.Status, env.ErrorCause, env.CaptureRoute, len(env.Sources), env.Body)
+
+	canonicalRefusal := contracts.CanonicalRefusalBodyFor(contracts.RefusalDefault)
+	lowerBody := strings.ToLower(env.Body)
+
+	// Outcome-space closure. Total over the envelope, no early return,
+	// no skip. See the branch table in the file header.
+	switch {
+	case env.Status == string(contracts.StatusSavedAsIdea):
+		// SCOPE-074-04B canonical ack rule. Reached only when the stack
+		// actually emitted the capture shape, so these four assertions
+		// are now unconditional WITHIN the shape they govern instead of
+		// being gated behind the status they are supposed to police.
+		if !env.CaptureRoute {
+			t.Errorf("status = %q but capture_route = false; the capture shape MUST set capture_route=true (regression of SCOPE-074-04B canonical ack)", env.Status)
+		}
+		if env.ConfirmCard != nil {
+			t.Errorf("confirm_card non-nil on the capture path; want nil (got %+v)", env.ConfirmCard)
+		}
+		if env.DisambiguationPrompt != nil {
+			t.Errorf("disambiguation_prompt non-nil on the capture path; want nil (got %+v)", env.DisambiguationPrompt)
+		}
+		// Canonical body substring — must match the shared saved-as-idea
+		// acknowledgement emitted by the facade (same as the spec 069
+		// SCOPE-4 BandLow path) so the cross-transport acknowledgement
+		// contract holds for the no-ground cause.
+		if !strings.Contains(lowerBody, captureAckSubstring) {
+			t.Errorf("status = %q but body = %q; expected the canonical %q acknowledgement (SCOPE-074-04B canonical ack rule)", env.Status, env.Body, captureAckSubstring)
+		}
+
+	case env.ErrorCause == string(contracts.ErrNoGroundedAnswer):
+		// The no-ground path RAN and refused honestly. This is the
+		// BandHigh shape that BUG-061-009 / INV-HB-REFUSAL ratified for
+		// open_knowledge: a matched, executed request the system could
+		// not ground refuses with a typed cause and MUST NOT be dressed
+		// as a band-low capture. Previously this whole shape reported
+		// SKIP and asserted nothing.
+		if env.Status != string(contracts.StatusUnavailable) {
+			t.Errorf("error_cause = %q but status = %q; want %q — the no-ground cause and the unavailable status are one contract, not two", env.ErrorCause, env.Status, contracts.StatusUnavailable)
+		}
+		if env.CaptureRoute {
+			t.Errorf("capture_route = true on a %q refusal; capture-as-fallback is band-LOW only (INV-HB-REFUSAL) and MUST NOT ride a high-band no-ground refusal; body=%q", env.ErrorCause, env.Body)
+		}
+		if strings.Contains(lowerBody, captureAckSubstring) {
+			t.Errorf("body = %q contains %q on a %q refusal — the user asked a real question and was told it was filed away as an idea (INV-HB-REFUSAL violated)", env.Body, captureAckSubstring, env.ErrorCause)
+		}
+		if env.Body != canonicalRefusal {
+			t.Errorf("error_cause = %q but body = %q; want the canonical refusal %q", env.ErrorCause, env.Body, canonicalRefusal)
+		}
+		if len(env.Sources) != 0 {
+			t.Errorf("error_cause = %q with %d sources; a no-grounded-answer refusal MUST NOT surface partial provenance", env.ErrorCause, len(env.Sources))
+		}
+
+	case env.ErrorCause == string(contracts.ErrProviderUnavailable):
+		// The upstream provider failed, so the turn never reached the
+		// grounding decision and this run cannot say anything about the
+		// SCOPE-074-04B contract either way. The contract itself draws
+		// this line: response.go documents ErrProviderUnavailable as
+		// "upstream failed", explicitly distinct from ErrNoGroundedAnswer
+		// ("could not ground"). Reporting FAIL here would assert a
+		// contract violation that was never observed — the same
+		// truthfulness error this packet exists to remove, pointed the
+		// other way. This skip is narrow and TYPED: it keys on an
+		// upstream-failure cause, never on the saved_as_idea status the
+		// four canonical-ack assertions police, so it cannot swallow the
+		// regression class BUG-074-002 was filed for.
+		if env.Status != string(contracts.StatusUnavailable) {
+			t.Errorf("error_cause = %q but status = %q; want %q — an upstream failure and the unavailable status are one contract", env.ErrorCause, env.Status, contracts.StatusUnavailable)
+		}
+		if env.CaptureRoute {
+			t.Errorf("capture_route = true on a %q failure; capture-as-fallback MUST NOT ride an upstream provider error; body=%q", env.ErrorCause, env.Body)
+		}
+		t.Skipf("upstream provider unavailable (error_cause=%q, status=%q); the open-knowledge grounding decision was never reached, so this run establishes nothing about the no-ground capture contract. body=%q", env.ErrorCause, env.Status, env.Body)
+
+	case len(env.Sources) > 0:
+		// The model grounded the prompt, so the no-ground path was not
+		// exercised on this run. That is the one legitimate
+		// non-exercise, and it PASSES rather than skipping — but the
+		// two invariants a grounded answer must satisfy are still
+		// asserted, so this branch cannot become a silent catch-all.
+		if env.CaptureRoute {
+			t.Errorf("capture_route = true on a grounded answer (%d sources); capture-as-fallback MUST NOT fire when the turn was groundable; status=%q body=%q", len(env.Sources), env.Status, env.Body)
+		}
+		if strings.Contains(lowerBody, captureAckSubstring) {
+			t.Errorf("body = %q contains %q on a grounded answer with %d sources; a grounded turn is answered, never captured", env.Body, captureAckSubstring, len(env.Sources))
+		}
+		t.Logf("open-knowledge grounded the prompt with %d source(s); the no-ground capture path was not exercised on this run, so branches 1 and 2 did not apply", len(env.Sources))
+
+	default:
+		// Neither a capture, nor a typed no-ground refusal, nor
+		// grounded. Off-contract, and previously the exact shape the
+		// old guard swallowed as a SKIP. An answered-with-zero-sources
+		// envelope lands here, which is the fabrication leak the
+		// provenance gate exists to refuse.
+		t.Errorf("off-contract envelope: status=%q error_cause=%q capture_route=%v sources=0 body=%q. An ungroundable open-knowledge turn must terminate as the capture shape (%q), a typed no-ground refusal (error_cause=%q), or a grounded answer carrying sources; a provider/infra failure also lands here and is reported rather than skipped",
+			env.Status, env.ErrorCause, env.CaptureRoute, env.Body,
+			contracts.StatusSavedAsIdea, contracts.ErrNoGroundedAnswer)
 	}
 }
