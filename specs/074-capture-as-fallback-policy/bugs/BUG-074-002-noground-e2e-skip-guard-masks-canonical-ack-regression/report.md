@@ -81,6 +81,31 @@ not evidence thinness.
 
 ## Test Evidence
 
+### Red-stage proof — summary, with the full run recorded below
+
+Scenario-first TDD requires a failing targeted proof before the fix is accepted
+as green, so the red-stage result is stated here up front rather than left to be
+discovered two hundred lines down. It is not a new claim; it summarises the
+executed runs recorded verbatim in
+[Live Execution — The Adversarial Flip, Demonstrated](#live-execution--the-adversarial-flip-demonstrated-2026-08-23).
+
+**RED (required red-stage, executed).** Against the live stack, the fixed test
+reported `--- FAIL: TestAssistantHTTPE2E_CaptureFallbackOpenKnowledgeNoGround
+(12.40s)` with `E2E_RC=1` on an off-contract envelope
+(`error_cause="provider_unavailable"`). The unmodified file reported
+`--- SKIP` in `0.19s` and exited 0 on that same envelope. Same stack, same
+prompt, same envelope, opposite verdict — which is the flip AC-3 asks for, and
+the reason the defect is now detectable at all.
+
+**GREEN (after the typed upstream-failure branch).** `E2E2_RC=0`,
+`PASS: go-e2e`, with the run reported as an honest typed skip that names exactly
+what it did and did not establish, and still asserts two invariants on the way
+out.
+
+The ordering matters and is preserved deliberately: the failing proof came
+first, and the green followed only after a second, separately-reasoned defect
+was fixed. Neither result is a re-run of the other.
+
 ### Verification method and its limits
 
 The defect is **static**: it is a property of the test's control flow, provable
