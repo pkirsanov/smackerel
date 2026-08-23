@@ -78,6 +78,126 @@ selector were not supplied. The packet therefore treats the counts and test
 identities as accepted handoff context, not as execution performed by
 `bubbles.bug`.
 
+### Required-Test No-Skip Guard (2026-08-23)
+
+**Executed by this agent:** YES (current session)
+**Claim Source:** executed — every line in this section was produced by a
+command run in this session against the working tree.
+**Phase:** implement
+
+The reproduction above is this packet's subject: five required tests reported
+package exit 0 while zero required behaviors ran. Nothing in the repository
+prevented a recurrence, because the only skip guard in the tree
+(`tests/e2e/agent/no_skip_guard_test.go`) resolves its scan directory from
+`runtime.Caller(0)` and reads that one directory non-recursively. It covers
+`tests/e2e/agent/` and nothing else, so `tests/e2e/assistant/` — where all five
+required tests live — had no guard at all.
+
+A directory-wide assertion would be the wrong instrument. Measured on this tree:
+`tests/e2e/assistant/` carries roughly 30 legitimate `t.Skip`/`t.Skipf` calls
+across 21 files — live-stack-unavailable guards, environment-branch guards, and
+`status=planned` scenario placeholders. In that directory a skip is the norm and
+its absence is the exception. The new guard is therefore a required-test
+denylist bound to the five `scenario-manifest.json` identities, and it also
+fails when a named required test is absent from its file, because a guard that
+goes quiet when its subject is deleted or renamed reproduces this same bug in a
+new form.
+
+#### Red stage — a seeded skip must fail the guard
+
+A `t.Skip` marker was temporarily seeded into the required test body in
+`tests/e2e/assistant/http_confirm_test.go`:
+
+```text
+$ go test ./tests/e2e/assistant/ -run 'TestRequiredAssistantE2ETestsNeverSkip' -v
+=== RUN   TestRequiredAssistantE2ETestsNeverSkip
+    required_no_skip_guard_test.go:216: BUG-069-005 SCN-BUG069005-006 violation: 1 problem(s) with the manifest-required assistant E2E tests:
+          http_confirm_test.go:28 — t.Skip-family call inside required test TestAssistantHTTPE2E_ConfirmAcceptExecutesGatedActionOnce (SCN-BUG069005-005)
+
+        A required test must FAIL loudly when its behavior is absent, never skip, and must never vanish.
+        To fix: either
+          (a) make the test FAIL fast on the missing dependency (preferred), or
+          (b) if the requirement genuinely changed, update scenario-manifest.json FIRST and then this denylist.
+        DO NOT silently bail out — a skipped required test is the false green this guard exists to prevent.
+--- FAIL: TestRequiredAssistantE2ETestsNeverSkip (0.00s)
+FAIL
+FAIL    github.com/smackerel/smackerel/tests/e2e/assistant      0.006s
+RED_EXIT=1
+```
+
+The guard names the file, the line, the required test, and the scenario id it
+belongs to, so the failure is actionable without reading the guard source.
+
+#### Mutation restored as its own step, then verified
+
+`trap ... EXIT` does not fire reliably in this execution environment and has
+already left a mutation live in this repository once. The restore is therefore
+an explicit command followed by an explicit verification, never a trap:
+
+```text
+$ git checkout -- tests/e2e/assistant/http_confirm_test.go
+CHECKOUT_EXIT=0
+
+$ git status --porcelain
+ M specs/069-assistant-http-transport/bugs/BUG-069-005-required-e2e-false-green/report.md
+ M specs/069-assistant-http-transport/bugs/BUG-069-005-required-e2e-false-green/scopes.md
+?? tests/e2e/assistant/required_no_skip_guard_test.go
+
+$ grep -n 'ORCHESTRATOR RED PROBE' tests/e2e/assistant/http_confirm_test.go
+GREP_RC=1 (1 = absent = restored)
+
+$ sed -n '27,29p' tests/e2e/assistant/http_confirm_test.go
+func TestAssistantHTTPE2E_ConfirmAcceptExecutesGatedActionOnce(t *testing.T) {
+        stack := loadHTTPTurnLiveStack(t)
+        waitHTTPTurnHealthy(t, stack, 30*time.Second)
+```
+
+The seeded marker is gone and the required test body is byte-identical to its
+committed form. No mutation was left in the tree.
+
+#### Green stage — guard and adversarial self-test
+
+```text
+$ go test ./tests/e2e/assistant/ -run 'TestRequiredAssistantE2ETestsNeverSkip' -v
+=== RUN   TestRequiredAssistantE2ETestsNeverSkip
+--- PASS: TestRequiredAssistantE2ETestsNeverSkip (0.00s)
+PASS
+ok      github.com/smackerel/smackerel/tests/e2e/assistant      0.006s
+GO_EXIT=0
+
+$ go test ./tests/e2e/assistant/ -run 'TestRequiredAssistantE2ETestsNeverSkip|TestRequiredNoSkipGuard_AdversarialFinding' -v
+--- PASS: TestRequiredNoSkipGuard_AdversarialFinding (0.01s)
+    --- PASS: TestRequiredNoSkipGuard_AdversarialFinding/skip_inside_required_test_is_caught (0.00s)
+    --- PASS: TestRequiredNoSkipGuard_AdversarialFinding/skipnow_and_skipf_are_caught (0.00s)
+    --- PASS: TestRequiredNoSkipGuard_AdversarialFinding/clean_required_test_reports_nothing (0.00s)
+    --- PASS: TestRequiredNoSkipGuard_AdversarialFinding/skip_in_neighbouring_func_is_ignored (0.00s)
+    --- PASS: TestRequiredNoSkipGuard_AdversarialFinding/brace_in_string_literal_does_not_break_boundaries (0.00s)
+    --- PASS: TestRequiredNoSkipGuard_AdversarialFinding/renamed_or_deleted_required_test_is_reported_missing (0.00s)
+    --- PASS: TestRequiredNoSkipGuard_AdversarialFinding/method_named_skip_is_not_a_match (0.00s)
+PASS
+ok      github.com/smackerel/smackerel/tests/e2e/assistant      0.014s
+GREEN_EXIT=0
+```
+
+The run is not vacuous: the `ok <pkg> <elapsed>` line is present with no
+`[no tests to run]` marker, and the seven named subtests are each reported
+individually, so the detector was exercised rather than merely compiled.
+
+#### Both build modes still compile
+
+The guard deliberately carries no `//go:build e2e` tag so it runs even when the
+gated suite is switched off — a guard that only runs when the suite runs cannot
+observe the suite silently not running. That makes the tagged build the thing
+most at risk from the new file, so both were checked:
+
+```text
+$ go vet -tags e2e ./tests/e2e/assistant/
+VET_TAGGED_EXIT=0
+
+$ go vet ./tests/e2e/assistant/
+VET_UNTAGGED_EXIT=0
+```
+
 ### Static Source Checks
 
 The following read-only checks were executed in the current session. Their full
@@ -959,6 +1079,9 @@ for ownership routing and DoD disposition.
 | 2026-07-21 | Both BUG-069-005 focused Go integration canaries received HTTP 503 `assistant_http_not_ready` before compiler/persistence assertions; adjacent Spec 069 live bind coverage waits for readiness | addressed: both canaries use bounded facade-readiness polling and pass against the disposable stack | `tests/integration/assistant/bug069005_runtime_canary_test.go`; [closeout evidence](#weather-implementation-and-test-closeout) |
 | 2026-07-21 | Canonical runner omitted the opt-in Ollama agent suite and retained 15 previously classified Go skips across OpenKnowledge, planned Spec 074, legacy-window, and superseded microtool profiles | classified non-applicable/planned/profile surfaces for this packet and never claimed passed; the new weather skip is separately blocking above | `specs/064-open-ended-knowledge-agent/`; `specs/074-capture-as-fallback-policy/`; `specs/065-generic-micro-tools/`; `specs/076-assistant-completion-rescope/`; [skip accounting](#canonical-complete-e2e---one-run) |
 | 2026-07-21 | Installed Bubbles regression guard still lacks generic Go `t.Skip`/`t.Skipf`/`t.SkipNow` detection | existing foreign route remains open; Smackerel installed framework files were not edited and upstream repair is not claimed | `TR-BUG-069-005-FRAMEWORK-001` in `state.json`; `specs/069-assistant-http-transport/bugs/BUG-069-005-required-e2e-false-green/design.md#8-framework-guard-routing` |
+| 2026-08-23 | `tests/e2e/assistant/` had NO skip guard of any kind. The sibling guard resolves its scan directory from `runtime.Caller(0)` and reads that one directory non-recursively, so it covers `tests/e2e/agent/` only. All five manifest-required assistant tests were therefore unguarded — the exact hole this packet's false green fell through | fixed-in-session: added a required-test denylist guard asserting the five manifest-required tests contain no `t.Skip`-family call in their function bodies AND that none of the five has been deleted or renamed. RED proved by seeding a marker into one required test (caught at `http_confirm_test.go:28`, exit 1); mutation restored via `git checkout --` and re-verified clean; GREEN re-run exit 0 with 2 tests + 7 subtests executed | `tests/e2e/assistant/required_no_skip_guard_test.go`; [Required-Test No-Skip Guard](#required-test-no-skip-guard-2026-08-23) |
+| 2026-08-23 | The G095 scanner flags the word `skipping` at `report.md:977`. That sentence is preserved historical RED evidence — it records that a required weather E2E stopped bailing out and began failing loudly — so it is a scanner match on a real English word, not a deferral | status-adjusted (documentation-only): the historical sentence is retained VERBATIM because rewording preserved red evidence would itself be evidence tampering; disposition is recorded here instead per remediation option (b). The underlying substantive finding is split into the two rows adjacent to this one, both of which are present in this same table | `specs/069-assistant-http-transport/bugs/BUG-069-005-required-e2e-false-green/report.md#test-continuation-deterministic-weather-and-readiness-2026-07-21` |
+| 2026-08-23 | The finding behind `TR-BUG-069-005-FRAMEWORK-001` has two halves that were previously tracked as one, which made its product disposition unreadable | routed (upstream half only): the PRODUCT half — assistant required tests being unguarded in this repo — is now closed in-repo by the new guard. The FRAMEWORK half — the installed regression guard's own blindness to Go skip tokens — is owned by the upstream framework repository and is not repairable from here, because `.github/bubbles/` is framework-managed and MUST NOT be edited downstream | `TR-BUG-069-005-FRAMEWORK-001` in `state.json`; `tests/e2e/assistant/required_no_skip_guard_test.go` |
 
 ## Test Continuation: Deterministic Weather And Readiness (2026-07-21)
 
@@ -1396,6 +1519,65 @@ must run on the eventual merged-main candidate. Certification remains
 **Claim Source:** executed — every sha, path, and count below was read from
 `git` in this session. Nothing here is a re-run of the test suite; this section
 records WHAT CHANGED, not what passed.
+
+**Changed paths — machine-readable delta index**
+**Recorded:** 2026-08-23 by bubbles.implement
+**Claim Source:** executed — the 37 delivered paths were read from
+`git diff --name-only f8e51b5e^1 f8e51b5e` (non-spec paths only) in this
+session; the guard path was read from `git status --porcelain`.
+
+This list is deliberately placed in the section BODY, above the first `####`
+sub-heading. The delta extractor stops at the next heading of ANY level, so a
+path recorded under a sub-heading is invisible to it. The list is also the only
+DURABLE evidence source: the working-tree signal that currently satisfies the
+delta check comes from `git status` and `git diff HEAD`, both of which go empty
+the moment this packet is committed. Prose below the sub-headings explains these
+same paths; this block is what a machine can read.
+
+```text
+cmd/core/main.go
+cmd/core/wiring_assistant_actions.go
+cmd/core/wiring_assistant_facade.go
+config/smackerel.yaml
+docker-compose.yml
+internal/agent/tools/microtools/location_normalize.go
+internal/agent/tools/microtools/location_normalize_openmeteo.go
+internal/agent/tools/microtools/location_normalize_openmeteo_test.go
+internal/agent/tools/weather/tool.go
+internal/assistant/compiled_interactions.go
+internal/assistant/compiled_weather_test.go
+internal/assistant/context/store.go
+internal/assistant/facade.go
+internal/assistant/intent/http_transport.go
+internal/assistant/intent/http_transport_test.go
+internal/config/assistant.go
+internal/config/assistant_intent_compiler.go
+internal/config/assistant_intent_compiler_test.go
+internal/config/assistant_test.go
+internal/config/validate_test.go
+ml/app/main.py
+ml/app/routes/intent_compile.py
+ml/tests/conftest.py
+ml/tests/test_intent_compiler.py
+ml/tests/test_intent_compiler_provider_fixture.py
+ml/tests/test_main.py
+scripts/commands/config.sh
+tests/e2e/assistant/annotation_intent_test.go
+tests/e2e/assistant/http_confirm_test.go
+tests/e2e/assistant/http_disambiguation_test.go
+tests/e2e/assistant/intent_clarify_test.go
+tests/e2e/assistant/intent_compiler_http_test.go
+tests/e2e/assistant/intent_side_effect_test.go
+tests/e2e/assistant/required_compiler_state_helpers_test.go
+tests/e2e/intent-compiler-provider/provider.py
+tests/e2e/stub-providers/nginx.conf
+tests/integration/assistant/bug069005_runtime_canary_test.go
+tests/e2e/assistant/required_no_skip_guard_test.go
+```
+
+The final entry, `tests/e2e/assistant/required_no_skip_guard_test.go`, is new in
+this session and is described under
+[Required-Test No-Skip Guard](#required-test-no-skip-guard-2026-08-23).
 
 #### Locating the commit of record
 

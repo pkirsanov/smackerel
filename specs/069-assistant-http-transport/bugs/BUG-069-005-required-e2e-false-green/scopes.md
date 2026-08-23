@@ -13,9 +13,10 @@ Links: [bug.md](bug.md) | [spec.md](spec.md) | [design.md](design.md) | [report.
 
 ## Mechanical Allowed List
 
-The following concrete product paths are the complete implementation path set
-changed at revision `ebf419414e1d1f824c77acf14025b1dda418c2a7`. Packet planning,
-state, and evidence artifacts are not product implementation files.
+**Change Boundary — Allowed file families.** The following concrete product paths
+are the complete implementation path set changed at revision
+`ebf419414e1d1f824c77acf14025b1dda418c2a7`. Packet planning, state, and evidence
+artifacts are not product implementation files.
 
 ### Implementation Files
 
@@ -64,6 +65,9 @@ state, and evidence artifacts are not product implementation files.
 - `tests/e2e/assistant/required_compiler_state_helpers_test.go`
 
 ## Mechanical Excluded List
+
+**Change Boundary — Excluded surfaces.** No scope in this packet may change any
+of the following:
 
 - Parent Spec 069 `spec.md`, `design.md`, `scopes.md`, `state.json`,
   `scenario-manifest.json`, `test-plan.json`, `report.md`, or
@@ -310,7 +314,7 @@ Scenario: SCN-BUG069005-002 - Springfield ambiguity creates a persistent choice
    > Network smackerel-test_default Removed
    > ```
    > Evidence: [report.md#live-compiler-and-pending-state-integration-green](report.md#live-compiler-and-pending-state-integration-green)
-- [x] Change Boundary is respected and zero excluded file families are changed.
+- [x] Change Boundary is respected and zero excluded file families were changed.
    > **Phase:** implement
    > **Command:** `git diff --check && git status --short`
    > **Exit Code:** 0
@@ -353,6 +357,32 @@ Scenario: SCN-BUG069005-002 - Springfield ambiguity creates a persistent choice
    > Warnings: 0
    > ```
    > Evidence: [report.md#weather-implementation-and-test-closeout](report.md#weather-implementation-and-test-closeout)
+- [ ] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior pass.
+   > **Uncertainty Declaration**
+   > **Added 2026-08-23 by bubbles.plan.** This scope carried the two protected
+   > regression rows in its Test Plan (`TP-BUG069005-04`, `TP-BUG069005-05`) but no
+   > Definition of Done item bound them, so the plan asked for the coverage without
+   > ever requiring anyone to prove it.
+   > **What was attempted:** nothing. This was an artifact-repair session; no test
+   > command was run.
+   > **What remains:** execute `TP-BUG069005-04` and `TP-BUG069005-05` and record the
+   > resulting output against this item.
+   > **Why it remains unchecked:** the 2026-07-21 implement run recorded passing
+   > output for both rows, but that is not this session's evidence, and this scope
+   > requires current-session command evidence before an item may be checked.
+   > Checking this item from a sibling item's recorded output would put one recorded
+   > result behind two separate claims — the exact false-green shape this packet was
+   > opened to remove.
+- [ ] Broader E2E regression suite passes.
+   > **Uncertainty Declaration**
+   > **Added 2026-08-23 by bubbles.plan.**
+   > **What was attempted:** nothing in this session.
+   > **What remains:** the canonical repository-wide `./smackerel.sh test e2e` run must
+   > pass with this scope's changes present.
+   > **Why it remains unchecked:** every E2E result recorded for this scope is
+   > package-local to `tests/e2e/assistant`, and package-local output is not
+   > repository-wide output. Scope 3 holds the identical item unchecked for the
+   > identical reason; checking it here would make the packet contradict itself.
 
 All items require current-session command evidence before checking.
 
@@ -601,7 +631,7 @@ Scenario: SCN-BUG069005-005 - Confirm acceptance executes the gated action once
    > PASS: go-e2e
    > ```
    > Evidence: [report.md#build-quality-and-governance](report.md#build-quality-and-governance)
-- [x] Change Boundary is respected and zero excluded file families are changed.
+- [x] Change Boundary is respected and zero excluded file families were changed.
    > **Phase:** implement
    > **Command:** `git diff --check && git status --short`
    > **Exit Code:** 0
@@ -669,6 +699,31 @@ Scenario: SCN-BUG069005-005 - Confirm acceptance executes the gated action once
    > The replay clause is restated in full on purpose: an item that asserted only
    > "executes the gated action" would drop the half of the scenario that makes it
    > a safety property rather than a happy path.
+- [ ] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior pass.
+   > **Uncertainty Declaration**
+   > **Added 2026-08-23 by bubbles.plan.** This scope carried its protected
+   > regression rows in the Test Plan but no Definition of Done item bound them, so
+   > the plan asked for the coverage without ever requiring anyone to prove it.
+   > **What was attempted:** nothing. This was an artifact-repair session; no test
+   > command was run.
+   > **What remains:** execute this scope's protected regression rows
+   > (`TP-BUG069005-07`, `TP-BUG069005-08`, `TP-BUG069005-09`) and record the
+   > resulting output against this item.
+   > **Why it remains unchecked:** the recorded passing output for those rows comes
+   > from the 2026-07-21 implement run, not from this session, and this scope
+   > requires current-session command evidence before an item may be checked. The
+   > three `SCN-` items directly above are unchecked for the same reason, so
+   > checking this one would contradict them.
+- [ ] Broader E2E regression suite passes.
+   > **Uncertainty Declaration**
+   > **Added 2026-08-23 by bubbles.plan.**
+   > **What was attempted:** nothing in this session.
+   > **What remains:** the canonical repository-wide `./smackerel.sh test e2e` run must
+   > pass with this scope's changes present.
+   > **Why it remains unchecked:** every E2E result recorded for this scope is
+   > package-local to `tests/e2e/assistant`, and package-local output is not
+   > repository-wide output. Scope 3 holds the identical item unchecked for the
+   > identical reason; checking it here would make the packet contradict itself.
 
 All items require current-session command evidence before checking.
 
