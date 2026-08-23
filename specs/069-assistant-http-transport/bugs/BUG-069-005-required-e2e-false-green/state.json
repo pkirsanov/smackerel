@@ -38,6 +38,13 @@
         "provenanceMode": "specialist",
         "claimedAt": "2026-08-23T06:52:26Z",
         "evidenceRef": "report.md#test-phase--required-e2e-execution-2026-08-23"
+      },
+      {
+        "phase": "simplify",
+        "agent": "bubbles.simplify",
+        "provenanceMode": "specialist",
+        "claimedAt": "2026-08-23T07:06:11Z",
+        "evidenceRef": "report.md#simplify-phase--review-of-the-landed-diff-2026-08-23"
       }
     ],
     "completedPhaseClaimsNote": "The implement entry was appended 2026-08-23 by bubbles.implement and is a dict record, not a bare string, because Check 6 normalizes both shapes but only a dict carries the agent identity Check 6B needs. Its evidenceRef resolves to the literal report.md heading '### Required-Test No-Skip Guard (2026-08-23)' at report.md line 81, verified by grep before it was cited rather than assumed from the slug. The claim is backed by two independent executionHistory entries naming bubbles.implement with claimSource 'executed': the 2026-07-21 product run and the 2026-08-23 run recorded below. This records an EXECUTION claim only; certification.certifiedCompletedPhases remains empty and is writable solely by bubbles.validate.",
@@ -106,6 +113,19 @@
         "claimSource": "executed",
         "evidenceRef": "report.md#test-phase--required-e2e-execution-2026-08-23",
         "note": "Executed the five manifest-required assistant E2E tests by name (5 PASS / 0 FAIL / 0 SKIP, exit 0), the unfiltered assistant package including both no-skip guards (52 PASS / 0 FAIL / 12 SKIP, exit 0), and the canonical repository-wide suite (exit 0, zero failure lines). Checked 8 DoD items across Scopes 1-3. Left the validate-owned certification item unchecked; Scope 3 stays In Progress because of it."
+      },
+      {
+        "at": "2026-08-23T07:06:11Z",
+        "agent": "bubbles.simplify",
+        "phasesExecuted": [
+          "simplify"
+        ],
+        "runStartedAt": "2026-08-23T06:57:53Z",
+        "runEndedAt": "2026-08-23T07:06:11Z",
+        "claimSource": "executed",
+        "outcome": "completed_owned",
+        "evidenceRef": "report.md#simplify-phase--review-of-the-landed-diff-2026-08-23",
+        "note": "Simplify phase over the two commits carrying this packet's code. PART 1, e4618e8e: reviewed AS LANDED and NOT re-executed in this run. That commit was produced by an earlier simplify-phase run whose code landed but whose phase claim was never written, which is the reason this claim was missing. Reading its diff shows it is broader than the parameter drop alone: it (a) removed the unused conv parameter from proposeCompiledAction, (b) extracted enforceCompiledWeatherProvenance collapsing three identical provenance.Enforce blocks, (c) extracted a rejectChoice closure collapsing two identical response-build-and-persist blocks in resolveCompilerDisambig, and (d) STRENGTHENED assertCompiledWeatherHonestFailure to assert response.Body == provenance.CanonicalRefusalBody. Item (d) is the one that matters here: the helper previously checked status and error-cause fields only, so a response whose body still read as a capture acknowledgement satisfied every field it examined and passed - the same false-green defect class this packet documents. All four were re-reviewed and kept; no evidence in this record rests on re-running them. PART 2, 673bb6a0: tests/e2e/assistant/required_no_skip_guard_test.go was the only substantial un-reviewed source, and three behaviour-preserving simplifications were applied to it. S1 removed the dead 'c := c' loop-variable copy (go.mod declares go 1.25.10 and Go has had per-iteration loop scoping since 1.22; confirmed the only such statement in the directory). S2 replaced strconv.Itoa(line) under a %s verb with %d on the int, retiring the now-unused strconv import. S3 removed a temp-file write-then-read round trip from the adversarial subtest: scanRequiredTestBodyForSkips takes src []byte and never opens the path, so the round trip reproduced []byte(c.body) at the cost of two error branches irrelevant to the code under test; the fixture is now passed in memory, which also makes the file's own isolation rationale stronger rather than weaker, and both doc comments asserting the old temp-directory rationale were corrected. ZERO assertions were removed, relaxed or narrowed in this phase; the seven wantSkips/wantMissing expectations are untouched and still execute. VERIFIED, not assumed: 'test unit --go --go-run' over both guard tests exits 0 with 'go test ./... finished OK', which is the whole-module build proof after the import change. Execution was proven separately from the exit code because an exit 0 under a -run selector can be vacuous - the target package line reads 'ok github.com/smackerel/smackerel/tests/e2e/assistant 0.014s' with NO '[no tests to run]' marker while every other package in the same run carries one, and a verbose re-run yields an individual --- PASS line for both tests and all seven adversarial subtests. No file was deleted, so the deletion-safety gate did not apply. No architectural change was implied, so no design or planning route was raised. runDurationSeconds is omitted rather than invented. No DoD box was checked - the single remaining unchecked item names bubbles.validate as its actor. certification.certifiedCompletedPhases was not touched and status remains in_progress."
       }
     ]
   },

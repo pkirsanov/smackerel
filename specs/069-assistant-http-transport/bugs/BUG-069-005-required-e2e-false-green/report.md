@@ -2041,4 +2041,122 @@ selector behaviour, not an empty suite.
 
 5 required executed; 5 passed; 0 failed; 0 skipped; package exit 0.
 
+---
+
+### Simplify Phase — Review Of The Landed Diff (2026-08-23)
+
+Owner: `bubbles.simplify`. Surface: the source and test files carried by the two commits that
+hold this packet's code, `e4618e8e` and `673bb6a0`. Working tree was clean at `8751a716` when
+this review began.
+
+The governing rule for this phase is that a test assertion may only be **strengthened, never
+weakened**. Everything below is checked against it. Nothing in this phase removed, relaxed, or
+narrowed an assertion.
+
+#### Part 1 — `e4618e8e`, reviewed as landed (not re-executed here)
+
+`e4618e8e` was produced by an earlier simplify-phase run in this session. Its **code landed**;
+its **phase claim was never written to `state.json`**, which is why this record exists. This
+phase read that diff and accepted it. It did **not** re-run its verification, and no claim below
+rests on re-execution of it — the evidence for `e4618e8e` is the evidence recorded in its own
+commit message.
+
+What that commit actually contains, read from `git show e4618e8e`, is broader than a single
+parameter drop:
+
+| # | File | Change | Class |
+|---|---|---|---|
+| 1 | `internal/assistant/facade.go`, `internal/assistant/compiled_interactions.go` | dropped the unused `conv assistantctx.Conversation` parameter from `proposeCompiledAction` (signature + sole call site) | dead parameter |
+| 2 | `internal/assistant/compiled_interactions.go` | extracted `enforceCompiledWeatherProvenance`, collapsing three identical 6-line `provenance.Enforce(...)` blocks | duplication |
+| 3 | `internal/assistant/compiled_interactions.go` | extracted a `rejectChoice` closure in `resolveCompilerDisambig`, collapsing two identical response-build-and-persist blocks that differed only in body text | duplication |
+| 4 | `internal/assistant/compiled_weather_test.go` | `assertCompiledWeatherHonestFailure` now also asserts `response.Body == provenance.CanonicalRefusalBody` | assertion **strengthened** |
+
+Item 4 is the one that matters for this packet. The helper previously checked status and
+error-cause fields only, so a response whose body still read as a capture acknowledgement would
+have satisfied every field it examined and passed. A test that cannot observe half of what it is
+named for is the same defect class this bug documents — a required check reporting green without
+binding its claim. Tightening it moves against that failure mode. Re-reviewed and kept.
+
+Items 1-3 are behaviour-preserving refactors with no assertion surface. Re-reviewed and kept.
+
+#### Part 2 — `673bb6a0`, reviewed and simplified now
+
+`tests/e2e/assistant/required_no_skip_guard_test.go` (315 lines) is the only substantial
+un-reviewed source added by this packet. Three genuine findings, all behaviour-preserving, all
+inside that one file. None touches an assertion.
+
+| # | Location | Finding | Fix |
+|---|---|---|---|
+| S1 | adversarial loop, line 286 | `c := c` per-iteration loop-variable copy. `go.mod` declares `go 1.25.10`; Go has scoped loop variables per iteration since 1.22, so the copy is dead. Confirmed to be the only such statement in the directory. | removed |
+| S2 | production guard, violation formatter | `fmt.Sprintf("%s:%s", ..., strconv.Itoa(line), ...)` converts an `int` to a string only to feed it to `%s` | `%d` with the `int` directly; the `strconv` import is now unused and removed |
+| S3 | adversarial subtest body | each case wrote `c.body` to a file under `t.TempDir()` and read it straight back, then passed the result to `scanRequiredTestBodyForSkips`. That function takes `src []byte` and never opens the path — the `filename` argument feeds `parser.ParseFile` position info and error strings only. The round trip therefore produced a value byte-identical to `[]byte(c.body)` at the cost of two error branches that cannot fail in any way relevant to the code under test. | pass `[]byte(c.body)` and a literal filename directly; 10 lines and a filesystem dependency removed from a pure-function test |
+
+S3 is worth one further note, because it borders on the rule this phase is bound by. It removes
+**no** assertion: the seven `wantSkips` / `wantMissing` expectations are untouched and still
+execute. It also makes the isolation claim in the file's own doc block *stronger* rather than
+weaker — the guard previously argued its fixtures could not pollute the production scan because
+they lived in a temp directory; they now cannot pollute it because no file is created at all.
+Both doc comments asserting the old temp-directory rationale were corrected to match.
+
+#### Verification of Part 2
+
+The tree still compiles and both guard tests still pass. Run through the repo CLI:
+
+```text
+$ ./smackerel.sh test unit --go --go-run 'TestRequiredAssistantE2ETestsNeverSkip|TestRequiredNoSkipGuard_AdversarialFinding'
+[go-unit] starting go test ./...
++ go test -run 'TestRequiredAssistantE2ETestsNeverSkip|TestRequiredNoSkipGuar...
+...
+ok      github.com/smackerel/smackerel/tests/e2e/assistant      0.014s
+[go-unit] go test ./... finished OK
+UNIT_RC=0
+```
+
+`go test ./...` compiles every package in the module, so `finished OK` is the build proof.
+
+Exit 0 under a `-run` selector can be vacuous, so execution was proven separately from the exit
+code, by two independent signals:
+
+1. The target package line above carries **no** `[no tests to run]` marker, while every other
+   package in the same run does — the selector matched here and nowhere else.
+2. A verbose re-run yields an individual `--- PASS:` line per test and per subtest:
+
+```text
+$ ./smackerel.sh test unit --go --verbose --go-run 'TestRequiredNoSkipGuard_AdversarialFinding|TestRequiredAssistantE2ETestsNeverSkip'
+--- PASS: TestRequiredAssistantE2ETestsNeverSkip (0.00s)
+--- PASS: TestRequiredNoSkipGuard_AdversarialFinding (0.00s)
+    --- PASS: TestRequiredNoSkipGuard_AdversarialFinding/skip_inside_required_test_is_caught (0.00s)
+    --- PASS: TestRequiredNoSkipGuard_AdversarialFinding/skipnow_and_skipf_are_caught (0.00s)
+    --- PASS: TestRequiredNoSkipGuard_AdversarialFinding/clean_required_test_reports_nothing (0.00s)
+    --- PASS: TestRequiredNoSkipGuard_AdversarialFinding/skip_in_neighbouring_func_is_ignored (0.00s)
+    --- PASS: TestRequiredNoSkipGuard_AdversarialFinding/brace_in_string_literal_does_not_break_boundaries (0.00s)
+    --- PASS: TestRequiredNoSkipGuard_AdversarialFinding/renamed_or_deleted_required_test_is_reported_missing (0.00s)
+    --- PASS: TestRequiredNoSkipGuard_AdversarialFinding/method_named_skip_is_not_a_match (0.00s)
+ok      github.com/smackerel/smackerel/tests/e2e/assistant      0.064s
+VERBOSE_RC=0
+```
+
+The production guard `TestRequiredAssistantE2ETestsNeverSkip` still passes, which independently
+confirms S1-S3 did not disturb the detector: it re-parses all five required assistant E2E files
+through the same `scanRequiredTestBodyForSkips` the adversarial cases exercise, and a missing
+required test is fatal there.
+
+The `testing: warning: no tests to run` lines emitted by unrelated packages in the verbose run
+are selector behaviour, not an empty suite — the same distinction recorded for Command 3 of the
+test phase above.
+
+#### Verdict
+
+| Part | Outcome |
+|---|---|
+| `e4618e8e` (4 changes) | reviewed as landed; kept; not re-executed in this phase |
+| `673bb6a0` guard test | 3 simplifications applied (S1-S3) |
+| Assertions removed or weakened | 0 |
+| Assertions strengthened | 1, in `e4618e8e` item 4 |
+| Build after change | `go test ./...` finished OK |
+| Guard tests after change | 2 tests + 7 subtests, all PASS, execution proven |
+
+No architectural change was implied, so no design or planning route was raised. No file was
+deleted, so the deletion-safety gate did not apply.
+
 

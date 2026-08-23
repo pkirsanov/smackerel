@@ -59,7 +59,7 @@
 //	    call. Violations name file, function and line.
 //	G3: the adversarial self-test proves the detector actually fires — a
 //	    broken extractor or regex would otherwise turn G1/G2 into a no-op.
-//	    Its fixtures are written to t.TempDir(), never into a scanned
+//	    Its fixtures are in-memory source strings, never files in a scanned
 //	    directory, so they cannot pollute the production assertion.
 package assistant_e2e
 
@@ -73,7 +73,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
-	"strconv"
 	"strings"
 	"testing"
 )
@@ -207,8 +206,8 @@ func TestRequiredAssistantE2ETestsNeverSkip(t *testing.T) {
 
 		for _, line := range lines {
 			violations = append(violations, fmt.Sprintf(
-				"%s:%s — t.Skip-family call inside required test %s (%s)",
-				rt.File, strconv.Itoa(line), rt.Func, rt.ScenarioID))
+				"%s:%d — t.Skip-family call inside required test %s (%s)",
+				rt.File, line, rt.Func, rt.ScenarioID))
 		}
 	}
 
@@ -224,8 +223,8 @@ func TestRequiredAssistantE2ETestsNeverSkip(t *testing.T) {
 }
 
 // TestRequiredNoSkipGuard_AdversarialFinding proves the detector fires
-// (G3). Fixtures are written to t.TempDir() so they are never scanned by
-// the production assertion above.
+// (G3). Fixtures are in-memory source strings, so they are never scanned
+// by the production assertion above.
 func TestRequiredNoSkipGuard_AdversarialFinding(t *testing.T) {
 	cases := []struct {
 		name        string
@@ -283,18 +282,10 @@ func TestRequiredNoSkipGuard_AdversarialFinding(t *testing.T) {
 	}
 
 	for _, c := range cases {
-		c := c
 		t.Run(c.name, func(t *testing.T) {
-			fixture := filepath.Join(t.TempDir(), "fixture_test.go")
-			if err := os.WriteFile(fixture, []byte(c.body), 0o600); err != nil {
-				t.Fatalf("write fixture: %v", err)
-			}
-			src, err := os.ReadFile(fixture)
-			if err != nil {
-				t.Fatalf("read fixture: %v", err)
-			}
-
-			lines, err := scanRequiredTestBodyForSkips(filepath.Base(fixture), src, c.target)
+			// scanRequiredTestBodyForSkips parses src and never opens the
+			// path, so the fixture needs no file on disk.
+			lines, err := scanRequiredTestBodyForSkips("fixture_test.go", []byte(c.body), c.target)
 
 			if c.wantMissing {
 				if !errors.Is(err, errRequiredNoSkipTestMissing) {
