@@ -42,6 +42,13 @@
         "provenanceMode": "specialist",
         "claimedAt": "2026-08-24T22:24:04Z",
         "evidenceRef": "report.md#test-phase"
+      },
+      {
+        "phase": "test",
+        "agent": "bubbles.test",
+        "provenanceMode": "specialist",
+        "claimedAt": "2026-08-24T22:35:13Z",
+        "evidenceRef": "report.md#2026-08-24-third-test-pass-the-sequential-replay-lane-ran"
       }
     ],
     "executionHistory": [
@@ -78,6 +85,16 @@
         "outcome": "completed_owned",
         "evidenceRef": "report.md#test-phase",
         "summary": "Second test pass, recorded in report.md under the Test Phase subsection '2026-08-24 Second Test Pass: The API-Boundary Lane Ran'. The E2E lane ran for the first time and found a second defect the unit lane is structurally unable to reach: finishConfirmResponse persisted the conversation value captured before arbitration, so a losing racer restored pending_confirm and a third racer redeemed the same reference, executing the gated action twice. Verified against the diff that the fix landed in internal/assistant/compiled_interactions.go, correcting the relayed attribution to internal/assistant/httpadapter where finishConfirmResponse has no definition at all. This agent did not run the E2E lane; its RED-to-GREEN transcript is operator-relayed and is tagged as such in report.md, corroborated structurally by the assertion format string rendering the RED line character for character, by the test carrying no skip, and by waitAssistantFacadeReady being a pre-existing fail-loud readiness wait rather than a bypass. Checked SCN-BUG069006-001 and SCN-BUG069006-003 on this session's own executed evidence at 73de731a, a 525-versus-522 line-count delta against a vacuous-selector negative control, both runs bypass-free and exit 0. Checked SCN-BUG069006-002 on the relayed API-boundary result. Left SCN-BUG069006-004 unchecked because the transcript carries one --- PASS: line against a 65-test package, which is the signature of a narrowed -run selector rather than proof the sequential replay test executed; its unmodified half is proven by zero deleted lines across the packet. Left the broader-suite item unchecked because one package is not the suite. Recorded a new Change Boundary finding: the fix landed in a file listed in neither the Allowed nor the Excluded table of scopes.md, which is bubbles.plan's to resolve. Eight of twenty DoD items are now checked. No certification field was written."
+      },
+      {
+        "at": "2026-08-24T22:35:13Z",
+        "agent": "bubbles.test",
+        "phasesExecuted": ["test"],
+        "provenanceMode": "specialist",
+        "outcome": "completed_owned",
+        "evidenceRef": "report.md#2026-08-24-third-test-pass-the-sequential-replay-lane-ran",
+        "claimSource": "mixed: relayed E2E transcript, executed local grounding",
+        "summary": "Third test pass, recorded in report.md under the Test Phase subsection '2026-08-24 Third Test Pass: The Sequential Replay Lane Ran'. The second pass had named exactly one artifact that would settle SCN-BUG069006-004: a --- PASS: line for TestAssistantHTTPE2E_ConfirmAcceptExecutesGatedActionOnce from a run whose selector admits it. That capture arrived, operator-relayed and recorded as such: both confirm tests were selected in one invocation by name alternation and each emitted its own PASS line, so the claim no longer rests on the package-level ok that the earlier passes correctly refused to trust. This agent did not run the lane. What it executed is the grounding: that --go-run is a real selector reaching go test -run through smackerel.sh:1463, smackerel.sh:2138, and scripts/runtime/go-e2e.sh:85 rather than an ignored flag; that the test carries no skip; that its file is unmodified in the working tree at 2aec49fa; that compiled_interactions.go:205-208 maps confirm.ErrPendingNotFound to the ErrNoMatch error_cause the replay asserts; and that the assertions at lines 86, 89, 91, 94-95, 105, and 108 cover the scenario clause for clause, with line 95 giving the replay a new TransportMessageID so it reaches redemption instead of being absorbed by the BUG-069-004 transport dedup cache. Checked SCN-BUG069006-004 on that basis, recording two limits rather than glossing them: the scenario's third Then clause about untouched columns is not asserted by this test and stays unproven on its own unchecked DoD line, and no_match is not a unique sentinel, so the load-bearing clause is the count-stays-exactly-1 assertion at line 108 rather than the error_cause string. Left the broader-suite item unchecked because two tests in one package is the opposite of a suite run. Left the 'passes unmodified' item unchecked although this capture supplies its passes half, because the request named one item and a DoD check is a claim to be made deliberately. Nine of twenty DoD items are now checked. No certification field was written."
       }
     ]
   },
@@ -129,5 +146,5 @@
   "transitionRequests": [],
   "reworkQueue": [],
   "createdAt": "2026-08-23T00:00:00Z",
-  "updatedAt": "2026-08-24T22:24:04Z"
+  "updatedAt": "2026-08-24T22:35:13Z"
 }

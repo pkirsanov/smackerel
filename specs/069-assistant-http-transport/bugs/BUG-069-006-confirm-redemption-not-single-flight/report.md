@@ -1024,3 +1024,125 @@ broader-suite item is unchecked because one package is not the suite. The
 Change Boundary item is unchecked because the fix landed outside the Allowed
 table and the boundary needs its owner. `status` remains `in_progress` and no
 `certification.*` field was written by this pass.
+
+### 2026-08-24 Third Test Pass: The Sequential Replay Lane Ran
+
+The second pass named exactly one thing that would settle `SCN-BUG069006-004`:
+a `--- PASS:` line for the sequential test from a run whose selector admits it.
+That capture now exists. **This agent did not run it.** The transcript below is
+operator-relayed and is recorded as such, not restated as this session's own
+execution.
+
+**Claim Source:** relayed (operator transcript)
+
+```
+$ ./smackerel.sh test e2e --go-package assistant --go-run 'TestAssistantHTTPE2E_ConfirmAcceptExecutesGatedActionOnce|TestAssistantHTTPE2E_ConcurrentConfirmExecutesGatedActionOnce'
+--- PASS: TestAssistantHTTPE2E_ConfirmAcceptExecutesGatedActionOnce (0.36s)
+--- PASS: TestAssistantHTTPE2E_ConcurrentConfirmExecutesGatedActionOnce (0.44s)
+PASS
+ok      github.com/smackerel/smackerel/tests/e2e/assistant      0.823s
+PASS: go-e2e
+```
+
+exit 0.
+
+**Why this answers the second pass on its own terms.** That objection was
+arithmetic, not rhetorical: one `--- PASS:` line against a package defining 65
+test functions is the signature of a narrowed `-run` selector, and `ok <package>`
+prints either way. Both halves are now closed. The selector is visible in the
+command line and names the sequential test by alternation, so it admits it; and
+the sequential test emitted its own `--- PASS:` line with its own duration, so
+the claim no longer rests on the package-level `ok` the first pass refused to
+trust.
+
+**What this agent established independently, at `2aec49fa`.**
+
+**Claim Source:** executed (this session)
+
+| Check | Command / location | Result |
+|---|---|---|
+| `--go-run` is a real selector for `test e2e`, not an ignored flag | `smackerel.sh:61` documents it, `:1463` binds `GO_E2E_RUN_SELECTOR`, `:2138` forwards `--run`, `scripts/runtime/go-e2e.sh:85` appends `-run "$go_run_selector"` to the `go test` argv | the quoted alternation reaches `go test -run`, where `A\|B` matches both names |
+| The sequential test carries no skip | `grep -n 't\.Skip\|SkipNow\|t\.Skipf' tests/e2e/assistant/http_confirm_test.go` | zero matches |
+| The file is unmodified in the working tree | `git status --porcelain tests/e2e/assistant/http_confirm_test.go` | empty |
+| The replay assertion observes `ErrPendingNotFound` | `internal/assistant/compiled_interactions.go:205-208` maps `confirm.ErrPendingNotFound` to `ErrorCause: contracts.ErrNoMatch` | the transport-visible rendering of the sentinel the scenario names |
+
+**Clause by clause.** `TestAssistantHTTPE2E_ConfirmAcceptExecutesGatedActionOnce`
+at `tests/e2e/assistant/http_confirm_test.go:28`:
+
+| SCN-BUG069006-004 clause | Assertion | Line | Fails via |
+|---|---|---|---|
+| the first returns a populated ConfirmResult | `env2.ErrorCause != ""` | 86 | `t.Fatalf` |
+| and executes the action once | `listCountBySourceQuery(...) != 1`, then `assertSingleListItem` | 89, 91 | `t.Fatalf` |
+| the replay carries the same reference | `turn3Req := turn2Req` copies the `ConfirmRef` bound at line 68; only `TransportMessageID` is changed | 94-95 | — |
+| the replay returns `ErrPendingNotFound` | `env3.ErrorCause != string(contracts.ErrNoMatch)` | 105 | `t.Errorf` |
+| without executing the action again | `listCountBySourceQuery(...) != 1` | 108 | `t.Fatalf` |
+
+Line 95 is what makes the replay a real replay rather than a transport-dedup
+artifact: the second confirm carries a **new** `TransportMessageID`, so it
+reaches the redemption machinery instead of being absorbed by the
+`transport_message_id` cache BUG-069-004 installed. Without that line the test
+would prove only that dedup works.
+
+**`SCN-BUG069006-004` moves to checked.** The item's own words are the measure:
+*a single confirm still succeeds and a sequential replay of the same reference
+still fails without re-executing the gated action.* Both halves are carried by
+assertions that fail the test when violated, in a run whose selector admits the
+test and which emitted that test's own PASS line. Holding out past the evidence
+this packet itself specified would be moving the goalposts, which is its own
+kind of inaccuracy.
+
+Two limits are recorded rather than glossed. First, the scenario's third `Then`
+clause — *the conversation working context and other pending columns are
+unchanged* — is **not** asserted by this test. It is carried by its own DoD line,
+`A redemption write leaves working_context, pending_disambig, pending_clarify,
+and legacy_retirement_notices untouched`, which stays unchecked because
+TP-BUG069006-03 still does not exist. Checking `SCN-BUG069006-004` on the item's
+stated gloss does not smuggle that claim in; it stays visibly unproven on its own
+line. Second, `no_match` is not a unique sentinel — `contracts/response.go:207-211`
+also emits it when an owned graph is empty for a query — so line 105 alone would
+not pin the replay to `ErrPendingNotFound`. The load-bearing clause does not
+depend on it: line 108 asserts the list count stayed **exactly 1**, which forbids
+a second execution whichever error_cause was rendered.
+
+**What stays unchecked.** `Broader E2E regression suite passes` stays unchecked.
+This capture is two tests in one package; `tests/e2e/` holds many Go packages and
+shell suites beside `assistant`, and a two-test selector is the opposite of a
+suite run.
+
+The same capture also bears on the separate item
+`TestAssistantHTTPE2E_ConfirmAcceptExecutesGatedActionOnce passes unmodified`,
+whose *unmodified* half the second pass proved with zero deleted lines and whose
+*passes* half this capture supplies. This pass records that and leaves the box
+unchecked, because the request named one item and a DoD check is a claim that
+should be made deliberately rather than swept along with a neighbour.
+
+**Third pass uncertainty declarations.**
+
+1. This agent did not execute the E2E lane. Every figure in the transcript is
+   operator-relayed. What this agent executed is the grounding table above: the
+   selector plumbing, the absence of a skip, the working-tree cleanliness, the
+   error mapping, and the assertion line numbers.
+2. No negative control accompanies this capture, so the two PASS lines cannot be
+   measured against a deliberately vacuous selector the way the second pass's
+   unit runs were. The test's structure supplies the sensitivity instead: a
+   second execution of the gated action makes the count 2 and line 108 fails
+   fatally. That is an argument from the code, which is weaker than an executed
+   negative control.
+3. `0.36s` is short for a lane that stands up a stack. It is consistent with the
+   two-turn flow running against a stack already healthy when the selector
+   reached it, since `loadHTTPTurnLiveStack` and `waitHTTPTurnHealthy` do the
+   standing-up outside the measured body. It is not independent proof the stack
+   was live, and nothing here converts it into one.
+
+**Third pass completion statement.** One DoD item moves to checked:
+`SCN-BUG069006-004`. The packet stands at nine of twenty. Eleven remain
+unchecked. The broader-suite item is unchecked because one selector is not a
+suite. The `PgStore` items — `RowsAffected()` reporting and the untouched-columns
+property — are unchecked because TP-BUG069006-03 was never written. The Change
+Boundary item is unchecked because the fix landed outside the Allowed table and
+that boundary belongs to `bubbles.plan`. The rest — root cause confirmed by
+execution, the red-stage recording, the routing of `Confirm`, `Discard`, and
+`SweepTimeouts`, the `machine.go` comment, the `passes unmodified` conjunction,
+the every-behaviour regression item, and the Build Quality Gate — are unchecked
+because no pass has recorded them against this tree. `status` remains
+`in_progress` and no `certification.*` field was written by this pass.
