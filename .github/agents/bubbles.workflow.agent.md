@@ -1,6 +1,6 @@
 ---
 description: Deterministic single-mode workflow runner for one explicit or bubbles.super-resolved workflow mode
-tools: [read, search, edit, agent, todo, execute, bubbles-dsw-smackerel]
+tools: [read, search, edit, agent, todo, execute, bubbles-smackerel]
 disable-model-invocation: true
 handoffs:
   - label: Business Analysis
