@@ -2520,3 +2520,332 @@ is demonstrated, and every bounded channel checked out clean. It is routed to
 `bubbles.test` as a one-call remediation that preserves the branch structure
 this packet was filed to establish.
 
+---
+
+## Validate Phase
+
+**Agent:** `bubbles.validate` · **Phase:** validate · **Date:** 2026-08-24
+**Claim Source:** executed — every command in this section ran in this session
+through `run_in_terminal`, and every exit code quoted is the code the terminal
+returned. No verdict here was derived by reading a script and predicting what it
+would report.
+
+**Ownership.** This phase writes `state.json` → `certification.*` and
+`execution.*`, and this report section. It edited no DoD checkbox, no scope
+status, no `spec.md`, no `design.md`, no `scopes.md`, and no file under
+`tests/` or `internal/`. The unchecked DoD items below stay unchecked: checking
+them is the test phase's authority and the evidence to support them does not
+exist.
+
+**Repository binding.** `repository-binding-host-context.sh` resolved the host
+session; `repository-binding.sh preflight --request-class STRUCTURED` returned
+`PREFLIGHT_CONFIRMED` then `PREFLIGHT_COMMITTED` with `repository=smackerel`,
+`authority=concrete-target`, `transition=confirmed`, `actionable=true`,
+`controlRevision=38`. Every repository-local read and write below happened after
+that commit. The resolved root is a host-local path and is not reproduced here.
+
+**Revision under review.** `HEAD = 16d591be` — *security(BUG-074-002):
+change-surface and leakage review*. `git status --porcelain` emitted nothing, so
+the tree was clean when every guard below ran.
+
+---
+
+### V-1 · State transition guard — exit 1, verdict FAIL
+
+The guard is the mechanical arbiter of this transition, so it ran first and its
+result is recorded before any interpretation of it.
+
+```
+# state-transition-guard BUG-074-002 (validate phase)
+$ bash .github/bubbles/scripts/state-transition-guard.sh specs/074-capture-as-fallback-policy/bugs/BUG-074-002-noground-e2e-skip-guard-masks-canonical-ack-regression
+exit: 1
+lines: 376
+sha256: 3e09bec795452cce02813bdc286294b8f9ef4b5eab6ce393c1f22f66d963beb8
+--- first 20 ---
+============================================================
+  BUBBLES STATE TRANSITION GUARD
+  Feature: specs/074-capture-as-fallback-policy/bugs/BUG-074-002-noground-e2e-skip-guard-masks-canonical-ack-regression
+  Timestamp: 2026-08-24T03:45:17Z
+============================================================
+
+--- Check 1: Required Artifacts ---
+✅ PASS: Required artifact exists: spec.md
+✅ PASS: Required artifact exists: design.md
+✅ PASS: Required artifact exists: uservalidation.md
+✅ PASS: Required artifact exists: state.json
+✅ PASS: Required artifact exists: scopes.md
+✅ PASS: Required artifact exists: report.md
+
+--- Check 2: state.json Integrity ---
+ℹ️  INFO: Current state.json status: in_progress
+ℹ️  INFO: Current workflowMode: bugfix-fastlane
+
+--- Check 2B: workflowMode Consistency ---
+ℹ️  INFO: No policySnapshot.workflowMode present — skipping consistency check
+--- omitted 336 line(s); sha256 above covers the full output ---
+--- last 20 ---
+
+🔍 Running project-defined gates from .github/bubbles-project.yaml...
+BEGIN TRANSITION_GUARD_RESULT_V1
+schemaVersion: transition-guard-result/v1
+workflowMode: bugfix-fastlane
+auditProfile: delivery-completion-v1
+targetStatus: done
+contractDigest: sha256:aa91472c047d3d985d38c1d308feb1e6081955b2aa553816deb5987d9cdc449f
+targetRevision: sha256:814bf496d705fb2ce1333d88d6963e62022ff3735f0f4fa7666aa9cce5801ed9
+applicableCheckClasses: [universal,mode-required,delivery-completion]
+notApplicableChecks: []
+passedGateIds: [G057,G053,G040,G051,G068,G082,G083,G084,G128,G085,G086,G091,G087,G093,G088,G089,G092,G090,G094,G095,G097,G098,G099,G100,G130,G131]
+failedGateIds: [G022,G027,G136]
+failedChecks: [Check-4-completion,Check-5-all-done]
+blockingCode: DELIVERY_COMPLETION_FAILED
+parentExpandedPhases: 0
+failureCount: 8
+exitStatus: 1
+verdict: FAIL
+END TRANSITION_GUARD_RESULT_V1
+```
+
+<!-- verify: bash bubbles/scripts/evidence-capture.sh --verify 3e09bec795452cce02813bdc286294b8f9ef4b5eab6ce393c1f22f66d963beb8 -- bash .github/bubbles/scripts/state-transition-guard.sh specs/074-capture-as-fallback-policy/bugs/BUG-074-002-noground-e2e-skip-guard-masks-canonical-ack-regression -->
+
+The three failing gates, quoted from the run:
+
+| Gate | Guard line | What it means here |
+|---|---|---|
+| **G022** | `Required phase 'validate' NOT in execution/certification phase records` and `Required phase 'audit' NOT in execution/certification phase records` — `2 specialist phase(s) missing` | This section closes the `validate` half. The `audit` half is genuinely unexecuted and is closed by nothing in this packet. |
+| **G027** | `Execution/certification phases claim implement/test phases but completedScopes is EMPTY` and `... but ZERO scopes are marked 'Done'` | `SCOPE-BUG-074-002-01` is `In Progress` with 11 of 19 DoD items unchecked. `completedScopes` is `[]` because no scope completed, which is the accurate reading, not a bookkeeping omission. |
+| **G136** | `uservalidation.md does not establish human acceptance` — 4 `PD12-UNCHECKED-ITEM` lines and `PD12-NO-RECORD` | No human has accepted the behavior. This agent cannot check those boxes; doing so would fabricate the acceptance the gate exists to require. |
+
+Check 4 additionally enumerated the 11 unchecked DoD items, and Check 5 reported
+`total=1, Done=0, In Progress=1`. Both are consistent with the DoD census in V-3.
+
+---
+
+### V-2 · Supporting guards — all clean
+
+Every guard below ran to completion in this session.
+
+```
+# artifact-lint BUG-074-002
+$ bash .github/bubbles/scripts/artifact-lint.sh specs/074-capture-as-fallback-policy/bugs/BUG-074-002-noground-e2e-skip-guard-masks-canonical-ack-regression
+exit: 0
+lines: 41
+sha256: d0fcc3d00860e2793d6f53a8434292f1a505ecf38ce4456d8d8db5bf25097ada
+--- last 12 ---
+✅ Mode-specific report gates skipped (status not in promotion set)
+✅ Value-first selection rationale lint skipped (not a value-first report)
+✅ Scenario path-placeholder lint skipped (no matching scenario sections found)
+
+=== Anti-Fabrication Evidence Checks ===
+✅ All checked DoD items in scopes.md have evidence blocks
+✅ No unfilled evidence template placeholders in scopes.md
+✅ No unfilled evidence template placeholders in report.md
+✅ No repo-CLI bypass detected in report.md command evidence
+
+=== End Anti-Fabrication Checks ===
+
+Artifact lint PASSED.
+```
+
+<!-- verify: bash bubbles/scripts/evidence-capture.sh --verify d0fcc3d00860e2793d6f53a8434292f1a505ecf38ce4456d8d8db5bf25097ada -- bash .github/bubbles/scripts/artifact-lint.sh specs/074-capture-as-fallback-policy/bugs/BUG-074-002-noground-e2e-skip-guard-masks-canonical-ack-regression -->
+
+```
+# traceability-guard BUG-074-002
+$ bash .github/bubbles/scripts/traceability-guard.sh specs/074-capture-as-fallback-policy/bugs/BUG-074-002-noground-e2e-skip-guard-masks-canonical-ack-regression
+exit: 0
+lines: 55
+sha256: fc2eae58834d05ef3ddda77a948ed5ac7df53cf44bd8fb4fb4a3f2c01ea193d0
+--- last 11 ---
+ℹ️  DoD fidelity: 4 scenarios checked, 4 mapped to DoD, 0 unmapped
+
+--- Traceability Summary ---
+ℹ️  Scenarios checked: 4
+ℹ️  Test rows checked: 7
+ℹ️  Scenario-to-row mappings: 4
+ℹ️  Concrete test file references: 4
+ℹ️  Report evidence references: 4
+ℹ️  DoD fidelity scenarios: 4 (mapped: 4, unmapped: 0)
+ℹ️  Edge confidence (IMP-015 Scope B): declared=1 inferred=0 ambiguous=7
+
+RESULT: PASSED (0 warnings)
+```
+
+The head of that capture is not reproduced here: the guard prints the feature
+path as a host-local absolute path, and this repository does not carry operator
+paths in committed artifacts. The `sha256` covers the full output, so the elided
+head is recoverable by re-running the verify line.
+
+<!-- verify: bash bubbles/scripts/evidence-capture.sh --verify fc2eae58834d05ef3ddda77a948ed5ac7df53cf44bd8fb4fb4a3f2c01ea193d0 -- bash .github/bubbles/scripts/traceability-guard.sh specs/074-capture-as-fallback-policy/bugs/BUG-074-002-noground-e2e-skip-guard-masks-canonical-ack-regression -->
+
+```
+$ bash .github/bubbles/scripts/implementation-reality-scan.sh <packet> --verbose
+ℹ️  INFO: Scopes yielded 0 files — falling back to design.md for file discovery
+⚠️  WARN: Resolved 4 file(s) from design.md fallback — scopes.md should reference these directly
+ℹ️  INFO: Resolved 4 implementation file(s) to scan
+  Files scanned:  4
+  Violations:     0
+  Warnings:       1
+🟡 PASSED with 1 warning(s) — manual review advised
+REALITY_RC=0
+```
+
+```
+$ bash .github/bubbles/scripts/artifact-freshness-guard.sh <packet>
+ℹ️  spec.md has no superseded/suppressed sections
+ℹ️  design.md has no superseded/suppressed sections
+ℹ️  No spec/design freshness boundaries detected
+ℹ️  scopes.md has no superseded scope section
+ℹ️  No superseded scope sections detected
+ℹ️  Single-file scope layout detected — orphaned per-scope directory check not applicable
+RESULT: PASS (0 failures, 0 warnings)
+FRESHNESS_RC=0
+```
+
+The reality-scan warning is real and worth stating plainly: the scan found no
+file references in `scopes.md` and fell back to `design.md` to discover the four
+files it scanned. It scanned the right files and found zero violations, but the
+discovery path was the fallback rather than the plan. That is recorded as DI-19.
+
+---
+
+### V-3 · Phase certification audit
+
+The instruction for this run was to certify only phases that carry BOTH a
+`report.md` evidence section AND an `execution.executionHistory` entry naming the
+agent that executed them. Each claim in `execution.completedPhaseClaims` was
+resolved against both surfaces independently — the claim itself was not treated
+as evidence of anything.
+
+```
+PHASE        CLAIM AGENT            HIST?     HIST AGENT/at                      ANCHOR?  ANCHOR TARGET
+--------------------------------------------------------------------------------------------------------
+implement    bubbles.implement      YES       bubbles.implement @2026-08-23T23:05:01Z  YES  L321  Implementation Delta
+test         bubbles.test           YES       bubbles.test @2026-08-24T00:05:14Z       YES  L596  Test Phase Per-DoD Evidence 2026-08-23
+regression   bubbles.regression     YES       bubbles.regression @2026-08-24T00:50:55Z YES  L917  Regression Phase
+simplify     bubbles.simplify       YES       bubbles.simplify @2026-08-24T01:17:41Z   YES  L1470 Simplify Phase
+stabilize    bubbles.stabilize      YES       bubbles.stabilize @2026-08-24T01:32:02Z  YES  L1767 Stabilize Phase
+security     bubbles.security       YES       bubbles.security @2026-08-24T01:56:53Z   YES  L2095 Security Phase
+
+audit in completedPhaseClaims : False
+audit in executionHistory     : False
+all phases seen in history    : ['analysis', 'discovery', 'documentation', 'implement',
+                                 'regression', 'security', 'simplify', 'stabilize', 'test']
+```
+
+Evidence density per certified section, measured over the section body rather
+than asserted:
+
+| Section | Body lines | Command / exit-code markers | Hashed captures |
+|---|---|---|---|
+| Implementation Delta | 274 | 7 shell prompts | — |
+| Test Phase Per-DoD Evidence 2026-08-23 | 225 | 15 shell prompts, 1 `exit:` | 2 |
+| Regression Phase | 552 | 12 command headings with exit codes (`CHECK_EXIT=0`, `UNIT_GOPKG_EXIT=1`, `LINT_EXIT=0`) | 2 |
+| Simplify Phase | 296 | 13 shell prompts | 1 |
+| Stabilize Phase | 327 | live-infrastructure observations (`RestartCount 1268 → 1276`, `df` probe, lock probes) | 2 |
+| Security Phase | 428 | 16 shell prompts | 3 |
+
+The guard's own Check 6B and Check 7C agree independently: *"Phase 'x' has
+specialist provenance"* for all six, and *"Every claimed phase has at least as
+many executionHistory runs as claims (6 phase(s))"*.
+
+**Certified:** `implement`, `test`, `regression`, `simplify`, `stabilize`,
+`security`.
+
+**Not certified — `audit`.** `report.md` contains no audit-phase section. The
+only headings matching *audit* are `## Invocation Audit` (a `bubbles.bug` filing
+note about subagent dispatch, written 2026-08-18) and `### Disjointness re-audit
+(post-change)` (a `bubbles.simplify` sub-analysis). Neither is an audit phase.
+`execution.executionHistory` contains no entry with `agent: bubbles.audit`, and
+`execution.completedPhaseClaims` contains no `audit` claim. Three dispatches of
+`bubbles.audit` returned without writing to this packet, and a dispatch that
+writes nothing has produced no evidence — so there is nothing here to certify. No
+audit record was created by this phase. `auditProfile: delivery-completion-v1`
+requires one, which is why G022 still fails after this section lands.
+
+---
+
+### V-4 · DoD census
+
+Counted directly from `scopes.md`, not from any prior summary:
+
+```
+scopes.md DoD checked  : 8
+scopes.md DoD unchecked: 11
+scope Status           : **Status:** In Progress
+```
+
+The 11 unchecked items are lines 117, 118, 119, 124, 125, 126, 127, 128, 129,
+133, 134. Nine of them share one root cause and one blocker, both already
+recorded by the test phase: the live stack returned
+`error_cause="provider_unavailable"` on every attempt, so the grounded and
+captured branches of the switch were never traversed, and
+`./smackerel.sh test e2e --go-package assistant` was refused by `disk-preflight`
+at exit 1 before any container started. Line 134 is unchecked because
+`state-transition-guard.sh` does not PASS — V-1 above is the direct evidence for
+that item remaining open, and it is the one item this phase can speak to
+authoritatively.
+
+This phase checked none of them. The evidence required to check them is a live
+run and a green suite; neither exists, and certification is not a substitute for
+either.
+
+---
+
+### V-5 · Outcome contract (Gate G070) — FAIL
+
+```
+$ bash .github/bubbles/scripts/goal-fidelity-guard.sh --boundary pre-certification \
+    --session-file .specify/memory/bubbles.session.json --spec-dir <packet>
+GOAL-FIDELITY[G070] .../spec.md has no non-empty '## Outcome Contract' section. G070
+requires Intent, Success Signal, Hard Constraints, and Failure Condition BEFORE
+bootstrap completes; without it there is no statement of what this feature was for.
+GOAL-FIDELITY[G070] .../spec.md Outcome Contract declares no 'Hard Constraints'.
+Certification cannot claim constraints were preserved when none were stated.
+goal-fidelity-guard: FAIL boundary=pre-certification findings=2
+GOAL_FIDELITY_RC=1
+```
+
+This gate is not wired into the transition guard's check set for this packet — it
+appears in neither `passedGateIds` nor `failedGateIds` in V-1 — so it would have
+gone unmeasured had this phase not run it directly. It is recorded as DI-20.
+
+`spec.md` is planning-owned. This phase did not add the missing section, because
+authoring the Intent and Success Signal a certification is then judged against is
+the exact self-dealing the ownership split prevents.
+
+---
+
+### V-6 · Discovered issues (validate phase, continuing the DI series)
+
+| # | Date | Issue | Disposition | Reference |
+|---|---|---|---|---|
+| DI-19 | 2026-08-24 | `implementation-reality-scan.sh` resolved zero files from `scopes.md` and fell back to `design.md` to find the four files it scanned. The scan is sound, but the plan does not name the files its own scope changes. | **Routed to `bubbles.plan`.** `scopes.md` is planning-owned; this phase holds no write authority over it. | V-2 above; scan output `Scopes yielded 0 files` |
+| DI-20 | 2026-08-24 | `spec.md` carries no `## Outcome Contract`, so G070 fails at the pre-certification boundary. The transition guard does not wire G070 for this packet, so the omission was invisible to every prior phase. | **Routed to `bubbles.analyst`.** `spec.md` is analyst-owned. | V-5 above |
+
+---
+
+### Validate verdict
+
+❌ **VALIDATION FAILED** — the transition guard returned exit 1 with verdict
+`FAIL`, 8 failures and 3 warnings across gates G022, G027 and G136, and G070
+fails independently at the pre-certification boundary.
+
+Six phases were certified because six phases were genuinely executed and left
+evidence on two independent surfaces. The packet is nonetheless not done, and the
+gap between those two statements is the entire point of separating phase
+certification from status certification:
+
+| Blocker | Owner | What closes it |
+|---|---|---|
+| `audit` phase absent (G022) | `bubbles.audit` | An audit run that writes a `report.md` section and an `executionHistory` entry. Three dispatches produced neither. |
+| 11 DoD items unchecked, scope `In Progress`, `completedScopes` empty (G027) | `bubbles.test` | A live stack that reaches the grounding decision, plus an assistant e2e package run that clears `disk-preflight`. |
+| Human acceptance not established (G136) | human author | A `## Human Acceptance Record` in `uservalidation.md`, authored by a person. |
+| No Outcome Contract (G070) | `bubbles.analyst` | An `## Outcome Contract` in `spec.md` with all four fields. |
+
+`status` and `certification.status` are set to `blocked` rather than
+`in_progress`. `in_progress` describes work that has a next step available inside
+the packet; every blocker above needs an agent or a person this packet cannot
+invoke, and the live-stack and disk blockers are environmental. `blocked` with a
+named owner per blocker is the honest reading, and it is recorded in
+`state.json` → `blockedReason`.
+

@@ -6,14 +6,15 @@
   "featureName": "BUG-074-002 no-ground E2E skip-guard masks the canonical-ack regression",
   "workflowMode": "bugfix-fastlane",
   "executionRuntime": "direct",
-  "status": "in_progress",
-  "statusCorrectionNote": "CORRECTED 2026-08-23 by bubbles.goal. This field read 'route_required', which is a ROUTING OUTCOME vocabulary word, not a schema-valid persisted status. transition-contract-resolver.sh:329 accepts only not_started, in_progress, blocked, the mode's statusCeiling, or a declared terminalAlias; bugfix-fastlane inherits ceiling 'done' and declares no aliases, so the guard failed at contract resolution with E009-TARGET-MISMATCH and exit 2 and never reached Check 6 at all. The packet was therefore unmeasurable rather than merely failing. in_progress is the accurate replacement: implement has shipped and been recorded, test is next. The routing intent is not lost -- it already lives in routing.outcome, which is its correct home and is unchanged. A portfolio scan of all state.json files found this packet was the only one carrying a non-schema status.",
+  "status": "blocked",
+  "blockedReason": "state-transition-guard.sh returned exit 1 with verdict FAIL at 2026-08-24T03:45:17Z (8 failures, 3 warnings; failedGateIds G022, G027, G136; blockingCode DELIVERY_COMPLETION_FAILED), and goal-fidelity-guard.sh returned exit 1 independently at the pre-certification boundary (G070). Four blockers, none of which this packet can clear from inside itself. (1) G022 - the audit phase is absent from all three surfaces: report.md has no audit-phase section, execution.completedPhaseClaims has no audit claim, and execution.executionHistory has no entry with agent bubbles.audit. Three bubbles.audit dispatches returned without writing anything to this packet, and auditProfile delivery-completion-v1 requires an audit. Owner: bubbles.audit. (2) G027 - SCOPE-BUG-074-002-01 is In Progress with 11 of 19 DoD items unchecked and certification.completedScopes is empty. Nine of the eleven need two machine states this packet cannot create: a live stack that reaches the grounding decision (every attempted run returned error_cause=provider_unavailable before the switch could branch) and an assistant e2e package run that clears disk-preflight (refused at exit 1 on 39 GB free against a 40 GB requirement, before any container started). Owner: bubbles.test, plus a host that can supply those two states. (3) G136 - uservalidation.md carries four unchecked items and no authored Human Acceptance Record; only a person can supply it, and checking those boxes on the author's behalf would fabricate the acceptance the gate exists to require. Owner: human author. (4) G070 - spec.md carries no non-empty '## Outcome Contract' section, so Intent, Success Signal, Hard Constraints and Failure Condition are unstated and certification cannot claim constraints were preserved. G070 is not wired into this packet's transition-guard check set, so it was invisible to every prior phase. Owner: bubbles.analyst. blocked rather than in_progress because every remaining step needs an agent this packet cannot invoke, a person, or a machine state the environment refused to provide. Six phases WERE genuinely executed and are certified in certification.certifiedCompletedPhases; that certification is about phase execution and is not a claim about delivery. Evidence: report.md '## Validate Phase'.",
+  "statusCorrectionNote": "CORRECTED 2026-08-23 by bubbles.goal. This field read 'route_required', which is a ROUTING OUTCOME vocabulary word, not a schema-valid persisted status. transition-contract-resolver.sh:329 accepts only not_started, in_progress, blocked, the mode's statusCeiling, or a declared terminalAlias; bugfix-fastlane inherits ceiling 'done' and declares no aliases, so the guard failed at contract resolution with E009-TARGET-MISMATCH and exit 2 and never reached Check 6 at all. The packet was therefore unmeasurable rather than merely failing. in_progress is the accurate replacement: implement has shipped and been recorded, test is next. The routing intent is not lost -- it already lives in routing.outcome, which is its correct home and is unchanged. A portfolio scan of all state.json files found this packet was the only one carrying a non-schema status. || SUPERSEDED-IN-PART 2026-08-24T03:52:00Z by bubbles.validate. The 2026-08-23 correction above stays accurate as history: route_required was never a schema-valid persisted status, and in_progress was the correct replacement at that time. Status has since moved to blocked, which transition-contract-resolver.sh:329 accepts on the same line as in_progress, so this is a status change rather than a second schema correction. The reason lives in blockedReason, not here.",
   "severity": "S3",
   "severityClass": "test-integrity",
   "releaseTrain": "mvp",
   "flagsIntroduced": [],
   "createdAt": "2026-08-18T00:00:00Z",
-  "lastUpdatedAt": "2026-08-24T01:17:41Z",
+  "lastUpdatedAt": "2026-08-24T03:52:00Z",
   "certifiedAt": null,
   "certifiedBy": null,
   "discoveredBy": "bubbles.bug (finding DI-5 during BUG-061-009 close-out)",
@@ -26,9 +27,10 @@
     "Which branch the live stack takes today for the fabricated-city prompt is NOT verified; no live run was performed."
   ],
   "execution": {
-    "activeAgent": "bubbles.test",
-    "currentPhase": "test",
-    "substate": "implemented",
+    "activeAgent": "bubbles.validate",
+    "currentPhase": "validate",
+    "substate": "blocked",
+    "executionPointerNote": "CORRECTED 2026-08-24T03:52:00Z by bubbles.validate. These three fields read activeAgent=bubbles.test, currentPhase=test, substate=implemented, which was accurate on 2026-08-23 but had not moved while five further phases ran. Leaving them would have told the next reader that test was still executing when regression, simplify, stabilize, security and validate had all run since. They now name the phase that actually last executed and the state it left the packet in.",
     "currentScope": "SCOPE-BUG-074-002-01",
     "executionModel": "direct-authorized-runner",
     "runStartedAt": "2026-08-18T00:00:00Z",
@@ -75,6 +77,13 @@
         "provenanceMode": "specialist",
         "claimedAt": "2026-08-24T01:56:53Z",
         "evidenceRef": "report.md#security-phase"
+      },
+      {
+        "phase": "validate",
+        "agent": "bubbles.validate",
+        "provenanceMode": "specialist",
+        "claimedAt": "2026-08-24T03:52:00Z",
+        "evidenceRef": "report.md#validate-phase"
       }
     ],
     "executionHistory": [
@@ -154,6 +163,18 @@
         "evidenceRef": "report.md#security-phase",
         "recordProvenance": "Contemporaneous. This entry and its execution.completedPhaseClaims twin were written in the same session as the run they describe, by the agent that performed it, before the session ended - not as a later corrective write. The timestamp 2026-08-24T01:56:53Z is real wall clock from 'date -u +%Y-%m-%dT%H:%M:%SZ' captured immediately before the report.md section was authored; the run itself spans 2026-08-24T01:47:28Z to 2026-08-24T01:56:53Z, both from the same command. No timestamp in this record was estimated, rounded forward, or derived from anything other than that command.",
         "summary": "Executed the security phase at HEAD 8441ed9c on a clean tree (git status --porcelain produced 0 lines). Repository binding resolved first: repository-binding-host-context.sh returned session vscode-ad58d1923c2301065c1d41d950c10d83 at control revision 32, and repository-binding.sh preflight --request-class STRUCTURED returned PREFLIGHT_CONFIRMED plus PREFLIGHT_COMMITTED at revision 33 with authority=concrete-target and actionable=true, exit 0. Verdict FINDINGS: 1 MEDIUM, 0 HIGH, 0 CRITICAL. Checked NO DoD item, edited no scope DoD text, wrote no certification.* field, and did not modify tests/e2e/assistant/capture_fallback_trigger_e2e_test.go. All three no-write invariants are digest-proven in report.md S-6. S-1 CHANGE SURFACE, PASS: git diff --name-status over the packet range 363bcdc5..HEAD shows 9 commits and exactly 6 files - 5 spec artifacts under the packet directory plus tests/e2e/assistant/capture_fallback_trigger_e2e_test.go. A negative grep across every production root in this repository (internal/, cmd/, ml/, web/, extensions/, deploy/, config/, scripts/, docker-compose*, Dockerfile*, smackerel.sh) matched nothing, exit 1. Zero unclassified paths, so the packet carries no production blast radius and no runtime attack surface changed. S-2 SECRET HYGIENE, PASS by four independent checks: (A) the repo's own pii-scan.sh invoked exactly as .git/hooks/pre-commit invokes it exited 0 but scanned '0 commits' because the tree is clean - recorded explicitly as WEAK and NOT counted as a pass, since treating it as one would repeat this packet's own defect class of a guard reporting success without testing anything; (B) gitleaks detect --config .gitleaks.toml --log-opts=363bcdc5..HEAD --redact scanned all 9 packet commits under the repository's own rules and found no leaks, exit 0; (C) the pii-scan step-2 equivalent checked the machine-local operator token list (23 active tokens) against the full packet diff for 0 hits, with token values never printed; (D) an independent grep for absolute home paths found 0 in the packet's added lines and 0 in each of the six files individually, report.md included, which matters because report.md is the artifact carrying pasted terminal output. S-3 G034 SECURITY GATE, repo-level FAIL with zero packet delta: security-gate.sh --repo-root . exits 1 with 12 inline-credentials findings, and that raw exit is reported rather than summarised away. The same gate run in a detached worktree at the packet base 363bcdc5 produces the identical 12. Both finding files (scripts/commands/config.sh, scripts/commands/config_secret_rejection_test.sh) are absent from the packet's change surface, and git merge-base --is-ancestor proves both of their last-touching commits (c7667d99, abd60886) are ancestors of the packet base, exit 0 each. Eleven of the twelve are __SECRET_PLACEHOLDER__ SST sentinels or grep patterns inside a test that exists to reject a literal password; the twelfth is a named webhook test fixture. Delta attributable to this packet: exactly zero. S-4 ASSERTION-MESSAGE LEAKAGE, MEDIUM FINDING and packet-attributable: three channels are bounded and verified safe - error_cause cannot carry provider detail because internal/assistant/contracts/response.go:189 declares it a closed-vocabulary discriminator with an enumerated constant set, so no upstream message, endpoint, model name or rate-limit detail can ride it; sources CONTENT is never printed, all 7 references use len(env.Sources) and a grep for a bare env.Sources inside a format argument returns 0, which matters because SourceJSON carries Title, URL, WebSnippet and ArtifactID; and the bearer is never printed, since postAssistantTurn sets the Authorization header but every failure path prints only err. The prompt is hardcoded and synthetic. What is NOT bounded is string(raw), the undecoded wire body, which by construction contains the complete sources[] array and so bypasses the len()-only discipline the decoded path observes. The packet ADDED those sites: string(raw) inside a t.* emission went 0 at base to 3 at HEAD, and env.Body inside a t.* emission went 1 to 8. The three raw sites fire on the abnormal paths - a 5-minute 503 timeout, any non-200, and an undecodable body - which is exactly when an upstream error handler is most likely to reflect request material back. This is a finding rather than an observation because the repository has already ratified the control and this file does not use it: tests/e2e/assistant/intent_compiler_http_test.go:76 defines assertNoSecretLeakage enforcing the SCN-068-A06 invariant that the wire response must not echo bearer tokens or private-key patterns, both files declare package assistant_e2e so it is callable with no new import, it takes exactly the three values the test already holds, and it reports a leak WITHOUT printing the leaked value. Current adoption is 2 call sites, both in that one sibling file. OWASP A09 primary, A02 secondary. Exploitability today is low and that is stated plainly. Routed to bubbles.test, not applied: this agent owns no test artifacts and the run instruction forbids editing the file. The remediation is one call to assertNoSecretLeakage(t, stack, raw) placed after postAssistantTurn returns and before the first raw emission, covering all three sites at once; it sits AHEAD of the switch, so it alters no branch selector, no branch predicate and no assertion count, preserving the disjointness property the simplify phase established. S-5 DEPENDENCY POSTURE, PASS: no dependency manifest or lockfile appears in the packet range, exit 1 on the grep. Because an untouched manifest is necessary but not sufficient - a test can import an already-vendored package and still widen the trusted surface - the import block itself was compared byte-for-byte and both revisions hash to 80586cabb73e53260dbfe1d77443681e62e8eed3d351cbf2cdc7c7dc996505cb. Five stdlib packages plus two first-party internal/ packages; the +231-line rewrite added zero dependencies. S-7 EXPLICIT NON-CLAIMS, five recorded: no branch was executed, so S-4's disclosure consequence carries claimSource 'interpreted' while its counts and type shapes carry 'executed'; no live stack was exercised; no compile was run by this phase; runtime authorization was not reviewed because the packet touches no production code, and a clean S-1 is the reason it is out of the assessed set rather than an assertion that the runtime is secure; and the repository-level G034 FAIL stands unresolved at 12. S-8 DISCOVERED ISSUE DI-18, routed to bubbles.plan: state.json sourceRevision reads d62f2e750ab315767199ce29b5862e9ae509cccd, which is neither HEAD 8441ed9c nor any commit in the packet range, so a reader taking it at face value would attribute this review and every earlier phase record to a revision the packet never produced. Not corrected here because sourceRevision is planning-owned; the report section states its own assessed revision explicitly so its evidence stays attributable regardless of the field."
+      },
+      {
+        "at": "2026-08-24T03:52:00Z",
+        "agent": "bubbles.validate",
+        "phasesExecuted": ["validate"],
+        "provenanceMode": "specialist",
+        "executionModel": "direct-authorized-runner",
+        "claimSource": "executed",
+        "outcome": "blocked",
+        "evidenceRef": "report.md#validate-phase",
+        "recordProvenance": "Contemporaneous. This entry and its execution.completedPhaseClaims twin were written in the same session as the run they describe, by the agent that performed it. The timestamp is real wall clock from 'date -u +%Y-%m-%dT%H:%M:%SZ' captured during the run (2026-08-24T03:49:20Z) and rounded to the minute of the write; the guard runs it reports carry their own guard-printed timestamps 2026-08-24T03:43:42Z and 2026-08-24T03:45:17Z, and the traceability and freshness guards carry 03:50:11Z and 03:48:22Z. No timestamp here was estimated or derived from anything other than those commands.",
+        "summary": "Executed the validate phase at HEAD 16d591be on a clean tree (git status --porcelain produced 0 lines). Repository binding resolved first: repository-binding-host-context.sh returned session vscode-ad58d1923c2301065c1d41d950c10d83 at expectedControlRevision 37, and repository-binding.sh preflight --request-class STRUCTURED returned PREFLIGHT_CONFIRMED plus PREFLIGHT_COMMITTED at revision 38 with authority=concrete-target, transition=confirmed, actionable=true, exit 0. VERDICT: VALIDATION FAILED. state-transition-guard.sh exit 1, verdict FAIL, 8 failures and 3 warnings, failedGateIds [G022,G027,G136], failedChecks [Check-4-completion,Check-5-all-done], blockingCode DELIVERY_COMPLETION_FAILED (bounded capture sha256 3e09bec795452cce02813bdc286294b8f9ef4b5eab6ce393c1f22f66d963beb8, 376 lines). Supporting guards all clean and run directly rather than predicted: artifact-lint.sh exit 0 (sha256 d0fcc3d00860e2793d6f53a8434292f1a505ecf38ce4456d8d8db5bf25097ada, 41 lines); traceability-guard.sh exit 0, RESULT PASSED 0 warnings, 4 scenarios / 7 test rows / 4 concrete test file references / 4 report evidence references (sha256 fc2eae58834d05ef3ddda77a948ed5ac7df53cf44bd8fb4fb4a3f2c01ea193d0, 55 lines); implementation-reality-scan.sh exit 0, 4 files scanned, 0 violations, 1 warning (scopes.md yielded 0 files so discovery fell back to design.md - recorded as DI-19); artifact-freshness-guard.sh exit 0, PASS 0 failures 0 warnings. goal-fidelity-guard.sh --boundary pre-certification returned exit 1 with 2 findings: spec.md has no non-empty '## Outcome Contract' section and declares no Hard Constraints (G070). G070 appears in neither passedGateIds nor failedGateIds of the transition guard, so it is unwired for this packet and would have gone unmeasured - recorded as DI-20. PHASE CERTIFICATION: certified exactly 6 phases - implement, test, regression, simplify, stabilize, security. Each was resolved independently against BOTH required surfaces rather than trusting the claim: a report.md section at the claimed anchor (L321 Implementation Delta, L596 Test Phase Per-DoD Evidence 2026-08-23, L917 Regression Phase, L1470 Simplify Phase, L1767 Stabilize Phase, L2095 Security Phase) AND an execution.executionHistory entry naming the same agent as the claim. The guard's own Check 6B and Check 7C agree. DID NOT CERTIFY audit: report.md contains no audit-phase section (the only audit-named headings are '## Invocation Audit', a bubbles.bug filing note from 2026-08-18, and '### Disjointness re-audit (post-change)', a bubbles.simplify sub-analysis), executionHistory contains no bubbles.audit entry, and completedPhaseClaims contains no audit claim. Three bubbles.audit dispatches returned with zero writes to this packet; a dispatch that writes nothing produces no evidence, so there was nothing to certify and no audit record was invented. WRITES: state.json certification.* and execution.*, plus report.md '## Validate Phase'. Checked NO DoD item, edited no scope status, no scopes.md, no spec.md, no design.md, no uservalidation.md, and no file under tests/ or internal/. DoD census counted directly from scopes.md: 8 checked, 11 unchecked (lines 117,118,119,124,125,126,127,128,129,133,134), scope status In Progress. Set status and certification.status to blocked with a per-blocker owner recorded in blockedReason."
       }
     ],
     "scopeSummary": [
@@ -169,23 +190,57 @@
     ]
   },
   "certification": {
-    "status": "in_progress",
-    "statusCorrectionNote": "CORRECTED 2026-08-23 by bubbles.goal, mirroring the top-level status for the same reason and keeping the two in agreement. Certification remains genuinely in_progress: certifiedCompletedPhases is empty and only bubbles.validate may write it.",
+    "status": "blocked",
+    "statusCorrectionNote": "CORRECTED 2026-08-23 by bubbles.goal, mirroring the top-level status for the same reason and keeping the two in agreement. Certification remains genuinely in_progress: certifiedCompletedPhases is empty and only bubbles.validate may write it. || UPDATED 2026-08-24T03:52:00Z by bubbles.validate, again mirroring the top-level status so the two stay in agreement. certifiedCompletedPhases is no longer empty - six phases are certified - but that field records which phases genuinely executed, not whether the packet is delivered. certification.status is blocked because the transition guard returned FAIL on G022, G027 and G136; see blockedReason.",
     "completedScopes": [],
-    "certifiedCompletedPhases": [],
-    "certifierAgent": null,
-    "certifiedAt": null,
-    "scopeProgress": [
-      {"scopeId": "SCOPE-BUG-074-002-01", "status": "in_progress", "dodComplete": 0, "dodTotal": 19}
+    "certifiedCompletedPhases": [
+      "implement",
+      "test",
+      "regression",
+      "simplify",
+      "stabilize",
+      "security"
     ],
-    "achievedAssuranceLevel": "root cause established by static source inspection with executed evidence; zero fix assurance",
+    "certifiedCompletedPhasesNote": "Exactly the phases that satisfied BOTH admission tests, each resolved independently rather than read off the claim: (a) a report.md evidence section resolvable at the anchor the claim cites, and (b) an execution.executionHistory entry whose agent matches the claiming agent. 'audit' is absent from this list because it is absent from report.md, from executionHistory and from completedPhaseClaims - three bubbles.audit dispatches returned without writing to this packet, so no evidence exists to certify and none was manufactured. This list is a statement about phase execution only; it asserts nothing about DoD completion, scope completion or delivery, all of which remain open per blockedReason.",
+    "certifierAgent": "bubbles.validate",
+    "certifiedAt": "2026-08-24T03:52:00Z",
+    "certificationEvidence": {
+      "revision": "16d591be313731325ea3dbcd4bd1ffbd889bbb21",
+      "treeClean": true,
+      "reportSection": "report.md#validate-phase",
+      "stateTransitionGuard": {
+        "command": "bash .github/bubbles/scripts/state-transition-guard.sh <packet>",
+        "exitCode": 1,
+        "verdict": "FAIL",
+        "failureCount": 8,
+        "warningCount": 3,
+        "failedGateIds": ["G022", "G027", "G136"],
+        "failedChecks": ["Check-4-completion", "Check-5-all-done"],
+        "blockingCode": "DELIVERY_COMPLETION_FAILED",
+        "capturedAt": "2026-08-24T03:45:17Z",
+        "outputSha256": "3e09bec795452cce02813bdc286294b8f9ef4b5eab6ce393c1f22f66d963beb8",
+        "outputLines": 376
+      },
+      "supportingGuards": [
+        {"script": "artifact-lint.sh", "exitCode": 0, "result": "PASSED", "outputSha256": "d0fcc3d00860e2793d6f53a8434292f1a505ecf38ce4456d8d8db5bf25097ada", "outputLines": 41},
+        {"script": "traceability-guard.sh", "exitCode": 0, "result": "PASSED (0 warnings)", "outputSha256": "fc2eae58834d05ef3ddda77a948ed5ac7df53cf44bd8fb4fb4a3f2c01ea193d0", "outputLines": 55},
+        {"script": "implementation-reality-scan.sh", "exitCode": 0, "result": "PASSED with 1 warning", "detail": "4 files scanned, 0 violations; scopes.md yielded 0 files so discovery fell back to design.md (DI-19)"},
+        {"script": "artifact-freshness-guard.sh", "exitCode": 0, "result": "PASS (0 failures, 0 warnings)"},
+        {"script": "goal-fidelity-guard.sh --boundary pre-certification", "exitCode": 1, "result": "FAIL findings=2", "detail": "G070: spec.md has no non-empty '## Outcome Contract' and declares no Hard Constraints. Not wired into this packet's transition-guard check set (absent from both passedGateIds and failedGateIds), so it was unmeasured until this phase ran it directly (DI-20)."}
+      ]
+    },
+    "scopeProgress": [
+      {"scopeId": "SCOPE-BUG-074-002-01", "status": "in_progress", "dodComplete": 8, "dodTotal": 19}
+    ],
+    "achievedAssuranceLevel": "Fix implemented and statically verified; six pipeline phases executed and certified. Zero live-stack assurance: the grounded and captured branches of the new switch were never traversed (every run returned error_cause=provider_unavailable) and the assistant e2e package never ran (disk-preflight refused at exit 1). No audit. No human acceptance.",
+    "assuranceDerivation": "Not derived via assurance-derive.sh. That helper resolves an achieved level for a TERMINAL certification, and this packet is blocked rather than terminal - implementation is not complete by its own DoD (11 of 19 items unchecked), tests did not run to completion, and no independent audit occurred. Recording a derived level here would imply a terminal transition that did not happen.",
     "pendingGates": [
-      "Resolve the open unknown: live run recording which branch the fabricated-city prompt takes at HEAD",
-      "Reproduce the defect (current test reports SKIP on an off-contract status)",
-      "Adversarial regression flips SKIP -> FAIL",
-      "Non-tautology control (grounded envelope still passes)",
-      "Full assistant e2e package with no collateral regression",
-      "validate-owned certification"
+      "G022 - audit phase absent from report.md, completedPhaseClaims and executionHistory (owner: bubbles.audit)",
+      "G027 - 11 of 19 DoD items unchecked, scope In Progress, completedScopes empty (owner: bubbles.test)",
+      "G136 - uservalidation.md has 4 unchecked items and no authored Human Acceptance Record (owner: human author)",
+      "G070 - spec.md has no '## Outcome Contract' section (owner: bubbles.analyst)",
+      "Environment - a live stack that reaches the grounding decision instead of returning error_cause=provider_unavailable",
+      "Environment - disk headroom above the 40 GB disk-preflight requirement so the assistant e2e package can run"
     ],
     "lockdownState": {
       "active": false,
@@ -226,10 +281,16 @@
   ],
   "reworkQueue": [],
   "routing": {
-    "outcome": "route_required",
-    "nextRequiredOwner": "bubbles.test",
-    "reason": "Implementation landed at commit 343d6076: the status-keyed skip guard in tests/e2e/assistant/capture_fallback_trigger_e2e_test.go is replaced by a five-branch total switch that classifies on error_cause/sources and asserts on status/body. Change boundary held - zero files under internal/. The DoD test matrix in scopes.md SCOPE-BUG-074-002-01 is owned by bubbles.test, which executes it and records the per-item evidence; certification remains owned by bubbles.validate per certification.status.",
-    "subsequentOwners": ["bubbles.validate"]
+    "outcome": "blocked",
+    "nextRequiredOwner": "bubbles.audit",
+    "reason": "UPDATED 2026-08-24T03:52:00Z by bubbles.validate. This field previously read outcome=route_required, nextRequiredOwner=bubbles.test, written by bubbles.implement when the test phase was the single next step. That is no longer the whole picture: the test phase ran on 2026-08-24T00:05:14Z and routed onward, and validate has since measured four distinct blockers with four distinct owners. bubbles.audit is named first because it is the only blocker whose owner can act with no environmental precondition - auditProfile delivery-completion-v1 requires an audit phase, three dispatches wrote nothing to this packet, and G022 cannot clear until one does. bubbles.test remains a required owner for G027 but needs two machine states this packet cannot create: a live stack that reaches the grounding decision rather than returning error_cause=provider_unavailable, and disk headroom above the 40 GB disk-preflight requirement. bubbles.analyst owns the missing spec.md Outcome Contract (G070). Human acceptance (G136) is owned by a person and by no agent. Per-blocker detail is in blockedReason.",
+    "priorRouting": {
+      "outcome": "route_required",
+      "nextRequiredOwner": "bubbles.test",
+      "writtenBy": "bubbles.implement",
+      "reason": "Implementation landed at commit 343d6076: the status-keyed skip guard in tests/e2e/assistant/capture_fallback_trigger_e2e_test.go is replaced by a five-branch total switch that classifies on error_cause/sources and asserts on status/body. Change boundary held - zero files under internal/. The DoD test matrix in scopes.md SCOPE-BUG-074-002-01 is owned by bubbles.test, which executes it and records the per-item evidence; certification remains owned by bubbles.validate per certification.status."
+    },
+    "subsequentOwners": ["bubbles.test", "bubbles.analyst", "bubbles.validate"]
   },
   "related": {
     "originFinding": "specs/061-conversational-assistant/bugs/BUG-061-009-high-band-refusal-masked-as-saved-as-idea/report.md#discovered-issues (DI-5)",
