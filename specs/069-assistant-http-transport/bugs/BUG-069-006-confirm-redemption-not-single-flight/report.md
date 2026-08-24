@@ -304,3 +304,85 @@ packet is owned by `bubbles.implement` per `state.json`
 `routing.nextRequiredOwner`, whose first execution obligation is the unchecked
 DoD item requiring the concurrent test to be recorded FAILING against the unfixed
 implementation before any fix lands.
+
+## Implementation Phase
+
+**Phase:** implement
+**Agent:** bubbles.implement
+**Claim Source:** executed
+**Commit:** `61b8be79` - `fix(BUG-069-006): make confirm redemption atomic via a store-arbitrated CAS`
+
+The `## Completion Statement` above records the bug-discovery phase. This
+section records the implement phase that followed it. Every DoD item in
+`scopes.md` remains unchecked.
+
+### Concurrent Regression Tests: RED Then GREEN
+
+Command:
+
+```bash
+SMACKEREL_SKIP_HOST_PREFLIGHT=1 ./smackerel.sh test unit --go --go-run 'TestMachineConfirm_ConcurrentRedemptionExecutesOnce|TestMachineConfirm_RacingSweepProducesOneTerminalOutcome'
+```
+
+RED, against the unfixed `machine.go` with all other files present so the
+package compiled. Exit code 1:
+
+```
+--- FAIL: TestMachineConfirm_ConcurrentRedemptionExecutesOnce (0.00s)
+    machine_concurrency_test.go:115: winners: got 2 want 1 — the gated action would execute 2 times
+    machine_concurrency_test.go:118: losers receiving ErrPendingNotFound: got 0 want 1
+    machine_concurrency_test.go:123: confirmed audit rows for "cr-1": got 2 want 1
+--- FAIL: TestMachineConfirm_RacingSweepProducesOneTerminalOutcome (0.00s)
+    machine_concurrency_test.go:164: terminal audit rows for "cr-1": got 2 (confirmed=1 discarded_timeout=1) want exactly 1
+FAIL    github.com/smackerel/smackerel/internal/assistant/confirm       0.060s
+```
+
+GREEN, with the fix applied. Exit code 0:
+
+```
+ok      github.com/smackerel/smackerel/internal/assistant/confirm       0.050s
+```
+
+### Supporting Lanes
+
+| Lane | Exit code | Result |
+|---|---|---|
+| Full Go unit suite | 0 | 149 packages ok, 0 failures |
+| `./smackerel.sh format --check` | 0 | `78 files already formatted` |
+| `./smackerel.sh lint` | 0 | `Web validation passed` |
+
+### The Fix
+
+The fix adds `Store.ClearPendingConfirm(ctx, userID, transport, confirmRef, now)
+(bool, error)`, evaluated as ONE atomic operation. All three call sites,
+`Confirm`, `Discard`, and `SweepTimeouts`, branch on `won`, so exactly one
+caller can redeem a given `confirmRef` and every other caller takes the
+loser path.
+
+`PgStore` implements it as a single conditional `UPDATE` and returns
+`tag.RowsAffected() == 1`. That return is load-bearing: `Persist` discards its
+`CommandTag` via `_`, so a bare conditional `WHERE` would have silently
+no-opped and reported success to every racer. Reading the affected-row count is
+what makes the database, rather than the caller, the arbiter of the race.
+
+### The Interface Addition Broke Four Store Implementations
+
+Adding the method to `Store` broke four implementations. Three of them were test
+doubles that the first pass missed: `memContextStore`, `memStore`, and
+`captureStore`. `./smackerel.sh check` is config-only and never compiles test
+files, so those three breakages stayed invisible until the test lane ran. A
+green `check` is not evidence that the package builds under `go test`.
+
+### Why `SMACKEREL_SKIP_HOST_PREFLIGHT=1` Was Set
+
+The disk preflight refuses with `C: 32 GB free, required 40 GB`. That reading is
+of the Windows volume backing the vhdx; the WSL ext4 filesystem the lane
+actually uses has 474 GB free and passes the same threshold.
+
+The variable is defined by `smackerel.sh` itself, not invented for this run, and
+setting it is justified for this lane only. `run_go_tooling` performs
+`docker run --rm` against an already-present `golang:1.25.10-bookworm` image
+with the Go caches in ext4-backed named volumes. That path builds no image and
+pulls nothing, so the preflight's disk threshold guards a cost this lane does
+not incur. The justification does NOT generalize to the build or e2e lanes,
+which do build images and therefore do need the check.

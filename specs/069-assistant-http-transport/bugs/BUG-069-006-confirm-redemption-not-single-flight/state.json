@@ -21,7 +21,15 @@
     "currentPhase": "bug-discovery",
     "executionModel": "direct-authorized-runner",
     "runStartedAt": "2026-08-23T00:00:00Z",
-    "completedPhaseClaims": [],
+    "completedPhaseClaims": [
+      {
+        "phase": "implement",
+        "agent": "bubbles.implement",
+        "provenanceMode": "specialist",
+        "claimedAt": "2026-08-24T15:02:01Z",
+        "evidenceRef": "report.md#implementation-phase"
+      }
+    ],
     "executionHistory": [
       {
         "at": "2026-08-23",
@@ -31,6 +39,14 @@
         "claimSource": "executed",
         "outcome": "completed_diagnostic",
         "note": "Authored the packet and independently re-verified every evidence claim inherited from SEC-069-005-1 by static inspection of the current tree. Four claims confirmed as stated; the PgStore claim confirmed with a type-name correction and found to be stronger than reported. Two additional defects in the same mechanism recorded in report.md Discovered Issues. No product or test source modified, no test suite executed, no DoD item checked."
+      },
+      {
+        "at": "2026-08-24T15:02:01Z",
+        "agent": "bubbles.implement",
+        "phasesExecuted": ["implement"],
+        "outcome": "completed_owned",
+        "evidenceRef": "report.md#implementation-phase",
+        "summary": "Made confirm redemption atomic by adding Store.ClearPendingConfirm, a single store-arbitrated compare-and-set that Confirm, Discard, and SweepTimeouts all branch on, with PgStore returning tag.RowsAffected() == 1 from one conditional UPDATE so the database arbitrates the race. The two concurrent regression tests were recorded FAILING against the unfixed machine.go (two winners, zero ErrPendingNotFound losers, two terminal audit rows) and then PASSING with the fix. The full Go unit suite, format --check, and lint were all clean. Every DoD item in scopes.md is still unchecked and certification fields were not written."
       }
     ]
   },
@@ -74,5 +90,5 @@
   "transitionRequests": [],
   "reworkQueue": [],
   "createdAt": "2026-08-23T00:00:00Z",
-  "updatedAt": "2026-08-23T00:00:00Z"
+  "updatedAt": "2026-08-24T15:02:01Z"
 }
