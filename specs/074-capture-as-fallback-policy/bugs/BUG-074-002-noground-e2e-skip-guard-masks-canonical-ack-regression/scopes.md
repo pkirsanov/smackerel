@@ -6,8 +6,8 @@ Links: [bug.md](bug.md) | [spec.md](spec.md) | [design.md](design.md) | [report.
 > `bubbles.bug` as a FILING + ROOT-CAUSE task, which implemented nothing. The
 > implementation landed 2026-08-23 at commit `343d6076` under `bubbles.implement`;
 > see `report.md` → *Implementation Delta*. The test phase then ran and checked
-> **10 of 19** DoD items; see `report.md` →
-> *Test Phase Per-DoD Evidence 2026-08-23*. The remaining **9** are unchecked for
+> **8 of 19** DoD items; see `report.md` →
+> *Test Phase Per-DoD Evidence 2026-08-23*. The remaining **11** are unchecked for
 > two distinct reasons, annotated individually below: five need a live envelope
 > this hardware tier cannot produce (every run returns `provider_unavailable`, so
 > branches 1, 2 and 4 of the shipped switch are untraversed), and the rest are

@@ -602,7 +602,7 @@ unless a line says otherwise.
 path has that path rewritten to `<operator-home>`. Nothing else in the captured
 output is altered.
 
-This phase checked **10 of 19** DoD items and deliberately left **9** unchecked.
+This phase checked **8 of 19** DoD items and deliberately left **11** unchecked.
 The unchecked list and the reason for each is the last subsection here; it is
 the substantive part of this record, not an appendix.
 
@@ -765,7 +765,7 @@ this host, which is not a decision a test phase makes unilaterally. The four DoD
 items that require a package run are therefore left unchecked below, and
 `Discovered Issues` records DI-7 for the blocker itself.
 
-### The nine unchecked items, and why each is unchecked
+### The unchecked items, and why each is unchecked
 
 | `scopes.md` line | Item | Why it is NOT checked |
 |---|---|---|
@@ -785,10 +785,10 @@ tier whose LLM provider was unavailable, so every one of them carries
 `error_cause="provider_unavailable"`. Branches 1, 2 and 4 of the shipped switch
 have never been traversed by a live envelope. Their correctness rests on the
 static control-flow reading recorded above, not on live traversal. Anyone
-reading the ten checked items as "the no-ground capture contract was verified
+reading the checked items as "the no-ground capture contract was verified
 end-to-end" would be reading more than the evidence carries.
 
-### The ten checked items
+### The checked items
 
 Lines 107, 108, 109 are carried by the three runs recorded in
 [Live Execution — The Adversarial Flip, Demonstrated (2026-08-23)](#live-execution--the-adversarial-flip-demonstrated-2026-08-23):
@@ -3057,7 +3057,7 @@ on a contract outcome. The file header's inventory is accurate on this point.
   verification "would be reading more than the evidence carries." That is the
   correct bound and it is stated without hedging.
 
-**The one over-claim.** report.md § *The ten checked items* claims ten checked DoD
+**The one over-claim (CORRECTED 2026-08-24).** report.md § *The checked items* claimed ten checked DoD
 items; the artifact has eight, and has had eight since the test phase's own commit:
 
 ```
@@ -3076,7 +3076,13 @@ The count was never ten in any revision. The two items narrated as checked but
 left `[ ]` are line 119 (*Bailout scan clean*) and line 127 (*`SCN-BUG-074-002-04`
 holds as shipped*) — both carry affirmative evidence text, and both are the items
 A-1 and A-2 above independently confirm. The `scopes.md` header note ("checked
-**10 of 19**", "remaining **9**") carries the same overstatement.
+**10 of 19**", "remaining **9**") carried the same overstatement.
+
+**Resolution (2026-08-24).** Both narrative surfaces were corrected to the
+artifact's real 8/11 after this audit surfaced the discrepancy — report.md
+lines 605, 768, 788, 791 and the `scopes.md` header note. The counts now agree
+with `grep -c '^- \[x\]'` on the artifact, which is the only source that was
+ever authoritative.
 
 Three things bound how much this matters, and the audit states all three:
 
