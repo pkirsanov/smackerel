@@ -174,6 +174,7 @@ func TestAssistantHTTPE2E_StaleCallbackRefDoesNotExecuteAction(t *testing.T) {
 func TestAssistantHTTPE2E_ConcurrentConfirmExecutesGatedActionOnce(t *testing.T) {
 	stack := loadHTTPTurnLiveStack(t)
 	waitHTTPTurnHealthy(t, stack, 30*time.Second)
+	waitAssistantFacadeReady(t, stack, 5*time.Minute)
 	isolateRequiredAssistantConversation(t, stack)
 	pool := openRequiredAssistantPool(t)
 	item := "test-bug069006-concurrent-" + timestamp()

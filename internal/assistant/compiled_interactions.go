@@ -207,7 +207,15 @@ func (f *Facade) finishConfirmResponse(
 			Status: contracts.StatusUnavailable, ErrorCause: contracts.ErrNoMatch,
 			Body: "That confirmation is stale or already resolved.", EmittedAt: emittedAt,
 		}
-		f.appendTurnAndPersist(ctx, conv, msg, resp, emittedAt)
+		// Re-load before persisting. `conv` was captured BEFORE arbitration and
+		// still carries the PendingConfirm this caller just lost; writing it back
+		// would resurrect the pending row and let a third caller redeem the same
+		// reference, executing the gated action twice (BUG-069-006).
+		fresh, _, loadErr := f.contextStore.Load(ctx, msg.UserID, msg.Transport)
+		if loadErr != nil {
+			return contracts.AssistantResponse{}, true, loadErr
+		}
+		f.appendTurnAndPersist(ctx, fresh, msg, resp, emittedAt)
 		f.writeAudit(ctx, msg, BandLow, nil, nil, resp)
 		return resp, true, nil
 	}
