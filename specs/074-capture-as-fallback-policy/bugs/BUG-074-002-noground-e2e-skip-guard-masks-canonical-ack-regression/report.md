@@ -2092,3 +2092,431 @@ refusal has cleared; and the guard banner's first three remediation levers free
 space inside the vhdx and cannot move the failing number, leaving the vhdx
 compact as the only lever that returns blocks to the backing volume.
 
+## Security Phase
+
+**Agent:** `bubbles.security` · **Run:** 2026-08-24T01:47:28Z – 2026-08-24T01:56:53Z
+**Assessed revision:** `8441ed9ce4ff6155a69779d039f35b6278ed5c2c` (HEAD, working tree clean)
+**Packet base:** `363bcdc5` (last commit before the packet's first commit `343d6076`)
+**Verdict:** ⚠️ FINDINGS — one MEDIUM, packet-attributable, routed to `bubbles.test`
+
+**Redaction:** absolute operator home paths and the operator account name are
+redacted throughout this section as `<operator-home>` and `<operator>`. Command
+lines below are shown as executed from the repository root, so no absolute home
+path is reproduced. The machine-local PII token list is referenced by count
+only; no token value is reproduced anywhere in this artifact.
+
+**Repository binding.** `repository-binding-host-context.sh` resolved session
+`vscode-ad58d1923c2301065c1d41d950c10d83` at control revision 32;
+`repository-binding.sh preflight --request-class STRUCTURED` returned
+`PREFLIGHT_CONFIRMED` / `PREFLIGHT_COMMITTED` at revision 33,
+`repository=smackerel`, `authority=concrete-target`, `actionable=true`, exit 0.
+
+**Write authority honoured.** This phase wrote `report.md` and two `state.json`
+execution records only. It checked no DoD item, edited no scope text, did not
+touch the test file, and did not write `certification.*`. The three no-write
+invariants are digest-proven in S-6.
+
+---
+
+### S-1 · Change-surface risk — no production path touched (PASS)
+
+**Claim Source:** executed
+
+```
+$ git rev-parse HEAD
+8441ed9ce4ff6155a69779d039f35b6278ed5c2c
+$ git status --porcelain
+(no output — clean tree)
+
+$ git --no-pager log --oneline 363bcdc5..HEAD
+8441ed9c stabilize(BUG-074-002): reliability assessment and phase record
+4076ba4b simplify(BUG-074-002): reduce duplication without weakening branch disjointness
+11ffe3d4 regression(BUG-074-002): cross-spec analysis and phase provenance
+aa88ac48 test(BUG-074-002): enforce total capture-fallback outcomes
+9c256fd9 plan(BUG-074-002): surface the red-stage proof where scenario-first TDD expects it
+fa9a1582 plan(BUG-074-002): record capability proportionality, git-backed diff, and close the resolved TR
+30d31da1 plan(BUG-074-002): close the DoD-Gherkin fidelity gap and the regression-E2E planning gap
+352599e1 fix(BUG-074-002): correct a non-schema status that made the packet unmeasurable
+343d6076 fix(BUG-074-002): make the no-ground E2E able to fail on the regression it advertises
+
+$ git --no-pager diff --stat 363bcdc5..HEAD
+ .../design.md                                      |   47 +
+ .../report.md                                      | 1837 +++++++++++++++++++-
+ .../scopes.md                                      |   69 +-
+ .../spec.md                                        |   26 +
+ .../state.json                                     |  130 +-
+ .../assistant/capture_fallback_trigger_e2e_test.go |  231 ++-
+ 6 files changed, 2252 insertions(+), 88 deletions(-)
+```
+
+Mechanical classification of every changed path, and a negative grep for
+production roots:
+
+```
+$ git --no-pager diff --name-only 363bcdc5..HEAD | grep -E '^(internal/|cmd/|ml/|web/|extensions/|deploy/|config/|scripts/|docker-compose|Dockerfile|smackerel\.sh)'
+production_path_hits_exit=1 (1 = none found)
+
+SPEC-ARTIFACT  specs/074-.../BUG-074-002-.../design.md
+SPEC-ARTIFACT  specs/074-.../BUG-074-002-.../report.md
+SPEC-ARTIFACT  specs/074-.../BUG-074-002-.../scopes.md
+SPEC-ARTIFACT  specs/074-.../BUG-074-002-.../spec.md
+SPEC-ARTIFACT  specs/074-.../BUG-074-002-.../state.json
+TEST-ARTIFACT  tests/e2e/assistant/capture_fallback_trigger_e2e_test.go
+```
+
+**Result.** Nine commits, six files, zero unclassified paths. Five are the
+packet's own spec artifacts; one is the E2E test. The negative grep covers every
+production root in this repository — `internal/`, `cmd/`, `ml/`, `web/`,
+`extensions/`, `deploy/`, `config/`, `scripts/`, the compose files, the
+Dockerfiles and the repo CLI — and matched nothing. The packet carries no
+production-code blast radius, so no runtime attack surface changed.
+
+---
+
+### S-2 · Secret hygiene — clean, by four independent checks (PASS)
+
+**Claim Source:** executed
+
+**Scanner A — the repo's own `pii-scan.sh`, invoked exactly as `.git/hooks/pre-commit` invokes it:**
+
+```
+$ bash .github/bubbles/scripts/pii-scan.sh
+1:51AM INF 0 commits scanned.
+1:51AM INF scan completed in 12.4ms
+1:51AM INF no leaks found
+🫧 pii-scan: clean.
+PII_SCAN_STAGED_EXIT=0
+```
+
+That exit 0 is **weak evidence and is not counted as a pass on its own.** The
+script runs `gitleaks protect --staged`; the tree is clean, so it scanned
+`0 commits` and therefore says nothing about the packet's committed content.
+Recording it as a clean result would be exactly the "guard reports success
+without testing anything" failure this packet exists to remove. Scanner B is
+the check that actually covers the packet.
+
+**Scanner B — the same gitleaks rules applied to the packet's committed range:**
+
+```
+$ gitleaks detect --source . --config .gitleaks.toml --log-opts="363bcdc5..HEAD" --redact --verbose
+1:51AM INF 9 commits scanned.
+1:51AM INF scan completed in 125ms
+1:51AM INF no leaks found
+GITLEAKS_RANGE_EXIT=0
+```
+
+All nine packet commits scanned under the repository's own `.gitleaks.toml`;
+no findings.
+
+**Scanner C — the `pii-scan.sh` step-2 equivalent (machine-local operator token list) against the packet diff:**
+
+```
+token file: present (23 active tokens)
+TOTAL_OPERATOR_TOKEN_HITS=0
+```
+
+Twenty-three operator-specific literal tokens — the class the generic regexes
+deliberately cannot encode, because encoding them would leak the values into
+the rule — checked against the full packet diff. Zero occurrences. Token values
+were never printed; only the count and the hit total.
+
+**Scanner D — independent absolute-home-path check, diff and current artifacts:**
+
+```
+$ git --no-pager diff 363bcdc5..HEAD | grep '^+' | grep -oE '/home/[A-Za-z0-9_.-]+'
+home_path_added_hits_exit=0   (no matches)
+
+0  specs/074-.../BUG-074-002-.../spec.md
+0  specs/074-.../BUG-074-002-.../design.md
+0  specs/074-.../BUG-074-002-.../scopes.md
+0  specs/074-.../BUG-074-002-.../report.md
+0  specs/074-.../BUG-074-002-.../state.json
+0  tests/e2e/assistant/capture_fallback_trigger_e2e_test.go
+```
+
+**Result.** No credential, no token, no operator account name, no absolute home
+path in either the packet's added lines or the current state of any of its six
+files. `report.md` is the highest-risk artifact here because it carries pasted
+terminal output, and it is clean at zero.
+
+---
+
+### S-3 · G034 `security_gate` — mechanical floor, zero packet-attributable delta (PASS with a pre-existing repo-level FAIL)
+
+**Claim Source:** executed
+
+The gate this agent owns fails at repository level, and honesty requires
+reporting the raw exit rather than the convenient summary:
+
+```
+$ bash .github/bubbles/scripts/security-gate.sh --repo-root .
+FINDING: inline-credentials: ./scripts/commands/config.sh:866:  POSTGRES_PASSWORD="__SECRET_PLACEHOLDER__POSTGRES_PASSWORD__"
+FINDING: inline-credentials: ./scripts/commands/config.sh:1070:  LLM_PROVIDER_SECRET_MASTER_KEY="__SECRET_PLACEHOLDER__LLM_PROVIDER_SECRET_MASTER_KEY__"
+FINDING: inline-credentials: ./scripts/commands/config.sh:1236:  TELEGRAM_BOT_TOKEN="__SECRET_PLACEHOLDER__TELEGRAM_BOT_TOKEN__"
+FINDING: inline-credentials: ./scripts/commands/config.sh:1542:  KEEP_GOOGLE_APP_PASSWORD="__SECRET_PLACEHOLDER__KEEP_GOOGLE_APP_PASSWORD__"
+FINDING: inline-credentials: ./scripts/commands/config.sh:1841:  AUTH_BOOTSTRAP_TOKEN="__SECRET_PLACEHOLDER__AUTH_BOOTSTRAP_TOKEN__"
+FINDING: inline-credentials: ./scripts/commands/config.sh:1851:  WEB_REGISTRATION_INVITE_TOKEN="__SECRET_PLACEHOLDER__WEB_REGISTRATION_INVITE_TOKEN__"
+FINDING: inline-credentials: ./scripts/commands/config.sh:2239:  ASSISTANT_TRANSPORTS_TELEGRAM_WEBHOOK_SECRET_REF="ASSISTANT_TELEGRAM_WEBHOOK_SECRET"
+FINDING: inline-credentials: ./scripts/commands/config.sh:2240:  ASSISTANT_TELEGRAM_WEBHOOK_SECRET="test-webhook-secret-061-scope-05-bs001-fixture"
+FINDING: inline-credentials: ./scripts/commands/config_secret_rejection_test.sh:56: ...
+FINDING: inline-credentials: ./scripts/commands/config_secret_rejection_test.sh:111: ...
+FINDING: inline-credentials: ./scripts/commands/config_secret_rejection_test.sh:118: ...
+FINDING: inline-credentials: ./scripts/commands/config_secret_rejection_test.sh:122: ...
+[security-gate] FAIL — G034 findings: 12
+G034_SECURITY_GATE_EXIT=1
+```
+
+The delta test, run in an isolated detached worktree at the packet base:
+
+```
+$ git worktree add --detach /tmp/sec-074-002-base 363bcdc5
+HEAD is now at 363bcdc5 validate(BUG-069-004): certify 6 phases, withhold 3; blocked solely on G136
+$ bash .github/bubbles/scripts/security-gate.sh --repo-root /tmp/sec-074-002-base
+[security-gate] FAIL — G034 findings: 12
+G034_AT_BASE_EXIT=1
+```
+
+Disjointness and pre-existence, proven rather than asserted:
+
+```
+NOT-IN-PACKET: scripts/commands/config.sh
+NOT-IN-PACKET: scripts/commands/config_secret_rejection_test.sh
+
+c7667d99 2026-08-11 feat(stage-1): eval-gate lane wiring, router warm-up contract, corpus grant scopes 01-04
+abd60886 2026-07-12 refactor(deploy): enforce generic self-hosted boundary
+
+$ git merge-base --is-ancestor <config.sh last commit> 363bcdc5
+config.sh_predates_packet_exit=0
+$ git merge-base --is-ancestor <rejection test last commit> 363bcdc5
+rejection_test_predates_packet_exit=0
+```
+
+**Result.** Twelve findings at the base, twelve at HEAD, identical set — a delta
+of exactly zero. Both finding files are absent from the packet's change surface
+and both were last modified by commits that are ancestors of the packet base.
+Inspecting the findings themselves, eleven are `__SECRET_PLACEHOLDER__*__`
+sentinels (the SST substitution marker, which is the structural opposite of a
+committed secret) or grep patterns inside a test that exists to *reject* a
+literal password; the twelfth is a named webhook test fixture. The gate's
+repository-level FAIL is real and is reported as such, and none of it is
+attributable to this packet.
+
+---
+
+### S-4 · Assertion-message leakage — MEDIUM, packet-attributable (FINDING)
+
+This is the one substantive security question a test-only change can raise, and
+the answer is not "no".
+
+**Claim Source for the counts and the type shapes:** executed
+**Claim Source for the disclosure consequence:** interpreted — the failure
+branches were not driven to emit; the reasoning is over the committed source
+and the contract types, not over an observed leaked log line.
+
+**What the branches actually print.** Every emission site in the file:
+
+| Line | Call | Fields emitted |
+|---|---|---|
+| 139 | `t.Skipf` | `string(raw)` — full wire body |
+| 144 | `t.Fatalf` | `resp.StatusCode`, `string(raw)` |
+| 148 | `t.Fatalf` | decode `err`, `string(raw)` |
+| 163 | `t.Logf` | `Status`, `ErrorCause`, `CaptureRoute`, `len(Sources)`, `Body` |
+| 180 / 183 | `t.Errorf` | `ConfirmCard` / `DisambiguationPrompt` via `%+v` |
+| 190, 205, 208, 211, 231→236, 245, 248, 258 | `t.Errorf` / `t.Skipf` | `Status`, `ErrorCause`, `Body`, `len(Sources)` |
+
+**What is bounded, and therefore safe.** Three properties limit the blast radius
+and each is verified:
+
+- `error_cause` cannot carry provider detail. `internal/assistant/contracts/response.go:189`
+  declares `type ErrorCause string` and line 187 documents it as *"the
+  closed-vocabulary error discriminator"*, with an enumerated constant set
+  (`provider_unavailable`, `no_grounded_answer`, `missing_scope`, `slot_missing`,
+  `internal_error`, `no_match`, `model_not_switchable`, …). Printing it discloses
+  one of a fixed set of discriminators — never an upstream message, endpoint,
+  model name or rate-limit detail.
+- `sources` **content** is never printed. All seven references in the file use
+  `len(env.Sources)`; a grep for a bare `env.Sources` inside a format argument
+  returns zero. This matters because `SourceJSON`
+  (`internal/assistant/httpadapter/schema.go`) carries `Title`, `URL`,
+  `WebSnippet`, `ArtifactID` and `ArtifactCapturedAt` — real corpus and web
+  content. The `len()`-only discipline is correct and the packet preserved it.
+- The bearer is never printed. `postAssistantTurn`
+  (`tests/e2e/assistant/http_turn_test.go`) sets
+  `Authorization: Bearer <stack.AuthToken>` but every one of its failure paths
+  prints only `err`. A grep across the whole `assistant_e2e` package for a
+  `t.*` call emitting `SMACKEREL_AUTH_TOKEN`, `Authorization`, or the token
+  variable returns no site that prints a value.
+- The prompt is synthetic and hardcoded: *"what is the population of the
+  fictional city of Zorthonia-by-the-Sea in 2024?"*. No real user text enters
+  the request.
+
+**What is not bounded — the finding.** `string(raw)` is the *undecoded* wire
+body. It necessarily contains every envelope field including the complete
+`sources[]` array with `Title`, `URL` and `WebSnippet`, so it bypasses the
+`len()`-only discipline that the decoded path observes. The packet added those
+sites:
+
+```
+                                     BASE(363bcdc5)  HEAD(8441ed9c)  delta
+env.Body inside a t.* emission             1               8          +7
+string(raw) inside a t.* emission          0               3          +3
+assertNoSecretLeakage calls                0               0           0
+env.Sources content printed                0               0           0
+```
+
+The three raw sites fire on the abnormal paths — a 5-minute 503 timeout, any
+non-200, and an undecodable body — which is precisely when an upstream error
+handler is most likely to reflect request material back into the response.
+
+The reason this is a finding rather than an observation is that **this
+repository has already ratified the exact control and this file does not use
+it.** `tests/e2e/assistant/intent_compiler_http_test.go:76` defines:
+
+```go
+// assertNoSecretLeakage enforces the SCN-068-A06 safety invariant:
+// regardless of which compiler outcome fired, the wire response MUST
+// NOT echo bearer tokens or recognizable secret patterns. ...
+func assertNoSecretLeakage(t *testing.T, stack httpTurnLiveStack, raw []byte) {
+	if strings.Contains(string(raw), stack.AuthToken) {
+		t.Errorf("response body leaks bearer token; capture/compiler-failure path is unsafe")
+	}
+	for _, s := range []string{"BEGIN PRIVATE KEY", "BEGIN RSA PRIVATE KEY", "BEGIN OPENSSH PRIVATE KEY"} { ... }
+}
+```
+
+Both files declare `package assistant_e2e`, so the helper is directly callable
+with no new import and no new abstraction. It takes exactly the three values the
+test already holds (`t`, `stack`, `raw`), and it reports a leak **without
+printing the leaked value**. Current adoption is two call sites, both inside
+`intent_compiler_http_test.go`.
+
+So a bearer echoed into a response body is a *modeled* failure in this
+repository, not a hypothetical — and the packet introduced three new sites that
+would print that body verbatim into a CI log without first passing it through
+the gate that exists for it.
+
+| Field | Value |
+|---|---|
+| Severity | **MEDIUM** |
+| OWASP | **A09** Security Logging and Monitoring Failures (primary); **A02** secret exposure (secondary, via the un-gated bearer-echo path) |
+| Attributable to this packet | **Yes** — `string(raw)` emission sites went 0 → 3 |
+| Exploitability today | Low. Synthetic prompt, closed-vocabulary `error_cause`, `sources` content never printed, bearer never printed by the harness, and G115 requires live categories to run against an ephemeral stack. |
+| Why not LOW | `raw` is the complete envelope including `WebSnippet`/`Title`; the sites fire on exactly the abnormal responses most likely to reflect request material; and the package's own ratified gate for this value is available and unused. |
+| Owner | `bubbles.test` — the remediation is a test-authorship edit |
+| Not applied here | This agent owns no test artifacts, and the instruction for this run forbids editing the test file. Recorded and routed rather than patched. |
+
+**Route packet.** Owner `bubbles.test`. Target
+`tests/e2e/assistant/capture_fallback_trigger_e2e_test.go`. Call
+`assertNoSecretLeakage(t, stack, raw)` immediately after `postAssistantTurn`
+returns and before the first `string(raw)` emission, so all three raw sites are
+covered by one call. This does not alter the five-branch switch, any branch
+selector, any branch predicate, or the assertion census — the property S-4 of
+the simplify phase established — because it adds a check ahead of the switch
+rather than inside it. A narrower variant, redacting `raw` at the three sites
+instead, is available if the owner prefers not to add a call site.
+
+---
+
+### S-5 · Dependency posture — no new dependency (PASS)
+
+**Claim Source:** executed
+
+```
+$ git --no-pager diff --name-only 363bcdc5..HEAD | grep -E '(go\.mod|go\.sum|package\.json|package-lock\.json|requirements.*\.txt|constraints.*\.txt|pyproject\.toml|Cargo\.toml|Cargo\.lock|\.npmrc|deny\.toml|pip\.conf)$'
+dependency_manifest_hits_exit=1 (1 = none found)
+```
+
+An untouched manifest is necessary but not sufficient — a test file can import a
+package already present in `go.sum` and still widen the trusted surface — so the
+import block itself was compared byte-for-byte:
+
+```
+$ git show 363bcdc5:tests/.../capture_fallback_trigger_e2e_test.go | awk '/^import \(/,/^\)/' | sha256sum
+80586cabb73e53260dbfe1d77443681e62e8eed3d351cbf2cdc7c7dc996505cb  -
+$ git show HEAD:tests/.../capture_fallback_trigger_e2e_test.go       | awk '/^import \(/,/^\)/' | sha256sum
+80586cabb73e53260dbfe1d77443681e62e8eed3d351cbf2cdc7c7dc996505cb  -
+```
+
+Identical digests. The block is:
+
+```go
+import (
+	"encoding/json"
+	"net/http"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/smackerel/smackerel/internal/assistant/contracts"
+	"github.com/smackerel/smackerel/internal/assistant/httpadapter"
+)
+```
+
+**Result.** Five standard-library packages and two first-party `internal/`
+packages. No third-party import, no manifest change, no lockfile change. The
++231-line rewrite added zero dependencies, so the supply-chain surface is
+unchanged.
+
+---
+
+### S-6 · Write-authority invariants (verified by digest)
+
+**Claim Source:** executed. Digests captured at 2026-08-24T01:56:53Z, immediately before this section was written; the post-write re-measurement is recorded below.
+
+| Invariant | Pre-write digest |
+|---|---|
+| `certification.*` unwritten | `5cd70a91fa9ad81618f000b6e9a646586782e90f2dbc8d689f32dbd8d92b32f9` |
+| test file unedited | `15e3c444c33cdbe87215b7b16f7406345cc71f434198aa8c176c2660c78c5a6e` |
+| `scopes.md` unedited, no DoD item checked | `191149dae195a72346ae64f2a2b8f07b02c8419ea616387d18976b13bd038daf` |
+
+---
+
+### S-7 · Explicit non-claims
+
+This phase does **not** claim any of the following, and no DoD item was checked
+on the strength of any of them:
+
+1. **No branch was executed.** The disclosure analysis in S-4 is static reading
+   of the committed source plus the contract type declarations. No failure
+   message was observed being emitted. That is why S-4 carries a split
+   `Claim Source` rather than a single `executed`.
+2. **No live stack was exercised.** This is a diagnostic phase; it ran scanners
+   and git, not the E2E. Nothing here says whether the five-branch switch
+   behaves correctly at runtime.
+3. **No compile was run by this phase.** The file analysed is the committed HEAD
+   content read from a clean tree, which fixes its provenance, but this phase
+   did not independently rebuild it.
+4. **Runtime authorization was not reviewed.** The packet touches no production
+   code, so no endpoint, middleware, role check or IDOR surface changed and none
+   was assessed. A clean S-1 is the reason this is out of the assessed set, not
+   an assertion that the runtime is secure.
+5. **The repository-level G034 FAIL is not resolved.** Twelve findings stand at
+   HEAD exactly as they stood at the base. S-3 establishes only that the packet
+   did not add to them.
+
+---
+
+### S-8 · Discovered issue
+
+| # | Date | Issue | Disposition | Reference |
+|---|---|---|---|---|
+| DI-18 | 2026-08-24 | `state.json.sourceRevision` reads `d62f2e750ab315767199ce29b5862e9ae509cccd`, which is neither HEAD (`8441ed9c`) nor any commit in the packet range `363bcdc5..HEAD`. A reader taking that field at face value would attribute this security review, and every earlier phase record, to a revision the packet never produced. | **Routed to `bubbles.plan`.** Not corrected here: `sourceRevision` is a planning-owned field and this agent holds no write authority over it. This section states its own assessed revision explicitly (`8441ed9c`, clean tree) so its evidence remains attributable regardless of the field. | `state.json` `sourceRevision`; `git rev-parse HEAD` |
+
+---
+
+### Security verdict
+
+⚠️ **FINDINGS** — 1 MEDIUM, 0 HIGH, 0 CRITICAL.
+
+| Question | Verdict | Basis |
+|---|---|---|
+| 1. Change-surface risk | **PASS** | 6 files, 5 spec + 1 test; negative grep across every production root matched nothing |
+| 2. Secret hygiene | **PASS** | gitleaks over 9 commits clean; 23 operator tokens, 0 hits; 0 home paths in diff and in all six files; G034 delta 0 |
+| 3. Assertion-message leakage | **MEDIUM — FINDING** | `string(raw)` emission sites 0 → 3, un-gated by the package's own ratified `assertNoSecretLeakage` (SCN-068-A06) |
+| 4. Dependency posture | **PASS** | no manifest touched; import block sha256-identical base vs HEAD |
+
+The MEDIUM does not block: it is defense-in-depth on a test-only file, no leak
+is demonstrated, and every bounded channel checked out clean. It is routed to
+`bubbles.test` as a one-call remediation that preserves the branch structure
+this packet was filed to establish.
+
