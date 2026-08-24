@@ -913,3 +913,554 @@ No subagents were invoked. This task was a filing + root-cause assignment
 executed directly by `bubbles.bug` under an explicit instruction not to implement
 the fix. The fix is routed via `state.json` → `routing` and
 `transitionRequests`, not dispatched from here.
+
+## Regression Phase
+
+**Agent:** `bubbles.regression` · **Phase:** regression · **Date:** 2026-08-24
+**Claim Source:** executed (current session), except blocks explicitly labelled
+**static**, which are source readings at `HEAD` with file and line cited.
+
+**Ownership.** This phase is diagnostic. It checked NO DoD item, edited no scope
+DoD text, and modified neither
+`tests/e2e/assistant/capture_fallback_trigger_e2e_test.go` nor any file under
+`internal/`. Its writes are confined to this report section and `state.json` →
+`execution.*`. `certification.*` was not written by this phase;
+`certifiedCompletedPhases` remains `[]` and `certifierAgent` remains `null`.
+
+**Correction to this section's own write record.** This paragraph previously
+stated that the phase wrote both `execution.completedPhaseClaims` and
+`execution.executionHistory`. That was not true of the file. The run wrote this
+report section and the `completedPhaseClaims` entry; the matching
+`executionHistory` entry did not land. `state-transition-guard.sh` then reported
+the claim as unbacked on two surfaces — Gate G022 *"phase claim(s) lack proper
+agent provenance — phase impersonation detected"* and Check 7C
+*"completedPhaseClaims claims phase(s) with NO executionHistory entry behind
+them: regression"*. The `bubbles.regression` entry was appended in a corrective
+write at `2026-08-24T00:57Z`. Its `at` is `2026-08-24T00:50:55Z`, so the record
+carries the time the run actually occurred rather than the time the record
+landed, and it states that same split in its own `recordProvenance` field. No
+analysis in this section was produced by that corrective write, and the
+corrective write touched no field other than the appended entry.
+
+**Repository binding.** `repository-binding-host-context.sh` resolved the host
+session, and `repository-binding.sh preflight` returned `PREFLIGHT_COMMITTED`
+with `repository=smackerel`, `authority=concrete-target`,
+`transition=confirmed`, `actionable=true`, `controlRevision=28`. Every
+repository-local read below happened after that commit. The resolved root is a
+host-local path and is therefore not reproduced in this artifact.
+
+**Revision under review.** `HEAD = aa88ac48` — *test(BUG-074-002): enforce total
+capture-fallback outcomes*. Working tree clean (`git status --porcelain` emitted
+nothing).
+
+---
+
+### Commands executed
+
+#### 1. `timeout 900 ./smackerel.sh check` — exit 0
+
+```
+config-validate: <repo>/config/generated/dev.env.tmp.1452517 OK
+Config is in sync with SST
+env_file drift guard: OK
+scenario-lint: scanning config/prompt_contracts (glob: *.yaml)
+scenarios registered: 17, rejected: 0
+scenario-lint: OK
+CHECK_EXIT=0
+```
+
+The absolute path in line 1 is redacted to `<repo>` per this repository's
+no-env-specific-content policy; every other byte is verbatim.
+
+**What this exit 0 does and does not establish (static, `smackerel.sh` line 54
+and line 882).** `check` validates generated config and docker-compose wiring.
+It runs `config-validate`, the `env_file` drift guard and `scenario-lint`. It
+compiles no Go and executes no test. Its exit 0 therefore carries no information
+about `capture_fallback_trigger_e2e_test.go`, and it is recorded here as a
+green environment signal rather than as a baseline for the change.
+
+#### 2. `timeout 1200 ./smackerel.sh test unit --go-package assistant` — exit 1
+
+```
+oom-preflight: OK — 26398 MB available (need 6000 MB; swap used 1916 MB).
+
+  ┌─ disk-preflight: REFUSED — not enough free disk ──────────────────┐
+  │  C: (backs the vhdx): 37     GB free   required: 40   GB
+  │  WSL / (ext4)       : 483    GB free   required: 25   GB
+  │
+  │  A heavy build here can fill the disk and wedge the daemon.
+  │  Reclaim space first, then re-run. Biggest levers, in order:
+  │
+  │   1) Safe Docker reclaim (keeps labeled-persistent volumes):
+  │        docker-safe-prune.sh          # dry-run first
+  │        docker-safe-prune.sh --apply
+  │   2) Stop idle project stacks you are NOT working in:
+  │        ./wanderaide.sh deploy stop complete
+  │        ./guesthost.sh stop all
+  │        ./quantitativefinance.sh --env=dev down
+  │        ./smackerel.sh down
+  │   3) Journald + apt (needs sudo password — run yourself):
+  │        sudo journalctl --vacuum-size=200M && sudo apt-get clean
+  │   4) If C: is low but WSL / looks fine, the vhdx is holding slack.
+  │      Reclaim needs a full WSL shutdown + compact from Windows:
+  │        wsl --shutdown            (kills ALL sessions — schedule it)
+  │        Optimize-VHD -Path <ext4.vhdx> -Mode Full   (elevated)
+  │
+  │  Current Docker footprint:
+  │      TYPE            TOTAL     ACTIVE    SIZE      RECLAIMABLE
+  │      Images          177       56        65.79GB   23.77GB (36%)
+  │      Containers      62        62        62.22MB   0B (0%)
+  │      Local Volumes   44        25        177GB     40.05GB (22%)
+  │      Build Cache     960       25        26.33GB   9.212GB
+  │
+  │  Override (only if you KNOW it fits): DISK_PREFLIGHT_OVERRIDE=1
+  └────────────────────────────────────────────────────────────────────┘
+
+UNIT_GOPKG_EXIT=1
+```
+
+`DISK_PREFLIGHT_OVERRIDE=1` was NOT used. It is the bypass pattern
+`.github/copilot-instructions.md` forbids, and the refusal is a correct host
+capacity verdict rather than a guard defect. No Docker prune was performed
+either: the reclaimable footprint above is shared with the wanderaide, guesthost
+and quantitativefinance stacks on this host, so it is an operator decision about
+shared infrastructure.
+
+#### 3. `timeout 900 ./smackerel.sh lint` — exit 0 (bounded evidence)
+
+Run at `HEAD` after the two commands above. Full captured stream: 196 lines,
+`sha256:47d7e32ba465ad069fb55867830be8b9be197d5833a4ab765f6942d64c2e60d7`. The
+first ~170 lines are the ML sidecar dependency installation the containerised
+lane performs before linting; the decision-bearing tail is reproduced verbatim:
+
+```
+All checks passed!
+=== Validating web manifests ===
+  OK: web/pwa/manifest.json
+  OK: PWA manifest has required fields
+  OK: web/extension/manifest.json
+  OK: Chrome extension manifest has required fields (MV3)
+  OK: web/extension/manifest.firefox.json
+  OK: Firefox extension manifest has required fields (MV2 + gecko)
+
+=== Validating JS syntax ===
+  OK: web/pwa/app.js
+  OK: web/pwa/sw.js
+  OK: web/pwa/lib/queue.js
+  OK: web/extension/background.js
+  OK: web/extension/popup/popup.js
+  OK: web/extension/lib/queue.js
+  OK: web/extension/lib/browser-polyfill.js
+
+=== Checking extension version consistency ===
+  OK: Extension versions match (1.0.0)
+
+Web validation passed
+LINT_EXIT=0
+```
+
+Go vet emitted nothing, which is its clean signal. That exit 0 also does not
+cover the changed file — see *Finding R-1* below.
+
+#### 4. `timeout 600 bash .github/bubbles/scripts/state-transition-guard.sh <packet>` — exit 1 (bounded evidence)
+
+Full captured stream: 413 lines,
+`sha256:9d4bdcdd36da689940a2478b9a11040abdea1128b30eec99eb451b911466c459`. The
+machine-readable verdict block is reproduced verbatim:
+
+```
+🔴 TRANSITION BLOCKED: 12 failure(s), 3 warning(s)
+
+state.json status MUST NOT be set to 'done'.
+Fix ALL blocking failures above before attempting promotion.
+
+BEGIN TRANSITION_GUARD_RESULT_V1
+schemaVersion: transition-guard-result/v1
+workflowMode: bugfix-fastlane
+auditProfile: delivery-completion-v1
+targetStatus: done
+applicableCheckClasses: [universal,mode-required,delivery-completion]
+notApplicableChecks: []
+failedGateIds: [G022,G027,G136]
+failedChecks: [Check-4-completion,Check-5-all-done]
+blockingCode: DELIVERY_COMPLETION_FAILED
+failureCount: 12
+exitStatus: 1
+verdict: FAIL
+END TRANSITION_GUARD_RESULT_V1
+GUARD_EXIT=1
+```
+
+This verdict is expected and correct while eleven DoD items are legitimately
+unchecked. It is recorded as a regression datum, not as a defect: the same
+`failedGateIds` set as the test phase, at a different `failureCount` — see
+*Finding R-6*.
+
+---
+
+### Step 1 — Test baseline comparison: NO BASELINE OBTAINABLE
+
+The requested unit command cannot produce a before/after pass-count baseline for
+the changed file, for three independent reasons. Each is sufficient on its own,
+and the first masked the other two at runtime.
+
+| # | Reason | Evidence |
+|---|---|---|
+| 1 | The lane was refused before argument parsing. `disk-preflight` exited 1 with the Windows volume backing the vhdx at 37 GB free against a 40 GB requirement. | Command 2 above. |
+| 2 | `--go-package` is not a `test unit` flag. The `test unit` parser accepts only `--go`, `--python`, `--go-run`, `--python-k`, `--verbose`/`-v`; its `*)` arm prints `Unknown test unit option:` and exits 1. `--go-package` belongs to `test e2e`. | **static** — `smackerel.sh` lines 976-1027 (parser), line 1023-1026 (`*)` arm), line 61 (`test e2e [--go-package assistant]`), line 58 (`test unit` flag list). |
+| 3 | Even with a valid flag, the unit lane cannot compile the changed file. `scripts/runtime/go-unit.sh` line 67 runs `go test ./...` with no `-tags`, and the file opens with `//go:build e2e`. It is excluded from the unit build entirely. | **static** — `scripts/runtime/go-unit.sh` line 67; `tests/e2e/assistant/capture_fallback_trigger_e2e_test.go` line 1. |
+
+Reason 2 is a defect in the request, not in the repository, and reason 3 means
+the corrected form `./smackerel.sh test unit --go` would still not have exercised
+the change. The lane that does exercise it is
+`./smackerel.sh test e2e --go-package assistant`, and that lane is blocked by
+the same disk refusal.
+
+**Consequence, recorded rather than smoothed over.** No executed before/after
+test-count baseline exists for this change in this session. The per-branch
+verdicts recorded by earlier phases under *Live Execution* remain the only live
+evidence, and this phase adds none. The static baseline in Step 4 is offered as
+what it is: a source census, not a test run.
+
+#### Finding R-1 — the lint lane does not typecheck the changed file (corroborates DI-4)
+
+`scripts/runtime/go-lint.sh` is four lines and its operative line is
+`go vet ./...` with no `-tags` argument. A `//go:build e2e` file is therefore
+invisible to it. Command 3's exit 0 is real, and it says nothing about
+`capture_fallback_trigger_e2e_test.go`.
+
+```
+#!/usr/bin/env bash
+set -euo pipefail
+
+cd /workspace
+go vet ./...
+```
+
+This is an independent confirmation of DI-4, reached from the script source
+rather than from the earlier phase's reading. DI-4 is already routed to
+`bubbles.plan`; this phase adds corroboration and no new routing.
+
+---
+
+### Step 4 — Coverage regression: NONE. Assertion density more than doubled
+
+Census taken at `HEAD` (`aa88ac48`) against the pre-fix parent (`343d6076~1`),
+both read from git rather than from a working copy.
+
+| Metric | Pre-fix `343d6076~1` | `HEAD` `aa88ac48` | Delta |
+|---|---|---|---|
+| File lines | 119 | 242 | +123 |
+| `t.Errorf` | 7 | 17 | +10 |
+| `t.Fatalf` | 2 | 2 | 0 |
+| **Total assertions** | **9** | **19** | **+10** |
+| `t.Skipf` | 2 | 2 | 0 |
+| Skips keyed on a CONTRACT field | 1 (`env.Status != StatusSavedAsIdea`, line 98) | 0 | **−1** |
+| Skips keyed on INFRASTRUCTURE | 1 (adapter readiness, line 71) | 2 (lines 119, 216) | +1 |
+
+Shipped branch selectors at `HEAD`, read from source:
+
+```
+151:    switch {
+152:    case env.Status == string(contracts.StatusSavedAsIdea):
+174:    case env.ErrorCause == string(contracts.ErrNoGroundedAnswer):
+197:    case env.ErrorCause == string(contracts.ErrProviderUnavailable):
+218:    case len(env.Sources) > 0:
+232:    default:
+```
+
+Surviving skips at `HEAD`, read from source:
+
+```
+119:  t.Skipf("assistant HTTP adapter never bound within 5min (still 503 assistant_http_not_ready), ...
+216:  t.Skipf("upstream provider unavailable (error_cause=%q, status=%q); the open-knowledge grounding decision was never reached, ...
+```
+
+Neither surviving skip keys on `status`, which is the field the canonical-ack
+assertions police. The pre-fix status-keyed guard is gone. The census the test
+phase recorded (19 assertions, 2 skips) reproduces exactly under an independent
+count, so no fabrication is present in that claim.
+
+Capture-acknowledgement substring assertions at `HEAD`:
+
+```
+170:  if !strings.Contains(lowerBody, captureAckSubstring) {     // branch 1 — ack REQUIRED
+187:  if strings.Contains(lowerBody, captureAckSubstring) {      // branch 2 — ack FORBIDDEN
+227:  if strings.Contains(lowerBody, captureAckSubstring) {      // branch 4 — ack FORBIDDEN
+```
+
+**Verdict on this axis: no coverage regression.** Coverage increased, and the
+one removed skip is the defect this packet was filed for.
+
+---
+
+### Step 5 — Deployment regression scan: NOT APPLICABLE
+
+`aa88ac48` touches four paths and none is a deployment surface:
+
+```
+ .../report.md                                      | 278 ++++++++++++++++++++-
+ .../scopes.md                                      |  72 ++++--
+ .../state.json                                     |  24 +-
+ .../assistant/capture_fallback_trigger_e2e_test.go |  19 +-
+ 4 files changed, 358 insertions(+), 35 deletions(-)
+```
+
+Nothing under `deploy/`, `.github/workflows/build.yml`, `config/smackerel.yaml`
+or `scripts/deploy/` changed, which matches `state.json` →
+`deploymentBoundary.impacted: false`. No Build-Once Deploy-Many detection was
+required.
+
+---
+
+### Steps 2 and 3 — Cross-spec impact and design coherence
+
+The question posed was whether spec 069 SCOPE-4 conflicts with spec 074
+SCOPE-074-04A / SCOPE-074-04B on the capture-acknowledgement contract. It does
+not. The conflict is real, but it sits on a different edge of the graph, and
+this phase settles statically what DI-3 could only raise conditionally.
+
+#### 069 SCOPE-4 ↔ 074 SCOPE-04A/04B: COHERENT
+
+`SCN-069-A06` is a **conditional rendering-parity** contract:
+
+> Given the facade returns AssistantResponse with CaptureRoute = true
+> When the HTTP adapter renders the response
+> Then the local capture path is invoked exactly once
+> And the HTTP response body includes the same "saved-as-idea" acknowledgement shape Telegram emits
+
+Its antecedent is `CaptureRoute = true`. It says nothing about **when**
+`CaptureRoute` may be set. `canonicalizeSuccessfulCaptureResponse`
+(`internal/assistant/facade.go` lines 1841-1875) makes the consequent
+structurally true: on the only path that leaves `CaptureRoute = true`, it
+overwrites `Body` with the single transport-agnostic constant
+`captureFallbackAcknowledgement` (`facade.go` line 60). One constant, both
+transports. `SCN-069-A06` is therefore satisfied and in fact strengthened by the
+band gate. `SCOPE-074-04A` is the band-low unrouted path and produces exactly
+that shape. **No conflict on either edge.**
+
+#### 074 SCOPE-04B ↔ INV-HB-REFUSAL (BUG-061-009): DIRECT CONTRADICTION
+
+`SCN-074-A12` in `specs/074-capture-as-fallback-policy/scopes.md` has two
+clauses. Clause 1 is about the artifact; clause 2 is about the wire:
+
+> Then exactly one Idea artifact is created with provenance = "capture-as-fallback"
+> And the acknowledgement returned to the user is the canonical "saved-as-idea" shape
+
+Its Test Plan row states the same expectation and names the file this packet
+changed:
+
+> TP-074-14 … `tests/e2e/assistant/capture_fallback_trigger_e2e_test.go` …
+> Planned regression: live fallback-eligible turn returns saved-as-idea
+> acknowledgement and one artifact
+
+`.github/copilot-instructions.md` → *Assistant Response Honesty* states the
+opposite for this path: *"saved as an idea" is band-LOW-only (INV-HB-REFUSAL,
+BUG-061-009) … This includes the OK-but-uncited `open_knowledge` (`/ask`) path:
+an answer with no verifiable sources refuses HONESTLY.*
+
+**Clause 2 is unreachable by construction. Static proof chain, four links:**
+
+1. The SCOPE-074-04B hook is at `internal/assistant/facade.go` line 1386. The
+   band switch opens at line 1066; `case BandLow:` spans 1067-1092,
+   `case BandBorderline:` 1093-1120, `case BandHigh:` 1121-1397, `default:`
+   1398. Line 1386 lies inside `case BandHigh:`. The hook fires only when
+   `band == BandHigh`.
+2. The hook's own predicate is `scenarioID == "open_knowledge"`, so a turn that
+   reaches it is by definition one the router matched to a scenario — the
+   band-high condition INV-HB-REFUSAL names.
+3. On a successful capture the hook does not set the capture shape at all. It
+   rewrites `resp` only on `capErr != nil` (lines 1387-1394). The wire response
+   therefore remains the open-knowledge refusal the executor produced.
+4. Line 1416 then applies `canonicalizeSuccessfulCaptureResponse(resp, band,
+   emittedAt)` unconditionally. Lines 1852-1864 convert any `band != BandLow`
+   capture shape to `StatusUnavailable` + `ErrNoGroundedAnswer` +
+   `CaptureRoute = false`, and explicitly replace a body equal to
+   `captureFallbackAcknowledgement` with `CanonicalRefusalBodyFor(RefusalDefault)`.
+
+Clause 1 of `SCN-074-A12` holds — the artifact IS written. Clause 2 cannot
+occur on any turn that satisfies the scope's own trigger. DI-3 recorded this as
+conditional on a live run; links 1-4 show it does not depend on one, because
+`scenarioID == "open_knowledge"` is the hook's precondition and the hook is
+physically inside the band-high arm.
+
+#### The contradiction is SUPERSESSION, not a regression introduced here
+
+| Event | Commit | Date |
+|---|---|---|
+| SCOPE-074-04B no-ground hook lands | `22ce5c6a` | 2026-06-01 |
+| SCOPE-074-04B DoD closed, status `Done` | — | 2026-06-02 |
+| `canonicalizeSuccessfulCaptureResponse` band gate lands | `d5054798` | 2026-07-19 |
+
+`git merge-base --is-ancestor 22ce5c6a d5054798` succeeds: the band gate is
+strictly later. SCOPE-074-04B was certified against behaviour that a ratified
+invariant reversed roughly seven weeks afterwards. The scope still carries
+`**Status:** Done` with clause 2 asserted.
+
+#### The contradiction is already enforced by a test inside 04B's own cited evidence file
+
+`internal/assistant/facade_open_knowledge_no_ground_test.go` is the file
+SCOPE-074-04B's first DoD item names as its flippable proof. That same file now
+contains `TestCanonicalizeSuccessfulCaptureResponse_BandHighConvertsToHonestRefusal`,
+whose assertions are the negation of clause 2:
+
+```go
+if got.Status != contracts.StatusUnavailable {
+        t.Fatalf("Status = %q; want StatusUnavailable (a band-high turn never keeps the capture shape)", got.Status)
+}
+if got.ErrorCause != contracts.ErrNoGroundedAnswer { ... }
+if got.CaptureRoute {
+        t.Fatalf("CaptureRoute = true; a band-high turn is not a capture")
+}
+if got.Body == captureFallbackAcknowledgement {
+        t.Fatalf("Body is the capture acknowledgement; a band-high turn must be an honest refusal")
+}
+```
+
+A `Done` scope and the test file it cites as evidence now assert opposite
+things about the same path.
+
+#### Finding R-2 — 04B's substitute-evidence transitivity covers clause 1 only
+
+SCOPE-074-04B's second DoD item closes TP-074-14 on substitute evidence whose
+stated warrant is: *the SCOPE-04B no-ground path calls the identical
+`runCaptureFallback` helper with cause `open_knowledge_no_ground` (single call
+site, no per-cause branching in the writer), so the live-stack proof for the
+writer hot path is transitive to the no-ground trigger*.
+
+That reasoning is sound for the **writer**, and therefore for clause 1. It does
+not reach clause 2. The acknowledgement is not produced by `runCaptureFallback`;
+it is produced by `canonicalizeSuccessfulCaptureResponse`, which branches on
+**band** — the single axis on which SCOPE-074-04A (`BandLow`) and
+SCOPE-074-04B (`BandHigh`) differ. The transitivity argument is thus valid over
+the one dimension it names and silent over the one dimension that decides
+clause 2. Both clauses were closed by one checkbox.
+
+#### Finding R-3 — 04B's Test Plan row cites the wrong scenario id
+
+The SCOPE-074-04B Test Plan maps `TP-074-14` to **`SCN-074-A01`**, which is
+SCOPE-074-04A's unrouted-turn scenario. The scope's own Gherkin block defines
+**`SCN-074-A12`**. Both ids are registered in
+`specs/074-capture-as-fallback-policy/scenario-manifest.json` (entries at lines
+10 and 175), so this is a mis-mapping rather than an undefined reference. It is
+the same 04A-for-04B substitution that Finding R-2 describes, appearing a second
+time and in a traceability field, which is how the substitution stayed
+invisible.
+
+#### Effect of `aa88ac48` on the conflict: it SURFACES it, and does not create it
+
+Branch 2 of the shipped switch asserts the INV-HB-REFUSAL shape and asserts the
+capture acknowledgement is ABSENT (line 187). The test file at `HEAD` therefore
+encodes the **superseding** contract, while its governing scope still states the
+superseded one. That is exactly the divergence DI-8 flagged for DoD items 111
+and 117; this phase confirms it and extends it one level up, from the packet's
+own DoD to the governing spec.
+
+**No test regressed. No design coherence defect was introduced by this change.**
+The incoherence predates it by roughly seven weeks and this change made it
+legible.
+
+---
+
+### Claim-versus-artifact drift detected in this packet
+
+Three recorded numbers disagree with the artifacts at `HEAD`. None reverses the
+test phase's substantive honesty — that phase correctly refused to check items
+its evidence did not support — but each misstates the artifact, and a reader or
+a downstream gate reconciling them would be misled.
+
+#### Finding R-4 — the DoD completion count is recorded three different ways, none matching
+
+| Source | Checked | Unchecked |
+|---|---|---|
+| `state.json` test-phase summary, headline sentence | 10 | 9 |
+| `state.json` test-phase summary, its own enumeration of item ids | 9 | 9 |
+| `scopes.md` at `HEAD`, mechanical count | **8** | **11** |
+| `state-transition-guard.sh` Check 9, independent count | **8** | — |
+
+```
+checked=8 unchecked=11
+✅ PASS: All 8 checked DoD items across resolved scope files have evidence blocks
+```
+
+The `aa88ac48` diff of `scopes.md` shows exactly eight `- [ ]` → `- [x]`
+transitions and no others. The headline "10" was never true of the artifact, in
+that commit or any other. No non-standard checkbox markup exists in the file, so
+the count is not a parsing artefact.
+
+#### Finding R-5 — `dodComplete` is 0 in both progress fields while eight items are checked
+
+`execution.scopeSummary[0].dodComplete` is `0` and
+`certification.scopeProgress[0].dodComplete` is `0`, against `dodCount: 19` and
+eight checked items in `scopes.md`. This phase did NOT correct either field.
+`certification.*` is not writable by a regression phase, and correcting the
+`execution` copy alone would leave the two halves disagreeing in a new way while
+silently resolving a question about which number is authoritative. Both are
+routed instead.
+
+#### Finding R-6 — the recorded guard verdict does not describe `HEAD`
+
+`state.json` records `failureCount 13, failedGateIds [G022,G027,G136]`. Re-run
+at `HEAD` on a clean tree, the guard returns `failureCount: 12` with the same
+`failedGateIds`. The gate set is stable; the count is not. The arithmetic at
+`HEAD` is 11 unchecked DoD items (`Check-4-completion`) plus 1 non-`Done` scope
+(`Check-5-all-done`) = 12, which means the recorded 13 corresponds to a state
+with 12 items unchecked — that is, a guard run taken before the final DoD item
+was checked, and then recorded as if it described the committed result.
+
+---
+
+### Discovered Issues (regression phase, continuing the DI series)
+
+| # | Date | Issue | Disposition | Reference |
+|---|---|---|---|---|
+| DI-9 | 2026-08-24 | `specs/074-capture-as-fallback-policy/scopes.md` SCOPE-074-04B is `Status: Done` while clause 2 of its `SCN-074-A12` ("the acknowledgement returned to the user is the canonical saved-as-idea shape") and its `TP-074-14` row are contradicted by shipped code. The hook sits in `case BandHigh:` and `canonicalizeSuccessfulCaptureResponse` converts every band-high capture shape to the honest refusal. The band gate (`d5054798`, 2026-07-19) postdates the scope's closure (2026-06-02) by roughly seven weeks, so this is supersession by a later ratified invariant. `internal/assistant/facade_open_knowledge_no_ground_test.go` — the file 04B cites as its own evidence — now contains a test asserting the negation. | **Routed to `bubbles.plan`, not reconciled here.** A regression phase does not rewrite another spec's Gherkin, and the shipped behaviour is the correct one. Reconciliation belongs to the owner of `specs/074-capture-as-fallback-policy/scopes.md`, which must decide whether 04B's clause 2 is withdrawn, re-expressed as an artifact-only guarantee, or re-scoped to the band-low path. This packet asserts no production defect. | `internal/assistant/facade.go` lines 60, 1066-1121, 1386-1394, 1416, 1841-1875; `specs/074-capture-as-fallback-policy/scopes.md` SCOPE-074-04B; `internal/assistant/facade_open_knowledge_no_ground_test.go`; `.github/copilot-instructions.md` → *Assistant Response Honesty* |
+| DI-10 | 2026-08-24 | SCOPE-074-04B's substitute-evidence warrant proves the writer path and is silent on the acknowledgement path (Finding R-2), and its Test Plan maps `TP-074-14` to `SCN-074-A01` rather than to its own `SCN-074-A12` (Finding R-3). One checkbox closed a two-clause scenario. | **Routed to `bubbles.plan`** together with DI-9; the two are the same defect seen from the evidence side and the traceability side. | `specs/074-capture-as-fallback-policy/scopes.md` SCOPE-074-04B DoD item 2 and Test Plan row TP-074-14; `specs/074-capture-as-fallback-policy/scenario-manifest.json` lines 10, 175 |
+| DI-11 | 2026-08-24 | Three DoD-completion figures in this packet's `state.json` disagree with `scopes.md` at `HEAD`: the narrative headline says 10 checked, its enumeration lists 9, both `dodComplete` fields say 0, and the artifact and the guard both count 8. The recorded `failureCount: 13` likewise does not describe `HEAD`, where the guard returns 12 with an unchanged gate set. | **Routed to `bubbles.test`**, which owns the test-phase claim and the `scopeSummary` figure, with `certification.scopeProgress` requiring `bubbles.validate`. This phase corrected nothing: `certification.*` is outside its write authority, and correcting one half of a disagreeing pair would manufacture a new inconsistency. | `state.json` → `execution.executionHistory[2].summary`, `execution.scopeSummary[0].dodComplete`, `certification.scopeProgress[0].dodComplete`; `scopes.md` DoD block; guard `Check 9` and `TRANSITION_GUARD_RESULT_V1` |
+
+DI-7 (host disk capacity) is unchanged and reproduces at a worse margin: the
+test phase recorded 39 GB free against the 40 GB requirement, and this phase
+observed 37 GB. It remains owned by the operator.
+
+---
+
+### Verdict
+
+```
+🔴 CONFLICT_DETECTED
+
+3 fundamental conflicts detected. 0 test regressions. 0 coverage loss.
+
+Conflicts:
+1. [SPEC_CONTRADICTION] specs/074-capture-as-fallback-policy SCOPE-074-04B
+   (Status: Done) asserts a canonical saved-as-idea acknowledgement on the
+   open_knowledge no-ground path; INV-HB-REFUSAL / BUG-061-009 forbids it on
+   any band-high path, and facade.go makes it unreachable by construction.
+2. [EVIDENCE_TRANSITIVITY] SCOPE-074-04B closed a two-clause scenario on a
+   warrant that covers only the writer clause; the acknowledgement clause is
+   decided by a band-branching function on the one axis 04A and 04B differ.
+3. [TRACEABILITY] SCOPE-074-04B maps TP-074-14 to SCN-074-A01 (04A's scenario)
+   rather than to its own SCN-074-A12.
+
+Non-conflicts confirmed:
+- 069 SCOPE-4 / SCN-069-A06 holds and is strengthened by the band gate. Its
+  antecedent is CaptureRoute=true, which the gate permits only at BandLow,
+  where the body is the single transport-agnostic constant.
+- 074 SCOPE-04A is coherent with both 069 SCOPE-4 and the band gate.
+
+Test baseline: NOT OBTAINABLE this session (three independent reasons; see
+  Step 1). No before/after pass-count comparison is claimed.
+Coverage: 9 -> 19 assertions; contract-keyed skips 1 -> 0. No loss.
+Deployment surface: unchanged; scan not applicable.
+
+Fix cycle needed: YES (design-level, not code-level).
+Required routing:
+- DI-9, DI-10  -> bubbles.plan   (reconcile SCOPE-074-04B against INV-HB-REFUSAL)
+- DI-11        -> bubbles.test   (execution counts) + bubbles.validate (certification counts)
+- DI-7         -> operator       (host disk capacity gating the e2e lane)
+```
+
+The conflict predates `aa88ac48` and was not introduced by it. This change is
+what made the conflict observable, because branch 2 of the shipped switch now
+asserts the superseding contract in the file the superseded scope names as its
+regression proof.
