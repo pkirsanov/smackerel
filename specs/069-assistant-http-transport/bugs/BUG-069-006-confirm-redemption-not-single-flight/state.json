@@ -28,6 +28,13 @@
         "provenanceMode": "specialist",
         "claimedAt": "2026-08-24T15:02:01Z",
         "evidenceRef": "report.md#implementation-phase"
+      },
+      {
+        "phase": "test",
+        "agent": "bubbles.test",
+        "provenanceMode": "specialist",
+        "claimedAt": "2026-08-24T16:07:46Z",
+        "evidenceRef": "report.md#test-phase"
       }
     ],
     "executionHistory": [
@@ -47,6 +54,14 @@
         "outcome": "completed_owned",
         "evidenceRef": "report.md#implementation-phase",
         "summary": "Made confirm redemption atomic by adding Store.ClearPendingConfirm, a single store-arbitrated compare-and-set that Confirm, Discard, and SweepTimeouts all branch on, with PgStore returning tag.RowsAffected() == 1 from one conditional UPDATE so the database arbitrates the race. The two concurrent regression tests were recorded FAILING against the unfixed machine.go (two winners, zero ErrPendingNotFound losers, two terminal audit rows) and then PASSING with the fix. The full Go unit suite, format --check, and lint were all clean. Every DoD item in scopes.md is still unchecked and certification fields were not written."
+      },
+      {
+        "at": "2026-08-24T16:07:46Z",
+        "agent": "bubbles.test",
+        "phasesExecuted": ["test"],
+        "outcome": "completed_owned",
+        "evidenceRef": "report.md#test-phase",
+        "summary": "Ran the Go unit lane and recorded the RED-to-GREEN concurrency proof for confirm redemption: the two concurrent regression tests fail against the unfixed machine.go and pass with the store-arbitrated compare-and-set. Checked the five DoD items that the unit evidence carries directly, covering the ClearPendingConfirm method on the interface and every implementation, exactly-once execution of the gated action under two concurrent confirms, ErrPendingNotFound for the losing caller, a single surviving confirmed audit row under a race, and one terminal row when a confirm races the timeout sweep. Left the four SCN-BUG069006 scenario items unchecked because SCN-002 is the API-boundary case and the e2e lane cannot run on this host: the lane builds images and starts containers, the disk preflight refuses, and smackerel-core is in a restart loop with no Docker network attached. Checking those items from unit evidence would claim a boundary that was never exercised."
       }
     ]
   },
