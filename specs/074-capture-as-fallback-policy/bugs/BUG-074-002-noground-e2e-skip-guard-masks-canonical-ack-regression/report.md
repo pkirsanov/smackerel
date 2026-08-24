@@ -1464,3 +1464,301 @@ The conflict predates `aa88ac48` and was not introduced by it. This change is
 what made the conflict observable, because branch 2 of the shipped switch now
 asserts the superseding contract in the file the superseded scope names as its
 regression proof.
+
+---
+
+## Simplify Phase
+
+**Agent:** `bubbles.simplify` · **Date:** 2026-08-24 · **Base:** `11ffe3d4`
+**Target:** `tests/e2e/assistant/capture_fallback_trigger_e2e_test.go` — the one
+file this packet changed, rewritten at `aa88ac48` into a total 5-branch switch
+over the decoded 200 envelope.
+**Outcome:** `route_required`. Five changes applied, all behaviour-preserving.
+One finding is recorded rather than applied because acting on it would change
+when the test declines to run.
+
+### Scope and constraint
+
+Three review passes were run over the target file: code reuse, code quality,
+efficiency. Sibling helpers named in the invocation — `loadHTTPTurnLiveStack`,
+`waitHTTPTurnHealthy`, `waitAssistantFacadeReady`, `postAssistantTurn` — were
+read in full before any judgement about duplication was formed.
+
+The binding constraint on this pass: the per-branch disjointness property must
+survive. Each branch of the switch classifies on ONE envelope field and asserts
+only on OTHER fields, which is what makes an escape hatch structurally
+impossible rather than merely discouraged. No change below touches a branch
+selector or a branch predicate. The re-audit is in the table further down.
+
+### Pass 1 — code reuse
+
+Four reuse candidates were evaluated. Two were rejected on semantics, two on
+cost, and the reasons differ, so they are recorded separately rather than
+summarised together.
+
+**R-S1 — `waitAssistantFacadeReady` is NOT substitutable here (rejected on
+semantics).** The invocation asked directly whether this helper already covers
+the file's inline readiness poll. It does not, for two independent reasons.
+First, the helper ends in `t.Fatalf` when its deadline elapses
+(`nl_facade_readiness_helper_test.go` line 55); the target file ends in
+`t.Skipf`. Substituting would convert an infrastructure-unavailability skip into
+a hard failure, contradicting the file's stated contract that declining here
+says only that the route is not up. Second, the helper probes with a `/reset`
+turn, which mutates conversation state before the real turn is sent, whereas the
+inline loop posts the test's own request and keeps the envelope it gets back.
+The helper is correct for its own callers and wrong for this one.
+
+`waitHTTPTurnHealthy` and the inline 503 loop were also checked for redundancy
+against each other and are not redundant: the former polls `/api/health` (core
+process up), the latter waits for the assistant adapter to bind. Both conditions
+are required and neither implies the other.
+
+**R-S2 — the 503 poll loop and the `live envelope:` log line duplicate
+`high_band_refusal_e2e_test.go` (rejected on cost).** The loop is the same eight
+lines of mechanism in both files, differing only in budget, sleep interval and
+skip message; the `t.Logf` format string is byte-identical. Extraction would
+need to edit a file this packet did not change in order to reach a second call
+site, and a helper with one call site is an abstraction for a one-time
+operation. The mechanism that would actually be shared is roughly six lines; the
+part that differs — each message states what its own run does and does not
+establish — is the load-bearing part and would have to be passed in regardless.
+The saving does not pay for an indirection in the most safety-critical live test
+in the package.
+
+**R-S3 — branch 2's assertion group overlaps `high_band_refusal_e2e_test.go`
+lines 174-183, and extracting it would create a path that silently breaks the
+disjointness constraint (rejected on risk).** This is the most substantive
+overlap found: three of branch 2's five assertions are identical to that block,
+message strings included. Extraction is nonetheless the wrong move, and the
+reason is specific rather than general. In the target file that assertion group
+sits inside a branch **selected by `error_cause`**, so it must never assert on
+`error_cause`. In the sibling it sits inside an **unconditional both-directions
+gate**, where no such restriction exists — that file deliberately asserts the
+`error_cause`/body correspondence in both directions. A shared helper would be
+edited from either side. Adding an `error_cause` assertion to it is correct and
+harmless for the sibling, and it would silently make branch 2 assert the field
+it selected with, which is precisely the defect class this packet exists to
+remove. Nothing at the sibling's edit site would signal that. The duplication is
+real; sharing it would couple a constrained context to an unconstrained one.
+
+**R-S4 — no restated contract vocabulary (no finding).** The file reads
+`captureAckSubstring`, `contracts.CanonicalRefusalBodyFor`,
+`contracts.StatusSavedAsIdea`, `contracts.StatusUnavailable`,
+`contracts.ErrNoGroundedAnswer` and `contracts.ErrProviderUnavailable` from
+their owning packages. No status string, cause string or acknowledgement phrase
+is hardcoded, so a vocabulary change upstream cannot leave this file asserting a
+stale constant.
+
+### Pass 2 — code quality: changes applied
+
+| # | Change | Why |
+|---|---|---|
+| C1 | Header skip inventory corrected from "Two skips survive" to three reachable skip sites, naming the third as inherited from `loadHTTPTurnLiveStack` (`CORE_EXTERNAL_URL` unset) | The claim under-counted. A reader auditing which skips can fire got a wrong answer from the paragraph whose entire job is that inventory. This packet was filed because a header promised a failure mode the code could not produce; an inaccurate skip census is the same defect in miniature. |
+| C2 | Header records the verified relationship between the 5-minute readiness budget and `scripts/runtime/go-e2e.sh`'s `-timeout 300s` | See F-S1 below. The constraint is a fact about the file that a future editor of that loop cannot derive from the loop. |
+| C3 | Inline comment above the poll loop no longer says "This is the ONLY condition on which this test declines to run" | C1 made that sentence false. It was introduced-then-corrected within this pass: correcting the header without correcting the inline claim would have left the file self-contradicting in a new way. |
+| C4 | `503` → `http.StatusServiceUnavailable`, `200` → `http.StatusOK` | Magic numerics where the file already imports `net/http`. Every other live test in the package uses the named constants, including the sibling's structurally identical poll condition at `high_band_refusal_e2e_test.go` line 86. |
+| C5 | Local `body []byte` renamed to `raw`, and `canonicalRefusal` moved from the pre-switch preamble into branch 2, its only consumer | The local `body` held undecoded HTTP bytes while nineteen assertions report on `env.Body`; one identifier for two different things in a file this assertion-dense invites a misread, and the sibling already calls it `raw`. Narrowing `canonicalRefusal` leaves the preamble holding only `lowerBody`, which is genuinely shared by branches 1, 2 and 4 — so the preamble now states what is common to all outcomes and nothing else. |
+
+Assertion and skip census is identical before and after: 19 `t.Errorf`/`t.Fatalf`
+and 2 `t.Skipf`. No assertion was added, removed, weakened or strengthened.
+
+### Pass 3 — efficiency
+
+`lowerBody` is computed once and reused; `postAssistantTurn` closes the response
+body internally so the poll loop does not leak; there are no allocations in
+loops and no repeated-call patterns. No efficiency change was warranted. The one
+timing observation is F-S1, which is a correctness question rather than an
+efficiency one.
+
+### F-S1 — recorded, deliberately not applied
+
+The readiness poll is budgeted at `5 * time.Minute`.
+`scripts/runtime/go-e2e.sh` line 77 runs the binary with
+`go_test_args=(-p 1 -tags e2e -v -count=1 -timeout 300s)` — the same five
+minutes, and `go test -timeout` bounds the whole binary, so that budget is
+shared by every test in the package. An adapter that never binds therefore
+exhausts the harness budget before the poll reaches its own deadline: the
+package dies on the harness timeout rather than reaching the `t.Skipf`, and it
+takes the rest of the package's tests with it. The sibling budgets its
+equivalent poll at 60s and states in its own comment that the budget "stays well
+inside the go-e2e.sh per-binary `-timeout 300s`"; this one does not.
+
+Re-sizing the budget changes when this test declines to run, which is a decision
+about the timing contract and not a restatement of it. The simplify mandate is
+explicit that a change altering observable behaviour is reported rather than
+applied, so the number is unchanged and the constraint is now written into the
+header (C2) where the next editor of that loop will read it. Routed to
+`bubbles.test`, which owns this file's execution contract.
+
+### F-S2 — recorded, no code change available in this pass
+
+No sanctioned lightweight command surface type-checks `//go:build e2e` Go.
+`scripts/runtime/go-lint.sh` is `go vet ./...` with zero tag flags and
+`scripts/runtime/go-unit.sh` likewise carries none, so both exclude every one of
+the 47 assistant e2e files from the build. Only `scripts/runtime/go-e2e.sh`
+carries `-tags e2e`, and reaching it requires the full disposable-stack lane
+behind the heavy host-resource preflight. A compile error in any assistant e2e
+file is therefore undiscoverable until that lane runs. This is what bounded the
+verification of this pass — see the Verification boundary section. Routed to
+`bubbles.plan` as a command-surface gap, not a defect in this file.
+
+### Disjointness re-audit (post-change)
+
+Selector column is the predicate the `case` arm branches on. Asserted column
+lists the fields used as assertion **predicates**; fields appearing only as
+`t.Errorf` message arguments are not assertions and are excluded, per the
+correction the test phase already recorded against DoD item 113.
+
+| Branch | Selects on | Asserts on (predicates) | Selector asserted? |
+|---|---|---|---|
+| 1 `status == saved_as_idea` | `env.Status` | `CaptureRoute`, `ConfirmCard`, `DisambiguationPrompt`, `lowerBody` contains | No |
+| 2 `error_cause == no_grounded_answer` | `env.ErrorCause` | `Status`, `CaptureRoute`, `lowerBody` contains, `Body`, `len(Sources)` | No |
+| 3 `error_cause == provider_unavailable` | `env.ErrorCause` | `Status`, `CaptureRoute` | No |
+| 4 `len(Sources) > 0` | `len(env.Sources)` | `CaptureRoute`, `lowerBody` contains | No |
+| 5 `default` | — | — (unconditional `t.Errorf`) | n/a |
+
+Per-branch disjointness holds in all four asserting branches, unchanged from
+`aa88ac48`. No selector and no predicate was edited by this pass.
+
+### Executed evidence
+
+**Claim Source:** executed, this session.
+
+Repository binding, committed before any repository-local read:
+
+```
+$ .github/bubbles/scripts/repository-binding-host-context.sh --session-log <host-session-log> --workspace-root <...×11>
+{"schemaVersion":1,"hostAdapter":"vscode-session-log","sessionId":"vscode-ad58d1923c2301065c1d41d950c10d83",
+ "expectedControlRevision":29, ...}
+HOST_CONTEXT_EXIT=0
+
+$ .github/bubbles/scripts/repository-binding.sh preflight --session-id vscode-ad58d1923c2301065c1d41d950c10d83 \
+    --expected-control-revision 29 --request-class STRUCTURED --repository-root <repo> --workspace-root <...×11>
+REPOSITORY PREFLIGHT CONFIRMED repository=smackerel root=<repo> source=explicit-repositoryRoot affinity=confirmed
+PREFLIGHT_COMMITTED decision=rb:vscode-ad58d1923c2301065c1d41d950c10d83:30 revision=30 repository=smackerel
+{"repositoryRoot":"<repo>","repositoryAlias":"smackerel","repositoryResolution":{"controlRevision":30,
+ "authority":"explicit-repository-root","transition":"confirmed","actionable":true}}
+PREFLIGHT_EXIT=0
+```
+
+Gofmt parse over every Go file under `cmd/ internal/ tests/`. This is the check
+that matters most for this pass, because `gofmt` ignores build constraints and
+so does read the `//go:build e2e` file that no other sanctioned lane compiles.
+It is also the check that caught a real defect mid-pass: an editor-applied
+replacement collapsed newlines and placed the moved `canonicalRefusal`
+declaration and the `if` that follows it inside a `//` comment. That was found
+by a targeted scan, corrected, and the run below is the post-correction state:
+
+```
+$ timeout 900 ./smackerel.sh format --check
+[... containerised go/python tooling setup ...]
+78 files already formatted
+FORMAT_CHECK_EXIT=0
+```
+
+The command named in the invocation:
+
+```
+$ timeout 900 ./smackerel.sh check
+config-validate: <repo>/config/generated/dev.env.tmp.<pid> OK
+Config is in sync with SST
+env_file drift guard: OK
+scenario-lint: scanning config/prompt_contracts (glob: *.yaml)
+scenarios registered: 17, rejected: 0
+scenario-lint: OK
+CHECK_EXIT=0
+```
+
+Type-check attempt through the only lane that carries `-tags e2e`, using a
+deliberately non-matching run selector so the package compiles and no test
+executes. It did not reach the compiler:
+
+```
+$ timeout 3000 ./smackerel.sh test e2e --go-package assistant --go-run 'ZzSimplifyCompileOnlyNoSuchTest'
+oom-preflight: OK — 27668 MB available (need 6000 MB; swap used 1803 MB).
+
+  ┌─ disk-preflight: REFUSED — not enough free disk ──────────────────┐
+  │  C: (backs the vhdx): 36     GB free   required: 40   GB
+  │  WSL / (ext4)       : 482    GB free   required: 25   GB
+  │  A heavy build here can fill the disk and wedge the daemon.
+  │  Current Docker footprint:
+  │      Images          194  56   66.74GB   23.77GB (35%)
+  │      Local Volumes   43   24   177.1GB   40.05GB (22%)
+  │      Build Cache     1081 0    28.24GB   10.46GB
+  │  Override (only if you KNOW it fits): DISK_PREFLIGHT_OVERRIDE=1
+  └────────────────────────────────────────────────────────────────────┘
+
+E2E_COMPILE_EXIT=1
+```
+
+`DISK_PREFLIGHT_OVERRIDE=1` was NOT used. It is the bypass pattern
+`.github/copilot-instructions.md` forbids, and the regression phase declined it
+on the same grounds at 37 GB; this phase observed 36 GB. This is DI-7, unchanged
+and operator-owned.
+
+Static verification standing in for the type-check, each edit individually:
+
+```
+$ grep -nE '(^|[^.A-Za-z_])body([^A-Za-z_=]|$)' <target>      # residual bare identifier
+(zero matches outside comment prose and env.Body message text)
+
+$ grep -nE 'StatusCode != (200|503)|== (200|503)' <target>     # residual magic literal
+(zero matches)
+
+$ sed -n '/^import (/,/^)/p' <target>
+        "net/http"                                             # constants resolve
+
+$ grep -rn 'http.StatusServiceUnavailable\|http.StatusOK' tests/e2e/assistant/ | head -8
+tests/e2e/assistant/high_band_refusal_e2e_test.go:86: if resp.StatusCode != http.StatusServiceUnavailable || !strings.Contains(string(raw), "assistant_http_not_ready") {
+(+7 further sibling uses in the same package and import set)
+
+$ grep -n 'canonicalRefusal' <target>
+200:    canonicalRefusal := contracts.CanonicalRefusalBodyFor(contracts.RefusalDefault)
+210:    if env.Body != canonicalRefusal {
+211:            t.Errorf(... canonicalRefusal)                  # decl and both uses inside branch 2
+
+$ grep -n '\braw\b' <target>
+125,129,130,139,144,147,148                                    # all six use sites converted
+
+$ git diff --stat
+ tests/e2e/assistant/capture_fallback_trigger_e2e_test.go | 62 +++++++++-------
+ 1 file changed, 41 insertions(+), 21 deletions(-)
+
+$ sha256sum <target>
+15e3c444c33cdbe87215b7b16f7406345cc71f434198aa8c176c2660c78c5a6e  (262 lines)
+```
+
+### Verification boundary
+
+Stated plainly so no reader over-reads the exit codes above. What IS verified:
+the file is syntactically valid Go and gofmt-clean (`format --check` exit 0,
+which parses it regardless of build tag); the config and scenario surfaces are
+in sync (`check` exit 0, which does not read this file at all); and every
+identifier touched by C4 and C5 resolves against an import already present and
+against sibling usage in the same package and import set.
+
+What is NOT verified: a type-check of the package under `-tags e2e`. The lane
+that performs it refused at the host disk preflight, and no lighter sanctioned
+surface compiles e2e-tagged Go (F-S2). No claim is made that this file compiles.
+Residual risk is low and is not zero: the changes are a rename with all six
+sites confirmed, two constant substitutions confirmed against sibling usage, and
+a declaration moved inside the block holding both of its uses. The one defect
+this pass introduced was caught by the syntax check, not reasoned away.
+
+No DoD item was checked and no DoD text was edited: `scopes.md` is outside this
+agent's write authority, and the evidence above supports none of its items.
+`certification.*` was not written.
+
+### Discovered Issues (simplify phase, continuing the DI series)
+
+| # | Date | Issue | Disposition | Reference |
+|---|---|---|---|---|
+| DI-12 | 2026-08-24 | The readiness poll in `capture_fallback_trigger_e2e_test.go` is budgeted at 5 minutes while `scripts/runtime/go-e2e.sh` line 77 runs the binary with `-timeout 300s`, shared across the package. The adapter-never-bound skip the file header presents as a real path is therefore not reliably reachable; the package dies on the harness timeout instead. The sibling budgets the same poll at 60s and documents the constraint. | **Routed to `bubbles.test`.** Recorded, not applied: re-sizing the budget changes when the test declines to run, which the simplify mandate reports rather than changes. The constraint is now written into the file header so the next editor of the loop reads it. | `tests/e2e/assistant/capture_fallback_trigger_e2e_test.go` readiness poll; `scripts/runtime/go-e2e.sh` line 77; `tests/e2e/assistant/high_band_refusal_e2e_test.go` lines 80-95 |
+| DI-13 | 2026-08-24 | No sanctioned lightweight command surface type-checks `//go:build e2e` Go. `go-lint.sh` (`go vet ./...`) and `go-unit.sh` carry zero tag flags; only `go-e2e.sh` carries `-tags e2e`, behind the full disposable-stack lane and its heavy preflight. A compile error in any of the 47 assistant e2e files is undiscoverable until that lane runs, and it bounded the verification available to this phase. | **Routed to `bubbles.plan`** as a command-surface gap. This phase asserts no defect in the target file and made no change to the lane scripts. | `scripts/runtime/go-lint.sh`; `scripts/runtime/go-unit.sh`; `scripts/runtime/go-e2e.sh` line 77 |
+| DI-14 | 2026-08-24 | Branch 2's assertion group overlaps `high_band_refusal_e2e_test.go` lines 174-183 in three of five assertions, message strings included, but the two sit in structurally different contexts: a selector-constrained switch branch here, an unconditional both-directions gate there. Extracting a shared helper would let an edit that is locally correct in the sibling silently make branch 2 assert the field it selected with. | **No change made, by design.** Recorded so the overlap is not rediscovered and extracted by a later pass that has not seen the constraint. | `tests/e2e/assistant/capture_fallback_trigger_e2e_test.go` branch 2; `tests/e2e/assistant/high_band_refusal_e2e_test.go` lines 174-183 |
+
+DI-7 (host disk capacity) reproduces again at a worse margin: the test phase saw
+39 GB free, the regression phase 37 GB, this phase 36 GB against the 40 GB
+requirement. It remains operator-owned and it is what blocked the type-check
+above.
+

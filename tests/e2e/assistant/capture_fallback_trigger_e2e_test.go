@@ -54,15 +54,29 @@
 //     failure, nor grounded is off-contract; that includes an
 //     answered-with-zero-sources fabrication leak.
 //
-// Two skips survive, both keyed on infrastructure availability and
-// neither on a contract outcome: the HTTP 503 `assistant_http_not_ready`
-// readiness poll below (adapter bind timing) and branch 3 (upstream
-// provider down). Critically, neither keys on the `saved_as_idea` status
-// that the four canonical-ack assertions police, which is the precise
-// defect BUG-074-002 was filed for. Model nondeterminism is absorbed by
-// branch 4 and by the input choice, never by relaxing an assertion —
-// the same discipline as
-// tests/e2e/assistant/high_band_refusal_e2e_test.go.
+// Three skip sites are reachable from this test, every one keyed on
+// infrastructure availability and none on a contract outcome. Two are
+// written here: the HTTP 503 `assistant_http_not_ready` readiness poll
+// below (adapter bind timing) and branch 3 (upstream provider down).
+// The third is inherited from loadHTTPTurnLiveStack, which skips when
+// CORE_EXTERNAL_URL is unset because there is no live stack to drive.
+// Critically, none keys on the `saved_as_idea` status that the four
+// canonical-ack assertions police, which is the precise defect
+// BUG-074-002 was filed for. Model nondeterminism is absorbed by branch
+// 4 and by the input choice, never by relaxing an assertion — the same
+// discipline as tests/e2e/assistant/high_band_refusal_e2e_test.go.
+//
+// One caveat on the first of those three, verified rather than assumed:
+// the readiness poll below is budgeted at 5 minutes, and
+// scripts/runtime/go-e2e.sh runs the binary with `-timeout 300s` — the
+// same 5 minutes, shared by every test in the package. An adapter that
+// never binds therefore exhausts the harness budget before the poll
+// reaches its own deadline, so that skip is not reliably reachable and
+// the package dies on the harness timeout instead. The sibling test
+// budgets its equivalent poll at 60s and records that the budget "stays
+// well inside the go-e2e.sh per-binary `-timeout 300s`"; this one does
+// not. Re-sizing it changes when this test declines to run, which is a
+// decision about the timing contract rather than a restatement of it.
 
 package assistant_e2e
 
@@ -97,17 +111,23 @@ func TestAssistantHTTPE2E_CaptureFallbackOpenKnowledgeNoGround(t *testing.T) {
 	// returning 503 assistant_http_not_ready briefly after the core
 	// container reports /api/health=200. Poll for up to 5 minutes;
 	// late-binding depends on ML sidecar reachability and can take
-	// substantial time on a cold test stack. This is the ONLY condition
-	// on which this test declines to run: the route is not up, so no
-	// conclusion about the no-ground contract is available either way.
+	// substantial time on a cold test stack. Declining here says only
+	// that the route is not up, so no conclusion about the no-ground
+	// contract is available either way. It is one of the three
+	// infrastructure-keyed skip sites the file header inventories, and
+	// the header records why this particular one is not reliably
+	// reachable under the harness timeout.
+	//
+	// `raw` is the undecoded HTTP body; every assertion below reports on the
+	// different `env.Body`, so the two do not share an identifier.
 	var (
 		resp *http.Response
-		body []byte
+		raw  []byte
 	)
 	deadline := time.Now().Add(5 * time.Minute)
 	for {
-		resp, body = postAssistantTurn(t, stack, req)
-		if resp.StatusCode != 503 || !strings.Contains(string(body), "assistant_http_not_ready") {
+		resp, raw = postAssistantTurn(t, stack, req)
+		if resp.StatusCode != http.StatusServiceUnavailable || !strings.Contains(string(raw), "assistant_http_not_ready") {
 			break
 		}
 		if time.Now().After(deadline) {
@@ -116,16 +136,16 @@ func TestAssistantHTTPE2E_CaptureFallbackOpenKnowledgeNoGround(t *testing.T) {
 			// SCOPE-074-04B regression" and asserted that unit and
 			// integration coverage proved the hook wired — two
 			// conclusions this loop never tested (BUG-074-002 DI-2).
-			t.Skipf("assistant HTTP adapter never bound within 5min (still 503 assistant_http_not_ready), so the turn never reached the facade and this run establishes nothing about the no-ground contract; last body=%s", string(body))
+			t.Skipf("assistant HTTP adapter never bound within 5min (still 503 assistant_http_not_ready), so the turn never reached the facade and this run establishes nothing about the no-ground contract; last body=%s", string(raw))
 		}
 		time.Sleep(3 * time.Second)
 	}
-	if resp.StatusCode != 200 {
-		t.Fatalf("status = %d, want 200; body=%s", resp.StatusCode, string(body))
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body=%s", resp.StatusCode, string(raw))
 	}
 	var env httpadapter.TurnResponse
-	if err := json.Unmarshal(body, &env); err != nil {
-		t.Fatalf("decode: %v\nbody=%s", err, string(body))
+	if err := json.Unmarshal(raw, &env); err != nil {
+		t.Fatalf("decode: %v\nbody=%s", err, string(raw))
 	}
 	if !env.FacadeInvoked {
 		t.Errorf("facade_invoked = false; want true")
@@ -143,7 +163,6 @@ func TestAssistantHTTPE2E_CaptureFallbackOpenKnowledgeNoGround(t *testing.T) {
 	t.Logf("live envelope: status=%q error_cause=%q capture_route=%v sources=%d body=%q",
 		env.Status, env.ErrorCause, env.CaptureRoute, len(env.Sources), env.Body)
 
-	canonicalRefusal := contracts.CanonicalRefusalBodyFor(contracts.RefusalDefault)
 	lowerBody := strings.ToLower(env.Body)
 
 	// Outcome-space closure. Total over the envelope, no early return,
@@ -178,6 +197,7 @@ func TestAssistantHTTPE2E_CaptureFallbackOpenKnowledgeNoGround(t *testing.T) {
 		// not ground refuses with a typed cause and MUST NOT be dressed
 		// as a band-low capture. Previously this whole shape reported
 		// SKIP and asserted nothing.
+		canonicalRefusal := contracts.CanonicalRefusalBodyFor(contracts.RefusalDefault)
 		if env.Status != string(contracts.StatusUnavailable) {
 			t.Errorf("error_cause = %q but status = %q; want %q — the no-ground cause and the unavailable status are one contract, not two", env.ErrorCause, env.Status, contracts.StatusUnavailable)
 		}
