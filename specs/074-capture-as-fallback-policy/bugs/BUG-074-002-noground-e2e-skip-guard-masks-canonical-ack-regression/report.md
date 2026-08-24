@@ -1762,3 +1762,333 @@ DI-7 (host disk capacity) reproduces again at a worse margin: the test phase saw
 requirement. It remains operator-owned and it is what blocked the type-check
 above.
 
+---
+
+## Stabilize Phase
+
+**Agent:** `bubbles.stabilize` — **Date:** 2026-08-24T01:32:02Z — **HEAD:** `4076ba4b`
+**Tree:** clean (`git status --porcelain` produced 0 lines)
+**Mandate:** diagnostic. Operational and reliability assessment only.
+
+**Verdict: ⚠️ PARTIALLY_STABLE** — no defect in the shipped test logic. Five
+reliability findings, all in the surrounding harness and host, none fixed inline
+because every one of them lands in another agent's write authority.
+
+**Write authority honored.** No DoD item was checked and no DoD text was edited:
+`scopes.md` is outside this agent's write authority, and the evidence below
+supports none of its items. `certification.*` was not written.
+`tests/e2e/assistant/capture_fallback_trigger_e2e_test.go` was not modified.
+
+**This section's own write record.** The run at `2026-08-24T01:32:02Z` wrote this
+report section and wrote nothing at all to `state.json` — neither the
+`execution.completedPhaseClaims` entry nor the `execution.executionHistory`
+entry landed. `state-transition-guard.sh` therefore reported *"Required phase
+'stabilize' NOT in execution/certification phase records"* (Gate G022): the
+phase was structurally invisible to the guard even though it had run. Both
+records were appended in a corrective write at `2026-08-24T01:40Z`. Each carries
+the time the run actually occurred — `claimedAt` and `at` are both
+`2026-08-24T01:32:02Z` — rather than the time the record landed, and the history
+entry states that same split in its own `recordProvenance` field. No analysis in
+this section was produced by the corrective write, no command was re-executed
+for it, and it touched no field other than the two appended entries.
+`certification.*` remains unwritten.
+
+### What this phase could and could not execute
+
+| Attempted | Command | Exit | Result |
+|---|---|---|---|
+| Live single-test E2E | `./smackerel.sh test e2e --go-package assistant --go-run 'TestAssistantHTTPE2E_CaptureFallbackOpenKnowledgeNoGround'` | 1 | Refused at the host disk preflight, before the suite lock and before any stack bring-up |
+| Repo CLI check | `./smackerel.sh check` | 0 | Config in sync with SST, env_file drift guard OK, 17 scenarios registered / 0 rejected |
+| Suite lock probe | `flock -n <lock> true` on both `test` suite locks | 0 | Both **FREE** |
+
+The E2E lane did not run. **Exit was 1, not 73** — the flock contingency did not
+occur, and the independent probe confirms it: no suite was holding either lock.
+The sole blocker is disk. Consequently branches 1, 2 and 4 of the shipped switch
+were not exercised in this session and **this phase asserts nothing about their
+runtime behaviour**.
+
+### S-1 — The 60 s client budget sits inside the tier's own realistic latency band
+
+This is the finding with the largest operational consequence, and it is
+**pre-existing in the shared harness, not introduced by this packet**.
+
+Budgets, each read from source rather than inferred:
+
+| Layer | Budget | Source |
+|---|---|---|
+| Server write ceiling for the open-knowledge path | **4200 s** | `cmd/core/main.go` `WriteTimeout: 4200 * time.Second` |
+| `cpu`-tier interactive `retrieval_qa_timeout_ms` | **120 s** | `config/smackerel.yaml` `models.tiers.cpu.interactive` |
+| `go-e2e.sh` per-package test binary | **300 s** | `scripts/runtime/go-e2e.sh` line 77, `-timeout 300s` |
+| This test's readiness poll deadline | **300 s** | the test's inline loop |
+| **Per-request HTTP client in `postAssistantTurn`** | **60 s** | `tests/e2e/assistant/http_turn_test.go` lines 82 and 90 (context *and* client) |
+
+The tightest bound is the client's, it is the innermost, and it is **fatal**:
+`postAssistantTurn` calls `t.Fatalf("POST /api/assistant/turn: %v", err)` when
+`client.Do` returns an error.
+
+The 4200 s server ceiling is not arbitrary padding. Its own comment states the
+value tracks `(max_iterations + synthesis_retry_budget) × per_llm_timeout` and
+records the expected band explicitly: *"Realistic GPU / self-hosted turns
+complete in ~40-90s; this is the pathological-slow-CPU-dev backstop."* This host
+is `SMACKEREL_HARDWARE_TIER=cpu` (read from the gitignored local env file).
+
+So a turn that takes 60-90 s — inside the band the production code documents as
+**realistic**, on the slower of the two tiers — produces a transport-timeout
+`t.Fatalf`. That outcome is neither one of the five branches nor an honest
+infrastructure skip. It reports as a hard FAIL on a stack that was working.
+
+The precise boundary of the packet's closure claim, stated without diminishing
+it: the switch is total over **decoded 200 envelopes**, because it is reached
+only after `resp.StatusCode != http.StatusOK` fatals and after `json.Unmarshal`
+fatals. It is not total over **the ways a request can fail to yield one**. The
+five-branch inventory in the file header is accurate within its domain; the
+domain is narrower than the set of outcomes reachable on a `cpu` tier. The
+packet's design is sound — this finding widens the frame around it rather than
+contradicting it.
+
+**Routed to `bubbles.test`** (harness budget owner). Not applied here: changing a
+shared helper used by 47 assistant E2E files is an edit to test infrastructure
+this diagnostic phase does not own.
+
+### S-2 — Whether this file needs `waitAssistantFacadeReady`
+
+The two readiness mechanisms differ on four axes that matter operationally, not
+merely stylistically:
+
+| Axis | Inline poll (this file) | `waitAssistantFacadeReady` |
+|---|---|---|
+| Probe payload | the **real** ungroundable question — full model inference | benign `/reset` — no inference |
+| Post helper | `postAssistantTurn`, 60 s cap, **fatal** on transport error | `postAssistantTurnNoFatal`, 10 s cap, **retries** on transport error |
+| `TransportMessageID` | one id computed **before** the loop, reused every iteration | fresh `e2e-readiness-<ts>` per iteration |
+| Deadline behaviour | `t.Skipf` | `t.Fatalf` |
+
+Two consequences follow.
+
+**It can race the facade's late binding in the sense that matters.** Not by
+sampling too early — the loop does retry on 503. The race is on *transport
+faults during the window*, and the inline poll cannot survive one. While the
+adapter is binding, the core is the component least likely to be stable; a
+connection reset or refusal during that window is a `t.Fatalf`, not another
+iteration. The helper absorbs exactly that class by returning a zero-value
+response and looping. This is not hypothetical on this host class — see S-4,
+where a core container is refusing connections on a ~60 s cycle right now.
+
+**The inline poll cannot simply be made retry-tolerant.** The adapter dedups on
+the triple `(userID, TransportMessageID, sha256(body))` —
+`internal/assistant/httpadapter/adapter.go` line 383 and
+`internal/assistant/httpadapter/dedup.go`. The inline poll reuses one id and one
+body, so a retry issued *after* a turn completed would replay the cached result
+rather than exercise a fresh turn; `errTransportMessageIDConflict` fires only on
+a *differing* payload, so nothing would surface the replay. That coupling is
+latent today precisely because the fatal helper aborts before any retry can
+happen — and it becomes live the moment anyone applies the obvious repair for
+S-1.
+
+**Assessment:** the helper's real value here is not the polling loop, it is the
+**separation of the readiness probe from the assertion turn**. Readiness gets
+established with cheap, disposable, freshly-keyed traffic; the assertion turn is
+then issued exactly once, un-deduped, against a facade already known to be
+bound. The inline poll conflates the two roles, which is the structural reason
+it is both expensive per probe and un-retryable.
+
+**One constraint against a verbatim swap, which is why this phase recommends
+rather than prescribes:** `waitAssistantFacadeReady` ends in `t.Fatalf`, whereas
+the inline poll ends in `t.Skipf`. Adopting it unchanged would convert
+infrastructure unavailability into a contract FAIL — the exact inversion this
+packet argues against when it justifies branch 3. The correct adoption is the
+probe/assertion separation with a skip-on-deadline terminal, and choosing that
+terminal is a decision about the test's declining contract.
+
+**Routed to `bubbles.test`**, which owns this file's test design.
+
+### S-3 — A grounded number for the readiness budget (supports DI-12)
+
+DI-12 already records that the 300 s poll exceeds the 300 s per-package harness
+budget and cites the sibling's 60 s as precedent. This phase adds the mechanism
+that makes 60-90 s the *right* number rather than merely the precedented one.
+
+`runAssistantFacadeWiringWithRetry` (`cmd/core/main.go` lines 550-589) runs
+`backoff := 2 * time.Second`, doubling, with `const maxBackoff = 30 * time.Second`
+and unbounded attempts. The wiring step pre-computes scenario embeddings through
+the ML sidecar's `/embed`.
+
+Therefore: once the sidecar is reachable, wiring lands within **one capped
+backoff period — at most 30 s** — plus the wiring work itself. A poll covering
+two to three capped periods (60-90 s) spans the entire converging case. Beyond
+that the loop is no longer waiting on late binding; it is waiting on a
+**non-converging** condition — the sidecar being down — which retries at 30 s
+intervals never resolve. The sibling's 60 s is proportionate to the mechanism.
+The 300 s budget waits ten capped periods for an event that takes one, and pays
+for it out of a package budget shared with 47 files.
+
+**Routed to `bubbles.test`** as supporting evidence for the existing DI-12.
+
+### S-4 — Live infrastructure: an active crash loop and a sidecar that has never been healthy
+
+First-hand `docker inspect` / `docker logs` observations at the time of this run:
+
+| Container | State | Evidence |
+|---|---|---|
+| `smackerel-smackerel-core-1` | **crash-looping** | `RestartCount` **1268 → 1276** across ~8 minutes of this session; `ExitCode=1`; `StartedAt`/`FinishedAt` ~350 ms apart |
+| `smackerel-smackerel-ml-1` | **unhealthy 21 h** | `Health=unhealthy`, `FailingStreak=7305`, healthcheck `urllib.error.URLError: <urlopen error [Errno 111] Connection refused>` |
+| `smackerel-postgres-1` | healthy | — |
+| `smackerel-nats-1` | healthy | — |
+
+The core's fatal startup error is identical on every restart:
+
+```
+"level":"ERROR","msg":"fatal startup error","error":"database connection: ping database:
+failed to connect to `user=smackerel database=smackerel`: hostname resolving error:
+lookup postgres on [<tailnet-dns-resolver>]:53: dial udp [<tailnet-dns-resolver>]:53:
+connect: network is unreachable"
+```
+
+A host DNS fault, not a code fault: `postgres` resolution is being sent to the
+tailnet DNS resolver over an IPv6 route that is unreachable, while the postgres
+container itself is healthy on the compose network.
+
+**Scope of this finding, stated honestly.** These containers are the **dev**
+compose project, not the E2E `test` project, so they do not by themselves
+explain any E2E outcome. Their value as evidence is different and still real:
+they are first-hand proof that the exact infrastructure failure class both
+surviving skip sites key on is live on this host, that the ML-gated facade
+binding of S-3 would never converge here, and that the transport-fault class
+S-2 describes is occurring on a ~60 s cycle.
+
+**A causal link this phase checked and rejected rather than assumed.** The crash
+loop's log footprint is 6.6 MB (core) and 11.6 MB (ml), ~18 MB combined. That is
+immaterial against the ~4 GB shortfall in S-5. The crash loop wastes CPU and
+fills logs with noise; it is **not** the disk cause, and it would be wrong to
+present it as one.
+
+**Routed to `bubbles.devops`** — host container lifecycle and DNS wiring, which
+is that agent's domain and not this packet's subject matter.
+
+### S-5 — Disk preflight: verified refusing, on a volume `df` cannot see
+
+The earlier-phase record of a disk-headroom refusal is **confirmed still in
+effect**, by direct execution rather than by inheritance. Verbatim from the
+refused run:
+
+```
+oom-preflight: OK — 27543 MB available (need 6000 MB; swap used 1797 MB).
+
+  ┌─ disk-preflight: REFUSED — not enough free disk ──────────────────┐
+  │  C: (backs the vhdx): 36     GB free   required: 40   GB
+  │  WSL / (ext4)       : 481    GB free   required: 25   GB
+  │
+  │  Current Docker footprint:
+  │      TYPE            TOTAL     ACTIVE    SIZE      RECLAIMABLE
+  │      Images          202       56        67.18GB   22.16GB (32%)
+  │      Containers      61        61        62.47MB   0B (0%)
+  │      Local Volumes   43        24        177.2GB   40.05GB (22%)
+  │      Build Cache     1137      0         29.12GB   10.9GB
+  └────────────────────────────────────────────────────────────────────┘
+```
+
+Three things this phase established that a shallower check would have gotten
+wrong:
+
+**The obvious measurement gives the opposite answer.** `df -h .` on the repo
+filesystem reports 482 GB available. Reading that alone yields "the refusal has
+cleared" — which is false. The failing volume is the Windows volume physically
+backing the WSL ext4 vhdx, invisible to `df` inside WSL; `df -BG /mnt/c` shows it
+at 97% used, 37 GB free. RAM is not implicated: 27543 MB available against a
+6000 MB floor.
+
+**The gate is host-local, not a repo artifact.** `host_resource_preflight()`
+(`smackerel.sh` lines 726-736) invokes `oom-preflight.sh` and `disk-preflight.sh`
+only `if command -v` finds them on `PATH`; both are installed outside the repo,
+and the function is a documented no-op where they are absent. CI and other
+developer machines are unaffected. Thresholds are the guard's own defaults,
+`REQ_C_GB=40` and `REQ_WSL_GB=25`.
+
+**The banner's own top three remediation levers cannot move the failing
+number.** Levers 1-3 (Docker prune, stopping idle project stacks, journald/apt
+cleanup) all free space *inside* the ext4 vhdx — where there is already 481 GB
+free against a 25 GB floor. A sparse vhdx does not return freed blocks to the
+backing volume, so none of the ~73 GB reclaimable Docker footprint reaches C:.
+Only lever 4 — a full WSL shutdown plus a vhdx compact — does. On this host the
+refusal is structurally sticky against the first three levers, which matters
+because a reader working the banner top-down will spend effort on levers that
+cannot help.
+
+Margin history across this packet's phases: 39 GB (test phase) → 37 GB
+(regression phase) → 36 GB (simplify phase) → **36 GB (this phase)**. The
+decline has flattened; it has not reversed, and it remains 4 GB short.
+
+`DISK_PREFLIGHT_OVERRIDE=1` was **not** used. The guard's stated purpose is to
+prevent a heavy build from wedging the Docker daemon, an override would have
+launched a full disposable-stack bring-up against a 4 GB margin, and forcing
+past a resource guard to manufacture evidence is precisely the bypass this
+repository's policy refuses. The absence of live-branch evidence is recorded as
+a constraint rather than engineered away.
+
+**Owned by the operator** (DI-7), unchanged.
+
+### S-6 — Environment constraint on the grounded and captured branches
+
+Recorded honestly, with the provenance of each claim marked.
+
+**Established first-hand in this session:**
+
+- `SMACKEREL_HARDWARE_TIER=cpu` — the slower of the two declared tiers.
+- SST `llm.provider: "ollama"`, `llm.ollama_url: ""` — an intentionally empty
+  operator seam; `config generate` fails loud `[F-OLLAMA-URL-MISSING]` rather
+  than defaulting.
+- `SMACKEREL_OLLAMA_URL` is declared in the gitignored local env file and is
+  **unset** in this shell (presence checked value-safely; no value was read or
+  emitted).
+- No smackerel Ollama container is running. The only Ollama container on this
+  host belongs to a different project, and nothing is listening on the Ollama
+  port in this network namespace.
+- The `test` lane nevertheless generates `ENABLE_OLLAMA=true` with
+  `OLLAMA_MODEL=qwen2.5:0.5b-instruct`, so the E2E stack brings up **its own**
+  provider. Provider availability inside the E2E lane is therefore a property of
+  that disposable stack starting, not of the dev stack's state.
+
+**Not established here, and not claimed.** This phase did **not** observe
+`error_cause=provider_unavailable`, because the lane that would produce it
+refused before starting. The proposition that this hardware tier terminates
+these turns as `provider_unavailable` reaches this phase as operator context and
+as prior-phase record; it is diagnostic input, and restating it as this session's
+execution evidence would be the fabrication class this packet exists to remove,
+pointed at the environment instead of at the contract.
+
+**The constraint that IS supported:** on this host in its current state,
+branches 1, 2 and 4 cannot be reached at all — not because the model grounds or
+fails to ground, but because the suite refuses at the disk preflight before a
+stack exists. Any claim about which branch a `cpu` tier lands on requires a run
+that has not happened.
+
+### Flakiness summary
+
+| Risk | Reachable on this host class | Severity | Owner |
+|---|---|---|---|
+| 60 s fatal client timeout inside the documented 40-90 s realistic band (S-1) | Yes | **high** | `bubbles.test` |
+| Transport fault during the binding window kills the poll (S-2) | Yes — S-4 shows the fault live | **high** | `bubbles.test` |
+| Readiness budget exceeds the package budget it is drawn from (S-3 / DI-12) | Yes | medium | `bubbles.test` |
+| Dedup replay if the poll is made retry-tolerant without re-keying (S-2) | Latent — becomes live with the S-1 repair | medium | `bubbles.test` |
+| Suite lock contention (exit 73) | **Not observed** — both locks probed FREE | none | — |
+
+The two surviving `t.Skip` sites are correctly keyed. Neither selects on
+`status`, and neither can absorb the regression class this packet was filed for.
+This phase found no reliability reason to change either one; the reliability
+problems are in the request helper and the poll structure that surround them.
+
+### Discovered Issues (stabilize phase, continuing the DI series)
+
+| # | Date | Issue | Disposition | Reference |
+|---|---|---|---|---|
+| DI-15 | 2026-08-24 | `postAssistantTurn` bounds every request at 60 s (context and client) and `t.Fatalf`s on `client.Do` error, while `cmd/core/main.go` sizes the open-knowledge `WriteTimeout` at 4200 s and documents the realistic band as ~40-90 s. On the `cpu` tier a correct-but-slow turn inside that band produces a hard FAIL that is not one of the five branches. Shared by 47 assistant E2E files; pre-existing, not introduced by this packet. | **Routed to `bubbles.test`.** Not applied: a shared-helper budget change is a test-infrastructure edit this diagnostic phase does not own. | `tests/e2e/assistant/http_turn_test.go` lines 82, 90; `cmd/core/main.go` `WriteTimeout`; `config/smackerel.yaml` `models.tiers.cpu` |
+| DI-16 | 2026-08-24 | The inline readiness poll probes with the real assertion request through the fatal `postAssistantTurn` and reuses one `TransportMessageID`, so it cannot survive a transport fault during the binding window and cannot be made retry-tolerant without hitting adapter dedup replay on `(userID, TransportMessageID, sha256(body))`. `waitAssistantFacadeReady` separates probe from assertion using a benign `/reset` with a fresh id and a retrying post helper — but ends in `t.Fatalf`, which would convert infrastructure unavailability into a contract FAIL. | **Routed to `bubbles.test`.** The recommendation is the probe/assertion separation with a skip-on-deadline terminal, not a verbatim swap; choosing the terminal is a test-design decision. | `tests/e2e/assistant/capture_fallback_trigger_e2e_test.go` readiness poll; `tests/e2e/assistant/nl_facade_readiness_helper_test.go`; `internal/assistant/httpadapter/adapter.go` line 383; `internal/assistant/httpadapter/dedup.go` |
+| DI-17 | 2026-08-24 | The dev compose project is degraded: `smackerel-smackerel-core-1` has restarted 1276 times and is looping on a fatal startup error resolving `postgres` through the tailnet DNS resolver over an unreachable IPv6 route, while `smackerel-smackerel-ml-1` reports `FailingStreak=7305` with its healthcheck refused. Postgres and NATS are healthy, so this is host DNS wiring, not application logic. Log footprint ~18 MB, immaterial to DI-7. | **Routed to `bubbles.devops`.** Host container lifecycle and DNS wiring; not this packet's subject matter and not touched here. | `docker inspect smackerel-smackerel-core-1`; `docker inspect smackerel-smackerel-ml-1` |
+
+DI-7 (host disk capacity) is confirmed by direct execution in this phase at
+36 GB against the 40 GB requirement, and it remains operator-owned. Two
+refinements are added above in S-5: the failing volume is invisible to `df`
+inside WSL, so the repo filesystem's 481 GB free is not evidence that the
+refusal has cleared; and the guard banner's first three remediation levers free
+space inside the vhdx and cannot move the failing number, leaving the vhdx
+compact as the only lever that returns blocks to the backing volume.
+
