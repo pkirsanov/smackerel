@@ -141,13 +141,13 @@ because EB-6 depends on it, not because it is new work.
 
 - [ ] Root cause is confirmed by execution, not only by static reading.
 - [ ] The concurrent redemption test is recorded FAILING against the unfixed implementation before any fix lands.
-- [ ] The conditional-clear method exists on the `Store` interface and on every implementation, including `InMemoryContextStore`.
+- [x] The conditional-clear method exists on the `Store` interface and on every implementation, including `InMemoryContextStore`. → Evidence: [report.md](report.md#definition-of-done-what-this-evidence-settles)
 - [ ] `PgStore` reads `CommandTag.RowsAffected()` and reports whether it performed the clear.
 - [ ] `Confirm`, `Discard`, and `SweepTimeouts` all route through the conditional clear and map a lost race to `ErrPendingNotFound`.
-- [ ] Two concurrent confirms of one reference execute the gated action exactly once, proven by a test using real goroutines and a release barrier.
-- [ ] The losing caller receives `ErrPendingNotFound`, indistinguishable from a post-redemption replay.
-- [ ] Exactly one confirmed audit row exists for the reference after a concurrent race.
-- [ ] A confirm racing the timeout sweep produces exactly one terminal audit row.
+- [x] Two concurrent confirms of one reference execute the gated action exactly once, proven by a test using real goroutines and a release barrier. → Evidence: [report.md](report.md#proving-the-two-concurrency-tests-actually-executed)
+- [x] The losing caller receives `ErrPendingNotFound`, indistinguishable from a post-redemption replay. → Evidence: [report.md](report.md#proving-the-two-concurrency-tests-actually-executed)
+- [x] Exactly one confirmed audit row exists for the reference after a concurrent race. → Evidence: [report.md](report.md#the-tests-are-sensitive-to-the-defect)
+- [x] A confirm racing the timeout sweep produces exactly one terminal audit row. → Evidence: [report.md](report.md#the-tests-are-sensitive-to-the-defect)
 - [ ] The single-flight comment at `machine.go` line 213 states the guarantee the code actually enforces.
 - [ ] A redemption write leaves `working_context`, `pending_disambig`, `pending_clarify`, and `legacy_retirement_notices` untouched.
 - [ ] `TestAssistantHTTPE2E_ConfirmAcceptExecutesGatedActionOnce` passes unmodified.

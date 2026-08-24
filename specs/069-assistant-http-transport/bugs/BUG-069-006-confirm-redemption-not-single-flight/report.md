@@ -446,3 +446,296 @@ with the Go caches in ext4-backed named volumes. That path builds no image and
 pulls nothing, so the preflight's disk threshold guards a cost this lane does
 not incur. The justification does NOT generalize to the build or e2e lanes,
 which do build images and therefore do need the check.
+
+## Test Phase
+
+**Phase:** test
+**Agent:** bubbles.test
+**Claim Source:** executed
+**Tree under test:** `a1329651`, working tree clean at run time
+**Scope of this phase:** the unit lane only. No product or test source was
+modified in this phase.
+
+### The Preflight Bypass Is Not In This Phase's Trust Chain
+
+The phase opened by setting `SMACKEREL_SKIP_HOST_PREFLIGHT=1`, on the standing
+account of the disk preflight refusing at `C: 32 GB free, required 40 GB`. That
+account no longer describes the machine. Re-running the same selector with the
+variable explicitly unset produced:
+
+```
+oom-preflight: OK — 37834 MB available (need 6000 MB; swap used 502 MB).
+disk-preflight: OK — C: 105 GB free (need 40 GB), WSL / 492 GB free (need 25 GB).
+```
+
+The preflight passes on its own terms, so the bypass buys nothing here. Every
+lane recorded below was therefore re-run with `env -u SMACKEREL_SKIP_HOST_PREFLIGHT`,
+and every figure in this section comes from those bypass-free runs. No waived
+check sits underneath any claim made here.
+
+### Lane Availability, As Observed
+
+| Lane | Ran | Basis |
+|---|---|---|
+| Go unit | Yes | Container-only; needs no live stack |
+| `format --check` | Yes | Container-only |
+| `lint` | Yes | Container-only |
+| Integration | No | Needs a live Postgres; no smackerel container exists |
+| E2E | No | Needs the live HTTP stack; no smackerel container exists |
+
+The live-stack lanes were not skipped by choice. `docker ps -a --filter
+name=smackerel` returns zero rows, in any state:
+
+```
+$ docker ps -a --filter 'name=smackerel' --format '{{.Names}} | {{.Status}} | {{.Networks}}'
+$ docker ps -aq --filter 'name=smackerel' | grep -c ''
+0
+```
+
+`TestAssistantHTTPE2E_ConcurrentConfirmExecutesGatedActionOnce` opens with
+`loadHTTPTurnLiveStack(t)`, `waitHTTPTurnHealthy(t, stack, 30*time.Second)` and
+`openRequiredAssistantPool(t)`. With no container and no database, that test
+cannot reach its first assertion. Standing the stack up requires an image build,
+which is exactly the cost the host preflight exists to gate, so the bypass that
+is harmless for the unit lane would not be harmless there.
+
+### Headline: Full Go Unit Lane
+
+```
+# BUG-069-006 TEST PHASE HEADLINE: full Go unit lane at a1329651, no preflight skip
+$ timeout 2400 env -u SMACKEREL_SKIP_HOST_PREFLIGHT ./smackerel.sh test unit --go
+exit: 0
+lines: 210
+sha256: 0a15035c19d5e92d5335598ed7c0c6d030e3e2629677f43f73f1d90cb9817cde
+--- first 10 ---
+oom-preflight: OK — 37166 MB available (need 6000 MB; swap used 502 MB).
+disk-preflight: OK — C: 105 GB free (need 40 GB), WSL / 492 GB free (need 25 GB).
+++ dirname /workspace/scripts/runtime/go-unit.sh
++ source /workspace/scripts/runtime/_ensure_envsubst.sh
++ ensure_envsubst go-unit
++ local tag=go-unit
++ command -v envsubst
++ echo '[go-unit] envsubst missing — installing gettext-base'
++ apt-get update -qq
+[go-unit] envsubst missing — installing gettext-base
+--- omitted 190 line(s); sha256 above covers the full output ---
+--- last 10 ---
+?       github.com/smackerel/smackerel/tests/integration/agent/routerwarmup     [no test files]
+?       github.com/smackerel/smackerel/tests/integration/drive/fixtures [no test files]
+?       github.com/smackerel/smackerel/tests/integration/nslock [no test files]
+ok      github.com/smackerel/smackerel/tests/observability      (cached)
+ok      github.com/smackerel/smackerel/tests/stress/readiness   (cached)
+ok      github.com/smackerel/smackerel/tests/unit/clients       (cached)
+?       github.com/smackerel/smackerel/web/pwa  [no test files]
+ok      github.com/smackerel/smackerel/web/pwa/tests    (cached)
+[go-unit] go test ./... finished OK
++ echo '[go-unit] go test ./... finished OK'
+```
+
+The lane is green across every package. Because `go test ./...` without
+`-count=1` may reuse cached results, this run is treated as proof that the tree
+COMPILES and that no package regressed, not as proof that any individual test
+executed in this session. The per-test claims below rest on the selector runs,
+which `scripts/runtime/go-unit.sh` invokes with `-count=1` and which therefore
+cannot be served from cache.
+
+### Proving The Two Concurrency Tests Actually Executed
+
+A `-run` selector that matches nothing still exits 0 and still prints
+`[go-unit] go test ./... finished OK`. Exit 0 alone is therefore compatible with
+a vacuous run, and a pasted `--- PASS:` line proves only that a line was pasted.
+The lane was instead measured against a negative control, because output line
+count under `-v` is a mechanical function of how many tests a package ran:
+
+| Package state under `go test -v` | Lines emitted |
+|---|---|
+| no test matched | `testing: warning: no tests to run` + `PASS` + `ok … [no tests to run]` = 3 |
+| one test passed | `=== RUN` + `--- PASS` + `PASS` + `ok` = 4 |
+| two tests passed | 2 × (`=== RUN` + `--- PASS`) + `PASS` + `ok` = 6 |
+
+Five bypass-free runs, identical except for the selector:
+
+| Selector | exit | lines | delta vs control | sha256 |
+|---|---|---|---|---|
+| `TestMachineConfirm_ThisTestNameDoesNotExist` (control) | 0 | 522 | — | `4a593f48c794412a9dbc00d49afeb9478ca0611f940fbbf8e431a8446985524d` |
+| `TestMachineConfirm_ConcurrentRedemptionExecutesOnce` (TP-BUG069006-01) | 0 | 523 | +1 | `17feab26aacd275fad00e50f2bf58282f1eab83d0e29287adcdbc217cdeaaab8` |
+| `TestMachineConfirm_RacingSweepProducesOneTerminalOutcome` (TP-BUG069006-02) | 0 | 523 | +1 | `0708e8b3bfc155f8c4cb01433db1566a0cd62705500e5b5ec9b20b16fc69f7d6` |
+| both of the above | 0 | 525 | +3 | `8f9b33e7ba60aa270679d834cdce69509813c22ce359a34a871b7e0a78dc258d` |
+| `TestMachine_Confirm_SingleFlight_SecondCallReturnsNotFound` | 0 | 523 | +1 | `2ed07a5f3f705160b5d591a395e3748bb8059f673120b5552b20221bae2206b7` |
+
+Each single selector lands exactly one line above the control, and the combined
+selector exactly three above, which is the arithmetic for one and two passing
+tests respectively. Those deltas are satisfiable only if each named test exists,
+was selected, and ran; a selector matching nothing would have reproduced the
+control's 522, and a failing test would have added failure detail and driven the
+exit code off 0. All five runs exited 0.
+
+The command form for every row above:
+
+```bash
+env -u SMACKEREL_SKIP_HOST_PREFLIGHT ./smackerel.sh test unit --go --go-run '<selector>' --verbose
+```
+
+Both names resolve to exactly one definition each, in the file the Test Plan
+names:
+
+```
+$ grep -rn 'func TestMachineConfirm_\(ConcurrentRedemptionExecutesOnce\|RacingSweepProducesOneTerminalOutcome\)' --include='*.go' .
+internal/assistant/confirm/machine_concurrency_test.go:79:func TestMachineConfirm_ConcurrentRedemptionExecutesOnce(t *testing.T) {
+internal/assistant/confirm/machine_concurrency_test.go:128:func TestMachineConfirm_RacingSweepProducesOneTerminalOutcome(t *testing.T) {
+```
+
+**On the sha256 values.** They fingerprint the exact bytes each run produced and
+are recorded so a reader can see that a real command produced a real transcript.
+They are not byte-stable across runs: both lanes emit per-package timings and
+the Python lanes emit an ephemeral pip cache path, so `--verify` against a fresh
+run will report a mismatch even when behaviour is unchanged. The re-derivable
+quantity, and the one the argument above rests on, is the line count.
+
+### The Tests Are Sensitive To The Defect
+
+A concurrency test that never observed red proves nothing, because an unlucky
+interleaving yields green on broken code. These do not rely on the scheduler.
+`loadBarrierStore` decorates `Store.Load` and detains every caller until
+`parties` callers have arrived before closing `release`:
+
+```go
+func (s *loadBarrierStore) Load(ctx context.Context, userID, transport string) (assistantctx.Conversation, bool, error) {
+	conv, ok, err := s.Store.Load(ctx, userID, transport)
+	s.mu.Lock()
+	s.arrived++
+	if s.arrived == s.parties {
+		close(s.release)
+	}
+	s.mu.Unlock()
+	<-s.release
+	return conv, ok, err
+}
+```
+
+That interval is precisely `machine.go`'s read-check-write window, so both racers
+leave `Load` believing they own the reference. The redemption is real
+concurrency — `go func` per racer under a `sync.WaitGroup` — and the assertions
+are on outcomes the defect would change, not on values the test itself supplied:
+`won != 1`, `lost != racers-1`, `counts[OutcomeConfirmed] != 1`, and
+`terminal != 1`. The barrier is also self-checking: `SweepTimeouts` must reach
+`Load` for the second party to arrive, so if the sweep stopped routing through
+the store the test would block rather than pass.
+
+### Supporting Lanes
+
+| Lane | Command | exit | lines | sha256 |
+|---|---|---|---|---|
+| Format | `env -u SMACKEREL_SKIP_HOST_PREFLIGHT ./smackerel.sh format --check` | 0 | 136 | `eee83e36c79e0a8d62c6262a4e01e2b3bf7fbb42588fd253f4fdac991c57e495` |
+| Lint | `env -u SMACKEREL_SKIP_HOST_PREFLIGHT ./smackerel.sh lint` | 0 | 157 | `04386fd10b195bc30efd52e5ad3241a75a441004b59838716cf8e993b8573e41` |
+
+Closing lines were `78 files already formatted` and `Web validation passed`.
+
+### Two Defects This Phase Found
+
+**TP-BUG069006-03 names a test that does not exist.** The Test Plan row points at
+`TestPgStoreClearPendingConfirm_IsConditionalAndAtomic` in
+`internal/assistant/context/pg_store_test.go`. That file exists and predates this
+packet; the test does not exist anywhere in the tree:
+
+```
+$ grep -rn 'TestPgStoreClearPendingConfirm_IsConditionalAndAtomic' --include='*.go' .
+$ git diff --name-only 61b8be79~1 a1329651 | grep 'pg_store_test.go'
+```
+
+Both commands return nothing. The row was never written, and no commit in this
+packet touched that file. This matters beyond bookkeeping: TP-BUG069006-03 is the
+only planned proof that `PgStore` — the implementation that actually arbitrates
+the race in production — behaves conditionally against a real database. The
+in-memory doubles cannot stand in for it, because they are the thing under test's
+test double, not its deployment target. DoD items 4 and 11 depend on this row and
+are recorded unchecked below.
+
+**The Change Boundary contradicts itself.** `scopes.md` lists
+`tests/e2e/assistant/http_confirm_test.go` in the Allowed table ("Extended:
+concurrent confirm regression at the API boundary") and in the Excluded table
+("The existing sequential test must keep passing unmodified"). The file was
+modified in `a1329651`:
+
+```
+$ git diff --name-only 61b8be79~1 a1329651
+internal/assistant/confirm/machine.go
+internal/assistant/confirm/machine_concurrency_test.go
+internal/assistant/confirm/machine_test.go
+internal/assistant/context/gauge_refresher_test.go
+internal/assistant/context/pg_store.go
+internal/assistant/context/store.go
+internal/assistant/facade_test_helpers_test.go
+internal/assistant/testing_support.go
+specs/069-assistant-http-transport/bugs/BUG-069-006-confirm-redemption-not-single-flight/design.md
+specs/069-assistant-http-transport/bugs/BUG-069-006-confirm-redemption-not-single-flight/report.md
+specs/069-assistant-http-transport/bugs/BUG-069-006-confirm-redemption-not-single-flight/scopes.md
+specs/069-assistant-http-transport/bugs/BUG-069-006-confirm-redemption-not-single-flight/spec.md
+specs/069-assistant-http-transport/bugs/BUG-069-006-confirm-redemption-not-single-flight/state.json
+tests/e2e/assistant/http_confirm_test.go
+```
+
+Every other changed path sits inside the Allowed list. The edit itself looks
+correct — it added the concurrent case beside the sequential one, which is what
+the Allowed row asks for — so the fault is in the boundary text, not the change.
+`scopes.md` planning content is owned by `bubbles.plan`; this phase records the
+contradiction and leaves the item unchecked rather than editing around it.
+
+### Definition Of Done: What This Evidence Settles
+
+Five items are checked. Each rests on a `-count=1` run recorded above.
+
+| DoD item | Verdict | Basis |
+|---|---|---|
+| Conditional-clear method exists on `Store` and every implementation | checked | The module compiles and the unit lane is green. Go enforces interface satisfaction at compile time, and all six implementations are passed where a `Store` is required, so a missing method is a build failure. Located at `store.go:170`, `pg_store.go:177`, `testing_support.go:119`, plus three test doubles |
+| Two concurrent confirms execute the gated action once, via real goroutines and a release barrier | checked | TP-BUG069006-01 ran and passed; `loadBarrierStore` supplies the barrier, `go func` + `sync.WaitGroup` the goroutines |
+| The losing caller receives `ErrPendingNotFound`, indistinguishable from a replay | checked | TP-BUG069006-01 asserts `errors.Is(err, ErrPendingNotFound)` on the loser; `TestMachine_Confirm_SingleFlight_SecondCallReturnsNotFound` was executed separately and asserts the same sentinel on the sequential replay |
+| Exactly one confirmed audit row after a concurrent race | checked | TP-BUG069006-01 asserts `counts[OutcomeConfirmed] != 1` fails the test |
+| Confirm racing the sweep produces one terminal audit row | checked | TP-BUG069006-02 asserts `terminal != 1` fails the test |
+
+Fifteen items remain unchecked, each for a stated reason:
+
+| DoD item | Why this phase does not settle it |
+|---|---|
+| Root cause confirmed by execution | The red reproduction belongs to the implement phase at `ac86e13b`. This phase ran against the fixed tree and did not re-execute it |
+| Concurrent test recorded FAILING before the fix | Same. Recording a red run requires reverting `machine.go`, which this phase did not do |
+| `PgStore` reads `CommandTag.RowsAffected()` and reports the clear | Its designated proof is TP-BUG069006-03, which does not exist, and the live-store lane has no database to run against |
+| All three call sites route through the conditional clear and map a lost race to `ErrPendingNotFound` | Two thirds is proven: TP-BUG069006-01 covers `Confirm`, TP-BUG069006-02 covers `Confirm` against `SweepTimeouts`. `Discard`'s lost-race path has no executed concurrency coverage. The item's wording is also imprecise against the code: `SweepTimeouts` at `machine.go:340` answers a lost race with `continue`, not `ErrPendingNotFound` |
+| The comment at `machine.go:213` states the enforced guarantee | A static property of a comment. Nothing this phase executed can confirm or refute it |
+| A redemption write leaves the other pending columns untouched | A column-level property of the real `UPDATE`. Needs TP-BUG069006-03 and a live store |
+| `TestAssistantHTTPE2E_ConfirmAcceptExecutesGatedActionOnce` passes unmodified | E2E lane; no smackerel container exists |
+| Scenario-specific E2E regression tests pass | E2E lane; same |
+| Broader E2E regression suite passes | E2E lane; same |
+| Change Boundary respected, zero excluded families changed | The boundary lists the same e2e file as both allowed and excluded, and that file was changed. The contradiction must be resolved in `scopes.md` before the item can be judged |
+| `SCN-BUG069006-001` holds | Its evidence link points at the red-stage proof, which this phase did not produce. The unit-level property is covered by the checked items above |
+| `SCN-BUG069006-002` holds at the API boundary | This is the API-boundary scenario. Its test exists at `http_confirm_test.go:174` and compiles, but it requires the live stack and did not run |
+| `SCN-BUG069006-003` holds | Same as `SCN-BUG069006-001`: the evidence link points at the red-stage proof |
+| `SCN-BUG069006-004` holds | Sequential replay is proven at unit level, but the scenario's evidence link is the implement phase and its Test Plan row TP-BUG069006-05 is an e2e test that did not run |
+| Build Quality Gate as a grouped block | Format, lint and artifact lint are green, but the block also asserts documentation alignment, and the two defects above are documentation defects in `scopes.md` |
+
+### Uncertainty Declarations
+
+1. The full unit lane reports many packages as `(cached)`. A cached result is a
+   valid pass for this tree state, but it is not a current-session execution.
+   Every per-test claim above was therefore re-run under `-count=1`; no checked
+   item rests on a cached result.
+2. `tests/e2e/assistant` appears as `ok … 0.008s` in the unit lane. That means
+   the package compiled and its guarded tests declined to run without a stack.
+   It is not evidence that any e2e test executed, and it is not used as such.
+3. The compile-time argument for the interface item establishes that every
+   implementation HAS the method with the right signature. It does not establish
+   that each implementation is correct. `PgStore`'s correctness is the missing
+   TP-BUG069006-03.
+
+### Test Phase Completion Statement
+
+The unit lane is green with no waived check anywhere in its chain, and the two
+concurrency tests named in the Test Plan are proven to have executed and passed
+by an argument stronger than a pasted verdict line. Five DoD items are checked
+on that evidence.
+
+The packet is not complete. The live-store and API-boundary halves of this fix
+are unproven here because neither lane can run without a smackerel container,
+and one planned proof, TP-BUG069006-03, was never written. Fifteen DoD items are
+unchecked and each is unchecked for a reason recorded above. `status` remains
+`in_progress` and no `certification.*` field was written by this phase.
