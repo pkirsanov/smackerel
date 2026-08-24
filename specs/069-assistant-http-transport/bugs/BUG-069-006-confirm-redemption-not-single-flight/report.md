@@ -739,3 +739,288 @@ are unproven here because neither lane can run without a smackerel container,
 and one planned proof, TP-BUG069006-03, was never written. Fifteen DoD items are
 unchecked and each is unchecked for a reason recorded above. `status` remains
 `in_progress` and no `certification.*` field was written by this phase.
+
+### 2026-08-24 Second Test Pass: The API-Boundary Lane Ran
+
+**Phase:** test (second pass)
+**Agent:** bubbles.test
+**Tree under test:** `73de731a`, working tree clean (`git status --porcelain` = 0 lines)
+**What changed since the first pass:** the E2E lane, recorded above as unrunnable,
+was run. It found a defect the unit lane is structurally unable to see.
+
+This pass mixes two provenance classes and does not blur them.
+
+| Claim | Claim Source | Basis |
+|---|---|---|
+| Unit concurrency at `73de731a` | `executed` | Two bypass-free selector runs captured in this session, below |
+| Git history, diffs, test bodies, helper semantics | `executed` | `git` and `grep` run in this session, below |
+| E2E RED at `5177a59f` and GREEN at `73de731a` | `operator-relayed` | Transcript supplied by the operator. This agent did not run the E2E lane. Corroborated structurally below, never restated as this agent's own execution |
+
+### Unit Concurrency Re-Executed At The Current Tree
+
+The first pass proved the two unit concurrency tests at `a1329651`. The tree has
+moved to `73de731a`, so that evidence needed re-earning rather than inheriting.
+The intervening product change does not touch the package under test:
+
+```
+$ git diff --name-only a1329651 73de731a | grep -c 'internal/assistant/confirm'
+0
+```
+
+Re-earned anyway, with the same negative-control method the first pass
+established, because a `-run` selector that matches nothing still exits 0.
+`scripts/runtime/go-unit.sh` appends `-count=1` whenever `--run` is present, so
+neither run below can be served from cache.
+
+```
+# BUG-069-006 negative control selector at 73de731a
+$ ./smackerel.sh test unit --go --go-run TestMachineConfirm_ThisTestNameDoesNotExist --verbose
+exit: 0
+lines: 522
+sha256: 5671c9f604fefe32af067e36bc6224695418641b20653d2566de36a5473b26bb
+--- first 2 ---
+oom-preflight: OK — 39246 MB available (need 6000 MB; swap used 552 MB).
+disk-preflight: OK — C: 96 GB free (need 40 GB), WSL / 489 GB free (need 25 GB).
+--- omitted 482 line(s); sha256 above covers the full output ---
+--- last 2 ---
+[go-unit] go test ./... finished OK
++ echo '[go-unit] go test ./... finished OK'
+```
+
+```
+# BUG-069-006 unit concurrency selector at 73de731a
+$ ./smackerel.sh test unit --go --go-run TestMachineConfirm_ConcurrentRedemptionExecutesOnce|TestMachineConfirm_RacingSweepProducesOneTerminalOutcome --verbose
+exit: 0
+lines: 525
+sha256: 39e066d34e31e364c4b66698596a3a64ef69460f6e692ce9d735dc373addc084
+--- first 2 ---
+oom-preflight: OK — 39239 MB available (need 6000 MB; swap used 552 MB).
+disk-preflight: OK — C: 96 GB free (need 40 GB), WSL / 489 GB free (need 25 GB).
+--- omitted 485 line(s); sha256 above covers the full output ---
+--- last 2 ---
+[go-unit] go test ./... finished OK
++ echo '[go-unit] go test ./... finished OK'
+```
+
+525 − 522 = +3, which under `go test -v` is the arithmetic for exactly two
+passing tests in one package: two `=== RUN` plus two `--- PASS` replacing the
+control's single `testing: warning: no tests to run`. A selector matching
+nothing would have reproduced 522; a failing test would have added failure
+detail and driven the exit off 0. Both runs exited 0 and both ran with
+`env -u SMACKEREL_SKIP_HOST_PREFLIGHT`, and the preflight passed on its own
+terms in each, so no waived check sits under either figure.
+
+This reproduces the first pass's combined-selector figure of 525 exactly, at a
+different commit, which is what makes the unit-level scenarios current rather
+than inherited.
+
+### The Second Defect: The Loser Path Resurrected The Pending Row
+
+The E2E lane ran for the first time at `5177a59f` — the store-arbitrated CAS
+from `61b8be79` already in place, every unit lane green — and failed:
+
+```
+--- FAIL: TestAssistantHTTPE2E_ConcurrentConfirmExecutesGatedActionOnce
+    http_confirm_test.go: list count after 4 concurrent confirms = 2, want exactly 1 — the gated action executed 2 times
+```
+
+**Root cause, verified against the diff rather than accepted as narrated.**
+`finishConfirmResponse` had two paths. The winner re-loaded the conversation
+fresh after arbitration. The loser persisted the stale `conv` value captured
+*before* arbitration, which still carried `PendingConfirm`. Writing it back
+resurrected the pending row: racer A won and executed, racer B lost and restored
+`pending_confirm`, racer C then won the CAS against the restored row and
+executed a second time. Two list rows, which is exactly what the assertion
+caught.
+
+One correction to the account as relayed. The defect is **not** in
+`internal/assistant/httpadapter`. `finishConfirmResponse` has exactly one
+definition, in package `assistant`:
+
+```
+$ grep -rn 'func .*finishConfirmResponse' --include='*.go' .
+./internal/assistant/compiled_interactions.go:197:func (f *Facade) finishConfirmResponse(
+$ grep -rn 'finishConfirmResponse' internal/assistant/httpadapter/ | wc -l
+0
+```
+
+The fix landed there, and the diff matches the account precisely:
+
+```
+$ git show --stat --format='' 73de731a
+ internal/assistant/compiled_interactions.go | 10 +++++++++-
+ tests/e2e/assistant/http_confirm_test.go    |  1 +
+
+-               f.appendTurnAndPersist(ctx, conv, msg, resp, emittedAt)
++               // Re-load before persisting. `conv` was captured BEFORE arbitration and
++               // still carries the PendingConfirm this caller just lost; writing it back
++               // would resurrect the pending row and let a third caller redeem the same
++               // reference, executing the gated action twice (BUG-069-006).
++               fresh, _, loadErr := f.contextStore.Load(ctx, msg.UserID, msg.Transport)
++               if loadErr != nil {
++                       return contracts.AssistantResponse{}, true, loadErr
++               }
++               f.appendTurnAndPersist(ctx, fresh, msg, resp, emittedAt)
+```
+
+GREEN at `73de731a`:
+
+```
+--- PASS: TestAssistantHTTPE2E_ConcurrentConfirmExecutesGatedActionOnce (24.21s)
+ok      github.com/smackerel/smackerel/tests/e2e/assistant
+```
+
+exit 0.
+
+**Why the unit lane could not have found this.** The unit tests call
+`Machine.Confirm` directly. `finishConfirmResponse` sits above the machine, on
+the facade that the HTTP path drives, so no unit assertion ever reaches the
+line that persisted the stale value. This is the concrete payoff of
+TP-BUG069006-04 existing at all: an in-process proof of a store-arbitrated CAS
+is not a proof that the caller above the store honours it.
+
+**Structural corroboration of the relayed transcript.** The RED line is a
+format-string match against the assertion actually in the tree, which a
+paraphrase would not reproduce:
+
+```go
+	const racers = 4
+	...
+	if got := listCountBySourceQuery(t, pool, turn1Req.TransportMessageID); got != 1 {
+		t.Fatalf("list count after %d concurrent confirms = %d, want exactly 1 — the gated action executed %d times", racers, got, got)
+	}
+```
+
+With `racers = 4` and `got = 2` that template renders the relayed line
+character for character. The test also matches SCN-BUG069006-002's shape as
+verified in the tree: four goroutines, each carrying a distinct
+`TransportMessageID` and the one shared `ConfirmRef` from the seed turn's
+`ConfirmCard`, and the invariant asserted against real database state via
+`listCountBySourceQuery` and `assertSingleListItem` rather than against any
+value the test supplied. `grep -nE 't\.Skip|t\.SkipNow|testing\.Short\(\)'` over
+`http_confirm_test.go` returns nothing.
+
+### Two Lane Failures That Were Not Test Failures
+
+**The first E2E attempt exited 137.** SIGKILL, out of memory. The E2E lane
+stands up its own disposable stack while the dev stack was also running, and the
+two together exceeded the memory ceiling. Bringing the dev stack down resolved
+it. No container remains from either stack now:
+
+```
+$ docker ps -aq --filter 'name=smackerel' | grep -c ''
+0
+```
+
+**The test then failed with HTTP 503 `assistant_http_not_ready`.** The stack was
+up and healthy but the assistant facade had not finished warming, so the first
+turn was rejected before the scenario began. The remedy was to give the test the
+existing `waitAssistantFacadeReady` helper, which is a readiness wait and not a
+skip — it polls `/reset` until `FacadeInvoked` is true and otherwise fails the
+test outright:
+
+```go
+	t.Fatalf("e2e: assistant facade did not become ready within %s; last_status=%d body=%s",
+		maxWait, lastStatus, string(lastBody))
+```
+
+The helper predates this packet. `git log --diff-filter=A` attributes
+`tests/e2e/assistant/nl_facade_readiness_helper_test.go` to `28fdceaf`, so
+nothing was invented here to make a red lane go green. A stack that never warms
+still fails the test after five minutes.
+
+### What This Pass Checks And What It Leaves Unchecked
+
+Three DoD items move to checked.
+
+| DoD item | Basis |
+|---|---|
+| `SCN-BUG069006-001` holds | Executed this session at `73de731a`: the 525-vs-522 delta proves `TestMachineConfirm_ConcurrentRedemptionExecutesOnce` ran and passed. Its assertions are the scenario's three clauses — one winner, `ErrPendingNotFound` for the loser, one `confirmed` audit row |
+| `SCN-BUG069006-002` holds at the API boundary | The API-boundary lane ran, went RED on a real two-execution violation, and went GREEN after `73de731a`. Against the live stack, not in-process, which is precisely what the item demands |
+| `SCN-BUG069006-003` holds | Executed this session at `73de731a`: the same delta covers `TestMachineConfirm_RacingSweepProducesOneTerminalOutcome`, which asserts `terminal != 1` fails |
+
+**`SCN-BUG069006-004` stays unchecked, and the E2E run does not settle it.** The
+relayed capture carries exactly one `--- PASS:` line, for the concurrent test.
+`tests/e2e/assistant` defines 65 test functions:
+
+```
+$ grep -rhc '^func Test' tests/e2e/assistant/*.go | paste -sd+ | bc
+65
+```
+
+A full unfiltered package run would have emitted far more than one `--- PASS:`
+line, so the capture is the signature of a `-run` selector narrowed to the
+concurrent test. `ok <package>` prints either way — the same trap this packet's
+first pass documented against itself, and it would be inconsistent to suspend
+that rule now that it is inconvenient. Nothing in the capture shows
+`TestAssistantHTTPE2E_ConfirmAcceptExecutesGatedActionOnce` executing.
+
+Half of that item's sibling — `TestAssistantHTTPE2E_ConfirmAcceptExecutesGatedActionOnce`
+passes **unmodified** — is settled. Across the whole packet the file changed
+additively only:
+
+```
+$ git diff 61b8be79~1 73de731a -- tests/e2e/assistant/http_confirm_test.go | grep -cE '^-[^-]'
+0
+```
+
+Zero deleted lines, so the sequential test body is byte-identical to its
+pre-packet form. But the item is a conjunction of *unmodified* and *passes*, and
+only the first half is proven, so it stays unchecked. One line of output
+settles it: a `--- PASS: TestAssistantHTTPE2E_ConfirmAcceptExecutesGatedActionOnce`
+from a run whose selector admits it.
+
+**"Broader E2E regression suite passes" stays unchecked.** The relayed capture
+covers one package. `tests/e2e/` holds dozens of Go packages and shell suites
+beside `assistant`. One package line is not the suite.
+
+**A new Change Boundary finding.** The fix landed in
+`internal/assistant/compiled_interactions.go`, which appears in neither the
+Allowed nor the Excluded table of `scopes.md`, while the Allowed table states
+that only its listed paths may be modified by this packet. The change itself is
+correct and minimal — it is where the defect is, and the defect had to be fixed
+for the API-boundary scenario to hold. The fault is that the boundary was drawn
+before anyone knew the facade was implicated, which is what happens when a
+boundary is authored from a unit-level reading of a concurrency defect. This
+compounds the contradiction the first pass recorded, where the same e2e file is
+listed as both allowed and excluded. `scopes.md` planning content is owned by
+`bubbles.plan`; this pass records the finding and leaves the "Change Boundary is
+respected" item unchecked rather than editing the boundary to fit the change.
+
+### Second Pass Uncertainty Declarations
+
+1. This agent did not run the E2E lane. Every E2E figure above is
+   operator-relayed and tagged as such. What this agent independently
+   established is that the test exists at `73de731a` with the shape the
+   scenario requires, that its failure template renders the relayed RED line
+   exactly, that it carries no skip, that its readiness helper is fail-loud and
+   pre-existing, and that the fix commit is real with a diff matching the stated
+   cause. That is corroboration of a transcript, which is weaker than having
+   run it, and `SCN-BUG069006-002` is checked on that weaker footing.
+2. The relayed GREEN shows no timing or line count for the package as a whole,
+   so it cannot be measured against a negative control the way the unit runs
+   above were. The 24.21s duration on the `--- PASS:` line is the only signal
+   that real work occurred, and it is consistent with a lane that stands up a
+   stack, seeds a turn, and races four HTTP confirms.
+3. TP-BUG069006-03 still does not exist, so `PgStore`'s conditional behaviour
+   against a real database remains unproven by any test. The E2E lane exercises
+   `PgStore` transitively — the stack runs Postgres — but no assertion inspects
+   `RowsAffected()` or the untouched-columns property, so the two DoD items
+   that depend on that row are unchanged by this pass.
+
+### Second Pass Completion Statement
+
+The API-boundary lane ran and earned its keep: it caught a two-execution
+violation that every unit lane in this packet had passed over, and the fix at
+`73de731a` closed it. The unit-level scenarios were re-executed at the current
+tree rather than inherited from `a1329651`. Three DoD items move to checked,
+bringing the packet to eight of twenty.
+
+Twelve remain unchecked. `SCN-BUG069006-004` is unchecked because the relayed
+capture shows one `--- PASS:` line against a 65-test package, which is the
+signature of a narrowed selector rather than proof the sequential test ran. The
+broader-suite item is unchecked because one package is not the suite. The
+`PgStore` items are unchecked because TP-BUG069006-03 was never written. The
+Change Boundary item is unchecked because the fix landed outside the Allowed
+table and the boundary needs its owner. `status` remains `in_progress` and no
+`certification.*` field was written by this pass.

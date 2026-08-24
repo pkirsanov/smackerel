@@ -35,6 +35,13 @@
         "provenanceMode": "specialist",
         "claimedAt": "2026-08-24T16:07:46Z",
         "evidenceRef": "report.md#test-phase"
+      },
+      {
+        "phase": "test",
+        "agent": "bubbles.test",
+        "provenanceMode": "specialist",
+        "claimedAt": "2026-08-24T22:24:04Z",
+        "evidenceRef": "report.md#test-phase"
       }
     ],
     "executionHistory": [
@@ -62,6 +69,15 @@
         "outcome": "completed_owned",
         "evidenceRef": "report.md#test-phase",
         "summary": "Ran the Go unit lane and recorded the RED-to-GREEN concurrency proof for confirm redemption: the two concurrent regression tests fail against the unfixed machine.go and pass with the store-arbitrated compare-and-set. Checked the five DoD items that the unit evidence carries directly, covering the ClearPendingConfirm method on the interface and every implementation, exactly-once execution of the gated action under two concurrent confirms, ErrPendingNotFound for the losing caller, a single surviving confirmed audit row under a race, and one terminal row when a confirm races the timeout sweep. Left the four SCN-BUG069006 scenario items unchecked because SCN-002 is the API-boundary case and the e2e lane cannot run on this host: the lane builds images and starts containers, the disk preflight refuses, and smackerel-core is in a restart loop with no Docker network attached. Checking those items from unit evidence would claim a boundary that was never exercised."
+      },
+      {
+        "at": "2026-08-24T22:24:04Z",
+        "agent": "bubbles.test",
+        "phasesExecuted": ["test"],
+        "provenanceMode": "specialist",
+        "outcome": "completed_owned",
+        "evidenceRef": "report.md#test-phase",
+        "summary": "Second test pass, recorded in report.md under the Test Phase subsection '2026-08-24 Second Test Pass: The API-Boundary Lane Ran'. The E2E lane ran for the first time and found a second defect the unit lane is structurally unable to reach: finishConfirmResponse persisted the conversation value captured before arbitration, so a losing racer restored pending_confirm and a third racer redeemed the same reference, executing the gated action twice. Verified against the diff that the fix landed in internal/assistant/compiled_interactions.go, correcting the relayed attribution to internal/assistant/httpadapter where finishConfirmResponse has no definition at all. This agent did not run the E2E lane; its RED-to-GREEN transcript is operator-relayed and is tagged as such in report.md, corroborated structurally by the assertion format string rendering the RED line character for character, by the test carrying no skip, and by waitAssistantFacadeReady being a pre-existing fail-loud readiness wait rather than a bypass. Checked SCN-BUG069006-001 and SCN-BUG069006-003 on this session's own executed evidence at 73de731a, a 525-versus-522 line-count delta against a vacuous-selector negative control, both runs bypass-free and exit 0. Checked SCN-BUG069006-002 on the relayed API-boundary result. Left SCN-BUG069006-004 unchecked because the transcript carries one --- PASS: line against a 65-test package, which is the signature of a narrowed -run selector rather than proof the sequential replay test executed; its unmodified half is proven by zero deleted lines across the packet. Left the broader-suite item unchecked because one package is not the suite. Recorded a new Change Boundary finding: the fix landed in a file listed in neither the Allowed nor the Excluded table of scopes.md, which is bubbles.plan's to resolve. Eight of twenty DoD items are now checked. No certification field was written."
       }
     ]
   },
@@ -113,5 +129,5 @@
   "transitionRequests": [],
   "reworkQueue": [],
   "createdAt": "2026-08-23T00:00:00Z",
-  "updatedAt": "2026-08-24T15:02:01Z"
+  "updatedAt": "2026-08-24T22:24:04Z"
 }
