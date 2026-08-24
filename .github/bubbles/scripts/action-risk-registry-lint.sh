@@ -78,7 +78,7 @@ registry_classes="$(
     inv && /^-[[:space:]]*/ { v = $0; sub(/^-[[:space:]]*/, "", v); print v }
   ' "$REGISTRY_FILE" | sort | tr '\n' ' '
 )"
-lib_classes_sorted="$(printf '%s' "$valid_classes" | tr ' ' '\n' | sort | tr '\n' ' ')"
+lib_classes_sorted="$(tr ' ' '\n' <<< "$valid_classes" | sort | tr '\n' ' ')"
 if [[ "$registry_classes" != "$lib_classes_sorted" ]]; then
   fail "Registry validRiskClasses disagrees with action-risk-classes-lib.sh"
   fail "  registry: ${registry_classes:-<empty>}"
@@ -86,12 +86,12 @@ if [[ "$registry_classes" != "$lib_classes_sorted" ]]; then
 fi
 
 # --- Every command must carry exactly one valid defaultRiskClass -------------
-all_commands="$(printf '%s\n' "$records" | awk -F'\t' '$1 == "CMD" { print $2 }')"
+all_commands="$(awk -F'\t' '$1 == "CMD" { print $2 }' <<< "$records")"
 command_count=0
 while IFS= read -r command_name; do
   [[ -n "$command_name" ]] || continue
   command_count=$((command_count + 1))
-  default_count="$(printf '%s\n' "$records" | awk -F'\t' -v c="$command_name" '$1 == "DEFAULT" && $2 == c' | wc -l | tr -d ' ')"
+  default_count="$(awk -F'\t' -v c="$command_name" '$1 == "DEFAULT" && $2 == c' <<< "$records" | wc -l | tr -d ' ')"
   if [[ "$default_count" -eq 0 ]]; then
     fail "Missing defaultRiskClass for command: $command_name"
     continue
@@ -99,7 +99,7 @@ while IFS= read -r command_name; do
   if [[ "$default_count" -gt 1 ]]; then
     fail "Duplicate defaultRiskClass for command: $command_name ($default_count entries)"
   fi
-  default_class="$(printf '%s\n' "$records" | awk -F'\t' -v c="$command_name" '$1 == "DEFAULT" && $2 == c { print $3; exit }')"
+  default_class="$(awk -F'\t' -v c="$command_name" '$1 == "DEFAULT" && $2 == c { print $3; exit }' <<< "$records")"
   if ! action_risk_is_valid_class "$default_class"; then
     fail "Invalid defaultRiskClass '$default_class' for command: $command_name (valid: $valid_classes)"
   fi
@@ -114,24 +114,24 @@ while IFS=$'\t' read -r _kind command_name override_key override_class; do
     fail "Invalid override risk class '$override_class' for $command_name.$override_key (valid: $valid_classes)"
   fi
 done <<EOF
-$(printf '%s\n' "$records" | awk -F'\t' '$1 == "OVERRIDE"')
+$(awk -F'\t' '$1 == "OVERRIDE"' <<< "$records")
 EOF
 
 # --- The nine load-bearing commands must be present -------------------------
 for command_name in $required_commands; do
-  if ! printf '%s\n' "$all_commands" | grep -qx "$command_name"; then
+  if ! grep -qx "$command_name" <<< "$all_commands"; then
     fail "Missing action risk command entry: $command_name"
   fi
 done
 
 # --- Recall's unknown-operation default must stay fail-safe -----------------
-recall_default_class="$(printf '%s\n' "$records" | awk -F'\t' '$1 == "DEFAULT" && $2 == "recall" { print $3; exit }')"
+recall_default_class="$(awk -F'\t' '$1 == "DEFAULT" && $2 == "recall" { print $3; exit }' <<< "$records")"
 if [[ "$recall_default_class" != "owned_mutation" ]]; then
   fail "Recall unknown-operation default must be owned_mutation (found: ${recall_default_class:-<absent>})"
 fi
 
 for recall_operation in search read status freshness sync; do
-  recall_class="$(printf '%s\n' "$records" | awk -F'\t' -v op="$recall_operation" '$1 == "OVERRIDE" && $2 == "recall" && $3 == op { print $4; exit }')"
+  recall_class="$(awk -F'\t' -v op="$recall_operation" '$1 == "OVERRIDE" && $2 == "recall" && $3 == op { print $4; exit }' <<< "$records")"
   recall_expected="read_only"
   [[ "$recall_operation" == "sync" ]] && recall_expected="owned_mutation"
   if [[ "$recall_class" != "$recall_expected" ]]; then
@@ -166,10 +166,10 @@ if [[ -f "$CLI_FILE" ]]; then
   if [[ -z "$cli_commands" ]]; then
     fail "Could not extract any command from $CLI_FILE main() — parity check would be inert"
   else
-    sorted_registry="$(printf '%s\n' "$all_commands" | sort -u)"
+    sorted_registry="$(sort -u <<< "$all_commands")"
     while IFS= read -r cli_cmd; do
       [[ -n "$cli_cmd" ]] || continue
-      if ! printf '%s\n' "$sorted_registry" | grep -qx "$cli_cmd"; then
+      if ! grep -qx "$cli_cmd" <<< "$sorted_registry"; then
         fail "CLI command '$cli_cmd' has no action risk registry entry (would default to read_only)"
       fi
     done <<EOF
@@ -177,7 +177,7 @@ $cli_commands
 EOF
     while IFS= read -r reg_cmd; do
       [[ -n "$reg_cmd" ]] || continue
-      if ! printf '%s\n' "$cli_commands" | grep -qx "$reg_cmd"; then
+      if ! grep -qx "$reg_cmd" <<< "$cli_commands"; then
         fail "Registry entry '$reg_cmd' has no CLI command (stale classification)"
       fi
     done <<EOF

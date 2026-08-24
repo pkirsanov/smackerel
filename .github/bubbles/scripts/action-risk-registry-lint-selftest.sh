@@ -27,6 +27,9 @@ FAIL=0
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
+PIPE_BUFFER_REGRESSION_COMMAND_COUNT=64
+PIPE_BUFFER_REGRESSION_NAME_BYTES=32768
+
 ok() {
   PASS=$((PASS + 1))
   printf 'ok   %s\n' "$1"
@@ -67,6 +70,55 @@ awk '/^  doctor:$/ { f = 1 }
      f && /defaultRiskClass:/ { sub(/read_only|owned_mutation/, "bogus_class"); f = 0 }
      { print }' "$REAL_REGISTRY" > "$WORK/s2.yaml"
 assert_exit "S2 invalid class on required command rejected" 1 "$(run_lint "$WORK/s2.yaml")"
+
+# --- S2b: an early invalid class stays a finding for oversized input --------
+# The generated CMD/DEFAULT record stream is about 4 MiB, well beyond ordinary
+# pipe buffers. With the old `printf records | awk ... exit` lookup, awk exits
+# after doctor and the producer dies on SIGPIPE (141) instead of returning the
+# lint's contractual finding exit (1).
+oversized_framework="$WORK/s2b-downstream/.github/bubbles"
+oversized_registry="$WORK/s2b-oversized.yaml"
+mkdir -p "$oversized_framework/scripts"
+cp "$LINT" "$oversized_framework/scripts/action-risk-registry-lint.sh"
+cp "$SCRIPT_DIR/action-risk-classes-lib.sh" "$oversized_framework/scripts/action-risk-classes-lib.sh"
+
+awk \
+  -v command_count="$PIPE_BUFFER_REGRESSION_COMMAND_COUNT" \
+  -v name_bytes="$PIPE_BUFFER_REGRESSION_NAME_BYTES" '
+  /^commands:[[:space:]]*$/ {
+    print
+    print "  doctor:"
+    print "    defaultRiskClass: bogus_class"
+    padding = sprintf("%*s", name_bytes, "")
+    gsub(/ /, "x", padding)
+    for (command_index = 1; command_index <= command_count; command_index++) {
+      printf "  g139_pipe_buffer_%03d_%s:", command_index, padding
+      print ""
+      print "    defaultRiskClass: read_only"
+    }
+    in_commands = 1
+    next
+  }
+  in_commands && /^  doctor:[[:space:]]*$/ {
+    skip_doctor = 1
+    next
+  }
+  skip_doctor {
+    if ($0 ~ /^  [A-Za-z0-9_-]+:[[:space:]]*$/) {
+      skip_doctor = 0
+    } else {
+      next
+    }
+  }
+  { print }
+' "$REAL_REGISTRY" > "$oversized_registry"
+
+oversized_exit="$(
+  BUBBLES_ACTION_RISK_REGISTRY="$oversized_registry" \
+    bash "$oversized_framework/scripts/action-risk-registry-lint.sh" >/dev/null 2>&1
+  printf '%s' "$?"
+)"
+assert_exit "S2b oversized early invalid class rejected without SIGPIPE" 1 "$oversized_exit"
 
 # --- S3: invalid class on a command the OLD lint never validated ------------
 awk '/^  status:$/ { f = 1 }

@@ -664,8 +664,28 @@ invalidation_ledger_file="$feature_dir/invalidation-ledger.json"
 transition_requests_file="$feature_dir/transition-requests.json"
 # shellcheck disable=SC2034
 rework_queue_file="$feature_dir/rework-queue.json"
-framework_ownership_lint_script="$SCRIPT_DIR/agent-ownership-lint.sh"
-workflow_grants_lint_script="$SCRIPT_DIR/workflow-runner-grants-lint.sh"
+resolve_guarded_framework_script() {
+  local script_name="$1"
+  local candidate
+
+  for candidate in \
+    "$guard_repo_root/bubbles/scripts/$script_name" \
+    "$guard_repo_root/.github/bubbles/scripts/$script_name" \
+    "$SCRIPT_DIR/$script_name"; do
+    if [[ -f "$candidate" ]]; then
+      printf '%s\n' "$candidate"
+      return 0
+    fi
+  done
+  return 1
+}
+
+framework_ownership_lint_script="$(resolve_guarded_framework_script agent-ownership-lint.sh || true)"
+workflow_grants_lint_script="$(resolve_guarded_framework_script workflow-runner-grants-lint.sh || true)"
+workflow_grants_lint_args=()
+case "$workflow_grants_lint_script" in
+  "$guard_repo_root/"*) workflow_grants_lint_args=(--repo-root "$guard_repo_root") ;;
+esac
 
 if [[ "$scope_layout" == "per-scope-directory" ]]; then
   while IFS= read -r scope_path; do
@@ -1102,7 +1122,7 @@ echo ""
 echo "--- Check 3H: Workflow Runner Authorization (G064) ---"
 if [[ -x "$workflow_grants_lint_script" || -f "$workflow_grants_lint_script" ]]; then
   _c3h_rc=0
-  bubbles_run_with_timeout 30 bash "$workflow_grants_lint_script" >/tmp/bubbles-workflow-grants-lint.$$ 2>&1 || _c3h_rc=$?
+  bubbles_run_with_timeout 30 bash "$workflow_grants_lint_script" ${workflow_grants_lint_args[@]+"${workflow_grants_lint_args[@]}"} >/tmp/bubbles-workflow-grants-lint.$$ 2>&1 || _c3h_rc=$?
   if [[ "$_c3h_rc" -eq 124 ]]; then
     fail "Workflow runner grants lint TIMED OUT after 30s — G064 not certified"
   elif [[ "$_c3h_rc" -eq 0 ]]; then
@@ -1391,34 +1411,26 @@ else
   pass "All $done_scopes scope(s) are marked Done"
 fi
 
-certification_scopes_block="$({
-  grep -A40 '"certification"' "$state_file" 2>/dev/null \
-    | awk '/"completedScopes"[[:space:]]*:/ {capture=1} capture {print} capture && /\]/ {exit}'
-} || true)"
+# Count JSON entries, not physical lines containing quoted text. The old scan
+# undercounted compact arrays. Certification state remains authoritative, with
+# the legacy top-level array retained only when certification.completedScopes
+# is absent.
+completed_scopes_json="$(jq -c '
+  if ((.certification? | type) == "object")
+      and ((.certification.completedScopes? | type) == "array") then
+    .certification.completedScopes
+  elif ((.completedScopes? | type) == "array") then
+    .completedScopes
+  else
+    []
+  end
+' "$state_file")"
+state_completed_scopes_count="$(printf '%s\n' "$completed_scopes_json" | jq 'length')"
+invalid_completed_scopes="$(printf '%s\n' "$completed_scopes_json" \
+  | jq -c '[.[] | select(type != "string")]')"
 
-if [[ -n "$certification_scopes_block" ]]; then
-  completed_scopes_body="$(printf '%s\n' "$certification_scopes_block" \
-    | sed -E '1s/.*"completedScopes"[[:space:]]*:[[:space:]]*\[//' || true)"
-else
-  completed_scopes_body="$({
-    awk '/"completedScopes"[[:space:]]*:/ {capture=1} capture {print} capture && /\]/ {exit}' "$state_file" \
-      | sed -E '1s/.*"completedScopes"[[:space:]]*:[[:space:]]*\[//'
-  } || true)"
-fi
-
-state_completed_scopes_count="$(printf '%s\n' "$completed_scopes_body" | grep -cE '"[^"]+"' || true)"
-
-# BUG-011: an integer-ordinal array ([1,2,3,…]) matches no quoted string, so the
-# count above reads 0 — the SAME value a genuinely empty array produces. The two
-# states then report the identical "is EMPTY" message, which is what made a
-# writer/reader type mismatch cost a schema comparison across four other specs to
-# diagnose. Anything between the brackets that is not whitespace or a separator
-# means the array is POPULATED, whatever its element type.
-completed_scopes_payload="$(printf '%s\n' "$completed_scopes_body" \
-  | sed -e '/\]/q' | sed -E 's/\].*$//' | tr -d '[:space:],')"
-
-if [[ -n "$completed_scopes_payload" ]] && [[ "$state_completed_scopes_count" -eq 0 ]]; then
-  fail "completedScopes is present but its entries are not string scope IDs (found: ${completed_scopes_payload:0:60}) — entries must be quoted scope IDs such as \"01-core-scope\", not ordinals; nothing can map an ordinal to a scope artifact"
+if [[ "$invalid_completed_scopes" != "[]" ]]; then
+  fail "completedScopes is present but its entries are not string scope IDs (found: ${invalid_completed_scopes:0:60}) — entries must be quoted scope IDs such as \"01-core-scope\", not ordinals; nothing can map an ordinal to a scope artifact"
 elif [[ "$done_scopes" -gt 0 ]] && [[ "$state_completed_scopes_count" -eq 0 ]]; then
   fail "Resolved scope artifacts report $done_scopes Done scope(s) but state.json completedScopes is EMPTY — state.json integrity failure"
 elif [[ "$done_scopes" -ne "$state_completed_scopes_count" ]]; then
@@ -4243,7 +4255,7 @@ echo "--- Check 19: Test Environment Dependency Detection (Gate G051) ---"
 env_dep_pattern='missing.*env\|env.*not set\|env.*not found\|required env\|environment variable.*missing\|panicked.*env\|config.*parse.*fail\|connection refused.*localhost\|could not connect\|cannot connect\|missing required.*config'
 
 # Load project-specific env dependency patterns if available
-PROJECT_CONFIG=".github/bubbles-project.yaml"
+PROJECT_CONFIG="$guard_repo_root/.github/bubbles-project.yaml"
 if [[ -f "$PROJECT_CONFIG" ]]; then
   extra_env_pattern="$(sed -n '/scans:/,/^[^ ]/{ /testEnvDependency:/,/^    [^ ]/{/patterns:/s/.*patterns:[[:space:]]*//p}}' "$PROJECT_CONFIG" 2>/dev/null || true)"
   if [[ -n "$extra_env_pattern" ]]; then
@@ -4924,18 +4936,18 @@ if [[ "$failures" -gt 0 ]]; then
   fi
 
   # ── Run project-defined custom gates (G900+) ───────────────────────
-  PROJECT_CONFIG=".github/bubbles-project.yaml"
+  PROJECT_CONFIG="$guard_repo_root/.github/bubbles-project.yaml"
   if [[ -f "$PROJECT_CONFIG" ]]; then
     echo ""
     echo "🔍 Running project-defined gates from $PROJECT_CONFIG..."
     while IFS= read -r line; do
       script_path=$(echo "$line" | sed 's/.*script:\s*//' | tr -d '[:space:]')
       [[ -z "$script_path" ]] && continue
-      full_path=".github/$script_path"
+      full_path="$guard_repo_root/.github/$script_path"
       gate_name=$(grep -B5 "script:.*$script_path" "$PROJECT_CONFIG" | grep -oE '^\s+\S+:$' | tail -1 | tr -d '[:space:]:')
       if [[ -x "$full_path" ]]; then
         echo "  Running: $gate_name ($full_path)"
-        if bash "$full_path"; then
+        if (cd "$guard_repo_root" && bash "$full_path"); then
           echo "  ✅ $gate_name passed"
         else
           blocking=$(grep -A2 "script:.*$script_path" "$PROJECT_CONFIG" | grep "blocking:" | sed 's/.*blocking:\s*//' | tr -d '[:space:]')

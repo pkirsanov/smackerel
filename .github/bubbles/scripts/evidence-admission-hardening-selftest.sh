@@ -41,7 +41,9 @@ source "$SCRIPT_DIR/guard-lib.sh"
 
 # Keep the guard fast: the delegated tail gates (G085-G095) have their own
 # selftests in framework-validate; skipping them here isolates Check 9 signal.
-export BUBBLES_STATE_TRANSITION_GUARD_SELFTEST_FAST=1
+# Bind this per invocation below instead of trusting ambient inheritance: a
+# framework runner can alter its own environment without changing what this
+# hermetic Check-9 fixture is supposed to adjudicate.
 
 selftest_tmp_base="${TMPDIR:-$HOME/.cache}"
 mkdir -p "$selftest_tmp_base"
@@ -101,6 +103,10 @@ assert_resolved() {
     fail "$label — fixture did NOT resolve a contract (E009/UNRESOLVED); Check-9 assertion would be tautological" "$log_file"
     return 1
   fi
+  if ! log_has "$log_file" "State-transition selftest fast path enabled"; then
+    fail "$label — guard did not enter the explicit Check-9 selftest fast path; tail-gate findings would contaminate this fixture" "$log_file"
+    return 1
+  fi
   return 0
 }
 
@@ -111,7 +117,7 @@ assert_blocks_with() {
   local log_file
   log_file="$tmp_root/$(basename "$feature_dir").log"
   local status
-  status="$(run_capture "$log_file" bash "$GUARD_SCRIPT" "$feature_dir")"
+  status="$(run_capture "$log_file" env BUBBLES_STATE_TRANSITION_GUARD_SELFTEST_FAST=1 bash "$GUARD_SCRIPT" "$feature_dir")"
   assert_resolved "$log_file" "$label" || return 0
   if [[ "$status" -eq 0 ]]; then
     fail "$label — guard PASSED but must BLOCK" "$log_file"
@@ -130,7 +136,7 @@ assert_passes() {
   local log_file
   log_file="$tmp_root/$(basename "$feature_dir").log"
   local status
-  status="$(run_capture "$log_file" bash "$GUARD_SCRIPT" "$feature_dir")"
+  status="$(run_capture "$log_file" env BUBBLES_STATE_TRANSITION_GUARD_SELFTEST_FAST=1 bash "$GUARD_SCRIPT" "$feature_dir")"
   assert_resolved "$log_file" "$label" || return 0
   if [[ "$status" -ne 0 ]]; then
     fail "$label — guard BLOCKED but must PASS" "$log_file"
@@ -164,7 +170,7 @@ assert_check9_covers() {
   local feature_dir="$1" label="$2"
   local log_file
   log_file="$tmp_root/$(basename "$feature_dir").log"
-  run_capture "$log_file" bash "$GUARD_SCRIPT" "$feature_dir" >/dev/null
+  run_capture "$log_file" env BUBBLES_STATE_TRANSITION_GUARD_SELFTEST_FAST=1 bash "$GUARD_SCRIPT" "$feature_dir" >/dev/null
   assert_resolved "$log_file" "$label" || return 0
   if log_has "$log_file" "has NO evidence block"; then
     fail "$label — Check 9 emitted 'has NO evidence block' (the valid tool-log entry was NOT accepted)" "$log_file"
@@ -184,7 +190,7 @@ assert_old_guard_passes() {
   local log_file
   log_file="$tmp_root/$(basename "$feature_dir").oldguard.log"
   local status
-  status="$(run_capture "$log_file" bash "$OLD_GUARD" "$feature_dir")"
+  status="$(run_capture "$log_file" env BUBBLES_STATE_TRANSITION_GUARD_SELFTEST_FAST=1 bash "$OLD_GUARD" "$feature_dir")"
   if log_has "$log_file" "E009-" || log_has "$log_file" "workflowMode: UNRESOLVED"; then
     fail "$label — OLD guard did not resolve the contract (E009/UNRESOLVED); teeth-proof invalid" "$log_file"
     return 0

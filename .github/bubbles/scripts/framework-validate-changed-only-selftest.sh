@@ -43,7 +43,19 @@ export BUBBLES_FRAMEWORK_VALIDATE_MODE=source
 echo "Running framework-validate --changed-only selftest..."
 
 FIXTURE="$TMP_ROOT/fixture"
-git clone -q --branch main --single-branch "$REPO_ROOT" "$FIXTURE"
+source_head="$(git -C "$REPO_ROOT" rev-parse HEAD)"
+git init -q "$FIXTURE"
+git -C "$FIXTURE" remote add origin "$REPO_ROOT"
+git -C "$FIXTURE" fetch -q origin "$source_head"
+git -C "$FIXTURE" checkout -q -b main FETCH_HEAD
+git -C "$FIXTURE" update-ref refs/remotes/origin/main "$source_head"
+git -C "$FIXTURE" branch --set-upstream-to=origin/main main >/dev/null
+
+if [[ "$(git -C "$FIXTURE" rev-parse HEAD)" == "$source_head" ]]; then
+  pass "fixture baseline matches the exact source HEAD"
+else
+  fail "fixture baseline must match the exact source HEAD"
+fi
 
 # A clone carries only committed state, so the fixture would exercise the
 # PREVIOUS framework-validate.sh. Replay the current worktree onto it (the same

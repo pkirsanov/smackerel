@@ -233,6 +233,23 @@ else
   bad "completed command tree cleanup" "rc=$descendant_rc pid=$descendant_pid $(printf '%s' "$descendant_out" | tr '\n' '|')"
 fi
 
+# --- 16. ADVERSARIAL: capture-file loss fails loud, never emits an empty hash -
+# A concurrent validator once removed a generic /tmp/tmp.* capture while the
+# child ran. The wrapper then emitted exit 1, lines 0, and a blank sha256 — an
+# evidence-shaped result that proved nothing. The child receives only the
+# private path so this fixture can reproduce that deletion deterministically.
+set +e
+missing_out="$(bash "$TARGET" -- bash -c 'rm -f "$BUBBLES_EVIDENCE_CAPTURE_OUTPUT_PATH"' 2>&1)"
+missing_rc=$?
+set -e
+if [[ "$missing_rc" -eq 2 ]] &&
+  printf '%s' "$missing_out" | grep -q 'capture output disappeared during command execution' &&
+  ! printf '%s' "$missing_out" | grep -q '^sha256:[[:space:]]*$'; then
+  ok "capture-file loss fails loud without emitting an empty evidence hash"
+else
+  bad "capture-file loss fails loud" "rc=$missing_rc $(printf '%s' "$missing_out" | tr '\n' '|')"
+fi
+
 printf '\n%s: %d/%d checks passed\n' "$NAME" "$((checks - failures))" "$checks"
 if [[ "$failures" -gt 0 ]]; then
   printf '%s: FAILED\n' "$NAME"

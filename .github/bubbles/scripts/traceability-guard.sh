@@ -327,7 +327,11 @@ extract_scenarios_with_ids() {
     /^[[:space:]]*Scenario( Outline)?:/ {
       title = $0
       sub(/^[[:space:]]*Scenario( Outline)?:[[:space:]]*/, "", title)
-      print heading_id "\t" title
+      scenario_id = heading_id
+      if (scenario_id == "" && match(title, /(SCN|AC|FR|UC)-[A-Za-z0-9_-]+/)) {
+        scenario_id = substr(title, RSTART, RLENGTH)
+      }
+      print scenario_id "\t" title
     }
   ' "$scope_path"
 }
@@ -523,6 +527,132 @@ if [[ ${#scope_analysis_files[@]} -eq 0 ]]; then
   done
 fi
 
+# Project manifest-linked test files onto the same immutable scope universe as
+# the scope files above. Without this projection, --current-scope omitted a Not
+# Started descendant's scope.md but still failed on that descendant's planned
+# test file from scenario-manifest.json. Sequential execution then deadlocked:
+# the current scope could not become Done until a later scope authored its test,
+# while the later scope could not start until the current scope was Done.
+#
+# Default --all-scopes behavior remains byte-for-byte strict. The structured
+# projection exists only in --current-scope, which already requires Python for
+# the fail-closed scope-universe resolver. Every scenario must resolve to one
+# physical scope directory; an unknown/ambiguous scope reference is a refusal,
+# never a silently skipped manifest row.
+manifest_linked_test_projection() {
+  if [[ "$scope_mode" != "--current-scope" ]]; then
+    jq -r "($manifest_scenarios_filter)[] | [(.linkedTests // [])[], (.linkedTestContracts // [])[]] | .[]? | if type == \"string\" then split(\"#\")[0] elif type == \"object\" then (.file // .path // empty) else empty end" "$scenario_manifest_file"
+    return $?
+  fi
+
+  local all_scope_dirs=""
+  all_scope_dirs="$(
+  find "$feature_dir/scopes" -mindepth 2 -maxdepth 2 -type f -name 'scope.md' \
+    | LC_ALL=C sort \
+    | while IFS= read -r manifest_scope_path; do
+      basename "$(dirname "$manifest_scope_path")"
+    done
+  )"
+
+  BUBBLES_TRACE_ALL_SCOPE_DIRS="$all_scope_dirs" \
+  BUBBLES_TRACE_APPLICABLE_SCOPE_DIRS="$applicable_scope_dirs" \
+  python3 - "$scenario_manifest_file" <<'PY'
+import json
+import os
+import posixpath
+import sys
+
+manifest_path = sys.argv[1]
+try:
+  with open(manifest_path, encoding="utf-8") as handle:
+    document = json.load(handle)
+except (OSError, ValueError) as exc:
+  sys.stderr.write("cannot parse scenario-manifest.json (%s)\n" % exc.__class__.__name__)
+  raise SystemExit(2)
+
+all_dirs = [line.strip() for line in os.environ.get("BUBBLES_TRACE_ALL_SCOPE_DIRS", "").splitlines() if line.strip()]
+applicable_dirs = set(line.strip() for line in os.environ.get("BUBBLES_TRACE_APPLICABLE_SCOPE_DIRS", "").splitlines() if line.strip())
+if not all_dirs or not applicable_dirs:
+  sys.stderr.write("scope-universe projection is empty\n")
+  raise SystemExit(2)
+
+def aliases(scope_dir):
+  result = {scope_dir}
+  prefix = scope_dir.split("-", 1)[0]
+  if prefix.isdigit():
+    number = str(int(prefix))
+    result.update({prefix, number, "SCOPE-" + prefix, "SCOPE-" + number})
+  return result
+
+alias_to_dirs = {}
+for scope_dir in all_dirs:
+  for alias in aliases(scope_dir):
+    alias_to_dirs.setdefault(alias, set()).add(scope_dir)
+
+def scope_tokens(scenario):
+  tokens = []
+  scope_ref = scenario.get("scopeRef")
+  if isinstance(scope_ref, str) and scope_ref.strip():
+    normalized = scope_ref.strip().rstrip("/")
+    if normalized.endswith("/scope.md"):
+      normalized = posixpath.dirname(normalized)
+    tokens.append(posixpath.basename(normalized))
+  for key in ("scope", "scopeId"):
+    value = scenario.get(key)
+    if isinstance(value, int) and not isinstance(value, bool):
+      tokens.append(str(value))
+    elif isinstance(value, str) and value.strip():
+      tokens.append(posixpath.basename(value.strip().rstrip("/")))
+  return tokens
+
+def resolve_scope(scenario, scenario_id):
+  matches = set()
+  for token in scope_tokens(scenario):
+    matches.update(alias_to_dirs.get(token, set()))
+  if len(matches) != 1:
+    sys.stderr.write("scenario %s scope reference resolves to %d physical scopes\n" % (scenario_id, len(matches)))
+    raise SystemExit(2)
+  return next(iter(matches))
+
+def linked_files(scenario):
+  files = []
+  for field in ("linkedTests", "linkedTestContracts"):
+    references = scenario.get(field)
+    if not isinstance(references, list):
+      continue
+    for reference in references:
+      path = None
+      if isinstance(reference, str):
+        path = reference.split("#", 1)[0].strip()
+      elif isinstance(reference, dict):
+        value = reference.get("file") or reference.get("path")
+        path = value.strip() if isinstance(value, str) else None
+      if path and path not in files:
+        files.append(path)
+  return files
+
+scenarios = document.get("scenarios") if isinstance(document, dict) else document
+if not isinstance(scenarios, list):
+  sys.stderr.write("scenario-manifest.json has no scenarios array\n")
+  raise SystemExit(2)
+
+projected = []
+for scenario in scenarios:
+  if not isinstance(scenario, dict):
+    continue
+  scenario_id = scenario.get("id") or scenario.get("scenarioId") or "<unidentified-scenario>"
+  scope_dir = resolve_scope(scenario, scenario_id)
+  if scope_dir not in applicable_dirs:
+    continue
+  for path in linked_files(scenario):
+    if path not in projected:
+      projected.append(path)
+
+for path in projected:
+  print(path)
+PY
+}
+
 echo "============================================================"
 echo "  BUBBLES TRACEABILITY GUARD"
 echo "  Feature: $feature_dir"
@@ -542,32 +672,57 @@ if [[ "$scope_defined_scenarios" -gt 0 ]]; then
   if [[ ! -f "$scenario_manifest_file" ]]; then
     fail "Resolved scopes define $scope_defined_scenarios Gherkin scenarios but scenario-manifest.json is missing"
   else
-    scenario_manifest_total="$(grep -cE '"scenarioId"[[:space:]]*:' "$scenario_manifest_file" || true)"
-    if [[ "$scenario_manifest_total" -lt "$scope_defined_scenarios" ]]; then
-      fail "scenario-manifest.json covers only $scenario_manifest_total scenarios but scopes define $scope_defined_scenarios"
-    else
-      pass "scenario-manifest.json covers $scenario_manifest_total scenario contract(s)"
+    manifest_scenarios_filter='if type == "array" then . elif type == "object" and (.scenarios | type == "array") then .scenarios else error("expected object.scenarios[] or legacy top-level array") end'
+    manifest_parseable=true
+    if ! command -v jq >/dev/null 2>&1; then
+      fail "scenario-manifest.json requires jq for structured validation"
+      manifest_parseable=false
+    elif ! jq -e "($manifest_scenarios_filter) | type == \"array\"" "$scenario_manifest_file" >/dev/null 2>&1; then
+      fail "scenario-manifest.json is malformed or has an unsupported envelope"
+      manifest_parseable=false
     fi
 
-    manifest_missing_files=0
-    while IFS= read -r manifest_test_file; do
-      [[ -n "$manifest_test_file" ]] || continue
-      if path_exists "$manifest_test_file" "$feature_dir"; then
-        pass "scenario-manifest.json linked test exists: $manifest_test_file"
+    if [[ "$manifest_parseable" == "true" ]]; then
+      scenario_manifest_total="$(jq -r "($manifest_scenarios_filter) | map(select(((.id // .scenarioId // \"\") | type) == \"string\" and ((.id // .scenarioId // \"\") | length) > 0)) | length" "$scenario_manifest_file")"
+      if [[ "$scenario_manifest_total" -lt "$scope_defined_scenarios" ]]; then
+        fail "scenario-manifest.json covers only $scenario_manifest_total scenarios but scopes define $scope_defined_scenarios"
       else
-        fail "scenario-manifest.json references missing linked test file: $manifest_test_file"
-        manifest_missing_files=$((manifest_missing_files + 1))
+        pass "scenario-manifest.json covers $scenario_manifest_total scenario contract(s)"
       fi
-    done < <(grep -Eo '"file"[[:space:]]*:[[:space:]]*"[^"]+"' "$scenario_manifest_file" 2>/dev/null | sed -E 's/.*:[[:space:]]*"([^"]+)"/\1/' || true)
 
-    if grep -qE '"evidenceRefs"[[:space:]]*:[[:space:]]*\[' "$scenario_manifest_file"; then
-      pass "scenario-manifest.json records evidenceRefs"
-    else
-      fail "scenario-manifest.json is missing evidenceRefs entries"
-    fi
+      manifest_missing_files=0
+      manifest_test_projection=""
+      manifest_projection_status=0
+      if manifest_test_projection="$(manifest_linked_test_projection 2>&1)"; then
+        manifest_projection_status=0
+      else
+        manifest_projection_status=$?
+      fi
+      if [[ "$manifest_projection_status" -ne 0 ]]; then
+        fail "scenario-manifest.json linked-test scope projection failed: $manifest_test_projection"
+        manifest_missing_files=$((manifest_missing_files + 1))
+      else
+        while IFS= read -r manifest_test_file; do
+          [[ -n "$manifest_test_file" ]] || continue
+          if path_exists "$manifest_test_file" "$feature_dir"; then
+            pass "scenario-manifest.json linked test exists: $manifest_test_file"
+          else
+            fail "scenario-manifest.json references missing linked test file: $manifest_test_file"
+            manifest_missing_files=$((manifest_missing_files + 1))
+          fi
+        done <<< "$manifest_test_projection"
+      fi
 
-    if [[ "$manifest_missing_files" -eq 0 ]]; then
-      pass "All linked tests from scenario-manifest.json exist"
+      manifest_evidence_refs="$(jq -r "($manifest_scenarios_filter) | map(select((.evidenceRefs | type) == \"array\")) | length" "$scenario_manifest_file")"
+      if [[ "$manifest_evidence_refs" -eq "$scenario_manifest_total" ]]; then
+        pass "scenario-manifest.json records evidenceRefs for all $scenario_manifest_total scenario contract(s)"
+      else
+        fail "scenario-manifest.json records evidenceRefs for only $manifest_evidence_refs of $scenario_manifest_total scenario contract(s)"
+      fi
+
+      if [[ "$manifest_missing_files" -eq 0 ]]; then
+        pass "All linked tests from scenario-manifest.json exist"
+      fi
     fi
 
     # IMP-106 SCOPE-3 (DOM-LINEAGE) — advisory scenario→invariant lineage edges.
@@ -674,9 +829,23 @@ for scope_index in "${!scope_analysis_files[@]}"; do
     scenario_total=$((scenario_total + 1))
 
     matched_row=""
-    while IFS= read -r row; do
-      [[ -n "$row" ]] || continue
-      if scenario_matches_row "$scenario" "$row" || trace_id_declared "$scenario_id" "$row"; then
+    if [[ -n "$scenario_id" ]]; then
+      while IFS= read -r row; do
+        [[ -n "$row" ]] || continue
+        if trace_id_declared "$scenario_id" "$row"; then
+          [[ -n "$matched_row" ]] || matched_row="$row"
+          if [[ -n "$(extract_path_candidates "$row")" ]]; then
+            matched_row="$row"
+            break
+          fi
+        fi
+      done <<< "$test_rows"
+    fi
+
+    if [[ -z "$matched_row" ]]; then
+      while IFS= read -r row; do
+        [[ -n "$row" ]] || continue
+        if scenario_matches_row "$scenario" "$row"; then
         # One scenario is legitimately covered by several rows — a page-integrity
         # row naming the page, plus the e2e row naming the spec file that
         # exercises it. Row order in the table is arbitrary, so breaking on the
@@ -690,8 +859,9 @@ for scope_index in "${!scope_analysis_files[@]}"; do
           matched_row="$row"
           break
         fi
-      fi
-    done <<< "$test_rows"
+        fi
+      done <<< "$test_rows"
+    fi
 
     if [[ -z "$matched_row" ]]; then
       fail "$scope_label scenario has no traceable Test Plan row: $scenario"
@@ -803,13 +973,24 @@ for scope_index in "${!scope_analysis_files[@]}"; do
     dod_fidelity_total=$((dod_fidelity_total + 1))
 
     matched_dod=""
-    while IFS= read -r dod_item; do
-      [[ -n "$dod_item" ]] || continue
-      if bubbles_scenario_matches_dod "$scenario" "$dod_item" id-hint-lenient || trace_id_declared "$scenario_id" "$dod_item"; then
-        matched_dod="$dod_item"
-        break
-      fi
-    done <<< "$dod_items"
+    if [[ -n "$scenario_id" ]]; then
+      while IFS= read -r dod_item; do
+        [[ -n "$dod_item" ]] || continue
+        if trace_id_declared "$scenario_id" "$dod_item"; then
+          matched_dod="$dod_item"
+          break
+        fi
+      done <<< "$dod_items"
+    fi
+    if [[ -z "$matched_dod" ]]; then
+      while IFS= read -r dod_item; do
+        [[ -n "$dod_item" ]] || continue
+        if bubbles_scenario_matches_dod "$scenario" "$dod_item" id-hint-lenient; then
+          matched_dod="$dod_item"
+          break
+        fi
+      done <<< "$dod_items"
+    fi
 
     if [[ -z "$matched_dod" ]]; then
       fail "$scope_label Gherkin scenario has no faithful DoD item preserving its behavioral claim: $scenario"

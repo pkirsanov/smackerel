@@ -286,14 +286,15 @@ for imp in "${imp_files[@]}"; do
   # long after its scopes shipped. Both shapes are derivable from evidence that
   # already exists, and neither needs a second status file to hold it: the
   # receipts are the checked acceptance criteria inside the proposal, and the
-  # landing evidence is the set of commits naming this id that touched governed
-  # paths.
+  # landing evidence is the set of governed-path commits whose subject
+  # attributes the landing to this exact id. A body-only mention is not subject
+  # attribution and must not advance the proposal's evidence state.
   #
   # Only the two unambiguously false shapes are reported. ACCEPTED and
   # IN PROGRESS legitimately span the whole range between them, so deriving a
   # verdict for those would replace an author's assertion with a lint's guess.
   if [[ -n "$status_value" && -n "$imp_id" && "$have_git" -eq 1 ]]; then
-    landing_commits="$(git -C "$repo_root" log --format=%H --grep="$imp_id" -- bubbles agents 2>/dev/null | grep -c '[^[:space:]]' || true)"
+    landing_commits="$(git -C "$repo_root" log --format=%s -- bubbles agents 2>/dev/null | grep -Ec "(^|[^[:alnum:]])${imp_id}([^[:alnum:]]|$)" || true)"
     criteria_total="$(grep -cE '^[[:space:]]*- \[[ x]\] ' "$imp" 2>/dev/null || true)"
     criteria_met="$(grep -cE '^[[:space:]]*- \[x\] ' "$imp" 2>/dev/null || true)"
     case "$status_value" in

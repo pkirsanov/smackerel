@@ -429,7 +429,7 @@ assert_eq_redacted() { # label actual expected
 }
 
 assert_line() { # label output exact-line
-  if printf '%s\n' "$2" | grep -Fqx -- "$3"; then
+  if grep -Fqx -- "$3" <<<"$2"; then
     record_pass
   else
     record_fail "$1 (missing line: $3)"
@@ -438,7 +438,7 @@ assert_line() { # label output exact-line
 }
 
 assert_match() { # label output extended-regex
-  if printf '%s\n' "$2" | grep -Eqi -- "$3"; then
+  if grep -Eqi -- "$3" <<<"$2"; then
     record_pass
   else
     record_fail "$1 (missing pattern: $3)"
@@ -447,7 +447,7 @@ assert_match() { # label output extended-regex
 }
 
 assert_not_match() { # label output extended-regex
-  if printf '%s\n' "$2" | grep -Eqi -- "$3"; then
+  if grep -Eqi -- "$3" <<<"$2"; then
     record_fail "$1 (unexpected pattern: $3)"
     printf '%s\n' "$2" | sed 's/^/    /'
   else

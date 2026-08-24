@@ -6,6 +6,8 @@
 #
 # Provides:
 #   bubbles_run_with_timeout <secs> <cmd...>   portable timeout (124 on timeout)
+#   bubbles_run_with_progress_timeout <idle-secs> <absolute-secs> <log> <cmd...>
+#                                                progress-aware bounded runner
 #   bubbles_pruned_find       <root> <pred...> find that prunes generated dirs
 #
 # These convert two BUG-001 failure modes into bounded, observable behavior:
@@ -23,6 +25,7 @@ _BUBBLES_GUARD_LIB_SOURCED=1
 bubbles_run_with_timeout() {
   local secs="$1"; shift
   if command -v timeout >/dev/null 2>&1; then
+    # portable-ok: GNU branch is capability-guarded; gtimeout and bash fallback follow.
     timeout "${secs}s" "$@"
     return $?
   fi
@@ -78,6 +81,100 @@ bubbles_run_with_timeout() {
   return $rc
 }
 
+# Progress-aware command timeout for long validators that stream to a log.
+# A fixed wall deadline confuses slow-but-active work with a hang. This runner
+# resets its idle clock whenever the log size changes, while retaining a hard
+# absolute ceiling for a command that emits forever without completing.
+#
+# Returns the command's own exit code, 124 after `idle_secs` with no log
+# progress, 125 after `absolute_secs` despite continued progress, or 2 for an
+# invalid invocation. The caller owns the log file; this function truncates it.
+# `BUBBLES_PROGRESS_TIMEOUT_REASON` is empty on command completion and is set to
+# `idle` or `absolute` for the corresponding timeout.
+bubbles_run_with_progress_timeout() {
+  local idle_secs="${1:-}"
+  local absolute_secs="${2:-}"
+  local log_file="${3:-}"
+  shift 3 2>/dev/null || return 2
+
+  if [[ ! "$idle_secs" =~ ^[1-9][0-9]*$ ]] ||
+    [[ ! "$absolute_secs" =~ ^[1-9][0-9]*$ ]] ||
+    [[ "$absolute_secs" -lt "$idle_secs" ]] ||
+    [[ -z "$log_file" ]] || [[ $# -eq 0 ]]; then
+    return 2
+  fi
+
+  : > "$log_file" || return 2
+  export BUBBLES_PROGRESS_TIMEOUT_REASON=""
+
+  # Job control gives the validator its own process group. A top-level shell can
+  # exit while one of its checks remains alive; terminating only $! would then
+  # leak that descendant into the next validation run.
+  local monitor_was_enabled=0
+  [[ "$-" == *m* ]] && monitor_was_enabled=1
+  set -m
+  "$@" > "$log_file" 2>&1 </dev/null &
+  local cmd_pid=$!
+  [[ "$monitor_was_enabled" -eq 1 ]] || set +m
+  local started_at=$SECONDS
+  local last_progress_at=$started_at
+  local last_size=0
+  local current_size=0
+  local now=0
+  local timeout_rc=0
+  local rc=0
+
+  while kill -0 "$cmd_pid" 2>/dev/null; do
+    sleep 1
+    kill -0 "$cmd_pid" 2>/dev/null || break
+
+    current_size="$(wc -c 2>/dev/null < "$log_file")" || current_size=""
+    if [[ ! "$current_size" =~ ^[0-9]+$ ]]; then
+      timeout_rc=2
+      break
+    fi
+    now=$SECONDS
+    if [[ "$current_size" -ne "$last_size" ]]; then
+      last_size="$current_size"
+      last_progress_at=$now
+    fi
+    if (( now - last_progress_at >= idle_secs )); then
+      BUBBLES_PROGRESS_TIMEOUT_REASON="idle"
+      timeout_rc=124
+      break
+    fi
+    if (( now - started_at >= absolute_secs )); then
+      BUBBLES_PROGRESS_TIMEOUT_REASON="absolute"
+      timeout_rc=125
+      break
+    fi
+  done
+
+  if [[ "$timeout_rc" -ne 0 ]]; then
+    kill -TERM -- "-$cmd_pid" 2>/dev/null || kill -TERM "$cmd_pid" 2>/dev/null || true
+    local termination_waited=0
+    while kill -0 "$cmd_pid" 2>/dev/null && [[ "$termination_waited" -lt 5 ]]; do
+      sleep 1
+      termination_waited=$((termination_waited + 1))
+    done
+    if kill -0 -- "-$cmd_pid" 2>/dev/null; then
+      kill -KILL -- "-$cmd_pid" 2>/dev/null || true
+    fi
+    wait "$cmd_pid" 2>/dev/null || true
+    return "$timeout_rc"
+  fi
+
+  wait "$cmd_pid" 2>/dev/null || rc=$?
+  # A command can return while a background descendant still owns its process
+  # group. The runner contract is complete-tree execution, so do not leak that
+  # child into a later validation phase even on a nominal parent completion.
+  if kill -0 -- "-$cmd_pid" 2>/dev/null; then
+    kill -TERM -- "-$cmd_pid" 2>/dev/null || true
+    kill -KILL -- "-$cmd_pid" 2>/dev/null || true
+  fi
+  return "$rc"
+}
+
 # find that prunes high-fan-out generated directories so whole-repo walks do not
 # traverse .git / node_modules / target / build caches. Usage:
 #   bubbles_pruned_find <root> <find-predicate...>   # predicate SHOULD end -print
@@ -121,6 +218,7 @@ bubbles_sed_inplace() {
 # Usage: epoch="$(bubbles_iso_to_epoch "2026-06-30T14:00:00Z")" || epoch=""
 bubbles_iso_to_epoch() {
   local ts="$1" epoch
+  # portable-ok: GNU date branch is capability-tested; BSD date fallback follows.
   if epoch="$(date -d "$ts" +%s 2>/dev/null)" && [[ -n "$epoch" ]]; then
     printf '%s' "$epoch"
     return 0
@@ -142,6 +240,7 @@ bubbles_iso_to_epoch() {
 # and fall back to second resolution (x1000). Usage: ms="$(bubbles_now_ms)"
 bubbles_now_ms() {
   local ns
+  # portable-ok: unsupported BSD %N output is numeric-checked before the seconds fallback.
   ns="$(date +%s%N 2>/dev/null)"
   if [[ "$ns" =~ ^[0-9]+$ ]]; then
     printf '%s' "$(( ns / 1000000 ))"

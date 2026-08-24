@@ -169,7 +169,9 @@ This prompt produces a **sequential, scope-by-scope execution plan** derived fro
 
 Core requirements:
 
-1) **Create small, well-defined scopes of work**
+1) **Create small, well-defined scopes that TOGETHER cover the whole spec**
+- Slicing controls scope SIZE, never scope COVERAGE. Every requirement in `spec.md` and every constraint in `design.md` MUST land in some scope. A requirement left out of the plan is a planning defect, not an implicit deferral — see [critical-requirements.md](bubbles_shared/critical-requirements.md) policies 12 and 13.
+- Where two plan shapes both cover the spec, choose the one that is better for the long run — fewer future migrations, fewer special cases, a contract the next change can extend — over the one that reaches a green scope soonest.
 - Each scope is a minimal, shippable increment.
 - Scopes must be ordered; do NOT proceed to scope N+1 until scope N is fully done.
 - Default target: one coherent user/system outcome per scope. If a scope mixes unrelated journeys, split it.

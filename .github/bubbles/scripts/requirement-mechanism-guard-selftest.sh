@@ -66,6 +66,9 @@ bad() {
   FAILED_SCENARIOS+=("$1")
 }
 
+contains() { [[ "$1" == *"$2"* ]]; }
+contains_ci() { [[ "${1,,}" == *"${2,,}"* ]]; }
+
 # Stage a fresh spec dir (under a fake repo root) and emit its absolute path.
 # Layout: $WORKSPACE/<name>/specs/097-fixture/ so the guard resolves repo_root
 # to $WORKSPACE/<name> via the */specs/* fallback (mktemp is not a git repo).
@@ -153,7 +156,7 @@ func TestAuthenticate(t *testing.T) {
 }
 EOF
 run_guard "$s1"
-if [[ "$RC" -eq 1 ]] && printf '%s' "$OUT" | grep -q "G097 BLOCK"; then
+if [[ "$RC" -eq 1 ]] && contains "$OUT" "G097 BLOCK"; then
   pass "S1 PKCE named but absent from code BLOCKs (exit 1)"
 else
   bad "S1 expected exit 1 with BLOCK, got $RC; out=$OUT"
@@ -252,7 +255,7 @@ package api
 func list(cursor string) {}
 EOF
 run_guard "$s4"
-if [[ "$RC" -eq 0 ]] && printf '%s' "$OUT" | grep -qi "not applicable"; then
+if [[ "$RC" -eq 0 ]] && contains_ci "$OUT" "not applicable"; then
   pass "S4 no mechanism named is not applicable (exit 0)"
 else
   bad "S4 expected exit 0 not-applicable, got $RC; out=$OUT"
@@ -284,7 +287,7 @@ package connector
 func Authenticate(token string) error { return nil }
 EOF
 run_guard "$s5"
-if [[ "$RC" -eq 0 ]] && printf '%s' "$OUT" | grep -qi "grandfathered\|DOWNGRADED"; then
+if [[ "$RC" -eq 0 ]] && { contains_ci "$OUT" "grandfathered" || contains_ci "$OUT" "downgraded"; }; then
   pass "S5 pre-cutoff spec is grandfathered to warning (exit 0)"
 else
   bad "S5 expected exit 0 grandfathered, got $RC; out=$OUT"
@@ -328,7 +331,7 @@ func TestHappyPath(t *testing.T) {
 }
 EOF
 run_guard "$s6"
-if [[ "$RC" -eq 0 ]] && printf '%s' "$OUT" | grep -qi "NUDGE" && printf '%s' "$OUT" | grep -qi "negative/rejection"; then
+if [[ "$RC" -eq 0 ]] && contains_ci "$OUT" "NUDGE" && contains_ci "$OUT" "negative/rejection"; then
   pass "S6 satisfied mechanism with no negative assertion emits #4 nudge, non-blocking (exit 0)"
 else
   bad "S6 expected exit 0 with negative-assertion nudge, got $RC; out=$OUT"
@@ -375,7 +378,7 @@ func TestAgainstFake(t *testing.T) {
 }
 EOF
 run_guard "$s7"
-if [[ "$RC" -eq 0 ]] && printf '%s' "$OUT" | grep -qi "in-process fake server"; then
+if [[ "$RC" -eq 0 ]] && contains_ci "$OUT" "in-process fake server"; then
   pass "S7 live-tier test backed by httptest.NewServer emits #3 nudge, non-blocking (exit 0)"
 else
   bad "S7 expected exit 0 with fake-server nudge, got $RC; out=$OUT"
@@ -407,7 +410,7 @@ package webhook
 func receive(body []byte) { process(body) }
 EOF
 run_guard "$s8"
-if [[ "$RC" -eq 1 ]] && printf '%s' "$OUT" | grep -q "HMAC"; then
+if [[ "$RC" -eq 1 ]] && contains "$OUT" "HMAC"; then
   pass "S8 HMAC named but absent from code BLOCKs (exit 1)"
 else
   bad "S8 expected exit 1 for HMAC gap, got $RC; out=$OUT"

@@ -246,6 +246,7 @@ checks:
     - bubbles/adapters/judge/ollama.sh
     - bubbles/adapters/observability/none.sh
     - bubbles/scripts/acceptance-authority-lib.sh
+    - bubbles/scripts/action-risk-classes-lib.sh
     - bubbles/scripts/action-risk-registry-lint.sh
     - bubbles/scripts/adoption-profile-lib-selftest.sh
     - bubbles/scripts/adoption-profile-lib.sh
@@ -426,6 +427,7 @@ checks:
     - bubbles/scripts/generate-framework-stats.sh
     - bubbles/scripts/generate-gate-coverage-map-selftest.sh
     - bubbles/scripts/generate-gate-coverage-map.sh
+    - bubbles/scripts/generate-gate-enforcement.sh
     - bubbles/scripts/generate-installer-selftest.sh
     - bubbles/scripts/generate-installer.sh
     - bubbles/scripts/generate-modes-block.sh
@@ -535,6 +537,8 @@ checks:
     - bubbles/scripts/payload-closure-guard.sh
     - bubbles/scripts/phase-coordinator-selftest.sh
     - bubbles/scripts/phase-coordinator.sh
+    - bubbles/scripts/phase-name-enum-lint-selftest.sh
+    - bubbles/scripts/phase-name-enum-lint.sh
     - bubbles/scripts/phase-relevance-resolve-selftest.sh
     - bubbles/scripts/phase-relevance-resolve.sh
     - bubbles/scripts/pii-scan.sh
@@ -576,6 +580,9 @@ checks:
     - bubbles/scripts/release-ladder-schema-guard.sh
     - bubbles/scripts/release-manifest-purity-selftest.sh
     - bubbles/scripts/release-manifest-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard.sh
+    - bubbles/scripts/release-packet-docs-lib.sh
     - bubbles/scripts/release-packet-location-guard-selftest.sh
     - bubbles/scripts/release-packet-location-guard.sh
     - bubbles/scripts/release-train-backfill-planner.sh
@@ -879,7 +886,6 @@ checks:
     - docs/guides/WORKFLOW_MODES.md
     - docs/issues/G068-word-overlap-threshold.md
     - docs/issues/session-aware-runtime-coordination.md
-    - docs/mcp.md
     - docs/recipes/README.md
     - docs/recipes/adversarial-verification.md
     - docs/recipes/ask-the-super-first.md
@@ -1006,6 +1012,7 @@ checks:
     - bubbles/adapters/judge/ollama.sh
     - bubbles/adapters/observability/none.sh
     - bubbles/scripts/acceptance-authority-lib.sh
+    - bubbles/scripts/action-risk-classes-lib.sh
     - bubbles/scripts/action-risk-registry-lint.sh
     - bubbles/scripts/adoption-profile-lib-selftest.sh
     - bubbles/scripts/adoption-profile-lib.sh
@@ -1186,6 +1193,7 @@ checks:
     - bubbles/scripts/generate-framework-stats.sh
     - bubbles/scripts/generate-gate-coverage-map-selftest.sh
     - bubbles/scripts/generate-gate-coverage-map.sh
+    - bubbles/scripts/generate-gate-enforcement.sh
     - bubbles/scripts/generate-installer-selftest.sh
     - bubbles/scripts/generate-installer.sh
     - bubbles/scripts/generate-modes-block.sh
@@ -1295,6 +1303,8 @@ checks:
     - bubbles/scripts/payload-closure-guard.sh
     - bubbles/scripts/phase-coordinator-selftest.sh
     - bubbles/scripts/phase-coordinator.sh
+    - bubbles/scripts/phase-name-enum-lint-selftest.sh
+    - bubbles/scripts/phase-name-enum-lint.sh
     - bubbles/scripts/phase-relevance-resolve-selftest.sh
     - bubbles/scripts/phase-relevance-resolve.sh
     - bubbles/scripts/pii-scan.sh
@@ -1336,6 +1346,9 @@ checks:
     - bubbles/scripts/release-ladder-schema-guard.sh
     - bubbles/scripts/release-manifest-purity-selftest.sh
     - bubbles/scripts/release-manifest-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard.sh
+    - bubbles/scripts/release-packet-docs-lib.sh
     - bubbles/scripts/release-packet-location-guard-selftest.sh
     - bubbles/scripts/release-packet-location-guard.sh
     - bubbles/scripts/release-train-backfill-planner.sh
@@ -1639,7 +1652,6 @@ checks:
     - docs/guides/WORKFLOW_MODES.md
     - docs/issues/G068-word-overlap-threshold.md
     - docs/issues/session-aware-runtime-coordination.md
-    - docs/mcp.md
     - docs/recipes/README.md
     - docs/recipes/adversarial-verification.md
     - docs/recipes/ask-the-super-first.md
@@ -1684,6 +1696,7 @@ checks:
     - bubbles/adapters/judge/ollama.sh
     - bubbles/adapters/observability/none.sh
     - bubbles/scripts/acceptance-authority-lib.sh
+    - bubbles/scripts/action-risk-classes-lib.sh
     - bubbles/scripts/action-risk-registry-lint.sh
     - bubbles/scripts/adoption-profile-lib-selftest.sh
     - bubbles/scripts/adoption-profile-lib.sh
@@ -1864,6 +1877,7 @@ checks:
     - bubbles/scripts/generate-framework-stats.sh
     - bubbles/scripts/generate-gate-coverage-map-selftest.sh
     - bubbles/scripts/generate-gate-coverage-map.sh
+    - bubbles/scripts/generate-gate-enforcement.sh
     - bubbles/scripts/generate-installer-selftest.sh
     - bubbles/scripts/generate-installer.sh
     - bubbles/scripts/generate-modes-block.sh
@@ -1973,6 +1987,8 @@ checks:
     - bubbles/scripts/payload-closure-guard.sh
     - bubbles/scripts/phase-coordinator-selftest.sh
     - bubbles/scripts/phase-coordinator.sh
+    - bubbles/scripts/phase-name-enum-lint-selftest.sh
+    - bubbles/scripts/phase-name-enum-lint.sh
     - bubbles/scripts/phase-relevance-resolve-selftest.sh
     - bubbles/scripts/phase-relevance-resolve.sh
     - bubbles/scripts/pii-scan.sh
@@ -2014,6 +2030,9 @@ checks:
     - bubbles/scripts/release-ladder-schema-guard.sh
     - bubbles/scripts/release-manifest-purity-selftest.sh
     - bubbles/scripts/release-manifest-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard.sh
+    - bubbles/scripts/release-packet-docs-lib.sh
     - bubbles/scripts/release-packet-location-guard-selftest.sh
     - bubbles/scripts/release-packet-location-guard.sh
     - bubbles/scripts/release-train-backfill-planner.sh
@@ -2317,7 +2336,6 @@ checks:
     - docs/guides/WORKFLOW_MODES.md
     - docs/issues/G068-word-overlap-threshold.md
     - docs/issues/session-aware-runtime-coordination.md
-    - docs/mcp.md
     - docs/recipes/README.md
     - docs/recipes/adversarial-verification.md
     - docs/recipes/ask-the-super-first.md
@@ -2379,6 +2397,7 @@ checks:
     - bubbles/adapters/judge/ollama.sh
     - bubbles/adapters/observability/none.sh
     - bubbles/scripts/acceptance-authority-lib.sh
+    - bubbles/scripts/action-risk-classes-lib.sh
     - bubbles/scripts/action-risk-registry-lint.sh
     - bubbles/scripts/adoption-profile-lib-selftest.sh
     - bubbles/scripts/adoption-profile-lib.sh
@@ -2559,6 +2578,7 @@ checks:
     - bubbles/scripts/generate-framework-stats.sh
     - bubbles/scripts/generate-gate-coverage-map-selftest.sh
     - bubbles/scripts/generate-gate-coverage-map.sh
+    - bubbles/scripts/generate-gate-enforcement.sh
     - bubbles/scripts/generate-installer-selftest.sh
     - bubbles/scripts/generate-installer.sh
     - bubbles/scripts/generate-modes-block.sh
@@ -2668,6 +2688,8 @@ checks:
     - bubbles/scripts/payload-closure-guard.sh
     - bubbles/scripts/phase-coordinator-selftest.sh
     - bubbles/scripts/phase-coordinator.sh
+    - bubbles/scripts/phase-name-enum-lint-selftest.sh
+    - bubbles/scripts/phase-name-enum-lint.sh
     - bubbles/scripts/phase-relevance-resolve-selftest.sh
     - bubbles/scripts/phase-relevance-resolve.sh
     - bubbles/scripts/pii-scan.sh
@@ -2709,6 +2731,9 @@ checks:
     - bubbles/scripts/release-ladder-schema-guard.sh
     - bubbles/scripts/release-manifest-purity-selftest.sh
     - bubbles/scripts/release-manifest-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard.sh
+    - bubbles/scripts/release-packet-docs-lib.sh
     - bubbles/scripts/release-packet-location-guard-selftest.sh
     - bubbles/scripts/release-packet-location-guard.sh
     - bubbles/scripts/release-train-backfill-planner.sh
@@ -3012,7 +3037,6 @@ checks:
     - docs/guides/WORKFLOW_MODES.md
     - docs/issues/G068-word-overlap-threshold.md
     - docs/issues/session-aware-runtime-coordination.md
-    - docs/mcp.md
     - docs/recipes/README.md
     - docs/recipes/adversarial-verification.md
     - docs/recipes/ask-the-super-first.md
@@ -3057,6 +3081,7 @@ checks:
     - bubbles/adapters/judge/ollama.sh
     - bubbles/adapters/observability/none.sh
     - bubbles/scripts/acceptance-authority-lib.sh
+    - bubbles/scripts/action-risk-classes-lib.sh
     - bubbles/scripts/action-risk-registry-lint.sh
     - bubbles/scripts/adoption-profile-lib-selftest.sh
     - bubbles/scripts/adoption-profile-lib.sh
@@ -3237,6 +3262,7 @@ checks:
     - bubbles/scripts/generate-framework-stats.sh
     - bubbles/scripts/generate-gate-coverage-map-selftest.sh
     - bubbles/scripts/generate-gate-coverage-map.sh
+    - bubbles/scripts/generate-gate-enforcement.sh
     - bubbles/scripts/generate-installer-selftest.sh
     - bubbles/scripts/generate-installer.sh
     - bubbles/scripts/generate-modes-block.sh
@@ -3346,6 +3372,8 @@ checks:
     - bubbles/scripts/payload-closure-guard.sh
     - bubbles/scripts/phase-coordinator-selftest.sh
     - bubbles/scripts/phase-coordinator.sh
+    - bubbles/scripts/phase-name-enum-lint-selftest.sh
+    - bubbles/scripts/phase-name-enum-lint.sh
     - bubbles/scripts/phase-relevance-resolve-selftest.sh
     - bubbles/scripts/phase-relevance-resolve.sh
     - bubbles/scripts/pii-scan.sh
@@ -3387,6 +3415,9 @@ checks:
     - bubbles/scripts/release-ladder-schema-guard.sh
     - bubbles/scripts/release-manifest-purity-selftest.sh
     - bubbles/scripts/release-manifest-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard.sh
+    - bubbles/scripts/release-packet-docs-lib.sh
     - bubbles/scripts/release-packet-location-guard-selftest.sh
     - bubbles/scripts/release-packet-location-guard.sh
     - bubbles/scripts/release-train-backfill-planner.sh
@@ -3690,7 +3721,6 @@ checks:
     - docs/guides/WORKFLOW_MODES.md
     - docs/issues/G068-word-overlap-threshold.md
     - docs/issues/session-aware-runtime-coordination.md
-    - docs/mcp.md
     - docs/recipes/README.md
     - docs/recipes/adversarial-verification.md
     - docs/recipes/ask-the-super-first.md
@@ -3770,6 +3800,7 @@ checks:
     - bubbles/adapters/judge/ollama.sh
     - bubbles/adapters/observability/none.sh
     - bubbles/scripts/acceptance-authority-lib.sh
+    - bubbles/scripts/action-risk-classes-lib.sh
     - bubbles/scripts/action-risk-registry-lint.sh
     - bubbles/scripts/adoption-profile-lib-selftest.sh
     - bubbles/scripts/adoption-profile-lib.sh
@@ -3950,6 +3981,7 @@ checks:
     - bubbles/scripts/generate-framework-stats.sh
     - bubbles/scripts/generate-gate-coverage-map-selftest.sh
     - bubbles/scripts/generate-gate-coverage-map.sh
+    - bubbles/scripts/generate-gate-enforcement.sh
     - bubbles/scripts/generate-installer-selftest.sh
     - bubbles/scripts/generate-installer.sh
     - bubbles/scripts/generate-modes-block.sh
@@ -4059,6 +4091,8 @@ checks:
     - bubbles/scripts/payload-closure-guard.sh
     - bubbles/scripts/phase-coordinator-selftest.sh
     - bubbles/scripts/phase-coordinator.sh
+    - bubbles/scripts/phase-name-enum-lint-selftest.sh
+    - bubbles/scripts/phase-name-enum-lint.sh
     - bubbles/scripts/phase-relevance-resolve-selftest.sh
     - bubbles/scripts/phase-relevance-resolve.sh
     - bubbles/scripts/pii-scan.sh
@@ -4100,6 +4134,9 @@ checks:
     - bubbles/scripts/release-ladder-schema-guard.sh
     - bubbles/scripts/release-manifest-purity-selftest.sh
     - bubbles/scripts/release-manifest-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard.sh
+    - bubbles/scripts/release-packet-docs-lib.sh
     - bubbles/scripts/release-packet-location-guard-selftest.sh
     - bubbles/scripts/release-packet-location-guard.sh
     - bubbles/scripts/release-train-backfill-planner.sh
@@ -4403,7 +4440,6 @@ checks:
     - docs/guides/WORKFLOW_MODES.md
     - docs/issues/G068-word-overlap-threshold.md
     - docs/issues/session-aware-runtime-coordination.md
-    - docs/mcp.md
     - docs/recipes/README.md
     - docs/recipes/adversarial-verification.md
     - docs/recipes/ask-the-super-first.md
@@ -4448,6 +4484,7 @@ checks:
     - bubbles/adapters/judge/ollama.sh
     - bubbles/adapters/observability/none.sh
     - bubbles/scripts/acceptance-authority-lib.sh
+    - bubbles/scripts/action-risk-classes-lib.sh
     - bubbles/scripts/action-risk-registry-lint.sh
     - bubbles/scripts/adoption-profile-lib-selftest.sh
     - bubbles/scripts/adoption-profile-lib.sh
@@ -4628,6 +4665,7 @@ checks:
     - bubbles/scripts/generate-framework-stats.sh
     - bubbles/scripts/generate-gate-coverage-map-selftest.sh
     - bubbles/scripts/generate-gate-coverage-map.sh
+    - bubbles/scripts/generate-gate-enforcement.sh
     - bubbles/scripts/generate-installer-selftest.sh
     - bubbles/scripts/generate-installer.sh
     - bubbles/scripts/generate-modes-block.sh
@@ -4737,6 +4775,8 @@ checks:
     - bubbles/scripts/payload-closure-guard.sh
     - bubbles/scripts/phase-coordinator-selftest.sh
     - bubbles/scripts/phase-coordinator.sh
+    - bubbles/scripts/phase-name-enum-lint-selftest.sh
+    - bubbles/scripts/phase-name-enum-lint.sh
     - bubbles/scripts/phase-relevance-resolve-selftest.sh
     - bubbles/scripts/phase-relevance-resolve.sh
     - bubbles/scripts/pii-scan.sh
@@ -4778,6 +4818,9 @@ checks:
     - bubbles/scripts/release-ladder-schema-guard.sh
     - bubbles/scripts/release-manifest-purity-selftest.sh
     - bubbles/scripts/release-manifest-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard.sh
+    - bubbles/scripts/release-packet-docs-lib.sh
     - bubbles/scripts/release-packet-location-guard-selftest.sh
     - bubbles/scripts/release-packet-location-guard.sh
     - bubbles/scripts/release-train-backfill-planner.sh
@@ -5081,7 +5124,6 @@ checks:
     - docs/guides/WORKFLOW_MODES.md
     - docs/issues/G068-word-overlap-threshold.md
     - docs/issues/session-aware-runtime-coordination.md
-    - docs/mcp.md
     - docs/recipes/README.md
     - docs/recipes/adversarial-verification.md
     - docs/recipes/ask-the-super-first.md
@@ -5141,6 +5183,7 @@ checks:
     - bubbles/adapters/judge/ollama.sh
     - bubbles/adapters/observability/none.sh
     - bubbles/scripts/acceptance-authority-lib.sh
+    - bubbles/scripts/action-risk-classes-lib.sh
     - bubbles/scripts/action-risk-registry-lint.sh
     - bubbles/scripts/adoption-profile-lib-selftest.sh
     - bubbles/scripts/adoption-profile-lib.sh
@@ -5321,6 +5364,7 @@ checks:
     - bubbles/scripts/generate-framework-stats.sh
     - bubbles/scripts/generate-gate-coverage-map-selftest.sh
     - bubbles/scripts/generate-gate-coverage-map.sh
+    - bubbles/scripts/generate-gate-enforcement.sh
     - bubbles/scripts/generate-installer-selftest.sh
     - bubbles/scripts/generate-installer.sh
     - bubbles/scripts/generate-modes-block.sh
@@ -5430,6 +5474,8 @@ checks:
     - bubbles/scripts/payload-closure-guard.sh
     - bubbles/scripts/phase-coordinator-selftest.sh
     - bubbles/scripts/phase-coordinator.sh
+    - bubbles/scripts/phase-name-enum-lint-selftest.sh
+    - bubbles/scripts/phase-name-enum-lint.sh
     - bubbles/scripts/phase-relevance-resolve-selftest.sh
     - bubbles/scripts/phase-relevance-resolve.sh
     - bubbles/scripts/pii-scan.sh
@@ -5471,6 +5517,9 @@ checks:
     - bubbles/scripts/release-ladder-schema-guard.sh
     - bubbles/scripts/release-manifest-purity-selftest.sh
     - bubbles/scripts/release-manifest-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard.sh
+    - bubbles/scripts/release-packet-docs-lib.sh
     - bubbles/scripts/release-packet-location-guard-selftest.sh
     - bubbles/scripts/release-packet-location-guard.sh
     - bubbles/scripts/release-train-backfill-planner.sh
@@ -5774,7 +5823,6 @@ checks:
     - docs/guides/WORKFLOW_MODES.md
     - docs/issues/G068-word-overlap-threshold.md
     - docs/issues/session-aware-runtime-coordination.md
-    - docs/mcp.md
     - docs/recipes/README.md
     - docs/recipes/adversarial-verification.md
     - docs/recipes/ask-the-super-first.md
@@ -5819,6 +5867,7 @@ checks:
     - bubbles/adapters/judge/ollama.sh
     - bubbles/adapters/observability/none.sh
     - bubbles/scripts/acceptance-authority-lib.sh
+    - bubbles/scripts/action-risk-classes-lib.sh
     - bubbles/scripts/action-risk-registry-lint.sh
     - bubbles/scripts/adoption-profile-lib-selftest.sh
     - bubbles/scripts/adoption-profile-lib.sh
@@ -5999,6 +6048,7 @@ checks:
     - bubbles/scripts/generate-framework-stats.sh
     - bubbles/scripts/generate-gate-coverage-map-selftest.sh
     - bubbles/scripts/generate-gate-coverage-map.sh
+    - bubbles/scripts/generate-gate-enforcement.sh
     - bubbles/scripts/generate-installer-selftest.sh
     - bubbles/scripts/generate-installer.sh
     - bubbles/scripts/generate-modes-block.sh
@@ -6108,6 +6158,8 @@ checks:
     - bubbles/scripts/payload-closure-guard.sh
     - bubbles/scripts/phase-coordinator-selftest.sh
     - bubbles/scripts/phase-coordinator.sh
+    - bubbles/scripts/phase-name-enum-lint-selftest.sh
+    - bubbles/scripts/phase-name-enum-lint.sh
     - bubbles/scripts/phase-relevance-resolve-selftest.sh
     - bubbles/scripts/phase-relevance-resolve.sh
     - bubbles/scripts/pii-scan.sh
@@ -6149,6 +6201,9 @@ checks:
     - bubbles/scripts/release-ladder-schema-guard.sh
     - bubbles/scripts/release-manifest-purity-selftest.sh
     - bubbles/scripts/release-manifest-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard.sh
+    - bubbles/scripts/release-packet-docs-lib.sh
     - bubbles/scripts/release-packet-location-guard-selftest.sh
     - bubbles/scripts/release-packet-location-guard.sh
     - bubbles/scripts/release-train-backfill-planner.sh
@@ -6452,7 +6507,6 @@ checks:
     - docs/guides/WORKFLOW_MODES.md
     - docs/issues/G068-word-overlap-threshold.md
     - docs/issues/session-aware-runtime-coordination.md
-    - docs/mcp.md
     - docs/recipes/README.md
     - docs/recipes/adversarial-verification.md
     - docs/recipes/ask-the-super-first.md
@@ -6527,6 +6581,7 @@ checks:
     - bubbles/adapters/judge/ollama.sh
     - bubbles/adapters/observability/none.sh
     - bubbles/scripts/acceptance-authority-lib.sh
+    - bubbles/scripts/action-risk-classes-lib.sh
     - bubbles/scripts/action-risk-registry-lint.sh
     - bubbles/scripts/adoption-profile-lib-selftest.sh
     - bubbles/scripts/adoption-profile-lib.sh
@@ -6707,6 +6762,7 @@ checks:
     - bubbles/scripts/generate-framework-stats.sh
     - bubbles/scripts/generate-gate-coverage-map-selftest.sh
     - bubbles/scripts/generate-gate-coverage-map.sh
+    - bubbles/scripts/generate-gate-enforcement.sh
     - bubbles/scripts/generate-installer-selftest.sh
     - bubbles/scripts/generate-installer.sh
     - bubbles/scripts/generate-modes-block.sh
@@ -6816,6 +6872,8 @@ checks:
     - bubbles/scripts/payload-closure-guard.sh
     - bubbles/scripts/phase-coordinator-selftest.sh
     - bubbles/scripts/phase-coordinator.sh
+    - bubbles/scripts/phase-name-enum-lint-selftest.sh
+    - bubbles/scripts/phase-name-enum-lint.sh
     - bubbles/scripts/phase-relevance-resolve-selftest.sh
     - bubbles/scripts/phase-relevance-resolve.sh
     - bubbles/scripts/pii-scan.sh
@@ -6857,6 +6915,9 @@ checks:
     - bubbles/scripts/release-ladder-schema-guard.sh
     - bubbles/scripts/release-manifest-purity-selftest.sh
     - bubbles/scripts/release-manifest-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard.sh
+    - bubbles/scripts/release-packet-docs-lib.sh
     - bubbles/scripts/release-packet-location-guard-selftest.sh
     - bubbles/scripts/release-packet-location-guard.sh
     - bubbles/scripts/release-train-backfill-planner.sh
@@ -7160,7 +7221,6 @@ checks:
     - docs/guides/WORKFLOW_MODES.md
     - docs/issues/G068-word-overlap-threshold.md
     - docs/issues/session-aware-runtime-coordination.md
-    - docs/mcp.md
     - docs/recipes/README.md
     - docs/recipes/adversarial-verification.md
     - docs/recipes/ask-the-super-first.md
@@ -7205,6 +7265,7 @@ checks:
     - bubbles/adapters/judge/ollama.sh
     - bubbles/adapters/observability/none.sh
     - bubbles/scripts/acceptance-authority-lib.sh
+    - bubbles/scripts/action-risk-classes-lib.sh
     - bubbles/scripts/action-risk-registry-lint.sh
     - bubbles/scripts/adoption-profile-lib-selftest.sh
     - bubbles/scripts/adoption-profile-lib.sh
@@ -7385,6 +7446,7 @@ checks:
     - bubbles/scripts/generate-framework-stats.sh
     - bubbles/scripts/generate-gate-coverage-map-selftest.sh
     - bubbles/scripts/generate-gate-coverage-map.sh
+    - bubbles/scripts/generate-gate-enforcement.sh
     - bubbles/scripts/generate-installer-selftest.sh
     - bubbles/scripts/generate-installer.sh
     - bubbles/scripts/generate-modes-block.sh
@@ -7494,6 +7556,8 @@ checks:
     - bubbles/scripts/payload-closure-guard.sh
     - bubbles/scripts/phase-coordinator-selftest.sh
     - bubbles/scripts/phase-coordinator.sh
+    - bubbles/scripts/phase-name-enum-lint-selftest.sh
+    - bubbles/scripts/phase-name-enum-lint.sh
     - bubbles/scripts/phase-relevance-resolve-selftest.sh
     - bubbles/scripts/phase-relevance-resolve.sh
     - bubbles/scripts/pii-scan.sh
@@ -7535,6 +7599,9 @@ checks:
     - bubbles/scripts/release-ladder-schema-guard.sh
     - bubbles/scripts/release-manifest-purity-selftest.sh
     - bubbles/scripts/release-manifest-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard.sh
+    - bubbles/scripts/release-packet-docs-lib.sh
     - bubbles/scripts/release-packet-location-guard-selftest.sh
     - bubbles/scripts/release-packet-location-guard.sh
     - bubbles/scripts/release-train-backfill-planner.sh
@@ -7838,7 +7905,6 @@ checks:
     - docs/guides/WORKFLOW_MODES.md
     - docs/issues/G068-word-overlap-threshold.md
     - docs/issues/session-aware-runtime-coordination.md
-    - docs/mcp.md
     - docs/recipes/README.md
     - docs/recipes/adversarial-verification.md
     - docs/recipes/ask-the-super-first.md
@@ -7883,6 +7949,7 @@ checks:
     - bubbles/adapters/judge/ollama.sh
     - bubbles/adapters/observability/none.sh
     - bubbles/scripts/acceptance-authority-lib.sh
+    - bubbles/scripts/action-risk-classes-lib.sh
     - bubbles/scripts/action-risk-registry-lint.sh
     - bubbles/scripts/adoption-profile-lib-selftest.sh
     - bubbles/scripts/adoption-profile-lib.sh
@@ -8063,6 +8130,7 @@ checks:
     - bubbles/scripts/generate-framework-stats.sh
     - bubbles/scripts/generate-gate-coverage-map-selftest.sh
     - bubbles/scripts/generate-gate-coverage-map.sh
+    - bubbles/scripts/generate-gate-enforcement.sh
     - bubbles/scripts/generate-installer-selftest.sh
     - bubbles/scripts/generate-installer.sh
     - bubbles/scripts/generate-modes-block.sh
@@ -8172,6 +8240,8 @@ checks:
     - bubbles/scripts/payload-closure-guard.sh
     - bubbles/scripts/phase-coordinator-selftest.sh
     - bubbles/scripts/phase-coordinator.sh
+    - bubbles/scripts/phase-name-enum-lint-selftest.sh
+    - bubbles/scripts/phase-name-enum-lint.sh
     - bubbles/scripts/phase-relevance-resolve-selftest.sh
     - bubbles/scripts/phase-relevance-resolve.sh
     - bubbles/scripts/pii-scan.sh
@@ -8213,6 +8283,9 @@ checks:
     - bubbles/scripts/release-ladder-schema-guard.sh
     - bubbles/scripts/release-manifest-purity-selftest.sh
     - bubbles/scripts/release-manifest-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard.sh
+    - bubbles/scripts/release-packet-docs-lib.sh
     - bubbles/scripts/release-packet-location-guard-selftest.sh
     - bubbles/scripts/release-packet-location-guard.sh
     - bubbles/scripts/release-train-backfill-planner.sh
@@ -8516,7 +8589,6 @@ checks:
     - docs/guides/WORKFLOW_MODES.md
     - docs/issues/G068-word-overlap-threshold.md
     - docs/issues/session-aware-runtime-coordination.md
-    - docs/mcp.md
     - docs/recipes/README.md
     - docs/recipes/adversarial-verification.md
     - docs/recipes/ask-the-super-first.md
@@ -8573,6 +8645,20 @@ checks:
     - docs/recipes/custom-gates.md
     commands:
     - python3
+  vc-bubbles-scripts-generate-gate-enforcement:
+    script: bubbles/scripts/generate-gate-enforcement.sh
+    label: "Generated gate-enforcement block current"
+    closureComplete: false
+    inputs:
+    - bubbles/scripts/gate-id-grep.sh
+    - bubbles/scripts/generate-gate-enforcement.sh
+    - README.md
+    - bubbles/registry/gates.yaml
+    - bubbles/workflows.yaml
+    - bubbles/workflows/modes.yaml
+    commands:
+    - python3
+    - shellcheck
   vc-bubbles-scripts-gate-retirement-selftest:
     script: bubbles/scripts/gate-retirement-selftest.sh
     label: "Gate retirement selftest (IMP-027 SCOPE-11)"
@@ -8657,6 +8743,7 @@ checks:
     - bubbles/adapters/judge/ollama.sh
     - bubbles/adapters/observability/none.sh
     - bubbles/scripts/acceptance-authority-lib.sh
+    - bubbles/scripts/action-risk-classes-lib.sh
     - bubbles/scripts/action-risk-registry-lint.sh
     - bubbles/scripts/adoption-profile-lib-selftest.sh
     - bubbles/scripts/adoption-profile-lib.sh
@@ -8837,6 +8924,7 @@ checks:
     - bubbles/scripts/generate-framework-stats.sh
     - bubbles/scripts/generate-gate-coverage-map-selftest.sh
     - bubbles/scripts/generate-gate-coverage-map.sh
+    - bubbles/scripts/generate-gate-enforcement.sh
     - bubbles/scripts/generate-installer-selftest.sh
     - bubbles/scripts/generate-installer.sh
     - bubbles/scripts/generate-modes-block.sh
@@ -8946,6 +9034,8 @@ checks:
     - bubbles/scripts/payload-closure-guard.sh
     - bubbles/scripts/phase-coordinator-selftest.sh
     - bubbles/scripts/phase-coordinator.sh
+    - bubbles/scripts/phase-name-enum-lint-selftest.sh
+    - bubbles/scripts/phase-name-enum-lint.sh
     - bubbles/scripts/phase-relevance-resolve-selftest.sh
     - bubbles/scripts/phase-relevance-resolve.sh
     - bubbles/scripts/pii-scan.sh
@@ -8987,6 +9077,9 @@ checks:
     - bubbles/scripts/release-ladder-schema-guard.sh
     - bubbles/scripts/release-manifest-purity-selftest.sh
     - bubbles/scripts/release-manifest-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard.sh
+    - bubbles/scripts/release-packet-docs-lib.sh
     - bubbles/scripts/release-packet-location-guard-selftest.sh
     - bubbles/scripts/release-packet-location-guard.sh
     - bubbles/scripts/release-train-backfill-planner.sh
@@ -9290,7 +9383,6 @@ checks:
     - docs/guides/WORKFLOW_MODES.md
     - docs/issues/G068-word-overlap-threshold.md
     - docs/issues/session-aware-runtime-coordination.md
-    - docs/mcp.md
     - docs/recipes/README.md
     - docs/recipes/adversarial-verification.md
     - docs/recipes/ask-the-super-first.md
@@ -9366,11 +9458,13 @@ checks:
     label: "Pre-tool risk gate selftest (v6.1 / R10)"
     closureComplete: true
     inputs:
+    - bubbles/scripts/action-risk-classes-lib.sh
     - bubbles/scripts/pre-tool-risk-gate-selftest.sh
     - bubbles/scripts/pre-tool-risk-gate.sh
     - bubbles/action-risk-registry.yaml
     commands:
     - shasum
+    - shellcheck
   vc-bubbles-scripts-adversarial-resolve-selftest:
     script: bubbles/scripts/adversarial-resolve-selftest.sh
     label: "Adversarial-resolve control plane selftest (IMP-002 / S0)"
@@ -9464,6 +9558,7 @@ checks:
     - bubbles/adapters/judge/ollama.sh
     - bubbles/adapters/observability/none.sh
     - bubbles/scripts/acceptance-authority-lib.sh
+    - bubbles/scripts/action-risk-classes-lib.sh
     - bubbles/scripts/action-risk-registry-lint.sh
     - bubbles/scripts/adoption-profile-lib-selftest.sh
     - bubbles/scripts/adoption-profile-lib.sh
@@ -9644,6 +9739,7 @@ checks:
     - bubbles/scripts/generate-framework-stats.sh
     - bubbles/scripts/generate-gate-coverage-map-selftest.sh
     - bubbles/scripts/generate-gate-coverage-map.sh
+    - bubbles/scripts/generate-gate-enforcement.sh
     - bubbles/scripts/generate-installer-selftest.sh
     - bubbles/scripts/generate-installer.sh
     - bubbles/scripts/generate-modes-block.sh
@@ -9753,6 +9849,8 @@ checks:
     - bubbles/scripts/payload-closure-guard.sh
     - bubbles/scripts/phase-coordinator-selftest.sh
     - bubbles/scripts/phase-coordinator.sh
+    - bubbles/scripts/phase-name-enum-lint-selftest.sh
+    - bubbles/scripts/phase-name-enum-lint.sh
     - bubbles/scripts/phase-relevance-resolve-selftest.sh
     - bubbles/scripts/phase-relevance-resolve.sh
     - bubbles/scripts/pii-scan.sh
@@ -9794,6 +9892,9 @@ checks:
     - bubbles/scripts/release-ladder-schema-guard.sh
     - bubbles/scripts/release-manifest-purity-selftest.sh
     - bubbles/scripts/release-manifest-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard.sh
+    - bubbles/scripts/release-packet-docs-lib.sh
     - bubbles/scripts/release-packet-location-guard-selftest.sh
     - bubbles/scripts/release-packet-location-guard.sh
     - bubbles/scripts/release-train-backfill-planner.sh
@@ -10097,7 +10198,6 @@ checks:
     - docs/guides/WORKFLOW_MODES.md
     - docs/issues/G068-word-overlap-threshold.md
     - docs/issues/session-aware-runtime-coordination.md
-    - docs/mcp.md
     - docs/recipes/README.md
     - docs/recipes/adversarial-verification.md
     - docs/recipes/ask-the-super-first.md
@@ -10142,6 +10242,7 @@ checks:
     - bubbles/adapters/judge/ollama.sh
     - bubbles/adapters/observability/none.sh
     - bubbles/scripts/acceptance-authority-lib.sh
+    - bubbles/scripts/action-risk-classes-lib.sh
     - bubbles/scripts/action-risk-registry-lint.sh
     - bubbles/scripts/adoption-profile-lib-selftest.sh
     - bubbles/scripts/adoption-profile-lib.sh
@@ -10322,6 +10423,7 @@ checks:
     - bubbles/scripts/generate-framework-stats.sh
     - bubbles/scripts/generate-gate-coverage-map-selftest.sh
     - bubbles/scripts/generate-gate-coverage-map.sh
+    - bubbles/scripts/generate-gate-enforcement.sh
     - bubbles/scripts/generate-installer-selftest.sh
     - bubbles/scripts/generate-installer.sh
     - bubbles/scripts/generate-modes-block.sh
@@ -10431,6 +10533,8 @@ checks:
     - bubbles/scripts/payload-closure-guard.sh
     - bubbles/scripts/phase-coordinator-selftest.sh
     - bubbles/scripts/phase-coordinator.sh
+    - bubbles/scripts/phase-name-enum-lint-selftest.sh
+    - bubbles/scripts/phase-name-enum-lint.sh
     - bubbles/scripts/phase-relevance-resolve-selftest.sh
     - bubbles/scripts/phase-relevance-resolve.sh
     - bubbles/scripts/pii-scan.sh
@@ -10472,6 +10576,9 @@ checks:
     - bubbles/scripts/release-ladder-schema-guard.sh
     - bubbles/scripts/release-manifest-purity-selftest.sh
     - bubbles/scripts/release-manifest-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard.sh
+    - bubbles/scripts/release-packet-docs-lib.sh
     - bubbles/scripts/release-packet-location-guard-selftest.sh
     - bubbles/scripts/release-packet-location-guard.sh
     - bubbles/scripts/release-train-backfill-planner.sh
@@ -10775,7 +10882,6 @@ checks:
     - docs/guides/WORKFLOW_MODES.md
     - docs/issues/G068-word-overlap-threshold.md
     - docs/issues/session-aware-runtime-coordination.md
-    - docs/mcp.md
     - docs/recipes/README.md
     - docs/recipes/adversarial-verification.md
     - docs/recipes/ask-the-super-first.md
@@ -10869,6 +10975,7 @@ checks:
     - bubbles/adapters/judge/ollama.sh
     - bubbles/adapters/observability/none.sh
     - bubbles/scripts/acceptance-authority-lib.sh
+    - bubbles/scripts/action-risk-classes-lib.sh
     - bubbles/scripts/action-risk-registry-lint.sh
     - bubbles/scripts/adoption-profile-lib-selftest.sh
     - bubbles/scripts/adoption-profile-lib.sh
@@ -11049,6 +11156,7 @@ checks:
     - bubbles/scripts/generate-framework-stats.sh
     - bubbles/scripts/generate-gate-coverage-map-selftest.sh
     - bubbles/scripts/generate-gate-coverage-map.sh
+    - bubbles/scripts/generate-gate-enforcement.sh
     - bubbles/scripts/generate-installer-selftest.sh
     - bubbles/scripts/generate-installer.sh
     - bubbles/scripts/generate-modes-block.sh
@@ -11158,6 +11266,8 @@ checks:
     - bubbles/scripts/payload-closure-guard.sh
     - bubbles/scripts/phase-coordinator-selftest.sh
     - bubbles/scripts/phase-coordinator.sh
+    - bubbles/scripts/phase-name-enum-lint-selftest.sh
+    - bubbles/scripts/phase-name-enum-lint.sh
     - bubbles/scripts/phase-relevance-resolve-selftest.sh
     - bubbles/scripts/phase-relevance-resolve.sh
     - bubbles/scripts/pii-scan.sh
@@ -11199,6 +11309,9 @@ checks:
     - bubbles/scripts/release-ladder-schema-guard.sh
     - bubbles/scripts/release-manifest-purity-selftest.sh
     - bubbles/scripts/release-manifest-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard.sh
+    - bubbles/scripts/release-packet-docs-lib.sh
     - bubbles/scripts/release-packet-location-guard-selftest.sh
     - bubbles/scripts/release-packet-location-guard.sh
     - bubbles/scripts/release-train-backfill-planner.sh
@@ -11502,7 +11615,6 @@ checks:
     - docs/guides/WORKFLOW_MODES.md
     - docs/issues/G068-word-overlap-threshold.md
     - docs/issues/session-aware-runtime-coordination.md
-    - docs/mcp.md
     - docs/recipes/README.md
     - docs/recipes/adversarial-verification.md
     - docs/recipes/ask-the-super-first.md
@@ -11559,6 +11671,7 @@ checks:
     - bubbles/adapters/judge/ollama.sh
     - bubbles/adapters/observability/none.sh
     - bubbles/scripts/acceptance-authority-lib.sh
+    - bubbles/scripts/action-risk-classes-lib.sh
     - bubbles/scripts/action-risk-registry-lint.sh
     - bubbles/scripts/adoption-profile-lib-selftest.sh
     - bubbles/scripts/adoption-profile-lib.sh
@@ -11739,6 +11852,7 @@ checks:
     - bubbles/scripts/generate-framework-stats.sh
     - bubbles/scripts/generate-gate-coverage-map-selftest.sh
     - bubbles/scripts/generate-gate-coverage-map.sh
+    - bubbles/scripts/generate-gate-enforcement.sh
     - bubbles/scripts/generate-installer-selftest.sh
     - bubbles/scripts/generate-installer.sh
     - bubbles/scripts/generate-modes-block.sh
@@ -11848,6 +11962,8 @@ checks:
     - bubbles/scripts/payload-closure-guard.sh
     - bubbles/scripts/phase-coordinator-selftest.sh
     - bubbles/scripts/phase-coordinator.sh
+    - bubbles/scripts/phase-name-enum-lint-selftest.sh
+    - bubbles/scripts/phase-name-enum-lint.sh
     - bubbles/scripts/phase-relevance-resolve-selftest.sh
     - bubbles/scripts/phase-relevance-resolve.sh
     - bubbles/scripts/pii-scan.sh
@@ -11889,6 +12005,9 @@ checks:
     - bubbles/scripts/release-ladder-schema-guard.sh
     - bubbles/scripts/release-manifest-purity-selftest.sh
     - bubbles/scripts/release-manifest-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard.sh
+    - bubbles/scripts/release-packet-docs-lib.sh
     - bubbles/scripts/release-packet-location-guard-selftest.sh
     - bubbles/scripts/release-packet-location-guard.sh
     - bubbles/scripts/release-train-backfill-planner.sh
@@ -12192,7 +12311,6 @@ checks:
     - docs/guides/WORKFLOW_MODES.md
     - docs/issues/G068-word-overlap-threshold.md
     - docs/issues/session-aware-runtime-coordination.md
-    - docs/mcp.md
     - docs/recipes/README.md
     - docs/recipes/adversarial-verification.md
     - docs/recipes/ask-the-super-first.md
@@ -12237,6 +12355,7 @@ checks:
     - bubbles/adapters/judge/ollama.sh
     - bubbles/adapters/observability/none.sh
     - bubbles/scripts/acceptance-authority-lib.sh
+    - bubbles/scripts/action-risk-classes-lib.sh
     - bubbles/scripts/action-risk-registry-lint.sh
     - bubbles/scripts/adoption-profile-lib-selftest.sh
     - bubbles/scripts/adoption-profile-lib.sh
@@ -12417,6 +12536,7 @@ checks:
     - bubbles/scripts/generate-framework-stats.sh
     - bubbles/scripts/generate-gate-coverage-map-selftest.sh
     - bubbles/scripts/generate-gate-coverage-map.sh
+    - bubbles/scripts/generate-gate-enforcement.sh
     - bubbles/scripts/generate-installer-selftest.sh
     - bubbles/scripts/generate-installer.sh
     - bubbles/scripts/generate-modes-block.sh
@@ -12526,6 +12646,8 @@ checks:
     - bubbles/scripts/payload-closure-guard.sh
     - bubbles/scripts/phase-coordinator-selftest.sh
     - bubbles/scripts/phase-coordinator.sh
+    - bubbles/scripts/phase-name-enum-lint-selftest.sh
+    - bubbles/scripts/phase-name-enum-lint.sh
     - bubbles/scripts/phase-relevance-resolve-selftest.sh
     - bubbles/scripts/phase-relevance-resolve.sh
     - bubbles/scripts/pii-scan.sh
@@ -12567,6 +12689,9 @@ checks:
     - bubbles/scripts/release-ladder-schema-guard.sh
     - bubbles/scripts/release-manifest-purity-selftest.sh
     - bubbles/scripts/release-manifest-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard.sh
+    - bubbles/scripts/release-packet-docs-lib.sh
     - bubbles/scripts/release-packet-location-guard-selftest.sh
     - bubbles/scripts/release-packet-location-guard.sh
     - bubbles/scripts/release-train-backfill-planner.sh
@@ -12870,7 +12995,6 @@ checks:
     - docs/guides/WORKFLOW_MODES.md
     - docs/issues/G068-word-overlap-threshold.md
     - docs/issues/session-aware-runtime-coordination.md
-    - docs/mcp.md
     - docs/recipes/README.md
     - docs/recipes/adversarial-verification.md
     - docs/recipes/ask-the-super-first.md
@@ -12948,6 +13072,7 @@ checks:
     - bubbles/adapters/judge/ollama.sh
     - bubbles/adapters/observability/none.sh
     - bubbles/scripts/acceptance-authority-lib.sh
+    - bubbles/scripts/action-risk-classes-lib.sh
     - bubbles/scripts/action-risk-registry-lint.sh
     - bubbles/scripts/adoption-profile-lib-selftest.sh
     - bubbles/scripts/adoption-profile-lib.sh
@@ -13128,6 +13253,7 @@ checks:
     - bubbles/scripts/generate-framework-stats.sh
     - bubbles/scripts/generate-gate-coverage-map-selftest.sh
     - bubbles/scripts/generate-gate-coverage-map.sh
+    - bubbles/scripts/generate-gate-enforcement.sh
     - bubbles/scripts/generate-installer-selftest.sh
     - bubbles/scripts/generate-installer.sh
     - bubbles/scripts/generate-modes-block.sh
@@ -13237,6 +13363,8 @@ checks:
     - bubbles/scripts/payload-closure-guard.sh
     - bubbles/scripts/phase-coordinator-selftest.sh
     - bubbles/scripts/phase-coordinator.sh
+    - bubbles/scripts/phase-name-enum-lint-selftest.sh
+    - bubbles/scripts/phase-name-enum-lint.sh
     - bubbles/scripts/phase-relevance-resolve-selftest.sh
     - bubbles/scripts/phase-relevance-resolve.sh
     - bubbles/scripts/pii-scan.sh
@@ -13278,6 +13406,9 @@ checks:
     - bubbles/scripts/release-ladder-schema-guard.sh
     - bubbles/scripts/release-manifest-purity-selftest.sh
     - bubbles/scripts/release-manifest-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard.sh
+    - bubbles/scripts/release-packet-docs-lib.sh
     - bubbles/scripts/release-packet-location-guard-selftest.sh
     - bubbles/scripts/release-packet-location-guard.sh
     - bubbles/scripts/release-train-backfill-planner.sh
@@ -13581,7 +13712,6 @@ checks:
     - docs/guides/WORKFLOW_MODES.md
     - docs/issues/G068-word-overlap-threshold.md
     - docs/issues/session-aware-runtime-coordination.md
-    - docs/mcp.md
     - docs/recipes/README.md
     - docs/recipes/adversarial-verification.md
     - docs/recipes/ask-the-super-first.md
@@ -13798,6 +13928,7 @@ checks:
     - bubbles/adapters/judge/ollama.sh
     - bubbles/adapters/observability/none.sh
     - bubbles/scripts/acceptance-authority-lib.sh
+    - bubbles/scripts/action-risk-classes-lib.sh
     - bubbles/scripts/action-risk-registry-lint.sh
     - bubbles/scripts/adoption-profile-lib-selftest.sh
     - bubbles/scripts/adoption-profile-lib.sh
@@ -13978,6 +14109,7 @@ checks:
     - bubbles/scripts/generate-framework-stats.sh
     - bubbles/scripts/generate-gate-coverage-map-selftest.sh
     - bubbles/scripts/generate-gate-coverage-map.sh
+    - bubbles/scripts/generate-gate-enforcement.sh
     - bubbles/scripts/generate-installer-selftest.sh
     - bubbles/scripts/generate-installer.sh
     - bubbles/scripts/generate-modes-block.sh
@@ -14087,6 +14219,8 @@ checks:
     - bubbles/scripts/payload-closure-guard.sh
     - bubbles/scripts/phase-coordinator-selftest.sh
     - bubbles/scripts/phase-coordinator.sh
+    - bubbles/scripts/phase-name-enum-lint-selftest.sh
+    - bubbles/scripts/phase-name-enum-lint.sh
     - bubbles/scripts/phase-relevance-resolve-selftest.sh
     - bubbles/scripts/phase-relevance-resolve.sh
     - bubbles/scripts/pii-scan.sh
@@ -14128,6 +14262,9 @@ checks:
     - bubbles/scripts/release-ladder-schema-guard.sh
     - bubbles/scripts/release-manifest-purity-selftest.sh
     - bubbles/scripts/release-manifest-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard.sh
+    - bubbles/scripts/release-packet-docs-lib.sh
     - bubbles/scripts/release-packet-location-guard-selftest.sh
     - bubbles/scripts/release-packet-location-guard.sh
     - bubbles/scripts/release-train-backfill-planner.sh
@@ -14431,7 +14568,6 @@ checks:
     - docs/guides/WORKFLOW_MODES.md
     - docs/issues/G068-word-overlap-threshold.md
     - docs/issues/session-aware-runtime-coordination.md
-    - docs/mcp.md
     - docs/recipes/README.md
     - docs/recipes/adversarial-verification.md
     - docs/recipes/ask-the-super-first.md
@@ -14476,6 +14612,7 @@ checks:
     - bubbles/adapters/judge/ollama.sh
     - bubbles/adapters/observability/none.sh
     - bubbles/scripts/acceptance-authority-lib.sh
+    - bubbles/scripts/action-risk-classes-lib.sh
     - bubbles/scripts/action-risk-registry-lint.sh
     - bubbles/scripts/adoption-profile-lib-selftest.sh
     - bubbles/scripts/adoption-profile-lib.sh
@@ -14656,6 +14793,7 @@ checks:
     - bubbles/scripts/generate-framework-stats.sh
     - bubbles/scripts/generate-gate-coverage-map-selftest.sh
     - bubbles/scripts/generate-gate-coverage-map.sh
+    - bubbles/scripts/generate-gate-enforcement.sh
     - bubbles/scripts/generate-installer-selftest.sh
     - bubbles/scripts/generate-installer.sh
     - bubbles/scripts/generate-modes-block.sh
@@ -14765,6 +14903,8 @@ checks:
     - bubbles/scripts/payload-closure-guard.sh
     - bubbles/scripts/phase-coordinator-selftest.sh
     - bubbles/scripts/phase-coordinator.sh
+    - bubbles/scripts/phase-name-enum-lint-selftest.sh
+    - bubbles/scripts/phase-name-enum-lint.sh
     - bubbles/scripts/phase-relevance-resolve-selftest.sh
     - bubbles/scripts/phase-relevance-resolve.sh
     - bubbles/scripts/pii-scan.sh
@@ -14806,6 +14946,9 @@ checks:
     - bubbles/scripts/release-ladder-schema-guard.sh
     - bubbles/scripts/release-manifest-purity-selftest.sh
     - bubbles/scripts/release-manifest-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard.sh
+    - bubbles/scripts/release-packet-docs-lib.sh
     - bubbles/scripts/release-packet-location-guard-selftest.sh
     - bubbles/scripts/release-packet-location-guard.sh
     - bubbles/scripts/release-train-backfill-planner.sh
@@ -15109,7 +15252,6 @@ checks:
     - docs/guides/WORKFLOW_MODES.md
     - docs/issues/G068-word-overlap-threshold.md
     - docs/issues/session-aware-runtime-coordination.md
-    - docs/mcp.md
     - docs/recipes/README.md
     - docs/recipes/adversarial-verification.md
     - docs/recipes/ask-the-super-first.md
@@ -15245,6 +15387,7 @@ checks:
     - bubbles/adapters/judge/ollama.sh
     - bubbles/adapters/observability/none.sh
     - bubbles/scripts/acceptance-authority-lib.sh
+    - bubbles/scripts/action-risk-classes-lib.sh
     - bubbles/scripts/action-risk-registry-lint.sh
     - bubbles/scripts/adoption-profile-lib-selftest.sh
     - bubbles/scripts/adoption-profile-lib.sh
@@ -15425,6 +15568,7 @@ checks:
     - bubbles/scripts/generate-framework-stats.sh
     - bubbles/scripts/generate-gate-coverage-map-selftest.sh
     - bubbles/scripts/generate-gate-coverage-map.sh
+    - bubbles/scripts/generate-gate-enforcement.sh
     - bubbles/scripts/generate-installer-selftest.sh
     - bubbles/scripts/generate-installer.sh
     - bubbles/scripts/generate-modes-block.sh
@@ -15534,6 +15678,8 @@ checks:
     - bubbles/scripts/payload-closure-guard.sh
     - bubbles/scripts/phase-coordinator-selftest.sh
     - bubbles/scripts/phase-coordinator.sh
+    - bubbles/scripts/phase-name-enum-lint-selftest.sh
+    - bubbles/scripts/phase-name-enum-lint.sh
     - bubbles/scripts/phase-relevance-resolve-selftest.sh
     - bubbles/scripts/phase-relevance-resolve.sh
     - bubbles/scripts/pii-scan.sh
@@ -15575,6 +15721,9 @@ checks:
     - bubbles/scripts/release-ladder-schema-guard.sh
     - bubbles/scripts/release-manifest-purity-selftest.sh
     - bubbles/scripts/release-manifest-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard.sh
+    - bubbles/scripts/release-packet-docs-lib.sh
     - bubbles/scripts/release-packet-location-guard-selftest.sh
     - bubbles/scripts/release-packet-location-guard.sh
     - bubbles/scripts/release-train-backfill-planner.sh
@@ -15878,7 +16027,6 @@ checks:
     - docs/guides/WORKFLOW_MODES.md
     - docs/issues/G068-word-overlap-threshold.md
     - docs/issues/session-aware-runtime-coordination.md
-    - docs/mcp.md
     - docs/recipes/README.md
     - docs/recipes/adversarial-verification.md
     - docs/recipes/ask-the-super-first.md
@@ -16014,6 +16162,7 @@ checks:
     - bubbles/adapters/judge/ollama.sh
     - bubbles/adapters/observability/none.sh
     - bubbles/scripts/acceptance-authority-lib.sh
+    - bubbles/scripts/action-risk-classes-lib.sh
     - bubbles/scripts/action-risk-registry-lint.sh
     - bubbles/scripts/adoption-profile-lib-selftest.sh
     - bubbles/scripts/adoption-profile-lib.sh
@@ -16194,6 +16343,7 @@ checks:
     - bubbles/scripts/generate-framework-stats.sh
     - bubbles/scripts/generate-gate-coverage-map-selftest.sh
     - bubbles/scripts/generate-gate-coverage-map.sh
+    - bubbles/scripts/generate-gate-enforcement.sh
     - bubbles/scripts/generate-installer-selftest.sh
     - bubbles/scripts/generate-installer.sh
     - bubbles/scripts/generate-modes-block.sh
@@ -16303,6 +16453,8 @@ checks:
     - bubbles/scripts/payload-closure-guard.sh
     - bubbles/scripts/phase-coordinator-selftest.sh
     - bubbles/scripts/phase-coordinator.sh
+    - bubbles/scripts/phase-name-enum-lint-selftest.sh
+    - bubbles/scripts/phase-name-enum-lint.sh
     - bubbles/scripts/phase-relevance-resolve-selftest.sh
     - bubbles/scripts/phase-relevance-resolve.sh
     - bubbles/scripts/pii-scan.sh
@@ -16344,6 +16496,9 @@ checks:
     - bubbles/scripts/release-ladder-schema-guard.sh
     - bubbles/scripts/release-manifest-purity-selftest.sh
     - bubbles/scripts/release-manifest-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard.sh
+    - bubbles/scripts/release-packet-docs-lib.sh
     - bubbles/scripts/release-packet-location-guard-selftest.sh
     - bubbles/scripts/release-packet-location-guard.sh
     - bubbles/scripts/release-train-backfill-planner.sh
@@ -16647,7 +16802,6 @@ checks:
     - docs/guides/WORKFLOW_MODES.md
     - docs/issues/G068-word-overlap-threshold.md
     - docs/issues/session-aware-runtime-coordination.md
-    - docs/mcp.md
     - docs/recipes/README.md
     - docs/recipes/adversarial-verification.md
     - docs/recipes/ask-the-super-first.md
@@ -16687,8 +16841,10 @@ checks:
     label: "Action risk registry lint"
     closureComplete: false
     inputs:
+    - bubbles/scripts/action-risk-classes-lib.sh
     - bubbles/scripts/action-risk-registry-lint.sh
-    commands: []
+    commands:
+    - shellcheck
   vc-bubbles-scripts-capability-ledger-selftest:
     script: bubbles/scripts/capability-ledger-selftest.sh
     label: "Capability ledger selftest"
@@ -16699,6 +16855,7 @@ checks:
     - bubbles/adapters/judge/ollama.sh
     - bubbles/adapters/observability/none.sh
     - bubbles/scripts/acceptance-authority-lib.sh
+    - bubbles/scripts/action-risk-classes-lib.sh
     - bubbles/scripts/action-risk-registry-lint.sh
     - bubbles/scripts/adoption-profile-lib-selftest.sh
     - bubbles/scripts/adoption-profile-lib.sh
@@ -16879,6 +17036,7 @@ checks:
     - bubbles/scripts/generate-framework-stats.sh
     - bubbles/scripts/generate-gate-coverage-map-selftest.sh
     - bubbles/scripts/generate-gate-coverage-map.sh
+    - bubbles/scripts/generate-gate-enforcement.sh
     - bubbles/scripts/generate-installer-selftest.sh
     - bubbles/scripts/generate-installer.sh
     - bubbles/scripts/generate-modes-block.sh
@@ -16988,6 +17146,8 @@ checks:
     - bubbles/scripts/payload-closure-guard.sh
     - bubbles/scripts/phase-coordinator-selftest.sh
     - bubbles/scripts/phase-coordinator.sh
+    - bubbles/scripts/phase-name-enum-lint-selftest.sh
+    - bubbles/scripts/phase-name-enum-lint.sh
     - bubbles/scripts/phase-relevance-resolve-selftest.sh
     - bubbles/scripts/phase-relevance-resolve.sh
     - bubbles/scripts/pii-scan.sh
@@ -17029,6 +17189,9 @@ checks:
     - bubbles/scripts/release-ladder-schema-guard.sh
     - bubbles/scripts/release-manifest-purity-selftest.sh
     - bubbles/scripts/release-manifest-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard.sh
+    - bubbles/scripts/release-packet-docs-lib.sh
     - bubbles/scripts/release-packet-location-guard-selftest.sh
     - bubbles/scripts/release-packet-location-guard.sh
     - bubbles/scripts/release-train-backfill-planner.sh
@@ -17332,7 +17495,6 @@ checks:
     - docs/guides/WORKFLOW_MODES.md
     - docs/issues/G068-word-overlap-threshold.md
     - docs/issues/session-aware-runtime-coordination.md
-    - docs/mcp.md
     - docs/recipes/README.md
     - docs/recipes/adversarial-verification.md
     - docs/recipes/ask-the-super-first.md
@@ -17431,6 +17593,7 @@ checks:
     - bubbles/adapters/judge/ollama.sh
     - bubbles/adapters/observability/none.sh
     - bubbles/scripts/acceptance-authority-lib.sh
+    - bubbles/scripts/action-risk-classes-lib.sh
     - bubbles/scripts/action-risk-registry-lint.sh
     - bubbles/scripts/adoption-profile-lib-selftest.sh
     - bubbles/scripts/adoption-profile-lib.sh
@@ -17611,6 +17774,7 @@ checks:
     - bubbles/scripts/generate-framework-stats.sh
     - bubbles/scripts/generate-gate-coverage-map-selftest.sh
     - bubbles/scripts/generate-gate-coverage-map.sh
+    - bubbles/scripts/generate-gate-enforcement.sh
     - bubbles/scripts/generate-installer-selftest.sh
     - bubbles/scripts/generate-installer.sh
     - bubbles/scripts/generate-modes-block.sh
@@ -17720,6 +17884,8 @@ checks:
     - bubbles/scripts/payload-closure-guard.sh
     - bubbles/scripts/phase-coordinator-selftest.sh
     - bubbles/scripts/phase-coordinator.sh
+    - bubbles/scripts/phase-name-enum-lint-selftest.sh
+    - bubbles/scripts/phase-name-enum-lint.sh
     - bubbles/scripts/phase-relevance-resolve-selftest.sh
     - bubbles/scripts/phase-relevance-resolve.sh
     - bubbles/scripts/pii-scan.sh
@@ -17761,6 +17927,9 @@ checks:
     - bubbles/scripts/release-ladder-schema-guard.sh
     - bubbles/scripts/release-manifest-purity-selftest.sh
     - bubbles/scripts/release-manifest-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard.sh
+    - bubbles/scripts/release-packet-docs-lib.sh
     - bubbles/scripts/release-packet-location-guard-selftest.sh
     - bubbles/scripts/release-packet-location-guard.sh
     - bubbles/scripts/release-train-backfill-planner.sh
@@ -18064,7 +18233,6 @@ checks:
     - docs/guides/WORKFLOW_MODES.md
     - docs/issues/G068-word-overlap-threshold.md
     - docs/issues/session-aware-runtime-coordination.md
-    - docs/mcp.md
     - docs/recipes/README.md
     - docs/recipes/adversarial-verification.md
     - docs/recipes/ask-the-super-first.md
@@ -18109,6 +18277,7 @@ checks:
     - bubbles/adapters/judge/ollama.sh
     - bubbles/adapters/observability/none.sh
     - bubbles/scripts/acceptance-authority-lib.sh
+    - bubbles/scripts/action-risk-classes-lib.sh
     - bubbles/scripts/action-risk-registry-lint.sh
     - bubbles/scripts/adoption-profile-lib-selftest.sh
     - bubbles/scripts/adoption-profile-lib.sh
@@ -18289,6 +18458,7 @@ checks:
     - bubbles/scripts/generate-framework-stats.sh
     - bubbles/scripts/generate-gate-coverage-map-selftest.sh
     - bubbles/scripts/generate-gate-coverage-map.sh
+    - bubbles/scripts/generate-gate-enforcement.sh
     - bubbles/scripts/generate-installer-selftest.sh
     - bubbles/scripts/generate-installer.sh
     - bubbles/scripts/generate-modes-block.sh
@@ -18398,6 +18568,8 @@ checks:
     - bubbles/scripts/payload-closure-guard.sh
     - bubbles/scripts/phase-coordinator-selftest.sh
     - bubbles/scripts/phase-coordinator.sh
+    - bubbles/scripts/phase-name-enum-lint-selftest.sh
+    - bubbles/scripts/phase-name-enum-lint.sh
     - bubbles/scripts/phase-relevance-resolve-selftest.sh
     - bubbles/scripts/phase-relevance-resolve.sh
     - bubbles/scripts/pii-scan.sh
@@ -18439,6 +18611,9 @@ checks:
     - bubbles/scripts/release-ladder-schema-guard.sh
     - bubbles/scripts/release-manifest-purity-selftest.sh
     - bubbles/scripts/release-manifest-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard.sh
+    - bubbles/scripts/release-packet-docs-lib.sh
     - bubbles/scripts/release-packet-location-guard-selftest.sh
     - bubbles/scripts/release-packet-location-guard.sh
     - bubbles/scripts/release-train-backfill-planner.sh
@@ -18742,7 +18917,6 @@ checks:
     - docs/guides/WORKFLOW_MODES.md
     - docs/issues/G068-word-overlap-threshold.md
     - docs/issues/session-aware-runtime-coordination.md
-    - docs/mcp.md
     - docs/recipes/README.md
     - docs/recipes/adversarial-verification.md
     - docs/recipes/ask-the-super-first.md
@@ -18787,6 +18961,7 @@ checks:
     - bubbles/adapters/judge/ollama.sh
     - bubbles/adapters/observability/none.sh
     - bubbles/scripts/acceptance-authority-lib.sh
+    - bubbles/scripts/action-risk-classes-lib.sh
     - bubbles/scripts/action-risk-registry-lint.sh
     - bubbles/scripts/adoption-profile-lib-selftest.sh
     - bubbles/scripts/adoption-profile-lib.sh
@@ -18967,6 +19142,7 @@ checks:
     - bubbles/scripts/generate-framework-stats.sh
     - bubbles/scripts/generate-gate-coverage-map-selftest.sh
     - bubbles/scripts/generate-gate-coverage-map.sh
+    - bubbles/scripts/generate-gate-enforcement.sh
     - bubbles/scripts/generate-installer-selftest.sh
     - bubbles/scripts/generate-installer.sh
     - bubbles/scripts/generate-modes-block.sh
@@ -19076,6 +19252,8 @@ checks:
     - bubbles/scripts/payload-closure-guard.sh
     - bubbles/scripts/phase-coordinator-selftest.sh
     - bubbles/scripts/phase-coordinator.sh
+    - bubbles/scripts/phase-name-enum-lint-selftest.sh
+    - bubbles/scripts/phase-name-enum-lint.sh
     - bubbles/scripts/phase-relevance-resolve-selftest.sh
     - bubbles/scripts/phase-relevance-resolve.sh
     - bubbles/scripts/pii-scan.sh
@@ -19117,6 +19295,9 @@ checks:
     - bubbles/scripts/release-ladder-schema-guard.sh
     - bubbles/scripts/release-manifest-purity-selftest.sh
     - bubbles/scripts/release-manifest-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard.sh
+    - bubbles/scripts/release-packet-docs-lib.sh
     - bubbles/scripts/release-packet-location-guard-selftest.sh
     - bubbles/scripts/release-packet-location-guard.sh
     - bubbles/scripts/release-train-backfill-planner.sh
@@ -19420,7 +19601,6 @@ checks:
     - docs/guides/WORKFLOW_MODES.md
     - docs/issues/G068-word-overlap-threshold.md
     - docs/issues/session-aware-runtime-coordination.md
-    - docs/mcp.md
     - docs/recipes/README.md
     - docs/recipes/adversarial-verification.md
     - docs/recipes/ask-the-super-first.md
@@ -19465,6 +19645,7 @@ checks:
     - bubbles/adapters/judge/ollama.sh
     - bubbles/adapters/observability/none.sh
     - bubbles/scripts/acceptance-authority-lib.sh
+    - bubbles/scripts/action-risk-classes-lib.sh
     - bubbles/scripts/action-risk-registry-lint.sh
     - bubbles/scripts/adoption-profile-lib-selftest.sh
     - bubbles/scripts/adoption-profile-lib.sh
@@ -19645,6 +19826,7 @@ checks:
     - bubbles/scripts/generate-framework-stats.sh
     - bubbles/scripts/generate-gate-coverage-map-selftest.sh
     - bubbles/scripts/generate-gate-coverage-map.sh
+    - bubbles/scripts/generate-gate-enforcement.sh
     - bubbles/scripts/generate-installer-selftest.sh
     - bubbles/scripts/generate-installer.sh
     - bubbles/scripts/generate-modes-block.sh
@@ -19754,6 +19936,8 @@ checks:
     - bubbles/scripts/payload-closure-guard.sh
     - bubbles/scripts/phase-coordinator-selftest.sh
     - bubbles/scripts/phase-coordinator.sh
+    - bubbles/scripts/phase-name-enum-lint-selftest.sh
+    - bubbles/scripts/phase-name-enum-lint.sh
     - bubbles/scripts/phase-relevance-resolve-selftest.sh
     - bubbles/scripts/phase-relevance-resolve.sh
     - bubbles/scripts/pii-scan.sh
@@ -19795,6 +19979,9 @@ checks:
     - bubbles/scripts/release-ladder-schema-guard.sh
     - bubbles/scripts/release-manifest-purity-selftest.sh
     - bubbles/scripts/release-manifest-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard.sh
+    - bubbles/scripts/release-packet-docs-lib.sh
     - bubbles/scripts/release-packet-location-guard-selftest.sh
     - bubbles/scripts/release-packet-location-guard.sh
     - bubbles/scripts/release-train-backfill-planner.sh
@@ -20098,7 +20285,6 @@ checks:
     - docs/guides/WORKFLOW_MODES.md
     - docs/issues/G068-word-overlap-threshold.md
     - docs/issues/session-aware-runtime-coordination.md
-    - docs/mcp.md
     - docs/recipes/README.md
     - docs/recipes/adversarial-verification.md
     - docs/recipes/ask-the-super-first.md
@@ -20143,6 +20329,7 @@ checks:
     - bubbles/adapters/judge/ollama.sh
     - bubbles/adapters/observability/none.sh
     - bubbles/scripts/acceptance-authority-lib.sh
+    - bubbles/scripts/action-risk-classes-lib.sh
     - bubbles/scripts/action-risk-registry-lint.sh
     - bubbles/scripts/adoption-profile-lib-selftest.sh
     - bubbles/scripts/adoption-profile-lib.sh
@@ -20323,6 +20510,7 @@ checks:
     - bubbles/scripts/generate-framework-stats.sh
     - bubbles/scripts/generate-gate-coverage-map-selftest.sh
     - bubbles/scripts/generate-gate-coverage-map.sh
+    - bubbles/scripts/generate-gate-enforcement.sh
     - bubbles/scripts/generate-installer-selftest.sh
     - bubbles/scripts/generate-installer.sh
     - bubbles/scripts/generate-modes-block.sh
@@ -20432,6 +20620,8 @@ checks:
     - bubbles/scripts/payload-closure-guard.sh
     - bubbles/scripts/phase-coordinator-selftest.sh
     - bubbles/scripts/phase-coordinator.sh
+    - bubbles/scripts/phase-name-enum-lint-selftest.sh
+    - bubbles/scripts/phase-name-enum-lint.sh
     - bubbles/scripts/phase-relevance-resolve-selftest.sh
     - bubbles/scripts/phase-relevance-resolve.sh
     - bubbles/scripts/pii-scan.sh
@@ -20473,6 +20663,9 @@ checks:
     - bubbles/scripts/release-ladder-schema-guard.sh
     - bubbles/scripts/release-manifest-purity-selftest.sh
     - bubbles/scripts/release-manifest-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard.sh
+    - bubbles/scripts/release-packet-docs-lib.sh
     - bubbles/scripts/release-packet-location-guard-selftest.sh
     - bubbles/scripts/release-packet-location-guard.sh
     - bubbles/scripts/release-train-backfill-planner.sh
@@ -20776,7 +20969,6 @@ checks:
     - docs/guides/WORKFLOW_MODES.md
     - docs/issues/G068-word-overlap-threshold.md
     - docs/issues/session-aware-runtime-coordination.md
-    - docs/mcp.md
     - docs/recipes/README.md
     - docs/recipes/adversarial-verification.md
     - docs/recipes/ask-the-super-first.md
@@ -20821,6 +21013,7 @@ checks:
     - bubbles/adapters/judge/ollama.sh
     - bubbles/adapters/observability/none.sh
     - bubbles/scripts/acceptance-authority-lib.sh
+    - bubbles/scripts/action-risk-classes-lib.sh
     - bubbles/scripts/action-risk-registry-lint.sh
     - bubbles/scripts/adoption-profile-lib-selftest.sh
     - bubbles/scripts/adoption-profile-lib.sh
@@ -21001,6 +21194,7 @@ checks:
     - bubbles/scripts/generate-framework-stats.sh
     - bubbles/scripts/generate-gate-coverage-map-selftest.sh
     - bubbles/scripts/generate-gate-coverage-map.sh
+    - bubbles/scripts/generate-gate-enforcement.sh
     - bubbles/scripts/generate-installer-selftest.sh
     - bubbles/scripts/generate-installer.sh
     - bubbles/scripts/generate-modes-block.sh
@@ -21110,6 +21304,8 @@ checks:
     - bubbles/scripts/payload-closure-guard.sh
     - bubbles/scripts/phase-coordinator-selftest.sh
     - bubbles/scripts/phase-coordinator.sh
+    - bubbles/scripts/phase-name-enum-lint-selftest.sh
+    - bubbles/scripts/phase-name-enum-lint.sh
     - bubbles/scripts/phase-relevance-resolve-selftest.sh
     - bubbles/scripts/phase-relevance-resolve.sh
     - bubbles/scripts/pii-scan.sh
@@ -21151,6 +21347,9 @@ checks:
     - bubbles/scripts/release-ladder-schema-guard.sh
     - bubbles/scripts/release-manifest-purity-selftest.sh
     - bubbles/scripts/release-manifest-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard.sh
+    - bubbles/scripts/release-packet-docs-lib.sh
     - bubbles/scripts/release-packet-location-guard-selftest.sh
     - bubbles/scripts/release-packet-location-guard.sh
     - bubbles/scripts/release-train-backfill-planner.sh
@@ -21454,7 +21653,6 @@ checks:
     - docs/guides/WORKFLOW_MODES.md
     - docs/issues/G068-word-overlap-threshold.md
     - docs/issues/session-aware-runtime-coordination.md
-    - docs/mcp.md
     - docs/recipes/README.md
     - docs/recipes/adversarial-verification.md
     - docs/recipes/ask-the-super-first.md
@@ -21499,6 +21697,7 @@ checks:
     - bubbles/adapters/judge/ollama.sh
     - bubbles/adapters/observability/none.sh
     - bubbles/scripts/acceptance-authority-lib.sh
+    - bubbles/scripts/action-risk-classes-lib.sh
     - bubbles/scripts/action-risk-registry-lint.sh
     - bubbles/scripts/adoption-profile-lib-selftest.sh
     - bubbles/scripts/adoption-profile-lib.sh
@@ -21679,6 +21878,7 @@ checks:
     - bubbles/scripts/generate-framework-stats.sh
     - bubbles/scripts/generate-gate-coverage-map-selftest.sh
     - bubbles/scripts/generate-gate-coverage-map.sh
+    - bubbles/scripts/generate-gate-enforcement.sh
     - bubbles/scripts/generate-installer-selftest.sh
     - bubbles/scripts/generate-installer.sh
     - bubbles/scripts/generate-modes-block.sh
@@ -21788,6 +21988,8 @@ checks:
     - bubbles/scripts/payload-closure-guard.sh
     - bubbles/scripts/phase-coordinator-selftest.sh
     - bubbles/scripts/phase-coordinator.sh
+    - bubbles/scripts/phase-name-enum-lint-selftest.sh
+    - bubbles/scripts/phase-name-enum-lint.sh
     - bubbles/scripts/phase-relevance-resolve-selftest.sh
     - bubbles/scripts/phase-relevance-resolve.sh
     - bubbles/scripts/pii-scan.sh
@@ -21829,6 +22031,9 @@ checks:
     - bubbles/scripts/release-ladder-schema-guard.sh
     - bubbles/scripts/release-manifest-purity-selftest.sh
     - bubbles/scripts/release-manifest-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard.sh
+    - bubbles/scripts/release-packet-docs-lib.sh
     - bubbles/scripts/release-packet-location-guard-selftest.sh
     - bubbles/scripts/release-packet-location-guard.sh
     - bubbles/scripts/release-train-backfill-planner.sh
@@ -22132,7 +22337,6 @@ checks:
     - docs/guides/WORKFLOW_MODES.md
     - docs/issues/G068-word-overlap-threshold.md
     - docs/issues/session-aware-runtime-coordination.md
-    - docs/mcp.md
     - docs/recipes/README.md
     - docs/recipes/adversarial-verification.md
     - docs/recipes/ask-the-super-first.md
@@ -22206,6 +22410,7 @@ checks:
     - bubbles/adapters/judge/ollama.sh
     - bubbles/adapters/observability/none.sh
     - bubbles/scripts/acceptance-authority-lib.sh
+    - bubbles/scripts/action-risk-classes-lib.sh
     - bubbles/scripts/action-risk-registry-lint.sh
     - bubbles/scripts/adoption-profile-lib-selftest.sh
     - bubbles/scripts/adoption-profile-lib.sh
@@ -22386,6 +22591,7 @@ checks:
     - bubbles/scripts/generate-framework-stats.sh
     - bubbles/scripts/generate-gate-coverage-map-selftest.sh
     - bubbles/scripts/generate-gate-coverage-map.sh
+    - bubbles/scripts/generate-gate-enforcement.sh
     - bubbles/scripts/generate-installer-selftest.sh
     - bubbles/scripts/generate-installer.sh
     - bubbles/scripts/generate-modes-block.sh
@@ -22495,6 +22701,8 @@ checks:
     - bubbles/scripts/payload-closure-guard.sh
     - bubbles/scripts/phase-coordinator-selftest.sh
     - bubbles/scripts/phase-coordinator.sh
+    - bubbles/scripts/phase-name-enum-lint-selftest.sh
+    - bubbles/scripts/phase-name-enum-lint.sh
     - bubbles/scripts/phase-relevance-resolve-selftest.sh
     - bubbles/scripts/phase-relevance-resolve.sh
     - bubbles/scripts/pii-scan.sh
@@ -22536,6 +22744,9 @@ checks:
     - bubbles/scripts/release-ladder-schema-guard.sh
     - bubbles/scripts/release-manifest-purity-selftest.sh
     - bubbles/scripts/release-manifest-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard.sh
+    - bubbles/scripts/release-packet-docs-lib.sh
     - bubbles/scripts/release-packet-location-guard-selftest.sh
     - bubbles/scripts/release-packet-location-guard.sh
     - bubbles/scripts/release-train-backfill-planner.sh
@@ -22839,7 +23050,6 @@ checks:
     - docs/guides/WORKFLOW_MODES.md
     - docs/issues/G068-word-overlap-threshold.md
     - docs/issues/session-aware-runtime-coordination.md
-    - docs/mcp.md
     - docs/recipes/README.md
     - docs/recipes/adversarial-verification.md
     - docs/recipes/ask-the-super-first.md
@@ -22884,6 +23094,7 @@ checks:
     - bubbles/adapters/judge/ollama.sh
     - bubbles/adapters/observability/none.sh
     - bubbles/scripts/acceptance-authority-lib.sh
+    - bubbles/scripts/action-risk-classes-lib.sh
     - bubbles/scripts/action-risk-registry-lint.sh
     - bubbles/scripts/adoption-profile-lib-selftest.sh
     - bubbles/scripts/adoption-profile-lib.sh
@@ -23064,6 +23275,7 @@ checks:
     - bubbles/scripts/generate-framework-stats.sh
     - bubbles/scripts/generate-gate-coverage-map-selftest.sh
     - bubbles/scripts/generate-gate-coverage-map.sh
+    - bubbles/scripts/generate-gate-enforcement.sh
     - bubbles/scripts/generate-installer-selftest.sh
     - bubbles/scripts/generate-installer.sh
     - bubbles/scripts/generate-modes-block.sh
@@ -23173,6 +23385,8 @@ checks:
     - bubbles/scripts/payload-closure-guard.sh
     - bubbles/scripts/phase-coordinator-selftest.sh
     - bubbles/scripts/phase-coordinator.sh
+    - bubbles/scripts/phase-name-enum-lint-selftest.sh
+    - bubbles/scripts/phase-name-enum-lint.sh
     - bubbles/scripts/phase-relevance-resolve-selftest.sh
     - bubbles/scripts/phase-relevance-resolve.sh
     - bubbles/scripts/pii-scan.sh
@@ -23214,6 +23428,9 @@ checks:
     - bubbles/scripts/release-ladder-schema-guard.sh
     - bubbles/scripts/release-manifest-purity-selftest.sh
     - bubbles/scripts/release-manifest-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard.sh
+    - bubbles/scripts/release-packet-docs-lib.sh
     - bubbles/scripts/release-packet-location-guard-selftest.sh
     - bubbles/scripts/release-packet-location-guard.sh
     - bubbles/scripts/release-train-backfill-planner.sh
@@ -23517,7 +23734,6 @@ checks:
     - docs/guides/WORKFLOW_MODES.md
     - docs/issues/G068-word-overlap-threshold.md
     - docs/issues/session-aware-runtime-coordination.md
-    - docs/mcp.md
     - docs/recipes/README.md
     - docs/recipes/adversarial-verification.md
     - docs/recipes/ask-the-super-first.md
@@ -23563,6 +23779,27 @@ checks:
     commands:
     - git
     - shellcheck
+  vc-bubbles-scripts-phase-name-enum-lint-selftest:
+    script: bubbles/scripts/phase-name-enum-lint-selftest.sh
+    label: "Phase-name enum lint selftest (IMP-052)"
+    closureComplete: true
+    inputs:
+    - bubbles/scripts/phase-name-enum-lint-selftest.sh
+    - bubbles/scripts/phase-name-enum-lint.sh
+    - bubbles/workflows.yaml
+    commands:
+    - git
+    - yq
+  vc-bubbles-scripts-phase-name-enum-lint:
+    script: bubbles/scripts/phase-name-enum-lint.sh
+    label: "Phase-name enum lint (live, IMP-052)"
+    closureComplete: false
+    inputs:
+    - bubbles/scripts/phase-name-enum-lint.sh
+    - bubbles/workflows.yaml
+    commands:
+    - git
+    - yq
   vc-bubbles-scripts-collected-test-count-guard-selftest:
     script: bubbles/scripts/collected-test-count-guard-selftest.sh
     label: "Collected-test-count guard selftest (IMP-036)"
@@ -23593,6 +23830,7 @@ checks:
     - bubbles/scripts/evidence-capture-selftest.sh
     - bubbles/scripts/evidence-capture.sh
     commands:
+    - perl
     - sha256sum
     - shasum
     - shellcheck
@@ -23690,6 +23928,7 @@ checks:
     - bubbles/adapters/judge/ollama.sh
     - bubbles/adapters/observability/none.sh
     - bubbles/scripts/acceptance-authority-lib.sh
+    - bubbles/scripts/action-risk-classes-lib.sh
     - bubbles/scripts/action-risk-registry-lint.sh
     - bubbles/scripts/adoption-profile-lib-selftest.sh
     - bubbles/scripts/adoption-profile-lib.sh
@@ -23870,6 +24109,7 @@ checks:
     - bubbles/scripts/generate-framework-stats.sh
     - bubbles/scripts/generate-gate-coverage-map-selftest.sh
     - bubbles/scripts/generate-gate-coverage-map.sh
+    - bubbles/scripts/generate-gate-enforcement.sh
     - bubbles/scripts/generate-installer-selftest.sh
     - bubbles/scripts/generate-installer.sh
     - bubbles/scripts/generate-modes-block.sh
@@ -23979,6 +24219,8 @@ checks:
     - bubbles/scripts/payload-closure-guard.sh
     - bubbles/scripts/phase-coordinator-selftest.sh
     - bubbles/scripts/phase-coordinator.sh
+    - bubbles/scripts/phase-name-enum-lint-selftest.sh
+    - bubbles/scripts/phase-name-enum-lint.sh
     - bubbles/scripts/phase-relevance-resolve-selftest.sh
     - bubbles/scripts/phase-relevance-resolve.sh
     - bubbles/scripts/pii-scan.sh
@@ -24020,6 +24262,9 @@ checks:
     - bubbles/scripts/release-ladder-schema-guard.sh
     - bubbles/scripts/release-manifest-purity-selftest.sh
     - bubbles/scripts/release-manifest-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard.sh
+    - bubbles/scripts/release-packet-docs-lib.sh
     - bubbles/scripts/release-packet-location-guard-selftest.sh
     - bubbles/scripts/release-packet-location-guard.sh
     - bubbles/scripts/release-train-backfill-planner.sh
@@ -24323,7 +24568,6 @@ checks:
     - docs/guides/WORKFLOW_MODES.md
     - docs/issues/G068-word-overlap-threshold.md
     - docs/issues/session-aware-runtime-coordination.md
-    - docs/mcp.md
     - docs/recipes/README.md
     - docs/recipes/adversarial-verification.md
     - docs/recipes/ask-the-super-first.md
@@ -24368,6 +24612,7 @@ checks:
     - bubbles/adapters/judge/ollama.sh
     - bubbles/adapters/observability/none.sh
     - bubbles/scripts/acceptance-authority-lib.sh
+    - bubbles/scripts/action-risk-classes-lib.sh
     - bubbles/scripts/action-risk-registry-lint.sh
     - bubbles/scripts/adoption-profile-lib-selftest.sh
     - bubbles/scripts/adoption-profile-lib.sh
@@ -24548,6 +24793,7 @@ checks:
     - bubbles/scripts/generate-framework-stats.sh
     - bubbles/scripts/generate-gate-coverage-map-selftest.sh
     - bubbles/scripts/generate-gate-coverage-map.sh
+    - bubbles/scripts/generate-gate-enforcement.sh
     - bubbles/scripts/generate-installer-selftest.sh
     - bubbles/scripts/generate-installer.sh
     - bubbles/scripts/generate-modes-block.sh
@@ -24657,6 +24903,8 @@ checks:
     - bubbles/scripts/payload-closure-guard.sh
     - bubbles/scripts/phase-coordinator-selftest.sh
     - bubbles/scripts/phase-coordinator.sh
+    - bubbles/scripts/phase-name-enum-lint-selftest.sh
+    - bubbles/scripts/phase-name-enum-lint.sh
     - bubbles/scripts/phase-relevance-resolve-selftest.sh
     - bubbles/scripts/phase-relevance-resolve.sh
     - bubbles/scripts/pii-scan.sh
@@ -24698,6 +24946,9 @@ checks:
     - bubbles/scripts/release-ladder-schema-guard.sh
     - bubbles/scripts/release-manifest-purity-selftest.sh
     - bubbles/scripts/release-manifest-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard.sh
+    - bubbles/scripts/release-packet-docs-lib.sh
     - bubbles/scripts/release-packet-location-guard-selftest.sh
     - bubbles/scripts/release-packet-location-guard.sh
     - bubbles/scripts/release-train-backfill-planner.sh
@@ -25001,7 +25252,6 @@ checks:
     - docs/guides/WORKFLOW_MODES.md
     - docs/issues/G068-word-overlap-threshold.md
     - docs/issues/session-aware-runtime-coordination.md
-    - docs/mcp.md
     - docs/recipes/README.md
     - docs/recipes/adversarial-verification.md
     - docs/recipes/ask-the-super-first.md
@@ -25054,6 +25304,7 @@ checks:
     - bubbles/adapters/judge/ollama.sh
     - bubbles/adapters/observability/none.sh
     - bubbles/scripts/acceptance-authority-lib.sh
+    - bubbles/scripts/action-risk-classes-lib.sh
     - bubbles/scripts/action-risk-registry-lint.sh
     - bubbles/scripts/adoption-profile-lib-selftest.sh
     - bubbles/scripts/adoption-profile-lib.sh
@@ -25234,6 +25485,7 @@ checks:
     - bubbles/scripts/generate-framework-stats.sh
     - bubbles/scripts/generate-gate-coverage-map-selftest.sh
     - bubbles/scripts/generate-gate-coverage-map.sh
+    - bubbles/scripts/generate-gate-enforcement.sh
     - bubbles/scripts/generate-installer-selftest.sh
     - bubbles/scripts/generate-installer.sh
     - bubbles/scripts/generate-modes-block.sh
@@ -25343,6 +25595,8 @@ checks:
     - bubbles/scripts/payload-closure-guard.sh
     - bubbles/scripts/phase-coordinator-selftest.sh
     - bubbles/scripts/phase-coordinator.sh
+    - bubbles/scripts/phase-name-enum-lint-selftest.sh
+    - bubbles/scripts/phase-name-enum-lint.sh
     - bubbles/scripts/phase-relevance-resolve-selftest.sh
     - bubbles/scripts/phase-relevance-resolve.sh
     - bubbles/scripts/pii-scan.sh
@@ -25384,6 +25638,9 @@ checks:
     - bubbles/scripts/release-ladder-schema-guard.sh
     - bubbles/scripts/release-manifest-purity-selftest.sh
     - bubbles/scripts/release-manifest-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard.sh
+    - bubbles/scripts/release-packet-docs-lib.sh
     - bubbles/scripts/release-packet-location-guard-selftest.sh
     - bubbles/scripts/release-packet-location-guard.sh
     - bubbles/scripts/release-train-backfill-planner.sh
@@ -25687,7 +25944,6 @@ checks:
     - docs/guides/WORKFLOW_MODES.md
     - docs/issues/G068-word-overlap-threshold.md
     - docs/issues/session-aware-runtime-coordination.md
-    - docs/mcp.md
     - docs/recipes/README.md
     - docs/recipes/adversarial-verification.md
     - docs/recipes/ask-the-super-first.md
@@ -25804,6 +26060,7 @@ checks:
     - bubbles/workflows/modes.yaml
     commands:
     - git
+    - jq
     - node
     - npx
     - python3
@@ -25908,6 +26165,7 @@ checks:
     - bubbles/adapters/judge/ollama.sh
     - bubbles/adapters/observability/none.sh
     - bubbles/scripts/acceptance-authority-lib.sh
+    - bubbles/scripts/action-risk-classes-lib.sh
     - bubbles/scripts/action-risk-registry-lint.sh
     - bubbles/scripts/adoption-profile-lib-selftest.sh
     - bubbles/scripts/adoption-profile-lib.sh
@@ -26088,6 +26346,7 @@ checks:
     - bubbles/scripts/generate-framework-stats.sh
     - bubbles/scripts/generate-gate-coverage-map-selftest.sh
     - bubbles/scripts/generate-gate-coverage-map.sh
+    - bubbles/scripts/generate-gate-enforcement.sh
     - bubbles/scripts/generate-installer-selftest.sh
     - bubbles/scripts/generate-installer.sh
     - bubbles/scripts/generate-modes-block.sh
@@ -26197,6 +26456,8 @@ checks:
     - bubbles/scripts/payload-closure-guard.sh
     - bubbles/scripts/phase-coordinator-selftest.sh
     - bubbles/scripts/phase-coordinator.sh
+    - bubbles/scripts/phase-name-enum-lint-selftest.sh
+    - bubbles/scripts/phase-name-enum-lint.sh
     - bubbles/scripts/phase-relevance-resolve-selftest.sh
     - bubbles/scripts/phase-relevance-resolve.sh
     - bubbles/scripts/pii-scan.sh
@@ -26238,6 +26499,9 @@ checks:
     - bubbles/scripts/release-ladder-schema-guard.sh
     - bubbles/scripts/release-manifest-purity-selftest.sh
     - bubbles/scripts/release-manifest-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard.sh
+    - bubbles/scripts/release-packet-docs-lib.sh
     - bubbles/scripts/release-packet-location-guard-selftest.sh
     - bubbles/scripts/release-packet-location-guard.sh
     - bubbles/scripts/release-train-backfill-planner.sh
@@ -26541,7 +26805,6 @@ checks:
     - docs/guides/WORKFLOW_MODES.md
     - docs/issues/G068-word-overlap-threshold.md
     - docs/issues/session-aware-runtime-coordination.md
-    - docs/mcp.md
     - docs/recipes/README.md
     - docs/recipes/adversarial-verification.md
     - docs/recipes/ask-the-super-first.md
@@ -26639,6 +26902,7 @@ checks:
     - bubbles/adapters/judge/ollama.sh
     - bubbles/adapters/observability/none.sh
     - bubbles/scripts/acceptance-authority-lib.sh
+    - bubbles/scripts/action-risk-classes-lib.sh
     - bubbles/scripts/action-risk-registry-lint.sh
     - bubbles/scripts/adoption-profile-lib-selftest.sh
     - bubbles/scripts/adoption-profile-lib.sh
@@ -26819,6 +27083,7 @@ checks:
     - bubbles/scripts/generate-framework-stats.sh
     - bubbles/scripts/generate-gate-coverage-map-selftest.sh
     - bubbles/scripts/generate-gate-coverage-map.sh
+    - bubbles/scripts/generate-gate-enforcement.sh
     - bubbles/scripts/generate-installer-selftest.sh
     - bubbles/scripts/generate-installer.sh
     - bubbles/scripts/generate-modes-block.sh
@@ -26928,6 +27193,8 @@ checks:
     - bubbles/scripts/payload-closure-guard.sh
     - bubbles/scripts/phase-coordinator-selftest.sh
     - bubbles/scripts/phase-coordinator.sh
+    - bubbles/scripts/phase-name-enum-lint-selftest.sh
+    - bubbles/scripts/phase-name-enum-lint.sh
     - bubbles/scripts/phase-relevance-resolve-selftest.sh
     - bubbles/scripts/phase-relevance-resolve.sh
     - bubbles/scripts/pii-scan.sh
@@ -26969,6 +27236,9 @@ checks:
     - bubbles/scripts/release-ladder-schema-guard.sh
     - bubbles/scripts/release-manifest-purity-selftest.sh
     - bubbles/scripts/release-manifest-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard.sh
+    - bubbles/scripts/release-packet-docs-lib.sh
     - bubbles/scripts/release-packet-location-guard-selftest.sh
     - bubbles/scripts/release-packet-location-guard.sh
     - bubbles/scripts/release-train-backfill-planner.sh
@@ -27272,7 +27542,6 @@ checks:
     - docs/guides/WORKFLOW_MODES.md
     - docs/issues/G068-word-overlap-threshold.md
     - docs/issues/session-aware-runtime-coordination.md
-    - docs/mcp.md
     - docs/recipes/README.md
     - docs/recipes/adversarial-verification.md
     - docs/recipes/ask-the-super-first.md
@@ -27325,6 +27594,7 @@ checks:
     - bubbles/adapters/judge/ollama.sh
     - bubbles/adapters/observability/none.sh
     - bubbles/scripts/acceptance-authority-lib.sh
+    - bubbles/scripts/action-risk-classes-lib.sh
     - bubbles/scripts/action-risk-registry-lint.sh
     - bubbles/scripts/adoption-profile-lib-selftest.sh
     - bubbles/scripts/adoption-profile-lib.sh
@@ -27505,6 +27775,7 @@ checks:
     - bubbles/scripts/generate-framework-stats.sh
     - bubbles/scripts/generate-gate-coverage-map-selftest.sh
     - bubbles/scripts/generate-gate-coverage-map.sh
+    - bubbles/scripts/generate-gate-enforcement.sh
     - bubbles/scripts/generate-installer-selftest.sh
     - bubbles/scripts/generate-installer.sh
     - bubbles/scripts/generate-modes-block.sh
@@ -27614,6 +27885,8 @@ checks:
     - bubbles/scripts/payload-closure-guard.sh
     - bubbles/scripts/phase-coordinator-selftest.sh
     - bubbles/scripts/phase-coordinator.sh
+    - bubbles/scripts/phase-name-enum-lint-selftest.sh
+    - bubbles/scripts/phase-name-enum-lint.sh
     - bubbles/scripts/phase-relevance-resolve-selftest.sh
     - bubbles/scripts/phase-relevance-resolve.sh
     - bubbles/scripts/pii-scan.sh
@@ -27655,6 +27928,9 @@ checks:
     - bubbles/scripts/release-ladder-schema-guard.sh
     - bubbles/scripts/release-manifest-purity-selftest.sh
     - bubbles/scripts/release-manifest-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard.sh
+    - bubbles/scripts/release-packet-docs-lib.sh
     - bubbles/scripts/release-packet-location-guard-selftest.sh
     - bubbles/scripts/release-packet-location-guard.sh
     - bubbles/scripts/release-train-backfill-planner.sh
@@ -27958,7 +28234,6 @@ checks:
     - docs/guides/WORKFLOW_MODES.md
     - docs/issues/G068-word-overlap-threshold.md
     - docs/issues/session-aware-runtime-coordination.md
-    - docs/mcp.md
     - docs/recipes/README.md
     - docs/recipes/adversarial-verification.md
     - docs/recipes/ask-the-super-first.md
@@ -28003,6 +28278,7 @@ checks:
     - bubbles/adapters/judge/ollama.sh
     - bubbles/adapters/observability/none.sh
     - bubbles/scripts/acceptance-authority-lib.sh
+    - bubbles/scripts/action-risk-classes-lib.sh
     - bubbles/scripts/action-risk-registry-lint.sh
     - bubbles/scripts/adoption-profile-lib-selftest.sh
     - bubbles/scripts/adoption-profile-lib.sh
@@ -28183,6 +28459,7 @@ checks:
     - bubbles/scripts/generate-framework-stats.sh
     - bubbles/scripts/generate-gate-coverage-map-selftest.sh
     - bubbles/scripts/generate-gate-coverage-map.sh
+    - bubbles/scripts/generate-gate-enforcement.sh
     - bubbles/scripts/generate-installer-selftest.sh
     - bubbles/scripts/generate-installer.sh
     - bubbles/scripts/generate-modes-block.sh
@@ -28292,6 +28569,8 @@ checks:
     - bubbles/scripts/payload-closure-guard.sh
     - bubbles/scripts/phase-coordinator-selftest.sh
     - bubbles/scripts/phase-coordinator.sh
+    - bubbles/scripts/phase-name-enum-lint-selftest.sh
+    - bubbles/scripts/phase-name-enum-lint.sh
     - bubbles/scripts/phase-relevance-resolve-selftest.sh
     - bubbles/scripts/phase-relevance-resolve.sh
     - bubbles/scripts/pii-scan.sh
@@ -28333,6 +28612,9 @@ checks:
     - bubbles/scripts/release-ladder-schema-guard.sh
     - bubbles/scripts/release-manifest-purity-selftest.sh
     - bubbles/scripts/release-manifest-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard.sh
+    - bubbles/scripts/release-packet-docs-lib.sh
     - bubbles/scripts/release-packet-location-guard-selftest.sh
     - bubbles/scripts/release-packet-location-guard.sh
     - bubbles/scripts/release-train-backfill-planner.sh
@@ -28636,7 +28918,6 @@ checks:
     - docs/guides/WORKFLOW_MODES.md
     - docs/issues/G068-word-overlap-threshold.md
     - docs/issues/session-aware-runtime-coordination.md
-    - docs/mcp.md
     - docs/recipes/README.md
     - docs/recipes/adversarial-verification.md
     - docs/recipes/ask-the-super-first.md
@@ -28681,6 +28962,7 @@ checks:
     - bubbles/adapters/judge/ollama.sh
     - bubbles/adapters/observability/none.sh
     - bubbles/scripts/acceptance-authority-lib.sh
+    - bubbles/scripts/action-risk-classes-lib.sh
     - bubbles/scripts/action-risk-registry-lint.sh
     - bubbles/scripts/adoption-profile-lib-selftest.sh
     - bubbles/scripts/adoption-profile-lib.sh
@@ -28861,6 +29143,7 @@ checks:
     - bubbles/scripts/generate-framework-stats.sh
     - bubbles/scripts/generate-gate-coverage-map-selftest.sh
     - bubbles/scripts/generate-gate-coverage-map.sh
+    - bubbles/scripts/generate-gate-enforcement.sh
     - bubbles/scripts/generate-installer-selftest.sh
     - bubbles/scripts/generate-installer.sh
     - bubbles/scripts/generate-modes-block.sh
@@ -28970,6 +29253,8 @@ checks:
     - bubbles/scripts/payload-closure-guard.sh
     - bubbles/scripts/phase-coordinator-selftest.sh
     - bubbles/scripts/phase-coordinator.sh
+    - bubbles/scripts/phase-name-enum-lint-selftest.sh
+    - bubbles/scripts/phase-name-enum-lint.sh
     - bubbles/scripts/phase-relevance-resolve-selftest.sh
     - bubbles/scripts/phase-relevance-resolve.sh
     - bubbles/scripts/pii-scan.sh
@@ -29011,6 +29296,9 @@ checks:
     - bubbles/scripts/release-ladder-schema-guard.sh
     - bubbles/scripts/release-manifest-purity-selftest.sh
     - bubbles/scripts/release-manifest-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard.sh
+    - bubbles/scripts/release-packet-docs-lib.sh
     - bubbles/scripts/release-packet-location-guard-selftest.sh
     - bubbles/scripts/release-packet-location-guard.sh
     - bubbles/scripts/release-train-backfill-planner.sh
@@ -29314,7 +29602,6 @@ checks:
     - docs/guides/WORKFLOW_MODES.md
     - docs/issues/G068-word-overlap-threshold.md
     - docs/issues/session-aware-runtime-coordination.md
-    - docs/mcp.md
     - docs/recipes/README.md
     - docs/recipes/adversarial-verification.md
     - docs/recipes/ask-the-super-first.md
@@ -29359,6 +29646,7 @@ checks:
     - bubbles/adapters/judge/ollama.sh
     - bubbles/adapters/observability/none.sh
     - bubbles/scripts/acceptance-authority-lib.sh
+    - bubbles/scripts/action-risk-classes-lib.sh
     - bubbles/scripts/action-risk-registry-lint.sh
     - bubbles/scripts/adoption-profile-lib-selftest.sh
     - bubbles/scripts/adoption-profile-lib.sh
@@ -29539,6 +29827,7 @@ checks:
     - bubbles/scripts/generate-framework-stats.sh
     - bubbles/scripts/generate-gate-coverage-map-selftest.sh
     - bubbles/scripts/generate-gate-coverage-map.sh
+    - bubbles/scripts/generate-gate-enforcement.sh
     - bubbles/scripts/generate-installer-selftest.sh
     - bubbles/scripts/generate-installer.sh
     - bubbles/scripts/generate-modes-block.sh
@@ -29648,6 +29937,8 @@ checks:
     - bubbles/scripts/payload-closure-guard.sh
     - bubbles/scripts/phase-coordinator-selftest.sh
     - bubbles/scripts/phase-coordinator.sh
+    - bubbles/scripts/phase-name-enum-lint-selftest.sh
+    - bubbles/scripts/phase-name-enum-lint.sh
     - bubbles/scripts/phase-relevance-resolve-selftest.sh
     - bubbles/scripts/phase-relevance-resolve.sh
     - bubbles/scripts/pii-scan.sh
@@ -29689,6 +29980,9 @@ checks:
     - bubbles/scripts/release-ladder-schema-guard.sh
     - bubbles/scripts/release-manifest-purity-selftest.sh
     - bubbles/scripts/release-manifest-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard.sh
+    - bubbles/scripts/release-packet-docs-lib.sh
     - bubbles/scripts/release-packet-location-guard-selftest.sh
     - bubbles/scripts/release-packet-location-guard.sh
     - bubbles/scripts/release-train-backfill-planner.sh
@@ -29992,7 +30286,6 @@ checks:
     - docs/guides/WORKFLOW_MODES.md
     - docs/issues/G068-word-overlap-threshold.md
     - docs/issues/session-aware-runtime-coordination.md
-    - docs/mcp.md
     - docs/recipes/README.md
     - docs/recipes/adversarial-verification.md
     - docs/recipes/ask-the-super-first.md
@@ -30037,6 +30330,7 @@ checks:
     - bubbles/adapters/judge/ollama.sh
     - bubbles/adapters/observability/none.sh
     - bubbles/scripts/acceptance-authority-lib.sh
+    - bubbles/scripts/action-risk-classes-lib.sh
     - bubbles/scripts/action-risk-registry-lint.sh
     - bubbles/scripts/adoption-profile-lib-selftest.sh
     - bubbles/scripts/adoption-profile-lib.sh
@@ -30217,6 +30511,7 @@ checks:
     - bubbles/scripts/generate-framework-stats.sh
     - bubbles/scripts/generate-gate-coverage-map-selftest.sh
     - bubbles/scripts/generate-gate-coverage-map.sh
+    - bubbles/scripts/generate-gate-enforcement.sh
     - bubbles/scripts/generate-installer-selftest.sh
     - bubbles/scripts/generate-installer.sh
     - bubbles/scripts/generate-modes-block.sh
@@ -30326,6 +30621,8 @@ checks:
     - bubbles/scripts/payload-closure-guard.sh
     - bubbles/scripts/phase-coordinator-selftest.sh
     - bubbles/scripts/phase-coordinator.sh
+    - bubbles/scripts/phase-name-enum-lint-selftest.sh
+    - bubbles/scripts/phase-name-enum-lint.sh
     - bubbles/scripts/phase-relevance-resolve-selftest.sh
     - bubbles/scripts/phase-relevance-resolve.sh
     - bubbles/scripts/pii-scan.sh
@@ -30367,6 +30664,9 @@ checks:
     - bubbles/scripts/release-ladder-schema-guard.sh
     - bubbles/scripts/release-manifest-purity-selftest.sh
     - bubbles/scripts/release-manifest-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard.sh
+    - bubbles/scripts/release-packet-docs-lib.sh
     - bubbles/scripts/release-packet-location-guard-selftest.sh
     - bubbles/scripts/release-packet-location-guard.sh
     - bubbles/scripts/release-train-backfill-planner.sh
@@ -30670,7 +30970,6 @@ checks:
     - docs/guides/WORKFLOW_MODES.md
     - docs/issues/G068-word-overlap-threshold.md
     - docs/issues/session-aware-runtime-coordination.md
-    - docs/mcp.md
     - docs/recipes/README.md
     - docs/recipes/adversarial-verification.md
     - docs/recipes/ask-the-super-first.md
@@ -30715,6 +31014,7 @@ checks:
     - bubbles/adapters/judge/ollama.sh
     - bubbles/adapters/observability/none.sh
     - bubbles/scripts/acceptance-authority-lib.sh
+    - bubbles/scripts/action-risk-classes-lib.sh
     - bubbles/scripts/action-risk-registry-lint.sh
     - bubbles/scripts/adoption-profile-lib-selftest.sh
     - bubbles/scripts/adoption-profile-lib.sh
@@ -30895,6 +31195,7 @@ checks:
     - bubbles/scripts/generate-framework-stats.sh
     - bubbles/scripts/generate-gate-coverage-map-selftest.sh
     - bubbles/scripts/generate-gate-coverage-map.sh
+    - bubbles/scripts/generate-gate-enforcement.sh
     - bubbles/scripts/generate-installer-selftest.sh
     - bubbles/scripts/generate-installer.sh
     - bubbles/scripts/generate-modes-block.sh
@@ -31004,6 +31305,8 @@ checks:
     - bubbles/scripts/payload-closure-guard.sh
     - bubbles/scripts/phase-coordinator-selftest.sh
     - bubbles/scripts/phase-coordinator.sh
+    - bubbles/scripts/phase-name-enum-lint-selftest.sh
+    - bubbles/scripts/phase-name-enum-lint.sh
     - bubbles/scripts/phase-relevance-resolve-selftest.sh
     - bubbles/scripts/phase-relevance-resolve.sh
     - bubbles/scripts/pii-scan.sh
@@ -31045,6 +31348,9 @@ checks:
     - bubbles/scripts/release-ladder-schema-guard.sh
     - bubbles/scripts/release-manifest-purity-selftest.sh
     - bubbles/scripts/release-manifest-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard.sh
+    - bubbles/scripts/release-packet-docs-lib.sh
     - bubbles/scripts/release-packet-location-guard-selftest.sh
     - bubbles/scripts/release-packet-location-guard.sh
     - bubbles/scripts/release-train-backfill-planner.sh
@@ -31348,7 +31654,6 @@ checks:
     - docs/guides/WORKFLOW_MODES.md
     - docs/issues/G068-word-overlap-threshold.md
     - docs/issues/session-aware-runtime-coordination.md
-    - docs/mcp.md
     - docs/recipes/README.md
     - docs/recipes/adversarial-verification.md
     - docs/recipes/ask-the-super-first.md
@@ -31404,6 +31709,7 @@ checks:
     - bubbles/adapters/judge/ollama.sh
     - bubbles/adapters/observability/none.sh
     - bubbles/scripts/acceptance-authority-lib.sh
+    - bubbles/scripts/action-risk-classes-lib.sh
     - bubbles/scripts/action-risk-registry-lint.sh
     - bubbles/scripts/adoption-profile-lib-selftest.sh
     - bubbles/scripts/adoption-profile-lib.sh
@@ -31584,6 +31890,7 @@ checks:
     - bubbles/scripts/generate-framework-stats.sh
     - bubbles/scripts/generate-gate-coverage-map-selftest.sh
     - bubbles/scripts/generate-gate-coverage-map.sh
+    - bubbles/scripts/generate-gate-enforcement.sh
     - bubbles/scripts/generate-installer-selftest.sh
     - bubbles/scripts/generate-installer.sh
     - bubbles/scripts/generate-modes-block.sh
@@ -31693,6 +32000,8 @@ checks:
     - bubbles/scripts/payload-closure-guard.sh
     - bubbles/scripts/phase-coordinator-selftest.sh
     - bubbles/scripts/phase-coordinator.sh
+    - bubbles/scripts/phase-name-enum-lint-selftest.sh
+    - bubbles/scripts/phase-name-enum-lint.sh
     - bubbles/scripts/phase-relevance-resolve-selftest.sh
     - bubbles/scripts/phase-relevance-resolve.sh
     - bubbles/scripts/pii-scan.sh
@@ -31734,6 +32043,9 @@ checks:
     - bubbles/scripts/release-ladder-schema-guard.sh
     - bubbles/scripts/release-manifest-purity-selftest.sh
     - bubbles/scripts/release-manifest-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard.sh
+    - bubbles/scripts/release-packet-docs-lib.sh
     - bubbles/scripts/release-packet-location-guard-selftest.sh
     - bubbles/scripts/release-packet-location-guard.sh
     - bubbles/scripts/release-train-backfill-planner.sh
@@ -32037,7 +32349,6 @@ checks:
     - docs/guides/WORKFLOW_MODES.md
     - docs/issues/G068-word-overlap-threshold.md
     - docs/issues/session-aware-runtime-coordination.md
-    - docs/mcp.md
     - docs/recipes/README.md
     - docs/recipes/adversarial-verification.md
     - docs/recipes/ask-the-super-first.md
@@ -32082,6 +32393,7 @@ checks:
     - bubbles/adapters/judge/ollama.sh
     - bubbles/adapters/observability/none.sh
     - bubbles/scripts/acceptance-authority-lib.sh
+    - bubbles/scripts/action-risk-classes-lib.sh
     - bubbles/scripts/action-risk-registry-lint.sh
     - bubbles/scripts/adoption-profile-lib-selftest.sh
     - bubbles/scripts/adoption-profile-lib.sh
@@ -32262,6 +32574,7 @@ checks:
     - bubbles/scripts/generate-framework-stats.sh
     - bubbles/scripts/generate-gate-coverage-map-selftest.sh
     - bubbles/scripts/generate-gate-coverage-map.sh
+    - bubbles/scripts/generate-gate-enforcement.sh
     - bubbles/scripts/generate-installer-selftest.sh
     - bubbles/scripts/generate-installer.sh
     - bubbles/scripts/generate-modes-block.sh
@@ -32371,6 +32684,8 @@ checks:
     - bubbles/scripts/payload-closure-guard.sh
     - bubbles/scripts/phase-coordinator-selftest.sh
     - bubbles/scripts/phase-coordinator.sh
+    - bubbles/scripts/phase-name-enum-lint-selftest.sh
+    - bubbles/scripts/phase-name-enum-lint.sh
     - bubbles/scripts/phase-relevance-resolve-selftest.sh
     - bubbles/scripts/phase-relevance-resolve.sh
     - bubbles/scripts/pii-scan.sh
@@ -32412,6 +32727,9 @@ checks:
     - bubbles/scripts/release-ladder-schema-guard.sh
     - bubbles/scripts/release-manifest-purity-selftest.sh
     - bubbles/scripts/release-manifest-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard.sh
+    - bubbles/scripts/release-packet-docs-lib.sh
     - bubbles/scripts/release-packet-location-guard-selftest.sh
     - bubbles/scripts/release-packet-location-guard.sh
     - bubbles/scripts/release-train-backfill-planner.sh
@@ -32715,7 +33033,6 @@ checks:
     - docs/guides/WORKFLOW_MODES.md
     - docs/issues/G068-word-overlap-threshold.md
     - docs/issues/session-aware-runtime-coordination.md
-    - docs/mcp.md
     - docs/recipes/README.md
     - docs/recipes/adversarial-verification.md
     - docs/recipes/ask-the-super-first.md
@@ -32760,6 +33077,7 @@ checks:
     - bubbles/adapters/judge/ollama.sh
     - bubbles/adapters/observability/none.sh
     - bubbles/scripts/acceptance-authority-lib.sh
+    - bubbles/scripts/action-risk-classes-lib.sh
     - bubbles/scripts/action-risk-registry-lint.sh
     - bubbles/scripts/adoption-profile-lib-selftest.sh
     - bubbles/scripts/adoption-profile-lib.sh
@@ -32940,6 +33258,7 @@ checks:
     - bubbles/scripts/generate-framework-stats.sh
     - bubbles/scripts/generate-gate-coverage-map-selftest.sh
     - bubbles/scripts/generate-gate-coverage-map.sh
+    - bubbles/scripts/generate-gate-enforcement.sh
     - bubbles/scripts/generate-installer-selftest.sh
     - bubbles/scripts/generate-installer.sh
     - bubbles/scripts/generate-modes-block.sh
@@ -33049,6 +33368,8 @@ checks:
     - bubbles/scripts/payload-closure-guard.sh
     - bubbles/scripts/phase-coordinator-selftest.sh
     - bubbles/scripts/phase-coordinator.sh
+    - bubbles/scripts/phase-name-enum-lint-selftest.sh
+    - bubbles/scripts/phase-name-enum-lint.sh
     - bubbles/scripts/phase-relevance-resolve-selftest.sh
     - bubbles/scripts/phase-relevance-resolve.sh
     - bubbles/scripts/pii-scan.sh
@@ -33090,6 +33411,9 @@ checks:
     - bubbles/scripts/release-ladder-schema-guard.sh
     - bubbles/scripts/release-manifest-purity-selftest.sh
     - bubbles/scripts/release-manifest-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard.sh
+    - bubbles/scripts/release-packet-docs-lib.sh
     - bubbles/scripts/release-packet-location-guard-selftest.sh
     - bubbles/scripts/release-packet-location-guard.sh
     - bubbles/scripts/release-train-backfill-planner.sh
@@ -33393,7 +33717,6 @@ checks:
     - docs/guides/WORKFLOW_MODES.md
     - docs/issues/G068-word-overlap-threshold.md
     - docs/issues/session-aware-runtime-coordination.md
-    - docs/mcp.md
     - docs/recipes/README.md
     - docs/recipes/adversarial-verification.md
     - docs/recipes/ask-the-super-first.md
@@ -33502,6 +33825,7 @@ checks:
     - bubbles/adapters/judge/ollama.sh
     - bubbles/adapters/observability/none.sh
     - bubbles/scripts/acceptance-authority-lib.sh
+    - bubbles/scripts/action-risk-classes-lib.sh
     - bubbles/scripts/action-risk-registry-lint.sh
     - bubbles/scripts/adoption-profile-lib-selftest.sh
     - bubbles/scripts/adoption-profile-lib.sh
@@ -33682,6 +34006,7 @@ checks:
     - bubbles/scripts/generate-framework-stats.sh
     - bubbles/scripts/generate-gate-coverage-map-selftest.sh
     - bubbles/scripts/generate-gate-coverage-map.sh
+    - bubbles/scripts/generate-gate-enforcement.sh
     - bubbles/scripts/generate-installer-selftest.sh
     - bubbles/scripts/generate-installer.sh
     - bubbles/scripts/generate-modes-block.sh
@@ -33791,6 +34116,8 @@ checks:
     - bubbles/scripts/payload-closure-guard.sh
     - bubbles/scripts/phase-coordinator-selftest.sh
     - bubbles/scripts/phase-coordinator.sh
+    - bubbles/scripts/phase-name-enum-lint-selftest.sh
+    - bubbles/scripts/phase-name-enum-lint.sh
     - bubbles/scripts/phase-relevance-resolve-selftest.sh
     - bubbles/scripts/phase-relevance-resolve.sh
     - bubbles/scripts/pii-scan.sh
@@ -33832,6 +34159,9 @@ checks:
     - bubbles/scripts/release-ladder-schema-guard.sh
     - bubbles/scripts/release-manifest-purity-selftest.sh
     - bubbles/scripts/release-manifest-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard.sh
+    - bubbles/scripts/release-packet-docs-lib.sh
     - bubbles/scripts/release-packet-location-guard-selftest.sh
     - bubbles/scripts/release-packet-location-guard.sh
     - bubbles/scripts/release-train-backfill-planner.sh
@@ -34135,7 +34465,6 @@ checks:
     - docs/guides/WORKFLOW_MODES.md
     - docs/issues/G068-word-overlap-threshold.md
     - docs/issues/session-aware-runtime-coordination.md
-    - docs/mcp.md
     - docs/recipes/README.md
     - docs/recipes/adversarial-verification.md
     - docs/recipes/ask-the-super-first.md
@@ -34180,6 +34509,7 @@ checks:
     - bubbles/adapters/judge/ollama.sh
     - bubbles/adapters/observability/none.sh
     - bubbles/scripts/acceptance-authority-lib.sh
+    - bubbles/scripts/action-risk-classes-lib.sh
     - bubbles/scripts/action-risk-registry-lint.sh
     - bubbles/scripts/adoption-profile-lib-selftest.sh
     - bubbles/scripts/adoption-profile-lib.sh
@@ -34360,6 +34690,7 @@ checks:
     - bubbles/scripts/generate-framework-stats.sh
     - bubbles/scripts/generate-gate-coverage-map-selftest.sh
     - bubbles/scripts/generate-gate-coverage-map.sh
+    - bubbles/scripts/generate-gate-enforcement.sh
     - bubbles/scripts/generate-installer-selftest.sh
     - bubbles/scripts/generate-installer.sh
     - bubbles/scripts/generate-modes-block.sh
@@ -34469,6 +34800,8 @@ checks:
     - bubbles/scripts/payload-closure-guard.sh
     - bubbles/scripts/phase-coordinator-selftest.sh
     - bubbles/scripts/phase-coordinator.sh
+    - bubbles/scripts/phase-name-enum-lint-selftest.sh
+    - bubbles/scripts/phase-name-enum-lint.sh
     - bubbles/scripts/phase-relevance-resolve-selftest.sh
     - bubbles/scripts/phase-relevance-resolve.sh
     - bubbles/scripts/pii-scan.sh
@@ -34510,6 +34843,9 @@ checks:
     - bubbles/scripts/release-ladder-schema-guard.sh
     - bubbles/scripts/release-manifest-purity-selftest.sh
     - bubbles/scripts/release-manifest-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard.sh
+    - bubbles/scripts/release-packet-docs-lib.sh
     - bubbles/scripts/release-packet-location-guard-selftest.sh
     - bubbles/scripts/release-packet-location-guard.sh
     - bubbles/scripts/release-train-backfill-planner.sh
@@ -34813,7 +35149,6 @@ checks:
     - docs/guides/WORKFLOW_MODES.md
     - docs/issues/G068-word-overlap-threshold.md
     - docs/issues/session-aware-runtime-coordination.md
-    - docs/mcp.md
     - docs/recipes/README.md
     - docs/recipes/adversarial-verification.md
     - docs/recipes/ask-the-super-first.md
@@ -34858,6 +35193,7 @@ checks:
     - bubbles/adapters/judge/ollama.sh
     - bubbles/adapters/observability/none.sh
     - bubbles/scripts/acceptance-authority-lib.sh
+    - bubbles/scripts/action-risk-classes-lib.sh
     - bubbles/scripts/action-risk-registry-lint.sh
     - bubbles/scripts/adoption-profile-lib-selftest.sh
     - bubbles/scripts/adoption-profile-lib.sh
@@ -35038,6 +35374,7 @@ checks:
     - bubbles/scripts/generate-framework-stats.sh
     - bubbles/scripts/generate-gate-coverage-map-selftest.sh
     - bubbles/scripts/generate-gate-coverage-map.sh
+    - bubbles/scripts/generate-gate-enforcement.sh
     - bubbles/scripts/generate-installer-selftest.sh
     - bubbles/scripts/generate-installer.sh
     - bubbles/scripts/generate-modes-block.sh
@@ -35147,6 +35484,8 @@ checks:
     - bubbles/scripts/payload-closure-guard.sh
     - bubbles/scripts/phase-coordinator-selftest.sh
     - bubbles/scripts/phase-coordinator.sh
+    - bubbles/scripts/phase-name-enum-lint-selftest.sh
+    - bubbles/scripts/phase-name-enum-lint.sh
     - bubbles/scripts/phase-relevance-resolve-selftest.sh
     - bubbles/scripts/phase-relevance-resolve.sh
     - bubbles/scripts/pii-scan.sh
@@ -35188,6 +35527,9 @@ checks:
     - bubbles/scripts/release-ladder-schema-guard.sh
     - bubbles/scripts/release-manifest-purity-selftest.sh
     - bubbles/scripts/release-manifest-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard.sh
+    - bubbles/scripts/release-packet-docs-lib.sh
     - bubbles/scripts/release-packet-location-guard-selftest.sh
     - bubbles/scripts/release-packet-location-guard.sh
     - bubbles/scripts/release-train-backfill-planner.sh
@@ -35491,7 +35833,6 @@ checks:
     - docs/guides/WORKFLOW_MODES.md
     - docs/issues/G068-word-overlap-threshold.md
     - docs/issues/session-aware-runtime-coordination.md
-    - docs/mcp.md
     - docs/recipes/README.md
     - docs/recipes/adversarial-verification.md
     - docs/recipes/ask-the-super-first.md
@@ -35536,6 +35877,7 @@ checks:
     - bubbles/adapters/judge/ollama.sh
     - bubbles/adapters/observability/none.sh
     - bubbles/scripts/acceptance-authority-lib.sh
+    - bubbles/scripts/action-risk-classes-lib.sh
     - bubbles/scripts/action-risk-registry-lint.sh
     - bubbles/scripts/adoption-profile-lib-selftest.sh
     - bubbles/scripts/adoption-profile-lib.sh
@@ -35716,6 +36058,7 @@ checks:
     - bubbles/scripts/generate-framework-stats.sh
     - bubbles/scripts/generate-gate-coverage-map-selftest.sh
     - bubbles/scripts/generate-gate-coverage-map.sh
+    - bubbles/scripts/generate-gate-enforcement.sh
     - bubbles/scripts/generate-installer-selftest.sh
     - bubbles/scripts/generate-installer.sh
     - bubbles/scripts/generate-modes-block.sh
@@ -35825,6 +36168,8 @@ checks:
     - bubbles/scripts/payload-closure-guard.sh
     - bubbles/scripts/phase-coordinator-selftest.sh
     - bubbles/scripts/phase-coordinator.sh
+    - bubbles/scripts/phase-name-enum-lint-selftest.sh
+    - bubbles/scripts/phase-name-enum-lint.sh
     - bubbles/scripts/phase-relevance-resolve-selftest.sh
     - bubbles/scripts/phase-relevance-resolve.sh
     - bubbles/scripts/pii-scan.sh
@@ -35866,6 +36211,9 @@ checks:
     - bubbles/scripts/release-ladder-schema-guard.sh
     - bubbles/scripts/release-manifest-purity-selftest.sh
     - bubbles/scripts/release-manifest-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard.sh
+    - bubbles/scripts/release-packet-docs-lib.sh
     - bubbles/scripts/release-packet-location-guard-selftest.sh
     - bubbles/scripts/release-packet-location-guard.sh
     - bubbles/scripts/release-train-backfill-planner.sh
@@ -36169,7 +36517,6 @@ checks:
     - docs/guides/WORKFLOW_MODES.md
     - docs/issues/G068-word-overlap-threshold.md
     - docs/issues/session-aware-runtime-coordination.md
-    - docs/mcp.md
     - docs/recipes/README.md
     - docs/recipes/adversarial-verification.md
     - docs/recipes/ask-the-super-first.md
@@ -36214,6 +36561,7 @@ checks:
     - bubbles/adapters/judge/ollama.sh
     - bubbles/adapters/observability/none.sh
     - bubbles/scripts/acceptance-authority-lib.sh
+    - bubbles/scripts/action-risk-classes-lib.sh
     - bubbles/scripts/action-risk-registry-lint.sh
     - bubbles/scripts/adoption-profile-lib-selftest.sh
     - bubbles/scripts/adoption-profile-lib.sh
@@ -36394,6 +36742,7 @@ checks:
     - bubbles/scripts/generate-framework-stats.sh
     - bubbles/scripts/generate-gate-coverage-map-selftest.sh
     - bubbles/scripts/generate-gate-coverage-map.sh
+    - bubbles/scripts/generate-gate-enforcement.sh
     - bubbles/scripts/generate-installer-selftest.sh
     - bubbles/scripts/generate-installer.sh
     - bubbles/scripts/generate-modes-block.sh
@@ -36503,6 +36852,8 @@ checks:
     - bubbles/scripts/payload-closure-guard.sh
     - bubbles/scripts/phase-coordinator-selftest.sh
     - bubbles/scripts/phase-coordinator.sh
+    - bubbles/scripts/phase-name-enum-lint-selftest.sh
+    - bubbles/scripts/phase-name-enum-lint.sh
     - bubbles/scripts/phase-relevance-resolve-selftest.sh
     - bubbles/scripts/phase-relevance-resolve.sh
     - bubbles/scripts/pii-scan.sh
@@ -36544,6 +36895,9 @@ checks:
     - bubbles/scripts/release-ladder-schema-guard.sh
     - bubbles/scripts/release-manifest-purity-selftest.sh
     - bubbles/scripts/release-manifest-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard.sh
+    - bubbles/scripts/release-packet-docs-lib.sh
     - bubbles/scripts/release-packet-location-guard-selftest.sh
     - bubbles/scripts/release-packet-location-guard.sh
     - bubbles/scripts/release-train-backfill-planner.sh
@@ -36847,7 +37201,6 @@ checks:
     - docs/guides/WORKFLOW_MODES.md
     - docs/issues/G068-word-overlap-threshold.md
     - docs/issues/session-aware-runtime-coordination.md
-    - docs/mcp.md
     - docs/recipes/README.md
     - docs/recipes/adversarial-verification.md
     - docs/recipes/ask-the-super-first.md
@@ -36909,6 +37262,7 @@ checks:
     - bubbles/scripts/traceability-guard.sh
     - tests/regression/test_25_traceability_test_plan_heading_depth.sh
     commands:
+    - jq
     - python3
     - shellcheck
   vc-tests-regression-test-26-state-transition-spec-mjs-path:
@@ -36921,6 +37275,7 @@ checks:
     - bubbles/adapters/judge/ollama.sh
     - bubbles/adapters/observability/none.sh
     - bubbles/scripts/acceptance-authority-lib.sh
+    - bubbles/scripts/action-risk-classes-lib.sh
     - bubbles/scripts/action-risk-registry-lint.sh
     - bubbles/scripts/adoption-profile-lib-selftest.sh
     - bubbles/scripts/adoption-profile-lib.sh
@@ -37101,6 +37456,7 @@ checks:
     - bubbles/scripts/generate-framework-stats.sh
     - bubbles/scripts/generate-gate-coverage-map-selftest.sh
     - bubbles/scripts/generate-gate-coverage-map.sh
+    - bubbles/scripts/generate-gate-enforcement.sh
     - bubbles/scripts/generate-installer-selftest.sh
     - bubbles/scripts/generate-installer.sh
     - bubbles/scripts/generate-modes-block.sh
@@ -37210,6 +37566,8 @@ checks:
     - bubbles/scripts/payload-closure-guard.sh
     - bubbles/scripts/phase-coordinator-selftest.sh
     - bubbles/scripts/phase-coordinator.sh
+    - bubbles/scripts/phase-name-enum-lint-selftest.sh
+    - bubbles/scripts/phase-name-enum-lint.sh
     - bubbles/scripts/phase-relevance-resolve-selftest.sh
     - bubbles/scripts/phase-relevance-resolve.sh
     - bubbles/scripts/pii-scan.sh
@@ -37251,6 +37609,9 @@ checks:
     - bubbles/scripts/release-ladder-schema-guard.sh
     - bubbles/scripts/release-manifest-purity-selftest.sh
     - bubbles/scripts/release-manifest-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard.sh
+    - bubbles/scripts/release-packet-docs-lib.sh
     - bubbles/scripts/release-packet-location-guard-selftest.sh
     - bubbles/scripts/release-packet-location-guard.sh
     - bubbles/scripts/release-train-backfill-planner.sh
@@ -37554,7 +37915,6 @@ checks:
     - docs/guides/WORKFLOW_MODES.md
     - docs/issues/G068-word-overlap-threshold.md
     - docs/issues/session-aware-runtime-coordination.md
-    - docs/mcp.md
     - docs/recipes/README.md
     - docs/recipes/adversarial-verification.md
     - docs/recipes/ask-the-super-first.md
@@ -37599,6 +37959,7 @@ checks:
     - bubbles/adapters/judge/ollama.sh
     - bubbles/adapters/observability/none.sh
     - bubbles/scripts/acceptance-authority-lib.sh
+    - bubbles/scripts/action-risk-classes-lib.sh
     - bubbles/scripts/action-risk-registry-lint.sh
     - bubbles/scripts/adoption-profile-lib-selftest.sh
     - bubbles/scripts/adoption-profile-lib.sh
@@ -37779,6 +38140,7 @@ checks:
     - bubbles/scripts/generate-framework-stats.sh
     - bubbles/scripts/generate-gate-coverage-map-selftest.sh
     - bubbles/scripts/generate-gate-coverage-map.sh
+    - bubbles/scripts/generate-gate-enforcement.sh
     - bubbles/scripts/generate-installer-selftest.sh
     - bubbles/scripts/generate-installer.sh
     - bubbles/scripts/generate-modes-block.sh
@@ -37888,6 +38250,8 @@ checks:
     - bubbles/scripts/payload-closure-guard.sh
     - bubbles/scripts/phase-coordinator-selftest.sh
     - bubbles/scripts/phase-coordinator.sh
+    - bubbles/scripts/phase-name-enum-lint-selftest.sh
+    - bubbles/scripts/phase-name-enum-lint.sh
     - bubbles/scripts/phase-relevance-resolve-selftest.sh
     - bubbles/scripts/phase-relevance-resolve.sh
     - bubbles/scripts/pii-scan.sh
@@ -37929,6 +38293,9 @@ checks:
     - bubbles/scripts/release-ladder-schema-guard.sh
     - bubbles/scripts/release-manifest-purity-selftest.sh
     - bubbles/scripts/release-manifest-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard.sh
+    - bubbles/scripts/release-packet-docs-lib.sh
     - bubbles/scripts/release-packet-location-guard-selftest.sh
     - bubbles/scripts/release-packet-location-guard.sh
     - bubbles/scripts/release-train-backfill-planner.sh
@@ -38232,7 +38599,6 @@ checks:
     - docs/guides/WORKFLOW_MODES.md
     - docs/issues/G068-word-overlap-threshold.md
     - docs/issues/session-aware-runtime-coordination.md
-    - docs/mcp.md
     - docs/recipes/README.md
     - docs/recipes/adversarial-verification.md
     - docs/recipes/ask-the-super-first.md
@@ -38277,6 +38643,7 @@ checks:
     - bubbles/adapters/judge/ollama.sh
     - bubbles/adapters/observability/none.sh
     - bubbles/scripts/acceptance-authority-lib.sh
+    - bubbles/scripts/action-risk-classes-lib.sh
     - bubbles/scripts/action-risk-registry-lint.sh
     - bubbles/scripts/adoption-profile-lib-selftest.sh
     - bubbles/scripts/adoption-profile-lib.sh
@@ -38457,6 +38824,7 @@ checks:
     - bubbles/scripts/generate-framework-stats.sh
     - bubbles/scripts/generate-gate-coverage-map-selftest.sh
     - bubbles/scripts/generate-gate-coverage-map.sh
+    - bubbles/scripts/generate-gate-enforcement.sh
     - bubbles/scripts/generate-installer-selftest.sh
     - bubbles/scripts/generate-installer.sh
     - bubbles/scripts/generate-modes-block.sh
@@ -38566,6 +38934,8 @@ checks:
     - bubbles/scripts/payload-closure-guard.sh
     - bubbles/scripts/phase-coordinator-selftest.sh
     - bubbles/scripts/phase-coordinator.sh
+    - bubbles/scripts/phase-name-enum-lint-selftest.sh
+    - bubbles/scripts/phase-name-enum-lint.sh
     - bubbles/scripts/phase-relevance-resolve-selftest.sh
     - bubbles/scripts/phase-relevance-resolve.sh
     - bubbles/scripts/pii-scan.sh
@@ -38607,6 +38977,9 @@ checks:
     - bubbles/scripts/release-ladder-schema-guard.sh
     - bubbles/scripts/release-manifest-purity-selftest.sh
     - bubbles/scripts/release-manifest-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard.sh
+    - bubbles/scripts/release-packet-docs-lib.sh
     - bubbles/scripts/release-packet-location-guard-selftest.sh
     - bubbles/scripts/release-packet-location-guard.sh
     - bubbles/scripts/release-train-backfill-planner.sh
@@ -38910,7 +39283,6 @@ checks:
     - docs/guides/WORKFLOW_MODES.md
     - docs/issues/G068-word-overlap-threshold.md
     - docs/issues/session-aware-runtime-coordination.md
-    - docs/mcp.md
     - docs/recipes/README.md
     - docs/recipes/adversarial-verification.md
     - docs/recipes/ask-the-super-first.md
@@ -38989,6 +39361,7 @@ checks:
     - bubbles/adapters/judge/ollama.sh
     - bubbles/adapters/observability/none.sh
     - bubbles/scripts/acceptance-authority-lib.sh
+    - bubbles/scripts/action-risk-classes-lib.sh
     - bubbles/scripts/action-risk-registry-lint.sh
     - bubbles/scripts/adoption-profile-lib-selftest.sh
     - bubbles/scripts/adoption-profile-lib.sh
@@ -39169,6 +39542,7 @@ checks:
     - bubbles/scripts/generate-framework-stats.sh
     - bubbles/scripts/generate-gate-coverage-map-selftest.sh
     - bubbles/scripts/generate-gate-coverage-map.sh
+    - bubbles/scripts/generate-gate-enforcement.sh
     - bubbles/scripts/generate-installer-selftest.sh
     - bubbles/scripts/generate-installer.sh
     - bubbles/scripts/generate-modes-block.sh
@@ -39278,6 +39652,8 @@ checks:
     - bubbles/scripts/payload-closure-guard.sh
     - bubbles/scripts/phase-coordinator-selftest.sh
     - bubbles/scripts/phase-coordinator.sh
+    - bubbles/scripts/phase-name-enum-lint-selftest.sh
+    - bubbles/scripts/phase-name-enum-lint.sh
     - bubbles/scripts/phase-relevance-resolve-selftest.sh
     - bubbles/scripts/phase-relevance-resolve.sh
     - bubbles/scripts/pii-scan.sh
@@ -39319,6 +39695,9 @@ checks:
     - bubbles/scripts/release-ladder-schema-guard.sh
     - bubbles/scripts/release-manifest-purity-selftest.sh
     - bubbles/scripts/release-manifest-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard.sh
+    - bubbles/scripts/release-packet-docs-lib.sh
     - bubbles/scripts/release-packet-location-guard-selftest.sh
     - bubbles/scripts/release-packet-location-guard.sh
     - bubbles/scripts/release-train-backfill-planner.sh
@@ -39622,7 +40001,6 @@ checks:
     - docs/guides/WORKFLOW_MODES.md
     - docs/issues/G068-word-overlap-threshold.md
     - docs/issues/session-aware-runtime-coordination.md
-    - docs/mcp.md
     - docs/recipes/README.md
     - docs/recipes/adversarial-verification.md
     - docs/recipes/ask-the-super-first.md
@@ -39711,6 +40089,7 @@ checks:
     - bubbles/adapters/judge/ollama.sh
     - bubbles/adapters/observability/none.sh
     - bubbles/scripts/acceptance-authority-lib.sh
+    - bubbles/scripts/action-risk-classes-lib.sh
     - bubbles/scripts/action-risk-registry-lint.sh
     - bubbles/scripts/adoption-profile-lib-selftest.sh
     - bubbles/scripts/adoption-profile-lib.sh
@@ -39891,6 +40270,7 @@ checks:
     - bubbles/scripts/generate-framework-stats.sh
     - bubbles/scripts/generate-gate-coverage-map-selftest.sh
     - bubbles/scripts/generate-gate-coverage-map.sh
+    - bubbles/scripts/generate-gate-enforcement.sh
     - bubbles/scripts/generate-installer-selftest.sh
     - bubbles/scripts/generate-installer.sh
     - bubbles/scripts/generate-modes-block.sh
@@ -40000,6 +40380,8 @@ checks:
     - bubbles/scripts/payload-closure-guard.sh
     - bubbles/scripts/phase-coordinator-selftest.sh
     - bubbles/scripts/phase-coordinator.sh
+    - bubbles/scripts/phase-name-enum-lint-selftest.sh
+    - bubbles/scripts/phase-name-enum-lint.sh
     - bubbles/scripts/phase-relevance-resolve-selftest.sh
     - bubbles/scripts/phase-relevance-resolve.sh
     - bubbles/scripts/pii-scan.sh
@@ -40041,6 +40423,9 @@ checks:
     - bubbles/scripts/release-ladder-schema-guard.sh
     - bubbles/scripts/release-manifest-purity-selftest.sh
     - bubbles/scripts/release-manifest-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard.sh
+    - bubbles/scripts/release-packet-docs-lib.sh
     - bubbles/scripts/release-packet-location-guard-selftest.sh
     - bubbles/scripts/release-packet-location-guard.sh
     - bubbles/scripts/release-train-backfill-planner.sh
@@ -40344,7 +40729,6 @@ checks:
     - docs/guides/WORKFLOW_MODES.md
     - docs/issues/G068-word-overlap-threshold.md
     - docs/issues/session-aware-runtime-coordination.md
-    - docs/mcp.md
     - docs/recipes/README.md
     - docs/recipes/adversarial-verification.md
     - docs/recipes/ask-the-super-first.md
@@ -40501,6 +40885,7 @@ checks:
     - bubbles/adapters/judge/ollama.sh
     - bubbles/adapters/observability/none.sh
     - bubbles/scripts/acceptance-authority-lib.sh
+    - bubbles/scripts/action-risk-classes-lib.sh
     - bubbles/scripts/action-risk-registry-lint.sh
     - bubbles/scripts/adoption-profile-lib-selftest.sh
     - bubbles/scripts/adoption-profile-lib.sh
@@ -40681,6 +41066,7 @@ checks:
     - bubbles/scripts/generate-framework-stats.sh
     - bubbles/scripts/generate-gate-coverage-map-selftest.sh
     - bubbles/scripts/generate-gate-coverage-map.sh
+    - bubbles/scripts/generate-gate-enforcement.sh
     - bubbles/scripts/generate-installer-selftest.sh
     - bubbles/scripts/generate-installer.sh
     - bubbles/scripts/generate-modes-block.sh
@@ -40790,6 +41176,8 @@ checks:
     - bubbles/scripts/payload-closure-guard.sh
     - bubbles/scripts/phase-coordinator-selftest.sh
     - bubbles/scripts/phase-coordinator.sh
+    - bubbles/scripts/phase-name-enum-lint-selftest.sh
+    - bubbles/scripts/phase-name-enum-lint.sh
     - bubbles/scripts/phase-relevance-resolve-selftest.sh
     - bubbles/scripts/phase-relevance-resolve.sh
     - bubbles/scripts/pii-scan.sh
@@ -40831,6 +41219,9 @@ checks:
     - bubbles/scripts/release-ladder-schema-guard.sh
     - bubbles/scripts/release-manifest-purity-selftest.sh
     - bubbles/scripts/release-manifest-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard.sh
+    - bubbles/scripts/release-packet-docs-lib.sh
     - bubbles/scripts/release-packet-location-guard-selftest.sh
     - bubbles/scripts/release-packet-location-guard.sh
     - bubbles/scripts/release-train-backfill-planner.sh
@@ -41134,7 +41525,6 @@ checks:
     - docs/guides/WORKFLOW_MODES.md
     - docs/issues/G068-word-overlap-threshold.md
     - docs/issues/session-aware-runtime-coordination.md
-    - docs/mcp.md
     - docs/recipes/README.md
     - docs/recipes/adversarial-verification.md
     - docs/recipes/ask-the-super-first.md
@@ -41199,6 +41589,7 @@ checks:
     - bubbles/adapters/judge/ollama.sh
     - bubbles/adapters/observability/none.sh
     - bubbles/scripts/acceptance-authority-lib.sh
+    - bubbles/scripts/action-risk-classes-lib.sh
     - bubbles/scripts/action-risk-registry-lint.sh
     - bubbles/scripts/adoption-profile-lib-selftest.sh
     - bubbles/scripts/adoption-profile-lib.sh
@@ -41379,6 +41770,7 @@ checks:
     - bubbles/scripts/generate-framework-stats.sh
     - bubbles/scripts/generate-gate-coverage-map-selftest.sh
     - bubbles/scripts/generate-gate-coverage-map.sh
+    - bubbles/scripts/generate-gate-enforcement.sh
     - bubbles/scripts/generate-installer-selftest.sh
     - bubbles/scripts/generate-installer.sh
     - bubbles/scripts/generate-modes-block.sh
@@ -41488,6 +41880,8 @@ checks:
     - bubbles/scripts/payload-closure-guard.sh
     - bubbles/scripts/phase-coordinator-selftest.sh
     - bubbles/scripts/phase-coordinator.sh
+    - bubbles/scripts/phase-name-enum-lint-selftest.sh
+    - bubbles/scripts/phase-name-enum-lint.sh
     - bubbles/scripts/phase-relevance-resolve-selftest.sh
     - bubbles/scripts/phase-relevance-resolve.sh
     - bubbles/scripts/pii-scan.sh
@@ -41529,6 +41923,9 @@ checks:
     - bubbles/scripts/release-ladder-schema-guard.sh
     - bubbles/scripts/release-manifest-purity-selftest.sh
     - bubbles/scripts/release-manifest-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard.sh
+    - bubbles/scripts/release-packet-docs-lib.sh
     - bubbles/scripts/release-packet-location-guard-selftest.sh
     - bubbles/scripts/release-packet-location-guard.sh
     - bubbles/scripts/release-train-backfill-planner.sh
@@ -41832,7 +42229,6 @@ checks:
     - docs/guides/WORKFLOW_MODES.md
     - docs/issues/G068-word-overlap-threshold.md
     - docs/issues/session-aware-runtime-coordination.md
-    - docs/mcp.md
     - docs/recipes/README.md
     - docs/recipes/adversarial-verification.md
     - docs/recipes/ask-the-super-first.md
@@ -41877,6 +42273,7 @@ checks:
     - bubbles/adapters/judge/ollama.sh
     - bubbles/adapters/observability/none.sh
     - bubbles/scripts/acceptance-authority-lib.sh
+    - bubbles/scripts/action-risk-classes-lib.sh
     - bubbles/scripts/action-risk-registry-lint.sh
     - bubbles/scripts/adoption-profile-lib-selftest.sh
     - bubbles/scripts/adoption-profile-lib.sh
@@ -42057,6 +42454,7 @@ checks:
     - bubbles/scripts/generate-framework-stats.sh
     - bubbles/scripts/generate-gate-coverage-map-selftest.sh
     - bubbles/scripts/generate-gate-coverage-map.sh
+    - bubbles/scripts/generate-gate-enforcement.sh
     - bubbles/scripts/generate-installer-selftest.sh
     - bubbles/scripts/generate-installer.sh
     - bubbles/scripts/generate-modes-block.sh
@@ -42166,6 +42564,8 @@ checks:
     - bubbles/scripts/payload-closure-guard.sh
     - bubbles/scripts/phase-coordinator-selftest.sh
     - bubbles/scripts/phase-coordinator.sh
+    - bubbles/scripts/phase-name-enum-lint-selftest.sh
+    - bubbles/scripts/phase-name-enum-lint.sh
     - bubbles/scripts/phase-relevance-resolve-selftest.sh
     - bubbles/scripts/phase-relevance-resolve.sh
     - bubbles/scripts/pii-scan.sh
@@ -42207,6 +42607,9 @@ checks:
     - bubbles/scripts/release-ladder-schema-guard.sh
     - bubbles/scripts/release-manifest-purity-selftest.sh
     - bubbles/scripts/release-manifest-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard.sh
+    - bubbles/scripts/release-packet-docs-lib.sh
     - bubbles/scripts/release-packet-location-guard-selftest.sh
     - bubbles/scripts/release-packet-location-guard.sh
     - bubbles/scripts/release-train-backfill-planner.sh
@@ -42510,7 +42913,6 @@ checks:
     - docs/guides/WORKFLOW_MODES.md
     - docs/issues/G068-word-overlap-threshold.md
     - docs/issues/session-aware-runtime-coordination.md
-    - docs/mcp.md
     - docs/recipes/README.md
     - docs/recipes/adversarial-verification.md
     - docs/recipes/ask-the-super-first.md
@@ -42605,6 +43007,7 @@ checks:
     - bubbles/adapters/judge/ollama.sh
     - bubbles/adapters/observability/none.sh
     - bubbles/scripts/acceptance-authority-lib.sh
+    - bubbles/scripts/action-risk-classes-lib.sh
     - bubbles/scripts/action-risk-registry-lint.sh
     - bubbles/scripts/adoption-profile-lib-selftest.sh
     - bubbles/scripts/adoption-profile-lib.sh
@@ -42785,6 +43188,7 @@ checks:
     - bubbles/scripts/generate-framework-stats.sh
     - bubbles/scripts/generate-gate-coverage-map-selftest.sh
     - bubbles/scripts/generate-gate-coverage-map.sh
+    - bubbles/scripts/generate-gate-enforcement.sh
     - bubbles/scripts/generate-installer-selftest.sh
     - bubbles/scripts/generate-installer.sh
     - bubbles/scripts/generate-modes-block.sh
@@ -42894,6 +43298,8 @@ checks:
     - bubbles/scripts/payload-closure-guard.sh
     - bubbles/scripts/phase-coordinator-selftest.sh
     - bubbles/scripts/phase-coordinator.sh
+    - bubbles/scripts/phase-name-enum-lint-selftest.sh
+    - bubbles/scripts/phase-name-enum-lint.sh
     - bubbles/scripts/phase-relevance-resolve-selftest.sh
     - bubbles/scripts/phase-relevance-resolve.sh
     - bubbles/scripts/pii-scan.sh
@@ -42935,6 +43341,9 @@ checks:
     - bubbles/scripts/release-ladder-schema-guard.sh
     - bubbles/scripts/release-manifest-purity-selftest.sh
     - bubbles/scripts/release-manifest-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard.sh
+    - bubbles/scripts/release-packet-docs-lib.sh
     - bubbles/scripts/release-packet-location-guard-selftest.sh
     - bubbles/scripts/release-packet-location-guard.sh
     - bubbles/scripts/release-train-backfill-planner.sh
@@ -43238,7 +43647,6 @@ checks:
     - docs/guides/WORKFLOW_MODES.md
     - docs/issues/G068-word-overlap-threshold.md
     - docs/issues/session-aware-runtime-coordination.md
-    - docs/mcp.md
     - docs/recipes/README.md
     - docs/recipes/adversarial-verification.md
     - docs/recipes/ask-the-super-first.md
@@ -43283,6 +43691,7 @@ checks:
     - bubbles/adapters/judge/ollama.sh
     - bubbles/adapters/observability/none.sh
     - bubbles/scripts/acceptance-authority-lib.sh
+    - bubbles/scripts/action-risk-classes-lib.sh
     - bubbles/scripts/action-risk-registry-lint.sh
     - bubbles/scripts/adoption-profile-lib-selftest.sh
     - bubbles/scripts/adoption-profile-lib.sh
@@ -43463,6 +43872,7 @@ checks:
     - bubbles/scripts/generate-framework-stats.sh
     - bubbles/scripts/generate-gate-coverage-map-selftest.sh
     - bubbles/scripts/generate-gate-coverage-map.sh
+    - bubbles/scripts/generate-gate-enforcement.sh
     - bubbles/scripts/generate-installer-selftest.sh
     - bubbles/scripts/generate-installer.sh
     - bubbles/scripts/generate-modes-block.sh
@@ -43572,6 +43982,8 @@ checks:
     - bubbles/scripts/payload-closure-guard.sh
     - bubbles/scripts/phase-coordinator-selftest.sh
     - bubbles/scripts/phase-coordinator.sh
+    - bubbles/scripts/phase-name-enum-lint-selftest.sh
+    - bubbles/scripts/phase-name-enum-lint.sh
     - bubbles/scripts/phase-relevance-resolve-selftest.sh
     - bubbles/scripts/phase-relevance-resolve.sh
     - bubbles/scripts/pii-scan.sh
@@ -43613,6 +44025,9 @@ checks:
     - bubbles/scripts/release-ladder-schema-guard.sh
     - bubbles/scripts/release-manifest-purity-selftest.sh
     - bubbles/scripts/release-manifest-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard.sh
+    - bubbles/scripts/release-packet-docs-lib.sh
     - bubbles/scripts/release-packet-location-guard-selftest.sh
     - bubbles/scripts/release-packet-location-guard.sh
     - bubbles/scripts/release-train-backfill-planner.sh
@@ -43916,7 +44331,6 @@ checks:
     - docs/guides/WORKFLOW_MODES.md
     - docs/issues/G068-word-overlap-threshold.md
     - docs/issues/session-aware-runtime-coordination.md
-    - docs/mcp.md
     - docs/recipes/README.md
     - docs/recipes/adversarial-verification.md
     - docs/recipes/ask-the-super-first.md
@@ -43961,6 +44375,7 @@ checks:
     - bubbles/adapters/judge/ollama.sh
     - bubbles/adapters/observability/none.sh
     - bubbles/scripts/acceptance-authority-lib.sh
+    - bubbles/scripts/action-risk-classes-lib.sh
     - bubbles/scripts/action-risk-registry-lint.sh
     - bubbles/scripts/adoption-profile-lib-selftest.sh
     - bubbles/scripts/adoption-profile-lib.sh
@@ -44141,6 +44556,7 @@ checks:
     - bubbles/scripts/generate-framework-stats.sh
     - bubbles/scripts/generate-gate-coverage-map-selftest.sh
     - bubbles/scripts/generate-gate-coverage-map.sh
+    - bubbles/scripts/generate-gate-enforcement.sh
     - bubbles/scripts/generate-installer-selftest.sh
     - bubbles/scripts/generate-installer.sh
     - bubbles/scripts/generate-modes-block.sh
@@ -44250,6 +44666,8 @@ checks:
     - bubbles/scripts/payload-closure-guard.sh
     - bubbles/scripts/phase-coordinator-selftest.sh
     - bubbles/scripts/phase-coordinator.sh
+    - bubbles/scripts/phase-name-enum-lint-selftest.sh
+    - bubbles/scripts/phase-name-enum-lint.sh
     - bubbles/scripts/phase-relevance-resolve-selftest.sh
     - bubbles/scripts/phase-relevance-resolve.sh
     - bubbles/scripts/pii-scan.sh
@@ -44291,6 +44709,9 @@ checks:
     - bubbles/scripts/release-ladder-schema-guard.sh
     - bubbles/scripts/release-manifest-purity-selftest.sh
     - bubbles/scripts/release-manifest-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard.sh
+    - bubbles/scripts/release-packet-docs-lib.sh
     - bubbles/scripts/release-packet-location-guard-selftest.sh
     - bubbles/scripts/release-packet-location-guard.sh
     - bubbles/scripts/release-train-backfill-planner.sh
@@ -44594,7 +45015,6 @@ checks:
     - docs/guides/WORKFLOW_MODES.md
     - docs/issues/G068-word-overlap-threshold.md
     - docs/issues/session-aware-runtime-coordination.md
-    - docs/mcp.md
     - docs/recipes/README.md
     - docs/recipes/adversarial-verification.md
     - docs/recipes/ask-the-super-first.md
@@ -44676,6 +45096,7 @@ checks:
     - bubbles/adapters/judge/ollama.sh
     - bubbles/adapters/observability/none.sh
     - bubbles/scripts/acceptance-authority-lib.sh
+    - bubbles/scripts/action-risk-classes-lib.sh
     - bubbles/scripts/action-risk-registry-lint.sh
     - bubbles/scripts/adoption-profile-lib-selftest.sh
     - bubbles/scripts/adoption-profile-lib.sh
@@ -44856,6 +45277,7 @@ checks:
     - bubbles/scripts/generate-framework-stats.sh
     - bubbles/scripts/generate-gate-coverage-map-selftest.sh
     - bubbles/scripts/generate-gate-coverage-map.sh
+    - bubbles/scripts/generate-gate-enforcement.sh
     - bubbles/scripts/generate-installer-selftest.sh
     - bubbles/scripts/generate-installer.sh
     - bubbles/scripts/generate-modes-block.sh
@@ -44965,6 +45387,8 @@ checks:
     - bubbles/scripts/payload-closure-guard.sh
     - bubbles/scripts/phase-coordinator-selftest.sh
     - bubbles/scripts/phase-coordinator.sh
+    - bubbles/scripts/phase-name-enum-lint-selftest.sh
+    - bubbles/scripts/phase-name-enum-lint.sh
     - bubbles/scripts/phase-relevance-resolve-selftest.sh
     - bubbles/scripts/phase-relevance-resolve.sh
     - bubbles/scripts/pii-scan.sh
@@ -45006,6 +45430,9 @@ checks:
     - bubbles/scripts/release-ladder-schema-guard.sh
     - bubbles/scripts/release-manifest-purity-selftest.sh
     - bubbles/scripts/release-manifest-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard.sh
+    - bubbles/scripts/release-packet-docs-lib.sh
     - bubbles/scripts/release-packet-location-guard-selftest.sh
     - bubbles/scripts/release-packet-location-guard.sh
     - bubbles/scripts/release-train-backfill-planner.sh
@@ -45309,7 +45736,6 @@ checks:
     - docs/guides/WORKFLOW_MODES.md
     - docs/issues/G068-word-overlap-threshold.md
     - docs/issues/session-aware-runtime-coordination.md
-    - docs/mcp.md
     - docs/recipes/README.md
     - docs/recipes/adversarial-verification.md
     - docs/recipes/ask-the-super-first.md
@@ -45354,6 +45780,7 @@ checks:
     - bubbles/adapters/judge/ollama.sh
     - bubbles/adapters/observability/none.sh
     - bubbles/scripts/acceptance-authority-lib.sh
+    - bubbles/scripts/action-risk-classes-lib.sh
     - bubbles/scripts/action-risk-registry-lint.sh
     - bubbles/scripts/adoption-profile-lib-selftest.sh
     - bubbles/scripts/adoption-profile-lib.sh
@@ -45534,6 +45961,7 @@ checks:
     - bubbles/scripts/generate-framework-stats.sh
     - bubbles/scripts/generate-gate-coverage-map-selftest.sh
     - bubbles/scripts/generate-gate-coverage-map.sh
+    - bubbles/scripts/generate-gate-enforcement.sh
     - bubbles/scripts/generate-installer-selftest.sh
     - bubbles/scripts/generate-installer.sh
     - bubbles/scripts/generate-modes-block.sh
@@ -45643,6 +46071,8 @@ checks:
     - bubbles/scripts/payload-closure-guard.sh
     - bubbles/scripts/phase-coordinator-selftest.sh
     - bubbles/scripts/phase-coordinator.sh
+    - bubbles/scripts/phase-name-enum-lint-selftest.sh
+    - bubbles/scripts/phase-name-enum-lint.sh
     - bubbles/scripts/phase-relevance-resolve-selftest.sh
     - bubbles/scripts/phase-relevance-resolve.sh
     - bubbles/scripts/pii-scan.sh
@@ -45684,6 +46114,9 @@ checks:
     - bubbles/scripts/release-ladder-schema-guard.sh
     - bubbles/scripts/release-manifest-purity-selftest.sh
     - bubbles/scripts/release-manifest-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard.sh
+    - bubbles/scripts/release-packet-docs-lib.sh
     - bubbles/scripts/release-packet-location-guard-selftest.sh
     - bubbles/scripts/release-packet-location-guard.sh
     - bubbles/scripts/release-train-backfill-planner.sh
@@ -45987,7 +46420,6 @@ checks:
     - docs/guides/WORKFLOW_MODES.md
     - docs/issues/G068-word-overlap-threshold.md
     - docs/issues/session-aware-runtime-coordination.md
-    - docs/mcp.md
     - docs/recipes/README.md
     - docs/recipes/adversarial-verification.md
     - docs/recipes/ask-the-super-first.md
@@ -46032,6 +46464,7 @@ checks:
     - bubbles/adapters/judge/ollama.sh
     - bubbles/adapters/observability/none.sh
     - bubbles/scripts/acceptance-authority-lib.sh
+    - bubbles/scripts/action-risk-classes-lib.sh
     - bubbles/scripts/action-risk-registry-lint.sh
     - bubbles/scripts/adoption-profile-lib-selftest.sh
     - bubbles/scripts/adoption-profile-lib.sh
@@ -46212,6 +46645,7 @@ checks:
     - bubbles/scripts/generate-framework-stats.sh
     - bubbles/scripts/generate-gate-coverage-map-selftest.sh
     - bubbles/scripts/generate-gate-coverage-map.sh
+    - bubbles/scripts/generate-gate-enforcement.sh
     - bubbles/scripts/generate-installer-selftest.sh
     - bubbles/scripts/generate-installer.sh
     - bubbles/scripts/generate-modes-block.sh
@@ -46321,6 +46755,8 @@ checks:
     - bubbles/scripts/payload-closure-guard.sh
     - bubbles/scripts/phase-coordinator-selftest.sh
     - bubbles/scripts/phase-coordinator.sh
+    - bubbles/scripts/phase-name-enum-lint-selftest.sh
+    - bubbles/scripts/phase-name-enum-lint.sh
     - bubbles/scripts/phase-relevance-resolve-selftest.sh
     - bubbles/scripts/phase-relevance-resolve.sh
     - bubbles/scripts/pii-scan.sh
@@ -46362,6 +46798,9 @@ checks:
     - bubbles/scripts/release-ladder-schema-guard.sh
     - bubbles/scripts/release-manifest-purity-selftest.sh
     - bubbles/scripts/release-manifest-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard.sh
+    - bubbles/scripts/release-packet-docs-lib.sh
     - bubbles/scripts/release-packet-location-guard-selftest.sh
     - bubbles/scripts/release-packet-location-guard.sh
     - bubbles/scripts/release-train-backfill-planner.sh
@@ -46665,7 +47104,6 @@ checks:
     - docs/guides/WORKFLOW_MODES.md
     - docs/issues/G068-word-overlap-threshold.md
     - docs/issues/session-aware-runtime-coordination.md
-    - docs/mcp.md
     - docs/recipes/README.md
     - docs/recipes/adversarial-verification.md
     - docs/recipes/ask-the-super-first.md
@@ -46710,6 +47148,7 @@ checks:
     - bubbles/adapters/judge/ollama.sh
     - bubbles/adapters/observability/none.sh
     - bubbles/scripts/acceptance-authority-lib.sh
+    - bubbles/scripts/action-risk-classes-lib.sh
     - bubbles/scripts/action-risk-registry-lint.sh
     - bubbles/scripts/adoption-profile-lib-selftest.sh
     - bubbles/scripts/adoption-profile-lib.sh
@@ -46890,6 +47329,7 @@ checks:
     - bubbles/scripts/generate-framework-stats.sh
     - bubbles/scripts/generate-gate-coverage-map-selftest.sh
     - bubbles/scripts/generate-gate-coverage-map.sh
+    - bubbles/scripts/generate-gate-enforcement.sh
     - bubbles/scripts/generate-installer-selftest.sh
     - bubbles/scripts/generate-installer.sh
     - bubbles/scripts/generate-modes-block.sh
@@ -46999,6 +47439,8 @@ checks:
     - bubbles/scripts/payload-closure-guard.sh
     - bubbles/scripts/phase-coordinator-selftest.sh
     - bubbles/scripts/phase-coordinator.sh
+    - bubbles/scripts/phase-name-enum-lint-selftest.sh
+    - bubbles/scripts/phase-name-enum-lint.sh
     - bubbles/scripts/phase-relevance-resolve-selftest.sh
     - bubbles/scripts/phase-relevance-resolve.sh
     - bubbles/scripts/pii-scan.sh
@@ -47040,6 +47482,9 @@ checks:
     - bubbles/scripts/release-ladder-schema-guard.sh
     - bubbles/scripts/release-manifest-purity-selftest.sh
     - bubbles/scripts/release-manifest-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard.sh
+    - bubbles/scripts/release-packet-docs-lib.sh
     - bubbles/scripts/release-packet-location-guard-selftest.sh
     - bubbles/scripts/release-packet-location-guard.sh
     - bubbles/scripts/release-train-backfill-planner.sh
@@ -47343,7 +47788,6 @@ checks:
     - docs/guides/WORKFLOW_MODES.md
     - docs/issues/G068-word-overlap-threshold.md
     - docs/issues/session-aware-runtime-coordination.md
-    - docs/mcp.md
     - docs/recipes/README.md
     - docs/recipes/adversarial-verification.md
     - docs/recipes/ask-the-super-first.md
@@ -47388,6 +47832,7 @@ checks:
     - bubbles/adapters/judge/ollama.sh
     - bubbles/adapters/observability/none.sh
     - bubbles/scripts/acceptance-authority-lib.sh
+    - bubbles/scripts/action-risk-classes-lib.sh
     - bubbles/scripts/action-risk-registry-lint.sh
     - bubbles/scripts/adoption-profile-lib-selftest.sh
     - bubbles/scripts/adoption-profile-lib.sh
@@ -47568,6 +48013,7 @@ checks:
     - bubbles/scripts/generate-framework-stats.sh
     - bubbles/scripts/generate-gate-coverage-map-selftest.sh
     - bubbles/scripts/generate-gate-coverage-map.sh
+    - bubbles/scripts/generate-gate-enforcement.sh
     - bubbles/scripts/generate-installer-selftest.sh
     - bubbles/scripts/generate-installer.sh
     - bubbles/scripts/generate-modes-block.sh
@@ -47677,6 +48123,8 @@ checks:
     - bubbles/scripts/payload-closure-guard.sh
     - bubbles/scripts/phase-coordinator-selftest.sh
     - bubbles/scripts/phase-coordinator.sh
+    - bubbles/scripts/phase-name-enum-lint-selftest.sh
+    - bubbles/scripts/phase-name-enum-lint.sh
     - bubbles/scripts/phase-relevance-resolve-selftest.sh
     - bubbles/scripts/phase-relevance-resolve.sh
     - bubbles/scripts/pii-scan.sh
@@ -47718,6 +48166,9 @@ checks:
     - bubbles/scripts/release-ladder-schema-guard.sh
     - bubbles/scripts/release-manifest-purity-selftest.sh
     - bubbles/scripts/release-manifest-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard.sh
+    - bubbles/scripts/release-packet-docs-lib.sh
     - bubbles/scripts/release-packet-location-guard-selftest.sh
     - bubbles/scripts/release-packet-location-guard.sh
     - bubbles/scripts/release-train-backfill-planner.sh
@@ -48021,7 +48472,6 @@ checks:
     - docs/guides/WORKFLOW_MODES.md
     - docs/issues/G068-word-overlap-threshold.md
     - docs/issues/session-aware-runtime-coordination.md
-    - docs/mcp.md
     - docs/recipes/README.md
     - docs/recipes/adversarial-verification.md
     - docs/recipes/ask-the-super-first.md
@@ -48184,6 +48634,7 @@ checks:
     - bubbles/adapters/judge/ollama.sh
     - bubbles/adapters/observability/none.sh
     - bubbles/scripts/acceptance-authority-lib.sh
+    - bubbles/scripts/action-risk-classes-lib.sh
     - bubbles/scripts/action-risk-registry-lint.sh
     - bubbles/scripts/adoption-profile-lib-selftest.sh
     - bubbles/scripts/adoption-profile-lib.sh
@@ -48364,6 +48815,7 @@ checks:
     - bubbles/scripts/generate-framework-stats.sh
     - bubbles/scripts/generate-gate-coverage-map-selftest.sh
     - bubbles/scripts/generate-gate-coverage-map.sh
+    - bubbles/scripts/generate-gate-enforcement.sh
     - bubbles/scripts/generate-installer-selftest.sh
     - bubbles/scripts/generate-installer.sh
     - bubbles/scripts/generate-modes-block.sh
@@ -48473,6 +48925,8 @@ checks:
     - bubbles/scripts/payload-closure-guard.sh
     - bubbles/scripts/phase-coordinator-selftest.sh
     - bubbles/scripts/phase-coordinator.sh
+    - bubbles/scripts/phase-name-enum-lint-selftest.sh
+    - bubbles/scripts/phase-name-enum-lint.sh
     - bubbles/scripts/phase-relevance-resolve-selftest.sh
     - bubbles/scripts/phase-relevance-resolve.sh
     - bubbles/scripts/pii-scan.sh
@@ -48514,6 +48968,9 @@ checks:
     - bubbles/scripts/release-ladder-schema-guard.sh
     - bubbles/scripts/release-manifest-purity-selftest.sh
     - bubbles/scripts/release-manifest-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard.sh
+    - bubbles/scripts/release-packet-docs-lib.sh
     - bubbles/scripts/release-packet-location-guard-selftest.sh
     - bubbles/scripts/release-packet-location-guard.sh
     - bubbles/scripts/release-train-backfill-planner.sh
@@ -48817,7 +49274,6 @@ checks:
     - docs/guides/WORKFLOW_MODES.md
     - docs/issues/G068-word-overlap-threshold.md
     - docs/issues/session-aware-runtime-coordination.md
-    - docs/mcp.md
     - docs/recipes/README.md
     - docs/recipes/adversarial-verification.md
     - docs/recipes/ask-the-super-first.md
@@ -48882,6 +49338,7 @@ checks:
     - bubbles/adapters/judge/ollama.sh
     - bubbles/adapters/observability/none.sh
     - bubbles/scripts/acceptance-authority-lib.sh
+    - bubbles/scripts/action-risk-classes-lib.sh
     - bubbles/scripts/action-risk-registry-lint.sh
     - bubbles/scripts/adoption-profile-lib-selftest.sh
     - bubbles/scripts/adoption-profile-lib.sh
@@ -49062,6 +49519,7 @@ checks:
     - bubbles/scripts/generate-framework-stats.sh
     - bubbles/scripts/generate-gate-coverage-map-selftest.sh
     - bubbles/scripts/generate-gate-coverage-map.sh
+    - bubbles/scripts/generate-gate-enforcement.sh
     - bubbles/scripts/generate-installer-selftest.sh
     - bubbles/scripts/generate-installer.sh
     - bubbles/scripts/generate-modes-block.sh
@@ -49171,6 +49629,8 @@ checks:
     - bubbles/scripts/payload-closure-guard.sh
     - bubbles/scripts/phase-coordinator-selftest.sh
     - bubbles/scripts/phase-coordinator.sh
+    - bubbles/scripts/phase-name-enum-lint-selftest.sh
+    - bubbles/scripts/phase-name-enum-lint.sh
     - bubbles/scripts/phase-relevance-resolve-selftest.sh
     - bubbles/scripts/phase-relevance-resolve.sh
     - bubbles/scripts/pii-scan.sh
@@ -49212,6 +49672,9 @@ checks:
     - bubbles/scripts/release-ladder-schema-guard.sh
     - bubbles/scripts/release-manifest-purity-selftest.sh
     - bubbles/scripts/release-manifest-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard.sh
+    - bubbles/scripts/release-packet-docs-lib.sh
     - bubbles/scripts/release-packet-location-guard-selftest.sh
     - bubbles/scripts/release-packet-location-guard.sh
     - bubbles/scripts/release-train-backfill-planner.sh
@@ -49515,7 +49978,6 @@ checks:
     - docs/guides/WORKFLOW_MODES.md
     - docs/issues/G068-word-overlap-threshold.md
     - docs/issues/session-aware-runtime-coordination.md
-    - docs/mcp.md
     - docs/recipes/README.md
     - docs/recipes/adversarial-verification.md
     - docs/recipes/ask-the-super-first.md
@@ -49560,6 +50022,7 @@ checks:
     - bubbles/adapters/judge/ollama.sh
     - bubbles/adapters/observability/none.sh
     - bubbles/scripts/acceptance-authority-lib.sh
+    - bubbles/scripts/action-risk-classes-lib.sh
     - bubbles/scripts/action-risk-registry-lint.sh
     - bubbles/scripts/adoption-profile-lib-selftest.sh
     - bubbles/scripts/adoption-profile-lib.sh
@@ -49740,6 +50203,7 @@ checks:
     - bubbles/scripts/generate-framework-stats.sh
     - bubbles/scripts/generate-gate-coverage-map-selftest.sh
     - bubbles/scripts/generate-gate-coverage-map.sh
+    - bubbles/scripts/generate-gate-enforcement.sh
     - bubbles/scripts/generate-installer-selftest.sh
     - bubbles/scripts/generate-installer.sh
     - bubbles/scripts/generate-modes-block.sh
@@ -49849,6 +50313,8 @@ checks:
     - bubbles/scripts/payload-closure-guard.sh
     - bubbles/scripts/phase-coordinator-selftest.sh
     - bubbles/scripts/phase-coordinator.sh
+    - bubbles/scripts/phase-name-enum-lint-selftest.sh
+    - bubbles/scripts/phase-name-enum-lint.sh
     - bubbles/scripts/phase-relevance-resolve-selftest.sh
     - bubbles/scripts/phase-relevance-resolve.sh
     - bubbles/scripts/pii-scan.sh
@@ -49890,6 +50356,9 @@ checks:
     - bubbles/scripts/release-ladder-schema-guard.sh
     - bubbles/scripts/release-manifest-purity-selftest.sh
     - bubbles/scripts/release-manifest-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard.sh
+    - bubbles/scripts/release-packet-docs-lib.sh
     - bubbles/scripts/release-packet-location-guard-selftest.sh
     - bubbles/scripts/release-packet-location-guard.sh
     - bubbles/scripts/release-train-backfill-planner.sh
@@ -50193,7 +50662,6 @@ checks:
     - docs/guides/WORKFLOW_MODES.md
     - docs/issues/G068-word-overlap-threshold.md
     - docs/issues/session-aware-runtime-coordination.md
-    - docs/mcp.md
     - docs/recipes/README.md
     - docs/recipes/adversarial-verification.md
     - docs/recipes/ask-the-super-first.md
@@ -50238,6 +50706,7 @@ checks:
     - bubbles/adapters/judge/ollama.sh
     - bubbles/adapters/observability/none.sh
     - bubbles/scripts/acceptance-authority-lib.sh
+    - bubbles/scripts/action-risk-classes-lib.sh
     - bubbles/scripts/action-risk-registry-lint.sh
     - bubbles/scripts/adoption-profile-lib-selftest.sh
     - bubbles/scripts/adoption-profile-lib.sh
@@ -50418,6 +50887,7 @@ checks:
     - bubbles/scripts/generate-framework-stats.sh
     - bubbles/scripts/generate-gate-coverage-map-selftest.sh
     - bubbles/scripts/generate-gate-coverage-map.sh
+    - bubbles/scripts/generate-gate-enforcement.sh
     - bubbles/scripts/generate-installer-selftest.sh
     - bubbles/scripts/generate-installer.sh
     - bubbles/scripts/generate-modes-block.sh
@@ -50527,6 +50997,8 @@ checks:
     - bubbles/scripts/payload-closure-guard.sh
     - bubbles/scripts/phase-coordinator-selftest.sh
     - bubbles/scripts/phase-coordinator.sh
+    - bubbles/scripts/phase-name-enum-lint-selftest.sh
+    - bubbles/scripts/phase-name-enum-lint.sh
     - bubbles/scripts/phase-relevance-resolve-selftest.sh
     - bubbles/scripts/phase-relevance-resolve.sh
     - bubbles/scripts/pii-scan.sh
@@ -50568,6 +51040,9 @@ checks:
     - bubbles/scripts/release-ladder-schema-guard.sh
     - bubbles/scripts/release-manifest-purity-selftest.sh
     - bubbles/scripts/release-manifest-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard.sh
+    - bubbles/scripts/release-packet-docs-lib.sh
     - bubbles/scripts/release-packet-location-guard-selftest.sh
     - bubbles/scripts/release-packet-location-guard.sh
     - bubbles/scripts/release-train-backfill-planner.sh
@@ -50871,7 +51346,6 @@ checks:
     - docs/guides/WORKFLOW_MODES.md
     - docs/issues/G068-word-overlap-threshold.md
     - docs/issues/session-aware-runtime-coordination.md
-    - docs/mcp.md
     - docs/recipes/README.md
     - docs/recipes/adversarial-verification.md
     - docs/recipes/ask-the-super-first.md
@@ -50916,6 +51390,7 @@ checks:
     - bubbles/adapters/judge/ollama.sh
     - bubbles/adapters/observability/none.sh
     - bubbles/scripts/acceptance-authority-lib.sh
+    - bubbles/scripts/action-risk-classes-lib.sh
     - bubbles/scripts/action-risk-registry-lint.sh
     - bubbles/scripts/adoption-profile-lib-selftest.sh
     - bubbles/scripts/adoption-profile-lib.sh
@@ -51096,6 +51571,7 @@ checks:
     - bubbles/scripts/generate-framework-stats.sh
     - bubbles/scripts/generate-gate-coverage-map-selftest.sh
     - bubbles/scripts/generate-gate-coverage-map.sh
+    - bubbles/scripts/generate-gate-enforcement.sh
     - bubbles/scripts/generate-installer-selftest.sh
     - bubbles/scripts/generate-installer.sh
     - bubbles/scripts/generate-modes-block.sh
@@ -51205,6 +51681,8 @@ checks:
     - bubbles/scripts/payload-closure-guard.sh
     - bubbles/scripts/phase-coordinator-selftest.sh
     - bubbles/scripts/phase-coordinator.sh
+    - bubbles/scripts/phase-name-enum-lint-selftest.sh
+    - bubbles/scripts/phase-name-enum-lint.sh
     - bubbles/scripts/phase-relevance-resolve-selftest.sh
     - bubbles/scripts/phase-relevance-resolve.sh
     - bubbles/scripts/pii-scan.sh
@@ -51246,6 +51724,9 @@ checks:
     - bubbles/scripts/release-ladder-schema-guard.sh
     - bubbles/scripts/release-manifest-purity-selftest.sh
     - bubbles/scripts/release-manifest-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard.sh
+    - bubbles/scripts/release-packet-docs-lib.sh
     - bubbles/scripts/release-packet-location-guard-selftest.sh
     - bubbles/scripts/release-packet-location-guard.sh
     - bubbles/scripts/release-train-backfill-planner.sh
@@ -51549,7 +52030,6 @@ checks:
     - docs/guides/WORKFLOW_MODES.md
     - docs/issues/G068-word-overlap-threshold.md
     - docs/issues/session-aware-runtime-coordination.md
-    - docs/mcp.md
     - docs/recipes/README.md
     - docs/recipes/adversarial-verification.md
     - docs/recipes/ask-the-super-first.md
@@ -51639,9 +52119,32 @@ checks:
     label: "Release packet location guard selftest"
     closureComplete: true
     inputs:
+    - bubbles/scripts/release-packet-docs-lib.sh
     - bubbles/scripts/release-packet-location-guard-selftest.sh
     - bubbles/scripts/release-packet-location-guard.sh
-    commands: []
+    commands:
+    - shellcheck
+  vc-bubbles-scripts-release-packet-completeness-guard-selftest:
+    script: bubbles/scripts/release-packet-completeness-guard-selftest.sh
+    label: "Release packet completeness guard selftest (G138)"
+    closureComplete: true
+    inputs:
+    - bubbles/scripts/release-packet-completeness-guard-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard.sh
+    - bubbles/scripts/release-packet-docs-lib.sh
+    - agents/bubbles.releases.agent.md
+    commands:
+    - shellcheck
+  vc-bubbles-scripts-release-packet-completeness-guard:
+    script: bubbles/scripts/release-packet-completeness-guard.sh
+    label: "Release packet completeness (live, G138)"
+    closureComplete: false
+    inputs:
+    - bubbles/scripts/release-packet-completeness-guard.sh
+    - bubbles/scripts/release-packet-docs-lib.sh
+    - agents/bubbles.releases.agent.md
+    commands:
+    - shellcheck
   vc-bubbles-scripts-release-delivery-reconciliation-guard-selftest:
     script: bubbles/scripts/release-delivery-reconciliation-guard-selftest.sh
     label: "Release delivery reconciliation guard selftest (G101)"
@@ -51696,6 +52199,7 @@ checks:
     - bubbles/adapters/judge/ollama.sh
     - bubbles/adapters/observability/none.sh
     - bubbles/scripts/acceptance-authority-lib.sh
+    - bubbles/scripts/action-risk-classes-lib.sh
     - bubbles/scripts/action-risk-registry-lint.sh
     - bubbles/scripts/adoption-profile-lib-selftest.sh
     - bubbles/scripts/adoption-profile-lib.sh
@@ -51876,6 +52380,7 @@ checks:
     - bubbles/scripts/generate-framework-stats.sh
     - bubbles/scripts/generate-gate-coverage-map-selftest.sh
     - bubbles/scripts/generate-gate-coverage-map.sh
+    - bubbles/scripts/generate-gate-enforcement.sh
     - bubbles/scripts/generate-installer-selftest.sh
     - bubbles/scripts/generate-installer.sh
     - bubbles/scripts/generate-modes-block.sh
@@ -51985,6 +52490,8 @@ checks:
     - bubbles/scripts/payload-closure-guard.sh
     - bubbles/scripts/phase-coordinator-selftest.sh
     - bubbles/scripts/phase-coordinator.sh
+    - bubbles/scripts/phase-name-enum-lint-selftest.sh
+    - bubbles/scripts/phase-name-enum-lint.sh
     - bubbles/scripts/phase-relevance-resolve-selftest.sh
     - bubbles/scripts/phase-relevance-resolve.sh
     - bubbles/scripts/pii-scan.sh
@@ -52026,6 +52533,9 @@ checks:
     - bubbles/scripts/release-ladder-schema-guard.sh
     - bubbles/scripts/release-manifest-purity-selftest.sh
     - bubbles/scripts/release-manifest-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard.sh
+    - bubbles/scripts/release-packet-docs-lib.sh
     - bubbles/scripts/release-packet-location-guard-selftest.sh
     - bubbles/scripts/release-packet-location-guard.sh
     - bubbles/scripts/release-train-backfill-planner.sh
@@ -52329,7 +52839,6 @@ checks:
     - docs/guides/WORKFLOW_MODES.md
     - docs/issues/G068-word-overlap-threshold.md
     - docs/issues/session-aware-runtime-coordination.md
-    - docs/mcp.md
     - docs/recipes/README.md
     - docs/recipes/adversarial-verification.md
     - docs/recipes/ask-the-super-first.md
@@ -52429,14 +52938,18 @@ checks:
   vc-bubbles-scripts-traceability-guard-selftest:
     script: bubbles/scripts/traceability-guard-selftest.sh
     label: "Traceability guard selftest"
-    closureComplete: true
+    closureComplete: false
     inputs:
     - bubbles/scripts/dod-section-lib.sh
     - bubbles/scripts/fun-mode.sh
+    - bubbles/scripts/guard-lib.sh
     - bubbles/scripts/scenario-match-lib.sh
     - bubbles/scripts/traceability-guard-selftest.sh
     - bubbles/scripts/traceability-guard.sh
+    - .specify/memory/bubbles.config.json
     commands:
+    - git
+    - jq
     - python3
     - shellcheck
   vc-bubbles-scripts-value-selection-lint-selftest:
@@ -52758,7 +53271,6 @@ checks:
     - bubbles/scripts/stale-deferral-lint-selftest.sh
     - bubbles/scripts/stale-deferral-lint.sh
     - CHANGELOG.md
-    - docs/mcp.md
     - docs/v5.2-design.md
     - docs/v6-mcp-design.md
     commands: []
@@ -52770,7 +53282,6 @@ checks:
     - bubbles/scripts/stale-deferral-lint-selftest.sh
     - bubbles/scripts/stale-deferral-lint.sh
     - CHANGELOG.md
-    - docs/mcp.md
     - docs/v5.2-design.md
     - docs/v6-mcp-design.md
     commands: []
@@ -52784,6 +53295,7 @@ checks:
     - bubbles/adapters/judge/ollama.sh
     - bubbles/adapters/observability/none.sh
     - bubbles/scripts/acceptance-authority-lib.sh
+    - bubbles/scripts/action-risk-classes-lib.sh
     - bubbles/scripts/action-risk-registry-lint.sh
     - bubbles/scripts/adoption-profile-lib-selftest.sh
     - bubbles/scripts/adoption-profile-lib.sh
@@ -52964,6 +53476,7 @@ checks:
     - bubbles/scripts/generate-framework-stats.sh
     - bubbles/scripts/generate-gate-coverage-map-selftest.sh
     - bubbles/scripts/generate-gate-coverage-map.sh
+    - bubbles/scripts/generate-gate-enforcement.sh
     - bubbles/scripts/generate-installer-selftest.sh
     - bubbles/scripts/generate-installer.sh
     - bubbles/scripts/generate-modes-block.sh
@@ -53073,6 +53586,8 @@ checks:
     - bubbles/scripts/payload-closure-guard.sh
     - bubbles/scripts/phase-coordinator-selftest.sh
     - bubbles/scripts/phase-coordinator.sh
+    - bubbles/scripts/phase-name-enum-lint-selftest.sh
+    - bubbles/scripts/phase-name-enum-lint.sh
     - bubbles/scripts/phase-relevance-resolve-selftest.sh
     - bubbles/scripts/phase-relevance-resolve.sh
     - bubbles/scripts/pii-scan.sh
@@ -53114,6 +53629,9 @@ checks:
     - bubbles/scripts/release-ladder-schema-guard.sh
     - bubbles/scripts/release-manifest-purity-selftest.sh
     - bubbles/scripts/release-manifest-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard.sh
+    - bubbles/scripts/release-packet-docs-lib.sh
     - bubbles/scripts/release-packet-location-guard-selftest.sh
     - bubbles/scripts/release-packet-location-guard.sh
     - bubbles/scripts/release-train-backfill-planner.sh
@@ -53417,7 +53935,6 @@ checks:
     - docs/guides/WORKFLOW_MODES.md
     - docs/issues/G068-word-overlap-threshold.md
     - docs/issues/session-aware-runtime-coordination.md
-    - docs/mcp.md
     - docs/recipes/README.md
     - docs/recipes/adversarial-verification.md
     - docs/recipes/ask-the-super-first.md
@@ -53462,6 +53979,7 @@ checks:
     - bubbles/adapters/judge/ollama.sh
     - bubbles/adapters/observability/none.sh
     - bubbles/scripts/acceptance-authority-lib.sh
+    - bubbles/scripts/action-risk-classes-lib.sh
     - bubbles/scripts/action-risk-registry-lint.sh
     - bubbles/scripts/adoption-profile-lib-selftest.sh
     - bubbles/scripts/adoption-profile-lib.sh
@@ -53642,6 +54160,7 @@ checks:
     - bubbles/scripts/generate-framework-stats.sh
     - bubbles/scripts/generate-gate-coverage-map-selftest.sh
     - bubbles/scripts/generate-gate-coverage-map.sh
+    - bubbles/scripts/generate-gate-enforcement.sh
     - bubbles/scripts/generate-installer-selftest.sh
     - bubbles/scripts/generate-installer.sh
     - bubbles/scripts/generate-modes-block.sh
@@ -53751,6 +54270,8 @@ checks:
     - bubbles/scripts/payload-closure-guard.sh
     - bubbles/scripts/phase-coordinator-selftest.sh
     - bubbles/scripts/phase-coordinator.sh
+    - bubbles/scripts/phase-name-enum-lint-selftest.sh
+    - bubbles/scripts/phase-name-enum-lint.sh
     - bubbles/scripts/phase-relevance-resolve-selftest.sh
     - bubbles/scripts/phase-relevance-resolve.sh
     - bubbles/scripts/pii-scan.sh
@@ -53792,6 +54313,9 @@ checks:
     - bubbles/scripts/release-ladder-schema-guard.sh
     - bubbles/scripts/release-manifest-purity-selftest.sh
     - bubbles/scripts/release-manifest-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard.sh
+    - bubbles/scripts/release-packet-docs-lib.sh
     - bubbles/scripts/release-packet-location-guard-selftest.sh
     - bubbles/scripts/release-packet-location-guard.sh
     - bubbles/scripts/release-train-backfill-planner.sh
@@ -54095,7 +54619,6 @@ checks:
     - docs/guides/WORKFLOW_MODES.md
     - docs/issues/G068-word-overlap-threshold.md
     - docs/issues/session-aware-runtime-coordination.md
-    - docs/mcp.md
     - docs/recipes/README.md
     - docs/recipes/adversarial-verification.md
     - docs/recipes/ask-the-super-first.md
@@ -54140,6 +54663,7 @@ checks:
     - bubbles/adapters/judge/ollama.sh
     - bubbles/adapters/observability/none.sh
     - bubbles/scripts/acceptance-authority-lib.sh
+    - bubbles/scripts/action-risk-classes-lib.sh
     - bubbles/scripts/action-risk-registry-lint.sh
     - bubbles/scripts/adoption-profile-lib-selftest.sh
     - bubbles/scripts/adoption-profile-lib.sh
@@ -54320,6 +54844,7 @@ checks:
     - bubbles/scripts/generate-framework-stats.sh
     - bubbles/scripts/generate-gate-coverage-map-selftest.sh
     - bubbles/scripts/generate-gate-coverage-map.sh
+    - bubbles/scripts/generate-gate-enforcement.sh
     - bubbles/scripts/generate-installer-selftest.sh
     - bubbles/scripts/generate-installer.sh
     - bubbles/scripts/generate-modes-block.sh
@@ -54429,6 +54954,8 @@ checks:
     - bubbles/scripts/payload-closure-guard.sh
     - bubbles/scripts/phase-coordinator-selftest.sh
     - bubbles/scripts/phase-coordinator.sh
+    - bubbles/scripts/phase-name-enum-lint-selftest.sh
+    - bubbles/scripts/phase-name-enum-lint.sh
     - bubbles/scripts/phase-relevance-resolve-selftest.sh
     - bubbles/scripts/phase-relevance-resolve.sh
     - bubbles/scripts/pii-scan.sh
@@ -54470,6 +54997,9 @@ checks:
     - bubbles/scripts/release-ladder-schema-guard.sh
     - bubbles/scripts/release-manifest-purity-selftest.sh
     - bubbles/scripts/release-manifest-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard.sh
+    - bubbles/scripts/release-packet-docs-lib.sh
     - bubbles/scripts/release-packet-location-guard-selftest.sh
     - bubbles/scripts/release-packet-location-guard.sh
     - bubbles/scripts/release-train-backfill-planner.sh
@@ -54773,7 +55303,6 @@ checks:
     - docs/guides/WORKFLOW_MODES.md
     - docs/issues/G068-word-overlap-threshold.md
     - docs/issues/session-aware-runtime-coordination.md
-    - docs/mcp.md
     - docs/recipes/README.md
     - docs/recipes/adversarial-verification.md
     - docs/recipes/ask-the-super-first.md
@@ -54835,6 +55364,7 @@ checks:
     - bubbles/adapters/judge/ollama.sh
     - bubbles/adapters/observability/none.sh
     - bubbles/scripts/acceptance-authority-lib.sh
+    - bubbles/scripts/action-risk-classes-lib.sh
     - bubbles/scripts/action-risk-registry-lint.sh
     - bubbles/scripts/adoption-profile-lib-selftest.sh
     - bubbles/scripts/adoption-profile-lib.sh
@@ -55015,6 +55545,7 @@ checks:
     - bubbles/scripts/generate-framework-stats.sh
     - bubbles/scripts/generate-gate-coverage-map-selftest.sh
     - bubbles/scripts/generate-gate-coverage-map.sh
+    - bubbles/scripts/generate-gate-enforcement.sh
     - bubbles/scripts/generate-installer-selftest.sh
     - bubbles/scripts/generate-installer.sh
     - bubbles/scripts/generate-modes-block.sh
@@ -55124,6 +55655,8 @@ checks:
     - bubbles/scripts/payload-closure-guard.sh
     - bubbles/scripts/phase-coordinator-selftest.sh
     - bubbles/scripts/phase-coordinator.sh
+    - bubbles/scripts/phase-name-enum-lint-selftest.sh
+    - bubbles/scripts/phase-name-enum-lint.sh
     - bubbles/scripts/phase-relevance-resolve-selftest.sh
     - bubbles/scripts/phase-relevance-resolve.sh
     - bubbles/scripts/pii-scan.sh
@@ -55165,6 +55698,9 @@ checks:
     - bubbles/scripts/release-ladder-schema-guard.sh
     - bubbles/scripts/release-manifest-purity-selftest.sh
     - bubbles/scripts/release-manifest-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard.sh
+    - bubbles/scripts/release-packet-docs-lib.sh
     - bubbles/scripts/release-packet-location-guard-selftest.sh
     - bubbles/scripts/release-packet-location-guard.sh
     - bubbles/scripts/release-train-backfill-planner.sh
@@ -55468,7 +56004,6 @@ checks:
     - docs/guides/WORKFLOW_MODES.md
     - docs/issues/G068-word-overlap-threshold.md
     - docs/issues/session-aware-runtime-coordination.md
-    - docs/mcp.md
     - docs/recipes/README.md
     - docs/recipes/adversarial-verification.md
     - docs/recipes/ask-the-super-first.md
@@ -55513,6 +56048,7 @@ checks:
     - bubbles/adapters/judge/ollama.sh
     - bubbles/adapters/observability/none.sh
     - bubbles/scripts/acceptance-authority-lib.sh
+    - bubbles/scripts/action-risk-classes-lib.sh
     - bubbles/scripts/action-risk-registry-lint.sh
     - bubbles/scripts/adoption-profile-lib-selftest.sh
     - bubbles/scripts/adoption-profile-lib.sh
@@ -55693,6 +56229,7 @@ checks:
     - bubbles/scripts/generate-framework-stats.sh
     - bubbles/scripts/generate-gate-coverage-map-selftest.sh
     - bubbles/scripts/generate-gate-coverage-map.sh
+    - bubbles/scripts/generate-gate-enforcement.sh
     - bubbles/scripts/generate-installer-selftest.sh
     - bubbles/scripts/generate-installer.sh
     - bubbles/scripts/generate-modes-block.sh
@@ -55802,6 +56339,8 @@ checks:
     - bubbles/scripts/payload-closure-guard.sh
     - bubbles/scripts/phase-coordinator-selftest.sh
     - bubbles/scripts/phase-coordinator.sh
+    - bubbles/scripts/phase-name-enum-lint-selftest.sh
+    - bubbles/scripts/phase-name-enum-lint.sh
     - bubbles/scripts/phase-relevance-resolve-selftest.sh
     - bubbles/scripts/phase-relevance-resolve.sh
     - bubbles/scripts/pii-scan.sh
@@ -55843,6 +56382,9 @@ checks:
     - bubbles/scripts/release-ladder-schema-guard.sh
     - bubbles/scripts/release-manifest-purity-selftest.sh
     - bubbles/scripts/release-manifest-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard.sh
+    - bubbles/scripts/release-packet-docs-lib.sh
     - bubbles/scripts/release-packet-location-guard-selftest.sh
     - bubbles/scripts/release-packet-location-guard.sh
     - bubbles/scripts/release-train-backfill-planner.sh
@@ -56146,7 +56688,6 @@ checks:
     - docs/guides/WORKFLOW_MODES.md
     - docs/issues/G068-word-overlap-threshold.md
     - docs/issues/session-aware-runtime-coordination.md
-    - docs/mcp.md
     - docs/recipes/README.md
     - docs/recipes/adversarial-verification.md
     - docs/recipes/ask-the-super-first.md
@@ -56310,6 +56851,7 @@ checks:
     - bubbles/adapters/judge/ollama.sh
     - bubbles/adapters/observability/none.sh
     - bubbles/scripts/acceptance-authority-lib.sh
+    - bubbles/scripts/action-risk-classes-lib.sh
     - bubbles/scripts/action-risk-registry-lint.sh
     - bubbles/scripts/adoption-profile-lib-selftest.sh
     - bubbles/scripts/adoption-profile-lib.sh
@@ -56490,6 +57032,7 @@ checks:
     - bubbles/scripts/generate-framework-stats.sh
     - bubbles/scripts/generate-gate-coverage-map-selftest.sh
     - bubbles/scripts/generate-gate-coverage-map.sh
+    - bubbles/scripts/generate-gate-enforcement.sh
     - bubbles/scripts/generate-installer-selftest.sh
     - bubbles/scripts/generate-installer.sh
     - bubbles/scripts/generate-modes-block.sh
@@ -56599,6 +57142,8 @@ checks:
     - bubbles/scripts/payload-closure-guard.sh
     - bubbles/scripts/phase-coordinator-selftest.sh
     - bubbles/scripts/phase-coordinator.sh
+    - bubbles/scripts/phase-name-enum-lint-selftest.sh
+    - bubbles/scripts/phase-name-enum-lint.sh
     - bubbles/scripts/phase-relevance-resolve-selftest.sh
     - bubbles/scripts/phase-relevance-resolve.sh
     - bubbles/scripts/pii-scan.sh
@@ -56640,6 +57185,9 @@ checks:
     - bubbles/scripts/release-ladder-schema-guard.sh
     - bubbles/scripts/release-manifest-purity-selftest.sh
     - bubbles/scripts/release-manifest-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard.sh
+    - bubbles/scripts/release-packet-docs-lib.sh
     - bubbles/scripts/release-packet-location-guard-selftest.sh
     - bubbles/scripts/release-packet-location-guard.sh
     - bubbles/scripts/release-train-backfill-planner.sh
@@ -56943,7 +57491,6 @@ checks:
     - docs/guides/WORKFLOW_MODES.md
     - docs/issues/G068-word-overlap-threshold.md
     - docs/issues/session-aware-runtime-coordination.md
-    - docs/mcp.md
     - docs/recipes/README.md
     - docs/recipes/adversarial-verification.md
     - docs/recipes/ask-the-super-first.md
@@ -56988,6 +57535,7 @@ checks:
     - bubbles/adapters/judge/ollama.sh
     - bubbles/adapters/observability/none.sh
     - bubbles/scripts/acceptance-authority-lib.sh
+    - bubbles/scripts/action-risk-classes-lib.sh
     - bubbles/scripts/action-risk-registry-lint.sh
     - bubbles/scripts/adoption-profile-lib-selftest.sh
     - bubbles/scripts/adoption-profile-lib.sh
@@ -57168,6 +57716,7 @@ checks:
     - bubbles/scripts/generate-framework-stats.sh
     - bubbles/scripts/generate-gate-coverage-map-selftest.sh
     - bubbles/scripts/generate-gate-coverage-map.sh
+    - bubbles/scripts/generate-gate-enforcement.sh
     - bubbles/scripts/generate-installer-selftest.sh
     - bubbles/scripts/generate-installer.sh
     - bubbles/scripts/generate-modes-block.sh
@@ -57277,6 +57826,8 @@ checks:
     - bubbles/scripts/payload-closure-guard.sh
     - bubbles/scripts/phase-coordinator-selftest.sh
     - bubbles/scripts/phase-coordinator.sh
+    - bubbles/scripts/phase-name-enum-lint-selftest.sh
+    - bubbles/scripts/phase-name-enum-lint.sh
     - bubbles/scripts/phase-relevance-resolve-selftest.sh
     - bubbles/scripts/phase-relevance-resolve.sh
     - bubbles/scripts/pii-scan.sh
@@ -57318,6 +57869,9 @@ checks:
     - bubbles/scripts/release-ladder-schema-guard.sh
     - bubbles/scripts/release-manifest-purity-selftest.sh
     - bubbles/scripts/release-manifest-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard.sh
+    - bubbles/scripts/release-packet-docs-lib.sh
     - bubbles/scripts/release-packet-location-guard-selftest.sh
     - bubbles/scripts/release-packet-location-guard.sh
     - bubbles/scripts/release-train-backfill-planner.sh
@@ -57621,7 +58175,6 @@ checks:
     - docs/guides/WORKFLOW_MODES.md
     - docs/issues/G068-word-overlap-threshold.md
     - docs/issues/session-aware-runtime-coordination.md
-    - docs/mcp.md
     - docs/recipes/README.md
     - docs/recipes/adversarial-verification.md
     - docs/recipes/ask-the-super-first.md
@@ -57729,6 +58282,7 @@ checks:
     - bubbles/adapters/judge/ollama.sh
     - bubbles/adapters/observability/none.sh
     - bubbles/scripts/acceptance-authority-lib.sh
+    - bubbles/scripts/action-risk-classes-lib.sh
     - bubbles/scripts/action-risk-registry-lint.sh
     - bubbles/scripts/adoption-profile-lib-selftest.sh
     - bubbles/scripts/adoption-profile-lib.sh
@@ -57909,6 +58463,7 @@ checks:
     - bubbles/scripts/generate-framework-stats.sh
     - bubbles/scripts/generate-gate-coverage-map-selftest.sh
     - bubbles/scripts/generate-gate-coverage-map.sh
+    - bubbles/scripts/generate-gate-enforcement.sh
     - bubbles/scripts/generate-installer-selftest.sh
     - bubbles/scripts/generate-installer.sh
     - bubbles/scripts/generate-modes-block.sh
@@ -58018,6 +58573,8 @@ checks:
     - bubbles/scripts/payload-closure-guard.sh
     - bubbles/scripts/phase-coordinator-selftest.sh
     - bubbles/scripts/phase-coordinator.sh
+    - bubbles/scripts/phase-name-enum-lint-selftest.sh
+    - bubbles/scripts/phase-name-enum-lint.sh
     - bubbles/scripts/phase-relevance-resolve-selftest.sh
     - bubbles/scripts/phase-relevance-resolve.sh
     - bubbles/scripts/pii-scan.sh
@@ -58059,6 +58616,9 @@ checks:
     - bubbles/scripts/release-ladder-schema-guard.sh
     - bubbles/scripts/release-manifest-purity-selftest.sh
     - bubbles/scripts/release-manifest-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard.sh
+    - bubbles/scripts/release-packet-docs-lib.sh
     - bubbles/scripts/release-packet-location-guard-selftest.sh
     - bubbles/scripts/release-packet-location-guard.sh
     - bubbles/scripts/release-train-backfill-planner.sh
@@ -58362,7 +58922,6 @@ checks:
     - docs/guides/WORKFLOW_MODES.md
     - docs/issues/G068-word-overlap-threshold.md
     - docs/issues/session-aware-runtime-coordination.md
-    - docs/mcp.md
     - docs/recipes/README.md
     - docs/recipes/adversarial-verification.md
     - docs/recipes/ask-the-super-first.md
@@ -58437,6 +58996,7 @@ checks:
     - bubbles/adapters/judge/ollama.sh
     - bubbles/adapters/observability/none.sh
     - bubbles/scripts/acceptance-authority-lib.sh
+    - bubbles/scripts/action-risk-classes-lib.sh
     - bubbles/scripts/action-risk-registry-lint.sh
     - bubbles/scripts/adoption-profile-lib-selftest.sh
     - bubbles/scripts/adoption-profile-lib.sh
@@ -58617,6 +59177,7 @@ checks:
     - bubbles/scripts/generate-framework-stats.sh
     - bubbles/scripts/generate-gate-coverage-map-selftest.sh
     - bubbles/scripts/generate-gate-coverage-map.sh
+    - bubbles/scripts/generate-gate-enforcement.sh
     - bubbles/scripts/generate-installer-selftest.sh
     - bubbles/scripts/generate-installer.sh
     - bubbles/scripts/generate-modes-block.sh
@@ -58726,6 +59287,8 @@ checks:
     - bubbles/scripts/payload-closure-guard.sh
     - bubbles/scripts/phase-coordinator-selftest.sh
     - bubbles/scripts/phase-coordinator.sh
+    - bubbles/scripts/phase-name-enum-lint-selftest.sh
+    - bubbles/scripts/phase-name-enum-lint.sh
     - bubbles/scripts/phase-relevance-resolve-selftest.sh
     - bubbles/scripts/phase-relevance-resolve.sh
     - bubbles/scripts/pii-scan.sh
@@ -58767,6 +59330,9 @@ checks:
     - bubbles/scripts/release-ladder-schema-guard.sh
     - bubbles/scripts/release-manifest-purity-selftest.sh
     - bubbles/scripts/release-manifest-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard.sh
+    - bubbles/scripts/release-packet-docs-lib.sh
     - bubbles/scripts/release-packet-location-guard-selftest.sh
     - bubbles/scripts/release-packet-location-guard.sh
     - bubbles/scripts/release-train-backfill-planner.sh
@@ -59070,7 +59636,6 @@ checks:
     - docs/guides/WORKFLOW_MODES.md
     - docs/issues/G068-word-overlap-threshold.md
     - docs/issues/session-aware-runtime-coordination.md
-    - docs/mcp.md
     - docs/recipes/README.md
     - docs/recipes/adversarial-verification.md
     - docs/recipes/ask-the-super-first.md
@@ -59115,6 +59680,7 @@ checks:
     - bubbles/adapters/judge/ollama.sh
     - bubbles/adapters/observability/none.sh
     - bubbles/scripts/acceptance-authority-lib.sh
+    - bubbles/scripts/action-risk-classes-lib.sh
     - bubbles/scripts/action-risk-registry-lint.sh
     - bubbles/scripts/adoption-profile-lib-selftest.sh
     - bubbles/scripts/adoption-profile-lib.sh
@@ -59295,6 +59861,7 @@ checks:
     - bubbles/scripts/generate-framework-stats.sh
     - bubbles/scripts/generate-gate-coverage-map-selftest.sh
     - bubbles/scripts/generate-gate-coverage-map.sh
+    - bubbles/scripts/generate-gate-enforcement.sh
     - bubbles/scripts/generate-installer-selftest.sh
     - bubbles/scripts/generate-installer.sh
     - bubbles/scripts/generate-modes-block.sh
@@ -59404,6 +59971,8 @@ checks:
     - bubbles/scripts/payload-closure-guard.sh
     - bubbles/scripts/phase-coordinator-selftest.sh
     - bubbles/scripts/phase-coordinator.sh
+    - bubbles/scripts/phase-name-enum-lint-selftest.sh
+    - bubbles/scripts/phase-name-enum-lint.sh
     - bubbles/scripts/phase-relevance-resolve-selftest.sh
     - bubbles/scripts/phase-relevance-resolve.sh
     - bubbles/scripts/pii-scan.sh
@@ -59445,6 +60014,9 @@ checks:
     - bubbles/scripts/release-ladder-schema-guard.sh
     - bubbles/scripts/release-manifest-purity-selftest.sh
     - bubbles/scripts/release-manifest-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard.sh
+    - bubbles/scripts/release-packet-docs-lib.sh
     - bubbles/scripts/release-packet-location-guard-selftest.sh
     - bubbles/scripts/release-packet-location-guard.sh
     - bubbles/scripts/release-train-backfill-planner.sh
@@ -59748,7 +60320,6 @@ checks:
     - docs/guides/WORKFLOW_MODES.md
     - docs/issues/G068-word-overlap-threshold.md
     - docs/issues/session-aware-runtime-coordination.md
-    - docs/mcp.md
     - docs/recipes/README.md
     - docs/recipes/adversarial-verification.md
     - docs/recipes/ask-the-super-first.md
@@ -59809,6 +60380,16 @@ checks:
     - shasum
     - shellcheck
     - yq
+  vc-bubbles-scripts-action-risk-registry-lint-selftest:
+    script: bubbles/scripts/action-risk-registry-lint-selftest.sh
+    label: "Discovered selftest: action-risk-registry-lint-selftest.sh"
+    closureComplete: true
+    inputs:
+    - bubbles/scripts/action-risk-classes-lib.sh
+    - bubbles/scripts/action-risk-registry-lint-selftest.sh
+    - bubbles/scripts/action-risk-registry-lint.sh
+    commands:
+    - shellcheck
   vc-bubbles-scripts-codeindex-adapter-contract-selftest:
     script: bubbles/scripts/codeindex-adapter-contract-selftest.sh
     label: "Discovered selftest: codeindex-adapter-contract-selftest.sh"
@@ -59933,6 +60514,7 @@ checks:
     - bubbles/adapters/judge/ollama.sh
     - bubbles/adapters/observability/none.sh
     - bubbles/scripts/acceptance-authority-lib.sh
+    - bubbles/scripts/action-risk-classes-lib.sh
     - bubbles/scripts/action-risk-registry-lint.sh
     - bubbles/scripts/adoption-profile-lib-selftest.sh
     - bubbles/scripts/adoption-profile-lib.sh
@@ -60113,6 +60695,7 @@ checks:
     - bubbles/scripts/generate-framework-stats.sh
     - bubbles/scripts/generate-gate-coverage-map-selftest.sh
     - bubbles/scripts/generate-gate-coverage-map.sh
+    - bubbles/scripts/generate-gate-enforcement.sh
     - bubbles/scripts/generate-installer-selftest.sh
     - bubbles/scripts/generate-installer.sh
     - bubbles/scripts/generate-modes-block.sh
@@ -60222,6 +60805,8 @@ checks:
     - bubbles/scripts/payload-closure-guard.sh
     - bubbles/scripts/phase-coordinator-selftest.sh
     - bubbles/scripts/phase-coordinator.sh
+    - bubbles/scripts/phase-name-enum-lint-selftest.sh
+    - bubbles/scripts/phase-name-enum-lint.sh
     - bubbles/scripts/phase-relevance-resolve-selftest.sh
     - bubbles/scripts/phase-relevance-resolve.sh
     - bubbles/scripts/pii-scan.sh
@@ -60264,6 +60849,9 @@ checks:
     - bubbles/scripts/release-ladder-schema-guard.sh
     - bubbles/scripts/release-manifest-purity-selftest.sh
     - bubbles/scripts/release-manifest-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard.sh
+    - bubbles/scripts/release-packet-docs-lib.sh
     - bubbles/scripts/release-packet-location-guard-selftest.sh
     - bubbles/scripts/release-packet-location-guard.sh
     - bubbles/scripts/release-train-backfill-planner.sh
@@ -60567,7 +61155,6 @@ checks:
     - docs/guides/WORKFLOW_MODES.md
     - docs/issues/G068-word-overlap-threshold.md
     - docs/issues/session-aware-runtime-coordination.md
-    - docs/mcp.md
     - docs/recipes/README.md
     - docs/recipes/adversarial-verification.md
     - docs/recipes/ask-the-super-first.md
@@ -60635,6 +61222,7 @@ checks:
     - bubbles/adapters/judge/ollama.sh
     - bubbles/adapters/observability/none.sh
     - bubbles/scripts/acceptance-authority-lib.sh
+    - bubbles/scripts/action-risk-classes-lib.sh
     - bubbles/scripts/action-risk-registry-lint.sh
     - bubbles/scripts/adoption-profile-lib-selftest.sh
     - bubbles/scripts/adoption-profile-lib.sh
@@ -60815,6 +61403,7 @@ checks:
     - bubbles/scripts/generate-framework-stats.sh
     - bubbles/scripts/generate-gate-coverage-map-selftest.sh
     - bubbles/scripts/generate-gate-coverage-map.sh
+    - bubbles/scripts/generate-gate-enforcement.sh
     - bubbles/scripts/generate-installer-selftest.sh
     - bubbles/scripts/generate-installer.sh
     - bubbles/scripts/generate-modes-block.sh
@@ -60924,6 +61513,8 @@ checks:
     - bubbles/scripts/payload-closure-guard.sh
     - bubbles/scripts/phase-coordinator-selftest.sh
     - bubbles/scripts/phase-coordinator.sh
+    - bubbles/scripts/phase-name-enum-lint-selftest.sh
+    - bubbles/scripts/phase-name-enum-lint.sh
     - bubbles/scripts/phase-relevance-resolve-selftest.sh
     - bubbles/scripts/phase-relevance-resolve.sh
     - bubbles/scripts/pii-scan.sh
@@ -60965,6 +61556,9 @@ checks:
     - bubbles/scripts/release-ladder-schema-guard.sh
     - bubbles/scripts/release-manifest-purity-selftest.sh
     - bubbles/scripts/release-manifest-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard.sh
+    - bubbles/scripts/release-packet-docs-lib.sh
     - bubbles/scripts/release-packet-location-guard-selftest.sh
     - bubbles/scripts/release-packet-location-guard.sh
     - bubbles/scripts/release-train-backfill-planner.sh
@@ -61269,7 +61863,6 @@ checks:
     - docs/guides/WORKFLOW_MODES.md
     - docs/issues/G068-word-overlap-threshold.md
     - docs/issues/session-aware-runtime-coordination.md
-    - docs/mcp.md
     - docs/recipes/README.md
     - docs/recipes/adversarial-verification.md
     - docs/recipes/ask-the-super-first.md
@@ -61352,6 +61945,7 @@ checks:
     - bubbles/adapters/judge/ollama.sh
     - bubbles/adapters/observability/none.sh
     - bubbles/scripts/acceptance-authority-lib.sh
+    - bubbles/scripts/action-risk-classes-lib.sh
     - bubbles/scripts/action-risk-registry-lint.sh
     - bubbles/scripts/adoption-profile-lib-selftest.sh
     - bubbles/scripts/adoption-profile-lib.sh
@@ -61532,6 +62126,7 @@ checks:
     - bubbles/scripts/generate-framework-stats.sh
     - bubbles/scripts/generate-gate-coverage-map-selftest.sh
     - bubbles/scripts/generate-gate-coverage-map.sh
+    - bubbles/scripts/generate-gate-enforcement.sh
     - bubbles/scripts/generate-installer-selftest.sh
     - bubbles/scripts/generate-installer.sh
     - bubbles/scripts/generate-modes-block.sh
@@ -61641,6 +62236,8 @@ checks:
     - bubbles/scripts/payload-closure-guard.sh
     - bubbles/scripts/phase-coordinator-selftest.sh
     - bubbles/scripts/phase-coordinator.sh
+    - bubbles/scripts/phase-name-enum-lint-selftest.sh
+    - bubbles/scripts/phase-name-enum-lint.sh
     - bubbles/scripts/phase-relevance-resolve-selftest.sh
     - bubbles/scripts/phase-relevance-resolve.sh
     - bubbles/scripts/pii-scan.sh
@@ -61682,6 +62279,9 @@ checks:
     - bubbles/scripts/release-ladder-schema-guard.sh
     - bubbles/scripts/release-manifest-purity-selftest.sh
     - bubbles/scripts/release-manifest-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard-selftest.sh
+    - bubbles/scripts/release-packet-completeness-guard.sh
+    - bubbles/scripts/release-packet-docs-lib.sh
     - bubbles/scripts/release-packet-location-guard-selftest.sh
     - bubbles/scripts/release-packet-location-guard.sh
     - bubbles/scripts/release-train-backfill-planner.sh
@@ -61986,7 +62586,6 @@ checks:
     - docs/guides/WORKFLOW_MODES.md
     - docs/issues/G068-word-overlap-threshold.md
     - docs/issues/session-aware-runtime-coordination.md
-    - docs/mcp.md
     - docs/recipes/README.md
     - docs/recipes/adversarial-verification.md
     - docs/recipes/ask-the-super-first.md
@@ -62031,4 +62630,4 @@ checks:
     commands:
     - sha256sum
     - shellcheck
-derivedAt: 7ec18a1
+derivedAt: 3c45bd6

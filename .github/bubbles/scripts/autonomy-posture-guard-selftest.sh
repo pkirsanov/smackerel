@@ -140,11 +140,11 @@ bubbles_sed_inplace 's|^VALID_AUTONOMY=".*"$|VALID_AUTONOMY="full guarded intera
   "$RESOLVER_AHEAD/bubbles/scripts/autonomy-resolve.sh"
 check "a resolver value the enum does not declare is refused" "1" "$(guard_rc "$RESOLVER_AHEAD")"
 
-if printf '%s' "$(guard_out "$RESOLVER_AHEAD")" | grep -q 'enum/resolver drift'; then
-  pass "drift is reported as drift, naming both sides"
-else
-  fail "drift finding should name both the enum and the resolver"
-fi
+RESOLVER_AHEAD_OUT="$(guard_out "$RESOLVER_AHEAD")"
+case "$RESOLVER_AHEAD_OUT" in
+  *'enum/resolver drift'*) pass "drift is reported as drift, naming both sides" ;;
+  *) fail "drift finding should name both the enum and the resolver" ;;
+esac
 
 # --- 3. `unattended` may not become unbounded ---------------------------------
 UNBOUNDED_OK="$(make_fixture)"

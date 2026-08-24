@@ -86,7 +86,9 @@ hash_of() {
   fi
 }
 
-tmp="$(mktemp)" || exit 2
+tmp_dir="$(mktemp -d "${TMPDIR:-/tmp}/bubbles-evidence-capture.XXXXXXXX")" || exit 2
+tmp="$tmp_dir/output.log"
+: > "$tmp" || exit 2
 interrupted_rc=""
 child_pid=""
 child_group_needs_cleanup=false
@@ -107,7 +109,7 @@ cleanup() {
   if [[ "$child_group_needs_cleanup" == "true" ]] && child_group_exists; then
     signal_child_group KILL
   fi
-  rm -f "$tmp"
+  rm -rf "$tmp_dir"
 }
 # Invoked indirectly by the INT/TERM traps.
 # shellcheck disable=SC2317
@@ -128,10 +130,12 @@ trap 'forward_signal 143 TERM' TERM
 # Job control gives the background command its own process group. The signal
 # traps can therefore stop the complete validator tree instead of killing only
 # this wrapper and leaving a lock-holding grandchild behind.
+monitor_was_enabled=0
+[[ "$-" == *m* ]] && monitor_was_enabled=1
 set -m
-"$@" >"$tmp" 2>&1 &
+BUBBLES_EVIDENCE_CAPTURE_OUTPUT_PATH="$tmp" "$@" >"$tmp" 2>&1 &
 child_pid=$!
-set +m
+[[ "$monitor_was_enabled" -eq 1 ]] || set +m
 
 rc=0
 while true; do
@@ -152,6 +156,11 @@ if child_group_exists; then
 fi
 if [[ -n "$interrupted_rc" ]]; then
   rc="$interrupted_rc"
+fi
+
+if [[ ! -f "$tmp" ]]; then
+  printf 'evidence-capture: capture output disappeared during command execution: %s\n' "$tmp" >&2
+  exit 2
 fi
 
 total="$(grep -c '' <"$tmp" 2>/dev/null || printf '0')"

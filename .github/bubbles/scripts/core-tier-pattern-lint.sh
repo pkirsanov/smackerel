@@ -109,7 +109,7 @@ dead=0
 
 while IFS= read -r needle; do
   [[ -n "$needle" ]] || continue
-  if ! printf '%s\n' "$scheduled_labels" | grep -qF -- "$needle"; then
+  if ! grep -qF -- "$needle" <<<"$scheduled_labels"; then
     printf '%s: DEAD core pattern: "%s"\n' "$NAME" "$needle" >&2
     printf '  It matches no scheduled check, so the core tier silently lost it.\n' >&2
     printf '  Either a check was renamed, or the pattern outlived its check.\n' >&2

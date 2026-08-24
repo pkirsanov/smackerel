@@ -1184,6 +1184,100 @@ remove_planning_only_linkage() {
   mv "$temp_file" "$state_file"
 }
 
+set_completed_scopes_precedence_fixture() {
+  local state_file="$1"
+  local temp_file
+  temp_file="$(mktemp)"
+
+  jq '.completedScopes = []' "$state_file" > "$temp_file"
+  mv "$temp_file" "$state_file"
+}
+
+expand_to_compact_three_scope_fixture() {
+  local feature_dir="$1"
+  local state_file="$feature_dir/state.json"
+
+  cat <<'EOF' >> "$feature_dir/scopes.md"
+
+## Scope 02: Compact Count Proof
+
+**Status:** Done
+
+### Test Plan
+
+| Test Type | Category | File/Location | Description | Command | Live System |
+| --- | --- | --- | --- | --- | --- |
+| Regression E2E | `e2e-ui` | `__SCENARIO_TEST__` | Scenario regression. | `selftest:scenario-regression` | Yes |
+| Regression E2E | `e2e-ui` | `__BROADER_TEST__` | Broader regression. | `selftest:broader-regression` | Yes |
+
+### Definition of Done
+
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior -> Evidence: report.md#test-evidence
+- [x] Broader E2E regression suite passes -> Evidence: report.md#test-evidence
+
+## Scope 03: Compact Count Bound
+
+**Status:** Done
+
+### Test Plan
+
+| Test Type | Category | File/Location | Description | Command | Live System |
+| --- | --- | --- | --- | --- | --- |
+| Regression E2E | `e2e-ui` | `__SCENARIO_TEST__` | Scenario regression. | `selftest:scenario-regression` | Yes |
+| Regression E2E | `e2e-ui` | `__BROADER_TEST__` | Broader regression. | `selftest:broader-regression` | Yes |
+
+### Definition of Done
+
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior -> Evidence: report.md#test-evidence
+- [x] Broader E2E regression suite passes -> Evidence: report.md#test-evidence
+EOF
+
+  bubbles_sed_inplace \
+    "s|__SCENARIO_TEST__|$feature_dir/tests/docs-scenario-regression.e2e.spec.ts|g" \
+    "$feature_dir/scopes.md"
+  bubbles_sed_inplace \
+    "s|__BROADER_TEST__|$feature_dir/tests/docs-broader-regression.e2e.spec.ts|g" \
+    "$feature_dir/scopes.md"
+
+  python3 - "$state_file" <<'PY'
+import json
+import sys
+
+path = sys.argv[1]
+entries = [
+    "01-docs-guard-fixture",
+    "02-compact-count-proof",
+    "03-compact-count-bound",
+]
+with open(path, encoding="utf-8") as handle:
+    data = json.load(handle)
+
+data["certification"]["completedScopes"] = entries
+rendered = json.dumps(data, indent=2)
+expanded = (
+    '    "completedScopes": [\n'
+    '      "01-docs-guard-fixture",\n'
+    '      "02-compact-count-proof",\n'
+    '      "03-compact-count-bound"\n'
+    '    ]'
+)
+compact = (
+    '    "completedScopes": '
+    '["01-docs-guard-fixture","02-compact-count-proof","03-compact-count-bound"]'
+)
+if expanded not in rendered:
+    raise SystemExit("expand_to_compact_three_scope_fixture: expected array shape missing")
+
+with open(path, "w", encoding="utf-8") as handle:
+    handle.write(rendered.replace(expanded, compact, 1))
+    handle.write("\n")
+PY
+
+  grep -Fq \
+    '"completedScopes": ["01-docs-guard-fixture","02-compact-count-proof","03-compact-count-bound"]' \
+    "$state_file"
+}
+
 emit_shared_infra_fixture() {
   local feature_dir="$1"
   local canary_test="$feature_dir/tests/auth-bootstrap-canary.e2e.spec.ts"
@@ -2167,6 +2261,8 @@ assert_transition_result_contract_matches_emitter \
   "TRANSITION_GUARD_RESULT_V1 emitter field order matches this suite's expectation"
 
 positive_feature_dir="$tmp_root/specs/900-transition-guard-selftest-pass"
+repo_root_isolation_feature_dir="$tmp_root/specs/900b-transition-guard-repo-root-isolation"
+repo_root_isolation_ambient_dir="$tmp_root/ambient-hostile-cwd"
 negative_feature_dir="$tmp_root/specs/901-transition-guard-selftest-missing-owner"
 shared_positive_feature_dir="$tmp_root/specs/903-transition-guard-selftest-shared-pass"
 shared_negative_feature_dir="$tmp_root/specs/904-transition-guard-selftest-shared-missing-controls"
@@ -2174,6 +2270,8 @@ workflow_mode_negative_feature_dir="$tmp_root/specs/905-transition-guard-selftes
 per_scope_positive_feature_dir="$tmp_root/specs/906-transition-guard-selftest-per-scope-pass"
 index_parity_negative_feature_dir="$tmp_root/specs/907-transition-guard-selftest-index-mismatch"
 phantom_scope_negative_feature_dir="$tmp_root/specs/908-transition-guard-selftest-phantom-scope"
+compact_completed_scopes_feature_dir="$tmp_root/specs/908c-transition-guard-selftest-compact-completed-scopes"
+completed_scopes_precedence_feature_dir="$tmp_root/specs/908d-transition-guard-selftest-completed-scopes-precedence"
 execution_history_negative_feature_dir="$tmp_root/specs/909-transition-guard-selftest-execution-history"
 lockdown_round_negative_feature_dir="$tmp_root/specs/910-transition-guard-selftest-lockdown-round"
 planning_done_negative_feature_dir="$tmp_root/specs/911-transition-guard-selftest-product-planning-done"
@@ -2235,7 +2333,37 @@ EOF
 
 emit_base_fixture "$positive_feature_dir"
 mutate_delivery_contract "$positive_feature_dir/state.json"
+cp -R "$positive_feature_dir" "$repo_root_isolation_feature_dir"
+mkdir -p "$repo_root_isolation_ambient_dir/.github"
+cat <<'EOF' > "$repo_root_isolation_ambient_dir/.github/bubbles-project.yaml"
+scans:
+  testEnvDependency:
+    patterns: Agent ownership lint passed
+EOF
+mkdir -p "$tmp_root/.specify/memory"
+cat <<'EOF' > "$tmp_root/.specify/memory/bubbles.session.json"
+{
+  "executionRuntime": "manual"
+}
+EOF
+cat <<'EOF' > "$repo_root_isolation_feature_dir/uservalidation.md"
+# User Validation
+
+## Checklist
+
+- [x] The guarded-repository root isolation behavior is accepted.
+
+## Human Acceptance Record
+
+- acceptedBy: repository-root-selftest-human
+- acceptedAt: 2026-08-19T08:00:00Z
+- method: human-interactive
+EOF
 cp -R "$positive_feature_dir" "$negative_feature_dir"
+cp -R "$positive_feature_dir" "$compact_completed_scopes_feature_dir"
+expand_to_compact_three_scope_fixture "$compact_completed_scopes_feature_dir"
+cp -R "$positive_feature_dir" "$completed_scopes_precedence_feature_dir"
+set_completed_scopes_precedence_fixture "$completed_scopes_precedence_feature_dir/state.json"
 emit_shared_infra_fixture "$shared_positive_feature_dir"
 mutate_delivery_contract "$shared_positive_feature_dir/state.json"
 emit_shared_infra_negative_fixture "$shared_negative_feature_dir"
@@ -2537,6 +2665,27 @@ assert_log_contains "$positive_log" "notApplicableChecks: []" "BUG-022 empty not
 assert_log_contains "$positive_log" "failedGateIds: []" "BUG-022 empty failed gates serialize exactly"
 assert_log_contains "$positive_log" "failedChecks: []" "BUG-022 empty failed checks serialize exactly"
 
+echo "Running guarded-repository root isolation selftest..."
+repo_root_isolation_log="$tmp_root/repo-root-isolation-guard.log"
+repo_root_isolation_status="$(
+  cd "$repo_root_isolation_ambient_dir"
+  run_capture "$repo_root_isolation_log" \
+    env BUBBLES_STATE_TRANSITION_GUARD_SELFTEST_FAST=0 \
+    bash "$GUARD_SCRIPT" "$repo_root_isolation_feature_dir"
+)"
+if [[ "$repo_root_isolation_status" -eq 0 ]]; then
+  pass "Guarded-repository fixture passes from a hostile ambient CWD"
+else
+  fail "Guarded-repository fixture was contaminated by ambient CWD"
+  sed -n '1,220p' "$repo_root_isolation_log"
+fi
+assert_log_not_contains "$repo_root_isolation_log" \
+  "$repo_root_isolation_ambient_dir/.github/bubbles-project.yaml" \
+  "Guard ignores ambient project config outside the guarded repository"
+assert_log_contains "$repo_root_isolation_log" \
+  "Retro convergence health SLO is pass/degraded (Gate G090)" \
+  "G090 evaluates convergence health against the guarded repository root"
+
 # --- G053 Check 13B: shell (.sh) runtime-path recognition ---
 # Regression guard for the G053<->G093 alignment fix. The G093 delivery-delta
 # guard's path_family already classifies *.sh as `runtime`; G053 Check 13B's
@@ -2663,7 +2812,7 @@ assert_log_contains "$c13_timeout_log" \
 # distinction is cosmetic and a reader still cannot tell the two apart.
 assert_log_not_contains "$c13_timeout_log" \
   "Artifact lint FAILED (exit" \
-  "Check 13 timeout path is distinct from the completed-and-rejected wording"
+  "Check 13 timeout path is distinct from the completed-and-rejected wording" # portable-ok: assertion prose, not a timeout invocation
 
 # Second twin, controlled pair: same staged clone, same fixture, same cap -- the
 # ONLY difference is that the stub now returns immediately. Isolating the lint's
@@ -2682,7 +2831,7 @@ run_capture "$c13_completes_log" env \
   bash "$c13_stub_guard" "$c13_stub_feature_dir" >/dev/null
 assert_log_not_contains "$c13_completes_log" \
   "this is a TIMEOUT, not a lint failure" \
-  "Check 13 does not take the timeout path when the same staged lint completes (timeout case is non-tautological)"
+  "Check 13 does not take the timeout path when the same staged lint completes (timeout case is non-tautological)" # portable-ok: assertion prose, not a timeout invocation
 
 # Third twin: the REAL guard running the REAL lint at the DEFAULT cap must not
 # report a timeout either, so the staged pair above cannot mask a regression that
@@ -2691,7 +2840,7 @@ c13_default_log="$tmp_root/check13-default.log"
 run_capture "$c13_default_log" bash "$GUARD_SCRIPT" "$positive_feature_dir" >/dev/null
 assert_log_not_contains "$c13_default_log" \
   "this is a TIMEOUT, not a lint failure" \
-  "Check 13 does not take the timeout path with the real lint at the default cap"
+  "Check 13 does not take the timeout path with the real lint at the default cap" # portable-ok: assertion prose, not a timeout invocation
 
 # --- Check 8: shell (.sh) test-path recognition (Test File Existence) ---
 # Regression guard for the Check 8 extension-alternation parity fix. Check 8's
@@ -3615,6 +3764,26 @@ else
   sed -n '1,260p' "$phantom_scope_log"
 fi
 assert_log_contains "$phantom_scope_log" "Phantom scope in completedScopes" "Negative per-scope fixture triggers Check 5C"
+
+echo "Running compact completedScopes counting regression selftest..."
+compact_completed_scopes_log="$tmp_root/compact-completed-scopes.log"
+compact_completed_scopes_status="$(run_capture "$compact_completed_scopes_log" bash "$GUARD_SCRIPT" "$compact_completed_scopes_feature_dir")"
+if [[ "$compact_completed_scopes_status" -eq 0 ]]; then
+  pass "Compact three-entry completedScopes passes the transition guard"
+else
+  fail "Compact three-entry completedScopes should pass the transition guard (observed $compact_completed_scopes_status)"
+fi
+assert_log_contains "$compact_completed_scopes_log" "completedScopes count matches artifact Done scope count (3)" "Compact completedScopes counts every entry"
+
+echo "Running completedScopes certification precedence selftest..."
+completed_scopes_precedence_log="$tmp_root/completed-scopes-precedence.log"
+completed_scopes_precedence_status="$(run_capture "$completed_scopes_precedence_log" bash "$GUARD_SCRIPT" "$completed_scopes_precedence_feature_dir")"
+if [[ "$completed_scopes_precedence_status" -eq 0 ]]; then
+  pass "Certification completedScopes takes precedence over the legacy top-level array"
+else
+  fail "Certification completedScopes precedence fixture should pass (observed $completed_scopes_precedence_status)"
+fi
+assert_log_contains "$completed_scopes_precedence_log" "completedScopes count matches artifact Done scope count (1)" "Certification completedScopes is authoritative"
 
 echo "Running executionHistory plausibility selftest..."
 execution_history_log="$tmp_root/execution-history.log"

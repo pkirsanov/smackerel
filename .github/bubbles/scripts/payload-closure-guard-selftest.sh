@@ -92,6 +92,31 @@ run_case "T4 run_check_self_only scheduling passes" 0 \
   '#!/usr/bin/env bash
 run_check_self_only "fixture regression" bash "$REPO_ROOT/tests/regression/test_99_fixture.sh"'
 
+large_root="$(mktemp -d)"
+large_body='#!/usr/bin/env bash
+run_check_self_only "fixture regression" bash "$REPO_ROOT/tests/regression/test_99_fixture.sh"'
+line_number=0
+while [[ "$line_number" -lt 5000 ]]; do
+  large_body="$large_body
+echo filler-$line_number"
+  line_number=$((line_number + 1))
+done
+build_fixture "$large_root" "$large_body"
+large_failures=0
+large_iteration=0
+while [[ "$large_iteration" -lt 20 ]]; do
+  if ! bash "$GUARD" "$large_root" >/dev/null 2>&1; then
+    large_failures=$((large_failures + 1))
+  fi
+  large_iteration=$((large_iteration + 1))
+done
+if [[ "$large_failures" -eq 0 ]]; then
+  pass "T4b large self-only scheduler is stable across 20 runs"
+else
+  fail "T4b large self-only scheduler failed $large_failures of 20 runs"
+fi
+rm -rf "$large_root"
+
 run_case "T5 literal registry entry is not a dependency" 0 \
   '#!/usr/bin/env bash
 source_only=(
@@ -112,7 +137,16 @@ repo="$(mktemp -d)"
 mkdir -p "$repo/tests/regression"
 cat > "$repo/tests/regression/test_99_fixture.sh" <<EOF
 echo generated
-EOF'
+EOF
+chmod +x "$repo/tests/regression/test_99_fixture.sh"
+git -C "$repo" add tests/regression/test_99_fixture.sh'
+
+run_case "T7b one materialized path does not excuse a separate source dependency" 1 \
+  '#!/usr/bin/env bash
+repo="$(mktemp -d)"
+mkdir -p "$repo/bubbles/scripts"
+printf "echo generated\n" >"$repo/bubbles/scripts/eval-harness.sh"
+bash "$SCRIPT_DIR/eval-harness.sh" run'
 
 run_case "T9 a reasoned payload-closure-allow marker exempts the reference" 0 \
   '#!/usr/bin/env bash

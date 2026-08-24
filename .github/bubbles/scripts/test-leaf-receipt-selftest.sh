@@ -24,6 +24,14 @@
 #                      refs cover it and leaves a NON-covering sibling ACCEPTED.
 #                      That sibling assertion is the precision claim; without it
 #                      "invalidate everything" would pass too
+#   directory owners   a declared owner may be a DIRECTORY, digested as a tree.
+#                      Editing, ADDING, deleting or renaming a file under it all
+#                      move the digest and force a real execution. The ADD case
+#                      is the one per-file refs cannot cover at any count, since
+#                      a new file changes no existing owner's digest. An empty
+#                      directory is distinct from a missing one, symlinks are
+#                      recorded rather than followed, and a path that is neither
+#                      a file nor a directory is refused exactly as before
 #   unresolved         a timed-out leaf is UNRESOLVED, and asserting it as a
 #                      pass OR as RED evidence is refused
 #   resume             a second run starts at the first UNRESOLVED leaf, with
@@ -129,6 +137,23 @@ executions() {
 # A leaf command whose only effect is to append one line to its own marker file.
 # It writes nothing to stdout, so it cannot collide with the key=value report.
 marker_cmd() { printf 'printf "ran\\n" >> %s/ran-%s' "$REPO" "$1"; }
+
+# The recorded `suite:tree-<sha>` entry, read back out of the store. Extracted
+# with index/substr rather than a 3-argument match(), which is a gawk extension
+# that stock macOS awk rejects outright.
+tree_entry() {
+  awk '
+    {
+      p = index($0, "\"suite:tree-")
+      if (p > 0) {
+        rest = substr($0, p + 1)
+        q = index(rest, "\"")
+        if (q > 0) line = substr(rest, 1, q - 1)
+      }
+    }
+    END { print line }
+  ' "$(store_path "$1")"
+}
 
 assert_eq() {
   if [[ "$2" == "$3" ]]; then
@@ -361,6 +386,227 @@ run_sut run "$REPO" --leaf "unit-a=true" --force
 assert_eq "adversarial: a bypass flag is rejected by name" "$LAST_RC" "2"
 run_sut run "$REPO" --leaf "unit-a=true" --replay-accepted
 assert_eq "adversarial: --replay-accepted is rejected by name" "$LAST_RC" "2"
+
+# ---------------------------------------------------------------------------
+# DIRECTORY OWNERS. A suite that covers a thousand files cannot be pinned by
+# naming one of them: editing any of the others would leave the declared digest
+# where it was and the suite would report ACCEPTED WITHOUT EXECUTING. So a
+# declared owner may be a DIRECTORY, digested as a tree over the file SET as
+# well as the bytes.
+#
+# Every state below is NOVEL -- no edit returns the tree to a shape a prior
+# receipt already covers. That matters: content addressing would legitimately
+# ACCEPT a return to previously-passing bytes, and a sequence that wandered back
+# would prove nothing about the edit under test.
+# ---------------------------------------------------------------------------
+new_repo jsonl
+mkdir -p "$REPO/suite/nested"
+printf 'suite one v1\n' > "$REPO/suite/one.ts"
+printf 'suite two v1\n' > "$REPO/suite/nested/two.ts"
+
+run_sut run "$REPO" --leaf "unit-t=$(marker_cmd t)" --leaf-ref 'unit-t=suite'
+assert_eq "directory owner: a directory is accepted as a declared owner" "$LAST_RC" "0"
+assert_eq "directory owner: the first run executes and passes" "$(kv leaf.1.outcome)" "RAN_PASS"
+assert_eq "directory owner: the first run really ran the leaf" "$(executions t)" "1"
+TREE_A="$(kv leaf.1.candidateDigest)"
+
+# The recorded entry keeps its "path:digest" shape and says which KIND of digest
+# it is, so a reader can tell a tree from a file without guessing.
+assert_eq "directory owner: the recorded entry is marked as a tree digest" \
+  "$(awk 'index($0, "\"suite:tree-") > 0 { n++ } END { print (n > 0 ? "marked" : "unmarked") }' "$(store_path "$REPO")")" "marked"
+
+# --- stable: identical bytes, identical digest, no second execution ---------
+run_sut run "$REPO" --leaf "unit-t=$(marker_cmd t)" --leaf-ref 'unit-t=suite'
+assert_eq "tree stable: two runs over identical bytes agree on the digest" "$(kv leaf.1.candidateDigest)" "$TREE_A"
+assert_eq "tree stable: identical bytes are ACCEPTED" "$(kv leaf.1.outcome)" "ACCEPTED"
+assert_eq "tree stable: the command did NOT execute again" "$(executions t)" "1"
+
+# --- content: one byte in a NESTED file ------------------------------------
+printf 'suite two v2\n' > "$REPO/suite/nested/two.ts"
+run_sut run "$REPO" --leaf "unit-t=$(marker_cmd t)" --leaf-ref 'unit-t=suite'
+TREE_B="$(kv leaf.1.candidateDigest)"
+assert_eq "tree content: editing a nested file changed the digest" \
+  "$([[ "$TREE_B" == "$TREE_A" ]] && printf 'same' || printf 'different')" "different"
+assert_eq "tree content: the leaf is no longer ACCEPTED" "$(kv leaf.1.outcome)" "RAN_PASS"
+assert_eq "tree content: the leaf re-executed" "$(executions t)" "2"
+
+# --- added: the case per-file refs CANNOT cover ----------------------------
+# A new file changes no EXISTING owner's digest, so every individually declared
+# ref would still match and a stale receipt would cover untested bytes. This is
+# the whole reason a directory may be declared at all.
+printf 'suite three v1\n' > "$REPO/suite/nested/three.ts"
+run_sut run "$REPO" --leaf "unit-t=$(marker_cmd t)" --leaf-ref 'unit-t=suite'
+TREE_C="$(kv leaf.1.candidateDigest)"
+assert_eq "tree added: ADDING a file changed the digest" \
+  "$([[ "$TREE_C" == "$TREE_B" ]] && printf 'same' || printf 'different')" "different"
+assert_eq "tree added: the stale receipt does NOT cover the new file" "$(kv leaf.1.outcome)" "RAN_PASS"
+assert_eq "tree added: the leaf re-executed" "$(executions t)" "3"
+
+# --- renamed: identical bytes, different path ------------------------------
+# Contents are byte-identical across this edit, so only a digest that covers the
+# path SET can see it.
+mv "$REPO/suite/nested/three.ts" "$REPO/suite/nested/four.ts"
+run_sut run "$REPO" --leaf "unit-t=$(marker_cmd t)" --leaf-ref 'unit-t=suite'
+TREE_D="$(kv leaf.1.candidateDigest)"
+assert_eq "tree renamed: renaming a file changed the digest" \
+  "$([[ "$TREE_D" == "$TREE_C" ]] && printf 'same' || printf 'different')" "different"
+assert_eq "tree renamed: the leaf re-executed" "$(executions t)" "4"
+
+# --- deleted ---------------------------------------------------------------
+rm "$REPO/suite/one.ts"
+run_sut run "$REPO" --leaf "unit-t=$(marker_cmd t)" --leaf-ref 'unit-t=suite'
+TREE_E="$(kv leaf.1.candidateDigest)"
+assert_eq "tree deleted: DELETING a file changed the digest" \
+  "$([[ "$TREE_E" == "$TREE_D" ]] && printf 'same' || printf 'different')" "different"
+assert_eq "tree deleted: the leaf re-executed" "$(executions t)" "5"
+
+# --- rerun: the acceptance claim, stated once over the whole sequence -------
+# Five distinct tree states, five real executions. Had ANY edit above failed to
+# move the digest, the leaf would have been ACCEPTED instead and this count
+# would be short -- which is exactly the "reported ACCEPTED without executing"
+# failure the directory owner exists to close.
+assert_eq "tree rerun: every tree edit forced a real execution" "$(executions t)" "5"
+
+# --- fileowner: a FILE owner still behaves exactly as before ----------------
+run_sut run "$REPO" --leaf "unit-f=$(marker_cmd f)" --leaf-ref 'unit-f=src/a.txt'
+assert_eq "file owner: a file owner still passes on the first run" "$(kv leaf.1.outcome)" "RAN_PASS"
+assert_eq "file owner: it really ran" "$(executions f)" "1"
+run_sut run "$REPO" --leaf "unit-f=$(marker_cmd f)" --leaf-ref 'unit-f=src/a.txt'
+assert_eq "file owner: identical bytes are still ACCEPTED" "$(kv leaf.1.outcome)" "ACCEPTED"
+assert_eq "file owner: it did NOT re-execute" "$(executions f)" "1"
+printf 'owner alpha v2\n' > "$REPO/src/a.txt"
+run_sut run "$REPO" --leaf "unit-f=$(marker_cmd f)" --leaf-ref 'unit-f=src/a.txt'
+assert_eq "file owner: a changed byte still forces a re-run" "$(kv leaf.1.outcome)" "RAN_PASS"
+assert_eq "file owner: it executed a second time" "$(executions f)" "2"
+assert_eq "file owner: a file entry carries NO tree marker" \
+  "$(awk 'index($0, "\"src/a.txt:tree-") > 0 { n++ } END { print (n > 0 ? "marked" : "unmarked") }' "$(store_path "$REPO")")" "unmarked"
+assert_eq "file owner: the file entry is still recorded as path:digest" \
+  "$(awk 'index($0, "\"src/a.txt:") > 0 { n++ } END { print (n > 0 ? "recorded" : "absent") }' "$(store_path "$REPO")")" "recorded"
+
+# ---------------------------------------------------------------------------
+# AGGREGATE. The aggregate digests the UNION of every declared owner, so a
+# directory has to work on that path too. Without this, a leaf could be pinned
+# to a tree while the whole-suite run that follows it still refused the same
+# path -- and the refusal would land only after every leaf had already run.
+# ---------------------------------------------------------------------------
+new_repo jsonl
+mkdir -p "$REPO/suite"
+printf 'agg one v1\n' > "$REPO/suite/one.ts"
+run_sut run "$REPO" --leaf "unit-g=$(marker_cmd g)" --leaf-ref 'unit-g=suite' --aggregate 'full=true'
+assert_eq "tree aggregate: a directory in the union is not refused" "$LAST_RC" "0"
+assert_eq "tree aggregate: the aggregate ran" "$(kv aggregate.outcome)" "RAN_PASS"
+AGG_A="$(kv aggregate.candidateDigest)"
+
+printf 'agg two v1\n' > "$REPO/suite/two.ts"
+run_sut run "$REPO" --leaf "unit-g=$(marker_cmd g)" --leaf-ref 'unit-g=suite' --aggregate 'full=true'
+assert_eq "tree aggregate: adding a file moved the AGGREGATE digest too" \
+  "$([[ "$(kv aggregate.candidateDigest)" == "$AGG_A" ]] && printf 'same' || printf 'different')" "different"
+assert_eq "tree aggregate: the aggregate re-ran rather than being refused as a repeat" \
+  "$(kv aggregate.outcome)" "RAN_PASS"
+
+# ---------------------------------------------------------------------------
+# EMPTY DIRECTORY. An existing but empty tree is NOT a missing one. Refusing it
+# would conflate "nothing here yet" with "this owner is gone"; digesting it as
+# the empty manifest keeps it distinct from both, and the first file it gains
+# moves the digest.
+# ---------------------------------------------------------------------------
+new_repo jsonl
+mkdir -p "$REPO/blank"
+run_sut run "$REPO" --leaf "unit-e=$(marker_cmd e)" --leaf-ref 'unit-e=blank'
+assert_eq "empty tree: an existing but empty directory is NOT refused" "$LAST_RC" "0"
+assert_eq "empty tree: the leaf ran" "$(kv leaf.1.outcome)" "RAN_PASS"
+BLANK_CAND="$(kv leaf.1.candidateDigest)"
+
+run_sut run "$REPO" --leaf "unit-e=$(marker_cmd e)" --leaf-ref 'unit-e=blank'
+assert_eq "empty tree: the empty digest is stable across runs" "$(kv leaf.1.candidateDigest)" "$BLANK_CAND"
+assert_eq "empty tree: it is ACCEPTED while still empty" "$(kv leaf.1.outcome)" "ACCEPTED"
+assert_eq "empty tree: it did NOT re-execute" "$(executions e)" "1"
+
+printf 'first\n' > "$REPO/blank/first.ts"
+run_sut run "$REPO" --leaf "unit-e=$(marker_cmd e)" --leaf-ref 'unit-e=blank'
+assert_eq "empty tree: the FIRST file moves the digest" \
+  "$([[ "$(kv leaf.1.candidateDigest)" == "$BLANK_CAND" ]] && printf 'same' || printf 'different')" "different"
+assert_eq "empty tree: it re-executed once it held bytes" "$(executions e)" "2"
+
+# ---------------------------------------------------------------------------
+# SYMLINKS. Recorded AS LINKS, never followed. The sharp claim is the third
+# block: a link pointing OUTSIDE the declared owner stays ACCEPTED when the
+# outside bytes change. If the walk followed links, that assertion fails -- so
+# "not followed" is proved rather than asserted.
+# ---------------------------------------------------------------------------
+new_repo jsonl
+mkdir -p "$REPO/suite"
+printf 'linked v1\n' > "$REPO/suite/one.ts"
+printf 'outside v1\n' > "$REPO/outside.txt"
+run_sut run "$REPO" --leaf "unit-s=$(marker_cmd s)" --leaf-ref 'unit-s=suite'
+assert_eq "tree symlink: baseline run passes" "$(kv leaf.1.outcome)" "RAN_PASS"
+SYM_A="$(kv leaf.1.candidateDigest)"
+
+ln -s ../outside.txt "$REPO/suite/link.ts"
+run_sut run "$REPO" --leaf "unit-s=$(marker_cmd s)" --leaf-ref 'unit-s=suite'
+SYM_B="$(kv leaf.1.candidateDigest)"
+assert_eq "tree symlink: a new link joins the file set and moves the digest" \
+  "$([[ "$SYM_B" == "$SYM_A" ]] && printf 'same' || printf 'different')" "different"
+assert_eq "tree symlink: the leaf re-executed" "$(executions s)" "2"
+
+printf 'outside v2\n' > "$REPO/outside.txt"
+run_sut run "$REPO" --leaf "unit-s=$(marker_cmd s)" --leaf-ref 'unit-s=suite'
+assert_eq "tree symlink: bytes OUTSIDE the declared owner are never followed in" \
+  "$(kv leaf.1.candidateDigest)" "$SYM_B"
+assert_eq "tree symlink: so the leaf stays ACCEPTED" "$(kv leaf.1.outcome)" "ACCEPTED"
+assert_eq "tree symlink: and does not re-execute" "$(executions s)" "2"
+
+rm "$REPO/suite/link.ts"
+ln -s ../elsewhere.txt "$REPO/suite/link.ts"
+run_sut run "$REPO" --leaf "unit-s=$(marker_cmd s)" --leaf-ref 'unit-s=suite'
+assert_eq "tree symlink: RETARGETING a link moves the digest" \
+  "$([[ "$(kv leaf.1.candidateDigest)" == "$SYM_B" ]] && printf 'same' || printf 'different')" "different"
+assert_eq "tree symlink: a dangling link inside the tree is recorded, not refused" "$LAST_RC" "0"
+assert_eq "tree symlink: the leaf re-executed" "$(executions s)" "3"
+
+# ---------------------------------------------------------------------------
+# LOCATION. The manifest carries each entry's path RELATIVE to the declared
+# owner, so the same tree checked out somewhere else digests the same. The two
+# fixture repositories below sit at different absolute paths, so an absolute
+# path leaking into the manifest would surface here as two different digests
+# for identical bytes.
+# ---------------------------------------------------------------------------
+new_repo jsonl
+mkdir -p "$REPO/suite/nested"
+printf 'located one v1\n' > "$REPO/suite/one.ts"
+printf 'located two v1\n' > "$REPO/suite/nested/two.ts"
+run_sut run "$REPO" --leaf 'unit-l=true' --leaf-ref 'unit-l=suite'
+assert_eq "tree location: the first copy passes" "$(kv leaf.1.outcome)" "RAN_PASS"
+LOC_A="$(tree_entry "$REPO")"
+assert_eq "tree location: a tree digest was recorded" \
+  "$([[ -n "$LOC_A" ]] && printf 'recorded' || printf 'absent')" "recorded"
+
+new_repo jsonl
+mkdir -p "$REPO/suite/nested"
+printf 'located one v1\n' > "$REPO/suite/one.ts"
+printf 'located two v1\n' > "$REPO/suite/nested/two.ts"
+run_sut run "$REPO" --leaf 'unit-l=true' --leaf-ref 'unit-l=suite'
+assert_eq "tree location: identical bytes at a DIFFERENT absolute path digest the same" \
+  "$(tree_entry "$REPO")" "$LOC_A"
+
+# ---------------------------------------------------------------------------
+# MISSING. Directory owners are purely additive: a path that is neither a
+# regular file nor a directory is refused exactly as it was, with the same
+# message and the same exit code, BEFORE anything executes.
+# ---------------------------------------------------------------------------
+run_sut run "$REPO" --leaf "unit-m=$(marker_cmd m)" --leaf-ref 'unit-m=nosuch'
+assert_eq "missing owner: an absent declared owner is still refused" "$LAST_RC" "2"
+assert_eq "missing owner: the refusal message is unchanged" \
+  "$(awk '/declared owner path not found: nosuch \(a leaf receipt cannot be earned from bytes that do not exist\)/ { n++ } END { print n + 0 }' <<< "$LAST_OUT")" "1"
+assert_eq "missing owner: the refusal lands BEFORE the leaf runs" "$(executions m)" "0"
+
+# A name that exists but is not bytes -- a dangling symlink declared AS the
+# owner -- is neither a file nor a directory, so it is refused too. It must not
+# slip through the new directory branch and digest as an empty tree.
+ln -s nowhere "$REPO/dangling"
+run_sut run "$REPO" --leaf "unit-m=$(marker_cmd m)" --leaf-ref 'unit-m=dangling'
+assert_eq "missing owner: a dangling link declared as the owner is refused" "$LAST_RC" "2"
+assert_eq "missing owner: it did not digest as an empty tree instead" "$(executions m)" "0"
 
 # ---------------------------------------------------------------------------
 printf '\n%s: %d passed, %d failed\n' "$NAME" "$passes" "$failures"

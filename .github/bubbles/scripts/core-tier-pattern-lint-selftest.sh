@@ -143,12 +143,20 @@ fi
 # --- 6. the REAL validator is currently clean --------------------------------
 # Reported as a live check so a dead pattern in the shipped validator is caught
 # here rather than at the next rename.
-out="$(bash "$TARGET" 2>&1)"
-rc=$?
-if [[ "$rc" -eq 0 ]]; then
-  ok "the shipped framework-validate.sh has no dead core pattern"
+shipped_failures=0
+shipped_iteration=0
+while [[ "$shipped_iteration" -lt 20 ]]; do
+  out="$(bash "$TARGET" 2>&1)"
+  rc=$?
+  if [[ "$rc" -ne 0 ]]; then
+    shipped_failures=$((shipped_failures + 1))
+  fi
+  shipped_iteration=$((shipped_iteration + 1))
+done
+if [[ "$shipped_failures" -eq 0 ]]; then
+  ok "the shipped framework-validate.sh is clean across 20 runs"
 else
-  bad "shipped validator is clean" "$out"
+  bad "shipped validator is clean across 20 runs" "$shipped_failures failure(s); last output: $out"
 fi
 
 printf '\n%s: %d/%d checks passed\n' "$NAME" "$((checks - failures))" "$checks"

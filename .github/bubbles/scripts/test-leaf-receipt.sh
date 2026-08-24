@@ -32,6 +32,15 @@
 #                      untouched owners stays ACCEPTED. That precision is the
 #                      whole value: invalidating everything would be correct but
 #                      would restore the waste this exists to remove.
+#   whole-tree owners  A declared owner may be a DIRECTORY, digested as a TREE.
+#                      A suite that covers a thousand files cannot be pinned by
+#                      naming one of them: every other file would change without
+#                      moving the digest, and the suite would report ACCEPTED
+#                      WITHOUT EXECUTING -- the precise failure a receipt exists
+#                      to prevent. The tree digest covers the file SET as well
+#                      as the bytes, because a NEWLY ADDED file changes no
+#                      existing owner's digest, which is the case per-file refs
+#                      cannot cover at all no matter how many are declared.
 #   unresolved is not a verdict  A timed-out leaf is UNRESOLVED. It is neither a
 #                      pass nor a failure, and `assert` REFUSES to let it stand
 #                      as either -- including as RED evidence, which is the
@@ -54,6 +63,29 @@
 # every production owner it declares -- so owner-path digests are inside the
 # acceptance key, not beside it. A receipt missing its output hash is a receipt
 # nobody earned, and it is never honoured.
+#
+# TREE DIGEST RULES (a declared owner that is a directory). Each is a decision,
+# not an accident:
+#   ordering    Entry paths are sorted under LC_ALL=C, so two runs over
+#               identical bytes agree regardless of the ambient locale.
+#   set         Every entry contributes a manifest line, so ADDING, deleting or
+#               renaming a file moves the digest even when no surviving file's
+#               contents changed. A digest over contents alone would reproduce
+#               the very bug this closes for the add case.
+#   recursion   Nested subdirectories are included.
+#   symlinks    RECORDED AS LINKS, NEVER FOLLOWED. The manifest carries the link
+#               target string, so retargeting a link moves the digest, while
+#               bytes outside the declared owner are never silently pulled in
+#               and a link cycle cannot make the walk diverge.
+#   empty dir   An EXISTING but empty directory is NOT a missing one. It digests
+#               the empty manifest -- a stable, well-defined value -- and takes a
+#               distinct digest the moment it holds its first file. Refusing it
+#               would conflate "nothing here yet" with "this owner is gone".
+#   absence     Only a path that is neither a regular file nor a directory is
+#               REFUSED, exactly as before. An absent owner is never digested as
+#               empty, because that would make a deleted file look unchanged.
+# The recorded entry keeps its `path:digest` shape; a tree digest is written as
+# `path:tree-<sha256>` so a reader can see which kind of digest it is.
 #
 # DEFAULT OFF, per repo. With no `testLeafReceipts:` block, no config file, or
 # an explicit `adapter: none`, the run behaves EXACTLY as it does today: every
@@ -135,6 +167,13 @@ Leaf outcomes (closed set):
 A receipt is EARNED: this script runs the leaf, so the exit code and the output
 hash are observed rather than supplied.
 
+A declared owner <path> may be a FILE or a DIRECTORY. A directory is digested as
+a tree over the file SET as well as the bytes, so adding, deleting or renaming a
+file under it invalidates the receipt -- which naming one file inside it could
+never do. Entries are ordered under LC_ALL=C; symlinks are recorded as links and
+never followed; an existing but empty directory digests the empty manifest. A
+path that is neither a file nor a directory is REFUSED.
+
 Project config (default OFF):
 
   testLeafReceipts:
@@ -175,6 +214,55 @@ sha256_stdin() {
   else
     fail "no sha256 tool (sha256sum/shasum) available to earn a receipt" 2
   fi
+}
+
+# sha256 over a DIRECTORY, digested as a TREE. See TREE DIGEST RULES in the
+# header for why each decision below is the one taken.
+#
+# A manifest of one line per entry -- relative path, kind, and either the file's
+# digest or the link's target -- is built, then digested through `sha256_file`.
+# Routing back through that one helper is deliberate: a second sha256 probe here
+# could disagree with the first about which tool exists, and the header's
+# promise is that the absence of a hasher is LOUD rather than an unverified
+# digest.
+#
+# The manifest carries the relative path, never the absolute one, so the same
+# tree checked out at a different location digests the same. It carries the path
+# at all so that adding, deleting or renaming a file cannot leave the digest
+# where it was.
+sha256_tree() {
+  local root="$1" manifest="$2" paths entry rel
+  root="$(cd "$root" && pwd -P)" || fail "cannot enter the declared owner tree: $1" 2
+  paths="$manifest.paths"
+
+  # find's exit status is CHECKED. An unreadable subdirectory that silently
+  # truncated the walk would shrink the file set and hand back a confident
+  # digest for a tree nobody finished reading.
+  find "$root" \( -type f -o -type l \) -print > "$paths" \
+    || fail "cannot walk the declared owner tree: $1" 2
+  LC_ALL=C sort "$paths" > "$paths.sorted" \
+    || fail "cannot order the declared owner tree: $1" 2
+
+  : > "$manifest" || fail "cannot write the tree manifest $manifest"
+  while IFS= read -r entry; do
+    [ -n "$entry" ] || continue
+    rel="${entry#"$root"/}"
+    # -L FIRST: `[ -f link-to-file ]` follows the link and would digest the
+    # target's bytes, which is the one thing a recorded-as-link entry must not
+    # do.
+    if [ -L "$entry" ]; then
+      printf 'link\t%s\t%s\n' "$(readlink "$entry")" "$rel" >> "$manifest"
+    elif [ -f "$entry" ]; then
+      printf 'file\t%s\t%s\n' "$(sha256_file "$entry")" "$rel" >> "$manifest"
+    else
+      # Reached when a path cannot be walked line-by-line -- a filename holding
+      # a newline splits into fragments that are neither. Refused loudly rather
+      # than dropped, because a dropped entry is an invisible hole in the set.
+      fail "cannot digest the declared owner tree entry: $entry (neither a regular file nor a symlink)" 2
+    fi
+  done < "$paths.sorted"
+
+  sha256_file "$manifest"
 }
 
 # Minimal JSON string escaping. Ids, paths, commands and rerun reasons are the
@@ -476,9 +564,17 @@ ${leaf_cmds[$i]}"
         *) abs="$repo_root/$path" ;;
       esac
       # A digest can only be earned from bytes that exist. Digesting an absent
-      # owner as "" would let a deleted file look like an unchanged one.
-      [ -f "$abs" ] || fail "declared owner path not found: $path (a leaf receipt cannot be earned from bytes that do not exist)" 2
-      digest="$(sha256_file "$abs")"
+      # owner as "" would let a deleted file look like an unchanged one. The
+      # refusal stays in THIS shell rather than inside the digest substitution,
+      # so an absent owner can only ever exit -- never fall through with an
+      # empty digest, which is the same hole wearing a different hat.
+      if [ -f "$abs" ]; then
+        digest="$(sha256_file "$abs")"
+      elif [ -d "$abs" ]; then
+        digest="tree-$(sha256_tree "$abs" "$work_dir/tree-manifest")"
+      else
+        fail "declared owner path not found: $path (a leaf receipt cannot be earned from bytes that do not exist)" 2
+      fi
       material="${material}
 ${path}:${digest}"
       refjson="${refjson}${refjson:+,}\"$(json_escape "${path}:${digest}")\""
@@ -505,8 +601,16 @@ ${agg_cmd}"
         /*) abs="$path" ;;
         *) abs="$repo_root/$path" ;;
       esac
-      [ -f "$abs" ] || fail "declared owner path not found: $path" 2
-      digest="$(sha256_file "$abs")"
+      # The aggregate takes the UNION of every declared owner, so a directory
+      # has to work here too -- otherwise a leaf could be pinned to a tree while
+      # the whole-suite run that follows it still refused the same path.
+      if [ -f "$abs" ]; then
+        digest="$(sha256_file "$abs")"
+      elif [ -d "$abs" ]; then
+        digest="tree-$(sha256_tree "$abs" "$work_dir/tree-manifest")"
+      else
+        fail "declared owner path not found: $path" 2
+      fi
       material="${material}
 ${path}:${digest}"
       agg_refjson="${agg_refjson}${agg_refjson:+,}\"$(json_escape "${path}:${digest}")\""

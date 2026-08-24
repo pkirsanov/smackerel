@@ -219,6 +219,28 @@ mkdir -p "$red_git/agents"
 ) >/dev/null 2>&1
 assert "red: untraceable co-mutation is caught" 1 "$red_git"
 
+# --- GREEN: a governed commit mentioning the IMP only in its body -----------
+#
+# A body can explicitly say that an IMP is not part of the commit. Landing
+# evidence therefore requires exact subject attribution; whole-message grep
+# would invert this disclaimer into a false landing for the PROPOSED IMP.
+green_body_only_mention="$WORK/green-body-only-mention"
+make_repo "$green_body_only_mention"
+mkdir -p "$green_body_only_mention/agents"
+(
+  cd "$green_body_only_mention"
+  git init -q .
+  git config user.email selftest@example.com
+  git config user.name selftest
+  git add improvements
+  git commit -q -m "docs: propose a framework improvement"
+  echo "governed" >agents/bubbles.retro.agent.md
+  git add agents/bubbles.retro.agent.md
+  git commit -q -m "chore: update unrelated agent guidance" \
+    -m "Not addressed here: IMP-001 remains proposed."
+) >/dev/null 2>&1
+assert "green: body-only IMP mention is not landing evidence" 0 "$green_body_only_mention"
+
 # --- GREEN: traceable co-mutation naming the IMP ----------------------------
 #
 # The fixture must be internally consistent, or it stops isolating Check 6. A

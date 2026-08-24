@@ -84,14 +84,18 @@ A fabricated completion is infinitely worse than an honest gap. An incorrect evi
    - Do not mask failures with fallback branches that simulate success.
    - Surface errors immediately with explicit failure paths.
 
-12. **Full-Fidelity Implementation Required**
+12. **Full-Fidelity Implementation Required — Deliver The Whole Declared Scope**
    - Do not simplify away required behavior, edge cases, error handling, or domain constraints.
    - Implement complete feature behavior with production-quality robustness.
+   - Deliver the FULL scope the artifacts declare. Narrowing delivery to the convenient subset — the happy path, one surface out of several, the requirements that were cheap — is incomplete work even when everything delivered is correct.
+   - A plan may slice work into small increments. It MUST NOT shrink what is owed. Scope SIZE is a sequencing choice. Scope COVERAGE is not negotiable. Every requirement in `spec.md` must land in some scope, and a requirement the plan omits is a planning defect, not an implicit deferral.
 
-13. **No Shortcuts**
-    - No partial implementation presented as complete.
-    - No reduced-scope tests presented as full validation.
-    - No incomplete docs for completed work; documentation must match shipped behavior.
+13. **No Shortcuts — Take The Durable Path**
+   - No partial implementation presented as complete.
+   - No reduced-scope tests presented as full validation.
+   - No incomplete docs for completed work; documentation must match shipped behavior.
+   - When two approaches both satisfy the spec, choose the one that is better for the LONG RUN — fewer future migrations, fewer special cases, and a contract the next change can extend — not the one that reaches green soonest. An easily-undone shortcut is still a shortcut, so reversibility does not excuse a choice the next change has to migrate away from.
+   - Corner-cutting is never justified by schedule, session length, context budget, or an instruction to move fast. If the durable path genuinely cannot be taken now, the honest outcome is `blocked` or explicitly planned artifacts owned by the correct agent — never a quiet substitution presented as done.
 
 14. **No Selective Remediation Of Discovered Findings**
    - When an agent, workflow, or validation round discovers multiple findings, every finding MUST be accounted for individually before the work can be treated as complete.
@@ -143,19 +147,19 @@ A fabricated completion is infinitely worse than an honest gap. An incorrect evi
    - Before changing a protected shared-infrastructure surface, planning MUST record the downstream contract surfaces that depend on it (ordering, timing, session/bootstrap state, tenant/user context, role detection, storage injection, or equivalent) and define an independent canary suite that validates those contracts before broad suite reruns.
    - A rollback or restore path for the shared-infrastructure change MUST be documented and verified before completion.
 
-21. **Collateral Change Containment For Narrow Repairs And Refactors**
+22. **Collateral Change Containment For Narrow Repairs And Refactors**
    - Narrow fixes and risky refactors MUST declare a change boundary listing the allowed file families and the excluded surfaces that must remain untouched.
    - Opportunistic cleanup, unrelated test rewrites, broad handler changes, or cross-directory sweeps MUST NOT be bundled into a shared-infrastructure repair loop unless the planning artifacts explicitly expand scope first.
    - If unrelated files change during a narrow repair, the work remains incomplete until the collateral edits are either removed or promoted into explicitly planned follow-up work owned by the correct scope.
 
-22. **Review Follow-Up Tags Do Not Override Planning-First**
+23. **Review Follow-Up Tags Do Not Override Planning-First**
    - Review follow-up tags (`directFix`, `promoteToSpec`, `documentOnly`, `monitor`) classify the SCOPE of planning needed, not whether planning can be skipped.
    - `directFix` means the fix design is straightforward and does not need a new feature-level spec. It does NOT mean "skip bug artifacts" or "implement inline."
    - Every `directFix` finding MUST still be processed through `bubbles.bug` (full 6-artifact bug packet) before implementation.
    - Every `promoteToSpec` finding MUST be processed through the full analyst → design → plan chain.
    - An agent that treats `directFix` as permission to bypass the planning-first delivery policy is committing a critical-requirements violation.
 
-23. **No Self-Validating Test Setup (Tests Must Not Test Their Own Fixtures)**
+24. **No Self-Validating Test Setup (Tests Must Not Test Their Own Fixtures)**
    - A test MUST assert on values **produced by the code under test**, not on values the test itself hardcoded or injected.
    - The test's input-to-assertion path MUST pass through real production code that meaningfully transforms, validates, queries, computes, or routes the data. If the code under test is a pass-through, identity function, or stub that returns its input unchanged, the test is validating its own setup — not the system.
    - **Hardcoded expected values are only valid when they represent the correct output of a known computation.** Example: asserting `add(2, 3) == 5` is valid because `5` is the expected output of real addition logic. Asserting `render(mockData).text == mockData.title` is invalid if `render` is a trivial pass-through — the test proves nothing about real rendering.
@@ -165,7 +169,7 @@ A fabricated completion is infinitely worse than an honest gap. An incorrect evi
    - For **unit tests**: provide input, call the function/method, assert the output reflects correct processing by that unit. Mocks of **external** dependencies (third-party APIs, non-owned services) are allowed — but the mock must simulate realistic external behavior, and the assertion must verify that the code under test responded correctly to that external behavior, not that the mock returned what it was told to return.
    - For **integration/e2e/stress/functional tests**: the system under test must be real and running. Assertions must verify end-to-end behavior where real code processed real (or realistically simulated) input. Asserting on canned response data injected by the test harness is self-validation.
 
-24. **Grounded Claims Only — No Assuming, No Guessing**
+25. **Grounded Claims Only — No Assuming, No Guessing**
    - Every factual assertion about the system, and every action, edit, recommendation, routing decision, or refusal derived from one, MUST trace to a source the agent actually read, executed, or retrieved in the CURRENT session. See [claim-grounding.md](claim-grounding.md) for the full contract.
    - Admissible sources are exactly four: a repository artifact opened this session, output captured this session from a real command or tool run, external research retrieved this session, or an operator statement made this session.
    - Training recall, inference from a name, inference from a convention, a prior session, and a subagent assertion that carries no source of its own are NOT sources. Being right does not satisfy this policy — an accurate guess and an inaccurate guess are the same violation, because neither is repeatable or reviewable.
@@ -204,7 +208,7 @@ An agent that cannot proceed without waiving one of these MUST stop and say so p
 
 ## Detection Scans (MANDATORY before marking scope "Done")
 
-These scans enforce policies 4-8 mechanically. Agents MUST run the implementation reality scan which covers all of these:
+These scans enforce policies 8-12 and 18 mechanically. Agents MUST run the implementation reality scan which covers all of these:
 
 ```bash
 # Run the comprehensive reality scan (covers stubs, fakes, hardcoded data, defaults, fallbacks)
@@ -216,13 +220,13 @@ bash bubbles/scripts/implementation-reality-scan.sh {FEATURE_DIR} --verbose
 
 | Policy | Scan | Patterns Detected |
 |--------|------|-------------------|
-| No Stubs (5) | Scan 1 | `fn fake_/mock_/stub_/placeholder_`, `generate_fake/mock/stub`, static RESPONSES/ITEMS arrays |
-| No Fake Data (6) | Scan 1+2 | `MOCK_DATA`, `SAMPLE_DATA`, `getSimulationData()`, `useMockData()`, import mock modules |
-| No Defaults (7) | Scan 5 | `unwrap_or()`, `unwrap_or_default()`, `\\|\\| "default"`, `?? "fallback"`, `os.getenv("K", "default")` |
-| No Fallbacks (8) | Scan 5 | Same as defaults — any pattern that masks missing config with a silent value |
-| Real Implementation (9) | Scan 3 | Data hooks/services with ZERO API/query/client transport signals — returning hardcoded data |
+| No Stubs (8) | Scan 1 | `fn fake_/mock_/stub_/placeholder_`, `generate_fake/mock/stub`, static RESPONSES/ITEMS arrays |
+| No Fake Data (9) | Scan 1+2 | `MOCK_DATA`, `SAMPLE_DATA`, `getSimulationData()`, `useMockData()`, import mock modules |
+| No Defaults (10) | Scan 5 | `unwrap_or()`, `unwrap_or_default()`, `\\|\\| "default"`, `?? "fallback"`, `os.getenv("K", "default")` |
+| No Fallbacks (11) | Scan 5 | Same as defaults — any pattern that masks missing config with a silent value |
+| Full-Fidelity Implementation (12) | Scan 3 | Data hooks/services with ZERO API/query/client transport signals — returning hardcoded data |
 | No Sensitive Client Storage (18) | Scan 2B | Semantic client-storage operations; durable credentials and high-trust classes block, exact low-privilege same-tab market-data session tuple only |
-| No Fake Integrations (18) | Scan 1C + 1D | 501/not-implemented handlers, random/no-op provider adapters with no real upstream call signals |
+| No Stubs — fake integrations (8) | Scan 1C + 1D | 501/not-implemented handlers, random/no-op provider adapters with no real upstream call signals |
 
 **If the reality scan exits with code 1, the scope CANNOT be "Done". Fix ALL violations first.**
 
@@ -239,7 +243,7 @@ Before reporting completion, all answers must be **YES**:
 5. Did required tests execute real code paths (with mocks only for true external dependencies)?
 6. Are all claims backed by actual current-session execution evidence?
 7. Are there zero TODOs, stubs, fake/sample verification artifacts, defaults, and fallbacks masking failures?
-8. Is the implementation full-featured, edge-case complete, high-quality, and documented without shortcuts?
+8. Is the implementation full-featured, edge-case complete, high-quality, and documented without shortcuts — covering the FULL declared scope rather than a convenient subset, and taking the durable path rather than the one that reached green soonest?
 9. Did all live-state mutations stay isolated to owned fixtures or get fully restored before completion?
 10. Was all implementation/hardening work backed by real feature, bug, or ops artifacts rather than empty or missing planning files?
 11. Were any TODOs, stubs, or placeholders resolved by real implementation or tracked planning instead of cosmetic relabeling?

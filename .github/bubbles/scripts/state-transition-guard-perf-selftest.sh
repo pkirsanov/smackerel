@@ -33,8 +33,56 @@ fail_count=0
 pass() { echo "  PASS: $1"; pass_count=$((pass_count + 1)); }
 fail() { echo "  FAIL: $1"; fail_count=$((fail_count + 1)); }
 
+guard_perf_budget_milliseconds=30000
+
+guard_perf_sample_pass() {
+  local wall_milliseconds="$1"
+  local cpu_milliseconds="$2"
+
+  [[ "$wall_milliseconds" -lt "$guard_perf_budget_milliseconds" ]] ||
+    [[ "$cpu_milliseconds" -lt "$guard_perf_budget_milliseconds" ]]
+}
+
+guard_perf_samples_pass() {
+  local first_wall_milliseconds="$1"
+  local first_cpu_milliseconds="$2"
+  local retry_wall_milliseconds="${3:-}"
+  local retry_cpu_milliseconds="${4:-}"
+
+  if guard_perf_sample_pass "$first_wall_milliseconds" "$first_cpu_milliseconds"; then
+    return 0
+  fi
+  [[ -n "$retry_wall_milliseconds" && -n "$retry_cpu_milliseconds" ]] || return 1
+  guard_perf_sample_pass "$retry_wall_milliseconds" "$retry_cpu_milliseconds"
+}
+
+if guard_perf_samples_pass 51000 51000 51000 12000; then
+  pass "one CPU-healthy retry distinguishes transient contention (wall=51s CPU=51s -> wall=51s CPU=12s)"
+else
+  fail "one healthy retry should distinguish transient contention"
+fi
+
+if guard_perf_samples_pass 51000 51000 51000 51000; then
+  fail "two over-budget samples must preserve the performance failure"
+else
+  pass "two wall-and-CPU over-budget samples preserve the performance failure (51s/51s, 51s/51s)"
+fi
+
+if guard_perf_samples_pass 51000 12000; then
+  pass "one CPU-healthy sample identifies host contention without an unnecessary retry"
+else
+  fail "a CPU-healthy sample should distinguish host contention"
+fi
+
+if guard_perf_samples_pass 51000 51000; then
+  fail "an over-budget first sample without retry data must fail closed"
+else
+  pass "missing retry data cannot turn an over-budget sample into a pass"
+fi
+
 # --- 1. timeout fires --------------------------------------------------------
 rc=0; bubbles_run_with_timeout 1 sleep 5 >/dev/null 2>&1 || rc=$?
+# portable-ok: assertion prose only; execution uses bubbles_run_with_timeout
 if [[ "$rc" -eq 124 ]]; then pass "timeout fires (124) on a hanging command"; else fail "timeout expected 124, got $rc"; fi
 
 # --- 2. exit code preserved --------------------------------------------------
@@ -204,19 +252,78 @@ EOF
   } > "$b5_feature/report.md"
 
   b5_lines="$(wc -l < "$b5_feature/report.md")"
+  duration_milliseconds() {
+    awk -v seconds="$1" 'BEGIN { printf "%.0f\n", seconds * 1000 }'
+  }
+
+  run_guard_perf_sample() {
+    local sample_log="$1"
+    local timing_log="$2"
+    local real_seconds user_seconds system_seconds
+
+    TIMEFORMAT='%3R %3U %3S'
+    {
+      time env BUBBLES_STATE_TRANSITION_GUARD_SELFTEST_FAST=1 \
+        bash "$GUARD" "$b5_feature" > "$sample_log" 2>&1 || true
+    } 2> "$timing_log"
+    if ! read -r real_seconds user_seconds system_seconds < "$timing_log"; then
+      fail "guard timing output is unreadable"
+      real_seconds=999
+      user_seconds=999
+      system_seconds=999
+    fi
+    sample_wall_seconds="$real_seconds"
+    sample_cpu_seconds="$(awk -v user_value="$user_seconds" -v system_value="$system_seconds" \
+      'BEGIN { printf "%.3f\n", user_value + system_value }')"
+    if [[ ! "$sample_wall_seconds" =~ ^[0-9]+([.][0-9]+)?$ ]] ||
+      [[ ! "$sample_cpu_seconds" =~ ^[0-9]+([.][0-9]+)?$ ]]; then
+      fail "guard timing output is not numeric"
+      sample_wall_seconds=999
+      sample_cpu_seconds=999
+    fi
+    sample_wall_milliseconds="$(duration_milliseconds "$sample_wall_seconds")"
+    sample_cpu_milliseconds="$(duration_milliseconds "$sample_cpu_seconds")"
+  }
+
   b5_log="$TMPDIR/bug005-guard.log"
-  b5_start=$(date +%s)
-  BUBBLES_STATE_TRANSITION_GUARD_SELFTEST_FAST=1 \
-    bash "$GUARD" "$b5_feature" > "$b5_log" 2>&1 || true
-  b5_elapsed=$(( $(date +%s) - b5_start ))
+  b5_time_log="$TMPDIR/bug005-guard.time"
+  run_guard_perf_sample "$b5_log" "$b5_time_log"
+  b5_first_wall_seconds="$sample_wall_seconds"
+  b5_first_cpu_seconds="$sample_cpu_seconds"
+  b5_first_wall_milliseconds="$sample_wall_milliseconds"
+  b5_first_cpu_milliseconds="$sample_cpu_milliseconds"
+  b5_retry_wall_seconds=""
+  b5_retry_cpu_seconds=""
+  b5_retry_wall_milliseconds=""
+  b5_retry_cpu_milliseconds=""
+
+  # A shared developer host can be CPU-contended by an unrelated build. One
+  # wall-clock outlier with sub-budget process-tree CPU is contention, not
+  # evidence that the frozen guard bytes regressed. Confirm once only when both
+  # signals breach the budget. The historical fork-storm consumed per-line
+  # process work, so it breaches both signals repeatedly.
+  if ! guard_perf_sample_pass "$b5_first_wall_milliseconds" "$b5_first_cpu_milliseconds"; then
+    b5_retry_log="$TMPDIR/bug005-guard-retry.log"
+    b5_retry_time_log="$TMPDIR/bug005-guard-retry.time"
+    run_guard_perf_sample "$b5_retry_log" "$b5_retry_time_log"
+    b5_retry_wall_seconds="$sample_wall_seconds"
+    b5_retry_cpu_seconds="$sample_cpu_seconds"
+    b5_retry_wall_milliseconds="$sample_wall_milliseconds"
+    b5_retry_cpu_milliseconds="$sample_cpu_milliseconds"
+    if [[ "$b5_retry_wall_milliseconds" -lt "$b5_first_wall_milliseconds" ]]; then
+      b5_log="$b5_retry_log"
+    fi
+  fi
 
   # Perf: the whole guard (Check 11 dominated; other checks do O(1) greps on the
   # report) must be seconds, not minutes. The fork-storm version took ~126s for
   # Check 11 alone on a 4888-line report; 30s is a deliberately loose ceiling.
-  if [[ "$b5_elapsed" -lt 30 ]]; then
-    pass "guard over ${b5_lines}-line report.md completes in ${b5_elapsed}s (< 30s; fork-storm was ~126s)"
+  if guard_perf_samples_pass \
+    "$b5_first_wall_milliseconds" "$b5_first_cpu_milliseconds" \
+    "$b5_retry_wall_milliseconds" "$b5_retry_cpu_milliseconds"; then
+    pass "guard over ${b5_lines}-line report.md stays within the 30s wall-or-CPU budget (first wall=${b5_first_wall_seconds}s CPU=${b5_first_cpu_seconds}s; retry wall=${b5_retry_wall_seconds:-not-run} CPU=${b5_retry_cpu_seconds:-not-run}; fork-storm was ~126s)"
   else
-    fail "guard over ${b5_lines}-line report.md took ${b5_elapsed}s (>= 30s budget) — Check 11 fork-storm may have regressed"
+    fail "guard over ${b5_lines}-line report.md stayed over both wall and CPU budgets (first wall=${b5_first_wall_seconds}s CPU=${b5_first_cpu_seconds}s; retry wall=${b5_retry_wall_seconds:-not-run} CPU=${b5_retry_cpu_seconds:-not-run}) — Check 11 fork-storm may have regressed"
     sed -n '1,40p' "$b5_log"
   fi
 

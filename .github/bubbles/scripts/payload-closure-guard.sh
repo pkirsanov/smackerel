@@ -129,10 +129,36 @@ while IFS= read -r managed_file; do
     # Writes are stripped too: a selftest that materialises a fixture with
     # `cat > "$repo/.../x.sh"` or `touch "$d/install.sh"` CREATES that path
     # inside its own scratch tree, so it does not depend on the real file.
-    if ! grep -v '^[[:space:]]*#' "$managed_path" |
+    variable_path_pattern="\\\$\{?[A-Za-z_][A-Za-z0-9_]*\}?/[^\"';|&[:space:]]*$dep_base"
+    runtime_refs="$(
+      grep -v '^[[:space:]]*#' "$managed_path" |
       grep -v -E ">>?[[:space:]]*\"[^\"]*$dep_base" |
       grep -v -E "(touch|mkdir|rm|cp|mv)[[:space:]][^|;&]*$dep_base" |
-      grep -E -q "\\\$\{?[A-Za-z_][A-Za-z0-9_]*\}?/[^\"';|&]*$dep_base"; then
+      grep -o -E "$variable_path_pattern" |
+      LC_ALL=C sort -u || true
+    )"
+    [[ -n "$runtime_refs" ]] || continue
+
+    # A selftest can materialize a source-shaped marker inside its disposable
+    # fixture, then chmod, stage, or execute that generated file. Exempt only
+    # the EXACT variable-rooted path that was written. Creating
+    # `$fixture/x.sh` must never excuse a separate `$SCRIPT_DIR/x.sh` runtime
+    # dependency merely because both share one basename.
+    materialized_refs="$(
+      grep -v '^[[:space:]]*#' "$managed_path" |
+      grep -E "((printf|cat)[^|;&]*>>?|touch[[:space:]])[^|;&]*$dep_base" |
+      grep -o -E "$variable_path_pattern" |
+      LC_ALL=C sort -u || true
+    )"
+    external_ref_found=false
+    while IFS= read -r runtime_ref; do
+      [[ -n "$runtime_ref" ]] || continue
+      if ! printf '%s\n' "$materialized_refs" | grep -Fx "$runtime_ref" >/dev/null; then
+        external_ref_found=true
+        break
+      fi
+    done <<<"$runtime_refs"
+    if [[ "$external_ref_found" != "true" ]]; then
       continue
     fi
 
@@ -150,7 +176,7 @@ while IFS= read -r managed_file; do
       continue
     fi
     if grep -v '^[[:space:]]*#' "$managed_path" |
-      grep -E -q "run_check_self_only.*$dep_base"; then
+      grep -E "run_check_self_only.*$dep_base" >/dev/null; then
       continue
     fi
 

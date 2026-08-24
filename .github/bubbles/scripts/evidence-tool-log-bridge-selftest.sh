@@ -56,13 +56,12 @@ else
 fi
 
 out_json="$(bash "$BRIDGE" "$TEST_ROOT/specs/042-foo" --format=json 2>&1 || true)"
-if echo "$out_json" | python3 -c "
+if python3 -c "
 import json, sys
 d = json.load(sys.stdin)
 assert d['logPresent'] is False, d
 assert d['matches'] == [], d
-print('OK')
-" 2>/dev/null | grep -q OK; then
+" <<<"$out_json" 2>/dev/null; then
   pass "2. json mode with no log returns logPresent:false envelope"
 else
   fail "2. json mode with no log: got '$out_json'"
@@ -88,7 +87,7 @@ EOF
 
 # 3. text mode reports coverage > 0.
 out_text2="$(bash "$BRIDGE" "$TEST_ROOT/specs/042-foo" --log "$LOG" 2>&1 || true)"
-if echo "$out_text2" | grep -qE 'Coverage: [1-9][0-9]*%'; then
+if grep -qE 'Coverage: [1-9][0-9]*%' <<<"$out_text2"; then
   pass "3. text mode with matching log reports non-zero coverage"
 else
   fail "3. text mode with log: got '$out_text2'"
@@ -96,7 +95,7 @@ fi
 
 # 4+5. JSON mode returns a non-empty matches[] envelope.
 out_json2="$(bash "$BRIDGE" "$TEST_ROOT/specs/042-foo" --log "$LOG" --format=json 2>&1 || true)"
-if echo "$out_json2" | python3 -c "
+if python3 -c "
 import json, sys
 d = json.load(sys.stdin)
 assert d['logPresent'] is True, d
@@ -107,8 +106,7 @@ assert d['coveragePct'] >= 50, d
 assert len(d['matches']) >= 1, d
 m = d['matches'][0]
 assert 'cmd' in m and 'ts' in m and 'scopeFile' in m and 'dodBody' in m
-print('OK')
-" 2>/dev/null | grep -q OK; then
+" <<<"$out_json2" 2>/dev/null; then
   pass "4+5. json mode returns structured matches[] envelope with valid coverage stats"
 else
   fail "4+5. json mode: got '$out_json2'"

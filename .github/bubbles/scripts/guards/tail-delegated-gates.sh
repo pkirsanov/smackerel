@@ -26,7 +26,7 @@ dog_guard="$SCRIPT_DIR/framework-dogfood-guard.sh"
 if fixture_gate_skip "framework dogfood evidence enforcement (Gate G085)"; then
   :
 elif [[ -x "$dog_guard" ]]; then
-  if run_guard_in_script_repo bash "$dog_guard" --repo-root "$script_repo_root" --quiet > /dev/null 2>&1; then
+  if run_guard_in_feature_repo bash "$dog_guard" --repo-root "$guard_repo_root" --quiet > /dev/null 2>&1; then
     pass "Framework dogfood evidence contract is satisfied (Gate G085)"
   else
     fail "Framework dogfood evidence contract failed — Gate G085. Run 'bash $dog_guard' for full diagnostic"
@@ -241,7 +241,7 @@ retro_convergence_health="$SCRIPT_DIR/retro-convergence-health.sh"
 if fixture_gate_skip "retro convergence health evidence (Gate G090)"; then
   :
 elif [[ -f "$retro_convergence_health" ]]; then
-  retro_repo_root="$script_repo_root"
+  retro_repo_root="$guard_repo_root"
   if bash "$retro_convergence_health" "$feature_dir" --repo-root "$retro_repo_root" --schema full > /dev/null 2>&1; then
     pass "Retro convergence health SLO is pass/degraded (Gate G090)"
   else

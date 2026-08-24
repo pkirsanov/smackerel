@@ -1078,9 +1078,9 @@ decisionPolicy:
   # an easily-undone shortcut is still a shortcut, so reversibility does not
   # excuse a choice the next change has to migrate away from.
   - name: prefer_durable
-    description: "When two approaches both satisfy the spec, choose the one better for the long term — fewer future migrations, fewer special cases, and a contract the next change can extend. Outranks prefer_completeness and prefer_reversible."
+    description: "When two approaches both satisfy the spec, choose the one better for the long term — fewer future migrations, fewer special cases, and a contract the next change can extend. This is critical-requirements.md policy 13 stated as a decision principle. The policy binds every agent whether or not a run is orchestrated; this entry only tells the auto-resolver how to apply it. Outranks prefer_completeness and prefer_reversible."
   - name: forbid_shortcut
-    description: "Never choose an approach that reaches green by weakening a test, narrowing a DoD claim, deferring required behavior, or relabeling incomplete work. This is critical-requirements.md policies 2, 13 and 16 stated as a decision principle so the auto-resolver can apply it."
+    description: "Never choose an approach that reaches green by weakening a test, narrowing a DoD claim, narrowing delivery to a convenient subset of the declared scope, deferring required behavior, or relabeling incomplete work. This is critical-requirements.md policies 2, 12, 13 and 16 stated as a decision principle so the auto-resolver can apply it."
   - name: prefer_completeness
     description: "When two approaches differ by <30% effort, choose the more complete one"
   - name: match_existing_patterns

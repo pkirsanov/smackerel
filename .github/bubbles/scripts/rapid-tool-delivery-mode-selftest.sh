@@ -48,7 +48,7 @@ fi
 # has_line <label> <regex>
 has_line() {
   local label="$1" re="$2"
-  if printf '%s\n' "$resolved" | grep -qE "$re"; then
+  if grep -qE "$re" <<<"$resolved"; then
     pass "$label"
   else
     fail "$label (pattern not found: $re)"
@@ -85,17 +85,17 @@ has_line "session budget tool-call cap = 250" '^[[:space:]]+maxToolCalls: 250'
 
 # --- (5) risk-tier-resolve routes low-risk here, high-risk to full-delivery ---
 low_out="$(bash "$RISK" --surface "Add a build-free single-file static HTML tool, no backend" 2>&1)"
-if printf '%s\n' "$low_out" | grep -qx "tier=rapid-tool-delivery"; then
+if grep -qx "tier=rapid-tool-delivery" <<<"$low_out"; then
   pass "risk-tier-resolve routes a low-risk build-free surface to rapid-tool-delivery"
 else
-  fail "low-risk surface did not route to rapid-tool-delivery (got: $(printf '%s' "$low_out" | grep '^tier=' || true))"
+  fail "low-risk surface did not route to rapid-tool-delivery (got: $(grep '^tier=' <<<"$low_out" || true))"
 fi
 
 high_out="$(bash "$RISK" --surface "self-contained html tool with jwt auth" 2>&1)"
-if printf '%s\n' "$high_out" | grep -qx "tier=full-delivery"; then
+if grep -qx "tier=full-delivery" <<<"$high_out"; then
   pass "risk-tier-resolve escalates a high-risk trigger to full-delivery (no self-label bypass)"
 else
-  fail "high-risk surface did not escalate to full-delivery (got: $(printf '%s' "$high_out" | grep '^tier=' || true))"
+  fail "high-risk surface did not escalate to full-delivery (got: $(grep '^tier=' <<<"$high_out" || true))"
 fi
 
 # --- (6) R4 fast-lane terminal: delivered_fast is a recognized terminal-for-mode ---

@@ -70,7 +70,7 @@ Any "no" means the claim is ungrounded. Verify it, downgrade it to a labeled Ass
 ## Authoritative governance modules
 This skill is a discovery shim. The full enforceable policy lives in:
 - `agents/bubbles_shared/claim-grounding.md` — the complete contract
-- `agents/bubbles_shared/critical-requirements.md` — policy 24, Grounded Claims Only
+- `agents/bubbles_shared/critical-requirements.md` — policy 25, Grounded Claims Only
 - `agents/bubbles_shared/evidence-rules.md` — execution evidence and Uncertainty Declarations
 - `agents/bubbles_shared/analytical-rigor.md` — depth and honesty of the resulting analysis
 
