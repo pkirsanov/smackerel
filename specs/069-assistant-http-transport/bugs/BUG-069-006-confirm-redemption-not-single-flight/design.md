@@ -297,3 +297,24 @@ against the defective code, which is exactly why it cannot demonstrate this fix.
 Revert the new `Store` method, its two implementations, and the three call-site
 changes. No migration to unwind, no configuration to restore, no deploy step. The
 prior behaviour returns in full, including the defect.
+
+### Single-Implementation Justification
+
+The design adds one method, `ClearPendingConfirm`, to the existing
+`assistantctx.Store` interface. It has a single production implementation:
+`PgStore`, which expresses the compare and the clear as one conditional UPDATE
+and reports the outcome through `tag.RowsAffected() == 1`.
+
+The remaining implementations — `InMemoryContextStore`, `memContextStore`,
+`memStore`, `captureStore` — exist only to satisfy the interface in tests.
+They are fixtures, not alternative strategies: no caller selects between them
+at runtime, and they encode no behavioural variation beyond doing in one
+critical section what Postgres does in one statement. Their existence is a
+consequence of Go interface satisfaction, not of a pluggable design.
+
+There is consequently no variation axis to document and no concrete-
+implementation matrix to compare. A `## Capability Foundation` section would
+have to invent a second axis to justify its own headings, which would misstate
+the design. The atomicity contract that genuinely constrains every
+implementation is stated once, on the interface method itself, where every
+implementer must read it.

@@ -34,24 +34,46 @@ BUG-069-005 was changed, and nothing under `.github/bubbles/` was changed.
 
 ## Test Evidence
 
-**No test suite was executed for this packet, and none is claimed.** The test
-lane holds a `flock` suite lock while a `git push` pre-push validation runs; a
-concurrent invocation exits 73 (lock held). Running it would have produced a
-lock-contention exit, not a behavioural result, and recording that as test
-evidence would be worthless.
+### Red-stage proof, captured before the fix
 
-Consequently:
+Scenario-first ordering for this packet. The failing capture is recorded here,
+ahead of the post-fix result, so the sequence is legible in file order. The
+full capture is in `## Implementation Phase` below.
 
-- `## Discovered Issues` carries no row asserting any test outcome.
-- The DoD item "The concurrent redemption test is recorded FAILING against the
-  unfixed implementation before any fix lands" is unchecked, and is the first
-  execution obligation of the implement phase.
-- No claim anywhere in this packet asserts that a test passed or failed.
+**RED — the concurrency tests against the UNFIXED `machine.go`**, with every
+other file of the change present so the package still compiled. Exit 1:
 
-The evidence below is **static verification** performed in this session. Each
+```
+--- FAIL: TestMachineConfirm_ConcurrentRedemptionExecutesOnce (0.00s)
+    machine_concurrency_test.go:115: winners: got 2 want 1 — the gated action would execute 2 times
+    machine_concurrency_test.go:118: losers receiving ErrPendingNotFound: got 0 want 1
+    machine_concurrency_test.go:123: confirmed audit rows for "cr-1": got 2 want 1
+--- FAIL: TestMachineConfirm_RacingSweepProducesOneTerminalOutcome (0.00s)
+    machine_concurrency_test.go:164: terminal audit rows for "cr-1": got 2 (confirmed=1 discarded_timeout=1) want exactly 1
+FAIL    github.com/smackerel/smackerel/internal/assistant/confirm       0.060s
+```
+
+**GREEN — green-stage, the same two tests with the fix applied.** Exit 0:
+
+```
+ok      github.com/smackerel/smackerel/internal/assistant/confirm       0.050s
+```
+
+The RED run is what makes the fix falsifiable: `winners: got 2` is the
+double-execution the packet was filed for, observed rather than argued.
+
+### Superseded note on the original filing session
+
+The original filing session executed no test suite and said so. That statement
+described the filing session only and is no longer the state of this packet —
+the implement phase has since run the lane above. The static verification that
+follows was performed during filing and is retained because it is what located
+the defect.
+
+The blocks below are **static verification** from the filing session. Each
 block is tagged with its claim source. `executed` means the command was run in
-this session and the output is its real output. Nothing here is `interpreted` or
-`not-run`.
+that session and the output is its real output. Nothing there is `interpreted`
+or `not-run`.
 
 ### Claim 1 - the redemption triple is not atomic
 
@@ -306,6 +328,44 @@ DoD item requiring the concurrent test to be recorded FAILING against the unfixe
 implementation before any fix lands.
 
 ## Implementation Phase
+
+### Code Diff Evidence
+
+**Claim Source:** executed.
+
+```
+$ git show --stat --format='%h %s' 61b8be79
+61b8be79 fix(BUG-069-006): make confirm redemption atomic via a store-arbitrated CAS
+
+ internal/assistant/confirm/machine.go              |  38 +++--
+ .../assistant/confirm/machine_concurrency_test.go  | 167 +++++++++++++++++++++
+ internal/assistant/confirm/machine_test.go         |  19 +++
+ internal/assistant/context/gauge_refresher_test.go |   3 +
+ internal/assistant/context/pg_store.go             |  34 +++++
+ internal/assistant/context/store.go                |  18 +++
+ internal/assistant/facade_test_helpers_test.go     |  22 +++
+ internal/assistant/testing_support.go              |  23 +++
+ 8 files changed, 311 insertions(+), 13 deletions(-)
+```
+
+The load-bearing addition is the interface method in
+`internal/assistant/context/store.go`, which states the atomicity requirement
+the three call sites depend on:
+
+```go
+// ClearPendingConfirm atomically clears pending_confirm for
+// (userID, transport) ONLY IF it still holds confirmRef, and
+// reports whether THIS caller performed the clear. Exactly one
+// of N concurrent callers may receive true for a given
+// reference; every other caller receives false.
+ClearPendingConfirm(ctx context.Context, userID, transport, confirmRef string, now time.Time) (bool, error)
+```
+
+Five of the eight files are the implementations that method obliged: `PgStore`
+(a single conditional UPDATE returning `tag.RowsAffected() == 1`) and four
+in-memory doubles. Three of those doubles — `memContextStore`, `memStore`,
+`captureStore` — live in `_test.go` files, which is why `./smackerel.sh check`
+could not see the break: it is config-only and never compiles test files.
 
 **Phase:** implement
 **Agent:** bubbles.implement

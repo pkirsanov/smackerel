@@ -2,7 +2,7 @@
 
 **Bug:** BUG-069-006 - confirm redemption is not single-flight under concurrency
 **Workflow mode:** bugfix-fastlane
-**Status:** in_progress - no implementation work has been performed
+**Status:** In Progress
 
 ## Execution Outline
 
@@ -33,7 +33,7 @@ modified by this packet.
 |---|---|
 | `internal/assistant/confirm/machine_concurrency_test.go` | New: concurrent redemption unit coverage |
 | `internal/assistant/context/pg_store_test.go` | Conditional-clear integration coverage against a live store |
-| `tests/e2e/assistant/http_confirm_concurrent_test.go` | New: concurrent confirm regression at the API boundary |
+| `tests/e2e/assistant/http_confirm_test.go` | Extended: concurrent confirm regression at the API boundary, alongside the existing sequential replay case |
 
 ### Packet Artifacts
 
@@ -65,7 +65,7 @@ of the following.
 
 ## Scope 1: Atomic redemption across confirm, discard, and timeout sweep
 
-**Status:** [ ] Not started
+**Status:** In Progress
 **Depends On:** none
 
 ### Gherkin Scenarios
@@ -131,7 +131,7 @@ Feature: Confirm redemption is single-flight under concurrency
 | TP-BUG069006-01 | SCN-BUG069006-001 | unit | `internal/assistant/confirm/machine_concurrency_test.go` | `TestMachineConfirm_ConcurrentRedemptionExecutesOnce` | `./smackerel.sh test unit --go` | No |
 | TP-BUG069006-02 | SCN-BUG069006-003 | unit | `internal/assistant/confirm/machine_concurrency_test.go` | `TestMachineConfirm_RacingSweepProducesOneTerminalOutcome` | `./smackerel.sh test unit --go` | No |
 | TP-BUG069006-03 | SCN-BUG069006-001 | integration | `internal/assistant/context/pg_store_test.go` | `TestPgStoreClearPendingConfirm_IsConditionalAndAtomic` | `./smackerel.sh test integration` | Yes |
-| TP-BUG069006-04 | SCN-BUG069006-002 | Regression E2E API | `tests/e2e/assistant/http_confirm_concurrent_test.go` | `TestAssistantHTTPE2E_ConcurrentConfirmExecutesGatedActionOnce` | `./smackerel.sh test e2e` | Yes |
+| TP-BUG069006-04 | SCN-BUG069006-002 | Regression E2E API | `tests/e2e/assistant/http_confirm_test.go` | `TestAssistantHTTPE2E_ConcurrentConfirmExecutesGatedActionOnce` | `./smackerel.sh test e2e` | Yes |
 | TP-BUG069006-05 | SCN-BUG069006-004 | Regression E2E API | `tests/e2e/assistant/http_confirm_test.go` | `TestAssistantHTTPE2E_ConfirmAcceptExecutesGatedActionOnce` | `./smackerel.sh test e2e` | Yes |
 
 TP-BUG069006-05 is an existing test that must pass unmodified. It is listed
@@ -154,4 +154,8 @@ because EB-6 depends on it, not because it is new work.
 - [ ] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior pass.
 - [ ] Broader E2E regression suite passes.
 - [ ] Change Boundary is respected and zero excluded file families were changed.
+- [ ] `SCN-BUG069006-001` holds: two concurrent confirms carrying one reference redeem it exactly once — one caller observes the win, the other receives `ErrPendingNotFound`, and exactly one `confirmed` audit row exists. → Evidence: [report.md](report.md#red-stage-proof-ahead-of-the-green-stage)
+- [ ] `SCN-BUG069006-002` holds at the API boundary: concurrent HTTP confirms with distinct transport message ids and one shared `ConfirmRef` execute the gated action exactly once, proven against the live stack rather than in-process. → Evidence: [report.md](report.md#implementation-phase)
+- [ ] `SCN-BUG069006-003` holds: a confirm racing the timeout sweep yields exactly one terminal outcome, never both a `confirmed` and a `discarded_timeout` row for the same reference. → Evidence: [report.md](report.md#red-stage-proof-ahead-of-the-green-stage)
+- [ ] `SCN-BUG069006-004` holds: sequential redemption behaviour is unchanged — a single confirm still succeeds and a sequential replay of the same reference still fails without re-executing the gated action. → Evidence: [report.md](report.md#implementation-phase)
 - [ ] Build Quality Gate passes as a grouped block: zero warnings, zero deferrals, lint and format clean, artifact lint clean, documentation aligned.

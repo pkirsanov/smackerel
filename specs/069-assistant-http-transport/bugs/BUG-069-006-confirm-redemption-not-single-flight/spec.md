@@ -111,3 +111,22 @@ unfixed implementation. A third sequential turn does not prove AC-1 and MUST NOT
 be accepted as evidence for it: the existing sequential test already passes
 today, against the very code this packet reports as defective, which is precisely
 why it cannot serve as proof.
+
+### Single-Capability Justification
+
+This packet introduces no reusable capability and no second provider, so the
+capability-foundation shape does not apply to it. It repairs ONE behaviour of
+ONE existing capability: the redemption of a pending confirmation reference in
+`internal/assistant/confirm`.
+
+The trigger words that make the gate look here — "implementation", "store" —
+refer to the pre-existing `assistantctx.Store` interface, which this packet
+extends by one method rather than founding. There is exactly one production
+implementation of that method, `PgStore`; the other implementations are
+in-memory test doubles, which are fixtures rather than variants and carry no
+variation axis. Nothing here is selected at runtime, configured per
+environment, or swapped per tenant.
+
+A Domain Capability Model would therefore describe a capability of one member
+with no axis of variation, which states nothing a reader could act on. The
+proportionate record is this justification.

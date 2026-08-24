@@ -53,6 +53,14 @@
   "certification": {
     "status": "in_progress",
     "completedScopes": [],
+    "scopeProgress": [
+      {
+        "scopeId": "Scope 1: Atomic redemption across confirm, discard, and timeout sweep",
+        "status": "in_progress",
+        "dodComplete": 0,
+        "dodTotal": 20
+      }
+    ],
     "certifiedCompletedPhases": [],
     "lockdownState": {
       "active": false,

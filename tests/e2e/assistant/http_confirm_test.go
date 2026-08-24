@@ -17,6 +17,7 @@ package assistant_e2e
 
 import (
 	"encoding/json"
+	"sync"
 	"testing"
 	"time"
 
@@ -158,4 +159,82 @@ func TestAssistantHTTPE2E_StaleCallbackRefDoesNotExecuteAction(t *testing.T) {
 	if !env2.FacadeInvoked {
 		t.Errorf("disambig facade_invoked = false; want true")
 	}
+}
+
+// TestAssistantHTTPE2E_ConcurrentConfirmExecutesGatedActionOnce —
+// SCN-BUG069006-002, the API-boundary half of BUG-069-006.
+//
+// The unit coverage in internal/assistant/confirm proves the store
+// arbitrates redemption. This proves the property survives the real
+// HTTP path: N simultaneous confirms carrying the SAME ConfirmRef must
+// execute the gated action exactly once. The sequential replay case is
+// already covered above; concurrency is a different failure mode,
+// because a sequential replay cannot observe two callers passing the
+// pending check before either has written.
+func TestAssistantHTTPE2E_ConcurrentConfirmExecutesGatedActionOnce(t *testing.T) {
+	stack := loadHTTPTurnLiveStack(t)
+	waitHTTPTurnHealthy(t, stack, 30*time.Second)
+	isolateRequiredAssistantConversation(t, stack)
+	pool := openRequiredAssistantPool(t)
+	item := "test-bug069006-concurrent-" + timestamp()
+
+	turn1Req := httpadapter.TurnRequest{
+		SchemaVersion:      httpadapter.SchemaVersionV1,
+		TransportMessageID: "e2e-bug069006-seed-" + timestamp(),
+		Kind:               string(contracts.KindText),
+		TransportHint:      "web",
+		Text:               "add " + item + " to my shopping list",
+	}
+	resp1, body1 := postAssistantTurn(t, stack, turn1Req)
+	if resp1.StatusCode != 200 {
+		t.Fatalf("seed turn status = %d, want 200; body=%s", resp1.StatusCode, string(body1))
+	}
+	var env1 httpadapter.TurnResponse
+	if err := json.Unmarshal(body1, &env1); err != nil {
+		t.Fatalf("seed turn decode: %v\nbody=%s", err, string(body1))
+	}
+	if env1.ConfirmCard == nil {
+		t.Fatalf("seed turn returned no required ConfirmCard (status=%q, capture_route=%v, body=%q)", env1.Status, env1.CaptureRoute, env1.Body)
+	}
+	if got := listCountBySourceQuery(t, pool, turn1Req.TransportMessageID); got != 0 {
+		t.Fatalf("list count before confirm = %d, want 0", got)
+	}
+
+	// Fire the racers. postAssistantTurnNoFatal is the goroutine-safe
+	// variant — calling t.Fatalf off the test goroutine is illegal.
+	const racers = 4
+	var wg sync.WaitGroup
+	statuses := make([]int, racers)
+	bodies := make([][]byte, racers)
+	ref := env1.ConfirmCard.ConfirmRef
+	for i := 0; i < racers; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			req := httpadapter.TurnRequest{
+				SchemaVersion:      httpadapter.SchemaVersionV1,
+				TransportMessageID: "e2e-bug069006-racer-" + timestamp() + "-" + string(rune('a'+i)),
+				Kind:               string(contracts.KindConfirm),
+				TransportHint:      "web",
+				ConfirmRef:         ref,
+				ConfirmChoice:      string(contracts.ConfirmPositive),
+			}
+			resp, body := postAssistantTurnNoFatal(t, stack, req)
+			statuses[i] = resp.StatusCode
+			bodies[i] = body
+		}(i)
+	}
+	wg.Wait()
+
+	for i := 0; i < racers; i++ {
+		if statuses[i] != 200 {
+			t.Errorf("racer %d status = %d, want 200; body=%s", i, statuses[i], string(bodies[i]))
+		}
+	}
+
+	// The invariant. Exactly one racer may have executed the write.
+	if got := listCountBySourceQuery(t, pool, turn1Req.TransportMessageID); got != 1 {
+		t.Fatalf("list count after %d concurrent confirms = %d, want exactly 1 — the gated action executed %d times", racers, got, got)
+	}
+	assertSingleListItem(t, pool, turn1Req.TransportMessageID, item)
 }
