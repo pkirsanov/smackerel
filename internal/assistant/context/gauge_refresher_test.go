@@ -60,6 +60,9 @@ func (s *captureStore) Load(context.Context, string, string) (Conversation, bool
 func (s *captureStore) Persist(context.Context, Conversation) error             { return nil }
 func (s *captureStore) DeleteByKey(context.Context, string, string) error       { return nil }
 func (s *captureStore) SweepIdle(context.Context, time.Duration) (int64, error) { return 0, nil }
+func (s *captureStore) ClearPendingConfirm(context.Context, string, string, string, time.Time) (bool, error) {
+	return false, nil
+}
 func (s *captureStore) CountActiveByTransport(context.Context) (map[string]int, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

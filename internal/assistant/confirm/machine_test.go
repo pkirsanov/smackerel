@@ -49,6 +49,25 @@ func (m *memStore) Persist(_ context.Context, conv assistantctx.Conversation) er
 	return nil
 }
 
+// ClearPendingConfirm implements assistantctx.Store.
+//
+// BUG-069-006. The compare and the clear share ONE critical section.
+func (m *memStore) ClearPendingConfirm(_ context.Context, userID, transport, confirmRef string, now time.Time) (bool, error) {
+	if userID == "" || transport == "" || confirmRef == "" {
+		return false, errors.New("assistantctx: ClearPendingConfirm requires non-empty userID, transport, and confirmRef")
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	conv, ok := m.rows[m.key(userID, transport)]
+	if !ok || conv.PendingConfirm == nil || conv.PendingConfirm.ConfirmRef != confirmRef {
+		return false, nil
+	}
+	conv.PendingConfirm = nil
+	conv.LastActivityAt = now.UTC()
+	m.rows[m.key(userID, transport)] = conv
+	return true, nil
+}
+
 func (m *memStore) DeleteByKey(_ context.Context, userID, transport string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()

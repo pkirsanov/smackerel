@@ -151,6 +151,24 @@ type Store interface {
 	// the facade is the source of truth for the timestamp.
 	Persist(ctx context.Context, conv Conversation) error
 
+	// ClearPendingConfirm atomically clears pending_confirm for
+	// (userID, transport) ONLY IF it still holds confirmRef, and
+	// reports whether THIS caller performed the clear. Exactly one
+	// of N concurrent callers may receive true for a given
+	// reference; every other caller receives false.
+	//
+	// BUG-069-006. Redemption cannot be expressed as Load-then-Persist:
+	// two callers can both read a live row and both write, executing a
+	// gated action twice. Implementations MUST evaluate the confirmRef
+	// predicate and the write as ONE atomic operation — a conditional
+	// UPDATE on the database side, or a single critical section for
+	// in-memory implementations. Checking in Go between two calls does
+	// not satisfy this contract.
+	//
+	// Implementations MUST leave working_context, pending_disambig,
+	// pending_clarify, and legacy_retirement_notices untouched.
+	ClearPendingConfirm(ctx context.Context, userID, transport, confirmRef string, now time.Time) (bool, error)
+
 	// DeleteByKey removes the conversation row for (userID, transport).
 	// Used by the /reset slash command and by the idle-sweep ticker on
 	// per-row cleanup. Idempotent (no error when the row does not exist).

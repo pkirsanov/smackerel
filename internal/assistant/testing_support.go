@@ -16,6 +16,7 @@ package assistant
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"time"
 
@@ -107,6 +108,28 @@ func (m *InMemoryContextStore) DeleteByKey(_ context.Context, userID, transport 
 	defer m.mu.Unlock()
 	delete(m.rows, m.key(userID, transport))
 	return nil
+}
+
+// ClearPendingConfirm implements assistantctx.Store.
+//
+// BUG-069-006. The compare and the clear happen in ONE critical
+// section. Splitting them into a read followed by a write would let
+// this fixture pass a concurrency test while production stays broken,
+// which is the failure mode the packet's design calls out explicitly.
+func (m *InMemoryContextStore) ClearPendingConfirm(_ context.Context, userID, transport, confirmRef string, now time.Time) (bool, error) {
+	if userID == "" || transport == "" || confirmRef == "" {
+		return false, errors.New("assistantctx: ClearPendingConfirm requires non-empty userID, transport, and confirmRef")
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	conv, ok := m.rows[m.key(userID, transport)]
+	if !ok || conv.PendingConfirm == nil || conv.PendingConfirm.ConfirmRef != confirmRef {
+		return false, nil
+	}
+	conv.PendingConfirm = nil
+	conv.LastActivityAt = now.UTC()
+	m.rows[m.key(userID, transport)] = conv
+	return true, nil
 }
 
 // SweepIdle implements assistantctx.Store. Always returns 0 (test

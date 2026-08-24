@@ -162,6 +162,40 @@ ON CONFLICT (user_id, transport) DO UPDATE
 	return nil
 }
 
+// ClearPendingConfirm implements Store.ClearPendingConfirm.
+//
+// BUG-069-006. The predicate and the write are one statement, so
+// PostgreSQL — not the caller — arbitrates the race. Under READ
+// COMMITTED the second of two concurrent executions re-reads the row
+// after the first commits, finds pending_confirm no longer holding
+// confirmRef, and affects zero rows.
+//
+// Note the deliberate contrast with Persist above, which discards the
+// CommandTag. Here rows-affected IS the answer, so it is read and
+// returned; a conditional UPDATE whose tag was discarded would report
+// success to the losing caller and defeat the whole guarantee.
+func (s *PgStore) ClearPendingConfirm(ctx context.Context, userID, transport, confirmRef string, now time.Time) (bool, error) {
+	if userID == "" || transport == "" || confirmRef == "" {
+		return false, errors.New("assistantctx: ClearPendingConfirm requires non-empty userID, transport, and confirmRef")
+	}
+	if now.IsZero() {
+		return false, errors.New("assistantctx: ClearPendingConfirm requires non-zero now (caller owns the timestamp)")
+	}
+	const q = `
+UPDATE assistant_conversations
+   SET pending_confirm = NULL,
+       last_activity_at = $3
+ WHERE user_id = $1
+   AND transport = $2
+   AND pending_confirm ->> 'confirm_ref' = $4
+`
+	tag, err := s.pool.Exec(ctx, q, userID, transport, now.UTC(), confirmRef)
+	if err != nil {
+		return false, fmt.Errorf("assistantctx: ClearPendingConfirm update: %w", err)
+	}
+	return tag.RowsAffected() == 1, nil
+}
+
 // PendingClarifyRow is a sweeper-only projection of one
 // assistant_conversations row whose pending_clarify column is set and
 // whose emit_time is older than the configured

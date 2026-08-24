@@ -210,12 +210,18 @@ func (m *Machine) Confirm(ctx context.Context, in ConfirmInput, now time.Time) (
 		return ConfirmResult{}, ErrPendingNotFound
 	}
 	pending := *conv.PendingConfirm
-	// Single-flight: clear pending BEFORE writing the audit row so a
-	// racing callback hits ErrPendingNotFound.
-	conv.PendingConfirm = nil
-	conv.LastActivityAt = now.UTC()
-	if err := m.store.Persist(ctx, conv); err != nil {
-		return ConfirmResult{}, fmt.Errorf("confirm.Confirm: persist conversation (clear pending): %w", err)
+	// Single-flight: the clear is a conditional write arbitrated by the
+	// store, so exactly one of N concurrent callers observes won==true
+	// and every other caller gets ErrPendingNotFound. The Load above is
+	// only how the audit payload is fetched; it is NOT the authority on
+	// whether redemption may proceed. Only the winner writes an audit
+	// row, which is what keeps the row count at exactly one (BUG-069-006).
+	won, err := m.store.ClearPendingConfirm(ctx, in.UserID, in.Transport, in.ConfirmRef, now)
+	if err != nil {
+		return ConfirmResult{}, fmt.Errorf("confirm.Confirm: clear pending confirm: %w", err)
+	}
+	if !won {
+		return ConfirmResult{}, ErrPendingNotFound
 	}
 	audit := ProposalArtifact{
 		ConfirmRef:     pending.ConfirmRef,
@@ -266,10 +272,12 @@ func (m *Machine) Discard(ctx context.Context, in DiscardInput, now time.Time) e
 		return ErrPendingNotFound
 	}
 	pending := *conv.PendingConfirm
-	conv.PendingConfirm = nil
-	conv.LastActivityAt = now.UTC()
-	if err := m.store.Persist(ctx, conv); err != nil {
-		return fmt.Errorf("confirm.Discard: persist conversation (clear pending): %w", err)
+	won, err := m.store.ClearPendingConfirm(ctx, in.UserID, in.Transport, in.ConfirmRef, now)
+	if err != nil {
+		return fmt.Errorf("confirm.Discard: clear pending confirm: %w", err)
+	}
+	if !won {
+		return ErrPendingNotFound
 	}
 	audit := ProposalArtifact{
 		ConfirmRef:     pending.ConfirmRef,
@@ -325,10 +333,14 @@ func (m *Machine) SweepTimeouts(ctx context.Context, expired []ExpiredPending, n
 			continue
 		}
 		pending := *conv.PendingConfirm
-		conv.PendingConfirm = nil
-		conv.LastActivityAt = now.UTC()
-		if err := m.store.Persist(ctx, conv); err != nil {
+		won, err := m.store.ClearPendingConfirm(ctx, e.UserID, e.Transport, e.ConfirmRef, now)
+		if err != nil {
 			return res, fmt.Errorf("confirm.SweepTimeouts: clear pending %s/%s: %w", e.UserID, e.Transport, err)
+		}
+		if !won {
+			// Lost the race to a concurrent confirm/discard — that
+			// caller owns the terminal audit row for this reference.
+			continue
 		}
 		audit := ProposalArtifact{
 			ConfirmRef:     pending.ConfirmRef,

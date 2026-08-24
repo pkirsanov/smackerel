@@ -10,6 +10,7 @@ package assistant
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"time"
 
@@ -48,6 +49,27 @@ func (m *memContextStore) Persist(_ context.Context, conv assistantctx.Conversat
 	defer m.mu.Unlock()
 	m.rows[m.key(conv.UserID, conv.Transport)] = conv
 	return nil
+}
+
+// ClearPendingConfirm implements assistantctx.Store.
+//
+// BUG-069-006. The compare and the clear share ONE critical section;
+// a read followed by a separate write would let this fixture pass a
+// concurrency test while production stays broken.
+func (m *memContextStore) ClearPendingConfirm(_ context.Context, userID, transport, confirmRef string, now time.Time) (bool, error) {
+	if userID == "" || transport == "" || confirmRef == "" {
+		return false, errors.New("assistantctx: ClearPendingConfirm requires non-empty userID, transport, and confirmRef")
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	conv, ok := m.rows[m.key(userID, transport)]
+	if !ok || conv.PendingConfirm == nil || conv.PendingConfirm.ConfirmRef != confirmRef {
+		return false, nil
+	}
+	conv.PendingConfirm = nil
+	conv.LastActivityAt = now.UTC()
+	m.rows[m.key(userID, transport)] = conv
+	return true, nil
 }
 
 func (m *memContextStore) DeleteByKey(_ context.Context, userID, transport string) error {
