@@ -496,7 +496,16 @@ explicit, disclosed deviation from `.github/instructions/terminal-discipline.ins
 §3 rather than shipping Go code whose compilation was never checked. It is
 tracked as **DI-4** in *Discovered Issues* below.
 
-### Live Execution — The Adversarial Flip, Demonstrated (2026-08-23)
+### Live Execution of the Adversarial Flip (2026-08-23)
+
+**Heading note.** This heading deliberately carries no em-dash. The transition
+guard slugifies a heading with `gsub(/[[:space:]]+/, "-")`, which collapses a
+run of whitespace to ONE hyphen; GitHub deletes the em-dash and then converts
+the two surviving spaces to TWO hyphens. A heading containing ` — ` therefore
+resolves under GitHub and not under the guard, and a DoD link written in either
+dialect is broken under the other. Removing the em-dash makes both sluggers
+agree, which fixes the divergence at its source instead of encoding one
+tool's quirk into every reference.
 
 **Executed:** YES (current session) · **Claim Source:** executed
 
@@ -584,6 +593,232 @@ of TP-B074-002-01, TP-B074-002-02, TP-B074-002-03 and TP-B074-002-05 is owned by
 `bubbles.test` and is recorded in `state.json` → `routing.nextRequiredOwner`;
 the four DoD items depending on those rows are left unchecked in `scopes.md`.
 
+## Test Phase Per-DoD Evidence 2026-08-23
+
+**Executed:** YES (current session, `bubbles.test`) · **Claim Source:** executed
+unless a line says otherwise.
+
+**Redaction:** command output below that contained an absolute operator home
+path has that path rewritten to `<operator-home>`. Nothing else in the captured
+output is altered.
+
+This phase checked **10 of 19** DoD items and deliberately left **9** unchecked.
+The unchecked list and the reason for each is the last subsection here; it is
+the substantive part of this record, not an appendix.
+
+The unchecked nine are not an oversight and they are not deferral. Six of them
+assert behaviour on a live grounded or captured turn, and this hardware tier
+returns `provider_unavailable` before the model ever grounds a turn, so the
+evidence that would close them cannot be produced here by any amount of effort.
+Three more assert whole-suite outcomes that need the E2E `flock` and the disk
+headroom the preflight refused. Checking any of them from what this phase
+actually observed would be fabrication of exactly the kind this packet exists
+to remove, so each stays `[ ]` with its reason recorded below.
+
+### Correction made by this phase: the header no longer overstates its own property
+
+Judging DoD item `scopes.md` line 113 required reading the header against the
+code rather than accepting it. It did not match. Lines 16-18 as shipped claimed:
+
+> The run is CLASSIFIED from `error_cause` and `sources`; the contract is
+> ASSERTED on `status` and `body`. Those two sets are deliberately disjoint.
+
+The code does not have that property. Branch 1 selects on `status`
+(`case env.Status == string(contracts.StatusSavedAsIdea)`), so `status` sits in
+the classification set as well as the assertion set; `sources` likewise selects
+branch 4 and is asserted in branch 2. The two global sets therefore intersect.
+
+The property the code *does* have is stronger and per-branch: **no branch
+asserts the field it selected with**, so no assertion can be swallowed by its
+own selector. Mechanically verified:
+
+```
+$ grep -nE '^\s+(case |default:)' tests/e2e/assistant/capture_fallback_trigger_e2e_test.go
+152:    case env.Status == string(contracts.StatusSavedAsIdea):
+174:    case env.ErrorCause == string(contracts.ErrNoGroundedAnswer):
+197:    case env.ErrorCause == string(contracts.ErrProviderUnavailable):
+218:    case len(env.Sources) > 0:
+232:    default:
+```
+
+| Branch | Selects on | Asserts on (line) | Selector re-asserted? |
+|---|---|---|---|
+| 1 capture | `status` | `capture_route` 157, `confirm_card` 160, `disambiguation_prompt` 163, `body` 170 | no |
+| 2 refusal | `error_cause` | `status` 181, `capture_route` 184, `body` 187/190, `sources` 193 | no |
+| 3 provider | `error_cause` | `status` 210, `capture_route` 213 | no |
+| 4 grounded | `sources` | `capture_route` 224, `body` 227 | no |
+| default | — | off-contract `t.Errorf` 238 | n/a |
+
+Leaving a comment that describes a property the code does not have is the exact
+defect class this packet exists to remove, so the header was corrected to state
+the per-branch property instead. The change is comment-only, inside the declared
+change boundary, and the file still typechecks under the `e2e` tag.
+
+### Static verification executed this phase
+
+```
+$ grep -cE 't\.Skip' tests/e2e/assistant/capture_fallback_trigger_e2e_test.go
+2
+$ grep -cE 't\.Errorf|t\.Fatalf' tests/e2e/assistant/capture_fallback_trigger_e2e_test.go
+19
+$ grep -nE 't\.Skip' tests/e2e/assistant/capture_fallback_trigger_e2e_test.go
+119:  t.Skipf("assistant HTTP adapter never bound within 5min (still 503 assistant_http_not_ready) ...
+216:  t.Skipf("upstream provider unavailable (error_cause=%q, status=%q); the open-knowledge ...
+
+$ grep -nE '^\s*return\s*$|t\.SkipNow|\.only\(|t\.Skip\(\)' tests/e2e/assistant/capture_fallback_trigger_e2e_test.go
+EARLY_EXIT_GREP_EXIT=1
+```
+
+Exit 1 from the last scan means **zero** matches: no bare `return`, no
+`t.SkipNow`, no `.only(`, no argument-less `t.Skip()`. That is the condition
+`.github/copilot-instructions.md` → *Adversarial Regression Tests For Bug Fixes*
+states as "Required tests MUST NOT use bailout returns ... or equivalent
+failure-condition early exits".
+
+The two surviving skips are at lines 119 and 216 (they were 112 and 209 before
+the header correction added seven lines). Line 119 keys on HTTP 503
+`assistant_http_not_ready`; line 216 keys on `error_cause=provider_unavailable`
+and asserts `status` and `capture_route` before skipping. Neither reads
+`saved_as_idea`, which is the status the four canonical-ack assertions police.
+
+Change boundary, taken from git rather than asserted:
+
+```
+$ git diff --name-only 343d6076~1..HEAD | grep -v '^specs/'
+tests/e2e/assistant/capture_fallback_trigger_e2e_test.go
+$ git diff --name-only d62f2e75..HEAD -- internal/ | wc -l   # (whole-repo range, other packets included)
+7
+$ git show --name-only --format='' 343d6076 | grep -v '^specs/'
+tests/e2e/assistant/capture_fallback_trigger_e2e_test.go
+```
+
+Across every commit this packet produced (`343d6076` plus the four planning
+commits `352599e1`, `30d31da1`, `fa9a1582`, `9c256fd9`) exactly **one** file
+outside `specs/` was touched, and it is the file the change boundary names. The
+seven `internal/` files in the second command belong to other packets in the
+same date range and are shown only so the range is not mistaken for this
+packet's delta. This phase's own edit is to that same single file.
+
+Option (b) — the deterministic stub `design.md` retained as a declared fallback
+— was not adopted; the shipped test still drives the live stack:
+
+```
+$ grep -nE 'httptest|stub|Stub|fake|Fake|mock|Mock|monkey|inject' tests/e2e/assistant/capture_fallback_trigger_e2e_test.go
+STUB_GREP_EXIT=1
+$ grep -nE 'loadHTTPTurnLiveStack|postAssistantTurn' tests/e2e/assistant/capture_fallback_trigger_e2e_test.go
+81:     stack := loadHTTPTurnLiveStack(t)
+109:            resp, body = postAssistantTurn(t, stack, req)
+```
+
+### Build verification after the header correction
+
+```
+$ ./smackerel.sh check
+config-validate: <operator-home>/smackerel/config/generated/dev.env.tmp.566081 OK
+Config is in sync with SST
+env_file drift guard: OK
+scenario-lint: scanning config/prompt_contracts (glob: *.yaml)
+scenarios registered: 17, rejected: 0
+scenario-lint: OK
+CHECK_EXIT=0
+
+$ ./smackerel.sh format --check
+78 files already formatted
+FORMAT_EXIT=0
+
+$ ./smackerel.sh lint
+... Web validation passed
+LINT_EXIT=0
+sha256(full 157-line output): 44cae14643b5a95310d88a66c91c9d2fc92b11b77de60243615351ddac30a713
+
+$ go vet -tags e2e ./tests/e2e/assistant/
+VET_E2E_EXIT=0
+```
+
+`go vet -tags e2e` is again the DI-4 disclosed deviation, and this phase needed
+it for a second reason: the lane that would otherwise have compiled the file
+refused to start (next subsection).
+
+### The broader suite did NOT run this phase — disk preflight refused it
+
+The reason has changed since the implement phase recorded a held `flock`. This
+phase's attempt was refused before any container started:
+
+```
+$ ./smackerel.sh test e2e --go-package assistant
+oom-preflight: OK — 28432 MB available (need 6000 MB; swap used 1045 MB).
+  ┌─ disk-preflight: REFUSED — not enough free disk ──────────────────┐
+  │  C: (backs the vhdx): 39     GB free   required: 40   GB
+  │  WSL / (ext4)       : 472    GB free   required: 25   GB
+  └────────────────────────────────────────────────────────────────────┘
+exit: 1
+sha256(full 34-line output): c77a2a936672667e9449082fa336783b1c986b23f65a918474118c70d575f1e1
+```
+
+Exit was **1**, not 73, so this is the disk guard rather than the suite lock.
+The suite did not execute a single test. The refusal names
+`DISK_PREFLIGHT_OVERRIDE=1` as an override and `docker-safe-prune.sh --apply` as
+a reclaim path; this phase used neither. Overriding a preflight is the bypass
+pattern `.github/copilot-instructions.md` forbids, and pruning Docker state
+would delete images, volumes and build cache shared with the other stacks on
+this host, which is not a decision a test phase makes unilaterally. The four DoD
+items that require a package run are therefore left unchecked below, and
+`Discovered Issues` records DI-7 for the blocker itself.
+
+### The nine unchecked items, and why each is unchecked
+
+| `scopes.md` line | Item | Why it is NOT checked |
+|---|---|---|
+| 110 | Non-tautology proven via a legitimately grounded envelope | Branch 4 was never traversed. Every live run on this tier returned `sources=0`. Run 3 shows the shipped test is not an unconditional always-fail (it exited 0), but that is a weaker fact than the one the item names, and substituting it would be the over-claim this packet exists to remove. |
+| 111 | The four SCOPE-074-04B assertions execute on every 200 with a decodable envelope | Two separate reasons. Live: branch 1 was never reached, so they have executed zero times. Design: as written the item describes behaviour the shipped code deliberately does **not** have — the four assertions execute inside branch 1 only, because asserting the capture contract on a provider-outage envelope would claim a violation nobody observed. The wording predates the five-branch design and is planning-owned; DI-8 records it. |
+| 117 | `SCN-BUG-074-002-01` holds on the live stack | **Falsified as written, by this packet's own run 3.** The scenario requires that an envelope whose status is not `saved_as_idea` and which carries no grounded sources makes the test FAIL and report no skip. Run 3's envelope was exactly that shape — `status="unavailable"`, `sources=0` — and the shipped test reported SKIP via branch 3. The shipped carve-out is defensible and typed, but the Gherkin has not been updated to admit it. DI-8 records the divergence. |
+| 118 | `SCN-BUG-074-002-02` holds on the live stack | Branch 4 never traversed; no grounded envelope was produced. |
+| 119 | `SCN-BUG-074-002-03` holds on the live stack | Branch 1 never traversed; no capture envelope was produced. The four canonical-ack assertions remain unexecuted against a live stack. |
+| 121 | Scenario-specific regression exists **and passes** for SCN-01, SCN-02, SCN-03 | The test exists and contains a branch for each. "Passes" is unproven for SCN-02 and SCN-03, which is the same gap as lines 118 and 119. |
+| 122 | Broader suite runs green, zero skipped required tests | The suite did not run this phase (disk preflight, above). |
+| 126 | Full assistant e2e package passes, zero skipped required tests | Same blocker as line 122. |
+| 127 | Build/lint/format clean **and** `state-transition-guard.sh` PASS | Build, format, lint and `go vet -tags e2e` are all exit 0 and recorded above. The guard is not PASS and cannot be while nine DoD items are correctly unchecked; its verdict is FAIL with `failureCount: 13`. The item is a conjunction, so one true half does not satisfy it. |
+
+**Uncertainty Declaration.** The three live-envelope facts this packet rests on
+— run 1 SKIP, run 2 FAIL, run 3 typed SKIP — were all produced on a hardware
+tier whose LLM provider was unavailable, so every one of them carries
+`error_cause="provider_unavailable"`. Branches 1, 2 and 4 of the shipped switch
+have never been traversed by a live envelope. Their correctness rests on the
+static control-flow reading recorded above, not on live traversal. Anyone
+reading the ten checked items as "the no-ground capture contract was verified
+end-to-end" would be reading more than the evidence carries.
+
+### The ten checked items
+
+Lines 107, 108, 109 are carried by the three runs recorded in
+[Live Execution — The Adversarial Flip, Demonstrated (2026-08-23)](#live-execution--the-adversarial-flip-demonstrated-2026-08-23):
+the raw envelope is captured verbatim there and identifies branch 3 as the
+branch the fabricated-city prompt takes at HEAD on this tier (line 107); run 1
+shows the pre-fix file reporting SKIP with package exit 0 on that off-contract
+envelope (line 108); runs 1 and 2 together show SKIP flipping to FAIL on the
+same stack, same prompt, same envelope (line 109).
+
+One qualification belongs on line 109 so it is not read too widely. Run 2 was the
+fixed file *before* the typed `provider_unavailable` branch was added. On the
+**shipped** file that same envelope reports a typed SKIP, not FAIL (that is run
+3). What runs 1 and 2 demonstrate is that the status-keyed escape hatch is gone;
+what they do not demonstrate is a live FAIL from the shipped artifact. The
+shipped artifact's FAIL paths — branch 2's five strict assertions and the
+`default:` case — are proven by construction and by the control-flow reading,
+and are recorded as untraversed in the Uncertainty Declaration above.
+
+Lines 112, 113, 114, 115, 116 and 120 are carried by the static verification in
+this section: the skip/assert census and their key fields (112), the header
+correction and the per-branch table (113), the zero-match early-exit scan (114),
+the git-derived change boundary (115), the absence of any stub together with the
+retained live-stack driver (116), and the two-skip census matching the item's
+own text (120).
+
+Line 128 is carried by `state.json`: `certification.certifiedCompletedPhases` is
+`[]`, `certification.certifierAgent` is `null`, and this phase wrote neither. It
+recorded its claim in `execution.completedPhaseClaims` only, which is the
+execution-owned field.
+
 ## Guards & Quality Gates
 
 **Claim Source:** executed (current session) — recorded in the RESULT-ENVELOPE
@@ -602,6 +837,8 @@ returned by this task.
 | DI-2 | 2026-08-18 | The line-71 `t.Skipf` message pre-judges its own condition, asserting the run is "test-infra timing rather than a SCOPE-074-04B regression" — a conclusion it has not tested. | **folded into this packet's fix scope** as a secondary correction, not filed separately: it is in the same file, the same change boundary, and the same class of defect (a skip that claims more than it proved). | `tests/e2e/assistant/capture_fallback_trigger_e2e_test.go` line 71; `scopes.md` → *Implementation Plan* step 4 |
 | DI-3 | 2026-08-23 | The `saved_as_idea` branch this test was built around may be **unreachable** for its own prompt. The SCOPE-074-04A no-ground hook runs inside `case BandHigh:` (`internal/assistant/facade.go` line 1121), and `canonicalizeSuccessfulCaptureResponse` (same file, lines 1841-1868) converts any band-high capture shape into `StatusUnavailable` + `ErrNoGroundedAnswer` + `CaptureRoute = false`. If the fabricated-city prompt routes to `open_knowledge`, SCOPE-074-04B's canonical ack cannot appear on the wire and INV-HB-REFUSAL governs instead. `state.json` → `explicitNonClaims` recorded these as "plausibly govern different branches"; this static reading suggests they do not coexist for this scenario. | **Not resolved here, and deliberately not asserted as a production defect.** Deciding it requires the live envelope, which is the unchecked DoD item *"The open unknown is resolved"* in `scopes.md` and is owned by `bubbles.test`. The fix keeps BOTH shapes as strict branches so the test is correct under either answer. If the live run confirms `saved_as_idea` is unreachable, the contradiction between `specs/074-capture-as-fallback-policy/scopes.md` SCOPE-074-04B and INV-HB-REFUSAL is a planning-owned question for `bubbles.plan`, not a test edit. | `internal/assistant/facade.go` lines 1121, 1383, 1841-1868; `internal/assistant/provenance/gate.go` lines 112-121; `scopes.md` → DoD item 1 |
 | DI-4 | 2026-08-23 | No `./smackerel.sh` subcommand typechecks `//go:build e2e` Go files without also taking the E2E suite `flock`. `check` is config-only (`smackerel.sh` line 882), `scripts/runtime/go-lint.sh` is a bare `go vet ./...` with no `-tags`, and `test e2e` locks at `smackerel.sh` line 1507. Tag-gated test code can therefore reach the E2E lane without ever having been compiled by a routine gate. | **Recorded as a repo tooling gap, disclosed not hidden.** This phase compensated with a scoped `go vet -tags e2e ./tests/e2e/assistant/` (exit 0, *Implementation Delta* → *Build verification*), an explicit deviation from `.github/instructions/terminal-discipline.instructions.md` §3. A lock-free tag-aware compile surface in `scripts/runtime/` is a change to `smackerel.sh` and `scripts/runtime/go-lint.sh`, both outside this packet's change boundary in `scopes.md` → *Change Boundary*, so it is routed to `bubbles.plan` via `state.json` → `routing.subsequentOwners` rather than made here. | `smackerel.sh` lines 882, 1507; `scripts/runtime/go-lint.sh`; `.github/instructions/terminal-discipline.instructions.md` §3 |
+| DI-6 | 2026-08-24 | The word "skipping" appears in this report's prose at the two surviving `t.Skip` sites while describing what the shipped test does. Both are infrastructure-keyed guards that describe shipped behaviour rather than an open task: line 119 keys on HTTP 503 `assistant_http_not_ready` and line 216 on `error_cause=provider_unavailable`. | Closed in this packet — the shipped behaviour is described, and both skips are justified in `### Static verification executed this phase` of this report. | `tests/e2e/assistant/capture_fallback_trigger_e2e_test.go` lines 119, 216 |
+| DI-7 | 2026-08-24 | `tests/e2e/assistant/http_capture_test.go:71` skips on `!env.CaptureRoute` and then asserts the capture contract — the same defect class this packet fixes, in a different file. Out of this packet's blast radius. | Routed — needs its own packet; NOT fixed here, and this packet makes no claim about it. | `tests/e2e/assistant/http_capture_test.go:71` |
 | DI-5 | 2026-08-23 | The strict `default:` branch now fails on an honest live infrastructure failure (for example `StatusUnavailable` + `ErrProviderUnavailable` when the LLM provider is down), because such an envelope is neither a capture, nor a typed no-ground refusal, nor grounded. | **Intentional, and it follows the packet's own Gherkin.** SCN-BUG-074-002-01 in `scopes.md` requires a failure whenever the status is not `saved_as_idea` and no grounded sources are present, and SCN-BUG-074-002-04 permits only the 503 adapter skip. Reporting a provider outage loudly is the specified behaviour; the failure message names that case explicitly so `bubbles.test` can classify a red run correctly. If live runs show this is operationally noisy, the remedy is a planning decision on `scopes.md` SCN-BUG-074-002-01, not a quiet relaxation of the assertion. | `scopes.md` → SCN-BUG-074-002-01, SCN-BUG-074-002-04; `tests/e2e/assistant/capture_fallback_trigger_e2e_test.go` `default:` branch |
 
 No other issues surfaced. No sweep for the analogous pattern elsewhere in the
@@ -630,6 +867,45 @@ sharing this one's five-branch outcome-space design. Reference:
 `tests/e2e/assistant/http_capture_test.go` lines 71-73;
 `specs/074-capture-as-fallback-policy/bugs/BUG-074-002-noground-e2e-skip-guard-masks-canonical-ack-regression/spec.md`
 → *Change Boundary*; [live execution evidence](#live-execution--the-adversarial-flip-demonstrated-2026-08-23).
+
+**DI-7 (2026-08-23, `bubbles.test`).** The `test e2e` lane is currently
+unrunnable on this host: `disk-preflight` refuses with exit 1 because the
+Windows volume backing the WSL vhdx has 39 GB free against a 40 GB requirement,
+while the ext4 filesystem has 472 GB free against its 25 GB requirement. The
+guard is correct — a heavy build can wedge the daemon — so this is a host
+capacity condition, not a guard defect. Disposition: **routed, not resolved
+here.** The two remedies the refusal itself names are a Docker prune that
+deletes images, volumes and build cache shared with the wanderaide, guesthost
+and quantitativefinance stacks on the same host, and `DISK_PREFLIGHT_OVERRIDE=1`,
+which is the bypass pattern `.github/copilot-instructions.md` forbids. Both are
+operator decisions about shared infrastructure and neither is inside this
+packet's change boundary. Consequence recorded rather than smoothed over: DoD
+items at `scopes.md` lines 122 and 126 cannot be satisfied while this holds, and
+`state.json` → `routing` names `bubbles.test` as the owner for re-running the
+package once capacity exists. Reference: `smackerel.sh` disk-preflight;
+[Test Phase Per-DoD Evidence 2026-08-23](#test-phase-per-dod-evidence-2026-08-23).
+
+**DI-8 (2026-08-23, `bubbles.test`).** Two planning artifacts describe behaviour
+the shipped test deliberately does not have, and live evidence now settles both.
+(a) `scopes.md` SCN-BUG-074-002-01 requires that an envelope whose status is not
+`saved_as_idea` and which carries no grounded sources reports FAIL and no skip.
+Run 3 produced exactly that envelope — `status="unavailable"`, `sources=0` — and
+the shipped test reported SKIP through the typed `provider_unavailable` branch.
+(b) `scopes.md` DoD line 111 requires the four SCOPE-074-04B assertions to
+execute "on every run that got HTTP 200 with a decodable envelope"; the shipped
+switch executes them inside branch 1 only. Disposition: **routed to
+`bubbles.plan`, not silently reconciled by editing either side.** The shipped
+carve-out is the right behaviour — asserting the capture contract on an upstream
+outage would claim a violation nobody observed, which is the failure mode this
+packet was filed to remove — but a test phase does not rewrite the Gherkin its
+own DoD is judged against, and it does not check an item whose text its evidence
+falsifies. The precedent already exists in this packet: DoD line 120 was
+rewritten by planning to record the two-skip reality faithfully rather than
+narrowing the scenario to match delivery, and SCN-BUG-074-002-01 and DoD line 111
+need the same treatment. Both items are left unchecked. Reference: `scopes.md`
+SCN-BUG-074-002-01 and DoD lines 111, 117, 120;
+`tests/e2e/assistant/capture_fallback_trigger_e2e_test.go` branch 3;
+[live execution evidence](#live-execution--the-adversarial-flip-demonstrated-2026-08-23).
 
 ## Invocation Audit
 

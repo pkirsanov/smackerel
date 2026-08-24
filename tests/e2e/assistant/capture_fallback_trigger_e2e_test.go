@@ -13,12 +13,19 @@
 // canonical saved-as-idea acknowledgement on the wire — identical
 // shape to the BandLow fallback path covered by spec 069 SCOPE-4.
 //
-// Adversarial coverage (BUG-074-002). The run is CLASSIFIED from
-// `error_cause` and `sources`; the contract is ASSERTED on `status` and
-// `body`. Those two sets are deliberately disjoint. The previous guard
-// branched on `status` and then asserted `status`, so a status
-// regression selected its own escape hatch and the test reported SKIP
-// instead of FAIL — the header promised a failure mode the code could
+// Adversarial coverage (BUG-074-002). Every branch below CLASSIFIES on
+// one field and ASSERTS only on others — never on the field it selected
+// with. The capture branch selects on `status` and asserts
+// `capture_route`, the two card fields and `body`; the refusal and
+// provider branches select on `error_cause` and assert `status`,
+// `capture_route`, `body` and `sources`; the grounded branch selects on
+// `sources` and asserts `capture_route` and `body`. That PER-BRANCH
+// disjointness is the structural property, and it is what makes an
+// escape hatch impossible rather than merely discouraged: no branch can
+// swallow the assertion it exists to make. The previous guard broke it —
+// it branched on `status` and then asserted `status`, so a status
+// regression selected its own escape hatch, the test reported SKIP
+// instead of FAIL, and the header promised a failure mode the code could
 // not produce.
 //
 // Every decoded 200 envelope now lands in exactly one of five branches,

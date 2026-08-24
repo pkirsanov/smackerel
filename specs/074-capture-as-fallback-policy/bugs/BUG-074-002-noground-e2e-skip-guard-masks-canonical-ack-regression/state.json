@@ -13,7 +13,7 @@
   "releaseTrain": "mvp",
   "flagsIntroduced": [],
   "createdAt": "2026-08-18T00:00:00Z",
-  "lastUpdatedAt": "2026-08-23T23:22:51Z",
+  "lastUpdatedAt": "2026-08-24T00:05:14Z",
   "certifiedAt": null,
   "certifiedBy": null,
   "discoveredBy": "bubbles.bug (finding DI-5 during BUG-061-009 close-out)",
@@ -26,8 +26,8 @@
     "Which branch the live stack takes today for the fabricated-city prompt is NOT verified; no live run was performed."
   ],
   "execution": {
-    "activeAgent": "bubbles.implement",
-    "currentPhase": "implement",
+    "activeAgent": "bubbles.test",
+    "currentPhase": "test",
     "substate": "implemented",
     "currentScope": "SCOPE-BUG-074-002-01",
     "executionModel": "direct-authorized-runner",
@@ -40,6 +40,13 @@
         "provenanceMode": "specialist",
         "claimedAt": "2026-08-23T23:05:01Z",
         "evidenceRef": "report.md#implementation-delta"
+      },
+      {
+        "phase": "test",
+        "agent": "bubbles.test",
+        "provenanceMode": "specialist",
+        "claimedAt": "2026-08-24T00:05:14Z",
+        "evidenceRef": "report.md#test-phase-per-dod-evidence-2026-08-23"
       }
     ],
     "executionHistory": [
@@ -61,6 +68,17 @@
         "outcome": "completed_owned",
         "evidenceRef": "report.md#implementation-delta",
         "summary": "Replaced the status-keyed escape hatch in tests/e2e/assistant/capture_fallback_trigger_e2e_test.go with a total switch over the decoded 200 envelope. The removed guard was `if env.Status != string(contracts.StatusSavedAsIdea) { t.Skipf(...) }` sitting directly above the four SCOPE-074-04B assertions, so the predicate and the assertions it protected read the same variable: any regression moving the turn off saved_as_idea selected its own escape hatch and the run reported SKIP where the file header promised FAIL. The shipped control flow CLASSIFIES each run from `error_cause` and `sources` and ASSERTS the contract on `status` and `body`; those two sets are deliberately disjoint, which is what makes the escape hatch structurally impossible rather than merely discouraged. Five branches, four of which assert. (1) status=saved_as_idea asserts the four canonical-ack rules strictly - capture_route true, nil confirm card, nil disambiguation prompt, canonical ack substring in the body. (2) error_cause=no_grounded_answer asserts the typed high-band refusal that BUG-061-009 / INV-HB-REFUSAL ratified - unavailable status, capture_route false, canonical refusal body, zero partial sources, and the capture acknowledgement string absent; that whole shape previously reported SKIP and asserted nothing. (3) error_cause=provider_unavailable asserts status coherence and capture_route false, then skips, because response.go types that cause as an upstream failure explicitly distinct from could-not-ground, so the grounding decision was never reached and FAIL would assert a violation nobody observed. (4) sources present passes while still asserting the two invariants a grounded answer must satisfy, so the one legitimate non-exercise cannot become a silent catch-all. (5) default fails loudly on any off-contract envelope, including an answered-with-zero-sources fabrication leak. Two skips survive and both key on infrastructure availability - the HTTP 503 assistant_http_not_ready readiness poll and branch 3 - and neither keys on the saved_as_idea status that the canonical-ack assertions police, which is the precise defect this packet was filed for. The file header comment and the scopes.md DoD item describing the branch table were updated in the same change so the documented shape matches the shipped five-branch switch. Change boundary honoured: zero files under internal/ were touched. Live evidence of the SKIP->FAIL flip is recorded in report.md under 'Live Execution - The Adversarial Flip, Demonstrated (2026-08-23)'. Execution of the SCOPE-BUG-074-002-01 DoD test matrix in scopes.md is owned by bubbles.test per routing.nextRequiredOwner; no DoD item is checked by this phase."
+      },
+      {
+        "at": "2026-08-24T00:05:14Z",
+        "agent": "bubbles.test",
+        "phasesExecuted": ["test"],
+        "provenanceMode": "specialist",
+        "executionModel": "direct-authorized-runner",
+        "claimSource": "executed",
+        "outcome": "route_required",
+        "evidenceRef": "report.md#test-phase-per-dod-evidence-2026-08-23",
+        "summary": "Executed the test phase for SCOPE-BUG-074-002-01. Checked 10 of 19 DoD items and deliberately left 9 unchecked; the unchecked set is the substantive result, not a remainder. CHECKED (107,108,109) on the three live runs already recorded in report.md 'Live Execution': the raw envelope status=unavailable error_cause=provider_unavailable capture_route=false sources=0 identifies branch 3 as the branch the fabricated-city prompt takes at HEAD on this tier; run 1 shows the pre-fix file reporting SKIP with package exit 0 on that off-contract envelope; runs 1 and 2 show SKIP flipping to FAIL on the same stack, same prompt, same envelope. A qualification is recorded on 109: run 2 predates the typed provider_unavailable branch, so on the SHIPPED file that same envelope reports a typed SKIP (run 3). What is demonstrated is that the status-keyed escape hatch is gone, not a live FAIL from the shipped artifact. CHECKED (112,113,114,115,116,120) on static verification executed this session: 2 t.Skip sites (lines 119 and 216 post-correction) and 19 t.Errorf/t.Fatalf; the early-exit scan for bare return / t.SkipNow / .only( / t.Skip() returned exit 1, zero matches; git diff --name-only 343d6076~1..HEAD outside specs/ returns exactly one path, the file the change boundary names, with zero internal/ paths; option (b) was not adopted, proven by a zero-match stub grep alongside the retained loadHTTPTurnLiveStack driver. CORRECTION MADE: DoD item 113 did NOT hold when checked. Header lines 16-18 claimed the classify and assert field sets were globally disjoint, but branch 1 selects on status and branch 4 on sources, and both fields are asserted in other branches, so the sets intersect. The property the code actually has is per-branch and stronger: no branch asserts the field it selected with. The header was corrected to state that, verified against all five case selectors and every assertion line. The edit is comment-only, inside the declared change boundary, gofmt clean, and go vet -tags e2e exit 0; a comment cannot alter runtime behaviour, so the three prior live verdicts stand and execution.substate remains implemented rather than needs_reverification. NOT CHECKED (110,111,117,118,119,121) because this hardware tier returns provider_unavailable on every turn, so branches 1, 2 and 4 of the shipped switch have never been traversed by a live envelope and their correctness rests on the static control-flow reading, not live traversal. Item 117 is stronger than unproven: it is FALSIFIED as written by this packet's own run 3, whose envelope was exactly the shape SCN-BUG-074-002-01 requires to FAIL and which the shipped test skipped through the typed branch. Item 111 likewise describes behaviour the shipped switch deliberately does not have. Both are recorded as DI-8 and routed to bubbles.plan rather than reconciled by editing either side. NOT CHECKED (122,126,127): the assistant e2e package did not run at all this phase because disk-preflight refused the lane at exit 1, not 73, with the Windows volume backing the vhdx at 39 GB free against a 40 GB requirement; DISK_PREFLIGHT_OVERRIDE=1 is the bypass the repo policy forbids and a Docker prune would delete state shared with three other stacks on the host, so neither was used and the blocker is recorded as DI-7. Item 127 is a conjunction whose build half is clean (check, format --check, lint and go vet -tags e2e all exit 0) but whose guard half is FAIL. Guard verdict unchanged by design: failureCount 13, failedGateIds [G022,G027,G136], which is correct while nine DoD items are legitimately unchecked. Certification untouched: certifiedCompletedPhases remains empty and certifierAgent remains null."
       }
     ],
     "scopeSummary": [
