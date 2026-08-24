@@ -26,6 +26,7 @@ modified by this packet.
 | `internal/assistant/context/pg_store.go` | Implement the conditional `UPDATE` and read `CommandTag.RowsAffected()` |
 | `internal/assistant/testing_support.go` | Implement the same method atomically on `InMemoryContextStore` |
 | `internal/assistant/confirm/machine.go` | Route `Confirm`, `Discard`, `SweepTimeouts` through it; correct the line 213 comment |
+| `internal/assistant/compiled_interactions.go` | `Facade.finishConfirmResponse` — stop the loser path persisting the pre-arbitration `conv`, which resurrected `pending_confirm` and let a later racer win the CAS a second time. Added after the API-boundary lane proved the store-level fix alone did not hold end to end; the original boundary was drawn from a unit-level reading of the defect and could not have named this file. |
 
 ### Test Files
 
@@ -53,7 +54,7 @@ of the following.
 | `.github/bubbles/**` | Framework-managed |
 | `internal/assistant/httpadapter/**` | The dedup key is correct for its purpose; retitling it is a non-goal per `spec.md` |
 | `internal/db/migrations/**` | The selected design requires no schema change |
-| `tests/e2e/assistant/http_confirm_test.go` | The existing sequential test must keep passing unmodified, which is what proves EB-6 |
+| `TestAssistantHTTPE2E_ConfirmAcceptExecutesGatedActionOnce` (the function, not its file) | The existing sequential test must keep passing unmodified, which is what proves EB-6. Scoped to the FUNCTION because the file itself is on the Allowed list — the packet adds a sibling concurrent test to it. Listing the whole file here contradicted that entry. |
 | `tests/e2e/assistant/required_no_skip_guard_test.go` | Guard surface owned by BUG-069-005 |
 | Any deploy, compose, or configuration file | The fix is code-local |
 
