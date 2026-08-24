@@ -2849,3 +2849,421 @@ invoke, and the live-stack and disk blockers are environmental. `blocked` with a
 named owner per blocker is the honest reading, and it is recorded in
 `state.json` → `blockedReason`.
 
+---
+
+## Audit Phase
+
+**Agent:** `bubbles.audit` · **Run:** 2026-08-24T04:09:42Z – 2026-08-24T04:14:00Z
+· **HEAD:** `cf8b6802` · **Tree:** clean (`git status --porcelain` produced 0
+lines) · **Audit profile:** `delivery-completion-v1` (registry-resolved, not
+audit-selected) · **Verdict:** ❌ **REWORK_REQUIRED**
+
+**Claim Source:** executed, this session. Every command below was run in this
+session and its real exit code recorded. Where output exceeded 40 lines it was
+routed through `evidence-capture.sh`, whose `sha256` covers every produced line
+and is re-derivable with `--verify`.
+
+This phase wrote exactly two things: this section, and the `audit` entries in
+`execution.completedPhaseClaims` and `execution.executionHistory`. It wrote **no**
+`certification.*` field, checked **no** DoD checkbox, and modified neither
+`scopes.md` nor `tests/e2e/assistant/capture_fallback_trigger_e2e_test.go`.
+
+### A-0 · Binding and contract resolved before any packet read
+
+`repository-binding-host-context.sh` returned session
+`vscode-ad58d1923c2301065c1d41d950c10d83` at `expectedControlRevision` 38;
+`repository-binding.sh preflight --request-class STRUCTURED` then returned:
+
+```
+REPOSITORY PREFLIGHT CONFIRMED repository=smackerel root=<repo-root> source=concrete-target affinity=confirmed
+PREFLIGHT_COMMITTED decision=rb:vscode-ad58d1923c2301065c1d41d950c10d83:39 revision=39 repository=smackerel
+{"repositoryResolution":{"authority":"concrete-target","transition":"confirmed","actionable":true}}
+PREFLIGHT_RC=0
+```
+
+`transition-contract-resolver.sh` then supplied the contract this phase asserted
+against rather than choosing one:
+
+```
+workflowMode   : bugfix-fastlane
+auditProfile   : delivery-completion-v1
+statusCeiling  : done      targetStatus: done      currentStatus: blocked
+contractDigest : sha256:aa91472c047d3d985d38c1d308feb1e6081955b2aa553816deb5987d9cdc449f
+targetRevision : sha256:5c498e91b762503fb379f1fe336f92e2254f7cd6c765ed70e9c642af1cf13d06
+RESOLVER_RC=0
+```
+
+Subject at audit time — `tests/e2e/assistant/capture_fallback_trigger_e2e_test.go`,
+262 lines, `sha256 15e3c444c33cdbe87215b7b16f7406345cc71f434198aa8c176c2660c78c5a6e`.
+
+### A-1 · Claim 1 — per-branch disjointness — **VERIFIED**
+
+The claim: each of the five branches classifies on one envelope field and asserts
+only on other fields, so no branch can swallow the assertion it exists to make.
+
+Selectors and assertion predicates were extracted mechanically before any prior
+phase's table was read, so the result below is an independent derivation and not
+a restatement:
+
+```
+$ grep -nE '^[[:space:]]*(switch|case|default:)' tests/e2e/assistant/capture_fallback_trigger_e2e_test.go
+170:    switch {
+171:    case env.Status == string(contracts.StatusSavedAsIdea):
+193:    case env.ErrorCause == string(contracts.ErrNoGroundedAnswer):
+217:    case env.ErrorCause == string(contracts.ErrProviderUnavailable):
+238:    case len(env.Sources) > 0:
+252:    default:
+
+$ grep -nE '^[[:space:]]*if ' tests/e2e/assistant/capture_fallback_trigger_e2e_test.go
+176:            if !env.CaptureRoute {
+179:            if env.ConfirmCard != nil {
+182:            if env.DisambiguationPrompt != nil {
+189:            if !strings.Contains(lowerBody, captureAckSubstring) {
+201:            if env.Status != string(contracts.StatusUnavailable) {
+204:            if env.CaptureRoute {
+207:            if strings.Contains(lowerBody, captureAckSubstring) {
+210:            if env.Body != canonicalRefusal {
+213:            if len(env.Sources) != 0 {
+230:            if env.Status != string(contracts.StatusUnavailable) {
+233:            if env.CaptureRoute {
+244:            if env.CaptureRoute {
+247:            if strings.Contains(lowerBody, captureAckSubstring) {
+```
+
+(Predicates at 130–157 sit above the switch and are preamble, not branch bodies.)
+
+| Branch | `case` line | Selects on | Predicate lines | Asserts on (predicates) | Selector in its own predicates? |
+|---|---|---|---|---|---|
+| 1 capture | 171 | `env.Status` | 176, 179, 182, 189 | `CaptureRoute`, `ConfirmCard`, `DisambiguationPrompt`, `lowerBody` | **No** |
+| 2 no-ground refusal | 193 | `env.ErrorCause` | 201, 204, 207, 210, 213 | `Status`, `CaptureRoute`, `lowerBody`, `Body`, `len(Sources)` | **No** |
+| 3 provider failure | 217 | `env.ErrorCause` | 230, 233 | `Status`, `CaptureRoute` | **No** |
+| 4 grounded | 238 | `len(env.Sources)` | 244, 247 | `CaptureRoute`, `lowerBody` | **No** |
+| 5 default | 252 | — | — (unconditional `t.Errorf` at 258) | n/a | n/a |
+
+Disjointness holds in all four asserting branches. The property is **per-branch**,
+not global — `Status` is branch 1's selector and branch 2's and 3's assertion, and
+`Sources` is branch 4's selector and branch 2's assertion — which is exactly the
+correction the test phase already recorded against its own header. The global
+formulation would be false; the per-branch one is true and is the one that carries
+the safety property.
+
+**One precision the claim needs.** The selector field *does* appear inside the
+`t.Errorf` format arguments of its own branch (line 177 prints `env.Status`, line
+231 prints `env.ErrorCause`). Those are message reads, not predicate reads. A
+value interpolated into a failure string cannot suppress the failure, so it cannot
+reopen the escape hatch. The disjointness that matters is over predicates, and
+over predicates it is clean.
+
+This independent derivation agrees row for row with the table the simplify phase
+recorded at *Disjointness re-audit (post-change)*. Two derivations from the same
+source is corroboration, not proof of runtime behaviour; see A-5.
+
+**Residual, recorded rather than smoothed over.** Per-branch disjointness removes
+the *total* escape hatch the old guard had, where every non-`saved_as_idea` status
+selected its own skip. It does not make the test unskippable: branch 3 still ends
+in `t.Skipf`, so an envelope carrying `error_cause=provider_unavailable` reports
+SKIP. The narrowing is real and large — escape now requires one specific typed
+upstream cause rather than any status change — and `provider_unavailable` is
+emitted for an upstream failure rather than by the capture path, so a
+canonical-ack regression does not select it. The residual is that the two can
+coincide, and on this host they always do (A-5).
+
+### A-2 · Claim 2 — both skips are infrastructure-keyed — **VERIFIED**
+
+Census: **2** skip sites, **19** assertions.
+
+```
+$ grep -noE 't\.(Skipf|Skip|Fatalf|Errorf)\(' tests/e2e/assistant/capture_fallback_trigger_e2e_test.go
+139:t.Skipf(     236:t.Skipf(
+144:t.Fatalf(    148:t.Fatalf(
+151/154/157/177/180/183/190/202/205/208/211/214/231/234/245/248/258: t.Errorf(
+
+skip_sites=2   assertions=19
+```
+
+| Site | Line | Guarding predicate | Keyed on |
+|---|---|---|---|
+| 1 | 139 | line 130 `resp.StatusCode != http.StatusServiceUnavailable \|\| !strings.Contains(string(raw), "assistant_http_not_ready")`, plus the line 133 deadline | HTTP 503 `assistant_http_not_ready` — adapter never bound. **Infrastructure.** |
+| 2 | 236 | line 217 `env.ErrorCause == string(contracts.ErrProviderUnavailable)` | upstream provider failed before the grounding decision. **Infrastructure.** |
+
+Neither is contract-keyed. Proven directly rather than argued — no skip call site
+references the policed status or the acknowledgement string:
+
+```
+$ grep -nE 't\.Skipf?\(' <subject> | grep -E 'SavedAsIdea|captureAckSubstring|saved_as_idea'
+skip_references_policed_contract_rc=1   (1 = zero matches, the wanted result)
+
+$ grep -n 'StatusSavedAsIdea' <subject>
+171:    case env.Status == string(contracts.StatusSavedAsIdea):
+260:            contracts.StatusSavedAsIdea, contracts.ErrNoGroundedAnswer)
+```
+
+`StatusSavedAsIdea` is read at exactly two places in the whole file: the branch-1
+selector and the `default:` branch's failure message. It appears in no skip
+predicate anywhere. That is the precise negation of the filed defect, in which the
+skip predicate *was* the status the assertions policed.
+
+The branch-3 split follows the contract rather than working around it, verified at
+the source rather than taken from the test's own comment:
+
+```
+$ grep -n -B3 -A1 'ErrNoGroundedAnswer' internal/assistant/contracts/response.go
+220:    // ErrNoGroundedAnswer is the honest discriminator for a
+227:    // ground), distinct from ErrProviderUnavailable (upstream failed) and
+229:    ErrNoGroundedAnswer ErrorCause = "no_grounded_answer"
+```
+
+**The count "two" is right for calls written in this file, and the file says so.**
+Three skip *sites* are reachable; the third is inherited and is also
+infrastructure-keyed, confirmed at its definition:
+
+```
+$ grep -rn 'func loadHTTPTurnLiveStack' tests/e2e/assistant/
+tests/e2e/assistant/http_turn_test.go:46:func loadHTTPTurnLiveStack(t *testing.T) httpTurnLiveStack {
+
+   http_turn_test.go:49    t.Skip("e2e: CORE_EXTERNAL_URL not set — live stack not available")
+```
+
+So all three reachable skip sites key on infrastructure availability and none keys
+on a contract outcome. The file header's inventory is accurate on this point.
+
+### A-3 · Claim 3 — report.md over-claim check — **VERIFIED for execution claims; ONE over-claim found on DoD counts**
+
+**Execution claims hold, and the checkable ones reproduce.**
+
+- *"The broader suite did NOT run — disk preflight refused it."* Reproduced
+  independently at a worse margin than any prior phase recorded (test phase 39 GB,
+  regression phase 37 GB, this phase 35 GB):
+
+  ```
+  $ disk-preflight.sh
+  ┌─ disk-preflight: REFUSED — not enough free disk ──────────────────┐
+  │  C: (backs the vhdx): 35     GB free   required: 40   GB
+  │  WSL / (ext4)       : 476    GB free   required: 25   GB
+  DISK_PREFLIGHT_RC=1
+  ```
+
+  The refusal names `DISK_PREFLIGHT_OVERRIDE=1`. This phase did not use it, for
+  the same reason the test and regression phases did not: overriding a preflight
+  is the bypass pattern `.github/copilot-instructions.md` forbids.
+
+- *Finding R-1, the lint lane cannot see the subject.* Reproduced at the source.
+  `scripts/runtime/go-lint.sh` is four lines and its operative line is
+  `go vet ./...` with no `-tags`, so the `//go:build e2e` subject is invisible to
+  it. A green lint says nothing about this file, and the packet says so.
+
+- *The Uncertainty Declaration.* It states plainly that branches 1, 2 and 4 have
+  never been traversed and that reading the checked items as end-to-end
+  verification "would be reading more than the evidence carries." That is the
+  correct bound and it is stated without hedging.
+
+**The one over-claim.** report.md § *The ten checked items* claims ten checked DoD
+items; the artifact has eight, and has had eight since the test phase's own commit:
+
+```
+$ grep -cE '^- \[x\] ' scopes.md   →  8
+$ grep -cE '^- \[ \] ' scopes.md   →  11        total 19
+$ scope status                     →  **Status:** In Progress
+
+per-revision history of scopes.md:
+aa88ac48  checked=8   unchecked=11   test(BUG-074-002): enforce total capture-fallback outcomes
+30d31da1  checked=0   unchecked=19   plan(BUG-074-002): close the DoD-Gherkin fidelity gap
+343d6076  checked=0   unchecked=13   fix(BUG-074-002): make the no-ground E2E able to fail
+57bcb187  checked=0   unchecked=13   docs(BUG-074-002): file the routed-but-unfiled DI-5 finding
+```
+
+The count was never ten in any revision. The two items narrated as checked but
+left `[ ]` are line 119 (*Bailout scan clean*) and line 127 (*`SCN-BUG-074-002-04`
+holds as shipped*) — both carry affirmative evidence text, and both are the items
+A-1 and A-2 above independently confirm. The `scopes.md` header note ("checked
+**10 of 19**", "remaining **9**") carries the same overstatement.
+
+Three things bound how much this matters, and the audit states all three:
+
+1. **It was self-detected inside the packet.** The regression phase recorded it as
+   Finding R-4 and DI-11 and routed it to `bubbles.test`. This audit's count
+   reproduces R-4 exactly, including its observation that the `aa88ac48` diff shows
+   exactly eight `- [ ]` → `- [x]` transitions.
+2. **It did not reach certification.** The validate phase recounted from the
+   artifact (V-4: `checked 8 / unchecked 11`) and certified on that number, and the
+   guard counts the artifact rather than the prose. The overstatement stayed in
+   narrative and never became a delivery claim.
+3. **Its direction is conservative.** The artifact is *less* complete than the
+   prose says, so nothing was accepted on the strength of it.
+
+Verdict on claim 3: report.md does not over-claim what was **executed**. It
+contains one live overstatement of **how many DoD items were checked**, already
+recorded as DI-11 and unrepaired at `HEAD`. `scopes.md` and the prior phases'
+`state.json` records are owned by `bubbles.test`; this phase corrected neither,
+because rewriting another agent's execution record is the impersonation the
+provenance checks exist to prevent.
+
+### A-4 · Guards executed this phase
+
+| Guard | Exit | Verdict | Evidence |
+|---|---|---|---|
+| `state-transition-guard.sh` (assertion-only, registry target/mode/digest) | 1 | **FAIL** — `failureCount 7`, `failedGateIds [G022,G027,G136]`, `failedChecks [Check-4-completion,Check-5-all-done]`, `blockingCode DELIVERY_COMPLETION_FAILED` | 377 lines, `sha256 1943094794093f5096a6d2fcf5623cf47b5138ec40e601c0947e17476ff31876` |
+| `artifact-lint.sh` (pre-write baseline) | 0 | **PASSED** | 41 lines, `sha256 3b806aeb3466a56e2ecf5ebe2e253fe3373aec87212e7cb492116add58996b0c` |
+| `./smackerel.sh format --check` | 0 | clean; subject not listed as unformatted (0 matches) | `FORMAT_RC=0` |
+| `./smackerel.sh check` | 0 | config in sync | `CHECK_RC=0` |
+| `disk-preflight.sh` | 1 | REFUSED, 35 GB vs 40 GB required | quoted in A-3 |
+
+The guard names this phase's own absence as the first blocker, in its own words:
+
+```
+135:🔴 BLOCK: Required phase 'audit' NOT in execution/certification phase records (Gate G022 violation)
+141:--- Check 6B: Phase-Claim Provenance (Gate G022 extension) ---
+161:--- Check 7C: Phase-Claim Execution Backing ---
+```
+
+Checks 6B and 7C are why this phase writes **both** a report section and an
+`executionHistory` entry naming `bubbles.audit`. A claim with only one of the two
+is what Check 7C classifies as zero-backing, and it is how the stabilize and
+regression phases were briefly recorded as unbacked earlier in this packet.
+
+`failureCount` is **7** here against the **8** recorded in
+`certification.certificationEvidence`. The validate phase captured its guard run
+at 03:45:17Z, before its own final writes landed; the gate set is identical. The
+recorded number describes a state one write behind `HEAD`, which is the same
+pattern the regression phase recorded as Finding R-6.
+
+**Post-write re-run — G022 observed closing.** The guard was re-run after this
+section and the two `state.json` records landed, same assertion-only invocation:
+
+```
+--- before this phase's writes ---
+failedGateIds: [G022,G027,G136]     failureCount: 7
+sha256: 1943094794093f5096a6d2fcf5623cf47b5138ec40e601c0947e17476ff31876
+
+--- after this phase's writes ---
+failedGateIds: [G027,G136]          failureCount: 5
+targetRevision: sha256:690b2a929d63728f35bf1ea6741088887ff3e690f7d4868a8ff9b7f4130a47a5
+sha256: cdcc703a8418a7a957fe26d36e1641e905827a6d84853dc0866a71fd10ea90ad
+exit: 1   verdict: FAIL   blockingCode: DELIVERY_COMPLETION_FAILED
+```
+
+`artifact-lint.sh` re-run after the writes: exit 0, `Artifact lint PASSED`, with
+all four Anti-Fabrication Evidence Checks green (checked DoD items have evidence
+blocks, no unfilled placeholders in `scopes.md` or `report.md`, no repo-CLI bypass
+in recorded command evidence).
+
+G022 leaves `failedGateIds` and the failure count drops from 7 to 5. That is the
+mechanical confirmation that these records satisfy Check 6B provenance and Check
+7C backing, which the three prior `bubbles.audit` dispatches did not, having
+written nothing to either surface. The verdict stays **FAIL** on `G027` and
+`G136`, which this phase has no authority to close and does not claim to.
+
+### A-5 · What this phase did NOT establish
+
+Stated plainly, because the packet's own defect class is a guard reporting success
+without having tested anything.
+
+- **Zero live-runtime assurance.** This phase executed no test. The lane is
+  refused by `disk-preflight` at exit 1 before any container starts, reproduced
+  above. Branches 1, 2, 4 and `default` were not traversed by this phase either.
+- **No compile verification through the sanctioned surface.** `./smackerel.sh
+  lint` cannot compile the subject (R-1, reproduced in A-3), and the e2e lane is
+  refused. Invoking a bare `go vet -tags e2e` would produce a green outside the
+  repo CLI that terminal discipline requires, so this phase did not. Compile
+  cleanliness of the subject at `HEAD` therefore rests on the test phase's
+  recorded `go vet -tags e2e` exit 0, not on anything this phase ran.
+- **The safety property is verified structurally, not behaviourally.** A-1 and A-2
+  are readings of source text. They establish that no branch can swallow its own
+  assertion; they do not establish that the assertions fire correctly against a
+  live envelope.
+- **On this host the test currently always skips.** Every recorded live run
+  returned `error_cause=provider_unavailable`, which selects branch 3, which ends
+  in `t.Skipf`. The regression protection this packet delivers is real in the code
+  and dormant in this environment. That is an environmental limitation rather than
+  a defect in the fix, and it is precisely why the eleven DoD items requiring live
+  traversal are correctly unchecked and the scope correctly reads In Progress.
+
+### A-6 · Discovered issue (audit phase, continuing the DI series)
+
+| # | Date | Issue | Disposition | Reference |
+|---|---|---|---|---|
+| DI-21 | 2026-08-24 | The transition contract declares **42** `requiredGates`; the guard's `TRANSITION_GUARD_RESULT_V1` block reports gate IDs for **6** of them (`G022 G027 G040 G051 G057 G094`). The other **36** — including `G021` anti-fabrication, `G028` implementation reality, `G029` integration completeness, `G035` vertical slice, `G047` IDOR and `G048` silent decode — appear in neither `passedGateIds` nor `failedGateIds`, so the result block does not evidence their evaluation. Several are plainly evaluated under a named `Check` without emitting a gate ID, so this is a statement about the result block as an evidence surface, **not** a claim that they went unevaluated. It is the same class as DI-20, where `G070` was genuinely unwired and invisible until validate ran it directly. | **Routed to `bubbles.plan`**, which owns gate wiring. This phase changed no guard and no registry. | `transition-contract-resolver.sh` → `requiredGates` (42); guard result block `passedGateIds` + `failedGateIds` (6 of the 42); set difference computed with `comm -23`, `absent_count=36` |
+
+### Audit verdict
+
+❌ **REWORK_REQUIRED**
+
+All three claims submitted for audit hold. Claim 1 and claim 2 are verified in
+full and independently derived. Claim 3 is verified for execution claims, with one
+overstatement of DoD counts that the packet had already detected itself, that
+never reached certification, and that errs conservatively.
+
+**No fabrication was detected.** Evidence integrity is sound: the guard and lint
+outputs reproduce, the disk blocker reproduces at a worse margin, the DoD count
+this audit derived matches both the artifact and the guard's independent count,
+and every claim that could not be substantiated is marked unchecked rather than
+asserted. The packet's persistent habit of recording what it could *not* establish
+is the reason a structural-only audit can reach a verdict at all.
+
+`REWORK_REQUIRED` rather than `SHIP_IT` because the delivery-completion profile is
+not satisfied, and rather than `DO_NOT_SHIP` because nothing found is a defect in
+the shipped change:
+
+| Blocker | Gate | Owner | What closes it |
+|---|---|---|---|
+| 11 of 19 DoD items unchecked; scope In Progress; `completedScopes` empty | G027 | `bubbles.test` | A live stack that reaches the grounding decision, plus an assistant e2e run that clears `disk-preflight` |
+| No authored Human Acceptance Record | G136 | human author | A `## Human Acceptance Record` in `uservalidation.md`, written by a person |
+| `spec.md` has no `## Outcome Contract` | G070 | `bubbles.analyst` | The four fields: Intent, Success Signal, Hard Constraints, Failure Condition |
+| DoD-count drift unrepaired at `HEAD` (DI-11, reconfirmed in A-3) | — | `bubbles.test` | Reconcile the narrative counts in `report.md`, `scopes.md` header and `state.json` to the artifact's 8/11 |
+
+G022 is not in this table: this phase's two records are what clear it.
+
+Of the four, `G070` is the only one an agent can close with no new machine state
+and no human, which is why it is named as `nextRequiredOwner`.
+
+### Spot-Check Recommendations
+
+Automation bias runs the wrong way as an audit sounds more confident. These are
+the items a human should verify personally rather than take from this section:
+
+1. **The 8-versus-10 DoD count.** Open `scopes.md` and count the `- [x]` lines
+   yourself. This audit, the regression phase and the guard all say eight; two
+   narrative surfaces still say ten. If your count is not eight, this audit's A-3
+   is wrong.
+2. **That branch 3 is an acceptable place to skip.** A-1 records it as a real
+   residual: the shipped test skips whenever the upstream provider is down, which
+   on this host is every run. Whether that is the right trade is a judgement about
+   the test's purpose, not a fact this audit can settle.
+3. **The structural-only basis of A-1 and A-2.** Both are readings of source text
+   with zero runtime confirmation. If you want behavioural assurance, the e2e lane
+   needs roughly 5 GB more free space on the volume backing the vhdx.
+4. **`failureCount` 7 versus the recorded 8.** This audit attributes the gap to
+   capture timing one write behind `HEAD`. Re-running the guard is the direct
+   check.
+5. **DI-21's 36 unreported gate IDs.** This audit deliberately does not claim
+   those gates went unevaluated. If any of them *are* silently unevaluated, that is
+   a materially larger finding than this section states.
+
+## RESULT-ENVELOPE
+
+```json
+{
+  "agent": "bubbles.audit",
+  "roleClass": "certification",
+  "outcome": "route_required",
+  "featureDir": "specs/074-capture-as-fallback-policy/bugs/BUG-074-002-noground-e2e-skip-guard-masks-canonical-ack-regression",
+  "scopeIds": ["SCOPE-BUG-074-002-01"],
+  "dodItems": [],
+  "scenarioIds": ["SCN-BUG-074-002-01", "SCN-BUG-074-002-02", "SCN-BUG-074-002-03", "SCN-BUG-074-002-04"],
+  "artifactsCreated": [],
+  "artifactsUpdated": ["report.md", "state.json"],
+  "evidenceRefs": ["report.md#audit-phase"],
+  "nextRequiredOwner": "bubbles.analyst",
+  "packetRef": null,
+  "blockedReason": null
+}
+```
+
+## ROUTE-REQUIRED
+
+`bubbles.analyst` — author the `## Outcome Contract` section in `spec.md` with all
+four fields (Intent, Success Signal, Hard Constraints, Failure Condition). G070
+fails at the pre-certification boundary without it, and it is the only remaining
+blocker closable with no new machine state and no human author. The other three
+blockers and their owners are tabulated under *Audit verdict* above.
+
