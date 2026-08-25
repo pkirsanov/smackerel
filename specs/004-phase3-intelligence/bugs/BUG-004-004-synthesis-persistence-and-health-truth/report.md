@@ -691,3 +691,54 @@ compile-verified but not behaviour-tested; `T004-05-API` covers that and remains
 open, along with the authorization and telemetry rows, which need the read API
 routes this scope has not yet added.
 
+## SCOPE-04 Read API Phase
+
+Three routes over the one durable read model, so the API, the health probe and
+the alert evaluator cannot disagree about the state of synthesis.
+
+Executed this session:
+
+```
+$ ./smackerel.sh test e2e --go-run 'TestSynthesisAPI'
+--- PASS: TestSynthesisAPI_LatestReportsAnExplicitState (0.04s)
+--- PASS: TestSynthesisAPI_RunsListIsWellFormed (0.04s)
+--- PASS: TestSynthesisAPI_RejectsInvalidLimit (0.03s)
+--- PASS: TestSynthesisAPI_DeniesUnauthenticatedCallers (0.03s)
+--- PASS: TestSynthesisAPI_UnknownRunIsNotFound (0.03s)
+
+$ ./smackerel.sh test integration --go-run 'TestSynthesis'
+25 passed, 0 failed
+
+$ ./smackerel.sh check -> 0    lint -> 0
+```
+
+### Two mistakes the e2e run caught in my own work
+
+Recorded because the second one is the more dangerous kind.
+
+1. The routes were mounted under `/api` and the tests written against
+   `/api/v1`. Every route returned 404.
+2. `TestSynthesisAPI_UnknownRunIsNotFound` **PASSED against those unmounted
+   routes.** It wanted a 404 and the router's "404 page not found" obliged. A
+   status code alone cannot distinguish a handler's not-found from a routing
+   miss. It now asserts the structured error code only the handler emits, so
+   the one test whose job is proving the detail route exists can no longer stay
+   green if that route is deleted.
+
+### Response shapes and why
+
+| Decision | Reason |
+|---|---|
+| never-run is 200 with an explicit state, not 404 | A 404 says the endpoint has nothing to say; the honest answer is that synthesis has a state and it is never-run |
+| latest and history carry no text | A caller needing counts never has to receive content it would then have to be trusted with |
+| detail is a separate route, not a flag | Same reason, enforced by routing rather than by a parameter |
+| `runs` serialises as `[]`, never `null` | A null reads as a missing field rather than as "no runs" |
+| `ErrSynthesisOutputNotFound` sentinel | Without it the API answers 500 for both a bad id and a broken database |
+| limit capped server-side, non-numeric refused | Coercion would hide a client bug and make the bound untestable from outside |
+
+### What these prove that the integration tests cannot
+
+The integration tests prove the read MODEL. Only these prove the handler is
+wired to it and that the auth gate is real. A model can be correct while the
+route returns a hardcoded shape, and nothing below the transport would notice.
+
