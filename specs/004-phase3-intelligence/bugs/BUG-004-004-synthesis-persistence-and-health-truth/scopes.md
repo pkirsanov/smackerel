@@ -57,7 +57,7 @@ flowchart LR
 ## Scope 1: Durable Synthesis Persistence Foundation
 
 **Scope ID:** SCOPE-01  
-**Status:** Not Started  
+**Status:** In Progress  
 **Scope-Kind:** runtime-behavior  
 **Foundation:** true  
 **Depends On:** -
@@ -134,20 +134,20 @@ Independent canary: start a disposable stack from a migrated blank database, per
 
 #### Core Outcomes
 
-- [ ] SCN-004-004-01: A successful run commits run, output, insight, and citation rows in one serializable transaction, and the production aggregate reader reads the same output identity and counts back together.
-- [ ] SCN-004-004-02: A duplicate logical run (same principal/cadence/window/source-set/policy) across concurrency or restart yields exactly one output and records the later attempt as idempotent no-change.
-- [ ] SCN-004-004-03: A required insight or citation write failure after the output insert rolls back the complete aggregate atomically so no output, insight, citation, or success transition from that attempt survives.
+- [x] SCN-004-004-01: A successful run commits run, output, insight, and citation rows in one serializable transaction, and the production aggregate reader reads the same output identity and counts back together. → Evidence: [report.md](report.md#scope-01-implementation-phase)
+- [x] SCN-004-004-02: A duplicate logical run (same principal/cadence/window/source-set/policy) across concurrency or restart yields exactly one output and records the later attempt as idempotent no-change. → Evidence: [report.md](report.md#scope-01-implementation-phase)
+- [x] SCN-004-004-03: A required insight or citation write failure after the output insert rolls back the complete aggregate atomically so no output, insight, citation, or success transition from that attempt survives. → Evidence: [report.md](report.md#scope-01-implementation-phase)
 - [ ] PostgreSQL is the sole authoritative store for logical runs, attempts, outputs, insights, citations, lifecycle, and audit.
-- [ ] One serializable transaction commits the complete aggregate, and mandatory production read-back gates success.
-- [ ] Deterministic identity prevents duplicate output across concurrency and restart; rolled-back content leaves no partial rows.
+- [x] One serializable transaction commits the complete aggregate, and mandatory production read-back gates success. → Evidence: [report.md](report.md#scope-01-implementation-phase)
+- [x] Deterministic identity prevents duplicate output across concurrency and restart; rolled-back content leaves no partial rows. → Evidence: [report.md](report.md#scope-01-implementation-phase)
 - [ ] Forward migration, legacy classification, bootstrap canary, and non-destructive rollback behavior are proven.
 
 #### Test Evidence - One Item Per Test Plan Row
 
-- [ ] T004-01-MIGRATE passes with current-session raw evidence in `report.md#t004-01-migrate`.
-- [ ] T004-01-COMMIT passes with current-session raw evidence in `report.md#t004-01-commit`.
-- [ ] T004-02-IDEMPOTENT passes with current-session raw evidence in `report.md#t004-02-idempotent`.
-- [ ] T004-03-ROLLBACK passes with current-session raw evidence in `report.md#t004-03-rollback`.
+- [x] T004-01-MIGRATE passes with current-session raw evidence in `report.md#t004-01-migrate`. → Evidence: [report.md](report.md#scope-01-implementation-phase)
+- [x] T004-01-COMMIT passes with current-session raw evidence in `report.md#t004-01-commit`. → Evidence: [report.md](report.md#scope-01-implementation-phase)
+- [x] T004-02-IDEMPOTENT passes with current-session raw evidence in `report.md#t004-02-idempotent`. → Evidence: [report.md](report.md#scope-01-implementation-phase)
+- [x] T004-03-ROLLBACK passes with current-session raw evidence in `report.md#t004-03-rollback`. → Evidence: [report.md](report.md#scope-01-implementation-phase)
 - [ ] T004-01-ADVERSARIAL fails against return-and-log behavior, then passes after persistence; both outputs are in `report.md#t004-01-adversarial`.
 - [ ] T004-01-ROLLBACK-COMPAT passes with current-session raw evidence in `report.md#t004-01-rollback-compat`.
 

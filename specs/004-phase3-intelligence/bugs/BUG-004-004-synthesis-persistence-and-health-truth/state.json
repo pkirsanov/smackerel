@@ -5,7 +5,7 @@
   "featureName": "Synthesis Persistence And Health Are Not Truthful",
   "releaseTrain": "mvp",
   "flagsIntroduced": [],
-  "status": "blocked",
+  "status": "in_progress",
   "statusReason": "Blocked on the deferred durable transactional-persistence rows (SCOPE-01..03) and the remaining SCOPE-04 live API/alert/telemetry rows. The HEALTH-TRUTH slice is now COMPLETE and live-proven: the pure DeriveSynthesisHealth mapping (2026-07-25) AND its live wiring into /api/health (internal/api/health.go::getCachedIntelligenceHealth, 2026-07-26) that builds a SynthesisPersistenceOutcome from the queryable run-state (GetLastSynthesisTime result+error) and sets IntelligenceStatus from DeriveSynthesisHealth: query error -> PhaseProbeError -> down; epoch/never-run sentinel -> PhaseNoRun -> down; a real persisted timestamp -> PhaseCommitted+ReadBackOK+OutputKindFull with Stale vs a 48h budget -> up when fresh, stale when old. Proven RED->GREEN by tests/integration/synthesis/health_test.go::TestNeverRunAndProbeFailureAreNeverUp (RED against unwired code exit 1; GREEN full ./smackerel.sh test integration exit 0; disposable stack torn down). check exit 0; lint exit 0; ok internal/api + ok internal/intelligence with no regression (the suite-level unit non-zero is an orthogonal pre-existing/concurrent internal/docfreshness failure for internal/acceptance + internal/experience undocumented in the forbidden docs/Development.md, not caused by this change). One SCOPE-04 Test-Evidence DoD item (T004-05-HEALTH) is checked. Unblock: implement SCOPE-01..03 durable transactional persistence (atomic insight+citation commit + post-commit read-back) and the remaining SCOPE-04 live rows (T004-05-API, T004-06-ALERT, T004-07-08-API, T004-09-AUTH, T004-09-TELEMETRY), then derive the SynthesisPersistenceOutcome from the durable run ledger rather than the coarse GetLastSynthesisTime read-back.",
   "workflowMode": "bugfix-fastlane",
   "linkedImplementationSpec": null,
@@ -34,17 +34,64 @@
     "currentScope": "SCOPE-04",
     "substate": "implemented",
     "runStartedAt": "2026-07-26T02:34:00Z",
-    "completedPhaseClaims": [],
+    "completedPhaseClaims": [
+      {
+        "phase": "implement",
+        "agent": "bubbles.goal",
+        "provenanceMode": "parent-expanded",
+        "claimedAt": "2026-08-25T15:08:30Z",
+        "evidenceRef": "report.md#scope-01-implementation-phase"
+      },
+      {
+        "phase": "test",
+        "agent": "bubbles.goal",
+        "provenanceMode": "parent-expanded",
+        "claimedAt": "2026-08-25T15:08:30Z",
+        "evidenceRef": "report.md#scope-01-implementation-phase"
+      }
+    ],
     "pendingTransitionRequests": [],
     "audit": {
       "schemaVersion": "audit-run/v1",
       "runId": null,
       "currentAttemptId": null,
       "attempts": []
-    }
+    },
+    "executionHistory": [
+      {
+        "at": "2026-08-25T15:08:30Z",
+        "agent": "bubbles.goal",
+        "phasesExecuted": [
+          "implement"
+        ],
+        "provenanceMode": "parent-expanded",
+        "expandedBy": "bubbles.goal",
+        "expansionReason": "runSubagent dispatch was not used for this phase; the orchestrator executed the scope directly after confirming the defect by reading the source, and records parent expansion rather than a specialist claim for work no specialist performed.",
+        "expansionEvidenceRef": "report.md#scope-01-implementation-phase",
+        "claimSource": "executed",
+        "outcome": "completed_owned",
+        "evidenceRef": "report.md#scope-01-implementation-phase",
+        "summary": "SCOPE-01 durable synthesis persistence. Migration 064 adds synthesis_runs, synthesis_run_attempts, synthesis_outputs, synthesis_output_insights and synthesis_citations. New tables rather than reusing synthesis_insights because that row has no run identity, window or policy version, and a UNIQUE constraint needs something to be unique ON. Idempotence is a UNIQUE index on logical_key, not a read-then-write guard that would race. Attempts are written OUTSIDE the content transaction so a failure survives its rollback, and carry no candidate text or source ids. Post-commit read-back is a mandatory gate calling the same production reader, because the defect being repaired is a producer that reported success having written nothing."
+      },
+      {
+        "at": "2026-08-25T15:08:30Z",
+        "agent": "bubbles.goal",
+        "phasesExecuted": [
+          "test"
+        ],
+        "provenanceMode": "parent-expanded",
+        "expandedBy": "bubbles.goal",
+        "expansionReason": "runSubagent dispatch was not used for this phase; the orchestrator executed the scope directly after confirming the defect by reading the source, and records parent expansion rather than a specialist claim for work no specialist performed.",
+        "expansionEvidenceRef": "report.md#scope-01-implementation-phase",
+        "claimSource": "executed",
+        "outcome": "completed_owned",
+        "evidenceRef": "report.md#scope-01-implementation-phase",
+        "summary": "SCOPE-01 coverage. 7 unit tests for the logical key (determinism, order-independence, dedupe, UTC normalization, per-field distinction, boundary collision) and 4 live-DB integration tests for SCN-01/02/03 plus malformed-attempt rejection. 4/4 PASS against real PostgreSQL, integration lane exit 0. The boundary-collision case was found TAUTOLOGICAL by running the mutation -- it shifted characters between two non-adjacent fields -- and was rewritten to use the adjacent pair, after which the mutation kills it."
+      }
+    ]
   },
   "certification": {
-    "status": "blocked",
+    "status": "in_progress",
     "completedScopes": [],
     "certifiedCompletedPhases": [],
     "scopeProgress": [
@@ -111,8 +158,7 @@
       "active": false,
       "lockedScenarioIds": []
     },
-    "invalidationLedger": [],
-    "blockedReason": "No agent-blocking external dependency. The packet was left blocked with the reason recorded only in report.md prose ('blocked on the deferred live-DB persistence rows') and never written to state.json, so the machine-readable state carried a terminal-ish status with no actionable cause -- indistinguishable from stalling. Real state: 5 scopes Not Started, 1 of 77 DoD items checked. The defect is confirmed at internal/intelligence/synthesis.go:50 -- RunSynthesis returns []SynthesisInsight and no INSERT INTO synthesis_insights exists anywhere in the package, while synthesis.go:403 reads SELECT MAX(created_at) FROM synthesis_insights for health, so health reads a table nothing writes. Live-DB work is reachable through the integration lane's disposable PostgreSQL, so this is agent-solvable and is being picked up."
+    "invalidationLedger": []
   },
   "policySnapshot": {
     "grill": {
@@ -224,7 +270,7 @@
   "activeBugs": [],
   "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-08-25T14:40:08Z",
+  "lastUpdatedAt": "2026-08-25T15:08:30Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "bug": "bug.md",
@@ -264,5 +310,9 @@
     "specDoneRequires": "All scopes done and validate-owned certification permits promotion."
   },
   "notes": "Owner routes required: bubbles.design, bubbles.plan, bubbles.ux. Blocks truthful synthesis/readiness in BUG-102-001 and coherent product claims.",
-  "blockedReason": "No agent-blocking external dependency. The packet was left blocked with the reason recorded only in report.md prose ('blocked on the deferred live-DB persistence rows') and never written to state.json, so the machine-readable state carried a terminal-ish status with no actionable cause -- indistinguishable from stalling. Real state: 5 scopes Not Started, 1 of 77 DoD items checked. The defect is confirmed at internal/intelligence/synthesis.go:50 -- RunSynthesis returns []SynthesisInsight and no INSERT INTO synthesis_insights exists anywhere in the package, while synthesis.go:403 reads SELECT MAX(created_at) FROM synthesis_insights for health, so health reads a table nothing writes. Live-DB work is reachable through the integration lane's disposable PostgreSQL, so this is agent-solvable and is being picked up."
+  "completedPhases": [
+    "implement",
+    "test"
+  ],
+  "progressNote": "SCOPE-01 has real progress: migration 064 applied, persistence layer implemented, 9 of 14 Scope 1 DoD items closed with executed evidence (7 unit + 4 live-DB integration tests green). Status moved blocked -> in_progress because the parked live-DB rows are now written. Remaining Scope 1 items (bootstrap canary, end-to-end adversarial RED against the return-and-log producer, rollback-compat) need RunSynthesis wired to the layer, which is SCOPE-02/03 work. Scopes 2-5 remain Not Started."
 }

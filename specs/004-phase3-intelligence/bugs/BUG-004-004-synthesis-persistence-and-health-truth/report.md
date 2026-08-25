@@ -285,3 +285,135 @@ deferred live-DB persistence rows.
 ## Audit Verdict
 
 Not audited. No terminal verdict claimed.
+
+## SCOPE-01 Implementation Phase
+
+The packet was parked with the live-DB rows unwritten. They are written now and
+green against real PostgreSQL.
+
+### The defect, confirmed rather than restated
+
+`bug.md` records Claim Source: interpreted — reported from operator-supplied
+history with no query or scheduler run behind it. Verified directly:
+
+```
+$ grep -n 'func (e \*Engine) RunSynthesis' internal/intelligence/synthesis.go
+50:func (e *Engine) RunSynthesis(ctx context.Context) ([]SynthesisInsight, error) {
+
+$ grep -rn 'INSERT INTO synthesis_insights' internal/
+(no output)
+
+$ grep -n 'synthesis_insights' internal/intelligence/synthesis.go
+403:  SELECT COALESCE(MAX(created_at), '1970-01-01'::timestamptz) FROM synthesis_insights
+
+$ grep -n -A5 'RunSynthesis(ctx)' internal/scheduler/jobs.go
+215:  insights, err := s.engine.RunSynthesis(ctx)
+219:          slog.Info("synthesis complete", "insights", len(insights))
+```
+
+The producer builds structs, the scheduler counts them and drops them, and the
+health query reads a table nothing writes. The S1 claim is accurate.
+
+### T004-01-MIGRATE
+
+Migration `064_synthesis_durable_persistence.sql` adds five tables. It is picked
+up automatically — the runner reads the embedded FS and sorts by filename
+(`internal/db/migrate.go:13`, `:46-54`), so no registry edit exists to forget.
+
+The integration lane applies it via `db.Migrate` before every test in this file;
+all four tests below run against the migrated schema, which is the applied-and-
+usable evidence.
+
+### T004-01-COMMIT, T004-02-IDEMPOTENT, T004-03-ROLLBACK
+
+```
+$ ./smackerel.sh test integration --go-run 'TestSynthesisPersistence'
+=== RUN   TestSynthesisPersistence_CommitsOneCompleteAggregate
+--- PASS: TestSynthesisPersistence_CommitsOneCompleteAggregate (0.04s)
+=== RUN   TestSynthesisPersistence_DuplicateLogicalRunIsIdempotent
+--- PASS: TestSynthesisPersistence_DuplicateLogicalRunIsIdempotent (0.04s)
+=== RUN   TestSynthesisPersistence_RequiredWriteFailureRollsBackAtomically
+--- PASS: TestSynthesisPersistence_RequiredWriteFailureRollsBackAtomically (0.04s)
+=== RUN   TestSynthesisPersistence_RejectsMalformedAttempts
+--- PASS: TestSynthesisPersistence_RejectsMalformedAttempts (0.02s)
+ok      github.com/smackerel/smackerel/tests/integration        0.280s
+INTEG_RC=0
+```
+
+What each proves beyond its name:
+
+`SCN-01` asserts through the PRODUCTION reader rather than a test-only query,
+and checks that identity does not drift between commit and read-back, that
+insight ORDER survives the round trip, and that the stored row counts agree with
+the denormalized counters. The last one matters because a future writer could
+otherwise leave counter and rows disagreeing with nothing noticing.
+
+`SCN-02` commits the logical run, then commits it again the way a restart or a
+second scheduler would. Idempotence is enforced by a UNIQUE index on
+`logical_key`, not by a read-then-write guard in Go, because the guard would
+race and the index cannot. The retry resolves to the ALREADY-COMMITTED output
+rather than to nothing.
+
+`SCN-03` is adversarial by construction. The failure is forced at the SECOND
+insight via a duplicate primary key, so the run row, the output row and the
+FIRST insight are already inside the transaction when it fires. A layer that
+committed incrementally, or opened a transaction per statement, would leave
+those rows behind and fail. After the abort all four tables are empty, and the
+failure attempt — written in its own transaction, which is why it survives — is
+grepped for every candidate string and source id from the aborted attempt. "The
+failure references no uncommitted content" is checked, not assumed.
+
+### Unit coverage of the logical key
+
+```
+$ ./smackerel.sh test unit --go --go-run 'TestLogicalKey|TestSourceSetDigest|TestNewSynthesisPersistence|TestDedupeStrings'
+--- PASS: TestLogicalKey_IsDeterministic (0.00s)
+--- PASS: TestLogicalKey_IgnoresSourceOrder (0.00s)
+--- PASS: TestLogicalKey_IgnoresDuplicateSources (0.00s)
+--- PASS: TestLogicalKey_NormalizesWindowToUTC (0.00s)
+--- PASS: TestLogicalKey_DistinguishesEveryField (0.00s)
+--- PASS: TestLogicalKey_FieldBoundariesCannotBeShifted (0.00s)
+--- PASS: TestSourceSetDigest_IsOrderIndependent (0.00s)
+ok      github.com/smackerel/smackerel/internal/intelligence    0.132s
+```
+
+### T004-01-ADVERSARIAL — one case was tautological, and running it proved it
+
+The boundary-collision test claimed to guard the length-prefixing in
+`LogicalKey`. Mutating the prefix away left it PASSING:
+
+```
+$ # worktree at HEAD, length prefix replaced with a raw write
+MUTATION: length prefix removed from LogicalKey
+ok      github.com/smackerel/smackerel/internal/intelligence    0.029s
+```
+
+The original case shifted a character between `Principal` and `PolicyVersion`,
+which are NOT adjacent in the hash order — the two window timestamps sit between
+them — so no concatenation collision was possible either way. It asserted a true
+statement the prefix had nothing to do with. Rewritten to use the adjacent pair:
+
+```
+$ # same mutation, corrected test
+MUTATION: length prefix removed
+--- FAIL: TestLogicalKey_FieldBoundariesCannotBeShifted (0.00s)
+    synthesis_persistence_test.go:113: field boundary collision: ("daily","x") and ("dail","yx") produced the same key
+FAIL    github.com/smackerel/smackerel/internal/intelligence    0.031s
+```
+
+Recorded rather than quietly corrected, because a reader deciding whether the
+prefix is load-bearing deserves to know the first proof of it was wrong.
+
+The remaining half of T004-01-ADVERSARIAL — demonstrating the suite RED against
+the return-and-log producer end to end — is not claimed here. That needs
+`RunSynthesis` wired to this layer, which is SCOPE-02/03 work, so the item stays
+unchecked.
+
+### Build quality
+
+```
+$ ./smackerel.sh check          -> 0
+$ ./smackerel.sh lint           -> 0
+$ ./smackerel.sh format --check -> 0
+```
+
