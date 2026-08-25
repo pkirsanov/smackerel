@@ -43,6 +43,23 @@ func (m *canaryStore) Persist(_ context.Context, conv assistantctx.Conversation)
 	m.rows[m.key(conv.UserID, conv.Transport)] = conv
 	return nil
 }
+
+// ClearPendingConfirm implements assistantctx.Store.
+//
+// BUG-069-006. The compare and the clear share ONE critical section; a
+// split read/write would let this fixture pass while production stays broken.
+func (m *canaryStore) ClearPendingConfirm(_ context.Context, userID, transport, confirmRef string, now time.Time) (bool, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	c, ok := m.rows[m.key(userID, transport)]
+	if !ok || c.PendingConfirm == nil || c.PendingConfirm.ConfirmRef != confirmRef {
+		return false, nil
+	}
+	c.PendingConfirm = nil
+	c.LastActivityAt = now.UTC()
+	m.rows[m.key(userID, transport)] = c
+	return true, nil
+}
 func (m *canaryStore) DeleteByKey(_ context.Context, userID, transport string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()

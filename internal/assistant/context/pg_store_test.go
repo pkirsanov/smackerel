@@ -230,3 +230,112 @@ func TestPgStoreSweepIdleRemovesStaleRows(t *testing.T) {
 		t.Errorf("SweepIdle did not remove the stale row")
 	}
 }
+
+// TestPgStoreClearPendingConfirm_IsConditionalAndAtomic — TP-BUG069006-03.
+//
+// The unit coverage for BUG-069-006 runs against in-memory doubles, which
+// prove the CONTRACT but not the SQL. This exercises the production
+// conditional UPDATE: that it clears only on a matching confirmRef, that a
+// second call for an already-redeemed reference reports false rather than
+// clearing again, and that it leaves the sibling columns alone.
+func TestPgStoreClearPendingConfirm_IsConditionalAndAtomic(t *testing.T) {
+	store, pool := newIntegrationStore(t)
+	prefix := integrationPrefix(t)
+	ctx := context.Background()
+	userID := prefix + "-cas"
+	const transport = "telegram"
+	now := time.Now().UTC().Truncate(time.Microsecond)
+
+	seed := Conversation{
+		UserID:    userID,
+		Transport: transport,
+		WorkingContext: WorkingContext{Turns: []ContextTurn{{
+			UserText:  "remind me to buy oat milk",
+			Body:      "Want me to add that?",
+			SourceIDs: []string{"artifact-1"},
+			EmittedAt: now,
+		}}},
+		PendingConfirm: &PendingConfirm{
+			ConfirmRef:     "cr-live-1",
+			ScenarioID:     "list.add",
+			ProposedAction: "add oat milk",
+			Payload:        []byte(`{"item":"oat milk"}`),
+			ExpiresAt:      now.Add(10 * time.Minute),
+		},
+		LastActivityAt: now,
+	}
+	if err := store.Persist(ctx, seed); err != nil {
+		t.Fatalf("seed Persist: %v", err)
+	}
+
+	// legacy_retirement_notices is a real column on assistant_conversations
+	// (migration 046) that the Conversation struct does not carry, so a
+	// Load-based assertion cannot see it. Read it directly instead.
+	const noticesQ = `SELECT COALESCE(legacy_retirement_notices::text, '') FROM assistant_conversations WHERE user_id = $1 AND transport = $2`
+	seedNotices := ""
+	if err := pool.QueryRow(ctx, noticesQ, userID, transport).Scan(&seedNotices); err != nil {
+		t.Fatalf("read legacy_retirement_notices before clear: %v", err)
+	}
+
+	// A non-matching reference must not clear a live pending row.
+	won, err := store.ClearPendingConfirm(ctx, userID, transport, "cr-does-not-match", now)
+	if err != nil {
+		t.Fatalf("ClearPendingConfirm(non-matching): %v", err)
+	}
+	if won {
+		t.Errorf("non-matching confirmRef reported won=true; the UPDATE is not conditional")
+	}
+	conv, found, err := store.Load(ctx, userID, transport)
+	if err != nil || !found {
+		t.Fatalf("Load after non-matching clear: err=%v found=%v", err, found)
+	}
+	if conv.PendingConfirm == nil {
+		t.Fatalf("non-matching confirmRef cleared the pending row anyway")
+	}
+
+	// The matching reference wins exactly once.
+	won, err = store.ClearPendingConfirm(ctx, userID, transport, "cr-live-1", now)
+	if err != nil {
+		t.Fatalf("ClearPendingConfirm(matching): %v", err)
+	}
+	if !won {
+		t.Fatalf("matching confirmRef reported won=false; the clear did not happen")
+	}
+
+	// A replay of the same reference must lose — this is what makes the
+	// redemption single-flight rather than merely idempotent-looking.
+	won, err = store.ClearPendingConfirm(ctx, userID, transport, "cr-live-1", now)
+	if err != nil {
+		t.Fatalf("ClearPendingConfirm(replay): %v", err)
+	}
+	if won {
+		t.Errorf("replay of a redeemed confirmRef reported won=true; two callers could both execute")
+	}
+
+	// The clear is surgical: only pending_confirm is affected.
+	conv, found, err = store.Load(ctx, userID, transport)
+	if err != nil || !found {
+		t.Fatalf("Load after clear: err=%v found=%v", err, found)
+	}
+	if conv.PendingConfirm != nil {
+		t.Errorf("pending_confirm survived a winning clear")
+	}
+	if len(conv.WorkingContext.Turns) != 1 {
+		t.Errorf("working_context turns = %d, want 1 — the clear touched a sibling column", len(conv.WorkingContext.Turns))
+	} else if conv.WorkingContext.Turns[0].UserText != "remind me to buy oat milk" {
+		t.Errorf("working_context content changed: %q", conv.WorkingContext.Turns[0].UserText)
+	}
+	if conv.PendingDisambig != nil {
+		t.Errorf("pending_disambig became non-nil across the clear")
+	}
+	if conv.PendingClarify != nil {
+		t.Errorf("pending_clarify became non-nil across the clear")
+	}
+	afterNotices := ""
+	if err := pool.QueryRow(ctx, noticesQ, userID, transport).Scan(&afterNotices); err != nil {
+		t.Fatalf("read legacy_retirement_notices after clear: %v", err)
+	}
+	if afterNotices != seedNotices {
+		t.Errorf("legacy_retirement_notices changed across the clear: %q -> %q", seedNotices, afterNotices)
+	}
+}

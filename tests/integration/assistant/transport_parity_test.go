@@ -72,6 +72,22 @@ func (s *parityStore) Persist(_ context.Context, c assistantctx.Conversation) er
 	s.persist = append(s.persist, s.key(c.UserID, c.Transport))
 	return nil
 }
+
+// ClearPendingConfirm implements assistantctx.Store.
+//
+// BUG-069-006. The compare and the clear share ONE critical section.
+func (s *parityStore) ClearPendingConfirm(_ context.Context, u, t, confirmRef string, now time.Time) (bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	c, ok := s.rows[s.key(u, t)]
+	if !ok || c.PendingConfirm == nil || c.PendingConfirm.ConfirmRef != confirmRef {
+		return false, nil
+	}
+	c.PendingConfirm = nil
+	c.LastActivityAt = now.UTC()
+	s.rows[s.key(u, t)] = c
+	return true, nil
+}
 func (s *parityStore) DeleteByKey(_ context.Context, u, t string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()

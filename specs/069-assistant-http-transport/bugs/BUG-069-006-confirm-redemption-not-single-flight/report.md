@@ -1146,3 +1146,238 @@ execution, the red-stage recording, the routing of `Confirm`, `Discard`, and
 the every-behaviour regression item, and the Build Quality Gate — are unchecked
 because no pass has recorded them against this tree. `status` remains
 `in_progress` and no `certification.*` field was written by this pass.
+
+---
+
+## Regression Phase
+
+**Agent:** `bubbles.regression`
+**Claim Source:** executed — every row in the lane matrix ran in this session at
+the current tree. No figure in this section is relayed.
+
+This phase is the delta check, not a re-proof of the fix. The question it answers
+is narrow: did anything that used to pass stop passing, and is the coverage that
+carries this packet's claims real rather than gamed.
+
+### Lane Matrix
+
+| Lane | Command | Result |
+|---|---|---|
+| Full Go unit lane | `./smackerel.sh test unit --go` | exit 0, sha256 `f99125ae56a653c1f6df1ef5b3cf464b35536d00837d270f9d626821a3704137` |
+| Cache-defeated focused re-run | selector `TestMachineConfirm_Concurrent\|RacingSweep\|SweepTimeouts\|Discard\|Confirm` | exit 0, sha256 `1d12fde057cf3846a91dcb6ba815528ddb560d322582044829567e898e0d6c73` |
+| Focused verbose | same selector, `-v` | `RUN=2 PASS=2 FAIL=0`; `--- PASS: TestMachineConfirm_ConcurrentRedemptionExecutesOnce`, `--- PASS: TestMachineConfirm_RacingSweepProducesOneTerminalOutcome` |
+| Race detector | `go test -race ./internal/assistant/confirm/... ./internal/assistant/context/...` | `ok` both, exit 0 |
+| Race detector | `go test -race ./internal/assistant/ ./internal/assistant/httpadapter/...` | `ok` both, exit 0 |
+| Lint | `./smackerel.sh lint` | exit 0, sha256 `40280b8e795df6ccf49588d77f2079c9dee7bf90058925041193909450ca6d4e` |
+| Format | `./smackerel.sh format --check` | exit 0, sha256 `863910ae5cb7e8f6386c01302bcba66e6ff58ba82cfa89dba1702763858ce034` |
+| Full assistant e2e package | `./smackerel.sh test e2e --go-package assistant` | exit 0, sha256 `685b7e403740fccb8dae8b192674638c12f3da9f505d6ed49a37af70b8ec4942` |
+| Focused e2e | both confirm tests, selector echoed | `RUN=2 PASS=2 FAIL=0 SKIP=0` |
+| Guard, required e2e | `regression-quality-guard.sh` | 0 violations, 0 warnings |
+| Guard, bugfix mode | `regression-quality-guard.sh --bugfix` on both test files | 0 violations; adversarial signal detected in **both** |
+| Authenticity scan | silent-pass and interception scan of `http_confirm_test.go` | no skip and no bailout patterns; no `httptest.NewServer`, `RoundTripper`, `gock`, or `httpmock` |
+
+**Baseline verdict.** No previously-passing test regressed. The full Go unit lane
+and the full assistant e2e package both exit 0, which is the widest deterministic
+comparison this phase made.
+
+**Two things the matrix adds that no earlier pass had.** First, the race
+detector. Every prior concurrency claim in this packet rested on outcome
+assertions — one winner, one `ErrPendingNotFound`, one audit row. Those hold even
+if the implementation races and the scheduler happened to be kind. Four package
+groups now run clean under `-race`, which tests the mechanism rather than the
+outcome. Second, the assistant e2e package ran **whole**, not through a selector.
+Every earlier e2e figure in this packet came from a `-run` narrowing, which is
+why earlier passes were right to refuse the broader-suite item on that evidence.
+
+**The authenticity scan is the load-bearing one.** `RUN=2 PASS=2` is worth
+nothing if the test intercepts its own transport. The scan found no
+`httptest.NewServer`, no custom `RoundTripper`, and no HTTP mocking library in
+`http_confirm_test.go`. The e2e is genuinely live-stack, so the two PASS lines
+mean what they appear to mean.
+
+### Coverage Delta
+
+Coverage did not decrease. The unit lane is the same lane earlier passes ran, at
+exit 0, with the two concurrency tests still present and still selected by name.
+
+One coverage fact **corrects the record**. Three earlier passes state that
+TP-BUG069006-03 "was never written". At the current tree it exists:
+
+```
+ internal/assistant/context/pg_store_test.go | 109 ++++++++++++++++++++++++++++
+ 1 file changed, 109 insertions(+)
+
++func TestPgStoreClearPendingConfirm_IsConditionalAndAtomic(t *testing.T) {
++	won, err := store.ClearPendingConfirm(ctx, userID, transport, "cr-does-not-match", now)
++	won, err = store.ClearPendingConfirm(ctx, userID, transport, "cr-live-1", now)
++	won, err = store.ClearPendingConfirm(ctx, userID, transport, "cr-live-1", now)
+```
+
+It is **uncommitted**, and it covers the non-matching reference, the matching
+reference, and the replay — the three arms TP-BUG069006-03 calls for. What this
+phase can say about it is bounded and worth stating precisely: the file was
+present in the tree when `go test -race ./internal/assistant/context/...`
+returned `ok`, so it **compiles and is race-clean**. That is not the same as the
+assertions having executed. An integration test against a live store typically
+skips when no store is reachable, and this phase did not run
+`./smackerel.sh test integration`. Compilation is not execution, so the two
+`PgStore` DoD items stay unchecked — but the reason has changed from "never
+written" to "written, uncommitted, unexecuted", and the record should say so.
+
+### Cross-Spec And Boundary Scan
+
+`git diff --name-only origin/main...HEAD` returns empty. The fix commits are
+already on `origin/main`, so there is no packet-scoped diff to compute a Change
+Boundary verdict from at this tree. The one uncommitted path is
+`internal/assistant/context/pg_store_test.go`, which **is** on the Allowed list
+in `scopes.md`. No excluded family appears in the working tree.
+
+That is not enough to check the Change Boundary item. Verifying "zero excluded
+file families were changed" requires diffing the packet against its base commit,
+and this phase has no base to diff against. The absence of a violation in a diff
+that is empty proves nothing.
+
+No cross-spec conflict surfaced. The change is confined to `internal/assistant/**`
+and adds one method to the `Store` interface. The interface addition is the only
+shared-surface change, and every implementation compiles, which the unit lane and
+both race runs demonstrate.
+
+### Finding: Dead `conv` Parameter — Routed To `bubbles.simplify`
+
+**This is not a regression and not a defect.** It is a cleanup the fix left
+behind, and it belongs in the record because nothing mechanical will surface it.
+
+After `73de731a`, `Facade.finishConfirmResponse` no longer uses its `conv`
+parameter. Extracting the function body and grepping for `conv` returns two
+lines:
+
+```
+4:      conv assistantctx.Conversation,
+14:             // Re-load before persisting. `conv` was captured BEFORE arbitration and
+```
+
+Line 4 is the signature. Line 14 is a comment. Stripping comments leaves the
+signature as the only occurrence in the whole function. The parameter is dead.
+All three call sites still pass it:
+
+```
+171:            return f.finishConfirmResponse(ctx, msg, conv, emittedAt, err, CompiledActionResult{
+182:            return f.finishConfirmResponse(ctx, msg, conv, emittedAt, err, CompiledActionResult{})
+194:    return f.finishConfirmResponse(ctx, msg, conv, emittedAt, err, result)
+```
+
+This is a direct artifact of the second defect's fix. The loser path used to
+persist the pre-arbitration `conv`; the fix made it re-load instead, which
+retired the parameter without removing it. The comment at line 14 is the fix's
+own explanation of why it stopped reading the value.
+
+**Why lint did not catch it.** `scripts/runtime/go-lint.sh` is, in full:
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+
+cd /workspace
+go vet ./...
+```
+
+`go vet` does not report unused function parameters, and there is no `golangci`
+configuration in this repo. So `./smackerel.sh lint` exiting 0 is correct and
+tells us nothing about this. An unused parameter cannot be flagged mechanically
+on the current lint surface.
+
+**Routing.** `bubbles.simplify`. Removing the parameter touches
+`internal/assistant/compiled_interactions.go` and its three call sites. This
+phase does not make that edit: it is a signature change to a product runtime file
+and regression is diagnostic.
+
+### What This Phase Checks And What It Leaves Unchecked
+
+**Checked — two items.**
+
+`Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior
+pass.` The focused e2e selected both confirm tests with the selector echoed and
+returned `RUN=2 PASS=2 FAIL=0 SKIP=0`. `SKIP=0` matters: it forecloses the
+silent-skip failure mode that this packet's origin, BUG-069-005, exists because
+of. The bugfix guard reports 0 violations and detects adversarial signal in
+**both** test files, so neither test is tautological. The authenticity scan
+confirms the e2e is live-stack. Every changed behaviour in this packet — atomic
+redemption at the domain layer, and the loser path no longer resurrecting the
+pending row at the facade — has a passing scenario test that would fail if the
+behaviour reverted.
+
+`TestAssistantHTTPE2E_ConfirmAcceptExecutesGatedActionOnce passes unmodified.`
+Both halves are now executed evidence from one session. *Passes*: the test is in
+the full assistant package that exited 0, and it is one of the two tests in the
+focused `PASS=2`. *Unmodified*: `git status --short` on
+`tests/e2e/assistant/http_confirm_test.go` returns empty at this tree. The third
+pass supplied the *passes* half and deliberately left the box alone; the
+*unmodified* half is confirmed here against the working tree, so the conjunction
+now holds and the box is checked.
+
+**Unchecked — and why, item by item.**
+
+`Broader E2E regression suite passes.` The full assistant Go package is broader
+than a two-test selector, and it is still not the suite. `tests/e2e/` holds
+thirteen sibling Go packages and roughly a hundred shell suites. The unrun
+surface is not incidental to this change:
+
+| Unrun surface | Why it is in this change's blast radius |
+|---|---|
+| `tests/e2e/assistant_regression/bs_004_notification_confirm.sh` | A confirm-flow regression suite. This packet changed the confirm redemption path. |
+| `tests/e2e/assistant_regression/` (9 further `bs_*` suites) | Behaviour-scenario regressions for the same assistant surface |
+| 12 `tests/e2e/assistant_*.sh` root suites | Acceptance and behaviour-scenario coverage of the same facade |
+
+A confirm-flow regression suite sitting unrun while a confirm-flow fix is being
+certified is precisely the gap this item guards. Checking it on one Go package
+would name a suite that was never exercised.
+
+`PgStore reads CommandTag.RowsAffected()` and the untouched-columns property.
+TP-BUG069006-03 exists and is race-clean, but is uncommitted and unexecuted. The
+integration lane did not run in this phase.
+
+`Change Boundary is respected and zero excluded file families were changed.` No
+packet-base diff is computable at this tree, as recorded in the boundary scan.
+
+`Build Quality Gate passes as a grouped block.` Lint is 0 and format is 0. The
+grouped item also asserts "documentation aligned", for which this phase has no
+evidence, and the tree carries an uncommitted test file. A grouped gate is
+checked when the whole group holds, not when most of it does.
+
+`Root cause is confirmed by execution`, the RED-stage recording, the routing of
+`Confirm`, `Discard`, and `SweepTimeouts`, and the `machine.go` line 213 comment
+all remain unchecked. These are implement-phase and test-phase claims. This phase
+ran post-fix lanes, which cannot confirm a root cause or a red stage. On the
+routing item specifically: the focused selector included `Discard` and
+`SweepTimeouts` and returned `RUN=2`, so no `Discard` test matched. Exit 0 on a
+selector that matches nothing is still exit 0, and this phase declines to read
+that as coverage.
+
+### Regression Phase Uncertainty Declarations
+
+1. The full assistant e2e package exited 0, but this phase did not enumerate the
+   test names inside it. The claim is "the package passed", not "these N named
+   tests within it passed". The two named confirm tests are separately evidenced
+   by the focused `PASS=2`.
+2. The uncommitted `pg_store_test.go` is proven to compile and to be race-clean.
+   Whether its assertions executed is unknown, because an unreachable store would
+   make it skip and this phase did not read a per-test verdict for it.
+3. No baseline snapshot from before the fix exists for the assistant e2e package,
+   so "no regression" for that package is grounded in exit 0 at the current tree
+   rather than in a before-and-after comparison. The unit lane does have prior
+   passes to compare against, and it is stable.
+
+### Regression Phase Completion Statement
+
+**Verdict: REGRESSION_FREE.** No previously-passing test now fails. No coverage
+decreased. No cross-spec conflict or design contradiction surfaced. The race
+detector is clean across four package groups, which is new evidence this packet
+did not previously hold.
+
+Two DoD items move to checked: the every-behaviour scenario-regression item and
+the `passes unmodified` conjunction. The packet stands at eleven of twenty. One
+finding is routed to `bubbles.simplify`: the dead `conv` parameter on
+`finishConfirmResponse`, invisible to a `go vet`-only lint surface. One record
+correction is entered: TP-BUG069006-03 exists as an uncommitted, unexecuted test
+rather than being unwritten. `status` remains `in_progress`. No `certification.*`
+field was written by this phase.

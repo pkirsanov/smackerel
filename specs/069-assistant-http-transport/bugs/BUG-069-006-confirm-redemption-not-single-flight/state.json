@@ -49,6 +49,13 @@
         "provenanceMode": "specialist",
         "claimedAt": "2026-08-24T22:35:13Z",
         "evidenceRef": "report.md#2026-08-24-third-test-pass-the-sequential-replay-lane-ran"
+      },
+      {
+        "phase": "regression",
+        "agent": "bubbles.regression",
+        "provenanceMode": "specialist",
+        "claimedAt": "2026-08-25T00:00:30Z",
+        "evidenceRef": "report.md#regression-phase"
       }
     ],
     "executionHistory": [
@@ -95,6 +102,16 @@
         "evidenceRef": "report.md#2026-08-24-third-test-pass-the-sequential-replay-lane-ran",
         "claimSource": "mixed: relayed E2E transcript, executed local grounding",
         "summary": "Third test pass, recorded in report.md under the Test Phase subsection '2026-08-24 Third Test Pass: The Sequential Replay Lane Ran'. The second pass had named exactly one artifact that would settle SCN-BUG069006-004: a --- PASS: line for TestAssistantHTTPE2E_ConfirmAcceptExecutesGatedActionOnce from a run whose selector admits it. That capture arrived, operator-relayed and recorded as such: both confirm tests were selected in one invocation by name alternation and each emitted its own PASS line, so the claim no longer rests on the package-level ok that the earlier passes correctly refused to trust. This agent did not run the lane. What it executed is the grounding: that --go-run is a real selector reaching go test -run through smackerel.sh:1463, smackerel.sh:2138, and scripts/runtime/go-e2e.sh:85 rather than an ignored flag; that the test carries no skip; that its file is unmodified in the working tree at 2aec49fa; that compiled_interactions.go:205-208 maps confirm.ErrPendingNotFound to the ErrNoMatch error_cause the replay asserts; and that the assertions at lines 86, 89, 91, 94-95, 105, and 108 cover the scenario clause for clause, with line 95 giving the replay a new TransportMessageID so it reaches redemption instead of being absorbed by the BUG-069-004 transport dedup cache. Checked SCN-BUG069006-004 on that basis, recording two limits rather than glossing them: the scenario's third Then clause about untouched columns is not asserted by this test and stays unproven on its own unchecked DoD line, and no_match is not a unique sentinel, so the load-bearing clause is the count-stays-exactly-1 assertion at line 108 rather than the error_cause string. Left the broader-suite item unchecked because two tests in one package is the opposite of a suite run. Left the 'passes unmodified' item unchecked although this capture supplies its passes half, because the request named one item and a DoD check is a claim to be made deliberately. Nine of twenty DoD items are now checked. No certification field was written."
+      },
+      {
+        "at": "2026-08-25T00:00:30Z",
+        "agent": "bubbles.regression",
+        "phasesExecuted": ["regression"],
+        "provenanceMode": "specialist",
+        "claimSource": "executed",
+        "outcome": "completed_diagnostic",
+        "evidenceRef": "report.md#regression-phase",
+        "summary": "Regression phase, recorded in report.md under '## Regression Phase'. Verdict REGRESSION_FREE: no previously-passing test now fails, no coverage decreased, and no cross-spec conflict or design contradiction surfaced. Unlike the three test passes, every figure in this phase was executed by this agent at the current tree rather than operator-relayed. Twelve lanes ran: the full Go unit lane at exit 0, a cache-defeated focused re-run at exit 0, a focused verbose run giving RUN=2 PASS=2 FAIL=0 with both concurrency tests named, the race detector clean across four package groups covering internal/assistant/confirm, internal/assistant/context, internal/assistant, and internal/assistant/httpadapter, lint at exit 0, format --check at exit 0, the FULL assistant e2e package at exit 0 with no -run narrowing, a focused e2e at RUN=2 PASS=2 FAIL=0 SKIP=0 with the selector echoed, regression-quality-guard clean on the required e2e, regression-quality-guard --bugfix reporting adversarial signal in BOTH test files, and a silent-pass and interception scan of http_confirm_test.go finding no skip, no bailout, and no httptest.NewServer, RoundTripper, gock, or httpmock, which is what makes the e2e genuinely live-stack rather than self-mocked. Two lanes are new evidence this packet did not previously hold: the race detector tests the mechanism where every prior concurrency claim tested only the outcome, and the whole-package e2e run removes the selector narrowing that earlier passes were correctly unwilling to read as suite coverage. Checked two DoD items. 'Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior pass' on the focused RUN=2 PASS=2 SKIP=0 plus adversarial signal in both files plus the authenticity scan, since SKIP=0 forecloses the silent-skip mode that BUG-069-005 exists because of. 'TestAssistantHTTPE2E_ConfirmAcceptExecutesGatedActionOnce passes unmodified' because both halves are now executed evidence in one session, the passes half from the whole-package exit 0 and the focused PASS=2, the unmodified half from git status returning empty on that file at this tree. Left the broader-suite item unchecked against the request's framing, on the merits: tests/e2e holds thirteen sibling Go packages and roughly a hundred shell suites, and the unrun surface is not incidental, since tests/e2e/assistant_regression/bs_004_notification_confirm.sh is a confirm-flow regression suite and this packet changed the confirm redemption path. One Go package is broader than a two-test selector and is still not the suite. Left the PgStore items, the Change Boundary item, and the grouped Build Quality Gate unchecked, the last because it also asserts documentation aligned, for which no evidence exists. Entered one record correction: three earlier passes state TP-BUG069006-03 was never written, but it exists at this tree as an uncommitted 109-line TestPgStoreClearPendingConfirm_IsConditionalAndAtomic covering the non-matching, matching, and replay arms; it was present when go test -race on internal/assistant/context returned ok, so it compiles and is race-clean, but compilation is not execution and the integration lane did not run, so its reason for staying unchecked changes from unwritten to written, uncommitted, unexecuted. Routed one finding to bubbles.simplify: after 73de731a the conv parameter of Facade.finishConfirmResponse is dead, since stripping comments leaves the signature as its only occurrence in the body, yet all three call sites at lines 171, 182, and 194 still pass it; go-lint.sh is go vet ./... with no golangci configuration, so an unused parameter cannot be flagged mechanically and lint exiting 0 is correct and uninformative here. This is cleanup left by the second defect's fix, not a defect. Eleven of twenty DoD items are now checked. No product or test source was modified. status remains in_progress and no certification.* field was written."
       }
     ]
   },
@@ -105,7 +122,7 @@
       {
         "scopeId": "Scope 1: Atomic redemption across confirm, discard, and timeout sweep",
         "status": "in_progress",
-        "dodComplete": 0,
+        "dodComplete": 11,
         "dodTotal": 20
       }
     ],
@@ -146,5 +163,5 @@
   "transitionRequests": [],
   "reworkQueue": [],
   "createdAt": "2026-08-23T00:00:00Z",
-  "updatedAt": "2026-08-24T22:35:13Z"
+  "updatedAt": "2026-08-25T00:00:30Z"
 }
