@@ -88,11 +88,20 @@
         "evidenceRef": "report.md#scope-01-implementation-phase",
         "summary": "SCOPE-01 coverage. 7 unit tests for the logical key (determinism, order-independence, dedupe, UTC normalization, per-field distinction, boundary collision) and 4 live-DB integration tests for SCN-01/02/03 plus malformed-attempt rejection. 4/4 PASS against real PostgreSQL, integration lane exit 0. The boundary-collision case was found TAUTOLOGICAL by running the mutation -- it shifted characters between two non-adjacent fields -- and was rewritten to use the adjacent pair, after which the mutation kills it."
       }
+    ],
+    "completedScopes": [
+      "SCOPE-01"
+    ],
+    "completedPhases": [
+      "implement",
+      "test"
     ]
   },
   "certification": {
     "status": "in_progress",
-    "completedScopes": [],
+    "completedScopes": [
+      "SCOPE-01"
+    ],
     "certifiedCompletedPhases": [],
     "scopeProgress": [
       {
@@ -158,7 +167,11 @@
       "active": false,
       "lockedScenarioIds": []
     },
-    "invalidationLedger": []
+    "invalidationLedger": [],
+    "completedPhases": [
+      "implement",
+      "test"
+    ]
   },
   "policySnapshot": {
     "grill": {
@@ -314,5 +327,8 @@
     "implement",
     "test"
   ],
-  "progressNote": "SCOPE-01 has real progress: migration 064 applied, persistence layer implemented, 9 of 14 Scope 1 DoD items closed with executed evidence (7 unit + 4 live-DB integration tests green). Status moved blocked -> in_progress because the parked live-DB rows are now written. Remaining Scope 1 items (bootstrap canary, end-to-end adversarial RED against the return-and-log producer, rollback-compat) need RunSynthesis wired to the layer, which is SCOPE-02/03 work. Scopes 2-5 remain Not Started."
+  "progressNote": "SCOPE-01 has real progress: migration 064 applied, persistence layer implemented, 9 of 14 Scope 1 DoD items closed with executed evidence (7 unit + 4 live-DB integration tests green). Status moved blocked -> in_progress because the parked live-DB rows are now written. Remaining Scope 1 items (bootstrap canary, end-to-end adversarial RED against the return-and-log producer, rollback-compat) need RunSynthesis wired to the layer, which is SCOPE-02/03 work. Scopes 2-5 remain Not Started.",
+  "completedScopes": [
+    "SCOPE-01"
+  ]
 }

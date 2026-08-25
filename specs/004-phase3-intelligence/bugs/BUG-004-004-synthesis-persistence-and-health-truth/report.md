@@ -244,7 +244,7 @@ GREEN_EXIT=0
   `docker ps --filter name=smackerel` + `./smackerel.sh down` (`DOWN_EXIT=0`)
   confirmed ZERO stray smackerel containers before and after.
 
-## Deferred (Live-DB) Rows — still blocking
+## Live-DB Rows — resolved (was: outstanding)
 
 The `/api/health` truthful-status WIRING (`T004-05-HEALTH`) is now DONE and
 live-proven above. The remaining rows require the durable transactional
@@ -289,7 +289,33 @@ Not audited. No terminal verdict claimed.
 ## SCOPE-01 Implementation Phase
 
 The packet was parked with the live-DB rows unwritten. They are written now and
-green against real PostgreSQL.
+green against real PostgreSQL. Every property under test is a DATABASE property,
+so none of them can be proven against a fake: a serializable transaction, a
+UNIQUE constraint doing the idempotence work rather than a read-then-write guard
+that would race, and a rollback that must still leave an audit row standing.
+They run in the integration lane against a real server.
+
+Executed this session:
+
+```
+$ ./smackerel.sh test unit --go --go-run 'TestLogicalKey|TestDedupeStrings'
+--- PASS: TestLogicalKey_IsDeterministic (0.00s)
+--- PASS: TestLogicalKey_IgnoresSourceOrder (0.00s)
+--- PASS: TestLogicalKey_IgnoresDuplicateSources (0.00s)
+--- PASS: TestLogicalKey_NormalizesWindowToUTC (0.00s)
+--- PASS: TestLogicalKey_DistinguishesEveryField (0.00s)
+--- PASS: TestLogicalKey_FieldBoundariesCannotBeShifted (0.00s)
+--- PASS: TestDedupeStrings_PreservesFirstOccurrenceOrder (0.00s)
+
+$ ./smackerel.sh test integration --go-run 'TestSynthesisPersistence'
+--- PASS: TestSynthesisPersistence_CommitsOneCompleteAggregate (0.04s)
+--- PASS: TestSynthesisPersistence_DuplicateLogicalRunIsIdempotent (0.04s)
+--- PASS: TestSynthesisPersistence_RequiredWriteFailureRollsBackAtomically (0.04s)
+--- PASS: TestSynthesisPersistence_RejectsMalformedAttempts (0.03s)
+ok      github.com/smackerel/smackerel/tests/integration        0.381s
+
+$ ./smackerel.sh check -> 0    $ ./smackerel.sh lint -> 0    format -> 0
+```
 
 ### The defect, confirmed rather than restated
 
@@ -416,4 +442,132 @@ $ ./smackerel.sh check          -> 0
 $ ./smackerel.sh lint           -> 0
 $ ./smackerel.sh format --check -> 0
 ```
+
+## SCOPE-02 Implementation Phase
+
+The producer that closes the loop. Synthesis now ends in a durable, read-back
+verified row instead of a log line. The defect was never a wrong count -- the
+count was accurate -- it was that the count described work the database never
+received, so a healthy-looking log line stood in for a missing row.
+
+Executed this session:
+
+```
+$ ./smackerel.sh test integration --go-run 'TestSynthesisProducer'
+--- PASS: TestSynthesisProducer_PersistsWhereReturnAndLogDidNot (0.28s)
+--- PASS: TestSynthesisProducer_RerunOfSameWindowIsIdempotent (0.24s)
+--- PASS: TestSynthesisProducer_EmptyCorpusPersistsQuietOutput (0.10s)
+
+$ ./smackerel.sh test integration --go-run 'TestSynthesisMigration'
+--- PASS: TestSynthesisMigration_BootstrapCanaryCreatesFullShape (0.04s)
+--- PASS: TestSynthesisMigration_IsNonDestructive (0.00s)
+--- PASS: TestSynthesisMigration_LegacyInsightsAreNotReadAsDurableOutput (0.13s)
+
+$ ./smackerel.sh test unit --go --go-run 'TestValidator_'
+22 tests, 0 failures (17 validator + 5 logical-key/helper)
+
+$ ./smackerel.sh check -> 0    $ ./smackerel.sh lint -> 0    format -> 0
+```
+
+### What changed
+
+`RunSynthesis` still builds insights and still returns them; nothing about the
+cluster query changed. What is new is `SynthesisProducer.RunAndPersist`, which
+reads the authorized corpus, builds a candidate, validates it, commits it, reads
+it back, and records an attempt. The scheduler calls that instead of logging a
+count, and `cmd/core` treats a construction failure as fatal -- a synthesis job
+that cannot persist should not run at all, because its log line would claim work
+the database never received.
+
+### T004-01-ADVERSARIAL — RED then GREEN
+
+The requirement is a test that fails against return-and-log behaviour and passes
+after persistence. Rather than run it once and describe the result, the test
+carries BOTH arms permanently, so it cannot rot into a tautology:
+
+```
+ARM 1  engine.RunSynthesis(ctx)      -> insights built, 0 rows in every table
+ARM 2  producer.RunAndPersist(...)   -> same corpus, rows readable
+```
+
+The RED was produced mechanically by reverting the producer to the original
+defect -- report a truthful count, write nothing:
+
+```
+MUTATED: producer reverted to return-and-log
+    synthesis_producer_test.go:129: got 0 run rows, want 1
+--- FAIL: TestSynthesisProducer_PersistsWhereReturnAndLogDidNot (0.08s)
+RESTORED
+```
+
+Restored, the same test passes. ARM 1 also pins WHERE writing belongs: a change
+that made `RunSynthesis` itself write would fail the control.
+
+### Executed evidence
+
+```
+$ ./smackerel.sh test integration --go-run 'TestSynthesis'
+--- PASS: TestSynthesisPersistence_CommitsOneCompleteAggregate (0.34s)
+--- PASS: TestSynthesisPersistence_DuplicateLogicalRunIsIdempotent (0.09s)
+--- PASS: TestSynthesisPersistence_RequiredWriteFailureRollsBackAtomically (0.11s)
+--- PASS: TestSynthesisPersistence_RejectsMalformedAttempts (0.05s)
+--- PASS: TestSynthesisPersistence_QuietOutputIsDurableNotMissing (0.08s)
+--- PASS: TestSynthesisPersistence_PartialOutputNamesOmissions (0.08s)
+--- PASS: TestSynthesisPersistence_InvalidCandidateNeverEntersPersistence (0.04s)
+--- PASS: TestSynthesisProducer_PersistsWhereReturnAndLogDidNot (0.28s)
+--- PASS: TestSynthesisProducer_RerunOfSameWindowIsIdempotent (0.24s)
+--- PASS: TestSynthesisProducer_EmptyCorpusPersistsQuietOutput (0.10s)
+ok      github.com/smackerel/smackerel/tests/integration        1.763s
+
+$ ./smackerel.sh test integration --go-run 'TestSynthesisMigration'
+--- PASS: TestSynthesisMigration_BootstrapCanaryCreatesFullShape (0.04s)
+--- PASS: TestSynthesisMigration_IsNonDestructive (0.00s)
+--- PASS: TestSynthesisMigration_LegacyInsightsAreNotReadAsDurableOutput (0.13s)
+
+$ ./smackerel.sh check  -> 0
+$ ./smackerel.sh lint   -> 0
+$ ./smackerel.sh format -> 0
+$ ./smackerel.sh test unit --go --go-run 'TestValidator_|TestLogicalKey|TestSynthesis' -> 0
+```
+
+The 22 unit tests cover the logical key and the validator. Each validator case
+asserts the exact failure code rather than merely that an error occurred, and a
+positive control asserts a valid candidate is ACCEPTED -- without it, a validator
+that rejected everything would satisfy every negative case.
+
+### SCN-004-004-04 — an ordering claim that is actually proven
+
+The rejection test asserts the tables are empty afterwards. That alone does not
+prove validation runs before the transaction opens, because a validator running
+INSIDE the transaction would also end empty via rollback, and the failure code
+survives being moved too. The distinguishing fact is that a pre-transaction
+rejection never acquires a pooled connection, so each case pins the pool acquire
+count. Moving `ValidateCandidate` below `BeginTx` fails all four subtests:
+
+```
+MUTATED: ValidateCandidate now runs AFTER BeginTx
+    synthesis_persistence_test.go:549: rejection acquired 1 pooled connection(s)
+--- FAIL: TestSynthesisPersistence_InvalidCandidateNeverEntersPersistence (0.03s)
+```
+
+### Reuse over a second spelling
+
+`SynthesisOutputKind` already existed in `synthesis_health.go` with
+`none/full/quiet/partial`. The first draft of the validator introduced a parallel
+type using `complete`. That is a capability duplication -- two vocabularies for
+one concept, guaranteed to disagree eventually -- so it was removed and migration
+065 was changed to speak the same words the Go constants do.
+
+### Honest scope
+
+The cluster query is not window-filtered. The authorized corpus is therefore
+every live artifact, not the window slice, and the code says so at the function
+that computes it. The check that buys is real -- a citation to a deleted or
+non-existent artifact is refused -- but it is not a claim that content is
+window-scoped. Narrowing the corpus requires narrowing the query in the same
+change, or every insight would be refused as unauthorized.
+
+Legacy `synthesis_insights` rows are classified, not deleted: they stay in place
+and are never read as durable output. The test seeds one and asserts it does not
+appear in a verified aggregate, and that it still exists afterwards.
 
