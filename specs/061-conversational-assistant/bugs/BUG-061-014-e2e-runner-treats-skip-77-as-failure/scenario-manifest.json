@@ -1,0 +1,240 @@
+{
+  "bugId": "BUG-061-014-e2e-runner-treats-skip-77-as-failure",
+  "parentFeatureDir": "specs/061-conversational-assistant",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-061-014-01",
+      "title": "an exit-77 fixture is reported as skipped by run_all.sh",
+      "specFile": "spec.md",
+      "requiredTestType": "e2e-api",
+      "linkedTests": [
+        {"file": "tests/e2e/runner_contract/run_runner_contract.sh", "testId": "AC-01-1"},
+        {"file": "tests/e2e/runner_contract/run_runner_contract.sh", "testId": "AC-01-2"},
+        {"file": "tests/e2e/runner_contract/run_runner_contract.sh", "testId": "ADV-01-a"},
+        "tests/e2e/run_all.sh"
+      ],
+      "evidenceRefs": [
+        "report.md#implementation-phase"
+      ],
+      "testCoverage": "e2e-api: the tracked run_all.sh is SYMLINKED into a sandbox, so the code under assertion is the shipped file. A synthetic fixture exiting 77 is reported SKIP, not FAIL (AC-01-1/AC-01-2), and ADV-01-a asserts it is not reported PASS either. Mutation-proven: mapping 77 onto the PASS branch fails AC-01-1 and ADV-01-a."
+    },
+    {
+      "scenarioId": "SCN-061-014-02",
+      "title": "an exit-77 fixture is reported as skipped by the CLI shell lane",
+      "specFile": "spec.md",
+      "requiredTestType": "e2e-api",
+      "linkedTests": [
+        {"file": "tests/e2e/runner_contract/run_runner_contract.sh", "testId": "AC-02-0"},
+        {"file": "tests/e2e/runner_contract/run_runner_contract.sh", "testId": "AC-02-1"},
+        {"file": "tests/e2e/runner_contract/run_runner_contract.sh", "testId": "AC-02-2"},
+        {"file": "tests/e2e/runner_contract/run_runner_contract.sh", "testId": "AC-02-4"},
+        "smackerel.sh"
+      ],
+      "evidenceRefs": [
+        "report.md#implementation-phase"
+      ],
+      "testCoverage": "e2e-api: smackerel.sh's classifier block is extracted VERBATIM by function name and evaluated (AC-02-0 asserts the extraction succeeded), so the tracked text is the code that runs. AC-02-1/AC-02-2 assert SKIP not FAIL; AC-02-4 asserts the lane never propagates the raw child status 77 as its own exit code. Mutation-proven via ADV-061-014-04: disabling the skip branch in the tracked smackerel.sh fails AC-02-1."
+    },
+    {
+      "scenarioId": "SCN-061-014-03",
+      "title": "a skip is counted in neither neighbour",
+      "specFile": "spec.md",
+      "requiredTestType": "e2e-api",
+      "linkedTests": [
+        {"file": "tests/e2e/runner_contract/run_runner_contract.sh", "testId": "AC-03-1"},
+        {"file": "tests/e2e/runner_contract/run_runner_contract.sh", "testId": "AC-03-2"},
+        {"file": "tests/e2e/runner_contract/run_runner_contract.sh", "testId": "AC-03-3"},
+        {"file": "tests/e2e/runner_contract/run_runner_contract.sh", "testId": "AC-03-4"},
+        "tests/e2e/run_all.sh"
+      ],
+      "evidenceRefs": [
+        "report.md#implementation-phase"
+      ],
+      "testCoverage": "e2e-api: with one pass, one skip and one fail fixture, Passed is 1, Failed is 1, Skipped is 1 and Total reconciles to the three-way sum of 3. The reconciliation assertion (AC-03-4) is what makes a skip counted twice detectable."
+    },
+    {
+      "scenarioId": "SCN-061-014-04",
+      "title": "the summary surfaces the skip reason",
+      "specFile": "spec.md",
+      "requiredTestType": "e2e-api",
+      "linkedTests": [
+        {"file": "tests/e2e/runner_contract/run_runner_contract.sh", "testId": "AC-04-1"},
+        {"file": "tests/e2e/runner_contract/run_runner_contract.sh", "testId": "AC-05-1"},
+        "tests/e2e/run_all.sh"
+      ],
+      "evidenceRefs": [
+        "report.md#implementation-phase"
+      ],
+      "testCoverage": "e2e-api: AC-04-1 asserts the fixture's own SKIP_REASON token reaches the results block; AC-05-1 asserts the fixture's stdout is still streamed live, so reading the reason did not swallow the output. run_all.sh can do this safely because its fixtures run as independent OS processes; the CLI classifier deliberately does not, since capturing there discards the child pid the interrupt path needs."
+    },
+    {
+      "scenarioId": "SCN-061-014-05",
+      "title": "a required skip keeps the suite non-green",
+      "specFile": "spec.md",
+      "requiredTestType": "e2e-api",
+      "linkedTests": [
+        {"file": "tests/e2e/runner_contract/run_runner_contract.sh", "testId": "ADV-02-a"},
+        {"file": "tests/e2e/runner_contract/run_runner_contract.sh", "testId": "ADV-02-b"},
+        {"file": "tests/e2e/runner_contract/run_runner_contract.sh", "testId": "AC-02-9"},
+        {"file": "tests/e2e/runner_contract/run_runner_contract.sh", "testId": "AC-02-10"},
+        {"file": "tests/e2e/runner_contract/run_runner_contract.sh", "testId": "AC-02-11"}
+      ],
+      "evidenceRefs": [
+        "report.md#implementation-phase"
+      ],
+      "testCoverage": "e2e-api: a skip of a fixture named in the runner's own required-set declaration yields a non-zero suite exit with ZERO failures recorded (AC-02-10), and never exits with the raw 77 (AC-02-11). The required name is read from the tracked declaration rather than invented, so a fixture cannot downgrade itself out of the required set. Mutation-proven: removing the required-skip term from the exit condition fails ADV-02-a."
+    },
+    {
+      "scenarioId": "SCN-061-014-06",
+      "title": "an optional skip does not redden a clean run",
+      "specFile": "spec.md",
+      "requiredTestType": "e2e-api",
+      "linkedTests": [
+        {"file": "tests/e2e/runner_contract/run_runner_contract.sh", "testId": "AC-06-1"},
+        {"file": "tests/e2e/runner_contract/run_runner_contract.sh", "testId": "AC-06-2"},
+        {"file": "tests/e2e/runner_contract/run_runner_contract.sh", "testId": "AC-06-3"}
+      ],
+      "evidenceRefs": [
+        "report.md#implementation-phase"
+      ],
+      "testCoverage": "e2e-api: a fixture NOT in the required set that exits 77 is reported SKIP and the suite still exits 0. This is the counterpart to SCN-061-014-05; together they prove requiredness is what decides the exit contribution, not the skip itself."
+    },
+    {
+      "scenarioId": "SCN-061-014-07",
+      "title": "a real failure is unaffected",
+      "specFile": "spec.md",
+      "requiredTestType": "e2e-api",
+      "linkedTests": [
+        {"file": "tests/e2e/runner_contract/run_runner_contract.sh", "testId": "ADV-03-a"},
+        {"file": "tests/e2e/runner_contract/run_runner_contract.sh", "testId": "ADV-03-b"},
+        {"file": "tests/e2e/runner_contract/run_runner_contract.sh", "testId": "ADV-03-c"},
+        {"file": "tests/e2e/runner_contract/run_runner_contract.sh", "testId": "ADV-03-d"}
+      ],
+      "evidenceRefs": [
+        "report.md#implementation-phase"
+      ],
+      "testCoverage": "e2e-api: an exit-1 control fixture stays FAIL, is NOT reclassified as SKIP, and keeps the suite exit non-zero. This is the guard against the wrong fix that broadens the skip branch to any non-zero status. Mutation-proven: broadening the branch fails ADV-03-a, ADV-03-b and ADV-03-c together."
+    },
+    {
+      "scenarioId": "SCN-061-014-08",
+      "title": "the seven existing skip slots report as skipped",
+      "specFile": "spec.md",
+      "requiredTestType": "e2e-api",
+      "linkedTests": [
+        {"file": "tests/e2e/runner_contract/run_runner_contract.sh", "testId": "AC-08-0"},
+        {"file": "tests/e2e/runner_contract/run_runner_contract.sh", "testId": "AC-08-9"},
+        {"file": "tests/e2e/runner_contract/run_runner_contract.sh", "testId": "AC-08-10"},
+        "tests/e2e/assistant_regression/lib/regression_helpers.sh"
+      ],
+      "evidenceRefs": [
+        "report.md#implementation-phase"
+      ],
+      "testCoverage": "e2e-api: the seven real reg_skip_with_blocker slots are driven through the runner; AC-08-0 asserts the slot set was discovered rather than assumed, a per-slot loop asserts each is reported SKIP and not FAIL, and AC-08-9/AC-08-10 assert two different slots carry their OWN distinct SKIP_REASON rather than a shared placeholder."
+    },
+    {
+      "scenarioId": "SCN-061-014-09",
+      "title": "the hardware-tier skip no longer reports success",
+      "specFile": "spec.md",
+      "requiredTestType": "e2e-api",
+      "linkedTests": [
+        {"file": "tests/e2e/runner_contract/run_tier_skip_contract.sh", "testId": "SCN-09-1"},
+        {"file": "tests/e2e/runner_contract/run_tier_skip_contract.sh", "testId": "SCN-09-2"},
+        {"file": "tests/e2e/runner_contract/run_tier_skip_contract.sh", "testId": "SCN-09-3"},
+        {"file": "tests/e2e/runner_contract/run_tier_skip_contract.sh", "testId": "SCN-09-4"},
+        {"file": "tests/e2e/runner_contract/run_tier_skip_contract.sh", "testId": "SCN-09-5"},
+        "tests/e2e/lib/helpers.sh"
+      ],
+      "evidenceRefs": [
+        "report.md#implementation-phase--scope-2"
+      ],
+      "testCoverage": "e2e-api: the driver sources the REAL helpers.sh and asserts skip_unless_accel_tier exits 77 and NOT 0 on tier=cpu (SCN-09-1/SCN-09-2), preserves its structured SKIP line (SCN-09-3), emits a machine-readable SKIP_REASON (SCN-09-4), and does not execute the fixture body (SCN-09-5). Before the fix this helper exited 0, reporting ten fixtures as PASS while proving nothing."
+    },
+    {
+      "scenarioId": "SCN-061-014-10",
+      "title": "an accel-tier fixture is reported as skipped, not passed",
+      "specFile": "spec.md",
+      "requiredTestType": "e2e-api",
+      "linkedTests": [
+        {"file": "tests/e2e/runner_contract/run_tier_skip_contract.sh", "testId": "SCN-10-1"},
+        {"file": "tests/e2e/runner_contract/run_tier_skip_contract.sh", "testId": "SCN-10-2"},
+        {"file": "tests/e2e/runner_contract/run_tier_skip_contract.sh", "testId": "SCN-10-3"},
+        {"file": "tests/e2e/runner_contract/run_tier_skip_contract.sh", "testId": "SCN-10-4"},
+        {"file": "tests/e2e/runner_contract/run_tier_skip_contract.sh", "testId": "ADV-05-a"},
+        {"file": "tests/e2e/runner_contract/run_tier_skip_contract.sh", "testId": "ADV-05-b"},
+        {"file": "tests/e2e/runner_contract/run_tier_skip_contract.sh", "testId": "ADV-05-c"},
+        {"file": "tests/e2e/runner_contract/run_tier_skip_contract.sh", "testId": "ADV-05-d"},
+        {"file": "tests/e2e/runner_contract/run_tier_skip_contract.sh", "testId": "ADV-05-e"}
+      ],
+      "evidenceRefs": [
+        "report.md#implementation-phase--scope-2"
+      ],
+      "testCoverage": "e2e-api: an end-to-end run through the real run_all.sh reports the tier-gated fixture SKIP, not PASS and not FAIL (SCN-10-1..3), and an optional tier skip keeps the suite exit 0 (SCN-10-4). ADV-05-a..d assert the TALLIES, not merely the label, which is what catches the wrong fix that prints SKIP while still counting the fixture as passed; mutation-proven by adding a PASSED increment to the skip branch."
+    },
+    {
+      "scenarioId": "SCN-061-014-11",
+      "title": "the accel path is unaffected",
+      "specFile": "spec.md",
+      "requiredTestType": "e2e-api",
+      "linkedTests": [
+        {"file": "tests/e2e/runner_contract/run_tier_skip_contract.sh", "testId": "SCN-11-1"},
+        {"file": "tests/e2e/runner_contract/run_tier_skip_contract.sh", "testId": "SCN-11-2"},
+        {"file": "tests/e2e/runner_contract/run_tier_skip_contract.sh", "testId": "SCN-11-3"},
+        "tests/e2e/lib/helpers.sh"
+      ],
+      "evidenceRefs": [
+        "report.md#implementation-phase--scope-2"
+      ],
+      "testCoverage": "e2e-api: on tier=accel the helper returns, the fixture body executes and exits 0, and no SKIP line is emitted. This proves the fix narrowed only the cpu branch and left the working path untouched."
+    },
+    {
+      "scenarioId": "SCN-061-014-12",
+      "title": "an unknown tier is still a hard error",
+      "specFile": "spec.md",
+      "requiredTestType": "e2e-api",
+      "linkedTests": [
+        {"file": "tests/e2e/runner_contract/run_tier_skip_contract.sh", "testId": "ADV-06-a"},
+        {"file": "tests/e2e/runner_contract/run_tier_skip_contract.sh", "testId": "ADV-06-b"},
+        {"file": "tests/e2e/runner_contract/run_tier_skip_contract.sh", "testId": "ADV-06-c"},
+        {"file": "tests/e2e/runner_contract/run_tier_skip_contract.sh", "testId": "ADV-06-d"}
+      ],
+      "evidenceRefs": [
+        "report.md#implementation-phase--scope-2"
+      ],
+      "testCoverage": "e2e-api: an unrecognised SMACKEREL_HARDWARE_TIER still exits 2, is NOT reclassified as a skip, is NOT a success, and names the misconfiguration. Mutation-proven: collapsing the unknown-tier branch into the skip branch fails ADV-06-a and ADV-06-b, which is the wrong fix that would hide a misconfigured host as a benign skip."
+    },
+    {
+      "scenarioId": "SCN-061-014-13",
+      "title": "both classifiers declare the same required set",
+      "specFile": "spec.md",
+      "requiredTestType": "e2e-api",
+      "linkedTests": [
+        {"file": "tests/e2e/runner_contract/run_runner_contract.sh", "testId": "AC-09-1"},
+        {"file": "tests/e2e/runner_contract/run_runner_contract.sh", "testId": "AC-09-2"},
+        {"file": "tests/e2e/runner_contract/run_runner_contract.sh", "testId": "AC-09-3"},
+        {"file": "tests/e2e/runner_contract/run_runner_contract.sh", "testId": "AC-09-4"},
+        "tests/e2e/run_all.sh",
+        "smackerel.sh"
+      ],
+      "evidenceRefs": [
+        "report.md#simplify-phase"
+      ],
+      "testCoverage": "e2e-api: the required sets are extracted from BOTH tracked files and compared for equal length and identical membership. Non-emptiness is asserted FIRST (AC-09-1/AC-09-2) because two empty lists agree vacuously and an empty required set would mean no skip could ever redden either lane. Proven to bite: removing a single entry from smackerel.sh alone yields 36 versus 35 and fails AC-09-3 and AC-09-4 at exit 1. This exists because the original defect WAS two surfaces disagreeing with nothing checking."
+    },
+    {
+      "scenarioId": "SCN-061-014-14",
+      "title": "the documented skip reason is the one emitted",
+      "specFile": "spec.md",
+      "requiredTestType": "e2e-api",
+      "linkedTests": [
+        {"file": "tests/e2e/runner_contract/run_tier_skip_contract.sh", "testId": "DOC-1"},
+        {"file": "tests/e2e/runner_contract/run_tier_skip_contract.sh", "testId": "DOC-2"},
+        "tests/e2e/lib/helpers.sh",
+        "docs/Testing.md"
+      ],
+      "evidenceRefs": [
+        "report.md#regression-phase"
+      ],
+      "testCoverage": "e2e-api: DOC-1 asserts the helper emits a SKIP_REASON token; DOC-2 asserts docs/Testing.md documents the token the helper ACTUALLY emits. The regression phase found the doc naming a token the helper never emitted and using SKIP_REASON= where both classifiers parse SKIP_REASON:. Proven to bite: mutating the token in the doc alone fails DOC-2 at exit 1."
+    }
+  ]
+}

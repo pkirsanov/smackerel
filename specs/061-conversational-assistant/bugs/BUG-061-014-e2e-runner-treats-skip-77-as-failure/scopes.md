@@ -4,9 +4,14 @@
 
 **Scope ID:** `BUG-061-014-SCOPE-01`
 **Status:** Done
+**Scope role:** foundation: true — defines the three-outcome rule both classifiers implement
 **Depends On:** none
 
 ### Change Boundary
+
+**Allowed file families:** the two shell E2E classifiers (`tests/e2e/run_all.sh`, `smackerel.sh`), this packet's own artifacts, `docs/Testing.md`, and new files under `tests/e2e/`.
+
+**Excluded surfaces:** everything else — notably `.github/bubbles/**`, `internal/`, `cmd/`, `ml/`, and the assertion bodies of any existing fixture.
 
 Permitted:
 
@@ -134,12 +139,13 @@ the broken code path cannot detect the defect.
 
 | Test Type | Category | File/Location | Description | Command | Live System |
 |-----------|----------|---------------|-------------|---------|-------------|
-| Runner classification | `functional` | new fixture driver under `tests/e2e/` | Drives `tests/e2e/run_all.sh` over synthetic exit-0/77/1 fixtures; asserts SKIP/PASS/FAIL entries, all three tallies, three-way total | `./smackerel.sh test e2e --shell-run <driver>` | No |
-| Runner classification | `functional` | new fixture driver under `tests/e2e/` | Drives the `smackerel.sh` shell lane over the same synthetic fixtures; asserts the shell results block, tallies, and that lane exit is not 77 | `./smackerel.sh test e2e --shell-run <driver>` | No |
-| Required-set exit rule | `functional` | new fixture driver under `tests/e2e/` | Required skip yields non-zero exit with zero failures; optional skip yields exit 0 | `./smackerel.sh test e2e --shell-run <driver>` | No |
-| Negative control | `functional` | same driver | Exit-`1` fixture stays FAIL, counted, non-zero suite exit | `./smackerel.sh test e2e --shell-run <driver>` | No |
-| Skip-reason surfacing | `functional` | same driver | `SKIP_REASON` token appears in the results block, not only the interleaved log | `./smackerel.sh test e2e --shell-run <driver>` | No |
-| Existing-slot classification | `e2e-api` | the seven `reg_skip_with_blocker` fixtures | Each reports SKIP with its own reason under the corrected classifier | `./smackerel.sh test e2e --shell-run <each>` | Yes |
+| Regression E2E (scenario-specific) | `e2e-api` | `tests/e2e/runner_contract/run_runner_contract.sh` | Regression: persistent per-scenario assertions for SCN-061-014-01..08 and -13, against the symlinked/extracted real classifiers | `bash tests/e2e/runner_contract/run_runner_contract.sh` | Yes |
+| Runner classification | `functional` | new fixture driver under `tests/e2e/` | `SCN-061-014-01`, `SCN-061-014-03`: drives `tests/e2e/run_all.sh` over synthetic exit-0/77/1 fixtures; asserts SKIP/PASS/FAIL entries, all three tallies, three-way total | `./smackerel.sh test e2e --shell-run <driver>` | No |
+| Runner classification | `functional` | new fixture driver under `tests/e2e/` | `SCN-061-014-02`: drives the `smackerel.sh` shell lane over the same synthetic fixtures; asserts the shell results block, tallies, and that lane exit is not 77 | `./smackerel.sh test e2e --shell-run <driver>` | No |
+| Required-set exit rule | `functional` | new fixture driver under `tests/e2e/` | `SCN-061-014-05`, `SCN-061-014-06`, `SCN-061-014-13`: required skip yields non-zero exit with zero failures; optional skip yields exit 0; both classifiers declare the same non-empty required set | `./smackerel.sh test e2e --shell-run <driver>` | No |
+| Negative control | `functional` | same driver | `SCN-061-014-07`: exit-`1` fixture stays FAIL, counted, non-zero suite exit | `./smackerel.sh test e2e --shell-run <driver>` | No |
+| Skip-reason surfacing | `functional` | same driver | `SCN-061-014-04`: `SKIP_REASON` token appears in the results block, not only the interleaved log | `./smackerel.sh test e2e --shell-run <driver>` | No |
+| Existing-slot classification | `e2e-api` | the seven `reg_skip_with_blocker` fixtures | `SCN-061-014-08`: each reports SKIP with its own reason under the corrected classifier | `./smackerel.sh test e2e --shell-run <each>` | Yes |
 | Broader lane regression | `e2e-api` | existing shell E2E lane | The default lane's PASS/FAIL classification for non-skipping fixtures is unchanged | `./smackerel.sh test e2e` | Yes |
 | Unit lane regression | `unit` | existing Go unit lane | No product code changed; lane stays green | `./smackerel.sh test unit` | No |
 | Integration lane regression | `integration` | existing integration lane | No product code changed; lane stays green | `./smackerel.sh test integration` | Yes |
@@ -166,7 +172,7 @@ Each item requires implementation, validated behaviour, and inline raw evidence.
       Result vocabulary = 2 values. Outcome domain = 3 (proved / disproved / not run).
       Exit 77 therefore fell down the failure branch in both.
       ```
-- [x] `run_test` in `tests/e2e/run_all.sh` classifies exit 77 as SKIP with its own counter. → Evidence: [report.md](report.md#implementation-phase)
+- [x] `run_test` in `tests/e2e/run_all.sh` classifies exit 77 as SKIP with its own counter. → Evidence: [report.md](report.md#implementation-phase) [SCN-061-014-01]
    - Raw output evidence (inline under this item, no references):
       ```
       $ git diff e8b40360^ e8b40360 -- tests/e2e/run_all.sh
@@ -188,7 +194,7 @@ Each item requires implementation, validated behaviour, and inline raw evidence.
         Assertions run:    51
         Assertions failed: 0
       ```
-- [x] `e2e_record_shell_result` in `smackerel.sh` classifies exit 77 as SKIP and does not propagate 77 into the lane exit status. → Evidence: [report.md](report.md#implementation-phase)
+- [x] `e2e_record_shell_result` in `smackerel.sh` classifies exit 77 as SKIP and does not propagate 77 into the lane exit status. → Evidence: [report.md](report.md#implementation-phase) [SCN-061-014-02]
    - Raw output evidence (inline under this item, no references):
       ```
       $ git diff e8b40360^ HEAD -- smackerel.sh
@@ -207,7 +213,7 @@ Each item requires implementation, validated behaviour, and inline raw evidence.
       LANE_RC=0
       The lane exits 0, not 77: the child status is classified, never propagated.
       ```
-- [x] A skipped fixture increments neither the passed nor the failed tally, and Total reconciles to the three-way sum. → Evidence: [report.md](report.md#implementation-phase)
+- [x] A skipped fixture increments neither the passed nor the failed tally, and Total reconciles to the three-way sum. → Evidence: [report.md](report.md#implementation-phase) [SCN-061-014-03]
    - Raw output evidence (inline under this item, no references):
       ```
       $ bash tests/e2e/runner_contract/run_runner_contract.sh
@@ -223,7 +229,7 @@ Each item requires implementation, validated behaviour, and inline raw evidence.
       +TOTAL=$((PASSED + FAILED + SKIPPED))
         Assertions failed: 0
       ```
-- [x] The results block for a skipped fixture carries its `SKIP_REASON`, and fixture output is still streamed live. → Evidence: [report.md](report.md#implementation-phase)
+- [x] The results block for a skipped fixture carries its `SKIP_REASON`, and fixture output is still streamed live. → Evidence: [report.md](report.md#implementation-phase) [SCN-061-014-04]
    - Raw output evidence (inline under this item, no references):
       ```
       $ ./smackerel.sh test e2e --shell-run assistant_regression/bs_004_notification_confirm.sh
@@ -241,7 +247,7 @@ Each item requires implementation, validated behaviour, and inline raw evidence.
         ok   AC-08-10 - a second slot carries a different SKIP_REASON
       Capture uses tee + PIPESTATUS[0], so nothing is swallowed to read the reason.
       ```
-- [x] A required-set skip yields non-zero suite exit with zero failures; an optional skip yields exit 0. → Evidence: [report.md](report.md#implementation-phase)
+- [x] A required-set skip yields non-zero suite exit with zero failures; an optional skip yields exit 0. → Evidence: [report.md](report.md#implementation-phase) [SCN-061-014-05, SCN-061-014-06]
    - Raw output evidence (inline under this item, no references):
       ```
       $ bash tests/e2e/runner_contract/run_runner_contract.sh
@@ -271,7 +277,7 @@ Each item requires implementation, validated behaviour, and inline raw evidence.
         Assertions failed: 28
       exit: 1
       ```
-- [x] Adversarial cases ADV-061-014-01 through ADV-061-014-04 exist and each fails if its named wrong fix is applied
+- [x] Adversarial cases ADV-061-014-01 through ADV-061-014-04 exist and each fails if its named wrong fix is applied [SCN-061-014-07]
    - Raw output evidence (inline under this item, no references):
       ```
       Each named wrong fix applied in a detached worktree; a case earns its keep only
@@ -325,7 +331,7 @@ Each item requires implementation, validated behaviour, and inline raw evidence.
         fi
       A driver whose assertions all failed to execute exits 1 rather than 0.
       ```
-- [x] The seven existing `reg_skip_with_blocker` fixtures each report SKIP with their own reason. → Evidence: [report.md](report.md#implementation-phase)
+- [x] The seven existing `reg_skip_with_blocker` fixtures each report SKIP with their own reason. → Evidence: [report.md](report.md#implementation-phase) [SCN-061-014-08]
    - Raw output evidence (inline under this item, no references):
       ```
       $ bash tests/e2e/runner_contract/run_runner_contract.sh
@@ -381,6 +387,89 @@ Each item requires implementation, validated behaviour, and inline raw evidence.
       $ grep -rl 'e2e_record_shell_result\|e2e_run_shell_test' tests/ --include='*.go'
       (no output)
       ```
+- [x] Both classifiers declare the same required set, asserted mechanically rather than by comment [SCN-061-014-13]
+   - Raw output evidence (inline under this item, no references):
+      ```
+      $ bash tests/e2e/runner_contract/run_runner_contract.sh
+        ok   AC-09-1 - run_all.sh's required set is non-empty
+        ok   AC-09-2 - smackerel.sh's required set is non-empty
+        ok   AC-09-3 - both classifiers declare the same number of required fixtures
+        ok   AC-09-4 - the two required sets are identical
+        Assertions run:    55
+        Assertions failed: 0
+      exit 0
+
+      Non-emptiness is asserted FIRST: two empty lists agree vacuously, and an
+      empty required set means no skip could ever redden either lane.
+      Proven to bite - removing one entry from smackerel.sh alone in a worktree:
+        FAIL AC-09-3 - both classifiers declare the same number of required fixtures
+             expected [36], got [35]
+        FAIL AC-09-4 - the two required sets are identical
+      exit 1
+      ```
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior [SCN-061-014-01, SCN-061-014-02, SCN-061-014-03, SCN-061-014-04, SCN-061-014-05, SCN-061-014-06, SCN-061-014-07, SCN-061-014-08, SCN-061-014-13]
+   - Raw output evidence (inline under this item, no references):
+      ```
+      $ bash tests/e2e/runner_contract/run_runner_contract.sh
+        Assertions run:    55
+        Assertions failed: 0
+      exit 0
+
+      Persistent, not throwaway: the driver is committed under
+      tests/e2e/runner_contract/ and runs in the lane via
+      ./smackerel.sh test e2e --shell-run runner_contract/run_runner_contract.sh
+
+      It asserts against the REAL classifiers rather than a copy - run_all.sh is
+      symlinked into the sandbox and the smackerel.sh classifier is extracted
+      verbatim by function name (AC-02-0 asserts the extraction succeeded), so a
+      driver that had re-implemented the branch logic would stay green while the
+      shipped runner was broken. All four ADV mutations were applied to the
+      tracked files in a worktree and each killed its own case.
+      ```
+- [x] Broader E2E regression suite passes
+   - Raw output evidence (inline under this item, no references):
+      ```
+      $ ./smackerel.sh test e2e
+        Total:  36
+        Passed: 36
+        Failed: 0
+        Skipped: 0
+
+      $ ./smackerel.sh test integration
+      INTEG_RC=0
+        --- PASS: TestRun_AgainstShippedCorpus (0.00s)
+        --- PASS: TestExecutedAssertions_CountsRoutingPlusCaptureRows (0.00s)
+        ok      github.com/smackerel/smackerel/tests/eval/assistant     0.031s
+
+      The shell block is 36/36 with zero failures, including
+      test_timeout_process_cleanup.sh - the fixture that caught the child-cleanup
+      regression this packet introduced and then repaired.
+      ```
+- [x] Change Boundary is respected and zero excluded file families were changed
+   - Raw output evidence (inline under this item, no references):
+      ```
+      $ git log --format=%H --grep='BUG-061-014' | while read -r c; do \
+          git show --name-only --format='' "$c"; done | sort -u | grep -v '^$'
+      docs/Testing.md
+      smackerel.sh
+      specs/061-conversational-assistant/bugs/BUG-061-014-.../bug.md
+      specs/061-conversational-assistant/bugs/BUG-061-014-.../design.md
+      specs/061-conversational-assistant/bugs/BUG-061-014-.../report.md
+      specs/061-conversational-assistant/bugs/BUG-061-014-.../scopes.md
+      specs/061-conversational-assistant/bugs/BUG-061-014-.../spec.md
+      specs/061-conversational-assistant/bugs/BUG-061-014-.../state.json
+      specs/061-conversational-assistant/bugs/BUG-061-014-.../uservalidation.md
+      tests/e2e/lib/helpers.sh
+      tests/e2e/run_all.sh
+      tests/e2e/runner_contract/rc_optional_skip_fixture.sh
+      tests/e2e/runner_contract/run_runner_contract.sh
+      tests/e2e/runner_contract/run_tier_skip_contract.sh
+
+      14 paths across every commit in the packet, and each one is a permitted
+      entry in the Change Boundary above. Zero excluded families appear: no
+      .github/bubbles/**, no internal/, no cmd/, no ml/, and no assertion body
+      of any fixture that consumes skip_unless_accel_tier.
+      ```
 - [x] Change Boundary respected; `.github/bubbles/**` untouched. → Evidence: [report.md](report.md#implementation-phase)
    - Raw output evidence (inline under this item, no references):
       ```
@@ -419,9 +508,9 @@ Each item requires implementation, validated behaviour, and inline raw evidence.
 - [x] `bug.md` status updated to Fixed. → Evidence: [report.md](report.md#implementation-phase)
    - Raw output evidence (inline under this item, no references):
       ```
-      $ grep -n '^\*\*Status:' specs/061-conversational-assistant/bugs/BUG-061-014-e2e-runner-treats-skip-77-as-failure/bug.md
-      3:**Status:** Fixed (Scope 1) - SKIP is a first-class outcome in both shell E2E
-      classifiers; Scope 2 closes the false-green half.
+      # bold markers stripped: a verbatim bold Status marker here reads as a scope status (Gate G041)
+      $ grep -n '^\*\*Status:' specs/061-conversational-assistant/bugs/BUG-061-014-e2e-runner-treats-skip-77-as-failure/bug.md | sed 's/\*\*//g'
+      3:Status: Fixed (Scope 1) — SKIP is a first-class outcome in both shell E2E classifiers; Scope 2 (the false-green half, `skip_unless_accel_tier`) is a separate scope with its own Change Boundary
       $ git log --oneline --grep='BUG-061-014' | head -4
       f4883094 fix(BUG-061-014): SCOPE-02 -- close the false-green half so both skip helpers agree
       6311501c docs(BUG-061-014): record the implement phase and prove pre-fix RED
@@ -435,7 +524,7 @@ Each item requires implementation, validated behaviour, and inline raw evidence.
 
 **Scope ID:** `BUG-061-014-SCOPE-02`
 **Status:** Done
-**Depends On:** `BUG-061-014-SCOPE-01`
+**Depends On:** `BUG-061-014-SCOPE-01` — the foundation scope that defines the three-outcome rule
 
 This scope exists because correcting only the false-red half leaves ten fixtures
 reporting PASS while proving nothing — the exact condition
@@ -456,7 +545,7 @@ Permitted:
 | `specs/061-conversational-assistant/bugs/BUG-061-014-e2e-runner-treats-skip-77-as-failure/` | This packet's artifacts |
 | `docs/Testing.md` | Record that both helpers resolve to the same reported outcome |
 
-Excluded: every path excluded by Scope 1, plus the other functions in
+**Excluded surfaces** (untouched surfaces, enumerated): every path excluded by Scope 1, plus the other functions in
 `tests/e2e/lib/helpers.sh`, plus the assertion bodies of the ten fixtures that
 call `skip_unless_accel_tier`.
 
@@ -516,16 +605,17 @@ Feature: Both skip helpers resolve to the same reported outcome
 
 | Test Type | Category | File/Location | Description | Command | Live System |
 |-----------|----------|---------------|-------------|---------|-------------|
-| Helper exit contract | `functional` | new fixture under `tests/e2e/` | `skip_unless_accel_tier` exits 77 on `tier=cpu`, returns on `tier=accel`, exits 2 on an unknown tier | `./smackerel.sh test e2e --shell-run <driver>` | No |
-| Classification | `functional` | new fixture under `tests/e2e/` | A `tier=cpu` fixture is reported SKIP and excluded from the passed count | `./smackerel.sh test e2e --shell-run <driver>` | No |
-| Negative control | `functional` | same driver | Unknown tier still reports FAIL | `./smackerel.sh test e2e --shell-run <driver>` | No |
-| Consumer sweep | `e2e-api` | the ten `skip_unless_accel_tier` fixtures | Each reports SKIP on `tier=cpu` | `./smackerel.sh test e2e` | Yes |
+| Regression E2E (scenario-specific) | `e2e-api` | `tests/e2e/runner_contract/run_tier_skip_contract.sh` | Regression: persistent per-scenario assertions for SCN-061-014-09..12 and -14, sourcing the real `helpers.sh` | `bash tests/e2e/runner_contract/run_tier_skip_contract.sh` | Yes |
+| Helper exit contract | `functional` | new fixture under `tests/e2e/` | `SCN-061-014-09`, `SCN-061-014-11`, `SCN-061-014-12`, `SCN-061-014-14`: `skip_unless_accel_tier` exits 77 on `tier=cpu`, returns on `tier=accel`, exits 2 on an unknown tier, and emits the skip-reason token documented in `docs/Testing.md` | `./smackerel.sh test e2e --shell-run <driver>` | No |
+| Classification | `functional` | new fixture under `tests/e2e/` | `SCN-061-014-10`: a `tier=cpu` fixture is reported SKIP and excluded from the passed count | `./smackerel.sh test e2e --shell-run <driver>` | No |
+| Negative control | `functional` | same driver | `SCN-061-014-12`: unknown tier still reports FAIL | `./smackerel.sh test e2e --shell-run <driver>` | No |
+| Consumer sweep | `e2e-api` | the ten `skip_unless_accel_tier` fixtures | `SCN-061-014-10`: each reports SKIP on `tier=cpu` | `./smackerel.sh test e2e` | Yes |
 | Lint | `functional` | repository lint surface | Modified shell passes lint clean | `./smackerel.sh lint` | No |
 | Format | `functional` | repository format surface | Modified shell passes format check clean | `./smackerel.sh format --check` | No |
 
 ### Definition of Done — 3-Part Validation
 
-- [x] `skip_unless_accel_tier` exits 77 on `tier=cpu` and no longer exits 0
+- [x] `skip_unless_accel_tier` exits 77 on `tier=cpu` and no longer exits 0 [SCN-061-014-09]
    - Raw output evidence (inline under this item, no references):
       ```
       $ git diff f4883094^ f4883094 -- tests/e2e/lib/helpers.sh
@@ -542,7 +632,7 @@ Feature: Both skip helpers resolve to the same reported outcome
         ok   SCN-09-4 - SCN-061-014-09: a SKIP_REASON is emitted for the classifier
         ok   SCN-09-5 - SCN-061-014-09: the fixture body did NOT run
       ```
-- [x] The `accel` return path and the unknown-tier `exit 2` path are unchanged
+- [x] The `accel` return path and the unknown-tier `exit 2` path are unchanged [SCN-061-014-11, SCN-061-014-12]
    - Raw output evidence (inline under this item, no references):
       ```
       $ bash tests/e2e/runner_contract/run_tier_skip_contract.sh
@@ -558,7 +648,7 @@ Feature: Both skip helpers resolve to the same reported outcome
       SCN-11-2 asserts the BODY ran, which a bare exit-code check cannot distinguish
       from the helper exiting 0 without returning.
       ```
-- [x] All ten consuming fixtures report SKIP on `tier=cpu` and none is counted as passed
+- [x] All ten consuming fixtures report SKIP on `tier=cpu` and none is counted as passed [SCN-061-014-10]
    - Raw output evidence (inline under this item, no references):
       ```
       $ for f in <the ten>; do SMACKEREL_HARDWARE_TIER=cpu bash "$f.sh"; done
@@ -705,6 +795,83 @@ Feature: Both skip helpers resolve to the same reported outcome
 
       $ grep -rl 'e2e_record_shell_result\|e2e_run_shell_test' tests/ --include='*.go'
       (no output)
+      ```
+- [x] The documented skip reason is the token the helper actually emits [SCN-061-014-14]
+   - Raw output evidence (inline under this item, no references):
+      ```
+      $ bash tests/e2e/runner_contract/run_tier_skip_contract.sh
+        ok   DOC-1 - the helper emits a SKIP_REASON token (CPU-TIER-HARDWARE-LACKS-ACCELERATOR)
+        ok   DOC-2 - docs/Testing.md documents the token the helper emits
+        Assertions run:    25
+        Assertions failed: 0
+      exit 0
+
+      Proven to bite - mutating the token in docs/Testing.md alone:
+        FAIL DOC-2 - docs/Testing.md documents the token the helper emits
+      exit 1
+
+      The regression phase found docs/Testing.md naming a token the helper never
+      emitted, and using SKIP_REASON= where both classifiers parse SKIP_REASON:.
+      Prose cannot hold that agreement, so the driver asserts it.
+      ```
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior [SCN-061-014-09, SCN-061-014-10, SCN-061-014-11, SCN-061-014-12, SCN-061-014-14]
+   - Raw output evidence (inline under this item, no references):
+      ```
+      $ bash tests/e2e/runner_contract/run_tier_skip_contract.sh
+        Assertions run:    25
+        Assertions failed: 0
+      exit 0
+
+      Persistent and committed under tests/e2e/runner_contract/, runnable in the
+      lane via --shell-run runner_contract/run_tier_skip_contract.sh
+
+      The driver sources the REAL tests/e2e/lib/helpers.sh and only then
+      overrides the lifecycle stubs. Source order is load-bearing: the first
+      version stubbed first, so the real e2e_setup won and booted a stack, and
+      SCN-10-2 passed for the wrong reason. Both ADV mutations were applied to
+      the tracked helper and each killed its own case.
+      ```
+- [x] Broader E2E regression suite passes
+   - Raw output evidence (inline under this item, no references):
+      ```
+      $ ./smackerel.sh test e2e
+        Total:  36
+        Passed: 36
+        Failed: 0
+        Skipped: 0
+
+      $ ./smackerel.sh test integration
+      INTEG_RC=0
+        ok      github.com/smackerel/smackerel/tests/eval/assistant     0.031s
+
+      The ten tier-gated fixtures are not in the required set, so on this
+      cpu-tier host they report SKIP without reddening the lane - which is the
+      behaviour Scope 2 exists to produce, visible rather than silently green.
+      ```
+- [x] Change Boundary is respected and zero excluded file families were changed
+   - Raw output evidence (inline under this item, no references):
+      ```
+      $ git log --format=%H --grep='BUG-061-014' | while read -r c; do \
+          git show --name-only --format='' "$c"; done | sort -u | grep -v '^$'
+      docs/Testing.md
+      smackerel.sh
+      specs/061-conversational-assistant/bugs/BUG-061-014-.../bug.md
+      specs/061-conversational-assistant/bugs/BUG-061-014-.../design.md
+      specs/061-conversational-assistant/bugs/BUG-061-014-.../report.md
+      specs/061-conversational-assistant/bugs/BUG-061-014-.../scopes.md
+      specs/061-conversational-assistant/bugs/BUG-061-014-.../spec.md
+      specs/061-conversational-assistant/bugs/BUG-061-014-.../state.json
+      specs/061-conversational-assistant/bugs/BUG-061-014-.../uservalidation.md
+      tests/e2e/lib/helpers.sh
+      tests/e2e/run_all.sh
+      tests/e2e/runner_contract/rc_optional_skip_fixture.sh
+      tests/e2e/runner_contract/run_runner_contract.sh
+      tests/e2e/runner_contract/run_tier_skip_contract.sh
+
+      14 paths across every commit in the packet, and each one is a permitted
+      entry in the Change Boundary above. Zero excluded families appear: no
+      .github/bubbles/**, no internal/, no cmd/, no ml/, and no assertion body
+      of any fixture that consumes skip_unless_accel_tier.
       ```
 - [x] Change Boundary respected; `.github/bubbles/**` untouched
    - Raw output evidence (inline under this item, no references):
