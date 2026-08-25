@@ -642,3 +642,145 @@ evidence here supports.
 The full shell E2E suite was not run end to end, so the item is left open rather
 than closed on a partial lane set — which is the same discipline that kept the
 broader-suite item open in BUG-069-006.
+
+## Implementation Phase — Scope 2
+
+The false-green half. Scope 1 stopped deliberate skips being reported as
+failures; this stops ten fixtures being reported as **passes** while proving
+nothing.
+
+Of the two, this is the more dangerous. A false red is noisy and gets
+investigated. A false green is silent and gets trusted, which is precisely the
+condition `BUG-069-005` was opened for — reproduced here in shell rather than in
+Go.
+
+### The change
+
+`skip_unless_accel_tier` in `tests/e2e/lib/helpers.sh` printed a structured
+`SKIP:` line and then `exit 0`. It now exits `77` and emits a machine-readable
+reason, so the Scope 1 classifiers lift it into the results block exactly as they
+do for `reg_skip_with_blocker`:
+
+```
+    cpu)
+      echo "SKIP: ${test_name} — cpu-tier hardware lacks accelerator; ..."
+      echo "RESULT: SKIPPED"
+      echo "SKIP_REASON: CPU-TIER-HARDWARE-LACKS-ACCELERATOR"
+      exit 77
+      ;;
+```
+
+The `accel` return path and the unknown-tier `exit 2` path are untouched. A
+misconfigured host stays a hard error rather than becoming a benign skip — that
+distinction is what ADV-061-014-06 exists to defend.
+
+### A wrong RED, caught and corrected
+
+The first RED run was not measuring what it claimed. The sandbox generated a
+`helpers.sh` that defined no-op lifecycle stubs and *then* sourced the real
+helpers, so the real `e2e_setup` overwrote the stub and the runner tried to boot
+an actual stack. It died before reaching its results block, and the count
+assertions failed with `missing [Passed: 1]` — the right verdict for the wrong
+reason.
+
+Source order is load-bearing here: the real helpers must come first so the
+tracked `skip_unless_accel_tier` is the function under test, and the lifecycle
+names are overridden after. With that corrected the RED measures the defect:
+
+```
+$ bash tests/e2e/runner_contract/run_tier_skip_contract.sh   # unmodified helper
+  FAIL SCN-09-1 — SCN-061-014-09: cpu tier exits 77
+  FAIL SCN-09-2 — SCN-061-014-09: cpu tier does NOT exit 0
+  FAIL SCN-10-2 — SCN-061-014-10: it is NOT reported as PASS
+  FAIL ADV-05-a — ADV-061-014-05: the passed count excludes the skipped fixture
+  FAIL UNIF-1  — both skip helpers exit with the same code
+  Assertions run:    23
+  Assertions failed: 9
+exit: 1
+```
+
+`SCN-10-2` is the load-bearing line. It fails because the fixture **was** reported
+as `PASS` — the false green, stated as a measurement rather than an argument.
+
+Worth noting the first RED had `SCN-10-2` *passing*, which looked like good news
+and was actually the broken sandbox masking the defect. A RED that agrees with
+you for the wrong reason is worse than one that disagrees.
+
+### GREEN
+
+```
+$ bash tests/e2e/runner_contract/run_tier_skip_contract.sh
+  Assertions run:    23
+  Assertions failed: 0
+exit: 0
+```
+
+Scope 1's driver is unaffected and still runs `51` assertions with `0` failures,
+which is why Scope 2 got its own file: Scope 1's recorded evidence stays exactly
+reproducible.
+
+### All ten consumers, measured
+
+```
+$ for f in <the ten>; do SMACKEREL_HARDWARE_TIER=cpu bash "$f.sh"; done
+assistant_acceptance_capture           rc=77  reason=CPU-TIER-HARDWARE-LACKS-ACCELERATOR
+assistant_acceptance_notification      rc=77  reason=CPU-TIER-HARDWARE-LACKS-ACCELERATOR
+assistant_acceptance_retrieval         rc=77  reason=CPU-TIER-HARDWARE-LACKS-ACCELERATOR
+assistant_acceptance_weather           rc=77  reason=CPU-TIER-HARDWARE-LACKS-ACCELERATOR
+assistant_bs002_test                   rc=77  reason=CPU-TIER-HARDWARE-LACKS-ACCELERATOR
+assistant_bs003_test                   rc=77  reason=CPU-TIER-HARDWARE-LACKS-ACCELERATOR
+assistant_bs004_test                   rc=77  reason=CPU-TIER-HARDWARE-LACKS-ACCELERATOR
+assistant_bs006_test                   rc=77  reason=CPU-TIER-HARDWARE-LACKS-ACCELERATOR
+assistant_bs007_test                   rc=77  reason=CPU-TIER-HARDWARE-LACKS-ACCELERATOR
+assistant_bs010_test                   rc=77  reason=CPU-TIER-HARDWARE-LACKS-ACCELERATOR
+```
+
+Ten of ten, each carrying its reason.
+
+### Required versus optional — the decision and why
+
+The ten are deliberately **not** declared required.
+
+Requiredness would make every cpu-tier run permanently non-green. That converts a
+legitimate hardware gate into standing red, and a suite that is always red
+carries no signal — the same loss of meaning, arrived at from the opposite
+direction, as a suite that is always green.
+
+Honesty comes from the classification instead. They report `SKIP` and land in the
+`Skipped` tally, so a reader sees exactly how many behaviours went unproven on
+this host. Declaring them required asserts "this suite must run on accel
+hardware", which is an operator decision about CI topology and belongs with
+whoever owns that hardware, not with the classifier.
+
+Recorded in `docs/Testing.md` under "Why the tier-gated fixtures are not declared
+required", alongside a table showing both producers now resolve to the same
+reported outcome.
+
+## Mutation Proof — every adversarial case kills its own wrong fix
+
+The implement phase left this item open because asserting an adversarial case
+*exists* is weaker than proving it *bites*. Each named wrong fix was applied in a
+detached worktree and the suite re-run. A case earns its keep only if its own
+assertion is the one that fails.
+
+| Case | Wrong fix applied | Result |
+|---|---|---|
+| ADV-061-014-01 | map exit `77` onto the `PASS` branch | `FAIL ADV-01-a — skip fixture is NOT reported as PASS` |
+| ADV-061-014-02 | drop `REQUIRED_SKIPPED` from the suite-exit condition | `FAIL ADV-02-a — required skip yields a non-zero suite exit` (exactly 1 assertion failed) |
+| ADV-061-014-03 | broaden the skip branch to `-ne 0` | `FAIL ADV-03-a`, `ADV-03-b`, `ADV-03-c` |
+| ADV-061-014-04 | disable the skip branch in `smackerel.sh`'s tracked classifier | `FAIL AC-02-1 — skip fixture is reported as SKIP in the shell results block` |
+| ADV-061-014-05 | count a skipped fixture as passed as well | `FAIL ADV-05-a`, `ADV-05-d` |
+| ADV-061-014-06 | collapse the unknown tier into the skip branch | `FAIL ADV-06-a`, `ADV-06-b` |
+
+Two of these are worth calling out.
+
+**ADV-02 killed with exactly one failing assertion.** Nothing else moved, which
+is what a precisely-targeted case looks like — it discriminates that specific
+wrong fix rather than tripping over collateral damage.
+
+**ADV-04 is a property, not a payload.** It asserts the driver executes the
+*tracked* classifier rather than a re-implementation. Mutating `smackerel.sh`'s
+extracted block and watching the driver notice is the proof: a driver that had
+copied the branch logic would have stayed green while the real runner was broken.
+The other five mutations demonstrate the same property for `run_all.sh`, since
+each one changed only the tracked file and each was detected.
