@@ -84,27 +84,34 @@ func TestLogicalKey_DistinguishesEveryField(t *testing.T) {
 }
 
 // ADVERSARIAL. This is the case the length-prefixing in LogicalKey exists for.
-// Concatenating fields without a length prefix makes ("ab","c") and ("a","bc")
-// hash identically, so two genuinely different runs would share one key and the
-// second would be swallowed as an idempotent no-change. If the prefix is
-// removed, this test fails.
+// Without a prefix the fields are concatenated raw, so a character shifted
+// across a boundary produces an identical hash and two genuinely different runs
+// share one key -- the second silently swallowed as an idempotent no-change.
+//
+// The shift must be between ADJACENT fields to collide. LogicalKey hashes in
+// the order cadence, principal, windowStart, windowEnd, policyVersion, sources,
+// so cadence and principal are the adjacent pair used here:
+//
+//	a: "daily" + "x"  -> "dailyx"
+//	b: "dail"  + "yx" -> "dailyx"
+//
+// Verified adversarial: replacing the length-prefixed write in LogicalKey with
+// a raw fmt.Fprintf(h, "%s", part) makes this test FAIL. An earlier version of
+// this test shifted between principal and policyVersion, which are NOT
+// adjacent -- the two window timestamps sit between them -- so it passed under
+// that same mutation and proved nothing.
 func TestLogicalKey_FieldBoundariesCannotBeShifted(t *testing.T) {
 	a := baseKey()
-	a.Cadence = CadenceDaily
-	a.Principal = "ab"
+	a.Cadence = "daily"
+	a.Principal = "x"
 
 	b := baseKey()
-	b.Cadence = CadenceDaily
-	b.Principal = "ab"
-
-	// Shift a character across the principal/policy boundary.
-	a.PolicyVersion = "xy"
-	b.Principal = "abx"
-	b.PolicyVersion = "y"
+	b.Cadence = "dail"
+	b.Principal = "yx"
 
 	if a.LogicalKey() == b.LogicalKey() {
 		t.Fatalf("field boundary collision: (%q,%q) and (%q,%q) produced the same key",
-			a.Principal, a.PolicyVersion, b.Principal, b.PolicyVersion)
+			a.Cadence, a.Principal, b.Cadence, b.Principal)
 	}
 }
 
