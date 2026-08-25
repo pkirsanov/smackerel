@@ -2016,7 +2016,6 @@ case "$COMMAND" in
         e2e_record_shell_result() {
           local test_name="$1"
           local status="$2"
-          local reason="${3:-}"
 
           if [[ "$status" -eq 0 ]]; then
             e2e_shell_results+=("PASS: ${test_name}")
@@ -2025,13 +2024,15 @@ case "$COMMAND" in
 
           if [[ "$status" -eq "$E2E_SHELL_SKIP_EXIT_CODE" ]]; then
             e2e_shell_skips=$((e2e_shell_skips + 1))
-            # The results block carries the fixture's own SKIP_REASON so the
-            # summary is readable without scrolling back through the run, and
-            # so both classifiers report a skip the same way. Only a fixture
-            # that emitted no reason falls back to naming that absence.
-            [[ -n "$reason" ]] || reason="no SKIP_REASON emitted by ${test_name}"
+            # The fixture's own SKIP_REASON line is in the streamed output just
+            # above this block; it is deliberately not lifted into the results
+            # line. Capturing it here would mean running e2e_run_child through
+            # tee, and that subshell discards the child pid the interrupt path
+            # needs -- trading a real cleanup guarantee for a cosmetic one.
+            # run_all.sh runs fixtures as plain processes with no such state to
+            # lose, so it does attach the reason.
             if e2e_shell_test_is_required "$test_name"; then
-              e2e_shell_results+=("SKIP: ${test_name} (${reason}) [required]")
+              e2e_shell_results+=("SKIP: ${test_name} [required]")
               e2e_required_shell_skips=$((e2e_required_shell_skips + 1))
               # A required skip keeps the lane non-green because the behaviour
               # is unproven, but the raw child status is never propagated: the
@@ -2040,7 +2041,7 @@ case "$COMMAND" in
                 e2e_overall_status=1
               fi
             else
-              e2e_shell_results+=("SKIP: ${test_name} (${reason})")
+              e2e_shell_results+=("SKIP: ${test_name}")
             fi
             return 0
           fi
@@ -2054,19 +2055,22 @@ case "$COMMAND" in
 
         e2e_run_shell_test() {
           local test_name="$1"
-          local status reason capture
+          local status
           shift
 
-          capture="$(mktemp)"
           set +e
-          # tee keeps the fixture's output streaming live while giving the
-          # classifier a copy to read SKIP_REASON from; nothing is swallowed.
-          e2e_run_child "$@" 2>&1 | tee "$capture"
-          status=${PIPESTATUS[0]}
+          # Deliberately NOT a pipeline, and not a subshell of any kind.
+          # e2e_run_child records the child's pid, pgid and run id in shell
+          # variables that the interrupt path reads to terminate the child and
+          # its process group. A pipeline runs the function in a subshell, so
+          # those assignments are discarded and the parent is left holding
+          # nothing to kill. That is a silent failure: classification still
+          # looks correct while cleanup has been disarmed.
+          # Guarded by tests/e2e/test_timeout_process_cleanup.sh (BUG-031-004).
+          e2e_run_child "$@"
+          status=$?
           set -e
-          reason="$(sed -n 's/^SKIP_REASON:[[:space:]]*//p' "$capture" | head -1)"
-          rm -f "$capture"
-          e2e_record_shell_result "$test_name" "$status" "$reason"
+          e2e_record_shell_result "$test_name" "$status"
           return 0
         }
 

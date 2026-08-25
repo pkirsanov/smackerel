@@ -977,3 +977,150 @@ could distort the summary's rendering. It cannot alter classification, counts, o
 the suite exit code, and the same fixture could already write escapes directly to
 the terminal on the live-stream path that existed before this change. Recorded as
 cosmetic rather than treated as a control.
+
+## Full-Lane Phase — the all-lanes item found a regression I had introduced
+
+This is the section the all-lanes DoD item exists to produce, and it did not
+come back clean. The full shell E2E lane ran end to end and returned **exit 1**
+with exactly one failure, and that failure was caused by this packet's own
+Scope 1 change.
+
+```
+$ ./smackerel.sh test e2e
+E2E_FULL_RC=1
+  FAIL: test_timeout_process_cleanup.sh (exit=1)
+  Total:  36
+  Passed: 35
+  Failed: 1
+  Skipped: 0
+```
+
+The failing assertion is `BUG-031-004-SCN-001`, which exists to prove that
+interrupting the runner terminates the child processes it started:
+
+```
+=== BUG-031-004-SCN-001: E2E interruption terminates child processes ===
+Observed marker process for smackerel-e2e-timeout-cleanup-...-runner: 2340819
+Interrupting nested E2E runner pid 2338010
+Nested E2E runner did not exit after interruption
+FAIL: nested E2E runner failed to exit after interruption
+```
+
+### Why it broke
+
+To read a fixture's `SKIP_REASON` in the CLI classifier I had written:
+
+```bash
+e2e_run_child "$@" 2>&1 | tee "$capture"
+status=${PIPESTATUS[0]}
+```
+
+`e2e_run_child` does not only run the child. It records the child's pid, its
+process-group id and its run id in shell variables that the interrupt path later
+reads to terminate that process group. A pipeline runs each element in a
+subshell, so those assignments were written into a subshell that exited
+immediately, and the parent was left holding nothing to kill.
+
+Measured rather than reasoned about, because the claim is mechanical:
+
+```
+$ setter() { myglobal="CHILD_PID_12345"; echo "output from setter"; }
+=== direct call (no pipeline) ===
+output from setter
+  after direct call, myglobal=[CHILD_PID_12345]
+=== inside a pipeline (what my change introduced) ===
+output from setter
+  after pipeline, myglobal=[]
+=== process substitution ===
+  after process substitution, myglobal=[CHILD_PID_12345]
+```
+
+The third case is why process substitution is not the fix either. It preserves
+the variable, but `output from setter` never appeared — the substitution is
+asynchronous, so its output can be reordered or lost relative to the parent's.
+Trading a cleanup guarantee for a display feature and then trading correct
+output ordering to get the guarantee back is not a repair.
+
+**This is the worst class of defect this packet has dealt with.** Classification
+still looked entirely correct — every skip, pass and failure was reported
+accurately, all 51 contract assertions passed, and the lane summary reconciled.
+Nothing in the output said cleanup had been disarmed. Only a test that actually
+interrupts a runner and looks for surviving children could see it.
+
+### The fix, and what it costs
+
+The CLI classifier no longer captures the child's output, so `e2e_run_child` is
+called directly with no subshell of any kind. The now-unused `reason` parameter
+is removed rather than left as a caller-less argument with a fallback message
+saying `no SKIP_REASON emitted by X` — which would have been false, since the
+fixture does emit one.
+
+The cost is that the CLI's results line reads `SKIP: <name>` instead of
+`SKIP: <name> (REASON)`. The reason is still on screen: the fixture streams it
+live, a few lines above the summary. `run_all.sh` keeps full reason extraction
+because its fixtures are separate processes with no shell state to lose, so its
+pipeline is safe. The asymmetry is deliberate and commented at both sites.
+
+Checked before choosing this: no contract assertion depends on CLI-side reason
+text. `AC-04-1`, `AC-08-9` and `AC-08-10` all read `$RUNNER_OUT`, the
+`run_all.sh` sandbox output; the CLI assertions `AC-02-*` check SKIP versus FAIL,
+the tallies and the exit status. `docs/Testing.md` already attributes reason
+reading to `run_all.sh` by name, so it needed no correction.
+
+If the CLI summary should ever carry the reason, the sound design is for the skip
+helpers to write it to a path passed in the environment, which both runners can
+read without capturing anything. That is a change to the helper contract and to
+every skip producer, so it is not folded into this packet.
+
+### Contamination ruled out before accepting the result
+
+A second lane was found running afterwards, which would have invalidated a
+process-cleanup result. The timestamps show no overlap: `/tmp/e2e_full.txt` last
+grew at `04:40:34` and `pgrep` returned `0` at `04:40:55`, while the other lane
+first appeared at `04:42:35`. The failure was measured on an uncontaminated run.
+
+### Focused post-fix verification
+
+The exact cleanup carrier now passes after replacing the state-losing pipeline
+with a direct `e2e_run_child` call. This is not a substitute for the full lane;
+it proves the failed scenario and its adjacent Docker cleanup controls only.
+
+```text
+# BUG-061-014 focused interruption cleanup after direct-child repair
+$ timeout 2700 ./smackerel.sh test e2e --shell-run test_timeout_process_cleanup.sh
+exit: 0
+lines: 40
+sha256: 23d2a1218f91ed710a94d76cf49052ad3a32d7689b1bc7f3550547e4aae9da8a
+PASS: BUG-031-004-SCN-002
+Nested E2E runner returned nonzero after interruption: -1
+Marker processes absent for smackerel-e2e-timeout-cleanup-21091-1787634992-runner
+PASS: BUG-031-004-SCN-001
+PASS: BUG-031-009-SCN-001
+PASS: BUG-031-009-SCN-002
+PASS: BUG-031-004 timeout process cleanup regression
+Total:  1
+Passed: 1
+Failed: 0
+Skipped: 0
+```
+
+Both classification contracts also pass with the direct-child call. The
+failure-shaped lines in the first receipt are deliberate mutant fixtures inside
+a contract command whose real exit is zero.
+
+```text
+# BUG-061-014 runner classification contracts after cleanup repair
+$ timeout 2700 ./smackerel.sh test e2e --shell-run runner_contract/run_runner_contract.sh
+exit: 0
+lines: 621
+sha256: 5b47a23a64bfdff8eddfcc1c113370e77cb11ade31cd284f8f0c7196e01ae065
+
+# BUG-061-014 tier skip contracts after cleanup repair
+$ timeout 2700 ./smackerel.sh test e2e --shell-run runner_contract/run_tier_skip_contract.sh
+exit: 0
+lines: 364
+sha256: 609da684bd9a55860be16552b08fcd2e5464137949db49bb41a26bd7098c1cf0
+```
+
+The full-lane DoD remains open here. The earlier `35 passed / 1 failed` result
+is retained above until an unfiltered `./smackerel.sh test e2e` completes green.
