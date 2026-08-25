@@ -12,19 +12,142 @@
   "linkedPlanningPacket": null,
   "planningOnly": false,
   "planningOnlyJustification": null,
-  "specDependsOn": ["specs/004-phase3-intelligence"],
+  "specDependsOn": [
+    "specs/004-phase3-intelligence"
+  ],
   "certifiedAt": null,
   "requiresRevalidation": false,
-  "requirementsRecovery": {"reviewId":"2026-07-24-independent-planning-review","status":"analyst_reconciled","addressedFindings":["SR-006","GRILL-12"],"activeRequirementsRef":"spec.md","decision":"Synthesis derives from and persists into the single operator-owned global corpus through explicit role/grant access and makes no tenant/user row-isolation claim.","certificationClaimed":false},
-  "execution": {"activeAgent":"bubbles.implement","currentPhase":"implement","currentScope":"SCOPE-04","substate":"implemented","runStartedAt":"2026-07-26T02:34:00Z","completedPhaseClaims":[],"pendingTransitionRequests":[],"audit":{"schemaVersion":"audit-run/v1","runId":null,"currentAttemptId":null,"attempts":[]}},
-  "certification": {"status":"blocked","completedScopes":[],"certifiedCompletedPhases":[],"scopeProgress":[{"scope":1,"scopeId":"SCOPE-01","name":"Durable Synthesis Persistence Foundation","status":"not_started","dependsOn":[],"scopeDir":null,"evidenceFile":"report.md","certifiedAt":null},{"scope":2,"scopeId":"SCOPE-02","name":"Validated Daily And Weekly Producers","status":"not_started","dependsOn":["SCOPE-01"],"scopeDir":null,"evidenceFile":"report.md","certifiedAt":null},{"scope":3,"scopeId":"SCOPE-03","name":"Durable Scheduler Retry And Lifecycle","status":"not_started","dependsOn":["SCOPE-02"],"scopeDir":null,"evidenceFile":"report.md","certifiedAt":null},{"scope":4,"scopeId":"SCOPE-04","name":"Canonical Read Health Alert And API Truth","status":"not_started","dependsOn":["SCOPE-03"],"scopeDir":null,"evidenceFile":"report.md","certifiedAt":null},{"scope":5,"scopeId":"SCOPE-05","name":"Today Status UI And Real-Stack Regression","status":"not_started","dependsOn":["SCOPE-04"],"scopeDir":null,"evidenceFile":"report.md","certifiedAt":null}],"lockdownState":{"active":false,"lockedScenarioIds":[]},"invalidationLedger":[]},
-  "policySnapshot": {"grill":{"mode":"off","source":"repo-default"},"tdd":{"mode":"scenario-first","source":"workflow-mode"},"autoCommit":{"mode":"off","source":"user-constraint"},"lockdown":{"mode":"off","source":"repo-default"},"regression":{"mode":"protected-scenarios","source":"workflow-mode"},"validation":{"mode":"certification-required","source":"repo-default"}},
+  "requirementsRecovery": {
+    "reviewId": "2026-07-24-independent-planning-review",
+    "status": "analyst_reconciled",
+    "addressedFindings": [
+      "SR-006",
+      "GRILL-12"
+    ],
+    "activeRequirementsRef": "spec.md",
+    "decision": "Synthesis derives from and persists into the single operator-owned global corpus through explicit role/grant access and makes no tenant/user row-isolation claim.",
+    "certificationClaimed": false
+  },
+  "execution": {
+    "activeAgent": "bubbles.implement",
+    "currentPhase": "implement",
+    "currentScope": "SCOPE-04",
+    "substate": "implemented",
+    "runStartedAt": "2026-07-26T02:34:00Z",
+    "completedPhaseClaims": [],
+    "pendingTransitionRequests": [],
+    "audit": {
+      "schemaVersion": "audit-run/v1",
+      "runId": null,
+      "currentAttemptId": null,
+      "attempts": []
+    }
+  },
+  "certification": {
+    "status": "blocked",
+    "completedScopes": [],
+    "certifiedCompletedPhases": [],
+    "scopeProgress": [
+      {
+        "scope": 1,
+        "scopeId": "SCOPE-01",
+        "name": "Durable Synthesis Persistence Foundation",
+        "status": "not_started",
+        "dependsOn": [],
+        "scopeDir": null,
+        "evidenceFile": "report.md",
+        "certifiedAt": null
+      },
+      {
+        "scope": 2,
+        "scopeId": "SCOPE-02",
+        "name": "Validated Daily And Weekly Producers",
+        "status": "not_started",
+        "dependsOn": [
+          "SCOPE-01"
+        ],
+        "scopeDir": null,
+        "evidenceFile": "report.md",
+        "certifiedAt": null
+      },
+      {
+        "scope": 3,
+        "scopeId": "SCOPE-03",
+        "name": "Durable Scheduler Retry And Lifecycle",
+        "status": "not_started",
+        "dependsOn": [
+          "SCOPE-02"
+        ],
+        "scopeDir": null,
+        "evidenceFile": "report.md",
+        "certifiedAt": null
+      },
+      {
+        "scope": 4,
+        "scopeId": "SCOPE-04",
+        "name": "Canonical Read Health Alert And API Truth",
+        "status": "not_started",
+        "dependsOn": [
+          "SCOPE-03"
+        ],
+        "scopeDir": null,
+        "evidenceFile": "report.md",
+        "certifiedAt": null
+      },
+      {
+        "scope": 5,
+        "scopeId": "SCOPE-05",
+        "name": "Today Status UI And Real-Stack Regression",
+        "status": "not_started",
+        "dependsOn": [
+          "SCOPE-04"
+        ],
+        "scopeDir": null,
+        "evidenceFile": "report.md",
+        "certifiedAt": null
+      }
+    ],
+    "lockdownState": {
+      "active": false,
+      "lockedScenarioIds": []
+    },
+    "invalidationLedger": [],
+    "blockedReason": "No agent-blocking external dependency. The packet was left blocked with the reason recorded only in report.md prose ('blocked on the deferred live-DB persistence rows') and never written to state.json, so the machine-readable state carried a terminal-ish status with no actionable cause -- indistinguishable from stalling. Real state: 5 scopes Not Started, 1 of 77 DoD items checked. The defect is confirmed at internal/intelligence/synthesis.go:50 -- RunSynthesis returns []SynthesisInsight and no INSERT INTO synthesis_insights exists anywhere in the package, while synthesis.go:403 reads SELECT MAX(created_at) FROM synthesis_insights for health, so health reads a table nothing writes. Live-DB work is reachable through the integration lane's disposable PostgreSQL, so this is agent-solvable and is being picked up."
+  },
+  "policySnapshot": {
+    "grill": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "tdd": {
+      "mode": "scenario-first",
+      "source": "workflow-mode"
+    },
+    "autoCommit": {
+      "mode": "off",
+      "source": "user-constraint"
+    },
+    "lockdown": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "regression": {
+      "mode": "protected-scenarios",
+      "source": "workflow-mode"
+    },
+    "validation": {
+      "mode": "certification-required",
+      "source": "repo-default"
+    }
+  },
   "transitionRequests": [],
   "reworkQueue": [],
   "executionHistory": [
     {
       "agent": "bubbles.ux",
-      "phasesExecuted": ["analyze"],
+      "phasesExecuted": [
+        "analyze"
+      ],
       "statusBefore": "in_progress",
       "statusAfter": "in_progress",
       "runStartedAt": "2026-07-23T15:09:23Z",
@@ -33,7 +156,9 @@
     },
     {
       "agent": "bubbles.design",
-      "phasesExecuted": ["bootstrap"],
+      "phasesExecuted": [
+        "bootstrap"
+      ],
       "statusBefore": "in_progress",
       "statusAfter": "in_progress",
       "runStartedAt": "2026-07-23T16:58:57Z",
@@ -42,7 +167,9 @@
     },
     {
       "agent": "bubbles.analyst",
-      "phasesExecuted": ["analyze"],
+      "phasesExecuted": [
+        "analyze"
+      ],
       "statusBefore": "in_progress",
       "statusAfter": "in_progress",
       "runStartedAt": "2026-07-24T02:35:39Z",
@@ -51,7 +178,9 @@
     },
     {
       "agent": "bubbles.design",
-      "phasesExecuted": ["bootstrap"],
+      "phasesExecuted": [
+        "bootstrap"
+      ],
       "statusBefore": "in_progress",
       "statusAfter": "in_progress",
       "runStartedAt": "2026-07-24T03:05:58Z",
@@ -60,25 +189,31 @@
     },
     {
       "agent": "bubbles.plan",
-      "phasesExecuted": ["harden"],
+      "phasesExecuted": [
+        "harden"
+      ],
       "statusBefore": "in_progress",
       "statusAfter": "in_progress",
       "runStartedAt": "2026-07-24T08:31:22Z",
       "runEndedAt": "2026-07-24T08:45:00Z",
-      "summary": "spec-scope-hardening reconciliation of planning artifacts against the 2026-07-24T05:46Z spec.md/design.md revision. Verified design.md covers BOTH named concerns: transactional synthesis persistence (single serializable pgx.Tx, one-current partial index, mandatory post-commit read-back gate, atomic rollback) AND migration safety (two-wave expand-contract keeping the accepted previous release readable via a compatibility projection, code-only previous-release rollback, plus an automated write-freeze + proven backup/restore data-rollback contract) — no design gap on that concern. Reconciled scenario-manifest.json to 18 rows (one per Gherkin (scenarioId,scope) instance across SCOPE-01..05, empty linkedTests pending implementation) to clear G057/G059; added SCN-id-cited faithful Core Outcome DoD items to all five scopes to clear G068; expanded certification.scopeProgress from 1 to 5 scopes with correct names and dependency ordering. No spec, design, source, test, config, certification, status transition, commit, push, build, deployment, or spec 079 change is claimed. Residual: traceability-guard report-evidence checks remain implementation-pending (report.md correctly claims no test evidence at planning time); not fabricated."
+      "summary": "spec-scope-hardening reconciliation of planning artifacts against the 2026-07-24T05:46Z spec.md/design.md revision. Verified design.md covers BOTH named concerns: transactional synthesis persistence (single serializable pgx.Tx, one-current partial index, mandatory post-commit read-back gate, atomic rollback) AND migration safety (two-wave expand-contract keeping the accepted previous release readable via a compatibility projection, code-only previous-release rollback, plus an automated write-freeze + proven backup/restore data-rollback contract) \u2014 no design gap on that concern. Reconciled scenario-manifest.json to 18 rows (one per Gherkin (scenarioId,scope) instance across SCOPE-01..05, empty linkedTests pending implementation) to clear G057/G059; added SCN-id-cited faithful Core Outcome DoD items to all five scopes to clear G068; expanded certification.scopeProgress from 1 to 5 scopes with correct names and dependency ordering. No spec, design, source, test, config, certification, status transition, commit, push, build, deployment, or spec 079 change is claimed. Residual: traceability-guard report-evidence checks remain implementation-pending (report.md correctly claims no test evidence at planning time); not fabricated."
     },
     {
       "agent": "bubbles.implement",
-      "phasesExecuted": ["implement"],
+      "phasesExecuted": [
+        "implement"
+      ],
       "statusBefore": "in_progress",
       "statusAfter": "blocked",
       "runStartedAt": "2026-07-25T00:00:00Z",
       "runEndedAt": "2026-07-25T00:00:00Z",
-      "summary": "Implemented a disjoint, unit-verifiable HEALTH-TRUTH slice of SCOPE-04: the pure, database-free DeriveSynthesisHealth mapping (internal/intelligence/synthesis_health.go) turning a synthesis persistence outcome into a truthful verdict, plus real Go unit tests (internal/intelligence/synthesis_health_test.go) — per-truth cases, an adversarial regression against the pre-fix never-run/probe-error->up mapping, a 14-case closed-vocabulary lock, and a 320-combination invariant sweep. Guarantees write-failure, probe-error, never-run, partial output, and any non-OK post-commit read-back can never be healthy/persisted/up. Placed in internal/intelligence (the existing synthesis package) rather than a new internal/synthesis package because doc_freshness_test would then require an edit to the locked docs/Development.md. Verified this session: ./smackerel.sh test unit --go --go-run DeriveSynthesisHealth --verbose (ok internal/intelligence, exit 0), ./smackerel.sh check (exit 0), ./smackerel.sh lint (exit 0). No git, no Docker stack, no live tests. All live-DB transactional-persistence and /api/health-wiring rows are deferred; packet set to blocked. No certification, scope-done, spec, design, scopes, uservalidation, or scenario-manifest change is claimed."
+      "summary": "Implemented a disjoint, unit-verifiable HEALTH-TRUTH slice of SCOPE-04: the pure, database-free DeriveSynthesisHealth mapping (internal/intelligence/synthesis_health.go) turning a synthesis persistence outcome into a truthful verdict, plus real Go unit tests (internal/intelligence/synthesis_health_test.go) \u2014 per-truth cases, an adversarial regression against the pre-fix never-run/probe-error->up mapping, a 14-case closed-vocabulary lock, and a 320-combination invariant sweep. Guarantees write-failure, probe-error, never-run, partial output, and any non-OK post-commit read-back can never be healthy/persisted/up. Placed in internal/intelligence (the existing synthesis package) rather than a new internal/synthesis package because doc_freshness_test would then require an edit to the locked docs/Development.md. Verified this session: ./smackerel.sh test unit --go --go-run DeriveSynthesisHealth --verbose (ok internal/intelligence, exit 0), ./smackerel.sh check (exit 0), ./smackerel.sh lint (exit 0). No git, no Docker stack, no live tests. All live-DB transactional-persistence and /api/health-wiring rows are deferred; packet set to blocked. No certification, scope-done, spec, design, scopes, uservalidation, or scenario-manifest change is claimed."
     },
     {
       "agent": "bubbles.implement",
-      "phasesExecuted": ["implement"],
+      "phasesExecuted": [
+        "implement"
+      ],
       "statusBefore": "blocked",
       "statusAfter": "blocked",
       "runStartedAt": "2026-07-26T02:34:00Z",
@@ -89,9 +224,45 @@
   "activeBugs": [],
   "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-07-26T02:48:00Z",
+  "lastUpdatedAt": "2026-08-25T14:40:08Z",
   "scopeLayout": "single-file",
-  "artifacts": {"bug":"bug.md","spec":"spec.md","design":"design.md","scopes":"scopes.md","report":"report.md","uservalidation":"uservalidation.md","scenarioManifest":"scenario-manifest.json"},
-  "statusDiscipline": {"validStatuses":["not_started","in_progress","blocked","specs_hardened","docs_updated","validated","done"],"scopePickupRule":"All dependsOn scopes must be Done. Pick the lowest-numbered eligible scope.","scopeDoneGates":["G020","G021","G022","G023","G024","G025","G055","G056","G057","G058","G059","G060","G061"],"specDoneRequires":"All scopes done and validate-owned certification permits promotion."},
-  "notes": "Owner routes required: bubbles.design, bubbles.plan, bubbles.ux. Blocks truthful synthesis/readiness in BUG-102-001 and coherent product claims."
+  "artifacts": {
+    "bug": "bug.md",
+    "spec": "spec.md",
+    "design": "design.md",
+    "scopes": "scopes.md",
+    "report": "report.md",
+    "uservalidation": "uservalidation.md",
+    "scenarioManifest": "scenario-manifest.json"
+  },
+  "statusDiscipline": {
+    "validStatuses": [
+      "not_started",
+      "in_progress",
+      "blocked",
+      "specs_hardened",
+      "docs_updated",
+      "validated",
+      "done"
+    ],
+    "scopePickupRule": "All dependsOn scopes must be Done. Pick the lowest-numbered eligible scope.",
+    "scopeDoneGates": [
+      "G020",
+      "G021",
+      "G022",
+      "G023",
+      "G024",
+      "G025",
+      "G055",
+      "G056",
+      "G057",
+      "G058",
+      "G059",
+      "G060",
+      "G061"
+    ],
+    "specDoneRequires": "All scopes done and validate-owned certification permits promotion."
+  },
+  "notes": "Owner routes required: bubbles.design, bubbles.plan, bubbles.ux. Blocks truthful synthesis/readiness in BUG-102-001 and coherent product claims.",
+  "blockedReason": "No agent-blocking external dependency. The packet was left blocked with the reason recorded only in report.md prose ('blocked on the deferred live-DB persistence rows') and never written to state.json, so the machine-readable state carried a terminal-ish status with no actionable cause -- indistinguishable from stalling. Real state: 5 scopes Not Started, 1 of 77 DoD items checked. The defect is confirmed at internal/intelligence/synthesis.go:50 -- RunSynthesis returns []SynthesisInsight and no INSERT INTO synthesis_insights exists anywhere in the package, while synthesis.go:403 reads SELECT MAX(created_at) FROM synthesis_insights for health, so health reads a table nothing writes. Live-DB work is reachable through the integration lane's disposable PostgreSQL, so this is agent-solvable and is being picked up."
 }
