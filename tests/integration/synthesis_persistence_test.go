@@ -12,6 +12,7 @@ package integration
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"testing"
@@ -85,6 +86,29 @@ func synthesisTestKey(principal string) intelligence.SynthesisRunKey {
 	}
 }
 
+// synthesisTestPolicy declares one required class and one optional one, which
+// is what lets the partial-output case be expressed at all.
+func synthesisTestPolicy() intelligence.SourceClassPolicy {
+	return intelligence.SourceClassPolicy{
+		Required: []string{"article"},
+		Optional: []string{"video"},
+	}
+}
+
+func synthesisAuthorizedSources() []string {
+	return []string{"art-alpha", "art-beta", "art-gamma"}
+}
+
+func synthesisCompleteCandidate(principal string) intelligence.SynthesisCandidate {
+	return intelligence.SynthesisCandidate{
+		Key:                    synthesisTestKey(principal),
+		Kind:                   intelligence.OutputKindFull,
+		Insights:               synthesisTestInsights(),
+		EvaluatedArtifactCount: 3,
+		IncludedClasses:        []string{"article", "video"},
+	}
+}
+
 func synthesisTestInsights() []intelligence.SynthesisInsight {
 	return []intelligence.SynthesisInsight{
 		{
@@ -119,9 +143,10 @@ func TestSynthesisPersistence_CommitsOneCompleteAggregate(t *testing.T) {
 
 	ctx := context.Background()
 	key := synthesisTestKey("operator-scn01")
-	insights := synthesisTestInsights()
 
-	agg, err := p.Commit(ctx, key, insights, time.Now().UTC())
+	cand := synthesisCompleteCandidate("operator-scn01")
+	insights := cand.Insights
+	agg, err := p.Commit(ctx, cand, synthesisTestPolicy(), synthesisAuthorizedSources(), time.Now().UTC())
 	if err != nil {
 		t.Fatalf("commit: %v", err)
 	}
@@ -193,13 +218,13 @@ func TestSynthesisPersistence_DuplicateLogicalRunIsIdempotent(t *testing.T) {
 	ctx := context.Background()
 	key := synthesisTestKey("operator-scn02")
 
-	first, err := p.Commit(ctx, key, synthesisTestInsights(), time.Now().UTC())
+	first, err := p.Commit(ctx, synthesisCompleteCandidate("operator-scn02"), synthesisTestPolicy(), synthesisAuthorizedSources(), time.Now().UTC())
 	if err != nil {
 		t.Fatalf("first commit: %v", err)
 	}
 
 	// The same logical run again — a restart or a concurrent scheduler.
-	_, err = p.Commit(ctx, key, synthesisTestInsights(), time.Now().UTC())
+	_, err = p.Commit(ctx, synthesisCompleteCandidate("operator-scn02"), synthesisTestPolicy(), synthesisAuthorizedSources(), time.Now().UTC())
 	if err == nil {
 		t.Fatal("second commit of the same logical run succeeded; exactly one output must exist")
 	}
@@ -285,7 +310,14 @@ func TestSynthesisPersistence_RequiredWriteFailureRollsBackAtomically(t *testing
 		},
 	}
 
-	_, commitErr := p.Commit(ctx, key, poisoned, time.Now().UTC())
+	poisonedCandidate := intelligence.SynthesisCandidate{
+		Key:                    key,
+		Kind:                   intelligence.OutputKindFull,
+		Insights:               poisoned,
+		EvaluatedArtifactCount: 2,
+		IncludedClasses:        []string{"article", "video"},
+	}
+	_, commitErr := p.Commit(ctx, poisonedCandidate, synthesisTestPolicy(), synthesisAuthorizedSources(), time.Now().UTC())
 	if commitErr == nil {
 		t.Fatal("commit succeeded despite a duplicate insight id; the aggregate must abort")
 	}
@@ -366,6 +398,182 @@ func TestSynthesisPersistence_RejectsMalformedAttempts(t *testing.T) {
 	if err := p.RecordAttempt(ctx, "k", intelligence.SynthesisAttemptOutcome("invented"), "", ""); err == nil {
 		t.Fatal("an unknown outcome was accepted")
 	}
+}
+
+// SCN-004-004-07 — a valid window that produces nothing persists ONE explicit
+// quiet output that reads differently from never-run and from failure.
+func TestSynthesisPersistence_QuietOutputIsDurableNotMissing(t *testing.T) {
+	pool := synthesisTestPool(t)
+	defer pool.Close()
+	resetSynthesisTables(t, pool)
+
+	p, err := intelligence.NewSynthesisPersistence(pool)
+	if err != nil {
+		t.Fatalf("construct persistence: %v", err)
+	}
+	ctx := context.Background()
+
+	cand := synthesisCompleteCandidate("operator-quiet")
+	cand.Kind = intelligence.OutputKindQuiet
+	cand.Insights = nil
+	cand.EvaluatedArtifactCount = 412 // evaluated many, surfaced none
+
+	agg, err := p.Commit(ctx, cand, synthesisTestPolicy(), synthesisAuthorizedSources(), time.Now().UTC())
+	if err != nil {
+		t.Fatalf("commit quiet output: %v", err)
+	}
+	if agg.Kind != intelligence.OutputKindQuiet {
+		t.Fatalf("stored kind %q, want quiet", agg.Kind)
+	}
+	if agg.InsightCount != 0 || agg.CitationCount != 0 {
+		t.Fatalf("quiet output carries content: insights=%d citations=%d", agg.InsightCount, agg.CitationCount)
+	}
+
+	// This is the property that separates quiet from never-run. Both have zero
+	// insights; only quiet asserts a window WAS evaluated, and the count is the
+	// assertion. Losing it would make the two indistinguishable again.
+	if agg.EvaluatedArtifactCount != 412 {
+		t.Fatalf("quiet output lost its evaluated count: got %d, want 412", agg.EvaluatedArtifactCount)
+	}
+
+	// A durable row exists — "nothing to surface" is stored, not absent.
+	var rows int
+	if err := pool.QueryRow(ctx,
+		`SELECT COUNT(*) FROM synthesis_outputs WHERE output_kind = 'quiet'`).Scan(&rows); err != nil {
+		t.Fatalf("count quiet outputs: %v", err)
+	}
+	if rows != 1 {
+		t.Fatalf("got %d quiet outputs, want exactly 1", rows)
+	}
+}
+
+// SCN-004-004-08 — a policy-approved optional omission persists a partial
+// output that NAMES what was included and what was left out.
+func TestSynthesisPersistence_PartialOutputNamesOmissions(t *testing.T) {
+	pool := synthesisTestPool(t)
+	defer pool.Close()
+	resetSynthesisTables(t, pool)
+
+	p, err := intelligence.NewSynthesisPersistence(pool)
+	if err != nil {
+		t.Fatalf("construct persistence: %v", err)
+	}
+	ctx := context.Background()
+
+	cand := synthesisCompleteCandidate("operator-partial")
+	cand.Kind = intelligence.OutputKindPartial
+	cand.IncludedClasses = []string{"article"}
+	cand.OmittedClasses = []string{"video"} // optional class, permitted omission
+
+	agg, err := p.Commit(ctx, cand, synthesisTestPolicy(), synthesisAuthorizedSources(), time.Now().UTC())
+	if err != nil {
+		t.Fatalf("commit partial output: %v", err)
+	}
+	if agg.Kind != intelligence.OutputKindPartial {
+		t.Fatalf("stored kind %q, want partial", agg.Kind)
+	}
+	if len(agg.IncludedClasses) != 1 || agg.IncludedClasses[0] != "article" {
+		t.Fatalf("included classes not preserved: %v", agg.IncludedClasses)
+	}
+	if len(agg.OmittedClasses) != 1 || agg.OmittedClasses[0] != "video" {
+		t.Fatalf("omitted classes not preserved: %v", agg.OmittedClasses)
+	}
+
+	// Omissions are ROWS, so a reader can count and filter them. Prose in a text
+	// column would not be checkable, which is what SCN-08 forbids.
+	var omitted int
+	if err := pool.QueryRow(ctx, `
+		SELECT COUNT(*) FROM synthesis_output_source_classes
+		WHERE output_id = $1 AND disposition = 'omitted'`, agg.OutputID).Scan(&omitted); err != nil {
+		t.Fatalf("count omissions: %v", err)
+	}
+	if omitted != 1 {
+		t.Fatalf("got %d omitted-class rows, want 1", omitted)
+	}
+}
+
+// SCN-004-004-04 — an invalid candidate is rejected BEFORE persistence is
+// entered, so no output is stored.
+//
+// ADVERSARIAL ON ORDERING. Empty tables alone do NOT prove this: a validator
+// running INSIDE the transaction would also end empty, via rollback. Nor does
+// the failure code -- that survives being moved inside too. The one fact that
+// separates them is that a pre-transaction rejection never acquires a pooled
+// connection, so each case pins the pool's acquire count across the call. Move
+// ValidateCandidate below BeginTx and the count rises by one and this fails.
+func TestSynthesisPersistence_InvalidCandidateNeverEntersPersistence(t *testing.T) {
+	pool := synthesisTestPool(t)
+	defer pool.Close()
+
+	p, err := intelligence.NewSynthesisPersistence(pool)
+	if err != nil {
+		t.Fatalf("construct persistence: %v", err)
+	}
+	ctx := context.Background()
+
+	for name, tc := range map[string]struct {
+		mutate func(*intelligence.SynthesisCandidate)
+		want   intelligence.SynthesisFailureCode
+	}{
+		"missing citation": {
+			mutate: func(c *intelligence.SynthesisCandidate) { c.Insights[0].SourceArtifactIDs = nil },
+			want:   intelligence.FailureMissingCitation,
+		},
+		"unauthorized artifact": {
+			mutate: func(c *intelligence.SynthesisCandidate) {
+				c.Insights[0].SourceArtifactIDs = []string{"art-not-authorized"}
+			},
+			want: intelligence.FailureUnauthorizedSource,
+		},
+		"invalid payload": {
+			mutate: func(c *intelligence.SynthesisCandidate) { c.Insights[0].ThroughLine = "" },
+			want:   intelligence.FailureInvalidPayload,
+		},
+		"required source omitted": {
+			mutate: func(c *intelligence.SynthesisCandidate) {
+				c.Kind = intelligence.OutputKindPartial
+				c.IncludedClasses = []string{"video"}
+				c.OmittedClasses = []string{"article"}
+			},
+			want: intelligence.FailureRequiredSourceOmit,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			resetSynthesisTables(t, pool)
+			cand := synthesisCompleteCandidate("operator-invalid-" + name)
+			tc.mutate(&cand)
+
+			acquiresBefore := pool.Stat().AcquireCount()
+			_, err := p.Commit(ctx, cand, synthesisTestPolicy(), synthesisAuthorizedSources(), time.Now().UTC())
+			if acquired := pool.Stat().AcquireCount() - acquiresBefore; acquired != 0 {
+				t.Fatalf("rejection acquired %d pooled connection(s); a candidate refused before BeginTx must acquire none", acquired)
+			}
+			if err == nil {
+				t.Fatal("invalid candidate was accepted")
+			}
+			var ve *intelligence.SynthesisValidationError
+			if !errorAs(err, &ve) {
+				t.Fatalf("expected a validation error (proving the pre-transaction gate fired), got %T: %v", err, err)
+			}
+			if ve.Code != tc.want {
+				t.Fatalf("got failure code %q, want %q", ve.Code, tc.want)
+			}
+
+			for _, table := range []string{"synthesis_runs", "synthesis_outputs", "synthesis_output_insights"} {
+				var n int
+				if err := pool.QueryRow(ctx, "SELECT COUNT(*) FROM "+table).Scan(&n); err != nil {
+					t.Fatalf("count %s: %v", table, err)
+				}
+				if n != 0 {
+					t.Fatalf("%s holds %d rows after a rejected candidate; persistence must not be entered", table, n)
+				}
+			}
+		})
+	}
+}
+
+func errorAs(err error, target **intelligence.SynthesisValidationError) bool {
+	return errors.As(err, target)
 }
 
 func contains(haystack, needle string) bool {

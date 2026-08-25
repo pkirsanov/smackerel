@@ -103,13 +103,17 @@ func (k SynthesisRunKey) SourceSetDigest() string {
 
 // SynthesisAggregate is one committed output read back as a unit.
 type SynthesisAggregate struct {
-	OutputID      string
-	RunID         string
-	LogicalKey    string
-	InsightCount  int
-	CitationCount int
-	CreatedAt     time.Time
-	Insights      []SynthesisInsight
+	OutputID               string
+	RunID                  string
+	LogicalKey             string
+	Kind                   SynthesisOutputKind
+	InsightCount           int
+	CitationCount          int
+	EvaluatedArtifactCount int
+	CreatedAt              time.Time
+	Insights               []SynthesisInsight
+	IncludedClasses        []string
+	OmittedClasses         []string
 }
 
 // SynthesisPersistence commits synthesis aggregates durably.
@@ -140,12 +144,20 @@ func NewSynthesisPersistence(pool *pgxpool.Pool) (*SynthesisPersistence, error) 
 // Returns ErrSynthesisRunExists when the logical run is already committed. The
 // caller records an idempotent no-change attempt; it must NOT treat that as an
 // error, and must NOT write a second output.
+//
+// Validation runs HERE, before BeginTx. SCN-004-004-04 requires that an invalid
+// candidate never enters persistence, and putting the check inside this method
+// makes that structural: no producer can forget to call the validator, and "no
+// output stored" is a consequence of never having started rather than of a
+// rollback that happened to work.
 func (p *SynthesisPersistence) Commit(
 	ctx context.Context,
-	key SynthesisRunKey,
-	insights []SynthesisInsight,
+	c SynthesisCandidate,
+	policy SourceClassPolicy,
+	authorizedSources []string,
 	now time.Time,
 ) (*SynthesisAggregate, error) {
+	key := c.Key
 	if key.Cadence != CadenceDaily && key.Cadence != CadenceWeekly {
 		return nil, fmt.Errorf("unknown synthesis cadence %q", key.Cadence)
 	}
@@ -158,7 +170,11 @@ func (p *SynthesisPersistence) Commit(
 	if !key.WindowEnd.After(key.WindowStart) {
 		return nil, fmt.Errorf("synthesis window end must be after start")
 	}
+	if err := ValidateCandidate(c, policy, authorizedSources); err != nil {
+		return nil, err
+	}
 
+	insights := c.Insights
 	logicalKey := key.LogicalKey()
 	runID := ulid.Make().String()
 	outputID := ulid.Make().String()
@@ -195,11 +211,30 @@ func (p *SynthesisPersistence) Commit(
 
 	_, err = tx.Exec(ctx, `
 		INSERT INTO synthesis_outputs
-			(id, run_id, insight_count, citation_count, created_at)
-		VALUES ($1, $2, $3, $4, $5)
-	`, outputID, runID, len(insights), citationCount, now.UTC())
+			(id, run_id, output_kind, insight_count, citation_count,
+			 evaluated_artifact_count, created_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
+	`, outputID, runID, string(c.Kind), len(insights), citationCount,
+		c.EvaluatedArtifactCount, now.UTC())
 	if err != nil {
 		return nil, fmt.Errorf("insert synthesis output: %w", err)
+	}
+
+	for _, cl := range c.IncludedClasses {
+		if _, err = tx.Exec(ctx, `
+			INSERT INTO synthesis_output_source_classes (output_id, source_class, disposition)
+			VALUES ($1, $2, 'included')
+		`, outputID, cl); err != nil {
+			return nil, fmt.Errorf("insert included source class: %w", err)
+		}
+	}
+	for _, cl := range c.OmittedClasses {
+		if _, err = tx.Exec(ctx, `
+			INSERT INTO synthesis_output_source_classes (output_id, source_class, disposition)
+			VALUES ($1, $2, 'omitted')
+		`, outputID, cl); err != nil {
+			return nil, fmt.Errorf("insert omitted source class: %w", err)
+		}
 	}
 
 	for ordinal, in := range insights {
@@ -256,14 +291,44 @@ func (p *SynthesisPersistence) Commit(
 // the path real consumers use.
 func (p *SynthesisPersistence) ReadAggregate(ctx context.Context, outputID string) (*SynthesisAggregate, error) {
 	agg := &SynthesisAggregate{OutputID: outputID}
+	var kind string
 	err := p.pool.QueryRow(ctx, `
-		SELECT o.run_id, r.logical_key, o.insight_count, o.citation_count, o.created_at
+		SELECT o.run_id, r.logical_key, o.output_kind, o.insight_count,
+		       o.citation_count, o.evaluated_artifact_count, o.created_at
 		FROM synthesis_outputs o
 		JOIN synthesis_runs r ON r.id = o.run_id
 		WHERE o.id = $1
-	`, outputID).Scan(&agg.RunID, &agg.LogicalKey, &agg.InsightCount, &agg.CitationCount, &agg.CreatedAt)
+	`, outputID).Scan(&agg.RunID, &agg.LogicalKey, &kind, &agg.InsightCount,
+		&agg.CitationCount, &agg.EvaluatedArtifactCount, &agg.CreatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("read synthesis output %s: %w", outputID, err)
+	}
+	agg.Kind = SynthesisOutputKind(kind)
+
+	classRows, err := p.pool.Query(ctx, `
+		SELECT source_class, disposition
+		FROM synthesis_output_source_classes
+		WHERE output_id = $1
+		ORDER BY source_class
+	`, outputID)
+	if err != nil {
+		return nil, fmt.Errorf("read synthesis source classes for %s: %w", outputID, err)
+	}
+	for classRows.Next() {
+		var cl, disposition string
+		if err := classRows.Scan(&cl, &disposition); err != nil {
+			classRows.Close()
+			return nil, fmt.Errorf("scan synthesis source class: %w", err)
+		}
+		if disposition == "included" {
+			agg.IncludedClasses = append(agg.IncludedClasses, cl)
+		} else {
+			agg.OmittedClasses = append(agg.OmittedClasses, cl)
+		}
+	}
+	classRows.Close()
+	if err := classRows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate synthesis source classes: %w", err)
 	}
 
 	rows, err := p.pool.Query(ctx, `
