@@ -626,6 +626,54 @@ Every bug fix regression must include at least one case that would fail if the b
 - Silent-pass bailout logic is forbidden.
 - Missing required controls or redirects must fail loudly.
 
+### The Shell E2E Three-Outcome Contract
+
+A fixture can prove a behaviour, disprove it, or not run. Both shell E2E
+classifiers — `run_test` in [`tests/e2e/run_all.sh`](../tests/e2e/run_all.sh) and
+`e2e_record_shell_result` in [`smackerel.sh`](../smackerel.sh) — report all three
+outcomes, and they implement the same rule so a fixture cannot report differently
+depending on the entry point.
+
+| Fixture exit | Classification | Counted in | Suite exit contribution |
+|---|---|---|---|
+| `0` | `PASS` | passed | none |
+| `77`, fixture declared required | `SKIP` | skipped | non-zero |
+| `77`, fixture not declared required | `SKIP` | skipped | none |
+| any other non-zero | `FAIL` | failed | non-zero |
+
+`Total` reconciles to `Passed + Failed + Skipped`. A skipped fixture increments
+neither of its neighbours. Exit `77` is the repository's shell skip convention and
+is produced by `reg_skip_with_blocker` in
+[`tests/e2e/assistant_regression/lib/regression_helpers.sh`](../tests/e2e/assistant_regression/lib/regression_helpers.sh),
+which also emits a `SKIP_REASON:` line. `run_all.sh` reads that line — while still
+streaming the fixture's output live — and attaches the reason to the results-block
+entry, so the summary carries the reason rather than an invented exit code.
+
+Mapping exit `77` onto the `PASS` branch is forbidden. It removes the red line
+while recreating the condition
+[`specs/069-assistant-http-transport/bugs/BUG-069-005-required-e2e-false-green/`](../specs/069-assistant-http-transport/bugs/BUG-069-005-required-e2e-false-green/)
+was opened for: a required behaviour going unproven under a green suite. A skip
+stays conspicuous in the output.
+
+### The Required-Set Rule
+
+Requiredness is declared by the runner, never inferred from a fixture:
+
+- `REQUIRED_TESTS` in [`tests/e2e/run_all.sh`](../tests/e2e/run_all.sh)
+- `e2e_required_shell_tests` in [`smackerel.sh`](../smackerel.sh)
+
+Both are explicit named lists, in the same idiom as `LIFECYCLE_TESTS`, so a
+fixture cannot downgrade itself out of the required set by editing its own body.
+A required fixture that skips is still labelled `SKIP` — the label stays honest —
+and the suite exit stays non-zero because the behaviour it covers is unproven.
+Neither half is sufficient alone. Adding a fixture to a product lane means adding
+it to the matching required list in the same change set.
+
+The contract is covered by
+[`tests/e2e/runner_contract/run_runner_contract.sh`](../tests/e2e/runner_contract/run_runner_contract.sh),
+which drives the tracked runners over synthetic exit-`0`/`77`/`1` fixtures and
+asserts their emitted summary text, all three tallies, and process exit status.
+
 ## Verification Standards
 
 Smackerel inherits the Bubbles evidence rules:

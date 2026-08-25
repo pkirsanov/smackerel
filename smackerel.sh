@@ -1949,14 +1949,99 @@ case "$COMMAND" in
 
         e2e_shell_results=()
         e2e_shell_failures=0
+        e2e_shell_skips=0
+        e2e_required_shell_skips=0
         e2e_overall_status=0
+
+        # A fixture can prove a behaviour, disprove it, or not run. Exit 77 is
+        # this repository's shell convention for the third outcome; see
+        # tests/e2e/assistant_regression/lib/regression_helpers.sh.
+        E2E_SHELL_SKIP_EXIT_CODE=77
+
+        # Shell E2E scripts whose skip must keep the lane non-green.
+        # Requiredness is declared here by the runner, in the same explicit
+        # named-array idiom the lane already uses for its script lists, so a
+        # fixture cannot downgrade itself out of the required set by editing
+        # its own body. This list mirrors REQUIRED_TESTS in
+        # tests/e2e/run_all.sh so both classifiers agree on one rule.
+        e2e_required_shell_tests=(
+          test_timeout_process_cleanup.sh
+          test_deploy_target_status.sh
+          test_compose_start.sh
+          test_persistence.sh
+          test_postgres_readiness_gate.sh
+          test_config_fail.sh
+          test_capture_pipeline.sh
+          test_voice_pipeline.sh
+          test_llm_failure_e2e.sh
+          test_capture_api.sh
+          test_capture_errors.sh
+          test_voice_capture_api.sh
+          test_knowledge_graph.sh
+          test_graph_entities.sh
+          test_search.sh
+          test_search_filters.sh
+          test_search_empty.sh
+          test_telegram.sh
+          test_telegram_auth.sh
+          test_telegram_voice.sh
+          test_telegram_format.sh
+          test_digest.sh
+          test_digest_quiet.sh
+          test_digest_telegram.sh
+          test_web_ui.sh
+          test_web_detail.sh
+          test_web_settings.sh
+          test_connector_framework.sh
+          test_imap_sync.sh
+          test_caldav_sync.sh
+          test_youtube_sync.sh
+          test_bookmark_import.sh
+          test_topic_lifecycle.sh
+          test_settings_connectors.sh
+          test_maps_import.sh
+          test_browser_sync.sh
+        )
+
+        e2e_shell_test_is_required() {
+          local candidate="$1"
+          local required
+
+          for required in "${e2e_required_shell_tests[@]}"; do
+            [[ "$candidate" == "$required" ]] && return 0
+          done
+          return 1
+        }
 
         e2e_record_shell_result() {
           local test_name="$1"
           local status="$2"
+          local reason="${3:-}"
 
           if [[ "$status" -eq 0 ]]; then
             e2e_shell_results+=("PASS: ${test_name}")
+            return 0
+          fi
+
+          if [[ "$status" -eq "$E2E_SHELL_SKIP_EXIT_CODE" ]]; then
+            e2e_shell_skips=$((e2e_shell_skips + 1))
+            # The results block carries the fixture's own SKIP_REASON so the
+            # summary is readable without scrolling back through the run, and
+            # so both classifiers report a skip the same way. Only a fixture
+            # that emitted no reason falls back to naming that absence.
+            [[ -n "$reason" ]] || reason="no SKIP_REASON emitted by ${test_name}"
+            if e2e_shell_test_is_required "$test_name"; then
+              e2e_shell_results+=("SKIP: ${test_name} (${reason}) [required]")
+              e2e_required_shell_skips=$((e2e_required_shell_skips + 1))
+              # A required skip keeps the lane non-green because the behaviour
+              # is unproven, but the raw child status is never propagated: the
+              # lane must not exit 77 and claim a skip code as its own.
+              if [[ "$e2e_overall_status" -eq 0 ]]; then
+                e2e_overall_status=1
+              fi
+            else
+              e2e_shell_results+=("SKIP: ${test_name} (${reason})")
+            fi
             return 0
           fi
 
@@ -1969,14 +2054,19 @@ case "$COMMAND" in
 
         e2e_run_shell_test() {
           local test_name="$1"
-          local status
+          local status reason capture
           shift
 
+          capture="$(mktemp)"
           set +e
-          e2e_run_child "$@"
-          status=$?
+          # tee keeps the fixture's output streaming live while giving the
+          # classifier a copy to read SKIP_REASON from; nothing is swallowed.
+          e2e_run_child "$@" 2>&1 | tee "$capture"
+          status=${PIPESTATUS[0]}
           set -e
-          e2e_record_shell_result "$test_name" "$status"
+          reason="$(sed -n 's/^SKIP_REASON:[[:space:]]*//p' "$capture" | head -1)"
+          rm -f "$capture"
+          e2e_record_shell_result "$test_name" "$status" "$reason"
           return 0
         }
 
@@ -1988,7 +2078,7 @@ case "$COMMAND" in
             return 0
           fi
 
-          passed=$((total - e2e_shell_failures))
+          passed=$((total - e2e_shell_failures - e2e_shell_skips))
           echo ""
           echo "========================================="
           echo "  Shell E2E Test Results"
@@ -2000,6 +2090,10 @@ case "$COMMAND" in
           echo "  Total:  $total"
           echo "  Passed: $passed"
           echo "  Failed: $e2e_shell_failures"
+          echo "  Skipped: $e2e_shell_skips"
+          if [[ "$e2e_required_shell_skips" -gt 0 ]]; then
+            echo "  Required skips: $e2e_required_shell_skips (behaviour declared required is unproven)"
+          fi
           echo "========================================="
           echo ""
         }

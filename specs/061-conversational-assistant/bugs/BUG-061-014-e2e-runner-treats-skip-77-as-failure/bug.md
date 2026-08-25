@@ -1,6 +1,6 @@
 # BUG-061-014 — The E2E runners have no SKIP bucket, so every skip is reported as a lie
 
-**Status:** Confirmed — discovery and documentation complete; no fix implemented
+**Status:** Fixed (Scope 1) — SKIP is a first-class outcome in both shell E2E classifiers; Scope 2 (the false-green half, `skip_unless_accel_tier`) is a separate scope with its own Change Boundary
 **Severity:** S2 — the suite's reported colour does not correspond to what the suite proved
 **Parent Spec:** `061-conversational-assistant`
 **Release Train:** `mvp`

@@ -14,10 +14,25 @@ source "$SCRIPT_DIR/lib/helpers.sh"
 
 PASSED=0
 FAILED=0
+SKIPPED=0
+REQUIRED_SKIPPED=0
 RESULTS=()
+
+# A fixture can prove a behaviour, disprove it, or not run. Exit 77 is this
+# repository's shell convention for the third outcome; see
+# tests/e2e/assistant_regression/lib/regression_helpers.sh::reg_skip_with_blocker.
+SKIP_EXIT_CODE=77
 
 # Lifecycle tests manage their own stack boot/teardown and must run standalone.
 LIFECYCLE_TESTS="test_timeout_process_cleanup test_compose_start test_persistence test_postgres_readiness_gate test_config_fail"
+
+# Fixtures whose skip must keep the suite non-green. Requiredness is declared
+# here by the runner, in the same explicit-array idiom as LIFECYCLE_TESTS, so a
+# fixture cannot downgrade itself out of the required set by editing its own
+# body. A required fixture that skips is still reported as SKIP — the label
+# stays honest — and the suite exit stays non-zero because the behaviour the
+# fixture covers is unproven.
+REQUIRED_TESTS="test_timeout_process_cleanup test_deploy_target_status test_compose_start test_persistence test_postgres_readiness_gate test_config_fail test_capture_pipeline test_voice_pipeline test_llm_failure_e2e test_capture_api test_capture_errors test_voice_capture_api test_knowledge_graph test_graph_entities test_search test_search_filters test_search_empty test_telegram test_telegram_auth test_telegram_voice test_telegram_format test_digest test_digest_quiet test_digest_telegram test_web_ui test_web_detail test_web_settings test_connector_framework test_imap_sync test_caldav_sync test_youtube_sync test_bookmark_import test_topic_lifecycle test_settings_connectors test_maps_import test_browser_sync"
 
 is_lifecycle_test() {
   local name="$1"
@@ -27,24 +42,46 @@ is_lifecycle_test() {
   return 1
 }
 
+is_required_test() {
+  local name="$1"
+  for rt in $REQUIRED_TESTS; do
+    [[ "$name" == "$rt" ]] && return 0
+  done
+  return 1
+}
+
 run_test() {
   local test_file="$1"
-  local test_name
+  local test_name exit_code output_file reason
   test_name="$(basename "$test_file" .sh)"
+  output_file="$(mktemp)"
 
   echo "--- Running: $test_name ---"
   set +e
-  bash "$test_file" 2>&1
-  local exit_code=$?
+  # tee keeps the fixture's own output streaming live while giving the
+  # classifier a copy to read SKIP_REASON from; nothing is swallowed.
+  bash "$test_file" 2>&1 | tee "$output_file"
+  exit_code=${PIPESTATUS[0]}
   set -e
 
-  if [ $exit_code -eq 0 ]; then
+  if [ "$exit_code" -eq 0 ]; then
     RESULTS+=("PASS: $test_name")
     PASSED=$((PASSED + 1))
+  elif [ "$exit_code" -eq "$SKIP_EXIT_CODE" ]; then
+    reason="$(sed -n 's/^SKIP_REASON:[[:space:]]*//p' "$output_file" | head -1)"
+    [ -n "$reason" ] || reason="no SKIP_REASON emitted by $test_file"
+    SKIPPED=$((SKIPPED + 1))
+    if is_required_test "$test_name"; then
+      RESULTS+=("SKIP: $test_name ($reason) [required]")
+      REQUIRED_SKIPPED=$((REQUIRED_SKIPPED + 1))
+    else
+      RESULTS+=("SKIP: $test_name ($reason)")
+    fi
   else
     RESULTS+=("FAIL: $test_name (exit=$exit_code)")
     FAILED=$((FAILED + 1))
   fi
+  rm -f "$output_file"
   echo ""
 }
 
@@ -103,7 +140,7 @@ fi
 
 # ── Results ──────────────────────────────────────────────────────────────────
 
-TOTAL=$((PASSED + FAILED))
+TOTAL=$((PASSED + FAILED + SKIPPED))
 echo "========================================="
 echo "  E2E Test Results"
 echo "========================================="
@@ -114,8 +151,12 @@ echo ""
 echo "  Total:  $TOTAL"
 echo "  Passed: $PASSED"
 echo "  Failed: $FAILED"
+echo "  Skipped: $SKIPPED"
+if [ $REQUIRED_SKIPPED -gt 0 ]; then
+  echo "  Required skips: $REQUIRED_SKIPPED (behaviour declared required is unproven)"
+fi
 echo "========================================="
 
-if [ $FAILED -gt 0 ]; then
+if [ $FAILED -gt 0 ] || [ $REQUIRED_SKIPPED -gt 0 ]; then
   exit 1
 fi
