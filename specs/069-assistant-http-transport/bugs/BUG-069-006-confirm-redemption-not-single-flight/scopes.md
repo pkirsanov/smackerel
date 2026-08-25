@@ -167,8 +167,8 @@ because EB-6 depends on it, not because it is new work.
 - [x] A confirm racing the timeout sweep produces exactly one terminal audit row. → Evidence: [report.md](report.md#the-tests-are-sensitive-to-the-defect)
 - [ ] The single-flight comment at `machine.go` line 213 states the guarantee the code actually enforces.
 - [ ] A redemption write leaves `working_context`, `pending_disambig`, `pending_clarify`, and `legacy_retirement_notices` untouched.
-- [x] `TestAssistantHTTPE2E_ConfirmAcceptExecutesGatedActionOnce` passes unmodified. → Evidence: [report.md](report.md#what-this-phase-checks-and-what-it-leaves-unchecked)
-- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior pass. → Evidence: [report.md](report.md#lane-matrix)
+- [x] `TestAssistantHTTPE2E_ConfirmAcceptExecutesGatedActionOnce` passes unmodified. → Evidence: [report.md](report.md#confirm-e2e-raw-output)
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior pass. → Evidence: [report.md](report.md#confirm-e2e-raw-output)
 - [ ] Broader E2E regression suite passes.
 - [ ] Change Boundary is respected and zero excluded file families were changed.
 - [x] `SCN-BUG069006-001` holds: two concurrent confirms carrying one reference redeem it exactly once — one caller observes the win, the other receives `ErrPendingNotFound`, and exactly one `confirmed` audit row exists. → Evidence: [report.md](report.md#unit-concurrency-re-executed-at-the-current-tree)

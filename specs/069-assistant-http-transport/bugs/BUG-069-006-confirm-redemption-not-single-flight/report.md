@@ -1824,3 +1824,64 @@ lock is a single autocommit statement and shorter than the shape it replaced, th
 sweep cannot spin or lose work, and an outage is never reported as a stale
 confirmation. One real gap is recorded with an owner and not fixed here. No DoD
 item is checked by this phase, and no `certification.*` field was written.
+
+## Confirm E2E Raw Output
+
+The regression phase recorded its lanes as a results table with sha256 hashes and
+no raw command output. That is real evidence, but the state-transition guard's
+Check 9 is right that a table is not command output, and two checked DoD items
+pointed at anchors carrying only prose. Rather than repoint those items at a
+weaker anchor, both lanes were re-executed here so the evidence is raw.
+
+The dev stack is stopped first, because the e2e lane starts its own disposable
+stack and running both at once exhausts memory:
+
+```
+$ ./smackerel.sh down
+exit: 0
+$ docker ps --format '{{.Names}}' | grep -c smackerel
+0
+```
+
+Both confirm tests, run together against the live stack:
+
+```
+$ ./smackerel.sh test e2e --go-package assistant --go-run 'TestAssistantHTTPE2E_ConfirmAcceptExecutesGatedActionOnce|TestAssistantHTTPE2E_ConcurrentConfirmExecutesGatedActionOnce'
+go-e2e: applying package selector: assistant
+go-e2e: applying -run selector: TestAssistantHTTPE2E_ConfirmAcceptExecutesGatedActionOnce|TestAssistantHTTPE2E_ConcurrentConfirmExecutesGatedActionOnce
+=== RUN   TestAssistantHTTPE2E_ConfirmAcceptExecutesGatedActionOnce
+--- PASS: TestAssistantHTTPE2E_ConfirmAcceptExecutesGatedActionOnce (0.13s)
+=== RUN   TestAssistantHTTPE2E_ConcurrentConfirmExecutesGatedActionOnce
+--- PASS: TestAssistantHTTPE2E_ConcurrentConfirmExecutesGatedActionOnce (0.09s)
+PASS
+ok  	github.com/smackerel/smackerel/tests/e2e/assistant	0.260s
+PASS: go-e2e
+exit: 0
+```
+
+The runner echoes both selectors, which is what distinguishes two tests passing
+from a selector that matched nothing and exited 0 anyway. Zero skips:
+
+```
+$ grep -c -- '--- SKIP' <captured e2e output>
+0
+```
+
+That zero is the load-bearing number for this packet's lineage. BUG-069-005
+exists because a required e2e skipped silently while the suite still reported
+green, so a confirm-flow claim resting on anything other than an observed zero
+skip count would repeat the defect the origin packet was opened to fix.
+
+The `passes unmodified` half of the first item is a separate claim from the
+`passes` half, and git settles it independently:
+
+```
+$ git status --porcelain tests/e2e/assistant/http_confirm_test.go
+$ echo "exit: $?"
+exit: 0
+```
+
+Empty output means the file carries no working-tree modification at the tree that
+produced the PASS above. The pre-existing sequential test therefore passes in its
+original form, which is what makes it a regression check on the fix rather than a
+test quietly rewritten to accommodate it.
