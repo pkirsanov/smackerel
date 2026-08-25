@@ -784,3 +784,142 @@ extracted block and watching the driver notice is the proof: a driver that had
 copied the branch logic would have stayed green while the real runner was broken.
 The other five mutations demonstrate the same property for `run_all.sh`, since
 each one changed only the tracked file and each was detected.
+
+## Simplify Phase
+
+One finding, and it is this packet's own defect shape at smaller scale.
+
+Requiredness is declared twice — `REQUIRED_TESTS` in `tests/e2e/run_all.sh` and
+`e2e_required_shell_tests` in `smackerel.sh`. They were identical (36 entries
+each) and `smackerel.sh` carried a comment saying its list "mirrors
+REQUIRED_TESTS in tests/e2e/run_all.sh".
+
+A comment does not hold. The original bug existed *because* two surfaces that had
+to agree about the skip convention disagreed and nothing checked. Leaving the
+required sets guarded by prose rebuilds that condition on a delay.
+
+`SCN-061-014-13` now asserts the agreement mechanically: both lists are extracted
+from the tracked files and compared. The non-emptiness check comes first, because
+two empty lists would otherwise agree vacuously — and an empty required set means
+no skip can ever redden either lane, which is the failure this whole packet is
+about.
+
+```
+--- SCN-061-014-13 — both classifiers declare the same required set ---
+  run_all.sh declares 36 required fixtures
+  smackerel.sh declares 36 required fixtures
+  ok   AC-09-1 — run_all.sh's required set is non-empty
+  ok   AC-09-2 — smackerel.sh's required set is non-empty
+  ok   AC-09-3 — both classifiers declare the same number of required fixtures
+  ok   AC-09-4 — the two required sets are identical
+  Assertions run:    55
+  Assertions failed: 0
+```
+
+Proven to bite. Removing one entry from `smackerel.sh` alone, in a worktree:
+
+```
+drift injected: removed test_browser_sync.sh from smackerel.sh only
+  run_all.sh declares 36 required fixtures
+  smackerel.sh declares 35 required fixtures
+  FAIL AC-09-3 — both classifiers declare the same number of required fixtures
+  FAIL AC-09-4 — the two required sets are identical
+  Assertions failed: 2
+exit: 1
+```
+
+### Considered and rejected
+
+**Extracting the classifier into a shared shell library sourced by both.**
+`run_all.sh` already sources `tests/e2e/lib/helpers.sh`, but `smackerel.sh`
+deliberately sources nothing from the test tree. A shared library would create a
+CLI-to-test-tree dependency in order to remove a duplication that a test can hold
+instead. Asserting the invariant is cheaper and gives the stronger guarantee: the
+lists may live apart as long as they cannot disagree.
+
+## Stabilize Phase
+
+The classifier change added per-fixture I/O — a `mktemp`, a `tee`, and a `sed` —
+to a runner that executes 61 shell fixtures. Four operational questions, one real
+finding.
+
+**`mktemp` failure is already fail-loud.** `run_all.sh` runs under `set -euo
+pipefail`, so a failed `mktemp` aborts the runner rather than producing an empty
+`$output_file` and a confusing downstream error. This is correct behaviour and
+needs no guard.
+
+**Cost is negligible relative to what it measures.** One `mktemp`, one `tee` and
+one `sed` per fixture, against fixtures that boot Docker stacks. The `sed` runs
+only on the skip branch, so the common paths pay only `tee`.
+
+**Peak temp usage is one fixture's output, not the suite's.** The file is removed
+at the end of each `run_test`, so a fixture with a large log does not accumulate
+across the run.
+
+**Finding: temp files leak on abnormal termination.** `rm -f "$output_file"` sits
+at the end of `run_test` and there is no `trap`. If the runner is interrupted —
+Ctrl-C, or the `timeout` wrapper the lane uses sending SIGTERM — the current
+fixture's temp file survives in `TMPDIR`. Each is one fixture's output and
+`/tmp` is not durable, so the impact is small, but the cleanup is currently
+conditional on a clean exit.
+
+This is recorded rather than fixed in this pass for a specific reason: the full
+shell E2E lane was executing `run_all.sh` at the time. Bash reads a script
+incrementally as it runs, so editing a running script risks corrupting its
+execution. The correct form is a single run-scoped temp file plus an `EXIT` trap,
+which is both simpler than the per-fixture `mktemp` and leak-free; it is applied
+after the lane reports rather than underneath it.
+
+## Security Phase
+
+The classifier now reads text a fixture controls — `SKIP_REASON:` — and places it
+into the results summary. That is a new data path from untrusted output into
+operator-facing display, so it gets a real look rather than a formality.
+
+**No command injection.** The reason is captured by command-substituting `sed`,
+stored in a variable, interpolated into an array element, and echoed. Bash does
+not re-evaluate variable contents, so substitution syntax in the reason is inert:
+
+```
+$ # fixture emits: SKIP_REASON: $(touch PWNED) `touch PWNED2` ;touch PWNED3
+SKIP: hostile ($(touch /tmp/sec-probe/PWNED) `touch /tmp/sec-probe/PWNED2` ;touch /tmp/sec-probe/PWNED3)
+--- did any injection fire? ---
+NONE — no command substitution occurred
+```
+
+The reason renders literally, which is the desired outcome: hostile text is
+visible rather than executed.
+
+**A fixture cannot forge its own classification.** This is the property that
+matters, because the whole packet is about the suite's colour being truthful.
+Classification reads the exit code; printed text is informational only.
+
+```
+$ # fixture prints RESULT: SKIPPED and SKIP: forge, then exits 1
+fixture exit code: 1
+FAIL: forge (exit=1)
+$ # fixture prints FAIL: everything is broken, then exits 0
+PASS: forge2 (exit=0) — text ignored, correct
+```
+
+A failing fixture cannot disguise itself as a skip by printing skip markers, and
+a passing one cannot be reddened by printing failure markers. Exiting 77 *is* the
+declaration of a skip — that is the contract, and it requires actually exiting
+77, which a fixture cannot do accidentally.
+
+**Fixture output at rest is owner-only.** The temp file now holds fixture output
+that may contain test-stack credentials. `mktemp` creates it `0600`:
+
+```
+$ f=$(mktemp); stat -c '%a %n' "$f"
+600 /tmp/tmp.SgqbgBO7EG
+```
+
+Owner-only, and removed at the end of the fixture. The exposure window is one
+fixture and the permission is correct.
+
+**Considered, low severity.** A `SKIP_REASON` containing ANSI escape sequences
+could distort the summary's rendering. It cannot alter classification, counts, or
+the suite exit code, and the same fixture could already write escapes directly to
+the terminal on the live-stream path that existed before this change. Recorded as
+cosmetic rather than treated as a control.

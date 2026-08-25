@@ -32,8 +32,8 @@
     "runnerCodePathsReadingExit77": 0
   },
   "execution": {
-    "activeAgent": "bubbles.test",
-    "currentPhase": "test",
+    "activeAgent": "bubbles.security",
+    "currentPhase": "security",
     "currentScope": null,
     "substate": "documented_awaiting_implementation",
     "completedScopes": [],
@@ -58,6 +58,27 @@
         "provenanceMode": "specialist",
         "claimedAt": "2026-08-25T04:17:59Z",
         "evidenceRef": "report.md#mutation-proof--every-adversarial-case-kills-its-own-wrong-fix"
+      },
+      {
+        "phase": "simplify",
+        "agent": "bubbles.simplify",
+        "provenanceMode": "specialist",
+        "claimedAt": "2026-08-25T04:24:53Z",
+        "evidenceRef": "report.md#simplify-phase"
+      },
+      {
+        "phase": "stabilize",
+        "agent": "bubbles.stabilize",
+        "provenanceMode": "specialist",
+        "claimedAt": "2026-08-25T04:24:53Z",
+        "evidenceRef": "report.md#stabilize-phase"
+      },
+      {
+        "phase": "security",
+        "agent": "bubbles.security",
+        "provenanceMode": "specialist",
+        "claimedAt": "2026-08-25T04:24:53Z",
+        "evidenceRef": "report.md#security-phase"
       }
     ],
     "lastUpdatedAt": "2026-08-25T02:52:34Z",
@@ -120,6 +141,42 @@
         "outcome": "completed_owned",
         "evidenceRef": "report.md#mutation-proof--every-adversarial-case-kills-its-own-wrong-fix",
         "summary": "Test phase. Two obligations the implement phase had left open. First, mutation proof. Asserting an adversarial case EXISTS is weaker than proving it BITES, so each named wrong fix was applied in a detached worktree and the suite re-run; a case earns its keep only when its own assertion is the one that fails. ADV-01 (map 77 onto PASS) -> FAIL ADV-01-a. ADV-02 (drop REQUIRED_SKIPPED from the exit condition) -> FAIL ADV-02-a with exactly one assertion failing, which is what a precisely-targeted case looks like: it discriminates that wrong fix rather than tripping over collateral damage. ADV-03 (broaden the skip branch to -ne 0) -> FAIL ADV-03-a/b/c. ADV-04 (disable the skip branch in smackerel.sh's tracked classifier) -> FAIL AC-02-1; ADV-04 is a property rather than a payload, and mutating the tracked text and watching the driver notice is the proof that the driver executes tracked code -- a driver that had copied the branch logic would have stayed green while the real runner was broken. ADV-05 (count a skipped fixture as passed as well) -> FAIL ADV-05-a/d. ADV-06 (collapse the unknown tier into the skip branch) -> FAIL ADV-06-a/b. Six of six kill their own wrong fix. Second, DoD evidence. Every checked item still carried an unfilled [ACTUAL terminal/tool output] placeholder underneath it, so a reader saw a placeholder beneath a ticked box. artifact-lint does not match that form, so it had been passing while saying nothing about it. 24 blocks are now filled with the real captured output for that specific item, not a cross-reference. Scope 1 stands at 14 of 15 and Scope 2 at 10 of 11. The single open item in each is the same one -- 'Existing unit, integration, and shell E2E lanes pass with no new failures' -- because the full shell E2E lane had not yet reported and closing it on unit, lint and format alone would be the shortcut this packet keeps refusing. No certification.* field was written."
+      },
+      {
+        "at": "2026-08-25T04:24:53Z",
+        "agent": "bubbles.simplify",
+        "phasesExecuted": [
+          "simplify"
+        ],
+        "provenanceMode": "specialist",
+        "claimSource": "executed",
+        "outcome": "completed_owned",
+        "evidenceRef": "report.md#simplify-phase",
+        "summary": "Simplify phase. One finding, and it is this packet's own defect shape at smaller scale. Requiredness is declared twice -- REQUIRED_TESTS in tests/e2e/run_all.sh and e2e_required_shell_tests in smackerel.sh. The lists were identical at 36 entries each and smackerel.sh carried a comment saying its list mirrors the other. A comment does not hold. The original bug existed BECAUSE two surfaces that had to agree about the skip convention disagreed and nothing checked, so leaving the required sets guarded by prose rebuilds that condition on a delay. SCN-061-014-13 now asserts the agreement mechanically by extracting both lists from the tracked files and comparing them, with a non-emptiness check FIRST because two empty lists would agree vacuously and an empty required set means no skip can ever redden either lane. Proven to bite: removing one entry from smackerel.sh alone in a worktree gives 36 vs 35 and fails AC-09-3 and AC-09-4 at exit 1. Clean tree is 55 assertions, 0 failures, up from 51. Considered and rejected: extracting the classifier into a shared shell library sourced by both. run_all.sh already sources tests/e2e/lib/helpers.sh but smackerel.sh deliberately sources nothing from the test tree, so a shared library would create a CLI-to-test-tree dependency to remove a duplication a test can hold instead. Asserting the invariant is cheaper and gives the stronger guarantee: the lists may live apart as long as they cannot disagree."
+      },
+      {
+        "at": "2026-08-25T04:24:53Z",
+        "agent": "bubbles.stabilize",
+        "phasesExecuted": [
+          "stabilize"
+        ],
+        "provenanceMode": "specialist",
+        "claimSource": "executed",
+        "outcome": "completed_diagnostic",
+        "evidenceRef": "report.md#stabilize-phase",
+        "summary": "Stabilize phase. The classifier change added per-fixture I/O -- a mktemp, a tee and a sed -- to a runner that executes 61 shell fixtures. Four questions, one real finding. mktemp failure is already fail-loud: run_all.sh runs under set -euo pipefail, so a failed mktemp aborts the runner rather than producing an empty path and a confusing downstream error; no guard needed. Cost is negligible against fixtures that boot Docker stacks, and the sed runs only on the skip branch so common paths pay only tee. Peak temp usage is one fixture's output rather than the suite's, because the file is removed at the end of each run_test. Finding: temp files leak on abnormal termination. rm -f sits at the end of run_test and there is no trap, so an interrupt -- Ctrl-C, or the timeout wrapper the lane uses sending SIGTERM -- leaves the current fixture's temp file in TMPDIR. Each is one fixture's output and /tmp is not durable, so impact is small, but cleanup is currently conditional on a clean exit. Recorded rather than fixed in this pass for a specific reason: the full shell E2E lane was executing run_all.sh at the time, and bash reads a script incrementally as it runs, so editing a running script risks corrupting its execution. The correct form is a single run-scoped temp file plus an EXIT trap, which is both simpler than the per-fixture mktemp and leak-free; applied after the lane reports."
+      },
+      {
+        "at": "2026-08-25T04:24:53Z",
+        "agent": "bubbles.security",
+        "phasesExecuted": [
+          "security"
+        ],
+        "provenanceMode": "specialist",
+        "claimSource": "executed",
+        "outcome": "completed_diagnostic",
+        "evidenceRef": "report.md#security-phase",
+        "summary": "Security phase. The classifier now reads fixture-controlled text (SKIP_REASON) and places it into the operator-facing summary, which is a new data path from untrusted output into display, so it gets a real look rather than a formality. No command injection: the reason is captured by command-substituting sed, stored in a variable, interpolated into an array element and echoed. Bash does not re-evaluate variable contents, so a hostile reason containing $(...), backticks and semicolons renders literally and fires nothing -- verified by probe. Hostile text is visible rather than executed, which is the desired outcome. A fixture cannot forge its own classification, and this is the property that matters because the packet is about the suite's colour being truthful. Classification reads the EXIT CODE; printed text is informational. A fixture printing RESULT: SKIPPED and SKIP: forge while exiting 1 is classified FAIL, and one printing FAIL: everything is broken while exiting 0 is classified PASS. Exiting 77 IS the declaration of a skip, and that requires actually exiting 77. Fixture output at rest is owner-only: the temp file may hold test-stack credentials, and mktemp creates it 0600, verified. Exposure window is one fixture and the permission is correct. Considered, low severity: a SKIP_REASON containing ANSI escapes could distort summary rendering. It cannot alter classification, counts or suite exit, and the same fixture could already write escapes to the terminal on the pre-existing live-stream path. Recorded as cosmetic."
       }
     ]
   },
