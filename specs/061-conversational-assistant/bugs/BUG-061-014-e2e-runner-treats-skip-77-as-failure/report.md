@@ -897,6 +897,33 @@ file behind. That is a property of POSIX signal handling, not a defect in the
 cleanup: one `0600` file holding one fixture's output, in a directory that does
 not survive reboot.
 
+**A second finding, arrived at by accident.** Immediately after the trap change
+both drivers reported failures — 23 in one, 6 in the other. The suites were fine;
+my shell was not. An earlier probe had `export TMPDIR` to a scratch directory
+which I then deleted, so `mktemp -d` failed, `WORK_ROOT` became the empty string,
+and every sandbox path resolved to an absolute `/<name>`:
+
+```
+run_runner_contract.sh: line 116: /mixed/smackerel.sh: No such file or directory
+run_runner_contract.sh: line 124: /mixed/tests/e2e/lib/helpers.sh: No such file or directory
+  FAIL AC-01-1 — skip fixture is reported as SKIP
+  FAIL AC-03-1 — SCN-061-014-03: passed count is 1
+  Assertions failed: 23
+```
+
+Both drivers run under `set -uo pipefail` rather than `-e`, so the failed
+`mktemp` was not fatal and the wall of downstream failures buried its own cause.
+A driver that answers a missing `TMPDIR` with twenty-three unrelated assertion
+failures is actively misleading, so both now check the root and say one thing:
+
+```
+$ TMPDIR=/nonexistent-dir-for-probe bash tests/e2e/runner_contract/run_runner_contract.sh
+mktemp: failed to create directory via template '/nonexistent-dir-for-probe/...'
+ERROR: could not create a sandbox root under /nonexistent-dir-for-probe
+```
+
+Clean runs are unaffected: 55/55 and 23/23.
+
 ## Security Phase
 
 The classifier now reads text a fixture controls — `SKIP_REASON:` — and places it
