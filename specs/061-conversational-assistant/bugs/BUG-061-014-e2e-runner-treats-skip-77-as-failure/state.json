@@ -86,6 +86,13 @@
         "provenanceMode": "specialist",
         "claimedAt": "2026-08-25T06:57:35Z",
         "evidenceRef": "report.md#regression-phase"
+      },
+      {
+        "phase": "audit",
+        "agent": "bubbles.goal",
+        "provenanceMode": "direct",
+        "claimedAt": "2026-08-25T07:13:39Z",
+        "evidenceRef": "report.md#audit-phase"
       }
     ],
     "lastUpdatedAt": "2026-08-25T02:52:34Z",
@@ -196,6 +203,18 @@
         "outcome": "completed_owned",
         "evidenceRef": "report.md#regression-phase",
         "summary": "Regression phase. Four findings. R1 is the one that justifies the phase: docs/Testing.md carried the normative instruction 'A 77 exit MUST be treated as PASS by any aggregating runner' -- precisely ADV-061-014-01, the wrong fix this packet's adversarial case exists to catch -- in the SAME FILE as the three-outcome contract forbidding it. One document gave two opposite instructions, and that is the likeliest explanation for how the original defect survived: an engineer following the documented rule would have implemented the false green. R2: two other sections still described skip_unless_accel_tier as exiting 0 while a third already said it 'previously exited 0'. Both corrected to 77 / SKIP / counted in Skipped. A related mismatch surfaced -- the doc named SKIP_REASON=cpu-tier-operator-defer-per-SCOPE-06c-PACKET-3 while the helper emits SKIP_REASON: CPU-TIER-HARDWARE-LACKS-ACCELERATOR, a different token AND separator. Correcting the text alone would repeat the mistake the simplify phase diagnosed for the required sets, so the tier driver now extracts the token from helpers.sh and asserts the doc contains it, non-emptiness checked first because assert_contains with an empty needle passes vacuously. 25 assertions 0 failures clean; mutating the doc token gives FAIL DOC-2 at exit 1. R3/R4 are foreign-owned staleness in BUG-069-006 state.json and the parent spec's scopes.md, both asserting the old exit 0 / FAIL-on-77 behaviour; routed to their owners rather than edited, since specs/** outside this packet is excluded by both Change Boundaries. Searched clean: no counter consumer parses the runners' tallies except this packet's driver; required-set parity 36/36 with empty symmetric difference; BUG-069-005 concerns the Go lane only."
+      },
+      {
+        "at": "2026-08-25T07:13:39Z",
+        "agent": "bubbles.goal",
+        "phasesExecuted": [
+          "audit"
+        ],
+        "provenanceMode": "direct",
+        "claimSource": "executed",
+        "outcome": "completed_owned",
+        "evidenceRef": "report.md#audit-phase",
+        "summary": "Audit phase. The bubbles.audit specialist was dispatched and returned no output; git status --porcelain was empty afterwards, so it was a genuine no-op and the audit was performed directly -- recorded as provenanceMode direct rather than attributed to a specialist that did not run. Classification audited branch by branch: three mutually exclusive branches with else catching every other non-zero, and the skip branch testing equality against a single constant, so no real failure can reach it. Suite exit is 1 on FAILED>0 OR REQUIRED_SKIPPED>0 -- reddens on an unproven required behaviour, never propagates the child's raw 77. Traps preserve 130/143. SKIP_EXIT_CODE defined once per file with no second definition to drift. Evidence integrity: 27 fenced blocks hashed, 0 duplicates; 26 checked DoD items, 0 missing evidence headers, 0 unfilled placeholders. One real finding: SCN-061-014-13 was asserted by the driver and described in the report but ABSENT from scopes.md -- added during simplify without updating the scenario list -- and the same was true of the regression phase's doc-parity assertions. Both are now declared (SCN-061-014-13 required-set parity in Scope 1, SCN-061-014-14 documented reason token in Scope 2) and the driver banner renamed to match. All 14 scenarios now have at least one assertion; suites re-run at 55/55 and 25/25. The one asymmetry -- smackerel.sh does not attach SKIP_REASON -- confirmed deliberate and mechanically caused, not an oversight. Lanes not re-run during the audit; the contract drivers were, being fast and stack-free."
       }
     ]
   },

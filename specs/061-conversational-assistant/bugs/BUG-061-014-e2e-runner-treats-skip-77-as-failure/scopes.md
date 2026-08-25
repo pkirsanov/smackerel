@@ -95,6 +95,12 @@ Feature: The shell E2E runners report three outcomes, not two
     When each is run through the corrected classifier
     Then each is reported as SKIP with its own SKIP_REASON
     And none is reported as FAIL
+
+  Scenario: SCN-061-014-13 — both classifiers declare the same required set
+    Given REQUIRED_TESTS in run_all.sh and e2e_required_shell_tests in smackerel.sh
+    When both declarations are extracted from the tracked files and compared
+    Then neither list is empty
+    And the two lists are identical
 ```
 
 ### Adversarial cases
@@ -482,6 +488,12 @@ Feature: Both skip helpers resolve to the same reported outcome
     When a fixture calls skip_unless_accel_tier
     Then the fixture exits 2
     And the runner reports it as FAIL
+
+  Scenario: SCN-061-014-14 — the documented skip reason is the one emitted
+    Given skip_unless_accel_tier emits a SKIP_REASON token
+    When the token is extracted from helpers.sh
+    Then the token is not empty
+    And docs/Testing.md documents that same token
 ```
 
 ### Adversarial cases

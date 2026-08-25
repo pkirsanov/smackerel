@@ -268,7 +268,7 @@ assert_eq UNIF-2 "and that code is the skip convention" "$TIER_EXIT" "$SKIP_EXIT
 # The regression phase found docs/Testing.md naming a SKIP_REASON token the
 # helper had never emitted. Prose cannot hold a value that lives in code, so the
 # agreement is asserted instead of described.
-scenario "SCOPE-02 doc parity — the documented SKIP_REASON is the emitted one"
+scenario "SCN-061-014-14 — the documented SKIP_REASON is the emitted one"
 
 TESTING_DOC="$REPO_ROOT/docs/Testing.md"
 EMITTED_REASON="$(sed -n 's/.*echo "SKIP_REASON:[[:space:]]*\([A-Z0-9_-]\{1,\}\)".*/\1/p' "$REAL_HELPERS" | head -1)"

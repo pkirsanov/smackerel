@@ -1292,3 +1292,101 @@ mechanism description is stale.
   the default lane.
 - **BUG-069-005:** every hit in that packet concerns the Go lane (`t.Skipf`), not
   shell exit 77. The two packets are complementary.
+
+## Audit Phase
+
+The `bubbles.audit` specialist was dispatched and returned no output; `git status --porcelain`
+was empty afterwards, confirming a genuine no-op rather than silent work. The
+audit was therefore performed directly, and is recorded as such rather than
+attributed to a specialist that did not run.
+
+### Classification, branch by branch
+
+```
+$ sed -n '/^run_test()/,/^}/p' tests/e2e/run_all.sh
+14:  if [ "$exit_code" -eq 0 ]; then
+16:    PASSED=$((PASSED + 1))
+17:  elif [ "$exit_code" -eq "$SKIP_EXIT_CODE" ]; then
+20:    SKIPPED=$((SKIPPED + 1))
+21:    if is_required_test "$test_name"; then
+23:      REQUIRED_SKIPPED=$((REQUIRED_SKIPPED + 1))
+27:  else
+28:    RESULTS+=("FAIL: $test_name (exit=$exit_code)")
+29:    FAILED=$((FAILED + 1))
+```
+
+Three branches, mutually exclusive, `else` catching every other non-zero. There
+is no path by which a real failure reaches the skip branch: the skip branch tests
+equality against a single constant.
+
+### Suite exit never launders and never propagates
+
+```
+12:if [ $FAILED -gt 0 ] || [ $REQUIRED_SKIPPED -gt 0 ]; then
+13:  exit 1
+```
+
+A required skip reddens the suite, which is the point — a behaviour declared
+required is unproven. The exit is `1`, never the child's raw `77`, so the suite
+cannot claim a skip code as its own status. Signal exits are preserved:
+
+```
+33:trap cleanup_run_output EXIT
+34:trap 'cleanup_run_output; exit 130' INT
+35:trap 'cleanup_run_output; exit 143' TERM
+```
+
+`SKIP_EXIT_CODE=77` is defined once per file — `run_all.sh:24` and
+`smackerel.sh:1959` — with no second definition to drift.
+
+### Evidence integrity
+
+```
+total evidence blocks: 27 | duplicates: 0
+checked=26 missing_header=0 unfilled=0
+```
+
+Twenty-seven fenced evidence blocks, hashed: no two identical. Every one of the
+26 checked DoD items carries a `Raw output evidence` header, and none still holds
+the `[ACTUAL terminal/tool output...]` placeholder. Byte-identical reuse across
+items is the copy-paste fabrication signature, and it is absent.
+
+### Two scenarios were asserted but never declared
+
+The scenario-to-assertion sweep found `SCN-061-014-13` referenced once in the
+driver and described in this report, but **absent from `scopes.md`**. It was
+added during the simplify phase and the scenario list was never updated. The same
+was true of the doc-parity assertions added during the regression phase.
+
+An assertion the packet runs but never declares is a traceability hole in the
+direction that matters least — the test exists — but it means the declared
+scenario list understates what the suite proves. Both are now declared:
+`SCN-061-014-13` (required-set parity) in Scope 1, `SCN-061-014-14` (documented
+reason token) in Scope 2, and the driver's scenario banner renamed to match.
+
+After the change, all fourteen scenarios have at least one driver assertion, and
+both suites still pass:
+
+```
+  Assertions run:    55        <- run_runner_contract.sh
+  Assertions failed: 0
+--- SCN-061-014-14 — the documented SKIP_REASON is the emitted one ---
+  Assertions run:    25        <- run_tier_skip_contract.sh
+  Assertions failed: 0
+```
+
+### The one asymmetry, confirmed deliberate
+
+`run_all.sh` attaches the fixture's `SKIP_REASON` to its results line;
+`smackerel.sh` does not. That is a real difference between the two classifiers,
+and the audit's job is to confirm it is a decision rather than an oversight. It
+is documented at the site, in this report, and its cause is mechanical: capturing
+the reason requires `tee`, `tee` requires a pipeline, and a pipeline subshells
+`e2e_run_child` and discards the child pid the interrupt path needs. The
+outcome vocabulary — which is what the contract governs — is identical in both.
+
+### Not re-run here
+
+The unit, integration and full E2E lanes were not re-run during the audit; they
+are recorded above from runs earlier in this session. The two contract drivers
+were re-run, because they are fast and stack-free.
