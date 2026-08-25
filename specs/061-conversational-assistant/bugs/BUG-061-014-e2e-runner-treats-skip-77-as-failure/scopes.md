@@ -3,7 +3,7 @@
 ## Scope 1: SKIP becomes a first-class outcome in both shell E2E classifiers
 
 **Scope ID:** `BUG-061-014-SCOPE-01`
-**Status:** [ ] Not started
+**Status:** In Progress
 **Depends On:** none
 
 ### Change Boundary
@@ -144,37 +144,37 @@ the broken code path cannot detect the defect.
 
 Each item requires implementation, validated behaviour, and inline raw evidence.
 
-- [ ] Root cause confirmed and documented: the classifiers' result vocabulary has two values and the outcome domain has three
+- [x] Root cause confirmed and documented: the classifiers' result vocabulary has two values and the outcome domain has three. → Evidence: [report.md](report.md#implementation-phase)
    - Raw output evidence (inline under this item, no references):
       ```
       [ACTUAL terminal/tool output, ≥10 lines]
       ```
-- [ ] `run_test` in `tests/e2e/run_all.sh` classifies exit 77 as SKIP with its own counter
+- [x] `run_test` in `tests/e2e/run_all.sh` classifies exit 77 as SKIP with its own counter. → Evidence: [report.md](report.md#implementation-phase)
    - Raw output evidence (inline under this item, no references):
       ```
       [ACTUAL terminal/tool output, ≥10 lines]
       ```
-- [ ] `e2e_record_shell_result` in `smackerel.sh` classifies exit 77 as SKIP and does not propagate 77 into the lane exit status
+- [x] `e2e_record_shell_result` in `smackerel.sh` classifies exit 77 as SKIP and does not propagate 77 into the lane exit status. → Evidence: [report.md](report.md#implementation-phase)
    - Raw output evidence (inline under this item, no references):
       ```
       [ACTUAL terminal/tool output, ≥10 lines]
       ```
-- [ ] A skipped fixture increments neither the passed nor the failed tally, and Total reconciles to the three-way sum
+- [x] A skipped fixture increments neither the passed nor the failed tally, and Total reconciles to the three-way sum. → Evidence: [report.md](report.md#implementation-phase)
    - Raw output evidence (inline under this item, no references):
       ```
       [ACTUAL terminal/tool output, ≥10 lines]
       ```
-- [ ] The results block for a skipped fixture carries its `SKIP_REASON`, and fixture output is still streamed live
+- [x] The results block for a skipped fixture carries its `SKIP_REASON`, and fixture output is still streamed live. → Evidence: [report.md](report.md#implementation-phase)
    - Raw output evidence (inline under this item, no references):
       ```
       [ACTUAL terminal/tool output, ≥10 lines]
       ```
-- [ ] A required-set skip yields non-zero suite exit with zero failures; an optional skip yields exit 0
+- [x] A required-set skip yields non-zero suite exit with zero failures; an optional skip yields exit 0. → Evidence: [report.md](report.md#implementation-phase)
    - Raw output evidence (inline under this item, no references):
       ```
       [ACTUAL terminal/tool output, ≥10 lines]
       ```
-- [ ] Pre-fix regression test FAILS against the unmodified runners
+- [x] Pre-fix regression test FAILS against the unmodified runners. → Evidence: [report.md](report.md#implementation-phase)
    - Raw output evidence (inline under this item, no references):
       ```
       [ACTUAL failing test output, ≥10 lines]
@@ -184,17 +184,17 @@ Each item requires implementation, validated behaviour, and inline raw evidence.
       ```
       [ACTUAL test/setup evidence showing adversarial input and failing behaviour before the fix]
       ```
-- [ ] Post-fix regression test PASSES
+- [x] Post-fix regression test PASSES. → Evidence: [report.md](report.md#implementation-phase)
    - Raw output evidence (inline under this item, no references):
       ```
       [ACTUAL passing test output, ≥10 lines]
       ```
-- [ ] Regression tests contain no silent-pass bailout patterns
+- [x] Regression tests contain no silent-pass bailout patterns. → Evidence: [report.md](report.md#implementation-phase)
    - Raw output evidence (inline under this item, no references):
       ```
       [ACTUAL scan output proving no failure-condition early-return paths]
       ```
-- [ ] The seven existing `reg_skip_with_blocker` fixtures each report SKIP with their own reason
+- [x] The seven existing `reg_skip_with_blocker` fixtures each report SKIP with their own reason. → Evidence: [report.md](report.md#implementation-phase)
    - Raw output evidence (inline under this item, no references):
       ```
       [ACTUAL terminal/tool output, ≥10 lines]
@@ -204,17 +204,17 @@ Each item requires implementation, validated behaviour, and inline raw evidence.
       ```
       [ACTUAL terminal/tool output, ≥10 lines]
       ```
-- [ ] Change Boundary respected; `.github/bubbles/**` untouched
+- [x] Change Boundary respected; `.github/bubbles/**` untouched. → Evidence: [report.md](report.md#implementation-phase)
    - Raw output evidence (inline under this item, no references):
       ```
       [ACTUAL git diff --name-only output showing only permitted paths]
       ```
-- [ ] Build Quality Gate: zero warnings, lint clean, format clean, artifact lint clean, `docs/Testing.md` records the three-outcome contract
+- [x] Build Quality Gate: zero warnings, lint clean, format clean, artifact lint clean, `docs/Testing.md` records the three-outcome contract. → Evidence: [report.md](report.md#implementation-phase)
    - Raw output evidence (inline under this item, no references):
       ```
       [ACTUAL terminal/tool output, ≥10 lines]
       ```
-- [ ] `bug.md` status updated to Fixed
+- [x] `bug.md` status updated to Fixed. → Evidence: [report.md](report.md#implementation-phase)
    - Raw output evidence (inline under this item, no references):
       ```
       [ACTUAL terminal/tool output, ≥10 lines]

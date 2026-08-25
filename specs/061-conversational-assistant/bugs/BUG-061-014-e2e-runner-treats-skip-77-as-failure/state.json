@@ -37,7 +37,15 @@
     "currentScope": null,
     "substate": "documented_awaiting_implementation",
     "completedScopes": [],
-    "completedPhaseClaims": [],
+    "completedPhaseClaims": [
+      {
+        "phase": "implement",
+        "agent": "bubbles.implement",
+        "provenanceMode": "specialist",
+        "claimedAt": "2026-08-25T03:52:05Z",
+        "evidenceRef": "report.md#implementation-phase"
+      }
+    ],
     "lastUpdatedAt": "2026-08-25T02:52:34Z",
     "nextRequiredOwner": "bubbles.implement",
     "executionHistory": [
@@ -62,6 +70,18 @@
           "specs/061-conversational-assistant/bugs/BUG-061-014-e2e-runner-treats-skip-77-as-failure/uservalidation.md",
           "specs/061-conversational-assistant/bugs/BUG-061-014-e2e-runner-treats-skip-77-as-failure/state.json"
         ]
+      },
+      {
+        "at": "2026-08-25T03:52:05Z",
+        "agent": "bubbles.implement",
+        "phasesExecuted": [
+          "implement"
+        ],
+        "provenanceMode": "specialist",
+        "claimSource": "executed",
+        "outcome": "completed_owned",
+        "evidenceRef": "report.md#implementation-phase",
+        "summary": "Implementation phase, Scope 1 only, recorded in report.md under '## Implementation Phase'. Both shell E2E classifiers now treat SKIP as a first-class outcome. Scope 2, the skip_unless_accel_tier false-green half, is untouched and none of its DoD items is checked, because it carries its own Change Boundary. run_test in tests/e2e/run_all.sh gains SKIPPED and REQUIRED_SKIPPED counters; e2e_record_shell_result in smackerel.sh gains e2e_shell_skips and e2e_required_shell_skips. Three design points carry the weight. Requiredness is declared runner-side in an explicit array matching the LIFECYCLE_TESTS idiom, so a fixture cannot downgrade itself out of the required set by editing its own body -- the same self-certification weakness that permits silent skips. A required skip is still LABELLED SKIP while the suite exit stays non-zero, because the behaviour is unproven; both halves are needed and the common wrong fix supplies only the first. The raw child status is never propagated, so the lane can no longer exit 77 and report a skip code as its own result. Output is captured with tee and PIPESTATUS[0], so the fixture streams live while the classifier still reads SKIP_REASON. One correction applied during the phase: the first pass left smackerel.sh printing a pointer to the fixture output while run_all.sh carried the real reason. Two classifiers reporting the same outcome differently is a smaller copy of the inconsistency this packet exists to remove, so smackerel.sh now extracts and carries the reason too. Pre-fix RED was measured rather than reconstructed: a detached worktree at the pre-fix commit with only the new contract files copied in, verified unmodified by grep -c SKIP_EXIT_CODE returning 0, fails 28 of 44 assertions and exits 1, printing FAIL: test_rc_optional_skip (exit=77) -- the defect itself. Post-fix the suite runs 51 assertions with 0 failures at exit 0. The differing counts are evidence rather than noise: assertions that cannot execute against the old runner are exactly the ones describing the outcome it could not express. End to end through the real lane, the fixture unchanged: before, FAIL ... (exit=77) and lane exit 77; after, SKIP with SCOPE-04-NOTIFICATION-PROPOSAL-FIXTURE-NOT-YET-AUTHORED carried into the summary, Skipped: 1, lane exit 0. Only the classification moved, from a failure it never was to the skip it always declared itself to be, and the reason is now more visible, not less. Build Quality Gate: lint 0, format --check 0, unit 0, artifact-lint 0. docs/Testing.md records the three-outcome contract, bug.md reads Fixed (Scope 1), and the commit touches zero files under .github/bubbles/. Thirteen of fifteen Scope 1 DoD items are checked. Two are left open deliberately: mutation-proof of each adversarial case, because applying each named wrong fix in turn and confirming its own case fails is a stronger claim than the evidence supports; and the all-lanes item, because the full shell E2E suite was not run end to end and closing it on a partial lane set would be the same shortcut that was refused for the broader-suite item in BUG-069-006. Scope 1 stays In Progress rather than Done. No certification.* field was written."
       }
     ]
   },

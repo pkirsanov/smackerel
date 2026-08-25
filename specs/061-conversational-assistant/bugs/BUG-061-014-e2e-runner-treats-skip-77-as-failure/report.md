@@ -494,3 +494,151 @@ No runtime file was modified. `tests/e2e/run_all.sh`, `smackerel.sh`,
 `3bec257660f5c4292d79e67d94391f51f72cdda0`. `.github/bubbles/**` was read only;
 it is framework-managed and is refreshed solely through the Bubbles installer or
 upgrade command.
+
+## Implementation Phase
+
+Scope 1 only. Both shell E2E classifiers now treat SKIP as a first-class outcome.
+Scope 2 — `skip_unless_accel_tier`, the false-green half — is untouched, because
+it carries its own Change Boundary.
+
+### What changed
+
+Two classifiers, one rule. `run_test` in `tests/e2e/run_all.sh` gains `SKIPPED`
+and `REQUIRED_SKIPPED` counters; `e2e_record_shell_result` in `smackerel.sh`
+gains `e2e_shell_skips` and `e2e_required_shell_skips`. Both read the named
+constant `77` rather than a bare literal.
+
+Three design points carry the weight:
+
+**Requiredness is declared runner-side**, in an explicit array matching the idiom
+already used for `LIFECYCLE_TESTS`. A fixture therefore cannot downgrade itself
+out of the required set by editing its own body, which is the same
+self-certification weakness that permits silent skips in the first place.
+
+**A required skip is still labelled SKIP.** The label stays honest while the
+suite exit stays non-zero, because the behaviour the fixture covers is unproven.
+Both halves are needed; the common wrong fix supplies only the first.
+
+**The raw child status is never propagated.** A required skip sets the overall
+status to `1`. Previously `e2e_record_shell_result` assigned the child status
+straight into `e2e_overall_status`, which is why the lane exited `77` and
+reported a skip code as its own result.
+
+Output is captured with `tee` and `PIPESTATUS[0]`, so the fixture streams live
+while the classifier still gets a copy to read `SKIP_REASON` from. Nothing is
+swallowed.
+
+### One correction applied during this phase
+
+The first pass left `smackerel.sh` printing `SKIP_REASON in the fixture output
+above` while `run_all.sh` carried the real reason. Two classifiers reporting the
+same outcome differently is a smaller copy of the exact inconsistency this packet
+exists to remove, so `smackerel.sh` now extracts and carries the reason as well.
+The visible result changed from a pointer to the reason itself.
+
+### Pre-fix RED — the regression suite fails against the unmodified runners
+
+DoD item 7 asks whether the new contract suite actually detects the defect. That
+cannot be reconstructed after the fix, so it was measured against a detached
+worktree at the pre-fix commit with only the new contract files copied in:
+
+```
+$ git worktree add --detach /tmp/<wt> e8b40360^
+$ grep -c 'SKIP_EXIT_CODE' /tmp/<wt>/tests/e2e/run_all.sh
+0
+$ cd /tmp/<wt> && bash tests/e2e/runner_contract/run_runner_contract.sh
+  FAIL: test_rc_fail (exit=1)
+  FAIL: test_rc_optional_skip (exit=77)
+  FAIL AC-01-1 — skip fixture is reported as SKIP
+  FAIL: test_rc_fail (exit=1)
+  FAIL: test_rc_optional_skip (exit=77)
+  FAIL AC-01-2 — skip fixture is NOT reported as FAIL
+  Assertions run:    44
+  Assertions failed: 28
+exit: 1
+```
+
+The `grep -c` returning `0` confirms the worktree holds the unmodified runner.
+`FAIL: test_rc_optional_skip (exit=77)` is the defect itself, printed by the old
+classifier. The suite fails 28 of 44 assertions and exits 1.
+
+The assertion count differs between runs — 44 pre-fix against 51 post-fix —
+because several assertions are reached only once the runner emits a SKIP line at
+all. That difference is itself evidence rather than noise: assertions that cannot
+even execute against the old runner are exactly the ones describing the outcome
+it could not express.
+
+### Post-fix GREEN
+
+```
+$ bash tests/e2e/runner_contract/run_runner_contract.sh
+  ok   AC-08-bs_004_notification_confirm — assistant_regression/bs_004_notification_confirm.sh classifies as SKIP
+  ok   AC-08F-bs_004_notification_confirm — assistant_regression/bs_004_notification_confirm.sh does NOT classify as FAIL
+  ok   AC-08-9 — each slot carries its own SKIP_REASON in the results block
+  ok   AC-08-10 — a second slot carries a different SKIP_REASON
+=========================================
+  Runner-contract results
+=========================================
+  Assertions run:    51
+  Assertions failed: 0
+=========================================
+exit: 0
+```
+
+### End-to-end through the real lane
+
+The behaviour that made this packet exist, before and after:
+
+```
+BEFORE
+$ ./smackerel.sh test e2e --shell-run assistant_regression/bs_004_notification_confirm.sh
+  FAIL: assistant_regression/bs_004_notification_confirm.sh (exit=77)
+exit: 77
+
+AFTER
+$ ./smackerel.sh test e2e --shell-run assistant_regression/bs_004_notification_confirm.sh
+RESULT: SKIPPED
+  SKIP: assistant_regression/bs_004_notification_confirm.sh (SCOPE-04-NOTIFICATION-PROPOSAL-FIXTURE-NOT-YET-AUTHORED)
+  Skipped: 1
+exit: 0
+```
+
+The fixture is unchanged. Only its classification moved, from a failure it never
+was to the skip it always declared itself to be — carrying its reason into the
+summary so the skip is more visible than before, not less.
+
+### Build Quality Gate
+
+```
+$ ./smackerel.sh lint
+exit: 0
+$ ./smackerel.sh format --check
+exit: 0
+$ ./smackerel.sh test unit --go
+exit: 0
+$ bash .github/bubbles/scripts/artifact-lint.sh <packet-dir>
+exit: 0
+```
+
+`docs/Testing.md` records the three-outcome contract, and `bug.md` reads
+`**Status:** Fixed (Scope 1)`. The commit touches zero files under
+`.github/bubbles/`.
+
+### What this phase does NOT claim
+
+Two DoD items stay unchecked, and the reasons are specific rather than
+housekeeping.
+
+**Mutation-proof of each adversarial case.** ADV-061-014-01 through 04 exist and
+assert the right propositions — that a skip is not reported as PASS, that an
+exit-1 control stays FAIL and is not reclassified, that a required skip yields a
+non-zero exit, and that the classifier text is extracted by function name instead
+of re-implemented. The pre-fix run demonstrates the suite detects the real defect.
+What has not been done is applying each named wrong fix in turn and confirming
+that its own case is the one that fails. That is a stronger claim than the
+evidence here supports.
+
+**Existing lanes pass with no new failures.** Unit, lint and format are exit 0.
+The full shell E2E suite was not run end to end, so the item is left open rather
+than closed on a partial lane set — which is the same discipline that kept the
+broader-suite item open in BUG-069-006.
