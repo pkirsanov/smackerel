@@ -32,8 +32,8 @@
     "runnerCodePathsReadingExit77": 0
   },
   "execution": {
-    "activeAgent": "bubbles.bug",
-    "currentPhase": "analyze",
+    "activeAgent": "bubbles.test",
+    "currentPhase": "test",
     "currentScope": null,
     "substate": "documented_awaiting_implementation",
     "completedScopes": [],
@@ -44,6 +44,20 @@
         "provenanceMode": "specialist",
         "claimedAt": "2026-08-25T03:52:05Z",
         "evidenceRef": "report.md#implementation-phase"
+      },
+      {
+        "phase": "implement",
+        "agent": "bubbles.implement",
+        "provenanceMode": "specialist",
+        "claimedAt": "2026-08-25T04:17:59Z",
+        "evidenceRef": "report.md#implementation-phase--scope-2"
+      },
+      {
+        "phase": "test",
+        "agent": "bubbles.test",
+        "provenanceMode": "specialist",
+        "claimedAt": "2026-08-25T04:17:59Z",
+        "evidenceRef": "report.md#mutation-proof--every-adversarial-case-kills-its-own-wrong-fix"
       }
     ],
     "lastUpdatedAt": "2026-08-25T02:52:34Z",
@@ -82,6 +96,30 @@
         "outcome": "completed_owned",
         "evidenceRef": "report.md#implementation-phase",
         "summary": "Implementation phase, Scope 1 only, recorded in report.md under '## Implementation Phase'. Both shell E2E classifiers now treat SKIP as a first-class outcome. Scope 2, the skip_unless_accel_tier false-green half, is untouched and none of its DoD items is checked, because it carries its own Change Boundary. run_test in tests/e2e/run_all.sh gains SKIPPED and REQUIRED_SKIPPED counters; e2e_record_shell_result in smackerel.sh gains e2e_shell_skips and e2e_required_shell_skips. Three design points carry the weight. Requiredness is declared runner-side in an explicit array matching the LIFECYCLE_TESTS idiom, so a fixture cannot downgrade itself out of the required set by editing its own body -- the same self-certification weakness that permits silent skips. A required skip is still LABELLED SKIP while the suite exit stays non-zero, because the behaviour is unproven; both halves are needed and the common wrong fix supplies only the first. The raw child status is never propagated, so the lane can no longer exit 77 and report a skip code as its own result. Output is captured with tee and PIPESTATUS[0], so the fixture streams live while the classifier still reads SKIP_REASON. One correction applied during the phase: the first pass left smackerel.sh printing a pointer to the fixture output while run_all.sh carried the real reason. Two classifiers reporting the same outcome differently is a smaller copy of the inconsistency this packet exists to remove, so smackerel.sh now extracts and carries the reason too. Pre-fix RED was measured rather than reconstructed: a detached worktree at the pre-fix commit with only the new contract files copied in, verified unmodified by grep -c SKIP_EXIT_CODE returning 0, fails 28 of 44 assertions and exits 1, printing FAIL: test_rc_optional_skip (exit=77) -- the defect itself. Post-fix the suite runs 51 assertions with 0 failures at exit 0. The differing counts are evidence rather than noise: assertions that cannot execute against the old runner are exactly the ones describing the outcome it could not express. End to end through the real lane, the fixture unchanged: before, FAIL ... (exit=77) and lane exit 77; after, SKIP with SCOPE-04-NOTIFICATION-PROPOSAL-FIXTURE-NOT-YET-AUTHORED carried into the summary, Skipped: 1, lane exit 0. Only the classification moved, from a failure it never was to the skip it always declared itself to be, and the reason is now more visible, not less. Build Quality Gate: lint 0, format --check 0, unit 0, artifact-lint 0. docs/Testing.md records the three-outcome contract, bug.md reads Fixed (Scope 1), and the commit touches zero files under .github/bubbles/. Thirteen of fifteen Scope 1 DoD items are checked. Two are left open deliberately: mutation-proof of each adversarial case, because applying each named wrong fix in turn and confirming its own case fails is a stronger claim than the evidence supports; and the all-lanes item, because the full shell E2E suite was not run end to end and closing it on a partial lane set would be the same shortcut that was refused for the broader-suite item in BUG-069-006. Scope 1 stays In Progress rather than Done. No certification.* field was written."
+      },
+      {
+        "at": "2026-08-25T04:17:59Z",
+        "agent": "bubbles.implement",
+        "phasesExecuted": [
+          "implement"
+        ],
+        "provenanceMode": "specialist",
+        "claimSource": "executed",
+        "outcome": "completed_owned",
+        "evidenceRef": "report.md#implementation-phase--scope-2",
+        "summary": "Implementation phase, SCOPE-02. Closes the false-green half, which is the more dangerous of the two: a false red is noisy and gets investigated, a false green is silent and gets trusted. skip_unless_accel_tier printed a structured SKIP line then exited 0, so on a cpu-tier host ten fixtures reported PASS while proving nothing -- the condition BUG-069-005 was opened for, reproduced in shell. It now exits 77 and emits RESULT: SKIPPED plus SKIP_REASON, so the Scope 1 classifiers lift the reason into the results block exactly as they do for reg_skip_with_blocker. The accel return path and the unknown-tier exit 2 are untouched: a misconfigured host stays a hard error rather than a benign skip, which is what ADV-061-014-06 defends. The first RED was wrong and the correction is recorded rather than quietly fixed. The sandbox defined no-op lifecycle stubs and THEN sourced the real helpers, so the real e2e_setup overwrote the stub and the runner tried to boot an actual stack; it died before its results block and the count assertions failed with missing [Passed: 1] -- the right verdict for the wrong reason. Notably SCN-10-2 PASSED in that broken run, which looked like good news and was the broken sandbox masking the defect. A RED that agrees with you for the wrong reason is worse than one that disagrees. With source order corrected the RED measures the real thing: 9 of 23 fail, including SCN-10-2 failing because the fixture WAS reported as PASS. Post-fix 23 of 23 pass. A separate driver rather than extending Scope 1's suite, so Scope 1's recorded 51-assertion evidence stays exactly reproducible; Scope 1 re-verified at 51/51 after the change. All ten consumers measured at cpu tier: rc=77, reason CPU-TIER-HARDWARE-LACKS-ACCELERATOR. Recorded decision: the ten are deliberately NOT declared required. Requiredness would make every cpu-tier run permanently non-green, converting a legitimate hardware gate into standing red, and a suite that is always red carries no signal -- the same loss of meaning, from the opposite direction, as one that is always green. Honesty comes from the classification instead: they report SKIP and land in the Skipped tally so a reader sees how many behaviours went unproven. Declaring them required asserts 'this suite must run on accel hardware', an operator decision about CI topology. Recorded in docs/Testing.md with a table showing both producers now resolve to the same reported outcome."
+      },
+      {
+        "at": "2026-08-25T04:17:59Z",
+        "agent": "bubbles.test",
+        "phasesExecuted": [
+          "test"
+        ],
+        "provenanceMode": "specialist",
+        "claimSource": "executed",
+        "outcome": "completed_owned",
+        "evidenceRef": "report.md#mutation-proof--every-adversarial-case-kills-its-own-wrong-fix",
+        "summary": "Test phase. Two obligations the implement phase had left open. First, mutation proof. Asserting an adversarial case EXISTS is weaker than proving it BITES, so each named wrong fix was applied in a detached worktree and the suite re-run; a case earns its keep only when its own assertion is the one that fails. ADV-01 (map 77 onto PASS) -> FAIL ADV-01-a. ADV-02 (drop REQUIRED_SKIPPED from the exit condition) -> FAIL ADV-02-a with exactly one assertion failing, which is what a precisely-targeted case looks like: it discriminates that wrong fix rather than tripping over collateral damage. ADV-03 (broaden the skip branch to -ne 0) -> FAIL ADV-03-a/b/c. ADV-04 (disable the skip branch in smackerel.sh's tracked classifier) -> FAIL AC-02-1; ADV-04 is a property rather than a payload, and mutating the tracked text and watching the driver notice is the proof that the driver executes tracked code -- a driver that had copied the branch logic would have stayed green while the real runner was broken. ADV-05 (count a skipped fixture as passed as well) -> FAIL ADV-05-a/d. ADV-06 (collapse the unknown tier into the skip branch) -> FAIL ADV-06-a/b. Six of six kill their own wrong fix. Second, DoD evidence. Every checked item still carried an unfilled [ACTUAL terminal/tool output] placeholder underneath it, so a reader saw a placeholder beneath a ticked box. artifact-lint does not match that form, so it had been passing while saying nothing about it. 24 blocks are now filled with the real captured output for that specific item, not a cross-reference. Scope 1 stands at 14 of 15 and Scope 2 at 10 of 11. The single open item in each is the same one -- 'Existing unit, integration, and shell E2E lanes pass with no new failures' -- because the full shell E2E lane had not yet reported and closing it on unit, lint and format alone would be the shortcut this packet keeps refusing. No certification.* field was written."
       }
     ]
   },
