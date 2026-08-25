@@ -284,6 +284,9 @@ still rejects it: its failure mode on scale-out is silent.
 
 | 2026-08-25 | DIS-069-006-4: `tests/e2e/assistant_regression/bs_004_notification_confirm.sh` is the confirm-flow shell regression suite, and it cannot validate this packet: it exits 77 with `SKIP_REASON: SCOPE-04-NOTIFICATION-PROPOSAL-FIXTURE-NOT-YET-AUTHORED`, and the e2e runner reports that skip as `FAIL: ... (exit=77)`. It has therefore never exercised the confirm flow it is named for. This is pre-existing and independent of this change — the fixture belongs to spec 061 SCOPE-04 — but it is the reason the "Broader E2E regression suite passes" DoD item cannot be closed here honestly rather than merely conveniently. It is also the same shape as BUG-069-005: a required suite whose skip is invisible unless someone runs it and reads the reason. | Recorded, not fixed. Authoring the notification-proposal fixture is spec 061 SCOPE-04 work and lies outside this packet's Change Boundary, which was just corrected and must not be widened to absorb it. Owner: spec 061 SCOPE-04. | `tests/e2e/assistant_regression/bs_004_notification_confirm.sh`; `./smackerel.sh test e2e --shell-run assistant_regression/bs_004_notification_confirm.sh` → exit 77 |
 
+| 2026-08-25 | DIS-069-006-5: `scenario-manifest.json` was inaccurate in two ways at once, and the state-transition guard surfaced both. Its `SCN-BUG069006-002` entry linked `tests/e2e/assistant/http_confirm_concurrent_test.go`, a file that has never existed — the concurrent API-boundary test was added to the existing `tests/e2e/assistant/http_confirm_test.go` instead, so the manifest pointed at nothing. Separately, all four scenarios still carried `"status": "not_started"` although all four linked tests exist and pass with recorded evidence in this report. The manifest was authored during planning and never reconciled as the tests landed. | Corrected. `SCN-BUG069006-002` now links the real file, and all four statuses read `passed`, which matches the executed evidence: SCN-001 from the verbose unit run plus the integration PASS, SCN-002 and SCN-004 from the e2e PASS lines, SCN-003 from the verbose unit run. | `scenario-manifest.json`; guard Check 3C |
+| 2026-08-25 | DIS-069-006-6: after that correction the guard still reports five `AMBIGUOUS-TITLE` findings, one per linked test, each saying "the title appears 2 times". No test function is defined twice — `grep -rn "func <name>"` returns exactly one hit for each. The cause is at `.github/bubbles/scripts/scenario-test-resolve.sh` line 330, `occurrences = body.count(title)`, a plain substring count over the whole file inside the branch its own comment labels a "Conservative literal scan". Go convention requires a doc comment to begin with the identifier it documents, so every one of these tests carries a line like `// TestMachineConfirm_ConcurrentRedemptionExecutesOnce covers SCN-BUG069006-001.` — and that line is occurrence two. | Recorded, not worked around. Deleting the doc comments would green the advisory by removing both a Go convention and the human-readable half of scenario traceability, which is a bad trade. The finding is ADVISORY — the guard states it stays advisory until `scenarioResolution: block` is set, and G057 is in `passedGateIds`. It is also a framework surface: `.github/bubbles/**` is on this packet's Mechanical Excluded List and is framework-managed. Owner: framework. | `.github/bubbles/scripts/scenario-test-resolve.sh` line 330 |
+
 ## Relationship To BUG-069-004
 
 `specs/069-assistant-http-transport/bugs/BUG-069-004-http-turn-dedup/bug.md` and
@@ -1383,3 +1386,202 @@ finding is routed to `bubbles.simplify`: the dead `conv` parameter on
 correction is entered: TP-BUG069006-03 exists as an uncommitted, unexecuted test
 rather than being unwritten. `status` remains `in_progress`. No `certification.*`
 field was written by this phase.
+
+## Simplify Phase
+
+Agent: `bubbles.simplify`. Two changes were made and three candidates were
+examined and left alone. Both changes are inside the Change Boundary; the second
+one is a correction *to* the Change Boundary, which the packet's own commit
+history had already contradicted.
+
+### Change 1 — the dead `conv` parameter
+
+The regression phase routed one finding here: after the loser-path fix,
+`Facade.finishConfirmResponse` still took a `conv assistantctx.Conversation`
+parameter that nothing in its body read. That is invisible to this repo's lint
+surface, because `scripts/runtime/go-lint.sh` is four lines ending in
+`go vet ./...` with no golangci configuration, and `go vet` does not report
+unused function parameters. Lint exiting 0 said nothing about it either way.
+
+The parameter is removed, along with all three call sites at lines 171, 182 and
+194. Removing it had a second-order effect worth stating plainly: `conv` then
+became unread inside `handlePendingConfirm` too, since passing it onward was its
+only remaining use.
+
+`handlePendingConfirm` keeps the parameter, renamed to `_` and annotated. Full
+removal was considered and rejected on a concrete ground rather than a stylistic
+one: the sole caller is `internal/assistant/facade.go` line 634, and that file is
+not listed in the Change Boundary. Editing it to delete one argument would widen
+a boundary that this packet corrected two commits ago, to buy nothing the `_`
+form does not already buy. The `_` form removes the dead binding, keeps the
+compiler enforcing that nothing reads the snapshot, and records at the signature
+why a snapshot arrives and is ignored.
+
+That annotation is the part worth keeping regardless of form. The defect this
+packet fixed was a stale pre-arbitration `Conversation` being written back; a
+signature that silently accepted one and a body that silently ignored it is
+precisely the shape that invites someone to start using it again.
+
+### Change 2 — the Change Boundary omitted its own compile-forced ripple
+
+Enumerating every implementation of the new interface method shows ten files, of
+which five are not in the Change Boundary's allowed list:
+
+```
+$ grep -rln 'ClearPendingConfirm' --include='*.go' .
+./internal/assistant/confirm/machine.go
+./internal/assistant/confirm/machine_test.go
+./internal/assistant/context/gauge_refresher_test.go
+./internal/assistant/context/pg_store.go
+./internal/assistant/context/pg_store_test.go
+./internal/assistant/context/store.go
+./internal/assistant/facade_test_helpers_test.go
+./internal/assistant/testing_support.go
+./tests/integration/assistant/confirmation_canary_test.go
+./tests/integration/assistant/transport_parity_test.go
+```
+
+The five unlisted files each carry a test-local `Store` double. None of them was
+a discretionary edit: adding a method to a Go interface stops every
+implementation compiling until it gains the method. The set is fully determined
+by the interface change the boundary already authorises in `store.go`.
+
+Two of these five were the reason commit `00fcdf3b` existed at all — the
+integration build had been broken since `61b8be79` because no test lane compiles
+integration-tagged files, so nothing reported it.
+
+`scopes.md` gains a `### Store-Interface Ripple Files` table naming all five with
+that reason. This makes the boundary describe what the change actually forces.
+The alternative was to leave an artifact that five commits already contradicted,
+which is the worse outcome: a boundary nobody can trust stops constraining
+anything.
+
+### Examined and left unchanged
+
+**`canaryStore` and `parityStore` near-duplication.** Both live in
+`tests/integration/assistant`, both wrap `sync.Mutex` plus a
+`map[string]Conversation`. Consolidation looked attractive until the difference
+showed up: `parityStore` also carries `persist []string` and appends to it on
+every write, because the transport-parity test asserts persist call ordering.
+Merging them would push that recording machinery into the canary test, which
+does not want it, or introduce an options-carrying shared base to hide it. Two
+short honest doubles beat one indirect shared one.
+
+**The six `ClearPendingConfirm` doubles.** They repeat a compare-then-clear under
+one lock. Extracting a shared helper would create a test-support dependency
+spanning `internal/assistant`, `internal/assistant/confirm`,
+`internal/assistant/context` and `tests/integration/assistant`. The repo already
+has one shared implementation, `InMemoryContextStore` in
+`internal/assistant/testing_support.go`; the rest are deliberately local and
+minimal so a test reads without a cross-package hop.
+
+**The `PgStore` SQL.** The single conditional `UPDATE` is already the smallest
+form that expresses the compare-and-clear atomically. There is nothing to remove
+without losing the atomicity that is the whole point.
+
+### Verification
+
+The full Go unit suite, captured:
+
+```
+# BUG-069-006 simplify: full Go unit suite after dead-parameter removal
+$ ./smackerel.sh test unit --go
+exit: 0
+lines: 210
+sha256: 727e4a090dbb7d5474e73c759ae23e0fd3c2cdc3ab03b90ff7e3fab60cd5c6db
+--- first 20 ---
+oom-preflight: OK — 38540 MB available (need 6000 MB; swap used 1143 MB).
+disk-preflight: OK — C: 96 GB free (need 40 GB), WSL / 470 GB free (need 25 GB).
+++ dirname /workspace/scripts/runtime/go-unit.sh
++ source /workspace/scripts/runtime/_ensure_envsubst.sh
++ ensure_envsubst go-unit
++ local tag=go-unit
++ command -v envsubst
++ echo '[go-unit] envsubst missing — installing gettext-base'
++ apt-get update -qq
+[go-unit] envsubst missing — installing gettext-base
++ apt-get install -y --no-install-recommends gettext-base
+Reading package lists...
+Building dependency tree...
+Reading state information...
+The following NEW packages will be installed:
+  gettext-base
+0 upgraded, 1 newly installed, 0 to remove and 20 not upgraded.
+Need to get 160 kB of archives.
+After this operation, 660 kB of additional disk space will be used.
+Get:1 http://deb.debian.org/debian bookworm/main amd64 gettext-base amd64 0.21-12 [160 kB]
+--- omitted 170 line(s); sha256 above covers the full output ---
+--- last 20 ---
+ok  	github.com/smackerel/smackerel/internal/testsupport/jssource	(cached)
+ok  	github.com/smackerel/smackerel/internal/topics	(cached)
+ok  	github.com/smackerel/smackerel/internal/web	(cached)
+ok  	github.com/smackerel/smackerel/internal/web/admin	(cached)
+ok  	github.com/smackerel/smackerel/internal/web/icons	(cached)
+ok  	github.com/smackerel/smackerel/internal/whatsapp/assistant_adapter	(cached)
+ok  	github.com/smackerel/smackerel/tests/e2e/agent	(cached)
+ok  	github.com/smackerel/smackerel/tests/e2e/assistant	(cached)
+ok  	github.com/smackerel/smackerel/tests/eval/assistant	(cached)
+ok  	github.com/smackerel/smackerel/tests/integration	(cached) [no tests to run]
+?   	github.com/smackerel/smackerel/tests/integration/agent/routerwarmup	[no test files]
+?   	github.com/smackerel/smackerel/tests/integration/drive/fixtures	[no test files]
+?   	github.com/smackerel/smackerel/tests/integration/nslock	[no test files]
+ok  	github.com/smackerel/smackerel/tests/observability	(cached)
+ok  	github.com/smackerel/smackerel/tests/stress/readiness	(cached)
+ok  	github.com/smackerel/smackerel/tests/unit/clients	(cached)
+?   	github.com/smackerel/smackerel/web/pwa	[no test files]
+ok  	github.com/smackerel/smackerel/web/pwa/tests	(cached)
+[go-unit] go test ./... finished OK
++ echo '[go-unit] go test ./... finished OK'
+```
+
+Verify with `bash .github/bubbles/scripts/evidence-capture.sh --verify
+727e4a090dbb7d5474e73c759ae23e0fd3c2cdc3ab03b90ff7e3fab60cd5c6db --
+./smackerel.sh test unit --go`.
+
+One honest note on that capture: the `ok` lines read `(cached)`. The fresh
+compile happened on the first suite run after the edit, which returned exit 0
+across 149 `ok` packages with zero `FAIL` lines; this capture is Go reusing that
+result because nothing changed in between. The edit was compiled and the suite
+passed against it — the cache marker records that the second invocation added no
+new information, not that the first one was skipped.
+
+The two concurrency tests re-run explicitly against the simplified code, verbose
+so the selector match is visible rather than inferred. This matters here: a
+`--go-run` selector that matches nothing also exits 0, so the exit code alone
+would not have distinguished "both passed" from "neither ran".
+
+```
+$ ./smackerel.sh test unit --go --go-run 'TestMachineConfirm_Concurrent|TestMachineConfirm_RacingSweep' --verbose
+=== RUN   TestMachineConfirm_ConcurrentRedemptionExecutesOnce
+--- PASS: TestMachineConfirm_ConcurrentRedemptionExecutesOnce (0.00s)
+=== RUN   TestMachineConfirm_RacingSweepProducesOneTerminalOutcome
+--- PASS: TestMachineConfirm_RacingSweepProducesOneTerminalOutcome (0.00s)
+exit: 0
+```
+
+Build Quality Gate commands, each run after the edit:
+
+```
+$ ./smackerel.sh lint
+exit: 0
+$ ./smackerel.sh format --check
+exit: 0
+```
+
+### Code Diff Evidence
+
+The simplified surface, reviewed with git diff against the working tree:
+
+```
+$ git diff --stat internal/assistant/compiled_interactions.go
+ internal/assistant/compiled_interactions.go | 13 ++++++-------
+ 1 file changed, 6 insertions(+), 7 deletions(-)
+```
+
+### Outcome
+
+Two changes landed, both inside the boundary. Three consolidation candidates were
+examined and each was left alone for a stated reason rather than by omission. The
+full unit suite, lint and format all exit 0 after the edit. No DoD item is
+checked by this phase that its own evidence does not support, and no
+`certification.*` field was written here.

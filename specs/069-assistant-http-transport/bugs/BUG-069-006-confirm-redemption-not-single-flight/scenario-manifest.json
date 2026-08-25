@@ -29,7 +29,7 @@
       "evidenceRefs": [
         "report.md#test-evidence"
       ],
-      "status": "not_started"
+      "status": "passed"
     },
     {
       "scenarioId": "SCN-BUG069006-002",
@@ -45,14 +45,14 @@
       "linkedTests": [
         {
           "type": "e2e-api",
-          "file": "tests/e2e/assistant/http_confirm_concurrent_test.go",
+          "file": "tests/e2e/assistant/http_confirm_test.go",
           "name": "TestAssistantHTTPE2E_ConcurrentConfirmExecutesGatedActionOnce"
         }
       ],
       "evidenceRefs": [
         "report.md#test-evidence"
       ],
-      "status": "not_started"
+      "status": "passed"
     },
     {
       "scenarioId": "SCN-BUG069006-003",
@@ -75,7 +75,7 @@
       "evidenceRefs": [
         "report.md#test-evidence"
       ],
-      "status": "not_started"
+      "status": "passed"
     },
     {
       "scenarioId": "SCN-BUG069006-004",
@@ -98,7 +98,7 @@
       "evidenceRefs": [
         "report.md#test-evidence"
       ],
-      "status": "not_started"
+      "status": "passed"
     }
   ]
 }

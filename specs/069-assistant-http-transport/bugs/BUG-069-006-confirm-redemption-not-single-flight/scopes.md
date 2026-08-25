@@ -36,6 +36,22 @@ modified by this packet.
 | `internal/assistant/context/pg_store_test.go` | Conditional-clear integration coverage against a live store |
 | `tests/e2e/assistant/http_confirm_test.go` | Extended: concurrent confirm regression at the API boundary, alongside the existing sequential replay case |
 
+### Store-Interface Ripple Files
+
+Adding a method to the `Store` interface is not a discretionary edit to these
+files: every implementation must gain the method or the package stops compiling.
+The set is therefore mechanically determined by the interface change, and is
+enumerated here so the boundary matches what the change actually forces. Each
+file carries a test-local `Store` double and gains nothing but the new method.
+
+| Path | Reason |
+|---|---|
+| `internal/assistant/confirm/machine_test.go` | Compile-forced: local `Store` double must implement `ClearPendingConfirm` |
+| `internal/assistant/context/gauge_refresher_test.go` | Compile-forced: local `Store` double must implement `ClearPendingConfirm` |
+| `internal/assistant/facade_test_helpers_test.go` | Compile-forced: local `Store` double must implement `ClearPendingConfirm` |
+| `tests/integration/assistant/confirmation_canary_test.go` | Compile-forced: `canaryStore` must implement `ClearPendingConfirm` |
+| `tests/integration/assistant/transport_parity_test.go` | Compile-forced: `parityStore` must implement `ClearPendingConfirm` |
+
 ### Packet Artifacts
 
 | Path | Reason |

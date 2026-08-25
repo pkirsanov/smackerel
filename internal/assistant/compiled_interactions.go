@@ -158,7 +158,7 @@ func compiledScenarioID(compiled intent.CompiledIntent) string {
 func (f *Facade) handlePendingConfirm(
 	ctx context.Context,
 	msg contracts.AssistantMessage,
-	conv assistantctx.Conversation,
+	_ assistantctx.Conversation, // pre-arbitration snapshot; redemption re-loads instead (BUG-069-006)
 	emittedAt time.Time,
 ) (contracts.AssistantResponse, bool, error) {
 	if msg.Kind != contracts.KindConfirm || f.compiledInteractions == nil {
@@ -168,7 +168,7 @@ func (f *Facade) handlePendingConfirm(
 		err := f.compiledInteractions.confirmMachine.Discard(ctx, confirm.DiscardInput{
 			UserID: msg.UserID, Transport: msg.Transport, ConfirmRef: msg.ConfirmRef,
 		}, emittedAt)
-		return f.finishConfirmResponse(ctx, msg, conv, emittedAt, err, CompiledActionResult{
+		return f.finishConfirmResponse(ctx, msg, emittedAt, err, CompiledActionResult{
 			Status: contracts.StatusSavedAsIdea, Body: "Change cancelled.",
 		})
 	}
@@ -179,7 +179,7 @@ func (f *Facade) handlePendingConfirm(
 		UserID: msg.UserID, Transport: msg.Transport, ConfirmRef: msg.ConfirmRef,
 	}, emittedAt)
 	if err != nil {
-		return f.finishConfirmResponse(ctx, msg, conv, emittedAt, err, CompiledActionResult{})
+		return f.finishConfirmResponse(ctx, msg, emittedAt, err, CompiledActionResult{})
 	}
 	var proposal CompiledActionProposal
 	if err := json.Unmarshal(confirmed.Payload, &proposal); err != nil {
@@ -191,13 +191,12 @@ func (f *Facade) handlePendingConfirm(
 		return contracts.AssistantResponse{}, true, errors.New("assistant: confirmed compiled action ownership mismatch")
 	}
 	result, err := f.compiledInteractions.actionExecutor.Execute(ctx, proposal)
-	return f.finishConfirmResponse(ctx, msg, conv, emittedAt, err, result)
+	return f.finishConfirmResponse(ctx, msg, emittedAt, err, result)
 }
 
 func (f *Facade) finishConfirmResponse(
 	ctx context.Context,
 	msg contracts.AssistantMessage,
-	conv assistantctx.Conversation,
 	emittedAt time.Time,
 	actionErr error,
 	result CompiledActionResult,
@@ -207,9 +206,9 @@ func (f *Facade) finishConfirmResponse(
 			Status: contracts.StatusUnavailable, ErrorCause: contracts.ErrNoMatch,
 			Body: "That confirmation is stale or already resolved.", EmittedAt: emittedAt,
 		}
-		// Re-load before persisting. `conv` was captured BEFORE arbitration and
-		// still carries the PendingConfirm this caller just lost; writing it back
-		// would resurrect the pending row and let a third caller redeem the same
+		// Re-load before persisting. A snapshot taken before arbitration still
+		// carries the PendingConfirm this caller just lost; writing it back would
+		// resurrect the pending row and let a third caller redeem the same
 		// reference, executing the gated action twice (BUG-069-006).
 		fresh, _, loadErr := f.contextStore.Load(ctx, msg.UserID, msg.Transport)
 		if loadErr != nil {
