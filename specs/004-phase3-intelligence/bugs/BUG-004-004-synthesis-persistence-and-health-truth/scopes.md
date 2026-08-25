@@ -391,16 +391,16 @@ Scenario: SCN-004-004-09 Authorization and telemetry preserve privacy
 - [ ] Latest/history/detail/retry, authenticated health, and alerts consume one durable read/health model and closed state vocabulary. (latest/history/detail land here; the operator retry route is not added yet)
 - [x] Never-run and probe failure are never up; stale/failed alerts clear only after persisted read-back recovery; partial remains degraded. Evidence: [report.md#scope-04-health-truth-phase](report.md#scope-04-health-truth-phase)
 - [x] Authorization is context-derived and prevents text, citations, run identity, timestamps, counts, and existence hints from crossing the matrix. Evidence: [report.md#scope-04-read-api-phase](report.md#scope-04-read-api-phase)
-- [ ] Logs, metrics, traces, and alert labels are bounded and content-free. (needs the telemetry assertions; the API responses are already content-free by construction)
+- [x] Logs, metrics, traces, and alert labels are bounded and content-free. Evidence: [report.md#scope-04-alert-and-telemetry-phase](report.md#scope-04-alert-and-telemetry-phase)
 
 #### Test Evidence - One Item Per Test Plan Row
 
 - [x] T004-05-HEALTH passes with current-session raw evidence in `report.md#t004-05-health`.
 - [x] T004-05-API passes with current-session raw evidence in `report.md#t004-05-api`. Evidence: [report.md#scope-04-read-api-phase](report.md#scope-04-read-api-phase)
-- [ ] T004-06-ALERT passes with current-session raw evidence in `report.md#t004-06-alert`. (needs the alert rules; the underlying stale/failed states are proven by the health tests)
+- [x] T004-06-ALERT passes with current-session raw evidence in `report.md#t004-06-alert`. Evidence: [report.md#scope-04-alert-and-telemetry-phase](report.md#scope-04-alert-and-telemetry-phase)
 - [x] T004-07-08-API passes with current-session raw evidence in `report.md#t004-07-08-api`. Evidence: [report.md#scope-04-read-api-phase](report.md#scope-04-read-api-phase)
 - [x] T004-09-AUTH passes with current-session raw evidence in `report.md#t004-09-auth`. Evidence: [report.md#scope-04-read-api-phase](report.md#scope-04-read-api-phase)
-- [ ] T004-09-TELEMETRY passes with current-session raw evidence in `report.md#t004-09-telemetry`. (needs the telemetry assertions; the API responses are already content-free by construction)
+- [x] T004-09-TELEMETRY passes with current-session raw evidence in `report.md#t004-09-telemetry`. Evidence: [report.md#scope-04-alert-and-telemetry-phase](report.md#scope-04-alert-and-telemetry-phase)
 
 #### Build Quality Gate
 

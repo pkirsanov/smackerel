@@ -742,3 +742,94 @@ The integration tests prove the read MODEL. Only these prove the handler is
 wired to it and that the auth gate is real. A model can be correct while the
 route returns a hardcoded shape, and nothing below the transport would notice.
 
+## SCOPE-04 Alert And Telemetry Phase
+
+Synthesis health existed only as a field inside an `/api/health` JSON response.
+Nothing scraped it and no rule could fire on it, so an operator learned that
+synthesis had stopped producing by noticing.
+
+Executed this session:
+
+```
+$ ./smackerel.sh test unit --go --go-run 'TestMetricStateFor_|TestSynthesisAlertRules_'
+--- PASS: TestMetricStateFor_StatesAreExclusiveAndOrdered (0.00s)
+--- PASS: TestMetricStateFor_EveryStateIsDistinct (0.00s)
+--- PASS: TestSynthesisAlertRules_ReferenceLivePublishedMetrics (0.00s)
+--- PASS: TestMetricStateFor_StalenessDoesNotDowngradeAFailure (0.00s)
+
+$ ./smackerel.sh test integration --go-run 'TestSynthesisTelemetry'
+--- PASS: TestSynthesisTelemetry_RejectionAuditCarriesNoSynthesisText (0.05s)
+--- PASS: TestSynthesisTelemetry_ReadTypesExposeNoContentFields (0.00s)
+
+$ ./smackerel.sh test integration --go-run 'TestSynthesis'
+27 passed, 0 failed
+
+$ ./smackerel.sh check -> 0    lint -> 0
+```
+
+### One gauge, not a labelled series
+
+A labelled gauge would let two states be non-zero during a scrape race, so an
+alert on `state="failed"` could fire while `state="up"` was also set. One number
+cannot be in two states at once, which makes exclusivity structural rather than
+something each rule has to assume.
+
+`MetricStateFor` lives beside the read model that produces the outcome, so the
+gauge and the `/api/health` verdict are two renderings of ONE derivation rather
+than two derivations that can drift.
+
+### Precedence, and why it is in that order
+
+| Rank | State | Reason |
+|---|---|---|
+| highest | probe-error | An unreadable database means the other fields describe nothing |
+| | failed | A current failure is the more urgent fact; time passing must not soften it |
+| | stale | Aged past budget, but the output is real |
+| | partial | Durable and honest, but never full health |
+| lowest | up | Verified and inside budget |
+
+A commit whose read-back did NOT succeed maps to **failed**, not up. Reporting
+it as up is exactly the claim this packet exists to remove.
+
+### Three guards against silent failure, each mutation-verified
+
+Silent is the operative word. None of these protect against a loud break.
+
+1. **Every state distinct.** A mapping returning one value for two states would
+   satisfy each individual case above while leaving one alert unreachable.
+2. **Every `state == N` reachable.** A rule on `== 7` would be permanently dead.
+3. **Rules name published metrics.** Prometheus never complains about a rule
+   whose series does not exist. It simply never fires, which is
+   indistinguishable from a healthy system. Renaming the metric in the rules
+   only:
+
+   ```
+   --- FAIL: TestSynthesisAlertRules_ReferenceLivePublishedMetrics (0.00s)
+       alert rules never mention "smackerel_synthesis_last_verified_output_unixtime";
+       the state it describes cannot be alerted on
+   ```
+
+Plus a control asserting the four alerts exist by name, since all three checks
+would pass on a file containing no synthesis rules at all.
+
+### Telemetry stays content-free
+
+An insight's through-line is user content derived from their corpus. If it
+reaches a failure message, an audit row or a metric label, it has left the
+boundary the API is careful about and landed somewhere with no access control.
+
+The structural guard covers the case nobody would notice: `SynthesisLatest` and
+`SynthesisHistoryEntry` are rendered in listings, logs and metric labels, so a
+future field named `ThroughLine` would silently ship content everywhere those
+appear. Adding exactly that field fails the test:
+
+```
+--- FAIL: TestSynthesisTelemetry_ReadTypesExposeNoContentFields (0.00s)
+    SynthesisLatest.ThroughLine looks like a content field; latest and history
+    are rendered in places with no access control
+```
+
+Its control asserts `SynthesisAggregate` still HAS `Insights` -- without that, a
+codebase that had lost the ability to return content at all would pass the
+content-free check trivially.
+
