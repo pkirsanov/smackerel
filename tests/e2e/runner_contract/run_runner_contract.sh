@@ -382,6 +382,55 @@ assert_contains AC-08-9 "each slot carries its own SKIP_REASON in the results bl
 assert_contains AC-08-10 "a second slot carries a different SKIP_REASON" \
   "$RUNNER_OUT" "SCOPE-06-GRAPH-SEEDING-NOT-YET-AUTHORED"
 
+# ── The two required-set declarations must not drift apart ───────────────────
+# Requiredness is declared twice, once per classifier, and smackerel.sh carries
+# only a comment saying its list mirrors run_all.sh. A comment does not hold.
+#
+# This is the packet's own defect shape at smaller scale: the original bug
+# existed because two surfaces that had to agree about the skip convention
+# disagreed, and nothing checked. Leaving the required sets guarded by prose
+# would rebuild that exact condition, so the agreement is asserted instead.
+scenario "SCN-061-014-13 — both classifiers declare the same required set"
+
+read_required_run_all() {
+  sed -n 's/^REQUIRED_TESTS="\(.*\)"$/\1/p' "$REAL_RUN_ALL" \
+    | tr ' ' '\n' | sed '/^$/d; s/$/.sh/' | sort
+}
+
+read_required_cli() {
+  awk '
+    /^[[:space:]]*e2e_required_shell_tests=\(/ { inside = 1; next }
+    inside && /^[[:space:]]*\)/ { exit }
+    inside {
+      gsub(/#.*/, "")
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "")
+      if ($0 != "") print
+    }
+  ' "$REAL_CLI" | sort
+}
+
+REQ_RUN_ALL="$(read_required_run_all)"
+REQ_CLI="$(read_required_cli)"
+REQ_RUN_ALL_N="$(printf '%s\n' "$REQ_RUN_ALL" | sed '/^$/d' | wc -l | tr -d ' ')"
+REQ_CLI_N="$(printf '%s\n' "$REQ_CLI" | sed '/^$/d' | wc -l | tr -d ' ')"
+
+echo "  run_all.sh declares $REQ_RUN_ALL_N required fixtures"
+echo "  smackerel.sh declares $REQ_CLI_N required fixtures"
+
+# A non-empty check first: two empty lists would otherwise "agree" vacuously,
+# and an empty required set means no skip can ever redden either lane.
+assert_ne AC-09-1 "run_all.sh's required set is non-empty" "$REQ_RUN_ALL_N" "0"
+assert_ne AC-09-2 "smackerel.sh's required set is non-empty" "$REQ_CLI_N" "0"
+assert_eq AC-09-3 "both classifiers declare the same number of required fixtures" \
+  "$REQ_CLI_N" "$REQ_RUN_ALL_N"
+
+if [ "$REQ_RUN_ALL" = "$REQ_CLI" ]; then
+  record 0 AC-09-4 "the two required sets are identical"
+else
+  record 1 AC-09-4 "the two required sets are identical" \
+    "$(diff <(printf '%s\n' "$REQ_RUN_ALL") <(printf '%s\n' "$REQ_CLI") | head -20 | tr '\n' ' ')"
+fi
+
 # ── Summary ─────────────────────────────────────────────────────────────────
 echo ""
 echo "========================================="
