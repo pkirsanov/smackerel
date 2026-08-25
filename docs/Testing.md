@@ -655,6 +655,41 @@ while recreating the condition
 was opened for: a required behaviour going unproven under a green suite. A skip
 stays conspicuous in the output.
 
+#### Both skip producers resolve to the same reported outcome
+
+There are two helpers that skip a fixture, and they agree. Exiting `0` to skip is
+forbidden for the same reason mapping `77` to `PASS` is: it reports an unproven
+behaviour as a proven one.
+
+| Helper | Location | Skips with | Emits |
+|---|---|---|---|
+| `reg_skip_with_blocker` | [`tests/e2e/assistant_regression/lib/regression_helpers.sh`](../tests/e2e/assistant_regression/lib/regression_helpers.sh) | `exit 77` | `RESULT: SKIPPED` + `SKIP_REASON:` |
+| `skip_unless_accel_tier` | [`tests/e2e/lib/helpers.sh`](../tests/e2e/lib/helpers.sh) | `exit 77` | `SKIP:` line + `RESULT: SKIPPED` + `SKIP_REASON:` |
+
+`skip_unless_accel_tier` previously exited `0`, which reported its ten consuming
+fixtures as `PASS` on a cpu-tier host while they proved nothing. That is the
+false-green half of BUG-061-014, and it is the more dangerous half: a false red
+is noisy and gets investigated, a false green is silent and gets trusted.
+
+Its `accel` path still returns so the fixture body runs, and its unknown-tier
+path still exits `2` and is classified `FAIL`. A misconfigured host is a hard
+error, never a benign skip — collapsing every non-accel tier into the skip branch
+would hide the misconfiguration.
+
+#### Why the tier-gated fixtures are not declared required
+
+The ten `skip_unless_accel_tier` consumers are deliberately **not** in either
+required set. Requiredness would make every cpu-tier run permanently non-green,
+which converts a legitimate hardware gate into standing red and destroys the
+signal the exit code carries.
+
+Honesty is preserved by the classification rather than the exit code: those
+fixtures now report `SKIP` and land in the `Skipped` tally, so a reader sees
+exactly how many behaviours went unproven on this host. Declaring them required
+is an operator decision about CI topology — it asserts "this suite must run on
+accel hardware" — and belongs with whoever owns that hardware, not with the
+classifier.
+
 ### The Required-Set Rule
 
 Requiredness is declared by the runner, never inferred from a fixture:

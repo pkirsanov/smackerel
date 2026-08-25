@@ -161,9 +161,13 @@ e2e_psql() {
 #
 # Tier-gated SKIP for live-stack tests that require accelerator hardware.
 # Reads SMACKEREL_HARDWARE_TIER (required; fail-loud per SST policy):
-#   - cpu   → emit a structured "SKIP: <name> — ..." line and exit 0.
+#   - cpu   → emit a structured "SKIP: <name> — ..." line plus a machine-readable
+#             SKIP_REASON, then exit 77 — the repository's skip convention, the
+#             same one reg_skip_with_blocker uses. Exiting 0 here reported ten
+#             fixtures as PASS while they proved nothing (BUG-061-014).
 #   - accel → return so the caller proceeds normally.
-#   - other → emit error and exit 2.
+#   - other → emit error and exit 2. A misconfigured host is a hard error, never
+#             a benign skip.
 # See docs/Testing.md → "Tier-gated live-stack tests" and
 # specs/061-conversational-assistant/design.md §5.1.
 skip_unless_accel_tier() {
@@ -172,7 +176,9 @@ skip_unless_accel_tier() {
   case "$SMACKEREL_HARDWARE_TIER" in
     cpu)
       echo "SKIP: ${test_name} — cpu-tier hardware lacks accelerator; live-stack retrieval-qa loop overshoots 15s ceiling per SCOPE-06c Round 71e evidence. Run on accel-tier host for live-stack PASS."
-      exit 0
+      echo "RESULT: SKIPPED"
+      echo "SKIP_REASON: CPU-TIER-HARDWARE-LACKS-ACCELERATOR"
+      exit 77
       ;;
     accel)
       return 0
