@@ -1885,3 +1885,205 @@ Empty output means the file carries no working-tree modification at the tree tha
 produced the PASS above. The pre-existing sequential test therefore passes in its
 original form, which is what makes it a regression check on the fix rather than a
 test quietly rewritten to accommodate it.
+
+## Security Phase
+
+Agent: `bubbles.security`. This phase is not a formality for this packet. A
+confirm gate exists so a consequential action requires explicit human assent, so
+executing a gated action twice from one assent is an authorization failure, not
+only a correctness bug. Five questions were asked. None produced an exploitable
+finding, and one produced a defense-in-depth layer worth recording. No source was
+modified.
+
+### 1. Is the guard authorization-complete, or is identity merely alongside it?
+
+The conditional clear names identity in the predicate rather than trusting the
+reference alone:
+
+```
+ WHERE user_id = $1
+   AND transport = $2
+   AND pending_confirm ->> 'confirm_ref' = $4
+```
+
+`(user_id, transport)` is the table's primary key, so those two terms locate the
+row and the reference is checked against that row only. A reference belonging to
+another user cannot be redeemed no matter what value `$4` carries, because the
+row it lives on is never the row this statement reaches.
+
+That guarantee is worth nothing if a caller can choose `$1`. It cannot. Identity
+is taken from the authenticated context, never from the request body:
+
+```
+	userID := auth.UserIDFromContext(r.Context())
+	if userID == "" {
+		if sess, ok := auth.SessionFromContext(r.Context()); ok && sess.Source != "" && a.cfg.SharedUserID != "" {
+			userID = a.cfg.SharedUserID
+		} else {
+			a.writeError(w, http.StatusUnauthorized, "auth_required", req.TransportMessageID, requestID, false)
+			return
+		}
+	}
+```
+
+The fallback is narrow and closed: it applies only when a session exists with a
+non-empty `Source` and the SST supplies a shared user id, and every other path
+answers 401. Per-user sessions never reach it, because the bearer middleware
+populates the id from the `sub` claim.
+
+The stronger structural fact is that the wire request has no user field at all:
+
+```
+type TurnRequest struct {
+	SchemaVersion        string         `json:"schema_version"`
+	TransportMessageID   string         `json:"transport_message_id"`
+	Kind                 string         `json:"kind"`
+	TransportHint        string         `json:"transport_hint"`
+	Text                 string         `json:"text"`
+	ConfirmRef           string         `json:"confirm_ref"`
+	ConfirmChoice        string         `json:"confirm_choice"`
+	DisambiguationRef    string         `json:"disambiguation_ref"`
+	DisambiguationChoice int            `json:"disambiguation_choice"`
+	ClientContext        map[string]any `json:"client_context"`
+}
+```
+
+A grep for `user` across that struct returns zero. There is no field to spoof, so
+identity substitution is not defended against — it is unrepresentable.
+
+### 2. Reference predictability, re-examined under the new code
+
+`SEC-069-005-2` recorded that pending references are predictable timestamps, and
+assessed that harmless because lookup is keyed by user. The fix changes the shape
+of the check, so the old conclusion does not carry over automatically: the
+reference is now a compared value inside a write predicate, which is exactly the
+kind of change that can turn a guessable token into a usable one.
+
+It does not here, and the reason is the conjunction. All three terms must match
+in the same statement, so guessing `$4` while unable to control `$1` matches zero
+rows and the write is a no-op that reports `won == false`.
+
+The statement is not even reached in that scenario. `Confirm` loads the caller's
+own conversation and returns at the entry guard first:
+
+```
+	conv, ok, err := m.store.Load(ctx, in.UserID, in.Transport)
+	...
+	if !ok || conv.PendingConfirm == nil || conv.PendingConfirm.ConfirmRef != in.ConfirmRef {
+		return ConfirmResult{}, ErrPendingNotFound
+	}
+```
+
+So predictability is less exploitable after this change than before it, not more.
+The old write path was `Persist` of a whole conversation, also keyed by identity;
+the new path keeps that scoping and adds a second identity-scoped condition on
+the write itself. The conclusion from `SEC-069-005-2` stands, on new reasoning
+rather than by restatement.
+
+### 3. Injection surface
+
+The statement is a compile-time constant with bound parameters:
+
+```
+	tag, err := s.pool.Exec(ctx, q, userID, transport, now.UTC(), confirmRef)
+```
+
+`q` is declared `const`, so no value can be interpolated into it. The only
+caller-controlled value, `confirmRef`, is bound as `$4` and never concatenated. A
+scan of the file for `Sprintf` or string concatenation in SQL construction
+returns nothing.
+
+The JSONB path deserves its own line, because `->>` takes a key that would be a
+live injection surface if it were caller-supplied. It is not: `'confirm_ref'` is
+a literal inside the constant. The caller supplies the value compared against the
+extraction, never the key extracted.
+
+`ClearPendingConfirm` also rejects empty inputs before issuing anything, which
+forecloses a degenerate call whose terms could match more loosely than intended:
+
+```
+	if userID == "" || transport == "" || confirmRef == "" {
+		return false, errors.New("assistantctx: ClearPendingConfirm requires non-empty userID, transport, and confirmRef")
+	}
+```
+
+### 4. Audit integrity — one row, and never an unaudited execution
+
+Exactly one audit row per reference is the security-relevant invariant, because
+the audit trail is what evidences who authorised a consequential action.
+
+The winner writes it and losers cannot, since losers return at `!won` before
+reaching the write. The ordering closes the more dangerous direction as well. In
+`Confirm` the sequence is guard, load, arbitrate, write audit, return payload:
+
+```
+	if err := m.writer.WriteProposalArtifact(ctx, audit); err != nil {
+		return ConfirmResult{}, fmt.Errorf("confirm.Confirm: write audit: %w", err)
+	}
+```
+
+A failed audit write returns an error instead of the payload, and the facade only
+executes after `Confirm` returns successfully. An action therefore cannot run
+without its audit row, because the row is a precondition of the caller ever
+receiving the payload to execute.
+
+The reverse ordering — audit written, execution then fails — leaves a row
+recording a confirmed authorization for an action that did not complete. That is
+semantically correct rather than a gap: the row attests that the user authorised
+the action, which did happen, and execution success is a separate fact.
+
+### 5. Disclosure through the error message
+
+`ErrPendingNotFound` renders as "That confirmation is stale or already resolved."
+The question is whether that reply tells a caller who submitted someone else's
+reference that the reference exists.
+
+It does not, and the entry guard quoted above is why. A caller submitting a
+foreign reference loads their own conversation, finds no pending confirm or a
+different one, and receives `ErrPendingNotFound` — the identical error, on the
+identical branch, as a caller submitting a reference that never existed. The two
+cases are indistinguishable in status, error cause and body, so the endpoint is
+not an existence oracle.
+
+### Unexpected finding: a second, independent authorization check
+
+The facade re-verifies ownership on the stored payload after `Confirm` returns:
+
+```
+	if proposal.SchemaVersion != compiledActionProposalSchemaV1 ||
+		proposal.UserID != msg.UserID || proposal.Transport != msg.Transport ||
+		proposal.ConfirmRef != msg.ConfirmRef {
+		return contracts.AssistantResponse{}, true, errors.New("assistant: confirmed compiled action ownership mismatch")
+	}
+```
+
+This is genuine defense in depth rather than a redundant check. It validates the
+*payload's* recorded owner against the authenticated request, so even a store
+that returned a payload belonging to another user would refuse to execute. The
+identity binding is enforced three times independently: by the primary key in the
+predicate, by the entry guard against the caller's own row, and by this check
+against the payload's own contents.
+
+### Verification
+
+No source was modified by this phase.
+
+```
+$ ./smackerel.sh test unit --go
+exit: 0
+$ ./smackerel.sh lint
+exit: 0
+$ ./smackerel.sh format --check
+exit: 0
+```
+
+### Outcome
+
+No exploitable finding. Identity cannot be spoofed because the wire format has no
+field for it; reference predictability is less exploitable after this change than
+before it, for a stated reason rather than by inheriting the earlier assessment;
+the SQL is a constant with bound parameters and a literal JSONB key; an action
+cannot execute without its audit row; and the error reply is not an existence
+oracle. One positive structural finding is recorded — identity is bound three
+times independently. No DoD item is checked by this phase, and no
+`certification.*` field was written.
