@@ -388,6 +388,17 @@ func NewRouter(deps *Dependencies) http.Handler {
 				})
 			}
 
+			// BUG-004-004 SCOPE-04 — durable synthesis read surface. Mounted
+			// inside the bearer-auth gate: run identity, counts and windows are
+			// operator information, and the detail route carries synthesis text.
+			if deps.SynthesisHandlers != nil {
+				r.Route("/synthesis", func(r chi.Router) {
+					r.Get("/latest", deps.SynthesisHandlers.GetLatest)
+					r.Get("/runs", deps.SynthesisHandlers.ListRuns)
+					r.Get("/runs/{outputID}", deps.SynthesisHandlers.GetRun)
+				})
+			}
+
 			if deps.QFEvidenceHandlers != nil {
 				r.Route("/qf/evidence-bundles", func(r chi.Router) {
 					r.Post("/", deps.QFEvidenceHandlers.CreateExport)

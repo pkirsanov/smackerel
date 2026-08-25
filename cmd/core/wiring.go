@@ -266,6 +266,11 @@ func buildAPIDeps(ctx context.Context, cfg *config.Config, svc *coreServices, co
 			cfg.QFDecisionsCredentialRef,
 			time.Now,
 		)
+		if synthesisReadModel, err := intelligence.NewSynthesisReadModel(svc.pg.Pool); err == nil {
+			if synthesisPersistence, err := intelligence.NewSynthesisPersistence(svc.pg.Pool); err == nil {
+				deps.SynthesisHandlers = api.NewSynthesisHandlers(synthesisReadModel, synthesisPersistence)
+			}
+		}
 		deps.QFEvidenceHandlers = api.NewQFEvidenceHandlers(svc.pg, connector.NewStateStore(svc.pg.Pool), qfEvidenceStore, qfEvidenceExporter)
 
 		// Spec 041 Scope 7 — personal-context read API host.

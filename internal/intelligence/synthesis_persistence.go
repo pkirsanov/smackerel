@@ -43,6 +43,11 @@ const (
 // ErrSynthesisRunExists reports that the logical run was already committed. It
 // is not a failure: the caller records an idempotent no-change attempt and
 // keeps the existing output.
+// ErrSynthesisOutputNotFound distinguishes an absent output from a failed read.
+// Collapsing the two would leave an operator unable to tell a bad id from a
+// broken database.
+var ErrSynthesisOutputNotFound = errors.New("synthesis output not found")
+
 var ErrSynthesisRunExists = errors.New("synthesis logical run already committed")
 
 // SynthesisRunKey identifies a LOGICAL run. Two triggers carrying the same key
@@ -311,6 +316,9 @@ func (p *SynthesisPersistence) ReadAggregate(ctx context.Context, outputID strin
 	`, outputID).Scan(&agg.RunID, &agg.LogicalKey, &kind, &agg.InsightCount,
 		&agg.CitationCount, &agg.EvaluatedArtifactCount, &agg.CreatedAt)
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrSynthesisOutputNotFound
+		}
 		return nil, fmt.Errorf("read synthesis output %s: %w", outputID, err)
 	}
 	agg.Kind = SynthesisOutputKind(kind)

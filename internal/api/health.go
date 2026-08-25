@@ -300,6 +300,10 @@ type Dependencies struct {
 
 	// QF evidence export handlers (optional — nil when QF connector is not enabled)
 	QFEvidenceHandlers *QFEvidenceHandlers
+	// SynthesisHandlers serves the BUG-004-004 durable synthesis read surface.
+	// Nil leaves the routes unmounted rather than mounting handlers that would
+	// answer "no synthesis" for a system that simply is not wired.
+	SynthesisHandlers *SynthesisHandlers
 
 	// QF personal-context read API handlers (optional — nil when QF
 	// connector is not enabled). Spec 041 Scope 7.

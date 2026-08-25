@@ -166,3 +166,64 @@ func (m *SynthesisReadModel) Latest(ctx context.Context) (SynthesisLatest, bool,
 	}
 	return l, true, nil
 }
+
+// SynthesisHistoryEntry is one row of run history. Like SynthesisLatest it
+// carries counts and identity but no synthesis text, so a history listing can
+// be rendered, logged or paged without deciding who may read content.
+type SynthesisHistoryEntry struct {
+	OutputID       string
+	LogicalKey     string
+	Cadence        string
+	Kind           SynthesisOutputKind
+	InsightCount   int
+	CitationCount  int
+	WindowStart    time.Time
+	WindowEnd      time.Time
+	LifecycleState string
+	CreatedAt      time.Time
+}
+
+// maxSynthesisHistoryLimit bounds a page. An unbounded listing would let one
+// request pull the entire history into memory, so the cap is enforced here
+// rather than trusted from the caller.
+const maxSynthesisHistoryLimit = 100
+
+// History returns verified outputs newest-first, capped at limit.
+//
+// A limit at or below zero is corrected to the cap rather than rejected: the
+// caller asking for "everything" should get a bounded page, not an error, and
+// definitely not everything.
+func (m *SynthesisReadModel) History(ctx context.Context, limit int) ([]SynthesisHistoryEntry, error) {
+	if limit <= 0 || limit > maxSynthesisHistoryLimit {
+		limit = maxSynthesisHistoryLimit
+	}
+
+	rows, err := m.pool.Query(ctx, `
+		SELECT o.id, r.logical_key, r.cadence, o.output_kind,
+		       o.insight_count, o.citation_count,
+		       r.window_start, r.window_end, r.lifecycle_state, o.created_at
+		FROM synthesis_outputs o
+		JOIN synthesis_runs r ON r.id = o.run_id
+		WHERE r.state = 'succeeded'
+		ORDER BY o.created_at DESC
+		LIMIT $1`, limit)
+	if err != nil {
+		return nil, fmt.Errorf("read synthesis history: %w", err)
+	}
+	defer rows.Close()
+
+	var out []SynthesisHistoryEntry
+	for rows.Next() {
+		var e SynthesisHistoryEntry
+		if err := rows.Scan(&e.OutputID, &e.LogicalKey, &e.Cadence, &e.Kind,
+			&e.InsightCount, &e.CitationCount,
+			&e.WindowStart, &e.WindowEnd, &e.LifecycleState, &e.CreatedAt); err != nil {
+			return nil, fmt.Errorf("scan synthesis history: %w", err)
+		}
+		out = append(out, e)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate synthesis history: %w", err)
+	}
+	return out, nil
+}
