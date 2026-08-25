@@ -79,6 +79,26 @@ func (m *memStore) Persist(_ context.Context, c assistantctx.Conversation) error
 	m.rows[m.key(c.UserID, c.Transport)] = c
 	return nil
 }
+
+// ClearPendingConfirm redeems a confirmation atomically. The predicate and the
+// write share one critical section, as the Store contract requires: checking in
+// Go between a Load and a Persist would let two callers both redeem the same
+// confirmation and execute a gated action twice.
+func (m *memStore) ClearPendingConfirm(_ context.Context, u, t, confirmRef string, now time.Time) (bool, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	conv, ok := m.rows[m.key(u, t)]
+	if !ok || conv.PendingConfirm == nil {
+		return false, nil
+	}
+	if conv.PendingConfirm.ConfirmRef != confirmRef || !conv.PendingConfirm.ExpiresAt.After(now) {
+		return false, nil
+	}
+	conv.PendingConfirm = nil // the other pending fields are left untouched
+	m.rows[m.key(u, t)] = conv
+	return true, nil
+}
+
 func (m *memStore) DeleteByKey(_ context.Context, u, t string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()

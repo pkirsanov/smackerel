@@ -196,7 +196,38 @@ func sleepWithContext(ctx context.Context, d time.Duration) error {
 // this process. The durable lease outlives the session and is what makes
 // recovery possible after a crash: a run whose lease has expired is reclaimable
 // by anyone, with no cooperation needed from the holder that died.
+// ClaimWindow takes the lease for a window, retrying transient conflicts.
+//
+// The retry is load-bearing under real contention. SERIALIZABLE means two
+// simultaneous claims can BOTH be valid transactions that PostgreSQL then
+// refuses to serialize, and that refusal is the isolation level working, not a
+// defect. Surfacing it raw would hand a caller an opaque database error where
+// the honest answer is "someone else holds this window" -- which is exactly
+// what the retry discovers on its next pass. Found by the concurrency stress
+// test; the sequential test could not reach it, because it never puts two
+// transactions inside the critical section at once.
 func (c *SynthesisCoordinator) ClaimWindow(ctx context.Context, key SynthesisRunKey, now time.Time) error {
+	var lastErr error
+	for attempt := 1; attempt <= c.policy.MaxAttempts; attempt++ {
+		err := c.claimOnce(ctx, key, now)
+		if err == nil || errors.Is(err, ErrRunClaimedElsewhere) {
+			return err
+		}
+		if ClassifySynthesisFailure(err) != FailureTransient {
+			return err
+		}
+		lastErr = err
+		if attempt == c.policy.MaxAttempts {
+			break
+		}
+		if sleepErr := c.sleep(ctx, c.policy.backoffFor(attempt)); sleepErr != nil {
+			return sleepErr
+		}
+	}
+	return fmt.Errorf("claim window: transient conflict persisted across %d attempt(s): %w", c.policy.MaxAttempts, lastErr)
+}
+
+func (c *SynthesisCoordinator) claimOnce(ctx context.Context, key SynthesisRunKey, now time.Time) error {
 	logicalKey := key.LogicalKey()
 	tx, err := c.persistence.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.Serializable})
 	if err != nil {
