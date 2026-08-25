@@ -79,6 +79,13 @@
         "provenanceMode": "specialist",
         "claimedAt": "2026-08-25T04:24:53Z",
         "evidenceRef": "report.md#security-phase"
+      },
+      {
+        "phase": "regression",
+        "agent": "bubbles.regression",
+        "provenanceMode": "specialist",
+        "claimedAt": "2026-08-25T06:57:35Z",
+        "evidenceRef": "report.md#regression-phase"
       }
     ],
     "lastUpdatedAt": "2026-08-25T02:52:34Z",
@@ -177,6 +184,18 @@
         "outcome": "completed_diagnostic",
         "evidenceRef": "report.md#security-phase",
         "summary": "Security phase. The classifier now reads fixture-controlled text (SKIP_REASON) and places it into the operator-facing summary, which is a new data path from untrusted output into display, so it gets a real look rather than a formality. No command injection: the reason is captured by command-substituting sed, stored in a variable, interpolated into an array element and echoed. Bash does not re-evaluate variable contents, so a hostile reason containing $(...), backticks and semicolons renders literally and fires nothing -- verified by probe. Hostile text is visible rather than executed, which is the desired outcome. A fixture cannot forge its own classification, and this is the property that matters because the packet is about the suite's colour being truthful. Classification reads the EXIT CODE; printed text is informational. A fixture printing RESULT: SKIPPED and SKIP: forge while exiting 1 is classified FAIL, and one printing FAIL: everything is broken while exiting 0 is classified PASS. Exiting 77 IS the declaration of a skip, and that requires actually exiting 77. Fixture output at rest is owner-only: the temp file may hold test-stack credentials, and mktemp creates it 0600, verified. Exposure window is one fixture and the permission is correct. Considered, low severity: a SKIP_REASON containing ANSI escapes could distort summary rendering. It cannot alter classification, counts or suite exit, and the same fixture could already write escapes to the terminal on the pre-existing live-stream path. Recorded as cosmetic."
+      },
+      {
+        "at": "2026-08-25T06:57:35Z",
+        "agent": "bubbles.regression",
+        "phasesExecuted": [
+          "regression"
+        ],
+        "provenanceMode": "specialist",
+        "claimSource": "executed",
+        "outcome": "completed_owned",
+        "evidenceRef": "report.md#regression-phase",
+        "summary": "Regression phase. Four findings. R1 is the one that justifies the phase: docs/Testing.md carried the normative instruction 'A 77 exit MUST be treated as PASS by any aggregating runner' -- precisely ADV-061-014-01, the wrong fix this packet's adversarial case exists to catch -- in the SAME FILE as the three-outcome contract forbidding it. One document gave two opposite instructions, and that is the likeliest explanation for how the original defect survived: an engineer following the documented rule would have implemented the false green. R2: two other sections still described skip_unless_accel_tier as exiting 0 while a third already said it 'previously exited 0'. Both corrected to 77 / SKIP / counted in Skipped. A related mismatch surfaced -- the doc named SKIP_REASON=cpu-tier-operator-defer-per-SCOPE-06c-PACKET-3 while the helper emits SKIP_REASON: CPU-TIER-HARDWARE-LACKS-ACCELERATOR, a different token AND separator. Correcting the text alone would repeat the mistake the simplify phase diagnosed for the required sets, so the tier driver now extracts the token from helpers.sh and asserts the doc contains it, non-emptiness checked first because assert_contains with an empty needle passes vacuously. 25 assertions 0 failures clean; mutating the doc token gives FAIL DOC-2 at exit 1. R3/R4 are foreign-owned staleness in BUG-069-006 state.json and the parent spec's scopes.md, both asserting the old exit 0 / FAIL-on-77 behaviour; routed to their owners rather than edited, since specs/** outside this packet is excluded by both Change Boundaries. Searched clean: no counter consumer parses the runners' tallies except this packet's driver; required-set parity 36/36 with empty symmetric difference; BUG-069-005 concerns the Go lane only."
       }
     ]
   },

@@ -740,7 +740,7 @@ Behavior:
 
 | `SMACKEREL_HARDWARE_TIER` | Test behavior | Exit |
 |---------------------------|---------------|------|
-| `cpu` | Emits `SKIP: <name> — ...` line and exits 0 | 0 |
+| `cpu` | Emits `SKIP: <name> — ...` line, `RESULT: SKIPPED` and `SKIP_REASON:`, then exits 77 | 77 |
 | `accel` | Runs the test normally | test result |
 | unset | Fails loud via `${VAR:?}` substitution | non-zero |
 | any other value | Emits `[<name>] unknown SMACKEREL_HARDWARE_TIER=...` to stderr | 2 |
@@ -761,8 +761,9 @@ tests MUST reuse this helper rather than open-coding the gate.
 
 Tier-gated tests REMAIN in the default e2e suite — do **not** exclude
 them via runner flags. The gate runs at test-script level so the test
-runner sees exit 0 on cpu hosts and the actual test outcome on accel
-hosts.
+runner sees exit 77 on cpu hosts — classified `SKIP`, counted in the
+`Skipped` tally, neither passed nor failed — and the actual test outcome
+on accel hosts. See "The Shell E2E Three-Outcome Contract" above.
 
 Rationale and evidence:
 
@@ -967,7 +968,7 @@ are **tier-gated** by the `SMACKEREL_HARDWARE_TIER` SST switch:
 
 | Tier  | BS-002 / BS-007 fixture behavior | Notes |
 |-------|----------------------------------|-------|
-| `cpu`   | **SKIP** with exit code **77** and structured `RESULT: SKIPPED` / `SKIP_REASON=cpu-tier-operator-defer-per-SCOPE-06c-PACKET-3` record | Correct behavior. CPU-only inference cannot satisfy the 15 s interactive budget for a full retrieval-qa cited-JSON turn; production retrieval runs on accel hardware only. |
+| `cpu`   | **SKIP** with exit code **77** and structured `RESULT: SKIPPED` / `SKIP_REASON: CPU-TIER-HARDWARE-LACKS-ACCELERATOR` record | Correct behavior. CPU-only inference cannot satisfy the 15 s interactive budget for a full retrieval-qa cited-JSON turn; production retrieval runs on accel hardware only. |
 | `accel` | Fixture proceeds past the skip block and runs the full live-stack assertion (webhook POST → slog scrape → adversarial `jq` assertions) | Acceptance verification path. |
 | unset / other | Fixture exits non-zero with `[F061-HARDWARE-TIER-MISSING]`-style fail-loud error (per [`smackerel-no-defaults`](../.github/instructions/smackerel-no-defaults.instructions.md)) | No implicit default. |
 
@@ -975,8 +976,13 @@ are **tier-gated** by the `SMACKEREL_HARDWARE_TIER` SST switch:
 convention for "intentional skip with documented reason" (see also the
 `skip-77` regression slots in the table above and
 [`tests/e2e/assistant_regression/lib/regression_helpers.sh`](../tests/e2e/assistant_regression/lib/regression_helpers.sh)).
-A 77 exit MUST be treated as PASS by any aggregating runner; the
-structured `SKIP_REASON=…` record is the audit trail.
+A 77 exit MUST be classified `SKIP` by any aggregating runner — never
+`PASS`, never `FAIL`. Mapping it onto `PASS` is forbidden: it reports an
+unproven behaviour as a proven one, which is the false green
+[`BUG-069-005`](../specs/069-assistant-http-transport/bugs/BUG-069-005-required-e2e-false-green/)
+was opened for. The structured `SKIP_REASON:` record is the audit trail; the
+classifiers parse it with a colon, not an equals sign.
+See "The Shell E2E Three-Outcome Contract" above for the binding rule.
 
 **Operator workflow.**
 

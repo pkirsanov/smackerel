@@ -1202,3 +1202,93 @@ $ grep -rl 'e2e_record_shell_result\|e2e_run_shell_test' tests/ --include='*.go'
 
 Called what it is rather than smoothed over: a genuine load-dependent async race
 in an unrelated package, pre-existing, and outside this packet's Change Boundary.
+
+## Regression Phase
+
+Four findings. The first is the one worth the phase existing.
+
+### R1 — a document instructing the fix its own sibling section forbids
+
+`docs/Testing.md` contained, as a normative instruction:
+
+```
+A 77 exit MUST be treated as PASS by any aggregating runner; the
+structured `SKIP_REASON=...` record is the audit trail.
+```
+
+That is precisely `ADV-061-014-01`, the wrong fix this packet's adversarial case
+exists to catch, written as guidance — and it sat in the SAME FILE as the
+three-outcome contract stating that mapping `77` onto `PASS` is forbidden because
+it recreates BUG-069-005. One document gave two opposite instructions.
+
+This is also the likeliest explanation for how the original defect survived. An
+engineer reaching for the documented rule would have implemented the false green.
+Now:
+
+```
+A 77 exit MUST be classified `SKIP` by any aggregating runner — never
+`PASS`, never `FAIL`. Mapping it onto `PASS` is forbidden: it reports an
+unproven behaviour as a proven one, which is the false green BUG-069-005
+was opened for.
+```
+
+### R2 — two sections, two different exit codes for one helper
+
+The tier-gate table still read `| cpu | Emits SKIP: <name> line and exits 0 | 0 |`
+and the prose still said "the test runner sees exit 0 on cpu hosts", while a
+third section in the same file already said the helper "previously exited `0`".
+Both now describe exit `77`, classified `SKIP`, counted in the `Skipped` tally.
+
+### The drift is now asserted, not described
+
+A related mismatch surfaced: the doc named `SKIP_REASON=cpu-tier-operator-defer-per-SCOPE-06c-PACKET-3`
+while the helper emits `SKIP_REASON: CPU-TIER-HARDWARE-LACKS-ACCELERATOR` — a
+different token AND a different separator, where the classifiers parse the colon
+form.
+
+Correcting the text alone would repeat the mistake the simplify phase already
+diagnosed for the required sets: prose cannot hold a value that lives in code.
+The tier driver now extracts the token from `helpers.sh` and asserts the doc
+contains it, with the non-emptiness check first because `assert_contains` with an
+empty needle passes vacuously:
+
+```
+  ok   DOC-1 — the helper emits a SKIP_REASON token (CPU-TIER-HARDWARE-LACKS-ACCELERATOR)
+  ok   DOC-2 — docs/Testing.md documents the token the helper emits
+  Assertions run:    25
+  Assertions failed: 0
+```
+
+Proven to bite — worktree with the doc token replaced by a stale one:
+
+```
+  FAIL DOC-2 — docs/Testing.md documents the token the helper emits
+  Assertions run:    25
+  Assertions failed: 1
+```
+
+### R3 and R4 — foreign-owned, routed rather than edited
+
+`specs/069-assistant-http-transport/bugs/BUG-069-006-.../state.json` states as
+current fact that `bs_004` "is reported by the e2e runner as `FAIL: ... (exit=77)`"
+and makes its unblocking condition "once ... bs_004 exits 0". Both premises are
+now false: the runner reports `SKIP`, and `bs_004` is in neither required set, so
+it contributes nothing to suite exit. Live DoD text in the parent
+`specs/061-conversational-assistant/scopes.md` likewise asserts "exit 0" for the
+tier helper in three places.
+
+Both are outside this packet's Change Boundary and are recorded for their owners
+rather than edited here. The closure rationale in each is unaffected; only the
+mechanism description is stale.
+
+### Searched and clean
+
+- **Counter consumers:** no script, workflow or Go test parses the runners'
+  `Passed:` / `Failed:` / `Total:` lines except this packet's own driver. `ci.yml`
+  runs only `test unit` and `test integration`; `e2e-ui.yml` runs only
+  `test e2e-ui`.
+- **Required-set parity:** 36 entries each, symmetric difference empty, and the
+  default lane arrays contain no tier-gated fixture — so no tier skip can redden
+  the default lane.
+- **BUG-069-005:** every hit in that packet concerns the Go lane (`t.Skipf`), not
+  shell exit 77. The two packets are complementary.

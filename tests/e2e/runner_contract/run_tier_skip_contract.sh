@@ -264,6 +264,31 @@ TIER_EXIT="$(awk '/^[[:space:]]*cpu\)/{f=1} f && /exit [0-9]+/{print $2; exit}' 
 assert_eq UNIF-1 "both skip helpers exit with the same code" "$TIER_EXIT" "$REG_EXIT"
 assert_eq UNIF-2 "and that code is the skip convention" "$TIER_EXIT" "$SKIP_EXIT"
 
+# ── Doc parity: the documented reason token is the one the helper emits ──────
+# The regression phase found docs/Testing.md naming a SKIP_REASON token the
+# helper had never emitted. Prose cannot hold a value that lives in code, so the
+# agreement is asserted instead of described.
+scenario "SCOPE-02 doc parity — the documented SKIP_REASON is the emitted one"
+
+TESTING_DOC="$REPO_ROOT/docs/Testing.md"
+EMITTED_REASON="$(sed -n 's/.*echo "SKIP_REASON:[[:space:]]*\([A-Z0-9_-]\{1,\}\)".*/\1/p' "$REAL_HELPERS" | head -1)"
+
+# Non-emptiness first: assert_contains with an empty needle passes vacuously, so
+# a failed extraction would otherwise look like agreement.
+if [ -n "$EMITTED_REASON" ]; then
+  record 0 DOC-1 "the helper emits a SKIP_REASON token ($EMITTED_REASON)"
+else
+  record 1 DOC-1 "the helper emits a SKIP_REASON token" \
+    "could not extract a token from $REAL_HELPERS"
+fi
+
+if [ -f "$TESTING_DOC" ]; then
+  assert_contains DOC-2 "docs/Testing.md documents the token the helper emits" \
+    "$(cat "$TESTING_DOC")" "$EMITTED_REASON"
+else
+  record 1 DOC-2 "docs/Testing.md is readable" "missing: $TESTING_DOC"
+fi
+
 echo ""
 echo "========================================="
 echo "  Tier-skip contract results"
