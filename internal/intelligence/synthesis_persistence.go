@@ -194,16 +194,26 @@ func (p *SynthesisPersistence) Commit(
 		citationCount += len(dedupeStrings(in.SourceArtifactIDs))
 	}
 
-	_, err = tx.Exec(ctx, `
+	// A row may already exist because the coordinator CLAIMED this window before
+	// the work started. That row is this run in 'running', not a competitor, so
+	// completing it is correct. Only an already-'succeeded' row is a genuine
+	// duplicate, and the WHERE is what draws that line. RETURNING id matters:
+	// the claim generated its own id, and the output must point at that row
+	// rather than at the id this call happened to mint.
+	err = tx.QueryRow(ctx, `
 		INSERT INTO synthesis_runs
 			(id, logical_key, cadence, principal, window_start, window_end,
 			 policy_version, source_set_digest, state, created_at, updated_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'succeeded', $9, $9)
+		ON CONFLICT (logical_key) DO UPDATE
+		SET state = 'succeeded', updated_at = $9
+		WHERE synthesis_runs.state <> 'succeeded'
+		RETURNING id
 	`, runID, logicalKey, string(key.Cadence), key.Principal,
 		key.WindowStart.UTC(), key.WindowEnd.UTC(),
-		key.PolicyVersion, key.SourceSetDigest(), now.UTC())
+		key.PolicyVersion, key.SourceSetDigest(), now.UTC()).Scan(&runID)
 	if err != nil {
-		if isUniqueViolation(err) {
+		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrSynthesisRunExists
 		}
 		return nil, fmt.Errorf("insert synthesis run: %w", err)

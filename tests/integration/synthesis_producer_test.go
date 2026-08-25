@@ -230,3 +230,72 @@ func TestSynthesisProducer_EmptyCorpusPersistsQuietOutput(t *testing.T) {
 		t.Fatalf("got %d outputs, want 1 durable quiet row", n)
 	}
 }
+
+// SCN-004-004-02 at the PRODUCER level. Wiring the coordinator into the
+// producer is what makes a second scheduler or an operator retry harmless; the
+// coordinator tests prove claiming works in isolation, this proves the producer
+// actually consults it.
+func TestSynthesisProducer_HonoursTheWindowClaim(t *testing.T) {
+	pool := synthesisTestPool(t)
+	defer pool.Close()
+	resetSynthesisTables(t, pool)
+	seedSynthesisCluster(t, pool)
+
+	ctx := context.Background()
+	persistence, err := intelligence.NewSynthesisPersistence(pool)
+	if err != nil {
+		t.Fatalf("construct persistence: %v", err)
+	}
+	policy := intelligence.SynthesisRetryPolicy{
+		MaxAttempts:  3,
+		InitialDelay: time.Millisecond,
+		MaxDelay:     5 * time.Millisecond,
+		LeaseTTL:     time.Minute,
+	}
+
+	build := func(holder string) *intelligence.SynthesisProducer {
+		coord, err := intelligence.NewSynthesisCoordinator(persistence, policy, holder)
+		if err != nil {
+			t.Fatalf("construct coordinator %s: %v", holder, err)
+		}
+		prod, err := intelligence.NewSynthesisProducer(&intelligence.Engine{Pool: pool}, persistence)
+		if err != nil {
+			t.Fatalf("construct producer %s: %v", holder, err)
+		}
+		return prod.WithCoordinator(coord)
+	}
+
+	now := time.Now().UTC()
+	first := build("scheduler-process-a")
+	second := build("operator-process-b")
+
+	agg, err := first.RunAndPersist(ctx, intelligence.CadenceDaily, "scheduler", now)
+	if err != nil {
+		t.Fatalf("first producer: %v", err)
+	}
+	if agg.InsightCount == 0 {
+		t.Fatal("first producer stored nothing; the claim test needs real work to guard")
+	}
+
+	// The first producer has already FINISHED, so there is no live lease for the
+	// second to lose -- ErrRunClaimedElsewhere belongs to the still-running case,
+	// which the coordinator tests cover directly. What must hold here is that a
+	// second process cannot produce a SECOND answer for a window that already has
+	// one: it resolves to the stored output.
+	secondAgg, err := second.RunAndPersist(ctx, intelligence.CadenceDaily, "scheduler", now)
+	if err != nil {
+		t.Fatalf("second producer must resolve to the stored output, not fail: %v", err)
+	}
+	if secondAgg.OutputID != agg.OutputID {
+		t.Fatalf("second producer resolved to output %s, want the stored %s", secondAgg.OutputID, agg.OutputID)
+	}
+
+	if n := countSynthesisRows(t, pool, "synthesis_outputs"); n != 1 {
+		t.Fatalf("got %d outputs after two producers ran the same window, want 1", n)
+	}
+	// One run row too. The claim and the commit must converge on a single row
+	// rather than the claim leaving an orphan behind.
+	if n := countSynthesisRows(t, pool, "synthesis_runs"); n != 1 {
+		t.Fatalf("got %d run rows, want 1; the claim and the commit must be the same row", n)
+	}
+}

@@ -386,7 +386,29 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("construct synthesis producer: %w", err)
 	}
-	sched.SetSynthesisProducer(synthesisProducer)
+
+	// The holder must identify THIS process, not the product, or two instances
+	// would each think they already hold the lease and both run the window.
+	synthesisHolder, err := os.Hostname()
+	if err != nil || synthesisHolder == "" {
+		synthesisHolder = fmt.Sprintf("smackerel-core-%d", os.Getpid())
+	} else {
+		synthesisHolder = fmt.Sprintf("%s-%d", synthesisHolder, os.Getpid())
+	}
+	synthesisCoordinator, err := intelligence.NewSynthesisCoordinator(
+		synthesisPersistence,
+		intelligence.SynthesisRetryPolicy{
+			MaxAttempts:  3,
+			InitialDelay: 2 * time.Second,
+			MaxDelay:     30 * time.Second,
+			LeaseTTL:     10 * time.Minute,
+		},
+		synthesisHolder,
+	)
+	if err != nil {
+		return fmt.Errorf("construct synthesis coordinator: %w", err)
+	}
+	sched.SetSynthesisProducer(synthesisProducer.WithCoordinator(synthesisCoordinator))
 
 	// Spec 021 Scope 4 — Unified Surfacing Controller. Wires the
 	// SST-validated daily-budget / dedupe / suppression / urgent-

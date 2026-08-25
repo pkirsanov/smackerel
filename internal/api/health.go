@@ -764,27 +764,21 @@ func (d *Dependencies) getCachedIntelligenceHealth(ctx context.Context) *intelli
 		// authority (intelligence.DeriveSynthesisHealth). This replaces the pre-fix
 		// mapping where a freshness-probe error or a never-run synthesis was
 		// reported "up", so a system that never produced — or could not be
-		// evaluated — no longer reports green (BUG-004-004 SCOPE-04). The richer
-		// per-insight/per-citation atomic post-commit read-back gate is the
-		// deferred durable-persistence slice; the coarse read-back available here
-		// is this successful GetLastSynthesisTime query, which reads a durable
-		// synthesis_insights row back.
-		lastSynthesis, err := d.IntelligenceEngine.GetLastSynthesisTime(ctx)
+		// evaluated — no longer reports green (BUG-004-004 SCOPE-04).
+		//
+		// The facts now come from SynthesisReadModel, which reads the DURABLE
+		// tables the producer commits to. The previous source was
+		// GetLastSynthesisTime, i.e. MAX(created_at) FROM synthesis_insights --
+		// the legacy table nothing writes any more. Left alone it would have
+		// reported never-run indefinitely while real output accumulated, which is
+		// the same divergence between the report and the store that this packet
+		// exists to close, only pointing the other way.
 		var outcome intelligence.SynthesisPersistenceOutcome
-		switch {
-		case err != nil:
-			slog.Warn("intelligence freshness check failed", "error", err)
+		if readModel, rmErr := intelligence.NewSynthesisReadModel(d.IntelligenceEngine.Pool); rmErr != nil {
+			slog.Warn("intelligence read model unavailable", "error", rmErr)
 			outcome = intelligence.SynthesisPersistenceOutcome{Phase: intelligence.PhaseProbeError}
-		case lastSynthesis.IsZero() || lastSynthesis.Year() < 2000:
-			// No synthesis has ever persisted an insight (fresh install / never-run).
-			outcome = intelligence.SynthesisPersistenceOutcome{Phase: intelligence.PhaseNoRun}
-		default:
-			outcome = intelligence.SynthesisPersistenceOutcome{
-				Phase:    intelligence.PhaseCommitted,
-				ReadBack: intelligence.ReadBackOK,
-				Output:   intelligence.OutputKindFull,
-				Stale:    time.Since(lastSynthesis) > intelligenceSynthesisFreshnessBudget,
-			}
+		} else {
+			outcome = readModel.LatestOutcome(ctx, intelligenceSynthesisFreshnessBudget, time.Now())
 		}
 		snapshot.intelligenceStatus = intelligence.DeriveSynthesisHealth(outcome).IntelligenceStatus
 

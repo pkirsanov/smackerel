@@ -30,6 +30,18 @@ const synthesisSourceClass = "canonical-graph"
 type SynthesisProducer struct {
 	engine      *Engine
 	persistence *SynthesisPersistence
+	// coordinator is optional. When set, a window is claimed before any work
+	// starts and the commit runs under bounded retry, so a second scheduler or
+	// an operator retry cannot duplicate the run. Nil keeps the single-process
+	// path working unchanged.
+	coordinator *SynthesisCoordinator
+}
+
+// WithCoordinator routes this producer's runs through cross-process claiming
+// and bounded retry.
+func (p *SynthesisProducer) WithCoordinator(c *SynthesisCoordinator) *SynthesisProducer {
+	p.coordinator = c
+	return p
 }
 
 // NewSynthesisProducer wires a producer to its engine and durable store. Both
@@ -125,6 +137,15 @@ func (p *SynthesisProducer) RunAndPersist(ctx context.Context, cadence Synthesis
 	}
 	policy := SourceClassPolicy{Required: []string{synthesisSourceClass}}
 
+	if p.coordinator != nil {
+		if claimErr := p.coordinator.ClaimWindow(ctx, key, now); claimErr != nil {
+			// Losing the claim is not an error condition for this process -- the
+			// holder is doing the work. Recording an attempt here would inflate the
+			// failure count with something that is functioning correctly.
+			return nil, claimErr
+		}
+	}
+
 	insights, err := p.engine.RunSynthesis(ctx)
 	if err != nil {
 		// The corpus could not be read, so this window has no verdict. Recording
@@ -150,7 +171,24 @@ func (p *SynthesisProducer) RunAndPersist(ctx context.Context, cadence Synthesis
 		IncludedClasses:        []string{synthesisSourceClass},
 	}
 
-	aggregate, err := p.persistence.Commit(ctx, candidate, policy, authorized, now)
+	var aggregate *SynthesisAggregate
+	commit := func(ctx context.Context) error {
+		var commitErr error
+		aggregate, commitErr = p.persistence.Commit(ctx, candidate, policy, authorized, now)
+		return commitErr
+	}
+
+	var err2 error
+	if p.coordinator == nil {
+		err2 = commit(ctx)
+	} else {
+		// Retry only wraps the commit. Re-running the cluster query on a
+		// serialization conflict would recompute identical insights at real cost;
+		// the conflict is about writing, not about deriving.
+		err2 = p.coordinator.RunWithRetry(ctx, key.LogicalKey(), commit)
+	}
+
+	err = err2
 	switch {
 	case err == nil:
 		p.recordAttempt(ctx, key, AttemptSucceeded, "", "")
