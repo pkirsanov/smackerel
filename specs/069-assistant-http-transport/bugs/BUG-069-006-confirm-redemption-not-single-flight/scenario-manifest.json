@@ -50,7 +50,7 @@
         }
       ],
       "evidenceRefs": [
-        "report.md#test-evidence"
+        "report.md#confirm-e2e-raw-output"
       ],
       "status": "passed"
     },
@@ -96,7 +96,7 @@
         }
       ],
       "evidenceRefs": [
-        "report.md#test-evidence"
+        "report.md#confirm-e2e-raw-output"
       ],
       "status": "passed"
     }
