@@ -1124,3 +1124,81 @@ sha256: 609da684bd9a55860be16552b08fcd2e5464137949db49bb41a26bd7098c1cf0
 
 The full-lane DoD remains open here. The earlier `35 passed / 1 failed` result
 is retained above until an unfiltered `./smackerel.sh test e2e` completes green.
+
+### The repair, verified on a clean lane
+
+```
+$ ./smackerel.sh test e2e
+  Total:  36
+  Passed: 36
+  Failed: 0
+  Skipped: 0
+```
+
+`test_timeout_process_cleanup.sh` passes, and with it the assertion that was
+failing:
+
+```
+=== BUG-031-004-SCN-001: E2E interruption terminates child processes ===
+Interrupting nested E2E runner pid 3859498
+PASS: BUG-031-004-SCN-001
+```
+
+Two intermediate results along the way were NOT accepted as evidence, because
+neither measured what it appeared to measure.
+
+**A stuck port, not a defect.** The first verification run got past
+`BUG-031-004-SCN-001` and then failed a later scenario, `BUG-031-009`. The cause
+was in the log:
+
+```
+ERROR: Smackerel host port preflight timed out after 180s waiting for project-scoped port release.
+Unavailable test port(s):
+  - OLLAMA_HOST_PORT=47004 on 127.0.0.1:47004: [Errno 98] Address already in use
+    owner: no process owner visible from /proc or docker ps
+```
+
+That port was debris from lanes I had force-killed while clearing the suite
+lock. It was free minutes later, and `BUG-031-009` passes on the clean lane
+above. Worth stating plainly: `BUG-031-009` had never been reached before,
+because my regression aborted the fixture at `SCN-001` first. It was not
+regressed by this packet; it was unmasked by fixing it.
+
+**Four runs whose output I could not read.** A queue of `evidence-capture`
+invocations ran the same checks while I was waiting. They completed, but
+`evidence-capture` removes its temp file on exit and their output went to
+terminals outside my reach. Citing a result I never saw would be exactly the
+fabrication this packet keeps refusing, so the lane above is one I ran and
+captured myself.
+
+### One unrelated Go test flaked under load
+
+The lane's overall exit was `1` despite the shell block being 36/36, from a Go
+e2e test:
+
+```
+--- FAIL: TestQFDecisionSurfaceCardsRenderThroughLiveSearchAndArtifactDetail (2.01s)
+    qf_decisions_surface_test.go:184: QF HTML surface missing "QF e2e surface thesis 1787638489659800753"
+```
+
+The artifact is submitted over NATS and the test then reads the HTML surface; the
+log shows `connector artifact submitted for processing` immediately before, so the
+read raced the processing. Three data points place it outside this packet:
+
+| Run | Result |
+|---|---|
+| Lane before the cleanup repair | `PASS (2.14s)` |
+| Lane after the cleanup repair, under full load | `FAIL (2.01s)` |
+| Same test alone, `--go-run` | `PASS (2.72s)`, exit 0 |
+
+And the change cannot reach it. Commit `213df4f0` touched `smackerel.sh` and this
+`report.md` only, and the `smackerel.sh` hunk is inside the shell-fixture
+classifier:
+
+```
+$ grep -rl 'e2e_record_shell_result\|e2e_run_shell_test' tests/ --include='*.go'
+(no output — no Go test references either function)
+```
+
+Called what it is rather than smoothed over: a genuine load-dependent async race
+in an unrelated package, pre-existing, and outside this packet's Change Boundary.

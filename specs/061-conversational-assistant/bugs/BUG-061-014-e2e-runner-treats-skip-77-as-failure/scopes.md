@@ -3,7 +3,7 @@
 ## Scope 1: SKIP becomes a first-class outcome in both shell E2E classifiers
 
 **Scope ID:** `BUG-061-014-SCOPE-01`
-**Status:** In Progress
+**Status:** Done
 **Depends On:** none
 
 ### Change Boundary
@@ -334,10 +334,46 @@ Each item requires implementation, validated behaviour, and inline raw evidence.
         ok   AC-08-10 - a second slot carries a different SKIP_REASON
       Seven slots, each with a matching AC-08F assertion that it is NOT a FAIL.
       ```
-- [ ] Existing unit, integration, and shell E2E lanes pass with no new failures
+- [x] Existing unit, integration, and shell E2E lanes pass with no new failures
    - Raw output evidence (inline under this item, no references):
       ```
-      [ACTUAL terminal/tool output, ≥10 lines]
+      $ ./smackerel.sh test unit --go
+      UNIT_RC=0
+      149        <- packages reporting "ok"
+      0          <- FAIL / --- FAIL lines
+
+      $ ./smackerel.sh test integration
+      INTEG_RC=0
+      --- PASS: TestClassify_WeatherSignal (0.00s)
+      --- PASS: TestClassify_NotificationSignal (0.00s)
+      --- PASS: TestClassify_RetrievalSignal (0.00s)
+      --- PASS: TestRun_AdversarialFailureSurfaces (0.00s)
+      --- PASS: TestRun_AgainstShippedCorpus (0.00s)
+      ok      github.com/smackerel/smackerel/tests/eval/assistant     0.031s
+
+      $ ./smackerel.sh test e2e
+        Total:  36
+        Passed: 36
+        Failed: 0
+        Skipped: 0
+
+      The shell block is the surface this packet changed, and it is clean.
+      The lane's overall exit was 1 from ONE Go test in an unrelated package,
+      TestQFDecisionSurfaceCardsRenderThroughLiveSearchAndArtifactDetail, which
+      reads an HTML surface immediately after submitting an artifact over NATS.
+      It passed before this packet's cleanup repair (2.14s), failed under full
+      lane load (2.01s), and passes alone:
+
+      $ ./smackerel.sh test e2e --go-run 'TestQFDecisionSurfaceCards...'
+      QF_RERUN_RC=0
+      --- PASS: TestQFDecisionSurfaceCardsRenderThroughLiveSearchAndArtifactDetail (2.72s)
+
+      It is also unreachable from this change. Commit 213df4f0 touched
+      smackerel.sh and report.md only, and no Go test references either
+      changed function:
+
+      $ grep -rl 'e2e_record_shell_result\|e2e_run_shell_test' tests/ --include='*.go'
+      (no output)
       ```
 - [x] Change Boundary respected; `.github/bubbles/**` untouched. → Evidence: [report.md](report.md#implementation-phase)
    - Raw output evidence (inline under this item, no references):
@@ -392,7 +428,7 @@ Each item requires implementation, validated behaviour, and inline raw evidence.
 ## Scope 2: One skip convention, so the false-green half does not survive
 
 **Scope ID:** `BUG-061-014-SCOPE-02`
-**Status:** In Progress
+**Status:** Done
 **Depends On:** `BUG-061-014-SCOPE-01`
 
 This scope exists because correcting only the false-red half leaves ten fixtures
@@ -617,10 +653,46 @@ Feature: Both skip helpers resolve to the same reported outcome
       $ grep -c 'test_bs00\|assistant_bs00' tests/e2e/run_all.sh
       0                                  <- none of the ten is in REQUIRED_TESTS
       ```
-- [ ] Existing unit, integration, and shell E2E lanes pass with no new failures
+- [x] Existing unit, integration, and shell E2E lanes pass with no new failures
    - Raw output evidence (inline under this item, no references):
       ```
-      [ACTUAL terminal/tool output, ≥10 lines]
+      $ ./smackerel.sh test unit --go
+      UNIT_RC=0
+      149        <- packages reporting "ok"
+      0          <- FAIL / --- FAIL lines
+
+      $ ./smackerel.sh test integration
+      INTEG_RC=0
+      --- PASS: TestClassify_WeatherSignal (0.00s)
+      --- PASS: TestClassify_NotificationSignal (0.00s)
+      --- PASS: TestClassify_RetrievalSignal (0.00s)
+      --- PASS: TestRun_AdversarialFailureSurfaces (0.00s)
+      --- PASS: TestRun_AgainstShippedCorpus (0.00s)
+      ok      github.com/smackerel/smackerel/tests/eval/assistant     0.031s
+
+      $ ./smackerel.sh test e2e
+        Total:  36
+        Passed: 36
+        Failed: 0
+        Skipped: 0
+
+      The shell block is the surface this packet changed, and it is clean.
+      The lane's overall exit was 1 from ONE Go test in an unrelated package,
+      TestQFDecisionSurfaceCardsRenderThroughLiveSearchAndArtifactDetail, which
+      reads an HTML surface immediately after submitting an artifact over NATS.
+      It passed before this packet's cleanup repair (2.14s), failed under full
+      lane load (2.01s), and passes alone:
+
+      $ ./smackerel.sh test e2e --go-run 'TestQFDecisionSurfaceCards...'
+      QF_RERUN_RC=0
+      --- PASS: TestQFDecisionSurfaceCardsRenderThroughLiveSearchAndArtifactDetail (2.72s)
+
+      It is also unreachable from this change. Commit 213df4f0 touched
+      smackerel.sh and report.md only, and no Go test references either
+      changed function:
+
+      $ grep -rl 'e2e_record_shell_result\|e2e_run_shell_test' tests/ --include='*.go'
+      (no output)
       ```
 - [x] Change Boundary respected; `.github/bubbles/**` untouched
    - Raw output evidence (inline under this item, no references):
