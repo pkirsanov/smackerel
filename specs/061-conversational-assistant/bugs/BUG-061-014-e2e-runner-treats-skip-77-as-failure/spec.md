@@ -77,6 +77,28 @@ same fixture exit code. Two independent classifiers with divergent rules is how 
 single fixture comes to have two different reported outcomes depending on which
 entry point invoked it.
 
+## Domain Capability Model
+
+**Capability:** classify the outcome of one shell E2E fixture and aggregate those
+outcomes into a suite verdict.
+
+The outcome domain has three values, because a fixture can prove a behaviour,
+disprove it, or not run. The capability is therefore a total function from a
+fixture exit code to one of `PASS`, `SKIP`, `FAIL`, plus a rule for how each
+contributes to the suite exit status. The defect was that both implementations
+encoded a two-valued vocabulary against this three-valued domain, so the third
+outcome had to be misreported as one of the other two.
+
+**Concrete implementations (2):** `run_test` in `tests/e2e/run_all.sh`, and
+`e2e_record_shell_result` in `smackerel.sh`. Two exist because a fixture can be
+reached from two entry points; both are real, both ship, and neither is a
+wrapper around the other.
+
+**Why this is a capability and not a one-off:** the two implementations must
+agree, and nothing was making them. That is the same class of defect as the
+original bug, one level up. The packet therefore asserts agreement mechanically
+(`SCN-061-014-13`) instead of documenting it in a comment.
+
 ## Acceptance criteria
 
 | ID | Criterion | Verification |

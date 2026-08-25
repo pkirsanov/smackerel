@@ -5,8 +5,32 @@ observed by execution during discovery. Items describing behaviour this bug will
 deliver are unchecked until a human has run the steps and observed them — no
 agent may check those.
 
-This packet is newly filed and **no fix is implemented**, so every delivery item
-below is unchecked.
+Both scopes are now implemented and every DoD item carries execution evidence,
+so the delivery items below describe behaviour that is in the tree and passing
+under agent execution. They remain **unchecked** because agent execution is not
+human acceptance, and this packet's own rule is that no agent may check them.
+Checking them here would be the exact substitution the rule exists to prevent.
+
+## Automation Readiness
+
+Automation verified each delivered behaviour far enough to be worth a human's
+time. **This grants no acceptance.** Every entry below was established by agent
+execution, and the packet's own rule — restated by the acceptance-authority
+contract — is that an agent cannot accept on a human's behalf.
+
+- [x] A fixture exiting `77` is reported `SKIP` by BOTH runners and counted in its own tally — `run_runner_contract.sh` AC-01-1, AC-02-1, AC-03-1..4; 55 assertions, 0 failures
+- [x] A skipped fixture is absorbed into neither neighbour; `Total` reconciles to `Passed + Failed + Skipped` — AC-03-4, and ADV-05-a..d on the tier driver
+- [x] A required skip keeps the suite exit non-zero with ZERO failures recorded; an optional skip leaves a clean run green — AC-02-9..11, AC-06-1..3, ADV-02-a
+- [x] A real failure is unaffected: exit `1` stays `FAIL`, counted, non-zero — ADV-03-a..d
+- [x] The summary carries the skip reason without searching the log — AC-04-1, with AC-05-1 proving output still streams live
+- [x] The seven existing skip slots each report `SKIP` with their OWN reason — AC-08-0, AC-08-9, AC-08-10
+- [x] The hardware-tier skip stops reporting success — `run_tier_skip_contract.sh` SCN-09-1..5, SCN-10-1..4; 25 assertions, 0 failures
+- [x] The change is confined to test runners and helpers; no product code touched — 14 paths across every commit, all inside the Change Boundary
+- [x] Both full lanes are green — shell E2E 36/36 with 0 failures, integration exit 0
+
+Every one of the six adversarial mutations was applied to the tracked files in a
+worktree and each killed its own case, so these assertions detect the wrong fix
+rather than merely agreeing with the right one.
 
 ## Checklist
 

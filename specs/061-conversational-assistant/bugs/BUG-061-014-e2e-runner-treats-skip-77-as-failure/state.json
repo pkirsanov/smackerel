@@ -5,15 +5,28 @@
   "title": "The E2E runners have no SKIP bucket, so a documented exit-77 skip is reported as a failure and an exit-0 skip is reported as a pass",
   "workflowMode": "bugfix-fastlane",
   "releaseTrain": "mvp",
-  "status": "in_progress",
+  "status": "blocked",
   "severity": "S2",
   "createdAt": "2026-08-25T02:52:34Z",
-  "lastUpdatedAt": "2026-08-25T02:52:34Z",
+  "lastUpdatedAt": "2026-08-25T14:09:08Z",
   "discoveredBy": "Operator observation of './smackerel.sh test e2e --shell-run assistant_regression/bs_004_notification_confirm.sh' reporting 'FAIL: ... (exit=77)' for a fixture that printed 'RESULT: SKIPPED'; independently re-verified by bubbles.bug at HEAD 3bec257660f5c4292d79e67d94391f51f72cdda0",
   "discoveredAt": "2026-08-25",
   "sourceRevision": "3bec257660f5c4292d79e67d94391f51f72cdda0",
-  "completedPhases": [],
-  "completedScopes": [],
+  "completedPhases": [
+    "implement",
+    "implement",
+    "test",
+    "simplify",
+    "stabilize",
+    "security",
+    "regression",
+    "audit",
+    "validate"
+  ],
+  "completedScopes": [
+    "BUG-061-014-SCOPE-01",
+    "BUG-061-014-SCOPE-02"
+  ],
   "affectedSurface": [
     "tests/e2e/run_all.sh",
     "smackerel.sh",
@@ -36,7 +49,10 @@
     "currentPhase": "security",
     "currentScope": null,
     "substate": "documented_awaiting_implementation",
-    "completedScopes": [],
+    "completedScopes": [
+      "BUG-061-014-SCOPE-01",
+      "BUG-061-014-SCOPE-02"
+    ],
     "completedPhaseClaims": [
       {
         "phase": "implement",
@@ -90,9 +106,16 @@
       {
         "phase": "audit",
         "agent": "bubbles.goal",
-        "provenanceMode": "direct",
+        "provenanceMode": "parent-expanded",
         "claimedAt": "2026-08-25T07:13:39Z",
         "evidenceRef": "report.md#audit-phase"
+      },
+      {
+        "phase": "validate",
+        "agent": "bubbles.goal",
+        "provenanceMode": "parent-expanded",
+        "claimedAt": "2026-08-25T14:09:08Z",
+        "evidenceRef": "report.md#validate-phase"
       }
     ],
     "lastUpdatedAt": "2026-08-25T02:52:34Z",
@@ -210,11 +233,29 @@
         "phasesExecuted": [
           "audit"
         ],
-        "provenanceMode": "direct",
+        "provenanceMode": "parent-expanded",
         "claimSource": "executed",
         "outcome": "completed_owned",
         "evidenceRef": "report.md#audit-phase",
-        "summary": "Audit phase. The bubbles.audit specialist was dispatched and returned no output; git status --porcelain was empty afterwards, so it was a genuine no-op and the audit was performed directly -- recorded as provenanceMode direct rather than attributed to a specialist that did not run. Classification audited branch by branch: three mutually exclusive branches with else catching every other non-zero, and the skip branch testing equality against a single constant, so no real failure can reach it. Suite exit is 1 on FAILED>0 OR REQUIRED_SKIPPED>0 -- reddens on an unproven required behaviour, never propagates the child's raw 77. Traps preserve 130/143. SKIP_EXIT_CODE defined once per file with no second definition to drift. Evidence integrity: 27 fenced blocks hashed, 0 duplicates; 26 checked DoD items, 0 missing evidence headers, 0 unfilled placeholders. One real finding: SCN-061-014-13 was asserted by the driver and described in the report but ABSENT from scopes.md -- added during simplify without updating the scenario list -- and the same was true of the regression phase's doc-parity assertions. Both are now declared (SCN-061-014-13 required-set parity in Scope 1, SCN-061-014-14 documented reason token in Scope 2) and the driver banner renamed to match. All 14 scenarios now have at least one assertion; suites re-run at 55/55 and 25/25. The one asymmetry -- smackerel.sh does not attach SKIP_REASON -- confirmed deliberate and mechanically caused, not an oversight. Lanes not re-run during the audit; the contract drivers were, being fast and stack-free."
+        "summary": "Audit phase. The bubbles.audit specialist was dispatched and returned no output; git status --porcelain was empty afterwards, so it was a genuine no-op and the audit was performed directly -- recorded as provenanceMode direct rather than attributed to a specialist that did not run. Classification audited branch by branch: three mutually exclusive branches with else catching every other non-zero, and the skip branch testing equality against a single constant, so no real failure can reach it. Suite exit is 1 on FAILED>0 OR REQUIRED_SKIPPED>0 -- reddens on an unproven required behaviour, never propagates the child's raw 77. Traps preserve 130/143. SKIP_EXIT_CODE defined once per file with no second definition to drift. Evidence integrity: 27 fenced blocks hashed, 0 duplicates; 26 checked DoD items, 0 missing evidence headers, 0 unfilled placeholders. One real finding: SCN-061-014-13 was asserted by the driver and described in the report but ABSENT from scopes.md -- added during simplify without updating the scenario list -- and the same was true of the regression phase's doc-parity assertions. Both are now declared (SCN-061-014-13 required-set parity in Scope 1, SCN-061-014-14 documented reason token in Scope 2) and the driver banner renamed to match. All 14 scenarios now have at least one assertion; suites re-run at 55/55 and 25/25. The one asymmetry -- smackerel.sh does not attach SKIP_REASON -- confirmed deliberate and mechanically caused, not an oversight. Lanes not re-run during the audit; the contract drivers were, being fast and stack-free.",
+        "expandedBy": "bubbles.goal",
+        "expansionReason": "runSubagent(bubbles.audit) returned no output and left the working tree unchanged, verified by git status --porcelain immediately after dispatch; the orchestrator expanded the audit phase directly rather than record a specialist claim for work no specialist performed.",
+        "expansionEvidenceRef": "report.md#audit-phase"
+      },
+      {
+        "at": "2026-08-25T14:09:08Z",
+        "agent": "bubbles.goal",
+        "phasesExecuted": [
+          "validate"
+        ],
+        "provenanceMode": "parent-expanded",
+        "expandedBy": "bubbles.goal",
+        "expansionReason": "runSubagent(bubbles.validate) was not dispatched for this phase because the validate work here is guard-driven: the state-transition-guard enumerates the remaining gates and each was remediated and re-measured directly. The orchestrator expanded the phase rather than record a specialist claim for work no specialist performed.",
+        "expansionEvidenceRef": "report.md#validate-phase",
+        "claimSource": "executed",
+        "outcome": "blocked",
+        "evidenceRef": "report.md#validate-phase",
+        "summary": "Validate phase. Drove the transition guard from 12 failing gates / 54 findings to human acceptance alone. Resolved: G057 scenario-manifest.json authored with all 14 scenarios and verified assertion ids; G053 Code Diff Evidence; G068 all 14 scenarios given citing DoD items, which exposed that SCN-13 and SCN-14 were asserted by the drivers but never declared, so two DoD items were added with their real mutation evidence; G094 capability-foundation sections, which the packet genuinely fits since one rule has two classifier implementations; G095 discovered-issue dispositions; G041 twice, both self-inflicted by evidence quoting a bold Status marker; G040, a false positive where 'separate processes' matched the banned 'separate PR'. G136 remains and is not remediable by an agent: the acceptance-authority contract states that if an agent is the only party that exercised the behaviour, acceptance has not happened. Automation Readiness was authored (it grants no acceptance); the Human Acceptance Record was deliberately NOT authored, because writing one would be the exact forgery the gate exists to prevent."
       }
     ]
   },
@@ -304,5 +345,12 @@
     "actionable": true
   },
   "transitionRequests": [],
-  "reworkQueue": []
+  "reworkQueue": [],
+  "certification": {
+    "status": "blocked",
+    "certifiedBy": "bubbles.goal",
+    "certifiedAt": "2026-08-25T14:09:08Z",
+    "evidenceRef": "report.md#validate-phase",
+    "blockedReason": "Gate G136 human acceptance. Both scopes are Done, all 34 DoD items carry inline execution evidence, both contract suites are green (55 and 25 assertions, 0 failures), the shell E2E lane is 36/36 and integration exits 0. What is missing is a human. The acceptance-authority contract requires a Human Acceptance Record naming a non-automation acceptor with a declared method, and forbids acceptedBy matching '^bubbles\\\\.'. Only agents exercised these behaviours, so acceptance has not occurred."
+  }
 }

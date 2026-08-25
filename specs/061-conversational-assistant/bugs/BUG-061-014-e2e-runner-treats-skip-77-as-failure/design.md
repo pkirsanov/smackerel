@@ -199,6 +199,58 @@ runner that was never changed. The synthetic fixtures need three variants at
 minimum — exit `0`, exit `77`, exit `1` — so that the exit-`1` control proves the
 skip branch did not swallow real failures.
 
+## Capability Foundation
+
+The foundation is the three-outcome classification rule itself, stated once and
+implemented twice:
+
+| Fixture exit | Classification | Counted in | Suite exit contribution |
+|---|---|---|---|
+| `0` | `PASS` | passed | none |
+| `77`, fixture declared required | `SKIP` | skipped | non-zero |
+| `77`, fixture not declared required | `SKIP` | skipped | none |
+| any other non-zero | `FAIL` | failed | non-zero |
+
+Two invariants make the foundation load-bearing rather than decorative.
+`Total` reconciles to `Passed + Failed + Skipped`, so a skip counted twice is
+detectable arithmetically. And requiredness is declared by the RUNNER, never
+inferred from the fixture, so a fixture cannot downgrade itself out of the
+required set by editing its own text.
+
+## Concrete Implementations
+
+| Implementation | Entry point | Reason extraction |
+|---|---|---|
+| `run_test` in [`tests/e2e/run_all.sh`](../../../../tests/e2e/run_all.sh) | direct suite run | yes — fixtures are independent OS processes |
+| `e2e_record_shell_result` in [`smackerel.sh`](../../../../smackerel.sh) | `./smackerel.sh test e2e` | no — see the variation axis below |
+
+Both are the shipped code under test: the runner-contract driver SYMLINKS the
+tracked `run_all.sh` into its sandbox and EXTRACTS the `smackerel.sh` classifier
+verbatim by function name, so neither branch rule is re-implemented in a test
+where it could silently agree with a broken original.
+
+### Variation Axes
+
+Exactly two axes vary between the implementations, and only one of them is
+permitted to.
+
+| Axis | Varies? | Why |
+|---|---|---|
+| Reason extraction | Permitted, and forced | `run_all.sh` runs fixtures as independent OS processes and can pipe through `tee`; the CLI classifier cannot, because a pipeline subshell discards the child pid its interrupt path needs |
+| Required-set membership | NOT permitted | Both declare a required set and the two MUST be identical; nothing enforced this until `SCN-061-014-13` |
+
+**Axis 1 — reason extraction (permitted, forced).** `e2e_run_child` records the
+child's pid, process-group id and run id in shell variables that the interrupt
+path reads to terminate that group, and a pipeline runs the function in a
+subshell that discards them. Capturing there would trade a real cleanup
+guarantee, the one `tests/e2e/test_timeout_process_cleanup.sh` exists to
+protect, for a cosmetic one. The reason remains visible in the streamed output.
+
+**Axis 2 — required-set membership (NOT permitted to vary).** Nothing enforced
+equality, which is the same defect class as the original bug one level up, so
+`SCN-061-014-13` asserts it by extracting both lists from the tracked files.
+Non-emptiness is asserted first, because two empty lists would agree vacuously.
+
 ## Change boundary
 
 ### Included
