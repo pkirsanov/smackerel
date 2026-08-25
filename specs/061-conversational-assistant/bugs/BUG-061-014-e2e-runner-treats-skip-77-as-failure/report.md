@@ -856,19 +856,46 @@ only on the skip branch, so the common paths pay only `tee`.
 at the end of each `run_test`, so a fixture with a large log does not accumulate
 across the run.
 
-**Finding: temp files leak on abnormal termination.** `rm -f "$output_file"` sits
-at the end of `run_test` and there is no `trap`. If the runner is interrupted —
-Ctrl-C, or the `timeout` wrapper the lane uses sending SIGTERM — the current
-fixture's temp file survives in `TMPDIR`. Each is one fixture's output and
-`/tmp` is not durable, so the impact is small, but the cleanup is currently
-conditional on a clean exit.
+**Finding, and its fix.** `rm -f "$output_file"` sat at the end of `run_test`
+with no `trap`, so an interrupted run left the current fixture's temp file in
+`TMPDIR`. Replaced with a single run-scoped file plus signal handlers, which is
+both simpler than a per-fixture `mktemp` and leak-free on every catchable path:
 
-This is recorded rather than fixed in this pass for a specific reason: the full
-shell E2E lane was executing `run_all.sh` at the time. Bash reads a script
-incrementally as it runs, so editing a running script risks corrupting its
-execution. The correct form is a single run-scoped temp file plus an `EXIT` trap,
-which is both simpler than the per-fixture `mktemp` and leak-free; it is applied
-after the lane reports rather than underneath it.
+```
+RUN_OUTPUT_FILE="$(mktemp)"
+cleanup_run_output() { rm -f "$RUN_OUTPUT_FILE"; }
+trap cleanup_run_output EXIT
+trap 'cleanup_run_output; exit 130' INT
+trap 'cleanup_run_output; exit 143' TERM
+```
+
+The first attempt used `trap ... EXIT` alone. Testing it rather than assuming it
+is what caught the gap: bash does **not** run an `EXIT` trap when killed by an
+untrapped `SIGTERM`, which is exactly how the `timeout` wrapper in the CLI lane
+stops this runner. `INT` and `TERM` are therefore handled explicitly, preserving
+the conventional 130 and 143 exit codes.
+
+The measurement also corrected a flaw in the test itself. The first run signalled
+a wrapper PID while the real `run_all.sh` survived untouched, so "the trap did not
+fire" was a false reading. Signalling the actual process gives the true behaviour:
+
+```
+before: 0
+while running: 1  (pid 2910155)
+TERM sent at t=2s while the 5s fixture is still in the foreground
+t=4s, fixture still running: 1
+t=9s, after the fixture completed: 0
+[1]+  Exit 143
+```
+
+**The residual, stated precisely.** Cleanup is not instantaneous. Bash defers trap
+handling until the current foreground command returns, so a `TERM` arriving
+mid-fixture is honoured only once that fixture ends — visible above as the file
+persisting at t=4s and gone at t=9s. And `SIGKILL` is uncatchable by design, so a
+`timeout --kill-after` that escalates past a long fixture can still leave one
+file behind. That is a property of POSIX signal handling, not a defect in the
+cleanup: one `0600` file holding one fixture's output, in a directory that does
+not survive reboot.
 
 ## Security Phase
 

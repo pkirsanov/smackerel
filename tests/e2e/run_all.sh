@@ -23,6 +23,17 @@ RESULTS=()
 # tests/e2e/assistant_regression/lib/regression_helpers.sh::reg_skip_with_blocker.
 SKIP_EXIT_CODE=77
 
+# One run-scoped capture file rather than one per fixture. tee truncates on
+# open, so fixtures cannot see each other's output.
+RUN_OUTPUT_FILE="$(mktemp)"
+cleanup_run_output() { rm -f "$RUN_OUTPUT_FILE"; }
+# EXIT alone is not enough: bash does not run it when killed by an untrapped
+# SIGTERM, which is how the `timeout` wrapper in the CLI lane stops this runner.
+# INT and TERM are handled explicitly so the conventional exit codes survive.
+trap cleanup_run_output EXIT
+trap 'cleanup_run_output; exit 130' INT
+trap 'cleanup_run_output; exit 143' TERM
+
 # Lifecycle tests manage their own stack boot/teardown and must run standalone.
 LIFECYCLE_TESTS="test_timeout_process_cleanup test_compose_start test_persistence test_postgres_readiness_gate test_config_fail"
 
@@ -52,15 +63,14 @@ is_required_test() {
 
 run_test() {
   local test_file="$1"
-  local test_name exit_code output_file reason
+  local test_name exit_code reason
   test_name="$(basename "$test_file" .sh)"
-  output_file="$(mktemp)"
 
   echo "--- Running: $test_name ---"
   set +e
   # tee keeps the fixture's own output streaming live while giving the
   # classifier a copy to read SKIP_REASON from; nothing is swallowed.
-  bash "$test_file" 2>&1 | tee "$output_file"
+  bash "$test_file" 2>&1 | tee "$RUN_OUTPUT_FILE"
   exit_code=${PIPESTATUS[0]}
   set -e
 
@@ -68,7 +78,7 @@ run_test() {
     RESULTS+=("PASS: $test_name")
     PASSED=$((PASSED + 1))
   elif [ "$exit_code" -eq "$SKIP_EXIT_CODE" ]; then
-    reason="$(sed -n 's/^SKIP_REASON:[[:space:]]*//p' "$output_file" | head -1)"
+    reason="$(sed -n 's/^SKIP_REASON:[[:space:]]*//p' "$RUN_OUTPUT_FILE" | head -1)"
     [ -n "$reason" ] || reason="no SKIP_REASON emitted by $test_file"
     SKIPPED=$((SKIPPED + 1))
     if is_required_test "$test_name"; then
@@ -81,7 +91,6 @@ run_test() {
     RESULTS+=("FAIL: $test_name (exit=$exit_code)")
     FAILED=$((FAILED + 1))
   fi
-  rm -f "$output_file"
   echo ""
 }
 

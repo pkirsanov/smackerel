@@ -36,6 +36,13 @@ CHECKS_FAILED=0
 CURRENT_SCENARIO="(none)"
 
 WORK_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/bug-061-014-tier-skip.XXXXXX")"
+# Without this, a failed mktemp (unwritable or missing TMPDIR) leaves WORK_ROOT
+# empty and every sandbox path becomes an absolute /<name>, which surfaces as a
+# wall of unrelated assertion failures instead of the one real cause.
+if [ -z "$WORK_ROOT" ] || [ ! -d "$WORK_ROOT" ]; then
+  echo "ERROR: could not create a sandbox root under ${TMPDIR:-/tmp}" >&2
+  exit 1
+fi
 cleanup() { rm -rf "$WORK_ROOT"; }
 trap cleanup EXIT
 
