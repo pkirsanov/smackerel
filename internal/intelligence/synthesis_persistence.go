@@ -448,3 +448,48 @@ func isUniqueViolation(err error) bool {
 	}
 	return false
 }
+
+// postgresErrorCode returns the SQLSTATE of err, or "" when it is not a
+// PostgreSQL error. Retry classification keys off the code rather than the
+// message because messages are localised and reworded between versions.
+func postgresErrorCode(err error) string {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) {
+		return pgErr.Code
+	}
+	return ""
+}
+
+// RecordAttemptWithKind is RecordAttempt plus the transient/terminal
+// classification SCOPE-03 needs. Kept as a separate entry point so existing
+// callers keep working and no caller is forced to invent a kind it does not
+// know.
+func (p *SynthesisPersistence) RecordAttemptWithKind(
+	ctx context.Context,
+	logicalKey string,
+	outcome SynthesisAttemptOutcome,
+	failureClass string,
+	failureKind string,
+	failureMessage string,
+) error {
+	switch failureKind {
+	case "", string(FailureTransient), string(FailureTerminal):
+	default:
+		return fmt.Errorf("unknown synthesis failure kind %q", failureKind)
+	}
+	// A non-failed attempt carrying a failure kind would be a contradiction in
+	// the audit log, so it is refused rather than stored.
+	if outcome != AttemptFailed && failureKind != "" {
+		return fmt.Errorf("outcome %q must not carry a failure kind", outcome)
+	}
+
+	if _, err := p.pool.Exec(ctx, `
+		INSERT INTO synthesis_run_attempts
+			(logical_key, outcome, failure_class, failure_kind, failure_message)
+		VALUES ($1, $2, $3, $4, $5)
+	`, logicalKey, string(outcome), nullIfEmpty(failureClass),
+		nullIfEmpty(failureKind), nullIfEmpty(failureMessage)); err != nil {
+		return fmt.Errorf("record synthesis attempt: %w", err)
+	}
+	return nil
+}
