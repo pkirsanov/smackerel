@@ -1,0 +1,155 @@
+{
+  "stateVersion": 3,
+  "specId": "061-conversational-assistant",
+  "bugId": "BUG-061-014",
+  "title": "The E2E runners have no SKIP bucket, so a documented exit-77 skip is reported as a failure and an exit-0 skip is reported as a pass",
+  "workflowMode": "bugfix-fastlane",
+  "releaseTrain": "mvp",
+  "status": "in_progress",
+  "severity": "S2",
+  "createdAt": "2026-08-25T02:52:34Z",
+  "lastUpdatedAt": "2026-08-25T02:52:34Z",
+  "discoveredBy": "Operator observation of './smackerel.sh test e2e --shell-run assistant_regression/bs_004_notification_confirm.sh' reporting 'FAIL: ... (exit=77)' for a fixture that printed 'RESULT: SKIPPED'; independently re-verified by bubbles.bug at HEAD 3bec257660f5c4292d79e67d94391f51f72cdda0",
+  "discoveredAt": "2026-08-25",
+  "sourceRevision": "3bec257660f5c4292d79e67d94391f51f72cdda0",
+  "completedPhases": [],
+  "completedScopes": [],
+  "affectedSurface": [
+    "tests/e2e/run_all.sh",
+    "smackerel.sh",
+    "tests/e2e/lib/helpers.sh",
+    "tests/e2e/assistant_regression/lib/regression_helpers.sh"
+  ],
+  "rootCause": "The shell E2E runners' result vocabulary has two values (pass, fail) while the outcome domain of a test suite has three (proved, disproved, did not run). Two independent classifiers encode the binary form: tests/e2e/run_all.sh:41-47 (run_test) and smackerel.sh:1954-1968 (e2e_record_shell_result). Neither has a branch for exit 77, and neither carries a counter for a third outcome. Because no skip bucket exists, every author of a skippable fixture must choose an exit code the runner will misreport, and both wrong answers are present: reg_skip_with_blocker exits 77 and is printed FAIL (7 fixtures, false red), while skip_unless_accel_tier exits 0 and is printed PASS (10 fixtures, false green). Verified by grep that no runner code path anywhere in the repository reads exit code 77: the convention has a producer and no consumer.",
+  "blastRadius": {
+    "regSkipWithBlockerFilesTotal": 8,
+    "regSkipWithBlockerCallSites": 7,
+    "skipUnlessAccelTierConsumers": 10,
+    "fixturesWithUntrustworthyReportedColour": 17,
+    "requiredSpec061BsSlotsCurrentlySkipping": 6,
+    "requiredSpec061BsSlotsTotal": 10,
+    "independentBinaryClassifiers": 2,
+    "runnerCodePathsReadingExit77": 0
+  },
+  "execution": {
+    "activeAgent": "bubbles.bug",
+    "currentPhase": "analyze",
+    "currentScope": null,
+    "substate": "documented_awaiting_implementation",
+    "completedScopes": [],
+    "completedPhaseClaims": [],
+    "lastUpdatedAt": "2026-08-25T02:52:34Z",
+    "nextRequiredOwner": "bubbles.implement",
+    "executionHistory": [
+      {
+        "agent": "bubbles.bug",
+        "runStartedAt": "2026-08-25T02:40:00Z",
+        "runCompletedAt": "2026-08-25T02:52:34Z",
+        "phasesExecuted": [
+          "discovery",
+          "documentation",
+          "analysis"
+        ],
+        "statusBefore": "not_started",
+        "statusAfter": "in_progress",
+        "summary": "Filed BUG-061-014 at HEAD 3bec257660f5c4292d79e67d94391f51f72cdda0 with a clean working tree. NO FIX IMPLEMENTED and no runtime file touched; both scopes are Not started and every DoD item is unchecked. The operator's three stated reasons were re-verified by execution rather than restated, and two required correction. (1) 'The broader e2e suite can never be green while a slot skips' is correct in principle but not yet true of the default lane: smackerel.sh's e2e_lifecycle_scripts / e2e_shared_scripts arrays name no assistant_* fixture and run_all.sh defaults to the flat glob test_*.sh, so the seven skip-77 fixtures are reached only through --shell-run or run_all.sh <pattern>. The claim becomes true of the default lane when spec 061 SCOPE-10 wires the required slots in, which is why correcting the classifier is what makes that wiring safe. (2) The BUG-069-005 inversion is real and stronger than reported: this repository also contains BUG-069-005's own false-green shape in the shell lane at tests/e2e/lib/helpers.sh:169-185, where skip_unless_accel_tier prints a structured SKIP: line then exits 0 for 10 fixtures. The packet therefore contains both the false-red and false-green halves, which is why scopes.md carries a second scope. (3) BUG-069-006 is confirmed blocked with DIS-069-006-4 quoting this defect verbatim, but the unblocking claim was split: correcting the classifier stops bs_004 being printed as a failure, and does not make it exercise the confirm flow, whose executed branch remains blocked on the spec 061 SCOPE-04 notification-proposal fixture. Whether DIS-069-006-4 closes depends on which reading of 'Broader E2E regression suite passes' governs that packet, and only the reporting reading is claimed here. Two further findings were established: the requested identifier BUG-061-011 is occupied by a blocked packet referenced from 11 files across specs 061 and 064, so this packet took BUG-061-014 (highest existing under spec 061 is 013); and requiredness has no manifest source today, since spec 061 has no scenario-manifest.json and no manifest anywhere names a shell fixture, so design.md D3 selects explicit runner-side declaration matching the existing LIFECYCLE_TESTS and lane-array idiom rather than letting a fixture self-certify its own requiredness.",
+        "artifactsCreated": [
+          "specs/061-conversational-assistant/bugs/BUG-061-014-e2e-runner-treats-skip-77-as-failure/bug.md",
+          "specs/061-conversational-assistant/bugs/BUG-061-014-e2e-runner-treats-skip-77-as-failure/spec.md",
+          "specs/061-conversational-assistant/bugs/BUG-061-014-e2e-runner-treats-skip-77-as-failure/design.md",
+          "specs/061-conversational-assistant/bugs/BUG-061-014-e2e-runner-treats-skip-77-as-failure/scopes.md",
+          "specs/061-conversational-assistant/bugs/BUG-061-014-e2e-runner-treats-skip-77-as-failure/report.md",
+          "specs/061-conversational-assistant/bugs/BUG-061-014-e2e-runner-treats-skip-77-as-failure/uservalidation.md",
+          "specs/061-conversational-assistant/bugs/BUG-061-014-e2e-runner-treats-skip-77-as-failure/state.json"
+        ]
+      }
+    ]
+  },
+  "changeBoundary": {
+    "included": [
+      "tests/e2e/run_all.sh",
+      "smackerel.sh",
+      "tests/e2e/lib/helpers.sh",
+      "tests/e2e/assistant_regression/lib/regression_helpers.sh",
+      "tests/e2e/ (new runner-level test fixtures and driver)",
+      "specs/061-conversational-assistant/bugs/BUG-061-014-e2e-runner-treats-skip-77-as-failure/",
+      "docs/Testing.md"
+    ],
+    "excluded": [
+      ".github/bubbles/**",
+      "bodies of the seven reg_skip_with_blocker fixtures",
+      "internal/**",
+      "cmd/**",
+      "ml/**",
+      "config/**",
+      "specs/069-assistant-http-transport/**",
+      "all other specs/** directories",
+      "smackerel.sh e2e_lifecycle_scripts and e2e_shared_scripts lane arrays"
+    ],
+    "exclusionNotes": ".github/bubbles/** is framework-managed install artifact territory. It is refreshed only through the canonical Bubbles installer or upgrade command and must never be patched locally, including by this packet. It was read during discovery and not modified."
+  },
+  "relatedPackets": [
+    {
+      "id": "BUG-069-005-required-e2e-false-green",
+      "path": "specs/069-assistant-http-transport/bugs/BUG-069-005-required-e2e-false-green/",
+      "status": "blocked",
+      "relationship": "Same root cause seen from the opposite side. BUG-069-005 is the false-green failure mode in the Go lane, where five manifest-required tests call t.Skipf and the package exits 0. This packet is the false-red failure mode in shell, plus BUG-069-005's own false-green shape reproduced in shell by skip_unless_accel_tier. Neither is a duplicate of the other, and the fix here must not trade one untrustworthy colour for the other."
+    },
+    {
+      "id": "BUG-069-006-confirm-redemption-not-single-flight",
+      "path": "specs/069-assistant-http-transport/bugs/BUG-069-006-confirm-redemption-not-single-flight/",
+      "status": "blocked",
+      "relationship": "Blocked on exactly one DoD item, 'Broader E2E regression suite passes', recorded as DIS-069-006-4, whose blockedReason quotes this defect's runner line verbatim. Correcting the classifier stops bs_004 being reported as a failure; it does not make bs_004 exercise the confirm flow, which remains blocked on the spec 061 SCOPE-04 notification-proposal fixture. Which of those the DoD item requires is a decision owned by that packet."
+    }
+  ],
+  "policySnapshot": {
+    "source": ".specify/memory/bubbles.config.json",
+    "capturedAt": "2026-08-25T02:52:34Z",
+    "workflowMode": "bugfix-fastlane",
+    "workflowModeSource": "packet-classification",
+    "statusCeiling": "done",
+    "grill": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "tdd": {
+      "mode": "scenario-first",
+      "source": "packet-declared"
+    },
+    "autoCommit": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "lockdown": {
+      "mode": "fastlane",
+      "source": "packet-declared"
+    },
+    "regression": {
+      "mode": "adversarial-required",
+      "source": "packet-declared"
+    },
+    "validation": {
+      "mode": "certification-required",
+      "source": "repo-default"
+    },
+    "evidenceRequired": true,
+    "canonicalCommands": {
+      "unit": "./smackerel.sh test unit",
+      "integration": "./smackerel.sh test integration",
+      "e2e-api": "./smackerel.sh test e2e",
+      "lint": "./smackerel.sh lint",
+      "format": "./smackerel.sh format --check"
+    }
+  },
+  "repositoryResolution": {
+    "sessionId": "vscode-ad58d1923c2301065c1d41d950c10d83",
+    "decisionId": "rb:vscode-ad58d1923c2301065c1d41d950c10d83:56",
+    "controlRevision": 56,
+    "authority": "explicit-repository-root",
+    "transition": "confirmed",
+    "repositoryAlias": "smackerel",
+    "actionable": true
+  },
+  "transitionRequests": [],
+  "reworkQueue": []
+}
