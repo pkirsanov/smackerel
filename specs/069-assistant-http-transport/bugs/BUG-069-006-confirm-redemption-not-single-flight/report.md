@@ -287,6 +287,8 @@ still rejects it: its failure mode on scale-out is silent.
 | 2026-08-25 | DIS-069-006-5: `scenario-manifest.json` was inaccurate in two ways at once, and the state-transition guard surfaced both. Its `SCN-BUG069006-002` entry linked `tests/e2e/assistant/http_confirm_concurrent_test.go`, a file that has never existed — the concurrent API-boundary test was added to the existing `tests/e2e/assistant/http_confirm_test.go` instead, so the manifest pointed at nothing. Separately, all four scenarios still carried `"status": "not_started"` although all four linked tests exist and pass with recorded evidence in this report. The manifest was authored during planning and never reconciled as the tests landed. | Corrected. `SCN-BUG069006-002` now links the real file, and all four statuses read `passed`, which matches the executed evidence: SCN-001 from the verbose unit run plus the integration PASS, SCN-002 and SCN-004 from the e2e PASS lines, SCN-003 from the verbose unit run. | `scenario-manifest.json`; guard Check 3C |
 | 2026-08-25 | DIS-069-006-6: after that correction the guard still reports five `AMBIGUOUS-TITLE` findings, one per linked test, each saying "the title appears 2 times". No test function is defined twice — `grep -rn "func <name>"` returns exactly one hit for each. The cause is at `.github/bubbles/scripts/scenario-test-resolve.sh` line 330, `occurrences = body.count(title)`, a plain substring count over the whole file inside the branch its own comment labels a "Conservative literal scan". Go convention requires a doc comment to begin with the identifier it documents, so every one of these tests carries a line like `// TestMachineConfirm_ConcurrentRedemptionExecutesOnce covers SCN-BUG069006-001.` — and that line is occurrence two. | Recorded, not worked around. Deleting the doc comments would green the advisory by removing both a Go convention and the human-readable half of scenario traceability, which is a bad trade. The finding is ADVISORY — the guard states it stays advisory until `scenarioResolution: block` is set, and G057 is in `passedGateIds`. It is also a framework surface: `.github/bubbles/**` is on this packet's Mechanical Excluded List and is framework-managed. Owner: framework. | `.github/bubbles/scripts/scenario-test-resolve.sh` line 330 |
 
+| 2026-08-25 | DIS-069-006-7: the single-flight guard is operationally invisible. `ConfirmCardOutcomesTotal` increments only on winner paths — confirmed at `machine.go` line 240, user-discarded at line 297, timeout-discarded in the sweep. A caller that loses the race increments no counter and writes no log line. Silently absorbing the loser is the correct behaviour, since that is what single flight means; the gap is that the metrics cannot distinguish a system where no races occur from one where many occur and are correctly absorbed. If the guard regressed, nothing would signal it until a gated action ran twice against a real user. | Recorded, not fixed. Emitting a lost-race signal needs a new outcome constant in `internal/assistant/metrics`, a package this packet's Change Boundary does not list. That boundary has been corrected twice inside this packet already and widening it a third time for an addition that is not part of the fix is the wrong trade. Owner: spec 061 SCOPE-09, which owns `ConfirmCardOutcomesTotal`. | `internal/assistant/confirm/machine.go` lines 240, 297; `internal/assistant/metrics` |
+
 ## Relationship To BUG-069-004
 
 `specs/069-assistant-http-transport/bugs/BUG-069-004-http-turn-dedup/bug.md` and
@@ -1585,3 +1587,240 @@ examined and each was left alone for a stated reason rather than by omission. Th
 full unit suite, lint and format all exit 0 after the edit. No DoD item is
 checked by this phase that its own evidence does not support, and no
 `certification.*` field was written here.
+
+## Stabilize Phase
+
+Agent: `bubbles.stabilize`. Five operational questions were asked about the fix,
+four of which resolve clean on measured evidence and one of which is a real gap
+recorded with an owner. No product or test source was modified by this phase.
+
+The framing worth stating up front: every prior phase asked whether the fix is
+*correct*. None asked whether it is *operable* — whether the new SQL scans, how
+long it holds a lock, whether a lost race can spin or lose work, whether a
+database outage gets mistold to a user as something else, and whether any of it
+is visible in production. Those are different questions and a passing test suite
+answers none of them.
+
+### 1. Index coverage — measured, not inferred
+
+The new predicate combines two primary-key columns with a JSONB extraction:
+
+```
+UPDATE assistant_conversations
+   SET pending_confirm = NULL, last_activity_at = $3
+ WHERE user_id = $1 AND transport = $2
+   AND pending_confirm ->> 'confirm_ref' = $4
+```
+
+A JSONB extraction in a `WHERE` clause is worth checking, because if it drove row
+selection it would need its own expression index and would otherwise scan. It
+does not drive selection here. The live schema:
+
+```
+$ docker exec smackerel-postgres-1 psql -U smackerel -d smackerel -c "\d assistant_conversations"
+          Column           |           Type           | Nullable
+---------------------------+--------------------------+----------
+ user_id                   | text                     | not null
+ transport                 | text                     | not null
+ working_context           | jsonb                    | not null
+ pending_confirm           | jsonb                    |
+ pending_disambig          | jsonb                    |
+ last_activity_at          | timestamp with time zone | not null
+ schema_version            | integer                  | not null
+ legacy_retirement_notices | jsonb                    | not null
+ pending_clarify           | jsonb                    |
+Indexes:
+    "assistant_conversations_pkey" PRIMARY KEY, btree (user_id, transport)
+    "idx_assistant_conversations_idle" btree (last_activity_at)
+    "idx_assistant_conversations_pending_clarify" btree ((pending_clarify ->> 'emit_time'::text)) WHERE pending_clarify IS NOT NULL
+```
+
+`(user_id, transport)` is the primary key, so the pair identifies exactly one
+row. Reasoning stops there only if you are willing to trust the planner without
+asking it. It was asked, against a row that genuinely matches the predicate,
+inside a transaction that is rolled back so the development database is left
+byte-identical:
+
+```
+$ docker exec smackerel-postgres-1 psql -U smackerel -d smackerel -v ON_ERROR_STOP=1 -c "
+BEGIN;
+INSERT INTO assistant_conversations (user_id, transport, working_context, pending_confirm, last_activity_at, legacy_retirement_notices)
+VALUES ('stabilize-probe-u1','http','{}'::jsonb, '{\"confirm_ref\":\"cr-probe-1\"}'::jsonb, now(), '{}'::jsonb);
+EXPLAIN (ANALYZE, BUFFERS, COSTS OFF)
+UPDATE assistant_conversations SET pending_confirm = NULL, last_activity_at = now()
+ WHERE user_id = 'stabilize-probe-u1' AND transport = 'http' AND pending_confirm ->> 'confirm_ref' = 'cr-probe-1';
+ROLLBACK;"
+INSERT 0 1
+                                    QUERY PLAN
+ Update on assistant_conversations (actual time=0.056..0.057 rows=0 loops=1)
+   Buffers: shared hit=4
+   ->  Index Scan using assistant_conversations_pkey on assistant_conversations (actual time=0.019..0.020 rows=1 loops=1)
+         Index Cond: ((user_id = 'stabilize-probe-u1'::text) AND (transport = 'http'::text))
+         Filter: ((pending_confirm ->> 'confirm_ref'::text) = 'cr-probe-1'::text)
+         Buffers: shared hit=2
+ Planning Time: 0.304 ms
+ Execution Time: 0.141 ms
+(10 rows)
+ROLLBACK
+```
+
+Three things in that plan settle the question. It is an `Index Scan using
+assistant_conversations_pkey`, not a sequential scan. The `Index Cond` carries
+only the two primary-key columns while the JSONB extraction appears as a
+`Filter`, which is the planner confirming the extraction is evaluated *after* the
+index has already narrowed to one row rather than being used to find it. And
+`Buffers: shared hit=2` with `Execution Time: 0.141 ms` puts a number on it.
+
+The `rows=1` on the Index Scan matters more than it looks. An earlier probe
+against a non-existent row produced the same plan shape with `rows=0`, which
+proves the plan but not that the predicate can match. Seeding a real row and
+seeing `rows=1` proves both.
+
+The development database is unchanged, which the rollback and a direct count
+confirm:
+
+```
+$ docker exec smackerel-postgres-1 psql -U smackerel -d smackerel -tAc "SELECT count(*) FROM assistant_conversations WHERE user_id='stabilize-probe-u1';"
+0
+```
+
+Conclusion: no scan risk, and no expression index should be added. An index on
+`pending_confirm ->> 'confirm_ref'` would add write amplification on every
+conversation update while buying nothing the primary key does not already give.
+
+### 2. Lock duration and contention — bounded, and strictly better than before
+
+`ClearPendingConfirm` issues its statement through `s.pool.Exec`, not inside a
+transaction the caller holds open:
+
+```
+	tag, err := s.pool.Exec(ctx, q, userID, transport, now.UTC(), confirmRef)
+```
+
+That makes it a single autocommit statement, so the row lock exists only for the
+duration measured above. Concurrent redemptions of the same reference serialize
+on that one row, and every caller after the winner observes zero rows affected,
+because the winner has set `pending_confirm` to `NULL` and the extraction no
+longer equals the reference.
+
+Comparing against what it replaced is the useful part. The old shape was Load,
+check, Persist as three separate statements with no lock held across them — the
+window between the check and the write is exactly the defect. The new shape holds
+a lock for less wall-clock time than any explicit transaction wrapping those
+three statements would have, while being the thing that closes the window.
+
+### 3. `SweepTimeouts` under load — no spin, no silent loss
+
+The sweep iterates `expired []ExpiredPending`, a finite caller-supplied slice, so
+`continue` advances the index. There is no retry loop, so a lost race cannot
+spin. A store error is not swallowed:
+
+```
+		won, err := m.store.ClearPendingConfirm(ctx, e.UserID, e.Transport, e.ConfirmRef, now)
+		if err != nil {
+			return res, fmt.Errorf("confirm.SweepTimeouts: clear pending %s/%s: %w", e.UserID, e.Transport, err)
+		}
+		if !won {
+			// Lost the race to a concurrent confirm/discard — that
+			// caller owns the terminal audit row for this reference.
+			continue
+		}
+```
+
+Work is not dropped when the sweep loses. The racing confirm or discard owns the
+terminal audit row, and that is asserted rather than assumed:
+`TestMachineConfirm_RacingSweepProducesOneTerminalOutcome` requires exactly one
+terminal audit row, which fails both if two are written and if none is.
+
+### 4. Outage versus stale confirmation — the distinction holds end to end
+
+This was the question with the worst failure mode. If a database outage were
+mapped to `ErrPendingNotFound`, a user would be told their confirmation is stale
+or already resolved when the truth is that the store is down. That is the exact
+class of dishonesty the repository's Assistant Response Honesty rule exists to
+prevent, and the fix introduces a new boolean that could easily have collapsed
+it.
+
+It does not collapse. `Confirm` and `Discard` both reserve `ErrPendingNotFound`
+for the lost-race branch and wrap store failures instead:
+
+```
+	won, err := m.store.ClearPendingConfirm(ctx, in.UserID, in.Transport, in.ConfirmRef, now)
+	if err != nil {
+		return ConfirmResult{}, fmt.Errorf("confirm.Confirm: clear pending confirm: %w", err)
+	}
+	if !won {
+		return ConfirmResult{}, ErrPendingNotFound
+	}
+```
+
+The response boundary preserves it. `finishConfirmResponse` selects the stale
+message with `errors.Is(actionErr, confirm.ErrPendingNotFound)`, which cannot
+match an error whose chain wraps a store failure rather than that sentinel, so an
+outage falls through to the next branch and surfaces as a real error:
+
+```
+	if errors.Is(actionErr, confirm.ErrPendingNotFound) {
+		... Body: "That confirmation is stale or already resolved." ...
+	}
+	if actionErr != nil {
+		return contracts.AssistantResponse{}, true, actionErr
+	}
+```
+
+A store outage therefore produces an error, not a false statement about the
+user's confirmation.
+
+### 5. Observability — one real gap, recorded
+
+`ConfirmCardOutcomesTotal` is incremented on winner paths only: confirmed at
+`machine.go` line 240, user-discarded at line 297, and timeout-discarded in the
+sweep. A caller that *loses* the race increments nothing and logs nothing.
+
+```
+$ grep -nE 'log\.|slog|metric|Counter|Inc\(|Observe' internal/assistant/confirm/machine.go
+18:	assistantmetrics "github.com/smackerel/smackerel/internal/assistant/metrics"
+239:	// Spec 061 SCOPE-09 — confirm-card outcome metric.
+240:	assistantmetrics.ConfirmCardOutcomesTotal.WithLabelValues(
+242:		assistantmetrics.ConfirmOutcomeConfirmed,
+244:	).Inc()
+294:	// Spec 061 SCOPE-09 — confirm-card outcome metric +
+297:	assistantmetrics.ConfirmCardOutcomesTotal.WithLabelValues(
+299:		assistantmetrics.ConfirmOutcomeDiscardedUser,
+301:	).Inc()
+302:	assistantmetrics.CaptureFallbackTotal.WithLabelValues(
+```
+
+Silently absorbing the loser is the correct *behaviour* — that is what single
+flight means. The gap is that it is operationally invisible: the metrics cannot
+distinguish a system where no races occur from one where many occur and are being
+correctly absorbed. If the guard ever regressed, nothing would signal it until a
+gated action ran twice in production.
+
+This is recorded as DIS-069-006-7 rather than fixed. Emitting it needs a new
+outcome constant in `internal/assistant/metrics`, and that package is not on this
+packet's Change Boundary, which was corrected twice already in this packet and
+should not be widened a third time for an addition that is not part of the fix.
+
+### Verification
+
+No source was modified by this phase, so the suites are re-run as a statement
+that the tree is unchanged rather than as proof of a new claim.
+
+```
+$ ./smackerel.sh test unit --go
+exit: 0
+$ ./smackerel.sh lint
+exit: 0
+$ ./smackerel.sh format --check
+exit: 0
+```
+
+### Outcome
+
+Four of five questions resolve clean on measured evidence: the update is a
+primary-key index scan at 0.141 ms with the JSONB as a post-index filter, the row
+lock is a single autocommit statement and shorter than the shape it replaced, the
+sweep cannot spin or lose work, and an outage is never reported as a stale
+confirmation. One real gap is recorded with an owner and not fixed here. No DoD
+item is checked by this phase, and no `certification.*` field was written.
