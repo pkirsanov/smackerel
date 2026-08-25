@@ -659,6 +659,8 @@ func init() {
 		// alert in config/prometheus/alerts.yml.
 		BackupLastSuccessUnixtime,
 		BackupSizeBytes,
+		SynthesisState,
+		SynthesisLastVerifiedOutputUnixtime,
 		BackupRunsTotal,
 		// Spec 054 notification-intelligence-handler pipeline metrics.
 		// Source-qualified pipeline-stage observability; bounded labels

@@ -21,6 +21,7 @@ import (
 	"github.com/smackerel/smackerel/internal/digest"
 	"github.com/smackerel/smackerel/internal/intelligence"
 	"github.com/smackerel/smackerel/internal/knowledge"
+	"github.com/smackerel/smackerel/internal/metrics"
 	"github.com/smackerel/smackerel/internal/pipeline"
 )
 
@@ -785,6 +786,24 @@ func (d *Dependencies) getCachedIntelligenceHealth(ctx context.Context) *intelli
 			outcome = readModel.LatestOutcome(ctx, intelligenceSynthesisFreshnessBudget, time.Now())
 		}
 		snapshot.intelligenceStatus = intelligence.DeriveSynthesisHealth(outcome).IntelligenceStatus
+
+		// Publish the same derivation as a scrapeable gauge. Health as a JSON
+		// field is something an operator has to go and look at; a gauge is
+		// something a rule can fire on while nobody is looking.
+		metrics.SynthesisState.Set(float64(intelligence.MetricStateFor(outcome)))
+		if latest, found, latestErr := func() (intelligence.SynthesisLatest, bool, error) {
+			model, mErr := intelligence.NewSynthesisReadModel(d.IntelligenceEngine.Pool)
+			if mErr != nil {
+				return intelligence.SynthesisLatest{}, false, mErr
+			}
+			return model.Latest(ctx)
+		}(); latestErr == nil && found {
+			metrics.SynthesisLastVerifiedOutputUnixtime.Set(float64(latest.CreatedAt.Unix()))
+		} else {
+			// Zero rather than leaving the previous value: a stale reading that
+			// looks recent is worse than an obviously-absent one.
+			metrics.SynthesisLastVerifiedOutputUnixtime.Set(0)
+		}
 
 		// Alert delivery pipeline freshness: pending alerts older than 30 minutes
 		// indicate the delivery sweep is not running (2 missed sweep cycles).

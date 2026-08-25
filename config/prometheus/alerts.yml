@@ -578,3 +578,77 @@ groups:
         NOT cover it. Confirm the ML sidecar is up (SmackerelMLUnavailable),
         verify NATS connectivity from the core, and inspect the core logs
         for the "NATS publish failed, generating fallback digest" warn line.
+
+# BUG-004-004 SCOPE-04 — synthesis durability.
+#
+# Before this, synthesis health existed only as a field inside an /api/health
+# JSON response. Nothing scraped it and no rule could fire on it, so an
+# operator learned that synthesis had stopped producing by noticing. These
+# rules make the stale and failed states alertable.
+#
+# smackerel_synthesis_state is a single numeric gauge rather than a labelled
+# one on purpose: one gauge cannot hold two states at once, so exclusivity is
+# structural and a rule never has to assume it.
+#   0 never-run  1 up  2 stale  3 partial  4 failed  5 probe-error
+- name: smackerel-synthesis
+  rules:
+  - alert: SmackerelSynthesisFailing
+    expr: smackerel_synthesis_state == 4
+    for: 30m
+    labels:
+      severity: critical
+      component: synthesis
+    annotations:
+      summary: "Smackerel synthesis is failing to persist"
+      description: |
+        The most recent synthesis attempt failed. An older verified
+        output may still exist; it does NOT clear this, because a
+        current failure is a current fact. Check
+        synthesis_run_attempts for the recorded failure_class — the
+        class is recorded, the candidate content deliberately is not.
+
+  - alert: SmackerelSynthesisStale
+    expr: smackerel_synthesis_state == 2
+    for: 1h
+    labels:
+      severity: warning
+      component: synthesis
+    annotations:
+      summary: "Smackerel synthesis output is stale"
+      description: |
+        The newest read-back-verified synthesis output has aged past
+        its freshness budget. The scheduler may not be running, or
+        every recent window may have been claimed and abandoned.
+        Check smackerel_synthesis_last_verified_output_unixtime and
+        the lease_expires_at column on synthesis_runs.
+
+  - alert: SmackerelSynthesisNeverRun
+    expr: smackerel_synthesis_state == 0
+    for: 24h
+    labels:
+      severity: warning
+      component: synthesis
+    annotations:
+      summary: "Smackerel synthesis has never produced an output"
+      description: |
+        No synthesis attempt or persisted output exists. On a new
+        install this is expected for the first day; after that it
+        means the daily job is not reaching the persistence layer.
+        Never-run is deliberately its own state — it is not a
+        failure, and it is emphatically not healthy.
+
+  - alert: SmackerelSynthesisStateUnreadable
+    expr: smackerel_synthesis_state == 5
+    for: 15m
+    labels:
+      severity: critical
+      component: synthesis
+    annotations:
+      summary: "Smackerel cannot read its own synthesis state"
+      description: |
+        The durable synthesis state could not be read. This is
+        distinct from a failed run: the run may have been fine and
+        the database unreachable. Health cannot claim up while this
+        is true, which is the point — an unreadable state is not a
+        healthy one.
+

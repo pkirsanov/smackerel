@@ -227,3 +227,48 @@ func (m *SynthesisReadModel) History(ctx context.Context, limit int) ([]Synthesi
 	}
 	return out, nil
 }
+
+// SynthesisMetricState is the exclusive numeric state a scraper sees. The
+// mapping lives here, next to the read model that produces the outcome, so the
+// metric and the /api/health verdict cannot drift apart -- they are two
+// renderings of one derivation, not two derivations.
+//
+// Values mirror internal/metrics.SynthesisState*; they are ints rather than a
+// dependency on that package because internal/metrics already imports nothing
+// from intelligence and reversing that would create a cycle.
+const (
+	SynthesisMetricNeverRun   = 0
+	SynthesisMetricUp         = 1
+	SynthesisMetricStale      = 2
+	SynthesisMetricPartial    = 3
+	SynthesisMetricFailed     = 4
+	SynthesisMetricProbeError = 5
+)
+
+// MetricStateFor maps a durable outcome to its exclusive scrape value.
+//
+// Order matters and is not arbitrary. Probe-error outranks everything because
+// an unreadable database means the other fields describe nothing. Failure
+// outranks staleness because a current failure is the more urgent fact. Partial
+// outranks up because a partial output is durable and honest but never full
+// health.
+func MetricStateFor(outcome SynthesisPersistenceOutcome) int {
+	switch {
+	case outcome.Phase == PhaseProbeError:
+		return SynthesisMetricProbeError
+	case outcome.Phase == PhaseNoRun:
+		return SynthesisMetricNeverRun
+	case outcome.Phase == PhaseWriteFailed:
+		return SynthesisMetricFailed
+	case outcome.Phase != PhaseCommitted || outcome.ReadBack != ReadBackOK:
+		// Committed-but-unverified is not a success. Treating it as one is the
+		// class of claim this packet exists to remove.
+		return SynthesisMetricFailed
+	case outcome.Stale:
+		return SynthesisMetricStale
+	case outcome.Output == OutputKindPartial:
+		return SynthesisMetricPartial
+	default:
+		return SynthesisMetricUp
+	}
+}
