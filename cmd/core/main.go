@@ -17,6 +17,7 @@ import (
 	"github.com/smackerel/smackerel/internal/assistant/transportidentity"
 	"github.com/smackerel/smackerel/internal/backup"
 	"github.com/smackerel/smackerel/internal/config"
+	"github.com/smackerel/smackerel/internal/intelligence"
 	"github.com/smackerel/smackerel/internal/intelligence/surfacing"
 	"github.com/smackerel/smackerel/internal/metrics"
 	"github.com/smackerel/smackerel/internal/scheduler"
@@ -372,6 +373,20 @@ func run() error {
 
 	// Start digest scheduler + intelligence jobs
 	sched := scheduler.New(svc.digestGen, tgBot, svc.intEngine, svc.topicLifecycle)
+
+	// BUG-004-004 — durable synthesis. Without this the daily job would run,
+	// report a count and store nothing. Construction failure is fatal rather
+	// than degraded: a synthesis job that cannot persist should not run at all,
+	// because its log line would claim work the database never received.
+	synthesisPersistence, err := intelligence.NewSynthesisPersistence(svc.pg.Pool)
+	if err != nil {
+		return fmt.Errorf("construct synthesis persistence: %w", err)
+	}
+	synthesisProducer, err := intelligence.NewSynthesisProducer(svc.intEngine, synthesisPersistence)
+	if err != nil {
+		return fmt.Errorf("construct synthesis producer: %w", err)
+	}
+	sched.SetSynthesisProducer(synthesisProducer)
 
 	// Spec 021 Scope 4 — Unified Surfacing Controller. Wires the
 	// SST-validated daily-budget / dedupe / suppression / urgent-

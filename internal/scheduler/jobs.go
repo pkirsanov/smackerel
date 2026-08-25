@@ -193,6 +193,12 @@ func (s *Scheduler) runTopicMomentumJob() {
 	s.runGuarded(&s.muHourly, "hourly", "topic-momentum", s.doTopicMomentumJob)
 }
 
+// synthesisPrincipal is the single-tenant owner every scheduled run is
+// attributed to. It is part of the logical key, so it is a constant rather than
+// a derived value: a drifting principal would make each run look new and defeat
+// the duplicate check.
+const synthesisPrincipal = "scheduler"
+
 func (s *Scheduler) doTopicMomentumJob() {
 	ctx, cancel := context.WithTimeout(s.baseCtx, 2*time.Minute)
 	defer cancel()
@@ -212,11 +218,29 @@ func (s *Scheduler) doSynthesisJob() {
 	ctx, cancel := context.WithTimeout(s.baseCtx, 5*time.Minute)
 	defer cancel()
 
-	insights, err := s.engine.RunSynthesis(ctx)
-	if err != nil {
-		slog.Error("synthesis failed", "error", err)
+	// BUG-004-004. This used to call RunSynthesis and log len(insights). The
+	// count was accurate and nothing was stored, so the log line reported
+	// success for work that left no durable trace. The producer commits and
+	// reads back before anything here claims completion.
+	if s.synthesisProducer == nil {
+		slog.Error("synthesis skipped: no durable persistence wired",
+			"reason", "synthesis_producer_unset")
 	} else {
-		slog.Info("synthesis complete", "insights", len(insights))
+		agg, err := s.synthesisProducer.RunAndPersist(
+			ctx, intelligence.CadenceDaily, synthesisPrincipal, time.Now().UTC())
+		switch {
+		case err != nil:
+			slog.Error("synthesis failed", "error", err)
+		default:
+			// Reporting the stored kind and the read-back output id, not just a
+			// count, so the log line names something an operator can go look up.
+			slog.Info("synthesis complete",
+				"output_id", agg.OutputID,
+				"kind", string(agg.Kind),
+				"insights", agg.InsightCount,
+				"citations", agg.CitationCount,
+				"evaluated_artifacts", agg.EvaluatedArtifactCount)
+		}
 	}
 
 	if err := s.engine.CheckOverdueCommitments(ctx); err != nil {

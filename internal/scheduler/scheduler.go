@@ -18,10 +18,14 @@ import (
 
 // Scheduler manages cron-triggered tasks.
 type Scheduler struct {
-	cron                      *cron.Cron
-	digestGen                 *digest.Generator
-	bot                       *telegram.Bot
-	engine                    *intelligence.Engine
+	cron      *cron.Cron
+	digestGen *digest.Generator
+	bot       *telegram.Bot
+	engine    *intelligence.Engine
+	// synthesisProducer persists synthesis output. Nil until wired by cmd/core;
+	// when nil the job reports UNAVAILABLE rather than logging a count, because
+	// "ran and stored nothing" was the defect BUG-004-004 repairs.
+	synthesisProducer         *intelligence.SynthesisProducer
 	lifecycle                 *topics.Lifecycle
 	mu                        sync.Mutex // protects digestPendingRetry and digestPendingDate
 	digestPendingRetry        bool
@@ -164,4 +168,10 @@ func (s *Scheduler) scheduleEngineJobs() {
 			slog.Warn("failed to schedule "+e.name, "error", err)
 		}
 	}
+}
+
+// SetSynthesisProducer wires durable synthesis persistence. Until it is called
+// the synthesis job has nowhere to store output and says so explicitly.
+func (s *Scheduler) SetSynthesisProducer(p *intelligence.SynthesisProducer) {
+	s.synthesisProducer = p
 }
