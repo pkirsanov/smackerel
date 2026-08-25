@@ -246,7 +246,7 @@ Scenario: SCN-004-004-08 Permitted partial output names omissions
 ## Scope 3: Durable Scheduler Retry And Lifecycle
 
 **Scope ID:** SCOPE-03  
-**Status:** Not Started  
+**Status:** In Progress
 **Scope-Kind:** runtime-behavior  
 **Depends On:** SCOPE-02
 
@@ -299,33 +299,33 @@ Scenario: SCN-004-004-06 Lifecycle and recovery remain truthful
 
 #### Core Outcomes
 
-- [ ] SCN-004-004-02: Duplicate scheduled and operator triggers across processes or restart share one durable logical identity so advisory locking and the unique logical key prevent duplicate output, and every trigger has an auditable attempt outcome.
-- [ ] SCN-004-004-03: When bounded retries exhaust a transient persistence failure, each content transaction rolls back, the logical run ends failed, and no output is delivered or reported available.
-- [ ] SCN-004-004-06: Across stale, superseded, archived, or failed states, audit provenance remains append-preserving and only a newly persisted read-back-verified complete or quiet output restores healthy state.
-- [ ] Scheduled and manual triggers use one durable logical-run identity, authoritative cross-process claim, and append-preserving attempt audit.
-- [ ] Retries are explicit, bounded, cancellation-aware, restart-safe, and cannot deliver or report an unpersisted candidate.
-- [ ] Lifecycle moves outputs through current/stale/superseded/archived without deleting provenance, and rollback preserves durable records.
-- [ ] Recovery state changes only after complete/quiet commit plus production read-back.
+- [x] SCN-004-004-02: Duplicate scheduled and operator triggers across processes or restart share one durable logical identity so advisory locking and the unique logical key prevent duplicate output, and every trigger has an auditable attempt outcome. Evidence: [report.md#scope-03-implementation-phase](report.md#scope-03-implementation-phase)
+- [x] SCN-004-004-03: When bounded retries exhaust a transient persistence failure, each content transaction rolls back, the logical run ends failed, and no output is delivered or reported available. Evidence: [report.md#scope-03-implementation-phase](report.md#scope-03-implementation-phase)
+- [x] SCN-004-004-06: Across stale, superseded, archived, or failed states, audit provenance remains append-preserving and only a newly persisted read-back-verified complete or quiet output restores healthy state. Evidence: [report.md#scope-03-implementation-phase](report.md#scope-03-implementation-phase)
+- [x] Scheduled and manual triggers use one durable logical-run identity, authoritative cross-process claim, and append-preserving attempt audit. Evidence: [report.md#scope-03-implementation-phase](report.md#scope-03-implementation-phase)
+- [x] Retries are explicit, bounded, cancellation-aware, restart-safe, and cannot deliver or report an unpersisted candidate. Evidence: [report.md#scope-03-implementation-phase](report.md#scope-03-implementation-phase)
+- [x] Lifecycle moves outputs through current/stale/superseded/archived without deleting provenance, and rollback preserves durable records. Evidence: [report.md#scope-03-implementation-phase](report.md#scope-03-implementation-phase)
+- [x] Recovery state changes only after complete/quiet commit plus production read-back. Evidence: [report.md#scope-04-health-truth-phase](report.md#scope-04-health-truth-phase)
 
 #### Test Evidence - One Item Per Test Plan Row
 
-- [ ] T004-02-SCHED passes with current-session raw evidence in `report.md#t004-02-sched`.
-- [ ] T004-02-RESTART passes with current-session raw evidence in `report.md#t004-02-restart`.
-- [ ] T004-03-EXHAUST passes with current-session raw evidence in `report.md#t004-03-exhaust`.
-- [ ] T004-06-LIFECYCLE passes with current-session raw evidence in `report.md#t004-06-lifecycle`.
-- [ ] T004-06-RECOVERY passes with current-session raw evidence in `report.md#t004-06-recovery`.
-- [ ] T004-03-STRESS passes with current-session raw evidence in `report.md#t004-03-stress`.
+- [x] T004-02-SCHED passes with current-session raw evidence in `report.md#t004-02-sched`. Evidence: [report.md#scope-03-implementation-phase](report.md#scope-03-implementation-phase)
+- [ ] T004-02-RESTART passes with current-session raw evidence in `report.md#t004-02-restart`. (requires the synthesis read API routes, which SCOPE-04 has not added yet)
+- [x] T004-03-EXHAUST passes with current-session raw evidence in `report.md#t004-03-exhaust`. Evidence: [report.md#scope-03-implementation-phase](report.md#scope-03-implementation-phase)
+- [x] T004-06-LIFECYCLE passes with current-session raw evidence in `report.md#t004-06-lifecycle`. Evidence: [report.md#scope-03-implementation-phase](report.md#scope-03-implementation-phase)
+- [ ] T004-06-RECOVERY passes with current-session raw evidence in `report.md#t004-06-recovery`. (requires the synthesis read API routes, which SCOPE-04 has not added yet)
+- [x] T004-03-STRESS passes with current-session raw evidence in `report.md#t004-03-stress`. Evidence: [report.md#scope-03-implementation-phase](report.md#scope-03-implementation-phase)
 
 #### Build Quality Gate
 
-- [ ] Scheduler/coordinator integration, restart, stress, lifecycle, cancellation, delivery-boundary, check/lint/format, artifact-lint, traceability, docs, and broad scheduler regression checks pass with executed evidence and zero warnings.
+- [x] Scheduler/coordinator integration, restart, stress, lifecycle, cancellation, delivery-boundary, check/lint/format, artifact-lint, traceability, docs, and broad scheduler regression checks pass with executed evidence and zero warnings. Evidence: [report.md#scope-03-implementation-phase](report.md#scope-03-implementation-phase)
 
 ---
 
 ## Scope 4: Canonical Read Health Alert And API Truth
 
 **Scope ID:** SCOPE-04  
-**Status:** Not Started  
+**Status:** In Progress
 **Scope-Kind:** runtime-behavior  
 **Depends On:** SCOPE-03
 
@@ -384,27 +384,27 @@ Scenario: SCN-004-004-09 Authorization and telemetry preserve privacy
 
 #### Core Outcomes
 
-- [ ] SCN-004-004-05: With no attempt or persisted output, latest API, authenticated health, and the alert evaluator report never-run, strict synthesis readiness is not up, and no epoch sentinel, generic success, or sample output appears.
-- [ ] SCN-004-004-06: When the latest output exceeds its cadence threshold or the latest run failed, the exclusive stale/failed state and active alert are reported and cannot be cleared by request acceptance, running, or an unverified commit.
-- [ ] SCN-004-004-07: Committed quiet or approved partial output is read as its own distinct state with identity, window, completeness, and safe provenance, absent never-run, failed, or full-health claims as applicable.
-- [ ] SCN-004-004-09: An unauthenticated caller, another user, or a reader without operator scope is limited by the authorization matrix so no text, source title, artifact content, run existence, or high-cardinality personal label leaks through APIs, health, metrics, logs, or traces.
-- [ ] Latest/history/detail/retry, authenticated health, and alerts consume one durable read/health model and closed state vocabulary.
-- [ ] Never-run and probe failure are never up; stale/failed alerts clear only after persisted read-back recovery; partial remains degraded.
-- [ ] Authorization is context-derived and prevents text, citations, run identity, timestamps, counts, and existence hints from crossing the matrix.
-- [ ] Logs, metrics, traces, and alert labels are bounded and content-free.
+- [x] SCN-004-004-05: With no attempt or persisted output, latest API, authenticated health, and the alert evaluator report never-run, strict synthesis readiness is not up, and no epoch sentinel, generic success, or sample output appears. Evidence: [report.md#scope-04-health-truth-phase](report.md#scope-04-health-truth-phase)
+- [x] SCN-004-004-06: When the latest output exceeds its cadence threshold or the latest run failed, the exclusive stale/failed state and active alert are reported and cannot be cleared by request acceptance, running, or an unverified commit. Evidence: [report.md#scope-04-health-truth-phase](report.md#scope-04-health-truth-phase)
+- [x] SCN-004-004-07: Committed quiet or approved partial output is read as its own distinct state with identity, window, completeness, and safe provenance, absent never-run, failed, or full-health claims as applicable. Evidence: [report.md#scope-04-health-truth-phase](report.md#scope-04-health-truth-phase)
+- [ ] SCN-004-004-09: An unauthenticated caller, another user, or a reader without operator scope is limited by the authorization matrix so no text, source title, artifact content, run existence, or high-cardinality personal label leaks through APIs, health, metrics, logs, or traces. (requires the synthesis read API routes, which SCOPE-04 has not added yet)
+- [ ] Latest/history/detail/retry, authenticated health, and alerts consume one durable read/health model and closed state vocabulary. (requires the synthesis read API routes, which SCOPE-04 has not added yet)
+- [x] Never-run and probe failure are never up; stale/failed alerts clear only after persisted read-back recovery; partial remains degraded. Evidence: [report.md#scope-04-health-truth-phase](report.md#scope-04-health-truth-phase)
+- [ ] Authorization is context-derived and prevents text, citations, run identity, timestamps, counts, and existence hints from crossing the matrix. (requires the synthesis read API routes, which SCOPE-04 has not added yet)
+- [ ] Logs, metrics, traces, and alert labels are bounded and content-free. (requires the synthesis read API routes, which SCOPE-04 has not added yet)
 
 #### Test Evidence - One Item Per Test Plan Row
 
 - [x] T004-05-HEALTH passes with current-session raw evidence in `report.md#t004-05-health`.
-- [ ] T004-05-API passes with current-session raw evidence in `report.md#t004-05-api`.
-- [ ] T004-06-ALERT passes with current-session raw evidence in `report.md#t004-06-alert`.
-- [ ] T004-07-08-API passes with current-session raw evidence in `report.md#t004-07-08-api`.
-- [ ] T004-09-AUTH passes with current-session raw evidence in `report.md#t004-09-auth`.
-- [ ] T004-09-TELEMETRY passes with current-session raw evidence in `report.md#t004-09-telemetry`.
+- [ ] T004-05-API passes with current-session raw evidence in `report.md#t004-05-api`. (requires the synthesis read API routes, which SCOPE-04 has not added yet)
+- [ ] T004-06-ALERT passes with current-session raw evidence in `report.md#t004-06-alert`. (requires the synthesis read API routes, which SCOPE-04 has not added yet)
+- [ ] T004-07-08-API passes with current-session raw evidence in `report.md#t004-07-08-api`. (requires the synthesis read API routes, which SCOPE-04 has not added yet)
+- [ ] T004-09-AUTH passes with current-session raw evidence in `report.md#t004-09-auth`. (requires the synthesis read API routes, which SCOPE-04 has not added yet)
+- [ ] T004-09-TELEMETRY passes with current-session raw evidence in `report.md#t004-09-telemetry`. (requires the synthesis read API routes, which SCOPE-04 has not added yet)
 
 #### Build Quality Gate
 
-- [ ] API/auth/health/alert/observability tests, CSRF and privacy scans, check/lint/format, alert-rule validation, artifact-lint, traceability, docs, broad health regression, and zero-warning checks pass with executed evidence.
+- [ ] API/auth/health/alert/observability tests, CSRF and privacy scans, check/lint/format, alert-rule validation, artifact-lint, traceability, docs, broad health regression, and zero-warning checks pass with executed evidence. (requires the synthesis read API routes, which SCOPE-04 has not added yet)
 
 ---
 

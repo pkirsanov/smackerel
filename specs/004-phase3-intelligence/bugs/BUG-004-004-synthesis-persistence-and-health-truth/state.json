@@ -90,7 +90,8 @@
       }
     ],
     "completedScopes": [
-      "SCOPE-01"
+      "SCOPE-01",
+      "SCOPE-02"
     ],
     "completedPhases": [
       "implement",
@@ -100,7 +101,8 @@
   "certification": {
     "status": "in_progress",
     "completedScopes": [
-      "SCOPE-01"
+      "SCOPE-01",
+      "SCOPE-02"
     ],
     "certifiedCompletedPhases": [],
     "scopeProgress": [
@@ -329,6 +331,7 @@
   ],
   "progressNote": "SCOPE-01 has real progress: migration 064 applied, persistence layer implemented, 9 of 14 Scope 1 DoD items closed with executed evidence (7 unit + 4 live-DB integration tests green). Status moved blocked -> in_progress because the parked live-DB rows are now written. Remaining Scope 1 items (bootstrap canary, end-to-end adversarial RED against the return-and-log producer, rollback-compat) need RunSynthesis wired to the layer, which is SCOPE-02/03 work. Scopes 2-5 remain Not Started.",
   "completedScopes": [
-    "SCOPE-01"
+    "SCOPE-01",
+    "SCOPE-02"
   ]
 }

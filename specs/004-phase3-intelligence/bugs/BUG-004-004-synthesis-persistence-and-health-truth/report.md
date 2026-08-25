@@ -571,3 +571,123 @@ Legacy `synthesis_insights` rows are classified, not deleted: they stay in place
 and are never read as durable output. The test seeds one and asserts it does not
 appear in a verified aggregate, and that it still exists afterwards.
 
+## SCOPE-03 Implementation Phase
+
+Durable coordination, bounded retry and lifecycle. Migration 066 adds run
+lifecycle, attempt count and a lease; the coordinator adds cross-process
+claiming, typed failure classification, bounded retry, stale-lease recovery and
+current/stale/superseded/archived transitions.
+
+Executed this session:
+
+```
+$ ./smackerel.sh test integration --go-run 'TestSynthesisCoordinator'
+--- PASS: TestSynthesisCoordinator_SecondHolderCannotClaimSameWindow (0.11s)
+--- PASS: TestSynthesisCoordinator_SameHolderMayReclaimItsOwnLease (0.07s)
+--- PASS: TestSynthesisCoordinator_ExpiredLeaseIsReclaimable (0.09s)
+--- PASS: TestSynthesisCoordinator_ExhaustedRetriesLeaveNoOutput (0.08s)
+--- PASS: TestSynthesisCoordinator_TerminalFailureIsNotRetried (0.07s)
+--- PASS: TestSynthesisCoordinator_LifecycleTransitionsPreserveAudit (0.09s)
+
+$ ./smackerel.sh test stress --go-run 'TestSynthesisConcurrentClaims'
+--- PASS: TestSynthesisConcurrentClaims_ExactlyOneHolderWins (0.06s)
+
+$ ./smackerel.sh test unit --go --go-run '<coordinator names>'
+9 tests, 0 failures (classification, retry policy, advisory key, holder)
+
+$ ./smackerel.sh check -> 0    lint -> 0    format -> 0
+```
+
+### Six defects the tests found in this scope's own implementation
+
+Recorded because each one was a green-looking path that was wrong, and the
+shape of the mistake is more useful than the fix.
+
+1. `ClaimWindow` could never create a run row. Its INSERT selected FROM the very
+   table it was inserting into, so a new window matched nothing, inserted
+   nothing, and returned success. Two holders both won the same window.
+   **The same-holder test PASSED against that broken code** -- both claims
+   no-opped, so neither errored. A green test agreeing for the wrong reason.
+2. `lifecycle_state` and `attempt_count` were NOT NULL with no default.
+3. The claim never set `created_at`.
+4. `MarkSuperseded` was unreachable from `stale`, and every transition no-opped
+   silently when its WHERE matched nothing -- a caller could believe an output
+   had been retired while it was still served as current.
+5. Under real concurrency one loser received a raw serialization error instead
+   of a clean refusal. Invisible to the sequential test.
+6. `Commit` treated its own claim row as a duplicate.
+
+### Why the stress test exists
+
+The integration test proves two holders cannot both win, but SEQUENTIALLY:
+holder A claims, then B is refused. That never puts two transactions inside the
+critical section, so a coordinator that dropped the advisory lock entirely would
+have passed it. Sixteen concurrent holders released through a shared start gate
+found defect 5 immediately.
+
+Under SERIALIZABLE two simultaneous claims can both be valid transactions that
+PostgreSQL then declines to serialize. That is the isolation level working, not
+a fault, and surfacing it raw hands the caller an opaque database error when the
+honest answer is that someone else holds the window -- which a retry discovers
+on its next pass.
+
+### Design notes
+
+A lease rather than only an advisory lock: an advisory lock dies with its
+session, so a process killed mid-run would park a window in `running` forever
+with nothing able to reclaim it. The lease expires on a wall clock, so recovery
+needs no cooperation from the dead process.
+
+Terminal failures do not consume the retry budget. Repeating a rejected
+candidate cannot change the answer and only delays the alert.
+
+Archiving is a label change, never a delete. The test asserts attempts, insights
+and citations all survive it, because an audit trail that shrinks when a run ages
+out is not an audit trail.
+
+## SCOPE-04 Health Truth Phase
+
+Health derived its verdict from `GetLastSynthesisTime`, which reads
+`MAX(created_at) FROM synthesis_insights` -- the LEGACY table. Nothing writes
+that table any more. Left alone it would have reported never-run indefinitely
+while real output accumulated, which is the same divergence between the report
+and the store this packet exists to close, pointing the other way.
+
+Executed this session:
+
+```
+$ ./smackerel.sh test integration --go-run 'TestSynthesisHealth'
+--- PASS: TestSynthesisHealth_NeverRunIsNotUp (0.05s)
+--- PASS: TestSynthesisHealth_CommittedOutputIsUpAndReadable (0.05s)
+--- PASS: TestSynthesisHealth_AgedOutputIsStaleNotUp (0.05s)
+--- PASS: TestSynthesisHealth_FailedAttemptIsNotClearedByAnOlderOutput (0.06s)
+--- PASS: TestSynthesisHealth_LegacyRowsDoNotMakeHealthUp (0.04s)
+
+$ ./smackerel.sh test integration --go-run 'TestSynthesis'
+25 passed, 0 failed
+
+$ ./smackerel.sh lint -> 0
+```
+
+### States that must not collapse into one another
+
+Each test pins one pair the old mapping could confuse:
+
+| Test | Separates |
+|---|---|
+| `NeverRunIsNotUp` | never-run from healthy |
+| `CommittedOutputIsUpAndReadable` | a real commit from a model that returns nothing |
+| `AgedOutputIsStaleNotUp` | stale from current |
+| `FailedAttemptIsNotClearedByAnOlderOutput` | a current failure from an older success |
+| `LegacyRowsDoNotMakeHealthUp` | durable output from legacy rows |
+
+The second row is the control. Without it the never-run assertion could pass
+simply because the model never returns anything at all.
+
+### Honest scope
+
+These prove the read MODEL. That the `/api/health` handler consumes it is
+compile-verified but not behaviour-tested; `T004-05-API` covers that and remains
+open, along with the authorization and telemetry rows, which need the read API
+routes this scope has not yet added.
+
