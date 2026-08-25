@@ -501,6 +501,34 @@ Scope 1 only. Both shell E2E classifiers now treat SKIP as a first-class outcome
 Scope 2 — `skip_unless_accel_tier`, the false-green half — is untouched, because
 it carries its own Change Boundary.
 
+Both contract suites and both full lanes, measured after the final repair:
+
+```
+$ bash tests/e2e/runner_contract/run_runner_contract.sh
+  Assertions run:    55
+  Assertions failed: 0
+exit 0
+
+$ bash tests/e2e/runner_contract/run_tier_skip_contract.sh
+  Assertions run:    25
+  Assertions failed: 0
+exit 0
+
+$ ./smackerel.sh test e2e
+  Total:  36
+  Passed: 36
+  Failed: 0
+  Skipped: 0
+
+$ ./smackerel.sh test integration
+INTEG_RC=0
+  ok      github.com/smackerel/smackerel/tests/eval/assistant     0.031s
+```
+
+All six adversarial mutations were applied to the tracked files in a worktree and
+each killed its own case, so these assertions detect the wrong fix rather than
+merely agreeing with the right one.
+
 ### What changed
 
 Two classifiers, one rule. `run_test` in `tests/e2e/run_all.sh` gains `SKIPPED`
@@ -1496,10 +1524,15 @@ file, including inside a fence. Re-ran the command with the markers stripped so
 the evidence stays truthful. Then the explanatory comment I wrote *about* that
 fix contained the marker too, and tripped the same gate a second time.
 
-**One genuine false positive (G040).** The deferral scan flagged `separate
-processes`, because it contains `separate pr`. The framework guard is
-framework-managed, so the sentence was reworded to `independent OS processes`
-rather than the guard edited.
+**One genuine false positive (G040).** A sentence describing how the two
+runners execute their fixtures was flagged by Gate G040's narrative scan. The
+scan's banned-phrase list carries a two-word pattern naming a split-off code
+review, and that pattern's ten-character prefix also opens an ordinary phrase
+about OS-level execution, so the two collided. The guard is framework-managed,
+so the sentence was reworded to `independent OS processes` rather than the guard
+edited. Worth noting: writing this paragraph tripped the same rule twice more,
+because quoting the offending phrase reproduces it. The finding is recorded here
+without restating the trigger, which is why the wording is oblique.
 
 **A capability model this packet actually fits (G094).** One classification
 rule, two shipped implementations, and exactly two variation axes — reason
@@ -1535,3 +1568,4 @@ all six adversarial mutations proven to kill their own case.
 The single operator action that unblocks it: run the 8 steps in
 `uservalidation.md` under `## Checklist`, check the ones that hold, and add a
 `## Human Acceptance Record` with `acceptedBy`, `acceptedAt` and `method`.
+

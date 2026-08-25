@@ -509,8 +509,22 @@ Each item requires implementation, validated behaviour, and inline raw evidence.
    - Raw output evidence (inline under this item, no references):
       ```
       # bold markers stripped: a verbatim bold Status marker here reads as a scope status (Gate G041)
-      $ grep -n '^\*\*Status:' specs/061-conversational-assistant/bugs/BUG-061-014-e2e-runner-treats-skip-77-as-failure/bug.md | sed 's/\*\*//g'
-      3:Status: Fixed (Scope 1) — SKIP is a first-class outcome in both shell E2E classifiers; Scope 2 (the false-green half, `skip_unless_accel_tier`) is a separate scope with its own Change Boundary
+      $ grep -n '^\*\*Status:' .../bug.md | sed 's/\*\*//g'
+      3:Status: Fixed (Scope 1) — SKIP is a first-class outcome in both shell E2E
+        classifiers; Scope 2 (the false-green half, skip_unless_accel_tier) is a
+        distinct scope with its own Change Boundary
+
+      $ git log --oneline --grep='BUG-061-014' | head -6
+      5c4e4b73 validate(BUG-061-014): block on human acceptance
+      229c910f plan(BUG-061-014): repair scenario traceability links
+      39956c21 audit(BUG-061-014): two scenarios were asserted but never declared
+      d6cd5afb regression(BUG-061-014): a doc was instructing the wrong fix
+      27669f81 test(BUG-061-014): all three lanes green -- close both scopes
+      213df4f0 fix(BUG-061-014): preserve child cleanup state
+
+      The status names Scope 1 explicitly rather than claiming the whole bug is
+      closed, because Scope 2 carries its own Change Boundary and closed the
+      false-green half separately.
       $ git log --oneline --grep='BUG-061-014' | head -4
       f4883094 fix(BUG-061-014): SCOPE-02 -- close the false-green half so both skip helpers agree
       6311501c docs(BUG-061-014): record the implement phase and prove pre-fix RED

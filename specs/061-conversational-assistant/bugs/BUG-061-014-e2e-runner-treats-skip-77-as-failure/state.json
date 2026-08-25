@@ -351,6 +351,44 @@
     "certifiedBy": "bubbles.goal",
     "certifiedAt": "2026-08-25T14:09:08Z",
     "evidenceRef": "report.md#validate-phase",
-    "blockedReason": "Gate G136 human acceptance. Both scopes are Done, all 34 DoD items carry inline execution evidence, both contract suites are green (55 and 25 assertions, 0 failures), the shell E2E lane is 36/36 and integration exits 0. What is missing is a human. The acceptance-authority contract requires a Human Acceptance Record naming a non-automation acceptor with a declared method, and forbids acceptedBy matching '^bubbles\\\\.'. Only agents exercised these behaviours, so acceptance has not occurred."
+    "blockedReason": "Gate G136 human acceptance. Both scopes are Done, all 34 DoD items carry inline execution evidence, both contract suites are green (55 and 25 assertions, 0 failures), the shell E2E lane is 36/36 and integration exits 0. What is missing is a human. The acceptance-authority contract requires a Human Acceptance Record naming a non-automation acceptor with a declared method, and forbids acceptedBy matching '^bubbles\\\\.'. Only agents exercised these behaviours, so acceptance has not occurred.",
+    "completedScopes": [
+      "BUG-061-014-SCOPE-01",
+      "BUG-061-014-SCOPE-02"
+    ],
+    "totalScopes": 2,
+    "certifiedCompletedPhases": [
+      "implement",
+      "implement",
+      "test",
+      "simplify",
+      "stabilize",
+      "security",
+      "regression",
+      "audit",
+      "validate"
+    ],
+    "scopeProgress": [
+      {
+        "scope": "BUG-061-014-SCOPE-01",
+        "status": "done",
+        "completedAt": "2026-08-25T14:09:08Z",
+        "dodTotal": 19,
+        "dodChecked": 19
+      },
+      {
+        "scope": "BUG-061-014-SCOPE-02",
+        "status": "done",
+        "completedAt": "2026-08-25T14:09:08Z",
+        "dodTotal": 15,
+        "dodChecked": 15
+      }
+    ],
+    "lockdownState": {
+      "state": "lockdown-blocked-human-acceptance",
+      "round": 1,
+      "lastCleanRound": 1,
+      "reason": "Every agent-clearable gate is clean: both scopes Done with all DoD items evidenced, both contract suites green (55 and 25 assertions, 0 failures), shell E2E 36/36, integration exit 0, all six adversarial mutations proven to kill their own case. Gate G136 remains because only agents exercised the behaviours, and the acceptance-authority contract forbids an agent recording acceptance on a human's behalf."
+    }
   }
 }
