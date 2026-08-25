@@ -2,7 +2,7 @@
 
 **Bug:** BUG-069-006 - confirm redemption is not single-flight under concurrency
 **Workflow mode:** bugfix-fastlane
-**Status:** In Progress
+**Status:** Blocked
 
 ## Execution Outline
 
@@ -78,11 +78,11 @@ of the following.
 
 | Scope | Name | Depends On | Scenario IDs | Status |
 |---|---|---|---|---|
-| 1 | Atomic redemption across confirm, discard, and timeout sweep | none | SCN-BUG069006-001, SCN-BUG069006-002, SCN-BUG069006-003, SCN-BUG069006-004 | Not Started |
+| 1 | Atomic redemption across confirm, discard, and timeout sweep | none | SCN-BUG069006-001, SCN-BUG069006-002, SCN-BUG069006-003, SCN-BUG069006-004 | Blocked |
 
 ## Scope 1: Atomic redemption across confirm, discard, and timeout sweep
 
-**Status:** In Progress
+**Status:** Blocked
 **Depends On:** none
 
 ### Gherkin Scenarios
@@ -156,23 +156,42 @@ because EB-6 depends on it, not because it is new work.
 
 ### Definition of Done
 
-- [ ] Root cause is confirmed by execution, not only by static reading.
-- [ ] The concurrent redemption test is recorded FAILING against the unfixed implementation before any fix lands.
+- [x] Root cause is confirmed by execution, not only by static reading. → Evidence: [report.md](report.md#validate-root-cause-confirmed-by-execution)
+- [x] The concurrent redemption test is recorded FAILING against the unfixed implementation before any fix lands. → Evidence: [report.md](report.md#validate-the-concurrent-test-failed-before-the-fix)
 - [x] The conditional-clear method exists on the `Store` interface and on every implementation, including `InMemoryContextStore`. → Evidence: [report.md](report.md#definition-of-done-what-this-evidence-settles)
-- [ ] `PgStore` reads `CommandTag.RowsAffected()` and reports whether it performed the clear.
-- [ ] `Confirm`, `Discard`, and `SweepTimeouts` all route through the conditional clear and map a lost race to `ErrPendingNotFound`.
+- [x] `PgStore` reads `CommandTag.RowsAffected()` and reports whether it performed the clear. → Evidence: [report.md](report.md#validate-pgstore-reports-whether-it-performed-the-clear)
+- [x] `Confirm`, `Discard`, and `SweepTimeouts` all route through the conditional clear and map a lost race to `ErrPendingNotFound`. → Evidence: [report.md](report.md#validate-all-three-call-sites-route-through-the-conditional-clear)
 - [x] Two concurrent confirms of one reference execute the gated action exactly once, proven by a test using real goroutines and a release barrier. → Evidence: [report.md](report.md#proving-the-two-concurrency-tests-actually-executed)
 - [x] The losing caller receives `ErrPendingNotFound`, indistinguishable from a post-redemption replay. → Evidence: [report.md](report.md#proving-the-two-concurrency-tests-actually-executed)
 - [x] Exactly one confirmed audit row exists for the reference after a concurrent race. → Evidence: [report.md](report.md#the-tests-are-sensitive-to-the-defect)
 - [x] A confirm racing the timeout sweep produces exactly one terminal audit row. → Evidence: [report.md](report.md#the-tests-are-sensitive-to-the-defect)
-- [ ] The single-flight comment at `machine.go` line 213 states the guarantee the code actually enforces.
-- [ ] A redemption write leaves `working_context`, `pending_disambig`, `pending_clarify`, and `legacy_retirement_notices` untouched.
+- [x] The single-flight comment at `machine.go` line 213 states the guarantee the code actually enforces. → Evidence: [report.md](report.md#validate-the-single-flight-comment-matches-the-code)
+- [x] A redemption write leaves `working_context`, `pending_disambig`, `pending_clarify`, and `legacy_retirement_notices` untouched. → Evidence: [report.md](report.md#validate-a-redemption-write-leaves-the-sibling-columns-alone)
 - [x] `TestAssistantHTTPE2E_ConfirmAcceptExecutesGatedActionOnce` passes unmodified. → Evidence: [report.md](report.md#confirm-e2e-raw-output)
 - [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior pass. → Evidence: [report.md](report.md#confirm-e2e-raw-output)
 - [ ] Broader E2E regression suite passes.
-- [ ] Change Boundary is respected and zero excluded file families were changed.
+- [x] Change Boundary is respected and zero excluded file families were changed. → Evidence: [report.md](report.md#validate-change-boundary-re-measured)
 - [x] `SCN-BUG069006-001` holds: two concurrent confirms carrying one reference redeem it exactly once — one caller observes the win, the other receives `ErrPendingNotFound`, and exactly one `confirmed` audit row exists. → Evidence: [report.md](report.md#unit-concurrency-re-executed-at-the-current-tree)
 - [x] `SCN-BUG069006-002` holds at the API boundary: concurrent HTTP confirms with distinct transport message ids and one shared `ConfirmRef` execute the gated action exactly once, proven against the live stack rather than in-process. → Evidence: [report.md](report.md#the-second-defect-the-loser-path-resurrected-the-pending-row)
 - [x] `SCN-BUG069006-003` holds: a confirm racing the timeout sweep yields exactly one terminal outcome, never both a `confirmed` and a `discarded_timeout` row for the same reference. → Evidence: [report.md](report.md#unit-concurrency-re-executed-at-the-current-tree)
 - [x] `SCN-BUG069006-004` holds: sequential redemption behaviour is unchanged — a single confirm still succeeds and a sequential replay of the same reference still fails without re-executing the gated action. → Evidence: [report.md](report.md#2026-08-24-third-test-pass-the-sequential-replay-lane-ran)
-- [ ] Build Quality Gate passes as a grouped block: zero warnings, zero deferrals, lint and format clean, artifact lint clean, documentation aligned.
+- [x] Build Quality Gate passes as a grouped block: zero warnings, zero deferrals, lint and format clean, artifact lint clean, documentation aligned. → Evidence: [report.md](report.md#validate-build-quality-gate)
+
+### Open Item
+
+One item above is unchecked and is unchecked deliberately.
+
+**Broader E2E regression suite passes.**
+`tests/e2e/assistant_regression/bs_004_notification_confirm.sh` is the
+confirm-flow member of that suite. Executed during the validate phase it exits
+77 with `SKIP_REASON: SCOPE-04-NOTIFICATION-PROPOSAL-FIXTURE-NOT-YET-AUTHORED`,
+which the runner classifies as a failure, so it has never exercised the confirm
+flow it is named for. Authoring that fixture is spec 061 SCOPE-04 work and lies
+outside this packet's Change Boundary. Recorded as DIS-069-006-4 with that
+owner; evidence in
+[report.md](report.md#validate-the-broader-e2e-suite-item-cannot-close).
+
+Scope 1 is therefore `Blocked`, not `In Progress` and not `Done`. `Done`
+requires all of its own DoD items checked, and one is not. `In Progress` would
+say work continues here, and none can: the remaining item needs a fixture this
+packet's Change Boundary does not permit it to author.

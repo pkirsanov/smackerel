@@ -7,7 +7,7 @@
   "workflowMode": "bugfix-fastlane",
   "executionRuntime": "direct",
   "releaseTrain": "mvp",
-  "status": "in_progress",
+  "status": "blocked",
   "originFinding": {
     "id": "SEC-069-005-1",
     "severity": "MEDIUM",
@@ -17,8 +17,8 @@
     "originPacket": "specs/069-assistant-http-transport/bugs/BUG-069-005-required-e2e-false-green"
   },
   "execution": {
-    "activeAgent": "bubbles.audit",
-    "currentPhase": "audit",
+    "activeAgent": "bubbles.validate",
+    "currentPhase": "validate",
     "executionModel": "direct-authorized-runner",
     "runStartedAt": "2026-08-23T00:00:00Z",
     "completedPhaseClaims": [
@@ -84,6 +84,13 @@
         "provenanceMode": "specialist",
         "claimedAt": "2026-08-25T01:53:39Z",
         "evidenceRef": "report.md#audit-phase"
+      },
+      {
+        "phase": "validate",
+        "agent": "bubbles.validate",
+        "provenanceMode": "specialist",
+        "claimedAt": "2026-08-25T02:28:12Z",
+        "evidenceRef": "report.md#validate-phase"
       }
     ],
     "executionHistory": [
@@ -201,27 +208,50 @@
         "outcome": "route_required",
         "evidenceRef": "report.md#audit-phase",
         "summary": "Audit phase, recorded in report.md under '## Audit Phase'. Adversarial verification of claims the packet already recorded, not new defect analysis. Verdict REWORK_REQUIRED, next owner bubbles.validate. Three claims were re-executed independently rather than read. Spot-check 1, the Go unit lane: ./smackerel.sh test unit --go returned exit 0, 210 lines, sha256 70febd70786d04d84278b6da4a31b78a16d62cb57c85d13df75082a33539799a. Because most packages reported (cached), exit 0 alone could not prove the two concurrency tests ran, so the claim was pressed again through --go-run, which appends -count=1 at scripts/runtime/go-unit.sh:63 and defeats the cache: both TestMachineConfirm_ConcurrentRedemptionExecutesOnce and TestMachineConfirm_RacingSweepProducesOneTerminalOutcome emitted their own === RUN and --- PASS lines, so that claim now rests on stronger evidence than the packet recorded for it. Spot-check 2, artifact lint: exit 0 as recorded, including all four anti-fabrication checks. Spot-check 3, the unmodified-test claim: git status --porcelain on tests/e2e/assistant/http_confirm_test.go is empty, but working-tree cleanliness is weaker than the DoD item claims because a committed edit would leave it clean too, so the claim was pressed against the whole packet history instead -- git diff 5ecea070^ HEAD on that file shows zero deleted lines, so the change is purely additive and the existing sequential function cannot have been edited. Change Boundary measured: the sixteen packet commits touch thirteen non-artifact files, every one of which appears in the scopes.md Allowed, Test, or Store-Interface-Ripple tables, and zero fall under an Excluded surface. Framework ownership reported honestly: the literal check returns 2, not the expected 0; both hits belong to commit dde4eb9d, the canonical installer rewriting its own .checksums and .install-source.json after a targetRepoSlug change from dsw-smackerel to smackerel, and every one of the sixteen BUG-069-006 commits was checked individually and returns zero framework paths. Stating 0 would have been the fabrication this phase exists to catch. Anchor linkage: all eleven checked DoD items resolve against GitHub-style slugs computed from report.md's seventy-nine headings, including the em-dash double-hyphen case; zero broken anchors. All seven Discovered Issues rows verified in both directions, nothing recorded open is already fixed and nothing recorded fixed is still open; DIS-069-006-4 was executed directly and confirmed exactly as written, the file exists, prints SKIP_REASON SCOPE-04-NOTIFICATION-PROPOSAL-FIXTURE-NOT-YET-AUTHORED, and exits 77. Six findings. AUD-1, over-claim in the header, Summary, and Completion Statement, corrected in this phase: three surfaces asserted the fix was never implemented, no DoD item was checked, and bubbles.implement still owed the red-stage capture, all contradicted by committed code, eight recorded phases, eleven of twenty checked items, and the red capture present in the same file; the direction is understatement rather than inflation but the defect class is identical, prose asserting a state the artifacts do not support where a reader looks first. AUD-2, invalid provenance token at report.md:1043, corrected in this phase: the value sat outside the executed|interpreted|not-run vocabulary so Check 40 rejected it and the block fell outside provenance accounting entirely; it now reads not-run, and the relay disclosure already present in the prose is untouched. AUD-3, SCN-BUG069006-004 rests on a weaker anchor than the packet holds, since in-session executed evidence for the same two tests exists in the Regression Phase lane matrix at RUN=2 PASS=2 FAIL=0 SKIP=0. AUD-4, the Stabilize and Security verification blocks are byte-identical with no sha256 or session marker, so two runs are indistinguishable from one paste; the substance is corroborated by this phase re-running the unit lane, the provenance of the second block is not. AUD-5, stale state.json pointers: execution.activeAgent reads bubbles.bug, execution.currentPhase reads bug-discovery, and routing.nextRequiredOwner reads bubbles.implement, all contradicted by the eight recorded phase claims and all outside audit's write authority. AUD-6, the Change Boundary DoD item is now provable from the packet base and remains unchecked, a conservative error the artifact owner must correct. No code was modified, no DoD box was checked or unchecked, no scope status was advanced, and no certification field was written by this phase."
+      },
+      {
+        "at": "2026-08-25T02:36:52Z",
+        "agent": "bubbles.validate",
+        "phasesExecuted": [
+          "validate"
+        ],
+        "provenanceMode": "specialist",
+        "claimSource": "executed",
+        "outcome": "blocked",
+        "evidenceRef": "report.md#validate-phase",
+        "summary": "Validate phase, recorded in report.md under '## Validate Phase'. Last phase of bugfix-fastlane and the only agent permitted to write certification.*. Two jobs: certify the phases that actually ran, and close the DoD items whose evidence actually exists. Every claim was re-derived in session rather than read from the packet's own prose, on the principle that a certification trusting its own packet's text is not a check. Certified eight phases after confirming three independent records agree for each: a completedPhaseClaims entry, a matching executionHistory entry, and a real evidence section in the report. Claims equal history for every phase, so none is claimed more often than it ran, which is the asymmetry Gate G027 exists to catch; test shows three of each because it ran three passes. Closed eight of the nine open DoD items on re-executed evidence: root cause confirmed by execution, the concurrent test recorded RED before the fix, PgStore reading CommandTag.RowsAffected, all three call sites routing through the conditional clear, the single-flight comment matching what the code enforces, the four sibling columns left untouched, the Change Boundary respected, and the grouped Build Quality Gate. Left 'Broader E2E regression suite passes' UNCHECKED, which is the whole reason the packet is not done: bs_004_notification_confirm.sh exits 77 on a missing spec-061 SCOPE-04 fixture and the runner reports that as a failure, and the suite is named for the confirm flow this packet changed. Both scopes are Blocked rather than Done for the same reason. Terminal status blocked rather than in_progress, because in_progress asserts work continues here and it does not; and rather than done, because the item is genuinely open. Nothing is routed: what the packet needs is another spec's work, not another specialist pass over these artifacts. Gate G136 is recorded as a known honest residual, since only agents exercised these behaviours and authoring a human acceptance record would fabricate the exact fact the gate requires."
       }
     ]
   },
   "certification": {
-    "status": "in_progress",
+    "status": "blocked",
     "completedScopes": [],
     "scopeProgress": [
       {
         "scopeId": "Scope 1: Atomic redemption across confirm, discard, and timeout sweep",
-        "status": "in_progress",
-        "dodComplete": 11,
+        "status": "blocked",
+        "dodComplete": 19,
         "dodTotal": 20
       }
     ],
-    "certifiedCompletedPhases": [],
+    "certifiedCompletedPhases": [
+      "implement",
+      "test",
+      "regression",
+      "simplify",
+      "stabilize",
+      "security",
+      "audit",
+      "validate"
+    ],
     "lockdownState": {
       "active": false,
       "round": 0,
       "reason": "Packet is newly authored; no implementation has begun and validate-owned certification has not started.",
       "lastUpdatedAt": "2026-08-23T00:00:00Z"
-    }
+    },
+    "certifiedAt": "2026-08-25T02:36:52Z",
+    "blockedReason": "One DoD item cannot be closed by anyone working inside this packet's Change Boundary. 'Broader E2E regression suite passes' is contradicted by tests/e2e/assistant_regression/bs_004_notification_confirm.sh, which exits 77 with SKIP_REASON: SCOPE-04-NOTIFICATION-PROPOSAL-FIXTURE-NOT-YET-AUTHORED and is reported by the e2e runner as 'FAIL: assistant_regression/bs_004_notification_confirm.sh (exit=77)'. That suite is named for the confirm flow and this packet changed the confirm redemption path, so the item cannot be closed honestly, only conveniently. UNBLOCKING CONDITION, operator-actionable: author the notification-proposal fixture that bs_004 declares missing, which is spec 061 SCOPE-04 work with its own Change Boundary. Once that fixture exists and bs_004 exits 0, re-run this packet's validate phase; the item closes and the packet reaches done with no other change. WHY NOT in_progress: nothing remains to be done here. All eight bugfix-fastlane phases ran, 19 of 20 DoD items are closed on executed evidence, and the twentieth needs another spec's work. WHY NOT done: the item is genuinely open. Recorded as DIS-069-006-4. KNOWN HONEST RESIDUAL, not a blocker an agent can clear: Gate G136 requires a '## Human Acceptance Record' in uservalidation.md whose acceptedBy is not an agent. Only agents exercised these behaviours, so authoring that record would fabricate the exact fact the gate exists to require. It is left unwritten deliberately."
   },
   "policySnapshot": {
     "grill": {
@@ -258,8 +288,8 @@
     }
   },
   "routing": {
-    "nextRequiredOwner": "bubbles.validate",
-    "reason": "All eight execution phases are recorded: implement, test (three passes), regression, simplify, stabilize, security, audit. Only validate remains, and it is the sole owner of certification.*. It inherits four audit findings: AUD-3 (scenario evidenceRefs repointed to in-session executed raw output, applied), AUD-4 (stabilize and security verification blocks were byte-identical; security now carries a cache-defeated hash-verifiable capture, applied), AUD-5 (these pointer fields were stale at bug-discovery, applied), and AUD-6 (the Change Boundary DoD item is provable and remains unchecked; box-checking belongs to the owner, not to audit). One DoD item cannot be closed honestly: 'Broader E2E regression suite passes' is contradicted by tests/e2e/assistant_regression/bs_004_notification_confirm.sh, which exits 77 with SKIP_REASON SCOPE-04-NOTIFICATION-PROPOSAL-FIXTURE-NOT-YET-AUTHORED and is reported by the runner as a failure. That fixture is spec 061 SCOPE-04 work and is recorded as DIS-069-006-4 with that owner.",
+    "nextRequiredOwner": null,
+    "reason": "Nothing is routed. All eight bugfix-fastlane phases ran and 19 of 20 DoD items are closed on executed evidence. The twentieth needs the spec 061 SCOPE-04 notification-proposal fixture that bs_004_notification_confirm.sh declares missing, which cannot be authored here without widening a Change Boundary this packet has already corrected twice. What the packet needs is another spec's work, not another specialist pass over these artifacts.",
     "relatedPackets": [
       {
         "packet": "specs/069-assistant-http-transport/bugs/BUG-069-004-http-turn-dedup",
@@ -272,10 +302,11 @@
         "note": "Raised SEC-069-005-1 and routed it to bubbles.implement. That packet's sequential-replay scenario is satisfied and is not reopened. No artifact of that packet is modified here."
       }
     ],
-    "updatedAt": "2026-08-25T02:02:59Z"
+    "updatedAt": "2026-08-25T02:36:52Z"
   },
   "transitionRequests": [],
   "reworkQueue": [],
   "createdAt": "2026-08-23T00:00:00Z",
-  "updatedAt": "2026-08-25T00:00:30Z"
+  "updatedAt": "2026-08-25T00:00:30Z",
+  "blockedReason": "One DoD item cannot be closed by anyone working inside this packet's Change Boundary. 'Broader E2E regression suite passes' is contradicted by tests/e2e/assistant_regression/bs_004_notification_confirm.sh, which exits 77 with SKIP_REASON: SCOPE-04-NOTIFICATION-PROPOSAL-FIXTURE-NOT-YET-AUTHORED and is reported by the e2e runner as 'FAIL: assistant_regression/bs_004_notification_confirm.sh (exit=77)'. That suite is named for the confirm flow and this packet changed the confirm redemption path, so the item cannot be closed honestly, only conveniently. UNBLOCKING CONDITION, operator-actionable: author the notification-proposal fixture that bs_004 declares missing, which is spec 061 SCOPE-04 work with its own Change Boundary. Once that fixture exists and bs_004 exits 0, re-run this packet's validate phase; the item closes and the packet reaches done with no other change. WHY NOT in_progress: nothing remains to be done here. All eight bugfix-fastlane phases ran, 19 of 20 DoD items are closed on executed evidence, and the twentieth needs another spec's work. WHY NOT done: the item is genuinely open. Recorded as DIS-069-006-4. KNOWN HONEST RESIDUAL, not a blocker an agent can clear: Gate G136 requires a '## Human Acceptance Record' in uservalidation.md whose acceptedBy is not an agent. Only agents exercised these behaviours, so authoring that record would fabricate the exact fact the gate exists to require. It is left unwritten deliberately."
 }

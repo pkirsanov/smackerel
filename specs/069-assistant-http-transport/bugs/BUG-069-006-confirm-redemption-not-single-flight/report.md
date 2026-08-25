@@ -1,11 +1,18 @@
 # Report: BUG-069-006 - Atomic confirm redemption
 
-**Packet status:** in_progress
+**Packet status:** blocked
 **Workflow mode:** bugfix-fastlane
 **Phases recorded:** bug discovery, implement, test (three passes), regression,
-simplify, stabilize, security, audit
-**Phase not yet recorded:** validate
-**DoD state at this tree:** 11 of 20 checked
+simplify, stabilize, security, audit, validate
+**DoD state at this tree:** 19 of 20 checked
+**Blocked on:** the `bs_004` confirm-flow fixture, owned by spec 061 SCOPE-04;
+and Gate G136 human acceptance, which requires a person
+
+> **Status correction (`bubbles.validate`, 2026-08-25).** The three lines this
+> block replaces read `Packet status: in_progress`, `Phase not yet recorded:
+> validate`, and `DoD state at this tree: 11 of 20 checked`. All three were true
+> when `bubbles.audit` wrote them and are superseded by the validate phase
+> recorded below.
 
 > **Header correction (`bubbles.audit`, 2026-08-25).** The two lines this block
 > replaces read `Phase performed: bug discovery, documentation, and root-cause
@@ -404,11 +411,20 @@ of them was honest - none of the work they describe had been done yet.
 > audit finding under `## Audit Phase`. Each phase below carries its own
 > completion statement; those are the current record.
 
-**Current packet state**, as verified under `## Audit Phase`: eight phases are
-recorded, the fix is committed across thirteen non-artifact files that all fall
-inside the Change Boundary, eleven of twenty DoD items are checked, and nine are
-unchecked with a stated reason each. The packet is still **not complete** and
-still makes no completion claim.
+**Current packet state**, as certified under `## Validate Phase`: nine phases
+are recorded, the fix is committed across thirteen non-artifact files that all
+fall inside the Change Boundary, and nineteen of twenty DoD items are checked.
+The packet is **not complete** and makes no completion claim. It is `blocked` on
+one DoD item that cannot be closed from inside its Change Boundary — the
+`bs_004` confirm-flow fixture, owned by spec 061 SCOPE-04 — and on Gate G136,
+which requires a human to accept the eight behaviours in `uservalidation.md`.
+
+> **State update (`bubbles.validate`, 2026-08-25).** The paragraph above read
+> `eight phases are recorded ... eleven of twenty DoD items are checked, and
+> nine are unchecked with a stated reason each`, and was accurate when
+> `bubbles.audit` wrote it. The validate phase has since certified the eight
+> required phases and closed eight of the nine open items. `status` and
+> `certification.status` are now `blocked`, not `in_progress`.
 
 ## Implementation Phase
 
@@ -2561,40 +2577,668 @@ store. `status` remains `in_progress`.
    Confirm you agree that installer metadata reconciliation under commit
    `dde4eb9d` is outside this packet's responsibility.
 
+## Validate Phase
+
+The last phase of `bugfix-fastlane` and the only one permitted to write
+`certification.*`. Two jobs: certify the phases that actually ran, and close the
+DoD items whose evidence actually exists.
+
+Every claim below was re-derived in this session. Where an earlier phase had
+already recorded a result, this phase re-executed the command rather than
+reading the recorded figure, because a certification that trusts its own
+packet's prose is not a check.
+
+### Validate entry state
+
+The guard was run before anything was read, so the starting position is on the
+record rather than reconstructed afterwards.
+
+**Claim Source:** executed
+
+```
+$ bash .github/bubbles/scripts/state-transition-guard.sh <packet-dir>
+🔴 TRANSITION BLOCKED: 7 failure(s), 3 warning(s)
+
+failedGateIds: [G022,G027,G136]
+failedChecks: [Check-4-completion,Check-5-all-done]
+blockingCode: DELIVERY_COMPLETION_FAILED
+failureCount: 7
+verdict: FAIL
+```
+
+Seven failures across three gates: G022 (validate absent from the phase
+records), G027 (nine unchecked DoD items and two scopes not Done), and G136
+(no human acceptance record).
+
+### Validate root cause confirmed by execution
+
+The RED capture in `## Implementation Phase` reports three defect-specific
+numbers. A transcript can be typed, so the check that matters is whether the
+test file can actually emit those exact strings. It can:
+
+**Claim Source:** executed
+
+```
+$ sed -n '113,124p;162,166p' internal/assistant/confirm/machine_concurrency_test.go
+	if won != 1 {
+		t.Errorf("winners: got %d want 1 — the gated action would execute %d times", won, won)
+	}
+	if lost != racers-1 {
+		t.Errorf("losers receiving ErrPendingNotFound: got %d want %d", lost, racers-1)
+	}
+
+	counts := countOutcomes(writer.snapshot(), in.ConfirmRef)
+	if counts[OutcomeConfirmed] != 1 {
+		t.Errorf("confirmed audit rows for %q: got %d want 1", in.ConfirmRef, counts[OutcomeConfirmed])
+	}
+	terminal := counts[OutcomeConfirmed] + counts[OutcomeDiscardedTimeout]
+	if terminal != 1 {
+		t.Errorf("terminal audit rows for %q: got %d (confirmed=%d discarded_timeout=%d) want exactly 1",
+			in.ConfirmRef, terminal, counts[OutcomeConfirmed], counts[OutcomeDiscardedTimeout])
+	}
+```
+
+The recorded RED lines cite `machine_concurrency_test.go:115`, `:118`, `:123`
+and `:164`. Those line numbers land on these four `t.Errorf` calls, and each
+format string renders the recorded line character for character once its
+arguments are substituted. `winners: got 2 want 1 — the gated action would
+execute 2 times` is the first one with `won == 2`.
+
+That settles the item as written. The root cause is not an argument about what
+the code would do under concurrency; it is a measurement of what it did —
+two winners, zero losers receiving the sentinel, two confirmed audit rows.
+
+### Validate the concurrent test failed before the fix
+
+Same capture, read for a different property: the RED run is recorded at exit 1
+with both concurrency tests failing, against `machine.go` before the fix, with
+every other file of the change present so the package compiled. The GREEN run
+of the same selector is exit 0.
+
+The ordering is what makes the fix falsifiable, and it is legible in the file:
+the RED block sits at `## Test Evidence` ahead of the post-fix result, and again
+in full under `## Implementation Phase`. Guard Check 3E independently reports
+scenario-first red-to-green ordering as recorded.
+
+Both tests pass at the tree being certified, cache-defeated so the result
+cannot be a replay of an earlier run. `--go-run` appends `-count=1`:
+
+**Claim Source:** executed
+
+```
+$ ./smackerel.sh test unit --go --verbose --go-run 'TestMachineConfirm_ConcurrentRedemptionExecutesOnce|TestMachineConfirm_RacingSweepProducesOneTerminalOutcome'
+FOCUSED_VERBOSE_EXIT=0
+lines: 525
+sha256: a0bdcbc4427e7f416b312064d04e807ee320854b613f83fd71a153ec17f8fc84
+
+[go-unit] applying -run selector: TestMachineConfirm_ConcurrentRedemptionExecutesOnce|TestMachineConfirm_RacingSweepProducesOneTerminalOutcome
+=== RUN   TestMachineConfirm_ConcurrentRedemptionExecutesOnce
+--- PASS: TestMachineConfirm_ConcurrentRedemptionExecutesOnce (0.00s)
+=== RUN   TestMachineConfirm_RacingSweepProducesOneTerminalOutcome
+--- PASS: TestMachineConfirm_RacingSweepProducesOneTerminalOutcome (0.00s)
+ok  	github.com/smackerel/smackerel/internal/assistant/confirm	0.019s
+
+RUN=2 PASS=2 FAIL=0 SKIP=0
+```
+
+The runner echoes the selector, so this establishes two facts rather than one:
+the tests executed, and the named tests are the ones that executed.
+
+### Validate PgStore reports whether it performed the clear
+
+Read at the source rather than taken from the report:
+
+**Claim Source:** executed
+
+```
+$ grep -n -A28 'func (s \*PgStore) ClearPendingConfirm' internal/assistant/context/pg_store.go
+184-	const q = `
+185-UPDATE assistant_conversations
+186-   SET pending_confirm = NULL,
+187-       last_activity_at = $3
+188- WHERE user_id = $1
+189-   AND transport = $2
+190-   AND pending_confirm ->> 'confirm_ref' = $4
+191-`
+192-	tag, err := s.pool.Exec(ctx, q, userID, transport, now.UTC(), confirmRef)
+193-	if err != nil {
+194-		return false, fmt.Errorf("assistantctx: ClearPendingConfirm update: %w", err)
+195-	}
+196-	return tag.RowsAffected() == 1, nil
+```
+
+Line 192 binds the `pgconn.CommandTag` to a named variable instead of
+discarding it, and line 196 returns `tag.RowsAffected() == 1`. That is the
+seam DIS-069-006-2 said the fix had to introduce: `PgStore.Persist` writes
+`if _, err := s.pool.Exec(...)`, so at that seam a losing writer matches zero
+rows and still returns `nil`. Here the write outcome reaches the caller.
+
+Executed against real PostgreSQL in this session:
+
+**Claim Source:** executed
+
+```
+$ ./smackerel.sh down          # never two stacks at once
+DOWN_EXIT=0
+$ ./smackerel.sh test integration --go-run 'TestPgStoreClearPendingConfirm_IsConditionalAndAtomic'
+INTEG_EXIT=0
+lines: 738
+sha256: 8b486420d159303966b24a256db43569cedb099a908cb66cf28e655080082567
+
+go-integration: applying -run selector: TestPgStoreClearPendingConfirm_IsConditionalAndAtomic
+=== RUN   TestPgStoreClearPendingConfirm_IsConditionalAndAtomic
+--- PASS: TestPgStoreClearPendingConfirm_IsConditionalAndAtomic (0.04s)
+ok  	github.com/smackerel/smackerel/internal/assistant/context	0.061s
+```
+
+Every other package in that run printed `[no tests to run]`, which is what a
+package the selector did not match looks like. `internal/assistant/context`
+does not look like that, so the PASS belongs to the named test.
+
+The test's arms are load-bearing in both directions, and the negative arm is
+the one that matters: a non-matching `confirmRef` must report `won == false`
+and must leave the live pending row in place. Without it, an unconditional
+`UPDATE` would satisfy every other assertion in the test.
+
+### Validate all three call sites route through the conditional clear
+
+**Claim Source:** executed
+
+```
+$ grep -n 'ClearPendingConfirm' internal/assistant/confirm/machine.go
+219:	won, err := m.store.ClearPendingConfirm(ctx, in.UserID, in.Transport, in.ConfirmRef, now)
+275:	won, err := m.store.ClearPendingConfirm(ctx, in.UserID, in.Transport, in.ConfirmRef, now)
+336:		won, err := m.store.ClearPendingConfirm(ctx, e.UserID, e.Transport, e.ConfirmRef, now)
+
+$ awk 'NR<=340 && /^func \(m \*Machine\)/ {print NR": "$0}' internal/assistant/confirm/machine.go
+201: func (m *Machine) Confirm(ctx context.Context, in ConfirmInput, now time.Time) (ConfirmResult, error) {
+263: func (m *Machine) Discard(ctx context.Context, in DiscardInput, now time.Time) error {
+324: func (m *Machine) SweepTimeouts(ctx context.Context, expired []ExpiredPending, now time.Time) (SweepResult, error) {
+```
+
+Line 219 is inside `Confirm`, 275 inside `Discard`, 336 inside `SweepTimeouts`.
+All three route through the conditional clear. The first clause holds exactly.
+
+**The second clause holds in substance and not in letter, and this phase states
+the difference rather than absorbing it.** The item says all three "map a lost
+race to `ErrPendingNotFound`". Two of them do, literally:
+
+```
+223-	if !won {
+224-		return ConfirmResult{}, ErrPendingNotFound     # Confirm
+279-	if !won {
+280-		return ErrPendingNotFound                      # Discard
+```
+
+`SweepTimeouts` does not, and cannot:
+
+```
+340-		if !won {
+341-			// Lost the race to a concurrent confirm/discard — that
+342-			// caller owns the terminal audit row for this reference.
+343-			continue
+```
+
+`SweepTimeouts` iterates a batch of `expired []ExpiredPending` and returns one
+`SweepResult`. Returning the sentinel for one entry would abort the sweep of
+every other entry, which would convert a correctly-absorbed race into an
+outage. `continue` expresses the same guarantee the sentinel expresses in the
+single-entry paths — this caller did not win, so it writes no audit row and the
+winner owns the terminal outcome — which is precisely what
+SCN-BUG069006-003 requires and what
+`TestMachineConfirm_RacingSweepProducesOneTerminalOutcome` asserts.
+
+The item is checked on that guarantee. A reader who takes the wording literally
+for `SweepTimeouts` would be wrong, so the wording is worth repairing; the
+wording belongs to `bubbles.plan` and this phase records it as an observation
+rather than editing a DoD statement it does not own.
+
+### Validate the single flight comment matches the code
+
+**Claim Source:** executed
+
+```
+$ sed -n '205,225p' internal/assistant/confirm/machine.go
+	conv, ok, err := m.store.Load(ctx, in.UserID, in.Transport)
+	...
+	pending := *conv.PendingConfirm
+	// Single-flight: the clear is a conditional write arbitrated by the
+	// store, so exactly one of N concurrent callers observes won==true
+	// and every other caller gets ErrPendingNotFound. The Load above is
+	// only how the audit payload is fetched; it is NOT the authority on
+	// whether redemption may proceed. Only the winner writes an audit
+	// row, which is what keeps the row count at exactly one (BUG-069-006).
+	won, err := m.store.ClearPendingConfirm(ctx, in.UserID, in.Transport, in.ConfirmRef, now)
+	if err != nil {
+		return ConfirmResult{}, fmt.Errorf("confirm.Confirm: clear pending confirm: %w", err)
+	}
+	if !won {
+		return ConfirmResult{}, ErrPendingNotFound
+	}
+```
+
+Judged clause by clause against the lines beneath it:
+
+| Comment clause | Code that enforces it |
+|---|---|
+| "the clear is a conditional write arbitrated by the store" | `pg_store.go:184-191`, one `UPDATE` whose `WHERE` carries the reference |
+| "exactly one of N concurrent callers observes won==true" | `pg_store.go:196`, `RowsAffected() == 1`, decided by the row lock |
+| "every other caller gets ErrPendingNotFound" | `machine.go:223-224` |
+| "The Load above is ... NOT the authority" | the `Load` at 205 feeds `pending` for the audit payload only; nothing branches on it after 219 |
+| "Only the winner writes an audit row" | the audit build at 226 is unreachable unless `won` |
+
+The fourth row is the one that earns the item. The defect this packet fixed was
+exactly a comment claiming single flight while the check that decided
+redemption was a `Load`-then-compare. The corrected comment now names the
+`Load` as non-authoritative, which is a claim the code can be checked against —
+and it holds.
+
+### Validate a redemption write leaves the sibling columns alone
+
+Two independent proofs, and they are strong in different ways.
+
+The structural proof is the `SET` clause. `pg_store.go:186-187` names exactly
+two columns, `pending_confirm` and `last_activity_at`. A statement that names
+two columns cannot write a third, so no sibling column is reachable by this
+write at all.
+
+The executed proof is the integration test recorded above, which asserts all
+four named columns across a winning clear:
+
+**Claim Source:** executed
+
+```
+$ sed -n '316,341p' internal/assistant/context/pg_store_test.go
+	if len(conv.WorkingContext.Turns) != 1 {
+		t.Errorf("working_context turns = %d, want 1 — the clear touched a sibling column", len(conv.WorkingContext.Turns))
+	} else if conv.WorkingContext.Turns[0].UserText != "remind me to buy oat milk" {
+		t.Errorf("working_context content changed: %q", conv.WorkingContext.Turns[0].UserText)
+	}
+	if conv.PendingDisambig != nil {
+		t.Errorf("pending_disambig became non-nil across the clear")
+	}
+	if conv.PendingClarify != nil {
+		t.Errorf("pending_clarify became non-nil across the clear")
+	}
+	afterNotices := ""
+	if err := pool.QueryRow(ctx, noticesQ, userID, transport).Scan(&afterNotices); err != nil {
+		t.Fatalf("read legacy_retirement_notices after clear: %v", err)
+	}
+	if afterNotices != seedNotices {
+		t.Errorf("legacy_retirement_notices changed across the clear: %q -> %q", seedNotices, afterNotices)
+	}
+```
+
+`legacy_retirement_notices` is read by direct SQL before and after, because it
+is a real column from migration 046 that the `Conversation` struct never
+carries, so a `Load`-based assertion is structurally blind to it. An assertion
+built only on `Load` would have silently skipped the one column it could not
+see.
+
+**One asymmetry stated rather than glossed.** The seed at `pg_store_test.go:249`
+sets `WorkingContext`, `PendingConfirm` and `LastActivityAt`, and leaves
+`PendingDisambig` and `PendingClarify` unset. For `working_context` the test
+therefore proves preservation of real content, and for
+`legacy_retirement_notices` it proves before-equals-after. For the other two it
+proves they did not *become* non-nil, which is a weaker statement than
+preserving a non-nil value. Those two rest on the structural proof: the `SET`
+clause cannot reach them. Both proofs are recorded so a reader can see which
+one is carrying which column.
+
+### Validate Change Boundary re-measured
+
+The audit phase measured this and reported it clean. That figure was not
+carried over; the boundary was re-measured here, and the first attempt was
+wrong in a way worth recording.
+
+A range diff `5ecea070^..HEAD` reports 36 commits and pulls in framework
+installer files, a sibling packet's artifacts, and four unrelated e2e test
+files — because other work is interleaved on the same branch. A range is not a
+packet. Restricting to this packet's own commits gives the real answer:
+
+**Claim Source:** executed
+
+```
+$ git log --reverse --format='%h %s' 5ecea070^..HEAD | grep -i 'BUG-069-006'
+PACKET_COMMIT_COUNT=17
+
+$ # union of files touched by those 17 commits, artifacts excluded
+NON_ARTIFACT_FILE_COUNT=13
+
+$ # each file checked against the scopes.md Allowed / Test / Store-Interface-Ripple tables
+IN-BOUNDARY  :: internal/assistant/compiled_interactions.go
+IN-BOUNDARY  :: internal/assistant/confirm/machine.go
+IN-BOUNDARY  :: internal/assistant/confirm/machine_concurrency_test.go
+IN-BOUNDARY  :: internal/assistant/confirm/machine_test.go
+IN-BOUNDARY  :: internal/assistant/context/gauge_refresher_test.go
+IN-BOUNDARY  :: internal/assistant/context/pg_store.go
+IN-BOUNDARY  :: internal/assistant/context/pg_store_test.go
+IN-BOUNDARY  :: internal/assistant/context/store.go
+IN-BOUNDARY  :: internal/assistant/facade_test_helpers_test.go
+IN-BOUNDARY  :: internal/assistant/testing_support.go
+IN-BOUNDARY  :: tests/e2e/assistant/http_confirm_test.go
+IN-BOUNDARY  :: tests/integration/assistant/confirmation_canary_test.go
+IN-BOUNDARY  :: tests/integration/assistant/transport_parity_test.go
+NOT_LISTED_COUNT=0
+EXCLUDED_HITS=none
+```
+
+Thirteen of thirteen in-boundary, zero excluded-family hits.
+
+**The excluded surface that file-level checking cannot see.** One entry on the
+Excluded list is a FUNCTION, `TestAssistantHTTPE2E_ConfirmAcceptExecutesGated
+ActionOnce`, and it lives in a file the packet legitimately DID modify, because
+the packet adds a sibling concurrent test to it. Checking file names would
+report clean while telling you nothing about the function. The measurement that
+does settle it is the direction of the diff:
+
+**Claim Source:** executed
+
+```
+$ # per packet commit, numstat on the file holding the excluded function
+  2f2c5f03  +79 -0
+  73de731a  +1 -0
+PACKET_TOTAL_ADDED=80 PACKET_TOTAL_DELETED=0
+
+$ grep -n 'func TestAssistantHTTPE2E_ConfirmAcceptExecutesGatedActionOnce' tests/e2e/assistant/http_confirm_test.go
+28:func TestAssistantHTTPE2E_ConfirmAcceptExecutesGatedActionOnce(t *testing.T) {
+```
+
+Eighty lines added, zero deleted. A purely additive diff cannot have edited a
+pre-existing function — there is no mechanism by which an edit to an existing
+line produces no deletion. The excluded function is untouched, and it is still
+present and still passing (below).
+
+### Validate the sequential and concurrent confirms at the API boundary
+
+Both confirm tests re-executed against the live stack at the tree being
+certified, after bringing the previous stack down:
+
+**Claim Source:** executed
+
+```
+$ ./smackerel.sh down
+DOWN2_EXIT=0
+$ ./smackerel.sh test e2e --go-run 'TestAssistantHTTPE2E_ConfirmAcceptExecutesGatedActionOnce|TestAssistantHTTPE2E_ConcurrentConfirmExecutesGatedActionOnce'
+E2E_EXIT=0
+lines: 449
+sha256: ae5a6ed2c8dea34f20eecfc3ee9fd7a6c36df1b5ec34953afd252ab0c129a2d8
+
+go-e2e: applying -run selector: TestAssistantHTTPE2E_ConfirmAcceptExecutesGatedActionOnce|TestAssistantHTTPE2E_ConcurrentConfirmExecutesGatedActionOnce
+=== RUN   TestAssistantHTTPE2E_ConfirmAcceptExecutesGatedActionOnce
+--- PASS: TestAssistantHTTPE2E_ConfirmAcceptExecutesGatedActionOnce (0.16s)
+=== RUN   TestAssistantHTTPE2E_ConcurrentConfirmExecutesGatedActionOnce
+--- PASS: TestAssistantHTTPE2E_ConcurrentConfirmExecutesGatedActionOnce (0.08s)
+ok  	github.com/smackerel/smackerel/tests/e2e/assistant	0.280s
+
+PASS=2 FAIL=0 SKIP=0
+```
+
+`SKIP=0` is the load-bearing number, not the exit code. BUG-069-005 exists
+because a required suite reported success while skipping. Two named PASS lines
+with zero skips is the shape that forecloses it.
+
+Earlier phases carried the API-boundary result as an operator-relayed
+transcript and tagged it honestly as relayed. It is now executed evidence in
+the certifying session.
+
+### Validate Build Quality Gate
+
+Five constituents, each measured.
+
+**Claim Source:** executed
+
+```
+$ ./smackerel.sh lint
+LINT_EXIT=0
+Web validation passed
+
+$ ./smackerel.sh format --check
+FORMAT_EXIT=0
+78 files already formatted
+
+$ bash .github/bubbles/scripts/artifact-lint.sh <packet-dir>
+ARTIFACT_LINT_EXIT=0
+✅ All checked DoD items in scopes.md have evidence blocks
+✅ No unfilled evidence template placeholders in scopes.md
+✅ No unfilled evidence template placeholders in report.md
+✅ No repo-CLI bypass detected in report.md command evidence
+Artifact lint PASSED.
+
+$ ./smackerel.sh test unit --go
+exit: 0
+lines: 210
+sha256: 5a73fa783b21c3e49b3b13fadf046ea0112650bd82b39a80942e841d559afb9d
+[go-unit] go test ./... finished OK
+```
+
+Zero warnings: lint, format, the full unit lane, the focused unit lane, the
+integration lane and the e2e lane all exit 0, and no lane emitted a warning
+line. Zero deferrals: guard Check 18 reports `Zero deferral language found in
+scope and report artifacts (Gate G040)`.
+
+**Documentation aligned, judged rather than asserted.** `bugfix-fastlane` has
+no `docs` phase — `required-specialists.yaml:34` lists
+`[implement, test, regression, simplify, stabilize, security, validate, audit]`
+— so alignment here means no documentation surface is made false by this
+change, not that a doc deliverable is owed. That was checked directly:
+
+**Claim Source:** executed
+
+```
+$ grep -rn 'pending_confirm\|ClearPendingConfirm\|redemption' docs/ README.md
+docs/Development.md:549:| 032 | `032_photo_reveal_tokens_secret_hash_and_toctou.sql` | Photo reveal-token secret hashing and TOCTOU-safe redemption |
+
+$ grep -rln 'ConfirmRef\|confirm_ref\|pending_confirm\|confirm card' docs/ README.md
+docs/smackerel.md
+docs/Operations.md
+```
+
+The single `redemption` hit is migration 032, photo reveal tokens, an unrelated
+subsystem. The two files that mention confirm cards were read:
+
+- `docs/smackerel.md:841,843` describe Telegram rendering of the confirm card
+  — the inline keyboard and `callback_data` encoding the `ConfirmRef`. This
+  packet changed no rendering behaviour, and the reference still resolves the
+  same card.
+- `docs/Operations.md:5056-5075`, "Confirm-Card Lifecycle", documents a
+  **different store**. It describes
+  `assistant_confirm_pending(confirm_ref TEXT PK, payload TEXT, expires_at
+  TIMESTAMPTZ)` behind
+  `internal/agent/tools/notification/pg_confirm_store.go`. This packet changed
+  `assistant_conversations.pending_confirm` behind
+  `internal/assistant/context/` and `internal/assistant/confirm/`. Those are two
+  independent confirm mechanisms, and zero of this packet's thirteen files fall
+  under `internal/agent/tools/notification/`.
+
+So no documented statement became false. The item is checked on that.
+
+Worth recording plainly, because it is the honest limit of the word "aligned":
+the single-flight guarantee is now a real behavioural contract and it is
+documented in this packet's artifacts, not in `docs/`. Alignment asks whether
+the docs contradict the code, and they do not.
+
+### Validate the broader E2E suite item cannot close
+
+This item stays unchecked, and the reason was executed rather than inherited:
+
+**Claim Source:** executed
+
+```
+$ bash tests/e2e/assistant_regression/bs_004_notification_confirm.sh
+=== Spec 061 SCOPE-10 DoD #7 — BS-004 persistent regression fixture ===
+RESULT: SKIPPED
+SKIP_REASON: SCOPE-04-NOTIFICATION-PROPOSAL-FIXTURE-NOT-YET-AUTHORED
+FIXTURE_PATH: tests/e2e/assistant_regression/bs_004_notification_confirm.sh
+BS004_EXIT=77
+```
+
+`bs_004_notification_confirm.sh` is the confirm-flow member of the shell
+regression suite. It exits 77 and the runner classifies that as a failure. It
+has therefore never exercised the confirm flow it is named for.
+
+The item says the broader suite passes. The suite does not pass. The distance
+between "every test I selected passed" and "the suite passes" is exactly the
+distance BUG-069-005 was filed over, so closing this item on the strength of
+the Go lanes would reproduce that packet's defect inside the packet that exists
+to prevent it.
+
+Authoring the notification-proposal fixture is spec 061 SCOPE-04 work and lies
+outside this packet's Change Boundary, which has already been corrected twice
+here and is not widened a third time. Recorded as DIS-069-006-4 with that owner.
+
+### Phase certification cross-check
+
+Each phase was certified only after confirming three independent records agree:
+a `completedPhaseClaims` entry, a matching `executionHistory` entry, and a real
+evidence section in this report.
+
+**Claim Source:** executed
+
+```
+phase       claims  history  reportSection
+implement        1        1              1
+test             3        3              2
+regression       1        1              1
+simplify         1        1              1
+stabilize        1        1              1
+security         1        1              1
+audit            1        1              1
+```
+
+Claims equal history for every phase, so no phase is claimed more often than it
+was run — the asymmetry Gate G027 exists to catch. `test` shows three of each
+because it ran three passes, and two report sections because the second and
+third passes are recorded as subsections of `## Test Phase` with the third
+carrying its own heading. Guard Check 6B independently confirms specialist
+provenance for all seven.
+
+`validate` is added by this phase, giving the eight
+`bugfix-fastlane` requires.
+
+### Terminal status: blocked, and why not in_progress
+
+One DoD item cannot be closed by anyone working inside this packet's Change
+Boundary. That single fact decides the status.
+
+`in_progress` asserts that work continues here. It does not. All eight phases
+have run, nineteen of twenty DoD items are closed on executed evidence, and the
+twentieth needs a fixture owned by spec 061 SCOPE-04. Leaving the packet
+`in_progress` would describe it as unfinished work when it is finished work
+waiting on someone else, and the two are not the same state — one asks for
+effort, the other asks for a decision.
+
+`done` is unreachable and is not reached for. Nineteen of twenty is not twenty.
+
+`blocked` is the status whose contract matches the facts: it carries a
+`blockedReason` naming a concrete blocker and an operator-actionable next step,
+and it makes the packet's true position legible without claiming completion. It
+is recorded with both residuals named, not just the convenient one.
+
+### Honest residuals
+
+Two, and neither is closed by writing about it.
+
+**1. Gate G136, human acceptance.** `uservalidation.md` carries eight unchecked
+behaviour statements, and the gate requires a `## Human Acceptance Record` with
+an `acceptedBy` that is not an agent. Only agents have exercised these
+behaviours. Authoring that record would fabricate the exact fact the gate
+exists to require — a human having actually used the confirm flow and accepted
+what it did. The gate is left failing, deliberately, because a failing gate
+that tells the truth is worth more than a passing one that does not.
+
+**2. The `SweepTimeouts` wording.** Recorded above: the DoD item says all three
+call sites map a lost race to `ErrPendingNotFound`, and `SweepTimeouts`
+expresses it as `continue`. The guarantee holds; the sentence overstates how
+uniformly it is expressed. `scopes.md` DoD text is owned by `bubbles.plan`.
+
+### Validate Phase uncertainty declarations
+
+1. **The RED capture was not re-executed.** Reproducing it requires reverting
+   `machine.go` to its pre-fix state, which would mean editing product source
+   during certification. It was corroborated instead, by proving the test file
+   can emit those exact strings at those exact line numbers. That is strong
+   corroboration and it is not the same as re-running it.
+
+2. **The full shell regression suite was not run end to end.** `bs_004` alone
+   was executed, because `bs_004` alone decides the item — one member exiting
+   77 is sufficient to establish that the suite does not pass. The other nine
+   members' current state is unmeasured by this phase and no claim is made
+   about them.
+
+3. **`pending_disambig` and `pending_clarify` preservation.** Stated above: the
+   executed test proves they do not become non-nil from a nil seed; preservation
+   of non-nil values in those columns rests on the `SET` clause naming only two
+   columns. Structural rather than executed, and labelled as such.
+
+### Validate Phase completion statement
+
+This phase certified eight phases and closed eight of the nine open DoD items,
+each against evidence it executed itself. It did not close the ninth and does
+not claim the packet is complete.
+
+Nineteen of twenty DoD items are checked. Scope 1 is set to `Blocked`: `Done`
+requires all of its own items checked and one is not, while `In Progress` would
+claim work continues here when none can. `certification.status` and the
+top-level `status` are set to `blocked`, with a `blockedReason` naming the
+`bs_004` fixture, its owner, and the human-acceptance record.
+
+No product source, test source, or DoD wording was modified by this phase. The
+files it wrote are `report.md`, `scopes.md` checkbox and status state, and
+`state.json`.
+
 ## RESULT-ENVELOPE
 
 ```json
 {
-  "agent": "bubbles.audit",
+  "agent": "bubbles.validate",
   "roleClass": "certification",
-  "outcome": "route_required",
+  "outcome": "blocked",
   "featureDir": "specs/069-assistant-http-transport/bugs/BUG-069-006-confirm-redemption-not-single-flight",
   "scopeIds": ["1"],
-  "dodItems": [],
-  "scenarioIds": ["SCN-BUG069006-004"],
-  "artifactsCreated": [],
-  "artifactsUpdated": ["report.md", "state.json"],
-  "evidenceRefs": [
-    "report.md#audit-phase",
-    "report.md#findings",
-    "report.md#discovered-issues-table--all-seven-rows-verified"
+  "dodItems": [
+    "root-cause-confirmed-by-execution",
+    "concurrent-test-red-before-fix",
+    "pgstore-reads-rowsaffected",
+    "three-call-sites-conditional-clear",
+    "single-flight-comment-matches-code",
+    "sibling-columns-untouched",
+    "change-boundary-respected",
+    "build-quality-gate"
   ],
-  "nextRequiredOwner": "bubbles.validate",
-  "packetRef": "AUD-069-006-001",
-  "blockedReason": null
+  "scenarioIds": [
+    "SCN-BUG069006-001",
+    "SCN-BUG069006-002",
+    "SCN-BUG069006-003",
+    "SCN-BUG069006-004"
+  ],
+  "artifactsCreated": [],
+  "artifactsUpdated": ["report.md", "scopes.md", "state.json"],
+  "evidenceRefs": [
+    "report.md#validate-phase",
+    "report.md#validate-change-boundary-re-measured",
+    "report.md#validate-build-quality-gate",
+    "report.md#validate-the-broader-e2e-suite-item-cannot-close",
+    "report.md#phase-certification-cross-check"
+  ],
+  "nextRequiredOwner": null,
+  "packetRef": null,
+  "blockedReason": "One DoD item cannot be closed from inside this packet's Change Boundary. 'Broader E2E regression suite passes' is contradicted by tests/e2e/assistant_regression/bs_004_notification_confirm.sh, executed in the certifying session at exit 77 with SKIP_REASON SCOPE-04-NOTIFICATION-PROPOSAL-FIXTURE-NOT-YET-AUTHORED, which the runner classifies as a failure. Operator-actionable next step: author the notification-proposal fixture under spec 061 SCOPE-04 so bs_004 executes its assertions instead of exiting 77, then re-run this packet's validate phase. Second residual: Gate G136 requires a '## Human Acceptance Record' in uservalidation.md with a non-agent acceptedBy; only agents have exercised the eight confirm behaviours, so no such record is authored here."
 }
 ```
 
 ## ROUTE-REQUIRED
 
-Owner: `bubbles.validate`
+NONE
 
-Reason: AUD-1 and AUD-2 are corrected in this phase. Three items remain and none
-is audit's to write. AUD-5: `execution.activeAgent`, `execution.currentPhase`,
-and `routing.nextRequiredOwner` still carry filing-session values contradicted by
-eight recorded phase claims. AUD-3: the `SCN-BUG069006-004` evidence anchor
-points at operator-relayed PASS lines while in-session executed evidence for the
-same tests exists in the Regression Phase lane matrix. AUD-6: the Change Boundary
-DoD item is provable from `5ecea070^` and remains unchecked. Nine DoD items are
-unchecked and the state-transition guard blocks promotion to `done` on Gates
-G022, G027, and G136.
+No owner is routed. There is no remaining work inside this packet's Change
+Boundary: eight phases have run, nineteen of twenty DoD items are closed on
+executed evidence, and the twentieth needs a fixture that belongs to spec 061
+SCOPE-04 and cannot be authored here without widening a boundary this packet has
+already corrected twice.
+
+The packet is `blocked` rather than routed because what it needs is a decision
+and another spec's work, not another specialist pass over these artifacts. The
+unblocking conditions are recorded verbatim in `state.json`
+`certification.blockedReason` and in
+[`report.md`](report.md#validate-the-broader-e2e-suite-item-cannot-close).
