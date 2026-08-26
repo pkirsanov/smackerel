@@ -113,6 +113,30 @@ Independent canary: start a disposable stack from a migrated blank database, per
 **Allowed:** next migration, synthesis persistence/domain package, real PostgreSQL repository/tests, migration/bootstrap tests, and interfaces needed by later scopes.  
 **Excluded:** `/digest` and `/status` presentation, scheduler timing, alert rules, unrelated digest tables, graph construction logic, provider integrations, and multi-tenant artifact ownership.
 
+**Allowed file families** for the packet as a whole, verified against
+`git diff --name-only` over every commit in it:
+
+| Family | Why it is in bounds |
+|---|---|
+| `internal/db/migrations/` | The durable schema this packet exists to add |
+| `internal/intelligence/` | Existing home of synthesis logic and the health mapping |
+| `internal/web/` | The Today and Status projection and its templates |
+| `internal/api/` | The four read routes, and the session-attachment repair |
+| `cmd/core/` | Wiring the reader into the running server |
+| `tests/`, `web/pwa/tests/` | The checks that prove all of the above |
+| `docs/`, `specs/.../` | Operator surface and the packet record |
+
+**Excluded surfaces**, none of which were changed: provider integrations,
+graph construction, digest tables unrelated to synthesis, multi-tenant artifact
+ownership, delivery transports, and the Python ML sidecar.
+
+One entry deserves its own note. `internal/api/router.go` was NOT in the
+original boundary. It was pulled in because a mutation test exposed a live
+session-attachment defect that made every page render `auth_required` for a
+logged-in reader. Leaving it unrepaired would have meant shipping a synthesis
+section that no authenticated person could see, so the repair is recorded here
+rather than quietly absorbed.
+
 ### Migration And Rollback
 
 - Forward migration follows the eight design steps, including valid legacy classification and delayed NOT NULL/FK enforcement.
@@ -129,6 +153,7 @@ Independent canary: start a disposable stack from a migrated blank database, per
 | T004-03-ROLLBACK | Integration | `integration` | SCN-004-004-03 | `tests/integration/synthesis_persistence_test.go` - `TestSynthesisPersistence_RequiredWriteFailureRollsBackAtomically` | `./smackerel.sh test integration` | Yes |
 | T004-01-ADVERSARIAL | E2E API regression | `e2e-api` | SCN-004-004-01 | `tests/e2e/synthesis_api_e2e_test.go` - `TestSynthesisAPI_NoOutputIsEverHalfWritten` | `./smackerel.sh test e2e` | Yes |
 | T004-01-ROLLBACK-COMPAT | Integration | `integration` | SCN-004-004-01 | `tests/integration/synthesis_migration_test.go` - `TestSynthesisMigration_IsNonDestructive` | `./smackerel.sh test integration` | Yes |
+| T004-01-REGRESSION-E2E | Regression E2E | `e2e-api` | SCN-004-004-01 | `tests/e2e/synthesis_api_e2e_test.go` - `TestSynthesisAPI_NoOutputIsEverHalfWritten` | `./smackerel.sh test e2e` | Yes |
 
 ### Definition of Done - Tiered Validation
 
@@ -153,6 +178,9 @@ Independent canary: start a disposable stack from a migrated blank database, per
 
 #### Build Quality Gate
 
+- [x] Change Boundary is respected and zero excluded file families were changed, verified with `git diff --name-only` across every commit in the packet. Evidence: [report.md#scope-05-packet-closeout](report.md#scope-05-packet-closeout)
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior in this scope exist and pass: `TestSynthesisAPI_NoOutputIsEverHalfWritten` proves no output is ever half-written. Evidence: [report.md#t004-01-adversarial](report.md#t004-01-adversarial)
+- [x] Broader E2E regression suite passes with no new failures: `./smackerel.sh test e2e` EXIT=0, 36 passed, 0 failed. Evidence: [report.md#scope-05-packet-closeout](report.md#scope-05-packet-closeout)
 - [x] Migration/repository/integration/E2E tests, disposable-store isolation, schema lint, check/lint/format, artifact-lint, traceability, documentation, zero warnings, impact-sweep canary, and change-boundary review all pass with executed evidence. Evidence: [report.md#scope-02-implementation-phase](report.md#scope-02-implementation-phase)
 
 ---
@@ -214,6 +242,7 @@ Scenario: SCN-004-004-08 Permitted partial output names omissions
 | T004-07-QUIET | Integration | `integration` | SCN-004-004-07 | `tests/integration/synthesis_producer_test.go` - `TestSynthesisProducer_EmptyCorpusPersistsQuietOutput` | `./smackerel.sh test integration` | Yes |
 | T004-07-QUIET-E2E | E2E API regression | `e2e-api` | SCN-004-004-07 | `tests/e2e/synthesis_api_e2e_test.go` - `TestSynthesisAPI_QuietWindowReadsAsRunNotBroken` | `./smackerel.sh test e2e` | Yes |
 | T004-08-PARTIAL | Integration | `integration` | SCN-004-004-08 | `tests/integration/synthesis_persistence_test.go` - `TestSynthesisPersistence_PartialOutputNamesOmissions` | `./smackerel.sh test integration` | Yes |
+| T004-02-REGRESSION-E2E | Regression E2E | `e2e-api` | SCN-004-004-02 | `tests/e2e/synthesis_api_e2e_test.go` - `TestSynthesisAPI_DuplicateTriggersShareOneDurableIdentity` | `./smackerel.sh test e2e` | Yes |
 
 ### Definition of Done - Tiered Validation
 
@@ -239,6 +268,8 @@ Scenario: SCN-004-004-08 Permitted partial output names omissions
 
 #### Build Quality Gate
 
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior in this scope exist and pass: `TestSynthesisAPI_DuplicateTriggersShareOneDurableIdentity` proves duplicate triggers share one durable identity. Evidence: [report.md#scope-02-implementation-phase](report.md#scope-02-implementation-phase)
+- [x] Broader E2E regression suite passes with no new failures: `./smackerel.sh test e2e` EXIT=0, 36 passed, 0 failed. Evidence: [report.md#scope-05-packet-closeout](report.md#scope-05-packet-closeout)
 - [x] Unit/integration/E2E regression, source authorization, schema/citation, privacy telemetry, check/lint/format, artifact-lint, traceability, docs, and broad synthesis regressions pass with executed evidence and zero warnings. Evidence: [report.md#scope-02-implementation-phase](report.md#scope-02-implementation-phase)
 
 ---
@@ -294,6 +325,7 @@ Scenario: SCN-004-004-06 Lifecycle and recovery remain truthful
 | T004-06-LIFECYCLE | Integration | `integration` | SCN-004-004-06 | `tests/integration/synthesis_coordinator_test.go` - `TestSynthesisCoordinator_LifecycleTransitionsPreserveAudit` | `./smackerel.sh test integration` | Yes |
 | T004-06-RECOVERY | E2E shell regression | `e2e-api` | SCN-004-004-06 | `tests/e2e/synthesis_restart_durability_e2e_test.sh` - `T004-06-RECOVERY health and history recover from storage` | `./smackerel.sh test e2e --shell-run synthesis_restart_durability_e2e_test.sh` | Yes |
 | T004-03-STRESS | Stress | `stress` | SCN-004-004-02/03 | `tests/stress/synthesis_retry_stress_test.go` - `Concurrent triggers stay single-output within bounded retry budget` | `./smackerel.sh test stress` | Yes |
+| T004-03-REGRESSION-E2E | Regression E2E | `e2e-api` | SCN-004-004-03 | `tests/e2e/synthesis_api_e2e_test.go` - `TestSynthesisAPI_RetryReportsAPersistedOutcome` | `./smackerel.sh test e2e` | Yes |
 
 ### Definition of Done - Tiered Validation
 
@@ -318,6 +350,8 @@ Scenario: SCN-004-004-06 Lifecycle and recovery remain truthful
 
 #### Build Quality Gate
 
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior in this scope exist and pass: `TestSynthesisAPI_RetryReportsAPersistedOutcome` proves a retry reports a persisted outcome rather than a hopeful one. Evidence: [report.md#scope-03-implementation-phase](report.md#scope-03-implementation-phase)
+- [x] Broader E2E regression suite passes with no new failures: `./smackerel.sh test e2e` EXIT=0, 36 passed, 0 failed. Evidence: [report.md#scope-05-packet-closeout](report.md#scope-05-packet-closeout)
 - [x] Scheduler/coordinator integration, restart, stress, lifecycle, cancellation, delivery-boundary, check/lint/format, artifact-lint, traceability, docs, and broad scheduler regression checks pass with executed evidence and zero warnings. Evidence: [report.md#scope-03-implementation-phase](report.md#scope-03-implementation-phase)
 
 ---
@@ -379,6 +413,7 @@ Scenario: SCN-004-004-09 Authorization and telemetry preserve privacy
 | T004-07-08-API | E2E API regression | `e2e-api` | SCN-004-004-07/08 | `tests/e2e/synthesis_api_e2e_test.go` - `TestSynthesisAPI_QuietWindowReadsAsRunNotBroken` | `./smackerel.sh test e2e` | Yes |
 | T004-09-AUTH | E2E API regression | `e2e-api` | SCN-004-004-09 | `tests/e2e/synthesis_api_e2e_test.go` - `TestSynthesisAPI_DeniesUnauthenticatedCallers` | `./smackerel.sh test e2e` | Yes |
 | T004-09-TELEMETRY | Security regression | `integration` | SCN-004-004-09 | `tests/integration/synthesis_telemetry_test.go` - `TestSynthesisTelemetry_RejectionAuditCarriesNoSynthesisText` | `./smackerel.sh test integration` | Yes |
+| T004-04-REGRESSION-E2E | Regression E2E | `e2e-api` | SCN-004-004-05/06 | `tests/e2e/synthesis_api_e2e_test.go` - `TestSynthesisAPI_LatestReportsAnExplicitState` | `./smackerel.sh test e2e` | Yes |
 
 ### Definition of Done - Tiered Validation
 
@@ -404,6 +439,8 @@ Scenario: SCN-004-004-09 Authorization and telemetry preserve privacy
 
 #### Build Quality Gate
 
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior in this scope exist and pass: `TestSynthesisAPI_LatestReportsAnExplicitState` proves the latest route always names an explicit state. Evidence: [report.md#scope-04-retry-route-phase](report.md#scope-04-retry-route-phase)
+- [x] Broader E2E regression suite passes with no new failures: `./smackerel.sh test e2e` EXIT=0, 36 passed, 0 failed. Evidence: [report.md#scope-05-packet-closeout](report.md#scope-05-packet-closeout)
 - [x] API/auth/health/alert/observability tests, CSRF and privacy scans, check/lint/format, alert-rule validation, artifact-lint, traceability, docs, broad health regression, and zero-warning checks pass with executed evidence. Evidence: [report.md#scope-04-retry-route-phase](report.md#scope-04-retry-route-phase)
 
 ---
@@ -448,7 +485,7 @@ Scenario: SCN-004-004-10 Synthesis states and Retry are accessible and responsiv
 
 1. Add Today's Weekly Synthesis section and Status's Synthesis section as projections of `SynthesisReadModel`; retain the existing daily digest independently.
 2. Render prose only when output ID, window, persisted time, and citation aggregate read together. Implement native citation disclosure and safe authorized links.
-3. Implement exclusive current/quiet/stale/partial/never-run/failed-without-output/failed-with-prior-output/auth states and separate prior verified output from latest failure.
+3. Implement exclusive current/quiet/stale/partial/never-run/failed-without-output/failed-with-prior-output/auth states and distinguish prior verified output from latest failure.
 4. Implement run-history filters, filtered-empty versus no-history, evidence detail, Retry confirmation, requested/running/persisted/idempotent/failed feedback, and alert-clear timing.
 5. Clear all synthesis-derived DOM/accessibility state synchronously on auth loss.
 6. Implement desktop/mobile reflow, 44px targets, 320px/200% zoom, focus restoration, live-region behavior, and no pointer-only controls.
@@ -489,6 +526,7 @@ Scenario: SCN-004-004-10 Synthesis states and Retry are accessible and responsiv
 | T004-09-10-UI | E2E UI | `e2e-ui` | SCN-004-004-09/10 | `web/pwa/tests/synthesis_truth.spec.ts` - `auth loss removes synthesis content from the accessibility tree, not just the DOM` | `./smackerel.sh test e2e-ui` | Yes |
 | T004-UI-UNIT | UI unit | `ui-unit` | SCN-004-004-05..10 | `internal/web/synthesis_projection_test.go` - `TestSynthesisProjection_ClosedStatesAreExclusive` | `./smackerel.sh test unit` | No |
 | T004-BROAD | Broad E2E regression | `e2e-ui` | SCN-004-004-01..10 | existing Today/Status plus `web/pwa/tests/synthesis_truth.spec.ts` - `Today and Status report the same durable synthesis state` | `./smackerel.sh test e2e-ui` | Yes |
+| T004-05-REGRESSION-E2E | Regression E2E | `e2e-ui` | SCN-004-004-01..10 | `tests/e2e/synthesis_state_matrix_e2e_test.sh` - all seven durable states asserted on both `/digest` and `/status` | `./smackerel.sh test e2e --shell-run synthesis_state_matrix_e2e_test.sh` | Yes |
 
 ### Definition of Done - Tiered Validation
 
@@ -518,6 +556,8 @@ Scenario: SCN-004-004-10 Synthesis states and Retry are accessible and responsiv
 
 #### Build Quality Gate
 
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior in this scope exist and pass: `tests/e2e/synthesis_state_matrix_e2e_test.sh` asserts all seven durable states on both `/digest` and `/status`, and `web/pwa/tests/synthesis_truth.spec.ts` carries 13 browser checks. Evidence: [report.md#t004-broad](report.md#t004-broad)
+- [x] Broader E2E regression suite passes with no new failures: `./smackerel.sh test e2e-ui` 89 passed, and `./smackerel.sh test e2e` EXIT=0 with 36 passed. Evidence: [report.md#scope-05-packet-closeout](report.md#scope-05-packet-closeout)
 - [x] Full packet unit/integration/E2E API/E2E UI/stress tests, Playwright anti-interception and bailout guards, privacy/security scans, migration canary, check/lint/format/build, implementation reality, artifact-lint, traceability, docs/capability truth, broad regression, and zero-warning checks all pass with executed evidence before certification. Evidence: [report.md#scope-05-packet-closeout](report.md#scope-05-packet-closeout)
 
 ## Planning Assumptions And Owner Routes

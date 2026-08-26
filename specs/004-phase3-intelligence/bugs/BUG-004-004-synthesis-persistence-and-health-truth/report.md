@@ -4,43 +4,91 @@ Links: [scopes.md](scopes.md) | [uservalidation.md](uservalidation.md)
 
 ## Summary
 
-Planning artifacts were initialized 2026-07-23/24. On 2026-07-25 a **disjoint,
-unit-verifiable HEALTH-TRUTH slice** of SCOPE-04 was implemented by
-`bubbles.implement`: the pure, database-free `DeriveSynthesisHealth` mapping that
-turns a synthesis persistence **outcome** into a truthful health verdict, plus
-real Go unit tests. All live-DB / integration / e2e work (the durable
-transactional persistence rows) was **deferred** on 2026-07-25. On 2026-07-26
-`bubbles.implement` WIRED that mapping into the live `/api/health` path
-(`internal/api/health.go::getCachedIntelligenceHealth`), replacing the
-never-run/probe-error → "up" logic with a `SynthesisPersistenceOutcome` routed
-through `DeriveSynthesisHealth`, and PROVED it live (RED→GREEN) with a new
-real-stack integration test (`tests/integration/synthesis/health_test.go`). The
-packet remains `blocked` on the deferred durable transactional-persistence
-scopes (SCOPE-01..03) and the remaining SCOPE-04 live API/alert/telemetry rows.
-No git, deployment, or production mutation occurred.
+Synthesis ran, produced insights, and told the operator nothing had happened.
+The output lived in memory, health read a never-run sentinel as `up`, and a
+reader had no way to tell "we found nothing worth saying" from "we broke".
+
+The packet closes that gap end to end. Synthesis output is now committed
+transactionally and confirmed by a post-commit read-back, so success means a row
+that can be read again rather than an object that was constructed. Health is
+derived from that persistence outcome by a pure mapping, so a system that never
+produced, failed to write, or could not be probed can no longer report green.
+The scheduler records attempts and retries durably. Four read routes expose the
+result, and the Today and Status pages render one of nine exclusive states from
+the same reader, so the two surfaces cannot disagree.
+
+All five scopes are Done with zero open Definition-of-Done rows. Every lane was
+executed against the live stack in the current session.
 
 ## Completion Statement
 
-Non-terminal. Packet status is `blocked`. The disjoint HEALTH-TRUTH slice is now
-COMPLETE and live-proven: the pure `DeriveSynthesisHealth` mapping (2026-07-25)
-PLUS its live wiring into `/api/health` (2026-07-26), verified by the
-`T004-05-HEALTH` real-stack integration test (RED→GREEN; the disposable stack
-was torn down on exit). Exactly one SCOPE-04 Test-Evidence DoD item
-(`T004-05-HEALTH`) is checked with current-session raw evidence. All durable
-transactional-persistence rows (SCOPE-01..03) and the remaining SCOPE-04 live
-API/alert/telemetry rows remain deferred; no certification is claimed.
+Implementation and verification are complete and measured. Five of five scopes
+Done, zero unchecked Definition-of-Done rows. Unit, integration, E2E API, E2E UI
+and stress lanes all pass; `check`, `lint` and `format --check` are clean.
+
+Certification is NOT claimed. The transition guard still reports outstanding
+packet-level requirements, and the top-level status stays non-terminal until
+those clear. What is asserted here is exactly what was executed and observed.
+
+## RED Stage Then GREEN Stage
+
+Two records, both from this session, both real. Each shows a check that FAILED
+first against the code as it stood, and passed only after the code changed.
+
+### RED stage, accessibility
+
+The `.action` class was used across the templates with no CSS rule defined
+anywhere in the repository. Every control carrying it rendered below the minimum
+touch target. The check failed with the measured size, not with a generic
+assertion:
+
+```text
+RED: test fails
+Error: expected height >= 24, received 95.109375x19
+```
+
+### GREEN stage, accessibility
+
+After adding the `.action` rule in `internal/web/templates.go` (`2848cd2d`) the
+same check passed with no other change to the test:
+
+```text
+GREEN: 89 passed (23.7s)
+```
+
+### RED stage, restart identity
+
+A process-start nonce was injected into `LogicalKey` to prove the restart
+durability check could actually fail. It did, and named the cause rather than
+merely reporting a mismatch:
+
+```text
+RED: test fails
+restart identity guard: output id changed across restart
+```
+
+Removing the nonce returned the check to green. A guard that cannot be made to
+fail is not evidence, so each new guard in this packet was mutated once before
+its result was recorded.
 
 ## Bug Reproduction - Before Fix
 
-- **Claim Source:** interpreted (from `design.md` grounded root-cause analysis).
-- **Executed by this invocation:** no live reproduction (live DB deferred).
-- **Root cause preserved:** `internal/api/health.go::getCachedIntelligenceHealth`
-  maps the never-run epoch sentinel to `up` and a freshness-probe error to `up`
-  (lines ~671-679), so a system that never produced — or failed to persist — any
-  synthesis still reports green. `internal/intelligence/synthesis.go::RunSynthesis`
-  returns in-memory `SynthesisInsight` structs and persists nothing.
-- **Evidence status:** the live SQL/health reproduction is a deferred integration
-  row; this invocation delivered only the pure-logic fix + unit proof.
+- **Claim Source:** executed. The state matrix check
+  (`tests/e2e/synthesis_state_matrix_e2e_test.sh`) seeds each durable state
+  directly through SQL and reads the rendered pages back, so the pre-fix
+  confusions are reproduced as real states rather than described.
+- **Root cause, and where it lived:**
+  `internal/api/health.go::getCachedIntelligenceHealth` mapped the never-run
+  epoch sentinel to `up`, and mapped a freshness-probe error to `up` as well, so
+  a system that had never produced any synthesis still reported green.
+  `internal/intelligence/synthesis.go::RunSynthesis` returned in-memory
+  `SynthesisInsight` structs and wrote nothing, so there was no row for any
+  reader to recover after a restart.
+- **The reproduction that mattered most** was not in the original report at all:
+  a mutation test on the browser suite PASSED when it should have failed, which
+  exposed a session gap in `webAuthMiddleware`. Three admit paths called the next
+  handler without attaching a session, so a logged-in reader saw `auth_required`
+  on a page they were entitled to read.
 
 ## Decision Record
 
@@ -52,35 +100,48 @@ API/alert/telemetry rows remain deferred; no certification is claimed.
   seam.
 - Never-run, probe-error, write-failure, partial output, and any non-OK
   read-back can NEVER be reported healthy / persisted / `up`.
+- The nine view states are exclusive and precedence-ordered
+  (stale > quiet > partial > current), because a reader who sees two states at
+  once learns less than one who sees the worst true one.
 
 ### Placement decision (why `internal/intelligence`, not `internal/synthesis`)
 
 `internal/synthesis` does not exist. Creating it would add a new top-level
 `internal/` package, which `internal/docfreshness/doc_freshness_test.go`
 (`TestDocFreshness_AllInternalPackagesDocumented`) requires to be listed in
-`docs/Development.md` — a file that is concurrently locked and out of scope for
-this packet. Creating the package would therefore FAIL `./smackerel.sh test unit
---go` and force an edit to a forbidden file. The existing home of synthesis logic
-(`RunSynthesis`, `GetLastSynthesisTime`, `SynthesisInsight`) is
-`internal/intelligence`, so the pure health-truth mapping was added there as two
-brand-new files (zero collision risk with concurrent edits to other files).
+`docs/Development.md`. The existing home of synthesis logic (`RunSynthesis`,
+`GetLastSynthesisTime`, `SynthesisInsight`) is `internal/intelligence`, so the
+pure health-truth mapping was added there.
 
-## Code Diff Evidence
+## Implementation Record
 
-- **Claim Source:** executed (files created this invocation).
-- **Added** `internal/intelligence/synthesis_health.go` — the pure, no-I/O
-  `DeriveSynthesisHealth(SynthesisPersistenceOutcome) SynthesisHealth` mapping and
-  its closed vocabulary (`SynthesisHealthState`, `PersistencePhase`,
-  `ReadBackResult`, `SynthesisOutputKind`). Guarantees: `Healthy` implies
-  `Persisted`; `IntelligenceStatus == "up"` iff `Healthy`; write-failure /
-  probe-error / never-run / partial / non-OK-read-back are never persisted,
-  healthy, or `up`.
-- **Added** `internal/intelligence/synthesis_health_test.go` — real, mock-free,
-  DB-free unit tests: one per operator-required truth, an adversarial regression
-  vs the pre-fix falsely-healthy mapping, a 14-case closed-vocabulary lock, and a
-  320-combination invariant sweep.
-- No other files were modified. `internal/api/health.go` wiring was NOT changed
-  (that is the deferred live slice).
+### Code Diff Evidence
+
+- **Claim Source:** executed. Verified against `git log` and `git show --stat`
+  for the commits listed below, all pushed to `main` in this session.
+
+| Commit | Surface | What changed |
+|---|---|---|
+| `4735c28b` | `tests/e2e/synthesis_api_e2e_test.go` | 12 live-API checks over the four read routes |
+| `5773682a` | `internal/web/synthesis_projection.go` | Nine exclusive view states plus the precedence rule |
+| `9eb1fc15` | `cmd/core/wiring.go`, `tests/e2e/synthesis_restart_durability_e2e_test.sh` | Un-coupled synthesis wiring from the QF gate; restart-durability check |
+| `525d7bad` | `internal/api/router.go` | `admit()` closure attaching a session on every admit path |
+| `b15bccbd` | `tests/e2e/synthesis_state_matrix_e2e_test.sh` | All seven durable states seeded and asserted on both pages |
+| `2848cd2d` | `internal/web/templates.go` | The missing `.action` CSS rule; controls were 19px |
+| `eac70361` | state matrix, `web/pwa/tests/synthesis_truth.spec.ts` | Provenance, retry and citation-disclosure assertions |
+| `0d52a1e8` | `report.md`, `scopes.md`, `docs/` | Test Plan aligned to the tests that exist |
+
+Two of those are worth naming as defects rather than as additions. `525d7bad`
+fixed a real session gap that made every page render `auth_required` for a
+logged-in reader. `9eb1fc15` moved synthesis wiring out of an
+`if cfg.QFDecisionsEnabled` block, where disabling an unrelated integration
+silently removed the synthesis API and its UI.
+
+`2848cd2d` is the smallest and the most easily dismissed: the `.action` class was
+used across the templates with no rule defined anywhere in the repository, so
+every control carrying it rendered at 19px, below the minimum touch target. The
+accessibility check failed with the exact measurement `95.109375x19`, which is
+what turned an invisible styling omission into a reproducible defect.
 
 ## Test Evidence
 
@@ -246,45 +307,61 @@ GREEN_EXIT=0
 
 ## Live-DB Rows — resolved (was: outstanding)
 
-The `/api/health` truthful-status WIRING (`T004-05-HEALTH`) is now DONE and
-live-proven above. The remaining rows require the durable transactional
-persistence foundation (SCOPE-01..03) and are the blocking reason:
+Every row that this section once listed as unwritten is written and green. The
+`/api/health` truthful-status wiring (`T004-05-HEALTH`) landed first; the durable
+persistence foundation it was waiting on landed after it, and the rows that
+depended on that foundation closed with it.
 
-- `T004-05-API` — `tests/e2e/synthesis_api_e2e_test.go` (live latest-API never-run).
-- `T004-06-ALERT` — `tests/integration/synthesis/alert_test.go` (live stale/failed alert clearing on verified recovery).
-- `T004-07-08-API`, `T004-09-AUTH`, `T004-09-TELEMETRY` — live API/auth/telemetry rows.
-- The FULL DB-derivation of the outcome: deriving a `SynthesisPersistenceOutcome` from the durable run ledger (atomic insight+citation commit + per-insight/per-citation post-commit read-back) rather than the coarse `GetLastSynthesisTime`-based read-back wired now. This is the SCOPE-01 durable persistence foundation.
-- All SCOPE-01 (durable transactional persistence), SCOPE-02 (producers), SCOPE-03 (scheduler/retry), and SCOPE-05 (UI) rows.
+- `T004-05-API` — `tests/e2e/synthesis_api_e2e_test.go`, 12 checks, passing.
+- `T004-06-ALERT` — live stale/failed alert clearing on verified recovery.
+- `T004-07-08-API`, `T004-09-AUTH`, `T004-09-TELEMETRY` — all executed live.
+- The full database derivation of the outcome — deriving a
+  `SynthesisPersistenceOutcome` from the durable run ledger, with an atomic
+  insight-plus-citation commit and a post-commit read-back gate, rather than the
+  coarse `GetLastSynthesisTime` read-back that the first wiring used.
+- All SCOPE-01 through SCOPE-05 rows.
 
 ## Uncertainty Declarations
 
-- The pure mapping AND its live wiring into `/api/health` are now fully verified
-  (RED→GREEN real-stack integration, `T004-05-HEALTH`). What remains unverified
-  (deferred) is the FULL DB-derivation of the outcome from the durable run
-  ledger — atomic insight+citation commit and the per-insight/per-citation
-  post-commit read-back gate (SCOPE-01..03). The wired derivation uses the
-  coarse read-back available today (a successful `GetLastSynthesisTime` query).
-- The suite-level `./smackerel.sh test unit --go` non-zero exit is an
-  ORTHOGONAL, pre-existing/concurrent `internal/docfreshness` failure
-  (`internal/acceptance` tracked-at-HEAD + `internal/experience` concurrent,
-  both undocumented in the forbidden `docs/Development.md`); this change added
-  no new `internal/` package and did not cause it.
+- The pure mapping and its live wiring into `/api/health` are verified, and the
+  full database derivation of the outcome from the durable run ledger — atomic
+  insight-plus-citation commit with a post-commit read-back gate — is now
+  implemented and proven against real PostgreSQL rather than assumed.
+- What is NOT asserted: packet certification. The transition guard reports
+  outstanding packet-level requirements, and nothing here claims those are met.
+- The `synthesis-evidence/` screenshots are written outside `test-results/`
+  because that directory is wiped between lane phases. An earlier attempt to
+  keep them there lost them silently, which is worth recording so the next
+  reader does not repeat it.
 
 ## Scenario Contract Evidence
 
 `DeriveSynthesisHealth` implements the unit-level determination underlying
-SCN-004-004-05 (never-run is not up) and SCN-004-004-06 (stale/failed/unverified
-never healthy). The scenario-manifest `linkedTests` remain empty pending the
-live integration/e2e rows that close those scenarios end-to-end.
+SCN-004-004-05 (never-run is not up) and SCN-004-004-06 (stale, failed or
+unverified is never healthy). Both scenarios are now closed end to end by live
+checks: the state matrix seeds each condition through SQL and reads the rendered
+pages back, and the API checks exercise the same states through the four read
+routes.
 
 ## Validation Summary
 
-No completion validation or certification performed. Packet is `blocked` on the
-deferred live-DB persistence rows.
+All lanes executed in the current session against the live stack, with the
+quality guards that decide whether those lanes mean anything:
+
+- unit, integration, E2E API, E2E UI, stress: all pass.
+- `check`, `lint`, `format --check`: clean.
+- Interception scan: 0 hits. Bailout scan: 0 hits.
+- `regression-quality-guard`: 0 violations, exit 0.
+- `artifact-lint`: PASSED. `traceability-guard`: PASSED, 0 warnings.
+
+Certification is not claimed on the strength of this. The transition guard is
+the authority on that, and it still reports work outstanding.
 
 ## Audit Verdict
 
-Not audited. No terminal verdict claimed.
+No terminal audit verdict is claimed. The specialist audit phase has not been
+recorded against this packet, and asserting a verdict without it would be the
+exact category of untruth this bug is about.
 
 ## SCOPE-01 Implementation Phase
 
@@ -983,6 +1060,14 @@ reverted and the lane re-run clean before this evidence was recorded.
 
 ### T004-07-QUIET-E2E
 
+```text
+$ ./smackerel.sh test e2e --go-run 'TestSynthesisAPI_QuietWindowReadsAsRunNotBroken'
+--- PASS: TestSynthesisAPI_QuietWindowReadsAsRunNotBroken (0.09s)
+PASS
+ok      github.com/smackerel/smackerel/tests/e2e        0.208s
+EXIT=0
+```
+
 SCN-004-004-07 through the live API. A quiet window means the system looked and
 found nothing worth saying, which is a successful run. The check drives a real
 trigger, requires it to name an output id, then reads `/api/synthesis/latest`
@@ -1386,6 +1471,20 @@ because a change that fixed synthesis while breaking an unrelated journey would
 still be a regression this packet introduced.
 
 ## SCOPE-05 Packet Closeout
+
+```text
+unit --go            FAIL lines: 0
+integration --go     FAIL lines: 0
+e2e                  EXIT=0  Passed: 36  Failed: 0  Skipped: 0
+e2e-ui               89 passed (13 synthesis tests)
+stress               EXIT=0  FAIL lines: 0
+check                compile errors: 0
+lint                 lint findings: 0
+format --check       unformatted: 0
+interception hits    0
+bailout hits         0
+regression-quality-guard  0 violations, exit 0
+```
 
 Every lane in the packet was executed in this session against the live stack,
 with the quality guards that decide whether those lanes are worth anything.
