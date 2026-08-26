@@ -1243,3 +1243,78 @@ triggered a run would inflate the very record it claims to report, so the run
 count is compared across repeated reads including a narrowed one, and the first
 read must be non-empty so an empty history could not satisfy it.
 
+### T004-01-UI
+
+The content assertions and a captured screenshot of the real rendered section.
+The screenshot is written to `web/pwa/synthesis-evidence/` rather than
+`test-results/`, because a later lane phase wipes the latter and the images were
+disappearing before the run finished.
+
+```text
+✓ a real committed synthesis is rendered from storage, never as empty or broken (657ms)
+PASS: current renders persisted prose with citation disclosure
+89 passed (23.7s)
+```
+
+The captured quiet-state render reads:
+
+```text
+Synthesis
+Quiet window — synthesis ran over 17 item(s) and found nothing worth reporting.
+Persisted 2026-08-26T17:30:35Z · run 01M0ZHZBBY9AAR54F826GKGJN4
+```
+
+That is the whole point of this bug in one frame. A window that produced nothing
+does not render as "no data" or as an error; it names how many items it
+evaluated, when it was persisted, and which run it was.
+
+### T004-02-UI
+
+```text
+✓ a rerun of the same window adds no duplicate to Today or run history (481ms)
+```
+
+Triggering the same window twice must resolve to ONE identity, and that identity
+must appear exactly once in history. The occurrence count is asserted rather
+than mere presence, because a duplicated record would still be "present" and
+would silently double-count real work.
+
+### T004-03-04-UI
+
+A rejected or failed candidate must expose neither prose nor the citation counts
+that would reveal a synthesis exists at all:
+
+```text
+PASS: failed_without_output offers a real retry button and leaks no citation disclosure
+PASS: failed_with_prior_output names the prior run without presenting it as the answer
+```
+
+Asserting the absence of citation counts matters separately from the absence of
+prose. A count is an existence hint: it tells a reader a synthesis happened even
+when its text is withheld.
+
+### T004-06-08-UI
+
+```text
+PASS: stale names the durable output behind it
+PASS: partial names the durable output behind it
+PASS: failed_with_prior_output names the prior run without presenting it as the answer
+```
+
+A degraded state must still say WHICH run it is describing. Rendering a
+limitation without naming the output behind it leaves a reader unable to tell
+one stale answer from another, and unable to check it against the run history.
+
+### T004-BROAD
+
+```text
+✓ Today and Status report the same durable synthesis state (541ms)
+89 passed (23.7s)
+8 passed (7.6s)
+8 passed (6.7s)
+```
+
+The whole browser suite passes alongside the pre-existing Today and Status
+journeys, and the two surfaces are asserted to agree rather than merely to work
+in isolation.
+

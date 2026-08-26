@@ -114,12 +114,18 @@ test("a real committed synthesis is rendered from storage, never as empty or bro
       citationBadges.first(),
       "a rendered insight must disclose its citation count",
     ).toBeVisible();
+    await section.screenshot({
+      path: "synthesis-evidence/today-content.png",
+    });
   } else {
     // A non-content state must render NO synthesis prose at all.
     await expect(
       section.locator(".synthesis-insight"),
       `state '${state}' must not render synthesis prose`,
     ).toHaveCount(0);
+    await section.screenshot({
+      path: `synthesis-evidence/today-${state}.png`,
+    });
   }
 });
 
@@ -373,4 +379,47 @@ test("reading run history never triggers a run and never masquerades as no histo
     after,
     `reading history changed the run count from ${before} to ${after}; a read path is creating runs`,
   ).toBe(before);
+});
+
+test("a rerun of the same window adds no duplicate to Today or run history", async ({
+  page,
+}) => {
+  await login(page, "/digest");
+
+  const trigger = async () => {
+    const res = await page.request.post("/api/synthesis/retry", {
+      data: { cadence: "daily" },
+    });
+    expect(
+      [200, 409],
+      `retry must be accepted or report an existing run; got ${res.status()}`,
+    ).toContain(res.status());
+    const body = await res.json();
+    return (body?.output?.outputId ?? "") as string;
+  };
+
+  const first = await trigger();
+  expect(first, "the first trigger must name an output").not.toBe("");
+  const second = await trigger();
+
+  // Same window, same identity. A second row here would mean the idempotency
+  // anchor is not holding and history would double-count real work.
+  expect(
+    second,
+    `the same window produced ${first} then ${second}; a rerun minted a second identity`,
+  ).toBe(first);
+
+  const res = await page.request.get("/api/synthesis/runs?limit=50");
+  expect(res.status()).toBe(200);
+  const body = await res.json();
+  const ids = (body.runs as Array<{ outputId: string }>).map((r) => r.outputId);
+  const occurrences = ids.filter((id) => id === first).length;
+  expect(
+    occurrences,
+    `output ${first} appears ${occurrences} times in run history; a rerun duplicated the record`,
+  ).toBe(1);
+
+  // Today must agree: one section, one state, no second rendering of the run.
+  await requireAnsweredState(page, "/digest");
+  await expect(page.locator("#synthesis-outcome")).toHaveCount(1);
 });

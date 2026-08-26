@@ -148,6 +148,33 @@ assert_retry_offered() {
     fi
 }
 
+# assert_provenance <path> <output-id>
+#
+# A degraded state must still say WHICH run it is describing. Rendering a
+# limitation without naming the output behind it leaves a reader unable to tell
+# one stale answer from another.
+assert_provenance() {
+    local path="$1" output_id="$2" html
+    html="$(curl -fsS --max-time 20 -H "Authorization: Bearer $AUTH_TOKEN" "$CORE_URL$path")"
+    if ! grep -q "$output_id" <<<"$html"; then
+        echo "FAIL: $path does not name output $output_id; the state carries no durable provenance"
+        exit 1
+    fi
+}
+
+# assert_no_citation_disclosure <path>
+#
+# A rejected or failed candidate must expose neither prose nor the citation
+# counts that would reveal a synthesis exists.
+assert_no_citation_disclosure() {
+    local path="$1" html
+    html="$(curl -fsS --max-time 20 -H "Authorization: Bearer $AUTH_TOKEN" "$CORE_URL$path")"
+    if grep -q 'data-citation-count=' <<<"$html"; then
+        echo "FAIL: $path exposes a citation count in a state that carries no verified content"
+        exit 1
+    fi
+}
+
 check() {
     local label="$1" expected="$2"
     assert_state /digest "$expected"
@@ -179,19 +206,24 @@ reset_synthesis
 seed_output stale full 1 "$OLD"
 seed_attempt succeeded
 check "stale" stale
+assert_provenance /digest out-stale
+echo "PASS: stale names the durable output behind it"
 
 # 5. partial — a policy-approved incomplete answer.
 reset_synthesis
 seed_output partial partial 1 "$FRESH"
 seed_attempt succeeded
 check "partial" partial
+assert_provenance /digest out-partial
+echo "PASS: partial names the durable output behind it"
 
 # 6. failed_without_output — an attempt failed and nothing verified exists.
 reset_synthesis
 seed_attempt failed
 check "failure with no prior output" failed_without_output
 assert_retry_offered /digest
-echo "PASS: failed_without_output offers a real retry button"
+assert_no_citation_disclosure /digest
+echo "PASS: failed_without_output offers a real retry button and leaks no citation disclosure"
 
 # 7. failed_with_prior_output — an attempt failed but an older output survives.
 #    The older output must NOT be presented as the current answer.
@@ -200,6 +232,8 @@ seed_output prior full 1 "$FRESH"
 seed_attempt failed
 check "failure with a prior output" failed_with_prior_output
 assert_retry_offered /digest
-echo "PASS: failed_with_prior_output offers a real retry button"
+assert_no_citation_disclosure /digest
+assert_provenance /digest out-prior
+echo "PASS: failed_with_prior_output names the prior run without presenting it as the answer"
 
 echo "=== durable synthesis state matrix: all seven states render exclusively ==="

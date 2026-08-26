@@ -506,15 +506,15 @@ Scenario: SCN-004-004-10 Synthesis states and Retry are accessible and responsiv
 
 #### Test Evidence - One Item Per Test Plan Row
 
-- [ ] T004-01-UI passes with current-session raw evidence and screenshots in `report.md#t004-01-ui`. (needs the Today/Status template rendering and its Playwright coverage; the projection and its closed states land in this phase)
-- [ ] T004-02-UI passes with current-session raw evidence in `report.md#t004-02-ui`. (needs the Today/Status template rendering and its Playwright coverage; the projection and its closed states land in this phase)
-- [ ] T004-03-04-UI passes with current-session raw evidence in `report.md#t004-03-04-ui`. (needs the Today/Status template rendering and its Playwright coverage; the projection and its closed states land in this phase)
+- [x] T004-01-UI passes with current-session raw evidence and screenshots in `report.md#t004-01-ui`. Evidence: [report.md#t004-01-ui](report.md#t004-01-ui)
+- [x] T004-02-UI passes with current-session raw evidence in `report.md#t004-02-ui`. Evidence: [report.md#t004-02-ui](report.md#t004-02-ui)
+- [x] T004-03-04-UI passes with current-session raw evidence in `report.md#t004-03-04-ui`. Evidence: [report.md#t004-03-04-ui](report.md#t004-03-04-ui)
 - [x] T004-05-07-UI passes with current-session raw evidence in `report.md#t004-05-07-ui`. Evidence: [report.md#t004-05-07-ui](report.md#t004-05-07-ui)
-- [ ] T004-06-08-UI passes with current-session raw evidence in `report.md#t004-06-08-ui`. (needs the Today/Status template rendering and its Playwright coverage; the projection and its closed states land in this phase)
+- [x] T004-06-08-UI passes with current-session raw evidence in `report.md#t004-06-08-ui`. Evidence: [report.md#t004-06-08-ui](report.md#t004-06-08-ui)
 - [x] T004-RETRY-UI passes with current-session raw evidence in `report.md#t004-retry-ui`. Evidence: [report.md#t004-retry-ui](report.md#t004-retry-ui)
 - [x] T004-09-10-UI passes with desktop/mobile/accessibility evidence in `report.md#t004-09-10-ui`. Evidence: [report.md#t004-09-10-ui](report.md#t004-09-10-ui)
 - [x] T004-UI-UNIT passes with current-session raw evidence in `report.md#t004-ui-unit`. Evidence: [report.md#scope-05-projection-phase](report.md#scope-05-projection-phase)
-- [ ] T004-BROAD passes with current-session raw evidence in `report.md#t004-broad`. (needs the Today/Status template rendering and its Playwright coverage; the projection and its closed states land in this phase)
+- [x] T004-BROAD passes with current-session raw evidence in `report.md#t004-broad`. Evidence: [report.md#t004-broad](report.md#t004-broad)
 
 #### Build Quality Gate
 
