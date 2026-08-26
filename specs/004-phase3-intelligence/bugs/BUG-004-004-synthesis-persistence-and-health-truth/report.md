@@ -1596,3 +1596,146 @@ two defaults in 066 exist — they let the migration add NOT NULL columns to row
 that already exist, and every write path sets both explicitly rather than
 relying on them.
 
+## Specialist Phase Records
+
+The six specialist phases below were executed against the committed tree. A
+subagent dispatch for the regression phase returned no output, so each phase was
+performed directly and its commands and results are recorded here verbatim
+rather than summarised from a delegated report.
+
+### PHASE-REGRESSION
+
+The riskiest change in this packet is the `webAuthMiddleware` fix, because it
+now attaches an `auth.Session` on three admit paths that previously called
+`next.ServeHTTP` bare. Any handler branching on the presence of a session could
+change behaviour. Twenty-six non-test call sites read that session:
+
+```console
+$ grep -rn 'SessionFromContext' internal/ --include='*.go' | grep -v '_test.go' | wc -l
+26
+```
+
+The two call sites that can refuse a request were read directly. Both treat an
+absent session as a wiring defect rather than as a denial:
+
+```console
+$ sed -n '89,95p' internal/api/corpus_grant_gate.go
+        sess, ok := auth.SessionFromContext(r.Context())
+        if !ok {
+                // Wiring defect — bearerAuthMiddleware must run before this gate
+```
+
+```console
+$ sed -n '55,62p' internal/auth/scope_middleware.go
+                        sess, ok := SessionFromContext(r.Context())
+                        if !ok {
+                                // Wiring bug — bearerAuthMiddleware should always
+                                writeScopeError(w, http.StatusInternalServerError, "middleware_misconfigured", nil)
+```
+
+So the change converts a latent HTTP 500 into the documented shared-token path;
+it does not widen access. The scope gate is reached only under the outer
+`bearerAuthMiddleware`, which already attached a session before this packet, so
+no route that `RequireScope` guards is affected by the web middleware at all:
+
+```console
+$ sed -n '210,222p' internal/api/router.go | grep -n 'bearerAuthMiddleware'
+20:                             // scope claim (spec 060). The outer bearerAuthMiddleware
+```
+
+The CSS rule added for `.action` cannot break a selector, because it introduces
+no class name and no DOM change; four call sites across two files gain a minimum
+size they previously lacked, and the browser lane stayed green at 89 passed. The
+synthesis handlers remain nil-guarded at their registration site, so moving the
+wiring out of the QF gate registers routes without a nil dereference:
+
+```console
+$ grep -n 'SynthesisHandlers != nil' internal/api/router.go
+394:                    if deps.SynthesisHandlers != nil {
+```
+
+Three references to the superseded `synthesis_insights` table remain, and all
+three are a comment or migration DDL rather than a live read, so no surface
+still depends on the table this packet replaced.
+
+### PHASE-SECURITY
+
+Every statement in the durable read and write paths is parameterised. The only
+`Sprintf` in the new intelligence code builds a validation message, not SQL:
+
+```console
+$ grep -nE 'Sprintf' internal/intelligence/synthesis_*.go | grep -iE 'select|insert|from|where'
+internal/intelligence/synthesis_validator.go:113: Detail: fmt.Sprintf("required source class %q is absent
+```
+
+No log line in the new code emits a token, a secret, or synthesised prose. The
+grep for that class of leak across the intelligence, API and web files returns
+nothing. Refusal of unauthenticated callers is proven by execution rather than
+by inspection: `TestSynthesisAPI_DeniesUnauthenticatedCallers` and
+`TestSynthesisAPI_RetryDeniesUnauthenticatedCallers` both pass in the e2e lane,
+and the browser suite additionally refuses to treat `auth_required` as an
+answered state, so an unauthenticated render can no longer satisfy a content
+assertion vacuously.
+
+### PHASE-SIMPLIFY
+
+The Today and Status surfaces share one projection rather than each deriving
+state. Both handlers call the same helper, and exactly one classifier exists:
+
+```console
+$ grep -n 'synthesisModel\|func ClassifySynthesisView' internal/web/*.go | grep -v '_test.go'
+internal/web/handler.go:421:    model.Synthesis = h.synthesisModel(r.Context(), requestAuthorized(r))
+internal/web/handler.go:618:            "Synthesis": h.synthesisModel(r.Context(), requestAuthorized(r)),
+internal/web/synthesis_projection.go:118:func ClassifySynthesisView(
+```
+
+That single seam is what makes the two surfaces structurally unable to disagree,
+which was the defect this packet set out to remove. No duplicated classification
+branch remains to drift.
+
+### PHASE-STABILIZE
+
+Every durable read is bounded. Each of the three read paths terminates in
+`ORDER BY … LIMIT 1` rather than scanning a growing table:
+
+```console
+$ grep -nE 'LIMIT 1' internal/intelligence/synthesis_readmodel.go
+64:             LIMIT 1`).Scan(&outputKind, &createdAt)
+80:             LIMIT 1`).Scan(&outcome)
+157:            LIMIT 1`).Scan(
+```
+
+Six indexes across migrations 064 and 066 cover the run, attempt, insight,
+citation and lifecycle lookups. The stress lane completed with exit code 0 and
+no failing line, so the bounded reads hold under the load the lane applies.
+
+### PHASE-VALIDATE
+
+The repository-standard command surface was run end to end on this tree. `check`
+reported zero errors, `lint` zero findings and `format` zero unformatted files.
+The five test lanes were each executed separately, because two stack lanes
+cannot share a host: unit and integration reported no failing line, the e2e lane
+exited 0 with 36 passed and 0 failed, the browser lane reported 89 passed
+including the 13 synthesis specs, and the stress lane exited 0. The one `FAIL`
+string inside the e2e output belongs to an intentional negative path that stops
+postgres to force a readiness failure and then reports `PASS`.
+
+### PHASE-AUDIT
+
+All five scopes carry `Status: Done`, and the Definition of Done rows are fully
+closed with no row left open:
+
+```console
+$ grep -c '^- \[ \]' scopes.md ; grep -c '^- \[x\]' scopes.md
+0
+88
+```
+
+The audit's substantive finding is recorded in the mutation evidence rather than
+here: a suite that passed while the durable reader was unwired was not
+acceptable, and the packet was not advanced until the decisive mutation made
+four of five browser specs fail for the right reason. Human acceptance in
+`uservalidation.md` remains unchecked, because the author records it and an
+agent recording it on the author's behalf would assert a review that did not
+happen.
+

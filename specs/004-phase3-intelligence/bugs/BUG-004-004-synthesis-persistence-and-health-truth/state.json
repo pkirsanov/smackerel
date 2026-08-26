@@ -48,6 +48,48 @@
         "provenanceMode": "parent-expanded",
         "claimedAt": "2026-08-25T15:08:30Z",
         "evidenceRef": "report.md#scope-01-implementation-phase"
+      },
+      {
+        "phase": "regression",
+        "agent": "bubbles.goal",
+        "provenanceMode": "parent-expanded",
+        "claimedAt": "2026-08-25T16:30:00Z",
+        "evidenceRef": "report.md#phase-regression"
+      },
+      {
+        "phase": "security",
+        "agent": "bubbles.goal",
+        "provenanceMode": "parent-expanded",
+        "claimedAt": "2026-08-25T16:30:00Z",
+        "evidenceRef": "report.md#phase-security"
+      },
+      {
+        "phase": "simplify",
+        "agent": "bubbles.goal",
+        "provenanceMode": "parent-expanded",
+        "claimedAt": "2026-08-25T16:30:00Z",
+        "evidenceRef": "report.md#phase-simplify"
+      },
+      {
+        "phase": "stabilize",
+        "agent": "bubbles.goal",
+        "provenanceMode": "parent-expanded",
+        "claimedAt": "2026-08-25T16:30:00Z",
+        "evidenceRef": "report.md#phase-stabilize"
+      },
+      {
+        "phase": "validate",
+        "agent": "bubbles.goal",
+        "provenanceMode": "parent-expanded",
+        "claimedAt": "2026-08-25T16:30:00Z",
+        "evidenceRef": "report.md#phase-validate"
+      },
+      {
+        "phase": "audit",
+        "agent": "bubbles.goal",
+        "provenanceMode": "parent-expanded",
+        "claimedAt": "2026-08-25T16:30:00Z",
+        "evidenceRef": "report.md#phase-audit"
       }
     ],
     "pendingTransitionRequests": [],
@@ -87,6 +129,96 @@
         "outcome": "completed_owned",
         "evidenceRef": "report.md#scope-01-implementation-phase",
         "summary": "SCOPE-01 coverage. 7 unit tests for the logical key (determinism, order-independence, dedupe, UTC normalization, per-field distinction, boundary collision) and 4 live-DB integration tests for SCN-01/02/03 plus malformed-attempt rejection. 4/4 PASS against real PostgreSQL, integration lane exit 0. The boundary-collision case was found TAUTOLOGICAL by running the mutation -- it shifted characters between two non-adjacent fields -- and was rewritten to use the adjacent pair, after which the mutation kills it."
+      },
+      {
+        "at": "2026-08-25T16:30:00Z",
+        "agent": "bubbles.goal",
+        "phasesExecuted": [
+          "regression"
+        ],
+        "provenanceMode": "parent-expanded",
+        "expandedBy": "bubbles.goal",
+        "expansionReason": "A runSubagent dispatch to bubbles.regression returned no output, so no specialist claim exists to record. The orchestrator executed the regression analysis directly against the committed tree and records parent expansion rather than a specialist claim for work no specialist performed.",
+        "expansionEvidenceRef": "report.md#phase-regression",
+        "claimSource": "executed",
+        "outcome": "completed_owned",
+        "evidenceRef": "report.md#phase-regression",
+        "summary": "Audited the 26 non-test SessionFromContext consumers against the webAuthMiddleware change. Both refusing call sites treat an absent session as a wiring defect rather than a denial, and RequireScope runs only under the outer bearerAuthMiddleware, so the change removes a latent HTTP 500 without widening access. The .action rule adds no class and no DOM change; SynthesisHandlers stays nil-guarded at registration; the three remaining synthesis_insights references are comment or DDL rather than a live read."
+      },
+      {
+        "at": "2026-08-25T16:30:00Z",
+        "agent": "bubbles.goal",
+        "phasesExecuted": [
+          "security"
+        ],
+        "provenanceMode": "parent-expanded",
+        "expandedBy": "bubbles.goal",
+        "expansionReason": "The one runSubagent dispatch attempted for this packet, to bubbles.regression, returned no output, so runSubagent was not relied on for the remaining phases. The orchestrator performed the security review directly on the committed tree and records parent expansion rather than a specialist claim for work no specialist performed.",
+        "expansionEvidenceRef": "report.md#phase-security",
+        "claimSource": "executed",
+        "outcome": "completed_owned",
+        "evidenceRef": "report.md#phase-security",
+        "summary": "Every statement in the durable read and write paths is parameterised; the only Sprintf in the new intelligence code builds a validation message. No log line emits a token, secret or synthesised prose. Refusal of unauthenticated callers is proven by two passing e2e tests, and the browser suite refuses to treat auth_required as an answered state so an unauthenticated render cannot satisfy a content assertion vacuously."
+      },
+      {
+        "at": "2026-08-25T16:30:00Z",
+        "agent": "bubbles.goal",
+        "phasesExecuted": [
+          "simplify"
+        ],
+        "provenanceMode": "parent-expanded",
+        "expandedBy": "bubbles.goal",
+        "expansionReason": "The one runSubagent dispatch attempted for this packet, to bubbles.regression, returned no output, so runSubagent was not relied on for the remaining phases. The orchestrator performed the duplication review directly on the committed tree and records parent expansion rather than a specialist claim for work no specialist performed.",
+        "expansionEvidenceRef": "report.md#phase-simplify",
+        "claimSource": "executed",
+        "outcome": "completed_owned",
+        "evidenceRef": "report.md#phase-simplify",
+        "summary": "Today and Status both call one synthesisModel helper and exactly one ClassifySynthesisView exists, so the two surfaces are structurally unable to disagree. No duplicated classification branch remains to drift."
+      },
+      {
+        "at": "2026-08-25T16:30:00Z",
+        "agent": "bubbles.goal",
+        "phasesExecuted": [
+          "stabilize"
+        ],
+        "provenanceMode": "parent-expanded",
+        "expandedBy": "bubbles.goal",
+        "expansionReason": "The one runSubagent dispatch attempted for this packet, to bubbles.regression, returned no output, so runSubagent was not relied on for the remaining phases. The orchestrator performed the resource and bound review directly on the committed tree and records parent expansion rather than a specialist claim for work no specialist performed.",
+        "expansionEvidenceRef": "report.md#phase-stabilize",
+        "claimSource": "executed",
+        "outcome": "completed_owned",
+        "evidenceRef": "report.md#phase-stabilize",
+        "summary": "All three durable read paths terminate in ORDER BY with LIMIT 1 rather than scanning a growing table, and six indexes across migrations 064 and 066 cover the run, attempt, insight, citation and lifecycle lookups. The stress lane exited 0 with no failing line."
+      },
+      {
+        "at": "2026-08-25T16:30:00Z",
+        "agent": "bubbles.goal",
+        "phasesExecuted": [
+          "validate"
+        ],
+        "provenanceMode": "parent-expanded",
+        "expandedBy": "bubbles.goal",
+        "expansionReason": "The one runSubagent dispatch attempted for this packet, to bubbles.regression, returned no output, so runSubagent was not relied on for the remaining phases. The orchestrator ran the repository-standard command surface directly and records parent expansion rather than a specialist claim for work no specialist performed.",
+        "expansionEvidenceRef": "report.md#phase-validate",
+        "claimSource": "executed",
+        "outcome": "completed_owned",
+        "evidenceRef": "report.md#phase-validate",
+        "summary": "check reported zero errors, lint zero findings and format zero unformatted files. The five test lanes were run separately because two stack lanes cannot share a host: unit and integration reported no failing line, e2e exited 0 with 36 passed and 0 failed, the browser lane reported 89 passed including 13 synthesis specs, and stress exited 0. The single FAIL string in the e2e output belongs to an intentional negative path that stops postgres to force a readiness failure and then reports PASS."
+      },
+      {
+        "at": "2026-08-25T16:30:00Z",
+        "agent": "bubbles.goal",
+        "phasesExecuted": [
+          "audit"
+        ],
+        "provenanceMode": "parent-expanded",
+        "expandedBy": "bubbles.goal",
+        "expansionReason": "The one runSubagent dispatch attempted for this packet, to bubbles.regression, returned no output, so runSubagent was not relied on for the remaining phases. The orchestrator performed the closure audit directly on the committed tree and records parent expansion rather than a specialist claim for work no specialist performed.",
+        "expansionEvidenceRef": "report.md#phase-audit",
+        "claimSource": "executed",
+        "outcome": "completed_owned",
+        "evidenceRef": "report.md#phase-audit",
+        "summary": "All five scopes carry Status Done with 88 closed Definition of Done rows and zero open. The substantive audit finding is that a browser suite passed while the durable reader was unwired; the packet was not advanced until the decisive mutation made four of five specs fail for the right reason. Human acceptance in uservalidation.md stays unchecked because the author records it."
       }
     ],
     "completedScopes": [
@@ -98,7 +230,13 @@
     ],
     "completedPhases": [
       "implement",
-      "test"
+      "test",
+      "regression",
+      "security",
+      "simplify",
+      "stabilize",
+      "validate",
+      "audit"
     ]
   },
   "certification": {
@@ -110,7 +248,16 @@
       "SCOPE-04",
       "SCOPE-05"
     ],
-    "certifiedCompletedPhases": [],
+    "certifiedCompletedPhases": [
+      "implement",
+      "test",
+      "regression",
+      "security",
+      "simplify",
+      "stabilize",
+      "validate",
+      "audit"
+    ],
     "scopeProgress": [
       {
         "scope": 1,
@@ -178,7 +325,13 @@
     "invalidationLedger": [],
     "completedPhases": [
       "implement",
-      "test"
+      "test",
+      "regression",
+      "security",
+      "simplify",
+      "stabilize",
+      "validate",
+      "audit"
     ]
   },
   "policySnapshot": {
@@ -333,7 +486,13 @@
   "notes": "Owner routes required: bubbles.design, bubbles.plan, bubbles.ux. Blocks truthful synthesis/readiness in BUG-102-001 and coherent product claims.",
   "completedPhases": [
     "implement",
-    "test"
+    "test",
+    "regression",
+    "security",
+    "simplify",
+    "stabilize",
+    "validate",
+    "audit"
   ],
   "progressNote": "SCOPE-01 has real progress: migration 064 applied, persistence layer implemented, 9 of 14 Scope 1 DoD items closed with executed evidence (7 unit + 4 live-DB integration tests green). Status moved blocked -> in_progress because the parked live-DB rows are now written. Remaining Scope 1 items (bootstrap canary, end-to-end adversarial RED against the return-and-log producer, rollback-compat) need RunSynthesis wired to the layer, which is SCOPE-02/03 work. Scopes 2-5 remain Not Started.",
   "completedScopes": [
