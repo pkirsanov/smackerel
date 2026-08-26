@@ -92,6 +92,7 @@
     "completedScopes": [
       "SCOPE-01",
       "SCOPE-02",
+      "SCOPE-03",
       "SCOPE-04"
     ],
     "completedPhases": [
@@ -104,6 +105,7 @@
     "completedScopes": [
       "SCOPE-01",
       "SCOPE-02",
+      "SCOPE-03",
       "SCOPE-04"
     ],
     "certifiedCompletedPhases": [],
@@ -134,7 +136,7 @@
         "scope": 3,
         "scopeId": "SCOPE-03",
         "name": "Durable Scheduler Retry And Lifecycle",
-        "status": "in_progress",
+        "status": "done",
         "dependsOn": [
           "SCOPE-02"
         ],

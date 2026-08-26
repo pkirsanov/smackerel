@@ -81,6 +81,12 @@ type DigestPageModel struct {
 	AgeDays        int
 	ErrorKind      DigestReadErrorKind
 	ErrorReference string
+
+	// Synthesis is the durable synthesis projection rendered alongside the
+	// digest (BUG-004-004 SCOPE-05). It is a separate typed model rather than
+	// more fields on this one, so a digest read fault and a synthesis read fault
+	// stay independently truthful instead of collapsing into a single state.
+	Synthesis SynthesisPageModel
 }
 
 // errDigestReaderUnavailable is the sentinel for a Digest route mounted without

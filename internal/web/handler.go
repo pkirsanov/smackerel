@@ -57,6 +57,20 @@ type Handler struct {
 	// wired, which keeps stale determination inert (a non-quiet row renders
 	// current, never arbitrarily stale) until the concurrent config work lands.
 	DigestStaleAfter time.Duration
+	// SynthesisReader is the durable synthesis read seam (BUG-004-004 SCOPE-05).
+	// Today and Status consume it so both pages answer from the same committed
+	// state. A nil reader renders the honest unavailable state, never never-run,
+	// because "I could not read" and "nothing has ever run" are different facts
+	// and conflating them is the confusion this bug exists to remove.
+	SynthesisReader SynthesisOutcomeReader
+	// SynthesisAggregates supplies persisted insight text for the states that may
+	// show it. Nil leaves content-bearing states without prose rather than
+	// substituting any, which is the safe direction to fail.
+	SynthesisAggregates SynthesisAggregateReader
+	// SynthesisFreshnessBudget is how long a verified output stays current.
+	// Zero keeps stale determination inert rather than calling every output
+	// stale, matching the DigestStaleAfter contract directly above.
+	SynthesisFreshnessBudget time.Duration
 	// ClockOverride, when non-nil, replaces time.Now for deterministic stale-age
 	// tests. Production leaves it nil. It is an observation seam only.
 	ClockOverride func() time.Time
@@ -400,6 +414,11 @@ func (h *Handler) DigestPage(w http.ResponseWriter, r *http.Request) {
 		d, err := h.DigestReader.GetLatest(r.Context(), selectedDate)
 		model = classifyDigest(d, err, selectedDate, h.now(), h.DigestStaleAfter)
 	}
+
+	// Synthesis is resolved independently of the digest read. A digest fault
+	// must not blank a healthy synthesis, and a synthesis fault must not blank a
+	// healthy digest; each states its own truth.
+	model.Synthesis = h.synthesisModel(r.Context(), requestAuthorized(r))
 
 	status := http.StatusOK
 	if model.State == DigestReadError {

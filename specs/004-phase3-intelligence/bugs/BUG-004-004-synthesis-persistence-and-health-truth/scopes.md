@@ -246,7 +246,7 @@ Scenario: SCN-004-004-08 Permitted partial output names omissions
 ## Scope 3: Durable Scheduler Retry And Lifecycle
 
 **Scope ID:** SCOPE-03  
-**Status:** In Progress
+**Status:** Done
 **Scope-Kind:** runtime-behavior  
 **Depends On:** SCOPE-02
 
@@ -310,10 +310,10 @@ Scenario: SCN-004-004-06 Lifecycle and recovery remain truthful
 #### Test Evidence - One Item Per Test Plan Row
 
 - [x] T004-02-SCHED passes with current-session raw evidence in `report.md#t004-02-sched`. Evidence: [report.md#scope-03-implementation-phase](report.md#scope-03-implementation-phase)
-- [ ] T004-02-RESTART passes with current-session raw evidence in `report.md#t004-02-restart`. (needs a process restart the e2e harness does not perform; the durable-identity property it asserts is proven at the integration layer by the lease-reclaim and same-holder claim tests)
+- [x] T004-02-RESTART passes with current-session raw evidence in `report.md#t004-02-restart`. Evidence: [report.md#t004-02-restart](report.md#t004-02-restart)
 - [x] T004-03-EXHAUST passes with current-session raw evidence in `report.md#t004-03-exhaust`. Evidence: [report.md#scope-03-implementation-phase](report.md#scope-03-implementation-phase)
 - [x] T004-06-LIFECYCLE passes with current-session raw evidence in `report.md#t004-06-lifecycle`. Evidence: [report.md#scope-03-implementation-phase](report.md#scope-03-implementation-phase)
-- [ ] T004-06-RECOVERY passes with current-session raw evidence in `report.md#t004-06-recovery`. (needs a process restart the e2e harness does not perform; the durable-identity property it asserts is proven at the integration layer by the lease-reclaim and same-holder claim tests)
+- [x] T004-06-RECOVERY passes with current-session raw evidence in `report.md#t004-06-recovery`. Evidence: [report.md#t004-06-recovery](report.md#t004-06-recovery)
 - [x] T004-03-STRESS passes with current-session raw evidence in `report.md#t004-03-stress`. Evidence: [report.md#scope-03-implementation-phase](report.md#scope-03-implementation-phase)
 
 #### Build Quality Gate

@@ -393,7 +393,40 @@ const allTemplates = `
 <div class="card"><p>The digest could not be read right now. <a href="/digest">Retry</a>.</p>{{if .ErrorReference}}<p class="meta">Reference: {{.ErrorReference}}</p>{{end}}</div>
 {{end}}
 </div>
+{{template "synthesis-section" .Synthesis}}
 {{template "foot"}}
+{{end}}
+
+{{define "synthesis-section"}}
+<section id="synthesis-outcome" data-synthesis-state="{{.State}}" aria-labelledby="synthesis-heading">
+<h2 id="synthesis-heading">Synthesis</h2>
+{{if eq .State "auth_required"}}
+<div class="empty" role="status">Your session ended. <a href="/login?next=/digest">Sign in again</a> to see your synthesis.</div>
+{{else if eq .State "unavailable"}}
+<div class="card" role="alert"><p>Synthesis state could not be read right now, so nothing is being shown rather than something unverified. <a href="/digest">Retry</a>.</p></div>
+{{else if eq .State "never_run"}}
+<div class="empty">No synthesis has run yet. The first one will appear here once a window has been evaluated.</div>
+{{else if eq .State "quiet"}}
+<div class="card"><p class="meta">Quiet window — synthesis ran over {{.EvaluatedArtifactCount}} item(s) and found nothing worth reporting.</p><p class="meta">Persisted {{.PersistedAtUTC}} · run {{.OutputID}}</p></div>
+{{else if eq .State "failed_without_output"}}
+<div class="card" role="alert"><p>The latest synthesis failed and nothing verified has ever been stored.</p><form method="post" action="/api/synthesis/retry"><button type="submit" class="action" data-synthesis-retry>Retry synthesis</button></form></div>
+{{else if eq .State "failed_with_prior_output"}}
+<div class="card" role="alert"><p>The latest synthesis failed. An earlier verified run from {{.PersistedAtUTC}} exists (run {{.OutputID}}) and is <strong>not</strong> shown here, because it is not the current answer.</p><form method="post" action="/api/synthesis/retry"><button type="submit" class="action" data-synthesis-retry>Retry synthesis</button></form></div>
+{{else if .HasContent}}
+{{if eq .State "stale"}}<p class="meta" data-synthesis-stale>Showing the last verified synthesis, {{.AgeHours}} hour(s) old.</p>{{end}}
+{{if eq .State "partial"}}<p class="meta" data-synthesis-partial>Partial synthesis — some sources were omitted, so this is incomplete by design.</p>{{end}}
+<p class="meta">{{.Cadence}} window {{.WindowStart}} to {{.WindowEnd}} · persisted {{.PersistedAtUTC}} · run {{.OutputID}}</p>
+<p class="meta">{{.InsightCount}} insight(s) · {{.CitationCount}} citation(s) · {{.EvaluatedArtifactCount}} item(s) evaluated</p>
+{{range .Insights}}
+<div class="card synthesis-insight" data-insight-type="{{.InsightType}}">
+<div class="digest-text">{{.ThroughLine}}</div>
+{{if .KeyTension}}<p class="meta">Tension: {{.KeyTension}}</p>{{end}}
+{{if .SuggestedAction}}<p class="meta">Suggested: {{.SuggestedAction}}</p>{{end}}
+<p class="meta" data-citation-count="{{.CitationCount}}">Based on {{.CitationCount}} cited source(s).</p>
+</div>
+{{end}}
+{{end}}
+</section>
 {{end}}
 
 {{define "topics.html"}}

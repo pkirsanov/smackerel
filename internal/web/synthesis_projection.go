@@ -77,6 +77,25 @@ type SynthesisPageModel struct {
 	// HasPriorVerifiedOutput distinguishes the two failure states for a reader
 	// who needs to know whether anything trustworthy exists at all.
 	HasPriorVerifiedOutput bool
+
+	// Insights is the persisted synthesis text. It is populated ONLY for states
+	// where HasContent reports true, and it is filled from the durable aggregate
+	// rather than regenerated, so what a reader sees is exactly what was stored.
+	Insights []SynthesisInsightView
+}
+
+// SynthesisInsightView is one persisted insight prepared for rendering.
+//
+// It carries the stored text and the NUMBER of citations behind it rather than
+// the artifact identifiers themselves. A reader needs to know a claim is
+// sourced; exposing which of their artifacts produced it belongs to the run
+// detail surface, where the request is explicit.
+type SynthesisInsightView struct {
+	InsightType     string
+	ThroughLine     string
+	KeyTension      string
+	SuggestedAction string
+	CitationCount   int
 }
 
 // HasContent reports whether this state may render synthesis prose.

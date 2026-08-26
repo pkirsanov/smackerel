@@ -257,6 +257,33 @@ func buildAPIDeps(ctx context.Context, cfg *config.Config, svc *coreServices, co
 	deps.ModelConnectionsAdminHandler = modelConnAdmin
 	deps.ModelConnectionsOperatorGate = modelConnGate
 
+	// BUG-004-004 — durable synthesis persistence, health and the read API.
+	//
+	// This is deliberately OUTSIDE the QF-decisions gate below. Synthesis
+	// durability is a core capability of this product, and leaving its wiring
+	// inside that gate meant an operator who turned off an unrelated integration
+	// also silently lost the synthesis API, the Today/Status synthesis section,
+	// and every honest never-run / stale / failed signal with it.
+	if synthesisReadModel, err := intelligence.NewSynthesisReadModel(svc.pg.Pool); err == nil {
+		if synthesisPersistence, err := intelligence.NewSynthesisPersistence(svc.pg.Pool); err == nil {
+			handlers := api.NewSynthesisHandlers(synthesisReadModel, synthesisPersistence)
+			if producer, pErr := intelligence.NewSynthesisProducer(svc.intEngine, synthesisPersistence); pErr == nil {
+				handlers = handlers.WithProducer(producer)
+			}
+			deps.SynthesisHandlers = handlers
+
+			// Today and Status read the SAME durable state the API serves.
+			// Sharing the read model is what makes the page and the API
+			// structurally unable to disagree; a separate page-local query could
+			// drift from it without any test noticing.
+			if svc.webHandler != nil {
+				svc.webHandler.SynthesisReader = synthesisReadModel
+				svc.webHandler.SynthesisAggregates = synthesisPersistence
+				svc.webHandler.SynthesisFreshnessBudget = time.Duration(cfg.DigestStaleAfterHours) * time.Hour
+			}
+		}
+	}
+
 	if cfg.QFDecisionsEnabled {
 		qfEvidenceStore := qfdecisions.NewEvidenceExportStore(svc.pg.Pool)
 		qfEvidenceExporter := qfdecisions.NewEvidenceExporter(
@@ -266,15 +293,6 @@ func buildAPIDeps(ctx context.Context, cfg *config.Config, svc *coreServices, co
 			cfg.QFDecisionsCredentialRef,
 			time.Now,
 		)
-		if synthesisReadModel, err := intelligence.NewSynthesisReadModel(svc.pg.Pool); err == nil {
-			if synthesisPersistence, err := intelligence.NewSynthesisPersistence(svc.pg.Pool); err == nil {
-				handlers := api.NewSynthesisHandlers(synthesisReadModel, synthesisPersistence)
-				if producer, pErr := intelligence.NewSynthesisProducer(svc.intEngine, synthesisPersistence); pErr == nil {
-					handlers = handlers.WithProducer(producer)
-				}
-				deps.SynthesisHandlers = handlers
-			}
-		}
 		deps.QFEvidenceHandlers = api.NewQFEvidenceHandlers(svc.pg, connector.NewStateStore(svc.pg.Pool), qfEvidenceStore, qfEvidenceExporter)
 
 		// Spec 041 Scope 7 — personal-context read API host.

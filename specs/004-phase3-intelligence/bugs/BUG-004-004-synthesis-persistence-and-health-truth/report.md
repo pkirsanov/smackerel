@@ -979,3 +979,74 @@ mean the kind and the payload disagree.
 This is the precise confusion this bug exists to remove: emptiness reported as
 absence, or as breakage.
 
+## SCOPE-03 Restart Durability Phase
+
+Both rows below were held open with the note that the e2e harness did not
+perform a process restart. That was true of the Go e2e lane, which runs inside a
+toolchain container with no access to the container runtime. It was not true of
+the shell e2e lane, which runs on the host. The capability was therefore built
+rather than the rows being left annotated.
+
+`tests/e2e/synthesis_restart_durability_e2e_test.sh` restarts the real core
+container through the repo-standard `smackerel_compose` helper and then asks the
+running system the same questions again.
+
+One detail decides whether this test is worth anything. A single health probe
+immediately after a restart can succeed against the OLD process, which is still
+holding the socket for a moment before it goes down. The first working version
+did exactly that, reported "healthy after 0s", and then failed on a connection
+reset. The gate now requires three consecutive healthy probes spaced two seconds
+apart, which a listener that is about to disappear cannot satisfy.
+
+```text
+./smackerel.sh test e2e --shell-run synthesis_restart_durability_e2e_test.sh
+=== T004-02-RESTART / T004-06-RECOVERY: durability across a real restart ===
+Waiting for services to be healthy (max 120s)...
+Services healthy after 0s
+committed output before restart: 01M0Y8M4HT9MK0JJKHG9CT6E63
+--- restarting the core process ---
+core process restarted and serving again
+PASS: T004-02-RESTART — window identity 01M0Y8M4HT9MK0JJKHG9CT6E63 survived a real process restart
+PASS: T004-06-RECOVERY — health and history both recovered 01M0Y8M4HT9MK0JJKHG9CT6E63 from storage (state 'quiet')
+=== durability across a real restart: complete ===
+  PASS: synthesis_restart_durability_e2e_test.sh
+  Total:  1
+  Passed: 1
+  Failed: 0
+```
+
+### T004-02-RESTART
+
+The same window must resolve to the same durable identity after the process that
+created it is gone. The check triggers a real synthesis, records the output id,
+restarts the core process, triggers the same window again, and requires the two
+ids to be equal.
+
+Mutation-verified against the exact defect it exists to catch. Adding a
+process-start nonce to `SynthesisRunKey.LogicalKey` simulates identity living in
+process memory rather than in the database, and produced:
+
+```text
+committed output before restart: 01M0Y8F06C9DG23KGRASK7QS0P
+--- restarting the core process ---
+core process restarted and serving again
+FAIL: the same window resolved to 01M0Y8F06C9DG23KGRASK7QS0P before the restart
+and 01M0Y8FEGKTZYFH5JF05GRT4R5 after it;
+      identity did not survive the process, so it was never durable
+```
+
+The nonce was reverted and the lane re-run clean before this evidence was
+recorded.
+
+### T004-06-RECOVERY
+
+After the restart the read path must recover what happened from storage. The
+check requires that `/api/synthesis/latest` does not report never-run, that it
+names the same output id committed before the restart, and that the same id is
+present in the run history.
+
+The history assertion is not redundant. A recovery that restored the single
+latest view but not the history would leave the two read surfaces telling a
+reader different stories about the same window, which is a quieter version of
+the same dishonesty.
+
