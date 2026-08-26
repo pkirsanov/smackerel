@@ -450,6 +450,20 @@ verified row instead of a log line. The defect was never a wrong count -- the
 count was accurate -- it was that the count described work the database never
 received, so a healthy-looking log line stood in for a missing row.
 
+Candidate validation runs BEFORE any transaction opens, in
+`internal/intelligence/synthesis_validator.go`, and is covered by 15 unit tests
+in `internal/intelligence/synthesis_validator_test.go`:
+
+```text
+$ ./smackerel.sh test unit --go --go-run 'TestValidator_'
+ok      github.com/smackerel/smackerel/internal/intelligence    0.043s
+```
+
+They pin each refusal reason separately — uncited insight, unauthorized
+citation, empty through-line, confidence out of band, missing required source
+class — because a validator that refused everything for one reason would satisfy
+a single aggregate test while rejecting valid work in production.
+
 Executed this session:
 
 ```
@@ -979,6 +993,14 @@ mean the kind and the payload disagree.
 This is the precise confusion this bug exists to remove: emptiness reported as
 absence, or as breakage.
 
+Requiring the trigger to name an output id first is what keeps the rest
+non-vacuous. Without it the check could run against a system that had committed
+nothing, where "not never-run" would be asserting something about an empty
+database rather than about a real quiet output.
+
+The insight-count assertion guards the opposite failure: a state labelled quiet
+while carrying content would be just as untruthful as content labelled empty.
+
 ## SCOPE-03 Restart Durability Phase
 
 Both rows below were held open with the note that the e2e harness did not
@@ -1049,6 +1071,14 @@ The history assertion is not redundant. A recovery that restored the single
 latest view but not the history would leave the two read surfaces telling a
 reader different stories about the same window, which is a quieter version of
 the same dishonesty.
+
+Naming the SAME id matters more than finding any id. A read path that recovered
+a different run would still answer confidently, and a test that only checked for
+non-emptiness would accept it.
+
+The never-run check is stated explicitly rather than folded into the id
+comparison, because never-run is the exact failure this bug is about: real work
+committed, then reported to a reader as though it had never occurred.
 
 ## SCOPE-05 Browser Rendering Phase
 
@@ -1275,9 +1305,18 @@ evaluated, when it was persisted, and which run it was.
 ```
 
 Triggering the same window twice must resolve to ONE identity, and that identity
-must appear exactly once in history. The occurrence count is asserted rather
-than mere presence, because a duplicated record would still be "present" and
-would silently double-count real work.
+must appear exactly once in history.
+
+The occurrence count is asserted rather than mere presence. That distinction is
+the whole test: a duplicated record would still be "present", so a membership
+check would pass while history silently double-counted the same work. Counting
+occurrences is the only form of the assertion that can fail for the reason it
+exists.
+
+The check also re-reads Today afterwards and requires exactly one rendered
+section, because a duplicate could surface either in the history list or as a
+second rendering on the page, and only asserting one of those would leave the
+other free to regress.
 
 ### T004-03-04-UI
 
@@ -1291,7 +1330,16 @@ PASS: failed_with_prior_output names the prior run without presenting it as the 
 
 Asserting the absence of citation counts matters separately from the absence of
 prose. A count is an existence hint: it tells a reader a synthesis happened even
-when its text is withheld.
+when its text is withheld, which is a smaller leak of the same kind.
+
+The two failure states are checked separately rather than together. They differ
+in exactly one respect — whether an older verified output exists — and that
+difference is what decides whether the page may name a prior run at all. A
+shared assertion over both would not notice if one state started borrowing the
+other's behavior.
+
+Both are seeded through the same columns the read model reads, so the states are
+real rather than simulated at the template layer.
 
 ### T004-06-08-UI
 
@@ -1303,7 +1351,17 @@ PASS: failed_with_prior_output names the prior run without presenting it as the 
 
 A degraded state must still say WHICH run it is describing. Rendering a
 limitation without naming the output behind it leaves a reader unable to tell
-one stale answer from another, and unable to check it against the run history.
+one stale answer from another, and unable to check what they are looking at
+against the run history.
+
+The assertion is that the specific output id appears in the rendered HTML, not
+that some id appears. An implementation that emitted a placeholder or the most
+recent id regardless of which run the state describes would satisfy a looser
+check and still mislead.
+
+`partial` is included alongside `stale` because both are degraded-but-durable:
+they carry real content whose limits must be stated, which is a different
+obligation from a failure that carries no content at all.
 
 ### T004-BROAD
 
@@ -1317,4 +1375,88 @@ one stale answer from another, and unable to check it against the run history.
 The whole browser suite passes alongside the pre-existing Today and Status
 journeys, and the two surfaces are asserted to agree rather than merely to work
 in isolation.
+
+Agreement is the load-bearing claim. Each page could pass every one of its own
+assertions while reading a different row, and no per-page test would notice.
+Comparing the state Today reports against the state Status reports is what makes
+the shared reader observable from outside.
+
+The three trailing counts are the other lane phases in the same run, included
+because a change that fixed synthesis while breaking an unrelated journey would
+still be a regression this packet introduced.
+
+## SCOPE-05 Packet Closeout
+
+Every lane in the packet was executed in this session against the live stack,
+with the quality guards that decide whether those lanes are worth anything.
+
+The lanes and the guards are recorded together deliberately. A green lane proves
+nothing on its own if the tests inside it intercept their own traffic or bail
+out early, so the interception and bailout scans are part of the same claim
+rather than a separate nicety.
+
+The subsections below give the raw output for each, plus one line of e2e output
+that looks like a failure and is not, because a reflexive grep would otherwise
+make an honest green run appear red.
+
+Docs are included in the same closeout because an operator reading `unavailable`
+at three in the morning needs to know it points at the database rather than at
+synthesis, and that distinction lives in prose rather than in a test.
+
+### Every lane, current session
+
+```text
+./smackerel.sh test unit --go            FAIL lines: 0
+./smackerel.sh test integration --go     FAIL lines: 0
+./smackerel.sh test e2e                  E2E_EXIT=0   Passed: 36  Failed: 0  Skipped: 0
+./smackerel.sh test e2e-ui               89 passed
+./smackerel.sh test stress               STRESS_EXIT=0  test FAIL lines: 0
+./smackerel.sh check                     compile errors: 0
+./smackerel.sh lint                      lint findings: 0
+./smackerel.sh format --check            unformatted: 0
+```
+
+One line in the e2e output reads `FAIL: Services did not become healthy within
+8s`, and it is not a failure. It is the expected output of a check that stops
+postgres deliberately:
+
+```text
+Stopping postgres to force a readiness failure...
+ Container smackerel-test-postgres-1  Stopped
+Waiting for services to be healthy (max 8s)...
+FAIL: Services did not become healthy within 8s
+PASS: SCN-002-BUG-002-001 (stopped postgres rejected, exit=1)
+```
+
+Recording it matters because a grep for `FAIL` would otherwise make an honest
+green run look red, and the reflex fix would be to filter the pattern rather
+than read it.
+
+### Test-quality guards
+
+```text
+interception hits: 0
+bailout hits: 0
+REGRESSION QUALITY RESULT: 0 violation(s), 0 warning(s)
+Files scanned: 1
+GUARD_EXIT=0
+```
+
+No `page.route`, `context.route`, `cy.intercept`, `msw`, `nock` or `wiremock`
+appears in the browser suite, so every assertion runs against the real stack.
+No early-return or `test.skip` bailout appears either, which is what stops a
+missing feature from being reported as a pass.
+
+### Docs
+
+`docs/Operations.md` gains an operator section covering the four read routes,
+the nine states with what an operator should read into each, and the commands
+that verify the surface. It names the distinction that matters most in practice:
+`quiet` versus `never_run` versus `failed_without_output` all show no prose, and
+conflating them is the confusion this packet removed.
+
+`docs/Development.md` documents migrations 064, 065 and 066, including why the
+two defaults in 066 exist — they let the migration add NOT NULL columns to rows
+that already exist, and every write path sets both explicitly rather than
+relying on them.
 

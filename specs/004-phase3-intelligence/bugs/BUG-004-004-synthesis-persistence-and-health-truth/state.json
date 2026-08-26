@@ -93,7 +93,8 @@
       "SCOPE-01",
       "SCOPE-02",
       "SCOPE-03",
-      "SCOPE-04"
+      "SCOPE-04",
+      "SCOPE-05"
     ],
     "completedPhases": [
       "implement",
@@ -106,7 +107,8 @@
       "SCOPE-01",
       "SCOPE-02",
       "SCOPE-03",
-      "SCOPE-04"
+      "SCOPE-04",
+      "SCOPE-05"
     ],
     "certifiedCompletedPhases": [],
     "scopeProgress": [
@@ -160,7 +162,7 @@
         "scope": 5,
         "scopeId": "SCOPE-05",
         "name": "Today Status UI And Real-Stack Regression",
-        "status": "in_progress",
+        "status": "done",
         "dependsOn": [
           "SCOPE-04"
         ],

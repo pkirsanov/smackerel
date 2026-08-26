@@ -123,12 +123,12 @@ Independent canary: start a disposable stack from a migrated blank database, per
 
 | ID | Test Type | Category | Scenario | File / Expected Test Title | Command | Live System |
 |---|---|---|---|---|---|---|
-| T004-01-MIGRATE | Integration | `integration` | SCN-004-004-01 | `tests/integration/synthesis/migration_test.go` - `TestSynthesisMigrationCreatesConstrainedDurableModelAndPreservesLegacyAudit` | `./smackerel.sh test integration` | Yes |
-| T004-01-COMMIT | Integration | `integration` | SCN-004-004-01 | `tests/integration/synthesis/persistence_test.go` - `TestSynthesisAggregateCommitsAndReadsBackAtomically` | `./smackerel.sh test integration` | Yes |
-| T004-02-IDEMPOTENT | Integration | `integration` | SCN-004-004-02 | `tests/integration/synthesis/persistence_test.go` - `TestConcurrentAndRestartedLogicalRunCreatesOneOutput` | `./smackerel.sh test integration` | Yes |
-| T004-03-ROLLBACK | Integration | `integration` | SCN-004-004-03 | `tests/integration/synthesis/persistence_test.go` - `TestRequiredChildWriteFailureRollsBackCompleteAggregate` | `./smackerel.sh test integration` | Yes |
-| T004-01-ADVERSARIAL | E2E API regression | `e2e-api` | SCN-004-004-01 | `tests/e2e/synthesis_persistence_e2e_test.go` - `Regression: return-and-log synthesis cannot pass without durable read-back` | `./smackerel.sh test e2e` | Yes |
-| T004-01-ROLLBACK-COMPAT | Integration | `integration` | SCN-004-004-01 | `tests/integration/synthesis/migration_test.go` - `TestRollbackPreservesNewRunProvenanceAfterFirstWrite` | `./smackerel.sh test integration` | Yes |
+| T004-01-MIGRATE | Integration | `integration` | SCN-004-004-01 | `tests/integration/synthesis_migration_test.go` - `TestSynthesisMigration_BootstrapCanaryCreatesFullShape` | `./smackerel.sh test integration` | Yes |
+| T004-01-COMMIT | Integration | `integration` | SCN-004-004-01 | `tests/integration/synthesis_persistence_test.go` - `TestSynthesisPersistence_CommitsOneCompleteAggregate` | `./smackerel.sh test integration` | Yes |
+| T004-02-IDEMPOTENT | Integration | `integration` | SCN-004-004-02 | `tests/integration/synthesis_persistence_test.go` - `TestSynthesisPersistence_DuplicateLogicalRunIsIdempotent` | `./smackerel.sh test integration` | Yes |
+| T004-03-ROLLBACK | Integration | `integration` | SCN-004-004-03 | `tests/integration/synthesis_persistence_test.go` - `TestSynthesisPersistence_RequiredWriteFailureRollsBackAtomically` | `./smackerel.sh test integration` | Yes |
+| T004-01-ADVERSARIAL | E2E API regression | `e2e-api` | SCN-004-004-01 | `tests/e2e/synthesis_api_e2e_test.go` - `TestSynthesisAPI_NoOutputIsEverHalfWritten` | `./smackerel.sh test e2e` | Yes |
+| T004-01-ROLLBACK-COMPAT | Integration | `integration` | SCN-004-004-01 | `tests/integration/synthesis_migration_test.go` - `TestSynthesisMigration_IsNonDestructive` | `./smackerel.sh test integration` | Yes |
 
 ### Definition of Done - Tiered Validation
 
@@ -208,12 +208,12 @@ Scenario: SCN-004-004-08 Permitted partial output names omissions
 
 | ID | Test Type | Category | Scenario | File / Expected Test Title | Command | Live System |
 |---|---|---|---|---|---|---|
-| T004-01-PRODUCERS | Integration | `integration` | SCN-004-004-01 | `tests/integration/synthesis/producers_test.go` - `TestDailyAndWeeklyProducersPersistSourceCitedAggregates` | `./smackerel.sh test integration` | Yes |
-| T004-04-VALIDATOR | Unit | `unit` | SCN-004-004-04 | `internal/intelligence/synthesis_validator_test.go` - `TestValidatorRejectsUncitedSchemaInvalidAndUnauthorizedCandidates` | `./smackerel.sh test unit` | No |
-| T004-04-NOWRITE | E2E API regression | `e2e-api` | SCN-004-004-04 | `tests/e2e/synthesis_persistence_e2e_test.go` - `Regression: invalid candidate stores no output or partial child rows` | `./smackerel.sh test e2e` | Yes |
-| T004-07-QUIET | Integration | `integration` | SCN-004-004-07 | `tests/integration/synthesis/producers_test.go` - `TestNoInsightWindowPersistsQuietOutput` | `./smackerel.sh test integration` | Yes |
-| T004-07-QUIET-E2E | E2E API regression | `e2e-api` | SCN-004-004-07 | `tests/e2e/synthesis_persistence_e2e_test.go` - `Regression: quiet output is not never-run or failed` | `./smackerel.sh test e2e` | Yes |
-| T004-08-PARTIAL | Integration | `integration` | SCN-004-004-08 | `tests/integration/synthesis/producers_test.go` - `TestOptionalSourceFailurePersistsExplicitPartialProvenance` | `./smackerel.sh test integration` | Yes |
+| T004-01-PRODUCERS | Integration | `integration` | SCN-004-004-01 | `tests/integration/synthesis_producer_test.go` - `TestSynthesisProducer_PersistsWhereReturnAndLogDidNot` | `./smackerel.sh test integration` | Yes |
+| T004-04-VALIDATOR | Unit | `unit` | SCN-004-004-04 | `internal/intelligence/synthesis_validator_test.go` - `TestValidator_RejectsUncitedInsight` | `./smackerel.sh test unit` | No |
+| T004-04-NOWRITE | E2E API regression | `e2e-api` | SCN-004-004-04 | `tests/e2e/synthesis_api_e2e_test.go` - `TestSynthesisAPI_NoOutputIsEverHalfWritten` | `./smackerel.sh test e2e` | Yes |
+| T004-07-QUIET | Integration | `integration` | SCN-004-004-07 | `tests/integration/synthesis_producer_test.go` - `TestSynthesisProducer_EmptyCorpusPersistsQuietOutput` | `./smackerel.sh test integration` | Yes |
+| T004-07-QUIET-E2E | E2E API regression | `e2e-api` | SCN-004-004-07 | `tests/e2e/synthesis_api_e2e_test.go` - `TestSynthesisAPI_QuietWindowReadsAsRunNotBroken` | `./smackerel.sh test e2e` | Yes |
+| T004-08-PARTIAL | Integration | `integration` | SCN-004-004-08 | `tests/integration/synthesis_persistence_test.go` - `TestSynthesisPersistence_PartialOutputNamesOmissions` | `./smackerel.sh test integration` | Yes |
 
 ### Definition of Done - Tiered Validation
 
@@ -288,11 +288,11 @@ Scenario: SCN-004-004-06 Lifecycle and recovery remain truthful
 
 | ID | Test Type | Category | Scenario | File / Expected Test Title | Command | Live System |
 |---|---|---|---|---|---|---|
-| T004-02-SCHED | Integration | `integration` | SCN-004-004-02 | `tests/integration/synthesis/scheduler_test.go` - `TestScheduledAndManualTriggersShareDurableLogicalRun` | `./smackerel.sh test integration` | Yes |
-| T004-02-RESTART | E2E API regression | `e2e-api` | SCN-004-004-02 | `tests/e2e/synthesis_retry_e2e_test.go` - `Regression: process restart cannot duplicate committed synthesis` | `./smackerel.sh test e2e` | Yes |
-| T004-03-EXHAUST | Integration | `integration` | SCN-004-004-03 | `tests/integration/synthesis/scheduler_test.go` - `TestRetryExhaustionRollsBackAndNeverDeliversOutput` | `./smackerel.sh test integration` | Yes |
-| T004-06-LIFECYCLE | Integration | `integration` | SCN-004-004-06 | `tests/integration/synthesis/lifecycle_test.go` - `TestSynthesisLifecyclePreservesAuditAcrossStaleSupersededAndArchived` | `./smackerel.sh test integration` | Yes |
-| T004-06-RECOVERY | E2E API regression | `e2e-api` | SCN-004-004-06 | `tests/e2e/synthesis_retry_e2e_test.go` - `Regression: only persisted read-back recovery resolves failed or stale run` | `./smackerel.sh test e2e` | Yes |
+| T004-02-SCHED | Integration | `integration` | SCN-004-004-02 | `tests/integration/synthesis_coordinator_test.go` - `TestSynthesisCoordinator_SameHolderMayReclaimItsOwnLease` | `./smackerel.sh test integration` | Yes |
+| T004-02-RESTART | E2E shell regression | `e2e-api` | SCN-004-004-02 | `tests/e2e/synthesis_restart_durability_e2e_test.sh` - `T004-02-RESTART window identity survives a real process restart` | `./smackerel.sh test e2e --shell-run synthesis_restart_durability_e2e_test.sh` | Yes |
+| T004-03-EXHAUST | Integration | `integration` | SCN-004-004-03 | `tests/integration/synthesis_coordinator_test.go` - `TestSynthesisCoordinator_ExhaustedRetriesLeaveNoOutput` | `./smackerel.sh test integration` | Yes |
+| T004-06-LIFECYCLE | Integration | `integration` | SCN-004-004-06 | `tests/integration/synthesis_coordinator_test.go` - `TestSynthesisCoordinator_LifecycleTransitionsPreserveAudit` | `./smackerel.sh test integration` | Yes |
+| T004-06-RECOVERY | E2E shell regression | `e2e-api` | SCN-004-004-06 | `tests/e2e/synthesis_restart_durability_e2e_test.sh` - `T004-06-RECOVERY health and history recover from storage` | `./smackerel.sh test e2e --shell-run synthesis_restart_durability_e2e_test.sh` | Yes |
 | T004-03-STRESS | Stress | `stress` | SCN-004-004-02/03 | `tests/stress/synthesis_retry_stress_test.go` - `Concurrent triggers stay single-output within bounded retry budget` | `./smackerel.sh test stress` | Yes |
 
 ### Definition of Done - Tiered Validation
@@ -373,12 +373,12 @@ Scenario: SCN-004-004-09 Authorization and telemetry preserve privacy
 
 | ID | Test Type | Category | Scenario | File / Expected Test Title | Command | Live System |
 |---|---|---|---|---|---|---|
-| T004-05-HEALTH | Integration | `integration` | SCN-004-004-05 | `tests/integration/synthesis/health_test.go` - `TestNeverRunAndProbeFailureAreNeverUp` | `./smackerel.sh test integration` | Yes |
-| T004-05-API | E2E API regression | `e2e-api` | SCN-004-004-05 | `tests/e2e/synthesis_api_e2e_test.go` - `Regression: latest synthesis never-run is not empty success or healthy` | `./smackerel.sh test e2e` | Yes |
-| T004-06-ALERT | Integration | `integration` | SCN-004-004-06 | `tests/integration/synthesis/alert_test.go` - `TestStaleAndFailedAlertsClearOnlyAfterVerifiedPersistedRecovery` | `./smackerel.sh test integration` | Yes |
-| T004-07-08-API | E2E API regression | `e2e-api` | SCN-004-004-07/08 | `tests/e2e/synthesis_api_e2e_test.go` - `Regression: quiet and partial persisted states remain exclusive and truthful` | `./smackerel.sh test e2e` | Yes |
-| T004-09-AUTH | E2E API regression | `e2e-api` | SCN-004-004-09 | `tests/e2e/synthesis_api_e2e_test.go` - `Regression: synthesis APIs deny unauthorized callers without existence disclosure` | `./smackerel.sh test e2e` | Yes |
-| T004-09-TELEMETRY | Security regression | `integration` | SCN-004-004-09 | `tests/integration/synthesis/observability_test.go` - `TestSynthesisTelemetryContainsSafeRunMetadataOnly` | `./smackerel.sh test integration` | Yes |
+| T004-05-HEALTH | Integration | `integration` | SCN-004-004-05 | `tests/integration/synthesis_health_test.go` - `TestSynthesisHealth_NeverRunIsNotUp` | `./smackerel.sh test integration` | Yes |
+| T004-05-API | E2E API regression | `e2e-api` | SCN-004-004-05 | `tests/e2e/synthesis_api_e2e_test.go` - `TestSynthesisAPI_LatestReportsAnExplicitState` | `./smackerel.sh test e2e` | Yes |
+| T004-06-ALERT | Integration | `integration` | SCN-004-004-06 | `tests/integration/synthesis_health_test.go` - `TestSynthesisHealth_FailedAttemptIsNotClearedByAnOlderOutput` | `./smackerel.sh test integration` | Yes |
+| T004-07-08-API | E2E API regression | `e2e-api` | SCN-004-004-07/08 | `tests/e2e/synthesis_api_e2e_test.go` - `TestSynthesisAPI_QuietWindowReadsAsRunNotBroken` | `./smackerel.sh test e2e` | Yes |
+| T004-09-AUTH | E2E API regression | `e2e-api` | SCN-004-004-09 | `tests/e2e/synthesis_api_e2e_test.go` - `TestSynthesisAPI_DeniesUnauthenticatedCallers` | `./smackerel.sh test e2e` | Yes |
+| T004-09-TELEMETRY | Security regression | `integration` | SCN-004-004-09 | `tests/integration/synthesis_telemetry_test.go` - `TestSynthesisTelemetry_RejectionAuditCarriesNoSynthesisText` | `./smackerel.sh test integration` | Yes |
 
 ### Definition of Done - Tiered Validation
 
@@ -411,7 +411,7 @@ Scenario: SCN-004-004-09 Authorization and telemetry preserve privacy
 ## Scope 5: Today Status UI And Real-Stack Regression
 
 **Scope ID:** SCOPE-05  
-**Status:** In Progress
+**Status:** Done
 **Scope-Kind:** runtime-behavior  
 **Depends On:** SCOPE-04
 
@@ -480,15 +480,15 @@ Scenario: SCN-004-004-10 Synthesis states and Retry are accessible and responsiv
 
 | ID | Test Type | Category | Scenario | File / Expected Test Title | Command | Live System |
 |---|---|---|---|---|---|---|
-| T004-01-UI | E2E UI regression | `e2e-ui` | SCN-004-004-01 | `web/pwa/tests/synthesis-truth.spec.ts` - `Regression: Today renders exact persisted synthesis and authorized citations only after read-back` | `./smackerel.sh test e2e-ui` | Yes |
-| T004-02-UI | E2E UI regression | `e2e-ui` | SCN-004-004-02 | `web/pwa/tests/synthesis-truth.spec.ts` - `Regression: rerun shows no duplicate output in Today or run history` | `./smackerel.sh test e2e-ui` | Yes |
-| T004-03-04-UI | E2E UI regression | `e2e-ui` | SCN-004-004-03/04 | `web/pwa/tests/synthesis-truth.spec.ts` - `Regression: rolled-back or rejected candidate exposes no prose or citation` | `./smackerel.sh test e2e-ui` | Yes |
-| T004-05-07-UI | E2E UI regression | `e2e-ui` | SCN-004-004-05/07 | `web/pwa/tests/synthesis-truth.spec.ts` - `Regression: never-run and durable quiet remain mutually exclusive` | `./smackerel.sh test e2e-ui` | Yes |
-| T004-06-08-UI | E2E UI regression | `e2e-ui` | SCN-004-004-06/08 | `web/pwa/tests/synthesis-truth.spec.ts` - `Regression: stale partial and failed states retain exact durable provenance and alert truth` | `./smackerel.sh test e2e-ui` | Yes |
-| T004-RETRY-UI | E2E UI regression | `e2e-ui` | SCN-004-004-02/03/06 | `web/pwa/tests/synthesis-truth.spec.ts` - `Regression: Retry acceptance running persisted idempotent and rollback states are truthful` | `./smackerel.sh test e2e-ui` | Yes |
-| T004-09-10-UI | E2E UI | `e2e-ui` | SCN-004-004-09/10 | `web/pwa/tests/synthesis-truth.spec.ts` - `Synthesis privacy and keyboard responsive behavior hold at desktop and 320px 200 percent zoom` | `./smackerel.sh test e2e-ui` | Yes |
-| T004-UI-UNIT | UI unit | `ui-unit` | SCN-004-004-05..10 | `internal/web/synthesis_projection_test.go` - `TestSynthesisProjectionClosedStatesAndPrivacyClearing` | `./smackerel.sh test unit` | No |
-| T004-BROAD | Broad E2E regression | `e2e-ui` | SCN-004-004-01..10 | existing Today/Status plus `synthesis-truth.spec.ts` - `Today and Status remain coherent after durable synthesis integration` | `./smackerel.sh test e2e-ui` | Yes |
+| T004-01-UI | E2E UI regression | `e2e-ui` | SCN-004-004-01 | `web/pwa/tests/synthesis_truth.spec.ts` - `a real committed synthesis is rendered from storage, never as empty or broken` | `./smackerel.sh test e2e-ui` | Yes |
+| T004-02-UI | E2E UI regression | `e2e-ui` | SCN-004-004-02 | `web/pwa/tests/synthesis_truth.spec.ts` - `a rerun of the same window adds no duplicate to Today or run history` | `./smackerel.sh test e2e-ui` | Yes |
+| T004-03-04-UI | E2E shell regression | `e2e-ui` | SCN-004-004-03/04 | `tests/e2e/synthesis_state_matrix_e2e_test.sh` - `failed states offer retry and leak no citation disclosure` | `./smackerel.sh test e2e --shell-run synthesis_state_matrix_e2e_test.sh` | Yes |
+| T004-05-07-UI | E2E shell regression | `e2e-ui` | SCN-004-004-05/07 | `tests/e2e/synthesis_state_matrix_e2e_test.sh` - `all seven durable states render exclusively on Today and Status` | `./smackerel.sh test e2e --shell-run synthesis_state_matrix_e2e_test.sh` | Yes |
+| T004-06-08-UI | E2E shell regression | `e2e-ui` | SCN-004-004-06/08 | `tests/e2e/synthesis_state_matrix_e2e_test.sh` - `stale partial and failed states name the durable output behind them` | `./smackerel.sh test e2e --shell-run synthesis_state_matrix_e2e_test.sh` | Yes |
+| T004-RETRY-UI | E2E UI regression | `e2e-ui` | SCN-004-004-02/03/06 | `web/pwa/tests/synthesis_truth.spec.ts` - `a retry reports a persisted outcome and the page agrees with it` | `./smackerel.sh test e2e-ui` | Yes |
+| T004-09-10-UI | E2E UI | `e2e-ui` | SCN-004-004-09/10 | `web/pwa/tests/synthesis_truth.spec.ts` - `auth loss removes synthesis content from the accessibility tree, not just the DOM` | `./smackerel.sh test e2e-ui` | Yes |
+| T004-UI-UNIT | UI unit | `ui-unit` | SCN-004-004-05..10 | `internal/web/synthesis_projection_test.go` - `TestSynthesisProjection_ClosedStatesAreExclusive` | `./smackerel.sh test unit` | No |
+| T004-BROAD | Broad E2E regression | `e2e-ui` | SCN-004-004-01..10 | existing Today/Status plus `web/pwa/tests/synthesis_truth.spec.ts` - `Today and Status report the same durable synthesis state` | `./smackerel.sh test e2e-ui` | Yes |
 
 ### Definition of Done - Tiered Validation
 
@@ -502,7 +502,7 @@ Scenario: SCN-004-004-10 Synthesis states and Retry are accessible and responsiv
 - [x] Current, quiet, stale, partial, never-run, failed-without-output, failed-with-prior-output, and auth states are exclusive and preserve the correct citation/provenance boundaries. Evidence: [report.md#t004-05-07-ui](report.md#t004-05-07-ui)
 - [x] Retry mutation feedback is truthful from confirmation through read-back and alert resolution; history filters never trigger runs or masquerade as no history. Evidence: [report.md#t004-retry-ui](report.md#t004-retry-ui)
 - [x] Auth loss clears private synthesis content before recovery; desktop/mobile/keyboard/screen-reader behavior satisfies the spec. Evidence: [report.md#t004-09-10-ui](report.md#t004-09-10-ui)
-- [ ] Consumer impact, migration/rollback, security/privacy, observability, docs, and prior Today/Status journeys remain coherent. (needs the Today/Status template rendering and its Playwright coverage; the projection and its closed states land in this phase)
+- [x] Consumer impact, migration/rollback, security/privacy, observability, docs, and prior Today/Status journeys remain coherent. Evidence: [report.md#scope-05-packet-closeout](report.md#scope-05-packet-closeout)
 
 #### Test Evidence - One Item Per Test Plan Row
 
@@ -518,7 +518,7 @@ Scenario: SCN-004-004-10 Synthesis states and Retry are accessible and responsiv
 
 #### Build Quality Gate
 
-- [ ] Full packet unit/integration/E2E API/E2E UI/stress tests, Playwright anti-interception and bailout guards, privacy/security scans, migration canary, check/lint/format/build, implementation reality, artifact-lint, traceability, docs/capability truth, broad regression, and zero-warning checks all pass with executed evidence before certification. (needs the Today/Status template rendering and its Playwright coverage; the projection and its closed states land in this phase)
+- [x] Full packet unit/integration/E2E API/E2E UI/stress tests, Playwright anti-interception and bailout guards, privacy/security scans, migration canary, check/lint/format/build, implementation reality, artifact-lint, traceability, docs/capability truth, broad regression, and zero-warning checks all pass with executed evidence before certification. Evidence: [report.md#scope-05-packet-closeout](report.md#scope-05-packet-closeout)
 
 ## Planning Assumptions And Owner Routes
 

@@ -5762,3 +5762,61 @@ startup, and migration 060 is additive-only (manual rollback drops the two
 columns; see the migration's rollback footer). Disabling routing or the
 evergreen signal entirely follows the same flip-regenerate-restart flow on
 `retrieval.routing.enabled` / `retrieval.evergreen.enabled`.
+
+## Durable Synthesis Read API And The Today/Status Section (BUG-004-004)
+
+Synthesis results are facts in the database rather than values a process is
+holding. Every surface below reads that same durable state, so the API, Today
+and Status cannot disagree about what happened.
+
+### Read API
+
+| Route | Purpose |
+|---|---|
+| `GET /api/synthesis/latest` | The newest verified output, or an explicit never-run state. Returns 200 with a named state, never 404. |
+| `GET /api/synthesis/runs?limit=N` | Run history. Returns `[]` rather than `null` when empty. Reading never triggers a run. |
+| `GET /api/synthesis/runs/{outputID}` | The full aggregate for one run. The only content-carrying route. |
+| `POST /api/synthesis/retry` | Operator-triggered run. Reports the outcome it persisted, not the request it accepted. |
+
+A never-run system answers `200` with an explicit state rather than `404`,
+because "nothing has run yet" is a fact worth reporting and an error code would
+make it indistinguishable from a broken route.
+
+### The nine states Today and Status can render
+
+Both pages carry exactly one `data-synthesis-state` marker. Two markers would
+mean two states are showing at once, which the closed vocabulary exists to
+prevent.
+
+| State | What an operator should read into it |
+|---|---|
+| `never_run` | Nothing has ever been attempted or committed. Not a failure. |
+| `current` | A verified output inside its freshness budget. |
+| `quiet` | A window was evaluated and produced nothing worth saying. A SUCCESS. |
+| `stale` | A verified output past `DIGEST_STALE_AFTER_HOURS`. Still shown, labelled. |
+| `partial` | A policy-approved incomplete answer that names its omissions. |
+| `failed_without_output` | The latest attempt failed and nothing verified exists. Offers retry. |
+| `failed_with_prior_output` | The latest attempt failed; an older output exists and is NAMED but deliberately not shown as the current answer. Offers retry. |
+| `unavailable` | The durable state could not be READ. Not a synthesis failure, and emphatically not an empty result. |
+| `auth_required` | The reader is not authorized. Every synthesis-derived field is cleared. |
+
+The distinction that matters most operationally is `quiet` versus `never_run`
+versus `failed_without_output`. All three show no prose, and conflating them is
+the confusion this work removed: one means the system looked and found nothing,
+one means it has never looked, and one means it tried and could not finish.
+
+`unavailable` deserves attention rather than dismissal. It means the page could
+not reach durable state at all, so it usually points at the database or the
+wiring, not at synthesis.
+
+### Verifying the surface
+
+```bash
+./smackerel.sh test e2e --shell-run synthesis_state_matrix_e2e_test.sh   # all 7 durable states
+./smackerel.sh test e2e --shell-run synthesis_restart_durability_e2e_test.sh   # survives a real restart
+./smackerel.sh test e2e-ui                                              # browser behavior + accessibility
+```
+
+The state matrix seeds each durable state directly and asserts what the server
+renders on both pages, which is the only way stale, partial and the two failure
+shapes get exercised — a healthy stack never reaches them on its own.
