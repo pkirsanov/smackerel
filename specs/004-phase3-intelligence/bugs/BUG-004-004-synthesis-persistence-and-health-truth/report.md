@@ -1171,3 +1171,75 @@ failed attempt must carry a `failure_class`, and the first version of the seed
 omitted it (`synthesis_run_attempts_failure_fields`). The seed was corrected to
 supply one rather than the constraint being worked around.
 
+### T004-09-10-UI
+
+Accessibility, reflow and keyboard behavior are asserted in the real browser:
+
+```text
+./smackerel.sh test e2e-ui
+✓ the synthesis section is reachable and labelled in the accessibility tree (593ms)
+✓ auth loss removes synthesis content from the accessibility tree, not just the DOM (332ms)
+✓ the synthesis section reflows at 320px without horizontal scroll (436ms)
+✓ the synthesis section reflows at 200% zoom without horizontal scroll (483ms)
+✓ the retry control class meets the minimum target size (474ms)
+88 passed (23.2s)
+```
+
+The accessibility assertions query by ROLE rather than by DOM id. That matters
+for the auth case in particular: content can be visually gone and still be
+announced, so absence is asserted in the tree assistive technology actually
+reads, including the citation counts that would otherwise leak the existence of
+a synthesis the reader is not entitled to.
+
+Mutation-verified. Removing `aria-labelledby` from the section fails exactly one
+test and leaves the rest passing, which is the correct shape — the others do not
+depend on that attribute:
+
+```text
+✘ the synthesis section is reachable and labelled in the accessibility tree (6.0s)
+Error: the section must be labelled by its heading so assistive technology can announce it
+```
+
+### A real accessibility defect this found
+
+The target-size check did not pass and then get recorded. It FAILED, and the
+failure was correct:
+
+```text
+Error: a control with class "action" renders 95.109375x19, below the 24px
+minimum target size
+```
+
+`class="action"` was in use across several templates with NO rule behind it
+anywhere in the stylesheet, so every such control rendered 19px tall. The fix
+adds the missing `.action` rule with a 24px minimum, which repairs the retry
+control and every other existing user of that class at once.
+
+An earlier version of this check tried to measure live `.action` controls on the
+page and refused to run, reporting that no control was present to size-check.
+That refusal was the non-vacuity guard working: the retry control only renders
+in a failure state a healthy stack does not reach. The check now measures what
+the class is worth in the stylesheet the page just shipped, and the matrix test
+asserts separately that the failure states render a real `<button>` carrying
+that class.
+
+### T004-RETRY-UI
+
+```text
+✓ the retry control is offered only when synthesis has actually failed (481ms)
+✓ a retry reports a persisted outcome and the page agrees with it (427ms)
+✓ reading run history never triggers a run and never masquerades as no history (205ms)
+PASS: failed_without_output offers a real retry button
+PASS: failed_with_prior_output offers a real retry button
+```
+
+Retry is asserted in both directions. A failure state must offer it, as a
+focusable button rather than text that reads like one; a healthy state must NOT,
+because implying something is wrong when it is not is the same dishonesty
+pointing the other way.
+
+The history check asserts that reading never writes. A history view that quietly
+triggered a run would inflate the very record it claims to report, so the run
+count is compared across repeated reads including a narrowed one, and the first
+read must be non-empty so an empty history could not satisfy it.
+

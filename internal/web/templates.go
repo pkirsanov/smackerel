@@ -40,6 +40,10 @@ const allTemplates = `
         .search-box { width: 100%; padding: 0.75rem; border: 1px solid var(--border); border-radius: var(--radius); font-size: 1rem; background: var(--card-bg); color: var(--fg); }
         .search-box:focus { outline: 2px solid var(--accent); border-color: transparent; }
         .card { background: var(--card-bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 1rem; margin: 0.75rem 0; box-shadow: var(--shadow); }
+        /* Several templates already used class="action" with no rule behind it,
+           so every such control rendered 19px tall. 24px is the minimum target. */
+        .action { display: inline-flex; align-items: center; justify-content: center; min-height: 24px; min-width: 24px; padding: 0.35rem 0.75rem; border: 1px solid var(--border); border-radius: var(--radius); background: var(--card-bg); color: var(--fg); font: inherit; text-decoration: none; cursor: pointer; }
+        .action:hover { border-color: var(--accent); }
         .intent-hero { border-left: 3px solid var(--accent); }
         .intent-hero-cta { display: inline-block; margin-top: 0.5rem; font-weight: 600; color: var(--fg); text-decoration: none; }
         .intent-hero-cta:hover { text-decoration: underline; }

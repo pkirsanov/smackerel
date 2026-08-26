@@ -129,6 +129,25 @@ assert_prose_present() {
     fi
 }
 
+# assert_retry_offered <path>
+#
+# A failure state must offer recovery, and it must do so as a real button rather
+# than as text that merely reads like one. The browser suite cannot reach a
+# failure state on a healthy stack, so the structural claim is asserted here
+# where the state can be seeded.
+assert_retry_offered() {
+    local path="$1" html
+    html="$(curl -fsS --max-time 20 -H "Authorization: Bearer $AUTH_TOKEN" "$CORE_URL$path")"
+    if ! grep -qE '<button[^>]*data-synthesis-retry' <<<"$html"; then
+        echo "FAIL: $path is a failure state but offers no retry button"
+        exit 1
+    fi
+    if ! grep -qE '<button[^>]*class="action"[^>]*data-synthesis-retry' <<<"$html"; then
+        echo "FAIL: $path retry control does not carry the action class that gives it its target size"
+        exit 1
+    fi
+}
+
 check() {
     local label="$1" expected="$2"
     assert_state /digest "$expected"
@@ -171,6 +190,8 @@ check "partial" partial
 reset_synthesis
 seed_attempt failed
 check "failure with no prior output" failed_without_output
+assert_retry_offered /digest
+echo "PASS: failed_without_output offers a real retry button"
 
 # 7. failed_with_prior_output — an attempt failed but an older output survives.
 #    The older output must NOT be presented as the current answer.
@@ -178,5 +199,7 @@ reset_synthesis
 seed_output prior full 1 "$FRESH"
 seed_attempt failed
 check "failure with a prior output" failed_with_prior_output
+assert_retry_offered /digest
+echo "PASS: failed_with_prior_output offers a real retry button"
 
 echo "=== durable synthesis state matrix: all seven states render exclusively ==="
