@@ -905,23 +905,37 @@ func matchBearerToken(r *http.Request, expected string) bool {
 // webAuthMiddleware checks authentication for web UI routes.
 // Accepts Bearer token in Authorization header or auth_token cookie.
 // If no AuthToken is configured, all requests are allowed (dev mode).
+//
+// Every path that admits a request attaches an auth.Session, so
+// auth.SessionFromContext is a reliable "this request cleared the gate" signal
+// for downstream handlers. Previously the three admit paths here passed the
+// request through unchanged while bearerAuthMiddleware attached a session,
+// which meant a handler asking the context whether the caller was authorized
+// got FALSE for a perfectly valid browser session.
 func (d *Dependencies) webAuthMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		admit := func() {
+			ctx := auth.WithSession(r.Context(), auth.Session{
+				Source: auth.SessionSourceSharedToken,
+			})
+			next.ServeHTTP(w, r.WithContext(ctx))
+		}
+
 		if d.AuthToken == "" {
-			next.ServeHTTP(w, r)
+			admit()
 			return
 		}
 
 		// Check Authorization header (Bearer token)
 		if matchBearerToken(r, d.AuthToken) {
-			next.ServeHTTP(w, r)
+			admit()
 			return
 		}
 
 		// Check auth_token cookie (for browser sessions)
 		if cookie, err := r.Cookie("auth_token"); err == nil {
 			if subtle.ConstantTimeCompare([]byte(cookie.Value), []byte(d.AuthToken)) == 1 {
-				next.ServeHTTP(w, r)
+				admit()
 				return
 			}
 		}

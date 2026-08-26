@@ -1050,3 +1050,76 @@ latest view but not the history would leave the two read surfaces telling a
 reader different stories about the same window, which is a quieter version of
 the same dishonesty.
 
+## SCOPE-05 Browser Rendering Phase
+
+Today and Status now render the durable synthesis projection, and
+`web/pwa/tests/synthesis_truth.spec.ts` exercises it in a real browser against
+the live stack with no request interception.
+
+```text
+./smackerel.sh test e2e-ui
+✓ synthesis_truth.spec.ts:61:1 › Today renders exactly one synthesis state drawn from the closed set (1.0s)
+✓ synthesis_truth.spec.ts:68:1 › a real committed synthesis is rendered from storage, never as empty or broken (883ms)
+✓ synthesis_truth.spec.ts:126:1 › Today and Status report the same durable synthesis state (1.2s)
+✓ synthesis_truth.spec.ts:141:1 › an unauthenticated visitor is never shown synthesis content (923ms)
+✓ synthesis_truth.spec.ts:164:1 › the retry control is offered only when synthesis has actually failed (881ms)
+81 passed (40.6s)
+```
+
+### The first version of this suite was vacuous, and the mutation is what proved it
+
+The suite initially passed while the durable reader was deliberately unwired.
+That is the outcome a green suite is supposed to make impossible, so the pass
+was worthless until it was explained.
+
+The cause was a real defect, not a test artifact. `webAuthMiddleware` had three
+paths that admitted a request by calling `next.ServeHTTP(w, r)` without
+attaching an `auth.Session`, while the bearer middleware alongside it did attach
+one. A handler asking the context whether the caller was authorized therefore
+got FALSE for a perfectly valid browser session, so every page rendered
+`auth_required` — including when the reader was correctly wired.
+
+`auth_required` clears every content-bearing field by design. That is right for
+a real auth failure and fatal for a test: the suite was asserting "no synthesis
+prose is present" against a page that was never going to contain any, and would
+have passed no matter what the durable state was.
+
+Two changes fixed it. The middleware now attaches a session on every admit path,
+so `SessionFromContext` is a reliable "this request cleared the gate" signal.
+And the spec now refuses `auth_required` and `unavailable` for an authenticated
+reader, because both mean the page never reached durable state:
+
+```text
+Error: /digest reported 'unavailable' for an authenticated reader; the page is
+not reading durable state, so every other assertion here would be vacuous
+  at requireAnsweredState (web/pwa/tests/synthesis_truth.spec.ts:42:9)
+```
+
+### Mutation-verified in both directions
+
+With `svc.webHandler.SynthesisReader` left unwired in `cmd/core/wiring.go`:
+
+```text
+✘ synthesis_truth.spec.ts:61:1 › Today renders exactly one synthesis state drawn from the closed set (754ms)
+✘ synthesis_truth.spec.ts:68:1 › a real committed synthesis is rendered from storage, never as empty or broken (1.0s)
+✘ synthesis_truth.spec.ts:126:1 › Today and Status report the same durable synthesis state (570ms)
+✓ synthesis_truth.spec.ts:141:1 › an unauthenticated visitor is never shown synthesis content (808ms)
+✘ synthesis_truth.spec.ts:164:1 › the retry control is offered only when synthesis has actually failed (733ms)
+```
+
+Four of five fail. The fifth passing is correct rather than a gap: the
+unauthenticated check does not depend on the reader being wired, so a mutation
+of the wiring should not disturb it. A mutation that broke every test equally
+would have told us less, because it would not distinguish the tests that read
+durable state from the one that deliberately does not.
+
+The wiring was restored and the lane re-run clean before this evidence was
+recorded.
+
+### One reader, two pages
+
+Both pages call the same `synthesisModel` through the same injected reader, and
+one test compares the state Today reports against the state Status reports. Two
+pages computing this separately is precisely how they would drift into telling a
+reader different stories, so the agreement is asserted rather than assumed.
+

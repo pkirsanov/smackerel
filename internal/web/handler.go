@@ -612,6 +612,10 @@ func (h *Handler) StatusPage(w http.ResponseWriter, r *http.Request) {
 		"NATSHealthy":                    h.NATS != nil && h.NATS.Healthy(),
 		"RecommendationsEnabled":         h.RecommendationsEnabled,
 		"RecommendationProviderStatuses": recommendationProviderStatuses,
+		// BUG-004-004 SCOPE-05 — Status renders the SAME durable synthesis
+		// projection Today does, from the same reader. Two pages computing this
+		// separately is how they would come to disagree.
+		"Synthesis": h.synthesisModel(r.Context(), requestAuthorized(r)),
 	}
 
 	if h.KnowledgeStore != nil {

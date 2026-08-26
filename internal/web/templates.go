@@ -452,6 +452,7 @@ const allTemplates = `
 {{define "status.html"}}
 {{template "head" .}}
 <h1>System Status</h1>
+{{template "synthesis-section" .Synthesis}}
 <div class="status-card">
     <div class="card stat"><div class="value">{{.ArtifactCount}}</div><div class="label">Artifacts</div></div>
     <div class="card stat"><div class="value">{{.TopicCount}}</div><div class="label">Topics</div></div>
