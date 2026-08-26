@@ -160,7 +160,7 @@ Independent canary: start a disposable stack from a migrated blank database, per
 ## Scope 2: Validated Daily And Weekly Producers
 
 **Scope ID:** SCOPE-02  
-**Status:** In Progress
+**Status:** Done
 **Scope-Kind:** runtime-behavior  
 **Depends On:** SCOPE-01
 
@@ -232,9 +232,9 @@ Scenario: SCN-004-004-08 Permitted partial output names omissions
 
 - [x] T004-01-PRODUCERS passes with current-session raw evidence in `report.md#t004-01-producers`. Evidence: [report.md#scope-02-implementation-phase](report.md#scope-02-implementation-phase)
 - [x] T004-04-VALIDATOR passes with current-session raw evidence in `report.md#t004-04-validator`. Evidence: [report.md#scope-02-implementation-phase](report.md#scope-02-implementation-phase)
-- [ ] T004-04-NOWRITE passes with current-session raw evidence in `report.md#t004-04-nowrite`. (requires the read API SCOPE-04 introduces; the same properties are covered at the integration layer today)
+- [x] T004-04-NOWRITE passes with current-session raw evidence in `report.md#t004-04-nowrite`. Evidence: [report.md#t004-04-nowrite](report.md#t004-04-nowrite)
 - [x] T004-07-QUIET passes with current-session raw evidence in `report.md#t004-07-quiet`. Evidence: [report.md#scope-02-implementation-phase](report.md#scope-02-implementation-phase)
-- [ ] T004-07-QUIET-E2E passes with current-session raw evidence in `report.md#t004-07-quiet-e2e`. (requires the read API SCOPE-04 introduces; the same properties are covered at the integration layer today)
+- [x] T004-07-QUIET-E2E passes with current-session raw evidence in `report.md#t004-07-quiet-e2e`. Evidence: [report.md#t004-07-quiet-e2e](report.md#t004-07-quiet-e2e)
 - [x] T004-08-PARTIAL passes with current-session raw evidence in `report.md#t004-08-partial`. Evidence: [report.md#scope-02-implementation-phase](report.md#scope-02-implementation-phase)
 
 #### Build Quality Gate
@@ -325,7 +325,7 @@ Scenario: SCN-004-004-06 Lifecycle and recovery remain truthful
 ## Scope 4: Canonical Read Health Alert And API Truth
 
 **Scope ID:** SCOPE-04  
-**Status:** In Progress
+**Status:** Done
 **Scope-Kind:** runtime-behavior  
 **Depends On:** SCOPE-03
 

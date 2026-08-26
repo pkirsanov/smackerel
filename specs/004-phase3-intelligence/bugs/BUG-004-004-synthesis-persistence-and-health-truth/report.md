@@ -924,3 +924,58 @@ answer. Committed-but-unverified maps to failed rather than rendering, because
 showing it would put prose in front of a reader that was never proven to be in
 the database.
 
+## SCOPE-02 E2E Phase
+
+Both rows below were held open while the read API did not exist. SCOPE-04
+delivered that API, so the two scenarios are now reachable end to end and are
+proven here against the live stack rather than at the integration seam alone.
+
+Lane used for both:
+
+```text
+./smackerel.sh down
+./smackerel.sh test e2e --go-run 'TestSynthesisAPI_NoOutputIsEverHalfWritten|TestSynthesisAPI_QuietWindowReadsAsRunNotBroken'
+=== RUN   TestSynthesisAPI_NoOutputIsEverHalfWritten
+--- PASS: TestSynthesisAPI_NoOutputIsEverHalfWritten (0.12s)
+=== RUN   TestSynthesisAPI_QuietWindowReadsAsRunNotBroken
+--- PASS: TestSynthesisAPI_QuietWindowReadsAsRunNotBroken (0.04s)
+PASS
+ok      github.com/smackerel/smackerel/tests/e2e        0.533s
+```
+
+### T004-04-NOWRITE
+
+SCN-004-004-04 through the live API. A refused candidate must leave nothing
+behind, so the check walks every run the list route returns and reads each
+detail aggregate. It fails if a declared count outruns the rows actually
+carried, if any insight arrives without a type, or if any insight arrives
+uncited.
+
+The guard is mutation-verified. Inflating the detail insight count by one in
+`internal/api/synthesis.go` produced:
+
+```text
+synthesis_api_e2e_test.go:469: output 01M0Y4KR9D4KGBWRKFVAQ1N0XV declares 2
+insights but carries 1; a count that outruns its rows is the signature of a
+partial write
+--- FAIL: TestSynthesisAPI_NoOutputIsEverHalfWritten (0.15s)
+```
+
+That failure text also settles a second question. "carries 1" means the corpus
+behind the e2e stack yields a real cited insight, so the uncited-insight and
+citation-count assertions run against a populated output. They are live checks,
+not assertions that pass because there is nothing to inspect. The mutation was
+reverted and the lane re-run clean before this evidence was recorded.
+
+### T004-07-QUIET-E2E
+
+SCN-004-004-07 through the live API. A quiet window means the system looked and
+found nothing worth saying, which is a successful run. The check drives a real
+trigger, requires it to name an output id, then reads `/api/synthesis/latest`
+and fails if that committed output reads back as `never-run` or as `failed`.
+It also fails if a `quiet` state reports a non-zero insight count, which would
+mean the kind and the payload disagree.
+
+This is the precise confusion this bug exists to remove: emptiness reported as
+absence, or as breakage.
+
