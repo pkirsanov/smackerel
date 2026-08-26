@@ -833,3 +833,94 @@ Its control asserts `SynthesisAggregate` still HAS `Insights` -- without that, a
 codebase that had lost the ability to return content at all would pass the
 content-free check trivially.
 
+## SCOPE-04 Retry Route Phase
+
+The last functional Scope 4 surface. An operator can now re-run a window and be
+told what happened to it.
+
+Executed this session:
+
+```
+$ ./smackerel.sh test e2e --go-run 'TestSynthesisAPI'
+--- PASS: TestSynthesisAPI_LatestReportsAnExplicitState (0.04s)
+--- PASS: TestSynthesisAPI_RunsListIsWellFormed (0.03s)
+--- PASS: TestSynthesisAPI_RejectsInvalidLimit (0.04s)
+--- PASS: TestSynthesisAPI_DeniesUnauthenticatedCallers (0.03s)
+--- PASS: TestSynthesisAPI_UnknownRunIsNotFound (0.06s)
+--- PASS: TestSynthesisAPI_RetryReportsAPersistedOutcome (0.46s)
+--- PASS: TestSynthesisAPI_RetryRefusesUnknownCadence (0.18s)
+--- PASS: TestSynthesisAPI_RetryDeniesUnauthenticatedCallers (0.04s)
+
+$ ./smackerel.sh check -> 0    lint -> 0
+```
+
+### It reports the outcome, not the request
+
+A 202 "accepted" would be the same shape of claim the original defect made:
+true about the request, silent about whether anything was stored. The outcome
+vocabulary is closed -- `persisted`, or `claimed-elsewhere` when another process
+holds the window, which is coordination succeeding rather than an error.
+
+The test does not stop at the status code. When the route reports `persisted`
+it reads the returned output id back through the detail route, because a
+reported commit that cannot be read is exactly the lie being repaired.
+
+An unrecognised cadence is refused rather than defaulted. Silently running
+daily would produce a real output answering a question nobody asked.
+
+The retry principal is deliberately the SAME as the scheduled run. A distinct
+one would make the retry a different logical key, so it would produce a second
+output instead of converging on the existing one -- defeating the idempotence
+the whole packet rests on.
+
+## SCOPE-05 Projection Phase
+
+The Today and Status projection, modelled on the existing `DigestPageModel`: one
+pure classifier, a closed state vocabulary, content-bearing fields populated
+only in states that legitimately carry content.
+
+Executed this session:
+
+```
+$ ./smackerel.sh test unit --go --go-run 'TestSynthesisProjection_'
+--- PASS: TestSynthesisProjection_ClosedStatesAreExclusive (0.00s)
+--- PASS: TestSynthesisProjection_EveryStateIsReachable (0.00s)
+--- PASS: TestSynthesisProjection_UnauthorizedModelIsStructurallyEmpty (0.00s)
+--- PASS: TestSynthesisProjection_HasContentIsTrueForExactlyTheContentStates (0.00s)
+--- PASS: TestSynthesisProjection_FailureWithPriorOutputRendersNoContent (0.00s)
+
+$ ./smackerel.sh check -> 0    lint -> 0
+```
+
+### Nine exclusive states
+
+`never_run`, `current`, `quiet`, `stale`, `partial`, `failed_without_output`,
+`failed_with_prior_output`, `unavailable`, `auth_required`. A test asserts every
+one is reachable, because an unreachable state is a UI branch no test can ever
+exercise.
+
+### Privacy clearing is structural, not a later pass
+
+The unauthorized branch returns BEFORE any stored field is copied in. Not
+populated-then-blanked -- never populated, so no later edit to the function can
+leak it. The test walks the struct by reflection, so a field added later is
+covered without anyone remembering to extend a list.
+
+Keeping just `OutputID` and `InsightCount` on an unauthorized model -- the
+plausible-looking mistake, since neither is prose -- fails it:
+
+```
+--- FAIL: TestSynthesisProjection_UnauthorizedModelIsStructurallyEmpty (0.00s)
+    unauthorized model carries OutputID = out-1; synthesis-derived fields must
+    never be populated for an unauthorized reader
+```
+
+### Failure keeps its prior output at arm's length
+
+`failed_with_prior_output` renders no content but still NAMES that a prior
+output exists. That is what lets a reader tell "nothing has ever worked" from
+"the latest run failed", without the older output being presented as the current
+answer. Committed-but-unverified maps to failed rather than rendering, because
+showing it would put prose in front of a reader that was never proven to be in
+the database.
+

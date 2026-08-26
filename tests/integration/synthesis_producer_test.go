@@ -299,3 +299,54 @@ func TestSynthesisProducer_HonoursTheWindowClaim(t *testing.T) {
 		t.Fatalf("got %d run rows, want 1; the claim and the commit must be the same row", n)
 	}
 }
+
+// The identity a duplicate trigger must converge on has to be STABLE. This
+// reproduces the live-stack condition the e2e run exposed: a second trigger for
+// the same window arrives after the corpus has grown by one artifact.
+//
+// If the source set participates in the logical key, the two triggers are
+// different runs and produce two outputs for one window -- which is the
+// duplicate SCN-004-004-02 forbids.
+func TestSynthesisProducer_IdentityIsStableAcrossCorpusDrift(t *testing.T) {
+	pool := synthesisTestPool(t)
+	defer pool.Close()
+	resetSynthesisTables(t, pool)
+	seedSynthesisCluster(t, pool)
+
+	ctx := context.Background()
+	persistence, err := intelligence.NewSynthesisPersistence(pool)
+	if err != nil {
+		t.Fatalf("construct persistence: %v", err)
+	}
+	producer, err := intelligence.NewSynthesisProducer(&intelligence.Engine{Pool: pool}, persistence)
+	if err != nil {
+		t.Fatalf("construct producer: %v", err)
+	}
+	now := time.Now().UTC()
+
+	first, err := producer.RunAndPersist(ctx, intelligence.CadenceDaily, "scheduler", now)
+	if err != nil {
+		t.Fatalf("first run: %v", err)
+	}
+
+	// One new artifact lands, exactly as a live ingest would deliver between two
+	// operator triggers seconds apart.
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO artifacts (id, artifact_type, title, content_hash, source_id)
+		VALUES ('art-drift-1', 'article', 'arrived between triggers', 'hash-drift-1', 'src-email')`); err != nil {
+		t.Fatalf("seed drifting artifact: %v", err)
+	}
+
+	second, err := producer.RunAndPersist(ctx, intelligence.CadenceDaily, "scheduler", now)
+	if err != nil {
+		t.Fatalf("second run: %v", err)
+	}
+
+	if first.OutputID != second.OutputID {
+		t.Fatalf("corpus drift produced a second identity for one window (%s then %s); a duplicate trigger must converge, and identity that moves with the corpus is not identity",
+			first.OutputID, second.OutputID)
+	}
+	if n := countSynthesisRows(t, pool, "synthesis_outputs"); n != 1 {
+		t.Fatalf("got %d outputs for one window after corpus drift, want 1", n)
+	}
+}

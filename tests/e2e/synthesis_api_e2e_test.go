@@ -287,3 +287,125 @@ func TestSynthesisAPI_RetryDeniesUnauthenticatedCallers(t *testing.T) {
 		t.Fatalf("unauthenticated retry returned %d, want 401 or 403; body=%s", status, string(body))
 	}
 }
+
+// T004-02-RESTART. Duplicate triggers converge on ONE durable identity.
+//
+// HONEST SCOPE, stated so nobody reads more into this than it proves. It does
+// not restart a process. What it does prove is the property that makes a
+// restart safe: identity lives in the database, not in the handler's memory.
+// Each HTTP request is handled independently with no shared in-process state
+// between them, so a second trigger that converges on the first output could
+// only have done so by reading durable state. A coordinator holding identity in
+// a package-level map would satisfy a single-request test and fail this one.
+func TestSynthesisAPI_DuplicateTriggersShareOneDurableIdentity(t *testing.T) {
+	cfg := loadE2EConfig(t)
+	waitForHealth(t, cfg, 60*time.Second)
+
+	first := synthesisRetryOutcome(t, cfg)
+	second := synthesisRetryOutcome(t, cfg)
+
+	if first.outputID == "" && second.outputID == "" {
+		t.Fatal("neither trigger produced an output id; this test proves nothing without one")
+	}
+
+	// Whichever arm produced an id, the other must either match it or report
+	// that the window was already claimed. What must NOT happen is two ids.
+	if first.outputID != "" && second.outputID != "" && first.outputID != second.outputID {
+		t.Fatalf("two triggers produced different outputs (%s and %s); one window must have one durable identity",
+			first.outputID, second.outputID)
+	}
+
+	// The history listing is the durable record, and it must not have grown a
+	// duplicate entry for the same window.
+	status, body := synthesisGet(t, cfg, "/api/synthesis/runs?limit=50", true)
+	if status != http.StatusOK {
+		t.Fatalf("read history: %d; body=%s", status, string(body))
+	}
+	var parsed struct {
+		Runs []struct {
+			OutputID    string `json:"outputId"`
+			WindowStart string `json:"windowStart"`
+			WindowEnd   string `json:"windowEnd"`
+			Cadence     string `json:"cadence"`
+		} `json:"runs"`
+	}
+	if err := json.Unmarshal(body, &parsed); err != nil {
+		t.Fatalf("decode history: %v", err)
+	}
+	seen := map[string]string{}
+	for _, run := range parsed.Runs {
+		window := run.Cadence + "|" + run.WindowStart + "|" + run.WindowEnd
+		if prior, dup := seen[window]; dup {
+			t.Fatalf("window %s has two outputs (%s and %s); duplicate triggers must converge, not accumulate",
+				window, prior, run.OutputID)
+		}
+		seen[window] = run.OutputID
+	}
+}
+
+// T004-06-RECOVERY. Health recovers only after an output is persisted AND
+// readable -- never on the strength of the request having been accepted.
+func TestSynthesisAPI_RecoveryFollowsPersistedReadBack(t *testing.T) {
+	cfg := loadE2EConfig(t)
+	waitForHealth(t, cfg, 60*time.Second)
+
+	outcome := synthesisRetryOutcome(t, cfg)
+	if outcome.outputID == "" {
+		// Claimed elsewhere. The recovery claim below needs an output this run
+		// actually produced, so there is nothing to assert rather than something
+		// to assert weakly.
+		t.Skipf("window was claimed elsewhere (outcome=%q); no output from this trigger to verify", outcome.outcome)
+	}
+
+	// The reported output must be READABLE. Recovery asserted on the strength of
+	// a 200 alone would repeat the defect: a success report about a row nobody
+	// checked for.
+	detailStatus, detailBody := synthesisGet(t, cfg, "/api/synthesis/runs/"+outcome.outputID, true)
+	if detailStatus != http.StatusOK {
+		t.Fatalf("reported output %s reads back as %d; recovery must rest on a verified read, not on the report. body=%s",
+			outcome.outputID, detailStatus, string(detailBody))
+	}
+
+	// And /latest must now agree, from the same durable read model.
+	latestStatus, latestBody := synthesisGet(t, cfg, "/api/synthesis/latest", true)
+	if latestStatus != http.StatusOK {
+		t.Fatalf("latest returned %d; body=%s", latestStatus, string(latestBody))
+	}
+	var latest synthesisLatestBody
+	if err := json.Unmarshal(latestBody, &latest); err != nil {
+		t.Fatalf("decode latest: %v", err)
+	}
+	if latest.State == "never-run" {
+		t.Fatalf("latest reports never-run after a persisted output; the API and the store disagree. body=%s", string(latestBody))
+	}
+	if latest.Output == nil || latest.Output.OutputID == "" {
+		t.Fatalf("latest carries no output after a persisted run. body=%s", string(latestBody))
+	}
+}
+
+type synthesisRetryResult struct {
+	outcome  string
+	outputID string
+}
+
+func synthesisRetryOutcome(t *testing.T, cfg e2eConfig) synthesisRetryResult {
+	t.Helper()
+	status, body := synthesisPost(t, cfg, "/api/synthesis/retry", `{"cadence":"daily"}`, true)
+	if status != http.StatusOK && status != http.StatusConflict {
+		t.Fatalf("retry returned %d, want 200 or 409; body=%s", status, string(body))
+	}
+	var parsed struct {
+		Outcome string `json:"outcome"`
+		Output  *struct {
+			OutputID string `json:"outputId"`
+		} `json:"output"`
+	}
+	if err := json.Unmarshal(body, &parsed); err != nil {
+		t.Fatalf("decode retry: %v; body=%s", err, string(body))
+	}
+	res := synthesisRetryResult{outcome: parsed.Outcome}
+	if parsed.Output != nil {
+		res.outputID = parsed.Output.OutputID
+	}
+	return res
+}

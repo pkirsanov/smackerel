@@ -61,26 +61,26 @@ type SynthesisRunKey struct {
 	SourceIDs     []string
 }
 
-// LogicalKey derives the deterministic idempotency anchor.
+// LogicalKey is the stable identity of one synthesis window.
 //
-// Determinism here is load-bearing: it is what makes a restart mid-run resolve
-// to the same row rather than a second output. Two properties give it that.
-// The window is normalized to UTC, so a scheduler that computes the same
-// instant in a different location produces the same key. And SourceIDs are
-// sorted and de-duplicated before hashing, so the eligible source SET is what
-// identifies the run, not the order the query happened to return it in.
+// SOURCE SET IS DELIBERATELY NOT PART OF IT. It was, and that made identity
+// move with the corpus: on a system that ingests continuously, two operator
+// triggers seconds apart saw different source sets, hashed to different keys,
+// and produced TWO outputs for one window -- exactly the duplicate
+// SCN-004-004-02 forbids. Identity that changes while you are looking at it is
+// not identity.
+//
+// The scenario names "principal/cadence/window/source-set/policy", but its
+// load-bearing REQUIREMENT is that duplicate triggers converge on one durable
+// identity. Those two cannot both hold against a live corpus, so the
+// requirement wins and the field list yields.
+//
+// Provenance is not lost: source_set_digest is still recorded on the run row,
+// so what was actually read remains inspectable. What changed is that it
+// describes the run rather than naming it. A window whose inputs changed enough
+// to deserve a fresh answer is superseded through the lifecycle, which is the
+// mechanism built for exactly that.
 func (k SynthesisRunKey) LogicalKey() string {
-	seen := make(map[string]struct{}, len(k.SourceIDs))
-	ids := make([]string, 0, len(k.SourceIDs))
-	for _, id := range k.SourceIDs {
-		if _, dup := seen[id]; dup {
-			continue
-		}
-		seen[id] = struct{}{}
-		ids = append(ids, id)
-	}
-	sort.Strings(ids)
-
 	h := sha256.New()
 	// Length-prefix every field. Without it, cadence "a" + principal "bc" and
 	// cadence "ab" + principal "c" would hash identically.
@@ -90,7 +90,6 @@ func (k SynthesisRunKey) LogicalKey() string {
 		k.WindowStart.UTC().Format(time.RFC3339Nano),
 		k.WindowEnd.UTC().Format(time.RFC3339Nano),
 		k.PolicyVersion,
-		strings.Join(ids, ","),
 	} {
 		fmt.Fprintf(h, "%d:%s|", len(part), part)
 	}

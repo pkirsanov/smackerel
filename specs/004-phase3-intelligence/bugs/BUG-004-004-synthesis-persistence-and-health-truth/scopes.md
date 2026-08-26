@@ -388,7 +388,7 @@ Scenario: SCN-004-004-09 Authorization and telemetry preserve privacy
 - [x] SCN-004-004-06: When the latest output exceeds its cadence threshold or the latest run failed, the exclusive stale/failed state and active alert are reported and cannot be cleared by request acceptance, running, or an unverified commit. Evidence: [report.md#scope-04-health-truth-phase](report.md#scope-04-health-truth-phase)
 - [x] SCN-004-004-07: Committed quiet or approved partial output is read as its own distinct state with identity, window, completeness, and safe provenance, absent never-run, failed, or full-health claims as applicable. Evidence: [report.md#scope-04-health-truth-phase](report.md#scope-04-health-truth-phase)
 - [x] SCN-004-004-09: An unauthenticated caller, another user, or a reader without operator scope is limited by the authorization matrix so no text, source title, artifact content, run existence, or high-cardinality personal label leaks through APIs, health, metrics, logs, or traces. Evidence: [report.md#scope-04-read-api-phase](report.md#scope-04-read-api-phase)
-- [ ] Latest/history/detail/retry, authenticated health, and alerts consume one durable read/health model and closed state vocabulary. (latest/history/detail land here; the operator retry route is not added yet)
+- [x] Latest/history/detail/retry, authenticated health, and alerts consume one durable read/health model and closed state vocabulary. Evidence: [report.md#scope-04-retry-route-phase](report.md#scope-04-retry-route-phase)
 - [x] Never-run and probe failure are never up; stale/failed alerts clear only after persisted read-back recovery; partial remains degraded. Evidence: [report.md#scope-04-health-truth-phase](report.md#scope-04-health-truth-phase)
 - [x] Authorization is context-derived and prevents text, citations, run identity, timestamps, counts, and existence hints from crossing the matrix. Evidence: [report.md#scope-04-read-api-phase](report.md#scope-04-read-api-phase)
 - [x] Logs, metrics, traces, and alert labels are bounded and content-free. Evidence: [report.md#scope-04-alert-and-telemetry-phase](report.md#scope-04-alert-and-telemetry-phase)
@@ -404,14 +404,14 @@ Scenario: SCN-004-004-09 Authorization and telemetry preserve privacy
 
 #### Build Quality Gate
 
-- [ ] API/auth/health/alert/observability tests, CSRF and privacy scans, check/lint/format, alert-rule validation, artifact-lint, traceability, docs, broad health regression, and zero-warning checks pass with executed evidence. (needs the alert and telemetry rows above)
+- [x] API/auth/health/alert/observability tests, CSRF and privacy scans, check/lint/format, alert-rule validation, artifact-lint, traceability, docs, broad health regression, and zero-warning checks pass with executed evidence. Evidence: [report.md#scope-04-retry-route-phase](report.md#scope-04-retry-route-phase)
 
 ---
 
 ## Scope 5: Today Status UI And Real-Stack Regression
 
 **Scope ID:** SCOPE-05  
-**Status:** Not Started  
+**Status:** In Progress
 **Scope-Kind:** runtime-behavior  
 **Depends On:** SCOPE-04
 
@@ -494,31 +494,31 @@ Scenario: SCN-004-004-10 Synthesis states and Retry are accessible and responsiv
 
 #### Core Outcomes
 
-- [ ] SCN-004-004-01: Today renders the exact persisted text, window, time, and authorized citation disclosure together only after read-back, and never renders in-memory or unverified output.
-- [ ] SCN-004-004-05: For real durable never-run, quiet, stale, partial, failed-without-output, and failed-with-prior-output states, Today and Status show the matching state from the same output/attempt identity and label prior verified output separately from a failed latest attempt.
-- [ ] SCN-004-004-09: When the real session expires or scope is denied, prose, titles, counts, windows, run IDs, timestamps, and existence hints leave the DOM and accessibility tree before auth recovery paints.
-- [ ] SCN-004-004-10: Citations, filters, run evidence, confirmation, Retry, running, persisted, idempotent, and failed states satisfy focus, announcements, target sizes, reflow, and state exclusivity on desktop and at 320px/200% zoom without overlap or horizontal scroll.
-- [ ] Today and Status render one durable persisted truth model; no scheduler acceptance, in-memory value, or failed transaction can produce Available content.
-- [ ] Current, quiet, stale, partial, never-run, failed-without-output, failed-with-prior-output, and auth states are exclusive and preserve the correct citation/provenance boundaries.
-- [ ] Retry mutation feedback is truthful from confirmation through read-back and alert resolution; history filters never trigger runs or masquerade as no history.
-- [ ] Auth loss clears private synthesis content before recovery; desktop/mobile/keyboard/screen-reader behavior satisfies the spec.
-- [ ] Consumer impact, migration/rollback, security/privacy, observability, docs, and prior Today/Status journeys remain coherent.
+- [ ] SCN-004-004-01: Today renders the exact persisted text, window, time, and authorized citation disclosure together only after read-back, and never renders in-memory or unverified output. (needs the Today/Status template rendering and its Playwright coverage; the projection and its closed states land in this phase)
+- [ ] SCN-004-004-05: For real durable never-run, quiet, stale, partial, failed-without-output, and failed-with-prior-output states, Today and Status show the matching state from the same output/attempt identity and label prior verified output separately from a failed latest attempt. (needs the Today/Status template rendering and its Playwright coverage; the projection and its closed states land in this phase)
+- [ ] SCN-004-004-09: When the real session expires or scope is denied, prose, titles, counts, windows, run IDs, timestamps, and existence hints leave the DOM and accessibility tree before auth recovery paints. (needs the Today/Status template rendering and its Playwright coverage; the projection and its closed states land in this phase)
+- [ ] SCN-004-004-10: Citations, filters, run evidence, confirmation, Retry, running, persisted, idempotent, and failed states satisfy focus, announcements, target sizes, reflow, and state exclusivity on desktop and at 320px/200% zoom without overlap or horizontal scroll. (needs the Today/Status template rendering and its Playwright coverage; the projection and its closed states land in this phase)
+- [ ] Today and Status render one durable persisted truth model; no scheduler acceptance, in-memory value, or failed transaction can produce Available content. (needs the Today/Status template rendering and its Playwright coverage; the projection and its closed states land in this phase)
+- [ ] Current, quiet, stale, partial, never-run, failed-without-output, failed-with-prior-output, and auth states are exclusive and preserve the correct citation/provenance boundaries. (needs the Today/Status template rendering and its Playwright coverage; the projection and its closed states land in this phase)
+- [ ] Retry mutation feedback is truthful from confirmation through read-back and alert resolution; history filters never trigger runs or masquerade as no history. (needs the Today/Status template rendering and its Playwright coverage; the projection and its closed states land in this phase)
+- [ ] Auth loss clears private synthesis content before recovery; desktop/mobile/keyboard/screen-reader behavior satisfies the spec. (needs the Today/Status template rendering and its Playwright coverage; the projection and its closed states land in this phase)
+- [ ] Consumer impact, migration/rollback, security/privacy, observability, docs, and prior Today/Status journeys remain coherent. (needs the Today/Status template rendering and its Playwright coverage; the projection and its closed states land in this phase)
 
 #### Test Evidence - One Item Per Test Plan Row
 
-- [ ] T004-01-UI passes with current-session raw evidence and screenshots in `report.md#t004-01-ui`.
-- [ ] T004-02-UI passes with current-session raw evidence in `report.md#t004-02-ui`.
-- [ ] T004-03-04-UI passes with current-session raw evidence in `report.md#t004-03-04-ui`.
-- [ ] T004-05-07-UI passes with current-session raw evidence in `report.md#t004-05-07-ui`.
-- [ ] T004-06-08-UI passes with current-session raw evidence in `report.md#t004-06-08-ui`.
-- [ ] T004-RETRY-UI passes with current-session raw evidence in `report.md#t004-retry-ui`.
-- [ ] T004-09-10-UI passes with desktop/mobile/accessibility evidence in `report.md#t004-09-10-ui`.
-- [ ] T004-UI-UNIT passes with current-session raw evidence in `report.md#t004-ui-unit`.
-- [ ] T004-BROAD passes with current-session raw evidence in `report.md#t004-broad`.
+- [ ] T004-01-UI passes with current-session raw evidence and screenshots in `report.md#t004-01-ui`. (needs the Today/Status template rendering and its Playwright coverage; the projection and its closed states land in this phase)
+- [ ] T004-02-UI passes with current-session raw evidence in `report.md#t004-02-ui`. (needs the Today/Status template rendering and its Playwright coverage; the projection and its closed states land in this phase)
+- [ ] T004-03-04-UI passes with current-session raw evidence in `report.md#t004-03-04-ui`. (needs the Today/Status template rendering and its Playwright coverage; the projection and its closed states land in this phase)
+- [ ] T004-05-07-UI passes with current-session raw evidence in `report.md#t004-05-07-ui`. (needs the Today/Status template rendering and its Playwright coverage; the projection and its closed states land in this phase)
+- [ ] T004-06-08-UI passes with current-session raw evidence in `report.md#t004-06-08-ui`. (needs the Today/Status template rendering and its Playwright coverage; the projection and its closed states land in this phase)
+- [ ] T004-RETRY-UI passes with current-session raw evidence in `report.md#t004-retry-ui`. (needs the Today/Status template rendering and its Playwright coverage; the projection and its closed states land in this phase)
+- [ ] T004-09-10-UI passes with desktop/mobile/accessibility evidence in `report.md#t004-09-10-ui`. (needs the Today/Status template rendering and its Playwright coverage; the projection and its closed states land in this phase)
+- [x] T004-UI-UNIT passes with current-session raw evidence in `report.md#t004-ui-unit`. Evidence: [report.md#scope-05-projection-phase](report.md#scope-05-projection-phase)
+- [ ] T004-BROAD passes with current-session raw evidence in `report.md#t004-broad`. (needs the Today/Status template rendering and its Playwright coverage; the projection and its closed states land in this phase)
 
 #### Build Quality Gate
 
-- [ ] Full packet unit/integration/E2E API/E2E UI/stress tests, Playwright anti-interception and bailout guards, privacy/security scans, migration canary, check/lint/format/build, implementation reality, artifact-lint, traceability, docs/capability truth, broad regression, and zero-warning checks all pass with executed evidence before certification.
+- [ ] Full packet unit/integration/E2E API/E2E UI/stress tests, Playwright anti-interception and bailout guards, privacy/security scans, migration canary, check/lint/format/build, implementation reality, artifact-lint, traceability, docs/capability truth, broad regression, and zero-warning checks all pass with executed evidence before certification. (needs the Today/Status template rendering and its Playwright coverage; the projection and its closed states land in this phase)
 
 ## Planning Assumptions And Owner Routes
 

@@ -27,23 +27,39 @@ func TestLogicalKey_IsDeterministic(t *testing.T) {
 	}
 }
 
-func TestLogicalKey_IgnoresSourceOrder(t *testing.T) {
-	// The eligible source SET identifies the run. If order mattered, a query
-	// plan change would silently split one logical run into two.
-	a := baseKey()
-	b := baseKey()
-	b.SourceIDs = []string{"art-c", "art-a", "art-b"}
-	if a.LogicalKey() != b.LogicalKey() {
-		t.Fatalf("source order changed the key; the set must decide, not the ordering")
+func TestLogicalKey_IsUnmovedByCorpusDrift(t *testing.T) {
+	// This is the guard on the defect that shipped: the source set WAS hashed
+	// into the key, so on a continuously ingesting system two triggers for one
+	// window saw different corpora and became two runs. Identity has to sit
+	// still while the corpus moves underneath it.
+	base := baseKey()
+	for name, drift := range map[string][]string{
+		"reordered":       {"art-c", "art-a", "art-b"},
+		"duplicated":      {"art-a", "art-a", "art-b", "art-c", "art-c"},
+		"grew by ingest":  {"art-a", "art-b", "art-c", "art-d"},
+		"shrank by purge": {"art-a"},
+		"replaced":        {"art-x", "art-y"},
+		"emptied":         nil,
+	} {
+		t.Run(name, func(t *testing.T) {
+			drifted := baseKey()
+			drifted.SourceIDs = drift
+			if drifted.LogicalKey() != base.LogicalKey() {
+				t.Fatalf("corpus %s changed the logical key; the window would produce a second output", name)
+			}
+		})
 	}
 }
 
-func TestLogicalKey_IgnoresDuplicateSources(t *testing.T) {
+func TestSourceSet_StaysVisibleAsProvenance(t *testing.T) {
+	// Dropping the source set from IDENTITY must not drop it from the record.
+	// If this digest stopped discriminating, we would lose the ability to say
+	// what a given run actually read.
 	a := baseKey()
 	b := baseKey()
-	b.SourceIDs = []string{"art-a", "art-a", "art-b", "art-c", "art-c"}
-	if a.LogicalKey() != b.LogicalKey() {
-		t.Fatalf("duplicate source ids changed the key")
+	b.SourceIDs = []string{"art-a", "art-b"}
+	if a.SourceSetDigest() == b.SourceSetDigest() {
+		t.Fatalf("source set digest stopped distinguishing corpora; provenance would be unrecoverable")
 	}
 }
 
@@ -71,7 +87,6 @@ func TestLogicalKey_DistinguishesEveryField(t *testing.T) {
 		"windowStart":   func(k *SynthesisRunKey) { k.WindowStart = k.WindowStart.Add(-time.Hour) },
 		"windowEnd":     func(k *SynthesisRunKey) { k.WindowEnd = k.WindowEnd.Add(time.Hour) },
 		"policyVersion": func(k *SynthesisRunKey) { k.PolicyVersion = "v2" },
-		"sourceSet":     func(k *SynthesisRunKey) { k.SourceIDs = append(k.SourceIDs, "art-d") },
 	} {
 		t.Run(name, func(t *testing.T) {
 			k := baseKey()
