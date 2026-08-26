@@ -409,3 +409,121 @@ func synthesisRetryOutcome(t *testing.T, cfg e2eConfig) synthesisRetryResult {
 	}
 	return res
 }
+
+// SCN-004-004-04 through the live API. A rejected candidate must leave NOTHING
+// behind, so no output the API can serve may be half-written. The visible
+// signature of a partial write is an aggregate whose declared counts disagree
+// with the rows it actually returns, or a cited insight with no citation.
+func TestSynthesisAPI_NoOutputIsEverHalfWritten(t *testing.T) {
+	cfg := loadE2EConfig(t)
+	waitForHealth(t, cfg, 60*time.Second)
+
+	// Drive a real commit so the assertion runs against a populated surface
+	// rather than passing on an empty list.
+	synthesisRetryOutcome(t, cfg)
+
+	status, body := synthesisGet(t, cfg, "/api/synthesis/runs?limit=25", true)
+	if status != http.StatusOK {
+		t.Fatalf("GET runs returned %d, want 200; body=%s", status, string(body))
+	}
+	var listed struct {
+		Runs []struct {
+			OutputID string `json:"outputId"`
+		} `json:"runs"`
+	}
+	if err := json.Unmarshal(body, &listed); err != nil {
+		t.Fatalf("decode runs: %v; body=%s", err, string(body))
+	}
+	if len(listed.Runs) == 0 {
+		t.Fatalf("no runs to inspect after a retry; the check would be vacuous. body=%s", string(body))
+	}
+
+	for _, run := range listed.Runs {
+		detailStatus, detailBody := synthesisGet(t, cfg, "/api/synthesis/runs/"+run.OutputID, true)
+		if detailStatus != http.StatusOK {
+			t.Fatalf("GET run %s returned %d, want 200; body=%s", run.OutputID, detailStatus, string(detailBody))
+		}
+		// Counts live under "output"; reading them from the top level would
+		// silently yield zero and make every assertion below vacuous.
+		var agg struct {
+			Output struct {
+				OutputID      string `json:"outputId"`
+				Kind          string `json:"kind"`
+				InsightCount  int    `json:"insightCount"`
+				CitationCount int    `json:"citationCount"`
+			} `json:"output"`
+			Insights []struct {
+				InsightType string   `json:"insightType"`
+				Citations   []string `json:"citations"`
+			} `json:"insights"`
+		}
+		if err := json.Unmarshal(detailBody, &agg); err != nil {
+			t.Fatalf("decode run %s: %v; body=%s", run.OutputID, err, string(detailBody))
+		}
+
+		if agg.Output.OutputID == "" {
+			t.Fatalf("run %s detail carried no output id; the response shape is not what this check assumes. body=%s",
+				run.OutputID, string(detailBody))
+		}
+		if agg.Output.InsightCount != len(agg.Insights) {
+			t.Fatalf("output %s declares %d insights but carries %d; a count that outruns its rows is the signature of a partial write",
+				run.OutputID, agg.Output.InsightCount, len(agg.Insights))
+		}
+		citations := 0
+		for _, in := range agg.Insights {
+			if in.InsightType == "" {
+				t.Fatalf("output %s carries an insight with no type; the row is incomplete", run.OutputID)
+			}
+			if len(in.Citations) == 0 {
+				t.Fatalf("output %s carries an uncited insight; validation must have refused it before any write", run.OutputID)
+			}
+			citations += len(in.Citations)
+		}
+		if agg.Output.CitationCount != citations {
+			t.Fatalf("output %s declares %d citations but carries %d; the aggregate is not whole",
+				run.OutputID, agg.Output.CitationCount, citations)
+		}
+		if agg.Output.Kind == "quiet" && len(agg.Insights) != 0 {
+			t.Fatalf("output %s is quiet yet carries %d insights", run.OutputID, len(agg.Insights))
+		}
+	}
+}
+
+// SCN-004-004-07 through the live API. A quiet window means the system looked
+// and found nothing worth saying. That is a SUCCESSFUL run, and the API must
+// never let a caller read it as never-run or failed -- the exact confusion this
+// bug exists to remove.
+func TestSynthesisAPI_QuietWindowReadsAsRunNotBroken(t *testing.T) {
+	cfg := loadE2EConfig(t)
+	waitForHealth(t, cfg, 60*time.Second)
+
+	result := synthesisRetryOutcome(t, cfg)
+	if result.outputID == "" {
+		t.Fatalf("retry produced no output id (outcome %q); a completed trigger must name its output", result.outcome)
+	}
+
+	status, body := synthesisGet(t, cfg, "/api/synthesis/latest", true)
+	if status != http.StatusOK {
+		t.Fatalf("GET latest returned %d, want 200; body=%s", status, string(body))
+	}
+	var parsed synthesisLatestBody
+	if err := json.Unmarshal(body, &parsed); err != nil {
+		t.Fatalf("decode latest: %v; body=%s", err, string(body))
+	}
+
+	if parsed.State == "never-run" {
+		t.Fatalf("a committed output is present (%s) yet latest reports never-run; emptiness is being read as absence. body=%s",
+			result.outputID, string(body))
+	}
+	if parsed.State == "failed" {
+		t.Fatalf("a committed output is present (%s) yet latest reports failed; a quiet window is a success. body=%s",
+			result.outputID, string(body))
+	}
+	if parsed.Output == nil {
+		t.Fatalf("state %q carried no output despite a committed run. body=%s", parsed.State, string(body))
+	}
+	if parsed.State == "quiet" && parsed.Output.InsightCount != 0 {
+		t.Fatalf("quiet state reported %d insights; the kind and the payload disagree. body=%s",
+			parsed.Output.InsightCount, string(body))
+	}
+}
