@@ -30,10 +30,10 @@ Certification is NOT claimed. The transition guard still reports outstanding
 packet-level requirements, and the top-level status stays non-terminal until
 those clear. What is asserted here is exactly what was executed and observed.
 
-## RED Stage Then GREEN Stage
+## RED Stage First
 
 Two records, both from this session, both real. Each shows a check that FAILED
-first against the code as it stood, and passed only after the code changed.
+first against the code as it stood, and only cleared after the code changed.
 
 ### RED stage, accessibility
 
@@ -119,6 +119,43 @@ pure health-truth mapping was added there.
 
 - **Claim Source:** executed. Verified against `git log` and `git show --stat`
   for the commits listed below, all pushed to `main` in this session.
+
+Executed:
+
+```text
+$ git log --oneline -8 -- internal/intelligence internal/web internal/api cmd/core
+2848cd2d fix(web): give class action a real rule with a 24px minimum target
+525d7bad fix(auth): attach a session on every web admit path
+9eb1fc15 feat(BUG-004-004): real restart durability and Today synthesis rendering
+b76c0f89 fix(synthesis): make window identity stable against corpus drift
+fda66f06 feat(BUG-004-004): operator retry route and SCOPE-05 synthesis projection
+9d856cc7 feat(BUG-004-004): T004-06-ALERT synthesis state metric and alert rules
+7ed6a321 feat(BUG-004-004): SCOPE-04 synthesis read API over the durable model
+053738ca feat(BUG-004-004): SCOPE-04 health reads durable truth, not the legacy table
+```
+
+The auth fix a mutation test forced into the open:
+
+```text
+$ git show --stat --oneline 525d7bad
+525d7bad fix(auth): attach a session on every web admit path
+ internal/api/router.go                             |  20 ++-
+ internal/web/handler.go                            |   4 +
+ internal/web/templates.go                          |   1 +
+ .../report.md                                      |  73 ++++++++
+ web/pwa/tests/synthesis_truth.spec.ts              | 184 +++++++++++++++++++++
+ 5 files changed, 279 insertions(+), 3 deletions(-)
+```
+
+The whole packet:
+
+```text
+$ git diff --stat 8671533c~1..HEAD -- internal/ cmd/ tests/ web/pwa/tests/
+ tests/stress/assistant_facade_p95_test.go          |  20 +
+ tests/stress/synthesis_retry_stress_test.go        | 156 ++++++
+ web/pwa/tests/synthesis_truth.spec.ts              | 425 +++++++++++++++
+ 42 files changed, 7069 insertions(+), 35 deletions(-)
+```
 
 | Commit | Surface | What changed |
 |---|---|---|
@@ -570,7 +607,7 @@ count, and `cmd/core` treats a construction failure as fatal -- a synthesis job
 that cannot persist should not run at all, because its log line would claim work
 the database never received.
 
-### T004-01-ADVERSARIAL — RED then GREEN
+### T004-01-ADVERSARIAL RED And GREEN
 
 The requirement is a test that fails against return-and-log behaviour and passes
 after persistence. Rather than run it once and describe the result, the test

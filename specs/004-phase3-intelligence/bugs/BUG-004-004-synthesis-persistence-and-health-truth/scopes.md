@@ -173,13 +173,13 @@ rather than quietly absorbed.
 - [x] T004-01-COMMIT passes with current-session raw evidence in `report.md#t004-01-commit`. → Evidence: [report.md](report.md#scope-01-implementation-phase)
 - [x] T004-02-IDEMPOTENT passes with current-session raw evidence in `report.md#t004-02-idempotent`. → Evidence: [report.md](report.md#scope-01-implementation-phase)
 - [x] T004-03-ROLLBACK passes with current-session raw evidence in `report.md#t004-03-rollback`. → Evidence: [report.md](report.md#scope-01-implementation-phase)
-- [x] T004-01-ADVERSARIAL fails against return-and-log behavior, then passes after persistence; both outputs are in `report.md#t004-01-adversarial`. Evidence: [report.md#scope-02-implementation-phase](report.md#scope-02-implementation-phase)
+- [x] T004-01-ADVERSARIAL fails against return-and-log behavior, then passes after persistence; both outputs are in `report.md#t004-01-adversarial-red-and-green`. Evidence: [report.md#t004-01-adversarial-red-and-green](report.md#t004-01-adversarial-red-and-green)ion-phase](report.md#scope-02-implementation-phase)
 - [x] T004-01-ROLLBACK-COMPAT passes with current-session raw evidence in `report.md#t004-01-rollback-compat`. Evidence: [report.md#scope-02-implementation-phase](report.md#scope-02-implementation-phase)
 
 #### Build Quality Gate
 
 - [x] Change Boundary is respected and zero excluded file families were changed, verified with `git diff --name-only` across every commit in the packet. Evidence: [report.md#scope-05-packet-closeout](report.md#scope-05-packet-closeout)
-- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior in this scope exist and pass: `TestSynthesisAPI_NoOutputIsEverHalfWritten` proves no output is ever half-written. Evidence: [report.md#t004-01-adversarial](report.md#t004-01-adversarial)
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior in this scope exist and pass: `TestSynthesisAPI_NoOutputIsEverHalfWritten` proves no output is ever half-written. Evidence: [report.md#t004-01-adversarial-red-and-green](report.md#t004-01-adversarial-red-and-green)sarial](report.md#t004-01-adversarial)
 - [x] Broader E2E regression suite passes with no new failures: `./smackerel.sh test e2e` EXIT=0, 36 passed, 0 failed. Evidence: [report.md#scope-05-packet-closeout](report.md#scope-05-packet-closeout)
 - [x] Migration/repository/integration/E2E tests, disposable-store isolation, schema lint, check/lint/format, artifact-lint, traceability, documentation, zero warnings, impact-sweep canary, and change-boundary review all pass with executed evidence. Evidence: [report.md#scope-02-implementation-phase](report.md#scope-02-implementation-phase)
 
