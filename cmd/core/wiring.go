@@ -268,7 +268,11 @@ func buildAPIDeps(ctx context.Context, cfg *config.Config, svc *coreServices, co
 		)
 		if synthesisReadModel, err := intelligence.NewSynthesisReadModel(svc.pg.Pool); err == nil {
 			if synthesisPersistence, err := intelligence.NewSynthesisPersistence(svc.pg.Pool); err == nil {
-				deps.SynthesisHandlers = api.NewSynthesisHandlers(synthesisReadModel, synthesisPersistence)
+				handlers := api.NewSynthesisHandlers(synthesisReadModel, synthesisPersistence)
+				if producer, pErr := intelligence.NewSynthesisProducer(svc.intEngine, synthesisPersistence); pErr == nil {
+					handlers = handlers.WithProducer(producer)
+				}
+				deps.SynthesisHandlers = handlers
 			}
 		}
 		deps.QFEvidenceHandlers = api.NewQFEvidenceHandlers(svc.pg, connector.NewStateStore(svc.pg.Pool), qfEvidenceStore, qfEvidenceExporter)

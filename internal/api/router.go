@@ -396,6 +396,7 @@ func NewRouter(deps *Dependencies) http.Handler {
 					r.Get("/latest", deps.SynthesisHandlers.GetLatest)
 					r.Get("/runs", deps.SynthesisHandlers.ListRuns)
 					r.Get("/runs/{outputID}", deps.SynthesisHandlers.GetRun)
+					r.Post("/retry", deps.SynthesisHandlers.Retry)
 				})
 			}
 

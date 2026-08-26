@@ -13,6 +13,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 )
@@ -192,4 +193,97 @@ func containsE2E(haystack, needle string) bool {
 		}
 	}
 	return false
+}
+
+func synthesisPost(t *testing.T, cfg e2eConfig, path, body string, authorized bool) (int, []byte) {
+	t.Helper()
+	req, err := http.NewRequest(http.MethodPost, cfg.CoreURL+path, strings.NewReader(body))
+	if err != nil {
+		t.Fatalf("build request %s: %v", path, err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if authorized {
+		req.Header.Set("Authorization", "Bearer "+cfg.AuthToken)
+	}
+	resp, err := (&http.Client{Timeout: 60 * time.Second}).Do(req)
+	if err != nil {
+		t.Fatalf("POST %s: %v", path, err)
+	}
+	defer resp.Body.Close()
+	out, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+	return resp.StatusCode, out
+}
+
+// The retry route reports what HAPPENED, not that the request was accepted.
+// A 202 would be the same shape of claim the original defect made: true about
+// the request, silent about whether anything was stored.
+func TestSynthesisAPI_RetryReportsAPersistedOutcome(t *testing.T) {
+	cfg := loadE2EConfig(t)
+	waitForHealth(t, cfg, 60*time.Second)
+
+	status, body := synthesisPost(t, cfg, "/api/synthesis/retry", `{"cadence":"daily"}`, true)
+	if status == http.StatusAccepted {
+		t.Fatalf("retry returned 202; the route must report the outcome, not merely that it was asked. body=%s", string(body))
+	}
+	if status != http.StatusOK && status != http.StatusConflict {
+		t.Fatalf("retry returned %d, want 200 or 409; body=%s", status, string(body))
+	}
+
+	var parsed struct {
+		Outcome string `json:"outcome"`
+		Output  *struct {
+			OutputID string `json:"outputId"`
+			Kind     string `json:"kind"`
+		} `json:"output"`
+	}
+	if err := json.Unmarshal(body, &parsed); err != nil {
+		t.Fatalf("decode retry: %v; body=%s", err, string(body))
+	}
+
+	switch parsed.Outcome {
+	case "persisted":
+		if parsed.Output == nil || parsed.Output.OutputID == "" {
+			t.Fatalf("outcome persisted carried no output id; that is the claim the defect made. body=%s", string(body))
+		}
+		// The id must resolve. An id that reads back as absent would mean the
+		// route reported a commit that is not there.
+		detailStatus, detailBody := synthesisGet(t, cfg, "/api/synthesis/runs/"+parsed.Output.OutputID, true)
+		if detailStatus != http.StatusOK {
+			t.Fatalf("retry reported output %s but reading it returned %d; a reported commit must be readable. body=%s",
+				parsed.Output.OutputID, detailStatus, string(detailBody))
+		}
+	case "claimed-elsewhere":
+		if parsed.Output != nil {
+			t.Fatalf("claimed-elsewhere carried an output; this process did not produce one. body=%s", string(body))
+		}
+	default:
+		t.Fatalf("retry returned unknown outcome %q; the vocabulary is closed. body=%s", parsed.Outcome, string(body))
+	}
+}
+
+// An unrecognised cadence must be refused, never defaulted. Silently running
+// daily would produce a real output answering a question nobody asked.
+func TestSynthesisAPI_RetryRefusesUnknownCadence(t *testing.T) {
+	cfg := loadE2EConfig(t)
+	waitForHealth(t, cfg, 60*time.Second)
+
+	for _, body := range []string{`{"cadence":"hourly"}`, `{"cadence":""}`, `{}`, `not json`} {
+		status, out := synthesisPost(t, cfg, "/api/synthesis/retry", body, true)
+		if status != http.StatusBadRequest {
+			t.Fatalf("retry with %s returned %d, want 400; body=%s", body, status, string(out))
+		}
+	}
+}
+
+func TestSynthesisAPI_RetryDeniesUnauthenticatedCallers(t *testing.T) {
+	cfg := loadE2EConfig(t)
+	waitForHealth(t, cfg, 60*time.Second)
+
+	status, body := synthesisPost(t, cfg, "/api/synthesis/retry", `{"cadence":"daily"}`, false)
+	if status != http.StatusUnauthorized && status != http.StatusForbidden {
+		t.Fatalf("unauthenticated retry returned %d, want 401 or 403; body=%s", status, string(body))
+	}
 }

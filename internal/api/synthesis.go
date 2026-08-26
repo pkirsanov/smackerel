@@ -1,7 +1,9 @@
 package api
 
 import (
+	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"strconv"
 	"time"
@@ -23,10 +25,20 @@ import (
 type SynthesisHandlers struct {
 	ReadModel   *intelligence.SynthesisReadModel
 	Persistence *intelligence.SynthesisPersistence
+	// Producer backs the operator retry route. Nil leaves retry unavailable
+	// rather than accepting a request it cannot act on -- a 202 for work that
+	// will never happen is the failure mode this packet exists to remove.
+	Producer *intelligence.SynthesisProducer
 }
 
 func NewSynthesisHandlers(model *intelligence.SynthesisReadModel, persistence *intelligence.SynthesisPersistence) *SynthesisHandlers {
 	return &SynthesisHandlers{ReadModel: model, Persistence: persistence}
+}
+
+// WithProducer enables the operator retry route.
+func (h *SynthesisHandlers) WithProducer(p *intelligence.SynthesisProducer) *SynthesisHandlers {
+	h.Producer = p
+	return h
 }
 
 // synthesisOutputResponse is the content-free summary. It carries counts,
@@ -225,3 +237,81 @@ func (h *SynthesisHandlers) GetRun(w http.ResponseWriter, r *http.Request) {
 		Insights: insights,
 	})
 }
+
+type synthesisRetryRequest struct {
+	Cadence string `json:"cadence"`
+}
+
+type synthesisRetryResponse struct {
+	Outcome string                   `json:"outcome"`
+	Output  *synthesisOutputResponse `json:"output,omitempty"`
+}
+
+// Retry runs a cadence window on demand.
+//
+// It reports what actually HAPPENED rather than that the request was accepted.
+// A 202 "accepted" would be the same shape of claim the original defect made:
+// true about the request, silent about whether anything was stored.
+func (h *SynthesisHandlers) Retry(w http.ResponseWriter, r *http.Request) {
+	if h == nil || h.Producer == nil {
+		writeError(w, http.StatusServiceUnavailable, "synthesis_retry_unavailable", "Synthesis retry is not configured")
+		return
+	}
+
+	var req synthesisRetryRequest
+	if err := json.NewDecoder(io.LimitReader(r.Body, 4<<10)).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_request", "Body must be JSON with a cadence field")
+		return
+	}
+
+	var cadence intelligence.SynthesisCadence
+	switch req.Cadence {
+	case string(intelligence.CadenceDaily):
+		cadence = intelligence.CadenceDaily
+	case string(intelligence.CadenceWeekly):
+		cadence = intelligence.CadenceWeekly
+	default:
+		// A closed vocabulary, refused rather than defaulted. Silently running
+		// daily for an unrecognised cadence would produce a real output that
+		// answers a question nobody asked.
+		writeError(w, http.StatusBadRequest, "invalid_cadence", "cadence must be daily or weekly")
+		return
+	}
+
+	agg, err := h.Producer.RunAndPersist(r.Context(), cadence, synthesisRetryPrincipal, time.Now().UTC())
+	switch {
+	case errors.Is(err, intelligence.ErrRunClaimedElsewhere):
+		// Not an error condition. Another process holds the window and is doing
+		// the work, which is the coordination succeeding.
+		writeJSON(w, http.StatusConflict, synthesisRetryResponse{Outcome: "claimed-elsewhere"})
+		return
+	case err != nil:
+		var ve *intelligence.SynthesisValidationError
+		if errors.As(err, &ve) {
+			// The failure CLASS is safe to return; the candidate content that
+			// caused it is not, and the validator already keeps it out.
+			writeError(w, http.StatusUnprocessableEntity, string(ve.Code), "Synthesis candidate was rejected")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "synthesis_retry_failed", "Synthesis run failed")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, synthesisRetryResponse{
+		Outcome: "persisted",
+		Output: &synthesisOutputResponse{
+			OutputID:               agg.OutputID,
+			Kind:                   string(agg.Kind),
+			InsightCount:           agg.InsightCount,
+			CitationCount:          agg.CitationCount,
+			EvaluatedArtifactCount: agg.EvaluatedArtifactCount,
+			CreatedAt:              agg.CreatedAt.UTC().Format(time.RFC3339),
+		},
+	})
+}
+
+// synthesisRetryPrincipal keeps an operator retry on the SAME logical identity
+// as the scheduled run for that window. A distinct principal would make the
+// retry a different logical key, so it would produce a second output instead of
+// converging on the existing one.
+const synthesisRetryPrincipal = "scheduler"
