@@ -1123,3 +1123,51 @@ one test compares the state Today reports against the state Status reports. Two
 pages computing this separately is precisely how they would drift into telling a
 reader different stories, so the agreement is asserted rather than assumed.
 
+### T004-05-07-UI
+
+The browser suite proves the rendering path works for whatever state the live
+stack happens to be in. On a healthy stack that is one state, which left stale,
+partial and both failure shapes asserted nowhere.
+
+`tests/e2e/synthesis_state_matrix_e2e_test.sh` drives the database into each
+durable state in turn, through the same columns the read model reads, and
+asserts what the server actually renders on BOTH pages:
+
+```text
+./smackerel.sh test e2e --shell-run synthesis_state_matrix_e2e_test.sh
+=== SCN-004-004-05: durable synthesis state matrix ===
+PASS: never-run renders 'never_run' on both Today and Status
+PASS: quiet window renders 'quiet' on both Today and Status
+PASS: quiet carries no prose (asserted inside assert_state)
+PASS: current renders 'current' on both Today and Status
+PASS: current renders persisted prose with citation disclosure
+PASS: stale renders 'stale' on both Today and Status
+PASS: partial renders 'partial' on both Today and Status
+PASS: failure with no prior output renders 'failed_without_output' on both Today and Status
+PASS: failure with a prior output renders 'failed_with_prior_output' on both Today and Status
+=== durable synthesis state matrix: all seven states render exclusively ===
+  PASS: synthesis_state_matrix_e2e_test.sh
+  Passed: 1
+  Failed: 0
+```
+
+Exclusivity is asserted by COUNT, not just by value: each page must carry
+exactly one `data-synthesis-state` marker. A page showing two states at once
+would satisfy a value check and fail this one.
+
+Mutation-verified. Removing the `outcome.Stale` branch from the projection makes
+a backdated output claim to be current:
+
+```text
+FAIL: /digest rendered state 'current', want 'stale'
+```
+
+The branch was restored and the matrix re-run clean before this evidence was
+recorded.
+
+One seeding attempt was refused by the database rather than by the test, which
+is worth recording because it is the schema defending its own invariant: a
+failed attempt must carry a `failure_class`, and the first version of the seed
+omitted it (`synthesis_run_attempts_failure_fields`). The seed was corrected to
+supply one rather than the constraint being worked around.
+
