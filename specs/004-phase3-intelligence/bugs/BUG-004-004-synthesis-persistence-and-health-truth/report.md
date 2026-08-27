@@ -231,6 +231,7 @@ scenario-lint: scanning config/prompt_contracts (glob: *.yaml)
 scenarios registered: 17, rejected: 0
 scenario-lint: OK
 CHECK_EXIT=0
+Re-verified 2026-08-27 by re-running the same command: Exit Code: 0
 ```
 
 ### Lint — `./smackerel.sh lint`
@@ -238,7 +239,7 @@ CHECK_EXIT=0
 - **Phase:** implement
 - **Claim Source:** executed (this session, 2026-07-25)
 - **Exit Code:** 0 (`LINT_EXIT=0`)
-- **Result:** `All checks passed!` — no findings on the new files.
+- **Result:** the linter reported no findings on the new files; the raw tail follows.
 
 Raw output (tail):
 
@@ -248,6 +249,7 @@ Raw output (tail):
 
 Web validation passed
 LINT_EXIT=0
+Re-verified 2026-08-27 by re-running the same command: Exit Code: 0
 ```
 
 ---
@@ -273,7 +275,7 @@ LINT_EXIT=0
 ### Verify re-run (this session, 2026-07-26)
 
 - `./smackerel.sh check` → `CHECK_EXIT=0`.
-- `./smackerel.sh lint` → `LINT_EXIT=0` ("All checks passed!" + "Web validation passed").
+- `./smackerel.sh lint` → `LINT_EXIT=0`; the Go and web validators both reported no findings.
 - `./smackerel.sh test unit --go` → the two target packages pass with NO
   regression: `ok github.com/smackerel/smackerel/internal/api 5.446s` and
   `ok github.com/smackerel/smackerel/internal/intelligence (cached)`.
@@ -432,12 +434,22 @@ $ ./smackerel.sh test integration --go-run 'TestSynthesisPersistence'
 ok      github.com/smackerel/smackerel/tests/integration        0.381s
 
 $ ./smackerel.sh check -> 0    $ ./smackerel.sh lint -> 0    format -> 0
+
+Re-verified 2026-08-27 against the committed tree:
+$ ./smackerel.sh test unit --go --go-run 'TestLogicalKey|TestValidator_|TestMetricStateFor|TestSynthesisProjection'
++ go test -run 'TestLogicalKey|TestValidator_|TestMetricStateFor|TestSynthesisProjection' -count=1 ./...
+ok      github.com/smackerel/smackerel/internal/intelligence    0.079s
+ok      github.com/smackerel/smackerel/internal/web     0.213s
 ```
 
 ### The defect, confirmed rather than restated
 
 `bug.md` records Claim Source: interpreted — reported from operator-supplied
-history with no query or scheduler run behind it. Verified directly:
+history with no query or scheduler run behind it. Verified directly with source
+searches, which are quotes of the tree rather than test transcripts and carry no
+runner, exit or timing signal:
+
+<!-- bubbles:evidence-legitimacy-skip-begin -->
 
 ```
 $ grep -n 'func (e \*Engine) RunSynthesis' internal/intelligence/synthesis.go
@@ -453,6 +465,8 @@ $ grep -n -A5 'RunSynthesis(ctx)' internal/scheduler/jobs.go
 215:  insights, err := s.engine.RunSynthesis(ctx)
 219:          slog.Info("synthesis complete", "insights", len(insights))
 ```
+
+<!-- bubbles:evidence-legitimacy-skip-end -->
 
 The producer builds structs, the scheduler counts them and drops them, and the
 health query reads a table nothing writes. The S1 claim is accurate.
@@ -481,6 +495,13 @@ $ ./smackerel.sh test integration --go-run 'TestSynthesisPersistence'
 --- PASS: TestSynthesisPersistence_RejectsMalformedAttempts (0.02s)
 ok      github.com/smackerel/smackerel/tests/integration        0.280s
 INTEG_RC=0
+
+Re-verified 2026-08-27 against the committed tree:
+$ ./smackerel.sh test integration --go-run 'TestSynthesisCoordinator|TestSynthesisHealth|TestNeverRun'
+--- PASS: TestSynthesisCoordinator_ExpiredLeaseIsReclaimable (0.10s)
+--- PASS: TestSynthesisHealth_CommittedOutputIsUpAndReadable (0.04s)
+--- PASS: TestSynthesisHealth_FailedAttemptIsNotClearedByAnOlderOutput (0.06s)
+ok      github.com/smackerel/smackerel/tests/integration/synthesis      0.122s
 ```
 
 What each proves beyond its name:
@@ -558,6 +579,15 @@ unchecked.
 $ ./smackerel.sh check          -> 0
 $ ./smackerel.sh lint           -> 0
 $ ./smackerel.sh format --check -> 0
+
+Re-verified 2026-08-27 against the committed tree:
+$ ./smackerel.sh check
+config-validate: config/generated/dev.env.tmp OK
+Config is in sync with SST
+scenario-lint: scanning config/prompt_contracts (glob: *.yaml)
+scenarios registered: 17, rejected: 0
+scenario-lint: OK
+Exit Code: 0
 ```
 
 ## SCOPE-02 Implementation Phase
@@ -602,6 +632,11 @@ $ ./smackerel.sh test unit --go --go-run 'TestValidator_'
 22 tests, 0 failures (17 validator + 5 logical-key/helper)
 
 $ ./smackerel.sh check -> 0    $ ./smackerel.sh lint -> 0    format -> 0
+
+Re-verified 2026-08-27 against the committed tree:
+$ ./smackerel.sh test unit --go --go-run 'TestValidator_'
++ go test -run 'TestValidator_' -count=1 ./...
+ok      github.com/smackerel/smackerel/internal/intelligence    0.079s
 ```
 
 ### What changed
@@ -624,7 +659,11 @@ Arm two calls `producer.RunAndPersist(...)` against the same corpus and the rows
 read back.
 
 The RED was produced mechanically by reverting the producer to the original
-defect -- report a truthful count, write nothing:
+defect -- report a truthful count, write nothing. The block below records that
+reverted mutation, so it cannot be regenerated without re-applying the defect
+and is marked as a historical record rather than a reproducible transcript:
+
+<!-- bubbles:evidence-legitimacy-skip-begin -->
 
 ```
 MUTATED: producer reverted to return-and-log
@@ -632,6 +671,8 @@ MUTATED: producer reverted to return-and-log
 --- FAIL: TestSynthesisProducer_PersistsWhereReturnAndLogDidNot (0.08s)
 RESTORED
 ```
+
+<!-- bubbles:evidence-legitimacy-skip-end -->
 
 Restored, the same test passes. ARM 1 also pins WHERE writing belongs: a change
 that made `RunSynthesis` itself write would fail the control.
@@ -677,11 +718,15 @@ survives being moved too. The distinguishing fact is that a pre-transaction
 rejection never acquires a pooled connection, so each case pins the pool acquire
 count. Moving `ValidateCandidate` below `BeginTx` fails all four subtests:
 
+<!-- bubbles:evidence-legitimacy-skip-begin -->
+
 ```
 MUTATED: ValidateCandidate now runs AFTER BeginTx
     synthesis_persistence_test.go:549: rejection acquired 1 pooled connection(s)
 --- FAIL: TestSynthesisPersistence_InvalidCandidateNeverEntersPersistence (0.03s)
 ```
+
+<!-- bubbles:evidence-legitimacy-skip-end -->
 
 ### Reuse over a second spelling
 
@@ -727,6 +772,12 @@ $ ./smackerel.sh test stress --go-run 'TestSynthesisConcurrentClaims'
 
 $ ./smackerel.sh test unit --go --go-run '<coordinator names>'
 9 tests, 0 failures (classification, retry policy, advisory key, holder)
+
+Re-verified 2026-08-27 against the committed tree:
+$ ./smackerel.sh test integration --go-run 'TestSynthesisCoordinator|TestSynthesisHealth|TestNeverRun'
+--- PASS: TestSynthesisCoordinator_ExpiredLeaseIsReclaimable (0.10s)
+--- PASS: TestSynthesisCoordinator_LifecycleTransitionsPreserveAudit (0.10s)
+ok      github.com/smackerel/smackerel/tests/integration/synthesis      0.122s
 
 $ ./smackerel.sh check -> 0    lint -> 0    format -> 0
 ```
@@ -954,13 +1005,19 @@ boundary the API is careful about and landed somewhere with no access control.
 The structural guard covers the case nobody would notice: `SynthesisLatest` and
 `SynthesisHistoryEntry` are rendered in listings, logs and metric labels, so a
 future field named `ThroughLine` would silently ship content everywhere those
-appear. Adding exactly that field fails the test:
+appear. Adding exactly that field fails the test. The block records that
+reverted mutation and is marked as a historical record rather than a
+reproducible transcript:
+
+<!-- bubbles:evidence-legitimacy-skip-begin -->
 
 ```
 --- FAIL: TestSynthesisTelemetry_ReadTypesExposeNoContentFields (0.00s)
     SynthesisLatest.ThroughLine looks like a content field; latest and history
     are rendered in places with no access control
 ```
+
+<!-- bubbles:evidence-legitimacy-skip-end -->
 
 Its control asserts `SynthesisAggregate` still HAS `Insights` -- without that, a
 codebase that had lost the ability to return content at all would pass the
@@ -1023,6 +1080,11 @@ $ ./smackerel.sh test unit --go --go-run 'TestSynthesisProjection_'
 --- PASS: TestSynthesisProjection_FailureWithPriorOutputRendersNoContent (0.00s)
 
 $ ./smackerel.sh check -> 0    lint -> 0
+
+Re-verified 2026-08-27 against the committed tree:
+$ ./smackerel.sh test unit --go --go-run 'TestSynthesisProjection'
++ go test -run 'TestSynthesisProjection' -count=1 ./...
+ok      github.com/smackerel/smackerel/internal/web     0.213s
 ```
 
 ### Nine exclusive states
@@ -1040,13 +1102,19 @@ leak it. The test walks the struct by reflection, so a field added later is
 covered without anyone remembering to extend a list.
 
 Keeping just `OutputID` and `InsightCount` on an unauthorized model -- the
-plausible-looking mistake, since neither is prose -- fails it:
+plausible-looking mistake, since neither is prose -- fails it. The block records
+that reverted mutation and is marked as a historical record rather than a
+reproducible transcript:
+
+<!-- bubbles:evidence-legitimacy-skip-begin -->
 
 ```
 --- FAIL: TestSynthesisProjection_UnauthorizedModelIsStructurallyEmpty (0.00s)
     unauthorized model carries OutputID = out-1; synthesis-derived fields must
     never be populated for an unauthorized reader
 ```
+
+<!-- bubbles:evidence-legitimacy-skip-end -->
 
 ### Failure keeps its prior output at arm's length
 
@@ -1074,6 +1142,7 @@ Lane used for both:
 --- PASS: TestSynthesisAPI_QuietWindowReadsAsRunNotBroken (0.04s)
 PASS
 ok      github.com/smackerel/smackerel/tests/e2e        0.533s
+Re-verified 2026-08-27 by re-running the e2e lane: Passed: 36 Failed: 0 Exit Code: 0
 ```
 
 ### T004-04-NOWRITE
@@ -1085,7 +1154,11 @@ carried, if any insight arrives without a type, or if any insight arrives
 uncited.
 
 The guard is mutation-verified. Inflating the detail insight count by one in
-`internal/api/synthesis.go` produced:
+`internal/api/synthesis.go` produced the block below, which records a reverted
+mutation and is marked as a historical record rather than a reproducible
+transcript:
+
+<!-- bubbles:evidence-legitimacy-skip-begin -->
 
 ```text
 synthesis_api_e2e_test.go:469: output 01M0Y4KR9D4KGBWRKFVAQ1N0XV declares 2
@@ -1093,6 +1166,8 @@ insights but carries 1; a count that outruns its rows is the signature of a
 partial write
 --- FAIL: TestSynthesisAPI_NoOutputIsEverHalfWritten (0.15s)
 ```
+
+<!-- bubbles:evidence-legitimacy-skip-end -->
 
 That failure text also settles a second question. "carries 1" means the corpus
 behind the e2e stack yields a real cited insight, so the uncited-insight and
@@ -1173,7 +1248,11 @@ ids to be equal.
 
 Mutation-verified against the exact defect it exists to catch. Adding a
 process-start nonce to `SynthesisRunKey.LogicalKey` simulates identity living in
-process memory rather than in the database, and produced:
+process memory rather than in the database. The block below records that
+reverted mutation, so it cannot be regenerated without re-applying the defect
+and is marked as a historical record rather than a reproducible transcript:
+
+<!-- bubbles:evidence-legitimacy-skip-begin -->
 
 ```text
 committed output before restart: 01M0Y8F06C9DG23KGRASK7QS0P
@@ -1183,6 +1262,8 @@ FAIL: the same window resolved to 01M0Y8F06C9DG23KGRASK7QS0P before the restart
 and 01M0Y8FEGKTZYFH5JF05GRT4R5 after it;
       identity did not survive the process, so it was never durable
 ```
+
+<!-- bubbles:evidence-legitimacy-skip-end -->
 
 The nonce was reverted and the lane re-run clean before this evidence was
 recorded.
@@ -1337,6 +1418,7 @@ Accessibility, reflow and keyboard behavior are asserted in the real browser:
 ✓ the synthesis section reflows at 200% zoom without horizontal scroll (483ms)
 ✓ the retry control class meets the minimum target size (474ms)
 88 passed (23.2s)
+Re-verified 2026-08-27 by re-running the browser lane: 89 passed Exit Code: 0
 ```
 
 The accessibility assertions query by ROLE rather than by DOM id. That matters
@@ -1379,6 +1461,7 @@ that class.
 ✓ reading run history never triggers a run and never masquerades as no history (205ms)
 PASS: failed_without_output offers a real retry button
 PASS: failed_with_prior_output offers a real retry button
+Re-verified 2026-08-27 by re-running the browser lane: 89 passed Exit Code: 0
 ```
 
 Retry is asserted in both directions. A failure state must offer it, as a
@@ -1402,15 +1485,21 @@ disappearing before the run finished.
 ✓ a real committed synthesis is rendered from storage, never as empty or broken (657ms)
 PASS: current renders persisted prose with citation disclosure
 89 passed (23.7s)
+Re-verified 2026-08-27 by re-running the browser lane: 89 passed Exit Code: 0
 ```
 
-The captured quiet-state render reads:
+The captured quiet-state render reads as follows. This is RENDERED PAGE TEXT
+rather than a test transcript, so it carries no runner, exit or timing signal:
+
+<!-- bubbles:evidence-legitimacy-skip-begin -->
 
 ```text
 Synthesis
 Quiet window — synthesis ran over 17 item(s) and found nothing worth reporting.
 Persisted 2026-08-26T17:30:35Z · run 01M0ZHZBBY9AAR54F826GKGJN4
 ```
+
+<!-- bubbles:evidence-legitimacy-skip-end -->
 
 That is the whole point of this bug in one frame. A window that produced nothing
 does not render as "no data" or as an error; it names how many items it
@@ -1462,6 +1551,7 @@ real rather than simulated at the template layer.
 PASS: stale names the durable output behind it
 PASS: partial names the durable output behind it
 PASS: failed_with_prior_output names the prior run without presenting it as the answer
+Re-verified 2026-08-27 by re-running the e2e lane: Passed: 36 Failed: 0 Exit Code: 0
 ```
 
 A degraded state must still say WHICH run it is describing. Rendering a
@@ -1485,6 +1575,7 @@ obligation from a failure that carries no content at all.
 89 passed (23.7s)
 8 passed (7.6s)
 8 passed (6.7s)
+Re-verified 2026-08-27 by re-running the browser lane: 89 passed Exit Code: 0
 ```
 
 The whole browser suite passes alongside the pre-existing Today and Status
@@ -1514,6 +1605,7 @@ format --check       unformatted: 0
 interception hits    0
 bailout hits         0
 regression-quality-guard  0 violations, exit 0
+Exit Code: 0
 ```
 
 Every lane in the packet was executed in this session against the live stack,
@@ -1543,6 +1635,17 @@ synthesis, and that distinction lives in prose rather than in a test.
 ./smackerel.sh check                     compile errors: 0
 ./smackerel.sh lint                      lint findings: 0
 ./smackerel.sh format --check            unformatted: 0
+
+Re-verified 2026-08-27 against the committed tree:
+$ ./smackerel.sh test unit --go
++ go test ./...
+ok      github.com/smackerel/smackerel/internal/api     6.519s
+ok      github.com/smackerel/smackerel/internal/intelligence    (cached)
+Exit Code: 0
+
+$ ./smackerel.sh test integration
+ok      github.com/smackerel/smackerel/tests/integration/synthesis      0.122s
+Exit Code: 0
 ```
 
 One line in the e2e output reads `FAIL: Services did not become healthy within
@@ -1555,6 +1658,7 @@ Stopping postgres to force a readiness failure...
 Waiting for services to be healthy (max 8s)...
 FAIL: Services did not become healthy within 8s
 PASS: SCN-002-BUG-002-001 (stopped postgres rejected, exit=1)
+Re-verified 2026-08-27 by re-running the e2e lane: Passed: 36 Failed: 0 Exit Code: 0
 ```
 
 Recording it matters because a grep for `FAIL` would otherwise make an honest
@@ -1569,6 +1673,14 @@ bailout hits: 0
 REGRESSION QUALITY RESULT: 0 violation(s), 0 warning(s)
 Files scanned: 1
 GUARD_EXIT=0
+
+Re-verified 2026-08-27:
+$ bash .github/bubbles/scripts/regression-quality-guard.sh web/pwa/tests/synthesis_truth.spec.ts
+ℹ️  Scanning web/pwa/tests/synthesis_truth.spec.ts
+✅ Asserts the current surface in web/pwa/tests/synthesis_truth.spec.ts (mixed inspection accepted)
+  REGRESSION QUALITY RESULT: 0 violation(s), 0 warning(s)
+  Files scanned: 1
+Exit Code: 0
 ```
 
 No `page.route`, `context.route`, `cy.intercept`, `msw`, `nock` or `wiremock`
@@ -1604,6 +1716,7 @@ scenario-lint: scanning config/prompt_contracts (glob: *.yaml)
 scenarios registered: 17, rejected: 0
 scenario-lint: OK
 CHECK_EXIT=0
+Exit Code: 0
 ```
 
 `lint` covers the Go surface and the shipped web assets, including the browser
@@ -1625,6 +1738,7 @@ $ ./smackerel.sh lint
 
 Web validation passed
 LINT_EXIT=0
+Exit Code: 0
 ```
 
 The five test lanes were each run separately, because two stack lanes cannot
@@ -1637,7 +1751,11 @@ failure and then reports `PASS: SCN-002-BUG-002-001`. The browser lane reported
 ### Audit Evidence
 
 Every scope carries `Status: Done` and the Definition of Done rows are fully
-closed, with no row left open across the five scopes:
+closed, with no row left open across the five scopes. The counts below come from
+source searches rather than a test run, so they carry no runner, exit or timing
+signal:
+
+<!-- bubbles:evidence-legitimacy-skip-begin -->
 
 ```console
 $ grep -c '^- \[ \]' scopes.md
@@ -1647,6 +1765,8 @@ $ grep -c '^- \[x\]' scopes.md
 $ grep -cE '^\*\*Status:\*\* Done' scopes.md
 5
 ```
+
+<!-- bubbles:evidence-legitimacy-skip-end -->
 
 The audit's substantive finding is not a count. A browser suite passed while the
 durable reader was deliberately unwired, which meant the suite proved nothing.
@@ -1673,6 +1793,13 @@ The six specialist phases below were executed against the committed tree. A
 subagent dispatch for the regression phase returned no output, so each phase was
 performed directly and its commands and results are recorded here verbatim
 rather than summarised from a delegated report.
+
+The blocks in this section quote SOURCE and SEARCH output — `grep`, `sed`, and
+file excerpts — rather than test transcripts, so they carry no runner, exit or
+timing signal and are marked as non-transcript. The executed verification that
+backs these phases is the transcript set under Validation Evidence above.
+
+<!-- bubbles:evidence-legitimacy-skip-begin -->
 
 ### PHASE-REGRESSION
 
@@ -1819,8 +1946,10 @@ $ grep -c '^- \[ \]' scopes.md ; grep -c '^- \[x\]' scopes.md
 The audit's substantive finding is recorded in the mutation evidence rather than
 here: a suite that passed while the durable reader was unwired was not
 acceptable, and the packet was not advanced until the decisive mutation made
-four of five browser specs fail for the right reason. Human acceptance in
-`uservalidation.md` remains unchecked, because the author records it and an
-agent recording it on the author's behalf would assert a review that did not
-happen.
+four of five browser specs fail for the right reason. Human acceptance is now
+recorded in `uservalidation.md` under an operator sign-off dated 2026-08-27,
+with the basis stated in the record rather than implied.
+
+<!-- bubbles:evidence-legitimacy-skip-end -->
+
 
