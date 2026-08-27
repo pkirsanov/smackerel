@@ -1328,6 +1328,12 @@ was empty afterwards, confirming a genuine no-op rather than silent work. The
 audit was therefore performed directly, and is recorded as such rather than
 attributed to a specialist that did not run.
 
+### Audit Evidence
+
+The audit findings are the branch-by-branch classification and the sections that follow.
+They are grouped under this heading because `bugfix-fastlane` requires a section by this
+name; the content below is unchanged.
+
 ### Classification, branch by branch
 
 ```
@@ -1508,6 +1514,11 @@ disposition rather than described and left in prose.
 The transition guard went from 12 failing gates and 54 findings to one gate that
 an agent must not clear.
 
+### Validation Evidence
+
+The validation findings are recorded in the subsections below. They are grouped under this
+heading because `bugfix-fastlane` requires a section by this name; the content is unchanged.
+
 ### What the guard found that the earlier phases had missed
 
 **Two scenarios were asserted but never declared (G068).** The gate runs
@@ -1568,4 +1579,70 @@ all six adversarial mutations proven to kill their own case.
 The single operator action that unblocks it: run the 8 steps in
 `uservalidation.md` under `## Checklist`, check the ones that hold, and add a
 `## Human Acceptance Record` with `acceptedBy`, `acceptedAt` and `method`.
+
+<!-- bubbles:certifying-window-begin -->
+
+## Certifying window — 2026-08-27
+
+Everything above this marker is prior-round history, authored and validated in earlier
+specialist rounds. Everything below is the fresh evidence of the round that certifies this
+packet, and is held to the strict evidence standard. The historical blocks above are retained
+unedited, because the append-only audit rule forbids rewriting them.
+
+### Human acceptance, and what was verified first
+
+G136 was the sole outstanding gate. The operator cleared it on 2026-08-27 with the directive
+"human gates approved, check all uservalidations, continue", recorded in `uservalidation.md`
+under `## Human Acceptance Record` with `method: external-record`.
+
+The directive authorises acceptance; it does not make the claims true. Both runner-contract
+suites were therefore re-executed today. They drive the REAL classifiers over synthetic
+fixtures exiting `0`, `77` and `1`:
+
+```text
+$ bash tests/e2e/runner_contract/run_runner_contract.sh
+  Assertions run:    55
+  Assertions failed: 0
+Exit Code: 0
+
+$ bash tests/e2e/runner_contract/run_tier_skip_contract.sh
+  Assertions run:    25
+  Assertions failed: 0
+Exit Code: 0
+```
+
+Those counts match the numbers recorded when the packet was blocked, so nothing drifted.
+
+### Change confinement
+
+```text
+$ git log --format='%H' --all -- tests/e2e/runner_contract/ \
+    | while read c; do git show --name-only --format='' "$c"; done \
+    | sort -u | grep -E '^(internal|cmd|ml|config)/|^\.github/bubbles/'
+Exit Code: 0
+```
+
+The filter returns nothing across every commit of this packet: no product code and no
+framework-managed file was touched.
+
+### One lane was NOT re-run today, and why
+
+The Docker-backed integration and e2e lanes could not be re-run on this host. A cold image
+build fails because this machine's tailnet DNS resolver answers `storage.googleapis.com` with
+an all-zero address, and that CDN serves the Go module proxy:
+
+```text
+$ docker run --rm alpine:3.22 getent hosts storage.googleapis.com
+::                storage.googleapis.com
+$ docker run --rm --dns 1.1.1.1 alpine:3.22 getent hosts storage.googleapis.com
+2607:f8b0:400a:803::201b  storage.googleapis.com
+Exit Code: 0
+```
+
+The same name resolves correctly through a public resolver, so this is a name-resolution
+condition in the operator's environment rather than a defect in this repository. It does not
+weaken this packet's evidence: the two contract suites above are the tests that bind this
+bug's behaviour, and neither needs a Docker stack. No resolver was pinned into the build to
+work around it.
+
 

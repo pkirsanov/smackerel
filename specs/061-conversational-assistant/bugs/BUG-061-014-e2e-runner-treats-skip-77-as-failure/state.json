@@ -5,7 +5,9 @@
   "title": "The E2E runners have no SKIP bucket, so a documented exit-77 skip is reported as a failure and an exit-0 skip is reported as a pass",
   "workflowMode": "bugfix-fastlane",
   "releaseTrain": "mvp",
-  "status": "blocked",
+  "status": "done",
+  "certifiedAt": "2026-08-27T05:00:00Z",
+  "statusReason": "Terminal. G136 was the sole outstanding gate and the operator cleared it on 2026-08-27 with the directive 'human gates approved, check all uservalidations, continue', recorded in uservalidation.md '## Human Acceptance Record' under method external-record. The eight '[Bug Fix]' items were NOT checked on the directive alone: both runner-contract suites were re-executed on 2026-08-27 and reported 55 assertions / 0 failed and 25 assertions / 0 failed, both exit 0, matching the counts recorded when the packet was blocked. Those drivers bind the REAL classifiers - run_all.sh is symlinked into a sandbox and the smackerel.sh classifier block is extracted by function name - so the tracked text is the code that executes, and neither driver boots a Docker stack. Change confinement was re-checked across every commit of the packet: no path under internal/, cmd/, ml/, config/ or .github/bubbles/ appears in any of them. The Docker-backed integration and e2e lanes were NOT re-run today and this is recorded in report.md rather than omitted: a cold image build fails because this host's tailnet DNS resolver answers storage.googleapis.com with an all-zero address while a public resolver answers it correctly, which is an operator-environment name-resolution condition and not a defect in this repository. It does not weaken this packet's evidence, because the two contract suites are the tests that bind this bug's behaviour and neither needs a stack.",
   "severity": "S2",
   "createdAt": "2026-08-25T02:52:34Z",
   "lastUpdatedAt": "2026-08-25T14:09:08Z",
@@ -347,11 +349,11 @@
   "transitionRequests": [],
   "reworkQueue": [],
   "certification": {
-    "status": "blocked",
+    "status": "done",
     "certifiedBy": "bubbles.goal",
     "certifiedAt": "2026-08-25T14:09:08Z",
     "evidenceRef": "report.md#validate-phase",
-    "blockedReason": "Gate G136 human acceptance. Both scopes are Done, all 34 DoD items carry inline execution evidence, both contract suites are green (55 and 25 assertions, 0 failures), the shell E2E lane is 36/36 and integration exits 0. What is missing is a human. The acceptance-authority contract requires a Human Acceptance Record naming a non-automation acceptor with a declared method, and forbids acceptedBy matching '^bubbles\\\\.'. Only agents exercised these behaviours, so acceptance has not occurred.",
+    "supersededBlockedReason": "Gate G136 human acceptance. Both scopes are Done, all 34 DoD items carry inline execution evidence, both contract suites are green (55 and 25 assertions, 0 failures), the shell E2E lane is 36/36 and integration exits 0. What is missing is a human. The acceptance-authority contract requires a Human Acceptance Record naming a non-automation acceptor with a declared method, and forbids acceptedBy matching '^bubbles\\\\.'. Only agents exercised these behaviours, so acceptance has not occurred.",
     "completedScopes": [
       "BUG-061-014-SCOPE-01",
       "BUG-061-014-SCOPE-02"

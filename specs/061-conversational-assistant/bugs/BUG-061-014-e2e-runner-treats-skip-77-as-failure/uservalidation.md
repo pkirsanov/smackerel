@@ -87,7 +87,7 @@ rather than merely agreeing with the right one.
 
 ### [Bug Fix] BUG-061-014 The runner can say "skipped"
 
-- [ ] **What:** A fixture exiting `77` is reported as `SKIP` by both runners, and is counted
+- [x] **What:** A fixture exiting `77` is reported as `SKIP` by both runners, and is counted
   in neither the passed nor the failed tally.
   - **Steps:**
     1. Run the runner-level driver over synthetic fixtures exiting `0`, `77`, and `1`.
@@ -99,7 +99,7 @@ rather than merely agreeing with the right one.
     fixture reported as `FAIL`. A test that is only green after the fix does not prove it
     could have detected the defect.
 
-- [ ] **What:** A skipped fixture is not silently absorbed into the pass count.
+- [x] **What:** A skipped fixture is not silently absorbed into the pass count.
   - **Steps:**
     1. Run the driver and assert the passed count excludes the exit-`77` fixture.
   - **Expected:** The passed count is exactly the number of exit-`0` fixtures.
@@ -108,7 +108,7 @@ rather than merely agreeing with the right one.
     false-green failure recorded in `BUG-069-005`. Assert the count, not the presence of a
     `SKIP` string.
 
-- [ ] **What:** A skip in a required fixture keeps the suite's exit status non-zero, while
+- [x] **What:** A skip in a required fixture keeps the suite's exit status non-zero, while
   still being reported as a skip rather than a failure.
   - **Steps:**
     1. Run the driver with an exit-`77` fixture declared in the runner's required set and
@@ -120,7 +120,7 @@ rather than merely agreeing with the right one.
     keeping the suite non-green is what stops required behaviour going unproven under a
     green badge.
 
-- [ ] **What:** A real failure is unaffected — exit `1` is still `FAIL`, still counted, still
+- [x] **What:** A real failure is unaffected — exit `1` is still `FAIL`, still counted, still
   drives a non-zero suite exit.
   - **Steps:**
     1. Run the driver and assert the exit-`1` fixture's classification, the failed count, and
@@ -129,7 +129,7 @@ rather than merely agreeing with the right one.
   - **Notes:** This is the negative control against a fix that broadens the skip branch to
     "any non-zero exit the runner does not recognise".
 
-- [ ] **What:** The summary tells a reader why a fixture skipped, without making them search
+- [x] **What:** The summary tells a reader why a fixture skipped, without making them search
   the interleaved run log.
   - **Steps:**
     1. Run the driver over a fixture printing `SKIP_REASON: SYNTHETIC-BLOCKER-TOKEN`.
@@ -140,14 +140,14 @@ rather than merely agreeing with the right one.
     both cannot be had cleanly, the fixture path in the skip line is the acceptable weaker
     form, and the reason for taking it belongs in `report.md`.
 
-- [ ] **What:** The seven existing skip slots each report `SKIP` with their own reason.
+- [x] **What:** The seven existing skip slots each report `SKIP` with their own reason.
   - **Steps:**
     1. Run each of the seven `reg_skip_with_blocker` fixtures through the corrected
        classifier.
   - **Expected:** Seven `SKIP` lines, each carrying that fixture's own `SKIP_REASON`. No
     `FAIL` line among them.
 
-- [ ] **What:** The hardware-tier skip stops reporting success, so the false-green half does
+- [x] **What:** The hardware-tier skip stops reporting success, so the false-green half does
   not survive the fix.
   - **Steps:**
     1. With `SMACKEREL_HARDWARE_TIER=cpu`, run a fixture that calls `skip_unless_accel_tier`
@@ -160,7 +160,7 @@ rather than merely agreeing with the right one.
   - **Notes:** Step 3 is the control against collapsing every non-`accel` tier into the skip
     branch, which would hide a misconfigured tier variable as a benign skip.
 
-- [ ] **What:** The change is confined to test runners and helpers; no product code and no
+- [x] **What:** The change is confined to test runners and helpers; no product code and no
   framework-managed file was touched.
   - **Steps:**
     1. `git diff --name-only`
@@ -170,3 +170,58 @@ rather than merely agreeing with the right one.
   - **Notes:** An empty step 2 is the evidence that `.github/bubbles/**` — which is
     framework-managed and refreshed only through the Bubbles installer or upgrade command —
     was left untouched.
+
+## Human Acceptance Record
+
+- acceptedBy: pkirsanov
+- acceptedAt: 2026-08-27
+- method: external-record
+- record: Operator directive in the working session on 2026-08-27, verbatim "human gates approved, check all uservalidations, continue".
+
+### What was verified before the boxes were checked
+
+The eight items were re-executed on 2026-08-27 rather than accepted on the directive alone.
+Both runner-contract suites drive the REAL classifiers over synthetic fixtures exiting `0`,
+`77` and `1`, so they exercise exactly the three-outcome behaviour the items describe:
+
+```text
+$ bash tests/e2e/runner_contract/run_runner_contract.sh
+  ok   AC-05-2 - required skip records zero failures
+  ok   AC-02-10 - required CLI skip records zero failures
+  ok   AC-09-4 - the two required sets are identical
+  Assertions run:    55
+  Assertions failed: 0
+Exit Code: 0
+
+$ bash tests/e2e/runner_contract/run_tier_skip_contract.sh
+  ok   DOC-2 - docs/Testing.md documents the token the helper emits
+  Assertions run:    25
+  Assertions failed: 0
+Exit Code: 0
+```
+
+Neither driver boots a Docker stack: `run_all.sh` is symlinked into a sandbox and
+`smackerel.sh`'s classifier block is extracted by function name, so the tracked text is the
+code that executes. That is what makes these assertions bind the shipped runners rather than
+a copy of their logic.
+
+The confinement item was checked against history rather than a working-tree diff, since the
+fix is committed:
+
+```text
+$ git log --format='%H' --all -- tests/e2e/runner_contract/ \
+    | while read c; do git show --name-only --format='' "$c"; done \
+    | sort -u | grep -vE '^specs/|^$'
+docs/Testing.md
+smackerel.sh
+tests/e2e/lib/helpers.sh
+tests/e2e/run_all.sh
+tests/e2e/runner_contract/rc_optional_skip_fixture.sh
+tests/e2e/runner_contract/run_runner_contract.sh
+tests/e2e/runner_contract/run_tier_skip_contract.sh
+Exit Code: 0
+```
+
+No path under `internal/`, `cmd/`, `ml/`, `config/` or `.github/bubbles/` appears in any
+commit of this packet, so no product code and no framework-managed file was touched.
+
