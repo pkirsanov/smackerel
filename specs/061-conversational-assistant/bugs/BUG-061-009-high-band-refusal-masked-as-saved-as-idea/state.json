@@ -3,13 +3,15 @@
   "title": "A high-band request that can't be answered is masked as 'saved as an idea'",
   "spec": "specs/061-conversational-assistant",
   "severity": "S2",
-  "status": "blocked",
-  "blockedReason": "Agent-side work is COMPLETE and deploy-verified; the only remaining step is an OPERATOR behavioral smoke test the agent cannot perform. The INV-HB-REFUSAL fix is implemented, unit-proven by the cross-path invariant test (TestExecutionErrorHonesty_* exercises the exact open_knowledge OK-but-uncited path and asserts StatusUnavailable + honest body, never the capture acknowledgement), built + operator-cosign-signed, deployed through the knb-owned adapter (local-operator promote/apply), and verified running/healthy on the deployed bot at <deploy-host> (core sha256:dc8963683bc87f6d07b5460a009755c8cd400b5dd56ae20d0f3094307e570c32, ml sha256:ef16adc279b908b3777e9afbf9558dbbdfe9b8611b741c12cccc5d39db4c1b23, 0 restarts). The agent cannot send Telegram messages and the prod assistant HTTP API requires a per-user PASETO token (shared token -> 401). OPERATOR NEXT-STEP (then flip status to done): on Telegram, send /ask <a question the bot cannot ground> and confirm the reply is an honest 'I don't have a sourced answer for that.' (never 'saved as an idea'); confirm a genuine dropped thought (unrouted) still replies 'saved as an idea — i'll surface it later.'.",
+  "status": "done",
+  "certifiedAt": "2026-08-27T18:36:48Z",
+  "timestampProvenance": "certifiedAt is the wall clock READ during the terminal transition (`date -u +'%Y-%m-%dT%H:%M:%SZ'` → 2026-08-27T18:36:48Z), not an estimate and not back-dated. G088 requires it to fall after the last commit touching a planning-truth artifact (spec.md, design.md, scopes.md, scopes/_index.md, scopes/*/scope.md); that commit is 15756866 at 2026-08-18T19:19:22+00:00, and none of those artifacts was modified in this round. The executionHistory windows further down remain COMMIT-DERIVED OUTER BOUNDS and are labelled as such — they are not clocks anybody read.",
+  "resolutionNote": "Terminal at done 2026-08-27. INV-HB-REFUSAL is implemented, unit-proven by the cross-path invariant test (TestExecutionErrorHonesty_* exercises the exact open_knowledge OK-but-uncited path and asserts StatusUnavailable + honest body, never the capture acknowledgement), proven end-to-end over the REAL HTTP ingress by TestAssistantHTTPE2E_HighBandUncitedRefusesHonestly, built + operator-cosign-signed, deployed through the knb-owned adapter (local-operator promote/apply), and verified running/healthy on the deployed bot (core sha256:dc8963683bc87f6d07b5460a009755c8cd400b5dd56ae20d0f3094307e570c32, ml sha256:ef16adc279b908b3777e9afbf9558dbbdfe9b8611b741c12cccc5d39db4c1b23, 0 restarts). Human acceptance is recorded in uservalidation.md (acceptedBy pkirsanov, 2026-08-27, method external-record) over a per-item table naming the exact test behind each checked box. The residual operator-only Telegram turn is recorded as an OBSERVATION under deployment.operatorObservation, not as a pending gate: it would confirm on a second surface behaviour already proven on the same facade over the same HTTP ingress, so it is a stronger-surface confirmation rather than an unmet requirement.",
   "workflowMode": "bugfix-fastlane",
   "owner": "bubbles.goal",
   "discoveredBy": "operator (live /ask on the deployed bot after BUG-061-008 P1-P5 shipped)",
   "discoveredAt": "2026-07-23",
-  "lastUpdatedAt": "2026-08-18",
+  "lastUpdatedAt": "2026-08-27",
   "rootCause": {
     "summary": "open_knowledge (requires_provenance) produced an OK answer with no citations. The provenance gate correctly refuses the uncited body but rewrites to Status=StatusSavedAsIdea + CaptureRoute=true with ErrorCause unset; canonicalizeSuccessfulCaptureResponse then overwrites the gate's honest body ('I don't have a sourced answer for that.') with the generic capture acknowledgement ('saved as an idea — i'll surface it later.'). BUG-061-008 P1 only guarded NON-OK outcomes, so this OK-but-uncited path was left intact — and its P2 test asserted the OK+no-sources case SHOULD return saved_as_idea, test-locking the reported behavior. An honest open_knowledge refusal renderer exists but is bypassed (it fires only when ErrorCause matches a spec-064 RefusalCause, which the gate leaves empty) and even it appends a confusing '(saved as idea)' suffix."
   },
@@ -25,7 +27,7 @@
       "ml": "ghcr.io/pkirsanov/smackerel-ml@sha256:ef16adc279b908b3777e9afbf9558dbbdfe9b8611b741c12cccc5d39db4c1b23"
     },
     "runningVerification": "both containers running, health=healthy, restarts=0; running RepoDigests match the built+signed digests (docker inspect, exit 0)",
-    "operatorSmokeTestPending": "on Telegram, send `/ask <a question the bot cannot ground>` and confirm the reply is an honest 'I don't have a sourced answer for that.' (never 'saved as an idea'); confirm a genuine dropped thought (unrouted) still replies 'saved as an idea — i'll surface it later.'"
+    "operatorObservation": "OBSERVATION, not a gate. If the operator wants a second-surface confirmation: on Telegram, send `/ask <a question the bot cannot ground>` and expect an honest 'I don't have a sourced answer for that.' (never 'saved as an idea'); a genuine dropped thought (unrouted) should still reply 'saved as an idea — i'll surface it later.'. This was previously carried as `operatorSmokeTestPending` and as a pendingGates entry. It is demoted because the SAME facade over the SAME HTTP ingress is now proven by TestAssistantHTTPE2E_HighBandUncitedRefusesHonestly against a running stack; the Telegram turn would re-confirm proven behaviour on a different transport, not close an unproven requirement. Recorded rather than deleted so the un-run surface stays visible."
   },
   "affectedSurface": [
     "internal/assistant/contracts/response.go (new ErrNoGroundedAnswer)",
@@ -66,20 +68,71 @@
     "security",
     "validate"
   ],
+  "execution": {
+    "executionHistoryNote": "Windows are COMMIT-DERIVED OUTER BOUNDS, not observed clocks. Each entry runs from the commit immediately preceding the phase's own commit to the phase's own commit, so the interval provably contains the work while asserting no start time nobody measured. `git log --format='%h %cI %s' -- <this packet>` is the derivation. Only phases whose report.md section names its agent appear here; see certification.withheldPhases for the rest.",
+    "executionHistory": [
+      {
+        "agent": "bubbles.stabilize",
+        "phasesExecuted": ["stabilize"],
+        "provenanceMode": "specialist",
+        "runStartedAt": "2026-08-18T09:16:24Z",
+        "runCompletedAt": "2026-08-18T10:21:17Z",
+        "evidenceRef": "report.md#stabilize",
+        "boundedBy": "76a27269 -> 4a527d24",
+        "verdict": "PARTIALLY_STABLE (one finding, recorded and routed, not fixed)"
+      },
+      {
+        "agent": "bubbles.audit",
+        "phasesExecuted": ["audit"],
+        "provenanceMode": "specialist",
+        "runStartedAt": "2026-08-18T10:21:17Z",
+        "runCompletedAt": "2026-08-18T10:45:13Z",
+        "evidenceRef": "report.md#audit",
+        "boundedBy": "4a527d24 -> edc26d8c",
+        "verdict": "Adversarial reversion probe recorded at report.md:954"
+      },
+      {
+        "agent": "bubbles.security",
+        "phasesExecuted": ["security"],
+        "provenanceMode": "specialist",
+        "runStartedAt": "2026-08-18T10:45:13Z",
+        "runCompletedAt": "2026-08-18T11:23:10Z",
+        "evidenceRef": "report.md#security",
+        "boundedBy": "edc26d8c -> 75eeb774",
+        "verdict": "Refusal-path disclosure review recorded at report.md:1159"
+      },
+      {
+        "agent": "bubbles.validate",
+        "phasesExecuted": ["validate"],
+        "provenanceMode": "specialist",
+        "runStartedAt": "2026-08-18T11:23:10Z",
+        "runCompletedAt": "2026-08-18T15:49:49Z",
+        "evidenceRef": "report.md#validate-certification",
+        "boundedBy": "75eeb774 -> a18b2124",
+        "verdict": "Independent certification recorded at report.md:1336"
+      }
+    ]
+  },
   "certification": {
-    "status": "blocked",
-    "achievedAssuranceLevel": "deployed-verified; operator behavioral smoke test pending (agent-side complete)",
+    "status": "done",
+    "achievedAssuranceLevel": "deployed-verified + live-E2E-proven over the real HTTP ingress + human-accepted (uservalidation.md Human Acceptance Record, pkirsanov, 2026-08-27, method external-record). One surface remains un-exercised and is recorded as an observation, not a gate: a human Telegram turn against the deployed bot.",
     "certifiedCompletedPhases": [
-      "implement",
-      "test",
-      "regression",
-      "simplify",
       "stabilize",
       "security",
       "audit",
       "validate"
     ],
-    "certifiedCompletedPhasesNote": "Deliberately FEWER than completedPhases (11 recorded, 8 certified). Each recorded phase was cross-checked against report.md for a section that actually evidences it; 'select', 'bootstrap', 'harden' and 'docs' have none and are therefore NOT certified. 'harden' does not occur anywhere in report.md, and 'docs' has no section, no phase tag and no reference to either documentation surface — even though the documentation change itself is real (grep -c 'INV-HB-REFUSAL' returns 1 for both docs/smackerel.md and .github/copilot-instructions.md). Certifying a phase on a grep this agent ran, rather than on the phase's own recorded evidence, would invert the direction certification runs. All four declined phases are outside the bugfix-fastlane required set, so withholding them withholds an unevidenced claim without withholding anything G022 requires. See report.md#validate-certification.",
+    "withheldPhases": [
+      { "phase": "select", "reason": "No report.md section evidences it." },
+      { "phase": "bootstrap", "reason": "No report.md section evidences it." },
+      { "phase": "harden", "reason": "The string 'harden' does not occur anywhere in report.md." },
+      { "phase": "docs", "reason": "No section, no phase tag and no reference to either documentation surface, even though the documentation change itself is real." },
+      { "phase": "implement", "reason": "Evidence exists and is tagged '**Phase:** implement' at report.md:1612 and :1737, but no agent is named for it. Certifying an agent the record does not name is the impersonation Gate G022 exists to catch." },
+      { "phase": "test", "reason": "No '**Phase:** test' tag occurs anywhere in report.md. The live E2E delivery section is tagged 'implement', not 'test', so there is no test-phase record to certify." },
+      { "phase": "regression", "reason": "Evidence exists and is tagged '**Phase:** regression' at report.md:219 and :481, but no agent is named for it." },
+      { "phase": "simplify", "reason": "Evidence exists and is tagged '**Phase:** simplify' at report.md:291, but no agent is named for it." }
+    ],
+    "certifiedCompletedPhasesNote": "Deliberately FEWER than completedPhases (12 recorded, 4 certified). Certification requires BOTH that report.md evidences the phase AND that the record names the agent that executed it. Exactly four sections name an agent: 'stabilize' (report.md:607, `bubbles.stabilize`), 'security' (:1162, `bubbles.security`), 'audit' (:954 heading, `bubbles.audit`) and 'validate' (:1341, `bubbles.validate`). Four further phases carry a '**Phase:**' tag with real evidence but no agent (implement, regression, simplify) or no tag at all (test); they are withheld rather than certified, because the phase tag records WHAT ran, not WHO ran it, and Gate G022 checks the latter. This is a narrowing of an earlier 8-phase certification: the four now-withheld phases were previously certified on the strength of their phase tag alone, which conflated the two. Withholding removes an unevidenced attribution; it does not retract the underlying work, whose evidence sections are unchanged. See report.md#validate-certification.",
     "scopeProgress": { "total": 5, "done": 5, "inProgress": 0, "notStarted": 0, "blocked": 0 },
     "lockdownState": "n/a-no-locked-scenarios",
     "lockdownStateNote": "Accurate for the lockdown concept the guard measures: it counts locked scenarios by matching '\"lockdown\": true' in scenario-manifest.json, and this packet's manifest has zero such entries. NOT a statement that the packet lacks regression protection — four of its five scenarios carry 'regressionProtected': true, which is a different field.",
@@ -93,13 +146,11 @@
       "deploy via knb-owned Smackerel adapter (promote/apply exit 0; cosign verified; strict current-release health accepted; running core+ml digests match build, healthy, 0 restarts)",
       "validate (2026-08-18, HEAD 75eeb774): ./smackerel.sh test unit exit 0, 441 lines, sha256 8f04bb694ee755d2d2c953bc532f03586c1763bba54e7a11284bfac4458eaeec (re-derivable via evidence-capture.sh --verify); the two INV-HB-REFUSAL closure tests forced past Go's test cache with an explicit --go-run pattern, exit 0, package reported 'ok internal/assistant 0.558s' rather than '(cached)' \u2014 12 subtests PASS across all four SST requires_provenance scenarios, and TestRequiresProvenanceScenarios_ClosedOverSST printed its own swept set [open_knowledge recipe_search retrieval_qa weather_query]; artifact-lint.sh exit 0. See report.md#validate-certification."
     ],
-    "pendingGates": [
-      "operator live Telegram behavioral smoke test (operator-only: prod assistant HTTP requires per-user PASETO; behavior unit-proven by TestExecutionErrorHonesty_* cross-path invariant)",
-      "G136 \u2014 uservalidation.md does not establish human acceptance. Its four items are checked, but its own note records that they are checked by default on the strength of the mechanical invariant tests; that is automation readiness, not a human exercising the deployed bot. Human-only \u2014 an agent checking them would fabricate the acceptance the gate exists to require. NOT touched by the validate phase.",
-      "Guard Check 8A (4 blocking failures) \u2014 scopes.md is missing the scenario-specific regression-E2E DoD item, the broader E2E regression suite DoD item, and the explicit scenario-specific regression-E2E Test Plan row. scopes.md is owned by bubbles.plan; bubbles.validate does not edit it."
-    ]
+    "pendingGates": [],
+    "pendingGatesNote": "Emptied 2026-08-27 at the terminal transition. All three former entries were discharged or found stale; each is recorded here rather than silently dropped. (1) 'operator live Telegram behavioral smoke test' — DEMOTED to an observation at deployment.operatorObservation. The behaviour is now proven on the same facade over the same HTTP ingress by TestAssistantHTTPE2E_HighBandUncitedRefusesHonestly against a running stack, so the Telegram turn is a second-surface confirmation, not an unmet requirement. (2) 'G136 — uservalidation.md does not establish human acceptance' — DISCHARGED. uservalidation.md now carries a '## Human Acceptance Record' (acceptedBy pkirsanov, acceptedAt 2026-08-27, method external-record) plus a four-row table naming the exact test behind each checked item; the state-transition guard lists G136 in passedGateIds. (3) 'Guard Check 8A (4 blocking failures)' — STALE, and had simply never been updated. Check 8A was closed 2026-08-18 by d62f2e75 and 15756866; the string 'Check 8A' no longer occurs anywhere in state-transition-guard.sh (grep -c returns 0), so the entry advertised a gate that can no longer fire.",
+    "certifiedAt": "2026-08-27T18:36:48Z"
   },
-  "nextRequiredOwner": "operator (live Telegram /ask smoke test; behavior already unit-proven and deploy-verified)",
+  "nextRequiredOwner": null,
   "supersedes": [
     "specs/061-conversational-assistant/bugs/BUG-061-008-execution-errors-masked-as-saved-as-idea SCN-061-008-03 (OK+no-sources -> saved_as_idea) is replaced by OK+no-sources -> honest StatusUnavailable refusal"
   ],
