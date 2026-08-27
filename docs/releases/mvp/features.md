@@ -24,6 +24,15 @@
   Every such spec carries exactly one binding below. Re-run the gate with:
     bash .github/bubbles/scripts/release-delivery-reconciliation-guard.sh \
       --repo-root "$(pwd)" --phase mvp --require-coverage
+
+  RE-RECONCILED 2026-08-27 against HEAD 8a599234. Two changes, both derived by
+  re-reading live state, neither restated from the prose below:
+    1. Spec 110 (releaseTrain: mvp) was authored after 2026-08-04 and was bound in
+       NO packet. Its home binding is added above as mvp-retrieval-quality-foundation.
+       The `next` packet carries a non-home reference to the same spec.
+    2. Spec 039 is now `required`, not `carried`. The 2026-08-04 exclusion rested on
+       a guard-parse defect that has since been fixed in the guard itself; see the
+       corrected Census row below. The legacy-estate enforced count moves 74 -> 75.
 -->
 <!-- bubbles:reconciled-packet schemaVersion=1 phase=mvp -->
 
@@ -60,6 +69,7 @@
 <!-- bubbles:feature id=mvp-knowledge-graph-explorer spec=specs/105-connected-knowledge-graph-explorer delivery=optional -->
 <!-- bubbles:feature id=mvp-coherent-product-experience spec=specs/106-coherent-product-experience delivery=optional -->
 <!-- bubbles:feature id=mvp-proactive-correlated-experience spec=specs/107-proactive-correlated-experience delivery=optional -->
+<!-- bubbles:feature id=mvp-retrieval-quality-foundation spec=specs/110-retrieval-quality-foundation delivery=optional -->
 
 <!-- ── Legacy estate: roadmap + foundation (no releaseTrain field; homes here) ── -->
 <!-- bubbles:feature id=cf-roadmap-specs spec=specs/001-smackerel-mvp delivery=required -->
@@ -161,33 +171,53 @@ This packet is the **home packet** for two disjoint groups:
 
 | Group | Membership test | Count | Enforced (`required`) |
 |---|---|---:|---:|
-| mvp-train delivery set | `state.json` has `releaseTrain: mvp` | 19 | 16 |
-| Pre-078 legacy estate | `state.json` has no `releaseTrain` field | 79 | 74 |
+| mvp-train delivery set | `state.json` has `releaseTrain: mvp` | 20 | 16 |
+| Pre-078 legacy estate | `state.json` has no `releaseTrain` field | 79 | 75 |
 | Operational specs | `specs/_ops/*` with a `state.json`, no train or `mvp` | 6 | 0 |
+
+> Counts re-derived 2026-08-27 at `HEAD` `8a599234`. The mvp-train group moved
+> 19 → 20 (spec 110 authored and bound). The legacy enforced count moved 74 → 75:
+> that single increment is spec 039, whose exclusion no longer holds — see its row
+> below.
 
 Specs on `releaseTrain: next` home to [`../next/features.md`](../next/features.md)
 and are deliberately absent here. A spec bound in **no** packet is a defect.
 
 **Every class above was derived, not asserted.** For each bound spec the guard's own
-required-feature test was replayed at `HEAD` `8d971420`: status terminal-for-mode,
-`validate` present in the completed-phase record, status not `blocked`. The thirteen
-specs that fail that test are the thirteen that are not `required`:
+required-feature test was replayed at `HEAD` `8a599234`: status terminal-for-mode,
+`validate` present in the completed-phase record, status not `blocked`. Thirteen bound
+specs fail that test, and those thirteen are exactly the ones that are not `required`:
 
 | Spec | Observed state | Class | Why not `required` |
 |---|---|---|---|
-| [`039-recommendations-engine`](../../../specs/039-recommendations-engine/) | `done` | `carried` | `certifiedCompletedPhases` records `validate` **only** as object entries, never as a bare string. The guard's parse (`.[]? \| ascii_downcase`) aborts on the first object, so `validate` is not guard-visible. The capability is delivered; the record shape is the defect. Fixing it means editing a spec's `state.json`, which `bubbles.releases` does not own — routed to `bubbles.plan` in [`actions.md`](actions.md). |
+| [`025-knowledge-synthesis-layer`](../../../specs/025-knowledge-synthesis-layer/) | `done` | `deferred-to:v1` (×2) | The spec itself is delivered; two *capabilities* it carries (M1b calendar-triggered briefs, M1c full promise engine) are deferred to phase `v1`. This is a capability-level deferral, not a spec-state failure — the only entry in this table of that kind. |
 | [`058-chrome-extension-bridge`](../../../specs/058-chrome-extension-bridge/) | `blocked` | `deferred-to:v1` | Sole remaining DoD row is a keyless-OIDC cosign identity binding that requires a real tagged CI release; it cannot be produced or honestly faked on a developer box. |
 | [`063-knowledge-ai-enrichment`](../../../specs/063-knowledge-ai-enrichment/) | `specs_hardened` | `optional` | `product-to-planning` planning artifact — no delivered source. The enrichment *capability* ships via 061/064, which are separately `required` above. |
 | [`104-universal-ask-self-knowledge`](../../../specs/104-universal-ask-self-knowledge/) | `blocked` | `optional` | Agent-side work complete and deployed; blocked on an operator-only live Telegram behavioural smoke that an agent cannot perform. |
 | [`105-connected-knowledge-graph-explorer`](../../../specs/105-connected-knowledge-graph-explorer/) | `in_progress` | `optional` | In flight. Not deferred — actively being delivered on the `mvp` train. |
 | [`106-coherent-product-experience`](../../../specs/106-coherent-product-experience/) | `in_progress` | `optional` | In flight; gates spec 107's remaining scopes. |
 | [`107-proactive-correlated-experience`](../../../specs/107-proactive-correlated-experience/) | `blocked` | `optional` | SCOPE-03A/03B1 delivered; remaining scopes gated on 106 (shell) and 105 (explorer). |
+| [`110-retrieval-quality-foundation`](../../../specs/110-retrieval-quality-foundation/) | `not_started` | `optional` | **Added 2026-08-27.** Authored after the previous reconciliation and bound in no packet until now. `releaseTrain: mvp` puts its home binding here under Census rule 2, even though the `next` packet had predicted it would ride train `next`; that contradiction is routed, not resolved here. |
 | [`_ops/OPS-001`](../../../specs/_ops/OPS-001-spec-banner-sweep/) | `specs_hardened` | `carried` | Runs `spec-scope-hardening`, whose `statusCeiling` is `specs_hardened` ([`workflows/modes.yaml`](../../../.github/bubbles/workflows/modes.yaml)). A packet in that mode can never reach a delivery-capable terminal status, so `delivery=required` was **unsatisfiable by construction** — no amount of work could turn it green. The capability itself was executed (the banner sweep ran; see the carry-forward row above). This is a binding category error, not undelivered work — routed as RTE-M4 in [`actions.md`](actions.md). Re-derived at `HEAD` `2a54d2fe`. |
 | [`_ops/OPS-002`](../../../specs/_ops/OPS-002-g088-certifiedat-backfill/) | `specs_hardened` | `carried` | Same ceiling defect as OPS-001: `spec-scope-hardening` cannot terminate delivery-capable, so `required` was unsatisfiable. The packet did execute its unambiguously-safe clean backfill (spec 018, which then passes Gate G088) and **deliberately refused** to bulk-recertify the remainder, because claiming per-spec certification reviews it never performed would be fabrication. That refusal is correct behaviour and is preserved, not remediated. Routed as RTE-M4 in [`actions.md`](actions.md). Re-derived at `HEAD` `2a54d2fe`. |
 | [`_ops/OPS-003`](../../../specs/_ops/OPS-003-gap06-bug067-selfhosted-deploy-handoff/) | `delivered_pending_activation` | `optional` | Terminal-for-mode handoff packet, not validate-certified. Awaiting operator activation. |
 | [`_ops/OPS-004`](../../../specs/_ops/OPS-004-selfhosted-activation-handoff/) | `delivered_pending_activation` | `optional` | Same shape as OPS-003. |
 | [`_ops/OPS-005`](../../../specs/_ops/OPS-005-target-readiness-sweep-fixes/) | `done` | `carried` | `ops-findings-fix` mode; no `validate` phase in the completed-phase record. |
 | [`_ops/OPS-006`](../../../specs/_ops/OPS-006-local-git-reconciliation/) | `in_progress` | `optional` | In flight. |
+
+**One 2026-08-04 exclusion has been withdrawn: spec 039.** That packet recorded
+[`039-recommendations-engine`](../../../specs/039-recommendations-engine/) as
+`carried`, on the stated premise that its `certifiedCompletedPhases` records
+`validate` only as object entries and that "the guard's parse
+(`.[]? | ascii_downcase`) aborts on the first object, so `validate` is not
+guard-visible". **That premise is no longer true.** The guard's
+`is_validate_certified()` now normalises both shapes
+(`(if type == "string" then . else (.phase // empty) end)`) and its own header
+comment names the order-dependent truncation as the defect it fixed. Replayed at
+`HEAD` `8a599234`, spec 039 is `done` and guard-visibly validate-certified; its
+annotation is `delivery=required` and the guard reports it `DELIVERED`. The record
+shape was the defect, the guard absorbed it, and the routed `bubbles.plan` request to
+rewrite that `state.json` is **discharged — no spec edit is needed or wanted.**
 
 **Flip conditions.** Each `optional` above becomes `required` the moment its spec
 reaches a terminal, validate-certified, non-blocked state — nothing else needs to

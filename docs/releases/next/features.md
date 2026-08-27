@@ -18,6 +18,17 @@
   spec carrying `releaseTrain: next`. Re-run the gate with:
     bash .github/bubbles/scripts/release-delivery-reconciliation-guard.sh \
       --repo-root "$(pwd)" --phase next --require-coverage
+
+  RE-RECONCILED 2026-08-27 against HEAD 8a599234. Three changes, each derived by
+  reading the bound spec's state.json at this commit, none copied from prose:
+    1. The three `spec=none` reserved slots now bind real specs (110, 111, 112),
+       which is the flip condition this packet wrote for itself on 2026-08-04.
+    2. Spec 108 is `blocked` / `full-delivery`, not `specs_hardened` /
+       `product-to-planning` as the 2026-08-04 prose claimed. Its class stays
+       `optional` (correct for `blocked` under Census rule 3); only the false
+       status claim and its table placement were corrected.
+    3. Spec 110 binds here as a NON-HOME reference only — it declares
+       `releaseTrain: mvp`, so its home binding is in ../mvp/features.md.
 -->
 <!-- bubbles:reconciled-packet schemaVersion=1 phase=next -->
 
@@ -32,16 +43,24 @@
 
 <!-- ── Planning artifacts on train `next` (specs_hardened; not validate-certified) ─ -->
 <!-- bubbles:feature id=next-prod-autonomous-supervisor spec=specs/079-prod-autonomous-supervisor delivery=optional -->
-<!-- bubbles:feature id=next-corpus-grant-enforcement spec=specs/108-corpus-grant-enforcement delivery=optional -->
 <!-- bubbles:feature id=next-mcp-knowledge-server spec=specs/109-mcp-knowledge-server delivery=optional -->
 
 <!-- ── Blocked on train `next` (blocker quoted in the prose table below) ─────── -->
 <!-- bubbles:feature id=next-multi-provider-model-connections spec=specs/096-multi-provider-model-connections delivery=optional -->
+<!-- bubbles:feature id=next-corpus-grant-enforcement spec=specs/108-corpus-grant-enforcement delivery=optional -->
 
-<!-- ── Reserved slots — capabilities under active spec authoring (no spec number yet) ─ -->
-<!-- bubbles:feature id=next-retrieval-quality-pipeline spec=none delivery=optional -->
-<!-- bubbles:feature id=next-corpus-portability spec=none delivery=optional -->
-<!-- bubbles:feature id=next-capability-registry spec=none delivery=optional -->
+<!-- ── Formerly-reserved slots — the specs now exist and are bound (2026-08-27) ─ -->
+<!-- bubbles:feature id=next-corpus-portability spec=specs/111-corpus-portability-sensitivity delivery=optional -->
+<!-- bubbles:feature id=next-capability-registry spec=specs/112-capability-registry delivery=optional -->
+<!-- bubbles:feature id=next-retrieval-quality-pipeline spec=specs/110-retrieval-quality-foundation delivery=optional -->
+<!-- machine-binding note (Gate G101): next-retrieval-quality-pipeline is a NON-HOME
+     binding. Spec 110's state.json declares `releaseTrain: mvp`, so Census rule 2
+     (home phase is DERIVED from releaseTrain, never chosen) puts its HOME binding in
+     ../mvp/features.md, not here. This packet retains the narrative row because the
+     capability extends the delivered 095 router, exactly the double-binding Census
+     rule 4 permits. The train assignment contradicts this packet's own 2026-08-04
+     "why it homes to next" rationale; that contradiction is routed to bubbles.plan
+     (owner of state.json) in actions.md, NOT silently corrected here. -->
 
 Phase `next` is the promotion-candidate gate. It is backed by release train `next`
 (`config/release-trains.yaml`, slot `staging`), and this packet is that train's
@@ -99,39 +118,72 @@ claimed.
 | Capability | Owning spec | `status` | Mode | Flip condition → `required` |
 |---|---|---|---|---|
 | **Production Autonomous Supervisor** | [`079-prod-autonomous-supervisor`](../../../specs/079-prod-autonomous-supervisor/) | `specs_hardened` | `spec-scope-hardening` | a `full-delivery` run reaches `done` with `validate` in certified phases |
-| **Corpus Grant Enforcement** — per-client, audited remote-egress grants over the corpus (Product Principle 11) | [`108-corpus-grant-enforcement`](../../../specs/108-corpus-grant-enforcement/) | `specs_hardened` | `product-to-planning` | same |
 | **MCP Knowledge Server** — MCP tool surface projecting the corpus to authorized external clients | [`109-mcp-knowledge-server`](../../../specs/109-mcp-knowledge-server/) | `specs_hardened` | `product-to-planning` | same |
+| **Corpus Portability & Artifact Sensitivity** — export / import / delete with artifact sensitivity classification (Product Principle 11's unconditional-exit requirement) | [`111-corpus-portability-sensitivity`](../../../specs/111-corpus-portability-sensitivity/) | `in_progress` | `product-to-planning` | same |
+| **Capability Registry** — one runtime registry projected to the assistant, navigation, slash commands, and the MCP tool surface | [`112-capability-registry`](../../../specs/112-capability-registry/) | `not_started` | `product-to-planning` | same |
+
+> `not_started` is not a row in the Census rule 3 table in [`../README.md`](../README.md).
+> It is classed `optional` here for the same reason `in_progress` is: `optional`
+> asserts no delivery, so it cannot overstate a spec that has not started. The
+> missing vocabulary row is recorded in that README rather than invented here.
 
 ### Blocked — in-repo work complete, external blocker recorded (`delivery=optional`)
 
 | Capability | Owning spec | `status` | Recorded blocker (quoted from `state.json.blockedReason`) |
 |---|---|---|---|
 | **Multi-Provider AI Model Connections** | [`096-multi-provider-model-connections`](../../../specs/096-multi-provider-model-connections/) | `blocked` | "VALIDATED-IN-REPO; blocked on the owner-directed `bubbles.devops` self-hosted handoff (same cohort as dependencies 084/087/088)." Two external blockers: Gate G089 requires dependency `088` to be `done` from *its* owner-directed terminal status, and spec 096's own live hosted-provider `e2e-api` legs are self-hosted-gated. |
+| **Corpus Grant Enforcement** — per-client, audited remote-egress grants over the corpus (Product Principle 11) | [`108-corpus-grant-enforcement`](../../../specs/108-corpus-grant-enforcement/) | `blocked` | "SCOPE-04 holds three operator-owned, time-bound DoD items that no code can satisfy: (1) >= 14 consecutive OBSERVE days with the stage resolved from SST at process start; (2) proactive rotation of every principal whose gr…" — certified `blocked` by `bubbles.validate`. |
 
-`optional` — not `deferred-to:` — is correct here. There is no later phase that
-receives this capability: `next` still owns it, and the discharge path is the
-recorded `bubbles.devops` handoff, not a hand-off to another gate. Census rule 3
-assigns `optional` + quoted blocker exactly for that shape.
+> **Corrected 2026-08-27.** The 2026-08-04 packet listed spec 108 in the *Planned*
+> table above as `specs_hardened` / `product-to-planning`. Reading
+> `specs/108-corpus-grant-enforcement/state.json` at `HEAD` `8a599234` shows
+> `status: blocked`, `workflowMode: full-delivery`, `certification.certifiedBy:
+> bubbles.validate`. The engineering is built and green; what is outstanding is an
+> operator-owned observation window, so the grant model **exists and does not yet
+> deny**. Both halves of that are true and neither alone is. The `delivery=optional`
+> class did not change — Census rule 3 assigns `optional` to `blocked` when no later
+> phase receives the capability, which is the case here.
 
-### Reserved slots — specs under active authoring (`spec=none delivery=optional`)
+`optional` — not `deferred-to:` — is correct for both rows. There is no later phase
+that receives these capabilities: `next` still owns them, and the discharge path is
+the recorded operator/`bubbles.devops` handoff, not a hand-off to another gate.
+Census rule 3 assigns `optional` + quoted blocker exactly for that shape.
 
-Three capabilities are being specced concurrently with this packet. They have no
-spec directory and therefore no number. Binding them to a guessed number would
-create the same dangling reference that the retired `deferred-to:release-v1` token
-created, so they are bound `spec=none` with the flip condition written down instead.
+### Formerly-reserved slots — now bound to real specs (reconciled 2026-08-27)
 
-| Reserved id | Capability | Why it homes to `next` | Flip condition |
-|---|---|---|---|
-| `next-retrieval-quality-pipeline` | Retrieval quality — chunking strategy, embedding selection, HNSW index tuning, and a retrieval-evaluation gate | Directly extends the delivered `095` retrieval router; same store, same graph (Principle 5) | replace `spec=none` with the real `specs/NNN-…` path once the spec directory exists, then apply census rule 3 to its `state.json` |
-| `next-corpus-portability` | Corpus portability — export / import / delete, with artifact sensitivity classification | Discharges Product Principle 11's unconditional-exit requirement; pairs with `108` corpus-grant enforcement, already on this train | same |
-| `next-capability-registry` | Capability registry — one registry projected to the assistant, navigation, slash commands, and the MCP tool surface | The MCP projection target is `109`, already on this train | same |
+On 2026-08-04 three capabilities were being specced concurrently with this packet.
+They had no spec directory and therefore no number, so they were bound `spec=none`
+rather than to a guessed number — a guessed number would have created the same
+dangling reference that the retired `deferred-to:release-v1` token created. The
+flip condition this packet wrote for itself was: *replace `spec=none` with the real
+`specs/NNN-…` path once the spec directory exists, then apply census rule 3 to its
+`state.json`.* All three directories now exist, so that condition is discharged here.
+
+| Reserved id | Now binds | Observed `status` | Home phase (Census rule 2) | Class |
+|---|---|---|---|---|
+| `next-corpus-portability` | [`111-corpus-portability-sensitivity`](../../../specs/111-corpus-portability-sensitivity/) | `in_progress` | `next` (`releaseTrain: next`) — **home is here** | `optional` |
+| `next-capability-registry` | [`112-capability-registry`](../../../specs/112-capability-registry/) | `not_started` | `next` (`releaseTrain: next`) — **home is here** | `optional` |
+| `next-retrieval-quality-pipeline` | [`110-retrieval-quality-foundation`](../../../specs/110-retrieval-quality-foundation/) | `not_started` | **`mvp`** (`releaseTrain: mvp`) — home is [`../mvp/features.md`](../mvp/features.md) | `optional` (non-home reference) |
+
+**The 110 placement prediction did not survive authoring, and that is recorded
+rather than papered over.** This packet argued on 2026-08-04 that retrieval quality
+"homes to `next`" because it directly extends the delivered `095` router. The spec
+was subsequently authored as `110-retrieval-quality-foundation` with
+`releaseTrain: mvp`. Census rule 2 is explicit that the home phase is *derived, never
+chosen*, so the derivation wins over this packet's rationale: 110's **home binding
+lives in `mvp`**. The row is retained here as a non-home reference because the `next`
+narrative genuinely depends on it — the double binding is what Census rule 4 permits.
+
+Which of the two is wrong — the train field or the rationale — is **not**
+`bubbles.releases`' call: `state.json` belongs to `bubbles.plan`. The contradiction is
+routed, not corrected. See [`actions.md`](actions.md).
 
 `next-capability-registry` is a **runtime** registry projecting live capability to
 four surfaces. It is related to, but distinct from, the `v1` item **V4-A**, which is
 a documentation generator that emits `docs/Capability_Map.md`. Do not merge the two
-rows: one is a runtime projection, the other a managed-doc artifact. If the authored
-spec ends up subsuming V4-A, the `v1` packet's V4-A row must be re-pointed at it in
-the same change, not silently dropped.
+rows: one is a runtime projection, the other a managed-doc artifact. If spec 112
+ends up subsuming V4-A, the `v1` packet's V4-A row must be re-pointed at it in the
+same change, not silently dropped.
 
 ## Plan-to-Release Traceability
 

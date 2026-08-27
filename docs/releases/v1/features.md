@@ -20,6 +20,35 @@ See [`../mvp/features.md`](../mvp/features.md) for the full carry-forward table 
 
 ## New In This Phase (v1 — operator decisions 2026-06-03)
 
+> **Read the "Proposed slot" column as STALE. Verified 2026-08-27 at `HEAD` `8a599234`.**
+> Every number this section proposes (`077`–`088`) was allocated to a different,
+> unrelated spec in the ~15 months since these rows were written — `077` is the PWA
+> browser test harness, `078` the cross-surface surfacing prioritizer, `079` the
+> production autonomous supervisor, `080` the knowledge-graph public API, `081` the
+> NATS sidecar hardening parity, `082` target-readiness hardening, `083` card-rewards
+> companion, `084` the open-knowledge reasoning loop, `085` client-binary release,
+> `086` local client build, `088` runtime-switchable models. None of the proposed v1
+> specs exists under any of those paths.
+>
+> These rows are **capability intent, not slot reservations**, and the numbers must be
+> re-derived at authoring time. They are deliberately left in place rather than
+> renumbered: `bubbles.releases` does not allocate spec numbers, and inventing a fresh
+> set here would create precisely the dangling references that the retired
+> `deferred-to:release-v1` token created. Because none of these rows carries a
+> machine-binding annotation, Gate G101 does not see them and no gate is weakened by
+> the staleness — but a reader would be misled, which is why it is stated. Renumbering
+> is routed to `bubbles.plan` in [`actions.md`](actions.md).
+>
+> **Editor's note — do not spell out the annotation token in prose.** The paragraph
+> above says "machine-binding annotation" instead of naming the token itself, and that
+> wording is load-bearing. `release-delivery-reconciliation-guard.sh` harvests
+> annotations by grepping for that token across the **whole file**, not only inside
+> HTML comment delimiters, so any prose mention is harvested as a fieldless phantom
+> annotation carrying no `id=`, `spec=` or `delivery=`. The guard then fails the phase
+> with exit 1 and **no diagnostic line**. Naming the token here on 2026-08-27 broke
+> `--phase v1` in exactly that way; the annotation count went 2 → 3 while the visible
+> annotations stayed at 2. Mention the token only inside a real annotation comment.
+
 ### V1 — Personal Productivity Sources (Gap A)
 
 | ID | Capability | Owning spec(s) | New spec required? | Proposed slot |
@@ -71,12 +100,39 @@ See [`../mvp/features.md`](../mvp/features.md) for the full carry-forward table 
 
 ### V7 — Retrieval-strategy routing + freshness-aware retrieval (post-MVP intelligence gap-closers, planning hardened 2026-06-17)
 
-> **Status: PLANNED / specced — NOT delivered.** Owning spec [`specs/095-retrieval-strategy-routing`](../../../specs/095-retrieval-strategy-routing/) is hardened to the `specs_hardened` ceiling (`product-to-planning` mode): `spec.md` + `design.md` + `scopes.md` (9 scopes) + `scenario-manifest.json` (16 `SCN-095-*` scenarios) authored, `planningOnly: true`, `flagsIntroduced: []`, `deliverableFiles: []`. Zero source delivered — `internal/retrieval/` does not exist yet. This row traces to a **real owning spec at `specs_hardened`**, NOT to certified code. Delivery is a separate later-stage full-delivery run (see [Plan-to-Release Traceability](#plan-to-release-traceability)).
+> **Status: DELIVERED and validate-certified (corrected 2026-08-27).** Owning spec
+> [`specs/095-retrieval-strategy-routing`](../../../specs/095-retrieval-strategy-routing/)
+> is `done` on `full-delivery` with `planningOnly: false`, and `validate` is present
+> in its `certification.certifiedCompletedPhases`. `internal/retrieval/` exists and
+> holds 24 Go files. The capability shipped on release train `next`, whose packet
+> ([`../next/features.md`](../next/features.md)) is its **home** binding and carries
+> it as `delivery=required`.
 >
-> This V7 group is a **2026-06-17 post-MVP addition**, distinct from the original 2026-06-03 operator-decision V1–V6 set above. Per [`../mvp/features.md`](../mvp/features.md) ("Any new connector after this MVP gate is RELEASE-V1 scope"; "No new spec is required for MVP"), the MVP phase is frozen for new specs, so spec 095 — a NEW spec — is RELEASE-V1-phase scope.
+> **What this row said before, and why it was wrong.** Until this reconciliation the
+> row read "PLANNED / specced — NOT delivered", `specs_hardened`, `planningOnly:
+> true`, "Zero source delivered — `internal/retrieval/` does not exist yet". That was
+> accurate when written on 2026-06-17 and became false when 095 was delivered. It is
+> corrected rather than quietly deleted, because a release packet that silently
+> rewrites its own history is exactly as untrustworthy as one that goes stale.
+>
+> This V7 group is a **2026-06-17 post-MVP addition**, distinct from the original
+> 2026-06-03 operator-decision V1–V6 set above. Per [`../mvp/features.md`](../mvp/features.md)
+> ("Any new connector after this MVP gate is RELEASE-V1 scope"; "No new spec is
+> required for MVP"), the MVP phase is frozen for new specs, so spec 095 — a NEW spec
+> — was RELEASE-V1-phase scope at authoring time. It was subsequently cut onto train
+> `next`, and its `state.json` records `releaseTrain: next`; Census rule 2 therefore
+> makes `next` its home and this row a permitted rule-4 carry-forward re-bind.
 
-<!-- bubbles:feature id=retrieval-strategy-routing spec=specs/095-retrieval-strategy-routing delivery=optional -->
-<!-- machine-binding note (Gate G101 / release-delivery-reconciliation-guard.sh): delivery=optional is deliberate, NOT required. Spec 095 is planning-only at the specs_hardened ceiling and is not yet validate-certified/delivered. The guard requires every delivery=required feature to bind a TERMINAL + validate-certified spec; 095 stays optional (NOT-ENFORCED) until its full-delivery run reaches done, at which point the v1 finalize refresh flips it to required. The packet-level reconciliation header is intentionally NOT added yet because the V1-V6 rows above still bind to not-yet-created proposed spec slots; full-packet machine reconciliation is a future bubbles.releases backfill. -->
+<!-- bubbles:feature id=retrieval-strategy-routing spec=specs/095-retrieval-strategy-routing delivery=required -->
+<!-- machine-binding note (Gate G101 / release-delivery-reconciliation-guard.sh): flipped
+optional -> required on 2026-08-27. The previous note stated the flip condition as "until
+its full-delivery run reaches done, at which point the v1 finalize refresh flips it to
+required". That run has reached done and `validate` is in the certified phase record, so
+the condition is met and the class now matches reality. This is a carry-forward re-bind;
+the HOME enforcing binding is in ../next/features.md, also required. The packet-level
+reconciliation header is still intentionally NOT added, because the V1-V6 rows above bind
+to proposed spec slots that were never created (and whose numbers are now taken by other
+specs); full-packet machine reconciliation remains a future bubbles.releases backfill. -->
 
 | ID | Capability | Owning spec | New spec required? | Status |
 |----|-----------|-------------|--------------------|--------|
@@ -111,8 +167,13 @@ See [`../mvp/features.md`](../mvp/features.md) for the full carry-forward table 
 <!-- bubbles:feature id=corpus-grant-enforcement spec=specs/108-corpus-grant-enforcement delivery=optional -->
 <!-- machine-binding note (Gate G101 / release-delivery-reconciliation-guard.sh): delivery=optional
 is deliberate, NOT required. The guard requires every delivery=required feature to bind a TERMINAL
-+ validate-certified spec; spec 108 is `in_progress`, so binding it as required would refuse the
-packet. It flips to required when 108 reaches a terminal validate-certified state. -->
++ validate-certified spec. CORRECTED 2026-08-27: this note previously said spec 108 is
+`in_progress`. Reading specs/108-corpus-grant-enforcement/state.json at HEAD 8a599234 shows
+`status: blocked`, `workflowMode: full-delivery`, certified blocked by bubbles.validate. The class
+is unchanged - `optional` is what Census rule 3 assigns to `blocked` when no later phase receives
+the capability - but the status claim was false and is now corrected. It flips to required when
+108 reaches a terminal validate-certified state; the outstanding work is an operator-owned
+observation window, not code. Its HOME binding is ../next/features.md; this is a rule-4 re-bind. -->
 
 | ID | Capability | Owning spec | Owning train | Flag | Status |
 |----|-----------|-------------|--------------|------|--------|

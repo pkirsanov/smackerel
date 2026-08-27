@@ -11,7 +11,37 @@ spec state-transition guard does not apply to them.
 This index file is **not** a packet doc. It sits one level above every packet
 directory and is the phase register plus the binding vocabulary contract.
 
-Last reconciled: **2026-08-04** against `HEAD` = `8d971420`.
+Last reconciled: **2026-08-27** against `HEAD` = `8a599234`.
+
+<details>
+<summary>What that stamp asserts, and what it does not</summary>
+
+Verified by execution at this reconciliation:
+
+- **Rule 1 (exhaustive home binding)** — `118` spec directories carry `state.json`
+  (`112` numbered + `6` under `_ops`); `118` distinct specs are bound. **Zero
+  unbound, zero dangling.** Three holes were closed here: `110-retrieval-quality-foundation`,
+  `111-corpus-portability-sensitivity`, `112-capability-registry` were bound for
+  the first time (the baseline bound `115`). They had been carried as
+  `spec=none` "reserved slots" while the specs actually existed.
+- **Rule 2 (home phase derived, never chosen)** — zero violations across every
+  singly-bound spec.
+- **Rule 3 (`deferred-to:` names a real phase)** — the only token in use is
+  `deferred-to:v1`, and `v1/` exists. No `deferred-to:release-v1` survives.
+- **Gate G101** — `mvp` (107 annotations), `next` (14), `v1` (2) each exit `0`.
+  Packet-completeness, packet-location and ladder-schema guards each exit `0`.
+
+Open, recorded rather than silently fixed:
+
+- **`specs/110` train assignment vs this register's homing rationale** — routed to
+  `bubbles.plan` as [`next/actions.md`](next/actions.md) **RTE-N7**. `bubbles.releases`
+  owns no `specs/**` artifact, so the contradiction is recorded, not resolved.
+
+The previous stamp read `2026-08-04` / `8d971420`. **1461** commits landed between
+that SHA and this one, **995** of them touching `specs/`, so the register asserted
+a reconciliation it had long outlived.
+
+</details>
 
 ---
 
@@ -105,17 +135,44 @@ It is caught by re-running the census command below, not by review discipline.
 ### Verify the census
 
 ```bash
-# Every spec that carries state.json:
-find specs -mindepth 2 -maxdepth 2 -name state.json | wc -l
+# Every spec that carries state.json — numbered specs (depth 2) AND _ops
+# packets (depth 3). The `-not -path '*/bugs/*'` prune keeps bug packets
+# (depth 4) out of a spec census even if maxdepth is later widened.
+find specs -mindepth 2 -maxdepth 3 -name state.json -not -path '*/bugs/*' | wc -l
 
 # Every distinct spec bound by an annotation across all packets:
 grep -ho 'bubbles:feature[^>]*' docs/releases/*/features.md \
   | grep -o 'spec=[^ ]*' | sed 's/^spec=//' | grep -v '^none$' | sort -u | wc -l
 ```
 
-The second count is expected to be lower than the first only by the number of
-specs deliberately bound in more than one packet; any spec appearing in neither
-list is an unbound defect.
+**The two counts must be EQUAL when the census is clean.** They were `118` and
+`118` at the 2026-08-27 reconciliation.
+
+Read a mismatch as follows — the direction is the diagnosis:
+
+| Observation | Meaning |
+|---|---|
+| second **<** first | Unbound specs. A spec carries `state.json` but no packet binds it. This is the Rule 5 defect. |
+| second **>** first | Either an annotation names a `specs/` directory that does not exist (dangling binding), **or** the first command is undercounting. |
+| equal | Clean. |
+
+> **Do not read a double-binding as a count difference.** The second command ends
+> in `sort -u`, so a spec deliberately bound in more than one packet still
+> contributes exactly one entry. Double-binding has **zero** effect on either
+> count, and an earlier version of this section said otherwise — it claimed the
+> second count "is expected to be lower than the first only by the number of
+> specs deliberately bound in more than one packet", which would have explained
+> away a real hole as normal.
+>
+> **`-maxdepth 2` was the concrete bug.** It matched only `specs/NNN-*/state.json`
+> and silently dropped all six `specs/_ops/*` packets, reporting `112` against a
+> true `118`. Because the *other* count was correct at `118`, the pair rendered a
+> perfectly clean census as `second > first` — the dangling-binding signature.
+> The command under-reported the population it was the sole check on.
+
+`spec=none` is excluded by design and is not a hole: it is the legal binding for
+an owner-decision row that owns no spec. Exactly one exists today —
+`m3-ratify-product-principles` in [`mvp/features.md`](mvp/features.md).
 
 ---
 
