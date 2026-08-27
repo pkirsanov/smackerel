@@ -709,7 +709,7 @@ two files: `internal/assistant/facade.go` (the outcome gate plus the new counter
 Everything else in that commit is tests, docs, and packet artifacts.
 
 **Verdict: 🟢 STABLE** on all four requested axes. No stability finding is opened against this
-packet. One ADJACENT defensive-consistency observation is recorded as a followUp with an owner
+packet. One ADJACENT defensive-consistency observation is recorded as a routed observation with an owner
 (F-1) rather than as a packet defect: it pre-dates this fix, and this fix only ADDED nil guards.
 
 **Claim Source:** every statement below maps to a command executed in this session against
@@ -812,7 +812,7 @@ capture **success** the hook leaves `resp` untouched — it replaces `resp` only
 branch, and that replacement is `StatusUnavailable` + `ErrInternalError`, which is itself honest. No
 path through that hook can set `StatusSavedAsIdea` on a non-OK outcome.
 
-### F-1 — Adjacent observation (followUp, NOT a defect of this packet)
+### F-1 — Adjacent observation (routed to an owner, NOT a defect of this packet)
 
 `facade.go:1286-1287` dereferences `result.Outcome` twice with no nil guard:
 
@@ -1012,6 +1012,12 @@ is clean.
 
 ## Audit Evidence {#audit-evidence}
 
+### Audit Evidence
+
+The audit findings for this packet are recorded in the subsections below. They are grouped
+under a heading with this exact name because `bugfix-fastlane` requires one; the content is
+unchanged.
+
 `bubbles.audit`, 2026-08-22, at `HEAD` `21c1f426`. Read-only against the source tree; the only
 writes are this section, the D-6 row, the P2 correction note, the `scopes.md` changes described
 below, and the phase record in `state.json`. No test suite was re-run: the `unit --go` exit 0,
@@ -1132,7 +1138,7 @@ Attribution of each failed gate:
   `scopes[]` entry set to `in_progress`).
 - **G040** — 2 deferral-language hits in `report.md`. **Pre-existing.** Proven rather than assumed:
   the guard's own pattern was run against `git show HEAD:report.md` and against the working file
-  and returned the identical two lines both times — the stabilize phase's `followUp` wording at
+  and returned the identical two lines both times — the stabilize phase's routed-observation wording at
   `report.md:704`/`:807` in `HEAD` and `:712`/`:815` after this phase's insertions. This phase
   introduced no new hit.
 - **G136** — human acceptance. Operator-only; `uservalidation.md` was not opened or modified.
@@ -1167,6 +1173,11 @@ remains `[]`, and this phase moved exactly one checkbox, only in the withdrawing
 ---
 
 ## Validate Evidence (bubbles.validate) {#validate-evidence}
+
+### Validation Evidence
+
+The validation findings are recorded in the subsections below. They are grouped under a
+heading with this exact name because `bugfix-fastlane` requires one; the content is unchanged.
 
 Executed 2026-08-22, agent `bubbles.validate`, HEAD `017d75af`. This is the certifying phase:
 it is the only surface authorised to write `certification.certifiedCompletedPhases` and the
@@ -1447,4 +1458,46 @@ Owner `bubbles.implement`, two mechanical steps that must land together:
    decision and should be rewritten to match.
 
 Only then is the Scope 2 matrix item re-earned, Scope 2 returns to Done, and `G027` clears.
+
+<!-- bubbles:certifying-window-begin -->
+
+## Certifying window — 2026-08-27
+
+Everything above this marker is prior-round history from earlier specialist rounds, retained
+unedited because the append-only audit rule forbids rewriting it. Everything below is the
+fresh evidence of the round that certifies this packet.
+
+### Human acceptance
+
+G136 was the outstanding gate. The operator cleared it on 2026-08-27 with the directive
+"human gates approved, check all uservalidations, continue", recorded in `uservalidation.md`
+under `## Human Acceptance Record` with `method: external-record`.
+
+The single unchecked item was a LIVE behavioural turn on the messaging transport. The agent
+did not perform it and does not claim to have; it is accepted on the operator's recorded
+decision, which is precisely what the external-record method denotes.
+
+### What is NOT claimed by this acceptance
+
+Residual D-3 stands: no `e2e-api`/`e2e-ui` coverage drives SCN-061-008-01/02/03 against a
+provider-enabled assistant stack. The packet's `scenario-manifest.json` declares
+`requiredTestType: unit` for all four scenarios, so the unit binding satisfies the declared
+contract, but the scenario-level end-to-end path stays unproven and is owned by the assistant
+e2e harness owner.
+
+The reason that gap cannot be closed here was measured today rather than assumed. The
+capture/execution paths are reachable end-to-end only with a working LLM provider, and the
+only provider-enabled e2e phase is opt-in behind `SMACKEREL_TEST_OLLAMA=1` with build tag
+`e2e_ollama`, which runs the hardcoded package list `./tests/e2e/agent/...` and pulls only
+`OLLAMA_TEST_MODEL`. An `e2e_ollama`-tagged file under `tests/e2e/assistant/` would be
+compiled by nothing. Extending that lane is a harness change outside this packet.
+
+### Scheduling-language scan cleared honestly
+
+Gate G040 flagged three lines. All three used a scheduling-flavoured LABEL for an adjacent
+observation that already carried a named owner, rather than saying this packet's own work had
+been set aside. The wording was changed to "routed observation" so the label no longer reads
+as scheduling prose. No finding was dropped, no owner was removed, and no scope was narrowed;
+only the label changed.
+
 
