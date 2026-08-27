@@ -5,8 +5,8 @@
   "featureName": "Synthesis Persistence And Health Are Not Truthful",
   "releaseTrain": "mvp",
   "flagsIntroduced": [],
-  "status": "done",
-  "statusReason": "All five scopes Done with 88 Definition of Done rows closed and none open. Eight phases recorded with provenance: implement, test, regression, security, simplify, stabilize, validate and audit. The state transition guard reports an empty failedGateIds set, and the human acceptance gate is satisfied by the operator sign-off recorded in uservalidation.md.",
+  "status": "in_progress",
+  "statusReason": "The delivered work is complete and verified: all five scopes Done with 88 Definition of Done rows closed and none open, eight phases recorded with provenance, and the operator sign-off recorded in uservalidation.md satisfies the human acceptance gate (G136 passes). The full integration lane exits 0 after two pre-existing test defects were repaired in e4fdc6c4. The single remaining blocker is artifact-lint's TERMINAL evidence-density standard, which requires two distinct terminal-output signals and at least three lines in each fenced evidence block; 17 historical blocks in this 1700-line report are real but excerpted command output that does not meet that bar. Status stays non-terminal rather than claiming done while that gate refuses. Unblock: re-capture those blocks as full transcripts, or present the non-transcript ones as prose.",
   "workflowMode": "bugfix-fastlane",
   "linkedImplementationSpec": null,
   "linkedPlanningPacket": null,
@@ -240,7 +240,7 @@
     ]
   },
   "certification": {
-    "status": "done",
+    "status": "in_progress",
     "completedScopes": [
       "SCOPE-01",
       "SCOPE-02",
