@@ -2970,5 +2970,78 @@ After (quoted verbatim from the post-edit run):
 
     <see the block appended below>
 
+<!-- bubbles:certifying-window-begin -->
+
+## Certifying window — 2026-08-27
+
+Everything above this marker is prior-round history from earlier specialist rounds, retained
+unedited because the append-only audit rule forbids rewriting it. Everything below is the
+fresh evidence of the round that certifies this packet.
+
+### Validation Evidence
+
+G136 was the sole outstanding gate. The operator cleared it on 2026-08-27 with the directive
+"human gates approved, check all uservalidations, continue", recorded in `uservalidation.md`
+under `## Human Acceptance Record` with `method: external-record`.
+
+The directive authorises acceptance; it does not make the claim true. Both halves of the
+acceptance item were therefore re-executed today.
+
+The lane emitted exactly ONE marker line, carrying the count the item names:
+
+```text
+$ ./smackerel.sh test integration
+ASSISTANT_ACCEPTANCE_GATE_V1 executed_assertions=210 rows=150 capture_expected=60 routing_accuracy=1.0000 capture_fallback_rate=1.0000
+marker lines matching ASSISTANT_ACCEPTANCE_GATE_V1: 1
+FAIL lines: 0
+build failures: 0
+Exit Code: 0
+```
+
+The marker count matters as much as its content. A gate that emitted its marker only on pass
+would satisfy a naive count while still hiding a skipped run, so the guard's teeth were
+confirmed separately:
+
+```text
+$ ./smackerel.sh test unit --go --go-run 'TestEvalLaneContract' --verbose
+--- PASS: TestEvalLaneContract_LaneRunsGateAndAssertsExecutedAssertions (0.00s)
+--- PASS: TestEvalLaneContract_AdversarialRejectsMissingEvalPackage (0.00s)
+--- PASS: TestEvalLaneContract_AdversarialRejectsMissingOrZeroAssertion/A3_assertion_accepts_zero (0.00s)
+--- PASS: TestEvalLaneContract_AdversarialRejectsConditionalOrAbsentMarker/A4_marker_conditional_on_passing (0.00s)
+--- PASS: TestEvalLaneContract_AdversarialRejectsConditionalOrAbsentMarker/A5_marker_never_emitted (0.00s)
+--- PASS: TestEvalLaneContract_AdversarialRejectsBypassOrBroadenedSkip (0.00s)
+--- PASS: TestEvalLaneContract_AdversarialRejectsMaskedFailureReporting (0.00s)
+ok      github.com/smackerel/smackerel/internal/deploy  0.028s
+FAIL lines: 0
+Exit Code: 0
+```
+
+### Audit Evidence
+
+One environment obstacle was met and resolved rather than reported as a blocker, and it is
+recorded here because it changed how the lane was run.
+
+A first attempt at the integration lane failed before any test executed: the cold image build
+could not download Go modules, because this host's tailnet DNS resolver answers
+`storage.googleapis.com` with an all-zero address and that CDN serves the module proxy. The
+cause was isolated with a control rather than guessed:
+
+```text
+$ docker buildx build --builder default --no-cache --progress=plain .
+#5 0.320 ::                storage.googleapis.com  storage.googleapis.com
+
+$ docker buildx build --builder smackerel-dns --no-cache --progress=plain .
+#5 0.103 2607:f8b0:400a:809::201b  storage.googleapis.com  storage.googleapis.com
+Exit Code: 0
+```
+
+Both probes exit 0, so the exit code proves nothing here; the discriminator is the ADDRESS.
+The fix was a local BuildKit builder whose build containers use a working resolver. It
+changes no file in this repository, no Docker daemon setting, and nothing on the tailnet, and
+it is removed with `docker buildx rm smackerel-dns`. No resolver was pinned into the build,
+because that would encode one machine's DNS into the product. With that builder selected the
+lane built and ran, producing the transcripts above.
+
+
 
 
