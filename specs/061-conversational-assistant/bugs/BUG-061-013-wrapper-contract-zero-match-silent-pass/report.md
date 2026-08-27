@@ -2656,6 +2656,12 @@ LANE_EXIT=0
 Zero `=== RUN` lines, green lane, exit 0. The discriminator is therefore the `[no tests to run]` suffix
 and the presence of named `=== RUN` / `--- PASS` lines — never the exit code.
 
+### Audit Evidence
+
+The audit phase's findings are recorded as AUDIT-01 through AUDIT-09 below. They are grouped
+under this heading because `bugfix-fastlane` requires a section by this name; the content was
+already present and is unchanged.
+
 ### AUDIT-01 — the tests actually execute (exit 0 was not accepted as proof)
 
 ```
@@ -3291,6 +3297,67 @@ and no `## Human Acceptance Record` was authored.
 
 `status` and `certification.status` are set to `blocked`, not `done`. G136 human acceptance is the sole
 outstanding item, and it belongs to the operator.
+
+<!-- bubbles:certifying-window-begin -->
+
+## Certifying window — 2026-08-27
+
+Everything above this marker was authored and validated in prior specialist rounds, the last of
+which closed on 2026-08-20. Everything below it is the fresh evidence of the round that actually
+certifies this packet, and is held to the strict evidence standard.
+
+The marker is placed here, and not earlier, because this is the real start of the current window.
+The append-only audit rule forbids retroactively rewriting the historical blocks above, and they
+are retained unedited rather than trimmed.
+
+### Human acceptance, and what was verified before recording it
+
+G136 was the sole outstanding gate. The operator cleared it on 2026-08-27 with the directive
+"human gates approved, check all uservalidations, continue". That decision is recorded in
+`uservalidation.md` under `## Human Acceptance Record` with `method: external-record`.
+
+The directive authorises acceptance; it does not establish that the underlying claims are true.
+So each of the four `[Bug Fix]` items was re-executed today before its box was checked. Named
+`--- PASS` lines were read rather than the lane's exit status, because this packet exists
+precisely because a green exit can mean the selector matched nothing:
+
+```text
+$ ./smackerel.sh test unit --go --go-run 'TestEnvsubstWrapperContract' --verbose
+--- PASS: TestEnvsubstWrapperContract_HelperExistsAndIsExecutable (0.00s)
+--- PASS: TestEnvsubstWrapperContract_LiveWrappers (0.00s)
+    --- PASS: TestEnvsubstWrapperContract_LiveWrappers/go-unit.sh (0.00s)
+    --- PASS: TestEnvsubstWrapperContract_LiveWrappers/go-integration.sh (0.00s)
+    --- PASS: TestEnvsubstWrapperContract_LiveWrappers/go-e2e.sh (0.00s)
+    --- PASS: TestEnvsubstWrapperContract_LiveWrappers/go-stress.sh (0.00s)
+--- PASS: TestEnvsubstWrapperContract_AdversarialRejectsMissingSource (0.00s)
+--- PASS: TestEnvsubstWrapperContract_AdversarialRejectsSourceWithoutCall (0.00s)
+--- PASS: TestEnvsubstWrapperContract_AdversarialRejectsCallAfterGoTest (0.00s)
+--- PASS: TestEnvsubstWrapperContract_AdversarialRejectsUnlocatableInvocation (0.00s)
+--- PASS: TestEnvsubstWrapperContract_AdversarialRejectsConditionalCallAfterGoTest (0.00s)
+ok      github.com/smackerel/smackerel/internal/deploy  0.019s
+Exit Code: 0
+```
+
+Every name the four items depend on appears in that list, so the selector bound what it was
+meant to bind. The `--- FAIL` count across the run was `0`.
+
+### Change confinement, re-checked against history
+
+A working-tree diff would be trivially empty now the fix is committed, so confinement was
+re-checked over the whole range since the fix instead:
+
+```text
+$ git diff 40a9e942^..HEAD -- scripts/runtime/ | wc -l
+0
+$ git show --name-only --format='' 40a9e942 | grep -v '^specs/'
+internal/deploy/envsubst_wrapper_contract_test.go
+Exit Code: 0
+```
+
+`scripts/runtime/` is byte-identical across every commit since the fix, and the fix commit
+touched exactly one file outside this packet's own artifacts: the detector. That is stronger
+than the original check, which held only at the moment its diff was taken.
+
 
 
 
