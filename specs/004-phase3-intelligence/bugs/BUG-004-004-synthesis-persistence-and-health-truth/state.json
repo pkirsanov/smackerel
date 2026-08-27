@@ -6,7 +6,6 @@
   "releaseTrain": "mvp",
   "flagsIntroduced": [],
   "status": "done",
-  "certifiedAt": "2026-08-27T02:30:00Z",
   "statusReason": "All five scopes Done with 88 Definition of Done rows closed and none open. Eight phases recorded with provenance: implement, test, regression, security, simplify, stabilize, validate and audit. The full integration lane exits 0 after two pre-existing test defects were repaired in e4fdc6c4. The human acceptance gate is satisfied by the operator sign-off recorded in uservalidation.md.",
   "workflowMode": "bugfix-fastlane",
   "linkedImplementationSpec": null,
@@ -16,7 +15,7 @@
   "specDependsOn": [
     "specs/004-phase3-intelligence"
   ],
-  "certifiedAt": null,
+  "certifiedAt": "2026-08-27T02:30:00Z",
   "requiresRevalidation": false,
   "requirementsRecovery": {
     "reviewId": "2026-07-24-independent-planning-review",
