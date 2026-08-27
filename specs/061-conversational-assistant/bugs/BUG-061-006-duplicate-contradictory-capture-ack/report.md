@@ -1722,7 +1722,7 @@ Each previously-corrected claim was re-derived rather than trusted:
 
 | Claim | Re-verification | Holds? |
 |---|---|---|
-| The draft e2e file was never committed | `git log --all` for `tests/e2e/assistant/*bug061006*` and `*BUG061006*` → 0 commits each. (A naive `*capture_ack*` glob returns 2 commits, but those are `capture_ack_cross_transport_test.go`, a pre-existing 2026-06-02 file unrelated to this bug.) | YES |
+| The draft e2e file was never committed | `git log --all` for `tests/e2e/assistant/*bug061006*` and `*BUG061006*` → 0 commits each. (A naive `*capture_ack*` glob returns 2 commits, but those belong to `capture_ack_cross_transport_test.go`, a different file whose first commit is dated 2026-06-02 — before this bug was filed — and which neither of this packet's two globs matches.) | YES |
 | `tests/e2e/assistant/` holds 47 `_test.go` files | `ls \| wc -l` → 47, re-run this pass | YES |
 | `--go-package assistant` is a supported selector at `smackerel.sh:1430-1449` | Re-read the range this pass; `(allowed: assistant)` appears in both the spaced and `=`-form branches | YES |
 | The 12 skips enumerate by cause | 3 + 3 + 4 + 2 = 12; group (a) skip strings verified verbatim at the cited `file:line`; all four group (c) tests verified as unconditional `t.Skip("planned: …")` on the first body line | YES |
