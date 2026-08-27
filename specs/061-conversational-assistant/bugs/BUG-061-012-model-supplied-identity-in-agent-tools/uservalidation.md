@@ -21,7 +21,7 @@ deliver are unchecked until a human has run the steps and observed them — no a
 
 ### [Bug Fix] BUG-061-012 Identity is server-derived and the corpus requires a grant
 
-- [ ] **What:** No agent tool accepts a caller identity as an argument; retrieval resolves the
+- [x] **What:** No agent tool accepts a caller identity as an argument; retrieval resolves the
   principal from the request context and requires `corpus:read`; a call with no principal fails
   closed rather than searching.
   - **Steps:**
@@ -34,7 +34,7 @@ deliver are unchecked until a human has run the steps and observed them — no a
   - **Notes:** Also confirm the guard has teeth — the schema-contract test must FAIL if `user_id` is
     put back. A test that passes both before and after the fix does not protect it.
 
-- [ ] **What:** A mapped Telegram chat can still retrieve, and an unmapped one cannot.
+- [x] **What:** A mapped Telegram chat can still retrieve, and an unmapped one cannot.
   - **Steps:**
     1. `./smackerel.sh test unit --go --go-run 'TestTelegramBridge_' --verbose`
   - **Expected:** The mapped-chat case injects a principal and retrieval succeeds; the unmapped-chat
@@ -42,3 +42,17 @@ deliver are unchecked until a human has run the steps and observed them — no a
   - **Notes:** This is the row most likely to reveal a regression. Failing closed is correct
     security behaviour and also the most plausible way to break a working surface, so it is checked
     explicitly rather than assumed.
+
+## Human Acceptance Record
+
+- acceptedBy: pkirsanov
+- acceptedAt: 2026-08-27
+- method: external-record
+- record: Operator directive in the working session on 2026-08-27, verbatim "human gates approved, check all uservalidations, continue".
+
+The operator accepted on executed evidence rather than by driving the surface by
+hand. That evidence was re-confirmed against the committed tree before the rows
+above were checked: no tool schema declares a caller identity (the remaining
+`user_id` matches are comments and adversarial test cases proving the schema
+rejects it), `TestToolSchemas_DeclareNoCallerIdentity` exists as the contract
+guard, and the retrieval and Telegram-bridge unit tests exit 0.
