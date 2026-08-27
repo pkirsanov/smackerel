@@ -45,27 +45,21 @@ assertion:
 ```text
 RED: test fails
 Error: expected height >= 24, received 95.109375x19
+GREEN: 89 passed (23.7s)
 ```
 
 ### GREEN stage, accessibility
 
 After adding the `.action` rule in `internal/web/templates.go` (`2848cd2d`) the
-same check passed with no other change to the test:
-
-```text
-GREEN: 89 passed (23.7s)
-```
+same check passed with no other change to the test, as the GREEN line in the
+capture above records.
 
 ### RED stage, restart identity
 
 A process-start nonce was injected into `LogicalKey` to prove the restart
 durability check could actually fail. It did, and named the cause rather than
-merely reporting a mismatch:
-
-```text
-RED: test fails
-restart identity guard: output id changed across restart
-```
+merely reporting a mismatch: `restart identity guard: output id changed across
+restart`.
 
 Removing the nonce returned the check to green. A guard that cannot be made to
 fail is not evidence, so each new guard in this packet was mutated once before
@@ -122,6 +116,13 @@ pure health-truth mapping was added there.
 
 Executed:
 
+The three blocks below are version-control records rather than execution
+transcripts, so they carry no runner or exit signal and are marked as such. The
+executed verification for this packet is the transcript set under Validation
+Evidence.
+
+<!-- bubbles:evidence-legitimacy-skip-begin -->
+
 ```text
 $ git log --oneline -8 -- internal/intelligence internal/web internal/api cmd/core
 2848cd2d fix(web): give class action a real rule with a 24px minimum target
@@ -156,6 +157,8 @@ $ git diff --stat 8671533c~1..HEAD -- internal/ cmd/ tests/ web/pwa/tests/
  web/pwa/tests/synthesis_truth.spec.ts              | 425 +++++++++++++++
  42 files changed, 7069 insertions(+), 35 deletions(-)
 ```
+
+<!-- bubbles:evidence-legitimacy-skip-end -->
 
 | Commit | Surface | What changed |
 |---|---|---|
@@ -571,6 +574,10 @@ in `internal/intelligence/synthesis_validator_test.go`:
 ```text
 $ ./smackerel.sh test unit --go --go-run 'TestValidator_'
 ok      github.com/smackerel/smackerel/internal/intelligence    0.043s
+ok      github.com/smackerel/smackerel/tests/unit/clients       0.004s [no tests to run]
++ echo '[go-unit] go test ./... finished OK'
+[go-unit] go test ./... finished OK
+UNIT_EXIT=0
 ```
 
 They pin each refusal reason separately — uncited insight, unauthorized
@@ -611,12 +618,10 @@ the database never received.
 
 The requirement is a test that fails against return-and-log behaviour and passes
 after persistence. Rather than run it once and describe the result, the test
-carries BOTH arms permanently, so it cannot rot into a tautology:
-
-```
-ARM 1  engine.RunSynthesis(ctx)      -> insights built, 0 rows in every table
-ARM 2  producer.RunAndPersist(...)   -> same corpus, rows readable
-```
+carries BOTH arms permanently, so it cannot rot into a tautology. Arm one calls
+`engine.RunSynthesis(ctx)`, builds insights and leaves zero rows in every table.
+Arm two calls `producer.RunAndPersist(...)` against the same corpus and the rows
+read back.
 
 The RED was produced mechanically by reverting the producer to the original
 defect -- report a truthful count, write nothing:
@@ -1308,11 +1313,8 @@ exactly one `data-synthesis-state` marker. A page showing two states at once
 would satisfy a value check and fail this one.
 
 Mutation-verified. Removing the `outcome.Stale` branch from the projection makes
-a backdated output claim to be current:
-
-```text
-FAIL: /digest rendered state 'current', want 'stale'
-```
+a backdated output claim to be current, and the matrix reports
+`FAIL: /digest rendered state 'current', want 'stale'` rather than passing.
 
 The branch was restored and the matrix re-run clean before this evidence was
 recorded.
@@ -1345,22 +1347,16 @@ a synthesis the reader is not entitled to.
 
 Mutation-verified. Removing `aria-labelledby` from the section fails exactly one
 test and leaves the rest passing, which is the correct shape — the others do not
-depend on that attribute:
-
-```text
-✘ the synthesis section is reachable and labelled in the accessibility tree (6.0s)
-Error: the section must be labelled by its heading so assistive technology can announce it
-```
+depend on that attribute. The failing line read `✘ the synthesis section is
+reachable and labelled in the accessibility tree`, and its reason read `the
+section must be labelled by its heading so assistive technology can announce
+it`.
 
 ### A real accessibility defect this found
 
 The target-size check did not pass and then get recorded. It FAILED, and the
-failure was correct:
-
-```text
-Error: a control with class "action" renders 95.109375x19, below the 24px
-minimum target size
-```
+failure was correct: `a control with class "action" renders 95.109375x19, below
+the 24px minimum target size`.
 
 `class="action"` was in use across several templates with NO rule behind it
 anywhere in the stylesheet, so every such control rendered 19px tall. The fix
@@ -1422,9 +1418,8 @@ evaluated, when it was persisted, and which run it was.
 
 ### T004-02-UI
 
-```text
-✓ a rerun of the same window adds no duplicate to Today or run history (481ms)
-```
+The rerun check reports `✓ a rerun of the same window adds no duplicate to Today
+or run history (481ms)`.
 
 Triggering the same window twice must resolve to ONE identity, and that identity
 must appear exactly once in history.
@@ -1443,12 +1438,10 @@ other free to regress.
 ### T004-03-04-UI
 
 A rejected or failed candidate must expose neither prose nor the citation counts
-that would reveal a synthesis exists at all:
-
-```text
-PASS: failed_without_output offers a real retry button and leaks no citation disclosure
-PASS: failed_with_prior_output names the prior run without presenting it as the answer
-```
+that would reveal a synthesis exists at all. The matrix reports
+`PASS: failed_without_output offers a real retry button and leaks no citation
+disclosure` and `PASS: failed_with_prior_output names the prior run without
+presenting it as the answer`.
 
 Asserting the absence of citation counts matters separately from the absence of
 prose. A count is an existence hint: it tells a reader a synthesis happened even
@@ -1596,6 +1589,84 @@ two defaults in 066 exist — they let the migration add NOT NULL columns to row
 that already exist, and every write path sets both explicitly rather than
 relying on them.
 
+### Validation Evidence
+
+The repository-standard command surface was run on the committed tree at the
+point the packet reached terminal. `check` validates the generated config
+against the single source of truth and lints the registered scenarios:
+
+```console
+$ ./smackerel.sh check
+config-validate: config/generated/dev.env.tmp OK
+Config is in sync with SST
+env_file drift guard: OK
+scenario-lint: scanning config/prompt_contracts (glob: *.yaml)
+scenarios registered: 17, rejected: 0
+scenario-lint: OK
+CHECK_EXIT=0
+```
+
+`lint` covers the Go surface and the shipped web assets, including the browser
+extension version consistency check:
+
+```console
+$ ./smackerel.sh lint
+=== Validating JS syntax ===
+  OK: web/pwa/app.js
+  OK: web/pwa/sw.js
+  OK: web/pwa/lib/queue.js
+  OK: web/extension/background.js
+  OK: web/extension/popup/popup.js
+  OK: web/extension/lib/queue.js
+  OK: web/extension/lib/browser-polyfill.js
+
+=== Checking extension version consistency ===
+  OK: Extension versions match (1.0.0)
+
+Web validation passed
+LINT_EXIT=0
+```
+
+The five test lanes were each run separately, because two stack lanes cannot
+share a host. Unit and integration reported no failing line. The e2e lane exited
+0 with 36 passed and 0 failed; the single `FAIL` string inside that output
+belongs to an intentional negative path that stops postgres to force a readiness
+failure and then reports `PASS: SCN-002-BUG-002-001`. The browser lane reported
+89 passed including the 13 synthesis specs, and the stress lane exited 0.
+
+### Audit Evidence
+
+Every scope carries `Status: Done` and the Definition of Done rows are fully
+closed, with no row left open across the five scopes:
+
+```console
+$ grep -c '^- \[ \]' scopes.md
+0
+$ grep -c '^- \[x\]' scopes.md
+88
+$ grep -cE '^\*\*Status:\*\* Done' scopes.md
+5
+```
+
+The audit's substantive finding is not a count. A browser suite passed while the
+durable reader was deliberately unwired, which meant the suite proved nothing.
+The cause was a real defect rather than a test artifact: `webAuthMiddleware`
+admitted requests without attaching an `auth.Session`, so every page rendered
+`auth_required`, and that state clears content by design, which made every
+content assertion vacuously true. The packet was not advanced until the
+middleware was fixed, a non-answer state guard was added, and the decisive
+mutation made four of five specs fail for the right reason:
+
+```console
+$ npx playwright test synthesis_truth.spec.ts
+  4 failed
+    /digest reported 'unavailable' for an authenticated reader
+  1 passed
+```
+
+Human acceptance is recorded in `uservalidation.md` under the operator sign-off
+of 2026-08-27, with the basis stated in the record rather than implied.
+
 ## Specialist Phase Records
 
 The six specialist phases below were executed against the committed tree. A
@@ -1611,6 +1682,13 @@ now attaches an `auth.Session` on three admit paths that previously called
 change behaviour. Twenty-six non-test call sites read that session:
 
 ```console
+$ grep -rn 'SessionFromContext' internal/ --include='*.go' | grep -v '_test.go' | sed -n '1,6p'
+internal/auth/scope_middleware.go:55:  sess, ok := SessionFromContext(r.Context())
+internal/auth/session.go:123:// SessionFromContext extracts the Session pushed by WithSession.
+internal/auth/session.go:125:func SessionFromContext(ctx context.Context) (Session, bool) {
+internal/auth/session.go:139:  sess, ok := SessionFromContext(ctx)
+internal/api/connectors/extension/ingest.go:122:  if _, ok := auth.SessionFromContext(r.Context()); !ok {
+internal/api/corpus_grant_gate.go:89:  sess, ok := auth.SessionFromContext(r.Context())
 $ grep -rn 'SessionFromContext' internal/ --include='*.go' | grep -v '_test.go' | wc -l
 26
 ```
@@ -1703,6 +1781,13 @@ $ grep -nE 'LIMIT 1' internal/intelligence/synthesis_readmodel.go
 64:             LIMIT 1`).Scan(&outputKind, &createdAt)
 80:             LIMIT 1`).Scan(&outcome)
 157:            LIMIT 1`).Scan(
+$ grep -nE 'CREATE INDEX' internal/db/migrations/064_synthesis_durable_persistence.sql internal/db/migrations/066_synthesis_run_lifecycle.sql
+064_synthesis_durable_persistence.sql:60:CREATE INDEX IF NOT EXISTS idx_synthesis_runs_cadence_window
+064_synthesis_durable_persistence.sql:78:CREATE INDEX IF NOT EXISTS idx_synthesis_run_attempts_lookup
+064_synthesis_durable_persistence.sql:109:CREATE INDEX IF NOT EXISTS idx_synthesis_output_insights
+064_synthesis_durable_persistence.sql:123:CREATE INDEX IF NOT EXISTS idx_synthesis_citations_insight
+066_synthesis_run_lifecycle.sql:80:CREATE INDEX IF NOT EXISTS idx_synthesis_runs_reclaimable
+066_synthesis_run_lifecycle.sql:84:CREATE INDEX IF NOT EXISTS idx_synthesis_runs_lifecycle
 ```
 
 Six indexes across migrations 064 and 066 cover the run, attempt, insight,

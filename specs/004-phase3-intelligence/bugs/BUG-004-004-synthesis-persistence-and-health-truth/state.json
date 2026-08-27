@@ -5,8 +5,8 @@
   "featureName": "Synthesis Persistence And Health Are Not Truthful",
   "releaseTrain": "mvp",
   "flagsIntroduced": [],
-  "status": "in_progress",
-  "statusReason": "Blocked on the deferred durable transactional-persistence rows (SCOPE-01..03) and the remaining SCOPE-04 live API/alert/telemetry rows. The HEALTH-TRUTH slice is now COMPLETE and live-proven: the pure DeriveSynthesisHealth mapping (2026-07-25) AND its live wiring into /api/health (internal/api/health.go::getCachedIntelligenceHealth, 2026-07-26) that builds a SynthesisPersistenceOutcome from the queryable run-state (GetLastSynthesisTime result+error) and sets IntelligenceStatus from DeriveSynthesisHealth: query error -> PhaseProbeError -> down; epoch/never-run sentinel -> PhaseNoRun -> down; a real persisted timestamp -> PhaseCommitted+ReadBackOK+OutputKindFull with Stale vs a 48h budget -> up when fresh, stale when old. Proven RED->GREEN by tests/integration/synthesis/health_test.go::TestNeverRunAndProbeFailureAreNeverUp (RED against unwired code exit 1; GREEN full ./smackerel.sh test integration exit 0; disposable stack torn down). check exit 0; lint exit 0; ok internal/api + ok internal/intelligence with no regression (the suite-level unit non-zero is an orthogonal pre-existing/concurrent internal/docfreshness failure for internal/acceptance + internal/experience undocumented in the forbidden docs/Development.md, not caused by this change). One SCOPE-04 Test-Evidence DoD item (T004-05-HEALTH) is checked. Unblock: implement SCOPE-01..03 durable transactional persistence (atomic insight+citation commit + post-commit read-back) and the remaining SCOPE-04 live rows (T004-05-API, T004-06-ALERT, T004-07-08-API, T004-09-AUTH, T004-09-TELEMETRY), then derive the SynthesisPersistenceOutcome from the durable run ledger rather than the coarse GetLastSynthesisTime read-back.",
+  "status": "done",
+  "statusReason": "All five scopes Done with 88 Definition of Done rows closed and none open. Eight phases recorded with provenance: implement, test, regression, security, simplify, stabilize, validate and audit. The state transition guard reports an empty failedGateIds set, and the human acceptance gate is satisfied by the operator sign-off recorded in uservalidation.md.",
   "workflowMode": "bugfix-fastlane",
   "linkedImplementationSpec": null,
   "linkedPlanningPacket": null,
@@ -240,7 +240,7 @@
     ]
   },
   "certification": {
-    "status": "in_progress",
+    "status": "done",
     "completedScopes": [
       "SCOPE-01",
       "SCOPE-02",

@@ -126,26 +126,97 @@ func TestNeverRunAndProbeFailureAreNeverUp(t *testing.T) {
 	}
 
 	// ---- Truth 3 (feasible): a FRESH persisted synthesis reports "up" ----
-	// Insert one synthesis_insights row with created_at = NOW() (within the
-	// freshness budget). Cleaned up on exit for ephemeral-store hygiene.
-	insightID := "bug-004-004-health-truth-" + time.Now().UTC().Format("20060102T150405.000000000")
+	// Seeds the DURABLE run ledger, not the legacy synthesis_insights table.
+	// Health derives from synthesis_outputs joined to a succeeded run, so a
+	// legacy insight row is correctly invisible to it and would assert nothing.
+	runID := "bug-004-004-health-run-" + time.Now().UTC().Format("20060102T150405.000000000")
+	outputID := "bug-004-004-health-out-" + time.Now().UTC().Format("20060102T150405.000000000")
 	t.Cleanup(func() {
 		cctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		if _, err := pool.Exec(cctx, "DELETE FROM synthesis_insights WHERE id = $1", insightID); err != nil {
-			t.Logf("cleanup synthesis_insights row %s failed: %v", insightID, err)
+		// synthesis_outputs cascades on the run delete.
+		if _, err := pool.Exec(cctx, "DELETE FROM synthesis_runs WHERE id = $1", runID); err != nil {
+			t.Logf("cleanup synthesis_runs row %s failed: %v", runID, err)
+		}
+		// Attempts are keyed by logical_key and are not a foreign key, so they
+		// do not cascade.
+		if _, err := pool.Exec(cctx, "DELETE FROM synthesis_run_attempts WHERE logical_key = $1", runID); err != nil {
+			t.Logf("cleanup synthesis_run_attempts for %s failed: %v", runID, err)
 		}
 	})
 	if _, err := pool.Exec(ctx,
-		`INSERT INTO synthesis_insights (id, insight_type, through_line, source_artifact_ids, created_at)
-		 VALUES ($1, $2, $3, $4, NOW())`,
-		insightID, "health-truth-probe", "BUG-004-004 live health-truth fresh-success probe", []string{},
+		`INSERT INTO synthesis_runs
+		   (id, logical_key, cadence, principal, window_start, window_end,
+		    policy_version, source_set_digest, state, created_at, updated_at)
+		 VALUES ($1, $2, 'daily', 'health-truth-probe', NOW() - INTERVAL '1 hour', NOW(),
+		         'v1', 'health-truth-probe-digest', 'succeeded', NOW(), NOW())`,
+		runID, runID,
 	); err != nil {
-		t.Fatalf("insert fresh synthesis_insights row: %v", err)
+		t.Fatalf("insert fresh synthesis_runs row: %v", err)
 	}
-	fresh := intelligenceStatus(liveEngine)
+	if _, err := pool.Exec(ctx,
+		`INSERT INTO synthesis_outputs
+		   (id, run_id, insight_count, citation_count, output_kind, evaluated_artifact_count, created_at)
+		 VALUES ($1, $2, 1, 1, 'full', 1, NOW())`,
+		outputID, runID,
+	); err != nil {
+		t.Fatalf("insert fresh synthesis_outputs row: %v", err)
+	}
+	// The read model takes the GLOBALLY latest attempt, not the attempt for this
+	// run, so a failed attempt left by any earlier test would classify this as
+	// failed-with-prior-output and report "down". Record a succeeded attempt so
+	// the newest attempt belongs to this row.
+	if _, err := pool.Exec(ctx,
+		`INSERT INTO synthesis_run_attempts (logical_key, outcome, recorded_at)
+		 VALUES ($1, 'succeeded', NOW())`,
+		runID,
+	); err != nil {
+		t.Fatalf("insert succeeded synthesis_run_attempts row: %v", err)
+	}
+	// The integration lane shares one database across packages that run in
+	// parallel, so a concurrent cleanup can delete this row between the insert
+	// and the health read. Poll briefly, and if it still is not "up", say
+	// whether the row survived — otherwise the failure reads as a health defect
+	// when it is actually cross-package interference.
+	var fresh string
+	deadline := time.Now().Add(3 * time.Second)
+	for {
+		fresh = intelligenceStatus(liveEngine)
+		if fresh == "up" || time.Now().After(deadline) {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
 	t.Logf("fresh-success: GET /api/health services.intelligence.status = %q", fresh)
 	if fresh != "up" {
-		t.Fatalf("fresh persisted synthesis: want intelligence=%q, got %q", "up", fresh)
+		var survived bool
+		if err := pool.QueryRow(ctx,
+			`SELECT EXISTS (SELECT 1 FROM synthesis_outputs o
+			   JOIN synthesis_runs r ON r.id = o.run_id
+			  WHERE o.id = $1 AND r.state = 'succeeded')`, outputID,
+		).Scan(&survived); err != nil {
+			t.Fatalf("check seeded row survived: %v", err)
+		}
+		if !survived {
+			t.Fatalf("seeded durable output %s was deleted before the health read; a concurrent package removed it, so this is test isolation, not a health defect", outputID)
+		}
+		// Health reads the NEWEST succeeded output, so a concurrent test's newer
+		// row wins the LIMIT 1 even though this row survived. Name it.
+		var winnerID, winnerKind string
+		var winnerAt time.Time
+		if err := pool.QueryRow(ctx,
+			`SELECT o.id, o.output_kind, o.created_at
+			   FROM synthesis_outputs o
+			   JOIN synthesis_runs r ON r.id = o.run_id
+			  WHERE r.state = 'succeeded'
+			  ORDER BY o.created_at DESC LIMIT 1`,
+		).Scan(&winnerID, &winnerKind, &winnerAt); err != nil {
+			t.Fatalf("read newest succeeded output: %v", err)
+		}
+		if winnerID != outputID {
+			t.Fatalf("health read the newest succeeded output %s (kind=%q at=%s), not this test's row %s; a concurrent package inserted a newer row, so this is test isolation, not a health defect",
+				winnerID, winnerKind, winnerAt.UTC().Format(time.RFC3339Nano), outputID)
+		}
+		t.Fatalf("fresh persisted synthesis: want intelligence=%q, got %q (this test's row %s is the newest succeeded output, kind=%q)", "up", fresh, winnerID, winnerKind)
 	}
 }

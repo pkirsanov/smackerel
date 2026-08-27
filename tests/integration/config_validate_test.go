@@ -141,20 +141,29 @@ func TestConfigValidate_AC5c_BinaryRejectsOversizedModel(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, "go", "run", "./cmd/config-validate", "--env-file="+envFile)
+
+	// Build with the AMBIENT env so the toolchain keeps its module cache, then
+	// exec the built binary under the restricted env below. Compiling under the
+	// restricted env made a cold cache look like a validation failure: `go run`
+	// exited 1 while only emitting "go: downloading ...", which is the exit code
+	// this test expects, so the assertion passed for the wrong reason.
+	binPath := filepath.Join(t.TempDir(), "config-validate")
+	// -buildvcs=false because the test container has no usable git context, and
+	// VCS stamping is irrelevant to what this test asserts.
+	build := exec.CommandContext(ctx, "go", "build", "-buildvcs=false", "-o", binPath, "./cmd/config-validate")
+	build.Dir = root
+	if buildOut, buildErr := build.CombinedOutput(); buildErr != nil {
+		t.Fatalf("build cmd/config-validate: %v output=%s", buildErr, string(buildOut))
+	}
+
+	cmd := exec.CommandContext(ctx, binPath, "--env-file="+envFile)
 	cmd.Dir = root
-	// Hermetic env: pass through only PATH + HOME + GOCACHE so `go run`
-	// can compile the binary. The binary itself reads env vars only via
-	// os.Environ AFTER loading the env file, so additional vars would
-	// leak into Validate(). loadEnvFile uses os.Setenv on the keys it
-	// parses, but os.Environ in the subprocess starts with the values
-	// in cmd.Env below — so values NOT in our env file remain unset.
+	// Hermetic env: the binary reads env vars only via os.Environ AFTER loading
+	// the env file, so additional vars would leak into Validate(). Values NOT in
+	// our env file remain unset because cmd.Env starts from this list.
 	cmd.Env = []string{
 		"PATH=" + os.Getenv("PATH"),
 		"HOME=" + os.Getenv("HOME"),
-		"GOCACHE=" + os.Getenv("GOCACHE"),
-		"GOMODCACHE=" + os.Getenv("GOMODCACHE"),
-		"GOFLAGS=" + os.Getenv("GOFLAGS"),
 	}
 
 	out, err := cmd.CombinedOutput()

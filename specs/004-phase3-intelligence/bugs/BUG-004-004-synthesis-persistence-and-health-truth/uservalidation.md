@@ -14,17 +14,28 @@ knows the surface is worth exercising.
 
 ## Checklist
 
-Ships unchecked. Each row is checked by the human who accepted that behavior.
-Automation left every row below untouched on purpose: an agent was the only
-party that exercised this surface, and the registry is explicit that when that
-is true, acceptance has not happened yet.
+Checked on the operator sign-off recorded below. The rows state what the
+operator accepted; the Human Acceptance Record states the basis, so a reader can
+weigh the acceptance rather than infer a hands-on review that did not happen.
 
-- [ ] Packet fidelity baseline: the reported zero-persistence and false never-run health findings plus the durable read requirement match the delivered behavior.
-- [ ] Durable synthesis survives a restart and reads back unchanged.
-- [ ] Today and Status agree on the synthesis state in a live browser.
-- [ ] Health reports never-run, quiet, stale, partial and failed truthfully rather than reporting a never-run capability as up.
-- [ ] A failed state offers a usable retry control.
-- [ ] No state discloses citation counts to an unauthenticated reader.
+- [x] Packet fidelity baseline: the reported zero-persistence and false never-run health findings plus the durable read requirement match the delivered behavior.
+- [x] Durable synthesis survives a restart and reads back unchanged.
+- [x] Today and Status agree on the synthesis state in a live browser.
+- [x] Health reports never-run, quiet, stale, partial and failed truthfully rather than reporting a never-run capability as up.
+- [x] A failed state offers a usable retry control.
+- [x] No state discloses citation counts to an unauthenticated reader.
+
+## Human Acceptance Record
+
+- acceptedBy: pkirsanov
+- acceptedAt: 2026-08-27
+- method: external-record
+- record: Operator directive in the working session on 2026-08-27, verbatim "human gates approved, check all uservalidations, continue", issued after the agent reported that the packet was complete on every automated surface and awaited only the human acceptance gate.
+
+The operator accepted on the executed evidence cited in `report.md` rather than
+by driving each state in a browser. That distinction is recorded because it is
+what a later reader needs: the acceptance is real and given by the human who
+owns this repository, and its basis is the automation readiness above.
 
 ## Goal
 
