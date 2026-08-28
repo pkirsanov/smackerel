@@ -170,6 +170,6 @@
   ],
   "validatePhaseProvenance": "Executed by bubbles.goal directly. Three bubbles.validate dispatches returned no output and made no change to the working tree (git status --porcelain empty, completedPhases unchanged, zero validate sections). Attributing the work to the agent that actually ran it rather than to a specialist that did not.",
   "blockedReasonDischarge": "All blockers discharged. The recorded blocker was an operator behavioural smoke test on the deployed bot; the operator issued a written directive approving the user validations, and uservalidation.md now carries a Human Acceptance Record naming exactly what that acceptance covers and what it does not. The verification pipeline that was genuinely absent (9 specialist phases) was executed this session with real command evidence, and the guard now reports failureCount 0 across all gates including G022, G053, G057, G060, G068, G093, G094 and G136. NOT CLAIMED: no human conversational turn against the deployed bot was performed by the agent.",
-  "certifiedAt": "2026-08-28T02:11:05Z",
+  "certifiedAt": "2026-08-28T02:19:28Z",
   "timestampProvenance": "certifiedAt read from date -u AFTER the packet commit; not inferred."
 }
