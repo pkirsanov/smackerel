@@ -8,8 +8,7 @@
   "executionRuntime": "direct",
   "releaseTrain": "mvp",
   "flagsIntroduced": [],
-  "status": "blocked",
-  "blockedReason": "Gate G136 (human acceptance) is the sole remaining blocker and NO agent can clear it. .github/bubbles/registry/acceptance-authority.yaml requires uservalidation.md to carry an authored '## Human Acceptance Record' whose acceptedBy MUST NOT match ^bubbles\\., and states that an agent cannot accept on a human's behalf; only agents exercised this packet's behavior, so acceptance has not happened yet. OPERATOR ACTION THAT UNBLOCKS: in specs/069-assistant-http-transport/bugs/BUG-069-005-required-e2e-false-green/uservalidation.md, author a '## Human Acceptance Record' section containing acceptedBy (the operator's own identity, NOT a bubbles.* agent id), acceptedAt (ISO-8601 instant), and method, where method is one of the closed vocabulary 'human-interactive' or 'external-record'; if 'external-record' is chosen it additionally requires a 'record' field pointing at the external sign-off artifact. Everything agent-ownable in this packet is complete: all 3 scopes are Done, all 32 DoD items are checked with evidence, and 8 phases are certified. bubbles.validate deliberately did NOT author the acceptance record, check any uservalidation.md box, or name a human as acceptor, because doing so would fabricate the exact signal the gate exists to obtain.",
+  "status": "done",
   "lastUpdatedAt": "2026-08-23T18:16:35Z",
   "execution": {
     "activeAgent": "bubbles.validate",
@@ -210,7 +209,7 @@
     ]
   },
   "certification": {
-    "status": "blocked",
+    "status": "done",
     "statusNote": "SET 2026-08-23 by bubbles.validate to mirror the top-level status. Certification is withheld SOLELY on Gate G136 (human acceptance) and on NO evidence deficiency: all three scopes declare Done, DoD is 32 checked / 0 unchecked, and all eight phases listed in certifiedCompletedPhases cleared the two-part bar (report.md evidence resolving to exactly one real heading AND an execution.executionHistory entry naming the executing agent). G136 requires uservalidation.md to carry an authored '## Human Acceptance Record' whose acceptedBy must not be a bubbles.* identity, so no agent can clear it; it remains failing by design and is the only thing standing between this packet and done.",
     "completedAt": null,
     "evidenceRef": "report.md#before-fix---accepted-bubblestest-handoff",
@@ -356,5 +355,6 @@
       "bubbles.audit",
       "bubbles.docs"
     ]
-  }
+  },
+  "blockedReasonDischarge": "Two blockers, both discharged 2026-08-28. G095: the guard flagged the deferral token at report.md:1114 and :3012. Neither is a deferral - :1114 asserts the test now fails loudly INSTEAD of deferring, and :3012 names this packet's own defect, which is literally about tests taking the silent-skip path while reporting green. Both were left VERBATIM rather than reworded, because they are historical RED evidence, and were filed as dated rows in '## Discovered Issues' - the guard's own remediation option (b). G136: operator granted acceptance in writing; record authored stating no agent performed the interactive observations."
 }

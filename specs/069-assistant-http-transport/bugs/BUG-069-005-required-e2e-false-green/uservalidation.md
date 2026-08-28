@@ -24,3 +24,17 @@ report a regression after delivery.
    change occurs after acceptance.
 6. Run the propagated regression-quality guard against the five files and
    confirm Go skip-family calls are rejected.
+
+
+## Human Acceptance Record
+
+- acceptedBy: pkirsanov
+- acceptedAt: 2026-08-28
+- method: external-record
+- record: Operator directive in the working session on 2026-08-28, verbatim "authorized, approved, update all user validations as approved".
+
+### Scope of this acceptance, stated precisely
+
+The items above describe behaviour observed against a running system. **No agent
+performed those observations interactively**; the acceptor is the operator. What
+automation contributed is this packet's own test evidence, recorded above.

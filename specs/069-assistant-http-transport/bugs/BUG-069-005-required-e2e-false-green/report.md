@@ -1075,6 +1075,8 @@ for ownership routing and DoD disposition.
 
 | Date | Finding | Disposition | Reference |
 |---|---|---|---|
+| 2026-08-28 | G095 flags the deferral token at `report.md:1114`. The sentence is preserved historical evidence and reads "the exact required weather E2E now fails loudly instead of <token>" — an assertion that the test does NOT defer, i.e. the opposite of a deferral. | Not a deferral; nothing is being put off. Left verbatim rather than reworded, because the line is historical RED evidence and editing it would damage the record. | `specs/069-assistant-http-transport/bugs/BUG-069-005-required-e2e-false-green/report.md:1114` |
+| 2026-08-28 | G095 flags the deferral token at `report.md:3012`. That line states the packet's own defect: five manifest-required assistant E2E tests were taking the silent-skip path while reporting green. The token is the SUBJECT MATTER of this bug. | Not a deferral; it names the defect this packet fixed. Left verbatim — this packet cannot describe its own subject without the word. | `specs/069-assistant-http-transport/bugs/BUG-069-005-required-e2e-false-green/report.md:3012` |
 | 2026-07-21 | Parent-required `TestIntentCompilerE2E_WeatherCompilesBeforeRouteAndNormalizesLocation` called `t.Skipf` after deterministic-profile capture fallback in both assistant and canonical E2E runs | addressed: the deterministic fixture emits the structured Barcelona slot, the protected test fails instead of skipping, and the production facade executes the sourced weather path | `tests/e2e/assistant/intent_compiler_http_test.go`; `tests/e2e/intent-compiler-provider/provider.py`; [closeout evidence](#weather-implementation-and-test-closeout) |
 | 2026-07-21 | Both BUG-069-005 focused Go integration canaries received HTTP 503 `assistant_http_not_ready` before compiler/persistence assertions; adjacent Spec 069 live bind coverage waits for readiness | addressed: both canaries use bounded facade-readiness polling and pass against the disposable stack | `tests/integration/assistant/bug069005_runtime_canary_test.go`; [closeout evidence](#weather-implementation-and-test-closeout) |
 | 2026-07-21 | Canonical runner omitted the opt-in Ollama agent suite and retained 15 previously classified Go skips across OpenKnowledge, planned Spec 074, legacy-window, and superseded microtool profiles | classified non-applicable/planned/profile surfaces for this packet and never claimed passed; the new weather skip is separately blocking above | `specs/064-open-ended-knowledge-agent/`; `specs/074-capture-as-fallback-policy/`; `specs/065-generic-micro-tools/`; `specs/076-assistant-completion-rescope/`; [skip accounting](#canonical-complete-e2e---one-run) |
@@ -3193,3 +3195,50 @@ Expected residual guard state after this phase: `G136` alone. That is correct an
 in this packet.
 
 
+
+
+<!-- bubbles:certifying-window-begin -->
+
+## Certifying window — 2026-08-28
+
+### Validation Evidence
+
+**Executed:** YES (this session)
+**Phase Agent:** bubbles.validate
+**Actual executor:** `bubbles.goal`. This window validated only the conditions
+that were still open; the packet's own validation phase is recorded above.
+**Command:** `bash .github/bubbles/scripts/state-transition-guard.sh specs/069-assistant-http-transport/bugs/BUG-069-005-required-e2e-false-green`
+**Exit Code:** 0
+
+```text
+$ bash .github/bubbles/scripts/state-transition-guard.sh <this packet>
+failedGateIds: []
+failureCount: 0
+Exit Code: 0
+```
+
+### Audit Evidence
+
+**Executed:** YES (this session)
+**Phase Agent:** bubbles.audit
+**Actual executor:** `bubbles.goal`.
+
+Two blockers were open. Neither was cleared by weakening a check.
+
+**G095 — two lexical matches, neither a deferral.** The guard cited
+`report.md:1114` and `report.md:3012`. The first asserts the required weather
+E2E now **fails loudly instead of** taking the silent path — the opposite of a
+deferral. The second names this packet's own defect: manifest-required assistant
+E2E tests were taking the silent-skip path while the lane reported green. Both
+lines were left **verbatim** rather than reworded, because they are historical
+RED evidence and editing evidence to satisfy a lexical matcher would be the
+wrong trade. They were filed instead as dated rows under `## Discovered Issues`,
+which is the guard's own remediation option (b).
+
+**G136 — operator acceptance**, recorded under `method: external-record` with an
+explicit statement that no agent performed the interactive observations.
+
+**What is NOT claimed:** no live interactive session was run by automation in
+this window. The mechanical half is the guard exit code quoted above.
+
+<!-- bubbles:certifying-window-end -->
