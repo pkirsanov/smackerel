@@ -98,6 +98,7 @@ Five rows. The "Test DoD items" group below contains four checkboxes mapping
 | T3 | Unit (adversarial contract guard) | `unit` | new `*_bug064003_test.go` under `internal/agent/` | Source-shape guard: FAILS if a fixed wall-clock literal wraps `agent.NewRouter` in the SCOPE-12 integration test, or if a local env-fallback helper is reintroduced (SCN-064-003-03) | `./smackerel.sh test unit --go --go-run BUG064003` | No |
 | T4 | Unit (adversarial) | `unit` | new `*_bug064003_test.go` under `internal/agent/` | Absent/unparseable `AGENT_ROUTING_CONFIDENCE_FLOOR` or `AGENT_ROUTING_CONSIDER_TOP_N` fails loud rather than substituting `0.65` / `5`; per-call embed timeout is not stricter than the SST value (SCN-064-003-04, SCN-064-003-05) | `./smackerel.sh test unit --go --go-run BUG064003` | No |
 | T5 | Regression E2E | `e2e-api` | NOT YET AUTHORED - see the "Regression E2E coverage" DoD group | Regression: a full-stack run re-proves SCN-064-003-01 and SCN-064-003-02 end to end, so the warm-up contract is protected above the integration tier as well | `./smackerel.sh test e2e` | Yes |
+| T6 | Stress | `stress` | NOT YET AUTHORED - see the "SLA / stress coverage" DoD group | This scope declares latency budgets (`warmup_target_latency_ms`, `warmup_budget_ms`, `build_per_call_budget_ms`), so it owes a stress run proving the derived build budget still absorbs the embed-call count under a loaded sidecar rather than only on an idle one | `./smackerel.sh test stress` | Yes |
 
 ### Definition of Done
 
@@ -206,11 +207,11 @@ Five rows. The "Test DoD items" group below contains four checkboxes mapping
 Each item cites its scenario id so the mapping is explicit rather than inferred
 from word overlap.
 
-- [x] **SCN-064-003-01** cold sidecar no longer fails the routing assertions - the cold-stack run reaches and evaluates all three SCOPE-12 routing assertions. Evidence: T1, `ok github.com/smackerel/smackerel/tests/integration/agent 1.664s`, 3 tests + 6 subtests, 0 FAIL / 0 SKIP.
-- [x] **SCN-064-003-02** an unready embedder reports itself as such - proven at the `integration` tier by fault injection, not merely asserted. Zeroing the warm-up budget at `routerwarmup.go:304` produced the explicit readiness verdict at `openknowledge_routing_test.go:125` via the `ErrEmbedderNotWarm` branch, with no `--- SKIP`. Tree restored, `diff_vs_HEAD=0`.
-- [x] **SCN-064-003-03** adversarial - a reintroduced fixed wall-clock literal is rejected. Evidence: T3 mutation kill. Injecting `agent.NewRouter(` caused the guard to fail with its own message, *"calls agent.NewRouter directly; it must go through routerwarmup.BuildRouter"*. The token was asserted ABSENT before injection, so a vacuous survival was impossible.
-- [x] **SCN-064-003-04** adversarial - a missing SST routing value fails loud. Evidence: T4 mutation kill, and the kill was DISCRIMINATING: replacing the `EnvConfidenceFloor` miss-append with `floor = 0.65` failed exactly `confidence_floor_absent` and `confidence_floor_empty` (2 of 8) while `confidence_floor_unparseable`, every `consider_top_n_*` and `fallback_scenario_id_absent` still passed.
-- [x] **SCN-064-003-05** the per-call embed timeout is not stricter than SST - evidence: T4, `TestBUG064003_PerCallEmbedTimeoutIsNotStricterThanSST`, 6 subtests including the adversarial `build_unit_above_the_sst_per_call_ceiling_is_rejected`.
+- [x] **SCN-064-003-01** cold sidecar no longer fails the routing assertions - the cold-stack run reaches and evaluates all three SCOPE-12 routing assertions. Evidence: [report.md](report.md) `### Test Evidence` - T1, `ok github.com/smackerel/smackerel/tests/integration/agent 1.664s`, 3 tests + 6 subtests, 0 FAIL / 0 SKIP.
+- [x] **SCN-064-003-02** an unready embedder reports itself as such - proven at the `integration` tier by fault injection, not merely asserted. Zeroing the warm-up budget at `routerwarmup.go:304` produced the explicit readiness verdict at `openknowledge_routing_test.go:125` via the `ErrEmbedderNotWarm` branch, with no `--- SKIP`. Tree restored, `diff_vs_HEAD=0`. Evidence: [report.md](report.md) `### Self-Correction` and `## Automation Readiness` in [uservalidation.md](uservalidation.md).
+- [x] **SCN-064-003-03** adversarial - a reintroduced fixed wall-clock literal is rejected. Evidence: [report.md](report.md) `### RED → GREEN ordering` - T3 mutation kill. Injecting `agent.NewRouter(` caused the guard to fail with its own message, *"calls agent.NewRouter directly; it must go through routerwarmup.BuildRouter"*. The token was asserted ABSENT before injection, so a vacuous survival was impossible.
+- [x] **SCN-064-003-04** adversarial - a missing SST routing value fails loud. Evidence: [report.md](report.md) `### RED → GREEN ordering` - T4 mutation kill, and the kill was DISCRIMINATING: replacing the `EnvConfidenceFloor` miss-append with `floor = 0.65` failed exactly `confidence_floor_absent` and `confidence_floor_empty` (2 of 8) while `confidence_floor_unparseable`, every `consider_top_n_*` and `fallback_scenario_id_absent` still passed.
+- [x] **SCN-064-003-05** the per-call embed timeout is not stricter than SST - evidence: [report.md](report.md) `### Test Evidence` - T4, `TestBUG064003_PerCallEmbedTimeoutIsNotStricterThanSST`, 6 subtests including the adversarial `build_unit_above_the_sst_per_call_ceiling_is_rejected`.
 
 #### Regression E2E coverage
 
@@ -219,6 +220,13 @@ formality, and they are the only reason this scope is not Done.
 
 - [ ] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior - T5 is not authored yet. Honest position: this fix changed NO product source (only an integration test, a new `_test.go` contract guard, a `tests/`-scoped support package, and 3 SST keys), so the integration tier is currently the highest tier that exercises it. That is an argument for E2E being low-value here, NOT evidence that it exists, so the box stays open rather than being talked shut.
 - [ ] Broader E2E regression suite passes - not runnable as a clean signal today. The e2e lane has two recorded defects of its own: the ollama model pull runs AFTER the block that needs it (R-010) and `go-e2e-stack-start` was SIGKILLed at exit 137 (R-011), both in `.specify/memory/open-work.md`. Claiming a green broader suite before those are fixed would be a false green.
+
+#### SLA / stress coverage
+
+This scope is SLA-sensitive: it introduces three latency budgets into SST, so it
+owes stress evidence rather than only idle-path evidence.
+
+- [ ] Stress coverage for the declared latency SLAs - T6 is not authored yet. Honest position: every timing figure recorded in this packet (`464ms` qualifying warm latency, `2s` per-call budget, `2m38s` derived build budget for 79 embed calls) was measured on an otherwise IDLE sidecar. That says nothing about behaviour under concurrent load, which is exactly when a derived budget is most likely to be wrong. The gap is recorded rather than closed by assertion.
 
 #### Regression-integrity items
 
