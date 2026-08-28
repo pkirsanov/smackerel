@@ -540,6 +540,62 @@ item, and only **19** carry a Human Acceptance Record. Filed as **R-013** in
 here — unchecking 285 files is large blast radius and some may have been checked
 by the owner legitimately before the contract existed.
 
+### Test Phase Execution (2026-08-28)
+
+Tests WERE executed this session. The `test` phase is deliberately NOT recorded
+in `state.json` `completedPhases`, and the reason is worth stating because it
+looks like an omission and is not one.
+
+Adding `"test"` to `completedPhases` was attempted and then REVERTED. Gate G027
+immediately refused it: *"Execution/certification phases claim implement/test
+phases but completedScopes is EMPTY - FABRICATION"*. That refusal is correct.
+The framework couples a phase claim to scope completion, and this packet has
+zero scopes marked Done because three test DoD items are legitimately open. So
+the phase record would have asserted a pipeline state that does not hold, even
+though the underlying test run was real. The run is recorded here as evidence
+instead, which is the honest home for it.
+
+**Command.** `DISK_PREFLIGHT_OVERRIDE=1 ./smackerel.sh test unit --go --go-run BUG064003`
+
+**Result.** The `internal/agent` package executed real tests:
+
+```
+ok      github.com/smackerel/smackerel/internal/agent   1.730s
+```
+
+**Why that one line is the load-bearing evidence, and not the exit code.**
+`go test -run <regex>` exits 0 when the selector matches NOTHING, so a green
+lane proves nothing on its own. The distinguishing signal is the
+`[no tests to run]` suffix: every OTHER package in the run carries it
+(`cmd/core 0.282s [no tests to run]`, `internal/api 0.187s [no tests to run]`,
+and so on), while `internal/agent` reports a real duration WITHOUT it. That
+asymmetry is what proves the BUG064003 tests actually ran rather than being
+vacuously selected away. Zero `^FAIL` lines in the run.
+
+**Stated precisely, so this is not read as more than it is.** The lane was run
+without `--verbose`, so it emitted no `=== RUN` / `--- PASS` lines. This run
+therefore supports a package-level pass with zero failures; it does NOT
+reproduce the per-test `27 === RUN / 9 --- PASS` counts recorded earlier in this
+report, which came from a separate verbose run and are not restated as if they
+came from this one.
+
+**The integration lane could not be run in this session, and the reason is not a
+test failure.** `./smackerel.sh test integration --go-run 'TestOpenKnowledgeRouting'`
+exited 1 during the DISK PREFLIGHT, before any package executed - the run
+produced zero `ok` / `FAIL` package lines. Docker reported 93 local volumes,
+161GB, 153.6GB reclaimable. The sanctioned remedy, `docker-safe-prune.sh`,
+correctly REFUSED because sibling repositories had live validations running
+(`wanderaide.sh test pre-push`, `wanderaide.sh test integration`, a knb pre-push
+hook), and pruning would have torn containers out from under them. The lane was
+not forced: this repository's rule is one stack lane at a time, and
+wanderaide's integration stack was already up.
+
+**On the override.** `DISK_PREFLIGHT_OVERRIDE=1` was used for the UNIT lane only,
+on a verified basis rather than a guess: `/var/lib/docker` sits on `/`, which
+reports 463G available at 52% use. The 33G figure that triggers the preflight is
+`/mnt/c`, where Docker does not write. The unit lane needs no stack, so it does
+not contend with wanderaide's running integration lane.
+
 ### Uncertainty Declarations
 
 1. **The ~30 s router-build window is an approximation.** Totals of 32.14 s and
