@@ -14249,3 +14249,63 @@ nextRequiredAction: |
 </code></pre>
 
 
+
+
+## Test-Plan Staleness Finding — 2026-08-28
+
+Spec 061 carries status `done`, yet its own state-transition guard reports **46
+failures**, of which **32 are `Test Plan references non-existent file`**. This
+section records what those 32 actually are, because "done spec fails 46 checks"
+is the kind of thing that stays invisible until someone runs the guard.
+
+### They are stale paths, not missing coverage
+
+Spec 061 SCOPE-04 was **REWORKED** mid-flight. `scopes.md:76` states the target
+shape explicitly:
+
+```text
+$ grep -n 'NO router/registry/executor/tracer' specs/061-conversational-assistant/scopes.md
+76:// internal/assistant/   (SCOPE-04 — facade orchestration; NO router/registry/executor/tracer packages)
+1 match
+```
+
+The Test Plan still names the **pre-rework** per-package layout. Checked on disk:
+
+```text
+$ for d in internal/assistant/skills internal/assistant/tracing internal/assistant/audit internal/agent/tools/notification; do ... done
+internal/assistant/skills          EXISTS (recipesearch)
+internal/assistant/tracing         EXISTS (tracer.go tracer_test.go)
+internal/assistant/audit           ABSENT — package designed out
+internal/agent/tools/notification  EXISTS (execute.go notification_test.go pg_confirm_store.go propose.go)
+4 checked, 1 absent
+```
+
+- `internal/assistant/audit/writer_test.go` — the whole package is gone because
+  audit writing was folded **into** the facade. Independently corroborated:
+  `facade.go` calls `f.writeAudit(ctx, msg, BandHigh, nil, nil, resp)` directly.
+- `internal/assistant/tracing/{canonical_attrs,root_span_inmem,tracing}_test.go`
+  — the package exists and is tested, as the single consolidated `tracer_test.go`.
+- `internal/assistant/skills/{weather,notifications,retrieval}/*_test.go` — those
+  per-skill packages were consolidated into the facade; only `recipesearch`
+  survives as a separate package.
+- `internal/agent/tools/notification/propose_test.go` — covered by the sibling
+  `notification_test.go`.
+
+### What this does and does not mean
+
+**Does not mean** the behaviour is untested. The reworked architecture is tested
+under consolidated filenames, and spec 061's fourteen child bugs all reached
+terminal `done` against the shipped code.
+
+**Does mean** the Test Plan is a stale map of an architecture this spec itself
+replaced. Anyone auditing coverage from it would chase 32 paths that cannot
+exist. This is the same failure mode found the same day in
+`tests/e2e/assistant_regression/bs_004_notification_confirm.sh`, which asserts a
+design-era scenario vocabulary the implementation replaced.
+
+**Status deliberately left `done`.** The delivery is real; the artifact is stale.
+Demoting it would assert the work is missing, which the evidence contradicts.
+The honest remedy is a Test Plan refresh mapping each of the 32 stale rows onto
+its consolidated successor — recorded here rather than performed, because
+rewriting 32 coverage rows without re-running each mapped test would substitute
+one inaccurate map for another.
