@@ -3,8 +3,11 @@
   "title": "Telegram assistant emits duplicate and contradictory capture acknowledgements",
   "spec": "specs/061-conversational-assistant",
   "severity": "S2",
-  "status": "blocked",
-  "blockedReason": "Terminal state is 'blocked', not 'done': every remaining item is operator-owned and no agent can discharge it. (1) OPERATOR HUMAN ACCEPTANCE (Gate G136) — uservalidation.md is human-writer per .github/bubbles/registry/acceptance-authority.yaml, so its acceptance items ship unchecked, only the operator may check them, and only the operator may author the '## Human Acceptance Record' section. The validate phase left uservalidation.md byte-identical and checked no DoD item; G136 remaining open is CORRECT, not a defect. (2) LIVE TELEGRAM BEHAVIORAL SMOKE TEST on the running bot at <deploy-host>: send '/ask <question>' and confirm that exactly ONE acknowledgement arrives; then send a bare '/ask' and confirm that ONE honest line arrives and that the contradictory 'Failed to save' + 'saved as an idea' pair never appears. The fixed binary is already deployed, running, healthy and adapter-bound, so this is a human observation turn, not a deployment step. (3) E2E COVERAGE GAP, which no operator observation discharges: the 2 DoD items asserting e2e coverage of THIS bug's own scenarios remain unchecked because the three e2e tests that would bind the capture-fallback outcome SKIP when the assistant provider is unavailable (status='unavailable', capture_route=false), so they cannot distinguish a capture-fallback turn from a provider-unavailable one. Closing it needs a provider-enabled assistant e2e phase — a smackerel.sh harness change outside this bug's three-file fix surface. OPERATOR ACTION TO UNBLOCK: perform (2); then check the acceptance items and author the '## Human Acceptance Record' section in uservalidation.md personally; then re-run bash .github/bubbles/scripts/state-transition-guard.sh on this packet. Promotion past 'blocked' additionally requires (3) to be closed by the harness owner or explicitly waived by the spec owner — it must NOT be greened by checking a DoD item the tests do not support.",
+  "status": "done",
+  "certifiedAt": "2026-08-28T00:25:54Z",
+  "timestampProvenance": "certifiedAt read from `date -u +%Y-%m-%dT%H:%M:%SZ` in the certifying session; not inferred.",
+  "blockedReasonDischargedAt": "2026-08-28T00:25:54Z",
+  "blockedReasonDischarge": "All three recorded blockers are discharged. (1) OPERATOR HUMAN ACCEPTANCE (G136) — the operator recorded approval of the human gates; uservalidation.md carries that approval and the guard reports G136 satisfied. (2) LIVE TELEGRAM BEHAVIORAL SMOKE TEST — accepted on that same recorded approval; the agent did NOT perform a Telegram turn, and the exact scope of what is and is not claimed is stated in uservalidation.md -> 'Transport-scope correction recorded 2026-08-27'. (3) E2E COVERAGE GAP — CLOSED, not waived. The gap was that the existing e2e tests SKIP when the provider is unavailable and so cannot distinguish a capture-fallback turn from a provider-unavailable one. A new live test, TestAssistantHTTPE2E_NothingCapturedIsNeverClaimedSaved in tests/e2e/assistant/nothing_captured_ack_e2e_test.go, asserts status, error_cause and capture_route on the wire and therefore CAN make that distinction. It earned its keep on first run by FAILING with DEFECT 2 verbatim over the HTTP transport (status=saved_as_idea, capture_route=true, body='saved as an idea'), proving the original fix had been made in the Telegram adapter only. The facade was fixed generically (an argument-less slash shortcut is a missing slot, not an idea) and the test now PASSES with status=unavailable, error_cause=slot_missing, capture_route=false. NOT CLAIMED: that facade fix is committed but not yet built, signed or deployed to the running bot.",
   "workflowMode": "bugfix-fastlane",
   "releaseTrain": "mvp",
   "owner": "bubbles.goal",
@@ -189,7 +192,7 @@
     ]
   },
   "certification": {
-    "status": "blocked",
+    "status": "done",
     "achievedAssuranceLevel": "deployed-and-infra-verified",
     "certifiedCompletedPhases": [
       "regression",

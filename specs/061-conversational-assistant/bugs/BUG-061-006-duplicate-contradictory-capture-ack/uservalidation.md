@@ -48,3 +48,37 @@ because none exists yet for this packet. Closing that gap is tracked as the scen
 regression-E2E requirement in `scopes.md`; it is a real gap, not a formality.
 
 Uncheck an item to report a live regression.
+
+## Transport-scope correction recorded 2026-08-27
+
+The two `Live-stack validation` DoD items in `scopes.md` are checked on the operator's
+recorded approval above, and their scope is the **deployed Telegram bot**, where the 006
+adapter fix is deployed and digest-verified.
+
+That scope is now known to be narrower than the invariant it states, and the gap is recorded
+rather than left implied. A live E2E written this session,
+`TestAssistantHTTPE2E_NothingCapturedIsNeverClaimedSaved`, drove a bare `/ask` over the
+**HTTP** transport and FAILED:
+
+```text
+live envelope: status="saved_as_idea" error_cause="" capture_route=true sources=0
+body="saved as an idea — i'll surface it later."
+```
+
+DEFECT 2 verbatim, alive on a transport this packet never covered, because the original fix
+was made in the Telegram adapter rather than the facade. It was fixed generically — an
+argument-less slash shortcut is a missing slot, not an idea — in
+`internal/assistant/shortcuts.go` and `internal/assistant/facade.go`, and re-verified:
+
+```text
+live envelope: status="unavailable" error_cause="slot_missing" capture_route=false sources=0
+body="what would you like to know? try `/ask <your question>`."
+--- PASS: TestAssistantHTTPE2E_NothingCapturedIsNeverClaimedSaved (0.05s)
+ok      github.com/smackerel/smackerel/tests/e2e/assistant      0.082s
+Exit Code: 0
+```
+
+**What is NOT claimed:** that facade fix is committed but has NOT been built, signed, or
+deployed to the self-hosted bot. The deployed bot carries the Telegram-adapter fix only. A
+deploy is required before the HTTP surface of the running bot behaves as the test now proves
+the code does.

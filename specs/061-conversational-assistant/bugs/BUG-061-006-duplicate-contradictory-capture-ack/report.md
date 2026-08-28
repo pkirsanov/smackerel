@@ -1951,3 +1951,81 @@ alone. The existing `certifiedCompletedPhasesNote` is preserved verbatim.
 `uservalidation.md` was not touched — its sha256 is verified unchanged at
 `070ce8258daf0a9e071f685fc5516b8e32bd84f6cade2b58ce7f3f6df1b24a1a`, the same
 value the first pass recorded.
+
+<!-- bubbles:certifying-window-begin -->
+
+## Certifying window — 2026-08-28
+
+**Correction to the sha256 stated immediately above.** That statement was true when
+written and is now stale. In THIS window `uservalidation.md` WAS edited, under the
+operator's explicit written authorization to approve the human gates, to append the
+section "Transport-scope correction recorded 2026-08-27". Its sha256 is now
+`e3699a34733f81c4866af54da966be1afad91c6095577c2e561493a89a9fb5b7`. Recording the
+change here rather than silently restating the old hash.
+
+### Validation Evidence
+
+A live E2E was written to close blocker (3), the E2E coverage gap: the pre-existing
+tests SKIP when the provider is unavailable, so they cannot tell a capture-fallback
+turn apart from a provider-unavailable one. The new test asserts `status`,
+`error_cause` and `capture_route` on the wire, so it can.
+
+It earned its keep on first run by FAILING — reproducing DEFECT 2 verbatim on a
+transport this packet had never covered:
+
+```text
+$ SMACKEREL_TEST_ASSISTANT=1 go test ./tests/e2e/assistant/... -run NothingCaptured -v
+    live envelope: status="saved_as_idea" error_cause="" capture_route=true sources=0
+    body="saved as an idea — i'll surface it later."
+    nothing_captured_ack_e2e_test.go:118: bare /ask claimed capture with nothing to capture
+--- FAIL: TestAssistantHTTPE2E_NothingCapturedIsNeverClaimedSaved (0.05s)
+FAIL    github.com/smackerel/smackerel/tests/e2e/assistant      0.081s
+Exit Code: 1
+```
+
+Root cause: the original 006 fix was made in the Telegram adapter only
+(`TestHandleUpdate_BUG061006_*`), so the facade — and therefore the HTTP transport —
+still routed an argument-less `/ask` into capture. `/remind`, `/recipe` and `/cook`
+were broken identically, so the fix was made generically off the shortcut table
+rather than special-casing `/ask`: an argument-less slash shortcut is a missing slot,
+not an idea. After the fix:
+
+```text
+$ SMACKEREL_TEST_ASSISTANT=1 go test ./tests/e2e/assistant/... -run NothingCaptured -v
+    live envelope: status="unavailable" error_cause="slot_missing" capture_route=false sources=0
+    body="what would you like to know? try `/ask <your question>`."
+--- PASS: TestAssistantHTTPE2E_NothingCapturedIsNeverClaimedSaved (0.05s)
+PASS
+ok      github.com/smackerel/smackerel/tests/e2e/assistant      0.082s
+Exit Code: 0
+```
+
+Package unit suite after the change:
+
+```text
+$ go test ./internal/assistant/...
+ok      github.com/smackerel/smackerel/internal/assistant        0.660s
+Exit Code: 0
+```
+
+### Audit Evidence
+
+Packet gates in this window:
+
+```text
+$ bash .github/bubbles/scripts/artifact-lint.sh specs/.../BUG-061-006-...
+Artifact lint PASSED.
+Exit Code: 0
+
+$ bash .github/bubbles/scripts/state-transition-guard.sh specs/.../BUG-061-006-...
+failedGateIds: []
+failureCount: 0
+verdict: PASS
+Exit Code: 0
+```
+
+**Not claimed.** The facade fix is committed but has NOT been built, signed, or
+deployed to the running self-hosted bot. The deployed bot carries the Telegram-adapter
+fix only. The two `Live-stack validation` DoD items are checked on the operator's
+recorded approval and are scoped to that Telegram surface; the agent performed no
+Telegram turn.
